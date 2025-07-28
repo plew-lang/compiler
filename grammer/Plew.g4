@@ -1,38 +1,54 @@
 grammar Plew;
 
-// enum, for in, while, array, comment, import, generics, match, lock, ??, ?, declare
+// enum, for in, while, array, comment, import, generics, match, lock, ??, ?, declare, factory
 
 trait:
 	TRAIT type (type_args_declare where_clauses?)? '{' (
 		req_newline (type | type_alias)
-	)* (req_newline value_declare)* (
-		req_newline constructor_declare
-	)* (req_newline function_declare)* opt_newline '}';
+	)* (req_newline assoc_field_declare)* (
+		req_newline field_declare
+	)* (req_newline constructor_declare)* (
+		req_newline method_declare
+	)* opt_newline '}';
 
 struct:
 	access_modifier? STRUCT type (
 		type_args_declare where_clauses?
 	)? '{' (req_newline type_alias)* (
-		req_newline field_access_modifier? value_declare
+		req_newline field_access_modifier? field_declare
 	)* opt_newline '}';
+
+assoc_field_declare: ASSOC field_declare;
+field_declare: value_declare_head type_annotate;
 
 impl:
 	IMPL type type_args_declare? (WITH type type_args?)? where_clauses? '{' (
 		req_newline type_alias
-	)* (req_newline value VIA value)* (req_newline constructor)* (
-		req_newline function
-	)* opt_newline '}';
+	)* (req_newline assoc_value) (
+		req_newline value_declare_head VIA value
+	)* (req_newline constructor)* (req_newline method)* opt_newline '}';
 
+assoc_value:
+	ASSOC value_declare_head type_annotate? assign_right;
 type_alias: TYPE type '=' type_use;
 field_access_modifier: access_modifier ('(' GET ')')?;
 
 constructor: constructor_declare block;
 constructor_declare:
-	access_modifier? (ASYNC | SPAWN)? CONSTRUCT function_declare_suffix;
+	access_modifier? function_modifier? CONSTRUCT function_declare_tail;
+method: method_declare block;
+method_declare:
+	access_modifier? method_modifier FN function_name function_declare_tail;
+method_modifier:
+	ASSOC function_modifier?
+	| ASYNC MUT
+	| MUT
+	| function_modifier;
 function: function_declare block;
 function_declare:
-	access_modifier? (ASYNC | SPAWN)? FN function_name function_declare_suffix;
-function_declare_suffix:
+	access_modifier? function_modifier? FN function_name function_declare_tail;
+function_modifier: ASYNC | SPAWN;
+function_declare_tail:
 	type_args_declare? '(' args_declare? ')' return_type? where_clauses?;
 return_type: '->' type_use;
 args_declare:
@@ -57,10 +73,11 @@ statement:
 if_statement: if block (elif block)* (else block)?;
 return_statement: RETURN expression;
 value_declare:
-	(SYNC | MUT)? VAL value (
+	value_declare_head (
 		type_annotate
 		| type_annotate? assign_right
 	);
+value_declare_head: (SYNC | MUT)? VAL value;
 assign: value assign_right;
 assign_right: '=' expression;
 
@@ -132,8 +149,8 @@ access_modifier: EXT? PUB;
 
 type_annotate: ':' type_use;
 type_use: type type_args? ('.' type)*;
-type: PASCAL_CASE;
-value: SNAKE_CASE;
+type: SELF_TYPE | PASCAL_CASE;
+value: SELF | SNAKE_CASE;
 crate: PASCAL_CASE;
 
 type_args_declare: '[' type (',' type)* ']';
@@ -141,7 +158,7 @@ type_args: '[' type_use (',' type_use)* ']';
 
 where_clauses:
 	WHERE where_clause (',' opt_newline where_clause)*;
-where_clause: type ('.' type)* ':' type_use;
+where_clause: type ('.' type)* type_annotate;
 
 literal:
 	integer_literal
@@ -176,6 +193,7 @@ GIVE: 'give';
 RETURN: 'return';
 WHERE: 'where';
 STRUCT: 'struct';
+ASSOC: 'assoc';
 IMPL: 'impl';
 WITH: 'with';
 VIA: 'via';
@@ -187,3 +205,5 @@ IF: 'if';
 ELIF: 'elif';
 ELSE: 'else';
 AS: 'as';
+SELF: 'self';
+SELF_TYPE: 'Self';
