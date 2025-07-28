@@ -1,22 +1,29 @@
 grammar Plew;
 
-// enum, for in, while, array, comment, import, generics, match, lock, ??, ?, declare, factory
+// enum, for in, while, array, comment, import, generics, match, lock, ??, ?, declare
 
 trait:
-	TRAIT type (type_args_declare where_clauses?)? '{' (
-		req_newline (type | type_alias)
-	)* (req_newline assoc_field_declare)* (
-		req_newline field_declare
-	)* (req_newline constructor_declare)* (
-		req_newline method_declare
-	)* opt_newline '}';
+	access_modifier? TRAIT type (
+		type_args_declare where_clauses?
+	)? '{' (req_newline (type | type_alias))* (
+		req_newline assoc_field_declare
+	)* (req_newline field_declare)* (
+		req_newline constructor_declare
+	)* (req_newline method_declare)* opt_newline '}';
 
 struct:
-	access_modifier? STRUCT type (
+	struct_directives? req_newline access_modifier? STRUCT type (
 		type_args_declare where_clauses?
 	)? '{' (req_newline type_alias)* (
 		req_newline field_access_modifier? field_declare
 	)* opt_newline '}';
+
+struct_directives:
+	struct_directive (req_newline struct_directive)*;
+struct_directive: '@' struct_directive_name;
+struct_directive_name:
+	'default_constructor(' access_modifier ')'
+	| 'field_key';
 
 assoc_field_declare: ASSOC field_declare;
 field_declare: value_declare_head type_annotate;
@@ -54,14 +61,7 @@ return_type: '->' type_use;
 args_declare:
 	opt_newline arg_declare (',' opt_newline arg_declare)* ','? opt_newline;
 arg_declare: INOUT? value type_annotate;
-block:
-	'{' opt_newline (
-		(multiple_statements opt_newline)
-		| (return_statement opt_newline)
-		| (
-			(multiple_statements req_newline)? return_statement opt_newline
-		)
-	)? '}';
+block: '{' opt_newline (multiple_statements opt_newline)? '}';
 
 multiple_statements: statement (req_newline statement)*;
 statement:
@@ -69,9 +69,14 @@ statement:
 	| block
 	| if_statement
 	| value_declare
-	| assign;
+	| assign
+	| return_statement
+	| break_statement
+	| give_statement;
 if_statement: if block (elif block)* (else block)?;
-return_statement: RETURN expression;
+return_statement: RETURN expression?;
+break_statement: BREAK expression?;
+give_statement: GIVE expression;
 value_declare:
 	value_declare_head (
 		type_annotate
@@ -107,18 +112,13 @@ construct_arg: value '=' expression;
 if_expression:
 	if block_expression (elif block_expression)* else block_expression;
 
-block_expression:
-	(ASYNC | SPAWN)? '{' opt_newline (
-		multiple_statements req_newline
-	)? give_statement opt_newline;
-give_statement: GIVE expression;
+block_expression: (ASYNC | SPAWN)? block;
 
 loop_expression:
 	LOOP '{' opt_newline multiple_loop_statements '}';
 multiple_loop_statements:
 	loop_statement (req_newline loop_statement)*;
 loop_statement: statement | break_statement;
-break_statement: BREAK expression?;
 
 or: or OR_OP opt_newline and | and;
 and: and AND_OP opt_newline relational | relational;
