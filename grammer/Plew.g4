@@ -1,50 +1,62 @@
 grammar Plew;
 
-// for in, while, comment, import, match, lazy, anonymous function, if let, enum access, assoc member access
+// for in, while, comment, import, match, lazy, anonymous function, if let, destructuring assignment
 
 extern:
-	EXTERN string_literal '{' (req_newline function_declare)* (
-		req_newline value_declare
+	EXTERN string_literal '{' (
+		req_newline (function_declare | value_declare)
 	)* opt_newline '}';
 
 trait:
 	access_modifier? TRAIT type (
 		type_args_declare where_clauses?
-	)? '{' (req_newline (type | type_alias))* (
-		req_newline assoc_field_declare
-	)* (req_newline field_declare)* (
-		req_newline constructor_declare
-	)* (req_newline method_declare)* opt_newline '}';
+	)? '{' trait_bodies? '}';
+trait_bodies:
+	opt_newline trait_body (req_newline trait_body)* opt_newline;
+trait_body:
+	TYPE type type_annotate
+	| type_alias
+	| assoc_field_declare
+	| field_declare
+	| constructor_declare
+	| method_declare;
+
+enum: (enum_directives req_newline)? access_modifier? ENUM type (
+		type_args_declare where_clauses?
+	)? '{' enum_bodies? '}';
+enum_bodies:
+	opt_newline enum_body (req_newline enum_body)* opt_newline;
+enum_body: type_alias | enum_variant_declare;
+enum_variant_declare:
+	enum_variant ('{' enum_variant_declare_bodies '}')?;
+enum_variant_declare_bodies:
+	opt_newline enum_variant_declare_body (
+		req_newline enum_variant_declare_body
+	)* opt_newline;
+enum_variant_declare_body: field_access_modifier? field_declare;
+enum_directives:
+	'@[' opt_newline enum_directive (
+		',' opt_newline enum_directive
+	)* opt_newline ']';
+enum_directive: 'all';
 
 struct:
 	(struct_directives req_newline)? access_modifier? STRUCT type (
 		type_args_declare where_clauses?
-	)? '{' (req_newline type_alias)* (
-		req_newline field_access_modifier? field_declare
-	)* opt_newline '}';
-
+	)? '{' struct_bodies? '}';
+struct_bodies:
+	opt_newline struct_body (req_newline struct_body)* opt_newline;
+struct_body: type_alias | field_access_modifier? field_declare;
 struct_directives:
-	struct_directive (req_newline struct_directive)*;
-struct_directive: '@' struct_directive_name;
-struct_directive_name:
+	'@[' opt_newline struct_directive (
+		',' opt_newline struct_directive
+	)* opt_newline ']';
+struct_directive:
 	'default_constructor(' access_modifier ')'
 	| 'field_key';
 
 assoc_field_declare: ASSOC field_declare;
 field_declare: value_declare_head type_annotate;
-
-enum: (enum_directives req_newline)? access_modifier? ENUM type (
-		type_args_declare where_clauses?
-	)? '{' (req_newline type_alias)* (req_newline enum_case)* opt_newline '}';
-
-enum_case:
-	ENUM_CASE (
-		'(' opt_newline type_use (',' opt_newline type_use)* opt_newline ')'
-	)?;
-ENUM_CASE: PASCAL_CASE;
-enum_directives: enum_directive (req_newline enum_directive)*;
-enum_directive: '@' enum_directive_name;
-enum_directive_name: 'all';
 
 extension: access_modifier? EXTENSION type FOR impl_body;
 impl: IMPL impl_body;
@@ -126,6 +138,7 @@ primary:
 	| primary ('.' opt_newline (value | function_call))+
 	| static_access
 	| construct
+	| enum_construct
 	| block_expression
 	| loop_expression
 	| if_expression
@@ -154,6 +167,11 @@ construct_children:
 construct_args: construct_arg (opt_newline construct_arg)*;
 construct_arg: value '=' expression;
 
+enum_construct:
+	type_use '.' opt_newline enum_variant (
+		'(' opt_newline expression (',' opt_newline expression)* opt_newline ')'
+	)?;
+
 if_expression:
 	block_modifier? if block (elif block)* else block;
 if: IF expression;
@@ -179,7 +197,7 @@ type_annotate: ':' type_use;
 type_use: type type_args? ('.' type type_args?)*;
 type: SELF_TYPE | PASCAL_CASE;
 value: SELF | SNAKE_CASE;
-crate: PASCAL_CASE;
+enum_variant: PASCAL_CASE;
 
 type_args_declare: '[' type (',' type)* ']';
 type_args: '[' type_use (',' type_use)* ']';
