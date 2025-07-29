@@ -1,6 +1,11 @@
 grammar Plew;
 
-// enum, for in, while, array, comment, import, generics, match, lock, ??, ?, declare
+// for in, while, comment, import, match, lazy, anonymous function, if let, enum access, assoc member access
+
+extern:
+	EXTERN string_literal '{' (req_newline function_declare)* (
+		req_newline value_declare
+	)* opt_newline '}';
 
 trait:
 	access_modifier? TRAIT type (
@@ -12,7 +17,7 @@ trait:
 	)* (req_newline method_declare)* opt_newline '}';
 
 struct:
-	struct_directives? req_newline access_modifier? STRUCT type (
+	(struct_directives req_newline)? access_modifier? STRUCT type (
 		type_args_declare where_clauses?
 	)? '{' (req_newline type_alias)* (
 		req_newline field_access_modifier? field_declare
@@ -28,8 +33,23 @@ struct_directive_name:
 assoc_field_declare: ASSOC field_declare;
 field_declare: value_declare_head type_annotate;
 
-impl:
-	IMPL type type_args_declare? (WITH type type_args?)? where_clauses? '{' (
+enum: (enum_directives req_newline)? access_modifier? ENUM type (
+		type_args_declare where_clauses?
+	)? '{' (req_newline type_alias)* (req_newline enum_case)* opt_newline '}';
+
+enum_case:
+	ENUM_CASE (
+		'(' opt_newline type_use (',' opt_newline type_use)* opt_newline ')'
+	)?;
+ENUM_CASE: PASCAL_CASE;
+enum_directives: enum_directive (req_newline enum_directive)*;
+enum_directive: '@' enum_directive_name;
+enum_directive_name: 'all';
+
+extension: access_modifier? EXTENSION type FOR impl_body;
+impl: IMPL impl_body;
+impl_body:
+	type type_args_declare? (AS type type_args?)? where_clauses? '{' (
 		req_newline type_alias
 	)* (req_newline assoc_value) (
 		req_newline value_declare_head VIA value
@@ -42,38 +62,33 @@ field_access_modifier: access_modifier ('(' GET ')')?;
 
 constructor: constructor_declare block;
 constructor_declare:
-	access_modifier? function_modifier? CONSTRUCT function_declare_tail;
+	access_modifier? block_modifier? CONSTRUCT function_declare_tail;
 method: method_declare block;
 method_declare:
 	access_modifier? method_modifier FN function_name function_declare_tail;
 method_modifier:
-	ASSOC function_modifier?
+	ASSOC block_modifier?
 	| ASYNC MUT
 	| MUT
-	| function_modifier;
+	| block_modifier;
 function: function_declare block;
 function_declare:
-	access_modifier? function_modifier? FN function_name function_declare_tail;
-function_modifier: ASYNC | SPAWN;
+	access_modifier? block_modifier? FN function_name function_declare_tail;
 function_declare_tail:
 	type_args_declare? '(' args_declare? ')' return_type? where_clauses?;
 return_type: '->' type_use;
 args_declare:
 	opt_newline arg_declare (',' opt_newline arg_declare)* ','? opt_newline;
 arg_declare: INOUT? value type_annotate;
-block: '{' opt_newline (multiple_statements opt_newline)? '}';
 
-multiple_statements: statement (req_newline statement)*;
 statement:
 	expression
-	| block
-	| if_statement
 	| value_declare
 	| assign
 	| return_statement
 	| break_statement
-	| give_statement;
-if_statement: if block (elif block)* (else block)?;
+	| give_statement
+	| CONTINUE;
 return_statement: RETURN expression?;
 break_statement: BREAK expression?;
 give_statement: GIVE expression;
@@ -86,18 +101,48 @@ value_declare_head: (SYNC | MUT)? VAL value;
 assign: value assign_right;
 assign_right: '=' expression;
 
-expression:
+expression: coalesce;
+coalesce: coalesce COALESCE_OP opt_newline or | or;
+or: or OR_OP opt_newline and | and;
+and: and AND_OP opt_newline relational | relational;
+relational: relational RELATIONAL_OP opt_newline add | add;
+add: add ADD_OP opt_newline multiply | multiply;
+multiply:
+	multiply MUL_OP opt_newline unary_prefix
+	| unary_prefix;
+unary_prefix: UNARY_PREFIX_OP? unary_postfix;
+unary_postfix: primary UNARY_POSTFIX_OP?;
+COALESCE_OP: '??';
+OR_OP: '||';
+AND_OP: '&&';
+RELATIONAL_OP: '==' | '!=' | '<' | '>' | '<=' | '>=';
+ADD_OP: '+' | '-';
+MUL_OP: '*' | '/';
+UNARY_PREFIX_OP: '-' | '!';
+UNARY_POSTFIX_OP: '?';
+
+primary:
 	literal
-	| value
-	| expression ('.' opt_newline (value | function_call))+
-	| function_call
+	| primary ('.' opt_newline (value | function_call))+
+	| static_access
 	| construct
 	| block_expression
+	| loop_expression
 	| if_expression
-	| expression AS type_use
-	| AWAIT expression
-	| expression '[' expression ']'
+	| lock_expression
+	| primary AS type_use
+	| AWAIT primary
+	| primary '[' primary ']'
 	| '(' expression ')';
+
+static_access:
+	(type_use '.' opt_newline)? (value | function_call);
+function_call:
+	function_name ('@' type ('.' type)*)? type_args? '(' call_args? ')';
+call_args:
+	opt_newline arg (',' opt_newline arg)* ','? opt_newline;
+arg: (value ':')? expression;
+function_name: SNAKE_CASE;
 
 construct:
 	'<' type_use opt_newline construct_args? (
@@ -110,45 +155,28 @@ construct_args: construct_arg (opt_newline construct_arg)*;
 construct_arg: value '=' expression;
 
 if_expression:
-	if block_expression (elif block_expression)* else block_expression;
-
-block_expression: (ASYNC | SPAWN)? block;
-
-loop_expression:
-	LOOP '{' opt_newline multiple_loop_statements '}';
-multiple_loop_statements:
-	loop_statement (req_newline loop_statement)*;
-loop_statement: statement | break_statement;
-
-or: or OR_OP opt_newline and | and;
-and: and AND_OP opt_newline relational | relational;
-relational: relational RELATIONAL_OP opt_newline add | add;
-add: add ADD_OP opt_newline multiply | multiply;
-multiply: multiply MUL_OP opt_newline unary | unary;
-unary: UNARY_OP? expression;
-OR_OP: '||';
-AND_OP: '&&';
-RELATIONAL_OP: '==' | '!=' | '<' | '>' | '<=' | '>=';
-ADD_OP: '+' | '-';
-MUL_OP: '*' | '/';
-UNARY_OP: '-' | '!';
-WHITESPACE: [ \t]+ -> skip;
-
-function_call:
-	function_name ('@' crate)? type_args? '(' call_args? ')';
-call_args:
-	opt_newline arg (',' opt_newline arg)* ','? opt_newline;
-arg: expression;
-function_name: SNAKE_CASE;
-
+	block_modifier? if block (elif block)* else block;
 if: IF expression;
 elif: ELIF expression;
 else: ELSE;
 
-access_modifier: EXT? PUB;
+lock_expression:
+	LOCK lock_value (',' opt_newline lock_value)* block;
+lock_value: value | value '=' expression;
+
+loop_expression: LOOP block;
+
+block_expression: block_modifier? block;
+block_modifier: ASYNC | SPAWN;
+block:
+	'{' opt_newline (
+		statement (req_newline statement)* opt_newline
+	)? '}';
+
+access_modifier: EXPORT;
 
 type_annotate: ':' type_use;
-type_use: type type_args? ('.' type)*;
+type_use: type type_args? ('.' type type_args?)*;
 type: SELF_TYPE | PASCAL_CASE;
 value: SELF | SNAKE_CASE;
 crate: PASCAL_CASE;
@@ -161,10 +189,25 @@ where_clauses:
 where_clause: type ('.' type)* type_annotate;
 
 literal:
-	integer_literal
+	closure_literal
+	| array_literal
+	| dictionary_literal
+	| tuple_literal
+	| integer_literal
 	| float_literal
 	| string_literal
 	| bool_literal;
+closure_literal: FN function_declare_tail;
+array_literal:
+	'[' (opt_newline expression (',' opt_newline expression)*)? opt_newline ']';
+dictionary_literal:
+	'[' opt_newline dictionary_entry (
+		',' opt_newline dictionary_entry
+	)* opt_newline ']'
+	| '[:]';
+tuple_literal:
+	'(' opt_newline expression (',' opt_newline expression)+ opt_newline ')';
+dictionary_entry: expression ':' expression;
 integer_literal: DIGIT+;
 float_literal: DIGIT+ '.' DIGIT+;
 string_literal: '"' .*? '"';
@@ -177,8 +220,7 @@ NEWLINE: '\n';
 DIGIT: [0-9];
 SNAKE_CASE: [a-z] [a-z0-9_]*;
 PASCAL_CASE: [A-Z] [A-Za-z0-9]*;
-PUB: 'pub';
-EXT: 'ext';
+EXPORT: 'export';
 GET: 'get';
 TYPE: 'type';
 VAL: 'val';
@@ -189,13 +231,15 @@ SPAWN: 'spawn';
 AWAIT: 'await';
 LOOP: 'loop';
 BREAK: 'break';
+CONTINUE: 'continue';
 GIVE: 'give';
 RETURN: 'return';
 WHERE: 'where';
+ENUM: 'enum';
 STRUCT: 'struct';
 ASSOC: 'assoc';
+EXTENSION: 'extension';
 IMPL: 'impl';
-WITH: 'with';
 VIA: 'via';
 TRAIT: 'trait';
 FN: 'fn';
@@ -204,6 +248,12 @@ INOUT: 'inout';
 IF: 'if';
 ELIF: 'elif';
 ELSE: 'else';
+FOR: 'for';
+LOCK: 'lock';
+MATCH: 'match';
 AS: 'as';
 SELF: 'self';
 SELF_TYPE: 'Self';
+EXTERN: 'extern';
+
+WHITESPACE: [ \t]+ -> skip;
