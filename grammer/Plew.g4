@@ -1,11 +1,19 @@
 grammar Plew;
 
-// for in, while, comment, import, match, lazy, anonymous function, if let, destructuring assignment
+// variable expansion, for in, while, comment, import, match, lazy, anonymous function, guard let, if let, channel, remove sync, multiple extension, extended type
 
 extern:
 	EXTERN string_literal '{' (
 		req_newline (function_declare | value_declare)
 	)* opt_newline '}';
+
+extension:
+	access_modifier? EXTENSION type (
+		type_args_declare where_clauses?
+	)? '{' opt_newline extension_body (
+		req_newline extension_body
+	)* opt_newline '}';
+extension_body: impl;
 
 trait:
 	access_modifier? TRAIT type (
@@ -58,17 +66,15 @@ struct_directive:
 assoc_field_declare: ASSOC field_declare;
 field_declare: value_declare_head type_annotate;
 
-extension: access_modifier? EXTENSION type FOR impl_body;
-impl: IMPL impl_body;
-impl_body:
-	type type_args_declare? (AS type type_args?)? where_clauses? '{' (
+impl:
+	IMPL type type_args_declare? (AS type type_args?)? where_clauses? '{' (
 		req_newline type_alias
 	)* (req_newline assoc_value) (
 		req_newline value_declare_head VIA value
 	)* (req_newline constructor)* (req_newline method)* opt_newline '}';
 
 assoc_value:
-	ASSOC value_declare_head type_annotate? assign_right;
+	ASSOC value_declare_head type_annotate? '=' expression;
 type_alias: TYPE type '=' type_use;
 field_access_modifier: access_modifier ('(' GET ')')?;
 
@@ -104,14 +110,23 @@ statement:
 return_statement: RETURN expression?;
 break_statement: BREAK expression?;
 give_statement: GIVE expression;
-value_declare:
-	value_declare_head (
-		type_annotate
-		| type_annotate? assign_right
-	);
+value_declare: value_declare_head type_annotate;
+assign: assign_left ASSIGN_OP expression;
+struct_assign_left:
+	'[' opt_newline struct_assign_left_entry (
+		',' opt_newline struct_assign_left_entry
+	)* opt_newline ']';
+struct_assign_left_entry: expression ':' assign_left;
+tuple_assign_left:
+	'(' opt_newline assign_left (',' opt_newline assign_left)* opt_newline ')';
+assign_left:
+	value ('.' opt_newline value)*
+	| type ('.' opt_newline type)* ('.' opt_newline value)+
+	| value_declare_head type_annotate?
+	| tuple_assign_left
+	| struct_assign_left;
 value_declare_head: (SYNC | MUT)? VAL value;
-assign: value assign_right;
-assign_right: '=' expression;
+ASSIGN_OP: '=' | '+=' | '-=' | '*=' | '/=';
 
 expression: coalesce;
 coalesce: coalesce COALESCE_OP opt_newline or | or;
@@ -131,11 +146,12 @@ RELATIONAL_OP: '==' | '!=' | '<' | '>' | '<=' | '>=';
 ADD_OP: '+' | '-';
 MUL_OP: '*' | '/';
 UNARY_PREFIX_OP: '-' | '!';
-UNARY_POSTFIX_OP: '?';
+UNARY_POSTFIX_OP: '!';
 
 primary:
 	literal
-	| primary ('.' opt_newline (value | function_call))+
+	| primary (member_access opt_newline (value | function_call))+
+	| primary '@' type_use
 	| static_access
 	| construct
 	| enum_construct
@@ -150,8 +166,7 @@ primary:
 
 static_access:
 	(type_use '.' opt_newline)? (value | function_call);
-function_call:
-	function_name ('@' type ('.' type)*)? type_args? '(' call_args? ')';
+function_call: function_name type_args? '(' call_args? ')';
 call_args:
 	opt_newline arg (',' opt_newline arg)* ','? opt_newline;
 arg: (value ':')? expression;
@@ -171,6 +186,8 @@ enum_construct:
 	type_use '.' opt_newline enum_variant (
 		'(' opt_newline expression (',' opt_newline expression)* opt_newline ')'
 	)?;
+
+member_access: '?'* '.';
 
 if_expression:
 	block_modifier? if block (elif block)* else block;
