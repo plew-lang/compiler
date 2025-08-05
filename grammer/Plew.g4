@@ -1,6 +1,6 @@
 grammar Plew;
 
-// variable expansion, for in, while, comment, import, match, lazy, anonymous function, guard let, if let, channel, remove sync, multiple extension, extended type
+// variable expansion, for in, while, comment, import, match, lazy, anonymous function
 
 extern:
 	EXTERN string_literal '{' (
@@ -67,7 +67,7 @@ assoc_field_declare: ASSOC field_declare;
 field_declare: value_declare_head type_annotate;
 
 impl:
-	IMPL type type_args_declare? (AS type type_args?)? where_clauses? '{' (
+	IMPL type type_args_declare? (AS type_use type_args?)? where_clauses? '{' (
 		req_newline type_alias
 	)* (req_newline assoc_value) (
 		req_newline value_declare_head VIA value
@@ -112,6 +112,12 @@ break_statement: BREAK expression?;
 give_statement: GIVE expression;
 value_declare: value_declare_head type_annotate;
 assign: assign_left ASSIGN_OP expression;
+assign_left:
+	value ('.' opt_newline value)*
+	| extended_type_chain ( '.' opt_newline value)+
+	| value_declare_head type_annotate?
+	| tuple_assign_left
+	| struct_assign_left;
 struct_assign_left:
 	'[' opt_newline struct_assign_left_entry (
 		',' opt_newline struct_assign_left_entry
@@ -119,14 +125,10 @@ struct_assign_left:
 struct_assign_left_entry: expression ':' assign_left;
 tuple_assign_left:
 	'(' opt_newline assign_left (',' opt_newline assign_left)* opt_newline ')';
-assign_left:
-	value ('.' opt_newline value)*
-	| type ('.' opt_newline type)* ('.' opt_newline value)+
-	| value_declare_head type_annotate?
-	| tuple_assign_left
-	| struct_assign_left;
-value_declare_head: (SYNC | MUT)? VAL value;
+value_declare_head: MUT? VAL value;
 ASSIGN_OP: '=' | '+=' | '-=' | '*=' | '/=';
+guard:
+	GUARD enum_assign (AND_OP opt_newline enum_assign)* block;
 
 expression: coalesce;
 coalesce: coalesce COALESCE_OP opt_newline or | or;
@@ -151,7 +153,7 @@ UNARY_POSTFIX_OP: '!';
 primary:
 	literal
 	| primary (member_access opt_newline (value | function_call))+
-	| primary '@' type_use
+	| primary extension_use
 	| static_access
 	| construct
 	| enum_construct
@@ -190,10 +192,25 @@ enum_construct:
 member_access: '?'* '.';
 
 if_expression:
-	block_modifier? if block (elif block)* else block;
-if: IF expression;
-elif: ELIF expression;
+	if block_expression (elif block_expression)* else block_expression;
+if: IF if_condition;
+elif: ELIF if_condition;
 else: ELSE;
+if_condition:
+	expression
+	| (expression AND_OP opt_newline)? enum_assign (
+		AND_OP opt_newline if_condition
+	)?;
+enum_assign: enum_assign_left '=' expression;
+
+match_expression:
+	MATCH expression '{' (
+		req_newline match_case block_expression
+	)* req_newline '}';
+match_case: expression | enum_assign_left | '_';
+// In the AST, even already-defined variables can be used as assign_left, but only variable definitions are intended to be allowed.
+enum_assign_left:
+	type ('.' opt_newline type)* '.' enum_variant '(' assign_left ')';
 
 lock_expression:
 	LOCK lock_value (',' opt_newline lock_value)* block;
@@ -211,10 +228,16 @@ block:
 access_modifier: EXPORT;
 
 type_annotate: ':' type_use;
-type_use: type type_args? ('.' type type_args?)*;
+type_use:
+	extendend_type type_args? ('.' extendend_type type_args?)*;
+extended_type_chain:
+	extendend_type ('.' opt_newline extendend_type)*;
+extendend_type: type extension_use?;
 type: SELF_TYPE | PASCAL_CASE;
 value: SELF | SNAKE_CASE;
 enum_variant: PASCAL_CASE;
+
+extension_use: (opt_newline '#' type_use)+;
 
 type_args_declare: '[' type (',' type)* ']';
 type_args: '[' type_use (',' type_use)* ']';
@@ -260,7 +283,6 @@ GET: 'get';
 TYPE: 'type';
 VAL: 'val';
 MUT: 'mut';
-SYNC: 'sync';
 ASYNC: 'async';
 SPAWN: 'spawn';
 AWAIT: 'await';
@@ -280,6 +302,7 @@ TRAIT: 'trait';
 FN: 'fn';
 CONSTRUCT: 'construct';
 INOUT: 'inout';
+GUARD: 'guard';
 IF: 'if';
 ELIF: 'elif';
 ELSE: 'else';
