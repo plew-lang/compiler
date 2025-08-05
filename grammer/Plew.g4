@@ -1,6 +1,6 @@
 grammar Plew;
 
-// variable expansion, for in, while, comment, import, match, lazy, anonymous function
+// variable expansion, for in, comment, import
 
 extern:
 	EXTERN string_literal '{' (
@@ -46,7 +46,7 @@ enum_directives:
 	'@[' opt_newline enum_directive (
 		',' opt_newline enum_directive
 	)* opt_newline ']';
-enum_directive: 'all';
+enum_directive: 'all' | common_directive;
 
 struct:
 	(struct_directives req_newline)? access_modifier? STRUCT type (
@@ -61,7 +61,10 @@ struct_directives:
 	)* opt_newline ']';
 struct_directive:
 	'default_constructor(' access_modifier ')'
-	| 'field_key';
+	| 'field_key'
+	| common_directive;
+
+common_directive: 'eq' | 'hash' | 'clone';
 
 assoc_field_declare: ASSOC field_declare;
 field_declare: value_declare_head type_annotate;
@@ -106,6 +109,8 @@ statement:
 	| return_statement
 	| break_statement
 	| give_statement
+	| guard
+	| while
 	| CONTINUE;
 return_statement: RETURN expression?;
 break_statement: BREAK expression?;
@@ -129,6 +134,7 @@ value_declare_head: MUT? VAL value;
 ASSIGN_OP: '=' | '+=' | '-=' | '*=' | '/=';
 guard:
 	GUARD enum_assign (AND_OP opt_newline enum_assign)* block;
+while: WHILE condition block;
 
 expression: coalesce;
 coalesce: coalesce COALESCE_OP opt_newline or | or;
@@ -160,7 +166,6 @@ primary:
 	| block_expression
 	| loop_expression
 	| if_expression
-	| lock_expression
 	| primary AS type_use
 	| AWAIT primary
 	| primary '[' primary ']'
@@ -193,13 +198,13 @@ member_access: '?'* '.';
 
 if_expression:
 	if block_expression (elif block_expression)* else block_expression;
-if: IF if_condition;
-elif: ELIF if_condition;
+if: IF condition;
+elif: ELIF condition;
 else: ELSE;
-if_condition:
+condition:
 	expression
 	| (expression AND_OP opt_newline)? enum_assign (
-		AND_OP opt_newline if_condition
+		AND_OP opt_newline condition
 	)?;
 enum_assign: enum_assign_left '=' expression;
 
@@ -211,10 +216,6 @@ match_case: expression | enum_assign_left | '_';
 // In the AST, even already-defined variables can be used as assign_left, but only variable definitions are intended to be allowed.
 enum_assign_left:
 	type ('.' opt_newline type)* '.' enum_variant '(' assign_left ')';
-
-lock_expression:
-	LOCK lock_value (',' opt_newline lock_value)* block;
-lock_value: value | value '=' expression;
 
 loop_expression: LOOP block;
 
@@ -303,11 +304,11 @@ FN: 'fn';
 CONSTRUCT: 'construct';
 INOUT: 'inout';
 GUARD: 'guard';
+WHILE: 'while';
+FOR: 'for';
 IF: 'if';
 ELIF: 'elif';
 ELSE: 'else';
-FOR: 'for';
-LOCK: 'lock';
 MATCH: 'match';
 AS: 'as';
 SELF: 'self';
