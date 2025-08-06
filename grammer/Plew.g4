@@ -1,6 +1,17 @@
 grammar Plew;
 
-// comment, import
+import_statement:
+	IMPORT import_source ((AS type) | import_with)?;
+import_with:
+	WITH '{' opt_newline import_with_component (
+		',' opt_newline import_with_component
+	)* opt_newline '}';
+import_with_component: (type (AS type)?) | (value (AS value)?);
+import_source:
+	package_name
+	| path_component ( '/' path_component)*;
+path_component: '.' | '..' | type;
+package_name: '@' type;
 
 extern:
 	EXTERN string_literal '{' (
@@ -61,10 +72,9 @@ struct_directives:
 	)* opt_newline ']';
 struct_directive:
 	'default_constructor(' access_modifier ')'
-	| 'field_key'
 	| common_directive;
 
-common_directive: 'eq' | 'hash' | 'clone';
+common_directive: 'eq' | 'hash' | 'clone' | 'decode' | 'encode';
 
 assoc_field_declare: ASSOC field_declare;
 field_declare: value_declare_head type_annotate;
@@ -334,5 +344,9 @@ AS: 'as';
 SELF: 'self';
 SELF_TYPE: 'Self';
 EXTERN: 'extern';
+IMPORT: 'import';
+WITH: 'with';
 
 WHITESPACE: [ \t]+ -> skip;
+LINE_COMMENT: '//' ~[\n]* -> skip;
+BLOCK_COMMENT: '/*' .*? '*/' -> skip;
