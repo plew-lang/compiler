@@ -1,6 +1,6 @@
 grammar Plew;
 
-// variable expansion, for in, comment, import
+// comment, import
 
 extern:
 	EXTERN string_literal '{' (
@@ -118,23 +118,43 @@ give_statement: GIVE expression;
 value_declare: value_declare_head type_annotate;
 assign: assign_left ASSIGN_OP expression;
 assign_left:
+	assign_left_with_declare
+	| assign_left_without_declare;
+assign_left_with_declare:
+	value_declare_head type_annotate?
+	| tuple_assign_left_with_declare
+	| struct_assign_left_with_declare;
+tuple_assign_left_with_declare:
+	'(' opt_newline assign_left_with_declare (
+		',' opt_newline assign_left_with_declare
+	)* opt_newline ')';
+struct_assign_left_with_declare:
+	'[' opt_newline struct_assign_left_entry_with_declare (
+		',' opt_newline struct_assign_left_entry_with_declare
+	)* opt_newline ']';
+struct_assign_left_entry_with_declare:
+	expression ':' assign_left_with_declare;
+assign_left_without_declare:
 	value ('.' opt_newline value)*
 	| extended_type_chain ( '.' opt_newline value)+
-	| value_declare_head type_annotate?
-	| tuple_assign_left
-	| struct_assign_left;
-struct_assign_left:
-	'[' opt_newline struct_assign_left_entry (
-		',' opt_newline struct_assign_left_entry
+	| tuple_assign_left_without_declare
+	| struct_assign_left_without_declare;
+struct_assign_left_without_declare:
+	'[' opt_newline struct_assign_left_entry_without_declare (
+		',' opt_newline struct_assign_left_entry_without_declare
 	)* opt_newline ']';
-struct_assign_left_entry: expression ':' assign_left;
-tuple_assign_left:
-	'(' opt_newline assign_left (',' opt_newline assign_left)* opt_newline ')';
+struct_assign_left_entry_without_declare:
+	expression ':' assign_left_without_declare;
+tuple_assign_left_without_declare:
+	'(' opt_newline assign_left_without_declare (
+		',' opt_newline assign_left_without_declare
+	)* opt_newline ')';
 value_declare_head: MUT? VAL value;
 ASSIGN_OP: '=' | '+=' | '-=' | '*=' | '/=';
 guard:
 	GUARD enum_assign (AND_OP opt_newline enum_assign)* block;
 while: WHILE condition block;
+for: FOR assign_left_with_declare IN expression block;
 
 expression: coalesce;
 coalesce: coalesce COALESCE_OP opt_newline or | or;
@@ -213,9 +233,8 @@ match_expression:
 		req_newline match_case block_expression
 	)* req_newline '}';
 match_case: expression | enum_assign_left | '_';
-// In the AST, even already-defined variables can be used as assign_left, but only variable definitions are intended to be allowed.
 enum_assign_left:
-	type ('.' opt_newline type)* '.' enum_variant '(' assign_left ')';
+	type ('.' opt_newline type)* '.' enum_variant '(' assign_left_with_declare ')';
 
 loop_expression: LOOP block;
 
@@ -306,6 +325,7 @@ INOUT: 'inout';
 GUARD: 'guard';
 WHILE: 'while';
 FOR: 'for';
+IN: 'in';
 IF: 'if';
 ELIF: 'elif';
 ELSE: 'else';
