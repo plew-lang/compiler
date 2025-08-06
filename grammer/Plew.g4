@@ -298,8 +298,16 @@ tuple_literal:
 dictionary_entry: expression ':' expression;
 integer_literal: DIGIT+;
 float_literal: DIGIT+ '.' DIGIT+;
-string_literal: '"' .*? '"';
 bool_literal: 'true' | 'false';
+string_literal: back_string_literal | double_string_literal;
+back_string_literal:
+	'`' (BACK_STRING_CHAR | string_variable)* '`';
+BACK_STRING_CHAR: '\\' . | ~[`\u007B];
+double_string_literal:
+	'"' (DOUBLE_STRING_CHAR | string_variable)* '"';
+DOUBLE_STRING_CHAR: '\\' . | ~["\u007B];
+string_variable: '{' expression (':' STRING_FORMAT+)? '}';
+STRING_FORMAT: '\\' . | ~[\u007D];
 
 req_newline: NEWLINE+;
 opt_newline: NEWLINE*;
