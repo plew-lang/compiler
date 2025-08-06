@@ -1,5 +1,19 @@
 grammar Plew;
 
+program: (program_component req_newline)* EOF;
+
+program_component:
+	import_statement
+	| extern
+	| extension
+	| trait
+	| enum
+	| struct
+	| impl
+	| type_alias
+	| function
+	| value_declare;
+
 import_statement:
 	IMPORT import_source ((AS type) | import_with)?;
 import_with:
@@ -19,17 +33,13 @@ extern:
 	)* opt_newline '}';
 
 extension:
-	access_modifier? EXTENSION type (
-		type_args_declare where_clauses?
-	)? '{' opt_newline extension_body (
+	EXPORT? EXTENSION type (type_args_declare where_clauses?)? '{' opt_newline extension_body (
 		req_newline extension_body
 	)* opt_newline '}';
 extension_body: impl;
 
 trait:
-	access_modifier? TRAIT type (
-		type_args_declare where_clauses?
-	)? '{' trait_bodies? '}';
+	EXPORT? TRAIT type (type_args_declare where_clauses?)? '{' trait_bodies? '}';
 trait_bodies:
 	opt_newline trait_body (req_newline trait_body)* opt_newline;
 trait_body:
@@ -40,7 +50,7 @@ trait_body:
 	| constructor_declare
 	| method_declare;
 
-enum: (enum_directives req_newline)? access_modifier? ENUM type (
+enum: (enum_directives req_newline)? EXPORT? ENUM type (
 		type_args_declare where_clauses?
 	)? '{' enum_bodies? '}';
 enum_bodies:
@@ -60,7 +70,7 @@ enum_directives:
 enum_directive: 'all' | common_directive;
 
 struct:
-	(struct_directives req_newline)? access_modifier? STRUCT type (
+	(struct_directives req_newline)? EXPORT? STRUCT type (
 		type_args_declare where_clauses?
 	)? '{' struct_bodies? '}';
 struct_bodies:
@@ -71,7 +81,7 @@ struct_directives:
 		',' opt_newline struct_directive
 	)* opt_newline ']';
 struct_directive:
-	'default_constructor(' access_modifier ')'
+	'default_constructor(' PUB ')'
 	| common_directive;
 
 common_directive: 'eq' | 'hash' | 'clone' | 'decode' | 'encode';
@@ -89,14 +99,14 @@ impl:
 assoc_value:
 	ASSOC value_declare_head type_annotate? '=' expression;
 type_alias: TYPE type '=' type_use;
-field_access_modifier: access_modifier ('(' GET ')')?;
+field_access_modifier: PUB ('(' GET ')')?;
 
 constructor: constructor_declare block;
 constructor_declare:
-	access_modifier? block_modifier? CONSTRUCT function_declare_tail;
+	PUB? block_modifier? CONSTRUCT function_declare_tail;
 method: method_declare block;
 method_declare:
-	access_modifier? method_modifier FN function_name function_declare_tail;
+	PUB? method_modifier FN function_name function_declare_tail;
 method_modifier:
 	ASSOC block_modifier?
 	| ASYNC MUT
@@ -104,7 +114,7 @@ method_modifier:
 	| block_modifier;
 function: function_declare block;
 function_declare:
-	access_modifier? block_modifier? FN function_name function_declare_tail;
+	EXPORT? block_modifier? FN function_name function_declare_tail;
 function_declare_tail:
 	type_args_declare? '(' args_declare? ')' return_type? where_clauses?;
 return_type: '->' type_use;
@@ -196,6 +206,7 @@ primary:
 	| block_expression
 	| loop_expression
 	| if_expression
+	| match_expression
 	| primary AS type_use
 	| AWAIT primary
 	| primary '[' primary ']'
@@ -254,8 +265,6 @@ block:
 	'{' opt_newline (
 		statement (req_newline statement)* opt_newline
 	)? '}';
-
-access_modifier: EXPORT;
 
 type_annotate: ':' type_use;
 type_use:
@@ -317,6 +326,7 @@ DIGIT: [0-9];
 SNAKE_CASE: [a-z] [a-z0-9_]*;
 PASCAL_CASE: [A-Z] [A-Za-z0-9]*;
 EXPORT: 'export';
+PUB: 'pub';
 GET: 'get';
 TYPE: 'type';
 VAL: 'val';
