@@ -209,6 +209,7 @@ primary:
 	| match_expression
 	| primary AS type_use
 	| AWAIT primary
+	| TRY primary
 	| primary '[' primary ']'
 	| '(' expression ')';
 
@@ -276,7 +277,7 @@ type: SELF_TYPE | PASCAL_CASE;
 value: SELF | SNAKE_CASE;
 enum_variant: PASCAL_CASE;
 
-extension_use: (opt_newline '#' type_use)+;
+extension_use: (opt_newline ('#' | '#!') type_use)+;
 
 type_args_declare: '[' type (',' type)* ']';
 type_args: '[' type_use (',' type_use)* ']';
@@ -364,6 +365,7 @@ SELF_TYPE: 'Self';
 EXTERN: 'extern';
 IMPORT: 'import';
 WITH: 'with';
+TRY: 'try';
 
 WHITESPACE: [ \t]+ -> skip;
 LINE_COMMENT: '//' ~[\n]* -> skip;
