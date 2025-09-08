@@ -284,7 +284,8 @@ type_args: '[' type_use (',' type_use)* ']';
 
 where_clauses:
 	WHERE where_clause (',' opt_newline where_clause)*;
-where_clause: type ('.' type)* type_annotate;
+where_clause: type ('.' type)* ('=' | ':') trait_bounds;
+trait_bounds: type_use ('+' opt_newline type_use)*;
 
 literal:
 	closure_literal
@@ -309,12 +310,7 @@ dictionary_entry: expression ':' expression;
 integer_literal: DIGIT+;
 float_literal: DIGIT+ '.' DIGIT+;
 bool_literal: 'true' | 'false';
-string_literal: back_string_literal | double_string_literal;
-back_string_literal:
-	'`' (BACK_STRING_CHAR | string_variable)* '`';
-BACK_STRING_CHAR: '\\' . | ~[`\u007B];
-double_string_literal:
-	'"' (DOUBLE_STRING_CHAR | string_variable)* '"';
+string_literal: '"' (DOUBLE_STRING_CHAR | string_variable)* '"';
 DOUBLE_STRING_CHAR: '\\' . | ~["\u007B];
 string_variable: '{' expression (':' STRING_FORMAT+)? '}';
 STRING_FORMAT: '\\' . | ~[\u007D];
