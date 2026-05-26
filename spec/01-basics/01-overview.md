@@ -15,8 +15,10 @@ Plew は現代的なシステムプログラミング言語で、型安全性、
 export, pub, get, type, val, mut, async, spawn, await, loop, break, continue,
 give, return, panic, where, enum, struct, newtype, assoc, extension, impl, via, trait, fn,
 factory, inout, guard, while, for, in, if, elif, else, match, as, self,
-Self, extern, import, part, with, try
+Self, extern, import, part, with, try, true, false
 ```
+
+`true` / `false` は真偽値リテラルです。
 
 ## コメント
 

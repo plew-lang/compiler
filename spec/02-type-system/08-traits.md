@@ -44,7 +44,7 @@ impl Counter as Iterator {
 
 - **型引数（多重 conformance）と関連型（出力）の使い分け**: 入力＝呼ぶ側が選び 1 型に複数 conformance あり得るものは**型引数**にする（`Add[Rhs]`：`Vec` は `Add[Vec]` と `Add[F64]` の両方に準拠できる）。出力＝impl が一意に決めるものは**関連型**（`type Output`・`Iterator.Item`）。1 つのトレイトが両方を持ってよい（`Add[Rhs] { type Output }`）。複数 conformance のメソッドは引数型で区別される**オーバーロード**になる（→ [メソッドのオーバーロード](07-methods-impl.md)、[型変換と演算子](../03-expressions/12-operators.md)）。
 - 関連型は**型の名前空間**に属し、メソッド・フィールドのオーバーロード集合とは別。関連型名がメソッド名と衝突することはない。`type Name = …` の充足に `via` は使わない（直接束ねる）。
-- **制約を付けられる**: `type Item: Display` のように要求側で制約を課せる。impl はその制約を満たす型で束ねる。ベア `type Item` は制約なし。
+- **制約を付けられる**: `type Item: Format` のように要求側で制約を課せる。impl はその制約を満たす型で束ねる。ベア `type Item` は制約なし。
 - **外部からの射影は `T.Item`**: 型変数経由で関連型を名指すときは `.` で射影する（値のメンバアクセスと同じ区切り）。
 
 ```plew
@@ -149,8 +149,7 @@ impl File as Writer {
 
 - `Clone`: オブジェクトの複製
 - `Hash`: ハッシュ値計算
-- `Display`: 表示用フォーマット
-- `Format`: 変数展開用フォーマット（→ [文字列](../01-basics/02-basic-types.md)）
+- `Format`: 表示・変数展開用フォーマット（→ [文字列](../01-basics/02-basic-types.md)）
 
 ### 演算子・変換・Optional 系トレイト
 

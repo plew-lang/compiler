@@ -87,7 +87,7 @@ val h = spawn { give f() }   // マルチスレッド。ハンドル Thread[T]�
 - **提供メソッドは上書き不可**。準拠側 impl が witness するのは要求だけで、提供メソッドに別本体は与えられない。挙動を変えたい型は `extension`+`#Ext` で別メソッドにする。**「上書き可能な既定」は持たない**（Swift protocol extension の静的/動的ディスパッチ食い違いを回避。本体の有無で抽象 vs 固定を明示選択）。提供メソッドは型のオーバーロード集合に加わり、同セレクタ・同シグネチャで衝突はエラー→`#Ext`（引数違いは共存）。
 - **継承 `trait Sub: Super`**：Sub 準拠は Super 準拠を要求（`:` は `where` と同じ制約）。**制約であって自動実装ではない** — `impl T as Sub` には別途 `impl T as Super` が要る（暗黙生成なし＝暗黙準拠を持たない方針の一貫）。Sub の提供メソッドは self 経由で Super のメンバを呼べる。ダイヤモンドの同名要求はオーバーロード集合に入り同シグネチャなら畳まれ、同一シグネチャの提供メソッド衝突はエラー→`#Ext`。
 - **トレイト型引数あり（多重 conformance）＋関連型（出力）**：入力＝呼ぶ側が選び 1 型に複数 conformance あり得るものは型引数（`Add[Rhs]`：`Vec` は `Add[Vec]` と `Add[F64]` 両方に準拠）。出力＝impl が一意に決めるものは関連型（`type Output`・`Iterator.Item`）。両方持てる。複数 conformance のメソッドは引数型で区別されるオーバーロードになる。ただし等価・順序（`Eq`/`Ord`）は同一型上の関係なので型引数を持たない（右辺常に `Self`）。
-- **関連型 `type Item`**：宣言は `type Item`、シグネチャ中はベア参照、impl は `type Item = X` で束ねる（`via` 不使用）、制約可（`type Item: Display`）。関連型は**型の名前空間**（メソッド/フィールドのオーバーロード集合とは別）。外部射影は `T.Item`（`.`）。トレイト名の `[...]` は**位置型引数＋関連型束縛**の混在（`Add[Vec]`／`Iterator[Item = Foo]`、Rust の `Trait<Arg, Assoc=T>` 同形。supertrait/where/引数境界共通）。
+- **関連型 `type Item`**：宣言は `type Item`、シグネチャ中はベア参照、impl は `type Item = X` で束ねる（`via` 不使用）、制約可（`type Item: Format`）。関連型は**型の名前空間**（メソッド/フィールドのオーバーロード集合とは別）。外部射影は `T.Item`（`.`）。トレイト名の `[...]` は**位置型引数＋関連型束縛**の混在（`Add[Vec]`／`Iterator[Item = Foo]`、Rust の `Trait<Arg, Assoc=T>` 同形。supertrait/where/引数境界共通）。
 
 ## トレイト準拠と `via`（全要求を明示）
 
@@ -124,7 +124,7 @@ val h = spawn { give f() }   // マルチスレッド。ハンドル Thread[T]�
 ## ジェネリクス / where 句
 
 - 基本的に Rust 同様 **不変（invariant）**。
-- **型パラメータの `[...]` は名前のみ**、制約は全部 `where`（インライン `[T: Trait]` なし）。`where` の述語は `型: 制約` のみで**型等価 `where T = I32` は持たない**（具体実装は型位置 `Struct[I32]`、関連型束縛は `T: Iterator[Item = I32]`）。impl 導入の型パラメータは **`impl[...]` で前置宣言**（`impl[T] Struct[T] as Trait where T: Display`）。デフォルト型引数なし。「トレイト境界」は**「トレイト制約」**と呼ぶ（`境界`=boundary は温存）。
+- **型パラメータの `[...]` は名前のみ**、制約は全部 `where`（インライン `[T: Trait]` なし）。`where` の述語は `型: 制約` のみで**型等価 `where T = I32` は持たない**（具体実装は型位置 `Struct[I32]`、関連型束縛は `T: Iterator[Item = I32]`）。impl 導入の型パラメータは **`impl[...]` で前置宣言**（`impl[T] Struct[T] as Trait where T: Format`）。デフォルト型引数なし。「トレイト境界」は**「トレイト制約」**と呼ぶ（`境界`=boundary は温存）。
 
 ## 命名規則（言語仕様として強制）
 
@@ -133,5 +133,5 @@ val h = spawn { give f() }   // マルチスレッド。ハンドル Thread[T]�
 
 ## 標準トレイト / ディレクティブ
 
-- 基本: `Clone`, `Hash`, `Display`, `Format`（文字列補間用）。変換: `From[Source]`（`x as T`⟺`T.from(x:x)`・`try` のエラー変換にも使用）。演算子で**型引数ありは別型を結ぶもの**: 算術 `Add[Rhs]/Sub[Rhs]/Mul[Rhs]/Div[Rhs]`（`type Output`）・添字 `Index[Key]`・nil 合体 `Coalesce[Rhs]`・単項 `Not`。**等価/順序は型引数なし**: `Eq{eq(rhs:Self)->Bool}`（`==`/`!=`）・`Ord: Eq{compare(rhs:Self)->Ordering}`（`< <= > >=`）。**`&&`/`||` はトレイトでなく制御フロー**（`if` 糖衣・短絡）。`Ordering = Less|Equal|Greater`。
+- 基本: `Clone`, `Hash`, `Format`（表示・補間）。変換: `From[Source]`（`x as T`⟺`T.from(x:x)`・`try` のエラー変換にも使用）。演算子で**型引数ありは別型を結ぶもの**: 算術 `Add[Rhs]/Sub[Rhs]/Mul[Rhs]/Div[Rhs]`（`type Output`）・添字 `Index[Key]`・nil 合体 `Coalesce[Rhs]`・単項 `Not`。**等価/順序は型引数なし**: `Eq{eq(rhs:Self)->Bool}`（`==`/`!=`）・`Ord: Eq{compare(rhs:Self)->Ordering}`（`< <= > >=`）。**`&&`/`||` はトレイトでなく制御フロー**（`if` 糖衣・短絡）。`Ordering = Less|Equal|Greater`。
 - `@[...]` 組み込みディレクティブ（コンパイラが自動合成。命名は型由来で **PascalCase**）: `Eq`, `Hash`, `Clone`, `Decode`, `Encode`、struct 専用 `DefaultFactory(pub)`、enum 専用 `All`（`Enum.all()` を生成）。ユーザー定義メタプログラミングは別章（→ [spec/04-execution/16-metaprogramming.md](../spec/04-execution/16-metaprogramming.md)）。

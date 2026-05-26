@@ -17,6 +17,9 @@ async fn main() {
 }
 ```
 
+- **戻り型は `Promise[T]` と明示して書き**、本体の `return e`（`e: T`）はコンパイラが自動的に `Promise[T]` に包みます（TypeScript と同じ）。`await` はその `Promise[T]` を `T` に開きます。
+- 戻り型を省略した `async fn`（`main` など）は、値を返さない `Promise` を返します。
+
 ## spawn — スレッドの起動
 
 `spawn { … }` は新しいスレッドを起動してブロックをそこで実行します。基盤と同じく**起動したスレッド自身もシングルスレッド + イベントループ**（Web Worker 的に、内部で `async`/`await` を使えます）。
@@ -39,7 +42,7 @@ spawn { background_task() }                         // ハンドルを束縛し�
 スレッド間で値を送るにはチャネルを使います。**具体的な型・構文はコアライブラリの実装で定めます**（言語コアの構文要素ではなく、ライブラリ API）。設計上の論点：
 
 - 方針は複数 Sender だが、**Plew は所有権が無いので Rust のように「Receiver は単一所有」を強制できない** ── `Receiver` も参照の値渡しで複数箇所が持て、`receive()` も複数回呼べる。マルチコンシューマの意味論（競合 vs ファンアウト等）はコアライブラリ設計で詰める。
-- `send` は immutable メソッド（上記）。`recv()` は `Result[T, ChannelClosed]` を返す方向。
+- `send` は immutable メソッド（上記）。`receive()` は `Result[T, ChannelClosed]` を返す方向。
 
 ## メモリ管理
 

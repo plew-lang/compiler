@@ -18,6 +18,13 @@ fn mutable_function(inout param: MyStruct) {
 }
 ```
 
+`inout` 引数には、**呼び出し側でも `&` を付けて**「この呼び出しで変更され得る」ことを明示します（暗黙に書き換わらない）。`&` は `mut` な束縛にしか付けられません。
+
+```plew
+mut val account = <Account balance=0 />
+mutable_function(param: &account)   // & 必須。account はこの後 変更され得る
+```
+
 ## 変数宣言
 
 ```plew

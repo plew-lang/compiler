@@ -19,7 +19,7 @@ export struct MyStruct[T] where T: SomeTrait {
 
 ```plew
 @[All, Eq, Hash]  // ディレクティブ（オプション）
-export enum Color[T] where T: Display {
+export enum Color[T] where T: Format {
     Red { val intensity: F64 }
     Green
     Blue
@@ -97,6 +97,8 @@ val container = <Container title="Main">
     <Label text="Hello World" />
 </Container>
 ```
+
+**子要素の対応づけ（Plew で最も暗黙的な箇所）**：`<Tag>…子…</Tag>` の子要素は、フィールド名がちょうど **`children`** のフィールドへ渡されます（属性で `children=…` と書くのと等価）。`children` の型は、子要素の並び（イテレータ）から構築できることを宣言するトレイト（暫定 `FromIterator[T]`・名称未決）に準拠していなければなりません。
 
 `@[DefaultFactory(pub)]` ディレクティブで、フィールドをそのまま受け取る既定の factory の公開範囲を制御できます。
 

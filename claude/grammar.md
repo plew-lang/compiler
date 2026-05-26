@@ -37,7 +37,7 @@
 | トレイト準拠 `via` | 各要求を `via` で実体メンバに束ねる（フィールド・メソッド両方） | `impl as` のみ＝**仕様が先行** |
 | トレイトの提供メソッド | 本体ありメソッドを定義可（上書き不可・要求とは別物） | `trait_body` は `method_declare`（本体なし）のみ＝**仕様が先行** |
 | トレイト継承 supertrait | `trait Sub: Super`（`:` で境界、複数可） | `trait` 規則に supertrait 句なし＝**仕様が先行** |
-| 関連型の宣言 | `type Item`（ベア）/ `type Item: Display`（境界） | `trait_body` は `TYPE type type_annotate`＝束縛必須、ベア不可＝**仕様が先行** |
+| 関連型の宣言 | `type Item`（ベア）/ `type Item: Format`（境界） | `trait_body` は `TYPE type type_annotate`＝束縛必須、ベア不可＝**仕様が先行** |
 | 関連型の束縛 | トレイト名の `[...]` に位置型引数＋名前付き束縛 `Trait[Arg, Assoc = Foo]` 混在 | `type_args` は位置のみ（`'[' type_use (',' type_use)* ']'`）＝名前付き束縛は**仕様が先行** |
 | 関連型の射影 | `T.Item`（`.` で射影） | `type_use` が `.` 連結対応＝表現可（要 AST 解釈） |
 | トレイトの型引数 | **あり**（多重 conformance。`Add[Rhs]` 等） | `trait` 規則に `type_args_declare?` あり＝**一致** |

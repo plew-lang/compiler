@@ -7,7 +7,7 @@ struct Container[T] {
     val value: T
 }
 
-fn process[T](container: Container[T]) where T: Display {
+fn process[T](container: Container[T]) where T: Format {
     // 処理
 }
 ```
@@ -20,7 +20,7 @@ fn process[T](container: Container[T]) where T: Display {
 
 ```plew
 impl[T] Container[T] { /* … */ }                        // self が generic（inherent）
-impl[T] Container[T] as Drawable where T: Display { }    // 条件付き準拠
+impl[T] Container[T] as Drawable where T: Format { }    // 条件付き準拠
 impl[T] Vector as Mul[T] where T: Scalar { }             // T はトレイト引数だけに現れる
 impl Container[I32] as SomeTrait { }                     // 具体インスタンス化（バインダなし）
 impl Celsius { /* … */ }                                 // 非ジェネリックはブラケット不要
@@ -29,12 +29,22 @@ impl Celsius { /* … */ }                                 // 非ジェネリッ
 - `impl[T]`（束縛）と `Container[T]`（使用）を分けるので、`impl Container[I32]`（具体型に対する実装）と曖昧になりません。
 - 型パラメータがトレイト引数・`where`・メソッドにしか現れない場合も、`impl[...]` が置き場になります（self 型のブラケットに頼らない）。
 
-## Where 句
+## 呼び出し位置での型引数の明示
 
-型パラメータへの制約を表現します。各述語は **`型: 制約`** の形です（`T: Clone + Display`、関連型射影への制約 `T.Item: Display` も書けます）。
+通常は型引数を**推論**しますが、推論が効かないときは呼び出し位置でも `name[TypeArgs](args)` と明示できます。
 
 ```plew
-fn func[T](param: T) where T: Clone + Display {
+val n = parse[I32](text: input)   // 型引数 I32 を明示
+```
+
+ブラケットの中身が**型なら型引数の適用、値なら[添字アクセス](../03-expressions/12-operators.md)**として解釈します（Go と同じ判別）。型は PascalCase・値（変数）は snake_case なので、`f[I32](…)`（型引数）と `arr[i]`（添字）は衝突しません。
+
+## Where 句
+
+型パラメータへの制約を表現します。各述語は **`型: 制約`** の形です（`T: Clone + Format`、関連型射影への制約 `T.Item: Format` も書けます）。
+
+```plew
+fn func[T](param: T) where T: Clone + Format {
     // 処理
 }
 ```

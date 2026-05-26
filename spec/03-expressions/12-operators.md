@@ -99,7 +99,11 @@ val diff = a != b   // !(a == b)
 `< <= > >=` は `Ord` トレイトの糖衣です。`Ord` も同一型上の**全順序**なので型引数を持たず（`Ord: Eq`）、比較結果を `Ordering` で返します。4 つの演算子はすべて `compare` に展開されます。
 
 ```plew
-enum Ordering { Less; Equal; Greater }
+enum Ordering {
+    Less
+    Equal
+    Greater
+}
 
 trait Ord: Eq {
     fn compare(rhs: Self) -> Ordering
@@ -173,6 +177,32 @@ impl MyArray[T] as Index[I32] {
 val array = <MyArray ... />
 val first = array[0]  // array.index(key: 0) と同等
 ```
+
+### 添字代入（IndexSet）
+
+`collection[key] = value` の添字**代入**は `IndexSet` トレイトの糖衣です。Rust の `IndexMut` 相当ですが、Plew は参照・借用を持たない（可変な場所を返せない）ので、**可変参照ではなくセッターメソッド**にします。
+
+```plew
+trait IndexSet[Key] {
+    type Value
+    mut fn index_set(key: Key, value: Value)
+}
+
+impl MyArray[T] as IndexSet[I32] {
+    type Value = T
+
+    mut fn index_set(key: I32, value: T) {
+        // 要素設定の実装
+    }
+}
+
+mut val array = <MyArray ... />
+array[0] = x  // array.index_set(key: 0, value: x) と同等
+```
+
+- 読み取り（`Index`）と代入（`IndexSet`）は**独立したトレイト**で、読み取り専用コレクションは `Index` だけを実装できます。
+- `collection[key] += x` などの複合代入は、**読み取り（`Index`）＋演算＋代入（`IndexSet`）**に展開されるので、両方の実装が要ります。
+- レシーバ自身を書き換えるので `index_set` は `mut fn`。`mut val` な束縛にしか使えません。
 
 ## オプショナルチェーン（Chain トレイト）
 
