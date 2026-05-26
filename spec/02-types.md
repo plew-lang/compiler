@@ -99,7 +99,7 @@ export struct MyStruct[T] where T: SomeTrait {
 }
 ```
 
-`pub` / `pub(get)` / 非公開（修飾なし）のメンバ可視性は [関数とインスタンス生成](04-functions.md) の「メンバの可視性」を参照。非公開メンバは型の無名 impl からのみ見えます。
+`pub` / `pub(get)` / 非公開（修飾なし）のメンバ可視性は [関数とメソッド](04-functions.md) の「メンバの可視性」を参照。非公開メンバは型の無名 impl からのみ見えます。
 
 **構造体ディレクティブ**: 詳細は今後決定予定（[メタプログラミング](12-metaprogramming.md) 参照）
 
@@ -126,7 +126,7 @@ export enum Color[T] where T: Display {
 | 生成 | `<S field=expr />` | `<E.V field=expr />` |
 | 分解 | `S { field: val binding }` | `E.V { field: val binding }` |
 
-- 生成は JSX ライク構文のみ（[関数とインスタンス生成](04-functions.md) 参照）。
+- 生成は JSX ライク構文のみ（下記 [インスタンス生成](#インスタンス生成) 参照）。
 - 分解は必ず**型名を先頭に置く**ため、`{` 始まりのブロックと曖昧になりません（[制御構造](05-control-flow.md) 参照）。
 
 ### 標準の Optional / Result
@@ -173,7 +173,81 @@ export trait Shape {
 }
 ```
 
-トレイト準拠時は、各要求（フィールド・メソッド）を `via` で実体メンバに明示的に束ねます（[関数とインスタンス生成](04-functions.md) の「トレイト準拠と via」参照）。`Foo.bar` は型ごとに一意で、暗黙の準拠は起きません。
+トレイトはカスタム型の一種で、上のように要求（フィールド・メソッド・関連型・関連値）と提供メソッドを宣言します。定義・関連型・継承（supertrait）・準拠と `via` の意味論は独立章の [トレイト](11-traits.md) を参照。準拠時は各要求を `via` で実体メンバに明示的に束ね、`Foo.bar` は型ごとに一意で、暗黙の準拠は起きません。
+
+## インスタンス生成
+
+全ての構造体および列挙型バリアントは**JSX ライクな構文でのみ**インスタンス化できます。位置引数による生成（`Color.Red(5)` のような形）はありません。
+
+```plew
+struct Person {
+    val name: String
+    val age: I32
+}
+
+// フィールド指定による生成
+val person = <Person name="Alice" age=30 />
+
+// 子要素を持つ構造体（UIコンポーネントなど）
+struct Container {
+    val title: String
+    val children: Array[Widget]
+}
+
+val container = <Container title="Main">
+    <Button text="OK" />
+    <Label text="Hello World" />
+</Container>
+```
+
+`@[DefaultFactory(pub)]` ディレクティブで、フィールドをそのまま受け取る既定の factory の公開範囲を制御できます。
+
+### factory
+
+カスタムの生成ロジックは `impl` 内に `factory` で定義します（`impl` は [関数とメソッド](04-functions.md)）。古典的なコンストラクタと違い `self` を初期化するのではなく、**完成したインスタンスを `return` で返します**（＝ファクトリ）。`return` は必須で、キャッシュ済みの値など `<Type … />` 以外を返してもかまいません。
+
+- 無名 `factory(...)` → `<Type … />` で呼び出す。ラベル集合が異なれば複数定義（[オーバーロード](04-functions.md)）できる。
+- 名前付き `factory name(...)` → `<Type.name … />` で呼び出す（列挙型バリアント生成と同じ形）。名前は snake_case。
+- 属性ラベルは factory の引数ラベル（必ずしもフィールド名と一致しなくてよい）。呼び出し時はラベル必須。
+
+引数なしや同一ラベル集合の生成は無名では1つしか作れないため、それらは**名前付き factory** にします。これにより `assoc fn` を生成用に流用せずに済み、生成が常に JSX で明示されます。
+
+```plew
+struct Celsius {
+    val degree: F64
+}
+
+impl Celsius {
+    // 名前付き factory → <Celsius.from_fahrenheit … />
+    factory from_fahrenheit(fahrenheit: F64) {
+        return <Celsius degree=((fahrenheit - 32.0) / 1.8) />
+    }
+
+    // 引数なしでも名前を付ければ何個でも定義できる
+    factory zero() {
+        return <Celsius degree=0.0 />
+    }
+}
+
+val a = <Celsius degree=20.0 />                      // フィールド指定
+val b = <Celsius.from_fahrenheit fahrenheit=68.0 />  // 名前付き factory
+val z = <Celsius.zero />                             // 引数なし factory
+```
+
+factory の戻り型は常に暗黙の `Self` です。本体での `<Type field=… />`（全フィールド指定）はフィールド初期化（＝ `Self` の生成）を指し、自分自身を再帰呼び出ししません。この `Self` 規約により、下記の [`newtype`](#newtype名目型) は元の型の factory をそのまま継承して JSX 構文で生成できます。
+
+### 列挙型バリアントの生成
+
+列挙型のバリアントも同じ構文で生成します。`Enum.Variant` を型として指定し、フィールドを持たないバリアントは要素なしで生成します。
+
+```plew
+val some = <Optional.Some value=42 />
+val none = <Optional.None />
+val ok   = <Result.Ok value=data />
+val err  = <Result.Err error=parse_error />
+```
+
+enum にも snake_case の名前付き factory を定義できます（PascalCase のバリアント名と衝突しません）。
 
 ## newtype（名目型）
 
@@ -228,7 +302,7 @@ val raw: F64 = d as F64
 
 ### 生成
 
-`factory` は暗黙的に `Self` を返すため（[関数とインスタンス生成](04-functions.md) 参照）、`newtype` は元の型の factory も継承します。したがって生成も他の型と同じく JSX 構文で行えます。
+`factory` は暗黙的に `Self` を返すため（上記 [インスタンス生成](#インスタンス生成) 参照）、`newtype` は元の型の factory も継承します。したがって生成も他の型と同じく JSX 構文で行えます。
 
 ```plew
 @[DefaultFactory(pub)]

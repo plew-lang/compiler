@@ -18,7 +18,7 @@ struct Point {
 
 - `Eq`, `Hash`, `Clone` — 対応する `Eq` / `Hash` / `Clone` トレイトの実装を合成。
 - `Encode`, `Decode` — シリアライズ用の実装を合成。
-- struct 専用 `DefaultFactory(pub)` — フィールドをそのまま受け取る既定 factory を合成し、公開範囲を制御（[関数とインスタンス生成](04-functions.md) 参照）。
+- struct 専用 `DefaultFactory(pub)` — フィールドをそのまま受け取る既定 factory を合成し、公開範囲を制御（[インスタンス生成](02-types.md) 参照）。
 - enum 専用 `All` — 全バリアントを列挙する `Enum.all()` を合成。
 - enum 用（集約エラー、名称未定） — 各 variant が単一ペイロードでソースエラー型を保持する enum に `From[各ソース]`（variant ラップ）を合成し、`try` のエラー変換の boilerplate を消す（Rust の `thiserror` 相当）。`try` 側の機構は単一の `From` のまま（→ [エラーハンドリング](07-error-handling.md)）。
 
