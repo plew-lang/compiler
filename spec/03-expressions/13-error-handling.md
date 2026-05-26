@@ -19,7 +19,7 @@ fn complex_operation() -> Result[Data, GeneralError] {
 }
 ```
 
-`try` は、`expr` のエラー型 `F` が関数の戻りエラー型 `E` と違う場合、Err 時に `E.from(x: f)` を挿入して変換します（Rust の `?`＝`From::from` と同じ）。ターゲット `E` は関数シグネチャから既知なので、`GeneralError` が複数のソースエラーから変換可能（`From[ParseError]`・`From[IoError]` …）でも、ソース型でオーバーロード解決されます（→ [型変換と From トレイト](07-operators.md)）。`E == F` のときは変換不要でそのまま伝播します。
+`try` は、`expr` のエラー型 `F` が関数の戻りエラー型 `E` と違う場合、Err 時に `E.from(x: f)` を挿入して変換します（Rust の `?`＝`From::from` と同じ）。ターゲット `E` は関数シグネチャから既知なので、`GeneralError` が複数のソースエラーから変換可能（`From[ParseError]`・`From[IoError]` …）でも、ソース型でオーバーロード解決されます（→ [型変換と From トレイト](12-operators.md)）。`E == F` のときは変換不要でそのまま伝播します。
 
 ```plew
 impl GeneralError as From[ParseError] {
@@ -30,7 +30,7 @@ impl GeneralError as From[IoError] {
 }
 ```
 
-集約エラー enum（各ソースエラーを variant で保持する型）では、こうした variant ラップの `From` 実装を**メタプログラミングで自動生成**でき、手書きは不要です（Rust の `thiserror` 相当）。`try` 側の機構は単一の `From` のまま、boilerplate だけを生成で消します（→ [メタプログラミング](12-metaprogramming.md)）。
+集約エラー enum（各ソースエラーを variant で保持する型）では、こうした variant ラップの `From` 実装を**メタプログラミングで自動生成**でき、手書きは不要です（Rust の `thiserror` 相当）。`try` 側の機構は単一の `From` のまま、boilerplate だけを生成で消します（→ [メタプログラミング](../04-execution/16-metaprogramming.md)）。
 
 ## force-unwrap は持たない
 

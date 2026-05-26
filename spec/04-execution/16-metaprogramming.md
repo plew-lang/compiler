@@ -18,9 +18,9 @@ struct Point {
 
 - `Eq`, `Hash`, `Clone` — 対応する `Eq` / `Hash` / `Clone` トレイトの実装を合成。
 - `Encode`, `Decode` — シリアライズ用の実装を合成。
-- struct 専用 `DefaultFactory(pub)` — フィールドをそのまま受け取る既定 factory を合成し、公開範囲を制御（[インスタンス生成](02-types.md) 参照）。
+- struct 専用 `DefaultFactory(pub)` — フィールドをそのまま受け取る既定 factory を合成し、公開範囲を制御（[インスタンス生成](../02-type-system/05-structs-enums.md) 参照）。
 - enum 専用 `All` — 全バリアントを列挙する `Enum.all()` を合成。
-- enum 用（集約エラー、名称未定） — 各 variant が単一ペイロードでソースエラー型を保持する enum に `From[各ソース]`（variant ラップ）を合成し、`try` のエラー変換の boilerplate を消す（Rust の `thiserror` 相当）。`try` 側の機構は単一の `From` のまま（→ [エラーハンドリング](08-error-handling.md)）。
+- enum 用（集約エラー、名称未定） — 各 variant が単一ペイロードでソースエラー型を保持する enum に `From[各ソース]`（variant ラップ）を合成し、`try` のエラー変換の boilerplate を消す（Rust の `thiserror` 相当）。`try` 側の機構は単一の `From` のまま（→ [エラーハンドリング](../03-expressions/13-error-handling.md)）。
 
 > 命名規則: ディレクティブは（理想的には）すべて後述の `Derive` トレイトを実装する**構造体**として表されるため、組み込み・ユーザー定義を問わず **PascalCase** です（`Eq` / `Hash` / `Clone` / `Encode` / `Decode` / `DefaultFactory` / `All`）。一方、ディレクティブが**生成する**メンバ（例: `Enum.all()`）は通常の関数・変数なので snake_case のままです。
 
@@ -58,5 +58,5 @@ impl All as Derive { /* ... */ }
 - 生成コマンドの名前・設定方法、および生成ファイルの命名規則・配置・コミット要否。
 - マクロ自身のビルドと配布（同一リポジトリ内か、別パッケージか）。
 - 衛生（hygiene）・名前解決・生成コードのスコープ。
-- [拡張システム](10-extensions.md)（`#Extension`）との関係。
+- [拡張システム](../02-type-system/09-extensions.md)（`#Extension`）との関係。
 - 組み込みディレクティブを実際に `Derive` 実装として提供するか（理想は Yes だが、性能・ブートストラップ上コンパイラ特権実装に留める可能性）。

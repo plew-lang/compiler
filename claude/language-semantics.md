@@ -6,7 +6,7 @@
 
 1. **参照の値渡し + GC + 所有権なし**。これが全制約の根。Rust 的な静的競合防止が効かないため、並行性は「spawn は全 immutable + チャネル」という Go 寄りの割り切りに着地している。
 2. **拡張解決は呼び出し位置の `#Extension` だけで決定論的に決まる**。import スコープに依存しない。
-3. **メタプログラミングはユーザー定義可能（方針転換中）**。当初は閉じていた（ユーザーマクロ無し、組み込み `@[...]` ディレクティブのみ）が、ビルドと独立した別コマンドで別ファイルにコード生成し、マクロは `TokenStream` を入出力する構造体（`Derive` トレイト実装）として定義する方式へ転換。組み込みディレクティブも理想的には同じ仕組みで提供する。詳細・未決は [spec/12-metaprogramming.md](../spec/12-metaprogramming.md) で検討中。
+3. **メタプログラミングはユーザー定義可能（方針転換中）**。当初は閉じていた（ユーザーマクロ無し、組み込み `@[...]` ディレクティブのみ）が、ビルドと独立した別コマンドで別ファイルにコード生成し、マクロは `TokenStream` を入出力する構造体（`Derive` トレイト実装）として定義する方式へ転換。組み込みディレクティブも理想的には同じ仕組みで提供する。詳細・未決は [spec/04-execution/16-metaprogramming.md](../spec/04-execution/16-metaprogramming.md) で検討中。
 
 ## 値の意味論
 
@@ -134,4 +134,4 @@ val h = spawn { give f() }   // マルチスレッド。ハンドル Thread[T]�
 ## 標準トレイト / ディレクティブ
 
 - 基本: `Clone`, `Hash`, `Display`, `Format`（文字列補間用）。変換: `From[Source]`（`x as T`⟺`T.from(x:x)`・`try` のエラー変換にも使用）。演算子で**型引数ありは別型を結ぶもの**: 算術 `Add[Rhs]/Sub[Rhs]/Mul[Rhs]/Div[Rhs]`（`type Output`）・添字 `Index[Key]`・nil 合体 `Coalesce[Rhs]`・単項 `Not`。**等価/順序は型引数なし**: `Eq{eq(rhs:Self)->Bool}`（`==`/`!=`）・`Ord: Eq{compare(rhs:Self)->Ordering}`（`< <= > >=`）。**`&&`/`||` はトレイトでなく制御フロー**（`if` 糖衣・短絡）。`Ordering = Less|Equal|Greater`。
-- `@[...]` 組み込みディレクティブ（コンパイラが自動合成。命名は型由来で **PascalCase**）: `Eq`, `Hash`, `Clone`, `Decode`, `Encode`、struct 専用 `DefaultFactory(pub)`、enum 専用 `All`（`Enum.all()` を生成）。ユーザー定義メタプログラミングは別章（→ [spec/12-metaprogramming.md](../spec/12-metaprogramming.md)）。
+- `@[...]` 組み込みディレクティブ（コンパイラが自動合成。命名は型由来で **PascalCase**）: `Eq`, `Hash`, `Clone`, `Decode`, `Encode`、struct 専用 `DefaultFactory(pub)`、enum 専用 `All`（`Enum.all()` を生成）。ユーザー定義メタプログラミングは別章（→ [spec/04-execution/16-metaprogramming.md](../spec/04-execution/16-metaprogramming.md)）。

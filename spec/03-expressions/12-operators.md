@@ -2,7 +2,7 @@
 
 ## 型キャストと From トレイト
 
-`x as T` キャストは、ターゲット型 `T` の `From[Source]` 実装を呼ぶシンタックスシュガーです（`x as T` ⟺ `T.from(x: x)`）。**唯一の例外は [`newtype`](02-types.md) と元の型の間の `as`** で、これは `From` 実装ではなく表現が同一な型どうしのゼロコストな再タグ（構造的に必ず成功）として処理されます。
+`x as T` キャストは、ターゲット型 `T` の `From[Source]` 実装を呼ぶシンタックスシュガーです（`x as T` ⟺ `T.from(x: x)`）。**唯一の例外は [`newtype`](../02-type-system/10-newtype.md) と元の型の間の `as`** で、これは `From` 実装ではなく表現が同一な型どうしのゼロコストな再タグ（構造的に必ず成功）として処理されます。
 
 ```plew
 trait From[Source] {
@@ -22,7 +22,7 @@ val x: I32 = 10
 val y: I64 = x as I64  // I64.from(x: x) と同等
 ```
 
-ターゲット型は `as T` の `T`（や `try` の関数戻り型）で常に明示的に決まるので、`from(x:)` は**ソース引数の型でオーバーロード解決**されます（→ [メソッドのオーバーロード](04-functions.md)）。これにより 1 つの型が複数ソースから変換可能（`I64` は `From[I32]` と `From[I16]` の両方に準拠）になります。`try` のエラー変換も同じ `From` を使います（→ [エラーハンドリング](08-error-handling.md)）。
+ターゲット型は `as T` の `T`（や `try` の関数戻り型）で常に明示的に決まるので、`from(x:)` は**ソース引数の型でオーバーロード解決**されます（→ [メソッドのオーバーロード](../02-type-system/07-methods-impl.md)）。これにより 1 つの型が複数ソースから変換可能（`I64` は `From[I32]` と `From[I16]` の両方に準拠）になります。`try` のエラー変換も同じ `From` を使います（→ [エラーハンドリング](13-error-handling.md)）。
 
 **暗黙変換は持ちません。** 型変換は常に明示の `as`（数値の幅変更 `I32→I64` 等も `x as I64` と書く）。例外は `try` のエラー変換（`From` を暗黙挿入）と数値リテラルの多相だけ。これによりオーバーロード解決は「ラベル＋具体型の完全一致（リテラルは互換候補に絞り一意か否か）」に保たれ、変換ランク付けの曖昧さが生じません。
 
@@ -56,7 +56,7 @@ val result = v1 + v2  // v1.add(rhs: v2) と同等
 
 ### 演算子のオーバーロード（右オペランド型ごとの conformance）
 
-演算子は対応トレイトのメソッドの糖衣です（`a + b` ⟺ `a.add(rhs: b)`）。トレイトは右オペランド型を型引数に持つので（`Add[Rhs]`）、**1 つの型が複数の右オペランド型に準拠**でき、`add` は引数型で区別される[オーバーロード](04-functions.md)として解決されます。
+演算子は対応トレイトのメソッドの糖衣です（`a + b` ⟺ `a.add(rhs: b)`）。トレイトは右オペランド型を型引数に持つので（`Add[Rhs]`）、**1 つの型が複数の右オペランド型に準拠**でき、`add` は引数型で区別される[オーバーロード](../02-type-system/07-methods-impl.md)として解決されます。
 
 ```plew
 // Vector * Vector
@@ -92,7 +92,7 @@ val same = a == b   // a.eq(rhs: b)
 val diff = a != b   // !(a == b)
 ```
 
-`@[Eq]` ディレクティブはフィールドごとの `impl T as Eq` を合成します（→ [メタプログラミング](12-metaprogramming.md)）。
+`@[Eq]` ディレクティブはフィールドごとの `impl T as Eq` を合成します（→ [メタプログラミング](../04-execution/16-metaprogramming.md)）。
 
 ## 順序（Ord トレイト）
 
@@ -111,7 +111,7 @@ a > b    // match a.compare(rhs: b) { Greater => true,  _ => false }
 a >= b   // match a.compare(rhs: b) { Less => false,    _ => true }
 ```
 
-`F32`/`F64` も `Ord`・`Eq` に準拠しますが、**NaN を比較すると panic** します（IEEE の「NaN はどの値とも順序が付かない」を静かな `false` で返さず落とす）。NaN 判定は `is_nan()`。算術自体は IEEE 据え置きで NaN/inf を生成します（→ [型システム](02-types.md)）。
+`F32`/`F64` も `Ord`・`Eq` に準拠しますが、**NaN を比較すると panic** します（IEEE の「NaN はどの値とも順序が付かない」を静かな `false` で返さず落とす）。NaN 判定は `is_nan()`。算術自体は IEEE 据え置きで NaN/inf を生成します（→ [基本型](../01-basics/02-basic-types.md)）。
 
 ## 論理結合子（`&&` / `||`）
 
@@ -126,7 +126,7 @@ a || b   // ≡ if a { give true } else { give b }
 
 > 前置 `!`（`Not`）は eager（必ずオペランドを評価する値演算）なのでトレイトのままです。ビット演算が必要なら `&` / `|` を `BitAnd` / `BitOr` トレイト（eager）として別途用意します（現状は未提供）。
 
-> **条件位置での `&&`**：`if`/`elif`/`while`/`guard` の条件では、`&&` は Bool 節に加えて反証可能束縛 `PATTERN = expr` も連結します（[条件チェーン](06-control-flow.md)）。値レベルの短絡と同じ概念ですが脱糖は別物で、`||` は束縛節を連結できません。
+> **条件位置での `&&`**：`if`/`elif`/`while`/`guard` の条件では、`&&` は Bool 節に加えて反証可能束縛 `PATTERN = expr` も連結します（[条件チェーン](11-control-flow.md)）。値レベルの短絡と同じ概念ですが脱糖は別物で、`||` は束縛節を連結できません。
 
 ## 単項演算子
 
@@ -191,8 +191,8 @@ trait Chain {
 
 ```plew
 match receiver.chain() {
-    Optional.Some { value: val v } => { give O.from_value(value: v.member) }
-    Optional.None                  => { give O.empty() }
+    Optional.Some { value: val v } => O.from_value(value: v.member)
+    Optional.None                  => O.empty()
 }
 ```
 
@@ -224,7 +224,7 @@ impl Optional[T] as Chain {
 }
 ```
 
-> `chain()` の戻り値が空のケース（`Optional.None`）は付随する値を持たないため、`Result` のようにエラー情報を運ぶ型は `?.` の対象外です。エラーの早期リターンは [`try`](08-error-handling.md) を使います。
+> `chain()` の戻り値が空のケース（`Optional.None`）は付随する値を持たないため、`Result` のようにエラー情報を運ぶ型は `?.` の対象外です。エラーの早期リターンは [`try`](13-error-handling.md) を使います。
 
 ## Nil 合体演算子（Coalesce トレイト）
 
@@ -248,8 +248,8 @@ impl Optional[T] as Coalesce[Optional[T]] {
 
     fn coalesce(rhs: Optional[T]) -> Optional[T] {
         return match self {
-            Optional.Some { value: val v } => { give <Optional.Some value=v /> }
-            Optional.None                  => { give rhs }
+            Optional.Some { value: val v } => <Optional.Some value=v />
+            Optional.None                  => rhs
         }
     }
 }
@@ -260,8 +260,8 @@ impl Optional[T] as Coalesce[T] {
 
     fn coalesce(rhs: T) -> T {
         return match self {
-            Optional.Some { value: val v } => { give v }
-            Optional.None                  => { give rhs }
+            Optional.Some { value: val v } => v
+            Optional.None                  => rhs
         }
     }
 }
