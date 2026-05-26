@@ -49,7 +49,9 @@
 | `panic` 文 | `panic "メッセージ"` キーワード（発散する**文**・式不可・catch 不可） | 文法に `panic` トークン/規則なし＝**仕様が先行** |
 | match アーム右辺 | ベア式 `=> expr`／ブロック `=> {…; give x}`／発散ブロック `=> {… panic …}` の 3 形式 | `match_case` の右辺形は要確認・ベア式と発散アーム＝**仕様が先行** |
 | ローカル再宣言（shadowing） | Rust 流に無制限（`name` は直近の宣言を指す。型/可変性変更可） | 文法は同名 `val` を許容、名前解決は意味論層＝一致（意味論層） |
-| 文字列・配列の型意味論 | `String`=不変・UTF-8 妥当・`==` バイト等価・`struct { pub(get) bytes: Array[U8] }`・`scalars`/`graphemes` はイテレータ・整数添字なし。`Array[T]` 一本（`[E; N]`/Slice/substring は保留）。タプルに Index なし | 文法に string_literal（補間）・配列/タプルリテラルあり＝**型意味論は意味論層**（不変・妥当性・ビューは型検査／コード生成層）＝仕様が先行 |
+| 文字列・配列の型意味論 | `String`=不変・UTF-8 妥当・`==` バイト等価・`struct { pub(get) bytes: Array[U8] }`・`scalars`/`graphemes` はイテレータ・整数添字なし。`Array[T]` 一本（`[E; N]`/Slice/substring は保留） | 文法に string_literal（補間）・配列リテラルあり＝**型意味論は意味論層**（不変・妥当性・ビューは型検査／コード生成層）＝仕様が先行 |
+| ラベル付きタプル（無名レコード） | 位置タプル廃止。`(x: I32, y: I32)` 型／`(x: 1, y: 2)` 生成／`.x` アクセス／`(val x, val y)=e` 分解。構造的・順不同・振る舞いなし | 現行文法は位置タプル `(e, e)`＝**仕様が先行**（ラベル必須・型意味論は意味論層） |
+| 変数束縛 `val`/bare・punning | `val`＝新規・bare＝既存（refutable は bare＝マッチ）。`for val i`／`(val x, val y)=e`／punning `{ val x }`≡`{ x: val x }`・未初期化宣言なし | 未反映＝**仕様が先行** |
 | レンジ構文 | `a..<b`(半開)/`a..=b`(閉)・素の `..` なし・2 型 `HalfOpenRange`/`ClosedRange` への**固定 JSX 糖衣**（非トレイト）・要素 `Ord`／反復は `Step` 条件付き（整数のみ） | 現行文法に範囲リテラルなし（要確認）＝**仕様が先行**（型・糖衣・トレイト制約は意味論層） |
 
 ## `examples/main.pw` について

@@ -54,13 +54,13 @@ SDK は 10 系だが `.csproj` の `TargetFramework` は `net8.0`。ANTLR パー
 - 無名 impl は**型を所有するモジュールのみ**、外部型は拡張 `#Ext`（Rust の「型 or トレイト」より厳格）→ spec/10,11。
 - トレイト準拠は**全要求 `via` 明示**（暗黙準拠なし）→ spec/05。メソッドは**引数型でオーバーロード可**（セレクタ＝名前＋ラベル、無名 impl はモジュール閉包でローカル検査・specialization 無し・→ spec/04）。提供メソッド（本体あり）可だが**上書き不可**。継承 `trait Sub: Super` は制約のみ・自動実装しない。**トレイトは型引数あり（多重 conformance）＋関連型（出力）**。演算子＝`Add[Rhs]` 等を右オペランド型でオーバーロード（**等価 `Eq`・順序 `Ord: Eq{compare->Ordering}` は同一型上の関係＝型引数なし**、`&&`/`||` は**短絡する制御フロー**でトレイト非）、変換＝`From[Source]`（`x as T`⟺`T.from`・`try` のエラー変換）。**浮動小数の NaN は比較で panic**（`is_nan()`・算術は IEEE）。数値リテラルは多相・文脈で確定・既定型なし → spec/02,04,07。
 - ジェネリクス: 型パラメータの `[...]` は**名前のみ**（インライン制約 `[T: Trait]` なし・制約は全部 `where`）。impl 導入の型変数は **`impl[T] Type …`** と前置宣言（束縛・self 型のブラケットは使用）。`where` に型等価 `T = I32` はなく具体実装は型位置 `Type[I32]`。デフォルト型引数なし。**「トレイト制約」**と呼ぶ（`境界`＝boundary とは別語）→ spec/02,04,05。
-- 制御フロー/変数: `panic "msg"` は**発散する文**（式ではない・回復不能・catch 不可、spawn 内はプロセス停止）。match アームはベア式 `=> v` も可（give/発散ブロックも）。ローカル変数の**再宣言（shadowing）は Rust 流に無制限**（`name` は直近の宣言を指す）→ spec/03,06。
+- 制御フロー/変数: `panic "msg"` は**発散する文**（式ではない・回復不能・catch 不可、spawn 内はプロセス停止）。match アームはベア式 `=> v` も可（give/発散ブロックも）。ローカル変数の**再宣言（shadowing）は Rust 流に無制限**（`name` は直近の宣言を指す）。**束縛は `val`＝新規・bare＝既存**（refutable パターンは bare＝マッチ）で分解・for に一般化（`for val i`／`(val x, val y)=e`／punning `{ val x }`≡`{ x: val x }`）・未初期化宣言なし → spec/03,06。
 - 可視性は `pub`（型スコープ・非公開は無名 impl のみ）と `export`（モジュール境界）の**別 2 軸・中間段なし** → spec/04,11。
 - 1 ファイル 1 モジュール（`.pw`）・`part` 分割・ディレクトリは `_.pw` → spec/11。
 - 並行性: `async`/`await`=JS（単一スレッド+イベントループ）、`spawn`=スレッド起動で戻りは `join() -> Promise[T]`、キャプチャ全 immutable、チャネルはコアライブラリ送り → spec/09。
 - エラー: `try`（Result 早期 return）＋エラー型の暗黙 `From` 変換（集約 enum の From はメタプログラミングで生成）→ spec/08。
 - 拡張は継承・ネスト禁止（由来一意性のため。組み合わせは `value#A#B`、再利用は `self#A.foo()`）→ spec/10。
-- 文字列/配列: `String` は**不変・UTF-8 妥当・`==` バイト等価**（参照意味論＋spawn immutable の帰結）。内部は `pub(get) bytes: Array[U8]` で公開（stored はフィールド・computed のみメソッド）。要素ビューは明示（`bytes`=配列/O(1)、`scalars`/`graphemes`=イテレータ/O(n)・整数添字なし）。`Array[T]` 一本で **`[E; N]`/const generics・Slice・substring は当面なし＝additive 保留**（FFI はコピー）。タプルに Index なし。レンジは `a..<b`(半開)/`a..=b`(閉)＝両端明示・素の `..` なし・2 型 `HalfOpenRange`/`ClosedRange` への JSX 糖衣・要素 `Ord`／反復は `Step` 条件付き（整数のみ） → spec/02,06。
+- 文字列/配列: `String` は**不変・UTF-8 妥当・`==` バイト等価**（参照意味論＋spawn immutable の帰結）。内部は `pub(get) bytes: Array[U8]` で公開（stored はフィールド・computed のみメソッド）。要素ビューは明示（`bytes`=配列/O(1)、`scalars`/`graphemes`=イテレータ/O(n)・整数添字なし）。`Array[T]` 一本で **`[E; N]`/const generics・Slice・substring は当面なし＝additive 保留**（FFI はコピー）。タプルは**ラベル付き無名レコード** `(x: I32, y: I32)`（`()` 生成・名前アクセス `.x`・構造的・振る舞いなし）に置換（位置タプル廃止）。レンジは `a..<b`(半開)/`a..=b`(閉)＝両端明示・素の `..` なし・2 型 `HalfOpenRange`/`ClosedRange` への JSX 糖衣・要素 `Ord`／反復は `Step` 条件付き（整数のみ） → spec/02,06。
 
 ## コーディング規約（Plew 言語側）
 
@@ -68,7 +68,7 @@ SDK は 10 系だが `.csproj` の `TargetFramework` は `net8.0`。ANTLR パー
 
 - 型名・enum バリアント: **PascalCase**。変数・関数名: **snake_case**。
 - import/part のパスコンポーネント（ファイル/ディレクトリ名）は PascalCase 必須（`.`/`..` と、ディレクトリ代表ファイル `_.pw` の `_` のみ例外）。ソースの拡張子は `.pw`。
-- 構造体は JSX ライク `<Type field=expr />` でのみインスタンス化。ブロックを式にするには `give` が必要。
+- 名前付き構造体は JSX ライク `<Type field=expr />` でインスタンス化、無名レコード（ラベル付きタプル）は `(label: expr)`。ブロックを式にするには `give` が必要。
 
 ## 作業の進め方・ユーザーについて
 

@@ -23,7 +23,7 @@
 - **表現＝`struct String { pub(get) bytes: Array[U8] }`**。`s.bytes` は O(1)・ゼロコピー読み取り。任意バイトの公開生成は無し（リテラル＋検証 factory `from_bytes -> Result` のみ）で UTF-8 不変条件を守る。stored はフィールド公開・computed だけメソッド。
 - **要素ビューは明示**：`bytes`（配列・ランダムアクセス・`count` O(1)）／`scalars()`・`graphemes()`（イテレータ・`count()` O(n)）。**整数添字 `s[i]` は無し**（生バイトは `s.bytes[i]`）。構築は伸長ビルダ→確定で凍結（連結 O(n²) 回避。ビルダ API 未決）。
 - **`Array[T]` 一本**：動的・伸長・連続・プリミティブ unboxed。`arr[i]` は `Index[I32] -> T`、`count` O(1)。**`[E; N]`/const generics は無し**。**Slice（ビュー型）・substring・`Range`/`arr[1..4]` も当面無し＝すべて additive 保留**。FFI は境界コピー。
-- **タプルは異種・位置指向で Index 無し**（分解・パターンでアクセス）。同種列は `Array`。C 固定長配列も異種タプルでなく同型 `Array` にコピーで写す。
+- **ラベル付きタプル（無名・構造的レコード）**：`(x: I32, y: I32)` 型・`(x: 1, y: 2)` 生成・`.x` 名前アクセス・`(val x, val y)=e` 分解。位置タプルは廃止（全要素ラベル必須）。構造的型・順不同・**振る舞いなし**（要れば名目 struct）・`()` はユニット。生成は名目=JSX／無名=`()` の2系統。同種列は `Array`。C 固定長配列は同型 `Array` にコピーで写す。
 - **レンジ**：2 型 `HalfOpenRange`/`ClosedRange`（bare `Range` 不使用）。`a..<b`≡`<HalfOpenRange start=a end=b />`／`a..=b`≡`<ClosedRange start=a end=b />` の**固定糖衣**（普通の 2 フィールド構造体への JSX 構築＝配列/辞書のような JSX 例外ではない）。非トレイト・上書き不可・**両端を `<`/`=` で明示・素の `..` なし**。要素型は `T: Ord`（順序型なら任意 T・`contains`）、**Iterator は `T: Step`（離散・整数のみ・`Step: Ord`）で条件付き準拠**（F64 は反復不可）。優先度は算術より緩い。片側・`step`・レンジパターンは additive 保留。
 
 ## 並行性モデル
@@ -51,9 +51,9 @@ val h = spawn { give f() }   // マルチスレッド。ハンドル Thread[T]�
 
 - **`guard <cond> { … }`**: 条件が偽のときだけブロックを実行。本体は**発散必須**（早期 `return`／`break`／`continue`／`panic`）。enum の unwrap + 変数束縛が可能（`guard Result.Ok { value: val v } = r { return … }` の後 `v` が使える）。条件は下記の条件チェーン。
 - **条件チェーン（`if`/`elif`/`while`/`guard`）**: 条件は `&&` 連結の節列で、各節は Bool 式 or 反証可能束縛 `PATTERN = expr`（Rust の let-chains 流）。左→右に短絡評価し、先行束縛は後続節と本体で有効。束縛節は `&&` のみ連結可（`||` 不可。Bool 節**内**の `||` は自由）。`if`/`while` も束縛可。ヘッダの `&&` は値レベル `&&` と同概念・別脱糖。Plew は構造体生成が JSX 限定なので Rust 流の「条件位置で構造体リテラル禁止」制限は不要。
-- **パターンマッチング**: `match` の各ケースは式。enum バリアントの分解（`Color.Red { intensity: val intensity }`。位置フィールドは無く必ず名前付き）、タプル分解、`_` 既定ケース。アーム右辺は 3 形式：ベア式 `=> expr`／ブロック `=> { …; give x }`／発散ブロック `=> { … panic … }`。
+- **パターンマッチング**: `match` の各ケースは式。enum バリアントの分解（`Color.Red { intensity: val intensity }`。位置フィールドは無く必ず名前付き）、ラベル付きタプル分解、`_` 既定ケース。**束縛は `val`／`mut val`**（bare はマッチ）・同名は punning（`{ val x }`≡`{ x: val x }`）。アーム右辺は 3 形式：ベア式 `=> expr`／ブロック `=> { …; give x }`／発散ブロック `=> { … panic … }`。
 - **`panic "msg"`**: 発散する**文**（式ではない。`x ?? panic` は不可 → `guard`/`match` を使う）。回復不能なバグ用（回復可能な失敗は `Result`/`try`）、catch 不可、`spawn` 内 panic はプロセス全体を停止。**発散規則**：全経路が `panic`/`return`/`break`/`continue` で抜けるブロックは値を生まず `give` 不要で、`if`/`match` の発散アームとして任意の期待型と適合する（式全体の型は発散しないアームから決まる）。
-- **構造化代入**: タプル `(a, b) = t`、構造体 `S { field: val x } = s`、入れ子可。
+- **構造化代入**: ラベル付きタプル `(val a, val b) = e`（`val`＝新規・bare＝既存へ代入、混在可）、構造体 `S { val field } = s`（型名先頭→ブロック非衝突）、入れ子可。未初期化宣言なし。
 
 ## エラーハンドリング
 

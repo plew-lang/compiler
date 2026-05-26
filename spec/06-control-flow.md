@@ -57,10 +57,12 @@ while Some { value: val line } = reader.next() && !line.is_empty() {
 val result = match expression {
     42                                      => "the answer"
     Color.Red { intensity: val intensity }  => "red with intensity {intensity}"
-    (val x, val y)                          => "tuple with x={x}, y={y}"
+    (val x, val y)                          => "record x={x}, y={y}"
     _                                       => "default case"
 }
 ```
+
+パターンの**束縛は `val`／`mut val` で明示**します（refutable な `match`/`if`/`while`/`guard` では、bare の名前は既存の値・リテラル・バリアントとの**マッチ**）。フィールド名と束縛名が同じなら **punning** で省略でき、`Color.Red { val intensity }` ≡ `Color.Red { intensity: val intensity }`、`(val x)` ≡ `(x: val x)` です。
 
 アームの右辺は次の 3 形式：
 
@@ -86,19 +88,21 @@ while condition {
     // 処理
 }
 
-// For ループ（レンジ・構造化代入対応）
-for i in 0..<n {
+// For ループ（レンジ・分解対応。ループ変数は val で宣言）
+for val i in 0..<n {
     // 0, 1, …, n-1（半開）。0..=n なら n まで含む
 }
 
-for (key, value) in dictionary {
+for (val key, val value) in dictionary {
     // 処理
 }
 
-for Person { name: person_name, age: person_age } in people {
+for Person { val name, val age } in people {
     // 処理
 }
 ```
+
+- ループ変数は `val`／`mut val` で**新規宣言**します。bare 名にすると既存の `mut` 変数へ代入し、ループ後も生存します（`val`＝新規・bare＝既存。→ [値](03-values.md)）。
 
 ## ガード文
 

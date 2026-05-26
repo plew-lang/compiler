@@ -21,13 +21,15 @@ fn mutable_function(inout param: MyStruct) {
 ## 変数宣言
 
 ```plew
-val immutable_var: I32  // 不変変数
+val immutable_var: I32 = 0               // 不変変数（初期化必須）
 mut val mutable_var: String = "initial"  // 可変変数
 
 // 不変変数を可変変数に代入するにはclone()が必要
 val immutable_data = <SomeStruct field=42 />
 mut val mutable_data = immutable_data.clone()
 ```
+
+- **宣言時に必ず初期化します**（未初期化宣言は持ちません）。分岐で初期値を決めたいときは式ブロックを使います：`val x: I32 = if flag { give 1 } else { give 2 }`。
 
 ### 再宣言（shadowing）
 
@@ -48,20 +50,24 @@ val raw = parse(data: raw)          // ParsedData（同名で変換・型が変�
 
 ## 代入と構造化代入
 
+代入 `x = e` は既存の `mut` 束縛を書き換えます。分解では各要素を **`val name`（新しい束縛）** か **bare `name`（既存へ代入・要 `mut`）** で書き分け、混在もできます（`val`＝新規・bare＝既存は[再宣言](#再宣言shadowing)と同じ区別）。
+
 ```plew
-// 基本代入
+// 基本代入（既存の mut 束縛）
 variable = expression
-variable += expression
-variable -= expression
-variable *= expression
-variable /= expression
+variable += expression          // -=, *=, /= も同様
 
-// タプルの構造化代入
-(a, b, c) = some_tuple
+// ラベル付きタプルの分解（フィールド名で対応）
+(val x, val y) = point          // x, y を新規宣言
+(x, val y) = point              // x は既存へ代入（要 mut）・y は新規
 
-// 構造体の構造化代入（先頭に型名を置く）
-SomeStruct { field1: x, field2: y } = some_struct
+// 構造体の分解（先頭に型名 → ブロックと曖昧にならない）
+SomeStruct { val field1, val field2 } = some_struct       // punning（同名束縛）
+SomeStruct { field1: val a, field2: val b } = some_struct // 別名
 
-// 複合的な構造化代入
-(first, Person { name: person_name, age: person_age }) = complex_data
+// 入れ子
+(name: val n, info: Person { val age }) = record
 ```
+
+- 分解は**フィールド名で対応**します（位置ではない）。`(val x, val y)` は record の `x`/`y` を束縛し、書く順序は問いません。
+- 文頭の `(` はラベル付きタプルの分解、型名始まりは構造体の分解、`{` 始まりは[ブロック](06-control-flow.md)で、互いに曖昧になりません。
