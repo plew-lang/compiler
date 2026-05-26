@@ -62,7 +62,7 @@ val h = spawn { give f() }   // マルチスレッド。ハンドル Thread[T]�
 
 ## 型キャストと演算子＝トレイト
 
-- **メソッドのオーバーロード**: 同名メソッドを引数型で区別して複数定義可（inherent/trait witness 問わず）。解決＝セレクタ（名前＋順序付きラベル）→ 具体位置の型。同セレクタ内は「型引数の形が全員一致・具体位置でのみ区別・境界は曖昧化に使わない」。**無名 impl が型のモジュールに閉じる**ので衝突検出はローカル（グローバルコヒーレンス不要）。重なり得るジェネリック impl は保守的拒否（specialization 無し）。
+- **メソッドのオーバーロード**: 同名メソッドを引数型で区別して複数定義可（inherent/trait witness 問わず）。解決＝セレクタ（名前＋順序付きラベル）→ 具体位置の型。同セレクタ内は「型引数の形が全員一致・具体位置でのみ区別・制約は曖昧化に使わない」。**無名 impl が型のモジュールに閉じる**ので衝突検出はローカル（グローバルコヒーレンス不要）。重なり得るジェネリック impl は保守的拒否（specialization 無し）。
 - **`x as T`** は `From` の糖衣（`x as T` ⟺ `T.from(x: x)`）。変換は**ターゲット側 `From[Source]`**（`assoc fn from(x: Source) -> Self`）。ターゲットは `as`／`try` で常に明示なので `from` はソース型でオーバーロード解決＝1 型が複数ソースから変換可。`try` のエラー変換も同じ `From`。
 - **演算子はトレイト経由で解決**（`+`=`Add[Rhs]`, `[]`=`Index[Key]`, `??`=`Coalesce[Rhs]` …）。`a + b` ⟺ `a.add(rhs: b)` で `b` の型に対応する `Add[…]` conformance を選ぶ（オーバーロード）。型引数 `[..]` を持つのは**両辺が別型になり得る**演算（算術・添字・nil 合体・変換）。同じ右オペランド型に複数 conformance 不可、blanket と具体の併存不可（specialization 無し）。
 - **等価・順序は同一型上の関係なので型引数なし**：`==`/`!=`＝`Eq { fn eq(rhs: Self) -> Bool }`（`!=` は `!(==)`、`@[Eq]` で derive）、`< <= > >=`＝`Ord: Eq { fn compare(rhs: Self) -> Ordering }`（4 演算子は `compare` に展開）。右辺は常に `Self`（異種比較 `impl A as Eq[B]` は対称・反射律を型で守れないため不可。`Ordering = Less|Equal|Greater`）。
@@ -85,9 +85,9 @@ val h = spawn { give f() }   // マルチスレッド。ハンドル Thread[T]�
 
 - トレイトのメンバは**本体の有無**で2種：**要求**（本体なし。各型が `via`／本体で witness）と**提供メソッド**（本体あり。要求の上に組む。`.map().filter()` チェーンの土台）。
 - **提供メソッドは上書き不可**。準拠側 impl が witness するのは要求だけで、提供メソッドに別本体は与えられない。挙動を変えたい型は `extension`+`#Ext` で別メソッドにする。**「上書き可能な既定」は持たない**（Swift protocol extension の静的/動的ディスパッチ食い違いを回避。本体の有無で抽象 vs 固定を明示選択）。提供メソッドは型のオーバーロード集合に加わり、同セレクタ・同シグネチャで衝突はエラー→`#Ext`（引数違いは共存）。
-- **継承 `trait Sub: Super`**：Sub 準拠は Super 準拠を要求（`:` は `where` と同じ境界）。**制約であって自動実装ではない** — `impl T as Sub` には別途 `impl T as Super` が要る（暗黙生成なし＝暗黙準拠を持たない方針の一貫）。Sub の提供メソッドは self 経由で Super のメンバを呼べる。ダイヤモンドの同名要求はオーバーロード集合に入り同シグネチャなら畳まれ、同一シグネチャの提供メソッド衝突はエラー→`#Ext`。
+- **継承 `trait Sub: Super`**：Sub 準拠は Super 準拠を要求（`:` は `where` と同じ制約）。**制約であって自動実装ではない** — `impl T as Sub` には別途 `impl T as Super` が要る（暗黙生成なし＝暗黙準拠を持たない方針の一貫）。Sub の提供メソッドは self 経由で Super のメンバを呼べる。ダイヤモンドの同名要求はオーバーロード集合に入り同シグネチャなら畳まれ、同一シグネチャの提供メソッド衝突はエラー→`#Ext`。
 - **トレイト型引数あり（多重 conformance）＋関連型（出力）**：入力＝呼ぶ側が選び 1 型に複数 conformance あり得るものは型引数（`Add[Rhs]`：`Vec` は `Add[Vec]` と `Add[F64]` 両方に準拠）。出力＝impl が一意に決めるものは関連型（`type Output`・`Iterator.Item`）。両方持てる。複数 conformance のメソッドは引数型で区別されるオーバーロードになる。ただし等価・順序（`Eq`/`Ord`）は同一型上の関係なので型引数を持たない（右辺常に `Self`）。
-- **関連型 `type Item`**：宣言は `type Item`、シグネチャ中はベア参照、impl は `type Item = X` で束ねる（`via` 不使用）、境界可（`type Item: Display`）。関連型は**型の名前空間**（メソッド/フィールドのオーバーロード集合とは別）。外部射影は `T.Item`（`.`）。トレイト名の `[...]` は**位置型引数＋関連型束縛**の混在（`Add[Vec]`／`Iterator[Item = Foo]`、Rust の `Trait<Arg, Assoc=T>` 同形。supertrait/where/引数境界共通）。
+- **関連型 `type Item`**：宣言は `type Item`、シグネチャ中はベア参照、impl は `type Item = X` で束ねる（`via` 不使用）、制約可（`type Item: Display`）。関連型は**型の名前空間**（メソッド/フィールドのオーバーロード集合とは別）。外部射影は `T.Item`（`.`）。トレイト名の `[...]` は**位置型引数＋関連型束縛**の混在（`Add[Vec]`／`Iterator[Item = Foo]`、Rust の `Trait<Arg, Assoc=T>` 同形。supertrait/where/引数境界共通）。
 
 ## トレイト準拠と `via`（全要求を明示）
 
@@ -124,7 +124,7 @@ val h = spawn { give f() }   // マルチスレッド。ハンドル Thread[T]�
 ## ジェネリクス / where 句
 
 - 基本的に Rust 同様 **不変（invariant）**。
-- `where` は `:`（トレイト境界）と `=`（型等価）の両方をサポート。impl の型引数は型側に付ける（`impl Struct[T] as Trait where T = I32`）。
+- **型パラメータの `[...]` は名前のみ**、制約は全部 `where`（インライン `[T: Trait]` なし）。`where` の述語は `型: 制約` のみで**型等価 `where T = I32` は持たない**（具体実装は型位置 `Struct[I32]`、関連型束縛は `T: Iterator[Item = I32]`）。impl 導入の型パラメータは **`impl[...]` で前置宣言**（`impl[T] Struct[T] as Trait where T: Display`）。デフォルト型引数なし。「トレイト境界」は**「トレイト制約」**と呼ぶ（`境界`=boundary は温存）。
 
 ## 命名規則（言語仕様として強制）
 

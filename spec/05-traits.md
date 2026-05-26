@@ -44,27 +44,27 @@ impl Counter as Iterator {
 
 - **型引数（多重 conformance）と関連型（出力）の使い分け**: 入力＝呼ぶ側が選び 1 型に複数 conformance あり得るものは**型引数**にする（`Add[Rhs]`：`Vec` は `Add[Vec]` と `Add[F64]` の両方に準拠できる）。出力＝impl が一意に決めるものは**関連型**（`type Output`・`Iterator.Item`）。1 つのトレイトが両方を持ってよい（`Add[Rhs] { type Output }`）。複数 conformance のメソッドは引数型で区別される**オーバーロード**になる（→ [メソッドのオーバーロード](04-functions.md)、[型変換と演算子](07-operators.md)）。
 - 関連型は**型の名前空間**に属し、メソッド・フィールドのオーバーロード集合とは別。関連型名がメソッド名と衝突することはない。`type Name = …` の充足に `via` は使わない（直接束ねる）。
-- **境界を付けられる**: `type Item: Display` のように要求側で境界を課せる。impl はその境界を満たす型で束ねる。ベア `type Item` は境界なし。
+- **制約を付けられる**: `type Item: Display` のように要求側で制約を課せる。impl はその制約を満たす型で束ねる。ベア `type Item` は制約なし。
 - **外部からの射影は `T.Item`**: 型変数経由で関連型を名指すときは `.` で射影する（値のメンバアクセスと同じ区切り）。
 
 ```plew
-fn first[T: Iterator](it: T) -> Optional[T.Item] {   // T.Item で射影
+fn first[T](it: T) -> Optional[T.Item] where T: Iterator {   // T.Item で射影
     return it.next()
 }
 ```
 
 #### トレイト名の `[...]`（型引数と関連型束縛）
 
-トレイト名のあとの `[...]` には、**位置型引数**（`Add[Vec]`）と**関連型束縛**（`Iterator[Item = Foo]`）を書けます（Rust の `Trait<Arg, Assoc = T>` と同形で、記号だけ `[]`）。両者は混在可。supertrait・`where`・引数境界のどこでも使えます。
+トレイト名のあとの `[...]` には、**位置型引数**（`Add[Vec]`）と**関連型束縛**（`Iterator[Item = Foo]`）を書けます（Rust の `Trait<Arg, Assoc = T>` と同形で、記号だけ `[]`）。両者は混在可。supertrait や `where` 句のトレイト制約で使えます。
 
 ```plew
-fn sum[T: Iterator[Item = I32]](it: T) -> I32 { /* ... */ }   // 関連型を束縛
-fn g[T: Add[Vec]](x: T) { /* ... */ }                          // 位置型引数で右オペランドを指定
+fn sum[T](it: T) -> I32 where T: Iterator[Item = I32] { /* ... */ }   // 関連型を束縛
+fn g[T](x: T) where T: Add[Vec] { /* ... */ }                          // 位置型引数で右オペランドを指定
 ```
 
 ### トレイトの継承（supertrait）
 
-`trait Sub: Super` は、`Sub` への準拠に `Super` への準拠を要求します（`where T: Trait` と同じく `:` は境界）。複数指定は `trait Sub: A, B`。関連型の束縛も同じ記法で書けます（`trait FooIterator: Iterator[Item = Foo] {}`）。
+`trait Sub: Super` は、`Sub` への準拠に `Super` への準拠を要求します（`where T: Trait` と同じく `:` は制約）。複数指定は `trait Sub: A, B`。関連型の束縛も同じ記法で書けます（`trait FooIterator: Iterator[Item = Foo] {}`）。
 
 ```plew
 trait BoundedStepper: Stepper {
