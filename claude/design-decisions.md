@@ -106,7 +106,7 @@
 - **`extern`**: 設計会話では `declare fn … from "libc"` 案を検討したが、最終文法は Rust 式の `extern "C" { … }` ブロックを採用。
 - **`lazy`（遅延初期化）**: 専用構文は設けない。`<Lazy />` 構造体で表現する（言語仕様に載せなくても自然に実装できる単なる構造体）。
 - **数値リテラル**: 16/8/2 進（`0x`/`0o`/`0b`）・`_` 桁区切り・e 表記・型サフィックスを採用。Rust とほぼ同様だが型サフィックスは型名（PascalCase）なので `10U32` / `3.14F64`（→ [spec/02-types.md](../spec/02-types.md)）。
-- **force-unwrap 演算子は無し**: 後置 `!` のような強制取り出しは持たない（文法に残る `UNARY_POSTFIX_OP` は遺物で、再構築時に削除）。取り出しは `Optional`/`Result` の `unwrap` メソッドに留め、基本は非推奨（→ [spec/07-error-handling.md](../spec/07-error-handling.md)）。
+- **force-unwrap 演算子は無し**: 後置 `!` のような強制取り出しは持たない（文法に残る `UNARY_POSTFIX_OP` は遺物で、再構築時に削除）。取り出しは `Optional`/`Result` の `unwrap` メソッドに留め、基本は非推奨（→ [spec/08-error-handling.md](../spec/08-error-handling.md)）。
 - **冪乗演算子 `**` は導入しない**: `pow`（関数/メソッド）で代替。Rust/Go/Swift と同様、右結合・優先順位の事故（`-2**2`）、戻り型/コストの不透明さ、演算子経済の観点から。冪乗は単一 CPU 命令でなく実体は関数呼び出しのため、安価な演算子の見た目を与えない。
 
 ## 未決 / 今後決定すべき事項
@@ -121,4 +121,4 @@
 6. **GC アルゴリズム** — GC 採用のみ決定、方式は未定。
 7. **メタプログラミング / ディレクティブ詳細** — `Derive` トレイトのシグネチャ、`TokenStream` API、組み込みを `Derive` 実装で提供するか等（→ [spec/12-metaprogramming.md](../spec/12-metaprogramming.md)）。
 8. **文法の細かい穴** — `@[...]` 内の空行・末尾カンマ、`match_case` 前の改行、`where_clauses` 末尾カンマなど（書き味レベル）。
-9. **FFI の型マッピング** — `extern "c"` / `extern "javascript"` ブロックの構文は採用済みだが、Plew 型 ↔ C/JS 型の対応（数値・ポインタ/バッファ・文字列の境界変換、外部由来の `NaN` 流入の扱いなど）は未策定。実装フェーズで定める（→ [spec/10-modules.md](../spec/10-modules.md)）。
+9. **FFI の型マッピング** — `extern "c"` / `extern "javascript"` ブロックの構文は採用済みだが、Plew 型 ↔ C/JS 型の対応（数値・ポインタ/バッファ・文字列の境界変換、外部由来の `NaN` 流入の扱いなど）は未策定。実装フェーズで定める（→ [spec/11-modules.md](../spec/11-modules.md)）。

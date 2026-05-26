@@ -19,7 +19,7 @@ fn complex_operation() -> Result[Data, GeneralError] {
 }
 ```
 
-`try` は、`expr` のエラー型 `F` が関数の戻りエラー型 `E` と違う場合、Err 時に `E.from(x: f)` を挿入して変換します（Rust の `?`＝`From::from` と同じ）。ターゲット `E` は関数シグネチャから既知なので、`GeneralError` が複数のソースエラーから変換可能（`From[ParseError]`・`From[IoError]` …）でも、ソース型でオーバーロード解決されます（→ [型変換と From トレイト](08-operators.md)）。`E == F` のときは変換不要でそのまま伝播します。
+`try` は、`expr` のエラー型 `F` が関数の戻りエラー型 `E` と違う場合、Err 時に `E.from(x: f)` を挿入して変換します（Rust の `?`＝`From::from` と同じ）。ターゲット `E` は関数シグネチャから既知なので、`GeneralError` が複数のソースエラーから変換可能（`From[ParseError]`・`From[IoError]` …）でも、ソース型でオーバーロード解決されます（→ [型変換と From トレイト](07-operators.md)）。`E == F` のときは変換不要でそのまま伝播します。
 
 ```plew
 impl GeneralError as From[ParseError] {
