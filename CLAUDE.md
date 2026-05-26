@@ -8,7 +8,7 @@
 
 コンパイラは **C# / .NET 8** 製。**ANTLR4** で構文解析し、**LLVMSharp** 経由で **LLVM-IR** を生成、ネイティブ／WASM を出力する。最終目標は **セルフホスティング**。パフォーマンスより開発しやすさを優先する。
 
-> **現状はスキャフォールド段階。** `Program.cs` は Hello World、文法（`grammer/Plew.g4`）とサンプル（`examples/main.pw`）と仕様（`SPEC.md`）がある。ANTLR / LLVMSharp の NuGet パッケージはまだ未追加で、パイプラインはこれから組む。
+> **現状はスキャフォールド段階（コンパイラ）／言語仕様は活発に策定中。** `Program.cs` は Hello World、文法（`grammer/Plew.g4`）とサンプル（`examples/main.pw`）がある。仕様は `SPEC.md`／`spec/*.md`（13 章・論理依存順に整理済み）で活発に策定中。ANTLR / LLVMSharp の NuGet パッケージはまだ未追加で、パイプラインはこれから組む。
 
 ## ドキュメント
 
@@ -48,7 +48,7 @@ SDK は 10 系だが `.csproj` の `TargetFramework` は `net8.0`。ANTLR パー
 1. **正典は `SPEC.md`／`spec/*.md`。`grammer/Plew.g4` は当面いじらない**（後で作り直す前提で、最近の判断は仕様が先行＝文法未反映。差分は [claude/grammar.md](claude/grammar.md)）。`note/` は記法が変遷した一次資料で、矛盾したら仕様優先。
 2. **全制約の根 = 参照の値渡し + GC + 所有権なし**。並行性は「spawn キャプチャ全 immutable（例外なし）＋スレッド間は immutable な `Sender` の `send` で値を送る（共有ではなく送信）」で割り切る。
 3. **メタプログラミングは方針転換済み**（閉じた→ユーザー定義可能：ビルドと別コマンドで別ファイルにコード生成＋`Derive` 構造体）。実装はコンパイラ完成後の最後。詳細は [spec/12-metaprogramming.md](spec/12-metaprogramming.md)。
-4. **実装前に [claude/design-decisions.md](claude/design-decisions.md) の未決事項を確認**。言語設計の大物はほぼ決着し、残る未決はチャネル API・GC 方式・メタプログラミング詳細・FFI 型マッピングなど**実装／コアライブラリ寄り**が中心。
+4. **実装前に [claude/design-decisions.md](claude/design-decisions.md) の未決事項を確認**。言語設計の大物（型・トレイト・並行性・拡張・モジュール・制御フロー・演算子・文字列/配列/レンジ）はほぼ決着し、残る未決は**実装／コアライブラリ寄り**が中心：チャネル API・GC 方式・メタプログラミング詳細・FFI 型マッピング・イテレータ/`Step` プロトコル・文字列ビルダ/正規化・`Slice`/部分文字列・固定長配列 `[E; N]` など。
 
 他言語の直感と違うので、設計/実装の前に該当 spec を必ず読むこと（ここは地図）：
 - 無名 impl は**型を所有するモジュールのみ**、外部型は拡張 `#Ext`（Rust の「型 or トレイト」より厳格）→ spec/10,11。
@@ -59,6 +59,7 @@ SDK は 10 系だが `.csproj` の `TargetFramework` は `net8.0`。ANTLR パー
 - 並行性: `async`/`await`=JS（単一スレッド+イベントループ）、`spawn`=スレッド起動で戻りは `join() -> Promise[T]`、キャプチャ全 immutable、チャネルはコアライブラリ送り → spec/09。
 - エラー: `try`（Result 早期 return）＋エラー型の暗黙 `From` 変換（集約 enum の From はメタプログラミングで生成）→ spec/08。
 - 拡張は継承・ネスト禁止（由来一意性のため。組み合わせは `value#A#B`、再利用は `self#A.foo()`）→ spec/10。
+- 文字列/配列: `String` は**不変・UTF-8 妥当・`==` バイト等価**（参照意味論＋spawn immutable の帰結）。内部は `pub(get) bytes: Array[U8]` で公開（stored はフィールド・computed のみメソッド）。要素ビューは明示（`bytes`=配列/O(1)、`scalars`/`graphemes`=イテレータ/O(n)・整数添字なし）。`Array[T]` 一本で **`[E; N]`/const generics・Slice・substring は当面なし＝additive 保留**（FFI はコピー）。タプルに Index なし。レンジは `a..<b`(半開)/`a..=b`(閉)＝両端明示・素の `..` なし・2 型 `HalfOpenRange`/`ClosedRange` への JSX 糖衣・要素 `Ord`／反復は `Step` 条件付き（整数のみ） → spec/02,06。
 
 ## コーディング規約（Plew 言語側）
 
@@ -78,5 +79,6 @@ SDK は 10 系だが `.csproj` の `TargetFramework` は `net8.0`。ANTLR パー
 - **単純 > 強力だが紛らわしい**。使いこなしにくい機能（`pub(crate)` 等）は切る。暗黙ルールは最小に。
 - **主張は根拠で。誇張しない**。ユーザーは通説や私の主張を検証してくる。間違えたら素直に撤回・再評価し、守りに入らない。避けられないトレードオフは欠点を隠さず明示する。
 - **根本方針も再考し得る**。下流の歪み（演算子・変換の不自然さ等）が積もると、一度決めた前提（例: 単一フラット名前空間 → オーバーロード許容へ転換）でも巻き戻す。だから決定の含意を追い「この方針だとここが歪む」を早めに可視化するのが有効。
-- **決定したら即同期**：spec（正典）と `claude/*.md` を更新し、grep で他所の矛盾・陳腐化を確認する。`grammer/Plew.g4` は触らない。**大きな巻き戻しの後は spec を通し読みして陳腐化・齟齬を点検する**。
+- **決定したら即同期**：spec（正典）と `claude/*.md` を更新し、grep で他所の矛盾・陳腐化を確認する。`grammer/Plew.g4` は触らない。**大きな巻き戻しの後は spec を通し読みして陳腐化・齟齬を点検する**。章の改番・節の移動をしたら、相対リンク（`(NN-name.md)`）を grep で機械的に張り替え（ファイル名が一意なので sed 一括で安全）、`SPEC.md` 索引・`CLAUDE.md` の地図（spec 番号）・claude 各 doc も合わせる。
+- **spec の章構成（現行）**：01 概要 / 02 型（プリミティブ・文字列・複合型・レンジ・生成・newtype・ジェネリクス）/ 03 値 / 04 関数とメソッド / 05 トレイト / 06 制御構造 / 07 型変換と演算子 / 08 エラー / 09 非同期 / 10 拡張 / 11 モジュール / 12 メタプログラミング / 13 例。
 - 日本語でやり取りする。

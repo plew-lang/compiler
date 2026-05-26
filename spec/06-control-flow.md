@@ -86,7 +86,11 @@ while condition {
     // 処理
 }
 
-// For ループ（構造化代入対応）
+// For ループ（レンジ・構造化代入対応）
+for i in 0..<n {
+    // 0, 1, …, n-1（半開）。0..=n なら n まで含む
+}
+
 for (key, value) in dictionary {
     // 処理
 }

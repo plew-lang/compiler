@@ -17,6 +17,15 @@
 - 不変変数を可変変数に代入するには `.clone()` が必要。
 - **再宣言（shadowing）可**: 同名 `val`/`mut val` を再宣言できる（Rust 流・無制限）。再宣言は代入でなく**新束縛**で型・可変性を変えてよく、`name` は常にレキシカルに直近の宣言を指す。`guard`/`match`/`if` のパターンが同名で値を絞り込めるのはこの一般規則の帰結（特別扱いなし）。代入 `x = e`（既存 `mut` 束縛を同型で更新）とは別物。「同名で別物を指す」リスクは未使用束縛の lint で緩和。
 
+## 文字列とコレクション（String / Array）
+
+- **`String` は不変・UTF-8 常に妥当・`==` はバイト等価**。加工は新 String を返す。参照意味論で共有されるため不変が安全側（`spawn` の immutable キャプチャと整合）。正準等価は暗黙にせず、要れば明示正規化（API 未決）。
+- **表現＝`struct String { pub(get) bytes: Array[U8] }`**。`s.bytes` は O(1)・ゼロコピー読み取り。任意バイトの公開生成は無し（リテラル＋検証 factory `from_bytes -> Result` のみ）で UTF-8 不変条件を守る。stored はフィールド公開・computed だけメソッド。
+- **要素ビューは明示**：`bytes`（配列・ランダムアクセス・`count` O(1)）／`scalars()`・`graphemes()`（イテレータ・`count()` O(n)）。**整数添字 `s[i]` は無し**（生バイトは `s.bytes[i]`）。構築は伸長ビルダ→確定で凍結（連結 O(n²) 回避。ビルダ API 未決）。
+- **`Array[T]` 一本**：動的・伸長・連続・プリミティブ unboxed。`arr[i]` は `Index[I32] -> T`、`count` O(1)。**`[E; N]`/const generics は無し**。**Slice（ビュー型）・substring・`Range`/`arr[1..4]` も当面無し＝すべて additive 保留**。FFI は境界コピー。
+- **タプルは異種・位置指向で Index 無し**（分解・パターンでアクセス）。同種列は `Array`。C 固定長配列も異種タプルでなく同型 `Array` にコピーで写す。
+- **レンジ**：2 型 `HalfOpenRange`/`ClosedRange`（bare `Range` 不使用）。`a..<b`≡`<HalfOpenRange start=a end=b />`／`a..=b`≡`<ClosedRange start=a end=b />` の**固定糖衣**（普通の 2 フィールド構造体への JSX 構築＝配列/辞書のような JSX 例外ではない）。非トレイト・上書き不可・**両端を `<`/`=` で明示・素の `..` なし**。要素型は `T: Ord`（順序型なら任意 T・`contains`）、**Iterator は `T: Step`（離散・整数のみ・`Step: Ord`）で条件付き準拠**（F64 は反復不可）。優先度は算術より緩い。片側・`step`・レンジパターンは additive 保留。
+
 ## 並行性モデル
 
 3 種のブロックを戻り値型で区別する：
