@@ -1,2 +1,6 @@
 .antlr
 book/
+
+# .NET build output
+bin/
+obj/
