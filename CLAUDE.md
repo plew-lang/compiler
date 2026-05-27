@@ -43,6 +43,8 @@ dotnet run            # コンパイラを実行
 
 SDK は 10 系だが `.csproj` の `TargetFramework` は `net8.0`。ANTLR パーサ生成の手順は [claude/grammar.md](claude/grammar.md) を参照。
 
+仕様書（`spec/`）は **mdBook** で閲覧する。設定は `book.toml`（`src = "spec"`）、目次は `spec/SUMMARY.md`、ランディングは `spec/README.md`。`mdbook serve --open` でライブリロード閲覧、`mdbook build` で `book/`（gitignore 済）へ出力。章の追加・改番時は `SUMMARY.md` も更新する。
+
 ## 実装上の最重要原則
 
 1. **正典は `SPEC.md`／`spec/*.md`。`grammer/Plew.g4` は当面いじらない**（後で作り直す前提で、最近の判断は仕様が先行＝文法未反映。差分は [claude/grammar.md](claude/grammar.md)）。`note/` は記法が変遷した一次資料で、矛盾したら仕様優先。
