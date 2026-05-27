@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PlewCompiler")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+988ce04d440824ef449aced473d808c80f6a1f06")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+db2b95e32ca51a40c8613201965d437e66e44664")]
 [assembly: System.Reflection.AssemblyProductAttribute("PlewCompiler")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PlewCompiler")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

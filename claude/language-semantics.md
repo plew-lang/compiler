@@ -124,8 +124,9 @@ val h = spawn { give f() }   // マルチスレッド。ハンドル Thread[T]�
 
 ## 関連関数 / 関連値（`assoc`）
 
-- Plew の static メソッド/変数は `assoc fn`/`assoc val`（名前が違うだけで static と同等。型名で呼ぶ）。当初「static 不要・グローバル関数で足りる」としたが**翻意**。型に属さないトップレベル関数も別途あるが static の代替ではない（両方存在）。**グローバル名前空間は無い**（全定義はモジュールのトップレベル＝モジュールスコープ・他モジュールは `import` 必須）。トップレベル変数（`val` 定数・`mut val` 可変）も持てる。
+- Plew の static メソッド/変数は `assoc fn`/`assoc val`（名前が違うだけで static と同等。型名で呼ぶ）。当初「static 不要・グローバル関数で足りる」としたが**翻意**。型に属さないトップレベル関数も別途あるが static の代替ではない（両方存在）。**ユーザーは ambient／グローバルな定義を作れない**（全定義はモジュールスコープ・他モジュールは `import` 必須。"グローバル名前空間が無い" のではなく、唯一の ambient＝言語提供 lang item にユーザーが足せない、という話）。トップレベル変数（`val` 定数・`mut val` 可変）も持てる。
 - 型名で呼びたいものは `assoc fn`（関連関数）/ `assoc val`（関連値）。`self` は参照の値渡しのため Rust の `&self` 明示は不要。
+- **言語アイテム（lang item）は常にスコープ・それ以外は明示 import**: no-primitives ゆえ、構文が意味として参照する型/トレイト（数値型・`Bool`・`String`・`Array`・`Optional`・`Result`・レンジ 2 型・`Promise`/スレッドハンドル・`Add`/`Eq`/`Ord`/`From`/`Iterator`/`Step` 等＝`1`/`"x"`/`[..]`/`a..<b`/`x?`/`try`/`+`/`for` の脱糖先）は import 不要で常にスコープ＝キーワード同格の言語の語彙。**それ以外（`Random`/`HashMap`/`print` 等）は明示 import**（構文が参照しない＝lang item でない）。唯一の ambient は言語提供 lang item でユーザーは足せない（"グローバル名前空間なし" ではなく "ユーザーが ambient を作れない"）。出どころは「ローカル→ファイル import→lang item」。lang item 名はローカル shadowing で覆える。正確な lang item 一覧は TODO。マニフェスト既定 import（write-once）は当面不採用（additive）。
 
 ## 構造体インスタンス化（construct / JSX ライク）
 
