@@ -30,8 +30,8 @@ Plew は現代的なシステムプログラミング言語で、型安全性、
 
 ### 第Ⅳ部 実行モデルとツール
 
-14. [非同期処理とメモリ管理](spec/04-execution/14-concurrency.md) — async/await、spawn、チャネル、GC
-15. [モジュールシステム](spec/04-execution/15-modules.md) — import、export、part、パッケージ、extern
+14. [非同期処理とメモリ管理](spec/04-execution/14-concurrency.md) — async/await、spawn、チャネル、GC、並行安全性（書き込み隔離のみ・データ競合自由は非提供）
+15. [モジュールシステム](spec/04-execution/15-modules.md) — トップレベルとモジュールスコープ（グローバル名前空間なし・トップレベル変数）、import、export、part、パッケージ、extern
 16. [メタプログラミング](spec/04-execution/16-metaprogramming.md) — `@[...]` 組み込みディレクティブ、ユーザー定義メタプログラミング（方針転換中）
 
 ### 付録
