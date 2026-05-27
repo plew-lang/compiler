@@ -16,9 +16,9 @@
 
 - **[SPEC.md](SPEC.md)** — 言語仕様（構文の正典）。
 - **[claude/architecture.md](claude/architecture.md)** — コンパイラのパイプライン設計、技術スタック、各フェーズの方針。
-- **[claude/language-semantics.md](claude/language-semantics.md)** — 文法だけでは分からない意味論（値の意味論、並行性、拡張解決、`give`/`guard`/`try` など）。実装で間違えやすい点。
-- **[claude/grammar.md](claude/grammar.md)** — ANTLR 文法の場所・生成方法・固有の罠、**文法と SPEC/設計会話の差分**。
-- **[claude/design-decisions.md](claude/design-decisions.md)** — 各設計判断の根拠・却下案・**未決事項リスト**。
+- **[claude/language-semantics.md](claude/language-semantics.md)** — spec 意味論の実装者向けダイジェスト＝**章をまたぐ設計の背骨＋実装で間違えやすい罠＋spec への索引**（機構は再掲せず spec へリンク）。
+- **[claude/grammar.md](claude/grammar.md)** — ANTLR 文法の場所・生成方法・固有の罠、**文法と SPEC の差分表**（文法が将来支えるべき構文と現状のみ。意味論は spec が正典）。
+- **[claude/design-decisions.md](claude/design-decisions.md)** — 各設計判断の**根拠・却下案・経緯・未決事項リスト**（「なぜ」専門。機構は spec 参照）。
 - **`note/*.md`** — 設計・言語選定の元になった ChatGPT 会話ログ（一次資料、記法は時系列で変遷あり）。
 
 ## リポジトリ構成

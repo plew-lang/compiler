@@ -15,47 +15,52 @@
 - 改行が意味を持つ言語（`req_newline` / `opt_newline` で文・宣言を区切る）。`NEWLINE: '\n'` をスキップしていないので、AST builder は改行トークンの扱いに注意。
 - 文字列補間: `string_literal` は `'"' (DOUBLE_STRING_CHAR | string_variable)* '"'`。`string_variable: '{' expression (':' STRING_FORMAT+)? '}'` で `{expr:format}` を Lexer/Parser レベルで分割している（単一トークンでは中の式を解析できないため）。
 
-## 文法と SPEC / 設計会話の差分（要注意）
+## 文法と SPEC の差分
 
-`Plew.g4` は**後で作り直す前提**で当面いじらない。初期の構文選択（`#Ext`、`impl … as`、修飾子削除など）は文法が解決済みの正だが、**最近の設計判断は SPEC 側が正で、文法が追いついていない**領域が多い（下表の「仕様が先行」）。
+`Plew.g4` は**後で作り直す前提**で当面いじらない。初期の構文選択（`#Ext`、`impl … as`、修飾子削除など）は文法が解決済みの正だが、**最近の設計判断は SPEC 側が正で、文法が追いついていない**領域が多い。
 
-| 項目 | SPEC（現行の決定） | 現行文法（`Plew.g4`） |
+下表は「文法が将来支えるべき構文」と「現行文法の状態」だけを示す。**各決定の意味論・根拠は spec が正典**なので、リンク先を見ること（ここで再掲しない）。多くの決定は**型検査／解決／コード生成といった意味論層**の話で、そもそも文法に現れない（その旨だけ記す）。
+
+凡例：**一致**＝文法が現行決定を既に表現／**仕様先行**＝文法が未追従で要拡張／**意味論層**＝文法非依存（型検査・解決・codegen で扱う）。
+
+| 項目（→ spec） | 文法が支えるべき構文 | 現行文法の状態 |
 | --- | --- | --- |
-| 拡張の区切り記号 | `#` / `#!`（呼び出し位置で明示） | `#` と `#!`（`('#' \| '#!') type_use`）＝一致 |
-| 拡張ビューの型扱い | `A#P` は実行時ゼロコストのビュー（`A` と同一構造体）／型検査では `A` の不変な型細別。**暗黙キャストなし**＝ビュー変更は `#`/`#!` 明示・コンテナ非伝播（`Array[A]`↔`Array[A#P]` 不可）。拡張違いは別の具体型＝オーバーロード共存（exact 一致）・トレイト制約充足は `x#Ext` 明示 | 型検査／解決層（文法非依存）＝**意味論層** |
-| トレイト実装 | `impl Type as Trait` | `AS type_use`＝一致 |
-| 並行性修飾子 | `sync`/`shared`/`atomic` は不採用 | 削除済み・`MUT? VAL` のみ＝一致 |
-| 可視性 | `export`(モジュール境界) ＋ `pub`/`pub(get)`(型スコープ・2段、中間段なし) | `export` + `pub`/`pub(get)`＝一致 |
-| 冪乗 `**` | **不採用**（`pow` で代替） | 未実装＝一致 |
-| `lazy` | 専用構文なし（`<Lazy />` 構造体） | 未実装＝一致 |
-| force-unwrap | **無し**（`unwrap` メソッド・非推奨） | `UNARY_POSTFIX_OP`(`!`) 残存＝遺物・削除予定 |
-| 数値リテラル | 0x/0o/0b・`_`・e 表記・型サフィックス(`10U32`)。**多相・文脈で確定・既定型なし**（一意でなければエラー） | `DIGIT+` のみ＝**仕様が先行**（型付けは意味論層） |
-| メソッドのオーバーロード | 同名を引数型で区別（セレクタ＝名前＋ラベル、形一致・具体位置で区別・制約非関与） | 文法は impl 内に同名 `method` を複数書けるが、規則は**意味論層で検査**＝**仕様が先行** |
-| ジェネリクスの型パラメータ | `[...]` は**名前のみ**（インライン制約 `[T: Trait]` なし）・制約は全部 `where`。`where` 述語は `型: 制約` のみで型等価 `T = I32` なし（具体実装は型位置 `Type[I32]`）。デフォルト型引数なし | 文法要確認＝**仕様が先行**（制約は意味論層） |
-| impl の型パラメータ | `impl[T] Type …` と前置宣言（束縛）、self 型・トレイト・`where` で使用 | 現行文法は `impl` に型パラメータ前置なし＝**仕様が先行** |
-| モジュール/`part`/`_.pw` | 1 ファイル 1 モジュール(`.pw`)、`part` で分割、ディレクトリは `_.pw`、エントリ `src/_.pw` | `import` のみ。`part`・`_.pw` 未反映＝**仕様が先行** |
-| 再エクスポート | `export <path> with {…}` / `with *`（ローカル非束縛） | 未反映＝**仕様が先行** |
-| トレイト準拠 `via` | 各要求を `via` で実体メンバに束ねる（フィールド・メソッド両方） | `impl as` のみ＝**仕様が先行** |
-| トレイトの派生メソッド・トレイト主語 impl・デフォルト拡張 | **トレイト本体は要求のみ（本体なし）**。派生メソッドは**名前付き拡張の `impl Trait { … }`**（self: Self: Trait・上書き不可）に置き、型が **`default_extension #Ext`** でベア表面に取り込む。トレイト主語の impl（`impl Trait`・`impl B as A`）は拡張内のみ・ベア不可・頭なし `impl[T] T` 禁止 | `trait_body` は `method_declare`（本体なし）のみ＝**この点は一致**。`extension`/`impl` がトレイト名を主語に受ける構文、型本体の `default_extension` 宣言は g4 未対応＝**仕様が先行**（impl 規則・意味論層で扱い） |
-| トレイトを値型にする存在型 | **`any P`**（マーカー必須・`some` 無し）。全型引数/関連型を束縛必須（`any Iterator[Item = I32]`）。第一級の型（変数・引数・戻り値・`Array[any P]`・関連型束縛・newtype underlying）。呼べるメンバはメンバ単位診断（`Self` 入力・関連関数は不可）。実装は最終フェーズ | `type_use` に `any` プレフィクスなし＝**仕様が先行**（存在型・動的ディスパッチは意味論／コード生成層） |
-| トレイト継承 supertrait | `trait Sub: Super`（`:` で境界、複数指定は `+`＝`trait Sub: A + B`・`where T: A + B` と同区切り） | `trait` 規則に supertrait 句なし＝**仕様が先行** |
-| 関連型の宣言 | `type Item`（ベア）/ `type Item: Format`（境界） | `trait_body` は `TYPE type type_annotate`＝束縛必須、ベア不可＝**仕様が先行** |
-| 関連型の束縛 | トレイト名の `[...]` に位置型引数＋名前付き束縛 `Trait[Arg, Assoc = Foo]` 混在 | `type_args` は位置のみ（`'[' type_use (',' type_use)* ']'`）＝名前付き束縛は**仕様が先行** |
-| 関連型の射影 | `T.Item`（`.` で射影） | `type_use` が `.` 連結対応＝表現可（要 AST 解釈） |
-| トレイトの型引数 | **あり**（多重 conformance。`Add[Rhs]` 等） | `trait` 規則に `type_args_declare?` あり＝**一致** |
-| 変換トレイト | `From[Source]`（`x as T`⟺`T.from(x:x)`・`try` のエラー変換） | トレイト名は意味論層（文法非依存）。`as` は `AS type_use`＝一致 |
-| 等価・順序 | `Eq{eq(rhs:Self)->Bool}`(`==`/`!=`)・`Ord:Eq{compare(rhs:Self)->Ordering}`(`< <= > >=`)。**型引数なし**（同一型上の関係） | 比較トークンは文法にあるが、トレイト対応付けは意味論層＝**仕様が先行** |
-| 論理結合子 `&&`/`||` | **短絡する制御フロー**（`if` 糖衣・Bool 専用・トレイト非・オーバーロード不可） | トークンは文法にあるが、短絡＝制御フローはコード生成層＝**仕様が先行** |
-| 条件チェーン（束縛つき条件） | `if`/`elif`/`while`/`guard` の条件は `&&` 連結の節列。各節は Bool 式 or 反証可能束縛 `PAT = expr`（Rust let-chains 流）。束縛節は `&&` のみ・`||` 不可。先行束縛は後続節と本体で有効 | 現行文法の `if`/`while` 条件は単一式想定（guard の束縛＋`&&` 連結含め要拡張）＝**仕様が先行** |
-| 浮動小数 NaN | 比較（`eq`/`compare`）で **panic**・`is_nan()`・算術は IEEE（NaN/inf 生成） | 実行時意味論（文法非依存） |
-| `panic` 文 | `panic "メッセージ"` キーワード（発散する**文**・式不可・catch 不可） | 文法に `panic` トークン/規則なし＝**仕様が先行** |
-| match アーム右辺 | ベア式 `=> expr`／ブロック `=> {…; give x}`／発散ブロック `=> {… panic …}` の 3 形式 | `match_case` の右辺形は要確認・ベア式と発散アーム＝**仕様が先行** |
-| ローカル再宣言（shadowing） | Rust 流に無制限（`name` は直近の宣言を指す。型/可変性変更可） | 文法は同名 `val` を許容、名前解決は意味論層＝一致（意味論層） |
-| 文字列・配列の型意味論 | `String`=不変・UTF-8 妥当・`==` バイト等価・`struct { pub(get) bytes: Array[U8] }`・`scalars`/`graphemes` はイテレータ・整数添字なし。`Array[T]` 一本（`[E; N]`/Slice/substring は保留） | 文法に string_literal（補間）・配列リテラルあり＝**型意味論は意味論層**（不変・妥当性・ビューは型検査／コード生成層）＝仕様が先行 |
-| 文字列補間・リテラル構文 | 補間 `{ 式 }`＝**任意の値式**（ブロック/match 不可）・フォーマット境界は**括弧深さ 0 の `:`**・波括弧リテラルは `{{`/`}}` 二重化（`\{` なし）・複数行は生改行可＋行末 `\` で改行＋次行先頭空白を除去（Rust 同） | 現行 g4 は `string_variable: '{' expression (':' STRING_FORMAT+)? '}'`＝単一 `{`・単一 `:`・波括弧エスケープ／行継続／深さ 0 規則なし＝**仕様が先行** |
-| ラベル付きタプル（無名レコード） | 位置タプル廃止。`(x: I32, y: I32)` 型／`(x: 1, y: 2)` 生成／`.x` アクセス／`(val x, val y)=e` 分解。構造的・順不同・振る舞いなし | 現行文法は位置タプル `(e, e)`＝**仕様が先行**（ラベル必須・型意味論は意味論層） |
-| 変数束縛 `val`/bare・punning | `val`＝新規・bare＝既存（refutable は bare＝マッチ）。`for val i`／`(val x, val y)=e`／punning `{ val x }`≡`{ x: val x }`・未初期化宣言なし | 未反映＝**仕様が先行** |
-| レンジ構文 | `a..<b`(半開)/`a..=b`(閉)・素の `..` なし・2 型 `HalfOpenRange`/`ClosedRange` への**固定 JSX 糖衣**（非トレイト）・要素 `Ord`／反復は `Step` 条件付き（整数のみ） | 現行文法に範囲リテラルなし（要確認）＝**仕様が先行**（型・糖衣・トレイト制約は意味論層） |
+| 拡張の区切り（[09](../spec/02-type-system/09-extensions.md)） | `('#' \| '#!') type_use` | 一致 |
+| 拡張ビューの型扱い（[09](../spec/02-type-system/09-extensions.md)） | （型細別・暗黙キャストなし・コンテナ非伝播） | 意味論層 |
+| トレイト実装（[07](../spec/02-type-system/07-methods-impl.md)） | `impl Type AS type_use` | 一致 |
+| 並行性修飾子（[14](../spec/04-execution/14-concurrency.md)） | `sync`/`shared`/`atomic` は不採用＝`MUT? VAL` のみ | 一致（削除済み） |
+| 可視性（[05](../spec/02-type-system/05-structs-enums.md)） | `export` + `pub`/`pub(get)` | 一致 |
+| 冪乗 `**`（[12](../spec/03-expressions/12-operators.md)） | 不採用（`pow` で代替） | 一致（未実装） |
+| `lazy` | 専用構文なし（`<Lazy />` 構造体） | 一致（未実装） |
+| force-unwrap（[13](../spec/03-expressions/13-error-handling.md)） | 無し（`UNARY_POSTFIX_OP` `!` は遺物・削除予定） | 要削除 |
+| 数値リテラル（[02](../spec/01-basics/02-basic-types.md)） | `0x`/`0o`/`0b`・`_`・e 表記・型サフィックス `10U32` | 仕様先行（`DIGIT+` のみ・型付けは意味論層） |
+| メソッドのオーバーロード（[07](../spec/02-type-system/07-methods-impl.md)） | impl 内に同名 `method` 複数（解決規則は意味論層） | 仕様先行 |
+| ジェネリクスの型パラメータ（[06](../spec/02-type-system/06-generics.md)） | `[...]` は名前のみ・制約は `where`（インライン `[T: Trait]` なし） | 仕様先行（制約は意味論層） |
+| impl の型パラメータ（[06](../spec/02-type-system/06-generics.md)） | `impl[T] Type …` の前置宣言 | 仕様先行（前置なし） |
+| モジュール/`part`/`_.pw`（[15](../spec/04-execution/15-modules.md)） | `part`・ディレクトリ `_.pw`・エントリ `src/_.pw` | 仕様先行（`import` のみ） |
+| 再エクスポート（[15](../spec/04-execution/15-modules.md)） | `export <path> with {…}` / `with *` | 仕様先行 |
+| トレイト準拠 `via`（[08](../spec/02-type-system/08-traits.md)） | 各要求を `via 完全シグネチャ` で束ねる | 仕様先行（`impl as` のみ） |
+| 派生メソッド・トレイト主語 impl・`default_extension`（[08](../spec/02-type-system/08-traits.md), [09](../spec/02-type-system/09-extensions.md)） | `extension`/`impl` がトレイト名を主語に取る／型本体の `default_extension #Ext` | 一部一致（`trait_body` は本体なしのみ＝一致）／残りは仕様先行 |
+| 存在型 `any P`（[08](../spec/02-type-system/08-traits.md)） | `type_use` の `any` プレフィクス | 仕様先行（存在型・動的ディスパッチは意味論/codegen 層） |
+| トレイト継承 supertrait（[08](../spec/02-type-system/08-traits.md)） | `trait Sub: A + B` | 仕様先行（supertrait 句なし） |
+| 関連型の宣言（[08](../spec/02-type-system/08-traits.md)） | `type Item`（ベア可）/ `type Item: 制約` | 仕様先行（束縛必須・ベア不可） |
+| 関連型の束縛（[08](../spec/02-type-system/08-traits.md)） | `Trait[Arg, Assoc = Foo]`（位置＋名前付き混在） | 仕様先行（`type_args` は位置のみ） |
+| 関連型の射影（[08](../spec/02-type-system/08-traits.md)） | `T.Item`（`.` 連結） | 一致（要 AST 解釈） |
+| トレイトの型引数（[08](../spec/02-type-system/08-traits.md)） | `Add[Rhs]` 等（`type_args_declare?`） | 一致 |
+| 変換トレイト・`as`（[12](../spec/03-expressions/12-operators.md)） | `AS type_use`（`From` 対応付けは意味論層） | 一致 |
+| 等価・順序（[12](../spec/03-expressions/12-operators.md)） | 比較トークン（`Eq`/`Ord` 対応付けは意味論層） | 仕様先行 |
+| 論理結合子 `&&`/`||`（[12](../spec/03-expressions/12-operators.md)） | トークンあり（短絡＝制御フローは codegen 層） | 仕様先行 |
+| 条件チェーン（[11](../spec/03-expressions/11-control-flow.md)） | `if`/`elif`/`while`/`guard` 条件に `PAT = expr` の `&&` 連結 | 仕様先行（単一式想定・要拡張） |
+| 浮動小数 NaN（[12](../spec/03-expressions/12-operators.md)） | （比較で panic・算術は IEEE） | 意味論層（実行時） |
+| 整数オーバーフロー/0 除算（[12](../spec/03-expressions/12-operators.md)） | （全ビルドで panic） | 意味論層（codegen） |
+| `panic` 文（[11](../spec/03-expressions/11-control-flow.md)） | `panic "msg"` キーワード（発散する文） | 仕様先行（トークン/規則なし） |
+| match アーム右辺（[11](../spec/03-expressions/11-control-flow.md)） | ベア式 `=> expr`／ブロック／発散ブロック | 仕様先行（要確認） |
+| ローカル再宣言（[03](../spec/01-basics/03-values.md)） | 同名 `val`（名前解決は意味論層） | 一致（意味論層） |
+| 文字列・配列の型意味論（[02](../spec/01-basics/02-basic-types.md)） | （不変・UTF-8 妥当・`bytes` 公開・整数添字なし等） | 意味論層（型検査/codegen） |
+| 文字列補間・複数行（[02](../spec/01-basics/02-basic-types.md)） | 補間 `{式}`・深さ 0 の `:` 境界・`{{`/`}}`・行末 `\` 継続 | 仕様先行（単一 `{`/`:`・エスケープ/継続なし） |
+| ラベル付きタプル（[02](../spec/01-basics/02-basic-types.md)） | `(x: I32)` 型／`(x: 1)` 生成／`.x`／`(val x)=e` 分解 | 仕様先行（位置タプル `(e, e)`） |
+| 変数束縛 `val`/bare・punning（[03](../spec/01-basics/03-values.md)） | `val`＝新規・bare＝既存／`for val i`／punning | 仕様先行 |
+| レンジ構文（[02](../spec/01-basics/02-basic-types.md)） | `a..<b`/`a..=b`（素の `..` なし） | 仕様先行（範囲リテラルなし・型/糖衣は意味論層） |
 
 ## `examples/main.pw` について
 
