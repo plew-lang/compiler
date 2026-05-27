@@ -22,6 +22,7 @@
 | 項目 | SPEC（現行の決定） | 現行文法（`Plew.g4`） |
 | --- | --- | --- |
 | 拡張の区切り記号 | `#` / `#!`（呼び出し位置で明示） | `#` と `#!`（`('#' \| '#!') type_use`）＝一致 |
+| 拡張ビューの型扱い | `A#P` は実行時ゼロコストのビュー（`A` と同一構造体）／型検査では `A` の不変な型細別。**暗黙キャストなし**＝ビュー変更は `#`/`#!` 明示・コンテナ非伝播（`Array[A]`↔`Array[A#P]` 不可）。拡張違いは別の具体型＝オーバーロード共存（exact 一致）・トレイト制約充足は `x#Ext` 明示 | 型検査／解決層（文法非依存）＝**意味論層** |
 | トレイト実装 | `impl Type as Trait` | `AS type_use`＝一致 |
 | 並行性修飾子 | `sync`/`shared`/`atomic` は不採用 | 削除済み・`MUT? VAL` のみ＝一致 |
 | 可視性 | `export`(モジュール境界) ＋ `pub`/`pub(get)`(型スコープ・2段、中間段なし) | `export` + `pub`/`pub(get)`＝一致 |
@@ -36,6 +37,7 @@
 | 再エクスポート | `export <path> with {…}` / `with *`（ローカル非束縛） | 未反映＝**仕様が先行** |
 | トレイト準拠 `via` | 各要求を `via` で実体メンバに束ねる（フィールド・メソッド両方） | `impl as` のみ＝**仕様が先行** |
 | トレイトの派生メソッド・トレイト主語 impl・デフォルト拡張 | **トレイト本体は要求のみ（本体なし）**。派生メソッドは**名前付き拡張の `impl Trait { … }`**（self: Self: Trait・上書き不可）に置き、型が **`default_extension #Ext`** でベア表面に取り込む。トレイト主語の impl（`impl Trait`・`impl B as A`）は拡張内のみ・ベア不可・頭なし `impl[T] T` 禁止 | `trait_body` は `method_declare`（本体なし）のみ＝**この点は一致**。`extension`/`impl` がトレイト名を主語に受ける構文、型本体の `default_extension` 宣言は g4 未対応＝**仕様が先行**（impl 規則・意味論層で扱い） |
+| トレイトを値型にする存在型 | **`any P`**（マーカー必須・`some` 無し）。全型引数/関連型を束縛必須（`any Iterator[Item = I32]`）。第一級の型（変数・引数・戻り値・`Array[any P]`・関連型束縛・newtype underlying）。呼べるメンバはメンバ単位診断（`Self` 入力・関連関数は不可）。実装は最終フェーズ | `type_use` に `any` プレフィクスなし＝**仕様が先行**（存在型・動的ディスパッチは意味論／コード生成層） |
 | トレイト継承 supertrait | `trait Sub: Super`（`:` で境界、複数指定は `+`＝`trait Sub: A + B`・`where T: A + B` と同区切り） | `trait` 規則に supertrait 句なし＝**仕様が先行** |
 | 関連型の宣言 | `type Item`（ベア）/ `type Item: Format`（境界） | `trait_body` は `TYPE type type_annotate`＝束縛必須、ベア不可＝**仕様が先行** |
 | 関連型の束縛 | トレイト名の `[...]` に位置型引数＋名前付き束縛 `Trait[Arg, Assoc = Foo]` 混在 | `type_args` は位置のみ（`'[' type_use (',' type_use)* ']'`）＝名前付き束縛は**仕様が先行** |

@@ -9,6 +9,8 @@ newtype UserId = String
 
 > Haskell の `newtype` と違い、Plew の `newtype` は**元の型の実装をそのまま引き継ぎ**、変換は `as` で行います（ラップ／アンラップ用のコンストラクタはありません）。
 
+> underlying には[存在型](08-traits.md#トレイトを値の型として使う存在型-any) `any P` も置けます（`newtype Handler = any Drawable` など）。継承される表面は `any P` の制限付きメンバ集合（`Self` 入力メンバ・関連関数は呼べない）です。
+
 ## 実装の継承と Self 置換
 
 `newtype` は元の型のすべての実装（メソッド・トレイト実装・演算子・factory）を自動的に継承します。継承の際、シグネチャ中の型は次のルールで読み替えられます。
