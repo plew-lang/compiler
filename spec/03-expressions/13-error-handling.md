@@ -32,6 +32,10 @@ impl GeneralError as From[IoError] {
 
 集約エラー enum（各ソースエラーを variant で保持する型）では、こうした variant ラップの `From` 実装を**メタプログラミングで自動生成**でき、手書きは不要です（Rust の `thiserror` 相当）。`try` 側の機構は単一の `From` のまま、boilerplate だけを生成で消します（→ [メタプログラミング](../04-execution/16-metaprogramming.md)）。
 
+## try の優先順位（前置・後置チェーン全体に掛かる）
+
+`try` は**前置演算子**で、直後の後置チェーン全体に掛かります。`try parse(input).validate()` は `try (parse(input).validate())` と解釈され、`parse(input).validate()` 全体（の `Result`）を評価してから早期リターン判定します。Rust の後置 `?`（`f()?.g()` ＝ `(f()?).g()`）とは逆なので、**Ok 値を取り出してから続きを呼ぶ**には括弧を使います：`(try parse(input)).validate()`。`try` は二項演算子より強く（`try f() + 1` ＝ `(try f()) + 1`）、後置より弱い位置にあります（→ [優先順位と結合性](12-operators.md#優先順位と結合性)）。
+
 ## force-unwrap は持たない
 
 `Optional` / `Result` から中身を強制的に取り出す**後置演算子（`!` のような force-unwrap）は提供しません**。取り出しは `Optional` / `Result` の `unwrap` メソッドで行いますが、空・エラー時に実行時エラーとなるため**基本的に非推奨**です。通常は `match` / `guard` / `?.` / `??` / `try` で分岐・伝播してください。

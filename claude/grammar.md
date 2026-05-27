@@ -50,6 +50,9 @@
 | 変換トレイト・`as`（[12](../spec/03-expressions/12-operators.md)） | `AS type_use`（`From` 対応付けは意味論層） | 一致 |
 | 等価・順序（[12](../spec/03-expressions/12-operators.md)） | 比較トークン（`Eq`/`Ord` 対応付けは意味論層） | 仕様先行 |
 | 論理結合子 `&&`/`||`（[12](../spec/03-expressions/12-operators.md)） | トークンあり（短絡＝制御フローは codegen 層） | 仕様先行 |
+| 演算子の優先順位・結合性（[12](../spec/03-expressions/12-operators.md)） | 14 段（後置 ＞ 前置/`try`/`await` ＞ `as` ＞ `*/%` ＞ `+-` ＞ `<<>>` ＞ `&` ＞ `^` ＞ `\|` ＞ `??` ＞ 比較[非結合] ＞ `&&` ＞ `\|\|` ＞ レンジ[非結合]） | 仕様先行（現行ラダーは `??` 最下位・`%`/`as`/レンジ/ビットを欠き・比較は左結合） |
+| ビット演算子（[12](../spec/03-expressions/12-operators.md)） | `& \| ^ << >> ~`（`BitAnd`/`BitOr`/`BitXor`/`Shl`/`Shr`/`BitNot`） | 仕様先行（トークン・規則なし＝採用決定だが未実装） |
+| 単項 `!` と `~`（[12](../spec/03-expressions/12-operators.md)） | `!`＝Bool 専用 Not／`~`＝整数 BitNot（別演算子） | 仕様先行（`UNARY_PREFIX_OP` は `-`/`!` のみ・`~` なし） |
 | 条件チェーン（[11](../spec/03-expressions/11-control-flow.md)） | `if`/`elif`/`while`/`guard` 条件に `PAT = expr` の `&&` 連結 | 仕様先行（単一式想定・要拡張） |
 | 浮動小数 NaN（[12](../spec/03-expressions/12-operators.md)） | （比較で panic・算術は IEEE） | 意味論層（実行時） |
 | 整数オーバーフロー/0 除算（[12](../spec/03-expressions/12-operators.md)） | （全ビルドで panic） | 意味論層（codegen） |
