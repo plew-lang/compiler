@@ -31,7 +31,7 @@ spec/<部>/NN-*.md     4 部サブディレクトリに分割した言語仕様�
 grammer/Plew.g4       ANTLR4 文法（構文の正典）
 examples/main.pw      サンプル（※旧構文を含む。grammar.md 参照）
 claude/*.md           本ガイドからリンクする実装ドキュメント
-obj/                  ビルド生成物
+obj/                  ビルド生成物（bin/ ともに gitignore 済・追跡外）
 ```
 
 ## ビルド / 実行
