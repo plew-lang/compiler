@@ -66,9 +66,10 @@ val h = spawn { give f() }   // マルチスレッド。ハンドル Thread[T]�
 - **`x as T`** は `From` の糖衣（`x as T` ⟺ `T.from(x: x)`）。変換は**ターゲット側 `From[Source]`**（`assoc fn from(x: Source) -> Self`）。ターゲットは `as`／`try` で常に明示なので `from` はソース型でオーバーロード解決＝1 型が複数ソースから変換可。`try` のエラー変換も同じ `From`。
 - **演算子はトレイト経由で解決**（`+`=`Add[Rhs]`, `[]`=`Index[Key]`, `??`=`Coalesce[Rhs]` …）。`a + b` ⟺ `a.add(rhs: b)` で `b` の型に対応する `Add[…]` conformance を選ぶ（オーバーロード）。型引数 `[..]` を持つのは**両辺が別型になり得る**演算（算術・添字・nil 合体・変換）。同じ右オペランド型に複数 conformance 不可、blanket と具体の併存不可（specialization 無し）。
 - **等価・順序は同一型上の関係なので型引数なし**：`==`/`!=`＝`Eq { fn eq(rhs: Self) -> Bool }`（`!=` は `!(==)`、`@[Eq]` で derive）、`< <= > >=`＝`Ord: Eq { fn compare(rhs: Self) -> Ordering }`（4 演算子は `compare` に展開）。右辺は常に `Self`（異種比較 `impl A as Eq[B]` は対称・反射律を型で守れないため不可。`Ordering = Less|Equal|Greater`）。
-- **`&&` / `||` は演算子トレイトではなく短絡する制御フロー**（`if` の糖衣 `a && b ≡ if a { give b } else { give false }`・Bool 専用・オーバーロード不可）。`!`（`Not`）は eager なのでトレイトのまま。ビット演算が要れば `&`/`|`＝`BitAnd`/`BitOr`（未提供）。
+- **`&&` / `||` は演算子トレイトではなく短絡する制御フロー**（`if` の糖衣 `a && b ≡ if a { give b } else { give false }`・Bool 専用・オーバーロード不可）。前置 `!`（`Not`）・`-`（`Neg`・符号反転、`-x`⟺`x.neg()`）は eager なのでトレイトのまま（`Neg` は型引数なし・符号付き整数/浮動小数のみ実装＝`U8`…`U64` は非実装で `-x` はコンパイルエラー）。ビット演算が要れば `&`/`|`＝`BitAnd`/`BitOr`（未提供）・ビット反転 `~`＝`BitNot`（未提供）。
 - **`F32`/`F64` の NaN は比較で panic**：算術は IEEE（NaN/inf を生成）だが、`Eq`/`Ord`（`==`・`<` 等）が NaN に当たると panic する（静かな `false` を返さない）。判定は `is_nan()`。これで float も全順序 `Ord`・全等価 `Eq` に正直に準拠。inf は全順序を壊さないので通常値。
-- **数値リテラルは多相・文脈で確定**: 組み込み数値型に多相で、注釈/引数/戻り/被演算子で一意に定まったもの。一意でなければエラー（既定型なし、`val x = 42` も文脈ゼロでエラー）。
+- **`/`・`%` の実行時意味（Rust/Go/Swift に合わせる）**：整数の 0 除算 `a / 0`・`a % 0` は **panic**（回復不能トラップ）。整数剰余 `%` は **truncated＝被除数の符号**（`-7 % 3 == -1`）。浮動小数 `/0.0` は IEEE の `inf`（panic しない）。`I32.MIN / -1` 等のオーバーフローは別途の整数オーバーフロー方針に従う（未決）。**`%`（`Rem`）は整数型のみ・float は非提供**（`1.5 % 0.5` はエラー＝Go/Swift に合わせる。剰余は名前付きメソッド。Rust は提供だが罠回避を優先）。
+- **数値リテラルは多相・文脈で確定**: 組み込み数値型に多相で、注釈/引数/戻り/被演算子で一意に定まったもの。一意でなければエラー（既定型なし、`val x = 42` も文脈ゼロでエラー）。**負リテラルの先頭 `-` はリテラルの一部に畳み込む**（`Neg` ではない）＝`-128: I8`（最小値）が書ける（`(128).neg()` 経由だと `128` が I8 に収まらず溢れる）。`-x`（変数・式）は通常の `Neg`。
 
 ## 拡張システム（`#Extension`）
 
@@ -145,5 +146,5 @@ val h = spawn { give f() }   // マルチスレッド。ハンドル Thread[T]�
 
 ## 標準トレイト / ディレクティブ
 
-- 基本: `Clone`, `Hash`, `Format`（表示・補間）。変換: `From[Source]`（`x as T`⟺`T.from(x:x)`・`try` のエラー変換にも使用）。演算子で**型引数ありは別型を結ぶもの**: 算術 `Add[Rhs]/Sub[Rhs]/Mul[Rhs]/Div[Rhs]`（`type Output`）・添字 `Index[Key]`・nil 合体 `Coalesce[Rhs]`・単項 `Not`。**等価/順序は型引数なし**: `Eq{eq(rhs:Self)->Bool}`（`==`/`!=`）・`Ord: Eq{compare(rhs:Self)->Ordering}`（`< <= > >=`）。**`&&`/`||` はトレイトでなく制御フロー**（`if` 糖衣・短絡）。`Ordering = Less|Equal|Greater`。
+- 基本: `Clone`, `Hash`, `Format`（表示・補間）。変換: `From[Source]`（`x as T`⟺`T.from(x:x)`・`try` のエラー変換にも使用）。演算子で**型引数ありは別型を結ぶもの**: 算術 `Add[Rhs]/Sub[Rhs]/Mul[Rhs]/Div[Rhs]/Rem[Rhs]`（`+ - * / %`・`type Output`・`**` は不採用で `pow`・ビット演算/シフトは未提供）・添字 `Index[Key]`・nil 合体 `Coalesce[Rhs]`・単項 `Not`／`Neg`（`Neg`＝符号反転・型引数なし・符号付き整数/浮動小数のみ）。**等価/順序は型引数なし**: `Eq{eq(rhs:Self)->Bool}`（`==`/`!=`）・`Ord: Eq{compare(rhs:Self)->Ordering}`（`< <= > >=`）。**`&&`/`||` はトレイトでなく制御フロー**（`if` 糖衣・短絡）。`Ordering = Less|Equal|Greater`。
 - `@[...]` 組み込みディレクティブ（コンパイラが自動合成。命名は型由来で **PascalCase**）: `Eq`, `Hash`, `Clone`, `Decode`, `Encode`、struct 専用 `DefaultFactory(pub)`、enum 専用 `All`（`Enum.all()` を生成）。ユーザー定義メタプログラミングは別章（→ [spec/04-execution/16-metaprogramming.md](../spec/04-execution/16-metaprogramming.md)）。
