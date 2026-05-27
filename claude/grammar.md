@@ -35,8 +35,8 @@
 | モジュール/`part`/`_.pw` | 1 ファイル 1 モジュール(`.pw`)、`part` で分割、ディレクトリは `_.pw`、エントリ `src/_.pw` | `import` のみ。`part`・`_.pw` 未反映＝**仕様が先行** |
 | 再エクスポート | `export <path> with {…}` / `with *`（ローカル非束縛） | 未反映＝**仕様が先行** |
 | トレイト準拠 `via` | 各要求を `via` で実体メンバに束ねる（フィールド・メソッド両方） | `impl as` のみ＝**仕様が先行** |
-| トレイトの提供メソッド | 本体ありメソッドを定義可（上書き不可・要求とは別物） | `trait_body` は `method_declare`（本体なし）のみ＝**仕様が先行** |
-| トレイト継承 supertrait | `trait Sub: Super`（`:` で境界、複数可） | `trait` 規則に supertrait 句なし＝**仕様が先行** |
+| トレイトの派生メソッド・トレイト主語 impl・デフォルト拡張 | **トレイト本体は要求のみ（本体なし）**。派生メソッドは**名前付き拡張の `impl Trait { … }`**（self: Self: Trait・上書き不可）に置き、型が **`default_extension #Ext`** でベア表面に取り込む。トレイト主語の impl（`impl Trait`・`impl B as A`）は拡張内のみ・ベア不可・頭なし `impl[T] T` 禁止 | `trait_body` は `method_declare`（本体なし）のみ＝**この点は一致**。`extension`/`impl` がトレイト名を主語に受ける構文、型本体の `default_extension` 宣言は g4 未対応＝**仕様が先行**（impl 規則・意味論層で扱い） |
+| トレイト継承 supertrait | `trait Sub: Super`（`:` で境界、複数指定は `+`＝`trait Sub: A + B`・`where T: A + B` と同区切り） | `trait` 規則に supertrait 句なし＝**仕様が先行** |
 | 関連型の宣言 | `type Item`（ベア）/ `type Item: Format`（境界） | `trait_body` は `TYPE type type_annotate`＝束縛必須、ベア不可＝**仕様が先行** |
 | 関連型の束縛 | トレイト名の `[...]` に位置型引数＋名前付き束縛 `Trait[Arg, Assoc = Foo]` 混在 | `type_args` は位置のみ（`'[' type_use (',' type_use)* ']'`）＝名前付き束縛は**仕様が先行** |
 | 関連型の射影 | `T.Item`（`.` で射影） | `type_use` が `.` 連結対応＝表現可（要 AST 解釈） |

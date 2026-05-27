@@ -18,7 +18,7 @@ Plew は現代的なシステムプログラミング言語で、型安全性、
 5. [構造体と列挙型](spec/02-type-system/05-structs-enums.md) — 構造体／列挙型の宣言、フィールド統一原則、Optional／Result、インスタンス生成（JSX／factory）、メンバの可視性
 6. [ジェネリクス](spec/02-type-system/06-generics.md) — 型パラメータ、impl[T]、where 句
 7. [メソッドと impl](spec/02-type-system/07-methods-impl.md) — impl、メソッド、関連関数／関連値、メソッドのオーバーロード、無名 impl のコヒーレンス
-8. [トレイト](spec/02-type-system/08-traits.md) — 定義（要求・提供メソッド）、関連型、継承（supertrait）、準拠と via、標準トレイト
+8. [トレイト](spec/02-type-system/08-traits.md) — 定義（要求・派生メソッドは拡張へ）、関連型、継承（supertrait）、準拠と via、標準トレイト
 9. [拡張システム](spec/02-type-system/09-extensions.md) — extension、`#` による拡張適用、orphan rule
 10. [newtype（名目型）](spec/02-type-system/10-newtype.md) — 実装の継承と Self 置換、as による再タグ
 

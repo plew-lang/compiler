@@ -54,14 +54,14 @@ SDK は 10 系だが `.csproj` の `TargetFramework` は `net8.0`。ANTLR パー
 
 他言語の直感と違うので、設計/実装の前に該当 spec を必ず読むこと（ここは地図）：
 - 無名 impl は**型を所有するモジュールのみ**、外部型は拡張 `#Ext`（Rust の「型 or トレイト」より厳格）→ spec/07,09,15。
-- トレイト準拠は**全要求 `via` 明示**（暗黙準拠なし）→ spec/08。メソッドは**引数型でオーバーロード可**（セレクタ＝名前＋ラベル、無名 impl はモジュール閉包でローカル検査・specialization 無し・→ spec/07）。提供メソッド（本体あり）可だが**上書き不可**。継承 `trait Sub: Super` は制約のみ・自動実装しない。**トレイトは型引数あり（多重 conformance）＋関連型（出力）**。演算子＝`Add[Rhs]` 等を右オペランド型でオーバーロード（**等価 `Eq`・順序 `Ord: Eq{compare->Ordering}` は同一型上の関係＝型引数なし**、`&&`/`||` は**短絡する制御フロー**でトレイト非）、変換＝`From[Source]`（`x as T`⟺`T.from`・`try` のエラー変換）。**浮動小数の NaN は比較で panic**（`is_nan()`・算術は IEEE）。数値リテラルは多相・文脈で確定・既定型なし → spec/02,07,12。
+- トレイト準拠は**全要求 `via` 明示**（暗黙準拠なし）→ spec/08。メソッドは**引数型でオーバーロード可**（セレクタ＝名前＋ラベル、無名 impl はモジュール閉包でローカル検査・specialization 無し・→ spec/07）。派生メソッド（map/filter 等）は**トレイト本体にもベア impl にも書かず、名前付き拡張の `impl Trait` に置き、型が `default_extension` でベア表面に取り込む**（ベア提供メソッドは廃止・トレイト主語 impl は拡張内のみ・頭なし `impl[T] T` 禁止・衝突は型の `default_extension` 宣言地点で検出）・**上書き不可**。継承 `trait Sub: Super` は制約のみ・自動実装しない。**トレイトは型引数あり（多重 conformance）＋関連型（出力）**。演算子＝`Add[Rhs]` 等を右オペランド型でオーバーロード（**等価 `Eq`・順序 `Ord: Eq{compare->Ordering}` は同一型上の関係＝型引数なし**、`&&`/`||` は**短絡する制御フロー**でトレイト非）、変換＝`From[Source]`（`x as T`⟺`T.from`・`try` のエラー変換）。**浮動小数の NaN は比較で panic**（`is_nan()`・算術は IEEE）。数値リテラルは多相・文脈で確定・既定型なし → spec/02,07,12。
 - ジェネリクス: 型パラメータの `[...]` は**名前のみ**（インライン制約 `[T: Trait]` なし・制約は全部 `where`）。impl 導入の型変数は **`impl[T] Type …`** と前置宣言（束縛・self 型のブラケットは使用）。`where` に型等価 `T = I32` はなく具体実装は型位置 `Type[I32]`。デフォルト型引数なし。**「トレイト制約」**と呼ぶ（`境界`＝boundary とは別語）→ spec/06,08。
 - 制御フロー/変数: `panic "msg"` は**発散する文**（式ではない・回復不能・catch 不可、spawn 内はプロセス停止）。match アームはベア式 `=> v` も可（give/発散ブロックも）。ローカル変数の**再宣言（shadowing）は Rust 流に無制限**（`name` は直近の宣言を指す）。**束縛は `val`＝新規・bare＝既存**（refutable パターンは bare＝マッチ）で分解・for に一般化（`for val i`／`(val x, val y)=e`／punning `{ val x }`≡`{ x: val x }`）・未初期化宣言なし → spec/03,11。
 - 可視性は `pub`（型スコープ・非公開は無名 impl のみ）と `export`（モジュール境界）の**別 2 軸・中間段なし** → spec/05,15。
 - 1 ファイル 1 モジュール（`.pw`）・`part` 分割・ディレクトリは `_.pw` → spec/15。
 - 並行性: `async`/`await`=JS（単一スレッド+イベントループ）、`spawn`=スレッド起動で戻りは `join() -> Promise[T]`、キャプチャ全 immutable、チャネルはコアライブラリ送り → spec/14。
 - エラー: `try`（Result 早期 return）＋エラー型の暗黙 `From` 変換（集約 enum の From はメタプログラミングで生成）→ spec/13。
-- 拡張は継承・ネスト禁止（由来一意性のため。組み合わせは `value#A#B`、再利用は `self#A.foo()`）→ spec/09。
+- 拡張は継承・ネスト禁止（由来一意性のため。組み合わせは `value#A#B`、再利用は `self#A.foo()`）。**impl の主語は型でもトレイトでもよい**（`impl Trait`＝派生メソッド・`impl B as A`＝トレイト間準拠＝blanket、いずれも拡張内のみ）。拡張は名前付きバンドルで **à la carte 適用**（名前から中身は不定・`T#P` は準拠を主張しない）。型は型本体に **`default_extension #A#B`** で既定拡張を宣言（ベア解決に参加・剥がしは `#!`・衝突は宣言地点でエラー・ジェネリック境界には流れず `x#Ext` 明示）→ spec/09。
 - 文字列/配列: `String` は**不変・UTF-8 妥当・`==` バイト等価**（参照意味論＋spawn immutable の帰結）。内部は `pub(get) bytes: Array[U8]` で公開（stored はフィールド・computed のみメソッド）。要素ビューは明示（`bytes`=配列/O(1)、`scalars`/`graphemes`=イテレータ/O(n)・整数添字なし）。`Array[T]` 一本で **`[E; N]`/const generics・Slice・substring は当面なし＝additive 保留**（FFI はコピー）。タプルは**ラベル付き無名レコード** `(x: I32, y: I32)`（`()` 生成・名前アクセス `.x`・構造的・振る舞いなし）に置換（位置タプル廃止）。レンジは `a..<b`(半開)/`a..=b`(閉)＝両端明示・素の `..` なし・2 型 `HalfOpenRange`/`ClosedRange` への JSX 糖衣・要素 `Ord`／反復は `Step` 条件付き（整数のみ） → spec/02,11。
 
 ## コーディング規約（Plew 言語側）
