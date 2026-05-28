@@ -35,6 +35,7 @@
 | force-unwrap（[13](../spec/03-expressions/13-error-handling.md)） | 無し（`UNARY_POSTFIX_OP` `!` は遺物・削除予定） | 要削除 |
 | 数値リテラル（[02](../spec/01-basics/02-basic-types.md)） | `0x`/`0o`/`0b`・`_`・e 表記・型サフィックス `10U32` | 仕様先行（`DIGIT+` のみ・型付けは意味論層） |
 | メソッドのオーバーロード（[07](../spec/02-type-system/07-methods-impl.md)） | impl 内に同名 `method` 複数（解決規則は意味論層） | 仕様先行 |
+| デフォルト引数（[04](../spec/01-basics/04-functions.md)） | `arg_declare` に `= 式`（`inout` には付けない） | 仕様先行（`arg_declare` は `INOUT? value type_annotate` で既定値構文なし・毎回評価/自己完結/セレクタ生成は意味論層） |
 | ジェネリクスの型パラメータ（[06](../spec/02-type-system/06-generics.md)） | `[...]` は名前のみ・制約は `where`（インライン `[T: Trait]` なし） | 仕様先行（制約は意味論層） |
 | impl の型パラメータ（[06](../spec/02-type-system/06-generics.md)） | `impl[T] Type …` の前置宣言 | 仕様先行（前置なし） |
 | モジュール/`part`/`_.pw`（[15](../spec/04-execution/15-modules.md)） | `part`・ディレクトリ `_.pw`・エントリ `src/_.pw` | 仕様先行（`import` のみ） |
