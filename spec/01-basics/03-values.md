@@ -72,9 +72,10 @@ variable += expression          // -=, *=, /= も同様
 SomeStruct { val field1, val field2 } = some_struct       // punning（同名束縛）
 SomeStruct { field1: val a, field2: val b } = some_struct // 別名
 
-// 入れ子
-(name: val n, info: Person { val age }) = record
+// 入れ子（不要フィールドは _ で破棄。全フィールドの明示が要る）
+(name: val n, info: Person { name: _, val age }) = record
 ```
 
 - 分解は**フィールド名で対応**します（位置ではない）。`(val x, val y)` は record の `x`/`y` を束縛し、書く順序は問いません。
 - 文頭の `(` はラベル付きタプルの分解、型名始まりは構造体の分解、`{` 始まりは[ブロック](../03-expressions/11-control-flow.md)で、互いに曖昧になりません。
+- **全フィールドを明示**します（束縛するか `_` で破棄）。未記載フィールドの暗黙無視も、残りを捨てる `..` もありません＝フィールド追加時に既存の分解がエラーになり取りこぼしを防ぎます。`_` は値を捨てる破棄パターンで `val` 不要、パターン位置ならどこでも書けます（詳細は → [パターンマッチング](../03-expressions/11-control-flow.md)）。
