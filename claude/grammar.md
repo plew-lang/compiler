@@ -63,6 +63,7 @@
 | 文字列・配列の型意味論（[02](../spec/01-basics/02-basic-types.md)） | （不変・UTF-8 妥当・`bytes` 公開・整数添字なし等） | 意味論層（型検査/codegen） |
 | 文字列補間・複数行（[02](../spec/01-basics/02-basic-types.md)） | 補間 `{式}`・深さ 0 の `:` 境界・`{{`/`}}`・行末 `\` 継続 | 仕様先行（単一 `{`/`:`・エスケープ/継続なし） |
 | ラベル付きタプル（[02](../spec/01-basics/02-basic-types.md)） | `(x: I32)` 型／`(x: 1)` 生成／`.x`／`(val x)=e` 分解 | 仕様先行（位置タプル `(e, e)`） |
+| 辞書・集合型（[02](../spec/01-basics/02-basic-types.md)） | `Dictionary[K, V]` リテラル `[k: v]`/`[:]`（`K: Hash`・`dict[k]->V` 欠落 panic）・`Set[E]` | 一致（`dictionary_literal` あり）／型名・`Hash` 境界・lang item 化・`Set` は意味論層 |
 | 変数束縛 `val`/bare・punning（[03](../spec/01-basics/03-values.md)） | `val`＝新規・bare＝既存／`for val i`／punning | 仕様先行 |
 | ワイルドカード `_`（[11](../spec/03-expressions/11-control-flow.md)） | 一般パターンの葉（破棄・パターン位置ならどこでも・値式不可） | 仕様先行（現行は `match_case` の `'_'` 特例のみ＝ネスト/分解での `_`・統一パターン規則は未整備） |
 | 全フィールド明示・`..` なし（[11](../spec/03-expressions/11-control-flow.md)） | 分解パターンは全フィールド列挙（束縛 or `_`）・残り無視 `..` を持たない | 意味論層（フィールド網羅検査）＋仕様先行（`enum_assign_left` は enum 限定で構造体/レコード分解の規則なし） |

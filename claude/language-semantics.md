@@ -56,10 +56,11 @@
 ### 文字列・配列 → [spec/02](../spec/01-basics/02-basic-types.md)
 - `String` は**不変・UTF-8 妥当・`==` バイト等価**。内部は `pub(get) bytes: Array[U8]`（O(1) 読み取り）。`scalars`/`graphemes` はイテレータ（O(n)）・**整数添字 `s[i]` は無い**。
 - `Array[T]` 一本（`[E; N]`/Slice/substring は当面なし＝additive 保留・FFI は境界コピー）。タプルは**ラベル付き無名レコード**（構造的・振る舞いなし）。レンジは `a..<b`/`a..=b` の 2 型への固定 JSX 糖衣・反復は `Step`（整数のみ）。
+- **辞書 `Dictionary[K, V]`**：リテラル `[k:v]`/`[:]`（可変アリティで JSX 不可＝配列と並ぶ本物の例外）・**lang item**（リテラルが参照）・キー `K: Hash`（`Hash: Eq`）・**`dict[k] -> V` で欠落 panic**（`Array` 範囲外と同じ＝添字の意味を型で変えない）・安全引きは `get(key:) -> Optional[V]`・代入は挿入/更新（`IndexSet`・`V`）・削除 `remove(key:)`・反復順未規定。集合 **`Set[E]`**（`E: Hash`）はリテラル無し＝**非 lang item**（import 要）。`Hash` 算法は Rust 流 `Hasher`（方向確定・正確なシグネチャは core-lib 送り）。
 
 ### モジュール・可視性 → [spec/15](../spec/04-execution/15-modules.md), [spec/05](../spec/02-type-system/05-structs-enums.md)
 - **ユーザーは ambient／グローバルな定義を作れない**（全定義はモジュールスコープ・他モジュールは `import` 必須）。ただしトップレベル関数・トップレベル変数（`val`/`mut val`）は在る。static は `assoc fn`/`assoc val`。
-- **import 必須の唯一の例外＝言語アイテム（lang item）**：構文が意味として参照する型/トレイト（数値型・`String`・`Array`・`Optional`/`Result`・レンジ 2 型・`Add`/`Eq`/`Ord`/`From`/`Iterator`/`Step` 等）は常にスコープ＝キーワード同格の語彙。それ以外（`Random`/`HashMap`/`print`）は明示 import（判定は「構文が参照するか」で sharp）。正確な一覧は TODO。
+- **import 必須の唯一の例外＝言語アイテム（lang item）**：構文が意味として参照する型/トレイト（数値型・`String`・`Array`・`Dictionary`・`Optional`/`Result`・レンジ 2 型・`Add`/`Eq`/`Ord`/`From`/`Iterator`/`Step`・辞書キー境界 `Hash` 等）は常にスコープ＝キーワード同格の語彙。それ以外（`Random`/`Set`/`print`）は明示 import（判定は「構文が参照するか」で sharp。`Set` はリテラル無しゆえ非 lang item）。正確な一覧は TODO。
 - 可視性は `pub`/`pub(get)`（型スコープ・2段・中間段なし）と `export`（モジュール境界）の**別 2 軸**。非公開（修飾なし）は**その型の無名 impl からのみ**可視。
 - 無名 impl は**型を定義したモジュール内のみ**置ける。外部型への実装はトレイト所有を問わず拡張 `#Ext`。
 
