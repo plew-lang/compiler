@@ -55,7 +55,7 @@
 
 ### 文字列・配列 → [spec/02](../spec/01-basics/02-basic-types.md)
 - `String` は**不変・UTF-8 妥当・`==` バイト等価**。内部は `pub(get) bytes: Array[U8]`（O(1) 読み取り）。`scalars`/`graphemes` はイテレータ（O(n)）・**整数添字 `s[i]` は無い**。
-- `Array[T]` 一本（`[E; N]`/Slice/substring は当面なし＝additive 保留・FFI は境界コピー）。タプルは**ラベル付き無名レコード**（構造的・振る舞いなし）。レンジは `a..<b`/`a..=b` の 2 型への固定 JSX 糖衣・反復は `Step`（整数のみ）。
+- `Array[T]` 一本（`[E; N]`/Slice/substring は当面なし＝additive 保留・FFI は境界コピー）。**添字 `arr[i]` は `Index[U64]`・`count`・`0..<arr.count` のレンジ要素も `U64`** に統一（暗黙変換なしゆえ同型にしないとキャスト地獄）＝`for val i in 0..<arr.count { arr[i] }` がキャストレス。符号なしで負添字は表現不可・範囲外 panic。**ポインタ幅 `USize` は採らず固定 `U64`**（全ターゲット同一意味論＝Plew の「意味論を変えるビルドなし」と整合・`I32` の 2³¹ 上限も回避）。`String.bytes` は `Array[U8]` なので同じく `U64` 添字。タプルは**ラベル付き無名レコード**（構造的・振る舞いなし）。レンジは `a..<b`/`a..=b` の 2 型への固定 JSX 糖衣・反復は `Step`（整数のみ）。
 - **辞書 `Dictionary[K, V]`**：リテラル `[k:v]`/`[:]`（可変アリティで JSX 不可＝配列と並ぶ本物の例外）・**lang item**（リテラルが参照）・キー `K: Hash`（`Hash: Eq`）・**`dict[k] -> V` で欠落 panic**（`Array` 範囲外と同じ＝添字の意味を型で変えない）・安全引きは `get(key:) -> Optional[V]`・代入は挿入/更新（`IndexSet`・`V`）・削除 `remove(key:)`・反復順未規定。集合 **`Set[E]`**（`E: Hash`）はリテラル無し＝**非 lang item**（import 要）。`Hash` 算法は Rust 流 `Hasher`（方向確定・正確なシグネチャは core-lib 送り）。
 
 ### モジュール・可視性 → [spec/15](../spec/04-execution/15-modules.md), [spec/05](../spec/02-type-system/05-structs-enums.md)

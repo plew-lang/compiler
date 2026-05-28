@@ -211,10 +211,10 @@ trait Index[Key] {
     fn index(key: Key) -> Output
 }
 
-impl MyArray[T] as Index[I32] {
+impl MyArray[T] as Index[U64] {
     type Output = T
 
-    fn index(key: I32) -> T {
+    fn index(key: U64) -> T {
         // 要素取得の実装
     }
 }
@@ -233,10 +233,10 @@ trait IndexSet[Key] {
     mut fn index_set(key: Key, value: Value)
 }
 
-impl MyArray[T] as IndexSet[I32] {
+impl MyArray[T] as IndexSet[U64] {
     type Value = T
 
-    mut fn index_set(key: I32, value: T) {
+    mut fn index_set(key: U64, value: T) {
         // 要素設定の実装
     }
 }

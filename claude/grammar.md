@@ -60,7 +60,7 @@
 | `panic` 文（[11](../spec/03-expressions/11-control-flow.md)） | `panic "msg"` キーワード（発散する文） | 仕様先行（トークン/規則なし） |
 | match アーム右辺（[11](../spec/03-expressions/11-control-flow.md)） | ベア式 `=> expr`／ブロック／発散ブロック | 仕様先行（要確認） |
 | ローカル再宣言（[03](../spec/01-basics/03-values.md)） | 同名 `val`（名前解決は意味論層） | 一致（意味論層） |
-| 文字列・配列の型意味論（[02](../spec/01-basics/02-basic-types.md)） | （不変・UTF-8 妥当・`bytes` 公開・整数添字なし等） | 意味論層（型検査/codegen） |
+| 文字列・配列の型意味論（[02](../spec/01-basics/02-basic-types.md)） | （不変・UTF-8 妥当・`bytes` 公開・整数添字なし・配列添字/`count`/レンジ要素は `U64` 固定 等） | 意味論層（型検査/codegen） |
 | 文字列補間・複数行（[02](../spec/01-basics/02-basic-types.md)） | 補間 `{式}`・深さ 0 の `:` 境界・`{{`/`}}`・行末 `\` 継続 | 仕様先行（単一 `{`/`:`・エスケープ/継続なし） |
 | ラベル付きタプル（[02](../spec/01-basics/02-basic-types.md)） | `(x: I32)` 型／`(x: 1)` 生成／`.x`／`(val x)=e` 分解 | 仕様先行（位置タプル `(e, e)`） |
 | 辞書・集合型（[02](../spec/01-basics/02-basic-types.md)） | `Dictionary[K, V]` リテラル `[k: v]`/`[:]`（`K: Hash`・`dict[k]->V` 欠落 panic）・`Set[E]` | 一致（`dictionary_literal` あり）／型名・`Hash` 境界・lang item 化・`Set` は意味論層 |
