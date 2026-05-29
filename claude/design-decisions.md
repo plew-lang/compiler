@@ -22,11 +22,11 @@
 
 ### 主な帰結と根拠
 - **ARC（参照カウント）を採る**：CoW は安価な一意性判定（refcount）を要し、ARC はコールドスタートが軽く**第一目標に合致**。代償＝**循環は refcount で回収できず `WeakRef[T]` が要る**（手動の弱参照を受け入れる＝意識的トレードオフ）。
-- **資源は `unique`＋`deinit`**：値 struct に `deinit` は置けない（コピーで多重 deinit＝二重 close。Swift の struct に deinit が無いのと同理）。値意味論で言語内に資源を書くには **class か noncopyable のどちらか必須**（Ref だけでは中身がコピー可能で漏れる）→ **class 種別を増やさず `unique`（noncopyable）採用**＝move 意味論の限定サブセット（borrow/inout/move・use-after-move・非 escape 借用でライフタイム不要）。
+- **資源は `unique`＋`deinit`**：値 struct に `deinit` は置けない（コピーで多重 deinit＝二重 close。Swift の struct に deinit が無いのと同理）。値意味論で言語内に資源を書くには **class か nonコピー可能 のどちらか必須**（Ref だけでは中身がコピー可能で漏れる）→ **class 種別を増やさず `unique`（nonコピー可能）採用**＝move 意味論の限定サブセット（borrow/inout/move・use-after-move・非 escape 借用でライフタイム不要）。
 - **`Ref` は唯一の共有可変プリミティブ**：extern で再現不可（コピー時 retain／drop 時 release の自動挿入が要る・これは Array の CoW も同様＝両者とも祝福プリミティブ）。「同じ書き方で違う挙動」の懸念は **deref `->` を明示**して解消（`.`＝ハンドル操作・`->`＝中身）。
 - **アクセス語＝`borrow`/`inout`/`move`**：`borrow`/`move` は「関係」を表すのに `modify` は「行為」を名指し不整合で却下。`&mut` は正確だが CoW には too much → **`inout`（＝CoW 版 `&mut`・Swift と同判断）**。`mut` は **`val`/`mut val`（記憶域）専用**（二義性回避）。`var` 却下＝「手抜き＝immutable」を守る。
 - **並行性は実質 race-free**：**借用は async/spawn を越えない**（越えるのは move/copy/Ref）→ async 借用ライフタイム追跡が不要・`Promise.all([f(move a),f(move a)])` は use-after-move で弾ける。**spawn は move/copy のみ・Ref は spawn 不可**（推移的 Ref-free を要求）→ スレッド間に共有可変が無く競合フリー・Mutex 不要。**async は単一スレッドゆえ Ref 可**（メモリ安全・interleave は JS 同様の論理ハザード）。spawn を越えられない型は **`local struct`**（`Ref` を持つ型は必須・unique 同型のエラー強制）。
-- **generics**：能力マーカーは **`[...]`**・trait 制約は `where`。既定 `[T]`＝`unique` でない＋`local` 許容＝common case が無注釈。`[no_local T]`（narrow・spawn 用）／`[allow_unique T]`（widen・unique admit・実装は将来）。非対称は「既定＝common case」の帰結。v1 は copyable 限定（unique は `Ref` 包み）。
+- **generics**：能力マーカーは **`[...]`**・trait 制約は `where`。既定 `[T]`＝`unique` でない＋`local` 許容＝common case が無注釈。`[no_local T]`（narrow・spawn 用）／`[allow_unique T]`（widen・unique admit・実装は将来）。非対称は「既定＝common case」の帰結。v1 は コピー可能 限定（unique は `Ref` 包み）。
 - **実装順**：spawn は後回し濃厚 → `no_local`/`allow_unique` 検査も連動。最小コンパイラは 値＋CoW＋ARC＋`unique` 基本＋`Ref`/`WeakRef` から。
 
 ## 主要な判断と根拠
