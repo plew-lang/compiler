@@ -27,16 +27,16 @@ async fn main() {
 
 `async fn` のメソッドは **self を借用できません**（借用は async 境界を越えられない＝`inout fn` の async 版は不可）。よって：
 
-- **非消費の async メソッドは self をコピー**する（Self コピー可能 のときのみ）。＝Self が コピー可能 必須で、generic struct なら型引数も コピー可能（[`allow_unique` でない](../02-type-system/06-generics.md)）。
+- **非消費の async メソッドは self をコピー**する（Self がコピー可能なときのみ）。＝Self がコピー可能必須で、generic struct なら型引数もコピー可能（[`allow_unique` でない](../02-type-system/06-generics.md)）。
 - **消費する async メソッドは `async move fn`**（self を move）。
 - **await を跨いで self を可変共有したいオブジェクトは `Ref` 裏打ち**にする ── `ref->async_mutate()` は `Ref` 越しに self を触り、`Ref` は async 境界を越えられる（単一スレッドでメモリ安全・interleave は JS 同様の論理ハザード）。ステートフルな async オブジェクトは Ref 裏打ち＝JS のオブジェクトと同じ姿。
 
 ### unique 結果と `allow_unique`（v1 は不可・将来）
 
-v1 では **`Promise[T]`/`Thread[T]` を含むコアの generic 型はすべて コピー可能 限定**（`allow_unique` 未導入）。帰結：
+v1 では **`Promise[T]`/`Thread[T]` を含むコアの generic 型はすべてコピー可能な型に限定**（`allow_unique` 未導入）。帰結：
 
-- async/spawn は **unique 結果を返せない**（`-> Promise[unique]` 不可）。返すのは コピー可能 か `Ref`。async で unique を持ち回るなら **`Ref` 包み**（`Ref` は async を越えられる）。
-- **unique を generic に入れるのは常に `Ref` 包み**（`Optional[Ref[File]]`・`Array[Ref[File]]`）。`Ref` は コピー可能 なので通常の コピー可能 コレクションになり、`match`/peek/反復が普通に効く（move-out 専用 API も `take()` も不要）。
+- async/spawn は **unique 結果を返せない**（`-> Promise[unique]` 不可）。返すのはコピー可能な値か `Ref`。async で unique を持ち回るなら **`Ref` 包み**（`Ref` は async を越えられる）。
+- **unique を generic に入れるのは常に `Ref` 包み**（`Optional[Ref[File]]`・`Array[Ref[File]]`）。`Ref` はコピー可能なので通常のコピー可能なコレクションになり、`match`/peek/反復が普通に効く（move-out 専用 API も `take()` も不要）。
 - by-value の unique を generic で扱う（`Optional[unique]`・`Promise[unique]`・`Array[unique]`）には **借用束縛＝ライフタイム**が要り（要素を取り出さず借用で覗く操作のため）、v1 の非 escape 借用では実装できない。**`allow_unique` は将来の additive**（保持系＝Optional/Promise が先・Array/Iterable は escaping borrow 導入後）。それまでは `Ref` 包みで代替。
 
 ## メモリ管理（ARC）
@@ -73,7 +73,7 @@ val result = await handle.join()             // 完了を待って結果（Threa
 spawn { background() }                        // 束縛しなければ detached
 ```
 
-- **ベアの `spawn { }` のキャプチャは コピー可能 のみ（暗黙コピー＝スナップショット）**。`borrow`/`inout`・`Ref`・`local` を触れば**コンパイルエラー**（経路を示す）。**`unique` のキャプチャもエラー**（ブロックへ move する構文は当面持たない＝additive）。
+- **ベアの `spawn { }` のキャプチャはコピー可能のみ（暗黙コピー＝スナップショット）**。`borrow`/`inout`・`Ref`・`local` を触れば**コンパイルエラー**（経路を示す）。**`unique` のキャプチャもエラー**（ブロックへ move する構文は当面持たない＝additive）。
 - **`unique` をスレッドへ渡すには `spawn fn`**（下記）の `move` 引数を使う。
 - **戻りはハンドル構造体**：`join() -> Promise[T]` を持つ（暫定 `Thread[T]`）。`await handle.join()` で結果。**ランタイムは全スレッド完了まで生存**してから終了する（Go の「main 終了で goroutine kill」footgun を避ける）。
 - **`spawn` 内 `panic` はプロセス全体を停止**する。スレッド単位で扱いたい失敗は `Result` を返して `join()` で受け取る。

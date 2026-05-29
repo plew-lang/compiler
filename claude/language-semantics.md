@@ -66,8 +66,8 @@
 - 無名 impl は**型を定義したモジュール内のみ**置ける。外部型への実装はトレイト所有を問わず拡張 `#Ext`。
 
 ### 並行性 → [spec/14](../spec/04-execution/14-concurrency.md)
-- ランタイムは **ARC**（循環は `WeakRef`）。**借用は async/spawn 境界を越えない**（越えるのは move/copy/Ref）。**spawn は move/copy のみ・`Ref` は spawn 不可**（推移的に `local` でないこと＝Ref-free を要求）→ **スレッド間に共有可変が無く実質 race-free**（旧「データ競合あり得る・UB」から格上げ）。**async は単一スレッドゆえ `Ref` 可**（interleave は JS 同様の論理ハザード）。
-- ベア `spawn { }` は コピー可能 のみ暗黙キャプチャ・`unique` は `spawn fn` の `move` 引数で渡す。`async fn`/`spawn fn` は `-> Promise[T]`/`-> Thread[T]` 明示で `return e` を自動 wrap。
+- ランタイムは **ARC**（循環は `WeakRef`）。**借用は async/spawn 境界を越えない**（越えるのは move/copy/Ref）。**spawn は move/copy のみ・`Ref` は spawn 不可**（推移的に `local` でないこと＝Ref-free を要求）→ **スレッド間に共有可変が無く実質 race-free**。**async は単一スレッドゆえ `Ref` 可**（interleave は JS 同様の論理ハザード）。
+- ベア `spawn { }` はコピー可能のみ暗黙キャプチャ・`unique` は `spawn fn` の `move` 引数で渡す。`async fn`/`spawn fn` は `-> Promise[T]`/`-> Thread[T]` 明示で `return e` を自動 wrap。
 - **実装課題**：境界越えの move/copy/Ref 判定（借用は越えない・`local`-free＝spawn 可否）の型検査。
 
 ### エラー → [spec/13](../spec/03-expressions/13-error-handling.md)

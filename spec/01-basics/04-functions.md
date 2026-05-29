@@ -12,7 +12,7 @@ export async fn function_name[T, U](
 }
 ```
 
-引数のモード（`borrow`／`inout`／`move`・コピー可能 は既定で by-value）、`async fn`／`spawn fn`、型引数の能力マーカー（`allow_unique`／`no_local`）は [値・変数・所有権](03-values.md)・[非同期処理とメモリ管理](../04-execution/14-concurrency.md)・[ジェネリクス](../02-type-system/06-generics.md) を参照。
+引数のモード（`borrow`／`inout`／`move`・コピー可能は既定で by-value）、`async fn`／`spawn fn`、型引数の能力マーカー（`allow_unique`／`no_local`）は [値・変数・所有権](03-values.md)・[非同期処理とメモリ管理](../04-execution/14-concurrency.md)・[ジェネリクス](../02-type-system/06-generics.md) を参照。
 
 ## 引数ラベル
 
@@ -84,7 +84,7 @@ val f: fn(n: I32) -> I32 = fn(n) { return n * 2 }  // n: I32 は推論される
 
 ### 環境のキャプチャ
 
-クロージャは外側のスコープの変数をキャプチャします。**値意味論なので、コピー可能 は[コピー（スナップショット）でキャプチャ](03-values.md#値意味論value-semantics)** ── 閉包外の変更は閉包に伝わらず、閉包内の変更も外へ漏れません。閉包と外で**同じ可変状態を共有**したいときは [`Ref`](03-values.md#ref--weakref共有可変) を明示的にキャプチャします（共有可変の唯一の手段）。
+クロージャは外側のスコープの変数をキャプチャします。**値意味論なので、コピー可能は[コピー（スナップショット）でキャプチャ](03-values.md#値意味論value-semantics)** ── 閉包外の変更は閉包に伝わらず、閉包内の変更も外へ漏れません。閉包と外で**同じ可変状態を共有**したいときは [`Ref`](03-values.md#ref--weakref共有可変) を明示的にキャプチャします（共有可変の唯一の手段）。
 
 ```plew
 struct Counter { mut val n: I32 }
@@ -102,6 +102,6 @@ counter()  // 1
 counter()  // 2
 ```
 
-- **コピー可能 のキャプチャはコピー**（独立スナップショット）。**`unique` 値はキャプチャできない**（閉包へ move する構文は当面なし）。共有可変は `Ref` を copy-capture し、ARC が生存を保つ（`[weak self]`/`@escaping` 注釈は無い）。
+- **コピー可能のキャプチャはコピー**（独立スナップショット）。**`unique` 値はキャプチャできない**（閉包へ move する構文は当面なし）。共有可変は `Ref` を copy-capture し、ARC が生存を保つ（`[weak self]`/`@escaping` 注釈は無い）。
 - `Ref` で**循環**ができ得る構造（閉包を保持するオブジェクトをその `Ref` が指す等）は [`WeakRef`](03-values.md#ref--weakref共有可変) で断ち切る。
-- **`spawn` ブロックのキャプチャは コピー可能 のみ**（`unique`/`Ref`/`borrow` は不可。`unique` をスレッドへ渡すなら `spawn fn`）→ [非同期処理とメモリ管理](../04-execution/14-concurrency.md)。
+- **`spawn` ブロックのキャプチャはコピー可能のみ**（`unique`/`Ref`/`borrow` は不可。`unique` をスレッドへ渡すなら `spawn fn`）→ [非同期処理とメモリ管理](../04-execution/14-concurrency.md)。

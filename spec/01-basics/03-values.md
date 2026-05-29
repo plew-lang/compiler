@@ -51,13 +51,13 @@ unique struct File {
 > **用語**：本書は `unique` を基準に書き、**「`unique` でない」＝コピー可能**（他言語でいう *Copyable*）と表します。*Copyable* はキーワードではありません。同様に [`local`](#localspawn-を越えられない型) の否定が「spawn を越えられる」（他言語の *Sendable*）です。
 
 - **束縛は move のみ**：`val f2 = move f`（以後 `f` は使えない）。`val f2 = f`（コピー）は**エラー**です。
-- **アクセスはモード明示必須**：コピー可能 と違い bare 不可。`borrow`/`inout`/`move` のいずれかを書く。
+- **アクセスはモード明示必須**：コピー可能と違い bare 不可。`borrow`/`inout`/`move` のいずれかを書く。
 - **`unique`（または unique を推移的に含む型）をフィールドに持つ型は `unique` 明示必須**。書かなければコンパイルエラー（自動伝染させず、フィールド追加時に決定を強制する＝[全フィールド明示](11-control-flow.md)と同じ精神）。
-- **ジェネリクスには直接渡せない**（型引数は コピー可能 限定）。共有・格納したいときは [`Ref`](#ref--weakref共有可変) で包む（`Optional[Ref[File]]` 等 → [ジェネリクス](../02-type-system/06-generics.md)）。
+- **ジェネリクスには直接渡せない**（型引数はコピー可能な型に限定）。共有・格納したいときは [`Ref`](#ref--weakref共有可変) で包む（`Optional[Ref[File]]` 等 → [ジェネリクス](../02-type-system/06-generics.md)）。
 
 ### deinit
 
-`unique` 型だけが `deinit` を持てます（コピー可能 型は不可 ── コピーのたびに多重実行され二重解放になるため。Swift の構造体に `deinit` が無いのと同理）。
+`unique` 型だけが `deinit` を持てます（コピー可能な型は不可 ── コピーのたびに多重実行され二重解放になるため。Swift の構造体に `deinit` が無いのと同理）。
 
 ```plew
 impl File {
