@@ -36,6 +36,7 @@
 | 数値リテラル（[02](../spec/01-basics/02-basic-types.md)） | `0x`/`0o`/`0b`・`_`・e 表記・型サフィックス `10U32` | 仕様先行（`DIGIT+` のみ・型付けは意味論層） |
 | メソッドのオーバーロード（[07](../spec/02-type-system/07-methods-impl.md)） | impl 内に同名 `method` 複数（解決規則は意味論層） | 仕様先行 |
 | デフォルト引数（[04](../spec/01-basics/04-functions.md)） | `arg_declare` に `= 式`（`inout` には付けない） | 仕様先行（`arg_declare` は `INOUT? value type_annotate` で既定値構文なし・毎回評価/自己完結/セレクタ生成は意味論層） |
+| ラベル抑制 `~:`（[04](../spec/01-basics/04-functions.md)） | `arg_declare` に `name~: Type`（無ラベル＝位置渡し・`factory` 引数では不可）／関数型の無ラベル位置は裸の型 `fn(Type, label: Type)->R` | 仕様先行（`arg_declare` に `~` マーカーなし・`factory` 制約は意味論層） |
 | ジェネリクスの型パラメータ（[06](../spec/02-type-system/06-generics.md)） | `[...]` は名前のみ・制約は `where`（インライン `[T: Trait]` なし） | 仕様先行（制約は意味論層） |
 | impl の型パラメータ（[06](../spec/02-type-system/06-generics.md)） | `impl[T] Type …` の前置宣言 | 仕様先行（前置なし） |
 | モジュール/`part`/`_.pw`（[15](../spec/04-execution/15-modules.md)） | `part`・ディレクトリ `_.pw`・エントリ `src/_.pw` | 仕様先行（`import` のみ） |
