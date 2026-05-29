@@ -279,6 +279,7 @@ array[0] = x  // array.index_set(key: 0, value: x) と同等
 - 読み取り（`Index`）と代入（`IndexSet`）は**独立したトレイト**で、読み取り専用コレクションは `Index` だけを実装できます。
 - `collection[key] += x` などの複合代入は、**読み取り（`Index`）＋演算＋代入（`IndexSet`）**に展開されるので、両方の実装が要ります（→ [複合代入演算子](#複合代入演算子)）。
 - レシーバ自身を書き換えるので `index_set` は `inout fn`。可変束縛（`mut val`）にしか使えません。
+- 添字越しの `inout` メソッド呼び出し（`arr[i].inout_method()`）やネストした代入（`a.b[i].c = x`）も、同じ `Index`→（変更）→`IndexSet` の **get-modify-set** に脱糖されます。場所（place）の文法・脱糖・重なる `inout` の禁止は [場所越しの変更](../01-basics/03-values.md#場所place越しの変更) を参照（複合代入はその特殊形）。
 
 ## オプショナルチェーン（Chain トレイト）
 

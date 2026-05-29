@@ -147,3 +147,38 @@ SomeStruct { field1: val a, field2: val b } = some_struct // 別名
 - 分解は**フィールド名で対応**します（位置ではない）。`(val x, val y)` は record の `x`/`y` を束縛し、書く順序は問いません。
 - 文頭の `(` はラベル付きタプルの分解、型名始まりは構造体の分解、`{` 始まりは[ブロック](../03-expressions/11-control-flow.md)で、互いに曖昧になりません。
 - **全フィールドを明示**します（束縛するか `_` で破棄）。未記載フィールドの暗黙無視も、残りを捨てる `..` もありません＝フィールド追加時に既存の分解がエラーになり取りこぼしを防ぎます。`_` は値を捨てる破棄パターンで `val` 不要、パターン位置ならどこでも書けます（詳細は → [パターンマッチング](../03-expressions/11-control-flow.md)）。
+
+## 場所（place）越しの変更
+
+代入の左辺・`inout` のレシーバ／引数になれるのは**場所（place）**＝`mut val` 束縛を根に、フィールドアクセスと添字を連ねたパスです（`x`・`x.field`・`arr[i]`・`a.b[i].c` 等）。`val` 束縛・関数の戻り値・一時値は場所ではなく、変更先にできません。
+
+### get-modify-set 脱糖
+
+ネストした場所への変更 ── 代入 `place = e`、複合代入 `place OP= e`、`inout` メソッド呼び出し `place.inout_method(...)`、`inout` 引数 `f(x: inout place)` ── は **read-modify-write** に脱糖します。場所の部分式（添字のキー・レシーバ）は**1 回だけ評価**し、添字の段は [`Index`](../03-expressions/12-operators.md#添字アクセス)（読み）と [`IndexSet`](../03-expressions/12-operators.md#添字代入indexset)（書き）、フィールドの段は load/store で、**内側から外へ書き戻し**ます。
+
+```plew
+mut val arr: Array[Counter] = [...]
+arr[i].increment()                    // inout fn increment()
+// ≈
+val k = i
+mut val tmp = arr.index(key: k)       // 読み（Index）
+tmp.increment()                       // ローカルへの inout
+arr.index_set(key: k, value: tmp)     // 書き戻し（IndexSet）
+```
+
+`arr[i].field = x`・`arr[i].field += x`・ネスト `a.b[i].c = x` も同様に、添字段は `Index`/`IndexSet`、フィールド段は load/store で内側から組みます。これは [複合代入](../03-expressions/12-operators.md#複合代入演算子) の「場所は 1 回評価・`Index`→演算→`IndexSet`」を、一般の場所パスと `inout` レシーバ／引数へ広げたものです。
+
+- **`IndexSet` を持たない添字（読み取り専用コレクション）越しには変更できません**（`Index` だけの型は読みのみ）。
+- **値意味論ゆえメモリ安全**：触るのは切り離したコピーで、書き戻しは*その時点の*コンテナに対して行うので、変更中に内部で再確保が起きても dangling しません（C++ のイテレータ無効化が原理的に起きない）。
+
+### in-place は観測不能な最適化
+
+get-modify-set が**意味モデル**です。コンパイラは、(1) バッファが一意所有、(2) 変更窓で再入による無効化が起きない、(3) 場所が重ならない、を**静的に証明できる**ときに限り、コピーを介さず実メモリを直接書き換えてよい（観測挙動は不変・`Index`/`IndexSet` の副作用は保存）。証明できなければコピーへ退避します。**実行時のアクセス計装（Swift の動的 exclusivity 相当）は持ちません** ── 値のコピーは dangling しないので、計装が守るべきハザードがそもそも生じないためです。将来ボトルネックになれば「証明できない場合まで in-place 化する」方式（実行時トラップ付き）を additive に足せます（重ならない全プログラムの観測挙動は不変なので非破壊）。
+
+### 重なる inout は禁止
+
+`inout` は[排他](#アクセスモードborrow--inout--move)です。1 つの呼び出しで**2 つ以上の `inout` 位置（レシーバ／引数）が同じ場所を指す**と、get-modify-set では独立コピーの書き戻しが衝突して**片方の変更が静かに消えます**（last-write-wins）。これを**プログラムエラー**とし、last-write-wins の挙動は**保証しません**（実装が将来 in-place＋トラップへ変わっても壊れないようにするため）。
+
+- **構文的に同一の場所**（`f(a: inout x, b: inout x)`・`x.m(arg: inout x)`・`arr[i]` と添字式まで一致）→ **コンパイルエラー**。
+- **同一コンテナで添字が distinct と証明できない**（`arr[i]` と `arr[j]`）→ **lint 警告**＋ 呼び出し直前にキー一致を検査して一致なら **panic**（多重 inout place の呼び出し位置に限った狭いランタイム検査）。
+- **distinct と証明できる**→ OK。

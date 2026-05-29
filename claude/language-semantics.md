@@ -21,6 +21,7 @@
 - すべて**値意味論（CoW）**（代入・受け渡しは独立コピー・共有可変は `Ref` のみ）。可変記憶域は `mut val`／アクセスは `borrow`/`inout`/`move`（呼び出しもモードを echo）→ [spec/03](../spec/01-basics/03-values.md)。`unique`/`local`・`Ref`/`WeakRef`/`->`・`deinit` も同章。
 - **再宣言（shadowing）は無制限**で、`name` は常にレキシカルに直近の宣言を指す。`guard`/`match`/`if` の絞り込みはこの一般規則の帰結＝**特別扱いしない**（代入 `x = e`＝既存 `mut` の同型更新とは別概念）。
 - **未初期化宣言は無い**（確定代入解析を持ち込まない）。`val x: T` 後分岐代入は `val x = if … { give … }` で書く。
+- **場所（place）越しの変更は get-modify-set（罠）** → [spec/03](../spec/01-basics/03-values.md#場所place越しの変更)。`arr[i].field = x`・`arr[i].inout_method()`・`a.b[i].c = x` は**可変参照を返さず**、添字段＝`Index`(読)+`IndexSet`(書)・フィールド段＝load/store の **read-modify-write** に脱糖（複合代入の一般化・場所は 1 回評価・`IndexSet` 無い型は変更不可）。**これが意味モデル**で、in-place 直接書き換えは「一意所有＋無効化なし＋非重なりを静的に証明できる時だけの観測不能な最適化」（実行時アクセス計装は持たない＝コピーは dangling しないので不要・将来 Swift 流 in-place+トラップは additive で非破壊）。**重なる `inout`**（1 呼び出しで 2 つ以上の inout 位置が同じ場所＝レシーバ＋引数等）は **last-write-wins で片方が静かに消えるバグ**ゆえ**プログラムエラー**＝①構文同一→コンパイルエラー ②添字が distinct 証明不可→lint＋限定ランタイム panic ③distinct 証明可→OK（last-write-wins 挙動は*保証しない*＝将来の実装変更に備える）。**`inout` の排他はスレッド安全でなく単一スレッドのメモリ安全（再確保による dangling 防止）の話**＝Swift の Law of Exclusivity と同根拠だが、Plew はコピー意味論ゆえ全アクセス計装が要らない。
 
 ### ブロック・制御フロー → [spec/11](../spec/03-expressions/11-control-flow.md)
 - ブロックを式にするには **`give` 必須**（`val x = { 42 }` はエラー、`{ give 42 }` が正）。`if`/`match`/`loop` も式（`loop` は `break <expr>`）。
