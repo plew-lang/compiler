@@ -1,44 +1,114 @@
-# 変数と値の管理
+# 値・変数・所有権
 
-## 参照の値渡しと inout
+> **⚠️ この章は地金転換（値意味論+CoW+ARC+opt-in所有権）を反映済み。** 旧版は「参照の値渡し + inout」を前提にしていた。転換の経緯・根拠は [CLAUDE.md 冒頭「進行中の地金転換」節] と [design-decisions の地金転換節] を参照。他章はまだ旧モデル記述が残る場合がある。
 
-Plew では全ての値の受け渡しは参照の値渡しで行われます。
+## 値意味論（value semantics）
+
+Plew の値の受け渡し ── 代入・引数渡し・構造体への埋め込み ── は**論理的なコピー**です。`val b = a` の後、`b` と `a` は独立で、片方を変更しても他方に影響しません。**共有された可変状態は [`Ref`](#ref--weakref共有可変) を通したときだけ**生まれます。
+
+> **CoW（copy-on-write）**：論理コピーですが、コンパイラ／ランタイムは実コピーを**遅延**します。共有中は同じ内部バッファを指し、いずれかを**変更した瞬間**にだけ複製します。だから読み取り共有は無料で、`Array`／`String`／`Dictionary` のような大きい値も安価に渡せます（「全代入が即コピー＝遅い」は誤解）。観測意味論は常に「独立」で、CoW は観測できない最適化です。
+
+ランタイムは tracing GC ではなく **ARC（参照カウント）** でメモリを管理します。決定的に破棄されるので [`deinit`](#deinit) による資源解放が使えます。循環参照だけは参照カウントで回収できないため [`WeakRef`](#ref--weakref共有可変) で断ち切ります。
+
+## 変数宣言（val / mut val）
 
 ```plew
-fn immutable_function(param: MyStruct) {
-    // param は不変 - フィールドの変更や可変メソッドの呼び出し不可
-    param.some_field = new_value  // エラー
-    param.mutate()  // エラー
+val x: I32 = 0               // 不変束縛（既定・初期化必須）
+mut val y: String = "init"   // 可変束縛（再代入・可変メソッド可）
+```
+
+- **既定は不変 `val`**。可変にするには `mut val` と一語多く書く（「手を抜くと不変」）。`mut` は**記憶域の可変性**を表す語で、後述の[借用](#アクセスモードborrow--inout--move)とは別軸です。
+- **宣言時に必ず初期化**します（未初期化宣言は持ちません）。分岐で初期値を決めたいときは式ブロック：`val x: I32 = if flag { give 1 } else { give 2 }`。
+
+## アクセスモード（borrow / inout / move）
+
+関数引数・メソッドの `self`・呼び出しは、値を**どう扱うか**を 3 つのモードで表します。**呼び出し側にもモードが現れる**ので、各変数の運命が呼び出し位置だけで読めます。
+
+| モード | 意味 | 引数宣言 | self | 呼び出し側 |
+| --- | --- | --- | --- | --- |
+| **borrow** | 読み借用（変更しない） | `x: borrow T` | `fn` | `f(x: borrow a)` |
+| **inout** | 可変借用（書き戻し・排他） | `x: inout T` | `inout fn` | `f(x: inout a)` |
+| **move** | 消費（所有を移す） | `x: move T` | `move fn` | `f(x: move a)` |
+
+- **`unique` でない型は既定で by-value**：`x: T`（モード語なし）＝コピー渡し・呼び出しも `f(x: a)`。コピー独立なので「読むだけ」相当で、`borrow`/`inout`/`move` は必要なときだけ書きます。
+- **`inout` は旧 `&mut` の CoW 版**（Swift の `inout` と同じ位置づけ）。「変更する」行為ではなく「変更可能に借りる関係」を表すので、`modify` のような行為語ではなくこの語を使います。
+- 呼び出しの読み分け：`f(x: a)`＝x は無傷／`f(x: inout a)`＝x はこの後変わり得る／`f(x: move a)`＝x は以後使えない。
+
+```plew
+inout fn deposit(amount: I32) { self.balance = self.balance + amount }  // self を可変借用
+fn balance() -> I32 { return self.balance }                            // self を読み借用
+```
+
+## unique（コピー不可型）
+
+```plew
+unique struct File {
+    val fd: I32
+    deinit { sys_close(fd: self.fd) }
 }
+```
 
-fn mutable_function(inout param: MyStruct) {
-    // param は可変 - フィールドの変更や可変メソッドの呼び出し可能
-    param.some_field = new_value  // OK
-    param.mutate()  // OK
+`unique` を先頭に付けた型は**コピー不可・move 専用**です。唯一所有が要る型 ── 資源（ファイル・ソケット）、ハンドルなど ── に使います。
+
+> **用語**：本書は `unique` を基準に書き、**「`unique` でない」＝コピー可能**（他言語でいう *Copyable*）と表します。*Copyable* はキーワードではありません。同様に [`local`](#localspawn-を越えられない型) の否定が「spawn を越えられる」（他言語の *Sendable*）です。
+
+- **束縛は move のみ**：`val f2 = move f`（以後 `f` は使えない）。`val f2 = f`（コピー）は**エラー**です。
+- **アクセスはモード明示必須**：copyable と違い bare 不可。`borrow`/`inout`/`move` のいずれかを書く。
+- **`unique`（または unique を推移的に含む型）をフィールドに持つ型は `unique` 明示必須**。書かなければコンパイルエラー（自動伝染させず、フィールド追加時に決定を強制する＝[全フィールド明示](11-control-flow.md)と同じ精神）。
+- **ジェネリクスには直接渡せない**（型引数は copyable 限定）。共有・格納したいときは [`Ref`](#ref--weakref共有可変) で包む（`Optional[Ref[File]]` 等 → [ジェネリクス](../02-type-system/06-generics.md)）。
+
+### deinit
+
+`unique` 型だけが `deinit` を持てます（copyable 型は不可 ── コピーのたびに多重実行され二重解放になるため。Swift の構造体に `deinit` が無いのと同理）。
+
+```plew
+impl File {
+    deinit { sys_close(fd: self.fd) }   // 最後の所有者が消えるとき一度だけ
 }
 ```
 
-`inout` 引数には、**呼び出し側でも `&` を付けて**「この呼び出しで変更され得る」ことを明示します（暗黙に書き換わらない）。`&` は `mut` な束縛にしか付けられません。
+- 引数・戻り値なし、失敗不可。最後の所有者がスコープを抜ける（または最後の [`Ref`](#ref--weakref共有可変) が解放される）ときに**ちょうど一度**走る。
+- 値 struct には書けない（`unique` 宣言が前提）。
+
+## local（spawn を越えられない型）
+
+[`Ref`](#ref--weakref共有可変)（や他の `local` 型）をフィールドに持つ型は **`local struct`** を明示します（`unique` と同型のエラー強制）。
 
 ```plew
-mut val account = <Account balance=0 />
-mutable_function(param: &account)   // & 必須。account はこの後 変更され得る
+local struct Session {
+    val conn: Ref[Connection]
+}
 ```
 
-## 変数宣言
+`local` 型はスレッド境界（`spawn`）を越えられません（共有可変＋非 atomic な参照カウントのため）。単一スレッド（`async` を含む）では通常の型と全く同じに扱えます。境界規則の詳細は [非同期処理とメモリ管理](../04-execution/14-concurrency.md) を参照。
+
+## Ref / WeakRef（共有可変）
+
+値意味論では共有された可変状態を作れません。**`Ref[T]` だけ**がその唯一の手段で、同一性を持つヒープ上の箱を複数の保有者で共有します。
 
 ```plew
-val immutable_var: I32 = 0               // 不変変数（初期化必須）
-mut val mutable_var: String = "initial"  // 可変変数
-
-// 不変変数を可変変数に代入するにはclone()が必要
-val immutable_data = <SomeStruct field=42 />
-mut val mutable_data = immutable_data.clone()
+val r = <Ref value=conn />   // conn を箱へ move（共有可変ハンドル）
+r->state = Connected         // -> で中身にアクセス（書き込みは全保有者に見える）
+val r2 = r                   // ハンドルをコピー＝同じ箱を共有（参照カウント++）
 ```
 
-- **宣言時に必ず初期化します**（未初期化宣言は持ちません）。分岐で初期値を決めたいときは式ブロックを使います：`val x: I32 = if flag { give 1 } else { give 2 }`。
+- `Ref[T]` は**祝福プリミティブ**（`Array`／`String` と同様、純 Plew では書けない）。コピーで共有＋retain し、最後の解放で中身の `deinit` を走らせる。
+- **`.` は Ref ハンドル自体への操作、`->` は中身（pointee）への操作**（C と同じ）。共有変異が `->` で構文的に明示され、値の `.` と区別されます。これが値意味論の中で「共有が起きる唯一の場所」を見えるようにしています。
+- **`val` な Ref 越しでも中身は変更できる**：Ref 束縛の `val`/`mut val` は **Ref 変数の再代入（`r = other`）** を gate するだけで、referent の変更（`r->x = v`・`inout fn` 呼び出し）は gate しません（Ref は共有可変が本分・Swift の `let class` と同じ）。値型の `val`（凍結）との非対称は、値 vs 参照の差を `Ref`＋`->` で可視化したものです。
+- **`move fn`（消費メソッド）は Ref 越しに呼べない**：共有された referent を消費すると他の `Ref` が無効化される（use-after-consume）ため、`Ref` 越しは `fn`/`inout fn` のみ。共有資源の後始末は **`deinit`（最後の `Ref` 解放時）** に委ねます。明示消費や失敗し得る `close() -> Result` が要るなら、共有せず裸の [`unique`](#uniqueコピー不可型) 値（唯一所有）で `move fn` を呼びます（共有時は「誰が close エラーを受けるか」が原理的に不定なので呼べないのが正しい）。〔additive：唯一保持なら中身を取り出す `try_unwrap() -> Optional[T]` を後付けし得る。〕
+- **循環**は参照カウントで回収されないので、断ち切りに **`WeakRef[T]`**（非所有・指す先が消え得る）を使います。**`WeakRef` は直接 deref できません（`w->x` は無い）** ── 指す先が生きている保証が無いからです。生存確認とアクセスは **`upgrade() -> Optional[Ref[T]]`** を通します（生きていれば強参照 `Ref`、消えていれば `None`＝可謬性が Optional で表に出る）：
 
-### 再宣言（shadowing）
+```plew
+val w = r.weak()                  // ダウングレード（. ＝ハンドル操作）
+match w.upgrade() {               // Optional[Ref[T]]
+    Optional.Some { value: val r } => r->x   // 強参照に格上げ済み＝生存保証・直接 deref 可
+    Optional.None                  => skip()
+}
+```
+
+  `w->x` を「直接 `Optional` を返す deref」にしないのは、(1) **生存を固定**するため（一度 `upgrade` すれば強参照が指す先を生かし続ける。`w->x`/`w->y` を個別に可謬にすると間に最後の強参照が落ちて途中で死に得る）、(2) **書き込みが綺麗**（`r->x = v` は生存保証された強参照に書く。死んだ先への静かな no-op を避ける）、(3) **`->` の意味を一定に保つ**（常に「生存保証された `Ref` の deref」）ため。Rust の `Weak::upgrade()` と同じ。
+
+## 再宣言（shadowing）
 
 同名の `val`/`mut val` を**再宣言できます**（Rust と同じ・無制限）。再宣言は代入ではなく**新しい束縛**で、型も可変性も変えてよく、それ以降 `name` は**レキシカルに直近の宣言**を指します。外側スコープの名前を内側で覆う（shadowing）こともできます。
 
@@ -51,22 +121,22 @@ val raw = read()                    // Bytes
 val raw = parse(data: raw)          // ParsedData（同名で変換・型が変わる）
 ```
 
-- **代入 `x = e` とは別物**：代入は既存の `mut` 束縛を同じ型で書き換える。再宣言 `val x = e` は新しい束縛を作る（`mut` 不要・型変更可）。
+- **代入 `x = e` とは別物**：代入は既存の `mut val` 束縛を同じ型で書き換える。再宣言 `val x = e` は新しい束縛を作る（`mut` 不要・型変更可）。
 - `guard`/`match`/`if` のパターン束縛が同名で値を絞り込めるのは、この一般規則の帰結であって特別扱いではない（「絞り込みのときだけ同名可」という線引きは設けない）。
 - 再宣言で覆って一度も読まれない前の束縛は、未使用束縛として診断（lint）で拾える（Rust 同様）。
 
 ## 代入と構造化代入
 
-代入 `x = e` は既存の `mut` 束縛を書き換えます。分解では各要素を **`val name`（新しい束縛）** か **bare `name`（既存へ代入・要 `mut`）** で書き分け、混在もできます（`val`＝新規・bare＝既存は[再宣言](#再宣言shadowing)と同じ区別）。
+代入 `x = e` は既存の `mut val` 束縛を書き換えます。分解では各要素を **`val name`（新しい束縛）** か **bare `name`（既存へ代入・要 `mut val`）** で書き分け、混在もできます（`val`＝新規・bare＝既存は[再宣言](#再宣言shadowing)と同じ区別）。
 
 ```plew
-// 基本代入（既存の mut 束縛）
+// 基本代入（既存の mut val 束縛）
 variable = expression
 variable += expression          // -=, *=, /= も同様
 
 // ラベル付きタプルの分解（フィールド名で対応）
 (val x, val y) = point          // x, y を新規宣言
-(x, val y) = point              // x は既存へ代入（要 mut）・y は新規
+(x, val y) = point              // x は既存へ代入（要 mut val）・y は新規
 
 // 構造体の分解（先頭に型名 → ブロックと曖昧にならない）
 SomeStruct { val field1, val field2 } = some_struct       // punning（同名束縛）

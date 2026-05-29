@@ -10,6 +10,18 @@
 
 > **現状はスキャフォールド段階（コンパイラ）／言語仕様は活発に策定中。** `Program.cs` は Hello World、文法（`grammer/Plew.g4`）とサンプル（`examples/main.pw`）がある。仕様は `SPEC.md`／`spec/*.md`（4 部 17 章・部ごとサブディレクトリ・論理依存順）で活発に策定中。ANTLR / LLVMSharp の NuGet パッケージはまだ未追加で、パイプラインはこれから組む。
 
+## ⚠️ 進行中の地金転換（2026-05・spec 移行中）
+
+**Plew のメモリ/実行モデルを根本転換中。下部「最重要原則」#2 や未改稿の `spec` 章は旧モデルのままで矛盾している。確定するまで下記の所在を正典とする（機構は spec／理由は design-decisions が正典で、ここでは再掲しない）。**
+
+**転換**：〈参照の値渡し + GC + 所有権なし〉→ **〈値意味論 + CoW + ARC + opt-in 所有権〉**（`val` の不変性が信頼でき・エイリアスバグ消滅・決定的破棄/RAII・実質 race-free。旧モデルは `val` の不変性が弱く footgun。「参照＝速い/CoW＝遅い」は誤解だった）。
+
+- **なぜ＋全決定の記録**：[claude/design-decisions.md](claude/design-decisions.md) の「地金転換」節（rationale・却下案・各サブ決定）。
+- **機構（改稿済み・正典）**：[spec 03 値・変数・所有権](spec/01-basics/03-values.md)（値意味論・`val`/`mut val`・`borrow`/`inout`/`move`・`unique`/`local`・`Ref`/`WeakRef`/`->`・`deinit`）／[spec 14 並行](spec/04-execution/14-concurrency.md)（ARC・spawn 境界・`spawn fn`・`Promise`/`Thread`・race-free）。
+- **未改稿（旧モデル・要書き換え）**：spec 02・04・06・07・08・01／下部「最重要原則」#2 以降の地図／`claude/language-semantics.md`。
+- **用語ポリシー（全章共通）**：書くキーワードは **`unique`/`local`（型）＋`allow_unique`/`no_local`（generics）の 4 つだけ**。capability は「`unique` でない＝コピー可（≒Copyable）」「`local` でない＝spawn 越え可（≒Sendable）」と**マーカーの否定**で表記（Copyable/Sendable/`no_unique` は非キーワード）。
+- **実装順**：spawn は後回し濃厚（`no_local`/`allow_unique` も連動・`allow_unique` は v1 全面後回しで unique は常に `Ref` 包み）。最小コンパイラは 値＋CoW＋ARC＋`unique` 基本＋`Ref`/`WeakRef` から。
+
 ## ドキュメント
 
 実装に着手する前に、関連する詳細ドキュメントを必ず読むこと：
@@ -48,7 +60,7 @@ SDK は 10 系だが `.csproj` の `TargetFramework` は `net8.0`。ANTLR パー
 ## 実装上の最重要原則
 
 1. **正典は `SPEC.md`／`spec/*.md`。`grammer/Plew.g4` は当面いじらない**（後で作り直す前提で、最近の判断は仕様が先行＝文法未反映。差分は [claude/grammar.md](claude/grammar.md)）。`note/` は記法が変遷した一次資料で、矛盾したら仕様優先。
-2. **全制約の根 = 参照の値渡し + GC + 所有権なし**。並行性は「spawn キャプチャ全 immutable（例外なし）＋スレッド間は immutable な `Sender` の `send` で値を送る（共有ではなく送信）」で割り切る。**保証は spawn 書き込み隔離のみ＝データ競合自由も競合下の UB なしも保証しない**（Go 寄り。詳細は下の並行性項）。
+2. **【⚠️ 地金転換中 ── 上の「進行中の地金転換」節が正典。以下は旧根】全制約の根 = 参照の値渡し + GC + 所有権なし**。並行性は「spawn キャプチャ全 immutable（例外なし）＋スレッド間は immutable な `Sender` の `send` で値を送る（共有ではなく送信）」で割り切る。**保証は spawn 書き込み隔離のみ＝データ競合自由も競合下の UB なしも保証しない**（Go 寄り。詳細は下の並行性項）。〔新根＝値意味論+CoW+ARC+opt-in所有権。並行性は「借用は境界を越えず・spawn は move/copy のみ・Ref は spawn 不可」で**実質 race-free**へ格上げ。〕
 3. **メタプログラミングは方針転換済み**（閉じた→ユーザー定義可能：ビルドと別コマンドで別ファイルにコード生成＋`Derive` 構造体）。実装はコンパイラ完成後の最後。詳細は [spec/04-execution/16-metaprogramming.md](spec/04-execution/16-metaprogramming.md)。
 4. **実装前に [claude/design-decisions.md](claude/design-decisions.md) の未決事項を確認**。言語設計の大物（型・トレイト・並行性・拡張・モジュール・制御フロー・演算子・文字列/配列/レンジ）はほぼ決着し、残る未決は**実装／コアライブラリ寄り**が中心：チャネル API・GC 方式・メタプログラミング詳細・FFI 型マッピング・イテレータ/`Step` プロトコル・`Hash`/`Hasher` プロトコル（方向は Rust 流確定・シグネチャ未策定）・文字列ビルダ/正規化・`Slice`/部分文字列・固定長配列 `[E; N]`・lang item の正確な一覧・`assert`/ビルドプロファイル（ラップ演算子名 `&+`/`wrapping_*` 含む）など。
 
