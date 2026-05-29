@@ -9,8 +9,10 @@ struct Calculator {
 
 extension BasicMath {
     impl Calculator {
-        inout fn add(value: F64) {
-            self.current += value
+        // 値を返す非破壊メソッド。新しい Calculator を BasicMath ビューで返すので
+        // そのままチェーンできる（ビューは戻り値に伝播しないため、明示して返す）。
+        fn add(value: F64) -> Calculator#BasicMath {
+            return <Calculator current=self.current + value />#BasicMath
         }
 
         fn result() -> F64 {
@@ -32,17 +34,18 @@ extension AdvancedMath {
 }
 
 async fn main() {
-    mut val calc = <Calculator current=0.0 />
-
-    val basic_result = calc#BasicMath
+    // BasicMath ── 値を返す流れるような API（非破壊・チェーン可能）。
+    val basic_result = <Calculator current=0.0 />#BasicMath
         .add(value: 10.0)
         .add(value: 5.0)
         .result()  // 15.0
 
-    val advanced_calc = calc#AdvancedMath
-    advanced_calc.power(exponent: 2.0)  // 225.0
-    advanced_calc.sqrt()                // 15.0
+    // AdvancedMath ── inout で self を直接変更する。
+    // inout の呼び出しには可変束縛 mut val が要る（val 束縛の中身は変更できない）。
+    mut val calc = <Calculator current=basic_result />
+    calc#AdvancedMath.power(exponent: 2.0)  // current = 225.0
+    calc#AdvancedMath.sqrt()                // current = 15.0
 
-    print(message: "Final result: {advanced_calc.result()}")
+    print("Final result: {calc#BasicMath.result()}")  // 15.0
 }
 ```

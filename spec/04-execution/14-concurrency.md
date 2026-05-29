@@ -15,7 +15,7 @@ async fn fetch_data(url: String) -> Promise[Result[Data, Error]] {
 
 async fn main() {
     val data = await fetch_data(url: "https://api.example.com/data")
-    print(message: "Received: {data}")
+    print("Received: {data}")
 }
 ```
 

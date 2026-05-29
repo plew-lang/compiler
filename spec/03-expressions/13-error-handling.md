@@ -4,6 +4,8 @@
 
 `try`は特別なエラーハンドリングではなく、Result 型の早期リターンのシンタックスシュガーです。
 
+**`try` は `Result` 専用で、`Optional` には効きません**（Rust の `?` が `Option` でも効くのとは異なる）。`Optional` を返す関数で `try optional` とは書けません。`Optional` の早期離脱・連結は `??`（nil 合体）・`?.`（オプショナルチェーン）・`match`/`guard` を使ってください。`Optional` を `Result` に持ち上げたい（欠落をエラーとして伝播したい）ときは、`opt ?? <Result.Err … />` 等で明示的に `Result` 化してから `try` します。`try` の経路をエラー型 1 本（`Result` の `From` 変換）に絞ることで、「欠落（`None`）」と「失敗（`Err`）」を構文レベルで混同しません。
+
 ```plew
 fn parse_and_process(input: String) -> Result[I32, String] {
     val number: I32 = try parse_int(text: input)  // エラー時は早期リターン
