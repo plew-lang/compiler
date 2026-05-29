@@ -50,7 +50,7 @@
 | トレイトの型引数（[08](../spec/02-type-system/08-traits.md)） | `Add[Rhs]` 等（`type_args_declare?`） | 一致 |
 | 変換トレイト・`as`（[12](../spec/03-expressions/12-operators.md)） | `AS type_use`（`From` factory 対応付け・`as` は infallible 固定は意味論層） | 一致 |
 | 失敗し得るファクトリ（[05](../spec/02-type-system/05-structs-enums.md)） | `factory` の前置修飾 `optional` / `result '[' type_use ']'`（戻りラッパーは意味論層） | 仕様先行（`factory` 宣言に修飾語なし・`optional`/`result` は文脈依存キーワードで要追加） |
-| `TryFrom`・可謬変換（[12](../spec/03-expressions/12-operators.md)） | `result[E] factory try_from(...)`（`as` 糖衣なし＝呼びは JSX `<T.try_from .../>`） | 仕様先行（trait 要求の factory・fallible factory に依存） |
+| `TryFrom`・可謬変換（[12](../spec/03-expressions/12-operators.md)） | `result[E] factory convert(from: ...)`（`as` 糖衣なし＝呼びは JSX `<T.convert from=.../>`）／`From` は無名 `factory(from: ...)`（`x as T` 糖衣） | 仕様先行（trait 要求の factory・fallible factory に依存） |
 | トレイトの factory 要求（[08](../spec/02-type-system/08-traits.md)） | `trait_body` に本体なし `factory`（fallible 含む）を要求として書ける | 仕様先行（`trait_body` は本体なしメソッド/フィールド等のみ・factory 要求は要追加） |
 | 等価・順序（[12](../spec/03-expressions/12-operators.md)） | 比較トークン（`Eq`/`Ord` 対応付けは意味論層） | 仕様先行 |
 | 論理結合子 `&&`/`||`（[12](../spec/03-expressions/12-operators.md)） | トークンあり（短絡＝制御フローは codegen 層） | 仕様先行 |
