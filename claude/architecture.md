@@ -6,7 +6,7 @@ Plew コンパイラ（`PlewCompiler`）の実装方針。**現状はスキャ�
 
 - **ターゲット: LLVM-IR**。生成した IR を `llc` → `clang`（あるいは LLVM API）でネイティブバイナリへ。WASM も将来ターゲット。
 - **最終的にセルフホスティング**したい。パフォーマンスは二の次、開発しやすさが最優先（macOS で動けば十分）。
-- **メモリ管理は GC**。所有権・借用・ライフタイムは採用しない（→ [language-semantics.md](language-semantics.md)、[design-decisions.md](design-decisions.md)）。
+- **メモリ管理は ARC（参照カウント）**。既定は値意味論（CoW）で、opt-in の最小所有権（`unique`/`borrow`/`inout`/`move`・`Ref`/`WeakRef`）のみ。全面的な所有権・ライフタイムは不採用（→ [language-semantics.md](language-semantics.md)、[design-decisions.md](design-decisions.md)）。
 
 ## 技術スタック
 
@@ -50,8 +50,8 @@ LLVM-IR
 
 - **AST builder**: ANTLR の Parse Tree を直接歩くのではなく、自前の AST ノードに落としてから解析する。`@[...]` 組み込みディレクティブは AST ノードに属性リストとして保持し、専用フェーズで変換する。ユーザー定義メタプログラミングはこれとは別方式（ビルドと独立した別コマンドで別ファイルへコード生成）へ転換した。→ [design-decisions.md](design-decisions.md) / [spec/04-execution/16-metaprogramming.md](../spec/04-execution/16-metaprogramming.md)。
 - **拡張解決（最重要）**: メソッド/演算子のバインドは「呼び出し位置の `#Extension` 指定」だけで決定論的に決める。import スコープに依存させない。無名（デフォルト）`impl` はそのまま発動、`extension Name { impl … }` は `#Name` で明示指定された時のみ発動。一意に定まらなければコンパイルエラー。詳細は [language-semantics.md](language-semantics.md)。
-- **並行性検査**: `spawn { … }` がキャプチャした変数はすべて immutable view として扱う（例外なし。`Sender` も同様）。可変状態は共有せず、スレッド間は immutable な `Sender` の `send`（immutable メソッド）で値を送る（Mutex は標準で提供しない）。`spawn` の戻りは `join() -> Promise[T]` のハンドルで、ランタイムは全スレッド完了まで生存。
-- **GC**: 方式はランタイム実装時に決定（未定）。シングルプロセス・シングルスレッド + イベントループ前提なので、メモリ安全性の問題は最小。
+- **並行性検査**: `spawn { … }` のキャプチャは copyable のみ（コピー＝スナップショット）、`unique` を渡すなら `spawn fn` の `move` 引数。**借用は async/spawn 境界を越えず、`Ref`/`local` 型は spawn を越えられない**（推移的に `Ref`-free＝`local` でないことを検査）。よってスレッド間に共有可変が無く実質 race-free（Mutex 不要）。`spawn` の戻りは `join() -> Promise[T]` のハンドルで、ランタイムは全スレッド完了まで生存。
+- **ARC（参照カウント）**: 循環は `WeakRef` で断ち切る（循環コレクタの要否・方式はランタイム実装時に決定・未定）。単一スレッド + イベントループ前提＋spawn は値の送信のみなので、並行のメモリ安全性問題は最小。
 
 ## ビルド/実行
 

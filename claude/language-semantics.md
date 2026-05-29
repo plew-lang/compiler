@@ -9,8 +9,7 @@
 
 ## 設計の背骨（3点）
 
-1. **参照の値渡し + GC + 所有権なし**。これが全制約の根。Rust 的な静的競合防止が効かないため、並行性は「spawn は全 immutable + チャネル」という Go 寄りの割り切りに着地する（→ [spec/14](../spec/04-execution/14-concurrency.md)）。文字列の不変性・Mutex 非提供・拡張の値非改変なども、ここから演繹的に出てくる。
-   > **⚠️ 2026-05 に地金転換を決定**：新根は **値意味論 + CoW + ARC + opt-in 所有権**（`unique`/`local`・`borrow`/`inout`/`move`・`Ref`/`WeakRef`/`->`・`deinit`）。`val` の不変性は型レベルで強くなり、並行性は借用が境界を越えず spawn は move/copy のみ・Ref は spawn 不可で**実質 race-free** に格上げ。文字列不変性等の帰結も根が変わるため再導出が要る。正典は **CLAUDE.md 冒頭「進行中の地金転換」節**と **[design-decisions.md](design-decisions.md) の「地金転換」節**。本書本体は未改訂（旧モデル記述）。
+1. **値意味論 + CoW + ARC + opt-in 所有権**。これが全制約の根（→ [spec/03](../spec/01-basics/03-values.md)）。代入・受け渡しは独立コピー（CoW で遅延）・共有可変は `Ref` のみ・メモリは ARC（循環は `WeakRef`）。`val` の不変性が信頼でき、並行性は「借用は async/spawn 境界を越えず・spawn は move/copy のみ・`Ref` は spawn 不可」で**実質 race-free**（→ [spec/14](../spec/04-execution/14-concurrency.md)）。文字列の CoW 不変性・`Mutex` 非提供・拡張の値非改変・`deinit` による決定的な資源解放なども、ここから演繹的に出てくる。
 2. **拡張解決は呼び出し位置の `#Extension` だけで決定論的に決まる**。import スコープに依存しない（→ [spec/09](../spec/02-type-system/09-extensions.md)）。実装上は「素の呼び出し＝無名 impl＋既定拡張のオーバーロード集合／`#Ext` を書いたときだけそのビューを開く」。一意に定まらなければコンパイルエラー。
 3. **メタプログラミングはユーザー定義可能（方針転換中）**：ビルドと独立した別コマンドで別ファイルへコード生成し、マクロは `TokenStream` を入出力する構造体（`Derive` 実装）。実装はコンパイラ完成後の最後（→ [spec/16](../spec/04-execution/16-metaprogramming.md)）。
 

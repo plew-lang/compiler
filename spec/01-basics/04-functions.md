@@ -102,6 +102,6 @@ counter()  // 1
 counter()  // 2
 ```
 
-- **copyable のキャプチャはコピー**（独立スナップショット）。**`unique` 値はキャプチャできない**（閉包へ move する構文は当面なし）。共有可変は `Ref` を copy-capture し、ARC が生存を保つ（GC 非依存・`[weak self]`/`@escaping` 注釈は無い）。
-- `Ref` で**循環**ができ得る構造（閉包を保持するオブジェクトをその `Ref` が指す等）は [`WeakRef`](03-values.md#ref--weakref共有可変) で断ち切る（旧「GC で循環ノーケア」は ARC では成り立たない）。
+- **copyable のキャプチャはコピー**（独立スナップショット）。**`unique` 値はキャプチャできない**（閉包へ move する構文は当面なし）。共有可変は `Ref` を copy-capture し、ARC が生存を保つ（`[weak self]`/`@escaping` 注釈は無い）。
+- `Ref` で**循環**ができ得る構造（閉包を保持するオブジェクトをその `Ref` が指す等）は [`WeakRef`](03-values.md#ref--weakref共有可変) で断ち切る。
 - **`spawn` ブロックのキャプチャは copyable のみ**（`unique`/`Ref`/`borrow` は不可。`unique` をスレッドへ渡すなら `spawn fn`）→ [非同期処理とメモリ管理](../04-execution/14-concurrency.md)。
