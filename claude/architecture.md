@@ -52,7 +52,12 @@ LLVM-IR
 - **拡張解決（最重要）**: メソッド/演算子のバインドは「呼び出し位置の `#Extension` 指定」だけで決定論的に決める。import スコープに依存させない。無名（デフォルト）`impl` はそのまま発動、`extension Name { impl … }` は `#Name` で明示指定された時のみ発動。一意に定まらなければコンパイルエラー。詳細は [language-semantics.md](language-semantics.md)。
 - **並行性検査**: `spawn { … }` のキャプチャはコピー可能のみ（コピー＝スナップショット）、`unique` を渡すなら `spawn fn` の `move` 引数。**借用は async/spawn 境界を越えず、`Ref`/`local` 型は spawn を越えられない**（推移的に `Ref`-free＝`local` でないことを検査）。よってスレッド間に共有可変が無く実質 race-free（Mutex 不要）。`spawn` の戻りは `join() -> Promise[T]` のハンドルで、ランタイムは全スレッド完了まで生存。
   - **codegen の責務（CoW × spawn）**: `Array`/`String`/`Dictionary` 等の CoW 値は内部バッファを**非 atomic** refcount で共有するので、**spawn 境界を越えるコピー可能値には eager な実体化（ディープコピー）を挿入**し、スレッド間でバッファ＝refcount を共有させない（async 境界では遅延のまま）。これで `Ref` だけでなく CoW バッファも非 atomic count を 2 スレッドから触られず、全面 atomic ARC を避けられる → [spec/14](../spec/04-execution/14-concurrency.md#cow-値は-spawn-境界で実体化するeager-copy)。
+  - **クロージャ変換（capture）**: 通常の閉包は外側変数を**参照キャプチャ**（`mut val` は可変・共有・永続）。**脱出する閉包がキャプチャした変数はヒープへ昇格（box 化）**して閉包の生存に合わせる。`mut val` を参照キャプチャした閉包は**共有可変ストレージを持つ＝`local` 扱いで spawn 不可**（spawn 閉包は copy/move キャプチャのみ）。`val` キャプチャは読み取り専用。→ [spec/04 環境のキャプチャ](../spec/01-basics/04-functions.md#環境のキャプチャ)。
 - **ARC（参照カウント）**: 循環は `WeakRef` で断ち切る（循環コレクタの要否・方式はランタイム実装時に決定・未定）。単一スレッド + イベントループ前提＋spawn は値の送信のみなので、並行のメモリ安全性問題は最小。
+- **再帰的な値型の自動箱化（codegen）**: 自己参照する `struct`/`enum`（木・連結リスト・AST）はサイズが無限になるので、**コンパイラが再帰を検出し必要なフィールドを CoW ヒープセルで自動箱化**してレイアウトを有限化する（Array/String と同じ機構の再利用・`indirect` 等の修飾語なし・フィールド型と値意味論は書いた通り・間接箇所はコンパイラが選ぶ）。値意味論の再帰型は循環を作れないので `WeakRef` 不要 → [spec/05 再帰的な値型](../spec/02-type-system/05-structs-enums.md#再帰的な値型)。
+- **トップレベル/`assoc val` 初期化（runtime）**: 起動時 **eager**（`main` 前に全完了）。各トップレベル値は **memoize されたサンク**（未初期化/初期化中/初期化済み）で、起動時に force-on-read で **依存順を自動算出**（静的依存解析なし）。**循環はコンパイル時でなく起動時の panic**（async ではデッドロック検出）。**トップレベルはイベントループ上の async コンテキスト**＝top-level await 可・並行起動（`Promise.all` 相当）。同期プログラム（await 皆無）は従来の同期 before-main と同挙動 → [spec/15 トップレベル初期化](../spec/04-execution/15-modules.md#トップレベル初期化と実行順序)。
+- **panic は abort（codegen）**: `panic` はスタックを巻き戻さず **trap 一発**でプロセス停止。**`deinit` は走らない**・unwind テーブル/landing pad を吐かない（Rust `panic="abort"` 相当）。`deinit` の決定的解放は正常終了パスのみ → [spec/11 panic と発散](../spec/03-expressions/11-control-flow.md#panic-と発散)。
+- **引数ラベルのコード生成**: セレクタ＝名前＋順序付きラベル列。**ラベル抑制 `name~:`** は無ラベル位置（呼び出しは位置渡し・`factory` では不可）。関数型はラベルを型同一性に含む（サブタイプ/暗黙変換なし・無ラベル位置は裸の型）→ [spec/04](../spec/01-basics/04-functions.md#ラベルの抑制)。
 
 ## ビルド/実行
 
