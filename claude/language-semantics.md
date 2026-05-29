@@ -67,6 +67,7 @@
 
 ### 並行性 → [spec/14](../spec/04-execution/14-concurrency.md)
 - ランタイムは **ARC**（循環は `WeakRef`）。**借用は async/spawn 境界を越えない**（越えるのは move/copy/Ref）。**spawn は move/copy のみ・`Ref` は spawn 不可**（推移的に `local` でないこと＝Ref-free を要求）→ **スレッド間に共有可変が無く実質 race-free**。**async は単一スレッドゆえ `Ref` 可**（interleave は JS 同様の論理ハザード）。
+- **CoW 値は spawn 境界で eager に実体化（ディープコピー）する罠**：`Array`/`String`/`Dictionary` は `Ref` を含まず `local` でないので spawn を越えられるが、**バッファの参照カウントも非 atomic**。遅延コピーのまま越えると `Ref` と同じ競合（2 スレッドが同一バッファの count を触る）になるので、**spawn 境界では CoW の遅延を打ち切りバッファを実体化**して各スレッドに独立 count を持たせる（async では遅延のまま＝単一スレッドで安全）。ARC を全面 atomic 化せず軽量 `Ref` を保つための選択（spawn は稀・重い前提）→ [spec/14](../spec/04-execution/14-concurrency.md#cow-値は-spawn-境界で実体化するeager-copy)。
 - ベア `spawn { }` はコピー可能のみ暗黙キャプチャ・`unique` は `spawn fn` の `move` 引数で渡す。`async fn`/`spawn fn` は `-> Promise[T]`/`-> Thread[T]` 明示で `return e` を自動 wrap。
 - **実装課題**：境界越えの move/copy/Ref 判定（借用は越えない・`local`-free＝spawn 可否）の型検査。
 

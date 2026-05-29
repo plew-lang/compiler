@@ -51,6 +51,7 @@ LLVM-IR
 - **AST builder**: ANTLR の Parse Tree を直接歩くのではなく、自前の AST ノードに落としてから解析する。`@[...]` 組み込みディレクティブは AST ノードに属性リストとして保持し、専用フェーズで変換する。ユーザー定義メタプログラミングはこれとは別方式（ビルドと独立した別コマンドで別ファイルへコード生成）へ転換した。→ [design-decisions.md](design-decisions.md) / [spec/04-execution/16-metaprogramming.md](../spec/04-execution/16-metaprogramming.md)。
 - **拡張解決（最重要）**: メソッド/演算子のバインドは「呼び出し位置の `#Extension` 指定」だけで決定論的に決める。import スコープに依存させない。無名（デフォルト）`impl` はそのまま発動、`extension Name { impl … }` は `#Name` で明示指定された時のみ発動。一意に定まらなければコンパイルエラー。詳細は [language-semantics.md](language-semantics.md)。
 - **並行性検査**: `spawn { … }` のキャプチャはコピー可能のみ（コピー＝スナップショット）、`unique` を渡すなら `spawn fn` の `move` 引数。**借用は async/spawn 境界を越えず、`Ref`/`local` 型は spawn を越えられない**（推移的に `Ref`-free＝`local` でないことを検査）。よってスレッド間に共有可変が無く実質 race-free（Mutex 不要）。`spawn` の戻りは `join() -> Promise[T]` のハンドルで、ランタイムは全スレッド完了まで生存。
+  - **codegen の責務（CoW × spawn）**: `Array`/`String`/`Dictionary` 等の CoW 値は内部バッファを**非 atomic** refcount で共有するので、**spawn 境界を越えるコピー可能値には eager な実体化（ディープコピー）を挿入**し、スレッド間でバッファ＝refcount を共有させない（async 境界では遅延のまま）。これで `Ref` だけでなく CoW バッファも非 atomic count を 2 スレッドから触られず、全面 atomic ARC を避けられる → [spec/14](../spec/04-execution/14-concurrency.md#cow-値は-spawn-境界で実体化するeager-copy)。
 - **ARC（参照カウント）**: 循環は `WeakRef` で断ち切る（循環コレクタの要否・方式はランタイム実装時に決定・未定）。単一スレッド + イベントループ前提＋spawn は値の送信のみなので、並行のメモリ安全性問題は最小。
 
 ## ビルド/実行
