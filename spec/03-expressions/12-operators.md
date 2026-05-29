@@ -2,29 +2,57 @@
 
 ## 型キャストと From トレイト
 
-`x as T` キャストは、ターゲット型 `T` の `From[Source]` 実装を呼ぶシンタックスシュガーです（`x as T` ⟺ `T.from(x: x)`）。**唯一の例外は [`newtype`](../02-type-system/10-newtype.md) と元の型の間の `as`** で、これは `From` 実装ではなく表現が同一な型どうしのゼロコストな再タグ（構造的に必ず成功）として処理されます。
+`x as T` キャストは、ターゲット型 `T` の `From[Source]` 実装（の factory `from`）を呼ぶシンタックスシュガーです（`x as T` ⟺ `<T.from x=x />`）。**唯一の例外は [`newtype`](../02-type-system/10-newtype.md) と元の型の間の `as`** で、これは `From` 実装ではなく表現が同一な型どうしのゼロコストな再タグ（構造的に必ず成功）として処理されます。
+
+**`as` は常に infallible（必ず成功して `T` を返す）です。** `From` は「**全域（total）な変換**」── 無損失（`I32→I64`）も、浮動小数の規定された丸め（`I64→F64`・`F64→F32`）も含め、**必ず値を作れる**変換だけが `From`＝`as` に乗ります。`as` が panic することも `Result` を返すこともありません（戻り型が `as T` の見た目どおり常に `T` であることを保つ）。
 
 ```plew
 trait From[Source] {
-    assoc fn from(x: Source) -> Self
+    factory from(x: Source)              // factory 要求（戻りは暗黙 Self）
 }
 
 impl I64 as From[I32] {
-    assoc fn from(x: I32) -> I64 {
-        // I32 から I64 への変換実装
+    factory from(x: I32) {
+        return <I64 ... />               // I32 から I64（無損失・全域）
     }
 }
 impl I64 as From[I16] {                  // 別ソースは別 conformance
-    assoc fn from(x: I16) -> I64 { /* ... */ }
+    factory from(x: I16) { /* ... */ }
 }
 
 val x: I32 = 10
-val y: I64 = x as I64  // I64.from(x: x) と同等
+val y: I64 = x as I64  // <I64.from x=x /> と同等
 ```
 
-ターゲット型は `as T` の `T`（や `try` の関数戻り型）で常に明示的に決まるので、`from(x:)` は**ソース引数の型でオーバーロード解決**されます（→ [メソッドのオーバーロード](../02-type-system/07-methods-impl.md)）。これにより 1 つの型が複数ソースから変換可能（`I64` は `From[I32]` と `From[I16]` の両方に準拠）になります。`try` のエラー変換も同じ `From` を使います（→ [エラーハンドリング](13-error-handling.md)）。
+ターゲット型は `as T` の `T`（や `try` の関数戻り型）で常に明示的に決まるので、`from` は**ソース引数の型でオーバーロード解決**されます（→ [メソッドのオーバーロード](../02-type-system/07-methods-impl.md)）。これにより 1 つの型が複数ソースから変換可能（`I64` は `From[I32]` と `From[I16]` の両方に準拠）になります。`try` のエラー変換も同じ `From` を使います（→ [エラーハンドリング](13-error-handling.md)）。
 
-**暗黙変換は持ちません。** 型変換は常に明示の `as`（数値の幅変更 `I32→I64` 等も `x as I64` と書く）。例外は `try` のエラー変換（`From` を暗黙挿入）と数値リテラルの多相だけ。これによりオーバーロード解決は「ラベル＋具体型の完全一致（リテラルは互換候補に絞り一意か否か）」に保たれ、変換ランク付けの曖昧さが生じません。なお[拡張ビューの変更](../02-type-system/09-extensions.md#拡張ビューの変更は明示暗黙キャストなし)（`A`↔`A#P`）は値の表現を変えない**ビューの再解釈**で型変換ではありませんが、これも暗黙には起きず常に `#`／`#!` を明示します。
+## 失敗し得る変換（TryFrom トレイト）
+
+範囲外になり得る変換（`I64→I8` の縮小、`F64→I32`、文字列パースなど）は**全域でない**ので `From`＝`as` には乗せず、**`TryFrom[Source]` の fallible factory `try_from`** で表します。戻りは `Result[Self, Error]` で、失敗を静かに切り詰め／飽和させず（Rust の `as` の silent truncate を採らない）、エラーを値として返します。
+
+```plew
+trait TryFrom[Source] {
+    type Error                                  // 出力＝関連型
+    result[Error] factory try_from(x: Source)   // fallible factory（→ Result[Self, Error]）
+}
+
+impl I8 as TryFrom[I64] {
+    type Error = RangeError
+    result[RangeError] factory try_from(x: I64) {
+        guard x >= -128 && x <= 127 { return <Result.Err error=<RangeError /> /> }
+        return <Result.Ok value=<I8 ... /> />
+    }
+}
+
+val r = <I8.try_from x=big />          // Result[I8, RangeError]
+val n = try <I8.try_from x=big />      // try で早期 return（前置 try が JSX 全体に掛かる）
+```
+
+- **`as` の糖衣は持たない**：fallible 変換は `<T.try_from x=… />`（factory）で明示する。`x as? T` のような専用糖衣は当面入れない（additive 保留）。
+- **`Error` は関連型**（impl が一意に決める出力なので・`From` の `Source` が型引数なのと対）。`try_from` のエラーは `try` の `From` 変換に乗って関数の戻りエラー型へ集約できる（→ [エラーハンドリング](13-error-handling.md)）。
+- **判定基準＝全域か可謬か**：必ず値を作れる（無損失 or 規定の丸め）＝`From`／`as`。表現できない入力があり得る＝`TryFrom`／`try_from`。浮動小数の丸め（精度欠落）は「型を取り違える wrap」ではなく IEEE の規定動作なので `From` 側（静かな嘘ではない）。
+
+**暗黙変換は持ちません。** 型変換は常に明示の `as`（数値の幅変更 `I32→I64` 等も `x as I64`）か、可謬なら `<T.try_from … />`。例外は `try` のエラー変換（`From` を暗黙挿入）と数値リテラルの多相だけ。これによりオーバーロード解決は「ラベル＋具体型の完全一致（リテラルは互換候補に絞り一意か否か）」に保たれ、変換ランク付けの曖昧さが生じません。なお[拡張ビューの変更](../02-type-system/09-extensions.md#拡張ビューの変更は明示暗黙キャストなし)（`A`↔`A#P`）は値の表現を変えない**ビューの再解釈**で型変換ではありませんが、これも暗黙には起きず常に `#`／`#!` を明示します。
 
 ## 演算子システム
 
@@ -256,9 +284,9 @@ array[0] = x  // array.index_set(key: 0, value: x) と同等
 ```plew
 trait Chain {
     type Value
-    fn chain() -> Optional[Value]              // 値か空かに分解する
-    assoc fn from_value(value: Value) -> Self  // 値から再構築する
-    assoc fn empty() -> Self                   // 空を再構築する
+    fn chain() -> Optional[Value]        // 値か空かに分解する
+    factory from_value(value: Value)     // 値から再構築する（factory・戻り Self）
+    factory empty()                      // 空を再構築する（factory・戻り Self）
 }
 ```
 
@@ -266,12 +294,12 @@ trait Chain {
 
 ```plew
 match receiver.chain() {
-    Optional.Some { value: val v } => O.from_value(value: v.member)
-    Optional.None                  => O.empty()
+    Optional.Some { value: val v } => <O.from_value value=v.member />
+    Optional.None                  => <O.empty />
 }
 ```
 
-レシーバが空なら以降のアクセスは評価されず、式全体が空になります（短絡評価）。`chain()` が値を返したときだけメンバへアクセスし、結果を `from_value` で包み直します（`from_value` / `empty` は関連関数なので関数呼び出しで、生成する変数は内部で JSX 構文を使います）。
+レシーバが空なら以降のアクセスは評価されず、式全体が空になります（短絡評価）。`chain()` が値を返したときだけメンバへアクセスし、結果を `from_value` で包み直します（`from_value` / `empty` は**factory なので JSX `<O.… />` で生成**し、構築点が見えます）。
 
 ```plew
 val name = user?.profile?.name
@@ -289,11 +317,11 @@ impl Optional[T] as Chain {
         return self
     }
 
-    assoc fn from_value(value: T) -> Optional[T] {
+    factory from_value(value: T) {
         return <Optional.Some value=value />
     }
 
-    assoc fn empty() -> Optional[T] {
+    factory empty() {
         return <Optional.None />
     }
 }

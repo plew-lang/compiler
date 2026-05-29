@@ -1,12 +1,23 @@
 # トレイト
 
-トレイトは、型が満たすべき**要求**（メソッド・フィールド・関連値・関連型）を束ねる抽象です。トレイト本体には要求だけを書きます。要求の上に組む**派生メソッド**（`Iterator` の `map`/`filter` を `next` の上に作る類）は、トレイト本体ではなく**名前付き拡張**の `impl Trait` ブロックに置き、各型が `default_extension` で自分のベア表面に取り込みます（→ [拡張](09-extensions.md)）。型への準拠は `impl Type as Trait` で**明示的に宣言**し、各要求を `via`／本体で witness します（暗黙の準拠は起きません）。トレイトは[型引数](#トレイト名の-型引数と関連型束縛)（多重 conformance）と[関連型](#関連型associated-type)（出力）を持てます。
+トレイトは、型が満たすべき**要求**（メソッド・フィールド・関連値・関連型・factory）を束ねる抽象です。トレイト本体には要求だけを書きます。要求の上に組む**派生メソッド**（`Iterator` の `map`/`filter` を `next` の上に作る類）は、トレイト本体ではなく**名前付き拡張**の `impl Trait` ブロックに置き、各型が `default_extension` で自分のベア表面に取り込みます（→ [拡張](09-extensions.md)）。型への準拠は `impl Type as Trait` で**明示的に宣言**し、各要求を `via`／本体で witness します（暗黙の準拠は起きません）。トレイトは[型引数](#トレイト名の-型引数と関連型束縛)（多重 conformance）と[関連型](#関連型associated-type)（出力）を持てます。
 
 トレイトの宣言は型システムの[カスタム型](05-structs-enums.md)の一種で、`export trait Shape { … }` のように書きます。本章では定義・関連型・継承・準拠の意味論、トレイトを値の型として使う**存在型**（`any`）、そして標準で提供されるトレイトのカタログをまとめます。
 
 ## トレイトの定義（要求）
 
-トレイト本体には型が満たすべき**要求**だけを書きます（すべて本体なし）。フィールド要求・メソッド要求・関連値要求・関連型があり、各型は準拠時に `via`／本体で必ず witness します（後述「トレイト準拠と via」）。
+トレイト本体には型が満たすべき**要求**だけを書きます（すべて本体なし）。フィールド要求・メソッド要求・関連値要求・関連型・**factory 要求**があり、各型は準拠時に `via`／本体で必ず witness します（後述「トレイト準拠と via」）。
+
+factory 要求は、トレイトが「**この型を構築する手段**」を求めるものです（`From` の変換・`Chain` の再構築など）。本体なしの factory シグネチャ（[fallible factory](05-structs-enums.md#失敗し得るファクトリfallible-factory) も可）を書き、準拠側 impl が factory 本体を定義して witness します。生成が常に JSX `<Type.name … />`／factory で起きる原則を、トレイト要求でも保ちます。
+
+```plew
+trait Default {
+    factory default()                 // factory 要求（全域）
+}
+impl Temperature as Default {
+    factory default() { return <Temperature celsius=0.0 /> }  // 本体で witness
+}
+```
 
 要求の上に組む**派生メソッド**（要求だけを使って組み立てる共有メソッド。`Iterator` の `map`/`filter` を `next` の上に作る類）は、トレイト本体にもベアの `impl Trait` にも書きません。**名前付き拡張**の中に `impl Trait { … }` として置き、各型が `default_extension` で自分のベア表面に取り込みます（→ [拡張](09-extensions.md) の「拡張はトレイトも対象にできる」「デフォルト拡張」）。こうすることで「どの派生メソッドがこの型でベアに見えるか」を**型の作者が明示的に管理**でき、別トレイト由来の同名メソッドが暗黙に流れ込んで衝突する事故が起きません。
 
@@ -238,7 +249,8 @@ fn f(a: any Eq, b: any Eq) {        // 型として持つ・配列に入れる�
 
 | 種別 | トレイト | 演算子・用途 |
 | --- | --- | --- |
-| 変換 | `From[Source]` | `x as T`（`try` のエラー変換も。newtype⇔元型の `as` だけは From でなくゼロコスト再タグ） |
+| 変換（全域） | `From[Source]` | `x as T`（factory `from`・必ず成功。`try` のエラー変換も。newtype⇔元型の `as` だけは From でなくゼロコスト再タグ） |
+| 変換（可謬） | `TryFrom[Source]` | `<T.try_from x=… />`（fallible factory・`Result[Self, Error]`。`as` 糖衣なし） |
 | 算術 | `Add[Rhs]` / `Sub[Rhs]` / `Mul[Rhs]` / `Div[Rhs]` | `+ - * /`・結果型は `type Output` |
 | 等価 | `Eq`（型引数なし・右辺 `Self`） | `== !=` |
 | 順序 | `Ord: Eq`（型引数なし） | `< <= > >=` |

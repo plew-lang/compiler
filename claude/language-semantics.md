@@ -72,5 +72,6 @@
 - **実装課題**：境界越えの move/copy/Ref 判定（借用は越えない・`local`-free＝spawn 可否）の型検査。
 
 ### エラー → [spec/13](../spec/03-expressions/13-error-handling.md)
-- `try <expr>` は `Result` の早期 return 糖衣（特別な例外機構ではない）。エラー型は `From[Source]` 実装があれば自動変換（`try` が `E.from(x: …)` を挿入）。集約 enum の `From` 群はメタプログラミングで生成。
-- `x as T` ⟺ `T.from(x: x)`（変換は常にターゲット側 `From[Source]`・ソース型でオーバーロード解決）。
+- `try <expr>` は `Result` の早期 return 糖衣（特別な例外機構ではない）。エラー型は `From[Source]` 実装があれば自動変換（`try` が `<E.from x=… />`＝From factory を挿入）。集約 enum の `From` 群はメタプログラミングで生成。
+- `x as T` ⟺ `<T.from x=x />`（変換は常にターゲット側 `From[Source]` の **factory**・ソース型でオーバーロード解決）。**`as` は infallible 固定**＝`From` は全域変換だけ（無損失＋浮動小数の規定丸め）。**縮小・パース等の可謬変換は `TryFrom[Source]` の `result[Error] factory try_from`** ＝ `<T.try_from x=… />` で `Result[Self, Error]`（`as` 糖衣なし・silent truncate しない）。判定基準＝「必ず値を作れる＝From／表現できない入力があり得る＝TryFrom」。
+- **生成は常に factory（JSX 可視）の罠**：インスタンス構築は `<Type … />`／factory に集約され、構築点が一目で分かる。**失敗し得る生成は fallible factory**＝前置 `optional factory`（→ `Optional[Self]`）／`result[E] factory`（→ `Result[Self, E]`）。包めるのは Optional/Result の 2 つだけ（lang item）・自動ラップなし（本体が `Some/None`・`Ok/Err` を JSX で明示）。**`From`/`Chain`/`TryFrom` の構築要求（`from`/`from_value`/`empty`/`try_from`）はすべて factory 要求**（assoc fn ではない＝旧 spec の `assoc fn` 記述は誤り・修正済み）。トレイトは factory も要求できる。`optional`/`result` は**文脈依存キーワード**（factory 修飾位置のみ・`val result` は従来どおり可）→ [spec/05](../spec/02-type-system/05-structs-enums.md#失敗し得るファクトリfallible-factory), [spec/12](../spec/03-expressions/12-operators.md#失敗し得る変換tryfrom-トレイト)。

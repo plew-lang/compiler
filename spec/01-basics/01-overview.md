@@ -20,6 +20,8 @@ match, as, self, Self, extern, import, part, with, try, true, false
 
 `true` / `false` は真偽値リテラルです。`borrow`/`inout`/`move`（アクセスモード）・`unique`/`local`（型マーカー）・`deinit`・generics の `allow_unique`/`no_local` は [値・変数・所有権](03-values.md) を参照。`mut` は記憶域可変性（`mut val`）専用です。
 
+**文脈依存キーワード**：`optional` / `result` は [fallible factory](../02-type-system/05-structs-enums.md#失敗し得るファクトリfallible-factory) の前置修飾（`optional factory …` / `result[E] factory …`）の位置でのみ予約語として働き、**それ以外では通常の識別子**です。`result` は頻出する変数名なので予約語にせず、`val result = compute()` などは従来どおり書けます。
+
 ## コメント
 
 ```plew

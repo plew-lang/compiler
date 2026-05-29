@@ -143,7 +143,56 @@ val b = <Celsius.from_fahrenheit fahrenheit=68.0 />  // 名前付き factory
 val z = <Celsius.zero />                             // 引数なし factory
 ```
 
-factory の戻り型は常に暗黙の `Self` です。本体での `<Type field=… />`（全フィールド指定）はフィールド初期化（＝ `Self` の生成）を指し、自分自身を再帰呼び出ししません。この `Self` 規約により、[`newtype`](10-newtype.md) は元の型の factory をそのまま継承して JSX 構文で生成できます。
+factory の戻り型は既定で暗黙の `Self` です（fallible な場合のみ下記の修飾語で `Optional[Self]`／`Result[Self, E]` にできる）。本体での `<Type field=… />`（全フィールド指定）はフィールド初期化（＝ `Self` の生成）を指し、自分自身を再帰呼び出ししません。この `Self` 規約により、[`newtype`](10-newtype.md) は元の型の factory をそのまま継承して JSX 構文で生成できます。
+
+### 失敗し得るファクトリ（fallible factory）
+
+生成は失敗し得ます（範囲外の数値・不正な入力など）。Plew に例外（throw/catch）は無いので、**失敗を表す lang item で包んで返すファクトリ**を、factory 宣言への**前置修飾語**で表します（戻り型は手書きしません）。
+
+| 修飾語 | 戻り | 意味 |
+| --- | --- | --- |
+| （なし） | `Self` | 必ず成功する全域ファクトリ |
+| `optional` | `Optional[Self]` | 値ができる／できない（理由は運ばない） |
+| `result[E]` | `Result[Self, E]` | 成功 or エラー `E` |
+
+包めるのは `Optional`／`Result` の **2 つだけ**（言語の可謬 lang item）。任意のラッパー（`Array[Self]`・`Promise[Self]` 等）は対象外で、`<Type.name … />` は常に「**1 個の Self を作る試み**」として読めます。修飾語は能力語 + 宣言子（`move fn`・`async fn`）と同じく前置で、`result` の `[E]` がエラー型を運びます。
+
+```plew
+struct Temperature {
+    pub(get) val celsius: F64
+}
+
+impl Temperature {
+    // 全域（従来どおり）
+    factory zero() {
+        return <Temperature celsius=0.0 />
+    }
+
+    // Optional[Self]：パースできなければ None
+    optional factory parse(text: String) {
+        guard Optional.Some { value: val c } = parse_f64(text: text) {
+            return <Optional.None />
+        }
+        return <Optional.Some value=<Temperature celsius=c /> />
+    }
+
+    // Result[Self, E]：物理的にあり得ない値はエラー
+    result[RangeError] factory from_kelvin(k: F64) {
+        guard k >= 0.0 { return <Result.Err error=<RangeError /> /> }
+        return <Result.Ok value=<Temperature celsius=(k - 273.15) /> />
+    }
+}
+
+val z = <Temperature.zero />                       // Temperature
+val a = <Temperature.parse text="20.0" />          // Optional[Temperature]
+val b = <Temperature.from_kelvin k=300.0 />        // Result[Temperature, RangeError]
+val c = try <Temperature.from_kelvin k=300.0 />    // try と合成（前置 try が JSX 全体に掛かる）
+```
+
+- **自動ラップはしない**（明示 > 暗黙）。本体は `Optional.Some`/`None`・`Result.Ok`/`Err` を **JSX で明示的に返す**。成功路の内側 `Self` も `<Type … />` で組むので、**構築点が二段とも可視**になる（JSX の目的どおり）。
+- **呼び出しは通常の JSX `<Type.name … />`**。返るのは宣言した `Optional[Self]`／`Result[Self, E]`。`as` のような糖衣は持たない（→ [型変換と演算子](../03-expressions/12-operators.md) の `TryFrom`）。
+- **`optional`／`result` は文脈依存キーワード**（factory 修飾位置でのみ予約）。`val result = …` のような**ごく普通の識別子としての `result`/`optional` は従来どおり使えます**（予約語にすると `result` という頻出変数名を潰すため → [概要](../01-basics/01-overview.md#キーワード)）。
+- **newtype 継承**：fallible factory も継承され、`Self` 置換がラッパー内に効く（`Result[Self, E]` → `Result[Brand, E]`。→ [newtype](10-newtype.md)）。
 
 ### 列挙型バリアントの生成
 

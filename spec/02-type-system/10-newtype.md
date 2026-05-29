@@ -53,7 +53,7 @@ val raw: F64 = d as F64
 
 ## 生成
 
-`factory` は暗黙的に `Self` を返すため（[構造体と列挙型](05-structs-enums.md#インスタンス生成) 参照）、`newtype` は元の型の factory も継承します。したがって生成も他の型と同じく JSX 構文で行えます。
+`factory` は暗黙的に `Self` を返すため（[構造体と列挙型](05-structs-enums.md#インスタンス生成) 参照）、`newtype` は元の型の factory も継承します。したがって生成も他の型と同じく JSX 構文で行えます。[fallible factory](05-structs-enums.md#失敗し得るファクトリfallible-factory)（`optional`／`result[E]`）も継承され、`Self` 置換はラッパーの内側に効きます（`Result[Self, E]` → `Result[Brand, E]`・`Optional[Self]` → `Optional[Brand]`）。`From`／`TryFrom` も factory なので、`as` や `<Brand.try_from … />` がそのまま使えます。
 
 ```plew
 @[DefaultFactory(pub)]
