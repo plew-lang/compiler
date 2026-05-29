@@ -31,6 +31,8 @@ impl MyType {
 }
 ```
 
+- **`assoc val` の初期化はトップレベル `val` と同じ規則**：起動時 eager・依存順（force-on-read）・循環は起動時 panic・トップレベル await 可（→ [モジュール § トップレベル初期化と実行順序](../04-execution/15-modules.md#トップレベル初期化と実行順序)）。ジェネリック型の `assoc val` が型引数ごとに別実体になるか（単相化）は実装詳細として別途。
+
 - **self のモードは `fn`（読み借用）／`inout fn`（可変借用）／`move fn`（消費）** ── [アクセスモード](../01-basics/03-values.md#アクセスモードborrow--inout--move)と同じ語。`inout fn`/`move fn` は対象が可変束縛／唯一所有のときだけ呼べる。**`Ref` 越しは `fn`/`inout fn` のみ**（`move fn` は共有を消費するため不可 → [Ref](../01-basics/03-values.md#ref--weakref共有可変)）。
 - **`async` メソッドは self を借用できない**（`inout self` が境界を跨げない）。非消費なら copy-self（`unique` でない型のみ）、消費なら `async move fn`、await を跨いで self を変更するなら **Ref 裏打ち** → [非同期処理とメモリ管理](../04-execution/14-concurrency.md)。
 
