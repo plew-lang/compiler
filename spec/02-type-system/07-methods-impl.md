@@ -6,14 +6,19 @@
 
 ```plew
 impl MyType {
-    // インスタンスメソッド
-    pub async fn instance_method(arg: Type) -> ReturnType {
+    // インスタンスメソッド（self を読み借用）
+    pub fn instance_method(arg: Type) -> ReturnType {
         // メソッド本体
     }
-    
-    // 可変メソッド
-    pub async mut fn mutable_method(arg: Type) -> ReturnType {
-        // 可変メソッド本体
+
+    // 可変メソッド（self を可変借用＝inout self）
+    pub inout fn mutable_method(arg: Type) {
+        // self のフィールドを書き換えられる
+    }
+
+    // 消費メソッド（self を move＝呼ぶと self は使えなくなる）
+    pub move fn into_other() -> Other {
+        // self を消費して別の値を返す
     }
 
     // 関連関数（静的メソッド相当）
@@ -25,6 +30,9 @@ impl MyType {
     assoc val associated_value: Type = default_value
 }
 ```
+
+- **self のモードは `fn`（読み借用）／`inout fn`（可変借用）／`move fn`（消費）** ── [アクセスモード](../01-basics/03-values.md#アクセスモードborrow--inout--move)と同じ語。`inout fn`/`move fn` は対象が可変束縛／唯一所有のときだけ呼べる。**`Ref` 越しは `fn`/`inout fn` のみ**（`move fn` は共有を消費するため不可 → [Ref](../01-basics/03-values.md#ref--weakref共有可変)）。
+- **`async` メソッドは self を借用できない**（`inout self` が境界を跨げない）。非消費なら copy-self（`unique` でない型のみ）、消費なら `async move fn`、await を跨いで self を変更するなら **Ref 裏打ち** → [非同期処理とメモリ管理](../04-execution/14-concurrency.md)。
 
 `impl` には `factory`（インスタンス生成）も書けます。生成は型の生成として [構造体と列挙型](05-structs-enums.md) の「インスタンス生成」にまとめています。トレイト準拠の `impl Type as Trait` と `via` は [トレイト](08-traits.md) を参照。
 

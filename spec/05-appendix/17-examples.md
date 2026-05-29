@@ -9,7 +9,7 @@ struct Calculator {
 
 extension BasicMath {
     impl Calculator {
-        mut fn add(value: F64) {
+        inout fn add(value: F64) {
             self.current += value
         }
 
@@ -21,11 +21,11 @@ extension BasicMath {
 
 extension AdvancedMath {
     impl Calculator {
-        mut fn power(exponent: F64) {
+        inout fn power(exponent: F64) {
             self.current = math_pow(base: self.current, exponent: exponent)
         }
 
-        mut fn sqrt() {
+        inout fn sqrt() {
             self.current = math_sqrt(value: self.current)
         }
     }

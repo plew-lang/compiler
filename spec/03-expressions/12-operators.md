@@ -230,13 +230,13 @@ val first = array[0]  // array.index(key: 0) と同等
 ```plew
 trait IndexSet[Key] {
     type Value
-    mut fn index_set(key: Key, value: Value)
+    inout fn index_set(key: Key, value: Value)
 }
 
 impl MyArray[T] as IndexSet[U64] {
     type Value = T
 
-    mut fn index_set(key: U64, value: T) {
+    inout fn index_set(key: U64, value: T) {
         // 要素設定の実装
     }
 }
@@ -247,7 +247,7 @@ array[0] = x  // array.index_set(key: 0, value: x) と同等
 
 - 読み取り（`Index`）と代入（`IndexSet`）は**独立したトレイト**で、読み取り専用コレクションは `Index` だけを実装できます。
 - `collection[key] += x` などの複合代入は、**読み取り（`Index`）＋演算＋代入（`IndexSet`）**に展開されるので、両方の実装が要ります（→ [複合代入演算子](#複合代入演算子)）。
-- レシーバ自身を書き換えるので `index_set` は `mut fn`。`mut val` な束縛にしか使えません。
+- レシーバ自身を書き換えるので `index_set` は `inout fn`。可変束縛（`mut val`）にしか使えません。
 
 ## オプショナルチェーン（Chain トレイト）
 

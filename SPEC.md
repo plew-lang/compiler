@@ -1,6 +1,6 @@
 # Plew プログラミング言語仕様書
 
-Plew は現代的なシステムプログラミング言語で、型安全性、非同期プログラミング、パターンマッチング、独自の拡張システムを重視して設計されています。シングルプロセス・シングルスレッドを基本とし、JavaScript ライクな非同期処理とガベージコレクションによるメモリ管理を採用しています。
+Plew は現代的なシステムプログラミング言語で、型安全性、非同期プログラミング、パターンマッチング、独自の拡張システムを重視して設計されています。シングルプロセス・シングルスレッドを基本とし、JavaScript ライクな非同期処理を採用します。値はコピー意味論（CoW）、メモリは ARC（参照カウント）で管理し、必要なときだけ opt-in の所有権（`unique`/`local`）を使います。
 
 本仕様書はトピック別に分割し、論理依存順に **4 部**へまとめて `spec/` 配下に置いています。
 
@@ -10,7 +10,7 @@ Plew は現代的なシステムプログラミング言語で、型安全性、
 
 1. [概要・基本構文](spec/01-basics/01-overview.md) — 概要、命名規則、キーワード、コメント
 2. [基本型](spec/01-basics/02-basic-types.md) — プリミティブ型、数値リテラル、文字列（不変・UTF-8・変数展開）、複合型（配列／辞書／ラベル付きタプル／レンジ）
-3. [変数と値の管理](spec/01-basics/03-values.md) — 参照の値渡しと inout、変数宣言、再宣言（shadowing）、構造化代入
+3. [値・変数・所有権](spec/01-basics/03-values.md) — 値意味論（CoW）、val／mut val、アクセスモード（borrow／inout／move）、unique／local、Ref／WeakRef、deinit、再宣言（shadowing）、構造化代入
 4. [関数](spec/01-basics/04-functions.md) — 関数宣言、引数ラベル、無名関数（クロージャ）
 
 ### 第Ⅱ部 型システム
@@ -30,7 +30,7 @@ Plew は現代的なシステムプログラミング言語で、型安全性、
 
 ### 第Ⅳ部 実行モデルとツール
 
-14. [非同期処理とメモリ管理](spec/04-execution/14-concurrency.md) — async/await、spawn、チャネル、GC、並行安全性（書き込み隔離のみ・データ競合自由は非提供）
+14. [非同期処理とメモリ管理](spec/04-execution/14-concurrency.md) — async/await、spawn（spawn fn）、ARC、境界規則（借用は越えない・spawn は値送信・Ref は spawn 不可）、チャネル、実質 race-free
 15. [モジュールシステム](spec/04-execution/15-modules.md) — トップレベルとモジュールスコープ（ユーザーは ambient 定義を作れない・トップレベル変数・言語アイテムは import 不要）、import、export、part、パッケージ、extern
 16. [メタプログラミング](spec/04-execution/16-metaprogramming.md) — `@[...]` 組み込みディレクティブ、ユーザー定義メタプログラミング（方針転換中）
 

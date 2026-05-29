@@ -119,7 +119,7 @@ for Person { val name, val age } in people {
 
 - ループ変数は `val`／`mut val` で**新規宣言**します。bare 名にすると既存の `mut` 変数へ代入し、ループ後も生存します（`val`＝新規・bare＝既存。→ [値](../01-basics/03-values.md)）。
 - **値を返せるのは `loop` だけ**：`loop { … break x }` は式として `x` を返します。`while`／`for` は値を持たず、`break` は**値なしの脱出のみ**（`break x` は不可）。ループ本体ブロックでは `give` も使えません（`give` は通常ブロックと `if`／`match` アーム専用）。ラベル付きループ・多重 `break` は持ちません。
-- `for` が回すのは **`Iterable`**（`fn iterator() -> Iter` で毎回新しいカーソルを産む）で、`Array`・辞書・レンジ等が準拠します。実際に値を出すのは **`Iterator`**（`mut fn next() -> Optional[Item]` の消費カーソル）で、両者は別トレイト（コレクションは値意味論上「自分のカーソル」を持てず、多重走査もしたいため）。`Iterator` 自身も `Iterable`（自分を返す）なので iterator を直接 `for` できます。正確なシグネチャはイテレータ・プロトコル（未策定）で確定します。
+- `for` が回すのは **`Iterable`**（`fn iterator() -> Iter` で毎回新しいカーソルを産む）で、`Array`・辞書・レンジ等が準拠します。実際に値を出すのは **`Iterator`**（`inout fn next() -> Optional[Item]` の消費カーソル）で、両者は別トレイト（コレクションは値意味論上「自分のカーソル」を持てず、多重走査もしたいため）。`Iterator` 自身も `Iterable`（自分を返す）なので iterator を直接 `for` できます。正確なシグネチャはイテレータ・プロトコル（未策定）で確定します。
 - `for (val key, val value) in dict` は、辞書が要素 `(key: K, value: V)`（ラベル付きタプル）の `Iterator` を産み、それを分解しています。
 
 ## ガード文

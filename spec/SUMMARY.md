@@ -6,7 +6,7 @@
 
 - [概要・基本構文](01-basics/01-overview.md)
 - [基本型](01-basics/02-basic-types.md)
-- [変数と値の管理](01-basics/03-values.md)
+- [値・変数・所有権](01-basics/03-values.md)
 - [関数](01-basics/04-functions.md)
 
 # 第Ⅱ部 型システム

@@ -108,8 +108,8 @@ val report = await handle.join()
 
 スレッド間で値を送るにはチャネルを使います（「共有」ではなく「送信」＝*share memory by communicating*）。**具体的な型・API はコアライブラリ送り**ですが、モデルは確定しています：
 
-- チャネルは**スレッド安全なプリミティブ**で、`Sender`/`Receiver` ハンドルは Sendable（`Ref` と違い内部が atomic なので spawn を越えられる）。
-- **送る値は Sendable**（move/copy で渡る・`Ref` は送れない）。これで送信経由でもスレッド間に共有可変が生まれず race-free を保つ。
+- チャネルは**スレッド安全なプリミティブ**で、`Sender`/`Receiver` ハンドルは `local` でない（`Ref` と違い内部が atomic なので spawn を越えられる）。
+- **送る値は `local` でないこと**（move/copy で渡る・`Ref` は送れない）。これで送信経由でもスレッド間に共有可変が生まれず race-free を保つ。
 - 方針は**複数 Sender**。所有権で「Receiver は単一所有」を強制はしない（複数箇所が持て、`receive()` も複数回呼べる）。`receive() -> Result[T, ChannelClosed]` 方向。マルチコンシューマの意味論は core-lib 設計で詰める。
 
 ## 並行安全性 ── 実質 race-free

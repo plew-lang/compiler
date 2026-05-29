@@ -23,17 +23,17 @@
 - **却下した軽量案**：参照のまま＋「不変な*型*が信頼を担う」＋`defer` で資源 ── 大半を取れるが、ユーザーは **Swift の値意味論の書き味そのもの**を欲した。
 - **誤解の訂正**：参照の値渡しを選んだ動機は「全代入コピー＝遅い」だったが、それは **CoW への誤解**（コピーは遅延・共有中無料・書き込み時のみ実体化）と判明 → 地金を CoW に倒す再検討が正当化された。
 
-### 主な帰結と根拠（機構は CLAUDE.md 冒頭節／将来 spec が正典）
+### 主な帰結と根拠（機構の正典は spec/03・14、本節は根拠）
 - **ARC を採り tracing GC を捨てる**：CoW は安価な一意性判定（refcount）を要し、GC では提供しづらい。ARC はコールドスタートが軽く**第一目標に合致**。代償＝**循環は refcount で回収できず `WeakRef[T]` 必要**（「GC で循環ノーケア・`[weak self]` 不要」の旧看板を手放す＝意識的トレードオフ）。
 - **資源は `unique`＋`deinit`**：値 struct に `deinit` は置けない（コピーで多重 deinit＝二重 close。Swift の struct に deinit が無いのと同理）。値意味論で言語内に資源を書くには **class か noncopyable のどちらか必須**（Ref だけでは中身がコピー可能で漏れる）と確認 → **class 種別を増やさず `unique`（noncopyable）採用**＝move 意味論の限定サブセット（borrow/inout/move・use-after-move・非 escape 借用でライフタイム不要）を導入。
 - **`Ref` は唯一の共有可変プリミティブ**：extern で再現不可（コピー時 retain／drop 時 release の自動挿入が要る・これは Array の CoW も同様＝両者とも祝福プリミティブ）。「同じ書き方で違う挙動」の懸念は **deref `->` を明示**して解消（`.`＝ハンドル操作・`->`＝中身）。
 - **アクセス語＝`borrow`/`inout`/`move`**：`borrow`/`move` は「関係」を表すのに `modify` は「行為」を名指し不整合で却下。`&mut` は正確だが CoW には too much → **`inout`（＝CoW 版 `&mut`・Swift と同判断）** に。`mut` は **`val`/`mut val`（記憶域）専用**に解放（二義性解消）。`var` 却下＝「手抜き＝immutable」を守る。
-- **並行性が race-free に格上げ**：**借用は async/spawn を越えない**（越えるのは move/copy/Ref）→ async 借用ライフタイム追跡が不要・`Promise.all([f(move a),f(move a)])` は use-after-move で弾ける。**spawn は move/copy のみ・Ref は spawn 不可**（推移的 Ref-free を要求＝旧「データ競合あり得る・UB」から **実質競合フリー**へ）。**async は単一スレッドゆえ Ref 可**（メモリ安全・interleave は JS 同様の論理ハザード）。非 Sendable は **`local struct` 明示マーカー**（Ref を持つ型は必須・unique 同型のエラー強制）。
+- **並行性が race-free に格上げ**：**借用は async/spawn を越えない**（越えるのは move/copy/Ref）→ async 借用ライフタイム追跡が不要・`Promise.all([f(move a),f(move a)])` は use-after-move で弾ける。**spawn は move/copy のみ・Ref は spawn 不可**（推移的 Ref-free を要求＝旧「データ競合あり得る・UB」から **実質競合フリー**へ）。**async は単一スレッドゆえ Ref 可**（メモリ安全・interleave は JS 同様の論理ハザード）。spawn を越えられない型は **`local struct` 明示マーカー**（`Ref` を持つ型は必須・unique 同型のエラー強制）。
 - **generics**：能力マーカーは **`[...]`**・trait 制約は `where`。既定 `[T]`＝copyable（unique 除外）＋local 許容＝common case が無注釈。`[no_local T]`（narrow・spawn 用）／`[allow_unique T]`（widen・unique admit・**ほぼ確実に入れるが実装後回し**）。非対称は恣意でなく「既定＝common case」の帰結。v1 は copyable 限定（unique は `Ref` 包み）。
 
 ### 現状
-- **決定済み・spec 未反映**。書き起こしは未完（design-decisions 本節＝完了／CLAUDE.md 冒頭節＝完了／#2・language-semantics＝フラグ済／spec 各章＋新章「所有権」＝未着手）。
-- **実装順**：spawn は後回し濃厚 → `no_local`/`allow_unique`/Sendable 検査も連動後回し。最小コンパイラは 値＋CoW＋ARC＋unique 基本＋`Ref`/`WeakRef` から。
+- **決定済み・spec 反映中**。書き起こし状況：design-decisions 本節・CLAUDE.md 冒頭節＝完了／spec 03（値・所有権）・14（並行）＝改稿済／伝播章 01・02・04・06・07・08＝改稿済／language-semantics＝要所更新済。新章は立てず spec/03 を所有権の本拠に拡張した（改番なし）。`allow_unique` の本実装は将来。
+- **実装順**：spawn は後回し濃厚 → `no_local`/`allow_unique` 検査も連動後回し。最小コンパイラは 値＋CoW＋ARC＋unique 基本＋`Ref`/`WeakRef` から。
 
 ## 主要な判断と根拠
 

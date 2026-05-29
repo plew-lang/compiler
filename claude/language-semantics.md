@@ -19,7 +19,7 @@
 トピックごとに、spec を読むだけだと踏みやすい点だけを挙げる。**機構そのものはリンク先が正典**。
 
 ### 値・束縛 → [spec/03](../spec/01-basics/03-values.md)
-- すべて**参照の値渡し**（参照はコピー・参照先は共有）。可変は `mut val`／引数 `inout`（呼び出し側は `&x`）。不変→可変代入は `.clone()`。
+- すべて**値意味論（CoW）**（代入・受け渡しは独立コピー・共有可変は `Ref` のみ）。可変記憶域は `mut val`／アクセスは `borrow`/`inout`/`move`（呼び出しもモードを echo）→ [spec/03](../spec/01-basics/03-values.md)。`unique`/`local`・`Ref`/`WeakRef`/`->`・`deinit` も同章。
 - **再宣言（shadowing）は無制限**で、`name` は常にレキシカルに直近の宣言を指す。`guard`/`match`/`if` の絞り込みはこの一般規則の帰結＝**特別扱いしない**（代入 `x = e`＝既存 `mut` の同型更新とは別概念）。
 - **未初期化宣言は無い**（確定代入解析を持ち込まない）。`val x: T` 後分岐代入は `val x = if … { give … }` で書く。
 
@@ -67,9 +67,9 @@
 - 無名 impl は**型を定義したモジュール内のみ**置ける。外部型への実装はトレイト所有を問わず拡張 `#Ext`。
 
 ### 並行性 → [spec/14](../spec/04-execution/14-concurrency.md)
-- `spawn` キャプチャは**全 immutable（例外なし・`Sender` も）**。**保証は「spawn 書き込み隔離」だけ**（spawn 外はロック不要）。**データ競合自由は非提供**＝spawn 間で可変状態を共有し未同期 read/write すれば**未定義動作になり得る**（将来の `Slice`/`any P`/enum の裂けでクラッシュ・メモリ破壊も。Go 寄り）。外の変更が spawn 内 read に見えるかは**未規定**（native 共有・WASM コピーの両方を合法に保つ）。idiomatic（immutable キャプチャ＋チャネル送信）は競合しない。
-- `spawn` の戻りはハンドル＝`join() -> Promise[T]`（`await handle.join()`）。ランタイムは全スレッド完了まで生存。`async fn` は戻り `-> Promise[T]` 明示・`return e` を自動 wrap。
-- **並行性検査フェーズの実装課題**：キャプチャの immutable 化を型検査で担保する点。
+- ランタイムは **ARC**（循環は `WeakRef`）。**借用は async/spawn 境界を越えない**（越えるのは move/copy/Ref）。**spawn は move/copy のみ・`Ref` は spawn 不可**（推移的に `local` でないこと＝Ref-free を要求）→ **スレッド間に共有可変が無く実質 race-free**（旧「データ競合あり得る・UB」から格上げ）。**async は単一スレッドゆえ `Ref` 可**（interleave は JS 同様の論理ハザード）。
+- ベア `spawn { }` は copyable のみ暗黙キャプチャ・`unique` は `spawn fn` の `move` 引数で渡す。`async fn`/`spawn fn` は `-> Promise[T]`/`-> Thread[T]` 明示で `return e` を自動 wrap。
+- **実装課題**：境界越えの move/copy/Ref 判定（借用は越えない・`local`-free＝spawn 可否）の型検査。
 
 ### エラー → [spec/13](../spec/03-expressions/13-error-handling.md)
 - `try <expr>` は `Result` の早期 return 糖衣（特別な例外機構ではない）。エラー型は `From[Source]` 実装があれば自動変換（`try` が `E.from(x: …)` を挿入）。集約 enum の `From` 群はメタプログラミングで生成。

@@ -3,7 +3,7 @@
 ## 構造体
 
 ```plew
-@[DefaultFactory(pub), Eq, Hash, Clone]  // ディレクティブ（オプション）
+@[DefaultFactory(pub), Eq, Hash]  // ディレクティブ（オプション）
 export struct MyStruct[T] where T: SomeTrait {
     pub val field1: String
     pub(get) val readonly_field: I32  // getter付きpublicフィールド
@@ -55,13 +55,13 @@ export enum Color[T] where T: Format {
 オプショナル値とエラーは特別な構文ではなく、通常の列挙型として定義されます。
 
 ```plew
-@[All, Eq, Clone]
+@[All, Eq]
 export enum Optional[T] {
     Some { val value: T }
     None
 }
 
-@[All, Eq, Clone]
+@[All, Eq]
 export enum Result[T, E] {
     Ok { val value: T }
     Err { val error: E }
@@ -170,11 +170,11 @@ enum にも snake_case の名前付き factory を定義できます（PascalCas
 struct Account {
     pub val id: I32             // どこからでも見える
     pub(get) val balance: I32   // 読み取り公開・書き込みは内部のみ
-    val secret_key: String      // 無名 impl の中だけ
+    mut val secret_key: String  // 無名 impl の中だけ
 }
 
 impl Account {                  // 無名 impl → secret_key が見える
-    pub mut fn rotate_key() { self.secret_key = generate() }
+    pub inout fn rotate_key() { self.secret_key = generate() }
 }
 
 extension Audit {

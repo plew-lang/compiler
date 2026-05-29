@@ -7,7 +7,7 @@
 型宣言に付与し、コンパイラに定型実装を合成させる属性です（Rust の `derive` 相当）。これは方針転換後も**言語提供の組み込み**として残ります。
 
 ```plew
-@[Eq, Hash, Clone]
+@[Eq, Hash]
 struct Point {
     val x: I32
     val y: I32
@@ -16,13 +16,13 @@ struct Point {
 
 組み込みディレクティブ（暫定リスト。詳細は今後決定）:
 
-- `Eq`, `Hash`, `Clone` — 対応する `Eq` / `Hash` / `Clone` トレイトの実装を合成。
+- `Eq`, `Hash` — 対応する `Eq` / `Hash` トレイトの実装を合成（`Clone` は無い＝値意味論で複製不要）。
 - `Encode`, `Decode` — シリアライズ用の実装を合成。
 - struct 専用 `DefaultFactory(pub)` — フィールドをそのまま受け取る既定 factory を合成し、公開範囲を制御（[インスタンス生成](../02-type-system/05-structs-enums.md) 参照）。
 - enum 専用 `All` — 全バリアントを列挙する `Enum.all()` を合成。
 - enum 用（集約エラー、名称未定） — 各 variant が単一ペイロードでソースエラー型を保持する enum に `From[各ソース]`（variant ラップ）を合成し、`try` のエラー変換の boilerplate を消す（Rust の `thiserror` 相当）。`try` 側の機構は単一の `From` のまま（→ [エラーハンドリング](../03-expressions/13-error-handling.md)）。
 
-> 命名規則: ディレクティブは（理想的には）すべて後述の `Derive` トレイトを実装する**構造体**として表されるため、組み込み・ユーザー定義を問わず **PascalCase** です（`Eq` / `Hash` / `Clone` / `Encode` / `Decode` / `DefaultFactory` / `All`）。一方、ディレクティブが**生成する**メンバ（例: `Enum.all()`）は通常の関数・変数なので snake_case のままです。
+> 命名規則: ディレクティブは（理想的には）すべて後述の `Derive` トレイトを実装する**構造体**として表されるため、組み込み・ユーザー定義を問わず **PascalCase** です（`Eq` / `Hash` / `Encode` / `Decode` / `DefaultFactory` / `All`）。一方、ディレクティブが**生成する**メンバ（例: `Enum.all()`）は通常の関数・変数なので snake_case のままです。
 
 ## ユーザー定義メタプログラミング
 
