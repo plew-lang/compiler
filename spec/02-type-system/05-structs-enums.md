@@ -3,11 +3,11 @@
 ## 構造体
 
 ```plew
-@[DefaultFactory(pub), Eq, Hash]  // ディレクティブ（オプション）
+@[Eq, Hash]  // ディレクティブ（derive・オプション）
 export struct MyStruct[T] where T: SomeTrait {
     pub val field1: String
     pub(get) val readonly_field: I32  // getter付きpublicフィールド
-    mut val field2: T
+    mut val field2: T = default_value()  // フィールドの宣言時デフォルト（生成時に省略可）
 }
 ```
 
@@ -147,7 +147,44 @@ val container = <Container title="Main">
 
 **子要素の対応づけ（Plew で最も暗黙的な箇所）**：`<Tag>…子…</Tag>` の子要素は、フィールド名がちょうど **`children`** のフィールドへ渡されます（属性で `children=…` と書くのと等価）。`children` の型は、子要素の並び（イテレータ）から構築できることを宣言するトレイト（暫定 `FromIterator[T]`・名称未決）に準拠していなければなりません。
 
-`@[DefaultFactory(pub)]` ディレクティブで、フィールドをそのまま受け取る既定の factory の公開範囲を制御できます。
+### 既定 factory（memberwise）とフィールドの既定値
+
+`<Type field=… />` でフィールドをそのまま渡す生成は、コンパイラが各構造体に自動で用意する**既定 factory（memberwise factory）**です（リテラルと同じくコア言語の構築意味論で、derive ではありません）。
+
+**フィールドは宣言時に既定値を持てます**（`val age: I32 = 0`）。これは既定 factory の**デフォルト引数**の糖衣で、意味論は[関数のデフォルト引数](../01-basics/04-functions.md#デフォルト引数)と同一です ── 省略のたびに**呼び出しごとに再評価**（`= []` は毎回フレッシュ）・**定義側モジュールのスコープで評価**・任意の実行時式可。**他フィールド・`self` は参照できません**（`val area: I32 = width * height` は不可。シグネチャ単体で評価できる自己完結な値だけ。許可方向は後から additive）。既定値を持つフィールドは生成時に省略でき、省略の組み合わせごとに生成セレクタが増えます。
+
+```plew
+struct Person {
+    pub val name: String
+    pub val age: I32 = 0
+}
+
+val a = <Person name="Alice" age=30 />   // 全指定
+val b = <Person name="Bob" />            // age 省略 → 0
+```
+
+**既定 factory の既定可視性は非公開（not pub）** ── 通常の非公開メンバと同じく、**型の無名 impl からしか呼べません**。memberwise factory は**非公開フィールドも構築引数として晒す**ため、無制限に公開するとカプセル化（`pub`/`pub(get)`）が構築時に破れるからです。外部・同モジュールの他コードからの生成は、型がカスタム factory を明示提供して担います。
+
+公開したいときは**無名 impl 内に裸の `pub factory` を 1 行**書きます（`@[...]` ディレクティブではなく素の構文 ── 可視性制御に祝福ディレクティブを作らないため）。
+
+```plew
+struct Color {
+    pub val r: U8 = 0
+    pub val g: U8 = 0
+    pub val b: U8 = 0
+    val cache: Optional[Parsed] = <Optional.None />   // 非公開・既定値あり
+}
+
+impl Color {
+    pub factory   // memberwise factory を公開（公開引数は pub フィールド r/g/b のみ）
+}
+
+val red = <Color r=255 />   // 型の外からでも生成可
+```
+
+- **公開できる条件＝既定値を持たないフィールドがすべて `pub`**（＝非公開フィールドはすべて既定値を持つ、と同値）。満たさなければコンパイルエラー。
+- **公開版が引数に取るのは `pub` フィールドだけ**。非公開フィールドは外から設定できず**常に既定値に固定**されます。
+- 書かなければ既定 factory は非公開のまま。カスタム無名 `factory(...)` とのラベル集合衝突は通常の[オーバーロード](07-methods-impl.md)規則で判定。
 
 ### factory
 
