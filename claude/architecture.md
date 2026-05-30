@@ -5,7 +5,7 @@ Plew コンパイラ（`PlewCompiler`）の実装方針。**現状はスキャ�
 ## ゴール
 
 - **ターゲット: LLVM-IR**。生成した IR を `llc` → `clang`（あるいは LLVM API）でネイティブバイナリへ。WASM も将来ターゲット。
-- **最終的にセルフホスティング**したい。パフォーマンスは二の次、開発しやすさが最優先（macOS で動けば十分）。
+- **最終的にセルフホスティング**したい。パフォーマンスは二の次（設計の拠り所＝「意味は唱えた通り・難しい魔法は隠す」を優先・hidden cost は許容）。macOS で動けば十分。
 - **メモリ管理は ARC（参照カウント）**。既定は値意味論（CoW）で、opt-in の最小所有権（`unique`/`borrow`/`inout`/`move`・`Ref`/`WeakRef`）のみ。全面的な所有権・ライフタイムは不採用（→ [language-semantics.md](language-semantics.md)、[design-decisions.md](design-decisions.md)）。
 
 ## 技術スタック
