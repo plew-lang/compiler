@@ -44,6 +44,26 @@ Plew が**常に保証**するもの：①メモリ安全（半初期化を観�
 
 > モジュール跨ぎも force-on-read で自動順序化され、跨ぎ循環も起動時 panic で捕まります（`import` 循環の可否は初期化とは独立した別の規則）。
 
+### 実行エントリ（`main`）
+
+プログラムの命令的な開始点は **`fn main`** です。トップレベルは宣言と値初期化子（上記の依存グラフ）だけを置く場所で、**自由なトップレベル文は持ちません**（文の順序と force-on-read の初期化順が衝突しないように、命令的な開始点を `main` に分離する）。実行の段取りは **①全トップレベル/`assoc val` 初期化を完了 → ②`main` を呼ぶ** の 2 段です。
+
+```plew
+fn main() { … }                       // 同期
+async fn main() { … }                 // await を使う（同期は無税の特殊ケース）
+fn main() -> Result[(), AppError] {   // Result を返すと main 内で try が使える
+    val cfg = try load_config()
+    run(config: cfg)
+    return <Result.Ok value=() />
+}
+```
+
+- **`async` は任意**：`fn main` と `async fn main` の両方が valid。実行モデルは常にイベントループなので、同期 `main` は await ゼロの特殊ケース（[同期プログラムは無税](#トップレベル-await-と並行初期化)）。
+- **戻り値は `()` か `Result[(), E]`**。`Result` を返すと **`main` 内で [`try`](../03-expressions/13-error-handling.md) が使え**、`Err` のときランタイムが**エラーを表示して非ゼロ終了**します（`Termination` 相当の lang トレイト経由）。明示的な終了コードは標準ライブラリの `Process.exit(code:)`（発散）。
+- **引数・環境は `main` の仮引数では受け取らず、標準ライブラリ経由**で取ります（`import Process` して `Process.args() -> Array[String]`／`Process.env` 等）。`print`/`Random` と同じく「ambient なプロセス能力を import 越しに明示取得」する形に揃え、出どころを可視に保つ（`main` のシグネチャを単一にし、ランタイムが複数 main 形を魔法認識しなくて済む）。`Process` は lang item ではないので import が要る。
+- **ランタイムの寿命**：`main` が返り、**かつイベントループが drain した**（保留タスク・タイマ・登録リスナ・未 join の [`spawn`](14-concurrency.md) スレッドがいずれも無い）ときにプロセスは終了します（Node/ブラウザと同じ）。よって UI アプリの `main` は「DOM にマウントして return」でよく、イベント待ちでループが生き続けます。CLI は仕事して return → ループ空 → 終了。サーバは listen して return → 接続待ちで生存。
+- **`main` は実行可能ビルドのときだけ必須**。ライブラリ（他パッケージや JS から呼ぶ WASM）には `main` は不要で、export 面だけを晒します（→ [エクスポート](#エクスポート)）。
+
 ### 言語アイテムは常にスコープにある（import 不要）
 
 「`import` 必須」の唯一の例外が**言語アイテム（lang item）**です。Plew はプリミティブ型を持たず `I32`/`String` も構造体ですが、**構文がその意味として参照する型・トレイトは、`import` せずとも常にスコープにあります** ── キーワードと同格の「言語の語彙」だからです（`if` を `import` しないのと同じ）。
@@ -200,11 +220,14 @@ import @Utils
 
 ### ビルド
 
-実行エントリの規約は持たない。ビルドするファイルを明示する：
+**エントリは「ファイルを明示選択」＋「その中の `fn main` が開始点」**の 2 段で、プロジェクト全体から "the main" を自動探索したり `bin/` のような特別ディレクトリを設けたりはしません。実行可能ビルドは、名指ししたファイルが定義する [`main`](#実行エントリmain) をエントリにします：
 
 ```sh
-plew build ./src/entry.pw
+plew build ./src/client.pw    # その file の fn main がエントリ（例：WASM 出力）
+plew build ./src/server.pw    # 別エントリ＝別ターゲット（例：native 出力）
 ```
+
+これにより**モノレポで複数エントリ**（クライアント／サーバ）が同じモデルモジュールを共有しつつ別々にビルドできます。`main` を持たないファイルはライブラリとしてビルドされ、`main` は不要です。
 
 ## 外部コード統合
 
