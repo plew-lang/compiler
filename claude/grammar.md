@@ -30,6 +30,8 @@
 | トレイト実装（[07](../spec/02-type-system/07-methods-impl.md)） | `impl Type AS type_use` | 一致 |
 | 並行性修飾子（[14](../spec/04-execution/14-concurrency.md)） | `sync`/`shared`/`atomic` は不採用＝`MUT? VAL` のみ | 一致（削除済み） |
 | 可視性（[05](../spec/02-type-system/05-structs-enums.md)） | `export` + `pub`/`pub(get)` | 一致 |
+| 構造体フィールドの既定値（[05](../spec/02-type-system/05-structs-enums.md)） | フィールド宣言に `= 式`（生成時省略可・memberwise factory の既定引数糖衣・毎回評価/他フィールド非参照は意味論層） | 仕様先行（フィールド宣言に既定値構文なし） |
+| 既定 factory の公開（[05](../spec/02-type-system/05-structs-enums.md)） | 無名 impl 内に裸の `pub factory`（引数・本体なし＝memberwise を公開・公開条件〔no-default が全 pub〕は意味論層・`@[DefaultFactory]` は廃止） | 仕様先行（`factory` は引数/本体前提・裸形なし） |
 | 冪乗 `**`（[12](../spec/03-expressions/12-operators.md)） | 不採用（`pow` で代替） | 一致（未実装） |
 | `lazy` | 専用構文なし（`<Lazy />` 構造体） | 一致（未実装） |
 | force-unwrap（[13](../spec/03-expressions/13-error-handling.md)） | 無し（`UNARY_POSTFIX_OP` `!` は遺物・削除予定） | 要削除 |
