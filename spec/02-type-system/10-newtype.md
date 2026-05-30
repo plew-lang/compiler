@@ -42,6 +42,24 @@ meter * meter   // ✗ Mul[Meter] は無い（rhs に F64 を要求）→ meter 
 
 継承された実装はコンパイラが合成するものです。**ユーザーが `newtype` に `impl` を書くことはできません**（[拡張](09-extensions.md) でも同様）。独自の振る舞いを足したい場合は構造体でラップします。
 
+### unique 型を包む
+
+underlying が [`unique`](../01-basics/03-values.md#uniqueコピー不可型) 型のとき、**newtype も自動的に `unique` になります**（再宣言不要・コピー不可・move 専用）。もしコピー可能になれば newtype を複製して元の型の唯一所有を回避でき資源安全が破れるので、unique 性の伝播は必須です。`unique` だけを手で再宣言させないのは、newtype が「named underlying からすべて継承する」という原則に従うため（underlying が `= File` と単一かつ可視なので、構造体の「フィールド追加で unique 化を見落とす」罠が無く、自動継承で安全）。
+
+[`deinit`](../01-basics/03-values.md#deinit) も他の実装と同じく継承され、**最後の `newtype` 所有者が消えるとき（または最後の `Ref` 解放時）にちょうど一度走ります**。資源はラップしても閉じる必要があるためです。
+
+```plew
+unique struct File {
+    val fd: I32
+    deinit { sys_close(fd: self.fd) }
+}
+
+newtype ReadOnlyFile = File   // 自動で unique・deinit を継承
+
+val r: ReadOnlyFile = open_ro(path: "x") as ReadOnlyFile
+// r がスコープを抜けると File の deinit が一度走る
+```
+
 ## 別の型としての扱いと as
 
 `newtype` と元の型は別の型なので、代入・引数渡しには明示的な `as` キャストが必要です。両者は表現が同一なので、この `as` は**双方向・ゼロコストの再タグ**で必ず成功します（[From トレイト](../03-expressions/12-operators.md) による計算を伴う変換とは異なります）。
