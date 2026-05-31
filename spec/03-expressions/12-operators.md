@@ -64,7 +64,7 @@ val n = try <I8.convert from=big />      // try で早期 return（前置 try �
 ```plew
 trait Add[Rhs] {
     type Output
-    fn add(rhs: Rhs) -> Output
+    assoc fn add(lhs: Self, rhs: Rhs) -> Output
 }
 
 struct Vector {
@@ -75,27 +75,31 @@ struct Vector {
 impl Vector as Add[Vector] {
     type Output = Vector
 
-    fn add(rhs: Vector) -> Vector {
-        return <Vector x=(self.x + rhs.x) y=(self.y + rhs.y) />
+    assoc fn add(lhs: Vector, rhs: Vector) -> Vector {
+        return <Vector x=(lhs.x + rhs.x) y=(lhs.y + rhs.y) />
     }
 }
 
 val v1 = <Vector x=1.0 y=2.0 />
 val v2 = <Vector x=3.0 y=4.0 />
-val result = v1 + v2  // v1.add(rhs: v2) と同等
+val result = v1 + v2  // Vector.add(lhs: v1, rhs: v2) と同等
 ```
+
+> **演算子・比較トレイトの要求は `assoc fn`（メソッドではない）**。`add`/`sub`/`compare` などは**自分を書き換えず新しい値を産む対称演算**で、両オペランドは対等な値（どちらも「主語」ではない）。これをメソッド `lhs.add(rhs:)` にすると、命令形動詞なのに非破壊＝「`add` したら `lhs` が変わる」と誤読させる（Swift の `sort`/`sorted` 規約に反する）。`assoc fn add(lhs:, rhs:)` なら受け手を演じず、操作名として正直（Swift の演算子 `static func +`、Rust の `Step` と同形）。一方**コンテナアクセサ**（`Index`/`IndexSet`）と**分解アクセサ**（`Chain.chain()`）は受け手（コンテナ／自分自身）が主語なのでメソッドのまま、**破壊する反復子**（`Iterator.next` の `inout fn`）は命令形メソッドで規約どおり。
 
 算術二項演算子はそれぞれ対応トレイトの糖衣です（いずれも型引数 `[Rhs]` と `type Output` を持ち、右オペランド型でオーバーロードできます）。
 
 | 演算子 | トレイト | 脱糖 |
 | --- | --- | --- |
-| `+` | `Add[Rhs]` | `a.add(rhs: b)` |
-| `-` | `Sub[Rhs]` | `a.sub(rhs: b)` |
-| `*` | `Mul[Rhs]` | `a.mul(rhs: b)` |
-| `/` | `Div[Rhs]` | `a.div(rhs: b)` |
-| `%` | `Rem[Rhs]` | `a.rem(rhs: b)` |
+| `+` | `Add[Rhs]` | `T.add(lhs: a, rhs: b)` |
+| `-` | `Sub[Rhs]` | `T.sub(lhs: a, rhs: b)` |
+| `*` | `Mul[Rhs]` | `T.mul(lhs: a, rhs: b)` |
+| `/` | `Div[Rhs]` | `T.div(lhs: a, rhs: b)` |
+| `%` | `Rem[Rhs]` | `T.rem(lhs: a, rhs: b)` |
 
-冪乗 `**` は持ちません（`pow` メソッドで代替）。二項ビット演算 `&` / `^` / `|` / `<<` / `>>` と単項 `~` は、それぞれ `BitAnd` / `BitXor` / `BitOr` / `Shl` / `Shr` / `BitNot` トレイトの糖衣です（優先順位は → [優先順位と結合性](#優先順位と結合性)）。
+（`T` は左オペランド `a` の型。`a + b` は `b` の型で `Add[…]` の conformance を選ぶ。）
+
+冪乗 `**` は持ちません（`Pow[Exp]` トレイトの `assoc fn pow(base: Self, exp: Exp) -> Output`・`Add[Rhs]` と同形で多重 conformance＝`pow(base: x, exp: 2)`）。二項ビット演算 `&` / `^` / `|` / `<<` / `>>` と単項 `~` は、それぞれ `BitAnd` / `BitXor` / `BitOr` / `Shl` / `Shr` / `BitNot` トレイトの糖衣で、いずれも上と同じく **`assoc fn`**（二項は `op(lhs:, rhs:)`・単項 `~` は `bitnot(value:)`）です（優先順位は → [優先順位と結合性](#優先順位と結合性)）。
 
 > **`/`・`%` の実行時意味**（Rust/Go/Swift に合わせる）：
 > - **整数の 0 除算**（`a / 0`・`a % 0`）は **panic**（回復不能なトラップ。静かな値を返さない）。
@@ -106,18 +110,18 @@ val result = v1 + v2  // v1.add(rhs: v2) と同等
 
 ### 演算子のオーバーロード（右オペランド型ごとの conformance）
 
-演算子は対応トレイトのメソッドの糖衣です（`a + b` ⟺ `a.add(rhs: b)`）。トレイトは右オペランド型を型引数に持つので（`Add[Rhs]`）、**1 つの型が複数の右オペランド型に準拠**でき、`add` は引数型で区別される[オーバーロード](../02-type-system/07-methods-impl.md)として解決されます。
+演算子は対応トレイトの `assoc fn` の糖衣です（`a + b` ⟺ `T.add(lhs: a, rhs: b)`）。トレイトは右オペランド型を型引数に持つので（`Add[Rhs]`）、**1 つの型が複数の右オペランド型に準拠**でき、`add` は引数型で区別される[オーバーロード](../02-type-system/07-methods-impl.md)として解決されます。
 
 ```plew
 // Vector * Vector
 impl Vector as Mul[Vector] {
     type Output = Vector
-    fn mul(rhs: Vector) -> Vector { /* 要素ごとの積など */ }
+    assoc fn mul(lhs: Vector, rhs: Vector) -> Vector { /* 要素ごとの積など */ }
 }
 // Vector * F64（スカラー倍）
 impl Vector as Mul[F64] {
     type Output = Vector
-    fn mul(rhs: F64) -> Vector { /* スカラー倍 */ }
+    assoc fn mul(lhs: Vector, rhs: F64) -> Vector { /* スカラー倍 */ }
 }
 
 val a = <Vector x=1.0 y=1.0 />
@@ -135,10 +139,10 @@ val c = a * 2.0                       // Mul[F64]
 
 ```plew
 trait Eq {
-    fn eq(rhs: Self) -> Bool
+    assoc fn eq(lhs: Self, rhs: Self) -> Bool
 }
 
-val same = a == b   // a.eq(rhs: b)
+val same = a == b   // T.eq(lhs: a, rhs: b)
 val diff = a != b   // !(a == b)
 ```
 
@@ -156,13 +160,13 @@ enum Ordering {
 }
 
 trait Ord: Eq {
-    fn compare(rhs: Self) -> Ordering
+    assoc fn compare(lhs: Self, rhs: Self) -> Ordering
 }
 
-a < b    // match a.compare(rhs: b) { Less => true,     _ => false }
-a <= b   // match a.compare(rhs: b) { Greater => false, _ => true }
-a > b    // match a.compare(rhs: b) { Greater => true,  _ => false }
-a >= b   // match a.compare(rhs: b) { Less => false,    _ => true }
+a < b    // match T.compare(lhs: a, rhs: b) { Less => true,     _ => false }
+a <= b   // match T.compare(lhs: a, rhs: b) { Greater => false, _ => true }
+a > b    // match T.compare(lhs: a, rhs: b) { Greater => true,  _ => false }
+a >= b   // match T.compare(lhs: a, rhs: b) { Less => false,    _ => true }
 ```
 
 `F32`/`F64` も `Ord`・`Eq` に準拠しますが、**NaN を比較すると panic** します（IEEE の「NaN はどの値とも順序が付かない」を静かな `false` で返さず落とす）。NaN 判定は `is_nan()`。算術自体は IEEE 据え置きで NaN/inf を生成します（→ [基本型](../01-basics/02-basic-types.md)）。
@@ -191,46 +195,46 @@ a || b   // ≡ if a { give true } else { give b }
 ```plew
 trait Not {
     type Output
-    fn not() -> Output
+    assoc fn not(value: Self) -> Output
 }
 
 impl Bool as Not {
     type Output = Bool
 
-    fn not() -> Bool {
+    assoc fn not(value: Bool) -> Bool {
         // 否定の実装
     }
 }
 
 val flag: Bool = true
-val negated = !flag  // flag.not() と同等
+val negated = !flag  // Bool.not(value: flag) と同等
 ```
 
-前置 `-`（符号反転）は `Neg` トレイトのシンタックスシュガーです（`-x` ⟺ `x.neg()`）。
+前置 `-`（符号反転）は `Neg` トレイトのシンタックスシュガーです（`-x` ⟺ `T.neg(value: x)`）。
 
 ```plew
 trait Neg {
     type Output
-    fn neg() -> Output
+    assoc fn neg(value: Self) -> Output
 }
 
 impl I32 as Neg {
     type Output = I32
 
-    fn neg() -> I32 {
+    assoc fn neg(value: I32) -> I32 {
         // 符号反転の実装
     }
 }
 
 val n: I32 = 5
-val m = -n  // n.neg() と同等
+val m = -n  // I32.neg(value: n) と同等
 ```
 
 - 符号付き整数（`I8`…`I64`）と浮動小数（`F32`/`F64`）が `Neg` を実装します。
 - **符号なし整数（`U8`…`U64`）は `Neg` を実装しない**ので、`-x`（`x: U32` 等）は**コンパイルエラー**です（「演算子は実装トレイトのある型でのみ」の一般則どおり。静かなラップ値を返しません）。
 - 二項の `-`（減算）は別トレイト `Sub` で、前置か中置かは構文位置で区別します。
 
-> **負の数値リテラル**は `Neg` ではありません。`-128` のように数値リテラル直前にある `-` は[リテラルの一部](../01-basics/02-basic-types.md#リテラルの型付け多相文脈で確定)として畳み込まれ、リテラル全体で型範囲を検査します（`-128` は `I8` の最小値として有効。`(128).neg()` 経由だと `128` が `I8` に収まらず溢れてしまう）。`Neg` は変数・式に対する実行時の符号反転に使います。
+> **負の数値リテラル**は `Neg` ではありません。`-128` のように数値リテラル直前にある `-` は[リテラルの一部](../01-basics/02-basic-types.md#リテラルの型付け多相文脈で確定)として畳み込まれ、リテラル全体で型範囲を検査します（`-128` は `I8` の最小値として有効。`I8.neg(value: 128)` 経由だと `128` が `I8` に収まらず溢れてしまう）。`Neg` は変数・式に対する実行時の符号反転に使います。
 
 ## 添字アクセス
 
@@ -340,10 +344,10 @@ impl Optional[T] as Chain {
 ```plew
 trait Coalesce[Rhs] {
     type Output
-    fn coalesce(rhs: Rhs) -> Output
+    assoc fn coalesce(lhs: Self, rhs: Rhs) -> Output
 }
 
-val result = a ?? b  // a.coalesce(rhs: b) と同等
+val result = a ?? b  // T.coalesce(lhs: a, rhs: b) と同等
 ```
 
 Optional は右辺の型に応じて 2 つの実装を与えます（`coalesce(rhs:)` を右辺型でオーバーロード）。
@@ -353,8 +357,8 @@ Optional は右辺の型に応じて 2 つの実装を与えます（`coalesce(r
 impl Optional[T] as Coalesce[Optional[T]] {
     type Output = Optional[T]
 
-    fn coalesce(rhs: Optional[T]) -> Optional[T] {
-        return match self {
+    assoc fn coalesce(lhs: Optional[T], rhs: Optional[T]) -> Optional[T] {
+        return match lhs {
             Optional.Some { value: val v } => <Optional.Some value=v />
             Optional.None                  => rhs
         }
@@ -365,8 +369,8 @@ impl Optional[T] as Coalesce[Optional[T]] {
 impl Optional[T] as Coalesce[T] {
     type Output = T
 
-    fn coalesce(rhs: T) -> T {
-        return match self {
+    assoc fn coalesce(lhs: Optional[T], rhs: T) -> T {
+        return match lhs {
             Optional.Some { value: val v } => v
             Optional.None                  => rhs
         }

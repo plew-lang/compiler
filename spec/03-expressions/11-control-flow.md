@@ -119,8 +119,49 @@ for Person { val name, val age } in people {
 
 - ループ変数は `val`／`mut val` で**新規宣言**します。bare 名にすると既存の `mut` 変数へ代入し、ループ後も生存します（`val`＝新規・bare＝既存。→ [値](../01-basics/03-values.md)）。
 - **値を返せるのは `loop` だけ**：`loop { … break x }` は式として `x` を返します。`while`／`for` は値を持たず、`break` は**値なしの脱出のみ**（`break x` は不可）。ループ本体ブロックでは `give` も使えません（`give` は通常ブロックと `if`／`match` アーム専用）。ラベル付きループ・多重 `break` は持ちません。
-- `for` が回すのは **`Iterable`**（`fn iterator() -> Iter` で毎回新しいカーソルを産む）で、`Array`・辞書・レンジ等が準拠します。実際に値を出すのは **`Iterator`**（`inout fn next() -> Optional[Item]` の消費カーソル）で、両者は別トレイト（コレクションは値意味論上「自分のカーソル」を持てず、多重走査もしたいため）。`Iterator` 自身も `Iterable`（自分を返す）なので iterator を直接 `for` できます。正確なシグネチャはイテレータ・プロトコル（未策定）で確定します。
+- `for` が回すのは **`Iterable`**（`fn iterator() -> Iter` で毎回新しいカーソルを産む）で、`Array`・辞書・レンジ等が準拠します。実際に値を出すのは **`Iterator`**（`inout fn next() -> Optional[Item]` の消費カーソル）で、両者は別トレイト（コレクションは値意味論上「自分のカーソル」を持てず、多重走査もしたいため）。`Iterator` 自身も `Iterable`（自分を返す）なので iterator を直接 `for` できます。正確なシグネチャは下記[イテレータ・プロトコル](#イテレータプロトコル)。
 - `for (val key, val value) in dict` は、辞書が要素 `(key: K, value: V)`（ラベル付きタプル）の `Iterator` を産み、それを分解しています。
+
+### イテレータ・プロトコル
+
+```plew
+trait Iterator {
+    type Item
+    inout fn next() -> Optional[Item]      // 自分のカーソルを inout で前進・尽きたら None
+}
+
+trait Iterable {
+    type Item
+    type Iter: Iterator[Item = Item]       // 産むカーソルの具象型（any で包まない＝単相化・boxing なし）
+    fn iterator() -> Iter                   // self を借用し新しいカーソルを値で返す
+}
+```
+
+- **`for val x in e` の脱糖**：
+
+```plew
+mut val it = e.iterator()                  // next が inout ゆえ mut val
+loop {
+    match it.next() {
+        Optional.Some { value: val x } => { /* 本体 */ }
+        Optional.None                  => break
+    }
+}
+```
+
+- **`Iterator` 自身が `Iterable`**：すべての `Iterator` を `Iterable` にする blanket（[`impl B as A`](../02-type-system/09-extensions.md) 形・core 提供）が `iterator()` で自分を返します。
+
+```plew
+impl Iterator as Iterable {
+    type Item = Self.Item
+    type Iter = Self
+    fn iterator() -> Self { self }          // 値で返す＝コピー。`for x in some_iter` は元の束縛を消費しない
+}
+```
+
+- **`next` は `inout fn`**（カーソルを書き換える＝破壊操作の命令形メソッド）、**`iterator()` は名詞アクセサのメソッド**、要素を産む `Item`/`Iter` は[関連型](../02-type-system/08-traits.md)。`type Iter: Iterator[Item = Item]` は**境界の中で関連型を束縛**する記法（`any Iterator[Item=I32]` と同形で、存在型に限らず境界一般で使える）。
+- v1 はイテレータ＝コピー可能な値（unique イテレータは `allow_unique` 待ちで additive）。派生メソッド（`map`/`filter`/`enumerate`/`zip`/`count` 等）は[名前付き拡張の `impl Iterator`＋`default_extension`](../02-type-system/09-extensions.md)に置く（正確な署名は core-library）。
+- **レンジの反復**は要素が `Step` のときだけ `Iterable` になる（条件付き準拠 `where T: Step`）→ [レンジ](../01-basics/02-basic-types.md#レンジhalfopenrange--closedrange)。
 
 ## ガード文
 

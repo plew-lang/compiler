@@ -183,7 +183,23 @@ for val i in 0..=n { … }   // 0, 1, …, n
 
 - 形ごとに別の **prelude 構造体**（`Array`/`Optional` 同様つねに在る）で、`a..<b` は `<HalfOpenRange start=a end=b />`、`a..=b` は `<ClosedRange start=a end=b />` の**固定シンタックスシュガー**です。レンジは固定 2 フィールド構造体（`{ start, end }`）なので、配列・辞書リテラル（可変アリティで JSX 不可＝本物の例外）と違い、**JSX 構築の例外ではなくその糖衣**（「構築は JSX」原則を破らない）。`..<`/`..=` は固定脱糖でユーザー型には定義できない（非トレイト・上書き不可）。
 - **要素型は `Ord`**（`HalfOpenRange[T] where T: Ord` / `ClosedRange[T] where T: Ord`）。順序さえあれば**任意の型でレンジを作れ**（ユーザー定義の順序型でも `v1..<v2`）、`contains` も使えます。
-- **反復は `T: Step` のときだけ**：整数系（`I8`…`U64`）は離散ステップの trait `Step`（`Step: Ord`・暫定名）を実装するので `for val i in 0..<n` できる。`F64` は `Ord` だが `Step` 非実装なので、`HalfOpenRange[F64]` は `contains` 可・**反復不可**。＝レンジが `Iterable`（`Iterator` を産める）になるのは `T: Step` のときだけ。
+- **反復は `T: Step` のときだけ**：整数系（`I8`…`U64`）は離散ステップの trait `Step`（`Step: Ord`）を実装するので `for val i in 0..<n` できる。`F64` は `Ord` だが `Step` 非実装なので、`HalfOpenRange[F64]` は `contains` 可・**反復不可**。＝レンジが [`Iterable`](../03-expressions/11-control-flow.md#イテレータプロトコル)（`Iterator` を産める）になるのは `T: Step` のときだけ（条件付き準拠 `where T: Step`）。
 - 優先度は算術より**緩い**（`0..<n+1` ＝ `0..<(n+1)`）。
 - **片側レンジ（`a..` / `..<b` / `..`）と `step` は当面持たない**（片側は主にスライス用途なのでスライスと一緒に、`step` は将来イテレータの `.step_by(k)` で。いずれも additive）。上端の無いレンジは印が不要（印は具体的な上端にだけ付く）。
-- イテレータ／反復プロトコル自体の設計と `Step` の正確な定義（successor・距離計算など）、`ClosedRange` 反復時の最大値での停止（イテレータ側の状態で扱い、構造体は素の `{ start, end }`）は別途（未決）。
+
+#### `Step` トレイト（離散ステップ）
+
+```plew
+trait Step: Ord {
+    // start から end への前進歩数（Iterator.size_hint と同形）。
+    // exact = Some(n): 正確に n 歩 ／ None: 歩数が U64 を超過 or 無限（lower は飽和下界）。
+    // start > end（到達不能・空）は (lower: 0, exact: Some(0))。
+    assoc fn steps_between(start: Self, end: Self) -> (lower: U64, exact: Optional[U64])
+    assoc fn step_forward(start: Self, count: U64) -> Optional[Self]   // count 歩先・型上限超過で None
+    assoc fn step_backward(start: Self, count: U64) -> Optional[Self]  // count 歩前・型下限未満で None
+}
+```
+
+- 要求はすべて **`assoc fn`**（対称・値を産む操作ゆえ・→ [演算子](../03-expressions/12-operators.md#演算子システム) の規約）。レンジ iterator は `T.step_forward(start: current, count: 1)` で前進し、**`None` を返したら終端**（`0..=U64.MAX` の MAX 到達も溢れなく扱える＝この `None` は正常な終端で、算術オーバーフロー panic とは別物）。`ClosedRange` の最大値停止はイテレータ側の状態で、構造体は素の `{ start, end }` のまま。
+- **歩数は `U64`**（添字・`count` と同じ・Rust の `usize` 相当）。距離が `U64` を超え得る型（将来の `U128`・ユーザ定義の広い離散型）でも、`steps_between` が `(飽和下界, None)` を返せるので実装可能 ── Array の容量も `U64` 上限なので、正確カウントを `U64` で頭打ちにするのは正しいキャップ。`step_forward` の `count: U64` は「一度に最大 `U64.MAX` 歩」で、`.step_by(k)` も `U64`。
+- `step_backward` は逆順反復（`.reversed()`・additive）で使い、v1 の前進反復では未使用。`steps_between` は `count()`/size_hint の O(1) 化に使う。
