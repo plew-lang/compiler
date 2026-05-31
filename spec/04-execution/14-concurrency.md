@@ -33,7 +33,7 @@ async fn main() {
 
 ### unique 結果と `allow_unique`（v1 は不可・将来）
 
-v1 では **`Promise[T]`/`Thread[T]` を含むコアの generic 型はすべてコピー可能な型に限定**（`allow_unique` 未導入）。帰結：
+v1 では **`Promise[T]`/`JoinHandle[T]` を含むコアの generic 型はすべてコピー可能な型に限定**（`allow_unique` 未導入）。帰結：
 
 - async/spawn は **unique 結果を返せない**（`-> Promise[unique]` 不可）。返すのはコピー可能な値か `Ref`。async で unique を持ち回るなら **`Ref` 包み**（`Ref` は async を越えられる）。
 - **unique を generic に入れるのは常に `Ref` 包み**（`Optional[Ref[File]]`・`Array[Ref[File]]`）。`Ref` はコピー可能なので通常のコピー可能なコレクションになり、`match`/peek/反復が普通に効く（move-out 専用 API も `take()` も不要）。
@@ -79,28 +79,28 @@ v1 では **`Promise[T]`/`Thread[T]` を含むコアの generic 型はすべて�
 ```plew
 val n = 100                                  // コピー可能
 val handle = spawn { give heavy(input: n) }  // n は暗黙コピーでキャプチャ
-val result = await handle.join()             // 完了を待って結果（Thread[T]・型名暫定）
+val result = await handle.join()             // handle: JoinHandle[T]、join(): Promise[T]、await で T
 spawn { background() }                        // 束縛しなければ detached
 ```
 
 - **ベアの `spawn { }` のキャプチャはコピー可能のみ（暗黙コピー＝スナップショット）**。`borrow`/`inout`・`Ref`・`local` を触れば**コンパイルエラー**（経路を示す）。**`unique` のキャプチャもエラー**（ブロックへ move する構文は当面持たない＝additive）。
 - **`unique` をスレッドへ渡すには `spawn fn`**（下記）の `move` 引数を使う。
-- **戻りはハンドル構造体**：`join() -> Promise[T]` を持つ（暫定 `Thread[T]`）。`await handle.join()` で結果。**ランタイムは全スレッド完了まで生存**してから終了する（Go の「main 終了で goroutine kill」footgun を避ける）。
-- **`spawn` 内 `panic` はプロセス全体を停止**する。スレッド単位で扱いたい失敗は `Result` を返して `join()` で受け取る。
+- **戻りはハンドル構造体 `JoinHandle[T]`**：`join() -> Promise[T]` を持つ（名前はその役割＝「join するためのハンドル」に由来。スレッドそのものを走らせるのは `spawn` で、この値はそれへのハンドル。Rust の `JoinHandle` と同名）。`await handle.join()` で結果。**ランタイムは全スレッド完了まで生存**してから終了する（Go の「main 終了で goroutine kill」footgun を避ける）。
+- **`spawn` 内 `panic` はプロセス全体を停止**する（panic=abort・スレッド単位の unwind/catch は無い）。スレッド単位で扱いたい失敗は `spawn fn … -> Result[T, E]` のように **`Result` を自分で返す**＝そのとき `join()` は `Promise[Result[T, E]]` を返す（T がそうだから）。**`join()` が暗黙に `Result` で包むことはありません** ── Rust の `JoinHandle::join() -> Result<T, _>` は panic を捕捉して `Err` 化するが、Plew は panic がプロセスを落とすので捕捉対象が無く、`Promise[T]` を正直にそのまま返す（hidden meaning を作らない）。
 
 ### spawn fn — 引数で値を渡してスレッド起動
 
 `unique` を含む値をスレッドへ明示的に渡すには、`async fn` と平行な宣言形 **`spawn fn`** を使う（キャプチャでなく**引数**で境界を越える）。
 
 ```plew
-spawn fn worker(input: move Data) -> Thread[Report] {   // input を move でスレッドへ
-    return analyze(input: input)                         // 戻り値は Thread に自動ラップ
+spawn fn worker(input: move Data) -> JoinHandle[Report] {   // input を move でスレッドへ
+    return analyze(input: input)                            // 戻り値は JoinHandle に自動ラップ
 }
 val handle = worker(input: move data)                    // 呼び出しがスレッドを起動
 val report = await handle.join()
 ```
 
-- `spawn fn g(...) -> Thread[T]` は呼ぶとスレッドを起動しハンドルを返す（`async fn ... -> Promise[T]` と平行・本体の `return e` を `Thread[T]` に自動ラップ）。**宣言された fn はキャプチャを持たず引数だけ**＝何が境界を越えるか完全に明示。
+- `spawn fn g(...) -> JoinHandle[T]` は呼ぶとスレッドを起動しハンドルを返す（`async fn ... -> Promise[T]` と平行・本体の `return e` を `JoinHandle[T]` に自動ラップ）。**宣言された fn はキャプチャを持たず引数だけ**＝何が境界を越えるか完全に明示。
 - 引数は `move`（unique・所有移動）／copy（コピー可能）。`borrow`/`inout`・`Ref`/`local` は渡せない（境界規則どおり）。
 
 ## local（spawn を越えられない型）

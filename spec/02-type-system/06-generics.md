@@ -20,7 +20,7 @@ fn process[T](container: Container[T]) where T: Format {
 
 型引数が**どんな型を取れるか**は `[...]` の能力マーカーで調整します（トレイト制約＝`where` とは別軸）。既定 `[T]` は **common case**＝**`unique` でない（コピー可能）かつ `local` 許容**で、無注釈で済みます。逸脱するときだけマークします：
 
-- **`[allow_unique T]`**：`unique` 型も admit する（widen）。`T` をコピーできなくなるので本体は借用／move で扱う。**v1 では未実装の将来機能** ── コア型（`Optional`/`Array`/`Promise`/`Thread` 等）も含め `allow_unique` を入れずコピー可能な型に限定し、`unique` を generic に入れるのは常に [`Ref`](../01-basics/03-values.md#ref--weakref共有可変) 包み（`Optional[Ref[P]]`）。
+- **`[allow_unique T]`**：`unique` 型も admit する（widen）。`T` をコピーできなくなるので本体は借用／move で扱う。**v1 では未実装の将来機能** ── コア型（`Optional`/`Array`/`Promise`/`JoinHandle` 等）も含め `allow_unique` を入れずコピー可能な型に限定し、`unique` を generic に入れるのは常に [`Ref`](../01-basics/03-values.md#ref--weakref共有可変) 包み（`Optional[Ref[P]]`）。
 - **`[no_local T]`**：`local` 型を除外する（narrow）＝`spawn` する generic で `T` を spawn 越え可能に制約する（→ [非同期処理とメモリ管理](../04-execution/14-concurrency.md)）。`spawn` を使わない大半のコードでは不要。
 
 非対称（`allow_unique`＝admit／`no_local`＝exclude）は「**既定＝common case・逸脱だけ注釈**」の帰結です（`unique` は generics で稀なので既定除外、`local` は日常的なので既定許容）。**条件付き unique**：`allow_unique` なコンテナが `T` を値で所有すると、`T` が `unique` のときコンテナ自身も `unique` になります（**自動導出・`reunique` 等の宣言は不要**。`unique` 性は型引数から見えるので silent でない）。

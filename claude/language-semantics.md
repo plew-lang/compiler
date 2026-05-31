@@ -73,7 +73,7 @@
 
 ### モジュール・可視性 → [spec/15](../spec/04-execution/15-modules.md), [spec/05](../spec/02-type-system/05-structs-enums.md)
 - **ユーザーは ambient／グローバルな定義を作れない**（全定義はモジュールスコープ・他モジュールは `import` 必須）。ただしトップレベル関数・トップレベル変数（`val`/`mut val`）は在る。static は `assoc fn`/`assoc val`。
-- **import 必須の唯一の例外＝言語アイテム（lang item）**：構文が意味として参照する型/トレイト（数値型・`String`・`Array`・`Dictionary`・`Optional`/`Result`・レンジ 2 型・`Add`/`Eq`/`Ord`/`From`/`Iterator`/`Step`・辞書キー境界 `Hash` 等）は常にスコープ＝キーワード同格の語彙。それ以外（`Random`/`Set`/`print`）は明示 import（判定は「構文が参照するか」で sharp。`Set` はリテラル無しゆえ非 lang item）。正確な一覧は TODO。
+- **import 必須の唯一の例外＝言語アイテム（lang item）。ただし ambient は型のみ・トレイトは含めない**：構文が意味として参照する**型**（数値型・`Bool`・`String`・`Array`・`Dictionary`・`Optional`/`Result`・レンジ 2 型・`Promise`・スレッドハンドル `JoinHandle`）は常にスコープ＝キーワード同格の語彙（型注釈に名前を書く＋リテラルが生む型だから）。**トレイトは非 ambient**：演算子・構文→トレイトの対応（`+`↔`Add`・`for`↔`Iterator`/`Iterable`・`xs[i]`↔`Index`・`[k:v]` キー境界↔`Hash`）は**コンパイラ内部の脱糖表（名前空間でない）**で、use site（`a+b`/`for`/`xs.sort()`）はレシーバ型＋`#Ext` で解決しトレイト名を**一度も名指さない**＝import 不要。トレイト名が要るのは `where T: P`/`any P`/`impl` の定義地点だけ（組み込み演算子トレイトも std から import）。`From` は脱糖表だが名指し時 import／`TryFrom` は構文非参照で普通の import（「脱糖表に居るか」と「名前空間に居るか」は独立）。それ以外（`Random`/`Set`/`print`）は明示 import（判定は「構文が参照するか」で sharp。`Set` はリテラル無しゆえ非 lang item）。`Unit` 型は無い（`()` は無名レコード構文）。正確な ambient 型一覧は TODO。
 - 可視性は `pub`/`pub(get)`（型スコープ・2段・中間段なし）と `export`（モジュール境界）の**別 2 軸**。非公開（修飾なし）は**その型の無名 impl からのみ**可視。
 - 無名 impl は**型を定義したモジュール内のみ**置ける。外部型への実装はトレイト所有を問わず拡張 `#Ext`。
 - **トップレベル/`assoc val` の初期化（罠）** → [spec/15 § トップレベル初期化](../spec/04-execution/15-modules.md#トップレベル初期化と実行順序)。起動時 **eager**（Swift/Rust 流の遅延ではない＝`main` 前に全完了）。順序は **force-on-read で依存順を自動算出**（静的依存解析を持たない＝各値は memoize サンク・読めば相手を再帰 force）。**循環はコンパイル時でなく起動時の panic**（初期化中への再入／async ではデッドロック検出）。**トップレベルはイベントループ上の async コンテキスト**＝top-level await 可・初期化子内 `spawn`+`join()` 可・独立な非同期初期化子は並行起動（`Promise.all` 相当）で待ちが重なる。初期化子は const 限定でなく**任意の実行時式**。**同期プログラム（await 皆無）は無税**＝従来の同期 before-main と同挙動。保証は①メモリ安全（半初期化を観測しない）②依存順③一回性のみで、**独立初期化子の副作用順は unspecified（UB ではない）**＝特定順が要るなら明示依存を作る。実装：value に 未初期化/初期化中/初期化済み の状態。
@@ -82,7 +82,7 @@
 ### 並行性 → [spec/14](../spec/04-execution/14-concurrency.md)
 - ランタイムは **ARC**（循環は `WeakRef`）。**借用は async/spawn 境界を越えない**（越えるのは move/copy/Ref）。**spawn は move/copy のみ・`Ref` は spawn 不可**（推移的に `local` でないこと＝Ref-free を要求）→ **スレッド間に共有可変が無く実質 race-free**。**async は単一スレッドゆえ `Ref` 可**（interleave は JS 同様の論理ハザード）。
 - **CoW 値は spawn 境界で eager に実体化（ディープコピー）する罠**：`Array`/`String`/`Dictionary` は `Ref` を含まず `local` でないので spawn を越えられるが、**バッファの参照カウントも非 atomic**。遅延コピーのまま越えると `Ref` と同じ競合（2 スレッドが同一バッファの count を触る）になるので、**spawn 境界では CoW の遅延を打ち切りバッファを実体化**して各スレッドに独立 count を持たせる（async では遅延のまま＝単一スレッドで安全）。ARC を全面 atomic 化せず軽量 `Ref` を保つための選択（spawn は稀・重い前提）→ [spec/14](../spec/04-execution/14-concurrency.md#cow-値は-spawn-境界で実体化するeager-copy)。
-- ベア `spawn { }` はコピー可能のみ暗黙キャプチャ・`unique` は `spawn fn` の `move` 引数で渡す。`async fn`/`spawn fn` は `-> Promise[T]`/`-> Thread[T]` 明示で `return e` を自動 wrap。
+- ベア `spawn { }` はコピー可能のみ暗黙キャプチャ・`unique` は `spawn fn` の `move` 引数で渡す。`async fn`/`spawn fn` は `-> Promise[T]`/`-> JoinHandle[T]` 明示で `return e` を自動 wrap。`spawn` の戻りハンドルは `JoinHandle[T]`（`join() -> Promise[T]`・名は役割＝「join するハンドル」由来・Rust 同名）。**`join()` は panic を `Result` 包みしない**（panic はプロセス停止＝捕捉対象なし・Rust の `join()->Result` と対照）＝失敗をスレッド単位で扱うなら `spawn fn …-> Result[T,E]` を自分で返す（→ `join():Promise[Result[T,E]]`）。
 - **実装課題**：境界越えの move/copy/Ref 判定（借用は越えない・`local`-free＝spawn 可否）の型検査。
 
 ### エラー → [spec/13](../spec/03-expressions/13-error-handling.md)
