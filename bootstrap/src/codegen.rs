@@ -20,8 +20,16 @@ pub fn emit_c(
     expr_ty: &[Ty],
     table: &TypeTable,
 ) -> Result<String, Vec<String>> {
-    let mut cg =
-        Codegen { ast, items, expr_ty, table, out: String::new(), errors: Vec::new(), tmp: 0 };
+    let mut cg = Codegen {
+        ast,
+        items,
+        expr_ty,
+        table,
+        out: String::new(),
+        errors: Vec::new(),
+        tmp: 0,
+        inout_params: Vec::new(),
+    };
     cg.out.push_str("#include <stdio.h>\n#include <stdint.h>\n#include <stdlib.h>\n\n");
     // stage0 String: immutable view over a (literal) UTF-8 buffer.
     cg.out.push_str("typedef struct { const char* data; int64_t len; } PlewString;\n");
@@ -59,6 +67,9 @@ struct Codegen<'a> {
     errors: Vec<String>,
     /// Counter for generated temporaries (e.g. match scrutinees).
     tmp: u32,
+    /// Names of the current function's `inout` parameters (lowered to C
+    /// pointers; their uses are dereferenced).
+    inout_params: Vec<String>,
 }
 
 impl Codegen<'_> {
@@ -86,15 +97,26 @@ impl Codegen<'_> {
                             }
                             self.out.push_str(&c_type(&p.ty));
                             self.out.push(' ');
+                            // `inout` params are passed by pointer.
+                            if p.mode == crate::ast::Mode::Inout {
+                                self.out.push('*');
+                            }
                             self.out.push_str(&p.label);
                         }
                     }
                     self.out.push_str(") {\n");
                 }
+                // Track inout params so their uses are dereferenced in the body.
+                self.inout_params = params
+                    .iter()
+                    .filter(|p| p.mode == crate::ast::Mode::Inout)
+                    .map(|p| p.label.clone())
+                    .collect();
                 let stmts: Vec<StmtId> = body.stmts.clone();
                 for sid in stmts {
                     self.emit_stmt(sid, is_main);
                 }
+                self.inout_params.clear();
                 if is_main {
                     self.out.push_str("    return 0;\n");
                 }
@@ -746,7 +768,14 @@ impl Codegen<'_> {
             ExprKind::Int(s) => s.replace('_', ""),
             ExprKind::Float(s) => s.replace('_', ""),
             ExprKind::Bool(b) => if *b { "1".into() } else { "0".into() },
-            ExprKind::Ident(s) => s.clone(),
+            ExprKind::Ident(s) => {
+                // An `inout` parameter is a C pointer; dereference its uses.
+                if self.inout_params.iter().any(|p| p == s) {
+                    format!("(*{s})")
+                } else {
+                    s.clone()
+                }
+            }
             ExprKind::Str(s) => {
                 let (lit, len) = c_string_literal(s);
                 format!("((PlewString){{{lit}, {len}}})")
@@ -784,6 +813,7 @@ impl Codegen<'_> {
             }
             ExprKind::Call { callee, args } => {
                 let callee = *callee;
+                let arg_modes: Vec<crate::ast::Mode> = args.iter().map(|a| a.mode).collect();
                 let arg_ids: Vec<ExprId> = args.iter().map(|a| a.value).collect();
                 // Method call `base.method(args)` — stage0 builtin Array methods.
                 if let ExprKind::Field { base, name } = &self.ast.expr(callee).kind {
@@ -794,9 +824,21 @@ impl Codegen<'_> {
                     self.errors.push(format!("method `{name}` is not supported by stage0 codegen"));
                     return "0".into();
                 }
-                // Non-method call: emit positional C call (labels ignored for now).
+                // Non-method call: emit positional C call (labels ignored for
+                // now). An `inout` argument passes the address of its place.
                 let callee_c = self.expr(callee);
-                let parts: Vec<String> = arg_ids.iter().map(|&a| self.expr(a)).collect();
+                let parts: Vec<String> = arg_ids
+                    .iter()
+                    .zip(&arg_modes)
+                    .map(|(&a, &m)| {
+                        let c = self.expr(a);
+                        if m == crate::ast::Mode::Inout {
+                            format!("&({c})")
+                        } else {
+                            c
+                        }
+                    })
+                    .collect();
                 format!("{callee_c}({})", parts.join(", "))
             }
             ExprKind::Field { base, name } => {

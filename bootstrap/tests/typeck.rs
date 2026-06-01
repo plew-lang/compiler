@@ -138,3 +138,27 @@ fn unknown_string_member_is_reported() {
     let e = errs("fn main() {\n    val s: String = \"x\"\n    val n: U64 = s.length\n}");
     assert!(e.iter().any(|m| m.contains("no member")), "errors: {e:?}");
 }
+
+#[test]
+fn inout_argument_must_be_marked() {
+    let e = errs("fn bump(c: inout I64) {\n    c = c + 1\n}\nfn main() {\n    mut val x: I64 = 0\n    bump(c: x)\n}");
+    assert!(e.iter().any(|m| m.contains("`inout`")), "errors: {e:?}");
+}
+
+#[test]
+fn inout_argument_must_be_a_place() {
+    let e = errs("fn bump(c: inout I64) {\n    c = c + 1\n}\nfn main() {\n    bump(c: inout 5)\n}");
+    assert!(e.iter().any(|m| m.contains("mutable place")), "errors: {e:?}");
+}
+
+#[test]
+fn borrow_on_copyable_param_is_an_error() {
+    let e = errs("fn f(x: borrow I64) {\n}\nfn main() {\n}");
+    assert!(e.iter().any(|m| m.contains("copyable")), "errors: {e:?}");
+}
+
+#[test]
+fn inout_roundtrips() {
+    let src = "fn bump(c: inout I64) {\n    c = c + 1\n}\nfn main() {\n    mut val x: I64 = 0\n    bump(c: inout x)\n}";
+    assert!(errs(src).is_empty(), "errors: {:?}", errs(src));
+}

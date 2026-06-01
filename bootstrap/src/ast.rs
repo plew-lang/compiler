@@ -170,11 +170,35 @@ pub enum PatKind {
     },
 }
 
+/// Access mode for a parameter / argument (spec/03). stage0 only acts on
+/// `ByValue` and `Inout`; `Borrow`/`Move` are parsed but rejected (they are an
+/// error on the copyable types stage0 has).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Mode {
+    ByValue,
+    Borrow,
+    Inout,
+    Move,
+}
+
+impl Mode {
+    pub fn keyword(self) -> &'static str {
+        match self {
+            Mode::ByValue => "",
+            Mode::Borrow => "borrow",
+            Mode::Inout => "inout",
+            Mode::Move => "move",
+        }
+    }
+}
+
 /// A call argument. Plew requires labels except where suppressed with `~:`;
 /// that requirement is a later semantic check, so `label` is optional here.
+/// `mode` carries a call-site `inout`/`borrow`/`move` marker (spec/03).
 #[derive(Clone, Debug)]
 pub struct Arg {
     pub label: Option<String>,
+    pub mode: Mode,
     pub value: ExprId,
 }
 
@@ -195,6 +219,8 @@ pub struct Param {
     pub label: String,
     /// `~:` label suppression (positional call site).
     pub suppressed: bool,
+    /// Access mode (`x: inout T` etc.); `ByValue` when no mode word.
+    pub mode: Mode,
     pub ty: Type,
     pub span: Span,
 }
@@ -428,6 +454,10 @@ impl Ast {
                         out.push_str(label);
                         out.push(':');
                     }
+                    if arg.mode != crate::ast::Mode::ByValue {
+                        out.push_str(arg.mode.keyword());
+                        out.push(' ');
+                    }
                     self.write_sexpr(arg.value, out);
                 }
                 out.push(')');
@@ -509,6 +539,10 @@ impl Ast {
                         out.push('~');
                     }
                     out.push(':');
+                    if p.mode != crate::ast::Mode::ByValue {
+                        out.push_str(p.mode.keyword());
+                        out.push(' ');
+                    }
                     self.write_type(&p.ty, out);
                 }
                 out.push(')');

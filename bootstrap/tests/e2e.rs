@@ -176,6 +176,18 @@ fn break_inside_enum_match_targets_the_loop() {
 }
 
 #[test]
+fn builds_and_runs_inout_struct_mutation() {
+    let src = "struct Counter {\n    val n: I64\n}\nfn bump(c: inout Counter, by: I64) {\n    c.n = c.n + by\n}\nfn main() {\n    mut val c: Counter = <Counter n=0 />\n    bump(c: inout c, by: 5)\n    bump(c: inout c, by: 3)\n    print(c.n)\n}\n";
+    assert_eq!(build_and_run(src, "inout_struct"), "8\n");
+}
+
+#[test]
+fn builds_and_runs_inout_array_append() {
+    let src = "fn add(xs: inout Array[I64], v: I64) {\n    xs.append(v)\n}\nfn main() {\n    mut val xs: Array[I64] = [1, 2]\n    add(xs: inout xs, v: 7)\n    add(xs: inout xs, v: 9)\n    print(xs.count)\n    print(xs[3])\n}\n";
+    assert_eq!(build_and_run(src, "inout_array"), "4\n9\n");
+}
+
+#[test]
 fn selfhost_lexer_sketch_builds_and_runs() {
     // The Plew-side lexer sketch (selfhost/lexer.pw) compiled by stage0 must
     // tokenize its hardcoded sample into the expected kind tags. This guards

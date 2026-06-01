@@ -6,8 +6,8 @@
 //! `try`/`await`, and statements/items follow.
 
 use crate::ast::{
-    Arg, Ast, BinOp, Block, ExprId, ExprKind, Field, Item, ItemId, ItemKind, MatchArm, Param, PatId,
-    PatKind, Stmt, StmtKind, Type, UnOp, Variant, Vis,
+    Arg, Ast, BinOp, Block, ExprId, ExprKind, Field, Item, ItemId, ItemKind, MatchArm, Mode, Param,
+    PatId, PatKind, Stmt, StmtKind, Type, UnOp, Variant, Vis,
 };
 use crate::lexer::lex;
 use crate::span::Span;
@@ -302,8 +302,9 @@ impl Parser {
             } else {
                 None
             };
+            let mode = self.parse_mode();
             let value = self.expr_bp(0);
-            args.push(Arg { label, value });
+            args.push(Arg { label, mode, value });
             if matches!(self.peek(), TokenKind::Comma) {
                 self.bump();
             } else {
@@ -538,9 +539,10 @@ impl Parser {
                 self.expect(&TokenKind::Colon, "`:` after the parameter label");
                 false
             };
+            let mode = self.parse_mode();
             let ty = self.ty();
             let span = start.merge(ty.span);
-            out.push(Param { label, suppressed, ty, span });
+            out.push(Param { label, suppressed, mode, ty, span });
             if matches!(self.peek(), TokenKind::Comma) {
                 self.bump();
             } else {
@@ -548,6 +550,18 @@ impl Parser {
             }
         }
         out
+    }
+
+    /// Parse an optional access-mode word (`borrow` / `inout` / `move`).
+    fn parse_mode(&mut self) -> Mode {
+        let m = match self.peek() {
+            TokenKind::Kw(Keyword::Borrow) => Mode::Borrow,
+            TokenKind::Kw(Keyword::Inout) => Mode::Inout,
+            TokenKind::Kw(Keyword::Move) => Mode::Move,
+            _ => return Mode::ByValue,
+        };
+        self.bump();
+        m
     }
 
     fn ty(&mut self) -> Type {

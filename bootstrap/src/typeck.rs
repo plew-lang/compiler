@@ -12,7 +12,8 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::ast::{
-    Ast, BinOp, Block, ExprId, ExprKind, ItemKind, MatchArm, PatId, PatKind, StmtKind, Type, UnOp,
+    Ast, BinOp, Block, ExprId, ExprKind, ItemKind, MatchArm, Mode, PatId, PatKind, StmtKind, Type,
+    UnOp,
 };
 use crate::span::Span;
 
@@ -125,6 +126,8 @@ pub struct CheckResult {
 
 struct FnSig {
     params: Vec<Ty>,
+    /// Access mode of each parameter (`ByValue` or `Inout` in stage0).
+    param_modes: Vec<Mode>,
     ret: Ty,
 }
 
@@ -238,11 +241,27 @@ pub fn check(ast: &Ast, items: &[crate::ast::ItemId]) -> CheckResult {
         if let ItemKind::Fn { name, params, ret, .. } = &ast.item(id).kind {
             let param_tys =
                 params.iter().map(|p| resolve_ty(&p.ty, &types, &mut table, &mut errors)).collect();
+            let param_modes = params
+                .iter()
+                .map(|p| {
+                    if matches!(p.mode, Mode::Borrow | Mode::Move) {
+                        // stage0 only has copyable types; borrow/move are an
+                        // error on those (spec/03). Treat as by-value.
+                        errors.push(TypeError {
+                            span: p.span,
+                            msg: format!("`{}` is not allowed on a copyable type (stage0 has only copyable types; use by-value or `inout`)", p.mode.keyword()),
+                        });
+                        Mode::ByValue
+                    } else {
+                        p.mode
+                    }
+                })
+                .collect();
             let ret_ty = match ret {
                 Some(t) => resolve_ty(t, &types, &mut table, &mut errors),
                 None => Ty::Unit,
             };
-            sigs.insert(name.clone(), FnSig { params: param_tys, ret: ret_ty });
+            sigs.insert(name.clone(), FnSig { params: param_tys, param_modes, ret: ret_ty });
         }
     }
 
@@ -534,7 +553,7 @@ impl Checker<'_> {
             }
             ExprKind::Call { callee, args } => {
                 let callee = *callee;
-                let args: Vec<_> = args.iter().map(|a| a.value).collect();
+                let args: Vec<(Mode, ExprId)> = args.iter().map(|a| (a.mode, a.value)).collect();
                 self.check_call(callee, &args, span)
             }
             ExprKind::If { cond, then_branch, else_branch } => {
@@ -995,12 +1014,13 @@ impl Checker<'_> {
         }
     }
 
-    fn check_call(&mut self, callee: ExprId, args: &[ExprId], span: Span) -> Ty {
+    fn check_call(&mut self, callee: ExprId, args: &[(Mode, ExprId)], span: Span) -> Ty {
         // Method call `base.method(args)`.
         if let ExprKind::Field { base, name } = &self.ast.expr(callee).kind {
             let (base, name) = (*base, name.clone());
             let bt = self.check_expr(base, None);
-            return self.check_method(bt, &name, args, span);
+            let values: Vec<ExprId> = args.iter().map(|&(_, v)| v).collect();
+            return self.check_method(bt, &name, &values, span);
         }
         if let ExprKind::Ident(name) = &self.ast.expr(callee).kind {
             let name = name.clone();
@@ -1013,13 +1033,14 @@ impl Checker<'_> {
                     self.error(span, "`print` takes exactly one argument (stage0)");
                     return Ty::Unit;
                 }
+                let arg = args[0].1;
                 let before = self.errors.len();
-                let mut t = self.check_expr(args[0], None);
+                let mut t = self.check_expr(arg, None);
                 if t == Ty::Error && self.errors.len() > before {
                     // Likely an ambiguous literal: discard those errors and retry
                     // with an I64 expectation. A genuine error reappears.
                     self.errors.truncate(before);
-                    t = self.check_expr(args[0], Some(Ty::I64));
+                    t = self.check_expr(arg, Some(Ty::I64));
                 }
                 if t != Ty::Error && !t.is_numeric() && t != Ty::String {
                     let tn = self.ty_name(t);
@@ -1029,13 +1050,18 @@ impl Checker<'_> {
             }
             if let Some(sig) = self.sigs.get(&name) {
                 let params = sig.params.clone();
+                let param_modes = sig.param_modes.clone();
                 let ret = sig.ret;
                 if args.len() != params.len() {
                     self.error(span, format!("`{name}` expects {} argument(s), found {}", params.len(), args.len()));
                 }
-                for (i, value) in args.iter().enumerate() {
+                for (i, &(arg_mode, value)) in args.iter().enumerate() {
                     let exp = params.get(i).copied();
-                    self.check_expr(*value, exp);
+                    self.check_expr(value, exp);
+                    // `inout` must agree on both sides, and the argument must be
+                    // a mutable place (lvalue).
+                    let pmode = param_modes.get(i).copied().unwrap_or(Mode::ByValue);
+                    self.check_arg_mode(pmode, arg_mode, value, span);
                 }
                 return ret;
             }
@@ -1044,6 +1070,36 @@ impl Checker<'_> {
         }
         self.error(span, "only simple function calls are supported by the stage0 type checker yet");
         Ty::Error
+    }
+
+    /// Validate a call-site access mode against the parameter's mode.
+    fn check_arg_mode(&mut self, pmode: Mode, arg_mode: Mode, value: ExprId, span: Span) {
+        match (pmode, arg_mode) {
+            (Mode::Inout, Mode::Inout) => {
+                if !self.is_place(value) {
+                    self.error(span, "`inout` argument must be a mutable place (a variable or field)");
+                }
+            }
+            (Mode::Inout, _) => {
+                self.error(span, "this parameter is `inout`; pass the argument as `inout` (e.g. `f(x: inout a)`)");
+            }
+            (Mode::ByValue, Mode::Inout) => {
+                self.error(span, "this parameter is by-value; remove the `inout` marker");
+            }
+            (_, Mode::Borrow) | (_, Mode::Move) => {
+                self.error(span, "`borrow`/`move` are not supported by stage0 (copyable types)");
+            }
+            _ => {}
+        }
+    }
+
+    /// Whether `expr` denotes an assignable place (lvalue) — an identifier,
+    /// field access, or index. (stage0 does not yet verify `mut`-ability.)
+    fn is_place(&self, expr: ExprId) -> bool {
+        matches!(
+            self.ast.expr(expr).kind,
+            ExprKind::Ident(_) | ExprKind::Field { .. } | ExprKind::Index { .. }
+        )
     }
 
     /// Check a method call on `recv`. stage0 supports a small set of builtin
