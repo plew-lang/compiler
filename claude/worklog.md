@@ -13,8 +13,9 @@ stage0（Rust）：lexer（タグ `lexer-working`）＋**式パーサ完成**（
 3. 🔨 **Parser**（再帰下降・AST を arena+index で）
    - ✅ 式：literal/ident/unary/binary（優先順位14段・非結合・グルーピング・エラー回復）
    - ✅ postfix：call（ラベル付き引数・末尾カンマ）/field `.`/index `[]`（postfix > prefix を担保）
-   - ⏭ 式の続き：`as`（要・型パーサ）・`try`/`await`・JSX `<T .. />`・closure・match 式・`??`の `?.`
-   - ⏭ 文・宣言（`val`/`fn`/`struct`/`enum`/`impl`/`import` …）
+   - ✅ 文・宣言（最小）：`fn` 宣言（params・`~:`・`-> ret`）・block・`val`/`mut val`・`return`・式文・型（`Array[I32]` 等）
+   - ⏭ 式の続き：`as`（要・型パーサ）・`try`/`await`・JSX `<T .. />`・closure・match 式・`?.`
+   - ⏭ 他宣言：`struct`/`enum`/`impl`/`trait`/`import` …
 4. 名前解決・型解決・trait/オーバーロード解決（stage0 は最小）
 5. **C コード生成** ＋ ARC ランタイム（C）
 6. **stage1**：Plew サブセットでコンパイラを書く → stage0 で compile → 自己 compile＝**セルフホスト達成**

@@ -5,7 +5,10 @@
 //! binary/unary/grouping core exists so far; `as`, postfix (call/field/index),
 //! `try`/`await`, and statements/items follow.
 
-use crate::ast::{Arg, Ast, BinOp, ExprId, ExprKind, UnOp};
+use crate::ast::{
+    Arg, Ast, BinOp, Block, ExprId, ExprKind, Item, ItemId, ItemKind, Param, Stmt, StmtKind, Type,
+    UnOp,
+};
 use crate::lexer::lex;
 use crate::span::Span;
 use crate::token::{Keyword, Token, TokenKind};
@@ -27,6 +30,17 @@ pub fn parse_expr(src: &str) -> (Ast, ExprId, Vec<ParseError>) {
     let root = p.expr_bp(0);
     p.expect_eof();
     (p.ast, root, p.errors)
+}
+
+/// Parse a whole program: a sequence of top-level items.
+pub fn parse_program(src: &str) -> (Ast, Vec<ItemId>, Vec<ParseError>) {
+    let (tokens, lex_errors) = lex(src);
+    let mut p = Parser::new(tokens);
+    for e in lex_errors {
+        p.errors.push(ParseError { msg: e.msg, span: e.span });
+    }
+    let items = p.program();
+    (p.ast, items, p.errors)
 }
 
 /// Associativity of an infix operator.
@@ -277,6 +291,212 @@ impl Parser {
             }
         }
         args
+    }
+
+    // --- items / statements ----------------------------------------------
+
+    fn program(&mut self) -> Vec<ItemId> {
+        let mut items = Vec::new();
+        self.eat_newlines();
+        while !self.at_eof() {
+            match self.item() {
+                Some(item) => items.push(item),
+                None => self.recover_to_newline(),
+            }
+            self.eat_newlines();
+        }
+        items
+    }
+
+    fn item(&mut self) -> Option<ItemId> {
+        match self.peek() {
+            TokenKind::Kw(Keyword::Fn) => Some(self.fn_item()),
+            other => {
+                let span = self.peek_span();
+                self.error(span, format!("expected an item (e.g. `fn`), found {other:?}"));
+                None
+            }
+        }
+    }
+
+    fn fn_item(&mut self) -> ItemId {
+        let start = self.peek_span();
+        self.bump(); // `fn`
+        let name = self.expect_ident("a function name");
+        self.expect(&TokenKind::LParen, "`(` after the function name");
+        let params = self.params();
+        self.expect(&TokenKind::RParen, "`)` after the parameters");
+        let ret = if matches!(self.peek(), TokenKind::Arrow) {
+            self.bump();
+            Some(self.ty())
+        } else {
+            None
+        };
+        let body = self.block();
+        let span = start.merge(body.span);
+        self.ast.alloc_item(Item { kind: ItemKind::Fn { name, params, ret, body }, span })
+    }
+
+    fn params(&mut self) -> Vec<Param> {
+        let mut out = Vec::new();
+        while !matches!(self.peek(), TokenKind::RParen | TokenKind::Eof) {
+            let start = self.peek_span();
+            let label = self.expect_ident("a parameter label");
+            let suppressed = if matches!(self.peek(), TokenKind::TildeColon) {
+                self.bump();
+                true
+            } else {
+                self.expect(&TokenKind::Colon, "`:` after the parameter label");
+                false
+            };
+            let ty = self.ty();
+            let span = start.merge(ty.span);
+            out.push(Param { label, suppressed, ty, span });
+            if matches!(self.peek(), TokenKind::Comma) {
+                self.bump();
+            } else {
+                break;
+            }
+        }
+        out
+    }
+
+    fn ty(&mut self) -> Type {
+        let start = self.peek_span();
+        let name = self.expect_ident("a type name");
+        let mut args = Vec::new();
+        let mut end = start;
+        if matches!(self.peek(), TokenKind::LBracket) {
+            self.bump();
+            while !matches!(self.peek(), TokenKind::RBracket | TokenKind::Eof) {
+                args.push(self.ty());
+                if matches!(self.peek(), TokenKind::Comma) {
+                    self.bump();
+                } else {
+                    break;
+                }
+            }
+            end = self.peek_span();
+            self.expect(&TokenKind::RBracket, "`]` to close the type arguments");
+        }
+        Type { name, args, span: start.merge(end) }
+    }
+
+    fn block(&mut self) -> Block {
+        let start = self.peek_span();
+        if !self.expect(&TokenKind::LBrace, "`{` to start a block") {
+            return Block { stmts: Vec::new(), span: start };
+        }
+        let mut stmts = Vec::new();
+        self.eat_newlines();
+        while !matches!(self.peek(), TokenKind::RBrace | TokenKind::Eof) {
+            stmts.push(self.stmt());
+            match self.peek() {
+                TokenKind::Newline => self.eat_newlines(),
+                TokenKind::RBrace => break,
+                _ => {
+                    let span = self.peek_span();
+                    self.error(span, "expected a newline or `}` after the statement");
+                    self.recover_to_newline();
+                    self.eat_newlines();
+                }
+            }
+        }
+        let end = self.peek_span();
+        self.expect(&TokenKind::RBrace, "`}` to close the block");
+        Block { stmts, span: start.merge(end) }
+    }
+
+    fn stmt(&mut self) -> crate::ast::StmtId {
+        let start = self.peek_span();
+        match self.peek() {
+            TokenKind::Kw(Keyword::Val) => self.let_stmt(false, start),
+            TokenKind::Kw(Keyword::Mut) => {
+                self.bump(); // `mut`
+                if matches!(self.peek(), TokenKind::Kw(Keyword::Val)) {
+                    self.let_stmt(true, start)
+                } else {
+                    let span = self.peek_span();
+                    self.error(span, "expected `val` after `mut`");
+                    let value = self.expr_bp(0);
+                    self.ast.alloc_stmt(Stmt { kind: StmtKind::Expr(value), span: start })
+                }
+            }
+            TokenKind::Kw(Keyword::Return) => {
+                self.bump(); // `return`
+                let value = if matches!(
+                    self.peek(),
+                    TokenKind::Newline | TokenKind::RBrace | TokenKind::Eof
+                ) {
+                    None
+                } else {
+                    Some(self.expr_bp(0))
+                };
+                let span = match value {
+                    Some(e) => start.merge(self.ast.expr(e).span),
+                    None => start,
+                };
+                self.ast.alloc_stmt(Stmt { kind: StmtKind::Return(value), span })
+            }
+            _ => {
+                let value = self.expr_bp(0);
+                let span = start.merge(self.ast.expr(value).span);
+                self.ast.alloc_stmt(Stmt { kind: StmtKind::Expr(value), span })
+            }
+        }
+    }
+
+    /// `val`/`mut val` binding. Cursor is at `val` (after an optional `mut`).
+    fn let_stmt(&mut self, mutable: bool, start: Span) -> crate::ast::StmtId {
+        self.bump(); // `val`
+        let name = self.expect_ident("a variable name");
+        let ty = if matches!(self.peek(), TokenKind::Colon) {
+            self.bump();
+            Some(self.ty())
+        } else {
+            None
+        };
+        self.expect(&TokenKind::Eq, "`=` in a binding");
+        let value = self.expr_bp(0);
+        let span = start.merge(self.ast.expr(value).span);
+        self.ast.alloc_stmt(Stmt { kind: StmtKind::Let { mutable, name, ty, value }, span })
+    }
+
+    // --- small helpers ----------------------------------------------------
+
+    fn eat_newlines(&mut self) {
+        while matches!(self.peek(), TokenKind::Newline) {
+            self.bump();
+        }
+    }
+
+    fn recover_to_newline(&mut self) {
+        while !matches!(self.peek(), TokenKind::Newline | TokenKind::Eof) {
+            self.bump();
+        }
+    }
+
+    fn expect_ident(&mut self, ctx: &str) -> String {
+        if let TokenKind::Ident(s) = self.peek().clone() {
+            self.bump();
+            s
+        } else {
+            let span = self.peek_span();
+            self.error(span, format!("expected {ctx}"));
+            String::new()
+        }
+    }
+
+    /// Consume a token equal to `want`, or record an error. Returns success.
+    fn expect(&mut self, want: &TokenKind, ctx: &str) -> bool {
+        if self.peek() == want {
+            self.bump();
+            true
+        } else {
+            let span = self.peek_span();
+            self.error(span, format!("expected {ctx}"));
+            false
+        }
     }
 
     fn primary(&mut self) -> ExprId {

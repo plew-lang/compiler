@@ -1,13 +1,20 @@
 //! Expression parser tests. We parse a snippet and assert on the S-expression
 //! dump of the resulting tree, which makes precedence/associativity explicit.
 
-use plewc::parser::parse_expr;
+use plewc::parser::{parse_expr, parse_program};
 
 /// Parse `src`, assert there are no errors, return the S-expr dump.
 fn sexpr(src: &str) -> String {
     let (ast, root, errs) = parse_expr(src);
     assert!(errs.is_empty(), "unexpected parse errors for {src:?}: {errs:?}");
     ast.dump(root)
+}
+
+/// Parse a whole program, assert no errors, return items dumped (one per line).
+fn prog(src: &str) -> String {
+    let (ast, items, errs) = parse_program(src);
+    assert!(errs.is_empty(), "unexpected parse errors for {src:?}: {errs:?}");
+    items.iter().map(|&i| ast.dump_item(i)).collect::<Vec<_>>().join("\n")
 }
 
 /// Parse `src` expecting at least one error; return the error messages.
@@ -117,6 +124,49 @@ fn postfix_binds_tighter_than_prefix_and_operators() {
     assert_eq!(sexpr("a.b * c"), "(* (. a b) c)");
     // call result indexed then added
     assert_eq!(sexpr("f(x)[0] + 1"), "(+ ([] (call f x) 0) 1)");
+}
+
+#[test]
+fn minimal_fn_and_call() {
+    assert_eq!(
+        prog("fn main() {\n    print(40 + 2)\n}"),
+        "(fn main () (block (call print (+ 40 2))))"
+    );
+    assert_eq!(prog("fn main() {}"), "(fn main () (block))");
+}
+
+#[test]
+fn statements_in_block() {
+    let src = "fn main() {\n    val x = 1 + 2\n    mut val y = x\n    print(y)\n    return\n}";
+    assert_eq!(
+        prog(src),
+        "(fn main () (block (val x (+ 1 2)) (mutval y x) (call print y) (return)))"
+    );
+}
+
+#[test]
+fn params_return_and_generic_types() {
+    assert_eq!(
+        prog("fn add(a: I32, b: I32) -> I32 {\n    return a + b\n}"),
+        "(fn add (a:I32 b:I32) -> I32 (block (return (+ a b))))"
+    );
+    // generic type in a parameter, and a suppressed label
+    assert_eq!(
+        prog("fn f(xs: Array[I32], text~: String) {\n    return\n}"),
+        "(fn f (xs:Array[I32] text~:String) (block (return)))"
+    );
+    assert_eq!(
+        prog("fn g(d: Dictionary[String, I32]) {}"),
+        "(fn g (d:Dictionary[String, I32]) (block))"
+    );
+}
+
+#[test]
+fn return_with_value_on_same_line() {
+    assert_eq!(
+        prog("fn two() -> I32 {\n    return 2\n}"),
+        "(fn two () -> I32 (block (return 2)))"
+    );
 }
 
 #[test]

@@ -13,9 +13,17 @@ use crate::span::Span;
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct ExprId(pub u32);
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub struct StmtId(pub u32);
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub struct ItemId(pub u32);
+
 #[derive(Clone, Debug, Default)]
 pub struct Ast {
     exprs: Vec<Expr>,
+    stmts: Vec<Stmt>,
+    items: Vec<Item>,
 }
 
 impl Ast {
@@ -35,6 +43,26 @@ impl Ast {
 
     pub fn expr_count(&self) -> usize {
         self.exprs.len()
+    }
+
+    pub fn alloc_stmt(&mut self, stmt: Stmt) -> StmtId {
+        let id = StmtId(self.stmts.len() as u32);
+        self.stmts.push(stmt);
+        id
+    }
+
+    pub fn stmt(&self, id: StmtId) -> &Stmt {
+        &self.stmts[id.0 as usize]
+    }
+
+    pub fn alloc_item(&mut self, item: Item) -> ItemId {
+        let id = ItemId(self.items.len() as u32);
+        self.items.push(item);
+        id
+    }
+
+    pub fn item(&self, id: ItemId) -> &Item {
+        &self.items[id.0 as usize]
     }
 }
 
@@ -73,6 +101,71 @@ pub enum ExprKind {
 pub struct Arg {
     pub label: Option<String>,
     pub value: ExprId,
+}
+
+// --- types, statements, items -------------------------------------------
+
+/// A type reference, e.g. `I32`, `Array[I32]`, `Dictionary[String, I32]`.
+/// (Function types, `any P`, etc. are added later.)
+#[derive(Clone, Debug)]
+pub struct Type {
+    pub name: String,
+    pub args: Vec<Type>,
+    pub span: Span,
+}
+
+/// A function parameter `label: Type` (or `label~: Type` to suppress the label).
+#[derive(Clone, Debug)]
+pub struct Param {
+    pub label: String,
+    /// `~:` label suppression (positional call site).
+    pub suppressed: bool,
+    pub ty: Type,
+    pub span: Span,
+}
+
+/// A `{ ... }` block: newline-separated statements.
+#[derive(Clone, Debug)]
+pub struct Block {
+    pub stmts: Vec<StmtId>,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct Stmt {
+    pub kind: StmtKind,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub enum StmtKind {
+    /// `val name = expr` / `mut val name = expr`, with optional type annotation.
+    Let {
+        mutable: bool,
+        name: String,
+        ty: Option<Type>,
+        value: ExprId,
+    },
+    /// `return expr?`
+    Return(Option<ExprId>),
+    /// An expression used as a statement.
+    Expr(ExprId),
+}
+
+#[derive(Clone, Debug)]
+pub struct Item {
+    pub kind: ItemKind,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub enum ItemKind {
+    Fn {
+        name: String,
+        params: Vec<Param>,
+        ret: Option<Type>,
+        body: Block,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -208,6 +301,88 @@ impl Ast {
                 out.push(')');
             }
             ExprKind::Error => out.push_str("<error>"),
+        }
+    }
+
+    /// Render an item as an S-expression (for tests).
+    pub fn dump_item(&self, id: ItemId) -> String {
+        let mut out = String::new();
+        self.write_item(id, &mut out);
+        out
+    }
+
+    fn write_item(&self, id: ItemId, out: &mut String) {
+        match &self.item(id).kind {
+            ItemKind::Fn { name, params, ret, body } => {
+                out.push_str("(fn ");
+                out.push_str(name);
+                out.push_str(" (");
+                for (i, p) in params.iter().enumerate() {
+                    if i > 0 {
+                        out.push(' ');
+                    }
+                    out.push_str(&p.label);
+                    if p.suppressed {
+                        out.push('~');
+                    }
+                    out.push(':');
+                    self.write_type(&p.ty, out);
+                }
+                out.push(')');
+                if let Some(ret) = ret {
+                    out.push_str(" -> ");
+                    self.write_type(ret, out);
+                }
+                out.push(' ');
+                self.write_block(body, out);
+                out.push(')');
+            }
+        }
+    }
+
+    fn write_type(&self, ty: &Type, out: &mut String) {
+        out.push_str(&ty.name);
+        if !ty.args.is_empty() {
+            out.push('[');
+            for (i, a) in ty.args.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                self.write_type(a, out);
+            }
+            out.push(']');
+        }
+    }
+
+    fn write_block(&self, block: &Block, out: &mut String) {
+        out.push_str("(block");
+        for &sid in &block.stmts {
+            out.push(' ');
+            self.write_stmt(sid, out);
+        }
+        out.push(')');
+    }
+
+    fn write_stmt(&self, id: StmtId, out: &mut String) {
+        match &self.stmt(id).kind {
+            StmtKind::Let { mutable, name, ty, value } => {
+                out.push_str(if *mutable { "(mutval " } else { "(val " });
+                out.push_str(name);
+                if let Some(ty) = ty {
+                    out.push(':');
+                    self.write_type(ty, out);
+                }
+                out.push(' ');
+                self.write_sexpr(*value, out);
+                out.push(')');
+            }
+            StmtKind::Return(Some(e)) => {
+                out.push_str("(return ");
+                self.write_sexpr(*e, out);
+                out.push(')');
+            }
+            StmtKind::Return(None) => out.push_str("(return)"),
+            StmtKind::Expr(e) => self.write_sexpr(*e, out),
         }
     }
 }
