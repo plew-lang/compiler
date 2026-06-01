@@ -4,13 +4,16 @@
 
 ## 現在地（一言）
 
-stage0（Rust）の **lexer が完成・全テスト green**。次は **パーサ**（再帰下降）に着手する。
+stage0（Rust）：lexer（タグ `lexer-working`）＋**式パーサ完成**（タグ `parser-first-expr` 予定）。AST は arena+index、優先順位14段を precedence climbing で実装。次は**式の続き（postfix: 呼び出し/フィールド/添字、`as`、`try`/`await`）→ 文・宣言**。
 
 ## 全体ロードマップ（第一目標＝Plew でコンパイラが書ける → 即セルフホスト）
 
 1. ✅ プロジェクト立ち上げ（C#/ANTLR/LLVMSharp と g4 を破棄 → Rust `bootstrap/`、lib+bin、cargo）
 2. ✅ **Lexer**（手書き・token 列・span・コメント・数値/文字列/演算子の maximal munch）＋テスト
-3. ⏭ **Parser**（再帰下降・AST を arena+index で）… ← 次はここ
+3. 🔨 **Parser**（再帰下降・AST を arena+index で）
+   - ✅ 式：literal/ident/unary/binary（優先順位14段・非結合・グルーピング・エラー回復）
+   - ⏭ 式の続き：postfix（call/field/index）・`as`・`try`/`await`・JSX `<T .. />`・closure・match 式
+   - ⏭ 文・宣言（`val`/`fn`/`struct`/`enum`/`impl`/`import` …）
 4. 名前解決・型解決・trait/オーバーロード解決（stage0 は最小）
 5. **C コード生成** ＋ ARC ランタイム（C）
 6. **stage1**：Plew サブセットでコンパイラを書く → stage0 で compile → 自己 compile＝**セルフホスト達成**
