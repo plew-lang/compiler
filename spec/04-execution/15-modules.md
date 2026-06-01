@@ -60,7 +60,7 @@ fn main() -> Result[(), AppError] {   // Result を返すと main 内で try が
 
 - **`async` は任意**：`fn main` と `async fn main` の両方が valid。実行モデルは常にイベントループなので、同期 `main` は await ゼロの特殊ケース（[同期プログラムは無税](#トップレベル-await-と並行初期化)）。
 - **戻り値は `()` か `Result[(), E]`**。`Result` を返すと **`main` 内で [`try`](../03-expressions/13-error-handling.md) が使え**、`Err` のときランタイムが**エラーを表示して非ゼロ終了**します（`Termination` 相当の lang トレイト経由）。明示的な終了コードは標準ライブラリの `Process.exit(code:)`（発散）。
-- **引数・環境は `main` の仮引数では受け取らず、標準ライブラリ経由**で取ります（`import Process` して `Process.args() -> Array[String]`／`Process.env` 等）。`print`/`Random` と同じく「ambient なプロセス能力を import 越しに明示取得」する形に揃え、出どころを可視に保つ（`main` のシグネチャを単一にし、ランタイムが複数 main 形を魔法認識しなくて済む）。`Process` は lang item ではないので import が要る。
+- **引数・環境は `main` の仮引数では受け取らず、標準ライブラリ経由**で取ります（`import @Std/Process` して `Process.args() -> Array[String]`／`Process.env` 等）。`print`/`Random` と同じく「ambient なプロセス能力を import 越しに明示取得」する形に揃え、出どころを可視に保つ（`main` のシグネチャを単一にし、ランタイムが複数 main 形を魔法認識しなくて済む）。`Process` は lang item ではないので import が要る。
 - **ランタイムの寿命**：`main` が返り、**かつイベントループが drain した**（保留タスク・タイマ・登録リスナ・未 join の [`spawn`](14-concurrency.md) スレッドがいずれも無い）ときにプロセスは終了します（Node/ブラウザと同じ）。よって UI アプリの `main` は「DOM にマウントして return」でよく、イベント待ちでループが生き続けます。CLI は仕事して return → ループ空 → 終了。サーバは listen して return → 接続待ちで生存。
 - **`main` は実行可能ビルドのときだけ必須**。ライブラリ（他パッケージや JS から呼ぶ WASM）には `main` は不要で、export 面だけを晒します（→ [エクスポート](#エクスポート)）。
 
@@ -81,26 +81,35 @@ fn main() -> Result[(), AppError] {   // Result を返すと main 内で try が
 
 > なぜ型だけで足りるか：**使う側（use site）はディスパッチが型に対して起きるのでトレイト名を解決せず**、**名指す側（definition site）はジェネリック/impl を書く文脈なので `import` が自然**。よって「ambient ＝ 型のみ・トレイトは脱糖表＋名指し時 `import`」で sharp に閉じます。`From` が脱糖表にあるのに `import` で名指すのと、`TryFrom`（構文非参照）が普通の `import` なのは、ともに「名前空間に居るか」と「脱糖表に居るか」が独立だからです。
 
-**固定された小さな一覧**で、**ここに無いものはすべて通常のライブラリ＝明示 `import` が要ります**（`Random`・`Set`・`print` など。`Set` はリテラルを持たず辞書 `Dictionary` と対照的で、構文が参照しない＝言語アイテムではない）。判定基準は「構文が参照するか」で sharp です。
+**固定された小さな一覧**で、**ここに無いものはすべて通常のライブラリ＝明示 `import` が要ります**（`Random`・`Set`・`print` などは `@Std/…` から import。`Set` はリテラルを持たず辞書 `Dictionary` と対照的で、構文が参照しない＝言語アイテムではない）。判定基準は「構文が参照するか」で sharp です。
 
 > 言語アイテムは**言語が提供する唯一の ambient な名前**で、キーワードと同じくユーザーがこれに足したり別の ambient を作ったりはできません（自前定義は必ずモジュールスコープ）。出どころは「ローカル束縛 → ファイルの `import` → 言語アイテム」で常に辿れ、言語アイテム名はローカル再宣言（[shadowing](../01-basics/03-values.md#再宣言shadowing)）で覆えます。
 
 ## インポート
 
-```plew
-import @ExternalPackage               // 外部パッケージ
-import ./LocalModule                 // ローカルモジュール
-import ../ParentModule as Parent     // エイリアス付きインポート
-import SomeModule with { Type1, function1 as func1 }  // 選択的インポート
+import のルートは **2 つだけ**で、**先頭の記号が出どころを表します**。bare 名（`import Foo`）は不可 ── 相対なのか外部なのか std なのかが記号で判らなくなるため、すべての import は `@` か `./`／`../` で始まります。
 
-// パス表現
-import ../../../Utils    // 相対パス
-import ./Src/Components  // 相対パス
+| 記号 | 出どころ | 例 |
+|---|---|---|
+| `@…` | **自分の外**（標準ライブラリ or 外部依存） | `import @Std/Testing`, `import @Json` |
+| `./` `../` | **自前**（このプロジェクトの相対パス） | `import ./Models/User`, `import ../Utils` |
+
+`@` の直後の名前で std と外部を見分けます ── **`@Std` は標準ライブラリの予約名**（マニフェスト束縛不要・常に利用可）で、それ以外の `@Name` はマニフェストで束縛した外部依存（→ [パッケージ](#パッケージ)）。`@` を「自分の外」、`./` を「自前」と読めば、行頭だけで provenance が確定します。
+
+```plew
+import @Std/Http                          // 標準ライブラリ（@Std は予約）
+import @Json                              // 外部依存（マニフェストで束縛）
+import @Json/Encode                       // 外部依存のサブモジュール
+import ./LocalModule                      // ローカルモジュール
+import ../ParentModule as Parent          // エイリアス付き
+import ./Models with { User as Account }  // 選択的インポート
 ```
+
+**サブパスは任意の深さ**で書けます（`@Std/Http/Server`・`@Dep/Foo/Bar`・`./Src/Components`）。`@…` でどのサブモジュールに到達できるかは**パッケージが公開宣言したものに限ります**（→ [公開モジュールと外部到達](#公開モジュールと外部到達)）。`@…` と `./` は解決規則が同一で、ディレクトリは `_.pw`（ルート）・サブパスは `/`（→ [ディレクトリパスの解決](#ディレクトリパスの解決_pw)）。
 
 ### 束縛のされ方
 
-- `import ./Foo` — モジュールを**名前空間 `Foo`** として束縛し、`Foo.Bar` でアクセス。
+- `import ./Foo` — モジュールを**名前空間 `Foo`**（パスの末尾要素）として束縛し、`Foo.Bar` でアクセス。`import @Std/Http` なら名前空間は `Http`。
 - `import ./Foo as F` — 名前空間を `F` に。
 - `import ./Foo with { Bar, Baz as Q }` — 選択したものを**フラットに**現スコープへ（`as` で別名可）。
 - `import ./Foo with *` — 公開物を**全てフラットに**取り込む。
@@ -221,12 +230,28 @@ import @Utils
 
 - ローカル名は消費側が決めるので、**上流パッケージの名前衝突はローカル名で解決**できる（同名の依存に別ローカル名を振る）。
 - 推移依存で同一パッケージの複数バージョンが現れた場合は **共存を許す方針**（依存解決の詳細は別途）。
+- **`@Std` は予約名**で、標準ライブラリを指します。ローカル名に `Std` は使えず、マニフェストへの記述なしに常に `import @Std/…` できます（言語が公開集合を宣言済みのパッケージ＝唯一マニフェスト束縛不要の `@`）。
 
-### 公開エントリと外部到達
+### 公開モジュールと外部到達
 
-- `import @Foo` は Foo パッケージの**公開エントリ**に解決される。デフォルトは **`src/_.pw`**、マニフェストで上書き可。
-- 外部からは**エントリの公開物だけ**が見える（エントリが再エクスポートで組んだ公開面）。内部ファイルへの直接到達（`@Foo/Internal` 等）はできない（カプセル化）。
-- ソースは `lib/` と `bin/` のような分割をせず、すべて `src/` に置く。
+パッケージは**どのモジュールを外部に公開するか**をマニフェストの `public` で宣言します。**公開パスは実ファイルに一致**し（別名を付けない＝`@A/Http` ↔ パッケージ内 `Http.pw`）、宣言したものだけが外部から `import` できます。ソースは `lib/`・`bin/` のような分割をせず、すべて `src/` に置き、`public` のパスは `src/` 起点です。
+
+```toml
+name = "A"
+public = ["_", "Http", "Json"]   # 実パス。_ はルート（src/_.pw）。既定は ["_"]
+```
+
+```plew
+import @A           // ✅ ルート（src/_.pw）
+import @A/Http      // ✅ public 宣言あり ↔ src/Http.pw（or src/Http/_.pw）
+import @A/Internal  // ❌ public に無い＝内部実装（到達不可）
+```
+
+- **`_` はルートモジュール**（`src/_.pw`）。`public` の**既定値は `["_"]`** ── 単一モジュールパッケージは `public` を書かずに `import @A` だけで使えます（ceremony ゼロ・`@A/A` のような Dart 流の名前重複は起きない）。
+- **`public = []` で何も公開しない**（内部／ツール専用パッケージ・封印）。`public = ["Http"]` なら**サブのみ公開**してルートを玄関にしない、も可。
+- **公開パスは実ファイル**（rename しない）。「公開ファイルを動かす＝公開 API を変える」を正直に出す Go 流の割り切り。リファクタ安定のための別名公開（Node の `exports` 流）は将来 additive。
+- **任意深さ可**：`public = ["Http/Server"]` で `@A/Http/Server` を公開。`public = ["Api/"]` のディレクトリ糖衣で subtree 一括公開できる（**既定は非公開**＝列挙外は内部実装）。
+- **ローカル `./` とパッケージ `@…` は解決規則が同一**（`_.pw`＝ルート・`/`＝サブ）。違いは「サブモジュールは `public` ゲートを通る」点だけ ── 所有境界での encapsulation を 1 段足したもの（ファイル→モジュールは [`part`](#part--モジュールの分割)、モジュール→モジュールは [`export`](#エクスポート)、プロジェクト→パッケージは `public`）。
 
 ### ビルド
 
@@ -238,6 +263,63 @@ plew build ./src/server.pw    # 別エントリ＝別ターゲット（例：nat
 ```
 
 これにより**モノレポで複数エントリ**（クライアント／サーバ）が同じモデルモジュールを共有しつつ別々にビルドできます。`main` を持たないファイルはライブラリとしてビルドされ、`main` は不要です。
+
+## テスト
+
+テストは **`test` ブロック**で書きます。**関数ではありません** ── テストはプログラムとしての意味（戻り値・レシーバ）を持たず「走らせて検査する」だけなので、`fn` ではなく専用ブロックにします（Zig/D 流）。`test` は実行時の意味を持たない**宣言修飾的な語**で、`export`（リンケージを変えるが実行時意味ゼロ）と同類です。
+
+```plew
+test "parses an empty header" {
+    val r = parse_header(input~: "")
+    expect_eq(expected: <Header empty=true />, actual: r)
+}
+```
+
+### 配置（モジュール直下／無名 impl 内）
+
+`test` ブロックは**コンテナスコープの宣言**で、置ける場所は 2 つ。**テストに特権的な可視性は無く**、通常コードと同じ規則で「見たいものが見える位置」に置きます：
+
+- **モジュール直下** ── 非 `export`（モジュール私的）の自由関数や公開 API を試験。
+- **無名 `impl` の中** ── その型の**非 [`pub`](../02-type-system/05-structs-enums.md#メンバの可視性) メンバ**を白箱で試験（無名 impl だから非 pub が見える）。
+
+`fn` の本体内には書けません。型の private を本体ファイルと分けて試験したいときは [`part`](#part--モジュールの分割) で**同一モジュールの別ファイル**に無名 impl を置けます（同一モジュールなので非 pub が見える）。
+
+```plew
+struct Parser { … }
+
+impl Parser {
+    test "backtracks on EOF" {
+        val p = <Parser source="" />
+        expect_eq(expected: 0, actual: p.cursor)   // cursor が非 pub でも無名 impl 内なら見える
+    }
+}
+```
+
+### 発見と実行
+
+- **発見はコンパイル対象に含まれる `test` ブロックの無条件全収集**。参照ベース（Zig の `refAllDecls` 流）にはせず、「**書いたテストは必ず走る**」を保証します（参照漏れで静かにスキップされる trap を避ける）。
+- **production ビルドからは `test` ブロックごとリンク除外**。通常コードは test／production で 1 バイトも変わりません（Rust の `cfg(test)` のように通常コードを差し替えるビルドモードは持たない＝意味論を変えるビルドは無い・変えるのはエントリ／リンク対象だけ）。
+- テストの失敗は**そのテストを失敗扱いにしてランナーは残りを続行**します（`assert` の [`panic`](../03-expressions/11-control-flow.md#panic-と発散)＝プロセス停止とは別の失敗チャネル。正確な機構はランナー設計の課題）。
+
+### アサーション（`@Std/Testing`）
+
+テスト用の表明は `@Std/Testing` から import する小さな関数族で、**実行時の [`assert`](../03-expressions/11-control-flow.md#assert--条件付き-panic) とは別物**です（`assert`＝本番コードの不変条件・panic／`expect_*`＝テストの検査・ランナー続行）。
+
+```plew
+import @Std/Testing with { expect, expect_eq, expect_ne, expect_approx }
+```
+
+| 関数 | 検査 |
+|---|---|
+| `expect(ok: Bool)` | 真偽値 |
+| `expect_eq(expected:, actual:)` | 等価（`==`） |
+| `expect_ne(expected:, actual:)` | 非等価 |
+| `expect_approx(expected:, actual:, tolerance:)` | 浮動小数の許容誤差内（NaN 比較は panic・厳密比較が脆いため固有理由あり） |
+
+- **`expected:`/`actual:` はラベル必須**（[ラベルは宣言順固定](../01-basics/04-functions.md#引数ラベル)）。`assertEquals(expected, actual)` の引数逆転 footgun を、ラベル明示で防ぎます（値を取り違えると `expected: <計算結果>` という不自然な記述になり目に見える）。失敗診断は expected／actual の値を表示。
+- **power-assert は採らない**。`assert(a == b)` の式を内省して両辺を表示する方式（pytest／Spock／Swift Testing）は診断が無料な一方「どの式まで分解されるか」が暗黙になるため、**対応範囲が関数リストで明示される** expect 族を選ぶ。
+- **`expect_error` は無い**。特定エラー値は `expect_eq(expected: <Result.Error … />, actual: r)`、ペイロード無視の「エラーか」は `expect(r.is_error)`、中身検査は [`match`](../03-expressions/11-control-flow.md#パターンマッチング) ── Plew は `==` を持つ値型エラーなので Zig の `expectError` 相当は畳まれる。
+- **バリアントの「ケースのみ判定」は関数にできない**（Plew に第一級のバリアントタグは無く、ケース判別は常に `match` の領域）。Result／Optional は `is_ok`/`is_error`/`is_some`/`is_none` で bool 化でき `expect(…)` に乗る。パターンを取る `expect_matches` は将来 additive。
 
 ## 外部コード統合
 
