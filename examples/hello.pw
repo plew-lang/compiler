@@ -1,6 +1,11 @@
+// 注（stage0 の暫定）:
+//   - 本来 `print` は ambient ではなく **import 必須**（lang item は型のみ・stdlib は明示 import）。
+//     正しくは `import @Std/...` で取り込む（正確なパスは stdlib 設計時に確定）。
+//   - 本来のシグネチャは `print[T](~value: T) where T: Format`（Format 準拠なら何でも）。
+//   stage0 では import 機構・トレイト・String が未実装のため、print を数値専用の
+//   暫定組み込み（printf 直結）として扱っている。stdlib 整備時に置換する。
 fn main() {
     // 型注釈でリテラル型を確定（spec: 数値リテラルは既定型なし・文脈で一意）。
-    // 注: stage0 はまだ型検査が無く、print(<int>) も暫定の組み込み。
     val answer: I64 = 6 * 7
     print(answer)
 }

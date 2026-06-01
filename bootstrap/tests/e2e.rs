@@ -50,6 +50,12 @@ fn builds_and_runs_sum_loop() {
 }
 
 #[test]
+fn builds_and_runs_struct() {
+    let src = "struct Point {\n    val x: I64\n    val y: I64\n}\nfn main() {\n    val p: Point = <Point x=3 y=4 />\n    print(p.x + p.y)\n}\n";
+    assert_eq!(build_and_run(src, "struct"), "7\n");
+}
+
+#[test]
 fn reports_unsupported_construct() {
     // `??` has no stage0 C lowering yet → a codegen error, not a panic.
     let errs = compile_to_c("fn main() {\n    print(a ?? b)\n}\n").unwrap_err();

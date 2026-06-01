@@ -5,7 +5,7 @@
 //! to prove the whole spine — source → C → clang → run — end to end. Real type
 //! lowering, the ARC runtime, strings, etc. replace it incrementally.
 
-use crate::ast::{Ast, BinOp, ExprId, ExprKind, ItemId, ItemKind, StmtId, StmtKind, UnOp};
+use crate::ast::{Ast, BinOp, ExprId, ExprKind, ItemId, ItemKind, StmtId, StmtKind, Type, UnOp};
 
 /// Generate a complete C translation unit for `items`, or a list of
 /// "unsupported construct" errors if the program uses features the skeleton
@@ -13,6 +13,12 @@ use crate::ast::{Ast, BinOp, ExprId, ExprKind, ItemId, ItemKind, StmtId, StmtKin
 pub fn emit_c(ast: &Ast, items: &[ItemId]) -> Result<String, Vec<String>> {
     let mut cg = Codegen { ast, out: String::new(), errors: Vec::new() };
     cg.out.push_str("#include <stdio.h>\n#include <stdint.h>\n\n");
+    // struct typedefs first (C needs types declared before use)
+    for &id in items {
+        if matches!(ast.item(id).kind, ItemKind::Struct { .. }) {
+            cg.emit_struct(id);
+        }
+    }
     for &id in items {
         cg.emit_item(id);
     }
@@ -32,13 +38,17 @@ struct Codegen<'a> {
 impl Codegen<'_> {
     fn emit_item(&mut self, id: ItemId) {
         match &self.ast.item(id).kind {
-            ItemKind::Fn { name, params, ret: _, body } => {
+            ItemKind::Fn { name, params, ret, body } => {
                 let is_main = name == "main";
                 if is_main {
                     self.out.push_str("int main(void) {\n");
                 } else {
-                    // Skeleton: user functions take/return int64_t, labels ignored.
-                    self.out.push_str("int64_t ");
+                    let rty = match ret {
+                        Some(t) => c_type(t),
+                        None => "void".to_string(),
+                    };
+                    self.out.push_str(&rty);
+                    self.out.push(' ');
                     self.out.push_str(name);
                     self.out.push('(');
                     if params.is_empty() {
@@ -48,7 +58,8 @@ impl Codegen<'_> {
                             if i > 0 {
                                 self.out.push_str(", ");
                             }
-                            self.out.push_str("int64_t ");
+                            self.out.push_str(&c_type(&p.ty));
+                            self.out.push(' ');
                             self.out.push_str(&p.label);
                         }
                     }
@@ -63,19 +74,39 @@ impl Codegen<'_> {
                 }
                 self.out.push_str("}\n\n");
             }
-            ItemKind::Struct { .. } | ItemKind::Enum { .. } => {
-                self.errors
-                    .push("struct / enum codegen is not supported by stage0 yet".into());
+            ItemKind::Struct { .. } => {} // emitted in the typedef pass
+            ItemKind::Enum { .. } => {
+                self.errors.push("enum codegen is not supported by stage0 yet".into());
             }
         }
     }
 
+    fn emit_struct(&mut self, id: ItemId) {
+        let ItemKind::Struct { name, fields, generics } = &self.ast.item(id).kind else {
+            return;
+        };
+        if !generics.is_empty() {
+            self.errors.push("generic struct codegen is not supported by stage0 yet".into());
+            return;
+        }
+        let name = name.clone();
+        let fields: Vec<(String, Type)> =
+            fields.iter().map(|f| (f.name.clone(), f.ty.clone())).collect();
+        self.out.push_str("typedef struct {\n");
+        for (fname, fty) in &fields {
+            let cty = c_type(fty);
+            self.out.push_str(&format!("    {cty} {fname};\n"));
+        }
+        self.out.push_str(&format!("}} {name};\n\n"));
+    }
+
     fn emit_stmt(&mut self, id: StmtId, in_main: bool) {
         match &self.ast.stmt(id).kind {
-            StmtKind::Let { name, value, .. } => {
+            StmtKind::Let { name, ty, value, .. } => {
                 let name = name.clone();
+                let cty = ty.as_ref().map(c_type).unwrap_or_else(|| "int64_t".to_string());
                 let v = self.expr(*value);
-                self.out.push_str(&format!("    int64_t {name} = {v};\n"));
+                self.out.push_str(&format!("    {cty} {name} = {v};\n"));
             }
             StmtKind::Return(value) => match value {
                 None => {
@@ -253,10 +284,32 @@ impl Codegen<'_> {
                 let parts: Vec<String> = arg_ids.iter().map(|&a| self.expr(a)).collect();
                 format!("{callee_c}({})", parts.join(", "))
             }
-            ExprKind::Field { .. } | ExprKind::Index { .. } => {
-                self.errors
-                    .push("field access / indexing is not supported by stage0 codegen yet".into());
+            ExprKind::Field { base, name } => {
+                let base = *base;
+                let name = name.clone();
+                let b = self.expr(base);
+                format!("{b}.{name}")
+            }
+            ExprKind::Index { .. } => {
+                self.errors.push("indexing is not supported by stage0 codegen yet".into());
                 "0".into()
+            }
+            ExprKind::New { path, fields } => {
+                let path = path.clone();
+                let field_list: Vec<(String, ExprId)> =
+                    fields.iter().map(|(n, v)| (n.clone(), *v)).collect();
+                if path.len() == 1 {
+                    let mut parts = Vec::new();
+                    for (n, v) in &field_list {
+                        let cv = self.expr(*v);
+                        parts.push(format!(".{n} = {cv}"));
+                    }
+                    format!("(({}){{{}}})", path[0], parts.join(", "))
+                } else {
+                    self.errors
+                        .push("enum-variant construction is not supported by stage0 codegen yet".into());
+                    "0".into()
+                }
             }
             ExprKind::If { .. } | ExprKind::Block(_) | ExprKind::While { .. } => {
                 self.errors.push(
@@ -265,17 +318,32 @@ impl Codegen<'_> {
                 );
                 "0".into()
             }
-            ExprKind::New { .. } => {
-                self.errors
-                    .push("construction `<...>` is not supported by stage0 codegen yet".into());
-                "0".into()
-            }
             ExprKind::Error => {
                 self.errors.push("cannot generate code from a parse error".into());
                 "0".into()
             }
         }
     }
+}
+
+/// Map a Plew type to its C spelling. Primitives map to fixed-width C types;
+/// any other name is assumed to be a declared struct (its typedef name).
+fn c_type(t: &Type) -> String {
+    match t.name.as_str() {
+        "I8" => "int8_t",
+        "I16" => "int16_t",
+        "I32" => "int32_t",
+        "I64" => "int64_t",
+        "U8" => "uint8_t",
+        "U16" => "uint16_t",
+        "U32" => "uint32_t",
+        "U64" => "uint64_t",
+        "F32" => "float",
+        "F64" => "double",
+        "Bool" => "int",
+        other => other,
+    }
+    .to_string()
 }
 
 /// Map a binary operator to its C spelling, or `None` if stage0 can't lower it.

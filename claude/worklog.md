@@ -22,8 +22,10 @@ stage0（Rust）：**walking skeleton 達成**（タグ `first-c-output`）＝`f
 5. 🔨 **型検査（最小）**＝双方向推論で数値リテラル型確定・Bool 条件・演算子型・呼び出し検査（`typeck.rs`）✅。残り＝struct/enum/String/Array へ拡張・codegen に型を通す
 6. 🔨 `struct`/`enum`＋`match`
    - ✅ `struct`/`enum` 宣言のパース（フィールド vis/mut・generics `[T]`・variant payload・`export` 受理・`where` は未対応で loud）。typeck/codegen は当面スキップ（codegen は loud エラー）
-   - ✅ JSX 構築 `<Type field=expr />`（ドット path で enum variant も・`/>` は 1 トークン `SlashGt`）。typeck/codegen は当面スタブ
-   - ⏭ struct 縦串（typeck に Ty::Struct＋レジストリ・construction/field access の検査・C struct/compound literal/field codegen）→ `match`＋パターン → enum＋match codegen（タグ付き共用体）
+   - ✅ JSX 構築 `<Type field=expr />`（ドット path で enum variant も・`/>` は 1 トークン `SlashGt`）
+   - ✅ **struct 縦串**：typeck に `Ty::Struct`＋レジストリ（construction の全フィールド検査・field access の型付け）、codegen は C struct typedef＋複合リテラル＋`.field`。e2e で `<Point x=3 y=4/>` → `p.x+p.y` = 7 が実行可
+   - ⏭ `match`＋パターン → enum codegen（タグ付き共用体）＋match codegen
+   - ⏭ `String`/`Array`＋ARC ランタイム（C）／import 機構／名前解決の本格化
    - ⏭ `String`/`Array`＋ARC ランタイム（C）／名前解決の本格化
 7. ⏭ → stage1（Plew でコンパイラ）に必要な分が揃い次第セルフホスト
 6. **stage1**：Plew サブセットでコンパイラを書く → stage0 で compile → 自己 compile＝**セルフホスト達成**
@@ -45,7 +47,7 @@ stage0（Rust）：**walking skeleton 達成**（タグ `first-c-output`）＝`f
 ## 既知の暫定ギャップ
 
 - ✅ **数値リテラルの型確定**：型検査（`typeck.rs`）で双方向推論を実装し、`val x = 6*7`（曖昧）を loud に拒否・注釈で解決・条件は Bool 強制・演算子型不一致も検出。テストで担保（tests/typeck.rs）。
-- **`print(<int>)` は暫定の組み込み**：型検査では引数を I64 に pin、codegen は printf 直結。本来の `print` は String を取る。文字列・stdlib 整備時に置換。
+- **`print` は暫定の組み込み**：本来は **import 必須**（ambient でない・`import @Std/...`・正確なパスは stdlib 設計時）で、シグネチャは **`print[T](~value: T) where T: Format`**（Format 準拠なら何でも）。stage0 は import 機構・トレイト・String 未実装のため、print を数値専用の組み込み（型検査で I64 pin・codegen は printf 直結）として暫定扱い。stdlib 整備時に置換。
 - **codegen は依然 `int64_t` 前提**：型検査は I32/U64/F64 等を区別するが、codegen は全整数を int64_t で出す（幅が違う型は未対応）。型を codegen に通す＝次段。
 - オーバーフロー panic・`as`・NaN 比較 panic 等の数値実行時意味論は未実装（codegen 素朴）。
 

@@ -410,6 +410,7 @@ fn can_end_statement(kind: &TokenKind) -> bool {
             | RParen
             | RBracket
             | RBrace
+            | SlashGt
             | Kw(True)
             | Kw(False)
             | Kw(Return)
