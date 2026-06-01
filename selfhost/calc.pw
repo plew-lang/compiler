@@ -56,13 +56,7 @@ fn parseNumber(p: inout Parser) -> U64 {
     while p.pos < p.bytes.count {
         val b: U8 = p.bytes[p.pos]
         if isDigit(b) {
-            mut val d: I64 = 0
-            mut val k: U8 = 48
-            while k < b {
-                d = d + 1
-                k = k + 1
-            }
-            v = v * 10 + d
+            v = v * 10 + (b as I64 - 48)
             p.pos = p.pos + 1
         } else {
             break

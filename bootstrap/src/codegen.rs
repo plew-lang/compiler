@@ -1021,6 +1021,12 @@ impl Codegen<'_> {
                 s.push_str(&format!("{v}; }})"));
                 s
             }
+            ExprKind::Cast { expr, ty } => {
+                let expr = *expr;
+                let cty = c_type(ty);
+                let e = self.expr(expr);
+                format!("(({cty})({e}))")
+            }
             ExprKind::Index { base, index } => {
                 let (base, index) = (*base, *index);
                 let aty = self.ty_of(base);

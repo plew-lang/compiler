@@ -162,3 +162,15 @@ fn inout_roundtrips() {
     let src = "fn bump(c: inout I64) {\n    c = c + 1\n}\nfn main() {\n    mut val x: I64 = 0\n    bump(c: inout x)\n}";
     assert!(errs(src).is_empty(), "errors: {:?}", errs(src));
 }
+
+#[test]
+fn numeric_as_cast_typechecks() {
+    let src = "fn main() {\n    val x: I32 = 5\n    val y: I64 = x as I64\n}";
+    assert!(errs(src).is_empty(), "errors: {:?}", errs(src));
+}
+
+#[test]
+fn non_numeric_as_cast_is_rejected() {
+    let e = errs("fn main() {\n    val s: String = \"x\"\n    val n: I64 = s as I64\n}");
+    assert!(e.iter().any(|m| m.contains("numeric")), "errors: {e:?}");
+}

@@ -178,6 +178,19 @@ impl Parser {
         let mut lhs = self.unary();
 
         loop {
+            // `expr as Type` — binds tighter than `*` (spec level 12), looser
+            // than prefix; left-associative (chains `a as T as U`).
+            if matches!(self.peek(), TokenKind::Kw(Keyword::As)) {
+                const AS_BP: u8 = 12;
+                if AS_BP < min_bp {
+                    break;
+                }
+                self.bump();
+                let ty = self.ty();
+                let span = self.ast.expr(lhs).span.merge(ty.span);
+                lhs = self.ast.alloc_expr(ExprKind::Cast { expr: lhs, ty }, span);
+                continue;
+            }
             let Some(op) = token_to_binop(self.peek()) else { break };
             let (bp, assoc) = infix_bp(op);
             if bp < min_bp {

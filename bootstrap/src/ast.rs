@@ -101,6 +101,8 @@ pub enum ExprKind {
     Binary { op: BinOp, lhs: ExprId, rhs: ExprId },
     /// Array literal `[e0, e1, ...]` (possibly empty `[]`).
     Array(Vec<ExprId>),
+    /// `expr as Type` — an infallible conversion (stage0: numeric→numeric).
+    Cast { expr: ExprId, ty: Type },
     /// Field access `base.name` (named only; no positional tuple indexing).
     Field { base: ExprId, name: String },
     /// Index `base[index]`.
@@ -429,6 +431,13 @@ impl Ast {
                     out.push(' ');
                     self.write_sexpr(e, out);
                 }
+                out.push(')');
+            }
+            ExprKind::Cast { expr, ty } => {
+                out.push_str("(as ");
+                self.write_sexpr(*expr, out);
+                out.push(' ');
+                self.write_type(ty, out);
                 out.push(')');
             }
             ExprKind::Field { base, name } => {

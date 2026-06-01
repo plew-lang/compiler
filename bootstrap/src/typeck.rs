@@ -551,6 +551,20 @@ impl Checker<'_> {
                 let elems = elems.clone();
                 self.check_array(&elems, expected, span)
             }
+            ExprKind::Cast { expr, ty } => {
+                let expr = *expr;
+                let ty = ty.clone();
+                let target = resolve_ty(&ty, self.types, self.table, self.errors);
+                let src = self.check_expr(expr, None);
+                // stage0: `as` only converts between numeric types.
+                if src != Ty::Error && target != Ty::Error
+                    && !(src.is_numeric() && target.is_numeric())
+                {
+                    let (sn, tn) = (self.ty_name(src), self.ty_name(target));
+                    self.error(span, format!("stage0 `as` only converts between numeric types (`{sn}` as `{tn}`)"));
+                }
+                target
+            }
             ExprKind::Call { callee, args } => {
                 let callee = *callee;
                 let args: Vec<(Mode, ExprId)> = args.iter().map(|a| (a.mode, a.value)).collect();

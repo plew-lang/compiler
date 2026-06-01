@@ -312,3 +312,11 @@ fn break_and_continue_statements() {
     assert!(dump.contains("(break)"), "dump: {dump}");
     assert!(dump.contains("(continue)"), "dump: {dump}");
 }
+
+#[test]
+fn as_cast_binds_tighter_than_multiply() {
+    // `as` > `*`, so `a * b as T` is `a * (b as T)`.
+    assert_eq!(sexpr("a * b as I64"), "(* a (as b I64))");
+    // left-associative chain
+    assert_eq!(sexpr("x as I32 as I64"), "(as (as x I32) I64)");
+}
