@@ -1,6 +1,6 @@
 # トレイト
 
-トレイトは、型が満たすべき**要求**（メソッド・フィールド・関連値・関連型・factory）を束ねる抽象です。トレイト本体には要求だけを書きます。要求の上に組む**派生メソッド**（`Iterator` の `map`/`filter` を `next` の上に作る類）は**名前付き拡張**の `impl Trait` ブロックに置きますが、トレイトは本体で `defaultExtension #IterExt` と**自分の既定拡張**を宣言できます。準拠型はそれを自動でベア表面に取り込み、境界 `where T: Iterator` 越しにも随伴します（境界随伴・→ [拡張](09-extensions.md#デフォルト拡張defaultextension)）。型への準拠は `impl Type as Trait` で**明示的に宣言**し、各要求を `via`／本体で witness します（暗黙の準拠は起きません）。トレイトは[型引数](#トレイト名の-型引数と関連型束縛)（多重 conformance）と[関連型](#関連型associated-type)（出力）を持てます。
+トレイトは、型が満たすべき**要求**（メソッド・フィールド・関連値・関連型・factory）を束ねる抽象です。トレイト本体には**要求だけ**を書きます。要求の上に組む**提供メソッド**（`Iterator` の `map`/`filter` を `next` の上に作る類）は、トレイトと同じモジュールの**ベアな `impl Trait { … }`** に書きます（型の inherent `impl Type { }` と対称）。型への準拠 `impl Type as Trait` を書けば、その型は**提供メソッドを自動でベア表面に得**、境界 `where T: Trait` 越しにも使えます。準拠は `impl Type as Trait` で**明示的に宣言**し、各要求を `via`／本体で witness します（暗黙の準拠は起きません）。トレイトは[型引数](#トレイト名の-型引数と関連型束縛)（多重 conformance）と[関連型](#関連型associated-type)（出力）を持てます。
 
 トレイトの宣言は型システムの[カスタム型](05-structs-enums.md)の一種で、`export trait Shape { … }` のように書きます。本章では定義・関連型・継承・準拠の意味論、トレイトを値の型として使う**存在型**（`any`）、そして標準で提供されるトレイトのカタログをまとめます。
 
@@ -19,36 +19,62 @@ impl Temperature as Default {
 }
 ```
 
-要求の上に組む**派生メソッド**（要求だけを使って組み立てる共有メソッド。`Iterator` の `map`/`filter` を `next` の上に作る類）は、トレイト本体にもベアの `impl Trait` にも書きません。**名前付き拡張**の中に `impl Trait { … }` として置きます（派生メソッドが拡張に閉じる＝`#` は拡張専用に保たれ、別トレイト由来の同名メソッドが暗黙に混ざる事故も起きません）。その上でトレイトは本体で `defaultExtension #Ext` を宣言し、その拡張を**自分の既定拡張**＝準拠型と境界に随伴する正規の派生メソッド束として指定できます（→ [拡張のデフォルト拡張](09-extensions.md#デフォルト拡張defaultextension)）。
+要求の上に組む**提供メソッド**（要求だけを使って組み立てる共有メソッド。`Iterator` の `map`/`filter` を `next` の上に作る類）は、**トレイトと同じモジュールのベアな `impl Trait { … }`** に書きます。トレイト本体には要求（本体なし）、`impl Trait` には提供メソッド（本体あり）── 型の `struct`（フィールド宣言）と `impl Type`（メソッド本体）と同じ住み分けです。
 
 ```plew
 trait Stepper {
     fn step() -> I32                 // 要求：本体なし。各型が実装する
-    defaultExtension #StepperExt     // このトレイトの既定拡張（派生メソッドの置き場）
 }
 
-extension StepperExt {               // 派生メソッドは名前付き拡張に置く
-    impl Stepper {
-        fn doubleStep() -> I32 {    // self: Self: Stepper。要求 step() の上に組む
-            return self.step() + self.step()
-        }
+impl Stepper {                       // 提供メソッド（トレイトと同じモジュール・ベア）
+    fn doubleStep() -> I32 {         // self: Self: Stepper。要求 step() の上に組む
+        return self.step() + self.step()
     }
 }
 
 struct Counter {
-    mut val n: I32                  // defaultExtension は不要：Stepper 準拠で #StepperExt を自動取り込み
+    mut val n: I32
 }
 impl Counter as Stepper {
-    fn step() -> I32 { return self.n }
+    fn step() -> I32 { return self.n }   // 要求を witness するだけ
 }
-// counter.doubleStep() が呼べる。fn f[T](t: T) where T: Stepper の本体でも
-// t.doubleStep() がベアで呼べる（既定拡張は境界越しに随伴する）。
+// counter.step() も counter.doubleStep() も呼べる。
+// fn f[T](t: T) where T: Stepper の本体でも t.doubleStep() がベアで呼べる。
 ```
 
-- **`impl Trait`（拡張内）の `self` は準拠型**（`Self: Trait`）。派生メソッドは `self` 経由で要求や同じ拡張内の他メソッドを呼べる。本体はトレイトのインターフェースに対して一度だけ型検査される。`impl Trait` を書けるのは拡張の中だけ（ベアの `impl Trait` は書けない）で、拡張なので外部トレイトも対象にできる。
-- トレイトが `defaultExtension` で宣言した既定拡張は**自動で随伴する**：準拠型のベア表面に載り（型側に `defaultExtension` を書く必要はない）、境界 `where T: Trait` 越しにも運ばれる（本体で `t.map()` がベアで呼べる＝[境界随伴](09-extensions.md#デフォルト拡張defaultextension)）。トレイトの**既定でない拡張**（別挙動の代替実装など）は自動では生えず、各型が `defaultExtension #Ext` で取り込むか、使用箇所で `value#Ext.foo()` と明示する。
-- 衝突は**型の定義地点**で検出する。型が準拠する複数トレイトの既定拡張（や型自身のメソッド・型が明示した `defaultExtension`）が同セレクタ・同シグネチャになればコンパイルエラー（引数型が違えばオーバーロードとして共存）。型の作者が片方を準拠地点で `impl A as P#!Ext` と**剥がして**解決し（generic 境界なら `where T: P#!Ext`）、剥がした側は `value#Ext.foo()` で届く。`#!` は既定拡張の持ち主であるトレイトに付き、型本体・型パラメータには書かない。同一シグネチャの別挙動が要るならトレイトの既定にせず `#Ext` で明示する。
-- **上書き可能な既定は持たない**: 準拠側の `impl Type as Trait`（`as` あり）が witness するのは**要求だけ**。派生メソッドに別の本体を与えること（上書き）はできない。挙動を変えたい型は別の名前付き `extension` に分けて `#Ext` で選ぶ。中間の「既定だが上書き可」は無い（Swift の protocol extension に伴う静的／動的ディスパッチの食い違いを避けるため）。
+- **`impl Trait` の `self` は準拠型**（`Self: Trait`）。提供メソッドは `self` 経由で要求や同じ `impl Trait` 内の他メソッドを呼べる。本体はトレイトのインターフェースに対して**一度だけ**型検査される。
+- **ベアな `impl Trait` を書けるのはトレイトを所有するモジュールだけ**（型の inherent `impl Type` と同じ「所有者のみ」コヒーレンス）。第三者がトレイトに提供メソッドを足す（`itertools` 的）のは**名前付き拡張** `extension X { impl Trait { … } }` で行い、使用箇所で `#X` を明示して opt-in する（→ [拡張](09-extensions.md)）。
+- **準拠で自動随伴**：`impl A as Trait` を書けば A は提供メソッドをベア表面に得、`where T: Trait` 越しにも使える。出どころは「明示した準拠／境界のトレイト」なので provenance は追える（ambient ではない）。
+- **上書き不可**：準拠側 `impl Type as Trait`（`as` あり）が witness するのは**要求だけ**。提供メソッドに別の本体を与える（上書き）ことはできない。挙動を変えたい型は名前付き `extension` に別実装を置き `#Ext` で選ぶ（Swift の protocol extension に伴う静的／動的ディスパッチの食い違いを避けるため）。
+
+### 提供メソッドの衝突（同名はベアに同居できない）
+
+Plew は**同名（同セレクタ＋同シグネチャ）のメソッドがベア表面に 2 つ並ぶこと**を許しません（→ [メソッドのオーバーロード](07-methods-impl.md)）。トレイト `P` と `Q` が同じ `foo()` を提供し、型 A が**両方に直接準拠**すると、A のベアに `foo` が 2 つ載るので **2 つ目の準拠地点でコンパイルエラー**になります。
+
+```plew
+trait P {}
+impl P { fn foo() {} }          // P の提供メソッド
+trait Q {}
+impl Q { fn foo() {} }          // Q の提供メソッド
+
+struct A {}
+impl A as P {}
+impl A as Q {}                  // エラー：foo が P・Q から二重にベアへ来る
+```
+
+> 要求が同名同シグの場合は**衝突しません** ── A は 1 つの witness で両トレイトの要求を同時に満たせる（define-once・後述）。衝突するのは**別実装が 2 つ来る提供メソッド**だけです。
+
+**解決＝片方の準拠を拡張に閉じる**（既存の拡張機構をそのまま使う）：
+
+```plew
+impl A as P {}                       // P の foo がベア
+extension AWithQ { impl A as Q {} }  // Q は #AWithQ ビューでだけ有効
+// a.foo()         → P の foo（ベア）
+// a#AWithQ.foo()  → Q の foo（拡張ビューがベアをシャドー → 拡張）
+// f(a#AWithQ)     → where T: Q を要求する関数へ渡す
+```
+
+generic で**両方を境界に**したいとき（`where T: P + Q`）の曖昧化は [拡張 § メソッド源の選択](09-extensions.md#メソッド源の選択ap) を参照（`t#P.foo()` で選ぶ）。
 
 ### 関連型（associated type）
 
@@ -95,20 +121,18 @@ trait BoundedStepper: Stepper {
     fn limit() -> I32                    // 要求
 }
 
-extension BoundedExt {
-    impl BoundedStepper {
-        fn cappedStep() -> I32 {        // 派生メソッド：親 Stepper の step() を使える
-            val s = self.step()
-            if s > self.limit() { return self.limit() }
-            return s
-        }
+impl BoundedStepper {                    // 提供メソッド：親 Stepper の step() を使える
+    fn cappedStep() -> I32 {
+        val s = self.step()
+        if s > self.limit() { return self.limit() }
+        return s
     }
 }
 ```
 
 - **継承は制約であって自動実装ではない**: `impl Type as BoundedStepper` を書くには、別途 `impl Type as Stepper` も存在しなければならない（無ければエラー）。親準拠が暗黙に生成されることはない（暗黙準拠を持たない方針の一貫）。
-- `Sub` を対象にする拡張の派生メソッドは、`self` 経由で `Super` の要求を呼べる（継承で準拠が保証されるため）。
-- ダイヤモンド継承で同名の**要求**が複数経路から来ても、同セレクタ・同シグネチャならオーバーロード集合の 1 つへ畳まれる（シグネチャ不一致はオーバーロードとして共存、または衝突ならエラー）。**派生メソッド**はトレイトの既定拡張として随伴するので、別経路由来の同名・同シグネチャ派生メソッドが衝突するのは「型が両トレイトに準拠したとき」で、**その型の定義地点**で報告される（準拠地点 `impl A as P#!Ext` で片方を剥がして解決・→ [拡張](09-extensions.md)）。トレイト定義そのものが衝突を強制することはない。
+- `Sub` の提供メソッド（`impl Sub`）は、`self` 経由で `Super` の要求を呼べる（継承で準拠が保証されるため）。
+- ダイヤモンド継承で同名の**要求**が複数経路から来ても、同セレクタ・同シグネチャならオーバーロード集合の 1 つへ畳まれる（シグネチャ不一致はオーバーロードとして共存、または衝突ならエラー）。**提供メソッド**は準拠で随伴するので、別経路由来の同名・同シグネチャ提供メソッドが衝突するのは「型が両トレイトに準拠したとき」で、**その型の定義地点**で報告される（[提供メソッドの衝突](#提供メソッドの衝突同名はベアに同居できない)と同じく、片方の準拠を拡張に閉じて解決）。トレイト定義そのものが衝突を強制することはない。
 
 ## トレイト準拠と via
 
