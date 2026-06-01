@@ -25,7 +25,9 @@ stage0（Rust）：整数・分岐・ループ・**struct**・**enum+match** が
    - ✅ JSX 構築 `<Type field=expr />`（ドット path で enum variant も・`/>` は 1 トークン `SlashGt`）
    - ✅ **struct 縦串**：`Ty::Struct`＋レジストリ、C struct typedef＋複合リテラル＋`.field`。`<Point x=3 y=4/>`→`p.x+p.y`=7
    - ✅ **enum + match 縦串**：`Ty::Enum`＋variant 構築（`<E.V .../>`）＋match（パターン束縛・網羅性検査）。codegen はタグ付き共用体＋switch（enum）/if-chain（int/Bool）。e2e で `Shape.Circle`→5、int match→20。**制約**：match は文位置のみ（値位置/`give` は未対応）、variant パターンは `E.V` 形（codegen）、variant フィールドのネストパターン未対応
-7. ⏭ **次の本丸**：`String`/`Array`＋ARC ランタイム（C）／import 機構／値位置 match・if（statement-expr）／codegen に型を通す（整数幅）／名前解決の本格化
+   - ✅ **型を codegen に通す土台**：typeck が `CheckResult.expr_ty`（式 ID→型）を返し codegen が参照（print 書式の型ベース選択など）
+   - ✅ **String（最小）**：型 `String`・文字列リテラル・`print(String)`。C 表現は `PlewString{const char* data; int64_t len}`（リテラル backed・ヒープ/ARC なし）。連結・可変・`bytes` 等は未実装
+7. ⏭ **次の本丸**：`Array`（ジェネリック＝単相化）＋ARC ランタイム（C）／import 機構／値位置 match・if（statement-expr）／codegen の整数幅反映／名前解決の本格化
    - ⏭ `String`/`Array`＋ARC ランタイム（C）／名前解決の本格化
 7. ⏭ → stage1（Plew でコンパイラ）に必要な分が揃い次第セルフホスト
 6. **stage1**：Plew サブセットでコンパイラを書く → stage0 で compile → 自己 compile＝**セルフホスト達成**

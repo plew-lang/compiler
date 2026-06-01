@@ -17,14 +17,15 @@ pub fn compile_to_c(src: &str) -> Result<String, Vec<String>> {
             .map(|e| format!("{:?}: {}", e.span, e.msg))
             .collect());
     }
-    let terrs = crate::typeck::check(&ast, &items);
-    if !terrs.is_empty() {
-        return Err(terrs
+    let checked = crate::typeck::check(&ast, &items);
+    if !checked.errors.is_empty() {
+        return Err(checked
+            .errors
             .into_iter()
             .map(|e| format!("{:?}: {}", e.span, e.msg))
             .collect());
     }
-    emit_c(&ast, &items)
+    emit_c(&ast, &items, &checked.expr_ty)
 }
 
 /// Compile `src` to a native executable at `out`, writing the intermediate C to

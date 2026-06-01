@@ -29,6 +29,8 @@ pub enum Ty {
     F32,
     F64,
     Bool,
+    /// Immutable UTF-8 string (stage0: literal-backed, no heap/ARC yet).
+    String,
     Unit,
     Struct(u32),
     Enum(u32),
@@ -65,6 +67,7 @@ impl Ty {
             F32 => "F32",
             F64 => "F64",
             Bool => "Bool",
+            String => "String",
             Unit => "()",
             Struct(_) => "<struct>",
             Enum(_) => "<enum>",
@@ -77,6 +80,14 @@ impl Ty {
 pub struct TypeError {
     pub span: Span,
     pub msg: String,
+}
+
+/// Result of type-checking: errors plus the inferred type of every expression
+/// (indexed by `ExprId.0`), which codegen consults (e.g. to pick a `print`
+/// format). Expressions that were never reached stay `Ty::Error`.
+pub struct CheckResult {
+    pub errors: Vec<TypeError>,
+    pub expr_ty: Vec<Ty>,
 }
 
 struct FnSig {
@@ -106,9 +117,10 @@ struct Types {
     enums: HashMap<String, u32>,
 }
 
-/// Type-check a whole program. Returns all type errors (empty = well-typed).
-pub fn check(ast: &Ast, items: &[crate::ast::ItemId]) -> Vec<TypeError> {
+/// Type-check a whole program.
+pub fn check(ast: &Ast, items: &[crate::ast::ItemId]) -> CheckResult {
     let mut errors = Vec::new();
+    let mut expr_ty = vec![Ty::Error; ast.expr_count()];
 
     // Pass 0a: assign ids to all struct/enum names (forward references ok).
     let mut types = Types::default();
@@ -204,6 +216,7 @@ pub fn check(ast: &Ast, items: &[crate::ast::ItemId]) -> Vec<TypeError> {
                 enums: &enums,
                 types: &types,
                 errors: &mut errors,
+                expr_ty: &mut expr_ty,
                 scopes: Vec::new(),
                 ret,
             };
@@ -217,7 +230,7 @@ pub fn check(ast: &Ast, items: &[crate::ast::ItemId]) -> Vec<TypeError> {
         }
     }
 
-    errors
+    CheckResult { errors, expr_ty }
 }
 
 /// Resolve a syntactic type to a [`Ty`].
@@ -234,6 +247,7 @@ fn resolve_ty(t: &Type, types: &Types, errors: &mut Vec<TypeError>) -> Ty {
         "F32" => Ty::F32,
         "F64" => Ty::F64,
         "Bool" => Ty::Bool,
+        "String" => Ty::String,
         other => {
             if let Some(&id) = types.structs.get(other) {
                 Ty::Struct(id)
@@ -264,6 +278,7 @@ struct Checker<'a> {
     enums: &'a [EnumDef],
     types: &'a Types,
     errors: &'a mut Vec<TypeError>,
+    expr_ty: &'a mut Vec<Ty>,
     scopes: Vec<HashMap<String, Ty>>,
     ret: Ty,
 }
@@ -354,6 +369,7 @@ impl Checker<'_> {
         let span = self.ast.expr(id).span;
         let t = self.infer_expr(id, expected);
         self.expect_eq(t, expected, span);
+        self.expr_ty[id.0 as usize] = t;
         t
     }
 
@@ -388,10 +404,7 @@ impl Checker<'_> {
                     Ty::Error
                 }
             },
-            ExprKind::Str(_) => {
-                self.error(span, "string literals are not supported by the stage0 type checker yet");
-                Ty::Error
-            }
+            ExprKind::Str(_) => Ty::String,
             ExprKind::Bool(_) => Ty::Bool,
             ExprKind::Ident(name) => {
                 let name = name.clone();
@@ -782,12 +795,19 @@ impl Checker<'_> {
         if let ExprKind::Ident(name) = &self.ast.expr(callee).kind {
             let name = name.clone();
             if name == "print" {
+                // stage0 builtin: accepts a number or a String (real signature:
+                // `print[T](~value: T) where T: Format`; import-required).
+                // Numeric literals are pinned to I64 for convenience; a string
+                // literal resolves to String.
                 if args.len() != 1 {
                     self.error(span, "`print` takes exactly one argument (stage0)");
                 } else {
-                    let t = self.check_expr(args[0], Some(Ty::I64));
-                    if t != Ty::Error && !t.is_numeric() {
-                        self.error(span, "`print` expects a numeric argument (stage0)");
+                    let is_str = matches!(self.ast.expr(args[0]).kind, ExprKind::Str(_));
+                    let exp = if is_str { None } else { Some(Ty::I64) };
+                    let t = self.check_expr(args[0], exp);
+                    if t != Ty::Error && !t.is_numeric() && t != Ty::String {
+                        let tn = self.ty_name(t);
+                        self.error(span, format!("`print` expects a number or String (stage0), found `{tn}`"));
                     }
                 }
                 return Ty::Unit;

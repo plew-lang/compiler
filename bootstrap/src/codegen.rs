@@ -8,13 +8,16 @@
 use crate::ast::{
     Ast, BinOp, ExprId, ExprKind, ItemId, ItemKind, MatchArm, PatKind, StmtId, StmtKind, Type, UnOp,
 };
+use crate::typeck::Ty;
 
 /// Generate a complete C translation unit for `items`, or a list of
 /// "unsupported construct" errors if the program uses features the skeleton
 /// codegen does not handle yet.
-pub fn emit_c(ast: &Ast, items: &[ItemId]) -> Result<String, Vec<String>> {
-    let mut cg = Codegen { ast, items, out: String::new(), errors: Vec::new(), tmp: 0 };
+pub fn emit_c(ast: &Ast, items: &[ItemId], expr_ty: &[Ty]) -> Result<String, Vec<String>> {
+    let mut cg = Codegen { ast, items, expr_ty, out: String::new(), errors: Vec::new(), tmp: 0 };
     cg.out.push_str("#include <stdio.h>\n#include <stdint.h>\n\n");
+    // stage0 String: immutable view over a (literal) UTF-8 buffer.
+    cg.out.push_str("typedef struct { const char* data; int64_t len; } PlewString;\n\n");
     // type definitions first (C needs types declared before use)
     for &id in items {
         match ast.item(id).kind {
@@ -36,6 +39,8 @@ pub fn emit_c(ast: &Ast, items: &[ItemId]) -> Result<String, Vec<String>> {
 struct Codegen<'a> {
     ast: &'a Ast,
     items: &'a [ItemId],
+    /// Inferred type of every expression, from the type checker.
+    expr_ty: &'a [Ty],
     out: String,
     errors: Vec<String>,
     /// Counter for generated temporaries (e.g. match scrutinees).
@@ -458,8 +463,17 @@ impl Codegen<'_> {
         if let ExprKind::Call { callee, args } = &self.ast.expr(id).kind {
             if let ExprKind::Ident(name) = &self.ast.expr(*callee).kind {
                 if name == "print" && args.len() == 1 && args[0].label.is_none() {
-                    let v = self.expr(args[0].value);
-                    return Some(format!("    printf(\"%lld\\n\", (long long)({v}));\n"));
+                    let argid = args[0].value;
+                    let aty = self.expr_ty.get(argid.0 as usize).copied().unwrap_or(Ty::Error);
+                    let v = self.expr(argid);
+                    let line = match aty {
+                        Ty::String => {
+                            format!("    printf(\"%.*s\\n\", (int)({v}).len, ({v}).data);\n")
+                        }
+                        Ty::F32 | Ty::F64 => format!("    printf(\"%f\\n\", (double)({v}));\n"),
+                        _ => format!("    printf(\"%lld\\n\", (long long)({v}));\n"),
+                    };
+                    return Some(line);
                 }
             }
         }
@@ -473,9 +487,9 @@ impl Codegen<'_> {
             ExprKind::Float(s) => s.replace('_', ""),
             ExprKind::Bool(b) => if *b { "1".into() } else { "0".into() },
             ExprKind::Ident(s) => s.clone(),
-            ExprKind::Str(_) => {
-                self.errors.push("string literals are not supported by stage0 codegen yet".into());
-                "0".into()
+            ExprKind::Str(s) => {
+                let (lit, len) = c_string_literal(s);
+                format!("((PlewString){{{lit}, {len}}})")
             }
             ExprKind::Unary { op, operand } => {
                 let inner = self.expr(*operand);
@@ -588,9 +602,30 @@ fn c_type(t: &Type) -> String {
         "F32" => "float",
         "F64" => "double",
         "Bool" => "int",
+        "String" => "PlewString",
         other => other,
     }
     .to_string()
+}
+
+/// Render a Plew string's decoded bytes as a C string literal plus its byte
+/// length. Non-printable / non-ASCII bytes use 3-digit octal escapes (which,
+/// unlike `\x`, are not greedy and so never merge with a following digit).
+fn c_string_literal(s: &str) -> (String, usize) {
+    let mut out = String::from("\"");
+    for b in s.bytes() {
+        match b {
+            b'"' => out.push_str("\\\""),
+            b'\\' => out.push_str("\\\\"),
+            b'\n' => out.push_str("\\n"),
+            b'\r' => out.push_str("\\r"),
+            b'\t' => out.push_str("\\t"),
+            0x20..=0x7e => out.push(b as char),
+            _ => out.push_str(&format!("\\{b:03o}")),
+        }
+    }
+    out.push('"');
+    (out, s.len())
 }
 
 /// Map a binary operator to its C spelling, or `None` if stage0 can't lower it.

@@ -68,6 +68,11 @@ fn builds_and_runs_int_match() {
 }
 
 #[test]
+fn builds_and_runs_string_print() {
+    assert_eq!(build_and_run("fn main() {\n    print(\"hello\")\n}\n", "strlit"), "hello\n");
+}
+
+#[test]
 fn reports_unsupported_construct() {
     // `??` has no stage0 C lowering yet → a codegen error, not a panic.
     let errs = compile_to_c("fn main() {\n    print(a ?? b)\n}\n").unwrap_err();

@@ -7,7 +7,7 @@ use plewc::typeck::check;
 fn errs(src: &str) -> Vec<String> {
     let (ast, items, perrs) = parse_program(src);
     assert!(perrs.is_empty(), "unexpected parse errors: {perrs:?}");
-    check(&ast, &items).into_iter().map(|e| e.msg).collect()
+    check(&ast, &items).errors.into_iter().map(|e| e.msg).collect()
 }
 
 #[test]
