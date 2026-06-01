@@ -1062,6 +1062,21 @@ impl Checker<'_> {
                 }
                 return Ty::Unit;
             }
+            // stage0 I/O builtins (real API is `@Std/...`).
+            if name == "readStdin" {
+                if !args.is_empty() {
+                    self.error(span, "`readStdin` takes no arguments");
+                }
+                return Ty::String;
+            }
+            if name == "write" {
+                if args.len() != 1 {
+                    self.error(span, "`write` takes exactly one String argument");
+                } else {
+                    self.check_expr(args[0].1, Some(Ty::String));
+                }
+                return Ty::Unit;
+            }
             if let Some(sig) = self.sigs.get(&name) {
                 let params = sig.params.clone();
                 let param_modes = sig.param_modes.clone();

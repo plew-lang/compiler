@@ -34,7 +34,15 @@ pub fn emit_c(
     // stage0 String: immutable view over a (literal) UTF-8 buffer.
     cg.out.push_str("typedef struct { const char* data; int64_t len; } PlewString;\n");
     cg.out.push_str(
-        "static int PlewString_eq(PlewString a, PlewString b) { if (a.len != b.len) return 0; for (int64_t i = 0; i < a.len; i++) if (a.data[i] != b.data[i]) return 0; return 1; }\n\n",
+        "static int PlewString_eq(PlewString a, PlewString b) { if (a.len != b.len) return 0; for (int64_t i = 0; i < a.len; i++) if (a.data[i] != b.data[i]) return 0; return 1; }\n",
+    );
+    // stage0 I/O builtins (real API is import-based `@Std/...`; these are
+    // fictions like `print`). Enough for a stdin->stdout compiler filter.
+    cg.out.push_str(
+        "static PlewString plew_read_stdin(void) { size_t cap = 4096, len = 0; char* buf = (char*)malloc(cap); int c; while ((c = getchar()) != EOF) { if (len + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); } buf[len++] = (char)c; } PlewString s; s.data = buf; s.len = (int64_t)len; return s; }\n",
+    );
+    cg.out.push_str(
+        "static void plew_write(PlewString s) { fwrite(s.data, 1, (size_t)s.len, stdout); }\n\n",
     );
     // Type emission must respect C's "declare before use", with two wrinkles:
     // a struct/enum may contain an array (by value) and an array's element may
@@ -957,6 +965,16 @@ impl Codegen<'_> {
                     }
                     self.errors.push(format!("method `{name}` is not supported by stage0 codegen"));
                     return "0".into();
+                }
+                // stage0 I/O builtins.
+                if let ExprKind::Ident(fname) = &self.ast.expr(callee).kind {
+                    if fname == "readStdin" {
+                        return "plew_read_stdin()".into();
+                    }
+                    if fname == "write" && arg_ids.len() == 1 {
+                        let a = self.expr(arg_ids[0]);
+                        return format!("plew_write({a})");
+                    }
                 }
                 // Non-method call: emit positional C call (labels ignored for
                 // now). An `inout` argument passes the address of its place.

@@ -211,6 +211,26 @@ fn selfhost_calc_parser_builds_and_runs() {
 }
 
 #[test]
+fn builds_and_runs_stdin_io() {
+    use std::io::Write;
+    use std::process::Stdio;
+    // Read stdin, count 'a' bytes, write a raw label then the count.
+    let src = "fn main() {\n    val s: String = readStdin()\n    mut val n: I64 = 0\n    for val b in s.bytes {\n        if b == 97 {\n            n += 1\n        }\n    }\n    write(\"a=\")\n    print(n)\n}\n";
+    let bin = std::env::temp_dir().join(format!("plewc_e2e_{}_stdin", std::process::id()));
+    build_executable(src, &bin).expect("build executable");
+    let mut child = Command::new(&bin)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("spawn");
+    child.stdin.take().unwrap().write_all(b"banana apple").unwrap();
+    let out = child.wait_with_output().expect("wait");
+    let _ = std::fs::remove_file(&bin);
+    let _ = std::fs::remove_file(bin.with_extension("c"));
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "a=4\n");
+}
+
+#[test]
 fn reports_unsupported_construct() {
     // `??` has no stage0 C lowering yet → a codegen error, not a panic.
     let errs = compile_to_c("fn main() {\n    print(a ?? b)\n}\n").unwrap_err();

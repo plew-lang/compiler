@@ -4,7 +4,7 @@
 
 ## 現在地（一言）
 
-stage0（Rust）：整数・分岐・ループ・**struct**・**enum+match**・**Array（リテラル/添字/`count`/for-each）** が source→C→clang→実行できる。型検査（双方向推論・数値リテラル型確定・struct/enum・match 網羅性・配列要素/添字/反復）あり。**次は Array の変更操作（`append`・`arr[i]=x`）＝メソッド呼び出しの土台**、その後 import 機構／値位置 match／整数幅反映。
+stage0（Rust）で **Plew 製のレキサとパーサ＋評価器が compile&run する**段階。サポート済み：型付き整数/Bool/String（`.bytes`/`==`）・Array（リテラル/添字/`count`/for-each/`append`/`arr[i]=x`・リーク参照セマンティクス）・struct・enum+match（文位置・if-chain）・if/else/while/for（range/array）・関数（相互再帰・プロトタイプ）・`break`/`continue`・**`inout` パラメータ**・**`as` 数値キャスト**・stdin/stdout I/O（`readStdin`/`write`）。codegen は型を依存順に出力（前方宣言＋トポロジカル）。`selfhost/lexer.pw`・`selfhost/calc.pw` が実証。**次：実 Plew サブセットの全トークン lexer → サブセット parser+C codegen を Plew で → ファイル/stdin で自分を食わせて self-host**。
 
 ### stage0 のメモリモデル（重要・spec とは別物）
 
@@ -46,7 +46,9 @@ stage0 は **throwaway（1 回コンパイルして終了）**。よって Array
    - ✅ **パーサ素描が compile&run**（`selfhost/calc.pw`）：算術式パーサ＋評価器。`inout p: Parser` でカーソル相互再帰・arena+index AST（`Array[Expr]`・U64 index＝`as` 回避）・enum payload・再帰 eval。`"2 + 3 * (4 + 5) - 1"`→28（e2e `selfhost_calc_parser_builds_and_runs`）。**パーサ・フェーズの言語要件を実証**。
    - ✅ **codegen の型順序対応**：構造体がArrayを含む／Arrayの要素が構造体、の循環を「①全 nominal の前方宣言 `typedef struct N N;`／②Array typedef（要素はポインタ＝前方宣言で足る）／③構造体/enum 本体を依存順（by-value 含有でトポロジカル）／④Array ランタイム（要素を値で扱う＝本体後）」で解決。関数は**プロトタイプ**を本体前に出して相互再帰可。
    - 📝 **パーサ素描で判明した言語の罠（spec 通りだが書き手が嵌まる）**：①フィールド名に `val` 不可（キーワード衝突）②enum variant フィールドも `val name: T`（`val` 必須）③match のフィールド punning は `{ val name }`（`val` 前置・bare `{ name }` は variant パターン扱い）④`as` キャスト未実装＝index 型は `count` と同じ `U64` で統一して回避。
-   - ⏭ 次：stage1 レキサを実 Plew サブセットの全トークンへ拡張 → 実 Plew サブセットのパーサ＋C codegen を Plew で。**ファイル I/O**（自分を読む＝真の self-host）と名前解決（線形スキャン or Dictionary）はその先。**ファイル I/O**（自分自身を読む＝真の self-host に必須・現状ハードコード文字列）と **`Dictionary` or 線形スキャン**（名前解決）はその先。AST 再帰は arena+index（`ExprId`=U32 包み）で回避予定。
+   - ✅ **`as` 数値キャスト**（spec/12）：`*` より強く prefix より弱い・左結合・stage0 は numeric↔numeric のみ・C キャスト。`3 as I64`（裸リテラル source）は曖昧エラーのまま＝`as` は default を供給しない（no-default 原則と整合）。
+   - ✅ **stdin/stdout I/O**（stage0 ビルトイン・`@Std` の fiction）：`readStdin() -> String`（全 stdin）・`write(s: String)`（生・改行なし）。stage1 を stdin→stdout フィルタにでき、codegen 断片を逐次 `write` できる（文字列連結不要）＝真の self-host への足場。
+   - ⏭ 次：実 Plew サブセットの全トークン lexer（多文字演算子・文字列/数値リテラル・コメント・全キーワード）→ サブセット parser+C codegen を Plew で。名前解決は線形スキャン（Dictionary は後）。AST 再帰は arena+index。self-host は stdin→stdout で `plewc-stage1 < x.pw > x.c`。**ファイル I/O**（自分自身を読む＝真の self-host に必須・現状ハードコード文字列）と **`Dictionary` or 線形スキャン**（名前解決）はその先。AST 再帰は arena+index（`ExprId`=U32 包み）で回避予定。
    - ⏭ import 機構／値位置 `match`／codegen 整数幅は必要になった時点で。
 7. ⏭ → stage1（Plew でコンパイラ）に必要な分が揃い次第セルフホスト
 6. **stage1**：Plew サブセットでコンパイラを書く → stage0 で compile → 自己 compile＝**セルフホスト達成**
