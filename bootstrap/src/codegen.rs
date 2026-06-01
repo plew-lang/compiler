@@ -318,6 +318,10 @@ impl Codegen<'_> {
                 );
                 "0".into()
             }
+            ExprKind::Match { .. } => {
+                self.errors.push("`match` is not supported by stage0 codegen yet".into());
+                "0".into()
+            }
             ExprKind::Error => {
                 self.errors.push("cannot generate code from a parse error".into());
                 "0".into()

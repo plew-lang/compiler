@@ -450,6 +450,10 @@ impl Checker<'_> {
                 self.error(span, "indexing is not supported by the stage0 type checker yet");
                 Ty::Error
             }
+            ExprKind::Match { .. } => {
+                self.error(span, "`match` is not supported by the stage0 type checker yet");
+                Ty::Error
+            }
             ExprKind::Error => Ty::Error,
         }
     }

@@ -209,6 +209,34 @@ fn compound_assignment() {
 }
 
 #[test]
+fn match_expression() {
+    let src = "fn f() {\n    match x {\n        0 => print(1)\n        _ => print(2)\n    }\n}";
+    assert_eq!(
+        prog(src),
+        "(fn f () (block (match x (=> 0 (call print 1)) (=> _ (call print 2)))))"
+    );
+}
+
+#[test]
+fn match_variant_patterns_and_binding() {
+    let src = "fn f() {\n    match opt {\n        Optional.Some { value: val v } => print(v)\n        Optional.None => print(0)\n    }\n}";
+    assert_eq!(
+        prog(src),
+        "(fn f () (block (match opt (=> Optional.Some{value=(val v)} (call print v)) (=> Optional.None (call print 0)))))"
+    );
+}
+
+#[test]
+fn match_punning_binding() {
+    // `{ val intensity }` is sugar for `{ intensity: val intensity }`
+    let src = "fn f() {\n    match c {\n        Color.Red { val intensity } => print(intensity)\n        _ => print(0)\n    }\n}";
+    assert_eq!(
+        prog(src),
+        "(fn f () (block (match c (=> Color.Red{intensity=(val intensity)} (call print intensity)) (=> _ (call print 0)))))"
+    );
+}
+
+#[test]
 fn jsx_construction() {
     assert_eq!(sexpr("<Point x=3 y=4 />"), "(new Point x=3 y=4)");
     // value expressions in attributes; nested call

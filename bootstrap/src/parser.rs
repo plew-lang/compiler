@@ -6,8 +6,8 @@
 //! `try`/`await`, and statements/items follow.
 
 use crate::ast::{
-    Arg, Ast, BinOp, Block, ExprId, ExprKind, Field, Item, ItemId, ItemKind, Param, Stmt, StmtKind,
-    Type, UnOp, Variant, Vis,
+    Arg, Ast, BinOp, Block, ExprId, ExprKind, Field, Item, ItemId, ItemKind, MatchArm, Param, PatId,
+    PatKind, Stmt, StmtKind, Type, UnOp, Variant, Vis,
 };
 use crate::lexer::lex;
 use crate::span::Span;
@@ -694,6 +694,121 @@ impl Parser {
         self.ast.alloc_expr(ExprKind::If { cond, then_branch, else_branch }, start.merge(end))
     }
 
+    /// `match scrutinee { pat => body  ... }`.
+    fn parse_match(&mut self) -> ExprId {
+        let start = self.peek_span();
+        self.bump(); // `match`
+        let scrutinee = self.expr_bp(0);
+        self.expect(&TokenKind::LBrace, "`{` to start the match body");
+        self.eat_newlines();
+        let mut arms = Vec::new();
+        while !matches!(self.peek(), TokenKind::RBrace | TokenKind::Eof) {
+            let astart = self.peek_span();
+            let pat = self.parse_pattern();
+            self.expect(&TokenKind::FatArrow, "`=>` after the pattern");
+            let body = self.expr_bp(0);
+            let span = astart.merge(self.ast.expr(body).span);
+            arms.push(MatchArm { pat, body, span });
+            if !self.eat_item_separator() {
+                break;
+            }
+        }
+        let end = self.peek_span();
+        self.expect(&TokenKind::RBrace, "`}` to close the match");
+        self.ast.alloc_expr(ExprKind::Match { scrutinee, arms }, start.merge(end))
+    }
+
+    fn parse_pattern(&mut self) -> PatId {
+        let span = self.peek_span();
+        match self.peek().clone() {
+            TokenKind::Int(s) => {
+                self.bump();
+                self.ast.alloc_pat(PatKind::Int(s), span)
+            }
+            TokenKind::Str(s) => {
+                self.bump();
+                self.ast.alloc_pat(PatKind::Str(s), span)
+            }
+            TokenKind::Kw(Keyword::True) => {
+                self.bump();
+                self.ast.alloc_pat(PatKind::Bool(true), span)
+            }
+            TokenKind::Kw(Keyword::False) => {
+                self.bump();
+                self.ast.alloc_pat(PatKind::Bool(false), span)
+            }
+            TokenKind::Kw(Keyword::Val) => {
+                self.bump();
+                let name = self.expect_ident("a binding name after `val`");
+                self.ast.alloc_pat(PatKind::Binding { mutable: false, name }, span)
+            }
+            TokenKind::Kw(Keyword::Mut) => {
+                self.bump();
+                self.expect(&TokenKind::Kw(Keyword::Val), "`val` after `mut`");
+                let name = self.expect_ident("a binding name after `mut val`");
+                self.ast.alloc_pat(PatKind::Binding { mutable: true, name }, span)
+            }
+            TokenKind::Ident(name) if name == "_" => {
+                self.bump();
+                self.ast.alloc_pat(PatKind::Wildcard, span)
+            }
+            TokenKind::Ident(_) => self.parse_variant_pattern(span),
+            other => {
+                self.error(span, format!("expected a pattern, found {other:?}"));
+                if !self.at_eof() {
+                    self.bump();
+                }
+                self.ast.alloc_pat(PatKind::Wildcard, span)
+            }
+        }
+    }
+
+    fn parse_variant_pattern(&mut self, start: Span) -> PatId {
+        let mut path = vec![self.expect_ident("a variant name")];
+        while matches!(self.peek(), TokenKind::Dot) {
+            self.bump();
+            path.push(self.expect_ident("a name after `.`"));
+        }
+        let mut fields = Vec::new();
+        let mut end = start;
+        if matches!(self.peek(), TokenKind::LBrace) {
+            self.bump();
+            self.eat_newlines();
+            while !matches!(self.peek(), TokenKind::RBrace | TokenKind::Eof) {
+                fields.push(self.parse_pattern_field());
+                if !self.eat_item_separator() {
+                    break;
+                }
+            }
+            end = self.peek_span();
+            self.expect(&TokenKind::RBrace, "`}` to close the variant pattern fields");
+        }
+        self.ast.alloc_pat(PatKind::Variant { path, fields }, start.merge(end))
+    }
+
+    /// `field: subpattern` or punning `val name` / `mut val name`.
+    fn parse_pattern_field(&mut self) -> (String, PatId) {
+        if let TokenKind::Ident(name) = self.peek().clone() {
+            if matches!(self.peek_nth(1), TokenKind::Colon) {
+                self.bump(); // name
+                self.bump(); // :
+                let pat = self.parse_pattern();
+                return (name, pat);
+            }
+        }
+        // punning: the field name is the binding's name
+        let pat = self.parse_pattern();
+        let name = match &self.ast.pat(pat).kind {
+            PatKind::Binding { name, .. } => name.clone(),
+            _ => {
+                let s = self.ast.pat(pat).span;
+                self.error(s, "expected `field: pattern` or a `val name` punning binding");
+                String::new()
+            }
+        };
+        (name, pat)
+    }
+
     /// JSX construction `<Type field=expr ... />` (or `<Type.Variant ... />`).
     fn parse_jsx(&mut self) -> ExprId {
         let start = self.peek_span();
@@ -804,6 +919,7 @@ impl Parser {
             }
             TokenKind::Kw(Keyword::If) => self.parse_if(),
             TokenKind::Kw(Keyword::While) => self.parse_while(),
+            TokenKind::Kw(Keyword::Match) => self.parse_match(),
             TokenKind::Lt => self.parse_jsx(),
             TokenKind::LBrace => {
                 let block = self.block();

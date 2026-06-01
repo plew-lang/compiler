@@ -19,11 +19,15 @@ pub struct StmtId(pub u32);
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct ItemId(pub u32);
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub struct PatId(pub u32);
+
 #[derive(Clone, Debug, Default)]
 pub struct Ast {
     exprs: Vec<Expr>,
     stmts: Vec<Stmt>,
     items: Vec<Item>,
+    pats: Vec<Pattern>,
 }
 
 impl Ast {
@@ -63,6 +67,16 @@ impl Ast {
 
     pub fn item(&self, id: ItemId) -> &Item {
         &self.items[id.0 as usize]
+    }
+
+    pub fn alloc_pat(&mut self, kind: PatKind, span: Span) -> PatId {
+        let id = PatId(self.pats.len() as u32);
+        self.pats.push(Pattern { kind, span });
+        id
+    }
+
+    pub fn pat(&self, id: PatId) -> &Pattern {
+        &self.pats[id.0 as usize]
     }
 }
 
@@ -108,8 +122,42 @@ pub enum ExprKind {
         path: Vec<String>,
         fields: Vec<(String, ExprId)>,
     },
+    /// `match scrutinee { pat => body  ... }`.
+    Match {
+        scrutinee: ExprId,
+        arms: Vec<MatchArm>,
+    },
     /// Placeholder inserted on a parse error so parsing can continue.
     Error,
+}
+
+#[derive(Clone, Debug)]
+pub struct MatchArm {
+    pub pat: PatId,
+    pub body: ExprId,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct Pattern {
+    pub kind: PatKind,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub enum PatKind {
+    /// `_`
+    Wildcard,
+    /// `val name` / `mut val name`
+    Binding { mutable: bool, name: String },
+    Int(String),
+    Bool(bool),
+    Str(String),
+    /// `Enum.Variant` or `Enum.Variant { field: subpat, .. }`.
+    Variant {
+        path: Vec<String>,
+        fields: Vec<(String, PatId)>,
+    },
 }
 
 /// A call argument. Plew requires labels except where suppressed with `~:`;
@@ -392,6 +440,18 @@ impl Ast {
                 }
                 out.push(')');
             }
+            ExprKind::Match { scrutinee, arms } => {
+                out.push_str("(match ");
+                self.write_sexpr(*scrutinee, out);
+                for arm in arms {
+                    out.push_str(" (=> ");
+                    self.write_pat(arm.pat, out);
+                    out.push(' ');
+                    self.write_sexpr(arm.body, out);
+                    out.push(')');
+                }
+                out.push(')');
+            }
             ExprKind::Error => out.push_str("<error>"),
         }
     }
@@ -453,6 +513,39 @@ impl Ast {
                     out.push(')');
                 }
                 out.push(')');
+            }
+        }
+    }
+
+    fn write_pat(&self, id: PatId, out: &mut String) {
+        match &self.pat(id).kind {
+            PatKind::Wildcard => out.push('_'),
+            PatKind::Binding { mutable, name } => {
+                out.push_str(if *mutable { "(mutval " } else { "(val " });
+                out.push_str(name);
+                out.push(')');
+            }
+            PatKind::Int(s) => out.push_str(s),
+            PatKind::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
+            PatKind::Str(s) => {
+                out.push('"');
+                out.push_str(s);
+                out.push('"');
+            }
+            PatKind::Variant { path, fields } => {
+                out.push_str(&path.join("."));
+                if !fields.is_empty() {
+                    out.push('{');
+                    for (i, (n, p)) in fields.iter().enumerate() {
+                        if i > 0 {
+                            out.push_str(", ");
+                        }
+                        out.push_str(n);
+                        out.push('=');
+                        self.write_pat(*p, out);
+                    }
+                    out.push('}');
+                }
             }
         }
     }
