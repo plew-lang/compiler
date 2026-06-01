@@ -14,18 +14,19 @@
 
 **ターゲット**は「**複雑な状態を持つクライアントアプリ**」を主軸に、モノレポでサーバ（Node 的・ステートレスで scale out 前提）も同一言語で書きモデル層を共有する**フルスタックのアプリケーション言語**（一次ビーチヘッド＝**WASM ウェブ**・自前ランタイム保持）。Rust の no-hidden-cost は日常に重すぎるので採らず（hidden cost は許容）、性能は二の次。シングルプロセス・シングルスレッド + イベントループ（JavaScript ライク）＋ ARC（参照カウント）を採用し、既定は値意味論（CoW）で、資源など必要なときだけ opt-in の最小所有権（`unique`/`borrow`/`inout`/`move`・`Ref`/`WeakRef`）を使う。
 
-コンパイラは **C# / .NET 8** 製。**ANTLR4** で構文解析し、**LLVMSharp** 経由で **LLVM-IR** を生成、ネイティブ／WASM を出力する。最終目標は **セルフホスティング**。パフォーマンスより上記の拠り所（意味は唱えた通り・難しい魔法は隠す）を優先する。
+コンパイラの stage0（使い捨てブートストラップ）は **Rust** 製（`bootstrap/`・cargo・lib+bin）。**手書き lexer + 再帰下降パーサ**で構文解析し、**C へトランスパイル → clang** でネイティブを出力する（旧 C#/.NET ＋ ANTLR4 ＋ LLVMSharp は技術選定ごと破棄）。**第一目標＝「Plew でコンパイラが書ける状態」→ 即セルフホスティング**。LLVM/WASM は self-host 後に Plew 側で追加。性能より上記の拠り所（意味は唱えた通り・難しい魔法は隠す）を優先。経緯は [claude/architecture.md](claude/architecture.md)。
 
-> **現状はスキャフォールド段階（コンパイラ）／言語仕様は活発に策定中。** `Program.cs` は Hello World、文法（`grammer/Plew.g4`）とサンプル（`examples/main.pw`）がある。仕様は `SPEC.md`／`spec/*.md`（4 部 17 章・部ごとサブディレクトリ・論理依存順）で活発に策定中。ANTLR / LLVMSharp の NuGet パッケージはまだ未追加で、パイプラインはこれから組む。
+> **現状＝実装フェーズ着手（仕様策定はほぼ完了）。** stage0（Rust・`bootstrap/`）の **lexer まで実装済み・全テスト green**、次はパーサ。仕様は `SPEC.md`／`spec/*.md`（4 部 17 章・部ごとサブディレクトリ・論理依存順）。実装の現在地・次の一歩は [claude/worklog.md](claude/worklog.md) を見ること。
 
 ## ドキュメント
 
 実装に着手する前に、関連する詳細ドキュメントを必ず読むこと：
 
 - **[SPEC.md](SPEC.md)** — 言語仕様（構文の正典）。
-- **[claude/architecture.md](claude/architecture.md)** — コンパイラのパイプライン設計、技術スタック、各フェーズの方針。
+- **[claude/worklog.md](claude/worklog.md)** — 実装の**現在地・次の一歩・ロードマップ**（compact 復帰用にこまめに更新する作業ログ）。
+- **[claude/architecture.md](claude/architecture.md)** — コンパイラのパイプライン設計、技術スタック、ブートストラップ戦略、各フェーズの方針、開発ワークフロー。
 - **[claude/language-semantics.md](claude/language-semantics.md)** — spec 意味論の実装者向けダイジェスト＝**章をまたぐ設計の背骨＋実装で間違えやすい罠＋spec への索引**（機構は再掲せず spec へリンク）。
-- **[claude/grammar.md](claude/grammar.md)** — ANTLR 文法の場所・生成方法・固有の罠、**文法と SPEC の差分表**（文法が将来支えるべき構文と現状のみ。意味論は spec が正典）。
+- **[claude/grammar.md](claude/grammar.md)** — **構文リファレンス**＝パーサが支えるべき構文の一覧と spec 索引（旧 ANTLR 機構の記述は破棄済の `Plew.g4` 前提で陳腐化・「構文 × spec」表のみ有効。意味論は spec が正典）。
 - **[claude/design-decisions.md](claude/design-decisions.md)** — 各設計判断の**根拠・却下案・経緯・未決事項リスト**（「なぜ」専門。機構は spec 参照）。構成は **言語の目的 → メモリ・所有権 → 主要な判断 → 個別論点 → 未決**（決定を前にまとめ・未決を末尾）。
 - **`note/*.md`** — 設計・言語選定の元になった ChatGPT 会話ログ（一次資料、記法は時系列で変遷あり）。
 
@@ -40,30 +41,33 @@
 ## リポジトリ構成
 
 ```
-PlewCompiler.csproj   C# プロジェクト（net8.0）
-Program.cs            エントリポイント（現状 Hello World）
+bootstrap/            stage0 コンパイラ（Rust・cargo）
+  Cargo.toml          lib(plewc) + bin(plewc)
+  src/                lexer.rs / token.rs / span.rs / lib.rs / main.rs …（順次追加）
+  tests/              cargo の統合テスト（lexer.rs …）
+  target/             ビルド生成物（gitignore 済・追跡外）
 SPEC.md               言語仕様の目次（インデックス）
 spec/<部>/NN-*.md     4 部サブディレクトリに分割した言語仕様本体
-grammer/Plew.g4       ANTLR4 文法（構文の正典）
 examples/main.pw      サンプル（※旧構文を含む。grammar.md 参照）
 claude/*.md           本ガイドからリンクする実装ドキュメント
-obj/                  ビルド生成物（bin/ ともに gitignore 済・追跡外）
 ```
 
 ## ビルド / 実行
 
 ```sh
-dotnet build          # コンパイラをビルド
-dotnet run            # コンパイラを実行
+cd bootstrap
+cargo test            # 全テスト
+cargo build           # stage0 コンパイラをビルド
+cargo run -- <file.pw>  # 実行（現状は token 列をダンプ）
 ```
 
-SDK は 10 系だが `.csproj` の `TargetFramework` は `net8.0`。ANTLR パーサ生成の手順は [claude/grammar.md](claude/grammar.md) を参照。
+clang は生成 C のコンパイルに使う（Apple clang で可）。
 
 仕様書（`spec/`）は **mdBook** で閲覧する。設定は `book.toml`（`src = "spec"`）、目次は `spec/SUMMARY.md`、ランディングは `spec/README.md`。`mdbook serve --open` でライブリロード閲覧、`mdbook build` で `book/`（gitignore 済）へ出力。章の追加・改番時は `SUMMARY.md` も更新する。
 
 ## 実装上の最重要原則
 
-1. **正典は `SPEC.md`／`spec/*.md`。`grammer/Plew.g4` は当面いじらない**（後で作り直す前提で、最近の判断は仕様が先行＝文法未反映。差分は [claude/grammar.md](claude/grammar.md)）。`note/` は記法が変遷した一次資料で、矛盾したら仕様優先。
+1. **正典は `SPEC.md`／`spec/*.md`**。`grammer/Plew.g4`（ANTLR 文法）は実装着手時に破棄済み＝**構文解析は手書き再帰下降パーサ**。パーサが支えるべき構文の一覧は [claude/grammar.md](claude/grammar.md)（構文リファレンス）。`note/` は記法が変遷した一次資料で、矛盾したら仕様優先。
 2. **全制約の根 = 値意味論 + CoW + ARC + opt-in 所有権**。代入・受け渡しは独立コピー（CoW で遅延）、共有可変は `Ref` のみ、メモリは ARC（循環は `WeakRef`）。`val` の不変性が信頼でき・エイリアスバグが無く・`deinit` で資源を決定的に解放できる。並行性は「借用は async/spawn 境界を越えず・spawn は move/copy のみ・`Ref` は spawn 不可」で **実質 race-free・`Mutex` 不要**（→ 下の「値・所有権」「並行性」項・spec/03,14）。
 3. **メタプログラミングは方針転換済み**（閉じた→ユーザー定義可能：ビルドと別コマンドで別ファイルにコード生成＋`Derive` 構造体）。実装はコンパイラ完成後の最後。詳細は [spec/04-execution/16-metaprogramming.md](spec/04-execution/16-metaprogramming.md)。
 4. **実装前に [claude/design-decisions.md](claude/design-decisions.md) の未決事項を確認**。言語設計の大物（型・トレイト・並行性・拡張・モジュール・制御フロー・演算子・文字列/配列/レンジ）はほぼ決着し、残る未決は**実装／コアライブラリ寄り**が中心：チャネル API・ARC/refcount 方式（循環回収は Ref グラフ限定サイクルコレクタを additive に足す方向で確定＝検出時は全ビルド loud 報告＋メモリ回収＋循環メンバ deinit 不走〔panic と対称・deinit 有無で分けない〕・残るはスキャン頻度/refcount 表現の細目）・メタプログラミング詳細・FFI 型マッピング・イテレータ/`Step` プロトコル・`Hash`/`Hasher` プロトコル（方向は Rust 流確定・シグネチャ未策定）・文字列ビルダ/正規化・`Slice`/部分文字列・固定長配列 `[E; N]`・ambient 型の正確な一覧・数値トレイトタワーのメンバ/署名（分解原理＝原子＋分類 supertrait 束は決定・`assert`＝常時 ON・ラップ＝`wrapping*` メソッドのみ・`pow`＝`Pow[Exp]` で決定／残りは core-lib）・テスト機構（言語表面＝`test` ブロック・配置・無条件発見・リンク除外・`expect*` 族・power-assert 不採用は決定／残りは失敗チャネル・`Debug`/`is*`・`assert` 置き場・async/doc テスト＝実装/ランナー/core-lib）・import 体系（3 ルート `@…`/`/`/`./`・`/`＝ルート起点絶対・`@Std` 予約＋分割・任意深さサブパス・`public`/path=file は決定／std 領域一覧は core-lib）など。
@@ -94,13 +98,15 @@ SDK は 10 系だが `.csproj` の `TargetFramework` は `net8.0`。ANTLR パー
 
 これまでのセッションで分かった進め方。
 
-- **現フェーズは言語設計（仕様策定）**。対話で設計判断を 1 つずつ固める。コンパイラ実装は後回しで、頼まれない限り着手しない。
+- **現フェーズはコンパイラ実装**（仕様策定はほぼ完了）。stage0 を Rust で実装中。現在地・次の一歩は [claude/worklog.md](claude/worklog.md)。理想は**人手を介さず自走でセルフホストまで**進めること。
 - **判断を仰ぐときは「選択肢＋トレードオフ＋推奨（理由）」を簡潔に**。ユーザーは納得すれば即決する。決定の含意を最後まで追い、他所に生じる矛盾・抜け（呼び出し側の整合、既存規則との衝突）を**先回りで指摘**する。
+- **判断に迷ったら突き進まず仰ぐ**。自明な実装判断は進めてよいが、後戻りが重い・判断が割れる分岐は確認する。一方で**明白に不要なファイルは容赦なく消してよい**。
+- **作業ログをこまめに更新**：compact がいつ走るか分からないので、[claude/worklog.md](claude/worklog.md) に「今やっていること・次にやること」を残す。**メモはすべて repo 内（`CLAUDE.md`／`claude/`）に置き、外部 memory は使わない**。
 - **明示 > 暗黙・便利**（＝拠り所の「意味は唱えた通り」側：**意味/出どころは明示・コスト/機構は隠す**。CoW/ARC を隠すことと矛盾しない）。冗長でも明示的・追跡可能な設計を好む（`via` 全明示・`#Ext` 必須・直接 import）。「どこからでも見える」ambient（Swift 的）を嫌い、出どころが常に分かることを重視する。
 - **単純 > 強力だが紛らわしい**。使いこなしにくい機能（`pub(crate)` 等）は切る。暗黙ルールは最小に。
 - **主張は根拠で。誇張しない**。ユーザーは通説や私の主張を検証してくる。間違えたら素直に撤回・再評価し、守りに入らない。避けられないトレードオフは欠点を隠さず明示する。
 - **根本方針も再考し得る**。下流の歪み（演算子・変換の不自然さ等）が積もると、一度決めた前提（例: 単一フラット名前空間 → オーバーロード許容へ転換）でも巻き戻す。だから決定の含意を追い「この方針だとここが歪む」を早めに可視化するのが有効。
-- **決定したら即同期**：spec（正典）と `claude/*.md` を更新し、grep で他所の矛盾・陳腐化を確認する。`grammer/Plew.g4` は触らない。**大きな巻き戻しの後は spec を通し読みして陳腐化・齟齬を点検する**。章の改番・節の移動をしたら、相対リンク（`(NN-name.md)`）を grep で機械的に張り替え（ファイル名が一意なので sed 一括で安全）、`SPEC.md` 索引・`CLAUDE.md` の地図（spec 番号）・claude 各 doc も合わせる。
-- **仕様策定中は作業のキリがつくたびに commit & push する**：1 つの設計判断を spec＋`claude/*.md` に反映し終えたら（または独立した修正のまとまりごとに）、その都度コミットしてリモートへ push する。大きな塊を溜めない。コミットメッセージは何をどう決めたかが追える粒度で書く。
+- **決定したら即同期**：spec（正典）と `claude/*.md` を更新し、grep で他所の矛盾・陳腐化を確認する。**大きな巻き戻しの後は spec を通し読みして陳腐化・齟齬を点検する**。章の改番・節の移動をしたら、相対リンク（`(NN-name.md)`）を grep で機械的に張り替え（ファイル名が一意なので sed 一括で安全）、`SPEC.md` 索引・`CLAUDE.md` の地図（spec 番号）・claude 各 doc も合わせる。
+- **作業のキリがつくたびに commit & push する**：機能/修正のまとまりごとに、その都度コミットしてリモートへ push（大きな塊を溜めない）。コミットメッセージは何をどうしたかが追える粒度で。**何かが正常動作する区切りでは git タグも切る**＝タグ名はまだバージョンでなく分かりやすい記述名（例 `lexer-working`・`parser-first-expr`・`first-c-output`・`self-host`）。ブランチは必要なら切ってよい（任意）。
 - **spec の章構成（4 部・17 章／`spec/<部ディレクトリ>/<NN>-*.md`）**：【Ⅰ 言語の基礎】01 概要 / 02 基本型（プリミティブ・文字列・複合型・レンジ）/ 03 値・変数・所有権（値意味論/CoW・unique/local・borrow/inout/move・Ref/WeakRef・deinit）/ 04 関数。【Ⅱ 型システム】05 構造体と列挙型（生成・factory・メンバ可視性）/ 06 ジェネリクス / 07 メソッドと impl（オーバーロード・無名 impl コヒーレンス）/ 08 トレイト / 09 拡張 / 10 newtype。【Ⅲ 式・制御・エラー】11 制御構造 / 12 型変換と演算子 / 13 エラー。【Ⅳ 実行モデルとツール】14 非同期 / 15 モジュール / 16 メタプログラミング。【付録】17 例。
 - 日本語でやり取りする。

@@ -1,6 +1,5 @@
-.antlr
+# mdBook output
 book/
 
-# .NET build output
-bin/
-obj/
+# Rust / cargo build output
+/bootstrap/target/
