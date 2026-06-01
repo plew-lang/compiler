@@ -1,0 +1,4 @@
+fn main() {
+    val answer = 6 * 7
+    print(answer)
+}

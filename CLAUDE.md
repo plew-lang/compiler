@@ -48,7 +48,7 @@ bootstrap/            stage0 コンパイラ（Rust・cargo）
   target/             ビルド生成物（gitignore 済・追跡外）
 SPEC.md               言語仕様の目次（インデックス）
 spec/<部>/NN-*.md     4 部サブディレクトリに分割した言語仕様本体
-examples/main.pw      サンプル（※旧構文を含む。grammar.md 参照）
+examples/hello.pw     現行構文の最小サンプル（stage0 で C 化→実行できる）
 claude/*.md           本ガイドからリンクする実装ドキュメント
 ```
 

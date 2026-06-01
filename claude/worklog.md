@@ -4,7 +4,7 @@
 
 ## 現在地（一言）
 
-stage0（Rust）：lexer（タグ `lexer-working`）＋**式パーサ完成**（タグ `parser-first-expr` 予定）。AST は arena+index、優先順位14段を precedence climbing で実装。次は**式の続き（postfix: 呼び出し/フィールド/添字、`as`、`try`/`await`）→ 文・宣言**。
+stage0（Rust）：**walking skeleton 達成**（タグ `first-c-output`）＝`fn main(){ print(...) }` を source→C→clang→実行できる。lexer/式・文・宣言パーサ＋最小 C codegen＋clang ドライバ。次は**型検査の最小化と codegen の汎用化**、並行して**式・宣言の肉付け**（文字列・`if`/`match`・`struct`/`enum`・他宣言）。
 
 ## 全体ロードマップ（第一目標＝Plew でコンパイラが書ける → 即セルフホスト）
 
@@ -16,8 +16,8 @@ stage0（Rust）：lexer（タグ `lexer-working`）＋**式パーサ完成**（
    - ✅ 文・宣言（最小）：`fn` 宣言（params・`~:`・`-> ret`）・block・`val`/`mut val`・`return`・式文・型（`Array[I32]` 等）
    - ⏭ 式の続き：`as`（要・型パーサ）・`try`/`await`・JSX `<T .. />`・closure・match 式・`?.`
    - ⏭ 他宣言：`struct`/`enum`/`impl`/`trait`/`import` …
-4. 名前解決・型解決・trait/オーバーロード解決（stage0 は最小）
-5. **C コード生成** ＋ ARC ランタイム（C）
+4. 🔨 **C コード生成（最小）** ＋ clang ドライバ ＝ walking skeleton ✅（整数前提・`print(int)`→printf・型検査なし）
+5. 名前解決・型解決・trait/オーバーロード解決／codegen 汎用化／ARC ランタイム（C）
 6. **stage1**：Plew サブセットでコンパイラを書く → stage0 で compile → 自己 compile＝**セルフホスト達成**
 7. 以降 LLVM/WASM・循環回収・所有権検査などを Plew 側で additive に
 

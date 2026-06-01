@@ -1,18 +1,26 @@
 //! `plewc` CLI entry point.
 //!
-//! Currently a thin harness: reads a `.pw` file and dumps its tokens, so the
-//! end-to-end pipeline can be exercised while later stages are built up.
+//! Usage:
+//!   plewc <file.pw>            build a native executable (stage0: via C + clang)
+//!   plewc --emit-c <file.pw>   print the generated C to stdout
+//!   plewc --tokens <file.pw>   dump the token stream (debugging)
 
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().collect();
-    let Some(path) = args.get(1) else {
-        eprintln!("usage: plewc <file.pw>");
-        return ExitCode::FAILURE;
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let (mode, path) = match args.as_slice() {
+        [flag, path] if flag == "--emit-c" => (Mode::EmitC, path.clone()),
+        [flag, path] if flag == "--tokens" => (Mode::Tokens, path.clone()),
+        [path] if !path.starts_with('-') => (Mode::Build, path.clone()),
+        _ => {
+            eprintln!("usage: plewc [--emit-c | --tokens] <file.pw>");
+            return ExitCode::FAILURE;
+        }
     };
 
-    let src = match std::fs::read_to_string(path) {
+    let src = match std::fs::read_to_string(&path) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("plewc: cannot read {path}: {e}");
@@ -20,15 +28,68 @@ fn main() -> ExitCode {
         }
     };
 
-    let (tokens, errors) = plewc::lexer::lex(&src);
-    for tok in &tokens {
-        println!("{:?} {:?}", tok.span, tok.kind);
-    }
-    if !errors.is_empty() {
-        for err in &errors {
-            eprintln!("plewc: lex error at {:?}: {}", err.span, err.msg);
+    match mode {
+        Mode::Tokens => {
+            let (tokens, errors) = plewc::lexer::lex(&src);
+            for tok in &tokens {
+                println!("{:?} {:?}", tok.span, tok.kind);
+            }
+            report_lex(&errors)
         }
-        return ExitCode::FAILURE;
+        Mode::EmitC => match plewc::driver::compile_to_c(&src) {
+            Ok(c) => {
+                print!("{c}");
+                ExitCode::SUCCESS
+            }
+            Err(errs) => report(&errs),
+        },
+        Mode::Build => {
+            let out = default_output_path(&path);
+            match plewc::driver::build_executable(&src, &out) {
+                Ok(()) => {
+                    eprintln!("plewc: built {}", out.display());
+                    ExitCode::SUCCESS
+                }
+                Err(msg) => {
+                    eprintln!("plewc: {msg}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
     }
-    ExitCode::SUCCESS
+}
+
+enum Mode {
+    Build,
+    EmitC,
+    Tokens,
+}
+
+/// `foo/bar.pw` -> `foo/bar`; a path with no extension gets `.out`.
+fn default_output_path(path: &str) -> PathBuf {
+    let p = Path::new(path);
+    let stripped = p.with_extension("");
+    if stripped == p {
+        p.with_extension("out")
+    } else {
+        stripped
+    }
+}
+
+fn report_lex(errors: &[plewc::lexer::LexError]) -> ExitCode {
+    if errors.is_empty() {
+        ExitCode::SUCCESS
+    } else {
+        for e in errors {
+            eprintln!("plewc: lex error at {:?}: {}", e.span, e.msg);
+        }
+        ExitCode::FAILURE
+    }
+}
+
+fn report(errs: &[String]) -> ExitCode {
+    for e in errs {
+        eprintln!("plewc: {e}");
+    }
+    ExitCode::FAILURE
 }

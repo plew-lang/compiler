@@ -64,6 +64,6 @@
 | 全フィールド明示・`..` なし（[11](../spec/03-expressions/11-control-flow.md)） | 分解パターンは全フィールド列挙（束縛 or `_`）・残り無視 `..` を持たない | 意味論層（フィールド網羅検査）＋仕様先行（`enum_assign_left` は enum 限定で構造体/レコード分解の規則なし） |
 | レンジ構文（[02](../spec/01-basics/02-basic-types.md)） | `a..<b`/`a..=b`（素の `..` なし） | 仕様先行（範囲リテラルなし・型/糖衣は意味論層） |
 
-## `examples/main.pw` について
+## サンプル（`examples/`）について
 
-このサンプルは `sync val` と `b.lock()` を使っており、**現行モデルでは無効**な旧設計の構文（Plew は `Mutex`/`sync val` を持たず、spawn は値の送信のみ）。新しいサンプルを書くときは現行モデル（spec）に従うこと。
+現行構文の有効なサンプルは `examples/hello.pw`（stage0 で実際に C 化→clang→実行できる最小プログラム）。旧 `examples/main.pw` は `sync val`/`b.lock()` を使う**現行モデルでは無効**な旧設計（Plew は `Mutex`/`sync val` を持たず spawn は値の送信のみ）だったため削除済み。新しいサンプルは現行モデル（spec）に従うこと。
