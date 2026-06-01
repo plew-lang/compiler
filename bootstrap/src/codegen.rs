@@ -36,16 +36,26 @@ pub fn emit_c(
     cg.out.push_str(
         "static int PlewString_eq(PlewString a, PlewString b) { if (a.len != b.len) return 0; for (int64_t i = 0; i < a.len; i++) if (a.data[i] != b.data[i]) return 0; return 1; }\n\n",
     );
-    // type definitions first (C needs types declared before use)
+    // Type emission must respect C's "declare before use", with two wrinkles:
+    // a struct/enum may contain an array (by value) and an array's element may
+    // be a struct/enum. We break the cycle with: (1) forward decls of every
+    // nominal type, (2) array *typedefs* (which only need a forward decl since
+    // they hold a pointer to the element), (3) full struct/enum bodies in
+    // dependency order, (4) array *runtime* (operates on elements by value, so
+    // needs full bodies). Functions then get prototypes before bodies so they
+    // can be mutually recursive.
     for &id in items {
         match ast.item(id).kind {
-            ItemKind::Struct { .. } => cg.emit_struct(id),
-            ItemKind::Enum { .. } => cg.emit_enum(id),
+            ItemKind::Struct { .. } => cg.emit_nominal_fwd(id),
+            ItemKind::Enum { .. } => cg.emit_nominal_fwd(id),
             ItemKind::Fn { .. } => {}
         }
     }
-    // Monomorphized array types + their (leaked) runtime, one per element type.
-    cg.emit_arrays();
+    cg.out.push('\n');
+    cg.emit_array_typedefs();
+    cg.emit_nominal_defs();
+    cg.emit_array_runtime();
+    cg.emit_fn_prototypes();
     for &id in items {
         cg.emit_item(id);
     }
@@ -80,31 +90,9 @@ impl Codegen<'_> {
                 if is_main {
                     self.out.push_str("int main(void) {\n");
                 } else {
-                    let rty = match ret {
-                        Some(t) => c_type(t),
-                        None => "void".to_string(),
-                    };
-                    self.out.push_str(&rty);
-                    self.out.push(' ');
-                    self.out.push_str(name);
-                    self.out.push('(');
-                    if params.is_empty() {
-                        self.out.push_str("void");
-                    } else {
-                        for (i, p) in params.iter().enumerate() {
-                            if i > 0 {
-                                self.out.push_str(", ");
-                            }
-                            self.out.push_str(&c_type(&p.ty));
-                            self.out.push(' ');
-                            // `inout` params are passed by pointer.
-                            if p.mode == crate::ast::Mode::Inout {
-                                self.out.push('*');
-                            }
-                            self.out.push_str(&p.label);
-                        }
-                    }
-                    self.out.push_str(") {\n");
+                    let sig = self.fn_signature(name, params, ret);
+                    self.out.push_str(&sig);
+                    self.out.push_str(" {\n");
                 }
                 // Track inout params so their uses are dereferenced in the body.
                 self.inout_params = params
@@ -126,61 +114,148 @@ impl Codegen<'_> {
         }
     }
 
-    fn emit_struct(&mut self, id: ItemId) {
-        let ItemKind::Struct { name, fields, generics } = &self.ast.item(id).kind else {
-            return;
-        };
-        if !generics.is_empty() {
-            self.errors.push("generic struct codegen is not supported by stage0 yet".into());
-            return;
-        }
-        let name = name.clone();
-        let fields: Vec<(String, Type)> =
-            fields.iter().map(|f| (f.name.clone(), f.ty.clone())).collect();
-        self.out.push_str("typedef struct {\n");
-        for (fname, fty) in &fields {
-            let cty = c_type(fty);
-            self.out.push_str(&format!("    {cty} {fname};\n"));
-        }
-        self.out.push_str(&format!("}} {name};\n\n"));
-    }
-
-    fn emit_enum(&mut self, id: ItemId) {
-        let ItemKind::Enum { name, variants, generics } = &self.ast.item(id).kind else {
-            return;
-        };
-        if !generics.is_empty() {
-            self.errors.push("generic enum codegen is not supported by stage0 yet".into());
-            return;
-        }
-        let name = name.clone();
-        let variants: Vec<(String, Vec<(String, Type)>)> = variants
-            .iter()
-            .map(|v| (v.name.clone(), v.fields.iter().map(|f| (f.name.clone(), f.ty.clone())).collect()))
-            .collect();
-        // Tagged union: an `int tag` plus a union of the variants that carry data.
-        self.out.push_str("typedef struct {\n    int tag;\n");
-        if variants.iter().any(|(_, fs)| !fs.is_empty()) {
-            self.out.push_str("    union {\n");
-            for (vname, fs) in &variants {
-                if fs.is_empty() {
-                    continue;
+    /// Forward declaration: `typedef struct Name Name;` so the name can be used
+    /// (through a pointer) before its body is emitted.
+    fn emit_nominal_fwd(&mut self, id: ItemId) {
+        let name = match &self.ast.item(id).kind {
+            ItemKind::Struct { name, generics, .. } | ItemKind::Enum { name, generics, .. } => {
+                if !generics.is_empty() {
+                    self.errors.push("generic type codegen is not supported by stage0 yet".into());
+                    return;
                 }
-                self.out.push_str("        struct { ");
-                for (fname, fty) in fs {
-                    self.out.push_str(&format!("{} {fname}; ", c_type(fty)));
-                }
-                self.out.push_str(&format!("}} {vname};\n"));
+                name.clone()
             }
-            self.out.push_str("    } data;\n");
-        }
-        self.out.push_str(&format!("}} {name};\n\n"));
+            ItemKind::Fn { .. } => return,
+        };
+        self.out.push_str(&format!("typedef struct {name} {name};\n"));
     }
 
-    /// Emit a monomorphized array struct + its (leaked) runtime for every
-    /// interned `Array[T]`. Memory is never freed — fine for a throwaway
-    /// stage0 that runs once per compilation.
-    fn emit_arrays(&mut self) {
+    /// Emit full struct/enum bodies in dependency order: a type that contains
+    /// another nominal type *by value* (not via an array, which is a pointer)
+    /// must be defined after it.
+    fn emit_nominal_defs(&mut self) {
+        // Collect nominal items and their by-value nominal dependencies.
+        let mut order: Vec<ItemId> = Vec::new();
+        let mut visiting: Vec<String> = Vec::new();
+        let mut done: Vec<String> = Vec::new();
+        let nominals: Vec<ItemId> = self
+            .items
+            .iter()
+            .copied()
+            .filter(|&id| matches!(self.ast.item(id).kind, ItemKind::Struct { .. } | ItemKind::Enum { .. }))
+            .collect();
+        for &id in &nominals {
+            self.topo_visit(id, &nominals, &mut order, &mut visiting, &mut done);
+        }
+        for id in order {
+            self.emit_nominal_body(id);
+        }
+    }
+
+    fn topo_visit(
+        &mut self,
+        id: ItemId,
+        nominals: &[ItemId],
+        order: &mut Vec<ItemId>,
+        visiting: &mut Vec<String>,
+        done: &mut Vec<String>,
+    ) {
+        let name = match &self.ast.item(id).kind {
+            ItemKind::Struct { name, .. } | ItemKind::Enum { name, .. } => name.clone(),
+            ItemKind::Fn { .. } => return,
+        };
+        if done.contains(&name) || visiting.contains(&name) {
+            return; // already emitted, or a cycle (broken arbitrarily)
+        }
+        visiting.push(name.clone());
+        for dep in self.nominal_deps(id) {
+            if let Some(&dep_id) = nominals
+                .iter()
+                .find(|&&n| matches!(&self.ast.item(n).kind, ItemKind::Struct { name, .. } | ItemKind::Enum { name, .. } if *name == dep))
+            {
+                self.topo_visit(dep_id, nominals, order, visiting, done);
+            }
+        }
+        visiting.retain(|n| n != &name);
+        done.push(name);
+        order.push(id);
+    }
+
+    /// Names of nominal types this type embeds *by value* (a direct field of
+    /// struct/enum type). `Array[T]` fields don't count (they hold a pointer).
+    fn nominal_deps(&self, id: ItemId) -> Vec<String> {
+        let mut deps = Vec::new();
+        let add = |t: &Type, deps: &mut Vec<String>| {
+            if t.name != "Array"
+                && !is_primitive_type(&t.name)
+                && !deps.contains(&t.name)
+            {
+                deps.push(t.name.clone());
+            }
+        };
+        match &self.ast.item(id).kind {
+            ItemKind::Struct { fields, .. } => {
+                for f in fields {
+                    add(&f.ty, &mut deps);
+                }
+            }
+            ItemKind::Enum { variants, .. } => {
+                for v in variants {
+                    for f in &v.fields {
+                        add(&f.ty, &mut deps);
+                    }
+                }
+            }
+            ItemKind::Fn { .. } => {}
+        }
+        deps
+    }
+
+    fn emit_nominal_body(&mut self, id: ItemId) {
+        match &self.ast.item(id).kind {
+            ItemKind::Struct { name, fields, .. } => {
+                let name = name.clone();
+                let fields: Vec<(String, Type)> =
+                    fields.iter().map(|f| (f.name.clone(), f.ty.clone())).collect();
+                self.out.push_str(&format!("struct {name} {{\n"));
+                for (fname, fty) in &fields {
+                    let cty = c_type(fty);
+                    self.out.push_str(&format!("    {cty} {fname};\n"));
+                }
+                self.out.push_str("};\n\n");
+            }
+            ItemKind::Enum { name, variants, .. } => {
+                let name = name.clone();
+                let variants: Vec<(String, Vec<(String, Type)>)> = variants
+                    .iter()
+                    .map(|v| {
+                        (v.name.clone(), v.fields.iter().map(|f| (f.name.clone(), f.ty.clone())).collect())
+                    })
+                    .collect();
+                self.out.push_str(&format!("struct {name} {{\n    int tag;\n"));
+                if variants.iter().any(|(_, fs)| !fs.is_empty()) {
+                    self.out.push_str("    union {\n");
+                    for (vname, fs) in &variants {
+                        if fs.is_empty() {
+                            continue;
+                        }
+                        self.out.push_str("        struct { ");
+                        for (fname, fty) in fs {
+                            self.out.push_str(&format!("{} {fname}; ", c_type(fty)));
+                        }
+                        self.out.push_str(&format!("}} {vname};\n"));
+                    }
+                    self.out.push_str("    } data;\n");
+                }
+                self.out.push_str("};\n\n");
+            }
+            ItemKind::Fn { .. } => {}
+        }
+    }
+
+    /// Array typedefs: `{T* data; len; cap}`. The element is held via a pointer
+    /// so a forward declaration of `T` suffices (emitted before full bodies).
+    fn emit_array_typedefs(&mut self) {
         for id in 0..self.table.array_elems.len() as u32 {
             let elem = self.table.array_elem(id);
             let at = self.array_c_name(id);
@@ -188,6 +263,17 @@ impl Codegen<'_> {
             self.out.push_str(&format!(
                 "typedef struct {{ {et}* data; int64_t len; int64_t cap; }} {at};\n"
             ));
+        }
+        self.out.push('\n');
+    }
+
+    /// Array (leaked) runtime — operates on elements by value, so it must come
+    /// after full struct/enum bodies. Memory is never freed (throwaway stage0).
+    fn emit_array_runtime(&mut self) {
+        for id in 0..self.table.array_elems.len() as u32 {
+            let elem = self.table.array_elem(id);
+            let at = self.array_c_name(id);
+            let et = self.ty_c_name(elem);
             self.out.push_str(&format!(
                 "static {at} {at}_new(void) {{ {at} a; a.data = 0; a.len = 0; a.cap = 0; return a; }}\n"
             ));
@@ -202,6 +288,54 @@ impl Codegen<'_> {
                 "static void {at}_push({at}* a, {et} v) {{ if (a->len >= a->cap) {{ int64_t nc = a->cap < 4 ? 4 : a->cap * 2; {et}* nd = ({et}*)malloc(sizeof({et}) * nc); for (int64_t i = 0; i < a->len; i++) nd[i] = a->data[i]; a->data = nd; a->cap = nc; }} a->data[a->len] = v; a->len++; }}\n\n"
             ));
         }
+    }
+
+    /// Emit a prototype for every non-`main` function so they can be mutually
+    /// recursive (and called before their definition).
+    fn emit_fn_prototypes(&mut self) {
+        for &id in self.items {
+            if let ItemKind::Fn { name, params, ret, .. } = &self.ast.item(id).kind {
+                if name == "main" {
+                    continue;
+                }
+                let sig = self.fn_signature(name, params, ret);
+                self.out.push_str(&sig);
+                self.out.push_str(";\n");
+            }
+        }
+        self.out.push('\n');
+    }
+
+    /// Render a C function signature `ret name(params)` (no body / trailing
+    /// semicolon). `inout` params become pointers.
+    fn fn_signature(
+        &self,
+        name: &str,
+        params: &[crate::ast::Param],
+        ret: &Option<Type>,
+    ) -> String {
+        let rty = match ret {
+            Some(t) => c_type(t),
+            None => "void".to_string(),
+        };
+        let mut s = format!("{rty} {name}(");
+        if params.is_empty() {
+            s.push_str("void");
+        } else {
+            for (i, p) in params.iter().enumerate() {
+                if i > 0 {
+                    s.push_str(", ");
+                }
+                s.push_str(&c_type(&p.ty));
+                s.push(' ');
+                if p.mode == crate::ast::Mode::Inout {
+                    s.push('*');
+                }
+                s.push_str(&p.label);
+            }
+        }
+        s.push(')');
+        s
     }
 
     /// Inferred type of expression `id` (from the type checker).
@@ -992,6 +1126,15 @@ fn c_type(t: &Type) -> String {
         "Array" if t.args.len() == 1 => format!("PlewArray_{}", mangle_type(&t.args[0])),
         other => other.to_string(),
     }
+}
+
+/// Whether a type name is a stage0 primitive (no nominal definition to order).
+fn is_primitive_type(name: &str) -> bool {
+    matches!(
+        name,
+        "I8" | "I16" | "I32" | "I64" | "U8" | "U16" | "U32" | "U64" | "F32" | "F64" | "Bool"
+            | "String"
+    )
 }
 
 /// C-identifier-safe mangling of a syntactic type (mirror of

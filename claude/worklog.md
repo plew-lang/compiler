@@ -43,7 +43,10 @@ stage0 は **throwaway（1 回コンパイルして終了）**。よって Array
    - ⏭ import 機構／値位置 `match`／codegen の整数幅反映／名前解決の本格化。
    - ✅ **stage1 レキサ素描が compile&run**（`selfhost/lexer.pw`）：整数/識別子/キーワード/単一文字記号を tokenize、arena 風 `Array[Tok]`（source を (start,len) で参照＝文字列materializeなし）。キーワード照合は純 Plew バイト比較（`rangeEquals`・substring 不要）。`"val x = 12 + foo * (3)"`→10 トークンの種別列を検証（e2e `selfhost_lexer_sketch_builds_and_runs`）。**substring 無しでレキサが書けることを実証**。
    - ✅ **`inout` パラメータ**（spec/03）：宣言 `x: inout T`／呼び出し `f(x: inout a)`（両側明示・引数は place）。codegen は C ポインタ＝callee 内で `(*p)`・呼び出しで `&(place)`。struct フィールド変更も配列 append も関数越しに伝播（パーサのカーソル状態 threading が書ける）。`borrow`/`move` はコピー可能型でエラー（spec 決定）。**未**：`mut` 束縛の検査（inout 引数が `val` でも今は通す）・重なり inout 検査・`inout fn`（メソッド self）。
-   - ⏭ 次：stage1 レキサを Plew の実サブセット全トークンに拡張 → **パーサ素描**（`inout p: Parser` で相互再帰・arena+index で AST）。**ファイル I/O**（自分自身を読む＝真の self-host に必須・現状ハードコード文字列）と **`Dictionary` or 線形スキャン**（名前解決）はその先。AST 再帰は arena+index（`ExprId`=U32 包み）で回避予定。
+   - ✅ **パーサ素描が compile&run**（`selfhost/calc.pw`）：算術式パーサ＋評価器。`inout p: Parser` でカーソル相互再帰・arena+index AST（`Array[Expr]`・U64 index＝`as` 回避）・enum payload・再帰 eval。`"2 + 3 * (4 + 5) - 1"`→28（e2e `selfhost_calc_parser_builds_and_runs`）。**パーサ・フェーズの言語要件を実証**。
+   - ✅ **codegen の型順序対応**：構造体がArrayを含む／Arrayの要素が構造体、の循環を「①全 nominal の前方宣言 `typedef struct N N;`／②Array typedef（要素はポインタ＝前方宣言で足る）／③構造体/enum 本体を依存順（by-value 含有でトポロジカル）／④Array ランタイム（要素を値で扱う＝本体後）」で解決。関数は**プロトタイプ**を本体前に出して相互再帰可。
+   - 📝 **パーサ素描で判明した言語の罠（spec 通りだが書き手が嵌まる）**：①フィールド名に `val` 不可（キーワード衝突）②enum variant フィールドも `val name: T`（`val` 必須）③match のフィールド punning は `{ val name }`（`val` 前置・bare `{ name }` は variant パターン扱い）④`as` キャスト未実装＝index 型は `count` と同じ `U64` で統一して回避。
+   - ⏭ 次：stage1 レキサを実 Plew サブセットの全トークンへ拡張 → 実 Plew サブセットのパーサ＋C codegen を Plew で。**ファイル I/O**（自分を読む＝真の self-host）と名前解決（線形スキャン or Dictionary）はその先。**ファイル I/O**（自分自身を読む＝真の self-host に必須・現状ハードコード文字列）と **`Dictionary` or 線形スキャン**（名前解決）はその先。AST 再帰は arena+index（`ExprId`=U32 包み）で回避予定。
    - ⏭ import 機構／値位置 `match`／codegen 整数幅は必要になった時点で。
 7. ⏭ → stage1（Plew でコンパイラ）に必要な分が揃い次第セルフホスト
 6. **stage1**：Plew サブセットでコンパイラを書く → stage0 で compile → 自己 compile＝**セルフホスト達成**

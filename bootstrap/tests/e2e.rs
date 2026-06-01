@@ -200,6 +200,17 @@ fn selfhost_lexer_sketch_builds_and_runs() {
 }
 
 #[test]
+fn selfhost_calc_parser_builds_and_runs() {
+    // The Plew-side arithmetic parser+evaluator (selfhost/calc.pw): inout
+    // cursor threading, arena+index AST, recursive eval. Guards the parser
+    // phase's language requirements (and codegen's type-ordering + prototypes).
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../selfhost/calc.pw");
+    let src = std::fs::read_to_string(path).expect("read selfhost/calc.pw");
+    // "2 + 3 * (4 + 5) - 1" = 2 + 27 - 1 = 28
+    assert_eq!(build_and_run(&src, "selfhost_calc"), "28\n");
+}
+
+#[test]
 fn reports_unsupported_construct() {
     // `??` has no stage0 C lowering yet → a codegen error, not a panic.
     let errs = compile_to_c("fn main() {\n    print(a ?? b)\n}\n").unwrap_err();

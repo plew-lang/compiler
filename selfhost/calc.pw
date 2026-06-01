@@ -1,0 +1,153 @@
+// stage1 parser sketch: a precedence-respecting arithmetic parser + evaluator
+// written in Plew, compiled by stage0. Validates the parser-phase approach:
+//   - mutable cursor state threaded via `inout p: Parser`
+//   - an AST stored arena-style (Array[Expr]), nodes referenced by U64 index
+//     (U64, not a newtype, to avoid needing `as` casts which stage0 lacks)
+//   - mutual recursion across parse functions and in eval
+//
+// Grammar: expr := term (('+' | '-') term)*  ;  term := atom (('*' | '/') atom)*
+//          atom := number | '(' expr ')'
+
+enum Expr {
+    Num { val value: I64 }
+    Bin { val op: U8, val lhs: U64, val rhs: U64 }
+}
+
+struct Parser {
+    val bytes: Array[U8]
+    mut val pos: U64
+    mut val nodes: Array[Expr]
+}
+
+fn peekByte(p: inout Parser) -> U8 {
+    if p.pos < p.bytes.count {
+        return p.bytes[p.pos]
+    }
+    return 0
+}
+
+fn skipSpaces(p: inout Parser) {
+    while p.pos < p.bytes.count {
+        if p.bytes[p.pos] == 32 {
+            p.pos = p.pos + 1
+        } else {
+            break
+        }
+    }
+}
+
+fn isDigit(b: U8) -> Bool {
+    if b >= 48 {
+        if b <= 57 {
+            return true
+        }
+    }
+    return false
+}
+
+fn push(p: inout Parser, e: Expr) -> U64 {
+    val id: U64 = p.nodes.count
+    p.nodes.append(e)
+    return id
+}
+
+fn parseNumber(p: inout Parser) -> U64 {
+    mut val v: I64 = 0
+    while p.pos < p.bytes.count {
+        val b: U8 = p.bytes[p.pos]
+        if isDigit(b) {
+            mut val d: I64 = 0
+            mut val k: U8 = 48
+            while k < b {
+                d = d + 1
+                k = k + 1
+            }
+            v = v * 10 + d
+            p.pos = p.pos + 1
+        } else {
+            break
+        }
+    }
+    return push(p: inout p, e: <Expr.Num value=v />)
+}
+
+fn parseAtom(p: inout Parser) -> U64 {
+    skipSpaces(p: inout p)
+    if peekByte(p: inout p) == 40 {
+        p.pos = p.pos + 1
+        val inner: U64 = parseExpr(p: inout p)
+        skipSpaces(p: inout p)
+        if peekByte(p: inout p) == 41 {
+            p.pos = p.pos + 1
+        }
+        return inner
+    }
+    return parseNumber(p: inout p)
+}
+
+fn parseTerm(p: inout Parser) -> U64 {
+    mut val left: U64 = parseAtom(p: inout p)
+    while true {
+        skipSpaces(p: inout p)
+        val b: U8 = peekByte(p: inout p)
+        if b == 42 {
+            p.pos = p.pos + 1
+            val right: U64 = parseAtom(p: inout p)
+            left = push(p: inout p, e: <Expr.Bin op=42 lhs=left rhs=right />)
+        } else {
+            if b == 47 {
+                p.pos = p.pos + 1
+                val right: U64 = parseAtom(p: inout p)
+                left = push(p: inout p, e: <Expr.Bin op=47 lhs=left rhs=right />)
+            } else {
+                break
+            }
+        }
+    }
+    return left
+}
+
+fn parseExpr(p: inout Parser) -> U64 {
+    mut val left: U64 = parseTerm(p: inout p)
+    while true {
+        skipSpaces(p: inout p)
+        val b: U8 = peekByte(p: inout p)
+        if b == 43 {
+            p.pos = p.pos + 1
+            val right: U64 = parseTerm(p: inout p)
+            left = push(p: inout p, e: <Expr.Bin op=43 lhs=left rhs=right />)
+        } else {
+            if b == 45 {
+                p.pos = p.pos + 1
+                val right: U64 = parseTerm(p: inout p)
+                left = push(p: inout p, e: <Expr.Bin op=45 lhs=left rhs=right />)
+            } else {
+                break
+            }
+        }
+    }
+    return left
+}
+
+fn eval(nodes: Array[Expr], id: U64) -> I64 {
+    val node: Expr = nodes[id]
+    match node {
+        Expr.Num { val value } => { return value }
+        Expr.Bin { val op, val lhs, val rhs } => {
+            val l: I64 = eval(nodes: nodes, id: lhs)
+            val r: I64 = eval(nodes: nodes, id: rhs)
+            if op == 43 { return l + r }
+            if op == 45 { return l - r }
+            if op == 42 { return l * r }
+            return l / r
+        }
+    }
+    return 0
+}
+
+fn main() {
+    val src: String = "2 + 3 * (4 + 5) - 1"
+    mut val p: Parser = <Parser bytes=src.bytes pos=0 nodes=[] />
+    val root: U64 = parseExpr(p: inout p)
+    print(eval(nodes: p.nodes, id: root))
+}
