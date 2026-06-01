@@ -14,8 +14,9 @@ stage0（Rust）：**walking skeleton 達成**（タグ `first-c-output`）＝`f
    - ✅ 式：literal/ident/unary/binary（優先順位14段・非結合・グルーピング・エラー回復）
    - ✅ postfix：call（ラベル付き引数・末尾カンマ）/field `.`/index `[]`（postfix > prefix を担保）
    - ✅ 文・宣言（最小）：`fn` 宣言（params・`~:`・`-> ret`）・block・`val`/`mut val`・`return`・式文・型（`Array[I32]` 等）
-   - ✅ 制御フロー：`if`/`else`/`else if`（式として）・ブロック式・`give`（パース）。codegen は `if` を**文位置**で対応（値位置/`give` は loud エラー＝次の増分）
-   - ⏭ 式の続き：`as`（要・型パーサ）・`try`/`await`・JSX `<T .. />`・closure・match 式・`?.`・**値位置 if/give の codegen**
+   - ✅ 制御フロー：`if`/`else`/`else if`（式として）・ブロック式・`give`（パース）。codegen は `if` を**文位置**で対応
+   - ✅ ループ：`while`（文位置 codegen）＋代入 `=`／複合代入 `+= -= *= /= %= &= |= ^= <<= >>=`。合計ループが e2e で動作
+   - ⏭ 式の続き：`as`（要・型パーサ）・`try`/`await`・JSX `<T .. />`・closure・`match`・`?.`・**値位置 if/give の codegen**（clang statement-expr）
    - ⏭ 他宣言：`struct`/`enum`/`impl`/`trait`/`import` …
 4. 🔨 **C コード生成（最小）** ＋ clang ドライバ ＝ walking skeleton ✅（整数前提・`print(int)`→printf・型検査なし）
 5. 名前解決・型解決・trait/オーバーロード解決／codegen 汎用化／ARC ランタイム（C）

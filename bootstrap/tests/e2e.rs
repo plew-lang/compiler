@@ -43,6 +43,13 @@ fn builds_and_runs_else_if() {
 }
 
 #[test]
+fn builds_and_runs_sum_loop() {
+    let src = "fn main() {\n    mut val i: I64 = 0\n    mut val sum: I64 = 0\n    while i < 5 {\n        sum += i\n        i += 1\n    }\n    print(sum)\n}\n";
+    // 0+1+2+3+4 = 10
+    assert_eq!(build_and_run(src, "sumloop"), "10\n");
+}
+
+#[test]
 fn reports_unsupported_construct() {
     // `??` has no stage0 C lowering yet → a codegen error, not a panic.
     let errs = compile_to_c("fn main() {\n    print(a ?? b)\n}\n").unwrap_err();

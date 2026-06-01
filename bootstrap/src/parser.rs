@@ -99,6 +99,26 @@ fn token_to_binop(kind: &TokenKind) -> Option<BinOp> {
     })
 }
 
+/// Recognize an assignment operator. `Some(None)` is plain `=`; `Some(Some(op))`
+/// is a compound assignment `OP=` (desugars to `target = target OP value`).
+fn assign_op(kind: &TokenKind) -> Option<Option<BinOp>> {
+    use TokenKind as T;
+    Some(match kind {
+        T::Eq => None,
+        T::PlusEq => Some(BinOp::Add),
+        T::MinusEq => Some(BinOp::Sub),
+        T::StarEq => Some(BinOp::Mul),
+        T::SlashEq => Some(BinOp::Div),
+        T::PercentEq => Some(BinOp::Rem),
+        T::AmpEq => Some(BinOp::BitAnd),
+        T::PipeEq => Some(BinOp::BitOr),
+        T::CaretEq => Some(BinOp::BitXor),
+        T::ShlEq => Some(BinOp::Shl),
+        T::ShrEq => Some(BinOp::Shr),
+        _ => return None,
+    })
+}
+
 struct Parser {
     tokens: Vec<Token>,
     pos: usize,
@@ -445,9 +465,19 @@ impl Parser {
                 self.ast.alloc_stmt(Stmt { kind: StmtKind::Return(value), span })
             }
             _ => {
-                let value = self.expr_bp(0);
-                let span = start.merge(self.ast.expr(value).span);
-                self.ast.alloc_stmt(Stmt { kind: StmtKind::Expr(value), span })
+                let target = self.expr_bp(0);
+                if let Some(op) = assign_op(self.peek()) {
+                    self.bump();
+                    let value = self.expr_bp(0);
+                    let span = start.merge(self.ast.expr(value).span);
+                    self.ast.alloc_stmt(Stmt {
+                        kind: StmtKind::Assign { target, op, value },
+                        span,
+                    })
+                } else {
+                    let span = start.merge(self.ast.expr(target).span);
+                    self.ast.alloc_stmt(Stmt { kind: StmtKind::Expr(target), span })
+                }
             }
         }
     }
@@ -493,6 +523,17 @@ impl Parser {
             None => then_span,
         };
         self.ast.alloc_expr(ExprKind::If { cond, then_branch, else_branch }, start.merge(end))
+    }
+
+    /// `while cond { .. }` as an expression (yields `()`).
+    fn parse_while(&mut self) -> ExprId {
+        let start = self.peek_span();
+        self.bump(); // `while`
+        let cond = self.expr_bp(0);
+        let body_block = self.block();
+        let sp = body_block.span;
+        let body = self.ast.alloc_expr(ExprKind::Block(body_block), sp);
+        self.ast.alloc_expr(ExprKind::While { cond, body }, start.merge(sp))
     }
 
     // --- small helpers ----------------------------------------------------
@@ -560,6 +601,7 @@ impl Parser {
                 self.ast.alloc_expr(ExprKind::Bool(false), span)
             }
             TokenKind::Kw(Keyword::If) => self.parse_if(),
+            TokenKind::Kw(Keyword::While) => self.parse_while(),
             TokenKind::LBrace => {
                 let block = self.block();
                 let sp = block.span;

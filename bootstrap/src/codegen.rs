@@ -87,6 +87,25 @@ impl Codegen<'_> {
                 self.errors
                     .push("`give` / block-as-value is not supported by stage0 codegen yet".into());
             }
+            StmtKind::Assign { target, op, value } => {
+                let (target, op, value) = (*target, *op, *value);
+                let t = self.expr(target);
+                let v = self.expr(value);
+                let opc = match op {
+                    None => "=".to_string(),
+                    Some(o) => match c_binop(o) {
+                        Some(s) => format!("{s}="),
+                        None => {
+                            self.errors.push(format!(
+                                "compound assignment with `{}` is not supported yet",
+                                o.symbol()
+                            ));
+                            "=".to_string()
+                        }
+                    },
+                };
+                self.out.push_str(&format!("    {t} {opc} {v};\n"));
+            }
             StmtKind::Expr(e) => {
                 let e = *e;
                 self.emit_expr_stmt(e, in_main);
@@ -106,6 +125,19 @@ impl Codegen<'_> {
         };
         if let Some((cond, then_branch, else_branch)) = if_info {
             self.emit_if_stmt(cond, then_branch, else_branch, in_main);
+            return;
+        }
+        // `while` used as a statement
+        let while_info = if let ExprKind::While { cond, body } = &self.ast.expr(e).kind {
+            Some((*cond, *body))
+        } else {
+            None
+        };
+        if let Some((cond, body)) = while_info {
+            let c = self.expr(cond);
+            self.out.push_str(&format!("    while ({c}) {{\n"));
+            self.emit_branch_block(body, in_main);
+            self.out.push_str("    }\n");
             return;
         }
         // bare block used as a statement
@@ -222,9 +254,10 @@ impl Codegen<'_> {
                     .push("field access / indexing is not supported by stage0 codegen yet".into());
                 "0".into()
             }
-            ExprKind::If { .. } | ExprKind::Block(_) => {
+            ExprKind::If { .. } | ExprKind::Block(_) | ExprKind::While { .. } => {
                 self.errors.push(
-                    "`if` / block in value position is not supported by stage0 codegen yet".into(),
+                    "`if` / `while` / block in value position is not supported by stage0 codegen yet"
+                        .into(),
                 );
                 "0".into()
             }

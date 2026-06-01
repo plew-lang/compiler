@@ -100,6 +100,8 @@ pub enum ExprKind {
         then_branch: ExprId,
         else_branch: Option<ExprId>,
     },
+    /// `while cond { .. }`. `body` is a `Block` expr. Yields `()`.
+    While { cond: ExprId, body: ExprId },
     /// Placeholder inserted on a parse error so parsing can continue.
     Error,
 }
@@ -159,6 +161,12 @@ pub enum StmtKind {
     Return(Option<ExprId>),
     /// `give expr` — yields the enclosing block's value.
     Give(ExprId),
+    /// Assignment `target = value`, or compound `target OP= value` (op = Some).
+    Assign {
+        target: ExprId,
+        op: Option<BinOp>,
+        value: ExprId,
+    },
     /// An expression used as a statement.
     Expr(ExprId),
 }
@@ -323,6 +331,13 @@ impl Ast {
                 }
                 out.push(')');
             }
+            ExprKind::While { cond, body } => {
+                out.push_str("(while ");
+                self.write_sexpr(*cond, out);
+                out.push(' ');
+                self.write_sexpr(*body, out);
+                out.push(')');
+            }
             ExprKind::Error => out.push_str("<error>"),
         }
     }
@@ -408,6 +423,17 @@ impl Ast {
             StmtKind::Give(e) => {
                 out.push_str("(give ");
                 self.write_sexpr(*e, out);
+                out.push(')');
+            }
+            StmtKind::Assign { target, op, value } => {
+                out.push('(');
+                if let Some(o) = op {
+                    out.push_str(o.symbol());
+                }
+                out.push_str("= ");
+                self.write_sexpr(*target, out);
+                out.push(' ');
+                self.write_sexpr(*value, out);
                 out.push(')');
             }
             StmtKind::Expr(e) => self.write_sexpr(*e, out),

@@ -194,6 +194,21 @@ fn block_expression_with_give() {
 }
 
 #[test]
+fn while_and_assignment() {
+    let src = "fn main() {\n    mut val i: I64 = 0\n    while i < 3 {\n        i = i + 1\n    }\n}";
+    assert_eq!(
+        prog(src),
+        "(fn main () (block (mutval i:I64 0) (while (< i 3) (block (= i (+ i 1))))))"
+    );
+}
+
+#[test]
+fn compound_assignment() {
+    let src = "fn main() {\n    mut val s: I64 = 0\n    s += 5\n    s *= 2\n}";
+    assert_eq!(prog(src), "(fn main () (block (mutval s:I64 0) (+= s 5) (*= s 2)))");
+}
+
+#[test]
 fn errors_on_garbage() {
     assert!(errors("1 +").iter().any(|m| m.contains("expected an expression")));
     assert!(errors("1 2").iter().any(|m| m.contains("trailing")));
