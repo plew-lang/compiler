@@ -7,7 +7,7 @@ Plew は、複雑な状態を持つクライアントアプリを主軸に、モ
 ## 命名規則
 
 - **型名**: PascalCase（例: `MyType`, `String`）
-- **変数名・関数名**: camelCase（例: `myVariable`, `calculateSum`）
+- **変数名・関数名・定数**: camelCase（例: `myVariable`, `calculateSum`, `maxRetry`）。定数（`val`/`export val`/`assoc val`）も同じく camelCase で、SCREAMING_SNAKE_CASE は使いません。
 
 ## キーワード
 

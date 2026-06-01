@@ -86,7 +86,7 @@ SDK は 10 系だが `.csproj` の `TargetFramework` は `net8.0`。ANTLR パー
 
 言語仕様として強制される命名規則。Plew コードを書く/生成するとき：
 
-- 型名・enum バリアント: **PascalCase**。変数・関数名: **camelCase**。
+- 型名・enum バリアント: **PascalCase**。変数・関数名・**定数**（`val`/`export val`/`assoc val`）: **camelCase**（SCREAMING_SNAKE は使わない）。能力マーカー/文脈キーワードも camelCase（`defaultExtension`/`allowUnique`/`noLocal`）。
 - import/part のパスコンポーネント（ファイル/ディレクトリ名）は PascalCase 必須（`.`/`..` と、ディレクトリ代表ファイル `_.pw` の `_` のみ例外）。ソースの拡張子は `.pw`。
 - 名前付き構造体は JSX ライク `<Type field=expr />` でインスタンス化、無名レコード（ラベル付きタプル）は `(label: expr)`。ブロックを式にするには `give` が必要。インスタンス生成は常に JSX/factory に集約（構築点が可視）。**フィールドは宣言時デフォルト値可**（`val x: I32 = 0`＝memberwise factory の既定引数糖衣・#04 意味論・他フィールド/self 参照不可）。**既定 memberwise factory は既定 not pub**（無名 impl のみ）・公開は**無名 impl 内の裸 `pub factory`**（no-default フィールドが全 pub のときだけ・`@[DefaultFactory]` ディレクティブは廃止）。**失敗し得る生成は fallible factory**＝前置 `optional factory`（→`Optional[Self]`）/`result[E] factory`（→`Result[Self, E]`）・自動ラップなし・包むのは Optional/Result のみ。`From`/`Chain`/`TryFrom` の構築要求は factory（`optional`/`result` は factory 修飾位置のみの文脈依存キーワード）→ spec/05,08,12。
 

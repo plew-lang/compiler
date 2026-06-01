@@ -10,7 +10,7 @@ Plew のすべての定義は、いずれかのモジュール（**1 ファイ�
 - **トップレベル変数**：不変の `val`（定数）と可変の `mut val`。プロセス全体で生きるモジュールレベルの状態です。
 
 ```plew
-val MAX_RETRY: I32 = 3          // トップレベル定数
+val maxRetry: I32 = 3          // トップレベル定数
 mut val requestCount = 0       // トップレベル可変変数
 ```
 
@@ -149,7 +149,7 @@ import ./kebab-case      // ❌ エラー: ハイフンは使用不可
 export struct PublicStruct { /* ... */ }
 export fn publicFunction() { /* ... */ }
 export trait PublicTrait { /* ... */ }
-export val PUBLIC_CONST: I32 = 100   // トップレベル定数も公開できる
+export val publicConst: I32 = 100   // トップレベル定数も公開できる
 ```
 
 ### 再エクスポート
