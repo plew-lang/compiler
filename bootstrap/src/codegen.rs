@@ -256,6 +256,16 @@ impl Codegen<'_> {
             self.out.push_str("    }\n");
             return;
         }
+        // `for` over a range used as a statement
+        let for_info = if let ExprKind::For { var, iter, body, .. } = &self.ast.expr(e).kind {
+            Some((var.clone(), *iter, *body))
+        } else {
+            None
+        };
+        if let Some((var, iter, body)) = for_info {
+            self.emit_for(&var, iter, body, in_main);
+            return;
+        }
         // `match` used as a statement
         let match_info = if let ExprKind::Match { scrutinee, arms } = &self.ast.expr(e).kind {
             Some((*scrutinee, arms.clone()))
@@ -319,6 +329,30 @@ impl Codegen<'_> {
         for s in stmts {
             self.emit_stmt(s, in_main);
         }
+    }
+
+    /// Lower a `for val v in a..<b { .. }` to a C counting loop.
+    fn emit_for(&mut self, var: &str, iter: ExprId, body: ExprId, in_main: bool) {
+        let range = if let ExprKind::Binary { op, lhs, rhs } = &self.ast.expr(iter).kind {
+            if matches!(op, BinOp::RangeHalf | BinOp::RangeClosed) {
+                Some((*op, *lhs, *rhs))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let Some((op, lhs, rhs)) = range else {
+            self.errors.push("`for` over a non-range is not supported by stage0 codegen yet".into());
+            return;
+        };
+        let lo = self.expr(lhs);
+        let hi = self.expr(rhs);
+        let cmp = if op == BinOp::RangeClosed { "<=" } else { "<" };
+        self.out
+            .push_str(&format!("    for (int64_t {var} = {lo}; {var} {cmp} {hi}; {var}++) {{\n"));
+        self.emit_branch_block(body, in_main);
+        self.out.push_str("    }\n");
     }
 
     /// Lower a block used as a value to a GNU statement-expression
@@ -604,8 +638,9 @@ impl Codegen<'_> {
                 let block = block.clone();
                 self.emit_value_block(&block)
             }
-            ExprKind::While { .. } => {
-                self.errors.push("`while` in value position is not supported by stage0 codegen yet".into());
+            ExprKind::While { .. } | ExprKind::For { .. } => {
+                self.errors
+                    .push("`while` / `for` in value position is not supported by stage0 codegen yet".into());
                 "0".into()
             }
             ExprKind::Match { .. } => {

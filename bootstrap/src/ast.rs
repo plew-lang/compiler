@@ -116,6 +116,14 @@ pub enum ExprKind {
     },
     /// `while cond { .. }`. `body` is a `Block` expr. Yields `()`.
     While { cond: ExprId, body: ExprId },
+    /// `for val name in iter { .. }`. stage0 supports range iterators only.
+    /// `body` is a `Block` expr. Yields `()`.
+    For {
+        var: String,
+        mutable: bool,
+        iter: ExprId,
+        body: ExprId,
+    },
     /// JSX construction `<Type field=expr ... />`. `path` is the dotted type
     /// path (`["Point"]`, or `["Color","Red"]` for an enum variant).
     New {
@@ -425,6 +433,15 @@ impl Ast {
             ExprKind::While { cond, body } => {
                 out.push_str("(while ");
                 self.write_sexpr(*cond, out);
+                out.push(' ');
+                self.write_sexpr(*body, out);
+                out.push(')');
+            }
+            ExprKind::For { var, mutable, iter, body } => {
+                out.push_str(if *mutable { "(for mutval " } else { "(for val " });
+                out.push_str(var);
+                out.push(' ');
+                self.write_sexpr(*iter, out);
                 out.push(' ');
                 self.write_sexpr(*body, out);
                 out.push(')');

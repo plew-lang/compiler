@@ -194,6 +194,12 @@ fn block_expression_with_give() {
 }
 
 #[test]
+fn for_range_loop() {
+    let src = "fn main() {\n    for val i in 0..<n {\n        print(i)\n    }\n}";
+    assert_eq!(prog(src), "(fn main () (block (for val i (..< 0 n) (block (call print i)))))");
+}
+
+#[test]
 fn while_and_assignment() {
     let src = "fn main() {\n    mut val i: I64 = 0\n    while i < 3 {\n        i = i + 1\n    }\n}";
     assert_eq!(

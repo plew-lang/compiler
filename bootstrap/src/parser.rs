@@ -842,6 +842,26 @@ impl Parser {
         self.ast.alloc_expr(ExprKind::New { path, fields }, start.merge(end))
     }
 
+    /// `for val name in iter { .. }` as an expression (yields `()`).
+    fn parse_for(&mut self) -> ExprId {
+        let start = self.peek_span();
+        self.bump(); // `for`
+        let mutable = if matches!(self.peek(), TokenKind::Kw(Keyword::Mut)) {
+            self.bump();
+            true
+        } else {
+            false
+        };
+        self.expect(&TokenKind::Kw(Keyword::Val), "`val` after `for`");
+        let var = self.expect_ident("a loop variable name");
+        self.expect(&TokenKind::Kw(Keyword::In), "`in` after the loop variable");
+        let iter = self.expr_bp(0);
+        let body_block = self.block();
+        let sp = body_block.span;
+        let body = self.ast.alloc_expr(ExprKind::Block(body_block), sp);
+        self.ast.alloc_expr(ExprKind::For { var, mutable, iter, body }, start.merge(sp))
+    }
+
     /// `while cond { .. }` as an expression (yields `()`).
     fn parse_while(&mut self) -> ExprId {
         let start = self.peek_span();
@@ -919,6 +939,7 @@ impl Parser {
             }
             TokenKind::Kw(Keyword::If) => self.parse_if(),
             TokenKind::Kw(Keyword::While) => self.parse_while(),
+            TokenKind::Kw(Keyword::For) => self.parse_for(),
             TokenKind::Kw(Keyword::Match) => self.parse_match(),
             TokenKind::Lt => self.parse_jsx(),
             TokenKind::LBrace => {

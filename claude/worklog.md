@@ -28,7 +28,8 @@ stage0（Rust）：整数・分岐・ループ・**struct**・**enum+match** が
    - ✅ **型を codegen に通す土台**：typeck が `CheckResult.expr_ty`（式 ID→型）を返し codegen が参照（print 書式の型ベース選択など）
    - ✅ **String（最小）**：型 `String`・文字列リテラル・`print(String)`。C 表現は `PlewString{const char* data; int64_t len}`（リテラル backed・ヒープ/ARC なし）。連結・可変・`bytes` 等は未実装
    - ✅ **値位置の `if`/ブロック**：GNU statement-expression＋三項で codegen（typeck は give 型を期待型から解決）。e2e で if→1、block→9
-7. ⏭ **次の本丸**：`Array`（ジェネリック＝単相化）＋ARC ランタイム（C）／import 機構／値位置 `match`（switch を式に）／codegen の整数幅反映／名前解決の本格化
+   - ✅ **`for val i in a..<b` レンジループ**：codegen は C counting loop。`0..<5`（両端リテラル）は spec 通り曖昧エラー＝型付き上限が必要（`0..<n`）。リテラル側を後で型付けし `0..<n` を曖昧にしない。配列反復・`for (k,v)` 分解は未対応
+7. ⏭ **次の本丸**：`Array`（ジェネリック＝単相化）＋ARC ランタイム（C）／import 機構／値位置 `match`／codegen の整数幅反映／名前解決の本格化。**型を Ty→C 名に解決する仕組み（codegen に型レジストリ公開）**が Array/値位置 match の前提
    - ⏭ `String`/`Array`＋ARC ランタイム（C）／名前解決の本格化
 7. ⏭ → stage1（Plew でコンパイラ）に必要な分が揃い次第セルフホスト
 6. **stage1**：Plew サブセットでコンパイラを書く → stage0 で compile → 自己 compile＝**セルフホスト達成**

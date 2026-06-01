@@ -85,6 +85,13 @@ fn builds_and_runs_block_value() {
 }
 
 #[test]
+fn builds_and_runs_for_range() {
+    // `0..<5` (two literals) is ambiguous by design; the upper bound is typed.
+    let src = "fn main() {\n    val n: I64 = 5\n    mut val sum: I64 = 0\n    for val i in 0..<n {\n        sum += i\n    }\n    print(sum)\n}\n";
+    assert_eq!(build_and_run(src, "forrange"), "10\n");
+}
+
+#[test]
 fn reports_unsupported_construct() {
     // `??` has no stage0 C lowering yet → a codegen error, not a panic.
     let errs = compile_to_c("fn main() {\n    print(a ?? b)\n}\n").unwrap_err();

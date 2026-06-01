@@ -500,6 +500,16 @@ impl Checker<'_> {
                 self.check_expr(body, None);
                 Ty::Unit
             }
+            ExprKind::For { var, iter, body, .. } => {
+                let var = var.clone();
+                let (iter, body) = (*iter, *body);
+                let elem = self.check_range_iter(iter);
+                self.push_scope();
+                self.define(&var, elem);
+                self.check_expr(body, None);
+                self.pop_scope();
+                Ty::Unit
+            }
             ExprKind::Block(block) => {
                 let block = block.clone();
                 self.check_block_value(&block, expected)
@@ -762,6 +772,43 @@ impl Checker<'_> {
                 self.error(span, format!("pattern for `{vname}` is missing field `{n}` (Plew has no `..`)"));
             }
         }
+    }
+
+    /// Check a `for` range iterator `a..<b` / `a..=b`, returning the element
+    /// (integer) type. A bare-literal bound is typed *after* the other bound so
+    /// `0..<n` pins `0` to `n`'s type rather than reporting it as ambiguous.
+    fn check_range_iter(&mut self, iter: ExprId) -> Ty {
+        let span = self.ast.expr(iter).span;
+        let range = if let ExprKind::Binary { op, lhs, rhs } = &self.ast.expr(iter).kind {
+            if matches!(op, BinOp::RangeHalf | BinOp::RangeClosed) {
+                Some((*lhs, *rhs))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let Some((lhs, rhs)) = range else {
+            self.error(span, "`for` requires a range iterator (stage0: `a..<b` or `a..=b`)");
+            return Ty::Error;
+        };
+        let lhs_lit = matches!(self.ast.expr(lhs).kind, ExprKind::Int(_) | ExprKind::Float(_));
+        let elem = if lhs_lit {
+            let rt = self.check_expr(rhs, None);
+            let exp = if rt.is_integer() { Some(rt) } else { None };
+            self.check_expr(lhs, exp)
+        } else {
+            let lt = self.check_expr(lhs, None);
+            let exp = if lt.is_integer() { Some(lt) } else { None };
+            self.check_expr(rhs, exp);
+            lt
+        };
+        if elem != Ty::Error && !elem.is_integer() {
+            let en = self.ty_name(elem);
+            self.error(span, format!("range bounds must be integers, found `{en}`"));
+            return Ty::Error;
+        }
+        elem
     }
 
     fn check_binary(&mut self, op: BinOp, lhs: ExprId, rhs: ExprId, expected: Option<Ty>, span: Span) -> Ty {
