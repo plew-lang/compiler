@@ -34,7 +34,14 @@
 - **決定的破棄**：ARC なら `deinit` でファイル/ソケット等を確定的に解放できる（GC の非決定性が無い）。
 
 ### 主な帰結と根拠
-- **ARC（参照カウント）を採る**：CoW は安価な一意性判定（refcount）を要し、ARC はコールドスタートが軽く**第一目標に合致**。代償＝**循環は refcount で回収できず `WeakRef[T]` が要る**（手動の弱参照を受け入れる＝意識的トレードオフ）。
+- **ARC（参照カウント）を採る**：CoW は安価な一意性判定（refcount）を要し、ARC はコールドスタートが軽く**第一目標に合致**。代償＝**循環は refcount で回収できず `WeakRef[T]` が要る**（手動の弱参照を受け入れる＝意識的トレードオフ）。この手動 `WeakRef` の負担（Swift/iOS で実証済みの「書き忘れると静かにリーク」footgun）の緩和方針は下記「循環回収」を参照。
+- **循環回収＝ARC＋Ref グラフ限定サイクルコレクタ（方向確定・実装は additive）**：「GC が欲しい」の正体は **GC ではなく循環の回収**で、両者は分離できる。**鍵＝循環は `Ref` グラフにしか生じない**：CoW の値世界（`Array`/`String`/`Dictionary`・[自動箱化された再帰値型](#主要な判断と根拠)）は構造上つねに木／DAG で、親への貼り戻し＝共有可変エイリアスは `Ref` でしか得られない（→ spec/05「再帰的な値型」）。よって純粋 ARC は値世界を**取りこぼしゼロ**で回収し、残る穴は「`Ref` ボックス（＋`mut val` を参照キャプチャしたクロージャ＝同じ管理下の共有可変ボックス）から成る、小さく隔離された部分グラフの循環」だけ。これはヒープ全体の GC ではないので、**trace 対象が `Ref` グラフに限定**され劇的に安い。
+  - **方式＝Bacon–Rajan の trial deletion**（"Concurrent Cycle Collection in Reference Counted Systems", 2001。CPython `gc`・PHP・Nim 旧 refc が実証）。循環は「refcount を減らしたが 0 にならなかった瞬間」にしか生まれないので、その候補ルートだけを集め、部分グラフ内で試行的に減算してゴミ循環を判定・回収する。**ARC の長所は全部残る**：CoW の一意性判定・`unique`+`deinit` の決定的資源解放は不変で、循環だけ自動回収。`WeakRef` は「正しさのために必須」から「決定性・性能のための opt-in」へ格下げされる。
+  - **Plew はこれを安く・安全にできるが Swift はできなかった**：相違は環境にある。**(1) 非 atomic かつスレッドローカルな `Ref`**（spawn を越えない）→ `Ref` グラフはスレッドごとに完全分割＝**per-thread コレクタ・ロック不要・stop-the-world のスレッド間協調が不要**（実 GC の最難関＝並行コーディネーションが、既存制約だけで消える）。**(2) 単一スレッド＋イベントループ**→ ターンの合間が**天然のセーフポイント**（JS エンジンが常時 GC を回せるのと同じ理由）。**(3) フルマネージド＋レイアウトメタデータ**で `Ref` フィールドを列挙でき、**FFI はコピー**ゆえ生ポインタが `Ref` グラフに侵入しない。Swift が常時ランタイム検出を積まず**プロセス外スナップショット（memory graph debugger/Instruments）に逃がした**のは、trace 計算が重いからではなく（trace は O(候補＋内部辺)・per-frame 仕事に比して安い）、**atomic RC＋素のプリエンプティブスレッド＋セーフポイント無し＋半マネージドヒープ（C/ObjC interop・`Unmanaged`）**で「安全に・プロセス内で・常時」やるのが重く脆いから＋「決定的 deinit・ポーズ無し」を売りにした思想と自己矛盾するから。Plew はこの障害を設計上すべて排除済み。
+  - **段階導入（どちらも additive・非破壊）**：**v1＝ARC＋手動 `WeakRef`＋dev 時リークレポータ**。iOS の真の痛みは「リーク」より「静かに漏れてプロファイラを当てるまで気づかない」サプライズなので、同じ trial-deletion trace を**回収せず報告だけ**に使い、開発ビルドで到達不能循環を **retain path 付きで loud に出す**（既定 ON・終了時/idle 時）。これは「嘘が起きる地点で大きく落とす」＝hidden *leak*（隠れた挙動/コスト）を可視化する Plew の拠り所と**完全に同型**で、実装も安い。**v2（後から）＝Ref グラフ限定コレクタ本体**を per-thread・event-loop idle で回す。
+  - **非破壊である根拠**：リークしていなかったプログラムは挙動不変。リークしていたプログラムだけが「回収される」＝**hidden cost の解消**で、拠り所の「hidden cost は可」側に収まる（hidden meaning/behavior の変更ではない）。だから v1 で確定させる必要すらなく、後から足せる。
+  - **対価・要決定の細目**：(a) **循環に含まれるオブジェクトの `deinit` は非決定的**になる（最後の release ではなくコレクタ実行時）。ただし決定的解放が要る資源（`unique`+`deinit`）は通常**循環に入らない**（循環は UI/オブザーバ等の純データグラフ）ので資源ユースケースの決定性は保たれる。(b) **循環内 deinit の順序規則**が要る → CPython PEP 442 流（任意順で finalize・各一度・復活なし。Plew 既定の「deinit は復活/失敗なし・一度だけ」と整合）を採れる。(c) dead-simple な ARC ランタイムにコレクタが乗る＝「最小ランタイム」と多少緊張するが、隔離された枯れたアルゴリズム。
+  - **足がかり**：Bacon & Rajan 2001／CPython `gc`（世代別の候補管理）／PEP 442／PHP の GC。いずれも「ARC の上に載る循環コレクタ」の実装例。
 - **資源は `unique`＋`deinit`**：値 struct に `deinit` は置けない（コピーで多重 deinit＝二重 close。Swift の struct に deinit が無いのと同理）。値意味論で言語内に資源を書くには **class かコピー不可型のどちらか必須**（Ref だけでは中身がコピー可能で漏れる）→ **class 種別を増やさず `unique`（コピー不可）採用**＝move 意味論の限定サブセット（borrow/inout/move・use-after-move・非 escape 借用でライフタイム不要）。
 - **`Ref` は唯一の共有可変プリミティブ**：extern で再現不可（コピー時 retain／drop 時 release の自動挿入が要る・これは Array の CoW も同様＝両者とも祝福プリミティブ）。「同じ書き方で違う挙動」の懸念は **deref `->` を明示**して解消（`.`＝ハンドル操作・`->`＝中身）。
 - **アクセス語＝`borrow`/`inout`/`move`**：`borrow`/`move` は「関係」を表すのに `modify` は「行為」を名指し不整合で却下。`&mut` は正確だが CoW には too much → **`inout`（＝CoW 版 `&mut`・Swift と同判断）**。`mut` は **`val`/`mut val`（記憶域）専用**（二義性回避）。`var` 却下＝「手抜き＝immutable」を守る。
@@ -229,7 +236,8 @@
 1. **チャネルの最終構文・型** — 方向（複数 Sender・`receive() -> Result[T, ChannelClosed]`・`Send`/`Clone` 境界不使用・`send` は immutable メソッド）は固まっているが、**所有権が無いため Receiver の単一所有は強制できない**（複数参照・複数 `receive` 可）。マルチコンシューマの意味論を含め **具体 API はコアライブラリ実装の課題**（言語コアの構文要素ではない）として stdlib 設計時に詰める。
 2. **spawn/async の意味論実装** — モデルは確定（`spawn` はスレッド起動・ハンドル `join() -> Promise[T]`・キャプチャ全 immutable・立てたスレッドも単一ループ・全スレッド完了までランタイム生存）。実装課題は「キャプチャ全 immutable」の型チェック（セマンティクス層）。文法には `block_modifier: ASYNC | SPAWN` のみ。
 3. **Mutex/sync/atomic の扱い** — 標準で提供しない（or `@unsafe` 限定）。旧文法の修飾子は削除済み。
-4. **ARC/refcount の方式** — ARC 採用。循環は `WeakRef` で断ち切る。循環コレクタの要否・実装方式は未定。
+4. **ARC/refcount の方式** — ARC 採用。**循環回収の方向は確定**＝v1 は手動 `WeakRef`＋dev 時リークレポータ、後から **Ref グラフ限定の Bacon–Rajan サイクルコレクタ**（per-thread・event-loop idle・どちらも additive。詳細・根拠は上記メモリ節「循環回収」）。残る実装課題は (a) コレクタを回す頻度/トリガ（idle/確保圧/終了時）の調整、(b) 循環内 `deinit` 順序規則（PEP 442 流の採否）、(c) 非 atomic refcount の具体表現（side table 等）。
+   <!-- なぜここで止めるか: v1 の正しさは手動 WeakRef で閉じており、コレクタは非破壊で後付けできる（リークしていたプログラムだけが改善＝hidden cost 解消）ので、確定を急がない。 -->
 5. **メタプログラミング / ディレクティブ詳細** — `Derive` トレイトのシグネチャ、`TokenStream` API、組み込みを `Derive` 実装で提供するか等（→ [spec/16](../spec/04-execution/16-metaprogramming.md)）。
 6. **文法の細かい穴** — `@[...]` 内の空行・末尾カンマ、`match_case` 前の改行、`where_clauses` 末尾カンマなど（書き味レベル）。
 7. **FFI の型マッピング** — `extern "c"` / `extern "javascript"` ブロックの構文は採用済みだが、Plew 型 ↔ C/JS 型の対応（数値・ポインタ/バッファ・文字列の境界変換、外部由来の `NaN` 流入の扱いなど）は未策定。C 固定長配列は当面**境界コピーで `Array[T]`** に写す方針（→ [spec/15](../spec/04-execution/15-modules.md)）。

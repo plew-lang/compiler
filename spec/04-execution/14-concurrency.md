@@ -42,7 +42,8 @@ v1 では **`Promise[T]`/`JoinHandle[T]` を含むコアの generic 型はすべ
 ## メモリ管理（ARC）
 
 - **ARC（参照カウント）で管理**：スコープを抜けて最後の所有者／`Ref` が消えると**即座に**解放され、`deinit` が走る（決定的破棄＝ファイル・ソケット等の資源解放に使える）。ただし**`panic` 時は abort で巻き戻さないので `deinit` は走らない**（資源は OS が回収・[制御構造 § panic と発散](../03-expressions/11-control-flow.md#panic-と発散) 参照）。決定的破棄が保証されるのは正常終了パスのみ。
-- **循環は `WeakRef` で**：参照カウントは循環を回収しないので、親子の逆リンク等は `WeakRef` で断ち切る。
+- **循環は `WeakRef` で**：参照カウントは循環を回収しないので、親子の逆リンク等は `WeakRef` で断ち切る。**循環が生じ得るのは `Ref` グラフだけ**（値世界＝`Array`/`String`/`Dictionary`・[自動箱化された再帰値型](../02-type-system/05-structs-enums.md#再帰的な値型)は構造上つねに木／DAG）なので、純粋 ARC は値世界を取りこぼさない。
+  > **将来 additive：循環の自動回収。** `Ref` グラフは小さく隔離され（trace 対象は `Ref` ボックス＋`mut val` 参照キャプチャしたクロージャだけ）、しかも **`Ref` は非 atomic かつスレッドローカル**（spawn を越えない＝per-thread）・**単一イベントループ**（ターン間が天然のセーフポイント）・フルマネージドなので、ARC の上に **Ref グラフ限定のサイクルコレクタ**（Bacon–Rajan の trial deletion・CPython/PHP で実証）を **per-thread・idle 実行**で非破壊に足せる。これにより手動 `WeakRef` は「正しさのため必須」から「決定性・性能の opt-in」へ格下げされる（`unique`+`deinit` の決定的解放は不変・循環内 `deinit` のみ非決定）。当面（v1）は手動 `WeakRef`＋**開発ビルドのリークレポータ**（到達不能循環を retain path 付きで loud に報告＝隠れたリークを可視化）で運用する。
 - 値意味論なので、共有された可変状態は `Ref` 経由のみ生まれる（→ [値・変数・所有権](../01-basics/03-values.md)）。
 
 ## 境界を越えるもの（move / copy / Ref / 借用）
