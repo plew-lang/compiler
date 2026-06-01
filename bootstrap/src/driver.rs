@@ -17,6 +17,13 @@ pub fn compile_to_c(src: &str) -> Result<String, Vec<String>> {
             .map(|e| format!("{:?}: {}", e.span, e.msg))
             .collect());
     }
+    let terrs = crate::typeck::check(&ast, &items);
+    if !terrs.is_empty() {
+        return Err(terrs
+            .into_iter()
+            .map(|e| format!("{:?}: {}", e.span, e.msg))
+            .collect());
+    }
     emit_c(&ast, &items)
 }
 

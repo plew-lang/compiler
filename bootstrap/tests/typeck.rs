@@ -1,0 +1,73 @@
+//! Type-checker tests. We parse (asserting no parse errors) then run the
+//! checker and inspect the messages.
+
+use plewc::parser::parse_program;
+use plewc::typeck::check;
+
+fn errs(src: &str) -> Vec<String> {
+    let (ast, items, perrs) = parse_program(src);
+    assert!(perrs.is_empty(), "unexpected parse errors: {perrs:?}");
+    check(&ast, &items).into_iter().map(|e| e.msg).collect()
+}
+
+#[test]
+fn ambiguous_numeric_literal_is_rejected() {
+    // The gap we are closing: no annotation, no context → ambiguous.
+    let e = errs("fn main() {\n    val x = 6 * 7\n}");
+    assert!(e.iter().any(|m| m.contains("ambiguous")), "errors: {e:?}");
+}
+
+#[test]
+fn annotation_resolves_literal() {
+    assert!(errs("fn main() {\n    val x: I64 = 6 * 7\n}").is_empty());
+}
+
+#[test]
+fn print_pins_its_argument() {
+    // stage0: `print` pins the literal to I64, so this is well-typed.
+    assert!(errs("fn main() {\n    print(40 + 2)\n}").is_empty());
+}
+
+#[test]
+fn literal_type_mismatch() {
+    let e = errs("fn main() {\n    val x: Bool = 1\n}");
+    assert!(!e.is_empty(), "expected a mismatch error");
+}
+
+#[test]
+fn unbound_name_is_reported() {
+    let e = errs("fn main() {\n    val x: I64 = y\n}");
+    assert!(e.iter().any(|m| m.contains("unbound")), "errors: {e:?}");
+}
+
+#[test]
+fn condition_must_be_bool() {
+    let e = errs("fn main() {\n    val n: I64 = 1\n    while n {\n        n += 1\n    }\n}");
+    assert!(e.iter().any(|m| m.contains("Bool")), "errors: {e:?}");
+}
+
+#[test]
+fn binding_to_wrong_type_is_reported() {
+    // y is I64; binding it to a Bool slot must error.
+    let e = errs("fn main() {\n    val y: I64 = 1\n    val b: Bool = y\n}");
+    assert!(!e.is_empty(), "expected a mismatch error");
+}
+
+#[test]
+fn function_calls_typecheck() {
+    let src = "fn add(a: I64, b: I64) -> I64 {\n    return a + b\n}\nfn main() {\n    val r: I64 = add(1, 2)\n    print(r)\n}";
+    assert!(errs(src).is_empty(), "errors: {:?}", errs(src));
+}
+
+#[test]
+fn return_type_mismatch_is_reported() {
+    let e = errs("fn f() -> Bool {\n    return 1\n}");
+    assert!(!e.is_empty(), "expected a return type error");
+}
+
+#[test]
+fn mixed_operand_types_rejected() {
+    // a: I32, b: I64 — arithmetic on differing types must error (no implicit conv).
+    let e = errs("fn main() {\n    val a: I32 = 1\n    val b: I64 = 2\n    val c: I64 = a + b\n}");
+    assert!(!e.is_empty(), "expected an operand-type error");
+}

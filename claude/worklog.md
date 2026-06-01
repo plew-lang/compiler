@@ -18,8 +18,10 @@ stage0（Rust）：**walking skeleton 達成**（タグ `first-c-output`）＝`f
    - ✅ ループ：`while`（文位置 codegen）＋代入 `=`／複合代入 `+= -= *= /= %= &= |= ^= <<= >>=`。合計ループが e2e で動作
    - ⏭ 式の続き：`as`（要・型パーサ）・`try`/`await`・JSX `<T .. />`・closure・`match`・`?.`・**値位置 if/give の codegen**（clang statement-expr）
    - ⏭ 他宣言：`struct`/`enum`/`impl`/`trait`/`import` …
-4. 🔨 **C コード生成（最小）** ＋ clang ドライバ ＝ walking skeleton ✅（整数前提・`print(int)`→printf・型検査なし）
-5. 名前解決・型解決・trait/オーバーロード解決／codegen 汎用化／ARC ランタイム（C）
+4. ✅ **C コード生成（最小）** ＋ clang ドライバ ＝ walking skeleton（`print(int)`→printf）
+5. 🔨 **型検査（最小）**＝双方向推論で数値リテラル型確定・Bool 条件・演算子型・呼び出し検査（`typeck.rs`）✅。残り＝struct/enum/String/Array へ拡張・codegen に型を通す
+6. ⏭ `struct`/`enum`＋`match`／`String`/`Array`＋ARC ランタイム（C）／名前解決の本格化
+7. ⏭ → stage1（Plew でコンパイラ）に必要な分が揃い次第セルフホスト
 6. **stage1**：Plew サブセットでコンパイラを書く → stage0 で compile → 自己 compile＝**セルフホスト達成**
 7. 以降 LLVM/WASM・循環回収・所有権検査などを Plew 側で additive に
 
@@ -36,13 +38,12 @@ stage0（Rust）：**walking skeleton 達成**（タグ `first-c-output`）＝`f
 - **walking skeleton 優先**：パーサを作り切る前に「`fn main` の小さなプログラム → C 生成 → clang → 実行」の縦串を通す（C トランスパイル＋clang 連携を早期検証・動く成果物）。マイルストン `first-c-output`。
 - 残りの順序：lexer 改行 ✅ → 文/ブロック/`fn`宣言 → 最小 C codegen + clang ドライバ → 縦串。その後に式の続き（`as`/match/JSX 等）と他宣言を肉付け。
 
-## 既知の暫定ギャップ（type 解決実装時に塞ぐ）
+## 既知の暫定ギャップ
 
-stage0 は**まだ型検査が一切無い**ため、Plew の意味論を強制していない箇所がある：
-
-- **数値リテラルの型確定を強制していない**：`val x = 6 * 7`（注釈・確定文脈なし）は本来 spec 上**コンパイルエラー**（既定型なし）だが、今は codegen が全部 `int64_t` とみなして通す。→ 型解決を入れたら拒否し、テストで担保する。
-- **`print(<int>)` は暫定の組み込み**（printf 直結）。本来の `print` は String を取る。文字列・stdlib 整備時に置換。
-- 演算子の型・オーバーフロー panic・`as` 等の数値意味論も未実装（codegen は素朴）。
+- ✅ **数値リテラルの型確定**：型検査（`typeck.rs`）で双方向推論を実装し、`val x = 6*7`（曖昧）を loud に拒否・注釈で解決・条件は Bool 強制・演算子型不一致も検出。テストで担保（tests/typeck.rs）。
+- **`print(<int>)` は暫定の組み込み**：型検査では引数を I64 に pin、codegen は printf 直結。本来の `print` は String を取る。文字列・stdlib 整備時に置換。
+- **codegen は依然 `int64_t` 前提**：型検査は I32/U64/F64 等を区別するが、codegen は全整数を int64_t で出す（幅が違う型は未対応）。型を codegen に通す＝次段。
+- オーバーフロー panic・`as`・NaN 比較 panic 等の数値実行時意味論は未実装（codegen 素朴）。
 
 ## 直近の決定・注意（揮発しやすい文脈）
 
