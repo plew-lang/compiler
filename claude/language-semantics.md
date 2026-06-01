@@ -59,7 +59,7 @@
 
 ### トレイト・準拠 → [spec/08](../spec/02-type-system/08-traits.md)
 - **準拠は全要求 `via` 明示**（暗黙準拠なし・`via` 左辺は常に完全シグネチャ・空 impl は準拠失敗）。「名前が合うだけで witness」のうっかり準拠を排除。
-- **提供メソッド（`map`/`filter` 等）は「トレイトと同じモジュールのベア `impl Trait`」に書く**（要求＝トレイト本体〔本体なし〕／提供＝`impl Trait`〔本体あり〕＝型の struct↔impl Type の対称）。準拠 `impl A as Trait` で自動でベアに載り、境界 `where T: Trait` 越しにも使える。第三者追加は `extension { impl Trait }`＝`#Ext` opt-in。**衝突＝同名提供メソッドがベアに2つ＝2つ目の準拠で eager エラー**→片方の準拠を拡張に閉じて解決（`extension AWithQ { impl A as Q }`・`a#AWithQ.foo()` シャドー）。generic `where T: P + Q` の曖昧化は **`a#P.foo()`**（`#`＝メソッド源セレクタ＝トレイト | 拡張・トレイト形は呼び出し位置限定・`A#P` 型は作らない・ここだけ一意解決を緩める）。上書き不可。**規定拡張・境界随伴・strip-on-trait は全廃**（`#!` は value/型レベルの拡張剥がし `a#!Ext`・super `self#!Bar` だけ）。
+- **提供メソッド（`map`/`filter` 等）は「トレイトと同じモジュールのベア `impl Trait`」に書く**（要求＝トレイト本体〔本体なし〕／提供＝`impl Trait`〔本体あり〕＝型の struct↔impl Type の対称）。準拠 `impl A as Trait` で自動でベアに載り、境界 `where T: Trait` 越しにも使える。第三者追加は `extension { impl Trait }`＝`#Ext` opt-in。**衝突＝同名提供メソッドがベアに2つ＝併存可・曖昧なベア呼びだけエラー**→ `a#P.foo()`/`a#Q.foo()` で源選択（具体・generic 同一）。ベア既定は片方を拡張/inherent で privileged（任意）。曖昧化 **`a#P.foo()`**（`#`＝メソッド源セレクタ＝トレイト | 拡張・トレイト形は呼び出し位置限定・`A#P` 型は作らない・ここだけ一意解決を緩める）。上書き不可。**規定拡張・境界随伴・strip-on-trait は全廃**（`#!` は value/型レベルの拡張剥がし `a#!Ext`・super `self#!Bar` だけ）。
 - 継承 `trait Sub: Super` は**制約のみ・自動実装しない**（`impl T as Super` が別途要る）。複数指定は `+`。
 - **トレイトを値型にできるのは存在型 `any P` だけ**（裸 `P` 不可・`some` 無し・異種混在・動的）。形成は全型引数/関連型を束縛必須。呼べるメンバはメンバ単位診断（`Self` 入力位置・関連関数は不可）。**ダウンキャストは無い**（具体型/別トレイトを取り出す機構なし＝Rust 同姿勢・`as` は infallible 固定で載らない・閉集合は列挙型＋網羅 match が担う・additive 保留）。**実装は最終フェーズ**。
 
