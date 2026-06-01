@@ -294,3 +294,13 @@ fn errors_on_garbage() {
     assert!(errors("1 2").iter().any(|m| m.contains("trailing")));
     assert!(errors("(1 + 2").iter().any(|m| m.contains("expected `)`")));
 }
+
+#[test]
+fn array_literals() {
+    assert_eq!(sexpr("[1, 2, 3]"), "(array 1 2 3)");
+    assert_eq!(sexpr("[]"), "(array)");
+    // index binds as a postfix on the array
+    assert_eq!(sexpr("xs[0]"), "([] xs 0)");
+    // trailing comma + newlines inside brackets are allowed
+    assert_eq!(sexpr("[\n  1,\n  2,\n]"), "(array 1 2)");
+}

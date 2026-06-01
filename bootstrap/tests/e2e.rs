@@ -92,6 +92,41 @@ fn builds_and_runs_for_range() {
 }
 
 #[test]
+fn builds_and_runs_array_index_and_count() {
+    let src = "fn main() {\n    val xs: Array[I64] = [10, 20, 30]\n    print(xs[1])\n    print(xs.count)\n}\n";
+    assert_eq!(build_and_run(src, "arr_idx"), "20\n3\n");
+}
+
+#[test]
+fn builds_and_runs_array_for_each() {
+    let src = "fn main() {\n    val xs: Array[I64] = [10, 20, 30]\n    mut val sum: I64 = 0\n    for val x in xs {\n        sum += x\n    }\n    print(sum)\n}\n";
+    assert_eq!(build_and_run(src, "arr_foreach"), "60\n");
+}
+
+#[test]
+fn builds_and_runs_array_of_struct() {
+    let src = "struct P {\n    val x: I64\n    val y: I64\n}\nfn main() {\n    val ps: Array[P] = [<P x=1 y=2 />, <P x=3 y=4 />]\n    mut val sum: I64 = 0\n    for val p in ps {\n        sum += p.x + p.y\n    }\n    print(sum)\n}\n";
+    assert_eq!(build_and_run(src, "arr_struct"), "10\n");
+}
+
+#[test]
+fn array_index_out_of_range_panics() {
+    let src = "fn main() {\n    val xs: Array[I64] = [1, 2, 3]\n    print(xs[5])\n}\n";
+    let bin = std::env::temp_dir()
+        .join(format!("plewc_e2e_{}_arr_oob", std::process::id()));
+    build_executable(src, &bin).expect("build executable");
+    let output = Command::new(&bin).output().expect("run built binary");
+    let _ = std::fs::remove_file(&bin);
+    let _ = std::fs::remove_file(bin.with_extension("c"));
+    assert!(!output.status.success(), "out-of-range index should exit non-zero");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("index out of range"),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn reports_unsupported_construct() {
     // `??` has no stage0 C lowering yet → a codegen error, not a panic.
     let errs = compile_to_c("fn main() {\n    print(a ?? b)\n}\n").unwrap_err();

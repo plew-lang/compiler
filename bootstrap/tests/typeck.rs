@@ -71,3 +71,34 @@ fn mixed_operand_types_rejected() {
     let e = errs("fn main() {\n    val a: I32 = 1\n    val b: I64 = 2\n    val c: I64 = a + b\n}");
     assert!(!e.is_empty(), "expected an operand-type error");
 }
+
+#[test]
+fn array_literal_checks_and_indexes() {
+    let src = "fn main() {\n    val xs: Array[I64] = [1, 2, 3]\n    val a: I64 = xs[0]\n    val n: U64 = xs.count\n}";
+    assert!(errs(src).is_empty(), "errors: {:?}", errs(src));
+}
+
+#[test]
+fn empty_array_without_annotation_is_ambiguous() {
+    let e = errs("fn main() {\n    val xs = []\n}");
+    assert!(e.iter().any(|m| m.contains("empty array")), "errors: {e:?}");
+}
+
+#[test]
+fn array_element_type_mismatch_is_reported() {
+    // Element `true` is not I64.
+    let e = errs("fn main() {\n    val xs: Array[I64] = [1, true]\n}");
+    assert!(!e.is_empty(), "expected an element-type error");
+}
+
+#[test]
+fn indexing_a_non_array_is_reported() {
+    let e = errs("fn main() {\n    val x: I64 = 1\n    val y: I64 = x[0]\n}");
+    assert!(e.iter().any(|m| m.contains("cannot be indexed")), "errors: {e:?}");
+}
+
+#[test]
+fn for_each_over_array_binds_element() {
+    let src = "fn main() {\n    val xs: Array[I64] = [1, 2, 3]\n    mut val s: I64 = 0\n    for val x in xs {\n        s += x\n    }\n}";
+    assert!(errs(src).is_empty(), "errors: {:?}", errs(src));
+}

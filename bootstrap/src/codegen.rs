@@ -9,14 +9,20 @@ use crate::ast::{
     Ast, BinOp, Block, ExprId, ExprKind, ItemId, ItemKind, MatchArm, PatKind, StmtId, StmtKind,
     Type, UnOp,
 };
-use crate::typeck::Ty;
+use crate::typeck::{Ty, TypeTable};
 
 /// Generate a complete C translation unit for `items`, or a list of
 /// "unsupported construct" errors if the program uses features the skeleton
 /// codegen does not handle yet.
-pub fn emit_c(ast: &Ast, items: &[ItemId], expr_ty: &[Ty]) -> Result<String, Vec<String>> {
-    let mut cg = Codegen { ast, items, expr_ty, out: String::new(), errors: Vec::new(), tmp: 0 };
-    cg.out.push_str("#include <stdio.h>\n#include <stdint.h>\n\n");
+pub fn emit_c(
+    ast: &Ast,
+    items: &[ItemId],
+    expr_ty: &[Ty],
+    table: &TypeTable,
+) -> Result<String, Vec<String>> {
+    let mut cg =
+        Codegen { ast, items, expr_ty, table, out: String::new(), errors: Vec::new(), tmp: 0 };
+    cg.out.push_str("#include <stdio.h>\n#include <stdint.h>\n#include <stdlib.h>\n\n");
     // stage0 String: immutable view over a (literal) UTF-8 buffer.
     cg.out.push_str("typedef struct { const char* data; int64_t len; } PlewString;\n\n");
     // type definitions first (C needs types declared before use)
@@ -27,6 +33,8 @@ pub fn emit_c(ast: &Ast, items: &[ItemId], expr_ty: &[Ty]) -> Result<String, Vec
             ItemKind::Fn { .. } => {}
         }
     }
+    // Monomorphized array types + their (leaked) runtime, one per element type.
+    cg.emit_arrays();
     for &id in items {
         cg.emit_item(id);
     }
@@ -42,6 +50,8 @@ struct Codegen<'a> {
     items: &'a [ItemId],
     /// Inferred type of every expression, from the type checker.
     expr_ty: &'a [Ty],
+    /// Shared nominal/array type table (id → name, array element types).
+    table: &'a TypeTable,
     out: String,
     errors: Vec<String>,
     /// Counter for generated temporaries (e.g. match scrutinees).
@@ -140,6 +150,83 @@ impl Codegen<'_> {
             self.out.push_str("    } data;\n");
         }
         self.out.push_str(&format!("}} {name};\n\n"));
+    }
+
+    /// Emit a monomorphized array struct + its (leaked) runtime for every
+    /// interned `Array[T]`. Memory is never freed — fine for a throwaway
+    /// stage0 that runs once per compilation.
+    fn emit_arrays(&mut self) {
+        for id in 0..self.table.array_elems.len() as u32 {
+            let elem = self.table.array_elem(id);
+            let at = self.array_c_name(id);
+            let et = self.ty_c_name(elem);
+            self.out.push_str(&format!(
+                "typedef struct {{ {et}* data; int64_t len; int64_t cap; }} {at};\n"
+            ));
+            self.out.push_str(&format!(
+                "static {at} {at}_new(void) {{ {at} a; a.data = 0; a.len = 0; a.cap = 0; return a; }}\n"
+            ));
+            self.out.push_str(&format!(
+                "static {et} {at}_get({at} a, int64_t i) {{ if (i < 0 || i >= a.len) {{ fprintf(stderr, \"panic: index out of range\\n\"); exit(1); }} return a.data[i]; }}\n\n"
+            ));
+        }
+    }
+
+    /// Inferred type of expression `id` (from the type checker).
+    fn ty_of(&self, id: ExprId) -> Ty {
+        self.expr_ty.get(id.0 as usize).copied().unwrap_or(Ty::Error)
+    }
+
+    /// C type name of `Array[elem]` for array-type id `id`.
+    fn array_c_name(&self, id: u32) -> String {
+        format!("PlewArray_{}", self.mangle(self.table.array_elem(id)))
+    }
+
+    /// Spell a [`Ty`] as a C type name (used where no syntactic `Type` exists,
+    /// e.g. array literals and `for`-each element bindings).
+    fn ty_c_name(&self, t: Ty) -> String {
+        match t {
+            Ty::I8 => "int8_t".into(),
+            Ty::I16 => "int16_t".into(),
+            Ty::I32 => "int32_t".into(),
+            Ty::I64 => "int64_t".into(),
+            Ty::U8 => "uint8_t".into(),
+            Ty::U16 => "uint16_t".into(),
+            Ty::U32 => "uint32_t".into(),
+            Ty::U64 => "uint64_t".into(),
+            Ty::F32 => "float".into(),
+            Ty::F64 => "double".into(),
+            Ty::Bool => "int".into(),
+            Ty::String => "PlewString".into(),
+            Ty::Struct(id) => self.table.struct_names[id as usize].clone(),
+            Ty::Enum(id) => self.table.enum_names[id as usize].clone(),
+            Ty::Array(id) => self.array_c_name(id),
+            Ty::Unit => "void".into(),
+            Ty::Error => "int".into(),
+        }
+    }
+
+    /// A C-identifier-safe mangling of a [`Ty`] (for type/function name parts).
+    fn mangle(&self, t: Ty) -> String {
+        match t {
+            Ty::I8 => "I8".into(),
+            Ty::I16 => "I16".into(),
+            Ty::I32 => "I32".into(),
+            Ty::I64 => "I64".into(),
+            Ty::U8 => "U8".into(),
+            Ty::U16 => "U16".into(),
+            Ty::U32 => "U32".into(),
+            Ty::U64 => "U64".into(),
+            Ty::F32 => "F32".into(),
+            Ty::F64 => "F64".into(),
+            Ty::Bool => "Bool".into(),
+            Ty::String => "String".into(),
+            Ty::Struct(id) => self.table.struct_names[id as usize].clone(),
+            Ty::Enum(id) => self.table.enum_names[id as usize].clone(),
+            Ty::Array(id) => format!("Arr_{}", self.mangle(self.table.array_elem(id))),
+            Ty::Unit => "Unit".into(),
+            Ty::Error => "Error".into(),
+        }
     }
 
     /// Tag index of `variant` within `enum_name`, by scanning the item list.
@@ -331,7 +418,8 @@ impl Codegen<'_> {
         }
     }
 
-    /// Lower a `for val v in a..<b { .. }` to a C counting loop.
+    /// Lower a `for` loop: a range `a..<b`/`a..=b` becomes a C counting loop;
+    /// an array becomes an index loop binding each element.
     fn emit_for(&mut self, var: &str, iter: ExprId, body: ExprId, in_main: bool) {
         let range = if let ExprKind::Binary { op, lhs, rhs } = &self.ast.expr(iter).kind {
             if matches!(op, BinOp::RangeHalf | BinOp::RangeClosed) {
@@ -342,15 +430,31 @@ impl Codegen<'_> {
         } else {
             None
         };
-        let Some((op, lhs, rhs)) = range else {
-            self.errors.push("`for` over a non-range is not supported by stage0 codegen yet".into());
+        if let Some((op, lhs, rhs)) = range {
+            let lo = self.expr(lhs);
+            let hi = self.expr(rhs);
+            let cmp = if op == BinOp::RangeClosed { "<=" } else { "<" };
+            self.out
+                .push_str(&format!("    for (int64_t {var} = {lo}; {var} {cmp} {hi}; {var}++) {{\n"));
+            self.emit_branch_block(body, in_main);
+            self.out.push_str("    }\n");
+            return;
+        }
+        // Array iteration: bind each element by index.
+        let Ty::Array(arr_id) = self.ty_of(iter) else {
+            self.errors.push("`for` over a non-range / non-array is not supported by stage0 codegen yet".into());
             return;
         };
-        let lo = self.expr(lhs);
-        let hi = self.expr(rhs);
-        let cmp = if op == BinOp::RangeClosed { "<=" } else { "<" };
+        let et = self.ty_c_name(self.table.array_elem(arr_id));
+        let n = self.tmp;
+        self.tmp += 1;
+        let (av, iv) = (format!("__for{n}"), format!("__fi{n}"));
+        let it = self.expr(iter);
+        let at = self.array_c_name(arr_id);
+        self.out.push_str(&format!("    {at} {av} = {it};\n"));
         self.out
-            .push_str(&format!("    for (int64_t {var} = {lo}; {var} {cmp} {hi}; {var}++) {{\n"));
+            .push_str(&format!("    for (int64_t {iv} = 0; {iv} < {av}.len; {iv}++) {{\n"));
+        self.out.push_str(&format!("        {et} {var} = {av}.data[{iv}];\n"));
         self.emit_branch_block(body, in_main);
         self.out.push_str("    }\n");
     }
@@ -577,12 +681,51 @@ impl Codegen<'_> {
             ExprKind::Field { base, name } => {
                 let base = *base;
                 let name = name.clone();
+                // `arr.count` lowers to the C length field.
+                if name == "count" && matches!(self.ty_of(base), Ty::Array(_)) {
+                    let b = self.expr(base);
+                    return format!("({b}).len");
+                }
                 let b = self.expr(base);
                 format!("{b}.{name}")
             }
-            ExprKind::Index { .. } => {
-                self.errors.push("indexing is not supported by stage0 codegen yet".into());
-                "0".into()
+            ExprKind::Array(elems) => {
+                let elems = elems.clone();
+                let aty = self.ty_of(id);
+                let Ty::Array(arr_id) = aty else {
+                    self.errors.push("array literal has no array type (stage0)".into());
+                    return "0".into();
+                };
+                let at = self.array_c_name(arr_id);
+                if elems.is_empty() {
+                    return format!("{at}_new()");
+                }
+                let et = self.ty_c_name(self.table.array_elem(arr_id));
+                let n = elems.len();
+                let tmp = self.tmp;
+                self.tmp += 1;
+                let v = format!("__a{tmp}");
+                let mut s = format!(
+                    "({{ {at} {v}; {v}.data = ({et}*)malloc(sizeof({et}) * {n}); {v}.len = {n}; {v}.cap = {n}; "
+                );
+                for (i, &e) in elems.iter().enumerate() {
+                    let ce = self.expr(e);
+                    s.push_str(&format!("{v}.data[{i}] = {ce}; "));
+                }
+                s.push_str(&format!("{v}; }})"));
+                s
+            }
+            ExprKind::Index { base, index } => {
+                let (base, index) = (*base, *index);
+                let aty = self.ty_of(base);
+                let Ty::Array(arr_id) = aty else {
+                    self.errors.push("indexing a non-array is not supported by stage0 codegen".into());
+                    return "0".into();
+                };
+                let at = self.array_c_name(arr_id);
+                let b = self.expr(base);
+                let i = self.expr(index);
+                format!("{at}_get({b}, (int64_t)({i}))")
             }
             ExprKind::New { path, fields } => {
                 let path = path.clone();
@@ -657,24 +800,36 @@ impl Codegen<'_> {
 }
 
 /// Map a Plew type to its C spelling. Primitives map to fixed-width C types;
-/// any other name is assumed to be a declared struct (its typedef name).
+/// `Array[T]` maps to its monomorphized struct name; any other name is assumed
+/// to be a declared struct/enum (its typedef name). Must agree with
+/// [`Codegen::ty_c_name`] for the same type.
 fn c_type(t: &Type) -> String {
     match t.name.as_str() {
-        "I8" => "int8_t",
-        "I16" => "int16_t",
-        "I32" => "int32_t",
-        "I64" => "int64_t",
-        "U8" => "uint8_t",
-        "U16" => "uint16_t",
-        "U32" => "uint32_t",
-        "U64" => "uint64_t",
-        "F32" => "float",
-        "F64" => "double",
-        "Bool" => "int",
-        "String" => "PlewString",
-        other => other,
+        "I8" => "int8_t".to_string(),
+        "I16" => "int16_t".to_string(),
+        "I32" => "int32_t".to_string(),
+        "I64" => "int64_t".to_string(),
+        "U8" => "uint8_t".to_string(),
+        "U16" => "uint16_t".to_string(),
+        "U32" => "uint32_t".to_string(),
+        "U64" => "uint64_t".to_string(),
+        "F32" => "float".to_string(),
+        "F64" => "double".to_string(),
+        "Bool" => "int".to_string(),
+        "String" => "PlewString".to_string(),
+        "Array" if t.args.len() == 1 => format!("PlewArray_{}", mangle_type(&t.args[0])),
+        other => other.to_string(),
     }
-    .to_string()
+}
+
+/// C-identifier-safe mangling of a syntactic type (mirror of
+/// [`Codegen::mangle`] on `Ty`, for use where only the AST type is available).
+fn mangle_type(t: &Type) -> String {
+    if t.name == "Array" && t.args.len() == 1 {
+        format!("Arr_{}", mangle_type(&t.args[0]))
+    } else {
+        t.name.clone()
+    }
 }
 
 /// Render a Plew string's decoded bytes as a C string literal plus its byte

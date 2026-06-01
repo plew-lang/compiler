@@ -862,6 +862,32 @@ impl Parser {
         self.ast.alloc_expr(ExprKind::For { var, mutable, iter, body }, start.merge(sp))
     }
 
+    /// Array literal `[e0, e1, ...]` (or empty `[]`). A trailing comma is ok.
+    /// Dictionary literals `[k: v]` are not supported by stage0 yet.
+    fn parse_array(&mut self, start: Span) -> ExprId {
+        self.bump(); // `[`
+        self.eat_newlines();
+        let mut elems = Vec::new();
+        while !matches!(self.peek(), TokenKind::RBracket | TokenKind::Eof) {
+            let e = self.expr_bp(0);
+            if matches!(self.peek(), TokenKind::Colon) {
+                let s = self.peek_span();
+                self.error(s, "dictionary literals are not supported by stage0 yet");
+            }
+            elems.push(e);
+            self.eat_newlines();
+            if matches!(self.peek(), TokenKind::Comma) {
+                self.bump();
+                self.eat_newlines();
+            } else {
+                break;
+            }
+        }
+        let end = self.peek_span();
+        self.expect(&TokenKind::RBracket, "`]` to close the array literal");
+        self.ast.alloc_expr(ExprKind::Array(elems), start.merge(end))
+    }
+
     /// `while cond { .. }` as an expression (yields `()`).
     fn parse_while(&mut self) -> ExprId {
         let start = self.peek_span();
@@ -942,6 +968,7 @@ impl Parser {
             TokenKind::Kw(Keyword::For) => self.parse_for(),
             TokenKind::Kw(Keyword::Match) => self.parse_match(),
             TokenKind::Lt => self.parse_jsx(),
+            TokenKind::LBracket => self.parse_array(span),
             TokenKind::LBrace => {
                 let block = self.block();
                 let sp = block.span;

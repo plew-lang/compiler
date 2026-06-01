@@ -99,6 +99,8 @@ pub enum ExprKind {
     Ident(String),
     Unary { op: UnOp, operand: ExprId },
     Binary { op: BinOp, lhs: ExprId, rhs: ExprId },
+    /// Array literal `[e0, e1, ...]` (possibly empty `[]`).
+    Array(Vec<ExprId>),
     /// Field access `base.name` (named only; no positional tuple indexing).
     Field { base: ExprId, name: String },
     /// Index `base[index]`.
@@ -389,6 +391,14 @@ impl Ast {
                 self.write_sexpr(*lhs, out);
                 out.push(' ');
                 self.write_sexpr(*rhs, out);
+                out.push(')');
+            }
+            ExprKind::Array(elems) => {
+                out.push_str("(array");
+                for &e in elems {
+                    out.push(' ');
+                    self.write_sexpr(e, out);
+                }
                 out.push(')');
             }
             ExprKind::Field { base, name } => {

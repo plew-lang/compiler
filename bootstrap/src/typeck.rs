@@ -34,6 +34,8 @@ pub enum Ty {
     Unit,
     Struct(u32),
     Enum(u32),
+    /// `Array[T]`; the u32 indexes [`TypeTable::array_elems`] for the element.
+    Array(u32),
     /// A type error already reported; suppresses cascades.
     Error,
 }
@@ -71,8 +73,38 @@ impl Ty {
             Unit => "()",
             Struct(_) => "<struct>",
             Enum(_) => "<enum>",
+            Array(_) => "<array>",
             Error => "<error>",
         }
+    }
+}
+
+/// Type information shared with codegen: id → name for nominal types, and the
+/// element type of every interned `Array[T]`. Built by the type checker so
+/// codegen can spell a [`Ty`] as a C type (and emit one monomorphized array
+/// runtime per element type).
+#[derive(Default)]
+pub struct TypeTable {
+    pub struct_names: Vec<String>,
+    pub enum_names: Vec<String>,
+    /// `Array[T]` element types, indexed by the `Ty::Array(id)` id.
+    pub array_elems: Vec<Ty>,
+}
+
+impl TypeTable {
+    /// Intern `Array[elem]`, returning its array-type id (deduplicated).
+    fn intern_array(&mut self, elem: Ty) -> u32 {
+        if let Some(i) = self.array_elems.iter().position(|&e| e == elem) {
+            return i as u32;
+        }
+        let i = self.array_elems.len() as u32;
+        self.array_elems.push(elem);
+        i
+    }
+
+    /// Element type of an `Array` type id.
+    pub fn array_elem(&self, id: u32) -> Ty {
+        self.array_elems[id as usize]
     }
 }
 
@@ -88,6 +120,7 @@ pub struct TypeError {
 pub struct CheckResult {
     pub errors: Vec<TypeError>,
     pub expr_ty: Vec<Ty>,
+    pub table: TypeTable,
 }
 
 struct FnSig {
@@ -144,6 +177,13 @@ pub fn check(ast: &Ast, items: &[crate::ast::ItemId]) -> CheckResult {
         }
     }
 
+    // The type table shared with codegen: nominal names plus interned arrays.
+    let mut table = TypeTable {
+        struct_names: struct_names.clone(),
+        enum_names: enum_names.clone(),
+        array_elems: Vec::new(),
+    };
+
     // Pass 0b: resolve field types of structs and enum variants.
     let mut structs: Vec<StructDef> = struct_names
         .iter()
@@ -165,7 +205,7 @@ pub fn check(ast: &Ast, items: &[crate::ast::ItemId]) -> CheckResult {
                 let sid = types.structs[name] as usize;
                 structs[sid].fields = fields
                     .iter()
-                    .map(|f| (f.name.clone(), resolve_ty(&f.ty, &types, &mut errors)))
+                    .map(|f| (f.name.clone(), resolve_ty(&f.ty, &types, &mut table, &mut errors)))
                     .collect();
             }
             ItemKind::Enum { name, variants, generics } => {
@@ -183,7 +223,7 @@ pub fn check(ast: &Ast, items: &[crate::ast::ItemId]) -> CheckResult {
                         fields: v
                             .fields
                             .iter()
-                            .map(|f| (f.name.clone(), resolve_ty(&f.ty, &types, &mut errors)))
+                            .map(|f| (f.name.clone(), resolve_ty(&f.ty, &types, &mut table, &mut errors)))
                             .collect(),
                     })
                     .collect();
@@ -196,9 +236,10 @@ pub fn check(ast: &Ast, items: &[crate::ast::ItemId]) -> CheckResult {
     let mut sigs: HashMap<String, FnSig> = HashMap::new();
     for &id in items {
         if let ItemKind::Fn { name, params, ret, .. } = &ast.item(id).kind {
-            let param_tys = params.iter().map(|p| resolve_ty(&p.ty, &types, &mut errors)).collect();
+            let param_tys =
+                params.iter().map(|p| resolve_ty(&p.ty, &types, &mut table, &mut errors)).collect();
             let ret_ty = match ret {
-                Some(t) => resolve_ty(t, &types, &mut errors),
+                Some(t) => resolve_ty(t, &types, &mut table, &mut errors),
                 None => Ty::Unit,
             };
             sigs.insert(name.clone(), FnSig { params: param_tys, ret: ret_ty });
@@ -215,6 +256,7 @@ pub fn check(ast: &Ast, items: &[crate::ast::ItemId]) -> CheckResult {
                 structs: &structs,
                 enums: &enums,
                 types: &types,
+                table: &mut table,
                 errors: &mut errors,
                 expr_ty: &mut expr_ty,
                 scopes: Vec::new(),
@@ -222,7 +264,7 @@ pub fn check(ast: &Ast, items: &[crate::ast::ItemId]) -> CheckResult {
             };
             cx.push_scope();
             for p in params {
-                let ty = resolve_ty(&p.ty, cx.types, cx.errors);
+                let ty = resolve_ty(&p.ty, cx.types, cx.table, cx.errors);
                 cx.define(&p.label, ty);
             }
             cx.check_block(body);
@@ -230,11 +272,28 @@ pub fn check(ast: &Ast, items: &[crate::ast::ItemId]) -> CheckResult {
         }
     }
 
-    CheckResult { errors, expr_ty }
+    CheckResult { errors, expr_ty, table }
 }
 
-/// Resolve a syntactic type to a [`Ty`].
-fn resolve_ty(t: &Type, types: &Types, errors: &mut Vec<TypeError>) -> Ty {
+/// Resolve a syntactic type to a [`Ty`]. `Array[T]` interns its element type
+/// into `table`; other type arguments are an error (stage0 has no generics).
+fn resolve_ty(t: &Type, types: &Types, table: &mut TypeTable, errors: &mut Vec<TypeError>) -> Ty {
+    // `Array[T]` is the only stage0 type constructor.
+    if t.name == "Array" {
+        if t.args.len() != 1 {
+            errors.push(TypeError {
+                span: t.span,
+                msg: "`Array` takes exactly one type argument (e.g. `Array[I32]`)".into(),
+            });
+            return Ty::Error;
+        }
+        let elem = resolve_ty(&t.args[0], types, table, errors);
+        if elem == Ty::Error {
+            return Ty::Error;
+        }
+        return Ty::Array(table.intern_array(elem));
+    }
+
     let ty = match t.name.as_str() {
         "I8" => Ty::I8,
         "I16" => Ty::I16,
@@ -256,7 +315,7 @@ fn resolve_ty(t: &Type, types: &Types, errors: &mut Vec<TypeError>) -> Ty {
             } else {
                 errors.push(TypeError {
                     span: t.span,
-                    msg: format!("unknown type `{other}` (stage0 supports primitives, Bool, and declared struct/enum types)"),
+                    msg: format!("unknown type `{other}` (stage0 supports primitives, Bool, declared struct/enum types, and `Array[T]`)"),
                 });
                 Ty::Error
             }
@@ -277,6 +336,7 @@ struct Checker<'a> {
     structs: &'a [StructDef],
     enums: &'a [EnumDef],
     types: &'a Types,
+    table: &'a mut TypeTable,
     errors: &'a mut Vec<TypeError>,
     expr_ty: &'a mut Vec<Ty>,
     scopes: Vec<HashMap<String, Ty>>,
@@ -303,6 +363,7 @@ impl Checker<'_> {
         match t {
             Ty::Struct(id) => self.structs[id as usize].name.clone(),
             Ty::Enum(id) => self.enums[id as usize].name.clone(),
+            Ty::Array(id) => format!("Array[{}]", self.ty_name(self.table.array_elem(id))),
             other => other.prim_name().to_string(),
         }
     }
@@ -338,7 +399,10 @@ impl Checker<'_> {
             StmtKind::Let { name, ty, value, .. } => {
                 let name = name.clone();
                 let value = *value;
-                let expected = ty.as_ref().map(|t| resolve_ty(t, self.types, self.errors));
+                let expected = match ty {
+                    Some(t) => Some(resolve_ty(t, self.types, self.table, self.errors)),
+                    None => None,
+                };
                 let vty = self.check_expr(value, expected);
                 self.define(&name, expected.unwrap_or(vty));
             }
@@ -462,6 +526,10 @@ impl Checker<'_> {
                 let (op, lhs, rhs) = (*op, *lhs, *rhs);
                 self.check_binary(op, lhs, rhs, expected, span)
             }
+            ExprKind::Array(elems) => {
+                let elems = elems.clone();
+                self.check_array(&elems, expected, span)
+            }
             ExprKind::Call { callee, args } => {
                 let callee = *callee;
                 let args: Vec<_> = args.iter().map(|a| a.value).collect();
@@ -503,7 +571,7 @@ impl Checker<'_> {
             ExprKind::For { var, iter, body, .. } => {
                 let var = var.clone();
                 let (iter, body) = (*iter, *body);
-                let elem = self.check_range_iter(iter);
+                let elem = self.check_iter(iter);
                 self.push_scope();
                 self.define(&var, elem);
                 self.check_expr(body, None);
@@ -534,6 +602,12 @@ impl Checker<'_> {
                             }
                         }
                     }
+                    // `arr.count` is the element count (spec: `U64`).
+                    Ty::Array(_) if name == "count" => Ty::U64,
+                    Ty::Array(_) => {
+                        self.error(span, format!("`Array` has no member `{name}` (stage0 supports `count`)"));
+                        Ty::Error
+                    }
                     Ty::Error => Ty::Error,
                     other => {
                         let on = self.ty_name(other);
@@ -542,9 +616,26 @@ impl Checker<'_> {
                     }
                 }
             }
-            ExprKind::Index { .. } => {
-                self.error(span, "indexing is not supported by the stage0 type checker yet");
-                Ty::Error
+            ExprKind::Index { base, index } => {
+                let (base, index) = (*base, *index);
+                let bt = self.check_expr(base, None);
+                match bt {
+                    Ty::Array(id) => {
+                        // Index is `U64` (spec); the result is the element type.
+                        self.check_expr(index, Some(Ty::U64));
+                        self.table.array_elem(id)
+                    }
+                    Ty::Error => {
+                        self.check_expr(index, None);
+                        Ty::Error
+                    }
+                    other => {
+                        let on = self.ty_name(other);
+                        self.error(span, format!("type `{on}` cannot be indexed"));
+                        self.check_expr(index, None);
+                        Ty::Error
+                    }
+                }
             }
             ExprKind::Match { scrutinee, arms } => {
                 let scrutinee = *scrutinee;
@@ -774,10 +865,43 @@ impl Checker<'_> {
         }
     }
 
-    /// Check a `for` range iterator `a..<b` / `a..=b`, returning the element
-    /// (integer) type. A bare-literal bound is typed *after* the other bound so
-    /// `0..<n` pins `0` to `n`'s type rather than reporting it as ambiguous.
-    fn check_range_iter(&mut self, iter: ExprId) -> Ty {
+    /// Check an array literal `[e0, e1, ...]`. The element type comes from the
+    /// expected `Array[E]` if present, else from the first element; all
+    /// elements must share it. An empty literal needs an expected type.
+    fn check_array(&mut self, elems: &[ExprId], expected: Option<Ty>, span: Span) -> Ty {
+        let expected_elem = match expected {
+            Some(Ty::Array(id)) => Some(self.table.array_elem(id)),
+            _ => None,
+        };
+        if elems.is_empty() {
+            return match expected_elem {
+                Some(e) => Ty::Array(self.table.intern_array(e)),
+                None => {
+                    self.error(span, "empty array literal needs a type annotation (e.g. `val xs: Array[I32] = []`)");
+                    Ty::Error
+                }
+            };
+        }
+        // First element establishes the type (unless one is expected).
+        let first = self.check_expr(elems[0], expected_elem);
+        let elem = expected_elem.unwrap_or(first);
+        for &e in &elems[1..] {
+            let et = self.check_expr(e, Some(elem));
+            if elem != Ty::Error && et != Ty::Error && et != elem {
+                let (en, etn) = (self.ty_name(elem), self.ty_name(et));
+                let s = self.ast.expr(e).span;
+                self.error(s, format!("array elements must share a type: expected `{en}`, found `{etn}`"));
+            }
+        }
+        if elem == Ty::Error {
+            return Ty::Error;
+        }
+        Ty::Array(self.table.intern_array(elem))
+    }
+
+    /// Check a `for` iterator and return the loop-variable (element) type.
+    /// stage0 supports integer ranges (`a..<b` / `a..=b`) and arrays.
+    fn check_iter(&mut self, iter: ExprId) -> Ty {
         let span = self.ast.expr(iter).span;
         let range = if let ExprKind::Binary { op, lhs, rhs } = &self.ast.expr(iter).kind {
             if matches!(op, BinOp::RangeHalf | BinOp::RangeClosed) {
@@ -789,8 +913,17 @@ impl Checker<'_> {
             None
         };
         let Some((lhs, rhs)) = range else {
-            self.error(span, "`for` requires a range iterator (stage0: `a..<b` or `a..=b`)");
-            return Ty::Error;
+            // Non-range: an array iterates its elements.
+            let it = self.check_expr(iter, None);
+            return match it {
+                Ty::Array(id) => self.table.array_elem(id),
+                Ty::Error => Ty::Error,
+                other => {
+                    let on = self.ty_name(other);
+                    self.error(span, format!("`for` cannot iterate `{on}` (stage0: a range `a..<b` or an array)"));
+                    Ty::Error
+                }
+            };
         };
         let lhs_lit = matches!(self.ast.expr(lhs).kind, ExprKind::Int(_) | ExprKind::Float(_));
         let elem = if lhs_lit {
@@ -858,20 +991,25 @@ impl Checker<'_> {
         if let ExprKind::Ident(name) = &self.ast.expr(callee).kind {
             let name = name.clone();
             if name == "print" {
-                // stage0 builtin: accepts a number or a String (real signature:
-                // `print[T](~value: T) where T: Format`; import-required).
-                // Numeric literals are pinned to I64 for convenience; a string
-                // literal resolves to String.
+                // stage0 builtin: accepts any number or a String (real signature:
+                // `print[T](~value: T) where T: Format`; import-required). The
+                // argument's natural type is used; an otherwise-ambiguous numeric
+                // literal falls back to I64 (a stage0 convenience).
                 if args.len() != 1 {
                     self.error(span, "`print` takes exactly one argument (stage0)");
-                } else {
-                    let is_str = matches!(self.ast.expr(args[0]).kind, ExprKind::Str(_));
-                    let exp = if is_str { None } else { Some(Ty::I64) };
-                    let t = self.check_expr(args[0], exp);
-                    if t != Ty::Error && !t.is_numeric() && t != Ty::String {
-                        let tn = self.ty_name(t);
-                        self.error(span, format!("`print` expects a number or String (stage0), found `{tn}`"));
-                    }
+                    return Ty::Unit;
+                }
+                let before = self.errors.len();
+                let mut t = self.check_expr(args[0], None);
+                if t == Ty::Error && self.errors.len() > before {
+                    // Likely an ambiguous literal: discard those errors and retry
+                    // with an I64 expectation. A genuine error reappears.
+                    self.errors.truncate(before);
+                    t = self.check_expr(args[0], Some(Ty::I64));
+                }
+                if t != Ty::Error && !t.is_numeric() && t != Ty::String {
+                    let tn = self.ty_name(t);
+                    self.error(span, format!("`print` expects a number or String (stage0), found `{tn}`"));
                 }
                 return Ty::Unit;
             }

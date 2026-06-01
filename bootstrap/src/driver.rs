@@ -25,7 +25,7 @@ pub fn compile_to_c(src: &str) -> Result<String, Vec<String>> {
             .map(|e| format!("{:?}: {}", e.span, e.msg))
             .collect());
     }
-    emit_c(&ast, &items, &checked.expr_ty)
+    emit_c(&ast, &items, &checked.expr_ty, &checked.table)
 }
 
 /// Compile `src` to a native executable at `out`, writing the intermediate C to

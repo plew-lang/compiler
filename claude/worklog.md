@@ -4,7 +4,11 @@
 
 ## 現在地（一言）
 
-stage0（Rust）：整数・分岐・ループ・**struct**・**enum+match** が source→C→clang→実行できる（タグ `first-c-output`/`struct-works`）。型検査（双方向推論・数値リテラル型確定・struct/enum・match 網羅性）あり。**次は String / Array ＋ ARC ランタイム（C）と import 機構**＝セルフホストに必要な土台。
+stage0（Rust）：整数・分岐・ループ・**struct**・**enum+match**・**Array（リテラル/添字/`count`/for-each）** が source→C→clang→実行できる。型検査（双方向推論・数値リテラル型確定・struct/enum・match 網羅性・配列要素/添字/反復）あり。**次は Array の変更操作（`append`・`arr[i]=x`）＝メソッド呼び出しの土台**、その後 import 機構／値位置 match／整数幅反映。
+
+### stage0 のメモリモデル（重要・spec とは別物）
+
+stage0 は **throwaway（1 回コンパイルして終了）**。よって Array は **ヒープ確保＋リーク（free しない）＋参照セマンティクス**で実装する（ARC/CoW は未実装）。値意味論との差（エイリアス後変更の観測）は、**stage1 を「アリーナ＋index・単一所有」で書く規律**で回避する（Rust 版 stage0 と同じスタイル＝AST も `ExprId` 等で arena+index）。spec の CoW 値意味論は**セルフホスト後の Plew 製コンパイラで正しく実装**する。これは spec の言語意味論を変えるものではなく stage0 の実装戦略（委任範囲内）。
 
 ## 全体ロードマップ（第一目標＝Plew でコンパイラが書ける → 即セルフホスト）
 
@@ -29,8 +33,11 @@ stage0（Rust）：整数・分岐・ループ・**struct**・**enum+match** が
    - ✅ **String（最小）**：型 `String`・文字列リテラル・`print(String)`。C 表現は `PlewString{const char* data; int64_t len}`（リテラル backed・ヒープ/ARC なし）。連結・可変・`bytes` 等は未実装
    - ✅ **値位置の `if`/ブロック**：GNU statement-expression＋三項で codegen（typeck は give 型を期待型から解決）。e2e で if→1、block→9
    - ✅ **`for val i in a..<b` レンジループ**：codegen は C counting loop。`0..<5`（両端リテラル）は spec 通り曖昧エラー＝型付き上限が必要（`0..<n`）。リテラル側を後で型付けし `0..<n` を曖昧にしない。配列反復・`for (k,v)` 分解は未対応
-7. ⏭ **次の本丸**：`Array`（ジェネリック＝単相化）＋ARC ランタイム（C）／import 機構／値位置 `match`／codegen の整数幅反映／名前解決の本格化。**型を Ty→C 名に解決する仕組み（codegen に型レジストリ公開）**が Array/値位置 match の前提
-   - ⏭ `String`/`Array`＋ARC ランタイム（C）／名前解決の本格化
+7. 🔨 **次の本丸**：
+   - ✅ **型レジストリを codegen に公開**：typeck が `CheckResult.table: TypeTable`（struct/enum 名 id→名、`Array[T]` 要素型の interning）を返し、codegen が `Ty→C名`（`ty_c_name`/`mangle`）を解決。
+   - ✅ **Array（単相化・読み取り中心）**：`[..]` リテラル／`arr[i]`（範囲外 panic）／`arr.count`（U64）／`for val x in arr`。C 表現＝`PlewArray_<mangle>{T* data; len; cap}`＋per-type ランタイム（`_new`/`_get`）。要素型ごとに単相化（プリミティブ/struct/enum/ネスト配列可）。メモリはリーク（上記メモリモデル）。
+   - ⏭ **Array 変更操作**：`append`・`arr[i] = x`（IndexSet）・空配列からの成長。`arr.append(x)` のためメソッド呼び出しの土台（配列ビルトインメソッドの解決/codegen）。
+   - ⏭ import 機構／値位置 `match`／codegen の整数幅反映／名前解決の本格化。
 7. ⏭ → stage1（Plew でコンパイラ）に必要な分が揃い次第セルフホスト
 6. **stage1**：Plew サブセットでコンパイラを書く → stage0 で compile → 自己 compile＝**セルフホスト達成**
 7. 以降 LLVM/WASM・循環回収・所有権検査などを Plew 側で additive に
