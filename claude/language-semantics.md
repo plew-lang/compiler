@@ -21,7 +21,7 @@
 トピックごとに、spec を読むだけだと踏みやすい点だけを挙げる。**機構そのものはリンク先が正典**。
 
 ### 値・束縛 → [spec/03](../spec/01-basics/03-values.md)
-- すべて**値意味論（CoW）**（代入・受け渡しは独立コピー・共有可変は `Ref` のみ）。可変記憶域は `mut val`／アクセスは `borrow`/`inout`/`move`（呼び出しもモードを echo）→ [spec/03](../spec/01-basics/03-values.md)。`unique`/`local`・`Ref`/`WeakRef`/`->`・`deinit` も同章。
+- すべて**値意味論（CoW）**（代入・受け渡しは独立コピー・共有可変は `Ref` のみ）。可変記憶域は `mut val`／アクセスは `borrow`/`inout`/`move`（呼び出しもモードを echo）→ [spec/03](../spec/01-basics/03-values.md)。`unique`/`local`・`Ref`/`WeakRef`/`->`・`deinit` も同章。**コピー可能型に `borrow`/`move` はエラー**（冗長／footgun）＝`inout` のみ可。unique 型は逆に by-value 不可＝モード必須。`inout` だけ両型にまたがる（self も同様＝コピー可能型は `move fn` 不可）。
 - **deinit の破棄順（決定的）**：型自身の `deinit` 本体が先（全フィールド有効）→ フィールドは**宣言順（上から下）**・入れ子は再帰同規則。フィールド既定値が他フィールド非参照ゆえ構築依存が無く、C++ の逆順動機が無い（最単純な宣言順）→ [spec/03 deinit](../spec/01-basics/03-values.md#deinit)。
 - **newtype が unique を包むと自動 unique**（再宣言不要・`deinit` 継承・一度だけ実行）。コピー可能化＝唯一所有回避＝資源安全破壊ゆえ伝播必須。underlying が単一可視なので構造体の見落とし罠が無い → [spec/10 unique 型を包む](../spec/02-type-system/10-newtype.md#unique-型を包む)。
 - **`mut val` の合成規則（Swift と同じ・罠）**：フィールド書き換え・`inout fn` 呼び出しには **束縛が `mut val`** かつ **フィールド自身が `mut val`** の**両方**が要る。`val c = <Counter n=0/>` の `c.n += 1` はフィールドが `mut val` でもエラー（束縛が `val`＝値型は束縛単位で凍結）。Ref だけがこの例外（`val` 束縛越しでも referent を変更可）→ [spec/03](../spec/01-basics/03-values.md#変数宣言val--mut-val)。

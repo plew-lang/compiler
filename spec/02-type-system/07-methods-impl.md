@@ -17,6 +17,7 @@ impl MyType {
     }
 
     // 消費メソッド（self を move＝呼ぶと self は使えなくなる）
+    // ※ move fn は unique 型でのみ。コピー可能型はコピーで済むため move は冗長＝エラー（→ spec/03）
     pub move fn intoOther() -> Other {
         // self を消費して別の値を返す
     }
