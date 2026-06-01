@@ -35,7 +35,7 @@ AST
   │   2. 型推論・型検査（ジェネリクス、where 句）
   │   3. trait/impl 解決・拡張解決（#Extension）
   │   4. 並行性検査（spawn キャプチャの immutable 化）
-  │   5. @[...] 組み込みディレクティブ展開（Eq/Hash/Clone/… を AST 変換で合成）
+  │   5. @[...] 組み込みディレクティブ展開（Eq/Hash/Encode/… を AST 変換で合成）
   ▼
 型付き AST / IR（中間表現）
   │  LLVMSharp で LLVM-IR を構築
