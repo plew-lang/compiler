@@ -51,12 +51,12 @@ underlying が [`unique`](../01-basics/03-values.md#uniqueコピー不可型) �
 ```plew
 unique struct File {
     val fd: I32
-    deinit { sys_close(fd: self.fd) }
+    deinit { sysClose(fd: self.fd) }
 }
 
 newtype ReadOnlyFile = File   // 自動で unique・deinit を継承
 
-val r: ReadOnlyFile = open_ro(path: "x") as ReadOnlyFile
+val r: ReadOnlyFile = openRo(path: "x") as ReadOnlyFile
 // r がスコープを抜けると File の deinit が一度走る
 ```
 

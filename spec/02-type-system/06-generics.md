@@ -12,18 +12,18 @@ fn process[T](container: Container[T]) where T: Format {
 }
 ```
 
-**型パラメータの `[...]` には名前と能力マーカーを並べます**（`[T]`・`[T, U]`・`[no_local T]`・`[allow_unique T]`）。**トレイト制約**はインラインに書かず、すべて [`where` 句](#where-句)に集約します（`fn`・`struct`・`enum`・`trait`・`impl` で共通）。役割分担は「**`[...]`＝名前＋能力マーカー（下記）／`where`＝トレイト制約**」です。
+**型パラメータの `[...]` には名前と能力マーカーを並べます**（`[T]`・`[T, U]`・`[noLocal T]`・`[allowUnique T]`）。**トレイト制約**はインラインに書かず、すべて [`where` 句](#where-句)に集約します（`fn`・`struct`・`enum`・`trait`・`impl` で共通）。役割分担は「**`[...]`＝名前＋能力マーカー（下記）／`where`＝トレイト制約**」です。
 
 > ジェネリック境界 `where T: P`（同種・静的・全要求が使える）と、トレイトを値の型にする[存在型](08-traits.md#トレイトを値の型として使う存在型-any) `any P`（異種混在・動的・呼べるメンバに制限）は別物です。「1 種類でよい」ならジェネリック、「異種を混ぜたい」なら `any P` を使います。
 
-## 型引数の能力マーカー（allow_unique / no_local）
+## 型引数の能力マーカー（allowUnique / noLocal）
 
 型引数が**どんな型を取れるか**は `[...]` の能力マーカーで調整します（トレイト制約＝`where` とは別軸）。既定 `[T]` は **common case**＝**`unique` でない（コピー可能）かつ `local` 許容**で、無注釈で済みます。逸脱するときだけマークします：
 
-- **`[allow_unique T]`**：`unique` 型も admit する（widen）。`T` をコピーできなくなるので本体は借用／move で扱う。**v1 では未実装の将来機能** ── コア型（`Optional`/`Array`/`Promise`/`JoinHandle` 等）も含め `allow_unique` を入れずコピー可能な型に限定し、`unique` を generic に入れるのは常に [`Ref`](../01-basics/03-values.md#ref--weakref共有可変) 包み（`Optional[Ref[P]]`）。
-- **`[no_local T]`**：`local` 型を除外する（narrow）＝`spawn` する generic で `T` を spawn 越え可能に制約する（→ [非同期処理とメモリ管理](../04-execution/14-concurrency.md)）。`spawn` を使わない大半のコードでは不要。
+- **`[allowUnique T]`**：`unique` 型も admit する（widen）。`T` をコピーできなくなるので本体は借用／move で扱う。**v1 では未実装の将来機能** ── コア型（`Optional`/`Array`/`Promise`/`JoinHandle` 等）も含め `allowUnique` を入れずコピー可能な型に限定し、`unique` を generic に入れるのは常に [`Ref`](../01-basics/03-values.md#ref--weakref共有可変) 包み（`Optional[Ref[P]]`）。
+- **`[noLocal T]`**：`local` 型を除外する（narrow）＝`spawn` する generic で `T` を spawn 越え可能に制約する（→ [非同期処理とメモリ管理](../04-execution/14-concurrency.md)）。`spawn` を使わない大半のコードでは不要。
 
-非対称（`allow_unique`＝admit／`no_local`＝exclude）は「**既定＝common case・逸脱だけ注釈**」の帰結です（`unique` は generics で稀なので既定除外、`local` は日常的なので既定許容）。**条件付き unique**：`allow_unique` なコンテナが `T` を値で所有すると、`T` が `unique` のときコンテナ自身も `unique` になります（**自動導出・`reunique` 等の宣言は不要**。`unique` 性は型引数から見えるので silent でない）。
+非対称（`allowUnique`＝admit／`noLocal`＝exclude）は「**既定＝common case・逸脱だけ注釈**」の帰結です（`unique` は generics で稀なので既定除外、`local` は日常的なので既定許容）。**条件付き unique**：`allowUnique` なコンテナが `T` を値で所有すると、`T` が `unique` のときコンテナ自身も `unique` になります（**自動導出・`reunique` 等の宣言は不要**。`unique` 性は型引数から見えるので silent でない）。
 
 ## impl の型パラメータ
 
@@ -48,7 +48,7 @@ impl Celsius { /* … */ }                                 // 非ジェネリッ
 val n = parse[I32](text: input)   // 型引数 I32 を明示
 ```
 
-ブラケットの中身が**型なら型引数の適用、値なら[添字アクセス](../03-expressions/12-operators.md)**として解釈します（Go と同じ判別）。型は PascalCase・値（変数）は snake_case なので、`f[I32](…)`（型引数）と `arr[i]`（添字）は衝突しません。
+ブラケットの中身が**型なら型引数の適用、値なら[添字アクセス](../03-expressions/12-operators.md)**として解釈します（Go と同じ判別）。型は PascalCase・値（変数）は camelCase なので、`f[I32](…)`（型引数）と `arr[i]`（添字）は衝突しません。
 
 ## Where 句
 

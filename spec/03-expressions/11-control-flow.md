@@ -6,7 +6,7 @@
 
 ```plew
 val result = {
-    val temp = calculate_something()
+    val temp = calculateSomething()
     give temp * 2  // ブロックの戻り値
 }
 
@@ -19,7 +19,7 @@ val invalid = { 42 }  // コンパイルエラー
 ```plew
 val result = if condition {
     give "true case"
-} elif another_condition {
+} elif anotherCondition {
     give "elif case"
 } else {
     give "else case"
@@ -41,7 +41,7 @@ if Optional.Some { value: val flag } = optional && flag {
     // flag はここで使える
 }
 
-while Optional.Some { value: val line } = reader.next() && !line.is_empty() {
+while Optional.Some { value: val line } = reader.next() && !line.isEmpty() {
     process(line: line)
 }
 ```
@@ -90,11 +90,11 @@ val result = match expression {
 ```plew
 // 無限ループ（式として使用可能）
 val result = loop {
-    val data = get_data()
-    if data.is_valid() { 
+    val data = getData()
+    if data.isValid() { 
         break data.process()  // ループの戻り値
     }
-    if should_retry() { continue }
+    if shouldRetry() { continue }
     break <Error.Failed />  // エラー時の戻り値
 }
 
@@ -155,12 +155,12 @@ loop {
 impl Iterator as Iterable {
     type Item = Self.Item
     type Iter = Self
-    fn iterator() -> Self { self }          // 値で返す＝コピー。`for x in some_iter` は元の束縛を消費しない
+    fn iterator() -> Self { self }          // 値で返す＝コピー。`for x in someIter` は元の束縛を消費しない
 }
 ```
 
 - **`next` は `inout fn`**（カーソルを書き換える＝破壊操作の命令形メソッド）、**`iterator()` は名詞アクセサのメソッド**、要素を産む `Item`/`Iter` は[関連型](../02-type-system/08-traits.md)。`type Iter: Iterator[Item = Item]` は**境界の中で関連型を束縛**する記法（`any Iterator[Item=I32]` と同形で、存在型に限らず境界一般で使える）。
-- v1 はイテレータ＝コピー可能な値（unique イテレータは `allow_unique` 待ちで additive）。派生メソッド（`map`/`filter`/`enumerate`/`zip`/`count` 等）は[名前付き拡張の `impl Iterator`＋`default_extension`](../02-type-system/09-extensions.md)に置く（正確な署名は core-library）。
+- v1 はイテレータ＝コピー可能な値（unique イテレータは `allowUnique` 待ちで additive）。派生メソッド（`map`/`filter`/`enumerate`/`zip`/`count` 等）は[名前付き拡張の `impl Iterator`＋`defaultExtension`](../02-type-system/09-extensions.md)に置く（正確な署名は core-library）。
 - **レンジの反復**は要素が `Step` のときだけ `Iterable` になる（条件付き準拠 `where T: Step`）→ [レンジ](../01-basics/02-basic-types.md#レンジhalfopenrange--closedrange)。
 
 ## ガード文
@@ -169,19 +169,19 @@ impl Iterator as Iterable {
 
 ```plew
 // 基本的な条件チェック
-guard user.is_authenticated() && user.has_permission(name: "read") {
+guard user.isAuthenticated() && user.hasPermission(name: "read") {
     return <Error.Unauthorized />
 }
 // ここに到達するのは guard 条件が true の場合のみ
 
 // 列挙型のunwrapと変数代入
-guard Result.Ok { value: val value } = some_result {
+guard Result.Ok { value: val value } = someResult {
     return <Error.Failed />
 }
 // ここでは value が使用可能
 
 // 複数の条件を組み合わせ
-guard Optional.Some { value: val data } = maybe_data && data.is_valid() {
+guard Optional.Some { value: val data } = maybeData && data.isValid() {
     return <Error.Invalid />
 }
 // ここでは data が使用可能
@@ -192,11 +192,11 @@ guard Optional.Some { value: val data } = maybe_data && data.is_valid() {
 `panic "メッセージ"` はプログラムを停止させる**文**です（`return`/`break` と同じく、その先へ進まない＝発散する制御フロー）。回復可能な失敗には使わず（それは `Result`/`try`）、**回復不能なバグ**を即座に・大きな声で落とすために使います。catch はできません。
 
 ```plew
-guard Optional.Some { value: val config } = maybe_config {
+guard Optional.Some { value: val config } = maybeConfig {
     panic "config is missing"   // guard 本体は発散する必要がある → panic で満たす
 }
 
-val config = match maybe_config {
+val config = match maybeConfig {
     Optional.Some { value: val v } => v
     Optional.None                  => { panic "config is missing" }  // 発散アーム
 }
@@ -215,4 +215,4 @@ val config = match maybe_config {
 
 - **常時 ON（全ビルド共通）**。最適化レベルで意味論は変わりません ── [整数オーバーフロー](../01-basics/02-basic-types.md#整数の実行時セマンティクスオーバーフロー)・0 除算・NaN 比較の panic と同じ「リリースでだけ落ちないバグを作らない」方針（観測挙動は唱えた意味から逸れない）。Rust の `assert!`／Swift の `precondition` に対応します。
 - 内部は `panic` ゆえ **abort**（巻き戻さない・`deinit` は走らない・catch 不可）。ただし `panic` と違い**発散文ではなく**、条件が真なら素通りする**ただの関数呼び出し**です（構文の特別扱いは不要）。構文が参照しない＝**lang item ではない**ので、`print` 同様 `import` が要ります。
-- **`debug_assert`（最適化ビルドで除去される段）は当面持ちません＝additive 保留**。重い不変条件チェックを本番で外したい需要はありますが、除去段は「観測挙動が唱えた意味から逸れない」方針と**唯一緊張する部分**（壊れたプログラムの loud 化を遅らせる＝リリースでだけ素通りする）。入れるなら *呼び出し位置で除去段と分かる別名* `debug_assert` ＋ ビルドプロファイル定義を伴って後から非破壊で足します。常時チェックが既定で、除去は明示的に opt-in。
+- **`debugAssert`（最適化ビルドで除去される段）は当面持ちません＝additive 保留**。重い不変条件チェックを本番で外したい需要はありますが、除去段は「観測挙動が唱えた意味から逸れない」方針と**唯一緊張する部分**（壊れたプログラムの loud 化を遅らせる＝リリースでだけ素通りする）。入れるなら *呼び出し位置で除去段と分かる別名* `debugAssert` ＋ ビルドプロファイル定義を伴って後から非破壊で足します。常時チェックが既定で、除去は明示的に opt-in。

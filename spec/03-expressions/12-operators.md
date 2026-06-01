@@ -169,7 +169,7 @@ a > b    // match T.compare(lhs: a, rhs: b) { Greater => true,  _ => false }
 a >= b   // match T.compare(lhs: a, rhs: b) { Less => false,    _ => true }
 ```
 
-`F32`/`F64` も `Ord`・`Eq` に準拠しますが、**NaN を比較すると panic** します（IEEE の「NaN はどの値とも順序が付かない」を静かな `false` で返さず落とす）。NaN 判定は `is_nan()`。算術自体は IEEE 据え置きで NaN/inf を生成します（→ [基本型](../01-basics/02-basic-types.md)）。
+`F32`/`F64` も `Ord`・`Eq` に準拠しますが、**NaN を比較すると panic** します（IEEE の「NaN はどの値とも順序が付かない」を静かな `false` で返さず落とす）。NaN 判定は `isNan()`。算術自体は IEEE 据え置きで NaN/inf を生成します（→ [基本型](../01-basics/02-basic-types.md)）。
 
 ## 論理結合子（`&&` / `||`）
 
@@ -265,25 +265,25 @@ val first = array[0]  // array.index(key: 0) と同等
 ```plew
 trait IndexSet[Key] {
     type Value
-    inout fn index_set(key: Key, value: Value)
+    inout fn indexSet(key: Key, value: Value)
 }
 
 impl MyArray[T] as IndexSet[U64] {
     type Value = T
 
-    inout fn index_set(key: U64, value: T) {
+    inout fn indexSet(key: U64, value: T) {
         // 要素設定の実装
     }
 }
 
 mut val array = <MyArray ... />
-array[0] = x  // array.index_set(key: 0, value: x) と同等
+array[0] = x  // array.indexSet(key: 0, value: x) と同等
 ```
 
 - 読み取り（`Index`）と代入（`IndexSet`）は**独立したトレイト**で、読み取り専用コレクションは `Index` だけを実装できます。
 - `collection[key] += x` などの複合代入は、**読み取り（`Index`）＋演算＋代入（`IndexSet`）**に展開されるので、両方の実装が要ります（→ [複合代入演算子](#複合代入演算子)）。
-- レシーバ自身を書き換えるので `index_set` は `inout fn`。可変束縛（`mut val`）にしか使えません。
-- 添字越しの `inout` メソッド呼び出し（`arr[i].inout_method()`）やネストした代入（`a.b[i].c = x`）も、同じ `Index`→（変更）→`IndexSet` の **get-modify-set** に脱糖されます。場所（place）の文法・脱糖・重なる `inout` の禁止は [場所越しの変更](../01-basics/03-values.md#場所place越しの変更) を参照（複合代入はその特殊形）。
+- レシーバ自身を書き換えるので `indexSet` は `inout fn`。可変束縛（`mut val`）にしか使えません。
+- 添字越しの `inout` メソッド呼び出し（`arr[i].inoutMethod()`）やネストした代入（`a.b[i].c = x`）も、同じ `Index`→（変更）→`IndexSet` の **get-modify-set** に脱糖されます。場所（place）の文法・脱糖・重なる `inout` の禁止は [場所越しの変更](../01-basics/03-values.md#場所place越しの変更) を参照（複合代入はその特殊形）。
 
 ## オプショナルチェーン（Chain トレイト）
 
@@ -293,7 +293,7 @@ array[0] = x  // array.index_set(key: 0, value: x) と同等
 trait Chain {
     type Value
     fn chain() -> Optional[Value]        // 値か空かに分解する
-    factory from_value(value: Value)     // 値から再構築する（factory・戻り Self）
+    factory fromValue(value: Value)     // 値から再構築する（factory・戻り Self）
     factory empty()                      // 空を再構築する（factory・戻り Self）
 }
 ```
@@ -302,12 +302,12 @@ trait Chain {
 
 ```plew
 match receiver.chain() {
-    Optional.Some { value: val v } => <O.from_value value=v.member />
+    Optional.Some { value: val v } => <O.fromValue value=v.member />
     Optional.None                  => <O.empty />
 }
 ```
 
-レシーバが空なら以降のアクセスは評価されず、式全体が空になります（短絡評価）。`chain()` が値を返したときだけメンバへアクセスし、結果を `from_value` で包み直します（`from_value` / `empty` は**factory なので JSX `<O.… />` で生成**し、構築点が見えます）。
+レシーバが空なら以降のアクセスは評価されず、式全体が空になります（短絡評価）。`chain()` が値を返したときだけメンバへアクセスし、結果を `fromValue` で包み直します（`fromValue` / `empty` は**factory なので JSX `<O.… />` で生成**し、構築点が見えます）。
 
 ```plew
 val name = user?.profile?.name
@@ -325,7 +325,7 @@ impl Optional[T] as Chain {
         return self
     }
 
-    factory from_value(value: T) {
+    factory fromValue(value: T) {
         return <Optional.Some value=value />
     }
 
@@ -379,7 +379,7 @@ impl Optional[T] as Coalesce[T] {
 ```
 
 ```plew
-val port: I32 = config_port ?? 8080  // 右辺 I32 → Coalesce[I32] → 結果 I32
+val port: I32 = configPort ?? 8080  // 右辺 I32 → Coalesce[I32] → 結果 I32
 val merged: Optional[I32] = a ?? b   // 右辺 Optional → Coalesce[Optional[I32]] → 結果 Optional
 ```
 
@@ -476,7 +476,7 @@ arr[f()] += x
 // ≈
 val recv = arr
 val key  = f()
-recv.index_set(key: key, value: recv.index(key: key) + x)
+recv.indexSet(key: key, value: recv.index(key: key) + x)
 ```
 
 フィールド `obj.field += x` も同様にレシーバを 1 回評価します。

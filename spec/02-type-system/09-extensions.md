@@ -30,7 +30,7 @@ extension GreetingExtension {
         }
         
         // 関連値の追加
-        assoc val default_greeting: String = "Hi there!"
+        assoc val defaultGreeting: String = "Hi there!"
         
         // 型エイリアスの追加
         type NameType = String
@@ -47,8 +47,8 @@ extension FormalExtension {
             return "Allow me to introduce myself: {self.name}"
         }
         
-        // factory の追加（→ <Person.formal_person name=… />）
-        factory formal_person(name: String) {
+        // factory の追加（→ <Person.formalPerson name=… />）
+        factory formalPerson(name: String) {
             return <Person name=name age=0 />
         }
     }
@@ -80,7 +80,7 @@ fn example() {
     val greeting2 = person#FormalExtension.greet()
     
     // 関連値へのアクセス
-    val default = Person#GreetingExtension.default_greeting
+    val default = Person#GreetingExtension.defaultGreeting
     
     // 拡張でトレイト実装を追加した場合の演算子使用
     val combined = person#MathExtension + <Person name="Bob" age=30 />
@@ -147,23 +147,23 @@ extension Bar {
 ## 拡張の型システム統合
 
 ```plew
-fn handle_formal_person(person: Person#FormalExtension) {
+fn handleFormalPerson(person: Person#FormalExtension) {
     // 拡張適用済みの型として受け取り
     person.greet()      // OK: FormalExtension.greet
     person.introduce()  // OK: FormalExtension.introduce
 }
 
-fn convert_extensions(person: Person#GreetingExtension) {
+fn convertExtensions(person: Person#GreetingExtension) {
     // 同名メソッドを持つ拡張を同時適用しようとするとコンパイルエラー
     // val conflicted: Person#GreetingExtension#FormalExtension  // エラー: greet メソッドが衝突
 
     // 拡張を外して別の拡張を適用
-    val formal_only = person#!GreetingExtension#FormalExtension
-    formal_only.greet()  // OK: FormalExtension.greet のみ
+    val formalOnly = person#!GreetingExtension#FormalExtension
+    formalOnly.greet()  // OK: FormalExtension.greet のみ
 
     // 拡張の付け替え
-    val with_greeting = formal_only#!FormalExtension#GreetingExtension
-    with_greeting.greet()  // OK: GreetingExtension.greet
+    val withGreeting = formalOnly#!FormalExtension#GreetingExtension
+    withGreeting.greet()  // OK: GreetingExtension.greet
 }
 ```
 
@@ -185,7 +185,7 @@ f(p#FormalExtension)   // OK：呼び出し位置で Formal ビューを明示
 
 **コンテナには伝播しない（不変）** ── `Array[A]` と `Array[A#P]`、`Array[A#Ext1]` と `Array[A#Ext2]` は別の型で、暗黙キャストできません。スカラの再ビューは安全でも、コンテナは impl に依存する**内部不変条件**を抱えるためです。たとえば外部型 `A` に別のハッシュを与える `#Ext1`/`#Ext2` で `Set[A#Ext1]`（Ext1 のハッシュで配置済み）を `Set[A#Ext2]` として読めてしまうと、全ルックアップが空振りする**サイレントな論理バグ**になります。ジェネリクス一般と同じく不変に倒し、付け替えたいときは明示的に組み直します（`Set.from(…)` など）。なお[トレイト制約](08-traits.md)の充足のためにコンパイラが拡張を推論することもありません（`f(x#Ext)` と明示する＝[orphan rule](#外部型への実装は拡張でorphan-rule) の想定された使い方）。
 
-**拡張違いはそのままオーバーロードになる** ── 暗黙キャストが無いので `A` と `A#P` は exact 一致で曖昧なく解決でき、`fn f(a: A)` と `fn f(a: A#P)` は別[オーバーロード](07-methods-impl.md#メソッドのオーバーロード)として共存します（呼び出し側が `#` の有無で選ぶ）。型が `default_extension #P` を宣言している場合は `A ≡ A#P` なので両者は同一定義＝重複エラーです。
+**拡張違いはそのままオーバーロードになる** ── 暗黙キャストが無いので `A` と `A#P` は exact 一致で曖昧なく解決でき、`fn f(a: A)` と `fn f(a: A#P)` は別[オーバーロード](07-methods-impl.md#メソッドのオーバーロード)として共存します（呼び出し側が `#` の有無で選ぶ）。型が `defaultExtension #P` を宣言している場合は `A ≡ A#P` なので両者は同一定義＝重複エラーです。
 
 ## 継承・ネストは持たない
 
@@ -236,13 +236,13 @@ extension IterExt {
 
 extension ToStr {
     impl Format as ToString {        // トレイト間準拠：self は Self: Format
-        fn to_string() -> String { return self.format(format: "") }
+        fn toString() -> String { return self.format(format: "") }
     }
 }
 ```
 
 - **`impl Trait { … }`（派生メソッド）**：`self` は `Self: Trait`。要求や同拡張内の他メソッドを呼べる。本体はトレイトのインターフェースに対して一度だけ型検査される。
-- **`impl B as A { … }`（トレイト間準拠）**：`B` の全準拠型を `A` へ準拠させる。`self` は `Self: B`。`A` の要求を `B` の語彙で実装する。`#Ext` 適用済み（または `default_extension` 済み）の B 型だけが `A` を満たすので、`fn g[T](x: T) where T: A` には `g(x#Ext)` で渡す（[外部型への実装](#外部型への実装は拡張でorphan-rule)の `f(x: v#Ext)` と同じ流れ）。
+- **`impl B as A { … }`（トレイト間準拠）**：`B` の全準拠型を `A` へ準拠させる。`self` は `Self: B`。`A` の要求を `B` の語彙で実装する。`#Ext` 適用済み（または `defaultExtension` 済み）の B 型だけが `A` を満たすので、`fn g[T](x: T) where T: A` には `g(x#Ext)` で渡す（[外部型への実装](#外部型への実装は拡張でorphan-rule)の `f(x: v#Ext)` と同じ流れ）。
 - **頭なし Self の blanket は禁止**：`impl[T] T { … }` や `impl[T] T as A where T: B { … }`（Self が型構築子を持たないベア型変数）は書けません。型所有が錨を下ろせず、型のベアメソッド一覧をローカルに列挙できなくなるためです。「B の全準拠型を A へ」は上記 `impl B as A`（主語＝トレイト）で表現します。
 
 ### 拡張は名前付きバンドル（à la carte 適用）
@@ -264,13 +264,13 @@ fn process[T](it: T#IterExt) where T: Iterator {   // where は T#IterExt から
 }
 ```
 
-## デフォルト拡張（`default_extension`）
+## デフォルト拡張（`defaultExtension`）
 
-型は、自分のベア表面に**既定で載せる拡張**を宣言できます。構文は型本体の `default_extension`（→ [構造体と列挙型](05-structs-enums.md)）で、列挙は型レベルの `Type#A#B` と同じく `#` 連結です。
+型は、自分のベア表面に**既定で載せる拡張**を宣言できます。構文は型本体の `defaultExtension`（→ [構造体と列挙型](05-structs-enums.md)）で、列挙は型レベルの `Type#A#B` と同じく `#` 連結です。
 
 ```plew
 struct Array[T] {
-    default_extension #IterExt#FooExt
+    defaultExtension #IterExt#FooExt
 }
 
 val arr = [1U32]      // Array
@@ -278,8 +278,8 @@ arr.map(f)            // OK：既定で #IterExt が載っている
 arr#!IterExt.map()    // エラー：#!IterExt で剥がすと map は無い
 ```
 
-- **宣言できるのは型の作者だけ**：`default_extension` は型本体に書く＝型を所有するモジュールのみ。外部モジュールが他人の型のベア表面を勝手に変えることはできない（変えたければ使用箇所で `#Ext`）。
+- **宣言できるのは型の作者だけ**：`defaultExtension` は型本体に書く＝型を所有するモジュールのみ。外部モジュールが他人の型のベア表面を勝手に変えることはできない（変えたければ使用箇所で `#Ext`）。
 - **ベア解決への参加**：既定拡張のメソッドは、その型のベアなオーバーロード集合に加わる（非デフォルトの拡張はベア解決に参加せず `#Ext` 必須）。`value#!Ext` で個別に剥がせ、`value#Ext` は常に届く。既定集合は `#`／`#!` チェーンの起点になる（`Array` ≡ `Array#IterExt#FooExt`）。
-- **衝突＝宣言地点でエラー**：型自身のメソッドや別の既定拡張と**同セレクタ・同シグネチャ**で衝突したら、`default_extension` 宣言地点でコンパイルエラー（引数型が違えばオーバーロードとして共存）。型の作者が「片方だけ既定にし、他方は `#Ext` で明示」と curate して解決する。
+- **衝突＝宣言地点でエラー**：型自身のメソッドや別の既定拡張と**同セレクタ・同シグネチャ**で衝突したら、`defaultExtension` 宣言地点でコンパイルエラー（引数型が違えばオーバーロードとして共存）。型の作者が「片方だけ既定にし、他方は `#Ext` で明示」と curate して解決する。
 - **à la carte**：既定拡張も適用は à la carte（型が資格を持つ部分だけが載る）。型が何の資格も持たない拡張を既定指定しても無意味なので診断対象。
 - **ジェネリックには流れない**：境界 `T: Trait` は要求しか運ばず、`T` の既定拡張は不明。境界型変数に派生メソッドを使うときは `x#Ext`（または引数型 `x: T#Ext`）と明示する（上記「à la carte 適用」参照）。

@@ -24,25 +24,25 @@ extension BasicMath {
 extension AdvancedMath {
     impl Calculator {
         inout fn power(exponent: F64) {
-            self.current = math_pow(base: self.current, exponent: exponent)
+            self.current = mathPow(base: self.current, exponent: exponent)
         }
 
         inout fn sqrt() {
-            self.current = math_sqrt(value: self.current)
+            self.current = mathSqrt(value: self.current)
         }
     }
 }
 
 async fn main() {
     // BasicMath ── 値を返す流れるような API（非破壊・チェーン可能）。
-    val basic_result = <Calculator current=0.0 />#BasicMath
+    val basicResult = <Calculator current=0.0 />#BasicMath
         .add(value: 10.0)
         .add(value: 5.0)
         .result()  // 15.0
 
     // AdvancedMath ── inout で self を直接変更する。
     // inout の呼び出しには可変束縛 mut val が要る（val 束縛の中身は変更できない）。
-    mut val calc = <Calculator current=basic_result />
+    mut val calc = <Calculator current=basicResult />
     calc#AdvancedMath.power(exponent: 2.0)  // current = 225.0
     calc#AdvancedMath.sqrt()                // current = 15.0
 

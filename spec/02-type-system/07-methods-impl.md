@@ -7,27 +7,27 @@
 ```plew
 impl MyType {
     // インスタンスメソッド（self を読み借用）
-    pub fn instance_method(arg: Type) -> ReturnType {
+    pub fn instanceMethod(arg: Type) -> ReturnType {
         // メソッド本体
     }
 
     // 可変メソッド（self を可変借用＝inout self）
-    pub inout fn mutable_method(arg: Type) {
+    pub inout fn mutableMethod(arg: Type) {
         // self のフィールドを書き換えられる
     }
 
     // 消費メソッド（self を move＝呼ぶと self は使えなくなる）
-    pub move fn into_other() -> Other {
+    pub move fn intoOther() -> Other {
         // self を消費して別の値を返す
     }
 
     // 関連関数（静的メソッド相当）
-    pub assoc fn associated_function() -> ReturnType {
+    pub assoc fn associatedFunction() -> ReturnType {
         // 関連関数本体
     }
 
     // 関連変数（静的変数相当）
-    assoc val associated_value: Type = default_value
+    assoc val associatedValue: Type = defaultValue
 }
 ```
 
@@ -63,10 +63,10 @@ impl A {
 // fn f(n: I32) {}
 ```
 
-- すべてのオーバーロードはその型のモジュール内（無名 impl）に集まるので、**衝突検出はモジュール単体のビルドで完結**する（Rust のようなグローバルコヒーレンスは不要）。拡張（`#Ext`）のメソッドはベア解決に参加しないので別扱い。ただし型が `default_extension` で既定指定した拡張のメソッドはベア集合に加わり、同セレクタ・同シグネチャの衝突は `default_extension` 宣言地点でエラーになる（→ [拡張](09-extensions.md#デフォルト拡張default_extension)）。
+- すべてのオーバーロードはその型のモジュール内（無名 impl）に集まるので、**衝突検出はモジュール単体のビルドで完結**する（Rust のようなグローバルコヒーレンスは不要）。拡張（`#Ext`）のメソッドはベア解決に参加しないので別扱い。ただし型が `defaultExtension` で既定指定した拡張のメソッドはベア集合に加わり、同セレクタ・同シグネチャの衝突は `defaultExtension` 宣言地点でエラーになる（→ [拡張](09-extensions.md#デフォルト拡張defaultextension)）。
 - 解決：ラベルでセレクタを確定 → 具体位置の型で 1 つ選ぶ → 型引数位置は推論＋制約チェック。重なり得るジェネリック impl は保守的に拒否し、specialization（最特化選択）は行わない。
 - リテラル引数は文脈（このオーバーロード集合）で型が一意に定まらなければエラー（→ [数値リテラル](../01-basics/02-basic-types.md)）。
-- **拡張違いは別の具体型として区別**：`#Ext` は型の一部なので `f(a: A)` と `f(a: A#P)` は別オーバーロードとして共存できる（[暗黙の拡張キャストは無く](09-extensions.md#拡張ビューの変更は明示暗黙キャストなし) exact 一致で解決・呼び出し側が `#` の有無で選ぶ）。型が `default_extension #P` を持つ場合は `A ≡ A#P` で重複定義エラー。
+- **拡張違いは別の具体型として区別**：`#Ext` は型の一部なので `f(a: A)` と `f(a: A#P)` は別オーバーロードとして共存できる（[暗黙の拡張キャストは無く](09-extensions.md#拡張ビューの変更は明示暗黙キャストなし) exact 一致で解決・呼び出し側が `#` の有無で選ぶ）。型が `defaultExtension #P` を持つ場合は `A ≡ A#P` で重複定義エラー。
 
 ### メソッドは値に取り出せない（クロージャで包む）
 

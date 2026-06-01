@@ -7,15 +7,15 @@
 **`try` は `Result` 専用で、`Optional` には効きません**（Rust の `?` が `Option` でも効くのとは異なる）。`Optional` を返す関数で `try optional` とは書けません。`Optional` の早期離脱・連結は `??`（nil 合体）・`?.`（オプショナルチェーン）・`match`/`guard` を使ってください。`Optional` を `Result` に持ち上げたい（欠落をエラーとして伝播したい）ときは、`opt ?? <Result.Err … />` 等で明示的に `Result` 化してから `try` します。`try` の経路をエラー型 1 本（`Result` の `From` 変換）に絞ることで、「欠落（`None`）」と「失敗（`Err`）」を構文レベルで混同しません。
 
 ```plew
-fn parse_and_process(input: String) -> Result[I32, String] {
-    val number: I32 = try parse_int(text: input)  // エラー時は早期リターン
+fn parseAndProcess(input: String) -> Result[I32, String] {
+    val number: I32 = try parseInt(text: input)  // エラー時は早期リターン
     val processed = number * 2
     return <Result.Ok value=processed />
 }
 
 // エラー型の変換（From トレイト実装時）
-fn complex_operation() -> Result[Data, GeneralError] {
-    val result1: Result[I32, ParseError] = try_parse()
+fn complexOperation() -> Result[Data, GeneralError] {
+    val result1: Result[I32, ParseError] = tryParse()
     val value = try result1  // ParseError → GeneralError に自動変換
     // 処理続行
 }
@@ -43,5 +43,5 @@ impl GeneralError as From[IoError] {
 `Optional` / `Result` から中身を強制的に取り出す**後置演算子（`!` のような force-unwrap）は提供しません**。取り出しは `Optional` / `Result` の `unwrap` メソッドで行いますが、空・エラー時に実行時エラーとなるため**基本的に非推奨**です。通常は `match` / `guard` / `?.` / `??` / `try` で分岐・伝播してください。
 
 ```plew
-val v = maybe_value.unwrap()  // 空なら実行時エラー。基本は使わない
+val v = maybeValue.unwrap()  // 空なら実行時エラー。基本は使わない
 ```

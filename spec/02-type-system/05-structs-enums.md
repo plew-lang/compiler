@@ -6,19 +6,19 @@
 @[Eq, Hash]  // ディレクティブ（derive・オプション）
 export struct MyStruct[T] where T: SomeTrait {
     pub val field1: String
-    pub(get) val readonly_field: I32  // getter付きpublicフィールド
-    mut val field2: T = default_value()  // フィールドの宣言時デフォルト（生成時に省略可）
+    pub(get) val readonlyField: I32  // getter付きpublicフィールド
+    mut val field2: T = defaultValue()  // フィールドの宣言時デフォルト（生成時に省略可）
 }
 ```
 
 `pub` / `pub(get)` / 非公開（修飾なし）のメンバ可視性は本章末の[メンバの可視性](#メンバの可視性)を参照。非公開メンバは型の無名 impl からのみ見えます。
 
-型本体には `default_extension #Ext1#Ext2` を書けます。これはこの型のベア表面に**既定で載せる拡張**の宣言です（列挙は型レベルの `Type#A#B` と同じ `#` 連結）。`impl`（実装）ではなく型の宣言なので型本体に置きます。意味論・衝突規則・剥がし方は [拡張のデフォルト拡張](09-extensions.md#デフォルト拡張default_extension) を参照。列挙型でも同様に書けます。
+型本体には `defaultExtension #Ext1#Ext2` を書けます。これはこの型のベア表面に**既定で載せる拡張**の宣言です（列挙は型レベルの `Type#A#B` と同じ `#` 連結）。`impl`（実装）ではなく型の宣言なので型本体に置きます。意味論・衝突規則・剥がし方は [拡張のデフォルト拡張](09-extensions.md#デフォルト拡張defaultextension) を参照。列挙型でも同様に書けます。
 
 ```plew
 struct Counter {
     mut val n: I32
-    default_extension #StepperExt   // counter.double_step() がベアで呼べる
+    defaultExtension #StepperExt   // counter.doubleStep() がベアで呼べる
 }
 ```
 
@@ -72,7 +72,7 @@ export enum Result[T, E] {
 val some = <Optional.Some value=42 />
 val none = <Optional.None />
 
-match maybe_value {
+match maybeValue {
     Optional.Some { value: val v } => v
     Optional.None                  => 0
 }
@@ -191,7 +191,7 @@ val red = <Color r=255 />   // 型の外からでも生成可
 カスタムの生成ロジックは `impl` 内に `factory` で定義します（`impl` は [メソッドと impl](07-methods-impl.md)）。古典的なコンストラクタと違い `self` を初期化するのではなく、**完成したインスタンスを `return` で返します**（＝ファクトリ）。`return` は必須で、キャッシュ済みの値など `<Type … />` 以外を返してもかまいません。
 
 - 無名 `factory(...)` → `<Type … />` で呼び出す。ラベル集合が異なれば複数定義（[オーバーロード](07-methods-impl.md)）できる。
-- 名前付き `factory name(...)` → `<Type.name … />` で呼び出す（列挙型バリアント生成と同じ形）。名前は snake_case。
+- 名前付き `factory name(...)` → `<Type.name … />` で呼び出す（列挙型バリアント生成と同じ形）。名前は camelCase。
 - 属性ラベルは factory の引数ラベル（必ずしもフィールド名と一致しなくてよい）。呼び出し時はラベル必須。**factory ではラベル抑制 `~:`（[関数](../01-basics/04-functions.md#ラベルの抑制) の無ラベル引数）は使えません** ── 生成は JSX でラベル付きであることが生成可視性の根幹だからです。
 
 引数なしや同一ラベル集合の生成は無名では1つしか作れないため、それらは**名前付き factory** にします。これにより `assoc fn` を生成用に流用せずに済み、生成が常に JSX で明示されます。
@@ -202,8 +202,8 @@ struct Celsius {
 }
 
 impl Celsius {
-    // 名前付き factory → <Celsius.from_fahrenheit … />
-    factory from_fahrenheit(fahrenheit: F64) {
+    // 名前付き factory → <Celsius.fromFahrenheit … />
+    factory fromFahrenheit(fahrenheit: F64) {
         return <Celsius degree=((fahrenheit - 32.0) / 1.8) />
     }
 
@@ -214,7 +214,7 @@ impl Celsius {
 }
 
 val a = <Celsius degree=20.0 />                      // フィールド指定
-val b = <Celsius.from_fahrenheit fahrenheit=68.0 />  // 名前付き factory
+val b = <Celsius.fromFahrenheit fahrenheit=68.0 />  // 名前付き factory
 val z = <Celsius.zero />                             // 引数なし factory
 ```
 
@@ -245,14 +245,14 @@ impl Temperature {
 
     // Optional[Self]：パースできなければ None
     optional factory parse(text: String) {
-        guard Optional.Some { value: val c } = parse_f64(text: text) {
+        guard Optional.Some { value: val c } = parseF64(text: text) {
             return <Optional.None />
         }
         return <Optional.Some value=<Temperature celsius=c /> />
     }
 
     // Result[Self, E]：物理的にあり得ない値はエラー
-    result[RangeError] factory from_kelvin(k: F64) {
+    result[RangeError] factory fromKelvin(k: F64) {
         guard k >= 0.0 { return <Result.Err error=<RangeError /> /> }
         return <Result.Ok value=<Temperature celsius=(k - 273.15) /> />
     }
@@ -260,8 +260,8 @@ impl Temperature {
 
 val z = <Temperature.zero />                       // Temperature
 val a = <Temperature.parse text="20.0" />          // Optional[Temperature]
-val b = <Temperature.from_kelvin k=300.0 />        // Result[Temperature, RangeError]
-val c = try <Temperature.from_kelvin k=300.0 />    // try と合成（前置 try が JSX 全体に掛かる）
+val b = <Temperature.fromKelvin k=300.0 />        // Result[Temperature, RangeError]
+val c = try <Temperature.fromKelvin k=300.0 />    // try と合成（前置 try が JSX 全体に掛かる）
 ```
 
 - **自動ラップはしない**（明示 > 暗黙）。本体は `Optional.Some`/`None`・`Result.Ok`/`Err` を **JSX で明示的に返す**。成功路の内側 `Self` も `<Type … />` で組むので、**構築点が二段とも可視**になる（JSX の目的どおり）。
@@ -277,10 +277,10 @@ val c = try <Temperature.from_kelvin k=300.0 />    // try と合成（前置 try
 val some = <Optional.Some value=42 />
 val none = <Optional.None />
 val ok   = <Result.Ok value=data />
-val err  = <Result.Err error=parse_error />
+val err  = <Result.Err error=parseError />
 ```
 
-enum にも snake_case の名前付き factory を定義できます（PascalCase のバリアント名と衝突しません）。
+enum にも camelCase の名前付き factory を定義できます（PascalCase のバリアント名と衝突しません）。
 
 ### 型を文脈から省く（leading-dot 構築）
 
@@ -310,17 +310,17 @@ val n: Optional[I32] = <.None />            // ペイロードなしバリアン
 struct Account {
     pub val id: I32             // どこからでも見える
     pub(get) val balance: I32   // 読み取り公開・書き込みは内部のみ
-    mut val secret_key: String  // 無名 impl の中だけ
+    mut val secretKey: String  // 無名 impl の中だけ
 }
 
-impl Account {                  // 無名 impl → secret_key が見える
-    pub inout fn rotate_key() { self.secret_key = generate() }
+impl Account {                  // 無名 impl → secretKey が見える
+    pub inout fn rotateKey() { self.secretKey = generate() }
 }
 
 extension Audit {
     impl Account {              // 拡張 → pub / pub(get) のみ
         fn report() -> I32 { return self.balance }  // OK
-        // fn leak() -> String { return self.secret_key }  // エラー: 非公開
+        // fn leak() -> String { return self.secretKey }  // エラー: 非公開
     }
 }
 ```

@@ -43,7 +43,7 @@ fn balance() -> I32 { return self.balance }                            // self �
 ```plew
 unique struct File {
     val fd: I32
-    deinit { sys_close(fd: self.fd) }
+    deinit { sysClose(fd: self.fd) }
 }
 ```
 
@@ -62,7 +62,7 @@ unique struct File {
 
 ```plew
 impl File {
-    deinit { sys_close(fd: self.fd) }   // 最後の所有者が消えるとき一度だけ
+    deinit { sysClose(fd: self.fd) }   // 最後の所有者が消えるとき一度だけ
 }
 ```
 
@@ -95,7 +95,7 @@ val r2 = r                   // ハンドルをコピー＝同じ箱を共有（
 - `Ref[T]` は**祝福プリミティブ**（`Array`／`String` と同様、純 Plew では書けない）。コピーで共有＋retain し、最後の解放で中身の `deinit` を走らせる。
 - **`.` は Ref ハンドル自体への操作、`->` は中身（pointee）への操作**（C と同じ）。共有変異が `->` で構文的に明示され、値の `.` と区別されます。これが値意味論の中で「共有が起きる唯一の場所」を見えるようにしています。
 - **`val` な Ref 越しでも中身は変更できる**：Ref 束縛の `val`/`mut val` は **Ref 変数の再代入（`r = other`）** を gate するだけで、referent の変更（`r->x = v`・`inout fn` 呼び出し）は gate しません（Ref は共有可変が本分・Swift の `let class` と同じ）。値型の `val`（凍結）との非対称は、値 vs 参照の差を `Ref`＋`->` で可視化したものです。
-- **`move fn`（消費メソッド）は Ref 越しに呼べない**：共有された referent を消費すると他の `Ref` が無効化される（use-after-consume）ため、`Ref` 越しは `fn`/`inout fn` のみ。共有資源の後始末は **`deinit`（最後の `Ref` 解放時）** に委ねます。明示消費や失敗し得る `close() -> Result` が要るなら、共有せず裸の [`unique`](#uniqueコピー不可型) 値（唯一所有）で `move fn` を呼びます（共有時は「誰が close エラーを受けるか」が原理的に不定なので呼べないのが正しい）。〔additive：唯一保持なら中身を取り出す `try_unwrap() -> Optional[T]` を後付けし得る。〕
+- **`move fn`（消費メソッド）は Ref 越しに呼べない**：共有された referent を消費すると他の `Ref` が無効化される（use-after-consume）ため、`Ref` 越しは `fn`/`inout fn` のみ。共有資源の後始末は **`deinit`（最後の `Ref` 解放時）** に委ねます。明示消費や失敗し得る `close() -> Result` が要るなら、共有せず裸の [`unique`](#uniqueコピー不可型) 値（唯一所有）で `move fn` を呼びます（共有時は「誰が close エラーを受けるか」が原理的に不定なので呼べないのが正しい）。〔additive：唯一保持なら中身を取り出す `tryUnwrap() -> Optional[T]` を後付けし得る。〕
 - **循環**は参照カウントで回収されないので、断ち切りに **`WeakRef[T]`**（非所有・指す先が消え得る）を使います。**`WeakRef` は直接 deref できません（`w->x` は無い）** ── 指す先が生きている保証が無いからです。生存確認とアクセスは **`upgrade() -> Optional[Ref[T]]`** を通します（生きていれば強参照 `Ref`、消えていれば `None`＝可謬性が Optional で表に出る）：
 
 ```plew
@@ -141,8 +141,8 @@ variable += expression          // -=, *=, /= も同様
 (x, val y) = point              // x は既存へ代入（要 mut val）・y は新規
 
 // 構造体の分解（先頭に型名 → ブロックと曖昧にならない）
-SomeStruct { val field1, val field2 } = some_struct       // punning（同名束縛）
-SomeStruct { field1: val a, field2: val b } = some_struct // 別名
+SomeStruct { val field1, val field2 } = someStruct       // punning（同名束縛）
+SomeStruct { field1: val a, field2: val b } = someStruct // 別名
 
 // 入れ子（不要フィールドは _ で破棄。全フィールドの明示が要る）
 (name: val n, info: Person { name: _, val age }) = record
@@ -158,7 +158,7 @@ SomeStruct { field1: val a, field2: val b } = some_struct // 別名
 
 ### get-modify-set 脱糖
 
-ネストした場所への変更 ── 代入 `place = e`、複合代入 `place OP= e`、`inout` メソッド呼び出し `place.inout_method(...)`、`inout` 引数 `f(x: inout place)` ── は **read-modify-write** に脱糖します。場所の部分式（添字のキー・レシーバ）は**1 回だけ評価**し、添字の段は [`Index`](../03-expressions/12-operators.md#添字アクセス)（読み）と [`IndexSet`](../03-expressions/12-operators.md#添字代入indexset)（書き）、フィールドの段は load/store で、**内側から外へ書き戻し**ます。
+ネストした場所への変更 ── 代入 `place = e`、複合代入 `place OP= e`、`inout` メソッド呼び出し `place.inoutMethod(...)`、`inout` 引数 `f(x: inout place)` ── は **read-modify-write** に脱糖します。場所の部分式（添字のキー・レシーバ）は**1 回だけ評価**し、添字の段は [`Index`](../03-expressions/12-operators.md#添字アクセス)（読み）と [`IndexSet`](../03-expressions/12-operators.md#添字代入indexset)（書き）、フィールドの段は load/store で、**内側から外へ書き戻し**ます。
 
 ```plew
 mut val arr: Array[Counter] = [...]
@@ -167,7 +167,7 @@ arr[i].increment()                    // inout fn increment()
 val k = i
 mut val tmp = arr.index(key: k)       // 読み（Index）
 tmp.increment()                       // ローカルへの inout
-arr.index_set(key: k, value: tmp)     // 書き戻し（IndexSet）
+arr.indexSet(key: k, value: tmp)     // 書き戻し（IndexSet）
 ```
 
 `arr[i].field = x`・`arr[i].field += x`・ネスト `a.b[i].c = x` も同様に、添字段は `Index`/`IndexSet`、フィールド段は load/store で内側から組みます。これは [複合代入](../03-expressions/12-operators.md#複合代入演算子) の「場所は 1 回評価・`Index`→演算→`IndexSet`」を、一般の場所パスと `inout` レシーバ／引数へ広げたものです。

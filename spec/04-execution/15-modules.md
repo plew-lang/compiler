@@ -11,7 +11,7 @@ Plew のすべての定義は、いずれかのモジュール（**1 ファイ�
 
 ```plew
 val MAX_RETRY: I32 = 3          // トップレベル定数
-mut val request_count = 0       // トップレベル可変変数
+mut val requestCount = 0       // トップレベル可変変数
 ```
 
 トップレベル可変変数も持てます。値意味論なので、[`spawn`](14-concurrency.md) はトップレベルのコピー可能な値を**コピー（スナップショット）でキャプチャ**し、spawn 外の状態を書き換えられません（`Ref` は spawn を越えられない）。よってスレッド間に共有可変が生まれず、ロックも不要です（→ [並行安全性](14-concurrency.md#並行安全性--実質-race-free)）。
@@ -52,7 +52,7 @@ Plew が**常に保証**するもの：①メモリ安全（半初期化を観�
 fn main() { … }                       // 同期
 async fn main() { … }                 // await を使う（同期は無税の特殊ケース）
 fn main() -> Result[(), AppError] {   // Result を返すと main 内で try が使える
-    val cfg = try load_config()
+    val cfg = try loadConfig()
     run(config: cfg)
     return <Result.Ok value=() />
 }
@@ -136,7 +136,7 @@ import ./Models with { User as Account }  // 選択的インポート
 ```plew
 import ./MyModule        // ✅ OK: PascalCase
 import ../ParentModule   // ✅ OK: PascalCase  
-import ./my_module       // ❌ エラー: snake_case は不可
+import ./myModule       // ❌ エラー: camelCase は不可（パスは PascalCase）
 import ./123Module       // ❌ エラー: 数字から始まる名前は不可
 import ./kebab-case      // ❌ エラー: ハイフンは使用不可
 ```
@@ -147,7 +147,7 @@ import ./kebab-case      // ❌ エラー: ハイフンは使用不可
 
 ```plew
 export struct PublicStruct { /* ... */ }
-export fn public_function() { /* ... */ }
+export fn publicFunction() { /* ... */ }
 export trait PublicTrait { /* ... */ }
 export val PUBLIC_CONST: I32 = 100   // トップレベル定数も公開できる
 ```
@@ -281,8 +281,8 @@ plew build ./src/server.pw    # 別エントリ＝別ターゲット（例：nat
 
 ```plew
 test "parses an empty header" {
-    val r = parse_header(input~: "")
-    expect_eq(expected: <Header empty=true />, actual: r)
+    val r = parseHeader(input~: "")
+    expectEq(expected: <Header empty=true />, actual: r)
 }
 ```
 
@@ -301,7 +301,7 @@ struct Parser { … }
 impl Parser {
     test "backtracks on EOF" {
         val p = <Parser source="" />
-        expect_eq(expected: 0, actual: p.cursor)   // cursor が非 pub でも無名 impl 内なら見える
+        expectEq(expected: 0, actual: p.cursor)   // cursor が非 pub でも無名 impl 内なら見える
     }
 }
 ```
@@ -314,23 +314,23 @@ impl Parser {
 
 ### アサーション（`@Std/Testing`）
 
-テスト用の表明は `@Std/Testing` から import する小さな関数族で、**実行時の [`assert`](../03-expressions/11-control-flow.md#assert--条件付き-panic) とは別物**です（`assert`＝本番コードの不変条件・panic／`expect_*`＝テストの検査・ランナー続行）。
+テスト用の表明は `@Std/Testing` から import する小さな関数族で、**実行時の [`assert`](../03-expressions/11-control-flow.md#assert--条件付き-panic) とは別物**です（`assert`＝本番コードの不変条件・panic／`expect*`＝テストの検査・ランナー続行）。
 
 ```plew
-import @Std/Testing with { expect, expect_eq, expect_ne, expect_approx }
+import @Std/Testing with { expect, expectEq, expectNe, expectApprox }
 ```
 
 | 関数 | 検査 |
 |---|---|
 | `expect(ok: Bool)` | 真偽値 |
-| `expect_eq(expected:, actual:)` | 等価（`==`） |
-| `expect_ne(expected:, actual:)` | 非等価 |
-| `expect_approx(expected:, actual:, tolerance:)` | 浮動小数の許容誤差内（NaN 比較は panic・厳密比較が脆いため固有理由あり） |
+| `expectEq(expected:, actual:)` | 等価（`==`） |
+| `expectNe(expected:, actual:)` | 非等価 |
+| `expectApprox(expected:, actual:, tolerance:)` | 浮動小数の許容誤差内（NaN 比較は panic・厳密比較が脆いため固有理由あり） |
 
 - **`expected:`/`actual:` はラベル必須**（[ラベルは宣言順固定](../01-basics/04-functions.md#引数ラベル)）。`assertEquals(expected, actual)` の引数逆転 footgun を、ラベル明示で防ぎます（値を取り違えると `expected: <計算結果>` という不自然な記述になり目に見える）。失敗診断は expected／actual の値を表示。
 - **power-assert は採らない**。`assert(a == b)` の式を内省して両辺を表示する方式（pytest／Spock／Swift Testing）は診断が無料な一方「どの式まで分解されるか」が暗黙になるため、**対応範囲が関数リストで明示される** expect 族を選ぶ。
-- **`expect_error` は無い**。特定エラー値は `expect_eq(expected: <Result.Error … />, actual: r)`、ペイロード無視の「エラーか」は `expect(r.is_error)`、中身検査は [`match`](../03-expressions/11-control-flow.md#パターンマッチング) ── Plew は `==` を持つ値型エラーなので Zig の `expectError` 相当は畳まれる。
-- **バリアントの「ケースのみ判定」は関数にできない**（Plew に第一級のバリアントタグは無く、ケース判別は常に `match` の領域）。Result／Optional は `is_ok`/`is_error`/`is_some`/`is_none` で bool 化でき `expect(…)` に乗る。パターンを取る `expect_matches` は将来 additive。
+- **`expectError` は無い**。特定エラー値は `expectEq(expected: <Result.Error … />, actual: r)`、ペイロード無視の「エラーか」は `expect(r.isError)`、中身検査は [`match`](../03-expressions/11-control-flow.md#パターンマッチング) ── Plew は `==` を持つ値型エラーなので Zig の `expectError` 相当は畳まれる。
+- **バリアントの「ケースのみ判定」は関数にできない**（Plew に第一級のバリアントタグは無く、ケース判別は常に `match` の領域）。Result／Optional は `isOk`/`isError`/`isSome`/`isNone` で bool 化でき `expect(…)` に乗る。パターンを取る `expectMatches` は将来 additive。
 
 ## 外部コード統合
 
@@ -341,7 +341,7 @@ extern "c" {
 }
 
 extern "javascript" {
-    fn console_log(message: String)
+    fn consoleLog(message: String)
     val window: JsWindow
 }
 ```

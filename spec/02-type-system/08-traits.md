@@ -1,6 +1,6 @@
 # トレイト
 
-トレイトは、型が満たすべき**要求**（メソッド・フィールド・関連値・関連型・factory）を束ねる抽象です。トレイト本体には要求だけを書きます。要求の上に組む**派生メソッド**（`Iterator` の `map`/`filter` を `next` の上に作る類）は、トレイト本体ではなく**名前付き拡張**の `impl Trait` ブロックに置き、各型が `default_extension` で自分のベア表面に取り込みます（→ [拡張](09-extensions.md)）。型への準拠は `impl Type as Trait` で**明示的に宣言**し、各要求を `via`／本体で witness します（暗黙の準拠は起きません）。トレイトは[型引数](#トレイト名の-型引数と関連型束縛)（多重 conformance）と[関連型](#関連型associated-type)（出力）を持てます。
+トレイトは、型が満たすべき**要求**（メソッド・フィールド・関連値・関連型・factory）を束ねる抽象です。トレイト本体には要求だけを書きます。要求の上に組む**派生メソッド**（`Iterator` の `map`/`filter` を `next` の上に作る類）は、トレイト本体ではなく**名前付き拡張**の `impl Trait` ブロックに置き、各型が `defaultExtension` で自分のベア表面に取り込みます（→ [拡張](09-extensions.md)）。型への準拠は `impl Type as Trait` で**明示的に宣言**し、各要求を `via`／本体で witness します（暗黙の準拠は起きません）。トレイトは[型引数](#トレイト名の-型引数と関連型束縛)（多重 conformance）と[関連型](#関連型associated-type)（出力）を持てます。
 
 トレイトの宣言は型システムの[カスタム型](05-structs-enums.md)の一種で、`export trait Shape { … }` のように書きます。本章では定義・関連型・継承・準拠の意味論、トレイトを値の型として使う**存在型**（`any`）、そして標準で提供されるトレイトのカタログをまとめます。
 
@@ -19,7 +19,7 @@ impl Temperature as Default {
 }
 ```
 
-要求の上に組む**派生メソッド**（要求だけを使って組み立てる共有メソッド。`Iterator` の `map`/`filter` を `next` の上に作る類）は、トレイト本体にもベアの `impl Trait` にも書きません。**名前付き拡張**の中に `impl Trait { … }` として置き、各型が `default_extension` で自分のベア表面に取り込みます（→ [拡張](09-extensions.md) の「拡張はトレイトも対象にできる」「デフォルト拡張」）。こうすることで「どの派生メソッドがこの型でベアに見えるか」を**型の作者が明示的に管理**でき、別トレイト由来の同名メソッドが暗黙に流れ込んで衝突する事故が起きません。
+要求の上に組む**派生メソッド**（要求だけを使って組み立てる共有メソッド。`Iterator` の `map`/`filter` を `next` の上に作る類）は、トレイト本体にもベアの `impl Trait` にも書きません。**名前付き拡張**の中に `impl Trait { … }` として置き、各型が `defaultExtension` で自分のベア表面に取り込みます（→ [拡張](09-extensions.md) の「拡張はトレイトも対象にできる」「デフォルト拡張」）。こうすることで「どの派生メソッドがこの型でベアに見えるか」を**型の作者が明示的に管理**でき、別トレイト由来の同名メソッドが暗黙に流れ込んで衝突する事故が起きません。
 
 ```plew
 trait Stepper {
@@ -28,7 +28,7 @@ trait Stepper {
 
 extension StepperExt {               // 派生メソッドは名前付き拡張に置く
     impl Stepper {
-        fn double_step() -> I32 {    // self: Self: Stepper。要求 step() の上に組む
+        fn doubleStep() -> I32 {    // self: Self: Stepper。要求 step() の上に組む
             return self.step() + self.step()
         }
     }
@@ -36,17 +36,17 @@ extension StepperExt {               // 派生メソッドは名前付き拡張�
 
 struct Counter {
     mut val n: I32
-    default_extension #StepperExt    // Counter のベア表面に double_step を載せる
+    defaultExtension #StepperExt    // Counter のベア表面に doubleStep を載せる
 }
 impl Counter as Stepper {
     fn step() -> I32 { return self.n }
 }
-// counter.step() も counter.double_step() も呼べる。`.map().filter()` チェーンも同じ仕組み
+// counter.step() も counter.doubleStep() も呼べる。`.map().filter()` チェーンも同じ仕組み
 ```
 
 - **`impl Trait`（拡張内）の `self` は準拠型**（`Self: Trait`）。派生メソッドは `self` 経由で要求や同じ拡張内の他メソッドを呼べる。本体はトレイトのインターフェースに対して一度だけ型検査される。`impl Trait` を書けるのは拡張の中だけ（ベアの `impl Trait` は書けない）で、拡張なので外部トレイトも対象にできる。
-- 派生メソッドは**自動では生えない**（拡張は opt-in）。各型が `default_extension #Ext` で取り込むか、使用箇所で `value#Ext.foo()` と明示する。ジェネリックコードでは境界 `T: Trait` は要求しか運ばないので、`value#Ext` を明示する（引数型を `x: T#Ext` にすれば本体はベアで書ける。`where T: Trait` は別途必要 → [拡張](09-extensions.md)）。
-- 衝突は**型の `default_extension` 宣言地点**で検出する。デフォルトに載せた拡張のメソッドが、その型自身のメソッドや別のデフォルト拡張と同セレクタ・同シグネチャになればコンパイルエラー（引数型が違えばオーバーロードとして共存）。型の作者がデフォルト集合を curate して解決する。同一シグネチャの別挙動が要るならデフォルトに入れず `#Ext` で明示する。
+- 派生メソッドは**自動では生えない**（拡張は opt-in）。各型が `defaultExtension #Ext` で取り込むか、使用箇所で `value#Ext.foo()` と明示する。ジェネリックコードでは境界 `T: Trait` は要求しか運ばないので、`value#Ext` を明示する（引数型を `x: T#Ext` にすれば本体はベアで書ける。`where T: Trait` は別途必要 → [拡張](09-extensions.md)）。
+- 衝突は**型の `defaultExtension` 宣言地点**で検出する。デフォルトに載せた拡張のメソッドが、その型自身のメソッドや別のデフォルト拡張と同セレクタ・同シグネチャになればコンパイルエラー（引数型が違えばオーバーロードとして共存）。型の作者がデフォルト集合を curate して解決する。同一シグネチャの別挙動が要るならデフォルトに入れず `#Ext` で明示する。
 - **上書き可能な既定は持たない**: 準拠側の `impl Type as Trait`（`as` あり）が witness するのは**要求だけ**。派生メソッドに別の本体を与えること（上書き）はできない。挙動を変えたい型は別の名前付き `extension` に分けて `#Ext` で選ぶ。中間の「既定だが上書き可」は無い（Swift の protocol extension に伴う静的／動的ディスパッチの食い違いを避けるため）。
 
 ### 関連型（associated type）
@@ -96,7 +96,7 @@ trait BoundedStepper: Stepper {
 
 extension BoundedExt {
     impl BoundedStepper {
-        fn capped_step() -> I32 {        // 派生メソッド：親 Stepper の step() を使える
+        fn cappedStep() -> I32 {        // 派生メソッド：親 Stepper の step() を使える
             val s = self.step()
             if s > self.limit() { return self.limit() }
             return s
@@ -107,7 +107,7 @@ extension BoundedExt {
 
 - **継承は制約であって自動実装ではない**: `impl Type as BoundedStepper` を書くには、別途 `impl Type as Stepper` も存在しなければならない（無ければエラー）。親準拠が暗黙に生成されることはない（暗黙準拠を持たない方針の一貫）。
 - `Sub` を対象にする拡張の派生メソッドは、`self` 経由で `Super` の要求を呼べる（継承で準拠が保証されるため）。
-- ダイヤモンド継承で同名の**要求**が複数経路から来ても、同セレクタ・同シグネチャならオーバーロード集合の 1 つへ畳まれる（シグネチャ不一致はオーバーロードとして共存、または衝突ならエラー）。**派生メソッド**はトレイトに自動付随せず**型が `default_extension` で取り込む**ものなので、別経路由来の同名・同シグネチャ派生メソッドが衝突するのは「型が両方をデフォルトに含めたとき」だけで、**その型の `default_extension` 宣言地点**で報告される（→ [拡張](09-extensions.md)）。トレイト定義そのものが衝突を強制することはない。
+- ダイヤモンド継承で同名の**要求**が複数経路から来ても、同セレクタ・同シグネチャならオーバーロード集合の 1 つへ畳まれる（シグネチャ不一致はオーバーロードとして共存、または衝突ならエラー）。**派生メソッド**はトレイトに自動付随せず**型が `defaultExtension` で取り込む**ものなので、別経路由来の同名・同シグネチャ派生メソッドが衝突するのは「型が両方をデフォルトに含めたとき」だけで、**その型の `defaultExtension` 宣言地点**で報告される（→ [拡張](09-extensions.md)）。トレイト定義そのものが衝突を強制することはない。
 
 ## トレイト準拠と via
 
@@ -153,8 +153,8 @@ trait Writer {
 }
 
 impl File as Writer {
-    fn write(data: Bytes) -> Result[I32, Error] via write_bytes
-    fn write(data: String) -> Result[I32, Error] via write_text
+    fn write(data: Bytes) -> Result[I32, Error] via writeBytes
+    fn write(data: String) -> Result[I32, Error] via writeText
 }
 ```
 

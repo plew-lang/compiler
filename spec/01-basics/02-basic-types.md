@@ -51,7 +51,7 @@ val z = 42             // エラー：文脈が無い → val z: I32 = 42 か va
 
 整数演算（`+`・`-`・`*`、単項 `-`、および `I32.MIN / -1` のような `/`・`%` の桁あふれ）が型の表現範囲を**オーバーフローすると panic** します。**全ビルド共通**で、最適化レベルによって意味論は変わりません（「静かな嘘を返さない」方針＝ Go のような silent wrap は不採用、Swift のトラップに合わせる）。
 
-ラップ（2 の補数で巻き戻す）が必要なときは**明示メソッド** `wrapping_add` / `wrapping_sub` / `wrapping_mul` / `wrapping_neg` を使います（`x.wrapping_add(rhs: y)`・算術 `add(rhs:)` を鏡写し）。**ラップ専用の演算子（`&+` 等）は持ちません**（Rust の std と同じく稀用途ゆえメソッドのみ・必要になれば additive）。これらは固定幅 2 の補数に固有の能力で、数値分類の外の型が同じ意味で実装することはないため、**独立トレイトにはせず整数の分類トレイトのメソッド**です（数値トレイトタワーの正確なメンバ・署名は core-library で確定）。`div`/`rem`/`shl`/`shr`/`abs`/`pow` のラップ版は additive 保留。0 除算 panic（→ [演算子](../03-expressions/12-operators.md#演算子システム)）と合わせ、整数演算は「静かに壊れない」を保ちます。
+ラップ（2 の補数で巻き戻す）が必要なときは**明示メソッド** `wrappingAdd` / `wrappingSub` / `wrappingMul` / `wrappingNeg` を使います（`x.wrappingAdd(rhs: y)`・算術 `add(rhs:)` を鏡写し）。**ラップ専用の演算子（`&+` 等）は持ちません**（Rust の std と同じく稀用途ゆえメソッドのみ・必要になれば additive）。これらは固定幅 2 の補数に固有の能力で、数値分類の外の型が同じ意味で実装することはないため、**独立トレイトにはせず整数の分類トレイトのメソッド**です（数値トレイトタワーの正確なメンバ・署名は core-library で確定）。`div`/`rem`/`shl`/`shr`/`abs`/`pow` のラップ版は additive 保留。0 除算 panic（→ [演算子](../03-expressions/12-operators.md#演算子システム)）と合わせ、整数演算は「静かに壊れない」を保ちます。
 
 > Plew は意味論を変えるビルドモード（オーバーフロー検査の on/off 等）を持ちません。`debug`/`release` の差は最適化レベル（速度）だけで、観測可能な挙動は不変です（リリースでだけ落ちるバグを作らない＝観測挙動は唱えた意味から逸れない）。
 
@@ -59,7 +59,7 @@ val z = 42             // エラー：文脈が無い → val z: I32 = 42 か va
 
 `F32`/`F64` の算術は IEEE-754 に従い、`0.0 / 0.0` や `sqrt(-1.0)`・`inf - inf` などは **NaN**（非数）を、`1.0 / 0.0` などは **inf**（無限大）を生成します。inf は全順序を壊さない（全要素より大／小、`inf == inf` は真）ので通常の値として扱えます。
 
-NaN だけは別扱いで、Plew は **NaN を比較した時点で panic** します（`== != < <= > >=`、および `Eq`/`Ord` 由来の処理）。「`NaN != NaN` が真」のような静かな嘘を返さず、バグを比較箇所で大きく落とすためです（→ [型変換と演算子](../03-expressions/12-operators.md)）。NaN 判定は `is_nan()` で明示的に行います。これにより `F32`/`F64` は全順序 `Ord`・全等価 `Eq` に正直に準拠できます。
+NaN だけは別扱いで、Plew は **NaN を比較した時点で panic** します（`== != < <= > >=`、および `Eq`/`Ord` 由来の処理）。「`NaN != NaN` が真」のような静かな嘘を返さず、バグを比較箇所で大きく落とすためです（→ [型変換と演算子](../03-expressions/12-operators.md)）。NaN 判定は `isNan()` で明示的に行います。これにより `F32`/`F64` は全順序 `Ord`・全等価 `Eq` に正直に準拠できます。
 
 ## 文字列（String）
 
@@ -76,7 +76,7 @@ struct String {
 ```
 
 - `bytes` は `pub(get)`（読み取り公開・書き込みは内部）。`s.bytes` は**ゼロコピーの読み取り**で `count` は O(1)。可変な配列が欲しければ `mut val b = s.bytes`（値意味論＝CoW で、変更するときにだけ複製される）。
-- **任意バイトからの公開生成は持たない**（不変条件を破るため）。生成は文字列リテラルと、検証する失敗し得る factory（例 `String.from_bytes(bytes:) -> Result[String, Utf8Error]`、名称暫定）に限る。
+- **任意バイトからの公開生成は持たない**（不変条件を破るため）。生成は文字列リテラルと、検証する失敗し得る factory（例 `String.fromBytes(bytes:) -> Result[String, Utf8Error]`、名称暫定）に限る。
 - **入力を正規化しない**：来たバイトをそのまま保持する（下記の等価と整合）。
 
 ### 等価
@@ -134,7 +134,7 @@ trait Format {
 [expression1, expression2, ...]
 ```
 
-`Array[T]` は**動的・伸長可能・連続**な **CoW 値型**のコレクション（`Vec<T>` / `List<T>` 相当）。コピーすると内部バッファを共有し、変更時にだけ複製します。要素は連続配置され、プリミティブは**ボックス化せずインライン格納**します（Java `int[]`・C# 配列モデル。`Array[U8]` や WASM ゼロコピーの前提）。**`unique` 要素は直接持てません**（generics はコピー可能な型に限定）ので [`Ref`](03-values.md#ref--weakref共有可変) 包み（`Array[Ref[T]]`）にします（→ [ジェネリクス](../02-type-system/06-generics.md#型引数の能力マーカーallow_unique--no_local)）。
+`Array[T]` は**動的・伸長可能・連続**な **CoW 値型**のコレクション（`Vec<T>` / `List<T>` 相当）。コピーすると内部バッファを共有し、変更時にだけ複製します。要素は連続配置され、プリミティブは**ボックス化せずインライン格納**します（Java `int[]`・C# 配列モデル。`Array[U8]` や WASM ゼロコピーの前提）。**`unique` 要素は直接持てません**（generics はコピー可能な型に限定）ので [`Ref`](03-values.md#ref--weakref共有可変) 包み（`Array[Ref[T]]`）にします（→ [ジェネリクス](../02-type-system/06-generics.md#型引数の能力マーカーallowunique--nolocal)）。
 
 - **唯一の配列型**。長さが型に乗る固定長配列 `[E; N]`（const generics）は持たない＝長さは常に実行時。型レベルの長さ安全が要る局所は名前付きフィールドの struct か実行時不変条件で代替する（需要が固まれば const generics は後付けで非破壊に足せる）。
 - **添字 `arr[i]` は `Index[U64] -> T`**（要素の値を返す。→ [型変換と演算子](../03-expressions/12-operators.md)）。**`count`・添字・`0..<arr.count` のレンジ要素はすべて `U64`** に揃えます（暗黙変換が無いので同型でないとキャストが要る ── 揃えることで `for val i in 0..<arr.count { arr[i] }` がキャストレス）。`count` は O(1)。符号なしゆえ**負添字は表現できず**、範囲外は panic（添字の意味を型で変えない＝[辞書](#辞書)と同じ）。幅は**固定 `U64`**（ポインタ幅の `USize` は採らない）＝**全ターゲットで同一意味論**にし、`I32` の 2³¹ 上限も回避するためです。
@@ -170,7 +170,7 @@ p.x                                       // アクセスは名前（位置添�
 - **振る舞いを持たない純データ**：`impl`・トレイト準拠・メソッドは書けない（必要なら名前付き[構造体](../02-type-system/05-structs-enums.md#構造体)を使う）。無名→名前付き struct への暗黙変換もしない（`Point` が欲しければ `<Point … />`）。
 - **生成は `()`** で、名前付き struct の JSX `<Point … />` とは別系統（名目型と構造的レコードは別物）。**`()`（要素ゼロ）はユニット型**（型理論の「空の直積」）。空ペイロードの `Result`/`Promise` 等にもこのユニット `()` をそのまま使います（`Result[(), E]`、値は `()`）。0 フィールドなので、フィールドを畳むメタプログラミングでも「0 個の基底ケース」として一様に扱え、`Void` のような別名・別型を設けません。
 - **構築の punning**：`(x, y)` は変数名をラベルにして `(x: x, y: y)` を作ります（punning は識別子のみ。`a + 1` 等の式は明示ラベル `(k: a + 1)` が必要）。**1 要素は末尾カンマ** `(x,)` ＝ `(x: x)` で、括弧式 `(x)` と区別します。分解側の punning（`(val x, val y)`）と対称です。
-- 主用途は**多値返却**と一時的なグルーピング（例 `fn div_mod(…) -> (quotient: I32, remainder: I32)`）。同種・列指向は `Array[T]`。
+- 主用途は**多値返却**と一時的なグルーピング（例 `fn divMod(…) -> (quotient: I32, remainder: I32)`）。同種・列指向は `Array[T]`。
 
 ### レンジ（HalfOpenRange / ClosedRange）
 
@@ -185,21 +185,21 @@ for val i in 0..=n { … }   // 0, 1, …, n
 - **要素型は `Ord`**（`HalfOpenRange[T] where T: Ord` / `ClosedRange[T] where T: Ord`）。順序さえあれば**任意の型でレンジを作れ**（ユーザー定義の順序型でも `v1..<v2`）、`contains` も使えます。
 - **反復は `T: Step` のときだけ**：整数系（`I8`…`U64`）は離散ステップの trait `Step`（`Step: Ord`）を実装するので `for val i in 0..<n` できる。`F64` は `Ord` だが `Step` 非実装なので、`HalfOpenRange[F64]` は `contains` 可・**反復不可**。＝レンジが [`Iterable`](../03-expressions/11-control-flow.md#イテレータプロトコル)（`Iterator` を産める）になるのは `T: Step` のときだけ（条件付き準拠 `where T: Step`）。
 - 優先度は算術より**緩い**（`0..<n+1` ＝ `0..<(n+1)`）。
-- **片側レンジ（`a..` / `..<b` / `..`）と `step` は当面持たない**（片側は主にスライス用途なのでスライスと一緒に、`step` は将来イテレータの `.step_by(k)` で。いずれも additive）。上端の無いレンジは印が不要（印は具体的な上端にだけ付く）。
+- **片側レンジ（`a..` / `..<b` / `..`）と `step` は当面持たない**（片側は主にスライス用途なのでスライスと一緒に、`step` は将来イテレータの `.stepBy(k)` で。いずれも additive）。上端の無いレンジは印が不要（印は具体的な上端にだけ付く）。
 
 #### `Step` トレイト（離散ステップ）
 
 ```plew
 trait Step: Ord {
-    // start から end への前進歩数（Iterator.size_hint と同形）。
+    // start から end への前進歩数（Iterator.sizeHint と同形）。
     // exact = Some(n): 正確に n 歩 ／ None: 歩数が U64 を超過 or 無限（lower は飽和下界）。
     // start > end（到達不能・空）は (lower: 0, exact: Some(0))。
-    assoc fn steps_between(start: Self, end: Self) -> (lower: U64, exact: Optional[U64])
-    assoc fn step_forward(start: Self, count: U64) -> Optional[Self]   // count 歩先・型上限超過で None
-    assoc fn step_backward(start: Self, count: U64) -> Optional[Self]  // count 歩前・型下限未満で None
+    assoc fn stepsBetween(start: Self, end: Self) -> (lower: U64, exact: Optional[U64])
+    assoc fn stepForward(start: Self, count: U64) -> Optional[Self]   // count 歩先・型上限超過で None
+    assoc fn stepBackward(start: Self, count: U64) -> Optional[Self]  // count 歩前・型下限未満で None
 }
 ```
 
-- 要求はすべて **`assoc fn`**（対称・値を産む操作ゆえ・→ [演算子](../03-expressions/12-operators.md#演算子システム) の規約）。レンジ iterator は `T.step_forward(start: current, count: 1)` で前進し、**`None` を返したら終端**（`0..=U64.MAX` の MAX 到達も溢れなく扱える＝この `None` は正常な終端で、算術オーバーフロー panic とは別物）。`ClosedRange` の最大値停止はイテレータ側の状態で、構造体は素の `{ start, end }` のまま。
-- **歩数は `U64`**（添字・`count` と同じ・Rust の `usize` 相当）。距離が `U64` を超え得る型（将来の `U128`・ユーザ定義の広い離散型）でも、`steps_between` が `(飽和下界, None)` を返せるので実装可能 ── Array の容量も `U64` 上限なので、正確カウントを `U64` で頭打ちにするのは正しいキャップ。`step_forward` の `count: U64` は「一度に最大 `U64.MAX` 歩」で、`.step_by(k)` も `U64`。
-- `step_backward` は逆順反復（`.reversed()`・additive）で使い、v1 の前進反復では未使用。`steps_between` は `count()`/size_hint の O(1) 化に使う。
+- 要求はすべて **`assoc fn`**（対称・値を産む操作ゆえ・→ [演算子](../03-expressions/12-operators.md#演算子システム) の規約）。レンジ iterator は `T.stepForward(start: current, count: 1)` で前進し、**`None` を返したら終端**（`0..=U64.MAX` の MAX 到達も溢れなく扱える＝この `None` は正常な終端で、算術オーバーフロー panic とは別物）。`ClosedRange` の最大値停止はイテレータ側の状態で、構造体は素の `{ start, end }` のまま。
+- **歩数は `U64`**（添字・`count` と同じ・Rust の `usize` 相当）。距離が `U64` を超え得る型（将来の `U128`・ユーザ定義の広い離散型）でも、`stepsBetween` が `(飽和下界, None)` を返せるので実装可能 ── Array の容量も `U64` 上限なので、正確カウントを `U64` で頭打ちにするのは正しいキャップ。`stepForward` の `count: U64` は「一度に最大 `U64.MAX` 歩」で、`.stepBy(k)` も `U64`。
+- `stepBackward` は逆順反復（`.reversed()`・additive）で使い、v1 の前進反復では未使用。`stepsBetween` は `count()`/sizeHint の O(1) 化に使う。

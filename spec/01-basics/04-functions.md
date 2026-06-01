@@ -3,16 +3,16 @@
 ## 関数宣言
 
 ```plew
-export async fn function_name[T, U](
+export async fn functionName[T, U](
     arg1: Type1,
     inout arg2: Type2,
-    arg3: Type3 = default_value
+    arg3: Type3 = defaultValue
 ) -> ReturnType where T: Trait1, U: Trait2 {
     // 関数本体
 }
 ```
 
-引数のモード（`borrow`／`inout`／`move`・コピー可能は既定で by-value）、`async fn`／`spawn fn`、型引数の能力マーカー（`allow_unique`／`no_local`）は [値・変数・所有権](03-values.md)・[非同期処理とメモリ管理](../04-execution/14-concurrency.md)・[ジェネリクス](../02-type-system/06-generics.md) を参照。
+引数のモード（`borrow`／`inout`／`move`・コピー可能は既定で by-value）、`async fn`／`spawn fn`、型引数の能力マーカー（`allowUnique`／`noLocal`）は [値・変数・所有権](03-values.md)・[非同期処理とメモリ管理](../04-execution/14-concurrency.md)・[ジェネリクス](../02-type-system/06-generics.md) を参照。
 
 ## 引数ラベル
 
@@ -26,7 +26,7 @@ fn greet(name: String, greeting: String) -> String {
 greet(name: "Alice", greeting: "Hello")  // ラベル必須・宣言順
 ```
 
-引数を持たない呼び出しにはラベルはありません（`make_counter()` など）。クロージャ呼び出しでもラベルが必要なため、**関数型はラベルを保持します**（Swift と異なり、型からラベルは落ちません）。
+引数を持たない呼び出しにはラベルはありません（`makeCounter()` など）。クロージャ呼び出しでもラベルが必要なため、**関数型はラベルを保持します**（Swift と異なり、型からラベルは落ちません）。
 
 ### ラベルの抑制（`~:`）
 
@@ -85,7 +85,7 @@ val add = fn(a: I32, b: I32) -> I32 {
 val sum = add(a: 1, b: 2)  // 3
 ```
 
-関数型は `fn(ラベル: 引数型, ...) -> 戻り値型` で表します（ラベルを含みます）。**無ラベル位置は型を裸で書きます**（型に内部名は要らないため、宣言の `name~:` に対応する型表記は `~:` ではなく裸の型）。ラベルは snake_case・型は PascalCase なので、`fn(value: String)`（ラベル付き）と `fn(String)`（無ラベル位置）は曖昧になりません。
+関数型は `fn(ラベル: 引数型, ...) -> 戻り値型` で表します（ラベルを含みます）。**無ラベル位置は型を裸で書きます**（型に内部名は要らないため、宣言の `name~:` に対応する型表記は `~:` ではなく裸の型）。ラベルは camelCase・型は PascalCase なので、`fn(value: String)`（ラベル付き）と `fn(String)`（無ラベル位置）は曖昧になりません。
 
 ```plew
 fn apply(f: fn(n: I32) -> I32, x: I32) -> I32 {
@@ -105,9 +105,9 @@ val printer: fn(String, terminator: String) -> () = …   // 第 1 引数は無�
 ```plew
 fn double(value: I32) -> I32 { return value * 2 }   // 型: fn(value: I32) -> I32
 
-fn map_each(self: Array[I32], transform: fn(element: I32) -> I32) -> Array[I32] { … }
+fn mapEach(self: Array[I32], transform: fn(element: I32) -> I32) -> Array[I32] { … }
 
-numbers.map_each(transform: double)   // ❌ 型エラー: fn(value:) は fn(element:) ではない
+numbers.mapEach(transform: double)   // ❌ 型エラー: fn(value:) は fn(element:) ではない
 ```
 
 これは Swift が初期に持ち（[SE-0111](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0111-remove-arg-label-type-significance.md) で撤廃した）「ラベル付き関数型の暗黙変換」を**意図的に持たない**設計です。Swift の混乱の主因は (a) ラベルによる並べ替えと (b) ラベル違いの暗黙サブタイプ変換でしたが、Plew は**引数順を固定**し**暗黙変換を持たない**ので、ラベルを型に残したまま健全でいられます。
@@ -127,7 +127,7 @@ numbers.map_each(transform: double)   // ❌ 型エラー: fn(value:) は fn(ele
 - **ラベル違いの関数を繋ぐときは、明示的にクロージャで包みます**（暗黙変換が無いので、適応は常に可視）。
 
   ```plew
-  numbers.map_each(transform: fn(element: I32) -> I32 { return double(value: element) })
+  numbers.mapEach(transform: fn(element: I32) -> I32 { return double(value: element) })
   ```
 
   値は同一でラベルだけ付け替える操作（ゼロコストの relabel キャスト）は持ちません ── 必要になることが稀なため。将来 `as` による relabel を additive に足すことはできます（許容を増やすだけで既存コードを壊さない）。
@@ -156,7 +156,7 @@ fn f() {
 - **閉包がスコープの外へ脱出**（返す・格納する）しても、キャプチャした変数は閉包が生きている間存続します。だから状態を持つ閉包に `Ref` は要りません：
 
   ```plew
-  fn make_counter() -> fn() -> I32 {
+  fn makeCounter() -> fn() -> I32 {
       mut val n = 0
       return fn() -> I32 {
           n += 1
@@ -164,7 +164,7 @@ fn f() {
       }
   }
 
-  val counter = make_counter()
+  val counter = makeCounter()
   counter()  // 1
   counter()  // 2
   ```
