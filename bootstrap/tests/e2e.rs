@@ -56,6 +56,18 @@ fn builds_and_runs_struct() {
 }
 
 #[test]
+fn builds_and_runs_enum_match() {
+    let src = "enum Shape {\n    Circle { val r: I64 }\n    Square { val side: I64 }\n}\nfn main() {\n    val c: Shape = <Shape.Circle r=5 />\n    match c {\n        Shape.Circle { val r } => print(r)\n        Shape.Square { val side } => print(side)\n    }\n}\n";
+    assert_eq!(build_and_run(src, "enum"), "5\n");
+}
+
+#[test]
+fn builds_and_runs_int_match() {
+    let src = "fn main() {\n    val n: I64 = 2\n    match n {\n        1 => print(10)\n        2 => print(20)\n        _ => print(0)\n    }\n}\n";
+    assert_eq!(build_and_run(src, "intmatch"), "20\n");
+}
+
+#[test]
 fn reports_unsupported_construct() {
     // `??` has no stage0 C lowering yet → a codegen error, not a panic.
     let errs = compile_to_c("fn main() {\n    print(a ?? b)\n}\n").unwrap_err();

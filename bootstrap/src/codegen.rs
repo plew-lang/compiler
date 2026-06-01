@@ -5,18 +5,22 @@
 //! to prove the whole spine — source → C → clang → run — end to end. Real type
 //! lowering, the ARC runtime, strings, etc. replace it incrementally.
 
-use crate::ast::{Ast, BinOp, ExprId, ExprKind, ItemId, ItemKind, StmtId, StmtKind, Type, UnOp};
+use crate::ast::{
+    Ast, BinOp, ExprId, ExprKind, ItemId, ItemKind, MatchArm, PatKind, StmtId, StmtKind, Type, UnOp,
+};
 
 /// Generate a complete C translation unit for `items`, or a list of
 /// "unsupported construct" errors if the program uses features the skeleton
 /// codegen does not handle yet.
 pub fn emit_c(ast: &Ast, items: &[ItemId]) -> Result<String, Vec<String>> {
-    let mut cg = Codegen { ast, out: String::new(), errors: Vec::new() };
+    let mut cg = Codegen { ast, items, out: String::new(), errors: Vec::new(), tmp: 0 };
     cg.out.push_str("#include <stdio.h>\n#include <stdint.h>\n\n");
-    // struct typedefs first (C needs types declared before use)
+    // type definitions first (C needs types declared before use)
     for &id in items {
-        if matches!(ast.item(id).kind, ItemKind::Struct { .. }) {
-            cg.emit_struct(id);
+        match ast.item(id).kind {
+            ItemKind::Struct { .. } => cg.emit_struct(id),
+            ItemKind::Enum { .. } => cg.emit_enum(id),
+            ItemKind::Fn { .. } => {}
         }
     }
     for &id in items {
@@ -31,8 +35,11 @@ pub fn emit_c(ast: &Ast, items: &[ItemId]) -> Result<String, Vec<String>> {
 
 struct Codegen<'a> {
     ast: &'a Ast,
+    items: &'a [ItemId],
     out: String,
     errors: Vec<String>,
+    /// Counter for generated temporaries (e.g. match scrutinees).
+    tmp: u32,
 }
 
 impl Codegen<'_> {
@@ -74,10 +81,7 @@ impl Codegen<'_> {
                 }
                 self.out.push_str("}\n\n");
             }
-            ItemKind::Struct { .. } => {} // emitted in the typedef pass
-            ItemKind::Enum { .. } => {
-                self.errors.push("enum codegen is not supported by stage0 yet".into());
-            }
+            ItemKind::Struct { .. } | ItemKind::Enum { .. } => {} // emitted in the typedef pass
         }
     }
 
@@ -98,6 +102,77 @@ impl Codegen<'_> {
             self.out.push_str(&format!("    {cty} {fname};\n"));
         }
         self.out.push_str(&format!("}} {name};\n\n"));
+    }
+
+    fn emit_enum(&mut self, id: ItemId) {
+        let ItemKind::Enum { name, variants, generics } = &self.ast.item(id).kind else {
+            return;
+        };
+        if !generics.is_empty() {
+            self.errors.push("generic enum codegen is not supported by stage0 yet".into());
+            return;
+        }
+        let name = name.clone();
+        let variants: Vec<(String, Vec<(String, Type)>)> = variants
+            .iter()
+            .map(|v| (v.name.clone(), v.fields.iter().map(|f| (f.name.clone(), f.ty.clone())).collect()))
+            .collect();
+        // Tagged union: an `int tag` plus a union of the variants that carry data.
+        self.out.push_str("typedef struct {\n    int tag;\n");
+        if variants.iter().any(|(_, fs)| !fs.is_empty()) {
+            self.out.push_str("    union {\n");
+            for (vname, fs) in &variants {
+                if fs.is_empty() {
+                    continue;
+                }
+                self.out.push_str("        struct { ");
+                for (fname, fty) in fs {
+                    self.out.push_str(&format!("{} {fname}; ", c_type(fty)));
+                }
+                self.out.push_str(&format!("}} {vname};\n"));
+            }
+            self.out.push_str("    } data;\n");
+        }
+        self.out.push_str(&format!("}} {name};\n\n"));
+    }
+
+    /// Tag index of `variant` within `enum_name`, by scanning the item list.
+    fn enum_variant_tag(&self, enum_name: &str, variant: &str) -> Option<usize> {
+        for &id in self.items {
+            if let ItemKind::Enum { name, variants, .. } = &self.ast.item(id).kind {
+                if name == enum_name {
+                    return variants.iter().position(|v| v.name == variant);
+                }
+            }
+        }
+        None
+    }
+
+    /// C type of `variant.field` within `enum_name`.
+    fn enum_field_ctype(&self, enum_name: &str, variant: &str, field: &str) -> Option<String> {
+        for &id in self.items {
+            if let ItemKind::Enum { name, variants, .. } = &self.ast.item(id).kind {
+                if name == enum_name {
+                    let v = variants.iter().find(|v| v.name == variant)?;
+                    let f = v.fields.iter().find(|f| f.name == field)?;
+                    return Some(c_type(&f.ty));
+                }
+            }
+        }
+        None
+    }
+
+    /// Find the enum that declares a variant of the given name (used when a
+    /// pattern writes a bare `Variant` instead of `Enum.Variant`).
+    fn find_enum_by_variant(&self, variant: &str) -> Option<String> {
+        for &id in self.items {
+            if let ItemKind::Enum { name, variants, .. } = &self.ast.item(id).kind {
+                if variants.iter().any(|v| v.name == variant) {
+                    return Some(name.clone());
+                }
+            }
+        }
+        None
     }
 
     fn emit_stmt(&mut self, id: StmtId, in_main: bool) {
@@ -175,6 +250,16 @@ impl Codegen<'_> {
             self.out.push_str("    }\n");
             return;
         }
+        // `match` used as a statement
+        let match_info = if let ExprKind::Match { scrutinee, arms } = &self.ast.expr(e).kind {
+            Some((*scrutinee, arms.clone()))
+        } else {
+            None
+        };
+        if let Some((scrutinee, arms)) = match_info {
+            self.emit_match_stmt(scrutinee, &arms, in_main);
+            return;
+        }
         // bare block used as a statement
         if matches!(self.ast.expr(e).kind, ExprKind::Block(_)) {
             self.out.push_str("    {\n");
@@ -228,6 +313,144 @@ impl Codegen<'_> {
         for s in stmts {
             self.emit_stmt(s, in_main);
         }
+    }
+
+    /// Lower a statement-position `match`. Enum scrutinees switch on the tag;
+    /// integer/Bool scrutinees become an if-chain. (Value-position `match` is
+    /// not supported by stage0 yet.)
+    fn emit_match_stmt(&mut self, scrutinee: ExprId, arms: &[MatchArm], in_main: bool) {
+        // Classify the match from its patterns.
+        let mut enum_name: Option<String> = None;
+        let mut is_value = false;
+        for arm in arms {
+            match &self.ast.pat(arm.pat).kind {
+                PatKind::Variant { path, .. } => {
+                    enum_name = if path.len() >= 2 {
+                        Some(path[0].clone())
+                    } else {
+                        self.find_enum_by_variant(&path[0])
+                    };
+                    break;
+                }
+                PatKind::Int(_) | PatKind::Bool(_) => {
+                    is_value = true;
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        let scrut = self.expr(scrutinee);
+        let id = self.tmp;
+        self.tmp += 1;
+        let tname = format!("__m{id}");
+
+        if let Some(ename) = enum_name {
+            self.out.push_str(&format!("    {ename} {tname} = {scrut};\n"));
+            self.out.push_str(&format!("    switch ({tname}.tag) {{\n"));
+            for arm in arms {
+                self.emit_enum_arm(&ename, &tname, arm, in_main);
+            }
+            self.out.push_str("    }\n");
+        } else if is_value {
+            self.out.push_str(&format!("    int64_t {tname} = {scrut};\n"));
+            self.emit_value_arms(&tname, arms, in_main);
+        } else {
+            self.errors
+                .push("match with only wildcard arms is not supported by stage0 codegen yet".into());
+        }
+    }
+
+    fn emit_enum_arm(&mut self, ename: &str, tname: &str, arm: &MatchArm, in_main: bool) {
+        let body = arm.body;
+        match &self.ast.pat(arm.pat).kind {
+            PatKind::Variant { path, fields } => {
+                let vname = path.last().cloned().unwrap_or_default();
+                let fields: Vec<(String, crate::ast::PatId)> =
+                    fields.iter().map(|(n, p)| (n.clone(), *p)).collect();
+                let tag = self.enum_variant_tag(ename, &vname).unwrap_or(0);
+                self.out.push_str(&format!("        case {tag}: {{\n"));
+                for (fname, fpat) in &fields {
+                    match &self.ast.pat(*fpat).kind {
+                        PatKind::Binding { name, .. } => {
+                            let name = name.clone();
+                            let cty = self
+                                .enum_field_ctype(ename, &vname, fname)
+                                .unwrap_or_else(|| "int64_t".into());
+                            self.out.push_str(&format!(
+                                "            {cty} {name} = {tname}.data.{vname}.{fname};\n"
+                            ));
+                        }
+                        PatKind::Wildcard => {}
+                        _ => self.errors.push(
+                            "nested patterns inside variant fields are not supported by stage0 codegen yet".into(),
+                        ),
+                    }
+                }
+                self.emit_expr_stmt(body, in_main);
+                self.out.push_str("            break;\n        }\n");
+            }
+            PatKind::Wildcard => {
+                self.out.push_str("        default: {\n");
+                self.emit_expr_stmt(body, in_main);
+                self.out.push_str("            break;\n        }\n");
+            }
+            PatKind::Binding { name, .. } => {
+                let name = name.clone();
+                self.out.push_str("        default: {\n");
+                self.out.push_str(&format!("            {ename} {name} = {tname};\n"));
+                self.emit_expr_stmt(body, in_main);
+                self.out.push_str("            break;\n        }\n");
+            }
+            _ => self.errors.push("unsupported pattern in enum match (stage0)".into()),
+        }
+    }
+
+    fn emit_value_arms(&mut self, tname: &str, arms: &[MatchArm], in_main: bool) {
+        let mut first = true;
+        for arm in arms {
+            let body = arm.body;
+            let cond: Option<String> = match &self.ast.pat(arm.pat).kind {
+                PatKind::Int(s) => Some(format!("{tname} == {}", s.replace('_', ""))),
+                PatKind::Bool(b) => Some(format!("{tname} == {}", if *b { 1 } else { 0 })),
+                PatKind::Wildcard | PatKind::Binding { .. } => None,
+                _ => {
+                    self.errors.push("unsupported pattern in value match (stage0)".into());
+                    Some("0".into())
+                }
+            };
+            let bind_name = if let PatKind::Binding { name, .. } = &self.ast.pat(arm.pat).kind {
+                Some(name.clone())
+            } else {
+                None
+            };
+            match cond {
+                Some(c) => {
+                    if first {
+                        self.out.push_str(&format!("    if ({c}) {{\n"));
+                        first = false;
+                    } else {
+                        self.out.push_str(&format!(" else if ({c}) {{\n"));
+                    }
+                    self.emit_expr_stmt(body, in_main);
+                    self.out.push_str("    }");
+                }
+                None => {
+                    if first {
+                        self.out.push_str("    {\n");
+                        first = false;
+                    } else {
+                        self.out.push_str(" else {\n");
+                    }
+                    if let Some(n) = bind_name {
+                        self.out.push_str(&format!("        int64_t {n} = {tname};\n"));
+                    }
+                    self.emit_expr_stmt(body, in_main);
+                    self.out.push_str("    }");
+                }
+            }
+        }
+        self.out.push('\n');
     }
 
     /// Special-case `print(<expr>)` → `printf("%lld\n", (long long)(expr))`.
@@ -305,9 +528,29 @@ impl Codegen<'_> {
                         parts.push(format!(".{n} = {cv}"));
                     }
                     format!("(({}){{{}}})", path[0], parts.join(", "))
+                } else if path.len() == 2 {
+                    let ename = path[0].clone();
+                    let vname = path[1].clone();
+                    match self.enum_variant_tag(&ename, &vname) {
+                        Some(tag) => {
+                            let mut parts = vec![format!(".tag = {tag}")];
+                            if !field_list.is_empty() {
+                                let mut fparts = Vec::new();
+                                for (n, v) in &field_list {
+                                    let cv = self.expr(*v);
+                                    fparts.push(format!(".{n} = {cv}"));
+                                }
+                                parts.push(format!(".data.{vname} = {{{}}}", fparts.join(", ")));
+                            }
+                            format!("(({ename}){{{}}})", parts.join(", "))
+                        }
+                        None => {
+                            self.errors.push(format!("`{ename}` has no variant `{vname}`"));
+                            "0".into()
+                        }
+                    }
                 } else {
-                    self.errors
-                        .push("enum-variant construction is not supported by stage0 codegen yet".into());
+                    self.errors.push("construction path is too deep (stage0)".into());
                     "0".into()
                 }
             }

@@ -4,7 +4,7 @@
 
 ## 現在地（一言）
 
-stage0（Rust）：**walking skeleton 達成**（タグ `first-c-output`）＝`fn main(){ print(...) }` を source→C→clang→実行できる。lexer/式・文・宣言パーサ＋最小 C codegen＋clang ドライバ。次は**型検査の最小化と codegen の汎用化**、並行して**式・宣言の肉付け**（文字列・`if`/`match`・`struct`/`enum`・他宣言）。
+stage0（Rust）：整数・分岐・ループ・**struct**・**enum+match** が source→C→clang→実行できる（タグ `first-c-output`/`struct-works`）。型検査（双方向推論・数値リテラル型確定・struct/enum・match 網羅性）あり。**次は String / Array ＋ ARC ランタイム（C）と import 機構**＝セルフホストに必要な土台。
 
 ## 全体ロードマップ（第一目標＝Plew でコンパイラが書ける → 即セルフホスト）
 
@@ -23,9 +23,9 @@ stage0（Rust）：**walking skeleton 達成**（タグ `first-c-output`）＝`f
 6. 🔨 `struct`/`enum`＋`match`
    - ✅ `struct`/`enum` 宣言のパース（フィールド vis/mut・generics `[T]`・variant payload・`export` 受理・`where` は未対応で loud）。typeck/codegen は当面スキップ（codegen は loud エラー）
    - ✅ JSX 構築 `<Type field=expr />`（ドット path で enum variant も・`/>` は 1 トークン `SlashGt`）
-   - ✅ **struct 縦串**：typeck に `Ty::Struct`＋レジストリ（construction の全フィールド検査・field access の型付け）、codegen は C struct typedef＋複合リテラル＋`.field`。e2e で `<Point x=3 y=4/>` → `p.x+p.y` = 7 が実行可
-   - ⏭ `match`＋パターン → enum codegen（タグ付き共用体）＋match codegen
-   - ⏭ `String`/`Array`＋ARC ランタイム（C）／import 機構／名前解決の本格化
+   - ✅ **struct 縦串**：`Ty::Struct`＋レジストリ、C struct typedef＋複合リテラル＋`.field`。`<Point x=3 y=4/>`→`p.x+p.y`=7
+   - ✅ **enum + match 縦串**：`Ty::Enum`＋variant 構築（`<E.V .../>`）＋match（パターン束縛・網羅性検査）。codegen はタグ付き共用体＋switch（enum）/if-chain（int/Bool）。e2e で `Shape.Circle`→5、int match→20。**制約**：match は文位置のみ（値位置/`give` は未対応）、variant パターンは `E.V` 形（codegen）、variant フィールドのネストパターン未対応
+7. ⏭ **次の本丸**：`String`/`Array`＋ARC ランタイム（C）／import 機構／値位置 match・if（statement-expr）／codegen に型を通す（整数幅）／名前解決の本格化
    - ⏭ `String`/`Array`＋ARC ランタイム（C）／名前解決の本格化
 7. ⏭ → stage1（Plew でコンパイラ）に必要な分が揃い次第セルフホスト
 6. **stage1**：Plew サブセットでコンパイラを書く → stage0 で compile → 自己 compile＝**セルフホスト達成**

@@ -1,18 +1,19 @@
 //! Minimal type checker (stage0).
 //!
 //! Bidirectional: an *expected* type is pushed down so polymorphic numeric
-//! literals are resolved from context (annotation, operand, parameter, return).
-//! A numeric literal with no expected numeric type is an error — Plew has **no
-//! default numeric type** (spec/02).
+//! literals are resolved from context. A numeric literal with no expected
+//! numeric type is an error — Plew has **no default numeric type** (spec/02).
 //!
 //! Supports: numeric/Bool primitives, arithmetic/comparison, `if`/`while`,
-//! bindings, calls, the `print` builtin, and **structs** (declaration, `<...>`
-//! construction, field access). Enums/match, strings, arrays, generics, traits
-//! come later.
+//! bindings, calls, the `print` builtin, **structs** (construction, field
+//! access), and **enums + `match`** (variant construction, pattern matching,
+//! exhaustiveness). Strings, arrays, generics, traits come later.
 
 use std::collections::{HashMap, HashSet};
 
-use crate::ast::{Ast, BinOp, Block, ExprId, ExprKind, ItemKind, StmtKind, Type, UnOp};
+use crate::ast::{
+    Ast, BinOp, Block, ExprId, ExprKind, ItemKind, MatchArm, PatId, PatKind, StmtKind, Type, UnOp,
+};
 use crate::span::Span;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -29,8 +30,8 @@ pub enum Ty {
     F64,
     Bool,
     Unit,
-    /// A declared struct, indexed into the registry built by [`check`].
     Struct(u32),
+    Enum(u32),
     /// A type error already reported; suppresses cascades.
     Error,
 }
@@ -50,7 +51,6 @@ impl Ty {
         use Ty::*;
         matches!(self, I8 | I16 | I32 | I64 | F32 | F64)
     }
-    /// Name for primitives; struct names go through [`Checker::ty_name`].
     fn prim_name(self) -> &'static str {
         use Ty::*;
         match self {
@@ -67,6 +67,7 @@ impl Ty {
             Bool => "Bool",
             Unit => "()",
             Struct(_) => "<struct>",
+            Enum(_) => "<enum>",
             Error => "<error>",
         }
     }
@@ -88,40 +89,94 @@ struct StructDef {
     fields: Vec<(String, Ty)>,
 }
 
+struct VariantDef {
+    name: String,
+    fields: Vec<(String, Ty)>,
+}
+
+struct EnumDef {
+    name: String,
+    variants: Vec<VariantDef>,
+}
+
+/// Name → id maps for nominal types.
+#[derive(Default)]
+struct Types {
+    structs: HashMap<String, u32>,
+    enums: HashMap<String, u32>,
+}
+
 /// Type-check a whole program. Returns all type errors (empty = well-typed).
 pub fn check(ast: &Ast, items: &[crate::ast::ItemId]) -> Vec<TypeError> {
     let mut errors = Vec::new();
 
-    // Pass 0a: assign an id to every struct name (so field types may reference
-    // other structs, including forward references).
-    let mut struct_ids: HashMap<String, u32> = HashMap::new();
+    // Pass 0a: assign ids to all struct/enum names (forward references ok).
+    let mut types = Types::default();
     let mut struct_names: Vec<String> = Vec::new();
+    let mut enum_names: Vec<String> = Vec::new();
     for &id in items {
-        if let ItemKind::Struct { name, .. } = &ast.item(id).kind {
-            if !struct_ids.contains_key(name) {
-                struct_ids.insert(name.clone(), struct_names.len() as u32);
-                struct_names.push(name.clone());
+        match &ast.item(id).kind {
+            ItemKind::Struct { name, .. } => {
+                if !types.structs.contains_key(name) {
+                    types.structs.insert(name.clone(), struct_names.len() as u32);
+                    struct_names.push(name.clone());
+                }
             }
+            ItemKind::Enum { name, .. } => {
+                if !types.enums.contains_key(name) {
+                    types.enums.insert(name.clone(), enum_names.len() as u32);
+                    enum_names.push(name.clone());
+                }
+            }
+            ItemKind::Fn { .. } => {}
         }
     }
-    // Pass 0b: resolve each struct's field types.
+
+    // Pass 0b: resolve field types of structs and enum variants.
     let mut structs: Vec<StructDef> = struct_names
         .iter()
         .map(|n| StructDef { name: n.clone(), fields: Vec::new() })
         .collect();
+    let mut enums: Vec<EnumDef> = enum_names
+        .iter()
+        .map(|n| EnumDef { name: n.clone(), variants: Vec::new() })
+        .collect();
     for &id in items {
-        if let ItemKind::Struct { name, fields, generics } = &ast.item(id).kind {
-            if !generics.is_empty() {
-                errors.push(TypeError {
-                    span: ast.item(id).span,
-                    msg: "generic structs are not supported by the stage0 type checker yet".into(),
-                });
+        match &ast.item(id).kind {
+            ItemKind::Struct { name, fields, generics } => {
+                if !generics.is_empty() {
+                    errors.push(TypeError {
+                        span: ast.item(id).span,
+                        msg: "generic structs are not supported by the stage0 type checker yet".into(),
+                    });
+                }
+                let sid = types.structs[name] as usize;
+                structs[sid].fields = fields
+                    .iter()
+                    .map(|f| (f.name.clone(), resolve_ty(&f.ty, &types, &mut errors)))
+                    .collect();
             }
-            let sid = struct_ids[name] as usize;
-            structs[sid].fields = fields
-                .iter()
-                .map(|f| (f.name.clone(), resolve_ty(&f.ty, &struct_ids, &mut errors)))
-                .collect();
+            ItemKind::Enum { name, variants, generics } => {
+                if !generics.is_empty() {
+                    errors.push(TypeError {
+                        span: ast.item(id).span,
+                        msg: "generic enums are not supported by the stage0 type checker yet".into(),
+                    });
+                }
+                let eid = types.enums[name] as usize;
+                enums[eid].variants = variants
+                    .iter()
+                    .map(|v| VariantDef {
+                        name: v.name.clone(),
+                        fields: v
+                            .fields
+                            .iter()
+                            .map(|f| (f.name.clone(), resolve_ty(&f.ty, &types, &mut errors)))
+                            .collect(),
+                    })
+                    .collect();
+            }
+            ItemKind::Fn { .. } => {}
         }
     }
 
@@ -129,12 +184,9 @@ pub fn check(ast: &Ast, items: &[crate::ast::ItemId]) -> Vec<TypeError> {
     let mut sigs: HashMap<String, FnSig> = HashMap::new();
     for &id in items {
         if let ItemKind::Fn { name, params, ret, .. } = &ast.item(id).kind {
-            let param_tys = params
-                .iter()
-                .map(|p| resolve_ty(&p.ty, &struct_ids, &mut errors))
-                .collect();
+            let param_tys = params.iter().map(|p| resolve_ty(&p.ty, &types, &mut errors)).collect();
             let ret_ty = match ret {
-                Some(t) => resolve_ty(t, &struct_ids, &mut errors),
+                Some(t) => resolve_ty(t, &types, &mut errors),
                 None => Ty::Unit,
             };
             sigs.insert(name.clone(), FnSig { params: param_tys, ret: ret_ty });
@@ -149,14 +201,15 @@ pub fn check(ast: &Ast, items: &[crate::ast::ItemId]) -> Vec<TypeError> {
                 ast,
                 sigs: &sigs,
                 structs: &structs,
-                struct_ids: &struct_ids,
+                enums: &enums,
+                types: &types,
                 errors: &mut errors,
                 scopes: Vec::new(),
                 ret,
             };
             cx.push_scope();
             for p in params {
-                let ty = resolve_ty(&p.ty, cx.struct_ids, cx.errors);
+                let ty = resolve_ty(&p.ty, cx.types, cx.errors);
                 cx.define(&p.label, ty);
             }
             cx.check_block(body);
@@ -168,7 +221,7 @@ pub fn check(ast: &Ast, items: &[crate::ast::ItemId]) -> Vec<TypeError> {
 }
 
 /// Resolve a syntactic type to a [`Ty`].
-fn resolve_ty(t: &Type, struct_ids: &HashMap<String, u32>, errors: &mut Vec<TypeError>) -> Ty {
+fn resolve_ty(t: &Type, types: &Types, errors: &mut Vec<TypeError>) -> Ty {
     let ty = match t.name.as_str() {
         "I8" => Ty::I8,
         "I16" => Ty::I16,
@@ -181,16 +234,19 @@ fn resolve_ty(t: &Type, struct_ids: &HashMap<String, u32>, errors: &mut Vec<Type
         "F32" => Ty::F32,
         "F64" => Ty::F64,
         "Bool" => Ty::Bool,
-        other => match struct_ids.get(other) {
-            Some(&id) => Ty::Struct(id),
-            None => {
+        other => {
+            if let Some(&id) = types.structs.get(other) {
+                Ty::Struct(id)
+            } else if let Some(&id) = types.enums.get(other) {
+                Ty::Enum(id)
+            } else {
                 errors.push(TypeError {
                     span: t.span,
-                    msg: format!("unknown type `{other}` (stage0 supports primitives, Bool, and declared structs)"),
+                    msg: format!("unknown type `{other}` (stage0 supports primitives, Bool, and declared struct/enum types)"),
                 });
                 Ty::Error
             }
-        },
+        }
     };
     if !t.args.is_empty() && ty != Ty::Error {
         errors.push(TypeError {
@@ -205,7 +261,8 @@ struct Checker<'a> {
     ast: &'a Ast,
     sigs: &'a HashMap<String, FnSig>,
     structs: &'a [StructDef],
-    struct_ids: &'a HashMap<String, u32>,
+    enums: &'a [EnumDef],
+    types: &'a Types,
     errors: &'a mut Vec<TypeError>,
     scopes: Vec<HashMap<String, Ty>>,
     ret: Ty,
@@ -230,6 +287,7 @@ impl Checker<'_> {
     fn ty_name(&self, t: Ty) -> String {
         match t {
             Ty::Struct(id) => self.structs[id as usize].name.clone(),
+            Ty::Enum(id) => self.enums[id as usize].name.clone(),
             other => other.prim_name().to_string(),
         }
     }
@@ -248,7 +306,7 @@ impl Checker<'_> {
             StmtKind::Let { name, ty, value, .. } => {
                 let name = name.clone();
                 let value = *value;
-                let expected = ty.as_ref().map(|t| resolve_ty(t, self.struct_ids, self.errors));
+                let expected = ty.as_ref().map(|t| resolve_ty(t, self.types, self.errors));
                 let vty = self.check_expr(value, expected);
                 self.define(&name, expected.unwrap_or(vty));
             }
@@ -419,8 +477,7 @@ impl Checker<'_> {
             }
             ExprKind::New { path, fields } => {
                 let path = path.clone();
-                let fields: Vec<(String, ExprId)> =
-                    fields.iter().map(|(n, v)| (n.clone(), *v)).collect();
+                let fields: Vec<(String, ExprId)> = fields.iter().map(|(n, v)| (n.clone(), *v)).collect();
                 self.check_new(&path, &fields, span)
             }
             ExprKind::Field { base, name } => {
@@ -450,47 +507,232 @@ impl Checker<'_> {
                 self.error(span, "indexing is not supported by the stage0 type checker yet");
                 Ty::Error
             }
-            ExprKind::Match { .. } => {
-                self.error(span, "`match` is not supported by the stage0 type checker yet");
-                Ty::Error
+            ExprKind::Match { scrutinee, arms } => {
+                let scrutinee = *scrutinee;
+                let arms = arms.clone();
+                self.check_match(scrutinee, &arms, expected, span)
             }
             ExprKind::Error => Ty::Error,
         }
     }
 
     fn check_new(&mut self, path: &[String], fields: &[(String, ExprId)], span: Span) -> Ty {
-        if path.len() != 1 {
-            self.error(span, "enum-variant construction is not supported by the stage0 type checker yet");
-            for (_, v) in fields {
-                self.check_expr(*v, None);
+        match path.len() {
+            1 => {
+                let sname = &path[0];
+                let Some(&sid) = self.types.structs.get(sname) else {
+                    self.error(span, format!("`{sname}` is not a declared struct"));
+                    for (_, v) in fields {
+                        self.check_expr(*v, None);
+                    }
+                    return Ty::Error;
+                };
+                let def_fields = self.structs[sid as usize].fields.clone();
+                self.check_record_fields(sname, &def_fields, fields, span);
+                Ty::Struct(sid)
             }
-            return Ty::Error;
+            2 => {
+                let ename = &path[0];
+                let vname = &path[1];
+                let Some(&eid) = self.types.enums.get(ename) else {
+                    self.error(span, format!("`{ename}` is not a declared enum"));
+                    for (_, v) in fields {
+                        self.check_expr(*v, None);
+                    }
+                    return Ty::Error;
+                };
+                let def_fields = match self.enums[eid as usize].variants.iter().find(|v| &v.name == vname) {
+                    Some(v) => v.fields.clone(),
+                    None => {
+                        self.error(span, format!("`{ename}` has no variant `{vname}`"));
+                        for (_, v) in fields {
+                            self.check_expr(*v, None);
+                        }
+                        return Ty::Error;
+                    }
+                };
+                self.check_record_fields(&format!("{ename}.{vname}"), &def_fields, fields, span);
+                Ty::Enum(eid)
+            }
+            _ => {
+                self.error(span, "construction path is too deep (stage0)");
+                Ty::Error
+            }
         }
-        let sname = &path[0];
-        let Some(&sid) = self.struct_ids.get(sname) else {
-            self.error(span, format!("`{sname}` is not a declared struct"));
-            for (_, v) in fields {
-                self.check_expr(*v, None);
-            }
-            return Ty::Error;
-        };
-        let def_fields = self.structs[sid as usize].fields.clone();
-        let mut provided: HashSet<&str> = HashSet::new();
-        for (fname, fval) in fields {
+    }
+
+    /// Check that provided fields exactly match the declared fields (types and
+    /// completeness). Shared by struct and enum-variant construction.
+    fn check_record_fields(
+        &mut self,
+        what: &str,
+        def_fields: &[(String, Ty)],
+        provided: &[(String, ExprId)],
+        span: Span,
+    ) {
+        let mut seen: HashSet<&str> = HashSet::new();
+        for (fname, fval) in provided {
             match def_fields.iter().find(|(n, _)| n == fname) {
                 Some((_, fty)) => {
                     self.check_expr(*fval, Some(*fty));
-                    provided.insert(fname.as_str());
+                    seen.insert(fname.as_str());
                 }
-                None => self.error(span, format!("`{sname}` has no field `{fname}`")),
+                None => self.error(span, format!("`{what}` has no field `{fname}`")),
             }
         }
-        for (n, _) in &def_fields {
-            if !provided.contains(n.as_str()) {
-                self.error(span, format!("missing field `{n}` in construction of `{sname}`"));
+        for (n, _) in def_fields {
+            if !seen.contains(n.as_str()) {
+                self.error(span, format!("missing field `{n}` in construction of `{what}`"));
             }
         }
-        Ty::Struct(sid)
+    }
+
+    fn check_match(&mut self, scrutinee: ExprId, arms: &[MatchArm], expected: Option<Ty>, span: Span) -> Ty {
+        let sty = self.check_expr(scrutinee, None);
+        let want = match expected {
+            Some(t) if t != Ty::Unit => Some(t),
+            _ => None,
+        };
+
+        let mut covered_variants: HashSet<String> = HashSet::new();
+        let mut has_catchall = false;
+        let mut covered_bools: HashSet<bool> = HashSet::new();
+        let mut arm_tys: Vec<Ty> = Vec::new();
+
+        for arm in arms {
+            // record coverage from the (outermost) pattern
+            match &self.ast.pat(arm.pat).kind {
+                PatKind::Wildcard | PatKind::Binding { .. } => has_catchall = true,
+                PatKind::Variant { path, .. } => {
+                    let vname = path.last().cloned().unwrap_or_default();
+                    covered_variants.insert(vname);
+                }
+                PatKind::Bool(b) => {
+                    covered_bools.insert(*b);
+                }
+                PatKind::Int(_) | PatKind::Str(_) => {}
+            }
+
+            self.push_scope();
+            self.check_pattern(arm.pat, sty);
+            let bty = self.check_expr(arm.body, want);
+            self.pop_scope();
+            arm_tys.push(bty);
+        }
+
+        // exhaustiveness
+        if !has_catchall {
+            match sty {
+                Ty::Enum(id) => {
+                    let missing: Vec<String> = self.enums[id as usize]
+                        .variants
+                        .iter()
+                        .filter(|v| !covered_variants.contains(&v.name))
+                        .map(|v| v.name.clone())
+                        .collect();
+                    if !missing.is_empty() {
+                        let en = self.enums[id as usize].name.clone();
+                        self.error(span, format!("non-exhaustive match on `{en}`: missing {}", missing.join(", ")));
+                    }
+                }
+                Ty::Bool => {
+                    if covered_bools.len() < 2 {
+                        self.error(span, "non-exhaustive match on `Bool`: cover both `true` and `false` (or use `_`)");
+                    }
+                }
+                Ty::Error => {}
+                _ => {
+                    self.error(span, "non-exhaustive match: this type needs a `_` or binding arm");
+                }
+            }
+        }
+
+        // result type
+        if let Some(w) = want {
+            w
+        } else if !arm_tys.is_empty() && arm_tys.iter().all(|&t| t == arm_tys[0]) {
+            arm_tys[0]
+        } else {
+            Ty::Unit
+        }
+    }
+
+    /// Check a pattern against the scrutinee type and bind its variables in the
+    /// current scope.
+    fn check_pattern(&mut self, pat: PatId, expected: Ty) {
+        let span = self.ast.pat(pat).span;
+        match &self.ast.pat(pat).kind {
+            PatKind::Wildcard => {}
+            PatKind::Binding { name, .. } => {
+                let name = name.clone();
+                self.define(&name, expected);
+            }
+            PatKind::Int(_) => {
+                if expected != Ty::Error && !expected.is_integer() {
+                    let en = self.ty_name(expected);
+                    self.error(span, format!("integer pattern cannot match `{en}`"));
+                }
+            }
+            PatKind::Bool(_) => {
+                if expected != Ty::Error && expected != Ty::Bool {
+                    let en = self.ty_name(expected);
+                    self.error(span, format!("`Bool` pattern cannot match `{en}`"));
+                }
+            }
+            PatKind::Str(_) => {
+                self.error(span, "string patterns are not supported by the stage0 type checker yet");
+            }
+            PatKind::Variant { path, fields } => {
+                let path = path.clone();
+                let fields: Vec<(String, PatId)> = fields.iter().map(|(n, p)| (n.clone(), *p)).collect();
+                self.check_variant_pattern(&path, &fields, expected, span);
+            }
+        }
+    }
+
+    fn check_variant_pattern(&mut self, path: &[String], fields: &[(String, PatId)], expected: Ty, span: Span) {
+        let Ty::Enum(eid) = expected else {
+            if expected != Ty::Error {
+                let en = self.ty_name(expected);
+                self.error(span, format!("variant pattern cannot match `{en}`"));
+            }
+            return;
+        };
+        // the variant name is the last path component
+        let vname = match path.last() {
+            Some(v) => v.clone(),
+            None => return,
+        };
+        // optional leading enum name must match
+        if path.len() == 2 {
+            let en = self.enums[eid as usize].name.clone();
+            if path[0] != en {
+                self.error(span, format!("pattern names enum `{}`, but the value is `{en}`", path[0]));
+            }
+        }
+        let vfields = match self.enums[eid as usize].variants.iter().find(|v| v.name == vname) {
+            Some(v) => v.fields.clone(),
+            None => {
+                let en = self.enums[eid as usize].name.clone();
+                self.error(span, format!("`{en}` has no variant `{vname}`"));
+                return;
+            }
+        };
+        let mut seen: HashSet<&str> = HashSet::new();
+        for (fname, fpat) in fields {
+            match vfields.iter().find(|(n, _)| n == fname) {
+                Some((_, fty)) => {
+                    self.check_pattern(*fpat, *fty);
+                    seen.insert(fname.as_str());
+                }
+                None => self.error(span, format!("variant `{vname}` has no field `{fname}`")),
+            }
+        }
+        for (n, _) in &vfields {
+            if !seen.contains(n.as_str()) {
+                self.error(span, format!("pattern for `{vname}` is missing field `{n}` (Plew has no `..`)"));
+            }
+        }
     }
 
     fn check_binary(&mut self, op: BinOp, lhs: ExprId, rhs: ExprId, expected: Option<Ty>, span: Span) -> Ty {
