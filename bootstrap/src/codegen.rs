@@ -6,7 +6,8 @@
 //! lowering, the ARC runtime, strings, etc. replace it incrementally.
 
 use crate::ast::{
-    Ast, BinOp, ExprId, ExprKind, ItemId, ItemKind, MatchArm, PatKind, StmtId, StmtKind, Type, UnOp,
+    Ast, BinOp, Block, ExprId, ExprKind, ItemId, ItemKind, MatchArm, PatKind, StmtId, StmtKind,
+    Type, UnOp,
 };
 use crate::typeck::Ty;
 
@@ -320,6 +321,24 @@ impl Codegen<'_> {
         }
     }
 
+    /// Lower a block used as a value to a GNU statement-expression
+    /// `({ stmts...; give_value; })`. Statements are captured by temporarily
+    /// redirecting `self.out`.
+    fn emit_value_block(&mut self, block: &Block) -> String {
+        let saved = std::mem::take(&mut self.out);
+        let mut tail = String::from("0");
+        for &sid in &block.stmts {
+            if let StmtKind::Give(e) = &self.ast.stmt(sid).kind {
+                let e = *e;
+                tail = self.expr(e);
+            } else {
+                self.emit_stmt(sid, false);
+            }
+        }
+        let body = std::mem::replace(&mut self.out, saved);
+        format!("({{ {body}{tail}; }})")
+    }
+
     /// Lower a statement-position `match`. Enum scrutinees switch on the tag;
     /// integer/Bool scrutinees become an if-chain. (Value-position `match` is
     /// not supported by stage0 yet.)
@@ -568,15 +587,30 @@ impl Codegen<'_> {
                     "0".into()
                 }
             }
-            ExprKind::If { .. } | ExprKind::Block(_) | ExprKind::While { .. } => {
-                self.errors.push(
-                    "`if` / `while` / block in value position is not supported by stage0 codegen yet"
-                        .into(),
-                );
+            // value-position `if` → ternary over the branch values (each branch
+            // is a block, lowered to a GNU statement-expression).
+            ExprKind::If { cond, then_branch, else_branch } => {
+                let (cond, then_branch, else_branch) = (*cond, *then_branch, *else_branch);
+                let c = self.expr(cond);
+                let t = self.expr(then_branch);
+                let e = match else_branch {
+                    Some(x) => self.expr(x),
+                    None => "0".into(),
+                };
+                format!("(({c}) ? ({t}) : ({e}))")
+            }
+            // value-position block `{ ...; give v }` → GNU statement-expression.
+            ExprKind::Block(block) => {
+                let block = block.clone();
+                self.emit_value_block(&block)
+            }
+            ExprKind::While { .. } => {
+                self.errors.push("`while` in value position is not supported by stage0 codegen yet".into());
                 "0".into()
             }
             ExprKind::Match { .. } => {
-                self.errors.push("`match` is not supported by stage0 codegen yet".into());
+                self.errors
+                    .push("`match` in value position is not supported by stage0 codegen yet".into());
                 "0".into()
             }
             ExprKind::Error => {

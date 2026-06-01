@@ -315,6 +315,23 @@ impl Checker<'_> {
         self.pop_scope();
     }
 
+    /// Check a block used as a value: its type is the type of its `give`
+    /// expression (checked against `expected`), or `()` if there is none.
+    fn check_block_value(&mut self, block: &Block, expected: Option<Ty>) -> Ty {
+        self.push_scope();
+        let mut val = Ty::Unit;
+        for &sid in &block.stmts {
+            if let StmtKind::Give(e) = &self.ast.stmt(sid).kind {
+                let e = *e;
+                val = self.check_expr(e, expected);
+            } else {
+                self.check_stmt(sid);
+            }
+        }
+        self.pop_scope();
+        val
+    }
+
     fn check_stmt(&mut self, sid: crate::ast::StmtId) {
         let span = self.ast.stmt(sid).span;
         match &self.ast.stmt(sid).kind {
@@ -485,8 +502,7 @@ impl Checker<'_> {
             }
             ExprKind::Block(block) => {
                 let block = block.clone();
-                self.check_block(&block);
-                Ty::Unit
+                self.check_block_value(&block, expected)
             }
             ExprKind::New { path, fields } => {
                 let path = path.clone();

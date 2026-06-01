@@ -73,6 +73,18 @@ fn builds_and_runs_string_print() {
 }
 
 #[test]
+fn builds_and_runs_if_as_value() {
+    let src = "fn main() {\n    val n: I64 = 7\n    val label: I64 = if n > 5 { give 1 } else { give 0 }\n    print(label)\n}\n";
+    assert_eq!(build_and_run(src, "ifval"), "1\n");
+}
+
+#[test]
+fn builds_and_runs_block_value() {
+    let src = "fn main() {\n    val x: I64 = {\n        val t: I64 = 3\n        give t * t\n    }\n    print(x)\n}\n";
+    assert_eq!(build_and_run(src, "blockval"), "9\n");
+}
+
+#[test]
 fn reports_unsupported_construct() {
     // `??` has no stage0 C lowering yet → a codegen error, not a panic.
     let errs = compile_to_c("fn main() {\n    print(a ?? b)\n}\n").unwrap_err();
