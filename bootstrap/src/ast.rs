@@ -91,6 +91,15 @@ pub enum ExprKind {
     Index { base: ExprId, index: ExprId },
     /// Call `callee(args)`. Method calls are `Call { callee: Field { .. } }`.
     Call { callee: ExprId, args: Vec<Arg> },
+    /// A `{ ... }` block used as an expression (its value comes from `give`).
+    Block(Block),
+    /// `if cond { .. } else { .. }`. `then_branch` is a `Block` expr; an
+    /// `else_branch` is a `Block` expr or another `If` (for `else if`).
+    If {
+        cond: ExprId,
+        then_branch: ExprId,
+        else_branch: Option<ExprId>,
+    },
     /// Placeholder inserted on a parse error so parsing can continue.
     Error,
 }
@@ -148,6 +157,8 @@ pub enum StmtKind {
     },
     /// `return expr?`
     Return(Option<ExprId>),
+    /// `give expr` — yields the enclosing block's value.
+    Give(ExprId),
     /// An expression used as a statement.
     Expr(ExprId),
 }
@@ -300,6 +311,18 @@ impl Ast {
                 }
                 out.push(')');
             }
+            ExprKind::Block(block) => self.write_block(block, out),
+            ExprKind::If { cond, then_branch, else_branch } => {
+                out.push_str("(if ");
+                self.write_sexpr(*cond, out);
+                out.push(' ');
+                self.write_sexpr(*then_branch, out);
+                if let Some(e) = else_branch {
+                    out.push(' ');
+                    self.write_sexpr(*e, out);
+                }
+                out.push(')');
+            }
             ExprKind::Error => out.push_str("<error>"),
         }
     }
@@ -382,6 +405,11 @@ impl Ast {
                 out.push(')');
             }
             StmtKind::Return(None) => out.push_str("(return)"),
+            StmtKind::Give(e) => {
+                out.push_str("(give ");
+                self.write_sexpr(*e, out);
+                out.push(')');
+            }
             StmtKind::Expr(e) => self.write_sexpr(*e, out),
         }
     }

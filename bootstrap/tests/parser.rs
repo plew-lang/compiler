@@ -170,6 +170,30 @@ fn return_with_value_on_same_line() {
 }
 
 #[test]
+fn if_else_as_statement() {
+    let src = "fn main() {\n    if n > 5 {\n        print(1)\n    } else {\n        print(0)\n    }\n}";
+    assert_eq!(
+        prog(src),
+        "(fn main () (block (if (> n 5) (block (call print 1)) (block (call print 0)))))"
+    );
+}
+
+#[test]
+fn else_if_chain() {
+    let src = "fn pick() -> I32 {\n    if a {\n        give 1\n    } else if b {\n        give 2\n    } else {\n        give 3\n    }\n}";
+    assert_eq!(
+        prog(src),
+        "(fn pick () -> I32 (block (if a (block (give 1)) (if b (block (give 2)) (block (give 3))))))"
+    );
+}
+
+#[test]
+fn block_expression_with_give() {
+    let src = "fn main() {\n    val x = {\n        val t = 2\n        give t * 3\n    }\n}";
+    assert_eq!(prog(src), "(fn main () (block (val x (block (val t 2) (give (* t 3))))))");
+}
+
+#[test]
 fn errors_on_garbage() {
     assert!(errors("1 +").iter().any(|m| m.contains("expected an expression")));
     assert!(errors("1 2").iter().any(|m| m.contains("trailing")));

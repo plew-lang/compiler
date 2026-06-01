@@ -14,19 +14,32 @@ fn emits_c_for_skeleton() {
     assert!(c.contains("(40 + 2)"), "C was:\n{c}");
 }
 
-#[test]
-fn builds_and_runs_skeleton() {
-    let bin = std::env::temp_dir().join(format!("plewc_e2e_{}", std::process::id()));
-    build_executable(SKELETON, &bin).expect("build executable");
-
+/// Build `src` to a temp binary (unique per test name), run it, return stdout.
+fn build_and_run(src: &str, tag: &str) -> String {
+    let bin = std::env::temp_dir().join(format!("plewc_e2e_{}_{}", std::process::id(), tag));
+    build_executable(src, &bin).expect("build executable");
     let output = Command::new(&bin).output().expect("run built binary");
-    let stdout = String::from_utf8_lossy(&output.stdout);
-
     let _ = std::fs::remove_file(&bin);
     let _ = std::fs::remove_file(bin.with_extension("c"));
-
     assert!(output.status.success(), "binary exited with {}", output.status);
-    assert_eq!(stdout, "42\n");
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+#[test]
+fn builds_and_runs_skeleton() {
+    assert_eq!(build_and_run(SKELETON, "skeleton"), "42\n");
+}
+
+#[test]
+fn builds_and_runs_branch() {
+    let src = "fn main() {\n    val n: I64 = 7\n    if n > 5 {\n        print(1)\n    } else {\n        print(0)\n    }\n}\n";
+    assert_eq!(build_and_run(src, "branch"), "1\n");
+}
+
+#[test]
+fn builds_and_runs_else_if() {
+    let src = "fn main() {\n    val n: I64 = 2\n    if n > 5 {\n        print(100)\n    } else if n > 1 {\n        print(50)\n    } else {\n        print(0)\n    }\n}\n";
+    assert_eq!(build_and_run(src, "elseif"), "50\n");
 }
 
 #[test]

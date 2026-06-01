@@ -14,7 +14,8 @@ stage0（Rust）：**walking skeleton 達成**（タグ `first-c-output`）＝`f
    - ✅ 式：literal/ident/unary/binary（優先順位14段・非結合・グルーピング・エラー回復）
    - ✅ postfix：call（ラベル付き引数・末尾カンマ）/field `.`/index `[]`（postfix > prefix を担保）
    - ✅ 文・宣言（最小）：`fn` 宣言（params・`~:`・`-> ret`）・block・`val`/`mut val`・`return`・式文・型（`Array[I32]` 等）
-   - ⏭ 式の続き：`as`（要・型パーサ）・`try`/`await`・JSX `<T .. />`・closure・match 式・`?.`
+   - ✅ 制御フロー：`if`/`else`/`else if`（式として）・ブロック式・`give`（パース）。codegen は `if` を**文位置**で対応（値位置/`give` は loud エラー＝次の増分）
+   - ⏭ 式の続き：`as`（要・型パーサ）・`try`/`await`・JSX `<T .. />`・closure・match 式・`?.`・**値位置 if/give の codegen**
    - ⏭ 他宣言：`struct`/`enum`/`impl`/`trait`/`import` …
 4. 🔨 **C コード生成（最小）** ＋ clang ドライバ ＝ walking skeleton ✅（整数前提・`print(int)`→printf・型検査なし）
 5. 名前解決・型解決・trait/オーバーロード解決／codegen 汎用化／ARC ランタイム（C）
@@ -33,6 +34,14 @@ stage0（Rust）：**walking skeleton 達成**（タグ `first-c-output`）＝`f
 
 - **walking skeleton 優先**：パーサを作り切る前に「`fn main` の小さなプログラム → C 生成 → clang → 実行」の縦串を通す（C トランスパイル＋clang 連携を早期検証・動く成果物）。マイルストン `first-c-output`。
 - 残りの順序：lexer 改行 ✅ → 文/ブロック/`fn`宣言 → 最小 C codegen + clang ドライバ → 縦串。その後に式の続き（`as`/match/JSX 等）と他宣言を肉付け。
+
+## 既知の暫定ギャップ（type 解決実装時に塞ぐ）
+
+stage0 は**まだ型検査が一切無い**ため、Plew の意味論を強制していない箇所がある：
+
+- **数値リテラルの型確定を強制していない**：`val x = 6 * 7`（注釈・確定文脈なし）は本来 spec 上**コンパイルエラー**（既定型なし）だが、今は codegen が全部 `int64_t` とみなして通す。→ 型解決を入れたら拒否し、テストで担保する。
+- **`print(<int>)` は暫定の組み込み**（printf 直結）。本来の `print` は String を取る。文字列・stdlib 整備時に置換。
+- 演算子の型・オーバーフロー panic・`as` 等の数値意味論も未実装（codegen は素朴）。
 
 ## 直近の決定・注意（揮発しやすい文脈）
 

@@ -83,14 +83,83 @@ impl Codegen<'_> {
                     self.out.push_str(&format!("    return {v};\n"));
                 }
             },
-            StmtKind::Expr(e) => {
-                if let Some(c) = self.try_emit_print(*e) {
-                    self.out.push_str(&c);
-                } else {
-                    let v = self.expr(*e);
-                    self.out.push_str(&format!("    {v};\n"));
-                }
+            StmtKind::Give(_) => {
+                self.errors
+                    .push("`give` / block-as-value is not supported by stage0 codegen yet".into());
             }
+            StmtKind::Expr(e) => {
+                let e = *e;
+                self.emit_expr_stmt(e, in_main);
+            }
+        }
+    }
+
+    /// Emit an expression in statement position. Control-flow expressions
+    /// (`if`, block) lower to C statements; everything else to `expr;`.
+    fn emit_expr_stmt(&mut self, e: ExprId, in_main: bool) {
+        // `if` used as a statement
+        let if_info = if let ExprKind::If { cond, then_branch, else_branch } = &self.ast.expr(e).kind
+        {
+            Some((*cond, *then_branch, *else_branch))
+        } else {
+            None
+        };
+        if let Some((cond, then_branch, else_branch)) = if_info {
+            self.emit_if_stmt(cond, then_branch, else_branch, in_main);
+            return;
+        }
+        // bare block used as a statement
+        if matches!(self.ast.expr(e).kind, ExprKind::Block(_)) {
+            self.out.push_str("    {\n");
+            self.emit_branch_block(e, in_main);
+            self.out.push_str("    }\n");
+            return;
+        }
+        if let Some(c) = self.try_emit_print(e) {
+            self.out.push_str(&c);
+        } else {
+            let v = self.expr(e);
+            self.out.push_str(&format!("    {v};\n"));
+        }
+    }
+
+    fn emit_if_stmt(
+        &mut self,
+        cond: ExprId,
+        then_branch: ExprId,
+        else_branch: Option<ExprId>,
+        in_main: bool,
+    ) {
+        let c = self.expr(cond);
+        self.out.push_str(&format!("    if ({c}) {{\n"));
+        self.emit_branch_block(then_branch, in_main);
+        self.out.push_str("    }");
+        match else_branch {
+            None => self.out.push('\n'),
+            Some(e) => {
+                self.out.push_str(" else {\n");
+                if matches!(self.ast.expr(e).kind, ExprKind::Block(_)) {
+                    self.emit_branch_block(e, in_main);
+                } else {
+                    // `else if`: a nested if-expression
+                    self.emit_expr_stmt(e, in_main);
+                }
+                self.out.push_str("    }\n");
+            }
+        }
+    }
+
+    /// Emit the statements of a block-expression (no value).
+    fn emit_branch_block(&mut self, block_expr: ExprId, in_main: bool) {
+        let stmts: Vec<StmtId> = match &self.ast.expr(block_expr).kind {
+            ExprKind::Block(b) => b.stmts.clone(),
+            _ => {
+                self.errors.push("expected a block".into());
+                Vec::new()
+            }
+        };
+        for s in stmts {
+            self.emit_stmt(s, in_main);
         }
     }
 
@@ -151,6 +220,12 @@ impl Codegen<'_> {
             ExprKind::Field { .. } | ExprKind::Index { .. } => {
                 self.errors
                     .push("field access / indexing is not supported by stage0 codegen yet".into());
+                "0".into()
+            }
+            ExprKind::If { .. } | ExprKind::Block(_) => {
+                self.errors.push(
+                    "`if` / block in value position is not supported by stage0 codegen yet".into(),
+                );
                 "0".into()
             }
             ExprKind::Error => {

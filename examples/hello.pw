@@ -1,4 +1,6 @@
 fn main() {
-    val answer = 6 * 7
+    // 型注釈でリテラル型を確定（spec: 数値リテラルは既定型なし・文脈で一意）。
+    // 注: stage0 はまだ型検査が無く、print(<int>) も暫定の組み込み。
+    val answer: I64 = 6 * 7
     print(answer)
 }

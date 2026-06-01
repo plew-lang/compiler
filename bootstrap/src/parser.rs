@@ -422,6 +422,12 @@ impl Parser {
                     self.ast.alloc_stmt(Stmt { kind: StmtKind::Expr(value), span: start })
                 }
             }
+            TokenKind::Kw(Keyword::Give) => {
+                self.bump(); // `give`
+                let value = self.expr_bp(0);
+                let span = start.merge(self.ast.expr(value).span);
+                self.ast.alloc_stmt(Stmt { kind: StmtKind::Give(value), span })
+            }
             TokenKind::Kw(Keyword::Return) => {
                 self.bump(); // `return`
                 let value = if matches!(
@@ -460,6 +466,33 @@ impl Parser {
         let value = self.expr_bp(0);
         let span = start.merge(self.ast.expr(value).span);
         self.ast.alloc_stmt(Stmt { kind: StmtKind::Let { mutable, name, ty, value }, span })
+    }
+
+    /// `if cond { .. } (else (if .. | { .. }))?` as an expression.
+    fn parse_if(&mut self) -> ExprId {
+        let start = self.peek_span();
+        self.bump(); // `if`
+        let cond = self.expr_bp(0);
+        let then_block = self.block();
+        let then_span = then_block.span;
+        let then_branch = self.ast.alloc_expr(ExprKind::Block(then_block), then_span);
+        let else_branch = if matches!(self.peek(), TokenKind::Kw(Keyword::Else)) {
+            self.bump();
+            if matches!(self.peek(), TokenKind::Kw(Keyword::If)) {
+                Some(self.parse_if())
+            } else {
+                let b = self.block();
+                let sp = b.span;
+                Some(self.ast.alloc_expr(ExprKind::Block(b), sp))
+            }
+        } else {
+            None
+        };
+        let end = match else_branch {
+            Some(e) => self.ast.expr(e).span,
+            None => then_span,
+        };
+        self.ast.alloc_expr(ExprKind::If { cond, then_branch, else_branch }, start.merge(end))
     }
 
     // --- small helpers ----------------------------------------------------
@@ -525,6 +558,12 @@ impl Parser {
             TokenKind::Kw(Keyword::False) => {
                 self.bump();
                 self.ast.alloc_expr(ExprKind::Bool(false), span)
+            }
+            TokenKind::Kw(Keyword::If) => self.parse_if(),
+            TokenKind::LBrace => {
+                let block = self.block();
+                let sp = block.span;
+                self.ast.alloc_expr(ExprKind::Block(block), sp)
             }
             TokenKind::LParen => {
                 self.bump();
