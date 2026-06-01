@@ -41,7 +41,9 @@ stage0 は **throwaway（1 回コンパイルして終了）**。よって Array
    - ✅ **`break`/`continue`**（文）。**enum match を C switch→tag の if-chain に変換**＝match アーム内の `break`/`continue` が（switch でなく）ループを正しく対象にする。clang は `-w`（生成 C は警告クリーンを目指さない）。
    - ✅ **複合機能スモークテスト通過**：enum トークン種＋struct トークン＋`Array[Tok]`＋enum 返す関数＋`while` で `src.bytes` 走査＋`append`＋`match`（block アーム）＝ミニレキサが compile&run。**match アームに文を置くには block `=> { … }` が必要**（spec 通り＝アームは式）。
    - ⏭ import 機構／値位置 `match`／codegen の整数幅反映／名前解決の本格化。
-   - ⏭ **stage1 レキサの素描を Plew で書いて、出てくるコンパイルエラーで不足機能を駆動**するのが次の効率的な一手（投機より具体ニーズで進める）。判明済みの想定不足：substring（owned）・`Dictionary[String,V]`（シンボルテーブル）・連結（エラーメッセージ）。AST 再帰は arena+index（`ExprId`=U32 newtype）で回避予定。
+   - ✅ **stage1 レキサ素描が compile&run**（`selfhost/lexer.pw`）：整数/識別子/キーワード/単一文字記号を tokenize、arena 風 `Array[Tok]`（source を (start,len) で参照＝文字列materializeなし）。キーワード照合は純 Plew バイト比較（`rangeEquals`・substring 不要）。`"val x = 12 + foo * (3)"`→10 トークンの種別列を検証（e2e `selfhost_lexer_sketch_builds_and_runs`）。**substring 無しでレキサが書けることを実証**。
+   - ⏭ 次：stage1 レキサを Plew の実サブセット全トークンに拡張 → パーサ素描。**ファイル I/O**（自分自身を読む＝真の self-host に必須・現状ハードコード文字列）と **`Dictionary` or 線形スキャン**（名前解決）はその先。AST 再帰は arena+index（`ExprId`=U32 包み）で回避予定。
+   - ⏭ import 機構／値位置 `match`／codegen 整数幅は必要になった時点で。
 7. ⏭ → stage1（Plew でコンパイラ）に必要な分が揃い次第セルフホスト
 6. **stage1**：Plew サブセットでコンパイラを書く → stage0 で compile → 自己 compile＝**セルフホスト達成**
 7. 以降 LLVM/WASM・循環回収・所有権検査などを Plew 側で additive に

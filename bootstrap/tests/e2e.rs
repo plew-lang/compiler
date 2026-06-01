@@ -176,6 +176,18 @@ fn break_inside_enum_match_targets_the_loop() {
 }
 
 #[test]
+fn selfhost_lexer_sketch_builds_and_runs() {
+    // The Plew-side lexer sketch (selfhost/lexer.pw) compiled by stage0 must
+    // tokenize its hardcoded sample into the expected kind tags. This guards
+    // the language subset the self-hosted compiler relies on.
+    let path =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../selfhost/lexer.pw");
+    let src = std::fs::read_to_string(path).expect("read selfhost/lexer.pw");
+    // "val x = 12 + foo * (3)" => 10 tokens with these kind tags.
+    assert_eq!(build_and_run(&src, "selfhost_lexer"), "10\n2\n1\n9\n0\n3\n1\n5\n7\n0\n8\n");
+}
+
+#[test]
 fn reports_unsupported_construct() {
     // `??` has no stage0 C lowering yet → a codegen error, not a panic.
     let errs = compile_to_c("fn main() {\n    print(a ?? b)\n}\n").unwrap_err();

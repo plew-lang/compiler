@@ -1,0 +1,172 @@
+// stage1 lexer sketch (written in Plew, compiled by stage0).
+//
+// Tokenizes a tiny subset: integers, identifiers/keywords, and a few
+// single-character punctuators. Tokens are stored arena-style (an Array[Tok]),
+// referencing the source by (start, len) rather than materializing strings.
+//
+// No file I/O yet, so `main` lexes a hardcoded source string and prints, for
+// each token, its kind tag followed by start and len.
+
+enum Kind {
+    Int
+    Ident
+    Kw
+    Plus
+    Minus
+    Star
+    Slash
+    LParen
+    RParen
+    Eq
+    Unknown
+}
+
+struct Tok {
+    val kind: Kind
+    val start: U64
+    val len: U64
+}
+
+fn isDigit(b: U8) -> Bool {
+    if b >= 48 {
+        if b <= 57 {
+            return true
+        }
+    }
+    return false
+}
+
+fn isAlpha(b: U8) -> Bool {
+    if b >= 97 {
+        if b <= 122 {
+            return true
+        }
+    }
+    if b >= 65 {
+        if b <= 90 {
+            return true
+        }
+    }
+    return false
+}
+
+fn isSpace(b: U8) -> Bool {
+    if b == 32 {
+        return true
+    }
+    if b == 10 {
+        return true
+    }
+    if b == 9 {
+        return true
+    }
+    return false
+}
+
+fn rangeEquals(bytes: Array[U8], start: U64, len: U64, kw: String) -> Bool {
+    val kb: Array[U8] = kw.bytes
+    if len != kb.count {
+        return false
+    }
+    mut val j: U64 = 0
+    while j < len {
+        if bytes[start + j] != kb[j] {
+            return false
+        }
+        j += 1
+    }
+    return true
+}
+
+fn kindTag(k: Kind) -> I64 {
+    match k {
+        Kind.Int => { return 0 }
+        Kind.Ident => { return 1 }
+        Kind.Kw => { return 2 }
+        Kind.Plus => { return 3 }
+        Kind.Minus => { return 4 }
+        Kind.Star => { return 5 }
+        Kind.Slash => { return 6 }
+        Kind.LParen => { return 7 }
+        Kind.RParen => { return 8 }
+        Kind.Eq => { return 9 }
+        Kind.Unknown => { return 99 }
+    }
+}
+
+fn main() {
+    val src: String = "val x = 12 + foo * (3)"
+    val bytes: Array[U8] = src.bytes
+    val n: U64 = bytes.count
+    mut val toks: Array[Tok] = []
+
+    mut val i: U64 = 0
+    while i < n {
+        val b: U8 = bytes[i]
+        if isSpace(b) {
+            i += 1
+            continue
+        }
+        if isDigit(b) {
+            val start: U64 = i
+            while i < n {
+                if isDigit(bytes[i]) {
+                    i += 1
+                } else {
+                    break
+                }
+            }
+            toks.append(<Tok kind=<Kind.Int /> start=start len=i - start />)
+            continue
+        }
+        if isAlpha(b) {
+            val start: U64 = i
+            while i < n {
+                if isAlpha(bytes[i]) {
+                    i += 1
+                } else {
+                    break
+                }
+            }
+            val len: U64 = i - start
+            mut val k: Kind = <Kind.Ident />
+            if rangeEquals(bytes, start, len, "val") {
+                k = <Kind.Kw />
+            }
+            if rangeEquals(bytes, start, len, "fn") {
+                k = <Kind.Kw />
+            }
+            toks.append(<Tok kind=k start=start len=len />)
+            continue
+        }
+        mut val k: Kind = <Kind.Unknown />
+        if b == 43 {
+            k = <Kind.Plus />
+        }
+        if b == 45 {
+            k = <Kind.Minus />
+        }
+        if b == 42 {
+            k = <Kind.Star />
+        }
+        if b == 47 {
+            k = <Kind.Slash />
+        }
+        if b == 40 {
+            k = <Kind.LParen />
+        }
+        if b == 41 {
+            k = <Kind.RParen />
+        }
+        if b == 61 {
+            k = <Kind.Eq />
+        }
+        toks.append(<Tok kind=k start=i len=1 />)
+        i += 1
+    }
+
+    print(toks.count)
+    for val t in toks {
+        print(kindTag(t.kind))
+    }
+}
