@@ -167,7 +167,14 @@ impl Codegen<'_> {
                 "static {at} {at}_new(void) {{ {at} a; a.data = 0; a.len = 0; a.cap = 0; return a; }}\n"
             ));
             self.out.push_str(&format!(
-                "static {et} {at}_get({at} a, int64_t i) {{ if (i < 0 || i >= a.len) {{ fprintf(stderr, \"panic: index out of range\\n\"); exit(1); }} return a.data[i]; }}\n\n"
+                "static {et} {at}_get({at} a, int64_t i) {{ if (i < 0 || i >= a.len) {{ fprintf(stderr, \"panic: index out of range\\n\"); exit(1); }} return a.data[i]; }}\n"
+            ));
+            self.out.push_str(&format!(
+                "static void {at}_set({at}* a, int64_t i, {et} v) {{ if (i < 0 || i >= a->len) {{ fprintf(stderr, \"panic: index out of range\\n\"); exit(1); }} a->data[i] = v; }}\n"
+            ));
+            // Growable push (old buffer leaked on realloc — stage0 never frees).
+            self.out.push_str(&format!(
+                "static void {at}_push({at}* a, {et} v) {{ if (a->len >= a->cap) {{ int64_t nc = a->cap < 4 ? 4 : a->cap * 2; {et}* nd = ({et}*)malloc(sizeof({et}) * nc); for (int64_t i = 0; i < a->len; i++) nd[i] = a->data[i]; a->data = nd; a->cap = nc; }} a->data[a->len] = v; a->len++; }}\n\n"
             ));
         }
     }
@@ -292,6 +299,15 @@ impl Codegen<'_> {
             }
             StmtKind::Assign { target, op, value } => {
                 let (target, op, value) = (*target, *op, *value);
+                // `arr[i] = v` / `arr[i] OP= v` → bounds-checked `_set` (a
+                // plain `_get(...) = v` would assign to an rvalue).
+                if let ExprKind::Index { base, index } = &self.ast.expr(target).kind {
+                    let (base, index) = (*base, *index);
+                    if let Ty::Array(id) = self.ty_of(base) {
+                        self.emit_index_set(id, base, index, op, value);
+                        return;
+                    }
+                }
                 let t = self.expr(target);
                 let v = self.expr(value);
                 let opc = match op {
@@ -457,6 +473,61 @@ impl Codegen<'_> {
         self.out.push_str(&format!("        {et} {var} = {av}.data[{iv}];\n"));
         self.emit_branch_block(body, in_main);
         self.out.push_str("    }\n");
+    }
+
+    /// Lower `arr[i] = v` / `arr[i] OP= v` to a bounds-checked `_set`. The
+    /// receiver must be an addressable C lvalue. For a compound assignment the
+    /// base/index are evaluated more than once (fine for stage0's lvalue bases).
+    fn emit_index_set(
+        &mut self,
+        arr_id: u32,
+        base: ExprId,
+        index: ExprId,
+        op: Option<BinOp>,
+        value: ExprId,
+    ) {
+        let at = self.array_c_name(arr_id);
+        let b = self.expr(base);
+        let i = self.expr(index);
+        let v = self.expr(value);
+        let rhs = match op {
+            None => v,
+            Some(o) => match c_binop(o) {
+                Some(sym) => format!("{at}_get({b}, (int64_t)({i})) {sym} {v}"),
+                None => {
+                    self.errors.push(format!(
+                        "compound assignment with `{}` is not supported yet",
+                        o.symbol()
+                    ));
+                    v
+                }
+            },
+        };
+        self.out.push_str(&format!("    {at}_set(&({b}), (int64_t)({i}), {rhs});\n"));
+    }
+
+    /// Lower a builtin `Array` method call. `append` mutates the receiver in
+    /// place, so the base must be an addressable C lvalue (Ident / field).
+    fn emit_array_method(
+        &mut self,
+        arr_id: u32,
+        base: ExprId,
+        name: &str,
+        args: &[ExprId],
+    ) -> String {
+        let at = self.array_c_name(arr_id);
+        match name {
+            "append" => {
+                let b = self.expr(base);
+                let v = self.expr(args[0]);
+                // Returns Unit; emitted as a (void) call usable in stmt position.
+                format!("{at}_push(&({b}), {v})")
+            }
+            other => {
+                self.errors.push(format!("`Array` method `{other}` is not supported by stage0 codegen"));
+                "0".into()
+            }
+        }
     }
 
     /// Lower a block used as a value to a GNU statement-expression
@@ -672,9 +743,19 @@ impl Codegen<'_> {
                 }
             }
             ExprKind::Call { callee, args } => {
-                // Non-print call: emit positional C call (labels ignored for now).
-                let callee_c = self.expr(*callee);
+                let callee = *callee;
                 let arg_ids: Vec<ExprId> = args.iter().map(|a| a.value).collect();
+                // Method call `base.method(args)` — stage0 builtin Array methods.
+                if let ExprKind::Field { base, name } = &self.ast.expr(callee).kind {
+                    let (base, name) = (*base, name.clone());
+                    if let Ty::Array(id) = self.ty_of(base) {
+                        return self.emit_array_method(id, base, &name, &arg_ids);
+                    }
+                    self.errors.push(format!("method `{name}` is not supported by stage0 codegen"));
+                    return "0".into();
+                }
+                // Non-method call: emit positional C call (labels ignored for now).
+                let callee_c = self.expr(callee);
                 let parts: Vec<String> = arg_ids.iter().map(|&a| self.expr(a)).collect();
                 format!("{callee_c}({})", parts.join(", "))
             }

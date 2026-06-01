@@ -988,6 +988,12 @@ impl Checker<'_> {
     }
 
     fn check_call(&mut self, callee: ExprId, args: &[ExprId], span: Span) -> Ty {
+        // Method call `base.method(args)`.
+        if let ExprKind::Field { base, name } = &self.ast.expr(callee).kind {
+            let (base, name) = (*base, name.clone());
+            let bt = self.check_expr(base, None);
+            return self.check_method(bt, &name, args, span);
+        }
         if let ExprKind::Ident(name) = &self.ast.expr(callee).kind {
             let name = name.clone();
             if name == "print" {
@@ -1030,6 +1036,49 @@ impl Checker<'_> {
         }
         self.error(span, "only simple function calls are supported by the stage0 type checker yet");
         Ty::Error
+    }
+
+    /// Check a method call on `recv`. stage0 supports a small set of builtin
+    /// `Array` methods (the real Array API is core-lib, TBD); like `print`,
+    /// these are stage0 fictions until the module/trait machinery exists.
+    fn check_method(&mut self, recv: Ty, name: &str, args: &[ExprId], span: Span) -> Ty {
+        match recv {
+            Ty::Array(id) => {
+                let elem = self.table.array_elem(id);
+                match name {
+                    // `append(value)`: push an element (mutates in place).
+                    "append" => {
+                        if args.len() != 1 {
+                            self.error(span, "`append` takes exactly one argument");
+                        } else {
+                            self.check_expr(args[0], Some(elem));
+                        }
+                        Ty::Unit
+                    }
+                    other => {
+                        for &a in args {
+                            self.check_expr(a, None);
+                        }
+                        self.error(span, format!("`Array` has no method `{other}` (stage0 supports `append`)"));
+                        Ty::Error
+                    }
+                }
+            }
+            Ty::Error => {
+                for &a in args {
+                    self.check_expr(a, None);
+                }
+                Ty::Error
+            }
+            other => {
+                for &a in args {
+                    self.check_expr(a, None);
+                }
+                let on = self.ty_name(other);
+                self.error(span, format!("type `{on}` has no methods (stage0)"));
+                Ty::Error
+            }
+        }
     }
 
     fn expect_eq(&mut self, actual: Ty, expected: Option<Ty>, span: Span) {

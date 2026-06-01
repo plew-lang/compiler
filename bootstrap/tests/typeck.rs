@@ -102,3 +102,21 @@ fn for_each_over_array_binds_element() {
     let src = "fn main() {\n    val xs: Array[I64] = [1, 2, 3]\n    mut val s: I64 = 0\n    for val x in xs {\n        s += x\n    }\n}";
     assert!(errs(src).is_empty(), "errors: {:?}", errs(src));
 }
+
+#[test]
+fn array_append_typechecks() {
+    let src = "fn main() {\n    mut val xs: Array[I64] = []\n    xs.append(1)\n}";
+    assert!(errs(src).is_empty(), "errors: {:?}", errs(src));
+}
+
+#[test]
+fn array_append_wrong_element_type_is_reported() {
+    let e = errs("fn main() {\n    mut val xs: Array[I64] = []\n    xs.append(true)\n}");
+    assert!(!e.is_empty(), "expected an append element-type error");
+}
+
+#[test]
+fn unknown_array_method_is_reported() {
+    let e = errs("fn main() {\n    mut val xs: Array[I64] = [1]\n    xs.frobnicate(2)\n}");
+    assert!(e.iter().any(|m| m.contains("no method")), "errors: {e:?}");
+}

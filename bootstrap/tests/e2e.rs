@@ -110,6 +110,25 @@ fn builds_and_runs_array_of_struct() {
 }
 
 #[test]
+fn builds_and_runs_array_append_and_index_set() {
+    let src = "fn main() {\n    mut val xs: Array[I64] = []\n    xs.append(10)\n    xs.append(20)\n    xs.append(30)\n    xs[1] = 99\n    mut val sum: I64 = 0\n    for val x in xs {\n        sum += x\n    }\n    print(xs.count)\n    print(sum)\n}\n";
+    assert_eq!(build_and_run(src, "arr_mut"), "3\n139\n");
+}
+
+#[test]
+fn builds_and_runs_array_grows_past_capacity() {
+    // Append more than the initial capacity (4) to exercise the realloc path.
+    let src = "fn main() {\n    val n: I64 = 10\n    mut val xs: Array[I64] = []\n    for val i in 0..<n {\n        xs.append(i)\n    }\n    mut val sum: I64 = 0\n    for val x in xs {\n        sum += x\n    }\n    print(xs.count)\n    print(sum)\n}\n";
+    assert_eq!(build_and_run(src, "arr_grow"), "10\n45\n");
+}
+
+#[test]
+fn builds_and_runs_array_index_compound_assign() {
+    let src = "fn main() {\n    mut val xs: Array[I64] = [1, 2, 3]\n    xs[0] += 40\n    xs[2] *= 10\n    print(xs[0])\n    print(xs[2])\n}\n";
+    assert_eq!(build_and_run(src, "arr_compound"), "41\n30\n");
+}
+
+#[test]
 fn array_index_out_of_range_panics() {
     let src = "fn main() {\n    val xs: Array[I64] = [1, 2, 3]\n    print(xs[5])\n}\n";
     let bin = std::env::temp_dir()

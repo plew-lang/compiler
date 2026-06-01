@@ -36,7 +36,7 @@ stage0 は **throwaway（1 回コンパイルして終了）**。よって Array
 7. 🔨 **次の本丸**：
    - ✅ **型レジストリを codegen に公開**：typeck が `CheckResult.table: TypeTable`（struct/enum 名 id→名、`Array[T]` 要素型の interning）を返し、codegen が `Ty→C名`（`ty_c_name`/`mangle`）を解決。
    - ✅ **Array（単相化・読み取り中心）**：`[..]` リテラル／`arr[i]`（範囲外 panic）／`arr.count`（U64）／`for val x in arr`。C 表現＝`PlewArray_<mangle>{T* data; len; cap}`＋per-type ランタイム（`_new`/`_get`）。要素型ごとに単相化（プリミティブ/struct/enum/ネスト配列可）。メモリはリーク（上記メモリモデル）。
-   - ⏭ **Array 変更操作**：`append`・`arr[i] = x`（IndexSet）・空配列からの成長。`arr.append(x)` のためメソッド呼び出しの土台（配列ビルトインメソッドの解決/codegen）。
+   - ✅ **Array 変更操作**：`arr.append(x)`（伸長・cap<4→4→倍々で realloc・旧バッファはリーク）／`arr[i] = x`・`arr[i] OP= x`（IndexSet・範囲外 panic）。メソッド呼び出しの土台＝typeck `check_method`（レシーバ型でディスパッチ・現状 Array の `append` のみ＝`print` 同様の stage0 ビルトイン）／codegen `emit_array_method`・`emit_index_set`（receiver は addressable lvalue 前提・`_push`/`_set` ランタイム）。空 `[]` から成長可。**制約**：append/index-set は base が C lvalue のときのみ（Ident/field）。
    - ⏭ import 機構／値位置 `match`／codegen の整数幅反映／名前解決の本格化。
 7. ⏭ → stage1（Plew でコンパイラ）に必要な分が揃い次第セルフホスト
 6. **stage1**：Plew サブセットでコンパイラを書く → stage0 で compile → 自己 compile＝**セルフホスト達成**
