@@ -256,30 +256,65 @@ extension P {
 }
 ```
 
-- `T#P` という型は**何の準拠も主張しません**。`#P` はあくまで「P のビューを開く」だけで、その中の `impl Iterator { fn map }` が `T` に**適用される**ことは別問題です。`it.map()` を呼ぶには `it#IterExt` で拡張ビューを開き、かつ `where T: Iterator` で `impl Iterator` 部が適用されることを保証する必要があります（直交する 2 条件で、両方必要）。
+- `T#P` という型は**何の準拠も主張しません**。`#P` はあくまで「P のビューを開く」だけで、その中の `impl Iterator { … }` が `T` に**適用される**ことは別問題です。トレイトの**既定でない**拡張のメソッドを境界型変数で使うには、`it#P` で拡張ビューを開き、かつ `where T: Iterator` で `impl Iterator` 部が適用されることを保証する必要があります（直交する 2 条件で、両方必要）。
 
 ```plew
-fn process[T](it: T#IterExt) where T: Iterator {   // where は T#IterExt から含意されない＝省略不可
-    it.map(f).filter(g)                            // 本体はベア。map の戻り値は default を持つ具体型なので鎖は流れる
+extension ExtraIterOps {                               // Iterator の既定ではない追加拡張
+    impl Iterator { fn chunks(size: U64) -> … { … } }
+}
+fn process[T](it: T#ExtraIterOps) where T: Iterator {  // where は T#ExtraIterOps から含意されない＝省略不可
+    it.chunks(size: 2)                                 // 本体はベア
 }
 ```
+
+> トレイトの**既定拡張**（`Iterator` の `#IterExt`）はこの限りではありません ── [境界随伴](#デフォルト拡張defaultextension)で `where T: Iterator` だけで `it.map()` が呼べ、`T#IterExt` は不要です。`#Ext` の二重条件が要るのは**既定でない**拡張だけです。
 
 ## デフォルト拡張（`defaultExtension`）
 
-型は、自分のベア表面に**既定で載せる拡張**を宣言できます。構文は型本体の `defaultExtension`（→ [構造体と列挙型](05-structs-enums.md)）で、列挙は型レベルの `Type#A#B` と同じく `#` 連結です。
+拡張がある型の**ベア表面に既定で載る**ようにする宣言です。宣言できる場所は 2 つあり、どちらも本体に `defaultExtension #Ext`（複数は `#A#B` 連結・型レベルの `Type#A#B` と同じ）と書きます。`impl` ではなく宣言なので本体に置きます。
+
+### トレイトが宣言する（準拠型に自動随伴＋境界随伴）
+
+トレイトは本体で自分の**既定拡張**を宣言できます。これがそのトレイトの[派生メソッド](08-traits.md)（`map`/`filter` 等）の正規の置き場です。
 
 ```plew
-struct Array[T] {
-    defaultExtension #IterExt#FooExt
+trait Iterator {
+    type Item
+    inout fn next() -> Optional[Item]
+    defaultExtension #IterExt          // このトレイトの既定拡張
 }
-
-val arr = [1U32]      // Array
-arr.map(f)            // OK：既定で #IterExt が載っている
-arr#!IterExt.map()    // エラー：#!IterExt で剥がすと map は無い
+extension IterExt { impl Iterator { fn map[F](f: F) -> … { … } } }
 ```
 
-- **宣言できるのは型の作者だけ**：`defaultExtension` は型本体に書く＝型を所有するモジュールのみ。外部モジュールが他人の型のベア表面を勝手に変えることはできない（変えたければ使用箇所で `#Ext`）。
-- **ベア解決への参加**：既定拡張のメソッドは、その型のベアなオーバーロード集合に加わる（非デフォルトの拡張はベア解決に参加せず `#Ext` 必須）。`value#!Ext` で個別に剥がせ、`value#Ext` は常に届く。既定集合は `#`／`#!` チェーンの起点になる（`Array` ≡ `Array#IterExt#FooExt`）。
-- **衝突＝宣言地点でエラー**：型自身のメソッドや別の既定拡張と**同セレクタ・同シグネチャ**で衝突したら、`defaultExtension` 宣言地点でコンパイルエラー（引数型が違えばオーバーロードとして共存）。型の作者が「片方だけ既定にし、他方は `#Ext` で明示」と curate して解決する。
+- **準拠型は自動で取り込む**：`impl A as Iterator` を書けば、A は `IterExt` をベア表面に得る（A 側に `defaultExtension` を書く必要はない）。à la carte で、A が資格を持つ部分（`impl Iterator`）だけが載る。
+- **境界を通して随伴する（境界随伴）**：`fn f[T](t: T) where T: Iterator` の本体で `t.map()` がベアで呼べる。これは generic が T を「Iterator として」扱うことの帰結で、`IterExt` の `impl Iterator` 部だけが運ばれ、**具体型の [strip](#既定拡張を剥がす) と無関係に一律**。境界の表記は `where T: Iterator` のまま（`#` は付かない）で、リンクはトレイト本体の `defaultExtension` 宣言が 1 度だけ貼る。
+
+### 型が宣言する（その型だけに載る）
+
+型も本体で `defaultExtension #Ext` を宣言できます。準拠トレイトの既定**ではない**拡張（第三者の追加メソッド束・型に固有の拡張など）を、その型のベア表面に既定で載せたいときに使います。
+
+```plew
+struct MyVec[T] {
+    defaultExtension #ExtraOps        // Iterator の既定 #IterExt は準拠で自動・これは追加分
+}
+```
+
+- **宣言できるのは型の作者だけ**：型本体に書く＝型を所有するモジュールのみ。外部モジュールが他人の型のベア表面を変えることはできない（変えたければ使用箇所で `#Ext`）。
+
+### 既定拡張を剥がす（`#!`）
+
+トレイトの既定拡張がその型に合わない（同名の自前メソッドがある・複数トレイトの既定が衝突する）ときは、型本体で `defaultExtension #!Ext` と**剥がせます**。
+
+```plew
+struct A {
+    defaultExtension #!IterExt        // IterExt をベア表面から外す
+}
+```
+
+- 剥がしても**準拠と境界随伴には影響しない**（strip はその型自身の非ジェネリックなベア表面だけに効く）。`a#IterExt.map()` で明示すれば届くし、`where T: Iterator` 越しなら `t.map()` は一律で呼べる。
+
+### 共通規則
+
+- **ベア解決への参加**：既定拡張（トレイト由来・型由来とも）のメソッドは、その型のベアなオーバーロード集合に加わる。既定でない拡張はベア解決に参加せず `#Ext` 必須。`value#!Ext` で個別に剥がせ、`value#Ext` は常に届く。
+- **衝突＝型の定義地点でエラー**：型自身のメソッド・準拠トレイトの既定拡張・型が宣言した `defaultExtension` のいずれかが**同セレクタ・同シグネチャ**で衝突したら、その型の定義地点でコンパイルエラー（引数型が違えばオーバーロードとして共存）。`defaultExtension #!Ext` で片方を剥がして解決し、剥がした側は `value#Ext.foo()` で届く。generic での衝突（`where T: A + B` で両既定が同名）は曖昧なベア呼び `t.f()` がその行でエラーになり、`t#Ext.f()` で曖昧化する（曖昧化も `#Ext`＝拡張で閉じる）。
 - **à la carte**：既定拡張も適用は à la carte（型が資格を持つ部分だけが載る）。型が何の資格も持たない拡張を既定指定しても無意味なので診断対象。
-- **ジェネリックには流れない**：境界 `T: Trait` は要求しか運ばず、`T` の既定拡張は不明。境界型変数に派生メソッドを使うときは `x#Ext`（または引数型 `x: T#Ext`）と明示する（上記「à la carte 適用」参照）。

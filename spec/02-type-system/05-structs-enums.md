@@ -13,12 +13,12 @@ export struct MyStruct[T] where T: SomeTrait {
 
 `pub` / `pub(get)` / 非公開（修飾なし）のメンバ可視性は本章末の[メンバの可視性](#メンバの可視性)を参照。非公開メンバは型の無名 impl からのみ見えます。
 
-型本体には `defaultExtension #Ext1#Ext2` を書けます。これはこの型のベア表面に**既定で載せる拡張**の宣言です（列挙は型レベルの `Type#A#B` と同じ `#` 連結）。`impl`（実装）ではなく型の宣言なので型本体に置きます。意味論・衝突規則・剥がし方は [拡張のデフォルト拡張](09-extensions.md#デフォルト拡張defaultextension) を参照。列挙型でも同様に書けます。
+型本体には `defaultExtension #Ext1#Ext2` を書けます。これはこの型のベア表面に**既定で載せる拡張**の宣言です（列挙は型レベルの `Type#A#B` と同じ `#` 連結）。`impl`（実装）ではなく型の宣言なので型本体に置きます。準拠するトレイトの既定拡張は宣言不要で自動的に載るので、ここに書くのは**トレイト既定でない**拡張だけです。合わない既定拡張は `defaultExtension #!Ext` で剥がせます。意味論・衝突規則・剥がし方は [拡張のデフォルト拡張](09-extensions.md#デフォルト拡張defaultextension) を参照。列挙型でも同様に書けます。
 
 ```plew
 struct Counter {
     mut val n: I32
-    defaultExtension #StepperExt   // counter.doubleStep() がベアで呼べる
+    defaultExtension #ChartExt   // この型に固有の拡張を明示的にベアへ（トレイト既定拡張は準拠で自動）
 }
 ```
 
