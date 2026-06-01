@@ -177,6 +177,33 @@ pub struct Item {
     pub span: Span,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Vis {
+    Private,
+    Pub,
+    /// `pub(get)`: public read, private write.
+    PubGet,
+}
+
+/// A struct field or an enum-variant field.
+#[derive(Clone, Debug)]
+pub struct Field {
+    pub vis: Vis,
+    pub mutable: bool,
+    pub name: String,
+    pub ty: Type,
+    pub default: Option<ExprId>,
+    pub span: Span,
+}
+
+/// An enum variant: `Name` (no fields) or `Name { val f: T, .. }`.
+#[derive(Clone, Debug)]
+pub struct Variant {
+    pub name: String,
+    pub fields: Vec<Field>,
+    pub span: Span,
+}
+
 #[derive(Clone, Debug)]
 pub enum ItemKind {
     Fn {
@@ -184,6 +211,16 @@ pub enum ItemKind {
         params: Vec<Param>,
         ret: Option<Type>,
         body: Block,
+    },
+    Struct {
+        name: String,
+        generics: Vec<String>,
+        fields: Vec<Field>,
+    },
+    Enum {
+        name: String,
+        generics: Vec<String>,
+        variants: Vec<Variant>,
     },
 }
 
@@ -375,7 +412,49 @@ impl Ast {
                 self.write_block(body, out);
                 out.push(')');
             }
+            ItemKind::Struct { name, generics, fields } => {
+                out.push_str("(struct ");
+                out.push_str(name);
+                write_generics(generics, out);
+                for f in fields {
+                    out.push(' ');
+                    self.write_field(f, out);
+                }
+                out.push(')');
+            }
+            ItemKind::Enum { name, generics, variants } => {
+                out.push_str("(enum ");
+                out.push_str(name);
+                write_generics(generics, out);
+                for v in variants {
+                    out.push_str(" (variant ");
+                    out.push_str(&v.name);
+                    for f in &v.fields {
+                        out.push(' ');
+                        self.write_field(f, out);
+                    }
+                    out.push(')');
+                }
+                out.push(')');
+            }
         }
+    }
+
+    fn write_field(&self, f: &Field, out: &mut String) {
+        out.push_str("(field");
+        match f.vis {
+            Vis::Pub => out.push_str(" pub"),
+            Vis::PubGet => out.push_str(" pubget"),
+            Vis::Private => {}
+        }
+        if f.mutable {
+            out.push_str(" mut");
+        }
+        out.push(' ');
+        out.push_str(&f.name);
+        out.push(':');
+        self.write_type(&f.ty, out);
+        out.push(')');
     }
 
     fn write_type(&self, ty: &Type, out: &mut String) {
@@ -438,5 +517,18 @@ impl Ast {
             }
             StmtKind::Expr(e) => self.write_sexpr(*e, out),
         }
+    }
+}
+
+fn write_generics(generics: &[String], out: &mut String) {
+    if !generics.is_empty() {
+        out.push('[');
+        for (i, g) in generics.iter().enumerate() {
+            if i > 0 {
+                out.push_str(", ");
+            }
+            out.push_str(g);
+        }
+        out.push(']');
     }
 }

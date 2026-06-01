@@ -85,31 +85,34 @@ pub fn check(ast: &Ast, items: &[ItemId]) -> Vec<TypeError> {
     let mut sigs: HashMap<String, FnSig> = HashMap::new();
 
     // Pass 1: collect function signatures (params/return are always explicit).
+    // struct/enum are parsed but not yet type-checked by stage0.
     for &id in items {
-        let ItemKind::Fn { name, params, ret, .. } = &ast.item(id).kind;
-        let param_tys = params
-            .iter()
-            .map(|p| resolve_ty(&p.ty, &mut errors))
-            .collect();
-        let ret_ty = match ret {
-            Some(t) => resolve_ty(t, &mut errors),
-            None => Ty::Unit,
-        };
-        sigs.insert(name.clone(), FnSig { params: param_tys, ret: ret_ty });
+        if let ItemKind::Fn { name, params, ret, .. } = &ast.item(id).kind {
+            let param_tys = params
+                .iter()
+                .map(|p| resolve_ty(&p.ty, &mut errors))
+                .collect();
+            let ret_ty = match ret {
+                Some(t) => resolve_ty(t, &mut errors),
+                None => Ty::Unit,
+            };
+            sigs.insert(name.clone(), FnSig { params: param_tys, ret: ret_ty });
+        }
     }
 
     // Pass 2: check each body.
     for &id in items {
-        let ItemKind::Fn { name, params, body, .. } = &ast.item(id).kind;
-        let ret = sigs.get(name).map(|s| s.ret).unwrap_or(Ty::Error);
-        let mut cx = Checker { ast, sigs: &sigs, errors: &mut errors, scopes: Vec::new(), ret };
-        cx.push_scope();
-        for p in params {
-            let ty = resolve_ty(&p.ty, cx.errors);
-            cx.define(&p.label, ty);
+        if let ItemKind::Fn { name, params, body, .. } = &ast.item(id).kind {
+            let ret = sigs.get(name).map(|s| s.ret).unwrap_or(Ty::Error);
+            let mut cx = Checker { ast, sigs: &sigs, errors: &mut errors, scopes: Vec::new(), ret };
+            cx.push_scope();
+            for p in params {
+                let ty = resolve_ty(&p.ty, cx.errors);
+                cx.define(&p.label, ty);
+            }
+            cx.check_block(body);
+            cx.pop_scope();
         }
-        cx.check_block(body);
-        cx.pop_scope();
     }
 
     errors

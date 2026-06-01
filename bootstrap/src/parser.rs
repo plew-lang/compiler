@@ -6,8 +6,8 @@
 //! `try`/`await`, and statements/items follow.
 
 use crate::ast::{
-    Arg, Ast, BinOp, Block, ExprId, ExprKind, Item, ItemId, ItemKind, Param, Stmt, StmtKind, Type,
-    UnOp,
+    Arg, Ast, BinOp, Block, ExprId, ExprKind, Field, Item, ItemId, ItemKind, Param, Stmt, StmtKind,
+    Type, UnOp, Variant, Vis,
 };
 use crate::lexer::lex;
 use crate::span::Span;
@@ -329,12 +329,181 @@ impl Parser {
     }
 
     fn item(&mut self) -> Option<ItemId> {
+        // optional `export` modifier (module-boundary visibility), ignored by
+        // stage0 for now.
+        if matches!(self.peek(), TokenKind::Kw(Keyword::Export)) {
+            self.bump();
+        }
         match self.peek() {
             TokenKind::Kw(Keyword::Fn) => Some(self.fn_item()),
+            TokenKind::Kw(Keyword::Struct) => Some(self.struct_item()),
+            TokenKind::Kw(Keyword::Enum) => Some(self.enum_item()),
             other => {
                 let span = self.peek_span();
-                self.error(span, format!("expected an item (e.g. `fn`), found {other:?}"));
+                self.error(span, format!("expected an item (e.g. `fn`, `struct`, `enum`), found {other:?}"));
                 None
+            }
+        }
+    }
+
+    fn struct_item(&mut self) -> ItemId {
+        let start = self.peek_span();
+        self.bump(); // `struct`
+        let name = self.expect_ident("a struct name");
+        let generics = self.parse_generics();
+        self.reject_where();
+        self.expect(&TokenKind::LBrace, "`{` to start the struct body");
+        let fields = self.parse_fields();
+        let end = self.peek_span();
+        self.expect(&TokenKind::RBrace, "`}` to close the struct");
+        self.ast.alloc_item(Item {
+            kind: ItemKind::Struct { name, generics, fields },
+            span: start.merge(end),
+        })
+    }
+
+    fn enum_item(&mut self) -> ItemId {
+        let start = self.peek_span();
+        self.bump(); // `enum`
+        let name = self.expect_ident("an enum name");
+        let generics = self.parse_generics();
+        self.reject_where();
+        self.expect(&TokenKind::LBrace, "`{` to start the enum body");
+        self.eat_newlines();
+        let mut variants = Vec::new();
+        while !matches!(self.peek(), TokenKind::RBrace | TokenKind::Eof) {
+            variants.push(self.parse_variant());
+            if !self.eat_item_separator() {
+                break;
+            }
+        }
+        let end = self.peek_span();
+        self.expect(&TokenKind::RBrace, "`}` to close the enum");
+        self.ast.alloc_item(Item {
+            kind: ItemKind::Enum { name, generics, variants },
+            span: start.merge(end),
+        })
+    }
+
+    fn parse_variant(&mut self) -> Variant {
+        let start = self.peek_span();
+        let name = self.expect_ident("a variant name");
+        let mut fields = Vec::new();
+        let mut end = start;
+        if matches!(self.peek(), TokenKind::LBrace) {
+            self.bump();
+            fields = self.parse_fields();
+            end = self.peek_span();
+            self.expect(&TokenKind::RBrace, "`}` to close the variant fields");
+        }
+        Variant { name, fields, span: start.merge(end) }
+    }
+
+    /// Parse `[ field (sep field)* ]` up to (and consuming) the closing `}`'s
+    /// caller. Used for both struct and variant bodies. Stops at `}`.
+    fn parse_fields(&mut self) -> Vec<Field> {
+        self.eat_newlines();
+        let mut fields = Vec::new();
+        while !matches!(self.peek(), TokenKind::RBrace | TokenKind::Eof) {
+            fields.push(self.parse_field());
+            if !self.eat_item_separator() {
+                break;
+            }
+        }
+        fields
+    }
+
+    fn parse_field(&mut self) -> Field {
+        let start = self.peek_span();
+        let vis = self.parse_vis();
+        let mutable = if matches!(self.peek(), TokenKind::Kw(Keyword::Mut)) {
+            self.bump();
+            true
+        } else {
+            false
+        };
+        self.expect(&TokenKind::Kw(Keyword::Val), "`val` in a field declaration");
+        let name = self.expect_ident("a field name");
+        self.expect(&TokenKind::Colon, "`:` after the field name");
+        let ty = self.ty();
+        let default = if matches!(self.peek(), TokenKind::Eq) {
+            self.bump();
+            Some(self.expr_bp(0))
+        } else {
+            None
+        };
+        let span = start.merge(ty.span);
+        Field { vis, mutable, name, ty, default, span }
+    }
+
+    fn parse_vis(&mut self) -> Vis {
+        if !matches!(self.peek(), TokenKind::Kw(Keyword::Pub)) {
+            return Vis::Private;
+        }
+        self.bump(); // `pub`
+        if matches!(self.peek(), TokenKind::LParen) {
+            self.bump();
+            let is_get = matches!(self.peek(), TokenKind::Ident(s) if s == "get");
+            if is_get {
+                self.bump();
+            } else {
+                let s = self.peek_span();
+                self.error(s, "expected `get` in `pub(get)`");
+            }
+            self.expect(&TokenKind::RParen, "`)` after `pub(get)`");
+            Vis::PubGet
+        } else {
+            Vis::Pub
+        }
+    }
+
+    fn parse_generics(&mut self) -> Vec<String> {
+        let mut g = Vec::new();
+        if matches!(self.peek(), TokenKind::LBracket) {
+            self.bump();
+            while !matches!(self.peek(), TokenKind::RBracket | TokenKind::Eof) {
+                g.push(self.expect_ident("a generic parameter name"));
+                if matches!(self.peek(), TokenKind::Comma) {
+                    self.bump();
+                } else {
+                    break;
+                }
+            }
+            self.expect(&TokenKind::RBracket, "`]` to close generic parameters");
+        }
+        g
+    }
+
+    fn reject_where(&mut self) {
+        if matches!(self.peek(), TokenKind::Kw(Keyword::Where)) {
+            let s = self.peek_span();
+            self.error(s, "`where` clauses are not supported by stage0 yet");
+            while !matches!(self.peek(), TokenKind::LBrace | TokenKind::Eof) {
+                self.bump();
+            }
+        }
+    }
+
+    /// Consume a separator (newline(s) or `,`) between fields/variants.
+    /// Returns false if the next token is the closer (caller should stop).
+    fn eat_item_separator(&mut self) -> bool {
+        match self.peek() {
+            TokenKind::Newline => {
+                self.eat_newlines();
+                true
+            }
+            TokenKind::Comma => {
+                self.bump();
+                self.eat_newlines();
+                true
+            }
+            TokenKind::RBrace => false,
+            _ => {
+                let s = self.peek_span();
+                self.error(s, "expected a newline, `,`, or `}`");
+                self.recover_to_newline();
+                self.eat_newlines();
+                !matches!(self.peek(), TokenKind::RBrace | TokenKind::Eof)
             }
         }
     }

@@ -63,6 +63,10 @@ impl Codegen<'_> {
                 }
                 self.out.push_str("}\n\n");
             }
+            ItemKind::Struct { .. } | ItemKind::Enum { .. } => {
+                self.errors
+                    .push("struct / enum codegen is not supported by stage0 yet".into());
+            }
         }
     }
 

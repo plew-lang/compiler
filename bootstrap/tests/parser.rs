@@ -209,6 +209,41 @@ fn compound_assignment() {
 }
 
 #[test]
+fn struct_declaration() {
+    let src = "struct Point {\n    val x: I64\n    val y: I64\n}";
+    assert_eq!(prog(src), "(struct Point (field x:I64) (field y:I64))");
+}
+
+#[test]
+fn struct_with_visibility_mut_and_generics() {
+    let src = "struct Box[T] {\n    pub val name: String\n    pub(get) val id: I32\n    mut val value: T\n}";
+    assert_eq!(
+        prog(src),
+        "(struct Box[T] (field pub name:String) (field pubget id:I32) (field mut value:T))"
+    );
+}
+
+#[test]
+fn enum_declaration() {
+    let src = "enum Color {\n    Red\n    Green\n    Blue\n}";
+    assert_eq!(prog(src), "(enum Color (variant Red) (variant Green) (variant Blue))");
+}
+
+#[test]
+fn enum_with_payload_and_generics() {
+    let src = "enum Optional[T] {\n    Some { val value: T }\n    None\n}";
+    assert_eq!(
+        prog(src),
+        "(enum Optional[T] (variant Some (field value:T)) (variant None))"
+    );
+}
+
+#[test]
+fn export_modifier_is_accepted() {
+    assert_eq!(prog("export struct S {\n    val x: I64\n}"), "(struct S (field x:I64))");
+}
+
+#[test]
 fn errors_on_garbage() {
     assert!(errors("1 +").iter().any(|m| m.contains("expected an expression")));
     assert!(errors("1 2").iter().any(|m| m.contains("trailing")));
