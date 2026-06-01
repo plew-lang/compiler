@@ -328,6 +328,8 @@ impl Codegen<'_> {
                 };
                 self.out.push_str(&format!("    {t} {opc} {v};\n"));
             }
+            StmtKind::Break => self.out.push_str("    break;\n"),
+            StmtKind::Continue => self.out.push_str("    continue;\n"),
             StmtKind::Expr(e) => {
                 let e = *e;
                 self.emit_expr_stmt(e, in_main);
@@ -551,9 +553,10 @@ impl Codegen<'_> {
         format!("({{ {body}{tail}; }})")
     }
 
-    /// Lower a statement-position `match`. Enum scrutinees switch on the tag;
-    /// integer/Bool scrutinees become an if-chain. (Value-position `match` is
-    /// not supported by stage0 yet.)
+    /// Lower a statement-position `match`. Both enum and integer/Bool
+    /// scrutinees become an if-chain on the tag/value. (An if-chain rather than
+    /// a C `switch` so a Plew `break` in an arm targets the enclosing loop, not
+    /// a switch.) Value-position `match` is not supported by stage0 yet.
     fn emit_match_stmt(&mut self, scrutinee: ExprId, arms: &[MatchArm], in_main: bool) {
         // Classify the match from its patterns.
         let mut enum_name: Option<String> = None;
@@ -583,11 +586,13 @@ impl Codegen<'_> {
 
         if let Some(ename) = enum_name {
             self.out.push_str(&format!("    {ename} {tname} = {scrut};\n"));
-            self.out.push_str(&format!("    switch ({tname}.tag) {{\n"));
+            let mut first = true;
             for arm in arms {
-                self.emit_enum_arm(&ename, &tname, arm, in_main);
+                self.emit_enum_arm(&ename, &tname, arm, in_main, &mut first);
             }
-            self.out.push_str("    }\n");
+            if !first {
+                self.out.push('\n');
+            }
         } else if is_value {
             self.out.push_str(&format!("    int64_t {tname} = {scrut};\n"));
             self.emit_value_arms(&tname, arms, in_main);
@@ -597,7 +602,16 @@ impl Codegen<'_> {
         }
     }
 
-    fn emit_enum_arm(&mut self, ename: &str, tname: &str, arm: &MatchArm, in_main: bool) {
+    /// Emit one enum-match arm as a link in an if-chain. `first` tracks whether
+    /// this is the leading `if` (vs `else if` / `else`).
+    fn emit_enum_arm(
+        &mut self,
+        ename: &str,
+        tname: &str,
+        arm: &MatchArm,
+        in_main: bool,
+        first: &mut bool,
+    ) {
         let body = arm.body;
         match &self.ast.pat(arm.pat).kind {
             PatKind::Variant { path, fields } => {
@@ -605,7 +619,12 @@ impl Codegen<'_> {
                 let fields: Vec<(String, crate::ast::PatId)> =
                     fields.iter().map(|(n, p)| (n.clone(), *p)).collect();
                 let tag = self.enum_variant_tag(ename, &vname).unwrap_or(0);
-                self.out.push_str(&format!("        case {tag}: {{\n"));
+                if *first {
+                    self.out.push_str(&format!("    if ({tname}.tag == {tag}) {{\n"));
+                    *first = false;
+                } else {
+                    self.out.push_str(&format!(" else if ({tname}.tag == {tag}) {{\n"));
+                }
                 for (fname, fpat) in &fields {
                     match &self.ast.pat(*fpat).kind {
                         PatKind::Binding { name, .. } => {
@@ -614,7 +633,7 @@ impl Codegen<'_> {
                                 .enum_field_ctype(ename, &vname, fname)
                                 .unwrap_or_else(|| "int64_t".into());
                             self.out.push_str(&format!(
-                                "            {cty} {name} = {tname}.data.{vname}.{fname};\n"
+                                "        {cty} {name} = {tname}.data.{vname}.{fname};\n"
                             ));
                         }
                         PatKind::Wildcard => {}
@@ -624,19 +643,29 @@ impl Codegen<'_> {
                     }
                 }
                 self.emit_expr_stmt(body, in_main);
-                self.out.push_str("            break;\n        }\n");
+                self.out.push_str("    }");
             }
             PatKind::Wildcard => {
-                self.out.push_str("        default: {\n");
+                if *first {
+                    self.out.push_str("    {\n");
+                    *first = false;
+                } else {
+                    self.out.push_str(" else {\n");
+                }
                 self.emit_expr_stmt(body, in_main);
-                self.out.push_str("            break;\n        }\n");
+                self.out.push_str("    }");
             }
             PatKind::Binding { name, .. } => {
                 let name = name.clone();
-                self.out.push_str("        default: {\n");
-                self.out.push_str(&format!("            {ename} {name} = {tname};\n"));
+                if *first {
+                    self.out.push_str("    {\n");
+                    *first = false;
+                } else {
+                    self.out.push_str(" else {\n");
+                }
+                self.out.push_str(&format!("        {ename} {name} = {tname};\n"));
                 self.emit_expr_stmt(body, in_main);
-                self.out.push_str("            break;\n        }\n");
+                self.out.push_str("    }");
             }
             _ => self.errors.push("unsupported pattern in enum match (stage0)".into()),
         }

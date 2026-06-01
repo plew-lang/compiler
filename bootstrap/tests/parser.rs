@@ -304,3 +304,11 @@ fn array_literals() {
     // trailing comma + newlines inside brackets are allowed
     assert_eq!(sexpr("[\n  1,\n  2,\n]"), "(array 1 2)");
 }
+
+#[test]
+fn break_and_continue_statements() {
+    let src = "fn main() {\n    while x {\n        break\n        continue\n    }\n}";
+    let dump = prog(src);
+    assert!(dump.contains("(break)"), "dump: {dump}");
+    assert!(dump.contains("(continue)"), "dump: {dump}");
+}

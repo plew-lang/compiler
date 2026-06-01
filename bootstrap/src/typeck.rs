@@ -438,6 +438,8 @@ impl Checker<'_> {
                     self.error(span, format!("cannot assign `{vn}` to `{tn}`"));
                 }
             }
+            // stage0 does not yet verify these appear inside a loop.
+            StmtKind::Break | StmtKind::Continue => {}
             StmtKind::Expr(e) => {
                 let e = *e;
                 self.check_expr(e, None);

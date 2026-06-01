@@ -38,8 +38,10 @@ stage0 は **throwaway（1 回コンパイルして終了）**。よって Array
    - ✅ **Array（単相化・読み取り中心）**：`[..]` リテラル／`arr[i]`（範囲外 panic）／`arr.count`（U64）／`for val x in arr`。C 表現＝`PlewArray_<mangle>{T* data; len; cap}`＋per-type ランタイム（`_new`/`_get`）。要素型ごとに単相化（プリミティブ/struct/enum/ネスト配列可）。メモリはリーク（上記メモリモデル）。
    - ✅ **Array 変更操作**：`arr.append(x)`（伸長・cap<4→4→倍々で realloc・旧バッファはリーク）／`arr[i] = x`・`arr[i] OP= x`（IndexSet・範囲外 panic）。メソッド呼び出しの土台＝typeck `check_method`（レシーバ型でディスパッチ・現状 Array の `append` のみ＝`print` 同様の stage0 ビルトイン）／codegen `emit_array_method`・`emit_index_set`（receiver は addressable lvalue 前提・`_push`/`_set` ランタイム）。空 `[]` から成長可。**制約**：append/index-set は base が C lvalue のときのみ（Ident/field）。
    - ✅ **String バイトアクセス＋等価**：`s.bytes`（spec 通り `Array[U8]`・O(1)・バッファ共有＝stage0 の参照セマンティクス配列で表現）／`String` の `==`/`!=`（バイト等価＝`PlewString_eq`）。これで Plew 製レキサが「ソースを `source.bytes` で走査・キーワードを `==` 照合」できる土台ができた。**未**：substring（owned コピー）・連結・`Ord`・scalars/graphemes。
+   - ✅ **`break`/`continue`**（文）。**enum match を C switch→tag の if-chain に変換**＝match アーム内の `break`/`continue` が（switch でなく）ループを正しく対象にする。clang は `-w`（生成 C は警告クリーンを目指さない）。
+   - ✅ **複合機能スモークテスト通過**：enum トークン種＋struct トークン＋`Array[Tok]`＋enum 返す関数＋`while` で `src.bytes` 走査＋`append`＋`match`（block アーム）＝ミニレキサが compile&run。**match アームに文を置くには block `=> { … }` が必要**（spec 通り＝アームは式）。
    - ⏭ import 機構／値位置 `match`／codegen の整数幅反映／名前解決の本格化。
-   - ⏭ **stage1 レキサの素描を Plew で書いて、出てくるコンパイルエラーで不足機能を駆動**するのが次の効率的な一手（投機より具体ニーズで進める）。
+   - ⏭ **stage1 レキサの素描を Plew で書いて、出てくるコンパイルエラーで不足機能を駆動**するのが次の効率的な一手（投機より具体ニーズで進める）。判明済みの想定不足：substring（owned）・`Dictionary[String,V]`（シンボルテーブル）・連結（エラーメッセージ）。AST 再帰は arena+index（`ExprId`=U32 newtype）で回避予定。
 7. ⏭ → stage1（Plew でコンパイラ）に必要な分が揃い次第セルフホスト
 6. **stage1**：Plew サブセットでコンパイラを書く → stage0 で compile → 自己 compile＝**セルフホスト達成**
 7. 以降 LLVM/WASM・循環回収・所有権検査などを Plew 側で additive に

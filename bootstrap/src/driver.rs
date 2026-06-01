@@ -37,6 +37,9 @@ pub fn build_executable(src: &str, out: &Path) -> Result<(), String> {
 
     let status = Command::new("clang")
         .arg(&c_path)
+        // Generated C is intentionally not warning-clean (redundant parens,
+        // statement-expressions, etc.); silence diagnostics.
+        .arg("-w")
         .arg("-o")
         .arg(out)
         .status()

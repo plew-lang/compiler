@@ -160,6 +160,22 @@ fn array_index_out_of_range_panics() {
 }
 
 #[test]
+fn builds_and_runs_break_and_continue() {
+    // Sum 1..=10 but skip multiples handled via continue, stop early via break.
+    let src = "fn main() {\n    mut val i: I64 = 0\n    mut val sum: I64 = 0\n    while i < 100 {\n        i += 1\n        if i > 5 {\n            break\n        }\n        sum += i\n    }\n    print(sum)\n}\n";
+    assert_eq!(build_and_run(src, "brk"), "15\n");
+}
+
+#[test]
+fn break_inside_enum_match_targets_the_loop() {
+    // `break` in a match arm must exit the loop, not a C switch — the enum
+    // match lowers to an if-chain to guarantee this.
+    let src = "enum K {\n    Stop\n    Go\n}\nfn classify(n: I64) -> K {\n    if n == 3 {\n        return <K.Stop />\n    }\n    return <K.Go />\n}\nfn main() {\n    mut val sum: I64 = 0\n    mut val i: I64 = 0\n    while i < 10 {\n        i += 1\n        match classify(i) {\n            K.Stop => { break }\n            K.Go => { sum += i }\n        }\n    }\n    print(sum)\n}\n";
+    // i=1 Go(+1), i=2 Go(+2), i=3 Stop -> break. sum = 3.
+    assert_eq!(build_and_run(src, "brk_match"), "3\n");
+}
+
+#[test]
 fn reports_unsupported_construct() {
     // `??` has no stage0 C lowering yet → a codegen error, not a panic.
     let errs = compile_to_c("fn main() {\n    print(a ?? b)\n}\n").unwrap_err();

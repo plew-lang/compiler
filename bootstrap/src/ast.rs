@@ -231,6 +231,10 @@ pub enum StmtKind {
         op: Option<BinOp>,
         value: ExprId,
     },
+    /// `break` — exit the enclosing loop.
+    Break,
+    /// `continue` — skip to the next iteration of the enclosing loop.
+    Continue,
     /// An expression used as a statement.
     Expr(ExprId),
 }
@@ -652,6 +656,8 @@ impl Ast {
                 self.write_sexpr(*value, out);
                 out.push(')');
             }
+            StmtKind::Break => out.push_str("(break)"),
+            StmtKind::Continue => out.push_str("(continue)"),
             StmtKind::Expr(e) => self.write_sexpr(*e, out),
         }
     }

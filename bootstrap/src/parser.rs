@@ -611,6 +611,14 @@ impl Parser {
                     self.ast.alloc_stmt(Stmt { kind: StmtKind::Expr(value), span: start })
                 }
             }
+            TokenKind::Kw(Keyword::Break) => {
+                self.bump();
+                self.ast.alloc_stmt(Stmt { kind: StmtKind::Break, span: start })
+            }
+            TokenKind::Kw(Keyword::Continue) => {
+                self.bump();
+                self.ast.alloc_stmt(Stmt { kind: StmtKind::Continue, span: start })
+            }
             TokenKind::Kw(Keyword::Give) => {
                 self.bump(); // `give`
                 let value = self.expr_bp(0);
