@@ -54,6 +54,7 @@ pub enum TokenKind {
     DotDotEq,   // ..=
     Arrow,      // ->
     FatArrow,   // =>
+    SlashGt,    // />  (JSX self-close; only when `/` is immediately followed by `>`)
     At,         // @
     Hash,       // #
     HashBang,   // #!

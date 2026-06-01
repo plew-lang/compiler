@@ -363,7 +363,13 @@ impl<'a> Lexer<'a> {
                 if self.eat('=') { StarEq } else { Star }
             }
             '/' => {
-                if self.eat('=') { SlashEq } else { Slash }
+                if self.eat('=') {
+                    SlashEq
+                } else if self.eat('>') {
+                    SlashGt // `/>` (JSX self-close)
+                } else {
+                    Slash
+                }
             }
             '%' => {
                 if self.eat('=') { PercentEq } else { Percent }

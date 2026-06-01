@@ -22,7 +22,8 @@ stage0（Rust）：**walking skeleton 達成**（タグ `first-c-output`）＝`f
 5. 🔨 **型検査（最小）**＝双方向推論で数値リテラル型確定・Bool 条件・演算子型・呼び出し検査（`typeck.rs`）✅。残り＝struct/enum/String/Array へ拡張・codegen に型を通す
 6. 🔨 `struct`/`enum`＋`match`
    - ✅ `struct`/`enum` 宣言のパース（フィールド vis/mut・generics `[T]`・variant payload・`export` 受理・`where` は未対応で loud）。typeck/codegen は当面スキップ（codegen は loud エラー）
-   - ⏭ `match`＋パターンのパース → struct 縦串（JSX 構築・field access・C struct）→ enum＋match の codegen（タグ付き共用体）
+   - ✅ JSX 構築 `<Type field=expr />`（ドット path で enum variant も・`/>` は 1 トークン `SlashGt`）。typeck/codegen は当面スタブ
+   - ⏭ struct 縦串（typeck に Ty::Struct＋レジストリ・construction/field access の検査・C struct/compound literal/field codegen）→ `match`＋パターン → enum＋match codegen（タグ付き共用体）
    - ⏭ `String`/`Array`＋ARC ランタイム（C）／名前解決の本格化
 7. ⏭ → stage1（Plew でコンパイラ）に必要な分が揃い次第セルフホスト
 6. **stage1**：Plew サブセットでコンパイラを書く → stage0 で compile → 自己 compile＝**セルフホスト達成**

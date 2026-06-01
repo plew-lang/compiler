@@ -694,6 +694,39 @@ impl Parser {
         self.ast.alloc_expr(ExprKind::If { cond, then_branch, else_branch }, start.merge(end))
     }
 
+    /// JSX construction `<Type field=expr ... />` (or `<Type.Variant ... />`).
+    fn parse_jsx(&mut self) -> ExprId {
+        let start = self.peek_span();
+        self.bump(); // `<`
+        let mut path = vec![self.expect_ident("a type name in `<...>`")];
+        while matches!(self.peek(), TokenKind::Dot) {
+            self.bump();
+            path.push(self.expect_ident("a name after `.` in `<...>`"));
+        }
+        self.eat_newlines();
+        let mut fields = Vec::new();
+        loop {
+            match self.peek() {
+                TokenKind::SlashGt | TokenKind::Eof => break,
+                TokenKind::Ident(_) => {
+                    let name = self.expect_ident("an attribute name");
+                    self.expect(&TokenKind::Eq, "`=` after the attribute name");
+                    let value = self.expr_bp(0);
+                    fields.push((name, value));
+                    self.eat_newlines();
+                }
+                _ => {
+                    let s = self.peek_span();
+                    self.error(s, "expected an attribute or `/>`");
+                    break;
+                }
+            }
+        }
+        let end = self.peek_span();
+        self.expect(&TokenKind::SlashGt, "`/>` to close the construction");
+        self.ast.alloc_expr(ExprKind::New { path, fields }, start.merge(end))
+    }
+
     /// `while cond { .. }` as an expression (yields `()`).
     fn parse_while(&mut self) -> ExprId {
         let start = self.peek_span();
@@ -771,6 +804,7 @@ impl Parser {
             }
             TokenKind::Kw(Keyword::If) => self.parse_if(),
             TokenKind::Kw(Keyword::While) => self.parse_while(),
+            TokenKind::Lt => self.parse_jsx(),
             TokenKind::LBrace => {
                 let block = self.block();
                 let sp = block.span;

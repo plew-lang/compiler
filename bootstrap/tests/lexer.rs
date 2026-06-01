@@ -121,11 +121,13 @@ fn selectors_and_jsx_punct() {
     use TokenKind::*;
     // method-source selector `#`, view-strip `#!`, import root `@`.
     assert_eq!(kinds("a#P b#!Ext @Std"), vec![id("a"), Hash, id("P"), id("b"), HashBang, id("Ext"), At, id("Std")]);
-    // JSX `<S x=42 />` lexes to its component punctuation.
+    // JSX `<S x=42 />` lexes to its component punctuation; `/>` is one token.
     assert_eq!(
         kinds("<S x=42 />"),
-        vec![Lt, id("S"), id("x"), Eq, Int("42".into()), Slash, Gt]
+        vec![Lt, id("S"), id("x"), Eq, Int("42".into()), SlashGt]
     );
+    // plain division is unaffected (`/` not immediately followed by `>`)
+    assert_eq!(kinds("a / b"), vec![id("a"), Slash, id("b")]);
 }
 
 #[test]

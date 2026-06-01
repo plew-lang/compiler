@@ -209,6 +209,17 @@ fn compound_assignment() {
 }
 
 #[test]
+fn jsx_construction() {
+    assert_eq!(sexpr("<Point x=3 y=4 />"), "(new Point x=3 y=4)");
+    // value expressions in attributes; nested call
+    assert_eq!(sexpr("<Box value=f(1) />"), "(new Box value=(call f 1))");
+    // enum-variant path and empty attributes
+    assert_eq!(sexpr("<Color.Red />"), "(new Color.Red)");
+    // multi-line attributes (newlines elided inside the tag)
+    assert_eq!(sexpr("<Point\n  x=1\n  y=2\n/>"), "(new Point x=1 y=2)");
+}
+
+#[test]
 fn struct_declaration() {
     let src = "struct Point {\n    val x: I64\n    val y: I64\n}";
     assert_eq!(prog(src), "(struct Point (field x:I64) (field y:I64))");

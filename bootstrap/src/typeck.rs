@@ -356,6 +356,10 @@ impl Checker<'_> {
                 self.error(span, "field access / indexing is not supported by the stage0 type checker yet");
                 Ty::Error
             }
+            ExprKind::New { .. } => {
+                self.error(span, "construction `<...>` is not supported by the stage0 type checker yet");
+                Ty::Error
+            }
             ExprKind::Error => Ty::Error,
         }
     }

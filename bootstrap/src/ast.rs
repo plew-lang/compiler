@@ -102,6 +102,12 @@ pub enum ExprKind {
     },
     /// `while cond { .. }`. `body` is a `Block` expr. Yields `()`.
     While { cond: ExprId, body: ExprId },
+    /// JSX construction `<Type field=expr ... />`. `path` is the dotted type
+    /// path (`["Point"]`, or `["Color","Red"]` for an enum variant).
+    New {
+        path: Vec<String>,
+        fields: Vec<(String, ExprId)>,
+    },
     /// Placeholder inserted on a parse error so parsing can continue.
     Error,
 }
@@ -373,6 +379,17 @@ impl Ast {
                 self.write_sexpr(*cond, out);
                 out.push(' ');
                 self.write_sexpr(*body, out);
+                out.push(')');
+            }
+            ExprKind::New { path, fields } => {
+                out.push_str("(new ");
+                out.push_str(&path.join("."));
+                for (name, val) in fields {
+                    out.push(' ');
+                    out.push_str(name);
+                    out.push('=');
+                    self.write_sexpr(*val, out);
+                }
                 out.push(')');
             }
             ExprKind::Error => out.push_str("<error>"),
