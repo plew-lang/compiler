@@ -49,7 +49,7 @@
 | 単項 `!` と `~`（[12](../spec/03-expressions/12-operators.md)） | `!`＝Bool 専用 Not／`~`＝整数 BitNot（別演算子） | 仕様先行（`UNARY_PREFIX_OP` は `-`/`!` のみ・`~` なし） |
 | 複合代入演算子（[12](../spec/03-expressions/12-operators.md)） | `ASSIGN_OP` に `%=` ＋ビット系 `&= ^= \|= <<= >>=`（脱糖 `a OP= b`⟺`a = a OP b`・専用トレイトなし） | 仕様先行（現行 `ASSIGN_OP` は `= += -= *= /=` のみ・`%=`/ビット系を欠く） |
 | 場所（place）越しの変更（[03](../spec/01-basics/03-values.md)） | 代入左辺・`inout` レシーバ/引数は place（`mut val` 根＋フィールド/添字パス）。`arr[i].field=x`・`arr[i].inoutMethod()`・`a.b[i].c=x` | 意味論層（get-modify-set 脱糖・in-place 最適化・重なり inout 検査＝静的エラー/lint/限定ランタイム panic はすべて型検査・codegen 層） |
-| 条件チェーン（[11](../spec/03-expressions/11-control-flow.md)） | `if`/`elif`/`while`/`guard` 条件に `PAT = expr` の `&&` 連結 | 仕様先行（単一式想定・要拡張） |
+| 条件チェーン（[11](../spec/03-expressions/11-control-flow.md)） | `if`/`while`/`guard` 条件に `PAT = expr` の `&&` 連結（`else if` は `else`＋ネスト `if`・`elif` 廃止） | 仕様先行（単一式想定・要拡張） |
 | 浮動小数 NaN（[12](../spec/03-expressions/12-operators.md)） | （比較で panic・算術は IEEE） | 意味論層（実行時） |
 | 整数オーバーフロー/0 除算（[12](../spec/03-expressions/12-operators.md)） | （全ビルドで panic） | 意味論層（codegen） |
 | `panic` 文（[11](../spec/03-expressions/11-control-flow.md)） | `panic "msg"` キーワード（発散する文） | 仕様先行（トークン/規則なし） |
