@@ -120,3 +120,21 @@ fn unknown_array_method_is_reported() {
     let e = errs("fn main() {\n    mut val xs: Array[I64] = [1]\n    xs.frobnicate(2)\n}");
     assert!(e.iter().any(|m| m.contains("no method")), "errors: {e:?}");
 }
+
+#[test]
+fn string_bytes_is_a_u8_array() {
+    let src = "fn main() {\n    val s: String = \"x\"\n    val n: U64 = s.bytes.count\n    val b: U8 = s.bytes[0]\n}";
+    assert!(errs(src).is_empty(), "errors: {:?}", errs(src));
+}
+
+#[test]
+fn string_equality_is_bool() {
+    let src = "fn main() {\n    val s: String = \"x\"\n    val eq: Bool = s == \"y\"\n}";
+    assert!(errs(src).is_empty(), "errors: {:?}", errs(src));
+}
+
+#[test]
+fn unknown_string_member_is_reported() {
+    let e = errs("fn main() {\n    val s: String = \"x\"\n    val n: U64 = s.length\n}");
+    assert!(e.iter().any(|m| m.contains("no member")), "errors: {e:?}");
+}

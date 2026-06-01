@@ -24,7 +24,10 @@ pub fn emit_c(
         Codegen { ast, items, expr_ty, table, out: String::new(), errors: Vec::new(), tmp: 0 };
     cg.out.push_str("#include <stdio.h>\n#include <stdint.h>\n#include <stdlib.h>\n\n");
     // stage0 String: immutable view over a (literal) UTF-8 buffer.
-    cg.out.push_str("typedef struct { const char* data; int64_t len; } PlewString;\n\n");
+    cg.out.push_str("typedef struct { const char* data; int64_t len; } PlewString;\n");
+    cg.out.push_str(
+        "static int PlewString_eq(PlewString a, PlewString b) { if (a.len != b.len) return 0; for (int64_t i = 0; i < a.len; i++) if (a.data[i] != b.data[i]) return 0; return 1; }\n\n",
+    );
     // type definitions first (C needs types declared before use)
     for &id in items {
         match ast.item(id).kind {
@@ -729,9 +732,17 @@ impl Codegen<'_> {
                 format!("({sym}{inner})")
             }
             ExprKind::Binary { op, lhs, rhs } => {
-                let l = self.expr(*lhs);
-                let r = self.expr(*rhs);
-                match c_binop(*op) {
+                let (op, lhs, rhs) = (*op, *lhs, *rhs);
+                // String equality is by-bytes, not a C struct compare.
+                if matches!(op, BinOp::Eq | BinOp::Ne) && self.ty_of(lhs) == Ty::String {
+                    let l = self.expr(lhs);
+                    let r = self.expr(rhs);
+                    let eq = format!("PlewString_eq({l}, {r})");
+                    return if op == BinOp::Ne { format!("(!{eq})") } else { eq };
+                }
+                let l = self.expr(lhs);
+                let r = self.expr(rhs);
+                match c_binop(op) {
                     Some(sym) => format!("({l} {sym} {r})"),
                     None => {
                         self.errors.push(format!(
@@ -766,6 +777,15 @@ impl Codegen<'_> {
                 if name == "count" && matches!(self.ty_of(base), Ty::Array(_)) {
                     let b = self.expr(base);
                     return format!("({b}).len");
+                }
+                // `s.bytes` views the string's buffer as an `Array[U8]` (shared,
+                // O(1)) — fine under the stage0 reference-semantics array model.
+                if name == "bytes" && self.ty_of(base) == Ty::String {
+                    let at = self.ty_c_name(self.ty_of(id));
+                    let b = self.expr(base);
+                    return format!(
+                        "({{ PlewString __s = {b}; ({at}){{(uint8_t*)__s.data, __s.len, __s.len}}; }})"
+                    );
                 }
                 let b = self.expr(base);
                 format!("{b}.{name}")

@@ -602,6 +602,12 @@ impl Checker<'_> {
                             }
                         }
                     }
+                    // `s.bytes` is the UTF-8 byte view (spec: `Array[U8]`, O(1)).
+                    Ty::String if name == "bytes" => Ty::Array(self.table.intern_array(Ty::U8)),
+                    Ty::String => {
+                        self.error(span, format!("`String` has no member `{name}` (stage0 supports `bytes`)"));
+                        Ty::Error
+                    }
                     // `arr.count` is the element count (spec: `U64`).
                     Ty::Array(_) if name == "count" => Ty::U64,
                     Ty::Array(_) => {

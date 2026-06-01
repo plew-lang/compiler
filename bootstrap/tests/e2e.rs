@@ -73,6 +73,20 @@ fn builds_and_runs_string_print() {
 }
 
 #[test]
+fn builds_and_runs_string_bytes() {
+    // `s.bytes` is an `Array[U8]` view: count, indexing, and iteration.
+    let src = "fn main() {\n    val s: String = \"hi\"\n    print(s.bytes.count)\n    print(s.bytes[0])\n    mut val sum: I64 = 0\n    for val b in s.bytes {\n        sum += 1\n    }\n    print(sum)\n}\n";
+    // "hi" => count 2, byte[0] = 'h' = 104, loop counts 2
+    assert_eq!(build_and_run(src, "strbytes"), "2\n104\n2\n");
+}
+
+#[test]
+fn builds_and_runs_string_equality() {
+    let src = "fn main() {\n    val s: String = \"fn\"\n    if s == \"fn\" {\n        print(1)\n    } else {\n        print(0)\n    }\n    if s != \"fn\" {\n        print(1)\n    } else {\n        print(0)\n    }\n}\n";
+    assert_eq!(build_and_run(src, "streq"), "1\n0\n");
+}
+
+#[test]
 fn builds_and_runs_if_as_value() {
     let src = "fn main() {\n    val n: I64 = 7\n    val label: I64 = if n > 5 { give 1 } else { give 0 }\n    print(label)\n}\n";
     assert_eq!(build_and_run(src, "ifval"), "1\n");
