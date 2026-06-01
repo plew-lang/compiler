@@ -37,9 +37,22 @@ impl<'a> Lexer<'a> {
 
     fn run(&mut self) -> Vec<Token> {
         let mut toks = Vec::new();
+        // Automatic statement termination: emit a Newline token for a newline
+        // that follows a token which can end a statement. Two suppressions:
+        //  - a newline after an operator / `,` / open bracket continues the line
+        //    (handled by `can_end_statement` returning false for those tokens);
+        //  - newlines inside `(...)` / `[...]` are insignificant (implicit line
+        //    continuation, Swift-style). `{...}` does NOT suppress, since blocks
+        //    use newlines to separate statements.
+        let mut last_can_end = false;
+        let mut paren_depth: u32 = 0;
         loop {
-            self.skip_trivia();
+            let saw_newline = self.skip_trivia();
             let start = self.pos;
+            if saw_newline && last_can_end && paren_depth == 0 && self.peek().is_some() {
+                toks.push(Token::new(TokenKind::Newline, Span::point(start as u32)));
+                last_can_end = false;
+            }
             match self.peek() {
                 None => {
                     toks.push(Token::new(TokenKind::Eof, Span::point(self.pos as u32)));
@@ -49,6 +62,14 @@ impl<'a> Lexer<'a> {
                     let kind = self.lex_token(c);
                     let span = Span::new(start as u32, self.pos as u32);
                     if let Some(kind) = kind {
+                        match kind {
+                            TokenKind::LParen | TokenKind::LBracket => paren_depth += 1,
+                            TokenKind::RParen | TokenKind::RBracket => {
+                                paren_depth = paren_depth.saturating_sub(1)
+                            }
+                            _ => {}
+                        }
+                        last_can_end = can_end_statement(&kind);
                         toks.push(Token::new(kind, span));
                     }
                 }
@@ -94,14 +115,21 @@ impl<'a> Lexer<'a> {
 
     // --- trivia -----------------------------------------------------------
 
-    fn skip_trivia(&mut self) {
+    /// Skip whitespace and comments. Returns whether a newline was crossed
+    /// (used for Go-style statement termination).
+    fn skip_trivia(&mut self) -> bool {
+        let mut newline = false;
         loop {
             match self.peek() {
                 Some(c) if c.is_whitespace() => {
+                    if c == '\n' {
+                        newline = true;
+                    }
                     self.bump();
                 }
                 Some('/') if self.peek2() == Some('/') => {
-                    // line comment
+                    // line comment (the terminating newline is left for the
+                    // whitespace branch, so it still counts as a newline)
                     while let Some(c) = self.peek() {
                         if c == '\n' {
                             break;
@@ -121,6 +149,7 @@ impl<'a> Lexer<'a> {
                                 self.error(start, "unterminated block comment");
                                 break;
                             }
+                            Some('\n') => newline = true,
                             Some('/') if self.peek() == Some('*') => {
                                 self.bump();
                                 depth += 1;
@@ -136,6 +165,7 @@ impl<'a> Lexer<'a> {
                 _ => break,
             }
         }
+        newline
     }
 
     // --- token dispatch ---------------------------------------------------
@@ -358,6 +388,28 @@ impl<'a> Lexer<'a> {
         };
         Some(kind)
     }
+}
+
+/// Whether a token can be the last token of a statement, i.e. a newline after
+/// it should terminate the statement (Go's rule).
+fn can_end_statement(kind: &TokenKind) -> bool {
+    use Keyword::*;
+    use TokenKind::*;
+    matches!(
+        kind,
+        Ident(_)
+            | Int(_)
+            | Float(_)
+            | Str(_)
+            | RParen
+            | RBracket
+            | RBrace
+            | Kw(True)
+            | Kw(False)
+            | Kw(Return)
+            | Kw(Break)
+            | Kw(Continue)
+    )
 }
 
 fn is_ident_start(c: char) -> bool {

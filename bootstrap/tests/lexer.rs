@@ -130,10 +130,41 @@ fn selectors_and_jsx_punct() {
 
 #[test]
 fn comments_are_trivia() {
+    // newline after `a` becomes a statement terminator (Go-style)
     assert_eq!(
         kinds("a // line\nb /* block /* nested */ */ c"),
-        vec![id("a"), id("b"), id("c")]
+        vec![id("a"), TokenKind::Newline, id("b"), id("c")]
     );
+}
+
+#[test]
+fn newline_terminates_after_value_token() {
+    use TokenKind::*;
+    // newline after an identifier/literal/`)`/`}` terminates the statement
+    assert_eq!(kinds("a\nb"), vec![id("a"), Newline, id("b")]);
+    assert_eq!(kinds("1\n2"), vec![Int("1".into()), Newline, Int("2".into())]);
+    // consecutive blank lines collapse to a single terminator
+    assert_eq!(kinds("a\n\n\nb"), vec![id("a"), Newline, id("b")]);
+    // no terminator at start, or with only a trailing newline before EOF
+    assert_eq!(kinds("\n\na"), vec![id("a")]);
+    assert_eq!(kinds("a\n"), vec![id("a")]);
+}
+
+#[test]
+fn newline_elided_after_operators_and_open_brackets() {
+    use TokenKind::*;
+    // line ending in an operator continues onto the next line
+    assert_eq!(
+        kinds("1 +\n2"),
+        vec![Int("1".into()), Plus, Int("2".into())]
+    );
+    // open paren / comma elide the newline
+    assert_eq!(
+        kinds("f(\n  a,\n  b\n)"),
+        vec![id("f"), LParen, id("a"), Comma, id("b"), RParen]
+    );
+    // but a newline after `)` terminates
+    assert_eq!(kinds("f()\ng()"), vec![id("f"), LParen, RParen, Newline, id("g"), LParen, RParen]);
 }
 
 #[test]

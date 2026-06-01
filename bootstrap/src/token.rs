@@ -99,6 +99,11 @@ pub enum TokenKind {
     ShlEq,     // <<=
     ShrEq,     // >>=
 
+    /// Inferred statement terminator: emitted for a newline that follows a
+    /// token which can end a statement (Go-style automatic termination).
+    /// Newlines after operators / open brackets / commas are elided.
+    Newline,
+
     Eof,
 }
 
