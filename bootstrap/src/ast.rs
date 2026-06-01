@@ -57,8 +57,22 @@ pub enum ExprKind {
     Ident(String),
     Unary { op: UnOp, operand: ExprId },
     Binary { op: BinOp, lhs: ExprId, rhs: ExprId },
+    /// Field access `base.name` (named only; no positional tuple indexing).
+    Field { base: ExprId, name: String },
+    /// Index `base[index]`.
+    Index { base: ExprId, index: ExprId },
+    /// Call `callee(args)`. Method calls are `Call { callee: Field { .. } }`.
+    Call { callee: ExprId, args: Vec<Arg> },
     /// Placeholder inserted on a parse error so parsing can continue.
     Error,
+}
+
+/// A call argument. Plew requires labels except where suppressed with `~:`;
+/// that requirement is a later semantic check, so `label` is optional here.
+#[derive(Clone, Debug)]
+pub struct Arg {
+    pub label: Option<String>,
+    pub value: ExprId,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -164,6 +178,33 @@ impl Ast {
                 self.write_sexpr(*lhs, out);
                 out.push(' ');
                 self.write_sexpr(*rhs, out);
+                out.push(')');
+            }
+            ExprKind::Field { base, name } => {
+                out.push_str("(. ");
+                self.write_sexpr(*base, out);
+                out.push(' ');
+                out.push_str(name);
+                out.push(')');
+            }
+            ExprKind::Index { base, index } => {
+                out.push_str("([] ");
+                self.write_sexpr(*base, out);
+                out.push(' ');
+                self.write_sexpr(*index, out);
+                out.push(')');
+            }
+            ExprKind::Call { callee, args } => {
+                out.push_str("(call ");
+                self.write_sexpr(*callee, out);
+                for arg in args {
+                    out.push(' ');
+                    if let Some(label) = &arg.label {
+                        out.push_str(label);
+                        out.push(':');
+                    }
+                    self.write_sexpr(arg.value, out);
+                }
                 out.push(')');
             }
             ExprKind::Error => out.push_str("<error>"),

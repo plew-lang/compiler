@@ -90,6 +90,36 @@ fn comparison_is_nonassociative() {
 }
 
 #[test]
+fn postfix_field_index_call() {
+    assert_eq!(sexpr("a.b"), "(. a b)");
+    assert_eq!(sexpr("a.b.c"), "(. (. a b) c)");
+    assert_eq!(sexpr("xs[0]"), "([] xs 0)");
+    assert_eq!(sexpr("m[i][j]"), "([] ([] m i) j)");
+    assert_eq!(sexpr("f()"), "(call f)");
+    assert_eq!(sexpr("f(1, 2)"), "(call f 1 2)");
+    // method call = field then call; mixed chains
+    assert_eq!(sexpr("a.b(1).c"), "(. (call (. a b) 1) c)");
+    assert_eq!(sexpr("xs[0].len()"), "(call (. ([] xs 0) len))");
+}
+
+#[test]
+fn call_args_with_labels() {
+    assert_eq!(sexpr("print(text: x, terminator: y)"), "(call print text:x terminator:y)");
+    assert_eq!(sexpr("f(a, x: b)"), "(call f a x:b)");
+    assert_eq!(sexpr("g(1,)"), "(call g 1)"); // trailing comma
+}
+
+#[test]
+fn postfix_binds_tighter_than_prefix_and_operators() {
+    // postfix(14) > prefix(13): -a.b == -(a.b)
+    assert_eq!(sexpr("-a.b"), "(- (. a b))");
+    // postfix > `*`: a.b * c == (a.b) * c
+    assert_eq!(sexpr("a.b * c"), "(* (. a b) c)");
+    // call result indexed then added
+    assert_eq!(sexpr("f(x)[0] + 1"), "(+ ([] (call f x) 0) 1)");
+}
+
+#[test]
 fn errors_on_garbage() {
     assert!(errors("1 +").iter().any(|m| m.contains("expected an expression")));
     assert!(errors("1 2").iter().any(|m| m.contains("trailing")));

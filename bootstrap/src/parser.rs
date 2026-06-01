@@ -5,7 +5,7 @@
 //! binary/unary/grouping core exists so far; `as`, postfix (call/field/index),
 //! `try`/`await`, and statements/items follow.
 
-use crate::ast::{Ast, BinOp, ExprId, ExprKind, UnOp};
+use crate::ast::{Arg, Ast, BinOp, ExprId, ExprKind, UnOp};
 use crate::lexer::lex;
 use crate::span::Span;
 use crate::token::{Keyword, Token, TokenKind};
@@ -103,6 +103,12 @@ impl Parser {
         &self.tokens[self.pos].kind
     }
 
+    /// Look ahead `n` tokens (clamped to the trailing Eof).
+    fn peek_nth(&self, n: usize) -> &TokenKind {
+        let i = (self.pos + n).min(self.tokens.len() - 1);
+        &self.tokens[i].kind
+    }
+
     fn peek_span(&self) -> Span {
         self.tokens[self.pos].span
     }
@@ -190,7 +196,87 @@ impl Parser {
             // since postfix binds tighter than prefix `-`.
             return self.ast.alloc_expr(ExprKind::Unary { op, operand }, span);
         }
-        self.primary()
+        self.postfix()
+    }
+
+    /// Postfix chain (highest precedence): field access, indexing, calls.
+    /// `-a.b` is `-(a.b)` because this runs inside `unary`'s operand.
+    fn postfix(&mut self) -> ExprId {
+        let mut base = self.primary();
+        loop {
+            match self.peek() {
+                TokenKind::Dot => {
+                    self.bump();
+                    let name_span = self.peek_span();
+                    let name = match self.peek().clone() {
+                        TokenKind::Ident(s) => {
+                            self.bump();
+                            s
+                        }
+                        _ => {
+                            self.error(name_span, "expected a field name after `.`");
+                            String::new()
+                        }
+                    };
+                    let span = self.ast.expr(base).span.merge(name_span);
+                    base = self.ast.alloc_expr(ExprKind::Field { base, name }, span);
+                }
+                TokenKind::LBracket => {
+                    self.bump();
+                    let index = self.expr_bp(0);
+                    let end = self.peek_span();
+                    if matches!(self.peek(), TokenKind::RBracket) {
+                        self.bump();
+                    } else {
+                        self.error(end, "expected `]`");
+                    }
+                    let span = self.ast.expr(base).span.merge(end);
+                    base = self.ast.alloc_expr(ExprKind::Index { base, index }, span);
+                }
+                TokenKind::LParen => {
+                    self.bump();
+                    let args = self.call_args();
+                    let end = self.peek_span();
+                    if matches!(self.peek(), TokenKind::RParen) {
+                        self.bump();
+                    } else {
+                        self.error(end, "expected `)`");
+                    }
+                    let span = self.ast.expr(base).span.merge(end);
+                    base = self.ast.alloc_expr(ExprKind::Call { callee: base, args }, span);
+                }
+                _ => break,
+            }
+        }
+        base
+    }
+
+    /// Parse a comma-separated argument list up to (but not consuming) `)`.
+    /// Each arg is `label: expr` or a bare `expr`. A trailing comma is allowed.
+    fn call_args(&mut self) -> Vec<Arg> {
+        let mut args = Vec::new();
+        while !matches!(self.peek(), TokenKind::RParen | TokenKind::Eof) {
+            // `label: expr` — a leading `ident :` that is not `::`.
+            let label = if let TokenKind::Ident(name) = self.peek().clone() {
+                if matches!(self.peek_nth(1), TokenKind::Colon) {
+                    self.bump(); // ident
+                    self.bump(); // :
+                    Some(name)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            let value = self.expr_bp(0);
+            args.push(Arg { label, value });
+            if matches!(self.peek(), TokenKind::Comma) {
+                self.bump();
+            } else {
+                break;
+            }
+        }
+        args
     }
 
     fn primary(&mut self) -> ExprId {

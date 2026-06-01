@@ -12,7 +12,8 @@ stage0（Rust）：lexer（タグ `lexer-working`）＋**式パーサ完成**（
 2. ✅ **Lexer**（手書き・token 列・span・コメント・数値/文字列/演算子の maximal munch）＋テスト
 3. 🔨 **Parser**（再帰下降・AST を arena+index で）
    - ✅ 式：literal/ident/unary/binary（優先順位14段・非結合・グルーピング・エラー回復）
-   - ⏭ 式の続き：postfix（call/field/index）・`as`・`try`/`await`・JSX `<T .. />`・closure・match 式
+   - ✅ postfix：call（ラベル付き引数・末尾カンマ）/field `.`/index `[]`（postfix > prefix を担保）
+   - ⏭ 式の続き：`as`（要・型パーサ）・`try`/`await`・JSX `<T .. />`・closure・match 式・`??`の `?.`
    - ⏭ 文・宣言（`val`/`fn`/`struct`/`enum`/`impl`/`import` …）
 4. 名前解決・型解決・trait/オーバーロード解決（stage0 は最小）
 5. **C コード生成** ＋ ARC ランタイム（C）
