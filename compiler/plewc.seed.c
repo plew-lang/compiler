@@ -986,7 +986,7 @@ int main(int argc, char** argv) {
     PlewArray_U8_push(&(combined), 10);
     }
     appendBytes(&(combined), sb);
-    Lexer lxp = (Lexer){.bytes = sb, .pos = 0, .toks = PlewArray_Tok_new(), .depth = 0};
+    Lexer lxp = (Lexer){.bytes = PlewArray_U8_copy(sb), .pos = 0, .toks = PlewArray_Tok_new(), .depth = 0};
     lex(&(lxp));
     PlewArray_Bind incs = collectParts(sb, lxp.toks);
     uint64_t baseLen = dirPrefixLen(path);
@@ -1013,9 +1013,9 @@ int main(int argc, char** argv) {
     PlewString s = plew_read_stdin();
     appendBytes(&(combined), ({ PlewString __s = s; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len}; }));
     }
-    Lexer lx = (Lexer){.bytes = combined, .pos = 0, .toks = PlewArray_Tok_new(), .depth = 0};
+    Lexer lx = (Lexer){.bytes = PlewArray_U8_copy(combined), .pos = 0, .toks = PlewArray_Tok_new(), .depth = 0};
     lex(&(lx));
-    Comp c = (Comp){.bytes = combined, .toks = lx.toks, .pos = 0, .exprs = PlewArray_Expr_new(), .stmts = PlewArray_Stmt_new(), .blocks = PlewArray_Block_new(), .funcs = PlewArray_Func_new(), .structs = PlewArray_StructDef_new(), .enums = PlewArray_EnumDef_new(), .types = PlewArray_TypeRef_new(), .genInsts = PlewArray_U64_new(), .arrayElems = PlewArray_Bind_new(), .locals = PlewArray_Local_new(), .tmp = 0, .curIsMain = 0, .curRetVoid = 0, .curRetStart = 0, .curRetLen = 0, .curRetIsArray = 0, .curRetTy = 0, .curHasRecv = 0, .curRecvStart = 0, .curRecvLen = 0, .curSelfInout = 0, .curTypeParams = PlewArray_Bind_new(), .curTypeArgs = PlewArray_U64_new(), .curRecvInstRef = 0, .curGiveTmp = 0, .impPrint = 0, .impWrite = 0, .impWriteByte = 0, .impReadStdin = 0, .impReadFile = 0, .impArgCount = 0, .impArgAt = 0, .impEprint = 0, .impExit = 0, .impReadFileBytes = 0, .impFileExists = 0};
+    Comp c = (Comp){.bytes = PlewArray_U8_copy(combined), .toks = PlewArray_Tok_copy(lx.toks), .pos = 0, .exprs = PlewArray_Expr_new(), .stmts = PlewArray_Stmt_new(), .blocks = PlewArray_Block_new(), .funcs = PlewArray_Func_new(), .structs = PlewArray_StructDef_new(), .enums = PlewArray_EnumDef_new(), .types = PlewArray_TypeRef_new(), .genInsts = PlewArray_U64_new(), .arrayElems = PlewArray_Bind_new(), .locals = PlewArray_Local_new(), .tmp = 0, .curIsMain = 0, .curRetVoid = 0, .curRetStart = 0, .curRetLen = 0, .curRetIsArray = 0, .curRetTy = 0, .curHasRecv = 0, .curRecvStart = 0, .curRecvLen = 0, .curSelfInout = 0, .curTypeParams = PlewArray_Bind_new(), .curTypeArgs = PlewArray_U64_new(), .curRecvInstRef = 0, .curGiveTmp = 0, .impPrint = 0, .impWrite = 0, .impWriteByte = 0, .impReadStdin = 0, .impReadFile = 0, .impArgCount = 0, .impArgAt = 0, .impEprint = 0, .impExit = 0, .impReadFileBytes = 0, .impFileExists = 0};
     PlewArray_TypeRef_push(&(c.types), (TypeRef){.nameStart = 0, .nameLen = 0, .args = PlewArray_U64_new()});
     parseProgram(&(c));
     collectGenInsts(&(c));
@@ -1953,7 +1953,7 @@ uint64_t parseMake(Comp* c) {
     else {
     }
     }
-    tyRef = Comp_pushType(&((*c)), (TypeRef){.nameStart = typeTok.start, .nameLen = typeTok.len, .args = targs});
+    tyRef = Comp_pushType(&((*c)), (TypeRef){.nameStart = typeTok.start, .nameLen = typeTok.len, .args = PlewArray_U64_copy(targs)});
     }
     else {
     }
@@ -2204,7 +2204,7 @@ PType parseTypeTok(Comp* c) {
     else {
     }
     }
-    uint64_t ref = Comp_pushType(&((*c)), (TypeRef){.nameStart = head.start, .nameLen = head.len, .args = args});
+    uint64_t ref = Comp_pushType(&((*c)), (TypeRef){.nameStart = head.start, .nameLen = head.len, .args = PlewArray_U64_copy(args)});
     if (bracketed) {
     if (rangeEquals((*c).bytes, head.start, head.len, (PlewString){"Array", 5})) {
     return (PType){.start = elemStart, .len = elemLen, .isArray = 1, .ref = ref};
@@ -2363,7 +2363,7 @@ uint64_t parseIf(Comp* c) {
     PlewArray_U64 one = PlewArray_U64_new();
     PlewArray_U64_push(&(one), nested);
     uint64_t blkId = (long long)(((*c).blocks).len);
-    PlewArray_Block_push(&((*c).blocks), (Block){.stmts = one});
+    PlewArray_Block_push(&((*c).blocks), (Block){.stmts = PlewArray_U64_copy(one)});
     return Comp_pushStmt(&((*c)), (Stmt){.tag = 5, .data.If = {.cond = cond, .thenBlk = thenBlk, .elseBlk = blkId, .hasElse = 1}});
     }
     else {
@@ -2397,7 +2397,7 @@ uint64_t parseIfExpr(Comp* c) {
     PlewArray_U64 one = PlewArray_U64_new();
     PlewArray_U64_push(&(one), Comp_pushStmt(&((*c)), (Stmt){.tag = 10, .data.Give = {.value = nested}}));
     uint64_t blkId = (long long)(((*c).blocks).len);
-    PlewArray_Block_push(&((*c).blocks), (Block){.stmts = one});
+    PlewArray_Block_push(&((*c).blocks), (Block){.stmts = PlewArray_U64_copy(one)});
     return Comp_pushExpr(&((*c)), (Expr){.tag = 13, .data.IfExpr = {.cond = cond, .thenBlk = thenBlk, .elseBlk = blkId}});
     }
     else {
@@ -2571,7 +2571,7 @@ PatInfo parsePattern(Comp* c) {
     }
     }
     }
-    return (PatInfo){.isWildcard = isWildcard, .enumStart = enumStart, .enumLen = enumLen, .variantStart = variantStart, .variantLen = variantLen, .binds = binds};
+    return (PatInfo){.isWildcard = isWildcard, .enumStart = enumStart, .enumLen = enumLen, .variantStart = variantStart, .variantLen = variantLen, .binds = PlewArray_Bind_copy(binds)};
 }
 long long bindNamesMatch(Comp* c, PlewArray_Bind a, PlewArray_Bind b) {
     if ((long long)((a).len) != (long long)((b).len)) {
@@ -2669,7 +2669,7 @@ uint64_t parseMatch(Comp* c) {
     PlewArray_PatInfo __fa62 = pats;
     for (long long __fi62 = 0; __fi62 < __fa62.len; __fi62++) {
         PatInfo pi = PlewArray_PatInfo_get(__fa62, __fi62);
-    PlewArray_MatchArm_push(&(arms), (MatchArm){.isWildcard = pi.isWildcard, .enumStart = pi.enumStart, .enumLen = pi.enumLen, .variantStart = pi.variantStart, .variantLen = pi.variantLen, .binds = pi.binds, .body = body});
+    PlewArray_MatchArm_push(&(arms), (MatchArm){.isWildcard = pi.isWildcard, .enumStart = pi.enumStart, .enumLen = pi.enumLen, .variantStart = pi.variantStart, .variantLen = pi.variantLen, .binds = PlewArray_Bind_copy(pi.binds), .body = body});
     }
     }
     }
@@ -2709,7 +2709,7 @@ uint64_t parseMatchExpr(Comp* c) {
     PlewArray_PatInfo __fa65 = pats;
     for (long long __fi65 = 0; __fi65 < __fa65.len; __fi65++) {
         PatInfo pi = PlewArray_PatInfo_get(__fa65, __fi65);
-    PlewArray_MatchArm_push(&(arms), (MatchArm){.isWildcard = pi.isWildcard, .enumStart = pi.enumStart, .enumLen = pi.enumLen, .variantStart = pi.variantStart, .variantLen = pi.variantLen, .binds = pi.binds, .body = body});
+    PlewArray_MatchArm_push(&(arms), (MatchArm){.isWildcard = pi.isWildcard, .enumStart = pi.enumStart, .enumLen = pi.enumLen, .variantStart = pi.variantStart, .variantLen = pi.variantLen, .binds = PlewArray_Bind_copy(pi.binds), .body = body});
     }
     }
     {
@@ -2813,7 +2813,7 @@ uint64_t parseBlock(Comp* c) {
     }
     }
     uint64_t id = (long long)(((*c).blocks).len);
-    PlewArray_Block_push(&((*c).blocks), (Block){.stmts = stmts});
+    PlewArray_Block_push(&((*c).blocks), (Block){.stmts = PlewArray_U64_copy(stmts)});
     return id;
 }
 void parseFuncCommon(Comp* c, long long hasRecv, uint64_t recvStart, uint64_t recvLen, long long selfInout, PlewArray_Bind implParams) {
@@ -2917,7 +2917,7 @@ void parseFuncCommon(Comp* c, long long hasRecv, uint64_t recvStart, uint64_t re
     }
     Comp_skipNewlines(&((*c)));
     uint64_t body = parseBlock(&((*c)));
-    PlewArray_Func_push(&((*c).funcs), (Func){.nameStart = nameTok.start, .nameLen = nameTok.len, .typeParams = typeParams, .params = params, .hasRet = hasRet, .retStart = retStart, .retLen = retLen, .retIsArray = retIsArray, .retTy = retRef, .body = body, .hasRecv = hasRecv, .recvStart = recvStart, .recvLen = recvLen, .selfInout = selfInout});
+    PlewArray_Func_push(&((*c).funcs), (Func){.nameStart = nameTok.start, .nameLen = nameTok.len, .typeParams = PlewArray_Bind_copy(typeParams), .params = PlewArray_Param_copy(params), .hasRet = hasRet, .retStart = retStart, .retLen = retLen, .retIsArray = retIsArray, .retTy = retRef, .body = body, .hasRecv = hasRecv, .recvStart = recvStart, .recvLen = recvLen, .selfInout = selfInout});
 }
 void parseFunc(Comp* c) {
     Comp_advance(&((*c)));
@@ -3041,7 +3041,7 @@ void parseStruct(Comp* c) {
     }
     }
     }
-    PlewArray_StructDef_push(&((*c).structs), (StructDef){.nameStart = nameTok.start, .nameLen = nameTok.len, .typeParams = typeParams, .fields = fields});
+    PlewArray_StructDef_push(&((*c).structs), (StructDef){.nameStart = nameTok.start, .nameLen = nameTok.len, .typeParams = PlewArray_Bind_copy(typeParams), .fields = PlewArray_FieldDef_copy(fields)});
 }
 void parseEnum(Comp* c) {
     Comp_advance(&((*c)));
@@ -3128,14 +3128,14 @@ void parseEnum(Comp* c) {
     else {
     }
     }
-    PlewArray_Variant_push(&(variants), (Variant){.nameStart = vTok.start, .nameLen = vTok.len, .fields = fields});
+    PlewArray_Variant_push(&(variants), (Variant){.nameStart = vTok.start, .nameLen = vTok.len, .fields = PlewArray_FieldDef_copy(fields)});
     }
     else {
     Comp_advance(&((*c)));
     }
     }
     }
-    PlewArray_EnumDef_push(&((*c).enums), (EnumDef){.nameStart = nameTok.start, .nameLen = nameTok.len, .typeParams = typeParams, .variants = variants});
+    PlewArray_EnumDef_push(&((*c).enums), (EnumDef){.nameStart = nameTok.start, .nameLen = nameTok.len, .typeParams = PlewArray_Bind_copy(typeParams), .variants = PlewArray_Variant_copy(variants)});
 }
 void markImport(Comp* c, uint64_t segStart, uint64_t segLen, uint64_t nameStart, uint64_t nameLen) {
     if (rangeEquals((*c).bytes, segStart, segLen, (PlewString){"Io", 2})) {
@@ -5677,7 +5677,7 @@ void genExpr(Comp* c, uint64_t id) {
     ft = fieldType(&((*c)), typeStart, typeLen, mf.nameStart, mf.nameLen);
     }
     if (ft.kind == 3) {
-    genArrayLiteral(&((*c)), mf.value, ft.nameStart, ft.nameLen);
+    genArrayValue(&((*c)), mf.value, ft.nameStart, ft.nameLen);
     }
     else {
     genExpr(&((*c)), mf.value);
@@ -6308,7 +6308,7 @@ void genStmt(Comp* c, uint64_t id) {
     else {
     plew_write(assignOpStr(op));
     if (tt.kind == 3) {
-    genArrayLiteral(&((*c)), value, tt.nameStart, tt.nameLen);
+    genArrayValue(&((*c)), value, tt.nameStart, tt.nameLen);
     }
     else {
     genExpr(&((*c)), value);
@@ -7308,8 +7308,8 @@ void emitMonoMethod(Comp* c, uint64_t fi, uint64_t instRef, long long proto) {
     Func f = PlewArray_Func_get((*c).funcs, (long long)(fi));
     TypeRef inst = PlewArray_TypeRef_get((*c).types, (long long)(instRef));
     (*c).curRecvInstRef = instRef;
-    (*c).curTypeParams = f.typeParams;
-    (*c).curTypeArgs = inst.args;
+    (*c).curTypeParams = PlewArray_Bind_copy(f.typeParams);
+    (*c).curTypeArgs = PlewArray_U64_copy(inst.args);
     if (proto) {
     genSignature(&((*c)), f);
     plew_write((PlewString){";\n", 2});
@@ -7320,8 +7320,8 @@ void emitMonoMethod(Comp* c, uint64_t fi, uint64_t instRef, long long proto) {
     PlewArray_Bind noParams = PlewArray_Bind_new();
     PlewArray_U64 noArgs = PlewArray_U64_new();
     (*c).curRecvInstRef = 0;
-    (*c).curTypeParams = noParams;
-    (*c).curTypeArgs = noArgs;
+    (*c).curTypeParams = PlewArray_Bind_copy(noParams);
+    (*c).curTypeArgs = PlewArray_U64_copy(noArgs);
 }
 void emitMonoMethods(Comp* c, long long proto) {
     uint64_t gi = 0;

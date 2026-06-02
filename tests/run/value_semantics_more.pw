@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+struct Holder { val items: Array[I32] }
+fn main() {
+    mut val a: Array[I32] = [10, 20]
+    mut val b: Array[I32] = [0]
+    b = a
+    b[0] = 77
+    print(a[0])
+    print(b[0])
+    val h: Holder = <Holder items=a />
+    a[1] = 88
+    print(h.items[1])
+    print(a[1])
+}

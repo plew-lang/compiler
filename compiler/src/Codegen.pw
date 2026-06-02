@@ -1959,7 +1959,7 @@ fn genExpr(c: inout Comp, id: U64) {
                         ft = fieldType(c: inout c, structStart: typeStart, structLen: typeLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
                     }
                     if ft.kind == 3 {
-                        genArrayLiteral(c: inout c, exprId: mf.value, elemStart: ft.nameStart, elemLen: ft.nameLen)
+                        genArrayValue(c: inout c, exprId: mf.value, elemStart: ft.nameStart, elemLen: ft.nameLen)
                     } else {
                         genExpr(c: inout c, id: mf.value)
                     }
@@ -2531,7 +2531,7 @@ fn genStmt(c: inout Comp, id: U64) {
                         } else {
                             write(s: assignOpStr(op: op))
                             if tt.kind == 3 {
-                                genArrayLiteral(c: inout c, exprId: value, elemStart: tt.nameStart, elemLen: tt.nameLen)
+                                genArrayValue(c: inout c, exprId: value, elemStart: tt.nameStart, elemLen: tt.nameLen)
                             } else {
                                 genExpr(c: inout c, id: value)
                             }
