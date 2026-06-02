@@ -13,10 +13,11 @@
 主な受理健全性チェック（import-gating・ラベル検査・match 網羅・無損失 `as`・struct/array `==` 拒否・`val` 代入の可変性検査）は**実装済**。各々の残ギャップは下の該当テーマ節に記載。**唯一の未完チェック＝下記 S2**。
 
 - ⏳ **S2 @Std I/O の実シグネチャ**：`print`/`write`/`writeByte`/`readStdin`/`readFile`/`argCount`/`argAt` は現状ハードコードの placeholder。完全コンパイラは実 `@Std` で解決する必要。`readFile`→`Result` 可謬化の前提（`Optional`/`Result`/`try`）は実装済なので技術的には可能で、残るは std モジュールが intrinsic を呼ぶ際の **import ゲート整合**（std 内部の intrinsic 使用許可）と **`print(整数)` の真シグネチャ決定**（std 領域・spec 表面ゆえ要相談）。
+- ⚠️ **C 予約語と衝突する識別子**（`default`/`double` 等を変数/関数/フィールド名に使う）→ 名前マングリング未実装ゆえ生成 C が壊れる＝**受理健全性の既知の穴**（spec-valid を accept して壊れた C を吐く・hidden meaning）。コンパイラ自身は回避済・ユーザーコードで顕在化。直し：codegen で識別子を安全な C 名へマングル。
 
 ## メモリ・所有権（最大の剥離）
 
-- **値意味論＋CoW** → **観測的には eager copy で達成**（配列/struct/generic コンテナを let/代入/JSX/return でコピー・タグ `value-semantics-complete`）。残（hidden cost）：**遅延コピー＋解放（leak 解消）＝refcount 版 ARC とセット**。`Array[T]` は `{T* data; len; cap}` でヒープ確保し **free しない**（append 旧バッファもリーク）。String は不変ゆえ共有で観測的に正しい。spec/03。
+- **値意味論＋CoW** → **観測的には eager copy で達成**（配列/struct/generic コンテナを let/代入/JSX/return でコピー・タグ `value-semantics-complete`）。残（hidden cost）：**遅延コピー＋解放（leak 解消）＝refcount 版 ARC とセット**。`Array[T]` は `{T* data; len; cap}` でヒープ確保し **free しない**（append 旧バッファもリーク）。String は不変ゆえ共有で観測的に正しい。**by-value 引数はコピーしない＝穴ではない**：spec で関数引数はイミュータブル（変更は `inout`）ゆえ共有とコピーは観測同一・`inout` はポインタ（意図的共有）。これで eager copy を hot path に入れず済み自己ホスト性能を保つ（全引数 deep copy なら O(n)/call で壊滅）。spec/03。
 - **ARC / `WeakRef` / 循環回収** → 無し（リークで代用）。
 - **`unique`/`local`/`borrow`/`move`/`deinit`** → 無し。すべてコピー可能・by-value。そもそも unique 型が無い。
 - **`inout`** → 実装済（C ポインタ）。**単純変数・合成可変性（`base.field`・`a[i]`・`.append`/`inout fn` 受信側）の代入可変性検査あり**。残：**重なり inout 検査なし**（spec は同一場所への複数 inout を禁止・lint＋限定 panic）。spec/03。
@@ -72,7 +73,8 @@
 - **対応**：`+ - * / %`・比較 `== != < <= > >=`・論理 `&& ||`（C 短絡）・**ビット/シフト `& | ^ << >> ~`**・単項 `! - ~`・代入 `=`・複合 `+= -= *= /= %=`＋**ビット系 `&= |= ^= <<= >>=`**（純粋脱糖）・**`??`（Coalesce・Optional）**。
 - **未対応**：`pow`/`**`・`Neg`/`Not`/各種演算子トレイト・`as` 以外の数値変換。
 - **優先順位**：`??` を含め 10 段（低→高：`|| < && < 比較 < ?? < | < ^ < & < シフト < +- < */%`・`??` 右結合）。spec の 14 段とビット/算術/論理/比較/`??` の相対順序は一致。未対応段（`as` の位置・レンジ）と比較/レンジの非結合は未強制。spec/12。
-- **`as`**：**数値↔数値の C キャストのみ**（無損失検査済＝source 幅を `TypeInfo` で復元し narrowing は reject・式幅も伝播）。残：`From`/`TryFrom`（`as` の全域変換脱糖・`try` の From 変換）・`?.`（オプショナルチェーン）は未実装。spec/12,13。
+- **`as`**：**数値↔数値の C キャストのみ**（無損失検査済＝source 幅を `TypeInfo` で復元し narrowing は reject・式幅も伝播）。残：`From`/`TryFrom`（`as` の全域変換脱糖・`try` の From 変換＝現状 `try` はソース/関数戻りの **エラー型一致 `E==E'` を要求**・違うと C 型不一致）・`?.`（オプショナルチェーン）は未実装。spec/12,13。
+- **`??`/`try` は `@Std/Core` の Optional/Result の tag/field レイアウトをハードコード前提**（Some=tag0/`v`・Ok=tag0/`value`・Err=tag1/`error`）。lang-item ゆえ妥当だが、ユーザーが別形の Optional/Result を定義しても `??`/`try` はこの形を仮定。見直し：lang-item を spec で固定 or コンパイラが Core のシンボルを参照（ambient 化〔上記 import 節〕とセットで整理）。
 
 ## 可視性・モジュール・import
 

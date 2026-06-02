@@ -1,6 +1,6 @@
 # 作業ログ
 
-> 現在地・次の一歩・運用メモだけを置く。完了した「やった」は git 履歴へ（タグで辿れる）。「なぜ」は [design-decisions.md](design-decisions.md)、「パイプライン設計」は [architecture.md](architecture.md)、「spec からの意図的剥離」は [provisional.md](provisional.md)、自走中の仮決めは [autonomous-decisions.md](autonomous-decisions.md)。
+> 現在地・次の一歩・運用メモだけを置く。完了した「やった」は git 履歴へ（タグで辿れる）。「なぜ」は [design-decisions.md](design-decisions.md)、「パイプライン設計」は [architecture.md](architecture.md)、「spec からの意図的剥離・暫定の仮決め」は [provisional.md](provisional.md)。
 
 ## 現在地
 
@@ -42,7 +42,7 @@
 
 ## メモリモデル（hidden cost の暫定）
 
-Array/`Ref` は **ヒープ確保＋リーク（free しない）**で実装（spec の遅延 CoW・ARC 解放/`deinit` は未）。値意味論は eager copy で**観測的には正しい**（[autonomous-decisions.md](autonomous-decisions.md)）。正しい解放/遅延は後段 ARC（hidden cost＝受理の健全性の対象外）。詳細は [provisional.md](provisional.md)。
+Array/`Ref` は **ヒープ確保＋リーク（free しない）**で実装（spec の遅延 CoW・ARC 解放/`deinit` は未）。値意味論は eager copy で**観測的には正しい**。正しい解放/遅延は後段 ARC（hidden cost＝受理の健全性の対象外）。詳細は [provisional.md](provisional.md)。
 
 ## 運用メモ
 
