@@ -1,0 +1,9 @@
+// Compound assignment overflows too: `x += v` desugars to `x = checked(x + v)`,
+// so pushing a U8 past 255 via += panics rather than wrapping.
+import @Std/Io with { print }
+
+fn main() {
+    mut val x: U8 = 250
+    x += 10
+    print(x as U64)
+}

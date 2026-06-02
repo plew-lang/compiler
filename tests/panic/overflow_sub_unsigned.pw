@@ -1,0 +1,9 @@
+// Unsigned subtraction that would go negative is overflow (the true result is
+// unrepresentable), so it panics rather than wrapping to a huge value.
+import @Std/Io with { print }
+
+fn main() {
+    val a: U8 = 3
+    val b: U8 = 5
+    print((a - b) as U64)
+}

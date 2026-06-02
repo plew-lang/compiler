@@ -841,6 +841,68 @@ fn strDecodedLen(c: inout Comp, start: U64, len: U64) -> I64 {
     return n
 }
 
+// Whether a binary op is checked arithmetic (+ - *) whose result may overflow
+// the operand type (spec: integer overflow always panics). `/` panics only on a
+// zero divisor (handled by plew_div); shifts/bitwise never overflow.
+fn isCheckedArith(op: I64) -> Bool {
+    if op == 56 { return true }
+    if op == 57 { return true }
+    if op == 58 { return true }
+    return false
+}
+
+// Map a compound-assign op (+= -= *=) to its binary op (+ - *) for the
+// overflow check; 0 for ops whose compound form can't overflow (bitwise/shift)
+// or isn't arithmetic. (/= and %= go through the checked plew_div/plew_mod.)
+fn compoundCheckedBin(op: I64) -> I64 {
+    if op == 67 { return 56 }
+    if op == 68 { return 57 }
+    if op == 69 { return 58 }
+    return 0
+}
+
+// The clang overflow-detecting builtin for a checked-arith op.
+fn overflowBuiltin(op: I64) -> String {
+    if op == 56 { return "__builtin_add_overflow" }
+    if op == 57 { return "__builtin_sub_overflow" }
+    return "__builtin_mul_overflow"
+}
+
+// The integer result type of an arithmetic binary (operands share a type, so
+// either operand's recovered int type works). Width-less scalar if neither is a
+// recoverable integer type — then the overflow check is skipped (documented gap).
+fn arithIntType(c: inout Comp, lhs: U64, rhs: U64) -> TypeInfo {
+    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    if lt.kind == 0 {
+        if isIntType(c: inout c, start: lt.nameStart, len: lt.nameLen) {
+            return lt
+        }
+    }
+    val rt: TypeInfo = exprType(c: inout c, id: rhs)
+    if rt.kind == 0 {
+        if isIntType(c: inout c, start: rt.nameStart, len: rt.nameLen) {
+            return rt
+        }
+    }
+    return scalarInfo()
+}
+
+// Emit `a OP b` as an overflow-checked statement-expression: compute into a
+// temp of the result type via the clang builtin, panic if it overflowed, else
+// yield the temp. The builtin detects overflow against the temp's exact width,
+// so storage being the declared width (Phase C) makes this precise.
+fn genCheckedArith(c: inout Comp, op: I64, lhs: U64, rhs: U64, tyStart: U64, tyLen: U64) {
+    write(s: "({ ")
+    genCElem(c: inout c, start: tyStart, len: tyLen)
+    write(s: " __ov; if (")
+    write(s: overflowBuiltin(op: op))
+    write(s: "((")
+    genExpr(c: inout c, id: lhs)
+    write(s: "), (")
+    genExpr(c: inout c, id: rhs)
+    write(s: "), &__ov)) plew_panic((PlewString){\"integer overflow\", 16}); __ov; })")
+}
+
 fn assignOpStr(op: I64) -> String {
     if op == 49 { return " = " }
     if op == 67 { return " += " }
@@ -943,11 +1005,24 @@ fn genExpr(c: inout Comp, id: U64) {
                                 genExpr(c: inout c, id: rhs)
                                 write(s: ")")
                             } else {
-                                write(s: "(")
-                                genExpr(c: inout c, id: lhs)
-                                write(s: binOpStr(op: op))
-                                genExpr(c: inout c, id: rhs)
-                                write(s: ")")
+                                val at: TypeInfo = arithIntType(c: inout c, lhs: lhs, rhs: rhs)
+                                if isCheckedArith(op: op) {
+                                    if at.nameLen > 0 {
+                                        genCheckedArith(c: inout c, op: op, lhs: lhs, rhs: rhs, tyStart: at.nameStart, tyLen: at.nameLen)
+                                    } else {
+                                        write(s: "(")
+                                        genExpr(c: inout c, id: lhs)
+                                        write(s: binOpStr(op: op))
+                                        genExpr(c: inout c, id: rhs)
+                                        write(s: ")")
+                                    }
+                                } else {
+                                    write(s: "(")
+                                    genExpr(c: inout c, id: lhs)
+                                    write(s: binOpStr(op: op))
+                                    genExpr(c: inout c, id: rhs)
+                                    write(s: ")")
+                                }
                             }
                         }
                     }
@@ -1679,12 +1754,29 @@ fn genStmt(c: inout Comp, id: U64) {
                         genExpr(c: inout c, id: value)
                         write(s: ")")
                     } else {
-                        write(s: assignOpStr(op: op))
                         val tt: TypeInfo = exprType(c: inout c, id: target)
-                        if tt.kind == 3 {
-                            genArrayLiteral(c: inout c, exprId: value, elemStart: tt.nameStart, elemLen: tt.nameLen)
+                        val cbin: I64 = compoundCheckedBin(op: op)
+                        mut val checked: Bool = false
+                        if cbin != 0 {
+                            if tt.kind == 0 {
+                                if isIntType(c: inout c, start: tt.nameStart, len: tt.nameLen) {
+                                    checked = true
+                                }
+                            }
+                        }
+                        if checked {
+                            // `x OP= v` -> `x = checked(x OP v)`. The place has no
+                            // side effects in this subset, so the re-evaluation is
+                            // observationally identical (hidden cost only).
+                            write(s: " = ")
+                            genCheckedArith(c: inout c, op: cbin, lhs: target, rhs: value, tyStart: tt.nameStart, tyLen: tt.nameLen)
                         } else {
-                            genExpr(c: inout c, id: value)
+                            write(s: assignOpStr(op: op))
+                            if tt.kind == 3 {
+                                genArrayLiteral(c: inout c, exprId: value, elemStart: tt.nameStart, elemLen: tt.nameLen)
+                            } else {
+                                genExpr(c: inout c, id: value)
+                            }
                         }
                     }
                     write(s: ";\n")

@@ -1,0 +1,10 @@
+// Integer overflow always panics (spec: no wraparound; wrapping is opt-in via
+// wrapping* methods). U8 max is 255, so 200 + 100 overflows the result type and
+// the overflow-checked arithmetic aborts at runtime.
+import @Std/Io with { print }
+
+fn main() {
+    val a: U8 = 200
+    val b: U8 = 100
+    print((a + b) as U64)
+}

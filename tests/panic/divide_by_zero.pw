@@ -1,0 +1,8 @@
+// Division by zero always panics (spec). Routed through plew_div.
+import @Std/Io with { print }
+
+fn main() {
+    val a: I64 = 10
+    val b: I64 = 0
+    print(a / b)
+}

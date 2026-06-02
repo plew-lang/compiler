@@ -72,6 +72,30 @@ for main in tests/part/*/Main.pw tests/part/Main.pw; do
     fi
 done
 
+# --- panic/ : valid code that must compile and link, but abort at *runtime*
+#     with a panic. The program must exit non-zero and its stderr must contain
+#     the text in tests/panic/<name>.panic (overflow, div-by-zero, OOB, ...). ---
+for pw in tests/panic/*.pw; do
+    [ -f "$pw" ] || continue
+    name=$(basename "$pw" .pw)
+    c="$TMP/panic-$name.c"
+    bin="$TMP/panic-$name"
+    if ! "$PLEWC" "$pw" > "$c" 2>"$TMP/err"; then
+        echo "FAIL  panic/$name  (plewc errored — should compile)"; fail=$((fail + 1)); continue
+    fi
+    if ! clang -w "$c" -o "$bin" 2>"$TMP/err"; then
+        echo "FAIL  panic/$name  (clang rejected generated C)"; fail=$((fail + 1)); continue
+    fi
+    "$bin" >/dev/null 2>"$TMP/perr"
+    code=$?
+    want=$(cat "tests/panic/$name.panic")
+    if [ "$code" -ne 0 ] && grep -qF "$want" "$TMP/perr"; then
+        pass=$((pass + 1))
+    else
+        echo "FAIL  panic/$name  (exit=$code stderr=[$(cat "$TMP/perr")] want substring [$want])"; fail=$((fail + 1))
+    fi
+done
+
 # --- reject/ : spec-invalid code must be rejected by plewc itself (it prints
 #     a `plewc: error:` diagnostic and exits non-zero). ---
 for pw in tests/reject/*.pw; do

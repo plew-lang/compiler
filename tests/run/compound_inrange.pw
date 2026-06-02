@@ -1,0 +1,14 @@
+// Overflow-checked compound assignment must leave in-range arithmetic untouched.
+import @Std/Io with { print }
+
+fn main() {
+    mut val a: U8 = 250
+    a += 5
+    print(a as U64)        // 255 (exactly fits)
+    mut val b: I32 = 1000
+    b -= 2000
+    print(b as I64)        // -1000
+    mut val c: U16 = 300
+    c *= 200
+    print(c as U64)        // 60000
+}
