@@ -1,0 +1,1114 @@
+// stage1 parser sketch #2: a parser that consumes the LEXER'S TOKEN STREAM
+// (not raw bytes), written in Plew and compiled by stage0.
+//
+// calc.pw validated the parser phase over raw bytes. The new thing here is
+// consuming an `Array[Tok]` produced by the lexer: the parser advances a token
+// cursor, dispatches on `Tok.kind`, and reads an integer literal's value back
+// out of the source bytes via the token's (start, len) span. This is exactly
+// the shape the self-hosted compiler's parser needs.
+//
+// The lexer below is copied from lexer.pw (stage0 has no import mechanism yet,
+// so each selfhost program is a single self-contained file). Only the subset
+// the expression grammar needs is exercised.
+//
+// Reads an expression from stdin and prints its value. Precedence:
+//   expr := term (('+' | '-') term)*
+//   term := atom (('*' | '/' | '%') atom)*
+//   atom := Int | '(' expr ')'
+
+enum Kind {
+    Eof
+    Newline
+    Int
+    Str
+    Ident
+    KwFn
+    KwStruct
+    KwEnum
+    KwMatch
+    KwIf
+    KwElse
+    KwWhile
+    KwFor
+    KwBreak
+    KwContinue
+    KwReturn
+    KwGive
+    KwVal
+    KwMut
+    KwIn
+    KwAs
+    KwInout
+    KwTrue
+    KwFalse
+    LParen
+    RParen
+    LBracket
+    RBracket
+    LBrace
+    RBrace
+    Comma
+    Colon
+    Dot
+    Eq
+    EqEq
+    Ne
+    Lt
+    Le
+    Gt
+    Ge
+    Plus
+    Minus
+    Star
+    Slash
+    Percent
+    AmpAmp
+    PipePipe
+    Bang
+    Arrow
+    FatArrow
+    SlashGt
+    PlusEq
+    MinusEq
+    StarEq
+    SlashEq
+    PercentEq
+    DotDotLt
+    DotDotEq
+    Unknown
+}
+
+struct Tok {
+    val kind: Kind
+    val start: U64
+    val len: U64
+}
+
+struct Lexer {
+    val bytes: Array[U8]
+    mut val pos: U64
+    mut val toks: Array[Tok]
+    mut val depth: I64
+}
+
+fn at(lx: inout Lexer, off: U64) -> U8 {
+    val i: U64 = lx.pos + off
+    if i < lx.bytes.count {
+        return lx.bytes[i]
+    }
+    return 0
+}
+
+fn isDigit(b: U8) -> Bool {
+    if b >= 48 {
+        if b <= 57 {
+            return true
+        }
+    }
+    return false
+}
+
+fn isAlpha(b: U8) -> Bool {
+    if b == 95 {
+        return true
+    }
+    if b >= 97 {
+        if b <= 122 {
+            return true
+        }
+    }
+    if b >= 65 {
+        if b <= 90 {
+            return true
+        }
+    }
+    return false
+}
+
+fn isAlnum(b: U8) -> Bool {
+    if isAlpha(b) {
+        return true
+    }
+    return isDigit(b)
+}
+
+fn rangeEquals(bytes: Array[U8], start: U64, len: U64, kw: String) -> Bool {
+    val kb: Array[U8] = kw.bytes
+    if len != kb.count {
+        return false
+    }
+    mut val j: U64 = 0
+    while j < len {
+        if bytes[start + j] != kb[j] {
+            return false
+        }
+        j += 1
+    }
+    return true
+}
+
+fn identKind(bytes: Array[U8], start: U64, len: U64) -> Kind {
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "fn") {
+        return <Kind.KwFn />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "struct") {
+        return <Kind.KwStruct />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "enum") {
+        return <Kind.KwEnum />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "match") {
+        return <Kind.KwMatch />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "if") {
+        return <Kind.KwIf />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "else") {
+        return <Kind.KwElse />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "while") {
+        return <Kind.KwWhile />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "for") {
+        return <Kind.KwFor />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "break") {
+        return <Kind.KwBreak />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "continue") {
+        return <Kind.KwContinue />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "return") {
+        return <Kind.KwReturn />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "give") {
+        return <Kind.KwGive />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "val") {
+        return <Kind.KwVal />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "mut") {
+        return <Kind.KwMut />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "in") {
+        return <Kind.KwIn />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "as") {
+        return <Kind.KwAs />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "inout") {
+        return <Kind.KwInout />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "true") {
+        return <Kind.KwTrue />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "false") {
+        return <Kind.KwFalse />
+    }
+    return <Kind.Ident />
+}
+
+fn emit(lx: inout Lexer, k: Kind, start: U64, len: U64) {
+    lx.toks.append(<Tok kind=k start=start len=len />)
+    lx.pos = start + len
+}
+
+fn lastWasNewline(lx: inout Lexer) -> Bool {
+    val n: U64 = lx.toks.count
+    if n == 0 {
+        return false
+    }
+    val t: Tok = lx.toks[n - 1]
+    match t.kind {
+        Kind.Newline => { return true }
+        _ => { return false }
+    }
+}
+
+fn lastCanEnd(lx: inout Lexer) -> Bool {
+    val n: U64 = lx.toks.count
+    if n == 0 {
+        return false
+    }
+    val t: Tok = lx.toks[n - 1]
+    match t.kind {
+        Kind.Ident => { return true }
+        Kind.Int => { return true }
+        Kind.Str => { return true }
+        Kind.RParen => { return true }
+        Kind.RBracket => { return true }
+        Kind.RBrace => { return true }
+        Kind.SlashGt => { return true }
+        Kind.KwTrue => { return true }
+        Kind.KwFalse => { return true }
+        Kind.KwReturn => { return true }
+        Kind.KwBreak => { return true }
+        Kind.KwContinue => { return true }
+        _ => { return false }
+    }
+}
+
+fn lex(lx: inout Lexer) {
+    while lx.pos < lx.bytes.count {
+        val b: U8 = at(lx: inout lx, off: 0)
+        if b == 32 {
+            lx.pos += 1
+            continue
+        }
+        if b == 9 {
+            lx.pos += 1
+            continue
+        }
+        if b == 13 {
+            lx.pos += 1
+            continue
+        }
+        if b == 10 {
+            if lx.depth > 0 {
+                lx.pos += 1
+            } else {
+                if lastCanEnd(lx: inout lx) {
+                    if lastWasNewline(lx: inout lx) {
+                        lx.pos += 1
+                    } else {
+                        emit(lx: inout lx, k: <Kind.Newline />, start: lx.pos, len: 1)
+                    }
+                } else {
+                    lx.pos += 1
+                }
+            }
+            continue
+        }
+        if b == 47 {
+            if at(lx: inout lx, off: 1) == 47 {
+                while lx.pos < lx.bytes.count {
+                    if at(lx: inout lx, off: 0) == 10 {
+                        break
+                    }
+                    lx.pos += 1
+                }
+                continue
+            }
+        }
+        if isDigit(b) {
+            val start: U64 = lx.pos
+            mut val j: U64 = lx.pos
+            while j < lx.bytes.count {
+                if isDigit(lx.bytes[j]) {
+                    j += 1
+                } else {
+                    break
+                }
+            }
+            emit(lx: inout lx, k: <Kind.Int />, start: start, len: j - start)
+            continue
+        }
+        if isAlpha(b) {
+            val start: U64 = lx.pos
+            mut val j: U64 = lx.pos
+            while j < lx.bytes.count {
+                if isAlnum(lx.bytes[j]) {
+                    j += 1
+                } else {
+                    break
+                }
+            }
+            val len: U64 = j - start
+            val k: Kind = identKind(bytes: lx.bytes, start: start, len: len)
+            emit(lx: inout lx, k: k, start: start, len: len)
+            continue
+        }
+        if b == 34 {
+            val start: U64 = lx.pos
+            mut val j: U64 = lx.pos + 1
+            while j < lx.bytes.count {
+                if lx.bytes[j] == 34 {
+                    j += 1
+                    break
+                }
+                j += 1
+            }
+            emit(lx: inout lx, k: <Kind.Str />, start: start, len: j - start)
+            continue
+        }
+        val b2: U8 = at(lx: inout lx, off: 1)
+        if b == 46 {
+            if b2 == 46 {
+                val b3: U8 = at(lx: inout lx, off: 2)
+                if b3 == 60 {
+                    emit(lx: inout lx, k: <Kind.DotDotLt />, start: lx.pos, len: 3)
+                    continue
+                }
+                if b3 == 61 {
+                    emit(lx: inout lx, k: <Kind.DotDotEq />, start: lx.pos, len: 3)
+                    continue
+                }
+            }
+            emit(lx: inout lx, k: <Kind.Dot />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 61 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.EqEq />, start: lx.pos, len: 2)
+                continue
+            }
+            if b2 == 62 {
+                emit(lx: inout lx, k: <Kind.FatArrow />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Eq />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 33 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.Ne />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Bang />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 60 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.Le />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Lt />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 62 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.Ge />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Gt />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 43 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.PlusEq />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Plus />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 45 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.MinusEq />, start: lx.pos, len: 2)
+                continue
+            }
+            if b2 == 62 {
+                emit(lx: inout lx, k: <Kind.Arrow />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Minus />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 42 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.StarEq />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Star />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 47 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.SlashEq />, start: lx.pos, len: 2)
+                continue
+            }
+            if b2 == 62 {
+                emit(lx: inout lx, k: <Kind.SlashGt />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Slash />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 37 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.PercentEq />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Percent />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 38 {
+            if b2 == 38 {
+                emit(lx: inout lx, k: <Kind.AmpAmp />, start: lx.pos, len: 2)
+                continue
+            }
+        }
+        if b == 124 {
+            if b2 == 124 {
+                emit(lx: inout lx, k: <Kind.PipePipe />, start: lx.pos, len: 2)
+                continue
+            }
+        }
+        if b == 40 {
+            emit(lx: inout lx, k: <Kind.LParen />, start: lx.pos, len: 1)
+            lx.depth += 1
+            continue
+        }
+        if b == 41 {
+            emit(lx: inout lx, k: <Kind.RParen />, start: lx.pos, len: 1)
+            lx.depth -= 1
+            continue
+        }
+        if b == 91 {
+            emit(lx: inout lx, k: <Kind.LBracket />, start: lx.pos, len: 1)
+            lx.depth += 1
+            continue
+        }
+        if b == 93 {
+            emit(lx: inout lx, k: <Kind.RBracket />, start: lx.pos, len: 1)
+            lx.depth -= 1
+            continue
+        }
+        if b == 123 {
+            emit(lx: inout lx, k: <Kind.LBrace />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 125 {
+            emit(lx: inout lx, k: <Kind.RBrace />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 44 {
+            emit(lx: inout lx, k: <Kind.Comma />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 58 {
+            emit(lx: inout lx, k: <Kind.Colon />, start: lx.pos, len: 1)
+            continue
+        }
+        emit(lx: inout lx, k: <Kind.Unknown />, start: lx.pos, len: 1)
+    }
+    lx.toks.append(<Tok kind=<Kind.Eof /> start=lx.pos len=0 />)
+}
+
+fn kindCode(k: Kind) -> I64 {
+    match k {
+        Kind.Eof => { return 0 }
+        Kind.Newline => { return 1 }
+        Kind.Int => { return 2 }
+        Kind.Str => { return 3 }
+        Kind.Ident => { return 4 }
+        Kind.KwFn => { return 10 }
+        Kind.KwStruct => { return 11 }
+        Kind.KwEnum => { return 12 }
+        Kind.KwMatch => { return 13 }
+        Kind.KwIf => { return 14 }
+        Kind.KwElse => { return 15 }
+        Kind.KwWhile => { return 16 }
+        Kind.KwFor => { return 17 }
+        Kind.KwBreak => { return 18 }
+        Kind.KwContinue => { return 19 }
+        Kind.KwReturn => { return 20 }
+        Kind.KwGive => { return 21 }
+        Kind.KwVal => { return 22 }
+        Kind.KwMut => { return 23 }
+        Kind.KwIn => { return 24 }
+        Kind.KwAs => { return 25 }
+        Kind.KwInout => { return 26 }
+        Kind.KwTrue => { return 27 }
+        Kind.KwFalse => { return 28 }
+        Kind.LParen => { return 40 }
+        Kind.RParen => { return 41 }
+        Kind.LBracket => { return 42 }
+        Kind.RBracket => { return 43 }
+        Kind.LBrace => { return 44 }
+        Kind.RBrace => { return 45 }
+        Kind.Comma => { return 46 }
+        Kind.Colon => { return 47 }
+        Kind.Dot => { return 48 }
+        Kind.Eq => { return 49 }
+        Kind.EqEq => { return 50 }
+        Kind.Ne => { return 51 }
+        Kind.Lt => { return 52 }
+        Kind.Le => { return 53 }
+        Kind.Gt => { return 54 }
+        Kind.Ge => { return 55 }
+        Kind.Plus => { return 56 }
+        Kind.Minus => { return 57 }
+        Kind.Star => { return 58 }
+        Kind.Slash => { return 59 }
+        Kind.Percent => { return 60 }
+        Kind.AmpAmp => { return 61 }
+        Kind.PipePipe => { return 62 }
+        Kind.Bang => { return 63 }
+        Kind.Arrow => { return 64 }
+        Kind.FatArrow => { return 65 }
+        Kind.SlashGt => { return 66 }
+        Kind.PlusEq => { return 67 }
+        Kind.MinusEq => { return 68 }
+        Kind.StarEq => { return 69 }
+        Kind.SlashEq => { return 70 }
+        Kind.PercentEq => { return 71 }
+        Kind.DotDotLt => { return 72 }
+        Kind.DotDotEq => { return 73 }
+        Kind.Unknown => { return 99 }
+    }
+}
+
+// ---- AST (arena, indexed by U64) ----
+//
+// Expressions and statements live in flat arenas (Array[Expr]/Array[Stmt]);
+// children are referenced by U64 index. Operators are stored as kindCode (I64)
+// to avoid nesting an enum inside an enum payload. Identifier nodes keep the
+// source (start, len) span so codegen can echo the name via writeByte.
+
+enum Expr {
+    Int { value: I64 }
+    Ident { start: U64, len: U64 }
+    Unary { op: I64, operand: U64 }
+    Binary { op: I64, lhs: U64, rhs: U64 }
+}
+
+enum Stmt {
+    Let { mutable: Bool, nameStart: U64, nameLen: U64, init: U64 }
+    Assign { op: I64, target: U64, value: U64 }
+    Print { expr: U64 }
+    ExprStmt { expr: U64 }
+    Return { value: U64, hasValue: Bool }
+    If { cond: U64, thenBlk: U64, elseBlk: U64, hasElse: Bool }
+    While { cond: U64, body: U64 }
+}
+
+struct Block {
+    val stmts: Array[U64]
+}
+
+struct Comp {
+    val bytes: Array[U8]
+    val toks: Array[Tok]
+    mut val pos: U64
+    mut val exprs: Array[Expr]
+    mut val stmts: Array[Stmt]
+    mut val blocks: Array[Block]
+}
+
+// ---- cursor helpers ----
+
+fn curKind(c: inout Comp) -> Kind {
+    return c.toks[c.pos].kind
+}
+
+fn cur(c: inout Comp) -> Tok {
+    return c.toks[c.pos]
+}
+
+fn peekKind(c: inout Comp, off: U64) -> Kind {
+    val i: U64 = c.pos + off
+    if i < c.toks.count {
+        return c.toks[i].kind
+    }
+    return <Kind.Eof />
+}
+
+fn advance(c: inout Comp) {
+    c.pos = c.pos + 1
+}
+
+fn skipNewlines(c: inout Comp) {
+    while true {
+        match curKind(c: inout c) {
+            Kind.Newline => { advance(c: inout c) }
+            _ => { break }
+        }
+    }
+}
+
+fn identIs(c: inout Comp, kw: String) -> Bool {
+    val t: Tok = c.toks[c.pos]
+    return rangeEquals(bytes: c.bytes, start: t.start, len: t.len, kw: kw)
+}
+
+fn pushExpr(c: inout Comp, e: Expr) -> U64 {
+    val id: U64 = c.exprs.count
+    c.exprs.append(e)
+    return id
+}
+
+fn pushStmt(c: inout Comp, s: Stmt) -> U64 {
+    val id: U64 = c.stmts.count
+    c.stmts.append(s)
+    return id
+}
+
+// Read an Int token's value out of the source bytes via its (start, len) span.
+fn tokenValue(c: inout Comp, t: Tok) -> I64 {
+    mut val v: I64 = 0
+    mut val j: U64 = 0
+    while j < t.len {
+        val b: U8 = c.bytes[t.start + j]
+        v = v * 10 + (b as I64 - 48)
+        j += 1
+    }
+    return v
+}
+
+// ---- expression parser (precedence climbing) ----
+
+fn binPrec(k: Kind) -> I64 {
+    match k {
+        Kind.PipePipe => { return 1 }
+        Kind.AmpAmp => { return 2 }
+        Kind.EqEq => { return 3 }
+        Kind.Ne => { return 3 }
+        Kind.Lt => { return 3 }
+        Kind.Le => { return 3 }
+        Kind.Gt => { return 3 }
+        Kind.Ge => { return 3 }
+        Kind.Plus => { return 4 }
+        Kind.Minus => { return 4 }
+        Kind.Star => { return 5 }
+        Kind.Slash => { return 5 }
+        Kind.Percent => { return 5 }
+        _ => { return 0 }
+    }
+}
+
+fn parsePrimary(c: inout Comp) -> U64 {
+    val k: Kind = curKind(c: inout c)
+    match k {
+        Kind.Int => {
+            val t: Tok = cur(c: inout c)
+            advance(c: inout c)
+            val v: I64 = tokenValue(c: inout c, t: t)
+            return pushExpr(c: inout c, e: <Expr.Int value=v />)
+        }
+        Kind.Ident => {
+            val t: Tok = cur(c: inout c)
+            advance(c: inout c)
+            return pushExpr(c: inout c, e: <Expr.Ident start=t.start len=t.len />)
+        }
+        Kind.KwTrue => {
+            advance(c: inout c)
+            return pushExpr(c: inout c, e: <Expr.Int value=1 />)
+        }
+        Kind.KwFalse => {
+            advance(c: inout c)
+            return pushExpr(c: inout c, e: <Expr.Int value=0 />)
+        }
+        Kind.LParen => {
+            advance(c: inout c)
+            val inner: U64 = parseExpr(c: inout c)
+            match curKind(c: inout c) {
+                Kind.RParen => { advance(c: inout c) }
+                _ => {}
+            }
+            return inner
+        }
+        _ => {
+            advance(c: inout c)
+            return pushExpr(c: inout c, e: <Expr.Int value=0 />)
+        }
+    }
+}
+
+fn parseUnary(c: inout Comp) -> U64 {
+    val k: Kind = curKind(c: inout c)
+    match k {
+        Kind.Minus => {
+            advance(c: inout c)
+            val o: U64 = parseUnary(c: inout c)
+            return pushExpr(c: inout c, e: <Expr.Unary op=57 operand=o />)
+        }
+        Kind.Bang => {
+            advance(c: inout c)
+            val o: U64 = parseUnary(c: inout c)
+            return pushExpr(c: inout c, e: <Expr.Unary op=63 operand=o />)
+        }
+        _ => { return parsePrimary(c: inout c) }
+    }
+}
+
+fn parseBin(c: inout Comp, minPrec: I64) -> U64 {
+    mut val left: U64 = parseUnary(c: inout c)
+    while true {
+        val k: Kind = curKind(c: inout c)
+        val prec: I64 = binPrec(k: k)
+        if prec == 0 {
+            break
+        }
+        if prec < minPrec {
+            break
+        }
+        val op: I64 = kindCode(k: k)
+        advance(c: inout c)
+        val right: U64 = parseBin(c: inout c, minPrec: prec + 1)
+        left = pushExpr(c: inout c, e: <Expr.Binary op=op lhs=left rhs=right />)
+    }
+    return left
+}
+
+fn parseExpr(c: inout Comp) -> U64 {
+    return parseBin(c: inout c, minPrec: 1)
+}
+
+// ---- statement parser ----
+
+fn isAssignOp(k: Kind) -> Bool {
+    match k {
+        Kind.Eq => { return true }
+        Kind.PlusEq => { return true }
+        Kind.MinusEq => { return true }
+        Kind.StarEq => { return true }
+        Kind.SlashEq => { return true }
+        Kind.PercentEq => { return true }
+        _ => { return false }
+    }
+}
+
+// Skip a type annotation: an identifier optionally followed by balanced
+// brackets (e.g. `Array[I64]`). v1 ignores the type (everything is int64_t).
+fn skipType(c: inout Comp) {
+    advance(c: inout c)
+    match curKind(c: inout c) {
+        Kind.LBracket => {
+            advance(c: inout c)
+            mut val depth: I64 = 1
+            while depth > 0 {
+                match curKind(c: inout c) {
+                    Kind.LBracket => { depth += 1 }
+                    Kind.RBracket => { depth -= 1 }
+                    Kind.Eof => { break }
+                    _ => {}
+                }
+                advance(c: inout c)
+            }
+        }
+        _ => {}
+    }
+}
+
+// `[mut] val name [: Type] = expr`. `mutable` says whether `mut` preceded it;
+// the current token is `val`.
+fn parseLet(c: inout Comp, mutable: Bool) -> U64 {
+    advance(c: inout c)
+    val nameTok: Tok = cur(c: inout c)
+    advance(c: inout c)
+    match curKind(c: inout c) {
+        Kind.Colon => {
+            advance(c: inout c)
+            skipType(c: inout c)
+        }
+        _ => {}
+    }
+    // `=`
+    match curKind(c: inout c) {
+        Kind.Eq => { advance(c: inout c) }
+        _ => {}
+    }
+    val init: U64 = parseExpr(c: inout c)
+    return pushStmt(c: inout c, s: <Stmt.Let mutable=mutable nameStart=nameTok.start nameLen=nameTok.len init=init />)
+}
+
+fn parsePrint(c: inout Comp) -> U64 {
+    advance(c: inout c)
+    advance(c: inout c)
+    val e: U64 = parseExpr(c: inout c)
+    match curKind(c: inout c) {
+        Kind.RParen => { advance(c: inout c) }
+        _ => {}
+    }
+    return pushStmt(c: inout c, s: <Stmt.Print expr=e />)
+}
+
+fn parseReturn(c: inout Comp) -> U64 {
+    advance(c: inout c)
+    match curKind(c: inout c) {
+        Kind.Newline => { return pushStmt(c: inout c, s: <Stmt.Return value=0 hasValue=false />) }
+        Kind.RBrace => { return pushStmt(c: inout c, s: <Stmt.Return value=0 hasValue=false />) }
+        Kind.Eof => { return pushStmt(c: inout c, s: <Stmt.Return value=0 hasValue=false />) }
+        _ => {
+            val e: U64 = parseExpr(c: inout c)
+            return pushStmt(c: inout c, s: <Stmt.Return value=e hasValue=true />)
+        }
+    }
+}
+
+fn parseIf(c: inout Comp) -> U64 {
+    advance(c: inout c)
+    val cond: U64 = parseExpr(c: inout c)
+    val thenBlk: U64 = parseBlock(c: inout c)
+    skipNewlines(c: inout c)
+    match curKind(c: inout c) {
+        Kind.KwElse => {
+            advance(c: inout c)
+            // `else if` chains as a nested if inside a synthesized block.
+            match curKind(c: inout c) {
+                Kind.KwIf => {
+                    val nested: U64 = parseIf(c: inout c)
+                    mut val one: Array[U64] = []
+                    one.append(nested)
+                    val blkId: U64 = c.blocks.count
+                    c.blocks.append(<Block stmts=one />)
+                    return pushStmt(c: inout c, s: <Stmt.If cond=cond thenBlk=thenBlk elseBlk=blkId hasElse=true />)
+                }
+                _ => {
+                    val elseBlk: U64 = parseBlock(c: inout c)
+                    return pushStmt(c: inout c, s: <Stmt.If cond=cond thenBlk=thenBlk elseBlk=elseBlk hasElse=true />)
+                }
+            }
+        }
+        _ => {
+            return pushStmt(c: inout c, s: <Stmt.If cond=cond thenBlk=thenBlk elseBlk=0 hasElse=false />)
+        }
+    }
+}
+
+fn parseWhile(c: inout Comp) -> U64 {
+    advance(c: inout c)
+    val cond: U64 = parseExpr(c: inout c)
+    val body: U64 = parseBlock(c: inout c)
+    return pushStmt(c: inout c, s: <Stmt.While cond=cond body=body />)
+}
+
+fn parseExprOrAssign(c: inout Comp) -> U64 {
+    val lhs: U64 = parseExpr(c: inout c)
+    val k: Kind = curKind(c: inout c)
+    if isAssignOp(k: k) {
+        val op: I64 = kindCode(k: k)
+        advance(c: inout c)
+        val rhs: U64 = parseExpr(c: inout c)
+        return pushStmt(c: inout c, s: <Stmt.Assign op=op target=lhs value=rhs />)
+    }
+    return pushStmt(c: inout c, s: <Stmt.ExprStmt expr=lhs />)
+}
+
+fn parseStmt(c: inout Comp) -> U64 {
+    val k: Kind = curKind(c: inout c)
+    match k {
+        Kind.KwVal => { return parseLet(c: inout c, mutable: false) }
+        Kind.KwMut => {
+            advance(c: inout c)
+            return parseLet(c: inout c, mutable: true)
+        }
+        Kind.KwIf => { return parseIf(c: inout c) }
+        Kind.KwWhile => { return parseWhile(c: inout c) }
+        Kind.KwReturn => { return parseReturn(c: inout c) }
+        Kind.Ident => {
+            if identIs(c: inout c, kw: "print") {
+                match peekKind(c: inout c, off: 1) {
+                    Kind.LParen => { return parsePrint(c: inout c) }
+                    _ => { return parseExprOrAssign(c: inout c) }
+                }
+            }
+            return parseExprOrAssign(c: inout c)
+        }
+        _ => { return parseExprOrAssign(c: inout c) }
+    }
+}
+
+// Parse `{ stmt* }`. Current token must be `{`.
+fn parseBlock(c: inout Comp) -> U64 {
+    match curKind(c: inout c) {
+        Kind.LBrace => { advance(c: inout c) }
+        _ => {}
+    }
+    mut val stmts: Array[U64] = []
+    while true {
+        skipNewlines(c: inout c)
+        val k: Kind = curKind(c: inout c)
+        match k {
+            Kind.RBrace => {
+                advance(c: inout c)
+                break
+            }
+            Kind.Eof => { break }
+            _ => {
+                val s: U64 = parseStmt(c: inout c)
+                stmts.append(s)
+            }
+        }
+    }
+    val id: U64 = c.blocks.count
+    c.blocks.append(<Block stmts=stmts />)
+    return id
+}
+
+// ---- C code generation ----
+
+fn digitStr(d: I64) -> String {
+    if d == 0 { return "0" }
+    if d == 1 { return "1" }
+    if d == 2 { return "2" }
+    if d == 3 { return "3" }
+    if d == 4 { return "4" }
+    if d == 5 { return "5" }
+    if d == 6 { return "6" }
+    if d == 7 { return "7" }
+    if d == 8 { return "8" }
+    return "9"
+}
+
+fn writeInt(n: I64) {
+    if n < 0 {
+        write(s: "-")
+        writeInt(n: 0 - n)
+        return
+    }
+    if n >= 10 {
+        writeInt(n: n / 10)
+    }
+    write(s: digitStr(d: n % 10))
+}
+
+fn writeSpan(c: inout Comp, start: U64, len: U64) {
+    mut val j: U64 = 0
+    while j < len {
+        writeByte(c.bytes[start + j])
+        j += 1
+    }
+}
+
+fn binOpStr(op: I64) -> String {
+    if op == 56 { return " + " }
+    if op == 57 { return " - " }
+    if op == 58 { return " * " }
+    if op == 59 { return " / " }
+    if op == 60 { return " % " }
+    if op == 50 { return " == " }
+    if op == 51 { return " != " }
+    if op == 52 { return " < " }
+    if op == 53 { return " <= " }
+    if op == 54 { return " > " }
+    if op == 55 { return " >= " }
+    if op == 61 { return " && " }
+    if op == 62 { return " || " }
+    return " ? "
+}
+
+fn unaryOpStr(op: I64) -> String {
+    if op == 57 { return "-" }
+    return "!"
+}
+
+fn assignOpStr(op: I64) -> String {
+    if op == 49 { return " = " }
+    if op == 67 { return " += " }
+    if op == 68 { return " -= " }
+    if op == 69 { return " *= " }
+    if op == 70 { return " /= " }
+    return " %= "
+}
+
+fn genExpr(c: inout Comp, id: U64) {
+    val e: Expr = c.exprs[id]
+    match e {
+        Expr.Int { val value } => { writeInt(n: value) }
+        Expr.Ident { val start, val len } => { writeSpan(c: inout c, start: start, len: len) }
+        Expr.Unary { val op, val operand } => {
+            write(s: unaryOpStr(op: op))
+            write(s: "(")
+            genExpr(c: inout c, id: operand)
+            write(s: ")")
+        }
+        Expr.Binary { val op, val lhs, val rhs } => {
+            write(s: "(")
+            genExpr(c: inout c, id: lhs)
+            write(s: binOpStr(op: op))
+            genExpr(c: inout c, id: rhs)
+            write(s: ")")
+        }
+    }
+}
+
+fn genStmt(c: inout Comp, id: U64) {
+    val s: Stmt = c.stmts[id]
+    match s {
+        Stmt.Let { val mutable, val nameStart, val nameLen, val init } => {
+            write(s: "    long long ")
+            writeSpan(c: inout c, start: nameStart, len: nameLen)
+            write(s: " = ")
+            genExpr(c: inout c, id: init)
+            write(s: ";\n")
+        }
+        Stmt.Assign { val op, val target, val value } => {
+            write(s: "    ")
+            genExpr(c: inout c, id: target)
+            write(s: assignOpStr(op: op))
+            genExpr(c: inout c, id: value)
+            write(s: ";\n")
+        }
+        Stmt.Print { val expr } => {
+            write(s: "    printf(\"%lld\\n\", (long long)(")
+            genExpr(c: inout c, id: expr)
+            write(s: "));\n")
+        }
+        Stmt.ExprStmt { val expr } => {
+            write(s: "    ")
+            genExpr(c: inout c, id: expr)
+            write(s: ";\n")
+        }
+        Stmt.Return { val value, val hasValue } => {
+            write(s: "    return 0;\n")
+        }
+        Stmt.If { val cond, val thenBlk, val elseBlk, val hasElse } => {
+            write(s: "    if (")
+            genExpr(c: inout c, id: cond)
+            write(s: ") {\n")
+            genBlock(c: inout c, id: thenBlk)
+            write(s: "    }\n")
+            if hasElse {
+                write(s: "    else {\n")
+                genBlock(c: inout c, id: elseBlk)
+                write(s: "    }\n")
+            }
+        }
+        Stmt.While { val cond, val body } => {
+            write(s: "    while (")
+            genExpr(c: inout c, id: cond)
+            write(s: ") {\n")
+            genBlock(c: inout c, id: body)
+            write(s: "    }\n")
+        }
+    }
+}
+
+fn genBlock(c: inout Comp, id: U64) {
+    val b: Block = c.blocks[id]
+    val stmts: Array[U64] = b.stmts
+    mut val i: U64 = 0
+    while i < stmts.count {
+        genStmt(c: inout c, id: stmts[i])
+        i += 1
+    }
+}
+
+// ---- driver ----
+//
+// v1 compiles a single top-level function's body into C `main` (the function's
+// own name is ignored). Reads Plew from stdin, writes C to stdout.
+
+fn main() {
+    val src: String = readStdin()
+    mut val lx: Lexer = <Lexer bytes=src.bytes pos=0 toks=[] depth=0 />
+    lex(lx: inout lx)
+    mut val c: Comp = <Comp bytes=src.bytes toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] />
+    skipNewlines(c: inout c)
+    // `fn <name> ( ... ) [-> ret]` then `{`. Skip the header up to the body.
+    match curKind(c: inout c) {
+        Kind.KwFn => { advance(c: inout c) }
+        _ => {}
+    }
+    // function name
+    match curKind(c: inout c) {
+        Kind.Ident => { advance(c: inout c) }
+        _ => {}
+    }
+    // skip everything up to the opening brace of the body
+    while true {
+        val k: Kind = curKind(c: inout c)
+        match k {
+            Kind.LBrace => { break }
+            Kind.Eof => { break }
+            _ => { advance(c: inout c) }
+        }
+    }
+    val body: U64 = parseBlock(c: inout c)
+    write(s: "#include <stdio.h>\n")
+    write(s: "int main(void) {\n")
+    genBlock(c: inout c, id: body)
+    write(s: "    return 0;\n")
+    write(s: "}\n")
+}

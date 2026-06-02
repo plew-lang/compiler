@@ -313,6 +313,32 @@ fn builds_and_runs_stdin_io() {
 }
 
 #[test]
+fn selfhost_plewc_compiles_a_plew_program() {
+    // selfhost/plewc.pw is the stage1 compiler skeleton, written in Plew: it
+    // reads a Plew program from stdin (a single top-level fn's body), parses
+    // declarations / statements / expressions into an arena AST, and emits a C
+    // program (identifiers echoed from source spans via writeByte). Three-stage
+    // check: stage0 builds plewc.pw -> run it on a Plew program to get C ->
+    // clang compiles that C -> run -> result. A real compiler-in-Plew end to end.
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../selfhost/plewc.pw");
+    let src = std::fs::read_to_string(path).expect("read selfhost/plewc.pw");
+    let program = "fn main() {\n    mut val i: I64 = 0\n    mut val sum: I64 = 0\n    while i < 5 {\n        sum += i\n        i += 1\n    }\n    if sum > 5 {\n        print(sum)\n    } else {\n        print(0)\n    }\n}\n";
+    let emitted_c = build_and_run_stdin(&src, "selfhost_plewc", program);
+    assert!(emitted_c.contains("int main(void)"), "emitted C was:\n{emitted_c}");
+
+    let c_path = std::env::temp_dir().join(format!("plew_plewc_{}.c", std::process::id()));
+    let out_bin = std::env::temp_dir().join(format!("plew_plewc_{}", std::process::id()));
+    std::fs::write(&c_path, &emitted_c).expect("write emitted C");
+    let status = Command::new("clang").arg(&c_path).arg("-o").arg(&out_bin).status().expect("clang");
+    assert!(status.success(), "clang failed on emitted C:\n{emitted_c}");
+    let output = Command::new(&out_bin).output().expect("run emitted binary");
+    let _ = std::fs::remove_file(&c_path);
+    let _ = std::fs::remove_file(&out_bin);
+    // 0+1+2+3+4 = 10, which is > 5, so it prints 10.
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "10\n");
+}
+
+#[test]
 fn builds_and_runs_write_byte() {
     // writeByte emits a single raw byte (putchar). The self-hosted compiler
     // uses it to echo identifier text out of source spans (no substring).
