@@ -449,7 +449,8 @@ fn selfhost_plewc_reaches_fixpoint() {
     let c1_path = std::env::temp_dir().join(format!("plew_sh_c1_{}.c", std::process::id()));
     let plewc1 = std::env::temp_dir().join(format!("plew_sh_plewc1_{}", std::process::id()));
     std::fs::write(&c1_path, &c1).unwrap();
-    assert!(Command::new("clang").arg("-w").arg(&c1_path).arg("-o").arg(&plewc1).status().expect("clang c1").success(), "clang failed on c1");
+    // -Werror also guards that plewc's generated C stays warning-clean.
+    assert!(Command::new("clang").arg("-Wall").arg("-Wextra").arg("-Werror").arg(&c1_path).arg("-o").arg(&plewc1).status().expect("clang c1").success(), "clang failed (or warned) on c1");
 
     // plewc1 compiles plewc.pw -> c2; fixpoint: c1 == c2
     let c2 = run_bin_stdin(&plewc1, &src);

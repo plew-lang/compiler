@@ -8,7 +8,7 @@
 
 **post-self-host フェーズ（1→4 順）**：
 1. ✅ **真の自己ビルド**＝`plewc plewc.pw`（ファイル引数）。stage0＋plewc.pw 両方に I/O ビルトイン追加＝`readFile(path)→String`・`argCount()→U64`・`argAt(i)→String`（C ランタイム＝`plew_read_file`/`plew_arg_count`/`plew_arg_at`・main を `int main(int argc, char** argv)` 化し argc/argv をグローバルへ）。plewc.pw の main は引数あれば `readFile(argAt(1))`・無ければ `readStdin()`。`plewc plewc.pw > c` → clang → `sb1`、`sb1 plewc.pw` で不動点も確認。
-2. ⏭ 生成 C の警告クリーン化（余分な括弧など・任意）。
+2. ✅ **生成 C の警告クリーン化**（plewc.pw の codegen のみ修正＝stage0 不問・不動点維持）。`-Wall -Wextra` で 4 種ゼロ化＝①`-Wparentheses-equality`（`if ((a==b))`）→`genCond`（条件位置の最上位 binary は外側括弧を省く）②`-Wunused-variable`（match 束縛）→束縛直後に `(void)name;`③`-Wunused-function`（要素型ごとの未使用配列ランタイム・I/O ヘルパー）→生成 static ヘルパーに `__attribute__((unused))`④`-Wreturn-type`（wildcard 無しの網羅 match で C が fall-through と誤認）→`else { __builtin_unreachable(); }`。回帰ガード＝不動点 e2e の c1 コンパイルを `-Wall -Wextra -Werror` に。
 3. ⏭ 言語機能を plewc.pw 側で拡張（spec の未実装サブセット＝`for`/値位置 match/トレイト等）。
 4. ⏭ stage0 の縮退/凍結（throwaway 明示・stage1 を正典化する段取り）。
 

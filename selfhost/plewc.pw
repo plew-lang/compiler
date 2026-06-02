@@ -2168,6 +2168,21 @@ fn genArrayLiteral(c: inout Comp, exprId: U64, elemStart: U64, elemLen: U64) {
     }
 }
 
+// Emit an expression in condition position. A top-level binary drops its outer
+// parens (the `if (...)` / `while (...)` already supplies them), which avoids
+// the `-Wparentheses-equality` warning on `if ((a == b))`.
+fn genCond(c: inout Comp, id: U64) {
+    val e: Expr = c.exprs[id]
+    match e {
+        Expr.Binary { val op, val lhs, val rhs } => {
+            genExpr(c: inout c, id: lhs)
+            write(s: binOpStr(op: op))
+            genExpr(c: inout c, id: rhs)
+        }
+        _ => { genExpr(c: inout c, id: id) }
+    }
+}
+
 fn genStmt(c: inout Comp, id: U64) {
     val s: Stmt = c.stmts[id]
     match s {
@@ -2226,7 +2241,7 @@ fn genStmt(c: inout Comp, id: U64) {
         }
         Stmt.If { val cond, val thenBlk, val elseBlk, val hasElse } => {
             write(s: "    if (")
-            genExpr(c: inout c, id: cond)
+            genCond(c: inout c, id: cond)
             write(s: ") {\n")
             genBlock(c: inout c, id: thenBlk)
             write(s: "    }\n")
@@ -2238,7 +2253,7 @@ fn genStmt(c: inout Comp, id: U64) {
         }
         Stmt.While { val cond, val body } => {
             write(s: "    while (")
-            genExpr(c: inout c, id: cond)
+            genCond(c: inout c, id: cond)
             write(s: ") {\n")
             genBlock(c: inout c, id: body)
             write(s: "    }\n")
@@ -2256,10 +2271,12 @@ fn genStmt(c: inout Comp, id: U64) {
             // non-wildcard arm's pattern.
             mut val enumStart: U64 = 0
             mut val enumLen: U64 = 0
+            mut val hasWildcard: Bool = false
             mut val q: U64 = 0
             while q < arms.count {
                 val aq: MatchArm = arms[q]
                 if aq.isWildcard {
+                    hasWildcard = true
                 } else {
                     if enumLen == 0 {
                         enumStart = aq.enumStart
@@ -2310,6 +2327,10 @@ fn genStmt(c: inout Comp, id: U64) {
                         write(s: ".")
                         writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
                         write(s: ";\n")
+                        // mark used so an unreferenced bind doesn't warn
+                        write(s: "        (void)")
+                        writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
+                        write(s: ";\n")
                         addBindLocal(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
                         bi += 1
                     }
@@ -2317,6 +2338,12 @@ fn genStmt(c: inout Comp, id: U64) {
                     write(s: "    }\n")
                 }
                 i += 1
+            }
+            // exhaustive match without a wildcard: the final fall-through is
+            // unreachable (so a value-returning function does not "fall off").
+            if hasWildcard {
+            } else {
+                write(s: "    else { __builtin_unreachable(); }\n")
             }
             write(s: "    }\n")
         }
@@ -2486,7 +2513,7 @@ fn genArrayTypedef(c: inout Comp, elemStart: U64, elemLen: U64) {
 // Monomorphized array runtime for one element type (new / get / set / push).
 // Old buffers leak on growth (stage0/stage1 never free — throwaway model).
 fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
-    write(s: "static ")
+    write(s: "__attribute__((unused)) static ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: " ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
@@ -2494,7 +2521,7 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: " a; a.data = 0; a.len = 0; a.cap = 0; return a; }\n")
 
-    write(s: "static ")
+    write(s: "__attribute__((unused)) static ")
     genCElem(c: inout c, start: elemStart, len: elemLen)
     write(s: " ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
@@ -2502,7 +2529,7 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: " a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } return a.data[i]; }\n")
 
-    write(s: "static void ")
+    write(s: "__attribute__((unused)) static void ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: "_set(")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
@@ -2510,7 +2537,7 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     genCElem(c: inout c, start: elemStart, len: elemLen)
     write(s: " v) { if (i < 0 || i >= a->len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } a->data[i] = v; }\n")
 
-    write(s: "static void ")
+    write(s: "__attribute__((unused)) static void ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: "_push(")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
@@ -2536,10 +2563,10 @@ fn genU8ArrayTypedef() {
 }
 
 fn genU8ArrayRuntime() {
-    write(s: "static PlewArray_U8 PlewArray_U8_new(void) { PlewArray_U8 a; a.data = 0; a.len = 0; a.cap = 0; return a; }\n")
-    write(s: "static unsigned char PlewArray_U8_get(PlewArray_U8 a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } return a.data[i]; }\n")
-    write(s: "static void PlewArray_U8_set(PlewArray_U8* a, long long i, unsigned char v) { if (i < 0 || i >= a->len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } a->data[i] = v; }\n")
-    write(s: "static void PlewArray_U8_push(PlewArray_U8* a, unsigned char v) { if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; unsigned char* nd = (unsigned char*)malloc(sizeof(unsigned char) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; a->data = nd; a->cap = nc; } a->data[a->len] = v; a->len++; }\n")
+    write(s: "__attribute__((unused)) static PlewArray_U8 PlewArray_U8_new(void) { PlewArray_U8 a; a.data = 0; a.len = 0; a.cap = 0; return a; }\n")
+    write(s: "__attribute__((unused)) static unsigned char PlewArray_U8_get(PlewArray_U8 a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } return a.data[i]; }\n")
+    write(s: "__attribute__((unused)) static void PlewArray_U8_set(PlewArray_U8* a, long long i, unsigned char v) { if (i < 0 || i >= a->len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } a->data[i] = v; }\n")
+    write(s: "__attribute__((unused)) static void PlewArray_U8_push(PlewArray_U8* a, unsigned char v) { if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; unsigned char* nd = (unsigned char*)malloc(sizeof(unsigned char) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; a->data = nd; a->cap = nc; } a->data[a->len] = v; a->len++; }\n")
 }
 
 // ---- driver ----
@@ -2566,13 +2593,13 @@ fn main() {
     // output is self-contained).
     write(s: "#include <stdio.h>\n#include <stdint.h>\n#include <stdlib.h>\n#include <string.h>\n")
     write(s: "typedef struct { const char* data; long long len; } PlewString;\n")
-    write(s: "static int PlewString_eq(PlewString a, PlewString b) { if (a.len != b.len) return 0; for (long long i = 0; i < a.len; i++) if (a.data[i] != b.data[i]) return 0; return 1; }\n")
-    write(s: "static PlewString plew_read_stdin(void) { size_t cap = 4096, len = 0; char* buf = (char*)malloc(cap); int ch; while ((ch = getchar()) != EOF) { if (len + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); } buf[len++] = (char)ch; } PlewString s; s.data = buf; s.len = (long long)len; return s; }\n")
-    write(s: "static void plew_write(PlewString s) { fwrite(s.data, 1, (size_t)s.len, stdout); }\n")
+    write(s: "__attribute__((unused)) static int PlewString_eq(PlewString a, PlewString b) { if (a.len != b.len) return 0; for (long long i = 0; i < a.len; i++) if (a.data[i] != b.data[i]) return 0; return 1; }\n")
+    write(s: "__attribute__((unused)) static PlewString plew_read_stdin(void) { size_t cap = 4096, len = 0; char* buf = (char*)malloc(cap); int ch; while ((ch = getchar()) != EOF) { if (len + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); } buf[len++] = (char)ch; } PlewString s; s.data = buf; s.len = (long long)len; return s; }\n")
+    write(s: "__attribute__((unused)) static void plew_write(PlewString s) { fwrite(s.data, 1, (size_t)s.len, stdout); }\n")
     write(s: "static int plew_argc = 0;\nstatic char** plew_argv = 0;\n")
-    write(s: "static long long plew_arg_count(void) { return (long long)plew_argc; }\n")
-    write(s: "static PlewString plew_arg_at(long long i) { PlewString s; if (i < 0 || i >= plew_argc) { s.data = \"\"; s.len = 0; return s; } s.data = plew_argv[i]; s.len = (long long)strlen(plew_argv[i]); return s; }\n")
-    write(s: "static PlewString plew_read_file(PlewString path) { FILE* f = fopen(path.data, \"rb\"); PlewString s; if (!f) { s.data = \"\"; s.len = 0; return s; } fseek(f, 0, SEEK_END); long sz = ftell(f); fseek(f, 0, SEEK_SET); char* buf = (char*)malloc((size_t)sz + 1); size_t n = fread(buf, 1, (size_t)sz, f); fclose(f); buf[n] = 0; s.data = buf; s.len = (long long)n; return s; }\n")
+    write(s: "__attribute__((unused)) static long long plew_arg_count(void) { return (long long)plew_argc; }\n")
+    write(s: "__attribute__((unused)) static PlewString plew_arg_at(long long i) { PlewString s; if (i < 0 || i >= plew_argc) { s.data = \"\"; s.len = 0; return s; } s.data = plew_argv[i]; s.len = (long long)strlen(plew_argv[i]); return s; }\n")
+    write(s: "__attribute__((unused)) static PlewString plew_read_file(PlewString path) { FILE* f = fopen(path.data, \"rb\"); PlewString s; if (!f) { s.data = \"\"; s.len = 0; return s; } fseek(f, 0, SEEK_END); long sz = ftell(f); fseek(f, 0, SEEK_SET); char* buf = (char*)malloc((size_t)sz + 1); size_t n = fread(buf, 1, (size_t)sz, f); fclose(f); buf[n] = 0; s.data = buf; s.len = (long long)n; return s; }\n")
     // forward typedefs for every nominal type (structs + enums).
     mut val si: U64 = 0
     while si < c.structs.count {
