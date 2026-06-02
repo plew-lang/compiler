@@ -287,6 +287,7 @@ struct EnumDef {
 struct Func {
     uint64_t nameStart;
     uint64_t nameLen;
+    PlewArray_Bind typeParams;
     PlewArray_Param params;
     long long hasRet;
     uint64_t retStart;
@@ -2703,6 +2704,7 @@ uint64_t parseBlock(Comp* c) {
 void parseFuncCommon(Comp* c, long long hasRecv, uint64_t recvStart, uint64_t recvLen, long long selfInout) {
     Tok nameTok = Comp_cur(&((*c)));
     Comp_advance(&((*c)));
+    PlewArray_Bind typeParams = parseTypeParams(&((*c)));
     PlewArray_Param params = PlewArray_Param_new();
     {
     Kind _m70 = Comp_curKind(&((*c)));
@@ -2789,7 +2791,7 @@ void parseFuncCommon(Comp* c, long long hasRecv, uint64_t recvStart, uint64_t re
     }
     Comp_skipNewlines(&((*c)));
     uint64_t body = parseBlock(&((*c)));
-    PlewArray_Func_push(&((*c).funcs), (Func){.nameStart = nameTok.start, .nameLen = nameTok.len, .params = params, .hasRet = hasRet, .retStart = retStart, .retLen = retLen, .retIsArray = retIsArray, .retTy = retRef, .body = body, .hasRecv = hasRecv, .recvStart = recvStart, .recvLen = recvLen, .selfInout = selfInout});
+    PlewArray_Func_push(&((*c).funcs), (Func){.nameStart = nameTok.start, .nameLen = nameTok.len, .typeParams = typeParams, .params = params, .hasRet = hasRet, .retStart = retStart, .retLen = retLen, .retIsArray = retIsArray, .retTy = retRef, .body = body, .hasRecv = hasRecv, .recvStart = recvStart, .recvLen = recvLen, .selfInout = selfInout});
 }
 void parseFunc(Comp* c) {
     Comp_advance(&((*c)));

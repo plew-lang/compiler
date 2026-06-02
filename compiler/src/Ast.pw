@@ -223,6 +223,10 @@ struct EnumDef {
 struct Func {
     val nameStart: U64
     val nameLen: U64
+    // generic type parameters `fn id[T](...)` (name spans; empty if not
+    // generic). For a method, an `impl[T] Type[T]`-introduced parameter also
+    // lands here. Consumed by G3 monomorphization.
+    val typeParams: Array[Bind]
     val params: Array[Param]
     val hasRet: Bool
     val retStart: U64

@@ -1024,6 +1024,8 @@ fn parseBlock(c: inout Comp) -> U64 {
 fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, selfInout: Bool) {
     val nameTok: Tok = c.cur()
     c.advance()
+    // optional generic parameters `fn id[T](...)`.
+    val typeParams: Array[Bind] = parseTypeParams(c: inout c)
     mut val params: Array[Param] = []
     match c.curKind() {
         Kind.LParen => {
@@ -1096,7 +1098,7 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
     }
     c.skipNewlines()
     val body: U64 = parseBlock(c: inout c)
-    c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvStart recvLen=recvLen selfInout=selfInout />)
+    c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvStart recvLen=recvLen selfInout=selfInout />)
 }
 
 // `fn name(...)`: a free function. The current token is `fn`.
