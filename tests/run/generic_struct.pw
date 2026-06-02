@@ -1,0 +1,12 @@
+import @Std/Io with { print }
+
+struct Box[T] {
+    val v: T
+}
+
+fn main() {
+    val bi: Box[I32] = <Box[I32] v=5 />
+    val bu: Box[U8] = <Box[U8] v=7 />
+    print(bi.v)
+    print(bu.v)
+}

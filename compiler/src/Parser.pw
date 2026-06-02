@@ -258,6 +258,39 @@ fn parseMake(c: inout Comp) -> U64 {
     c.advance()
     val typeTok: Tok = c.cur()
     c.advance()
+    // optional generic type arguments `<Box[I32] ...>` / `<Optional[I32].Some ...>`.
+    // Build a TypeRef for the instantiation; 0 (none) for a non-generic type.
+    mut val tyRef: U64 = 0
+    match c.curKind() {
+        Kind.LBracket => {
+            c.advance()
+            mut val targs: Array[U64] = []
+            mut val first: Bool = true
+            while true {
+                match c.curKind() {
+                    Kind.RBracket => { break }
+                    Kind.Eof => { break }
+                    _ => {}
+                }
+                if first {
+                } else {
+                    match c.curKind() {
+                        Kind.Comma => { c.advance() }
+                        _ => {}
+                    }
+                }
+                first = false
+                val arg: PType = parseTypeTok(c: inout c)
+                targs.append(arg.ref)
+            }
+            match c.curKind() {
+                Kind.RBracket => { c.advance() }
+                _ => {}
+            }
+            tyRef = c.pushType(t: <TypeRef nameStart=typeTok.start nameLen=typeTok.len args=targs />)
+        }
+        _ => {}
+    }
     mut val variantStart: U64 = 0
     mut val variantLen: U64 = 0
     mut val isEnum: Bool = false
@@ -299,7 +332,7 @@ fn parseMake(c: inout Comp) -> U64 {
             _ => { c.advance() }
         }
     }
-    return c.pushExpr(e: <Expr.Make typeStart=typeTok.start typeLen=typeTok.len variantStart=variantStart variantLen=variantLen isEnum=isEnum fields=fields />)
+    return c.pushExpr(e: <Expr.Make typeStart=typeTok.start typeLen=typeTok.len variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=tyRef fields=fields />)
 }
 
 fn parseBin(c: inout Comp, minPrec: I64) -> U64 {

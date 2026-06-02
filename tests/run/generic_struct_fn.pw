@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+struct Box[T] {
+    val v: T
+}
+
+fn unwrap(b: Box[I32]) -> I32 {
+    return b.v
+}
+
+fn makeBox(n: I32) -> Box[I32] {
+    return <Box[I32] v=n />
+}
+
+fn main() {
+    val b: Box[I32] = makeBox(n: 9)
+    print(unwrap(b: b))
+}

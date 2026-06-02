@@ -332,7 +332,7 @@ fn exprOffset(c: inout Comp, id: U64) -> U64 {
         Expr.Binary { val op, val lhs, val rhs } => { return exprOffset(c: inout c, id: lhs) }
         Expr.Unary { val op, val operand } => { return exprOffset(c: inout c, id: operand) }
         Expr.Cast { val operand, val tyStart, val tyLen, ty: _ } => { return exprOffset(c: inout c, id: operand) }
-        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val fields } => { return typeStart }
+        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => { return typeStart }
         Expr.MatchExpr { val scrut, val arms } => { return exprOffset(c: inout c, id: scrut) }
         Expr.IfExpr { val cond, val thenBlk, val elseBlk } => { return exprOffset(c: inout c, id: cond) }
         _ => { return 0 }
@@ -721,7 +721,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             return scalarInfo()
         }
-        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val fields } => {
+        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
             return <TypeInfo kind=2 nameStart=typeStart nameLen=typeLen />
         }
         Expr.Array { val elems } => { return scalarInfo() }
@@ -1229,8 +1229,8 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
             checkLitCtx(c: inout c, id: base, eKind: 0, eBits: 0, eSgn: false)
             checkLitCtx(c: inout c, id: index, eKind: 1, eBits: 64, eSgn: false)
         }
-        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val fields } => {
-            checkMakeFields(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fields: fields)
+        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
+            checkMakeFields(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ty, fields: fields)
         }
         Expr.Array { val elems } => {
             mut val i: U64 = 0
@@ -1447,11 +1447,16 @@ fn makeFieldType(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64,
 }
 
 // Check each provided Make field value against its declared field type.
-fn checkMakeFields(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fields: Array[MakeField]) {
+fn checkMakeFields(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: Array[MakeField]) {
     mut val i: U64 = 0
     while i < fields.count {
         val mf: MakeField = fields[i]
-        val ft: TypeInfo = makeFieldType(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+        mut val ft: TypeInfo = scalarInfo()
+        if isGenericInst(c: inout c, ref: ty) {
+            ft = genericFieldTypeInfo(c: inout c, instRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+        } else {
+            ft = makeFieldType(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+        }
         if ft.kind == 3 {
             checkLitArray(c: inout c, id: mf.value, elemStart: ft.nameStart, elemLen: ft.nameLen)
         } else {
@@ -1843,7 +1848,7 @@ fn genExpr(c: inout Comp, id: U64) {
             genExpr(c: inout c, id: operand)
             write(s: "))")
         }
-        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val fields } => {
+        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
             if isEnum {
                 write(s: "(")
                 writeSpan(c: inout c, start: typeStart, len: typeLen)
@@ -1869,8 +1874,13 @@ fn genExpr(c: inout Comp, id: U64) {
                 }
                 write(s: "}")
             } else {
+                val generic: Bool = isGenericInst(c: inout c, ref: ty)
                 write(s: "(")
-                genCType(c: inout c, start: typeStart, len: typeLen)
+                if generic {
+                    emitConcreteCType(c: inout c, ref: ty)
+                } else {
+                    genCType(c: inout c, start: typeStart, len: typeLen)
+                }
                 write(s: "){")
                 mut val i: U64 = 0
                 while i < fields.count {
@@ -1881,7 +1891,12 @@ fn genExpr(c: inout Comp, id: U64) {
                     write(s: ".")
                     writeSpan(c: inout c, start: mf.nameStart, len: mf.nameLen)
                     write(s: " = ")
-                    val ft: TypeInfo = fieldType(c: inout c, structStart: typeStart, structLen: typeLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                    mut val ft: TypeInfo = scalarInfo()
+                    if generic {
+                        ft = genericFieldTypeInfo(c: inout c, instRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                    } else {
+                        ft = fieldType(c: inout c, structStart: typeStart, structLen: typeLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                    }
                     if ft.kind == 3 {
                         genArrayLiteral(c: inout c, exprId: mf.value, elemStart: ft.nameStart, elemLen: ft.nameLen)
                     } else {
@@ -2148,7 +2163,7 @@ fn compareNeedsTrait(c: inout Comp, op: I64, lhs: U64) -> Bool {
 fn emitEnumOperand(c: inout Comp, id: U64, enStart: U64, enLen: U64) {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val fields } => {
+        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
             if isEnum {
                 writeU64(n: variantIndex(c: inout c, enumStart: enStart, enumLen: enLen, variantStart: variantStart, variantLen: variantLen))
                 return
@@ -3023,6 +3038,51 @@ fn collectGenInsts(c: inout Comp) {
         }
         xi += 1
     }
+}
+
+// TypeInfo of a fully-concrete TypeRef (for literal-context checking and the
+// field/index/method dispatch). Generic instantiations report as kind-2 named
+// (the head span); nested generic field types are deferred (G2a).
+fn typeInfoOfRef(c: inout Comp, ref: U64) -> TypeInfo {
+    val t: TypeRef = c.types[ref]
+    if t.args.count == 0 {
+        return typeInfoOfName(c: inout c, start: t.nameStart, len: t.nameLen, isArray: false)
+    }
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+        val el: TypeRef = c.types[t.args[0]]
+        return typeInfoOfName(c: inout c, start: el.nameStart, len: el.nameLen, isArray: true)
+    }
+    return typeInfoOfName(c: inout c, start: t.nameStart, len: t.nameLen, isArray: false)
+}
+
+// TypeInfo of a generic struct instantiation's field, substituting the type
+// parameter with the instantiation's concrete argument (`Box[I32]`.v -> I32).
+fn genericFieldTypeInfo(c: inout Comp, instRef: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
+    val t: TypeRef = c.types[instRef]
+    val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if si >= c.structs.count {
+        return scalarInfo()
+    }
+    val s: StructDef = c.structs[si]
+    val fields: Array[FieldDef] = s.fields
+    mut val i: U64 = 0
+    while i < fields.count {
+        val fd: FieldDef = fields[i]
+        if spansEqual(c: inout c, aStart: fd.nameStart, aLen: fd.nameLen, bStart: fieldStart, bLen: fieldLen) {
+            val ftr: TypeRef = c.types[fd.ty]
+            mut val pi: U64 = 0
+            while pi < s.typeParams.count {
+                val p: Bind = s.typeParams[pi]
+                if spansEqual(c: inout c, aStart: ftr.nameStart, aLen: ftr.nameLen, bStart: p.nameStart, bLen: p.nameLen) {
+                    return typeInfoOfRef(c: inout c, ref: t.args[pi])
+                }
+                pi += 1
+            }
+            return typeInfoOfRef(c: inout c, ref: fd.ty)
+        }
+        i += 1
+    }
+    return scalarInfo()
 }
 
 // `typedef struct Box_I32 Box_I32;` for one instantiation.

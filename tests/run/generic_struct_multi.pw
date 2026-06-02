@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+
+struct Pair[A, B] {
+    val first: A
+    val second: B
+}
+
+struct Box[T] {
+    val v: T
+}
+
+fn main() {
+    val p: Pair[I32, U8] = <Pair[I32, U8] first=100 second=7 />
+    print(p.first)
+    print(p.second)
+    val bi: Box[I32] = <Box[I32] v=42 />
+    val bb: Box[Box[I32]] = <Box[Box[I32]] v=bi />
+    print(bb.v.v)
+}

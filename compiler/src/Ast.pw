@@ -101,7 +101,7 @@ enum Expr {
     Binary { op: I64, lhs: U64, rhs: U64 }
     Call { nameStart: U64, nameLen: U64, args: Array[Arg] }
     Field { base: U64, nameStart: U64, nameLen: U64 }
-    Make { typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fields: Array[MakeField] }
+    Make { typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: Array[MakeField] }
     Str { start: U64, len: U64 }
     Array { elems: Array[U64] }
     Index { base: U64, index: U64 }
