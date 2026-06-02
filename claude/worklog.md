@@ -2,6 +2,10 @@
 
 > 現在地・次の一歩・運用メモだけを置く。完了した「やった」は git 履歴へ（タグで辿れる）。「なぜ」は [design-decisions.md](design-decisions.md)、「パイプライン設計」は [architecture.md](architecture.md)、「spec からの意図的剥離」は [provisional.md](provisional.md)。
 
+## ⚠️ 自走モード（最重要・常時遵守）
+
+ユーザー長期離席中。**ランタイム完成（コアライブラリ→CoW→ARC/Ref→イベントループ）まで止まらず実装し続ける**。停止してよいのは①後戻りが重い言語表面/spec 決定 ②自力で解けないブロッカー のみ。報告・確認のために turn を終えない＝常に次の増分へ。判断は spec 整合な既定で進め、**仮決めは [autonomous-decisions.md](autonomous-decisions.md) に逐次追記**。緑（build＋test.sh＋不動点）でこまめに署名コミット＆push、worklog 更新。詳細はローカルメモリ `autonomous-until-runtime`。
+
 ## 現在地
 
 🎉 **セルフホスト達成・stage0（Rust）退役済み。** 正典コンパイラ＝Plew パッケージ `compiler/src/`（root `_.pw` が `part` で `Lexer`/`Ast`/`Parser`/`Codegen` を綴じ込む 1 モジュール）。自分自身を不動点までコンパイルする。
@@ -60,7 +64,7 @@ manifest は **`Plew.toml`**（spec 暫定名・TOML・src 既定 `src/`・`/` �
 意味論の hidden-meaning は大半解消済み（整数幅・match・ラベル・診断）。残りは小さく additive。**拠り所「意味は最優先・コストは裏で後回し可」に照らし、leak ランタイムは hidden-cost ゆえ後回しでよい**。大物は以下の順で（合意済み）：
 
 1. **generics**（全ての門）＝型パラメータを struct/enum/fn に＋一般単相化（`Array[E]` 専用ハードコードを一般機構へ）。境界なし（trait 境界は traits と一緒に後段）。**`Ref[T]`/`Promise[T]`/`Optional[T]`/`Result[T,E]` が全部これに依存**。今の C トランスパイル上で完結でき、後の CoW は additive。
-2. **本物のコアライブラリ（純 Plew）**＝`@Std/Core` に `Optional`/`Result` 等を generic enum で実装。要 **I3＝`@Std/X` の実ファイル解決**（ローダは I1 で完成済み・`@Std`→std ディレクトリの解決を足す）。**import の正しい dogfood＝真に独立したモジュール**。これで **`try`＋可謬 I/O（`readFile`→`Result`）** が書けて **S2（残る hidden-meaning）も閉じる**。
+2. **本物のコアライブラリ（純 Plew）**＝🔄 着手済。✅ **I3 完了**（`@Std/X`→`dirname(argv[0])/std/X.pw`・`@` は Unknown トークン長1・collectParts が捕捉・resolveImport が `@Std/` 解決）。✅ **`@Std/Core` に `Optional`/`Result` を generic enum＋メソッド（isSome/isNone/unwrapOr/unwrap・isOk/isErr/unwrapOr/unwrap）で実装**＝`compiler/std/Core.pw`・`import @Std/Core` でロード（`tests/run/core_lib`）。残り：**`try`＋可謬 I/O（`readFile`→`Result`）→ S2 を閉じる**、ambient 化（現状は明示 import・[autonomous-decisions.md](autonomous-decisions.md) 参照）。
 3. **CoW**（値意味論・核の de-risk・以後コードがアリーナ規律から解放）。traits 不要。
 4. **ARC ＋ `Ref`/`WeakRef`**（共有可変＋循環回収・generics 必要）。
 5. **イベントループ（async/await/spawn）**（最大・`Promise[T]` 依存・最後）。

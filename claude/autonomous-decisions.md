@@ -1,0 +1,22 @@
+# 自走中に仮決めした判断の一覧
+
+> ユーザーが長期離席中、「ランタイム完成まで止まらず実装」する制約下で、**判断に迷ったが続行のために仮決めした**項目の一覧。後でユーザーが見直す用。各項目＝**何を／なぜ仮決め／見直し方・代替案**。spec 表面に関わるものは特に要レビュー。確定済みの spec 剥離カタログは [provisional.md](provisional.md)、現在地は [worklog.md](worklog.md)。
+
+## generics（G1〜G3）
+
+- **コアライブラリの設置位置＝`compiler/std/`**。`@Std/X` を `dirname(argv[0]) + "std/" + X + ".pw"` で解決（`compiler/plewc` 起動なら `compiler/std/X.pw`）。
+  - なぜ仮決め：実体位置に確たる根拠なし。env var／インストール時展開／バイナリ埋め込み等いろいろあり得る。
+  - ユーザー確認済の方針（2026-06-03）：**実態位置はどうでもよい**。プログラマ目線で「どこかからインポートできてる」(Rust 風)で OK、最終的にインストール時に適当な場所へ展開。**とりあえず動けば何でも可**。→ 現状の `compiler/std/` 解決で確定扱い（再配置は後で自由）。
+- **`Optional`/`Result` は ambient でなく明示 `import @Std/Core` を要求**（spec では ambient＝import 不要）。
+  - なぜ仮決め：auto-prelude（常時ロード）は既存テストの自前 `enum Optional` と衝突し、prelude 自己ロード回避等の複雑さがある。明示 import が安全で衝突なし。
+  - 見直し方：spec 準拠にするなら `@Std/Core` を prelude として自動ロードし ambient 化（要：自己ロード回避＋名前衝突の扱い）。**acceptance soundness は壊さない**（valid を reject するだけ＝incompleteness）。spec 整合の宿題。
+- **generic free 関数・`map[U]` 系・推移的インスタンス化・クロージャは未実装**（generic メソッドはレシーバ型由来で実装済）。
+  - なぜ仮決め：呼び出し位置の型引数推論（未型リテラルから不可）＋明示 `id[I32](x)` パース（Go 式判別）、メソッド独自型パラメータ、body 内生成インスタンスの推移発見、関数型/クロージャ ── いずれも大物で、コアライブラリの当面の必要（データ＋match＋レシーバ型メソッド）には不要。
+  - 見直し方：コアライブラリが `map`/`flatMap` を要求した時点で着手（worklog の G3 残り設計参照）。
+
+## 既知の別件（generics 以前からの仮決め・関連）
+
+- **C 予約語と衝突する Plew 識別子**（`default`/`double` 等）は生成 C が壊れる＝名前マングリング未実装。コンパイラ自身は回避。ユーザーコードで顕在化する hidden-meaning 穴（acceptance soundness 対象）。見直し：codegen で識別子を安全な C 名にマングル。
+- メモリは leak（free しない）＝CoW/ARC 未実装の hidden cost（[provisional.md](provisional.md)・拠り所上は後回し可）。
+
+> 運用：以後この自走で仮決めするたびここへ追記する。確定したら該当項目を消す／provisional.md or spec へ移す。

@@ -1,0 +1,24 @@
+import @Std/Core
+import @Std/Io with { print }
+
+fn safeDiv(a: I32, b: I32) -> Result[I32, U8] {
+    if b == 0 {
+        return <Result[I32, U8].Err error=1 />
+    }
+    return <Result[I32, U8].Ok value=a / b />
+}
+
+fn main() {
+    val r: Result[I32, U8] = safeDiv(a: 20, b: 4)
+    print(r.unwrapOr(fallback: 0))
+    print(r.isOk())
+    val bad: Result[I32, U8] = safeDiv(a: 1, b: 0)
+    print(bad.unwrapOr(fallback: 99))
+    print(bad.isErr())
+    val o: Optional[I32] = <Optional[I32].Some v=7 />
+    val n: Optional[I32] = <Optional[I32].None />
+    print(o.unwrap())
+    print(n.unwrapOr(fallback: 42))
+    print(o.isSome())
+    print(n.isNone())
+}

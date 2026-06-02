@@ -63,10 +63,16 @@ fn collectParts(rootBytes: Array[U8], toks: Array[Tok]) -> Array[Bind] {
             if i + 1 < toks.count {
                 val first: Tok = toks[i + 1]
                 mut val starts: Bool = false
+                // `@`-imports (`@Std/Core`): `@` lexes as an Unknown token; the
+                // path starts there and extends across the following segments.
                 match first.kind {
                     Kind.Dot => { starts = true }
                     Kind.Slash => { starts = true }
-                    _ => {}
+                    _ => {
+                        if rootBytes[first.start] == 64 {
+                            starts = true
+                        }
+                    }
                 }
                 if starts {
                     val pathStart: U64 = first.start
@@ -132,7 +138,7 @@ fn stripParents(path: Array[U8], baseLen: U64, n: U64) -> U64 {
 // (`@…` intrinsic/external, or `/…` with no package root). `/Seg` → srcRoot +
 // Seg + ".pw"; `./Name` → importerDir + Name + ".pw"; `../Name` → parent(s) of
 // importerDir + Name + ".pw". The trailing-`/` subpath stays (subdirectories).
-fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[U8], baseLen: U64, srcRoot: Array[U8], srcRootLen: U64) -> Array[U8] {
+fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[U8], baseLen: U64, srcRoot: Array[U8], srcRootLen: U64, stdRoot: Array[U8], stdRootLen: U64) -> Array[U8] {
     mut val out: Array[U8] = []
     if pLen == 0 {
         return out
@@ -140,6 +146,35 @@ fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[U8], ba
     val end: U64 = pStart + pLen
     val b0: U8 = src[pStart]
     if b0 == 64 {
+        // `@Std/<rest>` -> stdRoot + <rest> + ".pw" (the language std library).
+        // Other `@dep/...` (external packages) are not resolved yet -> skip.
+        if pLen >= 5 {
+            if src[pStart + 1] == 83 {
+                if src[pStart + 2] == 116 {
+                    if src[pStart + 3] == 100 {
+                        if src[pStart + 4] == 47 {
+                            if stdRootLen == 0 {
+                                return out
+                            }
+                            mut val si: U64 = 0
+                            while si < stdRootLen {
+                                out.append(stdRoot[si])
+                                si += 1
+                            }
+                            mut val sj: U64 = pStart + 5
+                            while sj < end {
+                                out.append(src[sj])
+                                sj += 1
+                            }
+                            out.append(46)
+                            out.append(112)
+                            out.append(119)
+                            return out
+                        }
+                    }
+                }
+            }
+        }
         return out
     }
     if b0 == 47 {
@@ -245,6 +280,23 @@ fn dirPrefixLen(path: Array[U8]) -> U64 {
     return pre
 }
 
+// The std library root: the directory of the plewc binary (argv[0]) with `std/`
+// appended. So invoking `compiler/plewc` resolves `@Std/X` to `compiler/std/X.pw`.
+fn computeStdRoot(arg0: Array[U8]) -> Array[U8] {
+    val pre: U64 = dirPrefixLen(path: arg0)
+    mut val out: Array[U8] = []
+    mut val i: U64 = 0
+    while i < pre {
+        out.append(arg0[i])
+        i += 1
+    }
+    out.append(115)
+    out.append(116)
+    out.append(100)
+    out.append(47)
+    return out
+}
+
 // Find the package source root for `/…` absolute imports: walk up from the
 // entry file's directory to the nearest ancestor containing `Plew.toml` (the
 // manifest), and return `<that dir>/src/`. Empty if no manifest is found (then
@@ -336,6 +388,9 @@ fn main() {
         // package src root for `/…` absolute imports (from the Plew.toml walk-up;
         // empty if no manifest is found, in which case `/…` imports are skipped).
         val srcRoot: Array[U8] = findSrcRoot(entry: entryBytes)
+        // std library root for `@Std/…`: the `std/` directory next to the plewc
+        // binary (argv[0]'s directory), so `@Std/Core` -> `<plewcdir>/std/Core.pw`.
+        val stdRoot: Array[U8] = computeStdRoot(arg0: argAt(0).bytes)
         val es: U64 = pathBuf.count
         appendBytes(into: inout pathBuf, from: entryBytes)
         loaded.append(<Bind nameStart=es nameLen=entryBytes.count fieldStart=es fieldLen=entryBytes.count />)
@@ -357,7 +412,7 @@ fn main() {
             mut val pj: U64 = 0
             while pj < incs.count {
                 val pb: Bind = incs[pj]
-                val childPath: Array[U8] = resolveImport(src: sb, pStart: pb.nameStart, pLen: pb.nameLen, importer: path, baseLen: baseLen, srcRoot: srcRoot, srcRootLen: srcRoot.count)
+                val childPath: Array[U8] = resolveImport(src: sb, pStart: pb.nameStart, pLen: pb.nameLen, importer: path, baseLen: baseLen, srcRoot: srcRoot, srcRootLen: srcRoot.count, stdRoot: stdRoot, stdRootLen: stdRoot.count)
                 if childPath.count == 0 {
                 } else {
                     if pathSeen(buf: pathBuf, loaded: loaded, path: childPath) {
