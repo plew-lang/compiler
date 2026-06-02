@@ -17,7 +17,22 @@
 
 ## 次の一歩の候補（やりやすい順で自走）
 
-- **整数幅エピックの残り：overflow panic＋リテラル文脈型付け＋幅つきストレージ**。④ lossy `as`・0除算 panic は実装済（**意味先行**＝`TypeInfo` にスカラ型名を持たせ・C 型は 64bit 据え置き・コンパイラは U64 に揃え `as` 厳密無損失）。残りはいずれも**式に幅を伝播する型付け**が要る：`exprType` が Binary/Unary を未伝播（`(a-b) as U8` の source 幅が不明＝④ の残穴）→ overflow 検査（U8+U8 の 256→panic）→ 幅つき C 型（hidden cost）→ リテラル文脈型付け（`val f: U8 = 300` の範囲検査・既定型なし・曖昧はエラー）。**式幅伝播を入れると ④ の残穴と overflow が同時に片付く**。複数セッション規模・中途半端だと不動点が壊れるので腰を据えて。
+### ★ 進行中エピック：整数幅をやり切る（次セッションの本線）
+
+**済**：④ lossy `as`（無損失のみ）・0除算 panic。**方針＝意味先行**：`TypeInfo` がスカラ型名を保持（kind=0＋name）・C 型は 64bit 据え置き・コンパイラは U64 に揃え `as` 厳密無損失。**確定済の言語判断**（spec／design-decisions）：U64 添字/count/range・`as`無損失（符号変更/縮小は `TryFrom`）・overflow/0除算は常に panic・**リテラル既定型なし＋曖昧はエラー**・`assert`常時ON。
+
+**残りを以下の順で**（A は小・先に commit／B が本丸／C は hidden cost で後回し可／D は別重量）：
+
+- **Phase A：`exprType` に式の幅を伝播**（④ の残穴 `(a-b) as U8` を閉じる・小）。Binary 算術(56–60)/ビット(74–78)→ `exprType(lhs)`、比較(50–55)/論理(61,62)→ Bool(width-less)、シフトは lhs 型。Unary `-`/`~`→operand 型・`!`→Bool。`exprType(Binary)` の他利用（place 検査の base 等）は低リスクだが不動点で確認。これで `as` check の「source 不明→lenient」分岐が縮む。
+- **Phase B：overflow panic**（hidden meaning の本丸）。幅つき型の算術で真の結果が型に収まらなければ panic。Phase A の結果幅が前提。**設計未決→着手時に方針提示**：①clang の `__builtin_*_overflow` を結果幅で使い溢れたら `plew_panic`（推奨・部品少）vs ②`plew_add_<T>` 等の (op×型) ランタイム関数（5op×8型＝冗長だが明示）。幅不明の式は検査不能＝skip（要 documented）。
+- **Phase C：幅つき C ストレージ**（hidden cost・後回し可）。`genCElem`/`genTypeInfoCType` を `int8_t…uint64_t` に（今は long long）。**Cを入れるとC算術が幅で wrap する**ので、Bの溢れ検査は wrap 前（より広い型 or 組込みで真値）に走らせる必要＝B と密結合。配列要素/フィールド/ローカル/引数/戻りを一斉。最大の不動点リスク（U64→uint64_t はコンパイラの非負値に対し挙動不変ゆえ通るはず）。**64bit 据え置きでも「宣言幅で overflow 検査」は成立**するので、意味完全性（A+B+D）には C は必須でない＝C は独立の cost フォローアップに切れる。
+- **Phase D：リテラル文脈型付け**（hidden meaning＋人間工学）。`val f: U8 = 300` の範囲検査・文脈（let 注釈/フィールド/引数/戻り/配列要素・`as` は済）からリテラル型を決める。**設計未決→着手時に方針提示**：完全な双方向 no-default 推論 vs 注釈必須-else-error の暫定。現状の「全部 long long・print は I64 fallback」を文脈駆動へ替える＝**現在 accept しているコードを reject し得る**ので慎重に。
+- **推奨順＝A→B→D（意味完全）／C は別途 cost 対応**。A 着手が安全な第一手。
+
+> 着手手順は ADD→reseed→USE（下節）。各 Phase で不動点を緑に保ってから commit。新 preamble 行（overflow ランタイム等）を足したら **reseed 2 回**。
+
+### その他の候補（エピック後）
+
 - **`import ./Foo`（名前空間束縛 `Foo.bar`）**。修飾名解決が要る（今は part で全部フラット同一スコープ）。part の provenance 穴の正攻法。
 - 値意味論/CoW・トレイト/ジェネリクスは更に大物（後）。
 - **メソッド化の続き（任意・ROI 逓減）**：残る `parseX(c: inout c)` 群も `impl` へ移せるが再帰的・多数でゲイン小＝後回し可。
