@@ -338,6 +338,7 @@ fn exprOffset(c: inout Comp, id: U64) -> U64 {
         Expr.Coalesce { val opt, val deflt } => { return exprOffset(c: inout c, id: opt) }
         Expr.Try { val expr } => { return exprOffset(c: inout c, id: expr) }
         Expr.Arrow { val base, val nameStart, val nameLen } => { return exprOffset(c: inout c, id: base) }
+        Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => { return retStart }
         _ => { return 0 }
     }
 }
@@ -819,6 +820,9 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     return fieldType(c: inout c, structStart: pt.nameStart, structLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
                 }
             }
+            return scalarInfo()
+        }
+        Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
             return scalarInfo()
         }
     }
@@ -1826,6 +1830,11 @@ fn genExpr(c: inout Comp, id: U64) {
             genExpr(c: inout c, id: base)
             write(s: ")->")
             writeSpan(c: inout c, start: nameStart, len: nameLen)
+        }
+        Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
+            // value = the lambda-lifted function's pointer (`__closure<id>`).
+            write(s: "__closure")
+            writeU64(n: id)
         }
         Expr.Method { val recv, val nameStart, val nameLen, val args } => {
             val bt: TypeInfo = exprType(c: inout c, id: recv)
@@ -3334,6 +3343,85 @@ fn genFunc(c: inout Comp, fi: U64) {
         write(s: "    return 0;\n")
     }
     write(s: "}\n")
+}
+
+// Emit a lambda-lifted closure: signature `<ret> __closure<id>(<params>)`, then
+// `;` (proto) or the body. v1 closures are non-capturing (the body sees its
+// params and globals only). The expression `<id>` is the Closure's arena index.
+fn genClosure(c: inout Comp, id: U64, proto: Bool) {
+    match c.exprs[id] {
+        Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
+            if hasRet {
+                c.curRetVoid = false
+                c.curRetStart = retStart
+                c.curRetLen = retLen
+                c.curRetIsArray = retIsArray
+                c.curRetTy = retTy
+                genCTypeOf(c: inout c, tyRef: retTy, fallStart: retStart, fallLen: retLen, isArray: retIsArray)
+            } else {
+                c.curRetVoid = true
+                c.curRetStart = 0
+                c.curRetLen = 0
+                c.curRetIsArray = false
+                c.curRetTy = 0
+                write(s: "void")
+            }
+            write(s: " __closure")
+            writeU64(n: id)
+            write(s: "(")
+            if params.count == 0 {
+                write(s: "void")
+            } else {
+                mut val i: U64 = 0
+                while i < params.count {
+                    if i > 0 {
+                        write(s: ", ")
+                    }
+                    val p: Param = params[i]
+                    genCTypeOf(c: inout c, tyRef: p.ty, fallStart: p.tyStart, fallLen: p.tyLen, isArray: p.tyIsArray)
+                    if p.isInout {
+                        write(s: "*")
+                    }
+                    write(s: " ")
+                    writeSpan(c: inout c, start: p.nameStart, len: p.nameLen)
+                    i += 1
+                }
+            }
+            write(s: ")")
+            if proto {
+                write(s: ";\n")
+            } else {
+                c.curIsMain = false
+                c.curHasRecv = false
+                c.locals = []
+                mut val pj: U64 = 0
+                while pj < params.count {
+                    val p2: Param = params[pj]
+                    addLocal(c: inout c, nameStart: p2.nameStart, nameLen: p2.nameLen, tyStart: p2.tyStart, tyLen: p2.tyLen, isArray: p2.tyIsArray, ty: p2.ty, isInout: p2.isInout, isMut: false)
+                    pj += 1
+                }
+                write(s: " {\n")
+                genBlock(c: inout c, id: body)
+                write(s: "}\n")
+            }
+        }
+        _ => {}
+    }
+}
+
+// Emit prototypes (proto=true) or bodies (proto=false) for every lambda-lifted
+// closure literal in the program (one per Expr.Closure arena node).
+fn emitClosures(c: inout Comp, proto: Bool) {
+    mut val i: U64 = 0
+    while i < c.exprs.count {
+        match c.exprs[i] {
+            Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
+                genClosure(c: inout c, id: i, proto: proto)
+            }
+            _ => {}
+        }
+        i += 1
+    }
 }
 
 // Emit an enum as a tagged union: `struct E { long long tag; union { struct

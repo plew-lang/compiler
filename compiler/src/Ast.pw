@@ -133,6 +133,11 @@ enum Expr {
     // a C `T*`, so this is C's `ref->field`. `->` is spec's pointee accessor;
     // the bare handle is `.` (rare). Shared mutation is visible at `->`.
     Arrow { base: U64, nameStart: U64, nameLen: U64 }
+    // a closure literal `fn(params) -> ret { body }`. Lambda-lifted to a
+    // top-level C function named `__closure<exprIndex>`; the expression value is
+    // that function's pointer. v1: non-capturing (the body may reference its
+    // params and globals, not enclosing locals).
+    Closure { params: Array[Param], hasRet: Bool, retStart: U64, retLen: U64, retIsArray: Bool, retTy: U64, body: U64 }
 }
 
 // One arm of a match: either `_ => block` (wildcard) or `Enum.Variant

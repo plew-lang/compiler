@@ -1,0 +1,9 @@
+import @Std/Io with { print }
+fn apply(f: fn(n: I32) -> I32, x: I32) -> I32 {
+    return f(n: x)
+}
+fn main() {
+    val g: fn(n: I32) -> I32 = fn(n: I32) -> I32 { return n * 3 }
+    print(g(n: 4))
+    print(apply(f: fn(n: I32) -> I32 { return n + 100 }, x: 5))
+}

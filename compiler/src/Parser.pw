@@ -146,6 +146,32 @@ fn parsePrimary(c: inout Comp) -> U64 {
             }
             return inner
         }
+        Kind.KwFn => {
+            // closure literal `fn(params) -> ret { body }` (lambda-lifted).
+            c.advance()
+            val params: Array[Param] = parseParamList(c: inout c)
+            mut val hasRet: Bool = false
+            mut val retStart: U64 = 0
+            mut val retLen: U64 = 0
+            mut val retIsArray: Bool = false
+            mut val retRef: U64 = 0
+            match c.curKind() {
+                Kind.Arrow => {
+                    c.advance()
+                    hasRet = true
+                    val rty: PType = parseTypeTok(c: inout c)
+                    retStart = rty.start
+                    retLen = rty.len
+                    retIsArray = rty.isArray
+                    retRef = rty.ref
+                    recordArrayElem(c: inout c, ty: rty)
+                }
+                _ => {}
+            }
+            c.skipNewlines()
+            val body: U64 = parseBlock(c: inout c)
+            return c.pushExpr(e: <Expr.Closure params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body />)
+        }
         Kind.Lt => {
             return parseMake(c: inout c)
         }
@@ -1103,27 +1129,10 @@ fn parseBlock(c: inout Comp) -> U64 {
 
 // ---- declaration parser ----
 
-// `fn name ( params ) [-> ret] { body }`. The leading `fn` (and any `inout`
-// receiver marker for methods) is already consumed; the current token is the
-// name. `hasRecv`/`recv*`/`selfInout` describe an `impl Type` method receiver
-// (none for a free function).
-fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, selfInout: Bool, implParams: Array[Bind]) {
-    val nameTok: Tok = c.cur()
-    c.advance()
-    // type parameters in scope = those introduced by the enclosing `impl[T]`
-    // (for a method) followed by the function's own `fn id[U](...)`.
-    val ownParams: Array[Bind] = parseTypeParams(c: inout c)
-    mut val typeParams: Array[Bind] = []
-    mut val ipi: U64 = 0
-    while ipi < implParams.count {
-        typeParams.append(implParams[ipi])
-        ipi += 1
-    }
-    mut val opi: U64 = 0
-    while opi < ownParams.count {
-        typeParams.append(ownParams[opi])
-        opi += 1
-    }
+// Parse a parenthesized parameter list `( name: [inout] Type, ... )` into
+// Param nodes (shared by function/method declarations and closure literals).
+// If the current token is not `(`, returns an empty list.
+fn parseParamList(c: inout Comp) -> Array[Param] {
     mut val params: Array[Param] = []
     match c.curKind() {
         Kind.LParen => {
@@ -1148,7 +1157,6 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
                         match c.curKind() {
                             Kind.Colon => {
                                 c.advance()
-                                // optional `inout` before the type
                                 match c.curKind() {
                                     Kind.KwInout => {
                                         c.advance()
@@ -1176,6 +1184,31 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
         }
         _ => {}
     }
+    return params
+}
+
+// `fn name ( params ) [-> ret] { body }`. The leading `fn` (and any `inout`
+// receiver marker for methods) is already consumed; the current token is the
+// name. `hasRecv`/`recv*`/`selfInout` describe an `impl Type` method receiver
+// (none for a free function).
+fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, selfInout: Bool, implParams: Array[Bind]) {
+    val nameTok: Tok = c.cur()
+    c.advance()
+    // type parameters in scope = those introduced by the enclosing `impl[T]`
+    // (for a method) followed by the function's own `fn id[U](...)`.
+    val ownParams: Array[Bind] = parseTypeParams(c: inout c)
+    mut val typeParams: Array[Bind] = []
+    mut val ipi: U64 = 0
+    while ipi < implParams.count {
+        typeParams.append(implParams[ipi])
+        ipi += 1
+    }
+    mut val opi: U64 = 0
+    while opi < ownParams.count {
+        typeParams.append(ownParams[opi])
+        opi += 1
+    }
+    val params: Array[Param] = parseParamList(c: inout c)
     mut val hasRet: Bool = false
     mut val retStart: U64 = 0
     mut val retLen: U64 = 0
