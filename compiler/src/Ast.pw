@@ -119,6 +119,16 @@ enum Expr {
     // a block ending in `give`. Lowers to a C statement-expression (like
     // MatchExpr). `else` is mandatory in value position (it must always yield).
     IfExpr { cond: U64, thenBlk: U64, elseBlk: U64 }
+    // `opt ?? default` (nil-coalescing on Optional): the value inside `Some`,
+    // else `default`. Lowers to a C statement-expression reading the Optional's
+    // tag. Couples to @Std/Core's Optional shape (Some = tag 0, field `v`).
+    Coalesce { opt: U64, deflt: U64 }
+    // `try expr` (Result early return): if `expr` is `Err`, return it from the
+    // enclosing function (rebuilt as the function's own Result error variant);
+    // otherwise the `Ok` value. Couples to @Std/Core's Result shape (Ok = tag 0
+    // field `value`, Err = tag 1 field `error`). First cut: error types must
+    // match (no `From` conversion yet).
+    Try { expr: U64 }
 }
 
 // One arm of a match: either `_ => block` (wildcard) or `Enum.Variant
@@ -276,6 +286,9 @@ struct Comp {
     mut val curRetStart: U64
     mut val curRetLen: U64
     mut val curRetIsArray: Bool
+    // the current function's structured return type (TypeRef index), so `try`
+    // can rebuild the function's Result error variant. 0 outside a function.
+    mut val curRetTy: U64
     // set per-function during codegen for the implicit method receiver: whether
     // the current function is a method, and if so its receiver type span and
     // whether self is `inout` (so a bare `self` lowers to `(*self)`).

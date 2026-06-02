@@ -335,6 +335,8 @@ fn exprOffset(c: inout Comp, id: U64) -> U64 {
         Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => { return typeStart }
         Expr.MatchExpr { val scrut, val arms } => { return exprOffset(c: inout c, id: scrut) }
         Expr.IfExpr { val cond, val thenBlk, val elseBlk } => { return exprOffset(c: inout c, id: cond) }
+        Expr.Coalesce { val opt, val deflt } => { return exprOffset(c: inout c, id: opt) }
+        Expr.Try { val expr } => { return exprOffset(c: inout c, id: expr) }
         _ => { return 0 }
     }
 }
@@ -714,6 +716,10 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 val f: Func = c.funcs[fi]
                 if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: nameStart, bLen: nameLen) {
                     if f.hasRet {
+                        if isGenericInst(c: inout c, ref: f.retTy) {
+                            val rtr: TypeRef = c.types[f.retTy]
+                            return <TypeInfo kind=2 nameStart=rtr.nameStart nameLen=rtr.nameLen ref=f.retTy />
+                        }
                         return typeInfoOfName(c: inout c, start: f.retStart, len: f.retLen, isArray: f.retIsArray)
                     }
                     return scalarInfo()
@@ -771,6 +777,21 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             val g: U64 = blockGiveExpr(c: inout c, blkId: thenBlk)
             if g < c.exprs.count {
                 return exprType(c: inout c, id: g)
+            }
+            return scalarInfo()
+        }
+        Expr.Coalesce { val opt, val deflt } => {
+            // result type = the Optional's element T = the default's type.
+            return exprType(c: inout c, id: deflt)
+        }
+        Expr.Try { val expr } => {
+            // result type = the Result's Ok payload T (args[0] of Result[T, E]).
+            val rt: TypeInfo = exprType(c: inout c, id: expr)
+            if isGenericInst(c: inout c, ref: rt.ref) {
+                val inst: TypeRef = c.types[rt.ref]
+                if inst.args.count > 0 {
+                    return typeInfoOfRef(c: inout c, ref: inst.args[0])
+                }
             }
             return scalarInfo()
         }
@@ -1257,6 +1278,15 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
                 checkLitCtx(c: inout c, id: arms[i].body, eKind: eKind, eBits: eBits, eSgn: eSgn)
                 i += 1
             }
+        }
+        Expr.Coalesce { val opt, val deflt } => {
+            // the default carries the surrounding context (it is the result T);
+            // the Optional operand is self-typed.
+            checkLitCtx(c: inout c, id: opt, eKind: 0, eBits: 0, eSgn: false)
+            checkLitCtx(c: inout c, id: deflt, eKind: eKind, eBits: eBits, eSgn: eSgn)
+        }
+        Expr.Try { val expr } => {
+            checkLitCtx(c: inout c, id: expr, eKind: 0, eBits: 0, eSgn: false)
         }
         _ => {}
     }
@@ -2071,6 +2101,57 @@ fn genExpr(c: inout Comp, id: U64) {
             writeU64(n: t)
             write(s: "; })")
         }
+        Expr.Coalesce { val opt, val deflt } => {
+            // `opt ?? deflt` -> read the Optional's tag; Some(0) yields its `v`,
+            // else the default. Couples to @Std/Core Optional (Some=0, field v).
+            val t: U64 = c.tmp
+            c.tmp = c.tmp + 1
+            val ot: TypeInfo = exprType(c: inout c, id: opt)
+            write(s: "({ ")
+            if isGenericInst(c: inout c, ref: ot.ref) {
+                emitMangle(c: inout c, ref: ot.ref)
+            } else {
+                genTypeInfoCType(c: inout c, ti: ot)
+            }
+            write(s: " __c")
+            writeU64(n: t)
+            write(s: " = (")
+            genExpr(c: inout c, id: opt)
+            write(s: "); __c")
+            writeU64(n: t)
+            write(s: ".tag == 0 ? __c")
+            writeU64(n: t)
+            write(s: ".data.Some.v : (")
+            genExpr(c: inout c, id: deflt)
+            write(s: "); })")
+        }
+        Expr.Try { val expr } => {
+            // `try expr` -> if Err(tag 1), early-return the function's own Result
+            // error variant; else yield the Ok value. Couples to @Std/Core Result
+            // (Ok=0 field value, Err=1 field error). First cut: error types match.
+            val t: U64 = c.tmp
+            c.tmp = c.tmp + 1
+            val et: TypeInfo = exprType(c: inout c, id: expr)
+            write(s: "({ ")
+            if isGenericInst(c: inout c, ref: et.ref) {
+                emitMangle(c: inout c, ref: et.ref)
+            } else {
+                genTypeInfoCType(c: inout c, ti: et)
+            }
+            write(s: " __t")
+            writeU64(n: t)
+            write(s: " = (")
+            genExpr(c: inout c, id: expr)
+            write(s: "); if (__t")
+            writeU64(n: t)
+            write(s: ".tag == 1) { return (")
+            emitMangle(c: inout c, ref: c.curRetTy)
+            write(s: "){.tag = 1, .data.Err.error = __t")
+            writeU64(n: t)
+            write(s: ".data.Err.error}; } __t")
+            writeU64(n: t)
+            write(s: ".data.Ok.value; })")
+        }
     }
 }
 
@@ -2809,11 +2890,13 @@ fn genFunc(c: inout Comp, fi: U64) {
         c.curRetStart = f.retStart
         c.curRetLen = f.retLen
         c.curRetIsArray = f.retIsArray
+        c.curRetTy = f.retTy
     } else {
         c.curRetVoid = true
         c.curRetStart = 0
         c.curRetLen = 0
         c.curRetIsArray = false
+        c.curRetTy = 0
     }
     // expose the method receiver so a bare `self` in the body resolves (and
     // lowers to `(*self)` for `inout fn`).

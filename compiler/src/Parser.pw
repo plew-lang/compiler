@@ -4,7 +4,8 @@
 // ---- expression parser (precedence climbing) ----
 
 // Binary operator precedence (higher binds tighter). Spec order, low to high:
-// || < && < comparison < | < ^ < & < shift < +- < */%.
+// || < && < comparison < ?? < | < ^ < & < shift < +- < */%.
+// (`??` sits between comparison and `|`, per CLAUDE.md / spec/12.)
 fn binPrec(k: Kind) -> I64 {
     return match k {
         Kind.PipePipe => 1
@@ -15,16 +16,17 @@ fn binPrec(k: Kind) -> I64 {
         Kind.Le => 3
         Kind.Gt => 3
         Kind.Ge => 3
-        Kind.Pipe => 4
-        Kind.Caret => 5
-        Kind.Amp => 6
-        Kind.Shl => 7
-        Kind.Shr => 7
-        Kind.Plus => 8
-        Kind.Minus => 8
-        Kind.Star => 9
-        Kind.Slash => 9
-        Kind.Percent => 9
+        Kind.Coalesce => 4
+        Kind.Pipe => 5
+        Kind.Caret => 6
+        Kind.Amp => 7
+        Kind.Shl => 8
+        Kind.Shr => 8
+        Kind.Plus => 9
+        Kind.Minus => 9
+        Kind.Star => 10
+        Kind.Slash => 10
+        Kind.Percent => 10
         _ => 0
     }
 }
@@ -190,6 +192,13 @@ fn parsePrimary(c: inout Comp) -> U64 {
 }
 
 fn parseUnary(c: inout Comp) -> U64 {
+    // `try <postfix-chain>` (Result early return): prefix, binds the whole
+    // postfix chain, stronger than binary operators. `try` is an identifier.
+    if c.identIs(kw: "try") {
+        c.advance()
+        val inner: U64 = parsePostfix(c: inout c)
+        return c.pushExpr(e: <Expr.Try expr=inner />)
+    }
     val k: Kind = c.curKind()
     match k {
         Kind.Minus => {
@@ -346,10 +355,20 @@ fn parseBin(c: inout Comp, minPrec: I64) -> U64 {
         if prec < minPrec {
             break
         }
-        val op: I64 = kindCode(k: k)
-        c.advance()
-        val right: U64 = parseBin(c: inout c, minPrec: prec + 1)
-        left = c.pushExpr(e: <Expr.Binary op=op lhs=left rhs=right />)
+        // `??` is right-associative and lowers to a dedicated Coalesce node.
+        match k {
+            Kind.Coalesce => {
+                c.advance()
+                val rhs: U64 = parseBin(c: inout c, minPrec: prec)
+                left = c.pushExpr(e: <Expr.Coalesce opt=left deflt=rhs />)
+            }
+            _ => {
+                val op: I64 = kindCode(k: k)
+                c.advance()
+                val right: U64 = parseBin(c: inout c, minPrec: prec + 1)
+                left = c.pushExpr(e: <Expr.Binary op=op lhs=left rhs=right />)
+            }
+        }
     }
     return left
 }

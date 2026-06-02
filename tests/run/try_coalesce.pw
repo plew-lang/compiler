@@ -1,0 +1,30 @@
+import @Std/Core
+import @Std/Io with { print }
+
+fn parseDigit(b: U8) -> Result[I32, U8] {
+    if b < 48 {
+        return <Result[I32, U8].Err error=1 />
+    }
+    if b > 57 {
+        return <Result[I32, U8].Err error=1 />
+    }
+    return <Result[I32, U8].Ok value=(b as I32) - 48 />
+}
+
+fn sumTwo(a: U8, b: U8) -> Result[I32, U8] {
+    val x: I32 = try parseDigit(b: a)
+    val y: I32 = try parseDigit(b: b)
+    return <Result[I32, U8].Ok value=x + y />
+}
+
+fn main() {
+    val ok: Result[I32, U8] = sumTwo(a: 55, b: 50)
+    print(ok.unwrapOr(fallback: 0))
+    val bad: Result[I32, U8] = sumTwo(a: 55, b: 99)
+    print(bad.unwrapOr(fallback: 0))
+    print(bad.isErr())
+    val some: Optional[I32] = <Optional[I32].Some v=5 />
+    val none: Optional[I32] = <Optional[I32].None />
+    print(some ?? 0)
+    print(none ?? 42)
+}
