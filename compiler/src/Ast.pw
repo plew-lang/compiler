@@ -200,6 +200,9 @@ struct Param {
     val tyIsArray: Bool
     val ty: U64
     val isInout: Bool
+    // label-suppressed `name~: Type` (spec/04): the argument is passed without a
+    // label (positional). Default false = labelled (the normal case).
+    val noLabel: Bool
 }
 
 struct FieldDef {

@@ -1,5 +1,5 @@
 import @Std/Core
 fn main() {
     val x: I32 = 5
-    assert(cond: x > 10)
+    assert(x > 10)
 }

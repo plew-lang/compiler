@@ -389,14 +389,21 @@ fn paramsLabelsOk(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bool
     mut val i: U64 = 0
     while i < args.count {
         val a: Arg = args[i]
-        if a.hasLabel {
-            val p: Param = params[i]
-            if spansEqual(c: inout c, aStart: a.labelStart, aLen: a.labelLen, bStart: p.nameStart, bLen: p.nameLen) {
-            } else {
+        val p: Param = params[i]
+        if p.noLabel {
+            // label-suppressed param: the argument must be positional (no label).
+            if a.hasLabel {
                 return false
             }
         } else {
-            return false
+            if a.hasLabel {
+                if spansEqual(c: inout c, aStart: a.labelStart, aLen: a.labelLen, bStart: p.nameStart, bLen: p.nameLen) {
+                } else {
+                    return false
+                }
+            } else {
+                return false
+            }
         }
         i += 1
     }

@@ -18,6 +18,7 @@
 
 - **`try` はエラー型一致を要求（`From` 変換なし）**。spec では `try` が `Err` 時に `<E from=f />`（From）でエラー型変換する。第一カットは未実装＝ソース `Result[T,E]` と関数戻り `Result[U,E']` の **E==E' 必須**（違うと生成 C が型不一致）。見直し：From トレイト実装後に変換挿入。
 - **`?.`（オプショナルチェーン）未実装**。`??`・`match`・`try` でカバー。見直し：spec/13 の `?.` を後で。
+- ✅ **`assert(x > 0)` 実装済（spec 忠実）**＝`@Std/Core` の純 Plew `fn assert(cond~: Bool)`（偽で panic・常時 ON）。**ラベル抑制 `~:` も実装**（`name~: Type` で位置引数・`paramsLabelsOk` が noLabel param の無ラベル arg を許可）。残：`assert` の任意 `message:` 引数（デフォルト引数）。
 - **`??`/`try` は `@Std/Core` の Optional/Result の形に密結合**（Some=tag0/field `v`、Ok=tag0/field `value`、Err=tag1/field `error` をハードコード）。lang-item ゆえ妥当だが、ユーザーが別形の Optional を定義しても `??` はこの形を仮定。見直し：lang-item を spec で固定 or コンパイラが Core のシンボルを参照。
 
 ## ランタイム：値意味論（CoW）
