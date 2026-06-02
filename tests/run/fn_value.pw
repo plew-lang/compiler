@@ -1,0 +1,10 @@
+import @Std/Io with { print }
+fn twice(n: I32) -> I32 { return n * 2 }
+fn apply(f: fn(n: I32) -> I32, x: I32) -> I32 {
+    return f(n: x)
+}
+fn main() {
+    val g: fn(n: I32) -> I32 = twice
+    print(g(n: 5))
+    print(apply(f: twice, x: 21))
+}

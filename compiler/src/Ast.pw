@@ -274,6 +274,9 @@ struct Comp {
     // structurally), collected from use sites after parsing. Post-order so a
     // by-value nested instance is defined before the type that contains it.
     mut val genInsts: Array[U64]
+    // distinct function-type TypeRefs (head `fn`), for emitting a C function
+    // pointer typedef per signature. Collected with genInsts during scanType.
+    mut val fnTypes: Array[U64]
     // distinct Array element type names seen in declarations (for monomorphizing
     // PlewArray_<E> + runtime); each entry reuses Bind as a (start,len) pair.
     mut val arrayElems: Array[Bind]

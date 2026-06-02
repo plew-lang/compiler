@@ -3431,6 +3431,15 @@ fn isGenericInst(c: inout Comp, ref: U64) -> Bool {
     return genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen) < c.enums.count
 }
 
+// Is `ref` a function type (head `fn`, args = [return, params...])?
+fn isFnType(c: inout Comp, ref: U64) -> Bool {
+    if ref >= c.types.count {
+        return false
+    }
+    val t: TypeRef = c.types[ref]
+    return rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "fn")
+}
+
 // Is `ref` a `Ref[T]` instantiation? `Ref` is a blessed primitive (a shared
 // mutable heap box), lowered to a C `T*` — not a user struct/enum.
 fn isRefInst(c: inout Comp, ref: U64) -> Bool {
@@ -3517,6 +3526,11 @@ fn emitConcreteCType(c: inout Comp, ref: U64) {
         write(s: "*")
         return
     }
+    // a function type -> its function-pointer typedef name.
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "fn") {
+        emitMangle(c: inout c, ref: r)
+        return
+    }
     // generic struct instantiation -> mangled C struct name.
     emitMangle(c: inout c, ref: r)
 }
@@ -3576,6 +3590,10 @@ fn genCTypeOf(c: inout Comp, tyRef: U64, fallStart: U64, fallLen: U64, isArray: 
         return
     }
     if isRefInst(c: inout c, ref: tyRef) {
+        emitConcreteCType(c: inout c, ref: tyRef)
+        return
+    }
+    if isFnType(c: inout c, ref: tyRef) {
         emitConcreteCType(c: inout c, ref: tyRef)
         return
     }
@@ -3681,6 +3699,21 @@ fn scanType(c: inout Comp, ref: U64) {
     if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
         if t.args.count == 1 {
             registerArrayElemRef(c: inout c, elemRef: t.args[0])
+        }
+    }
+    // register a function type for its C typedef (deduped structurally).
+    if isFnType(c: inout c, ref: ref) {
+        mut val fj: U64 = 0
+        mut val seen: Bool = false
+        while fj < c.fnTypes.count {
+            if typeRefEq(c: inout c, a: c.fnTypes[fj], b: ref) {
+                seen = true
+            }
+            fj += 1
+        }
+        if seen {
+        } else {
+            c.fnTypes.append(ref)
         }
     }
     if isGenericInst(c: inout c, ref: ref) {
@@ -3883,6 +3916,33 @@ fn genericEnumFieldTypeInfo(c: inout Comp, instRef: U64, variantStart: U64, vari
 fn genBindTypeInst(c: inout Comp, instRef: U64, variantStart: U64, variantLen: U64, bindStart: U64, bindLen: U64) {
     val ti: TypeInfo = genericEnumFieldTypeInfo(c: inout c, instRef: instRef, variantStart: variantStart, variantLen: variantLen, fieldStart: bindStart, fieldLen: bindLen)
     genTypeInfoCType(c: inout c, ti: ti)
+}
+
+// `typedef <ret> (*<mangle>)(<params>);` for one function type.
+fn emitFnTypedef(c: inout Comp, fnRef: U64) {
+    val t: TypeRef = c.types[fnRef]
+    write(s: "typedef ")
+    if t.args.count > 0 {
+        emitConcreteCType(c: inout c, ref: t.args[0])
+    } else {
+        write(s: "void")
+    }
+    write(s: " (*")
+    emitMangle(c: inout c, ref: fnRef)
+    write(s: ")(")
+    if t.args.count <= 1 {
+        write(s: "void")
+    } else {
+        mut val i: U64 = 1
+        while i < t.args.count {
+            if i > 1 {
+                write(s: ", ")
+            }
+            emitConcreteCType(c: inout c, ref: t.args[i])
+            i += 1
+        }
+    }
+    write(s: ");\n")
 }
 
 // `typedef struct Box_I32 Box_I32;` for one instantiation.
