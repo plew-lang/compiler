@@ -1,0 +1,14 @@
+// `as` is lossless-only: widening integer conversions (and in-range literals)
+// are accepted. Narrowing / signedness-changing `as` is a compile error
+// (see tests/reject/cast_*), to be done via TryFrom instead.
+import @Std/Io with { print }
+
+fn main() {
+    val a: U8 = 200
+    print(a as U64)        // 200  (unsigned widening)
+    val b: I32 = 5
+    print(b as I64)        // 5    (signed widening)
+    val c: U16 = 1000
+    print(c as I32)        // 1000 (unsigned -> strictly wider signed)
+    print('A' as U8)       // 65   (literal fits U8)
+}

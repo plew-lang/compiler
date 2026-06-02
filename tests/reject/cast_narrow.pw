@@ -1,0 +1,9 @@
+// `as` is lossless-only: a narrowing integer conversion (I64 -> U8) must be a
+// compile error (use a fallible TryFrom instead).
+import @Std/Io with { print }
+
+fn main() {
+    val x: I64 = 5
+    val y: U8 = x as U8
+    print(y)
+}

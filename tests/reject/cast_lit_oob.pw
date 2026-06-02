@@ -1,0 +1,7 @@
+// An integer literal that does not fit the `as` target type is rejected (300
+// does not fit U8). Silent truncation is exactly the hidden-meaning `as` forbids.
+import @Std/Io with { print }
+
+fn main() {
+    print(300 as U8)
+}

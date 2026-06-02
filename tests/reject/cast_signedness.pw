@@ -1,0 +1,9 @@
+// `as` is lossless-only: U64 -> I64 is the same width but not value-preserving
+// (large u64 values become negative), so it must be rejected.
+import @Std/Io with { print }
+
+fn main() {
+    val x: U64 = 5
+    val y: I64 = x as I64
+    print(y)
+}

@@ -74,6 +74,86 @@ fn isPrimType(c: inout Comp, start: U64, len: U64) -> Bool {
     return false
 }
 
+// Whether a type-name span is one of the 8 integer types (excludes Bool/String).
+fn isIntType(c: inout Comp, start: U64, len: U64) -> Bool {
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I8") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I16") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I32") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I64") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U8") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U16") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U32") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U64") { return true }
+    return false
+}
+
+// Bit width of an integer type-name span (0 if not an integer type).
+fn intBits(c: inout Comp, start: U64, len: U64) -> U64 {
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I8") { return 8 }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U8") { return 8 }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I16") { return 16 }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U16") { return 16 }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I32") { return 32 }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U32") { return 32 }
+    return 64
+}
+
+// Whether an integer type-name span is signed (`I*`). Assumes isIntType.
+fn intSigned(c: inout Comp, start: U64, len: U64) -> Bool {
+    return c.bytes[start] == 'I'
+}
+
+// Whether `src as dst` (both integer types) is lossless — i.e. dst represents
+// every src value (spec: `as` is lossless-only; narrowing/signedness -> TryFrom).
+fn losslessInt(c: inout Comp, srcStart: U64, srcLen: U64, dstStart: U64, dstLen: U64) -> Bool {
+    val sBits: U64 = intBits(c: inout c, start: srcStart, len: srcLen)
+    val dBits: U64 = intBits(c: inout c, start: dstStart, len: dstLen)
+    val sSigned: Bool = intSigned(c: inout c, start: srcStart, len: srcLen)
+    val dSigned: Bool = intSigned(c: inout c, start: dstStart, len: dstLen)
+    if sSigned {
+        if dSigned {
+            return dBits >= sBits
+        }
+        // signed -> unsigned: negatives are unrepresentable.
+        return false
+    }
+    if dSigned {
+        // unsigned -> signed needs a strictly wider target (the sign bit).
+        return dBits > sBits
+    }
+    return dBits >= sBits
+}
+
+// Whether the literal `value` fits the target integer type's range.
+fn litFitsType(c: inout Comp, value: I64, dstStart: U64, dstLen: U64) -> Bool {
+    val bits: U64 = intBits(c: inout c, start: dstStart, len: dstLen)
+    val sgn: Bool = intSigned(c: inout c, start: dstStart, len: dstLen)
+    if sgn {
+        if bits >= 64 {
+            return true
+        }
+        val half: I64 = 1 << (bits - 1)
+        if value < (0 - half) {
+            return false
+        }
+        if value > half - 1 {
+            return false
+        }
+        return true
+    }
+    if value < 0 {
+        return false
+    }
+    if bits >= 64 {
+        return true
+    }
+    val maxv: I64 = (1 << bits) - 1
+    if value > maxv {
+        return false
+    }
+    return true
+}
+
 // Emit the C *element* type for a type-name span (no Array wrapper): scalars
 // -> long long, except U8 -> unsigned char (so byte arrays alias a char buffer
 // for String.bytes); String -> PlewString; named struct/enum -> echoed.
@@ -353,7 +433,9 @@ fn typeInfoOfName(c: inout Comp, start: U64, len: U64, isArray: Bool) -> TypeInf
         return <TypeInfo kind=1 nameStart=start nameLen=len />
     }
     if isPrimType(c: inout c, start: start, len: len) {
-        return scalarInfo()
+        // kind=0 (scalar) but carry the type name so the width is recoverable
+        // (e.g. for the lossless-`as` check). The C type stays 64-bit for now.
+        return <TypeInfo kind=0 nameStart=start nameLen=len />
     }
     return <TypeInfo kind=2 nameStart=start nameLen=len />
 }
@@ -1049,6 +1131,32 @@ fn genExpr(c: inout Comp, id: U64) {
             write(s: "0")
         }
         Expr.Cast { val operand, val tyStart, val tyLen } => {
+            // lossless-`as` check (spec: `as` is infallible/lossless; narrowing or
+            // signedness change must go through TryFrom). Only checked when the
+            // target is an integer type and the source is a literal or has a
+            // recoverable integer type; otherwise left to a later pass.
+            if isIntType(c: inout c, start: tyStart, len: tyLen) {
+                val opE: Expr = c.exprs[operand]
+                match opE {
+                    Expr.Int { val value } => {
+                        if litFitsType(c: inout c, value: value, dstStart: tyStart, dstLen: tyLen) {
+                        } else {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "integer literal is out of range for the target type of `as`")
+                            return
+                        }
+                    }
+                    _ => {
+                        val st: TypeInfo = exprType(c: inout c, id: operand)
+                        if isIntType(c: inout c, start: st.nameStart, len: st.nameLen) {
+                            if losslessInt(c: inout c, srcStart: st.nameStart, srcLen: st.nameLen, dstStart: tyStart, dstLen: tyLen) {
+                            } else {
+                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "`as` would lose information (narrowing or signedness change); use a fallible TryFrom conversion")
+                                return
+                            }
+                        }
+                    }
+                }
+            }
             write(s: "((")
             genCElem(c: inout c, start: tyStart, len: tyLen)
             write(s: ")(")
