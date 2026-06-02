@@ -250,6 +250,19 @@ fn selfhost_calc_parser_builds_and_runs() {
 }
 
 #[test]
+fn selfhost_token_parser_builds_and_runs() {
+    // selfhost/parser.pw: a parser that consumes the LEXER'S TOKEN STREAM
+    // (Array[Tok]) rather than raw bytes — advancing a token cursor, dispatching
+    // on Tok.kind via match, and reading an Int literal's value back out of the
+    // source bytes via its (start, len) span. This is the shape the self-hosted
+    // compiler's parser needs: lex -> tokens -> parse.
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../selfhost/parser.pw");
+    let src = std::fs::read_to_string(path).expect("read selfhost/parser.pw");
+    // "1 + 2 * 3 - 4 % 3" = 1 + 6 - 1 = 6
+    assert_eq!(build_and_run_stdin(&src, "selfhost_tokparse", "1 + 2 * 3 - 4 % 3\n"), "6\n");
+}
+
+#[test]
 fn builds_and_runs_stdin_io() {
     use std::io::Write;
     use std::process::Stdio;
