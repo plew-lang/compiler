@@ -8,7 +8,7 @@
 
 - **ビルド**：`./bootstrap.sh`＝C 種 `compiler/plewc.seed.c`→clang→`plewc0`→`compiler/src/_.pw` を自己コンパイル→不動点 cmp（Rust/cargo 不要）。`./bootstrap.sh --reseed` で種更新。
 - **テスト**：`./test.sh`＝`tests/run/*.pw`（`.out` 照合・任意 `.in`）＋`tests/reject/*.pw`（コンパイル失敗を確認＝受理の健全性）＋不動点（Rust 非依存）。
-- **コンパイラがサポート済の言語**：型付き整数/Bool・String（リテラル/`.bytes`/`==`/エスケープ）・Array（リテラル/添字/`count`/`append`/`a[i]=x`/for-each）・struct/JSX 構築/フィールド・enum+match（網羅前提・タグ if-chain）・enum `==`（全 nullary 限定）・関数/引数/`inout`/再帰・`if`/`else`/`while`/`for`（range/array）・`break`/`continue`・`as`（数値）・I/O ビルトイン（`print`/`write`/`writeByte`/`readStdin`/`readFile`/`argCount`/`argAt`）。軽量型追跡 `exprType`・配列単相化・I/O ランタイム preamble を自前出力。生成 C は警告クリーン（`-Wall -Wextra -Werror`）。
+- **コンパイラがサポート済の言語**：型付き整数/Bool・String（リテラル/`.bytes`/`==`/エスケープ）・Array（リテラル/添字/`count`/`append`/`a[i]=x`/for-each）・struct/JSX 構築/フィールド・enum+match（網羅前提・タグ if-chain）・enum `==`（全 nullary 限定）・関数/引数/`inout`/再帰・`if`/`else`/`while`/`for`（range/array）・`break`/`continue`・`as`（数値）・**`import @Std/Io`・`@Std/Process` の `with { }` 選択 import**（I/O ビルトインは ambient でなく import 必須＝下記 enforce）・I/O ビルトイン（`print`/`write`/`writeByte`/`readStdin`/`readFile`/`argCount`/`argAt`）。軽量型追跡 `exprType`・配列単相化・I/O ランタイム preamble を自前出力。生成 C は警告クリーン（`-Wall -Wextra -Werror`）。
 - **足場（履歴）**：`examples/{lexer,parser,emit,calc}.pw` は self-host 途上の小コンパイラ。
 - **spec からの意図的剥離**（値意味論/CoW・整数幅・ラベル・トレイト・モジュール等）は [provisional.md](provisional.md) に集約。
 
@@ -16,9 +16,11 @@
 
 **このコンパイラが*受理*するコードを spec でも valid にする**（完全な Plew コンパイラも通せる）。spec が reject するのに今 accept してしまう所＝hidden meaning を潰す。逆向きの不完全性（valid だが未実装で reject＝`<.LParen />`・トレイト等）は許容。hidden cost（leak・int 幅・overflow 非 panic）は対象外（後回し）。
 
-要修正リスト＝[provisional.md](provisional.md)「受理の健全性チェックリスト」：① **import なしで `print` が書ける**（最優先＝import/`@Std`/モジュール機構）② ラベル無視 ③ 非網羅 match ④ lossy `as` ⑤ struct `==`。
+要修正リスト＝[provisional.md](provisional.md)「受理の健全性チェックリスト」：① ✅ **import なしで `print` が書ける** → 解消（I/O ビルトインは `@Std/Io`・args は `@Std/Process` から import 必須・名前↔モジュール検査つき）② ラベル無視 ③ 非網羅 match ④ lossy `as` ⑤ struct `==`。
 
-**次の一歩**：①の import/`@Std`。`import` なしの `print` を拒否する。着手時に `@Std` の最初のモジュール構成（`print` の置き場）を決める。
+**次の一歩**：②のラベル enforce。spec はラベル必須・宣言順・関数型同一性の一部だが、現状はパースして捨てている。呼び出し位置でラベルの有無/名前/順序を検査する（plewc.pw 自身も全呼び出しがラベル付きなので ADD→（必要なら reseed）→USE で適用）。
+
+> import 機構の現状＝**`with { }` 選択 import のみ**で、認識するのは I/O ビルトイン（`@Std/Io`＝print/write/writeByte/readStdin/readFile・`@Std/Process`＝argCount/argAt）だけ。名前空間 import（`Io.print`）・実モジュール解決・複数ファイル・`export`/`part`・`/`/`./` ルートは未実装（単一ファイルのまま）。enforce は「未 import の I/O ビルトイン呼び出し＝未宣言 C 識別子を吐いて clang を loud に失敗」＝enum-`==` と同じ sentinel 方式（診断＋非ゼロ終了の真のエラー経路はまだ無い）。
 
 ## 機能を plewc.pw に足す手順（ADD→reseed→USE）
 

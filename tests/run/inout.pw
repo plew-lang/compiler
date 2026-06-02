@@ -1,3 +1,5 @@
+import @Std/Io with { print }
+
 struct Counter {
     mut val n: I64
     mut val xs: Array[I64]

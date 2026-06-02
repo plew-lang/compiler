@@ -1,3 +1,5 @@
+import @Std/Io with { print }
+
 fn main() {
     mut val a: I64 = 0
     for val i in 0..<5 {

@@ -1,0 +1,7 @@
+// `print` lives in @Std/Io, not @Std/Process. Importing it from the wrong
+// module must not enable it (the import is name+module checked).
+import @Std/Process with { print }
+
+fn main() {
+    print(42)
+}

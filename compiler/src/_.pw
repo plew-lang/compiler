@@ -1,20 +1,14 @@
-// stage1 parser sketch #2: a parser that consumes the LEXER'S TOKEN STREAM
-// (not raw bytes), written in Plew and compiled by stage0.
+// The self-hosted Plew compiler: hand-written lexer + recursive-descent parser
+// -> arena AST (index handles) -> C transpilation. It compiles itself to a
+// fixpoint (see bootstrap.sh). Everything below is one module for now (the
+// module system is still single-file); future work splits it via `part`.
 //
-// calc.pw validated the parser phase over raw bytes. The new thing here is
-// consuming an `Array[Tok]` produced by the lexer: the parser advances a token
-// cursor, dispatches on `Tok.kind`, and reads an integer literal's value back
-// out of the source bytes via the token's (start, len) span. This is exactly
-// the shape the self-hosted compiler's parser needs.
-//
-// The lexer below is copied from lexer.pw (stage0 has no import mechanism yet,
-// so each selfhost program is a single self-contained file). Only the subset
-// the expression grammar needs is exercised.
-//
-// Reads an expression from stdin and prints its value. Precedence:
-//   expr := term (('+' | '-') term)*
-//   term := atom (('*' | '/' | '%') atom)*
-//   atom := Int | '(' expr ')'
+// I/O is not ambient in Plew (spec: `print` et al. live in @Std, must be
+// imported). These imports are also what the compiler now *enforces* on every
+// program it compiles, including this source.
+
+import @Std/Io with { print, write, writeByte, readStdin, readFile }
+import @Std/Process with { argCount, argAt }
 
 enum Kind {
     Eof
@@ -723,6 +717,16 @@ struct Comp {
     // set per-function during codegen so `return` lowers correctly
     mut val curIsMain: Bool
     mut val curRetVoid: Bool
+    // which I/O builtins the file has imported (acceptance soundness: spec makes
+    // these non-ambient, so using one without `import @Std/Io`/`@Std/Process`
+    // is a compile error). One flag per builtin, matched to its module.
+    mut val impPrint: Bool
+    mut val impWrite: Bool
+    mut val impWriteByte: Bool
+    mut val impReadStdin: Bool
+    mut val impReadFile: Bool
+    mut val impArgCount: Bool
+    mut val impArgAt: Bool
 }
 
 // ---- cursor helpers ----
@@ -1609,6 +1613,78 @@ fn parseEnum(c: inout Comp) {
     c.enums.append(<EnumDef nameStart=nameTok.start nameLen=nameTok.len variants=variants />)
 }
 
+// Enable the builtin named (nameStart,nameLen) iff it was imported from its
+// correct @Std submodule. `@Std/Io` owns print/write/writeByte/readStdin/
+// readFile; `@Std/Process` owns argCount/argAt. A name imported from the wrong
+// module stays disabled (so `import @Std/Process with { print }` is rejected).
+fn markImport(c: inout Comp, segStart: U64, segLen: U64, nameStart: U64, nameLen: U64) {
+    if rangeEquals(bytes: c.bytes, start: segStart, len: segLen, kw: "Io") {
+        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "print") { c.impPrint = true }
+        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "write") { c.impWrite = true }
+        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "writeByte") { c.impWriteByte = true }
+        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readStdin") { c.impReadStdin = true }
+        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readFile") { c.impReadFile = true }
+    }
+    if rangeEquals(bytes: c.bytes, start: segStart, len: segLen, kw: "Process") {
+        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argCount") { c.impArgCount = true }
+        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argAt") { c.impArgAt = true }
+    }
+}
+
+// `import <path> [with { name, ... }]`. The leading `import` ident is current.
+// We track the last path segment (the submodule, e.g. `Io` in `@Std/Io`) and,
+// for the selective `with` list, enable each recognized (module, name) builtin.
+// Only the `with { }` form binds flat names; the namespace form binds nothing
+// the compiler can call bare (it would need `Io.print`, unsupported for now).
+fn parseImport(c: inout Comp) {
+    advance(c: inout c)
+    mut val segStart: U64 = 0
+    mut val segLen: U64 = 0
+    while true {
+        val k: Kind = curKind(c: inout c)
+        match k {
+            Kind.Newline => { break }
+            Kind.Eof => { break }
+            Kind.LBrace => { break }
+            Kind.Ident => {
+                if identIs(c: inout c, kw: "with") {
+                    advance(c: inout c)
+                    break
+                }
+                val t: Tok = cur(c: inout c)
+                segStart = t.start
+                segLen = t.len
+                advance(c: inout c)
+            }
+            _ => { advance(c: inout c) }
+        }
+    }
+    match curKind(c: inout c) {
+        Kind.LBrace => {
+            advance(c: inout c)
+            while true {
+                skipNewlines(c: inout c)
+                val k: Kind = curKind(c: inout c)
+                match k {
+                    Kind.RBrace => {
+                        advance(c: inout c)
+                        break
+                    }
+                    Kind.Eof => { break }
+                    Kind.Comma => { advance(c: inout c) }
+                    Kind.Ident => {
+                        val t: Tok = cur(c: inout c)
+                        markImport(c: inout c, segStart: segStart, segLen: segLen, nameStart: t.start, nameLen: t.len)
+                        advance(c: inout c)
+                    }
+                    _ => { advance(c: inout c) }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 fn parseProgram(c: inout Comp) {
     while true {
         skipNewlines(c: inout c)
@@ -1617,6 +1693,13 @@ fn parseProgram(c: inout Comp) {
             Kind.KwFn => { parseFunc(c: inout c) }
             Kind.KwStruct => { parseStruct(c: inout c) }
             Kind.KwEnum => { parseEnum(c: inout c) }
+            Kind.Ident => {
+                if identIs(c: inout c, kw: "import") {
+                    parseImport(c: inout c)
+                } else {
+                    advance(c: inout c)
+                }
+            }
             Kind.Eof => { break }
             _ => { advance(c: inout c) }
         }
@@ -2043,35 +2126,59 @@ fn genExpr(c: inout Comp, id: U64) {
         Expr.Call { val nameStart, val nameLen, val args } => {
             // I/O builtins -> C runtime.
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "write") {
-                write(s: "plew_write(")
-                genExpr(c: inout c, id: args[0].expr)
-                write(s: ")")
+                if c.impWrite {
+                    write(s: "plew_write(")
+                    genExpr(c: inout c, id: args[0].expr)
+                    write(s: ")")
+                } else {
+                    write(s: "__plew_write_requires_import_Std_Io")
+                }
                 return
             }
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "writeByte") {
-                write(s: "putchar((int)(")
-                genExpr(c: inout c, id: args[0].expr)
-                write(s: "))")
+                if c.impWriteByte {
+                    write(s: "putchar((int)(")
+                    genExpr(c: inout c, id: args[0].expr)
+                    write(s: "))")
+                } else {
+                    write(s: "__plew_writeByte_requires_import_Std_Io")
+                }
                 return
             }
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readStdin") {
-                write(s: "plew_read_stdin()")
+                if c.impReadStdin {
+                    write(s: "plew_read_stdin()")
+                } else {
+                    write(s: "__plew_readStdin_requires_import_Std_Io")
+                }
                 return
             }
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readFile") {
-                write(s: "plew_read_file(")
-                genExpr(c: inout c, id: args[0].expr)
-                write(s: ")")
+                if c.impReadFile {
+                    write(s: "plew_read_file(")
+                    genExpr(c: inout c, id: args[0].expr)
+                    write(s: ")")
+                } else {
+                    write(s: "__plew_readFile_requires_import_Std_Io")
+                }
                 return
             }
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argCount") {
-                write(s: "plew_arg_count()")
+                if c.impArgCount {
+                    write(s: "plew_arg_count()")
+                } else {
+                    write(s: "__plew_argCount_requires_import_Std_Process")
+                }
                 return
             }
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argAt") {
-                write(s: "plew_arg_at((long long)(")
-                genExpr(c: inout c, id: args[0].expr)
-                write(s: "))")
+                if c.impArgAt {
+                    write(s: "plew_arg_at((long long)(")
+                    genExpr(c: inout c, id: args[0].expr)
+                    write(s: "))")
+                } else {
+                    write(s: "__plew_argAt_requires_import_Std_Process")
+                }
                 return
             }
             writeSpan(c: inout c, start: nameStart, len: nameLen)
@@ -2444,9 +2551,15 @@ fn genStmt(c: inout Comp, id: U64) {
             }
         }
         Stmt.Print { val expr } => {
-            write(s: "    printf(\"%lld\\n\", (long long)(")
-            genExpr(c: inout c, id: expr)
-            write(s: "));\n")
+            if c.impPrint {
+                write(s: "    printf(\"%lld\\n\", (long long)(")
+                genExpr(c: inout c, id: expr)
+                write(s: "));\n")
+            } else {
+                // not imported from @Std/Io -> emit an undeclared identifier so
+                // the C compile fails loudly (print is not ambient in Plew).
+                write(s: "    __plew_print_requires_import_Std_Io;\n")
+            }
         }
         Stmt.ExprStmt { val expr } => {
             write(s: "    ")
@@ -2882,7 +2995,7 @@ fn main() {
     }
     mut val lx: Lexer = <Lexer bytes=src.bytes pos=0 toks=[] depth=0 />
     lex(lx: inout lx)
-    mut val c: Comp = <Comp bytes=src.bytes toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false />
+    mut val c: Comp = <Comp bytes=src.bytes toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false />
     parseProgram(c: inout c)
     // runtime preamble: includes, immutable String, and the I/O builtins'
     // C runtime (the contract stage0 also injects — emitted here so stage1's

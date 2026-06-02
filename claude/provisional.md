@@ -10,7 +10,7 @@
 **目標＝このコンパイラが*受理*するコードは spec でも valid（完全な Plew コンパイラも通せる）。** 逆向きの不完全性（spec valid だが未実装で reject＝`<.LParen />`・トレイト・`Result`/`try` 等）は許容。直すべきは **「spec は reject するのに今 accept してしまう」＝hidden meaning** だけ。ランタイム挙動の誤り（hidden cost＝leak・int 幅・overflow 非 panic）はこの目標の対象外（後回し）。
 
 **受理の健全性チェックリスト（spec が拒むのに今通る＝要修正）**：
-1. **import なしで `print`/`write` 等が書ける** → spec は `@Std` import 必須（ambient でない）。**最優先**＝import/`@Std`/モジュール機構。
+1. ✅ ~~import なしで `print`/`write` 等が書ける~~ → **解消**。I/O ビルトインは ambient でなく `import @Std/Io with { … }`（print/write/writeByte/readStdin/readFile）・args は `@Std/Process with { argCount, argAt }` が必須。名前↔モジュールも検査（`@Std/Process with { print }` は print を有効化しない）。未 import の使用は未宣言 C 識別子で loud に reject（sentinel 方式）。
 2. **ラベル無視**（ラベルを drop＝ラベル無し/誤ラベル呼び出しも通る） → spec はラベル必須・宣言順・関数型の一部。enforce が要る。
 3. **非網羅 match が通る**（網羅性未検査） → spec は網羅必須＝コンパイルエラー。
 4. **lossy な `as` が通る**（`300 as U8` を C キャストで silent truncate） → spec は `as`＝infallible 限定（縮小は `TryFrom`）。`as` を無損失に制限。
@@ -84,8 +84,9 @@
 
 ## 可視性・モジュール・import
 
-- **`pub`/`export`／モジュール（1 ファイル 1 モジュール）／`part`／3 ルート import（`@…`/`/`/`./`）／`@Std`** → **全て未実装**。**単一ファイル**・名前解決は線形スキャン。
-- **lang item / ambient 型** → 概念なし。`print`/`write`/`writeByte`/`readStdin`/`readFile`/`argCount`/`argAt` は **コンパイラ埋め込みビルトイン**（本来は `@Std`＋`Format` 等）。移行レシピは [worklog.md](worklog.md)「self-host の契約」。
+- **`pub`/`export`／モジュール（1 ファイル 1 モジュール）／`part`／`/`・`./`・`../` ルート／名前空間 import（`Io.print`）／実モジュール解決** → **未実装**。**単一ファイル**・名前解決は線形スキャン。
+- **import（部分実装）** → `import @Std/Io with { … }`・`import @Std/Process with { … }` の **`with { }` 選択形のみ**パース＆enforce。認識する名前は I/O ビルトインだけ（`@Std/Io`＝print/write/writeByte/readStdin/readFile・`@Std/Process`＝argCount/argAt）で、**名前↔モジュール対応も検査**（誤モジュール import はそのビルトインを有効化しない）。それ以外の import パス・名前はパースして無視（単一ファイルゆえ解決先が無い）。enforce は **未 import 呼び出し＝未宣言 C 識別子で clang を失敗**させる sentinel 方式（enum-`==` と同じ・真の診断経路は未整備）。
+- **lang item / ambient 型** → 概念なし。`print`/`write`/`writeByte`/`readStdin`/`readFile`/`argCount`/`argAt` は **import で gate される埋め込みビルトイン**（本来は `@Std`＋`Format` 等で、名前自体も `argCount`/`argAt` 等は `Process.args()` の暫定スタンドイン）。移行レシピは [worklog.md](worklog.md)。
 - **エントリ `fn main`**：`int main(int argc, char** argv)` に固定脱糖（spec の `fn main`/`async fn main`・戻り `()|Result` とは別）。
 
 ## 構築・factory

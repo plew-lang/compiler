@@ -1,3 +1,5 @@
+import @Std/Io with { print }
+
 enum Shape {
     Circle { r: I64 }
     Rect { w: I64, h: I64 }

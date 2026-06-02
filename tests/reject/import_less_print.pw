@@ -1,0 +1,5 @@
+// `print` is not ambient in Plew — it must be imported from @Std/Io. Using it
+// without the import is a compile error (acceptance soundness).
+fn main() {
+    print(42)
+}
