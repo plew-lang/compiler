@@ -72,7 +72,7 @@ manifest は **`Plew.toml`**（spec 暫定名・TOML・src 既定 `src/`・`/` �
 2. ✅ **コアライブラリ（純 Plew）大筋完了**＝I3（`@Std/X`→`dirname(argv[0])/std/X.pw`）＋`@Std/Core` の `Optional`/`Result`＋メソッド（`compiler/std/Core.pw`・`tests/run/core_lib`）。✅ **`try`／`??` 実装**（`tests/run/try_coalesce`）。残り：可謬 I/O（`readFile`→`Result`）→ S2、ambient 化、`try` の From 変換・`?.`（[autonomous-decisions.md](autonomous-decisions.md)）。
 3. ✅ **CoW（値意味論）＝観測可能な範囲は完成**＝eager copy で配列 let/代入/JSX フィールド・mutable struct let/代入・配列/struct の return をコピー（`tests/run/value_semantics{,_let,_more,_struct,_return}`）。by-value 引数はイミュータブルゆえ不要。残り（deferred）：mono struct/enum 内のコンテナ配列の深いコピー（`Optional[Array]` 等）・**正確な refcount＋スコープ解放を伴う完全 CoW（遅延コピー＋ leak 解消）＝大物 ARC とセット**。
 4. 🔄 **ARC ＋ `Ref`/`WeakRef`**：✅ **基本 `Ref[T]` 実装**＝共有可変ヒープ箱（C `T*`）・`<Ref[T] value=e/>` 構築・`r->field` アクセス・コピーで共有（`tests/run/ref_shared`）。残り（deferred）：**ARC retain/release＋`deinit`（最後の解放）**＝スコープ解放追跡が要る大物・`WeakRef`＋`upgrade()`・循環回収・bare `<Ref value=e/>` 型推論（scalar 幅問題ゆえ明示 `[T]` 必須）。
-5. ⏳ **イベントループ（async/await/spawn）**（最大・最後・未着手）。`spawn`＝pthread が比較的容易だが `JoinHandle`/`join()→Promise[T]` は async 機構依存。async/await は状態機械変換 or コルーチンが要り**最難**。spec 表面（Promise API・スケジューリング）に密接ゆえ、簡略化は言語表面の判断になり得る＝慎重に。
+5. 🔄 **イベントループ（async/await/spawn）**（最大・最後）。✅ **土台＝関数値＋非キャプチャクロージャ**（`fn(...)->R` 型・関数ポインタ・`fn(...){}` リテラル＝ラムダリフティング・`tests/run/{fn_value,closure_literal}`）。残り：**クロージャのキャプチャ**（env＋fat closure＋エスケープヒープ化＝`spawn { block }` の前提・大物）→ **spawn**（pthread・`JoinHandle`/`join()→Promise`）→ **async/await**（状態機械変換 or コルーチン＝最難・spec 表面に密接で簡略化は要確認）。
 - traits（`Eq`/`Ord`/`Iterator` ＋ `where` 境界）は generics 後・コアライブラリと並走で純 Plew 化。I2（モジュール可視性ゲート）は多モジュール化が進む段で additive に。
 
 > **着手中＝generics**。まず既存の `Array[E]` 単相化機構（`PlewArray_<E>`・要素型名マングル・`Comp.arrayElems`）を一般 generic の土台に拡張する。

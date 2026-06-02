@@ -27,6 +27,12 @@
 - ✅ **観測可能な範囲は完成**＝plain 配列・struct（配列フィールド・再帰）・**generic struct/enum コンテナ**（`Box[Array]`/`Maybe[Array]`＝mono copy 関数）まで全部コピー。コピー挿入点＝配列/struct/generic-inst の let/代入/JSX フィールド/return（`genCopyValue` 統一）。by-value 引数はイミュータブルゆえ不要。match bind も generic enum で置換型。残るは leak（解放）と遅延コピーのみ＝refcount 版 hidden-cost 最適化（後段 ARC）。
 - **完全＆高速な CoW（refcount＋スコープ解放）は大物 ARC として後段**。eager copy は「mutable 束縛は稀＆小さい」前提で安全だが、性能最適化（遅延コピー）と解放（leak 解消）は refcount 版でないと埋まらない。`inout` と CoW の相互作用（inflated refcount で inout が in-place 変更できなくなる問題）＝正確な解放が前提。
 
+## クロージャ / 関数値（イベントループの土台）
+
+- ✅ **関数型 `fn(label:T,...)->R`＋関数を第一級値**（C 関数ポインタ typedef・関数名は decay・間接呼び出し）と **非キャプチャのクロージャリテラル**（`fn(...)->R{body}`＝ラムダリフティングで `__closure<id>` に）を実装（`tests/run/{fn_value,closure_literal}`）。ラベルは型から落とし C は位置引数。
+- **キャプチャ未実装（deferred・大物）**：外側ローカルを参照するクロージャ（`makeCounter` 等）は env が要る＝**環境構造体＋fat closure（{fn ptr, env ptr}）＋エスケープ解析でキャプチャ変数をヒープ化**。現状の bare 関数ポインタ表現を fat に変える必要＝関数型/呼び出し/全経路に波及。spec は参照キャプチャ（Swift 流・`mut val` は共有可変）。**`spawn { block }` はキャプチャ必須**ゆえイベントループの前提。
+- これらにより `map`/高階関数の**自由関数版**（`mapI32(arr, f: fn(...))`）は今書ける。`Array.map[U]` は generic own 型パラメータ＋推移的インスタンス化が別途要る。
+
 ## 既知の別件（generics 以前からの仮決め・関連）
 
 - **C 予約語と衝突する Plew 識別子**（`default`/`double` 等）は生成 C が壊れる＝名前マングリング未実装。コンパイラ自身は回避。ユーザーコードで顕在化する hidden-meaning 穴（acceptance soundness 対象）。見直し：codegen で識別子を安全な C 名にマングル。
