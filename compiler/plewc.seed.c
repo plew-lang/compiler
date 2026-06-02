@@ -449,6 +449,26 @@ __attribute__((unused)) static PatInfo PlewArray_PatInfo_get(PlewArray_PatInfo a
 __attribute__((unused)) static void PlewArray_PatInfo_set(PlewArray_PatInfo* a, long long i, PatInfo v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } a->data[i] = v; }
 __attribute__((unused)) static void PlewArray_PatInfo_push(PlewArray_PatInfo* a, PatInfo v) { if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; PatInfo* nd = (PatInfo*)malloc(sizeof(PatInfo) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; a->data = nd; a->cap = nc; } a->data[a->len] = v; a->len++; }
 __attribute__((unused)) static PlewArray_PatInfo PlewArray_PatInfo_copy(PlewArray_PatInfo a) { PlewArray_PatInfo r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (PatInfo*)malloc(sizeof(PatInfo) * a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; } return r; }
+Lexer Lexer_copy(Lexer s);
+TypeRef TypeRef_copy(TypeRef s);
+MatchArm MatchArm_copy(MatchArm s);
+PatInfo PatInfo_copy(PatInfo s);
+Block Block_copy(Block s);
+StructDef StructDef_copy(StructDef s);
+Variant Variant_copy(Variant s);
+EnumDef EnumDef_copy(EnumDef s);
+Func Func_copy(Func s);
+Comp Comp_copy(Comp s);
+Lexer Lexer_copy(Lexer s) { Lexer r = s; r.bytes = PlewArray_U8_copy(s.bytes); r.toks = PlewArray_Tok_copy(s.toks); return r; }
+TypeRef TypeRef_copy(TypeRef s) { TypeRef r = s; r.args = PlewArray_U64_copy(s.args); return r; }
+MatchArm MatchArm_copy(MatchArm s) { MatchArm r = s; r.binds = PlewArray_Bind_copy(s.binds); return r; }
+PatInfo PatInfo_copy(PatInfo s) { PatInfo r = s; r.binds = PlewArray_Bind_copy(s.binds); return r; }
+Block Block_copy(Block s) { Block r = s; r.stmts = PlewArray_U64_copy(s.stmts); return r; }
+StructDef StructDef_copy(StructDef s) { StructDef r = s; r.typeParams = PlewArray_Bind_copy(s.typeParams); r.fields = PlewArray_FieldDef_copy(s.fields); return r; }
+Variant Variant_copy(Variant s) { Variant r = s; r.fields = PlewArray_FieldDef_copy(s.fields); return r; }
+EnumDef EnumDef_copy(EnumDef s) { EnumDef r = s; r.typeParams = PlewArray_Bind_copy(s.typeParams); r.variants = PlewArray_Variant_copy(s.variants); return r; }
+Func Func_copy(Func s) { Func r = s; r.typeParams = PlewArray_Bind_copy(s.typeParams); r.params = PlewArray_Param_copy(s.params); return r; }
+Comp Comp_copy(Comp s) { Comp r = s; r.bytes = PlewArray_U8_copy(s.bytes); r.toks = PlewArray_Tok_copy(s.toks); r.exprs = PlewArray_Expr_copy(s.exprs); r.stmts = PlewArray_Stmt_copy(s.stmts); r.blocks = PlewArray_Block_copy(s.blocks); r.funcs = PlewArray_Func_copy(s.funcs); r.structs = PlewArray_StructDef_copy(s.structs); r.enums = PlewArray_EnumDef_copy(s.enums); r.types = PlewArray_TypeRef_copy(s.types); r.genInsts = PlewArray_U64_copy(s.genInsts); r.arrayElems = PlewArray_Bind_copy(s.arrayElems); r.locals = PlewArray_Local_copy(s.locals); r.curTypeParams = PlewArray_Bind_copy(s.curTypeParams); r.curTypeArgs = PlewArray_U64_copy(s.curTypeArgs); return r; }
 long long isPathTokKind(Kind k);
 PlewArray_Bind collectParts(PlewArray_U8 rootBytes, PlewArray_Tok toks);
 uint64_t stripParents(PlewArray_U8 path, uint64_t baseLen, uint64_t n);
@@ -605,6 +625,11 @@ void genCond(Comp* c, uint64_t id);
 void genStmt(Comp* c, uint64_t id);
 void genBlock(Comp* c, uint64_t id);
 long long nameIsMain(Comp* c, Func f);
+uint64_t structIndexByName(Comp* c, uint64_t start, uint64_t len);
+long long structNeedsCopy(Comp* c, uint64_t start, uint64_t len);
+void emitStructCopyProto(Comp* c, uint64_t si);
+void emitStructCopyDef(Comp* c, uint64_t si);
+void genStructValue(Comp* c, uint64_t exprId, uint64_t structStart, uint64_t structLen);
 void genStructDef(Comp* c, uint64_t si);
 void genSignature(Comp* c, Func f);
 void genFunc(Comp* c, uint64_t fi);
@@ -1120,6 +1145,30 @@ int main(int argc, char** argv) {
     genArrayRuntimeFns(&(c), ae2.nameStart, ae2.nameLen);
     }
     ar = ({ uint64_t __ov; if (__builtin_add_overflow((ar), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    uint64_t scp = 0;
+    while (scp < (long long)((c.structs).len)) {
+    StructDef cs = PlewArray_StructDef_get(c.structs, (long long)(scp));
+    if ((long long)((cs.typeParams).len) > 0) {
+    }
+    else {
+    if (structNeedsCopy(&(c), cs.nameStart, cs.nameLen)) {
+    emitStructCopyProto(&(c), scp);
+    }
+    }
+    scp = ({ uint64_t __ov; if (__builtin_add_overflow((scp), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    uint64_t scd = 0;
+    while (scd < (long long)((c.structs).len)) {
+    StructDef cs2 = PlewArray_StructDef_get(c.structs, (long long)(scd));
+    if ((long long)((cs2.typeParams).len) > 0) {
+    }
+    else {
+    if (structNeedsCopy(&(c), cs2.nameStart, cs2.nameLen)) {
+    emitStructCopyDef(&(c), scd);
+    }
+    }
+    scd = ({ uint64_t __ov; if (__builtin_add_overflow((scd), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     uint64_t i = 0;
     while (i < (long long)((c.funcs).len)) {
@@ -6259,7 +6308,12 @@ void genStmt(Comp* c, uint64_t id) {
     genArrayValue(&((*c)), init, tyStart, tyLen);
     }
     else {
+    if (mutable) {
+    genStructValue(&((*c)), init, tyStart, tyLen);
+    }
+    else {
     genExpr(&((*c)), init);
+    }
     }
     plew_write((PlewString){";\n", 2});
     addLocal(&((*c)), nameStart, nameLen, tyStart, tyLen, tyIsArray, ty, 0, mutable);
@@ -6396,7 +6450,12 @@ void genStmt(Comp* c, uint64_t id) {
     genArrayValue(&((*c)), value, tt.nameStart, tt.nameLen);
     }
     else {
+    if (op == 49) {
+    genStructValue(&((*c)), value, tt.nameStart, tt.nameLen);
+    }
+    else {
     genExpr(&((*c)), value);
+    }
     }
     }
     }
@@ -6716,6 +6775,100 @@ long long nameIsMain(Comp* c, Func f) {
     return 0;
     }
     return rangeEquals((*c).bytes, f.nameStart, f.nameLen, (PlewString){"main", 4});
+}
+uint64_t structIndexByName(Comp* c, uint64_t start, uint64_t len) {
+    uint64_t i = 0;
+    while (i < (long long)(((*c).structs).len)) {
+    StructDef s = PlewArray_StructDef_get((*c).structs, (long long)(i));
+    if ((long long)((s.typeParams).len) == 0) {
+    if (spansEqual(&((*c)), s.nameStart, s.nameLen, start, len)) {
+    return i;
+    }
+    }
+    i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    return (long long)(((*c).structs).len);
+}
+long long structNeedsCopy(Comp* c, uint64_t start, uint64_t len) {
+    uint64_t si = structIndexByName(&((*c)), start, len);
+    if (si >= (long long)(((*c).structs).len)) {
+    return 0;
+    }
+    StructDef s = PlewArray_StructDef_get((*c).structs, (long long)(si));
+    PlewArray_FieldDef fields = PlewArray_FieldDef_copy(s.fields);
+    uint64_t i = 0;
+    while (i < (long long)((fields).len)) {
+    FieldDef f = PlewArray_FieldDef_get(fields, (long long)(i));
+    if (f.tyIsArray) {
+    return 1;
+    }
+    else {
+    if (structNeedsCopy(&((*c)), f.tyStart, f.tyLen)) {
+    return 1;
+    }
+    }
+    i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    return 0;
+}
+void emitStructCopyProto(Comp* c, uint64_t si) {
+    StructDef s = PlewArray_StructDef_get((*c).structs, (long long)(si));
+    writeSpan(&((*c)), s.nameStart, s.nameLen);
+    plew_write((PlewString){" ", 1});
+    writeSpan(&((*c)), s.nameStart, s.nameLen);
+    plew_write((PlewString){"_copy(", 6});
+    writeSpan(&((*c)), s.nameStart, s.nameLen);
+    plew_write((PlewString){" s);\n", 5});
+}
+void emitStructCopyDef(Comp* c, uint64_t si) {
+    StructDef s = PlewArray_StructDef_get((*c).structs, (long long)(si));
+    writeSpan(&((*c)), s.nameStart, s.nameLen);
+    plew_write((PlewString){" ", 1});
+    writeSpan(&((*c)), s.nameStart, s.nameLen);
+    plew_write((PlewString){"_copy(", 6});
+    writeSpan(&((*c)), s.nameStart, s.nameLen);
+    plew_write((PlewString){" s) { ", 6});
+    writeSpan(&((*c)), s.nameStart, s.nameLen);
+    plew_write((PlewString){" r = s;", 7});
+    PlewArray_FieldDef fields = PlewArray_FieldDef_copy(s.fields);
+    uint64_t i = 0;
+    while (i < (long long)((fields).len)) {
+    FieldDef f = PlewArray_FieldDef_get(fields, (long long)(i));
+    if (f.tyIsArray) {
+    plew_write((PlewString){" r.", 3});
+    writeSpan(&((*c)), f.nameStart, f.nameLen);
+    plew_write((PlewString){" = ", 3});
+    wPA(&((*c)), f.tyStart, f.tyLen);
+    plew_write((PlewString){"_copy(s.", 8});
+    writeSpan(&((*c)), f.nameStart, f.nameLen);
+    plew_write((PlewString){");", 2});
+    }
+    else {
+    if (structNeedsCopy(&((*c)), f.tyStart, f.tyLen)) {
+    plew_write((PlewString){" r.", 3});
+    writeSpan(&((*c)), f.nameStart, f.nameLen);
+    plew_write((PlewString){" = ", 3});
+    writeSpan(&((*c)), f.tyStart, f.tyLen);
+    plew_write((PlewString){"_copy(s.", 8});
+    writeSpan(&((*c)), f.nameStart, f.nameLen);
+    plew_write((PlewString){");", 2});
+    }
+    }
+    i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    plew_write((PlewString){" return r; }\n", 13});
+}
+void genStructValue(Comp* c, uint64_t exprId, uint64_t structStart, uint64_t structLen) {
+    if (isPlaceExpr(&((*c)), exprId)) {
+    if (structNeedsCopy(&((*c)), structStart, structLen)) {
+    writeSpan(&((*c)), structStart, structLen);
+    plew_write((PlewString){"_copy(", 6});
+    genExpr(&((*c)), exprId);
+    plew_write((PlewString){")", 1});
+    return;
+    }
+    }
+    genExpr(&((*c)), exprId);
 }
 void genStructDef(Comp* c, uint64_t si) {
     StructDef s = PlewArray_StructDef_get((*c).structs, (long long)(si));

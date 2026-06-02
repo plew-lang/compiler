@@ -547,6 +547,30 @@ fn main() {
         }
         ar += 1
     }
+    // struct deep-copy fns for value semantics (after array runtime, which they
+    // call): prototypes first (mutual references), then definitions.
+    mut val scp: U64 = 0
+    while scp < c.structs.count {
+        val cs: StructDef = c.structs[scp]
+        if cs.typeParams.count > 0 {
+        } else {
+            if structNeedsCopy(c: inout c, start: cs.nameStart, len: cs.nameLen) {
+                emitStructCopyProto(c: inout c, si: scp)
+            }
+        }
+        scp += 1
+    }
+    mut val scd: U64 = 0
+    while scd < c.structs.count {
+        val cs2: StructDef = c.structs[scd]
+        if cs2.typeParams.count > 0 {
+        } else {
+            if structNeedsCopy(c: inout c, start: cs2.nameStart, len: cs2.nameLen) {
+                emitStructCopyDef(c: inout c, si: scd)
+            }
+        }
+        scd += 1
+    }
     // prototypes (skip main and generic templates — the latter are emitted per
     // instantiation below).
     mut val i: U64 = 0

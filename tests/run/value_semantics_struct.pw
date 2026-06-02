@@ -1,0 +1,12 @@
+import @Std/Io with { print }
+struct Bag { mut val items: Array[I32]  mut val tag: I32 }
+fn main() {
+    mut val a: Bag = <Bag items=[1, 2] tag=5 />
+    mut val b: Bag = a
+    b.items[0] = 99
+    b.tag = 7
+    print(a.items[0])
+    print(a.tag)
+    print(b.items[0])
+    print(b.tag)
+}
