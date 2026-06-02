@@ -5,6 +5,19 @@
 - 対象は 2 つ：**stage0**（Rust・`bootstrap/`・使い捨て・**凍結**＝もう機能追加しない）と **stage1**（`selfhost/plewc.pw`・Plew 製・**正典**＝今後の機能はこちらに additive）。差がある所だけ stage0/stage1 を明記、無ければ両方共通。
 - **重要な大前提**：観測挙動が仕様の意味から逸れている剥離（hidden *meaning*）と、裏でコストだけ払う剥離（hidden *cost*）は別物。前者（値意味論・オーバーフロー panic・ラベル等）はいずれ必ず埋める。後者（ARC/CoW を leak で代用等）は self-host 後に正しく実装する。
 
+## 現在の目標：受理の健全性（意味上 Plew として正しい）
+
+**目標＝このコンパイラが*受理*するコードは spec でも valid（完全な Plew コンパイラも通せる）。** 逆向きの不完全性（spec valid だが未実装で reject＝`<.LParen />`・トレイト・`Result`/`try` 等）は許容。直すべきは **「spec は reject するのに今 accept してしまう」＝hidden meaning** だけ。ランタイム挙動の誤り（hidden cost＝leak・int 幅・overflow 非 panic）はこの目標の対象外（後回し）。
+
+**受理の健全性チェックリスト（spec が拒むのに今通る＝要修正）**：
+1. **import なしで `print`/`write` 等が書ける** → spec は `@Std` import 必須（ambient でない）。**最優先**＝import/`@Std`/モジュール機構。
+2. **ラベル無視**（ラベルを drop＝ラベル無し/誤ラベル呼び出しも通る） → spec はラベル必須・宣言順・関数型の一部。enforce が要る。
+3. **非網羅 match が通る**（網羅性未検査） → spec は網羅必須＝コンパイルエラー。
+4. **lossy な `as` が通る**（`300 as U8` を C キャストで silent truncate） → spec は `as`＝infallible 限定（縮小は `TryFrom`）。`as` を無損失に制限。
+5. **struct の `==`**（壊れた C を出す） → `Eq` 無しなのでエラーにすべき（enum payload == は既にエラー化済）。
+
+→ **大前提**：これらの enforce は plewc.pw 自身にも適用される（plewc.pw も import 必須等になる）。が plewc.pw は今 stage0（凍結・import 非対応）でビルドされている＝**stage0 を退役させ stage1 種でブートストラップしないと、plewc.pw 自身を spec-valid 化できない**（[worklog.md](worklog.md) の seed 計画）。
+
 ## メモリ・所有権（最大の剥離）
 
 - **値意味論＋CoW** → **現状：参照セマンティクス＋リーク**。`Array[T]` は `{T* data; len; cap}` でヒープ確保し **free しない**（append の旧バッファもリーク）。代入・受け渡しは C の構造体コピー（ポインタ共有）＝**エイリアス後の変更が観測できてしまう**＝spec の値意味論と逆。回避は「stage1 を arena+index・単一所有で書く規律」のみ。spec/03。
