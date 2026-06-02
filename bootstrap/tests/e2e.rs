@@ -213,12 +213,29 @@ fn selfhost_lexer_tokenizes_a_function() {
     let src = std::fs::read_to_string(path).expect("read selfhost/lexer.pw");
     let input = "fn add(a: I64, b: I64) -> I64 {\n    return a + b\n}\n";
     // KwFn Ident LParen Ident Colon Ident Comma Ident Colon Ident RParen Arrow
-    // Ident LBrace Newline KwReturn Ident Plus Ident Newline RBrace Newline Eof
+    // Ident LBrace KwReturn Ident Plus Ident Newline RBrace Newline Eof
+    // (no Newline after `{` — Go-style: `{` cannot end a statement)
     let codes = [
-        10, 4, 40, 4, 47, 4, 46, 4, 47, 4, 41, 64, 4, 44, 1, 20, 4, 56, 4, 1, 45, 1, 0,
+        10, 4, 40, 4, 47, 4, 46, 4, 47, 4, 41, 64, 4, 44, 20, 4, 56, 4, 1, 45, 1, 0,
     ];
     let expected: String = codes.iter().map(|c| format!("{c}\n")).collect();
     assert_eq!(build_and_run_stdin(&src, "selfhost_lex_fn", input), expected);
+}
+
+#[test]
+fn selfhost_lexer_suppresses_continuation_newlines() {
+    // Go-style: newlines inside `()` and after an operator are continuations;
+    // only a token that can end a statement yields a Newline.
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../selfhost/lexer.pw");
+    let src = std::fs::read_to_string(path).expect("read selfhost/lexer.pw");
+    let input = "fn f(\n  a: I64,\n  b: I64\n) -> I64 {\n  val x = a +\n    b\n  return x\n}\n";
+    // No Newline inside the parens or after `+`; Newline only after `b`, `x`, `}`.
+    let codes = [
+        10, 4, 40, 4, 47, 4, 46, 4, 47, 4, 41, 64, 4, 44, 22, 4, 49, 4, 56, 4, 1, 20, 4, 1, 45, 1,
+        0,
+    ];
+    let expected: String = codes.iter().map(|c| format!("{c}\n")).collect();
+    assert_eq!(build_and_run_stdin(&src, "selfhost_lex_cont", input), expected);
 }
 
 #[test]

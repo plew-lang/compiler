@@ -82,6 +82,9 @@ struct Lexer {
     val bytes: Array[U8]
     mut val pos: U64
     mut val toks: Array[Tok]
+    // `()`/`[]` nesting depth: newlines inside brackets are line continuations
+    // (Swift-style). `{}` does not count — blocks keep newlines significant.
+    mut val depth: I64
 }
 
 fn at(lx: inout Lexer, off: U64) -> U8 {
@@ -218,6 +221,31 @@ fn lastWasNewline(lx: inout Lexer) -> Bool {
     }
 }
 
+// Whether the last emitted token can end a statement (Go-style automatic
+// semicolon insertion): a newline after such a token terminates the statement.
+fn lastCanEnd(lx: inout Lexer) -> Bool {
+    val n: U64 = lx.toks.count
+    if n == 0 {
+        return false
+    }
+    val t: Tok = lx.toks[n - 1]
+    match t.kind {
+        Kind.Ident => { return true }
+        Kind.Int => { return true }
+        Kind.Str => { return true }
+        Kind.RParen => { return true }
+        Kind.RBracket => { return true }
+        Kind.RBrace => { return true }
+        Kind.SlashGt => { return true }
+        Kind.KwTrue => { return true }
+        Kind.KwFalse => { return true }
+        Kind.KwReturn => { return true }
+        Kind.KwBreak => { return true }
+        Kind.KwContinue => { return true }
+        _ => { return false }
+    }
+}
+
 fn lex(lx: inout Lexer) {
     while lx.pos < lx.bytes.count {
         val b: U8 = at(lx: inout lx, off: 0)
@@ -234,12 +262,21 @@ fn lex(lx: inout Lexer) {
             lx.pos += 1
             continue
         }
-        // newline (collapsed)
+        // newline: a line continuation inside brackets; otherwise a statement
+        // terminator only after a token that can end a statement (collapsed).
         if b == 10 {
-            if lastWasNewline(lx: inout lx) {
+            if lx.depth > 0 {
                 lx.pos += 1
             } else {
-                emit(lx: inout lx, k: <Kind.Newline />, start: lx.pos, len: 1)
+                if lastCanEnd(lx: inout lx) {
+                    if lastWasNewline(lx: inout lx) {
+                        lx.pos += 1
+                    } else {
+                        emit(lx: inout lx, k: <Kind.Newline />, start: lx.pos, len: 1)
+                    }
+                } else {
+                    lx.pos += 1
+                }
             }
             continue
         }
@@ -419,18 +456,22 @@ fn lex(lx: inout Lexer) {
         // single-char delimiters
         if b == 40 {
             emit(lx: inout lx, k: <Kind.LParen />, start: lx.pos, len: 1)
+            lx.depth += 1
             continue
         }
         if b == 41 {
             emit(lx: inout lx, k: <Kind.RParen />, start: lx.pos, len: 1)
+            lx.depth -= 1
             continue
         }
         if b == 91 {
             emit(lx: inout lx, k: <Kind.LBracket />, start: lx.pos, len: 1)
+            lx.depth += 1
             continue
         }
         if b == 93 {
             emit(lx: inout lx, k: <Kind.RBracket />, start: lx.pos, len: 1)
+            lx.depth -= 1
             continue
         }
         if b == 123 {
@@ -521,7 +562,7 @@ fn kindCode(k: Kind) -> I64 {
 
 fn main() {
     val src: String = readStdin()
-    mut val lx: Lexer = <Lexer bytes=src.bytes pos=0 toks=[] />
+    mut val lx: Lexer = <Lexer bytes=src.bytes pos=0 toks=[] depth=0 />
     lex(lx: inout lx)
     for val t in lx.toks {
         print(kindCode(t.kind))
