@@ -1,0 +1,9 @@
+// Spec: integer literals have no default type; a literal with no context type is
+// a compile error (requires an annotation or a type suffix). `1 + 1` is two
+// context-free literals, so it must be rejected (write `1I32 + 1` etc.).
+import @Std/Io with { print }
+
+fn main() {
+    val x = 1 + 1
+    print(x as I64)
+}

@@ -32,7 +32,7 @@
 - **幅つき整数 `I8..U64`・`F32/F64`** → **現状：全整数 `long long`（int64_t）**。幅の区別なし・符号なし演算の意味なし・**浮動小数点は一切なし**。spec/02。
 - **0 除算は常に panic** → **実装済**：`a / b`・`a % b`・複合 `x /= v`/`x %= v`（簡易変数・配列 place `a[i] /= v` とも `x = plew_div(x, v)` に脱糖）すべて `plew_div`/`plew_mod`（preamble・除数 0 で `plew_panic`→exit(1)）経由。`%` は C 切り捨て＝剰余は被除数の符号（spec 通り）。
 - **オーバーフロー panic** → ✅ **解消**（整数幅エピック）。算術 `+ - *`（二項・複合代入 `+= -= *=`・配列要素複合）と単項 `-`・符号付き除算 `INT_MIN/-1` が**結果型の正確な幅**で溢れたら `plew_panic("integer overflow")`（`__builtin_*_overflow` 使用・幅は Phase C の narrow storage で正確）。0除算も panic（`/ %`・`/= %=`・width 既知は inline、未知は zero+`INT64_MIN/-1` 検査済 `plew_div`/`plew_mod`）。`x % -1` は 0 と定義（C UB 回避）。残：**両オペランドが幅不明な式**の算術（`(1+1)` 等リテラルのみ）と**配列要素の `/= %=` の narrow-signed `INT_MIN/-1`** は未検査＝rare な穴。`wrapping*` メソッドは無し（additive 予定）。**NaN 比較で panic**・`assert` 常時 ON は未実装（float 未対応ゆえ）。spec/12。
-- **数値リテラルは多相・既定型なし・曖昧はエラー** → **Phase D1 で範囲検査は解消**。純粋検査パス `checkLitCtx` が文脈の整数型をリテラルへ伝播し（let 注釈/代入先/引数/戻り/配列要素/フィールド/添字 U64/比較・算術の型付き相手）、範囲外リテラルと**定数式オーバーフロー（`200+100:U8`）**を compile error。先頭 `-` は畳み込み（`-128:I8` 可）。これで `val f: U8 = 300` の沈黙切り詰めは消えた。**残：厳密な no-default（context-free リテラルを曖昧エラー）は未強制**＝context-free リテラルは long-long 既定（**良性＝狭い型への格納経路は全て D1 が検査・算術溢れは Phase B が検査ゆえ沈黙切り詰めは無い**）。厳密化には `TypeInfo` の幅フィールド化（`.count` 等の U64 復元）＋Bool リテラルノード分離（`true`/`false` が今 `Expr.Int`）が要り、hidden-meaning 利得ゼロゆえ見送り。
+- **数値リテラルは多相・既定型なし・曖昧はエラー** → ✅ **解消（Phase D）**。`checkLitCtx`（純粋検査パス・C 出力不変）が文脈の整数型をリテラルへ伝播：let 注釈/代入先/引数/戻り/配列要素/フィールド/添字(U64)/比較・算術の型付き相手・`arr.count`(U64)/`arr[i]`(要素型)/`argCount()`(I64) の sibling。範囲外リテラルと**定数式オーバーフロー（`200+100:U8`）**を compile error、**文脈型の無いリテラルも曖昧エラー（spec の「初手は厳格」）**＝`val x = 1 + 1`・`for val i in 0..<5` は reject。明示は**型サフィックス `5U64`/`1I32`**（Int 直後の隣接整数型名）か注釈。`true`/`false` は `Expr.Int.isBool` で分離（Bool は曖昧でない）。先頭 `-` は畳み込み（`-128:I8` 可）。残（hidden cost のみ）：無注釈 `val x = foo()` の storage は long-long（型推論で狭めず＝widening の hidden cost・意味は不変）。
 - **整数の C ストレージ** → ✅ 各 Plew 整数型は厳密幅の stdint 型（`int8_t…int64_t`/`uint16_t…uint64_t`・**U8 は `unsigned char`**＝`.bytes` の char バッファ共有のため・`uint8_t` と同一）。`Bool` だけ `long long`（幅無関係）。旧「全部 long long」は廃止。これにより宣言幅で overflow 検査が成立。
 
 ## レンジ（暫定）
@@ -109,4 +109,4 @@
 
 ---
 
-**再訪の優先度（私見）**：観測挙動を歪める剥離＝①値意味論/CoW（最重要・ARC とセット）②~~整数幅＋オーバーフロー/0除算 panic~~（✅ 解消＝narrow storage＋overflow/division panic＋**リテラル文脈型付け D1**〔`val f: U8 = 300` 等の沈黙切り詰めを compile error〕。残るは厳密 no-default の強制のみ＝hidden-meaning 利得ゼロで見送り）③ラベル必須＋検査 ④`Result`/`try`/`Optional` ⑤トレイト/ジェネリクス。これらは Plew 側（stage1）で additive に。hidden cost だけの剥離（leak→ARC 等）は性能要求が出てから。
+**再訪の優先度（私見）**：観測挙動を歪める剥離＝①値意味論/CoW（最重要・ARC とセット）②~~整数幅＋オーバーフロー/0除算 panic~~（✅ **完全解消**＝narrow storage＋overflow/division panic＋**リテラル文脈型付け（範囲検査＋厳密 no-default・型サフィックス）**）③ラベル必須＋検査 ④`Result`/`try`/`Optional` ⑤トレイト/ジェネリクス。これらは Plew 側（stage1）で additive に。hidden cost だけの剥離（leak→ARC 等）は性能要求が出てから。

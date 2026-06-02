@@ -84,13 +84,31 @@ fn parsePrimary(c: inout Comp) -> U64 {
             val t: Tok = c.cur()
             c.advance()
             val v: I64 = c.tokenValue(t: t)
-            return c.pushExpr(e: <Expr.Int value=v offset=t.start />)
+            // optional type suffix: an integer-type name written immediately
+            // after the digits with no space (`5U64`, `1I32`). It gives a
+            // context-free literal its type (spec: no default type).
+            mut val sStart: U64 = 0
+            mut val sLen: U64 = 0
+            match c.curKind() {
+                Kind.Ident => {
+                    val st: Tok = c.cur()
+                    if st.start == t.start + t.len {
+                        if isIntType(c: inout c, start: st.start, len: st.len) {
+                            sStart = st.start
+                            sLen = st.len
+                            c.advance()
+                        }
+                    }
+                }
+                _ => {}
+            }
+            return c.pushExpr(e: <Expr.Int value=v offset=t.start isBool=false tyStart=sStart tyLen=sLen />)
         }
         Kind.Char => {
             val t: Tok = c.cur()
             c.advance()
             val v: I64 = charValue(c: inout c, t: t)
-            return c.pushExpr(e: <Expr.Int value=v offset=t.start />)
+            return c.pushExpr(e: <Expr.Int value=v offset=t.start isBool=false tyStart=0 tyLen=0 />)
         }
         Kind.Ident => {
             val t: Tok = c.cur()
@@ -110,12 +128,12 @@ fn parsePrimary(c: inout Comp) -> U64 {
         Kind.KwTrue => {
             val tt: Tok = c.cur()
             c.advance()
-            return c.pushExpr(e: <Expr.Int value=1 offset=tt.start />)
+            return c.pushExpr(e: <Expr.Int value=1 offset=tt.start isBool=true tyStart=0 tyLen=0 />)
         }
         Kind.KwFalse => {
             val tf: Tok = c.cur()
             c.advance()
-            return c.pushExpr(e: <Expr.Int value=0 offset=tf.start />)
+            return c.pushExpr(e: <Expr.Int value=0 offset=tf.start isBool=true tyStart=0 tyLen=0 />)
         }
         Kind.LParen => {
             c.advance()
@@ -166,7 +184,7 @@ fn parsePrimary(c: inout Comp) -> U64 {
         _ => {
             val te: Tok = c.cur()
             c.advance()
-            return c.pushExpr(e: <Expr.Int value=0 offset=te.start />)
+            return c.pushExpr(e: <Expr.Int value=0 offset=te.start isBool=false tyStart=0 tyLen=0 />)
         }
     }
 }

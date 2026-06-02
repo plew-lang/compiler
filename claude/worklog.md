@@ -8,7 +8,7 @@
 
 - **ビルド**：`./bootstrap.sh`＝C 種 `compiler/plewc.seed.c`→clang→`plewc0`→`compiler/src/_.pw` を自己コンパイル→不動点 cmp（Rust/cargo 不要）。`./bootstrap.sh --reseed` で種更新。
 - **テスト**：`./test.sh`＝`tests/run/*.pw`（`.out` 照合・任意 `.in`）＋`tests/part/`（複数ファイル）＋`tests/reject/*.pw`（plewc が非ゼロ終了で reject＝受理の健全性）＋不動点（Rust 非依存）。
-- **サポート済の言語**（現状スナップショット・経緯は git/タグ）：型付き整数/Bool・String（リテラル/`.bytes`/`==`/エスケープ）・文字リテラル `'c'`・Array（リテラル/添字/`count`/`append`/`a[i]=x`/for-each）・struct と JSX 構築・enum＋match（**網羅検査**・**or パターン `A|B`**・rename/discard 束縛 `{f: val n}`/`{f: _}`・**値位置 `match` 式**）・enum `==`（全 nullary）・**可変性検査（place 単位＝単純変数＋`base.field` 合成＋`a[i]` 配列束縛＋`.append`/`inout fn` メソッド受信側）**・関数/**引数ラベル検査**/`inout`/再帰・**インヘレントメソッド `impl Type { fn / inout fn }`**・**`panic`**・`if`/`else`/`while`/`for`/`break`/`continue`・**値位置 `if` 式＋ブロック `give`**（`else` 必須・`else if` チェーン可）・演算子（算術・比較・論理・**ビット/シフト `& | ^ << >> ~`**・単項 `! - ~`・**`as`〔整数・無損失のみ＝縮小/符号変更/リテラル範囲外は reject〕**・複合代入 `+= … %=`・**ビット系複合代入 `&= |= ^= <<= >>=`**・**整数は厳密幅で格納〔stdint〕＋算術/除算オーバーフロー・0除算は panic**）・**`import @Std/{Io,Process} with {}`**（I/O は ambient でなく import 必須）・複数ファイル **`part ./Name`**・I/O ビルトイン（print/write/writeByte/readStdin/readFile(Bytes)/argCount/argAt）・診断 `compileError(At)`。軽量型追跡・配列単相化・preamble 自前出力・生成 C は警告クリーン。**コンパイラ自身がメソッド/match 式/or パターンで自己記述**（dogfood）。
+- **サポート済の言語**（現状スナップショット・経緯は git/タグ）：型付き整数/Bool・String（リテラル/`.bytes`/`==`/エスケープ）・文字リテラル `'c'`・Array（リテラル/添字/`count`/`append`/`a[i]=x`/for-each）・struct と JSX 構築・enum＋match（**網羅検査**・**or パターン `A|B`**・rename/discard 束縛 `{f: val n}`/`{f: _}`・**値位置 `match` 式**）・enum `==`（全 nullary）・**可変性検査（place 単位＝単純変数＋`base.field` 合成＋`a[i]` 配列束縛＋`.append`/`inout fn` メソッド受信側）**・関数/**引数ラベル検査**/`inout`/再帰・**インヘレントメソッド `impl Type { fn / inout fn }`**・**`panic`**・`if`/`else`/`while`/`for`/`break`/`continue`・**値位置 `if` 式＋ブロック `give`**（`else` 必須・`else if` チェーン可）・演算子（算術・比較・論理・**ビット/シフト `& | ^ << >> ~`**・単項 `! - ~`・**`as`〔整数・無損失のみ＝縮小/符号変更/リテラル範囲外は reject〕**・複合代入 `+= … %=`・**ビット系複合代入 `&= |= ^= <<= >>=`**・**整数は厳密幅で格納〔stdint〕＋算術/除算オーバーフロー・0除算は panic＋リテラル文脈型付け〔既定型なし・文脈で確定・曖昧は reject・型サフィックス `5U64`〕**）・**`import @Std/{Io,Process} with {}`**（I/O は ambient でなく import 必須）・複数ファイル **`part ./Name`**・I/O ビルトイン（print/write/writeByte/readStdin/readFile(Bytes)/argCount/argAt）・診断 `compileError(At)`。軽量型追跡・配列単相化・preamble 自前出力・生成 C は警告クリーン。**コンパイラ自身がメソッド/match 式/or パターンで自己記述**（dogfood）。
 - **spec からの意図的剥離**（値意味論/CoW・整数幅・トレイト・モジュール詳細等）は [provisional.md](provisional.md) に集約。足場（履歴）`examples/{lexer,parser,emit,calc}.pw`。
 
 ## 受理の健全性（意味上 Plew として正しい）＝一区切り
@@ -17,7 +17,7 @@
 
 ## 次の一歩の候補（やりやすい順で自走）
 
-### 整数幅エピック — Phase A/B/C ✅ 完了・残り Phase D（リテラル文脈型付け）
+### 整数幅エピック — Phase A/B/C/D ✅ 完了
 
 **済（A+B+C）**：
 - **A：式幅伝播** — `exprType` が算術/ビット二項（→左辺幅）・単項 `-`/`~`（→operand 幅）を伝播。`(a-b) as U8` が narrowing として reject される。
@@ -29,7 +29,11 @@
 
 **Phase D1（リテラル文脈型付け・範囲検査）✅ 完了**。純粋検査パス `checkLitCtx`（C 出力不変）が文脈の整数型をリテラルへ伝播：let 注釈/代入先/引数(仮引数型)/戻り(戻り型)/配列要素/struct・enum フィールド/添字(U64)/比較・算術の型付き相手から型を降ろし、範囲外リテラルと**定数式オーバーフロー（`200+100:U8`）**を compile error。先頭 `-` はリテラルへ畳み込み（`-128:I8` 可）。`Expr.Int` に source offset を追加し診断行を正確化。`litFitsBits` を per-width 定数比較に（`1<<31` の C int 溢れバグ修正）。
 
-**Phase D2（厳密 no-default＝context-free リテラルを曖昧エラー）は見送り（要再投資判断）**。理由＝**D1 で hidden meaning（沈黙切り詰め）は完全に閉じた**：context-free リテラルは long-long 既定になるだけで、狭い型へ格納する経路（let/代入/引数/フィールド/戻り/配列）は全て D1 が検査し、算術の溢れは Phase B が型付きオペランド幅で検査する＝**残る context-free ケースに沈黙切り詰めは無い**（良性既定）。一方 blanket D2 は `0..<arr.count` の `.count` 等を U64 と復元できず誤検出する（要 `TypeInfo` の幅フィールド化＝源スパン非依存リファクタ）／限定 D2（注釈なし定数束縛）も `true`/`false` が `Expr.Int` ゆえ誤検出する（要 Bool リテラルノード分離）。**hidden-meaning 上の利得ゼロに対しモデリングのリファクタ 2 本が必要**ゆえ、受理の健全性の観点では D1 で十分。厳密 spec 準拠を望むなら別途 TypeInfo 幅化＋Bool リテラルを additive に。
+**Phase D2（厳密 no-default＝context-free リテラルを曖昧エラー）✅ 完了**。spec の「初手は厳格（明示要求）」（02-basic-types.md）に合わせ、文脈型の無い整数リテラルは `compileError`（`val x = 1 + 1`・`for val i in 0..<5` 等を reject）。実装：
+- **型サフィックス `5U64`/`1I32`**（parser）＝Int トークン直後（隣接・空白なし）の整数型名 Ident を suffix として取り込み `Expr.Int.tyStart/tyLen` に格納。`Expr.Int` に `isBool`（`true`/`false` 分離＝Bool は曖昧でない）も追加。
+- **`exprIntTy`**＝sibling 推論用に span-free で整数型(bits,sgn)を復元：`arr.count`→U64・`arr[i]`→要素型・builtin `argCount()`→I64。これで `0..<arr.count` は suffix 不要（spec 通り）。
+- `checkLitLeaf`：isBool→skip／suffix 有→suffix 型で範囲検査（曖昧でない）／eKind1→文脈幅で範囲検査／eKind0→**曖昧エラー**。
+- 注意：`for` の本体が I64 演算なら範囲も `0..<5I64`（`tests/run/for.pw`）。suffix は型を与えるだけで storage は従来通り（無注釈 let は long-long＝widening の hidden cost のみ）。
 
 > 着手手順は ADD→reseed→USE（下節）。各 Phase で不動点を緑に保ってから commit。新 preamble 行や **codegen 挙動変化（genCElem 等）を足したら reseed 2 回**（1 世代遅れる）。AST ノードへのフィールド追加（`Expr.Int` の offset 等）も出力が変わるので reseed 2 回。
 

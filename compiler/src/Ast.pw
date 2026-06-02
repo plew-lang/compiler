@@ -72,7 +72,11 @@ struct Arg {
 }
 
 enum Expr {
-    Int { value: I64, offset: U64 }
+    // An integer (or Bool) literal. `offset` is the source byte for diagnostics.
+    // `isBool` marks `true`/`false` (lowered to 1/0 but typed Bool, never an
+    // ambiguous integer). `tyStart`/`tyLen` is an optional type suffix span
+    // (`5U64`, `1I32`); tyLen 0 = no suffix, so the type comes from context.
+    Int { value: I64, offset: U64, isBool: Bool, tyStart: U64, tyLen: U64 }
     Ident { start: U64, len: U64 }
     Unary { op: I64, operand: U64 }
     Binary { op: I64, lhs: U64, rhs: U64 }

@@ -296,7 +296,7 @@ fn lineOf(c: inout Comp, offset: U64) -> I64 {
 fn exprOffset(c: inout Comp, id: U64) -> U64 {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Int { val value, val offset } => { return offset }
+        Expr.Int { value: _, val offset, isBool: _, tyStart: _, tyLen: _ } => { return offset }
         Expr.Ident { val start, val len } => { return start }
         Expr.Str { val start, val len } => { return start }
         Expr.Call { val nameStart, val nameLen, val args } => { return nameStart }
@@ -618,7 +618,14 @@ fn placeIsMutable(c: inout Comp, id: U64) -> Bool {
 fn exprType(c: inout Comp, id: U64) -> TypeInfo {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Int { val value, offset: _ } => { return scalarInfo() }
+        Expr.Int { value: _, offset: _, isBool: _, val tyStart, val tyLen } => {
+            // a suffixed literal (`5U64`) carries its own type; otherwise the
+            // type comes from context and is recovered elsewhere.
+            if tyLen != 0 {
+                return typeInfoOfName(c: inout c, start: tyStart, len: tyLen, isArray: false)
+            }
+            return scalarInfo()
+        }
         Expr.Str { val start, val len } => { return <TypeInfo kind=1 nameStart=0 nameLen=0 /> }
         Expr.Ident { val start, val len } => {
             if isSelfRef(c: inout c, start: start, len: len) {
@@ -1062,7 +1069,10 @@ fn notConst() -> ConstInt {
 fn foldConst(c: inout Comp, id: U64) -> ConstInt {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Int { val value, offset: _ } => { return <ConstInt isConst=true value=value /> }
+        Expr.Int { val value, offset: _, val isBool, tyStart: _, tyLen: _ } => {
+            if isBool { return notConst() }
+            return <ConstInt isConst=true value=value />
+        }
         Expr.Unary { val op, val operand } => {
             if op == 57 {
                 val o: ConstInt = foldConst(c: inout c, id: operand)
@@ -1097,18 +1107,39 @@ fn tiIsInt(c: inout Comp, ti: TypeInfo) -> Bool {
 }
 
 // Range-check the literals reachable from `id` against an expected integer type
-// described as (eKind, eBits, eSgn): eKind 0 = none/unknown (D1: lenient — no
-// error), 1 = integer of (eBits, eSgn), 2 = a non-integer type (skip int checks).
+// described as (eKind, eBits, eSgn): eKind 0 = no context type (spec: a literal
+// with no type is a compile error), 1 = integer of (eBits, eSgn), 2 = a non-
+// integer type (skip int checks). A `true`/`false` (isBool) or a suffixed
+// literal (`5U64`) carries its own type and is never context-ambiguous.
+fn checkLitLeaf(c: inout Comp, value: I64, offset: U64, isBool: Bool, tyStart: U64, tyLen: U64, eKind: U64, eBits: U64, eSgn: Bool) {
+    if isBool {
+        return
+    }
+    if tyLen != 0 {
+        // explicit type suffix: range-check against it (never ambiguous).
+        if litFitsType(c: inout c, value: value, dstStart: tyStart, dstLen: tyLen) {
+        } else {
+            compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal is out of range for its type")
+        }
+        return
+    }
+    if eKind == 1 {
+        if litFitsBits(value: value, bits: eBits, sgn: eSgn) {
+        } else {
+            compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal is out of range for its type")
+        }
+        return
+    }
+    if eKind == 0 {
+        compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal has no type from context; add a type annotation or a suffix (e.g. `5I32`)")
+    }
+}
+
 fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Int { val value, val offset } => {
-            if eKind == 1 {
-                if litFitsBits(value: value, bits: eBits, sgn: eSgn) {
-                } else {
-                    compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal is out of range for its type")
-                }
-            }
+        Expr.Int { val value, val offset, val isBool, val tyStart, val tyLen } => {
+            checkLitLeaf(c: inout c, value: value, offset: offset, isBool: isBool, tyStart: tyStart, tyLen: tyLen, eKind: eKind, eBits: eBits, eSgn: eSgn)
         }
         Expr.Unary { val op, val operand } => {
             if op == 57 {
@@ -1117,13 +1148,8 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
                 // value; otherwise recurse into the operand with the same type.
                 val oe: Expr = c.exprs[operand]
                 match oe {
-                    Expr.Int { val value, val offset } => {
-                        if eKind == 1 {
-                            if litFitsBits(value: 0 - value, bits: eBits, sgn: eSgn) {
-                            } else {
-                                compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal is out of range for its type")
-                            }
-                        }
+                    Expr.Int { val value, val offset, val isBool, val tyStart, val tyLen } => {
+                        checkLitLeaf(c: inout c, value: 0 - value, offset: offset, isBool: isBool, tyStart: tyStart, tyLen: tyLen, eKind: eKind, eBits: eBits, eSgn: eSgn)
                     }
                     _ => { checkLitCtx(c: inout c, id: operand, eKind: eKind, eBits: eBits, eSgn: eSgn) }
                 }
@@ -1166,7 +1192,7 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
             // checked by the cast itself, so only recurse into compound operands.
             val oe: Expr = c.exprs[operand]
             match oe {
-                Expr.Int { val value, offset: _ } => {}
+                Expr.Int { value: _, offset: _, isBool: _, tyStart: _, tyLen: _ } => {}
                 _ => { checkLitCtx(c: inout c, id: operand, eKind: 0, eBits: 0, eSgn: false) }
             }
         }
@@ -1199,20 +1225,64 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
     }
 }
 
+struct IntTy {
+    val known: Bool
+    val bits: U64
+    val sgn: Bool
+}
+
+// Recover an expression's integer type as (bits, sgn). Covers what exprType
+// reports width-less but is nonetheless integer-typed: `arr.count` (U64) and an
+// array element read `arr[i]` (the element's int type) — so a literal sibling in
+// `0 ..< arr.count` infers U64 and is not flagged ambiguous.
+fn exprIntTy(c: inout Comp, id: U64) -> IntTy {
+    val ti: TypeInfo = exprType(c: inout c, id: id)
+    if tiIsInt(c: inout c, ti: ti) {
+        return <IntTy known=true bits=intBits(c: inout c, start: ti.nameStart, len: ti.nameLen) sgn=intSigned(c: inout c, start: ti.nameStart, len: ti.nameLen) />
+    }
+    val e: Expr = c.exprs[id]
+    match e {
+        Expr.Call { val nameStart, val nameLen, val args } => {
+            // argCount() is the one integer-returning I/O builtin (I64).
+            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argCount") {
+                return <IntTy known=true bits=64 sgn=true />
+            }
+        }
+        Expr.Field { val base, val nameStart, val nameLen } => {
+            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "count") {
+                val bt: TypeInfo = exprType(c: inout c, id: base)
+                if bt.kind == 3 {
+                    return <IntTy known=true bits=64 sgn=false />
+                }
+            }
+        }
+        Expr.Index { val base, val index } => {
+            val bt: TypeInfo = exprType(c: inout c, id: base)
+            if bt.kind == 3 {
+                if isIntType(c: inout c, start: bt.nameStart, len: bt.nameLen) {
+                    return <IntTy known=true bits=intBits(c: inout c, start: bt.nameStart, len: bt.nameLen) sgn=intSigned(c: inout c, start: bt.nameStart, len: bt.nameLen) />
+                }
+            }
+        }
+        _ => {}
+    }
+    return <IntTy known=false bits=0 sgn=false />
+}
+
 // Infer an arithmetic/comparison's literal operand type from a typed sibling
 // (Plew: both operands share a type). If neither operand has a known integer
-// type, recurse with no context (D1 leaves that lenient).
+// type, the operands carry no context, so a literal there is ambiguous (error).
 fn checkArithNoCtx(c: inout Comp, lhs: U64, rhs: U64) {
-    val lt: TypeInfo = exprType(c: inout c, id: lhs)
-    if tiIsInt(c: inout c, ti: lt) {
-        checkLitTi(c: inout c, id: lhs, ti: lt)
-        checkLitTi(c: inout c, id: rhs, ti: lt)
+    val lt: IntTy = exprIntTy(c: inout c, id: lhs)
+    if lt.known {
+        checkLitCtx(c: inout c, id: lhs, eKind: 1, eBits: lt.bits, eSgn: lt.sgn)
+        checkLitCtx(c: inout c, id: rhs, eKind: 1, eBits: lt.bits, eSgn: lt.sgn)
         return
     }
-    val rt: TypeInfo = exprType(c: inout c, id: rhs)
-    if tiIsInt(c: inout c, ti: rt) {
-        checkLitTi(c: inout c, id: lhs, ti: rt)
-        checkLitTi(c: inout c, id: rhs, ti: rt)
+    val rt: IntTy = exprIntTy(c: inout c, id: rhs)
+    if rt.known {
+        checkLitCtx(c: inout c, id: lhs, eKind: 1, eBits: rt.bits, eSgn: rt.sgn)
+        checkLitCtx(c: inout c, id: rhs, eKind: 1, eBits: rt.bits, eSgn: rt.sgn)
         return
     }
     checkLitCtx(c: inout c, id: lhs, eKind: 0, eBits: 0, eSgn: false)
@@ -1368,7 +1438,7 @@ fn checkMakeFields(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U6
 fn genExpr(c: inout Comp, id: U64) {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Int { val value, offset: _ } => { writeInt(n: value) }
+        Expr.Int { val value, offset: _, isBool: _, tyStart: _, tyLen: _ } => { writeInt(n: value) }
         Expr.Ident { val start, val len } => {
             if isInoutLocal(c: inout c, start: start, len: len) {
                 write(s: "(*")
@@ -1707,7 +1777,7 @@ fn genExpr(c: inout Comp, id: U64) {
             if isIntType(c: inout c, start: tyStart, len: tyLen) {
                 val opE: Expr = c.exprs[operand]
                 match opE {
-                    Expr.Int { val value, val offset } => {
+                    Expr.Int { val value, val offset, isBool: _, tyStart: _, tyLen: _ } => {
                         if litFitsType(c: inout c, value: value, dstStart: tyStart, dstLen: tyLen) {
                         } else {
                             compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal is out of range for the target type of `as`")

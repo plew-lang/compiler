@@ -2,12 +2,12 @@ import @Std/Io with { print }
 
 fn main() {
     mut val a: I64 = 0
-    for val i in 0..<5 {
+    for val i in 0..<5I64 {        // literal range bound needs a type (no default)
         a += i
     }
     print(a)
     mut val b: I64 = 0
-    for val i in 1..=4 {
+    for val i in 1..=4I64 {
         b += i
     }
     print(b)

@@ -1,0 +1,9 @@
+// A literal range bound has no context type, so `0..<5` is ambiguous and must
+// be rejected; the spec form is `0..<5U64` (or another suffix).
+import @Std/Io with { print }
+
+fn main() {
+    for val i in 0..<5 {
+        print(i as I64)
+    }
+}

@@ -1,0 +1,19 @@
+// Type suffixes give a context-free literal its type (spec: no default type).
+// A suffix on one operand/bound flows to its sibling; `.count` is U64, so a
+// range over it needs no suffix; `true`/`false` are Bool, never ambiguous.
+import @Std/Io with { print }
+
+fn main() {
+    val x = 1I32 + 1          // 1I32 types both operands
+    print(x as I64)           // 2
+    val y = 250U8 + 5         // 255, fits U8
+    print(y as U64)           // 255
+    val xs: Array[I64] = [10, 20, 30]
+    mut val sum: I64 = 0
+    for val i in 0..<xs.count {   // count is U64 -> 0 infers U64, no suffix
+        sum += xs[i]
+    }
+    print(sum)                // 60
+    val flag = true           // Bool literal: unambiguous without annotation
+    if flag { print(7I64) }   // 7
+}
