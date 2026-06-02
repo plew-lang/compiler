@@ -1,0 +1,12 @@
+import @Std/Io with { print }
+struct Box { mut val xs: Array[I32] }
+fn getXs(b: Box) -> Array[I32] {
+    return b.xs
+}
+fn main() {
+    val b: Box = <Box xs=[3, 4] />
+    mut val r: Array[I32] = getXs(b: b)
+    r[0] = 88
+    print(b.xs[0])
+    print(r[0])
+}

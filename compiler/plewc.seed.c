@@ -753,7 +753,7 @@ PlewArray_Bind collectParts(PlewArray_U8 rootBytes, PlewArray_Tok toks) {
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    return parts;
+    return PlewArray_Bind_copy(parts);
 }
 uint64_t stripParents(PlewArray_U8 path, uint64_t baseLen, uint64_t n) {
     uint64_t end = baseLen;
@@ -783,7 +783,7 @@ uint64_t stripParents(PlewArray_U8 path, uint64_t baseLen, uint64_t n) {
 PlewArray_U8 resolveImport(PlewArray_U8 src, uint64_t pStart, uint64_t pLen, PlewArray_U8 importer, uint64_t baseLen, PlewArray_U8 srcRoot, uint64_t srcRootLen, PlewArray_U8 stdRoot, uint64_t stdRootLen) {
     PlewArray_U8 out = PlewArray_U8_new();
     if (pLen == 0) {
-    return out;
+    return PlewArray_U8_copy(out);
     }
     uint64_t end = ({ uint64_t __ov; if (__builtin_add_overflow((pStart), (pLen), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     unsigned char b0 = PlewArray_U8_get(src, (long long)(pStart));
@@ -794,7 +794,7 @@ PlewArray_U8 resolveImport(PlewArray_U8 src, uint64_t pStart, uint64_t pLen, Ple
     if (PlewArray_U8_get(src, (long long)(({ uint64_t __ov; if (__builtin_add_overflow((pStart), (3), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; }))) == 100) {
     if (PlewArray_U8_get(src, (long long)(({ uint64_t __ov; if (__builtin_add_overflow((pStart), (4), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; }))) == 47) {
     if (stdRootLen == 0) {
-    return out;
+    return PlewArray_U8_copy(out);
     }
     uint64_t si = 0;
     while (si < stdRootLen) {
@@ -809,17 +809,17 @@ PlewArray_U8 resolveImport(PlewArray_U8 src, uint64_t pStart, uint64_t pLen, Ple
     PlewArray_U8_push(&(out), 46);
     PlewArray_U8_push(&(out), 112);
     PlewArray_U8_push(&(out), 119);
-    return out;
+    return PlewArray_U8_copy(out);
     }
     }
     }
     }
     }
-    return out;
+    return PlewArray_U8_copy(out);
     }
     if (b0 == 47) {
     if (srcRootLen == 0) {
-    return out;
+    return PlewArray_U8_copy(out);
     }
     uint64_t i = 0;
     while (i < srcRootLen) {
@@ -834,7 +834,7 @@ PlewArray_U8 resolveImport(PlewArray_U8 src, uint64_t pStart, uint64_t pLen, Ple
     PlewArray_U8_push(&(out), 46);
     PlewArray_U8_push(&(out), 112);
     PlewArray_U8_push(&(out), 119);
-    return out;
+    return PlewArray_U8_copy(out);
     }
     uint64_t rest = pStart;
     uint64_t parents = 0;
@@ -886,7 +886,7 @@ PlewArray_U8 resolveImport(PlewArray_U8 src, uint64_t pStart, uint64_t pLen, Ple
     PlewArray_U8_push(&(out), 46);
     PlewArray_U8_push(&(out), 112);
     PlewArray_U8_push(&(out), 119);
-    return out;
+    return PlewArray_U8_copy(out);
 }
 void appendBytes(PlewArray_U8* into, PlewArray_U8 from) {
     uint64_t i = 0;
@@ -902,7 +902,7 @@ PlewArray_U8 extractSpan(PlewArray_U8 buf, uint64_t start, uint64_t len) {
     PlewArray_U8_push(&(out), PlewArray_U8_get(buf, (long long)(({ uint64_t __ov; if (__builtin_add_overflow((start), (i), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; }))));
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    return out;
+    return PlewArray_U8_copy(out);
 }
 uint64_t dirPrefixLen(PlewArray_U8 path) {
     uint64_t pre = 0;
@@ -927,7 +927,7 @@ PlewArray_U8 computeStdRoot(PlewArray_U8 arg0) {
     PlewArray_U8_push(&(out), 116);
     PlewArray_U8_push(&(out), 100);
     PlewArray_U8_push(&(out), 47);
-    return out;
+    return PlewArray_U8_copy(out);
 }
 PlewArray_U8 findSrcRoot(PlewArray_U8 entry) {
     uint64_t dirLen = dirPrefixLen(entry);
@@ -950,7 +950,7 @@ PlewArray_U8 findSrcRoot(PlewArray_U8 entry) {
     }
     PlewArray_U8 sx = PlewArray_U8_copy(({ PlewString __s = (PlewString){"src/", 4}; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len}; }));
     appendBytes(&(sr), sx);
-    return sr;
+    return PlewArray_U8_copy(sr);
     }
     if (dirLen == 0) {
     go = 0;
@@ -966,7 +966,7 @@ PlewArray_U8 findSrcRoot(PlewArray_U8 entry) {
     }
     }
     PlewArray_U8 empty = PlewArray_U8_new();
-    return empty;
+    return PlewArray_U8_copy(empty);
 }
 long long pathSeen(PlewArray_U8 buf, PlewArray_Bind loaded, PlewArray_U8 path) {
     uint64_t i = 0;
@@ -2161,7 +2161,7 @@ PlewArray_Arg parseCallArgs(Comp* c) {
     }
     }
     }
-    return args;
+    return PlewArray_Arg_copy(args);
 }
 long long isAssignOp(Kind k) {
     {
@@ -2316,7 +2316,7 @@ PlewArray_Bind parseTypeParams(Comp* c) {
     else {
     }
     }
-    return ps;
+    return PlewArray_Bind_copy(ps);
 }
 void recordArrayElem(Comp* c, PType ty) {
     if (ty.isArray) {
@@ -2691,7 +2691,7 @@ PlewArray_PatInfo parseArmPatterns(Comp* c) {
     }
     pi = ({ uint64_t __ov; if (__builtin_add_overflow((pi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    return pats;
+    return PlewArray_PatInfo_copy(pats);
 }
 uint64_t parseMatch(Comp* c) {
     Comp_advance(&((*c)));
@@ -6504,7 +6504,12 @@ void genStmt(Comp* c, uint64_t id) {
     }
     plew_write((PlewString){"    return ", 11});
     if (hasValue) {
-    genExpr(&((*c)), value);
+    if ((*c).curRetIsArray) {
+    genArrayValue(&((*c)), value, (*c).curRetStart, (*c).curRetLen);
+    }
+    else {
+    genStructValue(&((*c)), value, (*c).curRetStart, (*c).curRetLen);
+    }
     }
     else {
     plew_write((PlewString){"0", 1});

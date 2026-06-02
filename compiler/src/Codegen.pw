@@ -2635,7 +2635,14 @@ fn genStmt(c: inout Comp, id: U64) {
                     }
                     write(s: "    return ")
                     if hasValue {
-                        genExpr(c: inout c, id: value)
+                        // value semantics: returning a place array/struct hands
+                        // back an independent copy (else the caller could mutate
+                        // the callee's source, e.g. `return self.items`).
+                        if c.curRetIsArray {
+                            genArrayValue(c: inout c, exprId: value, elemStart: c.curRetStart, elemLen: c.curRetLen)
+                        } else {
+                            genStructValue(c: inout c, exprId: value, structStart: c.curRetStart, structLen: c.curRetLen)
+                        }
                     } else {
                         write(s: "0")
                     }
