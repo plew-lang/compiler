@@ -130,6 +130,9 @@ fn parsePrimary(c: inout Comp) -> U64 {
         Kind.KwMatch => {
             return parseMatchExpr(c: inout c)
         }
+        Kind.KwIf => {
+            return parseIfExpr(c: inout c)
+        }
         Kind.Str => {
             val t: Tok = c.cur()
             c.advance()
@@ -512,6 +515,42 @@ fn parseIf(c: inout Comp) -> U64 {
     }
 }
 
+// `if cond { ... give a } else { ... give b }` in expression position. Mirrors
+// parseIf but `else` is mandatory (a value-position `if` must always yield) and
+// it produces an Expr.IfExpr. `else if` chains as a nested if-expr wrapped in a
+// synthesized `give` block, so codegen sees a uniform else block.
+fn parseIfExpr(c: inout Comp) -> U64 {
+    c.advance()
+    val cond: U64 = parseExpr(c: inout c)
+    val thenBlk: U64 = parseBlock(c: inout c)
+    c.skipNewlines()
+    match c.curKind() {
+        Kind.KwElse => { c.advance() }
+        _ => {}
+    }
+    match c.curKind() {
+        Kind.KwIf => {
+            val nested: U64 = parseIfExpr(c: inout c)
+            mut val one: Array[U64] = []
+            one.append(c.pushStmt(s: <Stmt.Give value=nested />))
+            val blkId: U64 = c.blocks.count
+            c.blocks.append(<Block stmts=one />)
+            return c.pushExpr(e: <Expr.IfExpr cond=cond thenBlk=thenBlk elseBlk=blkId />)
+        }
+        _ => {
+            val elseBlk: U64 = parseBlock(c: inout c)
+            return c.pushExpr(e: <Expr.IfExpr cond=cond thenBlk=thenBlk elseBlk=elseBlk />)
+        }
+    }
+}
+
+// `give <expr>`: yield the enclosing value-position block's result.
+fn parseGive(c: inout Comp) -> U64 {
+    c.advance()
+    val v: U64 = parseExpr(c: inout c)
+    return c.pushStmt(s: <Stmt.Give value=v />)
+}
+
 fn parseWhile(c: inout Comp) -> U64 {
     c.advance()
     val cond: U64 = parseExpr(c: inout c)
@@ -817,6 +856,7 @@ fn parseStmt(c: inout Comp) -> U64 {
             }
             return parseExprOrAssign(c: inout c)
         }
+        Kind.KwGive => { return parseGive(c: inout c) }
         _ => { return parseExprOrAssign(c: inout c) }
     }
 }

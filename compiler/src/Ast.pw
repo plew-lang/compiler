@@ -88,6 +88,10 @@ enum Expr {
     // arm yields an expression (MatchArm.body is an Expr index, not a Block).
     // Lowers to a C statement-expression.
     MatchExpr { scrut: U64, arms: Array[MatchArm] }
+    // value-position `if cond { ... give a } else { ... give b }`: each branch is
+    // a block ending in `give`. Lowers to a C statement-expression (like
+    // MatchExpr). `else` is mandatory in value position (it must always yield).
+    IfExpr { cond: U64, thenBlk: U64, elseBlk: U64 }
 }
 
 // One arm of a match: either `_ => block` (wildcard) or `Enum.Variant
@@ -130,6 +134,10 @@ enum Stmt {
     // `panic <msg>`: a diverging statement (spec: unrecoverable, never returns).
     // msg is a String expression; offset is the `panic` keyword for diagnostics.
     Panic { msg: U64, offset: U64 }
+    // `give <expr>`: yields the value of the enclosing block-expression (an
+    // `if`/`match` used in value position). Codegen assigns it to the active
+    // result temp.
+    Give { value: U64 }
     Break
     Continue
 }
@@ -219,6 +227,11 @@ struct Comp {
     mut val curRecvStart: U64
     mut val curRecvLen: U64
     mut val curSelfInout: Bool
+    // result temp id of the innermost value-position block (`if`/`match` expr)
+    // currently being lowered, so a `give` statement knows which `__r<n>` to
+    // assign. -1 when not inside a block-expression (a bare `give` is then a
+    // no-op fallthrough; the parser only emits give inside if-exprs for now).
+    mut val curGiveTmp: I64
     // which I/O builtins the file has imported (acceptance soundness: spec makes
     // these non-ambient, so using one without `import @Std/Io`/`@Std/Process`
     // is a compile error). One flag per builtin, matched to its module.

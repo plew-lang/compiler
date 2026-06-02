@@ -152,6 +152,7 @@ fn exprOffset(c: inout Comp, id: U64) -> U64 {
         Expr.Cast { val operand, val tyStart, val tyLen } => { return exprOffset(c: inout c, id: operand) }
         Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val fields } => { return typeStart }
         Expr.MatchExpr { val scrut, val arms } => { return exprOffset(c: inout c, id: scrut) }
+        Expr.IfExpr { val cond, val thenBlk, val elseBlk } => { return exprOffset(c: inout c, id: cond) }
         _ => { return 0 }
     }
 }
@@ -493,8 +494,33 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             return scalarInfo()
         }
+        Expr.IfExpr { val cond, val thenBlk, val elseBlk } => {
+            val g: I64 = blockGiveExpr(c: inout c, blkId: thenBlk)
+            if g >= 0 {
+                return exprType(c: inout c, id: g as U64)
+            }
+            return scalarInfo()
+        }
     }
     return scalarInfo()
+}
+
+// The value expression of the last `give` in a block (the block's result), or
+// -1 if the block has no `give`. Used to infer a value-position `if`'s type.
+fn blockGiveExpr(c: inout Comp, blkId: U64) -> I64 {
+    val blk: Block = c.blocks[blkId]
+    val stmts: Array[U64] = blk.stmts
+    mut val i: U64 = 0
+    mut val found: I64 = 0 - 1
+    while i < stmts.count {
+        val s: Stmt = c.stmts[stmts[i]]
+        match s {
+            Stmt.Give { val value } => { found = value as I64 }
+            _ => {}
+        }
+        i += 1
+    }
+    return found
 }
 
 // Register a match-bound field as an in-scope local with its declared type.
@@ -1046,6 +1072,33 @@ fn genExpr(c: inout Comp, id: U64) {
             writeInt(n: t as I64)
             write(s: "; })")
         }
+        Expr.IfExpr { val cond, val thenBlk, val elseBlk } => {
+            // value-position if -> C statement-expression. Each branch is a block
+            // ending in `give`, which assigns the result temp __r<t>.
+            val t: U64 = c.tmp
+            c.tmp = c.tmp + 1
+            val g: I64 = blockGiveExpr(c: inout c, blkId: thenBlk)
+            mut val rt: TypeInfo = scalarInfo()
+            if g >= 0 {
+                rt = exprType(c: inout c, id: g as U64)
+            }
+            write(s: "({ ")
+            genTypeInfoCType(c: inout c, ti: rt)
+            write(s: " __r")
+            writeInt(n: t as I64)
+            write(s: "; if (")
+            genCond(c: inout c, id: cond)
+            write(s: ") {\n")
+            val save: I64 = c.curGiveTmp
+            c.curGiveTmp = t as I64
+            genBlock(c: inout c, id: thenBlk)
+            write(s: "    } else {\n")
+            genBlock(c: inout c, id: elseBlk)
+            c.curGiveTmp = save
+            write(s: "    } __r")
+            writeInt(n: t as I64)
+            write(s: "; })")
+        }
     }
 }
 
@@ -1450,6 +1503,17 @@ fn genStmt(c: inout Comp, id: U64) {
             write(s: "    plew_panic(")
             genExpr(c: inout c, id: msg)
             write(s: ");\n")
+        }
+        Stmt.Give { val value } => {
+            // assign the active value-position block's result temp (set by the
+            // enclosing IfExpr/MatchExpr lowering).
+            if c.curGiveTmp >= 0 {
+                write(s: "    __r")
+                writeInt(n: c.curGiveTmp)
+                write(s: " = (")
+                genExpr(c: inout c, id: value)
+                write(s: ");\n")
+            }
         }
         Stmt.Break => {
             write(s: "    break;\n")
