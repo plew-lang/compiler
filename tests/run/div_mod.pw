@@ -12,8 +12,17 @@ fn main() {
     val b: I64 = 7
     print(a / b)             // 14
     print(a % b)             // 2
-    // through compound assign (currently raw, not via plew_div — see provisional)
+    // compound assign also routes through the checked helpers
     mut val c: I64 = 20
     c /= 6
     print(c)                 // 3
+    mut val d: I64 = 20
+    d %= 6
+    print(d)                 // 2
+    // through an array place
+    mut val xs: Array[I64] = [20, 23]
+    xs[0] /= 6
+    xs[1] %= 6
+    print(xs[0])             // 3
+    print(xs[1])             // 5
 }

@@ -474,6 +474,8 @@ PlewString binOpStr(long long op);
 PlewString unaryOpStr(long long op);
 long long strDecodedLen(Comp* c, long long start, long long len);
 PlewString assignOpStr(long long op);
+long long isCompoundDiv(long long op);
+PlewString compoundDivFn(long long op);
 PlewString assignToBinStr(long long op);
 void genExpr(Comp* c, long long id);
 void genArrayLiteral(Comp* c, long long exprId, long long elemStart, long long elemLen);
@@ -3454,6 +3456,24 @@ PlewString assignOpStr(long long op) {
     }
     return (PlewString){" >>= ", 5};
 }
+long long isCompoundDiv(long long op) {
+    if (op == 70) {
+    return 1;
+    }
+    if (op == 71) {
+    return 1;
+    }
+    return 0;
+}
+PlewString compoundDivFn(long long op) {
+    if (op == 70) {
+    return (PlewString){"plew_div(", 9};
+    }
+    if (op == 71) {
+    return (PlewString){"plew_mod(", 9};
+    }
+    return (PlewString){"", 0};
+}
 PlewString assignToBinStr(long long op) {
     if (op == 67) {
     return (PlewString){" + ", 3};
@@ -4295,6 +4315,7 @@ void genStmt(Comp* c, long long id) {
     genExpr(&((*c)), value);
     }
     else {
+    plew_write(compoundDivFn(op));
     plew_write((PlewString){"PlewArray_", 10});
     writeSpan(&((*c)), bt.nameStart, bt.nameLen);
     plew_write((PlewString){"_get(", 5});
@@ -4302,8 +4323,15 @@ void genStmt(Comp* c, long long id) {
     plew_write((PlewString){", (long long)(", 14});
     genExpr(&((*c)), index);
     plew_write((PlewString){"))", 2});
+    if (isCompoundDiv(op)) {
+    plew_write((PlewString){", ", 2});
+    genExpr(&((*c)), value);
+    plew_write((PlewString){")", 1});
+    }
+    else {
     plew_write(assignToBinStr(op));
     genExpr(&((*c)), value);
+    }
     }
     plew_write((PlewString){");\n", 3});
     }
@@ -4328,6 +4356,15 @@ void genStmt(Comp* c, long long id) {
     }
     plew_write((PlewString){"    ", 4});
     genExpr(&((*c)), target);
+    if (isCompoundDiv(op)) {
+    plew_write((PlewString){" = ", 3});
+    plew_write(compoundDivFn(op));
+    genExpr(&((*c)), target);
+    plew_write((PlewString){", ", 2});
+    genExpr(&((*c)), value);
+    plew_write((PlewString){")", 1});
+    }
+    else {
     plew_write(assignOpStr(op));
     TypeInfo tt = exprType(&((*c)), target);
     if (tt.kind == 3) {
@@ -4335,6 +4372,7 @@ void genStmt(Comp* c, long long id) {
     }
     else {
     genExpr(&((*c)), value);
+    }
     }
     plew_write((PlewString){";\n", 2});
     }

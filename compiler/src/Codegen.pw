@@ -645,6 +645,22 @@ fn assignOpStr(op: I64) -> String {
     return " >>= "
 }
 
+// Whether a compound-assign op is `/=` (70) or `%=` (71), whose expansion must
+// go through the checked plew_div/plew_mod (spec: division by zero panics).
+fn isCompoundDiv(op: I64) -> Bool {
+    if op == 70 { return true }
+    if op == 71 { return true }
+    return false
+}
+
+// The checked-division C function (with its open paren) for `/=`/`%=`; "" for
+// any other op (so callers can prefix unconditionally).
+fn compoundDivFn(op: I64) -> String {
+    if op == 70 { return "plew_div(" }
+    if op == 71 { return "plew_mod(" }
+    return ""
+}
+
 // The binary operator underlying a compound assignment (`+=` -> ` + `), used to
 // expand `a[i] OP= v` into `set(a, i, get(a, i) OP v)`.
 fn assignToBinStr(op: I64) -> String {
@@ -1360,6 +1376,10 @@ fn genStmt(c: inout Comp, id: U64) {
                     if op == 49 {
                         genExpr(c: inout c, id: value)
                     } else {
+                        // `a[i] OP= v` -> set(a, i, get(a, i) OP v). For `/=`/`%=`
+                        // the binary form routes through plew_div/plew_mod so a
+                        // zero divisor panics, same as `a[i] = a[i] / v`.
+                        write(s: compoundDivFn(op: op))
                         write(s: "PlewArray_")
                         writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
                         write(s: "_get(")
@@ -1367,8 +1387,14 @@ fn genStmt(c: inout Comp, id: U64) {
                         write(s: ", (long long)(")
                         genExpr(c: inout c, id: index)
                         write(s: "))")
-                        write(s: assignToBinStr(op: op))
-                        genExpr(c: inout c, id: value)
+                        if isCompoundDiv(op: op) {
+                            write(s: ", ")
+                            genExpr(c: inout c, id: value)
+                            write(s: ")")
+                        } else {
+                            write(s: assignToBinStr(op: op))
+                            genExpr(c: inout c, id: value)
+                        }
                     }
                     write(s: ");\n")
                 }
@@ -1390,12 +1416,23 @@ fn genStmt(c: inout Comp, id: U64) {
                     }
                     write(s: "    ")
                     genExpr(c: inout c, id: target)
-                    write(s: assignOpStr(op: op))
-                    val tt: TypeInfo = exprType(c: inout c, id: target)
-                    if tt.kind == 3 {
-                        genArrayLiteral(c: inout c, exprId: value, elemStart: tt.nameStart, elemLen: tt.nameLen)
-                    } else {
+                    if isCompoundDiv(op: op) {
+                        // `x /= v` / `x %= v` -> x = plew_div(x, v) so a zero
+                        // divisor panics like `x = x / v`.
+                        write(s: " = ")
+                        write(s: compoundDivFn(op: op))
+                        genExpr(c: inout c, id: target)
+                        write(s: ", ")
                         genExpr(c: inout c, id: value)
+                        write(s: ")")
+                    } else {
+                        write(s: assignOpStr(op: op))
+                        val tt: TypeInfo = exprType(c: inout c, id: target)
+                        if tt.kind == 3 {
+                            genArrayLiteral(c: inout c, exprId: value, elemStart: tt.nameStart, elemLen: tt.nameLen)
+                        } else {
+                            genExpr(c: inout c, id: value)
+                        }
                     }
                     write(s: ";\n")
                 }

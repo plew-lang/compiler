@@ -30,7 +30,7 @@
 ## 数値モデル
 
 - **幅つき整数 `I8..U64`・`F32/F64`** → **現状：全整数 `long long`（int64_t）**。幅の区別なし・符号なし演算の意味なし・**浮動小数点は一切なし**。spec/02。
-- **0 除算は常に panic** → **実装済（binary `/`・`%`）**：`a / b`・`a % b` は `plew_div`/`plew_mod`（preamble・除数 0 で `plew_panic`→exit(1)）に脱糖。`%` は C 切り捨て＝剰余は被除数の符号（spec 通り）。残：複合代入 `/=`/`%=`（簡易・配列 place 経由とも）は今は生 `/`/`%`＝未チェック（hidden cost＝後回し・soundness 対象外）。
+- **0 除算は常に panic** → **実装済**：`a / b`・`a % b`・複合 `x /= v`/`x %= v`（簡易変数・配列 place `a[i] /= v` とも `x = plew_div(x, v)` に脱糖）すべて `plew_div`/`plew_mod`（preamble・除数 0 で `plew_panic`→exit(1)）経由。`%` は C 切り捨て＝剰余は被除数の符号（spec 通り）。
 - **オーバーフロー panic**・**NaN 比較で panic**・`assert` 常時 ON → **未実装**（C の UB / wraparound / crash 任せ）。オーバーフロー検査は幅つき整数（要 TypeInfo への幅保持）に依存ゆえ整数幅エピックと同時。`wrapping*` メソッドも無し。spec/12。
 - **数値リテラルは多相・既定型なし・曖昧はエラー** → stage0 は実装（双方向推論）。ただし `print` の引数だけ I64 にフォールバック（stage0 の便宜）。stage1 はリテラルを素朴に long long 化（曖昧検査は stage0 が既に弾く前提）。
 - **U8**：配列要素のときだけ `unsigned char`（`.bytes` の char バッファ共有のため）・スカラ U8 は long long。
