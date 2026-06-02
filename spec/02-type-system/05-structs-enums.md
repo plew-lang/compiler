@@ -29,7 +29,7 @@ struct Counter {
 ```plew
 @[All, Eq, Hash]  // ディレクティブ（オプション）
 export enum Color[T] where T: Format {
-    Red { val intensity: F64 }
+    Red { intensity: F64 }
     Green
     Blue
 }
@@ -39,16 +39,18 @@ export enum Color[T] where T: Format {
 
 ## フィールドの統一原則
 
-構造体と列挙型バリアントは、どちらも**名前付きフィールド**のみを持ちます。位置指向の無名ペイロード（`Some(T)` のようなもの）は書けません。そのため、宣言・生成・分解の3つで両者は同じ構文に従います。
+構造体と列挙型バリアントは、どちらも**名前付きフィールド**のみを持ちます。位置指向の無名ペイロード（`Some(T)` のようなもの）は書けません。生成と分解は両者で同じ構文に従います。**宣言だけは異なり**、バリアントのフィールドは修飾子なしの `field: Type` です（理由は下記）。
 
 | | 構造体 | 列挙型バリアント |
 | --- | --- | --- |
-| 宣言 | `struct S { val field: T }` | `enum E { V { val field: T } }` |
+| 宣言 | `struct S { val field: T }` | `enum E { V { field: T } }` |
 | 生成 | `<S field=expr />` | `<E.V field=expr />` |
 | 分解 | `S { field: val binding }` | `E.V { field: val binding }` |
 
 - 生成は JSX ライク構文のみ（下記 [インスタンス生成](#インスタンス生成) 参照）。
 - 分解は必ず**型名を先頭に置く**ため、`{` 始まりのブロックと曖昧になりません（[制御構造](../03-expressions/11-control-flow.md) 参照）。
+
+> **バリアントのフィールドに修飾子（`val`/`mut val`/`pub`）を書かない理由**：構造体フィールドの `val`/`mut val` は[記憶域可変性](../01-basics/03-values.md)（`c.n += 1` のような場所越しの変更）を、`pub`/`pub(get)` は[可視性](../04-execution/15-modules.md)を表します。バリアントのフィールドは **`match` で取り出すしかなく**、`e.V.field = …` のように場所として書き換える手段がない（変更はバリアントを作り直す）ので可変性修飾は意味を持ちません。可視性も列挙型単位（バリアントが見えれば `match` で全フィールドが見える）で、フィールド個別には意味を持ちません。意味を持たない修飾子を文法に残すのは冗長なので、バリアントのフィールドは `field: Type` だけにします（ラベル付きレコード `(field: Type)` と同形）。分解時の束縛 `{ val binding }` の `val` は**新しい変数の束縛**を表す別物で、こちらは従来どおりです。
 
 ## 標準の Optional / Result
 
@@ -57,14 +59,14 @@ export enum Color[T] where T: Format {
 ```plew
 @[All, Eq]
 export enum Optional[T] {
-    Some { val value: T }
+    Some { value: T }
     None
 }
 
 @[All, Eq]
 export enum Result[T, E] {
-    Ok { val value: T }
-    Err { val error: E }
+    Ok { value: T }
+    Err { error: E }
 }
 ```
 
@@ -94,7 +96,7 @@ struct TreeNode {
 }
 
 enum List[T] {
-    Cons { val head: T, val tail: List[T] }   // 自己参照
+    Cons { head: T, tail: List[T] }   // 自己参照
     Nil
 }
 ```

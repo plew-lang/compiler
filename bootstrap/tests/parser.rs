@@ -276,7 +276,7 @@ fn enum_declaration() {
 
 #[test]
 fn enum_with_payload_and_generics() {
-    let src = "enum Optional[T] {\n    Some { val value: T }\n    None\n}";
+    let src = "enum Optional[T] {\n    Some { value: T }\n    None\n}";
     assert_eq!(
         prog(src),
         "(enum Optional[T] (variant Some (field value:T)) (variant None))"
@@ -319,4 +319,20 @@ fn as_cast_binds_tighter_than_multiply() {
     assert_eq!(sexpr("a * b as I64"), "(* a (as b I64))");
     // left-associative chain
     assert_eq!(sexpr("x as I32 as I64"), "(as (as x I32) I64)");
+}
+
+#[test]
+fn variant_fields_have_no_val_keyword() {
+    // Variant fields are bare `name: Type` (no `val`/`mut`/`pub`).
+    let src = "enum E {\n    V { x: I64, y: I64 }\n    W\n}";
+    assert_eq!(prog(src), "(enum E (variant V (field x:I64) (field y:I64)) (variant W))");
+}
+
+#[test]
+fn val_on_a_variant_field_is_a_friendly_error() {
+    let (_ast, _items, errs) = parse_program("enum E {\n    V { val x: I64 }\n}");
+    assert!(
+        errs.iter().any(|e| e.msg.contains("no `val`/`mut`/`pub`")),
+        "errors: {errs:?}"
+    );
 }

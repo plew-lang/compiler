@@ -406,15 +406,53 @@ impl Parser {
         let mut end = start;
         if matches!(self.peek(), TokenKind::LBrace) {
             self.bump();
-            fields = self.parse_fields();
+            fields = self.parse_variant_fields();
             end = self.peek_span();
             self.expect(&TokenKind::RBrace, "`}` to close the variant fields");
         }
         Variant { name, fields, span: start.merge(end) }
     }
 
+    /// Parse enum-variant fields: bare `name: Type` entries (no `val`/`mut`/
+    /// `pub`/default — those modifiers are meaningless on a variant field,
+    /// which is never a mutable place nor individually visibility-controlled;
+    /// see spec/05). Stops at `}`.
+    fn parse_variant_fields(&mut self) -> Vec<Field> {
+        self.eat_newlines();
+        let mut fields = Vec::new();
+        while !matches!(self.peek(), TokenKind::RBrace | TokenKind::Eof) {
+            fields.push(self.parse_variant_field());
+            if !self.eat_item_separator() {
+                break;
+            }
+        }
+        fields
+    }
+
+    fn parse_variant_field(&mut self) -> Field {
+        let start = self.peek_span();
+        if matches!(
+            self.peek(),
+            TokenKind::Kw(Keyword::Val) | TokenKind::Kw(Keyword::Mut) | TokenKind::Kw(Keyword::Pub)
+        ) {
+            self.error(start, "variant fields are declared `name: Type` (no `val`/`mut`/`pub`)");
+            // best-effort recovery: skip the modifier word(s)
+            while matches!(
+                self.peek(),
+                TokenKind::Kw(Keyword::Val) | TokenKind::Kw(Keyword::Mut) | TokenKind::Kw(Keyword::Pub)
+            ) {
+                self.bump();
+            }
+        }
+        let name = self.expect_ident("a variant field name");
+        self.expect(&TokenKind::Colon, "`:` after the variant field name");
+        let ty = self.ty();
+        let span = start.merge(ty.span);
+        Field { vis: Vis::Private, mutable: false, name, ty, default: None, span }
+    }
+
     /// Parse `[ field (sep field)* ]` up to (and consuming) the closing `}`'s
-    /// caller. Used for both struct and variant bodies. Stops at `}`.
+    /// caller. Used for struct bodies. Stops at `}`.
     fn parse_fields(&mut self) -> Vec<Field> {
         self.eat_newlines();
         let mut fields = Vec::new();

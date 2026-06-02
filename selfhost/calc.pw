@@ -9,8 +9,8 @@
 //          atom := number | '(' expr ')'
 
 enum Expr {
-    Num { val value: I64 }
-    Bin { val op: U8, val lhs: U64, val rhs: U64 }
+    Num { value: I64 }
+    Bin { op: U8, lhs: U64, rhs: U64 }
 }
 
 struct Parser {

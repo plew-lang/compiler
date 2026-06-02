@@ -292,7 +292,8 @@ pub struct Field {
     pub span: Span,
 }
 
-/// An enum variant: `Name` (no fields) or `Name { val f: T, .. }`.
+/// An enum variant: `Name` (no fields) or `Name { f: T, .. }` (bare
+/// `name: Type` fields — no `val`/`mut`/`pub`; see spec/05).
 #[derive(Clone, Debug)]
 pub struct Variant {
     pub name: String,
