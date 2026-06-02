@@ -249,6 +249,13 @@ fn parsePostfix(c: inout Comp) -> U64 {
                 }
                 e = c.pushExpr(e: <Expr.Index base=e index=idx />)
             }
+            Kind.Arrow => {
+                // `ref->field`: access the pointee of a Ref[T].
+                c.advance()
+                val nameTok: Tok = c.cur()
+                c.advance()
+                e = c.pushExpr(e: <Expr.Arrow base=e nameStart=nameTok.start nameLen=nameTok.len />)
+            }
             Kind.KwAs => {
                 c.advance()
                 val ty: PType = parseTypeTok(c: inout c)

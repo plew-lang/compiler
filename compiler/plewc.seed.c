@@ -156,6 +156,7 @@ struct Expr {
         struct { uint64_t cond; uint64_t thenBlk; uint64_t elseBlk; } IfExpr;
         struct { uint64_t opt; uint64_t deflt; } Coalesce;
         struct { uint64_t expr; } Try;
+        struct { uint64_t base; uint64_t nameStart; uint64_t nameLen; } Arrow;
     } data;
 };
 struct Stmt {
@@ -611,6 +612,7 @@ void genEnumDef(Comp* c, uint64_t ei);
 uint64_t genericStructIndex(Comp* c, uint64_t nameStart, uint64_t nameLen);
 uint64_t genericEnumIndex(Comp* c, uint64_t nameStart, uint64_t nameLen);
 long long isGenericInst(Comp* c, uint64_t ref);
+long long isRefInst(Comp* c, uint64_t ref);
 long long isGenericEnumInst(Comp* c, uint64_t ref);
 long long typeRefEq(Comp* c, uint64_t a, uint64_t b);
 void emitMangle(Comp* c, uint64_t ref);
@@ -1893,6 +1895,12 @@ uint64_t parsePostfix(Comp* c) {
     }
     }
     e = Comp_pushExpr(&((*c)), (Expr){.tag = 9, .data.Index = {.base = e, .index = idx}});
+    }
+    else if (_m16.tag == 55) {
+    Comp_advance(&((*c)));
+    Tok nameTok = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
+    e = Comp_pushExpr(&((*c)), (Expr){.tag = 16, .data.Arrow = {.base = e, .nameStart = nameTok.start, .nameLen = nameTok.len}});
     }
     else if (_m16.tag == 21) {
     Comp_advance(&((*c)));
@@ -3766,6 +3774,15 @@ uint64_t exprOffset(Comp* c, uint64_t id) {
         (void)expr;
     return exprOffset(&((*c)), expr);
     }
+    else if (_m95.tag == 16) {
+        uint64_t base = _m95.data.Arrow.base;
+        (void)base;
+        uint64_t nameStart = _m95.data.Arrow.nameStart;
+        (void)nameStart;
+        uint64_t nameLen = _m95.data.Arrow.nameLen;
+        (void)nameLen;
+    return exprOffset(&((*c)), base);
+    }
     else {
     return 0;
     }
@@ -4033,6 +4050,15 @@ long long placeIsMutable(Comp* c, uint64_t id) {
         (void)index;
     return placeIsMutable(&((*c)), base);
     }
+    else if (_m96.tag == 16) {
+        uint64_t base = _m96.data.Arrow.base;
+        (void)base;
+        uint64_t nameStart = _m96.data.Arrow.nameStart;
+        (void)nameStart;
+        uint64_t nameLen = _m96.data.Arrow.nameLen;
+        (void)nameLen;
+    return 1;
+    }
     else {
     return 1;
     }
@@ -4079,6 +4105,10 @@ TypeInfo exprType(Comp* c, uint64_t id) {
     if (isGenericInst(&((*c)), lo.ty)) {
     TypeRef lt = PlewArray_TypeRef_get((*c).types, (long long)(lo.ty));
     return (TypeInfo){.kind = 2, .nameStart = lt.nameStart, .nameLen = lt.nameLen, .ref = lo.ty};
+    }
+    if (isRefInst(&((*c)), lo.ty)) {
+    TypeRef lt2 = PlewArray_TypeRef_get((*c).types, (long long)(lo.ty));
+    return (TypeInfo){.kind = 2, .nameStart = lt2.nameStart, .nameLen = lt2.nameLen, .ref = lo.ty};
     }
     return typeInfoOfName(&((*c)), lo.tyStart, lo.tyLen, lo.isArray);
     }
@@ -4272,6 +4302,23 @@ TypeInfo exprType(Comp* c, uint64_t id) {
     TypeRef inst = PlewArray_TypeRef_get((*c).types, (long long)(rt.ref));
     if ((long long)((inst.args).len) > 0) {
     return typeInfoOfRef(&((*c)), PlewArray_U64_get(inst.args, (long long)(0)));
+    }
+    }
+    return scalarInfo();
+    }
+    else if (_m97.tag == 16) {
+        uint64_t base = _m97.data.Arrow.base;
+        (void)base;
+        uint64_t nameStart = _m97.data.Arrow.nameStart;
+        (void)nameStart;
+        uint64_t nameLen = _m97.data.Arrow.nameLen;
+        (void)nameLen;
+    TypeInfo bt = exprType(&((*c)), base);
+    if (isRefInst(&((*c)), bt.ref)) {
+    TypeRef inst = PlewArray_TypeRef_get((*c).types, (long long)(bt.ref));
+    TypeInfo pt = typeInfoOfRef(&((*c)), PlewArray_U64_get(inst.args, (long long)(0)));
+    if (pt.kind == 2) {
+    return fieldType(&((*c)), pt.nameStart, pt.nameLen, nameStart, nameLen);
     }
     }
     return scalarInfo();
@@ -5478,6 +5525,18 @@ void genExpr(Comp* c, uint64_t id) {
     genExpr(&((*c)), index);
     plew_write((PlewString){"))", 2});
     }
+    else if (_m105.tag == 16) {
+        uint64_t base = _m105.data.Arrow.base;
+        (void)base;
+        uint64_t nameStart = _m105.data.Arrow.nameStart;
+        (void)nameStart;
+        uint64_t nameLen = _m105.data.Arrow.nameLen;
+        (void)nameLen;
+    plew_write((PlewString){"(", 1});
+    genExpr(&((*c)), base);
+    plew_write((PlewString){")->", 3});
+    writeSpan(&((*c)), nameStart, nameLen);
+    }
     else if (_m105.tag == 10) {
         uint64_t recv = _m105.data.Method.recv;
         (void)recv;
@@ -5620,6 +5679,32 @@ void genExpr(Comp* c, uint64_t id) {
         (void)ty;
         PlewArray_MakeField fields = _m105.data.Make.fields;
         (void)fields;
+    if (isRefInst(&((*c)), ty)) {
+    TypeRef rt = PlewArray_TypeRef_get((*c).types, (long long)(ty));
+    uint64_t t2 = (*c).tmp;
+    (*c).tmp = ({ uint64_t __ov; if (__builtin_add_overflow(((*c).tmp), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    plew_write((PlewString){"({ ", 3});
+    emitConcreteCType(&((*c)), PlewArray_U64_get(rt.args, (long long)(0)));
+    plew_write((PlewString){"* __ref", 7});
+    writeU64(t2);
+    plew_write((PlewString){" = (", 4});
+    emitConcreteCType(&((*c)), PlewArray_U64_get(rt.args, (long long)(0)));
+    plew_write((PlewString){"*)malloc(sizeof(", 16});
+    emitConcreteCType(&((*c)), PlewArray_U64_get(rt.args, (long long)(0)));
+    plew_write((PlewString){")); *__ref", 10});
+    writeU64(t2);
+    plew_write((PlewString){" = (", 4});
+    if ((long long)((fields).len) > 0) {
+    genExpr(&((*c)), PlewArray_MakeField_get(fields, (long long)(0)).value);
+    }
+    else {
+    plew_write((PlewString){"0", 1});
+    }
+    plew_write((PlewString){"); __ref", 8});
+    writeU64(t2);
+    plew_write((PlewString){"; })", 4});
+    return;
+    }
     if (isEnum) {
     plew_write((PlewString){"(", 1});
     if (isGenericEnumInst(&((*c)), ty)) {
@@ -6838,6 +6923,16 @@ long long isGenericInst(Comp* c, uint64_t ref) {
     }
     return (genericEnumIndex(&((*c)), t.nameStart, t.nameLen) < (long long)(((*c).enums).len));
 }
+long long isRefInst(Comp* c, uint64_t ref) {
+    if (ref >= (long long)(((*c).types).len)) {
+    return 0;
+    }
+    TypeRef t = PlewArray_TypeRef_get((*c).types, (long long)(ref));
+    if ((long long)((t.args).len) != 1) {
+    return 0;
+    }
+    return rangeEquals((*c).bytes, t.nameStart, t.nameLen, (PlewString){"Ref", 3});
+}
 long long isGenericEnumInst(Comp* c, uint64_t ref) {
     if (ref >= (long long)(((*c).types).len)) {
     return 0;
@@ -6895,6 +6990,11 @@ void emitConcreteCType(Comp* c, uint64_t ref) {
     emitMangle(&((*c)), PlewArray_U64_get(t.args, (long long)(0)));
     return;
     }
+    if (rangeEquals((*c).bytes, t.nameStart, t.nameLen, (PlewString){"Ref", 3})) {
+    emitConcreteCType(&((*c)), PlewArray_U64_get(t.args, (long long)(0)));
+    plew_write((PlewString){"*", 1});
+    return;
+    }
     emitMangle(&((*c)), r);
 }
 void emitFieldCType(Comp* c, uint64_t ref, PlewArray_Bind params, PlewArray_U64 args) {
@@ -6938,6 +7038,10 @@ void genCTypeOf(Comp* c, uint64_t tyRef, uint64_t fallStart, uint64_t fallLen, l
     return;
     }
     if (isGenericInst(&((*c)), tyRef)) {
+    emitConcreteCType(&((*c)), tyRef);
+    return;
+    }
+    if (isRefInst(&((*c)), tyRef)) {
     emitConcreteCType(&((*c)), tyRef);
     return;
     }

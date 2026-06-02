@@ -129,6 +129,10 @@ enum Expr {
     // field `value`, Err = tag 1 field `error`). First cut: error types must
     // match (no `From` conversion yet).
     Try { expr: U64 }
+    // `ref->field` — access a field of a `Ref[T]`'s pointee. `Ref[T]` lowers to
+    // a C `T*`, so this is C's `ref->field`. `->` is spec's pointee accessor;
+    // the bare handle is `.` (rare). Shared mutation is visible at `->`.
+    Arrow { base: U64, nameStart: U64, nameLen: U64 }
 }
 
 // One arm of a match: either `_ => block` (wildcard) or `Enum.Variant

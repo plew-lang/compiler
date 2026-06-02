@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+struct Counter { mut val n: I32 }
+fn bump(c: Ref[Counter]) {
+    c->n = c->n + 1
+}
+fn main() {
+    val r: Ref[Counter] = <Ref[Counter] value=<Counter n=10 /> />
+    val s: Ref[Counter] = r
+    r->n = 20
+    print(s->n)
+    bump(c: r)
+    print(r->n)
+    print(s->n)
+}

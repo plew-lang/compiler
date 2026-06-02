@@ -337,6 +337,7 @@ fn exprOffset(c: inout Comp, id: U64) -> U64 {
         Expr.IfExpr { val cond, val thenBlk, val elseBlk } => { return exprOffset(c: inout c, id: cond) }
         Expr.Coalesce { val opt, val deflt } => { return exprOffset(c: inout c, id: opt) }
         Expr.Try { val expr } => { return exprOffset(c: inout c, id: expr) }
+        Expr.Arrow { val base, val nameStart, val nameLen } => { return exprOffset(c: inout c, id: base) }
         _ => { return 0 }
     }
 }
@@ -637,6 +638,11 @@ fn placeIsMutable(c: inout Comp, id: U64) -> Bool {
         Expr.Index { val base, val index } => {
             return placeIsMutable(c: inout c, id: base)
         }
+        Expr.Arrow { val base, val nameStart, val nameLen } => {
+            // a Ref's pointee is mutable even through a `val` Ref binding (spec:
+            // `->` is not gated by val/mut; sharing is the Ref's purpose).
+            return true
+        }
         _ => { return true }
     }
 }
@@ -671,6 +677,10 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     if isGenericInst(c: inout c, ref: lo.ty) {
                         val lt: TypeRef = c.types[lo.ty]
                         return <TypeInfo kind=2 nameStart=lt.nameStart nameLen=lt.nameLen ref=lo.ty />
+                    }
+                    if isRefInst(c: inout c, ref: lo.ty) {
+                        val lt2: TypeRef = c.types[lo.ty]
+                        return <TypeInfo kind=2 nameStart=lt2.nameStart nameLen=lt2.nameLen ref=lo.ty />
                     }
                     return typeInfoOfName(c: inout c, start: lo.tyStart, len: lo.tyLen, isArray: lo.isArray)
                 }
@@ -791,6 +801,18 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 val inst: TypeRef = c.types[rt.ref]
                 if inst.args.count > 0 {
                     return typeInfoOfRef(c: inout c, ref: inst.args[0])
+                }
+            }
+            return scalarInfo()
+        }
+        Expr.Arrow { val base, val nameStart, val nameLen } => {
+            // pointee field type: base is Ref[T]; resolve T then T's field.
+            val bt: TypeInfo = exprType(c: inout c, id: base)
+            if isRefInst(c: inout c, ref: bt.ref) {
+                val inst: TypeRef = c.types[bt.ref]
+                val pt: TypeInfo = typeInfoOfRef(c: inout c, ref: inst.args[0])
+                if pt.kind == 2 {
+                    return fieldType(c: inout c, structStart: pt.nameStart, structLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
                 }
             }
             return scalarInfo()
@@ -1794,6 +1816,13 @@ fn genExpr(c: inout Comp, id: U64) {
             genExpr(c: inout c, id: index)
             write(s: "))")
         }
+        Expr.Arrow { val base, val nameStart, val nameLen } => {
+            // Ref pointee field access: `(base)->field` (Ref[T] is a C T*).
+            write(s: "(")
+            genExpr(c: inout c, id: base)
+            write(s: ")->")
+            writeSpan(c: inout c, start: nameStart, len: nameLen)
+        }
         Expr.Method { val recv, val nameStart, val nameLen, val args } => {
             val bt: TypeInfo = exprType(c: inout c, id: recv)
             if bt.kind == 3 {
@@ -1906,6 +1935,33 @@ fn genExpr(c: inout Comp, id: U64) {
             write(s: "))")
         }
         Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
+            if isRefInst(c: inout c, ref: ty) {
+                // `<Ref value=e />` -> allocate the pointee on the heap and move
+                // `e` into it (the box is shared by copy; ARC/free deferred).
+                val rt: TypeRef = c.types[ty]
+                val t2: U64 = c.tmp
+                c.tmp = c.tmp + 1
+                write(s: "({ ")
+                emitConcreteCType(c: inout c, ref: rt.args[0])
+                write(s: "* __ref")
+                writeU64(n: t2)
+                write(s: " = (")
+                emitConcreteCType(c: inout c, ref: rt.args[0])
+                write(s: "*)malloc(sizeof(")
+                emitConcreteCType(c: inout c, ref: rt.args[0])
+                write(s: ")); *__ref")
+                writeU64(n: t2)
+                write(s: " = (")
+                if fields.count > 0 {
+                    genExpr(c: inout c, id: fields[0].value)
+                } else {
+                    write(s: "0")
+                }
+                write(s: "); __ref")
+                writeU64(n: t2)
+                write(s: "; })")
+                return
+            }
             if isEnum {
                 write(s: "(")
                 if isGenericEnumInst(c: inout c, ref: ty) {
@@ -3047,6 +3103,19 @@ fn isGenericInst(c: inout Comp, ref: U64) -> Bool {
     return genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen) < c.enums.count
 }
 
+// Is `ref` a `Ref[T]` instantiation? `Ref` is a blessed primitive (a shared
+// mutable heap box), lowered to a C `T*` — not a user struct/enum.
+fn isRefInst(c: inout Comp, ref: U64) -> Bool {
+    if ref >= c.types.count {
+        return false
+    }
+    val t: TypeRef = c.types[ref]
+    if t.args.count != 1 {
+        return false
+    }
+    return rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref")
+}
+
 // Is `ref` a concrete generic *enum* instantiation specifically?
 fn isGenericEnumInst(c: inout Comp, ref: U64) -> Bool {
     if ref >= c.types.count {
@@ -3114,6 +3183,12 @@ fn emitConcreteCType(c: inout Comp, ref: U64) {
         emitMangle(c: inout c, ref: t.args[0])
         return
     }
+    // Ref[T] is a shared mutable heap box -> a C pointer to T.
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref") {
+        emitConcreteCType(c: inout c, ref: t.args[0])
+        write(s: "*")
+        return
+    }
     // generic struct instantiation -> mangled C struct name.
     emitMangle(c: inout c, ref: r)
 }
@@ -3169,6 +3244,10 @@ fn genCTypeOf(c: inout Comp, tyRef: U64, fallStart: U64, fallLen: U64, isArray: 
         return
     }
     if isGenericInst(c: inout c, ref: tyRef) {
+        emitConcreteCType(c: inout c, ref: tyRef)
+        return
+    }
+    if isRefInst(c: inout c, ref: tyRef) {
         emitConcreteCType(c: inout c, ref: tyRef)
         return
     }
