@@ -16,7 +16,7 @@
 
 コンパイラは **手書き lexer + 再帰下降パーサ**で構文解析し、**C へトランスパイル → clang** でネイティブを出力する（旧 C#/.NET ＋ ANTLR4 ＋ LLVMSharp は技術選定ごと破棄）。ブートストラップは使い捨ての **stage0（Rust 製）**で始めたが、self-host 達成後に**退役・削除**し、いまは **C 種からの自己ブートストラップ**（Rust 不要）。**第一目標＝「Plew でコンパイラが書ける状態」→ 即セルフホスティング＝✅達成済**。LLVM/WASM は self-host 後に Plew 側で追加（意味論が揃ってから並行バックエンドとして・C は捨てない）。性能より拠り所（意味は唱えた通り・難しい魔法は隠す）を優先。経緯は [claude/architecture.md](claude/architecture.md)。
 
-> **現状＝🎉 セルフホスト達成・stage0 退役済み。** 正典のコンパイラは **Plew 製の `selfhost/plewc.pw`**＝自分自身をコンパイルして不動点に達する。ブートストラップは **C 種 `selfhost/plewc.seed.c`**（plewc.pw の C 訳・チェックイン）から＝`./bootstrap.sh` で clang→plewc0→plewc.pw 自己コンパイル→不動点検証（Rust/cargo 不要）。Rust stage0 は削除済（`git checkout stage0-final -- bootstrap` で復旧可）。**今後の言語機能はすべて `plewc.pw` に Plew で additive に足す**。**現在の目標＝「受理の健全性」＝このコンパイラが受理するコードは spec でも valid にする**（import なしの `print` を拒否する等・hidden meaning を潰す。hidden cost＝leak/int 幅は後回し）→ [claude/provisional.md](claude/provisional.md)。テストは Rust 非依存の `./test.sh`。現在地・次の一歩は [claude/worklog.md](claude/worklog.md)。
+> **現状＝🎉 セルフホスト達成・stage0 退役済み。** 正典のコンパイラは **Plew 製の `compiler/src/_.pw`**＝自分自身をコンパイルして不動点に達する。ブートストラップは **C 種 `compiler/plewc.seed.c`**（plewc.pw の C 訳・チェックイン）から＝`./bootstrap.sh` で clang→plewc0→plewc.pw 自己コンパイル→不動点検証（Rust/cargo 不要）。Rust stage0 は削除済（`git checkout stage0-final -- bootstrap` で復旧可）。**今後の言語機能はすべて `plewc.pw` に Plew で additive に足す**。**現在の目標＝「受理の健全性」＝このコンパイラが受理するコードは spec でも valid にする**（import なしの `print` を拒否する等・hidden meaning を潰す。hidden cost＝leak/int 幅は後回し）→ [claude/provisional.md](claude/provisional.md)。テストは Rust 非依存の `./test.sh`。現在地・次の一歩は [claude/worklog.md](claude/worklog.md)。
 
 ## ドキュメント
 
@@ -47,13 +47,15 @@ test.sh               言語テストスイート（.pw ゴールデン＋reject
 tests/
   run/<name>.pw,.out  コンパイル&実行→stdout 照合（任意の .in を stdin に）
   reject/<name>.pw    spec-invalid＝コンパイル失敗すべきケース（受理の健全性）
-selfhost/             Plew 製のソース（追跡は *.pw と種のみ・生成物は gitignore）
-  plewc.pw            ★ 正典のコンパイラ（自分をコンパイルできる・今後の機能はここに Plew で）
-  plewc.seed.c        ★ ブートストラップ種＝plewc.pw の C 訳（チェックイン・clang だけで起動）
-  lexer.pw/parser.pw/emit.pw/calc.pw  self-host 途上の足場（実証用の小コンパイラ）
+compiler/             ★ 正典のコンパイラ＝Plew パッケージ（今後の機能はここに Plew で）
+  src/
+    _.pw              コンパイラ本体（root モジュール・`fn main`・将来はモジュール分割）
+  plewc.seed.c        ブートストラップ種＝src/_.pw の C 訳（チェックイン・clang だけで起動）
+  (plewc / plewc.c    ビルド生成物・gitignore)
+examples/             実証用 Plew プログラム（hello.pw＋self-host 途上の小コンパイラ群）
+  lexer.pw/parser.pw/emit.pw/calc.pw  self-host の足場（履歴的・トークナイザ/式パーサ/式→C）
 SPEC.md               言語仕様の目次（インデックス）
 spec/<部>/NN-*.md     4 部サブディレクトリに分割した言語仕様本体
-examples/hello.pw     現行構文の最小サンプル
 claude/*.md           本ガイドからリンクする実装ドキュメント
 ```
 
@@ -65,10 +67,10 @@ claude/*.md           本ガイドからリンクする実装ドキュメント
 ./bootstrap.sh        # 種(plewc.seed.c)→clang→plewc0→plewc.pw を自己コンパイル→不動点検証
 ./bootstrap.sh --reseed   # plewc.pw を変えて種が古くなったら種を再生成（→ plewc.seed.c を commit）
 ./test.sh             # 言語テストスイート（run ゴールデン＋reject＋不動点）
-selfhost/plewc foo.pw | clang -x c - -o foo && ./foo   # 正典コンパイラで .pw を実行
+compiler/plewc foo.pw | clang -x c - -o foo && ./foo   # 正典コンパイラで .pw を実行
 ```
 
-clang は生成 C のコンパイルに使う（Apple clang で可）。**今後の言語機能追加は `selfhost/plewc.pw` に Plew で**書く。新機能を plewc.pw 自身で使うときは「stage1 codegen に足す → `./bootstrap.sh --reseed` で種更新 → plewc.pw で使う」（ADD→reseed→USE）。
+clang は生成 C のコンパイルに使う（Apple clang で可）。**今後の言語機能追加は `compiler/src/_.pw` に Plew で**書く。新機能を plewc.pw 自身で使うときは「stage1 codegen に足す → `./bootstrap.sh --reseed` で種更新 → plewc.pw で使う」（ADD→reseed→USE）。
 
 仕様書（`spec/`）は **mdBook** で閲覧する。設定は `book.toml`（`src = "spec"`）、目次は `spec/SUMMARY.md`、ランディングは `spec/README.md`。`mdbook serve --open` でライブリロード閲覧、`mdbook build` で `book/`（gitignore 済）へ出力。章の追加・改番時は `SUMMARY.md` も更新する。
 

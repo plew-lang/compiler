@@ -1,8 +1,8 @@
 # mdBook output
 book/
 
-# selfhost build artifacts (the compiler emits a binary + .c next to each .pw)
-selfhost/*
-!selfhost/*.pw
-# ...except the bootstrap seed (the checked-in C the build starts from)
-!selfhost/plewc.seed.c
+# compiler build outputs (bootstrap.sh emits these; the seed + src are tracked)
+/compiler/plewc
+/compiler/plewc0
+/compiler/plewc.c
+/compiler/plewc.check.c

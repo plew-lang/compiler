@@ -9,18 +9,18 @@
 #                      spec-invalid code" (acceptance soundness)
 #   fixpoint           plewc compiles itself to a stable C output
 #
-# Usage: ./test.sh   (run ./bootstrap.sh first to build selfhost/plewc)
+# Usage: ./test.sh   (run ./bootstrap.sh first to build compiler/plewc)
 
 cd "$(dirname "$0")"
-PLEWC=./selfhost/plewc
-PW=./selfhost/plewc.pw
+PLEWC=./compiler/plewc
+PW=./compiler/src/_.pw
 TMP="${TMPDIR:-/tmp}/plew-test-$$"
 mkdir -p "$TMP"
 pass=0
 fail=0
 
 if [ ! -x "$PLEWC" ]; then
-    echo "selfhost/plewc not found — run ./bootstrap.sh first" >&2
+    echo "compiler/plewc not found — run ./bootstrap.sh first" >&2
     exit 1
 fi
 
