@@ -27,9 +27,11 @@
 
 **確定済の言語判断**（spec／design-decisions）：U64 添字/count/range・`as`無損失（符号変更/縮小は `TryFrom`）・overflow/0除算は常に panic・**リテラル既定型なし＋曖昧はエラー**・`assert`常時ON・`wrapping*` メソッド明示。
 
-**残り＝Phase D：リテラル文脈型付け**（hidden meaning＋人間工学・**未着手・要方針確認**）。`val f: U8 = 300` が 44 に黙って切り詰められる穴を閉じる＝文脈（let 注釈/フィールド/引数/戻り/配列要素/代入先・`as` は済）からリテラルの型を決め、範囲外は reject／リテラル算術（`200+100:U8`）は文脈幅で overflow させる。**設計未決＝着手時に選択肢提示**：(i) リテラルに文脈型を伝播する型付け（exprType(Int) を文脈依存に・operand 型が付くので overflow 検査も発火＝完全だが型推論機構の追加で大きめ・**現在 accept しているコードを reject し得る**） vs (ii) bare リテラルの範囲検査だけ（let-init 等で `litFitsType`・compile error・小さく安全だがリテラル算術の穴は残す）。現状「素朴 long long 化」を文脈駆動へ替えるので後戻りに注意。
+**Phase D1（リテラル文脈型付け・範囲検査）✅ 完了**。純粋検査パス `checkLitCtx`（C 出力不変）が文脈の整数型をリテラルへ伝播：let 注釈/代入先/引数(仮引数型)/戻り(戻り型)/配列要素/struct・enum フィールド/添字(U64)/比較・算術の型付き相手から型を降ろし、範囲外リテラルと**定数式オーバーフロー（`200+100:U8`）**を compile error。先頭 `-` はリテラルへ畳み込み（`-128:I8` 可）。`Expr.Int` に source offset を追加し診断行を正確化。`litFitsBits` を per-width 定数比較に（`1<<31` の C int 溢れバグ修正）。
 
-> 着手手順は ADD→reseed→USE（下節）。各 Phase で不動点を緑に保ってから commit。新 preamble 行や **codegen 挙動変化（genCElem 等）を足したら reseed 2 回**（1 世代遅れる）。
+**Phase D2（厳密 no-default＝context-free リテラルを曖昧エラー）は見送り（要再投資判断）**。理由＝**D1 で hidden meaning（沈黙切り詰め）は完全に閉じた**：context-free リテラルは long-long 既定になるだけで、狭い型へ格納する経路（let/代入/引数/フィールド/戻り/配列）は全て D1 が検査し、算術の溢れは Phase B が型付きオペランド幅で検査する＝**残る context-free ケースに沈黙切り詰めは無い**（良性既定）。一方 blanket D2 は `0..<arr.count` の `.count` 等を U64 と復元できず誤検出する（要 `TypeInfo` の幅フィールド化＝源スパン非依存リファクタ）／限定 D2（注釈なし定数束縛）も `true`/`false` が `Expr.Int` ゆえ誤検出する（要 Bool リテラルノード分離）。**hidden-meaning 上の利得ゼロに対しモデリングのリファクタ 2 本が必要**ゆえ、受理の健全性の観点では D1 で十分。厳密 spec 準拠を望むなら別途 TypeInfo 幅化＋Bool リテラルを additive に。
+
+> 着手手順は ADD→reseed→USE（下節）。各 Phase で不動点を緑に保ってから commit。新 preamble 行や **codegen 挙動変化（genCElem 等）を足したら reseed 2 回**（1 世代遅れる）。AST ノードへのフィールド追加（`Expr.Int` の offset 等）も出力が変わるので reseed 2 回。
 
 ### その他の候補（エピック後）
 
