@@ -7,6 +7,8 @@ __attribute__((unused)) static int PlewString_eq(PlewString a, PlewString b) { i
 __attribute__((unused)) static PlewString plew_read_stdin(void) { size_t cap = 4096, len = 0; char* buf = (char*)malloc(cap); int ch; while ((ch = getchar()) != EOF) { if (len + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); } buf[len++] = (char)ch; } PlewString s; s.data = buf; s.len = (long long)len; return s; }
 __attribute__((unused)) static void plew_write(PlewString s) { fwrite(s.data, 1, (size_t)s.len, stdout); }
 __attribute__((noreturn)) static void plew_panic(PlewString m) { fputs("panic: ", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\n', stderr); exit(1); }
+__attribute__((unused)) static long long plew_div(long long a, long long b) { if (b == 0) plew_panic((PlewString){"division by zero", 16}); return a / b; }
+__attribute__((unused)) static long long plew_mod(long long a, long long b) { if (b == 0) plew_panic((PlewString){"remainder by zero", 17}); return a % b; }
 __attribute__((unused)) static void plew_compile_error(PlewString m) { fputs("plewc: error: ", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\n', stderr); exit(1); }
 __attribute__((unused)) static void plew_compile_error_at(long long line, PlewString m) { fprintf(stderr, "plewc: error: line %lld: ", line); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\n', stderr); exit(1); }
 static int plew_argc = 0;
@@ -619,6 +621,8 @@ int main(int argc, char** argv) {
     plew_write((PlewString){"__attribute__((unused)) static PlewString plew_read_stdin(void) { size_t cap = 4096, len = 0; char* buf = (char*)malloc(cap); int ch; while ((ch = getchar()) != EOF) { if (len + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); } buf[len++] = (char)ch; } PlewString s; s.data = buf; s.len = (long long)len; return s; }\n", 323});
     plew_write((PlewString){"__attribute__((unused)) static void plew_write(PlewString s) { fwrite(s.data, 1, (size_t)s.len, stdout); }\n", 107});
     plew_write((PlewString){"__attribute__((noreturn)) static void plew_panic(PlewString m) { fputs(\"panic: \", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\\n', stderr); exit(1); }\n", 165});
+    plew_write((PlewString){"__attribute__((unused)) static long long plew_div(long long a, long long b) { if (b == 0) plew_panic((PlewString){\"division by zero\", 16}); return a / b; }\n", 156});
+    plew_write((PlewString){"__attribute__((unused)) static long long plew_mod(long long a, long long b) { if (b == 0) plew_panic((PlewString){\"remainder by zero\", 17}); return a % b; }\n", 157});
     plew_write((PlewString){"__attribute__((unused)) static void plew_compile_error(PlewString m) { fputs(\"plewc: error: \", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\\n', stderr); exit(1); }\n", 178});
     plew_write((PlewString){"__attribute__((unused)) static void plew_compile_error_at(long long line, PlewString m) { fprintf(stderr, \"plewc: error: line %lld: \", line); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\\n', stderr); exit(1); }\n", 216});
     plew_write((PlewString){"static int plew_argc = 0;\nstatic char** plew_argv = 0;\n", 55});
@@ -2640,9 +2644,9 @@ void writeInt(long long n) {
     return;
     }
     if (n >= 10) {
-    writeInt((n / 10));
+    writeInt(plew_div(n, 10));
     }
-    plew_write(digitStr((n % 10)));
+    plew_write(digitStr(plew_mod(n, 10)));
 }
 void writeSpan(Comp* c, long long start, long long len) {
     long long j = 0;
@@ -3546,11 +3550,29 @@ void genExpr(Comp* c, long long id) {
     plew_compile_error_at(lineOf(&((*c)), exprOffset(&((*c)), lhs)), (PlewString){"comparison needs Eq/Ord; not available for a struct or array", 60});
     }
     else {
+    if (op == 59) {
+    plew_write((PlewString){"plew_div(", 9});
+    genExpr(&((*c)), lhs);
+    plew_write((PlewString){", ", 2});
+    genExpr(&((*c)), rhs);
+    plew_write((PlewString){")", 1});
+    }
+    else {
+    if (op == 60) {
+    plew_write((PlewString){"plew_mod(", 9});
+    genExpr(&((*c)), lhs);
+    plew_write((PlewString){", ", 2});
+    genExpr(&((*c)), rhs);
+    plew_write((PlewString){")", 1});
+    }
+    else {
     plew_write((PlewString){"(", 1});
     genExpr(&((*c)), lhs);
     plew_write(binOpStr(op));
     genExpr(&((*c)), rhs);
     plew_write((PlewString){")", 1});
+    }
+    }
     }
     }
     }

@@ -701,11 +701,29 @@ fn genExpr(c: inout Comp, id: U64) {
                     if compareNeedsTrait(c: inout c, op: op, lhs: lhs) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "comparison needs Eq/Ord; not available for a struct or array")
                     } else {
-                        write(s: "(")
-                        genExpr(c: inout c, id: lhs)
-                        write(s: binOpStr(op: op))
-                        genExpr(c: inout c, id: rhs)
-                        write(s: ")")
+                        if op == 59 {
+                            // `/`: spec says division by zero always panics.
+                            write(s: "plew_div(")
+                            genExpr(c: inout c, id: lhs)
+                            write(s: ", ")
+                            genExpr(c: inout c, id: rhs)
+                            write(s: ")")
+                        } else {
+                            if op == 60 {
+                                // `%`: same — divisor must be nonzero.
+                                write(s: "plew_mod(")
+                                genExpr(c: inout c, id: lhs)
+                                write(s: ", ")
+                                genExpr(c: inout c, id: rhs)
+                                write(s: ")")
+                            } else {
+                                write(s: "(")
+                                genExpr(c: inout c, id: lhs)
+                                write(s: binOpStr(op: op))
+                                genExpr(c: inout c, id: rhs)
+                                write(s: ")")
+                            }
+                        }
                     }
                 }
             }

@@ -1,0 +1,19 @@
+// Division and modulo lower through plew_div / plew_mod (which panic on a zero
+// divisor). This exercises the normal, nonzero path: results must be unchanged,
+// and `%` follows C truncated semantics (remainder takes the dividend's sign).
+import @Std/Io with { print }
+
+fn main() {
+    print(17 / 5)            // 3
+    print(17 % 5)            // 2
+    print((0 - 17) / 5)      // -3 (truncated toward zero)
+    print((0 - 17) % 5)      // -2 (sign of dividend)
+    val a: I64 = 100
+    val b: I64 = 7
+    print(a / b)             // 14
+    print(a % b)             // 2
+    // through compound assign (currently raw, not via plew_div — see provisional)
+    mut val c: I64 = 20
+    c /= 6
+    print(c)                 // 3
+}

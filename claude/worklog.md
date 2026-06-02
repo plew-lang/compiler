@@ -17,7 +17,7 @@
 
 ## 次の一歩の候補（やりやすい順で自走）
 
-- **整数幅 `I8..U64`/`F32/F64`**＝hidden cost の大物。codegen 全体の `long long` 前提（count/index/for/符号付き比較を一斉に）を幅つきに置換すると、④ lossy `as`・overflow/0除算 panic・`'あ' を U8` の溢れ検査までまとめて片付く。**複数セッション規模・中途半端だと不動点が壊れる**ので腰を据えて。
+- **整数幅 `I8..U64`/`F32/F64`**＝hidden cost の大物。codegen 全体の `long long` 前提（count/index/for/符号付き比較を一斉に）を幅つきに置換すると、④ lossy `as`・overflow panic・`'あ' を U8` の溢れ検査までまとめて片付く。**複数セッション規模・中途半端だと不動点が壊れる**ので腰を据えて。要は軽量型復元 `TypeInfo` がスカラ幅を捨てている（`scalarInfo()`＝kind=0・幅なし）ので、まず `TypeInfo` に幅を持たせる→`genCElem`/`genTypeInfoCType` を幅つき C 型に→リテラル文脈型付け→overflow 検査、の順。**0 除算 panic は幅非依存ゆえ先行実装済**（binary `/`/`%`→`plew_div`/`plew_mod`・残は複合代入）。
 - **`import ./Foo`（名前空間束縛 `Foo.bar`）**。修飾名解決が要る（今は part で全部フラット同一スコープ）。part の provenance 穴の正攻法。
 - 値意味論/CoW・トレイト/ジェネリクスは更に大物（後）。
 - **メソッド化の続き（任意・ROI 逓減）**：残る `parseX(c: inout c)` 群も `impl` へ移せるが再帰的・多数でゲイン小＝後回し可。
