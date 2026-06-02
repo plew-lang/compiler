@@ -120,6 +120,11 @@ struct Kind {
         struct { char _u; } StarEq;
         struct { char _u; } SlashEq;
         struct { char _u; } PercentEq;
+        struct { char _u; } AmpEq;
+        struct { char _u; } PipeEq;
+        struct { char _u; } CaretEq;
+        struct { char _u; } ShlEq;
+        struct { char _u; } ShrEq;
         struct { char _u; } DotDotLt;
         struct { char _u; } DotDotEq;
         struct { char _u; } Unknown;
@@ -931,11 +936,11 @@ void lex(Lexer* lx) {
     if (b2 == 46) {
     unsigned char b3 = Lexer_at((*lx), 2);
     if (b3 == 60) {
-    Lexer_emit(&((*lx)), (Kind){.tag = 63}, (*lx).pos, 3);
+    Lexer_emit(&((*lx)), (Kind){.tag = 68}, (*lx).pos, 3);
     continue;
     }
     if (b3 == 61) {
-    Lexer_emit(&((*lx)), (Kind){.tag = 64}, (*lx).pos, 3);
+    Lexer_emit(&((*lx)), (Kind){.tag = 69}, (*lx).pos, 3);
     continue;
     }
     }
@@ -968,6 +973,11 @@ void lex(Lexer* lx) {
     continue;
     }
     if (b2 == 60) {
+    unsigned char b3 = Lexer_at((*lx), 2);
+    if (b3 == 61) {
+    Lexer_emit(&((*lx)), (Kind){.tag = 66}, (*lx).pos, 3);
+    continue;
+    }
     Lexer_emit(&((*lx)), (Kind){.tag = 52}, (*lx).pos, 2);
     continue;
     }
@@ -980,6 +990,11 @@ void lex(Lexer* lx) {
     continue;
     }
     if (b2 == 62) {
+    unsigned char b3 = Lexer_at((*lx), 2);
+    if (b3 == 61) {
+    Lexer_emit(&((*lx)), (Kind){.tag = 67}, (*lx).pos, 3);
+    continue;
+    }
     Lexer_emit(&((*lx)), (Kind){.tag = 53}, (*lx).pos, 2);
     continue;
     }
@@ -1039,6 +1054,10 @@ void lex(Lexer* lx) {
     Lexer_emit(&((*lx)), (Kind){.tag = 46}, (*lx).pos, 2);
     continue;
     }
+    if (b2 == 61) {
+    Lexer_emit(&((*lx)), (Kind){.tag = 63}, (*lx).pos, 2);
+    continue;
+    }
     Lexer_emit(&((*lx)), (Kind){.tag = 49}, (*lx).pos, 1);
     continue;
     }
@@ -1047,10 +1066,18 @@ void lex(Lexer* lx) {
     Lexer_emit(&((*lx)), (Kind){.tag = 47}, (*lx).pos, 2);
     continue;
     }
+    if (b2 == 61) {
+    Lexer_emit(&((*lx)), (Kind){.tag = 64}, (*lx).pos, 2);
+    continue;
+    }
     Lexer_emit(&((*lx)), (Kind){.tag = 50}, (*lx).pos, 1);
     continue;
     }
     if (b == 94) {
+    if (b2 == 61) {
+    Lexer_emit(&((*lx)), (Kind){.tag = 65}, (*lx).pos, 2);
+    continue;
+    }
     Lexer_emit(&((*lx)), (Kind){.tag = 51}, (*lx).pos, 1);
     continue;
     }
@@ -1094,12 +1121,12 @@ void lex(Lexer* lx) {
     Lexer_emit(&((*lx)), (Kind){.tag = 32}, (*lx).pos, 1);
     continue;
     }
-    Lexer_emit(&((*lx)), (Kind){.tag = 65}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 70}, (*lx).pos, 1);
     }
     PlewArray_Tok_push(&((*lx).toks), (Tok){.kind = (Kind){.tag = 0}, .start = (*lx).pos, .len = 0});
 }
 long long kindCode(Kind k) {
-    return ({ long long __mr7; Kind __ms7 = k; if (__ms7.tag == 0) { __mr7 = (0); } else if (__ms7.tag == 1) { __mr7 = (1); } else if (__ms7.tag == 2) { __mr7 = (2); } else if (__ms7.tag == 3) { __mr7 = (3); } else if (__ms7.tag == 4) { __mr7 = (5); } else if (__ms7.tag == 5) { __mr7 = (4); } else if (__ms7.tag == 6) { __mr7 = (10); } else if (__ms7.tag == 7) { __mr7 = (11); } else if (__ms7.tag == 8) { __mr7 = (12); } else if (__ms7.tag == 9) { __mr7 = (13); } else if (__ms7.tag == 10) { __mr7 = (14); } else if (__ms7.tag == 11) { __mr7 = (15); } else if (__ms7.tag == 12) { __mr7 = (16); } else if (__ms7.tag == 13) { __mr7 = (17); } else if (__ms7.tag == 14) { __mr7 = (18); } else if (__ms7.tag == 15) { __mr7 = (19); } else if (__ms7.tag == 16) { __mr7 = (20); } else if (__ms7.tag == 17) { __mr7 = (21); } else if (__ms7.tag == 18) { __mr7 = (22); } else if (__ms7.tag == 19) { __mr7 = (23); } else if (__ms7.tag == 20) { __mr7 = (24); } else if (__ms7.tag == 21) { __mr7 = (25); } else if (__ms7.tag == 22) { __mr7 = (26); } else if (__ms7.tag == 23) { __mr7 = (27); } else if (__ms7.tag == 24) { __mr7 = (28); } else if (__ms7.tag == 25) { __mr7 = (40); } else if (__ms7.tag == 26) { __mr7 = (41); } else if (__ms7.tag == 27) { __mr7 = (42); } else if (__ms7.tag == 28) { __mr7 = (43); } else if (__ms7.tag == 29) { __mr7 = (44); } else if (__ms7.tag == 30) { __mr7 = (45); } else if (__ms7.tag == 31) { __mr7 = (46); } else if (__ms7.tag == 32) { __mr7 = (47); } else if (__ms7.tag == 33) { __mr7 = (48); } else if (__ms7.tag == 34) { __mr7 = (49); } else if (__ms7.tag == 35) { __mr7 = (50); } else if (__ms7.tag == 36) { __mr7 = (51); } else if (__ms7.tag == 37) { __mr7 = (52); } else if (__ms7.tag == 38) { __mr7 = (53); } else if (__ms7.tag == 39) { __mr7 = (54); } else if (__ms7.tag == 40) { __mr7 = (55); } else if (__ms7.tag == 41) { __mr7 = (56); } else if (__ms7.tag == 42) { __mr7 = (57); } else if (__ms7.tag == 43) { __mr7 = (58); } else if (__ms7.tag == 44) { __mr7 = (59); } else if (__ms7.tag == 45) { __mr7 = (60); } else if (__ms7.tag == 46) { __mr7 = (61); } else if (__ms7.tag == 47) { __mr7 = (62); } else if (__ms7.tag == 48) { __mr7 = (63); } else if (__ms7.tag == 55) { __mr7 = (64); } else if (__ms7.tag == 56) { __mr7 = (65); } else if (__ms7.tag == 57) { __mr7 = (66); } else if (__ms7.tag == 58) { __mr7 = (67); } else if (__ms7.tag == 59) { __mr7 = (68); } else if (__ms7.tag == 60) { __mr7 = (69); } else if (__ms7.tag == 61) { __mr7 = (70); } else if (__ms7.tag == 62) { __mr7 = (71); } else if (__ms7.tag == 63) { __mr7 = (72); } else if (__ms7.tag == 64) { __mr7 = (73); } else if (__ms7.tag == 49) { __mr7 = (74); } else if (__ms7.tag == 50) { __mr7 = (75); } else if (__ms7.tag == 51) { __mr7 = (76); } else if (__ms7.tag == 52) { __mr7 = (77); } else if (__ms7.tag == 53) { __mr7 = (78); } else if (__ms7.tag == 54) { __mr7 = (79); } else if (__ms7.tag == 65) { __mr7 = (99); } else { __builtin_unreachable(); } __mr7; });
+    return ({ long long __mr7; Kind __ms7 = k; if (__ms7.tag == 0) { __mr7 = (0); } else if (__ms7.tag == 1) { __mr7 = (1); } else if (__ms7.tag == 2) { __mr7 = (2); } else if (__ms7.tag == 3) { __mr7 = (3); } else if (__ms7.tag == 4) { __mr7 = (5); } else if (__ms7.tag == 5) { __mr7 = (4); } else if (__ms7.tag == 6) { __mr7 = (10); } else if (__ms7.tag == 7) { __mr7 = (11); } else if (__ms7.tag == 8) { __mr7 = (12); } else if (__ms7.tag == 9) { __mr7 = (13); } else if (__ms7.tag == 10) { __mr7 = (14); } else if (__ms7.tag == 11) { __mr7 = (15); } else if (__ms7.tag == 12) { __mr7 = (16); } else if (__ms7.tag == 13) { __mr7 = (17); } else if (__ms7.tag == 14) { __mr7 = (18); } else if (__ms7.tag == 15) { __mr7 = (19); } else if (__ms7.tag == 16) { __mr7 = (20); } else if (__ms7.tag == 17) { __mr7 = (21); } else if (__ms7.tag == 18) { __mr7 = (22); } else if (__ms7.tag == 19) { __mr7 = (23); } else if (__ms7.tag == 20) { __mr7 = (24); } else if (__ms7.tag == 21) { __mr7 = (25); } else if (__ms7.tag == 22) { __mr7 = (26); } else if (__ms7.tag == 23) { __mr7 = (27); } else if (__ms7.tag == 24) { __mr7 = (28); } else if (__ms7.tag == 25) { __mr7 = (40); } else if (__ms7.tag == 26) { __mr7 = (41); } else if (__ms7.tag == 27) { __mr7 = (42); } else if (__ms7.tag == 28) { __mr7 = (43); } else if (__ms7.tag == 29) { __mr7 = (44); } else if (__ms7.tag == 30) { __mr7 = (45); } else if (__ms7.tag == 31) { __mr7 = (46); } else if (__ms7.tag == 32) { __mr7 = (47); } else if (__ms7.tag == 33) { __mr7 = (48); } else if (__ms7.tag == 34) { __mr7 = (49); } else if (__ms7.tag == 35) { __mr7 = (50); } else if (__ms7.tag == 36) { __mr7 = (51); } else if (__ms7.tag == 37) { __mr7 = (52); } else if (__ms7.tag == 38) { __mr7 = (53); } else if (__ms7.tag == 39) { __mr7 = (54); } else if (__ms7.tag == 40) { __mr7 = (55); } else if (__ms7.tag == 41) { __mr7 = (56); } else if (__ms7.tag == 42) { __mr7 = (57); } else if (__ms7.tag == 43) { __mr7 = (58); } else if (__ms7.tag == 44) { __mr7 = (59); } else if (__ms7.tag == 45) { __mr7 = (60); } else if (__ms7.tag == 46) { __mr7 = (61); } else if (__ms7.tag == 47) { __mr7 = (62); } else if (__ms7.tag == 48) { __mr7 = (63); } else if (__ms7.tag == 55) { __mr7 = (64); } else if (__ms7.tag == 56) { __mr7 = (65); } else if (__ms7.tag == 57) { __mr7 = (66); } else if (__ms7.tag == 58) { __mr7 = (67); } else if (__ms7.tag == 59) { __mr7 = (68); } else if (__ms7.tag == 60) { __mr7 = (69); } else if (__ms7.tag == 61) { __mr7 = (70); } else if (__ms7.tag == 62) { __mr7 = (71); } else if (__ms7.tag == 68) { __mr7 = (72); } else if (__ms7.tag == 69) { __mr7 = (73); } else if (__ms7.tag == 49) { __mr7 = (74); } else if (__ms7.tag == 50) { __mr7 = (75); } else if (__ms7.tag == 51) { __mr7 = (76); } else if (__ms7.tag == 52) { __mr7 = (77); } else if (__ms7.tag == 53) { __mr7 = (78); } else if (__ms7.tag == 54) { __mr7 = (79); } else if (__ms7.tag == 63) { __mr7 = (80); } else if (__ms7.tag == 64) { __mr7 = (81); } else if (__ms7.tag == 65) { __mr7 = (82); } else if (__ms7.tag == 66) { __mr7 = (83); } else if (__ms7.tag == 67) { __mr7 = (84); } else if (__ms7.tag == 70) { __mr7 = (99); } else { __builtin_unreachable(); } __mr7; });
 }
 Kind Comp_curKind(Comp* self) {
     return PlewArray_Tok_get((*self).toks, (long long)((*self).pos)).kind;
@@ -1543,6 +1570,21 @@ long long isAssignOp(Kind k) {
     else if (_m27.tag == 62) {
     return 1;
     }
+    else if (_m27.tag == 63) {
+    return 1;
+    }
+    else if (_m27.tag == 64) {
+    return 1;
+    }
+    else if (_m27.tag == 65) {
+    return 1;
+    }
+    else if (_m27.tag == 66) {
+    return 1;
+    }
+    else if (_m27.tag == 67) {
+    return 1;
+    }
     else {
     return 0;
     }
@@ -1728,12 +1770,12 @@ long long parseFor(Comp* c) {
     long long hi = 0;
     {
     Kind _m38 = Comp_curKind(&((*c)));
-    if (_m38.tag == 63) {
+    if (_m38.tag == 68) {
     Comp_advance(&((*c)));
     isRange = 1;
     hi = parseExpr(&((*c)));
     }
-    else if (_m38.tag == 64) {
+    else if (_m38.tag == 69) {
     Comp_advance(&((*c)));
     isRange = 1;
     inclusive = 1;
@@ -3302,7 +3344,22 @@ PlewString assignOpStr(long long op) {
     if (op == 70) {
     return (PlewString){" /= ", 4};
     }
+    if (op == 71) {
     return (PlewString){" %= ", 4};
+    }
+    if (op == 80) {
+    return (PlewString){" &= ", 4};
+    }
+    if (op == 81) {
+    return (PlewString){" |= ", 4};
+    }
+    if (op == 82) {
+    return (PlewString){" ^= ", 4};
+    }
+    if (op == 83) {
+    return (PlewString){" <<= ", 5};
+    }
+    return (PlewString){" >>= ", 5};
 }
 PlewString assignToBinStr(long long op) {
     if (op == 67) {
@@ -3317,7 +3374,22 @@ PlewString assignToBinStr(long long op) {
     if (op == 70) {
     return (PlewString){" / ", 3};
     }
+    if (op == 71) {
     return (PlewString){" % ", 3};
+    }
+    if (op == 80) {
+    return (PlewString){" & ", 3};
+    }
+    if (op == 81) {
+    return (PlewString){" | ", 3};
+    }
+    if (op == 82) {
+    return (PlewString){" ^ ", 3};
+    }
+    if (op == 83) {
+    return (PlewString){" << ", 4};
+    }
+    return (PlewString){" >> ", 4};
 }
 void genExpr(Comp* c, long long id) {
     Expr e = PlewArray_Expr_get((*c).exprs, (long long)(id));

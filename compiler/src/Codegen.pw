@@ -611,7 +611,12 @@ fn assignOpStr(op: I64) -> String {
     if op == 68 { return " -= " }
     if op == 69 { return " *= " }
     if op == 70 { return " /= " }
-    return " %= "
+    if op == 71 { return " %= " }
+    if op == 80 { return " &= " }
+    if op == 81 { return " |= " }
+    if op == 82 { return " ^= " }
+    if op == 83 { return " <<= " }
+    return " >>= "
 }
 
 // The binary operator underlying a compound assignment (`+=` -> ` + `), used to
@@ -621,7 +626,12 @@ fn assignToBinStr(op: I64) -> String {
     if op == 68 { return " - " }
     if op == 69 { return " * " }
     if op == 70 { return " / " }
-    return " % "
+    if op == 71 { return " % " }
+    if op == 80 { return " & " }
+    if op == 81 { return " | " }
+    if op == 82 { return " ^ " }
+    if op == 83 { return " << " }
+    return " >> "
 }
 
 fn genExpr(c: inout Comp, id: U64) {

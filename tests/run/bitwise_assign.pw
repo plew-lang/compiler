@@ -1,0 +1,26 @@
+// Compound bitwise-assign operators: &= |= ^= <<= >>= (pure desugar to a = a OP b).
+import @Std/Io with { print }
+
+fn main() {
+    mut val a: I64 = 12
+    a &= 10
+    print(a)              // 8
+    mut val b: I64 = 12
+    b |= 10
+    print(b)              // 14
+    mut val c: I64 = 12
+    c ^= 10
+    print(c)              // 6
+    mut val d: I64 = 1
+    d <<= 4
+    print(d)              // 16
+    mut val e: I64 = 255
+    e >>= 4
+    print(e)              // 15
+    // through an array place (get-modify-set lowering)
+    mut val xs: Array[I64] = [3, 7]
+    xs[0] |= 8
+    xs[1] &= 2
+    print(xs[0])          // 11
+    print(xs[1])          // 2
+}

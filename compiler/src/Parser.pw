@@ -367,6 +367,11 @@ fn isAssignOp(k: Kind) -> Bool {
         Kind.StarEq => { return true }
         Kind.SlashEq => { return true }
         Kind.PercentEq => { return true }
+        Kind.AmpEq => { return true }
+        Kind.PipeEq => { return true }
+        Kind.CaretEq => { return true }
+        Kind.ShlEq => { return true }
+        Kind.ShrEq => { return true }
         _ => { return false }
     }
 }

@@ -65,6 +65,11 @@ enum Kind {
     StarEq
     SlashEq
     PercentEq
+    AmpEq
+    PipeEq
+    CaretEq
+    ShlEq
+    ShrEq
     DotDotLt
     DotDotEq
     Unknown
@@ -380,6 +385,11 @@ fn lex(lx: inout Lexer) {
                 continue
             }
             if b2 == '<' {
+                val b3: U8 = lx.at(off: 2)
+                if b3 == '=' {
+                    lx.emit(k: <Kind.ShlEq />, start: lx.pos, len: 3)
+                    continue
+                }
                 lx.emit(k: <Kind.Shl />, start: lx.pos, len: 2)
                 continue
             }
@@ -392,6 +402,11 @@ fn lex(lx: inout Lexer) {
                 continue
             }
             if b2 == '>' {
+                val b3: U8 = lx.at(off: 2)
+                if b3 == '=' {
+                    lx.emit(k: <Kind.ShrEq />, start: lx.pos, len: 3)
+                    continue
+                }
                 lx.emit(k: <Kind.Shr />, start: lx.pos, len: 2)
                 continue
             }
@@ -451,6 +466,10 @@ fn lex(lx: inout Lexer) {
                 lx.emit(k: <Kind.AmpAmp />, start: lx.pos, len: 2)
                 continue
             }
+            if b2 == '=' {
+                lx.emit(k: <Kind.AmpEq />, start: lx.pos, len: 2)
+                continue
+            }
             lx.emit(k: <Kind.Amp />, start: lx.pos, len: 1)
             continue
         }
@@ -459,10 +478,18 @@ fn lex(lx: inout Lexer) {
                 lx.emit(k: <Kind.PipePipe />, start: lx.pos, len: 2)
                 continue
             }
+            if b2 == '=' {
+                lx.emit(k: <Kind.PipeEq />, start: lx.pos, len: 2)
+                continue
+            }
             lx.emit(k: <Kind.Pipe />, start: lx.pos, len: 1)
             continue
         }
         if b == '^' {
+            if b2 == '=' {
+                lx.emit(k: <Kind.CaretEq />, start: lx.pos, len: 2)
+                continue
+            }
             lx.emit(k: <Kind.Caret />, start: lx.pos, len: 1)
             continue
         }
@@ -578,6 +605,11 @@ fn kindCode(k: Kind) -> I64 {
         Kind.Shl => 77
         Kind.Shr => 78
         Kind.Tilde => 79
+        Kind.AmpEq => 80
+        Kind.PipeEq => 81
+        Kind.CaretEq => 82
+        Kind.ShlEq => 83
+        Kind.ShrEq => 84
         Kind.Unknown => 99
     }
 }
