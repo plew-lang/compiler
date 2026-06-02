@@ -81,6 +81,27 @@ manifest は **`Plew.toml`**（spec 暫定名・TOML・src 既定 `src/`・`/` �
 
 ADT 注意：ネスト配列 `Array[Array[U8]]` は今壊れる（`PlewArray_Array`・要素型未定義）＝G1/G2 でネスト TypeRef を正しくマングルすれば解消見込み（要テスト）。AST フィールド形を変えるので **reseed 2 回**ルール適用。
 
+進捗：✅ **G1 完了**（TypeRef アリーナ＋`ty`/`retTy`/`ref` フィールド・`parseTypeTok` 再帰パース・挙動不変）。✅ **G2 step1 完了**（struct/enum に `[T,U]` 型パラメータをパース＋`typeParams` 保持・marker は skip・消費なし）。
+
+#### G2 単相化の設計（実装中・次の一歩）
+
+**TypeRef の sentinel**：`ty`=0 を「型なし」にするため、parse 前に `c.types` 先頭へダミー TypeRef を 1 個 push（実型は index 1+）。`addLocal` の synthetic `ty:0` 等が誤って実型 0 を指さないように。
+
+**スコープ（G2a＝generic struct 先行）**：型引数は scalar/String/非 generic named＋他の generic struct インスタンス化（ネスト可）に限定。**Array を型引数/ generic フィールド型に置くのは保留**（`PlewArray_<name>` マングルと衝突＝別途）。**generic フィールドが型パラメータを含む別 generic 適用（`Box[T]` の中の `Foo[T]`）も G2a では保留**＝フィールド型は「型パラメータそのもの or 具体型」のみ＝推移閉包不要に。enum（Optional/Result）は **G2b**。
+
+**機構（Codegen.pw に追加予定）**：
+- `genericStructIndex(c, nameStart, nameLen)→U64`：typeParams 付き struct の index（なければ count）。enum 版も。
+- `typeRefEq(c, a, b)→Bool`：head span＋args 再帰比較（dedup 用・文字列バッファ不要）。
+- インスタンス収集：**use site のみ**走査（G2 は generic 関数なし＝use site の args は常に具体）＝c.funcs の param.ty/retTy・非 generic struct/enum のフィールド ty・全 Stmt.Let.ty・Expr.Cast.ty・Expr.Make の型引数。generic struct head のものを `Comp.genInsts`（TypeRef index・`typeRefEq` で dedup）へ。**arg が generic inst なら先に再帰収集（post-order）**＝by-value ネストの定義順を満たす。
+- `emitMangle(c, ref)`：`Box[I32]`→`Box_I32`、`I32`→`I32`（args を `_` 連結・再帰）。インスタンス struct 名＝generic inst の C 型名。
+- `emitConcreteCType(c, ref)`：具体 TypeRef の C 型＝args 無→`genCElem`／generic inst→`emitMangle`。
+- `emitFieldCType(c, fieldRef, params, args)`：フィールド型が型パラメータなら対応 arg の C 型（`emitConcreteCType(args[i])`）、でなければ `emitConcreteCType(fieldRef)`。
+- `emitMonoStruct(c, instRef)`：`struct Box_I32 { <substituted field ctype> field; ... };`。
+- use site の C 型出力ラッパ `genCTypeOf(c, tyRef, fallStart, fallLen, isArray)`：generic inst（非 Array・args 有・head が generic）なら `emitConcreteCType`、でなければ既存 `genCTypeRef`。Let(2234)/genSignature param/ret/genStructDef field/genEnumDef field の呼びを差し替え。
+- `_.pw` の emission ループ：通常 struct/enum ループで **generic decl を skip**（テンプレート）→ genInsts の forward typedef＋body を出力（G2a は struct body のみ）。
+
+**まだ要るもの（end-to-end テストに必須）**：Make の型引数 `<Box[I32] v=5/>` パース＋codegen（`(Box_I32){.v=5}`）・フィールドアクセス `b.v` の型回復（exprType が generic inst を返す）。これらが揃って初めて `tests/run` で検証可能。**G2b（enum）は match の scrut 型を mono 名に・genBindType の置換・variant tag も。**
+
 ### その他の候補（エピック後）
 - 値意味論/CoW・トレイト/ジェネリクスは更に大物（後）。
 - **メソッド化の続き（任意・ROI 逓減）**：残る `parseX(c: inout c)` 群も `impl` へ移せるが再帰的・多数でゲイン小＝後回し可。

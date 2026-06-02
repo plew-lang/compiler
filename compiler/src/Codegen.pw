@@ -2231,7 +2231,7 @@ fn genStmt(c: inout Comp, id: U64) {
         Stmt.Let { val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init } => {
             checkLitSpan(c: inout c, id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray)
             write(s: "    ")
-            genCTypeRef(c: inout c, start: tyStart, len: tyLen, isArray: tyIsArray)
+            genCTypeOf(c: inout c, tyRef: ty, fallStart: tyStart, fallLen: tyLen, isArray: tyIsArray)
             write(s: " ")
             writeSpan(c: inout c, start: nameStart, len: nameLen)
             write(s: " = ")
@@ -2651,7 +2651,7 @@ fn genStructDef(c: inout Comp, si: U64) {
     while i < fields.count {
         val f: FieldDef = fields[i]
         write(s: "    ")
-        genCTypeRef(c: inout c, start: f.tyStart, len: f.tyLen, isArray: f.tyIsArray)
+        genCTypeOf(c: inout c, tyRef: f.ty, fallStart: f.tyStart, fallLen: f.tyLen, isArray: f.tyIsArray)
         write(s: " ")
         writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
         write(s: ";\n")
@@ -2669,7 +2669,7 @@ fn genSignature(c: inout Comp, f: Func) {
         return
     }
     if f.hasRet {
-        genCTypeRef(c: inout c, start: f.retStart, len: f.retLen, isArray: f.retIsArray)
+        genCTypeOf(c: inout c, tyRef: f.retTy, fallStart: f.retStart, fallLen: f.retLen, isArray: f.retIsArray)
         write(s: " ")
     } else {
         write(s: "void ")
@@ -2692,7 +2692,7 @@ fn genSignature(c: inout Comp, f: Func) {
         while i < params.count {
             write(s: ", ")
             val p: Param = params[i]
-            genCTypeRef(c: inout c, start: p.tyStart, len: p.tyLen, isArray: p.tyIsArray)
+            genCTypeOf(c: inout c, tyRef: p.ty, fallStart: p.tyStart, fallLen: p.tyLen, isArray: p.tyIsArray)
             if p.isInout {
                 write(s: "*")
             }
@@ -2710,7 +2710,7 @@ fn genSignature(c: inout Comp, f: Func) {
                     write(s: ", ")
                 }
                 val p: Param = params[i]
-                genCTypeRef(c: inout c, start: p.tyStart, len: p.tyLen, isArray: p.tyIsArray)
+                genCTypeOf(c: inout c, tyRef: p.ty, fallStart: p.tyStart, fallLen: p.tyLen, isArray: p.tyIsArray)
                 if p.isInout {
                     write(s: "*")
                 }
@@ -2788,7 +2788,7 @@ fn genEnumDef(c: inout Comp, ei: U64) {
             while fi < fs.count {
                 val f: FieldDef = fs[fi]
                 write(s: " ")
-                genCTypeRef(c: inout c, start: f.tyStart, len: f.tyLen, isArray: f.tyIsArray)
+                genCTypeOf(c: inout c, tyRef: f.ty, fallStart: f.tyStart, fallLen: f.tyLen, isArray: f.tyIsArray)
                 write(s: " ")
                 writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
                 write(s: ";")
@@ -2802,6 +2802,260 @@ fn genEnumDef(c: inout Comp, ei: U64) {
         vi += 1
     }
     write(s: "    } data;\n")
+    write(s: "};\n")
+}
+
+// ---- generic monomorphization (G2a: structs) ----
+//
+// A generic struct `Box[T]` is a template: it is skipped in the normal struct
+// emission and instead emitted once per concrete instantiation (`Box_I32`,
+// `Box_String`, ...) with the type parameters substituted in field types.
+// Instantiations are discovered from use-site TypeRefs after parsing.
+
+// Index in c.structs of a generic struct named (nameStart,nameLen), or
+// c.structs.count if there is no such generic struct.
+fn genericStructIndex(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
+    mut val i: U64 = 0
+    while i < c.structs.count {
+        val s: StructDef = c.structs[i]
+        if s.typeParams.count > 0 {
+            if spansEqual(c: inout c, aStart: s.nameStart, aLen: s.nameLen, bStart: nameStart, bLen: nameLen) {
+                return i
+            }
+        }
+        i += 1
+    }
+    return c.structs.count
+}
+
+// Is `ref` a concrete generic-struct instantiation (head names a generic struct
+// and it carries type arguments)?
+fn isGenericInst(c: inout Comp, ref: U64) -> Bool {
+    if ref >= c.types.count {
+        return false
+    }
+    val t: TypeRef = c.types[ref]
+    if t.args.count == 0 {
+        return false
+    }
+    return genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen) < c.structs.count
+}
+
+// Structural equality of two TypeRefs (head span + args, recursively).
+fn typeRefEq(c: inout Comp, a: U64, b: U64) -> Bool {
+    if a == b {
+        return true
+    }
+    val ta: TypeRef = c.types[a]
+    val tb: TypeRef = c.types[b]
+    if spansEqual(c: inout c, aStart: ta.nameStart, aLen: ta.nameLen, bStart: tb.nameStart, bLen: tb.nameLen) {
+    } else {
+        return false
+    }
+    if ta.args.count != tb.args.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < ta.args.count {
+        if typeRefEq(c: inout c, a: ta.args[i], b: tb.args[i]) {
+        } else {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// Write the mangled C name for a TypeRef: head name with each type argument
+// appended as `_<arg-mangle>` (recursively). `Box[I32]` -> `Box_I32`, a bare
+// `I32` -> `I32`, `Box[Box[I32]]` -> `Box_Box_I32`.
+fn emitMangle(c: inout Comp, ref: U64) {
+    val t: TypeRef = c.types[ref]
+    writeSpan(c: inout c, start: t.nameStart, len: t.nameLen)
+    mut val i: U64 = 0
+    while i < t.args.count {
+        write(s: "_")
+        emitMangle(c: inout c, ref: t.args[i])
+        i += 1
+    }
+}
+
+// Emit the C type for a fully-concrete TypeRef (no type parameters left).
+fn emitConcreteCType(c: inout Comp, ref: U64) {
+    val t: TypeRef = c.types[ref]
+    if t.args.count == 0 {
+        genCElem(c: inout c, start: t.nameStart, len: t.nameLen)
+        return
+    }
+    // Array keeps the legacy `PlewArray_<elem>` C type (generic-arg arrays are
+    // deferred; the element mangle is its head name).
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+        write(s: "PlewArray_")
+        emitMangle(c: inout c, ref: t.args[0])
+        return
+    }
+    // generic struct instantiation -> mangled C struct name.
+    emitMangle(c: inout c, ref: ref)
+}
+
+// Emit the C type for a generic struct's field, substituting any type parameter
+// (`params[i]`) with the instantiation's concrete argument (`args[i]`). G2a:
+// a field type is either a bare type parameter or a fully-concrete type.
+fn emitFieldCType(c: inout Comp, ref: U64, params: Array[Bind], args: Array[U64]) {
+    val t: TypeRef = c.types[ref]
+    mut val pi: U64 = 0
+    while pi < params.count {
+        val p: Bind = params[pi]
+        if spansEqual(c: inout c, aStart: t.nameStart, aLen: t.nameLen, bStart: p.nameStart, bLen: p.nameLen) {
+            emitConcreteCType(c: inout c, ref: args[pi])
+            return
+        }
+        pi += 1
+    }
+    emitConcreteCType(c: inout c, ref: ref)
+}
+
+// Use-site C type emission: a generic instantiation lowers to its mangled
+// struct name; everything else falls back to the legacy (span,isArray) path.
+fn genCTypeOf(c: inout Comp, tyRef: U64, fallStart: U64, fallLen: U64, isArray: Bool) {
+    if isArray {
+        genCTypeRef(c: inout c, start: fallStart, len: fallLen, isArray: true)
+        return
+    }
+    if isGenericInst(c: inout c, ref: tyRef) {
+        emitConcreteCType(c: inout c, ref: tyRef)
+        return
+    }
+    genCTypeRef(c: inout c, start: fallStart, len: fallLen, isArray: false)
+}
+
+// Walk a use-site TypeRef, recording every concrete generic-struct
+// instantiation it contains. Post-order (args before self) so a by-value nested
+// instance is emitted before the type that contains it; deduped structurally.
+fn scanType(c: inout Comp, ref: U64) {
+    if ref >= c.types.count {
+        return
+    }
+    val t: TypeRef = c.types[ref]
+    mut val i: U64 = 0
+    while i < t.args.count {
+        scanType(c: inout c, ref: t.args[i])
+        i += 1
+    }
+    if isGenericInst(c: inout c, ref: ref) {
+        mut val j: U64 = 0
+        while j < c.genInsts.count {
+            if typeRefEq(c: inout c, a: c.genInsts[j], b: ref) {
+                return
+            }
+            j += 1
+        }
+        c.genInsts.append(ref)
+    }
+}
+
+// Discover all concrete generic instantiations from use sites (function params/
+// returns, non-generic struct/enum fields, let bindings, casts). G2 has no
+// generic functions yet, so every use-site type argument is concrete.
+fn collectGenInsts(c: inout Comp) {
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        val f: Func = c.funcs[fi]
+        if f.hasRet {
+            scanType(c: inout c, ref: f.retTy)
+        }
+        val ps: Array[Param] = f.params
+        mut val pi: U64 = 0
+        while pi < ps.count {
+            scanType(c: inout c, ref: ps[pi].ty)
+            pi += 1
+        }
+        fi += 1
+    }
+    mut val si: U64 = 0
+    while si < c.structs.count {
+        val s: StructDef = c.structs[si]
+        if s.typeParams.count == 0 {
+            val fs: Array[FieldDef] = s.fields
+            mut val k: U64 = 0
+            while k < fs.count {
+                scanType(c: inout c, ref: fs[k].ty)
+                k += 1
+            }
+        }
+        si += 1
+    }
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val e: EnumDef = c.enums[ei]
+        if e.typeParams.count == 0 {
+            val vs: Array[Variant] = e.variants
+            mut val vi: U64 = 0
+            while vi < vs.count {
+                val vfs: Array[FieldDef] = vs[vi].fields
+                mut val k: U64 = 0
+                while k < vfs.count {
+                    scanType(c: inout c, ref: vfs[k].ty)
+                    k += 1
+                }
+                vi += 1
+            }
+        }
+        ei += 1
+    }
+    mut val sti: U64 = 0
+    while sti < c.stmts.count {
+        match c.stmts[sti] {
+            Stmt.Let { mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, val ty, init: _ } => {
+                scanType(c: inout c, ref: ty)
+            }
+            _ => {}
+        }
+        sti += 1
+    }
+    mut val xi: U64 = 0
+    while xi < c.exprs.count {
+        match c.exprs[xi] {
+            Expr.Cast { val operand, val tyStart, val tyLen, val ty } => {
+                scanType(c: inout c, ref: ty)
+            }
+            _ => {}
+        }
+        xi += 1
+    }
+}
+
+// `typedef struct Box_I32 Box_I32;` for one instantiation.
+fn emitMonoForward(c: inout Comp, instRef: U64) {
+    write(s: "typedef struct ")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " ")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: ";\n")
+}
+
+// `struct Box_I32 { <field ctype> field; ... };` with type params substituted.
+fn emitMonoStruct(c: inout Comp, instRef: U64) {
+    val t: TypeRef = c.types[instRef]
+    val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if si >= c.structs.count {
+        return
+    }
+    val s: StructDef = c.structs[si]
+    write(s: "struct ")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " {\n")
+    val fields: Array[FieldDef] = s.fields
+    mut val i: U64 = 0
+    while i < fields.count {
+        val f: FieldDef = fields[i]
+        write(s: "    ")
+        emitFieldCType(c: inout c, ref: f.ty, params: s.typeParams, args: t.args)
+        write(s: " ")
+        writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+        write(s: ";\n")
+        i += 1
+    }
     write(s: "};\n")
 }
 

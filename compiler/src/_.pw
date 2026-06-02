@@ -376,8 +376,13 @@ fn main() {
     }
     mut val lx: Lexer = <Lexer bytes=combined pos=0 toks=[] depth=0 />
     lex(lx: inout lx)
-    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] types=[] arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curGiveTmp=0 impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false impEprint=false impExit=false impReadFileBytes=false impFileExists=false />
+    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] types=[] genInsts=[] arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curGiveTmp=0 impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false impEprint=false impExit=false impReadFileBytes=false impFileExists=false />
+    // reserve TypeRef index 0 as the "no type" sentinel so a `ty` field of 0
+    // (synthetic locals, untyped positions) never aliases a real parsed type.
+    c.types.append(<TypeRef nameStart=0 nameLen=0 args=[] />)
     parseProgram(c: inout c)
+    // discover concrete generic instantiations to monomorphize.
+    collectGenInsts(c: inout c)
     // runtime preamble: includes, immutable String, and the I/O builtins'
     // C runtime (the contract stage0 also injects — emitted here so stage1's
     // output is self-contained).
@@ -398,22 +403,34 @@ fn main() {
     mut val si: U64 = 0
     while si < c.structs.count {
         val s: StructDef = c.structs[si]
-        write(s: "typedef struct ")
-        writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
-        write(s: " ")
-        writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
-        write(s: ";\n")
+        if s.typeParams.count > 0 {
+        } else {
+            write(s: "typedef struct ")
+            writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+            write(s: " ")
+            writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+            write(s: ";\n")
+        }
         si += 1
     }
     mut val ei: U64 = 0
     while ei < c.enums.count {
         val e: EnumDef = c.enums[ei]
-        write(s: "typedef struct ")
-        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
-        write(s: " ")
-        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
-        write(s: ";\n")
+        if e.typeParams.count > 0 {
+        } else {
+            write(s: "typedef struct ")
+            writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+            write(s: " ")
+            writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+            write(s: ";\n")
+        }
         ei += 1
+    }
+    // forward typedefs for each monomorphized generic instantiation.
+    mut val mfi: U64 = 0
+    while mfi < c.genInsts.count {
+        emitMonoForward(c: inout c, instRef: c.genInsts[mfi])
+        mfi += 1
     }
     // array typedefs (element by pointer -> forward decls suffice). U8 is always
     // present (String.bytes); other element types come from declarations.
@@ -438,13 +455,27 @@ fn main() {
     // (A full topological sort is future work if that assumption breaks.)
     mut val ej: U64 = 0
     while ej < c.enums.count {
-        genEnumDef(c: inout c, ei: ej)
+        val ge: EnumDef = c.enums[ej]
+        if ge.typeParams.count > 0 {
+        } else {
+            genEnumDef(c: inout c, ei: ej)
+        }
         ej += 1
     }
     mut val sj: U64 = 0
     while sj < c.structs.count {
-        genStructDef(c: inout c, si: sj)
+        val gs: StructDef = c.structs[sj]
+        if gs.typeParams.count > 0 {
+        } else {
+            genStructDef(c: inout c, si: sj)
+        }
         sj += 1
+    }
+    // monomorphized generic struct bodies (post-order: nested instances first).
+    mut val mbi: U64 = 0
+    while mbi < c.genInsts.count {
+        emitMonoStruct(c: inout c, instRef: c.genInsts[mbi])
+        mbi += 1
     }
     // array runtime (element by value -> needs full nominal defs above).
     genU8ArrayRuntime()
