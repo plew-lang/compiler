@@ -336,3 +336,14 @@ fn val_on_a_variant_field_is_a_friendly_error() {
         "errors: {errs:?}"
     );
 }
+
+#[test]
+fn bare_field_pattern_suggests_val() {
+    // `{ op }` (forgot `val`) gets a targeted hint, not a generic error.
+    let src = "fn f() {\n    match n {\n        E.V { op } => print(op)\n    }\n}";
+    let (_ast, _items, errs) = parse_program(src);
+    assert!(
+        errs.iter().any(|e| e.msg.contains("write `val op`")),
+        "errors: {errs:?}"
+    );
+}

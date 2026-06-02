@@ -868,6 +868,20 @@ impl Parser {
                 let pat = self.parse_pattern();
                 return (name, pat);
             }
+            // A bare identifier with no `:` is almost always a forgotten `val`
+            // (a bare name would otherwise be parsed as a variant pattern, which
+            // is not a valid field binding). Point straight at the fix and
+            // recover as if `val name` was written.
+            if name != "_" {
+                let span = self.peek_span();
+                self.error(
+                    span,
+                    format!("to bind field `{name}`, write `val {name}` (punning); a bare name here is read as a variant pattern, not a binding"),
+                );
+                self.bump(); // consume the identifier
+                let pat = self.ast.alloc_pat(PatKind::Binding { mutable: false, name: name.clone() }, span);
+                return (name, pat);
+            }
         }
         // punning: the field name is the binding's name
         let pat = self.parse_pattern();
