@@ -52,8 +52,8 @@
 
 ## enum 等価（暫定）
 
-- **`Eq`/`Ord` トレイト＋`@[Eq]` derive（メタプロで構造的等価を生成・Rust 流）** → **現状：enum `==`/`!=` を「タグ（variant）比較」に直接脱糖**（`(a).tag OP (b).tag`）。stage1 のみ（stage0 は凍結ゆえ未対応＝plewc.pw 自身はまだ match で判別）。**全 nullary な enum では構造的 Eq と完全一致**（＝ `curKind == <Kind.LParen />` は正しい）。ペイロード持ち variant 同士の field-blind 比較だけが将来の構造的 Eq とズレる（hidden meaning）→ `@[Eq]` 実装時に置換。struct の `==` は未対応。spec/08,12,16。
-- 補足：variant 値は現状 JSX 必須（`<Kind.LParen />`）。bare `Kind.LParen`（nullary variant 値）は未サポート＝surface 追加の未決（パターン位置では `Kind.LParen` だが値位置では `<.../>`＝非対称）。
+- **`Eq`/`Ord` トレイト＋`@[Eq]` derive（メタプロで構造的等価を生成・Rust 流）** → **現状：enum `==`/`!=` を「タグ（variant）比較」に直接脱糖**（variant 構築オペランドは tag index リテラル・それ以外は `(expr).tag`＝例 `(k).tag == 0`）。stage1 のみ（stage0 は凍結ゆえ未対応＝plewc.pw 自身はまだ match で判別）。**全 nullary な enum だけ許可**（＝`curKind == <Kind.LParen />` は構造的 Eq と完全一致で正しい）。**payload 持ち enum の `==` は hidden meaning を避けるため loud にエラー**＝plewc が未宣言識別子 `__plew_enum_eq_requires_Eq_derive` を出力し C コンパイルが失敗（タグだけ見て payload を無視する沈黙バグにしない）。`@[Eq]` 実装で構造的 Eq に置換予定。struct の `==` は未対応。spec/08,12,16。
+- 補足：variant 値は **JSX 必須**（`<Kind.LParen />`）で確定（bare `Kind.LParen` は不採用＝「インスタンス生成は常に JSX」を維持・「どちらでも書ける」回避）。型省略 JSX `<.LParen />`（文脈推論）は surface 追加の未決。
 
 ## 制御フロー・match
 

@@ -515,6 +515,25 @@ fn selfhost_plewc_compiles_enum_eq() {
 }
 
 #[test]
+fn selfhost_plewc_rejects_payload_enum_eq() {
+    // Provisional safety: == on a payload-bearing enum has no structural Eq yet,
+    // so plewc emits an undeclared identifier -> the C compile fails loudly
+    // rather than silently comparing tags (which would ignore payloads).
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../selfhost/plewc.pw");
+    let src = std::fs::read_to_string(path).expect("read selfhost/plewc.pw");
+    let program = "enum E {\n    A { v: I64 }\n    B\n}\nfn main() {\n    val x: E = <E.A v=1 />\n    if x == <E.B /> {\n        print(1)\n    }\n}\n";
+    let emitted_c = build_and_run_stdin(&src, "selfhost_plewc_payeq", program);
+    assert!(emitted_c.contains("__plew_enum_eq_requires_Eq_derive"), "emitted C was:\n{emitted_c}");
+    let c_path = std::env::temp_dir().join(format!("plew_plewcpay_{}.c", std::process::id()));
+    let out_bin = std::env::temp_dir().join(format!("plew_plewcpay_{}", std::process::id()));
+    std::fs::write(&c_path, &emitted_c).expect("write emitted C");
+    let status = Command::new("clang").arg(&c_path).arg("-o").arg(&out_bin).status().expect("clang");
+    let _ = std::fs::remove_file(&c_path);
+    let _ = std::fs::remove_file(&out_bin);
+    assert!(!status.success(), "payload-enum == should fail to compile");
+}
+
+#[test]
 fn selfhost_plewc_compiles_string_eq_and_index_set() {
     // More post-self-host growth in plewc.pw: String ==/!= (lowered to
     // PlewString_eq, type-directed) and array element assignment a[i] = v /
