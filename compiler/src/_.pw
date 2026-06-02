@@ -14,7 +14,15 @@ import @Std/Process with { argCount, argAt, exit }
 part ./Lexer
 part ./Ast
 part ./Parser
-part ./Codegen
+part ./Codegen/Emit
+part ./Codegen/Resolve
+part ./Codegen/Ops
+part ./Codegen/Check
+part ./Codegen/Expr
+part ./Codegen/Stmt
+part ./Codegen/Decl
+part ./Codegen/Mono
+part ./Codegen/Array
 
 // ---- multi-file `part` ----
 //

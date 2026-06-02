@@ -1,0 +1,562 @@
+fn nameIsMain(c: inout Comp, f: Func) -> Bool {
+    if f.hasRecv {
+        return false
+    }
+    return rangeEquals(bytes: c.bytes, start: f.nameStart, len: f.nameLen, kw: "main")
+}
+
+// Index of a non-generic struct named (start,len), or c.structs.count if none.
+fn structIndexByName(c: inout Comp, start: U64, len: U64) -> U64 {
+    mut val i: U64 = 0
+    while i < c.structs.count {
+        val s: StructDef = c.structs[i]
+        if s.typeParams.count == 0 {
+            if spansEqual(c: inout c, aStart: s.nameStart, aLen: s.nameLen, bStart: start, bLen: len) {
+                return i
+            }
+        }
+        i += 1
+    }
+    return c.structs.count
+}
+
+// Does a struct need a deep copy for value semantics? True if it has an array
+// field (CoW buffer) or a struct field that itself needs copying. (By-value
+// structs are acyclic, so the recursion terminates.) Scalars / immutable
+// Strings / Ref pointers are correctly shared by a shallow copy.
+fn structNeedsCopy(c: inout Comp, start: U64, len: U64) -> Bool {
+    val si: U64 = structIndexByName(c: inout c, start: start, len: len)
+    if si >= c.structs.count {
+        return false
+    }
+    val s: StructDef = c.structs[si]
+    val fields: Array[FieldDef] = s.fields
+    mut val i: U64 = 0
+    while i < fields.count {
+        val f: FieldDef = fields[i]
+        if f.tyIsArray {
+            return true
+        } else {
+            if structNeedsCopy(c: inout c, start: f.tyStart, len: f.tyLen) {
+                return true
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// `Name Name_copy(Name s)` prototype.
+fn emitStructCopyProto(c: inout Comp, si: U64) {
+    val s: StructDef = c.structs[si]
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: " ")
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: "_copy(")
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: " s);\n")
+}
+
+// `Name Name_copy(Name s) { Name r = s; r.arr = PlewArray_E_copy(s.arr); ...; return r; }`
+// — value-semantics deep copy of a struct's array / nested-struct fields.
+fn emitStructCopyDef(c: inout Comp, si: U64) {
+    val s: StructDef = c.structs[si]
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: " ")
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: "_copy(")
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: " s) { ")
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: " r = s;")
+    val fields: Array[FieldDef] = s.fields
+    mut val i: U64 = 0
+    while i < fields.count {
+        val f: FieldDef = fields[i]
+        if f.tyIsArray {
+            write(s: " r.")
+            writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+            write(s: " = ")
+            wPA(c: inout c, elemStart: f.tyStart, elemLen: f.tyLen)
+            write(s: "_copy(s.")
+            writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+            write(s: ");")
+        } else {
+            if structNeedsCopy(c: inout c, start: f.tyStart, len: f.tyLen) {
+                write(s: " r.")
+                writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                write(s: " = ")
+                writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
+                write(s: "_copy(s.")
+                writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                write(s: ");")
+            }
+        }
+        i += 1
+    }
+    write(s: " return r; }\n")
+}
+
+// Does a monomorphized generic struct instantiation need a deep copy? True if
+// any field, after substituting the instantiation's type args, is an array.
+// (Nested mono-struct fields needing copy are deferred.)
+fn monoStructNeedsCopy(c: inout Comp, instRef: U64) -> Bool {
+    val t: TypeRef = c.types[instRef]
+    val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if si >= c.structs.count {
+        return false
+    }
+    val s: StructDef = c.structs[si]
+    val fields: Array[FieldDef] = s.fields
+    mut val i: U64 = 0
+    while i < fields.count {
+        val ti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: s.typeParams, tyRef: fields[i].ty)
+        if ti.kind == 3 {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// `Mangle Mangle_copy(Mangle s);` prototype for a mono struct instantiation.
+fn emitMonoStructCopyProto(c: inout Comp, instRef: U64) {
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " ")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: "_copy(")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " s);\n")
+}
+
+// Deep-copy definition for a mono struct instantiation: copy each array field
+// (after substitution) with PlewArray_E_copy; everything else stays shallow.
+fn emitMonoStructCopyDef(c: inout Comp, instRef: U64) {
+    val t: TypeRef = c.types[instRef]
+    val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if si >= c.structs.count {
+        return
+    }
+    val s: StructDef = c.structs[si]
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " ")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: "_copy(")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " s) { ")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " r = s;")
+    val fields: Array[FieldDef] = s.fields
+    mut val i: U64 = 0
+    while i < fields.count {
+        val f: FieldDef = fields[i]
+        val ti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: s.typeParams, tyRef: f.ty)
+        if ti.kind == 3 {
+            write(s: " r.")
+            writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+            write(s: " = ")
+            wPA(c: inout c, elemStart: ti.nameStart, elemLen: ti.nameLen)
+            write(s: "_copy(s.")
+            writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+            write(s: ");")
+        }
+        i += 1
+    }
+    write(s: " return r; }\n")
+}
+
+// Does a mono generic enum instantiation need a deep copy? True if any variant
+// field, after substitution, is an array.
+fn monoEnumNeedsCopy(c: inout Comp, instRef: U64) -> Bool {
+    val t: TypeRef = c.types[instRef]
+    val ei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if ei >= c.enums.count {
+        return false
+    }
+    val e: EnumDef = c.enums[ei]
+    val vars: Array[Variant] = e.variants
+    mut val vi: U64 = 0
+    while vi < vars.count {
+        val fs: Array[FieldDef] = vars[vi].fields
+        mut val fi: U64 = 0
+        while fi < fs.count {
+            val ti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: e.typeParams, tyRef: fs[fi].ty)
+            if ti.kind == 3 {
+                return true
+            }
+            fi += 1
+        }
+        vi += 1
+    }
+    return false
+}
+
+// `Mangle Mangle_copy(Mangle s);` prototype for a mono enum instantiation.
+fn emitMonoEnumCopyProto(c: inout Comp, instRef: U64) {
+    emitMonoStructCopyProto(c: inout c, instRef: instRef)
+}
+
+// Deep-copy a mono enum instantiation: for each variant holding an array
+// (after substitution), copy that variant's array fields under its tag.
+fn emitMonoEnumCopyDef(c: inout Comp, instRef: U64) {
+    val t: TypeRef = c.types[instRef]
+    val ei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if ei >= c.enums.count {
+        return
+    }
+    val e: EnumDef = c.enums[ei]
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " ")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: "_copy(")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " s) { ")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " r = s;")
+    val vars: Array[Variant] = e.variants
+    mut val vi: U64 = 0
+    while vi < vars.count {
+        val v: Variant = vars[vi]
+        val fs: Array[FieldDef] = v.fields
+        mut val anyArray: Bool = false
+        mut val ck: U64 = 0
+        while ck < fs.count {
+            val cti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: e.typeParams, tyRef: fs[ck].ty)
+            if cti.kind == 3 {
+                anyArray = true
+            }
+            ck += 1
+        }
+        if anyArray {
+            write(s: " if (r.tag == ")
+            writeU64(n: vi)
+            write(s: ") {")
+            mut val fi: U64 = 0
+            while fi < fs.count {
+                val f: FieldDef = fs[fi]
+                val ti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: e.typeParams, tyRef: f.ty)
+                if ti.kind == 3 {
+                    write(s: " r.data.")
+                    writeSpan(c: inout c, start: v.nameStart, len: v.nameLen)
+                    write(s: ".")
+                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                    write(s: " = ")
+                    wPA(c: inout c, elemStart: ti.nameStart, elemLen: ti.nameLen)
+                    write(s: "_copy(s.data.")
+                    writeSpan(c: inout c, start: v.nameStart, len: v.nameLen)
+                    write(s: ".")
+                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                    write(s: ");")
+                }
+                fi += 1
+            }
+            write(s: " }")
+        }
+        vi += 1
+    }
+    write(s: " return r; }\n")
+}
+
+// Emit a struct *value* for a mutable binding/store: deep-copy when the source
+// is a place and the struct needs copying (value semantics), else emit directly.
+fn genStructValue(c: inout Comp, exprId: U64, structStart: U64, structLen: U64) {
+    if isPlaceExpr(c: inout c, id: exprId) {
+        if structNeedsCopy(c: inout c, start: structStart, len: structLen) {
+            writeSpan(c: inout c, start: structStart, len: structLen)
+            write(s: "_copy(")
+            genExpr(c: inout c, id: exprId)
+            write(s: ")")
+            return
+        }
+    }
+    genExpr(c: inout c, id: exprId)
+}
+
+// Unified value-semantics copy for a binding/store/return, given the declared
+// type. Arrays and (mono / plain) structs that hold buffers deep-copy from a
+// place; everything else (scalars, Strings, Refs, fresh values) emits directly.
+fn genCopyValue(c: inout Comp, exprId: U64, tyRef: U64, fallStart: U64, fallLen: U64, isArray: Bool) {
+    if isArray {
+        genArrayValue(c: inout c, exprId: exprId, elemStart: fallStart, elemLen: fallLen)
+        return
+    }
+    if isGenericInst(c: inout c, ref: tyRef) {
+        mut val needs: Bool = false
+        if isGenericEnumInst(c: inout c, ref: tyRef) {
+            needs = monoEnumNeedsCopy(c: inout c, instRef: tyRef)
+        } else {
+            needs = monoStructNeedsCopy(c: inout c, instRef: tyRef)
+        }
+        if needs {
+            if isPlaceExpr(c: inout c, id: exprId) {
+                emitMangle(c: inout c, ref: tyRef)
+                write(s: "_copy(")
+                genExpr(c: inout c, id: exprId)
+                write(s: ")")
+                return
+            }
+        }
+        genExpr(c: inout c, id: exprId)
+        return
+    }
+    genStructValue(c: inout c, exprId: exprId, structStart: fallStart, structLen: fallLen)
+}
+
+// Emit a struct body `struct Name { <ctype> field; ... };`. Forward typedefs
+// are emitted separately so structs can reference each other by name; by-value
+// struct fields still require their definition to appear earlier (v3 relies on
+// source order being dependency order).
+fn genStructDef(c: inout Comp, si: U64) {
+    val s: StructDef = c.structs[si]
+    write(s: "struct ")
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: " {\n")
+    val fields: Array[FieldDef] = s.fields
+    mut val i: U64 = 0
+    while i < fields.count {
+        val f: FieldDef = fields[i]
+        write(s: "    ")
+        genCTypeOf(c: inout c, tyRef: f.ty, fallStart: f.tyStart, fallLen: f.tyLen, isArray: f.tyIsArray)
+        write(s: " ")
+        writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+        write(s: ";\n")
+        i += 1
+    }
+    write(s: "};\n")
+}
+
+// Emit a C function signature (no trailing `;` or `{`). `main` is special:
+// `int main(void)`. The return type and each parameter type come from the
+// declared Plew types via genCType (scalars -> long long, named types echoed).
+fn genSignature(c: inout Comp, f: Func) {
+    if nameIsMain(c: inout c, f: f) {
+        write(s: "int main(int argc, char** argv)")
+        return
+    }
+    if f.hasRet {
+        genCTypeOf(c: inout c, tyRef: f.retTy, fallStart: f.retStart, fallLen: f.retLen, isArray: f.retIsArray)
+        write(s: " ")
+    } else {
+        write(s: "void ")
+    }
+    // method: mangle to `Recv_name` with a leading `self` parameter. For a
+    // generic method, the receiver is the mangled instantiation (`Optional_I32`).
+    if f.hasRecv {
+        if c.curRecvInstRef != 0 {
+            emitMangle(c: inout c, ref: c.curRecvInstRef)
+        } else {
+            writeSpan(c: inout c, start: f.recvStart, len: f.recvLen)
+        }
+        write(s: "_")
+    }
+    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+    write(s: "(")
+    val params: Array[Param] = f.params
+    if f.hasRecv {
+        if c.curRecvInstRef != 0 {
+            emitConcreteCType(c: inout c, ref: c.curRecvInstRef)
+        } else {
+            genCTypeRef(c: inout c, start: f.recvStart, len: f.recvLen, isArray: false)
+        }
+        if f.selfInout {
+            write(s: "*")
+        }
+        write(s: " self")
+        mut val i: U64 = 0
+        while i < params.count {
+            write(s: ", ")
+            val p: Param = params[i]
+            genCTypeOf(c: inout c, tyRef: p.ty, fallStart: p.tyStart, fallLen: p.tyLen, isArray: p.tyIsArray)
+            if p.isInout {
+                write(s: "*")
+            }
+            write(s: " ")
+            writeSpan(c: inout c, start: p.nameStart, len: p.nameLen)
+            i += 1
+        }
+    } else {
+        if params.count == 0 {
+            write(s: "void")
+        } else {
+            mut val i: U64 = 0
+            while i < params.count {
+                if i > 0 {
+                    write(s: ", ")
+                }
+                val p: Param = params[i]
+                genCTypeOf(c: inout c, tyRef: p.ty, fallStart: p.tyStart, fallLen: p.tyLen, isArray: p.tyIsArray)
+                if p.isInout {
+                    write(s: "*")
+                }
+                write(s: " ")
+                writeSpan(c: inout c, start: p.nameStart, len: p.nameLen)
+                i += 1
+            }
+        }
+    }
+    write(s: ")")
+}
+
+fn genFunc(c: inout Comp, fi: U64) {
+    val f: Func = c.funcs[fi]
+    val isMain: Bool = nameIsMain(c: inout c, f: f)
+    c.curIsMain = isMain
+    if f.hasRet {
+        c.curRetVoid = false
+        c.curRetStart = f.retStart
+        c.curRetLen = f.retLen
+        c.curRetIsArray = f.retIsArray
+        c.curRetTy = f.retTy
+    } else {
+        c.curRetVoid = true
+        c.curRetStart = 0
+        c.curRetLen = 0
+        c.curRetIsArray = false
+        c.curRetTy = 0
+    }
+    // expose the method receiver so a bare `self` in the body resolves (and
+    // lowers to `(*self)` for `inout fn`).
+    c.curHasRecv = f.hasRecv
+    c.curRecvStart = f.recvStart
+    c.curRecvLen = f.recvLen
+    c.curSelfInout = f.selfInout
+    // fresh local scope for this function: parameters are the initial bindings
+    c.locals = []
+    val params: Array[Param] = f.params
+    mut val pi: U64 = 0
+    while pi < params.count {
+        val p: Param = params[pi]
+        addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false)
+        pi += 1
+    }
+    genSignature(c: inout c, f: f)
+    write(s: " {\n")
+    if isMain {
+        write(s: "    plew_argc = argc; plew_argv = argv;\n")
+    }
+    genBlock(c: inout c, id: f.body)
+    if isMain {
+        write(s: "    return 0;\n")
+    }
+    write(s: "}\n")
+}
+
+// Emit a lambda-lifted closure: signature `<ret> __closure<id>(<params>)`, then
+// `;` (proto) or the body. v1 closures are non-capturing (the body sees its
+// params and globals only). The expression `<id>` is the Closure's arena index.
+fn genClosure(c: inout Comp, id: U64, proto: Bool) {
+    match c.exprs[id] {
+        Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
+            if hasRet {
+                c.curRetVoid = false
+                c.curRetStart = retStart
+                c.curRetLen = retLen
+                c.curRetIsArray = retIsArray
+                c.curRetTy = retTy
+                genCTypeOf(c: inout c, tyRef: retTy, fallStart: retStart, fallLen: retLen, isArray: retIsArray)
+            } else {
+                c.curRetVoid = true
+                c.curRetStart = 0
+                c.curRetLen = 0
+                c.curRetIsArray = false
+                c.curRetTy = 0
+                write(s: "void")
+            }
+            write(s: " __closure")
+            writeU64(n: id)
+            write(s: "(")
+            if params.count == 0 {
+                write(s: "void")
+            } else {
+                mut val i: U64 = 0
+                while i < params.count {
+                    if i > 0 {
+                        write(s: ", ")
+                    }
+                    val p: Param = params[i]
+                    genCTypeOf(c: inout c, tyRef: p.ty, fallStart: p.tyStart, fallLen: p.tyLen, isArray: p.tyIsArray)
+                    if p.isInout {
+                        write(s: "*")
+                    }
+                    write(s: " ")
+                    writeSpan(c: inout c, start: p.nameStart, len: p.nameLen)
+                    i += 1
+                }
+            }
+            write(s: ")")
+            if proto {
+                write(s: ";\n")
+            } else {
+                c.curIsMain = false
+                c.curHasRecv = false
+                c.locals = []
+                mut val pj: U64 = 0
+                while pj < params.count {
+                    val p2: Param = params[pj]
+                    addLocal(c: inout c, nameStart: p2.nameStart, nameLen: p2.nameLen, tyStart: p2.tyStart, tyLen: p2.tyLen, isArray: p2.tyIsArray, ty: p2.ty, isInout: p2.isInout, isMut: false)
+                    pj += 1
+                }
+                write(s: " {\n")
+                genBlock(c: inout c, id: body)
+                write(s: "}\n")
+            }
+        }
+        _ => {}
+    }
+}
+
+// Emit prototypes (proto=true) or bodies (proto=false) for every lambda-lifted
+// closure literal in the program (one per Expr.Closure arena node).
+fn emitClosures(c: inout Comp, proto: Bool) {
+    mut val i: U64 = 0
+    while i < c.exprs.count {
+        match c.exprs[i] {
+            Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
+                genClosure(c: inout c, id: i, proto: proto)
+            }
+            _ => {}
+        }
+        i += 1
+    }
+}
+
+// Emit an enum as a tagged union: `struct E { long long tag; union { struct
+// {...} V; ... } data; };`. Nullary variants get a dummy member so the inner
+// struct is never empty.
+fn genEnumDef(c: inout Comp, ei: U64) {
+    val e: EnumDef = c.enums[ei]
+    write(s: "struct ")
+    writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+    write(s: " {\n")
+    write(s: "    long long tag;\n")
+    write(s: "    union {\n")
+    val vars: Array[Variant] = e.variants
+    mut val vi: U64 = 0
+    while vi < vars.count {
+        val v: Variant = vars[vi]
+        write(s: "        struct {")
+        val fs: Array[FieldDef] = v.fields
+        if fs.count == 0 {
+            write(s: " char _u; ")
+        } else {
+            mut val fi: U64 = 0
+            while fi < fs.count {
+                val f: FieldDef = fs[fi]
+                write(s: " ")
+                genCTypeOf(c: inout c, tyRef: f.ty, fallStart: f.tyStart, fallLen: f.tyLen, isArray: f.tyIsArray)
+                write(s: " ")
+                writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                write(s: ";")
+                fi += 1
+            }
+            write(s: " ")
+        }
+        write(s: "} ")
+        writeSpan(c: inout c, start: v.nameStart, len: v.nameLen)
+        write(s: ";\n")
+        vi += 1
+    }
+    write(s: "    } data;\n")
+    write(s: "};\n")
+}
+

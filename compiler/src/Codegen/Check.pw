@@ -1,0 +1,416 @@
+// --- Phase D: literal context typing -------------------------------------
+// Spec: integer literals have no default type; their type comes from context
+// (annotation / field / param / return / array element / sibling operand). A
+// literal that does not fit its context type is rejected, and a constant
+// expression that overflows its type is rejected at compile time. checkLit*
+// is a pure validation pass (emits compileError; does not change the C output).
+
+struct ConstInt {
+    val isConst: Bool
+    val value: I64
+}
+
+fn notConst() -> ConstInt {
+    return <ConstInt isConst=false value=0 />
+}
+
+// Fold a constant integer expression (literals, unary `-`, and `+ - *`). Lets us
+// catch constant overflow whose individual leaves each fit but whose result does
+// not (`val f: U8 = 200 + 100`). Other operators yield non-const (leaf checks
+// still apply). The fold runs in the compiler's own checked I64 arithmetic, so a
+// constant that overflows I64 itself aborts the compile loudly (pathological).
+fn foldConst(c: inout Comp, id: U64) -> ConstInt {
+    val e: Expr = c.exprs[id]
+    match e {
+        Expr.Int { val value, offset: _, val isBool, tyStart: _, tyLen: _ } => {
+            if isBool { return notConst() }
+            return <ConstInt isConst=true value=value />
+        }
+        Expr.Unary { val op, val operand } => {
+            if op == 57 {
+                val o: ConstInt = foldConst(c: inout c, id: operand)
+                if o.isConst { return <ConstInt isConst=true value=0 - o.value /> }
+            }
+            return notConst()
+        }
+        Expr.Binary { val op, val lhs, val rhs } => {
+            val a: ConstInt = foldConst(c: inout c, id: lhs)
+            val b: ConstInt = foldConst(c: inout c, id: rhs)
+            if a.isConst {
+                if b.isConst {
+                    if op == 56 { return <ConstInt isConst=true value=a.value + b.value /> }
+                    if op == 57 { return <ConstInt isConst=true value=a.value - b.value /> }
+                    if op == 58 { return <ConstInt isConst=true value=a.value * b.value /> }
+                }
+            }
+            return notConst()
+        }
+        _ => { return notConst() }
+    }
+}
+
+// Whether a recovered TypeInfo is a (width-bearing) integer type.
+fn tiIsInt(c: inout Comp, ti: TypeInfo) -> Bool {
+    if ti.kind == 0 {
+        if ti.nameLen != 0 {
+            return isIntType(c: inout c, start: ti.nameStart, len: ti.nameLen)
+        }
+    }
+    return false
+}
+
+// Range-check the literals reachable from `id` against an expected integer type
+// described as (eKind, eBits, eSgn): eKind 0 = no context type (spec: a literal
+// with no type is a compile error), 1 = integer of (eBits, eSgn), 2 = a non-
+// integer type (skip int checks). A `true`/`false` (isBool) or a suffixed
+// literal (`5U64`) carries its own type and is never context-ambiguous.
+fn checkLitLeaf(c: inout Comp, value: I64, offset: U64, isBool: Bool, tyStart: U64, tyLen: U64, eKind: U64, eBits: U64, eSgn: Bool) {
+    if isBool {
+        return
+    }
+    if tyLen != 0 {
+        // explicit type suffix: range-check against it (never ambiguous).
+        if litFitsType(c: inout c, value: value, dstStart: tyStart, dstLen: tyLen) {
+        } else {
+            compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal is out of range for its type")
+        }
+        return
+    }
+    if eKind == 1 {
+        if litFitsBits(value: value, bits: eBits, sgn: eSgn) {
+        } else {
+            compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal is out of range for its type")
+        }
+        return
+    }
+    if eKind == 0 {
+        compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal has no type from context; add a type annotation or a suffix (e.g. `5I32`)")
+    }
+}
+
+fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
+    val e: Expr = c.exprs[id]
+    match e {
+        Expr.Int { val value, val offset, val isBool, val tyStart, val tyLen } => {
+            checkLitLeaf(c: inout c, value: value, offset: offset, isBool: isBool, tyStart: tyStart, tyLen: tyLen, eKind: eKind, eBits: eBits, eSgn: eSgn)
+        }
+        Expr.Unary { val op, val operand } => {
+            if op == 57 {
+                // a leading `-` on a literal folds into the literal (`-128:I8` is
+                // valid even though `128` alone exceeds I8), so check the negated
+                // value; otherwise recurse into the operand with the same type.
+                val oe: Expr = c.exprs[operand]
+                match oe {
+                    Expr.Int { val value, val offset, val isBool, val tyStart, val tyLen } => {
+                        checkLitLeaf(c: inout c, value: 0 - value, offset: offset, isBool: isBool, tyStart: tyStart, tyLen: tyLen, eKind: eKind, eBits: eBits, eSgn: eSgn)
+                    }
+                    _ => { checkLitCtx(c: inout c, id: operand, eKind: eKind, eBits: eBits, eSgn: eSgn) }
+                }
+            } else {
+                if op == 79 {
+                    checkLitCtx(c: inout c, id: operand, eKind: eKind, eBits: eBits, eSgn: eSgn)
+                }
+            }
+        }
+        Expr.Binary { val op, val lhs, val rhs } => {
+            mut val isArith: Bool = false
+            if op >= 56 { if op <= 60 { isArith = true } }
+            if op >= 74 { if op <= 78 { isArith = true } }
+            if isArith {
+                if eKind == 1 {
+                    val cf: ConstInt = foldConst(c: inout c, id: id)
+                    if cf.isConst {
+                        if litFitsBits(value: cf.value, bits: eBits, sgn: eSgn) {
+                        } else {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "constant expression is out of range for its type")
+                        }
+                    }
+                    checkLitCtx(c: inout c, id: lhs, eKind: eKind, eBits: eBits, eSgn: eSgn)
+                    checkLitCtx(c: inout c, id: rhs, eKind: eKind, eBits: eBits, eSgn: eSgn)
+                } else {
+                    checkArithNoCtx(c: inout c, lhs: lhs, rhs: rhs)
+                }
+            } else {
+                checkArithNoCtx(c: inout c, lhs: lhs, rhs: rhs)
+            }
+        }
+        Expr.Call { val nameStart, val nameLen, val args } => {
+            checkCallArgs(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+        }
+        Expr.Method { val recv, val nameStart, val nameLen, val args } => {
+            checkMethodArgs(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+        }
+        Expr.Cast { val operand, val tyStart, val tyLen, ty: _ } => {
+            // The operand has its own type; a direct-literal operand is range-
+            // checked by the cast itself, so only recurse into compound operands.
+            val oe: Expr = c.exprs[operand]
+            match oe {
+                Expr.Int { value: _, offset: _, isBool: _, tyStart: _, tyLen: _ } => {}
+                _ => { checkLitCtx(c: inout c, id: operand, eKind: 0, eBits: 0, eSgn: false) }
+            }
+        }
+        Expr.Field { val base, val nameStart, val nameLen } => {
+            checkLitCtx(c: inout c, id: base, eKind: 0, eBits: 0, eSgn: false)
+        }
+        Expr.Index { val base, val index } => {
+            checkLitCtx(c: inout c, id: base, eKind: 0, eBits: 0, eSgn: false)
+            checkLitCtx(c: inout c, id: index, eKind: 1, eBits: 64, eSgn: false)
+        }
+        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
+            checkMakeFields(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ty, fields: fields)
+        }
+        Expr.Array { val elems } => {
+            mut val i: U64 = 0
+            while i < elems.count {
+                checkLitCtx(c: inout c, id: elems[i], eKind: eKind, eBits: eBits, eSgn: eSgn)
+                i += 1
+            }
+        }
+        Expr.MatchExpr { val scrut, val arms } => {
+            checkLitCtx(c: inout c, id: scrut, eKind: 0, eBits: 0, eSgn: false)
+            mut val i: U64 = 0
+            while i < arms.count {
+                checkLitCtx(c: inout c, id: arms[i].body, eKind: eKind, eBits: eBits, eSgn: eSgn)
+                i += 1
+            }
+        }
+        Expr.Coalesce { val opt, val deflt } => {
+            // the default carries the surrounding context (it is the result T);
+            // the Optional operand is self-typed.
+            checkLitCtx(c: inout c, id: opt, eKind: 0, eBits: 0, eSgn: false)
+            checkLitCtx(c: inout c, id: deflt, eKind: eKind, eBits: eBits, eSgn: eSgn)
+        }
+        Expr.Try { val expr } => {
+            checkLitCtx(c: inout c, id: expr, eKind: 0, eBits: 0, eSgn: false)
+        }
+        _ => {}
+    }
+}
+
+struct IntTy {
+    val known: Bool
+    val bits: U64
+    val sgn: Bool
+}
+
+// Recover an expression's integer type as (bits, sgn). Covers what exprType
+// reports width-less but is nonetheless integer-typed: `arr.count` (U64) and an
+// array element read `arr[i]` (the element's int type) — so a literal sibling in
+// `0 ..< arr.count` infers U64 and is not flagged ambiguous.
+fn exprIntTy(c: inout Comp, id: U64) -> IntTy {
+    val ti: TypeInfo = exprType(c: inout c, id: id)
+    if tiIsInt(c: inout c, ti: ti) {
+        return <IntTy known=true bits=intBits(c: inout c, start: ti.nameStart, len: ti.nameLen) sgn=intSigned(c: inout c, start: ti.nameStart, len: ti.nameLen) />
+    }
+    val e: Expr = c.exprs[id]
+    match e {
+        Expr.Call { val nameStart, val nameLen, val args } => {
+            // argCount() is the one integer-returning I/O builtin (I64).
+            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argCount") {
+                return <IntTy known=true bits=64 sgn=true />
+            }
+        }
+        Expr.Field { val base, val nameStart, val nameLen } => {
+            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "count") {
+                val bt: TypeInfo = exprType(c: inout c, id: base)
+                if bt.kind == 3 {
+                    return <IntTy known=true bits=64 sgn=false />
+                }
+            }
+        }
+        Expr.Index { val base, val index } => {
+            val bt: TypeInfo = exprType(c: inout c, id: base)
+            if bt.kind == 3 {
+                if isIntType(c: inout c, start: bt.nameStart, len: bt.nameLen) {
+                    return <IntTy known=true bits=intBits(c: inout c, start: bt.nameStart, len: bt.nameLen) sgn=intSigned(c: inout c, start: bt.nameStart, len: bt.nameLen) />
+                }
+            }
+        }
+        _ => {}
+    }
+    return <IntTy known=false bits=0 sgn=false />
+}
+
+// Infer an arithmetic/comparison's literal operand type from a typed sibling
+// (Plew: both operands share a type). If neither operand has a known integer
+// type, the operands carry no context, so a literal there is ambiguous (error).
+fn checkArithNoCtx(c: inout Comp, lhs: U64, rhs: U64) {
+    val lt: IntTy = exprIntTy(c: inout c, id: lhs)
+    if lt.known {
+        checkLitCtx(c: inout c, id: lhs, eKind: 1, eBits: lt.bits, eSgn: lt.sgn)
+        checkLitCtx(c: inout c, id: rhs, eKind: 1, eBits: lt.bits, eSgn: lt.sgn)
+        return
+    }
+    val rt: IntTy = exprIntTy(c: inout c, id: rhs)
+    if rt.known {
+        checkLitCtx(c: inout c, id: lhs, eKind: 1, eBits: rt.bits, eSgn: rt.sgn)
+        checkLitCtx(c: inout c, id: rhs, eKind: 1, eBits: rt.bits, eSgn: rt.sgn)
+        return
+    }
+    checkLitCtx(c: inout c, id: lhs, eKind: 0, eBits: 0, eSgn: false)
+    checkLitCtx(c: inout c, id: rhs, eKind: 0, eBits: 0, eSgn: false)
+}
+
+// checkLitCtx with the expected type given as a recovered TypeInfo.
+fn checkLitTi(c: inout Comp, id: U64, ti: TypeInfo) {
+    if tiIsInt(c: inout c, ti: ti) {
+        checkLitCtx(c: inout c, id: id, eKind: 1, eBits: intBits(c: inout c, start: ti.nameStart, len: ti.nameLen), eSgn: intSigned(c: inout c, start: ti.nameStart, len: ti.nameLen))
+        return
+    }
+    checkLitCtx(c: inout c, id: id, eKind: 0, eBits: 0, eSgn: false)
+}
+
+// checkLitCtx against a written type span (annotation / param / field).
+fn checkLitSpan(c: inout Comp, id: U64, tyStart: U64, tyLen: U64, isArray: Bool) {
+    if isArray {
+        checkLitArray(c: inout c, id: id, elemStart: tyStart, elemLen: tyLen)
+        return
+    }
+    checkLitTi(c: inout c, id: id, ti: typeInfoOfName(c: inout c, start: tyStart, len: tyLen, isArray: false))
+}
+
+// Range-check the elements of an array literal against the element type.
+fn checkLitArray(c: inout Comp, id: U64, elemStart: U64, elemLen: U64) {
+    val e: Expr = c.exprs[id]
+    match e {
+        Expr.Array { val elems } => {
+            mut val i: U64 = 0
+            while i < elems.count {
+                checkLitSpan(c: inout c, id: elems[i], tyStart: elemStart, tyLen: elemLen, isArray: false)
+                i += 1
+            }
+        }
+        _ => { checkLitCtx(c: inout c, id: id, eKind: 0, eBits: 0, eSgn: false) }
+    }
+}
+
+// Check call args against the callee's parameter types. Builtins (not found as a
+// user function) keep their args lenient at I64 (placeholder I/O shims).
+fn checkCallArgs(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen)
+    if fi == c.funcs.count {
+        mut val i: U64 = 0
+        while i < args.count {
+            checkLitCtx(c: inout c, id: args[i].expr, eKind: 1, eBits: 64, eSgn: true)
+            i += 1
+        }
+        return
+    }
+    val f: Func = c.funcs[fi]
+    val ps: Array[Param] = f.params
+    mut val i: U64 = 0
+    while i < args.count {
+        if i < ps.count {
+            val p: Param = ps[i]
+            checkLitSpan(c: inout c, id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+        } else {
+            checkLitCtx(c: inout c, id: args[i].expr, eKind: 0, eBits: 0, eSgn: false)
+        }
+        i += 1
+    }
+}
+
+// Check method-call args against the method's params; array `.append(x)` checks
+// `x` against the element type. Other builtins keep args lenient at I64.
+fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    checkLitCtx(c: inout c, id: recv, eKind: 0, eBits: 0, eSgn: false)
+    val rt: TypeInfo = exprType(c: inout c, id: recv)
+    if rt.kind == 2 {
+        val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen)
+        if mi != c.funcs.count {
+            val mf: Func = c.funcs[mi]
+            val ps: Array[Param] = mf.params
+            val genericRecv: Bool = isGenericInst(c: inout c, ref: rt.ref)
+            mut val i: U64 = 0
+            while i < args.count {
+                if i < ps.count {
+                    val p: Param = ps[i]
+                    if genericRecv {
+                        // resolve the param's type under the receiver's
+                        // instantiation so a literal arg gets the concrete context.
+                        val pti: TypeInfo = substTypeInfo(c: inout c, instRef: rt.ref, params: mf.typeParams, tyRef: p.ty)
+                        checkLitTi(c: inout c, id: args[i].expr, ti: pti)
+                    } else {
+                        checkLitSpan(c: inout c, id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+                    }
+                } else {
+                    checkLitCtx(c: inout c, id: args[i].expr, eKind: 0, eBits: 0, eSgn: false)
+                }
+                i += 1
+            }
+            return
+        }
+    }
+    if rt.kind == 3 {
+        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "append") {
+            mut val i: U64 = 0
+            while i < args.count {
+                checkLitSpan(c: inout c, id: args[i].expr, tyStart: rt.nameStart, tyLen: rt.nameLen, isArray: false)
+                i += 1
+            }
+            return
+        }
+    }
+    mut val i: U64 = 0
+    while i < args.count {
+        checkLitCtx(c: inout c, id: args[i].expr, eKind: 1, eBits: 64, eSgn: true)
+        i += 1
+    }
+}
+
+// Declared type of a Make field (struct field or enum variant field).
+fn makeFieldType(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fieldStart: U64, fieldLen: U64) -> TypeInfo {
+    if isEnum {
+        mut val ei: U64 = 0
+        while ei < c.enums.count {
+            val en: EnumDef = c.enums[ei]
+            if spansEqual(c: inout c, aStart: en.nameStart, aLen: en.nameLen, bStart: typeStart, bLen: typeLen) {
+                val vars: Array[Variant] = en.variants
+                mut val vi: U64 = 0
+                while vi < vars.count {
+                    val v: Variant = vars[vi]
+                    if spansEqual(c: inout c, aStart: v.nameStart, aLen: v.nameLen, bStart: variantStart, bLen: variantLen) {
+                        val fs: Array[FieldDef] = v.fields
+                        mut val fj: U64 = 0
+                        while fj < fs.count {
+                            val fd: FieldDef = fs[fj]
+                            if spansEqual(c: inout c, aStart: fd.nameStart, aLen: fd.nameLen, bStart: fieldStart, bLen: fieldLen) {
+                                return typeInfoOfName(c: inout c, start: fd.tyStart, len: fd.tyLen, isArray: fd.tyIsArray)
+                            }
+                            fj += 1
+                        }
+                    }
+                    vi += 1
+                }
+            }
+            ei += 1
+        }
+        return scalarInfo()
+    }
+    return fieldType(c: inout c, structStart: typeStart, structLen: typeLen, fieldStart: fieldStart, fieldLen: fieldLen)
+}
+
+// Check each provided Make field value against its declared field type.
+fn checkMakeFields(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: Array[MakeField]) {
+    mut val i: U64 = 0
+    while i < fields.count {
+        val mf: MakeField = fields[i]
+        mut val ft: TypeInfo = scalarInfo()
+        if isGenericEnumInst(c: inout c, ref: ty) {
+            ft = genericEnumFieldTypeInfo(c: inout c, instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+        } else {
+            if isGenericInst(c: inout c, ref: ty) {
+                ft = genericFieldTypeInfo(c: inout c, instRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+            } else {
+                ft = makeFieldType(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+            }
+        }
+        if ft.kind == 3 {
+            checkLitArray(c: inout c, id: mf.value, elemStart: ft.nameStart, elemLen: ft.nameLen)
+        } else {
+            checkLitTi(c: inout c, id: mf.value, ti: ft)
+        }
+        i += 1
+    }
+}
+

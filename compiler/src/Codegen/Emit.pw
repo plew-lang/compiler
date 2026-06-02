@@ -1,0 +1,345 @@
+// Part of the Plew compiler module (root: _.pw). Code generation: arena AST
+// -> C, plus the lightweight type recovery and acceptance-soundness checks.
+
+// ---- C code generation ----
+
+fn digitStr(d: I64) -> String {
+    if d == 0 { return "0" }
+    if d == 1 { return "1" }
+    if d == 2 { return "2" }
+    if d == 3 { return "3" }
+    if d == 4 { return "4" }
+    if d == 5 { return "5" }
+    if d == 6 { return "6" }
+    if d == 7 { return "7" }
+    if d == 8 { return "8" }
+    return "9"
+}
+
+fn writeInt(n: I64) {
+    if n < 0 {
+        write(s: "-")
+        writeInt(n: 0 - n)
+        return
+    }
+    if n >= 10 {
+        writeInt(n: n / 10)
+    }
+    write(s: digitStr(d: n % 10))
+}
+
+// U64 digit (0-9) -> its glyph. A U64 twin of digitStr: with no implicit
+// conversions and `as` restricted to lossless, an I64 digitStr cannot serve a
+// U64 caller (U64->I64 is not lossless), so unsigned printing needs its own.
+fn digitStrU(d: U64) -> String {
+    if d == 0 { return "0" }
+    if d == 1 { return "1" }
+    if d == 2 { return "2" }
+    if d == 3 { return "3" }
+    if d == 4 { return "4" }
+    if d == 5 { return "5" }
+    if d == 6 { return "6" }
+    if d == 7 { return "7" }
+    if d == 8 { return "8" }
+    return "9"
+}
+
+// Print a U64 (handle ids, indices, line numbers) with no sign handling — keeps
+// the unsigned values unsigned end to end (no `U64 as I64` cast).
+fn writeU64(n: U64) {
+    if n >= 10 {
+        writeU64(n: n / 10)
+    }
+    write(s: digitStrU(d: n % 10))
+}
+
+fn writeSpan(c: inout Comp, start: U64, len: U64) {
+    mut val j: U64 = 0
+    while j < len {
+        writeByte(c.bytes[start + j])
+        j += 1
+    }
+}
+
+// Compiler diagnostics. Ordinary module functions (not ambient builtins) so the
+// compiler source stays spec-valid: they report on stderr via @Std/Io `eprint`
+// and stop via @Std/Process `exit`. `compileErrorAt` includes a source line.
+fn eprintInt(n: I64) {
+    if n >= 10 {
+        eprintInt(n: n / 10)
+    }
+    eprint(text: digitStr(d: n % 10))
+}
+
+fn compileError(msg: String) {
+    eprint(text: "plewc: error: ")
+    eprint(text: msg)
+    eprint(text: "\n")
+    exit(code: 1)
+}
+
+fn compileErrorAt(line: I64, msg: String) {
+    eprint(text: "plewc: error: line ")
+    eprintInt(n: line)
+    eprint(text: ": ")
+    eprint(text: msg)
+    eprint(text: "\n")
+    exit(code: 1)
+}
+
+fn isPrimType(c: inout Comp, start: U64, len: U64) -> Bool {
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I8") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I16") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I32") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I64") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U8") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U16") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U32") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U64") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Bool") { return true }
+    return false
+}
+
+// Whether a type-name span is one of the 8 integer types (excludes Bool/String).
+fn isIntType(c: inout Comp, start: U64, len: U64) -> Bool {
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I8") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I16") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I32") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I64") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U8") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U16") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U32") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U64") { return true }
+    return false
+}
+
+// Bit width of an integer type-name span (0 if not an integer type).
+fn intBits(c: inout Comp, start: U64, len: U64) -> U64 {
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I8") { return 8 }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U8") { return 8 }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I16") { return 16 }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U16") { return 16 }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I32") { return 32 }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U32") { return 32 }
+    return 64
+}
+
+// Whether an integer type-name span is signed (`I*`). Assumes isIntType.
+fn intSigned(c: inout Comp, start: U64, len: U64) -> Bool {
+    return c.bytes[start] == 'I'
+}
+
+// Whether `src as dst` (both integer types) is lossless — i.e. dst represents
+// every src value (spec: `as` is lossless-only; narrowing/signedness -> TryFrom).
+fn losslessInt(c: inout Comp, srcStart: U64, srcLen: U64, dstStart: U64, dstLen: U64) -> Bool {
+    val sBits: U64 = intBits(c: inout c, start: srcStart, len: srcLen)
+    val dBits: U64 = intBits(c: inout c, start: dstStart, len: dstLen)
+    val sSigned: Bool = intSigned(c: inout c, start: srcStart, len: srcLen)
+    val dSigned: Bool = intSigned(c: inout c, start: dstStart, len: dstLen)
+    if sSigned {
+        if dSigned {
+            return dBits >= sBits
+        }
+        // signed -> unsigned: negatives are unrepresentable.
+        return false
+    }
+    if dSigned {
+        // unsigned -> signed needs a strictly wider target (the sign bit).
+        return dBits > sBits
+    }
+    return dBits >= sBits
+}
+
+// Whether the literal `value` fits the target integer type's range.
+fn litFitsType(c: inout Comp, value: I64, dstStart: U64, dstLen: U64) -> Bool {
+    val bits: U64 = intBits(c: inout c, start: dstStart, len: dstLen)
+    val sgn: Bool = intSigned(c: inout c, start: dstStart, len: dstLen)
+    return litFitsBits(value: value, bits: bits, sgn: sgn)
+}
+
+// Whether `value` fits an integer type of the given width and signedness. Span-
+// free core of litFitsType, so synthetic contexts (index = U64, print = I64)
+// can range-check literals without a type-name span in the source buffer.
+fn litFitsBits(value: I64, bits: U64, sgn: Bool) -> Bool {
+    // Per-width bounds as literals (no `1 << 31` / `1 << 32`, which would overflow
+    // a 32-bit C int and give the wrong bound). Bounds fit I64 (< 2^63).
+    if sgn {
+        if bits == 8 {
+            if value < (0 - 128) { return false }
+            if value > 127 { return false }
+            return true
+        }
+        if bits == 16 {
+            if value < (0 - 32768) { return false }
+            if value > 32767 { return false }
+            return true
+        }
+        if bits == 32 {
+            if value < (0 - 2147483648) { return false }
+            if value > 2147483647 { return false }
+            return true
+        }
+        return true
+    }
+    if value < 0 {
+        return false
+    }
+    if bits == 8 {
+        if value > 255 { return false }
+        return true
+    }
+    if bits == 16 {
+        if value > 65535 { return false }
+        return true
+    }
+    if bits == 32 {
+        if value > 4294967295 { return false }
+        return true
+    }
+    return true
+}
+
+// Emit the C *element* type for a type-name span (no Array wrapper). Each Plew
+// integer type maps to its exact-width C stdint type so storage width and
+// signedness match the declared type (no hidden widening); U8 -> unsigned char
+// (== uint8_t, keeps byte arrays aliasing a char buffer for String.bytes);
+// Bool -> long long (width irrelevant); String -> PlewString; named -> echoed.
+fn genCElem(c: inout Comp, start: U64, len: U64) {
+    if len == 0 {
+        write(s: "long long")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U8") {
+        write(s: "unsigned char")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I8") {
+        write(s: "int8_t")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I16") {
+        write(s: "int16_t")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U16") {
+        write(s: "uint16_t")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I32") {
+        write(s: "int32_t")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U32") {
+        write(s: "uint32_t")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I64") {
+        write(s: "int64_t")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U64") {
+        write(s: "uint64_t")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "String") {
+        write(s: "PlewString")
+        return
+    }
+    if isPrimType(c: inout c, start: start, len: len) {
+        // remaining prim = Bool
+        write(s: "long long")
+        return
+    }
+    writeSpan(c: inout c, start: start, len: len)
+}
+
+// Emit a C type for a (span, isArray) type. `Array[E]` -> `PlewArray_<E>`
+// (the element name is C-identifier-safe, so it doubles as the mangle).
+fn genCTypeRef(c: inout Comp, start: U64, len: U64, isArray: Bool) {
+    if isArray {
+        write(s: "PlewArray_")
+        writeSpan(c: inout c, start: start, len: len)
+        return
+    }
+    genCElem(c: inout c, start: start, len: len)
+}
+
+// Back-compat shim for non-array type positions (scalars / String / named).
+fn genCType(c: inout Comp, start: U64, len: U64) {
+    genCElem(c: inout c, start: start, len: len)
+}
+
+// Emit the C type for a recovered TypeInfo (used when the type comes from
+// inference rather than a written annotation, e.g. a match-expression result).
+fn genTypeInfoCType(c: inout Comp, ti: TypeInfo) {
+    if ti.kind == 1 {
+        write(s: "PlewString")
+        return
+    }
+    if ti.kind == 2 {
+        writeSpan(c: inout c, start: ti.nameStart, len: ti.nameLen)
+        return
+    }
+    if ti.kind == 3 {
+        write(s: "PlewArray_")
+        writeSpan(c: inout c, start: ti.nameStart, len: ti.nameLen)
+        return
+    }
+    write(s: "long long")
+}
+
+// Compare two source spans byte for byte.
+fn spansEqual(c: inout Comp, aStart: U64, aLen: U64, bStart: U64, bLen: U64) -> Bool {
+    if aLen != bLen {
+        return false
+    }
+    mut val j: U64 = 0
+    while j < aLen {
+        if c.bytes[aStart + j] != c.bytes[bStart + j] {
+            return false
+        }
+        j += 1
+    }
+    return true
+}
+
+// 1-based source line for a byte offset (count newlines before it). For
+// diagnostics; works across the assembled multi-file buffer.
+fn lineOf(c: inout Comp, offset: U64) -> I64 {
+    mut val line: I64 = 1
+    mut val i: U64 = 0
+    while i < offset {
+        if c.bytes[i] == 10 {
+            line += 1
+        }
+        i += 1
+    }
+    return line
+}
+
+// Best-effort byte offset for an expression (for diagnostics). Leaf nodes with
+// a span return it; compound nodes recurse to a representative child.
+fn exprOffset(c: inout Comp, id: U64) -> U64 {
+    val e: Expr = c.exprs[id]
+    match e {
+        Expr.Int { value: _, val offset, isBool: _, tyStart: _, tyLen: _ } => { return offset }
+        Expr.Ident { val start, val len } => { return start }
+        Expr.Str { val start, val len } => { return start }
+        Expr.Call { val nameStart, val nameLen, val args } => { return nameStart }
+        Expr.Method { val recv, val nameStart, val nameLen, val args } => { return nameStart }
+        Expr.Field { val base, val nameStart, val nameLen } => { return exprOffset(c: inout c, id: base) }
+        Expr.Index { val base, val index } => { return exprOffset(c: inout c, id: base) }
+        Expr.Binary { val op, val lhs, val rhs } => { return exprOffset(c: inout c, id: lhs) }
+        Expr.Unary { val op, val operand } => { return exprOffset(c: inout c, id: operand) }
+        Expr.Cast { val operand, val tyStart, val tyLen, ty: _ } => { return exprOffset(c: inout c, id: operand) }
+        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => { return typeStart }
+        Expr.MatchExpr { val scrut, val arms } => { return exprOffset(c: inout c, id: scrut) }
+        Expr.IfExpr { val cond, val thenBlk, val elseBlk } => { return exprOffset(c: inout c, id: cond) }
+        Expr.Coalesce { val opt, val deflt } => { return exprOffset(c: inout c, id: opt) }
+        Expr.Try { val expr } => { return exprOffset(c: inout c, id: expr) }
+        Expr.Arrow { val base, val nameStart, val nameLen } => { return exprOffset(c: inout c, id: base) }
+        Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => { return retStart }
+        _ => { return 0 }
+    }
+}
+

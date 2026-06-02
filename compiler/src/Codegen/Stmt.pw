@@ -1,0 +1,663 @@
+// Is `id` a place expression (a variable / field / element — an lvalue), as
+// opposed to a fresh value (literal / call / construction)? Used to decide
+// whether copying an array value is needed for value semantics.
+fn isPlaceExpr(c: inout Comp, id: U64) -> Bool {
+    match c.exprs[id] {
+        Expr.Ident { val start, val len } => { return true }
+        Expr.Field { val base, val nameStart, val nameLen } => { return true }
+        Expr.Index { val base, val index } => { return true }
+        _ => { return false }
+    }
+}
+
+// Emit an array *value* for a binding/store: copy (value semantics) when the
+// source is an existing place, else emit the fresh literal/expression directly.
+// (Eager-copy realizes value semantics; lazy CoW + freeing are deferred hidden
+// cost. Copying from a place gives the binding its own buffer.)
+fn genArrayValue(c: inout Comp, exprId: U64, elemStart: U64, elemLen: U64) {
+    if isPlaceExpr(c: inout c, id: exprId) {
+        wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+        write(s: "_copy(")
+        genExpr(c: inout c, id: exprId)
+        write(s: ")")
+        return
+    }
+    genArrayLiteral(c: inout c, exprId: exprId, elemStart: elemStart, elemLen: elemLen)
+}
+
+// Emit an array literal given the element type from context (declared type of
+// the let / field it initializes). Empty -> _new(); non-empty -> a statement
+// expression that news then pushes. Falls back to genExpr for non-literals.
+fn genArrayLiteral(c: inout Comp, exprId: U64, elemStart: U64, elemLen: U64) {
+    val e: Expr = c.exprs[exprId]
+    match e {
+        Expr.Array { val elems } => {
+            if elems.count == 0 {
+                write(s: "PlewArray_")
+                writeSpan(c: inout c, start: elemStart, len: elemLen)
+                write(s: "_new()")
+            } else {
+                write(s: "({ PlewArray_")
+                writeSpan(c: inout c, start: elemStart, len: elemLen)
+                write(s: " __a = PlewArray_")
+                writeSpan(c: inout c, start: elemStart, len: elemLen)
+                write(s: "_new(); ")
+                mut val i: U64 = 0
+                while i < elems.count {
+                    write(s: "PlewArray_")
+                    writeSpan(c: inout c, start: elemStart, len: elemLen)
+                    write(s: "_push(&__a, ")
+                    genExpr(c: inout c, id: elems[i])
+                    write(s: "); ")
+                    i += 1
+                }
+                write(s: "__a; })")
+            }
+        }
+        _ => { genExpr(c: inout c, id: exprId) }
+    }
+}
+
+// Whether `lhs OP rhs` is a String `==` / `!=` (which lowers to PlewString_eq
+// rather than a C struct comparison).
+fn isStringEq(c: inout Comp, op: I64, lhs: U64) -> Bool {
+    if op == 50 {
+    } else {
+        if op == 51 {
+        } else {
+            return false
+        }
+    }
+    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    return lt.kind == 1
+}
+
+fn isEnumName(c: inout Comp, start: U64, len: U64) -> Bool {
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val e: EnumDef = c.enums[ei]
+        if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) {
+            return true
+        }
+        ei += 1
+    }
+    return false
+}
+
+// Whether every variant of the named enum is nullary (no payload). Tag-only
+// `==` is exact for such enums; payload-bearing enums need structural Eq.
+fn isAllNullary(c: inout Comp, start: U64, len: U64) -> Bool {
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val e: EnumDef = c.enums[ei]
+        if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) {
+            val vars: Array[Variant] = e.variants
+            mut val vi: U64 = 0
+            while vi < vars.count {
+                val v: Variant = vars[vi]
+                if v.fields.count > 0 {
+                    return false
+                }
+                vi += 1
+            }
+            return true
+        }
+        ei += 1
+    }
+    return false
+}
+
+// Whether `lhs OP rhs` is an enum `==` / `!=`. Provisional: lowered to a tag
+// (variant) comparison, NOT a payload-aware structural Eq. For all-nullary
+// enums this coincides with structural equality; full Eq comes with @[Eq].
+fn isEnumEq(c: inout Comp, op: I64, lhs: U64) -> Bool {
+    if op == 50 {
+    } else {
+        if op == 51 {
+        } else {
+            return false
+        }
+    }
+    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    if lt.kind == 2 {
+        return isEnumName(c: inout c, start: lt.nameStart, len: lt.nameLen)
+    }
+    return false
+}
+
+// Acceptance soundness: comparison operators (== != < <= > >=) are trait-backed
+// (Eq/Ord). The compiler hardcodes them for numbers, String `==`/`!=`, and
+// all-nullary enum `==`; applied to a struct or array there is no Eq/Ord, so it
+// must be a compile error rather than broken C. (Reached only after the
+// String-eq and enum-eq paths have been ruled out.)
+fn compareNeedsTrait(c: inout Comp, op: I64, lhs: U64) -> Bool {
+    if op < 50 {
+        return false
+    }
+    if op > 55 {
+        return false
+    }
+    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    if lt.kind == 3 {
+        return true
+    }
+    if lt.kind == 2 {
+        if isEnumName(c: inout c, start: lt.nameStart, len: lt.nameLen) {
+            return false
+        }
+        return true
+    }
+    return false
+}
+
+// Emit one operand of an enum tag comparison: a variant construction becomes
+// its tag index literal; any other enum value becomes `(expr).tag`.
+fn emitEnumOperand(c: inout Comp, id: U64, enStart: U64, enLen: U64) {
+    val e: Expr = c.exprs[id]
+    match e {
+        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
+            if isEnum {
+                writeU64(n: variantIndex(c: inout c, enumStart: enStart, enumLen: enLen, variantStart: variantStart, variantLen: variantLen))
+                return
+            }
+        }
+        _ => {}
+    }
+    write(s: "(")
+    genExpr(c: inout c, id: id)
+    write(s: ").tag")
+}
+
+// Emit an enum `==`/`!=` as a tag comparison. Resolves the enum from whichever
+// operand is a value of that enum. PROVISIONAL: only all-nullary enums are
+// allowed; a payload-bearing enum emits an undeclared identifier so the C
+// compile fails loudly (structural Eq awaits @[Eq] — never compare blind).
+fn emitEnumTagCmp(c: inout Comp, lhs: U64, rhs: U64, op: I64, outer: Bool) {
+    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    mut val enStart: U64 = 0
+    mut val enLen: U64 = 0
+    if lt.kind == 2 {
+        enStart = lt.nameStart
+        enLen = lt.nameLen
+    } else {
+        val rt: TypeInfo = exprType(c: inout c, id: rhs)
+        enStart = rt.nameStart
+        enLen = rt.nameLen
+    }
+    if isAllNullary(c: inout c, start: enStart, len: enLen) {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "enum == needs structural Eq for payload variants (only all-nullary enums compare by tag)")
+        return
+    }
+    if outer {
+        write(s: "(")
+    }
+    emitEnumOperand(c: inout c, id: lhs, enStart: enStart, enLen: enLen)
+    if op == 51 {
+        write(s: " != ")
+    } else {
+        write(s: " == ")
+    }
+    emitEnumOperand(c: inout c, id: rhs, enStart: enStart, enLen: enLen)
+    if outer {
+        write(s: ")")
+    }
+}
+
+// Emit an expression in condition position. A top-level binary drops its outer
+// parens (the `if (...)` / `while (...)` already supplies them), which avoids
+// the `-Wparentheses-equality` warning on `if ((a == b))`. String/enum equality
+// have their own lowerings handled here too.
+fn genCond(c: inout Comp, id: U64) {
+    val e: Expr = c.exprs[id]
+    match e {
+        Expr.Binary { val op, val lhs, val rhs } => {
+            if isStringEq(c: inout c, op: op, lhs: lhs) {
+                genExpr(c: inout c, id: id)
+            } else {
+                if isEnumEq(c: inout c, op: op, lhs: lhs) {
+                    emitEnumTagCmp(c: inout c, lhs: lhs, rhs: rhs, op: op, outer: false)
+                } else {
+                    if compareNeedsTrait(c: inout c, op: op, lhs: lhs) {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "comparison needs Eq/Ord; not available for a struct or array")
+                    } else {
+                        genExpr(c: inout c, id: lhs)
+                        write(s: binOpStr(op: op))
+                        genExpr(c: inout c, id: rhs)
+                    }
+                }
+            }
+        }
+        _ => { genExpr(c: inout c, id: id) }
+    }
+}
+
+fn genStmt(c: inout Comp, id: U64) {
+    val s: Stmt = c.stmts[id]
+    match s {
+        Stmt.Let { val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init } => {
+            checkLitSpan(c: inout c, id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray)
+            write(s: "    ")
+            genCTypeOf(c: inout c, tyRef: ty, fallStart: tyStart, fallLen: tyLen, isArray: tyIsArray)
+            write(s: " ")
+            writeSpan(c: inout c, start: nameStart, len: nameLen)
+            write(s: " = ")
+            if tyIsArray {
+                genArrayValue(c: inout c, exprId: init, elemStart: tyStart, elemLen: tyLen)
+            } else {
+                if mutable {
+                    genCopyValue(c: inout c, exprId: init, tyRef: ty, fallStart: tyStart, fallLen: tyLen, isArray: false)
+                } else {
+                    genExpr(c: inout c, id: init)
+                }
+            }
+            write(s: ";\n")
+            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable)
+        }
+        Stmt.Assign { val op, val target, val value } => {
+            val te: Expr = c.exprs[target]
+            match te {
+                Expr.Index { val base, val index } => {
+                    // a[i] = v / a[i] OP= v -> bounds-checked PlewArray_E_set.
+                    // The array binding must be a mutable place (mutating an
+                    // element is a mutation of the array value).
+                    if placeIsMutable(c: inout c, id: base) {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "cannot assign to an element of an immutable binding; declare it with `mut val`")
+                        return
+                    }
+                    val bt: TypeInfo = exprType(c: inout c, id: base)
+                    if bt.kind == 3 {
+                        checkLitSpan(c: inout c, id: value, tyStart: bt.nameStart, tyLen: bt.nameLen, isArray: false)
+                    }
+                    write(s: "    PlewArray_")
+                    writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
+                    write(s: "_set(&(")
+                    genExpr(c: inout c, id: base)
+                    write(s: "), (long long)(")
+                    genExpr(c: inout c, id: index)
+                    write(s: "), ")
+                    if op == 49 {
+                        genExpr(c: inout c, id: value)
+                    } else {
+                        // `a[i] OP= v` -> set(a, i, get(a, i) OP v). Arithmetic
+                        // is overflow-checked, `/=`/`%=` route through the checked
+                        // plew_div/plew_mod (zero divisor / INT64_MIN -1), same as
+                        // `a[i] = a[i] OP v`.
+                        val cbin: I64 = compoundCheckedBin(op: op)
+                        val elemInt: Bool = isIntType(c: inout c, start: bt.nameStart, len: bt.nameLen)
+                        if isCompoundDiv(op: op) {
+                            write(s: compoundDivFn(op: op))
+                            genArrayGet(c: inout c, base: base, index: index, elemStart: bt.nameStart, elemLen: bt.nameLen)
+                            write(s: ", ")
+                            genExpr(c: inout c, id: value)
+                            write(s: ")")
+                        } else {
+                            mut val checkedElem: Bool = false
+                            if cbin != 0 {
+                                if elemInt {
+                                    checkedElem = true
+                                }
+                            }
+                            if checkedElem {
+                                write(s: "({ ")
+                                genCElem(c: inout c, start: bt.nameStart, len: bt.nameLen)
+                                write(s: " __ov; if (")
+                                write(s: overflowBuiltin(op: cbin))
+                                write(s: "((")
+                                genArrayGet(c: inout c, base: base, index: index, elemStart: bt.nameStart, elemLen: bt.nameLen)
+                                write(s: "), (")
+                                genExpr(c: inout c, id: value)
+                                write(s: "), &__ov)) plew_panic((PlewString){\"integer overflow\", 16}); __ov; })")
+                            } else {
+                                genArrayGet(c: inout c, base: base, index: index, elemStart: bt.nameStart, elemLen: bt.nameLen)
+                                write(s: assignToBinStr(op: op))
+                                genExpr(c: inout c, id: value)
+                            }
+                        }
+                    }
+                    write(s: ");\n")
+                }
+                _ => {
+                    // Acceptance soundness: the target must be a mutable place.
+                    // A plain `val` binding is immutable (only `mut val` locals /
+                    // `inout` params assign); a `base.field` target additionally
+                    // needs the field declared `mut val` (composite mutability).
+                    if placeIsMutable(c: inout c, id: target) {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "cannot assign to an immutable place; the binding and field must be declared `mut val`")
+                        return
+                    }
+                    val ctt: TypeInfo = exprType(c: inout c, id: target)
+                    if ctt.kind == 3 {
+                        checkLitArray(c: inout c, id: value, elemStart: ctt.nameStart, elemLen: ctt.nameLen)
+                    } else {
+                        checkLitTi(c: inout c, id: value, ti: ctt)
+                    }
+                    write(s: "    ")
+                    genExpr(c: inout c, id: target)
+                    if isCompoundDiv(op: op) {
+                        // `x /= v` / `x %= v` -> x = checked(x / v): zero divisor
+                        // and signed INT_MIN/-1 panic, like `x = x / v`.
+                        write(s: " = ")
+                        val dt: TypeInfo = exprType(c: inout c, id: target)
+                        if dt.kind == 0 {
+                            if isIntType(c: inout c, start: dt.nameStart, len: dt.nameLen) {
+                                genCheckedDiv(c: inout c, lhs: target, rhs: value, tyStart: dt.nameStart, tyLen: dt.nameLen, isMod: op == 71)
+                            } else {
+                                write(s: compoundDivFn(op: op))
+                                genExpr(c: inout c, id: target)
+                                write(s: ", ")
+                                genExpr(c: inout c, id: value)
+                                write(s: ")")
+                            }
+                        } else {
+                            write(s: compoundDivFn(op: op))
+                            genExpr(c: inout c, id: target)
+                            write(s: ", ")
+                            genExpr(c: inout c, id: value)
+                            write(s: ")")
+                        }
+                    } else {
+                        val tt: TypeInfo = exprType(c: inout c, id: target)
+                        val cbin: I64 = compoundCheckedBin(op: op)
+                        mut val checked: Bool = false
+                        if cbin != 0 {
+                            if tt.kind == 0 {
+                                if isIntType(c: inout c, start: tt.nameStart, len: tt.nameLen) {
+                                    checked = true
+                                }
+                            }
+                        }
+                        if checked {
+                            // `x OP= v` -> `x = checked(x OP v)`. The place has no
+                            // side effects in this subset, so the re-evaluation is
+                            // observationally identical (hidden cost only).
+                            write(s: " = ")
+                            genCheckedArith(c: inout c, op: cbin, lhs: target, rhs: value, tyStart: tt.nameStart, tyLen: tt.nameLen)
+                        } else {
+                            write(s: assignOpStr(op: op))
+                            if op == 49 {
+                                genCopyValue(c: inout c, exprId: value, tyRef: tt.ref, fallStart: tt.nameStart, fallLen: tt.nameLen, isArray: tt.kind == 3)
+                            } else {
+                                genExpr(c: inout c, id: value)
+                            }
+                        }
+                    }
+                    write(s: ";\n")
+                }
+            }
+        }
+        Stmt.Print { val expr, val offset } => {
+            if c.impPrint {
+                // print is a placeholder I/O builtin that accepts any integer; its
+                // literal arg defaults to I64 (a documented shim, not spec surface).
+                checkLitCtx(c: inout c, id: expr, eKind: 1, eBits: 64, eSgn: true)
+                write(s: "    printf(\"%lld\\n\", (long long)(")
+                genExpr(c: inout c, id: expr)
+                write(s: "));\n")
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "print is not ambient; import it from @Std/Io")
+            }
+        }
+        Stmt.ExprStmt { val expr } => {
+            checkLitCtx(c: inout c, id: expr, eKind: 0, eBits: 0, eSgn: false)
+            write(s: "    ")
+            genExpr(c: inout c, id: expr)
+            write(s: ";\n")
+        }
+        Stmt.Return { val value, val hasValue } => {
+            if c.curIsMain {
+                write(s: "    return 0;\n")
+            } else {
+                if c.curRetVoid {
+                    write(s: "    return;\n")
+                } else {
+                    if hasValue {
+                        checkLitSpan(c: inout c, id: value, tyStart: c.curRetStart, tyLen: c.curRetLen, isArray: c.curRetIsArray)
+                    }
+                    write(s: "    return ")
+                    if hasValue {
+                        // value semantics: returning a place array/struct hands
+                        // back an independent copy (else the caller could mutate
+                        // the callee's source, e.g. `return self.items`).
+                        genCopyValue(c: inout c, exprId: value, tyRef: c.curRetTy, fallStart: c.curRetStart, fallLen: c.curRetLen, isArray: c.curRetIsArray)
+                    } else {
+                        write(s: "0")
+                    }
+                    write(s: ";\n")
+                }
+            }
+        }
+        Stmt.If { val cond, val thenBlk, val elseBlk, val hasElse } => {
+            checkLitCtx(c: inout c, id: cond, eKind: 0, eBits: 0, eSgn: false)
+            write(s: "    if (")
+            genCond(c: inout c, id: cond)
+            write(s: ") {\n")
+            genBlock(c: inout c, id: thenBlk)
+            write(s: "    }\n")
+            if hasElse {
+                write(s: "    else {\n")
+                genBlock(c: inout c, id: elseBlk)
+                write(s: "    }\n")
+            }
+        }
+        Stmt.While { val cond, val body } => {
+            checkLitCtx(c: inout c, id: cond, eKind: 0, eBits: 0, eSgn: false)
+            write(s: "    while (")
+            genCond(c: inout c, id: cond)
+            write(s: ") {\n")
+            genBlock(c: inout c, id: body)
+            write(s: "    }\n")
+        }
+        Stmt.For { val varStart, val varLen, val isRange, val inclusive, val iter, val rangeHi, val body } => {
+            if isRange {
+                checkArithNoCtx(c: inout c, lhs: iter, rhs: rangeHi)
+            }
+            val t: U64 = c.tmp
+            c.tmp = c.tmp + 1
+            if isRange {
+                // for (long long var = lo; var (< | <=) __fe; var++) { body }
+                write(s: "    {\n")
+                write(s: "    long long __fe")
+                writeU64(n: t)
+                write(s: " = ")
+                genExpr(c: inout c, id: rangeHi)
+                write(s: ";\n")
+                write(s: "    for (long long ")
+                writeSpan(c: inout c, start: varStart, len: varLen)
+                write(s: " = ")
+                genExpr(c: inout c, id: iter)
+                write(s: "; ")
+                writeSpan(c: inout c, start: varStart, len: varLen)
+                if inclusive {
+                    write(s: " <= __fe")
+                } else {
+                    write(s: " < __fe")
+                }
+                writeU64(n: t)
+                write(s: "; ")
+                writeSpan(c: inout c, start: varStart, len: varLen)
+                write(s: "++) {\n")
+                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false)
+                genBlock(c: inout c, id: body)
+                write(s: "    }\n    }\n")
+            } else {
+                // walk an array by index, binding `var` to each element
+                val et: TypeInfo = exprType(c: inout c, id: iter)
+                write(s: "    {\n")
+                write(s: "    ")
+                wPA(c: inout c, elemStart: et.nameStart, elemLen: et.nameLen)
+                write(s: " __fa")
+                writeU64(n: t)
+                write(s: " = ")
+                genExpr(c: inout c, id: iter)
+                write(s: ";\n")
+                write(s: "    for (long long __fi")
+                writeU64(n: t)
+                write(s: " = 0; __fi")
+                writeU64(n: t)
+                write(s: " < __fa")
+                writeU64(n: t)
+                write(s: ".len; __fi")
+                writeU64(n: t)
+                write(s: "++) {\n")
+                write(s: "        ")
+                genCElem(c: inout c, start: et.nameStart, len: et.nameLen)
+                write(s: " ")
+                writeSpan(c: inout c, start: varStart, len: varLen)
+                write(s: " = ")
+                wPA(c: inout c, elemStart: et.nameStart, elemLen: et.nameLen)
+                write(s: "_get(__fa")
+                writeU64(n: t)
+                write(s: ", __fi")
+                writeU64(n: t)
+                write(s: ");\n")
+                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false)
+                genBlock(c: inout c, id: body)
+                write(s: "    }\n    }\n")
+            }
+        }
+        Stmt.Panic { val msg, val offset } => {
+            // diverging: plew_panic is noreturn (writes the message + exit(1)).
+            write(s: "    plew_panic(")
+            genExpr(c: inout c, id: msg)
+            write(s: ");\n")
+        }
+        Stmt.Give { val value } => {
+            // assign the active value-position block's result temp (set by the
+            // enclosing IfExpr/MatchExpr lowering).
+            if c.curGiveTmp != 0 {
+                write(s: "    __r")
+                writeU64(n: c.curGiveTmp - 1)
+                write(s: " = (")
+                genExpr(c: inout c, id: value)
+                write(s: ");\n")
+            }
+        }
+        Stmt.Break => {
+            write(s: "    break;\n")
+        }
+        Stmt.Continue => {
+            write(s: "    continue;\n")
+        }
+        Stmt.Match { val scrut, val arms } => {
+            if matchExhaustive(c: inout c, arms: arms) {
+            } else {
+                // non-exhaustive match -> undeclared identifier so the C compile
+                // fails loudly (spec: match must be exhaustive).
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
+                return
+            }
+            val t: U64 = c.tmp
+            c.tmp = c.tmp + 1
+            // a generic enum scrutinee (`Optional[I32]`) lowers its temp to the
+            // mangled C name and substitutes bind field types.
+            val scrutRef: U64 = exprType(c: inout c, id: scrut).ref
+            val genericMatch: Bool = isGenericEnumInst(c: inout c, ref: scrutRef)
+            // enum type for the scrutinee temp = the enum named by the first
+            // non-wildcard arm's pattern.
+            mut val enumStart: U64 = 0
+            mut val enumLen: U64 = 0
+            mut val hasWildcard: Bool = false
+            mut val q: U64 = 0
+            while q < arms.count {
+                val aq: MatchArm = arms[q]
+                if aq.isWildcard {
+                    hasWildcard = true
+                } else {
+                    if enumLen == 0 {
+                        enumStart = aq.enumStart
+                        enumLen = aq.enumLen
+                    }
+                }
+                q += 1
+            }
+            write(s: "    {\n")
+            write(s: "    ")
+            if genericMatch {
+                emitMangle(c: inout c, ref: scrutRef)
+            } else {
+                writeSpan(c: inout c, start: enumStart, len: enumLen)
+            }
+            write(s: " _m")
+            writeU64(n: t)
+            write(s: " = ")
+            genExpr(c: inout c, id: scrut)
+            write(s: ";\n")
+            mut val i: U64 = 0
+            mut val firstCond: Bool = true
+            while i < arms.count {
+                val a: MatchArm = arms[i]
+                if a.isWildcard {
+                    write(s: "    else {\n")
+                    genBlock(c: inout c, id: a.body)
+                    write(s: "    }\n")
+                } else {
+                    if firstCond {
+                        write(s: "    if (_m")
+                        firstCond = false
+                    } else {
+                        write(s: "    else if (_m")
+                    }
+                    writeU64(n: t)
+                    write(s: ".tag == ")
+                    writeU64(n: variantIndex(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen))
+                    write(s: ") {\n")
+                    val binds: Array[Bind] = a.binds
+                    mut val bi: U64 = 0
+                    while bi < binds.count {
+                        val bd: Bind = binds[bi]
+                        write(s: "        ")
+                        if genericMatch {
+                            genBindTypeInst(c: inout c, instRef: scrutRef, variantStart: a.variantStart, variantLen: a.variantLen, bindStart: bd.fieldStart, bindLen: bd.fieldLen)
+                        } else {
+                            genBindType(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, bindStart: bd.fieldStart, bindLen: bd.fieldLen)
+                        }
+                        write(s: " ")
+                        writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
+                        write(s: " = _m")
+                        writeU64(n: t)
+                        write(s: ".data.")
+                        writeSpan(c: inout c, start: a.variantStart, len: a.variantLen)
+                        write(s: ".")
+                        writeSpan(c: inout c, start: bd.fieldStart, len: bd.fieldLen)
+                        write(s: ";\n")
+                        // mark used so an unreferenced bind doesn't warn
+                        write(s: "        (void)")
+                        writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
+                        write(s: ";\n")
+                        if genericMatch {
+                            val bti: TypeInfo = genericEnumFieldTypeInfo(c: inout c, instRef: scrutRef, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                            addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false)
+                        } else {
+                            addBindLocal(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
+                        }
+                        bi += 1
+                    }
+                    genBlock(c: inout c, id: a.body)
+                    write(s: "    }\n")
+                }
+                i += 1
+            }
+            // exhaustive match without a wildcard: the final fall-through is
+            // unreachable (so a value-returning function does not "fall off").
+            if hasWildcard {
+            } else {
+                write(s: "    else { __builtin_unreachable(); }\n")
+            }
+            write(s: "    }\n")
+        }
+    }
+}
+
+fn genBlock(c: inout Comp, id: U64) {
+    val b: Block = c.blocks[id]
+    val stmts: Array[U64] = b.stmts
+    mut val i: U64 = 0
+    while i < stmts.count {
+        genStmt(c: inout c, id: stmts[i])
+        i += 1
+    }
+}
+

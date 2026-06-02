@@ -1,0 +1,702 @@
+// ---- generic monomorphization (G2a: structs) ----
+//
+// A generic struct `Box[T]` is a template: it is skipped in the normal struct
+// emission and instead emitted once per concrete instantiation (`Box_I32`,
+// `Box_String`, ...) with the type parameters substituted in field types.
+// Instantiations are discovered from use-site TypeRefs after parsing.
+
+// Index in c.structs of a generic struct named (nameStart,nameLen), or
+// c.structs.count if there is no such generic struct.
+fn genericStructIndex(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
+    mut val i: U64 = 0
+    while i < c.structs.count {
+        val s: StructDef = c.structs[i]
+        if s.typeParams.count > 0 {
+            if spansEqual(c: inout c, aStart: s.nameStart, aLen: s.nameLen, bStart: nameStart, bLen: nameLen) {
+                return i
+            }
+        }
+        i += 1
+    }
+    return c.structs.count
+}
+
+// Index in c.enums of a generic enum named (nameStart,nameLen), or c.enums.count
+// if there is no such generic enum.
+fn genericEnumIndex(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
+    mut val i: U64 = 0
+    while i < c.enums.count {
+        val e: EnumDef = c.enums[i]
+        if e.typeParams.count > 0 {
+            if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: nameStart, bLen: nameLen) {
+                return i
+            }
+        }
+        i += 1
+    }
+    return c.enums.count
+}
+
+// Is `ref` a concrete generic instantiation (head names a generic struct OR
+// enum and it carries type arguments)?
+fn isGenericInst(c: inout Comp, ref: U64) -> Bool {
+    if ref >= c.types.count {
+        return false
+    }
+    val t: TypeRef = c.types[ref]
+    if t.args.count == 0 {
+        return false
+    }
+    if genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen) < c.structs.count {
+        return true
+    }
+    return genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen) < c.enums.count
+}
+
+// Is `ref` a function type (head `fn`, args = [return, params...])?
+fn isFnType(c: inout Comp, ref: U64) -> Bool {
+    if ref >= c.types.count {
+        return false
+    }
+    val t: TypeRef = c.types[ref]
+    return rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "fn")
+}
+
+// Is `ref` a `Ref[T]` instantiation? `Ref` is a blessed primitive (a shared
+// mutable heap box), lowered to a C `T*` — not a user struct/enum.
+fn isRefInst(c: inout Comp, ref: U64) -> Bool {
+    if ref >= c.types.count {
+        return false
+    }
+    val t: TypeRef = c.types[ref]
+    if t.args.count != 1 {
+        return false
+    }
+    return rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref")
+}
+
+// Is `ref` a concrete generic *enum* instantiation specifically?
+fn isGenericEnumInst(c: inout Comp, ref: U64) -> Bool {
+    if ref >= c.types.count {
+        return false
+    }
+    val t: TypeRef = c.types[ref]
+    if t.args.count == 0 {
+        return false
+    }
+    return genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen) < c.enums.count
+}
+
+// Structural equality of two TypeRefs (head span + args, recursively).
+fn typeRefEq(c: inout Comp, a: U64, b: U64) -> Bool {
+    if a == b {
+        return true
+    }
+    val ta: TypeRef = c.types[a]
+    val tb: TypeRef = c.types[b]
+    if spansEqual(c: inout c, aStart: ta.nameStart, aLen: ta.nameLen, bStart: tb.nameStart, bLen: tb.nameLen) {
+    } else {
+        return false
+    }
+    if ta.args.count != tb.args.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < ta.args.count {
+        if typeRefEq(c: inout c, a: ta.args[i], b: tb.args[i]) {
+        } else {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// Write the mangled C name for a TypeRef: head name with each type argument
+// appended as `_<arg-mangle>` (recursively). `Box[I32]` -> `Box_I32`, a bare
+// `I32` -> `I32`, `Box[Box[I32]]` -> `Box_Box_I32`. Type parameters are resolved
+// under the active body env (so `Box[T]` with T=I32 mangles to `Box_I32`).
+fn emitMangle(c: inout Comp, ref: U64) {
+    val t: TypeRef = c.types[resolveTy(c: inout c, tyRef: ref)]
+    writeSpan(c: inout c, start: t.nameStart, len: t.nameLen)
+    mut val i: U64 = 0
+    while i < t.args.count {
+        write(s: "_")
+        emitMangle(c: inout c, ref: t.args[i])
+        i += 1
+    }
+}
+
+// Emit the C type for a concrete TypeRef (type parameters resolved via the env).
+fn emitConcreteCType(c: inout Comp, ref: U64) {
+    val r: U64 = resolveTy(c: inout c, tyRef: ref)
+    val t: TypeRef = c.types[r]
+    if t.args.count == 0 {
+        genCElem(c: inout c, start: t.nameStart, len: t.nameLen)
+        return
+    }
+    // Array keeps the legacy `PlewArray_<elem>` C type (generic-arg arrays are
+    // deferred; the element mangle is its head name).
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+        write(s: "PlewArray_")
+        emitMangle(c: inout c, ref: t.args[0])
+        return
+    }
+    // Ref[T] is a shared mutable heap box -> a C pointer to T.
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref") {
+        emitConcreteCType(c: inout c, ref: t.args[0])
+        write(s: "*")
+        return
+    }
+    // a function type -> its function-pointer typedef name.
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "fn") {
+        emitMangle(c: inout c, ref: r)
+        return
+    }
+    // generic struct instantiation -> mangled C struct name.
+    emitMangle(c: inout c, ref: r)
+}
+
+// Emit the C type for a generic struct's field, substituting any type parameter
+// (`params[i]`) with the instantiation's concrete argument (`args[i]`). G2a:
+// a field type is either a bare type parameter or a fully-concrete type.
+fn emitFieldCType(c: inout Comp, ref: U64, params: Array[Bind], args: Array[U64]) {
+    val t: TypeRef = c.types[ref]
+    mut val pi: U64 = 0
+    while pi < params.count {
+        val p: Bind = params[pi]
+        if spansEqual(c: inout c, aStart: t.nameStart, aLen: t.nameLen, bStart: p.nameStart, bLen: p.nameLen) {
+            emitConcreteCType(c: inout c, ref: args[pi])
+            return
+        }
+        pi += 1
+    }
+    emitConcreteCType(c: inout c, ref: ref)
+}
+
+// Resolve a TypeRef under the active body-substitution env: a bare type
+// parameter (`T`) maps to its concrete argument; everything else is unchanged.
+// (Nested substitution like `Optional[T]` is deferred.)
+fn resolveTy(c: inout Comp, tyRef: U64) -> U64 {
+    if tyRef >= c.types.count {
+        return tyRef
+    }
+    val t: TypeRef = c.types[tyRef]
+    if t.args.count == 0 {
+        mut val i: U64 = 0
+        while i < c.curTypeParams.count {
+            val p: Bind = c.curTypeParams[i]
+            if spansEqual(c: inout c, aStart: t.nameStart, aLen: t.nameLen, bStart: p.nameStart, bLen: p.nameLen) {
+                return c.curTypeArgs[i]
+            }
+            i += 1
+        }
+    }
+    return tyRef
+}
+
+// Use-site C type emission: a type parameter resolves via the body env, a
+// generic instantiation lowers to its mangled name; else the legacy path.
+fn genCTypeOf(c: inout Comp, tyRef: U64, fallStart: U64, fallLen: U64, isArray: Bool) {
+    if isArray {
+        genCTypeRef(c: inout c, start: fallStart, len: fallLen, isArray: true)
+        return
+    }
+    val rt: U64 = resolveTy(c: inout c, tyRef: tyRef)
+    if rt != tyRef {
+        emitConcreteCType(c: inout c, ref: rt)
+        return
+    }
+    if isGenericInst(c: inout c, ref: tyRef) {
+        emitConcreteCType(c: inout c, ref: tyRef)
+        return
+    }
+    if isRefInst(c: inout c, ref: tyRef) {
+        emitConcreteCType(c: inout c, ref: tyRef)
+        return
+    }
+    if isFnType(c: inout c, ref: tyRef) {
+        emitConcreteCType(c: inout c, ref: tyRef)
+        return
+    }
+    genCTypeRef(c: inout c, start: fallStart, len: fallLen, isArray: false)
+}
+
+// Is (start,len) the name of a generic type parameter of some struct/enum/fn?
+// (Used to tell a template type like `Box[T]` from a concrete `Box[I32]`.)
+fn isTypeParamName(c: inout Comp, start: U64, len: U64) -> Bool {
+    mut val si: U64 = 0
+    while si < c.structs.count {
+        val tp: Array[Bind] = c.structs[si].typeParams
+        mut val k: U64 = 0
+        while k < tp.count {
+            if spansEqual(c: inout c, aStart: tp[k].nameStart, aLen: tp[k].nameLen, bStart: start, bLen: len) {
+                return true
+            }
+            k += 1
+        }
+        si += 1
+    }
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val tp2: Array[Bind] = c.enums[ei].typeParams
+        mut val k2: U64 = 0
+        while k2 < tp2.count {
+            if spansEqual(c: inout c, aStart: tp2[k2].nameStart, aLen: tp2[k2].nameLen, bStart: start, bLen: len) {
+                return true
+            }
+            k2 += 1
+        }
+        ei += 1
+    }
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        val tp3: Array[Bind] = c.funcs[fi].typeParams
+        mut val k3: U64 = 0
+        while k3 < tp3.count {
+            if spansEqual(c: inout c, aStart: tp3[k3].nameStart, aLen: tp3[k3].nameLen, bStart: start, bLen: len) {
+                return true
+            }
+            k3 += 1
+        }
+        fi += 1
+    }
+    return false
+}
+
+// Is `ref` a fully-ground type (no type parameter anywhere in head or args)?
+fn tyRefIsGround(c: inout Comp, ref: U64) -> Bool {
+    if ref >= c.types.count {
+        return true
+    }
+    val t: TypeRef = c.types[ref]
+    if isTypeParamName(c: inout c, start: t.nameStart, len: t.nameLen) {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < t.args.count {
+        if tyRefIsGround(c: inout c, ref: t.args[i]) {
+        } else {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// Walk a use-site TypeRef, recording every concrete generic instantiation it
+// contains. Post-order (args before self) so a by-value nested instance is
+// emitted before the type that contains it; deduped structurally. A type that
+// still mentions a type parameter (a template like `Box[T]`) is not collected.
+// Register the element type of an Array reached via a type argument into
+// c.arrayElems (deduped by name span) so its PlewArray runtime is emitted.
+fn registerArrayElemRef(c: inout Comp, elemRef: U64) {
+    if elemRef >= c.types.count {
+        return
+    }
+    val e: TypeRef = c.types[elemRef]
+    mut val i: U64 = 0
+    while i < c.arrayElems.count {
+        val ae: Bind = c.arrayElems[i]
+        if spansEqual(c: inout c, aStart: ae.nameStart, aLen: ae.nameLen, bStart: e.nameStart, bLen: e.nameLen) {
+            return
+        }
+        i += 1
+    }
+    c.arrayElems.append(<Bind nameStart=e.nameStart nameLen=e.nameLen fieldStart=e.nameStart fieldLen=e.nameLen />)
+}
+
+fn scanType(c: inout Comp, ref: U64) {
+    if ref >= c.types.count {
+        return
+    }
+    val t: TypeRef = c.types[ref]
+    mut val i: U64 = 0
+    while i < t.args.count {
+        scanType(c: inout c, ref: t.args[i])
+        i += 1
+    }
+    // an `Array[E]` reached via a type argument (e.g. inside `Box[Array[I32]]`)
+    // still needs its `PlewArray_E` runtime emitted — register the element.
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+        if t.args.count == 1 {
+            registerArrayElemRef(c: inout c, elemRef: t.args[0])
+        }
+    }
+    // register a function type for its C typedef (deduped structurally).
+    if isFnType(c: inout c, ref: ref) {
+        mut val fj: U64 = 0
+        mut val seen: Bool = false
+        while fj < c.fnTypes.count {
+            if typeRefEq(c: inout c, a: c.fnTypes[fj], b: ref) {
+                seen = true
+            }
+            fj += 1
+        }
+        if seen {
+        } else {
+            c.fnTypes.append(ref)
+        }
+    }
+    if isGenericInst(c: inout c, ref: ref) {
+        if tyRefIsGround(c: inout c, ref: ref) {
+            mut val j: U64 = 0
+            while j < c.genInsts.count {
+                if typeRefEq(c: inout c, a: c.genInsts[j], b: ref) {
+                    return
+                }
+                j += 1
+            }
+            c.genInsts.append(ref)
+        }
+    }
+}
+
+// Discover all concrete generic instantiations from use sites (function params/
+// returns, non-generic struct/enum fields, let bindings, casts). G2 has no
+// generic functions yet, so every use-site type argument is concrete.
+fn collectGenInsts(c: inout Comp) {
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        val f: Func = c.funcs[fi]
+        // skip generic templates: their param/return types contain type
+        // parameters (not concrete), resolved per instantiation instead.
+        if f.typeParams.count > 0 {
+        } else {
+            if f.hasRet {
+                scanType(c: inout c, ref: f.retTy)
+            }
+            val ps: Array[Param] = f.params
+            mut val pi: U64 = 0
+            while pi < ps.count {
+                scanType(c: inout c, ref: ps[pi].ty)
+                pi += 1
+            }
+        }
+        fi += 1
+    }
+    mut val si: U64 = 0
+    while si < c.structs.count {
+        val s: StructDef = c.structs[si]
+        if s.typeParams.count == 0 {
+            val fs: Array[FieldDef] = s.fields
+            mut val k: U64 = 0
+            while k < fs.count {
+                scanType(c: inout c, ref: fs[k].ty)
+                k += 1
+            }
+        }
+        si += 1
+    }
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val e: EnumDef = c.enums[ei]
+        if e.typeParams.count == 0 {
+            val vs: Array[Variant] = e.variants
+            mut val vi: U64 = 0
+            while vi < vs.count {
+                val vfs: Array[FieldDef] = vs[vi].fields
+                mut val k: U64 = 0
+                while k < vfs.count {
+                    scanType(c: inout c, ref: vfs[k].ty)
+                    k += 1
+                }
+                vi += 1
+            }
+        }
+        ei += 1
+    }
+    mut val sti: U64 = 0
+    while sti < c.stmts.count {
+        match c.stmts[sti] {
+            Stmt.Let { mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, val ty, init: _ } => {
+                scanType(c: inout c, ref: ty)
+            }
+            _ => {}
+        }
+        sti += 1
+    }
+    mut val xi: U64 = 0
+    while xi < c.exprs.count {
+        match c.exprs[xi] {
+            Expr.Cast { val operand, val tyStart, val tyLen, val ty } => {
+                scanType(c: inout c, ref: ty)
+            }
+            Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
+                scanType(c: inout c, ref: ty)
+            }
+            _ => {}
+        }
+        xi += 1
+    }
+}
+
+// TypeInfo of a fully-concrete TypeRef (for literal-context checking and the
+// field/index/method dispatch). Generic instantiations report as kind-2 named
+// (the head span); nested generic field types are deferred (G2a).
+fn typeInfoOfRef(c: inout Comp, ref: U64) -> TypeInfo {
+    val t: TypeRef = c.types[ref]
+    if t.args.count == 0 {
+        return typeInfoOfName(c: inout c, start: t.nameStart, len: t.nameLen, isArray: false)
+    }
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+        val el: TypeRef = c.types[t.args[0]]
+        return typeInfoOfName(c: inout c, start: el.nameStart, len: el.nameLen, isArray: true)
+    }
+    return typeInfoOfName(c: inout c, start: t.nameStart, len: t.nameLen, isArray: false)
+}
+
+// TypeInfo of a type `tyRef` after substituting any type parameter (`params[i]`)
+// with the instantiation `instRef`'s concrete argument. Used to resolve a
+// generic method's parameter types at a call site.
+fn substTypeInfo(c: inout Comp, instRef: U64, params: Array[Bind], tyRef: U64) -> TypeInfo {
+    val t: TypeRef = c.types[tyRef]
+    mut val i: U64 = 0
+    while i < params.count {
+        val p: Bind = params[i]
+        if spansEqual(c: inout c, aStart: t.nameStart, aLen: t.nameLen, bStart: p.nameStart, bLen: p.nameLen) {
+            val inst: TypeRef = c.types[instRef]
+            if i < inst.args.count {
+                return typeInfoOfRef(c: inout c, ref: inst.args[i])
+            }
+        }
+        i += 1
+    }
+    return typeInfoOfRef(c: inout c, ref: tyRef)
+}
+
+// TypeInfo of a generic struct instantiation's field, substituting the type
+// parameter with the instantiation's concrete argument (`Box[I32]`.v -> I32).
+fn genericFieldTypeInfo(c: inout Comp, instRef: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
+    val t: TypeRef = c.types[instRef]
+    val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if si >= c.structs.count {
+        return scalarInfo()
+    }
+    val s: StructDef = c.structs[si]
+    val fields: Array[FieldDef] = s.fields
+    mut val i: U64 = 0
+    while i < fields.count {
+        val fd: FieldDef = fields[i]
+        if spansEqual(c: inout c, aStart: fd.nameStart, aLen: fd.nameLen, bStart: fieldStart, bLen: fieldLen) {
+            val ftr: TypeRef = c.types[fd.ty]
+            mut val pi: U64 = 0
+            while pi < s.typeParams.count {
+                val p: Bind = s.typeParams[pi]
+                if spansEqual(c: inout c, aStart: ftr.nameStart, aLen: ftr.nameLen, bStart: p.nameStart, bLen: p.nameLen) {
+                    return typeInfoOfRef(c: inout c, ref: t.args[pi])
+                }
+                pi += 1
+            }
+            return typeInfoOfRef(c: inout c, ref: fd.ty)
+        }
+        i += 1
+    }
+    return scalarInfo()
+}
+
+// TypeInfo of a generic enum instantiation's variant field, substituting the
+// type parameter with the instantiation's concrete argument.
+fn genericEnumFieldTypeInfo(c: inout Comp, instRef: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
+    val t: TypeRef = c.types[instRef]
+    val ei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if ei >= c.enums.count {
+        return scalarInfo()
+    }
+    val e: EnumDef = c.enums[ei]
+    val vars: Array[Variant] = e.variants
+    mut val vi: U64 = 0
+    while vi < vars.count {
+        val v: Variant = vars[vi]
+        if spansEqual(c: inout c, aStart: v.nameStart, aLen: v.nameLen, bStart: variantStart, bLen: variantLen) {
+            val fs: Array[FieldDef] = v.fields
+            mut val fi: U64 = 0
+            while fi < fs.count {
+                val fd: FieldDef = fs[fi]
+                if spansEqual(c: inout c, aStart: fd.nameStart, aLen: fd.nameLen, bStart: fieldStart, bLen: fieldLen) {
+                    val ftr: TypeRef = c.types[fd.ty]
+                    mut val pi: U64 = 0
+                    while pi < e.typeParams.count {
+                        val p: Bind = e.typeParams[pi]
+                        if spansEqual(c: inout c, aStart: ftr.nameStart, aLen: ftr.nameLen, bStart: p.nameStart, bLen: p.nameLen) {
+                            return typeInfoOfRef(c: inout c, ref: t.args[pi])
+                        }
+                        pi += 1
+                    }
+                    return typeInfoOfRef(c: inout c, ref: fd.ty)
+                }
+                fi += 1
+            }
+        }
+        vi += 1
+    }
+    return scalarInfo()
+}
+
+// Emit the C type of a match-bound field for a generic enum instantiation,
+// substituting the type parameter (mirrors genBindType with substitution).
+fn genBindTypeInst(c: inout Comp, instRef: U64, variantStart: U64, variantLen: U64, bindStart: U64, bindLen: U64) {
+    val ti: TypeInfo = genericEnumFieldTypeInfo(c: inout c, instRef: instRef, variantStart: variantStart, variantLen: variantLen, fieldStart: bindStart, fieldLen: bindLen)
+    genTypeInfoCType(c: inout c, ti: ti)
+}
+
+// `typedef <ret> (*<mangle>)(<params>);` for one function type.
+fn emitFnTypedef(c: inout Comp, fnRef: U64) {
+    val t: TypeRef = c.types[fnRef]
+    write(s: "typedef ")
+    if t.args.count > 0 {
+        emitConcreteCType(c: inout c, ref: t.args[0])
+    } else {
+        write(s: "void")
+    }
+    write(s: " (*")
+    emitMangle(c: inout c, ref: fnRef)
+    write(s: ")(")
+    if t.args.count <= 1 {
+        write(s: "void")
+    } else {
+        mut val i: U64 = 1
+        while i < t.args.count {
+            if i > 1 {
+                write(s: ", ")
+            }
+            emitConcreteCType(c: inout c, ref: t.args[i])
+            i += 1
+        }
+    }
+    write(s: ");\n")
+}
+
+// `typedef struct Box_I32 Box_I32;` for one instantiation.
+fn emitMonoForward(c: inout Comp, instRef: U64) {
+    write(s: "typedef struct ")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " ")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: ";\n")
+}
+
+// `struct Box_I32 { <field ctype> field; ... };` with type params substituted.
+fn emitMonoStruct(c: inout Comp, instRef: U64) {
+    val t: TypeRef = c.types[instRef]
+    val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if si >= c.structs.count {
+        return
+    }
+    val s: StructDef = c.structs[si]
+    write(s: "struct ")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " {\n")
+    val fields: Array[FieldDef] = s.fields
+    mut val i: U64 = 0
+    while i < fields.count {
+        val f: FieldDef = fields[i]
+        write(s: "    ")
+        emitFieldCType(c: inout c, ref: f.ty, params: s.typeParams, args: t.args)
+        write(s: " ")
+        writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+        write(s: ";\n")
+        i += 1
+    }
+    write(s: "};\n")
+}
+
+// `struct Optional_I32 { long long tag; union { ... } data; };` — a generic
+// enum instantiation, mirroring genEnumDef with type params substituted.
+fn emitMonoEnum(c: inout Comp, instRef: U64) {
+    val t: TypeRef = c.types[instRef]
+    val ei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if ei >= c.enums.count {
+        return
+    }
+    val e: EnumDef = c.enums[ei]
+    write(s: "struct ")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " {\n    long long tag;\n    union {\n")
+    val vars: Array[Variant] = e.variants
+    mut val vi: U64 = 0
+    while vi < vars.count {
+        val v: Variant = vars[vi]
+        write(s: "        struct {")
+        val fs: Array[FieldDef] = v.fields
+        if fs.count == 0 {
+            write(s: " char _u; ")
+        } else {
+            mut val fi: U64 = 0
+            while fi < fs.count {
+                val f: FieldDef = fs[fi]
+                write(s: " ")
+                emitFieldCType(c: inout c, ref: f.ty, params: e.typeParams, args: t.args)
+                write(s: " ")
+                writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                write(s: ";")
+                fi += 1
+            }
+            write(s: " ")
+        }
+        write(s: "} ")
+        writeSpan(c: inout c, start: v.nameStart, len: v.nameLen)
+        write(s: ";\n")
+        vi += 1
+    }
+    write(s: "    } data;\n};\n")
+}
+
+// Does generic method `f` belong to the receiver instantiation `instRef`?
+// (A method on `impl[T] Box[T]`: hasRecv, head name matches, and every type
+// parameter is bound by the receiver's args — first cut excludes methods with
+// their own extra type parameters.)
+fn methodMatchesInst(c: inout Comp, f: Func, instRef: U64) -> Bool {
+    if f.hasRecv {
+    } else {
+        return false
+    }
+    if f.typeParams.count == 0 {
+        return false
+    }
+    val inst: TypeRef = c.types[instRef]
+    if spansEqual(c: inout c, aStart: f.recvStart, aLen: f.recvLen, bStart: inst.nameStart, bLen: inst.nameLen) {
+    } else {
+        return false
+    }
+    return f.typeParams.count == inst.args.count
+}
+
+// Emit a generic method specialized for receiver instantiation `instRef`,
+// with the body-substitution env active (type params -> the receiver's args).
+// `proto` emits just the signature + `;`; otherwise the full definition.
+fn emitMonoMethod(c: inout Comp, fi: U64, instRef: U64, proto: Bool) {
+    val f: Func = c.funcs[fi]
+    val inst: TypeRef = c.types[instRef]
+    c.curRecvInstRef = instRef
+    c.curTypeParams = f.typeParams
+    c.curTypeArgs = inst.args
+    if proto {
+        genSignature(c: inout c, f: f)
+        write(s: ";\n")
+    } else {
+        genFunc(c: inout c, fi: fi)
+    }
+    val noParams: Array[Bind] = []
+    val noArgs: Array[U64] = []
+    c.curRecvInstRef = 0
+    c.curTypeParams = noParams
+    c.curTypeArgs = noArgs
+}
+
+// Emit prototypes (proto=true) or bodies (proto=false) for every generic
+// method, one per receiver instantiation in c.genInsts.
+fn emitMonoMethods(c: inout Comp, proto: Bool) {
+    mut val gi: U64 = 0
+    while gi < c.genInsts.count {
+        mut val mfi: U64 = 0
+        while mfi < c.funcs.count {
+            if methodMatchesInst(c: inout c, f: c.funcs[mfi], instRef: c.genInsts[gi]) {
+                emitMonoMethod(c: inout c, fi: mfi, instRef: c.genInsts[gi], proto: proto)
+            }
+            mfi += 1
+        }
+        gi += 1
+    }
+}
+

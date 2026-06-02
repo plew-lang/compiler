@@ -1,0 +1,584 @@
+// Index of the top-level function named (nameStart,nameLen), or -1 if none.
+// Names are unique (no overloading in this compiler), so the first match wins.
+// Returns `c.funcs.count` (one past the end) when there is no match — kept as a
+// U64 sentinel so callers never need a signed index (lossless-`as` discipline).
+fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.hasRecv {
+        } else {
+            if spansEqual(c: inout c, aStart: nameStart, aLen: nameLen, bStart: f.nameStart, bLen: f.nameLen) {
+                return i
+            }
+        }
+        i += 1
+    }
+    return c.funcs.count
+}
+
+// Index of the method named (nameStart,nameLen) on receiver type
+// (recvStart,recvLen), or `c.funcs.count` (one past the end) if none.
+fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> U64 {
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.hasRecv {
+            if spansEqual(c: inout c, aStart: nameStart, aLen: nameLen, bStart: f.nameStart, bLen: f.nameLen) {
+                if spansEqual(c: inout c, aStart: recvStart, aLen: recvLen, bStart: f.recvStart, bLen: f.recvLen) {
+                    return i
+                }
+            }
+        }
+        i += 1
+    }
+    return c.funcs.count
+}
+
+// Check call args against a parameter list: arg count matches and every arg
+// carries its parameter's label in declaration order (spec: labels required).
+fn paramsLabelsOk(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bool {
+    if args.count > params.count {
+        return false
+    }
+    // any params beyond the provided args must have a default (trailing-default
+    // omission). Without that, the arity mismatch is an error.
+    mut val r: U64 = args.count
+    while r < params.count {
+        if params[r].hasDefault {
+        } else {
+            return false
+        }
+        r += 1
+    }
+    mut val i: U64 = 0
+    while i < args.count {
+        val a: Arg = args[i]
+        val p: Param = params[i]
+        if p.noLabel {
+            // label-suppressed param: the argument must be positional (no label).
+            if a.hasLabel {
+                return false
+            }
+        } else {
+            if a.hasLabel {
+                if spansEqual(c: inout c, aStart: a.labelStart, aLen: a.labelLen, bStart: p.nameStart, bLen: p.nameLen) {
+                } else {
+                    return false
+                }
+            } else {
+                return false
+            }
+        }
+        i += 1
+    }
+    return true
+}
+
+// Acceptance soundness: spec requires every argument to carry its label, in
+// declaration order. Check a call against the callee's params. Calls that don't
+// resolve to a user function (I/O builtins, methods) return true here — they're
+// handled on their own paths and keep their provisional calling conventions.
+fn callLabelsOk(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
+    val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen)
+    if fi == c.funcs.count {
+        return true
+    }
+    val f: Func = c.funcs[fi]
+    return paramsLabelsOk(c: inout c, params: f.params, args: args)
+}
+
+// Does some arm cover the variant (variantStart,variantLen)? A wildcard arm
+// covers everything.
+fn armCovers(c: inout Comp, arms: Array[MatchArm], variantStart: U64, variantLen: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < arms.count {
+        val a: MatchArm = arms[i]
+        if a.isWildcard {
+            return true
+        }
+        if spansEqual(c: inout c, aStart: a.variantStart, aLen: a.variantLen, bStart: variantStart, bLen: variantLen) {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Acceptance soundness: spec requires match to be exhaustive (Rust-style). A
+// match is exhaustive iff it has a `_` wildcard, or every variant of the
+// scrutinee's enum is covered by some arm. (This compiler's match is always
+// over an enum, and has no `val x` catch-all arm, so those are the only cases.)
+fn matchExhaustive(c: inout Comp, arms: Array[MatchArm]) -> Bool {
+    mut val enumStart: U64 = 0
+    mut val enumLen: U64 = 0
+    mut val i: U64 = 0
+    while i < arms.count {
+        val a: MatchArm = arms[i]
+        if a.isWildcard {
+            return true
+        }
+        if enumLen == 0 {
+            enumStart = a.enumStart
+            enumLen = a.enumLen
+        }
+        i += 1
+    }
+    if enumLen == 0 {
+        return true
+    }
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val e: EnumDef = c.enums[ei]
+        if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: enumStart, bLen: enumLen) {
+            val vars: Array[Variant] = e.variants
+            mut val vi: U64 = 0
+            while vi < vars.count {
+                val v: Variant = vars[vi]
+                if armCovers(c: inout c, arms: arms, variantStart: v.nameStart, variantLen: v.nameLen) {
+                } else {
+                    return false
+                }
+                vi += 1
+            }
+            return true
+        }
+        ei += 1
+    }
+    return true
+}
+
+// Tag index of `Enum.Variant` (the variant's position in its enum declaration).
+fn variantIndex(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64) -> U64 {
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val e: EnumDef = c.enums[ei]
+        if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: enumStart, bLen: enumLen) {
+            val vars: Array[Variant] = e.variants
+            mut val vi: U64 = 0
+            while vi < vars.count {
+                val v: Variant = vars[vi]
+                if spansEqual(c: inout c, aStart: v.nameStart, aLen: v.nameLen, bStart: variantStart, bLen: variantLen) {
+                    return vi
+                }
+                vi += 1
+            }
+        }
+        ei += 1
+    }
+    return 0
+}
+
+// ---- lightweight type recovery (for monomorphization + .bytes dispatch) ----
+
+fn scalarInfo() -> TypeInfo {
+    return <TypeInfo kind=0 nameStart=0 nameLen=0 ref=0 />
+}
+
+fn typeInfoOfName(c: inout Comp, start: U64, len: U64, isArray: Bool) -> TypeInfo {
+    if isArray {
+        return <TypeInfo kind=3 nameStart=start nameLen=len ref=0 />
+    }
+    if len == 0 {
+        return scalarInfo()
+    }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "String") {
+        return <TypeInfo kind=1 nameStart=start nameLen=len ref=0 />
+    }
+    if isPrimType(c: inout c, start: start, len: len) {
+        // kind=0 (scalar) but carry the type name so the width is recoverable
+        // (e.g. for the lossless-`as` check). The C type stays 64-bit for now.
+        return <TypeInfo kind=0 nameStart=start nameLen=len ref=0 />
+    }
+    return <TypeInfo kind=2 nameStart=start nameLen=len ref=0 />
+}
+
+fn addLocal(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool) {
+    c.locals.append(<Local nameStart=nameStart nameLen=nameLen tyStart=tyStart tyLen=tyLen isArray=isArray ty=ty isInout=isInout isMut=isMut />)
+}
+
+// Whether the binding named (start,len) — most recent in scope — may be assigned
+// to: `mut val` locals and `inout` params. Unknown names default to assignable
+// (the C compile catches genuinely undeclared identifiers).
+fn localIsMutable(c: inout Comp, start: U64, len: U64) -> Bool {
+    if isSelfRef(c: inout c, start: start, len: len) {
+        // `self` is assignable only through an `inout fn` receiver.
+        return c.curSelfInout
+    }
+    mut val i: U64 = c.locals.count
+    while i > 0 {
+        i -= 1
+        val lo: Local = c.locals[i]
+        if spansEqual(c: inout c, aStart: lo.nameStart, aLen: lo.nameLen, bStart: start, bLen: len) {
+            if lo.isMut {
+                return true
+            }
+            return lo.isInout
+        }
+    }
+    return true
+}
+
+// Whether `name` refers to an `inout` parameter of the current function (so its
+// uses must be dereferenced as `(*name)`).
+fn isSelfRef(c: inout Comp, start: U64, len: U64) -> Bool {
+    if c.curHasRecv {
+        return rangeEquals(bytes: c.bytes, start: start, len: len, kw: "self")
+    }
+    return false
+}
+
+fn isInoutLocal(c: inout Comp, start: U64, len: U64) -> Bool {
+    if isSelfRef(c: inout c, start: start, len: len) {
+        // `inout fn` receivers are pointers, so a bare `self` is `(*self)`.
+        return c.curSelfInout
+    }
+    mut val i: U64 = c.locals.count
+    while i > 0 {
+        i -= 1
+        val lo: Local = c.locals[i]
+        if spansEqual(c: inout c, aStart: lo.nameStart, aLen: lo.nameLen, bStart: start, bLen: len) {
+            return lo.isInout
+        }
+    }
+    return false
+}
+
+// Type of field `fieldName` declared in struct `structName` (else scalar).
+fn fieldType(c: inout Comp, structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
+    mut val si: U64 = 0
+    while si < c.structs.count {
+        val s: StructDef = c.structs[si]
+        if spansEqual(c: inout c, aStart: s.nameStart, aLen: s.nameLen, bStart: structStart, bLen: structLen) {
+            val fs: Array[FieldDef] = s.fields
+            mut val fi: U64 = 0
+            while fi < fs.count {
+                val f: FieldDef = fs[fi]
+                if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: fieldStart, bLen: fieldLen) {
+                    return typeInfoOfName(c: inout c, start: f.tyStart, len: f.tyLen, isArray: f.tyIsArray)
+                }
+                fi += 1
+            }
+        }
+        si += 1
+    }
+    return scalarInfo()
+}
+
+// Whether a struct field is declared `mut val` (assignable). Unknown struct or
+// field defaults to true (don't reject what we can't resolve).
+fn fieldDeclaredMut(c: inout Comp, structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> Bool {
+    mut val si: U64 = 0
+    while si < c.structs.count {
+        val s: StructDef = c.structs[si]
+        if spansEqual(c: inout c, aStart: s.nameStart, aLen: s.nameLen, bStart: structStart, bLen: structLen) {
+            val fs: Array[FieldDef] = s.fields
+            mut val fi: U64 = 0
+            while fi < fs.count {
+                val f: FieldDef = fs[fi]
+                if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: fieldStart, bLen: fieldLen) {
+                    return f.isMut
+                }
+                fi += 1
+            }
+        }
+        si += 1
+    }
+    return true
+}
+
+// Whether an assignment target is a mutable *place* (spec: composite mutability).
+// A bare binding must be `mut val`/`inout`; a field access additionally needs the
+// field declared `mut val` and its base to be a mutable place; an index follows
+// its array binding. Unresolved cases default to mutable (the C compile still
+// catches genuinely undeclared names).
+fn placeIsMutable(c: inout Comp, id: U64) -> Bool {
+    val e: Expr = c.exprs[id]
+    match e {
+        Expr.Ident { val start, val len } => {
+            return localIsMutable(c: inout c, start: start, len: len)
+        }
+        Expr.Field { val base, val nameStart, val nameLen } => {
+            val bt: TypeInfo = exprType(c: inout c, id: base)
+            if bt.kind == 2 {
+                if fieldDeclaredMut(c: inout c, structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) {
+                    return placeIsMutable(c: inout c, id: base)
+                }
+                return false
+            }
+            return placeIsMutable(c: inout c, id: base)
+        }
+        Expr.Index { val base, val index } => {
+            return placeIsMutable(c: inout c, id: base)
+        }
+        Expr.Arrow { val base, val nameStart, val nameLen } => {
+            // a Ref's pointee is mutable even through a `val` Ref binding (spec:
+            // `->` is not gated by val/mut; sharing is the Ref's purpose).
+            return true
+        }
+        _ => { return true }
+    }
+}
+
+// Recover an expression's type. Only the cases plewc.pw exercises on the base
+// of a field/index/method are precise; everything else falls back to scalar.
+fn exprType(c: inout Comp, id: U64) -> TypeInfo {
+    val e: Expr = c.exprs[id]
+    match e {
+        Expr.Int { value: _, offset: _, isBool: _, val tyStart, val tyLen } => {
+            // a suffixed literal (`5U64`) carries its own type; otherwise the
+            // type comes from context and is recovered elsewhere.
+            if tyLen != 0 {
+                return typeInfoOfName(c: inout c, start: tyStart, len: tyLen, isArray: false)
+            }
+            return scalarInfo()
+        }
+        Expr.Str { val start, val len } => { return <TypeInfo kind=1 nameStart=0 nameLen=0 ref=0 /> }
+        Expr.Ident { val start, val len } => {
+            if isSelfRef(c: inout c, start: start, len: len) {
+                if c.curRecvInstRef != 0 {
+                    val rt: TypeRef = c.types[c.curRecvInstRef]
+                    return <TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=c.curRecvInstRef />
+                }
+                return typeInfoOfName(c: inout c, start: c.curRecvStart, len: c.curRecvLen, isArray: false)
+            }
+            mut val i: U64 = c.locals.count
+            while i > 0 {
+                i -= 1
+                val lo: Local = c.locals[i]
+                if spansEqual(c: inout c, aStart: lo.nameStart, aLen: lo.nameLen, bStart: start, bLen: len) {
+                    if isGenericInst(c: inout c, ref: lo.ty) {
+                        val lt: TypeRef = c.types[lo.ty]
+                        return <TypeInfo kind=2 nameStart=lt.nameStart nameLen=lt.nameLen ref=lo.ty />
+                    }
+                    if isRefInst(c: inout c, ref: lo.ty) {
+                        val lt2: TypeRef = c.types[lo.ty]
+                        return <TypeInfo kind=2 nameStart=lt2.nameStart nameLen=lt2.nameLen ref=lo.ty />
+                    }
+                    return typeInfoOfName(c: inout c, start: lo.tyStart, len: lo.tyLen, isArray: lo.isArray)
+                }
+            }
+            return scalarInfo()
+        }
+        Expr.Unary { val op, val operand } => {
+            // `-` / `~` preserve the operand's width; `!` is Bool (width-less).
+            if op == 57 { return exprType(c: inout c, id: operand) }
+            if op == 79 { return exprType(c: inout c, id: operand) }
+            return scalarInfo()
+        }
+        Expr.Binary { val op, val lhs, val rhs } => {
+            // Arithmetic (56-60) and bitwise/shift (74-78) take the left
+            // operand's width; comparisons (50-55) and logical (61,62) are Bool.
+            if op >= 56 {
+                if op <= 60 {
+                    return exprType(c: inout c, id: lhs)
+                }
+            }
+            if op >= 74 {
+                if op <= 78 {
+                    return exprType(c: inout c, id: lhs)
+                }
+            }
+            return scalarInfo()
+        }
+        Expr.Call { val nameStart, val nameLen, val args } => {
+            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readStdin") {
+                return <TypeInfo kind=1 nameStart=0 nameLen=0 ref=0 />
+            }
+            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readFile") {
+                return <TypeInfo kind=1 nameStart=0 nameLen=0 ref=0 />
+            }
+            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readFileBytes") {
+                return <TypeInfo kind=1 nameStart=0 nameLen=0 ref=0 />
+            }
+            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argAt") {
+                return <TypeInfo kind=1 nameStart=0 nameLen=0 ref=0 />
+            }
+            mut val fi: U64 = 0
+            while fi < c.funcs.count {
+                val f: Func = c.funcs[fi]
+                if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: nameStart, bLen: nameLen) {
+                    if f.hasRet {
+                        if isGenericInst(c: inout c, ref: f.retTy) {
+                            val rtr: TypeRef = c.types[f.retTy]
+                            return <TypeInfo kind=2 nameStart=rtr.nameStart nameLen=rtr.nameLen ref=f.retTy />
+                        }
+                        return typeInfoOfName(c: inout c, start: f.retStart, len: f.retLen, isArray: f.retIsArray)
+                    }
+                    return scalarInfo()
+                }
+                fi += 1
+            }
+            return scalarInfo()
+        }
+        Expr.Field { val base, val nameStart, val nameLen } => {
+            val bt: TypeInfo = exprType(c: inout c, id: base)
+            // a generic struct instantiation's field type is substituted.
+            if isGenericInst(c: inout c, ref: bt.ref) {
+                return genericFieldTypeInfo(c: inout c, instRef: bt.ref, fieldStart: nameStart, fieldLen: nameLen)
+            }
+            if bt.kind == 2 {
+                return fieldType(c: inout c, structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
+            }
+            return scalarInfo()
+        }
+        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
+            if isGenericInst(c: inout c, ref: ty) {
+                return <TypeInfo kind=2 nameStart=typeStart nameLen=typeLen ref=ty />
+            }
+            return <TypeInfo kind=2 nameStart=typeStart nameLen=typeLen ref=0 />
+        }
+        Expr.Array { val elems } => { return scalarInfo() }
+        Expr.Index { val base, val index } => {
+            val bt: TypeInfo = exprType(c: inout c, id: base)
+            if bt.kind == 3 {
+                return typeInfoOfName(c: inout c, start: bt.nameStart, len: bt.nameLen, isArray: false)
+            }
+            return scalarInfo()
+        }
+        Expr.Method { val recv, val nameStart, val nameLen, val args } => {
+            val rt: TypeInfo = exprType(c: inout c, id: recv)
+            if rt.kind == 2 {
+                val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen)
+                if mi == c.funcs.count {
+                    return scalarInfo()
+                }
+                val mf: Func = c.funcs[mi]
+                if mf.hasRet {
+                    return typeInfoOfName(c: inout c, start: mf.retStart, len: mf.retLen, isArray: mf.retIsArray)
+                }
+                return scalarInfo()
+            }
+            return scalarInfo()
+        }
+        Expr.Cast { val operand, val tyStart, val tyLen, ty: _ } => {
+            return typeInfoOfName(c: inout c, start: tyStart, len: tyLen, isArray: false)
+        }
+        Expr.MatchExpr { val scrut, val arms } => {
+            if arms.count > 0 {
+                return exprType(c: inout c, id: arms[0].body)
+            }
+            return scalarInfo()
+        }
+        Expr.IfExpr { val cond, val thenBlk, val elseBlk } => {
+            val g: U64 = blockGiveExpr(c: inout c, blkId: thenBlk)
+            if g < c.exprs.count {
+                return exprType(c: inout c, id: g)
+            }
+            return scalarInfo()
+        }
+        Expr.Coalesce { val opt, val deflt } => {
+            // result type = the Optional's element T = the default's type.
+            return exprType(c: inout c, id: deflt)
+        }
+        Expr.Try { val expr } => {
+            // result type = the Result's Ok payload T (args[0] of Result[T, E]).
+            val rt: TypeInfo = exprType(c: inout c, id: expr)
+            if isGenericInst(c: inout c, ref: rt.ref) {
+                val inst: TypeRef = c.types[rt.ref]
+                if inst.args.count > 0 {
+                    return typeInfoOfRef(c: inout c, ref: inst.args[0])
+                }
+            }
+            return scalarInfo()
+        }
+        Expr.Arrow { val base, val nameStart, val nameLen } => {
+            // pointee field type: base is Ref[T]; resolve T then T's field.
+            val bt: TypeInfo = exprType(c: inout c, id: base)
+            if isRefInst(c: inout c, ref: bt.ref) {
+                val inst: TypeRef = c.types[bt.ref]
+                val pt: TypeInfo = typeInfoOfRef(c: inout c, ref: inst.args[0])
+                if pt.kind == 2 {
+                    return fieldType(c: inout c, structStart: pt.nameStart, structLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
+                }
+            }
+            return scalarInfo()
+        }
+        Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
+            return scalarInfo()
+        }
+    }
+    return scalarInfo()
+}
+
+// The value expression of the last `give` in a block (the block's result), or
+// `c.exprs.count` (one past the end) if the block has no `give`. A U64 sentinel
+// keeps callers off signed indices. Used to infer a value-position `if`'s type.
+fn blockGiveExpr(c: inout Comp, blkId: U64) -> U64 {
+    val blk: Block = c.blocks[blkId]
+    val stmts: Array[U64] = blk.stmts
+    mut val i: U64 = 0
+    mut val found: U64 = c.exprs.count
+    while i < stmts.count {
+        val s: Stmt = c.stmts[stmts[i]]
+        match s {
+            Stmt.Give { val value } => { found = value }
+            _ => {}
+        }
+        i += 1
+    }
+    return found
+}
+
+// Register a match-bound field as an in-scope local with its declared type.
+// Register a match-bound field as an in-scope local. The field is found by
+// (fieldStart,fieldLen); the local is named (bindStart,bindLen) — equal for
+// punning, different for a `field: val name` rename.
+fn addBindLocal(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64, bindStart: U64, bindLen: U64) {
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val e: EnumDef = c.enums[ei]
+        if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: enumStart, bLen: enumLen) {
+            val vars: Array[Variant] = e.variants
+            mut val vi: U64 = 0
+            while vi < vars.count {
+                val v: Variant = vars[vi]
+                if spansEqual(c: inout c, aStart: v.nameStart, aLen: v.nameLen, bStart: variantStart, bLen: variantLen) {
+                    val fs: Array[FieldDef] = v.fields
+                    mut val fi: U64 = 0
+                    while fi < fs.count {
+                        val f: FieldDef = fs[fi]
+                        if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: fieldStart, bLen: fieldLen) {
+                            addLocal(c: inout c, nameStart: bindStart, nameLen: bindLen, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray, ty: f.ty, isInout: false, isMut: false)
+                            return
+                        }
+                        fi += 1
+                    }
+                }
+                vi += 1
+            }
+        }
+        ei += 1
+    }
+}
+
+// Emit the C type of a match-bound field (looked up in the enum declaration).
+fn genBindType(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64, bindStart: U64, bindLen: U64) {
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val e: EnumDef = c.enums[ei]
+        if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: enumStart, bLen: enumLen) {
+            val vars: Array[Variant] = e.variants
+            mut val vi: U64 = 0
+            while vi < vars.count {
+                val v: Variant = vars[vi]
+                if spansEqual(c: inout c, aStart: v.nameStart, aLen: v.nameLen, bStart: variantStart, bLen: variantLen) {
+                    val fs: Array[FieldDef] = v.fields
+                    mut val fi: U64 = 0
+                    while fi < fs.count {
+                        val f: FieldDef = fs[fi]
+                        if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: bindStart, bLen: bindLen) {
+                            genCTypeRef(c: inout c, start: f.tyStart, len: f.tyLen, isArray: f.tyIsArray)
+                            return
+                        }
+                        fi += 1
+                    }
+                }
+                vi += 1
+            }
+        }
+        ei += 1
+    }
+    write(s: "long long")
+}
+
