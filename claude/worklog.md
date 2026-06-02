@@ -26,10 +26,9 @@
 
 - ✅ **コンパイラ本体を分割**。`compiler/src/_.pw`（約3100行）→ root `_.pw`（234行・import＋part＋driver＋main）＋`Lexer.pw`/`Ast.pw`/`Parser.pw`/`Codegen.pw`。ブートストラップは root を渡すだけ（part 追従はコンパイラがやる）＝`part` のブートストラップ実地テストにもなっている。bootstrap.sh/test.sh は無変更。
 
-- ✅ **真の診断経路**。`compileError(msg)` ビルトイン（`plew_compile_error`＝stderr へ `plewc: error: …`＋`exit(1)`）。受理健全性の全チェック（import/ラベル/match/struct==/enum==）を sentinel から置換。`test.sh` の reject は plewc の終了コードで判定（clang 任せをやめた）。compileError はコンパイラ内部の ambient プリミティブ（import gate しない）。残：行番号（オフセット→行の付与）は未。
+- ✅ **真の診断経路＋行番号**。`compileError(msg)`／`compileErrorAt(line, msg)` ビルトイン（stderr へ `plewc: error: [line N: ]…`＋`exit(1)`）。受理健全性の全チェック（import/ラベル/match/struct==/enum==）を sentinel から置換し、`lineOf(offset)`＋`exprOffset(id)`＋`Stmt.Print.offset` で行番号を付与（assembled buffer 越しでも正しい）。`test.sh` の reject は plewc の終了コードで判定。compileError* はコンパイラ内部の ambient プリミティブ（import gate しない）。
 
 **次の一歩の候補**（やりやすい順で自走）：
-- 行番号付き診断＝`compileError` にオフセット→行番号を足す（Call 系はトークン start があるので安い）。
 - `import ./Foo`（名前空間束縛・`Foo.bar`）＝修飾名解決が要る。今は全部フラット同一スコープ。
 - 整数幅（`I8..U64`/`F*`）＝hidden cost の大物。これが入ると④ lossy `as`・overflow panic も片付く。
 - 値意味論/CoW・トレイト/ジェネリクスは更に大物（後）。

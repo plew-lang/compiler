@@ -376,6 +376,7 @@ fn parseLet(c: inout Comp, mutable: Bool) -> U64 {
 }
 
 fn parsePrint(c: inout Comp) -> U64 {
+    val kw: Tok = cur(c: inout c)
     advance(c: inout c)
     advance(c: inout c)
     val e: U64 = parseExpr(c: inout c)
@@ -383,7 +384,7 @@ fn parsePrint(c: inout Comp) -> U64 {
         Kind.RParen => { advance(c: inout c) }
         _ => {}
     }
-    return pushStmt(c: inout c, s: <Stmt.Print expr=e />)
+    return pushStmt(c: inout c, s: <Stmt.Print expr=e offset=kw.start />)
 }
 
 fn parseReturn(c: inout Comp) -> U64 {

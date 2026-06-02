@@ -103,6 +103,39 @@ fn spansEqual(c: inout Comp, aStart: U64, aLen: U64, bStart: U64, bLen: U64) -> 
     return true
 }
 
+// 1-based source line for a byte offset (count newlines before it). For
+// diagnostics; works across the assembled multi-file buffer.
+fn lineOf(c: inout Comp, offset: U64) -> I64 {
+    mut val line: I64 = 1
+    mut val i: U64 = 0
+    while i < offset {
+        if c.bytes[i] == 10 {
+            line += 1
+        }
+        i += 1
+    }
+    return line
+}
+
+// Best-effort byte offset for an expression (for diagnostics). Leaf nodes with
+// a span return it; compound nodes recurse to a representative child.
+fn exprOffset(c: inout Comp, id: U64) -> U64 {
+    val e: Expr = c.exprs[id]
+    match e {
+        Expr.Ident { val start, val len } => { return start }
+        Expr.Str { val start, val len } => { return start }
+        Expr.Call { val nameStart, val nameLen, val args } => { return nameStart }
+        Expr.Method { val recv, val nameStart, val nameLen, val args } => { return nameStart }
+        Expr.Field { val base, val nameStart, val nameLen } => { return exprOffset(c: inout c, id: base) }
+        Expr.Index { val base, val index } => { return exprOffset(c: inout c, id: base) }
+        Expr.Binary { val op, val lhs, val rhs } => { return exprOffset(c: inout c, id: lhs) }
+        Expr.Unary { val op, val operand } => { return exprOffset(c: inout c, id: operand) }
+        Expr.Cast { val operand, val tyStart, val tyLen } => { return exprOffset(c: inout c, id: operand) }
+        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val fields } => { return typeStart }
+        _ => { return 0 }
+    }
+}
+
 // Index of the top-level function named (nameStart,nameLen), or -1 if none.
 // Names are unique (no overloading in this compiler), so the first match wins.
 fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64) -> I64 {
@@ -518,7 +551,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     emitEnumTagCmp(c: inout c, lhs: lhs, rhs: rhs, op: op, outer: true)
                 } else {
                     if compareNeedsTrait(c: inout c, op: op, lhs: lhs) {
-                        compileError(msg: "comparison needs Eq/Ord; not available for a struct or array")
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "comparison needs Eq/Ord; not available for a struct or array")
                     } else {
                         write(s: "(")
                         genExpr(c: inout c, id: lhs)
@@ -540,6 +573,15 @@ fn genExpr(c: inout Comp, id: U64) {
                 write(s: ")")
                 return
             }
+            // compileErrorAt(line, msg): like compileError but with a source line.
+            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "compileErrorAt") {
+                write(s: "plew_compile_error_at(")
+                genExpr(c: inout c, id: args[0].expr)
+                write(s: ", ")
+                genExpr(c: inout c, id: args[1].expr)
+                write(s: ")")
+                return
+            }
             // I/O builtins -> C runtime.
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "write") {
                 if c.impWrite {
@@ -547,7 +589,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     genExpr(c: inout c, id: args[0].expr)
                     write(s: ")")
                 } else {
-                    compileError(msg: "write is not ambient; import it from @Std/Io")
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "write is not ambient; import it from @Std/Io")
                 }
                 return
             }
@@ -557,7 +599,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     genExpr(c: inout c, id: args[0].expr)
                     write(s: "))")
                 } else {
-                    compileError(msg: "writeByte is not ambient; import it from @Std/Io")
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "writeByte is not ambient; import it from @Std/Io")
                 }
                 return
             }
@@ -565,7 +607,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 if c.impReadStdin {
                     write(s: "plew_read_stdin()")
                 } else {
-                    compileError(msg: "readStdin is not ambient; import it from @Std/Io")
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "readStdin is not ambient; import it from @Std/Io")
                 }
                 return
             }
@@ -575,7 +617,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     genExpr(c: inout c, id: args[0].expr)
                     write(s: ")")
                 } else {
-                    compileError(msg: "readFile is not ambient; import it from @Std/Io")
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "readFile is not ambient; import it from @Std/Io")
                 }
                 return
             }
@@ -587,7 +629,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     genExpr(c: inout c, id: args[0].expr)
                     write(s: ")")
                 } else {
-                    compileError(msg: "readFile is not ambient; import it from @Std/Io")
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "readFile is not ambient; import it from @Std/Io")
                 }
                 return
             }
@@ -595,7 +637,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 if c.impArgCount {
                     write(s: "plew_arg_count()")
                 } else {
-                    compileError(msg: "argCount is not ambient; import it from @Std/Process")
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "argCount is not ambient; import it from @Std/Process")
                 }
                 return
             }
@@ -605,7 +647,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     genExpr(c: inout c, id: args[0].expr)
                     write(s: "))")
                 } else {
-                    compileError(msg: "argAt is not ambient; import it from @Std/Process")
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "argAt is not ambient; import it from @Std/Process")
                 }
                 return
             }
@@ -613,7 +655,7 @@ fn genExpr(c: inout Comp, id: U64) {
             } else {
                 // label missing / wrong / out of order -> undeclared identifier
                 // so the C compile fails loudly (spec: labels are required).
-                compileError(msg: "argument labels do not match the function parameters")
+                compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "argument labels do not match the function parameters")
                 return
             }
             writeSpan(c: inout c, start: nameStart, len: nameLen)
@@ -909,7 +951,7 @@ fn emitEnumTagCmp(c: inout Comp, lhs: U64, rhs: U64, op: I64, outer: Bool) {
     }
     if isAllNullary(c: inout c, start: enStart, len: enLen) {
     } else {
-        compileError(msg: "enum == needs structural Eq for payload variants (only all-nullary enums compare by tag)")
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "enum == needs structural Eq for payload variants (only all-nullary enums compare by tag)")
         return
     }
     if outer {
@@ -942,7 +984,7 @@ fn genCond(c: inout Comp, id: U64) {
                     emitEnumTagCmp(c: inout c, lhs: lhs, rhs: rhs, op: op, outer: false)
                 } else {
                     if compareNeedsTrait(c: inout c, op: op, lhs: lhs) {
-                        compileError(msg: "comparison needs Eq/Ord; not available for a struct or array")
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "comparison needs Eq/Ord; not available for a struct or array")
                     } else {
                         genExpr(c: inout c, id: lhs)
                         write(s: binOpStr(op: op))
@@ -1014,15 +1056,13 @@ fn genStmt(c: inout Comp, id: U64) {
                 }
             }
         }
-        Stmt.Print { val expr } => {
+        Stmt.Print { val expr, val offset } => {
             if c.impPrint {
                 write(s: "    printf(\"%lld\\n\", (long long)(")
                 genExpr(c: inout c, id: expr)
                 write(s: "));\n")
             } else {
-                // not imported from @Std/Io -> emit an undeclared identifier so
-                // the C compile fails loudly (print is not ambient in Plew).
-                compileError(msg: "print is not ambient; import it from @Std/Io")
+                compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "print is not ambient; import it from @Std/Io")
             }
         }
         Stmt.ExprStmt { val expr } => {
@@ -1142,7 +1182,7 @@ fn genStmt(c: inout Comp, id: U64) {
             } else {
                 // non-exhaustive match -> undeclared identifier so the C compile
                 // fails loudly (spec: match must be exhaustive).
-                compileError(msg: "match must be exhaustive: cover all variants or add a wildcard")
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
                 return
             }
             val t: U64 = c.tmp

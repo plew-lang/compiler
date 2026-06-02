@@ -92,7 +92,7 @@ struct MatchArm {
 enum Stmt {
     Let { mutable: Bool, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, init: U64 }
     Assign { op: I64, target: U64, value: U64 }
-    Print { expr: U64 }
+    Print { expr: U64, offset: U64 }
     ExprStmt { expr: U64 }
     Return { value: U64, hasValue: Bool }
     If { cond: U64, thenBlk: U64, elseBlk: U64, hasElse: Bool }
