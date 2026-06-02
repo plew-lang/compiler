@@ -44,9 +44,17 @@
 - ✅ **S1 完了**：診断 `compileError`/`compileErrorAt` を**普通の Plew 関数**（Codegen.pw・`eprint`＋`exit`＋`digitStr` 由来の `eprintInt`）に。`@Std/Io` `eprint(text: String)`・`@Std/Process` `exit(code: I32)` を import-gate ビルトインとして追加し _.pw で import、codegen 特別扱いと dead な `plew_compile_error*` preamble を撤去。これで診断の ambient 依存は解消。
 - **S2（大物・要 spec 決定）**：`@Std` I/O の実シグネチャ。特に `print(整数)` の可否＝print の真シグネチャと、`readFile`/`readFileBytes` の**可謬化＝`Optional`/`Result`/`try`（spec/13）エピック**。std 領域のシグネチャは spec 表面（core-lib 未決）ゆえユーザー確認が要る。
 
-### その他の候補（エピック後）
+### ★ import / モジュール（本物のコアライブラリの土台）
 
-- **`import ./Foo`（名前空間束縛 `Foo.bar`）**。修飾名解決が要る（今は part で全部フラット同一スコープ）。part の provenance 穴の正攻法。
+manifest は **`Plew.toml`**（spec 暫定名・TOML・src 既定 `src/`・`/` は `<root>/src` 起点）。ネスト配列 `Array[Array[U8]]` は**使えない**（`PlewArray_Array` で要素型 `Array` 未定義）ので、パス一覧は flat バッファ＋`Array[Bind]`(span) で持つ。
+
+- ✅ **I1a 完了**：モジュールローダ＝再帰＋dedup の worklist（`compiler/src/_.pw` の driver）。各ファイルの `part ./Name`・`import ./Name` を**そのファイルのディレクトリ相対**で解決し、distinct ファイルを 1 回だけ combined バッファへ。diamond は 1 回・循環は終了。コンパイラ自身の flat 同一 dir parts は同順同内容＝不動点維持。`tests/part/crossimport`。
+- ⏳ **I1b**：`import ../Name`（親相対）＋ `import /Path`（`Plew.toml` を上に辿って root 確定→`<root>/src` 起点）。
+- ⏳ **I2 with ゲーティング**：今は include したファイルの名前が全部フラットに見える。`import ./Foo with { bar }` で `bar` だけ可視・未 import 名はエラーに。
+- ⏳ **I3 @Std 実体化**：`@Std/X`→std ディレクトリ解決。純 Plew のもの（`Core` の `Optional`/`Result`）は generics 後。`@Std/Io`/`Process` は extern/FFI まではイントリンシック裏付けのまま。
+- 後で additive：修飾名 `Foo.bar`・`export`・`public` マニフェスト・`_.pw` ディレクトリ代表。
+
+### その他の候補（エピック後）
 - 値意味論/CoW・トレイト/ジェネリクスは更に大物（後）。
 - **メソッド化の続き（任意・ROI 逓減）**：残る `parseX(c: inout c)` 群も `impl` へ移せるが再帰的・多数でゲイン小＝後回し可。
 
