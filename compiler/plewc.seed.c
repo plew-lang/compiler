@@ -350,14 +350,14 @@ PlewArray_Bind collectParts(PlewArray_U8 rootBytes, PlewArray_Tok toks);
 PlewArray_U8 buildPartPath(PlewArray_U8 rootPathBytes, PlewArray_U8 rootBytes, long long nameStart, long long nameLen);
 void appendBytes(PlewArray_U8* into, PlewArray_U8 from);
 unsigned char Lexer_at(Lexer self, long long off);
+void Lexer_emit(Lexer* self, Kind k, long long start, long long len);
+long long Lexer_lastWasNewline(Lexer self);
+long long Lexer_lastCanEnd(Lexer self);
 long long isDigit(unsigned char b);
 long long isAlpha(unsigned char b);
 long long isAlnum(unsigned char b);
 long long rangeEquals(PlewArray_U8 bytes, long long start, long long len, PlewString kw);
 Kind identKind(PlewArray_U8 bytes, long long start, long long len);
-void emit(Lexer* lx, Kind k, long long start, long long len);
-long long lastWasNewline(Lexer* lx);
-long long lastCanEnd(Lexer* lx);
 void lex(Lexer* lx);
 long long kindCode(Kind k);
 Kind curKind(Comp* c);
@@ -661,6 +661,78 @@ unsigned char Lexer_at(Lexer self, long long off) {
     }
     return 0;
 }
+void Lexer_emit(Lexer* self, Kind k, long long start, long long len) {
+    PlewArray_Tok_push(&((*self).toks), (Tok){.kind = k, .start = start, .len = len});
+    (*self).pos = (start + len);
+}
+long long Lexer_lastWasNewline(Lexer self) {
+    long long n = (long long)((self.toks).len);
+    if (n == 0) {
+    return 0;
+    }
+    Tok t = PlewArray_Tok_get(self.toks, (long long)((n - 1)));
+    {
+    Kind _m5 = t.kind;
+    if (_m5.tag == 1) {
+    return 1;
+    }
+    else {
+    return 0;
+    }
+    }
+}
+long long Lexer_lastCanEnd(Lexer self) {
+    long long n = (long long)((self.toks).len);
+    if (n == 0) {
+    return 0;
+    }
+    Tok t = PlewArray_Tok_get(self.toks, (long long)((n - 1)));
+    {
+    Kind _m6 = t.kind;
+    if (_m6.tag == 5) {
+    return 1;
+    }
+    else if (_m6.tag == 2) {
+    return 1;
+    }
+    else if (_m6.tag == 3) {
+    return 1;
+    }
+    else if (_m6.tag == 4) {
+    return 1;
+    }
+    else if (_m6.tag == 26) {
+    return 1;
+    }
+    else if (_m6.tag == 28) {
+    return 1;
+    }
+    else if (_m6.tag == 30) {
+    return 1;
+    }
+    else if (_m6.tag == 51) {
+    return 1;
+    }
+    else if (_m6.tag == 23) {
+    return 1;
+    }
+    else if (_m6.tag == 24) {
+    return 1;
+    }
+    else if (_m6.tag == 16) {
+    return 1;
+    }
+    else if (_m6.tag == 14) {
+    return 1;
+    }
+    else if (_m6.tag == 15) {
+    return 1;
+    }
+    else {
+    return 0;
+    }
+    }
+}
 long long isDigit(unsigned char b) {
     if (b >= 48) {
     if (b <= 57) {
@@ -765,78 +837,6 @@ Kind identKind(PlewArray_U8 bytes, long long start, long long len) {
     }
     return (Kind){.tag = 5};
 }
-void emit(Lexer* lx, Kind k, long long start, long long len) {
-    PlewArray_Tok_push(&((*lx).toks), (Tok){.kind = k, .start = start, .len = len});
-    (*lx).pos = (start + len);
-}
-long long lastWasNewline(Lexer* lx) {
-    long long n = (long long)(((*lx).toks).len);
-    if (n == 0) {
-    return 0;
-    }
-    Tok t = PlewArray_Tok_get((*lx).toks, (long long)((n - 1)));
-    {
-    Kind _m5 = t.kind;
-    if (_m5.tag == 1) {
-    return 1;
-    }
-    else {
-    return 0;
-    }
-    }
-}
-long long lastCanEnd(Lexer* lx) {
-    long long n = (long long)(((*lx).toks).len);
-    if (n == 0) {
-    return 0;
-    }
-    Tok t = PlewArray_Tok_get((*lx).toks, (long long)((n - 1)));
-    {
-    Kind _m6 = t.kind;
-    if (_m6.tag == 5) {
-    return 1;
-    }
-    else if (_m6.tag == 2) {
-    return 1;
-    }
-    else if (_m6.tag == 3) {
-    return 1;
-    }
-    else if (_m6.tag == 4) {
-    return 1;
-    }
-    else if (_m6.tag == 26) {
-    return 1;
-    }
-    else if (_m6.tag == 28) {
-    return 1;
-    }
-    else if (_m6.tag == 30) {
-    return 1;
-    }
-    else if (_m6.tag == 51) {
-    return 1;
-    }
-    else if (_m6.tag == 23) {
-    return 1;
-    }
-    else if (_m6.tag == 24) {
-    return 1;
-    }
-    else if (_m6.tag == 16) {
-    return 1;
-    }
-    else if (_m6.tag == 14) {
-    return 1;
-    }
-    else if (_m6.tag == 15) {
-    return 1;
-    }
-    else {
-    return 0;
-    }
-    }
-}
 void lex(Lexer* lx) {
     while ((*lx).pos < (long long)(((*lx).bytes).len)) {
     unsigned char b = Lexer_at((*lx), 0);
@@ -857,12 +857,12 @@ void lex(Lexer* lx) {
     (*lx).pos += 1;
     }
     else {
-    if (lastCanEnd(&((*lx)))) {
-    if (lastWasNewline(&((*lx)))) {
+    if (Lexer_lastCanEnd((*lx))) {
+    if (Lexer_lastWasNewline((*lx))) {
     (*lx).pos += 1;
     }
     else {
-    emit(&((*lx)), (Kind){.tag = 1}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 1}, (*lx).pos, 1);
     }
     }
     else {
@@ -893,7 +893,7 @@ void lex(Lexer* lx) {
     break;
     }
     }
-    emit(&((*lx)), (Kind){.tag = 2}, start, (j - start));
+    Lexer_emit(&((*lx)), (Kind){.tag = 2}, start, (j - start));
     continue;
     }
     if (isAlpha(b)) {
@@ -909,7 +909,7 @@ void lex(Lexer* lx) {
     }
     long long len = (j - start);
     Kind k = identKind((*lx).bytes, start, len);
-    emit(&((*lx)), k, start, len);
+    Lexer_emit(&((*lx)), k, start, len);
     continue;
     }
     if (b == 34) {
@@ -926,7 +926,7 @@ void lex(Lexer* lx) {
     }
     j += 1;
     }
-    emit(&((*lx)), (Kind){.tag = 3}, start, (j - start));
+    Lexer_emit(&((*lx)), (Kind){.tag = 3}, start, (j - start));
     continue;
     }
     if (b == 39) {
@@ -943,7 +943,7 @@ void lex(Lexer* lx) {
     }
     j += 1;
     }
-    emit(&((*lx)), (Kind){.tag = 4}, start, (j - start));
+    Lexer_emit(&((*lx)), (Kind){.tag = 4}, start, (j - start));
     continue;
     }
     unsigned char b2 = Lexer_at((*lx), 1);
@@ -951,150 +951,150 @@ void lex(Lexer* lx) {
     if (b2 == 46) {
     unsigned char b3 = Lexer_at((*lx), 2);
     if (b3 == 60) {
-    emit(&((*lx)), (Kind){.tag = 57}, (*lx).pos, 3);
+    Lexer_emit(&((*lx)), (Kind){.tag = 57}, (*lx).pos, 3);
     continue;
     }
     if (b3 == 61) {
-    emit(&((*lx)), (Kind){.tag = 58}, (*lx).pos, 3);
+    Lexer_emit(&((*lx)), (Kind){.tag = 58}, (*lx).pos, 3);
     continue;
     }
     }
-    emit(&((*lx)), (Kind){.tag = 33}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 33}, (*lx).pos, 1);
     continue;
     }
     if (b == 61) {
     if (b2 == 61) {
-    emit(&((*lx)), (Kind){.tag = 35}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 35}, (*lx).pos, 2);
     continue;
     }
     if (b2 == 62) {
-    emit(&((*lx)), (Kind){.tag = 50}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 50}, (*lx).pos, 2);
     continue;
     }
-    emit(&((*lx)), (Kind){.tag = 34}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 34}, (*lx).pos, 1);
     continue;
     }
     if (b == 33) {
     if (b2 == 61) {
-    emit(&((*lx)), (Kind){.tag = 36}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 36}, (*lx).pos, 2);
     continue;
     }
-    emit(&((*lx)), (Kind){.tag = 48}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 48}, (*lx).pos, 1);
     continue;
     }
     if (b == 60) {
     if (b2 == 61) {
-    emit(&((*lx)), (Kind){.tag = 38}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 38}, (*lx).pos, 2);
     continue;
     }
-    emit(&((*lx)), (Kind){.tag = 37}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 37}, (*lx).pos, 1);
     continue;
     }
     if (b == 62) {
     if (b2 == 61) {
-    emit(&((*lx)), (Kind){.tag = 40}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 40}, (*lx).pos, 2);
     continue;
     }
-    emit(&((*lx)), (Kind){.tag = 39}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 39}, (*lx).pos, 1);
     continue;
     }
     if (b == 43) {
     if (b2 == 61) {
-    emit(&((*lx)), (Kind){.tag = 52}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 52}, (*lx).pos, 2);
     continue;
     }
-    emit(&((*lx)), (Kind){.tag = 41}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 41}, (*lx).pos, 1);
     continue;
     }
     if (b == 45) {
     if (b2 == 61) {
-    emit(&((*lx)), (Kind){.tag = 53}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 53}, (*lx).pos, 2);
     continue;
     }
     if (b2 == 62) {
-    emit(&((*lx)), (Kind){.tag = 49}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 49}, (*lx).pos, 2);
     continue;
     }
-    emit(&((*lx)), (Kind){.tag = 42}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 42}, (*lx).pos, 1);
     continue;
     }
     if (b == 42) {
     if (b2 == 61) {
-    emit(&((*lx)), (Kind){.tag = 54}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 54}, (*lx).pos, 2);
     continue;
     }
-    emit(&((*lx)), (Kind){.tag = 43}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 43}, (*lx).pos, 1);
     continue;
     }
     if (b == 47) {
     if (b2 == 61) {
-    emit(&((*lx)), (Kind){.tag = 55}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 55}, (*lx).pos, 2);
     continue;
     }
     if (b2 == 62) {
-    emit(&((*lx)), (Kind){.tag = 51}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 51}, (*lx).pos, 2);
     continue;
     }
-    emit(&((*lx)), (Kind){.tag = 44}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 44}, (*lx).pos, 1);
     continue;
     }
     if (b == 37) {
     if (b2 == 61) {
-    emit(&((*lx)), (Kind){.tag = 56}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 56}, (*lx).pos, 2);
     continue;
     }
-    emit(&((*lx)), (Kind){.tag = 45}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 45}, (*lx).pos, 1);
     continue;
     }
     if (b == 38) {
     if (b2 == 38) {
-    emit(&((*lx)), (Kind){.tag = 46}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 46}, (*lx).pos, 2);
     continue;
     }
     }
     if (b == 124) {
     if (b2 == 124) {
-    emit(&((*lx)), (Kind){.tag = 47}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 47}, (*lx).pos, 2);
     continue;
     }
     }
     if (b == 40) {
-    emit(&((*lx)), (Kind){.tag = 25}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 25}, (*lx).pos, 1);
     (*lx).depth += 1;
     continue;
     }
     if (b == 41) {
-    emit(&((*lx)), (Kind){.tag = 26}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 26}, (*lx).pos, 1);
     (*lx).depth -= 1;
     continue;
     }
     if (b == 91) {
-    emit(&((*lx)), (Kind){.tag = 27}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 27}, (*lx).pos, 1);
     (*lx).depth += 1;
     continue;
     }
     if (b == 93) {
-    emit(&((*lx)), (Kind){.tag = 28}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 28}, (*lx).pos, 1);
     (*lx).depth -= 1;
     continue;
     }
     if (b == 123) {
-    emit(&((*lx)), (Kind){.tag = 29}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 29}, (*lx).pos, 1);
     continue;
     }
     if (b == 125) {
-    emit(&((*lx)), (Kind){.tag = 30}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 30}, (*lx).pos, 1);
     continue;
     }
     if (b == 44) {
-    emit(&((*lx)), (Kind){.tag = 31}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 31}, (*lx).pos, 1);
     continue;
     }
     if (b == 58) {
-    emit(&((*lx)), (Kind){.tag = 32}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 32}, (*lx).pos, 1);
     continue;
     }
-    emit(&((*lx)), (Kind){.tag = 59}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 59}, (*lx).pos, 1);
     }
     PlewArray_Tok_push(&((*lx).toks), (Tok){.kind = (Kind){.tag = 0}, .start = (*lx).pos, .len = 0});
 }

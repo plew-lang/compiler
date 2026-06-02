@@ -86,6 +86,47 @@ impl Lexer {
         }
         return 0
     }
+    // Push a token and advance the cursor past it.
+    inout fn emit(k: Kind, start: U64, len: U64) {
+        self.toks.append(<Tok kind=k start=start len=len />)
+        self.pos = start + len
+    }
+    // Was the most recent token a newline?
+    fn lastWasNewline() -> Bool {
+        val n: U64 = self.toks.count
+        if n == 0 {
+            return false
+        }
+        val t: Tok = self.toks[n - 1]
+        match t.kind {
+            Kind.Newline => { return true }
+            _ => { return false }
+        }
+    }
+    // Can the most recent token end a statement? (decides newline insertion)
+    fn lastCanEnd() -> Bool {
+        val n: U64 = self.toks.count
+        if n == 0 {
+            return false
+        }
+        val t: Tok = self.toks[n - 1]
+        match t.kind {
+            Kind.Ident => { return true }
+            Kind.Int => { return true }
+            Kind.Str => { return true }
+            Kind.Char => { return true }
+            Kind.RParen => { return true }
+            Kind.RBracket => { return true }
+            Kind.RBrace => { return true }
+            Kind.SlashGt => { return true }
+            Kind.KwTrue => { return true }
+            Kind.KwFalse => { return true }
+            Kind.KwReturn => { return true }
+            Kind.KwBreak => { return true }
+            Kind.KwContinue => { return true }
+            _ => { return false }
+        }
+    }
 }
 
 fn isDigit(b: U8) -> Bool {
@@ -197,47 +238,6 @@ fn identKind(bytes: Array[U8], start: U64, len: U64) -> Kind {
     return <Kind.Ident />
 }
 
-fn emit(lx: inout Lexer, k: Kind, start: U64, len: U64) {
-    lx.toks.append(<Tok kind=k start=start len=len />)
-    lx.pos = start + len
-}
-
-fn lastWasNewline(lx: inout Lexer) -> Bool {
-    val n: U64 = lx.toks.count
-    if n == 0 {
-        return false
-    }
-    val t: Tok = lx.toks[n - 1]
-    match t.kind {
-        Kind.Newline => { return true }
-        _ => { return false }
-    }
-}
-
-fn lastCanEnd(lx: inout Lexer) -> Bool {
-    val n: U64 = lx.toks.count
-    if n == 0 {
-        return false
-    }
-    val t: Tok = lx.toks[n - 1]
-    match t.kind {
-        Kind.Ident => { return true }
-        Kind.Int => { return true }
-        Kind.Str => { return true }
-        Kind.Char => { return true }
-        Kind.RParen => { return true }
-        Kind.RBracket => { return true }
-        Kind.RBrace => { return true }
-        Kind.SlashGt => { return true }
-        Kind.KwTrue => { return true }
-        Kind.KwFalse => { return true }
-        Kind.KwReturn => { return true }
-        Kind.KwBreak => { return true }
-        Kind.KwContinue => { return true }
-        _ => { return false }
-    }
-}
-
 fn lex(lx: inout Lexer) {
     while lx.pos < lx.bytes.count {
         val b: U8 = lx.at(off: 0)
@@ -257,11 +257,11 @@ fn lex(lx: inout Lexer) {
             if lx.depth > 0 {
                 lx.pos += 1
             } else {
-                if lastCanEnd(lx: inout lx) {
-                    if lastWasNewline(lx: inout lx) {
+                if lx.lastCanEnd() {
+                    if lx.lastWasNewline() {
                         lx.pos += 1
                     } else {
-                        emit(lx: inout lx, k: <Kind.Newline />, start: lx.pos, len: 1)
+                        lx.emit(k: <Kind.Newline />, start: lx.pos, len: 1)
                     }
                 } else {
                     lx.pos += 1
@@ -290,7 +290,7 @@ fn lex(lx: inout Lexer) {
                     break
                 }
             }
-            emit(lx: inout lx, k: <Kind.Int />, start: start, len: j - start)
+            lx.emit(k: <Kind.Int />, start: start, len: j - start)
             continue
         }
         if isAlpha(b: b) {
@@ -305,7 +305,7 @@ fn lex(lx: inout Lexer) {
             }
             val len: U64 = j - start
             val k: Kind = identKind(bytes: lx.bytes, start: start, len: len)
-            emit(lx: inout lx, k: k, start: start, len: len)
+            lx.emit(k: k, start: start, len: len)
             continue
         }
         if b == '"' {
@@ -323,7 +323,7 @@ fn lex(lx: inout Lexer) {
                 }
                 j += 1
             }
-            emit(lx: inout lx, k: <Kind.Str />, start: start, len: j - start)
+            lx.emit(k: <Kind.Str />, start: start, len: j - start)
             continue
         }
         if b == '\'' {
@@ -341,7 +341,7 @@ fn lex(lx: inout Lexer) {
                 }
                 j += 1
             }
-            emit(lx: inout lx, k: <Kind.Char />, start: start, len: j - start)
+            lx.emit(k: <Kind.Char />, start: start, len: j - start)
             continue
         }
         val b2: U8 = lx.at(off: 1)
@@ -349,150 +349,150 @@ fn lex(lx: inout Lexer) {
             if b2 == '.' {
                 val b3: U8 = lx.at(off: 2)
                 if b3 == '<' {
-                    emit(lx: inout lx, k: <Kind.DotDotLt />, start: lx.pos, len: 3)
+                    lx.emit(k: <Kind.DotDotLt />, start: lx.pos, len: 3)
                     continue
                 }
                 if b3 == '=' {
-                    emit(lx: inout lx, k: <Kind.DotDotEq />, start: lx.pos, len: 3)
+                    lx.emit(k: <Kind.DotDotEq />, start: lx.pos, len: 3)
                     continue
                 }
             }
-            emit(lx: inout lx, k: <Kind.Dot />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.Dot />, start: lx.pos, len: 1)
             continue
         }
         if b == '=' {
             if b2 == '=' {
-                emit(lx: inout lx, k: <Kind.EqEq />, start: lx.pos, len: 2)
+                lx.emit(k: <Kind.EqEq />, start: lx.pos, len: 2)
                 continue
             }
             if b2 == '>' {
-                emit(lx: inout lx, k: <Kind.FatArrow />, start: lx.pos, len: 2)
+                lx.emit(k: <Kind.FatArrow />, start: lx.pos, len: 2)
                 continue
             }
-            emit(lx: inout lx, k: <Kind.Eq />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.Eq />, start: lx.pos, len: 1)
             continue
         }
         if b == '!' {
             if b2 == '=' {
-                emit(lx: inout lx, k: <Kind.Ne />, start: lx.pos, len: 2)
+                lx.emit(k: <Kind.Ne />, start: lx.pos, len: 2)
                 continue
             }
-            emit(lx: inout lx, k: <Kind.Bang />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.Bang />, start: lx.pos, len: 1)
             continue
         }
         if b == '<' {
             if b2 == '=' {
-                emit(lx: inout lx, k: <Kind.Le />, start: lx.pos, len: 2)
+                lx.emit(k: <Kind.Le />, start: lx.pos, len: 2)
                 continue
             }
-            emit(lx: inout lx, k: <Kind.Lt />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.Lt />, start: lx.pos, len: 1)
             continue
         }
         if b == '>' {
             if b2 == '=' {
-                emit(lx: inout lx, k: <Kind.Ge />, start: lx.pos, len: 2)
+                lx.emit(k: <Kind.Ge />, start: lx.pos, len: 2)
                 continue
             }
-            emit(lx: inout lx, k: <Kind.Gt />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.Gt />, start: lx.pos, len: 1)
             continue
         }
         if b == '+' {
             if b2 == '=' {
-                emit(lx: inout lx, k: <Kind.PlusEq />, start: lx.pos, len: 2)
+                lx.emit(k: <Kind.PlusEq />, start: lx.pos, len: 2)
                 continue
             }
-            emit(lx: inout lx, k: <Kind.Plus />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.Plus />, start: lx.pos, len: 1)
             continue
         }
         if b == '-' {
             if b2 == '=' {
-                emit(lx: inout lx, k: <Kind.MinusEq />, start: lx.pos, len: 2)
+                lx.emit(k: <Kind.MinusEq />, start: lx.pos, len: 2)
                 continue
             }
             if b2 == '>' {
-                emit(lx: inout lx, k: <Kind.Arrow />, start: lx.pos, len: 2)
+                lx.emit(k: <Kind.Arrow />, start: lx.pos, len: 2)
                 continue
             }
-            emit(lx: inout lx, k: <Kind.Minus />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.Minus />, start: lx.pos, len: 1)
             continue
         }
         if b == '*' {
             if b2 == '=' {
-                emit(lx: inout lx, k: <Kind.StarEq />, start: lx.pos, len: 2)
+                lx.emit(k: <Kind.StarEq />, start: lx.pos, len: 2)
                 continue
             }
-            emit(lx: inout lx, k: <Kind.Star />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.Star />, start: lx.pos, len: 1)
             continue
         }
         if b == '/' {
             if b2 == '=' {
-                emit(lx: inout lx, k: <Kind.SlashEq />, start: lx.pos, len: 2)
+                lx.emit(k: <Kind.SlashEq />, start: lx.pos, len: 2)
                 continue
             }
             if b2 == '>' {
-                emit(lx: inout lx, k: <Kind.SlashGt />, start: lx.pos, len: 2)
+                lx.emit(k: <Kind.SlashGt />, start: lx.pos, len: 2)
                 continue
             }
-            emit(lx: inout lx, k: <Kind.Slash />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.Slash />, start: lx.pos, len: 1)
             continue
         }
         if b == '%' {
             if b2 == '=' {
-                emit(lx: inout lx, k: <Kind.PercentEq />, start: lx.pos, len: 2)
+                lx.emit(k: <Kind.PercentEq />, start: lx.pos, len: 2)
                 continue
             }
-            emit(lx: inout lx, k: <Kind.Percent />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.Percent />, start: lx.pos, len: 1)
             continue
         }
         if b == '&' {
             if b2 == '&' {
-                emit(lx: inout lx, k: <Kind.AmpAmp />, start: lx.pos, len: 2)
+                lx.emit(k: <Kind.AmpAmp />, start: lx.pos, len: 2)
                 continue
             }
         }
         if b == '|' {
             if b2 == '|' {
-                emit(lx: inout lx, k: <Kind.PipePipe />, start: lx.pos, len: 2)
+                lx.emit(k: <Kind.PipePipe />, start: lx.pos, len: 2)
                 continue
             }
         }
         if b == '(' {
-            emit(lx: inout lx, k: <Kind.LParen />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.LParen />, start: lx.pos, len: 1)
             lx.depth += 1
             continue
         }
         if b == ')' {
-            emit(lx: inout lx, k: <Kind.RParen />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.RParen />, start: lx.pos, len: 1)
             lx.depth -= 1
             continue
         }
         if b == '[' {
-            emit(lx: inout lx, k: <Kind.LBracket />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.LBracket />, start: lx.pos, len: 1)
             lx.depth += 1
             continue
         }
         if b == ']' {
-            emit(lx: inout lx, k: <Kind.RBracket />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.RBracket />, start: lx.pos, len: 1)
             lx.depth -= 1
             continue
         }
         if b == '{' {
-            emit(lx: inout lx, k: <Kind.LBrace />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.LBrace />, start: lx.pos, len: 1)
             continue
         }
         if b == '}' {
-            emit(lx: inout lx, k: <Kind.RBrace />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.RBrace />, start: lx.pos, len: 1)
             continue
         }
         if b == ',' {
-            emit(lx: inout lx, k: <Kind.Comma />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.Comma />, start: lx.pos, len: 1)
             continue
         }
         if b == ':' {
-            emit(lx: inout lx, k: <Kind.Colon />, start: lx.pos, len: 1)
+            lx.emit(k: <Kind.Colon />, start: lx.pos, len: 1)
             continue
         }
-        emit(lx: inout lx, k: <Kind.Unknown />, start: lx.pos, len: 1)
+        lx.emit(k: <Kind.Unknown />, start: lx.pos, len: 1)
     }
     lx.toks.append(<Tok kind=<Kind.Eof /> start=lx.pos len=0 />)
 }
