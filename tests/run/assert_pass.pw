@@ -1,0 +1,8 @@
+import @Std/Core
+import @Std/Io with { print }
+fn main() {
+    val x: I32 = 5
+    assert(cond: x > 0)
+    assert(cond: x == 5)
+    print(x)
+}

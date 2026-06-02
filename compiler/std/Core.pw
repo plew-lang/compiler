@@ -79,3 +79,15 @@ impl[T, E] Result[T, E] {
         }
     }
 }
+
+// assert(cond:) panics when the condition is false (spec/11: always on, all
+// builds). Returns (). NOTE: spec writes the condition unlabeled — `assert(x>0)`
+// — via label suppression `~:`, which the compiler does not yet support in
+// parameter declarations, so the condition takes a `cond:` label for now (see
+// autonomous-decisions.md). An optional `message:` arg is future work.
+fn assert(cond: Bool) {
+    if cond {
+    } else {
+        panic "assertion failed"
+    }
+}
