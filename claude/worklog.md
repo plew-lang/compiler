@@ -81,7 +81,11 @@ manifest は **`Plew.toml`**（spec 暫定名・TOML・src 既定 `src/`・`/` �
 
 ADT 注意：ネスト配列 `Array[Array[U8]]` は今壊れる（`PlewArray_Array`・要素型未定義）＝G1/G2 でネスト TypeRef を正しくマングルすれば解消見込み（要テスト）。AST フィールド形を変えるので **reseed 2 回**ルール適用。
 
-進捗：✅ **G1 完了**（TypeRef アリーナ＋`ty`/`retTy`/`ref` フィールド・`parseTypeTok` 再帰パース・挙動不変）。✅ **G2 step1 完了**（struct/enum に `[T,U]` 型パラメータをパース＋`typeParams` 保持・marker は skip・消費なし）。
+進捗：✅ **G1 完了**（TypeRef アリーナ＋`ty`/`retTy`/`ref` フィールド・`parseTypeTok` 再帰パース・挙動不変）。✅ **G2 step1 完了**（struct/enum に `[T,U]` 型パラメータ・`typeParams` 保持）。✅ **G2 step2＝単相化インフラ完了**（`genInsts`・TypeRef sentinel index0・`genericStructIndex`/`isGenericInst`/`typeRefEq`/`emitMangle`/`emitConcreteCType`/`emitFieldCType`/`genCTypeOf`/`scanType`/`collectGenInsts`/`emitMonoForward`/`emitMonoStruct`・use-site C 型を `genCTypeOf` 経由に・driver で generic template skip＋mono 出力）。✅ **G2a 完了＝generic struct が end-to-end**（宣言・`<Box[I32] v=5/>` 構築・`b.v` フィールド read・多パラメータ `Pair[A,B]`・ネスト `Box[Box[I32]]`・関数引数/戻り値。Make に型引数パース＋`Expr.Make.ty`・`typeInfoOfRef`/`genericFieldTypeInfo`・checkMakeFields/Make emission が generic 分岐。`tests/run/generic_struct{,_multi,_fn}`）。
+
+**次＝G2b（generic enum＝Optional/Result）**：mono enum body 出力（`genEnumDef` を mangled 名＋フィールド置換で）・構築 `<Optional[I32].Some v=5/>`（Make の isEnum 経路を mangled 名・variant 置換）・**match**。match の難所＝scrut の具体インスタンス化を知る必要＝**`TypeInfo` に `ref: U64` を足す**（`exprType(Ident)`＝local の `lo.ty`、`exprType(Make)`＝`ty` をセット）→ match codegen が scrut 型 ref から mangled enum 名で C temp 宣言・`genBindType`/`variantIndex` を mono enum に対応（bind フィールド型は型パラメータ置換）。`emitMonoEnum(c, instRef)` を `genEnumDef` の置換版で。collectGenInsts は struct/enum 両対応に拡張（`isGenericInst` を enum も含むよう一般化＝`genericDeclIndex`）。
+
+**その後＝G3（generic 関数/メソッド）**：`fn f[T]`・呼び出しで型引数推論（引数型）or 明示 `f[I32](...)`・`impl[T] Type[T]` メソッド・呼ばれたインスタンスを単相化（関数も mangle）。
 
 #### G2 単相化の設計（実装中・次の一歩）
 
