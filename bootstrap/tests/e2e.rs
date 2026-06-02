@@ -473,6 +473,27 @@ fn selfhost_plewc_reaches_fixpoint() {
 }
 
 #[test]
+fn selfhost_plewc_compiles_for_loops() {
+    // plewc.pw post-self-host language growth: `for val i in a..<b` / `a..=b`
+    // and `for val x in arr` (lowered to C for-loops). plewc.pw also dogfoods
+    // the feature in its own driver, so the fixpoint test already exercises it.
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../selfhost/plewc.pw");
+    let src = std::fs::read_to_string(path).expect("read selfhost/plewc.pw");
+    let program = "fn main() {\n    mut val a: I64 = 0\n    for val i in 0..<5 {\n        a += i\n    }\n    print(a)\n    mut val b: I64 = 0\n    for val i in 1..=4 {\n        b += i\n    }\n    print(b)\n    val xs: Array[I64] = [10, 20, 30]\n    mut val c: I64 = 0\n    for val x in xs {\n        c += x\n    }\n    print(c)\n}\n";
+    let emitted_c = build_and_run_stdin(&src, "selfhost_plewc_for", program);
+    let c_path = std::env::temp_dir().join(format!("plew_plewcfor_{}.c", std::process::id()));
+    let out_bin = std::env::temp_dir().join(format!("plew_plewcfor_{}", std::process::id()));
+    std::fs::write(&c_path, &emitted_c).expect("write emitted C");
+    let status = Command::new("clang").arg("-w").arg(&c_path).arg("-o").arg(&out_bin).status().expect("clang");
+    assert!(status.success(), "clang failed on emitted C:\n{emitted_c}");
+    let output = Command::new(&out_bin).output().expect("run emitted binary");
+    let _ = std::fs::remove_file(&c_path);
+    let _ = std::fs::remove_file(&out_bin);
+    // 0+1+2+3+4=10; 1+2+3+4=10; 10+20+30=60
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "10\n10\n60\n");
+}
+
+#[test]
 fn selfhost_plewc_compiles_arrays_and_strings() {
     // plewc.pw v5: monomorphized arrays (PlewArray_<E> + runtime), [] literal,
     // append, index, .count, struct array fields, String literals, String.bytes

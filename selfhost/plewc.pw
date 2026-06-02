@@ -644,6 +644,9 @@ enum Stmt {
     Return { value: U64, hasValue: Bool }
     If { cond: U64, thenBlk: U64, elseBlk: U64, hasElse: Bool }
     While { cond: U64, body: U64 }
+    // `for val name in iter { body }`. isRange: iter is `lo ..(< | =) hi`
+    // (inclusive picks <=); otherwise iter is an array, walked by index.
+    For { varStart: U64, varLen: U64, isRange: Bool, inclusive: Bool, iter: U64, rangeHi: U64, body: U64 }
     Match { scrut: U64, arms: Array[MatchArm] }
     Break
     Continue
@@ -1210,6 +1213,43 @@ fn parseWhile(c: inout Comp) -> U64 {
     return pushStmt(c: inout c, s: <Stmt.While cond=cond body=body />)
 }
 
+// `for val name in iter { body }` where iter is `lo ..< hi` / `lo ..= hi`
+// (a range) or an array expression.
+fn parseFor(c: inout Comp) -> U64 {
+    advance(c: inout c)
+    match curKind(c: inout c) {
+        Kind.KwVal => { advance(c: inout c) }
+        _ => {}
+    }
+    val nameTok: Tok = cur(c: inout c)
+    advance(c: inout c)
+    match curKind(c: inout c) {
+        Kind.KwIn => { advance(c: inout c) }
+        _ => {}
+    }
+    val lo: U64 = parseExpr(c: inout c)
+    mut val isRange: Bool = false
+    mut val inclusive: Bool = false
+    mut val hi: U64 = 0
+    match curKind(c: inout c) {
+        Kind.DotDotLt => {
+            advance(c: inout c)
+            isRange = true
+            hi = parseExpr(c: inout c)
+        }
+        Kind.DotDotEq => {
+            advance(c: inout c)
+            isRange = true
+            inclusive = true
+            hi = parseExpr(c: inout c)
+        }
+        _ => {}
+    }
+    skipNewlines(c: inout c)
+    val body: U64 = parseBlock(c: inout c)
+    return pushStmt(c: inout c, s: <Stmt.For varStart=nameTok.start varLen=nameTok.len isRange=isRange inclusive=inclusive iter=lo rangeHi=hi body=body />)
+}
+
 fn parseExprOrAssign(c: inout Comp) -> U64 {
     val lhs: U64 = parseExpr(c: inout c)
     val k: Kind = curKind(c: inout c)
@@ -1320,6 +1360,7 @@ fn parseStmt(c: inout Comp) -> U64 {
         }
         Kind.KwIf => { return parseIf(c: inout c) }
         Kind.KwWhile => { return parseWhile(c: inout c) }
+        Kind.KwFor => { return parseFor(c: inout c) }
         Kind.KwMatch => { return parseMatch(c: inout c) }
         Kind.KwBreak => {
             advance(c: inout c)
@@ -2258,6 +2299,71 @@ fn genStmt(c: inout Comp, id: U64) {
             genBlock(c: inout c, id: body)
             write(s: "    }\n")
         }
+        Stmt.For { val varStart, val varLen, val isRange, val inclusive, val iter, val rangeHi, val body } => {
+            val t: U64 = c.tmp
+            c.tmp = c.tmp + 1
+            if isRange {
+                // for (long long var = lo; var (< | <=) __fe; var++) { body }
+                write(s: "    {\n")
+                write(s: "    long long __fe")
+                writeInt(n: t as I64)
+                write(s: " = ")
+                genExpr(c: inout c, id: rangeHi)
+                write(s: ";\n")
+                write(s: "    for (long long ")
+                writeSpan(c: inout c, start: varStart, len: varLen)
+                write(s: " = ")
+                genExpr(c: inout c, id: iter)
+                write(s: "; ")
+                writeSpan(c: inout c, start: varStart, len: varLen)
+                if inclusive {
+                    write(s: " <= __fe")
+                } else {
+                    write(s: " < __fe")
+                }
+                writeInt(n: t as I64)
+                write(s: "; ")
+                writeSpan(c: inout c, start: varStart, len: varLen)
+                write(s: "++) {\n")
+                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, isInout: false)
+                genBlock(c: inout c, id: body)
+                write(s: "    }\n    }\n")
+            } else {
+                // walk an array by index, binding `var` to each element
+                val et: TypeInfo = exprType(c: inout c, id: iter)
+                write(s: "    {\n")
+                write(s: "    ")
+                wPA(c: inout c, elemStart: et.nameStart, elemLen: et.nameLen)
+                write(s: " __fa")
+                writeInt(n: t as I64)
+                write(s: " = ")
+                genExpr(c: inout c, id: iter)
+                write(s: ";\n")
+                write(s: "    for (long long __fi")
+                writeInt(n: t as I64)
+                write(s: " = 0; __fi")
+                writeInt(n: t as I64)
+                write(s: " < __fa")
+                writeInt(n: t as I64)
+                write(s: ".len; __fi")
+                writeInt(n: t as I64)
+                write(s: "++) {\n")
+                write(s: "        ")
+                genCElem(c: inout c, start: et.nameStart, len: et.nameLen)
+                write(s: " ")
+                writeSpan(c: inout c, start: varStart, len: varLen)
+                write(s: " = ")
+                wPA(c: inout c, elemStart: et.nameStart, elemLen: et.nameLen)
+                write(s: "_get(__fa")
+                writeInt(n: t as I64)
+                write(s: ", __fi")
+                writeInt(n: t as I64)
+                write(s: ");\n")
+                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, isInout: false)
+                genBlock(c: inout c, id: body)
+                write(s: "    }\n    }\n")
+            }
+        }
         Stmt.Break => {
             write(s: "    break;\n")
         }
@@ -2669,10 +2775,8 @@ fn main() {
         }
         i += 1
     }
-    // bodies
-    mut val j: U64 = 0
-    while j < c.funcs.count {
+    // bodies (dogfooding the for-loop this compiler now supports)
+    for val j in 0..<c.funcs.count {
         genFunc(c: inout c, fi: j)
-        j += 1
     }
 }
