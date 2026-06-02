@@ -444,6 +444,8 @@ void parseImport(Comp* c);
 void parseProgram(Comp* c);
 PlewString digitStr(long long d);
 void writeInt(long long n);
+PlewString digitStrU(long long d);
+void writeU64(long long n);
 void writeSpan(Comp* c, long long start, long long len);
 long long isPrimType(Comp* c, long long start, long long len);
 void genCElem(Comp* c, long long start, long long len);
@@ -2662,6 +2664,42 @@ void writeInt(long long n) {
     }
     plew_write(digitStr(plew_mod(n, 10)));
 }
+PlewString digitStrU(long long d) {
+    if (d == 0) {
+    return (PlewString){"0", 1};
+    }
+    if (d == 1) {
+    return (PlewString){"1", 1};
+    }
+    if (d == 2) {
+    return (PlewString){"2", 1};
+    }
+    if (d == 3) {
+    return (PlewString){"3", 1};
+    }
+    if (d == 4) {
+    return (PlewString){"4", 1};
+    }
+    if (d == 5) {
+    return (PlewString){"5", 1};
+    }
+    if (d == 6) {
+    return (PlewString){"6", 1};
+    }
+    if (d == 7) {
+    return (PlewString){"7", 1};
+    }
+    if (d == 8) {
+    return (PlewString){"8", 1};
+    }
+    return (PlewString){"9", 1};
+}
+void writeU64(long long n) {
+    if (n >= 10) {
+    writeU64(plew_div(n, 10));
+    }
+    plew_write(digitStrU(plew_mod(n, 10)));
+}
 void writeSpan(Comp* c, long long start, long long len) {
     long long j = 0;
     while (j < len) {
@@ -4026,11 +4064,11 @@ void genExpr(Comp* c, long long id) {
     plew_write((PlewString){"({ ", 3});
     genTypeInfoCType(&((*c)), rt);
     plew_write((PlewString){" __mr", 5});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){"; ", 2});
     writeSpan(&((*c)), enumStart, enumLen);
     plew_write((PlewString){" __ms", 5});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){" = ", 3});
     genExpr(&((*c)), scrut);
     plew_write((PlewString){"; ", 2});
@@ -4040,7 +4078,7 @@ void genExpr(Comp* c, long long id) {
     MatchArm a = PlewArray_MatchArm_get(arms, (long long)(i));
     if (a.isWildcard) {
     plew_write((PlewString){"else { __mr", 11});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){" = (", 4});
     genExpr(&((*c)), a.body);
     plew_write((PlewString){"); } ", 5});
@@ -4053,7 +4091,7 @@ void genExpr(Comp* c, long long id) {
     else {
     plew_write((PlewString){"else if (__ms", 13});
     }
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){".tag == ", 8});
     writeInt(variantIndex(&((*c)), a.enumStart, a.enumLen, a.variantStart, a.variantLen));
     plew_write((PlewString){") { ", 4});
@@ -4065,7 +4103,7 @@ void genExpr(Comp* c, long long id) {
     plew_write((PlewString){" ", 1});
     writeSpan(&((*c)), bd.nameStart, bd.nameLen);
     plew_write((PlewString){" = __ms", 7});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){".data.", 6});
     writeSpan(&((*c)), a.variantStart, a.variantLen);
     plew_write((PlewString){".", 1});
@@ -4077,7 +4115,7 @@ void genExpr(Comp* c, long long id) {
     bi += 1;
     }
     plew_write((PlewString){"__mr", 4});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){" = (", 4});
     genExpr(&((*c)), a.body);
     plew_write((PlewString){"); } ", 5});
@@ -4090,7 +4128,7 @@ void genExpr(Comp* c, long long id) {
     plew_write((PlewString){"else { __builtin_unreachable(); } ", 34});
     }
     plew_write((PlewString){"__mr", 4});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){"; })", 4});
     }
     else if (_m89.tag == 13) {
@@ -4110,7 +4148,7 @@ void genExpr(Comp* c, long long id) {
     plew_write((PlewString){"({ ", 3});
     genTypeInfoCType(&((*c)), rt);
     plew_write((PlewString){" __r", 4});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){"; if (", 6});
     genCond(&((*c)), cond);
     plew_write((PlewString){") {\n", 4});
@@ -4121,7 +4159,7 @@ void genExpr(Comp* c, long long id) {
     genBlock(&((*c)), elseBlk);
     (*c).curGiveTmp = save;
     plew_write((PlewString){"    } __r", 9});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){"; })", 4});
     }
     else { __builtin_unreachable(); }
@@ -4552,7 +4590,7 @@ void genStmt(Comp* c, long long id) {
     if (isRange) {
     plew_write((PlewString){"    {\n", 6});
     plew_write((PlewString){"    long long __fe", 18});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){" = ", 3});
     genExpr(&((*c)), rangeHi);
     plew_write((PlewString){";\n", 2});
@@ -4568,7 +4606,7 @@ void genStmt(Comp* c, long long id) {
     else {
     plew_write((PlewString){" < __fe", 7});
     }
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){"; ", 2});
     writeSpan(&((*c)), varStart, varLen);
     plew_write((PlewString){"++) {\n", 6});
@@ -4582,18 +4620,18 @@ void genStmt(Comp* c, long long id) {
     plew_write((PlewString){"    ", 4});
     wPA(&((*c)), et.nameStart, et.nameLen);
     plew_write((PlewString){" __fa", 5});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){" = ", 3});
     genExpr(&((*c)), iter);
     plew_write((PlewString){";\n", 2});
     plew_write((PlewString){"    for (long long __fi", 23});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){" = 0; __fi", 10});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){" < __fa", 7});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){".len; __fi", 10});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){"++) {\n", 6});
     plew_write((PlewString){"        ", 8});
     genCElem(&((*c)), et.nameStart, et.nameLen);
@@ -4602,9 +4640,9 @@ void genStmt(Comp* c, long long id) {
     plew_write((PlewString){" = ", 3});
     wPA(&((*c)), et.nameStart, et.nameLen);
     plew_write((PlewString){"_get(__fa", 9});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){", __fi", 6});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){");\n", 3});
     addLocal(&((*c)), varStart, varLen, et.nameStart, et.nameLen, 0, 0, 0);
     genBlock(&((*c)), body);
@@ -4671,7 +4709,7 @@ void genStmt(Comp* c, long long id) {
     plew_write((PlewString){"    ", 4});
     writeSpan(&((*c)), enumStart, enumLen);
     plew_write((PlewString){" _m", 3});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){" = ", 3});
     genExpr(&((*c)), scrut);
     plew_write((PlewString){";\n", 2});
@@ -4692,7 +4730,7 @@ void genStmt(Comp* c, long long id) {
     else {
     plew_write((PlewString){"    else if (_m", 15});
     }
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){".tag == ", 8});
     writeInt(variantIndex(&((*c)), a.enumStart, a.enumLen, a.variantStart, a.variantLen));
     plew_write((PlewString){") {\n", 4});
@@ -4705,7 +4743,7 @@ void genStmt(Comp* c, long long id) {
     plew_write((PlewString){" ", 1});
     writeSpan(&((*c)), bd.nameStart, bd.nameLen);
     plew_write((PlewString){" = _m", 5});
-    writeInt(((long long)(t)));
+    writeU64(t);
     plew_write((PlewString){".data.", 6});
     writeSpan(&((*c)), a.variantStart, a.variantLen);
     plew_write((PlewString){".", 1});

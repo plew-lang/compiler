@@ -28,6 +28,31 @@ fn writeInt(n: I64) {
     write(s: digitStr(d: n % 10))
 }
 
+// U64 digit (0-9) -> its glyph. A U64 twin of digitStr: with no implicit
+// conversions and `as` restricted to lossless, an I64 digitStr cannot serve a
+// U64 caller (U64->I64 is not lossless), so unsigned printing needs its own.
+fn digitStrU(d: U64) -> String {
+    if d == 0 { return "0" }
+    if d == 1 { return "1" }
+    if d == 2 { return "2" }
+    if d == 3 { return "3" }
+    if d == 4 { return "4" }
+    if d == 5 { return "5" }
+    if d == 6 { return "6" }
+    if d == 7 { return "7" }
+    if d == 8 { return "8" }
+    return "9"
+}
+
+// Print a U64 (handle ids, indices, line numbers) with no sign handling — keeps
+// the unsigned values unsigned end to end (no `U64 as I64` cast).
+fn writeU64(n: U64) {
+    if n >= 10 {
+        writeU64(n: n / 10)
+    }
+    write(s: digitStrU(d: n % 10))
+}
+
 fn writeSpan(c: inout Comp, start: U64, len: U64) {
     mut val j: U64 = 0
     while j < len {
@@ -1108,11 +1133,11 @@ fn genExpr(c: inout Comp, id: U64) {
             write(s: "({ ")
             genTypeInfoCType(c: inout c, ti: rt)
             write(s: " __mr")
-            writeInt(n: t as I64)
+            writeU64(n: t)
             write(s: "; ")
             writeSpan(c: inout c, start: enumStart, len: enumLen)
             write(s: " __ms")
-            writeInt(n: t as I64)
+            writeU64(n: t)
             write(s: " = ")
             genExpr(c: inout c, id: scrut)
             write(s: "; ")
@@ -1122,7 +1147,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 val a: MatchArm = arms[i]
                 if a.isWildcard {
                     write(s: "else { __mr")
-                    writeInt(n: t as I64)
+                    writeU64(n: t)
                     write(s: " = (")
                     genExpr(c: inout c, id: a.body)
                     write(s: "); } ")
@@ -1133,7 +1158,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     } else {
                         write(s: "else if (__ms")
                     }
-                    writeInt(n: t as I64)
+                    writeU64(n: t)
                     write(s: ".tag == ")
                     writeInt(n: variantIndex(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen))
                     write(s: ") { ")
@@ -1145,7 +1170,7 @@ fn genExpr(c: inout Comp, id: U64) {
                         write(s: " ")
                         writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
                         write(s: " = __ms")
-                        writeInt(n: t as I64)
+                        writeU64(n: t)
                         write(s: ".data.")
                         writeSpan(c: inout c, start: a.variantStart, len: a.variantLen)
                         write(s: ".")
@@ -1157,7 +1182,7 @@ fn genExpr(c: inout Comp, id: U64) {
                         bi += 1
                     }
                     write(s: "__mr")
-                    writeInt(n: t as I64)
+                    writeU64(n: t)
                     write(s: " = (")
                     genExpr(c: inout c, id: a.body)
                     write(s: "); } ")
@@ -1169,7 +1194,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 write(s: "else { __builtin_unreachable(); } ")
             }
             write(s: "__mr")
-            writeInt(n: t as I64)
+            writeU64(n: t)
             write(s: "; })")
         }
         Expr.IfExpr { val cond, val thenBlk, val elseBlk } => {
@@ -1185,7 +1210,7 @@ fn genExpr(c: inout Comp, id: U64) {
             write(s: "({ ")
             genTypeInfoCType(c: inout c, ti: rt)
             write(s: " __r")
-            writeInt(n: t as I64)
+            writeU64(n: t)
             write(s: "; if (")
             genCond(c: inout c, id: cond)
             write(s: ") {\n")
@@ -1196,7 +1221,7 @@ fn genExpr(c: inout Comp, id: U64) {
             genBlock(c: inout c, id: elseBlk)
             c.curGiveTmp = save
             write(s: "    } __r")
-            writeInt(n: t as I64)
+            writeU64(n: t)
             write(s: "; })")
         }
     }
@@ -1562,7 +1587,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 // for (long long var = lo; var (< | <=) __fe; var++) { body }
                 write(s: "    {\n")
                 write(s: "    long long __fe")
-                writeInt(n: t as I64)
+                writeU64(n: t)
                 write(s: " = ")
                 genExpr(c: inout c, id: rangeHi)
                 write(s: ";\n")
@@ -1577,7 +1602,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 } else {
                     write(s: " < __fe")
                 }
-                writeInt(n: t as I64)
+                writeU64(n: t)
                 write(s: "; ")
                 writeSpan(c: inout c, start: varStart, len: varLen)
                 write(s: "++) {\n")
@@ -1591,18 +1616,18 @@ fn genStmt(c: inout Comp, id: U64) {
                 write(s: "    ")
                 wPA(c: inout c, elemStart: et.nameStart, elemLen: et.nameLen)
                 write(s: " __fa")
-                writeInt(n: t as I64)
+                writeU64(n: t)
                 write(s: " = ")
                 genExpr(c: inout c, id: iter)
                 write(s: ";\n")
                 write(s: "    for (long long __fi")
-                writeInt(n: t as I64)
+                writeU64(n: t)
                 write(s: " = 0; __fi")
-                writeInt(n: t as I64)
+                writeU64(n: t)
                 write(s: " < __fa")
-                writeInt(n: t as I64)
+                writeU64(n: t)
                 write(s: ".len; __fi")
-                writeInt(n: t as I64)
+                writeU64(n: t)
                 write(s: "++) {\n")
                 write(s: "        ")
                 genCElem(c: inout c, start: et.nameStart, len: et.nameLen)
@@ -1611,9 +1636,9 @@ fn genStmt(c: inout Comp, id: U64) {
                 write(s: " = ")
                 wPA(c: inout c, elemStart: et.nameStart, elemLen: et.nameLen)
                 write(s: "_get(__fa")
-                writeInt(n: t as I64)
+                writeU64(n: t)
                 write(s: ", __fi")
-                writeInt(n: t as I64)
+                writeU64(n: t)
                 write(s: ");\n")
                 addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, isInout: false, isMut: false)
                 genBlock(c: inout c, id: body)
@@ -1675,7 +1700,7 @@ fn genStmt(c: inout Comp, id: U64) {
             write(s: "    ")
             writeSpan(c: inout c, start: enumStart, len: enumLen)
             write(s: " _m")
-            writeInt(n: t as I64)
+            writeU64(n: t)
             write(s: " = ")
             genExpr(c: inout c, id: scrut)
             write(s: ";\n")
@@ -1694,7 +1719,7 @@ fn genStmt(c: inout Comp, id: U64) {
                     } else {
                         write(s: "    else if (_m")
                     }
-                    writeInt(n: t as I64)
+                    writeU64(n: t)
                     write(s: ".tag == ")
                     writeInt(n: variantIndex(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen))
                     write(s: ") {\n")
@@ -1707,7 +1732,7 @@ fn genStmt(c: inout Comp, id: U64) {
                         write(s: " ")
                         writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
                         write(s: " = _m")
-                        writeInt(n: t as I64)
+                        writeU64(n: t)
                         write(s: ".data.")
                         writeSpan(c: inout c, start: a.variantStart, len: a.variantLen)
                         write(s: ".")
