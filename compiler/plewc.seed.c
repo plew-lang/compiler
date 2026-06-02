@@ -269,6 +269,7 @@ struct FieldDef {
 struct StructDef {
     uint64_t nameStart;
     uint64_t nameLen;
+    PlewArray_Bind typeParams;
     PlewArray_FieldDef fields;
 };
 struct Variant {
@@ -279,6 +280,7 @@ struct Variant {
 struct EnumDef {
     uint64_t nameStart;
     uint64_t nameLen;
+    PlewArray_Bind typeParams;
     PlewArray_Variant variants;
 };
 struct Func {
@@ -458,6 +460,7 @@ uint64_t parseExpr(Comp* c);
 PlewArray_Arg parseCallArgs(Comp* c);
 long long isAssignOp(Kind k);
 PType parseTypeTok(Comp* c);
+PlewArray_Bind parseTypeParams(Comp* c);
 void recordArrayElem(Comp* c, PType ty);
 uint64_t parseLet(Comp* c, long long mutable);
 uint64_t parsePrint(Comp* c);
@@ -1990,6 +1993,55 @@ PType parseTypeTok(Comp* c) {
     }
     return (PType){.start = head.start, .len = head.len, .isArray = 0, .ref = ref};
 }
+PlewArray_Bind parseTypeParams(Comp* c) {
+    PlewArray_Bind ps = PlewArray_Bind_new();
+    {
+    Kind _m32 = Comp_curKind(&((*c)));
+    if (_m32.tag == 27) {
+    Comp_advance(&((*c)));
+    while (1) {
+    {
+    Kind _m33 = Comp_curKind(&((*c)));
+    if (_m33.tag == 28) {
+    Comp_advance(&((*c)));
+    break;
+    }
+    else if (_m33.tag == 0) {
+    break;
+    }
+    else if (_m33.tag == 31) {
+    Comp_advance(&((*c)));
+    }
+    else if (_m33.tag == 5) {
+    uint64_t nameStart = 0;
+    uint64_t nameLen = 0;
+    while (1) {
+    {
+    Kind _m34 = Comp_curKind(&((*c)));
+    if (_m34.tag == 5) {
+    Tok t = Comp_cur(&((*c)));
+    nameStart = t.start;
+    nameLen = t.len;
+    Comp_advance(&((*c)));
+    }
+    else {
+    break;
+    }
+    }
+    }
+    PlewArray_Bind_push(&(ps), (Bind){.nameStart = nameStart, .nameLen = nameLen, .fieldStart = nameStart, .fieldLen = nameLen});
+    }
+    else {
+    Comp_advance(&((*c)));
+    }
+    }
+    }
+    }
+    else {
+    }
+    }
+    return ps;
+}
 void recordArrayElem(Comp* c, PType ty) {
     if (ty.isArray) {
     uint64_t i = 0;
@@ -2012,8 +2064,8 @@ uint64_t parseLet(Comp* c, long long mutable) {
     long long tyIsArray = 0;
     uint64_t tyRef = 0;
     {
-    Kind _m32 = Comp_curKind(&((*c)));
-    if (_m32.tag == 32) {
+    Kind _m35 = Comp_curKind(&((*c)));
+    if (_m35.tag == 32) {
     Comp_advance(&((*c)));
     PType ty = parseTypeTok(&((*c)));
     tyStart = ty.start;
@@ -2026,8 +2078,8 @@ uint64_t parseLet(Comp* c, long long mutable) {
     }
     }
     {
-    Kind _m33 = Comp_curKind(&((*c)));
-    if (_m33.tag == 34) {
+    Kind _m36 = Comp_curKind(&((*c)));
+    if (_m36.tag == 34) {
     Comp_advance(&((*c)));
     }
     else {
@@ -2042,8 +2094,8 @@ uint64_t parsePrint(Comp* c) {
     Comp_advance(&((*c)));
     uint64_t e = parseExpr(&((*c)));
     {
-    Kind _m34 = Comp_curKind(&((*c)));
-    if (_m34.tag == 26) {
+    Kind _m37 = Comp_curKind(&((*c)));
+    if (_m37.tag == 26) {
     Comp_advance(&((*c)));
     }
     else {
@@ -2060,14 +2112,14 @@ uint64_t parsePanic(Comp* c) {
 uint64_t parseReturn(Comp* c) {
     Comp_advance(&((*c)));
     {
-    Kind _m35 = Comp_curKind(&((*c)));
-    if (_m35.tag == 1) {
+    Kind _m38 = Comp_curKind(&((*c)));
+    if (_m38.tag == 1) {
     return Comp_pushStmt(&((*c)), (Stmt){.tag = 4, .data.Return = {.value = 0, .hasValue = 0}});
     }
-    else if (_m35.tag == 30) {
+    else if (_m38.tag == 30) {
     return Comp_pushStmt(&((*c)), (Stmt){.tag = 4, .data.Return = {.value = 0, .hasValue = 0}});
     }
-    else if (_m35.tag == 0) {
+    else if (_m38.tag == 0) {
     return Comp_pushStmt(&((*c)), (Stmt){.tag = 4, .data.Return = {.value = 0, .hasValue = 0}});
     }
     else {
@@ -2082,12 +2134,12 @@ uint64_t parseIf(Comp* c) {
     uint64_t thenBlk = parseBlock(&((*c)));
     Comp_skipNewlines(&((*c)));
     {
-    Kind _m36 = Comp_curKind(&((*c)));
-    if (_m36.tag == 11) {
+    Kind _m39 = Comp_curKind(&((*c)));
+    if (_m39.tag == 11) {
     Comp_advance(&((*c)));
     {
-    Kind _m37 = Comp_curKind(&((*c)));
-    if (_m37.tag == 10) {
+    Kind _m40 = Comp_curKind(&((*c)));
+    if (_m40.tag == 10) {
     uint64_t nested = parseIf(&((*c)));
     PlewArray_U64 one = PlewArray_U64_new();
     PlewArray_U64_push(&(one), nested);
@@ -2112,16 +2164,16 @@ uint64_t parseIfExpr(Comp* c) {
     uint64_t thenBlk = parseBlock(&((*c)));
     Comp_skipNewlines(&((*c)));
     {
-    Kind _m38 = Comp_curKind(&((*c)));
-    if (_m38.tag == 11) {
+    Kind _m41 = Comp_curKind(&((*c)));
+    if (_m41.tag == 11) {
     Comp_advance(&((*c)));
     }
     else {
     }
     }
     {
-    Kind _m39 = Comp_curKind(&((*c)));
-    if (_m39.tag == 10) {
+    Kind _m42 = Comp_curKind(&((*c)));
+    if (_m42.tag == 10) {
     uint64_t nested = parseIfExpr(&((*c)));
     PlewArray_U64 one = PlewArray_U64_new();
     PlewArray_U64_push(&(one), Comp_pushStmt(&((*c)), (Stmt){.tag = 10, .data.Give = {.value = nested}}));
@@ -2149,8 +2201,8 @@ uint64_t parseWhile(Comp* c) {
 uint64_t parseFor(Comp* c) {
     Comp_advance(&((*c)));
     {
-    Kind _m40 = Comp_curKind(&((*c)));
-    if (_m40.tag == 18) {
+    Kind _m43 = Comp_curKind(&((*c)));
+    if (_m43.tag == 18) {
     Comp_advance(&((*c)));
     }
     else {
@@ -2159,8 +2211,8 @@ uint64_t parseFor(Comp* c) {
     Tok nameTok = Comp_cur(&((*c)));
     Comp_advance(&((*c)));
     {
-    Kind _m41 = Comp_curKind(&((*c)));
-    if (_m41.tag == 20) {
+    Kind _m44 = Comp_curKind(&((*c)));
+    if (_m44.tag == 20) {
     Comp_advance(&((*c)));
     }
     else {
@@ -2171,13 +2223,13 @@ uint64_t parseFor(Comp* c) {
     long long inclusive = 0;
     uint64_t hi = 0;
     {
-    Kind _m42 = Comp_curKind(&((*c)));
-    if (_m42.tag == 68) {
+    Kind _m45 = Comp_curKind(&((*c)));
+    if (_m45.tag == 68) {
     Comp_advance(&((*c)));
     isRange = 1;
     hi = parseExpr(&((*c)));
     }
-    else if (_m42.tag == 69) {
+    else if (_m45.tag == 69) {
     Comp_advance(&((*c)));
     isRange = 1;
     inclusive = 1;
@@ -2218,8 +2270,8 @@ PatInfo parsePattern(Comp* c) {
     enumLen = firstTok.len;
     Comp_advance(&((*c)));
     {
-    Kind _m43 = Comp_curKind(&((*c)));
-    if (_m43.tag == 33) {
+    Kind _m46 = Comp_curKind(&((*c)));
+    if (_m46.tag == 33) {
     Comp_advance(&((*c)));
     }
     else {
@@ -2230,48 +2282,48 @@ PatInfo parsePattern(Comp* c) {
     variantLen = vTok.len;
     Comp_advance(&((*c)));
     {
-    Kind _m44 = Comp_curKind(&((*c)));
-    if (_m44.tag == 29) {
+    Kind _m47 = Comp_curKind(&((*c)));
+    if (_m47.tag == 29) {
     Comp_advance(&((*c)));
     while (1) {
     Comp_skipNewlines(&((*c)));
     {
-    Kind _m45 = Comp_curKind(&((*c)));
-    if (_m45.tag == 30) {
+    Kind _m48 = Comp_curKind(&((*c)));
+    if (_m48.tag == 30) {
     Comp_advance(&((*c)));
     break;
     }
-    else if (_m45.tag == 0) {
+    else if (_m48.tag == 0) {
     break;
     }
-    else if (_m45.tag == 18) {
+    else if (_m48.tag == 18) {
     Comp_advance(&((*c)));
     Tok bTok = Comp_cur(&((*c)));
     Comp_advance(&((*c)));
     PlewArray_Bind_push(&(binds), (Bind){.nameStart = bTok.start, .nameLen = bTok.len, .fieldStart = bTok.start, .fieldLen = bTok.len});
     {
-    Kind _m46 = Comp_curKind(&((*c)));
-    if (_m46.tag == 31) {
+    Kind _m49 = Comp_curKind(&((*c)));
+    if (_m49.tag == 31) {
     Comp_advance(&((*c)));
     }
     else {
     }
     }
     }
-    else if (_m45.tag == 5) {
+    else if (_m48.tag == 5) {
     Tok fTok = Comp_cur(&((*c)));
     Comp_advance(&((*c)));
     {
-    Kind _m47 = Comp_curKind(&((*c)));
-    if (_m47.tag == 32) {
+    Kind _m50 = Comp_curKind(&((*c)));
+    if (_m50.tag == 32) {
     Comp_advance(&((*c)));
     }
     else {
     }
     }
     {
-    Kind _m48 = Comp_curKind(&((*c)));
-    if (_m48.tag == 18) {
+    Kind _m51 = Comp_curKind(&((*c)));
+    if (_m51.tag == 18) {
     Comp_advance(&((*c)));
     Tok bTok = Comp_cur(&((*c)));
     Comp_advance(&((*c)));
@@ -2282,8 +2334,8 @@ PatInfo parsePattern(Comp* c) {
     }
     }
     {
-    Kind _m49 = Comp_curKind(&((*c)));
-    if (_m49.tag == 31) {
+    Kind _m52 = Comp_curKind(&((*c)));
+    if (_m52.tag == 31) {
     Comp_advance(&((*c)));
     }
     else {
@@ -2333,8 +2385,8 @@ PlewArray_PatInfo parseArmPatterns(Comp* c) {
     PlewArray_PatInfo_push(&(pats), parsePattern(&((*c))));
     while (1) {
     {
-    Kind _m50 = Comp_curKind(&((*c)));
-    if (_m50.tag == 50) {
+    Kind _m53 = Comp_curKind(&((*c)));
+    if (_m53.tag == 50) {
     Comp_advance(&((*c)));
     Comp_skipNewlines(&((*c)));
     PlewArray_PatInfo_push(&(pats), parsePattern(&((*c))));
@@ -2345,8 +2397,8 @@ PlewArray_PatInfo parseArmPatterns(Comp* c) {
     }
     }
     {
-    Kind _m51 = Comp_curKind(&((*c)));
-    if (_m51.tag == 56) {
+    Kind _m54 = Comp_curKind(&((*c)));
+    if (_m54.tag == 56) {
     Comp_advance(&((*c)));
     }
     else {
@@ -2366,47 +2418,6 @@ PlewArray_PatInfo parseArmPatterns(Comp* c) {
     return pats;
 }
 uint64_t parseMatch(Comp* c) {
-    Comp_advance(&((*c)));
-    uint64_t scrut = parseExpr(&((*c)));
-    Comp_skipNewlines(&((*c)));
-    {
-    Kind _m52 = Comp_curKind(&((*c)));
-    if (_m52.tag == 29) {
-    Comp_advance(&((*c)));
-    }
-    else {
-    }
-    }
-    PlewArray_MatchArm arms = PlewArray_MatchArm_new();
-    while (1) {
-    Comp_skipNewlines(&((*c)));
-    Kind k = Comp_curKind(&((*c)));
-    {
-    Kind _m53 = k;
-    if (_m53.tag == 30) {
-    Comp_advance(&((*c)));
-    break;
-    }
-    else if (_m53.tag == 0) {
-    break;
-    }
-    else {
-    PlewArray_PatInfo pats = parseArmPatterns(&((*c)));
-    Comp_skipNewlines(&((*c)));
-    uint64_t body = parseBlock(&((*c)));
-    {
-    PlewArray_PatInfo __fa54 = pats;
-    for (long long __fi54 = 0; __fi54 < __fa54.len; __fi54++) {
-        PatInfo pi = PlewArray_PatInfo_get(__fa54, __fi54);
-    PlewArray_MatchArm_push(&(arms), (MatchArm){.isWildcard = pi.isWildcard, .enumStart = pi.enumStart, .enumLen = pi.enumLen, .variantStart = pi.variantStart, .variantLen = pi.variantLen, .binds = pi.binds, .body = body});
-    }
-    }
-    }
-    }
-    }
-    return Comp_pushStmt(&((*c)), (Stmt){.tag = 8, .data.Match = {.scrut = scrut, .arms = arms}});
-}
-uint64_t parseMatchExpr(Comp* c) {
     Comp_advance(&((*c)));
     uint64_t scrut = parseExpr(&((*c)));
     Comp_skipNewlines(&((*c)));
@@ -2433,7 +2444,8 @@ uint64_t parseMatchExpr(Comp* c) {
     }
     else {
     PlewArray_PatInfo pats = parseArmPatterns(&((*c)));
-    uint64_t body = parseExpr(&((*c)));
+    Comp_skipNewlines(&((*c)));
+    uint64_t body = parseBlock(&((*c)));
     {
     PlewArray_PatInfo __fa57 = pats;
     for (long long __fi57 = 0; __fi57 < __fa57.len; __fi57++) {
@@ -2441,9 +2453,49 @@ uint64_t parseMatchExpr(Comp* c) {
     PlewArray_MatchArm_push(&(arms), (MatchArm){.isWildcard = pi.isWildcard, .enumStart = pi.enumStart, .enumLen = pi.enumLen, .variantStart = pi.variantStart, .variantLen = pi.variantLen, .binds = pi.binds, .body = body});
     }
     }
+    }
+    }
+    }
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 8, .data.Match = {.scrut = scrut, .arms = arms}});
+}
+uint64_t parseMatchExpr(Comp* c) {
+    Comp_advance(&((*c)));
+    uint64_t scrut = parseExpr(&((*c)));
+    Comp_skipNewlines(&((*c)));
     {
     Kind _m58 = Comp_curKind(&((*c)));
-    if (_m58.tag == 31) {
+    if (_m58.tag == 29) {
+    Comp_advance(&((*c)));
+    }
+    else {
+    }
+    }
+    PlewArray_MatchArm arms = PlewArray_MatchArm_new();
+    while (1) {
+    Comp_skipNewlines(&((*c)));
+    Kind k = Comp_curKind(&((*c)));
+    {
+    Kind _m59 = k;
+    if (_m59.tag == 30) {
+    Comp_advance(&((*c)));
+    break;
+    }
+    else if (_m59.tag == 0) {
+    break;
+    }
+    else {
+    PlewArray_PatInfo pats = parseArmPatterns(&((*c)));
+    uint64_t body = parseExpr(&((*c)));
+    {
+    PlewArray_PatInfo __fa60 = pats;
+    for (long long __fi60 = 0; __fi60 < __fa60.len; __fi60++) {
+        PatInfo pi = PlewArray_PatInfo_get(__fa60, __fi60);
+    PlewArray_MatchArm_push(&(arms), (MatchArm){.isWildcard = pi.isWildcard, .enumStart = pi.enumStart, .enumLen = pi.enumLen, .variantStart = pi.variantStart, .variantLen = pi.variantLen, .binds = pi.binds, .body = body});
+    }
+    }
+    {
+    Kind _m61 = Comp_curKind(&((*c)));
+    if (_m61.tag == 31) {
     Comp_advance(&((*c)));
     }
     else {
@@ -2457,42 +2509,42 @@ uint64_t parseMatchExpr(Comp* c) {
 uint64_t parseStmt(Comp* c) {
     Kind k = Comp_curKind(&((*c)));
     {
-    Kind _m59 = k;
-    if (_m59.tag == 18) {
+    Kind _m62 = k;
+    if (_m62.tag == 18) {
     return parseLet(&((*c)), 0);
     }
-    else if (_m59.tag == 19) {
+    else if (_m62.tag == 19) {
     Comp_advance(&((*c)));
     return parseLet(&((*c)), 1);
     }
-    else if (_m59.tag == 10) {
+    else if (_m62.tag == 10) {
     return parseIf(&((*c)));
     }
-    else if (_m59.tag == 12) {
+    else if (_m62.tag == 12) {
     return parseWhile(&((*c)));
     }
-    else if (_m59.tag == 13) {
+    else if (_m62.tag == 13) {
     return parseFor(&((*c)));
     }
-    else if (_m59.tag == 9) {
+    else if (_m62.tag == 9) {
     return parseMatch(&((*c)));
     }
-    else if (_m59.tag == 14) {
+    else if (_m62.tag == 14) {
     Comp_advance(&((*c)));
     return Comp_pushStmt(&((*c)), (Stmt){.tag = 11});
     }
-    else if (_m59.tag == 15) {
+    else if (_m62.tag == 15) {
     Comp_advance(&((*c)));
     return Comp_pushStmt(&((*c)), (Stmt){.tag = 12});
     }
-    else if (_m59.tag == 16) {
+    else if (_m62.tag == 16) {
     return parseReturn(&((*c)));
     }
-    else if (_m59.tag == 5) {
+    else if (_m62.tag == 5) {
     if (Comp_identIs(&((*c)), (PlewString){"print", 5})) {
     {
-    Kind _m60 = Comp_peekKind(&((*c)), 1);
-    if (_m60.tag == 25) {
+    Kind _m63 = Comp_peekKind(&((*c)), 1);
+    if (_m63.tag == 25) {
     return parsePrint(&((*c)));
     }
     else {
@@ -2505,7 +2557,7 @@ uint64_t parseStmt(Comp* c) {
     }
     return parseExprOrAssign(&((*c)));
     }
-    else if (_m59.tag == 17) {
+    else if (_m62.tag == 17) {
     return parseGive(&((*c)));
     }
     else {
@@ -2515,8 +2567,8 @@ uint64_t parseStmt(Comp* c) {
 }
 uint64_t parseBlock(Comp* c) {
     {
-    Kind _m61 = Comp_curKind(&((*c)));
-    if (_m61.tag == 29) {
+    Kind _m64 = Comp_curKind(&((*c)));
+    if (_m64.tag == 29) {
     Comp_advance(&((*c)));
     }
     else {
@@ -2527,12 +2579,12 @@ uint64_t parseBlock(Comp* c) {
     Comp_skipNewlines(&((*c)));
     Kind k = Comp_curKind(&((*c)));
     {
-    Kind _m62 = k;
-    if (_m62.tag == 30) {
+    Kind _m65 = k;
+    if (_m65.tag == 30) {
     Comp_advance(&((*c)));
     break;
     }
-    else if (_m62.tag == 0) {
+    else if (_m65.tag == 0) {
     break;
     }
     else {
@@ -2550,19 +2602,19 @@ void parseFuncCommon(Comp* c, long long hasRecv, uint64_t recvStart, uint64_t re
     Comp_advance(&((*c)));
     PlewArray_Param params = PlewArray_Param_new();
     {
-    Kind _m63 = Comp_curKind(&((*c)));
-    if (_m63.tag == 25) {
+    Kind _m66 = Comp_curKind(&((*c)));
+    if (_m66.tag == 25) {
     Comp_advance(&((*c)));
     while (1) {
     Comp_skipNewlines(&((*c)));
     Kind k = Comp_curKind(&((*c)));
     {
-    Kind _m64 = k;
-    if (_m64.tag == 26) {
+    Kind _m67 = k;
+    if (_m67.tag == 26) {
     Comp_advance(&((*c)));
     break;
     }
-    else if (_m64.tag == 0) {
+    else if (_m67.tag == 0) {
     break;
     }
     else {
@@ -2574,12 +2626,12 @@ void parseFuncCommon(Comp* c, long long hasRecv, uint64_t recvStart, uint64_t re
     uint64_t pTyRef = 0;
     long long pIsInout = 0;
     {
-    Kind _m65 = Comp_curKind(&((*c)));
-    if (_m65.tag == 32) {
+    Kind _m68 = Comp_curKind(&((*c)));
+    if (_m68.tag == 32) {
     Comp_advance(&((*c)));
     {
-    Kind _m66 = Comp_curKind(&((*c)));
-    if (_m66.tag == 22) {
+    Kind _m69 = Comp_curKind(&((*c)));
+    if (_m69.tag == 22) {
     Comp_advance(&((*c)));
     pIsInout = 1;
     }
@@ -2598,8 +2650,8 @@ void parseFuncCommon(Comp* c, long long hasRecv, uint64_t recvStart, uint64_t re
     }
     PlewArray_Param_push(&(params), (Param){.nameStart = pTok.start, .nameLen = pTok.len, .tyStart = pTyStart, .tyLen = pTyLen, .tyIsArray = pTyIsArray, .ty = pTyRef, .isInout = pIsInout});
     {
-    Kind _m67 = Comp_curKind(&((*c)));
-    if (_m67.tag == 31) {
+    Kind _m70 = Comp_curKind(&((*c)));
+    if (_m70.tag == 31) {
     Comp_advance(&((*c)));
     }
     else {
@@ -2618,8 +2670,8 @@ void parseFuncCommon(Comp* c, long long hasRecv, uint64_t recvStart, uint64_t re
     long long retIsArray = 0;
     uint64_t retRef = 0;
     {
-    Kind _m68 = Comp_curKind(&((*c)));
-    if (_m68.tag == 55) {
+    Kind _m71 = Comp_curKind(&((*c)));
+    if (_m71.tag == 55) {
     Comp_advance(&((*c)));
     hasRet = 1;
     PType rty = parseTypeTok(&((*c)));
@@ -2645,8 +2697,8 @@ void parseImpl(Comp* c) {
     Tok tyTok = Comp_cur(&((*c)));
     Comp_advance(&((*c)));
     {
-    Kind _m69 = Comp_curKind(&((*c)));
-    if (_m69.tag == 29) {
+    Kind _m72 = Comp_curKind(&((*c)));
+    if (_m72.tag == 29) {
     Comp_advance(&((*c)));
     }
     else {
@@ -2656,19 +2708,19 @@ void parseImpl(Comp* c) {
     Comp_skipNewlines(&((*c)));
     Kind k = Comp_curKind(&((*c)));
     {
-    Kind _m70 = k;
-    if (_m70.tag == 30) {
+    Kind _m73 = k;
+    if (_m73.tag == 30) {
     Comp_advance(&((*c)));
     break;
     }
-    else if (_m70.tag == 0) {
+    else if (_m73.tag == 0) {
     break;
     }
-    else if (_m70.tag == 22) {
+    else if (_m73.tag == 22) {
     Comp_advance(&((*c)));
     {
-    Kind _m71 = Comp_curKind(&((*c)));
-    if (_m71.tag == 6) {
+    Kind _m74 = Comp_curKind(&((*c)));
+    if (_m74.tag == 6) {
     Comp_advance(&((*c)));
     }
     else {
@@ -2676,7 +2728,7 @@ void parseImpl(Comp* c) {
     }
     parseFuncCommon(&((*c)), 1, tyTok.start, tyTok.len, 1);
     }
-    else if (_m70.tag == 6) {
+    else if (_m73.tag == 6) {
     Comp_advance(&((*c)));
     parseFuncCommon(&((*c)), 1, tyTok.start, tyTok.len, 0);
     }
@@ -2690,9 +2742,10 @@ void parseStruct(Comp* c) {
     Comp_advance(&((*c)));
     Tok nameTok = Comp_cur(&((*c)));
     Comp_advance(&((*c)));
+    PlewArray_Bind typeParams = parseTypeParams(&((*c)));
     {
-    Kind _m72 = Comp_curKind(&((*c)));
-    if (_m72.tag == 29) {
+    Kind _m75 = Comp_curKind(&((*c)));
+    if (_m75.tag == 29) {
     Comp_advance(&((*c)));
     }
     else {
@@ -2703,19 +2756,19 @@ void parseStruct(Comp* c) {
     Comp_skipNewlines(&((*c)));
     Kind k = Comp_curKind(&((*c)));
     {
-    Kind _m73 = k;
-    if (_m73.tag == 30) {
+    Kind _m76 = k;
+    if (_m76.tag == 30) {
     Comp_advance(&((*c)));
     break;
     }
-    else if (_m73.tag == 0) {
+    else if (_m76.tag == 0) {
     break;
     }
     else {
     long long isMut = 0;
     {
-    Kind _m74 = Comp_curKind(&((*c)));
-    if (_m74.tag == 19) {
+    Kind _m77 = Comp_curKind(&((*c)));
+    if (_m77.tag == 19) {
     Comp_advance(&((*c)));
     isMut = 1;
     }
@@ -2723,8 +2776,8 @@ void parseStruct(Comp* c) {
     }
     }
     {
-    Kind _m75 = Comp_curKind(&((*c)));
-    if (_m75.tag == 18) {
+    Kind _m78 = Comp_curKind(&((*c)));
+    if (_m78.tag == 18) {
     Comp_advance(&((*c)));
     }
     else {
@@ -2737,8 +2790,8 @@ void parseStruct(Comp* c) {
     long long tyIsArray = 0;
     uint64_t tyRef = 0;
     {
-    Kind _m76 = Comp_curKind(&((*c)));
-    if (_m76.tag == 32) {
+    Kind _m79 = Comp_curKind(&((*c)));
+    if (_m79.tag == 32) {
     Comp_advance(&((*c)));
     PType ty = parseTypeTok(&((*c)));
     tyStart = ty.start;
@@ -2754,15 +2807,16 @@ void parseStruct(Comp* c) {
     }
     }
     }
-    PlewArray_StructDef_push(&((*c).structs), (StructDef){.nameStart = nameTok.start, .nameLen = nameTok.len, .fields = fields});
+    PlewArray_StructDef_push(&((*c).structs), (StructDef){.nameStart = nameTok.start, .nameLen = nameTok.len, .typeParams = typeParams, .fields = fields});
 }
 void parseEnum(Comp* c) {
     Comp_advance(&((*c)));
     Tok nameTok = Comp_cur(&((*c)));
     Comp_advance(&((*c)));
+    PlewArray_Bind typeParams = parseTypeParams(&((*c)));
     {
-    Kind _m77 = Comp_curKind(&((*c)));
-    if (_m77.tag == 29) {
+    Kind _m80 = Comp_curKind(&((*c)));
+    if (_m80.tag == 29) {
     Comp_advance(&((*c)));
     }
     else {
@@ -2773,34 +2827,34 @@ void parseEnum(Comp* c) {
     Comp_skipNewlines(&((*c)));
     Kind k = Comp_curKind(&((*c)));
     {
-    Kind _m78 = k;
-    if (_m78.tag == 30) {
+    Kind _m81 = k;
+    if (_m81.tag == 30) {
     Comp_advance(&((*c)));
     break;
     }
-    else if (_m78.tag == 0) {
+    else if (_m81.tag == 0) {
     break;
     }
-    else if (_m78.tag == 5) {
+    else if (_m81.tag == 5) {
     Tok vTok = Comp_cur(&((*c)));
     Comp_advance(&((*c)));
     PlewArray_FieldDef fields = PlewArray_FieldDef_new();
     {
-    Kind _m79 = Comp_curKind(&((*c)));
-    if (_m79.tag == 29) {
+    Kind _m82 = Comp_curKind(&((*c)));
+    if (_m82.tag == 29) {
     Comp_advance(&((*c)));
     while (1) {
     Comp_skipNewlines(&((*c)));
     {
-    Kind _m80 = Comp_curKind(&((*c)));
-    if (_m80.tag == 30) {
+    Kind _m83 = Comp_curKind(&((*c)));
+    if (_m83.tag == 30) {
     Comp_advance(&((*c)));
     break;
     }
-    else if (_m80.tag == 0) {
+    else if (_m83.tag == 0) {
     break;
     }
-    else if (_m80.tag == 5) {
+    else if (_m83.tag == 5) {
     Tok fTok = Comp_cur(&((*c)));
     Comp_advance(&((*c)));
     uint64_t tyStart = 0;
@@ -2808,8 +2862,8 @@ void parseEnum(Comp* c) {
     long long tyIsArray = 0;
     uint64_t tyRef = 0;
     {
-    Kind _m81 = Comp_curKind(&((*c)));
-    if (_m81.tag == 32) {
+    Kind _m84 = Comp_curKind(&((*c)));
+    if (_m84.tag == 32) {
     Comp_advance(&((*c)));
     PType ty = parseTypeTok(&((*c)));
     tyStart = ty.start;
@@ -2823,8 +2877,8 @@ void parseEnum(Comp* c) {
     }
     PlewArray_FieldDef_push(&(fields), (FieldDef){.nameStart = fTok.start, .nameLen = fTok.len, .tyStart = tyStart, .tyLen = tyLen, .tyIsArray = tyIsArray, .ty = tyRef, .isMut = 0});
     {
-    Kind _m82 = Comp_curKind(&((*c)));
-    if (_m82.tag == 31) {
+    Kind _m85 = Comp_curKind(&((*c)));
+    if (_m85.tag == 31) {
     Comp_advance(&((*c)));
     }
     else {
@@ -2847,7 +2901,7 @@ void parseEnum(Comp* c) {
     }
     }
     }
-    PlewArray_EnumDef_push(&((*c).enums), (EnumDef){.nameStart = nameTok.start, .nameLen = nameTok.len, .variants = variants});
+    PlewArray_EnumDef_push(&((*c).enums), (EnumDef){.nameStart = nameTok.start, .nameLen = nameTok.len, .typeParams = typeParams, .variants = variants});
 }
 void markImport(Comp* c, uint64_t segStart, uint64_t segLen, uint64_t nameStart, uint64_t nameLen) {
     if (rangeEquals((*c).bytes, segStart, segLen, (PlewString){"Io", 2})) {
@@ -2895,17 +2949,17 @@ void parseImport(Comp* c) {
     while (1) {
     Kind k = Comp_curKind(&((*c)));
     {
-    Kind _m83 = k;
-    if (_m83.tag == 1) {
+    Kind _m86 = k;
+    if (_m86.tag == 1) {
     break;
     }
-    else if (_m83.tag == 0) {
+    else if (_m86.tag == 0) {
     break;
     }
-    else if (_m83.tag == 29) {
+    else if (_m86.tag == 29) {
     break;
     }
-    else if (_m83.tag == 5) {
+    else if (_m86.tag == 5) {
     if (Comp_identIs(&((*c)), (PlewString){"with", 4})) {
     Comp_advance(&((*c)));
     break;
@@ -2921,25 +2975,25 @@ void parseImport(Comp* c) {
     }
     }
     {
-    Kind _m84 = Comp_curKind(&((*c)));
-    if (_m84.tag == 29) {
+    Kind _m87 = Comp_curKind(&((*c)));
+    if (_m87.tag == 29) {
     Comp_advance(&((*c)));
     while (1) {
     Comp_skipNewlines(&((*c)));
     Kind k = Comp_curKind(&((*c)));
     {
-    Kind _m85 = k;
-    if (_m85.tag == 30) {
+    Kind _m88 = k;
+    if (_m88.tag == 30) {
     Comp_advance(&((*c)));
     break;
     }
-    else if (_m85.tag == 0) {
+    else if (_m88.tag == 0) {
     break;
     }
-    else if (_m85.tag == 31) {
+    else if (_m88.tag == 31) {
     Comp_advance(&((*c)));
     }
-    else if (_m85.tag == 5) {
+    else if (_m88.tag == 5) {
     Tok t = Comp_cur(&((*c)));
     markImport(&((*c)), segStart, segLen, t.start, t.len);
     Comp_advance(&((*c)));
@@ -2959,17 +3013,17 @@ void parseProgram(Comp* c) {
     Comp_skipNewlines(&((*c)));
     Kind k = Comp_curKind(&((*c)));
     {
-    Kind _m86 = k;
-    if (_m86.tag == 6) {
+    Kind _m89 = k;
+    if (_m89.tag == 6) {
     parseFunc(&((*c)));
     }
-    else if (_m86.tag == 7) {
+    else if (_m89.tag == 7) {
     parseStruct(&((*c)));
     }
-    else if (_m86.tag == 8) {
+    else if (_m89.tag == 8) {
     parseEnum(&((*c)));
     }
-    else if (_m86.tag == 5) {
+    else if (_m89.tag == 5) {
     if (Comp_identIs(&((*c)), (PlewString){"import", 6})) {
     parseImport(&((*c)));
     }
@@ -2982,7 +3036,7 @@ void parseProgram(Comp* c) {
     }
     }
     }
-    else if (_m86.tag == 0) {
+    else if (_m89.tag == 0) {
     break;
     }
     else {
@@ -3352,115 +3406,115 @@ int64_t lineOf(Comp* c, uint64_t offset) {
 uint64_t exprOffset(Comp* c, uint64_t id) {
     Expr e = PlewArray_Expr_get((*c).exprs, (long long)(id));
     {
-    Expr _m87 = e;
-    if (_m87.tag == 0) {
-        uint64_t offset = _m87.data.Int.offset;
+    Expr _m90 = e;
+    if (_m90.tag == 0) {
+        uint64_t offset = _m90.data.Int.offset;
         (void)offset;
     return offset;
     }
-    else if (_m87.tag == 1) {
-        uint64_t start = _m87.data.Ident.start;
+    else if (_m90.tag == 1) {
+        uint64_t start = _m90.data.Ident.start;
         (void)start;
-        uint64_t len = _m87.data.Ident.len;
+        uint64_t len = _m90.data.Ident.len;
         (void)len;
     return start;
     }
-    else if (_m87.tag == 7) {
-        uint64_t start = _m87.data.Str.start;
+    else if (_m90.tag == 7) {
+        uint64_t start = _m90.data.Str.start;
         (void)start;
-        uint64_t len = _m87.data.Str.len;
+        uint64_t len = _m90.data.Str.len;
         (void)len;
     return start;
     }
-    else if (_m87.tag == 4) {
-        uint64_t nameStart = _m87.data.Call.nameStart;
+    else if (_m90.tag == 4) {
+        uint64_t nameStart = _m90.data.Call.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m87.data.Call.nameLen;
+        uint64_t nameLen = _m90.data.Call.nameLen;
         (void)nameLen;
-        PlewArray_Arg args = _m87.data.Call.args;
+        PlewArray_Arg args = _m90.data.Call.args;
         (void)args;
     return nameStart;
     }
-    else if (_m87.tag == 10) {
-        uint64_t recv = _m87.data.Method.recv;
+    else if (_m90.tag == 10) {
+        uint64_t recv = _m90.data.Method.recv;
         (void)recv;
-        uint64_t nameStart = _m87.data.Method.nameStart;
+        uint64_t nameStart = _m90.data.Method.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m87.data.Method.nameLen;
+        uint64_t nameLen = _m90.data.Method.nameLen;
         (void)nameLen;
-        PlewArray_Arg args = _m87.data.Method.args;
+        PlewArray_Arg args = _m90.data.Method.args;
         (void)args;
     return nameStart;
     }
-    else if (_m87.tag == 5) {
-        uint64_t base = _m87.data.Field.base;
+    else if (_m90.tag == 5) {
+        uint64_t base = _m90.data.Field.base;
         (void)base;
-        uint64_t nameStart = _m87.data.Field.nameStart;
+        uint64_t nameStart = _m90.data.Field.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m87.data.Field.nameLen;
+        uint64_t nameLen = _m90.data.Field.nameLen;
         (void)nameLen;
     return exprOffset(&((*c)), base);
     }
-    else if (_m87.tag == 9) {
-        uint64_t base = _m87.data.Index.base;
+    else if (_m90.tag == 9) {
+        uint64_t base = _m90.data.Index.base;
         (void)base;
-        uint64_t index = _m87.data.Index.index;
+        uint64_t index = _m90.data.Index.index;
         (void)index;
     return exprOffset(&((*c)), base);
     }
-    else if (_m87.tag == 3) {
-        int64_t op = _m87.data.Binary.op;
+    else if (_m90.tag == 3) {
+        int64_t op = _m90.data.Binary.op;
         (void)op;
-        uint64_t lhs = _m87.data.Binary.lhs;
+        uint64_t lhs = _m90.data.Binary.lhs;
         (void)lhs;
-        uint64_t rhs = _m87.data.Binary.rhs;
+        uint64_t rhs = _m90.data.Binary.rhs;
         (void)rhs;
     return exprOffset(&((*c)), lhs);
     }
-    else if (_m87.tag == 2) {
-        int64_t op = _m87.data.Unary.op;
+    else if (_m90.tag == 2) {
+        int64_t op = _m90.data.Unary.op;
         (void)op;
-        uint64_t operand = _m87.data.Unary.operand;
+        uint64_t operand = _m90.data.Unary.operand;
         (void)operand;
     return exprOffset(&((*c)), operand);
     }
-    else if (_m87.tag == 11) {
-        uint64_t operand = _m87.data.Cast.operand;
+    else if (_m90.tag == 11) {
+        uint64_t operand = _m90.data.Cast.operand;
         (void)operand;
-        uint64_t tyStart = _m87.data.Cast.tyStart;
+        uint64_t tyStart = _m90.data.Cast.tyStart;
         (void)tyStart;
-        uint64_t tyLen = _m87.data.Cast.tyLen;
+        uint64_t tyLen = _m90.data.Cast.tyLen;
         (void)tyLen;
     return exprOffset(&((*c)), operand);
     }
-    else if (_m87.tag == 6) {
-        uint64_t typeStart = _m87.data.Make.typeStart;
+    else if (_m90.tag == 6) {
+        uint64_t typeStart = _m90.data.Make.typeStart;
         (void)typeStart;
-        uint64_t typeLen = _m87.data.Make.typeLen;
+        uint64_t typeLen = _m90.data.Make.typeLen;
         (void)typeLen;
-        uint64_t variantStart = _m87.data.Make.variantStart;
+        uint64_t variantStart = _m90.data.Make.variantStart;
         (void)variantStart;
-        uint64_t variantLen = _m87.data.Make.variantLen;
+        uint64_t variantLen = _m90.data.Make.variantLen;
         (void)variantLen;
-        long long isEnum = _m87.data.Make.isEnum;
+        long long isEnum = _m90.data.Make.isEnum;
         (void)isEnum;
-        PlewArray_MakeField fields = _m87.data.Make.fields;
+        PlewArray_MakeField fields = _m90.data.Make.fields;
         (void)fields;
     return typeStart;
     }
-    else if (_m87.tag == 12) {
-        uint64_t scrut = _m87.data.MatchExpr.scrut;
+    else if (_m90.tag == 12) {
+        uint64_t scrut = _m90.data.MatchExpr.scrut;
         (void)scrut;
-        PlewArray_MatchArm arms = _m87.data.MatchExpr.arms;
+        PlewArray_MatchArm arms = _m90.data.MatchExpr.arms;
         (void)arms;
     return exprOffset(&((*c)), scrut);
     }
-    else if (_m87.tag == 13) {
-        uint64_t cond = _m87.data.IfExpr.cond;
+    else if (_m90.tag == 13) {
+        uint64_t cond = _m90.data.IfExpr.cond;
         (void)cond;
-        uint64_t thenBlk = _m87.data.IfExpr.thenBlk;
+        uint64_t thenBlk = _m90.data.IfExpr.thenBlk;
         (void)thenBlk;
-        uint64_t elseBlk = _m87.data.IfExpr.elseBlk;
+        uint64_t elseBlk = _m90.data.IfExpr.elseBlk;
         (void)elseBlk;
     return exprOffset(&((*c)), cond);
     }
@@ -3700,20 +3754,20 @@ long long fieldDeclaredMut(Comp* c, uint64_t structStart, uint64_t structLen, ui
 long long placeIsMutable(Comp* c, uint64_t id) {
     Expr e = PlewArray_Expr_get((*c).exprs, (long long)(id));
     {
-    Expr _m88 = e;
-    if (_m88.tag == 1) {
-        uint64_t start = _m88.data.Ident.start;
+    Expr _m91 = e;
+    if (_m91.tag == 1) {
+        uint64_t start = _m91.data.Ident.start;
         (void)start;
-        uint64_t len = _m88.data.Ident.len;
+        uint64_t len = _m91.data.Ident.len;
         (void)len;
     return localIsMutable(&((*c)), start, len);
     }
-    else if (_m88.tag == 5) {
-        uint64_t base = _m88.data.Field.base;
+    else if (_m91.tag == 5) {
+        uint64_t base = _m91.data.Field.base;
         (void)base;
-        uint64_t nameStart = _m88.data.Field.nameStart;
+        uint64_t nameStart = _m91.data.Field.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m88.data.Field.nameLen;
+        uint64_t nameLen = _m91.data.Field.nameLen;
         (void)nameLen;
     TypeInfo bt = exprType(&((*c)), base);
     if (bt.kind == 2) {
@@ -3724,10 +3778,10 @@ long long placeIsMutable(Comp* c, uint64_t id) {
     }
     return placeIsMutable(&((*c)), base);
     }
-    else if (_m88.tag == 9) {
-        uint64_t base = _m88.data.Index.base;
+    else if (_m91.tag == 9) {
+        uint64_t base = _m91.data.Index.base;
         (void)base;
-        uint64_t index = _m88.data.Index.index;
+        uint64_t index = _m91.data.Index.index;
         (void)index;
     return placeIsMutable(&((*c)), base);
     }
@@ -3739,28 +3793,28 @@ long long placeIsMutable(Comp* c, uint64_t id) {
 TypeInfo exprType(Comp* c, uint64_t id) {
     Expr e = PlewArray_Expr_get((*c).exprs, (long long)(id));
     {
-    Expr _m89 = e;
-    if (_m89.tag == 0) {
-        uint64_t tyStart = _m89.data.Int.tyStart;
+    Expr _m92 = e;
+    if (_m92.tag == 0) {
+        uint64_t tyStart = _m92.data.Int.tyStart;
         (void)tyStart;
-        uint64_t tyLen = _m89.data.Int.tyLen;
+        uint64_t tyLen = _m92.data.Int.tyLen;
         (void)tyLen;
     if (tyLen != 0) {
     return typeInfoOfName(&((*c)), tyStart, tyLen, 0);
     }
     return scalarInfo();
     }
-    else if (_m89.tag == 7) {
-        uint64_t start = _m89.data.Str.start;
+    else if (_m92.tag == 7) {
+        uint64_t start = _m92.data.Str.start;
         (void)start;
-        uint64_t len = _m89.data.Str.len;
+        uint64_t len = _m92.data.Str.len;
         (void)len;
     return (TypeInfo){.kind = 1, .nameStart = 0, .nameLen = 0};
     }
-    else if (_m89.tag == 1) {
-        uint64_t start = _m89.data.Ident.start;
+    else if (_m92.tag == 1) {
+        uint64_t start = _m92.data.Ident.start;
         (void)start;
-        uint64_t len = _m89.data.Ident.len;
+        uint64_t len = _m92.data.Ident.len;
         (void)len;
     if (isSelfRef(&((*c)), start, len)) {
     return typeInfoOfName(&((*c)), (*c).curRecvStart, (*c).curRecvLen, 0);
@@ -3775,10 +3829,10 @@ TypeInfo exprType(Comp* c, uint64_t id) {
     }
     return scalarInfo();
     }
-    else if (_m89.tag == 2) {
-        int64_t op = _m89.data.Unary.op;
+    else if (_m92.tag == 2) {
+        int64_t op = _m92.data.Unary.op;
         (void)op;
-        uint64_t operand = _m89.data.Unary.operand;
+        uint64_t operand = _m92.data.Unary.operand;
         (void)operand;
     if (op == 57) {
     return exprType(&((*c)), operand);
@@ -3788,12 +3842,12 @@ TypeInfo exprType(Comp* c, uint64_t id) {
     }
     return scalarInfo();
     }
-    else if (_m89.tag == 3) {
-        int64_t op = _m89.data.Binary.op;
+    else if (_m92.tag == 3) {
+        int64_t op = _m92.data.Binary.op;
         (void)op;
-        uint64_t lhs = _m89.data.Binary.lhs;
+        uint64_t lhs = _m92.data.Binary.lhs;
         (void)lhs;
-        uint64_t rhs = _m89.data.Binary.rhs;
+        uint64_t rhs = _m92.data.Binary.rhs;
         (void)rhs;
     if (op >= 56) {
     if (op <= 60) {
@@ -3807,12 +3861,12 @@ TypeInfo exprType(Comp* c, uint64_t id) {
     }
     return scalarInfo();
     }
-    else if (_m89.tag == 4) {
-        uint64_t nameStart = _m89.data.Call.nameStart;
+    else if (_m92.tag == 4) {
+        uint64_t nameStart = _m92.data.Call.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m89.data.Call.nameLen;
+        uint64_t nameLen = _m92.data.Call.nameLen;
         (void)nameLen;
-        PlewArray_Arg args = _m89.data.Call.args;
+        PlewArray_Arg args = _m92.data.Call.args;
         (void)args;
     if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"readStdin", 9})) {
     return (TypeInfo){.kind = 1, .nameStart = 0, .nameLen = 0};
@@ -3839,12 +3893,12 @@ TypeInfo exprType(Comp* c, uint64_t id) {
     }
     return scalarInfo();
     }
-    else if (_m89.tag == 5) {
-        uint64_t base = _m89.data.Field.base;
+    else if (_m92.tag == 5) {
+        uint64_t base = _m92.data.Field.base;
         (void)base;
-        uint64_t nameStart = _m89.data.Field.nameStart;
+        uint64_t nameStart = _m92.data.Field.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m89.data.Field.nameLen;
+        uint64_t nameLen = _m92.data.Field.nameLen;
         (void)nameLen;
     TypeInfo bt = exprType(&((*c)), base);
     if (bt.kind == 2) {
@@ -3852,30 +3906,30 @@ TypeInfo exprType(Comp* c, uint64_t id) {
     }
     return scalarInfo();
     }
-    else if (_m89.tag == 6) {
-        uint64_t typeStart = _m89.data.Make.typeStart;
+    else if (_m92.tag == 6) {
+        uint64_t typeStart = _m92.data.Make.typeStart;
         (void)typeStart;
-        uint64_t typeLen = _m89.data.Make.typeLen;
+        uint64_t typeLen = _m92.data.Make.typeLen;
         (void)typeLen;
-        uint64_t variantStart = _m89.data.Make.variantStart;
+        uint64_t variantStart = _m92.data.Make.variantStart;
         (void)variantStart;
-        uint64_t variantLen = _m89.data.Make.variantLen;
+        uint64_t variantLen = _m92.data.Make.variantLen;
         (void)variantLen;
-        long long isEnum = _m89.data.Make.isEnum;
+        long long isEnum = _m92.data.Make.isEnum;
         (void)isEnum;
-        PlewArray_MakeField fields = _m89.data.Make.fields;
+        PlewArray_MakeField fields = _m92.data.Make.fields;
         (void)fields;
     return (TypeInfo){.kind = 2, .nameStart = typeStart, .nameLen = typeLen};
     }
-    else if (_m89.tag == 8) {
-        PlewArray_U64 elems = _m89.data.Array.elems;
+    else if (_m92.tag == 8) {
+        PlewArray_U64 elems = _m92.data.Array.elems;
         (void)elems;
     return scalarInfo();
     }
-    else if (_m89.tag == 9) {
-        uint64_t base = _m89.data.Index.base;
+    else if (_m92.tag == 9) {
+        uint64_t base = _m92.data.Index.base;
         (void)base;
-        uint64_t index = _m89.data.Index.index;
+        uint64_t index = _m92.data.Index.index;
         (void)index;
     TypeInfo bt = exprType(&((*c)), base);
     if (bt.kind == 3) {
@@ -3883,14 +3937,14 @@ TypeInfo exprType(Comp* c, uint64_t id) {
     }
     return scalarInfo();
     }
-    else if (_m89.tag == 10) {
-        uint64_t recv = _m89.data.Method.recv;
+    else if (_m92.tag == 10) {
+        uint64_t recv = _m92.data.Method.recv;
         (void)recv;
-        uint64_t nameStart = _m89.data.Method.nameStart;
+        uint64_t nameStart = _m92.data.Method.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m89.data.Method.nameLen;
+        uint64_t nameLen = _m92.data.Method.nameLen;
         (void)nameLen;
-        PlewArray_Arg args = _m89.data.Method.args;
+        PlewArray_Arg args = _m92.data.Method.args;
         (void)args;
     TypeInfo rt = exprType(&((*c)), recv);
     if (rt.kind == 2) {
@@ -3906,31 +3960,31 @@ TypeInfo exprType(Comp* c, uint64_t id) {
     }
     return scalarInfo();
     }
-    else if (_m89.tag == 11) {
-        uint64_t operand = _m89.data.Cast.operand;
+    else if (_m92.tag == 11) {
+        uint64_t operand = _m92.data.Cast.operand;
         (void)operand;
-        uint64_t tyStart = _m89.data.Cast.tyStart;
+        uint64_t tyStart = _m92.data.Cast.tyStart;
         (void)tyStart;
-        uint64_t tyLen = _m89.data.Cast.tyLen;
+        uint64_t tyLen = _m92.data.Cast.tyLen;
         (void)tyLen;
     return typeInfoOfName(&((*c)), tyStart, tyLen, 0);
     }
-    else if (_m89.tag == 12) {
-        uint64_t scrut = _m89.data.MatchExpr.scrut;
+    else if (_m92.tag == 12) {
+        uint64_t scrut = _m92.data.MatchExpr.scrut;
         (void)scrut;
-        PlewArray_MatchArm arms = _m89.data.MatchExpr.arms;
+        PlewArray_MatchArm arms = _m92.data.MatchExpr.arms;
         (void)arms;
     if ((long long)((arms).len) > 0) {
     return exprType(&((*c)), PlewArray_MatchArm_get(arms, (long long)(0)).body);
     }
     return scalarInfo();
     }
-    else if (_m89.tag == 13) {
-        uint64_t cond = _m89.data.IfExpr.cond;
+    else if (_m92.tag == 13) {
+        uint64_t cond = _m92.data.IfExpr.cond;
         (void)cond;
-        uint64_t thenBlk = _m89.data.IfExpr.thenBlk;
+        uint64_t thenBlk = _m92.data.IfExpr.thenBlk;
         (void)thenBlk;
-        uint64_t elseBlk = _m89.data.IfExpr.elseBlk;
+        uint64_t elseBlk = _m92.data.IfExpr.elseBlk;
         (void)elseBlk;
     uint64_t g = blockGiveExpr(&((*c)), thenBlk);
     if (g < (long long)(((*c).exprs).len)) {
@@ -3950,9 +4004,9 @@ uint64_t blockGiveExpr(Comp* c, uint64_t blkId) {
     while (i < (long long)((stmts).len)) {
     Stmt s = PlewArray_Stmt_get((*c).stmts, (long long)(PlewArray_U64_get(stmts, (long long)(i))));
     {
-    Stmt _m90 = s;
-    if (_m90.tag == 10) {
-        uint64_t value = _m90.data.Give.value;
+    Stmt _m93 = s;
+    if (_m93.tag == 10) {
+        uint64_t value = _m93.data.Give.value;
         (void)value;
     found = value;
     }
@@ -4311,21 +4365,21 @@ ConstInt notConst(void) {
 ConstInt foldConst(Comp* c, uint64_t id) {
     Expr e = PlewArray_Expr_get((*c).exprs, (long long)(id));
     {
-    Expr _m91 = e;
-    if (_m91.tag == 0) {
-        int64_t value = _m91.data.Int.value;
+    Expr _m94 = e;
+    if (_m94.tag == 0) {
+        int64_t value = _m94.data.Int.value;
         (void)value;
-        long long isBool = _m91.data.Int.isBool;
+        long long isBool = _m94.data.Int.isBool;
         (void)isBool;
     if (isBool) {
     return notConst();
     }
     return (ConstInt){.isConst = 1, .value = value};
     }
-    else if (_m91.tag == 2) {
-        int64_t op = _m91.data.Unary.op;
+    else if (_m94.tag == 2) {
+        int64_t op = _m94.data.Unary.op;
         (void)op;
-        uint64_t operand = _m91.data.Unary.operand;
+        uint64_t operand = _m94.data.Unary.operand;
         (void)operand;
     if (op == 57) {
     ConstInt o = foldConst(&((*c)), operand);
@@ -4335,12 +4389,12 @@ ConstInt foldConst(Comp* c, uint64_t id) {
     }
     return notConst();
     }
-    else if (_m91.tag == 3) {
-        int64_t op = _m91.data.Binary.op;
+    else if (_m94.tag == 3) {
+        int64_t op = _m94.data.Binary.op;
         (void)op;
-        uint64_t lhs = _m91.data.Binary.lhs;
+        uint64_t lhs = _m94.data.Binary.lhs;
         (void)lhs;
-        uint64_t rhs = _m91.data.Binary.rhs;
+        uint64_t rhs = _m94.data.Binary.rhs;
         (void)rhs;
     ConstInt a = foldConst(&((*c)), lhs);
     ConstInt b = foldConst(&((*c)), rhs);
@@ -4399,39 +4453,39 @@ void checkLitLeaf(Comp* c, int64_t value, uint64_t offset, long long isBool, uin
 void checkLitCtx(Comp* c, uint64_t id, uint64_t eKind, uint64_t eBits, long long eSgn) {
     Expr e = PlewArray_Expr_get((*c).exprs, (long long)(id));
     {
-    Expr _m92 = e;
-    if (_m92.tag == 0) {
-        int64_t value = _m92.data.Int.value;
+    Expr _m95 = e;
+    if (_m95.tag == 0) {
+        int64_t value = _m95.data.Int.value;
         (void)value;
-        uint64_t offset = _m92.data.Int.offset;
+        uint64_t offset = _m95.data.Int.offset;
         (void)offset;
-        long long isBool = _m92.data.Int.isBool;
+        long long isBool = _m95.data.Int.isBool;
         (void)isBool;
-        uint64_t tyStart = _m92.data.Int.tyStart;
+        uint64_t tyStart = _m95.data.Int.tyStart;
         (void)tyStart;
-        uint64_t tyLen = _m92.data.Int.tyLen;
+        uint64_t tyLen = _m95.data.Int.tyLen;
         (void)tyLen;
     checkLitLeaf(&((*c)), value, offset, isBool, tyStart, tyLen, eKind, eBits, eSgn);
     }
-    else if (_m92.tag == 2) {
-        int64_t op = _m92.data.Unary.op;
+    else if (_m95.tag == 2) {
+        int64_t op = _m95.data.Unary.op;
         (void)op;
-        uint64_t operand = _m92.data.Unary.operand;
+        uint64_t operand = _m95.data.Unary.operand;
         (void)operand;
     if (op == 57) {
     Expr oe = PlewArray_Expr_get((*c).exprs, (long long)(operand));
     {
-    Expr _m93 = oe;
-    if (_m93.tag == 0) {
-        int64_t value = _m93.data.Int.value;
+    Expr _m96 = oe;
+    if (_m96.tag == 0) {
+        int64_t value = _m96.data.Int.value;
         (void)value;
-        uint64_t offset = _m93.data.Int.offset;
+        uint64_t offset = _m96.data.Int.offset;
         (void)offset;
-        long long isBool = _m93.data.Int.isBool;
+        long long isBool = _m96.data.Int.isBool;
         (void)isBool;
-        uint64_t tyStart = _m93.data.Int.tyStart;
+        uint64_t tyStart = _m96.data.Int.tyStart;
         (void)tyStart;
-        uint64_t tyLen = _m93.data.Int.tyLen;
+        uint64_t tyLen = _m96.data.Int.tyLen;
         (void)tyLen;
     checkLitLeaf(&((*c)), ({ int64_t __ov; if (__builtin_sub_overflow((0), (value), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; }), offset, isBool, tyStart, tyLen, eKind, eBits, eSgn);
     }
@@ -4446,12 +4500,12 @@ void checkLitCtx(Comp* c, uint64_t id, uint64_t eKind, uint64_t eBits, long long
     }
     }
     }
-    else if (_m92.tag == 3) {
-        int64_t op = _m92.data.Binary.op;
+    else if (_m95.tag == 3) {
+        int64_t op = _m95.data.Binary.op;
         (void)op;
-        uint64_t lhs = _m92.data.Binary.lhs;
+        uint64_t lhs = _m95.data.Binary.lhs;
         (void)lhs;
-        uint64_t rhs = _m92.data.Binary.rhs;
+        uint64_t rhs = _m95.data.Binary.rhs;
         (void)rhs;
     long long isArith = 0;
     if (op >= 56) {
@@ -4485,77 +4539,77 @@ void checkLitCtx(Comp* c, uint64_t id, uint64_t eKind, uint64_t eBits, long long
     checkArithNoCtx(&((*c)), lhs, rhs);
     }
     }
-    else if (_m92.tag == 4) {
-        uint64_t nameStart = _m92.data.Call.nameStart;
+    else if (_m95.tag == 4) {
+        uint64_t nameStart = _m95.data.Call.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m92.data.Call.nameLen;
+        uint64_t nameLen = _m95.data.Call.nameLen;
         (void)nameLen;
-        PlewArray_Arg args = _m92.data.Call.args;
+        PlewArray_Arg args = _m95.data.Call.args;
         (void)args;
     checkCallArgs(&((*c)), nameStart, nameLen, args);
     }
-    else if (_m92.tag == 10) {
-        uint64_t recv = _m92.data.Method.recv;
+    else if (_m95.tag == 10) {
+        uint64_t recv = _m95.data.Method.recv;
         (void)recv;
-        uint64_t nameStart = _m92.data.Method.nameStart;
+        uint64_t nameStart = _m95.data.Method.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m92.data.Method.nameLen;
+        uint64_t nameLen = _m95.data.Method.nameLen;
         (void)nameLen;
-        PlewArray_Arg args = _m92.data.Method.args;
+        PlewArray_Arg args = _m95.data.Method.args;
         (void)args;
     checkMethodArgs(&((*c)), recv, nameStart, nameLen, args);
     }
-    else if (_m92.tag == 11) {
-        uint64_t operand = _m92.data.Cast.operand;
+    else if (_m95.tag == 11) {
+        uint64_t operand = _m95.data.Cast.operand;
         (void)operand;
-        uint64_t tyStart = _m92.data.Cast.tyStart;
+        uint64_t tyStart = _m95.data.Cast.tyStart;
         (void)tyStart;
-        uint64_t tyLen = _m92.data.Cast.tyLen;
+        uint64_t tyLen = _m95.data.Cast.tyLen;
         (void)tyLen;
     Expr oe = PlewArray_Expr_get((*c).exprs, (long long)(operand));
     {
-    Expr _m94 = oe;
-    if (_m94.tag == 0) {
+    Expr _m97 = oe;
+    if (_m97.tag == 0) {
     }
     else {
     checkLitCtx(&((*c)), operand, 0, 0, 0);
     }
     }
     }
-    else if (_m92.tag == 5) {
-        uint64_t base = _m92.data.Field.base;
+    else if (_m95.tag == 5) {
+        uint64_t base = _m95.data.Field.base;
         (void)base;
-        uint64_t nameStart = _m92.data.Field.nameStart;
+        uint64_t nameStart = _m95.data.Field.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m92.data.Field.nameLen;
+        uint64_t nameLen = _m95.data.Field.nameLen;
         (void)nameLen;
     checkLitCtx(&((*c)), base, 0, 0, 0);
     }
-    else if (_m92.tag == 9) {
-        uint64_t base = _m92.data.Index.base;
+    else if (_m95.tag == 9) {
+        uint64_t base = _m95.data.Index.base;
         (void)base;
-        uint64_t index = _m92.data.Index.index;
+        uint64_t index = _m95.data.Index.index;
         (void)index;
     checkLitCtx(&((*c)), base, 0, 0, 0);
     checkLitCtx(&((*c)), index, 1, 64, 0);
     }
-    else if (_m92.tag == 6) {
-        uint64_t typeStart = _m92.data.Make.typeStart;
+    else if (_m95.tag == 6) {
+        uint64_t typeStart = _m95.data.Make.typeStart;
         (void)typeStart;
-        uint64_t typeLen = _m92.data.Make.typeLen;
+        uint64_t typeLen = _m95.data.Make.typeLen;
         (void)typeLen;
-        uint64_t variantStart = _m92.data.Make.variantStart;
+        uint64_t variantStart = _m95.data.Make.variantStart;
         (void)variantStart;
-        uint64_t variantLen = _m92.data.Make.variantLen;
+        uint64_t variantLen = _m95.data.Make.variantLen;
         (void)variantLen;
-        long long isEnum = _m92.data.Make.isEnum;
+        long long isEnum = _m95.data.Make.isEnum;
         (void)isEnum;
-        PlewArray_MakeField fields = _m92.data.Make.fields;
+        PlewArray_MakeField fields = _m95.data.Make.fields;
         (void)fields;
     checkMakeFields(&((*c)), typeStart, typeLen, variantStart, variantLen, isEnum, fields);
     }
-    else if (_m92.tag == 8) {
-        PlewArray_U64 elems = _m92.data.Array.elems;
+    else if (_m95.tag == 8) {
+        PlewArray_U64 elems = _m95.data.Array.elems;
         (void)elems;
     uint64_t i = 0;
     while (i < (long long)((elems).len)) {
@@ -4563,10 +4617,10 @@ void checkLitCtx(Comp* c, uint64_t id, uint64_t eKind, uint64_t eBits, long long
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     }
-    else if (_m92.tag == 12) {
-        uint64_t scrut = _m92.data.MatchExpr.scrut;
+    else if (_m95.tag == 12) {
+        uint64_t scrut = _m95.data.MatchExpr.scrut;
         (void)scrut;
-        PlewArray_MatchArm arms = _m92.data.MatchExpr.arms;
+        PlewArray_MatchArm arms = _m95.data.MatchExpr.arms;
         (void)arms;
     checkLitCtx(&((*c)), scrut, 0, 0, 0);
     uint64_t i = 0;
@@ -4586,24 +4640,24 @@ IntTy exprIntTy(Comp* c, uint64_t id) {
     }
     Expr e = PlewArray_Expr_get((*c).exprs, (long long)(id));
     {
-    Expr _m95 = e;
-    if (_m95.tag == 4) {
-        uint64_t nameStart = _m95.data.Call.nameStart;
+    Expr _m98 = e;
+    if (_m98.tag == 4) {
+        uint64_t nameStart = _m98.data.Call.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m95.data.Call.nameLen;
+        uint64_t nameLen = _m98.data.Call.nameLen;
         (void)nameLen;
-        PlewArray_Arg args = _m95.data.Call.args;
+        PlewArray_Arg args = _m98.data.Call.args;
         (void)args;
     if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"argCount", 8})) {
     return (IntTy){.known = 1, .bits = 64, .sgn = 1};
     }
     }
-    else if (_m95.tag == 5) {
-        uint64_t base = _m95.data.Field.base;
+    else if (_m98.tag == 5) {
+        uint64_t base = _m98.data.Field.base;
         (void)base;
-        uint64_t nameStart = _m95.data.Field.nameStart;
+        uint64_t nameStart = _m98.data.Field.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m95.data.Field.nameLen;
+        uint64_t nameLen = _m98.data.Field.nameLen;
         (void)nameLen;
     if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"count", 5})) {
     TypeInfo bt = exprType(&((*c)), base);
@@ -4612,10 +4666,10 @@ IntTy exprIntTy(Comp* c, uint64_t id) {
     }
     }
     }
-    else if (_m95.tag == 9) {
-        uint64_t base = _m95.data.Index.base;
+    else if (_m98.tag == 9) {
+        uint64_t base = _m98.data.Index.base;
         (void)base;
-        uint64_t index = _m95.data.Index.index;
+        uint64_t index = _m98.data.Index.index;
         (void)index;
     TypeInfo bt = exprType(&((*c)), base);
     if (bt.kind == 3) {
@@ -4662,9 +4716,9 @@ void checkLitSpan(Comp* c, uint64_t id, uint64_t tyStart, uint64_t tyLen, long l
 void checkLitArray(Comp* c, uint64_t id, uint64_t elemStart, uint64_t elemLen) {
     Expr e = PlewArray_Expr_get((*c).exprs, (long long)(id));
     {
-    Expr _m96 = e;
-    if (_m96.tag == 8) {
-        PlewArray_U64 elems = _m96.data.Array.elems;
+    Expr _m99 = e;
+    if (_m99.tag == 8) {
+        PlewArray_U64 elems = _m99.data.Array.elems;
         (void)elems;
     uint64_t i = 0;
     while (i < (long long)((elems).len)) {
@@ -4786,16 +4840,16 @@ void checkMakeFields(Comp* c, uint64_t typeStart, uint64_t typeLen, uint64_t var
 void genExpr(Comp* c, uint64_t id) {
     Expr e = PlewArray_Expr_get((*c).exprs, (long long)(id));
     {
-    Expr _m97 = e;
-    if (_m97.tag == 0) {
-        int64_t value = _m97.data.Int.value;
+    Expr _m100 = e;
+    if (_m100.tag == 0) {
+        int64_t value = _m100.data.Int.value;
         (void)value;
     writeInt(value);
     }
-    else if (_m97.tag == 1) {
-        uint64_t start = _m97.data.Ident.start;
+    else if (_m100.tag == 1) {
+        uint64_t start = _m100.data.Ident.start;
         (void)start;
-        uint64_t len = _m97.data.Ident.len;
+        uint64_t len = _m100.data.Ident.len;
         (void)len;
     if (isInoutLocal(&((*c)), start, len)) {
     plew_write((PlewString){"(*", 2});
@@ -4806,10 +4860,10 @@ void genExpr(Comp* c, uint64_t id) {
     writeSpan(&((*c)), start, len);
     }
     }
-    else if (_m97.tag == 2) {
-        int64_t op = _m97.data.Unary.op;
+    else if (_m100.tag == 2) {
+        int64_t op = _m100.data.Unary.op;
         (void)op;
-        uint64_t operand = _m97.data.Unary.operand;
+        uint64_t operand = _m100.data.Unary.operand;
         (void)operand;
     long long negChecked = 0;
     if (op == 57) {
@@ -4832,12 +4886,12 @@ void genExpr(Comp* c, uint64_t id) {
     plew_write((PlewString){")", 1});
     }
     }
-    else if (_m97.tag == 3) {
-        int64_t op = _m97.data.Binary.op;
+    else if (_m100.tag == 3) {
+        int64_t op = _m100.data.Binary.op;
         (void)op;
-        uint64_t lhs = _m97.data.Binary.lhs;
+        uint64_t lhs = _m100.data.Binary.lhs;
         (void)lhs;
-        uint64_t rhs = _m97.data.Binary.rhs;
+        uint64_t rhs = _m100.data.Binary.rhs;
         (void)rhs;
     if (isStringEq(&((*c)), op, lhs)) {
     if (op == 51) {
@@ -4919,12 +4973,12 @@ void genExpr(Comp* c, uint64_t id) {
     }
     }
     }
-    else if (_m97.tag == 4) {
-        uint64_t nameStart = _m97.data.Call.nameStart;
+    else if (_m100.tag == 4) {
+        uint64_t nameStart = _m100.data.Call.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m97.data.Call.nameLen;
+        uint64_t nameLen = _m100.data.Call.nameLen;
         (void)nameLen;
-        PlewArray_Arg args = _m97.data.Call.args;
+        PlewArray_Arg args = _m100.data.Call.args;
         (void)args;
     if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"write", 5})) {
     if ((*c).impWrite) {
@@ -5058,12 +5112,12 @@ void genExpr(Comp* c, uint64_t id) {
     }
     plew_write((PlewString){")", 1});
     }
-    else if (_m97.tag == 5) {
-        uint64_t base = _m97.data.Field.base;
+    else if (_m100.tag == 5) {
+        uint64_t base = _m100.data.Field.base;
         (void)base;
-        uint64_t nameStart = _m97.data.Field.nameStart;
+        uint64_t nameStart = _m100.data.Field.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m97.data.Field.nameLen;
+        uint64_t nameLen = _m100.data.Field.nameLen;
         (void)nameLen;
     TypeInfo bt = exprType(&((*c)), base);
     if (bt.kind == 1) {
@@ -5082,10 +5136,10 @@ void genExpr(Comp* c, uint64_t id) {
     plew_write((PlewString){".", 1});
     writeSpan(&((*c)), nameStart, nameLen);
     }
-    else if (_m97.tag == 7) {
-        uint64_t start = _m97.data.Str.start;
+    else if (_m100.tag == 7) {
+        uint64_t start = _m100.data.Str.start;
         (void)start;
-        uint64_t len = _m97.data.Str.len;
+        uint64_t len = _m100.data.Str.len;
         (void)len;
     plew_write((PlewString){"(PlewString){\"", 14});
     writeSpan(&((*c)), ({ uint64_t __ov; if (__builtin_add_overflow((start), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; }), ({ uint64_t __ov; if (__builtin_sub_overflow((len), (2), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; }));
@@ -5093,10 +5147,10 @@ void genExpr(Comp* c, uint64_t id) {
     writeInt(strDecodedLen(&((*c)), start, len));
     plew_write((PlewString){"}", 1});
     }
-    else if (_m97.tag == 9) {
-        uint64_t base = _m97.data.Index.base;
+    else if (_m100.tag == 9) {
+        uint64_t base = _m100.data.Index.base;
         (void)base;
-        uint64_t index = _m97.data.Index.index;
+        uint64_t index = _m100.data.Index.index;
         (void)index;
     TypeInfo bt = exprType(&((*c)), base);
     plew_write((PlewString){"PlewArray_", 10});
@@ -5107,14 +5161,14 @@ void genExpr(Comp* c, uint64_t id) {
     genExpr(&((*c)), index);
     plew_write((PlewString){"))", 2});
     }
-    else if (_m97.tag == 10) {
-        uint64_t recv = _m97.data.Method.recv;
+    else if (_m100.tag == 10) {
+        uint64_t recv = _m100.data.Method.recv;
         (void)recv;
-        uint64_t nameStart = _m97.data.Method.nameStart;
+        uint64_t nameStart = _m100.data.Method.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m97.data.Method.nameLen;
+        uint64_t nameLen = _m100.data.Method.nameLen;
         (void)nameLen;
-        PlewArray_Arg args = _m97.data.Method.args;
+        PlewArray_Arg args = _m100.data.Method.args;
         (void)args;
     TypeInfo bt = exprType(&((*c)), recv);
     if (bt.kind == 3) {
@@ -5182,26 +5236,26 @@ void genExpr(Comp* c, uint64_t id) {
     plew_write((PlewString){")", 1});
     }
     }
-    else if (_m97.tag == 8) {
-        PlewArray_U64 elems = _m97.data.Array.elems;
+    else if (_m100.tag == 8) {
+        PlewArray_U64 elems = _m100.data.Array.elems;
         (void)elems;
     plew_write((PlewString){"0", 1});
     }
-    else if (_m97.tag == 11) {
-        uint64_t operand = _m97.data.Cast.operand;
+    else if (_m100.tag == 11) {
+        uint64_t operand = _m100.data.Cast.operand;
         (void)operand;
-        uint64_t tyStart = _m97.data.Cast.tyStart;
+        uint64_t tyStart = _m100.data.Cast.tyStart;
         (void)tyStart;
-        uint64_t tyLen = _m97.data.Cast.tyLen;
+        uint64_t tyLen = _m100.data.Cast.tyLen;
         (void)tyLen;
     if (isIntType(&((*c)), tyStart, tyLen)) {
     Expr opE = PlewArray_Expr_get((*c).exprs, (long long)(operand));
     {
-    Expr _m98 = opE;
-    if (_m98.tag == 0) {
-        int64_t value = _m98.data.Int.value;
+    Expr _m101 = opE;
+    if (_m101.tag == 0) {
+        int64_t value = _m101.data.Int.value;
         (void)value;
-        uint64_t offset = _m98.data.Int.offset;
+        uint64_t offset = _m101.data.Int.offset;
         (void)offset;
     if (litFitsType(&((*c)), value, tyStart, tyLen)) {
     }
@@ -5229,18 +5283,18 @@ void genExpr(Comp* c, uint64_t id) {
     genExpr(&((*c)), operand);
     plew_write((PlewString){"))", 2});
     }
-    else if (_m97.tag == 6) {
-        uint64_t typeStart = _m97.data.Make.typeStart;
+    else if (_m100.tag == 6) {
+        uint64_t typeStart = _m100.data.Make.typeStart;
         (void)typeStart;
-        uint64_t typeLen = _m97.data.Make.typeLen;
+        uint64_t typeLen = _m100.data.Make.typeLen;
         (void)typeLen;
-        uint64_t variantStart = _m97.data.Make.variantStart;
+        uint64_t variantStart = _m100.data.Make.variantStart;
         (void)variantStart;
-        uint64_t variantLen = _m97.data.Make.variantLen;
+        uint64_t variantLen = _m100.data.Make.variantLen;
         (void)variantLen;
-        long long isEnum = _m97.data.Make.isEnum;
+        long long isEnum = _m100.data.Make.isEnum;
         (void)isEnum;
-        PlewArray_MakeField fields = _m97.data.Make.fields;
+        PlewArray_MakeField fields = _m100.data.Make.fields;
         (void)fields;
     if (isEnum) {
     plew_write((PlewString){"(", 1});
@@ -5292,10 +5346,10 @@ void genExpr(Comp* c, uint64_t id) {
     plew_write((PlewString){"}", 1});
     }
     }
-    else if (_m97.tag == 12) {
-        uint64_t scrut = _m97.data.MatchExpr.scrut;
+    else if (_m100.tag == 12) {
+        uint64_t scrut = _m100.data.MatchExpr.scrut;
         (void)scrut;
-        PlewArray_MatchArm arms = _m97.data.MatchExpr.arms;
+        PlewArray_MatchArm arms = _m100.data.MatchExpr.arms;
         (void)arms;
     if (matchExhaustive(&((*c)), arms)) {
     }
@@ -5393,12 +5447,12 @@ void genExpr(Comp* c, uint64_t id) {
     writeU64(t);
     plew_write((PlewString){"; })", 4});
     }
-    else if (_m97.tag == 13) {
-        uint64_t cond = _m97.data.IfExpr.cond;
+    else if (_m100.tag == 13) {
+        uint64_t cond = _m100.data.IfExpr.cond;
         (void)cond;
-        uint64_t thenBlk = _m97.data.IfExpr.thenBlk;
+        uint64_t thenBlk = _m100.data.IfExpr.thenBlk;
         (void)thenBlk;
-        uint64_t elseBlk = _m97.data.IfExpr.elseBlk;
+        uint64_t elseBlk = _m100.data.IfExpr.elseBlk;
         (void)elseBlk;
     uint64_t t = (*c).tmp;
     (*c).tmp = ({ uint64_t __ov; if (__builtin_add_overflow(((*c).tmp), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
@@ -5430,9 +5484,9 @@ void genExpr(Comp* c, uint64_t id) {
 void genArrayLiteral(Comp* c, uint64_t exprId, uint64_t elemStart, uint64_t elemLen) {
     Expr e = PlewArray_Expr_get((*c).exprs, (long long)(exprId));
     {
-    Expr _m99 = e;
-    if (_m99.tag == 8) {
-        PlewArray_U64 elems = _m99.data.Array.elems;
+    Expr _m102 = e;
+    if (_m102.tag == 8) {
+        PlewArray_U64 elems = _m102.data.Array.elems;
         (void)elems;
     if ((long long)((elems).len) == 0) {
     plew_write((PlewString){"PlewArray_", 10});
@@ -5544,19 +5598,19 @@ long long compareNeedsTrait(Comp* c, int64_t op, uint64_t lhs) {
 void emitEnumOperand(Comp* c, uint64_t id, uint64_t enStart, uint64_t enLen) {
     Expr e = PlewArray_Expr_get((*c).exprs, (long long)(id));
     {
-    Expr _m100 = e;
-    if (_m100.tag == 6) {
-        uint64_t typeStart = _m100.data.Make.typeStart;
+    Expr _m103 = e;
+    if (_m103.tag == 6) {
+        uint64_t typeStart = _m103.data.Make.typeStart;
         (void)typeStart;
-        uint64_t typeLen = _m100.data.Make.typeLen;
+        uint64_t typeLen = _m103.data.Make.typeLen;
         (void)typeLen;
-        uint64_t variantStart = _m100.data.Make.variantStart;
+        uint64_t variantStart = _m103.data.Make.variantStart;
         (void)variantStart;
-        uint64_t variantLen = _m100.data.Make.variantLen;
+        uint64_t variantLen = _m103.data.Make.variantLen;
         (void)variantLen;
-        long long isEnum = _m100.data.Make.isEnum;
+        long long isEnum = _m103.data.Make.isEnum;
         (void)isEnum;
-        PlewArray_MakeField fields = _m100.data.Make.fields;
+        PlewArray_MakeField fields = _m103.data.Make.fields;
         (void)fields;
     if (isEnum) {
     writeU64(variantIndex(&((*c)), enStart, enLen, variantStart, variantLen));
@@ -5607,13 +5661,13 @@ void emitEnumTagCmp(Comp* c, uint64_t lhs, uint64_t rhs, int64_t op, long long o
 void genCond(Comp* c, uint64_t id) {
     Expr e = PlewArray_Expr_get((*c).exprs, (long long)(id));
     {
-    Expr _m101 = e;
-    if (_m101.tag == 3) {
-        int64_t op = _m101.data.Binary.op;
+    Expr _m104 = e;
+    if (_m104.tag == 3) {
+        int64_t op = _m104.data.Binary.op;
         (void)op;
-        uint64_t lhs = _m101.data.Binary.lhs;
+        uint64_t lhs = _m104.data.Binary.lhs;
         (void)lhs;
-        uint64_t rhs = _m101.data.Binary.rhs;
+        uint64_t rhs = _m104.data.Binary.rhs;
         (void)rhs;
     if (isStringEq(&((*c)), op, lhs)) {
     genExpr(&((*c)), id);
@@ -5642,23 +5696,23 @@ void genCond(Comp* c, uint64_t id) {
 void genStmt(Comp* c, uint64_t id) {
     Stmt s = PlewArray_Stmt_get((*c).stmts, (long long)(id));
     {
-    Stmt _m102 = s;
-    if (_m102.tag == 0) {
-        long long mutable = _m102.data.Let.mutable;
+    Stmt _m105 = s;
+    if (_m105.tag == 0) {
+        long long mutable = _m105.data.Let.mutable;
         (void)mutable;
-        uint64_t nameStart = _m102.data.Let.nameStart;
+        uint64_t nameStart = _m105.data.Let.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m102.data.Let.nameLen;
+        uint64_t nameLen = _m105.data.Let.nameLen;
         (void)nameLen;
-        uint64_t tyStart = _m102.data.Let.tyStart;
+        uint64_t tyStart = _m105.data.Let.tyStart;
         (void)tyStart;
-        uint64_t tyLen = _m102.data.Let.tyLen;
+        uint64_t tyLen = _m105.data.Let.tyLen;
         (void)tyLen;
-        long long tyIsArray = _m102.data.Let.tyIsArray;
+        long long tyIsArray = _m105.data.Let.tyIsArray;
         (void)tyIsArray;
-        uint64_t ty = _m102.data.Let.ty;
+        uint64_t ty = _m105.data.Let.ty;
         (void)ty;
-        uint64_t init = _m102.data.Let.init;
+        uint64_t init = _m105.data.Let.init;
         (void)init;
     checkLitSpan(&((*c)), init, tyStart, tyLen, tyIsArray);
     plew_write((PlewString){"    ", 4});
@@ -5675,20 +5729,20 @@ void genStmt(Comp* c, uint64_t id) {
     plew_write((PlewString){";\n", 2});
     addLocal(&((*c)), nameStart, nameLen, tyStart, tyLen, tyIsArray, ty, 0, mutable);
     }
-    else if (_m102.tag == 1) {
-        int64_t op = _m102.data.Assign.op;
+    else if (_m105.tag == 1) {
+        int64_t op = _m105.data.Assign.op;
         (void)op;
-        uint64_t target = _m102.data.Assign.target;
+        uint64_t target = _m105.data.Assign.target;
         (void)target;
-        uint64_t value = _m102.data.Assign.value;
+        uint64_t value = _m105.data.Assign.value;
         (void)value;
     Expr te = PlewArray_Expr_get((*c).exprs, (long long)(target));
     {
-    Expr _m103 = te;
-    if (_m103.tag == 9) {
-        uint64_t base = _m103.data.Index.base;
+    Expr _m106 = te;
+    if (_m106.tag == 9) {
+        uint64_t base = _m106.data.Index.base;
         (void)base;
-        uint64_t index = _m103.data.Index.index;
+        uint64_t index = _m106.data.Index.index;
         (void)index;
     if (placeIsMutable(&((*c)), base)) {
     }
@@ -5815,10 +5869,10 @@ void genStmt(Comp* c, uint64_t id) {
     }
     }
     }
-    else if (_m102.tag == 2) {
-        uint64_t expr = _m102.data.Print.expr;
+    else if (_m105.tag == 2) {
+        uint64_t expr = _m105.data.Print.expr;
         (void)expr;
-        uint64_t offset = _m102.data.Print.offset;
+        uint64_t offset = _m105.data.Print.offset;
         (void)offset;
     if ((*c).impPrint) {
     checkLitCtx(&((*c)), expr, 1, 64, 1);
@@ -5830,18 +5884,18 @@ void genStmt(Comp* c, uint64_t id) {
     compileErrorAt(lineOf(&((*c)), offset), (PlewString){"print is not ambient; import it from @Std/Io", 44});
     }
     }
-    else if (_m102.tag == 3) {
-        uint64_t expr = _m102.data.ExprStmt.expr;
+    else if (_m105.tag == 3) {
+        uint64_t expr = _m105.data.ExprStmt.expr;
         (void)expr;
     checkLitCtx(&((*c)), expr, 0, 0, 0);
     plew_write((PlewString){"    ", 4});
     genExpr(&((*c)), expr);
     plew_write((PlewString){";\n", 2});
     }
-    else if (_m102.tag == 4) {
-        uint64_t value = _m102.data.Return.value;
+    else if (_m105.tag == 4) {
+        uint64_t value = _m105.data.Return.value;
         (void)value;
-        long long hasValue = _m102.data.Return.hasValue;
+        long long hasValue = _m105.data.Return.hasValue;
         (void)hasValue;
     if ((*c).curIsMain) {
     plew_write((PlewString){"    return 0;\n", 14});
@@ -5865,14 +5919,14 @@ void genStmt(Comp* c, uint64_t id) {
     }
     }
     }
-    else if (_m102.tag == 5) {
-        uint64_t cond = _m102.data.If.cond;
+    else if (_m105.tag == 5) {
+        uint64_t cond = _m105.data.If.cond;
         (void)cond;
-        uint64_t thenBlk = _m102.data.If.thenBlk;
+        uint64_t thenBlk = _m105.data.If.thenBlk;
         (void)thenBlk;
-        uint64_t elseBlk = _m102.data.If.elseBlk;
+        uint64_t elseBlk = _m105.data.If.elseBlk;
         (void)elseBlk;
-        long long hasElse = _m102.data.If.hasElse;
+        long long hasElse = _m105.data.If.hasElse;
         (void)hasElse;
     checkLitCtx(&((*c)), cond, 0, 0, 0);
     plew_write((PlewString){"    if (", 8});
@@ -5886,10 +5940,10 @@ void genStmt(Comp* c, uint64_t id) {
     plew_write((PlewString){"    }\n", 6});
     }
     }
-    else if (_m102.tag == 6) {
-        uint64_t cond = _m102.data.While.cond;
+    else if (_m105.tag == 6) {
+        uint64_t cond = _m105.data.While.cond;
         (void)cond;
-        uint64_t body = _m102.data.While.body;
+        uint64_t body = _m105.data.While.body;
         (void)body;
     checkLitCtx(&((*c)), cond, 0, 0, 0);
     plew_write((PlewString){"    while (", 11});
@@ -5898,20 +5952,20 @@ void genStmt(Comp* c, uint64_t id) {
     genBlock(&((*c)), body);
     plew_write((PlewString){"    }\n", 6});
     }
-    else if (_m102.tag == 7) {
-        uint64_t varStart = _m102.data.For.varStart;
+    else if (_m105.tag == 7) {
+        uint64_t varStart = _m105.data.For.varStart;
         (void)varStart;
-        uint64_t varLen = _m102.data.For.varLen;
+        uint64_t varLen = _m105.data.For.varLen;
         (void)varLen;
-        long long isRange = _m102.data.For.isRange;
+        long long isRange = _m105.data.For.isRange;
         (void)isRange;
-        long long inclusive = _m102.data.For.inclusive;
+        long long inclusive = _m105.data.For.inclusive;
         (void)inclusive;
-        uint64_t iter = _m102.data.For.iter;
+        uint64_t iter = _m105.data.For.iter;
         (void)iter;
-        uint64_t rangeHi = _m102.data.For.rangeHi;
+        uint64_t rangeHi = _m105.data.For.rangeHi;
         (void)rangeHi;
-        uint64_t body = _m102.data.For.body;
+        uint64_t body = _m105.data.For.body;
         (void)body;
     if (isRange) {
     checkArithNoCtx(&((*c)), iter, rangeHi);
@@ -5980,17 +6034,17 @@ void genStmt(Comp* c, uint64_t id) {
     plew_write((PlewString){"    }\n    }\n", 12});
     }
     }
-    else if (_m102.tag == 9) {
-        uint64_t msg = _m102.data.Panic.msg;
+    else if (_m105.tag == 9) {
+        uint64_t msg = _m105.data.Panic.msg;
         (void)msg;
-        uint64_t offset = _m102.data.Panic.offset;
+        uint64_t offset = _m105.data.Panic.offset;
         (void)offset;
     plew_write((PlewString){"    plew_panic(", 15});
     genExpr(&((*c)), msg);
     plew_write((PlewString){");\n", 3});
     }
-    else if (_m102.tag == 10) {
-        uint64_t value = _m102.data.Give.value;
+    else if (_m105.tag == 10) {
+        uint64_t value = _m105.data.Give.value;
         (void)value;
     if ((*c).curGiveTmp != 0) {
     plew_write((PlewString){"    __r", 7});
@@ -6000,16 +6054,16 @@ void genStmt(Comp* c, uint64_t id) {
     plew_write((PlewString){");\n", 3});
     }
     }
-    else if (_m102.tag == 11) {
+    else if (_m105.tag == 11) {
     plew_write((PlewString){"    break;\n", 11});
     }
-    else if (_m102.tag == 12) {
+    else if (_m105.tag == 12) {
     plew_write((PlewString){"    continue;\n", 14});
     }
-    else if (_m102.tag == 8) {
-        uint64_t scrut = _m102.data.Match.scrut;
+    else if (_m105.tag == 8) {
+        uint64_t scrut = _m105.data.Match.scrut;
         (void)scrut;
-        PlewArray_MatchArm arms = _m102.data.Match.arms;
+        PlewArray_MatchArm arms = _m105.data.Match.arms;
         (void)arms;
     if (matchExhaustive(&((*c)), arms)) {
     }

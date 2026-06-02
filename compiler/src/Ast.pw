@@ -195,6 +195,10 @@ struct FieldDef {
 struct StructDef {
     val nameStart: U64
     val nameLen: U64
+    // generic type parameters `[T, U]` (each a name span; reuses Bind). Empty
+    // for a non-generic struct. Capability markers (noLocal/allowUnique) are
+    // skipped at parse time (v1: allowUnique unimplemented, noLocal a no-op).
+    val typeParams: Array[Bind]
     val fields: Array[FieldDef]
 }
 
@@ -207,6 +211,8 @@ struct Variant {
 struct EnumDef {
     val nameStart: U64
     val nameLen: U64
+    // generic type parameters `[T, U]` (see StructDef.typeParams).
+    val typeParams: Array[Bind]
     val variants: Array[Variant]
 }
 

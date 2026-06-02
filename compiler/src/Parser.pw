@@ -455,6 +455,51 @@ fn parseTypeTok(c: inout Comp) -> PType {
     return <PType start=head.start len=head.len isArray=false ref=ref />
 }
 
+// Parse an optional generic parameter list `[T, U]` after a struct/enum/fn
+// name. Each comma-separated entry is `[marker ...] name`; capability markers
+// (noLocal/allowUnique) precede the name and are skipped (v1). Returns the
+// param name spans (empty if there is no bracket). The current token is whatever
+// follows the name (a `[` opens the list, anything else means non-generic).
+fn parseTypeParams(c: inout Comp) -> Array[Bind] {
+    mut val ps: Array[Bind] = []
+    match c.curKind() {
+        Kind.LBracket => {
+            c.advance()
+            while true {
+                match c.curKind() {
+                    Kind.RBracket => {
+                        c.advance()
+                        break
+                    }
+                    Kind.Eof => { break }
+                    Kind.Comma => { c.advance() }
+                    Kind.Ident => {
+                        // consume consecutive idents in this entry; the param
+                        // name is the last (any leading idents are markers).
+                        mut val nameStart: U64 = 0
+                        mut val nameLen: U64 = 0
+                        while true {
+                            match c.curKind() {
+                                Kind.Ident => {
+                                    val t: Tok = c.cur()
+                                    nameStart = t.start
+                                    nameLen = t.len
+                                    c.advance()
+                                }
+                                _ => { break }
+                            }
+                        }
+                        ps.append(<Bind nameStart=nameStart nameLen=nameLen fieldStart=nameStart fieldLen=nameLen />)
+                    }
+                    _ => { c.advance() }
+                }
+            }
+        }
+        _ => {}
+    }
+    return ps
+}
+
 // Register an Array element type name for later monomorphization (deduped).
 fn recordArrayElem(c: inout Comp, ty: PType) {
     if ty.isArray {
@@ -1070,6 +1115,7 @@ fn parseStruct(c: inout Comp) {
     c.advance()
     val nameTok: Tok = c.cur()
     c.advance()
+    val typeParams: Array[Bind] = parseTypeParams(c: inout c)
     match c.curKind() {
         Kind.LBrace => { c.advance() }
         _ => {}
@@ -1121,7 +1167,7 @@ fn parseStruct(c: inout Comp) {
             }
         }
     }
-    c.structs.append(<StructDef nameStart=nameTok.start nameLen=nameTok.len fields=fields />)
+    c.structs.append(<StructDef nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams fields=fields />)
 }
 
 // `enum Name { Variant [{ field: Type, ... }] ... }`. Variant fields take no
@@ -1130,6 +1176,7 @@ fn parseEnum(c: inout Comp) {
     c.advance()
     val nameTok: Tok = c.cur()
     c.advance()
+    val typeParams: Array[Bind] = parseTypeParams(c: inout c)
     match c.curKind() {
         Kind.LBrace => { c.advance() }
         _ => {}
@@ -1195,7 +1242,7 @@ fn parseEnum(c: inout Comp) {
             _ => { c.advance() }
         }
     }
-    c.enums.append(<EnumDef nameStart=nameTok.start nameLen=nameTok.len variants=variants />)
+    c.enums.append(<EnumDef nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams variants=variants />)
 }
 
 // Enable the builtin named (nameStart,nameLen) iff it was imported from its
