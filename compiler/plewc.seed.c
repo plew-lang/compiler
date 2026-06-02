@@ -172,6 +172,7 @@ struct Local {
     long long tyLen;
     long long isArray;
     long long isInout;
+    long long isMut;
 };
 struct TypeInfo {
     long long kind;
@@ -405,7 +406,8 @@ long long matchExhaustive(Comp* c, PlewArray_MatchArm arms);
 long long variantIndex(Comp* c, long long enumStart, long long enumLen, long long variantStart, long long variantLen);
 TypeInfo scalarInfo(void);
 TypeInfo typeInfoOfName(Comp* c, long long start, long long len, long long isArray);
-void addLocal(Comp* c, long long nameStart, long long nameLen, long long tyStart, long long tyLen, long long isArray, long long isInout);
+void addLocal(Comp* c, long long nameStart, long long nameLen, long long tyStart, long long tyLen, long long isArray, long long isInout, long long isMut);
+long long localIsMutable(Comp* c, long long start, long long len);
 long long isInoutLocal(Comp* c, long long start, long long len);
 TypeInfo fieldType(Comp* c, long long structStart, long long structLen, long long fieldStart, long long fieldLen);
 TypeInfo exprType(Comp* c, long long id);
@@ -2870,8 +2872,22 @@ TypeInfo typeInfoOfName(Comp* c, long long start, long long len, long long isArr
     }
     return (TypeInfo){.kind = 2, .nameStart = start, .nameLen = len};
 }
-void addLocal(Comp* c, long long nameStart, long long nameLen, long long tyStart, long long tyLen, long long isArray, long long isInout) {
-    PlewArray_Local_push(&((*c).locals), (Local){.nameStart = nameStart, .nameLen = nameLen, .tyStart = tyStart, .tyLen = tyLen, .isArray = isArray, .isInout = isInout});
+void addLocal(Comp* c, long long nameStart, long long nameLen, long long tyStart, long long tyLen, long long isArray, long long isInout, long long isMut) {
+    PlewArray_Local_push(&((*c).locals), (Local){.nameStart = nameStart, .nameLen = nameLen, .tyStart = tyStart, .tyLen = tyLen, .isArray = isArray, .isInout = isInout, .isMut = isMut});
+}
+long long localIsMutable(Comp* c, long long start, long long len) {
+    long long i = (long long)(((*c).locals).len);
+    while (i > 0) {
+    i -= 1;
+    Local lo = PlewArray_Local_get((*c).locals, (long long)(i));
+    if (spansEqual(&((*c)), lo.nameStart, lo.nameLen, start, len)) {
+    if (lo.isMut) {
+    return 1;
+    }
+    return lo.isInout;
+    }
+    }
+    return 1;
 }
 long long isInoutLocal(Comp* c, long long start, long long len) {
     long long i = (long long)(((*c).locals).len);
@@ -3065,7 +3081,7 @@ void addBindLocal(Comp* c, long long enumStart, long long enumLen, long long var
     while (fi < (long long)((fs).len)) {
     FieldDef f = PlewArray_FieldDef_get(fs, (long long)(fi));
     if (spansEqual(&((*c)), f.nameStart, f.nameLen, bindStart, bindLen)) {
-    addLocal(&((*c)), bindStart, bindLen, f.tyStart, f.tyLen, f.tyIsArray, 0);
+    addLocal(&((*c)), bindStart, bindLen, f.tyStart, f.tyLen, f.tyIsArray, 0, 0);
     return;
     }
     fi += 1;
@@ -3790,7 +3806,7 @@ void genStmt(Comp* c, long long id) {
     genExpr(&((*c)), init);
     }
     plew_write((PlewString){";\n", 2});
-    addLocal(&((*c)), nameStart, nameLen, tyStart, tyLen, tyIsArray, 0);
+    addLocal(&((*c)), nameStart, nameLen, tyStart, tyLen, tyIsArray, 0, mutable);
     }
     else if (_m75.tag == 1) {
         long long op = _m75.data.Assign.op;
@@ -3832,6 +3848,24 @@ void genStmt(Comp* c, long long id) {
     plew_write((PlewString){");\n", 3});
     }
     else {
+    Expr tk = PlewArray_Expr_get((*c).exprs, (long long)(target));
+    {
+    Expr _m77 = tk;
+    if (_m77.tag == 1) {
+        long long start = _m77.data.Ident.start;
+        (void)start;
+        long long len = _m77.data.Ident.len;
+        (void)len;
+    if (localIsMutable(&((*c)), start, len)) {
+    }
+    else {
+    plew_compile_error_at(lineOf(&((*c)), start), (PlewString){"cannot assign to an immutable binding; declare it with `mut val`", 64});
+    return;
+    }
+    }
+    else {
+    }
+    }
     plew_write((PlewString){"    ", 4});
     genExpr(&((*c)), target);
     plew_write(assignOpStr(op));
@@ -3962,7 +3996,7 @@ void genStmt(Comp* c, long long id) {
     plew_write((PlewString){"; ", 2});
     writeSpan(&((*c)), varStart, varLen);
     plew_write((PlewString){"++) {\n", 6});
-    addLocal(&((*c)), varStart, varLen, 0, 0, 0, 0);
+    addLocal(&((*c)), varStart, varLen, 0, 0, 0, 0, 0);
     genBlock(&((*c)), body);
     plew_write((PlewString){"    }\n    }\n", 12});
     }
@@ -3996,7 +4030,7 @@ void genStmt(Comp* c, long long id) {
     plew_write((PlewString){", __fi", 6});
     writeInt(((long long)(t)));
     plew_write((PlewString){");\n", 3});
-    addLocal(&((*c)), varStart, varLen, et.nameStart, et.nameLen, 0, 0);
+    addLocal(&((*c)), varStart, varLen, et.nameStart, et.nameLen, 0, 0, 0);
     genBlock(&((*c)), body);
     plew_write((PlewString){"    }\n    }\n", 12});
     }
@@ -4183,7 +4217,7 @@ void genFunc(Comp* c, long long fi) {
     long long pi = 0;
     while (pi < (long long)((params).len)) {
     Param p = PlewArray_Param_get(params, (long long)(pi));
-    addLocal(&((*c)), p.nameStart, p.nameLen, p.tyStart, p.tyLen, p.tyIsArray, p.isInout);
+    addLocal(&((*c)), p.nameStart, p.nameLen, p.tyStart, p.tyLen, p.tyIsArray, p.isInout, 0);
     pi += 1;
     }
     genSignature(&((*c)), f);

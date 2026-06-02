@@ -15,6 +15,7 @@
 3. ✅ ~~非網羅 match が通る~~ → **解消**。match は網羅必須（`_` ワイルドカード、または enum 全 variant の被覆を検査・非網羅は `compileError` 診断で reject）。残：到達不能アーム警告・ガード・ネストパターンは未対応（元々）。
 4. **lossy な `as` が通る**（`300 as U8` を C キャストで silent truncate） → spec は `as`＝infallible 限定（縮小は `TryFrom`）。`as` を無損失に制限。
 5. ✅ ~~struct の `==`~~ → **解消**。比較演算子（`== != < <= > >=`）を struct/array に適用＝`Eq`/`Ord` 無しなので `compileError` 診断で reject（従来は壊れた C を吐いて clang が偶発的に弾いていたのを明示エラーに）。残：enum/String の順序比較（`<` 等）は依然「壊れた C で偶発的 reject」＝ホールではないが未整理。
+6. ✅ ~~不変束縛 `val` への代入が通る~~ → **部分解消**。単純変数への代入 `x = …`／`x OP= …` は、対象が `mut val` ローカル or `inout` 仮引数でなければ `compileError` 診断で reject（spec: `val` は不変・`mut val` のみ可変記憶域）。残：**フィールド/添字越しの変更**（`a.f = x`・`a[i] = x`）の合成可変性検査（束縛側 `mut` 要求）・不変配列への `.append` 等のメソッド経由変更は未検査（incremental・受理健全性は accepted⟹valid のみ要求するので未検査でも方向は崩れない）。
 
 → **大前提**：これらの enforce は plewc.pw 自身にも適用される（plewc.pw も import 必須・全呼び出しラベル付き等になっている）。stage0 退役＋C 種ブートストラップ済なので、新機能を追加する各サイクルで plewc.pw 自身も spec-valid に保ちながら不動点を維持する（ADD→reseed→USE）。
 
@@ -23,7 +24,7 @@
 - **値意味論＋CoW** → **現状：参照セマンティクス＋リーク**。`Array[T]` は `{T* data; len; cap}` でヒープ確保し **free しない**（append の旧バッファもリーク）。代入・受け渡しは C の構造体コピー（ポインタ共有）＝**エイリアス後の変更が観測できてしまう**＝spec の値意味論と逆。回避は「stage1 を arena+index・単一所有で書く規律」のみ。spec/03。
 - **ARC / `WeakRef` / 循環回収** → 無し（リークで代用）。
 - **`unique`/`local`/`borrow`/`move`/`Ref`/`WeakRef`/`deinit`** → 無し。すべてコピー可能・by-value。`borrow`/`move` は stage0 がコピー可能型でエラーにする（spec 通り）が、そもそも unique 型が無い。
-- **`inout`** → 実装済（C ポインタ）。ただし **重なり inout 検査なし**（spec は同一場所への複数 inout を禁止・lint＋限定 panic）。`inout` の mut 束縛検査もなし。spec/03。
+- **`inout`** → 実装済（C ポインタ）。ただし **重なり inout 検査なし**（spec は同一場所への複数 inout を禁止・lint＋限定 panic）。**単純変数への代入は可変性検査あり**（`val` 不変・`mut val`/`inout` のみ代入可＝受理健全性 #6）が、フィールド/添字越しの合成可変性は未検査。spec/03。
 - **place 越しの get-modify-set 脱糖**（`arr[i].field=x` 等） → 未実装（単純な代入のみ）。spec/03。
 
 ## 数値モデル

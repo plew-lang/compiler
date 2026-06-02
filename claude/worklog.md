@@ -8,12 +8,12 @@
 
 - **ビルド**：`./bootstrap.sh`＝C 種 `compiler/plewc.seed.c`→clang→`plewc0`→`compiler/src/_.pw` を自己コンパイル→不動点 cmp（Rust/cargo 不要）。`./bootstrap.sh --reseed` で種更新。
 - **テスト**：`./test.sh`＝`tests/run/*.pw`（`.out` 照合・任意 `.in`）＋`tests/part/`（複数ファイル）＋`tests/reject/*.pw`（plewc が非ゼロ終了で reject＝受理の健全性）＋不動点（Rust 非依存）。
-- **サポート済の言語**：型付き整数/Bool・String（リテラル/`.bytes`/`==`/エスケープ）・**文字リテラル `'c'`**（→コードポイント）・Array（リテラル/添字/`count`/`append`/`a[i]=x`/for-each）・struct/JSX 構築/フィールド・enum+match（**網羅検査あり**・タグ if-chain）・enum `==`（全 nullary 限定）・関数/引数/**ラベル検査**/`inout`/再帰・`if`/`else`/`while`/`for`（range/array）・`break`/`continue`・`as`（数値）・**`import @Std/Io`・`@Std/Process` の `with {}` 選択 import**（I/O は ambient でなく import 必須）・**複数ファイル `part ./Name`**・I/O ビルトイン（`print`/`write`/`writeByte`/`readStdin`/`readFile`/`readFileBytes`/`argCount`/`argAt`）・診断 `compileError`/`compileErrorAt`。軽量型追跡・配列単相化・I/O ランタイム preamble を自前出力。生成 C は警告クリーン。
+- **サポート済の言語**：型付き整数/Bool・String（リテラル/`.bytes`/`==`/エスケープ）・**文字リテラル `'c'`**（→コードポイント）・Array（リテラル/添字/`count`/`append`/`a[i]=x`/for-each）・struct/JSX 構築/フィールド・enum+match（**網羅検査あり**・タグ if-chain）・enum `==`（全 nullary 限定）・**`val`/`mut val` 可変性検査**（不変への単純代入は reject）・関数/引数/**ラベル検査**/`inout`/再帰・`if`/`else`/`while`/`for`（range/array）・`break`/`continue`・`as`（数値）・**`import @Std/Io`・`@Std/Process` の `with {}` 選択 import**（I/O は ambient でなく import 必須）・**複数ファイル `part ./Name`**・I/O ビルトイン（`print`/`write`/`writeByte`/`readStdin`/`readFile`/`readFileBytes`/`argCount`/`argAt`）・診断 `compileError`/`compileErrorAt`。軽量型追跡・配列単相化・I/O ランタイム preamble を自前出力。生成 C は警告クリーン。
 - **spec からの意図的剥離**（値意味論/CoW・整数幅・トレイト・モジュール詳細等）は [provisional.md](provisional.md) に集約。足場（履歴）`examples/{lexer,parser,emit,calc}.pw`。
 
 ## 受理の健全性（意味上 Plew として正しい）＝一区切り
 
-「このコンパイラが*受理*するコードは spec でも valid」を目標に hidden meaning を潰す。チェックリスト（詳細 [provisional.md](provisional.md)）：① import なし `print` ② ラベル無視 ③ 非網羅 match ⑤ struct/array 比較 ＝**解消済**。④ lossy `as` のみ**保留**（整数幅の実装に依存）。違反はすべて `compileError*` 診断＝`plewc: error: [line N: ]…`＋非ゼロ終了で reject。
+「このコンパイラが*受理*するコードは spec でも valid」を目標に hidden meaning を潰す。チェックリスト（詳細 [provisional.md](provisional.md)）：① import なし `print` ② ラベル無視 ③ 非網羅 match ⑤ struct/array 比較 ⑥ 不変 `val` への代入（単純変数）＝**解消済**。④ lossy `as` のみ**保留**（整数幅の実装に依存）。違反はすべて `compileError*` 診断＝`plewc: error: [line N: ]…`＋非ゼロ終了で reject。
 
 ## 次の一歩の候補（やりやすい順で自走）
 

@@ -283,8 +283,26 @@ fn typeInfoOfName(c: inout Comp, start: U64, len: U64, isArray: Bool) -> TypeInf
     return <TypeInfo kind=2 nameStart=start nameLen=len />
 }
 
-fn addLocal(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, isInout: Bool) {
-    c.locals.append(<Local nameStart=nameStart nameLen=nameLen tyStart=tyStart tyLen=tyLen isArray=isArray isInout=isInout />)
+fn addLocal(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, isInout: Bool, isMut: Bool) {
+    c.locals.append(<Local nameStart=nameStart nameLen=nameLen tyStart=tyStart tyLen=tyLen isArray=isArray isInout=isInout isMut=isMut />)
+}
+
+// Whether the binding named (start,len) — most recent in scope — may be assigned
+// to: `mut val` locals and `inout` params. Unknown names default to assignable
+// (the C compile catches genuinely undeclared identifiers).
+fn localIsMutable(c: inout Comp, start: U64, len: U64) -> Bool {
+    mut val i: U64 = c.locals.count
+    while i > 0 {
+        i -= 1
+        val lo: Local = c.locals[i]
+        if spansEqual(c: inout c, aStart: lo.nameStart, aLen: lo.nameLen, bStart: start, bLen: len) {
+            if lo.isMut {
+                return true
+            }
+            return lo.isInout
+        }
+    }
+    return true
 }
 
 // Whether `name` refers to an `inout` parameter of the current function (so its
@@ -410,7 +428,7 @@ fn addBindLocal(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, 
                     while fi < fs.count {
                         val f: FieldDef = fs[fi]
                         if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: bindStart, bLen: bindLen) {
-                            addLocal(c: inout c, nameStart: bindStart, nameLen: bindLen, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray, isInout: false)
+                            addLocal(c: inout c, nameStart: bindStart, nameLen: bindLen, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray, isInout: false, isMut: false)
                             return
                         }
                         fi += 1
@@ -1012,7 +1030,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 genExpr(c: inout c, id: init)
             }
             write(s: ";\n")
-            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, isInout: false)
+            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, isInout: false, isMut: mutable)
         }
         Stmt.Assign { val op, val target, val value } => {
             val te: Expr = c.exprs[target]
@@ -1043,6 +1061,21 @@ fn genStmt(c: inout Comp, id: U64) {
                     write(s: ");\n")
                 }
                 _ => {
+                    // Acceptance soundness: assigning to a plain `val` binding is
+                    // a spec violation (`val` is immutable; only `mut val` locals
+                    // and `inout` params are assignable). Field/index targets have
+                    // their own (composite) mutability rules, not checked here.
+                    val tk: Expr = c.exprs[target]
+                    match tk {
+                        Expr.Ident { val start, val len } => {
+                            if localIsMutable(c: inout c, start: start, len: len) {
+                            } else {
+                                compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "cannot assign to an immutable binding; declare it with `mut val`")
+                                return
+                            }
+                        }
+                        _ => {}
+                    }
                     write(s: "    ")
                     genExpr(c: inout c, id: target)
                     write(s: assignOpStr(op: op))
@@ -1132,7 +1165,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 write(s: "; ")
                 writeSpan(c: inout c, start: varStart, len: varLen)
                 write(s: "++) {\n")
-                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, isInout: false)
+                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, isInout: false, isMut: false)
                 genBlock(c: inout c, id: body)
                 write(s: "    }\n    }\n")
             } else {
@@ -1166,7 +1199,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 write(s: ", __fi")
                 writeInt(n: t as I64)
                 write(s: ");\n")
-                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, isInout: false)
+                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, isInout: false, isMut: false)
                 genBlock(c: inout c, id: body)
                 write(s: "    }\n    }\n")
             }
@@ -1360,7 +1393,7 @@ fn genFunc(c: inout Comp, fi: U64) {
     mut val pi: U64 = 0
     while pi < params.count {
         val p: Param = params[pi]
-        addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, isInout: p.isInout)
+        addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, isInout: p.isInout, isMut: false)
         pi += 1
     }
     genSignature(c: inout c, f: f)

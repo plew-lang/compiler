@@ -25,6 +25,10 @@ struct Local {
     val tyLen: U64
     val isArray: Bool
     val isInout: Bool
+    // assignable? `mut val` locals and `inout` params are; plain `val` locals,
+    // function params, for-loop vars and match binds are immutable (spec: `val`
+    // is immutable, `mut val` is the mutable storage form).
+    val isMut: Bool
 }
 
 // The recovered type of an expression. kind: 0 scalar (long long), 1 String,
