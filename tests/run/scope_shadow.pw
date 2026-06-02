@@ -1,0 +1,16 @@
+// Lexical scope frames: a binding declared inside a block leaves scope at the
+// block's end. Here an inner immutable `val x` shadows the outer `mut val x`
+// only within the `if`; after the block the name resolves to the outer mutable
+// binding again, so `x = 5` is a legal assignment. Without scope frames the
+// mutability check would scan past the block and wrongly see the inner `val`.
+import @Std/Io with { print }
+
+fn main() {
+    mut val x: I32 = 1
+    if true {
+        val x: I32 = 99
+        print(x)
+    }
+    x = 5
+    print(x)
+}

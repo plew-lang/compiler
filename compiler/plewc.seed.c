@@ -6546,6 +6546,7 @@ void genStmt(Comp* c, uint64_t id) {
     }
     uint64_t t = (*c).tmp;
     (*c).tmp = ({ uint64_t __ov; if (__builtin_add_overflow(((*c).tmp), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    uint64_t forMark = scopeMark(&((*c)));
     if (isRange) {
     plew_write((PlewString){"    {\n", 6});
     plew_write((PlewString){"    long long __fe", 18});
@@ -6607,6 +6608,7 @@ void genStmt(Comp* c, uint64_t id) {
     genBlock(&((*c)), body);
     plew_write((PlewString){"    }\n    }\n", 12});
     }
+    scopeExit(&((*c)), forMark);
     }
     else if (_m117.tag == 9) {
         uint64_t msg = _m117.data.Panic.msg;
@@ -6700,6 +6702,7 @@ void genStmt(Comp* c, uint64_t id) {
     plew_write((PlewString){".tag == ", 8});
     writeU64(variantIndex(&((*c)), a.enumStart, a.enumLen, a.variantStart, a.variantLen));
     plew_write((PlewString){") {\n", 4});
+    uint64_t armMark = scopeMark(&((*c)));
     PlewArray_Bind binds = PlewArray_Bind_copy(a.binds);
     uint64_t bi = 0;
     while (bi < (long long)((binds).len)) {
@@ -6733,6 +6736,7 @@ void genStmt(Comp* c, uint64_t id) {
     bi = ({ uint64_t __ov; if (__builtin_add_overflow((bi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     genBlock(&((*c)), a.body);
+    scopeExit(&((*c)), armMark);
     plew_write((PlewString){"    }\n", 6});
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });

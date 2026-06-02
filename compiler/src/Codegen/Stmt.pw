@@ -456,6 +456,8 @@ fn genStmt(c: inout Comp, id: U64) {
             }
             val t: U64 = c.tmp
             c.tmp = c.tmp + 1
+            // the loop variable is scoped to the for-statement (popped below).
+            val forMark: U64 = scopeMark(c: inout c)
             if isRange {
                 // for (long long var = lo; var (< | <=) __fe; var++) { body }
                 write(s: "    {\n")
@@ -517,6 +519,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 genBlock(c: inout c, id: body)
                 write(s: "    }\n    }\n")
             }
+            scopeExit(c: inout c, mark: forMark)
         }
         Stmt.Panic { val msg, val offset } => {
             // diverging: plew_panic is noreturn (writes the message + exit(1)).
@@ -604,6 +607,8 @@ fn genStmt(c: inout Comp, id: U64) {
                     write(s: ".tag == ")
                     writeU64(n: variantIndex(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen))
                     write(s: ") {\n")
+                    // pattern binds are scoped to this arm (popped below).
+                    val armMark: U64 = scopeMark(c: inout c)
                     val binds: Array[Bind] = a.binds
                     mut val bi: U64 = 0
                     while bi < binds.count {
@@ -636,6 +641,7 @@ fn genStmt(c: inout Comp, id: U64) {
                         bi += 1
                     }
                     genBlock(c: inout c, id: a.body)
+                    scopeExit(c: inout c, mark: armMark)
                     write(s: "    }\n")
                 }
                 i += 1
