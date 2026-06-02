@@ -28,9 +28,12 @@
 
 - ✅ **真の診断経路＋行番号**。`compileError(msg)`／`compileErrorAt(line, msg)` ビルトイン（stderr へ `plewc: error: [line N: ]…`＋`exit(1)`）。受理健全性の全チェック（import/ラベル/match/struct==/enum==）を sentinel から置換し、`lineOf(offset)`＋`exprOffset(id)`＋`Stmt.Print.offset` で行番号を付与（assembled buffer 越しでも正しい）。`test.sh` の reject は plewc の終了コードで判定。compileError* はコンパイラ内部の ambient プリミティブ（import gate しない）。
 
+- ✅ **文字リテラル `'c'`**（spec/02「文字リテラル」＋design-decisions に決定記録）。単一スカラ→コードポイントの多相数値リテラル（`'/'`→47・`'あ'`→12354・エンコーディング非依存）。エスケープは文字列と共通。複数スカラ（国旗 `'🇯🇵'`）・複数書記素（`'ab'`）は `Grapheme` 型未策定ゆえ reject（spec valid だが未実装）。lexer に `Kind.Char`、parser に `charValue`（UTF-8 をビット演算なしの算術で復号＝`%64`/`*64`）。**ドッグフード**：`isDigit`/`isAlpha` を `b >= '0'` 等に書き換え（同じ整数に lower）。残：マジックナンバーは lexer 本体（句読点 dispatch・`b == 47` 等）にまだ多数＝追って char literal 化できる（同値 lower ゆえ不動点安全）。
+
 **次の一歩の候補**（やりやすい順で自走）：
+- lexer 残りのマジックナンバーを char literal 化（低リスク・読みやすさ向上・同値 lower で不動点安全）。
 - `import ./Foo`（名前空間束縛・`Foo.bar`）＝修飾名解決が要る。今は全部フラット同一スコープ。
-- 整数幅（`I8..U64`/`F*`）＝hidden cost の大物。これが入ると④ lossy `as`・overflow panic も片付く。
+- 整数幅（`I8..U64`/`F*`）＝hidden cost の大物。これが入ると④ lossy `as`・overflow panic も片付く（`'あ' を U8` の溢れ検査もここで効く）。
 - 値意味論/CoW・トレイト/ジェネリクスは更に大物（後）。
 
 > import 機構の現状＝**`with { }` 選択 import のみ**で、認識するのは I/O ビルトイン（`@Std/Io`＝print/write/writeByte/readStdin/readFile・`@Std/Process`＝argCount/argAt）だけ。名前空間 import（`Io.print`）・実モジュール解決・複数ファイル・`export`/`part`・`/`/`./` ルートは未実装（単一ファイルのまま）。enforce は `compileError(msg)`＝`plewc: error: …` を stderr に出し非ゼロ終了（受理健全性チェック共通の経路）。
