@@ -1,0 +1,18 @@
+// or-pattern over payload variants that share a field name (bound by punning):
+// both alternatives bind `value`, so they can share one body.
+import @Std/Io with { print }
+
+enum Node { Leaf { value: I64 } Unary { value: I64 } Bin { value: I64 } }
+
+fn weight(n: Node) -> I64 {
+    return match n {
+        Node.Leaf { val value } | Node.Unary { val value } => value
+        Node.Bin { val value } => value * 100
+    }
+}
+
+fn main() {
+    print(weight(n: <Node.Leaf value=3 />))
+    print(weight(n: <Node.Unary value=4 />))
+    print(weight(n: <Node.Bin value=5 />))
+}

@@ -413,6 +413,7 @@ long long parseWhile(Comp* c);
 long long parseFor(Comp* c);
 long long parseExprOrAssign(Comp* c);
 PatInfo parsePattern(Comp* c);
+long long bindNamesMatch(Comp* c, PlewArray_Bind a, PlewArray_Bind b);
 PlewArray_PatInfo parseArmPatterns(Comp* c);
 long long parseMatch(Comp* c);
 long long parseMatchExpr(Comp* c);
@@ -1823,7 +1824,33 @@ PatInfo parsePattern(Comp* c) {
     }
     return (PatInfo){.isWildcard = isWildcard, .enumStart = enumStart, .enumLen = enumLen, .variantStart = variantStart, .variantLen = variantLen, .binds = binds};
 }
+long long bindNamesMatch(Comp* c, PlewArray_Bind a, PlewArray_Bind b) {
+    if ((long long)((a).len) != (long long)((b).len)) {
+    return 0;
+    }
+    long long i = 0;
+    while (i < (long long)((a).len)) {
+    Bind an = PlewArray_Bind_get(a, (long long)(i));
+    long long found = 0;
+    long long j = 0;
+    while (j < (long long)((b).len)) {
+    Bind bn = PlewArray_Bind_get(b, (long long)(j));
+    if (spansEqual(&((*c)), an.nameStart, an.nameLen, bn.nameStart, bn.nameLen)) {
+    found = 1;
+    }
+    j += 1;
+    }
+    if (found) {
+    }
+    else {
+    return 0;
+    }
+    i += 1;
+    }
+    return 1;
+}
 PlewArray_PatInfo parseArmPatterns(Comp* c) {
+    long long startOff = Comp_cur(&((*c))).start;
     PlewArray_PatInfo pats = PlewArray_PatInfo_new();
     PlewArray_PatInfo_push(&(pats), parsePattern(&((*c))));
     while (1) {
@@ -1846,6 +1873,17 @@ PlewArray_PatInfo parseArmPatterns(Comp* c) {
     }
     else {
     }
+    }
+    long long pi = 1;
+    while (pi < (long long)((pats).len)) {
+    PatInfo p0 = PlewArray_PatInfo_get(pats, (long long)(0));
+    PatInfo pn = PlewArray_PatInfo_get(pats, (long long)(pi));
+    if (bindNamesMatch(&((*c)), p0.binds, pn.binds)) {
+    }
+    else {
+    plew_compile_error_at(lineOf(&((*c)), startOff), (PlewString){"or-pattern alternatives must bind the same names", 48});
+    }
+    pi += 1;
     }
     return pats;
 }

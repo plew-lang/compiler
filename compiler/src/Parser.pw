@@ -621,10 +621,39 @@ fn parsePattern(c: inout Comp) -> PatInfo {
     return <PatInfo isWildcard=isWildcard enumStart=enumStart enumLen=enumLen variantStart=variantStart variantLen=variantLen binds=binds />
 }
 
+// Do two bind lists introduce the same set of names? (order-independent; names
+// are unique within a pattern, so equal counts + subset both ways = set equality)
+fn bindNamesMatch(c: inout Comp, a: Array[Bind], b: Array[Bind]) -> Bool {
+    if a.count != b.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.count {
+        val an: Bind = a[i]
+        mut val found: Bool = false
+        mut val j: U64 = 0
+        while j < b.count {
+            val bn: Bind = b[j]
+            if spansEqual(c: inout c, aStart: an.nameStart, aLen: an.nameLen, bStart: bn.nameStart, bLen: bn.nameLen) {
+                found = true
+            }
+            j += 1
+        }
+        if found {
+        } else {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
 // Parse an arm's full pattern list `Pat ( | Pat )*` (or-patterns), consuming the
 // trailing `=>`. Returns one PatInfo per alternative; the caller emits one
-// MatchArm per alternative sharing the arm body.
+// MatchArm per alternative sharing the arm body. Spec: every alternative must
+// bind the same set of names (so the shared body sees well-defined bindings).
 fn parseArmPatterns(c: inout Comp) -> Array[PatInfo] {
+    val startOff: U64 = c.cur().start
     mut val pats: Array[PatInfo] = []
     pats.append(parsePattern(c: inout c))
     while true {
@@ -640,6 +669,17 @@ fn parseArmPatterns(c: inout Comp) -> Array[PatInfo] {
     match c.curKind() {
         Kind.FatArrow => { c.advance() }
         _ => {}
+    }
+    // or-pattern alternatives must bind the same names (Rust-style).
+    mut val pi: U64 = 1
+    while pi < pats.count {
+        val p0: PatInfo = pats[0]
+        val pn: PatInfo = pats[pi]
+        if bindNamesMatch(c: inout c, a: p0.binds, b: pn.binds) {
+        } else {
+            compileErrorAt(line: lineOf(c: inout c, offset: startOff), msg: "or-pattern alternatives must bind the same names")
+        }
+        pi += 1
     }
     return pats
 }
