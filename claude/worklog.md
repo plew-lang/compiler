@@ -12,16 +12,28 @@
 3. 🔨 言語機能を plewc.pw 側で拡張（post-self-host は Plew 側で additive）。
    - ✅ **`for` ループ**（`Stmt.For`）＝`for val i in a..<b`/`a..=b`（range・inclusive で `<=`）と `for val x in arr`（配列を index で走査）。codegen は C for ループへ脱糖（range＝`for(long long var=lo; var </<= __feN; var++)`・array＝`{ PlewArray_E __faN = arr; for(...) { E var = PlewArray_E_get(__faN, __fiN); ... } }`）。ループ変数を locals に登録（range＝scalar・array＝要素型）。**plewc.pw 自身の driver で dogfood**（本体出力ループを `for val j in 0..<c.funcs.count` に）→ stage0 が新 plewc.pw をビルド・self-built が不動点維持・警告クリーン（e2e `selfhost_plewc_compiles_for_loops`）。
    - ✅ **String `==`/`!=`**（型指向＝`exprType(lhs)` が String なら `PlewString_eq(...)`／`!=` は `!`・`isStringEq` ヘルパー・`genCond` も String eq を genExpr 経由に）＋ **`a[i] = v` index-set**（`Stmt.Assign` の target が `Expr.Index` なら `PlewArray_E_set(&base, i, v)`・複合 `a[i] OP= v` は `set(.., get(..) OP v)`＝`assignToBinStr`）。e2e `selfhost_plewc_compiles_string_eq_and_index_set`（1,1,40,13）・不動点維持・警告クリーン。
-   - ⏭ 候補（次）：値位置 `if`/`match`（`give`・statement-expr 脱糖）/ トレイト等。
-4. ✅ **stage0 凍結・stage1 正典化**：`bootstrap.sh`（リポジトリルート）＝フルブートストラップ＋不動点検証（①`cargo build`→stage0②stage0 が plewc.pw→`selfhost/plewc`③stage1 が自分を C 化→clang→`plewc-selfbuilt`④自己コンパイルで不動点 cmp）。成果物＝`selfhost/plewc`（`selfhost/plewc foo.pw | clang -x c -`）。CLAUDE.md の「現状」「第一目標」「リポジトリ構成」「ビルド/実行」を self-host 達成・stage0 凍結・**今後の機能は stage1（plewc.pw）側に Plew で additive**へ更新。
+   - ✅ **enum `==`/`!=`（暫定・variant 同一性）**＝タグ比較に脱糖（variant 構築は tag index リテラル・他は `(expr).tag`）。**全 nullary enum 限定で許可**（`curKind == <Kind.LParen />` は正しい）・**payload 持ち enum の `==` は loud エラー**（未宣言識別子 `__plew_enum_eq_requires_Eq_derive` を出し C コンパイル失敗＝沈黙バグ回避）。本筋は `@[Eq]` derive で構造的 Eq（→ provisional.md）。variant 値は JSX 一本化を維持（bare `Foo.Bar` 不採用・「どちらでも書ける」回避）。型省略 JSX `<.LParen />` は未決（surface 追加）。
+   - ⏭ 候補（次）：受理の健全性（下記の現在目標）／値位置 `if`/`match`／トレイト等。
+4. ✅ **stage1 正典化**（→ 5 で stage0 退役）：当初は `bootstrap.sh` で stage0 経由ブートストラップ＋不動点検証。CLAUDE.md を self-host 達成・**今後の機能は plewc.pw 側に Plew で additive**へ更新。
+5. ✅ **stage0 退役（Rust 削除）＋Rust 非依存テスト**：
+   - **C 種ブートストラップ**＝`selfhost/plewc.seed.c`（plewc.pw の C 訳・チェックイン・gitignore 例外）。`bootstrap.sh` を `clang 種→plewc0→plewc.pw 自己コンパイル→不動点 cmp(種, 再生成)` に書換（Rust/cargo 不要）。`./bootstrap.sh --reseed` で plewc.pw 変更時に種再生成。新機能を plewc.pw 自身で使う手順＝**ADD（stage1 codegen に足す）→reseed→USE**。
+   - **`bootstrap/`（Rust stage0）を削除**（タグ `stage0-final` で復旧可＝`git checkout stage0-final -- bootstrap`）。**削除方針＝不要になった実装は消し、必要なら git tag から復旧**（ユーザー方針）。
+   - **テストを Rust から `.pw` シェルハーネスへ移行**＝`test.sh`＋`tests/run/*.pw`（`.out` 照合・任意 `.in`）＋`tests/reject/*.pw`（spec-invalid＝コンパイル失敗を確認＝受理の健全性）＋不動点。stage0 内部 API 依存の Rust テストは stage0 ごと退役。`./test.sh`→pass=11。
+   - **LLVM 化の方針（決定）**：当面やらない。捨てるのは codegen バックエンド層（2〜3 割）のみで lexer/parser/型/import/トレイト機構は生き残る・C バックエンドは可読/移植性で残す価値あり。**意味論が一通り揃ってから（import/トレイト/所有権の後）、性能 or 直 WASM が要る時に並行バックエンドとして追加**。先回りの IR 構築は premature。
+
+## 現在の目標：受理の健全性（意味上 Plew として正しい）
+
+**このコンパイラが*受理*するコードは spec でも valid にする**（完全な Plew コンパイラも通せる）。spec が reject するのに今 accept してしまう所＝hidden meaning を潰す。逆向きの不完全性（valid だが未実装で reject＝`<.LParen />`・トレイト等）は許容。ランタイム挙動の誤り（hidden cost＝leak・int 幅・overflow 非 panic）は対象外（後回し）。要修正リストは [provisional.md](provisional.md)「受理の健全性チェックリスト」＝①**import なしで `print` が書ける**（最優先＝import/`@Std`/モジュール機構）②ラベル無視 ③非網羅 match ④lossy `as` ⑤struct `==`。**enforce は plewc.pw 自身にも及ぶ**ので ADD→reseed→USE で plewc.pw を spec-valid 化していく。実装が楽になるもの（import 等）は先に入れてよい。
 
 ## 現在地（一言）
 
-stage0（Rust）で **Plew 製コンパイラ（`selfhost/plewc.pw`・v1）が Plew プログラムを C に変換し clang が通す**段階に到達。stage0 サポート済み：型付き整数/Bool/String（`.bytes`/`==`・リテラルのエスケープ `\n`/`\"`/`\\`）・Array（リテラル/添字/`count`/for-each/`append`/`arr[i]=x`・リーク参照セマンティクス）・struct・enum+match（文位置・if-chain）・if/else/while/for（range/array）・関数（相互再帰・プロトタイプ）・`break`/`continue`・**`inout` パラメータ**・**`as` 数値キャスト**・stdin/stdout I/O（`readStdin`/`write`/**`writeByte`**＝putchar・識別子スパン出力用）。codegen は型を依存順に出力（前方宣言＋トポロジカル）。**Plew 製コンパイラ v1（`selfhost/plewc.pw`）が compile&run**：単一トップレベル関数の本体を C `main` に変換＝`val`/`mut val`・代入（`= += -= *= /= %=`）・`if`/`else`/`else if`・`while`・`print`・式（優先順位付き precedence-climbing・単項・括弧・識別子スパン出力）。arena+index AST。stdin→C を stdout に。**v2 関数/引数/呼び出し/再帰・v3 struct/JSX/フィールド・v4 enum/match・v5 Array/String/ビルトイン**まで実装済（型注釈は実 C 型へ反映・軽量型追跡 `exprType`・配列単相化・String.bytes 共有ビュー・I/O ランタイム preamble を自前出力）。実証用 selfhost ファイル：`lexer.pw`（全トークン）・`parser.pw`（トークン列パーサ）・`emit.pw`（式→C ミニコンパイラ）・`calc.pw`（バイト列パーサ）。**残るは `inout` 引数のみ＝実装すれば `plewc < plewc.pw` で self-host 可能（最後の山）**。
+**セルフホスト達成済・stage0 退役済。** 正典コンパイラ＝`selfhost/plewc.pw`（Plew 製）。ビルドは C 種 `selfhost/plewc.seed.c` から（`./bootstrap.sh`・Rust 不要）、テストは `./test.sh`（Rust 非依存）。plewc.pw がサポート済の言語：型付き整数/Bool/String（リテラル/`.bytes`/`==`/エスケープ）・Array（リテラル/添字/`count`/`append`/`a[i]=x`/for-each・**リーク参照セマンティクス**＝CoW 未実装）・struct/JSX 構築/フィールド・enum+match（網羅前提・タグ if-chain）・enum `==`（全 nullary 限定）・関数/引数/`inout`/再帰・`if`/`else`/`while`/`for`（range/array）・`break`/`continue`・`as`（数値）・I/O ビルトイン（`print`/`write`/`writeByte`/`readStdin`/`readFile`/`argCount`/`argAt`＝**import なしの暫定**）。軽量型追跡 `exprType`・配列単相化・I/O ランタイム preamble を自前出力。生成 C は警告クリーン（`-Wall -Wextra -Werror`）。
 
-### stage0 のメモリモデル（重要・spec とは別物）
+**次の目標は上記「受理の健全性」**（import/`@Std` を筆頭に、spec が reject すべきものを reject する）。実証用の小コンパイラ `lexer.pw`/`parser.pw`/`emit.pw`/`calc.pw` は self-host 途上の足場（履歴的価値）。
 
-stage0 は **throwaway（1 回コンパイルして終了）**。よって Array は **ヒープ確保＋リーク（free しない）＋参照セマンティクス**で実装する（ARC/CoW は未実装）。値意味論との差（エイリアス後変更の観測）は、**stage1 を「アリーナ＋index・単一所有」で書く規律**で回避する（Rust 版 stage0 と同じスタイル＝AST も `ExprId` 等で arena+index）。spec の CoW 値意味論は**セルフホスト後の Plew 製コンパイラで正しく実装**する。これは spec の言語意味論を変えるものではなく stage0 の実装戦略（委任範囲内）。
+### メモリモデル（重要・spec とは別物＝hidden cost の暫定）
+
+現コンパイラは Array を **ヒープ確保＋リーク（free しない）＋参照セマンティクス**で実装（ARC/CoW 未実装）。spec の CoW 値意味論との差（エイリアス後変更の観測）は、**plewc.pw を「アリーナ＋index・単一所有」で書く規律**で回避している。spec の CoW/ARC は後で正しく実装する（hidden cost＝受理の健全性の対象外）。詳細は [provisional.md](provisional.md)。
 
 ## 全体ロードマップ（第一目標＝Plew でコンパイラが書ける → 即セルフホスト）
 

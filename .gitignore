@@ -1,9 +1,8 @@
 # mdBook output
 book/
 
-# Rust / cargo build output
-/bootstrap/target/
-
-# selfhost build artifacts (stage0 emits a binary + .c next to each .pw)
+# selfhost build artifacts (the compiler emits a binary + .c next to each .pw)
 selfhost/*
 !selfhost/*.pw
+# ...except the bootstrap seed (the checked-in C the build starts from)
+!selfhost/plewc.seed.c
