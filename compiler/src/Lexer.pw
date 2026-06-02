@@ -6,6 +6,7 @@ enum Kind {
     Newline
     Int
     Str
+    Char
     Ident
     KwFn
     KwStruct
@@ -85,8 +86,8 @@ fn at(lx: inout Lexer, off: U64) -> U8 {
 }
 
 fn isDigit(b: U8) -> Bool {
-    if b >= 48 {
-        if b <= 57 {
+    if b >= '0' {
+        if b <= '9' {
             return true
         }
     }
@@ -94,16 +95,16 @@ fn isDigit(b: U8) -> Bool {
 }
 
 fn isAlpha(b: U8) -> Bool {
-    if b == 95 {
+    if b == '_' {
         return true
     }
-    if b >= 97 {
-        if b <= 122 {
+    if b >= 'a' {
+        if b <= 'z' {
             return true
         }
     }
-    if b >= 65 {
-        if b <= 90 {
+    if b >= 'A' {
+        if b <= 'Z' {
             return true
         }
     }
@@ -220,6 +221,7 @@ fn lastCanEnd(lx: inout Lexer) -> Bool {
         Kind.Ident => { return true }
         Kind.Int => { return true }
         Kind.Str => { return true }
+        Kind.Char => { return true }
         Kind.RParen => { return true }
         Kind.RBracket => { return true }
         Kind.RBrace => { return true }
@@ -319,6 +321,24 @@ fn lex(lx: inout Lexer) {
                 j += 1
             }
             emit(lx: inout lx, k: <Kind.Str />, start: start, len: j - start)
+            continue
+        }
+        if b == 39 {
+            // character literal `'…'` (one scalar; backslash escapes the next byte)
+            val start: U64 = lx.pos
+            mut val j: U64 = lx.pos + 1
+            while j < lx.bytes.count {
+                if lx.bytes[j] == 92 {
+                    j += 2
+                    continue
+                }
+                if lx.bytes[j] == 39 {
+                    j += 1
+                    break
+                }
+                j += 1
+            }
+            emit(lx: inout lx, k: <Kind.Char />, start: start, len: j - start)
             continue
         }
         val b2: U8 = at(lx: inout lx, off: 1)
@@ -480,6 +500,7 @@ fn kindCode(k: Kind) -> I64 {
         Kind.Newline => { return 1 }
         Kind.Int => { return 2 }
         Kind.Str => { return 3 }
+        Kind.Char => { return 5 }
         Kind.Ident => { return 4 }
         Kind.KwFn => { return 10 }
         Kind.KwStruct => { return 11 }

@@ -1,0 +1,6 @@
+import @Std/Io with { print }
+
+fn main() {
+    val f: U32 = '🇯🇵'
+    print(f)
+}

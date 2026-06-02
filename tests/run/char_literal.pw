@@ -1,0 +1,16 @@
+import @Std/Io with { print }
+
+fn main() {
+    val slash: U8 = '/'
+    print(slash)
+    val zero: U8 = '0'
+    print(zero)
+    val a: U8 = 'A'
+    print(a)
+    val nl: U8 = '\n'
+    print(nl)
+    val tab: U8 = '\t'
+    print(tab)
+    val hira: U16 = 'あ'
+    print(hira)
+}

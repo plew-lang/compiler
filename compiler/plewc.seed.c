@@ -58,6 +58,7 @@ struct Kind {
         struct { char _u; } Newline;
         struct { char _u; } Int;
         struct { char _u; } Str;
+        struct { char _u; } Char;
         struct { char _u; } Ident;
         struct { char _u; } KwFn;
         struct { char _u; } KwStruct;
@@ -360,6 +361,7 @@ long long pushExpr(Comp* c, Expr e);
 long long pushStmt(Comp* c, Stmt s);
 long long tokenValue(Comp* c, Tok t);
 long long binPrec(Kind k);
+long long charValue(Comp* c, Tok t);
 long long parsePrimary(Comp* c);
 long long parseUnary(Comp* c);
 long long parsePostfix(Comp* c);
@@ -445,7 +447,7 @@ PlewArray_Bind collectParts(PlewArray_U8 rootBytes, PlewArray_Tok toks) {
     long long isPart = 0;
     {
     Kind _m0 = t.kind;
-    if (_m0.tag == 4) {
+    if (_m0.tag == 5) {
     if (rangeEquals(rootBytes, t.start, t.len, (PlewString){"part", 4})) {
     isPart = 1;
     }
@@ -458,7 +460,7 @@ PlewArray_Bind collectParts(PlewArray_U8 rootBytes, PlewArray_Tok toks) {
     long long okDot = 0;
     {
     Kind _m1 = PlewArray_Tok_get(toks, (long long)((i + 1))).kind;
-    if (_m1.tag == 32) {
+    if (_m1.tag == 33) {
     okDot = 1;
     }
     else {
@@ -467,7 +469,7 @@ PlewArray_Bind collectParts(PlewArray_U8 rootBytes, PlewArray_Tok toks) {
     long long okSlash = 0;
     {
     Kind _m2 = PlewArray_Tok_get(toks, (long long)((i + 2))).kind;
-    if (_m2.tag == 43) {
+    if (_m2.tag == 44) {
     okSlash = 1;
     }
     else {
@@ -477,7 +479,7 @@ PlewArray_Bind collectParts(PlewArray_U8 rootBytes, PlewArray_Tok toks) {
     long long okName = 0;
     {
     Kind _m3 = nameT.kind;
-    if (_m3.tag == 4) {
+    if (_m3.tag == 5) {
     okName = 1;
     }
     else {
@@ -690,63 +692,63 @@ long long rangeEquals(PlewArray_U8 bytes, long long start, long long len, PlewSt
 }
 Kind identKind(PlewArray_U8 bytes, long long start, long long len) {
     if (rangeEquals(bytes, start, len, (PlewString){"fn", 2})) {
-    return (Kind){.tag = 5};
-    }
-    if (rangeEquals(bytes, start, len, (PlewString){"struct", 6})) {
     return (Kind){.tag = 6};
     }
-    if (rangeEquals(bytes, start, len, (PlewString){"enum", 4})) {
+    if (rangeEquals(bytes, start, len, (PlewString){"struct", 6})) {
     return (Kind){.tag = 7};
     }
-    if (rangeEquals(bytes, start, len, (PlewString){"match", 5})) {
+    if (rangeEquals(bytes, start, len, (PlewString){"enum", 4})) {
     return (Kind){.tag = 8};
     }
-    if (rangeEquals(bytes, start, len, (PlewString){"if", 2})) {
+    if (rangeEquals(bytes, start, len, (PlewString){"match", 5})) {
     return (Kind){.tag = 9};
     }
-    if (rangeEquals(bytes, start, len, (PlewString){"else", 4})) {
+    if (rangeEquals(bytes, start, len, (PlewString){"if", 2})) {
     return (Kind){.tag = 10};
     }
-    if (rangeEquals(bytes, start, len, (PlewString){"while", 5})) {
+    if (rangeEquals(bytes, start, len, (PlewString){"else", 4})) {
     return (Kind){.tag = 11};
     }
-    if (rangeEquals(bytes, start, len, (PlewString){"for", 3})) {
+    if (rangeEquals(bytes, start, len, (PlewString){"while", 5})) {
     return (Kind){.tag = 12};
     }
-    if (rangeEquals(bytes, start, len, (PlewString){"break", 5})) {
+    if (rangeEquals(bytes, start, len, (PlewString){"for", 3})) {
     return (Kind){.tag = 13};
     }
-    if (rangeEquals(bytes, start, len, (PlewString){"continue", 8})) {
+    if (rangeEquals(bytes, start, len, (PlewString){"break", 5})) {
     return (Kind){.tag = 14};
     }
-    if (rangeEquals(bytes, start, len, (PlewString){"return", 6})) {
+    if (rangeEquals(bytes, start, len, (PlewString){"continue", 8})) {
     return (Kind){.tag = 15};
     }
-    if (rangeEquals(bytes, start, len, (PlewString){"give", 4})) {
+    if (rangeEquals(bytes, start, len, (PlewString){"return", 6})) {
     return (Kind){.tag = 16};
     }
-    if (rangeEquals(bytes, start, len, (PlewString){"val", 3})) {
+    if (rangeEquals(bytes, start, len, (PlewString){"give", 4})) {
     return (Kind){.tag = 17};
     }
-    if (rangeEquals(bytes, start, len, (PlewString){"mut", 3})) {
+    if (rangeEquals(bytes, start, len, (PlewString){"val", 3})) {
     return (Kind){.tag = 18};
     }
-    if (rangeEquals(bytes, start, len, (PlewString){"in", 2})) {
+    if (rangeEquals(bytes, start, len, (PlewString){"mut", 3})) {
     return (Kind){.tag = 19};
     }
-    if (rangeEquals(bytes, start, len, (PlewString){"as", 2})) {
+    if (rangeEquals(bytes, start, len, (PlewString){"in", 2})) {
     return (Kind){.tag = 20};
     }
-    if (rangeEquals(bytes, start, len, (PlewString){"inout", 5})) {
+    if (rangeEquals(bytes, start, len, (PlewString){"as", 2})) {
     return (Kind){.tag = 21};
     }
-    if (rangeEquals(bytes, start, len, (PlewString){"true", 4})) {
+    if (rangeEquals(bytes, start, len, (PlewString){"inout", 5})) {
     return (Kind){.tag = 22};
     }
-    if (rangeEquals(bytes, start, len, (PlewString){"false", 5})) {
+    if (rangeEquals(bytes, start, len, (PlewString){"true", 4})) {
     return (Kind){.tag = 23};
     }
-    return (Kind){.tag = 4};
+    if (rangeEquals(bytes, start, len, (PlewString){"false", 5})) {
+    return (Kind){.tag = 24};
+    }
+    return (Kind){.tag = 5};
 }
 void emit(Lexer* lx, Kind k, long long start, long long len) {
     PlewArray_Tok_push(&((*lx).toks), (Tok){.kind = k, .start = start, .len = len});
@@ -776,7 +778,7 @@ long long lastCanEnd(Lexer* lx) {
     Tok t = PlewArray_Tok_get((*lx).toks, (long long)((n - 1)));
     {
     Kind _m6 = t.kind;
-    if (_m6.tag == 4) {
+    if (_m6.tag == 5) {
     return 1;
     }
     else if (_m6.tag == 2) {
@@ -785,31 +787,34 @@ long long lastCanEnd(Lexer* lx) {
     else if (_m6.tag == 3) {
     return 1;
     }
-    else if (_m6.tag == 25) {
+    else if (_m6.tag == 4) {
     return 1;
     }
-    else if (_m6.tag == 27) {
+    else if (_m6.tag == 26) {
     return 1;
     }
-    else if (_m6.tag == 29) {
+    else if (_m6.tag == 28) {
     return 1;
     }
-    else if (_m6.tag == 50) {
+    else if (_m6.tag == 30) {
     return 1;
     }
-    else if (_m6.tag == 22) {
+    else if (_m6.tag == 51) {
     return 1;
     }
     else if (_m6.tag == 23) {
     return 1;
     }
-    else if (_m6.tag == 15) {
+    else if (_m6.tag == 24) {
     return 1;
     }
-    else if (_m6.tag == 13) {
+    else if (_m6.tag == 16) {
     return 1;
     }
     else if (_m6.tag == 14) {
+    return 1;
+    }
+    else if (_m6.tag == 15) {
     return 1;
     }
     else {
@@ -909,155 +914,172 @@ void lex(Lexer* lx) {
     emit(&((*lx)), (Kind){.tag = 3}, start, (j - start));
     continue;
     }
+    if (b == 39) {
+    long long start = (*lx).pos;
+    long long j = ((*lx).pos + 1);
+    while (j < (long long)(((*lx).bytes).len)) {
+    if (PlewArray_U8_get((*lx).bytes, (long long)(j)) == 92) {
+    j += 2;
+    continue;
+    }
+    if (PlewArray_U8_get((*lx).bytes, (long long)(j)) == 39) {
+    j += 1;
+    break;
+    }
+    j += 1;
+    }
+    emit(&((*lx)), (Kind){.tag = 4}, start, (j - start));
+    continue;
+    }
     unsigned char b2 = at(&((*lx)), 1);
     if (b == 46) {
     if (b2 == 46) {
     unsigned char b3 = at(&((*lx)), 2);
     if (b3 == 60) {
-    emit(&((*lx)), (Kind){.tag = 56}, (*lx).pos, 3);
-    continue;
-    }
-    if (b3 == 61) {
     emit(&((*lx)), (Kind){.tag = 57}, (*lx).pos, 3);
     continue;
     }
-    }
-    emit(&((*lx)), (Kind){.tag = 32}, (*lx).pos, 1);
+    if (b3 == 61) {
+    emit(&((*lx)), (Kind){.tag = 58}, (*lx).pos, 3);
     continue;
     }
-    if (b == 61) {
-    if (b2 == 61) {
-    emit(&((*lx)), (Kind){.tag = 34}, (*lx).pos, 2);
-    continue;
-    }
-    if (b2 == 62) {
-    emit(&((*lx)), (Kind){.tag = 49}, (*lx).pos, 2);
-    continue;
     }
     emit(&((*lx)), (Kind){.tag = 33}, (*lx).pos, 1);
     continue;
     }
-    if (b == 33) {
+    if (b == 61) {
     if (b2 == 61) {
     emit(&((*lx)), (Kind){.tag = 35}, (*lx).pos, 2);
-    continue;
-    }
-    emit(&((*lx)), (Kind){.tag = 47}, (*lx).pos, 1);
-    continue;
-    }
-    if (b == 60) {
-    if (b2 == 61) {
-    emit(&((*lx)), (Kind){.tag = 37}, (*lx).pos, 2);
-    continue;
-    }
-    emit(&((*lx)), (Kind){.tag = 36}, (*lx).pos, 1);
-    continue;
-    }
-    if (b == 62) {
-    if (b2 == 61) {
-    emit(&((*lx)), (Kind){.tag = 39}, (*lx).pos, 2);
-    continue;
-    }
-    emit(&((*lx)), (Kind){.tag = 38}, (*lx).pos, 1);
-    continue;
-    }
-    if (b == 43) {
-    if (b2 == 61) {
-    emit(&((*lx)), (Kind){.tag = 51}, (*lx).pos, 2);
-    continue;
-    }
-    emit(&((*lx)), (Kind){.tag = 40}, (*lx).pos, 1);
-    continue;
-    }
-    if (b == 45) {
-    if (b2 == 61) {
-    emit(&((*lx)), (Kind){.tag = 52}, (*lx).pos, 2);
-    continue;
-    }
-    if (b2 == 62) {
-    emit(&((*lx)), (Kind){.tag = 48}, (*lx).pos, 2);
-    continue;
-    }
-    emit(&((*lx)), (Kind){.tag = 41}, (*lx).pos, 1);
-    continue;
-    }
-    if (b == 42) {
-    if (b2 == 61) {
-    emit(&((*lx)), (Kind){.tag = 53}, (*lx).pos, 2);
-    continue;
-    }
-    emit(&((*lx)), (Kind){.tag = 42}, (*lx).pos, 1);
-    continue;
-    }
-    if (b == 47) {
-    if (b2 == 61) {
-    emit(&((*lx)), (Kind){.tag = 54}, (*lx).pos, 2);
     continue;
     }
     if (b2 == 62) {
     emit(&((*lx)), (Kind){.tag = 50}, (*lx).pos, 2);
     continue;
     }
+    emit(&((*lx)), (Kind){.tag = 34}, (*lx).pos, 1);
+    continue;
+    }
+    if (b == 33) {
+    if (b2 == 61) {
+    emit(&((*lx)), (Kind){.tag = 36}, (*lx).pos, 2);
+    continue;
+    }
+    emit(&((*lx)), (Kind){.tag = 48}, (*lx).pos, 1);
+    continue;
+    }
+    if (b == 60) {
+    if (b2 == 61) {
+    emit(&((*lx)), (Kind){.tag = 38}, (*lx).pos, 2);
+    continue;
+    }
+    emit(&((*lx)), (Kind){.tag = 37}, (*lx).pos, 1);
+    continue;
+    }
+    if (b == 62) {
+    if (b2 == 61) {
+    emit(&((*lx)), (Kind){.tag = 40}, (*lx).pos, 2);
+    continue;
+    }
+    emit(&((*lx)), (Kind){.tag = 39}, (*lx).pos, 1);
+    continue;
+    }
+    if (b == 43) {
+    if (b2 == 61) {
+    emit(&((*lx)), (Kind){.tag = 52}, (*lx).pos, 2);
+    continue;
+    }
+    emit(&((*lx)), (Kind){.tag = 41}, (*lx).pos, 1);
+    continue;
+    }
+    if (b == 45) {
+    if (b2 == 61) {
+    emit(&((*lx)), (Kind){.tag = 53}, (*lx).pos, 2);
+    continue;
+    }
+    if (b2 == 62) {
+    emit(&((*lx)), (Kind){.tag = 49}, (*lx).pos, 2);
+    continue;
+    }
+    emit(&((*lx)), (Kind){.tag = 42}, (*lx).pos, 1);
+    continue;
+    }
+    if (b == 42) {
+    if (b2 == 61) {
+    emit(&((*lx)), (Kind){.tag = 54}, (*lx).pos, 2);
+    continue;
+    }
     emit(&((*lx)), (Kind){.tag = 43}, (*lx).pos, 1);
     continue;
     }
-    if (b == 37) {
+    if (b == 47) {
     if (b2 == 61) {
     emit(&((*lx)), (Kind){.tag = 55}, (*lx).pos, 2);
+    continue;
+    }
+    if (b2 == 62) {
+    emit(&((*lx)), (Kind){.tag = 51}, (*lx).pos, 2);
     continue;
     }
     emit(&((*lx)), (Kind){.tag = 44}, (*lx).pos, 1);
     continue;
     }
+    if (b == 37) {
+    if (b2 == 61) {
+    emit(&((*lx)), (Kind){.tag = 56}, (*lx).pos, 2);
+    continue;
+    }
+    emit(&((*lx)), (Kind){.tag = 45}, (*lx).pos, 1);
+    continue;
+    }
     if (b == 38) {
     if (b2 == 38) {
-    emit(&((*lx)), (Kind){.tag = 45}, (*lx).pos, 2);
+    emit(&((*lx)), (Kind){.tag = 46}, (*lx).pos, 2);
     continue;
     }
     }
     if (b == 124) {
     if (b2 == 124) {
-    emit(&((*lx)), (Kind){.tag = 46}, (*lx).pos, 2);
+    emit(&((*lx)), (Kind){.tag = 47}, (*lx).pos, 2);
     continue;
     }
     }
     if (b == 40) {
-    emit(&((*lx)), (Kind){.tag = 24}, (*lx).pos, 1);
+    emit(&((*lx)), (Kind){.tag = 25}, (*lx).pos, 1);
     (*lx).depth += 1;
     continue;
     }
     if (b == 41) {
-    emit(&((*lx)), (Kind){.tag = 25}, (*lx).pos, 1);
+    emit(&((*lx)), (Kind){.tag = 26}, (*lx).pos, 1);
     (*lx).depth -= 1;
     continue;
     }
     if (b == 91) {
-    emit(&((*lx)), (Kind){.tag = 26}, (*lx).pos, 1);
+    emit(&((*lx)), (Kind){.tag = 27}, (*lx).pos, 1);
     (*lx).depth += 1;
     continue;
     }
     if (b == 93) {
-    emit(&((*lx)), (Kind){.tag = 27}, (*lx).pos, 1);
+    emit(&((*lx)), (Kind){.tag = 28}, (*lx).pos, 1);
     (*lx).depth -= 1;
     continue;
     }
     if (b == 123) {
-    emit(&((*lx)), (Kind){.tag = 28}, (*lx).pos, 1);
-    continue;
-    }
-    if (b == 125) {
     emit(&((*lx)), (Kind){.tag = 29}, (*lx).pos, 1);
     continue;
     }
-    if (b == 44) {
+    if (b == 125) {
     emit(&((*lx)), (Kind){.tag = 30}, (*lx).pos, 1);
     continue;
     }
-    if (b == 58) {
+    if (b == 44) {
     emit(&((*lx)), (Kind){.tag = 31}, (*lx).pos, 1);
     continue;
     }
-    emit(&((*lx)), (Kind){.tag = 58}, (*lx).pos, 1);
+    if (b == 58) {
+    emit(&((*lx)), (Kind){.tag = 32}, (*lx).pos, 1);
+    continue;
+    }
+    emit(&((*lx)), (Kind){.tag = 59}, (*lx).pos, 1);
     }
     PlewArray_Tok_push(&((*lx).toks), (Tok){.kind = (Kind){.tag = 0}, .start = (*lx).pos, .len = 0});
 }
@@ -1077,168 +1099,171 @@ long long kindCode(Kind k) {
     return 3;
     }
     else if (_m7.tag == 4) {
-    return 4;
+    return 5;
     }
     else if (_m7.tag == 5) {
-    return 10;
+    return 4;
     }
     else if (_m7.tag == 6) {
-    return 11;
+    return 10;
     }
     else if (_m7.tag == 7) {
-    return 12;
+    return 11;
     }
     else if (_m7.tag == 8) {
-    return 13;
+    return 12;
     }
     else if (_m7.tag == 9) {
-    return 14;
+    return 13;
     }
     else if (_m7.tag == 10) {
-    return 15;
+    return 14;
     }
     else if (_m7.tag == 11) {
-    return 16;
+    return 15;
     }
     else if (_m7.tag == 12) {
-    return 17;
+    return 16;
     }
     else if (_m7.tag == 13) {
-    return 18;
+    return 17;
     }
     else if (_m7.tag == 14) {
-    return 19;
+    return 18;
     }
     else if (_m7.tag == 15) {
-    return 20;
+    return 19;
     }
     else if (_m7.tag == 16) {
-    return 21;
+    return 20;
     }
     else if (_m7.tag == 17) {
-    return 22;
+    return 21;
     }
     else if (_m7.tag == 18) {
-    return 23;
+    return 22;
     }
     else if (_m7.tag == 19) {
-    return 24;
+    return 23;
     }
     else if (_m7.tag == 20) {
-    return 25;
+    return 24;
     }
     else if (_m7.tag == 21) {
-    return 26;
+    return 25;
     }
     else if (_m7.tag == 22) {
-    return 27;
+    return 26;
     }
     else if (_m7.tag == 23) {
-    return 28;
+    return 27;
     }
     else if (_m7.tag == 24) {
-    return 40;
+    return 28;
     }
     else if (_m7.tag == 25) {
-    return 41;
+    return 40;
     }
     else if (_m7.tag == 26) {
-    return 42;
+    return 41;
     }
     else if (_m7.tag == 27) {
-    return 43;
+    return 42;
     }
     else if (_m7.tag == 28) {
-    return 44;
+    return 43;
     }
     else if (_m7.tag == 29) {
-    return 45;
+    return 44;
     }
     else if (_m7.tag == 30) {
-    return 46;
+    return 45;
     }
     else if (_m7.tag == 31) {
-    return 47;
+    return 46;
     }
     else if (_m7.tag == 32) {
-    return 48;
+    return 47;
     }
     else if (_m7.tag == 33) {
-    return 49;
+    return 48;
     }
     else if (_m7.tag == 34) {
-    return 50;
+    return 49;
     }
     else if (_m7.tag == 35) {
-    return 51;
+    return 50;
     }
     else if (_m7.tag == 36) {
-    return 52;
+    return 51;
     }
     else if (_m7.tag == 37) {
-    return 53;
+    return 52;
     }
     else if (_m7.tag == 38) {
-    return 54;
+    return 53;
     }
     else if (_m7.tag == 39) {
-    return 55;
+    return 54;
     }
     else if (_m7.tag == 40) {
-    return 56;
+    return 55;
     }
     else if (_m7.tag == 41) {
-    return 57;
+    return 56;
     }
     else if (_m7.tag == 42) {
-    return 58;
+    return 57;
     }
     else if (_m7.tag == 43) {
-    return 59;
+    return 58;
     }
     else if (_m7.tag == 44) {
-    return 60;
+    return 59;
     }
     else if (_m7.tag == 45) {
-    return 61;
+    return 60;
     }
     else if (_m7.tag == 46) {
-    return 62;
+    return 61;
     }
     else if (_m7.tag == 47) {
-    return 63;
+    return 62;
     }
     else if (_m7.tag == 48) {
-    return 64;
+    return 63;
     }
     else if (_m7.tag == 49) {
-    return 65;
+    return 64;
     }
     else if (_m7.tag == 50) {
-    return 66;
+    return 65;
     }
     else if (_m7.tag == 51) {
-    return 67;
+    return 66;
     }
     else if (_m7.tag == 52) {
-    return 68;
+    return 67;
     }
     else if (_m7.tag == 53) {
-    return 69;
+    return 68;
     }
     else if (_m7.tag == 54) {
-    return 70;
+    return 69;
     }
     else if (_m7.tag == 55) {
-    return 71;
+    return 70;
     }
     else if (_m7.tag == 56) {
-    return 72;
+    return 71;
     }
     else if (_m7.tag == 57) {
-    return 73;
+    return 72;
     }
     else if (_m7.tag == 58) {
+    return 73;
+    }
+    else if (_m7.tag == 59) {
     return 99;
     }
     else { __builtin_unreachable(); }
@@ -1300,14 +1325,11 @@ long long tokenValue(Comp* c, Tok t) {
 long long binPrec(Kind k) {
     {
     Kind _m9 = k;
-    if (_m9.tag == 46) {
+    if (_m9.tag == 47) {
     return 1;
     }
-    else if (_m9.tag == 45) {
+    else if (_m9.tag == 46) {
     return 2;
-    }
-    else if (_m9.tag == 34) {
-    return 3;
     }
     else if (_m9.tag == 35) {
     return 3;
@@ -1325,13 +1347,13 @@ long long binPrec(Kind k) {
     return 3;
     }
     else if (_m9.tag == 40) {
-    return 4;
+    return 3;
     }
     else if (_m9.tag == 41) {
     return 4;
     }
     else if (_m9.tag == 42) {
-    return 5;
+    return 4;
     }
     else if (_m9.tag == 43) {
     return 5;
@@ -1339,10 +1361,66 @@ long long binPrec(Kind k) {
     else if (_m9.tag == 44) {
     return 5;
     }
+    else if (_m9.tag == 45) {
+    return 5;
+    }
     else {
     return 0;
     }
     }
+}
+long long charValue(Comp* c, Tok t) {
+    long long contentLen = (t.len - 2);
+    if (contentLen == 0) {
+    plew_compile_error_at(lineOf(&((*c)), t.start), (PlewString){"empty character literal", 23});
+    }
+    long long p = (t.start + 1);
+    unsigned char b0 = PlewArray_U8_get((*c).bytes, (long long)(p));
+    if (b0 == 92) {
+    if (contentLen != 2) {
+    plew_compile_error_at(lineOf(&((*c)), t.start), (PlewString){"character literal must be a single scalar", 41});
+    }
+    unsigned char e = PlewArray_U8_get((*c).bytes, (long long)((p + 1)));
+    if (e == 110) {
+    return 10;
+    }
+    if (e == 116) {
+    return 9;
+    }
+    if (e == 114) {
+    return 13;
+    }
+    if (e == 48) {
+    return 0;
+    }
+    return e;
+    }
+    long long consumed = 1;
+    long long value = 0;
+    if (b0 < 128) {
+    consumed = 1;
+    value = b0;
+    }
+    else {
+    if (b0 < 224) {
+    consumed = 2;
+    value = (((b0 % 32) * 64) + (PlewArray_U8_get((*c).bytes, (long long)((p + 1))) % 64));
+    }
+    else {
+    if (b0 < 240) {
+    consumed = 3;
+    value = ((((b0 % 16) * 4096) + ((PlewArray_U8_get((*c).bytes, (long long)((p + 1))) % 64) * 64)) + (PlewArray_U8_get((*c).bytes, (long long)((p + 2))) % 64));
+    }
+    else {
+    consumed = 4;
+    value = (((((b0 % 8) * 262144) + ((PlewArray_U8_get((*c).bytes, (long long)((p + 1))) % 64) * 4096)) + ((PlewArray_U8_get((*c).bytes, (long long)((p + 2))) % 64) * 64)) + (PlewArray_U8_get((*c).bytes, (long long)((p + 3))) % 64));
+    }
+    }
+    }
+    if (contentLen != consumed) {
+    plew_compile_error_at(lineOf(&((*c)), t.start), (PlewString){"multi-scalar character literal (Grapheme) is not yet supported", 62});
+    }
+    return value;
 }
 long long parsePrimary(Comp* c) {
     Kind k = curKind(&((*c)));
@@ -1356,9 +1434,15 @@ long long parsePrimary(Comp* c) {
     }
     else if (_m10.tag == 4) {
     Tok t = cur(&((*c)));
+    advance(&((*c)));
+    long long v = charValue(&((*c)), t);
+    return pushExpr(&((*c)), (Expr){.tag = 0, .data.Int = {.value = v}});
+    }
+    else if (_m10.tag == 5) {
+    Tok t = cur(&((*c)));
     {
     Kind _m11 = peekKind(&((*c)), 1);
-    if (_m11.tag == 24) {
+    if (_m11.tag == 25) {
     advance(&((*c)));
     advance(&((*c)));
     PlewArray_Arg args = parseCallArgs(&((*c)));
@@ -1370,20 +1454,20 @@ long long parsePrimary(Comp* c) {
     }
     }
     }
-    else if (_m10.tag == 22) {
+    else if (_m10.tag == 23) {
     advance(&((*c)));
     return pushExpr(&((*c)), (Expr){.tag = 0, .data.Int = {.value = 1}});
     }
-    else if (_m10.tag == 23) {
+    else if (_m10.tag == 24) {
     advance(&((*c)));
     return pushExpr(&((*c)), (Expr){.tag = 0, .data.Int = {.value = 0}});
     }
-    else if (_m10.tag == 24) {
+    else if (_m10.tag == 25) {
     advance(&((*c)));
     long long inner = parseExpr(&((*c)));
     {
     Kind _m12 = curKind(&((*c)));
-    if (_m12.tag == 25) {
+    if (_m12.tag == 26) {
     advance(&((*c)));
     }
     else {
@@ -1391,7 +1475,7 @@ long long parsePrimary(Comp* c) {
     }
     return inner;
     }
-    else if (_m10.tag == 36) {
+    else if (_m10.tag == 37) {
     return parseMake(&((*c)));
     }
     else if (_m10.tag == 3) {
@@ -1399,14 +1483,14 @@ long long parsePrimary(Comp* c) {
     advance(&((*c)));
     return pushExpr(&((*c)), (Expr){.tag = 7, .data.Str = {.start = t.start, .len = t.len}});
     }
-    else if (_m10.tag == 26) {
+    else if (_m10.tag == 27) {
     advance(&((*c)));
     PlewArray_U64 elems = PlewArray_U64_new();
     while (1) {
     skipNewlines(&((*c)));
     {
     Kind _m13 = curKind(&((*c)));
-    if (_m13.tag == 27) {
+    if (_m13.tag == 28) {
     advance(&((*c)));
     break;
     }
@@ -1418,7 +1502,7 @@ long long parsePrimary(Comp* c) {
     PlewArray_U64_push(&(elems), e);
     {
     Kind _m14 = curKind(&((*c)));
-    if (_m14.tag == 30) {
+    if (_m14.tag == 31) {
     advance(&((*c)));
     }
     else {
@@ -1439,12 +1523,12 @@ long long parseUnary(Comp* c) {
     Kind k = curKind(&((*c)));
     {
     Kind _m15 = k;
-    if (_m15.tag == 41) {
+    if (_m15.tag == 42) {
     advance(&((*c)));
     long long o = parseUnary(&((*c)));
     return pushExpr(&((*c)), (Expr){.tag = 2, .data.Unary = {.op = 57, .operand = o}});
     }
-    else if (_m15.tag == 47) {
+    else if (_m15.tag == 48) {
     advance(&((*c)));
     long long o = parseUnary(&((*c)));
     return pushExpr(&((*c)), (Expr){.tag = 2, .data.Unary = {.op = 63, .operand = o}});
@@ -1459,13 +1543,13 @@ long long parsePostfix(Comp* c) {
     while (1) {
     {
     Kind _m16 = curKind(&((*c)));
-    if (_m16.tag == 32) {
+    if (_m16.tag == 33) {
     advance(&((*c)));
     Tok nameTok = cur(&((*c)));
     advance(&((*c)));
     {
     Kind _m17 = curKind(&((*c)));
-    if (_m17.tag == 24) {
+    if (_m17.tag == 25) {
     advance(&((*c)));
     PlewArray_Arg args = parseCallArgs(&((*c)));
     e = pushExpr(&((*c)), (Expr){.tag = 10, .data.Method = {.recv = e, .nameStart = nameTok.start, .nameLen = nameTok.len, .args = args}});
@@ -1475,12 +1559,12 @@ long long parsePostfix(Comp* c) {
     }
     }
     }
-    else if (_m16.tag == 26) {
+    else if (_m16.tag == 27) {
     advance(&((*c)));
     long long idx = parseExpr(&((*c)));
     {
     Kind _m18 = curKind(&((*c)));
-    if (_m18.tag == 27) {
+    if (_m18.tag == 28) {
     advance(&((*c)));
     }
     else {
@@ -1488,7 +1572,7 @@ long long parsePostfix(Comp* c) {
     }
     e = pushExpr(&((*c)), (Expr){.tag = 9, .data.Index = {.base = e, .index = idx}});
     }
-    else if (_m16.tag == 20) {
+    else if (_m16.tag == 21) {
     advance(&((*c)));
     PType ty = parseTypeTok(&((*c)));
     e = pushExpr(&((*c)), (Expr){.tag = 11, .data.Cast = {.operand = e, .tyStart = ty.start, .tyLen = ty.len}});
@@ -1509,7 +1593,7 @@ long long parseMake(Comp* c) {
     long long isEnum = 0;
     {
     Kind _m19 = curKind(&((*c)));
-    if (_m19.tag == 32) {
+    if (_m19.tag == 33) {
     advance(&((*c)));
     Tok vTok = cur(&((*c)));
     advance(&((*c)));
@@ -1526,23 +1610,23 @@ long long parseMake(Comp* c) {
     Kind k = curKind(&((*c)));
     {
     Kind _m20 = k;
-    if (_m20.tag == 50) {
+    if (_m20.tag == 51) {
     advance(&((*c)));
     break;
     }
-    else if (_m20.tag == 38) {
+    else if (_m20.tag == 39) {
     advance(&((*c)));
     break;
     }
     else if (_m20.tag == 0) {
     break;
     }
-    else if (_m20.tag == 4) {
+    else if (_m20.tag == 5) {
     Tok fTok = cur(&((*c)));
     advance(&((*c)));
     {
     Kind _m21 = curKind(&((*c)));
-    if (_m21.tag == 33) {
+    if (_m21.tag == 34) {
     advance(&((*c)));
     }
     else {
@@ -1586,7 +1670,7 @@ PlewArray_Arg parseCallArgs(Comp* c) {
     Kind k = curKind(&((*c)));
     {
     Kind _m22 = k;
-    if (_m22.tag == 25) {
+    if (_m22.tag == 26) {
     advance(&((*c)));
     break;
     }
@@ -1599,10 +1683,10 @@ PlewArray_Arg parseCallArgs(Comp* c) {
     long long hasLabel = 0;
     {
     Kind _m23 = curKind(&((*c)));
-    if (_m23.tag == 4) {
+    if (_m23.tag == 5) {
     {
     Kind _m24 = peekKind(&((*c)), 1);
-    if (_m24.tag == 31) {
+    if (_m24.tag == 32) {
     Tok lt = cur(&((*c)));
     labelStart = lt.start;
     labelLen = lt.len;
@@ -1620,7 +1704,7 @@ PlewArray_Arg parseCallArgs(Comp* c) {
     long long isInout = 0;
     {
     Kind _m25 = curKind(&((*c)));
-    if (_m25.tag == 21) {
+    if (_m25.tag == 22) {
     advance(&((*c)));
     isInout = 1;
     }
@@ -1631,7 +1715,7 @@ PlewArray_Arg parseCallArgs(Comp* c) {
     PlewArray_Arg_push(&(args), (Arg){.expr = e, .isInout = isInout, .labelStart = labelStart, .labelLen = labelLen, .hasLabel = hasLabel});
     {
     Kind _m26 = curKind(&((*c)));
-    if (_m26.tag == 30) {
+    if (_m26.tag == 31) {
     advance(&((*c)));
     }
     else {
@@ -1645,10 +1729,7 @@ PlewArray_Arg parseCallArgs(Comp* c) {
 long long isAssignOp(Kind k) {
     {
     Kind _m27 = k;
-    if (_m27.tag == 33) {
-    return 1;
-    }
-    else if (_m27.tag == 51) {
+    if (_m27.tag == 34) {
     return 1;
     }
     else if (_m27.tag == 52) {
@@ -1663,6 +1744,9 @@ long long isAssignOp(Kind k) {
     else if (_m27.tag == 55) {
     return 1;
     }
+    else if (_m27.tag == 56) {
+    return 1;
+    }
     else {
     return 0;
     }
@@ -1673,7 +1757,7 @@ PType parseTypeTok(Comp* c) {
     advance(&((*c)));
     {
     Kind _m28 = curKind(&((*c)));
-    if (_m28.tag == 26) {
+    if (_m28.tag == 27) {
     advance(&((*c)));
     Tok elem = cur(&((*c)));
     advance(&((*c)));
@@ -1681,10 +1765,10 @@ PType parseTypeTok(Comp* c) {
     while (depth > 0) {
     {
     Kind _m29 = curKind(&((*c)));
-    if (_m29.tag == 26) {
+    if (_m29.tag == 27) {
     depth += 1;
     }
-    else if (_m29.tag == 27) {
+    else if (_m29.tag == 28) {
     depth -= 1;
     }
     else if (_m29.tag == 0) {
@@ -1724,7 +1808,7 @@ long long parseLet(Comp* c, long long mutable) {
     long long tyIsArray = 0;
     {
     Kind _m30 = curKind(&((*c)));
-    if (_m30.tag == 31) {
+    if (_m30.tag == 32) {
     advance(&((*c)));
     PType ty = parseTypeTok(&((*c)));
     tyStart = ty.start;
@@ -1737,7 +1821,7 @@ long long parseLet(Comp* c, long long mutable) {
     }
     {
     Kind _m31 = curKind(&((*c)));
-    if (_m31.tag == 33) {
+    if (_m31.tag == 34) {
     advance(&((*c)));
     }
     else {
@@ -1753,7 +1837,7 @@ long long parsePrint(Comp* c) {
     long long e = parseExpr(&((*c)));
     {
     Kind _m32 = curKind(&((*c)));
-    if (_m32.tag == 25) {
+    if (_m32.tag == 26) {
     advance(&((*c)));
     }
     else {
@@ -1768,7 +1852,7 @@ long long parseReturn(Comp* c) {
     if (_m33.tag == 1) {
     return pushStmt(&((*c)), (Stmt){.tag = 4, .data.Return = {.value = 0, .hasValue = 0}});
     }
-    else if (_m33.tag == 29) {
+    else if (_m33.tag == 30) {
     return pushStmt(&((*c)), (Stmt){.tag = 4, .data.Return = {.value = 0, .hasValue = 0}});
     }
     else if (_m33.tag == 0) {
@@ -1787,11 +1871,11 @@ long long parseIf(Comp* c) {
     skipNewlines(&((*c)));
     {
     Kind _m34 = curKind(&((*c)));
-    if (_m34.tag == 10) {
+    if (_m34.tag == 11) {
     advance(&((*c)));
     {
     Kind _m35 = curKind(&((*c)));
-    if (_m35.tag == 9) {
+    if (_m35.tag == 10) {
     long long nested = parseIf(&((*c)));
     PlewArray_U64 one = PlewArray_U64_new();
     PlewArray_U64_push(&(one), nested);
@@ -1820,7 +1904,7 @@ long long parseFor(Comp* c) {
     advance(&((*c)));
     {
     Kind _m36 = curKind(&((*c)));
-    if (_m36.tag == 17) {
+    if (_m36.tag == 18) {
     advance(&((*c)));
     }
     else {
@@ -1830,7 +1914,7 @@ long long parseFor(Comp* c) {
     advance(&((*c)));
     {
     Kind _m37 = curKind(&((*c)));
-    if (_m37.tag == 19) {
+    if (_m37.tag == 20) {
     advance(&((*c)));
     }
     else {
@@ -1842,12 +1926,12 @@ long long parseFor(Comp* c) {
     long long hi = 0;
     {
     Kind _m38 = curKind(&((*c)));
-    if (_m38.tag == 56) {
+    if (_m38.tag == 57) {
     advance(&((*c)));
     isRange = 1;
     hi = parseExpr(&((*c)));
     }
-    else if (_m38.tag == 57) {
+    else if (_m38.tag == 58) {
     advance(&((*c)));
     isRange = 1;
     inclusive = 1;
@@ -1877,7 +1961,7 @@ long long parseMatch(Comp* c) {
     skipNewlines(&((*c)));
     {
     Kind _m39 = curKind(&((*c)));
-    if (_m39.tag == 28) {
+    if (_m39.tag == 29) {
     advance(&((*c)));
     }
     else {
@@ -1889,7 +1973,7 @@ long long parseMatch(Comp* c) {
     Kind k = curKind(&((*c)));
     {
     Kind _m40 = k;
-    if (_m40.tag == 29) {
+    if (_m40.tag == 30) {
     advance(&((*c)));
     break;
     }
@@ -1914,7 +1998,7 @@ long long parseMatch(Comp* c) {
     advance(&((*c)));
     {
     Kind _m41 = curKind(&((*c)));
-    if (_m41.tag == 32) {
+    if (_m41.tag == 33) {
     advance(&((*c)));
     }
     else {
@@ -1926,27 +2010,27 @@ long long parseMatch(Comp* c) {
     advance(&((*c)));
     {
     Kind _m42 = curKind(&((*c)));
-    if (_m42.tag == 28) {
+    if (_m42.tag == 29) {
     advance(&((*c)));
     while (1) {
     skipNewlines(&((*c)));
     {
     Kind _m43 = curKind(&((*c)));
-    if (_m43.tag == 29) {
+    if (_m43.tag == 30) {
     advance(&((*c)));
     break;
     }
     else if (_m43.tag == 0) {
     break;
     }
-    else if (_m43.tag == 17) {
+    else if (_m43.tag == 18) {
     advance(&((*c)));
     Tok bTok = cur(&((*c)));
     advance(&((*c)));
     PlewArray_Bind_push(&(binds), (Bind){.nameStart = bTok.start, .nameLen = bTok.len});
     {
     Kind _m44 = curKind(&((*c)));
-    if (_m44.tag == 30) {
+    if (_m44.tag == 31) {
     advance(&((*c)));
     }
     else {
@@ -1965,7 +2049,7 @@ long long parseMatch(Comp* c) {
     }
     {
     Kind _m45 = curKind(&((*c)));
-    if (_m45.tag == 49) {
+    if (_m45.tag == 50) {
     advance(&((*c)));
     }
     else {
@@ -1983,41 +2067,41 @@ long long parseStmt(Comp* c) {
     Kind k = curKind(&((*c)));
     {
     Kind _m46 = k;
-    if (_m46.tag == 17) {
+    if (_m46.tag == 18) {
     return parseLet(&((*c)), 0);
     }
-    else if (_m46.tag == 18) {
+    else if (_m46.tag == 19) {
     advance(&((*c)));
     return parseLet(&((*c)), 1);
     }
-    else if (_m46.tag == 9) {
+    else if (_m46.tag == 10) {
     return parseIf(&((*c)));
     }
-    else if (_m46.tag == 11) {
+    else if (_m46.tag == 12) {
     return parseWhile(&((*c)));
     }
-    else if (_m46.tag == 12) {
+    else if (_m46.tag == 13) {
     return parseFor(&((*c)));
     }
-    else if (_m46.tag == 8) {
+    else if (_m46.tag == 9) {
     return parseMatch(&((*c)));
-    }
-    else if (_m46.tag == 13) {
-    advance(&((*c)));
-    return pushStmt(&((*c)), (Stmt){.tag = 9});
     }
     else if (_m46.tag == 14) {
     advance(&((*c)));
-    return pushStmt(&((*c)), (Stmt){.tag = 10});
+    return pushStmt(&((*c)), (Stmt){.tag = 9});
     }
     else if (_m46.tag == 15) {
+    advance(&((*c)));
+    return pushStmt(&((*c)), (Stmt){.tag = 10});
+    }
+    else if (_m46.tag == 16) {
     return parseReturn(&((*c)));
     }
-    else if (_m46.tag == 4) {
+    else if (_m46.tag == 5) {
     if (identIs(&((*c)), (PlewString){"print", 5})) {
     {
     Kind _m47 = peekKind(&((*c)), 1);
-    if (_m47.tag == 24) {
+    if (_m47.tag == 25) {
     return parsePrint(&((*c)));
     }
     else {
@@ -2035,7 +2119,7 @@ long long parseStmt(Comp* c) {
 long long parseBlock(Comp* c) {
     {
     Kind _m48 = curKind(&((*c)));
-    if (_m48.tag == 28) {
+    if (_m48.tag == 29) {
     advance(&((*c)));
     }
     else {
@@ -2047,7 +2131,7 @@ long long parseBlock(Comp* c) {
     Kind k = curKind(&((*c)));
     {
     Kind _m49 = k;
-    if (_m49.tag == 29) {
+    if (_m49.tag == 30) {
     advance(&((*c)));
     break;
     }
@@ -2071,14 +2155,14 @@ void parseFunc(Comp* c) {
     PlewArray_Param params = PlewArray_Param_new();
     {
     Kind _m50 = curKind(&((*c)));
-    if (_m50.tag == 24) {
+    if (_m50.tag == 25) {
     advance(&((*c)));
     while (1) {
     skipNewlines(&((*c)));
     Kind k = curKind(&((*c)));
     {
     Kind _m51 = k;
-    if (_m51.tag == 25) {
+    if (_m51.tag == 26) {
     advance(&((*c)));
     break;
     }
@@ -2094,11 +2178,11 @@ void parseFunc(Comp* c) {
     long long pIsInout = 0;
     {
     Kind _m52 = curKind(&((*c)));
-    if (_m52.tag == 31) {
+    if (_m52.tag == 32) {
     advance(&((*c)));
     {
     Kind _m53 = curKind(&((*c)));
-    if (_m53.tag == 21) {
+    if (_m53.tag == 22) {
     advance(&((*c)));
     pIsInout = 1;
     }
@@ -2117,7 +2201,7 @@ void parseFunc(Comp* c) {
     PlewArray_Param_push(&(params), (Param){.nameStart = pTok.start, .nameLen = pTok.len, .tyStart = pTyStart, .tyLen = pTyLen, .tyIsArray = pTyIsArray, .isInout = pIsInout});
     {
     Kind _m54 = curKind(&((*c)));
-    if (_m54.tag == 30) {
+    if (_m54.tag == 31) {
     advance(&((*c)));
     }
     else {
@@ -2136,7 +2220,7 @@ void parseFunc(Comp* c) {
     long long retIsArray = 0;
     {
     Kind _m55 = curKind(&((*c)));
-    if (_m55.tag == 48) {
+    if (_m55.tag == 49) {
     advance(&((*c)));
     hasRet = 1;
     PType rty = parseTypeTok(&((*c)));
@@ -2158,7 +2242,7 @@ void parseStruct(Comp* c) {
     advance(&((*c)));
     {
     Kind _m56 = curKind(&((*c)));
-    if (_m56.tag == 28) {
+    if (_m56.tag == 29) {
     advance(&((*c)));
     }
     else {
@@ -2170,20 +2254,20 @@ void parseStruct(Comp* c) {
     Kind k = curKind(&((*c)));
     {
     Kind _m57 = k;
-    if (_m57.tag == 29) {
+    if (_m57.tag == 30) {
     advance(&((*c)));
     break;
     }
     else if (_m57.tag == 0) {
     break;
     }
-    else if (_m57.tag == 17) {
-    advance(&((*c)));
-    }
     else if (_m57.tag == 18) {
     advance(&((*c)));
     }
-    else if (_m57.tag == 4) {
+    else if (_m57.tag == 19) {
+    advance(&((*c)));
+    }
+    else if (_m57.tag == 5) {
     Tok fTok = cur(&((*c)));
     advance(&((*c)));
     long long tyStart = 0;
@@ -2191,7 +2275,7 @@ void parseStruct(Comp* c) {
     long long tyIsArray = 0;
     {
     Kind _m58 = curKind(&((*c)));
-    if (_m58.tag == 31) {
+    if (_m58.tag == 32) {
     advance(&((*c)));
     PType ty = parseTypeTok(&((*c)));
     tyStart = ty.start;
@@ -2217,7 +2301,7 @@ void parseEnum(Comp* c) {
     advance(&((*c)));
     {
     Kind _m59 = curKind(&((*c)));
-    if (_m59.tag == 28) {
+    if (_m59.tag == 29) {
     advance(&((*c)));
     }
     else {
@@ -2229,33 +2313,33 @@ void parseEnum(Comp* c) {
     Kind k = curKind(&((*c)));
     {
     Kind _m60 = k;
-    if (_m60.tag == 29) {
+    if (_m60.tag == 30) {
     advance(&((*c)));
     break;
     }
     else if (_m60.tag == 0) {
     break;
     }
-    else if (_m60.tag == 4) {
+    else if (_m60.tag == 5) {
     Tok vTok = cur(&((*c)));
     advance(&((*c)));
     PlewArray_FieldDef fields = PlewArray_FieldDef_new();
     {
     Kind _m61 = curKind(&((*c)));
-    if (_m61.tag == 28) {
+    if (_m61.tag == 29) {
     advance(&((*c)));
     while (1) {
     skipNewlines(&((*c)));
     {
     Kind _m62 = curKind(&((*c)));
-    if (_m62.tag == 29) {
+    if (_m62.tag == 30) {
     advance(&((*c)));
     break;
     }
     else if (_m62.tag == 0) {
     break;
     }
-    else if (_m62.tag == 4) {
+    else if (_m62.tag == 5) {
     Tok fTok = cur(&((*c)));
     advance(&((*c)));
     long long tyStart = 0;
@@ -2263,7 +2347,7 @@ void parseEnum(Comp* c) {
     long long tyIsArray = 0;
     {
     Kind _m63 = curKind(&((*c)));
-    if (_m63.tag == 31) {
+    if (_m63.tag == 32) {
     advance(&((*c)));
     PType ty = parseTypeTok(&((*c)));
     tyStart = ty.start;
@@ -2277,7 +2361,7 @@ void parseEnum(Comp* c) {
     PlewArray_FieldDef_push(&(fields), (FieldDef){.nameStart = fTok.start, .nameLen = fTok.len, .tyStart = tyStart, .tyLen = tyLen, .tyIsArray = tyIsArray});
     {
     Kind _m64 = curKind(&((*c)));
-    if (_m64.tag == 30) {
+    if (_m64.tag == 31) {
     advance(&((*c)));
     }
     else {
@@ -2343,10 +2427,10 @@ void parseImport(Comp* c) {
     else if (_m65.tag == 0) {
     break;
     }
-    else if (_m65.tag == 28) {
+    else if (_m65.tag == 29) {
     break;
     }
-    else if (_m65.tag == 4) {
+    else if (_m65.tag == 5) {
     if (identIs(&((*c)), (PlewString){"with", 4})) {
     advance(&((*c)));
     break;
@@ -2363,24 +2447,24 @@ void parseImport(Comp* c) {
     }
     {
     Kind _m66 = curKind(&((*c)));
-    if (_m66.tag == 28) {
+    if (_m66.tag == 29) {
     advance(&((*c)));
     while (1) {
     skipNewlines(&((*c)));
     Kind k = curKind(&((*c)));
     {
     Kind _m67 = k;
-    if (_m67.tag == 29) {
+    if (_m67.tag == 30) {
     advance(&((*c)));
     break;
     }
     else if (_m67.tag == 0) {
     break;
     }
-    else if (_m67.tag == 30) {
+    else if (_m67.tag == 31) {
     advance(&((*c)));
     }
-    else if (_m67.tag == 4) {
+    else if (_m67.tag == 5) {
     Tok t = cur(&((*c)));
     markImport(&((*c)), segStart, segLen, t.start, t.len);
     advance(&((*c)));
@@ -2401,16 +2485,16 @@ void parseProgram(Comp* c) {
     Kind k = curKind(&((*c)));
     {
     Kind _m68 = k;
-    if (_m68.tag == 5) {
+    if (_m68.tag == 6) {
     parseFunc(&((*c)));
     }
-    else if (_m68.tag == 6) {
+    else if (_m68.tag == 7) {
     parseStruct(&((*c)));
     }
-    else if (_m68.tag == 7) {
+    else if (_m68.tag == 8) {
     parseEnum(&((*c)));
     }
-    else if (_m68.tag == 4) {
+    else if (_m68.tag == 5) {
     if (identIs(&((*c)), (PlewString){"import", 6})) {
     parseImport(&((*c)));
     }

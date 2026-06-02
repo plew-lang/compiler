@@ -22,6 +22,54 @@ fn binPrec(k: Kind) -> I64 {
     }
 }
 
+// Decode a character literal token `'…'` (span includes both quotes) to its
+// Unicode codepoint. Only a single scalar is allowed; multi-scalar (Grapheme)
+// literals are rejected (Grapheme type unimplemented). UTF-8 is decoded with
+// arithmetic (no bitwise ops in this compiler): `& 0x3F` == `% 64`, `<< 6` == `* 64`.
+fn charValue(c: inout Comp, t: Tok) -> I64 {
+    val contentLen: U64 = t.len - 2
+    if contentLen == 0 {
+        compileErrorAt(line: lineOf(c: inout c, offset: t.start), msg: "empty character literal")
+    }
+    val p: U64 = t.start + 1
+    val b0: U8 = c.bytes[p]
+    if b0 == 92 {
+        if contentLen != 2 {
+            compileErrorAt(line: lineOf(c: inout c, offset: t.start), msg: "character literal must be a single scalar")
+        }
+        val e: U8 = c.bytes[p + 1]
+        if e == 110 { return 10 }
+        if e == 116 { return 9 }
+        if e == 114 { return 13 }
+        if e == 48 { return 0 }
+        // \\ \' \" and any other escape: the byte itself
+        return e
+    }
+    mut val consumed: U64 = 1
+    mut val value: I64 = 0
+    if b0 < 128 {
+        consumed = 1
+        value = b0
+    } else {
+        if b0 < 224 {
+            consumed = 2
+            value = (b0 % 32) * 64 + (c.bytes[p + 1] % 64)
+        } else {
+            if b0 < 240 {
+                consumed = 3
+                value = (b0 % 16) * 4096 + (c.bytes[p + 1] % 64) * 64 + (c.bytes[p + 2] % 64)
+            } else {
+                consumed = 4
+                value = (b0 % 8) * 262144 + (c.bytes[p + 1] % 64) * 4096 + (c.bytes[p + 2] % 64) * 64 + (c.bytes[p + 3] % 64)
+            }
+        }
+    }
+    if contentLen != consumed {
+        compileErrorAt(line: lineOf(c: inout c, offset: t.start), msg: "multi-scalar character literal (Grapheme) is not yet supported")
+    }
+    return value
+}
+
 fn parsePrimary(c: inout Comp) -> U64 {
     val k: Kind = curKind(c: inout c)
     match k {
@@ -29,6 +77,12 @@ fn parsePrimary(c: inout Comp) -> U64 {
             val t: Tok = cur(c: inout c)
             advance(c: inout c)
             val v: I64 = tokenValue(c: inout c, t: t)
+            return pushExpr(c: inout c, e: <Expr.Int value=v />)
+        }
+        Kind.Char => {
+            val t: Tok = cur(c: inout c)
+            advance(c: inout c)
+            val v: I64 = charValue(c: inout c, t: t)
             return pushExpr(c: inout c, e: <Expr.Int value=v />)
         }
         Kind.Ident => {
