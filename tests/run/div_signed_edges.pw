@@ -1,0 +1,13 @@
+// Signed `%` is defined for the INT_MIN/-1 corner: x % -1 == 0 (no overflow,
+// sidesteps the C UB). Normal signed division/modulo are unchanged.
+import @Std/Io with { print }
+
+fn main() {
+    val big: I32 = 2147483647
+    val a: I32 = 0 - big - 1     // INT32_MIN
+    val b: I32 = 0 - 1
+    print((a % b) as I64)        // 0
+    val c: I32 = 0 - 17
+    print((c / 5) as I64)        // -3
+    print((c % 5) as I64)        // -2
+}

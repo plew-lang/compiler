@@ -7,8 +7,8 @@ __attribute__((unused)) static int PlewString_eq(PlewString a, PlewString b) { i
 __attribute__((unused)) static PlewString plew_read_stdin(void) { size_t cap = 4096, len = 0; char* buf = (char*)malloc(cap); int ch; while ((ch = getchar()) != EOF) { if (len + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); } buf[len++] = (char)ch; } PlewString s; s.data = buf; s.len = (long long)len; return s; }
 __attribute__((unused)) static void plew_write(PlewString s) { fwrite(s.data, 1, (size_t)s.len, stdout); }
 __attribute__((noreturn)) static void plew_panic(PlewString m) { fputs("panic: ", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\n', stderr); exit(1); }
-__attribute__((unused)) static long long plew_div(long long a, long long b) { if (b == 0) plew_panic((PlewString){"division by zero", 16}); return a / b; }
-__attribute__((unused)) static long long plew_mod(long long a, long long b) { if (b == 0) plew_panic((PlewString){"remainder by zero", 17}); return a % b; }
+__attribute__((unused)) static long long plew_div(long long a, long long b) { if (b == 0) plew_panic((PlewString){"division by zero", 16}); if (b == -1 && a == INT64_MIN) plew_panic((PlewString){"integer overflow", 16}); return a / b; }
+__attribute__((unused)) static long long plew_mod(long long a, long long b) { if (b == 0) plew_panic((PlewString){"remainder by zero", 17}); if (b == -1) return 0; return a % b; }
 __attribute__((unused)) static void plew_compile_error(PlewString m) { fputs("plewc: error: ", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\n', stderr); exit(1); }
 __attribute__((unused)) static void plew_compile_error_at(long long line, PlewString m) { fprintf(stderr, "plewc: error: line %lld: ", line); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\n', stderr); exit(1); }
 static int plew_argc = 0;
@@ -488,6 +488,9 @@ int64_t compoundCheckedBin(int64_t op);
 PlewString overflowBuiltin(int64_t op);
 TypeInfo arithIntType(Comp* c, uint64_t lhs, uint64_t rhs);
 void genCheckedArith(Comp* c, int64_t op, uint64_t lhs, uint64_t rhs, uint64_t tyStart, uint64_t tyLen);
+PlewString intMinMacro(Comp* c, uint64_t start, uint64_t len);
+void genCheckedNeg(Comp* c, uint64_t operand, uint64_t tyStart, uint64_t tyLen);
+void genCheckedDiv(Comp* c, uint64_t lhs, uint64_t rhs, uint64_t tyStart, uint64_t tyLen, long long isMod);
 PlewString assignOpStr(int64_t op);
 long long isCompoundDiv(int64_t op);
 PlewString compoundDivFn(int64_t op);
@@ -638,8 +641,8 @@ int main(int argc, char** argv) {
     plew_write((PlewString){"__attribute__((unused)) static PlewString plew_read_stdin(void) { size_t cap = 4096, len = 0; char* buf = (char*)malloc(cap); int ch; while ((ch = getchar()) != EOF) { if (len + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); } buf[len++] = (char)ch; } PlewString s; s.data = buf; s.len = (long long)len; return s; }\n", 323});
     plew_write((PlewString){"__attribute__((unused)) static void plew_write(PlewString s) { fwrite(s.data, 1, (size_t)s.len, stdout); }\n", 107});
     plew_write((PlewString){"__attribute__((noreturn)) static void plew_panic(PlewString m) { fputs(\"panic: \", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\\n', stderr); exit(1); }\n", 165});
-    plew_write((PlewString){"__attribute__((unused)) static long long plew_div(long long a, long long b) { if (b == 0) plew_panic((PlewString){\"division by zero\", 16}); return a / b; }\n", 156});
-    plew_write((PlewString){"__attribute__((unused)) static long long plew_mod(long long a, long long b) { if (b == 0) plew_panic((PlewString){\"remainder by zero\", 17}); return a % b; }\n", 157});
+    plew_write((PlewString){"__attribute__((unused)) static long long plew_div(long long a, long long b) { if (b == 0) plew_panic((PlewString){\"division by zero\", 16}); if (b == -1 && a == INT64_MIN) plew_panic((PlewString){\"integer overflow\", 16}); return a / b; }\n", 237});
+    plew_write((PlewString){"__attribute__((unused)) static long long plew_mod(long long a, long long b) { if (b == 0) plew_panic((PlewString){\"remainder by zero\", 17}); if (b == -1) return 0; return a % b; }\n", 180});
     plew_write((PlewString){"__attribute__((unused)) static void plew_compile_error(PlewString m) { fputs(\"plewc: error: \", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\\n', stderr); exit(1); }\n", 178});
     plew_write((PlewString){"__attribute__((unused)) static void plew_compile_error_at(long long line, PlewString m) { fprintf(stderr, \"plewc: error: line %lld: \", line); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\\n', stderr); exit(1); }\n", 216});
     plew_write((PlewString){"static int plew_argc = 0;\nstatic char** plew_argv = 0;\n", 55});
@@ -2670,9 +2673,9 @@ void writeInt(int64_t n) {
     return;
     }
     if (n >= 10) {
-    writeInt(plew_div(n, 10));
+    writeInt(({ int64_t __dl = (n); int64_t __dr = (10); if (__dr == 0) plew_panic((PlewString){"division by zero", 16}); if (__dr == -1 && __dl == INT64_MIN) plew_panic((PlewString){"integer overflow", 16}); __dl / __dr; }));
     }
-    plew_write(digitStr(plew_mod(n, 10)));
+    plew_write(digitStr(({ int64_t __dl = (n); int64_t __dr = (10); if (__dr == 0) plew_panic((PlewString){"remainder by zero", 17}); (__dr == -1 ? 0 : __dl % __dr); })));
 }
 PlewString digitStrU(uint64_t d) {
     if (d == 0) {
@@ -2706,9 +2709,9 @@ PlewString digitStrU(uint64_t d) {
 }
 void writeU64(uint64_t n) {
     if (n >= 10) {
-    writeU64(plew_div(n, 10));
+    writeU64(({ uint64_t __dl = (n); uint64_t __dr = (10); if (__dr == 0) plew_panic((PlewString){"division by zero", 16}); __dl / __dr; }));
     }
-    plew_write(digitStrU(plew_mod(n, 10)));
+    plew_write(digitStrU(({ uint64_t __dl = (n); uint64_t __dr = (10); if (__dr == 0) plew_panic((PlewString){"remainder by zero", 17}); __dl % __dr; })));
 }
 void writeSpan(Comp* c, uint64_t start, uint64_t len) {
     uint64_t j = 0;
@@ -3739,6 +3742,63 @@ void genCheckedArith(Comp* c, int64_t op, uint64_t lhs, uint64_t rhs, uint64_t t
     genExpr(&((*c)), rhs);
     plew_write((PlewString){"), &__ov)) plew_panic((PlewString){\"integer overflow\", 16}); __ov; })", 69});
 }
+PlewString intMinMacro(Comp* c, uint64_t start, uint64_t len) {
+    if (rangeEquals((*c).bytes, start, len, (PlewString){"I8", 2})) {
+    return (PlewString){"INT8_MIN", 8};
+    }
+    if (rangeEquals((*c).bytes, start, len, (PlewString){"I16", 3})) {
+    return (PlewString){"INT16_MIN", 9};
+    }
+    if (rangeEquals((*c).bytes, start, len, (PlewString){"I32", 3})) {
+    return (PlewString){"INT32_MIN", 9};
+    }
+    return (PlewString){"INT64_MIN", 9};
+}
+void genCheckedNeg(Comp* c, uint64_t operand, uint64_t tyStart, uint64_t tyLen) {
+    plew_write((PlewString){"({ ", 3});
+    genCElem(&((*c)), tyStart, tyLen);
+    plew_write((PlewString){" __ov; if (__builtin_sub_overflow((", 35});
+    genCElem(&((*c)), tyStart, tyLen);
+    plew_write((PlewString){")0, (", 5});
+    genExpr(&((*c)), operand);
+    plew_write((PlewString){"), &__ov)) plew_panic((PlewString){\"integer overflow\", 16}); __ov; })", 69});
+}
+void genCheckedDiv(Comp* c, uint64_t lhs, uint64_t rhs, uint64_t tyStart, uint64_t tyLen, long long isMod) {
+    long long signedTy = intSigned(&((*c)), tyStart, tyLen);
+    plew_write((PlewString){"({ ", 3});
+    genCElem(&((*c)), tyStart, tyLen);
+    plew_write((PlewString){" __dl = (", 9});
+    genExpr(&((*c)), lhs);
+    plew_write((PlewString){"); ", 3});
+    genCElem(&((*c)), tyStart, tyLen);
+    plew_write((PlewString){" __dr = (", 9});
+    genExpr(&((*c)), rhs);
+    plew_write((PlewString){"); if (__dr == 0) plew_panic((PlewString){", 42});
+    if (isMod) {
+    plew_write((PlewString){"\"remainder by zero\", 17}); ", 27});
+    }
+    else {
+    plew_write((PlewString){"\"division by zero\", 16}); ", 26});
+    }
+    if (signedTy) {
+    if (isMod) {
+    plew_write((PlewString){"(__dr == -1 ? 0 : __dl % __dr); })", 34});
+    }
+    else {
+    plew_write((PlewString){"if (__dr == -1 && __dl == ", 26});
+    plew_write(intMinMacro(&((*c)), tyStart, tyLen));
+    plew_write((PlewString){") plew_panic((PlewString){\"integer overflow\", 16}); __dl / __dr; })", 67});
+    }
+    }
+    else {
+    if (isMod) {
+    plew_write((PlewString){"__dl % __dr; })", 15});
+    }
+    else {
+    plew_write((PlewString){"__dl / __dr; })", 15});
+    }
+    }
+}
 PlewString assignOpStr(int64_t op) {
     if (op == 49) {
     return (PlewString){" = ", 3};
@@ -3848,10 +3908,26 @@ void genExpr(Comp* c, uint64_t id) {
         (void)op;
         uint64_t operand = _m89.data.Unary.operand;
         (void)operand;
+    long long negChecked = 0;
+    if (op == 57) {
+    TypeInfo ot = exprType(&((*c)), operand);
+    if (ot.kind == 0) {
+    if (isIntType(&((*c)), ot.nameStart, ot.nameLen)) {
+    if (intSigned(&((*c)), ot.nameStart, ot.nameLen)) {
+    genCheckedNeg(&((*c)), operand, ot.nameStart, ot.nameLen);
+    negChecked = 1;
+    }
+    }
+    }
+    }
+    if (negChecked) {
+    }
+    else {
     plew_write(unaryOpStr(op));
     plew_write((PlewString){"(", 1});
     genExpr(&((*c)), operand);
     plew_write((PlewString){")", 1});
+    }
     }
     else if (_m89.tag == 3) {
         int64_t op = _m89.data.Binary.op;
@@ -3887,19 +3963,31 @@ void genExpr(Comp* c, uint64_t id) {
     }
     else {
     if (op == 59) {
+    TypeInfo dt = arithIntType(&((*c)), lhs, rhs);
+    if (dt.nameLen > 0) {
+    genCheckedDiv(&((*c)), lhs, rhs, dt.nameStart, dt.nameLen, 0);
+    }
+    else {
     plew_write((PlewString){"plew_div(", 9});
     genExpr(&((*c)), lhs);
     plew_write((PlewString){", ", 2});
     genExpr(&((*c)), rhs);
     plew_write((PlewString){")", 1});
     }
+    }
     else {
     if (op == 60) {
+    TypeInfo mt = arithIntType(&((*c)), lhs, rhs);
+    if (mt.nameLen > 0) {
+    genCheckedDiv(&((*c)), lhs, rhs, mt.nameStart, mt.nameLen, 1);
+    }
+    else {
     plew_write((PlewString){"plew_mod(", 9});
     genExpr(&((*c)), lhs);
     plew_write((PlewString){", ", 2});
     genExpr(&((*c)), rhs);
     plew_write((PlewString){")", 1});
+    }
     }
     else {
     TypeInfo at = arithIntType(&((*c)), lhs, rhs);
@@ -4724,11 +4812,26 @@ void genStmt(Comp* c, uint64_t id) {
     genExpr(&((*c)), target);
     if (isCompoundDiv(op)) {
     plew_write((PlewString){" = ", 3});
+    TypeInfo dt = exprType(&((*c)), target);
+    if (dt.kind == 0) {
+    if (isIntType(&((*c)), dt.nameStart, dt.nameLen)) {
+    genCheckedDiv(&((*c)), target, value, dt.nameStart, dt.nameLen, (op == 71));
+    }
+    else {
     plew_write(compoundDivFn(op));
     genExpr(&((*c)), target);
     plew_write((PlewString){", ", 2});
     genExpr(&((*c)), value);
     plew_write((PlewString){")", 1});
+    }
+    }
+    else {
+    plew_write(compoundDivFn(op));
+    genExpr(&((*c)), target);
+    plew_write((PlewString){", ", 2});
+    genExpr(&((*c)), value);
+    plew_write((PlewString){")", 1});
+    }
     }
     else {
     TypeInfo tt = exprType(&((*c)), target);

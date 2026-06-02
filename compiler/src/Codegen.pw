@@ -903,6 +903,65 @@ fn genCheckedArith(c: inout Comp, op: I64, lhs: U64, rhs: U64, tyStart: U64, tyL
     write(s: "), &__ov)) plew_panic((PlewString){\"integer overflow\", 16}); __ov; })")
 }
 
+// The stdint.h MIN macro for a signed integer type (used in the INT_MIN / -1
+// division-overflow guard). Assumes a signed int type span.
+fn intMinMacro(c: inout Comp, start: U64, len: U64) -> String {
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I8") { return "INT8_MIN" }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I16") { return "INT16_MIN" }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I32") { return "INT32_MIN" }
+    return "INT64_MIN"
+}
+
+// Emit `-x` as an overflow-checked negation: negating the signed minimum has no
+// representable result, so it panics. (Only emitted for signed int operands;
+// `-` on unsigned is a type error the front end will reject later.)
+fn genCheckedNeg(c: inout Comp, operand: U64, tyStart: U64, tyLen: U64) {
+    write(s: "({ ")
+    genCElem(c: inout c, start: tyStart, len: tyLen)
+    write(s: " __ov; if (__builtin_sub_overflow((")
+    genCElem(c: inout c, start: tyStart, len: tyLen)
+    write(s: ")0, (")
+    genExpr(c: inout c, id: operand)
+    write(s: "), &__ov)) plew_panic((PlewString){\"integer overflow\", 16}); __ov; })")
+}
+
+// Emit width- and sign-aware `/` or `%` (isMod) as a statement-expression:
+// always panic on a zero divisor; for signed division, INT_MIN / -1 overflows
+// (panic), and x % -1 is defined as 0 (sidesteps the C UB at INT_MIN % -1).
+// Unsigned has neither overflow case. Computes at the exact result width.
+fn genCheckedDiv(c: inout Comp, lhs: U64, rhs: U64, tyStart: U64, tyLen: U64, isMod: Bool) {
+    val signedTy: Bool = intSigned(c: inout c, start: tyStart, len: tyLen)
+    write(s: "({ ")
+    genCElem(c: inout c, start: tyStart, len: tyLen)
+    write(s: " __dl = (")
+    genExpr(c: inout c, id: lhs)
+    write(s: "); ")
+    genCElem(c: inout c, start: tyStart, len: tyLen)
+    write(s: " __dr = (")
+    genExpr(c: inout c, id: rhs)
+    write(s: "); if (__dr == 0) plew_panic((PlewString){")
+    if isMod {
+        write(s: "\"remainder by zero\", 17}); ")
+    } else {
+        write(s: "\"division by zero\", 16}); ")
+    }
+    if signedTy {
+        if isMod {
+            write(s: "(__dr == -1 ? 0 : __dl % __dr); })")
+        } else {
+            write(s: "if (__dr == -1 && __dl == ")
+            write(s: intMinMacro(c: inout c, start: tyStart, len: tyLen))
+            write(s: ") plew_panic((PlewString){\"integer overflow\", 16}); __dl / __dr; })")
+        }
+    } else {
+        if isMod {
+            write(s: "__dl % __dr; })")
+        } else {
+            write(s: "__dl / __dr; })")
+        }
+    }
+}
+
 fn assignOpStr(op: I64) -> String {
     if op == 49 { return " = " }
     if op == 67 { return " += " }
@@ -962,10 +1021,25 @@ fn genExpr(c: inout Comp, id: U64) {
             }
         }
         Expr.Unary { val op, val operand } => {
-            write(s: unaryOpStr(op: op))
-            write(s: "(")
-            genExpr(c: inout c, id: operand)
-            write(s: ")")
+            mut val negChecked: Bool = false
+            if op == 57 {
+                val ot: TypeInfo = exprType(c: inout c, id: operand)
+                if ot.kind == 0 {
+                    if isIntType(c: inout c, start: ot.nameStart, len: ot.nameLen) {
+                        if intSigned(c: inout c, start: ot.nameStart, len: ot.nameLen) {
+                            genCheckedNeg(c: inout c, operand: operand, tyStart: ot.nameStart, tyLen: ot.nameLen)
+                            negChecked = true
+                        }
+                    }
+                }
+            }
+            if negChecked {
+            } else {
+                write(s: unaryOpStr(op: op))
+                write(s: "(")
+                genExpr(c: inout c, id: operand)
+                write(s: ")")
+            }
         }
         Expr.Binary { val op, val lhs, val rhs } => {
             if isStringEq(c: inout c, op: op, lhs: lhs) {
@@ -990,20 +1064,32 @@ fn genExpr(c: inout Comp, id: U64) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "comparison needs Eq/Ord; not available for a struct or array")
                     } else {
                         if op == 59 {
-                            // `/`: spec says division by zero always panics.
-                            write(s: "plew_div(")
-                            genExpr(c: inout c, id: lhs)
-                            write(s: ", ")
-                            genExpr(c: inout c, id: rhs)
-                            write(s: ")")
-                        } else {
-                            if op == 60 {
-                                // `%`: same — divisor must be nonzero.
-                                write(s: "plew_mod(")
+                            // `/`: zero divisor always panics; signed INT_MIN/-1
+                            // overflows. Width-aware when the type is known; else
+                            // the generic (zero-checked) plew_div.
+                            val dt: TypeInfo = arithIntType(c: inout c, lhs: lhs, rhs: rhs)
+                            if dt.nameLen > 0 {
+                                genCheckedDiv(c: inout c, lhs: lhs, rhs: rhs, tyStart: dt.nameStart, tyLen: dt.nameLen, isMod: false)
+                            } else {
+                                write(s: "plew_div(")
                                 genExpr(c: inout c, id: lhs)
                                 write(s: ", ")
                                 genExpr(c: inout c, id: rhs)
                                 write(s: ")")
+                            }
+                        } else {
+                            if op == 60 {
+                                // `%`: same — divisor must be nonzero.
+                                val mt: TypeInfo = arithIntType(c: inout c, lhs: lhs, rhs: rhs)
+                                if mt.nameLen > 0 {
+                                    genCheckedDiv(c: inout c, lhs: lhs, rhs: rhs, tyStart: mt.nameStart, tyLen: mt.nameLen, isMod: true)
+                                } else {
+                                    write(s: "plew_mod(")
+                                    genExpr(c: inout c, id: lhs)
+                                    write(s: ", ")
+                                    genExpr(c: inout c, id: rhs)
+                                    write(s: ")")
+                                }
                             } else {
                                 val at: TypeInfo = arithIntType(c: inout c, lhs: lhs, rhs: rhs)
                                 if isCheckedArith(op: op) {
@@ -1745,14 +1831,27 @@ fn genStmt(c: inout Comp, id: U64) {
                     write(s: "    ")
                     genExpr(c: inout c, id: target)
                     if isCompoundDiv(op: op) {
-                        // `x /= v` / `x %= v` -> x = plew_div(x, v) so a zero
-                        // divisor panics like `x = x / v`.
+                        // `x /= v` / `x %= v` -> x = checked(x / v): zero divisor
+                        // and signed INT_MIN/-1 panic, like `x = x / v`.
                         write(s: " = ")
-                        write(s: compoundDivFn(op: op))
-                        genExpr(c: inout c, id: target)
-                        write(s: ", ")
-                        genExpr(c: inout c, id: value)
-                        write(s: ")")
+                        val dt: TypeInfo = exprType(c: inout c, id: target)
+                        if dt.kind == 0 {
+                            if isIntType(c: inout c, start: dt.nameStart, len: dt.nameLen) {
+                                genCheckedDiv(c: inout c, lhs: target, rhs: value, tyStart: dt.nameStart, tyLen: dt.nameLen, isMod: op == 71)
+                            } else {
+                                write(s: compoundDivFn(op: op))
+                                genExpr(c: inout c, id: target)
+                                write(s: ", ")
+                                genExpr(c: inout c, id: value)
+                                write(s: ")")
+                            }
+                        } else {
+                            write(s: compoundDivFn(op: op))
+                            genExpr(c: inout c, id: target)
+                            write(s: ", ")
+                            genExpr(c: inout c, id: value)
+                            write(s: ")")
+                        }
                     } else {
                         val tt: TypeInfo = exprType(c: inout c, id: target)
                         val cbin: I64 = compoundCheckedBin(op: op)

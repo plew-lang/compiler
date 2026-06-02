@@ -1,0 +1,12 @@
+// Signed division overflow: INT_MIN / -1 has no representable result, so it
+// panics (not UB, not a wrapped value). INT_MIN is built in range (2147483647
+// fits I32, and each subtraction stays in range) so this survives literal
+// range checking.
+import @Std/Io with { print }
+
+fn main() {
+    val big: I32 = 2147483647
+    val a: I32 = 0 - big - 1     // INT32_MIN
+    val b: I32 = 0 - 1
+    print((a / b) as I64)
+}
