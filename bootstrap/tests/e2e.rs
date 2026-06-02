@@ -494,6 +494,27 @@ fn selfhost_plewc_compiles_for_loops() {
 }
 
 #[test]
+fn selfhost_plewc_compiles_string_eq_and_index_set() {
+    // More post-self-host growth in plewc.pw: String ==/!= (lowered to
+    // PlewString_eq, type-directed) and array element assignment a[i] = v /
+    // a[i] OP= v (lowered to PlewArray_E_set).
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../selfhost/plewc.pw");
+    let src = std::fs::read_to_string(path).expect("read selfhost/plewc.pw");
+    let program = "fn main() {\n    val s: String = \"fn\"\n    if s == \"fn\" {\n        print(1)\n    } else {\n        print(0)\n    }\n    if s != \"x\" {\n        print(1)\n    } else {\n        print(0)\n    }\n    mut val xs: Array[I64] = [1, 2, 3]\n    xs[0] = 40\n    xs[2] += 10\n    print(xs[0])\n    print(xs[2])\n}\n";
+    let emitted_c = build_and_run_stdin(&src, "selfhost_plewc_streq", program);
+    let c_path = std::env::temp_dir().join(format!("plew_plewcseq_{}.c", std::process::id()));
+    let out_bin = std::env::temp_dir().join(format!("plew_plewcseq_{}", std::process::id()));
+    std::fs::write(&c_path, &emitted_c).expect("write emitted C");
+    let status = Command::new("clang").arg("-w").arg(&c_path).arg("-o").arg(&out_bin).status().expect("clang");
+    assert!(status.success(), "clang failed on emitted C:\n{emitted_c}");
+    let output = Command::new(&out_bin).output().expect("run emitted binary");
+    let _ = std::fs::remove_file(&c_path);
+    let _ = std::fs::remove_file(&out_bin);
+    // s=="fn" -> 1; s!="x" -> 1; xs[0]=40; xs[2]=3+10=13
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "1\n1\n40\n13\n");
+}
+
+#[test]
 fn selfhost_plewc_compiles_arrays_and_strings() {
     // plewc.pw v5: monomorphized arrays (PlewArray_<E> + runtime), [] literal,
     // append, index, .count, struct array fields, String literals, String.bytes

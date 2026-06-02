@@ -1984,6 +1984,16 @@ fn assignOpStr(op: I64) -> String {
     return " %= "
 }
 
+// The binary operator underlying a compound assignment (`+=` -> ` + `), used to
+// expand `a[i] OP= v` into `set(a, i, get(a, i) OP v)`.
+fn assignToBinStr(op: I64) -> String {
+    if op == 67 { return " + " }
+    if op == 68 { return " - " }
+    if op == 69 { return " * " }
+    if op == 70 { return " / " }
+    return " % "
+}
+
 fn genExpr(c: inout Comp, id: U64) {
     val e: Expr = c.exprs[id]
     match e {
@@ -2004,11 +2014,27 @@ fn genExpr(c: inout Comp, id: U64) {
             write(s: ")")
         }
         Expr.Binary { val op, val lhs, val rhs } => {
-            write(s: "(")
-            genExpr(c: inout c, id: lhs)
-            write(s: binOpStr(op: op))
-            genExpr(c: inout c, id: rhs)
-            write(s: ")")
+            if isStringEq(c: inout c, op: op, lhs: lhs) {
+                if op == 51 {
+                    write(s: "(!PlewString_eq(")
+                } else {
+                    write(s: "PlewString_eq(")
+                }
+                genExpr(c: inout c, id: lhs)
+                write(s: ", ")
+                genExpr(c: inout c, id: rhs)
+                if op == 51 {
+                    write(s: "))")
+                } else {
+                    write(s: ")")
+                }
+            } else {
+                write(s: "(")
+                genExpr(c: inout c, id: lhs)
+                write(s: binOpStr(op: op))
+                genExpr(c: inout c, id: rhs)
+                write(s: ")")
+            }
         }
         Expr.Call { val nameStart, val nameLen, val args } => {
             // I/O builtins -> C runtime.
@@ -2209,16 +2235,35 @@ fn genArrayLiteral(c: inout Comp, exprId: U64, elemStart: U64, elemLen: U64) {
     }
 }
 
+// Whether `lhs OP rhs` is a String `==` / `!=` (which lowers to PlewString_eq
+// rather than a C struct comparison).
+fn isStringEq(c: inout Comp, op: I64, lhs: U64) -> Bool {
+    if op == 50 {
+    } else {
+        if op == 51 {
+        } else {
+            return false
+        }
+    }
+    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    return lt.kind == 1
+}
+
 // Emit an expression in condition position. A top-level binary drops its outer
 // parens (the `if (...)` / `while (...)` already supplies them), which avoids
-// the `-Wparentheses-equality` warning on `if ((a == b))`.
+// the `-Wparentheses-equality` warning on `if ((a == b))`. String equality is
+// a function call, so it is routed through genExpr unchanged.
 fn genCond(c: inout Comp, id: U64) {
     val e: Expr = c.exprs[id]
     match e {
         Expr.Binary { val op, val lhs, val rhs } => {
-            genExpr(c: inout c, id: lhs)
-            write(s: binOpStr(op: op))
-            genExpr(c: inout c, id: rhs)
+            if isStringEq(c: inout c, op: op, lhs: lhs) {
+                genExpr(c: inout c, id: id)
+            } else {
+                genExpr(c: inout c, id: lhs)
+                write(s: binOpStr(op: op))
+                genExpr(c: inout c, id: rhs)
+            }
         }
         _ => { genExpr(c: inout c, id: id) }
     }
@@ -2242,16 +2287,46 @@ fn genStmt(c: inout Comp, id: U64) {
             addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, isInout: false)
         }
         Stmt.Assign { val op, val target, val value } => {
-            write(s: "    ")
-            genExpr(c: inout c, id: target)
-            write(s: assignOpStr(op: op))
-            val tt: TypeInfo = exprType(c: inout c, id: target)
-            if tt.kind == 3 {
-                genArrayLiteral(c: inout c, exprId: value, elemStart: tt.nameStart, elemLen: tt.nameLen)
-            } else {
-                genExpr(c: inout c, id: value)
+            val te: Expr = c.exprs[target]
+            match te {
+                Expr.Index { val base, val index } => {
+                    // a[i] = v / a[i] OP= v -> bounds-checked PlewArray_E_set
+                    val bt: TypeInfo = exprType(c: inout c, id: base)
+                    write(s: "    PlewArray_")
+                    writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
+                    write(s: "_set(&(")
+                    genExpr(c: inout c, id: base)
+                    write(s: "), (long long)(")
+                    genExpr(c: inout c, id: index)
+                    write(s: "), ")
+                    if op == 49 {
+                        genExpr(c: inout c, id: value)
+                    } else {
+                        write(s: "PlewArray_")
+                        writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
+                        write(s: "_get(")
+                        genExpr(c: inout c, id: base)
+                        write(s: ", (long long)(")
+                        genExpr(c: inout c, id: index)
+                        write(s: "))")
+                        write(s: assignToBinStr(op: op))
+                        genExpr(c: inout c, id: value)
+                    }
+                    write(s: ");\n")
+                }
+                _ => {
+                    write(s: "    ")
+                    genExpr(c: inout c, id: target)
+                    write(s: assignOpStr(op: op))
+                    val tt: TypeInfo = exprType(c: inout c, id: target)
+                    if tt.kind == 3 {
+                        genArrayLiteral(c: inout c, exprId: value, elemStart: tt.nameStart, elemLen: tt.nameLen)
+                    } else {
+                        genExpr(c: inout c, id: value)
+                    }
+                    write(s: ";\n")
+                }
             }
-            write(s: ";\n")
         }
         Stmt.Print { val expr } => {
             write(s: "    printf(\"%lld\\n\", (long long)(")
