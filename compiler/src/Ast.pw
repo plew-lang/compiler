@@ -157,6 +157,13 @@ struct Func {
     val retLen: U64
     val retIsArray: Bool
     val body: U64
+    // method receiver: an `impl Type { ... }` member carries the receiver type
+    // (recvStart,recvLen) and whether self is `inout` (`inout fn` vs `fn`). The
+    // C function is mangled `Type_name` with an extra leading `self` parameter.
+    val hasRecv: Bool
+    val recvStart: U64
+    val recvLen: U64
+    val selfInout: Bool
 }
 
 struct Comp {
@@ -180,6 +187,13 @@ struct Comp {
     // set per-function during codegen so `return` lowers correctly
     mut val curIsMain: Bool
     mut val curRetVoid: Bool
+    // set per-function during codegen for the implicit method receiver: whether
+    // the current function is a method, and if so its receiver type span and
+    // whether self is `inout` (so a bare `self` lowers to `(*self)`).
+    mut val curHasRecv: Bool
+    mut val curRecvStart: U64
+    mut val curRecvLen: U64
+    mut val curSelfInout: Bool
     // which I/O builtins the file has imported (acceptance soundness: spec makes
     // these non-ambient, so using one without `import @Std/Io`/`@Std/Process`
     // is a compile error). One flag per builtin, matched to its module.

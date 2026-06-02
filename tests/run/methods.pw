@@ -1,0 +1,28 @@
+// Inherent methods via `impl`: a by-value `fn` receiver reads self; an
+// `inout fn` receiver mutates self. Calls are `recv.name(label: arg)`.
+import @Std/Io with { print }
+
+struct Counter {
+    mut val n: I64
+}
+
+impl Counter {
+    fn doubled() -> I64 {
+        return self.n * 2
+    }
+    fn plus(k: I64) -> I64 {
+        return self.n + k
+    }
+    inout fn bump(by: I64) {
+        self.n += by
+    }
+}
+
+fn main() {
+    mut val c: Counter = <Counter n=10 />
+    print(c.doubled())
+    print(c.plus(k: 5))
+    c.bump(by: 7)
+    print(c.n)
+    print(c.doubled())
+}

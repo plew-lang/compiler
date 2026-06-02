@@ -1,0 +1,18 @@
+// A method call must carry its parameter's label (spec: labels required, in
+// declaration order). A wrong label is a compile error.
+import @Std/Io with { print }
+
+struct Box {
+    val v: I64
+}
+
+impl Box {
+    fn plus(k: I64) -> I64 {
+        return self.v + k
+    }
+}
+
+fn main() {
+    val b: Box = <Box v=1 />
+    print(b.plus(wrong: 2))
+}

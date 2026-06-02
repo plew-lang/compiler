@@ -142,12 +142,56 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64) -> I64 {
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
-        if spansEqual(c: inout c, aStart: nameStart, aLen: nameLen, bStart: f.nameStart, bLen: f.nameLen) {
-            return i as I64
+        if f.hasRecv {
+        } else {
+            if spansEqual(c: inout c, aStart: nameStart, aLen: nameLen, bStart: f.nameStart, bLen: f.nameLen) {
+                return i as I64
+            }
         }
         i += 1
     }
     return 0 - 1
+}
+
+// Index of the method named (nameStart,nameLen) on receiver type
+// (recvStart,recvLen), or -1 if none.
+fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> I64 {
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.hasRecv {
+            if spansEqual(c: inout c, aStart: nameStart, aLen: nameLen, bStart: f.nameStart, bLen: f.nameLen) {
+                if spansEqual(c: inout c, aStart: recvStart, aLen: recvLen, bStart: f.recvStart, bLen: f.recvLen) {
+                    return i as I64
+                }
+            }
+        }
+        i += 1
+    }
+    return 0 - 1
+}
+
+// Check call args against a parameter list: arg count matches and every arg
+// carries its parameter's label in declaration order (spec: labels required).
+fn paramsLabelsOk(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bool {
+    if params.count != args.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < args.count {
+        val a: Arg = args[i]
+        if a.hasLabel {
+            val p: Param = params[i]
+            if spansEqual(c: inout c, aStart: a.labelStart, aLen: a.labelLen, bStart: p.nameStart, bLen: p.nameLen) {
+            } else {
+                return false
+            }
+        } else {
+            return false
+        }
+        i += 1
+    }
+    return true
 }
 
 // Acceptance soundness: spec requires every argument to carry its label, in
@@ -160,24 +204,7 @@ fn callLabelsOk(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -
         return true
     }
     val f: Func = c.funcs[fi as U64]
-    if f.params.count != args.count {
-        return false
-    }
-    mut val i: U64 = 0
-    while i < args.count {
-        val a: Arg = args[i]
-        if a.hasLabel {
-            val p: Param = f.params[i]
-            if spansEqual(c: inout c, aStart: a.labelStart, aLen: a.labelLen, bStart: p.nameStart, bLen: p.nameLen) {
-            } else {
-                return false
-            }
-        } else {
-            return false
-        }
-        i += 1
-    }
-    return true
+    return paramsLabelsOk(c: inout c, params: f.params, args: args)
 }
 
 // Does some arm cover the variant (variantStart,variantLen)? A wildcard arm
@@ -291,6 +318,10 @@ fn addLocal(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U6
 // to: `mut val` locals and `inout` params. Unknown names default to assignable
 // (the C compile catches genuinely undeclared identifiers).
 fn localIsMutable(c: inout Comp, start: U64, len: U64) -> Bool {
+    if isSelfRef(c: inout c, start: start, len: len) {
+        // `self` is assignable only through an `inout fn` receiver.
+        return c.curSelfInout
+    }
     mut val i: U64 = c.locals.count
     while i > 0 {
         i -= 1
@@ -307,7 +338,18 @@ fn localIsMutable(c: inout Comp, start: U64, len: U64) -> Bool {
 
 // Whether `name` refers to an `inout` parameter of the current function (so its
 // uses must be dereferenced as `(*name)`).
+fn isSelfRef(c: inout Comp, start: U64, len: U64) -> Bool {
+    if c.curHasRecv {
+        return rangeEquals(bytes: c.bytes, start: start, len: len, kw: "self")
+    }
+    return false
+}
+
 fn isInoutLocal(c: inout Comp, start: U64, len: U64) -> Bool {
+    if isSelfRef(c: inout c, start: start, len: len) {
+        // `inout fn` receivers are pointers, so a bare `self` is `(*self)`.
+        return c.curSelfInout
+    }
     mut val i: U64 = c.locals.count
     while i > 0 {
         i -= 1
@@ -348,6 +390,9 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
         Expr.Int { val value } => { return scalarInfo() }
         Expr.Str { val start, val len } => { return <TypeInfo kind=1 nameStart=0 nameLen=0 /> }
         Expr.Ident { val start, val len } => {
+            if isSelfRef(c: inout c, start: start, len: len) {
+                return typeInfoOfName(c: inout c, start: c.curRecvStart, len: c.curRecvLen, isArray: false)
+            }
             mut val i: U64 = c.locals.count
             while i > 0 {
                 i -= 1
@@ -404,7 +449,21 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             return scalarInfo()
         }
-        Expr.Method { val recv, val nameStart, val nameLen, val args } => { return scalarInfo() }
+        Expr.Method { val recv, val nameStart, val nameLen, val args } => {
+            val rt: TypeInfo = exprType(c: inout c, id: recv)
+            if rt.kind == 2 {
+                val mi: I64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen)
+                if mi < 0 {
+                    return scalarInfo()
+                }
+                val mf: Func = c.funcs[mi as U64]
+                if mf.hasRet {
+                    return typeInfoOfName(c: inout c, start: mf.retStart, len: mf.retLen, isArray: mf.retIsArray)
+                }
+                return scalarInfo()
+            }
+            return scalarInfo()
+        }
         Expr.Cast { val operand, val tyStart, val tyLen } => {
             return typeInfoOfName(c: inout c, start: tyStart, len: tyLen, isArray: false)
         }
@@ -733,15 +792,56 @@ fn genExpr(c: inout Comp, id: U64) {
             write(s: "))")
         }
         Expr.Method { val recv, val nameStart, val nameLen, val args } => {
-            // only `append` is supported
             val bt: TypeInfo = exprType(c: inout c, id: recv)
-            write(s: "PlewArray_")
-            writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
-            write(s: "_push(&(")
-            genExpr(c: inout c, id: recv)
-            write(s: "), ")
-            genExpr(c: inout c, id: args[0].expr)
-            write(s: ")")
+            if bt.kind == 3 {
+                // array builtin: `.append(v)` -> PlewArray_E_push(&recv, v).
+                write(s: "PlewArray_")
+                writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
+                write(s: "_push(&(")
+                genExpr(c: inout c, id: recv)
+                write(s: "), ")
+                genExpr(c: inout c, id: args[0].expr)
+                write(s: ")")
+            } else {
+                // user method on a named type: `recv.m(args)` -> Recv_m(self, args)
+                // (self by value, or &recv for an `inout fn` receiver).
+                val mi: I64 = findMethod(c: inout c, recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen)
+                if mi < 0 {
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "no such method on this type")
+                    return
+                }
+                val mf: Func = c.funcs[mi as U64]
+                if paramsLabelsOk(c: inout c, params: mf.params, args: args) {
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "argument labels do not match the method parameters")
+                    return
+                }
+                writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
+                write(s: "_")
+                writeSpan(c: inout c, start: nameStart, len: nameLen)
+                write(s: "(")
+                if mf.selfInout {
+                    write(s: "&(")
+                    genExpr(c: inout c, id: recv)
+                    write(s: ")")
+                } else {
+                    genExpr(c: inout c, id: recv)
+                }
+                mut val i: U64 = 0
+                while i < args.count {
+                    write(s: ", ")
+                    val ar: Arg = args[i]
+                    if ar.isInout {
+                        write(s: "&(")
+                        genExpr(c: inout c, id: ar.expr)
+                        write(s: ")")
+                    } else {
+                        genExpr(c: inout c, id: ar.expr)
+                    }
+                    i += 1
+                }
+                write(s: ")")
+            }
         }
         Expr.Array { val elems } => {
             // Array literals appear only in typed positions (let init / JSX
@@ -1314,6 +1414,9 @@ fn genBlock(c: inout Comp, id: U64) {
 }
 
 fn nameIsMain(c: inout Comp, f: Func) -> Bool {
+    if f.hasRecv {
+        return false
+    }
     return rangeEquals(bytes: c.bytes, start: f.nameStart, len: f.nameLen, kw: "main")
 }
 
@@ -1354,17 +1457,23 @@ fn genSignature(c: inout Comp, f: Func) {
     } else {
         write(s: "void ")
     }
+    // method: mangle to `Recv_name` with a leading `self` parameter.
+    if f.hasRecv {
+        writeSpan(c: inout c, start: f.recvStart, len: f.recvLen)
+        write(s: "_")
+    }
     writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
     write(s: "(")
     val params: Array[Param] = f.params
-    if params.count == 0 {
-        write(s: "void")
-    } else {
+    if f.hasRecv {
+        genCTypeRef(c: inout c, start: f.recvStart, len: f.recvLen, isArray: false)
+        if f.selfInout {
+            write(s: "*")
+        }
+        write(s: " self")
         mut val i: U64 = 0
         while i < params.count {
-            if i > 0 {
-                write(s: ", ")
-            }
+            write(s: ", ")
             val p: Param = params[i]
             genCTypeRef(c: inout c, start: p.tyStart, len: p.tyLen, isArray: p.tyIsArray)
             if p.isInout {
@@ -1373,6 +1482,25 @@ fn genSignature(c: inout Comp, f: Func) {
             write(s: " ")
             writeSpan(c: inout c, start: p.nameStart, len: p.nameLen)
             i += 1
+        }
+    } else {
+        if params.count == 0 {
+            write(s: "void")
+        } else {
+            mut val i: U64 = 0
+            while i < params.count {
+                if i > 0 {
+                    write(s: ", ")
+                }
+                val p: Param = params[i]
+                genCTypeRef(c: inout c, start: p.tyStart, len: p.tyLen, isArray: p.tyIsArray)
+                if p.isInout {
+                    write(s: "*")
+                }
+                write(s: " ")
+                writeSpan(c: inout c, start: p.nameStart, len: p.nameLen)
+                i += 1
+            }
         }
     }
     write(s: ")")
@@ -1387,6 +1515,12 @@ fn genFunc(c: inout Comp, fi: U64) {
     } else {
         c.curRetVoid = true
     }
+    // expose the method receiver so a bare `self` in the body resolves (and
+    // lowers to `(*self)` for `inout fn`).
+    c.curHasRecv = f.hasRecv
+    c.curRecvStart = f.recvStart
+    c.curRecvLen = f.recvLen
+    c.curSelfInout = f.selfInout
     // fresh local scope for this function: parameters are the initial bindings
     c.locals = []
     val params: Array[Param] = f.params

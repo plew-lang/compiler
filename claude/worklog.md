@@ -8,7 +8,7 @@
 
 - **ビルド**：`./bootstrap.sh`＝C 種 `compiler/plewc.seed.c`→clang→`plewc0`→`compiler/src/_.pw` を自己コンパイル→不動点 cmp（Rust/cargo 不要）。`./bootstrap.sh --reseed` で種更新。
 - **テスト**：`./test.sh`＝`tests/run/*.pw`（`.out` 照合・任意 `.in`）＋`tests/part/`（複数ファイル）＋`tests/reject/*.pw`（plewc が非ゼロ終了で reject＝受理の健全性）＋不動点（Rust 非依存）。
-- **サポート済の言語**：型付き整数/Bool・String（リテラル/`.bytes`/`==`/エスケープ）・**文字リテラル `'c'`**（→コードポイント）・Array（リテラル/添字/`count`/`append`/`a[i]=x`/for-each）・struct/JSX 構築/フィールド・enum+match（**網羅検査あり**・タグ if-chain）・enum `==`（全 nullary 限定）・**`val`/`mut val` 可変性検査**（不変への単純代入は reject）・関数/引数/**ラベル検査**/`inout`/再帰・`if`/`else`/`while`/`for`（range/array）・`break`/`continue`・`as`（数値）・**`import @Std/Io`・`@Std/Process` の `with {}` 選択 import**（I/O は ambient でなく import 必須）・**複数ファイル `part ./Name`**・I/O ビルトイン（`print`/`write`/`writeByte`/`readStdin`/`readFile`/`readFileBytes`/`argCount`/`argAt`）・診断 `compileError`/`compileErrorAt`。軽量型追跡・配列単相化・I/O ランタイム preamble を自前出力。生成 C は警告クリーン。
+- **サポート済の言語**：型付き整数/Bool・String（リテラル/`.bytes`/`==`/エスケープ）・**文字リテラル `'c'`**（→コードポイント）・Array（リテラル/添字/`count`/`append`/`a[i]=x`/for-each）・struct/JSX 構築/フィールド・enum+match（**網羅検査あり**・タグ if-chain）・enum `==`（全 nullary 限定）・**`val`/`mut val` 可変性検査**（不変への単純代入は reject）・関数/引数/**ラベル検査**/`inout`/再帰・**インヘレントメソッド `impl Type { fn / inout fn }`**（`recv.m(label:)`・self 暗黙・ラベル検査・`Type_m` マングル＝コンパイラ自身も `lx.at(off:)` で dogfood 中）・`if`/`else`/`while`/`for`（range/array）・`break`/`continue`・`as`（数値）・**`import @Std/Io`・`@Std/Process` の `with {}` 選択 import**（I/O は ambient でなく import 必須）・**複数ファイル `part ./Name`**・I/O ビルトイン（`print`/`write`/`writeByte`/`readStdin`/`readFile`/`readFileBytes`/`argCount`/`argAt`）・診断 `compileError`/`compileErrorAt`。軽量型追跡・配列単相化・I/O ランタイム preamble を自前出力。生成 C は警告クリーン。
 - **spec からの意図的剥離**（値意味論/CoW・整数幅・トレイト・モジュール詳細等）は [provisional.md](provisional.md) に集約。足場（履歴）`examples/{lexer,parser,emit,calc}.pw`。
 
 ## 受理の健全性（意味上 Plew として正しい）＝一区切り
@@ -17,7 +17,7 @@
 
 ## 次の一歩の候補（やりやすい順で自走）
 
-- **lexer 残りのマジックナンバーを char literal 化**（`b == 47`→`b == '/'` 等）。低リスク・読みやすさ向上・同値 lower で不動点安全。
+- **コンパイラ自身の自由関数 → メソッド化を段階的に進める**（`at(lx: inout lx, off:)`→`lx.at(off:)` は完了済。`cur`/`advance`/`peekKind` 等 `inout Comp`/`inout Lexer` を取るヘルパは `impl` メソッドへ移せる＝書き味向上）。各まとまりで ADD 不要・USE→reseed のみ。低リスク。
 - **`import ./Foo`（名前空間束縛・`Foo.bar`）**。修飾名解決が要る（今は part で全部フラット同一スコープ）。
 - **整数幅 `I8..U64`/`F32/F64`**＝hidden cost の大物。codegen 全体の `long long` 前提を幅つきに置換すると、④ lossy `as`・overflow/0除算 panic・`'あ' を U8` の溢れ検査までまとめて片付く。**複数セッション規模**。
 - 値意味論/CoW・トレイト/ジェネリクスは更に大物（後）。

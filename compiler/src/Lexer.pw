@@ -77,12 +77,15 @@ struct Lexer {
     mut val depth: I64
 }
 
-fn at(lx: inout Lexer, off: U64) -> U8 {
-    val i: U64 = lx.pos + off
-    if i < lx.bytes.count {
-        return lx.bytes[i]
+impl Lexer {
+    // The byte `off` positions ahead of the cursor, or 0 past the end.
+    fn at(off: U64) -> U8 {
+        val i: U64 = self.pos + off
+        if i < self.bytes.count {
+            return self.bytes[i]
+        }
+        return 0
     }
-    return 0
 }
 
 fn isDigit(b: U8) -> Bool {
@@ -237,7 +240,7 @@ fn lastCanEnd(lx: inout Lexer) -> Bool {
 
 fn lex(lx: inout Lexer) {
     while lx.pos < lx.bytes.count {
-        val b: U8 = at(lx: inout lx, off: 0)
+        val b: U8 = lx.at(off: 0)
         if b == ' ' {
             lx.pos += 1
             continue
@@ -267,9 +270,9 @@ fn lex(lx: inout Lexer) {
             continue
         }
         if b == '/' {
-            if at(lx: inout lx, off: 1) == '/' {
+            if lx.at(off: 1) == '/' {
                 while lx.pos < lx.bytes.count {
-                    if at(lx: inout lx, off: 0) == '\n' {
+                    if lx.at(off: 0) == '\n' {
                         break
                     }
                     lx.pos += 1
@@ -341,10 +344,10 @@ fn lex(lx: inout Lexer) {
             emit(lx: inout lx, k: <Kind.Char />, start: start, len: j - start)
             continue
         }
-        val b2: U8 = at(lx: inout lx, off: 1)
+        val b2: U8 = lx.at(off: 1)
         if b == '.' {
             if b2 == '.' {
-                val b3: U8 = at(lx: inout lx, off: 2)
+                val b3: U8 = lx.at(off: 2)
                 if b3 == '<' {
                     emit(lx: inout lx, k: <Kind.DotDotLt />, start: lx.pos, len: 3)
                     continue

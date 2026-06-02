@@ -691,10 +691,11 @@ fn parseBlock(c: inout Comp) -> U64 {
 
 // ---- declaration parser ----
 
-// `fn name ( params ) [-> ret] { body }`. v2 params are by-value `name: Type`
-// (type skipped, all int64_t); labels equal names.
-fn parseFunc(c: inout Comp) {
-    advance(c: inout c)
+// `fn name ( params ) [-> ret] { body }`. The leading `fn` (and any `inout`
+// receiver marker for methods) is already consumed; the current token is the
+// name. `hasRecv`/`recv*`/`selfInout` describe an `impl Type` method receiver
+// (none for a free function).
+fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, selfInout: Bool) {
     val nameTok: Tok = cur(c: inout c)
     advance(c: inout c)
     mut val params: Array[Param] = []
@@ -765,7 +766,50 @@ fn parseFunc(c: inout Comp) {
     }
     skipNewlines(c: inout c)
     val body: U64 = parseBlock(c: inout c)
-    c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray body=body />)
+    c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray body=body hasRecv=hasRecv recvStart=recvStart recvLen=recvLen selfInout=selfInout />)
+}
+
+// `fn name(...)`: a free function. The current token is `fn`.
+fn parseFunc(c: inout Comp) {
+    advance(c: inout c)
+    parseFuncCommon(c: inout c, hasRecv: false, recvStart: 0, recvLen: 0, selfInout: false)
+}
+
+// `impl Type { (fn | inout fn) name(...) ... }`: inherent methods. Each member
+// is a function with an implicit `self` receiver (`inout fn` makes self
+// mutable). The current token is the `impl` identifier.
+fn parseImpl(c: inout Comp) {
+    advance(c: inout c)
+    val tyTok: Tok = cur(c: inout c)
+    advance(c: inout c)
+    match curKind(c: inout c) {
+        Kind.LBrace => { advance(c: inout c) }
+        _ => {}
+    }
+    while true {
+        skipNewlines(c: inout c)
+        val k: Kind = curKind(c: inout c)
+        match k {
+            Kind.RBrace => {
+                advance(c: inout c)
+                break
+            }
+            Kind.Eof => { break }
+            Kind.KwInout => {
+                advance(c: inout c)
+                match curKind(c: inout c) {
+                    Kind.KwFn => { advance(c: inout c) }
+                    _ => {}
+                }
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: tyTok.start, recvLen: tyTok.len, selfInout: true)
+            }
+            Kind.KwFn => {
+                advance(c: inout c)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: tyTok.start, recvLen: tyTok.len, selfInout: false)
+            }
+            _ => { advance(c: inout c) }
+        }
+    }
 }
 
 // `struct Name { (val|mut val) field: Type ... }`. Field modifiers (val/mut/
@@ -971,7 +1015,11 @@ fn parseProgram(c: inout Comp) {
                 if identIs(c: inout c, kw: "import") {
                     parseImport(c: inout c)
                 } else {
-                    advance(c: inout c)
+                    if identIs(c: inout c, kw: "impl") {
+                        parseImpl(c: inout c)
+                    } else {
+                        advance(c: inout c)
+                    }
                 }
             }
             Kind.Eof => { break }
