@@ -13,7 +13,7 @@
 1. ✅ ~~import なしで `print`/`write` 等が書ける~~ → **解消**。I/O ビルトインは ambient でなく `import @Std/Io with { … }`（print/write/writeByte/readStdin/readFile）・args は `@Std/Process with { argCount, argAt }` が必須。名前↔モジュールも検査（`@Std/Process with { print }` は print を有効化しない）。未 import の使用は `compileError` 診断（`plewc: error: …`＋非ゼロ終了）で reject。
 2. ✅ ~~ラベル無視~~ → **部分解消**。ユーザー定義トップレベル関数の呼び出しは、各引数のラベル必須・宣言順・名前一致を検査（不一致は `compileError` 診断で reject）。残：ラベル抑制 `~:`・メソッド呼び出し・関数型同一性へのラベル反映・I/O ビルトインのラベル（暫定シグネチャゆえ非検査）は未対応。
 3. ✅ ~~非網羅 match が通る~~ → **解消**。match は網羅必須（`_` ワイルドカード、または enum 全 variant の被覆を検査・非網羅は `compileError` 診断で reject）。残：到達不能アーム警告・ガード・ネストパターンは未対応（元々）。
-4. ✅ ~~lossy な `as` が通る~~ → **解消**。`as` は無損失のみ（spec: infallible 限定・縮小/符号変更は `TryFrom`）。整数 `as` で、**target が整数型**かつ **(a) operand がリテラル → 値が target レンジ内か** / **(b) source の整数型が復元可 → `losslessInt`（同符号は幅 widen・unsigned→signed は厳密に幅 widen・signed→unsigned は不可・縮小は不可）** を検査し、外れたら `compileError`。`TypeInfo` がスカラ型名を保持するようにして source 幅を復元（kind=0＋name・C 型は 64bit 据え置き）。コンパイラ自身の唯一の整数 `as`＝`U8 as I64`（widen）は通る。残：**source の整数型が復元できない式**（`(a-b) as U8` 等＝`exprType` が Binary を未伝播）は未検査＝lenient allow（accept-invalid の穴が式幅伝播まで残る・式幅伝播は overflow エピックと同時）／**let-init 等のリテラル範囲**（`val f: U8 = 300`）は `as` でないので別途未検査。
+4. ✅ ~~lossy な `as` が通る~~ → **解消**。`as` は無損失のみ（spec: infallible 限定・縮小/符号変更は `TryFrom`）。整数 `as` で、**target が整数型**かつ **(a) operand がリテラル → 値が target レンジ内か** / **(b) source の整数型が復元可 → `losslessInt`（同符号は幅 widen・unsigned→signed は厳密に幅 widen・signed→unsigned は不可・縮小は不可）** を検査し、外れたら `compileError`。`TypeInfo` がスカラ型名を保持するようにして source 幅を復元（kind=0＋name）。`exprType` は算術/ビット二項（→左辺幅）・単項 `-`/`~`（→operand 幅）も伝播するので `(a-b) as U8` のような**式幅も復元され narrowing として reject**（旧「式幅伝播まで lenient」の穴は解消）。コンパイラ自身の唯一の整数 `as`＝`U8 as I64`（widen）は通る。残：**両オペランドが幅不明な式**（`(1+1) as U8` 等＝リテラルのみ）は依然 lenient／**let-init 等のリテラル範囲**（`val f: U8 = 300`）は `as` でないので別途未検査＝**リテラル文脈型付け（Phase D・未着手）**で閉じる。
 5. ✅ ~~struct の `==`~~ → **解消**。比較演算子（`== != < <= > >=`）を struct/array に適用＝`Eq`/`Ord` 無しなので `compileError` 診断で reject（従来は壊れた C を吐いて clang が偶発的に弾いていたのを明示エラーに）。残：enum/String の順序比較（`<` 等）は依然「壊れた C で偶発的 reject」＝ホールではないが未整理。
 6. ✅ ~~不変束縛 `val` への代入が通る~~ → **解消**。代入対象は**可変な place**でなければ `compileError` で reject＝`placeIsMutable`：①単純変数＝`mut val` ローカル or `inout` 仮引数 ②`base.field`＝フィールドが `mut val` 宣言**かつ** base も可変 place（Swift 流合成可変性・struct FieldDef に `isMut` を保持） ③`a[i]`＝配列束縛 base が可変 place（要素変更は配列値の変更）。`self.f`（inout fn）も合成で通る。**メソッド経由の変更も検査**：配列 `.append`（受信側 place が可変必須）・`inout fn` メソッド呼び（受信側 place が可変必須）も `placeIsMutable` で reject。残：重なり `inout` 検査・place 越し get-modify-set の一般形は未対応（spec/03・別項）。
 
@@ -31,9 +31,9 @@
 
 - **幅つき整数 `I8..U64`・`F32/F64`** → **現状：全整数 `long long`（int64_t）**。幅の区別なし・符号なし演算の意味なし・**浮動小数点は一切なし**。spec/02。
 - **0 除算は常に panic** → **実装済**：`a / b`・`a % b`・複合 `x /= v`/`x %= v`（簡易変数・配列 place `a[i] /= v` とも `x = plew_div(x, v)` に脱糖）すべて `plew_div`/`plew_mod`（preamble・除数 0 で `plew_panic`→exit(1)）経由。`%` は C 切り捨て＝剰余は被除数の符号（spec 通り）。
-- **オーバーフロー panic**・**NaN 比較で panic**・`assert` 常時 ON → **未実装**（C の UB / wraparound / crash 任せ）。オーバーフロー検査は幅つき整数（要 TypeInfo への幅保持）に依存ゆえ整数幅エピックと同時。`wrapping*` メソッドも無し。spec/12。
-- **数値リテラルは多相・既定型なし・曖昧はエラー** → stage0 は実装（双方向推論）。ただし `print` の引数だけ I64 にフォールバック（stage0 の便宜）。stage1 はリテラルを素朴に long long 化（曖昧検査は stage0 が既に弾く前提）。
-- **U8**：配列要素のときだけ `unsigned char`（`.bytes` の char バッファ共有のため）・スカラ U8 は long long。
+- **オーバーフロー panic** → ✅ **解消**（整数幅エピック）。算術 `+ - *`（二項・複合代入 `+= -= *=`・配列要素複合）と単項 `-`・符号付き除算 `INT_MIN/-1` が**結果型の正確な幅**で溢れたら `plew_panic("integer overflow")`（`__builtin_*_overflow` 使用・幅は Phase C の narrow storage で正確）。0除算も panic（`/ %`・`/= %=`・width 既知は inline、未知は zero+`INT64_MIN/-1` 検査済 `plew_div`/`plew_mod`）。`x % -1` は 0 と定義（C UB 回避）。残：**両オペランドが幅不明な式**の算術（`(1+1)` 等リテラルのみ）と**配列要素の `/= %=` の narrow-signed `INT_MIN/-1`** は未検査＝rare な穴。`wrapping*` メソッドは無し（additive 予定）。**NaN 比較で panic**・`assert` 常時 ON は未実装（float 未対応ゆえ）。spec/12。
+- **数値リテラルは多相・既定型なし・曖昧はエラー** → stage1 はリテラルを素朴に C 整数リテラル化（既定 long long 文脈）。**リテラル文脈型付け（Phase D）は未着手**＝`val f: U8 = 300` が 44 に黙って切り詰められる hidden meaning が残る（典型穴）。`(200+100):U8` のようなリテラル算術の文脈オーバーフローも同様（operand が幅不明ゆえ検査されない）。閉じるにはリテラルへ文脈型を伝播する型付けが要る。
+- **整数の C ストレージ** → ✅ 各 Plew 整数型は厳密幅の stdint 型（`int8_t…int64_t`/`uint16_t…uint64_t`・**U8 は `unsigned char`**＝`.bytes` の char バッファ共有のため・`uint8_t` と同一）。`Bool` だけ `long long`（幅無関係）。旧「全部 long long」は廃止。これにより宣言幅で overflow 検査が成立。
 
 ## レンジ（暫定）
 
@@ -109,4 +109,4 @@
 
 ---
 
-**再訪の優先度（私見）**：観測挙動を歪める剥離＝①値意味論/CoW（最重要・ARC とセット）②整数幅＋オーバーフロー/0除算 panic ③ラベル必須＋検査 ④`Result`/`try`/`Optional` ⑤トレイト/ジェネリクス。これらは self-host 後に Plew 側（stage1）で additive に。hidden cost だけの剥離（leak→ARC 等）は性能要求が出てから。
+**再訪の優先度（私見）**：観測挙動を歪める剥離＝①値意味論/CoW（最重要・ARC とセット）②~~整数幅＋オーバーフロー/0除算 panic~~（✅ narrow storage＋overflow/division panic は解消・残るは**リテラル文脈型付け Phase D**＝`val f: U8 = 300` の沈黙切り詰め）③ラベル必須＋検査 ④`Result`/`try`/`Optional` ⑤トレイト/ジェネリクス。これらは Plew 側（stage1）で additive に。hidden cost だけの剥離（leak→ARC 等）は性能要求が出てから。

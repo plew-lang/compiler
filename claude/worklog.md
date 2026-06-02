@@ -8,7 +8,7 @@
 
 - **ビルド**：`./bootstrap.sh`＝C 種 `compiler/plewc.seed.c`→clang→`plewc0`→`compiler/src/_.pw` を自己コンパイル→不動点 cmp（Rust/cargo 不要）。`./bootstrap.sh --reseed` で種更新。
 - **テスト**：`./test.sh`＝`tests/run/*.pw`（`.out` 照合・任意 `.in`）＋`tests/part/`（複数ファイル）＋`tests/reject/*.pw`（plewc が非ゼロ終了で reject＝受理の健全性）＋不動点（Rust 非依存）。
-- **サポート済の言語**（現状スナップショット・経緯は git/タグ）：型付き整数/Bool・String（リテラル/`.bytes`/`==`/エスケープ）・文字リテラル `'c'`・Array（リテラル/添字/`count`/`append`/`a[i]=x`/for-each）・struct と JSX 構築・enum＋match（**網羅検査**・**or パターン `A|B`**・rename/discard 束縛 `{f: val n}`/`{f: _}`・**値位置 `match` 式**）・enum `==`（全 nullary）・**可変性検査（place 単位＝単純変数＋`base.field` 合成＋`a[i]` 配列束縛＋`.append`/`inout fn` メソッド受信側）**・関数/**引数ラベル検査**/`inout`/再帰・**インヘレントメソッド `impl Type { fn / inout fn }`**・**`panic`**・`if`/`else`/`while`/`for`/`break`/`continue`・**値位置 `if` 式＋ブロック `give`**（`else` 必須・`else if` チェーン可）・演算子（算術・比較・論理・**ビット/シフト `& | ^ << >> ~`**・単項 `! - ~`・**`as`〔整数・無損失のみ＝縮小/符号変更/リテラル範囲外は reject〕**・複合代入 `+= … %=`・**ビット系複合代入 `&= |= ^= <<= >>=`**）・**`import @Std/{Io,Process} with {}`**（I/O は ambient でなく import 必須）・複数ファイル **`part ./Name`**・I/O ビルトイン（print/write/writeByte/readStdin/readFile(Bytes)/argCount/argAt）・診断 `compileError(At)`。軽量型追跡・配列単相化・preamble 自前出力・生成 C は警告クリーン。**コンパイラ自身がメソッド/match 式/or パターンで自己記述**（dogfood）。
+- **サポート済の言語**（現状スナップショット・経緯は git/タグ）：型付き整数/Bool・String（リテラル/`.bytes`/`==`/エスケープ）・文字リテラル `'c'`・Array（リテラル/添字/`count`/`append`/`a[i]=x`/for-each）・struct と JSX 構築・enum＋match（**網羅検査**・**or パターン `A|B`**・rename/discard 束縛 `{f: val n}`/`{f: _}`・**値位置 `match` 式**）・enum `==`（全 nullary）・**可変性検査（place 単位＝単純変数＋`base.field` 合成＋`a[i]` 配列束縛＋`.append`/`inout fn` メソッド受信側）**・関数/**引数ラベル検査**/`inout`/再帰・**インヘレントメソッド `impl Type { fn / inout fn }`**・**`panic`**・`if`/`else`/`while`/`for`/`break`/`continue`・**値位置 `if` 式＋ブロック `give`**（`else` 必須・`else if` チェーン可）・演算子（算術・比較・論理・**ビット/シフト `& | ^ << >> ~`**・単項 `! - ~`・**`as`〔整数・無損失のみ＝縮小/符号変更/リテラル範囲外は reject〕**・複合代入 `+= … %=`・**ビット系複合代入 `&= |= ^= <<= >>=`**・**整数は厳密幅で格納〔stdint〕＋算術/除算オーバーフロー・0除算は panic**）・**`import @Std/{Io,Process} with {}`**（I/O は ambient でなく import 必須）・複数ファイル **`part ./Name`**・I/O ビルトイン（print/write/writeByte/readStdin/readFile(Bytes)/argCount/argAt）・診断 `compileError(At)`。軽量型追跡・配列単相化・preamble 自前出力・生成 C は警告クリーン。**コンパイラ自身がメソッド/match 式/or パターンで自己記述**（dogfood）。
 - **spec からの意図的剥離**（値意味論/CoW・整数幅・トレイト・モジュール詳細等）は [provisional.md](provisional.md) に集約。足場（履歴）`examples/{lexer,parser,emit,calc}.pw`。
 
 ## 受理の健全性（意味上 Plew として正しい）＝一区切り
@@ -17,19 +17,19 @@
 
 ## 次の一歩の候補（やりやすい順で自走）
 
-### ★ 進行中エピック：整数幅をやり切る（次セッションの本線）
+### 整数幅エピック — Phase A/B/C ✅ 完了・残り Phase D（リテラル文脈型付け）
 
-**済**：④ lossy `as`（無損失のみ）・0除算 panic。**方針＝意味先行**：`TypeInfo` がスカラ型名を保持（kind=0＋name）・C 型は 64bit 据え置き・コンパイラは U64 に揃え `as` 厳密無損失。**確定済の言語判断**（spec／design-decisions）：U64 添字/count/range・`as`無損失（符号変更/縮小は `TryFrom`）・overflow/0除算は常に panic・**リテラル既定型なし＋曖昧はエラー**・`assert`常時ON。
+**済（A+B+C）**：
+- **A：式幅伝播** — `exprType` が算術/ビット二項（→左辺幅）・単項 `-`/`~`（→operand 幅）を伝播。`(a-b) as U8` が narrowing として reject される。
+- **C：narrow storage** — `genCElem` が各整数型を厳密幅 stdint（`int8_t…int64_t`/`uint16_t…uint64_t`・U8 は `unsigned char`・Bool は long long）に。これで宣言幅で overflow 検査が成立。コンパイラ自身の値は小さい非負ゆえ挙動不変＝fixpoint 維持。
+- **B：overflow/division panic** — 算術 `+ - *`（二項・複合代入・配列要素複合）と単項 `-` が `__builtin_*_overflow` で結果型幅に溢れたら `plew_panic("integer overflow")`。`/ %`・`/= %=` は width＆符号認識の inline 文（0除算 panic・signed `INT_MIN/-1` overflow panic・`x % -1`=0 で C UB 回避）、width 不明は zero+`INT64_MIN/-1` 検査済 `plew_div`/`plew_mod`。`tests/panic/` カテゴリを test.sh に追加（compile+link 成功・実行は非ゼロ＋stderr 部分一致）。
+- 残る穴（rare・documented）：両オペランドが幅不明な式（`(1+1):U8` 等リテラルのみ）の算術文脈オーバーフロー、配列要素 `/= %=` の narrow-signed `INT_MIN/-1`。
 
-**残りを以下の順で**（A は小・先に commit／B が本丸／C は hidden cost で後回し可／D は別重量）：
+**確定済の言語判断**（spec／design-decisions）：U64 添字/count/range・`as`無損失（符号変更/縮小は `TryFrom`）・overflow/0除算は常に panic・**リテラル既定型なし＋曖昧はエラー**・`assert`常時ON・`wrapping*` メソッド明示。
 
-- **Phase A：`exprType` に式の幅を伝播**（④ の残穴 `(a-b) as U8` を閉じる・小）。Binary 算術(56–60)/ビット(74–78)→ `exprType(lhs)`、比較(50–55)/論理(61,62)→ Bool(width-less)、シフトは lhs 型。Unary `-`/`~`→operand 型・`!`→Bool。`exprType(Binary)` の他利用（place 検査の base 等）は低リスクだが不動点で確認。これで `as` check の「source 不明→lenient」分岐が縮む。
-- **Phase B：overflow panic**（hidden meaning の本丸）。幅つき型の算術で真の結果が型に収まらなければ panic。Phase A の結果幅が前提。**設計未決→着手時に方針提示**：①clang の `__builtin_*_overflow` を結果幅で使い溢れたら `plew_panic`（推奨・部品少）vs ②`plew_add_<T>` 等の (op×型) ランタイム関数（5op×8型＝冗長だが明示）。幅不明の式は検査不能＝skip（要 documented）。
-- **Phase C：幅つき C ストレージ**（hidden cost・後回し可）。`genCElem`/`genTypeInfoCType` を `int8_t…uint64_t` に（今は long long）。**Cを入れるとC算術が幅で wrap する**ので、Bの溢れ検査は wrap 前（より広い型 or 組込みで真値）に走らせる必要＝B と密結合。配列要素/フィールド/ローカル/引数/戻りを一斉。最大の不動点リスク（U64→uint64_t はコンパイラの非負値に対し挙動不変ゆえ通るはず）。**64bit 据え置きでも「宣言幅で overflow 検査」は成立**するので、意味完全性（A+B+D）には C は必須でない＝C は独立の cost フォローアップに切れる。
-- **Phase D：リテラル文脈型付け**（hidden meaning＋人間工学）。`val f: U8 = 300` の範囲検査・文脈（let 注釈/フィールド/引数/戻り/配列要素・`as` は済）からリテラル型を決める。**設計未決→着手時に方針提示**：完全な双方向 no-default 推論 vs 注釈必須-else-error の暫定。現状の「全部 long long・print は I64 fallback」を文脈駆動へ替える＝**現在 accept しているコードを reject し得る**ので慎重に。
-- **推奨順＝A→B→D（意味完全）／C は別途 cost 対応**。A 着手が安全な第一手。
+**残り＝Phase D：リテラル文脈型付け**（hidden meaning＋人間工学・**未着手・要方針確認**）。`val f: U8 = 300` が 44 に黙って切り詰められる穴を閉じる＝文脈（let 注釈/フィールド/引数/戻り/配列要素/代入先・`as` は済）からリテラルの型を決め、範囲外は reject／リテラル算術（`200+100:U8`）は文脈幅で overflow させる。**設計未決＝着手時に選択肢提示**：(i) リテラルに文脈型を伝播する型付け（exprType(Int) を文脈依存に・operand 型が付くので overflow 検査も発火＝完全だが型推論機構の追加で大きめ・**現在 accept しているコードを reject し得る**） vs (ii) bare リテラルの範囲検査だけ（let-init 等で `litFitsType`・compile error・小さく安全だがリテラル算術の穴は残す）。現状「素朴 long long 化」を文脈駆動へ替えるので後戻りに注意。
 
-> 着手手順は ADD→reseed→USE（下節）。各 Phase で不動点を緑に保ってから commit。新 preamble 行（overflow ランタイム等）を足したら **reseed 2 回**。
+> 着手手順は ADD→reseed→USE（下節）。各 Phase で不動点を緑に保ってから commit。新 preamble 行や **codegen 挙動変化（genCElem 等）を足したら reseed 2 回**（1 世代遅れる）。
 
 ### その他の候補（エピック後）
 
