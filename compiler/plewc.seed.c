@@ -566,6 +566,10 @@ uint64_t variantIndex(Comp* c, uint64_t enumStart, uint64_t enumLen, uint64_t va
 TypeInfo scalarInfo(void);
 TypeInfo typeInfoOfName(Comp* c, uint64_t start, uint64_t len, long long isArray);
 void addLocal(Comp* c, uint64_t nameStart, uint64_t nameLen, uint64_t tyStart, uint64_t tyLen, long long isArray, uint64_t ty, long long isInout, long long isMut);
+uint64_t scopeMark(Comp* c);
+void emitScopeDrops(Comp* c, uint64_t mark);
+void popLocals(Comp* c, uint64_t mark);
+void scopeExit(Comp* c, uint64_t mark);
 long long localIsMutable(Comp* c, uint64_t start, uint64_t len);
 long long isSelfRef(Comp* c, uint64_t start, uint64_t len);
 long long isInoutLocal(Comp* c, uint64_t start, uint64_t len);
@@ -3882,6 +3886,24 @@ TypeInfo typeInfoOfName(Comp* c, uint64_t start, uint64_t len, long long isArray
 void addLocal(Comp* c, uint64_t nameStart, uint64_t nameLen, uint64_t tyStart, uint64_t tyLen, long long isArray, uint64_t ty, long long isInout, long long isMut) {
     PlewArray_Local_push(&((*c).locals), (Local){.nameStart = nameStart, .nameLen = nameLen, .tyStart = tyStart, .tyLen = tyLen, .isArray = isArray, .ty = ty, .isInout = isInout, .isMut = isMut});
 }
+uint64_t scopeMark(Comp* c) {
+    return (long long)(((*c).locals).len);
+}
+void emitScopeDrops(Comp* c, uint64_t mark) {
+}
+void popLocals(Comp* c, uint64_t mark) {
+    PlewArray_Local kept = PlewArray_Local_new();
+    uint64_t i = 0;
+    while (i < mark) {
+    PlewArray_Local_push(&(kept), PlewArray_Local_get((*c).locals, (long long)(i)));
+    i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    (*c).locals = PlewArray_Local_copy(kept);
+}
+void scopeExit(Comp* c, uint64_t mark) {
+    emitScopeDrops(&((*c)), mark);
+    popLocals(&((*c)), mark);
+}
 long long localIsMutable(Comp* c, uint64_t start, uint64_t len) {
     if (isSelfRef(&((*c)), start, len)) {
     return (*c).curSelfInout;
@@ -6726,6 +6748,7 @@ void genStmt(Comp* c, uint64_t id) {
     }
 }
 void genBlock(Comp* c, uint64_t id) {
+    uint64_t mark = scopeMark(&((*c)));
     Block b = PlewArray_Block_get((*c).blocks, (long long)(id));
     PlewArray_U64 stmts = PlewArray_U64_copy(b.stmts);
     uint64_t i = 0;
@@ -6733,6 +6756,7 @@ void genBlock(Comp* c, uint64_t id) {
     genStmt(&((*c)), PlewArray_U64_get(stmts, (long long)(i)));
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
+    scopeExit(&((*c)), mark);
 }
 long long nameIsMain(Comp* c, Func f) {
     if (f.hasRecv) {

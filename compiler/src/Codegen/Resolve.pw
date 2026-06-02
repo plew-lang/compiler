@@ -197,6 +197,44 @@ fn addLocal(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U6
     c.locals.append(<Local nameStart=nameStart nameLen=nameLen tyStart=tyStart tyLen=tyLen isArray=isArray ty=ty isInout=isInout isMut=isMut />)
 }
 
+// --- scope frames (the ARC drop backbone) ---
+//
+// Locals live in a flat stack (`c.locals`). A lexical block owns the bindings
+// pushed after its entry high-water mark; on exit we (1) drop them — ARC
+// release / `deinit`, currently a no-op while everything leaks — and (2) pop
+// them so a sibling or enclosing scope cannot resolve a name that has left
+// scope. C variable names are emitted verbatim (writeSpan of the source name),
+// so popping only tightens name resolution; it never renames anything.
+
+// Record the locals high-water mark to restore at scope exit.
+fn scopeMark(c: inout Comp) -> U64 {
+    return c.locals.count
+}
+
+// Emit the releases for every binding pushed since `mark`, in reverse
+// declaration order (construction is forward, destruction is reverse).
+// TODO(arc): wire to ARC release / `deinit` once ownership is tracked.
+fn emitScopeDrops(c: inout Comp, mark: U64) {
+}
+
+// Pop the locals stack back to `mark` (Array has no truncate, so rebuild the
+// kept prefix — scopes are small and this is codegen, not a hot path).
+fn popLocals(c: inout Comp, mark: U64) {
+    mut val kept: Array[Local] = []
+    mut val i: U64 = 0
+    while i < mark {
+        kept.append(c.locals[i])
+        i += 1
+    }
+    c.locals = kept
+}
+
+// Leave a scope: drop its bindings, then pop them off the resolution stack.
+fn scopeExit(c: inout Comp, mark: U64) {
+    emitScopeDrops(c: inout c, mark: mark)
+    popLocals(c: inout c, mark: mark)
+}
+
 // Whether the binding named (start,len) — most recent in scope — may be assigned
 // to: `mut val` locals and `inout` params. Unknown names default to assignable
 // (the C compile catches genuinely undeclared identifiers).

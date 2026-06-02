@@ -652,6 +652,7 @@ fn genStmt(c: inout Comp, id: U64) {
 }
 
 fn genBlock(c: inout Comp, id: U64) {
+    val mark: U64 = scopeMark(c: inout c)
     val b: Block = c.blocks[id]
     val stmts: Array[U64] = b.stmts
     mut val i: U64 = 0
@@ -659,5 +660,6 @@ fn genBlock(c: inout Comp, id: U64) {
         genStmt(c: inout c, id: stmts[i])
         i += 1
     }
+    scopeExit(c: inout c, mark: mark)
 }
 
