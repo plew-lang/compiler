@@ -78,6 +78,10 @@ enum Expr {
     Index { base: U64, index: U64 }
     Method { recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg] }
     Cast { operand: U64, tyStart: U64, tyLen: U64 }
+    // value-position `match scrut { Pat => expr, ... }`: like Stmt.Match but each
+    // arm yields an expression (MatchArm.body is an Expr index, not a Block).
+    // Lowers to a C statement-expression.
+    MatchExpr { scrut: U64, arms: Array[MatchArm] }
 }
 
 // One arm of a match: either `_ => block` (wildcard) or `Enum.Variant
@@ -90,7 +94,19 @@ struct MatchArm {
     val variantStart: U64
     val variantLen: U64
     val binds: Array[Bind]
+    // body is a Block index for Stmt.Match, or an Expr index for Expr.MatchExpr.
     val body: U64
+}
+
+// The pattern part of a match arm (everything before `=>`), shared by statement
+// and expression match parsing. Mirrors MatchArm minus the body.
+struct PatInfo {
+    val isWildcard: Bool
+    val enumStart: U64
+    val enumLen: U64
+    val variantStart: U64
+    val variantLen: U64
+    val binds: Array[Bind]
 }
 
 enum Stmt {

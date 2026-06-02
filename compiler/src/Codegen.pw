@@ -88,6 +88,25 @@ fn genCType(c: inout Comp, start: U64, len: U64) {
     genCElem(c: inout c, start: start, len: len)
 }
 
+// Emit the C type for a recovered TypeInfo (used when the type comes from
+// inference rather than a written annotation, e.g. a match-expression result).
+fn genTypeInfoCType(c: inout Comp, ti: TypeInfo) {
+    if ti.kind == 1 {
+        write(s: "PlewString")
+        return
+    }
+    if ti.kind == 2 {
+        writeSpan(c: inout c, start: ti.nameStart, len: ti.nameLen)
+        return
+    }
+    if ti.kind == 3 {
+        write(s: "PlewArray_")
+        writeSpan(c: inout c, start: ti.nameStart, len: ti.nameLen)
+        return
+    }
+    write(s: "long long")
+}
+
 // Compare two source spans byte for byte.
 fn spansEqual(c: inout Comp, aStart: U64, aLen: U64, bStart: U64, bLen: U64) -> Bool {
     if aLen != bLen {
@@ -132,6 +151,7 @@ fn exprOffset(c: inout Comp, id: U64) -> U64 {
         Expr.Unary { val op, val operand } => { return exprOffset(c: inout c, id: operand) }
         Expr.Cast { val operand, val tyStart, val tyLen } => { return exprOffset(c: inout c, id: operand) }
         Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val fields } => { return typeStart }
+        Expr.MatchExpr { val scrut, val arms } => { return exprOffset(c: inout c, id: scrut) }
         _ => { return 0 }
     }
 }
@@ -466,6 +486,12 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
         }
         Expr.Cast { val operand, val tyStart, val tyLen } => {
             return typeInfoOfName(c: inout c, start: tyStart, len: tyLen, isArray: false)
+        }
+        Expr.MatchExpr { val scrut, val arms } => {
+            if arms.count > 0 {
+                return exprType(c: inout c, id: arms[0].body)
+            }
+            return scalarInfo()
         }
     }
     return scalarInfo()
@@ -910,6 +936,102 @@ fn genExpr(c: inout Comp, id: U64) {
                 }
                 write(s: "}")
             }
+        }
+        Expr.MatchExpr { val scrut, val arms } => {
+            // value-position match -> C statement-expression. Mirrors the
+            // Stmt.Match lowering but each arm assigns the result temp __mr.
+            if matchExhaustive(c: inout c, arms: arms) {
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
+                return
+            }
+            val t: U64 = c.tmp
+            c.tmp = c.tmp + 1
+            // result type inferred from the first arm's expression (provisional:
+            // a result type that depends on a pattern bind may mis-infer).
+            val rt: TypeInfo = exprType(c: inout c, id: arms[0].body)
+            mut val enumStart: U64 = 0
+            mut val enumLen: U64 = 0
+            mut val hasWildcard: Bool = false
+            mut val q: U64 = 0
+            while q < arms.count {
+                val aq: MatchArm = arms[q]
+                if aq.isWildcard {
+                    hasWildcard = true
+                } else {
+                    if enumLen == 0 {
+                        enumStart = aq.enumStart
+                        enumLen = aq.enumLen
+                    }
+                }
+                q += 1
+            }
+            write(s: "({ ")
+            genTypeInfoCType(c: inout c, ti: rt)
+            write(s: " __mr")
+            writeInt(n: t as I64)
+            write(s: "; ")
+            writeSpan(c: inout c, start: enumStart, len: enumLen)
+            write(s: " __ms")
+            writeInt(n: t as I64)
+            write(s: " = ")
+            genExpr(c: inout c, id: scrut)
+            write(s: "; ")
+            mut val i: U64 = 0
+            mut val firstCond: Bool = true
+            while i < arms.count {
+                val a: MatchArm = arms[i]
+                if a.isWildcard {
+                    write(s: "else { __mr")
+                    writeInt(n: t as I64)
+                    write(s: " = (")
+                    genExpr(c: inout c, id: a.body)
+                    write(s: "); } ")
+                } else {
+                    if firstCond {
+                        write(s: "if (__ms")
+                        firstCond = false
+                    } else {
+                        write(s: "else if (__ms")
+                    }
+                    writeInt(n: t as I64)
+                    write(s: ".tag == ")
+                    writeInt(n: variantIndex(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen))
+                    write(s: ") { ")
+                    val binds: Array[Bind] = a.binds
+                    mut val bi: U64 = 0
+                    while bi < binds.count {
+                        val bd: Bind = binds[bi]
+                        genBindType(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
+                        write(s: " ")
+                        writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
+                        write(s: " = __ms")
+                        writeInt(n: t as I64)
+                        write(s: ".data.")
+                        writeSpan(c: inout c, start: a.variantStart, len: a.variantLen)
+                        write(s: ".")
+                        writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
+                        write(s: "; (void)")
+                        writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
+                        write(s: "; ")
+                        addBindLocal(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
+                        bi += 1
+                    }
+                    write(s: "__mr")
+                    writeInt(n: t as I64)
+                    write(s: " = (")
+                    genExpr(c: inout c, id: a.body)
+                    write(s: "); } ")
+                }
+                i += 1
+            }
+            if hasWildcard {
+            } else {
+                write(s: "else { __builtin_unreachable(); } ")
+            }
+            write(s: "__mr")
+            writeInt(n: t as I64)
+            write(s: "; })")
         }
     }
 }

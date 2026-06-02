@@ -6,26 +6,26 @@
 // Binary operator precedence (higher binds tighter). Spec order, low to high:
 // || < && < comparison < | < ^ < & < shift < +- < */%.
 fn binPrec(k: Kind) -> I64 {
-    match k {
-        Kind.PipePipe => { return 1 }
-        Kind.AmpAmp => { return 2 }
-        Kind.EqEq => { return 3 }
-        Kind.Ne => { return 3 }
-        Kind.Lt => { return 3 }
-        Kind.Le => { return 3 }
-        Kind.Gt => { return 3 }
-        Kind.Ge => { return 3 }
-        Kind.Pipe => { return 4 }
-        Kind.Caret => { return 5 }
-        Kind.Amp => { return 6 }
-        Kind.Shl => { return 7 }
-        Kind.Shr => { return 7 }
-        Kind.Plus => { return 8 }
-        Kind.Minus => { return 8 }
-        Kind.Star => { return 9 }
-        Kind.Slash => { return 9 }
-        Kind.Percent => { return 9 }
-        _ => { return 0 }
+    return match k {
+        Kind.PipePipe => 1
+        Kind.AmpAmp => 2
+        Kind.EqEq => 3
+        Kind.Ne => 3
+        Kind.Lt => 3
+        Kind.Le => 3
+        Kind.Gt => 3
+        Kind.Ge => 3
+        Kind.Pipe => 4
+        Kind.Caret => 5
+        Kind.Amp => 6
+        Kind.Shl => 7
+        Kind.Shr => 7
+        Kind.Plus => 8
+        Kind.Minus => 8
+        Kind.Star => 9
+        Kind.Slash => 9
+        Kind.Percent => 9
+        _ => 0
     }
 }
 
@@ -126,6 +126,9 @@ fn parsePrimary(c: inout Comp) -> U64 {
         }
         Kind.Lt => {
             return parseMake(c: inout c)
+        }
+        Kind.KwMatch => {
+            return parseMatchExpr(c: inout c)
         }
         Kind.Str => {
             val t: Tok = c.cur()
@@ -560,9 +563,72 @@ fn parseExprOrAssign(c: inout Comp) -> U64 {
     return c.pushStmt(s: <Stmt.ExprStmt expr=lhs />)
 }
 
-// `match scrut { (pattern => { body })* }`. Patterns: `_` (wildcard) or
-// `Enum.Variant [{ val f, ... }]`. Arms are block bodies (the subset plewc.pw
-// uses); bare-expression arms are not handled yet.
+// Parse a match-arm pattern (everything up to and including `=>`): `_`
+// (wildcard) or `Enum.Variant [{ val f, ... }]`. The cursor is left just past
+// the `=>`, ready to parse the arm body (a block or an expression).
+fn parsePattern(c: inout Comp) -> PatInfo {
+    val firstTok: Tok = c.cur()
+    mut val isWildcard: Bool = false
+    mut val enumStart: U64 = 0
+    mut val enumLen: U64 = 0
+    mut val variantStart: U64 = 0
+    mut val variantLen: U64 = 0
+    mut val binds: Array[Bind] = []
+    if rangeEquals(bytes: c.bytes, start: firstTok.start, len: firstTok.len, kw: "_") {
+        isWildcard = true
+        c.advance()
+    } else {
+        enumStart = firstTok.start
+        enumLen = firstTok.len
+        c.advance()
+        // `.Variant`
+        match c.curKind() {
+            Kind.Dot => { c.advance() }
+            _ => {}
+        }
+        val vTok: Tok = c.cur()
+        variantStart = vTok.start
+        variantLen = vTok.len
+        c.advance()
+        // optional `{ val f, ... }`
+        match c.curKind() {
+            Kind.LBrace => {
+                c.advance()
+                while true {
+                    c.skipNewlines()
+                    match c.curKind() {
+                        Kind.RBrace => {
+                            c.advance()
+                            break
+                        }
+                        Kind.Eof => { break }
+                        Kind.KwVal => {
+                            c.advance()
+                            val bTok: Tok = c.cur()
+                            c.advance()
+                            binds.append(<Bind nameStart=bTok.start nameLen=bTok.len />)
+                            match c.curKind() {
+                                Kind.Comma => { c.advance() }
+                                _ => {}
+                            }
+                        }
+                        _ => { c.advance() }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    // `=>`
+    match c.curKind() {
+        Kind.FatArrow => { c.advance() }
+        _ => {}
+    }
+    return <PatInfo isWildcard=isWildcard enumStart=enumStart enumLen=enumLen variantStart=variantStart variantLen=variantLen binds=binds />
+}
+
+// `match scrut { (pattern => { body })* }` in statement position: arm bodies are
+// blocks. (Expression-position match with bare-expression arms is parseMatchExpr.)
 fn parseMatch(c: inout Comp) -> U64 {
     c.advance()
     val scrut: U64 = parseExpr(c: inout c)
@@ -582,70 +648,48 @@ fn parseMatch(c: inout Comp) -> U64 {
             }
             Kind.Eof => { break }
             _ => {
-                val firstTok: Tok = c.cur()
-                mut val isWildcard: Bool = false
-                mut val enumStart: U64 = 0
-                mut val enumLen: U64 = 0
-                mut val variantStart: U64 = 0
-                mut val variantLen: U64 = 0
-                mut val binds: Array[Bind] = []
-                if rangeEquals(bytes: c.bytes, start: firstTok.start, len: firstTok.len, kw: "_") {
-                    isWildcard = true
-                    c.advance()
-                } else {
-                    enumStart = firstTok.start
-                    enumLen = firstTok.len
-                    c.advance()
-                    // `.Variant`
-                    match c.curKind() {
-                        Kind.Dot => { c.advance() }
-                        _ => {}
-                    }
-                    val vTok: Tok = c.cur()
-                    variantStart = vTok.start
-                    variantLen = vTok.len
-                    c.advance()
-                    // optional `{ val f, ... }`
-                    match c.curKind() {
-                        Kind.LBrace => {
-                            c.advance()
-                            while true {
-                                c.skipNewlines()
-                                match c.curKind() {
-                                    Kind.RBrace => {
-                                        c.advance()
-                                        break
-                                    }
-                                    Kind.Eof => { break }
-                                    Kind.KwVal => {
-                                        c.advance()
-                                        val bTok: Tok = c.cur()
-                                        c.advance()
-                                        binds.append(<Bind nameStart=bTok.start nameLen=bTok.len />)
-                                        match c.curKind() {
-                                            Kind.Comma => { c.advance() }
-                                            _ => {}
-                                        }
-                                    }
-                                    _ => { c.advance() }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                // `=>`
-                match c.curKind() {
-                    Kind.FatArrow => { c.advance() }
-                    _ => {}
-                }
+                val pi: PatInfo = parsePattern(c: inout c)
                 c.skipNewlines()
                 val body: U64 = parseBlock(c: inout c)
-                arms.append(<MatchArm isWildcard=isWildcard enumStart=enumStart enumLen=enumLen variantStart=variantStart variantLen=variantLen binds=binds body=body />)
+                arms.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body />)
             }
         }
     }
     return c.pushStmt(s: <Stmt.Match scrut=scrut arms=arms />)
+}
+
+// `match scrut { pattern => expr, ... }` in expression position: each arm yields
+// an expression (no block). Lowers to a C statement-expression in codegen.
+fn parseMatchExpr(c: inout Comp) -> U64 {
+    c.advance()
+    val scrut: U64 = parseExpr(c: inout c)
+    c.skipNewlines()
+    match c.curKind() {
+        Kind.LBrace => { c.advance() }
+        _ => {}
+    }
+    mut val arms: Array[MatchArm] = []
+    while true {
+        c.skipNewlines()
+        val k: Kind = c.curKind()
+        match k {
+            Kind.RBrace => {
+                c.advance()
+                break
+            }
+            Kind.Eof => { break }
+            _ => {
+                val pi: PatInfo = parsePattern(c: inout c)
+                val body: U64 = parseExpr(c: inout c)
+                arms.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body />)
+                match c.curKind() {
+                    Kind.Comma => { c.advance() }
+                    _ => {}
+                }
+            }
+        }
+    }
+    return c.pushExpr(e: <Expr.MatchExpr scrut=scrut arms=arms />)
 }
 
 fn parseStmt(c: inout Comp) -> U64 {

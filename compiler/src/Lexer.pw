@@ -104,9 +104,9 @@ impl Lexer {
             return false
         }
         val t: Tok = self.toks[n - 1]
-        match t.kind {
-            Kind.Newline => { return true }
-            _ => { return false }
+        return match t.kind {
+            Kind.Newline => true
+            _ => false
         }
     }
     // Can the most recent token end a statement? (decides newline insertion)
@@ -116,21 +116,21 @@ impl Lexer {
             return false
         }
         val t: Tok = self.toks[n - 1]
-        match t.kind {
-            Kind.Ident => { return true }
-            Kind.Int => { return true }
-            Kind.Str => { return true }
-            Kind.Char => { return true }
-            Kind.RParen => { return true }
-            Kind.RBracket => { return true }
-            Kind.RBrace => { return true }
-            Kind.SlashGt => { return true }
-            Kind.KwTrue => { return true }
-            Kind.KwFalse => { return true }
-            Kind.KwReturn => { return true }
-            Kind.KwBreak => { return true }
-            Kind.KwContinue => { return true }
-            _ => { return false }
+        return match t.kind {
+            Kind.Ident => true
+            Kind.Int => true
+            Kind.Str => true
+            Kind.Char => true
+            Kind.RParen => true
+            Kind.RBracket => true
+            Kind.RBrace => true
+            Kind.SlashGt => true
+            Kind.KwTrue => true
+            Kind.KwFalse => true
+            Kind.KwReturn => true
+            Kind.KwBreak => true
+            Kind.KwContinue => true
+            _ => false
         }
     }
 }
@@ -524,73 +524,73 @@ fn lex(lx: inout Lexer) {
 }
 
 fn kindCode(k: Kind) -> I64 {
-    match k {
-        Kind.Eof => { return 0 }
-        Kind.Newline => { return 1 }
-        Kind.Int => { return 2 }
-        Kind.Str => { return 3 }
-        Kind.Char => { return 5 }
-        Kind.Ident => { return 4 }
-        Kind.KwFn => { return 10 }
-        Kind.KwStruct => { return 11 }
-        Kind.KwEnum => { return 12 }
-        Kind.KwMatch => { return 13 }
-        Kind.KwIf => { return 14 }
-        Kind.KwElse => { return 15 }
-        Kind.KwWhile => { return 16 }
-        Kind.KwFor => { return 17 }
-        Kind.KwBreak => { return 18 }
-        Kind.KwContinue => { return 19 }
-        Kind.KwReturn => { return 20 }
-        Kind.KwGive => { return 21 }
-        Kind.KwVal => { return 22 }
-        Kind.KwMut => { return 23 }
-        Kind.KwIn => { return 24 }
-        Kind.KwAs => { return 25 }
-        Kind.KwInout => { return 26 }
-        Kind.KwTrue => { return 27 }
-        Kind.KwFalse => { return 28 }
-        Kind.LParen => { return 40 }
-        Kind.RParen => { return 41 }
-        Kind.LBracket => { return 42 }
-        Kind.RBracket => { return 43 }
-        Kind.LBrace => { return 44 }
-        Kind.RBrace => { return 45 }
-        Kind.Comma => { return 46 }
-        Kind.Colon => { return 47 }
-        Kind.Dot => { return 48 }
-        Kind.Eq => { return 49 }
-        Kind.EqEq => { return 50 }
-        Kind.Ne => { return 51 }
-        Kind.Lt => { return 52 }
-        Kind.Le => { return 53 }
-        Kind.Gt => { return 54 }
-        Kind.Ge => { return 55 }
-        Kind.Plus => { return 56 }
-        Kind.Minus => { return 57 }
-        Kind.Star => { return 58 }
-        Kind.Slash => { return 59 }
-        Kind.Percent => { return 60 }
-        Kind.AmpAmp => { return 61 }
-        Kind.PipePipe => { return 62 }
-        Kind.Bang => { return 63 }
-        Kind.Arrow => { return 64 }
-        Kind.FatArrow => { return 65 }
-        Kind.SlashGt => { return 66 }
-        Kind.PlusEq => { return 67 }
-        Kind.MinusEq => { return 68 }
-        Kind.StarEq => { return 69 }
-        Kind.SlashEq => { return 70 }
-        Kind.PercentEq => { return 71 }
-        Kind.DotDotLt => { return 72 }
-        Kind.DotDotEq => { return 73 }
-        Kind.Amp => { return 74 }
-        Kind.Pipe => { return 75 }
-        Kind.Caret => { return 76 }
-        Kind.Shl => { return 77 }
-        Kind.Shr => { return 78 }
-        Kind.Tilde => { return 79 }
-        Kind.Unknown => { return 99 }
+    return match k {
+        Kind.Eof => 0
+        Kind.Newline => 1
+        Kind.Int => 2
+        Kind.Str => 3
+        Kind.Char => 5
+        Kind.Ident => 4
+        Kind.KwFn => 10
+        Kind.KwStruct => 11
+        Kind.KwEnum => 12
+        Kind.KwMatch => 13
+        Kind.KwIf => 14
+        Kind.KwElse => 15
+        Kind.KwWhile => 16
+        Kind.KwFor => 17
+        Kind.KwBreak => 18
+        Kind.KwContinue => 19
+        Kind.KwReturn => 20
+        Kind.KwGive => 21
+        Kind.KwVal => 22
+        Kind.KwMut => 23
+        Kind.KwIn => 24
+        Kind.KwAs => 25
+        Kind.KwInout => 26
+        Kind.KwTrue => 27
+        Kind.KwFalse => 28
+        Kind.LParen => 40
+        Kind.RParen => 41
+        Kind.LBracket => 42
+        Kind.RBracket => 43
+        Kind.LBrace => 44
+        Kind.RBrace => 45
+        Kind.Comma => 46
+        Kind.Colon => 47
+        Kind.Dot => 48
+        Kind.Eq => 49
+        Kind.EqEq => 50
+        Kind.Ne => 51
+        Kind.Lt => 52
+        Kind.Le => 53
+        Kind.Gt => 54
+        Kind.Ge => 55
+        Kind.Plus => 56
+        Kind.Minus => 57
+        Kind.Star => 58
+        Kind.Slash => 59
+        Kind.Percent => 60
+        Kind.AmpAmp => 61
+        Kind.PipePipe => 62
+        Kind.Bang => 63
+        Kind.Arrow => 64
+        Kind.FatArrow => 65
+        Kind.SlashGt => 66
+        Kind.PlusEq => 67
+        Kind.MinusEq => 68
+        Kind.StarEq => 69
+        Kind.SlashEq => 70
+        Kind.PercentEq => 71
+        Kind.DotDotLt => 72
+        Kind.DotDotEq => 73
+        Kind.Amp => 74
+        Kind.Pipe => 75
+        Kind.Caret => 76
+        Kind.Shl => 77
+        Kind.Shr => 78
+        Kind.Tilde => 79
+        Kind.Unknown => 99
     }
 }
 

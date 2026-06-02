@@ -1,0 +1,40 @@
+// match as an expression (bare-expr arms): scalar/String results, payload
+// binds, and nesting inside a larger expression.
+import @Std/Io with { print, write }
+
+enum Color { Red Green Blue }
+enum Shape { Circle { r: I64 } Square { s: I64 } }
+
+fn rank(c: Color) -> I64 {
+    return match c {
+        Color.Red => 1
+        Color.Green => 2
+        Color.Blue => 3
+    }
+}
+
+fn label(c: Color) -> String {
+    return match c {
+        Color.Red => "red"
+        _ => "other"
+    }
+}
+
+fn area(s: Shape) -> I64 {
+    return match s {
+        Shape.Circle { val r } => r * r * 3
+        Shape.Square { val s } => s * s
+    }
+}
+
+fn main() {
+    print(rank(c: <Color.Green />))
+    write(s: label(c: <Color.Red />))
+    write(s: "\n")
+    write(s: label(c: <Color.Blue />))
+    write(s: "\n")
+    print(area(s: <Shape.Circle r=10 />))
+    print(area(s: <Shape.Square s=4 />))
+    val x: I64 = match <Color.Blue /> { Color.Red => 0, Color.Green => 0, Color.Blue => 7 } + 1
+    print(x)
+}
