@@ -563,9 +563,8 @@ fn parseExprOrAssign(c: inout Comp) -> U64 {
     return c.pushStmt(s: <Stmt.ExprStmt expr=lhs />)
 }
 
-// Parse a match-arm pattern (everything up to and including `=>`): `_`
-// (wildcard) or `Enum.Variant [{ val f, ... }]`. The cursor is left just past
-// the `=>`, ready to parse the arm body (a block or an expression).
+// Parse a single match-arm pattern: `_` (wildcard) or `Enum.Variant
+// [{ val f, ... }]`. Stops at the `|` (or-pattern) or `=>` that follows.
 fn parsePattern(c: inout Comp) -> PatInfo {
     val firstTok: Tok = c.cur()
     mut val isWildcard: Bool = false
@@ -619,12 +618,30 @@ fn parsePattern(c: inout Comp) -> PatInfo {
             _ => {}
         }
     }
-    // `=>`
+    return <PatInfo isWildcard=isWildcard enumStart=enumStart enumLen=enumLen variantStart=variantStart variantLen=variantLen binds=binds />
+}
+
+// Parse an arm's full pattern list `Pat ( | Pat )*` (or-patterns), consuming the
+// trailing `=>`. Returns one PatInfo per alternative; the caller emits one
+// MatchArm per alternative sharing the arm body.
+fn parseArmPatterns(c: inout Comp) -> Array[PatInfo] {
+    mut val pats: Array[PatInfo] = []
+    pats.append(parsePattern(c: inout c))
+    while true {
+        match c.curKind() {
+            Kind.Pipe => {
+                c.advance()
+                c.skipNewlines()
+                pats.append(parsePattern(c: inout c))
+            }
+            _ => { break }
+        }
+    }
     match c.curKind() {
         Kind.FatArrow => { c.advance() }
         _ => {}
     }
-    return <PatInfo isWildcard=isWildcard enumStart=enumStart enumLen=enumLen variantStart=variantStart variantLen=variantLen binds=binds />
+    return pats
 }
 
 // `match scrut { (pattern => { body })* }` in statement position: arm bodies are
@@ -648,10 +665,12 @@ fn parseMatch(c: inout Comp) -> U64 {
             }
             Kind.Eof => { break }
             _ => {
-                val pi: PatInfo = parsePattern(c: inout c)
+                val pats: Array[PatInfo] = parseArmPatterns(c: inout c)
                 c.skipNewlines()
                 val body: U64 = parseBlock(c: inout c)
-                arms.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body />)
+                for val pi in pats {
+                    arms.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body />)
+                }
             }
         }
     }
@@ -679,9 +698,11 @@ fn parseMatchExpr(c: inout Comp) -> U64 {
             }
             Kind.Eof => { break }
             _ => {
-                val pi: PatInfo = parsePattern(c: inout c)
+                val pats: Array[PatInfo] = parseArmPatterns(c: inout c)
                 val body: U64 = parseExpr(c: inout c)
-                arms.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body />)
+                for val pi in pats {
+                    arms.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body />)
+                }
                 match c.curKind() {
                     Kind.Comma => { c.advance() }
                     _ => {}

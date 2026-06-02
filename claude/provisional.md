@@ -72,7 +72,7 @@
 ## 制御フロー・match
 
 - **`match` 網羅性をコンパイル時検査** → **実装済**。`_` ワイルドカード or enum 全 variant 被覆を検査（非網羅は `compileError` 診断で reject）。網羅な match（全 variant 列挙・wildcard 無し）は従来どおり末尾に `__builtin_unreachable()`。残：到達不能アーム警告・ガード・ネストパターン・`val x` 捕捉アームは未対応。spec/11。
-- **match アーム**：文位置は **block アーム**（`=> { … }`）、**式位置は bare 式アーム**（`=> v`）。両者ともパターンは `E.V { val f }` 一段＋`_`（全フィールド束縛必須は spec 通り）。**ガード・ネストパターン無し**。文位置の bare 式アーム・式位置の block(`give`)アームは未対応（位置ごとに片方）。
+- **match アーム**：文位置は **block アーム**（`=> { … }`）、**式位置は bare 式アーム**（`=> v`）。パターンは `E.V { val f }` 一段＋`_`＋**or パターン `A | B | …`**（全フィールド束縛必須は spec 通り）。or パターンは「選択肢ごとに同一 body を共有するアームへ複製」で脱糖（nullary は完全対応・payload 選択肢は同名フィールドなら可／食い違いは C エラーで reject＝暫定）。**ガード・ネストパターン無し**。文位置の bare 式アーム・式位置の block(`give`)アームは未対応（位置ごとに片方）。
 - **値位置の `match`** → **実装済**（`return match k { … => v }`／`val x = match …`／式中ネスト可）。C statement-expression に脱糖（結果型は第 1 アームの式から推論＝バインド依存の結果型は暫定で誤推論し得る）。**値位置の `if`・ブロック `give`** は依然未対応（`match` 式のみ）。spec/11。
 - **`panic`（発散文）** → **実装済**。`panic <msg>`（msg は String 式）→ noreturn な `plew_panic`（stderr に `panic: <msg>`＋`exit(1)`）。spec 通り回復不能・unwind なし・`deinit` 非走行（そもそも未実装）。残：spawn 内のプロセス停止は単一スレッドゆえ自明・式位置の `panic` は文のみ。配列範囲外 panic は従来通り個別ランタイムで exit（メッセージ別）。
 

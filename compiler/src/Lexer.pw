@@ -117,19 +117,7 @@ impl Lexer {
         }
         val t: Tok = self.toks[n - 1]
         return match t.kind {
-            Kind.Ident => true
-            Kind.Int => true
-            Kind.Str => true
-            Kind.Char => true
-            Kind.RParen => true
-            Kind.RBracket => true
-            Kind.RBrace => true
-            Kind.SlashGt => true
-            Kind.KwTrue => true
-            Kind.KwFalse => true
-            Kind.KwReturn => true
-            Kind.KwBreak => true
-            Kind.KwContinue => true
+            Kind.Ident | Kind.Int | Kind.Str | Kind.Char | Kind.RParen | Kind.RBracket | Kind.RBrace | Kind.SlashGt | Kind.KwTrue | Kind.KwFalse | Kind.KwReturn | Kind.KwBreak | Kind.KwContinue => true
             _ => false
         }
     }

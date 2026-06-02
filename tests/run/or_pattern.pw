@@ -1,0 +1,30 @@
+// Or-patterns `A | B => ...` in both expression and statement match. Multiple
+// alternatives share one arm body; exhaustiveness counts every listed variant.
+import @Std/Io with { print, write }
+
+enum Tk { A B C D E }
+
+fn group(t: Tk) -> String {
+    return match t {
+        Tk.A | Tk.C | Tk.E => "odd"
+        Tk.B | Tk.D => "even"
+    }
+}
+
+fn code(t: Tk) -> I64 {
+    match t {
+        Tk.A | Tk.B => { return 1 }
+        _ => { return 9 }
+    }
+}
+
+fn main() {
+    write(s: group(t: <Tk.A />))
+    write(s: "\n")
+    write(s: group(t: <Tk.D />))
+    write(s: "\n")
+    write(s: group(t: <Tk.E />))
+    write(s: "\n")
+    print(code(t: <Tk.B />))
+    print(code(t: <Tk.C />))
+}
