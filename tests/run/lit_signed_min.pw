@@ -1,0 +1,14 @@
+// A leading `-` folds into the literal, so the signed minimum is writable even
+// though its magnitude exceeds the positive range (-128 fits I8, 128 does not).
+import @Std/Io with { print }
+
+fn main() {
+    val a: I8 = -128
+    val b: I16 = -32768
+    val c: I32 = -2147483648
+    print(a as I64)        // -128
+    print(b as I64)        // -32768
+    print(c as I64)        // -2147483648
+    val d: U8 = 255
+    print(d as U64)        // 255 (unsigned max in range)
+}

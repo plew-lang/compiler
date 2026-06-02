@@ -1,0 +1,8 @@
+// A literal argument is checked against the parameter type: 300 does not fit U8.
+import @Std/Io with { print }
+
+fn take(x: U8) { print(x as U64) }
+
+fn main() {
+    take(x: 300)
+}

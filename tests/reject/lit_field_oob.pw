@@ -1,0 +1,11 @@
+// A literal field value is checked against the declared field type.
+import @Std/Io with { print }
+
+struct Pixel {
+    val level: U8
+}
+
+fn main() {
+    val p: Pixel = <Pixel level=300 />
+    print(p.level as U64)
+}

@@ -1,0 +1,8 @@
+// A constant expression that overflows its context type is rejected at compile
+// time (each leaf fits U8, but 200 + 100 = 300 does not).
+import @Std/Io with { print }
+
+fn main() {
+    val f: U8 = 200 + 100
+    print(f as U64)
+}

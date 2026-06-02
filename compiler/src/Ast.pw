@@ -72,7 +72,7 @@ struct Arg {
 }
 
 enum Expr {
-    Int { value: I64 }
+    Int { value: I64, offset: U64 }
     Ident { start: U64, len: U64 }
     Unary { op: I64, operand: U64 }
     Binary { op: I64, lhs: U64, rhs: U64 }
@@ -224,6 +224,11 @@ struct Comp {
     // set per-function during codegen so `return` lowers correctly
     mut val curIsMain: Bool
     mut val curRetVoid: Bool
+    // the current function's return type span (for literal range-checking a
+    // `return <expr>` against the declared return type). Valid when !curRetVoid.
+    mut val curRetStart: U64
+    mut val curRetLen: U64
+    mut val curRetIsArray: Bool
     // set per-function during codegen for the implicit method receiver: whether
     // the current function is a method, and if so its receiver type span and
     // whether self is `inout` (so a bare `self` lowers to `(*self)`).

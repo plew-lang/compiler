@@ -1,0 +1,8 @@
+// Spec: integer literals have no default type; a literal that does not fit its
+// context type is rejected (no silent truncation). 300 does not fit U8.
+import @Std/Io with { print }
+
+fn main() {
+    val f: U8 = 300
+    print(f as U64)
+}
