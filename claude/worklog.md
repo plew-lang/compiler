@@ -4,7 +4,13 @@
 
 ## 🎉 セルフホスト達成（2026-06-02）
 
-**第一目標達成＝Plew で書かれたコンパイラが自分自身をコンパイルできる（不動点）。** `selfhost/plewc.pw`（Plew 製コンパイラ）を stage0 でビルド→`plewc`、`plewc` が plewc.pw を C 化（`c1`）→clang で `plewc1`、`plewc1` が plewc.pw を C 化（`c2`）、**`c1 == c2`（完全一致）**。`plewc1` は実プログラム（算術/struct/enum/array/string）も正しくコンパイル＝動く自己ホスト型コンパイラ。e2e `selfhost_plewc_reaches_fixpoint` で恒常検証。stage0（Rust）はこれで throwaway 化＝以降の機能追加は Plew 側（plewc.pw）で additive に。次フェーズ＝①生成 C の警告クリーン化（任意）②plewc.pw を `.pw` ファイル引数で読む（現状 stdin・真の自己 build へ）③言語機能を plewc.pw 側で拡張（spec の未実装サブセット）。
+**第一目標達成＝Plew で書かれたコンパイラが自分自身をコンパイルできる（不動点）。** `selfhost/plewc.pw`（Plew 製コンパイラ）を stage0 でビルド→`plewc`、`plewc` が plewc.pw を C 化（`c1`）→clang で `plewc1`、`plewc1` が plewc.pw を C 化（`c2`）、**`c1 == c2`（完全一致）**。`plewc1` は実プログラム（算術/struct/enum/array/string）も正しくコンパイル＝動く自己ホスト型コンパイラ。e2e `selfhost_plewc_reaches_fixpoint` で恒常検証。stage0（Rust）はこれで throwaway 化＝以降の機能追加は Plew 側（plewc.pw）で additive に。
+
+**post-self-host フェーズ（1→4 順）**：
+1. ✅ **真の自己ビルド**＝`plewc plewc.pw`（ファイル引数）。stage0＋plewc.pw 両方に I/O ビルトイン追加＝`readFile(path)→String`・`argCount()→U64`・`argAt(i)→String`（C ランタイム＝`plew_read_file`/`plew_arg_count`/`plew_arg_at`・main を `int main(int argc, char** argv)` 化し argc/argv をグローバルへ）。plewc.pw の main は引数あれば `readFile(argAt(1))`・無ければ `readStdin()`。`plewc plewc.pw > c` → clang → `sb1`、`sb1 plewc.pw` で不動点も確認。
+2. ⏭ 生成 C の警告クリーン化（余分な括弧など・任意）。
+3. ⏭ 言語機能を plewc.pw 側で拡張（spec の未実装サブセット＝`for`/値位置 match/トレイト等）。
+4. ⏭ stage0 の縮退/凍結（throwaway 明示・stage1 を正典化する段取り）。
 
 ## 現在地（一言）
 

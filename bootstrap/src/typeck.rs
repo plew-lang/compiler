@@ -1088,6 +1088,30 @@ impl Checker<'_> {
                 }
                 return Ty::Unit;
             }
+            // stage0 builtins for the self-build: read a file, read argv.
+            // Real API is `@Std/Fs` / `@Std/Process`.
+            if name == "readFile" {
+                if args.len() != 1 {
+                    self.error(span, "`readFile` takes exactly one String argument");
+                } else {
+                    self.check_expr(args[0].1, Some(Ty::String));
+                }
+                return Ty::String;
+            }
+            if name == "argCount" {
+                if !args.is_empty() {
+                    self.error(span, "`argCount` takes no arguments");
+                }
+                return Ty::U64;
+            }
+            if name == "argAt" {
+                if args.len() != 1 {
+                    self.error(span, "`argAt` takes exactly one U64 argument");
+                } else {
+                    self.check_expr(args[0].1, Some(Ty::U64));
+                }
+                return Ty::String;
+            }
             if let Some(sig) = self.sigs.get(&name) {
                 let params = sig.params.clone();
                 let param_modes = sig.param_modes.clone();

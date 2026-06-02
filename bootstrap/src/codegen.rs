@@ -30,7 +30,13 @@ pub fn emit_c(
         tmp: 0,
         inout_params: Vec::new(),
     };
-    cg.out.push_str("#include <stdio.h>\n#include <stdint.h>\n#include <stdlib.h>\n\n");
+    cg.out.push_str("#include <stdio.h>\n#include <stdint.h>\n#include <stdlib.h>\n#include <string.h>\n\n");
+    // Command-line args (captured in main) and file reading. Real API is
+    // `@Std/Process` / `@Std/Fs`; these are stage0 builtins like print.
+    cg.out.push_str("static int plew_argc = 0;\nstatic char** plew_argv = 0;\n");
+    cg.out.push_str(
+        "static int64_t plew_arg_count(void) { return (int64_t)plew_argc; }\n",
+    );
     // stage0 String: immutable view over a (literal) UTF-8 buffer.
     cg.out.push_str("typedef struct { const char* data; int64_t len; } PlewString;\n");
     cg.out.push_str(
@@ -42,7 +48,13 @@ pub fn emit_c(
         "static PlewString plew_read_stdin(void) { size_t cap = 4096, len = 0; char* buf = (char*)malloc(cap); int c; while ((c = getchar()) != EOF) { if (len + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); } buf[len++] = (char)c; } PlewString s; s.data = buf; s.len = (int64_t)len; return s; }\n",
     );
     cg.out.push_str(
-        "static void plew_write(PlewString s) { fwrite(s.data, 1, (size_t)s.len, stdout); }\n\n",
+        "static void plew_write(PlewString s) { fwrite(s.data, 1, (size_t)s.len, stdout); }\n",
+    );
+    cg.out.push_str(
+        "static PlewString plew_arg_at(int64_t i) { PlewString s; if (i < 0 || i >= plew_argc) { s.data = \"\"; s.len = 0; return s; } s.data = plew_argv[i]; s.len = (int64_t)strlen(plew_argv[i]); return s; }\n",
+    );
+    cg.out.push_str(
+        "static PlewString plew_read_file(PlewString path) { FILE* f = fopen(path.data, \"rb\"); PlewString s; if (!f) { s.data = \"\"; s.len = 0; return s; } fseek(f, 0, SEEK_END); long sz = ftell(f); fseek(f, 0, SEEK_SET); char* buf = (char*)malloc((size_t)sz + 1); size_t n = fread(buf, 1, (size_t)sz, f); fclose(f); buf[n] = 0; s.data = buf; s.len = (int64_t)n; return s; }\n\n",
     );
     // Type emission must respect C's "declare before use", with two wrinkles:
     // a struct/enum may contain an array (by value) and an array's element may
@@ -96,7 +108,8 @@ impl Codegen<'_> {
             ItemKind::Fn { name, params, ret, body } => {
                 let is_main = name == "main";
                 if is_main {
-                    self.out.push_str("int main(void) {\n");
+                    self.out.push_str("int main(int argc, char** argv) {\n");
+                    self.out.push_str("    plew_argc = argc; plew_argv = argv;\n");
                 } else {
                     let sig = self.fn_signature(name, params, ret);
                     self.out.push_str(&sig);
@@ -978,6 +991,17 @@ impl Codegen<'_> {
                     if fname == "writeByte" && arg_ids.len() == 1 {
                         let a = self.expr(arg_ids[0]);
                         return format!("putchar((int)({a}))");
+                    }
+                    if fname == "readFile" && arg_ids.len() == 1 {
+                        let a = self.expr(arg_ids[0]);
+                        return format!("plew_read_file({a})");
+                    }
+                    if fname == "argCount" {
+                        return "plew_arg_count()".into();
+                    }
+                    if fname == "argAt" && arg_ids.len() == 1 {
+                        let a = self.expr(arg_ids[0]);
+                        return format!("plew_arg_at((int64_t)({a}))");
                     }
                 }
                 // Non-method call: emit positional C call (labels ignored for

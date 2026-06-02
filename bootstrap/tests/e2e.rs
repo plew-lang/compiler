@@ -9,7 +9,7 @@ const SKELETON: &str = "fn main() {\n    print(40 + 2)\n}\n";
 #[test]
 fn emits_c_for_skeleton() {
     let c = compile_to_c(SKELETON).expect("compile to C");
-    assert!(c.contains("int main(void)"), "C was:\n{c}");
+    assert!(c.contains("int main("), "C was:\n{c}");
     assert!(c.contains("printf"), "C was:\n{c}");
     assert!(c.contains("(40 + 2)"), "C was:\n{c}");
 }
@@ -324,7 +324,7 @@ fn selfhost_plewc_compiles_a_plew_program() {
     let src = std::fs::read_to_string(path).expect("read selfhost/plewc.pw");
     let program = "fn main() {\n    mut val i: I64 = 0\n    mut val sum: I64 = 0\n    while i < 5 {\n        sum += i\n        i += 1\n    }\n    if sum > 5 {\n        print(sum)\n    } else {\n        print(0)\n    }\n}\n";
     let emitted_c = build_and_run_stdin(&src, "selfhost_plewc", program);
-    assert!(emitted_c.contains("int main(void)"), "emitted C was:\n{emitted_c}");
+    assert!(emitted_c.contains("int main("), "emitted C was:\n{emitted_c}");
 
     let c_path = std::env::temp_dir().join(format!("plew_plewc_{}.c", std::process::id()));
     let out_bin = std::env::temp_dir().join(format!("plew_plewc_{}", std::process::id()));
@@ -445,7 +445,7 @@ fn selfhost_plewc_reaches_fixpoint() {
 
     // plewc compiles itself -> c1 -> plewc1
     let c1 = run_bin_stdin(&plewc, &src);
-    assert!(c1.contains("int main(void)"), "c1 was not C:\n{}", &c1[..c1.len().min(400)]);
+    assert!(c1.contains("int main("), "c1 was not C:\n{}", &c1[..c1.len().min(400)]);
     let c1_path = std::env::temp_dir().join(format!("plew_sh_c1_{}.c", std::process::id()));
     let plewc1 = std::env::temp_dir().join(format!("plew_sh_plewc1_{}", std::process::id()));
     std::fs::write(&c1_path, &c1).unwrap();
