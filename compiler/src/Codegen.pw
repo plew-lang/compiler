@@ -2155,6 +2155,33 @@ fn genExpr(c: inout Comp, id: U64) {
     }
 }
 
+// Is `id` a place expression (a variable / field / element — an lvalue), as
+// opposed to a fresh value (literal / call / construction)? Used to decide
+// whether copying an array value is needed for value semantics.
+fn isPlaceExpr(c: inout Comp, id: U64) -> Bool {
+    match c.exprs[id] {
+        Expr.Ident { val start, val len } => { return true }
+        Expr.Field { val base, val nameStart, val nameLen } => { return true }
+        Expr.Index { val base, val index } => { return true }
+        _ => { return false }
+    }
+}
+
+// Emit an array *value* for a binding/store: copy (value semantics) when the
+// source is an existing place, else emit the fresh literal/expression directly.
+// (Eager-copy realizes value semantics; lazy CoW + freeing are deferred hidden
+// cost. Copying from a place gives the binding its own buffer.)
+fn genArrayValue(c: inout Comp, exprId: U64, elemStart: U64, elemLen: U64) {
+    if isPlaceExpr(c: inout c, id: exprId) {
+        wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+        write(s: "_copy(")
+        genExpr(c: inout c, id: exprId)
+        write(s: ")")
+        return
+    }
+    genArrayLiteral(c: inout c, exprId: exprId, elemStart: elemStart, elemLen: elemLen)
+}
+
 // Emit an array literal given the element type from context (declared type of
 // the let / field it initializes). Empty -> _new(); non-empty -> a statement
 // expression that news then pushes. Falls back to genExpr for non-literals.
@@ -2373,7 +2400,7 @@ fn genStmt(c: inout Comp, id: U64) {
             writeSpan(c: inout c, start: nameStart, len: nameLen)
             write(s: " = ")
             if tyIsArray {
-                genArrayLiteral(c: inout c, exprId: init, elemStart: tyStart, elemLen: tyLen)
+                genArrayValue(c: inout c, exprId: init, elemStart: tyStart, elemLen: tyLen)
             } else {
                 genExpr(c: inout c, id: init)
             }
@@ -3614,6 +3641,23 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     write(s: "*)malloc(sizeof(")
     genCElem(c: inout c, start: elemStart, len: elemLen)
     write(s: ") * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; a->data = nd; a->cap = nc; } a->data[a->len] = v; a->len++; }\n")
+
+    // value-semantics deep copy (eager): a fresh buffer with the same elements.
+    // Element copy is by C assignment (correct for scalars, immutable Strings,
+    // and structs of those); nested mutable aggregates are a documented gap.
+    write(s: "__attribute__((unused)) static ")
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+    write(s: " ")
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+    write(s: "_copy(")
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+    write(s: " a) { ")
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+    write(s: " r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (")
+    genCElem(c: inout c, start: elemStart, len: elemLen)
+    write(s: "*)malloc(sizeof(")
+    genCElem(c: inout c, start: elemStart, len: elemLen)
+    write(s: ") * a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; } return r; }\n")
 }
 
 fn isU8Elem(c: inout Comp, elemStart: U64, elemLen: U64) -> Bool {
@@ -3631,5 +3675,6 @@ fn genU8ArrayRuntime() {
     write(s: "__attribute__((unused)) static unsigned char PlewArray_U8_get(PlewArray_U8 a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } return a.data[i]; }\n")
     write(s: "__attribute__((unused)) static void PlewArray_U8_set(PlewArray_U8* a, long long i, unsigned char v) { if (i < 0 || i >= a->len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } a->data[i] = v; }\n")
     write(s: "__attribute__((unused)) static void PlewArray_U8_push(PlewArray_U8* a, unsigned char v) { if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; unsigned char* nd = (unsigned char*)malloc(sizeof(unsigned char) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; a->data = nd; a->cap = nc; } a->data[a->len] = v; a->len++; }\n")
+    write(s: "__attribute__((unused)) static PlewArray_U8 PlewArray_U8_copy(PlewArray_U8 a) { PlewArray_U8 r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (unsigned char*)malloc(sizeof(unsigned char) * a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; } return r; }\n")
 }
 

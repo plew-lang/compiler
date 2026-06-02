@@ -14,6 +14,12 @@
   - なぜ仮決め：呼び出し位置の型引数推論（未型リテラルから不可）＋明示 `id[I32](x)` パース（Go 式判別）、メソッド独自型パラメータ、body 内生成インスタンスの推移発見、関数型/クロージャ ── いずれも大物で、コアライブラリの当面の必要（データ＋match＋レシーバ型メソッド）には不要。
   - 見直し方：コアライブラリが `map`/`flatMap` を要求した時点で着手（worklog の G3 残り設計参照）。
 
+## エラー処理（try / ??）
+
+- **`try` はエラー型一致を要求（`From` 変換なし）**。spec では `try` が `Err` 時に `<E from=f />`（From）でエラー型変換する。第一カットは未実装＝ソース `Result[T,E]` と関数戻り `Result[U,E']` の **E==E' 必須**（違うと生成 C が型不一致）。見直し：From トレイト実装後に変換挿入。
+- **`?.`（オプショナルチェーン）未実装**。`??`・`match`・`try` でカバー。見直し：spec/13 の `?.` を後で。
+- **`??`/`try` は `@Std/Core` の Optional/Result の形に密結合**（Some=tag0/field `v`、Ok=tag0/field `value`、Err=tag1/field `error` をハードコード）。lang-item ゆえ妥当だが、ユーザーが別形の Optional を定義しても `??` はこの形を仮定。見直し：lang-item を spec で固定 or コンパイラが Core のシンボルを参照。
+
 ## 既知の別件（generics 以前からの仮決め・関連）
 
 - **C 予約語と衝突する Plew 識別子**（`default`/`double` 等）は生成 C が壊れる＝名前マングリング未実装。コンパイラ自身は回避。ユーザーコードで顕在化する hidden-meaning 穴（acceptance soundness 対象）。見直し：codegen で識別子を安全な C 名にマングル。

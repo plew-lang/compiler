@@ -1,0 +1,11 @@
+import @Std/Io with { print }
+fn main() {
+    mut val a: Array[I32] = [1, 2, 3]
+    mut val b: Array[I32] = a
+    b.append(4)
+    b[0] = 99
+    print(a.count)
+    print(a[0])
+    print(b.count)
+    print(b[0])
+}
