@@ -360,15 +360,15 @@ long long rangeEquals(PlewArray_U8 bytes, long long start, long long len, PlewSt
 Kind identKind(PlewArray_U8 bytes, long long start, long long len);
 void lex(Lexer* lx);
 long long kindCode(Kind k);
-Kind curKind(Comp* c);
-Tok cur(Comp* c);
-Kind peekKind(Comp* c, long long off);
-void advance(Comp* c);
-void skipNewlines(Comp* c);
-long long identIs(Comp* c, PlewString kw);
-long long pushExpr(Comp* c, Expr e);
-long long pushStmt(Comp* c, Stmt s);
-long long tokenValue(Comp* c, Tok t);
+Kind Comp_curKind(Comp* self);
+Tok Comp_cur(Comp* self);
+Kind Comp_peekKind(Comp* self, long long off);
+void Comp_advance(Comp* self);
+void Comp_skipNewlines(Comp* self);
+long long Comp_identIs(Comp* self, PlewString kw);
+long long Comp_pushExpr(Comp* self, Expr e);
+long long Comp_pushStmt(Comp* self, Stmt s);
+long long Comp_tokenValue(Comp* self, Tok t);
 long long binPrec(Kind k);
 long long charValue(Comp* c, Tok t);
 long long parsePrimary(Comp* c);
@@ -1284,28 +1284,28 @@ long long kindCode(Kind k) {
     else { __builtin_unreachable(); }
     }
 }
-Kind curKind(Comp* c) {
-    return PlewArray_Tok_get((*c).toks, (long long)((*c).pos)).kind;
+Kind Comp_curKind(Comp* self) {
+    return PlewArray_Tok_get((*self).toks, (long long)((*self).pos)).kind;
 }
-Tok cur(Comp* c) {
-    return PlewArray_Tok_get((*c).toks, (long long)((*c).pos));
+Tok Comp_cur(Comp* self) {
+    return PlewArray_Tok_get((*self).toks, (long long)((*self).pos));
 }
-Kind peekKind(Comp* c, long long off) {
-    long long i = ((*c).pos + off);
-    if (i < (long long)(((*c).toks).len)) {
-    return PlewArray_Tok_get((*c).toks, (long long)(i)).kind;
+Kind Comp_peekKind(Comp* self, long long off) {
+    long long i = ((*self).pos + off);
+    if (i < (long long)(((*self).toks).len)) {
+    return PlewArray_Tok_get((*self).toks, (long long)(i)).kind;
     }
     return (Kind){.tag = 0};
 }
-void advance(Comp* c) {
-    (*c).pos = ((*c).pos + 1);
+void Comp_advance(Comp* self) {
+    (*self).pos = ((*self).pos + 1);
 }
-void skipNewlines(Comp* c) {
+void Comp_skipNewlines(Comp* self) {
     while (1) {
     {
-    Kind _m8 = curKind(&((*c)));
+    Kind _m8 = Comp_curKind(&((*self)));
     if (_m8.tag == 1) {
-    advance(&((*c)));
+    Comp_advance(&((*self)));
     }
     else {
     break;
@@ -1313,25 +1313,25 @@ void skipNewlines(Comp* c) {
     }
     }
 }
-long long identIs(Comp* c, PlewString kw) {
-    Tok t = PlewArray_Tok_get((*c).toks, (long long)((*c).pos));
-    return rangeEquals((*c).bytes, t.start, t.len, kw);
+long long Comp_identIs(Comp* self, PlewString kw) {
+    Tok t = PlewArray_Tok_get((*self).toks, (long long)((*self).pos));
+    return rangeEquals((*self).bytes, t.start, t.len, kw);
 }
-long long pushExpr(Comp* c, Expr e) {
-    long long id = (long long)(((*c).exprs).len);
-    PlewArray_Expr_push(&((*c).exprs), e);
+long long Comp_pushExpr(Comp* self, Expr e) {
+    long long id = (long long)(((*self).exprs).len);
+    PlewArray_Expr_push(&((*self).exprs), e);
     return id;
 }
-long long pushStmt(Comp* c, Stmt s) {
-    long long id = (long long)(((*c).stmts).len);
-    PlewArray_Stmt_push(&((*c).stmts), s);
+long long Comp_pushStmt(Comp* self, Stmt s) {
+    long long id = (long long)(((*self).stmts).len);
+    PlewArray_Stmt_push(&((*self).stmts), s);
     return id;
 }
-long long tokenValue(Comp* c, Tok t) {
+long long Comp_tokenValue(Comp* self, Tok t) {
     long long v = 0;
     long long j = 0;
     while (j < t.len) {
-    unsigned char b = PlewArray_U8_get((*c).bytes, (long long)((t.start + j)));
+    unsigned char b = PlewArray_U8_get((*self).bytes, (long long)((t.start + j)));
     v = ((v * 10) + (((long long)(b)) - 48));
     j += 1;
     }
@@ -1438,52 +1438,52 @@ long long charValue(Comp* c, Tok t) {
     return value;
 }
 long long parsePrimary(Comp* c) {
-    Kind k = curKind(&((*c)));
+    Kind k = Comp_curKind(&((*c)));
     {
     Kind _m10 = k;
     if (_m10.tag == 2) {
-    Tok t = cur(&((*c)));
-    advance(&((*c)));
-    long long v = tokenValue(&((*c)), t);
-    return pushExpr(&((*c)), (Expr){.tag = 0, .data.Int = {.value = v}});
+    Tok t = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
+    long long v = Comp_tokenValue(&((*c)), t);
+    return Comp_pushExpr(&((*c)), (Expr){.tag = 0, .data.Int = {.value = v}});
     }
     else if (_m10.tag == 4) {
-    Tok t = cur(&((*c)));
-    advance(&((*c)));
+    Tok t = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     long long v = charValue(&((*c)), t);
-    return pushExpr(&((*c)), (Expr){.tag = 0, .data.Int = {.value = v}});
+    return Comp_pushExpr(&((*c)), (Expr){.tag = 0, .data.Int = {.value = v}});
     }
     else if (_m10.tag == 5) {
-    Tok t = cur(&((*c)));
+    Tok t = Comp_cur(&((*c)));
     {
-    Kind _m11 = peekKind(&((*c)), 1);
+    Kind _m11 = Comp_peekKind(&((*c)), 1);
     if (_m11.tag == 25) {
-    advance(&((*c)));
-    advance(&((*c)));
+    Comp_advance(&((*c)));
+    Comp_advance(&((*c)));
     PlewArray_Arg args = parseCallArgs(&((*c)));
-    return pushExpr(&((*c)), (Expr){.tag = 4, .data.Call = {.nameStart = t.start, .nameLen = t.len, .args = args}});
+    return Comp_pushExpr(&((*c)), (Expr){.tag = 4, .data.Call = {.nameStart = t.start, .nameLen = t.len, .args = args}});
     }
     else {
-    advance(&((*c)));
-    return pushExpr(&((*c)), (Expr){.tag = 1, .data.Ident = {.start = t.start, .len = t.len}});
+    Comp_advance(&((*c)));
+    return Comp_pushExpr(&((*c)), (Expr){.tag = 1, .data.Ident = {.start = t.start, .len = t.len}});
     }
     }
     }
     else if (_m10.tag == 23) {
-    advance(&((*c)));
-    return pushExpr(&((*c)), (Expr){.tag = 0, .data.Int = {.value = 1}});
+    Comp_advance(&((*c)));
+    return Comp_pushExpr(&((*c)), (Expr){.tag = 0, .data.Int = {.value = 1}});
     }
     else if (_m10.tag == 24) {
-    advance(&((*c)));
-    return pushExpr(&((*c)), (Expr){.tag = 0, .data.Int = {.value = 0}});
+    Comp_advance(&((*c)));
+    return Comp_pushExpr(&((*c)), (Expr){.tag = 0, .data.Int = {.value = 0}});
     }
     else if (_m10.tag == 25) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     long long inner = parseExpr(&((*c)));
     {
-    Kind _m12 = curKind(&((*c)));
+    Kind _m12 = Comp_curKind(&((*c)));
     if (_m12.tag == 26) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
@@ -1494,19 +1494,19 @@ long long parsePrimary(Comp* c) {
     return parseMake(&((*c)));
     }
     else if (_m10.tag == 3) {
-    Tok t = cur(&((*c)));
-    advance(&((*c)));
-    return pushExpr(&((*c)), (Expr){.tag = 7, .data.Str = {.start = t.start, .len = t.len}});
+    Tok t = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
+    return Comp_pushExpr(&((*c)), (Expr){.tag = 7, .data.Str = {.start = t.start, .len = t.len}});
     }
     else if (_m10.tag == 27) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     PlewArray_U64 elems = PlewArray_U64_new();
     while (1) {
-    skipNewlines(&((*c)));
+    Comp_skipNewlines(&((*c)));
     {
-    Kind _m13 = curKind(&((*c)));
+    Kind _m13 = Comp_curKind(&((*c)));
     if (_m13.tag == 28) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     break;
     }
     else if (_m13.tag == 0) {
@@ -1516,9 +1516,9 @@ long long parsePrimary(Comp* c) {
     long long e = parseExpr(&((*c)));
     PlewArray_U64_push(&(elems), e);
     {
-    Kind _m14 = curKind(&((*c)));
+    Kind _m14 = Comp_curKind(&((*c)));
     if (_m14.tag == 31) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
@@ -1526,27 +1526,27 @@ long long parsePrimary(Comp* c) {
     }
     }
     }
-    return pushExpr(&((*c)), (Expr){.tag = 8, .data.Array = {.elems = elems}});
+    return Comp_pushExpr(&((*c)), (Expr){.tag = 8, .data.Array = {.elems = elems}});
     }
     else {
-    advance(&((*c)));
-    return pushExpr(&((*c)), (Expr){.tag = 0, .data.Int = {.value = 0}});
+    Comp_advance(&((*c)));
+    return Comp_pushExpr(&((*c)), (Expr){.tag = 0, .data.Int = {.value = 0}});
     }
     }
 }
 long long parseUnary(Comp* c) {
-    Kind k = curKind(&((*c)));
+    Kind k = Comp_curKind(&((*c)));
     {
     Kind _m15 = k;
     if (_m15.tag == 42) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     long long o = parseUnary(&((*c)));
-    return pushExpr(&((*c)), (Expr){.tag = 2, .data.Unary = {.op = 57, .operand = o}});
+    return Comp_pushExpr(&((*c)), (Expr){.tag = 2, .data.Unary = {.op = 57, .operand = o}});
     }
     else if (_m15.tag == 48) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     long long o = parseUnary(&((*c)));
-    return pushExpr(&((*c)), (Expr){.tag = 2, .data.Unary = {.op = 63, .operand = o}});
+    return Comp_pushExpr(&((*c)), (Expr){.tag = 2, .data.Unary = {.op = 63, .operand = o}});
     }
     else {
     return parsePostfix(&((*c)));
@@ -1557,40 +1557,40 @@ long long parsePostfix(Comp* c) {
     long long e = parsePrimary(&((*c)));
     while (1) {
     {
-    Kind _m16 = curKind(&((*c)));
+    Kind _m16 = Comp_curKind(&((*c)));
     if (_m16.tag == 33) {
-    advance(&((*c)));
-    Tok nameTok = cur(&((*c)));
-    advance(&((*c)));
+    Comp_advance(&((*c)));
+    Tok nameTok = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     {
-    Kind _m17 = curKind(&((*c)));
+    Kind _m17 = Comp_curKind(&((*c)));
     if (_m17.tag == 25) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     PlewArray_Arg args = parseCallArgs(&((*c)));
-    e = pushExpr(&((*c)), (Expr){.tag = 10, .data.Method = {.recv = e, .nameStart = nameTok.start, .nameLen = nameTok.len, .args = args}});
+    e = Comp_pushExpr(&((*c)), (Expr){.tag = 10, .data.Method = {.recv = e, .nameStart = nameTok.start, .nameLen = nameTok.len, .args = args}});
     }
     else {
-    e = pushExpr(&((*c)), (Expr){.tag = 5, .data.Field = {.base = e, .nameStart = nameTok.start, .nameLen = nameTok.len}});
+    e = Comp_pushExpr(&((*c)), (Expr){.tag = 5, .data.Field = {.base = e, .nameStart = nameTok.start, .nameLen = nameTok.len}});
     }
     }
     }
     else if (_m16.tag == 27) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     long long idx = parseExpr(&((*c)));
     {
-    Kind _m18 = curKind(&((*c)));
+    Kind _m18 = Comp_curKind(&((*c)));
     if (_m18.tag == 28) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
     }
-    e = pushExpr(&((*c)), (Expr){.tag = 9, .data.Index = {.base = e, .index = idx}});
+    e = Comp_pushExpr(&((*c)), (Expr){.tag = 9, .data.Index = {.base = e, .index = idx}});
     }
     else if (_m16.tag == 21) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     PType ty = parseTypeTok(&((*c)));
-    e = pushExpr(&((*c)), (Expr){.tag = 11, .data.Cast = {.operand = e, .tyStart = ty.start, .tyLen = ty.len}});
+    e = Comp_pushExpr(&((*c)), (Expr){.tag = 11, .data.Cast = {.operand = e, .tyStart = ty.start, .tyLen = ty.len}});
     }
     else {
     break;
@@ -1600,18 +1600,18 @@ long long parsePostfix(Comp* c) {
     return e;
 }
 long long parseMake(Comp* c) {
-    advance(&((*c)));
-    Tok typeTok = cur(&((*c)));
-    advance(&((*c)));
+    Comp_advance(&((*c)));
+    Tok typeTok = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     long long variantStart = 0;
     long long variantLen = 0;
     long long isEnum = 0;
     {
-    Kind _m19 = curKind(&((*c)));
+    Kind _m19 = Comp_curKind(&((*c)));
     if (_m19.tag == 33) {
-    advance(&((*c)));
-    Tok vTok = cur(&((*c)));
-    advance(&((*c)));
+    Comp_advance(&((*c)));
+    Tok vTok = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     variantStart = vTok.start;
     variantLen = vTok.len;
     isEnum = 1;
@@ -1621,28 +1621,28 @@ long long parseMake(Comp* c) {
     }
     PlewArray_MakeField fields = PlewArray_MakeField_new();
     while (1) {
-    skipNewlines(&((*c)));
-    Kind k = curKind(&((*c)));
+    Comp_skipNewlines(&((*c)));
+    Kind k = Comp_curKind(&((*c)));
     {
     Kind _m20 = k;
     if (_m20.tag == 51) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     break;
     }
     else if (_m20.tag == 39) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     break;
     }
     else if (_m20.tag == 0) {
     break;
     }
     else if (_m20.tag == 5) {
-    Tok fTok = cur(&((*c)));
-    advance(&((*c)));
+    Tok fTok = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     {
-    Kind _m21 = curKind(&((*c)));
+    Kind _m21 = Comp_curKind(&((*c)));
     if (_m21.tag == 34) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
@@ -1651,16 +1651,16 @@ long long parseMake(Comp* c) {
     PlewArray_MakeField_push(&(fields), (MakeField){.nameStart = fTok.start, .nameLen = fTok.len, .value = v});
     }
     else {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     }
     }
-    return pushExpr(&((*c)), (Expr){.tag = 6, .data.Make = {.typeStart = typeTok.start, .typeLen = typeTok.len, .variantStart = variantStart, .variantLen = variantLen, .isEnum = isEnum, .fields = fields}});
+    return Comp_pushExpr(&((*c)), (Expr){.tag = 6, .data.Make = {.typeStart = typeTok.start, .typeLen = typeTok.len, .variantStart = variantStart, .variantLen = variantLen, .isEnum = isEnum, .fields = fields}});
 }
 long long parseBin(Comp* c, long long minPrec) {
     long long left = parseUnary(&((*c)));
     while (1) {
-    Kind k = curKind(&((*c)));
+    Kind k = Comp_curKind(&((*c)));
     long long prec = binPrec(k);
     if (prec == 0) {
     break;
@@ -1669,9 +1669,9 @@ long long parseBin(Comp* c, long long minPrec) {
     break;
     }
     long long op = kindCode(k);
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     long long right = parseBin(&((*c)), (prec + 1));
-    left = pushExpr(&((*c)), (Expr){.tag = 3, .data.Binary = {.op = op, .lhs = left, .rhs = right}});
+    left = Comp_pushExpr(&((*c)), (Expr){.tag = 3, .data.Binary = {.op = op, .lhs = left, .rhs = right}});
     }
     return left;
 }
@@ -1681,12 +1681,12 @@ long long parseExpr(Comp* c) {
 PlewArray_Arg parseCallArgs(Comp* c) {
     PlewArray_Arg args = PlewArray_Arg_new();
     while (1) {
-    skipNewlines(&((*c)));
-    Kind k = curKind(&((*c)));
+    Comp_skipNewlines(&((*c)));
+    Kind k = Comp_curKind(&((*c)));
     {
     Kind _m22 = k;
     if (_m22.tag == 26) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     break;
     }
     else if (_m22.tag == 0) {
@@ -1697,17 +1697,17 @@ PlewArray_Arg parseCallArgs(Comp* c) {
     long long labelLen = 0;
     long long hasLabel = 0;
     {
-    Kind _m23 = curKind(&((*c)));
+    Kind _m23 = Comp_curKind(&((*c)));
     if (_m23.tag == 5) {
     {
-    Kind _m24 = peekKind(&((*c)), 1);
+    Kind _m24 = Comp_peekKind(&((*c)), 1);
     if (_m24.tag == 32) {
-    Tok lt = cur(&((*c)));
+    Tok lt = Comp_cur(&((*c)));
     labelStart = lt.start;
     labelLen = lt.len;
     hasLabel = 1;
-    advance(&((*c)));
-    advance(&((*c)));
+    Comp_advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
@@ -1718,9 +1718,9 @@ PlewArray_Arg parseCallArgs(Comp* c) {
     }
     long long isInout = 0;
     {
-    Kind _m25 = curKind(&((*c)));
+    Kind _m25 = Comp_curKind(&((*c)));
     if (_m25.tag == 22) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     isInout = 1;
     }
     else {
@@ -1729,9 +1729,9 @@ PlewArray_Arg parseCallArgs(Comp* c) {
     long long e = parseExpr(&((*c)));
     PlewArray_Arg_push(&(args), (Arg){.expr = e, .isInout = isInout, .labelStart = labelStart, .labelLen = labelLen, .hasLabel = hasLabel});
     {
-    Kind _m26 = curKind(&((*c)));
+    Kind _m26 = Comp_curKind(&((*c)));
     if (_m26.tag == 31) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
@@ -1768,18 +1768,18 @@ long long isAssignOp(Kind k) {
     }
 }
 PType parseTypeTok(Comp* c) {
-    Tok head = cur(&((*c)));
-    advance(&((*c)));
+    Tok head = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     {
-    Kind _m28 = curKind(&((*c)));
+    Kind _m28 = Comp_curKind(&((*c)));
     if (_m28.tag == 27) {
-    advance(&((*c)));
-    Tok elem = cur(&((*c)));
-    advance(&((*c)));
+    Comp_advance(&((*c)));
+    Tok elem = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     long long depth = 1;
     while (depth > 0) {
     {
-    Kind _m29 = curKind(&((*c)));
+    Kind _m29 = Comp_curKind(&((*c)));
     if (_m29.tag == 27) {
     depth += 1;
     }
@@ -1792,7 +1792,7 @@ PType parseTypeTok(Comp* c) {
     else {
     }
     }
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     return (PType){.start = elem.start, .len = elem.len, .isArray = 1};
     }
@@ -1815,16 +1815,16 @@ void recordArrayElem(Comp* c, PType ty) {
     }
 }
 long long parseLet(Comp* c, long long mutable) {
-    advance(&((*c)));
-    Tok nameTok = cur(&((*c)));
-    advance(&((*c)));
+    Comp_advance(&((*c)));
+    Tok nameTok = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     long long tyStart = 0;
     long long tyLen = 0;
     long long tyIsArray = 0;
     {
-    Kind _m30 = curKind(&((*c)));
+    Kind _m30 = Comp_curKind(&((*c)));
     if (_m30.tag == 32) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     PType ty = parseTypeTok(&((*c)));
     tyStart = ty.start;
     tyLen = ty.len;
@@ -1835,102 +1835,102 @@ long long parseLet(Comp* c, long long mutable) {
     }
     }
     {
-    Kind _m31 = curKind(&((*c)));
+    Kind _m31 = Comp_curKind(&((*c)));
     if (_m31.tag == 34) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
     }
     long long init = parseExpr(&((*c)));
-    return pushStmt(&((*c)), (Stmt){.tag = 0, .data.Let = {.mutable = mutable, .nameStart = nameTok.start, .nameLen = nameTok.len, .tyStart = tyStart, .tyLen = tyLen, .tyIsArray = tyIsArray, .init = init}});
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 0, .data.Let = {.mutable = mutable, .nameStart = nameTok.start, .nameLen = nameTok.len, .tyStart = tyStart, .tyLen = tyLen, .tyIsArray = tyIsArray, .init = init}});
 }
 long long parsePrint(Comp* c) {
-    Tok kw = cur(&((*c)));
-    advance(&((*c)));
-    advance(&((*c)));
+    Tok kw = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
+    Comp_advance(&((*c)));
     long long e = parseExpr(&((*c)));
     {
-    Kind _m32 = curKind(&((*c)));
+    Kind _m32 = Comp_curKind(&((*c)));
     if (_m32.tag == 26) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
     }
-    return pushStmt(&((*c)), (Stmt){.tag = 2, .data.Print = {.expr = e, .offset = kw.start}});
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 2, .data.Print = {.expr = e, .offset = kw.start}});
 }
 long long parseReturn(Comp* c) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     {
-    Kind _m33 = curKind(&((*c)));
+    Kind _m33 = Comp_curKind(&((*c)));
     if (_m33.tag == 1) {
-    return pushStmt(&((*c)), (Stmt){.tag = 4, .data.Return = {.value = 0, .hasValue = 0}});
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 4, .data.Return = {.value = 0, .hasValue = 0}});
     }
     else if (_m33.tag == 30) {
-    return pushStmt(&((*c)), (Stmt){.tag = 4, .data.Return = {.value = 0, .hasValue = 0}});
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 4, .data.Return = {.value = 0, .hasValue = 0}});
     }
     else if (_m33.tag == 0) {
-    return pushStmt(&((*c)), (Stmt){.tag = 4, .data.Return = {.value = 0, .hasValue = 0}});
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 4, .data.Return = {.value = 0, .hasValue = 0}});
     }
     else {
     long long e = parseExpr(&((*c)));
-    return pushStmt(&((*c)), (Stmt){.tag = 4, .data.Return = {.value = e, .hasValue = 1}});
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 4, .data.Return = {.value = e, .hasValue = 1}});
     }
     }
 }
 long long parseIf(Comp* c) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     long long cond = parseExpr(&((*c)));
     long long thenBlk = parseBlock(&((*c)));
-    skipNewlines(&((*c)));
+    Comp_skipNewlines(&((*c)));
     {
-    Kind _m34 = curKind(&((*c)));
+    Kind _m34 = Comp_curKind(&((*c)));
     if (_m34.tag == 11) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     {
-    Kind _m35 = curKind(&((*c)));
+    Kind _m35 = Comp_curKind(&((*c)));
     if (_m35.tag == 10) {
     long long nested = parseIf(&((*c)));
     PlewArray_U64 one = PlewArray_U64_new();
     PlewArray_U64_push(&(one), nested);
     long long blkId = (long long)(((*c).blocks).len);
     PlewArray_Block_push(&((*c).blocks), (Block){.stmts = one});
-    return pushStmt(&((*c)), (Stmt){.tag = 5, .data.If = {.cond = cond, .thenBlk = thenBlk, .elseBlk = blkId, .hasElse = 1}});
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 5, .data.If = {.cond = cond, .thenBlk = thenBlk, .elseBlk = blkId, .hasElse = 1}});
     }
     else {
     long long elseBlk = parseBlock(&((*c)));
-    return pushStmt(&((*c)), (Stmt){.tag = 5, .data.If = {.cond = cond, .thenBlk = thenBlk, .elseBlk = elseBlk, .hasElse = 1}});
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 5, .data.If = {.cond = cond, .thenBlk = thenBlk, .elseBlk = elseBlk, .hasElse = 1}});
     }
     }
     }
     else {
-    return pushStmt(&((*c)), (Stmt){.tag = 5, .data.If = {.cond = cond, .thenBlk = thenBlk, .elseBlk = 0, .hasElse = 0}});
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 5, .data.If = {.cond = cond, .thenBlk = thenBlk, .elseBlk = 0, .hasElse = 0}});
     }
     }
 }
 long long parseWhile(Comp* c) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     long long cond = parseExpr(&((*c)));
     long long body = parseBlock(&((*c)));
-    return pushStmt(&((*c)), (Stmt){.tag = 6, .data.While = {.cond = cond, .body = body}});
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 6, .data.While = {.cond = cond, .body = body}});
 }
 long long parseFor(Comp* c) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     {
-    Kind _m36 = curKind(&((*c)));
+    Kind _m36 = Comp_curKind(&((*c)));
     if (_m36.tag == 18) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
     }
-    Tok nameTok = cur(&((*c)));
-    advance(&((*c)));
+    Tok nameTok = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     {
-    Kind _m37 = curKind(&((*c)));
+    Kind _m37 = Comp_curKind(&((*c)));
     if (_m37.tag == 20) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
@@ -1940,14 +1940,14 @@ long long parseFor(Comp* c) {
     long long inclusive = 0;
     long long hi = 0;
     {
-    Kind _m38 = curKind(&((*c)));
+    Kind _m38 = Comp_curKind(&((*c)));
     if (_m38.tag == 57) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     isRange = 1;
     hi = parseExpr(&((*c)));
     }
     else if (_m38.tag == 58) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     isRange = 1;
     inclusive = 1;
     hi = parseExpr(&((*c)));
@@ -1955,48 +1955,48 @@ long long parseFor(Comp* c) {
     else {
     }
     }
-    skipNewlines(&((*c)));
+    Comp_skipNewlines(&((*c)));
     long long body = parseBlock(&((*c)));
-    return pushStmt(&((*c)), (Stmt){.tag = 7, .data.For = {.varStart = nameTok.start, .varLen = nameTok.len, .isRange = isRange, .inclusive = inclusive, .iter = lo, .rangeHi = hi, .body = body}});
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 7, .data.For = {.varStart = nameTok.start, .varLen = nameTok.len, .isRange = isRange, .inclusive = inclusive, .iter = lo, .rangeHi = hi, .body = body}});
 }
 long long parseExprOrAssign(Comp* c) {
     long long lhs = parseExpr(&((*c)));
-    Kind k = curKind(&((*c)));
+    Kind k = Comp_curKind(&((*c)));
     if (isAssignOp(k)) {
     long long op = kindCode(k);
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     long long rhs = parseExpr(&((*c)));
-    return pushStmt(&((*c)), (Stmt){.tag = 1, .data.Assign = {.op = op, .target = lhs, .value = rhs}});
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 1, .data.Assign = {.op = op, .target = lhs, .value = rhs}});
     }
-    return pushStmt(&((*c)), (Stmt){.tag = 3, .data.ExprStmt = {.expr = lhs}});
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 3, .data.ExprStmt = {.expr = lhs}});
 }
 long long parseMatch(Comp* c) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     long long scrut = parseExpr(&((*c)));
-    skipNewlines(&((*c)));
+    Comp_skipNewlines(&((*c)));
     {
-    Kind _m39 = curKind(&((*c)));
+    Kind _m39 = Comp_curKind(&((*c)));
     if (_m39.tag == 29) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
     }
     PlewArray_MatchArm arms = PlewArray_MatchArm_new();
     while (1) {
-    skipNewlines(&((*c)));
-    Kind k = curKind(&((*c)));
+    Comp_skipNewlines(&((*c)));
+    Kind k = Comp_curKind(&((*c)));
     {
     Kind _m40 = k;
     if (_m40.tag == 30) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     break;
     }
     else if (_m40.tag == 0) {
     break;
     }
     else {
-    Tok firstTok = cur(&((*c)));
+    Tok firstTok = Comp_cur(&((*c)));
     long long isWildcard = 0;
     long long enumStart = 0;
     long long enumLen = 0;
@@ -2005,55 +2005,55 @@ long long parseMatch(Comp* c) {
     PlewArray_Bind binds = PlewArray_Bind_new();
     if (rangeEquals((*c).bytes, firstTok.start, firstTok.len, (PlewString){"_", 1})) {
     isWildcard = 1;
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     enumStart = firstTok.start;
     enumLen = firstTok.len;
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     {
-    Kind _m41 = curKind(&((*c)));
+    Kind _m41 = Comp_curKind(&((*c)));
     if (_m41.tag == 33) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
     }
-    Tok vTok = cur(&((*c)));
+    Tok vTok = Comp_cur(&((*c)));
     variantStart = vTok.start;
     variantLen = vTok.len;
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     {
-    Kind _m42 = curKind(&((*c)));
+    Kind _m42 = Comp_curKind(&((*c)));
     if (_m42.tag == 29) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     while (1) {
-    skipNewlines(&((*c)));
+    Comp_skipNewlines(&((*c)));
     {
-    Kind _m43 = curKind(&((*c)));
+    Kind _m43 = Comp_curKind(&((*c)));
     if (_m43.tag == 30) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     break;
     }
     else if (_m43.tag == 0) {
     break;
     }
     else if (_m43.tag == 18) {
-    advance(&((*c)));
-    Tok bTok = cur(&((*c)));
-    advance(&((*c)));
+    Comp_advance(&((*c)));
+    Tok bTok = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     PlewArray_Bind_push(&(binds), (Bind){.nameStart = bTok.start, .nameLen = bTok.len});
     {
-    Kind _m44 = curKind(&((*c)));
+    Kind _m44 = Comp_curKind(&((*c)));
     if (_m44.tag == 31) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
     }
     }
     else {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     }
     }
@@ -2063,30 +2063,30 @@ long long parseMatch(Comp* c) {
     }
     }
     {
-    Kind _m45 = curKind(&((*c)));
+    Kind _m45 = Comp_curKind(&((*c)));
     if (_m45.tag == 50) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
     }
-    skipNewlines(&((*c)));
+    Comp_skipNewlines(&((*c)));
     long long body = parseBlock(&((*c)));
     PlewArray_MatchArm_push(&(arms), (MatchArm){.isWildcard = isWildcard, .enumStart = enumStart, .enumLen = enumLen, .variantStart = variantStart, .variantLen = variantLen, .binds = binds, .body = body});
     }
     }
     }
-    return pushStmt(&((*c)), (Stmt){.tag = 8, .data.Match = {.scrut = scrut, .arms = arms}});
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 8, .data.Match = {.scrut = scrut, .arms = arms}});
 }
 long long parseStmt(Comp* c) {
-    Kind k = curKind(&((*c)));
+    Kind k = Comp_curKind(&((*c)));
     {
     Kind _m46 = k;
     if (_m46.tag == 18) {
     return parseLet(&((*c)), 0);
     }
     else if (_m46.tag == 19) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     return parseLet(&((*c)), 1);
     }
     else if (_m46.tag == 10) {
@@ -2102,20 +2102,20 @@ long long parseStmt(Comp* c) {
     return parseMatch(&((*c)));
     }
     else if (_m46.tag == 14) {
-    advance(&((*c)));
-    return pushStmt(&((*c)), (Stmt){.tag = 9});
+    Comp_advance(&((*c)));
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 9});
     }
     else if (_m46.tag == 15) {
-    advance(&((*c)));
-    return pushStmt(&((*c)), (Stmt){.tag = 10});
+    Comp_advance(&((*c)));
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 10});
     }
     else if (_m46.tag == 16) {
     return parseReturn(&((*c)));
     }
     else if (_m46.tag == 5) {
-    if (identIs(&((*c)), (PlewString){"print", 5})) {
+    if (Comp_identIs(&((*c)), (PlewString){"print", 5})) {
     {
-    Kind _m47 = peekKind(&((*c)), 1);
+    Kind _m47 = Comp_peekKind(&((*c)), 1);
     if (_m47.tag == 25) {
     return parsePrint(&((*c)));
     }
@@ -2133,21 +2133,21 @@ long long parseStmt(Comp* c) {
 }
 long long parseBlock(Comp* c) {
     {
-    Kind _m48 = curKind(&((*c)));
+    Kind _m48 = Comp_curKind(&((*c)));
     if (_m48.tag == 29) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
     }
     PlewArray_U64 stmts = PlewArray_U64_new();
     while (1) {
-    skipNewlines(&((*c)));
-    Kind k = curKind(&((*c)));
+    Comp_skipNewlines(&((*c)));
+    Kind k = Comp_curKind(&((*c)));
     {
     Kind _m49 = k;
     if (_m49.tag == 30) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     break;
     }
     else if (_m49.tag == 0) {
@@ -2164,40 +2164,40 @@ long long parseBlock(Comp* c) {
     return id;
 }
 void parseFuncCommon(Comp* c, long long hasRecv, long long recvStart, long long recvLen, long long selfInout) {
-    Tok nameTok = cur(&((*c)));
-    advance(&((*c)));
+    Tok nameTok = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     PlewArray_Param params = PlewArray_Param_new();
     {
-    Kind _m50 = curKind(&((*c)));
+    Kind _m50 = Comp_curKind(&((*c)));
     if (_m50.tag == 25) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     while (1) {
-    skipNewlines(&((*c)));
-    Kind k = curKind(&((*c)));
+    Comp_skipNewlines(&((*c)));
+    Kind k = Comp_curKind(&((*c)));
     {
     Kind _m51 = k;
     if (_m51.tag == 26) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     break;
     }
     else if (_m51.tag == 0) {
     break;
     }
     else {
-    Tok pTok = cur(&((*c)));
-    advance(&((*c)));
+    Tok pTok = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     long long pTyStart = 0;
     long long pTyLen = 0;
     long long pTyIsArray = 0;
     long long pIsInout = 0;
     {
-    Kind _m52 = curKind(&((*c)));
+    Kind _m52 = Comp_curKind(&((*c)));
     if (_m52.tag == 32) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     {
-    Kind _m53 = curKind(&((*c)));
+    Kind _m53 = Comp_curKind(&((*c)));
     if (_m53.tag == 22) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     pIsInout = 1;
     }
     else {
@@ -2214,9 +2214,9 @@ void parseFuncCommon(Comp* c, long long hasRecv, long long recvStart, long long 
     }
     PlewArray_Param_push(&(params), (Param){.nameStart = pTok.start, .nameLen = pTok.len, .tyStart = pTyStart, .tyLen = pTyLen, .tyIsArray = pTyIsArray, .isInout = pIsInout});
     {
-    Kind _m54 = curKind(&((*c)));
+    Kind _m54 = Comp_curKind(&((*c)));
     if (_m54.tag == 31) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
@@ -2233,9 +2233,9 @@ void parseFuncCommon(Comp* c, long long hasRecv, long long recvStart, long long 
     long long retLen = 0;
     long long retIsArray = 0;
     {
-    Kind _m55 = curKind(&((*c)));
+    Kind _m55 = Comp_curKind(&((*c)));
     if (_m55.tag == 49) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     hasRet = 1;
     PType rty = parseTypeTok(&((*c)));
     retStart = rty.start;
@@ -2246,44 +2246,44 @@ void parseFuncCommon(Comp* c, long long hasRecv, long long recvStart, long long 
     else {
     }
     }
-    skipNewlines(&((*c)));
+    Comp_skipNewlines(&((*c)));
     long long body = parseBlock(&((*c)));
     PlewArray_Func_push(&((*c).funcs), (Func){.nameStart = nameTok.start, .nameLen = nameTok.len, .params = params, .hasRet = hasRet, .retStart = retStart, .retLen = retLen, .retIsArray = retIsArray, .body = body, .hasRecv = hasRecv, .recvStart = recvStart, .recvLen = recvLen, .selfInout = selfInout});
 }
 void parseFunc(Comp* c) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     parseFuncCommon(&((*c)), 0, 0, 0, 0);
 }
 void parseImpl(Comp* c) {
-    advance(&((*c)));
-    Tok tyTok = cur(&((*c)));
-    advance(&((*c)));
+    Comp_advance(&((*c)));
+    Tok tyTok = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     {
-    Kind _m56 = curKind(&((*c)));
+    Kind _m56 = Comp_curKind(&((*c)));
     if (_m56.tag == 29) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
     }
     while (1) {
-    skipNewlines(&((*c)));
-    Kind k = curKind(&((*c)));
+    Comp_skipNewlines(&((*c)));
+    Kind k = Comp_curKind(&((*c)));
     {
     Kind _m57 = k;
     if (_m57.tag == 30) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     break;
     }
     else if (_m57.tag == 0) {
     break;
     }
     else if (_m57.tag == 22) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     {
-    Kind _m58 = curKind(&((*c)));
+    Kind _m58 = Comp_curKind(&((*c)));
     if (_m58.tag == 6) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
@@ -2291,56 +2291,56 @@ void parseImpl(Comp* c) {
     parseFuncCommon(&((*c)), 1, tyTok.start, tyTok.len, 1);
     }
     else if (_m57.tag == 6) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     parseFuncCommon(&((*c)), 1, tyTok.start, tyTok.len, 0);
     }
     else {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     }
     }
 }
 void parseStruct(Comp* c) {
-    advance(&((*c)));
-    Tok nameTok = cur(&((*c)));
-    advance(&((*c)));
+    Comp_advance(&((*c)));
+    Tok nameTok = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     {
-    Kind _m59 = curKind(&((*c)));
+    Kind _m59 = Comp_curKind(&((*c)));
     if (_m59.tag == 29) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
     }
     PlewArray_FieldDef fields = PlewArray_FieldDef_new();
     while (1) {
-    skipNewlines(&((*c)));
-    Kind k = curKind(&((*c)));
+    Comp_skipNewlines(&((*c)));
+    Kind k = Comp_curKind(&((*c)));
     {
     Kind _m60 = k;
     if (_m60.tag == 30) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     break;
     }
     else if (_m60.tag == 0) {
     break;
     }
     else if (_m60.tag == 18) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else if (_m60.tag == 19) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else if (_m60.tag == 5) {
-    Tok fTok = cur(&((*c)));
-    advance(&((*c)));
+    Tok fTok = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     long long tyStart = 0;
     long long tyLen = 0;
     long long tyIsArray = 0;
     {
-    Kind _m61 = curKind(&((*c)));
+    Kind _m61 = Comp_curKind(&((*c)));
     if (_m61.tag == 32) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     PType ty = parseTypeTok(&((*c)));
     tyStart = ty.start;
     tyLen = ty.len;
@@ -2353,66 +2353,66 @@ void parseStruct(Comp* c) {
     PlewArray_FieldDef_push(&(fields), (FieldDef){.nameStart = fTok.start, .nameLen = fTok.len, .tyStart = tyStart, .tyLen = tyLen, .tyIsArray = tyIsArray});
     }
     else {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     }
     }
     PlewArray_StructDef_push(&((*c).structs), (StructDef){.nameStart = nameTok.start, .nameLen = nameTok.len, .fields = fields});
 }
 void parseEnum(Comp* c) {
-    advance(&((*c)));
-    Tok nameTok = cur(&((*c)));
-    advance(&((*c)));
+    Comp_advance(&((*c)));
+    Tok nameTok = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     {
-    Kind _m62 = curKind(&((*c)));
+    Kind _m62 = Comp_curKind(&((*c)));
     if (_m62.tag == 29) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
     }
     PlewArray_Variant variants = PlewArray_Variant_new();
     while (1) {
-    skipNewlines(&((*c)));
-    Kind k = curKind(&((*c)));
+    Comp_skipNewlines(&((*c)));
+    Kind k = Comp_curKind(&((*c)));
     {
     Kind _m63 = k;
     if (_m63.tag == 30) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     break;
     }
     else if (_m63.tag == 0) {
     break;
     }
     else if (_m63.tag == 5) {
-    Tok vTok = cur(&((*c)));
-    advance(&((*c)));
+    Tok vTok = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     PlewArray_FieldDef fields = PlewArray_FieldDef_new();
     {
-    Kind _m64 = curKind(&((*c)));
+    Kind _m64 = Comp_curKind(&((*c)));
     if (_m64.tag == 29) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     while (1) {
-    skipNewlines(&((*c)));
+    Comp_skipNewlines(&((*c)));
     {
-    Kind _m65 = curKind(&((*c)));
+    Kind _m65 = Comp_curKind(&((*c)));
     if (_m65.tag == 30) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     break;
     }
     else if (_m65.tag == 0) {
     break;
     }
     else if (_m65.tag == 5) {
-    Tok fTok = cur(&((*c)));
-    advance(&((*c)));
+    Tok fTok = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
     long long tyStart = 0;
     long long tyLen = 0;
     long long tyIsArray = 0;
     {
-    Kind _m66 = curKind(&((*c)));
+    Kind _m66 = Comp_curKind(&((*c)));
     if (_m66.tag == 32) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     PType ty = parseTypeTok(&((*c)));
     tyStart = ty.start;
     tyLen = ty.len;
@@ -2424,16 +2424,16 @@ void parseEnum(Comp* c) {
     }
     PlewArray_FieldDef_push(&(fields), (FieldDef){.nameStart = fTok.start, .nameLen = fTok.len, .tyStart = tyStart, .tyLen = tyLen, .tyIsArray = tyIsArray});
     {
-    Kind _m67 = curKind(&((*c)));
+    Kind _m67 = Comp_curKind(&((*c)));
     if (_m67.tag == 31) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
     }
     }
     }
     else {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     }
     }
@@ -2444,7 +2444,7 @@ void parseEnum(Comp* c) {
     PlewArray_Variant_push(&(variants), (Variant){.nameStart = vTok.start, .nameLen = vTok.len, .fields = fields});
     }
     else {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     }
     }
@@ -2478,11 +2478,11 @@ void markImport(Comp* c, long long segStart, long long segLen, long long nameSta
     }
 }
 void parseImport(Comp* c) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     long long segStart = 0;
     long long segLen = 0;
     while (1) {
-    Kind k = curKind(&((*c)));
+    Kind k = Comp_curKind(&((*c)));
     {
     Kind _m68 = k;
     if (_m68.tag == 1) {
@@ -2495,46 +2495,46 @@ void parseImport(Comp* c) {
     break;
     }
     else if (_m68.tag == 5) {
-    if (identIs(&((*c)), (PlewString){"with", 4})) {
-    advance(&((*c)));
+    if (Comp_identIs(&((*c)), (PlewString){"with", 4})) {
+    Comp_advance(&((*c)));
     break;
     }
-    Tok t = cur(&((*c)));
+    Tok t = Comp_cur(&((*c)));
     segStart = t.start;
     segLen = t.len;
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     }
     }
     {
-    Kind _m69 = curKind(&((*c)));
+    Kind _m69 = Comp_curKind(&((*c)));
     if (_m69.tag == 29) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     while (1) {
-    skipNewlines(&((*c)));
-    Kind k = curKind(&((*c)));
+    Comp_skipNewlines(&((*c)));
+    Kind k = Comp_curKind(&((*c)));
     {
     Kind _m70 = k;
     if (_m70.tag == 30) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     break;
     }
     else if (_m70.tag == 0) {
     break;
     }
     else if (_m70.tag == 31) {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else if (_m70.tag == 5) {
-    Tok t = cur(&((*c)));
+    Tok t = Comp_cur(&((*c)));
     markImport(&((*c)), segStart, segLen, t.start, t.len);
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     else {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     }
     }
@@ -2545,8 +2545,8 @@ void parseImport(Comp* c) {
 }
 void parseProgram(Comp* c) {
     while (1) {
-    skipNewlines(&((*c)));
-    Kind k = curKind(&((*c)));
+    Comp_skipNewlines(&((*c)));
+    Kind k = Comp_curKind(&((*c)));
     {
     Kind _m71 = k;
     if (_m71.tag == 6) {
@@ -2559,15 +2559,15 @@ void parseProgram(Comp* c) {
     parseEnum(&((*c)));
     }
     else if (_m71.tag == 5) {
-    if (identIs(&((*c)), (PlewString){"import", 6})) {
+    if (Comp_identIs(&((*c)), (PlewString){"import", 6})) {
     parseImport(&((*c)));
     }
     else {
-    if (identIs(&((*c)), (PlewString){"impl", 4})) {
+    if (Comp_identIs(&((*c)), (PlewString){"impl", 4})) {
     parseImpl(&((*c)));
     }
     else {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     }
     }
@@ -2575,7 +2575,7 @@ void parseProgram(Comp* c) {
     break;
     }
     else {
-    advance(&((*c)));
+    Comp_advance(&((*c)));
     }
     }
     }

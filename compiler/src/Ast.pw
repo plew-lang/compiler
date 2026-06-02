@@ -207,62 +207,68 @@ struct Comp {
 }
 
 // ---- cursor helpers ----
+//
+// Methods on the parse cursor. All take `inout self` (even read-only ones): the
+// Comp struct is large, so a by-value receiver would copy every arena header on
+// each call; the cursor is always held by `inout` anyway.
 
-fn curKind(c: inout Comp) -> Kind {
-    return c.toks[c.pos].kind
-}
-
-fn cur(c: inout Comp) -> Tok {
-    return c.toks[c.pos]
-}
-
-fn peekKind(c: inout Comp, off: U64) -> Kind {
-    val i: U64 = c.pos + off
-    if i < c.toks.count {
-        return c.toks[i].kind
+impl Comp {
+    // The kind of the token under the cursor.
+    inout fn curKind() -> Kind {
+        return self.toks[self.pos].kind
     }
-    return <Kind.Eof />
-}
-
-fn advance(c: inout Comp) {
-    c.pos = c.pos + 1
-}
-
-fn skipNewlines(c: inout Comp) {
-    while true {
-        match curKind(c: inout c) {
-            Kind.Newline => { advance(c: inout c) }
-            _ => { break }
+    // The token under the cursor.
+    inout fn cur() -> Tok {
+        return self.toks[self.pos]
+    }
+    // The kind `off` tokens ahead, or Eof past the end.
+    inout fn peekKind(off: U64) -> Kind {
+        val i: U64 = self.pos + off
+        if i < self.toks.count {
+            return self.toks[i].kind
+        }
+        return <Kind.Eof />
+    }
+    // Advance the cursor by one token.
+    inout fn advance() {
+        self.pos = self.pos + 1
+    }
+    // Skip a run of newline tokens.
+    inout fn skipNewlines() {
+        while true {
+            match self.curKind() {
+                Kind.Newline => { self.advance() }
+                _ => { break }
+            }
         }
     }
-}
-
-fn identIs(c: inout Comp, kw: String) -> Bool {
-    val t: Tok = c.toks[c.pos]
-    return rangeEquals(bytes: c.bytes, start: t.start, len: t.len, kw: kw)
-}
-
-fn pushExpr(c: inout Comp, e: Expr) -> U64 {
-    val id: U64 = c.exprs.count
-    c.exprs.append(e)
-    return id
-}
-
-fn pushStmt(c: inout Comp, s: Stmt) -> U64 {
-    val id: U64 = c.stmts.count
-    c.stmts.append(s)
-    return id
-}
-
-// Read an Int token's value out of the source bytes via its (start, len) span.
-fn tokenValue(c: inout Comp, t: Tok) -> I64 {
-    mut val v: I64 = 0
-    mut val j: U64 = 0
-    while j < t.len {
-        val b: U8 = c.bytes[t.start + j]
-        v = v * 10 + (b as I64 - 48)
-        j += 1
+    // Does the token under the cursor spell the keyword `kw`?
+    inout fn identIs(kw: String) -> Bool {
+        val t: Tok = self.toks[self.pos]
+        return rangeEquals(bytes: self.bytes, start: t.start, len: t.len, kw: kw)
     }
-    return v
+    // Append an expression node, returning its arena index.
+    inout fn pushExpr(e: Expr) -> U64 {
+        val id: U64 = self.exprs.count
+        self.exprs.append(e)
+        return id
+    }
+    // Append a statement node, returning its arena index.
+    inout fn pushStmt(s: Stmt) -> U64 {
+        val id: U64 = self.stmts.count
+        self.stmts.append(s)
+        return id
+    }
+    // Read an Int token's value out of the source bytes via its (start,len) span.
+    inout fn tokenValue(t: Tok) -> I64 {
+        mut val v: I64 = 0
+        mut val j: U64 = 0
+        while j < t.len {
+            val b: U8 = self.bytes[t.start + j]
+            v = v * 10 + (b as I64 - 48)
+            j += 1
+        }
+        return v
+    }
 }
 

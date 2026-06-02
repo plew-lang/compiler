@@ -71,48 +71,48 @@ fn charValue(c: inout Comp, t: Tok) -> I64 {
 }
 
 fn parsePrimary(c: inout Comp) -> U64 {
-    val k: Kind = curKind(c: inout c)
+    val k: Kind = c.curKind()
     match k {
         Kind.Int => {
-            val t: Tok = cur(c: inout c)
-            advance(c: inout c)
-            val v: I64 = tokenValue(c: inout c, t: t)
-            return pushExpr(c: inout c, e: <Expr.Int value=v />)
+            val t: Tok = c.cur()
+            c.advance()
+            val v: I64 = c.tokenValue(t: t)
+            return c.pushExpr(e: <Expr.Int value=v />)
         }
         Kind.Char => {
-            val t: Tok = cur(c: inout c)
-            advance(c: inout c)
+            val t: Tok = c.cur()
+            c.advance()
             val v: I64 = charValue(c: inout c, t: t)
-            return pushExpr(c: inout c, e: <Expr.Int value=v />)
+            return c.pushExpr(e: <Expr.Int value=v />)
         }
         Kind.Ident => {
-            val t: Tok = cur(c: inout c)
-            match peekKind(c: inout c, off: 1) {
+            val t: Tok = c.cur()
+            match c.peekKind(off: 1) {
                 Kind.LParen => {
-                    advance(c: inout c)
-                    advance(c: inout c)
+                    c.advance()
+                    c.advance()
                     val args: Array[Arg] = parseCallArgs(c: inout c)
-                    return pushExpr(c: inout c, e: <Expr.Call nameStart=t.start nameLen=t.len args=args />)
+                    return c.pushExpr(e: <Expr.Call nameStart=t.start nameLen=t.len args=args />)
                 }
                 _ => {
-                    advance(c: inout c)
-                    return pushExpr(c: inout c, e: <Expr.Ident start=t.start len=t.len />)
+                    c.advance()
+                    return c.pushExpr(e: <Expr.Ident start=t.start len=t.len />)
                 }
             }
         }
         Kind.KwTrue => {
-            advance(c: inout c)
-            return pushExpr(c: inout c, e: <Expr.Int value=1 />)
+            c.advance()
+            return c.pushExpr(e: <Expr.Int value=1 />)
         }
         Kind.KwFalse => {
-            advance(c: inout c)
-            return pushExpr(c: inout c, e: <Expr.Int value=0 />)
+            c.advance()
+            return c.pushExpr(e: <Expr.Int value=0 />)
         }
         Kind.LParen => {
-            advance(c: inout c)
+            c.advance()
             val inner: U64 = parseExpr(c: inout c)
-            match curKind(c: inout c) {
-                Kind.RParen => { advance(c: inout c) }
+            match c.curKind() {
+                Kind.RParen => { c.advance() }
                 _ => {}
             }
             return inner
@@ -121,52 +121,52 @@ fn parsePrimary(c: inout Comp) -> U64 {
             return parseMake(c: inout c)
         }
         Kind.Str => {
-            val t: Tok = cur(c: inout c)
-            advance(c: inout c)
-            return pushExpr(c: inout c, e: <Expr.Str start=t.start len=t.len />)
+            val t: Tok = c.cur()
+            c.advance()
+            return c.pushExpr(e: <Expr.Str start=t.start len=t.len />)
         }
         Kind.LBracket => {
-            advance(c: inout c)
+            c.advance()
             mut val elems: Array[U64] = []
             while true {
-                skipNewlines(c: inout c)
-                match curKind(c: inout c) {
+                c.skipNewlines()
+                match c.curKind() {
                     Kind.RBracket => {
-                        advance(c: inout c)
+                        c.advance()
                         break
                     }
                     Kind.Eof => { break }
                     _ => {
                         val e: U64 = parseExpr(c: inout c)
                         elems.append(e)
-                        match curKind(c: inout c) {
-                            Kind.Comma => { advance(c: inout c) }
+                        match c.curKind() {
+                            Kind.Comma => { c.advance() }
                             _ => {}
                         }
                     }
                 }
             }
-            return pushExpr(c: inout c, e: <Expr.Array elems=elems />)
+            return c.pushExpr(e: <Expr.Array elems=elems />)
         }
         _ => {
-            advance(c: inout c)
-            return pushExpr(c: inout c, e: <Expr.Int value=0 />)
+            c.advance()
+            return c.pushExpr(e: <Expr.Int value=0 />)
         }
     }
 }
 
 fn parseUnary(c: inout Comp) -> U64 {
-    val k: Kind = curKind(c: inout c)
+    val k: Kind = c.curKind()
     match k {
         Kind.Minus => {
-            advance(c: inout c)
+            c.advance()
             val o: U64 = parseUnary(c: inout c)
-            return pushExpr(c: inout c, e: <Expr.Unary op=57 operand=o />)
+            return c.pushExpr(e: <Expr.Unary op=57 operand=o />)
         }
         Kind.Bang => {
-            advance(c: inout c)
+            c.advance()
             val o: U64 = parseUnary(c: inout c)
-            return pushExpr(c: inout c, e: <Expr.Unary op=63 operand=o />)
+            return c.pushExpr(e: <Expr.Unary op=63 operand=o />)
         }
         _ => { return parsePostfix(c: inout c) }
     }
@@ -176,35 +176,35 @@ fn parseUnary(c: inout Comp) -> U64 {
 fn parsePostfix(c: inout Comp) -> U64 {
     mut val e: U64 = parsePrimary(c: inout c)
     while true {
-        match curKind(c: inout c) {
+        match c.curKind() {
             Kind.Dot => {
-                advance(c: inout c)
-                val nameTok: Tok = cur(c: inout c)
-                advance(c: inout c)
-                match curKind(c: inout c) {
+                c.advance()
+                val nameTok: Tok = c.cur()
+                c.advance()
+                match c.curKind() {
                     Kind.LParen => {
-                        advance(c: inout c)
+                        c.advance()
                         val args: Array[Arg] = parseCallArgs(c: inout c)
-                        e = pushExpr(c: inout c, e: <Expr.Method recv=e nameStart=nameTok.start nameLen=nameTok.len args=args />)
+                        e = c.pushExpr(e: <Expr.Method recv=e nameStart=nameTok.start nameLen=nameTok.len args=args />)
                     }
                     _ => {
-                        e = pushExpr(c: inout c, e: <Expr.Field base=e nameStart=nameTok.start nameLen=nameTok.len />)
+                        e = c.pushExpr(e: <Expr.Field base=e nameStart=nameTok.start nameLen=nameTok.len />)
                     }
                 }
             }
             Kind.LBracket => {
-                advance(c: inout c)
+                c.advance()
                 val idx: U64 = parseExpr(c: inout c)
-                match curKind(c: inout c) {
-                    Kind.RBracket => { advance(c: inout c) }
+                match c.curKind() {
+                    Kind.RBracket => { c.advance() }
                     _ => {}
                 }
-                e = pushExpr(c: inout c, e: <Expr.Index base=e index=idx />)
+                e = c.pushExpr(e: <Expr.Index base=e index=idx />)
             }
             Kind.KwAs => {
-                advance(c: inout c)
+                c.advance()
                 val ty: PType = parseTypeTok(c: inout c)
-                e = pushExpr(c: inout c, e: <Expr.Cast operand=e tyStart=ty.start tyLen=ty.len />)
+                e = c.pushExpr(e: <Expr.Cast operand=e tyStart=ty.start tyLen=ty.len />)
             }
             _ => { break }
         }
@@ -216,17 +216,17 @@ fn parsePostfix(c: inout Comp) -> U64 {
 // struct construction; a dotted `.Variant` path (enum) is consumed but not yet
 // modeled.
 fn parseMake(c: inout Comp) -> U64 {
-    advance(c: inout c)
-    val typeTok: Tok = cur(c: inout c)
-    advance(c: inout c)
+    c.advance()
+    val typeTok: Tok = c.cur()
+    c.advance()
     mut val variantStart: U64 = 0
     mut val variantLen: U64 = 0
     mut val isEnum: Bool = false
-    match curKind(c: inout c) {
+    match c.curKind() {
         Kind.Dot => {
-            advance(c: inout c)
-            val vTok: Tok = cur(c: inout c)
-            advance(c: inout c)
+            c.advance()
+            val vTok: Tok = c.cur()
+            c.advance()
             variantStart = vTok.start
             variantLen = vTok.len
             isEnum = true
@@ -235,38 +235,38 @@ fn parseMake(c: inout Comp) -> U64 {
     }
     mut val fields: Array[MakeField] = []
     while true {
-        skipNewlines(c: inout c)
-        val k: Kind = curKind(c: inout c)
+        c.skipNewlines()
+        val k: Kind = c.curKind()
         match k {
             Kind.SlashGt => {
-                advance(c: inout c)
+                c.advance()
                 break
             }
             Kind.Gt => {
-                advance(c: inout c)
+                c.advance()
                 break
             }
             Kind.Eof => { break }
             Kind.Ident => {
-                val fTok: Tok = cur(c: inout c)
-                advance(c: inout c)
-                match curKind(c: inout c) {
-                    Kind.Eq => { advance(c: inout c) }
+                val fTok: Tok = c.cur()
+                c.advance()
+                match c.curKind() {
+                    Kind.Eq => { c.advance() }
                     _ => {}
                 }
                 val v: U64 = parseExpr(c: inout c)
                 fields.append(<MakeField nameStart=fTok.start nameLen=fTok.len value=v />)
             }
-            _ => { advance(c: inout c) }
+            _ => { c.advance() }
         }
     }
-    return pushExpr(c: inout c, e: <Expr.Make typeStart=typeTok.start typeLen=typeTok.len variantStart=variantStart variantLen=variantLen isEnum=isEnum fields=fields />)
+    return c.pushExpr(e: <Expr.Make typeStart=typeTok.start typeLen=typeTok.len variantStart=variantStart variantLen=variantLen isEnum=isEnum fields=fields />)
 }
 
 fn parseBin(c: inout Comp, minPrec: I64) -> U64 {
     mut val left: U64 = parseUnary(c: inout c)
     while true {
-        val k: Kind = curKind(c: inout c)
+        val k: Kind = c.curKind()
         val prec: I64 = binPrec(k: k)
         if prec == 0 {
             break
@@ -275,9 +275,9 @@ fn parseBin(c: inout Comp, minPrec: I64) -> U64 {
             break
         }
         val op: I64 = kindCode(k: k)
-        advance(c: inout c)
+        c.advance()
         val right: U64 = parseBin(c: inout c, minPrec: prec + 1)
-        left = pushExpr(c: inout c, e: <Expr.Binary op=op lhs=left rhs=right />)
+        left = c.pushExpr(e: <Expr.Binary op=op lhs=left rhs=right />)
     }
     return left
 }
@@ -292,11 +292,11 @@ fn parseExpr(c: inout Comp) -> U64 {
 fn parseCallArgs(c: inout Comp) -> Array[Arg] {
     mut val args: Array[Arg] = []
     while true {
-        skipNewlines(c: inout c)
-        val k: Kind = curKind(c: inout c)
+        c.skipNewlines()
+        val k: Kind = c.curKind()
         match k {
             Kind.RParen => {
-                advance(c: inout c)
+                c.advance()
                 break
             }
             Kind.Eof => { break }
@@ -305,16 +305,16 @@ fn parseCallArgs(c: inout Comp) -> Array[Arg] {
                 mut val labelStart: U64 = 0
                 mut val labelLen: U64 = 0
                 mut val hasLabel: Bool = false
-                match curKind(c: inout c) {
+                match c.curKind() {
                     Kind.Ident => {
-                        match peekKind(c: inout c, off: 1) {
+                        match c.peekKind(off: 1) {
                             Kind.Colon => {
-                                val lt: Tok = cur(c: inout c)
+                                val lt: Tok = c.cur()
                                 labelStart = lt.start
                                 labelLen = lt.len
                                 hasLabel = true
-                                advance(c: inout c)
-                                advance(c: inout c)
+                                c.advance()
+                                c.advance()
                             }
                             _ => {}
                         }
@@ -323,17 +323,17 @@ fn parseCallArgs(c: inout Comp) -> Array[Arg] {
                 }
                 // optional `inout` marker
                 mut val isInout: Bool = false
-                match curKind(c: inout c) {
+                match c.curKind() {
                     Kind.KwInout => {
-                        advance(c: inout c)
+                        c.advance()
                         isInout = true
                     }
                     _ => {}
                 }
                 val e: U64 = parseExpr(c: inout c)
                 args.append(<Arg expr=e isInout=isInout labelStart=labelStart labelLen=labelLen hasLabel=hasLabel />)
-                match curKind(c: inout c) {
-                    Kind.Comma => { advance(c: inout c) }
+                match c.curKind() {
+                    Kind.Comma => { c.advance() }
                     _ => {}
                 }
             }
@@ -361,22 +361,22 @@ fn isAssignOp(k: Kind) -> Bool {
 // (scalar, String, or a named struct/enum). Nested element types beyond the
 // first token are consumed but not modeled (plewc.pw uses none).
 fn parseTypeTok(c: inout Comp) -> PType {
-    val head: Tok = cur(c: inout c)
-    advance(c: inout c)
-    match curKind(c: inout c) {
+    val head: Tok = c.cur()
+    c.advance()
+    match c.curKind() {
         Kind.LBracket => {
-            advance(c: inout c)
-            val elem: Tok = cur(c: inout c)
-            advance(c: inout c)
+            c.advance()
+            val elem: Tok = c.cur()
+            c.advance()
             mut val depth: I64 = 1
             while depth > 0 {
-                match curKind(c: inout c) {
+                match c.curKind() {
                     Kind.LBracket => { depth += 1 }
                     Kind.RBracket => { depth -= 1 }
                     Kind.Eof => { break }
                     _ => {}
                 }
-                advance(c: inout c)
+                c.advance()
             }
             return <PType start=elem.start len=elem.len isArray=true />
         }
@@ -403,15 +403,15 @@ fn recordArrayElem(c: inout Comp, ty: PType) {
 // `[mut] val name [: Type] = expr`. `mutable` says whether `mut` preceded it;
 // the current token is `val`.
 fn parseLet(c: inout Comp, mutable: Bool) -> U64 {
-    advance(c: inout c)
-    val nameTok: Tok = cur(c: inout c)
-    advance(c: inout c)
+    c.advance()
+    val nameTok: Tok = c.cur()
+    c.advance()
     mut val tyStart: U64 = 0
     mut val tyLen: U64 = 0
     mut val tyIsArray: Bool = false
-    match curKind(c: inout c) {
+    match c.curKind() {
         Kind.Colon => {
-            advance(c: inout c)
+            c.advance()
             val ty: PType = parseTypeTok(c: inout c)
             tyStart = ty.start
             tyLen = ty.len
@@ -421,148 +421,148 @@ fn parseLet(c: inout Comp, mutable: Bool) -> U64 {
         _ => {}
     }
     // `=`
-    match curKind(c: inout c) {
-        Kind.Eq => { advance(c: inout c) }
+    match c.curKind() {
+        Kind.Eq => { c.advance() }
         _ => {}
     }
     val init: U64 = parseExpr(c: inout c)
-    return pushStmt(c: inout c, s: <Stmt.Let mutable=mutable nameStart=nameTok.start nameLen=nameTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray init=init />)
+    return c.pushStmt(s: <Stmt.Let mutable=mutable nameStart=nameTok.start nameLen=nameTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray init=init />)
 }
 
 fn parsePrint(c: inout Comp) -> U64 {
-    val kw: Tok = cur(c: inout c)
-    advance(c: inout c)
-    advance(c: inout c)
+    val kw: Tok = c.cur()
+    c.advance()
+    c.advance()
     val e: U64 = parseExpr(c: inout c)
-    match curKind(c: inout c) {
-        Kind.RParen => { advance(c: inout c) }
+    match c.curKind() {
+        Kind.RParen => { c.advance() }
         _ => {}
     }
-    return pushStmt(c: inout c, s: <Stmt.Print expr=e offset=kw.start />)
+    return c.pushStmt(s: <Stmt.Print expr=e offset=kw.start />)
 }
 
 fn parseReturn(c: inout Comp) -> U64 {
-    advance(c: inout c)
-    match curKind(c: inout c) {
-        Kind.Newline => { return pushStmt(c: inout c, s: <Stmt.Return value=0 hasValue=false />) }
-        Kind.RBrace => { return pushStmt(c: inout c, s: <Stmt.Return value=0 hasValue=false />) }
-        Kind.Eof => { return pushStmt(c: inout c, s: <Stmt.Return value=0 hasValue=false />) }
+    c.advance()
+    match c.curKind() {
+        Kind.Newline => { return c.pushStmt(s: <Stmt.Return value=0 hasValue=false />) }
+        Kind.RBrace => { return c.pushStmt(s: <Stmt.Return value=0 hasValue=false />) }
+        Kind.Eof => { return c.pushStmt(s: <Stmt.Return value=0 hasValue=false />) }
         _ => {
             val e: U64 = parseExpr(c: inout c)
-            return pushStmt(c: inout c, s: <Stmt.Return value=e hasValue=true />)
+            return c.pushStmt(s: <Stmt.Return value=e hasValue=true />)
         }
     }
 }
 
 fn parseIf(c: inout Comp) -> U64 {
-    advance(c: inout c)
+    c.advance()
     val cond: U64 = parseExpr(c: inout c)
     val thenBlk: U64 = parseBlock(c: inout c)
-    skipNewlines(c: inout c)
-    match curKind(c: inout c) {
+    c.skipNewlines()
+    match c.curKind() {
         Kind.KwElse => {
-            advance(c: inout c)
+            c.advance()
             // `else if` chains as a nested if inside a synthesized block.
-            match curKind(c: inout c) {
+            match c.curKind() {
                 Kind.KwIf => {
                     val nested: U64 = parseIf(c: inout c)
                     mut val one: Array[U64] = []
                     one.append(nested)
                     val blkId: U64 = c.blocks.count
                     c.blocks.append(<Block stmts=one />)
-                    return pushStmt(c: inout c, s: <Stmt.If cond=cond thenBlk=thenBlk elseBlk=blkId hasElse=true />)
+                    return c.pushStmt(s: <Stmt.If cond=cond thenBlk=thenBlk elseBlk=blkId hasElse=true />)
                 }
                 _ => {
                     val elseBlk: U64 = parseBlock(c: inout c)
-                    return pushStmt(c: inout c, s: <Stmt.If cond=cond thenBlk=thenBlk elseBlk=elseBlk hasElse=true />)
+                    return c.pushStmt(s: <Stmt.If cond=cond thenBlk=thenBlk elseBlk=elseBlk hasElse=true />)
                 }
             }
         }
         _ => {
-            return pushStmt(c: inout c, s: <Stmt.If cond=cond thenBlk=thenBlk elseBlk=0 hasElse=false />)
+            return c.pushStmt(s: <Stmt.If cond=cond thenBlk=thenBlk elseBlk=0 hasElse=false />)
         }
     }
 }
 
 fn parseWhile(c: inout Comp) -> U64 {
-    advance(c: inout c)
+    c.advance()
     val cond: U64 = parseExpr(c: inout c)
     val body: U64 = parseBlock(c: inout c)
-    return pushStmt(c: inout c, s: <Stmt.While cond=cond body=body />)
+    return c.pushStmt(s: <Stmt.While cond=cond body=body />)
 }
 
 // `for val name in iter { body }` where iter is `lo ..< hi` / `lo ..= hi`
 // (a range) or an array expression.
 fn parseFor(c: inout Comp) -> U64 {
-    advance(c: inout c)
-    match curKind(c: inout c) {
-        Kind.KwVal => { advance(c: inout c) }
+    c.advance()
+    match c.curKind() {
+        Kind.KwVal => { c.advance() }
         _ => {}
     }
-    val nameTok: Tok = cur(c: inout c)
-    advance(c: inout c)
-    match curKind(c: inout c) {
-        Kind.KwIn => { advance(c: inout c) }
+    val nameTok: Tok = c.cur()
+    c.advance()
+    match c.curKind() {
+        Kind.KwIn => { c.advance() }
         _ => {}
     }
     val lo: U64 = parseExpr(c: inout c)
     mut val isRange: Bool = false
     mut val inclusive: Bool = false
     mut val hi: U64 = 0
-    match curKind(c: inout c) {
+    match c.curKind() {
         Kind.DotDotLt => {
-            advance(c: inout c)
+            c.advance()
             isRange = true
             hi = parseExpr(c: inout c)
         }
         Kind.DotDotEq => {
-            advance(c: inout c)
+            c.advance()
             isRange = true
             inclusive = true
             hi = parseExpr(c: inout c)
         }
         _ => {}
     }
-    skipNewlines(c: inout c)
+    c.skipNewlines()
     val body: U64 = parseBlock(c: inout c)
-    return pushStmt(c: inout c, s: <Stmt.For varStart=nameTok.start varLen=nameTok.len isRange=isRange inclusive=inclusive iter=lo rangeHi=hi body=body />)
+    return c.pushStmt(s: <Stmt.For varStart=nameTok.start varLen=nameTok.len isRange=isRange inclusive=inclusive iter=lo rangeHi=hi body=body />)
 }
 
 fn parseExprOrAssign(c: inout Comp) -> U64 {
     val lhs: U64 = parseExpr(c: inout c)
-    val k: Kind = curKind(c: inout c)
+    val k: Kind = c.curKind()
     if isAssignOp(k: k) {
         val op: I64 = kindCode(k: k)
-        advance(c: inout c)
+        c.advance()
         val rhs: U64 = parseExpr(c: inout c)
-        return pushStmt(c: inout c, s: <Stmt.Assign op=op target=lhs value=rhs />)
+        return c.pushStmt(s: <Stmt.Assign op=op target=lhs value=rhs />)
     }
-    return pushStmt(c: inout c, s: <Stmt.ExprStmt expr=lhs />)
+    return c.pushStmt(s: <Stmt.ExprStmt expr=lhs />)
 }
 
 // `match scrut { (pattern => { body })* }`. Patterns: `_` (wildcard) or
 // `Enum.Variant [{ val f, ... }]`. Arms are block bodies (the subset plewc.pw
 // uses); bare-expression arms are not handled yet.
 fn parseMatch(c: inout Comp) -> U64 {
-    advance(c: inout c)
+    c.advance()
     val scrut: U64 = parseExpr(c: inout c)
-    skipNewlines(c: inout c)
-    match curKind(c: inout c) {
-        Kind.LBrace => { advance(c: inout c) }
+    c.skipNewlines()
+    match c.curKind() {
+        Kind.LBrace => { c.advance() }
         _ => {}
     }
     mut val arms: Array[MatchArm] = []
     while true {
-        skipNewlines(c: inout c)
-        val k: Kind = curKind(c: inout c)
+        c.skipNewlines()
+        val k: Kind = c.curKind()
         match k {
             Kind.RBrace => {
-                advance(c: inout c)
+                c.advance()
                 break
             }
             Kind.Eof => { break }
             _ => {
-                val firstTok: Tok = cur(c: inout c)
+                val firstTok: Tok = c.cur()
                 mut val isWildcard: Bool = false
                 mut val enumStart: U64 = 0
                 mut val enumLen: U64 = 0
@@ -571,43 +571,43 @@ fn parseMatch(c: inout Comp) -> U64 {
                 mut val binds: Array[Bind] = []
                 if rangeEquals(bytes: c.bytes, start: firstTok.start, len: firstTok.len, kw: "_") {
                     isWildcard = true
-                    advance(c: inout c)
+                    c.advance()
                 } else {
                     enumStart = firstTok.start
                     enumLen = firstTok.len
-                    advance(c: inout c)
+                    c.advance()
                     // `.Variant`
-                    match curKind(c: inout c) {
-                        Kind.Dot => { advance(c: inout c) }
+                    match c.curKind() {
+                        Kind.Dot => { c.advance() }
                         _ => {}
                     }
-                    val vTok: Tok = cur(c: inout c)
+                    val vTok: Tok = c.cur()
                     variantStart = vTok.start
                     variantLen = vTok.len
-                    advance(c: inout c)
+                    c.advance()
                     // optional `{ val f, ... }`
-                    match curKind(c: inout c) {
+                    match c.curKind() {
                         Kind.LBrace => {
-                            advance(c: inout c)
+                            c.advance()
                             while true {
-                                skipNewlines(c: inout c)
-                                match curKind(c: inout c) {
+                                c.skipNewlines()
+                                match c.curKind() {
                                     Kind.RBrace => {
-                                        advance(c: inout c)
+                                        c.advance()
                                         break
                                     }
                                     Kind.Eof => { break }
                                     Kind.KwVal => {
-                                        advance(c: inout c)
-                                        val bTok: Tok = cur(c: inout c)
-                                        advance(c: inout c)
+                                        c.advance()
+                                        val bTok: Tok = c.cur()
+                                        c.advance()
                                         binds.append(<Bind nameStart=bTok.start nameLen=bTok.len />)
-                                        match curKind(c: inout c) {
-                                            Kind.Comma => { advance(c: inout c) }
+                                        match c.curKind() {
+                                            Kind.Comma => { c.advance() }
                                             _ => {}
                                         }
                                     }
-                                    _ => { advance(c: inout c) }
+                                    _ => { c.advance() }
                                 }
                             }
                         }
@@ -615,25 +615,25 @@ fn parseMatch(c: inout Comp) -> U64 {
                     }
                 }
                 // `=>`
-                match curKind(c: inout c) {
-                    Kind.FatArrow => { advance(c: inout c) }
+                match c.curKind() {
+                    Kind.FatArrow => { c.advance() }
                     _ => {}
                 }
-                skipNewlines(c: inout c)
+                c.skipNewlines()
                 val body: U64 = parseBlock(c: inout c)
                 arms.append(<MatchArm isWildcard=isWildcard enumStart=enumStart enumLen=enumLen variantStart=variantStart variantLen=variantLen binds=binds body=body />)
             }
         }
     }
-    return pushStmt(c: inout c, s: <Stmt.Match scrut=scrut arms=arms />)
+    return c.pushStmt(s: <Stmt.Match scrut=scrut arms=arms />)
 }
 
 fn parseStmt(c: inout Comp) -> U64 {
-    val k: Kind = curKind(c: inout c)
+    val k: Kind = c.curKind()
     match k {
         Kind.KwVal => { return parseLet(c: inout c, mutable: false) }
         Kind.KwMut => {
-            advance(c: inout c)
+            c.advance()
             return parseLet(c: inout c, mutable: true)
         }
         Kind.KwIf => { return parseIf(c: inout c) }
@@ -641,17 +641,17 @@ fn parseStmt(c: inout Comp) -> U64 {
         Kind.KwFor => { return parseFor(c: inout c) }
         Kind.KwMatch => { return parseMatch(c: inout c) }
         Kind.KwBreak => {
-            advance(c: inout c)
-            return pushStmt(c: inout c, s: <Stmt.Break />)
+            c.advance()
+            return c.pushStmt(s: <Stmt.Break />)
         }
         Kind.KwContinue => {
-            advance(c: inout c)
-            return pushStmt(c: inout c, s: <Stmt.Continue />)
+            c.advance()
+            return c.pushStmt(s: <Stmt.Continue />)
         }
         Kind.KwReturn => { return parseReturn(c: inout c) }
         Kind.Ident => {
-            if identIs(c: inout c, kw: "print") {
-                match peekKind(c: inout c, off: 1) {
+            if c.identIs(kw: "print") {
+                match c.peekKind(off: 1) {
                     Kind.LParen => { return parsePrint(c: inout c) }
                     _ => { return parseExprOrAssign(c: inout c) }
                 }
@@ -664,17 +664,17 @@ fn parseStmt(c: inout Comp) -> U64 {
 
 // Parse `{ stmt* }`. Current token must be `{`.
 fn parseBlock(c: inout Comp) -> U64 {
-    match curKind(c: inout c) {
-        Kind.LBrace => { advance(c: inout c) }
+    match c.curKind() {
+        Kind.LBrace => { c.advance() }
         _ => {}
     }
     mut val stmts: Array[U64] = []
     while true {
-        skipNewlines(c: inout c)
-        val k: Kind = curKind(c: inout c)
+        c.skipNewlines()
+        val k: Kind = c.curKind()
         match k {
             Kind.RBrace => {
-                advance(c: inout c)
+                c.advance()
                 break
             }
             Kind.Eof => { break }
@@ -696,35 +696,35 @@ fn parseBlock(c: inout Comp) -> U64 {
 // name. `hasRecv`/`recv*`/`selfInout` describe an `impl Type` method receiver
 // (none for a free function).
 fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, selfInout: Bool) {
-    val nameTok: Tok = cur(c: inout c)
-    advance(c: inout c)
+    val nameTok: Tok = c.cur()
+    c.advance()
     mut val params: Array[Param] = []
-    match curKind(c: inout c) {
+    match c.curKind() {
         Kind.LParen => {
-            advance(c: inout c)
+            c.advance()
             while true {
-                skipNewlines(c: inout c)
-                val k: Kind = curKind(c: inout c)
+                c.skipNewlines()
+                val k: Kind = c.curKind()
                 match k {
                     Kind.RParen => {
-                        advance(c: inout c)
+                        c.advance()
                         break
                     }
                     Kind.Eof => { break }
                     _ => {
-                        val pTok: Tok = cur(c: inout c)
-                        advance(c: inout c)
+                        val pTok: Tok = c.cur()
+                        c.advance()
                         mut val pTyStart: U64 = 0
                         mut val pTyLen: U64 = 0
                         mut val pTyIsArray: Bool = false
                         mut val pIsInout: Bool = false
-                        match curKind(c: inout c) {
+                        match c.curKind() {
                             Kind.Colon => {
-                                advance(c: inout c)
+                                c.advance()
                                 // optional `inout` before the type
-                                match curKind(c: inout c) {
+                                match c.curKind() {
                                     Kind.KwInout => {
-                                        advance(c: inout c)
+                                        c.advance()
                                         pIsInout = true
                                     }
                                     _ => {}
@@ -738,8 +738,8 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
                             _ => {}
                         }
                         params.append(<Param nameStart=pTok.start nameLen=pTok.len tyStart=pTyStart tyLen=pTyLen tyIsArray=pTyIsArray isInout=pIsInout />)
-                        match curKind(c: inout c) {
-                            Kind.Comma => { advance(c: inout c) }
+                        match c.curKind() {
+                            Kind.Comma => { c.advance() }
                             _ => {}
                         }
                     }
@@ -752,9 +752,9 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
     mut val retStart: U64 = 0
     mut val retLen: U64 = 0
     mut val retIsArray: Bool = false
-    match curKind(c: inout c) {
+    match c.curKind() {
         Kind.Arrow => {
-            advance(c: inout c)
+            c.advance()
             hasRet = true
             val rty: PType = parseTypeTok(c: inout c)
             retStart = rty.start
@@ -764,14 +764,14 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
         }
         _ => {}
     }
-    skipNewlines(c: inout c)
+    c.skipNewlines()
     val body: U64 = parseBlock(c: inout c)
     c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray body=body hasRecv=hasRecv recvStart=recvStart recvLen=recvLen selfInout=selfInout />)
 }
 
 // `fn name(...)`: a free function. The current token is `fn`.
 fn parseFunc(c: inout Comp) {
-    advance(c: inout c)
+    c.advance()
     parseFuncCommon(c: inout c, hasRecv: false, recvStart: 0, recvLen: 0, selfInout: false)
 }
 
@@ -779,35 +779,35 @@ fn parseFunc(c: inout Comp) {
 // is a function with an implicit `self` receiver (`inout fn` makes self
 // mutable). The current token is the `impl` identifier.
 fn parseImpl(c: inout Comp) {
-    advance(c: inout c)
-    val tyTok: Tok = cur(c: inout c)
-    advance(c: inout c)
-    match curKind(c: inout c) {
-        Kind.LBrace => { advance(c: inout c) }
+    c.advance()
+    val tyTok: Tok = c.cur()
+    c.advance()
+    match c.curKind() {
+        Kind.LBrace => { c.advance() }
         _ => {}
     }
     while true {
-        skipNewlines(c: inout c)
-        val k: Kind = curKind(c: inout c)
+        c.skipNewlines()
+        val k: Kind = c.curKind()
         match k {
             Kind.RBrace => {
-                advance(c: inout c)
+                c.advance()
                 break
             }
             Kind.Eof => { break }
             Kind.KwInout => {
-                advance(c: inout c)
-                match curKind(c: inout c) {
-                    Kind.KwFn => { advance(c: inout c) }
+                c.advance()
+                match c.curKind() {
+                    Kind.KwFn => { c.advance() }
                     _ => {}
                 }
                 parseFuncCommon(c: inout c, hasRecv: true, recvStart: tyTok.start, recvLen: tyTok.len, selfInout: true)
             }
             Kind.KwFn => {
-                advance(c: inout c)
+                c.advance()
                 parseFuncCommon(c: inout c, hasRecv: true, recvStart: tyTok.start, recvLen: tyTok.len, selfInout: false)
             }
-            _ => { advance(c: inout c) }
+            _ => { c.advance() }
         }
     }
 }
@@ -815,34 +815,34 @@ fn parseImpl(c: inout Comp) {
 // `struct Name { (val|mut val) field: Type ... }`. Field modifiers (val/mut/
 // pub) are consumed and ignored; codegen maps each field's type to a C type.
 fn parseStruct(c: inout Comp) {
-    advance(c: inout c)
-    val nameTok: Tok = cur(c: inout c)
-    advance(c: inout c)
-    match curKind(c: inout c) {
-        Kind.LBrace => { advance(c: inout c) }
+    c.advance()
+    val nameTok: Tok = c.cur()
+    c.advance()
+    match c.curKind() {
+        Kind.LBrace => { c.advance() }
         _ => {}
     }
     mut val fields: Array[FieldDef] = []
     while true {
-        skipNewlines(c: inout c)
-        val k: Kind = curKind(c: inout c)
+        c.skipNewlines()
+        val k: Kind = c.curKind()
         match k {
             Kind.RBrace => {
-                advance(c: inout c)
+                c.advance()
                 break
             }
             Kind.Eof => { break }
-            Kind.KwVal => { advance(c: inout c) }
-            Kind.KwMut => { advance(c: inout c) }
+            Kind.KwVal => { c.advance() }
+            Kind.KwMut => { c.advance() }
             Kind.Ident => {
-                val fTok: Tok = cur(c: inout c)
-                advance(c: inout c)
+                val fTok: Tok = c.cur()
+                c.advance()
                 mut val tyStart: U64 = 0
                 mut val tyLen: U64 = 0
                 mut val tyIsArray: Bool = false
-                match curKind(c: inout c) {
+                match c.curKind() {
                     Kind.Colon => {
-                        advance(c: inout c)
+                        c.advance()
                         val ty: PType = parseTypeTok(c: inout c)
                         tyStart = ty.start
                         tyLen = ty.len
@@ -853,7 +853,7 @@ fn parseStruct(c: inout Comp) {
                 }
                 fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray />)
             }
-            _ => { advance(c: inout c) }
+            _ => { c.advance() }
         }
     }
     c.structs.append(<StructDef nameStart=nameTok.start nameLen=nameTok.len fields=fields />)
@@ -862,47 +862,47 @@ fn parseStruct(c: inout Comp) {
 // `enum Name { Variant [{ field: Type, ... }] ... }`. Variant fields take no
 // modifiers (bare `name: Type`), per the language's variant-field rule.
 fn parseEnum(c: inout Comp) {
-    advance(c: inout c)
-    val nameTok: Tok = cur(c: inout c)
-    advance(c: inout c)
-    match curKind(c: inout c) {
-        Kind.LBrace => { advance(c: inout c) }
+    c.advance()
+    val nameTok: Tok = c.cur()
+    c.advance()
+    match c.curKind() {
+        Kind.LBrace => { c.advance() }
         _ => {}
     }
     mut val variants: Array[Variant] = []
     while true {
-        skipNewlines(c: inout c)
-        val k: Kind = curKind(c: inout c)
+        c.skipNewlines()
+        val k: Kind = c.curKind()
         match k {
             Kind.RBrace => {
-                advance(c: inout c)
+                c.advance()
                 break
             }
             Kind.Eof => { break }
             Kind.Ident => {
-                val vTok: Tok = cur(c: inout c)
-                advance(c: inout c)
+                val vTok: Tok = c.cur()
+                c.advance()
                 mut val fields: Array[FieldDef] = []
-                match curKind(c: inout c) {
+                match c.curKind() {
                     Kind.LBrace => {
-                        advance(c: inout c)
+                        c.advance()
                         while true {
-                            skipNewlines(c: inout c)
-                            match curKind(c: inout c) {
+                            c.skipNewlines()
+                            match c.curKind() {
                                 Kind.RBrace => {
-                                    advance(c: inout c)
+                                    c.advance()
                                     break
                                 }
                                 Kind.Eof => { break }
                                 Kind.Ident => {
-                                    val fTok: Tok = cur(c: inout c)
-                                    advance(c: inout c)
+                                    val fTok: Tok = c.cur()
+                                    c.advance()
                                     mut val tyStart: U64 = 0
                                     mut val tyLen: U64 = 0
                                     mut val tyIsArray: Bool = false
-                                    match curKind(c: inout c) {
+                                    match c.curKind() {
                                         Kind.Colon => {
-                                            advance(c: inout c)
+                                            c.advance()
                                             val ty: PType = parseTypeTok(c: inout c)
                                             tyStart = ty.start
                                             tyLen = ty.len
@@ -912,12 +912,12 @@ fn parseEnum(c: inout Comp) {
                                         _ => {}
                                     }
                                     fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray />)
-                                    match curKind(c: inout c) {
-                                        Kind.Comma => { advance(c: inout c) }
+                                    match c.curKind() {
+                                        Kind.Comma => { c.advance() }
                                         _ => {}
                                     }
                                 }
-                                _ => { advance(c: inout c) }
+                                _ => { c.advance() }
                             }
                         }
                     }
@@ -925,7 +925,7 @@ fn parseEnum(c: inout Comp) {
                 }
                 variants.append(<Variant nameStart=vTok.start nameLen=vTok.len fields=fields />)
             }
-            _ => { advance(c: inout c) }
+            _ => { c.advance() }
         }
     }
     c.enums.append(<EnumDef nameStart=nameTok.start nameLen=nameTok.len variants=variants />)
@@ -955,47 +955,47 @@ fn markImport(c: inout Comp, segStart: U64, segLen: U64, nameStart: U64, nameLen
 // Only the `with { }` form binds flat names; the namespace form binds nothing
 // the compiler can call bare (it would need `Io.print`, unsupported for now).
 fn parseImport(c: inout Comp) {
-    advance(c: inout c)
+    c.advance()
     mut val segStart: U64 = 0
     mut val segLen: U64 = 0
     while true {
-        val k: Kind = curKind(c: inout c)
+        val k: Kind = c.curKind()
         match k {
             Kind.Newline => { break }
             Kind.Eof => { break }
             Kind.LBrace => { break }
             Kind.Ident => {
-                if identIs(c: inout c, kw: "with") {
-                    advance(c: inout c)
+                if c.identIs(kw: "with") {
+                    c.advance()
                     break
                 }
-                val t: Tok = cur(c: inout c)
+                val t: Tok = c.cur()
                 segStart = t.start
                 segLen = t.len
-                advance(c: inout c)
+                c.advance()
             }
-            _ => { advance(c: inout c) }
+            _ => { c.advance() }
         }
     }
-    match curKind(c: inout c) {
+    match c.curKind() {
         Kind.LBrace => {
-            advance(c: inout c)
+            c.advance()
             while true {
-                skipNewlines(c: inout c)
-                val k: Kind = curKind(c: inout c)
+                c.skipNewlines()
+                val k: Kind = c.curKind()
                 match k {
                     Kind.RBrace => {
-                        advance(c: inout c)
+                        c.advance()
                         break
                     }
                     Kind.Eof => { break }
-                    Kind.Comma => { advance(c: inout c) }
+                    Kind.Comma => { c.advance() }
                     Kind.Ident => {
-                        val t: Tok = cur(c: inout c)
+                        val t: Tok = c.cur()
                         markImport(c: inout c, segStart: segStart, segLen: segLen, nameStart: t.start, nameLen: t.len)
-                        advance(c: inout c)
+                        c.advance()
                     }
-                    _ => { advance(c: inout c) }
+                    _ => { c.advance() }
                 }
             }
         }
@@ -1005,25 +1005,25 @@ fn parseImport(c: inout Comp) {
 
 fn parseProgram(c: inout Comp) {
     while true {
-        skipNewlines(c: inout c)
-        val k: Kind = curKind(c: inout c)
+        c.skipNewlines()
+        val k: Kind = c.curKind()
         match k {
             Kind.KwFn => { parseFunc(c: inout c) }
             Kind.KwStruct => { parseStruct(c: inout c) }
             Kind.KwEnum => { parseEnum(c: inout c) }
             Kind.Ident => {
-                if identIs(c: inout c, kw: "import") {
+                if c.identIs(kw: "import") {
                     parseImport(c: inout c)
                 } else {
-                    if identIs(c: inout c, kw: "impl") {
+                    if c.identIs(kw: "impl") {
                         parseImpl(c: inout c)
                     } else {
-                        advance(c: inout c)
+                        c.advance()
                     }
                 }
             }
             Kind.Eof => { break }
-            _ => { advance(c: inout c) }
+            _ => { c.advance() }
         }
     }
 }
