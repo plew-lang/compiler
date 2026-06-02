@@ -85,8 +85,11 @@ ADT 注意：ネスト配列 `Array[Array[U8]]` は今壊れる（`PlewArray_Arr
 
 ✅ **G2b 完了＝generic enum が end-to-end**（`Optional[T]`/`Result[T,E]` 宣言・`<Optional[I32].Some v=5/>` 構築・文/値位置 `match`〔bind フィールド型を置換〕・関数引数/戻り値。`TypeInfo.ref`〔具体インスタンス化の Comp.types index・`exprType(Ident/Make)` でセット〕・`genericEnumIndex`/`isGenericEnumInst`/`emitMonoEnum`/`genericEnumFieldTypeInfo`/`genBindTypeInst`・match codegen が scrut の ref から mangled enum 名で temp 宣言・collectGenInsts は Make も走査。`tests/run/generic_enum_{optional,result}`）。**タグ `generics-data`**。
 
-✅ **G3 step1 完了**：`fn id[T](...)` の型パラメータを `Func.typeParams` にパース（緑 no-op・`impl[T]` は未）。
+✅ **G3 step1/2/3 完了**：`fn id[T]`／`impl[T] Box[T]` パース＋impl 型パラメータを各メソッドへ伝播。✅ **generic メソッドが end-to-end**（`impl[T] Optional[T] { fn unwrapOr(fallback: T) -> T }`・`impl[T] Box[T] { fn get()->T  fn replace(n: T)->Box[T] }`・`Box[T]` 構築/返却は env で `Box_I32` に解決・型引数はレシーバの具体型由来＝呼び出し位置推論不要・(instantiation, method) ごとに `Optional_I32_unwrapOr` を特殊化）。機構：body 置換 env（`curTypeParams`/`curTypeArgs`/`curRecvInstRef`）・`resolveTy`・`emitMangle`/`emitConcreteCType`/`genCTypeOf` が env 解決・`emitMonoMethod(s)`/`methodMatchesInst`・メソッド呼び dispatch と `self` 型が instantiation 経由・`checkMethodArgs` が `substTypeInfo` でリテラル文脈解決・`collectGenInsts` は generic template を skip／`scanType` は ground のみ収集（`isTypeParamName`/`tyRefIsGround`）。`tests/run/generic_method_{enum,struct}`。
 
+**G3 残り（additive・コアライブラリが必要になったら）**：①**generic free 関数**＝呼び出し位置の型引数推論（未型リテラルから推論不可）＋明示 `id[I32](x)` パース〔Go 式 type/value 判別・今 `id[I32]` は Index にパース〕。②**メソッド own 型パラメータ `map[U]`**＝レシーバで束縛されない U＝call-site 推論が要る（`methodMatchesInst` が `typeParams.count == args.count` で今 skip）。③**推移的インスタンス化**＝generic body 内だけで生じる新インスタンス（`map` が `Optional[U]` を作る）＝単相化中に発見→worklist 追加で fixpoint。`map`/`flatMap` は①②③＋クロージャ/関数型が要るので後段。**現状でコアライブラリの Optional/Result は「データ＋match＋レシーバ型メソッド（unwrapOr/isSome 等）」まで書ける**。
+
+(以下は G2b 着手時の旧メモ・参考)
 **残り G3（本体・最後）の設計**：
 - **型 env を Comp に**：`curTypeParams: Array[Bind]`＋`curTypeArgs: Array[U64]`。generic 関数/メソッドの body codegen 中だけセット。`genCTypeOf`/literal 文脈/`exprType` が env で置換。
 - **メソッドが本命＆実は簡単**：`impl[T] Optional[T] { fn unwrapOr(default: T) -> T }` 系。**型引数はレシーバの具体型から来る**（`o: Optional[I32]` → T=I32・リテラル推論不要）。インスタンス集合は**既存の `genInsts`（レシーバの具体型）を再利用**＝各 genInst（メソッドを持つ struct/enum）につきメソッドを特殊化＝`Optional_I32_unwrapOr`。呼び出し `o.method(args)` は `exprType(recv).ref` から dispatch。**free 関数は呼び出し位置の型引数推論（未型リテラルから推論できない）＋明示 `id[I32](x)` パース〔Go 式 type/value 判別〕が要り難しい→メソッド先行が筋**。
