@@ -209,6 +209,7 @@ struct TypeInfo {
     int64_t kind;
     uint64_t nameStart;
     uint64_t nameLen;
+    uint64_t ref;
 };
 struct MakeField {
     uint64_t nameStart;
@@ -578,7 +579,9 @@ void genSignature(Comp* c, Func f);
 void genFunc(Comp* c, uint64_t fi);
 void genEnumDef(Comp* c, uint64_t ei);
 uint64_t genericStructIndex(Comp* c, uint64_t nameStart, uint64_t nameLen);
+uint64_t genericEnumIndex(Comp* c, uint64_t nameStart, uint64_t nameLen);
 long long isGenericInst(Comp* c, uint64_t ref);
+long long isGenericEnumInst(Comp* c, uint64_t ref);
 long long typeRefEq(Comp* c, uint64_t a, uint64_t b);
 void emitMangle(Comp* c, uint64_t ref);
 void emitConcreteCType(Comp* c, uint64_t ref);
@@ -588,8 +591,11 @@ void scanType(Comp* c, uint64_t ref);
 void collectGenInsts(Comp* c);
 TypeInfo typeInfoOfRef(Comp* c, uint64_t ref);
 TypeInfo genericFieldTypeInfo(Comp* c, uint64_t instRef, uint64_t fieldStart, uint64_t fieldLen);
+TypeInfo genericEnumFieldTypeInfo(Comp* c, uint64_t instRef, uint64_t variantStart, uint64_t variantLen, uint64_t fieldStart, uint64_t fieldLen);
+void genBindTypeInst(Comp* c, uint64_t instRef, uint64_t variantStart, uint64_t variantLen, uint64_t bindStart, uint64_t bindLen);
 void emitMonoForward(Comp* c, uint64_t instRef);
 void emitMonoStruct(Comp* c, uint64_t instRef);
+void emitMonoEnum(Comp* c, uint64_t instRef);
 void wPA(Comp* c, uint64_t elemStart, uint64_t elemLen);
 void genArrayTypedef(Comp* c, uint64_t elemStart, uint64_t elemLen);
 void genArrayRuntimeFns(Comp* c, uint64_t elemStart, uint64_t elemLen);
@@ -1012,7 +1018,12 @@ int main(int argc, char** argv) {
     }
     uint64_t mbi = 0;
     while (mbi < (long long)((c.genInsts).len)) {
+    if (isGenericEnumInst(&(c), PlewArray_U64_get(c.genInsts, (long long)(mbi)))) {
+    emitMonoEnum(&(c), PlewArray_U64_get(c.genInsts, (long long)(mbi)));
+    }
+    else {
     emitMonoStruct(&(c), PlewArray_U64_get(c.genInsts, (long long)(mbi)));
+    }
     mbi = ({ uint64_t __ov; if (__builtin_add_overflow((mbi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     genU8ArrayRuntime();
@@ -3750,22 +3761,22 @@ uint64_t variantIndex(Comp* c, uint64_t enumStart, uint64_t enumLen, uint64_t va
     return 0;
 }
 TypeInfo scalarInfo(void) {
-    return (TypeInfo){.kind = 0, .nameStart = 0, .nameLen = 0};
+    return (TypeInfo){.kind = 0, .nameStart = 0, .nameLen = 0, .ref = 0};
 }
 TypeInfo typeInfoOfName(Comp* c, uint64_t start, uint64_t len, long long isArray) {
     if (isArray) {
-    return (TypeInfo){.kind = 3, .nameStart = start, .nameLen = len};
+    return (TypeInfo){.kind = 3, .nameStart = start, .nameLen = len, .ref = 0};
     }
     if (len == 0) {
     return scalarInfo();
     }
     if (rangeEquals((*c).bytes, start, len, (PlewString){"String", 6})) {
-    return (TypeInfo){.kind = 1, .nameStart = start, .nameLen = len};
+    return (TypeInfo){.kind = 1, .nameStart = start, .nameLen = len, .ref = 0};
     }
     if (isPrimType(&((*c)), start, len)) {
-    return (TypeInfo){.kind = 0, .nameStart = start, .nameLen = len};
+    return (TypeInfo){.kind = 0, .nameStart = start, .nameLen = len, .ref = 0};
     }
-    return (TypeInfo){.kind = 2, .nameStart = start, .nameLen = len};
+    return (TypeInfo){.kind = 2, .nameStart = start, .nameLen = len, .ref = 0};
 }
 void addLocal(Comp* c, uint64_t nameStart, uint64_t nameLen, uint64_t tyStart, uint64_t tyLen, long long isArray, uint64_t ty, long long isInout, long long isMut) {
     PlewArray_Local_push(&((*c).locals), (Local){.nameStart = nameStart, .nameLen = nameLen, .tyStart = tyStart, .tyLen = tyLen, .isArray = isArray, .ty = ty, .isInout = isInout, .isMut = isMut});
@@ -3903,7 +3914,7 @@ TypeInfo exprType(Comp* c, uint64_t id) {
         (void)start;
         uint64_t len = _m96.data.Str.len;
         (void)len;
-    return (TypeInfo){.kind = 1, .nameStart = 0, .nameLen = 0};
+    return (TypeInfo){.kind = 1, .nameStart = 0, .nameLen = 0, .ref = 0};
     }
     else if (_m96.tag == 1) {
         uint64_t start = _m96.data.Ident.start;
@@ -3918,6 +3929,10 @@ TypeInfo exprType(Comp* c, uint64_t id) {
     i = ({ uint64_t __ov; if (__builtin_sub_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     Local lo = PlewArray_Local_get((*c).locals, (long long)(i));
     if (spansEqual(&((*c)), lo.nameStart, lo.nameLen, start, len)) {
+    if (isGenericInst(&((*c)), lo.ty)) {
+    TypeRef lt = PlewArray_TypeRef_get((*c).types, (long long)(lo.ty));
+    return (TypeInfo){.kind = 2, .nameStart = lt.nameStart, .nameLen = lt.nameLen, .ref = lo.ty};
+    }
     return typeInfoOfName(&((*c)), lo.tyStart, lo.tyLen, lo.isArray);
     }
     }
@@ -3963,16 +3978,16 @@ TypeInfo exprType(Comp* c, uint64_t id) {
         PlewArray_Arg args = _m96.data.Call.args;
         (void)args;
     if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"readStdin", 9})) {
-    return (TypeInfo){.kind = 1, .nameStart = 0, .nameLen = 0};
+    return (TypeInfo){.kind = 1, .nameStart = 0, .nameLen = 0, .ref = 0};
     }
     if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"readFile", 8})) {
-    return (TypeInfo){.kind = 1, .nameStart = 0, .nameLen = 0};
+    return (TypeInfo){.kind = 1, .nameStart = 0, .nameLen = 0, .ref = 0};
     }
     if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"readFileBytes", 13})) {
-    return (TypeInfo){.kind = 1, .nameStart = 0, .nameLen = 0};
+    return (TypeInfo){.kind = 1, .nameStart = 0, .nameLen = 0, .ref = 0};
     }
     if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"argAt", 5})) {
-    return (TypeInfo){.kind = 1, .nameStart = 0, .nameLen = 0};
+    return (TypeInfo){.kind = 1, .nameStart = 0, .nameLen = 0, .ref = 0};
     }
     uint64_t fi = 0;
     while (fi < (long long)(((*c).funcs).len)) {
@@ -4015,7 +4030,10 @@ TypeInfo exprType(Comp* c, uint64_t id) {
         (void)ty;
         PlewArray_MakeField fields = _m96.data.Make.fields;
         (void)fields;
-    return (TypeInfo){.kind = 2, .nameStart = typeStart, .nameLen = typeLen};
+    if (isGenericInst(&((*c)), ty)) {
+    return (TypeInfo){.kind = 2, .nameStart = typeStart, .nameLen = typeLen, .ref = ty};
+    }
+    return (TypeInfo){.kind = 2, .nameStart = typeStart, .nameLen = typeLen, .ref = 0};
     }
     else if (_m96.tag == 8) {
         PlewArray_U64 elems = _m96.data.Array.elems;
@@ -4926,11 +4944,16 @@ void checkMakeFields(Comp* c, uint64_t typeStart, uint64_t typeLen, uint64_t var
     while (i < (long long)((fields).len)) {
     MakeField mf = PlewArray_MakeField_get(fields, (long long)(i));
     TypeInfo ft = scalarInfo();
+    if (isGenericEnumInst(&((*c)), ty)) {
+    ft = genericEnumFieldTypeInfo(&((*c)), ty, variantStart, variantLen, mf.nameStart, mf.nameLen);
+    }
+    else {
     if (isGenericInst(&((*c)), ty)) {
     ft = genericFieldTypeInfo(&((*c)), ty, mf.nameStart, mf.nameLen);
     }
     else {
     ft = makeFieldType(&((*c)), typeStart, typeLen, variantStart, variantLen, isEnum, mf.nameStart, mf.nameLen);
+    }
     }
     if (ft.kind == 3) {
     checkLitArray(&((*c)), mf.value, ft.nameStart, ft.nameLen);
@@ -5404,7 +5427,12 @@ void genExpr(Comp* c, uint64_t id) {
         (void)fields;
     if (isEnum) {
     plew_write((PlewString){"(", 1});
+    if (isGenericEnumInst(&((*c)), ty)) {
+    emitConcreteCType(&((*c)), ty);
+    }
+    else {
     writeSpan(&((*c)), typeStart, typeLen);
+    }
     plew_write((PlewString){"){.tag = ", 9});
     writeU64(variantIndex(&((*c)), typeStart, typeLen, variantStart, variantLen));
     if ((long long)((fields).len) > 0) {
@@ -5478,6 +5506,8 @@ void genExpr(Comp* c, uint64_t id) {
     uint64_t t = (*c).tmp;
     (*c).tmp = ({ uint64_t __ov; if (__builtin_add_overflow(((*c).tmp), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     TypeInfo rt = exprType(&((*c)), PlewArray_MatchArm_get(arms, (long long)(0)).body);
+    uint64_t scrutRef = exprType(&((*c)), scrut).ref;
+    long long genericMatch = isGenericEnumInst(&((*c)), scrutRef);
     uint64_t enumStart = 0;
     uint64_t enumLen = 0;
     long long hasWildcard = 0;
@@ -5500,7 +5530,12 @@ void genExpr(Comp* c, uint64_t id) {
     plew_write((PlewString){" __mr", 5});
     writeU64(t);
     plew_write((PlewString){"; ", 2});
+    if (genericMatch) {
+    emitMangle(&((*c)), scrutRef);
+    }
+    else {
     writeSpan(&((*c)), enumStart, enumLen);
+    }
     plew_write((PlewString){" __ms", 5});
     writeU64(t);
     plew_write((PlewString){" = ", 3});
@@ -5533,7 +5568,12 @@ void genExpr(Comp* c, uint64_t id) {
     uint64_t bi = 0;
     while (bi < (long long)((binds).len)) {
     Bind bd = PlewArray_Bind_get(binds, (long long)(bi));
+    if (genericMatch) {
+    genBindTypeInst(&((*c)), scrutRef, a.variantStart, a.variantLen, bd.fieldStart, bd.fieldLen);
+    }
+    else {
     genBindType(&((*c)), a.enumStart, a.enumLen, a.variantStart, a.variantLen, bd.fieldStart, bd.fieldLen);
+    }
     plew_write((PlewString){" ", 1});
     writeSpan(&((*c)), bd.nameStart, bd.nameLen);
     plew_write((PlewString){" = __ms", 7});
@@ -6193,6 +6233,8 @@ void genStmt(Comp* c, uint64_t id) {
     }
     uint64_t t = (*c).tmp;
     (*c).tmp = ({ uint64_t __ov; if (__builtin_add_overflow(((*c).tmp), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    uint64_t scrutRef = exprType(&((*c)), scrut).ref;
+    long long genericMatch = isGenericEnumInst(&((*c)), scrutRef);
     uint64_t enumStart = 0;
     uint64_t enumLen = 0;
     long long hasWildcard = 0;
@@ -6212,7 +6254,12 @@ void genStmt(Comp* c, uint64_t id) {
     }
     plew_write((PlewString){"    {\n", 6});
     plew_write((PlewString){"    ", 4});
+    if (genericMatch) {
+    emitMangle(&((*c)), scrutRef);
+    }
+    else {
     writeSpan(&((*c)), enumStart, enumLen);
+    }
     plew_write((PlewString){" _m", 3});
     writeU64(t);
     plew_write((PlewString){" = ", 3});
@@ -6244,7 +6291,12 @@ void genStmt(Comp* c, uint64_t id) {
     while (bi < (long long)((binds).len)) {
     Bind bd = PlewArray_Bind_get(binds, (long long)(bi));
     plew_write((PlewString){"        ", 8});
+    if (genericMatch) {
+    genBindTypeInst(&((*c)), scrutRef, a.variantStart, a.variantLen, bd.fieldStart, bd.fieldLen);
+    }
+    else {
     genBindType(&((*c)), a.enumStart, a.enumLen, a.variantStart, a.variantLen, bd.fieldStart, bd.fieldLen);
+    }
     plew_write((PlewString){" ", 1});
     writeSpan(&((*c)), bd.nameStart, bd.nameLen);
     plew_write((PlewString){" = _m", 5});
@@ -6458,6 +6510,19 @@ uint64_t genericStructIndex(Comp* c, uint64_t nameStart, uint64_t nameLen) {
     }
     return (long long)(((*c).structs).len);
 }
+uint64_t genericEnumIndex(Comp* c, uint64_t nameStart, uint64_t nameLen) {
+    uint64_t i = 0;
+    while (i < (long long)(((*c).enums).len)) {
+    EnumDef e = PlewArray_EnumDef_get((*c).enums, (long long)(i));
+    if ((long long)((e.typeParams).len) > 0) {
+    if (spansEqual(&((*c)), e.nameStart, e.nameLen, nameStart, nameLen)) {
+    return i;
+    }
+    }
+    i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    return (long long)(((*c).enums).len);
+}
 long long isGenericInst(Comp* c, uint64_t ref) {
     if (ref >= (long long)(((*c).types).len)) {
     return 0;
@@ -6466,7 +6531,20 @@ long long isGenericInst(Comp* c, uint64_t ref) {
     if ((long long)((t.args).len) == 0) {
     return 0;
     }
-    return (genericStructIndex(&((*c)), t.nameStart, t.nameLen) < (long long)(((*c).structs).len));
+    if (genericStructIndex(&((*c)), t.nameStart, t.nameLen) < (long long)(((*c).structs).len)) {
+    return 1;
+    }
+    return (genericEnumIndex(&((*c)), t.nameStart, t.nameLen) < (long long)(((*c).enums).len));
+}
+long long isGenericEnumInst(Comp* c, uint64_t ref) {
+    if (ref >= (long long)(((*c).types).len)) {
+    return 0;
+    }
+    TypeRef t = PlewArray_TypeRef_get((*c).types, (long long)(ref));
+    if ((long long)((t.args).len) == 0) {
+    return 0;
+    }
+    return (genericEnumIndex(&((*c)), t.nameStart, t.nameLen) < (long long)(((*c).enums).len));
 }
 long long typeRefEq(Comp* c, uint64_t a, uint64_t b) {
     if (a == b) {
@@ -6636,6 +6714,23 @@ void collectGenInsts(Comp* c) {
         (void)ty;
     scanType(&((*c)), ty);
     }
+    else if (_m112.tag == 6) {
+        uint64_t typeStart = _m112.data.Make.typeStart;
+        (void)typeStart;
+        uint64_t typeLen = _m112.data.Make.typeLen;
+        (void)typeLen;
+        uint64_t variantStart = _m112.data.Make.variantStart;
+        (void)variantStart;
+        uint64_t variantLen = _m112.data.Make.variantLen;
+        (void)variantLen;
+        long long isEnum = _m112.data.Make.isEnum;
+        (void)isEnum;
+        uint64_t ty = _m112.data.Make.ty;
+        (void)ty;
+        PlewArray_MakeField fields = _m112.data.Make.fields;
+        (void)fields;
+    scanType(&((*c)), ty);
+    }
     else {
     }
     }
@@ -6680,6 +6775,45 @@ TypeInfo genericFieldTypeInfo(Comp* c, uint64_t instRef, uint64_t fieldStart, ui
     }
     return scalarInfo();
 }
+TypeInfo genericEnumFieldTypeInfo(Comp* c, uint64_t instRef, uint64_t variantStart, uint64_t variantLen, uint64_t fieldStart, uint64_t fieldLen) {
+    TypeRef t = PlewArray_TypeRef_get((*c).types, (long long)(instRef));
+    uint64_t ei = genericEnumIndex(&((*c)), t.nameStart, t.nameLen);
+    if (ei >= (long long)(((*c).enums).len)) {
+    return scalarInfo();
+    }
+    EnumDef e = PlewArray_EnumDef_get((*c).enums, (long long)(ei));
+    PlewArray_Variant vars = e.variants;
+    uint64_t vi = 0;
+    while (vi < (long long)((vars).len)) {
+    Variant v = PlewArray_Variant_get(vars, (long long)(vi));
+    if (spansEqual(&((*c)), v.nameStart, v.nameLen, variantStart, variantLen)) {
+    PlewArray_FieldDef fs = v.fields;
+    uint64_t fi = 0;
+    while (fi < (long long)((fs).len)) {
+    FieldDef fd = PlewArray_FieldDef_get(fs, (long long)(fi));
+    if (spansEqual(&((*c)), fd.nameStart, fd.nameLen, fieldStart, fieldLen)) {
+    TypeRef ftr = PlewArray_TypeRef_get((*c).types, (long long)(fd.ty));
+    uint64_t pi = 0;
+    while (pi < (long long)((e.typeParams).len)) {
+    Bind p = PlewArray_Bind_get(e.typeParams, (long long)(pi));
+    if (spansEqual(&((*c)), ftr.nameStart, ftr.nameLen, p.nameStart, p.nameLen)) {
+    return typeInfoOfRef(&((*c)), PlewArray_U64_get(t.args, (long long)(pi)));
+    }
+    pi = ({ uint64_t __ov; if (__builtin_add_overflow((pi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    return typeInfoOfRef(&((*c)), fd.ty);
+    }
+    fi = ({ uint64_t __ov; if (__builtin_add_overflow((fi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    }
+    vi = ({ uint64_t __ov; if (__builtin_add_overflow((vi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    return scalarInfo();
+}
+void genBindTypeInst(Comp* c, uint64_t instRef, uint64_t variantStart, uint64_t variantLen, uint64_t bindStart, uint64_t bindLen) {
+    TypeInfo ti = genericEnumFieldTypeInfo(&((*c)), instRef, variantStart, variantLen, bindStart, bindLen);
+    genTypeInfoCType(&((*c)), ti);
+}
 void emitMonoForward(Comp* c, uint64_t instRef) {
     plew_write((PlewString){"typedef struct ", 15});
     emitMangle(&((*c)), instRef);
@@ -6709,6 +6843,45 @@ void emitMonoStruct(Comp* c, uint64_t instRef) {
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     plew_write((PlewString){"};\n", 3});
+}
+void emitMonoEnum(Comp* c, uint64_t instRef) {
+    TypeRef t = PlewArray_TypeRef_get((*c).types, (long long)(instRef));
+    uint64_t ei = genericEnumIndex(&((*c)), t.nameStart, t.nameLen);
+    if (ei >= (long long)(((*c).enums).len)) {
+    return;
+    }
+    EnumDef e = PlewArray_EnumDef_get((*c).enums, (long long)(ei));
+    plew_write((PlewString){"struct ", 7});
+    emitMangle(&((*c)), instRef);
+    plew_write((PlewString){" {\n    long long tag;\n    union {\n", 34});
+    PlewArray_Variant vars = e.variants;
+    uint64_t vi = 0;
+    while (vi < (long long)((vars).len)) {
+    Variant v = PlewArray_Variant_get(vars, (long long)(vi));
+    plew_write((PlewString){"        struct {", 16});
+    PlewArray_FieldDef fs = v.fields;
+    if ((long long)((fs).len) == 0) {
+    plew_write((PlewString){" char _u; ", 10});
+    }
+    else {
+    uint64_t fi = 0;
+    while (fi < (long long)((fs).len)) {
+    FieldDef f = PlewArray_FieldDef_get(fs, (long long)(fi));
+    plew_write((PlewString){" ", 1});
+    emitFieldCType(&((*c)), f.ty, e.typeParams, t.args);
+    plew_write((PlewString){" ", 1});
+    writeSpan(&((*c)), f.nameStart, f.nameLen);
+    plew_write((PlewString){";", 1});
+    fi = ({ uint64_t __ov; if (__builtin_add_overflow((fi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    plew_write((PlewString){" ", 1});
+    }
+    plew_write((PlewString){"} ", 2});
+    writeSpan(&((*c)), v.nameStart, v.nameLen);
+    plew_write((PlewString){";\n", 2});
+    vi = ({ uint64_t __ov; if (__builtin_add_overflow((vi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    plew_write((PlewString){"    } data;\n};\n", 15});
 }
 void wPA(Comp* c, uint64_t elemStart, uint64_t elemLen) {
     plew_write((PlewString){"PlewArray_", 10});

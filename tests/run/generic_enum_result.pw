@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+enum Result[T, E] {
+    Ok { val value: T }
+    Err { val error: E }
+}
+
+fn classify(n: I32) -> Result[I32, U8] {
+    if n > 0 {
+        return <Result[I32, U8].Ok value=n />
+    }
+    return <Result[I32, U8].Err error=2 />
+}
+
+fn main() {
+    val r: Result[I32, U8] = classify(n: 7)
+    val msg: I32 = match r {
+        Result.Ok { val value } => value
+        Result.Err { val error } => 0 - (error as I32)
+    }
+    print(msg)
+    val r2: Result[I32, U8] = classify(n: 0 - 5)
+    match r2 {
+        Result.Ok { val value } => { print(value) }
+        Result.Err { val error } => { print(error) }
+    }
+}

@@ -471,10 +471,14 @@ fn main() {
         }
         sj += 1
     }
-    // monomorphized generic struct bodies (post-order: nested instances first).
+    // monomorphized generic bodies (post-order: nested instances first).
     mut val mbi: U64 = 0
     while mbi < c.genInsts.count {
-        emitMonoStruct(c: inout c, instRef: c.genInsts[mbi])
+        if isGenericEnumInst(c: inout c, ref: c.genInsts[mbi]) {
+            emitMonoEnum(c: inout c, instRef: c.genInsts[mbi])
+        } else {
+            emitMonoStruct(c: inout c, instRef: c.genInsts[mbi])
+        }
         mbi += 1
     }
     // array runtime (element by value -> needs full nominal defs above).

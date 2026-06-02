@@ -57,6 +57,10 @@ struct TypeInfo {
     val kind: I64
     val nameStart: U64
     val nameLen: U64
+    // Comp.types index of the full structured type when this is a generic
+    // instantiation (e.g. `Optional[I32]`), so match/dispatch can recover the
+    // mangled C name and substitute type parameters. 0 (sentinel) otherwise.
+    val ref: U64
 }
 
 // One `field=expr` pair inside a JSX construction `<Type field=expr ... />`.
