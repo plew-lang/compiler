@@ -14,9 +14,9 @@
 
 **ターゲット**は「**複雑な状態を持つクライアントアプリ**」を主軸に、モノレポでサーバ（Node 的・ステートレスで scale out 前提）も同一言語で書きモデル層を共有する**フルスタックのアプリケーション言語**（一次ビーチヘッド＝**WASM ウェブ**・自前ランタイム保持）。Rust の no-hidden-cost は日常に重すぎるので採らず（hidden cost は許容）、性能は二の次。シングルプロセス・シングルスレッド + イベントループ（JavaScript ライク）＋ ARC（参照カウント）を採用し、既定は値意味論（CoW）で、資源など必要なときだけ opt-in の最小所有権（`unique`/`borrow`/`inout`/`move`・`Ref`/`WeakRef`）を使う。
 
-コンパイラの stage0（使い捨てブートストラップ）は **Rust** 製（`bootstrap/`・cargo・lib+bin）。**手書き lexer + 再帰下降パーサ**で構文解析し、**C へトランスパイル → clang** でネイティブを出力する（旧 C#/.NET ＋ ANTLR4 ＋ LLVMSharp は技術選定ごと破棄）。**第一目標＝「Plew でコンパイラが書ける状態」→ 即セルフホスティング**。LLVM/WASM は self-host 後に Plew 側で追加。性能より上記の拠り所（意味は唱えた通り・難しい魔法は隠す）を優先。経緯は [claude/architecture.md](claude/architecture.md)。
+コンパイラの stage0（使い捨てブートストラップ）は **Rust** 製（`bootstrap/`・cargo・lib+bin）。**手書き lexer + 再帰下降パーサ**で構文解析し、**C へトランスパイル → clang** でネイティブを出力する（旧 C#/.NET ＋ ANTLR4 ＋ LLVMSharp は技術選定ごと破棄）。**第一目標＝「Plew でコンパイラが書ける状態」→ 即セルフホスティング＝✅達成済**（`selfhost/plewc.pw` が stage0 経由で自分をコンパイルし不動点）。LLVM/WASM は self-host 後に Plew 側で追加。性能より上記の拠り所（意味は唱えた通り・難しい魔法は隠す）を優先。経緯は [claude/architecture.md](claude/architecture.md)。
 
-> **現状＝実装フェーズ着手（仕様策定はほぼ完了）。** stage0（Rust・`bootstrap/`）の **lexer まで実装済み・全テスト green**、次はパーサ。仕様は `SPEC.md`／`spec/*.md`（4 部 17 章・部ごとサブディレクトリ・論理依存順）。実装の現在地・次の一歩は [claude/worklog.md](claude/worklog.md) を見ること。
+> **現状＝🎉 セルフホスト達成。** stage0（Rust・`bootstrap/`）は役目を終え**凍結**（throwaway・もう機能追加しない）。正典のコンパイラは **Plew 製の `selfhost/plewc.pw`（stage1）**＝自分自身をコンパイルして不動点に達する（`./bootstrap.sh` で再現＝stage0 ビルド→stage1 生成→自己コンパイル→不動点検証）。**今後の言語機能はすべて stage1（plewc.pw）側に Plew で additive に足す**（stage0 は触らない）。仕様は `SPEC.md`／`spec/*.md`（4 部 17 章）。現コンパイラが spec から意図的に剥離している箇所は [claude/provisional.md](claude/provisional.md)、現在地・次の一歩は [claude/worklog.md](claude/worklog.md)。
 
 ## ドキュメント
 
@@ -42,27 +42,35 @@
 ## リポジトリ構成
 
 ```
-bootstrap/            stage0 コンパイラ（Rust・cargo）
+bootstrap.sh          フルブートストラップ＋不動点検証（stage0→stage1→自己コンパイル）
+bootstrap/            stage0 コンパイラ（Rust・cargo・凍結＝throwaway）
   Cargo.toml          lib(plewc) + bin(plewc)
-  src/                lexer.rs / token.rs / span.rs / lib.rs / main.rs …（順次追加）
-  tests/              cargo の統合テスト（lexer.rs …）
+  src/                lexer.rs / parser.rs / typeck.rs / codegen.rs / driver.rs …
+  tests/              cargo の統合テスト（e2e.rs に self-host 不動点テスト含む）
   target/             ビルド生成物（gitignore 済・追跡外）
+selfhost/             Plew 製のソース（追跡は *.pw のみ・生成物は gitignore）
+  plewc.pw            ★ stage1＝正典のコンパイラ（自分をコンパイルできる）
+  lexer.pw/parser.pw/emit.pw/calc.pw  実証用の小コンパイラ（self-host 途上の足場）
 SPEC.md               言語仕様の目次（インデックス）
 spec/<部>/NN-*.md     4 部サブディレクトリに分割した言語仕様本体
-examples/hello.pw     現行構文の最小サンプル（stage0 で C 化→実行できる）
+examples/hello.pw     現行構文の最小サンプル
 claude/*.md           本ガイドからリンクする実装ドキュメント
 ```
 
 ## ビルド / 実行
 
 ```sh
+./bootstrap.sh        # stage0→stage1→自己コンパイル→不動点検証（成果物 selfhost/plewc）
+selfhost/plewc foo.pw | clang -x c - -o foo && ./foo   # 正典コンパイラで .pw を実行
+
 cd bootstrap
-cargo test            # 全テスト
-cargo build           # stage0 コンパイラをビルド
-cargo run -- <file.pw>  # 実行（現状は token 列をダンプ）
+cargo test            # 全テスト（self-host 不動点テスト含む）
+cargo build           # stage0（凍結）をビルド
+cargo run -- <file.pw>          # stage0 で .pw をネイティブビルド
+cargo run -- --emit-c <file.pw> # stage0 で生成 C を stdout へ
 ```
 
-clang は生成 C のコンパイルに使う（Apple clang で可）。
+clang は生成 C のコンパイルに使う（Apple clang で可）。**今後の言語機能追加は `selfhost/plewc.pw`（stage1）側に Plew で**書く＝stage0（Rust）は凍結。
 
 仕様書（`spec/`）は **mdBook** で閲覧する。設定は `book.toml`（`src = "spec"`）、目次は `spec/SUMMARY.md`、ランディングは `spec/README.md`。`mdbook serve --open` でライブリロード閲覧、`mdbook build` で `book/`（gitignore 済）へ出力。章の追加・改番時は `SUMMARY.md` も更新する。
 
