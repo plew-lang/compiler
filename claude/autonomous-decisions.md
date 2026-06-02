@@ -24,7 +24,7 @@
 
 - **eager copy で観測可能な値意味論を実現**（拠り所：意味は正しく・コスト〔遅延 CoW・解放〕は裏で後回し可）。コピー挿入点＝`val/mut val` 配列束縛・配列代入・JSX 配列フィールド初期化（いずれもソースが place のとき `PlewArray_E_copy`）。String は不変ゆえ共有で正しい（コピー不要）。**メモリは leak のまま**（解放は後回し hidden cost）。
 - **by-value 引数はコピーしない＝これは穴ではない**：spec で関数引数はイミュータブル（変更には `inout`）。変更不能ゆえ共有とコピーは観測同一。`inout` はポインタ（意図的共有）。よって引数コピー不要＝**eager copy を hot path に入れずに済み自己ホスト性能を保てる**（全引数を deep copy すると O(n)/call で壊滅する、を回避）。
-- ✅ **観測可能な穴は解消済**：①struct コピー時の配列フィールド（`structNeedsCopy`＋`Name_copy` 再帰）②place 配列/struct の return（return 地点でコピー）も実装。**コピー挿入点＝配列 let/代入/JSX フィールド・mutable struct let/代入・return（配列/struct）**。by-value 引数はイミュータブルゆえ不要。残るは深いエッジ（generic-inst/enum フィールド内の配列の深いコピー＝mono struct/enum の copy 関数は未＝`Optional[Array[I32]]` 等のコンテナ内配列）。
+- ✅ **観測可能な範囲は完成**＝plain 配列・struct（配列フィールド・再帰）・**generic struct/enum コンテナ**（`Box[Array]`/`Maybe[Array]`＝mono copy 関数）まで全部コピー。コピー挿入点＝配列/struct/generic-inst の let/代入/JSX フィールド/return（`genCopyValue` 統一）。by-value 引数はイミュータブルゆえ不要。match bind も generic enum で置換型。残るは leak（解放）と遅延コピーのみ＝refcount 版 hidden-cost 最適化（後段 ARC）。
 - **完全＆高速な CoW（refcount＋スコープ解放）は大物 ARC として後段**。eager copy は「mutable 束縛は稀＆小さい」前提で安全だが、性能最適化（遅延コピー）と解放（leak 解消）は refcount 版でないと埋まらない。`inout` と CoW の相互作用（inflated refcount で inout が in-place 変更できなくなる問題）＝正確な解放が前提。
 
 ## 既知の別件（generics 以前からの仮決め・関連）
