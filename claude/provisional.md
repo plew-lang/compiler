@@ -5,15 +5,25 @@
 - 対象＝**正典コンパイラ `compiler/src/_.pw`**（Plew 製・今後の機能はここに additive）。使い捨ての Rust stage0 は self-host 後に退役・削除済（履歴記述に出る「stage0」は当時の throwaway を指す・タグ `stage0-final` で復旧可）。
 - **重要な大前提**：観測挙動が仕様の意味から逸れている剥離（hidden *meaning*）と、裏でコストだけ払う剥離（hidden *cost*）は別物。前者（値意味論・オーバーフロー panic・ラベル等）はいずれ必ず埋める。後者（ARC/CoW を leak で代用等）は self-host 後に正しく実装する。
 
-## 現在の目標：受理の健全性（意味上 Plew として正しい）
+## 第一目標：コンパイラのソース自体が spec-valid（完全な Plew コンパイラで通る）
 
-**目標＝このコンパイラが*受理*するコードは spec でも valid（完全な Plew コンパイラも通せる）。** 逆向きの不完全性（spec valid だが未実装で reject＝`<.LParen />`・トレイト・`Result`/`try` 等）は許容。直すべきは **「spec は reject するのに今 accept してしまう」＝hidden meaning** だけ。ランタイム挙動の誤り（hidden cost＝leak・int 幅・overflow 非 panic）はこの目標の対象外（後回し）。
+**最優先のゴール＝`compiler/src/*.pw` が完全 spec 準拠コンパイラでもそのままコンパイルできる、純 spec-valid な Plew であること。** これは下の「受理の健全性（accepted ⟹ spec-valid）」を、最重要プログラム＝コンパイラ自身に適用したもの。コンパイラは自分自身を受理するので、受理の健全性が完全なら自動的にソースも spec-valid になる＝両者は表裏。ランタイム挙動の誤り（hidden cost＝leak 等）は対象外だが、**ソースが現コンパイラ固有の緩み（ambient ビルトイン・placeholder シグネチャ等）に依存していたらそれは spec-validity の穴**として潰す。
+
+**ソース spec-validity チェックリスト（コンパイラ自身が依存する非 spec 事項＝要修正）**：
+- ✅ 整数（幅・オーバーフロー・リテラル文脈型付け）／match・ラベル・制御構造・メソッド／enum は `==` でなく `match`／`try`・未実装演算子は未使用 → **spec-valid な使い方に到達**（整数幅エピックで完了）。
+- ✅ **S3 値意味論**：append 先は全て生アリーナ（`inout self`）かローカル新規アキュムレータのみ＝**「配列を別名束縛→元を変更→観測」する箇所なし**＝CoW 値意味論下で挙動同一（規律で spec-clean・監査済／形式証明はなし）。
+- ⏳ **S1 診断ビルトインの ambient 依存**：`compileError`/`compileErrorAt` を import なしで使用（spec：ambient は lang item のみ）。`readFileBytes` も未 import 使用。→ 実 `@Std` プリミティブ（`eprint`/`exit`）を足して**普通の Plew 関数として定義＋import**することで脱 ambient 化する（着手中）。
+- ⏳ **S2 @Std I/O の実シグネチャ**：`print`/`write`/`writeByte`/`readStdin`/`readFile`/`argCount`/`argAt` は現状ハードコードの placeholder。完全コンパイラは実 `@Std` で解決する必要。特に **(a) `print(整数)` の許容＝print の真のシグネチャ**、**(b) `readFile`/`readFileBytes` の可謬性＝`Result`/`try` が要る**。後者は `Optional`/`Result`/`try`（spec/13）エピックと**std 領域のシグネチャ決定（spec 表面・要相談）**に依存。
+
+## 受理の健全性（意味上 Plew として正しい）
+
+**このコンパイラが*受理*するコードは spec でも valid。** 逆向きの不完全性（spec valid だが未実装で reject＝`<.LParen />`・トレイト・`Result`/`try` 等）は許容。直すべきは **「spec は reject するのに今 accept してしまう」＝hidden meaning** だけ。ランタイム挙動の誤り（hidden cost＝leak・int 幅・overflow 非 panic）はこの目標の対象外（後回し）。
 
 **受理の健全性チェックリスト（spec が拒むのに今通る＝要修正）**：
 1. ✅ ~~import なしで `print`/`write` 等が書ける~~ → **解消**。I/O ビルトインは ambient でなく `import @Std/Io with { … }`（print/write/writeByte/readStdin/readFile）・args は `@Std/Process with { argCount, argAt }` が必須。名前↔モジュールも検査（`@Std/Process with { print }` は print を有効化しない）。未 import の使用は `compileError` 診断（`plewc: error: …`＋非ゼロ終了）で reject。
 2. ✅ ~~ラベル無視~~ → **部分解消**。ユーザー定義トップレベル関数の呼び出しは、各引数のラベル必須・宣言順・名前一致を検査（不一致は `compileError` 診断で reject）。残：ラベル抑制 `~:`・メソッド呼び出し・関数型同一性へのラベル反映・I/O ビルトインのラベル（暫定シグネチャゆえ非検査）は未対応。
 3. ✅ ~~非網羅 match が通る~~ → **解消**。match は網羅必須（`_` ワイルドカード、または enum 全 variant の被覆を検査・非網羅は `compileError` 診断で reject）。残：到達不能アーム警告・ガード・ネストパターンは未対応（元々）。
-4. ✅ ~~lossy な `as` が通る~~ → **解消**。`as` は無損失のみ（spec: infallible 限定・縮小/符号変更は `TryFrom`）。整数 `as` で、**target が整数型**かつ **(a) operand がリテラル → 値が target レンジ内か** / **(b) source の整数型が復元可 → `losslessInt`（同符号は幅 widen・unsigned→signed は厳密に幅 widen・signed→unsigned は不可・縮小は不可）** を検査し、外れたら `compileError`。`TypeInfo` がスカラ型名を保持するようにして source 幅を復元（kind=0＋name）。`exprType` は算術/ビット二項（→左辺幅）・単項 `-`/`~`（→operand 幅）も伝播するので `(a-b) as U8` のような**式幅も復元され narrowing として reject**（旧「式幅伝播まで lenient」の穴は解消）。コンパイラ自身の唯一の整数 `as`＝`U8 as I64`（widen）は通る。残：**両オペランドが幅不明な式**（`(1+1) as U8` 等＝リテラルのみ）は依然 lenient／**let-init 等のリテラル範囲**（`val f: U8 = 300`）は `as` でないので別途未検査＝**リテラル文脈型付け（Phase D・未着手）**で閉じる。
+4. ✅ ~~lossy な `as` が通る~~ → **解消**。`as` は無損失のみ（spec: infallible 限定・縮小/符号変更は `TryFrom`）。整数 `as` で、**target が整数型**かつ **(a) operand がリテラル → 値が target レンジ内か** / **(b) source の整数型が復元可 → `losslessInt`（同符号は幅 widen・unsigned→signed は厳密に幅 widen・signed→unsigned は不可・縮小は不可）** を検査し、外れたら `compileError`。`TypeInfo` がスカラ型名を保持するようにして source 幅を復元（kind=0＋name）。`exprType` は算術/ビット二項（→左辺幅）・単項 `-`/`~`（→operand 幅）も伝播するので `(a-b) as U8` のような**式幅も復元され narrowing として reject**（旧「式幅伝播まで lenient」の穴は解消）。コンパイラ自身の唯一の整数 `as`＝`U8 as I64`（widen）は通る。リテラル範囲（`val f: U8 = 300`）と context-free リテラル（`val x = 1+1`）は **Phase D（リテラル文脈型付け・完了）**で解消済。
 5. ✅ ~~struct の `==`~~ → **解消**。比較演算子（`== != < <= > >=`）を struct/array に適用＝`Eq`/`Ord` 無しなので `compileError` 診断で reject（従来は壊れた C を吐いて clang が偶発的に弾いていたのを明示エラーに）。残：enum/String の順序比較（`<` 等）は依然「壊れた C で偶発的 reject」＝ホールではないが未整理。
 6. ✅ ~~不変束縛 `val` への代入が通る~~ → **解消**。代入対象は**可変な place**でなければ `compileError` で reject＝`placeIsMutable`：①単純変数＝`mut val` ローカル or `inout` 仮引数 ②`base.field`＝フィールドが `mut val` 宣言**かつ** base も可変 place（Swift 流合成可変性・struct FieldDef に `isMut` を保持） ③`a[i]`＝配列束縛 base が可変 place（要素変更は配列値の変更）。`self.f`（inout fn）も合成で通る。**メソッド経由の変更も検査**：配列 `.append`（受信側 place が可変必須）・`inout fn` メソッド呼び（受信側 place が可変必須）も `placeIsMutable` で reject。残：重なり `inout` 検査・place 越し get-modify-set の一般形は未対応（spec/03・別項）。
 
