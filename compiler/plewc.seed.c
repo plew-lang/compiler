@@ -488,6 +488,7 @@ int64_t compoundCheckedBin(int64_t op);
 PlewString overflowBuiltin(int64_t op);
 TypeInfo arithIntType(Comp* c, uint64_t lhs, uint64_t rhs);
 void genCheckedArith(Comp* c, int64_t op, uint64_t lhs, uint64_t rhs, uint64_t tyStart, uint64_t tyLen);
+void genArrayGet(Comp* c, uint64_t base, uint64_t index, uint64_t elemStart, uint64_t elemLen);
 PlewString intMinMacro(Comp* c, uint64_t start, uint64_t len);
 void genCheckedNeg(Comp* c, uint64_t operand, uint64_t tyStart, uint64_t tyLen);
 void genCheckedDiv(Comp* c, uint64_t lhs, uint64_t rhs, uint64_t tyStart, uint64_t tyLen, long long isMod);
@@ -3742,6 +3743,15 @@ void genCheckedArith(Comp* c, int64_t op, uint64_t lhs, uint64_t rhs, uint64_t t
     genExpr(&((*c)), rhs);
     plew_write((PlewString){"), &__ov)) plew_panic((PlewString){\"integer overflow\", 16}); __ov; })", 69});
 }
+void genArrayGet(Comp* c, uint64_t base, uint64_t index, uint64_t elemStart, uint64_t elemLen) {
+    plew_write((PlewString){"PlewArray_", 10});
+    writeSpan(&((*c)), elemStart, elemLen);
+    plew_write((PlewString){"_get(", 5});
+    genExpr(&((*c)), base);
+    plew_write((PlewString){", (long long)(", 14});
+    genExpr(&((*c)), index);
+    plew_write((PlewString){"))", 2});
+}
 PlewString intMinMacro(Comp* c, uint64_t start, uint64_t len) {
     if (rangeEquals((*c).bytes, start, len, (PlewString){"I8", 2})) {
     return (PlewString){"INT8_MIN", 8};
@@ -4781,22 +4791,38 @@ void genStmt(Comp* c, uint64_t id) {
     genExpr(&((*c)), value);
     }
     else {
-    plew_write(compoundDivFn(op));
-    plew_write((PlewString){"PlewArray_", 10});
-    writeSpan(&((*c)), bt.nameStart, bt.nameLen);
-    plew_write((PlewString){"_get(", 5});
-    genExpr(&((*c)), base);
-    plew_write((PlewString){", (long long)(", 14});
-    genExpr(&((*c)), index);
-    plew_write((PlewString){"))", 2});
+    int64_t cbin = compoundCheckedBin(op);
+    long long elemInt = isIntType(&((*c)), bt.nameStart, bt.nameLen);
     if (isCompoundDiv(op)) {
+    plew_write(compoundDivFn(op));
+    genArrayGet(&((*c)), base, index, bt.nameStart, bt.nameLen);
     plew_write((PlewString){", ", 2});
     genExpr(&((*c)), value);
     plew_write((PlewString){")", 1});
     }
     else {
+    long long checkedElem = 0;
+    if (cbin != 0) {
+    if (elemInt) {
+    checkedElem = 1;
+    }
+    }
+    if (checkedElem) {
+    plew_write((PlewString){"({ ", 3});
+    genCElem(&((*c)), bt.nameStart, bt.nameLen);
+    plew_write((PlewString){" __ov; if (", 11});
+    plew_write(overflowBuiltin(cbin));
+    plew_write((PlewString){"((", 2});
+    genArrayGet(&((*c)), base, index, bt.nameStart, bt.nameLen);
+    plew_write((PlewString){"), (", 4});
+    genExpr(&((*c)), value);
+    plew_write((PlewString){"), &__ov)) plew_panic((PlewString){\"integer overflow\", 16}); __ov; })", 69});
+    }
+    else {
+    genArrayGet(&((*c)), base, index, bt.nameStart, bt.nameLen);
     plew_write(assignToBinStr(op));
     genExpr(&((*c)), value);
+    }
     }
     }
     plew_write((PlewString){");\n", 3});

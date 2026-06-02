@@ -903,6 +903,17 @@ fn genCheckedArith(c: inout Comp, op: I64, lhs: U64, rhs: U64, tyStart: U64, tyL
     write(s: "), &__ov)) plew_panic((PlewString){\"integer overflow\", 16}); __ov; })")
 }
 
+// Emit a bounds-checked array element read: `PlewArray_<E>_get(base, (idx))`.
+fn genArrayGet(c: inout Comp, base: U64, index: U64, elemStart: U64, elemLen: U64) {
+    write(s: "PlewArray_")
+    writeSpan(c: inout c, start: elemStart, len: elemLen)
+    write(s: "_get(")
+    genExpr(c: inout c, id: base)
+    write(s: ", (long long)(")
+    genExpr(c: inout c, id: index)
+    write(s: "))")
+}
+
 // The stdint.h MIN macro for a signed integer type (used in the INT_MIN / -1
 // division-overflow guard). Assumes a signed int type span.
 fn intMinMacro(c: inout Comp, start: U64, len: U64) -> String {
@@ -1796,24 +1807,40 @@ fn genStmt(c: inout Comp, id: U64) {
                     if op == 49 {
                         genExpr(c: inout c, id: value)
                     } else {
-                        // `a[i] OP= v` -> set(a, i, get(a, i) OP v). For `/=`/`%=`
-                        // the binary form routes through plew_div/plew_mod so a
-                        // zero divisor panics, same as `a[i] = a[i] / v`.
-                        write(s: compoundDivFn(op: op))
-                        write(s: "PlewArray_")
-                        writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
-                        write(s: "_get(")
-                        genExpr(c: inout c, id: base)
-                        write(s: ", (long long)(")
-                        genExpr(c: inout c, id: index)
-                        write(s: "))")
+                        // `a[i] OP= v` -> set(a, i, get(a, i) OP v). Arithmetic
+                        // is overflow-checked, `/=`/`%=` route through the checked
+                        // plew_div/plew_mod (zero divisor / INT64_MIN -1), same as
+                        // `a[i] = a[i] OP v`.
+                        val cbin: I64 = compoundCheckedBin(op: op)
+                        val elemInt: Bool = isIntType(c: inout c, start: bt.nameStart, len: bt.nameLen)
                         if isCompoundDiv(op: op) {
+                            write(s: compoundDivFn(op: op))
+                            genArrayGet(c: inout c, base: base, index: index, elemStart: bt.nameStart, elemLen: bt.nameLen)
                             write(s: ", ")
                             genExpr(c: inout c, id: value)
                             write(s: ")")
                         } else {
-                            write(s: assignToBinStr(op: op))
-                            genExpr(c: inout c, id: value)
+                            mut val checkedElem: Bool = false
+                            if cbin != 0 {
+                                if elemInt {
+                                    checkedElem = true
+                                }
+                            }
+                            if checkedElem {
+                                write(s: "({ ")
+                                genCElem(c: inout c, start: bt.nameStart, len: bt.nameLen)
+                                write(s: " __ov; if (")
+                                write(s: overflowBuiltin(op: cbin))
+                                write(s: "((")
+                                genArrayGet(c: inout c, base: base, index: index, elemStart: bt.nameStart, elemLen: bt.nameLen)
+                                write(s: "), (")
+                                genExpr(c: inout c, id: value)
+                                write(s: "), &__ov)) plew_panic((PlewString){\"integer overflow\", 16}); __ov; })")
+                            } else {
+                                genArrayGet(c: inout c, base: base, index: index, elemStart: bt.nameStart, elemLen: bt.nameLen)
+                                write(s: assignToBinStr(op: op))
+                                genExpr(c: inout c, id: value)
+                            }
                         }
                     }
                     write(s: ");\n")

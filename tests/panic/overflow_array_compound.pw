@@ -1,0 +1,9 @@
+// Array-element compound assignment is overflow-checked too: pushing a U8
+// element past 255 via `a[i] += v` panics rather than wrapping.
+import @Std/Io with { print }
+
+fn main() {
+    mut val xs: Array[U8] = [250, 0]
+    xs[0] += 10
+    print(xs[0] as U64)
+}
