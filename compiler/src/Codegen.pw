@@ -1988,7 +1988,17 @@ fn genExpr(c: inout Comp, id: U64) {
                         write(s: ".")
                         writeSpan(c: inout c, start: mf.nameStart, len: mf.nameLen)
                         write(s: " = ")
-                        genExpr(c: inout c, id: mf.value)
+                        mut val eft: TypeInfo = scalarInfo()
+                        if isGenericEnumInst(c: inout c, ref: ty) {
+                            eft = genericEnumFieldTypeInfo(c: inout c, instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                        } else {
+                            eft = makeFieldType(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: true, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                        }
+                        if eft.kind == 3 {
+                            genArrayValue(c: inout c, exprId: mf.value, elemStart: eft.nameStart, elemLen: eft.nameLen)
+                        } else {
+                            genExpr(c: inout c, id: mf.value)
+                        }
                         i += 1
                     }
                     write(s: "}")
@@ -2115,7 +2125,12 @@ fn genExpr(c: inout Comp, id: U64) {
                         write(s: "; (void)")
                         writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
                         write(s: "; ")
-                        addBindLocal(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
+                        if genericMatch {
+                            val bti: TypeInfo = genericEnumFieldTypeInfo(c: inout c, instRef: scrutRef, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                            addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false)
+                        } else {
+                            addBindLocal(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
+                        }
                         bi += 1
                     }
                     write(s: "__mr")
@@ -2844,7 +2859,12 @@ fn genStmt(c: inout Comp, id: U64) {
                         write(s: "        (void)")
                         writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
                         write(s: ";\n")
-                        addBindLocal(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
+                        if genericMatch {
+                            val bti: TypeInfo = genericEnumFieldTypeInfo(c: inout c, instRef: scrutRef, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                            addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false)
+                        } else {
+                            addBindLocal(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
+                        }
                         bi += 1
                     }
                     genBlock(c: inout c, id: a.body)
@@ -3040,6 +3060,98 @@ fn emitMonoStructCopyDef(c: inout Comp, instRef: U64) {
     write(s: " return r; }\n")
 }
 
+// Does a mono generic enum instantiation need a deep copy? True if any variant
+// field, after substitution, is an array.
+fn monoEnumNeedsCopy(c: inout Comp, instRef: U64) -> Bool {
+    val t: TypeRef = c.types[instRef]
+    val ei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if ei >= c.enums.count {
+        return false
+    }
+    val e: EnumDef = c.enums[ei]
+    val vars: Array[Variant] = e.variants
+    mut val vi: U64 = 0
+    while vi < vars.count {
+        val fs: Array[FieldDef] = vars[vi].fields
+        mut val fi: U64 = 0
+        while fi < fs.count {
+            val ti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: e.typeParams, tyRef: fs[fi].ty)
+            if ti.kind == 3 {
+                return true
+            }
+            fi += 1
+        }
+        vi += 1
+    }
+    return false
+}
+
+// `Mangle Mangle_copy(Mangle s);` prototype for a mono enum instantiation.
+fn emitMonoEnumCopyProto(c: inout Comp, instRef: U64) {
+    emitMonoStructCopyProto(c: inout c, instRef: instRef)
+}
+
+// Deep-copy a mono enum instantiation: for each variant holding an array
+// (after substitution), copy that variant's array fields under its tag.
+fn emitMonoEnumCopyDef(c: inout Comp, instRef: U64) {
+    val t: TypeRef = c.types[instRef]
+    val ei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if ei >= c.enums.count {
+        return
+    }
+    val e: EnumDef = c.enums[ei]
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " ")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: "_copy(")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " s) { ")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " r = s;")
+    val vars: Array[Variant] = e.variants
+    mut val vi: U64 = 0
+    while vi < vars.count {
+        val v: Variant = vars[vi]
+        val fs: Array[FieldDef] = v.fields
+        mut val anyArray: Bool = false
+        mut val ck: U64 = 0
+        while ck < fs.count {
+            val cti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: e.typeParams, tyRef: fs[ck].ty)
+            if cti.kind == 3 {
+                anyArray = true
+            }
+            ck += 1
+        }
+        if anyArray {
+            write(s: " if (r.tag == ")
+            writeU64(n: vi)
+            write(s: ") {")
+            mut val fi: U64 = 0
+            while fi < fs.count {
+                val f: FieldDef = fs[fi]
+                val ti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: e.typeParams, tyRef: f.ty)
+                if ti.kind == 3 {
+                    write(s: " r.data.")
+                    writeSpan(c: inout c, start: v.nameStart, len: v.nameLen)
+                    write(s: ".")
+                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                    write(s: " = ")
+                    wPA(c: inout c, elemStart: ti.nameStart, elemLen: ti.nameLen)
+                    write(s: "_copy(s.data.")
+                    writeSpan(c: inout c, start: v.nameStart, len: v.nameLen)
+                    write(s: ".")
+                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                    write(s: ");")
+                }
+                fi += 1
+            }
+            write(s: " }")
+        }
+        vi += 1
+    }
+    write(s: " return r; }\n")
+}
+
 // Emit a struct *value* for a mutable binding/store: deep-copy when the source
 // is a place and the struct needs copying (value semantics), else emit directly.
 fn genStructValue(c: inout Comp, exprId: U64, structStart: U64, structLen: U64) {
@@ -3064,7 +3176,13 @@ fn genCopyValue(c: inout Comp, exprId: U64, tyRef: U64, fallStart: U64, fallLen:
         return
     }
     if isGenericInst(c: inout c, ref: tyRef) {
-        if monoStructNeedsCopy(c: inout c, instRef: tyRef) {
+        mut val needs: Bool = false
+        if isGenericEnumInst(c: inout c, ref: tyRef) {
+            needs = monoEnumNeedsCopy(c: inout c, instRef: tyRef)
+        } else {
+            needs = monoStructNeedsCopy(c: inout c, instRef: tyRef)
+        }
+        if needs {
             if isPlaceExpr(c: inout c, id: exprId) {
                 emitMangle(c: inout c, ref: tyRef)
                 write(s: "_copy(")

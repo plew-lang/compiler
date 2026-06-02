@@ -632,6 +632,9 @@ void emitStructCopyDef(Comp* c, uint64_t si);
 long long monoStructNeedsCopy(Comp* c, uint64_t instRef);
 void emitMonoStructCopyProto(Comp* c, uint64_t instRef);
 void emitMonoStructCopyDef(Comp* c, uint64_t instRef);
+long long monoEnumNeedsCopy(Comp* c, uint64_t instRef);
+void emitMonoEnumCopyProto(Comp* c, uint64_t instRef);
+void emitMonoEnumCopyDef(Comp* c, uint64_t instRef);
 void genStructValue(Comp* c, uint64_t exprId, uint64_t structStart, uint64_t structLen);
 void genCopyValue(Comp* c, uint64_t exprId, uint64_t tyRef, uint64_t fallStart, uint64_t fallLen, long long isArray);
 void genStructDef(Comp* c, uint64_t si);
@@ -1178,6 +1181,9 @@ int main(int argc, char** argv) {
     uint64_t mcp = 0;
     while (mcp < (long long)((c.genInsts).len)) {
     if (isGenericEnumInst(&(c), PlewArray_U64_get(c.genInsts, (long long)(mcp)))) {
+    if (monoEnumNeedsCopy(&(c), PlewArray_U64_get(c.genInsts, (long long)(mcp)))) {
+    emitMonoEnumCopyProto(&(c), PlewArray_U64_get(c.genInsts, (long long)(mcp)));
+    }
     }
     else {
     if (monoStructNeedsCopy(&(c), PlewArray_U64_get(c.genInsts, (long long)(mcp)))) {
@@ -1189,6 +1195,9 @@ int main(int argc, char** argv) {
     uint64_t mcd = 0;
     while (mcd < (long long)((c.genInsts).len)) {
     if (isGenericEnumInst(&(c), PlewArray_U64_get(c.genInsts, (long long)(mcd)))) {
+    if (monoEnumNeedsCopy(&(c), PlewArray_U64_get(c.genInsts, (long long)(mcd)))) {
+    emitMonoEnumCopyDef(&(c), PlewArray_U64_get(c.genInsts, (long long)(mcd)));
+    }
     }
     else {
     if (monoStructNeedsCopy(&(c), PlewArray_U64_get(c.genInsts, (long long)(mcd)))) {
@@ -1827,7 +1836,7 @@ uint64_t parsePrimary(Comp* c) {
     Comp_advance(&((*c)));
     Comp_advance(&((*c)));
     PlewArray_Arg args = parseCallArgs(&((*c)));
-    return Comp_pushExpr(&((*c)), (Expr){.tag = 4, .data.Call = {.nameStart = t.start, .nameLen = t.len, .args = args}});
+    return Comp_pushExpr(&((*c)), (Expr){.tag = 4, .data.Call = {.nameStart = t.start, .nameLen = t.len, .args = PlewArray_Arg_copy(args)}});
     }
     else {
     Comp_advance(&((*c)));
@@ -1900,7 +1909,7 @@ uint64_t parsePrimary(Comp* c) {
     }
     }
     }
-    return Comp_pushExpr(&((*c)), (Expr){.tag = 8, .data.Array = {.elems = elems}});
+    return Comp_pushExpr(&((*c)), (Expr){.tag = 8, .data.Array = {.elems = PlewArray_U64_copy(elems)}});
     }
     else {
     Tok te = Comp_cur(&((*c)));
@@ -1952,7 +1961,7 @@ uint64_t parsePostfix(Comp* c) {
     if (_m17.tag == 25) {
     Comp_advance(&((*c)));
     PlewArray_Arg args = parseCallArgs(&((*c)));
-    e = Comp_pushExpr(&((*c)), (Expr){.tag = 10, .data.Method = {.recv = e, .nameStart = nameTok.start, .nameLen = nameTok.len, .args = args}});
+    e = Comp_pushExpr(&((*c)), (Expr){.tag = 10, .data.Method = {.recv = e, .nameStart = nameTok.start, .nameLen = nameTok.len, .args = PlewArray_Arg_copy(args)}});
     }
     else {
     e = Comp_pushExpr(&((*c)), (Expr){.tag = 5, .data.Field = {.base = e, .nameStart = nameTok.start, .nameLen = nameTok.len}});
@@ -2094,7 +2103,7 @@ uint64_t parseMake(Comp* c) {
     }
     }
     }
-    return Comp_pushExpr(&((*c)), (Expr){.tag = 6, .data.Make = {.typeStart = typeTok.start, .typeLen = typeTok.len, .variantStart = variantStart, .variantLen = variantLen, .isEnum = isEnum, .ty = tyRef, .fields = fields}});
+    return Comp_pushExpr(&((*c)), (Expr){.tag = 6, .data.Make = {.typeStart = typeTok.start, .typeLen = typeTok.len, .variantStart = variantStart, .variantLen = variantLen, .isEnum = isEnum, .ty = tyRef, .fields = PlewArray_MakeField_copy(fields)}});
 }
 uint64_t parseBin(Comp* c, int64_t minPrec) {
     uint64_t left = parseUnary(&((*c)));
@@ -2759,7 +2768,7 @@ uint64_t parseMatch(Comp* c) {
     }
     }
     }
-    return Comp_pushStmt(&((*c)), (Stmt){.tag = 8, .data.Match = {.scrut = scrut, .arms = arms}});
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 8, .data.Match = {.scrut = scrut, .arms = PlewArray_MatchArm_copy(arms)}});
 }
 uint64_t parseMatchExpr(Comp* c) {
     Comp_advance(&((*c)));
@@ -2807,7 +2816,7 @@ uint64_t parseMatchExpr(Comp* c) {
     }
     }
     }
-    return Comp_pushExpr(&((*c)), (Expr){.tag = 12, .data.MatchExpr = {.scrut = scrut, .arms = arms}});
+    return Comp_pushExpr(&((*c)), (Expr){.tag = 12, .data.MatchExpr = {.scrut = scrut, .arms = PlewArray_MatchArm_copy(arms)}});
 }
 uint64_t parseStmt(Comp* c) {
     Kind k = Comp_curKind(&((*c)));
@@ -5807,7 +5816,19 @@ void genExpr(Comp* c, uint64_t id) {
     plew_write((PlewString){".", 1});
     writeSpan(&((*c)), mf.nameStart, mf.nameLen);
     plew_write((PlewString){" = ", 3});
+    TypeInfo eft = scalarInfo();
+    if (isGenericEnumInst(&((*c)), ty)) {
+    eft = genericEnumFieldTypeInfo(&((*c)), ty, variantStart, variantLen, mf.nameStart, mf.nameLen);
+    }
+    else {
+    eft = makeFieldType(&((*c)), typeStart, typeLen, variantStart, variantLen, 1, mf.nameStart, mf.nameLen);
+    }
+    if (eft.kind == 3) {
+    genArrayValue(&((*c)), mf.value, eft.nameStart, eft.nameLen);
+    }
+    else {
     genExpr(&((*c)), mf.value);
+    }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     plew_write((PlewString){"}", 1});
@@ -5944,7 +5965,13 @@ void genExpr(Comp* c, uint64_t id) {
     plew_write((PlewString){"; (void)", 8});
     writeSpan(&((*c)), bd.nameStart, bd.nameLen);
     plew_write((PlewString){"; ", 2});
+    if (genericMatch) {
+    TypeInfo bti = genericEnumFieldTypeInfo(&((*c)), scrutRef, a.variantStart, a.variantLen, bd.fieldStart, bd.fieldLen);
+    addLocal(&((*c)), bd.nameStart, bd.nameLen, bti.nameStart, bti.nameLen, (bti.kind == 3), 0, 0, 0);
+    }
+    else {
     addBindLocal(&((*c)), a.enumStart, a.enumLen, a.variantStart, a.variantLen, bd.fieldStart, bd.fieldLen, bd.nameStart, bd.nameLen);
+    }
     bi = ({ uint64_t __ov; if (__builtin_add_overflow((bi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     plew_write((PlewString){"__mr", 4});
@@ -6768,7 +6795,13 @@ void genStmt(Comp* c, uint64_t id) {
     plew_write((PlewString){"        (void)", 14});
     writeSpan(&((*c)), bd.nameStart, bd.nameLen);
     plew_write((PlewString){";\n", 2});
+    if (genericMatch) {
+    TypeInfo bti = genericEnumFieldTypeInfo(&((*c)), scrutRef, a.variantStart, a.variantLen, bd.fieldStart, bd.fieldLen);
+    addLocal(&((*c)), bd.nameStart, bd.nameLen, bti.nameStart, bti.nameLen, (bti.kind == 3), 0, 0, 0);
+    }
+    else {
     addBindLocal(&((*c)), a.enumStart, a.enumLen, a.variantStart, a.variantLen, bd.fieldStart, bd.fieldLen, bd.nameStart, bd.nameLen);
+    }
     bi = ({ uint64_t __ov; if (__builtin_add_overflow((bi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     genBlock(&((*c)), a.body);
@@ -6942,6 +6975,90 @@ void emitMonoStructCopyDef(Comp* c, uint64_t instRef) {
     }
     plew_write((PlewString){" return r; }\n", 13});
 }
+long long monoEnumNeedsCopy(Comp* c, uint64_t instRef) {
+    TypeRef t = PlewArray_TypeRef_get((*c).types, (long long)(instRef));
+    uint64_t ei = genericEnumIndex(&((*c)), t.nameStart, t.nameLen);
+    if (ei >= (long long)(((*c).enums).len)) {
+    return 0;
+    }
+    EnumDef e = PlewArray_EnumDef_get((*c).enums, (long long)(ei));
+    PlewArray_Variant vars = PlewArray_Variant_copy(e.variants);
+    uint64_t vi = 0;
+    while (vi < (long long)((vars).len)) {
+    PlewArray_FieldDef fs = PlewArray_FieldDef_copy(PlewArray_Variant_get(vars, (long long)(vi)).fields);
+    uint64_t fi = 0;
+    while (fi < (long long)((fs).len)) {
+    TypeInfo ti = substTypeInfo(&((*c)), instRef, e.typeParams, PlewArray_FieldDef_get(fs, (long long)(fi)).ty);
+    if (ti.kind == 3) {
+    return 1;
+    }
+    fi = ({ uint64_t __ov; if (__builtin_add_overflow((fi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    vi = ({ uint64_t __ov; if (__builtin_add_overflow((vi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    return 0;
+}
+void emitMonoEnumCopyProto(Comp* c, uint64_t instRef) {
+    emitMonoStructCopyProto(&((*c)), instRef);
+}
+void emitMonoEnumCopyDef(Comp* c, uint64_t instRef) {
+    TypeRef t = PlewArray_TypeRef_get((*c).types, (long long)(instRef));
+    uint64_t ei = genericEnumIndex(&((*c)), t.nameStart, t.nameLen);
+    if (ei >= (long long)(((*c).enums).len)) {
+    return;
+    }
+    EnumDef e = PlewArray_EnumDef_get((*c).enums, (long long)(ei));
+    emitMangle(&((*c)), instRef);
+    plew_write((PlewString){" ", 1});
+    emitMangle(&((*c)), instRef);
+    plew_write((PlewString){"_copy(", 6});
+    emitMangle(&((*c)), instRef);
+    plew_write((PlewString){" s) { ", 6});
+    emitMangle(&((*c)), instRef);
+    plew_write((PlewString){" r = s;", 7});
+    PlewArray_Variant vars = PlewArray_Variant_copy(e.variants);
+    uint64_t vi = 0;
+    while (vi < (long long)((vars).len)) {
+    Variant v = PlewArray_Variant_get(vars, (long long)(vi));
+    PlewArray_FieldDef fs = PlewArray_FieldDef_copy(v.fields);
+    long long anyArray = 0;
+    uint64_t ck = 0;
+    while (ck < (long long)((fs).len)) {
+    TypeInfo cti = substTypeInfo(&((*c)), instRef, e.typeParams, PlewArray_FieldDef_get(fs, (long long)(ck)).ty);
+    if (cti.kind == 3) {
+    anyArray = 1;
+    }
+    ck = ({ uint64_t __ov; if (__builtin_add_overflow((ck), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    if (anyArray) {
+    plew_write((PlewString){" if (r.tag == ", 14});
+    writeU64(vi);
+    plew_write((PlewString){") {", 3});
+    uint64_t fi = 0;
+    while (fi < (long long)((fs).len)) {
+    FieldDef f = PlewArray_FieldDef_get(fs, (long long)(fi));
+    TypeInfo ti = substTypeInfo(&((*c)), instRef, e.typeParams, f.ty);
+    if (ti.kind == 3) {
+    plew_write((PlewString){" r.data.", 8});
+    writeSpan(&((*c)), v.nameStart, v.nameLen);
+    plew_write((PlewString){".", 1});
+    writeSpan(&((*c)), f.nameStart, f.nameLen);
+    plew_write((PlewString){" = ", 3});
+    wPA(&((*c)), ti.nameStart, ti.nameLen);
+    plew_write((PlewString){"_copy(s.data.", 13});
+    writeSpan(&((*c)), v.nameStart, v.nameLen);
+    plew_write((PlewString){".", 1});
+    writeSpan(&((*c)), f.nameStart, f.nameLen);
+    plew_write((PlewString){");", 2});
+    }
+    fi = ({ uint64_t __ov; if (__builtin_add_overflow((fi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    plew_write((PlewString){" }", 2});
+    }
+    vi = ({ uint64_t __ov; if (__builtin_add_overflow((vi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    plew_write((PlewString){" return r; }\n", 13});
+}
 void genStructValue(Comp* c, uint64_t exprId, uint64_t structStart, uint64_t structLen) {
     if (isPlaceExpr(&((*c)), exprId)) {
     if (structNeedsCopy(&((*c)), structStart, structLen)) {
@@ -6960,7 +7077,14 @@ void genCopyValue(Comp* c, uint64_t exprId, uint64_t tyRef, uint64_t fallStart, 
     return;
     }
     if (isGenericInst(&((*c)), tyRef)) {
-    if (monoStructNeedsCopy(&((*c)), tyRef)) {
+    long long needs = 0;
+    if (isGenericEnumInst(&((*c)), tyRef)) {
+    needs = monoEnumNeedsCopy(&((*c)), tyRef);
+    }
+    else {
+    needs = monoStructNeedsCopy(&((*c)), tyRef);
+    }
+    if (needs) {
     if (isPlaceExpr(&((*c)), exprId)) {
     emitMangle(&((*c)), tyRef);
     plew_write((PlewString){"_copy(", 6});

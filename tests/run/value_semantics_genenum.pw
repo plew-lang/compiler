@@ -1,0 +1,15 @@
+import @Std/Io with { print }
+enum Maybe[T] { Just { mut val v: T }  Nothing }
+fn main() {
+    mut val a: Maybe[Array[I32]] = <Maybe[Array[I32]].Just v=[1, 2] />
+    mut val b: Maybe[Array[I32]] = a
+    match b {
+        Maybe.Just { val v } => { print(v[0]) }
+        Maybe.Nothing => { print(0) }
+    }
+    b = <Maybe[Array[I32]].Just v=[7, 8] />
+    match a {
+        Maybe.Just { val v } => { print(v[0]) }
+        Maybe.Nothing => { print(0) }
+    }
+}

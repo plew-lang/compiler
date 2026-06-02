@@ -576,6 +576,9 @@ fn main() {
     mut val mcp: U64 = 0
     while mcp < c.genInsts.count {
         if isGenericEnumInst(c: inout c, ref: c.genInsts[mcp]) {
+            if monoEnumNeedsCopy(c: inout c, instRef: c.genInsts[mcp]) {
+                emitMonoEnumCopyProto(c: inout c, instRef: c.genInsts[mcp])
+            }
         } else {
             if monoStructNeedsCopy(c: inout c, instRef: c.genInsts[mcp]) {
                 emitMonoStructCopyProto(c: inout c, instRef: c.genInsts[mcp])
@@ -586,6 +589,9 @@ fn main() {
     mut val mcd: U64 = 0
     while mcd < c.genInsts.count {
         if isGenericEnumInst(c: inout c, ref: c.genInsts[mcd]) {
+            if monoEnumNeedsCopy(c: inout c, instRef: c.genInsts[mcd]) {
+                emitMonoEnumCopyDef(c: inout c, instRef: c.genInsts[mcd])
+            }
         } else {
             if monoStructNeedsCopy(c: inout c, instRef: c.genInsts[mcd]) {
                 emitMonoStructCopyDef(c: inout c, instRef: c.genInsts[mcd])
