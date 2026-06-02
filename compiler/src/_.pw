@@ -120,10 +120,10 @@ fn isAlpha(b: U8) -> Bool {
 }
 
 fn isAlnum(b: U8) -> Bool {
-    if isAlpha(b) {
+    if isAlpha(b: b) {
         return true
     }
-    return isDigit(b)
+    return isDigit(b: b)
 }
 
 fn rangeEquals(bytes: Array[U8], start: U64, len: U64, kw: String) -> Bool {
@@ -284,11 +284,11 @@ fn lex(lx: inout Lexer) {
                 continue
             }
         }
-        if isDigit(b) {
+        if isDigit(b: b) {
             val start: U64 = lx.pos
             mut val j: U64 = lx.pos
             while j < lx.bytes.count {
-                if isDigit(lx.bytes[j]) {
+                if isDigit(b: lx.bytes[j]) {
                     j += 1
                 } else {
                     break
@@ -297,11 +297,11 @@ fn lex(lx: inout Lexer) {
             emit(lx: inout lx, k: <Kind.Int />, start: start, len: j - start)
             continue
         }
-        if isAlpha(b) {
+        if isAlpha(b: b) {
             val start: U64 = lx.pos
             mut val j: U64 = lx.pos
             while j < lx.bytes.count {
-                if isAlnum(lx.bytes[j]) {
+                if isAlnum(b: lx.bytes[j]) {
                     j += 1
                 } else {
                     break
@@ -600,6 +600,11 @@ struct Bind {
 struct Arg {
     val expr: U64
     val isInout: Bool
+    // the argument label `name:` (spec: required, in declaration order). Empty
+    // when the call site omitted it (then a user-function call is rejected).
+    val labelStart: U64
+    val labelLen: U64
+    val hasLabel: Bool
 }
 
 enum Expr {
@@ -1036,10 +1041,17 @@ fn parseCallArgs(c: inout Comp) -> Array[Arg] {
             Kind.Eof => { break }
             _ => {
                 // optional argument label `name:`
+                mut val labelStart: U64 = 0
+                mut val labelLen: U64 = 0
+                mut val hasLabel: Bool = false
                 match curKind(c: inout c) {
                     Kind.Ident => {
                         match peekKind(c: inout c, off: 1) {
                             Kind.Colon => {
+                                val lt: Tok = cur(c: inout c)
+                                labelStart = lt.start
+                                labelLen = lt.len
+                                hasLabel = true
                                 advance(c: inout c)
                                 advance(c: inout c)
                             }
@@ -1058,7 +1070,7 @@ fn parseCallArgs(c: inout Comp) -> Array[Arg] {
                     _ => {}
                 }
                 val e: U64 = parseExpr(c: inout c)
-                args.append(<Arg expr=e isInout=isInout />)
+                args.append(<Arg expr=e isInout=isInout labelStart=labelStart labelLen=labelLen hasLabel=hasLabel />)
                 match curKind(c: inout c) {
                     Kind.Comma => { advance(c: inout c) }
                     _ => {}
@@ -1808,6 +1820,50 @@ fn spansEqual(c: inout Comp, aStart: U64, aLen: U64, bStart: U64, bLen: U64) -> 
     return true
 }
 
+// Index of the top-level function named (nameStart,nameLen), or -1 if none.
+// Names are unique (no overloading in this compiler), so the first match wins.
+fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64) -> I64 {
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if spansEqual(c: inout c, aStart: nameStart, aLen: nameLen, bStart: f.nameStart, bLen: f.nameLen) {
+            return i as I64
+        }
+        i += 1
+    }
+    return 0 - 1
+}
+
+// Acceptance soundness: spec requires every argument to carry its label, in
+// declaration order. Check a call against the callee's params. Calls that don't
+// resolve to a user function (I/O builtins, methods) return true here — they're
+// handled on their own paths and keep their provisional calling conventions.
+fn callLabelsOk(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
+    val fi: I64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen)
+    if fi < 0 {
+        return true
+    }
+    val f: Func = c.funcs[fi as U64]
+    if f.params.count != args.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < args.count {
+        val a: Arg = args[i]
+        if a.hasLabel {
+            val p: Param = f.params[i]
+            if spansEqual(c: inout c, aStart: a.labelStart, aLen: a.labelLen, bStart: p.nameStart, bLen: p.nameLen) {
+            } else {
+                return false
+            }
+        } else {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
 // Tag index of `Enum.Variant` (the variant's position in its enum declaration).
 fn variantIndex(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64) -> I64 {
     mut val ei: U64 = 0
@@ -2179,6 +2235,13 @@ fn genExpr(c: inout Comp, id: U64) {
                 } else {
                     write(s: "__plew_argAt_requires_import_Std_Process")
                 }
+                return
+            }
+            if callLabelsOk(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args) {
+            } else {
+                // label missing / wrong / out of order -> undeclared identifier
+                // so the C compile fails loudly (spec: labels are required).
+                write(s: "__plew_call_label_mismatch")
                 return
             }
             writeSpan(c: inout c, start: nameStart, len: nameLen)

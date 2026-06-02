@@ -1,0 +1,11 @@
+// A label that doesn't match the parameter name (here `x:` for a parameter
+// named `n`) must be a compile error — labels are part of the call's identity.
+import @Std/Io with { print }
+
+fn dbl(n: I64) -> I64 {
+    return n * 2
+}
+
+fn main() {
+    print(dbl(x: 21))
+}

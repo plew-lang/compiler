@@ -16,9 +16,9 @@
 
 **このコンパイラが*受理*するコードを spec でも valid にする**（完全な Plew コンパイラも通せる）。spec が reject するのに今 accept してしまう所＝hidden meaning を潰す。逆向きの不完全性（valid だが未実装で reject＝`<.LParen />`・トレイト等）は許容。hidden cost（leak・int 幅・overflow 非 panic）は対象外（後回し）。
 
-要修正リスト＝[provisional.md](provisional.md)「受理の健全性チェックリスト」：① ✅ **import なしで `print` が書ける** → 解消（I/O ビルトインは `@Std/Io`・args は `@Std/Process` から import 必須・名前↔モジュール検査つき）② ラベル無視 ③ 非網羅 match ④ lossy `as` ⑤ struct `==`。
+要修正リスト＝[provisional.md](provisional.md)「受理の健全性チェックリスト」：① ✅ **import なしで `print`** → 解消（I/O ビルトインは `@Std/Io`・args は `@Std/Process` から import 必須・名前↔モジュール検査つき）② ✅ **ラベル無視** → 部分解消（ユーザー関数呼び出しは有無/名前/宣言順/arg 数を検査・不一致は sentinel reject）③ 非網羅 match ④ lossy `as` ⑤ struct `==`。
 
-**次の一歩**：②のラベル enforce。spec はラベル必須・宣言順・関数型同一性の一部だが、現状はパースして捨てている。呼び出し位置でラベルの有無/名前/順序を検査する（plewc.pw 自身も全呼び出しがラベル付きなので ADD→（必要なら reseed）→USE で適用）。
+**次の一歩**：③の match 網羅性検査。現状は網羅と仮定して wildcard なし末尾に `__builtin_unreachable()` を吐くだけ。enum の全 variant が被覆されるか（または `_`/捕捉束縛 `val x` があるか）を検査し、非網羅をコンパイルエラーにする。
 
 > import 機構の現状＝**`with { }` 選択 import のみ**で、認識するのは I/O ビルトイン（`@Std/Io`＝print/write/writeByte/readStdin/readFile・`@Std/Process`＝argCount/argAt）だけ。名前空間 import（`Io.print`）・実モジュール解決・複数ファイル・`export`/`part`・`/`/`./` ルートは未実装（単一ファイルのまま）。enforce は「未 import の I/O ビルトイン呼び出し＝未宣言 C 識別子を吐いて clang を loud に失敗」＝enum-`==` と同じ sentinel 方式（診断＋非ゼロ終了の真のエラー経路はまだ無い）。
 

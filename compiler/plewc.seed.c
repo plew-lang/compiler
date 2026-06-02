@@ -186,6 +186,9 @@ struct Bind {
 struct Arg {
     long long expr;
     long long isInout;
+    long long labelStart;
+    long long labelLen;
+    long long hasLabel;
 };
 struct MatchArm {
     long long isWildcard;
@@ -385,6 +388,8 @@ void genCElem(Comp* c, long long start, long long len);
 void genCTypeRef(Comp* c, long long start, long long len, long long isArray);
 void genCType(Comp* c, long long start, long long len);
 long long spansEqual(Comp* c, long long aStart, long long aLen, long long bStart, long long bLen);
+long long findFunc(Comp* c, long long nameStart, long long nameLen);
+long long callLabelsOk(Comp* c, long long nameStart, long long nameLen, PlewArray_Arg args);
 long long variantIndex(Comp* c, long long enumStart, long long enumLen, long long variantStart, long long variantLen);
 TypeInfo scalarInfo(void);
 TypeInfo typeInfoOfName(Comp* c, long long start, long long len, long long isArray);
@@ -1378,12 +1383,19 @@ PlewArray_Arg parseCallArgs(Comp* c) {
     break;
     }
     else {
+    long long labelStart = 0;
+    long long labelLen = 0;
+    long long hasLabel = 0;
     {
     Kind _m18 = curKind(&((*c)));
     if (_m18.tag == 4) {
     {
     Kind _m19 = peekKind(&((*c)), 1);
     if (_m19.tag == 31) {
+    Tok lt = cur(&((*c)));
+    labelStart = lt.start;
+    labelLen = lt.len;
+    hasLabel = 1;
     advance(&((*c)));
     advance(&((*c)));
     }
@@ -1405,7 +1417,7 @@ PlewArray_Arg parseCallArgs(Comp* c) {
     }
     }
     long long e = parseExpr(&((*c)));
-    PlewArray_Arg_push(&(args), (Arg){.expr = e, .isInout = isInout});
+    PlewArray_Arg_push(&(args), (Arg){.expr = e, .isInout = isInout, .labelStart = labelStart, .labelLen = labelLen, .hasLabel = hasLabel});
     {
     Kind _m21 = curKind(&((*c)));
     if (_m21.tag == 30) {
@@ -2324,6 +2336,44 @@ long long spansEqual(Comp* c, long long aStart, long long aLen, long long bStart
     }
     return 1;
 }
+long long findFunc(Comp* c, long long nameStart, long long nameLen) {
+    long long i = 0;
+    while (i < (long long)(((*c).funcs).len)) {
+    Func f = PlewArray_Func_get((*c).funcs, (long long)(i));
+    if (spansEqual(&((*c)), nameStart, nameLen, f.nameStart, f.nameLen)) {
+    return ((long long)(i));
+    }
+    i += 1;
+    }
+    return (0 - 1);
+}
+long long callLabelsOk(Comp* c, long long nameStart, long long nameLen, PlewArray_Arg args) {
+    long long fi = findFunc(&((*c)), nameStart, nameLen);
+    if (fi < 0) {
+    return 1;
+    }
+    Func f = PlewArray_Func_get((*c).funcs, (long long)(((long long)(fi))));
+    if ((long long)((f.params).len) != (long long)((args).len)) {
+    return 0;
+    }
+    long long i = 0;
+    while (i < (long long)((args).len)) {
+    Arg a = PlewArray_Arg_get(args, (long long)(i));
+    if (a.hasLabel) {
+    Param p = PlewArray_Param_get(f.params, (long long)(i));
+    if (spansEqual(&((*c)), a.labelStart, a.labelLen, p.nameStart, p.nameLen)) {
+    }
+    else {
+    return 0;
+    }
+    }
+    else {
+    return 0;
+    }
+    i += 1;
+    }
+    return 1;
+}
 long long variantIndex(Comp* c, long long enumStart, long long enumLen, long long variantStart, long long variantLen) {
     long long ei = 0;
     while (ei < (long long)(((*c).enums).len)) {
@@ -2826,6 +2876,12 @@ void genExpr(Comp* c, long long id) {
     else {
     plew_write((PlewString){"__plew_argAt_requires_import_Std_Process", 40});
     }
+    return;
+    }
+    if (callLabelsOk(&((*c)), nameStart, nameLen, args)) {
+    }
+    else {
+    plew_write((PlewString){"__plew_call_label_mismatch", 26});
     return;
     }
     writeSpan(&((*c)), nameStart, nameLen);

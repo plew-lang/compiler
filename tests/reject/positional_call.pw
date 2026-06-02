@@ -1,0 +1,11 @@
+// Argument labels are required (spec: labels are mandatory, in declaration
+// order). Calling a user function positionally must be a compile error.
+import @Std/Io with { print }
+
+fn dbl(n: I64) -> I64 {
+    return n * 2
+}
+
+fn main() {
+    print(dbl(21))
+}
