@@ -41,7 +41,7 @@
 
 整数幅エピック完了で、コア言語の使い方は spec-valid に到達。残るは**ソースが現コンパイラ固有の緩みに依存している箇所**（→ [provisional.md](provisional.md) 冒頭「ソース spec-validity チェックリスト」）：
 
-- **S1（着手中・独立・要相談なし）**：診断 `compileError`/`compileErrorAt` の ambient 依存を解消＝`@Std/Io` に `eprint(text: String)`・`@Std/Process` に `exit(code: I32)` を足し（import-gate）、`compileError`/`compileErrorAt` を**普通の Plew 関数**として定義（int 整形は `eprint`＋`digitStr` の Plew ヘルパ）→ codegen の特別扱いを撤去。`readFileBytes` も import に追加。ADD→reseed→USE（挙動変化ゆえ reseed 2 回）。
+- ✅ **S1 完了**：診断 `compileError`/`compileErrorAt` を**普通の Plew 関数**（Codegen.pw・`eprint`＋`exit`＋`digitStr` 由来の `eprintInt`）に。`@Std/Io` `eprint(text: String)`・`@Std/Process` `exit(code: I32)` を import-gate ビルトインとして追加し _.pw で import、codegen 特別扱いと dead な `plew_compile_error*` preamble を撤去。これで診断の ambient 依存は解消。
 - **S2（大物・要 spec 決定）**：`@Std` I/O の実シグネチャ。特に `print(整数)` の可否＝print の真シグネチャと、`readFile`/`readFileBytes` の**可謬化＝`Optional`/`Result`/`try`（spec/13）エピック**。std 領域のシグネチャは spec 表面（core-lib 未決）ゆえユーザー確認が要る。
 
 ### その他の候補（エピック後）
