@@ -1584,6 +1584,26 @@ fn genExpr(c: inout Comp, id: U64) {
                 }
                 return
             }
+            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "eprint") {
+                if c.impEprint {
+                    write(s: "plew_eprint(")
+                    genExpr(c: inout c, id: args[0].expr)
+                    write(s: ")")
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "eprint is not ambient; import it from @Std/Io")
+                }
+                return
+            }
+            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "exit") {
+                if c.impExit {
+                    write(s: "exit((int)(")
+                    genExpr(c: inout c, id: args[0].expr)
+                    write(s: "))")
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "exit is not ambient; import it from @Std/Process")
+                }
+                return
+            }
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readStdin") {
                 if c.impReadStdin {
                     write(s: "plew_read_stdin()")

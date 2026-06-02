@@ -256,6 +256,9 @@ struct Comp {
     mut val impReadFile: Bool
     mut val impArgCount: Bool
     mut val impArgAt: Bool
+    mut val impEprint: Bool
+    mut val impExit: Bool
+    mut val impReadFileBytes: Bool
 }
 
 // ---- cursor helpers ----
