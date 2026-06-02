@@ -243,7 +243,7 @@ fn parsePostfix(c: inout Comp) -> U64 {
             Kind.KwAs => {
                 c.advance()
                 val ty: PType = parseTypeTok(c: inout c)
-                e = c.pushExpr(e: <Expr.Cast operand=e tyStart=ty.start tyLen=ty.len />)
+                e = c.pushExpr(e: <Expr.Cast operand=e tyStart=ty.start tyLen=ty.len ty=ty.ref />)
             }
             _ => { break }
         }
@@ -400,33 +400,59 @@ fn isAssignOp(k: Kind) -> Bool {
     }
 }
 
-// Parse a type annotation into a PType. For `Array[E]` the span names the
-// element E and isArray is true; otherwise the span names the type itself
-// (scalar, String, or a named struct/enum). Nested element types beyond the
-// first token are consumed but not modeled (plewc.pw uses none).
+// Parse a type annotation into a PType. Builds a structured TypeRef (head name
+// + recursively-parsed type arguments) and returns its index in `ref`. The
+// legacy (start,len,isArray) triple is also filled for the Array / scalar /
+// named codegen paths: `Array[E]` keeps isArray=true with the span naming the
+// first argument E (nested elements beyond the head are modeled only via ref);
+// any other `Name[Arg, ...]` is a generic application (isArray=false, head span).
 fn parseTypeTok(c: inout Comp) -> PType {
     val head: Tok = c.cur()
     c.advance()
+    mut val args: Array[U64] = []
+    mut val elemStart: U64 = head.start
+    mut val elemLen: U64 = head.len
+    mut val bracketed: Bool = false
     match c.curKind() {
         Kind.LBracket => {
+            bracketed = true
             c.advance()
-            val elem: Tok = c.cur()
-            c.advance()
-            mut val depth: I64 = 1
-            while depth > 0 {
+            mut val first: Bool = true
+            while true {
                 match c.curKind() {
-                    Kind.LBracket => { depth += 1 }
-                    Kind.RBracket => { depth -= 1 }
+                    Kind.RBracket => { break }
                     Kind.Eof => { break }
                     _ => {}
                 }
-                c.advance()
+                if first {
+                } else {
+                    match c.curKind() {
+                        Kind.Comma => { c.advance() }
+                        _ => {}
+                    }
+                }
+                first = false
+                val arg: PType = parseTypeTok(c: inout c)
+                args.append(arg.ref)
+                if args.count == 1 {
+                    elemStart = arg.start
+                    elemLen = arg.len
+                }
             }
-            return <PType start=elem.start len=elem.len isArray=true />
+            match c.curKind() {
+                Kind.RBracket => { c.advance() }
+                _ => {}
+            }
         }
         _ => {}
     }
-    return <PType start=head.start len=head.len isArray=false />
+    val ref: U64 = c.pushType(t: <TypeRef nameStart=head.start nameLen=head.len args=args />)
+    if bracketed {
+        if rangeEquals(bytes: c.bytes, start: head.start, len: head.len, kw: "Array") {
+            return <PType start=elemStart len=elemLen isArray=true ref=ref />
+        }
+    }
+    return <PType start=head.start len=head.len isArray=false ref=ref />
 }
 
 // Register an Array element type name for later monomorphization (deduped).
@@ -453,6 +479,7 @@ fn parseLet(c: inout Comp, mutable: Bool) -> U64 {
     mut val tyStart: U64 = 0
     mut val tyLen: U64 = 0
     mut val tyIsArray: Bool = false
+    mut val tyRef: U64 = 0
     match c.curKind() {
         Kind.Colon => {
             c.advance()
@@ -460,6 +487,7 @@ fn parseLet(c: inout Comp, mutable: Bool) -> U64 {
             tyStart = ty.start
             tyLen = ty.len
             tyIsArray = ty.isArray
+            tyRef = ty.ref
             recordArrayElem(c: inout c, ty: ty)
         }
         _ => {}
@@ -470,7 +498,7 @@ fn parseLet(c: inout Comp, mutable: Bool) -> U64 {
         _ => {}
     }
     val init: U64 = parseExpr(c: inout c)
-    return c.pushStmt(s: <Stmt.Let mutable=mutable nameStart=nameTok.start nameLen=nameTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray init=init />)
+    return c.pushStmt(s: <Stmt.Let mutable=mutable nameStart=nameTok.start nameLen=nameTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=init />)
 }
 
 fn parsePrint(c: inout Comp) -> U64 {
@@ -937,6 +965,7 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
                         mut val pTyStart: U64 = 0
                         mut val pTyLen: U64 = 0
                         mut val pTyIsArray: Bool = false
+                        mut val pTyRef: U64 = 0
                         mut val pIsInout: Bool = false
                         match c.curKind() {
                             Kind.Colon => {
@@ -953,11 +982,12 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
                                 pTyStart = pty.start
                                 pTyLen = pty.len
                                 pTyIsArray = pty.isArray
+                                pTyRef = pty.ref
                                 recordArrayElem(c: inout c, ty: pty)
                             }
                             _ => {}
                         }
-                        params.append(<Param nameStart=pTok.start nameLen=pTok.len tyStart=pTyStart tyLen=pTyLen tyIsArray=pTyIsArray isInout=pIsInout />)
+                        params.append(<Param nameStart=pTok.start nameLen=pTok.len tyStart=pTyStart tyLen=pTyLen tyIsArray=pTyIsArray ty=pTyRef isInout=pIsInout />)
                         match c.curKind() {
                             Kind.Comma => { c.advance() }
                             _ => {}
@@ -972,6 +1002,7 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
     mut val retStart: U64 = 0
     mut val retLen: U64 = 0
     mut val retIsArray: Bool = false
+    mut val retRef: U64 = 0
     match c.curKind() {
         Kind.Arrow => {
             c.advance()
@@ -980,13 +1011,14 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
             retStart = rty.start
             retLen = rty.len
             retIsArray = rty.isArray
+            retRef = rty.ref
             recordArrayElem(c: inout c, ty: rty)
         }
         _ => {}
     }
     c.skipNewlines()
     val body: U64 = parseBlock(c: inout c)
-    c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray body=body hasRecv=hasRecv recvStart=recvStart recvLen=recvLen selfInout=selfInout />)
+    c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvStart recvLen=recvLen selfInout=selfInout />)
 }
 
 // `fn name(...)`: a free function. The current token is `fn`.
@@ -1072,6 +1104,7 @@ fn parseStruct(c: inout Comp) {
                 mut val tyStart: U64 = 0
                 mut val tyLen: U64 = 0
                 mut val tyIsArray: Bool = false
+                mut val tyRef: U64 = 0
                 match c.curKind() {
                     Kind.Colon => {
                         c.advance()
@@ -1079,11 +1112,12 @@ fn parseStruct(c: inout Comp) {
                         tyStart = ty.start
                         tyLen = ty.len
                         tyIsArray = ty.isArray
+                        tyRef = ty.ref
                         recordArrayElem(c: inout c, ty: ty)
                     }
                     _ => {}
                 }
-                fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray isMut=isMut />)
+                fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isMut=isMut />)
             }
         }
     }
@@ -1131,6 +1165,7 @@ fn parseEnum(c: inout Comp) {
                                     mut val tyStart: U64 = 0
                                     mut val tyLen: U64 = 0
                                     mut val tyIsArray: Bool = false
+                                    mut val tyRef: U64 = 0
                                     match c.curKind() {
                                         Kind.Colon => {
                                             c.advance()
@@ -1138,11 +1173,12 @@ fn parseEnum(c: inout Comp) {
                                             tyStart = ty.start
                                             tyLen = ty.len
                                             tyIsArray = ty.isArray
+                                            tyRef = ty.ref
                                             recordArrayElem(c: inout c, ty: ty)
                                         }
                                         _ => {}
                                     }
-                                    fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray isMut=false />)
+                                    fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isMut=false />)
                                     match c.curKind() {
                                         Kind.Comma => { c.advance() }
                                         _ => {}

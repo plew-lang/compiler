@@ -14,6 +14,22 @@ struct PType {
     val start: U64
     val len: U64
     val isArray: Bool
+    // index into Comp.types of the full structured type (head name + type
+    // arguments). The (start,len,isArray) triple above is the legacy "head"
+    // view kept for the Array / scalar / named paths; `ref` carries the general
+    // `Name[Arg, ...]` shape (nested, multi-arg) for generics. For `Array[E]`
+    // the triple still names E with isArray=true, and ref is {Array, [E]}.
+    val ref: U64
+}
+
+// A structured type reference: a head type name span plus a list of type
+// arguments (indices into Comp.types). Non-generic types have an empty args
+// list. `Array[E]` is {name="Array", args=[E]}; `Optional[I32]` is
+// {name="Optional", args=[I32]}; a bare `I32` is {name="I32", args=[]}.
+struct TypeRef {
+    val nameStart: U64
+    val nameLen: U64
+    val args: Array[U64]
 }
 
 // A variable binding in scope during codegen (param, let, or match bind), used
@@ -24,6 +40,9 @@ struct Local {
     val tyStart: U64
     val tyLen: U64
     val isArray: Bool
+    // structured type (Comp.types index); carries generic type arguments that
+    // the (tyStart,tyLen,isArray) head view cannot.
+    val ty: U64
     val isInout: Bool
     // assignable? `mut val` locals and `inout` params are; plain `val` locals,
     // function params, for-loop vars and match binds are immutable (spec: `val`
@@ -87,7 +106,7 @@ enum Expr {
     Array { elems: Array[U64] }
     Index { base: U64, index: U64 }
     Method { recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg] }
-    Cast { operand: U64, tyStart: U64, tyLen: U64 }
+    Cast { operand: U64, tyStart: U64, tyLen: U64, ty: U64 }
     // value-position `match scrut { Pat => expr, ... }`: like Stmt.Match but each
     // arm yields an expression (MatchArm.body is an Expr index, not a Block).
     // Lowers to a C statement-expression.
@@ -124,7 +143,7 @@ struct PatInfo {
 }
 
 enum Stmt {
-    Let { mutable: Bool, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, init: U64 }
+    Let { mutable: Bool, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64 }
     Assign { op: I64, target: U64, value: U64 }
     Print { expr: U64, offset: U64 }
     ExprStmt { expr: U64 }
@@ -156,6 +175,7 @@ struct Param {
     val tyStart: U64
     val tyLen: U64
     val tyIsArray: Bool
+    val ty: U64
     val isInout: Bool
 }
 
@@ -165,6 +185,7 @@ struct FieldDef {
     val tyStart: U64
     val tyLen: U64
     val tyIsArray: Bool
+    val ty: U64
     // declared `mut val` (assignable storage) vs `val` (immutable). Always false
     // for enum variant fields (they take no modifier). Used for the composite
     // mutability check on `base.field = x` (spec: both binding and field `mut`).
@@ -197,6 +218,7 @@ struct Func {
     val retStart: U64
     val retLen: U64
     val retIsArray: Bool
+    val retTy: U64
     val body: U64
     // method receiver: an `impl Type { ... }` member carries the receiver type
     // (recvStart,recvLen) and whether self is `inout` (`inout fn` vs `fn`). The
@@ -217,6 +239,9 @@ struct Comp {
     mut val funcs: Array[Func]
     mut val structs: Array[StructDef]
     mut val enums: Array[EnumDef]
+    // structured type references (TypeRef arena), indexed by the `ty`/`ref`
+    // fields above. Built during parsing; consumed by generic monomorphization.
+    mut val types: Array[TypeRef]
     // distinct Array element type names seen in declarations (for monomorphizing
     // PlewArray_<E> + runtime); each entry reuses Bind as a (start,len) pair.
     mut val arrayElems: Array[Bind]
@@ -313,6 +338,12 @@ impl Comp {
     inout fn pushStmt(s: Stmt) -> U64 {
         val id: U64 = self.stmts.count
         self.stmts.append(s)
+        return id
+    }
+    // Append a structured type reference, returning its Comp.types index.
+    inout fn pushType(t: TypeRef) -> U64 {
+        val id: U64 = self.types.count
+        self.types.append(t)
         return id
     }
     // Read an Int token's value out of the source bytes via its (start,len) span.

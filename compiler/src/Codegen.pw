@@ -331,7 +331,7 @@ fn exprOffset(c: inout Comp, id: U64) -> U64 {
         Expr.Index { val base, val index } => { return exprOffset(c: inout c, id: base) }
         Expr.Binary { val op, val lhs, val rhs } => { return exprOffset(c: inout c, id: lhs) }
         Expr.Unary { val op, val operand } => { return exprOffset(c: inout c, id: operand) }
-        Expr.Cast { val operand, val tyStart, val tyLen } => { return exprOffset(c: inout c, id: operand) }
+        Expr.Cast { val operand, val tyStart, val tyLen, ty: _ } => { return exprOffset(c: inout c, id: operand) }
         Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val fields } => { return typeStart }
         Expr.MatchExpr { val scrut, val arms } => { return exprOffset(c: inout c, id: scrut) }
         Expr.IfExpr { val cond, val thenBlk, val elseBlk } => { return exprOffset(c: inout c, id: cond) }
@@ -517,8 +517,8 @@ fn typeInfoOfName(c: inout Comp, start: U64, len: U64, isArray: Bool) -> TypeInf
     return <TypeInfo kind=2 nameStart=start nameLen=len />
 }
 
-fn addLocal(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, isInout: Bool, isMut: Bool) {
-    c.locals.append(<Local nameStart=nameStart nameLen=nameLen tyStart=tyStart tyLen=tyLen isArray=isArray isInout=isInout isMut=isMut />)
+fn addLocal(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool) {
+    c.locals.append(<Local nameStart=nameStart nameLen=nameLen tyStart=tyStart tyLen=tyLen isArray=isArray ty=ty isInout=isInout isMut=isMut />)
 }
 
 // Whether the binding named (start,len) — most recent in scope — may be assigned
@@ -747,7 +747,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             return scalarInfo()
         }
-        Expr.Cast { val operand, val tyStart, val tyLen } => {
+        Expr.Cast { val operand, val tyStart, val tyLen, ty: _ } => {
             return typeInfoOfName(c: inout c, start: tyStart, len: tyLen, isArray: false)
         }
         Expr.MatchExpr { val scrut, val arms } => {
@@ -805,7 +805,7 @@ fn addBindLocal(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, 
                     while fi < fs.count {
                         val f: FieldDef = fs[fi]
                         if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: fieldStart, bLen: fieldLen) {
-                            addLocal(c: inout c, nameStart: bindStart, nameLen: bindLen, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray, isInout: false, isMut: false)
+                            addLocal(c: inout c, nameStart: bindStart, nameLen: bindLen, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray, ty: f.ty, isInout: false, isMut: false)
                             return
                         }
                         fi += 1
@@ -1213,7 +1213,7 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
         Expr.Method { val recv, val nameStart, val nameLen, val args } => {
             checkMethodArgs(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
         }
-        Expr.Cast { val operand, val tyStart, val tyLen } => {
+        Expr.Cast { val operand, val tyStart, val tyLen, ty: _ } => {
             // The operand has its own type; a direct-literal operand is range-
             // checked by the cast itself, so only recurse into compound operands.
             val oe: Expr = c.exprs[operand]
@@ -1810,7 +1810,7 @@ fn genExpr(c: inout Comp, id: U64) {
             // declared element type. A bare literal here has no element context.
             write(s: "0")
         }
-        Expr.Cast { val operand, val tyStart, val tyLen } => {
+        Expr.Cast { val operand, val tyStart, val tyLen, ty: _ } => {
             // lossless-`as` check (spec: `as` is infallible/lossless; narrowing or
             // signedness change must go through TryFrom). Only checked when the
             // target is an integer type and the source is a literal or has a
@@ -2228,7 +2228,7 @@ fn genCond(c: inout Comp, id: U64) {
 fn genStmt(c: inout Comp, id: U64) {
     val s: Stmt = c.stmts[id]
     match s {
-        Stmt.Let { val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val init } => {
+        Stmt.Let { val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init } => {
             checkLitSpan(c: inout c, id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray)
             write(s: "    ")
             genCTypeRef(c: inout c, start: tyStart, len: tyLen, isArray: tyIsArray)
@@ -2241,7 +2241,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 genExpr(c: inout c, id: init)
             }
             write(s: ";\n")
-            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, isInout: false, isMut: mutable)
+            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable)
         }
         Stmt.Assign { val op, val target, val value } => {
             val te: Expr = c.exprs[target]
@@ -2465,7 +2465,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 write(s: "; ")
                 writeSpan(c: inout c, start: varStart, len: varLen)
                 write(s: "++) {\n")
-                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, isInout: false, isMut: false)
+                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false)
                 genBlock(c: inout c, id: body)
                 write(s: "    }\n    }\n")
             } else {
@@ -2499,7 +2499,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 write(s: ", __fi")
                 writeU64(n: t)
                 write(s: ");\n")
-                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, isInout: false, isMut: false)
+                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false)
                 genBlock(c: inout c, id: body)
                 write(s: "    }\n    }\n")
             }
@@ -2750,7 +2750,7 @@ fn genFunc(c: inout Comp, fi: U64) {
     mut val pi: U64 = 0
     while pi < params.count {
         val p: Param = params[pi]
-        addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, isInout: p.isInout, isMut: false)
+        addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false)
         pi += 1
     }
     genSignature(c: inout c, f: f)

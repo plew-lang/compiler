@@ -66,7 +66,20 @@ manifest は **`Plew.toml`**（spec 暫定名・TOML・src 既定 `src/`・`/` �
 5. **イベントループ（async/await/spawn）**（最大・`Promise[T]` 依存・最後）。
 - traits（`Eq`/`Ord`/`Iterator` ＋ `where` 境界）は generics 後・コアライブラリと並走で純 Plew 化。I2（モジュール可視性ゲート）は多モジュール化が進む段で additive に。
 
-> **次の着手＝generics**。まず既存の `Array[E]` 単相化機構（`PlewArray_<E>`・要素型名マングル・`Comp.arrayElems`）を一般 generic の土台に拡張する方向で調査・設計。
+> **着手中＝generics**。まず既存の `Array[E]` 単相化機構（`PlewArray_<E>`・要素型名マングル・`Comp.arrayElems`）を一般 generic の土台に拡張する。
+
+#### generics 実装の段取り（言語表面は spec/06 で確定済＝確認不要）
+
+確定済の言語表面：型パラメータ `[T]`/`[T, U]`＋能力マーカー `noLocal`/`allowUnique`（v1 は `allowUnique` 不実装＝コピー可能型限定・`unique` は `Ref` 包み）、トレイト制約は `where`（traits エピックなので **v1 は境界なし**＝parse して無視 or 後回し）、use-site の型引数 `Name[TypeArgs]`（PascalCase＝型引数適用／camelCase＝添字＝Go 式判別）、推論＋明示 `f[I32](...)`。`impl[T] Type[T]`。
+
+現状の型表現 `(start, len, isArray)` は `Array[E]` 専用ハードコードで `Name[Arg, ...]`（複数引数・ネスト）を表現できない。これが土台。**コンパイラ自身は generics を使わない（Array＋scalar＋非 generic named のみ）ので、新機構は既存 Array 経路と併存で additive に足せる＝低リスク**。
+
+- **G1（土台・型表現）**：`TypeRef` アリーナ（`struct TypeRef { nameStart, nameLen: U64; args: Array[U64] }`・`Comp.types`）導入。`parseTypeTok` を `Name[Arg, ...]` 再帰パースに一般化（`Array[E]` は `TypeRef{Array,[E]}` に吸収）。型を運ぶ全箇所（`Param`/`FieldDef`/`Func.ret`/`Local`/`Stmt.Let`/`Expr.Cast`/`Comp.curRet`/`PType`）の `(tyStart,tyLen,isArray)` 三つ組を `ty: U64`（TypeRef index）へ。codegen の型出力（`genCTypeRef`/`genCElem`）を TypeRef 受けに。**挙動不変の純リファクタ**＝不動点＋全テストで検証。
+- **G2（generic struct/enum＋単相化）**：struct/enum に `[T,U]` 型パラメータ。プログラム全 TypeRef から具体インスタンス化 `Name[ConcreteArgs]` を収集→型パラメータ置換でフィールド/バリアント型を実体化→ネスト発見の推移閉包→マングル名 `Name_Arg1_Arg2` で C struct/enum を 1 インスタンスずつ出力。JSX 構築 `<Box[I32] v=5 />`・`<Optional[I32].Some v=5 />`。
+- **G3（generic 関数/メソッド）**：`fn f[T]`・呼び出しで型引数推論（引数型から）or 明示 `f[I32](...)`・`impl[T] Type[T]` メソッド。呼ばれたインスタンスを単相化。
+- **G4（コアライブラリ接続）**：`Optional`/`Result` を実 generic enum 化（次エピックのコアライブラリで）。
+
+ADT 注意：ネスト配列 `Array[Array[U8]]` は今壊れる（`PlewArray_Array`・要素型未定義）＝G1/G2 でネスト TypeRef を正しくマングルすれば解消見込み（要テスト）。AST フィールド形を変えるので **reseed 2 回**ルール適用。
 
 ### その他の候補（エピック後）
 - 値意味論/CoW・トレイト/ジェネリクスは更に大物（後）。

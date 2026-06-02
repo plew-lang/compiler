@@ -376,7 +376,7 @@ fn main() {
     }
     mut val lx: Lexer = <Lexer bytes=combined pos=0 toks=[] depth=0 />
     lex(lx: inout lx)
-    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curGiveTmp=0 impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false impEprint=false impExit=false impReadFileBytes=false impFileExists=false />
+    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] types=[] arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curGiveTmp=0 impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false impEprint=false impExit=false impReadFileBytes=false impFileExists=false />
     parseProgram(c: inout c)
     // runtime preamble: includes, immutable String, and the I/O builtins'
     // C runtime (the contract stage0 also injects — emitted here so stage1's
