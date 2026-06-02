@@ -154,9 +154,11 @@ fn litFitsType(c: inout Comp, value: I64, dstStart: U64, dstLen: U64) -> Bool {
     return true
 }
 
-// Emit the C *element* type for a type-name span (no Array wrapper): scalars
-// -> long long, except U8 -> unsigned char (so byte arrays alias a char buffer
-// for String.bytes); String -> PlewString; named struct/enum -> echoed.
+// Emit the C *element* type for a type-name span (no Array wrapper). Each Plew
+// integer type maps to its exact-width C stdint type so storage width and
+// signedness match the declared type (no hidden widening); U8 -> unsigned char
+// (== uint8_t, keeps byte arrays aliasing a char buffer for String.bytes);
+// Bool -> long long (width irrelevant); String -> PlewString; named -> echoed.
 fn genCElem(c: inout Comp, start: U64, len: U64) {
     if len == 0 {
         write(s: "long long")
@@ -166,11 +168,40 @@ fn genCElem(c: inout Comp, start: U64, len: U64) {
         write(s: "unsigned char")
         return
     }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I8") {
+        write(s: "int8_t")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I16") {
+        write(s: "int16_t")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U16") {
+        write(s: "uint16_t")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I32") {
+        write(s: "int32_t")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U32") {
+        write(s: "uint32_t")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I64") {
+        write(s: "int64_t")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U64") {
+        write(s: "uint64_t")
+        return
+    }
     if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "String") {
         write(s: "PlewString")
         return
     }
     if isPrimType(c: inout c, start: start, len: len) {
+        // remaining prim = Bool
         write(s: "long long")
         return
     }
