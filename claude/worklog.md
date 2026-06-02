@@ -17,7 +17,7 @@
 
 ## 次の一歩の候補（やりやすい順で自走）
 
-- **コンパイラ自身の自由関数 → メソッド化を段階的に進める**（`at(lx: inout lx, off:)`→`lx.at(off:)` は完了済。`cur`/`advance`/`peekKind` 等 `inout Comp`/`inout Lexer` を取るヘルパは `impl` メソッドへ移せる＝書き味向上）。各まとまりで ADD 不要・USE→reseed のみ。低リスク。
+- **メソッド化の続き（任意・ROI 逓減）**：Lexer ヘルパ（`at`/`emit`/`lastWasNewline`/`lastCanEnd`）と Comp パースカーソル（`curKind`/`cur`/`peekKind`/`advance`/`skipNewlines`/`identIs`/`pushExpr`/`pushStmt`/`tokenValue`）は `impl` 化済。残る `parseX(c: inout c)` 群も移せるが再帰的・多数でゲインは小さめ＝後回し可。USE→reseed のみ。
 - **`import ./Foo`（名前空間束縛・`Foo.bar`）**。修飾名解決が要る（今は part で全部フラット同一スコープ）。
 - **整数幅 `I8..U64`/`F32/F64`**＝hidden cost の大物。codegen 全体の `long long` 前提を幅つきに置換すると、④ lossy `as`・overflow/0除算 panic・`'あ' を U8` の溢れ検査までまとめて片付く。**複数セッション規模**。
 - 値意味論/CoW・トレイト/ジェネリクスは更に大物（後）。
