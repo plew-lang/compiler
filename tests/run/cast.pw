@@ -11,4 +11,7 @@ fn main() {
     val c: U16 = 1000
     print(c as I32)        // 1000 (unsigned -> strictly wider signed)
     print('A' as U8)       // 65   (literal fits U8)
+    val x: I32 = 7
+    val y: I32 = 9
+    print((x + y) as I64)  // 16   (I32 arithmetic widened to I64 is lossless)
 }

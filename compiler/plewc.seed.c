@@ -3328,6 +3328,12 @@ TypeInfo exprType(Comp* c, long long id) {
         (void)op;
         long long operand = _m87.data.Unary.operand;
         (void)operand;
+    if (op == 57) {
+    return exprType(&((*c)), operand);
+    }
+    if (op == 79) {
+    return exprType(&((*c)), operand);
+    }
     return scalarInfo();
     }
     else if (_m87.tag == 3) {
@@ -3337,6 +3343,16 @@ TypeInfo exprType(Comp* c, long long id) {
         (void)lhs;
         long long rhs = _m87.data.Binary.rhs;
         (void)rhs;
+    if (op >= 56) {
+    if (op <= 60) {
+    return exprType(&((*c)), lhs);
+    }
+    }
+    if (op >= 74) {
+    if (op <= 78) {
+    return exprType(&((*c)), lhs);
+    }
+    }
     return scalarInfo();
     }
     else if (_m87.tag == 4) {
