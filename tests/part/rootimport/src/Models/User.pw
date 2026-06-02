@@ -1,0 +1,1 @@
+fn userId() -> I64 { return 777 }

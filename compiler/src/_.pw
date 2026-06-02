@@ -245,6 +245,49 @@ fn dirPrefixLen(path: Array[U8]) -> U64 {
     return pre
 }
 
+// Find the package source root for `/…` absolute imports: walk up from the
+// entry file's directory to the nearest ancestor containing `Plew.toml` (the
+// manifest), and return `<that dir>/src/`. Empty if no manifest is found (then
+// `/…` imports are unresolved). spec: sources live under `src/` (manifest may
+// override later); only the manifest's *location* is used for now.
+fn findSrcRoot(entry: Array[U8]) -> Array[U8] {
+    mut val dirLen: U64 = dirPrefixLen(path: entry)
+    mut val go: Bool = true
+    while go {
+        mut val mani: Array[U8] = []
+        mut val i: U64 = 0
+        while i < dirLen {
+            mani.append(entry[i])
+            i += 1
+        }
+        val mn: Array[U8] = "Plew.toml".bytes
+        appendBytes(into: inout mani, from: mn)
+        if fileExists(path: mani) {
+            mut val sr: Array[U8] = []
+            mut val j: U64 = 0
+            while j < dirLen {
+                sr.append(entry[j])
+                j += 1
+            }
+            val sx: Array[U8] = "src/".bytes
+            appendBytes(into: inout sr, from: sx)
+            return sr
+        }
+        if dirLen == 0 {
+            go = false
+        } else {
+            val nd: U64 = stripParents(path: entry, baseLen: dirLen, n: 1)
+            if nd == dirLen {
+                go = false
+            } else {
+                dirLen = nd
+            }
+        }
+    }
+    mut val empty: Array[U8] = []
+    return empty
+}
+
 // Whether `path` is already in the loaded set (each Bind is a span into `buf`).
 // Dedup keeps a module included once and makes import cycles terminate.
 fn pathSeen(buf: Array[U8], loaded: Array[Bind], path: Array[U8]) -> Bool {
@@ -290,9 +333,9 @@ fn main() {
         val entryBytes: Array[U8] = rootPath.bytes
         mut val pathBuf: Array[U8] = []
         mut val loaded: Array[Bind] = []
-        // package src root for `/…` absolute imports (empty until Plew.toml walk-up
-        // is wired — `/` imports then skip; `./`/`../` need no root).
-        mut val srcRoot: Array[U8] = []
+        // package src root for `/…` absolute imports (from the Plew.toml walk-up;
+        // empty if no manifest is found, in which case `/…` imports are skipped).
+        val srcRoot: Array[U8] = findSrcRoot(entry: entryBytes)
         val es: U64 = pathBuf.count
         appendBytes(into: inout pathBuf, from: entryBytes)
         loaded.append(<Bind nameStart=es nameLen=entryBytes.count fieldStart=es fieldLen=entryBytes.count />)

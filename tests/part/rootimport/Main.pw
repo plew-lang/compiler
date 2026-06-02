@@ -1,0 +1,11 @@
+// Root-absolute `/…` imports resolve from the package src root (the directory
+// holding Plew.toml, + src/) regardless of where the importer sits — the Rust
+// `crate::` analog. Here Main pulls in /Lib and /Models/User.
+import @Std/Io with { print }
+import /Lib
+import /Models/User
+
+fn main() {
+    print(twice(n: 21I64))       // 42
+    print(userId())              // 777
+}

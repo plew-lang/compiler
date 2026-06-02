@@ -407,6 +407,7 @@ PlewArray_U8 resolveImport(PlewArray_U8 src, uint64_t pStart, uint64_t pLen, Ple
 void appendBytes(PlewArray_U8* into, PlewArray_U8 from);
 PlewArray_U8 extractSpan(PlewArray_U8 buf, uint64_t start, uint64_t len);
 uint64_t dirPrefixLen(PlewArray_U8 path);
+PlewArray_U8 findSrcRoot(PlewArray_U8 entry);
 long long pathSeen(PlewArray_U8 buf, PlewArray_Bind loaded, PlewArray_U8 path);
 unsigned char Lexer_at(Lexer self, uint64_t off);
 void Lexer_emit(Lexer* self, Kind k, uint64_t start, uint64_t len);
@@ -779,6 +780,45 @@ uint64_t dirPrefixLen(PlewArray_U8 path) {
     }
     return pre;
 }
+PlewArray_U8 findSrcRoot(PlewArray_U8 entry) {
+    uint64_t dirLen = dirPrefixLen(entry);
+    long long go = 1;
+    while (go) {
+    PlewArray_U8 mani = PlewArray_U8_new();
+    uint64_t i = 0;
+    while (i < dirLen) {
+    PlewArray_U8_push(&(mani), PlewArray_U8_get(entry, (long long)(i)));
+    i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    PlewArray_U8 mn = ({ PlewString __s = (PlewString){"Plew.toml", 9}; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len}; });
+    appendBytes(&(mani), mn);
+    if (plew_file_exists(mani)) {
+    PlewArray_U8 sr = PlewArray_U8_new();
+    uint64_t j = 0;
+    while (j < dirLen) {
+    PlewArray_U8_push(&(sr), PlewArray_U8_get(entry, (long long)(j)));
+    j = ({ uint64_t __ov; if (__builtin_add_overflow((j), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    PlewArray_U8 sx = ({ PlewString __s = (PlewString){"src/", 4}; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len}; });
+    appendBytes(&(sr), sx);
+    return sr;
+    }
+    if (dirLen == 0) {
+    go = 0;
+    }
+    else {
+    uint64_t nd = stripParents(entry, dirLen, 1);
+    if (nd == dirLen) {
+    go = 0;
+    }
+    else {
+    dirLen = nd;
+    }
+    }
+    }
+    PlewArray_U8 empty = PlewArray_U8_new();
+    return empty;
+}
 long long pathSeen(PlewArray_U8 buf, PlewArray_Bind loaded, PlewArray_U8 path) {
     uint64_t i = 0;
     while (i < (long long)((loaded).len)) {
@@ -808,7 +848,7 @@ int main(int argc, char** argv) {
     PlewArray_U8 entryBytes = ({ PlewString __s = rootPath; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len}; });
     PlewArray_U8 pathBuf = PlewArray_U8_new();
     PlewArray_Bind loaded = PlewArray_Bind_new();
-    PlewArray_U8 srcRoot = PlewArray_U8_new();
+    PlewArray_U8 srcRoot = findSrcRoot(entryBytes);
     uint64_t es = (long long)((pathBuf).len);
     appendBytes(&(pathBuf), entryBytes);
     PlewArray_Bind_push(&(loaded), (Bind){.nameStart = es, .nameLen = (long long)((entryBytes).len), .fieldStart = es, .fieldLen = (long long)((entryBytes).len)});
