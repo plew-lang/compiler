@@ -84,7 +84,8 @@
 
 ## 可視性・モジュール・import
 
-- **`pub`/`export`／モジュール（1 ファイル 1 モジュール）／`part`／`/`・`./`・`../` ルート／名前空間 import（`Io.print`）／実モジュール解決** → **未実装**。**単一ファイル**・名前解決は線形スキャン。
+- **`pub`/`export`／`/`・`../` ルート／名前空間 import（`Io.print`）／`_.pw` ディレクトリ解決** → **未実装**。名前解決は（全ファイル連結後の）線形スキャン。
+- **`part ./Name`（部分実装）** → 同一モジュールの複数ファイル化に対応。root ファイルの `part ./Name` directive を走査し、`Name.pw`（兄弟ファイル）を readFileBytes で読んで**バイト列を連結**し、1 つの buffer として lex/parse（単一アリーナ・単一 C 出力モデルゆえ別コンパイルはせず全部入りにする）。スコープ共有・名前空間なしは spec 通り。残：`_.pw` ディレクトリ・`../`・`/` ルート・ネストした part（root の part のみ走査＝part 先の part は未追従）・forest/循環検査なし。パス構築は `readFileBytes(path: Array[U8])` ビルトイン（`@Std/Io` の `readFile` import で一緒に有効化される内部ヘルパ）。
 - **import（部分実装）** → `import @Std/Io with { … }`・`import @Std/Process with { … }` の **`with { }` 選択形のみ**パース＆enforce。認識する名前は I/O ビルトインだけ（`@Std/Io`＝print/write/writeByte/readStdin/readFile・`@Std/Process`＝argCount/argAt）で、**名前↔モジュール対応も検査**（誤モジュール import はそのビルトインを有効化しない）。それ以外の import パス・名前はパースして無視（単一ファイルゆえ解決先が無い）。enforce は **未 import 呼び出し＝未宣言 C 識別子で clang を失敗**させる sentinel 方式（enum-`==` と同じ・真の診断経路は未整備）。
 - **lang item / ambient 型** → 概念なし。`print`/`write`/`writeByte`/`readStdin`/`readFile`/`argCount`/`argAt` は **import で gate される埋め込みビルトイン**（本来は `@Std`＋`Format` 等で、名前自体も `argCount`/`argAt` 等は `Process.args()` の暫定スタンドイン）。移行レシピは [worklog.md](worklog.md)。
 - **エントリ `fn main`**：`int main(int argc, char** argv)` に固定脱糖（spec の `fn main`/`async fn main`・戻り `()|Result` とは別）。

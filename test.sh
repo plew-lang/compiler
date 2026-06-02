@@ -48,6 +48,30 @@ for pw in tests/run/*.pw; do
     fi
 done
 
+# --- part/ : multi-file modules. Each subdir's Main.pw stitches in siblings
+#     via `part`; compile the root, run it, and check Main.out. ---
+for main in tests/part/*/Main.pw tests/part/Main.pw; do
+    [ -f "$main" ] || continue
+    dir=$(dirname "$main")
+    name=$(basename "$dir")
+    [ "$name" = "part" ] && name="part"
+    c="$TMP/part-$name.c"
+    bin="$TMP/part-$name"
+    if ! "$PLEWC" "$main" > "$c" 2>"$TMP/err"; then
+        echo "FAIL  part/$name  (plewc errored)"; fail=$((fail + 1)); continue
+    fi
+    if ! clang -w "$c" -o "$bin" 2>"$TMP/err"; then
+        echo "FAIL  part/$name  (clang rejected generated C)"; fail=$((fail + 1)); continue
+    fi
+    got=$("$bin")
+    want=$(cat "$dir/Main.out")
+    if [ "$got" = "$want" ]; then
+        pass=$((pass + 1))
+    else
+        echo "FAIL  part/$name  (output: got [$got] want [$want])"; fail=$((fail + 1))
+    fi
+done
+
 # --- reject/ : spec-invalid code must fail to compile ---
 for pw in tests/reject/*.pw; do
     name=$(basename "$pw" .pw)

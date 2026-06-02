@@ -2033,6 +2033,9 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readFile") {
                 return <TypeInfo kind=1 nameStart=0 nameLen=0 />
             }
+            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readFileBytes") {
+                return <TypeInfo kind=1 nameStart=0 nameLen=0 />
+            }
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argAt") {
                 return <TypeInfo kind=1 nameStart=0 nameLen=0 />
             }
@@ -2276,6 +2279,18 @@ fn genExpr(c: inout Comp, id: U64) {
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readFile") {
                 if c.impReadFile {
                     write(s: "plew_read_file(")
+                    genExpr(c: inout c, id: args[0].expr)
+                    write(s: ")")
+                } else {
+                    write(s: "__plew_readFile_requires_import_Std_Io")
+                }
+                return
+            }
+            // readFileBytes(path: Array[U8]) -> String. Bundled under the same
+            // `readFile` import (an internal helper for multi-file `part`).
+            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readFileBytes") {
+                if c.impReadFile {
+                    write(s: "plew_read_file_bytes(")
                     genExpr(c: inout c, id: args[0].expr)
                     write(s: ")")
                 } else {
@@ -3141,24 +3156,132 @@ fn genU8ArrayRuntime() {
     write(s: "__attribute__((unused)) static void PlewArray_U8_push(PlewArray_U8* a, unsigned char v) { if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; unsigned char* nd = (unsigned char*)malloc(sizeof(unsigned char) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; a->data = nd; a->cap = nc; } a->data[a->len] = v; a->len++; }\n")
 }
 
+// ---- multi-file `part` ----
+//
+// A module may span several files: `part ./Name` stitches Name.pw into the same
+// module (shared scope, no namespace). We resolve this by assembling all files
+// into one byte buffer and lexing/parsing it as a unit (the single-arena, single
+// C-output model has no separate compilation). Only `part ./Name` (sibling file)
+// is supported for now; `_.pw` directories, `../`, and `/` roots are additive.
+
+// Scan a lexed token stream for `part . / Ident` directives, returning the
+// module-name spans (into `rootBytes`). `part` is an ordinary identifier.
+fn collectParts(rootBytes: Array[U8], toks: Array[Tok]) -> Array[Bind] {
+    mut val parts: Array[Bind] = []
+    mut val i: U64 = 0
+    while i < toks.count {
+        val t: Tok = toks[i]
+        mut val isPart: Bool = false
+        match t.kind {
+            Kind.Ident => {
+                if rangeEquals(bytes: rootBytes, start: t.start, len: t.len, kw: "part") {
+                    isPart = true
+                }
+            }
+            _ => {}
+        }
+        if isPart {
+            if i + 3 < toks.count {
+                mut val okDot: Bool = false
+                match toks[i + 1].kind {
+                    Kind.Dot => { okDot = true }
+                    _ => {}
+                }
+                mut val okSlash: Bool = false
+                match toks[i + 2].kind {
+                    Kind.Slash => { okSlash = true }
+                    _ => {}
+                }
+                val nameT: Tok = toks[i + 3]
+                mut val okName: Bool = false
+                match nameT.kind {
+                    Kind.Ident => { okName = true }
+                    _ => {}
+                }
+                if okDot && okSlash && okName {
+                    parts.append(<Bind nameStart=nameT.start nameLen=nameT.len />)
+                }
+            }
+        }
+        i += 1
+    }
+    return parts
+}
+
+// Build the file path for `part ./Name`: the root file's directory (everything
+// up to and including the last `/`) + Name + ".pw".
+fn buildPartPath(rootPathBytes: Array[U8], rootBytes: Array[U8], nameStart: U64, nameLen: U64) -> Array[U8] {
+    mut val path: Array[U8] = []
+    mut val prefixLen: U64 = 0
+    mut val k: U64 = 0
+    while k < rootPathBytes.count {
+        if rootPathBytes[k] == 47 {
+            prefixLen = k + 1
+        }
+        k += 1
+    }
+    mut val p: U64 = 0
+    while p < prefixLen {
+        path.append(rootPathBytes[p])
+        p += 1
+    }
+    mut val n: U64 = 0
+    while n < nameLen {
+        path.append(rootBytes[nameStart + n])
+        n += 1
+    }
+    path.append(46)
+    path.append(112)
+    path.append(119)
+    return path
+}
+
+// Append every byte of `from` onto `into`.
+fn appendBytes(into: inout Array[U8], from: Array[U8]) {
+    mut val i: U64 = 0
+    while i < from.count {
+        into.append(from[i])
+        i += 1
+    }
+}
+
 // ---- driver ----
 //
-// Reads a Plew program from stdin (top-level `fn` declarations), parses it into
-// an arena AST, and writes a C translation to stdout: the runtime preamble,
-// nominal type decls, monomorphized array types, then prototypes and bodies.
+// Reads a Plew program from a file argument (following `part` directives) or
+// from stdin, parses it into an arena AST, and writes a C translation to stdout:
+// the runtime preamble, nominal type decls, monomorphized array types, then
+// prototypes and bodies.
 
 fn main() {
-    // Read source from a file argument (`plewc file.pw`) or, with no argument,
-    // from stdin. Output C goes to stdout either way.
-    mut val src: String = ""
+    // Assemble the source. With a file argument we read it, follow its `part`
+    // directives, and concatenate every file into one buffer; with no argument
+    // we read a single program from stdin.
+    mut val combined: Array[U8] = []
     if argCount() > 1 {
-        src = readFile(argAt(1))
+        val rootPath: String = argAt(1)
+        val rootPathBytes: Array[U8] = rootPath.bytes
+        val rootStr: String = readFile(rootPath)
+        val rootBytes: Array[U8] = rootStr.bytes
+        mut val lx0: Lexer = <Lexer bytes=rootBytes pos=0 toks=[] depth=0 />
+        lex(lx: inout lx0)
+        val parts: Array[Bind] = collectParts(rootBytes: rootBytes, toks: lx0.toks)
+        appendBytes(into: inout combined, from: rootBytes)
+        mut val pi: U64 = 0
+        while pi < parts.count {
+            val pb: Bind = parts[pi]
+            val partPath: Array[U8] = buildPartPath(rootPathBytes: rootPathBytes, rootBytes: rootBytes, nameStart: pb.nameStart, nameLen: pb.nameLen)
+            val partStr: String = readFileBytes(partPath)
+            combined.append(10)
+            appendBytes(into: inout combined, from: partStr.bytes)
+            pi += 1
+        }
     } else {
-        src = readStdin()
+        val s: String = readStdin()
+        appendBytes(into: inout combined, from: s.bytes)
     }
-    mut val lx: Lexer = <Lexer bytes=src.bytes pos=0 toks=[] depth=0 />
+    mut val lx: Lexer = <Lexer bytes=combined pos=0 toks=[] depth=0 />
     lex(lx: inout lx)
-    mut val c: Comp = <Comp bytes=src.bytes toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false />
+    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false />
     parseProgram(c: inout c)
     // runtime preamble: includes, immutable String, and the I/O builtins'
     // C runtime (the contract stage0 also injects — emitted here so stage1's
@@ -3196,6 +3319,10 @@ fn main() {
     // array typedefs (element by pointer -> forward decls suffice). U8 is always
     // present (String.bytes); other element types come from declarations.
     genU8ArrayTypedef()
+    // readFileBytes: read a file named by an Array[U8] path (used by multi-file
+    // `part` to read a path built from byte spans). Needs PlewArray_U8 above and
+    // plew_read_file from the preamble.
+    write(s: "__attribute__((unused)) static PlewString plew_read_file_bytes(PlewArray_U8 p) { char* path = (char*)malloc((size_t)p.len + 1); memcpy(path, p.data, (size_t)p.len); path[p.len] = 0; PlewString r = plew_read_file((PlewString){path, p.len}); free(path); return r; }\n")
     mut val ai: U64 = 0
     while ai < c.arrayElems.count {
         val ae: Bind = c.arrayElems[ai]

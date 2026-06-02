@@ -1,0 +1,7 @@
+fn triple(n: I64) -> I64 {
+    return n * 3
+}
+
+fn square(n: I64) -> I64 {
+    return n * n
+}

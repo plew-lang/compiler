@@ -20,7 +20,13 @@
 
 **④が整数幅に依存して保留**：現状は `as` を数値↔数値の素の C キャストにしており `300 as U8` が silent truncate する。spec は `as`＝infallible 固定（無損失のみ・縮小は `TryFrom`）。だが現コンパイラは整数幅を区別せず全部 `long long` なので**損失性が判定できない**＝幅つき整数（hidden cost 側の大物）の実装と一体。受理の健全性は①②③⑤で当面の hidden-meaning を概ね潰した。
 
-**次の一歩＝コードを書きやすくする機能へ（方針転換）**：受理の健全性が一区切りしたので、ユーザー要望により**実装を楽にする機能**を優先する。第一候補＝**複数ファイルモジュール（`part ./File` 相対パス）**＝3000 行の `compiler/src/_.pw` を lexer/parser/codegen 等に分割できるようにする。現アーキ（単一アリーナ＋単一 C 出力）には `part`（同一モジュール・スコープ共有・名前空間なし）が最も素直＝参照ファイルを readFile して同じ Comp に lex+parse して decl を追記するだけで成立し、修飾名解決が要らない。`import ./Foo`（名前空間束縛・`Foo.bar`）は修飾名解決が要るので後。
+**開発を楽にする機能フェーズ（受理の健全性は一区切り）**：
+
+- ✅ **複数ファイル `part ./Name`**（相対・兄弟ファイル）。root の `part` directive を走査→兄弟 `.pw` を readFileBytes で読みバイト連結→1 buffer として lex/parse（単一アリーナ・単一 C 出力ゆえ全部入り）。`tests/part/` で回帰。残：`_.pw` ディレクトリ・`../`・`/` ルート・ネスト part 追従。
+
+**次の一歩＝コンパイラ本体 `compiler/src/_.pw`（約3100行）の分割**。`part` が使えるので lexer / ast / parser / codegen 等に切り出して `_.pw` を薄い root（import＋part＋main）にする。これがブートストラップ自身の part 実地テストにもなる。手順：`_.pw` から塊を別ファイルへ移動→`_.pw` に `part ./Lexer` 等を追加→`./bootstrap.sh --reseed`（種更新）→不動点確認。**bootstrap.sh/test.sh は引数に root（`compiler/src/_.pw`）を渡すだけで変更不要**（part 追従はコンパイラがやる）。
+
+その後の候補：`import ./Foo`（名前空間束縛・要修飾名解決）・String 連結や行番号付き診断などの足回り。
 
 > import 機構の現状＝**`with { }` 選択 import のみ**で、認識するのは I/O ビルトイン（`@Std/Io`＝print/write/writeByte/readStdin/readFile・`@Std/Process`＝argCount/argAt）だけ。名前空間 import（`Io.print`）・実モジュール解決・複数ファイル・`export`/`part`・`/`/`./` ルートは未実装（単一ファイルのまま）。enforce は「未 import の I/O ビルトイン呼び出し＝未宣言 C 識別子を吐いて clang を loud に失敗」＝enum-`==` と同じ sentinel 方式（診断＋非ゼロ終了の真のエラー経路はまだ無い）。
 

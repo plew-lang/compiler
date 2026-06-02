@@ -1,0 +1,10 @@
+// Multi-file module: Main.pw stitches in Helper.pw via `part`, then calls a
+// function defined there (shared scope, no namespace).
+import @Std/Io with { print }
+
+part ./Helper
+
+fn main() {
+    print(triple(n: 7))
+    print(square(n: 5))
+}

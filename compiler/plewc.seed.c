@@ -32,6 +32,7 @@ typedef struct Kind Kind;
 typedef struct Expr Expr;
 typedef struct Stmt Stmt;
 typedef struct { unsigned char* data; long long len; long long cap; } PlewArray_U8;
+__attribute__((unused)) static PlewString plew_read_file_bytes(PlewArray_U8 p) { char* path = (char*)malloc((size_t)p.len + 1); memcpy(path, p.data, (size_t)p.len); path[p.len] = 0; PlewString r = plew_read_file((PlewString){path, p.len}); free(path); return r; }
 typedef struct { Tok* data; long long len; long long cap; } PlewArray_Tok;
 typedef struct { Arg* data; long long len; long long cap; } PlewArray_Arg;
 typedef struct { MakeField* data; long long len; long long cap; } PlewArray_MakeField;
@@ -429,6 +430,9 @@ void genArrayRuntimeFns(Comp* c, long long elemStart, long long elemLen);
 long long isU8Elem(Comp* c, long long elemStart, long long elemLen);
 void genU8ArrayTypedef(void);
 void genU8ArrayRuntime(void);
+PlewArray_Bind collectParts(PlewArray_U8 rootBytes, PlewArray_Tok toks);
+PlewArray_U8 buildPartPath(PlewArray_U8 rootPathBytes, PlewArray_U8 rootBytes, long long nameStart, long long nameLen);
+void appendBytes(PlewArray_U8* into, PlewArray_U8 from);
 unsigned char at(Lexer* lx, long long off) {
     long long i = ((*lx).pos + off);
     if (i < (long long)(((*lx).bytes).len)) {
@@ -2560,6 +2564,9 @@ TypeInfo exprType(Comp* c, long long id) {
     if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"readFile", 8})) {
     return (TypeInfo){.kind = 1, .nameStart = 0, .nameLen = 0};
     }
+    if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"readFileBytes", 13})) {
+    return (TypeInfo){.kind = 1, .nameStart = 0, .nameLen = 0};
+    }
     if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"argAt", 5})) {
     return (TypeInfo){.kind = 1, .nameStart = 0, .nameLen = 0};
     }
@@ -2911,6 +2918,17 @@ void genExpr(Comp* c, long long id) {
     if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"readFile", 8})) {
     if ((*c).impReadFile) {
     plew_write((PlewString){"plew_read_file(", 15});
+    genExpr(&((*c)), PlewArray_Arg_get(args, (long long)(0)).expr);
+    plew_write((PlewString){")", 1});
+    }
+    else {
+    plew_write((PlewString){"__plew_readFile_requires_import_Std_Io", 38});
+    }
+    return;
+    }
+    if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"readFileBytes", 13})) {
+    if ((*c).impReadFile) {
+    plew_write((PlewString){"plew_read_file_bytes(", 21});
     genExpr(&((*c)), PlewArray_Arg_get(args, (long long)(0)).expr);
     plew_write((PlewString){")", 1});
     }
@@ -3860,18 +3878,122 @@ void genU8ArrayRuntime(void) {
     plew_write((PlewString){"__attribute__((unused)) static void PlewArray_U8_set(PlewArray_U8* a, long long i, unsigned char v) { if (i < 0 || i >= a->len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } a->data[i] = v; }\n", 207});
     plew_write((PlewString){"__attribute__((unused)) static void PlewArray_U8_push(PlewArray_U8* a, unsigned char v) { if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; unsigned char* nd = (unsigned char*)malloc(sizeof(unsigned char) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; a->data = nd; a->cap = nc; } a->data[a->len] = v; a->len++; }\n", 351});
 }
-int main(int argc, char** argv) {
-    plew_argc = argc; plew_argv = argv;
-    PlewString src = (PlewString){"", 0};
-    if (plew_arg_count() > 1) {
-    src = plew_read_file(plew_arg_at((long long)(1)));
+PlewArray_Bind collectParts(PlewArray_U8 rootBytes, PlewArray_Tok toks) {
+    PlewArray_Bind parts = PlewArray_Bind_new();
+    long long i = 0;
+    while (i < (long long)((toks).len)) {
+    Tok t = PlewArray_Tok_get(toks, (long long)(i));
+    long long isPart = 0;
+    {
+    Kind _m71 = t.kind;
+    if (_m71.tag == 4) {
+    if (rangeEquals(rootBytes, t.start, t.len, (PlewString){"part", 4})) {
+    isPart = 1;
+    }
     }
     else {
-    src = plew_read_stdin();
     }
-    Lexer lx = (Lexer){.bytes = ({ PlewString __s = src; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len}; }), .pos = 0, .toks = PlewArray_Tok_new(), .depth = 0};
+    }
+    if (isPart) {
+    if ((i + 3) < (long long)((toks).len)) {
+    long long okDot = 0;
+    {
+    Kind _m72 = PlewArray_Tok_get(toks, (long long)((i + 1))).kind;
+    if (_m72.tag == 32) {
+    okDot = 1;
+    }
+    else {
+    }
+    }
+    long long okSlash = 0;
+    {
+    Kind _m73 = PlewArray_Tok_get(toks, (long long)((i + 2))).kind;
+    if (_m73.tag == 43) {
+    okSlash = 1;
+    }
+    else {
+    }
+    }
+    Tok nameT = PlewArray_Tok_get(toks, (long long)((i + 3)));
+    long long okName = 0;
+    {
+    Kind _m74 = nameT.kind;
+    if (_m74.tag == 4) {
+    okName = 1;
+    }
+    else {
+    }
+    }
+    if ((okDot && okSlash) && okName) {
+    PlewArray_Bind_push(&(parts), (Bind){.nameStart = nameT.start, .nameLen = nameT.len});
+    }
+    }
+    }
+    i += 1;
+    }
+    return parts;
+}
+PlewArray_U8 buildPartPath(PlewArray_U8 rootPathBytes, PlewArray_U8 rootBytes, long long nameStart, long long nameLen) {
+    PlewArray_U8 path = PlewArray_U8_new();
+    long long prefixLen = 0;
+    long long k = 0;
+    while (k < (long long)((rootPathBytes).len)) {
+    if (PlewArray_U8_get(rootPathBytes, (long long)(k)) == 47) {
+    prefixLen = (k + 1);
+    }
+    k += 1;
+    }
+    long long p = 0;
+    while (p < prefixLen) {
+    PlewArray_U8_push(&(path), PlewArray_U8_get(rootPathBytes, (long long)(p)));
+    p += 1;
+    }
+    long long n = 0;
+    while (n < nameLen) {
+    PlewArray_U8_push(&(path), PlewArray_U8_get(rootBytes, (long long)((nameStart + n))));
+    n += 1;
+    }
+    PlewArray_U8_push(&(path), 46);
+    PlewArray_U8_push(&(path), 112);
+    PlewArray_U8_push(&(path), 119);
+    return path;
+}
+void appendBytes(PlewArray_U8* into, PlewArray_U8 from) {
+    long long i = 0;
+    while (i < (long long)((from).len)) {
+    PlewArray_U8_push(&((*into)), PlewArray_U8_get(from, (long long)(i)));
+    i += 1;
+    }
+}
+int main(int argc, char** argv) {
+    plew_argc = argc; plew_argv = argv;
+    PlewArray_U8 combined = PlewArray_U8_new();
+    if (plew_arg_count() > 1) {
+    PlewString rootPath = plew_arg_at((long long)(1));
+    PlewArray_U8 rootPathBytes = ({ PlewString __s = rootPath; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len}; });
+    PlewString rootStr = plew_read_file(rootPath);
+    PlewArray_U8 rootBytes = ({ PlewString __s = rootStr; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len}; });
+    Lexer lx0 = (Lexer){.bytes = rootBytes, .pos = 0, .toks = PlewArray_Tok_new(), .depth = 0};
+    lex(&(lx0));
+    PlewArray_Bind parts = collectParts(rootBytes, lx0.toks);
+    appendBytes(&(combined), rootBytes);
+    long long pi = 0;
+    while (pi < (long long)((parts).len)) {
+    Bind pb = PlewArray_Bind_get(parts, (long long)(pi));
+    PlewArray_U8 partPath = buildPartPath(rootPathBytes, rootBytes, pb.nameStart, pb.nameLen);
+    PlewString partStr = plew_read_file_bytes(partPath);
+    PlewArray_U8_push(&(combined), 10);
+    appendBytes(&(combined), ({ PlewString __s = partStr; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len}; }));
+    pi += 1;
+    }
+    }
+    else {
+    PlewString s = plew_read_stdin();
+    appendBytes(&(combined), ({ PlewString __s = s; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len}; }));
+    }
+    Lexer lx = (Lexer){.bytes = combined, .pos = 0, .toks = PlewArray_Tok_new(), .depth = 0};
     lex(&(lx));
-    Comp c = (Comp){.bytes = ({ PlewString __s = src; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len}; }), .toks = lx.toks, .pos = 0, .exprs = PlewArray_Expr_new(), .stmts = PlewArray_Stmt_new(), .blocks = PlewArray_Block_new(), .funcs = PlewArray_Func_new(), .structs = PlewArray_StructDef_new(), .enums = PlewArray_EnumDef_new(), .arrayElems = PlewArray_Bind_new(), .locals = PlewArray_Local_new(), .tmp = 0, .curIsMain = 0, .curRetVoid = 0, .impPrint = 0, .impWrite = 0, .impWriteByte = 0, .impReadStdin = 0, .impReadFile = 0, .impArgCount = 0, .impArgAt = 0};
+    Comp c = (Comp){.bytes = combined, .toks = lx.toks, .pos = 0, .exprs = PlewArray_Expr_new(), .stmts = PlewArray_Stmt_new(), .blocks = PlewArray_Block_new(), .funcs = PlewArray_Func_new(), .structs = PlewArray_StructDef_new(), .enums = PlewArray_EnumDef_new(), .arrayElems = PlewArray_Bind_new(), .locals = PlewArray_Local_new(), .tmp = 0, .curIsMain = 0, .curRetVoid = 0, .impPrint = 0, .impWrite = 0, .impWriteByte = 0, .impReadStdin = 0, .impReadFile = 0, .impArgCount = 0, .impArgAt = 0};
     parseProgram(&(c));
     plew_write((PlewString){"#include <stdio.h>\n#include <stdint.h>\n#include <stdlib.h>\n#include <string.h>\n", 79});
     plew_write((PlewString){"typedef struct { const char* data; long long len; } PlewString;\n", 64});
@@ -3903,6 +4025,7 @@ int main(int argc, char** argv) {
     ei += 1;
     }
     genU8ArrayTypedef();
+    plew_write((PlewString){"__attribute__((unused)) static PlewString plew_read_file_bytes(PlewArray_U8 p) { char* path = (char*)malloc((size_t)p.len + 1); memcpy(path, p.data, (size_t)p.len); path[p.len] = 0; PlewString r = plew_read_file((PlewString){path, p.len}); free(path); return r; }\n", 264});
     long long ai = 0;
     while (ai < (long long)((c.arrayElems).len)) {
     Bind ae = PlewArray_Bind_get(c.arrayElems, (long long)(ai));
@@ -3946,8 +4069,8 @@ int main(int argc, char** argv) {
     i += 1;
     }
     {
-    long long __fe71 = (long long)((c.funcs).len);
-    for (long long j = 0; j < __fe71; j++) {
+    long long __fe75 = (long long)((c.funcs).len);
+    for (long long j = 0; j < __fe75; j++) {
     genFunc(&(c), j);
     }
     }
