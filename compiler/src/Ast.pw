@@ -1,0 +1,250 @@
+// Part of the Plew compiler module (root: _.pw). AST: arena node types
+// (indexed by U64), the Comp state, and cursor helpers.
+
+// ---- AST (arena, indexed by U64) ----
+//
+// Expressions and statements live in flat arenas (Array[Expr]/Array[Stmt]);
+// children are referenced by U64 index. Operators are stored as kindCode (I64)
+// to avoid nesting an enum inside an enum payload. Identifier nodes keep the
+// source (start, len) span so codegen can echo the name via writeByte.
+
+// A parsed type: for `Array[E]`, (start,len) names the element E and isArray is
+// true; otherwise (start,len) names the type itself (scalar / String / named).
+struct PType {
+    val start: U64
+    val len: U64
+    val isArray: Bool
+}
+
+// A variable binding in scope during codegen (param, let, or match bind), used
+// to recover an expression's type for monomorphization and `.bytes` dispatch.
+struct Local {
+    val nameStart: U64
+    val nameLen: U64
+    val tyStart: U64
+    val tyLen: U64
+    val isArray: Bool
+    val isInout: Bool
+}
+
+// The recovered type of an expression. kind: 0 scalar (long long), 1 String,
+// 2 named struct/enum, 3 array. For named: (nameStart,len) is the type name;
+// for array: the element type name (always backed by a real declaration span).
+struct TypeInfo {
+    val kind: I64
+    val nameStart: U64
+    val nameLen: U64
+}
+
+// One `field=expr` pair inside a JSX construction `<Type field=expr ... />`.
+struct MakeField {
+    val nameStart: U64
+    val nameLen: U64
+    val value: U64
+}
+
+// One `val name` field binding inside a match pattern `E.V { val a, val b }`.
+struct Bind {
+    val nameStart: U64
+    val nameLen: U64
+}
+
+// A call argument: the expression plus whether it was passed `inout` (which
+// lowers to `&(expr)` at the call site, matching a pointer parameter).
+struct Arg {
+    val expr: U64
+    val isInout: Bool
+    // the argument label `name:` (spec: required, in declaration order). Empty
+    // when the call site omitted it (then a user-function call is rejected).
+    val labelStart: U64
+    val labelLen: U64
+    val hasLabel: Bool
+}
+
+enum Expr {
+    Int { value: I64 }
+    Ident { start: U64, len: U64 }
+    Unary { op: I64, operand: U64 }
+    Binary { op: I64, lhs: U64, rhs: U64 }
+    Call { nameStart: U64, nameLen: U64, args: Array[Arg] }
+    Field { base: U64, nameStart: U64, nameLen: U64 }
+    Make { typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fields: Array[MakeField] }
+    Str { start: U64, len: U64 }
+    Array { elems: Array[U64] }
+    Index { base: U64, index: U64 }
+    Method { recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg] }
+    Cast { operand: U64, tyStart: U64, tyLen: U64 }
+}
+
+// One arm of a match: either `_ => block` (wildcard) or `Enum.Variant
+// [{ val f ... }] => block`. The pattern names the enum and variant, so codegen
+// resolves the tag index and field types without any type inference.
+struct MatchArm {
+    val isWildcard: Bool
+    val enumStart: U64
+    val enumLen: U64
+    val variantStart: U64
+    val variantLen: U64
+    val binds: Array[Bind]
+    val body: U64
+}
+
+enum Stmt {
+    Let { mutable: Bool, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, init: U64 }
+    Assign { op: I64, target: U64, value: U64 }
+    Print { expr: U64 }
+    ExprStmt { expr: U64 }
+    Return { value: U64, hasValue: Bool }
+    If { cond: U64, thenBlk: U64, elseBlk: U64, hasElse: Bool }
+    While { cond: U64, body: U64 }
+    // `for val name in iter { body }`. isRange: iter is `lo ..(< | =) hi`
+    // (inclusive picks <=); otherwise iter is an array, walked by index.
+    For { varStart: U64, varLen: U64, isRange: Bool, inclusive: Bool, iter: U64, rangeHi: U64, body: U64 }
+    Match { scrut: U64, arms: Array[MatchArm] }
+    Break
+    Continue
+}
+
+struct Block {
+    val stmts: Array[U64]
+}
+
+struct Param {
+    val nameStart: U64
+    val nameLen: U64
+    val tyStart: U64
+    val tyLen: U64
+    val tyIsArray: Bool
+    val isInout: Bool
+}
+
+struct FieldDef {
+    val nameStart: U64
+    val nameLen: U64
+    val tyStart: U64
+    val tyLen: U64
+    val tyIsArray: Bool
+}
+
+struct StructDef {
+    val nameStart: U64
+    val nameLen: U64
+    val fields: Array[FieldDef]
+}
+
+struct Variant {
+    val nameStart: U64
+    val nameLen: U64
+    val fields: Array[FieldDef]
+}
+
+struct EnumDef {
+    val nameStart: U64
+    val nameLen: U64
+    val variants: Array[Variant]
+}
+
+struct Func {
+    val nameStart: U64
+    val nameLen: U64
+    val params: Array[Param]
+    val hasRet: Bool
+    val retStart: U64
+    val retLen: U64
+    val retIsArray: Bool
+    val body: U64
+}
+
+struct Comp {
+    val bytes: Array[U8]
+    val toks: Array[Tok]
+    mut val pos: U64
+    mut val exprs: Array[Expr]
+    mut val stmts: Array[Stmt]
+    mut val blocks: Array[Block]
+    mut val funcs: Array[Func]
+    mut val structs: Array[StructDef]
+    mut val enums: Array[EnumDef]
+    // distinct Array element type names seen in declarations (for monomorphizing
+    // PlewArray_<E> + runtime); each entry reuses Bind as a (start,len) pair.
+    mut val arrayElems: Array[Bind]
+    // variables in scope during codegen (params / lets / match binds), for type
+    // recovery (monomorphization + `.bytes` dispatch).
+    mut val locals: Array[Local]
+    // fresh-temp counter for match scrutinee bindings (`_m0`, `_m1`, ...)
+    mut val tmp: U64
+    // set per-function during codegen so `return` lowers correctly
+    mut val curIsMain: Bool
+    mut val curRetVoid: Bool
+    // which I/O builtins the file has imported (acceptance soundness: spec makes
+    // these non-ambient, so using one without `import @Std/Io`/`@Std/Process`
+    // is a compile error). One flag per builtin, matched to its module.
+    mut val impPrint: Bool
+    mut val impWrite: Bool
+    mut val impWriteByte: Bool
+    mut val impReadStdin: Bool
+    mut val impReadFile: Bool
+    mut val impArgCount: Bool
+    mut val impArgAt: Bool
+}
+
+// ---- cursor helpers ----
+
+fn curKind(c: inout Comp) -> Kind {
+    return c.toks[c.pos].kind
+}
+
+fn cur(c: inout Comp) -> Tok {
+    return c.toks[c.pos]
+}
+
+fn peekKind(c: inout Comp, off: U64) -> Kind {
+    val i: U64 = c.pos + off
+    if i < c.toks.count {
+        return c.toks[i].kind
+    }
+    return <Kind.Eof />
+}
+
+fn advance(c: inout Comp) {
+    c.pos = c.pos + 1
+}
+
+fn skipNewlines(c: inout Comp) {
+    while true {
+        match curKind(c: inout c) {
+            Kind.Newline => { advance(c: inout c) }
+            _ => { break }
+        }
+    }
+}
+
+fn identIs(c: inout Comp, kw: String) -> Bool {
+    val t: Tok = c.toks[c.pos]
+    return rangeEquals(bytes: c.bytes, start: t.start, len: t.len, kw: kw)
+}
+
+fn pushExpr(c: inout Comp, e: Expr) -> U64 {
+    val id: U64 = c.exprs.count
+    c.exprs.append(e)
+    return id
+}
+
+fn pushStmt(c: inout Comp, s: Stmt) -> U64 {
+    val id: U64 = c.stmts.count
+    c.stmts.append(s)
+    return id
+}
+
+// Read an Int token's value out of the source bytes via its (start, len) span.
+fn tokenValue(c: inout Comp, t: Tok) -> I64 {
+    mut val v: I64 = 0
+    mut val j: U64 = 0
+    while j < t.len {
+        val b: U8 = c.bytes[t.start + j]
+        v = v * 10 + (b as I64 - 48)
+        j += 1
+    }
+    return v
+}
+

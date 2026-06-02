@@ -48,9 +48,13 @@ tests/
   run/<name>.pw,.out  コンパイル&実行→stdout 照合（任意の .in を stdin に）
   reject/<name>.pw    spec-invalid＝コンパイル失敗すべきケース（受理の健全性）
 compiler/             ★ 正典のコンパイラ＝Plew パッケージ（今後の機能はここに Plew で）
-  src/
-    _.pw              コンパイラ本体（root モジュール・`fn main`・将来はモジュール分割）
-  plewc.seed.c        ブートストラップ種＝src/_.pw の C 訳（チェックイン・clang だけで起動）
+  src/                ★ root `_.pw` が `part` で Lexer/Ast/Parser/Codegen を綴じ込む 1 モジュール
+    _.pw              root モジュール＝import＋part 宣言＋driver（複数ファイル組み立て＋`fn main`）
+    Lexer.pw          ソースバイト→トークン列（Kind/Tok/Lexer・lex・kindCode）
+    Ast.pw            arena ノード型（Expr/Stmt 等）＋Comp 状態＋カーソルヘルパ
+    Parser.pw         再帰下降パーサ（トークン→arena AST・import/part directive 処理）
+    Codegen.pw        arena AST→C＋軽量型復元＋受理健全性チェック
+  plewc.seed.c        ブートストラップ種＝コンパイラ全体の C 訳（チェックイン・clang だけで起動）
   (plewc / plewc.c    ビルド生成物・gitignore)
 examples/             実証用 Plew プログラム（hello.pw＋self-host 途上の小コンパイラ群）
   lexer.pw/parser.pw/emit.pw/calc.pw  self-host の足場（履歴的・トークナイザ/式パーサ/式→C）

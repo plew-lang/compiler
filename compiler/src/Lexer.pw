@@ -1,0 +1,540 @@
+// Part of the Plew compiler module (root: _.pw). Lexer: source bytes ->
+// token stream. See _.pw for imports and the driver.
+
+enum Kind {
+    Eof
+    Newline
+    Int
+    Str
+    Ident
+    KwFn
+    KwStruct
+    KwEnum
+    KwMatch
+    KwIf
+    KwElse
+    KwWhile
+    KwFor
+    KwBreak
+    KwContinue
+    KwReturn
+    KwGive
+    KwVal
+    KwMut
+    KwIn
+    KwAs
+    KwInout
+    KwTrue
+    KwFalse
+    LParen
+    RParen
+    LBracket
+    RBracket
+    LBrace
+    RBrace
+    Comma
+    Colon
+    Dot
+    Eq
+    EqEq
+    Ne
+    Lt
+    Le
+    Gt
+    Ge
+    Plus
+    Minus
+    Star
+    Slash
+    Percent
+    AmpAmp
+    PipePipe
+    Bang
+    Arrow
+    FatArrow
+    SlashGt
+    PlusEq
+    MinusEq
+    StarEq
+    SlashEq
+    PercentEq
+    DotDotLt
+    DotDotEq
+    Unknown
+}
+
+struct Tok {
+    val kind: Kind
+    val start: U64
+    val len: U64
+}
+
+struct Lexer {
+    val bytes: Array[U8]
+    mut val pos: U64
+    mut val toks: Array[Tok]
+    mut val depth: I64
+}
+
+fn at(lx: inout Lexer, off: U64) -> U8 {
+    val i: U64 = lx.pos + off
+    if i < lx.bytes.count {
+        return lx.bytes[i]
+    }
+    return 0
+}
+
+fn isDigit(b: U8) -> Bool {
+    if b >= 48 {
+        if b <= 57 {
+            return true
+        }
+    }
+    return false
+}
+
+fn isAlpha(b: U8) -> Bool {
+    if b == 95 {
+        return true
+    }
+    if b >= 97 {
+        if b <= 122 {
+            return true
+        }
+    }
+    if b >= 65 {
+        if b <= 90 {
+            return true
+        }
+    }
+    return false
+}
+
+fn isAlnum(b: U8) -> Bool {
+    if isAlpha(b: b) {
+        return true
+    }
+    return isDigit(b: b)
+}
+
+fn rangeEquals(bytes: Array[U8], start: U64, len: U64, kw: String) -> Bool {
+    val kb: Array[U8] = kw.bytes
+    if len != kb.count {
+        return false
+    }
+    mut val j: U64 = 0
+    while j < len {
+        if bytes[start + j] != kb[j] {
+            return false
+        }
+        j += 1
+    }
+    return true
+}
+
+fn identKind(bytes: Array[U8], start: U64, len: U64) -> Kind {
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "fn") {
+        return <Kind.KwFn />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "struct") {
+        return <Kind.KwStruct />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "enum") {
+        return <Kind.KwEnum />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "match") {
+        return <Kind.KwMatch />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "if") {
+        return <Kind.KwIf />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "else") {
+        return <Kind.KwElse />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "while") {
+        return <Kind.KwWhile />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "for") {
+        return <Kind.KwFor />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "break") {
+        return <Kind.KwBreak />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "continue") {
+        return <Kind.KwContinue />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "return") {
+        return <Kind.KwReturn />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "give") {
+        return <Kind.KwGive />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "val") {
+        return <Kind.KwVal />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "mut") {
+        return <Kind.KwMut />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "in") {
+        return <Kind.KwIn />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "as") {
+        return <Kind.KwAs />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "inout") {
+        return <Kind.KwInout />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "true") {
+        return <Kind.KwTrue />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "false") {
+        return <Kind.KwFalse />
+    }
+    return <Kind.Ident />
+}
+
+fn emit(lx: inout Lexer, k: Kind, start: U64, len: U64) {
+    lx.toks.append(<Tok kind=k start=start len=len />)
+    lx.pos = start + len
+}
+
+fn lastWasNewline(lx: inout Lexer) -> Bool {
+    val n: U64 = lx.toks.count
+    if n == 0 {
+        return false
+    }
+    val t: Tok = lx.toks[n - 1]
+    match t.kind {
+        Kind.Newline => { return true }
+        _ => { return false }
+    }
+}
+
+fn lastCanEnd(lx: inout Lexer) -> Bool {
+    val n: U64 = lx.toks.count
+    if n == 0 {
+        return false
+    }
+    val t: Tok = lx.toks[n - 1]
+    match t.kind {
+        Kind.Ident => { return true }
+        Kind.Int => { return true }
+        Kind.Str => { return true }
+        Kind.RParen => { return true }
+        Kind.RBracket => { return true }
+        Kind.RBrace => { return true }
+        Kind.SlashGt => { return true }
+        Kind.KwTrue => { return true }
+        Kind.KwFalse => { return true }
+        Kind.KwReturn => { return true }
+        Kind.KwBreak => { return true }
+        Kind.KwContinue => { return true }
+        _ => { return false }
+    }
+}
+
+fn lex(lx: inout Lexer) {
+    while lx.pos < lx.bytes.count {
+        val b: U8 = at(lx: inout lx, off: 0)
+        if b == 32 {
+            lx.pos += 1
+            continue
+        }
+        if b == 9 {
+            lx.pos += 1
+            continue
+        }
+        if b == 13 {
+            lx.pos += 1
+            continue
+        }
+        if b == 10 {
+            if lx.depth > 0 {
+                lx.pos += 1
+            } else {
+                if lastCanEnd(lx: inout lx) {
+                    if lastWasNewline(lx: inout lx) {
+                        lx.pos += 1
+                    } else {
+                        emit(lx: inout lx, k: <Kind.Newline />, start: lx.pos, len: 1)
+                    }
+                } else {
+                    lx.pos += 1
+                }
+            }
+            continue
+        }
+        if b == 47 {
+            if at(lx: inout lx, off: 1) == 47 {
+                while lx.pos < lx.bytes.count {
+                    if at(lx: inout lx, off: 0) == 10 {
+                        break
+                    }
+                    lx.pos += 1
+                }
+                continue
+            }
+        }
+        if isDigit(b: b) {
+            val start: U64 = lx.pos
+            mut val j: U64 = lx.pos
+            while j < lx.bytes.count {
+                if isDigit(b: lx.bytes[j]) {
+                    j += 1
+                } else {
+                    break
+                }
+            }
+            emit(lx: inout lx, k: <Kind.Int />, start: start, len: j - start)
+            continue
+        }
+        if isAlpha(b: b) {
+            val start: U64 = lx.pos
+            mut val j: U64 = lx.pos
+            while j < lx.bytes.count {
+                if isAlnum(b: lx.bytes[j]) {
+                    j += 1
+                } else {
+                    break
+                }
+            }
+            val len: U64 = j - start
+            val k: Kind = identKind(bytes: lx.bytes, start: start, len: len)
+            emit(lx: inout lx, k: k, start: start, len: len)
+            continue
+        }
+        if b == 34 {
+            val start: U64 = lx.pos
+            mut val j: U64 = lx.pos + 1
+            while j < lx.bytes.count {
+                // a backslash escapes the next byte (so `\"` does not close)
+                if lx.bytes[j] == 92 {
+                    j += 2
+                    continue
+                }
+                if lx.bytes[j] == 34 {
+                    j += 1
+                    break
+                }
+                j += 1
+            }
+            emit(lx: inout lx, k: <Kind.Str />, start: start, len: j - start)
+            continue
+        }
+        val b2: U8 = at(lx: inout lx, off: 1)
+        if b == 46 {
+            if b2 == 46 {
+                val b3: U8 = at(lx: inout lx, off: 2)
+                if b3 == 60 {
+                    emit(lx: inout lx, k: <Kind.DotDotLt />, start: lx.pos, len: 3)
+                    continue
+                }
+                if b3 == 61 {
+                    emit(lx: inout lx, k: <Kind.DotDotEq />, start: lx.pos, len: 3)
+                    continue
+                }
+            }
+            emit(lx: inout lx, k: <Kind.Dot />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 61 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.EqEq />, start: lx.pos, len: 2)
+                continue
+            }
+            if b2 == 62 {
+                emit(lx: inout lx, k: <Kind.FatArrow />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Eq />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 33 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.Ne />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Bang />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 60 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.Le />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Lt />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 62 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.Ge />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Gt />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 43 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.PlusEq />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Plus />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 45 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.MinusEq />, start: lx.pos, len: 2)
+                continue
+            }
+            if b2 == 62 {
+                emit(lx: inout lx, k: <Kind.Arrow />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Minus />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 42 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.StarEq />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Star />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 47 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.SlashEq />, start: lx.pos, len: 2)
+                continue
+            }
+            if b2 == 62 {
+                emit(lx: inout lx, k: <Kind.SlashGt />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Slash />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 37 {
+            if b2 == 61 {
+                emit(lx: inout lx, k: <Kind.PercentEq />, start: lx.pos, len: 2)
+                continue
+            }
+            emit(lx: inout lx, k: <Kind.Percent />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 38 {
+            if b2 == 38 {
+                emit(lx: inout lx, k: <Kind.AmpAmp />, start: lx.pos, len: 2)
+                continue
+            }
+        }
+        if b == 124 {
+            if b2 == 124 {
+                emit(lx: inout lx, k: <Kind.PipePipe />, start: lx.pos, len: 2)
+                continue
+            }
+        }
+        if b == 40 {
+            emit(lx: inout lx, k: <Kind.LParen />, start: lx.pos, len: 1)
+            lx.depth += 1
+            continue
+        }
+        if b == 41 {
+            emit(lx: inout lx, k: <Kind.RParen />, start: lx.pos, len: 1)
+            lx.depth -= 1
+            continue
+        }
+        if b == 91 {
+            emit(lx: inout lx, k: <Kind.LBracket />, start: lx.pos, len: 1)
+            lx.depth += 1
+            continue
+        }
+        if b == 93 {
+            emit(lx: inout lx, k: <Kind.RBracket />, start: lx.pos, len: 1)
+            lx.depth -= 1
+            continue
+        }
+        if b == 123 {
+            emit(lx: inout lx, k: <Kind.LBrace />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 125 {
+            emit(lx: inout lx, k: <Kind.RBrace />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 44 {
+            emit(lx: inout lx, k: <Kind.Comma />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == 58 {
+            emit(lx: inout lx, k: <Kind.Colon />, start: lx.pos, len: 1)
+            continue
+        }
+        emit(lx: inout lx, k: <Kind.Unknown />, start: lx.pos, len: 1)
+    }
+    lx.toks.append(<Tok kind=<Kind.Eof /> start=lx.pos len=0 />)
+}
+
+fn kindCode(k: Kind) -> I64 {
+    match k {
+        Kind.Eof => { return 0 }
+        Kind.Newline => { return 1 }
+        Kind.Int => { return 2 }
+        Kind.Str => { return 3 }
+        Kind.Ident => { return 4 }
+        Kind.KwFn => { return 10 }
+        Kind.KwStruct => { return 11 }
+        Kind.KwEnum => { return 12 }
+        Kind.KwMatch => { return 13 }
+        Kind.KwIf => { return 14 }
+        Kind.KwElse => { return 15 }
+        Kind.KwWhile => { return 16 }
+        Kind.KwFor => { return 17 }
+        Kind.KwBreak => { return 18 }
+        Kind.KwContinue => { return 19 }
+        Kind.KwReturn => { return 20 }
+        Kind.KwGive => { return 21 }
+        Kind.KwVal => { return 22 }
+        Kind.KwMut => { return 23 }
+        Kind.KwIn => { return 24 }
+        Kind.KwAs => { return 25 }
+        Kind.KwInout => { return 26 }
+        Kind.KwTrue => { return 27 }
+        Kind.KwFalse => { return 28 }
+        Kind.LParen => { return 40 }
+        Kind.RParen => { return 41 }
+        Kind.LBracket => { return 42 }
+        Kind.RBracket => { return 43 }
+        Kind.LBrace => { return 44 }
+        Kind.RBrace => { return 45 }
+        Kind.Comma => { return 46 }
+        Kind.Colon => { return 47 }
+        Kind.Dot => { return 48 }
+        Kind.Eq => { return 49 }
+        Kind.EqEq => { return 50 }
+        Kind.Ne => { return 51 }
+        Kind.Lt => { return 52 }
+        Kind.Le => { return 53 }
+        Kind.Gt => { return 54 }
+        Kind.Ge => { return 55 }
+        Kind.Plus => { return 56 }
+        Kind.Minus => { return 57 }
+        Kind.Star => { return 58 }
+        Kind.Slash => { return 59 }
+        Kind.Percent => { return 60 }
+        Kind.AmpAmp => { return 61 }
+        Kind.PipePipe => { return 62 }
+        Kind.Bang => { return 63 }
+        Kind.Arrow => { return 64 }
+        Kind.FatArrow => { return 65 }
+        Kind.SlashGt => { return 66 }
+        Kind.PlusEq => { return 67 }
+        Kind.MinusEq => { return 68 }
+        Kind.StarEq => { return 69 }
+        Kind.SlashEq => { return 70 }
+        Kind.PercentEq => { return 71 }
+        Kind.DotDotLt => { return 72 }
+        Kind.DotDotEq => { return 73 }
+        Kind.Unknown => { return 99 }
+    }
+}
+

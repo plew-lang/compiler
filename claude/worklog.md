@@ -24,9 +24,13 @@
 
 - ✅ **複数ファイル `part ./Name`**（相対・兄弟ファイル）。root の `part` directive を走査→兄弟 `.pw` を readFileBytes で読みバイト連結→1 buffer として lex/parse（単一アリーナ・単一 C 出力ゆえ全部入り）。`tests/part/` で回帰。残：`_.pw` ディレクトリ・`../`・`/` ルート・ネスト part 追従。
 
-**次の一歩＝コンパイラ本体 `compiler/src/_.pw`（約3100行）の分割**。`part` が使えるので lexer / ast / parser / codegen 等に切り出して `_.pw` を薄い root（import＋part＋main）にする。これがブートストラップ自身の part 実地テストにもなる。手順：`_.pw` から塊を別ファイルへ移動→`_.pw` に `part ./Lexer` 等を追加→`./bootstrap.sh --reseed`（種更新）→不動点確認。**bootstrap.sh/test.sh は引数に root（`compiler/src/_.pw`）を渡すだけで変更不要**（part 追従はコンパイラがやる）。
+- ✅ **コンパイラ本体を分割**。`compiler/src/_.pw`（約3100行）→ root `_.pw`（234行・import＋part＋driver＋main）＋`Lexer.pw`/`Ast.pw`/`Parser.pw`/`Codegen.pw`。ブートストラップは root を渡すだけ（part 追従はコンパイラがやる）＝`part` のブートストラップ実地テストにもなっている。bootstrap.sh/test.sh は無変更。
 
-その後の候補：`import ./Foo`（名前空間束縛・要修飾名解決）・String 連結や行番号付き診断などの足回り。
+**次の一歩の候補**（やりやすい順で自走）：
+- `import ./Foo`（名前空間束縛・`Foo.bar`）＝修飾名解決が要る。今は全部フラット同一スコープ。
+- 行番号付き診断（sentinel→真のエラー経路）＝stderr＋`exit` で「error: line N: …」。整数幅など今後のチェックが全部楽になる足回り。
+- 整数幅（`I8..U64`/`F*`）＝hidden cost の大物。これが入ると④ lossy `as`・overflow panic も片付く。
+- 値意味論/CoW・トレイト/ジェネリクスは更に大物（後）。
 
 > import 機構の現状＝**`with { }` 選択 import のみ**で、認識するのは I/O ビルトイン（`@Std/Io`＝print/write/writeByte/readStdin/readFile・`@Std/Process`＝argCount/argAt）だけ。名前空間 import（`Io.print`）・実モジュール解決・複数ファイル・`export`/`part`・`/`/`./` ルートは未実装（単一ファイルのまま）。enforce は「未 import の I/O ビルトイン呼び出し＝未宣言 C 識別子を吐いて clang を loud に失敗」＝enum-`==` と同じ sentinel 方式（診断＋非ゼロ終了の真のエラー経路はまだ無い）。
 
