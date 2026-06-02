@@ -259,6 +259,7 @@ struct Comp {
     mut val impEprint: Bool
     mut val impExit: Bool
     mut val impReadFileBytes: Bool
+    mut val impFileExists: Bool
 }
 
 // ---- cursor helpers ----

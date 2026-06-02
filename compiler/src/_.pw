@@ -8,7 +8,7 @@
 // imported). These imports are also what the compiler now *enforces* on every
 // program it compiles, including this source.
 
-import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileBytes, eprint }
+import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileBytes, eprint, fileExists }
 import @Std/Process with { argCount, argAt, exit }
 
 part ./Lexer
@@ -24,55 +24,190 @@ part ./Codegen
 // C-output model has no separate compilation). Only `part ./Name` (sibling file)
 // is supported for now; `_.pw` directories, `../`, and `/` roots are additive.
 
-// Scan a lexed token stream for local-include directives — `part ./Name` and
-// `import ./Name` — returning the module-name spans (into `rootBytes`). Both
-// keywords are ordinary identifiers; only the `./Name` shape (Dot Slash Ident)
-// is collected here. `import @Std/…` (At …), `import /…` (Slash …) and
-// `import ../…` (Dot Dot …) do not match this pattern, so they are left for
-// their own handling (intrinsic @Std / root-absolute / parent-relative).
+// A token kind that can appear inside an import/part path: `.`/`..`(Dot), `/`
+// (Slash), or a segment (Ident). `@` is not lexed as a token, so `@Std/…` paths
+// start with an Ident and are not captured here (intrinsic, handled elsewhere).
+fn isPathTokKind(k: Kind) -> Bool {
+    match k {
+        Kind.Dot => { return true }
+        Kind.Slash => { return true }
+        Kind.Ident => { return true }
+        _ => { return false }
+    }
+}
+
+// Scan a token stream for `part <path>` / `import <path>` directives and return
+// the full contiguous path spans (into `rootBytes`) — `./Name`, `../Name`,
+// `/Seg/Seg`, etc. A path starts at a `.`/`/` immediately after the keyword and
+// extends across adjacent path tokens (no whitespace gap), so it stops before a
+// space-separated `with`. `@Std/…` starts with an Ident (no leading `.`/`/`) and
+// is skipped here. resolveImport later turns each span into a file path.
 fn collectParts(rootBytes: Array[U8], toks: Array[Tok]) -> Array[Bind] {
     mut val parts: Array[Bind] = []
     mut val i: U64 = 0
     while i < toks.count {
         val t: Tok = toks[i]
-        mut val isPart: Bool = false
+        mut val isKw: Bool = false
         match t.kind {
             Kind.Ident => {
                 if rangeEquals(bytes: rootBytes, start: t.start, len: t.len, kw: "part") {
-                    isPart = true
+                    isKw = true
                 }
                 if rangeEquals(bytes: rootBytes, start: t.start, len: t.len, kw: "import") {
-                    isPart = true
+                    isKw = true
                 }
             }
             _ => {}
         }
-        if isPart {
-            if i + 3 < toks.count {
-                mut val okDot: Bool = false
-                match toks[i + 1].kind {
-                    Kind.Dot => { okDot = true }
+        if isKw {
+            if i + 1 < toks.count {
+                val first: Tok = toks[i + 1]
+                mut val starts: Bool = false
+                match first.kind {
+                    Kind.Dot => { starts = true }
+                    Kind.Slash => { starts = true }
                     _ => {}
                 }
-                mut val okSlash: Bool = false
-                match toks[i + 2].kind {
-                    Kind.Slash => { okSlash = true }
-                    _ => {}
-                }
-                val nameT: Tok = toks[i + 3]
-                mut val okName: Bool = false
-                match nameT.kind {
-                    Kind.Ident => { okName = true }
-                    _ => {}
-                }
-                if okDot && okSlash && okName {
-                    parts.append(<Bind nameStart=nameT.start nameLen=nameT.len fieldStart=nameT.start fieldLen=nameT.len />)
+                if starts {
+                    val pathStart: U64 = first.start
+                    mut val pathEnd: U64 = first.start + first.len
+                    mut val j: U64 = i + 2
+                    mut val go: Bool = true
+                    while go {
+                        if j < toks.count {
+                            val nt: Tok = toks[j]
+                            if isPathTokKind(k: nt.kind) {
+                                if nt.start == pathEnd {
+                                    pathEnd = nt.start + nt.len
+                                    j += 1
+                                } else {
+                                    go = false
+                                }
+                            } else {
+                                go = false
+                            }
+                        } else {
+                            go = false
+                        }
+                    }
+                    val pl: U64 = pathEnd - pathStart
+                    parts.append(<Bind nameStart=pathStart nameLen=pl fieldStart=pathStart fieldLen=pl />)
+                    i = j - 1
                 }
             }
         }
         i += 1
     }
     return parts
+}
+
+// Remove `n` trailing directory components from the prefix path[0..baseLen]
+// (baseLen points just past a trailing '/'); returns the new prefix length. Used
+// for `../` (each strips one component from the importer's directory).
+fn stripParents(path: Array[U8], baseLen: U64, n: U64) -> U64 {
+    mut val end: U64 = baseLen
+    mut val c: U64 = 0
+    while c < n {
+        if end > 0 {
+            end -= 1
+            mut val go: Bool = true
+            while go {
+                if end > 0 {
+                    if path[end - 1] == 47 {
+                        go = false
+                    } else {
+                        end -= 1
+                    }
+                } else {
+                    go = false
+                }
+            }
+        }
+        c += 1
+    }
+    return end
+}
+
+// Resolve an import/part path span into a file path, or an empty array to skip
+// (`@…` intrinsic/external, or `/…` with no package root). `/Seg` → srcRoot +
+// Seg + ".pw"; `./Name` → importerDir + Name + ".pw"; `../Name` → parent(s) of
+// importerDir + Name + ".pw". The trailing-`/` subpath stays (subdirectories).
+fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[U8], baseLen: U64, srcRoot: Array[U8], srcRootLen: U64) -> Array[U8] {
+    mut val out: Array[U8] = []
+    if pLen == 0 {
+        return out
+    }
+    val end: U64 = pStart + pLen
+    val b0: U8 = src[pStart]
+    if b0 == 64 {
+        return out
+    }
+    if b0 == 47 {
+        if srcRootLen == 0 {
+            return out
+        }
+        mut val i: U64 = 0
+        while i < srcRootLen {
+            out.append(srcRoot[i])
+            i += 1
+        }
+        mut val j: U64 = pStart + 1
+        while j < end {
+            out.append(src[j])
+            j += 1
+        }
+        out.append(46)
+        out.append(112)
+        out.append(119)
+        return out
+    }
+    // relative ('.')
+    mut val rest: U64 = pStart
+    mut val parents: U64 = 0
+    if pStart + 1 < end {
+        if src[pStart] == 46 {
+            if src[pStart + 1] == 47 {
+                rest = pStart + 2
+            } else {
+                mut val go: Bool = true
+                while go {
+                    if rest + 2 < end {
+                        if src[rest] == 46 {
+                            if src[rest + 1] == 46 {
+                                if src[rest + 2] == 47 {
+                                    parents += 1
+                                    rest += 3
+                                } else {
+                                    go = false
+                                }
+                            } else {
+                                go = false
+                            }
+                        } else {
+                            go = false
+                        }
+                    } else {
+                        go = false
+                    }
+                }
+            }
+        }
+    }
+    val dirLen: U64 = stripParents(path: importer, baseLen: baseLen, n: parents)
+    mut val k: U64 = 0
+    while k < dirLen {
+        out.append(importer[k])
+        k += 1
+    }
+    mut val m: U64 = rest
+    while m < end {
+        out.append(src[m])
+        m += 1
+    }
+    out.append(46)
+    out.append(112)
+    out.append(119)
+    return out
 }
 
 // Append every byte of `from` onto `into`.
@@ -108,26 +243,6 @@ fn dirPrefixLen(path: Array[U8]) -> U64 {
         k += 1
     }
     return pre
-}
-
-// Resolve a `./Name` local include against the importer's directory:
-// base[0..baseLen] + Name + ".pw".
-fn resolveSibling(base: Array[U8], baseLen: U64, nameBytes: Array[U8], nameStart: U64, nameLen: U64) -> Array[U8] {
-    mut val path: Array[U8] = []
-    mut val i: U64 = 0
-    while i < baseLen {
-        path.append(base[i])
-        i += 1
-    }
-    mut val n: U64 = 0
-    while n < nameLen {
-        path.append(nameBytes[nameStart + n])
-        n += 1
-    }
-    path.append(46)
-    path.append(112)
-    path.append(119)
-    return path
 }
 
 // Whether `path` is already in the loaded set (each Bind is a span into `buf`).
@@ -175,6 +290,9 @@ fn main() {
         val entryBytes: Array[U8] = rootPath.bytes
         mut val pathBuf: Array[U8] = []
         mut val loaded: Array[Bind] = []
+        // package src root for `/…` absolute imports (empty until Plew.toml walk-up
+        // is wired — `/` imports then skip; `./`/`../` need no root).
+        mut val srcRoot: Array[U8] = []
         val es: U64 = pathBuf.count
         appendBytes(into: inout pathBuf, from: entryBytes)
         loaded.append(<Bind nameStart=es nameLen=entryBytes.count fieldStart=es fieldLen=entryBytes.count />)
@@ -196,12 +314,15 @@ fn main() {
             mut val pj: U64 = 0
             while pj < incs.count {
                 val pb: Bind = incs[pj]
-                val childPath: Array[U8] = resolveSibling(base: path, baseLen: baseLen, nameBytes: sb, nameStart: pb.nameStart, nameLen: pb.nameLen)
-                if pathSeen(buf: pathBuf, loaded: loaded, path: childPath) {
+                val childPath: Array[U8] = resolveImport(src: sb, pStart: pb.nameStart, pLen: pb.nameLen, importer: path, baseLen: baseLen, srcRoot: srcRoot, srcRootLen: srcRoot.count)
+                if childPath.count == 0 {
                 } else {
-                    val cs: U64 = pathBuf.count
-                    appendBytes(into: inout pathBuf, from: childPath)
-                    loaded.append(<Bind nameStart=cs nameLen=childPath.count fieldStart=cs fieldLen=childPath.count />)
+                    if pathSeen(buf: pathBuf, loaded: loaded, path: childPath) {
+                    } else {
+                        val cs: U64 = pathBuf.count
+                        appendBytes(into: inout pathBuf, from: childPath)
+                        loaded.append(<Bind nameStart=cs nameLen=childPath.count fieldStart=cs fieldLen=childPath.count />)
+                    }
                 }
                 pj += 1
             }
@@ -212,7 +333,7 @@ fn main() {
     }
     mut val lx: Lexer = <Lexer bytes=combined pos=0 toks=[] depth=0 />
     lex(lx: inout lx)
-    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curGiveTmp=0 impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false impEprint=false impExit=false impReadFileBytes=false />
+    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curGiveTmp=0 impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false impEprint=false impExit=false impReadFileBytes=false impFileExists=false />
     parseProgram(c: inout c)
     // runtime preamble: includes, immutable String, and the I/O builtins'
     // C runtime (the contract stage0 also injects — emitted here so stage1's
@@ -258,6 +379,7 @@ fn main() {
     // `part` to read a path built from byte spans). Needs PlewArray_U8 above and
     // plew_read_file from the preamble.
     write(s: "__attribute__((unused)) static PlewString plew_read_file_bytes(PlewArray_U8 p) { char* path = (char*)malloc((size_t)p.len + 1); memcpy(path, p.data, (size_t)p.len); path[p.len] = 0; PlewString r = plew_read_file((PlewString){path, p.len}); free(path); return r; }\n")
+    write(s: "__attribute__((unused)) static long long plew_file_exists(PlewArray_U8 p) { char* path = (char*)malloc((size_t)p.len + 1); memcpy(path, p.data, (size_t)p.len); path[p.len] = 0; FILE* f = fopen(path, \"rb\"); free(path); if (f) { fclose(f); return 1; } return 0; }\n")
     mut val ai: U64 = 0
     while ai < c.arrayElems.count {
         val ae: Bind = c.arrayElems[ai]

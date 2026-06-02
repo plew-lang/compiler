@@ -1645,6 +1645,16 @@ fn genExpr(c: inout Comp, id: U64) {
                 }
                 return
             }
+            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "fileExists") {
+                if c.impFileExists {
+                    write(s: "plew_file_exists(")
+                    genExpr(c: inout c, id: args[0].expr)
+                    write(s: ")")
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "fileExists is not ambient; import it from @Std/Io")
+                }
+                return
+            }
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argCount") {
                 if c.impArgCount {
                     write(s: "plew_arg_count()")

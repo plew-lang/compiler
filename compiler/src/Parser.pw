@@ -1175,6 +1175,7 @@ fn markImport(c: inout Comp, segStart: U64, segLen: U64, nameStart: U64, nameLen
         if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readFile") { c.impReadFile = true }
         if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readFileBytes") { c.impReadFileBytes = true }
         if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "eprint") { c.impEprint = true }
+        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "fileExists") { c.impFileExists = true }
     }
     if rangeEquals(bytes: c.bytes, start: segStart, len: segLen, kw: "Process") {
         if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argCount") { c.impArgCount = true }
