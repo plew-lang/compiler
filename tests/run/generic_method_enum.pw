@@ -1,0 +1,30 @@
+import @Std/Io with { print }
+
+enum Optional[T] {
+    Some { val v: T }
+    None
+}
+
+impl[T] Optional[T] {
+    fn unwrapOr(fallback: T) -> T {
+        match self {
+            Optional.Some { val v } => { return v }
+            Optional.None => { return fallback }
+        }
+    }
+    fn isSome() -> I32 {
+        match self {
+            Optional.Some { val v } => { return 1 }
+            Optional.None => { return 0 }
+        }
+    }
+}
+
+fn main() {
+    val a: Optional[I32] = <Optional[I32].Some v=42 />
+    val b: Optional[I32] = <Optional[I32].None />
+    print(a.unwrapOr(fallback: 7))
+    print(b.unwrapOr(fallback: 7))
+    print(a.isSome())
+    print(b.isSome())
+}

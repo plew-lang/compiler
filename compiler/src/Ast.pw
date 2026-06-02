@@ -283,6 +283,14 @@ struct Comp {
     mut val curRecvStart: U64
     mut val curRecvLen: U64
     mut val curSelfInout: Bool
+    // generic body substitution env: when emitting a monomorphized generic
+    // function/method body, curTypeParams[i] (a type-param name) maps to the
+    // concrete TypeRef curTypeArgs[i]. Empty outside a generic instantiation.
+    mut val curTypeParams: Array[Bind]
+    mut val curTypeArgs: Array[U64]
+    // the receiver's concrete instantiation TypeRef when emitting a generic
+    // method (so the mangled C name and `self`'s type resolve). 0 otherwise.
+    mut val curRecvInstRef: U64
     // result temp id of the innermost value-position block (`if`/`match` expr)
     // currently being lowered, so a `give` statement knows which `__r<n>` to
     // assign — stored as `id + 1` so 0 means "not inside a block-expression" (a

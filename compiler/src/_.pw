@@ -376,7 +376,7 @@ fn main() {
     }
     mut val lx: Lexer = <Lexer bytes=combined pos=0 toks=[] depth=0 />
     lex(lx: inout lx)
-    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] types=[] genInsts=[] arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curGiveTmp=0 impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false impEprint=false impExit=false impReadFileBytes=false impFileExists=false />
+    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] types=[] genInsts=[] arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curTypeParams=[] curTypeArgs=[] curRecvInstRef=0 curGiveTmp=0 impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false impEprint=false impExit=false impReadFileBytes=false impFileExists=false />
     // reserve TypeRef index 0 as the "no type" sentinel so a `ty` field of 0
     // (synthetic locals, untyped positions) never aliases a real parsed type.
     c.types.append(<TypeRef nameStart=0 nameLen=0 args=[] />)
@@ -492,19 +492,31 @@ fn main() {
         }
         ar += 1
     }
-    // prototypes (skip main)
+    // prototypes (skip main and generic templates — the latter are emitted per
+    // instantiation below).
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
         if nameIsMain(c: inout c, f: f) {
         } else {
-            genSignature(c: inout c, f: f)
-            write(s: ";\n")
+            if f.typeParams.count > 0 {
+            } else {
+                genSignature(c: inout c, f: f)
+                write(s: ";\n")
+            }
         }
         i += 1
     }
-    // bodies (dogfooding the for-loop this compiler now supports)
+    // generic method prototypes (one per receiver instantiation).
+    emitMonoMethods(c: inout c, proto: true)
+    // bodies (skip generic templates).
     for val j in 0..<c.funcs.count {
-        genFunc(c: inout c, fi: j)
+        val fb: Func = c.funcs[j]
+        if fb.typeParams.count > 0 {
+        } else {
+            genFunc(c: inout c, fi: j)
+        }
     }
+    // generic method bodies.
+    emitMonoMethods(c: inout c, proto: false)
 }

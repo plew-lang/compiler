@@ -1,0 +1,23 @@
+import @Std/Io with { print }
+
+struct Box[T] {
+    val v: T
+}
+
+impl[T] Box[T] {
+    fn get() -> T {
+        return self.v
+    }
+    fn replace(n: T) -> Box[T] {
+        return <Box[T] v=n />
+    }
+}
+
+fn main() {
+    val bi: Box[I32] = <Box[I32] v=10 />
+    val bu: Box[U8] = <Box[U8] v=5 />
+    print(bi.get())
+    print(bu.get())
+    val b2: Box[I32] = bi.replace(n: 99)
+    print(b2.get())
+}
