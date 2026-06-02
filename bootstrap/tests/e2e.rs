@@ -412,6 +412,65 @@ fn selfhost_plewc_compiles_enums_and_match() {
     assert_eq!(String::from_utf8_lossy(&output.stdout), "75\n24\n");
 }
 
+/// Run an existing binary feeding `stdin`, return stdout (asserts success).
+fn run_bin_stdin(bin: &std::path::Path, stdin: &str) -> String {
+    use std::io::Write;
+    use std::process::Stdio;
+    let mut child = Command::new(bin)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("spawn");
+    child.stdin.take().unwrap().write_all(stdin.as_bytes()).unwrap();
+    let out = child.wait_with_output().expect("wait");
+    assert!(out.status.success(), "binary exited with {}", out.status);
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+#[test]
+fn selfhost_plewc_reaches_fixpoint() {
+    // THE self-host test. plewc.pw is a Plew compiler. Pipeline:
+    //   stage0 (Rust) builds plewc.pw -> `plewc` binary
+    //   plewc compiles plewc.pw      -> c1   (clang -> plewc1 binary)
+    //   plewc1 compiles plewc.pw     -> c2
+    // c1 == c2 is the fixpoint: the Plew-written compiler reproduces itself
+    // exactly, so it no longer depends on stage0. We also confirm plewc1 is a
+    // real working compiler by having it build and run a sample program.
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../selfhost/plewc.pw");
+    let src = std::fs::read_to_string(path).expect("read selfhost/plewc.pw");
+
+    // stage0 -> plewc binary
+    let plewc = std::env::temp_dir().join(format!("plew_sh_plewc_{}", std::process::id()));
+    build_executable(&src, &plewc).expect("stage0 builds plewc.pw");
+
+    // plewc compiles itself -> c1 -> plewc1
+    let c1 = run_bin_stdin(&plewc, &src);
+    assert!(c1.contains("int main(void)"), "c1 was not C:\n{}", &c1[..c1.len().min(400)]);
+    let c1_path = std::env::temp_dir().join(format!("plew_sh_c1_{}.c", std::process::id()));
+    let plewc1 = std::env::temp_dir().join(format!("plew_sh_plewc1_{}", std::process::id()));
+    std::fs::write(&c1_path, &c1).unwrap();
+    assert!(Command::new("clang").arg("-w").arg(&c1_path).arg("-o").arg(&plewc1).status().expect("clang c1").success(), "clang failed on c1");
+
+    // plewc1 compiles plewc.pw -> c2; fixpoint: c1 == c2
+    let c2 = run_bin_stdin(&plewc1, &src);
+    assert_eq!(c1, c2, "self-host fixpoint broken: plewc and plewc1 disagree");
+
+    // plewc1 is a real working compiler: build and run a sample program.
+    let sample = "fn add(a: I64, b: I64) -> I64 {\n    return a + b\n}\nfn main() {\n    print(add(a: 19, b: 23))\n}\n";
+    let sample_c = run_bin_stdin(&plewc1, sample);
+    let sc_path = std::env::temp_dir().join(format!("plew_sh_sample_{}.c", std::process::id()));
+    let sbin = std::env::temp_dir().join(format!("plew_sh_sample_{}", std::process::id()));
+    std::fs::write(&sc_path, &sample_c).unwrap();
+    assert!(Command::new("clang").arg("-w").arg(&sc_path).arg("-o").arg(&sbin).status().expect("clang sample").success());
+    let out = Command::new(&sbin).output().expect("run sample");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "42\n");
+
+    for p in [&plewc, &c1_path, &plewc1, &sc_path, &sbin] {
+        let _ = std::fs::remove_file(p);
+    }
+    let _ = std::fs::remove_file(plewc.with_extension("c"));
+}
+
 #[test]
 fn selfhost_plewc_compiles_arrays_and_strings() {
     // plewc.pw v5: monomorphized arrays (PlewArray_<E> + runtime), [] literal,

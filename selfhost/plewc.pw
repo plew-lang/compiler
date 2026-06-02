@@ -322,6 +322,11 @@ fn lex(lx: inout Lexer) {
             val start: U64 = lx.pos
             mut val j: U64 = lx.pos + 1
             while j < lx.bytes.count {
+                // a backslash escapes the next byte (so `\"` does not close)
+                if lx.bytes[j] == 92 {
+                    j += 2
+                    continue
+                }
                 if lx.bytes[j] == 34 {
                     j += 1
                     break
@@ -571,6 +576,7 @@ struct Local {
     val tyStart: U64
     val tyLen: U64
     val isArray: Bool
+    val isInout: Bool
 }
 
 // The recovered type of an expression. kind: 0 scalar (long long), 1 String,
@@ -595,18 +601,26 @@ struct Bind {
     val nameLen: U64
 }
 
+// A call argument: the expression plus whether it was passed `inout` (which
+// lowers to `&(expr)` at the call site, matching a pointer parameter).
+struct Arg {
+    val expr: U64
+    val isInout: Bool
+}
+
 enum Expr {
     Int { value: I64 }
     Ident { start: U64, len: U64 }
     Unary { op: I64, operand: U64 }
     Binary { op: I64, lhs: U64, rhs: U64 }
-    Call { nameStart: U64, nameLen: U64, args: Array[U64] }
+    Call { nameStart: U64, nameLen: U64, args: Array[Arg] }
     Field { base: U64, nameStart: U64, nameLen: U64 }
     Make { typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fields: Array[MakeField] }
     Str { start: U64, len: U64 }
     Array { elems: Array[U64] }
     Index { base: U64, index: U64 }
-    Method { recv: U64, nameStart: U64, nameLen: U64, args: Array[U64] }
+    Method { recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg] }
+    Cast { operand: U64, tyStart: U64, tyLen: U64 }
 }
 
 // One arm of a match: either `_ => block` (wildcard) or `Enum.Variant
@@ -645,6 +659,7 @@ struct Param {
     val tyStart: U64
     val tyLen: U64
     val tyIsArray: Bool
+    val isInout: Bool
 }
 
 struct FieldDef {
@@ -803,7 +818,7 @@ fn parsePrimary(c: inout Comp) -> U64 {
                 Kind.LParen => {
                     advance(c: inout c)
                     advance(c: inout c)
-                    val args: Array[U64] = parseCallArgs(c: inout c)
+                    val args: Array[Arg] = parseCallArgs(c: inout c)
                     return pushExpr(c: inout c, e: <Expr.Call nameStart=t.start nameLen=t.len args=args />)
                 }
                 _ => {
@@ -896,7 +911,7 @@ fn parsePostfix(c: inout Comp) -> U64 {
                 match curKind(c: inout c) {
                     Kind.LParen => {
                         advance(c: inout c)
-                        val args: Array[U64] = parseCallArgs(c: inout c)
+                        val args: Array[Arg] = parseCallArgs(c: inout c)
                         e = pushExpr(c: inout c, e: <Expr.Method recv=e nameStart=nameTok.start nameLen=nameTok.len args=args />)
                     }
                     _ => {
@@ -912,6 +927,11 @@ fn parsePostfix(c: inout Comp) -> U64 {
                     _ => {}
                 }
                 e = pushExpr(c: inout c, e: <Expr.Index base=e index=idx />)
+            }
+            Kind.KwAs => {
+                advance(c: inout c)
+                val ty: PType = parseTypeTok(c: inout c)
+                e = pushExpr(c: inout c, e: <Expr.Cast operand=e tyStart=ty.start tyLen=ty.len />)
             }
             _ => { break }
         }
@@ -994,9 +1014,10 @@ fn parseExpr(c: inout Comp) -> U64 {
 }
 
 // Parse a call's argument list (current token is just past `(`). Labels are
-// accepted (`label: expr`) and dropped — stage0-style positional C emission.
-fn parseCallArgs(c: inout Comp) -> Array[U64] {
-    mut val args: Array[U64] = []
+// accepted (`label: expr`) and dropped (positional C emission); an optional
+// `inout` before the expression marks a by-reference argument.
+fn parseCallArgs(c: inout Comp) -> Array[Arg] {
+    mut val args: Array[Arg] = []
     while true {
         skipNewlines(c: inout c)
         val k: Kind = curKind(c: inout c)
@@ -1020,8 +1041,17 @@ fn parseCallArgs(c: inout Comp) -> Array[U64] {
                     }
                     _ => {}
                 }
+                // optional `inout` marker
+                mut val isInout: Bool = false
+                match curKind(c: inout c) {
+                    Kind.KwInout => {
+                        advance(c: inout c)
+                        isInout = true
+                    }
+                    _ => {}
+                }
                 val e: U64 = parseExpr(c: inout c)
-                args.append(e)
+                args.append(<Arg expr=e isInout=isInout />)
                 match curKind(c: inout c) {
                     Kind.Comma => { advance(c: inout c) }
                     _ => {}
@@ -1367,9 +1397,18 @@ fn parseFunc(c: inout Comp) {
                         mut val pTyStart: U64 = 0
                         mut val pTyLen: U64 = 0
                         mut val pTyIsArray: Bool = false
+                        mut val pIsInout: Bool = false
                         match curKind(c: inout c) {
                             Kind.Colon => {
                                 advance(c: inout c)
+                                // optional `inout` before the type
+                                match curKind(c: inout c) {
+                                    Kind.KwInout => {
+                                        advance(c: inout c)
+                                        pIsInout = true
+                                    }
+                                    _ => {}
+                                }
                                 val pty: PType = parseTypeTok(c: inout c)
                                 pTyStart = pty.start
                                 pTyLen = pty.len
@@ -1378,7 +1417,7 @@ fn parseFunc(c: inout Comp) {
                             }
                             _ => {}
                         }
-                        params.append(<Param nameStart=pTok.start nameLen=pTok.len tyStart=pTyStart tyLen=pTyLen tyIsArray=pTyIsArray />)
+                        params.append(<Param nameStart=pTok.start nameLen=pTok.len tyStart=pTyStart tyLen=pTyLen tyIsArray=pTyIsArray isInout=pIsInout />)
                         match curKind(c: inout c) {
                             Kind.Comma => { advance(c: inout c) }
                             _ => {}
@@ -1688,8 +1727,22 @@ fn typeInfoOfName(c: inout Comp, start: U64, len: U64, isArray: Bool) -> TypeInf
     return <TypeInfo kind=2 nameStart=start nameLen=len />
 }
 
-fn addLocal(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool) {
-    c.locals.append(<Local nameStart=nameStart nameLen=nameLen tyStart=tyStart tyLen=tyLen isArray=isArray />)
+fn addLocal(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, isInout: Bool) {
+    c.locals.append(<Local nameStart=nameStart nameLen=nameLen tyStart=tyStart tyLen=tyLen isArray=isArray isInout=isInout />)
+}
+
+// Whether `name` refers to an `inout` parameter of the current function (so its
+// uses must be dereferenced as `(*name)`).
+fn isInoutLocal(c: inout Comp, start: U64, len: U64) -> Bool {
+    mut val i: U64 = c.locals.count
+    while i > 0 {
+        i -= 1
+        val lo: Local = c.locals[i]
+        if spansEqual(c: inout c, aStart: lo.nameStart, aLen: lo.nameLen, bStart: start, bLen: len) {
+            return lo.isInout
+        }
+    }
+    return false
 }
 
 // Type of field `fieldName` declared in struct `structName` (else scalar).
@@ -1769,6 +1822,9 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             return scalarInfo()
         }
         Expr.Method { val recv, val nameStart, val nameLen, val args } => { return scalarInfo() }
+        Expr.Cast { val operand, val tyStart, val tyLen } => {
+            return typeInfoOfName(c: inout c, start: tyStart, len: tyLen, isArray: false)
+        }
     }
     return scalarInfo()
 }
@@ -1789,7 +1845,7 @@ fn addBindLocal(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, 
                     while fi < fs.count {
                         val f: FieldDef = fs[fi]
                         if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: bindStart, bLen: bindLen) {
-                            addLocal(c: inout c, nameStart: bindStart, nameLen: bindLen, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray)
+                            addLocal(c: inout c, nameStart: bindStart, nameLen: bindLen, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray, isInout: false)
                             return
                         }
                         fi += 1
@@ -1885,7 +1941,15 @@ fn genExpr(c: inout Comp, id: U64) {
     val e: Expr = c.exprs[id]
     match e {
         Expr.Int { val value } => { writeInt(n: value) }
-        Expr.Ident { val start, val len } => { writeSpan(c: inout c, start: start, len: len) }
+        Expr.Ident { val start, val len } => {
+            if isInoutLocal(c: inout c, start: start, len: len) {
+                write(s: "(*")
+                writeSpan(c: inout c, start: start, len: len)
+                write(s: ")")
+            } else {
+                writeSpan(c: inout c, start: start, len: len)
+            }
+        }
         Expr.Unary { val op, val operand } => {
             write(s: unaryOpStr(op: op))
             write(s: "(")
@@ -1903,13 +1967,13 @@ fn genExpr(c: inout Comp, id: U64) {
             // I/O builtins -> C runtime.
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "write") {
                 write(s: "plew_write(")
-                genExpr(c: inout c, id: args[0])
+                genExpr(c: inout c, id: args[0].expr)
                 write(s: ")")
                 return
             }
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "writeByte") {
                 write(s: "putchar((int)(")
-                genExpr(c: inout c, id: args[0])
+                genExpr(c: inout c, id: args[0].expr)
                 write(s: "))")
                 return
             }
@@ -1924,7 +1988,14 @@ fn genExpr(c: inout Comp, id: U64) {
                 if i > 0 {
                     write(s: ", ")
                 }
-                genExpr(c: inout c, id: args[i])
+                val ar: Arg = args[i]
+                if ar.isInout {
+                    write(s: "&(")
+                    genExpr(c: inout c, id: ar.expr)
+                    write(s: ")")
+                } else {
+                    genExpr(c: inout c, id: ar.expr)
+                }
                 i += 1
             }
             write(s: ")")
@@ -1974,14 +2045,21 @@ fn genExpr(c: inout Comp, id: U64) {
             write(s: "_push(&(")
             genExpr(c: inout c, id: recv)
             write(s: "), ")
-            genExpr(c: inout c, id: args[0])
+            genExpr(c: inout c, id: args[0].expr)
             write(s: ")")
         }
         Expr.Array { val elems } => {
             // Array literals appear only in typed positions (let init / JSX
-            // field), handled by genArrayLiteral with the declared element type.
-            // A bare literal here has no element context; emit nothing useful.
+            // field / array assignment), handled by genArrayLiteral with the
+            // declared element type. A bare literal here has no element context.
             write(s: "0")
+        }
+        Expr.Cast { val operand, val tyStart, val tyLen } => {
+            write(s: "((")
+            genCElem(c: inout c, start: tyStart, len: tyLen)
+            write(s: ")(")
+            genExpr(c: inout c, id: operand)
+            write(s: "))")
         }
         Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val fields } => {
             if isEnum {
@@ -2083,13 +2161,18 @@ fn genStmt(c: inout Comp, id: U64) {
                 genExpr(c: inout c, id: init)
             }
             write(s: ";\n")
-            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray)
+            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, isInout: false)
         }
         Stmt.Assign { val op, val target, val value } => {
             write(s: "    ")
             genExpr(c: inout c, id: target)
             write(s: assignOpStr(op: op))
-            genExpr(c: inout c, id: value)
+            val tt: TypeInfo = exprType(c: inout c, id: target)
+            if tt.kind == 3 {
+                genArrayLiteral(c: inout c, exprId: value, elemStart: tt.nameStart, elemLen: tt.nameLen)
+            } else {
+                genExpr(c: inout c, id: value)
+            }
             write(s: ";\n")
         }
         Stmt.Print { val expr } => {
@@ -2282,6 +2365,9 @@ fn genSignature(c: inout Comp, f: Func) {
             }
             val p: Param = params[i]
             genCTypeRef(c: inout c, start: p.tyStart, len: p.tyLen, isArray: p.tyIsArray)
+            if p.isInout {
+                write(s: "*")
+            }
             write(s: " ")
             writeSpan(c: inout c, start: p.nameStart, len: p.nameLen)
             i += 1
@@ -2305,7 +2391,7 @@ fn genFunc(c: inout Comp, fi: U64) {
     mut val pi: U64 = 0
     while pi < params.count {
         val p: Param = params[pi]
-        addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+        addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, isInout: p.isInout)
         pi += 1
     }
     genSignature(c: inout c, f: f)
@@ -2485,15 +2571,18 @@ fn main() {
         ai += 1
     }
     // nominal bodies (may contain arrays by value; typedefs above are complete).
-    mut val sj: U64 = 0
-    while sj < c.structs.count {
-        genStructDef(c: inout c, si: sj)
-        sj += 1
-    }
+    // Enums first: a struct may hold an enum by value (e.g. Tok holds Kind), but
+    // no enum holds a struct by value, so this order resolves the dependency.
+    // (A full topological sort is future work if that assumption breaks.)
     mut val ej: U64 = 0
     while ej < c.enums.count {
         genEnumDef(c: inout c, ei: ej)
         ej += 1
+    }
+    mut val sj: U64 = 0
+    while sj < c.structs.count {
+        genStructDef(c: inout c, si: sj)
+        sj += 1
     }
     // array runtime (element by value -> needs full nominal defs above).
     genU8ArrayRuntime()
