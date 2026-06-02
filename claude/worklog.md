@@ -49,8 +49,9 @@
 manifest は **`Plew.toml`**（spec 暫定名・TOML・src 既定 `src/`・`/` は `<root>/src` 起点）。ネスト配列 `Array[Array[U8]]` は**使えない**（`PlewArray_Array` で要素型 `Array` 未定義）ので、パス一覧は flat バッファ＋`Array[Bind]`(span) で持つ。
 
 - ✅ **I1a 完了**：モジュールローダ＝再帰＋dedup の worklist（`compiler/src/_.pw` の driver）。各ファイルの `part ./Name`・`import ./Name` を**そのファイルのディレクトリ相対**で解決し、distinct ファイルを 1 回だけ combined バッファへ。diamond は 1 回・循環は終了。コンパイラ自身の flat 同一 dir parts は同順同内容＝不動点維持。`tests/part/crossimport`。
-- ⏳ **I1b**：`import ../Name`（親相対）＋ `import /Path`（`Plew.toml` を上に辿って root 確定→`<root>/src` 起点）。
-- ⏳ **I2 with ゲーティング**：今は include したファイルの名前が全部フラットに見える。`import ./Foo with { bar }` で `bar` だけ可視・未 import 名はエラーに。
+- ✅ **I1b 完了**：パスを構造的に解決。`./Name`・`./Sub/Name`（サブディレクトリ）・`../Name`/`../../Name`（親相対・`../` ごとに importer dir を 1 段 strip）・`/Seg/Seg`（root 絶対＝`findSrcRoot` が entry から上方へ `Plew.toml` を探し `<root>/src` を起点に・**ネストした entry からでも src ルート解決**＝`crate::` 動作）。`fileExists` ビルトイン（`plew_file_exists`）で manifest を検出。manifest は位置のみ使用（中身未読・src 既定）。`@Std` は Dot/Slash 始まりでないので自然にスキップ。`tests/part/rootimport`（`Plew.toml`＋`src/`）。
+- ⏳ **I2 with ゲーティング**（次・難所）：今は include したファイルの名前が全部フラットに見える。`import ./Foo with { bar }` で `bar` だけ可視・未 import 名はエラーに。要：各トップレベル定義の**モジュール所属**追跡＋各 import 文の許可名集合＋名前使用時の可視性検査（今は全フラット・所属情報なし）。
+- 既知の別件：Plew 識別子が **C 予約語**（`double` 等）だと生成 C が壊れる＝名前マングリング未実装（コンパイラ自身は回避済・ユーザーコードで顕在化・S 系とは別の hidden-meaning 穴）。
 - ⏳ **I3 @Std 実体化**：`@Std/X`→std ディレクトリ解決。純 Plew のもの（`Core` の `Optional`/`Result`）は generics 後。`@Std/Io`/`Process` は extern/FFI まではイントリンシック裏付けのまま。
 - 後で additive：修飾名 `Foo.bar`・`export`・`public` マニフェスト・`_.pw` ディレクトリ代表。
 
