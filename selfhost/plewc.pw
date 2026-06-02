@@ -2029,11 +2029,15 @@ fn genExpr(c: inout Comp, id: U64) {
                     write(s: ")")
                 }
             } else {
-                write(s: "(")
-                genExpr(c: inout c, id: lhs)
-                write(s: binOpStr(op: op))
-                genExpr(c: inout c, id: rhs)
-                write(s: ")")
+                if isEnumEq(c: inout c, op: op, lhs: lhs) {
+                    emitEnumTagCmp(c: inout c, lhs: lhs, rhs: rhs, op: op, outer: true)
+                } else {
+                    write(s: "(")
+                    genExpr(c: inout c, id: lhs)
+                    write(s: binOpStr(op: op))
+                    genExpr(c: inout c, id: rhs)
+                    write(s: ")")
+                }
             }
         }
         Expr.Call { val nameStart, val nameLen, val args } => {
@@ -2249,10 +2253,63 @@ fn isStringEq(c: inout Comp, op: I64, lhs: U64) -> Bool {
     return lt.kind == 1
 }
 
+fn isEnumName(c: inout Comp, start: U64, len: U64) -> Bool {
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val e: EnumDef = c.enums[ei]
+        if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) {
+            return true
+        }
+        ei += 1
+    }
+    return false
+}
+
+// Whether `lhs OP rhs` is an enum `==` / `!=`. Provisional: lowered to a tag
+// (variant) comparison, NOT a payload-aware structural Eq. For all-nullary
+// enums this coincides with structural equality; full Eq comes with @[Eq].
+fn isEnumEq(c: inout Comp, op: I64, lhs: U64) -> Bool {
+    if op == 50 {
+    } else {
+        if op == 51 {
+        } else {
+            return false
+        }
+    }
+    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    if lt.kind == 2 {
+        return isEnumName(c: inout c, start: lt.nameStart, len: lt.nameLen)
+    }
+    return false
+}
+
+// Emit `(lhs).tag OP (rhs).tag` for an enum ==/!=. `outer` wraps the whole in
+// parens (for subexpression use); omit it in condition position to avoid the
+// `-Wparentheses-equality` warning.
+fn emitEnumTagCmp(c: inout Comp, lhs: U64, rhs: U64, op: I64, outer: Bool) {
+    if outer {
+        write(s: "(")
+    }
+    write(s: "(")
+    genExpr(c: inout c, id: lhs)
+    write(s: ").tag")
+    if op == 51 {
+        write(s: " != ")
+    } else {
+        write(s: " == ")
+    }
+    write(s: "(")
+    genExpr(c: inout c, id: rhs)
+    write(s: ").tag")
+    if outer {
+        write(s: ")")
+    }
+}
+
 // Emit an expression in condition position. A top-level binary drops its outer
 // parens (the `if (...)` / `while (...)` already supplies them), which avoids
-// the `-Wparentheses-equality` warning on `if ((a == b))`. String equality is
-// a function call, so it is routed through genExpr unchanged.
+// the `-Wparentheses-equality` warning on `if ((a == b))`. String/enum equality
+// have their own lowerings handled here too.
 fn genCond(c: inout Comp, id: U64) {
     val e: Expr = c.exprs[id]
     match e {
@@ -2260,9 +2317,13 @@ fn genCond(c: inout Comp, id: U64) {
             if isStringEq(c: inout c, op: op, lhs: lhs) {
                 genExpr(c: inout c, id: id)
             } else {
-                genExpr(c: inout c, id: lhs)
-                write(s: binOpStr(op: op))
-                genExpr(c: inout c, id: rhs)
+                if isEnumEq(c: inout c, op: op, lhs: lhs) {
+                    emitEnumTagCmp(c: inout c, lhs: lhs, rhs: rhs, op: op, outer: false)
+                } else {
+                    genExpr(c: inout c, id: lhs)
+                    write(s: binOpStr(op: op))
+                    genExpr(c: inout c, id: rhs)
+                }
             }
         }
         _ => { genExpr(c: inout c, id: id) }

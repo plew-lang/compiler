@@ -50,6 +50,11 @@
 - **デフォルト引数（呼び出しごと再評価・定義側スコープ）** → 未実装。
 - **クロージャ／メソッド値** → 未実装（spec はメソッド値を禁止＝こちらは spec 通り）。
 
+## enum 等価（暫定）
+
+- **`Eq`/`Ord` トレイト＋`@[Eq]` derive（メタプロで構造的等価を生成・Rust 流）** → **現状：enum `==`/`!=` を「タグ（variant）比較」に直接脱糖**（`(a).tag OP (b).tag`）。stage1 のみ（stage0 は凍結ゆえ未対応＝plewc.pw 自身はまだ match で判別）。**全 nullary な enum では構造的 Eq と完全一致**（＝ `curKind == <Kind.LParen />` は正しい）。ペイロード持ち variant 同士の field-blind 比較だけが将来の構造的 Eq とズレる（hidden meaning）→ `@[Eq]` 実装時に置換。struct の `==` は未対応。spec/08,12,16。
+- 補足：variant 値は現状 JSX 必須（`<Kind.LParen />`）。bare `Kind.LParen`（nullary variant 値）は未サポート＝surface 追加の未決（パターン位置では `Kind.LParen` だが値位置では `<.../>`＝非対称）。
+
 ## 制御フロー・match
 
 - **`match` 網羅性をコンパイル時検査** → **現状：検査せず**（網羅と仮定し、wildcard 無しの末尾に `__builtin_unreachable()`）。spec/11。

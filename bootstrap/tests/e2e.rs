@@ -494,6 +494,27 @@ fn selfhost_plewc_compiles_for_loops() {
 }
 
 #[test]
+fn selfhost_plewc_compiles_enum_eq() {
+    // Provisional enum ==/!= (variant identity): lowered to a tag comparison
+    // `(a).tag OP (b).tag`. For all-nullary enums this is exact identity.
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../selfhost/plewc.pw");
+    let src = std::fs::read_to_string(path).expect("read selfhost/plewc.pw");
+    let program = "enum Kind {\n    LParen\n    RParen\n    Int\n}\nfn classify(k: Kind) -> I64 {\n    if k == <Kind.LParen /> {\n        return 1\n    }\n    if k != <Kind.Int /> {\n        return 2\n    }\n    return 3\n}\nfn main() {\n    print(classify(k: <Kind.LParen />))\n    print(classify(k: <Kind.RParen />))\n    print(classify(k: <Kind.Int />))\n}\n";
+    let emitted_c = build_and_run_stdin(&src, "selfhost_plewc_enumeq", program);
+    assert!(emitted_c.contains(").tag =="), "emitted C was:\n{emitted_c}");
+    let c_path = std::env::temp_dir().join(format!("plew_plewceq_{}.c", std::process::id()));
+    let out_bin = std::env::temp_dir().join(format!("plew_plewceq_{}", std::process::id()));
+    std::fs::write(&c_path, &emitted_c).expect("write emitted C");
+    let status = Command::new("clang").arg("-w").arg(&c_path).arg("-o").arg(&out_bin).status().expect("clang");
+    assert!(status.success(), "clang failed on emitted C:\n{emitted_c}");
+    let output = Command::new(&out_bin).output().expect("run emitted binary");
+    let _ = std::fs::remove_file(&c_path);
+    let _ = std::fs::remove_file(&out_bin);
+    // LParen->1, RParen->2 (not Int), Int->3
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "1\n2\n3\n");
+}
+
+#[test]
 fn selfhost_plewc_compiles_string_eq_and_index_set() {
     // More post-self-host growth in plewc.pw: String ==/!= (lowered to
     // PlewString_eq, type-directed) and array element assignment a[i] = v /
