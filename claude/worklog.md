@@ -107,10 +107,10 @@ flag day（同時破壊）にならない理由＝ソースが使う機能は常
 
 ## 既知の暫定ギャップ
 
-- ✅ **数値リテラルの型確定**：型検査（`typeck.rs`）で双方向推論を実装し、`val x = 6*7`（曖昧）を loud に拒否・注釈で解決・条件は Bool 強制・演算子型不一致も検出。テストで担保（tests/typeck.rs）。
-- **`print` は暫定の組み込み**：本来は **import 必須**（ambient でない・`import @Std/...`・正確なパスは stdlib 設計時）で、シグネチャは **`print[T](~value: T) where T: Format`**（Format 準拠なら何でも）。stage0 は import 機構・トレイト・String 未実装のため、print を数値専用の組み込み（型検査で I64 pin・codegen は printf 直結）として暫定扱い。stdlib 整備時に置換。
-- **codegen は依然 `int64_t` 前提**：型検査は I32/U64/F64 等を区別するが、codegen は全整数を int64_t で出す（幅が違う型は未対応）。型を codegen に通す＝次段。
-- オーバーフロー panic・`as`・NaN 比較 panic 等の数値実行時意味論は未実装（codegen 素朴）。
+→ **仕様からの意図的剥離の網羅カタログは [provisional.md](provisional.md) に集約**（値意味論/CoW・整数幅・レンジ・ラベル・トレイト・モジュール等＝「バグでなく既知の暫定」）。ここには揮発しやすい個別メモだけ残す：
+
+- ✅ **数値リテラルの型確定**：型検査（`typeck.rs`）で双方向推論を実装し、`val x = 6*7`（曖昧）を loud に拒否・注釈で解決・条件は Bool 強制・演算子型不一致も検出（tests/typeck.rs）。
+- 大物（整数幅・値意味論・レンジ・ラベル・トレイト・`Result`/`try` 等）は provisional.md 参照。再訪は self-host 後に stage1 側で additive。
 
 ## 直近の決定・注意（揮発しやすい文脈）
 

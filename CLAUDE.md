@@ -28,6 +28,7 @@
 - **[claude/language-semantics.md](claude/language-semantics.md)** — spec 意味論の実装者向けダイジェスト＝**章をまたぐ設計の背骨＋実装で間違えやすい罠＋spec への索引**（機構は再掲せず spec へリンク）。
 - **[claude/grammar.md](claude/grammar.md)** — **構文リファレンス**＝パーサが支えるべき構文の一覧と spec 索引（旧 ANTLR 機構の記述は破棄済の `Plew.g4` 前提で陳腐化・「構文 × spec」表のみ有効。意味論は spec が正典）。
 - **[claude/design-decisions.md](claude/design-decisions.md)** — 各設計判断の**根拠・却下案・経緯・未決事項リスト**（「なぜ」専門。機構は spec 参照）。構成は **言語の目的 → メモリ・所有権 → 主要な判断 → 個別論点 → 未決**（決定を前にまとめ・未決を末尾）。
+- **[claude/provisional.md](claude/provisional.md)** — **現コンパイラ（stage0/stage1）が spec から意図的に剥離している箇所のカタログ**（「これはバグでなく既知の暫定」＝仕様準拠に寄せる作業の地図。値意味論/CoW・整数幅・レンジ・ラベル・トレイト等）。
 - **`note/*.md`** — 設計・言語選定の元になった ChatGPT 会話ログ（一次資料、記法は時系列で変遷あり）。
 
 ### claude/ の編集方針（このディレクトリは私＝Claude 用のメモ）
