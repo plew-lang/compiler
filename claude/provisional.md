@@ -12,8 +12,8 @@
 **ソース spec-validity チェックリスト（コンパイラ自身が依存する非 spec 事項＝要修正）**：
 - ✅ 整数（幅・オーバーフロー・リテラル文脈型付け）／match・ラベル・制御構造・メソッド／enum は `==` でなく `match`／`try`・未実装演算子は未使用 → **spec-valid な使い方に到達**（整数幅エピックで完了）。
 - ✅ **S3 値意味論**：append 先は全て生アリーナ（`inout self`）かローカル新規アキュムレータのみ＝**「配列を別名束縛→元を変更→観測」する箇所なし**＝CoW 値意味論下で挙動同一（規律で spec-clean・監査済／形式証明はなし）。
-- ⏳ **S1 診断ビルトインの ambient 依存**：`compileError`/`compileErrorAt` を import なしで使用（spec：ambient は lang item のみ）。`readFileBytes` も未 import 使用。→ 実 `@Std` プリミティブ（`eprint`/`exit`）を足して**普通の Plew 関数として定義＋import**することで脱 ambient 化する（着手中）。
-- ⏳ **S2 @Std I/O の実シグネチャ**：`print`/`write`/`writeByte`/`readStdin`/`readFile`/`argCount`/`argAt` は現状ハードコードの placeholder。完全コンパイラは実 `@Std` で解決する必要。特に **(a) `print(整数)` の許容＝print の真のシグネチャ**、**(b) `readFile`/`readFileBytes` の可謬性＝`Result`/`try` が要る**。後者は `Optional`/`Result`/`try`（spec/13）エピックと**std 領域のシグネチャ決定（spec 表面・要相談）**に依存。
+- ✅ **S1 診断ビルトインの脱 ambient（完了）**：`compileError`/`compileErrorAt` を **`eprint`/`exit` 経由の普通の Plew 関数**（Codegen.pw）にし、`@Std/Io` `eprint`・`@Std/Process` `exit` を import-gate ビルトインとして追加・_.pw で import。dead な preamble 撤去。
+- ⏳ **S2 @Std I/O の実シグネチャ**：`print`/`write`/`writeByte`/`readStdin`/`readFile`/`argCount`/`argAt` は現状ハードコードの placeholder。完全コンパイラは実 `@Std` で解決する必要。**(b) `readFile`→`Result` 可謬化の前提（`Optional`/`Result`/`try`）は実装済**＝技術的には可能で、残るは std モジュールが intrinsic を呼ぶ際の **import ゲート整合**（std 内部の intrinsic 使用許可）。**(a) `print(整数)` の真シグネチャ**＝std 領域のシグネチャ決定（spec 表面・要相談）。
 
 ## 受理の健全性（意味上 Plew として正しい）
 
@@ -39,7 +39,7 @@
 
 ## 数値モデル
 
-- **幅つき整数 `I8..U64`・`F32/F64`** → **現状：全整数 `long long`（int64_t）**。幅の区別なし・符号なし演算の意味なし・**浮動小数点は一切なし**。spec/02。
+- **幅つき整数 `I8..U64`・`F32/F64`** → ✅ **整数は厳密幅 stdint で実装**（下の「整数の C ストレージ」項）＝幅の区別あり・overflow/0除算 panic・リテラル文脈型付け。**浮動小数点 `F32/F64` は未実装**。spec/02。
 - **0 除算は常に panic** → **実装済**：`a / b`・`a % b`・複合 `x /= v`/`x %= v`（簡易変数・配列 place `a[i] /= v` とも `x = plew_div(x, v)` に脱糖）すべて `plew_div`/`plew_mod`（preamble・除数 0 で `plew_panic`→exit(1)）経由。`%` は C 切り捨て＝剰余は被除数の符号（spec 通り）。
 - **オーバーフロー panic** → ✅ **解消**（整数幅エピック）。算術 `+ - *`（二項・複合代入 `+= -= *=`・配列要素複合）と単項 `-`・符号付き除算 `INT_MIN/-1` が**結果型の正確な幅**で溢れたら `plew_panic("integer overflow")`（`__builtin_*_overflow` 使用・幅は Phase C の narrow storage で正確）。0除算も panic（`/ %`・`/= %=`・width 既知は inline、未知は zero+`INT64_MIN/-1` 検査済 `plew_div`/`plew_mod`）。`x % -1` は 0 と定義（C UB 回避）。残：**両オペランドが幅不明な式**の算術（`(1+1)` 等リテラルのみ）と**配列要素の `/= %=` の narrow-signed `INT_MIN/-1`** は未検査＝rare な穴。`wrapping*` メソッドは無し（additive 予定）。**NaN 比較で panic**・`assert` 常時 ON は未実装（float 未対応ゆえ）。spec/12。
 - **数値リテラルは多相・既定型なし・曖昧はエラー** → ✅ **解消（Phase D）**。`checkLitCtx`（純粋検査パス・C 出力不変）が文脈の整数型をリテラルへ伝播：let 注釈/代入先/引数/戻り/配列要素/フィールド/添字(U64)/比較・算術の型付き相手・`arr.count`(U64)/`arr[i]`(要素型)/`argCount()`(I64) の sibling。範囲外リテラルと**定数式オーバーフロー（`200+100:U8`）**を compile error、**文脈型の無いリテラルも曖昧エラー（spec の「初手は厳格」）**＝`val x = 1 + 1`・`for val i in 0..<5` は reject。明示は**型サフィックス `5U64`/`1I32`**（Int 直後の隣接整数型名）か注釈。`true`/`false` は `Expr.Int.isBool` で分離（Bool は曖昧でない）。先頭 `-` は畳み込み（`-128:I8` 可）。残（hidden cost のみ）：無注釈 `val x = foo()` の storage は long-long（型推論で狭めず＝widening の hidden cost・意味は不変）。
@@ -51,29 +51,30 @@
 
 ## 文字列
 
-- `String`＝不変・UTF-8 妥当・`==` バイト等価な **CoW 値型** → **現状：`{const char* data; long long len}`・不変・byte-`==`**（不変と byte-eq は spec 通り）。ただし **CoW なし**（stage0 のリーク/参照）・**UTF-8 妥当性チェックなし**・**連結なし**・**`scalars`/`graphemes`/`Ord`/substring/`Slice` なし**。`.bytes`（`Array[U8]`・O(1) 共有ビュー）は spec 通り。spec/02。
+- `String`＝不変・UTF-8 妥当・`==` バイト等価な **CoW 値型** → **現状：`{const char* data; long long len}`・不変・byte-`==`**（不変と byte-eq は spec 通り。不変ゆえ共有でも値意味論は観測的に正しい）。ただし **UTF-8 妥当性チェックなし**・**連結なし**・**`scalars`/`graphemes`/`Ord`/substring/`Slice` なし**・解放なし（leak）。`.bytes`（`Array[U8]`・O(1) 共有ビュー）は spec 通り。spec/02。
 - **文字列リテラルのエスケープ**：内容を C へ **verbatim 透過**（`\n`/`\"`/`\\`/`\t` 等 C と共通のものだけ正しく動く）。decoded length だけ自前計算。Plew 固有エスケープは未対応。
 
 ## 配列・辞書・集合・タプル
 
-- `Array[T]`：上記メモリ項参照（参照＋リーク・CoW 無し）。添字 `U64`・範囲外 panic は spec 通り。`[E; N]`/const generics/`Slice`/部分文字列は **spec 自体が当面保留**。
-- **`Dictionary[K,V]`（lang item・`[k:v]` リテラル）／`Set[E]`** → **未実装**。
+- `Array[T]`：✅ **値意味論は観測的に達成**（eager copy で配列/struct/generic コンテナを let/代入/JSX/return コピー・タグ `value-semantics-complete`）。残（hidden cost）：**遅延 CoW＋解放（leak 解消）＝refcount 版 ARC とセット**。添字 `U64`・範囲外 panic は spec 通り。`[E; N]`/const generics/`Slice`/部分文字列は **spec 自体が当面保留**。
+- **`Dictionary[K,V]`（lang item・`[k:v]` リテラル）／`Set[E]`** → **未実装**（Hash が要る大物）。
 - **ラベル付き無名レコード `(x: I32, y: I32)`** → 未実装（struct のみ）。
 
 ## 型システム：ジェネリクス・トレイト・拡張
 
-- **ジェネリクス `[T]`／`where` 制約／関連型** → **全て未実装**（具体型のみ）。
-- **トレイト（`via` 準拠・提供メソッド・`any P` 存在型・blanket・継承）** → **全て未実装**。
+- **ジェネリクス `[T]`／`[T,U]`** → ✅ **実装済（タグ `generics-data`/`generics-methods`）**：struct/enum/fn/`impl[T]` の型パラメータ・単相化（`Box_I32`）・generic struct/enum（`Optional`/`Result` 含む）・generic メソッド（レシーバ型由来）。残 additive：generic free 関数の呼び出し位置推論＋明示 `id[I32](x)`・メソッド own 型パラメータ `map[U]`＋推移的インスタンス化・`where` 制約（traits 待ち）・関連型。
+- **トレイト（`via` 準拠・提供メソッド・`any P` 存在型・blanket・継承）** → **全て未実装**（大物）。
 - **演算子→トレイト脱糖**（`+`↔`Add` 等） → 無し。**演算子は数値/String にハードコード**。対象演算子も subset（下記）。
 - **拡張 `#Ext`／`defaultExtension`／`A#P` ビュー／無名 impl コヒーレンス** → 全て未実装。
 - **`newtype`** → 未実装。
 
 ## 関数・呼び出し
 
-- **引数ラベルは必須・宣言順・関数型の同一性の一部** → **部分実装**。ユーザー定義トップレベル関数の呼び出しはラベルを検査（各引数 `hasLabel`＋宣言順で param 名と一致・arg 数一致・不一致は `compileError` 診断で reject）。C 出力自体は依然ラベルを落とし位置引数。**ユーザーメソッド呼び出しもラベル検査あり**（`recv.m(label: arg)`・引数数＋ラベル一致）。未対応：ラベル抑制 `~:`・**I/O ビルトイン**（`write(s:)`/`argAt(…)` 等は暫定シグネチャゆえ generic パス手前で個別処理＝非検査）・ラベルによるオーバーロード・関数型同一性へのラベル反映。spec/04。
+- **引数ラベルは必須・宣言順・関数型の同一性の一部** → **部分実装**。ユーザー定義トップレベル関数の呼び出しはラベルを検査（各引数 `hasLabel`＋宣言順で param 名と一致・arg 数一致・不一致は `compileError` 診断で reject）。C 出力自体は依然ラベルを落とし位置引数。**ユーザーメソッド呼び出しもラベル検査あり**（`recv.m(label: arg)`・引数数＋ラベル一致）。✅ **ラベル抑制 `~:`**（位置引数）・**デフォルト引数**（末尾省略）は実装済。未対応：**I/O ビルトイン**（`write(s:)`/`argAt(…)` 等は暫定シグネチャゆえ generic パス手前で個別処理＝非検査）・ラベルによるオーバーロード・関数型同一性へのラベル反映。spec/04。
 - **インヘレントメソッド `impl Type { fn m(...) }`** → **実装済（subset）**。`fn`（by-value self）/`inout fn`（self を可変・C ポインタ）の 2 モード・呼び出し `recv.m(label: arg)`・ラベル検査あり・C へは `Type_m(self, …)` にマングル（`inout fn` は `&recv`）。`self` は暗黙（明示トークン無し＝codegen が現在レシーバを覚えて `self` 識別子を特別扱い）。**未対応**：引数型オーバーロード（セレクタ＝名前＋ラベル）・`move fn` self・トレイト/拡張のメソッド・メソッドの一時値レシーバへの `inout`（lvalue 前提）。**自由関数は名前一意**（同名不可）。配列の `append` は型ベースのビルトイン経路。
-- **デフォルト引数（呼び出しごと再評価・定義側スコープ）** → 未実装。
-- **クロージャ／メソッド値** → 未実装（spec はメソッド値を禁止＝こちらは spec 通り）。
+- **ラベル抑制 `name~:`** → ✅ 実装済（位置引数・`Param.noLabel`）。
+- **デフォルト引数 `name: T = expr`** → ✅ **実装済（末尾省略のみ）**。呼び出し位置で省略 param のデフォルト式を出力。残：spec の中間省略（ラベルで一意）・省略組合せのセレクタ集合合流・配列/struct デフォルト。
+- **クロージャ／関数値** → ✅ **実装済（非キャプチャ）**：関数型 `fn(...)->R`・関数を第一級値（C 関数ポインタ）・クロージャリテラル（ラムダリフティング `__closure<id>`）・高階関数。**キャプチャ未実装**（env＋fat closure＋エスケープヒープ化＝大物・`spawn` 前提）。メソッド値は spec で禁止（spec 通り未対応）。
 
 ## enum 等価（暫定）
 
@@ -89,10 +90,10 @@
 
 ## 演算子（subset）
 
-- **対応**：`+ - * / %`・比較 `== != < <= > >=`・論理 `&& ||`（C 短絡）・**ビット/シフト `& | ^ << >> ~`**・単項 `! - ~`・代入 `=`・複合 `+= -= *= /= %=`・**ビット系複合代入 `&= |= ^= <<= >>=`**（純粋脱糖）。
-- **未対応**：`??`（Coalesce）・`pow`/`**`・`Neg`/`Not`/各種演算子トレイト・`as` 以外の変換。
-- **優先順位**：stage1 は **9 段**（低→高：`|| < && < 比較 < | < ^ < & < シフト < +- < */%`）。spec の **14 段**（`as`>`*/%`>`+-`>シフト>`&`>`^`>`|`>`??`>比較>`&&`>`||`>レンジ）と、ビット/算術/論理/比較の相対順序は一致。未対応段（`as` の位置・`??`・レンジ）と比較/レンジの非結合は未強制。spec/12。
-- **`as`**：**数値↔数値の C キャストのみ**。spec は「`as` は infallible 固定＝`From` 経由の全域変換」。`From`/`TryFrom`/`try`/`Result`/`Optional`/`?.` は **全て未実装**。spec/12,13。
+- **対応**：`+ - * / %`・比較 `== != < <= > >=`・論理 `&& ||`（C 短絡）・**ビット/シフト `& | ^ << >> ~`**・単項 `! - ~`・代入 `=`・複合 `+= -= *= /= %=`・**ビット系複合代入 `&= |= ^= <<= >>=`**（純粋脱糖）・**`??`（Coalesce・Optional）**。
+- **未対応**：`pow`/`**`・`Neg`/`Not`/各種演算子トレイト・`as` 以外の数値変換。
+- **優先順位**：`??` を含め 10 段（低→高：`|| < && < 比較 < ?? < | < ^ < & < シフト < +- < */%`・`??` は右結合）。spec の 14 段とビット/算術/論理/比較/`??` の相対順序は一致。未対応段（`as` の位置・レンジ）と比較/レンジの非結合は未強制。spec/12。
+- **`as`**：**数値↔数値の C キャストのみ**（無損失検査済）。✅ **`Optional`/`Result`/`try`/`??` は実装済**（spec/13・専用ノード）。残：`From`/`TryFrom`（`as` の全域変換脱糖・`try` の From 変換）・`?.`（オプショナルチェーン）は未実装。spec/12,13。
 
 ## 可視性・モジュール・import
 
@@ -107,9 +108,10 @@
 - **JSX `<Type f=e/>`／`<E.V f=e/>`** → 対応。
 - **`factory`／`optional`・`result factory`／フィールドデフォルト値／memberwise vs `pub factory`** → 未実装。全フィールドを名前付きで必須指定。
 
-## 並行性・メタプログラミング
+## 共有可変・並行性・メタプログラミング
 
-- **`async`/`await`/`spawn`/`Promise`/`JoinHandle`/チャネル** → 全て未実装（コンパイラに不要）。
+- **`Ref[T]`（共有可変）** → ✅ **基本実装済**：ヒープ箱（C `T*`）・`<Ref[T] value=e/>`・`r->field`・コピーで共有。残：**ARC retain/release＋`deinit`（スコープ解放追跡）**・`WeakRef`＋`upgrade()`・循環回収・bare `<Ref value=e/>` 型推論（明示 `[T]` 必須）。spec/03,14。
+- **`async`/`await`/`spawn`/`Promise`/`JoinHandle`/チャネル** → **未実装**（イベントループ＝最大の残・コンパイラには不要）。✅ 土台＝関数値＋非キャプチャクロージャは実装済（spawn にはキャプチャが要る）。
 - **メタプログラミング（`Derive`・コード生成）** → 未実装（spec 上も最後）。
 
 ## 字句・文の区切り（ここは spec 通り）

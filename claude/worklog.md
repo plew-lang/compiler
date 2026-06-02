@@ -1,149 +1,57 @@
 # 作業ログ
 
-> 現在地・次の一歩・運用メモだけを置く。完了した「やった」は git 履歴へ（タグで辿れる）。「なぜ」は [design-decisions.md](design-decisions.md)、「パイプライン設計」は [architecture.md](architecture.md)、「spec からの意図的剥離」は [provisional.md](provisional.md)。
+> 現在地・次の一歩・運用メモだけを置く。完了した「やった」は git 履歴へ（タグで辿れる）。「なぜ」は [design-decisions.md](design-decisions.md)、「パイプライン設計」は [architecture.md](architecture.md)、「spec からの意図的剥離」は [provisional.md](provisional.md)、自走中の仮決めは [autonomous-decisions.md](autonomous-decisions.md)。
 
 ## ⚠️ 自走モード（最重要・常時遵守）
 
-ユーザー長期離席中。**ランタイム完成（コアライブラリ→CoW→ARC/Ref→イベントループ）まで止まらず実装し続ける**。停止してよいのは①後戻りが重い言語表面/spec 決定 ②自力で解けないブロッカー のみ。報告・確認のために turn を終えない＝常に次の増分へ。判断は spec 整合な既定で進め、**仮決めは [autonomous-decisions.md](autonomous-decisions.md) に逐次追記**。緑（build＋test.sh＋不動点）でこまめに署名コミット＆push、worklog 更新。詳細はローカルメモリ `autonomous-until-runtime`。
+ユーザー離席中は **ランタイム完成（クロージャのキャプチャ→spawn→async／ARC 解放・deinit）まで止まらず実装し続ける**。停止してよいのは①後戻りが重い言語表面/spec 決定 ②自力で解けないブロッカー のみ。報告・確認のために turn を終えない＝常に次の増分へ。判断は spec 整合な既定で進め、**仮決めは [autonomous-decisions.md](autonomous-decisions.md) に逐次追記**。緑（build＋test.sh＋不動点）でこまめに署名コミット＆push、worklog 更新。詳細はローカルメモリ `autonomous-until-runtime`。
 
 ## 現在地
 
 🎉 **セルフホスト達成・stage0（Rust）退役済み。** 正典コンパイラ＝Plew パッケージ `compiler/src/`（root `_.pw` が `part` で `Lexer`/`Ast`/`Parser`/`Codegen` を綴じ込む 1 モジュール）。自分自身を不動点までコンパイルする。
 
-- **ビルド**：`./bootstrap.sh`＝C 種 `compiler/plewc.seed.c`→clang→`plewc0`→`compiler/src/_.pw` を自己コンパイル→不動点 cmp（Rust/cargo 不要）。`./bootstrap.sh --reseed` で種更新。
-- **テスト**：`./test.sh`＝`tests/run/*.pw`（`.out` 照合・任意 `.in`）＋`tests/part/`（複数ファイル）＋`tests/reject/*.pw`（plewc が非ゼロ終了で reject＝受理の健全性）＋不動点（Rust 非依存）。
-- **サポート済の言語**（現状スナップショット・経緯は git/タグ）：型付き整数/Bool・String（リテラル/`.bytes`/`==`/エスケープ）・文字リテラル `'c'`・Array（リテラル/添字/`count`/`append`/`a[i]=x`/for-each）・struct と JSX 構築・enum＋match（**網羅検査**・**or パターン `A|B`**・rename/discard 束縛 `{f: val n}`/`{f: _}`・**値位置 `match` 式**）・enum `==`（全 nullary）・**可変性検査（place 単位＝単純変数＋`base.field` 合成＋`a[i]` 配列束縛＋`.append`/`inout fn` メソッド受信側）**・関数/**引数ラベル検査**/`inout`/再帰・**インヘレントメソッド `impl Type { fn / inout fn }`**・**`panic`**・`if`/`else`/`while`/`for`/`break`/`continue`・**値位置 `if` 式＋ブロック `give`**（`else` 必須・`else if` チェーン可）・演算子（算術・比較・論理・**ビット/シフト `& | ^ << >> ~`**・単項 `! - ~`・**`as`〔整数・無損失のみ＝縮小/符号変更/リテラル範囲外は reject〕**・複合代入 `+= … %=`・**ビット系複合代入 `&= |= ^= <<= >>=`**・**整数は厳密幅で格納〔stdint〕＋算術/除算オーバーフロー・0除算は panic＋リテラル文脈型付け〔既定型なし・文脈で確定・曖昧は reject・型サフィックス `5U64`〕**）・**モジュールローダ＝再帰＋dedup の worklist**（`part ./Name`・`import ./Name`・`import ./Sub/Name`・`import ../Name`・`import /Seg/Seg`〔`Plew.toml` 上方探索→`<root>/src` 起点・`crate::` 相当〕を解決・diamond 1 回・循環終了・名前は当面フラット〔with ゲート I2 未〕）・**`import @Std/{Io,Process} with {}`**（I/O は ambient でなく import 必須・print/write/writeByte/readStdin/readFile(Bytes)/argCount/argAt/eprint/exit/fileExists）・診断 `compileError(At)` は**普通の Plew 関数**（`eprint`/`exit` 経由・脱 ambient 済）。軽量型追跡・配列単相化・preamble 自前出力・生成 C は警告クリーン。**コンパイラ自身がメソッド/match 式/or パターンで自己記述**（dogfood）。
-- **★generics 完成**（タグ `generics-data`/`generics-methods`）：型パラメータ `[T,U]`（struct/enum/fn/`impl[T]`）・単相化（`Box_I32`・`emitMangle`/`genInsts`）・generic struct（`<Box[I32] v=5/>`・フィールド・ネスト・多パラメータ）・generic enum（`Optional`/`Result`・`<O[I32].Some v=5/>`・match）・**generic メソッド**（`impl[T] Optional[T]{fn unwrapOr...}`＝レシーバ型由来の単相化・body 置換 env）。残 additive＝generic free 関数・`map[U]`（own 型パラメータ＋推移的インスタンス化＋クロージャ）。
-- **★コアライブラリ**＝`@Std/Core`（`compiler/std/Core.pw`・`@Std/X`→`dirname(argv[0])/std/X.pw`）に `Optional[T]`/`Result[T,E]`＋メソッド。**`try`（Result 早期 return）/`??`（Optional 合体）**実装（spec/13・専用 Expr ノード・前置 `try`／右結合 `??`）。
-- **★値意味論（観測的に完成・タグ `value-semantics-complete`）**＝eager copy で配列/struct/generic struct/generic enum コンテナを let/代入/JSX/return でコピー（`genCopyValue`・`PlewArray_E_copy`/`Name_copy`/mono copy）。String は不変で共有・by-value 引数はイミュータブルで不要。leak（解放）と遅延コピーは後段 ARC（hidden cost）。
-- **★`Ref[T]`（共有可変）**＝ヒープ箱（C `T*`）・`<Ref[T] value=e/>`・`r->field`・コピーで共有（`tests/run/ref_shared`）。ARC 解放/`deinit`/`WeakRef`/循環は未（leak・後段）。
-- **値意味論・generics を有効化したまま自己ホスト不動点維持**。
-- **spec からの意図的剥離**（leak・整数幅・トレイト・モジュール詳細等）は [provisional.md](provisional.md)、自走中の仮決めは [autonomous-decisions.md](autonomous-decisions.md) に集約。足場（履歴）`examples/{lexer,parser,emit,calc}.pw`。
+- **ビルド**：`./bootstrap.sh`＝C 種 `compiler/plewc.seed.c`→clang→`plewc0`→`compiler/src/_.pw` を自己コンパイル→不動点 cmp（Rust 不要）。`./bootstrap.sh --reseed` で種更新。
+- **テスト**：`./test.sh`＝`tests/run/*.pw`（`.out` 照合・任意 `.in`）＋`tests/part/`（複数ファイル）＋`tests/reject/*.pw`（plewc 非ゼロ終了で reject＝受理の健全性）＋`tests/panic/*.pw`（compile+link 成功・実行は非ゼロ＋`.panic` stderr 部分一致）＋不動点。
 
-## 受理の健全性（意味上 Plew として正しい）＝一区切り
+### サポート済の言語（現状スナップショット・経緯は git/タグ）
 
-「このコンパイラが*受理*するコードは spec でも valid」を目標に hidden meaning を潰す。チェックリスト（詳細 [provisional.md](provisional.md)）：① import なし `print` ② ラベル無視 ③ 非網羅 match ④ lossy `as`（無損失のみに制限・縮小/符号変更/リテラル範囲外を reject） ⑤ struct/array 比較 ⑥ 不変 place への代入（単純変数＋`base.field` 合成＋`a[i]`＋`.append`/`inout fn` 受信側）＝**全項解消済**。残る穴は限定的＝ラベル抑制/メソッドラベル（②残）・式幅が復元できない `as`（④残・式幅伝播は overflow と同時）・let-init リテラル範囲＝いずれも「accepted⟹valid」の方向では incremental。違反はすべて `compileError*` 診断＝`plewc: error: [line N: ]…`＋非ゼロ終了で reject。
+- **基本**：型付き整数/Bool・String（リテラル/`.bytes`/`==`/エスケープ）・文字リテラル・Array（リテラル/添字/`count`/`append`/`a[i]=x`/for-each）・struct と JSX 構築・enum＋match（網羅検査・or パターン・rename/discard 束縛・値位置 `match` 式）・インヘレントメソッド・`panic`・`if`/`else`/`while`/`for`/`break`/`continue`・値位置 `if`＋`give`。
+- **演算子/整数**：算術・比較・論理・ビット/シフト・単項・`as`（整数・無損失のみ）・複合代入。**整数は厳密幅 stdint で格納＋算術/除算オーバーフロー・0除算は panic＋リテラル文脈型付け**（既定型なし・曖昧は reject・型サフィックス `5U64`）。
+- **可変性検査**（place 単位＝単純変数＋`base.field` 合成＋`a[i]`＋`.append`/`inout fn` 受信側）・**引数ラベル検査**。
+- **モジュール**：再帰＋dedup ローダ（`part ./`・`import ./`・`./Sub/`・`../`・`/Seg`〔`Plew.toml` 上方探索→`<root>/src`〕・`@Std/X`→`dirname(argv[0])/std/X.pw`）・`import @Std/{Io,Process} with {}`（I/O は import 必須）。診断 `compileError(At)` は普通の Plew 関数（脱 ambient 済）。
+- **★generics 完成**（タグ `generics-data`/`generics-methods`）：型パラメータ `[T,U]`（struct/enum/fn/`impl[T]`）・単相化（`Box_I32`）・generic struct（構築/フィールド/ネスト/多パラメータ）・generic enum（`Optional`/`Result`・match）・**generic メソッド**（レシーバ型由来の単相化・body 置換 env）。
+- **★コアライブラリ**＝`@Std/Core`（`compiler/std/Core.pw`）に `Optional[T]`/`Result[T,E]`＋メソッド・`assert(cond~:, message:)`。**`try`/`??`** 実装。
+- **★値意味論（観測的に完成・タグ `value-semantics-complete`）**＝eager copy で配列/struct/generic struct/enum コンテナを let/代入/JSX/return でコピー。String は不変で共有・by-value 引数はイミュータブルで不要。
+- **★`Ref[T]`（共有可変）**＝ヒープ箱（C `T*`）・`<Ref[T] value=e/>`・`r->field`・コピーで共有。
+- **★クロージャ/関数値**＝関数型 `fn(...)->R`・関数を第一級値・非キャプチャのクロージャリテラル（ラムダリフティング）・高階関数。**ラベル抑制 `~:`**・**デフォルト引数 `name: T = expr`**。
+- **値意味論・generics・クロージャを有効化したまま自己ホスト不動点維持**。生成 C は警告クリーン。**コンパイラ自身がメソッド/match 式で自己記述**（dogfood）。
 
-## 次の一歩の候補（やりやすい順で自走）
+## ★ ロードマップ（generics → コアライブラリ → ランタイム）
 
-### 整数幅エピック — Phase A/B/C/D ✅ 完了
+意味論の hidden-meaning は大半解消済み（整数幅・match・ラベル・診断・受理の健全性チェックリストは [provisional.md](provisional.md) で全項解消）。残りは大物が中心。**拠り所「意味は最優先・コストは裏で後回し可」**：leak ランタイムは hidden-cost ゆえ後回し可。
 
-**済（A+B+C）**：
-- **A：式幅伝播** — `exprType` が算術/ビット二項（→左辺幅）・単項 `-`/`~`（→operand 幅）を伝播。`(a-b) as U8` が narrowing として reject される。
-- **C：narrow storage** — `genCElem` が各整数型を厳密幅 stdint（`int8_t…int64_t`/`uint16_t…uint64_t`・U8 は `unsigned char`・Bool は long long）に。これで宣言幅で overflow 検査が成立。コンパイラ自身の値は小さい非負ゆえ挙動不変＝fixpoint 維持。
-- **B：overflow/division panic** — 算術 `+ - *`（二項・複合代入・配列要素複合）と単項 `-` が `__builtin_*_overflow` で結果型幅に溢れたら `plew_panic("integer overflow")`。`/ %`・`/= %=` は width＆符号認識の inline 文（0除算 panic・signed `INT_MIN/-1` overflow panic・`x % -1`=0 で C UB 回避）、width 不明は zero+`INT64_MIN/-1` 検査済 `plew_div`/`plew_mod`。`tests/panic/` カテゴリを test.sh に追加（compile+link 成功・実行は非ゼロ＋stderr 部分一致）。
-- 残る穴（rare・documented）：両オペランドが幅不明な式（`(1+1):U8` 等リテラルのみ）の算術文脈オーバーフロー、配列要素 `/= %=` の narrow-signed `INT_MIN/-1`。
-
-**確定済の言語判断**（spec／design-decisions）：U64 添字/count/range・`as`無損失（符号変更/縮小は `TryFrom`）・overflow/0除算は常に panic・**リテラル既定型なし＋曖昧はエラー**・`assert`常時ON・`wrapping*` メソッド明示。
-
-**Phase D1（リテラル文脈型付け・範囲検査）✅ 完了**。純粋検査パス `checkLitCtx`（C 出力不変）が文脈の整数型をリテラルへ伝播：let 注釈/代入先/引数(仮引数型)/戻り(戻り型)/配列要素/struct・enum フィールド/添字(U64)/比較・算術の型付き相手から型を降ろし、範囲外リテラルと**定数式オーバーフロー（`200+100:U8`）**を compile error。先頭 `-` はリテラルへ畳み込み（`-128:I8` 可）。`Expr.Int` に source offset を追加し診断行を正確化。`litFitsBits` を per-width 定数比較に（`1<<31` の C int 溢れバグ修正）。
-
-**Phase D2（厳密 no-default＝context-free リテラルを曖昧エラー）✅ 完了**。spec の「初手は厳格（明示要求）」（02-basic-types.md）に合わせ、文脈型の無い整数リテラルは `compileError`（`val x = 1 + 1`・`for val i in 0..<5` 等を reject）。実装：
-- **型サフィックス `5U64`/`1I32`**（parser）＝Int トークン直後（隣接・空白なし）の整数型名 Ident を suffix として取り込み `Expr.Int.tyStart/tyLen` に格納。`Expr.Int` に `isBool`（`true`/`false` 分離＝Bool は曖昧でない）も追加。
-- **`exprIntTy`**＝sibling 推論用に span-free で整数型(bits,sgn)を復元：`arr.count`→U64・`arr[i]`→要素型・builtin `argCount()`→I64。これで `0..<arr.count` は suffix 不要（spec 通り）。
-- `checkLitLeaf`：isBool→skip／suffix 有→suffix 型で範囲検査（曖昧でない）／eKind1→文脈幅で範囲検査／eKind0→**曖昧エラー**。
-- 注意：`for` の本体が I64 演算なら範囲も `0..<5I64`（`tests/run/for.pw`）。suffix は型を与えるだけで storage は従来通り（無注釈 let は long-long＝widening の hidden cost のみ）。
-
-> 着手手順は ADD→reseed→USE（下節）。各 Phase で不動点を緑に保ってから commit。新 preamble 行や **codegen 挙動変化（genCElem 等）を足したら reseed 2 回**（1 世代遅れる）。AST ノードへのフィールド追加（`Expr.Int` の offset 等）も出力が変わるので reseed 2 回。
-
-### ★ 第一目標：コンパイラのソース自体を spec-valid に（完全 Plew コンパイラで通す）
-
-整数幅エピック完了で、コア言語の使い方は spec-valid に到達。残るは**ソースが現コンパイラ固有の緩みに依存している箇所**（→ [provisional.md](provisional.md) 冒頭「ソース spec-validity チェックリスト」）：
-
-- ✅ **S1 完了**：診断 `compileError`/`compileErrorAt` を**普通の Plew 関数**（Codegen.pw・`eprint`＋`exit`＋`digitStr` 由来の `eprintInt`）に。`@Std/Io` `eprint(text: String)`・`@Std/Process` `exit(code: I32)` を import-gate ビルトインとして追加し _.pw で import、codegen 特別扱いと dead な `plew_compile_error*` preamble を撤去。これで診断の ambient 依存は解消。
-- **S2（大物・要 spec 決定）**：`@Std` I/O の実シグネチャ。特に `print(整数)` の可否＝print の真シグネチャと、`readFile`/`readFileBytes` の**可謬化＝`Optional`/`Result`/`try`（spec/13）エピック**。std 領域のシグネチャは spec 表面（core-lib 未決）ゆえユーザー確認が要る。
-
-### ★ import / モジュール（本物のコアライブラリの土台）
-
-manifest は **`Plew.toml`**（spec 暫定名・TOML・src 既定 `src/`・`/` は `<root>/src` 起点）。ネスト配列 `Array[Array[U8]]` は**使えない**（`PlewArray_Array` で要素型 `Array` 未定義）ので、パス一覧は flat バッファ＋`Array[Bind]`(span) で持つ。
-
-- ✅ **I1a 完了**：モジュールローダ＝再帰＋dedup の worklist（`compiler/src/_.pw` の driver）。各ファイルの `part ./Name`・`import ./Name` を**そのファイルのディレクトリ相対**で解決し、distinct ファイルを 1 回だけ combined バッファへ。diamond は 1 回・循環は終了。コンパイラ自身の flat 同一 dir parts は同順同内容＝不動点維持。`tests/part/crossimport`。
-- ✅ **I1b 完了**：パスを構造的に解決。`./Name`・`./Sub/Name`（サブディレクトリ）・`../Name`/`../../Name`（親相対・`../` ごとに importer dir を 1 段 strip）・`/Seg/Seg`（root 絶対＝`findSrcRoot` が entry から上方へ `Plew.toml` を探し `<root>/src` を起点に・**ネストした entry からでも src ルート解決**＝`crate::` 動作）。`fileExists` ビルトイン（`plew_file_exists`）で manifest を検出。manifest は位置のみ使用（中身未読・src 既定）。`@Std` は Dot/Slash 始まりでないので自然にスキップ。`tests/part/rootimport`（`Plew.toml`＋`src/`）。
-- ⏳ **I2 with ゲーティング**（次・難所）：今は include したファイルの名前が全部フラットに見える。`import ./Foo with { bar }` で `bar` だけ可視・未 import 名はエラーに。要：各トップレベル定義の**モジュール所属**追跡＋各 import 文の許可名集合＋名前使用時の可視性検査（今は全フラット・所属情報なし）。
-- 既知の別件：Plew 識別子が **C 予約語**（`double` 等）だと生成 C が壊れる＝名前マングリング未実装（コンパイラ自身は回避済・ユーザーコードで顕在化・S 系とは別の hidden-meaning 穴）。
-- ⏳ **I3 @Std 実体化**：`@Std/X`→std ディレクトリ解決。純 Plew のもの（`Core` の `Optional`/`Result`）は generics 後。`@Std/Io`/`Process` は extern/FFI まではイントリンシック裏付けのまま。
-- 後で additive：修飾名 `Foo.bar`・`export`・`public` マニフェスト・`_.pw` ディレクトリ代表。
-
-### ★ 確定ロードマップ（generics → コアライブラリ → ランタイム）
-
-意味論の hidden-meaning は大半解消済み（整数幅・match・ラベル・診断）。残りは小さく additive。**拠り所「意味は最優先・コストは裏で後回し可」に照らし、leak ランタイムは hidden-cost ゆえ後回しでよい**。大物は以下の順で（合意済み）：
-
-1. ✅ **generics 完了**＝型パラメータ struct/enum/fn＋単相化（G1〜G3・generic struct/enum/メソッド end-to-end・タグ `generics-data`/`generics-methods`）。残り additive：generic free 関数・`map[U]`（own 型パラメータ＋推移的インスタンス化＋クロージャ）。
-2. ✅ **コアライブラリ（純 Plew）大筋完了**＝I3（`@Std/X`→`dirname(argv[0])/std/X.pw`）＋`@Std/Core` の `Optional`/`Result`＋メソッド（`compiler/std/Core.pw`・`tests/run/core_lib`）。✅ **`try`／`??` 実装**（`tests/run/try_coalesce`）。残り：可謬 I/O（`readFile`→`Result`）→ S2、ambient 化、`try` の From 変換・`?.`（[autonomous-decisions.md](autonomous-decisions.md)）。
-3. ✅ **CoW（値意味論）＝観測可能な範囲は完成**＝eager copy で配列 let/代入/JSX フィールド・mutable struct let/代入・配列/struct の return をコピー（`tests/run/value_semantics{,_let,_more,_struct,_return}`）。by-value 引数はイミュータブルゆえ不要。残り（deferred）：mono struct/enum 内のコンテナ配列の深いコピー（`Optional[Array]` 等）・**正確な refcount＋スコープ解放を伴う完全 CoW（遅延コピー＋ leak 解消）＝大物 ARC とセット**。
-4. 🔄 **ARC ＋ `Ref`/`WeakRef`**：✅ **基本 `Ref[T]` 実装**＝共有可変ヒープ箱（C `T*`）・`<Ref[T] value=e/>` 構築・`r->field` アクセス・コピーで共有（`tests/run/ref_shared`）。残り（deferred）：**ARC retain/release＋`deinit`（最後の解放）**＝スコープ解放追跡が要る大物・`WeakRef`＋`upgrade()`・循環回収・bare `<Ref value=e/>` 型推論（scalar 幅問題ゆえ明示 `[T]` 必須）。
-5. 🔄 **イベントループ（async/await/spawn）**（最大・最後）。✅ **土台＝関数値＋非キャプチャクロージャ**（`fn(...)->R` 型・関数ポインタ・`fn(...){}` リテラル＝ラムダリフティング・`tests/run/{fn_value,closure_literal}`）。残り：**クロージャのキャプチャ**（env＋fat closure＋エスケープヒープ化＝`spawn { block }` の前提・大物）→ **spawn**（pthread・`JoinHandle`/`join()→Promise`）→ **async/await**（状態機械変換 or コルーチン＝最難・spec 表面に密接で簡略化は要確認）。
-- traits（`Eq`/`Ord`/`Iterator` ＋ `where` 境界）は generics 後・コアライブラリと並走で純 Plew 化。I2（モジュール可視性ゲート）は多モジュール化が進む段で additive に。
-
-> **着手中＝generics**。まず既存の `Array[E]` 単相化機構（`PlewArray_<E>`・要素型名マングル・`Comp.arrayElems`）を一般 generic の土台に拡張する。
-
-#### generics 実装の段取り（言語表面は spec/06 で確定済＝確認不要）
-
-確定済の言語表面：型パラメータ `[T]`/`[T, U]`＋能力マーカー `noLocal`/`allowUnique`（v1 は `allowUnique` 不実装＝コピー可能型限定・`unique` は `Ref` 包み）、トレイト制約は `where`（traits エピックなので **v1 は境界なし**＝parse して無視 or 後回し）、use-site の型引数 `Name[TypeArgs]`（PascalCase＝型引数適用／camelCase＝添字＝Go 式判別）、推論＋明示 `f[I32](...)`。`impl[T] Type[T]`。
-
-現状の型表現 `(start, len, isArray)` は `Array[E]` 専用ハードコードで `Name[Arg, ...]`（複数引数・ネスト）を表現できない。これが土台。**コンパイラ自身は generics を使わない（Array＋scalar＋非 generic named のみ）ので、新機構は既存 Array 経路と併存で additive に足せる＝低リスク**。
-
-- **G1（土台・型表現）**：`TypeRef` アリーナ（`struct TypeRef { nameStart, nameLen: U64; args: Array[U64] }`・`Comp.types`）導入。`parseTypeTok` を `Name[Arg, ...]` 再帰パースに一般化（`Array[E]` は `TypeRef{Array,[E]}` に吸収）。型を運ぶ全箇所（`Param`/`FieldDef`/`Func.ret`/`Local`/`Stmt.Let`/`Expr.Cast`/`Comp.curRet`/`PType`）の `(tyStart,tyLen,isArray)` 三つ組を `ty: U64`（TypeRef index）へ。codegen の型出力（`genCTypeRef`/`genCElem`）を TypeRef 受けに。**挙動不変の純リファクタ**＝不動点＋全テストで検証。
-- **G2（generic struct/enum＋単相化）**：struct/enum に `[T,U]` 型パラメータ。プログラム全 TypeRef から具体インスタンス化 `Name[ConcreteArgs]` を収集→型パラメータ置換でフィールド/バリアント型を実体化→ネスト発見の推移閉包→マングル名 `Name_Arg1_Arg2` で C struct/enum を 1 インスタンスずつ出力。JSX 構築 `<Box[I32] v=5 />`・`<Optional[I32].Some v=5 />`。
-- **G3（generic 関数/メソッド）**：`fn f[T]`・呼び出しで型引数推論（引数型から）or 明示 `f[I32](...)`・`impl[T] Type[T]` メソッド。呼ばれたインスタンスを単相化。
-- **G4（コアライブラリ接続）**：`Optional`/`Result` を実 generic enum 化（次エピックのコアライブラリで）。
-
-ADT 注意：ネスト配列 `Array[Array[U8]]` は今壊れる（`PlewArray_Array`・要素型未定義）＝G1/G2 でネスト TypeRef を正しくマングルすれば解消見込み（要テスト）。AST フィールド形を変えるので **reseed 2 回**ルール適用。
-
-進捗：✅ **G1 完了**（TypeRef アリーナ＋`ty`/`retTy`/`ref` フィールド・`parseTypeTok` 再帰パース・挙動不変）。✅ **G2 step1 完了**（struct/enum に `[T,U]` 型パラメータ・`typeParams` 保持）。✅ **G2 step2＝単相化インフラ完了**（`genInsts`・TypeRef sentinel index0・`genericStructIndex`/`isGenericInst`/`typeRefEq`/`emitMangle`/`emitConcreteCType`/`emitFieldCType`/`genCTypeOf`/`scanType`/`collectGenInsts`/`emitMonoForward`/`emitMonoStruct`・use-site C 型を `genCTypeOf` 経由に・driver で generic template skip＋mono 出力）。✅ **G2a 完了＝generic struct が end-to-end**（宣言・`<Box[I32] v=5/>` 構築・`b.v` フィールド read・多パラメータ `Pair[A,B]`・ネスト `Box[Box[I32]]`・関数引数/戻り値。Make に型引数パース＋`Expr.Make.ty`・`typeInfoOfRef`/`genericFieldTypeInfo`・checkMakeFields/Make emission が generic 分岐。`tests/run/generic_struct{,_multi,_fn}`）。
-
-✅ **G2b 完了＝generic enum が end-to-end**（`Optional[T]`/`Result[T,E]` 宣言・`<Optional[I32].Some v=5/>` 構築・文/値位置 `match`〔bind フィールド型を置換〕・関数引数/戻り値。`TypeInfo.ref`〔具体インスタンス化の Comp.types index・`exprType(Ident/Make)` でセット〕・`genericEnumIndex`/`isGenericEnumInst`/`emitMonoEnum`/`genericEnumFieldTypeInfo`/`genBindTypeInst`・match codegen が scrut の ref から mangled enum 名で temp 宣言・collectGenInsts は Make も走査。`tests/run/generic_enum_{optional,result}`）。**タグ `generics-data`**。
-
-✅ **G3 step1/2/3 完了**：`fn id[T]`／`impl[T] Box[T]` パース＋impl 型パラメータを各メソッドへ伝播。✅ **generic メソッドが end-to-end**（`impl[T] Optional[T] { fn unwrapOr(fallback: T) -> T }`・`impl[T] Box[T] { fn get()->T  fn replace(n: T)->Box[T] }`・`Box[T]` 構築/返却は env で `Box_I32` に解決・型引数はレシーバの具体型由来＝呼び出し位置推論不要・(instantiation, method) ごとに `Optional_I32_unwrapOr` を特殊化）。機構：body 置換 env（`curTypeParams`/`curTypeArgs`/`curRecvInstRef`）・`resolveTy`・`emitMangle`/`emitConcreteCType`/`genCTypeOf` が env 解決・`emitMonoMethod(s)`/`methodMatchesInst`・メソッド呼び dispatch と `self` 型が instantiation 経由・`checkMethodArgs` が `substTypeInfo` でリテラル文脈解決・`collectGenInsts` は generic template を skip／`scanType` は ground のみ収集（`isTypeParamName`/`tyRefIsGround`）。`tests/run/generic_method_{enum,struct}`。
-
-**G3 残り（additive・コアライブラリが必要になったら）**：①**generic free 関数**＝呼び出し位置の型引数推論（未型リテラルから推論不可）＋明示 `id[I32](x)` パース〔Go 式 type/value 判別・今 `id[I32]` は Index にパース〕。②**メソッド own 型パラメータ `map[U]`**＝レシーバで束縛されない U＝call-site 推論が要る（`methodMatchesInst` が `typeParams.count == args.count` で今 skip）。③**推移的インスタンス化**＝generic body 内だけで生じる新インスタンス（`map` が `Optional[U]` を作る）＝単相化中に発見→worklist 追加で fixpoint。`map`/`flatMap` は①②③＋クロージャ/関数型が要るので後段。**現状でコアライブラリの Optional/Result は「データ＋match＋レシーバ型メソッド（unwrapOr/isSome 等）」まで書ける**。
-
-(以下は G2b 着手時の旧メモ・参考)
-**残り G3（本体・最後）の設計**：
-- **型 env を Comp に**：`curTypeParams: Array[Bind]`＋`curTypeArgs: Array[U64]`。generic 関数/メソッドの body codegen 中だけセット。`genCTypeOf`/literal 文脈/`exprType` が env で置換。
-- **メソッドが本命＆実は簡単**：`impl[T] Optional[T] { fn unwrapOr(default: T) -> T }` 系。**型引数はレシーバの具体型から来る**（`o: Optional[I32]` → T=I32・リテラル推論不要）。インスタンス集合は**既存の `genInsts`（レシーバの具体型）を再利用**＝各 genInst（メソッドを持つ struct/enum）につきメソッドを特殊化＝`Optional_I32_unwrapOr`。呼び出し `o.method(args)` は `exprType(recv).ref` から dispatch。**free 関数は呼び出し位置の型引数推論（未型リテラルから推論できない）＋明示 `id[I32](x)` パース〔Go 式 type/value 判別〕が要り難しい→メソッド先行が筋**。
-- **`impl[T] Box[T]` パース**：今の `parseImpl` は `impl` の次を型名トークンとして読む＝`impl[T]` の `[` を処理しない。`impl` の後に `parseTypeParams`→self 型 `Box[T]`（`parseTypeTok`）を読むよう拡張。メソッドの `Func.typeParams` に impl 由来パラメータも入れる（recv 型の型変数）。
-- **難所＝推移的インスタンス化**：body が新たな generic インスタンス化を作る（`map` が `Optional[U]` を返す/作る）と、`collectGenInsts`（parse 後 1 回）では拾えない＝**単相化中に発見した新インスタンスを worklist に足して fixpoint まで回す**必要。**第一カットは body 内で新インスタンス化を作らないメソッドに限定**（`unwrapOr`/`isSome`/`isNone`・body は T と self の値の受け渡しのみ）＝`map`/`flatMap` は推移閉包を入れてから。リテラルを T 型で導入（`val r: T = 5`）も第一カットは避ける（env 下の literal 文脈解決が要る）。
-- **body 置換の choke point**：`resolveTy(c, tyRef)→U64`＝env 下で head が param なら対応 arg ref を返す（top-level 置換）。`genCTypeOf` が `resolveTy` を通す。ネスト置換（`Optional[T]`→`Optional[I32]`）は新 TypeRef を `c.types` に push して作る＝推移閉包とセットで後段。
-
-> generics 現況＝**「データ」側完成（struct/enum・タグ `generics-data`）／「振る舞い」側（関数・メソッド）が G3 残**。コアライブラリの Optional/Result は**データとして match で使える**段階。メソッド（`map` 等）は G3 本体後。
-
-#### G2 単相化の設計（実装中・次の一歩）
-
-**TypeRef の sentinel**：`ty`=0 を「型なし」にするため、parse 前に `c.types` 先頭へダミー TypeRef を 1 個 push（実型は index 1+）。`addLocal` の synthetic `ty:0` 等が誤って実型 0 を指さないように。
-
-**スコープ（G2a＝generic struct 先行）**：型引数は scalar/String/非 generic named＋他の generic struct インスタンス化（ネスト可）に限定。**Array を型引数/ generic フィールド型に置くのは保留**（`PlewArray_<name>` マングルと衝突＝別途）。**generic フィールドが型パラメータを含む別 generic 適用（`Box[T]` の中の `Foo[T]`）も G2a では保留**＝フィールド型は「型パラメータそのもの or 具体型」のみ＝推移閉包不要に。enum（Optional/Result）は **G2b**。
-
-**機構（Codegen.pw に追加予定）**：
-- `genericStructIndex(c, nameStart, nameLen)→U64`：typeParams 付き struct の index（なければ count）。enum 版も。
-- `typeRefEq(c, a, b)→Bool`：head span＋args 再帰比較（dedup 用・文字列バッファ不要）。
-- インスタンス収集：**use site のみ**走査（G2 は generic 関数なし＝use site の args は常に具体）＝c.funcs の param.ty/retTy・非 generic struct/enum のフィールド ty・全 Stmt.Let.ty・Expr.Cast.ty・Expr.Make の型引数。generic struct head のものを `Comp.genInsts`（TypeRef index・`typeRefEq` で dedup）へ。**arg が generic inst なら先に再帰収集（post-order）**＝by-value ネストの定義順を満たす。
-- `emitMangle(c, ref)`：`Box[I32]`→`Box_I32`、`I32`→`I32`（args を `_` 連結・再帰）。インスタンス struct 名＝generic inst の C 型名。
-- `emitConcreteCType(c, ref)`：具体 TypeRef の C 型＝args 無→`genCElem`／generic inst→`emitMangle`。
-- `emitFieldCType(c, fieldRef, params, args)`：フィールド型が型パラメータなら対応 arg の C 型（`emitConcreteCType(args[i])`）、でなければ `emitConcreteCType(fieldRef)`。
-- `emitMonoStruct(c, instRef)`：`struct Box_I32 { <substituted field ctype> field; ... };`。
-- use site の C 型出力ラッパ `genCTypeOf(c, tyRef, fallStart, fallLen, isArray)`：generic inst（非 Array・args 有・head が generic）なら `emitConcreteCType`、でなければ既存 `genCTypeRef`。Let(2234)/genSignature param/ret/genStructDef field/genEnumDef field の呼びを差し替え。
-- `_.pw` の emission ループ：通常 struct/enum ループで **generic decl を skip**（テンプレート）→ genInsts の forward typedef＋body を出力（G2a は struct body のみ）。
-
-**まだ要るもの（end-to-end テストに必須）**：Make の型引数 `<Box[I32] v=5/>` パース＋codegen（`(Box_I32){.v=5}`）・フィールドアクセス `b.v` の型回復（exprType が generic inst を返す）。これらが揃って初めて `tests/run` で検証可能。**G2b（enum）は match の scrut 型を mono 名に・genBindType の置換・variant tag も。**
-
-### その他の候補（エピック後）
-- 値意味論/CoW・トレイト/ジェネリクスは更に大物（後）。
-- **メソッド化の続き（任意・ROI 逓減）**：残る `parseX(c: inout c)` 群も `impl` へ移せるが再帰的・多数でゲイン小＝後回し可。
-
-> import の現状＝**`with {}` 選択形のみ**・認識するのは I/O ビルトインだけ（`@Std/Io`＝print/write/writeByte/readStdin/readFile(+readFileBytes)・`@Std/Process`＝argCount/argAt）・名前↔モジュール検査あり。名前空間 import・実モジュール解決・`export`・`/`/`../` ルート・`_.pw` ディレクトリ・ネスト part 追従は未実装。
+1. ✅ **generics 完了**。残 additive：generic free 関数（呼び出し位置推論＋明示 `id[I32](x)` の Go 式判別）・`map[U]`（メソッド own 型パラメータ＋推移的インスタンス化＝単相化中の発見を worklist で fixpoint）。
+2. ✅ **コアライブラリ（純 Plew）大筋完了**（`@Std/Core`・`try`/`??`・`assert`）。残り：**可謬 I/O（`readFile`→`Result`）→ S2 を閉じる**（ただし std モジュールが intrinsic を使う際の import ゲート整合に注意）・ambient 化・`try` の From 変換・`?.`。
+3. ✅ **CoW（値意味論）＝観測可能な範囲は完成**。残り（deferred・hidden cost）：**正確な refcount＋スコープ解放を伴う完全 CoW（遅延コピー＋ leak 解消）＝ARC とセット**。`inout` と CoW の相互作用は正確な解放が前提。
+4. 🔄 **ARC ＋ `Ref`/`WeakRef`**：✅ 基本 `Ref[T]`。残り（deferred）：**ARC retain/release＋`deinit`**＝**スコープ解放追跡（全 exit パス）が要る大物**・`WeakRef`＋`upgrade()`（refcount 前提）・循環回収（Bacon–Rajan・spec/14）・bare `<Ref value=e/>` 型推論（scalar 幅問題ゆえ明示 `[T]` 必須）。
+5. 🔄 **イベントループ（async/await/spawn）**（最大・最後）。✅ 土台＝関数値＋非キャプチャクロージャ。残り：
+   - **クロージャのキャプチャ**＝外側ローカル参照（`makeCounter`）。**env＋fat closure（{fn ptr, env ptr}）＋エスケープでキャプチャ変数をヒープ化**。現状の bare 関数ポインタ表現の根本変更で、関数型/呼び出し/全経路に波及（相互依存が強く incremental green が困難）＝**`spawn { block }` の前提**。spec は参照キャプチャ（Swift 流・`mut val` 共有可変）。
+   - **spawn**＝pthread。境界で CoW 値は eager 実体化・`Ref` は越えられない（spec/14）。`JoinHandle[T]`/`join()→Promise[T]` は async 機構依存（blocking join に簡略化するなら言語表面の判断＝要確認）。
+   - **async/await**＝状態機械変換 or コルーチン＝最難。`Promise[T]` 自動ラップ・`await` 展開・スケジューラ。spec 表面（Promise API）に密接。
+- **traits**（`Eq`/`Ord`/`Iterator`＋`where` 境界）・**Dictionary**（`[k:v]`・Hash）は別の大物（generics 後・コアライブラリと並走で純 Plew 化）。**I2**（import の with ゲート＝定義のモジュール所属追跡＋可視性検査・今は全フラット）は多モジュール化が進む段で additive。
 
 ## 機能を plewc.pw に足す手順（ADD→reseed→USE）
 
-新機能を plewc.pw の**ソースで使う**には：①`compiler/src/` の codegen に機能を足す（**ADD**）→ ②`./bootstrap.sh --reseed` で種更新（→ `compiler/plewc.seed.c` を commit）→ ③ソースで使う（**USE**）。「ソースが使う機能は常にひとつ前のコンパイラがサポート済み」を守れば不動点は壊れない。新しい preamble 行を足した直後は種が 1 世代遅れるので **reseed を 2 回**回す（1 回目で挙動を種に焼き、2 回目で種ファイルを一致させる）。暗黙ビルトイン → 実 `@Std`/`extern` への将来移行も同じ ADD→USE→REMOVE で flag day にならない。
+新機能を plewc.pw の**ソースで使う**には：①`compiler/src/` の codegen に機能を足す（ADD）→ ②`./bootstrap.sh --reseed` で種更新（→ `compiler/plewc.seed.c` を commit）→ ③ソースで使う（USE）。「ソースが使う機能は常にひとつ前のコンパイラがサポート済み」を守れば不動点は壊れない。**新しい preamble 行や codegen 出力変化（genCElem 等）・AST フィールド追加を足したら reseed を 2 回**（1 回目で挙動を種に焼き、2 回目で種ファイルを一致させる）。暗黙ビルトイン→実 `@Std`/`extern` への移行も同じ ADD→USE→REMOVE で flag day にならない。
 
-## メモリモデル（hidden cost の暫定・重要）
+## メモリモデル（hidden cost の暫定）
 
-Array は **ヒープ確保＋リーク（free しない）＋参照セマンティクス**で実装（spec の CoW 値意味論/ARC は未実装）。エイリアス後変更が観測できてしまう差は、**plewc.pw を「アリーナ＋index・単一所有」で書く規律**で回避している。正しい CoW/ARC は後で（hidden cost＝受理の健全性の対象外）。詳細は [provisional.md](provisional.md)。
+Array/`Ref` は **ヒープ確保＋リーク（free しない）**で実装（spec の遅延 CoW・ARC 解放/`deinit` は未）。値意味論は eager copy で**観測的には正しい**（[autonomous-decisions.md](autonomous-decisions.md)）。正しい解放/遅延は後段 ARC（hidden cost＝受理の健全性の対象外）。詳細は [provisional.md](provisional.md)。
 
 ## 運用メモ
 
-- 動作する区切りで**記述的 git タグ**（`self-host`/`char-literals` 等・バージョン番号はまだ）。コミットメッセージは英語。
+- 動作する区切りで**記述的 git タグ**（`generics-data`/`value-semantics-complete` 等・バージョン番号はまだ）。コミットメッセージは英語＋`Co-Authored-By`。GPG 署名（`--no-gpg-sign` を使わない）。
 - **不要になった実装は削除し、必要なら git tag から復旧**（例：`git checkout stage0-final -- bootstrap`）。
-- 言語表面の決定は spec（正典）＋claude/ に即同期し、grep で陳腐化を点検。メモは repo 内（外部 memory は使わない）。
-- LLVM 化は当面しない＝意味論が揃ってから（import/トレイト/所有権の後）、性能 or 直 WASM が要る時に並行バックエンドとして追加（C は捨てない）。
+- 言語表面の決定は spec（正典）＋claude/ に即同期し、grep で陳腐化を点検。
+- C 予約語（`double` 等）と衝突する Plew 識別子は生成 C が壊れる＝名前マングリング未実装（コンパイラ自身は回避・ユーザーコードで顕在化）。
+- LLVM 化は当面しない＝意味論が揃ってから（所有権・並行の後）、性能 or 直 WASM が要る時に並行バックエンドとして追加（C は捨てない）。
