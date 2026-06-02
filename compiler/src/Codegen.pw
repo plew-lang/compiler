@@ -61,6 +61,32 @@ fn writeSpan(c: inout Comp, start: U64, len: U64) {
     }
 }
 
+// Compiler diagnostics. Ordinary module functions (not ambient builtins) so the
+// compiler source stays spec-valid: they report on stderr via @Std/Io `eprint`
+// and stop via @Std/Process `exit`. `compileErrorAt` includes a source line.
+fn eprintInt(n: I64) {
+    if n >= 10 {
+        eprintInt(n: n / 10)
+    }
+    eprint(text: digitStr(d: n % 10))
+}
+
+fn compileError(msg: String) {
+    eprint(text: "plewc: error: ")
+    eprint(text: msg)
+    eprint(text: "\n")
+    exit(code: 1)
+}
+
+fn compileErrorAt(line: I64, msg: String) {
+    eprint(text: "plewc: error: line ")
+    eprintInt(n: line)
+    eprint(text: ": ")
+    eprint(text: msg)
+    eprint(text: "\n")
+    exit(code: 1)
+}
+
 fn isPrimType(c: inout Comp, start: U64, len: U64) -> Bool {
     if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I8") { return true }
     if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I16") { return true }
@@ -1544,25 +1570,10 @@ fn genExpr(c: inout Comp, id: U64) {
             }
         }
         Expr.Call { val nameStart, val nameLen, val args } => {
-            // compileError(msg): the compiler's own diagnostic primitive —
-            // prints to stderr and exits non-zero. Compiler-internal (used by
-            // the acceptance-soundness checks below), so it is ambient (not
-            // import-gated); it is not a user-facing language construct.
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "compileError") {
-                write(s: "plew_compile_error(")
-                genExpr(c: inout c, id: args[0].expr)
-                write(s: ")")
-                return
-            }
-            // compileErrorAt(line, msg): like compileError but with a source line.
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "compileErrorAt") {
-                write(s: "plew_compile_error_at(")
-                genExpr(c: inout c, id: args[0].expr)
-                write(s: ", ")
-                genExpr(c: inout c, id: args[1].expr)
-                write(s: ")")
-                return
-            }
+            // compileError / compileErrorAt are ordinary module functions (defined
+            // above via eprint/exit), so they are NOT special-cased here — calls
+            // lower like any other user-function call. (Kept spec-valid: no ambient
+            // diagnostic builtin.)
             // I/O builtins -> C runtime.
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "write") {
                 if c.impWrite {

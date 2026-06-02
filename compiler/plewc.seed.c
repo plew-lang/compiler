@@ -10,8 +10,6 @@ __attribute__((unused)) static void plew_eprint(PlewString s) { fwrite(s.data, 1
 __attribute__((noreturn)) static void plew_panic(PlewString m) { fputs("panic: ", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\n', stderr); exit(1); }
 __attribute__((unused)) static long long plew_div(long long a, long long b) { if (b == 0) plew_panic((PlewString){"division by zero", 16}); if (b == -1 && a == INT64_MIN) plew_panic((PlewString){"integer overflow", 16}); return a / b; }
 __attribute__((unused)) static long long plew_mod(long long a, long long b) { if (b == 0) plew_panic((PlewString){"remainder by zero", 17}); if (b == -1) return 0; return a % b; }
-__attribute__((unused)) static void plew_compile_error(PlewString m) { fputs("plewc: error: ", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\n', stderr); exit(1); }
-__attribute__((unused)) static void plew_compile_error_at(long long line, PlewString m) { fprintf(stderr, "plewc: error: line %lld: ", line); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\n', stderr); exit(1); }
 static int plew_argc = 0;
 static char** plew_argv = 0;
 __attribute__((unused)) static long long plew_arg_count(void) { return (long long)plew_argc; }
@@ -465,6 +463,9 @@ void writeInt(int64_t n);
 PlewString digitStrU(uint64_t d);
 void writeU64(uint64_t n);
 void writeSpan(Comp* c, uint64_t start, uint64_t len);
+void eprintInt(int64_t n);
+void compileError(PlewString msg);
+void compileErrorAt(int64_t line, PlewString msg);
 long long isPrimType(Comp* c, uint64_t start, uint64_t len);
 long long isIntType(Comp* c, uint64_t start, uint64_t len);
 uint64_t intBits(Comp* c, uint64_t start, uint64_t len);
@@ -678,8 +679,6 @@ int main(int argc, char** argv) {
     plew_write((PlewString){"__attribute__((noreturn)) static void plew_panic(PlewString m) { fputs(\"panic: \", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\\n', stderr); exit(1); }\n", 165});
     plew_write((PlewString){"__attribute__((unused)) static long long plew_div(long long a, long long b) { if (b == 0) plew_panic((PlewString){\"division by zero\", 16}); if (b == -1 && a == INT64_MIN) plew_panic((PlewString){\"integer overflow\", 16}); return a / b; }\n", 237});
     plew_write((PlewString){"__attribute__((unused)) static long long plew_mod(long long a, long long b) { if (b == 0) plew_panic((PlewString){\"remainder by zero\", 17}); if (b == -1) return 0; return a % b; }\n", 180});
-    plew_write((PlewString){"__attribute__((unused)) static void plew_compile_error(PlewString m) { fputs(\"plewc: error: \", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\\n', stderr); exit(1); }\n", 178});
-    plew_write((PlewString){"__attribute__((unused)) static void plew_compile_error_at(long long line, PlewString m) { fprintf(stderr, \"plewc: error: line %lld: \", line); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\\n', stderr); exit(1); }\n", 216});
     plew_write((PlewString){"static int plew_argc = 0;\nstatic char** plew_argv = 0;\n", 55});
     plew_write((PlewString){"__attribute__((unused)) static long long plew_arg_count(void) { return (long long)plew_argc; }\n", 95});
     plew_write((PlewString){"__attribute__((unused)) static PlewString plew_arg_at(long long i) { PlewString s; if (i < 0 || i >= plew_argc) { s.data = \"\"; s.len = 0; return s; } s.data = plew_argv[i]; s.len = (long long)strlen(plew_argv[i]); return s; }\n", 226});
@@ -1252,13 +1251,13 @@ int64_t binPrec(Kind k) {
 int64_t charValue(Comp* c, Tok t) {
     uint64_t contentLen = ({ uint64_t __ov; if (__builtin_sub_overflow((t.len), (2), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     if (contentLen == 0) {
-    plew_compile_error_at(lineOf(&((*c)), t.start), (PlewString){"empty character literal", 23});
+    compileErrorAt(lineOf(&((*c)), t.start), (PlewString){"empty character literal", 23});
     }
     uint64_t p = ({ uint64_t __ov; if (__builtin_add_overflow((t.start), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     unsigned char b0 = PlewArray_U8_get((*c).bytes, (long long)(p));
     if (b0 == 92) {
     if (contentLen != 2) {
-    plew_compile_error_at(lineOf(&((*c)), t.start), (PlewString){"character literal must be a single scalar", 41});
+    compileErrorAt(lineOf(&((*c)), t.start), (PlewString){"character literal must be a single scalar", 41});
     }
     unsigned char e = PlewArray_U8_get((*c).bytes, (long long)(({ uint64_t __ov; if (__builtin_add_overflow((p), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; })));
     if (e == 110) {
@@ -1298,7 +1297,7 @@ int64_t charValue(Comp* c, Tok t) {
     }
     }
     if (contentLen != consumed) {
-    plew_compile_error_at(lineOf(&((*c)), t.start), (PlewString){"multi-scalar character literal (Grapheme) is not yet supported", 62});
+    compileErrorAt(lineOf(&((*c)), t.start), (PlewString){"multi-scalar character literal (Grapheme) is not yet supported", 62});
     }
     return value;
 }
@@ -2079,7 +2078,7 @@ PlewArray_PatInfo parseArmPatterns(Comp* c) {
     if (bindNamesMatch(&((*c)), p0.binds, pn.binds)) {
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), startOff), (PlewString){"or-pattern alternatives must bind the same names", 48});
+    compileErrorAt(lineOf(&((*c)), startOff), (PlewString){"or-pattern alternatives must bind the same names", 48});
     }
     pi = ({ uint64_t __ov; if (__builtin_add_overflow((pi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
@@ -2783,6 +2782,26 @@ void writeSpan(Comp* c, uint64_t start, uint64_t len) {
     putchar((int)(PlewArray_U8_get((*c).bytes, (long long)(({ uint64_t __ov; if (__builtin_add_overflow((start), (j), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; })))));
     j = ({ uint64_t __ov; if (__builtin_add_overflow((j), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
+}
+void eprintInt(int64_t n) {
+    if (n >= 10) {
+    eprintInt(({ int64_t __dl = (n); int64_t __dr = (10); if (__dr == 0) plew_panic((PlewString){"division by zero", 16}); if (__dr == -1 && __dl == INT64_MIN) plew_panic((PlewString){"integer overflow", 16}); __dl / __dr; }));
+    }
+    plew_eprint(digitStr(({ int64_t __dl = (n); int64_t __dr = (10); if (__dr == 0) plew_panic((PlewString){"remainder by zero", 17}); (__dr == -1 ? 0 : __dl % __dr); })));
+}
+void compileError(PlewString msg) {
+    plew_eprint((PlewString){"plewc: error: ", 14});
+    plew_eprint(msg);
+    plew_eprint((PlewString){"\n", 1});
+    exit((int)(1));
+}
+void compileErrorAt(int64_t line, PlewString msg) {
+    plew_eprint((PlewString){"plewc: error: line ", 19});
+    eprintInt(line);
+    plew_eprint((PlewString){": ", 2});
+    plew_eprint(msg);
+    plew_eprint((PlewString){"\n", 1});
+    exit((int)(1));
 }
 long long isPrimType(Comp* c, uint64_t start, uint64_t len) {
     if (rangeEquals((*c).bytes, start, len, (PlewString){"I8", 2})) {
@@ -4069,7 +4088,7 @@ void checkLitLeaf(Comp* c, int64_t value, uint64_t offset, long long isBool, uin
     if (litFitsType(&((*c)), value, tyStart, tyLen)) {
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), offset), (PlewString){"integer literal is out of range for its type", 44});
+    compileErrorAt(lineOf(&((*c)), offset), (PlewString){"integer literal is out of range for its type", 44});
     }
     return;
     }
@@ -4077,12 +4096,12 @@ void checkLitLeaf(Comp* c, int64_t value, uint64_t offset, long long isBool, uin
     if (litFitsBits(value, eBits, eSgn)) {
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), offset), (PlewString){"integer literal is out of range for its type", 44});
+    compileErrorAt(lineOf(&((*c)), offset), (PlewString){"integer literal is out of range for its type", 44});
     }
     return;
     }
     if (eKind == 0) {
-    plew_compile_error_at(lineOf(&((*c)), offset), (PlewString){"integer literal has no type from context; add a type annotation or a suffix (e.g. `5I32`)", 89});
+    compileErrorAt(lineOf(&((*c)), offset), (PlewString){"integer literal has no type from context; add a type annotation or a suffix (e.g. `5I32`)", 89});
     }
 }
 void checkLitCtx(Comp* c, uint64_t id, uint64_t eKind, uint64_t eBits, long long eSgn) {
@@ -4160,7 +4179,7 @@ void checkLitCtx(Comp* c, uint64_t id, uint64_t eKind, uint64_t eBits, long long
     if (litFitsBits(cf.value, eBits, eSgn)) {
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), exprOffset(&((*c)), id)), (PlewString){"constant expression is out of range for its type", 48});
+    compileErrorAt(lineOf(&((*c)), exprOffset(&((*c)), id)), (PlewString){"constant expression is out of range for its type", 48});
     }
     }
     checkLitCtx(&((*c)), lhs, eKind, eBits, eSgn);
@@ -4551,7 +4570,7 @@ void genExpr(Comp* c, uint64_t id) {
     }
     else {
     if (compareNeedsTrait(&((*c)), op, lhs)) {
-    plew_compile_error_at(lineOf(&((*c)), exprOffset(&((*c)), lhs)), (PlewString){"comparison needs Eq/Ord; not available for a struct or array", 60});
+    compileErrorAt(lineOf(&((*c)), exprOffset(&((*c)), lhs)), (PlewString){"comparison needs Eq/Ord; not available for a struct or array", 60});
     }
     else {
     if (op == 59) {
@@ -4615,20 +4634,6 @@ void genExpr(Comp* c, uint64_t id) {
         (void)nameLen;
         PlewArray_Arg args = _m96.data.Call.args;
         (void)args;
-    if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"compileError", 12})) {
-    plew_write((PlewString){"plew_compile_error(", 19});
-    genExpr(&((*c)), PlewArray_Arg_get(args, (long long)(0)).expr);
-    plew_write((PlewString){")", 1});
-    return;
-    }
-    if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"compileErrorAt", 14})) {
-    plew_write((PlewString){"plew_compile_error_at(", 22});
-    genExpr(&((*c)), PlewArray_Arg_get(args, (long long)(0)).expr);
-    plew_write((PlewString){", ", 2});
-    genExpr(&((*c)), PlewArray_Arg_get(args, (long long)(1)).expr);
-    plew_write((PlewString){")", 1});
-    return;
-    }
     if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"write", 5})) {
     if ((*c).impWrite) {
     plew_write((PlewString){"plew_write(", 11});
@@ -4636,7 +4641,7 @@ void genExpr(Comp* c, uint64_t id) {
     plew_write((PlewString){")", 1});
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), nameStart), (PlewString){"write is not ambient; import it from @Std/Io", 44});
+    compileErrorAt(lineOf(&((*c)), nameStart), (PlewString){"write is not ambient; import it from @Std/Io", 44});
     }
     return;
     }
@@ -4647,7 +4652,7 @@ void genExpr(Comp* c, uint64_t id) {
     plew_write((PlewString){"))", 2});
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), nameStart), (PlewString){"writeByte is not ambient; import it from @Std/Io", 48});
+    compileErrorAt(lineOf(&((*c)), nameStart), (PlewString){"writeByte is not ambient; import it from @Std/Io", 48});
     }
     return;
     }
@@ -4658,7 +4663,7 @@ void genExpr(Comp* c, uint64_t id) {
     plew_write((PlewString){")", 1});
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), nameStart), (PlewString){"eprint is not ambient; import it from @Std/Io", 45});
+    compileErrorAt(lineOf(&((*c)), nameStart), (PlewString){"eprint is not ambient; import it from @Std/Io", 45});
     }
     return;
     }
@@ -4669,7 +4674,7 @@ void genExpr(Comp* c, uint64_t id) {
     plew_write((PlewString){"))", 2});
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), nameStart), (PlewString){"exit is not ambient; import it from @Std/Process", 48});
+    compileErrorAt(lineOf(&((*c)), nameStart), (PlewString){"exit is not ambient; import it from @Std/Process", 48});
     }
     return;
     }
@@ -4678,7 +4683,7 @@ void genExpr(Comp* c, uint64_t id) {
     plew_write((PlewString){"plew_read_stdin()", 17});
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), nameStart), (PlewString){"readStdin is not ambient; import it from @Std/Io", 48});
+    compileErrorAt(lineOf(&((*c)), nameStart), (PlewString){"readStdin is not ambient; import it from @Std/Io", 48});
     }
     return;
     }
@@ -4689,7 +4694,7 @@ void genExpr(Comp* c, uint64_t id) {
     plew_write((PlewString){")", 1});
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), nameStart), (PlewString){"readFile is not ambient; import it from @Std/Io", 47});
+    compileErrorAt(lineOf(&((*c)), nameStart), (PlewString){"readFile is not ambient; import it from @Std/Io", 47});
     }
     return;
     }
@@ -4700,7 +4705,7 @@ void genExpr(Comp* c, uint64_t id) {
     plew_write((PlewString){")", 1});
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), nameStart), (PlewString){"readFile is not ambient; import it from @Std/Io", 47});
+    compileErrorAt(lineOf(&((*c)), nameStart), (PlewString){"readFile is not ambient; import it from @Std/Io", 47});
     }
     return;
     }
@@ -4709,7 +4714,7 @@ void genExpr(Comp* c, uint64_t id) {
     plew_write((PlewString){"plew_arg_count()", 16});
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), nameStart), (PlewString){"argCount is not ambient; import it from @Std/Process", 52});
+    compileErrorAt(lineOf(&((*c)), nameStart), (PlewString){"argCount is not ambient; import it from @Std/Process", 52});
     }
     return;
     }
@@ -4720,14 +4725,14 @@ void genExpr(Comp* c, uint64_t id) {
     plew_write((PlewString){"))", 2});
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), nameStart), (PlewString){"argAt is not ambient; import it from @Std/Process", 49});
+    compileErrorAt(lineOf(&((*c)), nameStart), (PlewString){"argAt is not ambient; import it from @Std/Process", 49});
     }
     return;
     }
     if (callLabelsOk(&((*c)), nameStart, nameLen, args)) {
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), nameStart), (PlewString){"argument labels do not match the function parameters", 52});
+    compileErrorAt(lineOf(&((*c)), nameStart), (PlewString){"argument labels do not match the function parameters", 52});
     return;
     }
     writeSpan(&((*c)), nameStart, nameLen);
@@ -4813,7 +4818,7 @@ void genExpr(Comp* c, uint64_t id) {
     if (placeIsMutable(&((*c)), recv)) {
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), exprOffset(&((*c)), recv)), (PlewString){"cannot mutate an immutable binding; declare it with `mut val`", 61});
+    compileErrorAt(lineOf(&((*c)), exprOffset(&((*c)), recv)), (PlewString){"cannot mutate an immutable binding; declare it with `mut val`", 61});
     return;
     }
     plew_write((PlewString){"PlewArray_", 10});
@@ -4827,21 +4832,21 @@ void genExpr(Comp* c, uint64_t id) {
     else {
     uint64_t mi = findMethod(&((*c)), bt.nameStart, bt.nameLen, nameStart, nameLen);
     if (mi == (long long)(((*c).funcs).len)) {
-    plew_compile_error_at(lineOf(&((*c)), nameStart), (PlewString){"no such method on this type", 27});
+    compileErrorAt(lineOf(&((*c)), nameStart), (PlewString){"no such method on this type", 27});
     return;
     }
     Func mf = PlewArray_Func_get((*c).funcs, (long long)(mi));
     if (paramsLabelsOk(&((*c)), mf.params, args)) {
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), nameStart), (PlewString){"argument labels do not match the method parameters", 50});
+    compileErrorAt(lineOf(&((*c)), nameStart), (PlewString){"argument labels do not match the method parameters", 50});
     return;
     }
     if (mf.selfInout) {
     if (placeIsMutable(&((*c)), recv)) {
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), exprOffset(&((*c)), recv)), (PlewString){"cannot call an `inout fn` method on an immutable binding; declare it with `mut val`", 83});
+    compileErrorAt(lineOf(&((*c)), exprOffset(&((*c)), recv)), (PlewString){"cannot call an `inout fn` method on an immutable binding; declare it with `mut val`", 83});
     return;
     }
     }
@@ -4898,7 +4903,7 @@ void genExpr(Comp* c, uint64_t id) {
     if (litFitsType(&((*c)), value, tyStart, tyLen)) {
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), offset), (PlewString){"integer literal is out of range for the target type of `as`", 59});
+    compileErrorAt(lineOf(&((*c)), offset), (PlewString){"integer literal is out of range for the target type of `as`", 59});
     return;
     }
     }
@@ -4908,7 +4913,7 @@ void genExpr(Comp* c, uint64_t id) {
     if (losslessInt(&((*c)), st.nameStart, st.nameLen, tyStart, tyLen)) {
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), exprOffset(&((*c)), operand)), (PlewString){"`as` would lose information (narrowing or signedness change); use a fallible TryFrom conversion", 95});
+    compileErrorAt(lineOf(&((*c)), exprOffset(&((*c)), operand)), (PlewString){"`as` would lose information (narrowing or signedness change); use a fallible TryFrom conversion", 95});
     return;
     }
     }
@@ -4992,7 +4997,7 @@ void genExpr(Comp* c, uint64_t id) {
     if (matchExhaustive(&((*c)), arms)) {
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), exprOffset(&((*c)), scrut)), (PlewString){"match must be exhaustive: cover all variants or add a wildcard", 62});
+    compileErrorAt(lineOf(&((*c)), exprOffset(&((*c)), scrut)), (PlewString){"match must be exhaustive: cover all variants or add a wildcard", 62});
     return;
     }
     uint64_t t = (*c).tmp;
@@ -5278,7 +5283,7 @@ void emitEnumTagCmp(Comp* c, uint64_t lhs, uint64_t rhs, int64_t op, long long o
     if (isAllNullary(&((*c)), enStart, enLen)) {
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), exprOffset(&((*c)), lhs)), (PlewString){"enum == needs structural Eq for payload variants (only all-nullary enums compare by tag)", 88});
+    compileErrorAt(lineOf(&((*c)), exprOffset(&((*c)), lhs)), (PlewString){"enum == needs structural Eq for payload variants (only all-nullary enums compare by tag)", 88});
     return;
     }
     if (outer) {
@@ -5316,7 +5321,7 @@ void genCond(Comp* c, uint64_t id) {
     }
     else {
     if (compareNeedsTrait(&((*c)), op, lhs)) {
-    plew_compile_error_at(lineOf(&((*c)), exprOffset(&((*c)), lhs)), (PlewString){"comparison needs Eq/Ord; not available for a struct or array", 60});
+    compileErrorAt(lineOf(&((*c)), exprOffset(&((*c)), lhs)), (PlewString){"comparison needs Eq/Ord; not available for a struct or array", 60});
     }
     else {
     genExpr(&((*c)), lhs);
@@ -5383,7 +5388,7 @@ void genStmt(Comp* c, uint64_t id) {
     if (placeIsMutable(&((*c)), base)) {
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), exprOffset(&((*c)), base)), (PlewString){"cannot assign to an element of an immutable binding; declare it with `mut val`", 78});
+    compileErrorAt(lineOf(&((*c)), exprOffset(&((*c)), base)), (PlewString){"cannot assign to an element of an immutable binding; declare it with `mut val`", 78});
     return;
     }
     TypeInfo bt = exprType(&((*c)), base);
@@ -5441,7 +5446,7 @@ void genStmt(Comp* c, uint64_t id) {
     if (placeIsMutable(&((*c)), target)) {
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), exprOffset(&((*c)), target)), (PlewString){"cannot assign to an immutable place; the binding and field must be declared `mut val`", 85});
+    compileErrorAt(lineOf(&((*c)), exprOffset(&((*c)), target)), (PlewString){"cannot assign to an immutable place; the binding and field must be declared `mut val`", 85});
     return;
     }
     TypeInfo ctt = exprType(&((*c)), target);
@@ -5517,7 +5522,7 @@ void genStmt(Comp* c, uint64_t id) {
     plew_write((PlewString){"));\n", 4});
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), offset), (PlewString){"print is not ambient; import it from @Std/Io", 44});
+    compileErrorAt(lineOf(&((*c)), offset), (PlewString){"print is not ambient; import it from @Std/Io", 44});
     }
     }
     else if (_m101.tag == 3) {
@@ -5704,7 +5709,7 @@ void genStmt(Comp* c, uint64_t id) {
     if (matchExhaustive(&((*c)), arms)) {
     }
     else {
-    plew_compile_error_at(lineOf(&((*c)), exprOffset(&((*c)), scrut)), (PlewString){"match must be exhaustive: cover all variants or add a wildcard", 62});
+    compileErrorAt(lineOf(&((*c)), exprOffset(&((*c)), scrut)), (PlewString){"match must be exhaustive: cover all variants or add a wildcard", 62});
     return;
     }
     uint64_t t = (*c).tmp;

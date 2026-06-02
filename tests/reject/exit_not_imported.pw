@@ -1,0 +1,4 @@
+// exit is not ambient: it must be imported from @Std/Process.
+fn main() {
+    exit(code: 1)
+}

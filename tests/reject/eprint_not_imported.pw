@@ -1,0 +1,5 @@
+// eprint is not ambient: using it without importing from @Std/Io is rejected
+// (same rule as print/write — only lang items are ambient).
+fn main() {
+    eprint(text: "hi")
+}
