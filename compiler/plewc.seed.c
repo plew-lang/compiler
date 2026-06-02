@@ -620,7 +620,7 @@ int main(int argc, char** argv) {
     }
     Lexer lx = (Lexer){.bytes = combined, .pos = 0, .toks = PlewArray_Tok_new(), .depth = 0};
     lex(&(lx));
-    Comp c = (Comp){.bytes = combined, .toks = lx.toks, .pos = 0, .exprs = PlewArray_Expr_new(), .stmts = PlewArray_Stmt_new(), .blocks = PlewArray_Block_new(), .funcs = PlewArray_Func_new(), .structs = PlewArray_StructDef_new(), .enums = PlewArray_EnumDef_new(), .arrayElems = PlewArray_Bind_new(), .locals = PlewArray_Local_new(), .tmp = 0, .curIsMain = 0, .curRetVoid = 0, .curHasRecv = 0, .curRecvStart = 0, .curRecvLen = 0, .curSelfInout = 0, .curGiveTmp = (0 - 1), .impPrint = 0, .impWrite = 0, .impWriteByte = 0, .impReadStdin = 0, .impReadFile = 0, .impArgCount = 0, .impArgAt = 0};
+    Comp c = (Comp){.bytes = combined, .toks = lx.toks, .pos = 0, .exprs = PlewArray_Expr_new(), .stmts = PlewArray_Stmt_new(), .blocks = PlewArray_Block_new(), .funcs = PlewArray_Func_new(), .structs = PlewArray_StructDef_new(), .enums = PlewArray_EnumDef_new(), .arrayElems = PlewArray_Bind_new(), .locals = PlewArray_Local_new(), .tmp = 0, .curIsMain = 0, .curRetVoid = 0, .curHasRecv = 0, .curRecvStart = 0, .curRecvLen = 0, .curSelfInout = 0, .curGiveTmp = 0, .impPrint = 0, .impWrite = 0, .impWriteByte = 0, .impReadStdin = 0, .impReadFile = 0, .impArgCount = 0, .impArgAt = 0};
     parseProgram(&(c));
     plew_write((PlewString){"#include <stdio.h>\n#include <stdint.h>\n#include <stdlib.h>\n#include <string.h>\n", 79});
     plew_write((PlewString){"typedef struct { const char* data; long long len; } PlewString;\n", 64});
@@ -2930,12 +2930,12 @@ long long findFunc(Comp* c, long long nameStart, long long nameLen) {
     }
     else {
     if (spansEqual(&((*c)), nameStart, nameLen, f.nameStart, f.nameLen)) {
-    return ((long long)(i));
+    return i;
     }
     }
     i += 1;
     }
-    return (0 - 1);
+    return (long long)(((*c).funcs).len);
 }
 long long findMethod(Comp* c, long long recvStart, long long recvLen, long long nameStart, long long nameLen) {
     long long i = 0;
@@ -2944,13 +2944,13 @@ long long findMethod(Comp* c, long long recvStart, long long recvLen, long long 
     if (f.hasRecv) {
     if (spansEqual(&((*c)), nameStart, nameLen, f.nameStart, f.nameLen)) {
     if (spansEqual(&((*c)), recvStart, recvLen, f.recvStart, f.recvLen)) {
-    return ((long long)(i));
+    return i;
     }
     }
     }
     i += 1;
     }
-    return (0 - 1);
+    return (long long)(((*c).funcs).len);
 }
 long long paramsLabelsOk(Comp* c, PlewArray_Param params, PlewArray_Arg args) {
     if ((long long)((params).len) != (long long)((args).len)) {
@@ -2976,10 +2976,10 @@ long long paramsLabelsOk(Comp* c, PlewArray_Param params, PlewArray_Arg args) {
 }
 long long callLabelsOk(Comp* c, long long nameStart, long long nameLen, PlewArray_Arg args) {
     long long fi = findFunc(&((*c)), nameStart, nameLen);
-    if (fi < 0) {
+    if (fi == (long long)(((*c).funcs).len)) {
     return 1;
     }
-    Func f = PlewArray_Func_get((*c).funcs, (long long)(((long long)(fi))));
+    Func f = PlewArray_Func_get((*c).funcs, (long long)(fi));
     return paramsLabelsOk(&((*c)), f.params, args);
 }
 long long armCovers(Comp* c, PlewArray_MatchArm arms, long long variantStart, long long variantLen) {
@@ -3045,7 +3045,7 @@ long long variantIndex(Comp* c, long long enumStart, long long enumLen, long lon
     while (vi < (long long)((vars).len)) {
     Variant v = PlewArray_Variant_get(vars, (long long)(vi));
     if (spansEqual(&((*c)), v.nameStart, v.nameLen, variantStart, variantLen)) {
-    return ((long long)(vi));
+    return vi;
     }
     vi += 1;
     }
@@ -3327,10 +3327,10 @@ TypeInfo exprType(Comp* c, long long id) {
     TypeInfo rt = exprType(&((*c)), recv);
     if (rt.kind == 2) {
     long long mi = findMethod(&((*c)), rt.nameStart, rt.nameLen, nameStart, nameLen);
-    if (mi < 0) {
+    if (mi == (long long)(((*c).funcs).len)) {
     return scalarInfo();
     }
-    Func mf = PlewArray_Func_get((*c).funcs, (long long)(((long long)(mi))));
+    Func mf = PlewArray_Func_get((*c).funcs, (long long)(mi));
     if (mf.hasRet) {
     return typeInfoOfName(&((*c)), mf.retStart, mf.retLen, mf.retIsArray);
     }
@@ -3365,8 +3365,8 @@ TypeInfo exprType(Comp* c, long long id) {
         long long elseBlk = _m87.data.IfExpr.elseBlk;
         (void)elseBlk;
     long long g = blockGiveExpr(&((*c)), thenBlk);
-    if (g >= 0) {
-    return exprType(&((*c)), ((long long)(g)));
+    if (g < (long long)(((*c).exprs).len)) {
+    return exprType(&((*c)), g);
     }
     return scalarInfo();
     }
@@ -3378,7 +3378,7 @@ long long blockGiveExpr(Comp* c, long long blkId) {
     Block blk = PlewArray_Block_get((*c).blocks, (long long)(blkId));
     PlewArray_U64 stmts = blk.stmts;
     long long i = 0;
-    long long found = (0 - 1);
+    long long found = (long long)(((*c).exprs).len);
     while (i < (long long)((stmts).len)) {
     Stmt s = PlewArray_Stmt_get((*c).stmts, (long long)(PlewArray_U64_get(stmts, (long long)(i))));
     {
@@ -3386,7 +3386,7 @@ long long blockGiveExpr(Comp* c, long long blkId) {
     if (_m88.tag == 10) {
         long long value = _m88.data.Give.value;
         (void)value;
-    found = ((long long)(value));
+    found = value;
     }
     else {
     }
@@ -3901,11 +3901,11 @@ void genExpr(Comp* c, long long id) {
     }
     else {
     long long mi = findMethod(&((*c)), bt.nameStart, bt.nameLen, nameStart, nameLen);
-    if (mi < 0) {
+    if (mi == (long long)(((*c).funcs).len)) {
     plew_compile_error_at(lineOf(&((*c)), nameStart), (PlewString){"no such method on this type", 27});
     return;
     }
-    Func mf = PlewArray_Func_get((*c).funcs, (long long)(((long long)(mi))));
+    Func mf = PlewArray_Func_get((*c).funcs, (long long)(mi));
     if (paramsLabelsOk(&((*c)), mf.params, args)) {
     }
     else {
@@ -3984,7 +3984,7 @@ void genExpr(Comp* c, long long id) {
     plew_write((PlewString){"(", 1});
     writeSpan(&((*c)), typeStart, typeLen);
     plew_write((PlewString){"){.tag = ", 9});
-    writeInt(variantIndex(&((*c)), typeStart, typeLen, variantStart, variantLen));
+    writeU64(variantIndex(&((*c)), typeStart, typeLen, variantStart, variantLen));
     if ((long long)((fields).len) > 0) {
     plew_write((PlewString){", .data.", 8});
     writeSpan(&((*c)), variantStart, variantLen);
@@ -4093,7 +4093,7 @@ void genExpr(Comp* c, long long id) {
     }
     writeU64(t);
     plew_write((PlewString){".tag == ", 8});
-    writeInt(variantIndex(&((*c)), a.enumStart, a.enumLen, a.variantStart, a.variantLen));
+    writeU64(variantIndex(&((*c)), a.enumStart, a.enumLen, a.variantStart, a.variantLen));
     plew_write((PlewString){") { ", 4});
     PlewArray_Bind binds = a.binds;
     long long bi = 0;
@@ -4142,8 +4142,8 @@ void genExpr(Comp* c, long long id) {
     (*c).tmp = ((*c).tmp + 1);
     long long g = blockGiveExpr(&((*c)), thenBlk);
     TypeInfo rt = scalarInfo();
-    if (g >= 0) {
-    rt = exprType(&((*c)), ((long long)(g)));
+    if (g < (long long)(((*c).exprs).len)) {
+    rt = exprType(&((*c)), g);
     }
     plew_write((PlewString){"({ ", 3});
     genTypeInfoCType(&((*c)), rt);
@@ -4153,7 +4153,7 @@ void genExpr(Comp* c, long long id) {
     genCond(&((*c)), cond);
     plew_write((PlewString){") {\n", 4});
     long long save = (*c).curGiveTmp;
-    (*c).curGiveTmp = ((long long)(t));
+    (*c).curGiveTmp = (t + 1);
     genBlock(&((*c)), thenBlk);
     plew_write((PlewString){"    } else {\n", 13});
     genBlock(&((*c)), elseBlk);
@@ -4297,7 +4297,7 @@ void emitEnumOperand(Comp* c, long long id, long long enStart, long long enLen) 
         PlewArray_MakeField fields = _m91.data.Make.fields;
         (void)fields;
     if (isEnum) {
-    writeInt(variantIndex(&((*c)), enStart, enLen, variantStart, variantLen));
+    writeU64(variantIndex(&((*c)), enStart, enLen, variantStart, variantLen));
     return;
     }
     }
@@ -4661,9 +4661,9 @@ void genStmt(Comp* c, long long id) {
     else if (_m93.tag == 10) {
         long long value = _m93.data.Give.value;
         (void)value;
-    if ((*c).curGiveTmp >= 0) {
+    if ((*c).curGiveTmp != 0) {
     plew_write((PlewString){"    __r", 7});
-    writeInt((*c).curGiveTmp);
+    writeU64(((*c).curGiveTmp - 1));
     plew_write((PlewString){" = (", 4});
     genExpr(&((*c)), value);
     plew_write((PlewString){");\n", 3});
@@ -4732,7 +4732,7 @@ void genStmt(Comp* c, long long id) {
     }
     writeU64(t);
     plew_write((PlewString){".tag == ", 8});
-    writeInt(variantIndex(&((*c)), a.enumStart, a.enumLen, a.variantStart, a.variantLen));
+    writeU64(variantIndex(&((*c)), a.enumStart, a.enumLen, a.variantStart, a.variantLen));
     plew_write((PlewString){") {\n", 4});
     PlewArray_Bind binds = a.binds;
     long long bi = 0;

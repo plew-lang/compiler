@@ -233,9 +233,10 @@ struct Comp {
     mut val curSelfInout: Bool
     // result temp id of the innermost value-position block (`if`/`match` expr)
     // currently being lowered, so a `give` statement knows which `__r<n>` to
-    // assign. -1 when not inside a block-expression (a bare `give` is then a
-    // no-op fallthrough; the parser only emits give inside if-exprs for now).
-    mut val curGiveTmp: I64
+    // assign — stored as `id + 1` so 0 means "not inside a block-expression" (a
+    // bare `give` is then a no-op). The +1 encoding keeps it U64 (no signed
+    // sentinel) under the lossless-`as` discipline.
+    mut val curGiveTmp: U64
     // which I/O builtins the file has imported (acceptance soundness: spec makes
     // these non-ambient, so using one without `import @Std/Io`/`@Std/Process`
     // is a compile error). One flag per builtin, matched to its module.

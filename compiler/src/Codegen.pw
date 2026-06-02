@@ -184,37 +184,39 @@ fn exprOffset(c: inout Comp, id: U64) -> U64 {
 
 // Index of the top-level function named (nameStart,nameLen), or -1 if none.
 // Names are unique (no overloading in this compiler), so the first match wins.
-fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64) -> I64 {
+// Returns `c.funcs.count` (one past the end) when there is no match — kept as a
+// U64 sentinel so callers never need a signed index (lossless-`as` discipline).
+fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
         if f.hasRecv {
         } else {
             if spansEqual(c: inout c, aStart: nameStart, aLen: nameLen, bStart: f.nameStart, bLen: f.nameLen) {
-                return i as I64
+                return i
             }
         }
         i += 1
     }
-    return 0 - 1
+    return c.funcs.count
 }
 
 // Index of the method named (nameStart,nameLen) on receiver type
-// (recvStart,recvLen), or -1 if none.
-fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> I64 {
+// (recvStart,recvLen), or `c.funcs.count` (one past the end) if none.
+fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> U64 {
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
         if f.hasRecv {
             if spansEqual(c: inout c, aStart: nameStart, aLen: nameLen, bStart: f.nameStart, bLen: f.nameLen) {
                 if spansEqual(c: inout c, aStart: recvStart, aLen: recvLen, bStart: f.recvStart, bLen: f.recvLen) {
-                    return i as I64
+                    return i
                 }
             }
         }
         i += 1
     }
-    return 0 - 1
+    return c.funcs.count
 }
 
 // Check call args against a parameter list: arg count matches and every arg
@@ -245,11 +247,11 @@ fn paramsLabelsOk(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bool
 // resolve to a user function (I/O builtins, methods) return true here — they're
 // handled on their own paths and keep their provisional calling conventions.
 fn callLabelsOk(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
-    val fi: I64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen)
-    if fi < 0 {
+    val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen)
+    if fi == c.funcs.count {
         return true
     }
-    val f: Func = c.funcs[fi as U64]
+    val f: Func = c.funcs[fi]
     return paramsLabelsOk(c: inout c, params: f.params, args: args)
 }
 
@@ -314,7 +316,7 @@ fn matchExhaustive(c: inout Comp, arms: Array[MatchArm]) -> Bool {
 }
 
 // Tag index of `Enum.Variant` (the variant's position in its enum declaration).
-fn variantIndex(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64) -> I64 {
+fn variantIndex(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64) -> U64 {
     mut val ei: U64 = 0
     while ei < c.enums.count {
         val e: EnumDef = c.enums[ei]
@@ -324,7 +326,7 @@ fn variantIndex(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, 
             while vi < vars.count {
                 val v: Variant = vars[vi]
                 if spansEqual(c: inout c, aStart: v.nameStart, aLen: v.nameLen, bStart: variantStart, bLen: variantLen) {
-                    return vi as I64
+                    return vi
                 }
                 vi += 1
             }
@@ -548,11 +550,11 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
         Expr.Method { val recv, val nameStart, val nameLen, val args } => {
             val rt: TypeInfo = exprType(c: inout c, id: recv)
             if rt.kind == 2 {
-                val mi: I64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen)
-                if mi < 0 {
+                val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen)
+                if mi == c.funcs.count {
                     return scalarInfo()
                 }
-                val mf: Func = c.funcs[mi as U64]
+                val mf: Func = c.funcs[mi]
                 if mf.hasRet {
                     return typeInfoOfName(c: inout c, start: mf.retStart, len: mf.retLen, isArray: mf.retIsArray)
                 }
@@ -570,9 +572,9 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             return scalarInfo()
         }
         Expr.IfExpr { val cond, val thenBlk, val elseBlk } => {
-            val g: I64 = blockGiveExpr(c: inout c, blkId: thenBlk)
-            if g >= 0 {
-                return exprType(c: inout c, id: g as U64)
+            val g: U64 = blockGiveExpr(c: inout c, blkId: thenBlk)
+            if g < c.exprs.count {
+                return exprType(c: inout c, id: g)
             }
             return scalarInfo()
         }
@@ -581,16 +583,17 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
 }
 
 // The value expression of the last `give` in a block (the block's result), or
-// -1 if the block has no `give`. Used to infer a value-position `if`'s type.
-fn blockGiveExpr(c: inout Comp, blkId: U64) -> I64 {
+// `c.exprs.count` (one past the end) if the block has no `give`. A U64 sentinel
+// keeps callers off signed indices. Used to infer a value-position `if`'s type.
+fn blockGiveExpr(c: inout Comp, blkId: U64) -> U64 {
     val blk: Block = c.blocks[blkId]
     val stmts: Array[U64] = blk.stmts
     mut val i: U64 = 0
-    mut val found: I64 = 0 - 1
+    mut val found: U64 = c.exprs.count
     while i < stmts.count {
         val s: Stmt = c.stmts[stmts[i]]
         match s {
-            Stmt.Give { val value } => { found = value as I64 }
+            Stmt.Give { val value } => { found = value }
             _ => {}
         }
         i += 1
@@ -992,12 +995,12 @@ fn genExpr(c: inout Comp, id: U64) {
             } else {
                 // user method on a named type: `recv.m(args)` -> Recv_m(self, args)
                 // (self by value, or &recv for an `inout fn` receiver).
-                val mi: I64 = findMethod(c: inout c, recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen)
-                if mi < 0 {
+                val mi: U64 = findMethod(c: inout c, recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen)
+                if mi == c.funcs.count {
                     compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "no such method on this type")
                     return
                 }
-                val mf: Func = c.funcs[mi as U64]
+                val mf: Func = c.funcs[mi]
                 if paramsLabelsOk(c: inout c, params: mf.params, args: args) {
                 } else {
                     compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "argument labels do not match the method parameters")
@@ -1057,7 +1060,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 write(s: "(")
                 writeSpan(c: inout c, start: typeStart, len: typeLen)
                 write(s: "){.tag = ")
-                writeInt(n: variantIndex(c: inout c, enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen))
+                writeU64(n: variantIndex(c: inout c, enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen))
                 if fields.count > 0 {
                     write(s: ", .data.")
                     writeSpan(c: inout c, start: variantStart, len: variantLen)
@@ -1160,7 +1163,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     }
                     writeU64(n: t)
                     write(s: ".tag == ")
-                    writeInt(n: variantIndex(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen))
+                    writeU64(n: variantIndex(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen))
                     write(s: ") { ")
                     val binds: Array[Bind] = a.binds
                     mut val bi: U64 = 0
@@ -1202,10 +1205,10 @@ fn genExpr(c: inout Comp, id: U64) {
             // ending in `give`, which assigns the result temp __r<t>.
             val t: U64 = c.tmp
             c.tmp = c.tmp + 1
-            val g: I64 = blockGiveExpr(c: inout c, blkId: thenBlk)
+            val g: U64 = blockGiveExpr(c: inout c, blkId: thenBlk)
             mut val rt: TypeInfo = scalarInfo()
-            if g >= 0 {
-                rt = exprType(c: inout c, id: g as U64)
+            if g < c.exprs.count {
+                rt = exprType(c: inout c, id: g)
             }
             write(s: "({ ")
             genTypeInfoCType(c: inout c, ti: rt)
@@ -1214,8 +1217,8 @@ fn genExpr(c: inout Comp, id: U64) {
             write(s: "; if (")
             genCond(c: inout c, id: cond)
             write(s: ") {\n")
-            val save: I64 = c.curGiveTmp
-            c.curGiveTmp = t as I64
+            val save: U64 = c.curGiveTmp
+            c.curGiveTmp = t + 1
             genBlock(c: inout c, id: thenBlk)
             write(s: "    } else {\n")
             genBlock(c: inout c, id: elseBlk)
@@ -1359,7 +1362,7 @@ fn emitEnumOperand(c: inout Comp, id: U64, enStart: U64, enLen: U64) {
     match e {
         Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val fields } => {
             if isEnum {
-                writeInt(n: variantIndex(c: inout c, enumStart: enStart, enumLen: enLen, variantStart: variantStart, variantLen: variantLen))
+                writeU64(n: variantIndex(c: inout c, enumStart: enStart, enumLen: enLen, variantStart: variantStart, variantLen: variantLen))
                 return
             }
         }
@@ -1654,9 +1657,9 @@ fn genStmt(c: inout Comp, id: U64) {
         Stmt.Give { val value } => {
             // assign the active value-position block's result temp (set by the
             // enclosing IfExpr/MatchExpr lowering).
-            if c.curGiveTmp >= 0 {
+            if c.curGiveTmp != 0 {
                 write(s: "    __r")
-                writeInt(n: c.curGiveTmp)
+                writeU64(n: c.curGiveTmp - 1)
                 write(s: " = (")
                 genExpr(c: inout c, id: value)
                 write(s: ");\n")
@@ -1721,7 +1724,7 @@ fn genStmt(c: inout Comp, id: U64) {
                     }
                     writeU64(n: t)
                     write(s: ".tag == ")
-                    writeInt(n: variantIndex(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen))
+                    writeU64(n: variantIndex(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen))
                     write(s: ") {\n")
                     val binds: Array[Bind] = a.binds
                     mut val bi: U64 = 0
