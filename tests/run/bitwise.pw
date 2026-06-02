@@ -1,0 +1,16 @@
+// Bitwise & shift operators (& | ^ << >> ~) and their precedence.
+// Spec order (low->high): | < ^ < & < shift < +-, so `&` binds tighter than `|`
+// and `+` tighter than `<<`.
+import @Std/Io with { print }
+
+fn main() {
+    print(12 & 10)        // 8
+    print(12 | 10)        // 14
+    print(12 ^ 10)        // 6
+    print(1 << 4)         // 16
+    print(255 >> 4)       // 15
+    print(6 & 3 | 8)      // (6&3)|8 = 10
+    print(1 << 2 + 1)     // 1 << (2+1) = 8
+    val x: I64 = 5
+    print(~x)             // -6
+}

@@ -544,11 +544,17 @@ fn binOpStr(op: I64) -> String {
     if op == 55 { return " >= " }
     if op == 61 { return " && " }
     if op == 62 { return " || " }
+    if op == 74 { return " & " }
+    if op == 75 { return " | " }
+    if op == 76 { return " ^ " }
+    if op == 77 { return " << " }
+    if op == 78 { return " >> " }
     return " ? "
 }
 
 fn unaryOpStr(op: I64) -> String {
     if op == 57 { return "-" }
+    if op == 79 { return "~" }
     return "!"
 }
 

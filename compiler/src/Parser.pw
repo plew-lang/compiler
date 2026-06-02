@@ -3,6 +3,8 @@
 
 // ---- expression parser (precedence climbing) ----
 
+// Binary operator precedence (higher binds tighter). Spec order, low to high:
+// || < && < comparison < | < ^ < & < shift < +- < */%.
 fn binPrec(k: Kind) -> I64 {
     match k {
         Kind.PipePipe => { return 1 }
@@ -13,19 +15,24 @@ fn binPrec(k: Kind) -> I64 {
         Kind.Le => { return 3 }
         Kind.Gt => { return 3 }
         Kind.Ge => { return 3 }
-        Kind.Plus => { return 4 }
-        Kind.Minus => { return 4 }
-        Kind.Star => { return 5 }
-        Kind.Slash => { return 5 }
-        Kind.Percent => { return 5 }
+        Kind.Pipe => { return 4 }
+        Kind.Caret => { return 5 }
+        Kind.Amp => { return 6 }
+        Kind.Shl => { return 7 }
+        Kind.Shr => { return 7 }
+        Kind.Plus => { return 8 }
+        Kind.Minus => { return 8 }
+        Kind.Star => { return 9 }
+        Kind.Slash => { return 9 }
+        Kind.Percent => { return 9 }
         _ => { return 0 }
     }
 }
 
 // Decode a character literal token `'…'` (span includes both quotes) to its
 // Unicode codepoint. Only a single scalar is allowed; multi-scalar (Grapheme)
-// literals are rejected (Grapheme type unimplemented). UTF-8 is decoded with
-// arithmetic (no bitwise ops in this compiler): `& 0x3F` == `% 64`, `<< 6` == `* 64`.
+// literals are rejected (Grapheme type unimplemented). UTF-8 is decoded with the
+// canonical bitwise form (continuation bytes carry 6 bits each).
 fn charValue(c: inout Comp, t: Tok) -> I64 {
     val contentLen: U64 = t.len - 2
     if contentLen == 0 {
@@ -53,14 +60,14 @@ fn charValue(c: inout Comp, t: Tok) -> I64 {
     } else {
         if b0 < 224 {
             consumed = 2
-            value = (b0 % 32) * 64 + (c.bytes[p + 1] % 64)
+            value = ((b0 & 31) << 6) | (c.bytes[p + 1] & 63)
         } else {
             if b0 < 240 {
                 consumed = 3
-                value = (b0 % 16) * 4096 + (c.bytes[p + 1] % 64) * 64 + (c.bytes[p + 2] % 64)
+                value = ((b0 & 15) << 12) | ((c.bytes[p + 1] & 63) << 6) | (c.bytes[p + 2] & 63)
             } else {
                 consumed = 4
-                value = (b0 % 8) * 262144 + (c.bytes[p + 1] % 64) * 4096 + (c.bytes[p + 2] % 64) * 64 + (c.bytes[p + 3] % 64)
+                value = ((b0 & 7) << 18) | ((c.bytes[p + 1] & 63) << 12) | ((c.bytes[p + 2] & 63) << 6) | (c.bytes[p + 3] & 63)
             }
         }
     }
@@ -167,6 +174,11 @@ fn parseUnary(c: inout Comp) -> U64 {
             c.advance()
             val o: U64 = parseUnary(c: inout c)
             return c.pushExpr(e: <Expr.Unary op=63 operand=o />)
+        }
+        Kind.Tilde => {
+            c.advance()
+            val o: U64 = parseUnary(c: inout c)
+            return c.pushExpr(e: <Expr.Unary op=79 operand=o />)
         }
         _ => { return parsePostfix(c: inout c) }
     }

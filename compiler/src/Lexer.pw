@@ -51,6 +51,12 @@ enum Kind {
     AmpAmp
     PipePipe
     Bang
+    Amp
+    Pipe
+    Caret
+    Shl
+    Shr
+    Tilde
     Arrow
     FatArrow
     SlashGt
@@ -385,12 +391,20 @@ fn lex(lx: inout Lexer) {
                 lx.emit(k: <Kind.Le />, start: lx.pos, len: 2)
                 continue
             }
+            if b2 == '<' {
+                lx.emit(k: <Kind.Shl />, start: lx.pos, len: 2)
+                continue
+            }
             lx.emit(k: <Kind.Lt />, start: lx.pos, len: 1)
             continue
         }
         if b == '>' {
             if b2 == '=' {
                 lx.emit(k: <Kind.Ge />, start: lx.pos, len: 2)
+                continue
+            }
+            if b2 == '>' {
+                lx.emit(k: <Kind.Shr />, start: lx.pos, len: 2)
                 continue
             }
             lx.emit(k: <Kind.Gt />, start: lx.pos, len: 1)
@@ -449,12 +463,24 @@ fn lex(lx: inout Lexer) {
                 lx.emit(k: <Kind.AmpAmp />, start: lx.pos, len: 2)
                 continue
             }
+            lx.emit(k: <Kind.Amp />, start: lx.pos, len: 1)
+            continue
         }
         if b == '|' {
             if b2 == '|' {
                 lx.emit(k: <Kind.PipePipe />, start: lx.pos, len: 2)
                 continue
             }
+            lx.emit(k: <Kind.Pipe />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == '^' {
+            lx.emit(k: <Kind.Caret />, start: lx.pos, len: 1)
+            continue
+        }
+        if b == '~' {
+            lx.emit(k: <Kind.Tilde />, start: lx.pos, len: 1)
+            continue
         }
         if b == '(' {
             lx.emit(k: <Kind.LParen />, start: lx.pos, len: 1)
@@ -558,6 +584,12 @@ fn kindCode(k: Kind) -> I64 {
         Kind.PercentEq => { return 71 }
         Kind.DotDotLt => { return 72 }
         Kind.DotDotEq => { return 73 }
+        Kind.Amp => { return 74 }
+        Kind.Pipe => { return 75 }
+        Kind.Caret => { return 76 }
+        Kind.Shl => { return 77 }
+        Kind.Shr => { return 78 }
+        Kind.Tilde => { return 79 }
         Kind.Unknown => { return 99 }
     }
 }

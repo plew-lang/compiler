@@ -104,6 +104,12 @@ struct Kind {
         struct { char _u; } AmpAmp;
         struct { char _u; } PipePipe;
         struct { char _u; } Bang;
+        struct { char _u; } Amp;
+        struct { char _u; } Pipe;
+        struct { char _u; } Caret;
+        struct { char _u; } Shl;
+        struct { char _u; } Shr;
+        struct { char _u; } Tilde;
         struct { char _u; } Arrow;
         struct { char _u; } FatArrow;
         struct { char _u; } SlashGt;
@@ -714,7 +720,7 @@ long long Lexer_lastCanEnd(Lexer self) {
     else if (_m6.tag == 30) {
     return 1;
     }
-    else if (_m6.tag == 51) {
+    else if (_m6.tag == 57) {
     return 1;
     }
     else if (_m6.tag == 23) {
@@ -955,11 +961,11 @@ void lex(Lexer* lx) {
     if (b2 == 46) {
     unsigned char b3 = Lexer_at((*lx), 2);
     if (b3 == 60) {
-    Lexer_emit(&((*lx)), (Kind){.tag = 57}, (*lx).pos, 3);
+    Lexer_emit(&((*lx)), (Kind){.tag = 63}, (*lx).pos, 3);
     continue;
     }
     if (b3 == 61) {
-    Lexer_emit(&((*lx)), (Kind){.tag = 58}, (*lx).pos, 3);
+    Lexer_emit(&((*lx)), (Kind){.tag = 64}, (*lx).pos, 3);
     continue;
     }
     }
@@ -972,7 +978,7 @@ void lex(Lexer* lx) {
     continue;
     }
     if (b2 == 62) {
-    Lexer_emit(&((*lx)), (Kind){.tag = 50}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 56}, (*lx).pos, 2);
     continue;
     }
     Lexer_emit(&((*lx)), (Kind){.tag = 34}, (*lx).pos, 1);
@@ -991,6 +997,10 @@ void lex(Lexer* lx) {
     Lexer_emit(&((*lx)), (Kind){.tag = 38}, (*lx).pos, 2);
     continue;
     }
+    if (b2 == 60) {
+    Lexer_emit(&((*lx)), (Kind){.tag = 52}, (*lx).pos, 2);
+    continue;
+    }
     Lexer_emit(&((*lx)), (Kind){.tag = 37}, (*lx).pos, 1);
     continue;
     }
@@ -999,12 +1009,16 @@ void lex(Lexer* lx) {
     Lexer_emit(&((*lx)), (Kind){.tag = 40}, (*lx).pos, 2);
     continue;
     }
+    if (b2 == 62) {
+    Lexer_emit(&((*lx)), (Kind){.tag = 53}, (*lx).pos, 2);
+    continue;
+    }
     Lexer_emit(&((*lx)), (Kind){.tag = 39}, (*lx).pos, 1);
     continue;
     }
     if (b == 43) {
     if (b2 == 61) {
-    Lexer_emit(&((*lx)), (Kind){.tag = 52}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 58}, (*lx).pos, 2);
     continue;
     }
     Lexer_emit(&((*lx)), (Kind){.tag = 41}, (*lx).pos, 1);
@@ -1012,11 +1026,11 @@ void lex(Lexer* lx) {
     }
     if (b == 45) {
     if (b2 == 61) {
-    Lexer_emit(&((*lx)), (Kind){.tag = 53}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 59}, (*lx).pos, 2);
     continue;
     }
     if (b2 == 62) {
-    Lexer_emit(&((*lx)), (Kind){.tag = 49}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 55}, (*lx).pos, 2);
     continue;
     }
     Lexer_emit(&((*lx)), (Kind){.tag = 42}, (*lx).pos, 1);
@@ -1024,7 +1038,7 @@ void lex(Lexer* lx) {
     }
     if (b == 42) {
     if (b2 == 61) {
-    Lexer_emit(&((*lx)), (Kind){.tag = 54}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 60}, (*lx).pos, 2);
     continue;
     }
     Lexer_emit(&((*lx)), (Kind){.tag = 43}, (*lx).pos, 1);
@@ -1032,11 +1046,11 @@ void lex(Lexer* lx) {
     }
     if (b == 47) {
     if (b2 == 61) {
-    Lexer_emit(&((*lx)), (Kind){.tag = 55}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 61}, (*lx).pos, 2);
     continue;
     }
     if (b2 == 62) {
-    Lexer_emit(&((*lx)), (Kind){.tag = 51}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 57}, (*lx).pos, 2);
     continue;
     }
     Lexer_emit(&((*lx)), (Kind){.tag = 44}, (*lx).pos, 1);
@@ -1044,7 +1058,7 @@ void lex(Lexer* lx) {
     }
     if (b == 37) {
     if (b2 == 61) {
-    Lexer_emit(&((*lx)), (Kind){.tag = 56}, (*lx).pos, 2);
+    Lexer_emit(&((*lx)), (Kind){.tag = 62}, (*lx).pos, 2);
     continue;
     }
     Lexer_emit(&((*lx)), (Kind){.tag = 45}, (*lx).pos, 1);
@@ -1055,12 +1069,24 @@ void lex(Lexer* lx) {
     Lexer_emit(&((*lx)), (Kind){.tag = 46}, (*lx).pos, 2);
     continue;
     }
+    Lexer_emit(&((*lx)), (Kind){.tag = 49}, (*lx).pos, 1);
+    continue;
     }
     if (b == 124) {
     if (b2 == 124) {
     Lexer_emit(&((*lx)), (Kind){.tag = 47}, (*lx).pos, 2);
     continue;
     }
+    Lexer_emit(&((*lx)), (Kind){.tag = 50}, (*lx).pos, 1);
+    continue;
+    }
+    if (b == 94) {
+    Lexer_emit(&((*lx)), (Kind){.tag = 51}, (*lx).pos, 1);
+    continue;
+    }
+    if (b == 126) {
+    Lexer_emit(&((*lx)), (Kind){.tag = 54}, (*lx).pos, 1);
+    continue;
     }
     if (b == 40) {
     Lexer_emit(&((*lx)), (Kind){.tag = 25}, (*lx).pos, 1);
@@ -1098,7 +1124,7 @@ void lex(Lexer* lx) {
     Lexer_emit(&((*lx)), (Kind){.tag = 32}, (*lx).pos, 1);
     continue;
     }
-    Lexer_emit(&((*lx)), (Kind){.tag = 59}, (*lx).pos, 1);
+    Lexer_emit(&((*lx)), (Kind){.tag = 65}, (*lx).pos, 1);
     }
     PlewArray_Tok_push(&((*lx).toks), (Tok){.kind = (Kind){.tag = 0}, .start = (*lx).pos, .len = 0});
 }
@@ -1252,37 +1278,55 @@ long long kindCode(Kind k) {
     else if (_m7.tag == 48) {
     return 63;
     }
-    else if (_m7.tag == 49) {
+    else if (_m7.tag == 55) {
     return 64;
     }
-    else if (_m7.tag == 50) {
+    else if (_m7.tag == 56) {
     return 65;
     }
-    else if (_m7.tag == 51) {
+    else if (_m7.tag == 57) {
     return 66;
     }
-    else if (_m7.tag == 52) {
+    else if (_m7.tag == 58) {
     return 67;
     }
-    else if (_m7.tag == 53) {
+    else if (_m7.tag == 59) {
     return 68;
     }
-    else if (_m7.tag == 54) {
+    else if (_m7.tag == 60) {
     return 69;
     }
-    else if (_m7.tag == 55) {
+    else if (_m7.tag == 61) {
     return 70;
     }
-    else if (_m7.tag == 56) {
+    else if (_m7.tag == 62) {
     return 71;
     }
-    else if (_m7.tag == 57) {
+    else if (_m7.tag == 63) {
     return 72;
     }
-    else if (_m7.tag == 58) {
+    else if (_m7.tag == 64) {
     return 73;
     }
-    else if (_m7.tag == 59) {
+    else if (_m7.tag == 49) {
+    return 74;
+    }
+    else if (_m7.tag == 50) {
+    return 75;
+    }
+    else if (_m7.tag == 51) {
+    return 76;
+    }
+    else if (_m7.tag == 52) {
+    return 77;
+    }
+    else if (_m7.tag == 53) {
+    return 78;
+    }
+    else if (_m7.tag == 54) {
+    return 79;
+    }
+    else if (_m7.tag == 65) {
     return 99;
     }
     else { __builtin_unreachable(); }
@@ -1368,20 +1412,35 @@ long long binPrec(Kind k) {
     else if (_m9.tag == 40) {
     return 3;
     }
-    else if (_m9.tag == 41) {
+    else if (_m9.tag == 50) {
     return 4;
+    }
+    else if (_m9.tag == 51) {
+    return 5;
+    }
+    else if (_m9.tag == 49) {
+    return 6;
+    }
+    else if (_m9.tag == 52) {
+    return 7;
+    }
+    else if (_m9.tag == 53) {
+    return 7;
+    }
+    else if (_m9.tag == 41) {
+    return 8;
     }
     else if (_m9.tag == 42) {
-    return 4;
+    return 8;
     }
     else if (_m9.tag == 43) {
-    return 5;
+    return 9;
     }
     else if (_m9.tag == 44) {
-    return 5;
+    return 9;
     }
     else if (_m9.tag == 45) {
-    return 5;
+    return 9;
     }
     else {
     return 0;
@@ -1423,16 +1482,16 @@ long long charValue(Comp* c, Tok t) {
     else {
     if (b0 < 224) {
     consumed = 2;
-    value = (((b0 % 32) * 64) + (PlewArray_U8_get((*c).bytes, (long long)((p + 1))) % 64));
+    value = (((b0 & 31) << 6) | (PlewArray_U8_get((*c).bytes, (long long)((p + 1))) & 63));
     }
     else {
     if (b0 < 240) {
     consumed = 3;
-    value = ((((b0 % 16) * 4096) + ((PlewArray_U8_get((*c).bytes, (long long)((p + 1))) % 64) * 64)) + (PlewArray_U8_get((*c).bytes, (long long)((p + 2))) % 64));
+    value = ((((b0 & 15) << 12) | ((PlewArray_U8_get((*c).bytes, (long long)((p + 1))) & 63) << 6)) | (PlewArray_U8_get((*c).bytes, (long long)((p + 2))) & 63));
     }
     else {
     consumed = 4;
-    value = (((((b0 % 8) * 262144) + ((PlewArray_U8_get((*c).bytes, (long long)((p + 1))) % 64) * 4096)) + ((PlewArray_U8_get((*c).bytes, (long long)((p + 2))) % 64) * 64)) + (PlewArray_U8_get((*c).bytes, (long long)((p + 3))) % 64));
+    value = (((((b0 & 7) << 18) | ((PlewArray_U8_get((*c).bytes, (long long)((p + 1))) & 63) << 12)) | ((PlewArray_U8_get((*c).bytes, (long long)((p + 2))) & 63) << 6)) | (PlewArray_U8_get((*c).bytes, (long long)((p + 3))) & 63));
     }
     }
     }
@@ -1552,6 +1611,11 @@ long long parseUnary(Comp* c) {
     long long o = parseUnary(&((*c)));
     return Comp_pushExpr(&((*c)), (Expr){.tag = 2, .data.Unary = {.op = 63, .operand = o}});
     }
+    else if (_m15.tag == 54) {
+    Comp_advance(&((*c)));
+    long long o = parseUnary(&((*c)));
+    return Comp_pushExpr(&((*c)), (Expr){.tag = 2, .data.Unary = {.op = 79, .operand = o}});
+    }
     else {
     return parsePostfix(&((*c)));
     }
@@ -1629,7 +1693,7 @@ long long parseMake(Comp* c) {
     Kind k = Comp_curKind(&((*c)));
     {
     Kind _m20 = k;
-    if (_m20.tag == 51) {
+    if (_m20.tag == 57) {
     Comp_advance(&((*c)));
     break;
     }
@@ -1751,19 +1815,19 @@ long long isAssignOp(Kind k) {
     if (_m27.tag == 34) {
     return 1;
     }
-    else if (_m27.tag == 52) {
+    else if (_m27.tag == 58) {
     return 1;
     }
-    else if (_m27.tag == 53) {
+    else if (_m27.tag == 59) {
     return 1;
     }
-    else if (_m27.tag == 54) {
+    else if (_m27.tag == 60) {
     return 1;
     }
-    else if (_m27.tag == 55) {
+    else if (_m27.tag == 61) {
     return 1;
     }
-    else if (_m27.tag == 56) {
+    else if (_m27.tag == 62) {
     return 1;
     }
     else {
@@ -1951,12 +2015,12 @@ long long parseFor(Comp* c) {
     long long hi = 0;
     {
     Kind _m38 = Comp_curKind(&((*c)));
-    if (_m38.tag == 57) {
+    if (_m38.tag == 63) {
     Comp_advance(&((*c)));
     isRange = 1;
     hi = parseExpr(&((*c)));
     }
-    else if (_m38.tag == 58) {
+    else if (_m38.tag == 64) {
     Comp_advance(&((*c)));
     isRange = 1;
     inclusive = 1;
@@ -2074,7 +2138,7 @@ long long parseMatch(Comp* c) {
     }
     {
     Kind _m45 = Comp_curKind(&((*c)));
-    if (_m45.tag == 50) {
+    if (_m45.tag == 56) {
     Comp_advance(&((*c)));
     }
     else {
@@ -2247,7 +2311,7 @@ void parseFuncCommon(Comp* c, long long hasRecv, long long recvStart, long long 
     long long retIsArray = 0;
     {
     Kind _m55 = Comp_curKind(&((*c)));
-    if (_m55.tag == 49) {
+    if (_m55.tag == 55) {
     Comp_advance(&((*c)));
     hasRet = 1;
     PType rty = parseTypeTok(&((*c)));
@@ -3290,11 +3354,29 @@ PlewString binOpStr(long long op) {
     if (op == 62) {
     return (PlewString){" || ", 4};
     }
+    if (op == 74) {
+    return (PlewString){" & ", 3};
+    }
+    if (op == 75) {
+    return (PlewString){" | ", 3};
+    }
+    if (op == 76) {
+    return (PlewString){" ^ ", 3};
+    }
+    if (op == 77) {
+    return (PlewString){" << ", 4};
+    }
+    if (op == 78) {
+    return (PlewString){" >> ", 4};
+    }
     return (PlewString){" ? ", 3};
 }
 PlewString unaryOpStr(long long op) {
     if (op == 57) {
     return (PlewString){"-", 1};
+    }
+    if (op == 79) {
+    return (PlewString){"~", 1};
     }
     return (PlewString){"!", 1};
 }
