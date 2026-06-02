@@ -161,6 +161,10 @@ struct FieldDef {
     val tyStart: U64
     val tyLen: U64
     val tyIsArray: Bool
+    // declared `mut val` (assignable storage) vs `val` (immutable). Always false
+    // for enum variant fields (they take no modifier). Used for the composite
+    // mutability check on `base.field = x` (spec: both binding and field `mut`).
+    val isMut: Bool
 }
 
 struct StructDef {

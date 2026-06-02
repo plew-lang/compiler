@@ -1,0 +1,13 @@
+// Composite mutability: even though `n` is `mut val`, the binding `c` is a plain
+// `val`, so the place `c.n` is immutable. Assigning to it must be rejected.
+import @Std/Io with { print }
+
+struct Counter {
+    mut val n: I64
+}
+
+fn main() {
+    val c: Counter = <Counter n=0 />
+    c.n = 5
+    print(c.n)
+}

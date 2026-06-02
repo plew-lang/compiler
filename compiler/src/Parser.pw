@@ -1031,9 +1031,21 @@ fn parseStruct(c: inout Comp) {
                 break
             }
             Kind.Eof => { break }
-            Kind.KwVal => { c.advance() }
-            Kind.KwMut => { c.advance() }
-            Kind.Ident => {
+            _ => {
+                // a field declaration: `[mut] val name : Type`. `mut val` marks
+                // assignable storage; bare `val` is immutable.
+                mut val isMut: Bool = false
+                match c.curKind() {
+                    Kind.KwMut => {
+                        c.advance()
+                        isMut = true
+                    }
+                    _ => {}
+                }
+                match c.curKind() {
+                    Kind.KwVal => { c.advance() }
+                    _ => {}
+                }
                 val fTok: Tok = c.cur()
                 c.advance()
                 mut val tyStart: U64 = 0
@@ -1050,9 +1062,8 @@ fn parseStruct(c: inout Comp) {
                     }
                     _ => {}
                 }
-                fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray />)
+                fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray isMut=isMut />)
             }
-            _ => { c.advance() }
         }
     }
     c.structs.append(<StructDef nameStart=nameTok.start nameLen=nameTok.len fields=fields />)
@@ -1110,7 +1121,7 @@ fn parseEnum(c: inout Comp) {
                                         }
                                         _ => {}
                                     }
-                                    fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray />)
+                                    fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray isMut=false />)
                                     match c.curKind() {
                                         Kind.Comma => { c.advance() }
                                         _ => {}

@@ -1,0 +1,9 @@
+// Mutating an element is a mutation of the array value, so the array binding
+// must be `mut val`. Index-assigning through a plain `val` binding is rejected.
+import @Std/Io with { print }
+
+fn main() {
+    val xs: Array[I64] = [1, 2, 3]
+    xs[0] = 9
+    print(xs[0])
+}

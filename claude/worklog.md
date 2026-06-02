@@ -13,7 +13,7 @@
 
 ## 受理の健全性（意味上 Plew として正しい）＝一区切り
 
-「このコンパイラが*受理*するコードは spec でも valid」を目標に hidden meaning を潰す。チェックリスト（詳細 [provisional.md](provisional.md)）：① import なし `print` ② ラベル無視 ③ 非網羅 match ⑤ struct/array 比較 ⑥ 不変 `val` への代入（単純変数）＝**解消済**。④ lossy `as` のみ**保留**（整数幅の実装に依存）。違反はすべて `compileError*` 診断＝`plewc: error: [line N: ]…`＋非ゼロ終了で reject。
+「このコンパイラが*受理*するコードは spec でも valid」を目標に hidden meaning を潰す。チェックリスト（詳細 [provisional.md](provisional.md)）：① import なし `print` ② ラベル無視 ③ 非網羅 match ⑤ struct/array 比較 ⑥ 不変 place への代入（単純変数＋`base.field` 合成可変性＋`a[i]` 配列束縛）＝**解消済**。④ lossy `as` のみ**保留**（整数幅の実装に依存）。違反はすべて `compileError*` 診断＝`plewc: error: [line N: ]…`＋非ゼロ終了で reject。
 
 ## 次の一歩の候補（やりやすい順で自走）
 

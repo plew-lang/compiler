@@ -403,6 +403,56 @@ fn fieldType(c: inout Comp, structStart: U64, structLen: U64, fieldStart: U64, f
     return scalarInfo()
 }
 
+// Whether a struct field is declared `mut val` (assignable). Unknown struct or
+// field defaults to true (don't reject what we can't resolve).
+fn fieldDeclaredMut(c: inout Comp, structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> Bool {
+    mut val si: U64 = 0
+    while si < c.structs.count {
+        val s: StructDef = c.structs[si]
+        if spansEqual(c: inout c, aStart: s.nameStart, aLen: s.nameLen, bStart: structStart, bLen: structLen) {
+            val fs: Array[FieldDef] = s.fields
+            mut val fi: U64 = 0
+            while fi < fs.count {
+                val f: FieldDef = fs[fi]
+                if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: fieldStart, bLen: fieldLen) {
+                    return f.isMut
+                }
+                fi += 1
+            }
+        }
+        si += 1
+    }
+    return true
+}
+
+// Whether an assignment target is a mutable *place* (spec: composite mutability).
+// A bare binding must be `mut val`/`inout`; a field access additionally needs the
+// field declared `mut val` and its base to be a mutable place; an index follows
+// its array binding. Unresolved cases default to mutable (the C compile still
+// catches genuinely undeclared names).
+fn placeIsMutable(c: inout Comp, id: U64) -> Bool {
+    val e: Expr = c.exprs[id]
+    match e {
+        Expr.Ident { val start, val len } => {
+            return localIsMutable(c: inout c, start: start, len: len)
+        }
+        Expr.Field { val base, val nameStart, val nameLen } => {
+            val bt: TypeInfo = exprType(c: inout c, id: base)
+            if bt.kind == 2 {
+                if fieldDeclaredMut(c: inout c, structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) {
+                    return placeIsMutable(c: inout c, id: base)
+                }
+                return false
+            }
+            return placeIsMutable(c: inout c, id: base)
+        }
+        Expr.Index { val base, val index } => {
+            return placeIsMutable(c: inout c, id: base)
+        }
+        _ => { return true }
+    }
+}
+
 // Recover an expression's type. Only the cases plewc.pw exercises on the base
 // of a field/index/method are precise; everything else falls back to scalar.
 fn exprType(c: inout Comp, id: U64) -> TypeInfo {
@@ -1364,7 +1414,14 @@ fn genStmt(c: inout Comp, id: U64) {
             val te: Expr = c.exprs[target]
             match te {
                 Expr.Index { val base, val index } => {
-                    // a[i] = v / a[i] OP= v -> bounds-checked PlewArray_E_set
+                    // a[i] = v / a[i] OP= v -> bounds-checked PlewArray_E_set.
+                    // The array binding must be a mutable place (mutating an
+                    // element is a mutation of the array value).
+                    if placeIsMutable(c: inout c, id: base) {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "cannot assign to an element of an immutable binding; declare it with `mut val`")
+                        return
+                    }
                     val bt: TypeInfo = exprType(c: inout c, id: base)
                     write(s: "    PlewArray_")
                     writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
@@ -1399,20 +1456,14 @@ fn genStmt(c: inout Comp, id: U64) {
                     write(s: ");\n")
                 }
                 _ => {
-                    // Acceptance soundness: assigning to a plain `val` binding is
-                    // a spec violation (`val` is immutable; only `mut val` locals
-                    // and `inout` params are assignable). Field/index targets have
-                    // their own (composite) mutability rules, not checked here.
-                    val tk: Expr = c.exprs[target]
-                    match tk {
-                        Expr.Ident { val start, val len } => {
-                            if localIsMutable(c: inout c, start: start, len: len) {
-                            } else {
-                                compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "cannot assign to an immutable binding; declare it with `mut val`")
-                                return
-                            }
-                        }
-                        _ => {}
+                    // Acceptance soundness: the target must be a mutable place.
+                    // A plain `val` binding is immutable (only `mut val` locals /
+                    // `inout` params assign); a `base.field` target additionally
+                    // needs the field declared `mut val` (composite mutability).
+                    if placeIsMutable(c: inout c, id: target) {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "cannot assign to an immutable place; the binding and field must be declared `mut val`")
+                        return
                     }
                     write(s: "    ")
                     genExpr(c: inout c, id: target)

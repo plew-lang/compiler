@@ -1,0 +1,14 @@
+// Composite mutability: the binding `c` is `mut val`, but the field `base` is a
+// plain `val` (immutable storage), so `c.base = ...` must be rejected.
+import @Std/Io with { print }
+
+struct Point {
+    mut val x: I64
+    val base: I64
+}
+
+fn main() {
+    mut val c: Point = <Point x=0 base=100 />
+    c.base = 5
+    print(c.base)
+}

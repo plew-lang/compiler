@@ -1,0 +1,20 @@
+// Composite mutability: a `mut val` field on a `mut val` binding is assignable
+// (directly and via compound assign); a plain `val` field is read-only but still
+// readable. Index assignment works through a `mut val` array binding.
+import @Std/Io with { print }
+
+struct Counter {
+    mut val n: I64
+    val base: I64
+}
+
+fn main() {
+    mut val c: Counter = <Counter n=0 base=100 />
+    c.n = 5
+    c.n += 3
+    print(c.n)            // 8
+    print(c.base)         // 100 (immutable, but readable)
+    mut val xs: Array[I64] = [1, 2, 3]
+    xs[1] = 20
+    print(xs[1])          // 20
+}
