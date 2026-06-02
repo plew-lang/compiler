@@ -482,7 +482,7 @@ uint64_t parseMatch(Comp* c);
 uint64_t parseMatchExpr(Comp* c);
 uint64_t parseStmt(Comp* c);
 uint64_t parseBlock(Comp* c);
-void parseFuncCommon(Comp* c, long long hasRecv, uint64_t recvStart, uint64_t recvLen, long long selfInout);
+void parseFuncCommon(Comp* c, long long hasRecv, uint64_t recvStart, uint64_t recvLen, long long selfInout, PlewArray_Bind implParams);
 void parseFunc(Comp* c);
 void parseImpl(Comp* c);
 void parseStruct(Comp* c);
@@ -2701,10 +2701,21 @@ uint64_t parseBlock(Comp* c) {
     PlewArray_Block_push(&((*c).blocks), (Block){.stmts = stmts});
     return id;
 }
-void parseFuncCommon(Comp* c, long long hasRecv, uint64_t recvStart, uint64_t recvLen, long long selfInout) {
+void parseFuncCommon(Comp* c, long long hasRecv, uint64_t recvStart, uint64_t recvLen, long long selfInout, PlewArray_Bind implParams) {
     Tok nameTok = Comp_cur(&((*c)));
     Comp_advance(&((*c)));
-    PlewArray_Bind typeParams = parseTypeParams(&((*c)));
+    PlewArray_Bind ownParams = parseTypeParams(&((*c)));
+    PlewArray_Bind typeParams = PlewArray_Bind_new();
+    uint64_t ipi = 0;
+    while (ipi < (long long)((implParams).len)) {
+    PlewArray_Bind_push(&(typeParams), PlewArray_Bind_get(implParams, (long long)(ipi)));
+    ipi = ({ uint64_t __ov; if (__builtin_add_overflow((ipi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    uint64_t opi = 0;
+    while (opi < (long long)((ownParams).len)) {
+    PlewArray_Bind_push(&(typeParams), PlewArray_Bind_get(ownParams, (long long)(opi)));
+    opi = ({ uint64_t __ov; if (__builtin_add_overflow((opi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
     PlewArray_Param params = PlewArray_Param_new();
     {
     Kind _m70 = Comp_curKind(&((*c)));
@@ -2795,12 +2806,15 @@ void parseFuncCommon(Comp* c, long long hasRecv, uint64_t recvStart, uint64_t re
 }
 void parseFunc(Comp* c) {
     Comp_advance(&((*c)));
-    parseFuncCommon(&((*c)), 0, 0, 0, 0);
+    PlewArray_Bind noParams = PlewArray_Bind_new();
+    parseFuncCommon(&((*c)), 0, 0, 0, 0, noParams);
 }
 void parseImpl(Comp* c) {
     Comp_advance(&((*c)));
-    Tok tyTok = Comp_cur(&((*c)));
-    Comp_advance(&((*c)));
+    PlewArray_Bind implParams = parseTypeParams(&((*c)));
+    PType recvPty = parseTypeTok(&((*c)));
+    uint64_t recvStart = recvPty.start;
+    uint64_t recvLen = recvPty.len;
     {
     Kind _m76 = Comp_curKind(&((*c)));
     if (_m76.tag == 29) {
@@ -2831,11 +2845,11 @@ void parseImpl(Comp* c) {
     else {
     }
     }
-    parseFuncCommon(&((*c)), 1, tyTok.start, tyTok.len, 1);
+    parseFuncCommon(&((*c)), 1, recvStart, recvLen, 1, implParams);
     }
     else if (_m77.tag == 6) {
     Comp_advance(&((*c)));
-    parseFuncCommon(&((*c)), 1, tyTok.start, tyTok.len, 0);
+    parseFuncCommon(&((*c)), 1, recvStart, recvLen, 0, implParams);
     }
     else {
     Comp_advance(&((*c)));

@@ -1021,11 +1021,23 @@ fn parseBlock(c: inout Comp) -> U64 {
 // receiver marker for methods) is already consumed; the current token is the
 // name. `hasRecv`/`recv*`/`selfInout` describe an `impl Type` method receiver
 // (none for a free function).
-fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, selfInout: Bool) {
+fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, selfInout: Bool, implParams: Array[Bind]) {
     val nameTok: Tok = c.cur()
     c.advance()
-    // optional generic parameters `fn id[T](...)`.
-    val typeParams: Array[Bind] = parseTypeParams(c: inout c)
+    // type parameters in scope = those introduced by the enclosing `impl[T]`
+    // (for a method) followed by the function's own `fn id[U](...)`.
+    val ownParams: Array[Bind] = parseTypeParams(c: inout c)
+    mut val typeParams: Array[Bind] = []
+    mut val ipi: U64 = 0
+    while ipi < implParams.count {
+        typeParams.append(implParams[ipi])
+        ipi += 1
+    }
+    mut val opi: U64 = 0
+    while opi < ownParams.count {
+        typeParams.append(ownParams[opi])
+        opi += 1
+    }
     mut val params: Array[Param] = []
     match c.curKind() {
         Kind.LParen => {
@@ -1104,7 +1116,8 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
 // `fn name(...)`: a free function. The current token is `fn`.
 fn parseFunc(c: inout Comp) {
     c.advance()
-    parseFuncCommon(c: inout c, hasRecv: false, recvStart: 0, recvLen: 0, selfInout: false)
+    val noParams: Array[Bind] = []
+    parseFuncCommon(c: inout c, hasRecv: false, recvStart: 0, recvLen: 0, selfInout: false, implParams: noParams)
 }
 
 // `impl Type { (fn | inout fn) name(...) ... }`: inherent methods. Each member
@@ -1112,8 +1125,13 @@ fn parseFunc(c: inout Comp) {
 // mutable). The current token is the `impl` identifier.
 fn parseImpl(c: inout Comp) {
     c.advance()
-    val tyTok: Tok = c.cur()
-    c.advance()
+    // optional `impl[T]` binder, then the receiver type (`Box[T]` / `Comp`).
+    // recvStart/recvLen names the receiver head; the self type's `[T]` args are
+    // consumed by parseTypeTok and the params flow to each method's typeParams.
+    val implParams: Array[Bind] = parseTypeParams(c: inout c)
+    val recvPty: PType = parseTypeTok(c: inout c)
+    val recvStart: U64 = recvPty.start
+    val recvLen: U64 = recvPty.len
     match c.curKind() {
         Kind.LBrace => { c.advance() }
         _ => {}
@@ -1133,11 +1151,11 @@ fn parseImpl(c: inout Comp) {
                     Kind.KwFn => { c.advance() }
                     _ => {}
                 }
-                parseFuncCommon(c: inout c, hasRecv: true, recvStart: tyTok.start, recvLen: tyTok.len, selfInout: true)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: true, implParams: implParams)
             }
             Kind.KwFn => {
                 c.advance()
-                parseFuncCommon(c: inout c, hasRecv: true, recvStart: tyTok.start, recvLen: tyTok.len, selfInout: false)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, implParams: implParams)
             }
             _ => { c.advance() }
         }
