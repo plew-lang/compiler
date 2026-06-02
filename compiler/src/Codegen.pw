@@ -949,6 +949,13 @@ fn genExpr(c: inout Comp, id: U64) {
         Expr.Method { val recv, val nameStart, val nameLen, val args } => {
             val bt: TypeInfo = exprType(c: inout c, id: recv)
             if bt.kind == 3 {
+                // array builtin: `.append(v)` mutates the receiver, so it must be
+                // a mutable place (spec: `val` arrays are immutable).
+                if placeIsMutable(c: inout c, id: recv) {
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot mutate an immutable binding; declare it with `mut val`")
+                    return
+                }
                 // array builtin: `.append(v)` -> PlewArray_E_push(&recv, v).
                 write(s: "PlewArray_")
                 writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
@@ -970,6 +977,15 @@ fn genExpr(c: inout Comp, id: U64) {
                 } else {
                     compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "argument labels do not match the method parameters")
                     return
+                }
+                // an `inout fn` method mutates its receiver, so the receiver must
+                // be a mutable place.
+                if mf.selfInout {
+                    if placeIsMutable(c: inout c, id: recv) {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
+                        return
+                    }
                 }
                 writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
                 write(s: "_")

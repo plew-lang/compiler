@@ -15,7 +15,7 @@
 3. ✅ ~~非網羅 match が通る~~ → **解消**。match は網羅必須（`_` ワイルドカード、または enum 全 variant の被覆を検査・非網羅は `compileError` 診断で reject）。残：到達不能アーム警告・ガード・ネストパターンは未対応（元々）。
 4. **lossy な `as` が通る**（`300 as U8` を C キャストで silent truncate） → spec は `as`＝infallible 限定（縮小は `TryFrom`）。`as` を無損失に制限。
 5. ✅ ~~struct の `==`~~ → **解消**。比較演算子（`== != < <= > >=`）を struct/array に適用＝`Eq`/`Ord` 無しなので `compileError` 診断で reject（従来は壊れた C を吐いて clang が偶発的に弾いていたのを明示エラーに）。残：enum/String の順序比較（`<` 等）は依然「壊れた C で偶発的 reject」＝ホールではないが未整理。
-6. ✅ ~~不変束縛 `val` への代入が通る~~ → **解消**。代入対象は**可変な place**でなければ `compileError` で reject＝`placeIsMutable`：①単純変数＝`mut val` ローカル or `inout` 仮引数 ②`base.field`＝フィールドが `mut val` 宣言**かつ** base も可変 place（Swift 流合成可変性・struct FieldDef に `isMut` を保持） ③`a[i]`＝配列束縛 base が可変 place（要素変更は配列値の変更）。`self.f`（inout fn）も合成で通る。残：不変配列への `.append` 等の**メソッド経由**変更は未検査（accepted⟹valid は崩れない・メソッドの self モード検査は後続）。
+6. ✅ ~~不変束縛 `val` への代入が通る~~ → **解消**。代入対象は**可変な place**でなければ `compileError` で reject＝`placeIsMutable`：①単純変数＝`mut val` ローカル or `inout` 仮引数 ②`base.field`＝フィールドが `mut val` 宣言**かつ** base も可変 place（Swift 流合成可変性・struct FieldDef に `isMut` を保持） ③`a[i]`＝配列束縛 base が可変 place（要素変更は配列値の変更）。`self.f`（inout fn）も合成で通る。**メソッド経由の変更も検査**：配列 `.append`（受信側 place が可変必須）・`inout fn` メソッド呼び（受信側 place が可変必須）も `placeIsMutable` で reject。残：重なり `inout` 検査・place 越し get-modify-set の一般形は未対応（spec/03・別項）。
 
 → **大前提**：これらの enforce は plewc.pw 自身にも適用される（plewc.pw も import 必須・全呼び出しラベル付き等になっている）。stage0 退役＋C 種ブートストラップ済なので、新機能を追加する各サイクルで plewc.pw 自身も spec-valid に保ちながら不動点を維持する（ADD→reseed→USE）。
 

@@ -1,0 +1,19 @@
+// An `inout fn` method mutates its receiver, so calling it on a plain `val`
+// binding must be rejected (the binding is immutable).
+import @Std/Io with { print }
+
+struct Counter {
+    mut val n: I64
+}
+
+impl Counter {
+    inout fn bump(by: I64) {
+        self.n += by
+    }
+}
+
+fn main() {
+    val c: Counter = <Counter n=10 />
+    c.bump(by: 7)
+    print(c.n)
+}

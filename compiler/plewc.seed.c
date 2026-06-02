@@ -3847,6 +3847,12 @@ void genExpr(Comp* c, long long id) {
         (void)args;
     TypeInfo bt = exprType(&((*c)), recv);
     if (bt.kind == 3) {
+    if (placeIsMutable(&((*c)), recv)) {
+    }
+    else {
+    plew_compile_error_at(lineOf(&((*c)), exprOffset(&((*c)), recv)), (PlewString){"cannot mutate an immutable binding; declare it with `mut val`", 61});
+    return;
+    }
     plew_write((PlewString){"PlewArray_", 10});
     writeSpan(&((*c)), bt.nameStart, bt.nameLen);
     plew_write((PlewString){"_push(&(", 8});
@@ -3867,6 +3873,14 @@ void genExpr(Comp* c, long long id) {
     else {
     plew_compile_error_at(lineOf(&((*c)), nameStart), (PlewString){"argument labels do not match the method parameters", 50});
     return;
+    }
+    if (mf.selfInout) {
+    if (placeIsMutable(&((*c)), recv)) {
+    }
+    else {
+    plew_compile_error_at(lineOf(&((*c)), exprOffset(&((*c)), recv)), (PlewString){"cannot call an `inout fn` method on an immutable binding; declare it with `mut val`", 83});
+    return;
+    }
     }
     writeSpan(&((*c)), bt.nameStart, bt.nameLen);
     plew_write((PlewString){"_", 1});
