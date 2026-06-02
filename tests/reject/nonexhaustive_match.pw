@@ -1,0 +1,13 @@
+// match must be exhaustive (spec: Rust-style). This match omits `Blue` and has
+// no `_` wildcard, so it must be a compile error.
+import @Std/Io with { print }
+
+enum Color { Red Green Blue }
+
+fn main() {
+    val col: Color = <Color.Red />
+    match col {
+        Color.Red => { print(1) }
+        Color.Green => { print(2) }
+    }
+}

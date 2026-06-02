@@ -16,9 +16,9 @@
 
 **このコンパイラが*受理*するコードを spec でも valid にする**（完全な Plew コンパイラも通せる）。spec が reject するのに今 accept してしまう所＝hidden meaning を潰す。逆向きの不完全性（valid だが未実装で reject＝`<.LParen />`・トレイト等）は許容。hidden cost（leak・int 幅・overflow 非 panic）は対象外（後回し）。
 
-要修正リスト＝[provisional.md](provisional.md)「受理の健全性チェックリスト」：① ✅ **import なしで `print`** → 解消（I/O ビルトインは `@Std/Io`・args は `@Std/Process` から import 必須・名前↔モジュール検査つき）② ✅ **ラベル無視** → 部分解消（ユーザー関数呼び出しは有無/名前/宣言順/arg 数を検査・不一致は sentinel reject）③ 非網羅 match ④ lossy `as` ⑤ struct `==`。
+要修正リスト＝[provisional.md](provisional.md)「受理の健全性チェックリスト」：① ✅ **import なしで `print`**（`@Std/Io`・`@Std/Process` import 必須・名前↔モジュール検査）② ✅ **ラベル無視**（ユーザー関数呼び出しは有無/名前/宣言順/arg 数を検査）③ ✅ **非網羅 match**（`_` or 全 variant 被覆を検査）④ lossy `as` ⑤ struct `==`。いずれも不一致は未宣言 C 識別子 sentinel で clang を loud に失敗させる方式。
 
-**次の一歩**：③の match 網羅性検査。現状は網羅と仮定して wildcard なし末尾に `__builtin_unreachable()` を吐くだけ。enum の全 variant が被覆されるか（または `_`/捕捉束縛 `val x` があるか）を検査し、非網羅をコンパイルエラーにする。
+**次の一歩**：④の lossy `as` 制限。現状は `as` を数値↔数値の素の C キャストにしており `300 as U8` が silent truncate する。spec は `as`＝infallible 固定（無損失変換のみ・縮小は `TryFrom`）。だが現コンパイラは整数幅を区別せず全部 `long long`（→ [数値モデル]）なので、幅つき整数の実装と一体。**幅つき整数が無い現状で `as` の損失性は判定できない**＝④は整数幅実装（hidden cost 側の大物）に依存。先に⑤ struct `==`（`Eq` 無しの型の `==` を reject・enum payload == と同型の判定）を片す方が独立で軽い。
 
 > import 機構の現状＝**`with { }` 選択 import のみ**で、認識するのは I/O ビルトイン（`@Std/Io`＝print/write/writeByte/readStdin/readFile・`@Std/Process`＝argCount/argAt）だけ。名前空間 import（`Io.print`）・実モジュール解決・複数ファイル・`export`/`part`・`/`/`./` ルートは未実装（単一ファイルのまま）。enforce は「未 import の I/O ビルトイン呼び出し＝未宣言 C 識別子を吐いて clang を loud に失敗」＝enum-`==` と同じ sentinel 方式（診断＋非ゼロ終了の真のエラー経路はまだ無い）。
 

@@ -1,0 +1,17 @@
+import @Std/Io with { print }
+
+enum Color { Red Green Blue }
+
+fn rank(c: Color) -> I64 {
+    match c {
+        Color.Red => { return 1 }
+        Color.Green => { return 2 }
+        Color.Blue => { return 3 }
+    }
+    return 0
+}
+
+fn main() {
+    print(rank(c: <Color.Green />))
+    print(rank(c: <Color.Blue />))
+}

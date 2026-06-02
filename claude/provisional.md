@@ -12,7 +12,7 @@
 **受理の健全性チェックリスト（spec が拒むのに今通る＝要修正）**：
 1. ✅ ~~import なしで `print`/`write` 等が書ける~~ → **解消**。I/O ビルトインは ambient でなく `import @Std/Io with { … }`（print/write/writeByte/readStdin/readFile）・args は `@Std/Process with { argCount, argAt }` が必須。名前↔モジュールも検査（`@Std/Process with { print }` は print を有効化しない）。未 import の使用は未宣言 C 識別子で loud に reject（sentinel 方式）。
 2. ✅ ~~ラベル無視~~ → **部分解消**。ユーザー定義トップレベル関数の呼び出しは、各引数のラベル必須・宣言順・名前一致を検査（不一致は sentinel で reject）。残：ラベル抑制 `~:`・メソッド呼び出し・関数型同一性へのラベル反映・I/O ビルトインのラベル（暫定シグネチャゆえ非検査）は未対応。
-3. **非網羅 match が通る**（網羅性未検査） → spec は網羅必須＝コンパイルエラー。
+3. ✅ ~~非網羅 match が通る~~ → **解消**。match は網羅必須（`_` ワイルドカード、または enum 全 variant の被覆を検査・非網羅は sentinel reject）。残：到達不能アーム警告・ガード・ネストパターンは未対応（元々）。
 4. **lossy な `as` が通る**（`300 as U8` を C キャストで silent truncate） → spec は `as`＝infallible 限定（縮小は `TryFrom`）。`as` を無損失に制限。
 5. **struct の `==`**（壊れた C を出す） → `Eq` 無しなのでエラーにすべき（enum payload == は既にエラー化済）。
 
@@ -70,7 +70,7 @@
 
 ## 制御フロー・match
 
-- **`match` 網羅性をコンパイル時検査** → **現状：検査せず**（網羅と仮定し、wildcard 無しの末尾に `__builtin_unreachable()`）。spec/11。
+- **`match` 網羅性をコンパイル時検査** → **実装済**。`_` ワイルドカード or enum 全 variant 被覆を検査（非網羅は未宣言 C 識別子 sentinel で reject）。網羅な match（全 variant 列挙・wildcard 無し）は従来どおり末尾に `__builtin_unreachable()`。残：到達不能アーム警告・ガード・ネストパターン・`val x` 捕捉アームは未対応。spec/11。
 - **match アーム**：stage1 は **文位置・block アームのみ**（`=> { … }`）。**ベア式アーム `=> v`・ガード・ネストパターン無し**（`E.V { val f }` 一段＋`_` のみ・全フィールド束縛必須は spec 通り）。
 - **値位置の `if`/`match`/ブロック（`give`）** → stage0 は if/block を statement-expression で対応・**stage1 は未対応**（文位置のみ）。`give` は stage1 では非対応。spec/11。
 - **`panic`（発散文）** → stage1 未実装（範囲外 panic 等はランタイム関数で個別に exit）。

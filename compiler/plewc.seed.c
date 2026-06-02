@@ -390,6 +390,8 @@ void genCType(Comp* c, long long start, long long len);
 long long spansEqual(Comp* c, long long aStart, long long aLen, long long bStart, long long bLen);
 long long findFunc(Comp* c, long long nameStart, long long nameLen);
 long long callLabelsOk(Comp* c, long long nameStart, long long nameLen, PlewArray_Arg args);
+long long armCovers(Comp* c, PlewArray_MatchArm arms, long long variantStart, long long variantLen);
+long long matchExhaustive(Comp* c, PlewArray_MatchArm arms);
 long long variantIndex(Comp* c, long long enumStart, long long enumLen, long long variantStart, long long variantLen);
 TypeInfo scalarInfo(void);
 TypeInfo typeInfoOfName(Comp* c, long long start, long long len, long long isArray);
@@ -2374,6 +2376,59 @@ long long callLabelsOk(Comp* c, long long nameStart, long long nameLen, PlewArra
     }
     return 1;
 }
+long long armCovers(Comp* c, PlewArray_MatchArm arms, long long variantStart, long long variantLen) {
+    long long i = 0;
+    while (i < (long long)((arms).len)) {
+    MatchArm a = PlewArray_MatchArm_get(arms, (long long)(i));
+    if (a.isWildcard) {
+    return 1;
+    }
+    if (spansEqual(&((*c)), a.variantStart, a.variantLen, variantStart, variantLen)) {
+    return 1;
+    }
+    i += 1;
+    }
+    return 0;
+}
+long long matchExhaustive(Comp* c, PlewArray_MatchArm arms) {
+    long long enumStart = 0;
+    long long enumLen = 0;
+    long long i = 0;
+    while (i < (long long)((arms).len)) {
+    MatchArm a = PlewArray_MatchArm_get(arms, (long long)(i));
+    if (a.isWildcard) {
+    return 1;
+    }
+    if (enumLen == 0) {
+    enumStart = a.enumStart;
+    enumLen = a.enumLen;
+    }
+    i += 1;
+    }
+    if (enumLen == 0) {
+    return 1;
+    }
+    long long ei = 0;
+    while (ei < (long long)(((*c).enums).len)) {
+    EnumDef e = PlewArray_EnumDef_get((*c).enums, (long long)(ei));
+    if (spansEqual(&((*c)), e.nameStart, e.nameLen, enumStart, enumLen)) {
+    PlewArray_Variant vars = e.variants;
+    long long vi = 0;
+    while (vi < (long long)((vars).len)) {
+    Variant v = PlewArray_Variant_get(vars, (long long)(vi));
+    if (armCovers(&((*c)), arms, v.nameStart, v.nameLen)) {
+    }
+    else {
+    return 0;
+    }
+    vi += 1;
+    }
+    return 1;
+    }
+    ei += 1;
+    }
+    return 1;
+}
 long long variantIndex(Comp* c, long long enumStart, long long enumLen, long long variantStart, long long variantLen) {
     long long ei = 0;
     while (ei < (long long)(((*c).enums).len)) {
@@ -3494,6 +3549,12 @@ void genStmt(Comp* c, long long id) {
         (void)scrut;
         PlewArray_MatchArm arms = _m69.data.Match.arms;
         (void)arms;
+    if (matchExhaustive(&((*c)), arms)) {
+    }
+    else {
+    plew_write((PlewString){"    __plew_match_not_exhaustive;\n", 33});
+    return;
+    }
     long long t = (*c).tmp;
     (*c).tmp = ((*c).tmp + 1);
     long long enumStart = 0;

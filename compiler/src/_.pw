@@ -1864,6 +1864,66 @@ fn callLabelsOk(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -
     return true
 }
 
+// Does some arm cover the variant (variantStart,variantLen)? A wildcard arm
+// covers everything.
+fn armCovers(c: inout Comp, arms: Array[MatchArm], variantStart: U64, variantLen: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < arms.count {
+        val a: MatchArm = arms[i]
+        if a.isWildcard {
+            return true
+        }
+        if spansEqual(c: inout c, aStart: a.variantStart, aLen: a.variantLen, bStart: variantStart, bLen: variantLen) {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Acceptance soundness: spec requires match to be exhaustive (Rust-style). A
+// match is exhaustive iff it has a `_` wildcard, or every variant of the
+// scrutinee's enum is covered by some arm. (This compiler's match is always
+// over an enum, and has no `val x` catch-all arm, so those are the only cases.)
+fn matchExhaustive(c: inout Comp, arms: Array[MatchArm]) -> Bool {
+    mut val enumStart: U64 = 0
+    mut val enumLen: U64 = 0
+    mut val i: U64 = 0
+    while i < arms.count {
+        val a: MatchArm = arms[i]
+        if a.isWildcard {
+            return true
+        }
+        if enumLen == 0 {
+            enumStart = a.enumStart
+            enumLen = a.enumLen
+        }
+        i += 1
+    }
+    if enumLen == 0 {
+        return true
+    }
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val e: EnumDef = c.enums[ei]
+        if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: enumStart, bLen: enumLen) {
+            val vars: Array[Variant] = e.variants
+            mut val vi: U64 = 0
+            while vi < vars.count {
+                val v: Variant = vars[vi]
+                if armCovers(c: inout c, arms: arms, variantStart: v.nameStart, variantLen: v.nameLen) {
+                } else {
+                    return false
+                }
+                vi += 1
+            }
+            return true
+        }
+        ei += 1
+    }
+    return true
+}
+
 // Tag index of `Enum.Variant` (the variant's position in its enum declaration).
 fn variantIndex(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64) -> I64 {
     mut val ei: U64 = 0
@@ -2737,6 +2797,13 @@ fn genStmt(c: inout Comp, id: U64) {
             write(s: "    continue;\n")
         }
         Stmt.Match { val scrut, val arms } => {
+            if matchExhaustive(c: inout c, arms: arms) {
+            } else {
+                // non-exhaustive match -> undeclared identifier so the C compile
+                // fails loudly (spec: match must be exhaustive).
+                write(s: "    __plew_match_not_exhaustive;\n")
+                return
+            }
             val t: U64 = c.tmp
             c.tmp = c.tmp + 1
             // enum type for the scrutinee temp = the enum named by the first
