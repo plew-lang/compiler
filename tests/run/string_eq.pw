@@ -1,0 +1,18 @@
+fn main() {
+    val s: String = "fn"
+    if s == "fn" {
+        print(1)
+    } else {
+        print(0)
+    }
+    if s != "x" {
+        print(1)
+    } else {
+        print(0)
+    }
+    mut val xs: Array[I64] = [1, 2, 3]
+    xs[0] = 40
+    xs[2] += 10
+    print(xs[0])
+    print(xs[2])
+}

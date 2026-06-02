@@ -1,0 +1,11 @@
+fn main() {
+    val s: String = readStdin()
+    val bs: Array[U8] = s.bytes
+    mut val n: I64 = 0
+    for val b in bs {
+        if b == 97 {
+            n += 1
+        }
+    }
+    print(n)
+}

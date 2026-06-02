@@ -1,0 +1,19 @@
+enum Shape {
+    Circle { r: I64 }
+    Rect { w: I64, h: I64 }
+}
+fn area(s: Shape) -> I64 {
+    match s {
+        Shape.Circle { val r } => {
+            return r * r * 3
+        }
+        Shape.Rect { val w, val h } => {
+            return w * h
+        }
+    }
+    return 0
+}
+fn main() {
+    print(area(s: <Shape.Circle r=5 />))
+    print(area(s: <Shape.Rect w=4 h=6 />))
+}

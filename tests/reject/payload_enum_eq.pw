@@ -1,0 +1,10 @@
+enum E {
+    A { v: I64 }
+    B
+}
+fn main() {
+    val x: E = <E.A v=1 />
+    if x == <E.B /> {
+        print(1)
+    }
+}

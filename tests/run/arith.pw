@@ -1,0 +1,13 @@
+fn add(a: I64, b: I64) -> I64 {
+    return a + b
+}
+fn fib(n: I64) -> I64 {
+    if n < 2 {
+        return n
+    }
+    return add(a: fib(n: n - 1), b: fib(n: n - 2))
+}
+fn main() {
+    print(add(a: 3, b: 4))
+    print(fib(n: 10))
+}

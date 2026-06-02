@@ -1,0 +1,17 @@
+struct Counter {
+    mut val n: I64
+    mut val xs: Array[I64]
+}
+fn bump(c: inout Counter, by: I64) {
+    c.n += by
+    c.xs.append(c.n)
+}
+fn main() {
+    mut val c: Counter = <Counter n=0 xs=[] />
+    bump(c: inout c, by: 5)
+    bump(c: inout c, by: 7)
+    bump(c: inout c, by: 3)
+    print(c.n)
+    print(c.xs[0])
+    print(c.xs[2])
+}

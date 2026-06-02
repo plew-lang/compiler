@@ -1,0 +1,18 @@
+fn main() {
+    mut val a: I64 = 0
+    for val i in 0..<5 {
+        a += i
+    }
+    print(a)
+    mut val b: I64 = 0
+    for val i in 1..=4 {
+        b += i
+    }
+    print(b)
+    val xs: Array[I64] = [10, 20, 30]
+    mut val c: I64 = 0
+    for val x in xs {
+        c += x
+    }
+    print(c)
+}

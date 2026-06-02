@@ -1,0 +1,15 @@
+struct Point {
+    val x: I64
+    val y: I64
+}
+struct Line {
+    val a: Point
+    val b: Point
+}
+fn main() {
+    val p: Point = <Point x=3 y=4 />
+    val q: Point = <Point x=10 y=20 />
+    val ln: Line = <Line a=p b=q />
+    print(p.x + p.y)
+    print(ln.b.x + ln.a.y)
+}
