@@ -85,7 +85,16 @@ ADT 注意：ネスト配列 `Array[Array[U8]]` は今壊れる（`PlewArray_Arr
 
 ✅ **G2b 完了＝generic enum が end-to-end**（`Optional[T]`/`Result[T,E]` 宣言・`<Optional[I32].Some v=5/>` 構築・文/値位置 `match`〔bind フィールド型を置換〕・関数引数/戻り値。`TypeInfo.ref`〔具体インスタンス化の Comp.types index・`exprType(Ident/Make)` でセット〕・`genericEnumIndex`/`isGenericEnumInst`/`emitMonoEnum`/`genericEnumFieldTypeInfo`/`genBindTypeInst`・match codegen が scrut の ref から mangled enum 名で temp 宣言・collectGenInsts は Make も走査。`tests/run/generic_enum_{optional,result}`）。**タグ `generics-data`**。
 
-**次＝G3（generic 関数/メソッド＝generics の「振る舞い」側・最後）**：`fn id[T](x: T) -> T`・呼び出しで型引数推論（引数式の型を param 型の型変数に対応づけ）or 明示 `id[I32](x)`・`impl[T] Box[T] { fn … }` メソッド・呼ばれたインスタンスを単相化（関数名も `id_I32` に mangle）。**難所＝関数 BODY を型パラメータ置換しながら codegen**＝genFunc/genStmt/genExpr に「現在の型 env（param→具体）」を通す必要（今は型 env なし）。コアライブラリ（Optional/Result のメソッド・free 関数）はこれが要る。Func に `typeParams: Array[Bind]` を足してパース（`parseTypeParams` を fn でも・`impl[T]` も）。**まずは generic free 関数→次にメソッド**の順が無難。
+✅ **G3 step1 完了**：`fn id[T](...)` の型パラメータを `Func.typeParams` にパース（緑 no-op・`impl[T]` は未）。
+
+**残り G3（本体・最後）の設計**：
+- **型 env を Comp に**：`curTypeParams: Array[Bind]`＋`curTypeArgs: Array[U64]`。generic 関数/メソッドの body codegen 中だけセット。`genCTypeOf`/literal 文脈/`exprType` が env で置換。
+- **メソッドが本命＆実は簡単**：`impl[T] Optional[T] { fn unwrapOr(default: T) -> T }` 系。**型引数はレシーバの具体型から来る**（`o: Optional[I32]` → T=I32・リテラル推論不要）。インスタンス集合は**既存の `genInsts`（レシーバの具体型）を再利用**＝各 genInst（メソッドを持つ struct/enum）につきメソッドを特殊化＝`Optional_I32_unwrapOr`。呼び出し `o.method(args)` は `exprType(recv).ref` から dispatch。**free 関数は呼び出し位置の型引数推論（未型リテラルから推論できない）＋明示 `id[I32](x)` パース〔Go 式 type/value 判別〕が要り難しい→メソッド先行が筋**。
+- **`impl[T] Box[T]` パース**：今の `parseImpl` は `impl` の次を型名トークンとして読む＝`impl[T]` の `[` を処理しない。`impl` の後に `parseTypeParams`→self 型 `Box[T]`（`parseTypeTok`）を読むよう拡張。メソッドの `Func.typeParams` に impl 由来パラメータも入れる（recv 型の型変数）。
+- **難所＝推移的インスタンス化**：body が新たな generic インスタンス化を作る（`map` が `Optional[U]` を返す/作る）と、`collectGenInsts`（parse 後 1 回）では拾えない＝**単相化中に発見した新インスタンスを worklist に足して fixpoint まで回す**必要。**第一カットは body 内で新インスタンス化を作らないメソッドに限定**（`unwrapOr`/`isSome`/`isNone`・body は T と self の値の受け渡しのみ）＝`map`/`flatMap` は推移閉包を入れてから。リテラルを T 型で導入（`val r: T = 5`）も第一カットは避ける（env 下の literal 文脈解決が要る）。
+- **body 置換の choke point**：`resolveTy(c, tyRef)→U64`＝env 下で head が param なら対応 arg ref を返す（top-level 置換）。`genCTypeOf` が `resolveTy` を通す。ネスト置換（`Optional[T]`→`Optional[I32]`）は新 TypeRef を `c.types` に push して作る＝推移閉包とセットで後段。
+
+> generics 現況＝**「データ」側完成（struct/enum・タグ `generics-data`）／「振る舞い」側（関数・メソッド）が G3 残**。コアライブラリの Optional/Result は**データとして match で使える**段階。メソッド（`map` 等）は G3 本体後。
 
 #### G2 単相化の設計（実装中・次の一歩）
 
