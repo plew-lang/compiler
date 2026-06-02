@@ -187,16 +187,38 @@ fn builds_and_runs_inout_array_append() {
     assert_eq!(build_and_run(src, "inout_array"), "4\n9\n");
 }
 
+/// Build a program from `src`, run it feeding `stdin`, return stdout.
+fn build_and_run_stdin(src: &str, tag: &str, stdin: &str) -> String {
+    use std::io::Write;
+    use std::process::Stdio;
+    let bin = std::env::temp_dir().join(format!("plewc_e2e_{}_{}", std::process::id(), tag));
+    build_executable(src, &bin).expect("build executable");
+    let mut child = Command::new(&bin)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("spawn");
+    child.stdin.take().unwrap().write_all(stdin.as_bytes()).unwrap();
+    let out = child.wait_with_output().expect("wait");
+    let _ = std::fs::remove_file(&bin);
+    let _ = std::fs::remove_file(bin.with_extension("c"));
+    assert!(out.status.success(), "binary exited with {}", out.status);
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
 #[test]
-fn selfhost_lexer_sketch_builds_and_runs() {
-    // The Plew-side lexer sketch (selfhost/lexer.pw) compiled by stage0 must
-    // tokenize its hardcoded sample into the expected kind tags. This guards
-    // the language subset the self-hosted compiler relies on.
-    let path =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../selfhost/lexer.pw");
+fn selfhost_lexer_tokenizes_a_function() {
+    // The full-subset lexer (selfhost/lexer.pw) prints one kind-code per token.
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../selfhost/lexer.pw");
     let src = std::fs::read_to_string(path).expect("read selfhost/lexer.pw");
-    // "val x = 12 + foo * (3)" => 10 tokens with these kind tags.
-    assert_eq!(build_and_run(&src, "selfhost_lexer"), "10\n2\n1\n9\n0\n3\n1\n5\n7\n0\n8\n");
+    let input = "fn add(a: I64, b: I64) -> I64 {\n    return a + b\n}\n";
+    // KwFn Ident LParen Ident Colon Ident Comma Ident Colon Ident RParen Arrow
+    // Ident LBrace Newline KwReturn Ident Plus Ident Newline RBrace Newline Eof
+    let codes = [
+        10, 4, 40, 4, 47, 4, 46, 4, 47, 4, 41, 64, 4, 44, 1, 20, 4, 56, 4, 1, 45, 1, 0,
+    ];
+    let expected: String = codes.iter().map(|c| format!("{c}\n")).collect();
+    assert_eq!(build_and_run_stdin(&src, "selfhost_lex_fn", input), expected);
 }
 
 #[test]
