@@ -6,6 +6,7 @@ typedef struct { const char* data; long long len; } PlewString;
 __attribute__((unused)) static int PlewString_eq(PlewString a, PlewString b) { if (a.len != b.len) return 0; for (long long i = 0; i < a.len; i++) if (a.data[i] != b.data[i]) return 0; return 1; }
 __attribute__((unused)) static PlewString plew_read_stdin(void) { size_t cap = 4096, len = 0; char* buf = (char*)malloc(cap); int ch; while ((ch = getchar()) != EOF) { if (len + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); } buf[len++] = (char)ch; } PlewString s; s.data = buf; s.len = (long long)len; return s; }
 __attribute__((unused)) static void plew_write(PlewString s) { fwrite(s.data, 1, (size_t)s.len, stdout); }
+__attribute__((unused)) static void plew_compile_error(PlewString m) { fputs("plewc: error: ", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\n', stderr); exit(1); }
 static int plew_argc = 0;
 static char** plew_argv = 0;
 __attribute__((unused)) static long long plew_arg_count(void) { return (long long)plew_argc; }
@@ -555,6 +556,7 @@ int main(int argc, char** argv) {
     plew_write((PlewString){"__attribute__((unused)) static int PlewString_eq(PlewString a, PlewString b) { if (a.len != b.len) return 0; for (long long i = 0; i < a.len; i++) if (a.data[i] != b.data[i]) return 0; return 1; }\n", 197});
     plew_write((PlewString){"__attribute__((unused)) static PlewString plew_read_stdin(void) { size_t cap = 4096, len = 0; char* buf = (char*)malloc(cap); int ch; while ((ch = getchar()) != EOF) { if (len + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); } buf[len++] = (char)ch; } PlewString s; s.data = buf; s.len = (long long)len; return s; }\n", 323});
     plew_write((PlewString){"__attribute__((unused)) static void plew_write(PlewString s) { fwrite(s.data, 1, (size_t)s.len, stdout); }\n", 107});
+    plew_write((PlewString){"__attribute__((unused)) static void plew_compile_error(PlewString m) { fputs(\"plewc: error: \", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\\n', stderr); exit(1); }\n", 178});
     plew_write((PlewString){"static int plew_argc = 0;\nstatic char** plew_argv = 0;\n", 55});
     plew_write((PlewString){"__attribute__((unused)) static long long plew_arg_count(void) { return (long long)plew_argc; }\n", 95});
     plew_write((PlewString){"__attribute__((unused)) static PlewString plew_arg_at(long long i) { PlewString s; if (i < 0 || i >= plew_argc) { s.data = \"\"; s.len = 0; return s; } s.data = plew_argv[i]; s.len = (long long)strlen(plew_argv[i]); return s; }\n", 226});
@@ -3063,7 +3065,7 @@ void genExpr(Comp* c, long long id) {
     }
     else {
     if (compareNeedsTrait(&((*c)), op, lhs)) {
-    plew_write((PlewString){"__plew_compare_requires_Eq_or_Ord", 33});
+    plew_compile_error((PlewString){"comparison needs Eq/Ord; not available for a struct or array", 60});
     }
     else {
     plew_write((PlewString){"(", 1});
@@ -3082,6 +3084,12 @@ void genExpr(Comp* c, long long id) {
         (void)nameLen;
         PlewArray_Arg args = _m70.data.Call.args;
         (void)args;
+    if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"compileError", 12})) {
+    plew_write((PlewString){"plew_compile_error(", 19});
+    genExpr(&((*c)), PlewArray_Arg_get(args, (long long)(0)).expr);
+    plew_write((PlewString){")", 1});
+    return;
+    }
     if (rangeEquals((*c).bytes, nameStart, nameLen, (PlewString){"write", 5})) {
     if ((*c).impWrite) {
     plew_write((PlewString){"plew_write(", 11});
@@ -3089,7 +3097,7 @@ void genExpr(Comp* c, long long id) {
     plew_write((PlewString){")", 1});
     }
     else {
-    plew_write((PlewString){"__plew_write_requires_import_Std_Io", 35});
+    plew_compile_error((PlewString){"write is not ambient; import it from @Std/Io", 44});
     }
     return;
     }
@@ -3100,7 +3108,7 @@ void genExpr(Comp* c, long long id) {
     plew_write((PlewString){"))", 2});
     }
     else {
-    plew_write((PlewString){"__plew_writeByte_requires_import_Std_Io", 39});
+    plew_compile_error((PlewString){"writeByte is not ambient; import it from @Std/Io", 48});
     }
     return;
     }
@@ -3109,7 +3117,7 @@ void genExpr(Comp* c, long long id) {
     plew_write((PlewString){"plew_read_stdin()", 17});
     }
     else {
-    plew_write((PlewString){"__plew_readStdin_requires_import_Std_Io", 39});
+    plew_compile_error((PlewString){"readStdin is not ambient; import it from @Std/Io", 48});
     }
     return;
     }
@@ -3120,7 +3128,7 @@ void genExpr(Comp* c, long long id) {
     plew_write((PlewString){")", 1});
     }
     else {
-    plew_write((PlewString){"__plew_readFile_requires_import_Std_Io", 38});
+    plew_compile_error((PlewString){"readFile is not ambient; import it from @Std/Io", 47});
     }
     return;
     }
@@ -3131,7 +3139,7 @@ void genExpr(Comp* c, long long id) {
     plew_write((PlewString){")", 1});
     }
     else {
-    plew_write((PlewString){"__plew_readFile_requires_import_Std_Io", 38});
+    plew_compile_error((PlewString){"readFile is not ambient; import it from @Std/Io", 47});
     }
     return;
     }
@@ -3140,7 +3148,7 @@ void genExpr(Comp* c, long long id) {
     plew_write((PlewString){"plew_arg_count()", 16});
     }
     else {
-    plew_write((PlewString){"__plew_argCount_requires_import_Std_Process", 43});
+    plew_compile_error((PlewString){"argCount is not ambient; import it from @Std/Process", 52});
     }
     return;
     }
@@ -3151,14 +3159,14 @@ void genExpr(Comp* c, long long id) {
     plew_write((PlewString){"))", 2});
     }
     else {
-    plew_write((PlewString){"__plew_argAt_requires_import_Std_Process", 40});
+    plew_compile_error((PlewString){"argAt is not ambient; import it from @Std/Process", 49});
     }
     return;
     }
     if (callLabelsOk(&((*c)), nameStart, nameLen, args)) {
     }
     else {
-    plew_write((PlewString){"__plew_call_label_mismatch", 26});
+    plew_compile_error((PlewString){"argument labels do not match the function parameters", 52});
     return;
     }
     writeSpan(&((*c)), nameStart, nameLen);
@@ -3491,7 +3499,7 @@ void emitEnumTagCmp(Comp* c, long long lhs, long long rhs, long long op, long lo
     if (isAllNullary(&((*c)), enStart, enLen)) {
     }
     else {
-    plew_write((PlewString){"__plew_enum_eq_requires_Eq_derive", 33});
+    plew_compile_error((PlewString){"enum == needs structural Eq for payload variants (only all-nullary enums compare by tag)", 88});
     return;
     }
     if (outer) {
@@ -3529,7 +3537,7 @@ void genCond(Comp* c, long long id) {
     }
     else {
     if (compareNeedsTrait(&((*c)), op, lhs)) {
-    plew_write((PlewString){"__plew_compare_requires_Eq_or_Ord", 33});
+    plew_compile_error((PlewString){"comparison needs Eq/Ord; not available for a struct or array", 60});
     }
     else {
     genExpr(&((*c)), lhs);
@@ -3640,7 +3648,7 @@ void genStmt(Comp* c, long long id) {
     plew_write((PlewString){"));\n", 4});
     }
     else {
-    plew_write((PlewString){"    __plew_print_requires_import_Std_Io;\n", 41});
+    plew_compile_error((PlewString){"print is not ambient; import it from @Std/Io", 44});
     }
     }
     else if (_m74.tag == 3) {
@@ -3798,7 +3806,7 @@ void genStmt(Comp* c, long long id) {
     if (matchExhaustive(&((*c)), arms)) {
     }
     else {
-    plew_write((PlewString){"    __plew_match_not_exhaustive;\n", 33});
+    plew_compile_error((PlewString){"match must be exhaustive: cover all variants or add a wildcard", 62});
     return;
     }
     long long t = (*c).tmp;

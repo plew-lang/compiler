@@ -518,7 +518,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     emitEnumTagCmp(c: inout c, lhs: lhs, rhs: rhs, op: op, outer: true)
                 } else {
                     if compareNeedsTrait(c: inout c, op: op, lhs: lhs) {
-                        write(s: "__plew_compare_requires_Eq_or_Ord")
+                        compileError(msg: "comparison needs Eq/Ord; not available for a struct or array")
                     } else {
                         write(s: "(")
                         genExpr(c: inout c, id: lhs)
@@ -530,6 +530,16 @@ fn genExpr(c: inout Comp, id: U64) {
             }
         }
         Expr.Call { val nameStart, val nameLen, val args } => {
+            // compileError(msg): the compiler's own diagnostic primitive —
+            // prints to stderr and exits non-zero. Compiler-internal (used by
+            // the acceptance-soundness checks below), so it is ambient (not
+            // import-gated); it is not a user-facing language construct.
+            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "compileError") {
+                write(s: "plew_compile_error(")
+                genExpr(c: inout c, id: args[0].expr)
+                write(s: ")")
+                return
+            }
             // I/O builtins -> C runtime.
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "write") {
                 if c.impWrite {
@@ -537,7 +547,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     genExpr(c: inout c, id: args[0].expr)
                     write(s: ")")
                 } else {
-                    write(s: "__plew_write_requires_import_Std_Io")
+                    compileError(msg: "write is not ambient; import it from @Std/Io")
                 }
                 return
             }
@@ -547,7 +557,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     genExpr(c: inout c, id: args[0].expr)
                     write(s: "))")
                 } else {
-                    write(s: "__plew_writeByte_requires_import_Std_Io")
+                    compileError(msg: "writeByte is not ambient; import it from @Std/Io")
                 }
                 return
             }
@@ -555,7 +565,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 if c.impReadStdin {
                     write(s: "plew_read_stdin()")
                 } else {
-                    write(s: "__plew_readStdin_requires_import_Std_Io")
+                    compileError(msg: "readStdin is not ambient; import it from @Std/Io")
                 }
                 return
             }
@@ -565,7 +575,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     genExpr(c: inout c, id: args[0].expr)
                     write(s: ")")
                 } else {
-                    write(s: "__plew_readFile_requires_import_Std_Io")
+                    compileError(msg: "readFile is not ambient; import it from @Std/Io")
                 }
                 return
             }
@@ -577,7 +587,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     genExpr(c: inout c, id: args[0].expr)
                     write(s: ")")
                 } else {
-                    write(s: "__plew_readFile_requires_import_Std_Io")
+                    compileError(msg: "readFile is not ambient; import it from @Std/Io")
                 }
                 return
             }
@@ -585,7 +595,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 if c.impArgCount {
                     write(s: "plew_arg_count()")
                 } else {
-                    write(s: "__plew_argCount_requires_import_Std_Process")
+                    compileError(msg: "argCount is not ambient; import it from @Std/Process")
                 }
                 return
             }
@@ -595,7 +605,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     genExpr(c: inout c, id: args[0].expr)
                     write(s: "))")
                 } else {
-                    write(s: "__plew_argAt_requires_import_Std_Process")
+                    compileError(msg: "argAt is not ambient; import it from @Std/Process")
                 }
                 return
             }
@@ -603,7 +613,7 @@ fn genExpr(c: inout Comp, id: U64) {
             } else {
                 // label missing / wrong / out of order -> undeclared identifier
                 // so the C compile fails loudly (spec: labels are required).
-                write(s: "__plew_call_label_mismatch")
+                compileError(msg: "argument labels do not match the function parameters")
                 return
             }
             writeSpan(c: inout c, start: nameStart, len: nameLen)
@@ -899,7 +909,7 @@ fn emitEnumTagCmp(c: inout Comp, lhs: U64, rhs: U64, op: I64, outer: Bool) {
     }
     if isAllNullary(c: inout c, start: enStart, len: enLen) {
     } else {
-        write(s: "__plew_enum_eq_requires_Eq_derive")
+        compileError(msg: "enum == needs structural Eq for payload variants (only all-nullary enums compare by tag)")
         return
     }
     if outer {
@@ -932,7 +942,7 @@ fn genCond(c: inout Comp, id: U64) {
                     emitEnumTagCmp(c: inout c, lhs: lhs, rhs: rhs, op: op, outer: false)
                 } else {
                     if compareNeedsTrait(c: inout c, op: op, lhs: lhs) {
-                        write(s: "__plew_compare_requires_Eq_or_Ord")
+                        compileError(msg: "comparison needs Eq/Ord; not available for a struct or array")
                     } else {
                         genExpr(c: inout c, id: lhs)
                         write(s: binOpStr(op: op))
@@ -1012,7 +1022,7 @@ fn genStmt(c: inout Comp, id: U64) {
             } else {
                 // not imported from @Std/Io -> emit an undeclared identifier so
                 // the C compile fails loudly (print is not ambient in Plew).
-                write(s: "    __plew_print_requires_import_Std_Io;\n")
+                compileError(msg: "print is not ambient; import it from @Std/Io")
             }
         }
         Stmt.ExprStmt { val expr } => {
@@ -1132,7 +1142,7 @@ fn genStmt(c: inout Comp, id: U64) {
             } else {
                 // non-exhaustive match -> undeclared identifier so the C compile
                 // fails loudly (spec: match must be exhaustive).
-                write(s: "    __plew_match_not_exhaustive;\n")
+                compileError(msg: "match must be exhaustive: cover all variants or add a wildcard")
                 return
             }
             val t: U64 = c.tmp

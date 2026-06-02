@@ -10,13 +10,13 @@
 **目標＝このコンパイラが*受理*するコードは spec でも valid（完全な Plew コンパイラも通せる）。** 逆向きの不完全性（spec valid だが未実装で reject＝`<.LParen />`・トレイト・`Result`/`try` 等）は許容。直すべきは **「spec は reject するのに今 accept してしまう」＝hidden meaning** だけ。ランタイム挙動の誤り（hidden cost＝leak・int 幅・overflow 非 panic）はこの目標の対象外（後回し）。
 
 **受理の健全性チェックリスト（spec が拒むのに今通る＝要修正）**：
-1. ✅ ~~import なしで `print`/`write` 等が書ける~~ → **解消**。I/O ビルトインは ambient でなく `import @Std/Io with { … }`（print/write/writeByte/readStdin/readFile）・args は `@Std/Process with { argCount, argAt }` が必須。名前↔モジュールも検査（`@Std/Process with { print }` は print を有効化しない）。未 import の使用は未宣言 C 識別子で loud に reject（sentinel 方式）。
-2. ✅ ~~ラベル無視~~ → **部分解消**。ユーザー定義トップレベル関数の呼び出しは、各引数のラベル必須・宣言順・名前一致を検査（不一致は sentinel で reject）。残：ラベル抑制 `~:`・メソッド呼び出し・関数型同一性へのラベル反映・I/O ビルトインのラベル（暫定シグネチャゆえ非検査）は未対応。
-3. ✅ ~~非網羅 match が通る~~ → **解消**。match は網羅必須（`_` ワイルドカード、または enum 全 variant の被覆を検査・非網羅は sentinel reject）。残：到達不能アーム警告・ガード・ネストパターンは未対応（元々）。
+1. ✅ ~~import なしで `print`/`write` 等が書ける~~ → **解消**。I/O ビルトインは ambient でなく `import @Std/Io with { … }`（print/write/writeByte/readStdin/readFile）・args は `@Std/Process with { argCount, argAt }` が必須。名前↔モジュールも検査（`@Std/Process with { print }` は print を有効化しない）。未 import の使用は `compileError` 診断（`plewc: error: …`＋非ゼロ終了）で reject。
+2. ✅ ~~ラベル無視~~ → **部分解消**。ユーザー定義トップレベル関数の呼び出しは、各引数のラベル必須・宣言順・名前一致を検査（不一致は `compileError` 診断で reject）。残：ラベル抑制 `~:`・メソッド呼び出し・関数型同一性へのラベル反映・I/O ビルトインのラベル（暫定シグネチャゆえ非検査）は未対応。
+3. ✅ ~~非網羅 match が通る~~ → **解消**。match は網羅必須（`_` ワイルドカード、または enum 全 variant の被覆を検査・非網羅は `compileError` 診断で reject）。残：到達不能アーム警告・ガード・ネストパターンは未対応（元々）。
 4. **lossy な `as` が通る**（`300 as U8` を C キャストで silent truncate） → spec は `as`＝infallible 限定（縮小は `TryFrom`）。`as` を無損失に制限。
-5. ✅ ~~struct の `==`~~ → **解消**。比較演算子（`== != < <= > >=`）を struct/array に適用＝`Eq`/`Ord` 無しなので sentinel reject（従来は壊れた C を吐いて clang が偶発的に弾いていたのを明示エラーに）。残：enum/String の順序比較（`<` 等）は依然「壊れた C で偶発的 reject」＝ホールではないが未整理。
+5. ✅ ~~struct の `==`~~ → **解消**。比較演算子（`== != < <= > >=`）を struct/array に適用＝`Eq`/`Ord` 無しなので `compileError` 診断で reject（従来は壊れた C を吐いて clang が偶発的に弾いていたのを明示エラーに）。残：enum/String の順序比較（`<` 等）は依然「壊れた C で偶発的 reject」＝ホールではないが未整理。
 
-→ **大前提**：これらの enforce は plewc.pw 自身にも適用される（plewc.pw も import 必須等になる）。が plewc.pw は今 stage0（凍結・import 非対応）でビルドされている＝**stage0 を退役させ stage1 種でブートストラップしないと、plewc.pw 自身を spec-valid 化できない**（[worklog.md](worklog.md) の seed 計画）。
+→ **大前提**：これらの enforce は plewc.pw 自身にも適用される（plewc.pw も import 必須・全呼び出しラベル付き等になっている）。stage0 退役＋C 種ブートストラップ済なので、新機能を追加する各サイクルで plewc.pw 自身も spec-valid に保ちながら不動点を維持する（ADD→reseed→USE）。
 
 ## メモリ・所有権（最大の剥離）
 
@@ -58,19 +58,19 @@
 
 ## 関数・呼び出し
 
-- **引数ラベルは必須・宣言順・関数型の同一性の一部** → **部分実装**。ユーザー定義トップレベル関数の呼び出しはラベルを検査（各引数 `hasLabel`＋宣言順で param 名と一致・arg 数一致・不一致は未宣言 C 識別子 sentinel で reject）。C 出力自体は依然ラベルを落とし位置引数。未対応：ラベル抑制 `~:`・**メソッド呼び出し**（ユーザーメソッド未実装ゆえ）・**I/O ビルトイン**（`write(s:)`/`argAt(…)` 等は暫定シグネチャゆえ generic パス手前で個別処理＝非検査）・ラベルによるオーバーロード・関数型同一性へのラベル反映。spec/04。
+- **引数ラベルは必須・宣言順・関数型の同一性の一部** → **部分実装**。ユーザー定義トップレベル関数の呼び出しはラベルを検査（各引数 `hasLabel`＋宣言順で param 名と一致・arg 数一致・不一致は `compileError` 診断で reject）。C 出力自体は依然ラベルを落とし位置引数。未対応：ラベル抑制 `~:`・**メソッド呼び出し**（ユーザーメソッド未実装ゆえ）・**I/O ビルトイン**（`write(s:)`/`argAt(…)` 等は暫定シグネチャゆえ generic パス手前で個別処理＝非検査）・ラベルによるオーバーロード・関数型同一性へのラベル反映。spec/04。
 - **メソッドの引数型オーバーロード**（セレクタ＝名前＋ラベル） → 無し。**関数は名前一意**（同名不可）。メソッドは `append` のみ stage1 ビルトイン。
 - **デフォルト引数（呼び出しごと再評価・定義側スコープ）** → 未実装。
 - **クロージャ／メソッド値** → 未実装（spec はメソッド値を禁止＝こちらは spec 通り）。
 
 ## enum 等価（暫定）
 
-- **`Eq`/`Ord` トレイト＋`@[Eq]` derive（メタプロで構造的等価を生成・Rust 流）** → **現状：enum `==`/`!=` を「タグ（variant）比較」に直接脱糖**（variant 構築オペランドは tag index リテラル・それ以外は `(expr).tag`＝例 `(k).tag == 0`）。stage1 のみ（stage0 は凍結ゆえ未対応＝plewc.pw 自身はまだ match で判別）。**全 nullary な enum だけ許可**（＝`curKind == <Kind.LParen />` は構造的 Eq と完全一致で正しい）。**payload 持ち enum の `==` は hidden meaning を避けるため loud にエラー**＝plewc が未宣言識別子 `__plew_enum_eq_requires_Eq_derive` を出力し C コンパイルが失敗（タグだけ見て payload を無視する沈黙バグにしない）。`@[Eq]` 実装で構造的 Eq に置換予定。struct の `==` は未対応。spec/08,12,16。
+- **`Eq`/`Ord` トレイト＋`@[Eq]` derive（メタプロで構造的等価を生成・Rust 流）** → **現状：enum `==`/`!=` を「タグ（variant）比較」に直接脱糖**（variant 構築オペランドは tag index リテラル・それ以外は `(expr).tag`＝例 `(k).tag == 0`）。stage1 のみ（stage0 は凍結ゆえ未対応＝plewc.pw 自身はまだ match で判別）。**全 nullary な enum だけ許可**（＝`curKind == <Kind.LParen />` は構造的 Eq と完全一致で正しい）。**payload 持ち enum の `==` は hidden meaning を避けるため `compileError` 診断で reject**（タグだけ見て payload を無視する沈黙バグにしない）。`@[Eq]` 実装で構造的 Eq に置換予定。struct の `==` は未対応。spec/08,12,16。
 - 補足：variant 値は **JSX 必須**（`<Kind.LParen />`）で確定（bare `Kind.LParen` は不採用＝「インスタンス生成は常に JSX」を維持・「どちらでも書ける」回避）。型省略 JSX `<.LParen />`（文脈推論）は surface 追加の未決。
 
 ## 制御フロー・match
 
-- **`match` 網羅性をコンパイル時検査** → **実装済**。`_` ワイルドカード or enum 全 variant 被覆を検査（非網羅は未宣言 C 識別子 sentinel で reject）。網羅な match（全 variant 列挙・wildcard 無し）は従来どおり末尾に `__builtin_unreachable()`。残：到達不能アーム警告・ガード・ネストパターン・`val x` 捕捉アームは未対応。spec/11。
+- **`match` 網羅性をコンパイル時検査** → **実装済**。`_` ワイルドカード or enum 全 variant 被覆を検査（非網羅は `compileError` 診断で reject）。網羅な match（全 variant 列挙・wildcard 無し）は従来どおり末尾に `__builtin_unreachable()`。残：到達不能アーム警告・ガード・ネストパターン・`val x` 捕捉アームは未対応。spec/11。
 - **match アーム**：stage1 は **文位置・block アームのみ**（`=> { … }`）。**ベア式アーム `=> v`・ガード・ネストパターン無し**（`E.V { val f }` 一段＋`_` のみ・全フィールド束縛必須は spec 通り）。
 - **値位置の `if`/`match`/ブロック（`give`）** → stage0 は if/block を statement-expression で対応・**stage1 は未対応**（文位置のみ）。`give` は stage1 では非対応。spec/11。
 - **`panic`（発散文）** → stage1 未実装（範囲外 panic 等はランタイム関数で個別に exit）。
@@ -86,7 +86,7 @@
 
 - **`pub`/`export`／`/`・`../` ルート／名前空間 import（`Io.print`）／`_.pw` ディレクトリ解決** → **未実装**。名前解決は（全ファイル連結後の）線形スキャン。
 - **`part ./Name`（部分実装）** → 同一モジュールの複数ファイル化に対応。root ファイルの `part ./Name` directive を走査し、`Name.pw`（兄弟ファイル）を readFileBytes で読んで**バイト列を連結**し、1 つの buffer として lex/parse（単一アリーナ・単一 C 出力モデルゆえ別コンパイルはせず全部入りにする）。スコープ共有・名前空間なしは spec 通り。残：`_.pw` ディレクトリ・`../`・`/` ルート・ネストした part（root の part のみ走査＝part 先の part は未追従）・forest/循環検査なし。パス構築は `readFileBytes(path: Array[U8])` ビルトイン（`@Std/Io` の `readFile` import で一緒に有効化される内部ヘルパ）。
-- **import（部分実装）** → `import @Std/Io with { … }`・`import @Std/Process with { … }` の **`with { }` 選択形のみ**パース＆enforce。認識する名前は I/O ビルトインだけ（`@Std/Io`＝print/write/writeByte/readStdin/readFile・`@Std/Process`＝argCount/argAt）で、**名前↔モジュール対応も検査**（誤モジュール import はそのビルトインを有効化しない）。それ以外の import パス・名前はパースして無視（単一ファイルゆえ解決先が無い）。enforce は **未 import 呼び出し＝未宣言 C 識別子で clang を失敗**させる sentinel 方式（enum-`==` と同じ・真の診断経路は未整備）。
+- **import（部分実装）** → `import @Std/Io with { … }`・`import @Std/Process with { … }` の **`with { }` 選択形のみ**パース＆enforce。認識する名前は I/O ビルトインだけ（`@Std/Io`＝print/write/writeByte/readStdin/readFile・`@Std/Process`＝argCount/argAt）で、**名前↔モジュール対応も検査**（誤モジュール import はそのビルトインを有効化しない）。それ以外の import パス・名前はパースして無視（単一ファイルゆえ解決先が無い）。enforce は `compileError(msg)` ビルトイン＝stderr へ `plewc: error: …`＋`exit(1)`（受理健全性チェック共通・行番号は未）。
 - **lang item / ambient 型** → 概念なし。`print`/`write`/`writeByte`/`readStdin`/`readFile`/`argCount`/`argAt` は **import で gate される埋め込みビルトイン**（本来は `@Std`＋`Format` 等で、名前自体も `argCount`/`argAt` 等は `Process.args()` の暫定スタンドイン）。移行レシピは [worklog.md](worklog.md)。
 - **エントリ `fn main`**：`int main(int argc, char** argv)` に固定脱糖（spec の `fn main`/`async fn main`・戻り `()|Result` とは別）。
 

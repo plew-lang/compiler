@@ -72,13 +72,13 @@ for main in tests/part/*/Main.pw tests/part/Main.pw; do
     fi
 done
 
-# --- reject/ : spec-invalid code must fail to compile ---
+# --- reject/ : spec-invalid code must be rejected by plewc itself (it prints
+#     a `plewc: error:` diagnostic and exits non-zero). ---
 for pw in tests/reject/*.pw; do
     name=$(basename "$pw" .pw)
     c="$TMP/reject-$name.c"
-    "$PLEWC" "$pw" > "$c" 2>/dev/null
-    if clang -w "$c" -o "$TMP/reject-$name" 2>/dev/null; then
-        echo "FAIL  reject/$name  (compiled, but should have been rejected)"; fail=$((fail + 1))
+    if "$PLEWC" "$pw" > "$c" 2>/dev/null; then
+        echo "FAIL  reject/$name  (plewc accepted it, but it should be rejected)"; fail=$((fail + 1))
     else
         pass=$((pass + 1))
     fi

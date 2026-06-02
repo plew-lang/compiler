@@ -16,7 +16,7 @@
 
 **このコンパイラが*受理*するコードを spec でも valid にする**（完全な Plew コンパイラも通せる）。spec が reject するのに今 accept してしまう所＝hidden meaning を潰す。逆向きの不完全性（valid だが未実装で reject＝`<.LParen />`・トレイト等）は許容。hidden cost（leak・int 幅・overflow 非 panic）は対象外（後回し）。
 
-要修正リスト＝[provisional.md](provisional.md)「受理の健全性チェックリスト」：① ✅ **import なしで `print`**（`@Std/Io`・`@Std/Process` import 必須・名前↔モジュール検査）② ✅ **ラベル無視**（ユーザー関数呼び出しは有無/名前/宣言順/arg 数を検査）③ ✅ **非網羅 match**（`_` or 全 variant 被覆を検査）④ ⏸ lossy `as`（**整数幅実装に依存＝保留**）⑤ ✅ **struct `==`**（比較演算子を struct/array に適用＝`Eq`/`Ord` 無しで reject）。いずれも不一致は未宣言 C 識別子 sentinel で clang を loud に失敗させる方式。
+要修正リスト＝[provisional.md](provisional.md)「受理の健全性チェックリスト」：① ✅ **import なしで `print`**（`@Std/Io`・`@Std/Process` import 必須・名前↔モジュール検査）② ✅ **ラベル無視**（ユーザー関数呼び出しは有無/名前/宣言順/arg 数を検査）③ ✅ **非網羅 match**（`_` or 全 variant 被覆を検査）④ ⏸ lossy `as`（**整数幅実装に依存＝保留**）⑤ ✅ **struct `==`**（比較演算子を struct/array に適用＝`Eq`/`Ord` 無しで reject）。いずれも不一致は **`compileError(msg)` ビルトイン**で `plewc: error: …` を stderr に出し非ゼロ終了（旧 sentinel 方式＝未宣言 C 識別子で clang を落とす、を置換）。
 
 **④が整数幅に依存して保留**：現状は `as` を数値↔数値の素の C キャストにしており `300 as U8` が silent truncate する。spec は `as`＝infallible 固定（無損失のみ・縮小は `TryFrom`）。だが現コンパイラは整数幅を区別せず全部 `long long` なので**損失性が判定できない**＝幅つき整数（hidden cost 側の大物）の実装と一体。受理の健全性は①②③⑤で当面の hidden-meaning を概ね潰した。
 
@@ -26,13 +26,15 @@
 
 - ✅ **コンパイラ本体を分割**。`compiler/src/_.pw`（約3100行）→ root `_.pw`（234行・import＋part＋driver＋main）＋`Lexer.pw`/`Ast.pw`/`Parser.pw`/`Codegen.pw`。ブートストラップは root を渡すだけ（part 追従はコンパイラがやる）＝`part` のブートストラップ実地テストにもなっている。bootstrap.sh/test.sh は無変更。
 
+- ✅ **真の診断経路**。`compileError(msg)` ビルトイン（`plew_compile_error`＝stderr へ `plewc: error: …`＋`exit(1)`）。受理健全性の全チェック（import/ラベル/match/struct==/enum==）を sentinel から置換。`test.sh` の reject は plewc の終了コードで判定（clang 任せをやめた）。compileError はコンパイラ内部の ambient プリミティブ（import gate しない）。残：行番号（オフセット→行の付与）は未。
+
 **次の一歩の候補**（やりやすい順で自走）：
+- 行番号付き診断＝`compileError` にオフセット→行番号を足す（Call 系はトークン start があるので安い）。
 - `import ./Foo`（名前空間束縛・`Foo.bar`）＝修飾名解決が要る。今は全部フラット同一スコープ。
-- 行番号付き診断（sentinel→真のエラー経路）＝stderr＋`exit` で「error: line N: …」。整数幅など今後のチェックが全部楽になる足回り。
 - 整数幅（`I8..U64`/`F*`）＝hidden cost の大物。これが入ると④ lossy `as`・overflow panic も片付く。
 - 値意味論/CoW・トレイト/ジェネリクスは更に大物（後）。
 
-> import 機構の現状＝**`with { }` 選択 import のみ**で、認識するのは I/O ビルトイン（`@Std/Io`＝print/write/writeByte/readStdin/readFile・`@Std/Process`＝argCount/argAt）だけ。名前空間 import（`Io.print`）・実モジュール解決・複数ファイル・`export`/`part`・`/`/`./` ルートは未実装（単一ファイルのまま）。enforce は「未 import の I/O ビルトイン呼び出し＝未宣言 C 識別子を吐いて clang を loud に失敗」＝enum-`==` と同じ sentinel 方式（診断＋非ゼロ終了の真のエラー経路はまだ無い）。
+> import 機構の現状＝**`with { }` 選択 import のみ**で、認識するのは I/O ビルトイン（`@Std/Io`＝print/write/writeByte/readStdin/readFile・`@Std/Process`＝argCount/argAt）だけ。名前空間 import（`Io.print`）・実モジュール解決・複数ファイル・`export`/`part`・`/`/`./` ルートは未実装（単一ファイルのまま）。enforce は `compileError(msg)`＝`plewc: error: …` を stderr に出し非ゼロ終了（受理健全性チェック共通の経路）。
 
 ## 機能を plewc.pw に足す手順（ADD→reseed→USE）
 
