@@ -413,6 +413,31 @@ fn selfhost_plewc_compiles_enums_and_match() {
 }
 
 #[test]
+fn selfhost_plewc_compiles_arrays_and_strings() {
+    // plewc.pw v5: monomorphized arrays (PlewArray_<E> + runtime), [] literal,
+    // append, index, .count, struct array fields, String literals, String.bytes
+    // (aliasing PlewArray_U8), and the write/writeByte/readStdin builtins lowered
+    // to the C runtime that plewc.pw emits itself (self-contained output).
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../selfhost/plewc.pw");
+    let src = std::fs::read_to_string(path).expect("read selfhost/plewc.pw");
+    let program = "struct Box {\n    val xs: Array[I64]\n}\nfn sum(b: Box) -> I64 {\n    mut val s: I64 = 0\n    mut val i: U64 = 0\n    while i < b.xs.count {\n        s += b.xs[i]\n        i += 1\n    }\n    return s\n}\nfn countA(s: String) -> I64 {\n    val bs: Array[U8] = s.bytes\n    mut val n: I64 = 0\n    mut val i: U64 = 0\n    while i < bs.count {\n        if bs[i] == 97 {\n            n += 1\n        }\n        i += 1\n    }\n    return n\n}\nfn main() {\n    mut val xs: Array[I64] = []\n    xs.append(10)\n    xs.append(20)\n    xs.append(12)\n    val b: Box = <Box xs=xs />\n    print(sum(b: b))\n    val msg: String = \"banana\"\n    print(countA(s: msg))\n}\n";
+    let emitted_c = build_and_run_stdin(&src, "selfhost_plewc_arr", program);
+    assert!(emitted_c.contains("PlewArray_I64"), "emitted C was:\n{emitted_c}");
+    assert!(emitted_c.contains("PlewString"), "emitted C was:\n{emitted_c}");
+
+    let c_path = std::env::temp_dir().join(format!("plew_plewcarr_{}.c", std::process::id()));
+    let out_bin = std::env::temp_dir().join(format!("plew_plewcarr_{}", std::process::id()));
+    std::fs::write(&c_path, &emitted_c).expect("write emitted C");
+    let status = Command::new("clang").arg(&c_path).arg("-o").arg(&out_bin).status().expect("clang");
+    assert!(status.success(), "clang failed on emitted C:\n{emitted_c}");
+    let output = Command::new(&out_bin).output().expect("run emitted binary");
+    let _ = std::fs::remove_file(&c_path);
+    let _ = std::fs::remove_file(&out_bin);
+    // 10+20+12 = 42; 'a' count in "banana" = 3
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "42\n3\n");
+}
+
+#[test]
 fn builds_and_runs_write_byte() {
     // writeByte emits a single raw byte (putchar). The self-hosted compiler
     // uses it to echo identifier text out of source spans (no substring).

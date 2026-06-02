@@ -4,7 +4,7 @@
 
 ## 現在地（一言）
 
-stage0（Rust）で **Plew 製コンパイラ（`selfhost/plewc.pw`・v1）が Plew プログラムを C に変換し clang が通す**段階に到達。stage0 サポート済み：型付き整数/Bool/String（`.bytes`/`==`・リテラルのエスケープ `\n`/`\"`/`\\`）・Array（リテラル/添字/`count`/for-each/`append`/`arr[i]=x`・リーク参照セマンティクス）・struct・enum+match（文位置・if-chain）・if/else/while/for（range/array）・関数（相互再帰・プロトタイプ）・`break`/`continue`・**`inout` パラメータ**・**`as` 数値キャスト**・stdin/stdout I/O（`readStdin`/`write`/**`writeByte`**＝putchar・識別子スパン出力用）。codegen は型を依存順に出力（前方宣言＋トポロジカル）。**Plew 製コンパイラ v1（`selfhost/plewc.pw`）が compile&run**：単一トップレベル関数の本体を C `main` に変換＝`val`/`mut val`・代入（`= += -= *= /= %=`）・`if`/`else`/`else if`・`while`・`print`・式（優先順位付き precedence-climbing・単項・括弧・識別子スパン出力）。arena+index AST（`Expr`/`Stmt`/`Block`）。stdin→C を stdout に。実証用 selfhost ファイル：`lexer.pw`（全トークン）・`parser.pw`（トークン列を食う式パーサ）・`emit.pw`（式→C ミニコンパイラ）・`calc.pw`（バイト列パーサ）。**次：plewc.pw を育てる＝複数関数＋引数＋呼び出し → struct/enum/match → Array/String → 自分自身を食えるサブセットまで（self-host fixpoint）**。
+stage0（Rust）で **Plew 製コンパイラ（`selfhost/plewc.pw`・v1）が Plew プログラムを C に変換し clang が通す**段階に到達。stage0 サポート済み：型付き整数/Bool/String（`.bytes`/`==`・リテラルのエスケープ `\n`/`\"`/`\\`）・Array（リテラル/添字/`count`/for-each/`append`/`arr[i]=x`・リーク参照セマンティクス）・struct・enum+match（文位置・if-chain）・if/else/while/for（range/array）・関数（相互再帰・プロトタイプ）・`break`/`continue`・**`inout` パラメータ**・**`as` 数値キャスト**・stdin/stdout I/O（`readStdin`/`write`/**`writeByte`**＝putchar・識別子スパン出力用）。codegen は型を依存順に出力（前方宣言＋トポロジカル）。**Plew 製コンパイラ v1（`selfhost/plewc.pw`）が compile&run**：単一トップレベル関数の本体を C `main` に変換＝`val`/`mut val`・代入（`= += -= *= /= %=`）・`if`/`else`/`else if`・`while`・`print`・式（優先順位付き precedence-climbing・単項・括弧・識別子スパン出力）。arena+index AST。stdin→C を stdout に。**v2 関数/引数/呼び出し/再帰・v3 struct/JSX/フィールド・v4 enum/match・v5 Array/String/ビルトイン**まで実装済（型注釈は実 C 型へ反映・軽量型追跡 `exprType`・配列単相化・String.bytes 共有ビュー・I/O ランタイム preamble を自前出力）。実証用 selfhost ファイル：`lexer.pw`（全トークン）・`parser.pw`（トークン列パーサ）・`emit.pw`（式→C ミニコンパイラ）・`calc.pw`（バイト列パーサ）。**残るは `inout` 引数のみ＝実装すれば `plewc < plewc.pw` で self-host 可能（最後の山）**。
 
 ### stage0 のメモリモデル（重要・spec とは別物）
 
@@ -56,7 +56,8 @@ stage0 は **throwaway（1 回コンパイルして終了）**。よって Array
    - ✅ **plewc.pw v2＝複数関数＋引数＋ユーザー呼び出し**：トップレベル `fn` を順に読み（`parseProgram`/`parseFunc`）、by-value 引数 `name: Type`（型スキップ＝全 `long long`・ラベル=名前）、`Expr.Call`（ラベルは drop し位置引数で C 出力・enum payload に `Array[U64]` を載せられることを stage0 単体検証済）、戻り値型（`-> ret` 有=`long long`/無=`void`/`main`=`int main(void)`）、相互再帰用に**全非 main 関数の前方プロトタイプ**を先出し。`return` は関数種別（main/void/値）で出し分け（`curIsMain`/`curRetVoid` を codegen 中に設定）。`add`+`fib(10)` プログラム→7,55（e2e `selfhost_plewc_compiles_functions_and_calls`）。
    - ✅ **plewc.pw v3＝struct/JSX 構築/フィールドアクセス＋型注釈の C 型反映**：`struct Name { (val|mut val) f: T ... }`（修飾子は consume して無視）を `parseStruct`→`StructDef`/`FieldDef`。JSX `<Type f=e ... />`（`parseMake`→`Expr.Make`＋`MakeField` 配列）を C 複合リテラル `(Type){.f = e, ...}` に。postfix `.field`（`parsePostfix`→`Expr.Field`・チェーン可）。型注釈を実 C 型へ反映開始＝`genCType`：scalar（I8..U64/Bool）→`long long`・named（struct）→名前エコー（`Stmt.Let`/フィールド/構造体本体）。struct は前方 typedef を全部先出し→本体（source 順＝依存順前提・topological は後で）。enum の dotted `<E.V .../>` は consume するが未モデル（v4）。nested struct＋chained field プログラム→7,14（e2e `selfhost_plewc_compiles_structs`）。
    - ✅ **plewc.pw v4＝enum + match**：`enum Name { Variant [{ f: T, ... }] }`（variant フィールドは修飾子なし）を `parseEnum`→`EnumDef`/`Variant`。C はタグ付き共用体 `struct E { long long tag; union { struct {...} V; ... } data; }`（nullary variant は `char _u` ダミー）。JSX variant 構築 `<E.V f=e/>`→`(E){.tag=idx, .data.V={.f=e}}`（`Expr.Make` に `isEnum`/variant span 追加）。`match scrut { E.V { val f } => { ... } _ => {...} }`→`Stmt.Match`→**tag の if-chain**（フレッシュ temp `_mN`・wildcard=`else`）。**型推論不要**＝パターンが `Enum.Variant` を明示するので tag index（`variantIndex`）とフィールド型（`genBindType`）を enum 宣言から線形スキャンで解決。**引数/戻り値型も実 C 型へ**（`Param`/`Func` に型スパン・`genSignature` で `genCType`）。enum/struct とも前方 typedef を全部先出し→本体（plewc.pw の集約は全て Array＝ポインタ経由ゆえ本体順序非依存）。`area(Shape)` プログラム→75,24（e2e `selfhost_plewc_compiles_enums_and_match`）。match アームは block body 限定（plewc.pw が使う形・bare-expr arm は未対応）。
-   - ⏭ 次：**plewc.pw を育てて self-host fixpoint へ**。残り＝①`Array`（リテラル `[..]`/添字 `a[i]`/`count`/`append`/`a[i]=x`）＋`String`（リテラル/`.bytes`/`==`）・要素型の単相化（`PlewArray_<T>` C 表現を plewc 側で生成＝stage0 と同型）→②`for val x in ...`/`break`/`continue`→③**`inout` 引数**（plewc.pw 自身が多用＝self-host 必須・最大の山＝呼び出し側 `f(x: inout a)`・宣言側ポインタ・使用箇所 deref）→④`writeByte`/`readStdin`/`write`/`print` ビルトインの認識→⑤型の C 型反映を String/Array まで拡張＋struct の topological 順序（相互参照が by-value のとき）。自分自身を食えるサブセットに達したら **`plewc < plewc.pw`** で self-host。**ファイル I/O**（自分を読む）と名前解決はその過程で。AST 再帰は arena+index（U64 index）で回避済。
+   - ✅ **plewc.pw v5＝Array + String + ビルトイン（最大の codegen 山）**：軽量な型追跡を導入＝`Local`（変数→型の環境・関数ごとにリセット＋引数登録・`val`/match束縛で追加）＋`exprType`（式の型を bottom-up 復元＝`TypeInfo` kind 0scalar/1String/2named/3array）。これで `c.bytes`（struct フィールド）と `kw.bytes`（String ビルトイン）を**型推論で区別**。型は `PType`（element 名＋isArray）で表現（`parseTypeTok` が `Array[E]`→element 捕捉）。**Array 単相化**：宣言から要素型名を収集（`arrayElems`・dedup）→`PlewArray_<E>` typedef＋ランタイム（`_new`/`_get` 範囲チェック/`_set`/`_push` 倍々・リーク）を要素ごとに生成（stage0 と同型）。`[]`/`[a,b]` リテラルは宣言型から要素を取り `genArrayLiteral`（空＝`_new()`・非空＝statement-expr で push）・`a[i]`＝`PlewArray_E_get`・`.append`＝`_push`（`Expr.Method`）・`.count`＝`.len`。**String**＝`PlewString{const char* data; long long len}`・リテラルは内容 verbatim＋decoded length（`strDecodedLen`）・`.bytes`＝`PlewArray_U8` で char バッファを O(1) 共有ビュー（U8 要素＝`unsigned char`・U8 配列は常時 emit＝span 不要のハードコード）。**ビルトイン**＝`write`→`plew_write`・`writeByte`→`putchar`・`readStdin`→`plew_read_stdin` を Call codegen で認識し、**ランタイム preamble（PlewString＋I/O 本体）を plewc 自身が出力**＝出力 C は自己完結（self-host 契約を満たす）。出力順＝preamble→nominal forward→array typedef→nominal body→array runtime→prototypes→bodies（stage0 と同じ依存順）。配列＋文字列プログラム→42,3（e2e `selfhost_plewc_compiles_arrays_and_strings`）。
+   - ⏭ 次：**`inout` 引数（self-host 最後の山）**＝plewc.pw 自身が `inout c: Comp`/`inout lx: Lexer` を多用。codegen＝宣言側はポインタ引数（`T* p`）・本体で `p` の使用を `(*p)` に・呼び出し側 `f(x: inout a)` は `&(a)` を渡す。Param に inout フラグを持たせ、Ident codegen で inout 引数なら deref。これが通れば **`plewc < plewc.pw` で self-host**（不動点検証）。**ファイル I/O**（自分を読む）と struct の topological 順序（相互 by-value 参照時）はその過程で。
    - ⏭ import 機構／値位置 `match`／codegen 整数幅は必要になった時点で。
 7. ⏭ → stage1（Plew でコンパイラ）に必要な分が揃い次第セルフホスト
 6. **stage1**：Plew サブセットでコンパイラを書く → stage0 で compile → 自己 compile＝**セルフホスト達成**
@@ -69,6 +70,22 @@ stage0 は **throwaway（1 回コンパイルして終了）**。よって Array
 - AST ノード定義（arena 前提）。まず**式 → 文 → 宣言**の順で最小から。
 - パーサの骨格（トークンカーソル・エラー回復方針）＋最初のテスト（整数リテラル/二項演算の優先順位）。
 - 構文の全体像と優先順位は [grammar.md](grammar.md)（構文リファレンス＝spec 索引）と spec/12（演算子 14 段）を参照。
+
+## self-host の契約（後戻り回避・重要）
+
+stage0 が plewc.pw に**暗黙提供**しているのは閉じた小さな一式だけ＝**I/O ビルトイン4つ**（`print`/`write`/`writeByte`/`readStdin`）＋**C ランタイム preamble**（`PlewString`・`PlewArray_<T>`＋配列ランタイム・上記4関数の本体）。パース/型/codegen ロジックは全て plewc.pw 側（純 Plew）にあり、I/O はこれで飽和（これ以上ビルトインは要らない）。
+
+**規律＝「plewc.pw が依存する stage0 の振る舞いは、必ず plewc.pw 自身の codegen にも実装する」**。そのリストに載るのは上記 I/O 4つ＋ランタイム preamble のみ。Array/String フェーズ（v5）で「stage1 の codegen が `write`→`plew_write` を出し、preamble に `PlewString`・配列ランタイム・I/O 本体を自前で吐く」ところまでやり切れば、stage1 の出力 C は自己完結し stage0 依存が消える。
+
+**後戻りは silent には起きない**：self-host は不動点検証（`plewc < plewc.pw > a.c` → `clang a.c` → `plewc2 < plewc.pw > b.c`・`a.c == b.c`）で宣言する。取りこぼしがあれば出力 C が未定義参照でコンパイル失敗＝stage0 を捨てる前に即露見。よってビルトインの暗黙埋め込みは Rust への後戻りトラップにならない（stage0 は throwaway のまま）。
+
+### 暗黙埋め込み → `extern`/`@Std` への将来移行（非破壊の段階分け＝ADD→USE→REMOVE）
+
+self-host 後、暗黙埋め込み（ランタイム自動注入＋魔法ビルトイン）を実 `@Std`/`extern` に置換したくなる。これを**非破壊**にやる鉄則＝「新しい形を*使う*前にコンパイラに*受理*させる／旧挙動の除去は最後」。各コミットは「ひとつ前のコンパイラ」でビルドし不動点を保つ：
+1. **ADD**：コンパイラに `extern`/import 宣言の**受理**を足す（自動注入は継続）。ソースは未変更→旧コンパイラで通る。
+2. **USE**：plewc.pw の**ソース**に `extern`/import を足す（ステップ1のコンパイラが受理できるので通る・注入は冗長だが無害）。
+3. **REMOVE**：コンパイラの自動注入を**やめ** extern＋別コンパイルの runtime.o リンクに切替（ステップ2のコンパイラがまだ注入するので新ソースを通せる）。
+flag day（同時破壊）にならない理由＝ソースが使う機能は常に前バージョンがサポート済み。急ぐ必要なし（self-host を妨げない）。魔法ビルトインは import 機構＋最小 `@Std` ができるまでの代用で、言語表面には未露出（`print`/`write` は本来 `@Std`＋`Format`）。
 
 ## 戦略メモ
 
