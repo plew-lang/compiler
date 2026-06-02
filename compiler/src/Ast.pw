@@ -203,6 +203,11 @@ struct Param {
     // label-suppressed `name~: Type` (spec/04): the argument is passed without a
     // label (positional). Default false = labelled (the normal case).
     val noLabel: Bool
+    // default argument `name: T = expr` (spec/04): when the call omits this
+    // param, `defaultExpr` is emitted in its place. v1 supports omitting trailing
+    // defaulted params. `hasDefault` false = required.
+    val hasDefault: Bool
+    val defaultExpr: U64
 }
 
 struct FieldDef {

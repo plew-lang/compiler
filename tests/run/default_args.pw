@@ -1,0 +1,6 @@
+import @Std/Io with { print }
+fn greet(n: I32, times: I32 = 2) -> I32 { return n * times }
+fn main() {
+    print(greet(n: 5))
+    print(greet(n: 5, times: 3))
+}

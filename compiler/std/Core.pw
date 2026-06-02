@@ -80,12 +80,13 @@ impl[T, E] Result[T, E] {
     }
 }
 
-// assert(x > 0) panics when the condition is false (spec/11: always on, all
-// builds). Returns (). The condition is label-suppressed (`cond~:`) so it is
-// passed positionally, matching spec. An optional `message:` arg is future work.
-fn assert(cond~: Bool) {
+// assert(x > 0) / assert(x > 0, message: "...") panics when the condition is
+// false (spec/11: always on, all builds). Returns (). The condition is
+// label-suppressed (`cond~:`, positional); the diagnostic message is an
+// optional labelled argument with a default.
+fn assert(cond~: Bool, message: String = "assertion failed") {
     if cond {
     } else {
-        panic "assertion failed"
+        panic message
     }
 }

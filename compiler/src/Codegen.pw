@@ -383,8 +383,18 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
 // Check call args against a parameter list: arg count matches and every arg
 // carries its parameter's label in declaration order (spec: labels required).
 fn paramsLabelsOk(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bool {
-    if params.count != args.count {
+    if args.count > params.count {
         return false
+    }
+    // any params beyond the provided args must have a default (trailing-default
+    // omission). Without that, the arity mismatch is an error.
+    mut val r: U64 = args.count
+    while r < params.count {
+        if params[r].hasDefault {
+        } else {
+            return false
+        }
+        r += 1
     }
     mut val i: U64 = 0
     while i < args.count {
@@ -1791,6 +1801,21 @@ fn genExpr(c: inout Comp, id: U64) {
                     genExpr(c: inout c, id: ar.expr)
                 }
                 i += 1
+            }
+            // fill omitted trailing params with their default expressions.
+            val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen)
+            if cfi == c.funcs.count {
+            } else {
+                val cf: Func = c.funcs[cfi]
+                val cps: Array[Param] = cf.params
+                mut val di: U64 = args.count
+                while di < cps.count {
+                    if di > 0 {
+                        write(s: ", ")
+                    }
+                    genExpr(c: inout c, id: cps[di].defaultExpr)
+                    di += 1
+                }
             }
             write(s: ")")
         }

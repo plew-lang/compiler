@@ -1184,7 +1184,18 @@ fn parseParamList(c: inout Comp) -> Array[Param] {
                             }
                             _ => {}
                         }
-                        params.append(<Param nameStart=pTok.start nameLen=pTok.len tyStart=pTyStart tyLen=pTyLen tyIsArray=pTyIsArray ty=pTyRef isInout=pIsInout noLabel=pNoLabel />)
+                        // optional default `= expr`.
+                        mut val pHasDefault: Bool = false
+                        mut val pDefault: U64 = 0
+                        match c.curKind() {
+                            Kind.Eq => {
+                                c.advance()
+                                pHasDefault = true
+                                pDefault = parseExpr(c: inout c)
+                            }
+                            _ => {}
+                        }
+                        params.append(<Param nameStart=pTok.start nameLen=pTok.len tyStart=pTyStart tyLen=pTyLen tyIsArray=pTyIsArray ty=pTyRef isInout=pIsInout noLabel=pNoLabel hasDefault=pHasDefault defaultExpr=pDefault />)
                         match c.curKind() {
                             Kind.Comma => { c.advance() }
                             _ => {}
