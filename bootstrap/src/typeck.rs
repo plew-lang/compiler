@@ -1077,6 +1077,17 @@ impl Checker<'_> {
                 }
                 return Ty::Unit;
             }
+            if name == "writeByte" {
+                // stage0 builtin: emit a single raw byte to stdout (putchar).
+                // The self-hosted compiler needs this to echo identifier text
+                // out of source spans (stage0 String is immutable, no substring).
+                if args.len() != 1 {
+                    self.error(span, "`writeByte` takes exactly one U8 argument");
+                } else {
+                    self.check_expr(args[0].1, Some(Ty::U8));
+                }
+                return Ty::Unit;
+            }
             if let Some(sig) = self.sigs.get(&name) {
                 let params = sig.params.clone();
                 let param_modes = sig.param_modes.clone();

@@ -313,6 +313,14 @@ fn builds_and_runs_stdin_io() {
 }
 
 #[test]
+fn builds_and_runs_write_byte() {
+    // writeByte emits a single raw byte (putchar). The self-hosted compiler
+    // uses it to echo identifier text out of source spans (no substring).
+    let src = "fn main() {\n    val s: String = \"Hi!\"\n    val bs: Array[U8] = s.bytes\n    mut val i: U64 = 0\n    while i < bs.count {\n        writeByte(bs[i])\n        i += 1\n    }\n    writeByte(10)\n}\n";
+    assert_eq!(build_and_run(src, "writebyte"), "Hi!\n");
+}
+
+#[test]
 fn reports_unsupported_construct() {
     // `??` has no stage0 C lowering yet → a codegen error, not a panic.
     let errs = compile_to_c("fn main() {\n    print(a ?? b)\n}\n").unwrap_err();

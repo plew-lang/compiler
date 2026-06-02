@@ -975,6 +975,10 @@ impl Codegen<'_> {
                         let a = self.expr(arg_ids[0]);
                         return format!("plew_write({a})");
                     }
+                    if fname == "writeByte" && arg_ids.len() == 1 {
+                        let a = self.expr(arg_ids[0]);
+                        return format!("putchar((int)({a}))");
+                    }
                 }
                 // Non-method call: emit positional C call (labels ignored for
                 // now). An `inout` argument passes the address of its place.
