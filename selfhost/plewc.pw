@@ -600,6 +600,8 @@ enum Stmt {
     If { cond: U64, thenBlk: U64, elseBlk: U64, hasElse: Bool }
     While { cond: U64, body: U64 }
     Match { scrut: U64, arms: Array[MatchArm] }
+    Break
+    Continue
 }
 
 struct Block {
@@ -1181,6 +1183,14 @@ fn parseStmt(c: inout Comp) -> U64 {
         Kind.KwIf => { return parseIf(c: inout c) }
         Kind.KwWhile => { return parseWhile(c: inout c) }
         Kind.KwMatch => { return parseMatch(c: inout c) }
+        Kind.KwBreak => {
+            advance(c: inout c)
+            return pushStmt(c: inout c, s: <Stmt.Break />)
+        }
+        Kind.KwContinue => {
+            advance(c: inout c)
+            return pushStmt(c: inout c, s: <Stmt.Continue />)
+        }
         Kind.KwReturn => { return parseReturn(c: inout c) }
         Kind.Ident => {
             if identIs(c: inout c, kw: "print") {
@@ -1719,6 +1729,12 @@ fn genStmt(c: inout Comp, id: U64) {
             write(s: ") {\n")
             genBlock(c: inout c, id: body)
             write(s: "    }\n")
+        }
+        Stmt.Break => {
+            write(s: "    break;\n")
+        }
+        Stmt.Continue => {
+            write(s: "    continue;\n")
         }
         Stmt.Match { val scrut, val arms } => {
             val t: U64 = c.tmp
