@@ -16,9 +16,11 @@
 
 **このコンパイラが*受理*するコードを spec でも valid にする**（完全な Plew コンパイラも通せる）。spec が reject するのに今 accept してしまう所＝hidden meaning を潰す。逆向きの不完全性（valid だが未実装で reject＝`<.LParen />`・トレイト等）は許容。hidden cost（leak・int 幅・overflow 非 panic）は対象外（後回し）。
 
-要修正リスト＝[provisional.md](provisional.md)「受理の健全性チェックリスト」：① ✅ **import なしで `print`**（`@Std/Io`・`@Std/Process` import 必須・名前↔モジュール検査）② ✅ **ラベル無視**（ユーザー関数呼び出しは有無/名前/宣言順/arg 数を検査）③ ✅ **非網羅 match**（`_` or 全 variant 被覆を検査）④ lossy `as` ⑤ struct `==`。いずれも不一致は未宣言 C 識別子 sentinel で clang を loud に失敗させる方式。
+要修正リスト＝[provisional.md](provisional.md)「受理の健全性チェックリスト」：① ✅ **import なしで `print`**（`@Std/Io`・`@Std/Process` import 必須・名前↔モジュール検査）② ✅ **ラベル無視**（ユーザー関数呼び出しは有無/名前/宣言順/arg 数を検査）③ ✅ **非網羅 match**（`_` or 全 variant 被覆を検査）④ ⏸ lossy `as`（**整数幅実装に依存＝保留**）⑤ ✅ **struct `==`**（比較演算子を struct/array に適用＝`Eq`/`Ord` 無しで reject）。いずれも不一致は未宣言 C 識別子 sentinel で clang を loud に失敗させる方式。
 
-**次の一歩**：④の lossy `as` 制限。現状は `as` を数値↔数値の素の C キャストにしており `300 as U8` が silent truncate する。spec は `as`＝infallible 固定（無損失変換のみ・縮小は `TryFrom`）。だが現コンパイラは整数幅を区別せず全部 `long long`（→ [数値モデル]）なので、幅つき整数の実装と一体。**幅つき整数が無い現状で `as` の損失性は判定できない**＝④は整数幅実装（hidden cost 側の大物）に依存。先に⑤ struct `==`（`Eq` 無しの型の `==` を reject・enum payload == と同型の判定）を片す方が独立で軽い。
+**④が整数幅に依存して保留**：現状は `as` を数値↔数値の素の C キャストにしており `300 as U8` が silent truncate する。spec は `as`＝infallible 固定（無損失のみ・縮小は `TryFrom`）。だが現コンパイラは整数幅を区別せず全部 `long long` なので**損失性が判定できない**＝幅つき整数（hidden cost 側の大物）の実装と一体。受理の健全性は①②③⑤で当面の hidden-meaning を概ね潰した。
+
+**次の一歩＝コードを書きやすくする機能へ（方針転換）**：受理の健全性が一区切りしたので、ユーザー要望により**実装を楽にする機能**を優先する。第一候補＝**複数ファイルモジュール（`part ./File` 相対パス）**＝3000 行の `compiler/src/_.pw` を lexer/parser/codegen 等に分割できるようにする。現アーキ（単一アリーナ＋単一 C 出力）には `part`（同一モジュール・スコープ共有・名前空間なし）が最も素直＝参照ファイルを readFile して同じ Comp に lex+parse して decl を追記するだけで成立し、修飾名解決が要らない。`import ./Foo`（名前空間束縛・`Foo.bar`）は修飾名解決が要るので後。
 
 > import 機構の現状＝**`with { }` 選択 import のみ**で、認識するのは I/O ビルトイン（`@Std/Io`＝print/write/writeByte/readStdin/readFile・`@Std/Process`＝argCount/argAt）だけ。名前空間 import（`Io.print`）・実モジュール解決・複数ファイル・`export`/`part`・`/`/`./` ルートは未実装（単一ファイルのまま）。enforce は「未 import の I/O ビルトイン呼び出し＝未宣言 C 識別子を吐いて clang を loud に失敗」＝enum-`==` と同じ sentinel 方式（診断＋非ゼロ終了の真のエラー経路はまだ無い）。
 

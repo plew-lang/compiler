@@ -14,7 +14,7 @@
 2. ✅ ~~ラベル無視~~ → **部分解消**。ユーザー定義トップレベル関数の呼び出しは、各引数のラベル必須・宣言順・名前一致を検査（不一致は sentinel で reject）。残：ラベル抑制 `~:`・メソッド呼び出し・関数型同一性へのラベル反映・I/O ビルトインのラベル（暫定シグネチャゆえ非検査）は未対応。
 3. ✅ ~~非網羅 match が通る~~ → **解消**。match は網羅必須（`_` ワイルドカード、または enum 全 variant の被覆を検査・非網羅は sentinel reject）。残：到達不能アーム警告・ガード・ネストパターンは未対応（元々）。
 4. **lossy な `as` が通る**（`300 as U8` を C キャストで silent truncate） → spec は `as`＝infallible 限定（縮小は `TryFrom`）。`as` を無損失に制限。
-5. **struct の `==`**（壊れた C を出す） → `Eq` 無しなのでエラーにすべき（enum payload == は既にエラー化済）。
+5. ✅ ~~struct の `==`~~ → **解消**。比較演算子（`== != < <= > >=`）を struct/array に適用＝`Eq`/`Ord` 無しなので sentinel reject（従来は壊れた C を吐いて clang が偶発的に弾いていたのを明示エラーに）。残：enum/String の順序比較（`<` 等）は依然「壊れた C で偶発的 reject」＝ホールではないが未整理。
 
 → **大前提**：これらの enforce は plewc.pw 自身にも適用される（plewc.pw も import 必須等になる）。が plewc.pw は今 stage0（凍結・import 非対応）でビルドされている＝**stage0 を退役させ stage1 種でブートストラップしないと、plewc.pw 自身を spec-valid 化できない**（[worklog.md](worklog.md) の seed 計画）。
 

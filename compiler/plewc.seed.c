@@ -412,6 +412,7 @@ long long isStringEq(Comp* c, long long op, long long lhs);
 long long isEnumName(Comp* c, long long start, long long len);
 long long isAllNullary(Comp* c, long long start, long long len);
 long long isEnumEq(Comp* c, long long op, long long lhs);
+long long compareNeedsTrait(Comp* c, long long op, long long lhs);
 void emitEnumOperand(Comp* c, long long id, long long enStart, long long enLen);
 void emitEnumTagCmp(Comp* c, long long lhs, long long rhs, long long op, long long outer);
 void genCond(Comp* c, long long id);
@@ -2856,11 +2857,16 @@ void genExpr(Comp* c, long long id) {
     emitEnumTagCmp(&((*c)), lhs, rhs, op, 1);
     }
     else {
+    if (compareNeedsTrait(&((*c)), op, lhs)) {
+    plew_write((PlewString){"__plew_compare_requires_Eq_or_Ord", 33});
+    }
+    else {
     plew_write((PlewString){"(", 1});
     genExpr(&((*c)), lhs);
     plew_write(binOpStr(op));
     genExpr(&((*c)), rhs);
     plew_write((PlewString){")", 1});
+    }
     }
     }
     }
@@ -3205,6 +3211,25 @@ long long isEnumEq(Comp* c, long long op, long long lhs) {
     }
     return 0;
 }
+long long compareNeedsTrait(Comp* c, long long op, long long lhs) {
+    if (op < 50) {
+    return 0;
+    }
+    if (op > 55) {
+    return 0;
+    }
+    TypeInfo lt = exprType(&((*c)), lhs);
+    if (lt.kind == 3) {
+    return 1;
+    }
+    if (lt.kind == 2) {
+    if (isEnumName(&((*c)), lt.nameStart, lt.nameLen)) {
+    return 0;
+    }
+    return 1;
+    }
+    return 0;
+}
 void emitEnumOperand(Comp* c, long long id, long long enStart, long long enLen) {
     Expr e = PlewArray_Expr_get((*c).exprs, (long long)(id));
     {
@@ -3287,9 +3312,14 @@ void genCond(Comp* c, long long id) {
     emitEnumTagCmp(&((*c)), lhs, rhs, op, 0);
     }
     else {
+    if (compareNeedsTrait(&((*c)), op, lhs)) {
+    plew_write((PlewString){"__plew_compare_requires_Eq_or_Ord", 33});
+    }
+    else {
     genExpr(&((*c)), lhs);
     plew_write(binOpStr(op));
     genExpr(&((*c)), rhs);
+    }
     }
     }
     }

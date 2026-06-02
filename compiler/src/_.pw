@@ -2231,11 +2231,15 @@ fn genExpr(c: inout Comp, id: U64) {
                 if isEnumEq(c: inout c, op: op, lhs: lhs) {
                     emitEnumTagCmp(c: inout c, lhs: lhs, rhs: rhs, op: op, outer: true)
                 } else {
-                    write(s: "(")
-                    genExpr(c: inout c, id: lhs)
-                    write(s: binOpStr(op: op))
-                    genExpr(c: inout c, id: rhs)
-                    write(s: ")")
+                    if compareNeedsTrait(c: inout c, op: op, lhs: lhs) {
+                        write(s: "__plew_compare_requires_Eq_or_Ord")
+                    } else {
+                        write(s: "(")
+                        genExpr(c: inout c, id: lhs)
+                        write(s: binOpStr(op: op))
+                        genExpr(c: inout c, id: rhs)
+                        write(s: ")")
+                    }
                 }
             }
         }
@@ -2536,6 +2540,31 @@ fn isEnumEq(c: inout Comp, op: I64, lhs: U64) -> Bool {
     return false
 }
 
+// Acceptance soundness: comparison operators (== != < <= > >=) are trait-backed
+// (Eq/Ord). The compiler hardcodes them for numbers, String `==`/`!=`, and
+// all-nullary enum `==`; applied to a struct or array there is no Eq/Ord, so it
+// must be a compile error rather than broken C. (Reached only after the
+// String-eq and enum-eq paths have been ruled out.)
+fn compareNeedsTrait(c: inout Comp, op: I64, lhs: U64) -> Bool {
+    if op < 50 {
+        return false
+    }
+    if op > 55 {
+        return false
+    }
+    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    if lt.kind == 3 {
+        return true
+    }
+    if lt.kind == 2 {
+        if isEnumName(c: inout c, start: lt.nameStart, len: lt.nameLen) {
+            return false
+        }
+        return true
+    }
+    return false
+}
+
 // Emit one operand of an enum tag comparison: a variant construction becomes
 // its tag index literal; any other enum value becomes `(expr).tag`.
 fn emitEnumOperand(c: inout Comp, id: U64, enStart: U64, enLen: U64) {
@@ -2604,9 +2633,13 @@ fn genCond(c: inout Comp, id: U64) {
                 if isEnumEq(c: inout c, op: op, lhs: lhs) {
                     emitEnumTagCmp(c: inout c, lhs: lhs, rhs: rhs, op: op, outer: false)
                 } else {
-                    genExpr(c: inout c, id: lhs)
-                    write(s: binOpStr(op: op))
-                    genExpr(c: inout c, id: rhs)
+                    if compareNeedsTrait(c: inout c, op: op, lhs: lhs) {
+                        write(s: "__plew_compare_requires_Eq_or_Ord")
+                    } else {
+                        genExpr(c: inout c, id: lhs)
+                        write(s: binOpStr(op: op))
+                        genExpr(c: inout c, id: rhs)
+                    }
                 }
             }
         }
