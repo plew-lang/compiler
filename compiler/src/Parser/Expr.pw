@@ -1,0 +1,468 @@
+// Part of the Plew compiler module (root: _.pw). Recursive-descent parser:
+// token stream -> arena AST (plus import/part directive handling).
+
+// ---- expression parser (precedence climbing) ----
+
+// Binary operator precedence (higher binds tighter). Spec order, low to high:
+// || < && < comparison < ?? < | < ^ < & < shift < +- < */%.
+// (`??` sits between comparison and `|`, per CLAUDE.md / spec/12.)
+fn binPrec(k: Kind) -> I64 {
+    return match k {
+        Kind.PipePipe => 1
+        Kind.AmpAmp => 2
+        Kind.EqEq => 3
+        Kind.Ne => 3
+        Kind.Lt => 3
+        Kind.Le => 3
+        Kind.Gt => 3
+        Kind.Ge => 3
+        Kind.Coalesce => 4
+        Kind.Pipe => 5
+        Kind.Caret => 6
+        Kind.Amp => 7
+        Kind.Shl => 8
+        Kind.Shr => 8
+        Kind.Plus => 9
+        Kind.Minus => 9
+        Kind.Star => 10
+        Kind.Slash => 10
+        Kind.Percent => 10
+        _ => 0
+    }
+}
+
+// Decode a character literal token `'…'` (span includes both quotes) to its
+// Unicode codepoint. Only a single scalar is allowed; multi-scalar (Grapheme)
+// literals are rejected (Grapheme type unimplemented). UTF-8 is decoded with the
+// canonical bitwise form (continuation bytes carry 6 bits each).
+fn charValue(c: inout Comp, t: Tok) -> I64 {
+    val contentLen: U64 = t.len - 2
+    if contentLen == 0 {
+        compileErrorAt(line: lineOf(c: inout c, offset: t.start), msg: "empty character literal")
+    }
+    val p: U64 = t.start + 1
+    val b0: U8 = c.bytes[p]
+    if b0 == '\\' {
+        if contentLen != 2 {
+            compileErrorAt(line: lineOf(c: inout c, offset: t.start), msg: "character literal must be a single scalar")
+        }
+        val e: U8 = c.bytes[p + 1]
+        if e == 'n' { return '\n' }
+        if e == 't' { return '\t' }
+        if e == 'r' { return '\r' }
+        if e == '0' { return '\0' }
+        // \\ \' \" and any other escape: the byte itself
+        return e
+    }
+    mut val consumed: U64 = 1
+    mut val value: I64 = 0
+    if b0 < 128 {
+        consumed = 1
+        value = b0
+    } else {
+        if b0 < 224 {
+            consumed = 2
+            value = ((b0 & 31) << 6) | (c.bytes[p + 1] & 63)
+        } else {
+            if b0 < 240 {
+                consumed = 3
+                value = ((b0 & 15) << 12) | ((c.bytes[p + 1] & 63) << 6) | (c.bytes[p + 2] & 63)
+            } else {
+                consumed = 4
+                value = ((b0 & 7) << 18) | ((c.bytes[p + 1] & 63) << 12) | ((c.bytes[p + 2] & 63) << 6) | (c.bytes[p + 3] & 63)
+            }
+        }
+    }
+    if contentLen != consumed {
+        compileErrorAt(line: lineOf(c: inout c, offset: t.start), msg: "multi-scalar character literal (Grapheme) is not yet supported")
+    }
+    return value
+}
+
+fn parsePrimary(c: inout Comp) -> U64 {
+    val k: Kind = c.curKind()
+    match k {
+        Kind.Int => {
+            val t: Tok = c.cur()
+            c.advance()
+            val v: I64 = c.tokenValue(t: t)
+            // optional type suffix: an integer-type name written immediately
+            // after the digits with no space (`5U64`, `1I32`). It gives a
+            // context-free literal its type (spec: no default type).
+            mut val sStart: U64 = 0
+            mut val sLen: U64 = 0
+            match c.curKind() {
+                Kind.Ident => {
+                    val st: Tok = c.cur()
+                    if st.start == t.start + t.len {
+                        if isIntType(c: inout c, start: st.start, len: st.len) {
+                            sStart = st.start
+                            sLen = st.len
+                            c.advance()
+                        }
+                    }
+                }
+                _ => {}
+            }
+            return c.pushExpr(e: <Expr.Int value=v offset=t.start isBool=false tyStart=sStart tyLen=sLen />)
+        }
+        Kind.Char => {
+            val t: Tok = c.cur()
+            c.advance()
+            val v: I64 = charValue(c: inout c, t: t)
+            return c.pushExpr(e: <Expr.Int value=v offset=t.start isBool=false tyStart=0 tyLen=0 />)
+        }
+        Kind.Ident => {
+            val t: Tok = c.cur()
+            match c.peekKind(off: 1) {
+                Kind.LParen => {
+                    c.advance()
+                    c.advance()
+                    val args: Array[Arg] = parseCallArgs(c: inout c)
+                    return c.pushExpr(e: <Expr.Call nameStart=t.start nameLen=t.len args=args />)
+                }
+                _ => {
+                    c.advance()
+                    return c.pushExpr(e: <Expr.Ident start=t.start len=t.len />)
+                }
+            }
+        }
+        Kind.KwTrue => {
+            val tt: Tok = c.cur()
+            c.advance()
+            return c.pushExpr(e: <Expr.Int value=1 offset=tt.start isBool=true tyStart=0 tyLen=0 />)
+        }
+        Kind.KwFalse => {
+            val tf: Tok = c.cur()
+            c.advance()
+            return c.pushExpr(e: <Expr.Int value=0 offset=tf.start isBool=true tyStart=0 tyLen=0 />)
+        }
+        Kind.LParen => {
+            c.advance()
+            val inner: U64 = parseExpr(c: inout c)
+            match c.curKind() {
+                Kind.RParen => { c.advance() }
+                _ => {}
+            }
+            return inner
+        }
+        Kind.KwFn => {
+            // closure literal `fn(params) -> ret { body }` (lambda-lifted).
+            c.advance()
+            val params: Array[Param] = parseParamList(c: inout c)
+            mut val hasRet: Bool = false
+            mut val retStart: U64 = 0
+            mut val retLen: U64 = 0
+            mut val retIsArray: Bool = false
+            mut val retRef: U64 = 0
+            match c.curKind() {
+                Kind.Arrow => {
+                    c.advance()
+                    hasRet = true
+                    val rty: PType = parseTypeTok(c: inout c)
+                    retStart = rty.start
+                    retLen = rty.len
+                    retIsArray = rty.isArray
+                    retRef = rty.ref
+                    recordArrayElem(c: inout c, ty: rty)
+                }
+                _ => {}
+            }
+            c.skipNewlines()
+            val body: U64 = parseBlock(c: inout c)
+            return c.pushExpr(e: <Expr.Closure params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body />)
+        }
+        Kind.Lt => {
+            return parseMake(c: inout c)
+        }
+        Kind.KwMatch => {
+            return parseMatchExpr(c: inout c)
+        }
+        Kind.KwIf => {
+            return parseIfExpr(c: inout c)
+        }
+        Kind.Str => {
+            val t: Tok = c.cur()
+            c.advance()
+            return c.pushExpr(e: <Expr.Str start=t.start len=t.len />)
+        }
+        Kind.LBracket => {
+            c.advance()
+            mut val elems: Array[U64] = []
+            while true {
+                c.skipNewlines()
+                match c.curKind() {
+                    Kind.RBracket => {
+                        c.advance()
+                        break
+                    }
+                    Kind.Eof => { break }
+                    _ => {
+                        val e: U64 = parseExpr(c: inout c)
+                        elems.append(e)
+                        match c.curKind() {
+                            Kind.Comma => { c.advance() }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            return c.pushExpr(e: <Expr.Array elems=elems />)
+        }
+        _ => {
+            val te: Tok = c.cur()
+            c.advance()
+            return c.pushExpr(e: <Expr.Int value=0 offset=te.start isBool=false tyStart=0 tyLen=0 />)
+        }
+    }
+}
+
+fn parseUnary(c: inout Comp) -> U64 {
+    // `try <postfix-chain>` (Result early return): prefix, binds the whole
+    // postfix chain, stronger than binary operators. `try` is an identifier.
+    if c.identIs(kw: "try") {
+        c.advance()
+        val inner: U64 = parsePostfix(c: inout c)
+        return c.pushExpr(e: <Expr.Try expr=inner />)
+    }
+    val k: Kind = c.curKind()
+    match k {
+        Kind.Minus => {
+            c.advance()
+            val o: U64 = parseUnary(c: inout c)
+            return c.pushExpr(e: <Expr.Unary op=57 operand=o />)
+        }
+        Kind.Bang => {
+            c.advance()
+            val o: U64 = parseUnary(c: inout c)
+            return c.pushExpr(e: <Expr.Unary op=63 operand=o />)
+        }
+        Kind.Tilde => {
+            c.advance()
+            val o: U64 = parseUnary(c: inout c)
+            return c.pushExpr(e: <Expr.Unary op=79 operand=o />)
+        }
+        _ => { return parsePostfix(c: inout c) }
+    }
+}
+
+// Postfix chain: `.field` accesses (index `[]` comes later).
+fn parsePostfix(c: inout Comp) -> U64 {
+    mut val e: U64 = parsePrimary(c: inout c)
+    while true {
+        match c.curKind() {
+            Kind.Dot => {
+                c.advance()
+                val nameTok: Tok = c.cur()
+                c.advance()
+                match c.curKind() {
+                    Kind.LParen => {
+                        c.advance()
+                        val args: Array[Arg] = parseCallArgs(c: inout c)
+                        e = c.pushExpr(e: <Expr.Method recv=e nameStart=nameTok.start nameLen=nameTok.len args=args />)
+                    }
+                    _ => {
+                        e = c.pushExpr(e: <Expr.Field base=e nameStart=nameTok.start nameLen=nameTok.len />)
+                    }
+                }
+            }
+            Kind.LBracket => {
+                c.advance()
+                val idx: U64 = parseExpr(c: inout c)
+                match c.curKind() {
+                    Kind.RBracket => { c.advance() }
+                    _ => {}
+                }
+                e = c.pushExpr(e: <Expr.Index base=e index=idx />)
+            }
+            Kind.Arrow => {
+                // `ref->field`: access the pointee of a Ref[T].
+                c.advance()
+                val nameTok: Tok = c.cur()
+                c.advance()
+                e = c.pushExpr(e: <Expr.Arrow base=e nameStart=nameTok.start nameLen=nameTok.len />)
+            }
+            Kind.KwAs => {
+                c.advance()
+                val ty: PType = parseTypeTok(c: inout c)
+                e = c.pushExpr(e: <Expr.Cast operand=e tyStart=ty.start tyLen=ty.len ty=ty.ref />)
+            }
+            _ => { break }
+        }
+    }
+    return e
+}
+
+// JSX construction `<Type field=expr ... />`. Current token is `<`. v3 handles
+// struct construction; a dotted `.Variant` path (enum) is consumed but not yet
+// modeled.
+fn parseMake(c: inout Comp) -> U64 {
+    c.advance()
+    val typeTok: Tok = c.cur()
+    c.advance()
+    // optional generic type arguments `<Box[I32] ...>` / `<Optional[I32].Some ...>`.
+    // Build a TypeRef for the instantiation; 0 (none) for a non-generic type.
+    mut val tyRef: U64 = 0
+    match c.curKind() {
+        Kind.LBracket => {
+            c.advance()
+            mut val targs: Array[U64] = []
+            mut val first: Bool = true
+            while true {
+                match c.curKind() {
+                    Kind.RBracket => { break }
+                    Kind.Eof => { break }
+                    _ => {}
+                }
+                if first {
+                } else {
+                    match c.curKind() {
+                        Kind.Comma => { c.advance() }
+                        _ => {}
+                    }
+                }
+                first = false
+                val arg: PType = parseTypeTok(c: inout c)
+                targs.append(arg.ref)
+            }
+            match c.curKind() {
+                Kind.RBracket => { c.advance() }
+                _ => {}
+            }
+            tyRef = c.pushType(t: <TypeRef nameStart=typeTok.start nameLen=typeTok.len args=targs />)
+        }
+        _ => {}
+    }
+    mut val variantStart: U64 = 0
+    mut val variantLen: U64 = 0
+    mut val isEnum: Bool = false
+    match c.curKind() {
+        Kind.Dot => {
+            c.advance()
+            val vTok: Tok = c.cur()
+            c.advance()
+            variantStart = vTok.start
+            variantLen = vTok.len
+            isEnum = true
+        }
+        _ => {}
+    }
+    mut val fields: Array[MakeField] = []
+    while true {
+        c.skipNewlines()
+        val k: Kind = c.curKind()
+        match k {
+            Kind.SlashGt => {
+                c.advance()
+                break
+            }
+            Kind.Gt => {
+                c.advance()
+                break
+            }
+            Kind.Eof => { break }
+            Kind.Ident => {
+                val fTok: Tok = c.cur()
+                c.advance()
+                match c.curKind() {
+                    Kind.Eq => { c.advance() }
+                    _ => {}
+                }
+                val v: U64 = parseExpr(c: inout c)
+                fields.append(<MakeField nameStart=fTok.start nameLen=fTok.len value=v />)
+            }
+            _ => { c.advance() }
+        }
+    }
+    return c.pushExpr(e: <Expr.Make typeStart=typeTok.start typeLen=typeTok.len variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=tyRef fields=fields />)
+}
+
+fn parseBin(c: inout Comp, minPrec: I64) -> U64 {
+    mut val left: U64 = parseUnary(c: inout c)
+    while true {
+        val k: Kind = c.curKind()
+        val prec: I64 = binPrec(k: k)
+        if prec == 0 {
+            break
+        }
+        if prec < minPrec {
+            break
+        }
+        // `??` is right-associative and lowers to a dedicated Coalesce node.
+        match k {
+            Kind.Coalesce => {
+                c.advance()
+                val rhs: U64 = parseBin(c: inout c, minPrec: prec)
+                left = c.pushExpr(e: <Expr.Coalesce opt=left deflt=rhs />)
+            }
+            _ => {
+                val op: I64 = kindCode(k: k)
+                c.advance()
+                val right: U64 = parseBin(c: inout c, minPrec: prec + 1)
+                left = c.pushExpr(e: <Expr.Binary op=op lhs=left rhs=right />)
+            }
+        }
+    }
+    return left
+}
+
+fn parseExpr(c: inout Comp) -> U64 {
+    return parseBin(c: inout c, minPrec: 1)
+}
+
+// Parse a call's argument list (current token is just past `(`). Labels are
+// accepted (`label: expr`) and dropped (positional C emission); an optional
+// `inout` before the expression marks a by-reference argument.
+fn parseCallArgs(c: inout Comp) -> Array[Arg] {
+    mut val args: Array[Arg] = []
+    while true {
+        c.skipNewlines()
+        val k: Kind = c.curKind()
+        match k {
+            Kind.RParen => {
+                c.advance()
+                break
+            }
+            Kind.Eof => { break }
+            _ => {
+                // optional argument label `name:`
+                mut val labelStart: U64 = 0
+                mut val labelLen: U64 = 0
+                mut val hasLabel: Bool = false
+                match c.curKind() {
+                    Kind.Ident => {
+                        match c.peekKind(off: 1) {
+                            Kind.Colon => {
+                                val lt: Tok = c.cur()
+                                labelStart = lt.start
+                                labelLen = lt.len
+                                hasLabel = true
+                                c.advance()
+                                c.advance()
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+                // optional `inout` marker
+                mut val isInout: Bool = false
+                match c.curKind() {
+                    Kind.KwInout => {
+                        c.advance()
+                        isInout = true
+                    }
+                    _ => {}
+                }
+                val e: U64 = parseExpr(c: inout c)
+                args.append(<Arg expr=e isInout=isInout labelStart=labelStart labelLen=labelLen hasLabel=hasLabel />)
+                match c.curKind() {
+                    Kind.Comma => { c.advance() }
+                    _ => {}
+                }
+            }
+        }
+    }
+    return args
+}
+

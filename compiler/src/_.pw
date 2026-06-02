@@ -13,7 +13,9 @@ import @Std/Process with { argCount, argAt, exit }
 
 part ./Lexer
 part ./Ast
-part ./Parser
+part ./Parser/Expr
+part ./Parser/Stmt
+part ./Parser/Decl
 part ./Codegen/Emit
 part ./Codegen/Resolve
 part ./Codegen/Ops
