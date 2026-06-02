@@ -33,15 +33,15 @@ fn charValue(c: inout Comp, t: Tok) -> I64 {
     }
     val p: U64 = t.start + 1
     val b0: U8 = c.bytes[p]
-    if b0 == 92 {
+    if b0 == '\\' {
         if contentLen != 2 {
             compileErrorAt(line: lineOf(c: inout c, offset: t.start), msg: "character literal must be a single scalar")
         }
         val e: U8 = c.bytes[p + 1]
-        if e == 110 { return 10 }
-        if e == 116 { return 9 }
-        if e == 114 { return 13 }
-        if e == 48 { return 0 }
+        if e == 'n' { return '\n' }
+        if e == 't' { return '\t' }
+        if e == 'r' { return '\r' }
+        if e == '0' { return '\0' }
         // \\ \' \" and any other escape: the byte itself
         return e
     }

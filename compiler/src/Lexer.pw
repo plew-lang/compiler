@@ -238,19 +238,19 @@ fn lastCanEnd(lx: inout Lexer) -> Bool {
 fn lex(lx: inout Lexer) {
     while lx.pos < lx.bytes.count {
         val b: U8 = at(lx: inout lx, off: 0)
-        if b == 32 {
+        if b == ' ' {
             lx.pos += 1
             continue
         }
-        if b == 9 {
+        if b == '\t' {
             lx.pos += 1
             continue
         }
-        if b == 13 {
+        if b == '\r' {
             lx.pos += 1
             continue
         }
-        if b == 10 {
+        if b == '\n' {
             if lx.depth > 0 {
                 lx.pos += 1
             } else {
@@ -266,10 +266,10 @@ fn lex(lx: inout Lexer) {
             }
             continue
         }
-        if b == 47 {
-            if at(lx: inout lx, off: 1) == 47 {
+        if b == '/' {
+            if at(lx: inout lx, off: 1) == '/' {
                 while lx.pos < lx.bytes.count {
-                    if at(lx: inout lx, off: 0) == 10 {
+                    if at(lx: inout lx, off: 0) == '\n' {
                         break
                     }
                     lx.pos += 1
@@ -305,16 +305,16 @@ fn lex(lx: inout Lexer) {
             emit(lx: inout lx, k: k, start: start, len: len)
             continue
         }
-        if b == 34 {
+        if b == '"' {
             val start: U64 = lx.pos
             mut val j: U64 = lx.pos + 1
             while j < lx.bytes.count {
                 // a backslash escapes the next byte (so `\"` does not close)
-                if lx.bytes[j] == 92 {
+                if lx.bytes[j] == '\\' {
                     j += 2
                     continue
                 }
-                if lx.bytes[j] == 34 {
+                if lx.bytes[j] == '"' {
                     j += 1
                     break
                 }
@@ -323,16 +323,16 @@ fn lex(lx: inout Lexer) {
             emit(lx: inout lx, k: <Kind.Str />, start: start, len: j - start)
             continue
         }
-        if b == 39 {
+        if b == '\'' {
             // character literal `'…'` (one scalar; backslash escapes the next byte)
             val start: U64 = lx.pos
             mut val j: U64 = lx.pos + 1
             while j < lx.bytes.count {
-                if lx.bytes[j] == 92 {
+                if lx.bytes[j] == '\\' {
                     j += 2
                     continue
                 }
-                if lx.bytes[j] == 39 {
+                if lx.bytes[j] == '\'' {
                     j += 1
                     break
                 }
@@ -342,14 +342,14 @@ fn lex(lx: inout Lexer) {
             continue
         }
         val b2: U8 = at(lx: inout lx, off: 1)
-        if b == 46 {
-            if b2 == 46 {
+        if b == '.' {
+            if b2 == '.' {
                 val b3: U8 = at(lx: inout lx, off: 2)
-                if b3 == 60 {
+                if b3 == '<' {
                     emit(lx: inout lx, k: <Kind.DotDotLt />, start: lx.pos, len: 3)
                     continue
                 }
-                if b3 == 61 {
+                if b3 == '=' {
                     emit(lx: inout lx, k: <Kind.DotDotEq />, start: lx.pos, len: 3)
                     continue
                 }
@@ -357,135 +357,135 @@ fn lex(lx: inout Lexer) {
             emit(lx: inout lx, k: <Kind.Dot />, start: lx.pos, len: 1)
             continue
         }
-        if b == 61 {
-            if b2 == 61 {
+        if b == '=' {
+            if b2 == '=' {
                 emit(lx: inout lx, k: <Kind.EqEq />, start: lx.pos, len: 2)
                 continue
             }
-            if b2 == 62 {
+            if b2 == '>' {
                 emit(lx: inout lx, k: <Kind.FatArrow />, start: lx.pos, len: 2)
                 continue
             }
             emit(lx: inout lx, k: <Kind.Eq />, start: lx.pos, len: 1)
             continue
         }
-        if b == 33 {
-            if b2 == 61 {
+        if b == '!' {
+            if b2 == '=' {
                 emit(lx: inout lx, k: <Kind.Ne />, start: lx.pos, len: 2)
                 continue
             }
             emit(lx: inout lx, k: <Kind.Bang />, start: lx.pos, len: 1)
             continue
         }
-        if b == 60 {
-            if b2 == 61 {
+        if b == '<' {
+            if b2 == '=' {
                 emit(lx: inout lx, k: <Kind.Le />, start: lx.pos, len: 2)
                 continue
             }
             emit(lx: inout lx, k: <Kind.Lt />, start: lx.pos, len: 1)
             continue
         }
-        if b == 62 {
-            if b2 == 61 {
+        if b == '>' {
+            if b2 == '=' {
                 emit(lx: inout lx, k: <Kind.Ge />, start: lx.pos, len: 2)
                 continue
             }
             emit(lx: inout lx, k: <Kind.Gt />, start: lx.pos, len: 1)
             continue
         }
-        if b == 43 {
-            if b2 == 61 {
+        if b == '+' {
+            if b2 == '=' {
                 emit(lx: inout lx, k: <Kind.PlusEq />, start: lx.pos, len: 2)
                 continue
             }
             emit(lx: inout lx, k: <Kind.Plus />, start: lx.pos, len: 1)
             continue
         }
-        if b == 45 {
-            if b2 == 61 {
+        if b == '-' {
+            if b2 == '=' {
                 emit(lx: inout lx, k: <Kind.MinusEq />, start: lx.pos, len: 2)
                 continue
             }
-            if b2 == 62 {
+            if b2 == '>' {
                 emit(lx: inout lx, k: <Kind.Arrow />, start: lx.pos, len: 2)
                 continue
             }
             emit(lx: inout lx, k: <Kind.Minus />, start: lx.pos, len: 1)
             continue
         }
-        if b == 42 {
-            if b2 == 61 {
+        if b == '*' {
+            if b2 == '=' {
                 emit(lx: inout lx, k: <Kind.StarEq />, start: lx.pos, len: 2)
                 continue
             }
             emit(lx: inout lx, k: <Kind.Star />, start: lx.pos, len: 1)
             continue
         }
-        if b == 47 {
-            if b2 == 61 {
+        if b == '/' {
+            if b2 == '=' {
                 emit(lx: inout lx, k: <Kind.SlashEq />, start: lx.pos, len: 2)
                 continue
             }
-            if b2 == 62 {
+            if b2 == '>' {
                 emit(lx: inout lx, k: <Kind.SlashGt />, start: lx.pos, len: 2)
                 continue
             }
             emit(lx: inout lx, k: <Kind.Slash />, start: lx.pos, len: 1)
             continue
         }
-        if b == 37 {
-            if b2 == 61 {
+        if b == '%' {
+            if b2 == '=' {
                 emit(lx: inout lx, k: <Kind.PercentEq />, start: lx.pos, len: 2)
                 continue
             }
             emit(lx: inout lx, k: <Kind.Percent />, start: lx.pos, len: 1)
             continue
         }
-        if b == 38 {
-            if b2 == 38 {
+        if b == '&' {
+            if b2 == '&' {
                 emit(lx: inout lx, k: <Kind.AmpAmp />, start: lx.pos, len: 2)
                 continue
             }
         }
-        if b == 124 {
-            if b2 == 124 {
+        if b == '|' {
+            if b2 == '|' {
                 emit(lx: inout lx, k: <Kind.PipePipe />, start: lx.pos, len: 2)
                 continue
             }
         }
-        if b == 40 {
+        if b == '(' {
             emit(lx: inout lx, k: <Kind.LParen />, start: lx.pos, len: 1)
             lx.depth += 1
             continue
         }
-        if b == 41 {
+        if b == ')' {
             emit(lx: inout lx, k: <Kind.RParen />, start: lx.pos, len: 1)
             lx.depth -= 1
             continue
         }
-        if b == 91 {
+        if b == '[' {
             emit(lx: inout lx, k: <Kind.LBracket />, start: lx.pos, len: 1)
             lx.depth += 1
             continue
         }
-        if b == 93 {
+        if b == ']' {
             emit(lx: inout lx, k: <Kind.RBracket />, start: lx.pos, len: 1)
             lx.depth -= 1
             continue
         }
-        if b == 123 {
+        if b == '{' {
             emit(lx: inout lx, k: <Kind.LBrace />, start: lx.pos, len: 1)
             continue
         }
-        if b == 125 {
+        if b == '}' {
             emit(lx: inout lx, k: <Kind.RBrace />, start: lx.pos, len: 1)
             continue
         }
-        if b == 44 {
+        if b == ',' {
             emit(lx: inout lx, k: <Kind.Comma />, start: lx.pos, len: 1)
             continue
         }
-        if b == 58 {
+        if b == ':' {
             emit(lx: inout lx, k: <Kind.Colon />, start: lx.pos, len: 1)
             continue
         }
