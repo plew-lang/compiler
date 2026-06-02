@@ -29,7 +29,9 @@
 1. ✅ **generics 完了**。残 additive：generic free 関数（呼び出し位置推論＋明示 `id[I32](x)` の Go 式判別）・`map[U]`（メソッド own 型パラメータ＋推移的インスタンス化＝単相化中の発見を worklist で fixpoint）。
 2. ✅ **コアライブラリ（純 Plew）大筋完了**（`@Std/Core`・`try`/`??`・`assert`）。残り：**可謬 I/O（`readFile`→`Result`）→ S2 を閉じる**（ただし std モジュールが intrinsic を使う際の import ゲート整合に注意）・ambient 化・`try` の From 変換・`?.`。
 3. ✅ **CoW（値意味論）＝観測可能な範囲は完成**。残り（deferred・hidden cost）：**正確な refcount＋スコープ解放を伴う完全 CoW（遅延コピー＋ leak 解消）＝ARC とセット**。`inout` と CoW の相互作用は正確な解放が前提。
-4. 🔄 **ARC ＋ `Ref`/`WeakRef`**：✅ 基本 `Ref[T]`。残り（deferred）：**ARC retain/release＋`deinit`**＝**スコープ解放追跡（全 exit パス）が要る大物**・`WeakRef`＋`upgrade()`（refcount 前提）・循環回収（Bacon–Rajan・spec/14）・bare `<Ref value=e/>` 型推論（scalar 幅問題ゆえ明示 `[T]` 必須）。
+4. 🔄 **ARC ＋ `Ref`/`WeakRef`**：✅ 基本 `Ref[T]`。✅ **スコープフレーム基盤**＝`genBlock`/`for`/`match` 入口で `scopeMark`→出口で `scopeExit`（`emitScopeDrops`〔今は no-op〕＋`popLocals`）。名前解決を真の lexical scope に厳格化（回帰テスト `scope_shadow`）。✅ **ASan ハーネス**（`ASAN=1 ./test.sh`・free 導入時の UAF/double-free を機械検証・leak 検出は free 後に `detect_leaks=1`）。
+   - 次＝**`emitScopeDrops` に実 release を結線**。**refcount が要る**（scope-based free 単独では不可）：eager-copy で各束縛は別バッファを持つが、**by-value 引数は C 構造体コピーで data ポインタを caller と共有**＝scope 末で素朴に free すると double-free。→ ヒープ確保（Array バッファ・`Ref` 箱）に refcount ヘッダ・retain/release・0 で free。`return`/`break`/`continue` の早期 exit でも囲うスコープを drop（spec: panic は drop 不走）。
+   - その後：`deinit`（unique・破棄順＝型本体→フィールド宣言順）・`WeakRef`＋`upgrade()`・循環回収（Ref グラフ限定サイクルコレクタ・spec/14）・bare `<Ref value=e/>` 型推論（明示 `[T]` 必須）。
 5. 🔄 **イベントループ（async/await/spawn）**（最大・最後）。✅ 土台＝関数値＋非キャプチャクロージャ。残り：
    - **クロージャのキャプチャ**＝外側ローカル参照（`makeCounter`）。**env＋fat closure（{fn ptr, env ptr}）＋エスケープでキャプチャ変数をヒープ化**。現状の bare 関数ポインタ表現の根本変更で、関数型/呼び出し/全経路に波及（相互依存が強く incremental green が困難）＝**`spawn { block }` の前提**。spec は参照キャプチャ（Swift 流・`mut val` 共有可変）。
    - **spawn**＝pthread。境界で CoW 値は eager 実体化・`Ref` は越えられない（spec/14）。`JoinHandle[T]`/`join()→Promise[T]` は async 機構依存（blocking join に簡略化するなら言語表面の判断＝要確認）。
