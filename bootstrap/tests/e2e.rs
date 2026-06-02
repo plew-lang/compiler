@@ -339,6 +339,29 @@ fn selfhost_plewc_compiles_a_plew_program() {
 }
 
 #[test]
+fn selfhost_plewc_compiles_functions_and_calls() {
+    // plewc.pw v2: multiple top-level functions, by-value parameters, user
+    // function calls (labels dropped), return values, recursion, and forward
+    // prototypes. Same three-stage check as above.
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../selfhost/plewc.pw");
+    let src = std::fs::read_to_string(path).expect("read selfhost/plewc.pw");
+    let program = "fn add(a: I64, b: I64) -> I64 {\n    return a + b\n}\nfn fib(n: I64) -> I64 {\n    if n < 2 {\n        return n\n    }\n    return add(a: fib(n: n - 1), b: fib(n: n - 2))\n}\nfn main() {\n    print(add(a: 3, b: 4))\n    print(fib(n: 10))\n}\n";
+    let emitted_c = build_and_run_stdin(&src, "selfhost_plewc_fn", program);
+    assert!(emitted_c.contains("long long fib(long long n)"), "emitted C was:\n{emitted_c}");
+
+    let c_path = std::env::temp_dir().join(format!("plew_plewcfn_{}.c", std::process::id()));
+    let out_bin = std::env::temp_dir().join(format!("plew_plewcfn_{}", std::process::id()));
+    std::fs::write(&c_path, &emitted_c).expect("write emitted C");
+    let status = Command::new("clang").arg(&c_path).arg("-o").arg(&out_bin).status().expect("clang");
+    assert!(status.success(), "clang failed on emitted C:\n{emitted_c}");
+    let output = Command::new(&out_bin).output().expect("run emitted binary");
+    let _ = std::fs::remove_file(&c_path);
+    let _ = std::fs::remove_file(&out_bin);
+    // add(3,4)=7, fib(10)=55
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n55\n");
+}
+
+#[test]
 fn builds_and_runs_write_byte() {
     // writeByte emits a single raw byte (putchar). The self-hosted compiler
     // uses it to echo identifier text out of source spans (no substring).

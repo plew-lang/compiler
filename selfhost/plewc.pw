@@ -560,6 +560,7 @@ enum Expr {
     Ident { start: U64, len: U64 }
     Unary { op: I64, operand: U64 }
     Binary { op: I64, lhs: U64, rhs: U64 }
+    Call { nameStart: U64, nameLen: U64, args: Array[U64] }
 }
 
 enum Stmt {
@@ -576,6 +577,19 @@ struct Block {
     val stmts: Array[U64]
 }
 
+struct Param {
+    val nameStart: U64
+    val nameLen: U64
+}
+
+struct Func {
+    val nameStart: U64
+    val nameLen: U64
+    val params: Array[Param]
+    val hasRet: Bool
+    val body: U64
+}
+
 struct Comp {
     val bytes: Array[U8]
     val toks: Array[Tok]
@@ -583,6 +597,10 @@ struct Comp {
     mut val exprs: Array[Expr]
     mut val stmts: Array[Stmt]
     mut val blocks: Array[Block]
+    mut val funcs: Array[Func]
+    // set per-function during codegen so `return` lowers correctly
+    mut val curIsMain: Bool
+    mut val curRetVoid: Bool
 }
 
 // ---- cursor helpers ----
@@ -677,8 +695,18 @@ fn parsePrimary(c: inout Comp) -> U64 {
         }
         Kind.Ident => {
             val t: Tok = cur(c: inout c)
-            advance(c: inout c)
-            return pushExpr(c: inout c, e: <Expr.Ident start=t.start len=t.len />)
+            match peekKind(c: inout c, off: 1) {
+                Kind.LParen => {
+                    advance(c: inout c)
+                    advance(c: inout c)
+                    val args: Array[U64] = parseCallArgs(c: inout c)
+                    return pushExpr(c: inout c, e: <Expr.Call nameStart=t.start nameLen=t.len args=args />)
+                }
+                _ => {
+                    advance(c: inout c)
+                    return pushExpr(c: inout c, e: <Expr.Ident start=t.start len=t.len />)
+                }
+            }
         }
         Kind.KwTrue => {
             advance(c: inout c)
@@ -742,6 +770,45 @@ fn parseBin(c: inout Comp, minPrec: I64) -> U64 {
 
 fn parseExpr(c: inout Comp) -> U64 {
     return parseBin(c: inout c, minPrec: 1)
+}
+
+// Parse a call's argument list (current token is just past `(`). Labels are
+// accepted (`label: expr`) and dropped — stage0-style positional C emission.
+fn parseCallArgs(c: inout Comp) -> Array[U64] {
+    mut val args: Array[U64] = []
+    while true {
+        skipNewlines(c: inout c)
+        val k: Kind = curKind(c: inout c)
+        match k {
+            Kind.RParen => {
+                advance(c: inout c)
+                break
+            }
+            Kind.Eof => { break }
+            _ => {
+                // optional argument label `name:`
+                match curKind(c: inout c) {
+                    Kind.Ident => {
+                        match peekKind(c: inout c, off: 1) {
+                            Kind.Colon => {
+                                advance(c: inout c)
+                                advance(c: inout c)
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+                val e: U64 = parseExpr(c: inout c)
+                args.append(e)
+                match curKind(c: inout c) {
+                    Kind.Comma => { advance(c: inout c) }
+                    _ => {}
+                }
+            }
+        }
+    }
+    return args
 }
 
 // ---- statement parser ----
@@ -926,6 +993,74 @@ fn parseBlock(c: inout Comp) -> U64 {
     return id
 }
 
+// ---- declaration parser ----
+
+// `fn name ( params ) [-> ret] { body }`. v2 params are by-value `name: Type`
+// (type skipped, all int64_t); labels equal names.
+fn parseFunc(c: inout Comp) {
+    advance(c: inout c)
+    val nameTok: Tok = cur(c: inout c)
+    advance(c: inout c)
+    mut val params: Array[Param] = []
+    match curKind(c: inout c) {
+        Kind.LParen => {
+            advance(c: inout c)
+            while true {
+                skipNewlines(c: inout c)
+                val k: Kind = curKind(c: inout c)
+                match k {
+                    Kind.RParen => {
+                        advance(c: inout c)
+                        break
+                    }
+                    Kind.Eof => { break }
+                    _ => {
+                        val pTok: Tok = cur(c: inout c)
+                        advance(c: inout c)
+                        match curKind(c: inout c) {
+                            Kind.Colon => {
+                                advance(c: inout c)
+                                skipType(c: inout c)
+                            }
+                            _ => {}
+                        }
+                        params.append(<Param nameStart=pTok.start nameLen=pTok.len />)
+                        match curKind(c: inout c) {
+                            Kind.Comma => { advance(c: inout c) }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    mut val hasRet: Bool = false
+    match curKind(c: inout c) {
+        Kind.Arrow => {
+            advance(c: inout c)
+            hasRet = true
+            skipType(c: inout c)
+        }
+        _ => {}
+    }
+    skipNewlines(c: inout c)
+    val body: U64 = parseBlock(c: inout c)
+    c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len params=params hasRet=hasRet body=body />)
+}
+
+fn parseProgram(c: inout Comp) {
+    while true {
+        skipNewlines(c: inout c)
+        val k: Kind = curKind(c: inout c)
+        match k {
+            Kind.KwFn => { parseFunc(c: inout c) }
+            Kind.Eof => { break }
+            _ => { advance(c: inout c) }
+        }
+    }
+}
+
 // ---- C code generation ----
 
 fn digitStr(d: I64) -> String {
@@ -1010,6 +1145,19 @@ fn genExpr(c: inout Comp, id: U64) {
             genExpr(c: inout c, id: rhs)
             write(s: ")")
         }
+        Expr.Call { val nameStart, val nameLen, val args } => {
+            writeSpan(c: inout c, start: nameStart, len: nameLen)
+            write(s: "(")
+            mut val i: U64 = 0
+            while i < args.count {
+                if i > 0 {
+                    write(s: ", ")
+                }
+                genExpr(c: inout c, id: args[i])
+                i += 1
+            }
+            write(s: ")")
+        }
     }
 }
 
@@ -1041,7 +1189,21 @@ fn genStmt(c: inout Comp, id: U64) {
             write(s: ";\n")
         }
         Stmt.Return { val value, val hasValue } => {
-            write(s: "    return 0;\n")
+            if c.curIsMain {
+                write(s: "    return 0;\n")
+            } else {
+                if c.curRetVoid {
+                    write(s: "    return;\n")
+                } else {
+                    write(s: "    return ")
+                    if hasValue {
+                        genExpr(c: inout c, id: value)
+                    } else {
+                        write(s: "0")
+                    }
+                    write(s: ";\n")
+                }
+            }
         }
         Stmt.If { val cond, val thenBlk, val elseBlk, val hasElse } => {
             write(s: "    if (")
@@ -1075,40 +1237,89 @@ fn genBlock(c: inout Comp, id: U64) {
     }
 }
 
+fn nameIsMain(c: inout Comp, f: Func) -> Bool {
+    return rangeEquals(bytes: c.bytes, start: f.nameStart, len: f.nameLen, kw: "main")
+}
+
+// Emit a C function signature (no trailing `;` or `{`). `main` is special:
+// `int main(void)`. Other functions return `long long` (with `-> ret`) or
+// `void`; every parameter is `long long` (v2 ignores declared types).
+fn genSignature(c: inout Comp, f: Func) {
+    if nameIsMain(c: inout c, f: f) {
+        write(s: "int main(void)")
+        return
+    }
+    if f.hasRet {
+        write(s: "long long ")
+    } else {
+        write(s: "void ")
+    }
+    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+    write(s: "(")
+    val params: Array[Param] = f.params
+    if params.count == 0 {
+        write(s: "void")
+    } else {
+        mut val i: U64 = 0
+        while i < params.count {
+            if i > 0 {
+                write(s: ", ")
+            }
+            write(s: "long long ")
+            val p: Param = params[i]
+            writeSpan(c: inout c, start: p.nameStart, len: p.nameLen)
+            i += 1
+        }
+    }
+    write(s: ")")
+}
+
+fn genFunc(c: inout Comp, fi: U64) {
+    val f: Func = c.funcs[fi]
+    val isMain: Bool = nameIsMain(c: inout c, f: f)
+    c.curIsMain = isMain
+    if f.hasRet {
+        c.curRetVoid = false
+    } else {
+        c.curRetVoid = true
+    }
+    genSignature(c: inout c, f: f)
+    write(s: " {\n")
+    genBlock(c: inout c, id: f.body)
+    if isMain {
+        write(s: "    return 0;\n")
+    }
+    write(s: "}\n")
+}
+
 // ---- driver ----
 //
-// v1 compiles a single top-level function's body into C `main` (the function's
-// own name is ignored). Reads Plew from stdin, writes C to stdout.
+// Reads a Plew program from stdin (top-level `fn` declarations), parses it into
+// an arena AST, and writes a C translation to stdout: forward prototypes for
+// every non-main function, then each function body. `main` becomes C `main`.
 
 fn main() {
     val src: String = readStdin()
     mut val lx: Lexer = <Lexer bytes=src.bytes pos=0 toks=[] depth=0 />
     lex(lx: inout lx)
-    mut val c: Comp = <Comp bytes=src.bytes toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] />
-    skipNewlines(c: inout c)
-    // `fn <name> ( ... ) [-> ret]` then `{`. Skip the header up to the body.
-    match curKind(c: inout c) {
-        Kind.KwFn => { advance(c: inout c) }
-        _ => {}
-    }
-    // function name
-    match curKind(c: inout c) {
-        Kind.Ident => { advance(c: inout c) }
-        _ => {}
-    }
-    // skip everything up to the opening brace of the body
-    while true {
-        val k: Kind = curKind(c: inout c)
-        match k {
-            Kind.LBrace => { break }
-            Kind.Eof => { break }
-            _ => { advance(c: inout c) }
-        }
-    }
-    val body: U64 = parseBlock(c: inout c)
+    mut val c: Comp = <Comp bytes=src.bytes toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] curIsMain=false curRetVoid=false />
+    parseProgram(c: inout c)
     write(s: "#include <stdio.h>\n")
-    write(s: "int main(void) {\n")
-    genBlock(c: inout c, id: body)
-    write(s: "    return 0;\n")
-    write(s: "}\n")
+    // prototypes (skip main)
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if nameIsMain(c: inout c, f: f) {
+        } else {
+            genSignature(c: inout c, f: f)
+            write(s: ";\n")
+        }
+        i += 1
+    }
+    // bodies
+    mut val j: U64 = 0
+    while j < c.funcs.count {
+        genFunc(c: inout c, fi: j)
+        j += 1
+    }
 }
