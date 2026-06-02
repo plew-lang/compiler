@@ -3,3 +3,7 @@ book/
 
 # Rust / cargo build output
 /bootstrap/target/
+
+# selfhost build artifacts (stage0 emits a binary + .c next to each .pw)
+selfhost/*
+!selfhost/*.pw
