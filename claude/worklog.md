@@ -63,11 +63,11 @@ manifest は **`Plew.toml`**（spec 暫定名・TOML・src 既定 `src/`・`/` �
 
 意味論の hidden-meaning は大半解消済み（整数幅・match・ラベル・診断）。残りは小さく additive。**拠り所「意味は最優先・コストは裏で後回し可」に照らし、leak ランタイムは hidden-cost ゆえ後回しでよい**。大物は以下の順で（合意済み）：
 
-1. **generics**（全ての門）＝型パラメータを struct/enum/fn に＋一般単相化（`Array[E]` 専用ハードコードを一般機構へ）。境界なし（trait 境界は traits と一緒に後段）。**`Ref[T]`/`Promise[T]`/`Optional[T]`/`Result[T,E]` が全部これに依存**。今の C トランスパイル上で完結でき、後の CoW は additive。
-2. **本物のコアライブラリ（純 Plew）**＝🔄 着手済。✅ **I3 完了**（`@Std/X`→`dirname(argv[0])/std/X.pw`・`@` は Unknown トークン長1・collectParts が捕捉・resolveImport が `@Std/` 解決）。✅ **`@Std/Core` に `Optional`/`Result` を generic enum＋メソッド（isSome/isNone/unwrapOr/unwrap・isOk/isErr/unwrapOr/unwrap）で実装**＝`compiler/std/Core.pw`・`import @Std/Core` でロード（`tests/run/core_lib`）。残り：**`try`＋可謬 I/O（`readFile`→`Result`）→ S2 を閉じる**、ambient 化（現状は明示 import・[autonomous-decisions.md](autonomous-decisions.md) 参照）。
-3. **CoW**（値意味論・核の de-risk・以後コードがアリーナ規律から解放）。traits 不要。
-4. **ARC ＋ `Ref`/`WeakRef`**（共有可変＋循環回収・generics 必要）。
-5. **イベントループ（async/await/spawn）**（最大・`Promise[T]` 依存・最後）。
+1. ✅ **generics 完了**＝型パラメータ struct/enum/fn＋単相化（G1〜G3・generic struct/enum/メソッド end-to-end・タグ `generics-data`/`generics-methods`）。残り additive：generic free 関数・`map[U]`（own 型パラメータ＋推移的インスタンス化＋クロージャ）。
+2. ✅ **コアライブラリ（純 Plew）大筋完了**＝I3（`@Std/X`→`dirname(argv[0])/std/X.pw`）＋`@Std/Core` の `Optional`/`Result`＋メソッド（`compiler/std/Core.pw`・`tests/run/core_lib`）。✅ **`try`／`??` 実装**（`tests/run/try_coalesce`）。残り：可謬 I/O（`readFile`→`Result`）→ S2、ambient 化、`try` の From 変換・`?.`（[autonomous-decisions.md](autonomous-decisions.md)）。
+3. 🔄 **CoW（値意味論）＝観測可能な部分は達成**＝eager copy で `mut val` 配列束縛/代入/JSX 配列フィールドをコピー（`tests/run/value_semantics{,_let,_more}`）。by-value 引数はイミュータブルゆえコピー不要（穴でない）。残り（deferred）：struct コピー時の配列フィールド深いコピー・place 配列の return・**正確な refcount＋スコープ解放を伴う完全 CoW（遅延コピー＋解放）＝大物 ARC とセット**。
+4. 🔄 **ARC ＋ `Ref`/`WeakRef`**：✅ **基本 `Ref[T]` 実装**＝共有可変ヒープ箱（C `T*`）・`<Ref[T] value=e/>` 構築・`r->field` アクセス・コピーで共有（`tests/run/ref_shared`）。残り（deferred）：**ARC retain/release＋`deinit`（最後の解放）**＝スコープ解放追跡が要る大物・`WeakRef`＋`upgrade()`・循環回収・bare `<Ref value=e/>` 型推論（scalar 幅問題ゆえ明示 `[T]` 必須）。
+5. ⏳ **イベントループ（async/await/spawn）**（最大・最後・未着手）。`spawn`＝pthread が比較的容易だが `JoinHandle`/`join()→Promise[T]` は async 機構依存。async/await は状態機械変換 or コルーチンが要り**最難**。spec 表面（Promise API・スケジューリング）に密接ゆえ、簡略化は言語表面の判断になり得る＝慎重に。
 - traits（`Eq`/`Ord`/`Iterator` ＋ `where` 境界）は generics 後・コアライブラリと並走で純 Plew 化。I2（モジュール可視性ゲート）は多モジュール化が進む段で additive に。
 
 > **着手中＝generics**。まず既存の `Array[E]` 単相化機構（`PlewArray_<E>`・要素型名マングル・`Comp.arrayElems`）を一般 generic の土台に拡張する。
