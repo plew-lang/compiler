@@ -1,6 +1,6 @@
 # コンパイラ アーキテクチャ
 
-Plew コンパイラの実装方針。**現状はブートストラップ（stage0）を立ち上げ中**で、本書はパイプライン設計・技術選定・ブートストラップ戦略を示す。
+Plew コンパイラの実装方針。**🎉 セルフホスト達成済み**＝正典コンパイラは Plew 製の `compiler/src/_.pw`（手書きパーサ→C→clang・自分を不動点までコンパイル）。本書はパイプライン設計と、**そこへ至るブートストラップの経緯**（使い捨て Rust stage0→退役）を残す。現在地・次の一歩は [worklog.md](worklog.md)。
 
 ## ゴールと第一目標
 
@@ -9,14 +9,16 @@ Plew コンパイラの実装方針。**現状はブートストラップ（stag
 - **第一目標時点では macOS（ローカル）でだけ動けばよい**。クロスや WASM は後。
 - **メモリ管理は ARC**。既定は値意味論（CoW）で、opt-in の最小所有権（`unique`/`borrow`/`inout`/`move`・`Ref`/`WeakRef`）のみ（→ [language-semantics.md](language-semantics.md)、[design-decisions.md](design-decisions.md)）。
 
-## 技術スタック（stage0 ブートストラップ）
+## 技術スタック
 
-| 役割 | 採用 | 備考 |
+正典コンパイラ（`compiler/src/_.pw`・Plew 製）は **手書き lexer + 再帰下降パーサ → C トランスパイル → clang** ＝下表の stage0 と同じ骨格を Plew で実装している（LLVM/WASM は後述の通り後回し）。下表は**使い捨て stage0（Rust・退役済み）**の技術選定で、骨格と「なぜ Rust だったか」の経緯。
+
+| 役割 | stage0 の採用 | 備考 |
 | --- | --- | --- |
-| 実装言語 | **Rust**（`bootstrap/`、`cargo`） | lib + bin 構成。本体は lib クレート `plewc`、CLI は `bin`。`tests/` から内部を叩ける＝TDD 容易 |
-| 字句・構文解析 | **手書き**（lexer + 再帰下降パーサ） | ANTLR は不採用。速度と挙動の完全な制御のため |
-| コード生成 | **C へトランスパイル → `clang`** | LLVM/WASM は **self-host 達成後に Plew 側で**追加。stage0 は最小工数でネイティブを得る |
-| ランタイム | **C**（ARC・基本型・I/O） | 生成 C にリンクするヘッダ/ソース |
+| 実装言語 | **Rust**（退役済み・`git checkout stage0-final -- bootstrap` で復旧可） | lib + bin。`tests/` から内部を叩け TDD 容易。役割は stage1 を立ち上げることだけ |
+| 字句・構文解析 | **手書き**（lexer + 再帰下降パーサ） | ANTLR は不採用。速度と挙動の完全な制御のため（stage1 も同じ） |
+| コード生成 | **C へトランスパイル → `clang`** | LLVM/WASM は **self-host 達成後に Plew 側で**追加（stage1 も C 出力を継続） |
+| ランタイム | **C**（基本型・I/O・配列） | 生成 C に preamble として埋め込み（stage1 は自前で出力） |
 
 ### 技術選定の経緯（なぜ巻き戻したか）
 
@@ -27,17 +29,11 @@ Plew コンパイラの実装方針。**現状はブートストラップ（stag
   - **既知の摩擦と対策**：Rust は素朴なポインタ相互参照（型グラフ・親参照）で借用検査と戦う。これは **arena ＋ index（`NodeId(u32)` 等の整数ハンドルで参照）**で回避する（rustc/rust-analyzer の定石。キャッシュ効率・安定 ID という副産物つき）。この方式は Plew の arena 設計にも移植できる。
 - **C トランスパイルを選ぶ**：LLVM-IR は SSA・phi・明示型・手動メモリ操作で、テキスト手書きか C++ バインディング格闘になる。C は局所変数・制御構文・struct・関数呼び出しがそのまま使え最適化は clang 任せ、ARC ランタイムも C ヘッダ1枚。多くの言語が C 経由でブートストラップした実績。最終形の LLVM/WASM は self-host 後に Plew で書く（「仕組みは問わない」＝C は隠れた機構）。
 
-## ブートストラップ戦略
+## ブートストラップ戦略（達成済み・経緯）
 
-- **stage0（Rust・使い捨て）**：Plew の**サブセット**をコンパイルして C を吐く。役割は stage1 を動かすことだけ。
-- **stage1（Plew で書くコンパイラ）**：stage0 のサブセットだけで記述し、stage0 でコンパイル → 自分自身をコンパイルできたら**セルフホスト達成**。以降の機能（本物の LLVM/WASM バックエンド・循環回収・所有権検査）は Plew 側で additive に育てる。
+辿った道：**stage0（Rust・使い捨て）が Plew サブセットを C に落とす → そのサブセットだけで stage1（`compiler/src/_.pw`）を書く → stage0 でコンパイル → 自分自身をコンパイルできて不動点＝セルフホスト達成 → stage0 を退役**。いまは stage0 不要で、stage1 の C 訳（種 `compiler/plewc.seed.c`）から `./bootstrap.sh` で自己ブートストラップする。以降の機能（LLVM/WASM バックエンド・循環回収・所有権検査・トレイト等）は Plew 側（stage1）で additive に育てる。現コンパイラが spec から意図的に省いている範囲は [provisional.md](provisional.md)。
 
-**ブートストラップ・サブセット**（stage0 が対応＝stage1 を書ける範囲）：`struct`/`enum`・網羅 `match`・関数/メソッド/クロージャ・ジェネリクス＋`where`・最小トレイト・モジュール/`import`・`try`/`Result`・基本制御フロー（if/match/for/while/loop・`give`）。
-
-**第一目標では省略**（意味論が崩れない範囲で素朴化。すべて additive に後付け）：
-- **CoW → ベタコピー**（観測等価な隠れコスト最適化なので素朴コピーでよい）。
-- **`Ref`/`WeakRef` 不要**：AST 等は **arena＋index** で組み、共有可変を使わない（両 stage で設計が揃う）。
-- **循環回収・`unique`/`borrow`/`move` の静的強制・`any` 存在型・`#Ext`・async/spawn・最適化・メタプロ**：いずれも後回し。stage1 ソースをこれらに依存せず書く。
+> arena＋index で AST を組み共有可変（`Ref`/`WeakRef`）を使わない規律、CoW をベタコピー（リーク）で代用する素朴化など、ブートストラップ用の素朴化は両 stage で設計が揃うよう選んだ。詳細・現状の剥離一覧は [provisional.md](provisional.md)。
 
 ## コンパイルパイプライン（設計）
 
@@ -52,8 +48,8 @@ AST（arena 確保・index 参照）
   │  セマンティック解析
   │   1. 名前解決（モジュール / import / スコープ）
   │   2. 型推論・型検査（ジェネリクス、where 句）
-  │   3. trait/impl 解決・拡張解決（#Extension）※ stage0 は最小
-  │   4. 並行性検査（spawn キャプチャ）※ 第一目標では省略
+  │   3. trait/impl 解決・拡張解決（#Extension）※ 現状は未実装
+  │   4. 並行性検査（spawn キャプチャ）※ 現状は未実装
   ▼
 型付き AST
   │  C コード生成（+ ARC ランタイム C をリンク）
@@ -66,7 +62,7 @@ C ソース
 
 ### 各フェーズの実装メモ（意味論＝言語非依存の契約）
 
-以下は「コンパイラがどう振る舞うべきか」の意味論メモ。多くは**第一目標では省略**する検査・最適化だが、self-host 後に実装するときの索引として残す。
+以下は「コンパイラがどう振る舞うべきか」の意味論メモ。多くは**現状まだ未実装**の検査・最適化だが、これから実装するときの索引として残す。
 
 - **AST builder**: トークン列から自前 AST へ。arena に確保し相互参照は index で持つ。`@[...]` 組み込みディレクティブは AST に属性として保持し専用フェーズで変換（ユーザー定義メタプロはビルドと独立した別コマンドで別ファイルへコード生成する別方式へ転換）。→ [design-decisions.md](design-decisions.md) / [spec/16](../spec/04-execution/16-metaprogramming.md)。
 - **拡張解決（最重要）**: メソッド/演算子のバインドは「呼び出し位置の `#Extension` 指定」だけで決定論的に決め、import スコープに依存させない。無名（デフォルト）`impl` はそのまま発動、`extension Name { impl … }` は `#Name` 明示時のみ。一意に定まらなければエラー。→ [language-semantics.md](language-semantics.md)。
@@ -82,8 +78,8 @@ C ソース
 
 ## ビルド／開発ワークフロー
 
-- ビルド/テスト：`cd bootstrap && cargo build` / `cargo test`。CLI は `cargo run -- <file.pw>`。サンプルは `examples/*.pw`（旧構文を含む・[grammar.md](grammar.md) 参照）。
-- **TDD を意識**：各機能はテスト先行〜並行で。人手を介さず自走でセルフホストまで進められる状態を保つ。
-- `grammer/Plew.g4` は破棄済み（手書きパーサへ移行）。正典は引き続き `SPEC.md`／`spec/*.md`。
+- **ビルド**：`./bootstrap.sh`（C 種→clang→自己コンパイル→不動点検証・Rust 不要）。**テスト**：`./test.sh`（`.pw` ゴールデン＋reject＋不動点）。**コンパイラ実行**：`compiler/plewc foo.pw | clang -x c -`。手順詳細は [worklog.md](worklog.md)（ADD→reseed→USE）。
+- **テスト先行**：機能は `tests/run`（ゴールデン）／`tests/reject`（受理の健全性）で守る。
+- `grammer/Plew.g4` は破棄済み（手書きパーサ）。正典は `SPEC.md`／`spec/*.md`。
 
 > commit/push のタイミング・タグ命名・worklog 更新・「迷ったら仰ぐ／不要ファイルは消してよい」などの**プロセス方針は `CLAUDE.md`「作業の進め方・ユーザーについて」が住所**（ここでは再掲しない）。実装の現在地・次の一歩は [worklog.md](worklog.md)。
