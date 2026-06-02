@@ -20,6 +20,13 @@
 - **`?.`（オプショナルチェーン）未実装**。`??`・`match`・`try` でカバー。見直し：spec/13 の `?.` を後で。
 - **`??`/`try` は `@Std/Core` の Optional/Result の形に密結合**（Some=tag0/field `v`、Ok=tag0/field `value`、Err=tag1/field `error` をハードコード）。lang-item ゆえ妥当だが、ユーザーが別形の Optional を定義しても `??` はこの形を仮定。見直し：lang-item を spec で固定 or コンパイラが Core のシンボルを参照。
 
+## ランタイム：値意味論（CoW）
+
+- **eager copy で観測可能な値意味論を実現**（拠り所：意味は正しく・コスト〔遅延 CoW・解放〕は裏で後回し可）。コピー挿入点＝`val/mut val` 配列束縛・配列代入・JSX 配列フィールド初期化（いずれもソースが place のとき `PlewArray_E_copy`）。String は不変ゆえ共有で正しい（コピー不要）。**メモリは leak のまま**（解放は後回し hidden cost）。
+- **by-value 引数はコピーしない＝これは穴ではない**：spec で関数引数はイミュータブル（変更には `inout`）。変更不能ゆえ共有とコピーは観測同一。`inout` はポインタ（意図的共有）。よって引数コピー不要＝**eager copy を hot path に入れずに済み自己ホスト性能を保てる**（全引数を deep copy すると O(n)/call で壊滅する、を回避）。
+- **残る観測可能な穴（deferred）**：①**struct コピー時の配列フィールド**＝`mut val h2 = h`（struct 値）は C 浅いコピーで `h2` の配列フィールドが `h` と共有→両方 `mut val` なら `h2.items[0]=x` が `h` に波及。再帰的 struct deep-copy（型ごと copy 関数）が要る。②**place 配列の return**＝`fn f()->Array { return self.items }` の戻りを呼び出し側が `mut val` で受けて変更すると `self` に波及。return 地点 or 受け取り地点でコピーが要る。
+- **完全＆高速な CoW（refcount＋スコープ解放）は大物 ARC として後段**。eager copy は「mutable 束縛は稀＆小さい」前提で安全だが、上記①②と性能最適化（遅延コピー）は refcount 版でないと埋まらない。`inout` と CoW の相互作用（inflated refcount で inout が in-place 変更できなくなる問題）＝正確な解放が前提。
+
 ## 既知の別件（generics 以前からの仮決め・関連）
 
 - **C 予約語と衝突する Plew 識別子**（`default`/`double` 等）は生成 C が壊れる＝名前マングリング未実装。コンパイラ自身は回避。ユーザーコードで顕在化する hidden-meaning 穴（acceptance soundness 対象）。見直し：codegen で識別子を安全な C 名にマングル。
