@@ -441,6 +441,14 @@ fn parsePrint(c: inout Comp) -> U64 {
     return c.pushStmt(s: <Stmt.Print expr=e offset=kw.start />)
 }
 
+// `panic <msg>`: a diverging statement. The `panic` identifier is current.
+fn parsePanic(c: inout Comp) -> U64 {
+    val kw: Tok = c.cur()
+    c.advance()
+    val msg: U64 = parseExpr(c: inout c)
+    return c.pushStmt(s: <Stmt.Panic msg=msg offset=kw.start />)
+}
+
 fn parseReturn(c: inout Comp) -> U64 {
     c.advance()
     match c.curKind() {
@@ -655,6 +663,9 @@ fn parseStmt(c: inout Comp) -> U64 {
                     Kind.LParen => { return parsePrint(c: inout c) }
                     _ => { return parseExprOrAssign(c: inout c) }
                 }
+            }
+            if c.identIs(kw: "panic") {
+                return parsePanic(c: inout c)
             }
             return parseExprOrAssign(c: inout c)
         }

@@ -1304,6 +1304,12 @@ fn genStmt(c: inout Comp, id: U64) {
                 write(s: "    }\n    }\n")
             }
         }
+        Stmt.Panic { val msg, val offset } => {
+            // diverging: plew_panic is noreturn (writes the message + exit(1)).
+            write(s: "    plew_panic(")
+            genExpr(c: inout c, id: msg)
+            write(s: ");\n")
+        }
         Stmt.Break => {
             write(s: "    break;\n")
         }

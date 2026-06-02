@@ -1,0 +1,24 @@
+// `panic` is a diverging statement. Here it sits on a branch that isn't taken,
+// so the program runs to completion — this checks that panic compiles, links,
+// and (being noreturn) lets a function "end" on panic without a return.
+import @Std/Io with { print }
+
+fn mustBeSmall(n: I64) -> I64 {
+    if n > 100 {
+        panic "too big"
+    }
+    return n + 1
+}
+
+// every path diverges -> no return needed despite the I64 result type.
+fn classify(n: I64) -> I64 {
+    if n == 0 {
+        return 0
+    }
+    panic "unreachable in this test"
+}
+
+fn main() {
+    print(mustBeSmall(n: 41))
+    print(classify(n: 0))
+}

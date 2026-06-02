@@ -6,6 +6,7 @@ typedef struct { const char* data; long long len; } PlewString;
 __attribute__((unused)) static int PlewString_eq(PlewString a, PlewString b) { if (a.len != b.len) return 0; for (long long i = 0; i < a.len; i++) if (a.data[i] != b.data[i]) return 0; return 1; }
 __attribute__((unused)) static PlewString plew_read_stdin(void) { size_t cap = 4096, len = 0; char* buf = (char*)malloc(cap); int ch; while ((ch = getchar()) != EOF) { if (len + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); } buf[len++] = (char)ch; } PlewString s; s.data = buf; s.len = (long long)len; return s; }
 __attribute__((unused)) static void plew_write(PlewString s) { fwrite(s.data, 1, (size_t)s.len, stdout); }
+__attribute__((noreturn)) static void plew_panic(PlewString m) { fputs("panic: ", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\n', stderr); exit(1); }
 __attribute__((unused)) static void plew_compile_error(PlewString m) { fputs("plewc: error: ", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\n', stderr); exit(1); }
 __attribute__((unused)) static void plew_compile_error_at(long long line, PlewString m) { fprintf(stderr, "plewc: error: line %lld: ", line); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\n', stderr); exit(1); }
 static int plew_argc = 0;
@@ -145,6 +146,7 @@ struct Stmt {
         struct { long long cond; long long body; } While;
         struct { long long varStart; long long varLen; long long isRange; long long inclusive; long long iter; long long rangeHi; long long body; } For;
         struct { long long scrut; PlewArray_MatchArm arms; } Match;
+        struct { long long msg; long long offset; } Panic;
         struct { char _u; } Break;
         struct { char _u; } Continue;
     } data;
@@ -383,6 +385,7 @@ PType parseTypeTok(Comp* c);
 void recordArrayElem(Comp* c, PType ty);
 long long parseLet(Comp* c, long long mutable);
 long long parsePrint(Comp* c);
+long long parsePanic(Comp* c);
 long long parseReturn(Comp* c);
 long long parseIf(Comp* c);
 long long parseWhile(Comp* c);
@@ -576,6 +579,7 @@ int main(int argc, char** argv) {
     plew_write((PlewString){"__attribute__((unused)) static int PlewString_eq(PlewString a, PlewString b) { if (a.len != b.len) return 0; for (long long i = 0; i < a.len; i++) if (a.data[i] != b.data[i]) return 0; return 1; }\n", 197});
     plew_write((PlewString){"__attribute__((unused)) static PlewString plew_read_stdin(void) { size_t cap = 4096, len = 0; char* buf = (char*)malloc(cap); int ch; while ((ch = getchar()) != EOF) { if (len + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); } buf[len++] = (char)ch; } PlewString s; s.data = buf; s.len = (long long)len; return s; }\n", 323});
     plew_write((PlewString){"__attribute__((unused)) static void plew_write(PlewString s) { fwrite(s.data, 1, (size_t)s.len, stdout); }\n", 107});
+    plew_write((PlewString){"__attribute__((noreturn)) static void plew_panic(PlewString m) { fputs(\"panic: \", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\\n', stderr); exit(1); }\n", 165});
     plew_write((PlewString){"__attribute__((unused)) static void plew_compile_error(PlewString m) { fputs(\"plewc: error: \", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\\n', stderr); exit(1); }\n", 178});
     plew_write((PlewString){"__attribute__((unused)) static void plew_compile_error_at(long long line, PlewString m) { fprintf(stderr, \"plewc: error: line %lld: \", line); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\\n', stderr); exit(1); }\n", 216});
     plew_write((PlewString){"static int plew_argc = 0;\nstatic char** plew_argv = 0;\n", 55});
@@ -1860,6 +1864,12 @@ long long parsePrint(Comp* c) {
     }
     return Comp_pushStmt(&((*c)), (Stmt){.tag = 2, .data.Print = {.expr = e, .offset = kw.start}});
 }
+long long parsePanic(Comp* c) {
+    Tok kw = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
+    long long msg = parseExpr(&((*c)));
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 9, .data.Panic = {.msg = msg, .offset = kw.start}});
+}
 long long parseReturn(Comp* c) {
     Comp_advance(&((*c)));
     {
@@ -2103,11 +2113,11 @@ long long parseStmt(Comp* c) {
     }
     else if (_m46.tag == 14) {
     Comp_advance(&((*c)));
-    return Comp_pushStmt(&((*c)), (Stmt){.tag = 9});
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 10});
     }
     else if (_m46.tag == 15) {
     Comp_advance(&((*c)));
-    return Comp_pushStmt(&((*c)), (Stmt){.tag = 10});
+    return Comp_pushStmt(&((*c)), (Stmt){.tag = 11});
     }
     else if (_m46.tag == 16) {
     return parseReturn(&((*c)));
@@ -2123,6 +2133,9 @@ long long parseStmt(Comp* c) {
     return parseExprOrAssign(&((*c)));
     }
     }
+    }
+    if (Comp_identIs(&((*c)), (PlewString){"panic", 5})) {
+    return parsePanic(&((*c)));
     }
     return parseExprOrAssign(&((*c)));
     }
@@ -4195,9 +4208,18 @@ void genStmt(Comp* c, long long id) {
     }
     }
     else if (_m78.tag == 9) {
-    plew_write((PlewString){"    break;\n", 11});
+        long long msg = _m78.data.Panic.msg;
+        (void)msg;
+        long long offset = _m78.data.Panic.offset;
+        (void)offset;
+    plew_write((PlewString){"    plew_panic(", 15});
+    genExpr(&((*c)), msg);
+    plew_write((PlewString){");\n", 3});
     }
     else if (_m78.tag == 10) {
+    plew_write((PlewString){"    break;\n", 11});
+    }
+    else if (_m78.tag == 11) {
     plew_write((PlewString){"    continue;\n", 14});
     }
     else if (_m78.tag == 8) {

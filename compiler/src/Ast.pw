@@ -105,6 +105,9 @@ enum Stmt {
     // (inclusive picks <=); otherwise iter is an array, walked by index.
     For { varStart: U64, varLen: U64, isRange: Bool, inclusive: Bool, iter: U64, rangeHi: U64, body: U64 }
     Match { scrut: U64, arms: Array[MatchArm] }
+    // `panic <msg>`: a diverging statement (spec: unrecoverable, never returns).
+    // msg is a String expression; offset is the `panic` keyword for diagnostics.
+    Panic { msg: U64, offset: U64 }
     Break
     Continue
 }
