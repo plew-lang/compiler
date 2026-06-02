@@ -562,6 +562,12 @@ struct MakeField {
     val value: U64
 }
 
+// One `val name` field binding inside a match pattern `E.V { val a, val b }`.
+struct Bind {
+    val nameStart: U64
+    val nameLen: U64
+}
+
 enum Expr {
     Int { value: I64 }
     Ident { start: U64, len: U64 }
@@ -569,7 +575,20 @@ enum Expr {
     Binary { op: I64, lhs: U64, rhs: U64 }
     Call { nameStart: U64, nameLen: U64, args: Array[U64] }
     Field { base: U64, nameStart: U64, nameLen: U64 }
-    Make { typeStart: U64, typeLen: U64, fields: Array[MakeField] }
+    Make { typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fields: Array[MakeField] }
+}
+
+// One arm of a match: either `_ => block` (wildcard) or `Enum.Variant
+// [{ val f ... }] => block`. The pattern names the enum and variant, so codegen
+// resolves the tag index and field types without any type inference.
+struct MatchArm {
+    val isWildcard: Bool
+    val enumStart: U64
+    val enumLen: U64
+    val variantStart: U64
+    val variantLen: U64
+    val binds: Array[Bind]
+    val body: U64
 }
 
 enum Stmt {
@@ -580,6 +599,7 @@ enum Stmt {
     Return { value: U64, hasValue: Bool }
     If { cond: U64, thenBlk: U64, elseBlk: U64, hasElse: Bool }
     While { cond: U64, body: U64 }
+    Match { scrut: U64, arms: Array[MatchArm] }
 }
 
 struct Block {
@@ -589,6 +609,8 @@ struct Block {
 struct Param {
     val nameStart: U64
     val nameLen: U64
+    val tyStart: U64
+    val tyLen: U64
 }
 
 struct FieldDef {
@@ -604,11 +626,25 @@ struct StructDef {
     val fields: Array[FieldDef]
 }
 
+struct Variant {
+    val nameStart: U64
+    val nameLen: U64
+    val fields: Array[FieldDef]
+}
+
+struct EnumDef {
+    val nameStart: U64
+    val nameLen: U64
+    val variants: Array[Variant]
+}
+
 struct Func {
     val nameStart: U64
     val nameLen: U64
     val params: Array[Param]
     val hasRet: Bool
+    val retStart: U64
+    val retLen: U64
     val body: U64
 }
 
@@ -621,6 +657,9 @@ struct Comp {
     mut val blocks: Array[Block]
     mut val funcs: Array[Func]
     mut val structs: Array[StructDef]
+    mut val enums: Array[EnumDef]
+    // fresh-temp counter for match scrutinee bindings (`_m0`, `_m1`, ...)
+    mut val tmp: U64
     // set per-function during codegen so `return` lowers correctly
     mut val curIsMain: Bool
     mut val curRetVoid: Bool
@@ -799,10 +838,17 @@ fn parseMake(c: inout Comp) -> U64 {
     advance(c: inout c)
     val typeTok: Tok = cur(c: inout c)
     advance(c: inout c)
+    mut val variantStart: U64 = 0
+    mut val variantLen: U64 = 0
+    mut val isEnum: Bool = false
     match curKind(c: inout c) {
         Kind.Dot => {
             advance(c: inout c)
+            val vTok: Tok = cur(c: inout c)
             advance(c: inout c)
+            variantStart = vTok.start
+            variantLen = vTok.len
+            isEnum = true
         }
         _ => {}
     }
@@ -833,7 +879,7 @@ fn parseMake(c: inout Comp) -> U64 {
             _ => { advance(c: inout c) }
         }
     }
-    return pushExpr(c: inout c, e: <Expr.Make typeStart=typeTok.start typeLen=typeTok.len fields=fields />)
+    return pushExpr(c: inout c, e: <Expr.Make typeStart=typeTok.start typeLen=typeTok.len variantStart=variantStart variantLen=variantLen isEnum=isEnum fields=fields />)
 }
 
 fn parseBin(c: inout Comp, minPrec: I64) -> U64 {
@@ -1036,6 +1082,94 @@ fn parseExprOrAssign(c: inout Comp) -> U64 {
     return pushStmt(c: inout c, s: <Stmt.ExprStmt expr=lhs />)
 }
 
+// `match scrut { (pattern => { body })* }`. Patterns: `_` (wildcard) or
+// `Enum.Variant [{ val f, ... }]`. Arms are block bodies (the subset plewc.pw
+// uses); bare-expression arms are not handled yet.
+fn parseMatch(c: inout Comp) -> U64 {
+    advance(c: inout c)
+    val scrut: U64 = parseExpr(c: inout c)
+    skipNewlines(c: inout c)
+    match curKind(c: inout c) {
+        Kind.LBrace => { advance(c: inout c) }
+        _ => {}
+    }
+    mut val arms: Array[MatchArm] = []
+    while true {
+        skipNewlines(c: inout c)
+        val k: Kind = curKind(c: inout c)
+        match k {
+            Kind.RBrace => {
+                advance(c: inout c)
+                break
+            }
+            Kind.Eof => { break }
+            _ => {
+                val firstTok: Tok = cur(c: inout c)
+                mut val isWildcard: Bool = false
+                mut val enumStart: U64 = 0
+                mut val enumLen: U64 = 0
+                mut val variantStart: U64 = 0
+                mut val variantLen: U64 = 0
+                mut val binds: Array[Bind] = []
+                if rangeEquals(bytes: c.bytes, start: firstTok.start, len: firstTok.len, kw: "_") {
+                    isWildcard = true
+                    advance(c: inout c)
+                } else {
+                    enumStart = firstTok.start
+                    enumLen = firstTok.len
+                    advance(c: inout c)
+                    // `.Variant`
+                    match curKind(c: inout c) {
+                        Kind.Dot => { advance(c: inout c) }
+                        _ => {}
+                    }
+                    val vTok: Tok = cur(c: inout c)
+                    variantStart = vTok.start
+                    variantLen = vTok.len
+                    advance(c: inout c)
+                    // optional `{ val f, ... }`
+                    match curKind(c: inout c) {
+                        Kind.LBrace => {
+                            advance(c: inout c)
+                            while true {
+                                skipNewlines(c: inout c)
+                                match curKind(c: inout c) {
+                                    Kind.RBrace => {
+                                        advance(c: inout c)
+                                        break
+                                    }
+                                    Kind.Eof => { break }
+                                    Kind.KwVal => {
+                                        advance(c: inout c)
+                                        val bTok: Tok = cur(c: inout c)
+                                        advance(c: inout c)
+                                        binds.append(<Bind nameStart=bTok.start nameLen=bTok.len />)
+                                        match curKind(c: inout c) {
+                                            Kind.Comma => { advance(c: inout c) }
+                                            _ => {}
+                                        }
+                                    }
+                                    _ => { advance(c: inout c) }
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                // `=>`
+                match curKind(c: inout c) {
+                    Kind.FatArrow => { advance(c: inout c) }
+                    _ => {}
+                }
+                skipNewlines(c: inout c)
+                val body: U64 = parseBlock(c: inout c)
+                arms.append(<MatchArm isWildcard=isWildcard enumStart=enumStart enumLen=enumLen variantStart=variantStart variantLen=variantLen binds=binds body=body />)
+            }
+        }
+    }
+    return pushStmt(c: inout c, s: <Stmt.Match scrut=scrut arms=arms />)
+}
+
 fn parseStmt(c: inout Comp) -> U64 {
     val k: Kind = curKind(c: inout c)
     match k {
@@ -1046,6 +1180,7 @@ fn parseStmt(c: inout Comp) -> U64 {
         }
         Kind.KwIf => { return parseIf(c: inout c) }
         Kind.KwWhile => { return parseWhile(c: inout c) }
+        Kind.KwMatch => { return parseMatch(c: inout c) }
         Kind.KwReturn => { return parseReturn(c: inout c) }
         Kind.Ident => {
             if identIs(c: inout c, kw: "print") {
@@ -1111,14 +1246,18 @@ fn parseFunc(c: inout Comp) {
                     _ => {
                         val pTok: Tok = cur(c: inout c)
                         advance(c: inout c)
+                        mut val pTyStart: U64 = 0
+                        mut val pTyLen: U64 = 0
                         match curKind(c: inout c) {
                             Kind.Colon => {
                                 advance(c: inout c)
                                 val pty: Tok = parseTypeTok(c: inout c)
+                                pTyStart = pty.start
+                                pTyLen = pty.len
                             }
                             _ => {}
                         }
-                        params.append(<Param nameStart=pTok.start nameLen=pTok.len />)
+                        params.append(<Param nameStart=pTok.start nameLen=pTok.len tyStart=pTyStart tyLen=pTyLen />)
                         match curKind(c: inout c) {
                             Kind.Comma => { advance(c: inout c) }
                             _ => {}
@@ -1130,17 +1269,21 @@ fn parseFunc(c: inout Comp) {
         _ => {}
     }
     mut val hasRet: Bool = false
+    mut val retStart: U64 = 0
+    mut val retLen: U64 = 0
     match curKind(c: inout c) {
         Kind.Arrow => {
             advance(c: inout c)
             hasRet = true
             val rty: Tok = parseTypeTok(c: inout c)
+            retStart = rty.start
+            retLen = rty.len
         }
         _ => {}
     }
     skipNewlines(c: inout c)
     val body: U64 = parseBlock(c: inout c)
-    c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len params=params hasRet=hasRet body=body />)
+    c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len params=params hasRet=hasRet retStart=retStart retLen=retLen body=body />)
 }
 
 // `struct Name { (val|mut val) field: Type ... }`. Field modifiers (val/mut/
@@ -1187,6 +1330,75 @@ fn parseStruct(c: inout Comp) {
     c.structs.append(<StructDef nameStart=nameTok.start nameLen=nameTok.len fields=fields />)
 }
 
+// `enum Name { Variant [{ field: Type, ... }] ... }`. Variant fields take no
+// modifiers (bare `name: Type`), per the language's variant-field rule.
+fn parseEnum(c: inout Comp) {
+    advance(c: inout c)
+    val nameTok: Tok = cur(c: inout c)
+    advance(c: inout c)
+    match curKind(c: inout c) {
+        Kind.LBrace => { advance(c: inout c) }
+        _ => {}
+    }
+    mut val variants: Array[Variant] = []
+    while true {
+        skipNewlines(c: inout c)
+        val k: Kind = curKind(c: inout c)
+        match k {
+            Kind.RBrace => {
+                advance(c: inout c)
+                break
+            }
+            Kind.Eof => { break }
+            Kind.Ident => {
+                val vTok: Tok = cur(c: inout c)
+                advance(c: inout c)
+                mut val fields: Array[FieldDef] = []
+                match curKind(c: inout c) {
+                    Kind.LBrace => {
+                        advance(c: inout c)
+                        while true {
+                            skipNewlines(c: inout c)
+                            match curKind(c: inout c) {
+                                Kind.RBrace => {
+                                    advance(c: inout c)
+                                    break
+                                }
+                                Kind.Eof => { break }
+                                Kind.Ident => {
+                                    val fTok: Tok = cur(c: inout c)
+                                    advance(c: inout c)
+                                    mut val tyStart: U64 = 0
+                                    mut val tyLen: U64 = 0
+                                    match curKind(c: inout c) {
+                                        Kind.Colon => {
+                                            advance(c: inout c)
+                                            val ty: Tok = parseTypeTok(c: inout c)
+                                            tyStart = ty.start
+                                            tyLen = ty.len
+                                        }
+                                        _ => {}
+                                    }
+                                    fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen />)
+                                    match curKind(c: inout c) {
+                                        Kind.Comma => { advance(c: inout c) }
+                                        _ => {}
+                                    }
+                                }
+                                _ => { advance(c: inout c) }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                variants.append(<Variant nameStart=vTok.start nameLen=vTok.len fields=fields />)
+            }
+            _ => { advance(c: inout c) }
+        }
+    }
+    c.enums.append(<EnumDef nameStart=nameTok.start nameLen=nameTok.len variants=variants />)
+}
+
 fn parseProgram(c: inout Comp) {
     while true {
         skipNewlines(c: inout c)
@@ -1194,6 +1406,7 @@ fn parseProgram(c: inout Comp) {
         match k {
             Kind.KwFn => { parseFunc(c: inout c) }
             Kind.KwStruct => { parseStruct(c: inout c) }
+            Kind.KwEnum => { parseEnum(c: inout c) }
             Kind.Eof => { break }
             _ => { advance(c: inout c) }
         }
@@ -1249,7 +1462,7 @@ fn isPrimType(c: inout Comp, start: U64, len: U64) -> Bool {
 }
 
 // Map a Plew type-name span to a C type. v3 models scalars (all -> long long)
-// and named struct types (echoed). String / Array come later.
+// and named struct/enum types (echoed). String / Array come later.
 fn genCType(c: inout Comp, start: U64, len: U64) {
     if len == 0 {
         write(s: "long long")
@@ -1260,6 +1473,72 @@ fn genCType(c: inout Comp, start: U64, len: U64) {
         return
     }
     writeSpan(c: inout c, start: start, len: len)
+}
+
+// Compare two source spans byte for byte.
+fn spansEqual(c: inout Comp, aStart: U64, aLen: U64, bStart: U64, bLen: U64) -> Bool {
+    if aLen != bLen {
+        return false
+    }
+    mut val j: U64 = 0
+    while j < aLen {
+        if c.bytes[aStart + j] != c.bytes[bStart + j] {
+            return false
+        }
+        j += 1
+    }
+    return true
+}
+
+// Tag index of `Enum.Variant` (the variant's position in its enum declaration).
+fn variantIndex(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64) -> I64 {
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val e: EnumDef = c.enums[ei]
+        if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: enumStart, bLen: enumLen) {
+            val vars: Array[Variant] = e.variants
+            mut val vi: U64 = 0
+            while vi < vars.count {
+                val v: Variant = vars[vi]
+                if spansEqual(c: inout c, aStart: v.nameStart, aLen: v.nameLen, bStart: variantStart, bLen: variantLen) {
+                    return vi as I64
+                }
+                vi += 1
+            }
+        }
+        ei += 1
+    }
+    return 0
+}
+
+// Emit the C type of a match-bound field (looked up in the enum declaration).
+fn genBindType(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64, bindStart: U64, bindLen: U64) {
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val e: EnumDef = c.enums[ei]
+        if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: enumStart, bLen: enumLen) {
+            val vars: Array[Variant] = e.variants
+            mut val vi: U64 = 0
+            while vi < vars.count {
+                val v: Variant = vars[vi]
+                if spansEqual(c: inout c, aStart: v.nameStart, aLen: v.nameLen, bStart: variantStart, bLen: variantLen) {
+                    val fs: Array[FieldDef] = v.fields
+                    mut val fi: U64 = 0
+                    while fi < fs.count {
+                        val f: FieldDef = fs[fi]
+                        if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: bindStart, bLen: bindLen) {
+                            genCType(c: inout c, start: f.tyStart, len: f.tyLen)
+                            return
+                        }
+                        fi += 1
+                    }
+                }
+                vi += 1
+            }
+        }
+        ei += 1
+    }
+    write(s: "long long")
 }
 
 fn binOpStr(op: I64) -> String {
@@ -1329,23 +1608,49 @@ fn genExpr(c: inout Comp, id: U64) {
             write(s: ".")
             writeSpan(c: inout c, start: nameStart, len: nameLen)
         }
-        Expr.Make { val typeStart, val typeLen, val fields } => {
-            write(s: "(")
-            genCType(c: inout c, start: typeStart, len: typeLen)
-            write(s: "){")
-            mut val i: U64 = 0
-            while i < fields.count {
-                if i > 0 {
-                    write(s: ", ")
+        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val fields } => {
+            if isEnum {
+                write(s: "(")
+                writeSpan(c: inout c, start: typeStart, len: typeLen)
+                write(s: "){.tag = ")
+                writeInt(n: variantIndex(c: inout c, enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen))
+                if fields.count > 0 {
+                    write(s: ", .data.")
+                    writeSpan(c: inout c, start: variantStart, len: variantLen)
+                    write(s: " = {")
+                    mut val i: U64 = 0
+                    while i < fields.count {
+                        if i > 0 {
+                            write(s: ", ")
+                        }
+                        val mf: MakeField = fields[i]
+                        write(s: ".")
+                        writeSpan(c: inout c, start: mf.nameStart, len: mf.nameLen)
+                        write(s: " = ")
+                        genExpr(c: inout c, id: mf.value)
+                        i += 1
+                    }
+                    write(s: "}")
                 }
-                val mf: MakeField = fields[i]
-                write(s: ".")
-                writeSpan(c: inout c, start: mf.nameStart, len: mf.nameLen)
-                write(s: " = ")
-                genExpr(c: inout c, id: mf.value)
-                i += 1
+                write(s: "}")
+            } else {
+                write(s: "(")
+                genCType(c: inout c, start: typeStart, len: typeLen)
+                write(s: "){")
+                mut val i: U64 = 0
+                while i < fields.count {
+                    if i > 0 {
+                        write(s: ", ")
+                    }
+                    val mf: MakeField = fields[i]
+                    write(s: ".")
+                    writeSpan(c: inout c, start: mf.nameStart, len: mf.nameLen)
+                    write(s: " = ")
+                    genExpr(c: inout c, id: mf.value)
+                    i += 1
+                }
+                write(s: "}")
             }
-            write(s: "}")
         }
     }
 }
@@ -1415,6 +1720,76 @@ fn genStmt(c: inout Comp, id: U64) {
             genBlock(c: inout c, id: body)
             write(s: "    }\n")
         }
+        Stmt.Match { val scrut, val arms } => {
+            val t: U64 = c.tmp
+            c.tmp = c.tmp + 1
+            // enum type for the scrutinee temp = the enum named by the first
+            // non-wildcard arm's pattern.
+            mut val enumStart: U64 = 0
+            mut val enumLen: U64 = 0
+            mut val q: U64 = 0
+            while q < arms.count {
+                val aq: MatchArm = arms[q]
+                if aq.isWildcard {
+                } else {
+                    if enumLen == 0 {
+                        enumStart = aq.enumStart
+                        enumLen = aq.enumLen
+                    }
+                }
+                q += 1
+            }
+            write(s: "    {\n")
+            write(s: "    ")
+            writeSpan(c: inout c, start: enumStart, len: enumLen)
+            write(s: " _m")
+            writeInt(n: t as I64)
+            write(s: " = ")
+            genExpr(c: inout c, id: scrut)
+            write(s: ";\n")
+            mut val i: U64 = 0
+            mut val firstCond: Bool = true
+            while i < arms.count {
+                val a: MatchArm = arms[i]
+                if a.isWildcard {
+                    write(s: "    else {\n")
+                    genBlock(c: inout c, id: a.body)
+                    write(s: "    }\n")
+                } else {
+                    if firstCond {
+                        write(s: "    if (_m")
+                        firstCond = false
+                    } else {
+                        write(s: "    else if (_m")
+                    }
+                    writeInt(n: t as I64)
+                    write(s: ".tag == ")
+                    writeInt(n: variantIndex(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen))
+                    write(s: ") {\n")
+                    val binds: Array[Bind] = a.binds
+                    mut val bi: U64 = 0
+                    while bi < binds.count {
+                        val bd: Bind = binds[bi]
+                        write(s: "        ")
+                        genBindType(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
+                        write(s: " ")
+                        writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
+                        write(s: " = _m")
+                        writeInt(n: t as I64)
+                        write(s: ".data.")
+                        writeSpan(c: inout c, start: a.variantStart, len: a.variantLen)
+                        write(s: ".")
+                        writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
+                        write(s: ";\n")
+                        bi += 1
+                    }
+                    genBlock(c: inout c, id: a.body)
+                    write(s: "    }\n")
+                }
+                i += 1
+            }
+            write(s: "    }\n")
+        }
     }
 }
 
@@ -1456,15 +1831,16 @@ fn genStructDef(c: inout Comp, si: U64) {
 }
 
 // Emit a C function signature (no trailing `;` or `{`). `main` is special:
-// `int main(void)`. Other functions return `long long` (with `-> ret`) or
-// `void`; every parameter is `long long` (v2 ignores declared types).
+// `int main(void)`. The return type and each parameter type come from the
+// declared Plew types via genCType (scalars -> long long, named types echoed).
 fn genSignature(c: inout Comp, f: Func) {
     if nameIsMain(c: inout c, f: f) {
         write(s: "int main(void)")
         return
     }
     if f.hasRet {
-        write(s: "long long ")
+        genCType(c: inout c, start: f.retStart, len: f.retLen)
+        write(s: " ")
     } else {
         write(s: "void ")
     }
@@ -1479,8 +1855,9 @@ fn genSignature(c: inout Comp, f: Func) {
             if i > 0 {
                 write(s: ", ")
             }
-            write(s: "long long ")
             val p: Param = params[i]
+            genCType(c: inout c, start: p.tyStart, len: p.tyLen)
+            write(s: " ")
             writeSpan(c: inout c, start: p.nameStart, len: p.nameLen)
             i += 1
         }
@@ -1506,6 +1883,46 @@ fn genFunc(c: inout Comp, fi: U64) {
     write(s: "}\n")
 }
 
+// Emit an enum as a tagged union: `struct E { long long tag; union { struct
+// {...} V; ... } data; };`. Nullary variants get a dummy member so the inner
+// struct is never empty.
+fn genEnumDef(c: inout Comp, ei: U64) {
+    val e: EnumDef = c.enums[ei]
+    write(s: "struct ")
+    writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+    write(s: " {\n")
+    write(s: "    long long tag;\n")
+    write(s: "    union {\n")
+    val vars: Array[Variant] = e.variants
+    mut val vi: U64 = 0
+    while vi < vars.count {
+        val v: Variant = vars[vi]
+        write(s: "        struct {")
+        val fs: Array[FieldDef] = v.fields
+        if fs.count == 0 {
+            write(s: " char _u; ")
+        } else {
+            mut val fi: U64 = 0
+            while fi < fs.count {
+                val f: FieldDef = fs[fi]
+                write(s: " ")
+                genCType(c: inout c, start: f.tyStart, len: f.tyLen)
+                write(s: " ")
+                writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                write(s: ";")
+                fi += 1
+            }
+            write(s: " ")
+        }
+        write(s: "} ")
+        writeSpan(c: inout c, start: v.nameStart, len: v.nameLen)
+        write(s: ";\n")
+        vi += 1
+    }
+    write(s: "    } data;\n")
+    write(s: "};\n")
+}
+
 // ---- driver ----
 //
 // Reads a Plew program from stdin (top-level `fn` declarations), parses it into
@@ -1516,10 +1933,12 @@ fn main() {
     val src: String = readStdin()
     mut val lx: Lexer = <Lexer bytes=src.bytes pos=0 toks=[] depth=0 />
     lex(lx: inout lx)
-    mut val c: Comp = <Comp bytes=src.bytes toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] curIsMain=false curRetVoid=false />
+    mut val c: Comp = <Comp bytes=src.bytes toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] tmp=0 curIsMain=false curRetVoid=false />
     parseProgram(c: inout c)
     write(s: "#include <stdio.h>\n")
-    // struct forward typedefs, then bodies (source order = dependency order)
+    // forward typedefs for every nominal type (structs + enums), then bodies.
+    // Aggregates nest only via Array (a pointer), so forwards suffice and body
+    // order is unconstrained.
     mut val si: U64 = 0
     while si < c.structs.count {
         val s: StructDef = c.structs[si]
@@ -1530,10 +1949,25 @@ fn main() {
         write(s: ";\n")
         si += 1
     }
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val e: EnumDef = c.enums[ei]
+        write(s: "typedef struct ")
+        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+        write(s: " ")
+        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+        write(s: ";\n")
+        ei += 1
+    }
     mut val sj: U64 = 0
     while sj < c.structs.count {
         genStructDef(c: inout c, si: sj)
         sj += 1
+    }
+    mut val ej: U64 = 0
+    while ej < c.enums.count {
+        genEnumDef(c: inout c, ei: ej)
+        ej += 1
     }
     // prototypes (skip main)
     mut val i: U64 = 0

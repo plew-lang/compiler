@@ -387,6 +387,32 @@ fn selfhost_plewc_compiles_structs() {
 }
 
 #[test]
+fn selfhost_plewc_compiles_enums_and_match() {
+    // plewc.pw v4: enum declarations -> C tagged union, JSX variant
+    // construction `<E.V f=e />` -> designated init with tag, and match ->
+    // if-chain on tag with field bindings (the pattern names the enum/variant,
+    // so tag index and field types are resolved without type inference).
+    // Function parameter/return types now use the declared types too.
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../selfhost/plewc.pw");
+    let src = std::fs::read_to_string(path).expect("read selfhost/plewc.pw");
+    let program = "enum Shape {\n    Circle { r: I64 }\n    Rect { w: I64, h: I64 }\n}\nfn area(s: Shape) -> I64 {\n    match s {\n        Shape.Circle { val r } => {\n            return r * r * 3\n        }\n        Shape.Rect { val w, val h } => {\n            return w * h\n        }\n    }\n    return 0\n}\nfn main() {\n    val c: Shape = <Shape.Circle r=5 />\n    val r: Shape = <Shape.Rect w=4 h=6 />\n    print(area(s: c))\n    print(area(s: r))\n}\n";
+    let emitted_c = build_and_run_stdin(&src, "selfhost_plewc_enum", program);
+    assert!(emitted_c.contains("union {"), "emitted C was:\n{emitted_c}");
+    assert!(emitted_c.contains(".tag == "), "emitted C was:\n{emitted_c}");
+
+    let c_path = std::env::temp_dir().join(format!("plew_plewcen_{}.c", std::process::id()));
+    let out_bin = std::env::temp_dir().join(format!("plew_plewcen_{}", std::process::id()));
+    std::fs::write(&c_path, &emitted_c).expect("write emitted C");
+    let status = Command::new("clang").arg(&c_path).arg("-o").arg(&out_bin).status().expect("clang");
+    assert!(status.success(), "clang failed on emitted C:\n{emitted_c}");
+    let output = Command::new(&out_bin).output().expect("run emitted binary");
+    let _ = std::fs::remove_file(&c_path);
+    let _ = std::fs::remove_file(&out_bin);
+    // Circle r=5 -> 5*5*3 = 75; Rect 4x6 -> 24
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "75\n24\n");
+}
+
+#[test]
 fn builds_and_runs_write_byte() {
     // writeByte emits a single raw byte (putchar). The self-hosted compiler
     // uses it to echo identifier text out of source spans (no substring).
