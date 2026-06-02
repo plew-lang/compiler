@@ -55,6 +55,19 @@ manifest は **`Plew.toml`**（spec 暫定名・TOML・src 既定 `src/`・`/` �
 - ⏳ **I3 @Std 実体化**：`@Std/X`→std ディレクトリ解決。純 Plew のもの（`Core` の `Optional`/`Result`）は generics 後。`@Std/Io`/`Process` は extern/FFI まではイントリンシック裏付けのまま。
 - 後で additive：修飾名 `Foo.bar`・`export`・`public` マニフェスト・`_.pw` ディレクトリ代表。
 
+### ★ 確定ロードマップ（generics → コアライブラリ → ランタイム）
+
+意味論の hidden-meaning は大半解消済み（整数幅・match・ラベル・診断）。残りは小さく additive。**拠り所「意味は最優先・コストは裏で後回し可」に照らし、leak ランタイムは hidden-cost ゆえ後回しでよい**。大物は以下の順で（合意済み）：
+
+1. **generics**（全ての門）＝型パラメータを struct/enum/fn に＋一般単相化（`Array[E]` 専用ハードコードを一般機構へ）。境界なし（trait 境界は traits と一緒に後段）。**`Ref[T]`/`Promise[T]`/`Optional[T]`/`Result[T,E]` が全部これに依存**。今の C トランスパイル上で完結でき、後の CoW は additive。
+2. **本物のコアライブラリ（純 Plew）**＝`@Std/Core` に `Optional`/`Result` 等を generic enum で実装。要 **I3＝`@Std/X` の実ファイル解決**（ローダは I1 で完成済み・`@Std`→std ディレクトリの解決を足す）。**import の正しい dogfood＝真に独立したモジュール**。これで **`try`＋可謬 I/O（`readFile`→`Result`）** が書けて **S2（残る hidden-meaning）も閉じる**。
+3. **CoW**（値意味論・核の de-risk・以後コードがアリーナ規律から解放）。traits 不要。
+4. **ARC ＋ `Ref`/`WeakRef`**（共有可変＋循環回収・generics 必要）。
+5. **イベントループ（async/await/spawn）**（最大・`Promise[T]` 依存・最後）。
+- traits（`Eq`/`Ord`/`Iterator` ＋ `where` 境界）は generics 後・コアライブラリと並走で純 Plew 化。I2（モジュール可視性ゲート）は多モジュール化が進む段で additive に。
+
+> **次の着手＝generics**。まず既存の `Array[E]` 単相化機構（`PlewArray_<E>`・要素型名マングル・`Comp.arrayElems`）を一般 generic の土台に拡張する方向で調査・設計。
+
 ### その他の候補（エピック後）
 - 値意味論/CoW・トレイト/ジェネリクスは更に大物（後）。
 - **メソッド化の続き（任意・ROI 逓減）**：残る `parseX(c: inout c)` 群も `impl` へ移せるが再帰的・多数でゲイン小＝後回し可。
