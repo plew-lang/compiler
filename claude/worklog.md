@@ -4,7 +4,7 @@
 
 ## 現在地（一言）
 
-stage0（Rust）で **Plew 製のレキサとパーサ＋評価器が compile&run する**段階。サポート済み：型付き整数/Bool/String（`.bytes`/`==`）・Array（リテラル/添字/`count`/for-each/`append`/`arr[i]=x`・リーク参照セマンティクス）・struct・enum+match（文位置・if-chain）・if/else/while/for（range/array）・関数（相互再帰・プロトタイプ）・`break`/`continue`・**`inout` パラメータ**・**`as` 数値キャスト**・stdin/stdout I/O（`readStdin`/`write`）。codegen は型を依存順に出力（前方宣言＋トポロジカル）。`selfhost/lexer.pw`・`selfhost/calc.pw` が実証。**次：実 Plew サブセットの全トークン lexer → サブセット parser+C codegen を Plew で → ファイル/stdin で自分を食わせて self-host**。
+stage0（Rust）で **Plew 製のレキサ・パーサ・評価器・ミニコンパイラが compile&run する**段階。サポート済み：型付き整数/Bool/String（`.bytes`/`==`・リテラルのエスケープ `\n`/`\"`/`\\`）・Array（リテラル/添字/`count`/for-each/`append`/`arr[i]=x`・リーク参照セマンティクス）・struct・enum+match（文位置・if-chain）・if/else/while/for（range/array）・関数（相互再帰・プロトタイプ）・`break`/`continue`・**`inout` パラメータ**・**`as` 数値キャスト**・stdin/stdout I/O（`readStdin`/`write`）。codegen は型を依存順に出力（前方宣言＋トポロジカル）。**lex→parse→emit-C の縦串が Plew 側で実証済み**：`selfhost/lexer.pw`（全トークン）・`selfhost/parser.pw`（トークン列を食う式パーサ）・`selfhost/emit.pw`（式を C プログラムに変換するミニコンパイラ＝`write` で逐次出力・整数の十進化）・`selfhost/calc.pw`（バイト列パーサ）。**次：実 Plew サブセットの parser を Plew で本格化（宣言・文・式の全 AST）→ codegen を Plew で → ファイル I/O で自分を食わせて self-host**。
 
 ### stage0 のメモリモデル（重要・spec とは別物）
 
@@ -49,7 +49,9 @@ stage0 は **throwaway（1 回コンパイルして終了）**。よって Array
    - ✅ **`as` 数値キャスト**（spec/12）：`*` より強く prefix より弱い・左結合・stage0 は numeric↔numeric のみ・C キャスト。`3 as I64`（裸リテラル source）は曖昧エラーのまま＝`as` は default を供給しない（no-default 原則と整合）。
    - ✅ **stdin/stdout I/O**（stage0 ビルトイン・`@Std` の fiction）：`readStdin() -> String`（全 stdin）・`write(s: String)`（生・改行なし）。stage1 を stdin→stdout フィルタにでき、codegen 断片を逐次 `write` できる（文字列連結不要）＝真の self-host への足場。
    - ✅ **実 Plew サブセットの全トークン lexer**（`selfhost/lexer.pw`・stdin→トークン種別列）：整数/文字列リテラル・識別子/19 キーワード・行コメント・改行（collapsed）・全区切り＋多文字演算子（`-> => /> == != <= >= += -= *= /= %= ..< ..= && ||`）。`Lexer{bytes,pos,toks}` を `inout` で持ち回り `Array[Tok]` 構築。`fn add(a: I64, b: I64) -> I64 { return a + b }` を正しく tokenize（e2e `selfhost_lexer_tokenizes_a_function`・stdin パイプ）。**Go 流 newline 抑制も実装済み**（`()`/`[]` 内は継続・文を終えられるトークンの後だけ Newline・`{` 後は出さない＝stage0 と一致）。**未**：文字列エスケープ・Float リテラル・`~:`/ビット演算子。
-   - ⏭ 次：このトークン列を食う**サブセット parser を Plew で**（arena+index AST・`inout p`）→ C codegen を Plew で（`write` 断片出力）。名前解決は線形スキャン。self-host は `plewc-stage1 < x.pw > x.c`。**ファイル I/O**（自分自身を読む＝真の self-host に必須・現状ハードコード文字列）と **`Dictionary` or 線形スキャン**（名前解決）はその先。AST 再帰は arena+index（`ExprId`=U32 包み）で回避予定。
+   - ✅ **トークン列を食うパーサを Plew で**（`selfhost/parser.pw`）：lexer を同梱し `Array[Tok]` を消費＝トークンカーソル `inout p: Parser` を進め `match Tok.kind` でディスパッチ・Int リテラルの値を (start,len) スパンからソースバイト経由で復元（`tokenValue`）。式文法（`+ - * / %`・括弧・優先順位）を arena+index AST に。`"1 + 2 * 3 - 4 % 3"`→6（e2e `selfhost_token_parser_builds_and_runs`・stdin）。**バイトでなくトークン列を食う self-host パーサの形を実証**。
+   - ✅ **C codegen を Plew で＝ミニコンパイラ**（`selfhost/emit.pw`）：式を読み（lex→tokens→AST）、計算する**完全な C プログラムを stdout に出力**（`write` で逐次・String 連結不要）。整数の十進化は桁ごとの digit リテラル（`"0".."9"`）を再帰 `write`（stage0 String は不変・連結不可ゆえ構築でなく選択）。完全括弧化した C 式を AST から出力。二段検証＝stage0 が emit.pw をビルド→実行で C 取得→clang で C をコンパイル→実行→28（e2e `selfhost_emit_compiles_a_c_program`）。**lex→parse→emit-C の縦串が Plew 側で end-to-end・stage0 文字列エスケープも動作確認**。
+   - ⏭ 次：**実 Plew サブセットの parser を Plew で本格化**（宣言 `fn`/`struct`/`enum`・文・式の全 AST・`inout p`）→ codegen を Plew で（`write` 断片出力）。名前解決は線形スキャン。self-host は `plewc-stage1 < x.pw > x.c`。**ファイル I/O**（自分自身を読む＝真の self-host に必須・現状 stdin/ハードコード）と **`Dictionary` or 線形スキャン**（名前解決）はその先。AST 再帰は arena+index（U64 index＝`as` 回避）で回避済。
    - ⏭ import 機構／値位置 `match`／codegen 整数幅は必要になった時点で。
 7. ⏭ → stage1（Plew でコンパイラ）に必要な分が揃い次第セルフホスト
 6. **stage1**：Plew サブセットでコンパイラを書く → stage0 で compile → 自己 compile＝**セルフホスト達成**

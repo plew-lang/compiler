@@ -263,6 +263,36 @@ fn selfhost_token_parser_builds_and_runs() {
 }
 
 #[test]
+fn selfhost_emit_compiles_a_c_program() {
+    // selfhost/emit.pw is a tiny COMPILER in Plew: it reads an arithmetic
+    // expression and emits a complete C program (via write()) that prints the
+    // value. Two-stage check: stage0 builds emit.pw -> run it to get C ->
+    // clang compiles that C -> run -> result. Exercises the lex -> parse ->
+    // emit-C pipeline end to end in Plew, plus write()-based output and
+    // decimal integer formatting via per-digit string literals.
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../selfhost/emit.pw");
+    let src = std::fs::read_to_string(path).expect("read selfhost/emit.pw");
+    let emitted_c = build_and_run_stdin(&src, "selfhost_emit", "2 + 3 * (4 + 5) - 1\n");
+    assert!(emitted_c.contains("printf"), "emitted C was:\n{emitted_c}");
+
+    // Now compile the emitted C with clang and run it.
+    let c_path = std::env::temp_dir().join(format!("plew_emit_{}.c", std::process::id()));
+    let out_bin = std::env::temp_dir().join(format!("plew_emit_{}", std::process::id()));
+    std::fs::write(&c_path, &emitted_c).expect("write emitted C");
+    let status = Command::new("clang")
+        .arg(&c_path)
+        .arg("-o")
+        .arg(&out_bin)
+        .status()
+        .expect("run clang");
+    assert!(status.success(), "clang failed on emitted C:\n{emitted_c}");
+    let output = Command::new(&out_bin).output().expect("run emitted binary");
+    let _ = std::fs::remove_file(&c_path);
+    let _ = std::fs::remove_file(&out_bin);
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "28\n");
+}
+
+#[test]
 fn builds_and_runs_stdin_io() {
     use std::io::Write;
     use std::process::Stdio;
