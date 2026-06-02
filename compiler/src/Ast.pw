@@ -47,10 +47,16 @@ struct MakeField {
     val value: U64
 }
 
-// One `val name` field binding inside a match pattern `E.V { val a, val b }`.
+// One field binding inside a match pattern `E.V { val a, b: val c }`. `name` is
+// the introduced local; `field` is the variant field it reads. For punning
+// (`val a`) the two are equal; for rename (`b: val c`) field=b, name=c.
+// (Also reused elsewhere as a plain (name) span pair — array element names,
+// part directives — where the field span is just set equal to the name.)
 struct Bind {
     val nameStart: U64
     val nameLen: U64
+    val fieldStart: U64
+    val fieldLen: U64
 }
 
 // A call argument: the expression plus whether it was passed `inout` (which

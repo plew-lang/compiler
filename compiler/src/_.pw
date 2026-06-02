@@ -59,7 +59,7 @@ fn collectParts(rootBytes: Array[U8], toks: Array[Tok]) -> Array[Bind] {
                     _ => {}
                 }
                 if okDot && okSlash && okName {
-                    parts.append(<Bind nameStart=nameT.start nameLen=nameT.len />)
+                    parts.append(<Bind nameStart=nameT.start nameLen=nameT.len fieldStart=nameT.start fieldLen=nameT.len />)
                 }
             }
         }

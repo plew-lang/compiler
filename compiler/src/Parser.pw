@@ -411,7 +411,7 @@ fn recordArrayElem(c: inout Comp, ty: PType) {
             }
             i += 1
         }
-        c.arrayElems.append(<Bind nameStart=ty.start nameLen=ty.len />)
+        c.arrayElems.append(<Bind nameStart=ty.start nameLen=ty.len fieldStart=ty.start fieldLen=ty.len />)
     }
 }
 
@@ -602,10 +602,36 @@ fn parsePattern(c: inout Comp) -> PatInfo {
                         }
                         Kind.Eof => { break }
                         Kind.KwVal => {
+                            // punning `val x`: field and binding are the same name.
                             c.advance()
                             val bTok: Tok = c.cur()
                             c.advance()
-                            binds.append(<Bind nameStart=bTok.start nameLen=bTok.len />)
+                            binds.append(<Bind nameStart=bTok.start nameLen=bTok.len fieldStart=bTok.start fieldLen=bTok.len />)
+                            match c.curKind() {
+                                Kind.Comma => { c.advance() }
+                                _ => {}
+                            }
+                        }
+                        Kind.Ident => {
+                            // `field: val name` (rename) or `field: _` (discard).
+                            val fTok: Tok = c.cur()
+                            c.advance()
+                            match c.curKind() {
+                                Kind.Colon => { c.advance() }
+                                _ => {}
+                            }
+                            match c.curKind() {
+                                Kind.KwVal => {
+                                    c.advance()
+                                    val bTok: Tok = c.cur()
+                                    c.advance()
+                                    binds.append(<Bind nameStart=bTok.start nameLen=bTok.len fieldStart=fTok.start fieldLen=fTok.len />)
+                                }
+                                _ => {
+                                    // `field: _` -> discard (consume the `_`), no binding.
+                                    c.advance()
+                                }
+                            }
                             match c.curKind() {
                                 Kind.Comma => { c.advance() }
                                 _ => {}

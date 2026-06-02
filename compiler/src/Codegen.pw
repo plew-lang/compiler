@@ -498,7 +498,10 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
 }
 
 // Register a match-bound field as an in-scope local with its declared type.
-fn addBindLocal(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64, bindStart: U64, bindLen: U64) {
+// Register a match-bound field as an in-scope local. The field is found by
+// (fieldStart,fieldLen); the local is named (bindStart,bindLen) — equal for
+// punning, different for a `field: val name` rename.
+fn addBindLocal(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64, bindStart: U64, bindLen: U64) {
     mut val ei: U64 = 0
     while ei < c.enums.count {
         val e: EnumDef = c.enums[ei]
@@ -512,7 +515,7 @@ fn addBindLocal(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, 
                     mut val fi: U64 = 0
                     while fi < fs.count {
                         val f: FieldDef = fs[fi]
-                        if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: bindStart, bLen: bindLen) {
+                        if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: fieldStart, bLen: fieldLen) {
                             addLocal(c: inout c, nameStart: bindStart, nameLen: bindLen, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray, isInout: false, isMut: false)
                             return
                         }
@@ -1002,7 +1005,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     mut val bi: U64 = 0
                     while bi < binds.count {
                         val bd: Bind = binds[bi]
-                        genBindType(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
+                        genBindType(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, bindStart: bd.fieldStart, bindLen: bd.fieldLen)
                         write(s: " ")
                         writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
                         write(s: " = __ms")
@@ -1010,11 +1013,11 @@ fn genExpr(c: inout Comp, id: U64) {
                         write(s: ".data.")
                         writeSpan(c: inout c, start: a.variantStart, len: a.variantLen)
                         write(s: ".")
-                        writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
+                        writeSpan(c: inout c, start: bd.fieldStart, len: bd.fieldLen)
                         write(s: "; (void)")
                         writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
                         write(s: "; ")
-                        addBindLocal(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
+                        addBindLocal(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
                         bi += 1
                     }
                     write(s: "__mr")
@@ -1504,7 +1507,7 @@ fn genStmt(c: inout Comp, id: U64) {
                     while bi < binds.count {
                         val bd: Bind = binds[bi]
                         write(s: "        ")
-                        genBindType(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
+                        genBindType(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, bindStart: bd.fieldStart, bindLen: bd.fieldLen)
                         write(s: " ")
                         writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
                         write(s: " = _m")
@@ -1512,13 +1515,13 @@ fn genStmt(c: inout Comp, id: U64) {
                         write(s: ".data.")
                         writeSpan(c: inout c, start: a.variantStart, len: a.variantLen)
                         write(s: ".")
-                        writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
+                        writeSpan(c: inout c, start: bd.fieldStart, len: bd.fieldLen)
                         write(s: ";\n")
                         // mark used so an unreferenced bind doesn't warn
                         write(s: "        (void)")
                         writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
                         write(s: ";\n")
-                        addBindLocal(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
+                        addBindLocal(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
                         bi += 1
                     }
                     genBlock(c: inout c, id: a.body)
