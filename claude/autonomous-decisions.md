@@ -24,8 +24,8 @@
 
 - **eager copy で観測可能な値意味論を実現**（拠り所：意味は正しく・コスト〔遅延 CoW・解放〕は裏で後回し可）。コピー挿入点＝`val/mut val` 配列束縛・配列代入・JSX 配列フィールド初期化（いずれもソースが place のとき `PlewArray_E_copy`）。String は不変ゆえ共有で正しい（コピー不要）。**メモリは leak のまま**（解放は後回し hidden cost）。
 - **by-value 引数はコピーしない＝これは穴ではない**：spec で関数引数はイミュータブル（変更には `inout`）。変更不能ゆえ共有とコピーは観測同一。`inout` はポインタ（意図的共有）。よって引数コピー不要＝**eager copy を hot path に入れずに済み自己ホスト性能を保てる**（全引数を deep copy すると O(n)/call で壊滅する、を回避）。
-- **残る観測可能な穴（deferred）**：①**struct コピー時の配列フィールド**＝`mut val h2 = h`（struct 値）は C 浅いコピーで `h2` の配列フィールドが `h` と共有→両方 `mut val` なら `h2.items[0]=x` が `h` に波及。再帰的 struct deep-copy（型ごと copy 関数）が要る。②**place 配列の return**＝`fn f()->Array { return self.items }` の戻りを呼び出し側が `mut val` で受けて変更すると `self` に波及。return 地点 or 受け取り地点でコピーが要る。
-- **完全＆高速な CoW（refcount＋スコープ解放）は大物 ARC として後段**。eager copy は「mutable 束縛は稀＆小さい」前提で安全だが、上記①②と性能最適化（遅延コピー）は refcount 版でないと埋まらない。`inout` と CoW の相互作用（inflated refcount で inout が in-place 変更できなくなる問題）＝正確な解放が前提。
+- ✅ **観測可能な穴は解消済**：①struct コピー時の配列フィールド（`structNeedsCopy`＋`Name_copy` 再帰）②place 配列/struct の return（return 地点でコピー）も実装。**コピー挿入点＝配列 let/代入/JSX フィールド・mutable struct let/代入・return（配列/struct）**。by-value 引数はイミュータブルゆえ不要。残るは深いエッジ（generic-inst/enum フィールド内の配列の深いコピー＝mono struct/enum の copy 関数は未＝`Optional[Array[I32]]` 等のコンテナ内配列）。
+- **完全＆高速な CoW（refcount＋スコープ解放）は大物 ARC として後段**。eager copy は「mutable 束縛は稀＆小さい」前提で安全だが、性能最適化（遅延コピー）と解放（leak 解消）は refcount 版でないと埋まらない。`inout` と CoW の相互作用（inflated refcount で inout が in-place 変更できなくなる問題）＝正確な解放が前提。
 
 ## 既知の別件（generics 以前からの仮決め・関連）
 
