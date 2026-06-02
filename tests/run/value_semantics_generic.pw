@@ -1,0 +1,9 @@
+import @Std/Io with { print }
+struct Box[T] { mut val v: T }
+fn main() {
+    mut val a: Box[Array[I32]] = <Box[Array[I32]] v=[1, 2] />
+    mut val b: Box[Array[I32]] = a
+    b.v[0] = 9
+    print(a.v[0])
+    print(b.v[0])
+}

@@ -740,6 +740,10 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
         }
         Expr.Field { val base, val nameStart, val nameLen } => {
             val bt: TypeInfo = exprType(c: inout c, id: base)
+            // a generic struct instantiation's field type is substituted.
+            if isGenericInst(c: inout c, ref: bt.ref) {
+                return genericFieldTypeInfo(c: inout c, instRef: bt.ref, fieldStart: nameStart, fieldLen: nameLen)
+            }
             if bt.kind == 2 {
                 return fieldType(c: inout c, structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
             }
@@ -2459,7 +2463,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 genArrayValue(c: inout c, exprId: init, elemStart: tyStart, elemLen: tyLen)
             } else {
                 if mutable {
-                    genStructValue(c: inout c, exprId: init, structStart: tyStart, structLen: tyLen)
+                    genCopyValue(c: inout c, exprId: init, tyRef: ty, fallStart: tyStart, fallLen: tyLen, isArray: false)
                 } else {
                     genExpr(c: inout c, id: init)
                 }
@@ -2590,14 +2594,10 @@ fn genStmt(c: inout Comp, id: U64) {
                             genCheckedArith(c: inout c, op: cbin, lhs: target, rhs: value, tyStart: tt.nameStart, tyLen: tt.nameLen)
                         } else {
                             write(s: assignOpStr(op: op))
-                            if tt.kind == 3 {
-                                genArrayValue(c: inout c, exprId: value, elemStart: tt.nameStart, elemLen: tt.nameLen)
+                            if op == 49 {
+                                genCopyValue(c: inout c, exprId: value, tyRef: tt.ref, fallStart: tt.nameStart, fallLen: tt.nameLen, isArray: tt.kind == 3)
                             } else {
-                                if op == 49 {
-                                    genStructValue(c: inout c, exprId: value, structStart: tt.nameStart, structLen: tt.nameLen)
-                                } else {
-                                    genExpr(c: inout c, id: value)
-                                }
+                                genExpr(c: inout c, id: value)
                             }
                         }
                     }
@@ -2638,11 +2638,7 @@ fn genStmt(c: inout Comp, id: U64) {
                         // value semantics: returning a place array/struct hands
                         // back an independent copy (else the caller could mutate
                         // the callee's source, e.g. `return self.items`).
-                        if c.curRetIsArray {
-                            genArrayValue(c: inout c, exprId: value, elemStart: c.curRetStart, elemLen: c.curRetLen)
-                        } else {
-                            genStructValue(c: inout c, exprId: value, structStart: c.curRetStart, structLen: c.curRetLen)
-                        }
+                        genCopyValue(c: inout c, exprId: value, tyRef: c.curRetTy, fallStart: c.curRetStart, fallLen: c.curRetLen, isArray: c.curRetIsArray)
                     } else {
                         write(s: "0")
                     }
@@ -2976,6 +2972,74 @@ fn emitStructCopyDef(c: inout Comp, si: U64) {
     write(s: " return r; }\n")
 }
 
+// Does a monomorphized generic struct instantiation need a deep copy? True if
+// any field, after substituting the instantiation's type args, is an array.
+// (Nested mono-struct fields needing copy are deferred.)
+fn monoStructNeedsCopy(c: inout Comp, instRef: U64) -> Bool {
+    val t: TypeRef = c.types[instRef]
+    val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if si >= c.structs.count {
+        return false
+    }
+    val s: StructDef = c.structs[si]
+    val fields: Array[FieldDef] = s.fields
+    mut val i: U64 = 0
+    while i < fields.count {
+        val ti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: s.typeParams, tyRef: fields[i].ty)
+        if ti.kind == 3 {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// `Mangle Mangle_copy(Mangle s);` prototype for a mono struct instantiation.
+fn emitMonoStructCopyProto(c: inout Comp, instRef: U64) {
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " ")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: "_copy(")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " s);\n")
+}
+
+// Deep-copy definition for a mono struct instantiation: copy each array field
+// (after substitution) with PlewArray_E_copy; everything else stays shallow.
+fn emitMonoStructCopyDef(c: inout Comp, instRef: U64) {
+    val t: TypeRef = c.types[instRef]
+    val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if si >= c.structs.count {
+        return
+    }
+    val s: StructDef = c.structs[si]
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " ")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: "_copy(")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " s) { ")
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " r = s;")
+    val fields: Array[FieldDef] = s.fields
+    mut val i: U64 = 0
+    while i < fields.count {
+        val f: FieldDef = fields[i]
+        val ti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: s.typeParams, tyRef: f.ty)
+        if ti.kind == 3 {
+            write(s: " r.")
+            writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+            write(s: " = ")
+            wPA(c: inout c, elemStart: ti.nameStart, elemLen: ti.nameLen)
+            write(s: "_copy(s.")
+            writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+            write(s: ");")
+        }
+        i += 1
+    }
+    write(s: " return r; }\n")
+}
+
 // Emit a struct *value* for a mutable binding/store: deep-copy when the source
 // is a place and the struct needs copying (value semantics), else emit directly.
 fn genStructValue(c: inout Comp, exprId: U64, structStart: U64, structLen: U64) {
@@ -2989,6 +3053,30 @@ fn genStructValue(c: inout Comp, exprId: U64, structStart: U64, structLen: U64) 
         }
     }
     genExpr(c: inout c, id: exprId)
+}
+
+// Unified value-semantics copy for a binding/store/return, given the declared
+// type. Arrays and (mono / plain) structs that hold buffers deep-copy from a
+// place; everything else (scalars, Strings, Refs, fresh values) emits directly.
+fn genCopyValue(c: inout Comp, exprId: U64, tyRef: U64, fallStart: U64, fallLen: U64, isArray: Bool) {
+    if isArray {
+        genArrayValue(c: inout c, exprId: exprId, elemStart: fallStart, elemLen: fallLen)
+        return
+    }
+    if isGenericInst(c: inout c, ref: tyRef) {
+        if monoStructNeedsCopy(c: inout c, instRef: tyRef) {
+            if isPlaceExpr(c: inout c, id: exprId) {
+                emitMangle(c: inout c, ref: tyRef)
+                write(s: "_copy(")
+                genExpr(c: inout c, id: exprId)
+                write(s: ")")
+                return
+            }
+        }
+        genExpr(c: inout c, id: exprId)
+        return
+    }
+    genStructValue(c: inout c, exprId: exprId, structStart: fallStart, structLen: fallLen)
 }
 
 // Emit a struct body `struct Name { <ctype> field; ... };`. Forward typedefs
@@ -3442,6 +3530,24 @@ fn tyRefIsGround(c: inout Comp, ref: U64) -> Bool {
 // contains. Post-order (args before self) so a by-value nested instance is
 // emitted before the type that contains it; deduped structurally. A type that
 // still mentions a type parameter (a template like `Box[T]`) is not collected.
+// Register the element type of an Array reached via a type argument into
+// c.arrayElems (deduped by name span) so its PlewArray runtime is emitted.
+fn registerArrayElemRef(c: inout Comp, elemRef: U64) {
+    if elemRef >= c.types.count {
+        return
+    }
+    val e: TypeRef = c.types[elemRef]
+    mut val i: U64 = 0
+    while i < c.arrayElems.count {
+        val ae: Bind = c.arrayElems[i]
+        if spansEqual(c: inout c, aStart: ae.nameStart, aLen: ae.nameLen, bStart: e.nameStart, bLen: e.nameLen) {
+            return
+        }
+        i += 1
+    }
+    c.arrayElems.append(<Bind nameStart=e.nameStart nameLen=e.nameLen fieldStart=e.nameStart fieldLen=e.nameLen />)
+}
+
 fn scanType(c: inout Comp, ref: U64) {
     if ref >= c.types.count {
         return
@@ -3451,6 +3557,13 @@ fn scanType(c: inout Comp, ref: U64) {
     while i < t.args.count {
         scanType(c: inout c, ref: t.args[i])
         i += 1
+    }
+    // an `Array[E]` reached via a type argument (e.g. inside `Box[Array[I32]]`)
+    // still needs its `PlewArray_E` runtime emitted — register the element.
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+        if t.args.count == 1 {
+            registerArrayElemRef(c: inout c, elemRef: t.args[0])
+        }
     }
     if isGenericInst(c: inout c, ref: ref) {
         if tyRefIsGround(c: inout c, ref: ref) {

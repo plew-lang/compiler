@@ -571,6 +571,28 @@ fn main() {
         }
         scd += 1
     }
+    // deep-copy fns for monomorphized generic struct instantiations holding
+    // arrays (e.g. `Box[Array[I32]]`): prototypes then definitions.
+    mut val mcp: U64 = 0
+    while mcp < c.genInsts.count {
+        if isGenericEnumInst(c: inout c, ref: c.genInsts[mcp]) {
+        } else {
+            if monoStructNeedsCopy(c: inout c, instRef: c.genInsts[mcp]) {
+                emitMonoStructCopyProto(c: inout c, instRef: c.genInsts[mcp])
+            }
+        }
+        mcp += 1
+    }
+    mut val mcd: U64 = 0
+    while mcd < c.genInsts.count {
+        if isGenericEnumInst(c: inout c, ref: c.genInsts[mcd]) {
+        } else {
+            if monoStructNeedsCopy(c: inout c, instRef: c.genInsts[mcd]) {
+                emitMonoStructCopyDef(c: inout c, instRef: c.genInsts[mcd])
+            }
+        }
+        mcd += 1
+    }
     // prototypes (skip main and generic templates — the latter are emitted per
     // instantiation below).
     mut val i: U64 = 0
