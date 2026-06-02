@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+fn mapI32(xs: Array[I32], f: fn(n: I32) -> I32) -> Array[I32] {
+    mut val out: Array[I32] = []
+    for val x in xs {
+        out.append(f(n: x))
+    }
+    return out
+}
+
+fn main() {
+    val nums: Array[I32] = [1, 2, 3, 4]
+    val doubled: Array[I32] = mapI32(xs: nums, f: fn(n: I32) -> I32 { return n * 2 })
+    for val d in doubled {
+        print(d)
+    }
+    print(nums.count)
+}
