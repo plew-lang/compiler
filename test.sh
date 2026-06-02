@@ -9,7 +9,15 @@
 #                      spec-invalid code" (acceptance soundness)
 #   fixpoint           plewc compiles itself to a stable C output
 #
-# Usage: ./test.sh   (run ./bootstrap.sh first to build compiler/plewc)
+# Usage: ./test.sh           (run ./bootstrap.sh first to build compiler/plewc)
+#        ASAN=1 ./test.sh    compile + run the test PROGRAMS under
+#                            AddressSanitizer (catches use-after-free /
+#                            double-free / heap-overflow once ARC starts
+#                            freeing). Green today: nothing is freed yet, and
+#                            macOS ASan does not detect leaks by default. When
+#                            ARC frees, flip ASAN_OPTIONS detect_leaks=1 below.
+#                            The compiler itself (fixpoint/reject) intentionally
+#                            leaks, so it stays out of the ASan pass.
 
 cd "$(dirname "$0")"
 PLEWC=./compiler/plewc
@@ -18,6 +26,14 @@ TMP="${TMPDIR:-/tmp}/plew-test-$$"
 mkdir -p "$TMP"
 pass=0
 fail=0
+
+# Flags for compiling the generated C of *test programs*. ASAN=1 opts into
+# AddressSanitizer; leak detection stays off until ARC actually frees memory.
+CC_FLAGS="-w"
+if [ "${ASAN:-0}" = "1" ]; then
+    CC_FLAGS="-w -g -fsanitize=address -fno-omit-frame-pointer"
+    export ASAN_OPTIONS="detect_leaks=0"
+fi
 
 if [ ! -x "$PLEWC" ]; then
     echo "compiler/plewc not found — run ./bootstrap.sh first" >&2
@@ -32,7 +48,7 @@ for pw in tests/run/*.pw; do
     if ! "$PLEWC" "$pw" > "$c" 2>"$TMP/err"; then
         echo "FAIL  $name  (plewc errored)"; fail=$((fail + 1)); continue
     fi
-    if ! clang -w "$c" -o "$bin" 2>"$TMP/err"; then
+    if ! clang $CC_FLAGS "$c" -o "$bin" 2>"$TMP/err"; then
         echo "FAIL  $name  (clang rejected generated C)"; fail=$((fail + 1)); continue
     fi
     if [ -f "tests/run/$name.in" ]; then
@@ -60,7 +76,7 @@ for main in tests/part/*/Main.pw tests/part/Main.pw; do
     if ! "$PLEWC" "$main" > "$c" 2>"$TMP/err"; then
         echo "FAIL  part/$name  (plewc errored)"; fail=$((fail + 1)); continue
     fi
-    if ! clang -w "$c" -o "$bin" 2>"$TMP/err"; then
+    if ! clang $CC_FLAGS "$c" -o "$bin" 2>"$TMP/err"; then
         echo "FAIL  part/$name  (clang rejected generated C)"; fail=$((fail + 1)); continue
     fi
     got=$("$bin")
@@ -83,7 +99,7 @@ for pw in tests/panic/*.pw; do
     if ! "$PLEWC" "$pw" > "$c" 2>"$TMP/err"; then
         echo "FAIL  panic/$name  (plewc errored — should compile)"; fail=$((fail + 1)); continue
     fi
-    if ! clang -w "$c" -o "$bin" 2>"$TMP/err"; then
+    if ! clang $CC_FLAGS "$c" -o "$bin" 2>"$TMP/err"; then
         echo "FAIL  panic/$name  (clang rejected generated C)"; fail=$((fail + 1)); continue
     fi
     "$bin" >/dev/null 2>"$TMP/perr"
