@@ -1,0 +1,11 @@
+// Cross-file `import ./Name` (separate files folded into the build by the
+// module loader), including a diamond: both Main and Helper import Util, which
+// must be included exactly once (dedup).
+import @Std/Io with { print }
+import ./Helper with { addOne }
+import ./Util
+
+fn main() {
+    print(addOne(n: 41I64))      // 42
+    print(triple(n: 7I64))       // 21
+}

@@ -24,8 +24,12 @@ part ./Codegen
 // C-output model has no separate compilation). Only `part ./Name` (sibling file)
 // is supported for now; `_.pw` directories, `../`, and `/` roots are additive.
 
-// Scan a lexed token stream for `part . / Ident` directives, returning the
-// module-name spans (into `rootBytes`). `part` is an ordinary identifier.
+// Scan a lexed token stream for local-include directives — `part ./Name` and
+// `import ./Name` — returning the module-name spans (into `rootBytes`). Both
+// keywords are ordinary identifiers; only the `./Name` shape (Dot Slash Ident)
+// is collected here. `import @Std/…` (At …), `import /…` (Slash …) and
+// `import ../…` (Dot Dot …) do not match this pattern, so they are left for
+// their own handling (intrinsic @Std / root-absolute / parent-relative).
 fn collectParts(rootBytes: Array[U8], toks: Array[Tok]) -> Array[Bind] {
     mut val parts: Array[Bind] = []
     mut val i: U64 = 0
@@ -35,6 +39,9 @@ fn collectParts(rootBytes: Array[U8], toks: Array[Tok]) -> Array[Bind] {
         match t.kind {
             Kind.Ident => {
                 if rangeEquals(bytes: rootBytes, start: t.start, len: t.len, kw: "part") {
+                    isPart = true
+                }
+                if rangeEquals(bytes: rootBytes, start: t.start, len: t.len, kw: "import") {
                     isPart = true
                 }
             }
@@ -68,26 +75,53 @@ fn collectParts(rootBytes: Array[U8], toks: Array[Tok]) -> Array[Bind] {
     return parts
 }
 
-// Build the file path for `part ./Name`: the root file's directory (everything
-// up to and including the last `/`) + Name + ".pw".
-fn buildPartPath(rootPathBytes: Array[U8], rootBytes: Array[U8], nameStart: U64, nameLen: U64) -> Array[U8] {
-    mut val path: Array[U8] = []
-    mut val prefixLen: U64 = 0
+// Append every byte of `from` onto `into`.
+fn appendBytes(into: inout Array[U8], from: Array[U8]) {
+    mut val i: U64 = 0
+    while i < from.count {
+        into.append(from[i])
+        i += 1
+    }
+}
+
+// Copy a byte span out of `buf` into a fresh array (paths live in a shared
+// buffer; this extracts one for use as a file path).
+fn extractSpan(buf: Array[U8], start: U64, len: U64) -> Array[U8] {
+    mut val out: Array[U8] = []
+    mut val i: U64 = 0
+    while i < len {
+        out.append(buf[start + i])
+        i += 1
+    }
+    return out
+}
+
+// Length of the directory prefix of `path` (index just past the last '/'); 0 if
+// the path has no '/'. So a sibling resolves as path[0..pre] + name.
+fn dirPrefixLen(path: Array[U8]) -> U64 {
+    mut val pre: U64 = 0
     mut val k: U64 = 0
-    while k < rootPathBytes.count {
-        if rootPathBytes[k] == 47 {
-            prefixLen = k + 1
+    while k < path.count {
+        if path[k] == 47 {
+            pre = k + 1
         }
         k += 1
     }
-    mut val p: U64 = 0
-    while p < prefixLen {
-        path.append(rootPathBytes[p])
-        p += 1
+    return pre
+}
+
+// Resolve a `./Name` local include against the importer's directory:
+// base[0..baseLen] + Name + ".pw".
+fn resolveSibling(base: Array[U8], baseLen: U64, nameBytes: Array[U8], nameStart: U64, nameLen: U64) -> Array[U8] {
+    mut val path: Array[U8] = []
+    mut val i: U64 = 0
+    while i < baseLen {
+        path.append(base[i])
+        i += 1
     }
     mut val n: U64 = 0
     while n < nameLen {
-        path.append(rootBytes[nameStart + n])
+        path.append(nameBytes[nameStart + n])
         n += 1
     }
     path.append(46)
@@ -96,13 +130,28 @@ fn buildPartPath(rootPathBytes: Array[U8], rootBytes: Array[U8], nameStart: U64,
     return path
 }
 
-// Append every byte of `from` onto `into`.
-fn appendBytes(into: inout Array[U8], from: Array[U8]) {
+// Whether `path` is already in the loaded set (each Bind is a span into `buf`).
+// Dedup keeps a module included once and makes import cycles terminate.
+fn pathSeen(buf: Array[U8], loaded: Array[Bind], path: Array[U8]) -> Bool {
     mut val i: U64 = 0
-    while i < from.count {
-        into.append(from[i])
+    while i < loaded.count {
+        val b: Bind = loaded[i]
+        if b.nameLen == path.count {
+            mut val eq: Bool = true
+            mut val j: U64 = 0
+            while j < path.count {
+                if buf[b.nameStart + j] != path[j] {
+                    eq = false
+                }
+                j += 1
+            }
+            if eq {
+                return true
+            }
+        }
         i += 1
     }
+    return false
 }
 
 // ---- driver ----
@@ -118,22 +167,44 @@ fn main() {
     // we read a single program from stdin.
     mut val combined: Array[U8] = []
     if argCount() > 1 {
+        // Module loader: a recursive, deduplicated worklist over local includes.
+        // Each file's `part ./Name` / `import ./Name` directives resolve relative
+        // to that file's own directory; every distinct file is concatenated once
+        // into a single buffer (the compiler is single-arena / single-C-output).
         val rootPath: String = argAt(1)
-        val rootPathBytes: Array[U8] = rootPath.bytes
-        val rootStr: String = readFile(rootPath)
-        val rootBytes: Array[U8] = rootStr.bytes
-        mut val lx0: Lexer = <Lexer bytes=rootBytes pos=0 toks=[] depth=0 />
-        lex(lx: inout lx0)
-        val parts: Array[Bind] = collectParts(rootBytes: rootBytes, toks: lx0.toks)
-        appendBytes(into: inout combined, from: rootBytes)
-        mut val pi: U64 = 0
-        while pi < parts.count {
-            val pb: Bind = parts[pi]
-            val partPath: Array[U8] = buildPartPath(rootPathBytes: rootPathBytes, rootBytes: rootBytes, nameStart: pb.nameStart, nameLen: pb.nameLen)
-            val partStr: String = readFileBytes(partPath)
-            combined.append(10)
-            appendBytes(into: inout combined, from: partStr.bytes)
-            pi += 1
+        val entryBytes: Array[U8] = rootPath.bytes
+        mut val pathBuf: Array[U8] = []
+        mut val loaded: Array[Bind] = []
+        val es: U64 = pathBuf.count
+        appendBytes(into: inout pathBuf, from: entryBytes)
+        loaded.append(<Bind nameStart=es nameLen=entryBytes.count fieldStart=es fieldLen=entryBytes.count />)
+        mut val qi: U64 = 0
+        while qi < loaded.count {
+            val ent: Bind = loaded[qi]
+            qi += 1
+            val path: Array[U8] = extractSpan(buf: pathBuf, start: ent.nameStart, len: ent.nameLen)
+            val src: String = readFileBytes(path)
+            val sb: Array[U8] = src.bytes
+            if combined.count > 0 {
+                combined.append(10)
+            }
+            appendBytes(into: inout combined, from: sb)
+            mut val lxp: Lexer = <Lexer bytes=sb pos=0 toks=[] depth=0 />
+            lex(lx: inout lxp)
+            val incs: Array[Bind] = collectParts(rootBytes: sb, toks: lxp.toks)
+            val baseLen: U64 = dirPrefixLen(path: path)
+            mut val pj: U64 = 0
+            while pj < incs.count {
+                val pb: Bind = incs[pj]
+                val childPath: Array[U8] = resolveSibling(base: path, baseLen: baseLen, nameBytes: sb, nameStart: pb.nameStart, nameLen: pb.nameLen)
+                if pathSeen(buf: pathBuf, loaded: loaded, path: childPath) {
+                } else {
+                    val cs: U64 = pathBuf.count
+                    appendBytes(into: inout pathBuf, from: childPath)
+                    loaded.append(<Bind nameStart=cs nameLen=childPath.count fieldStart=cs fieldLen=childPath.count />)
+                }
+                pj += 1
+            }
         }
     } else {
         val s: String = readStdin()
