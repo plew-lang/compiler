@@ -2,10 +2,6 @@
 
 > 現在地・次の一歩・運用メモだけを置く。完了した「やった」は git 履歴へ（タグで辿れる）。「なぜ」は [design-decisions.md](design-decisions.md)、「パイプライン設計」は [architecture.md](architecture.md)、「spec からの意図的剥離」は [provisional.md](provisional.md)、自走中の仮決めは [autonomous-decisions.md](autonomous-decisions.md)。
 
-## ⚠️ 自走モード（最重要・常時遵守）
-
-ユーザー離席中は **ランタイム完成（クロージャのキャプチャ→spawn→async／ARC 解放・deinit）まで止まらず実装し続ける**。停止してよいのは①後戻りが重い言語表面/spec 決定 ②自力で解けないブロッカー のみ。報告・確認のために turn を終えない＝常に次の増分へ。判断は spec 整合な既定で進め、**仮決めは [autonomous-decisions.md](autonomous-decisions.md) に逐次追記**。緑（build＋test.sh＋不動点）でこまめに署名コミット＆push、worklog 更新。詳細はローカルメモリ `autonomous-until-runtime`。
-
 ## 現在地
 
 🎉 **セルフホスト達成・stage0（Rust）退役済み。** 正典コンパイラ＝Plew パッケージ `compiler/src/`（root `_.pw` が `part` で `Lexer`/`Ast`/`Parser`/`Codegen` を綴じ込む 1 モジュール）。自分自身を不動点までコンパイルする。
