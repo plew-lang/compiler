@@ -6,6 +6,7 @@ typedef struct { const char* data; long long len; } PlewString;
 __attribute__((unused)) static void* plew_arc_alloc(long long bytes) { long long* p = (long long*)malloc(sizeof(long long) + (size_t)bytes); p[0] = 1; return (void*)(p + 1); }
 __attribute__((unused)) static void plew_arc_retain(long long* rc) { if (rc) (*rc) += 1; }
 __attribute__((unused)) static void plew_arc_release(long long* rc) { if (rc && (--(*rc)) == 0) free((void*)rc); }
+__attribute__((unused)) static void* plew_ref_share(void* p) { if (p) ((long long*)p)[-1] += 1; return p; }
 __attribute__((unused)) static int PlewString_eq(PlewString a, PlewString b) { if (a.len != b.len) return 0; for (long long i = 0; i < a.len; i++) if (a.data[i] != b.data[i]) return 0; return 1; }
 __attribute__((unused)) static PlewString plew_read_stdin(void) { size_t cap = 4096, len = 0; char* buf = (char*)malloc(cap); int ch; while ((ch = getchar()) != EOF) { if (len + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); } buf[len++] = (char)ch; } PlewString s; s.data = buf; s.len = (long long)len; return s; }
 __attribute__((unused)) static void plew_write(PlewString s) { fwrite(s.data, 1, (size_t)s.len, stdout); }
@@ -670,6 +671,7 @@ TypeInfo typeInfoOfName(Comp* c, uint64_t start, uint64_t len, long long isArray
 void addLocal(Comp* c, uint64_t nameStart, uint64_t nameLen, uint64_t tyStart, uint64_t tyLen, long long isArray, uint64_t ty, long long isInout, long long isMut, long long owned);
 uint64_t scopeMark(Comp* c);
 void emitScopeDrops(Comp* c, uint64_t mark);
+void emitRefRelease(Comp* c, uint64_t nameStart, uint64_t nameLen, uint64_t refTy);
 long long structLocalReleasable(Comp* c, uint64_t start, uint64_t len);
 void popLocals(Comp* c, uint64_t mark);
 void scopeExit(Comp* c, uint64_t mark);
@@ -867,6 +869,7 @@ int main(int argc, char** argv) {
     plew_write((PlewString){"__attribute__((unused)) static void* plew_arc_alloc(long long bytes) { long long* p = (long long*)malloc(sizeof(long long) + (size_t)bytes); p[0] = 1; return (void*)(p + 1); }\n", 176});
     plew_write((PlewString){"__attribute__((unused)) static void plew_arc_retain(long long* rc) { if (rc) (*rc) += 1; }\n", 91});
     plew_write((PlewString){"__attribute__((unused)) static void plew_arc_release(long long* rc) { if (rc && (--(*rc)) == 0) free((void*)rc); }\n", 115});
+    plew_write((PlewString){"__attribute__((unused)) static void* plew_ref_share(void* p) { if (p) ((long long*)p)[-1] += 1; return p; }\n", 108});
     plew_write((PlewString){"__attribute__((unused)) static int PlewString_eq(PlewString a, PlewString b) { if (a.len != b.len) return 0; for (long long i = 0; i < a.len; i++) if (a.data[i] != b.data[i]) return 0; return 1; }\n", 197});
     plew_write((PlewString){"__attribute__((unused)) static PlewString plew_read_stdin(void) { size_t cap = 4096, len = 0; char* buf = (char*)malloc(cap); int ch; while ((ch = getchar()) != EOF) { if (len + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); } buf[len++] = (char)ch; } PlewString s; s.data = buf; s.len = (long long)len; return s; }\n", 323});
     plew_write((PlewString){"__attribute__((unused)) static void plew_write(PlewString s) { fwrite(s.data, 1, (size_t)s.len, stdout); }\n", 107});
@@ -4374,6 +4377,10 @@ void emitScopeDrops(Comp* c, uint64_t mark) {
     plew_write((PlewString){");\n", 3});
     }
     else {
+    if (isRefInst(&((*c)), lo.ty)) {
+    emitRefRelease(&((*c)), lo.nameStart, lo.nameLen, lo.ty);
+    }
+    else {
     if (structLocalReleasable(&((*c)), lo.tyStart, lo.tyLen)) {
     plew_write((PlewString){"    ", 4});
     writeSpan(&((*c)), lo.tyStart, lo.tyLen);
@@ -4384,6 +4391,36 @@ void emitScopeDrops(Comp* c, uint64_t mark) {
     }
     }
     }
+    }
+}
+void emitRefRelease(Comp* c, uint64_t nameStart, uint64_t nameLen, uint64_t refTy) {
+    TypeRef rt = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(refTy)));
+    TypeInfo bti = typeInfoOfRef(&((*c)), PlewArray_U64_get(rt.args, (long long)(0)));
+    plew_write((PlewString){"    if (", 8});
+    writeSpan(&((*c)), nameStart, nameLen);
+    plew_write((PlewString){") { long long* __rrc = ((long long*)", 36});
+    writeSpan(&((*c)), nameStart, nameLen);
+    plew_write((PlewString){") - 1; if ((--(*__rrc)) == 0) {", 31});
+    if (bti.kind == 3) {
+    plew_write((PlewString){" ", 1});
+    wPA(&((*c)), bti.nameStart, bti.nameLen);
+    plew_write((PlewString){"_release(*", 10});
+    writeSpan(&((*c)), nameStart, nameLen);
+    plew_write((PlewString){");", 2});
+    }
+    else {
+    if (bti.kind == 2) {
+    if (structNeedsCopy(&((*c)), bti.nameStart, bti.nameLen)) {
+    plew_write((PlewString){" ", 1});
+    writeSpan(&((*c)), bti.nameStart, bti.nameLen);
+    plew_write((PlewString){"_release(*", 10});
+    writeSpan(&((*c)), nameStart, nameLen);
+    plew_write((PlewString){");", 2});
+    }
+    }
+    }
+    plew_write((PlewString){" free(__rrc); } }\n", 18});
+    TypeRef_release(rt);
 }
 long long structLocalReleasable(Comp* c, uint64_t start, uint64_t len) {
     uint64_t si = structIndexByName(&((*c)), start, len);
@@ -6435,13 +6472,14 @@ void genExpr(Comp* c, uint64_t id) {
     writeU64(t2);
     plew_write((PlewString){" = (", 4});
     emitConcreteCType(&((*c)), PlewArray_U64_get(rt.args, (long long)(0)));
-    plew_write((PlewString){"*)malloc(sizeof(", 16});
+    plew_write((PlewString){"*)plew_arc_alloc(sizeof(", 24});
     emitConcreteCType(&((*c)), PlewArray_U64_get(rt.args, (long long)(0)));
     plew_write((PlewString){")); *__ref", 10});
     writeU64(t2);
     plew_write((PlewString){" = (", 4});
     if ((long long)((fields).len) > 0) {
-    genExpr(&((*c)), PlewArray_MakeField_get(fields, (long long)(0)).value);
+    TypeInfo bti = typeInfoOfRef(&((*c)), PlewArray_U64_get(rt.args, (long long)(0)));
+    genCopyValue(&((*c)), PlewArray_MakeField_get(fields, (long long)(0)).value, PlewArray_U64_get(rt.args, (long long)(0)), bti.nameStart, bti.nameLen, (bti.kind == 3));
     }
     else {
     plew_write((PlewString){"0", 1});
@@ -7936,6 +7974,16 @@ void genStructValue(Comp* c, uint64_t exprId, uint64_t structStart, uint64_t str
 void genCopyValue(Comp* c, uint64_t exprId, uint64_t tyRef, uint64_t fallStart, uint64_t fallLen, long long isArray) {
     if (isArray) {
     genArrayValue(&((*c)), exprId, fallStart, fallLen);
+    return;
+    }
+    if (isRefInst(&((*c)), tyRef)) {
+    if (isPlaceExpr(&((*c)), exprId)) {
+    plew_write((PlewString){"plew_ref_share((void*)(", 23});
+    genExpr(&((*c)), exprId);
+    plew_write((PlewString){"))", 2});
+    return;
+    }
+    genExpr(&((*c)), exprId);
     return;
     }
     if (isGenericInst(&((*c)), tyRef)) {

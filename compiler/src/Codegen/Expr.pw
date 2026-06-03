@@ -414,8 +414,10 @@ fn genExpr(c: inout Comp, id: U64) {
         }
         Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
             if isRefInst(c: inout c, ref: ty) {
-                // `<Ref value=e />` -> allocate the pointee on the heap and move
-                // `e` into it (the box is shared by copy; ARC/free deferred).
+                // `<Ref value=e />` -> a refcounted heap box (plew_arc_alloc puts
+                // an rc header before the pointee; the Ref value is the pointer
+                // past it). The box owns its pointee, so move/share `e` into it
+                // with genCopyValue; copies of the Ref retain, scope exit releases.
                 val rt: TypeRef = c.types[ty]
                 val t2: U64 = c.tmp
                 c.tmp = c.tmp + 1
@@ -425,13 +427,14 @@ fn genExpr(c: inout Comp, id: U64) {
                 writeU64(n: t2)
                 write(s: " = (")
                 emitConcreteCType(c: inout c, ref: rt.args[0])
-                write(s: "*)malloc(sizeof(")
+                write(s: "*)plew_arc_alloc(sizeof(")
                 emitConcreteCType(c: inout c, ref: rt.args[0])
                 write(s: ")); *__ref")
                 writeU64(n: t2)
                 write(s: " = (")
                 if fields.count > 0 {
-                    genExpr(c: inout c, id: fields[0].value)
+                    val bti: TypeInfo = typeInfoOfRef(c: inout c, ref: rt.args[0])
+                    genCopyValue(c: inout c, exprId: fields[0].value, tyRef: rt.args[0], fallStart: bti.nameStart, fallLen: bti.nameLen, isArray: bti.kind == 3)
                 } else {
                     write(s: "0")
                 }

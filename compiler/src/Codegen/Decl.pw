@@ -372,6 +372,18 @@ fn genCopyValue(c: inout Comp, exprId: U64, tyRef: U64, fallStart: U64, fallLen:
         genArrayValue(c: inout c, exprId: exprId, elemStart: fallStart, elemLen: fallLen)
         return
     }
+    if isRefInst(c: inout c, ref: tyRef) {
+        // CoW share for a Ref: binding from a live place retains the box; a fresh
+        // Ref (from `<Ref .../>`) transfers its rc=1 and is emitted directly.
+        if isPlaceExpr(c: inout c, id: exprId) {
+            write(s: "plew_ref_share((void*)(")
+            genExpr(c: inout c, id: exprId)
+            write(s: "))")
+            return
+        }
+        genExpr(c: inout c, id: exprId)
+        return
+    }
     if isGenericInst(c: inout c, ref: tyRef) {
         mut val needs: Bool = false
         if isGenericEnumInst(c: inout c, ref: tyRef) {

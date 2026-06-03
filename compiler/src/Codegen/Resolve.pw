@@ -233,21 +233,57 @@ fn emitScopeDrops(c: inout Comp, mark: U64) {
                 writeSpan(c: inout c, start: lo.nameStart, len: lo.nameLen)
                 write(s: ");\n")
             } else {
-                // an owned struct local that owns heap fields: release them. Safe
-                // now that struct bindings share-on-bind (retain), so the local
-                // genuinely co-owns its fields rather than aliasing without a
-                // refcount. Restricted to concrete (non-generic) structs, whose
-                // `<Name>_release` is the one emitted by the driver.
-                if structLocalReleasable(c: inout c, start: lo.tyStart, len: lo.tyLen) {
-                    write(s: "    ")
-                    writeSpan(c: inout c, start: lo.tyStart, len: lo.tyLen)
-                    write(s: "_release(")
-                    writeSpan(c: inout c, start: lo.nameStart, len: lo.nameLen)
-                    write(s: ");\n")
+                if isRefInst(c: inout c, ref: lo.ty) {
+                    // an owned Ref local: release its refcounted box.
+                    emitRefRelease(c: inout c, nameStart: lo.nameStart, nameLen: lo.nameLen, refTy: lo.ty)
+                } else {
+                    // an owned struct local that owns heap fields: release them.
+                    // Safe now that struct bindings share-on-bind (retain), so the
+                    // local genuinely co-owns its fields rather than aliasing
+                    // without a refcount. Restricted to concrete (non-generic)
+                    // structs, whose `<Name>_release` the driver emits.
+                    if structLocalReleasable(c: inout c, start: lo.tyStart, len: lo.tyLen) {
+                        write(s: "    ")
+                        writeSpan(c: inout c, start: lo.tyStart, len: lo.tyLen)
+                        write(s: "_release(")
+                        writeSpan(c: inout c, start: lo.nameStart, len: lo.nameLen)
+                        write(s: ");\n")
+                    }
                 }
             }
         }
     }
+}
+
+// Release an owned Ref local: drop the box's refcount (header before the
+// pointee); at zero, release the boxed value if it owns heap (an array or a
+// heap-owning struct) then free the box.
+fn emitRefRelease(c: inout Comp, nameStart: U64, nameLen: U64, refTy: U64) {
+    val rt: TypeRef = c.types[refTy]
+    val bti: TypeInfo = typeInfoOfRef(c: inout c, ref: rt.args[0])
+    write(s: "    if (")
+    writeSpan(c: inout c, start: nameStart, len: nameLen)
+    write(s: ") { long long* __rrc = ((long long*)")
+    writeSpan(c: inout c, start: nameStart, len: nameLen)
+    write(s: ") - 1; if ((--(*__rrc)) == 0) {")
+    if bti.kind == 3 {
+        write(s: " ")
+        wPA(c: inout c, elemStart: bti.nameStart, elemLen: bti.nameLen)
+        write(s: "_release(*")
+        writeSpan(c: inout c, start: nameStart, len: nameLen)
+        write(s: ");")
+    } else {
+        if bti.kind == 2 {
+            if structNeedsCopy(c: inout c, start: bti.nameStart, len: bti.nameLen) {
+                write(s: " ")
+                writeSpan(c: inout c, start: bti.nameStart, len: bti.nameLen)
+                write(s: "_release(*")
+                writeSpan(c: inout c, start: nameStart, len: nameLen)
+                write(s: ");")
+            }
+        }
+    }
+    write(s: " free(__rrc); } }\n")
 }
 
 // Whether an owned struct local of type (start,len) should be released at scope
