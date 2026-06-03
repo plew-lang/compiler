@@ -224,9 +224,14 @@ fn emitScopeDrops(c: inout Comp, mark: U64) {
         val lo: Local = c.locals[i]
         if lo.owned {
             if lo.isArray {
-                write(s: "    plew_arc_release(")
+                // recursive release: PlewArray_E_release frees heap-owning struct
+                // elements before the buffer (E_release = plew_arc_release for
+                // scalar elements; rc=0 borrowed views are no-ops).
+                write(s: "    ")
+                wPA(c: inout c, elemStart: lo.tyStart, elemLen: lo.tyLen)
+                write(s: "_release(")
                 writeSpan(c: inout c, start: lo.nameStart, len: lo.nameLen)
-                write(s: ".rc);\n")
+                write(s: ");\n")
             } else {
                 // an owned struct local that owns heap fields: release them. Safe
                 // now that struct bindings share-on-bind (retain), so the local

@@ -169,9 +169,11 @@ fn emitStructReleaseDef(c: inout Comp, si: U64) {
     while i < fields.count {
         val f: FieldDef = fields[i]
         if f.tyIsArray {
-            write(s: " plew_arc_release(s.")
+            write(s: " ")
+            wPA(c: inout c, elemStart: f.tyStart, elemLen: f.tyLen)
+            write(s: "_release(s.")
             writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-            write(s: ".rc);")
+            write(s: ");")
         } else {
             if structNeedsCopy(c: inout c, start: f.tyStart, len: f.tyLen) {
                 write(s: " ")
