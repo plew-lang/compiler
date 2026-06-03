@@ -148,9 +148,9 @@ fn emitConcreteCType(c: inout Comp, ref: U64) {
         write(s: "*")
         return
     }
-    // a function type -> its function-pointer typedef name.
+    // a function type -> the uniform fat-closure struct (fn ptr + env + rc).
     if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "fn") {
-        emitMangle(c: inout c, ref: r)
+        write(s: "PlewClosure")
         return
     }
     // generic struct instantiation -> mangled C struct name.
@@ -540,32 +540,9 @@ fn genBindTypeInst(c: inout Comp, instRef: U64, variantStart: U64, variantLen: U
     genTypeInfoCType(c: inout c, ti: ti)
 }
 
-// `typedef <ret> (*<mangle>)(<params>);` for one function type.
-fn emitFnTypedef(c: inout Comp, fnRef: U64) {
-    val t: TypeRef = c.types[fnRef]
-    write(s: "typedef ")
-    if t.args.count > 0 {
-        emitConcreteCType(c: inout c, ref: t.args[0])
-    } else {
-        write(s: "void")
-    }
-    write(s: " (*")
-    emitMangle(c: inout c, ref: fnRef)
-    write(s: ")(")
-    if t.args.count <= 1 {
-        write(s: "void")
-    } else {
-        mut val i: U64 = 1
-        while i < t.args.count {
-            if i > 1 {
-                write(s: ", ")
-            }
-            emitConcreteCType(c: inout c, ref: t.args[i])
-            i += 1
-        }
-    }
-    write(s: ");\n")
-}
+// Function types no longer get a per-signature C typedef: every function value
+// is the uniform `PlewClosure` struct (defined in the preamble). The concrete
+// signature is recovered at each call site to cast `PlewClosure.fn`.
 
 // `typedef struct Box_I32 Box_I32;` for one instantiation.
 fn emitMonoForward(c: inout Comp, instRef: U64) {

@@ -94,7 +94,7 @@ fn main() {
     }
     mut val lx: Lexer = <Lexer bytes=combined pos=0 toks=[] depth=0 />
     lex(lx: inout lx)
-    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] traits=[] conforms=[] methodAliases=[] derives=[] pendingDerives=[] funcBounds=[] curCheckFn=0 curWitnessed=[] curWhereTraits=[] types=[] genInsts=[] fnInsts=[] fnTypes=[] arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curRetTy=0 curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curSelfMove=false curTypeParams=[] curTypeArgs=[] curRecvInstRef=0 curGiveTmp=0 curLoopMark=0 curBranchBase=0 impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false impEprint=false impExit=false impReadFileBytes=false impFileExists=false deinits=[] />
+    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] traits=[] conforms=[] methodAliases=[] derives=[] pendingDerives=[] funcBounds=[] curCheckFn=0 curWitnessed=[] curWhereTraits=[] types=[] genInsts=[] fnInsts=[] fnTypes=[] fnThunks=[] arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curRetTy=0 curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curSelfMove=false curTypeParams=[] curTypeArgs=[] curRecvInstRef=0 curGiveTmp=0 curLoopMark=0 curBranchBase=0 impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false impEprint=false impExit=false impReadFileBytes=false impFileExists=false deinits=[] />
     // reserve TypeRef index 0 as the "no type" sentinel so a `ty` field of 0
     // (synthetic locals, untyped positions) never aliases a real parsed type.
     c.types.append(<TypeRef nameStart=0 nameLen=0 args=[] />)
@@ -123,6 +123,8 @@ fn main() {
     // discover concrete instantiations of generic free functions from call sites
     // (each emitted as a specialized C function `f_<arg-mangle>`).
     collectFnInsts(c: inout c)
+    // discover bare function-value references (need a closure-ABI thunk each).
+    collectFnThunks(c: inout c)
     // enforce `where T: Trait` bounds (spec/08): each instantiation's concrete
     // type argument must conform to the trait its parameter is bound to.
     checkFnBounds(c: inout c)
@@ -150,6 +152,16 @@ fn main() {
     // Ref boxes carry the same inline rc header (the Ref value points past it).
     // plew_ref_share retains and returns the pointer for share-on-bind.
     write(s: "__attribute__((unused)) static void* plew_ref_share(void* p) { if (p) ((long long*)p)[-1] += 1; return p; }\n")
+    // A first-class function value (closure) is a fat pointer: the C function
+    // (uniform ABI `R fn(void* env, params...)`), an env pointer (NULL for
+    // non-capturing closures and bare-function thunks), an inline rc header for
+    // the env's ARC, and a `drop` that releases the env's captured fields. The
+    // call site casts `fn` to the concrete signature recovered from the value's
+    // static function type. share/release manage the env refcount; release runs
+    // `drop` then frees the env block at the last reference.
+    write(s: "typedef struct { void* fn; void* env; long long* rc; void (*drop)(void*); } PlewClosure;\n")
+    write(s: "__attribute__((unused)) static PlewClosure plew_closure_share(PlewClosure cl) { plew_arc_retain(cl.rc); return cl; }\n")
+    write(s: "__attribute__((unused)) static void plew_closure_release(PlewClosure cl) { if (cl.rc && (--(*cl.rc)) == 0) { if (cl.drop) cl.drop(cl.env); free((void*)cl.rc); } }\n")
     write(s: "__attribute__((unused)) static int PlewString_eq(PlewString a, PlewString b) { if (a.len != b.len) return 0; for (long long i = 0; i < a.len; i++) if (a.data[i] != b.data[i]) return 0; return 1; }\n")
     write(s: "__attribute__((unused)) static PlewString plew_read_stdin(void) { size_t cap = 4096, len = 0; char* buf = (char*)malloc(cap); int ch; while ((ch = getchar()) != EOF) { if (len + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); } buf[len++] = (char)ch; } PlewString s; s.data = buf; s.len = (long long)len; return s; }\n")
     write(s: "__attribute__((unused)) static void plew_write(PlewString s) { fwrite(s.data, 1, (size_t)s.len, stdout); }\n")
@@ -327,13 +339,8 @@ fn main() {
         }
         mcd += 1
     }
-    // function-pointer typedefs (after all value types are complete, before any
-    // signature that uses a function type).
-    mut val fti: U64 = 0
-    while fti < c.fnTypes.count {
-        emitFnTypedef(c: inout c, fnRef: c.fnTypes[fti])
-        fti += 1
-    }
+    // (Function types need no per-signature typedef: every function value is the
+    // uniform PlewClosure struct from the preamble.)
     // prototypes (skip main and generic templates — the latter are emitted per
     // instantiation below).
     mut val i: U64 = 0
@@ -358,6 +365,8 @@ fn main() {
     emitMonoMethods(c: inout c, proto: true)
     // generic free function instance prototypes (one per call-site instantiation).
     emitMonoFns(c: inout c, proto: true)
+    // function-value thunk prototypes.
+    emitThunks(c: inout c, proto: true)
     // lambda-lifted closure prototypes.
     emitClosures(c: inout c, proto: true)
     // bodies (skip generic templates).
@@ -376,6 +385,8 @@ fn main() {
     emitMonoMethods(c: inout c, proto: false)
     // generic free function instance bodies.
     emitMonoFns(c: inout c, proto: false)
+    // function-value thunk bodies.
+    emitThunks(c: inout c, proto: false)
     // lambda-lifted closure bodies.
     emitClosures(c: inout c, proto: false)
 }

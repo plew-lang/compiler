@@ -435,6 +435,11 @@ struct Comp {
     // distinct function-type TypeRefs (head `fn`), for emitting a C function
     // pointer typedef per signature. Collected with genInsts during scanType.
     mut val fnTypes: Array[U64]
+    // function indices used as a bare value (a function reference, not a call):
+    // each needs a thunk `<sel>__thunk(void* env, ...)` to adapt the plain C
+    // function to the uniform closure ABI. Collected before signatures are
+    // emitted (collectFnThunks), so the thunk protos precede every use.
+    mut val fnThunks: Array[U64]
     // distinct Array element type names seen in declarations (for monomorphizing
     // PlewArray_<E> + runtime); each entry reuses Bind as a (start,len) pair.
     mut val arrayElems: Array[Bind]

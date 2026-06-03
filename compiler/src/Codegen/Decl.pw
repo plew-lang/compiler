@@ -800,15 +800,15 @@ fn genClosure(c: inout Comp, id: U64, proto: Bool) {
             }
             write(s: " __closure")
             writeU64(n: id)
-            write(s: "(")
+            // uniform closure ABI: the env pointer is always the first C param
+            // (NULL for a non-capturing closure), so every function value can be
+            // called the same way after a single cast at the call site.
+            write(s: "(void* __env")
             if params.count == 0 {
-                write(s: "void")
             } else {
                 mut val i: U64 = 0
                 while i < params.count {
-                    if i > 0 {
-                        write(s: ", ")
-                    }
+                    write(s: ", ")
                     val p: Param = params[i]
                     genCTypeOf(c: inout c, tyRef: p.ty, fallStart: p.tyStart, fallLen: p.tyLen, isArray: p.tyIsArray)
                     if p.isInout {
@@ -839,6 +839,109 @@ fn genClosure(c: inout Comp, id: U64, proto: Bool) {
             }
         }
         _ => {}
+    }
+}
+
+// Record that free function `fi` is used as a bare value (needs a thunk).
+fn addFnThunk(c: inout Comp, fi: U64) {
+    mut val i: U64 = 0
+    while i < c.fnThunks.count {
+        if c.fnThunks[i] == fi {
+            return
+        }
+        i += 1
+    }
+    c.fnThunks.append(fi)
+}
+
+// Pre-pass: every bare identifier that names a (non-generic, non-method) free
+// function is a function-as-value use (calls carry the name on Expr.Call, not an
+// Ident), so it needs a thunk to reach the uniform closure ABI. Over-approx is
+// safe: an unused thunk is harmless (and generated C is compiled with -w).
+fn collectFnThunks(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.exprs.count {
+        match c.exprs[i] {
+            Expr.Ident { val start, val len } => {
+                val fvi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)
+                if fvi < c.funcs.count {
+                    val f: Func = c.funcs[fvi]
+                    if f.hasRecv {
+                    } else {
+                        if f.isAssoc {
+                        } else {
+                            if f.typeParams.count > 0 {
+                                // a generic free fn has no bare symbol (it is emitted
+                                // per instantiation) — not supported as a value yet.
+                            } else {
+                                addFnThunk(c: inout c, fi: fvi)
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        i += 1
+    }
+}
+
+// Emit one function's thunk `<ret> <sel>__thunk(void* __env, params...)` that
+// forwards (positionally) to the plain C function, adapting it to the uniform
+// closure ABI so a bare function reference becomes a PlewClosure.
+fn genThunk(c: inout Comp, fi: U64, proto: Bool) {
+    val f: Func = c.funcs[fi]
+    if f.hasRet {
+        genCTypeOf(c: inout c, tyRef: f.retTy, fallStart: f.retStart, fallLen: f.retLen, isArray: f.retIsArray)
+        write(s: " ")
+    } else {
+        write(s: "void ")
+    }
+    writeFnSelector(c: inout c, f: f)
+    write(s: "__thunk(void* __env")
+    val params: Array[Param] = f.params
+    mut val i: U64 = 0
+    while i < params.count {
+        write(s: ", ")
+        val p: Param = params[i]
+        genCTypeOf(c: inout c, tyRef: p.ty, fallStart: p.tyStart, fallLen: p.tyLen, isArray: p.tyIsArray)
+        if p.isInout {
+            write(s: "*")
+        }
+        write(s: " ")
+        writeSpan(c: inout c, start: p.nameStart, len: p.nameLen)
+        i += 1
+    }
+    write(s: ")")
+    if proto {
+        write(s: ";\n")
+        return
+    }
+    write(s: " { (void)__env; ")
+    if f.hasRet {
+        write(s: "return ")
+    }
+    writeFnSelector(c: inout c, f: f)
+    write(s: "(")
+    mut val j: U64 = 0
+    while j < params.count {
+        if j > 0 {
+            write(s: ", ")
+        }
+        val p2: Param = params[j]
+        writeSpan(c: inout c, start: p2.nameStart, len: p2.nameLen)
+        j += 1
+    }
+    write(s: "); }\n")
+}
+
+// Emit prototypes (proto=true) or bodies (proto=false) for every function-value
+// thunk collected by collectFnThunks.
+fn emitThunks(c: inout Comp, proto: Bool) {
+    mut val i: U64 = 0
+    while i < c.fnThunks.count {
+        genThunk(c: inout c, fi: c.fnThunks[i], proto: proto)
+        i += 1
     }
 }
 

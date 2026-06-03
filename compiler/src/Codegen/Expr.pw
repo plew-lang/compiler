@@ -1,3 +1,43 @@
+// Emit a call through a first-class function value (a PlewClosure local named
+// (nameStart,nameLen) of function type `tyRef`, args = [ret, param...]). The
+// stored `.fn` has the uniform ABI `ret fn(void* env, params...)`, so we cast
+// it to that signature and pass `.env` as the leading argument.
+fn emitClosureCall(c: inout Comp, tyRef: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    val t: TypeRef = c.types[tyRef]
+    write(s: "((")
+    if t.args.count > 0 {
+        emitConcreteCType(c: inout c, ref: t.args[0])
+    } else {
+        write(s: "void")
+    }
+    write(s: " (*)(void*")
+    mut val pi: U64 = 1
+    while pi < t.args.count {
+        write(s: ", ")
+        emitConcreteCType(c: inout c, ref: t.args[pi])
+        pi += 1
+    }
+    write(s: "))(")
+    writeSpan(c: inout c, start: nameStart, len: nameLen)
+    write(s: ").fn)((")
+    writeSpan(c: inout c, start: nameStart, len: nameLen)
+    write(s: ").env")
+    mut val i: U64 = 0
+    while i < args.count {
+        write(s: ", ")
+        val ar: Arg = args[i]
+        if ar.isInout {
+            write(s: "&(")
+            genExpr(c: inout c, id: ar.expr)
+            write(s: ")")
+        } else {
+            genExpr(c: inout c, id: ar.expr)
+        }
+        i += 1
+    }
+    write(s: ")")
+}
+
 fn genExpr(c: inout Comp, id: U64) {
     val e: Expr = c.exprs[id]
     match e {
@@ -19,7 +59,12 @@ fn genExpr(c: inout Comp, id: U64) {
                 } else {
                     val fvi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)
                     if fvi < c.funcs.count {
+                        // a bare function reference becomes a fat closure whose fn
+                        // is the function's thunk (adapts the plain C signature to
+                        // the uniform `(void* env, ...)` ABI). env/rc/drop are 0.
+                        write(s: "(PlewClosure){(void*)&")
                         writeFnSelector(c: inout c, f: c.funcs[fvi])
+                        write(s: "__thunk, 0, 0, 0}")
                     } else {
                         writeSpan(c: inout c, start: start, len: len)
                     }
@@ -270,6 +315,16 @@ fn genExpr(c: inout Comp, id: U64) {
                 compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "argument labels do not match the function parameters")
                 return
             }
+            // a local/param of function type shadows any function of the same
+            // name (spec: locals shadow): it is a first-class function value, so
+            // dispatch through its fat closure (cast `.fn`, pass `.env` first).
+            val lvi: U64 = localIndexByName(c: inout c, start: nameStart, len: nameLen)
+            if lvi < c.locals.count {
+                if isFnType(c: inout c, ref: c.locals[lvi].ty) {
+                    emitClosureCall(c: inout c, tyRef: c.locals[lvi].ty, nameStart: nameStart, nameLen: nameLen, args: args)
+                    return
+                }
+            }
             // resolve the (possibly overloaded) callee, then emit its selector-
             // mangled C name so the call reaches the right overload's symbol.
             val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -375,9 +430,12 @@ fn genExpr(c: inout Comp, id: U64) {
             writeSpan(c: inout c, start: nameStart, len: nameLen)
         }
         Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
-            // value = the lambda-lifted function's pointer (`__closure<id>`).
-            write(s: "__closure")
+            // value = a fat closure: the lambda-lifted function plus a NULL env
+            // (non-capturing for now). The env/rc/drop slots stay 0 until capture
+            // support fills them.
+            write(s: "(PlewClosure){(void*)&__closure")
             writeU64(n: id)
+            write(s: ", 0, 0, 0}")
         }
         Expr.Method { val recv, val nameStart, val nameLen, val args } => {
             // `Type.name(args)` (assoc fn call): the receiver is a bare type name,
