@@ -368,6 +368,22 @@ fn checkParamModes(c: inout Comp, params: Array[Param]) {
     }
 }
 
+// Reject `Array[unique]` (spec/03): unique values cannot be stored in a generic
+// container directly — wrap them in `Ref[T]`. Without this a unique array element
+// is silently never deinit'd (CoW shares the buffer; the elements leak). Checks
+// every distinct array element type collected during parsing. `Array[Ref[File]]`
+// passes (the element head is `Ref`, not the unique type).
+fn checkArrayElemsNotUnique(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.arrayElems.count {
+        val ae: Bind = c.arrayElems[i]
+        if typeIsUnique(c: inout c, start: ae.nameStart, len: ae.nameLen) {
+            compileErrorAt(line: lineOf(c: inout c, offset: ae.nameStart), msg: "a unique type cannot be stored in an Array; wrap it in Ref[T]")
+        }
+        i += 1
+    }
+}
+
 // Run param-mode validity over every function/method declaration.
 fn checkAllParamModes(c: inout Comp) {
     mut val i: U64 = 0

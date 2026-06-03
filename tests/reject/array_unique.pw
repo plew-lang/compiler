@@ -1,0 +1,9 @@
+// A unique type cannot be stored in an Array (it would be silently never
+// deinit'd); wrap it in Ref[T].
+import @Std/Io with { write }
+unique struct File { val fd: I64 }
+fn main() {
+    mut val xs: Array[File] = []
+    xs.append(<File fd=1 />)
+    write(s: "x\n")
+}

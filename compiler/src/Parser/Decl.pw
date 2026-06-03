@@ -179,6 +179,16 @@ fn parseImpl(c: inout Comp) {
                 c.advance()
                 parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, implParams: implParams)
             }
+            Kind.KwMove => {
+                // `move fn` (consuming self) is not implemented yet; reject loudly
+                // rather than silently dropping the `move` (which would treat self
+                // as a by-value read). Until then, use a free function taking a
+                // `move T` parameter.
+                compileErrorAt(line: lineOf(c: inout c, offset: c.cur().start), msg: "`move fn` (consuming self) is not yet supported; use a free function with a `move T` parameter")
+            }
+            Kind.KwBorrow => {
+                compileErrorAt(line: lineOf(c: inout c, offset: c.cur().start), msg: "`borrow fn` (borrowing self) is not yet supported; use `fn` or a free function with a `borrow T` parameter")
+            }
             Kind.KwDeinit => {
                 // `deinit { body }` (spec/03): no params, no return, read self.
                 // Lowered to a synthetic method `Type_deinit(Type self)` (name span

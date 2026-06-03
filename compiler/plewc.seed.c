@@ -729,6 +729,7 @@ void checkLitArray(Comp* c, uint64_t id, uint64_t elemStart, uint64_t elemLen);
 long long typeIsTransitivelyUnique(Comp* c, uint64_t start, uint64_t len);
 void checkFieldContagion(Comp* c);
 void checkParamModes(Comp* c, PlewArray_Param params);
+void checkArrayElemsNotUnique(Comp* c);
 void checkAllParamModes(Comp* c);
 void checkUniquePlaceCopy(Comp* c, uint64_t exprId, long long inoutOk);
 void checkUniqueArgModes(Comp* c, PlewArray_Arg args);
@@ -888,6 +889,7 @@ int main(int argc, char** argv) {
     parseProgram(&(c));
     checkFieldContagion(&(c));
     checkAllParamModes(&(c));
+    checkArrayElemsNotUnique(&(c));
     collectGenInsts(&(c));
     plew_write((PlewString){"#include <stdio.h>\n#include <stdint.h>\n#include <stdlib.h>\n#include <string.h>\n", 79});
     plew_write((PlewString){"typedef struct { const char* data; long long len; } PlewString;\n", 64});
@@ -3283,6 +3285,12 @@ void parseImpl(Comp* c) {
     else if (_m225.tag == 6) {
     Comp_advance(&((*c)));
     parseFuncCommon(&((*c)), 1, recvStart, recvLen, 0, implParams);
+    }
+    else if (_m225.tag == 25) {
+    compileErrorAt(lineOf(&((*c)), Comp_cur(&((*c))).start), (PlewString){"`move fn` (consuming self) is not yet supported; use a free function with a `move T` parameter", 94});
+    }
+    else if (_m225.tag == 26) {
+    compileErrorAt(lineOf(&((*c)), Comp_cur(&((*c))).start), (PlewString){"`borrow fn` (borrowing self) is not yet supported; use `fn` or a free function with a `borrow T` parameter", 106});
     }
     else if (_m225.tag == 24) {
     Tok deinitTok = Comp_cur(&((*c)));
@@ -6097,6 +6105,16 @@ void checkParamModes(Comp* c, PlewArray_Param params) {
     compileErrorAt(lineOf(&((*c)), p.nameStart), (PlewString){"`borrow` is redundant on a copyable type; pass by value", 55});
     }
     }
+    }
+    i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+}
+void checkArrayElemsNotUnique(Comp* c) {
+    uint64_t i = 0;
+    while (i < (long long)(((*c).arrayElems).len)) {
+    Bind ae = PlewArray_Bind_get((*c).arrayElems, (long long)(i));
+    if (typeIsUnique(&((*c)), ae.nameStart, ae.nameLen)) {
+    compileErrorAt(lineOf(&((*c)), ae.nameStart), (PlewString){"a unique type cannot be stored in an Array; wrap it in Ref[T]", 61});
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
