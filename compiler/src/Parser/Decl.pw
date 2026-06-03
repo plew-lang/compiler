@@ -94,7 +94,7 @@ fn parseParamList(c: inout Comp) -> Array[Param] {
 // receiver marker for methods) is already consumed; the current token is the
 // name. `hasRecv`/`recv*`/`selfInout` describe an `impl Type` method receiver
 // (none for a free function).
-fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, selfInout: Bool, selfMove: Bool, implParams: Array[Bind]) {
+fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, selfInout: Bool, selfMove: Bool, implParams: Array[Bind], traitImpl: Bool) {
     val nameTok: Tok = c.cur()
     c.advance()
     // type parameters in scope = those introduced by the enclosing `impl[T]`
@@ -130,6 +130,20 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
         }
         _ => {}
     }
+    // a trait-impl member witnesses a requirement either by `via real` (an alias
+    // to an existing member) or by defining a body here (spec/08). `via` follows
+    // the signature on the same line; record the witnessed requirement name.
+    if traitImpl {
+        if c.identIs(kw: "via") {
+            c.advance()
+            val realTok: Tok = c.cur()
+            c.advance()
+            c.methodAliases.append(<MethodAlias recvStart=recvStart recvLen=recvLen aliasStart=nameTok.start aliasLen=nameTok.len realStart=realTok.start realLen=realTok.len />)
+            c.curWitnessed.append(<Bind nameStart=nameTok.start nameLen=nameTok.len fieldStart=nameTok.start fieldLen=nameTok.len />)
+            return
+        }
+        c.curWitnessed.append(<Bind nameStart=nameTok.start nameLen=nameTok.len fieldStart=nameTok.start fieldLen=nameTok.len />)
+    }
     c.skipNewlines()
     val body: U64 = parseBlock(c: inout c)
     c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvStart recvLen=recvLen selfInout=selfInout selfMove=selfMove />)
@@ -139,7 +153,7 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
 fn parseFunc(c: inout Comp) {
     c.advance()
     val noParams: Array[Bind] = []
-    parseFuncCommon(c: inout c, hasRecv: false, recvStart: 0, recvLen: 0, selfInout: false, selfMove: false, implParams: noParams)
+    parseFuncCommon(c: inout c, hasRecv: false, recvStart: 0, recvLen: 0, selfInout: false, selfMove: false, implParams: noParams, traitImpl: false)
 }
 
 // `impl Type { (fn | inout fn) name(...) ... }`: inherent methods. Each member
@@ -154,6 +168,25 @@ fn parseImpl(c: inout Comp) {
     val recvPty: PType = parseTypeTok(c: inout c)
     val recvStart: U64 = recvPty.start
     val recvLen: U64 = recvPty.len
+    // `impl Type as Trait { ... }` (spec/08): a conformance. The members witness
+    // the trait's requirements (body or `via`); each `fn` is registered as a
+    // method on Type exactly like an inherent member, so it rides the existing
+    // method-resolution machinery. A bare `impl Type { ... }` is inherent.
+    mut val isTraitImpl: Bool = false
+    mut val traitStart: U64 = 0
+    mut val traitLen: U64 = 0
+    match c.curKind() {
+        Kind.KwAs => {
+            c.advance()
+            val traitTok: Tok = c.cur()
+            c.advance()
+            isTraitImpl = true
+            traitStart = traitTok.start
+            traitLen = traitTok.len
+            c.curWitnessed = []
+        }
+        _ => {}
+    }
     match c.curKind() {
         Kind.LBrace => { c.advance() }
         _ => {}
@@ -173,11 +206,11 @@ fn parseImpl(c: inout Comp) {
                     Kind.KwFn => { c.advance() }
                     _ => {}
                 }
-                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: true, selfMove: false, implParams: implParams)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: true, selfMove: false, implParams: implParams, traitImpl: isTraitImpl)
             }
             Kind.KwFn => {
                 c.advance()
-                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams, traitImpl: isTraitImpl)
             }
             Kind.KwMove => {
                 // `move fn` (consuming self): the method takes ownership of self.
@@ -186,7 +219,7 @@ fn parseImpl(c: inout Comp) {
                     Kind.KwFn => { c.advance() }
                     _ => {}
                 }
-                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: true, implParams: implParams)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: true, implParams: implParams, traitImpl: isTraitImpl)
             }
             Kind.KwBorrow => {
                 // `borrow fn` (read self, non-consuming): observationally identical
@@ -196,7 +229,7 @@ fn parseImpl(c: inout Comp) {
                     Kind.KwFn => { c.advance() }
                     _ => {}
                 }
-                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams, traitImpl: isTraitImpl)
             }
             Kind.KwDeinit => {
                 // `deinit { body }` (spec/03): no params, no return, read self.
@@ -214,6 +247,56 @@ fn parseImpl(c: inout Comp) {
             _ => { c.advance() }
         }
     }
+    // record the conformance with the requirement names it witnessed, for the
+    // completeness check (spec/08: every requirement must be witnessed).
+    if isTraitImpl {
+        c.conforms.append(<Conform typeStart=recvStart typeLen=recvLen traitStart=traitStart traitLen=traitLen witnessed=c.curWitnessed />)
+    }
+}
+
+// `trait Name { fn req(...) [-> T] ... }` (spec/08). The body holds only
+// requirements (no body). T1 records each method requirement's name; the
+// signature (type params, params, return) is parsed and discarded. Non-`fn`
+// lines (field / associated-type / factory requirements) are skipped for now.
+fn parseTrait(c: inout Comp) {
+    c.advance()
+    val nameTok: Tok = c.cur()
+    c.advance()
+    match c.curKind() {
+        Kind.LBrace => { c.advance() }
+        _ => {}
+    }
+    mut val reqs: Array[Bind] = []
+    while true {
+        c.skipNewlines()
+        val k: Kind = c.curKind()
+        match k {
+            Kind.RBrace => {
+                c.advance()
+                break
+            }
+            Kind.Eof => { break }
+            Kind.KwFn => {
+                c.advance()
+                val reqTok: Tok = c.cur()
+                c.advance()
+                // consume the signature: optional `[T]`, params, optional `-> ret`.
+                val tps: Array[Bind] = parseTypeParams(c: inout c)
+                val ps: Array[Param] = parseParamList(c: inout c)
+                match c.curKind() {
+                    Kind.Arrow => {
+                        c.advance()
+                        val rty: PType = parseTypeTok(c: inout c)
+                        recordArrayElem(c: inout c, ty: rty)
+                    }
+                    _ => {}
+                }
+                reqs.append(<Bind nameStart=reqTok.start nameLen=reqTok.len fieldStart=reqTok.start fieldLen=reqTok.len />)
+            }
+            _ => { c.advance() }
+        }
+    }
+    c.traits.append(<TraitDef nameStart=nameTok.start nameLen=nameTok.len reqs=reqs />)
 }
 
 // `[unique] struct Name { (val|mut val) field: Type ... }`. Field modifiers
@@ -467,7 +550,11 @@ fn parseProgram(c: inout Comp) {
                     if c.identIs(kw: "impl") {
                         parseImpl(c: inout c)
                     } else {
-                        c.advance()
+                        if c.identIs(kw: "trait") {
+                            parseTrait(c: inout c)
+                        } else {
+                            c.advance()
+                        }
                     }
                 }
             }

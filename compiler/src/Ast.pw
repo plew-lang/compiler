@@ -261,6 +261,42 @@ struct Variant {
     val fields: Array[FieldDef]
 }
 
+// A trait declaration `trait Name { fn req(...) -> T ... }` (spec/08). The body
+// holds only *requirements* (no body). For T1 we record each method
+// requirement's name (reuses Bind as a (start,len) pair); the parser still
+// consumes the full signature but labels/types are recovered later. Field/
+// associated-type/factory requirements are not parsed yet (additive).
+struct TraitDef {
+    val nameStart: U64
+    val nameLen: U64
+    val reqs: Array[Bind]
+}
+
+// A recorded conformance `impl Type as Trait { ... }` (spec/08: conformance is
+// explicit, never implicit). `witnessed` lists the requirement names this impl
+// satisfied (via a body method or a `via` alias), so the completeness check can
+// verify every requirement of `Trait` is met (incomplete conformance = error).
+struct Conform {
+    val typeStart: U64
+    val typeLen: U64
+    val traitStart: U64
+    val traitLen: U64
+    val witnessed: Array[Bind]
+}
+
+// A `via` alias `fn req(...) -> T via real` inside a trait impl (spec/08: the
+// requirement name becomes a bare callable that dispatches to the real member).
+// findMethod, on missing `alias` for `recv`, retries with `real` — so both
+// `x.req()` and `x.real()` resolve to the one real method.
+struct MethodAlias {
+    val recvStart: U64
+    val recvLen: U64
+    val aliasStart: U64
+    val aliasLen: U64
+    val realStart: U64
+    val realLen: U64
+}
+
 struct EnumDef {
     val nameStart: U64
     val nameLen: U64
@@ -307,6 +343,16 @@ struct Comp {
     mut val funcs: Array[Func]
     mut val structs: Array[StructDef]
     mut val enums: Array[EnumDef]
+    // trait declarations, recorded conformances, and `via` method aliases
+    // (spec/08). `traits`/`conforms` drive the conformance-completeness check;
+    // `methodAliases` redirect a requirement name to its real witness method.
+    mut val traits: Array[TraitDef]
+    mut val conforms: Array[Conform]
+    mut val methodAliases: Array[MethodAlias]
+    // scratch: requirement names witnessed by the trait impl currently being
+    // parsed (body method or `via` alias). Reset at each `impl Type as Trait`
+    // entry; folded into the Conform record at the impl's close.
+    mut val curWitnessed: Array[Bind]
     // structured type references (TypeRef arena), indexed by the `ty`/`ref`
     // fields above. Built during parsing; consumed by generic monomorphization.
     mut val types: Array[TypeRef]

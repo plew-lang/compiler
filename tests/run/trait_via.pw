@@ -1,0 +1,21 @@
+import @Std/Io with { print }
+
+// `via` aliases a requirement name to an existing real member: both the
+// requirement name (draw) and the real name (render) call the one method.
+trait Drawable {
+    fn draw() -> I64
+}
+
+struct Sprite { val w: I64 }
+impl Sprite {
+    fn render() -> I64 { return self.w }
+}
+impl Sprite as Drawable {
+    fn draw() -> I64 via render
+}
+
+fn main() {
+    val s: Sprite = <Sprite w=7 />
+    print(s.draw())
+    print(s.render())
+}

@@ -91,7 +91,22 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
     if typeMatch != c.funcs.count {
         return typeMatch
     }
-    return firstLabel
+    if firstLabel != c.funcs.count {
+        return firstLabel
+    }
+    // no direct method: a trait `via` alias may redirect this requirement name to
+    // a real member (spec/08). Retry resolution under the real name.
+    mut val ai: U64 = 0
+    while ai < c.methodAliases.count {
+        val al: MethodAlias = c.methodAliases[ai]
+        if spansEqual(c: inout c, aStart: recvStart, aLen: recvLen, bStart: al.recvStart, bLen: al.recvLen) {
+            if spansEqual(c: inout c, aStart: nameStart, aLen: nameLen, bStart: al.aliasStart, bLen: al.aliasLen) {
+                return findMethod(c: inout c, recvStart: recvStart, recvLen: recvLen, nameStart: al.realStart, nameLen: al.realLen, args: args)
+            }
+        }
+        ai += 1
+    }
+    return c.funcs.count
 }
 
 // Check call args against a parameter list: arg count matches and every arg

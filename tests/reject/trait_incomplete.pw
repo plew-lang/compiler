@@ -1,0 +1,12 @@
+import @Std/Io with { print }
+
+// Conformance must witness every requirement (spec/08): empty impl is rejected.
+trait Stepper {
+    fn step() -> I64
+}
+struct Counter { val n: I64 }
+impl Counter as Stepper {
+}
+fn main() {
+    print(0)
+}

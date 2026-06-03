@@ -1,0 +1,16 @@
+import @Std/Io with { print }
+
+// A trait requirement witnessed by a body method in the conformance impl.
+trait Stepper {
+    fn step() -> I64
+}
+
+struct Counter { val n: I64 }
+impl Counter as Stepper {
+    fn step() -> I64 { return self.n }
+}
+
+fn main() {
+    val c: Counter = <Counter n=5 />
+    print(c.step())
+}

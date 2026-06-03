@@ -587,3 +587,47 @@ fn checkMakeFields(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U6
     }
 }
 
+
+// Whether `witnessed` (a conformance's satisfied requirement names) contains the
+// requirement named (start,len). T1 matches on name only (overloaded
+// requirements with the same name and differing signatures are a later concern).
+fn witnessedHas(c: inout Comp, witnessed: Array[Bind], start: U64, len: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < witnessed.count {
+        val w: Bind = witnessed[i]
+        if spansEqual(c: inout c, aStart: w.nameStart, aLen: w.nameLen, bStart: start, bLen: len) {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Conformance completeness (spec/08): every requirement of each `impl Type as
+// Trait` must be witnessed in that impl (a body method or a `via` alias). An
+// empty or partial conformance is an error (no implicit/silent conformance).
+fn checkConformances(c: inout Comp) {
+    mut val ci: U64 = 0
+    while ci < c.conforms.count {
+        val cf: Conform = c.conforms[ci]
+        // find the trait being conformed to (an unknown trait name is ignored
+        // here; resolving/importing trait names is a later concern).
+        mut val ti: U64 = 0
+        while ti < c.traits.count {
+            val t: TraitDef = c.traits[ti]
+            if spansEqual(c: inout c, aStart: t.nameStart, aLen: t.nameLen, bStart: cf.traitStart, bLen: cf.traitLen) {
+                mut val ri: U64 = 0
+                while ri < t.reqs.count {
+                    val r: Bind = t.reqs[ri]
+                    if witnessedHas(c: inout c, witnessed: cf.witnessed, start: r.nameStart, len: r.nameLen) {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)")
+                    }
+                    ri += 1
+                }
+            }
+            ti += 1
+        }
+        ci += 1
+    }
+}
