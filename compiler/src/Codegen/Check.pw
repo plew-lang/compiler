@@ -620,7 +620,7 @@ fn checkConformances(c: inout Comp) {
                 found = true
                 mut val ri: U64 = 0
                 while ri < t.reqs.count {
-                    val r: Bind = t.reqs[ri]
+                    val r: Func = t.reqs[ri]
                     if witnessedHas(c: inout c, witnessed: cf.witnessed, start: r.nameStart, len: r.nameLen) {
                     } else {
                         compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)")

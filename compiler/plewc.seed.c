@@ -59,11 +59,11 @@ typedef struct { MakeField* data; long long len; long long cap; long long* rc; }
 typedef struct { MatchArm* data; long long len; long long cap; long long* rc; } PlewArray_MatchArm;
 typedef struct { Param* data; long long len; long long cap; long long* rc; } PlewArray_Param;
 typedef struct { FieldDef* data; long long len; long long cap; long long* rc; } PlewArray_FieldDef;
+typedef struct { Func* data; long long len; long long cap; long long* rc; } PlewArray_Func;
 typedef struct { Variant* data; long long len; long long cap; long long* rc; } PlewArray_Variant;
 typedef struct { Expr* data; long long len; long long cap; long long* rc; } PlewArray_Expr;
 typedef struct { Stmt* data; long long len; long long cap; long long* rc; } PlewArray_Stmt;
 typedef struct { Block* data; long long len; long long cap; long long* rc; } PlewArray_Block;
-typedef struct { Func* data; long long len; long long cap; long long* rc; } PlewArray_Func;
 typedef struct { StructDef* data; long long len; long long cap; long long* rc; } PlewArray_StructDef;
 typedef struct { EnumDef* data; long long len; long long cap; long long* rc; } PlewArray_EnumDef;
 typedef struct { TraitDef* data; long long len; long long cap; long long* rc; } PlewArray_TraitDef;
@@ -313,7 +313,7 @@ struct Variant {
 struct TraitDef {
     uint64_t nameStart;
     uint64_t nameLen;
-    PlewArray_Bind reqs;
+    PlewArray_Func reqs;
 };
 struct Conform {
     uint64_t typeStart;
@@ -538,6 +538,14 @@ __attribute__((unused)) static PlewArray_FieldDef PlewArray_FieldDef_share(PlewA
 __attribute__((unused)) static void PlewArray_FieldDef_unique(PlewArray_FieldDef* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_FieldDef nc = PlewArray_FieldDef_copy(*a); plew_arc_release(a->rc); *a = nc; } }
 __attribute__((unused)) static void PlewArray_FieldDef_set(PlewArray_FieldDef* a, long long i, FieldDef v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_FieldDef_unique(a); a->data[i] = v; }
 __attribute__((unused)) static void PlewArray_FieldDef_push(PlewArray_FieldDef* a, FieldDef v) { PlewArray_FieldDef_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; FieldDef* nd = (FieldDef*)plew_arc_alloc(sizeof(FieldDef) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
+__attribute__((unused)) static PlewArray_Func PlewArray_Func_new(void) { PlewArray_Func a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static Func PlewArray_Func_get(PlewArray_Func a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
+__attribute__((unused)) static PlewArray_Func PlewArray_Func_copy(PlewArray_Func a) { PlewArray_Func r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (Func*)plew_arc_alloc(sizeof(Func) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = Func_copy(a.data[i]); } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
+__attribute__((unused)) static void PlewArray_Func_release(PlewArray_Func a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; for (long long i = 0; i < a.len; i++) Func_release(a.data[i]); free(a.rc); }
+__attribute__((unused)) static PlewArray_Func PlewArray_Func_share(PlewArray_Func a) { plew_arc_retain(a.rc); return a; }
+__attribute__((unused)) static void PlewArray_Func_unique(PlewArray_Func* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_Func nc = PlewArray_Func_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static void PlewArray_Func_set(PlewArray_Func* a, long long i, Func v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_Func_unique(a); a->data[i] = v; }
+__attribute__((unused)) static void PlewArray_Func_push(PlewArray_Func* a, Func v) { PlewArray_Func_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; Func* nd = (Func*)plew_arc_alloc(sizeof(Func) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
 __attribute__((unused)) static PlewArray_Variant PlewArray_Variant_new(void) { PlewArray_Variant a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
 __attribute__((unused)) static Variant PlewArray_Variant_get(PlewArray_Variant a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
 __attribute__((unused)) static PlewArray_Variant PlewArray_Variant_copy(PlewArray_Variant a) { PlewArray_Variant r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (Variant*)plew_arc_alloc(sizeof(Variant) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = Variant_copy(a.data[i]); } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
@@ -570,14 +578,6 @@ __attribute__((unused)) static PlewArray_Block PlewArray_Block_share(PlewArray_B
 __attribute__((unused)) static void PlewArray_Block_unique(PlewArray_Block* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_Block nc = PlewArray_Block_copy(*a); plew_arc_release(a->rc); *a = nc; } }
 __attribute__((unused)) static void PlewArray_Block_set(PlewArray_Block* a, long long i, Block v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_Block_unique(a); a->data[i] = v; }
 __attribute__((unused)) static void PlewArray_Block_push(PlewArray_Block* a, Block v) { PlewArray_Block_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; Block* nd = (Block*)plew_arc_alloc(sizeof(Block) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
-__attribute__((unused)) static PlewArray_Func PlewArray_Func_new(void) { PlewArray_Func a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
-__attribute__((unused)) static Func PlewArray_Func_get(PlewArray_Func a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_Func PlewArray_Func_copy(PlewArray_Func a) { PlewArray_Func r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (Func*)plew_arc_alloc(sizeof(Func) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = Func_copy(a.data[i]); } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_Func_release(PlewArray_Func a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; for (long long i = 0; i < a.len; i++) Func_release(a.data[i]); free(a.rc); }
-__attribute__((unused)) static PlewArray_Func PlewArray_Func_share(PlewArray_Func a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_Func_unique(PlewArray_Func* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_Func nc = PlewArray_Func_copy(*a); plew_arc_release(a->rc); *a = nc; } }
-__attribute__((unused)) static void PlewArray_Func_set(PlewArray_Func* a, long long i, Func v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_Func_unique(a); a->data[i] = v; }
-__attribute__((unused)) static void PlewArray_Func_push(PlewArray_Func* a, Func v) { PlewArray_Func_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; Func* nd = (Func*)plew_arc_alloc(sizeof(Func) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
 __attribute__((unused)) static PlewArray_StructDef PlewArray_StructDef_new(void) { PlewArray_StructDef a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
 __attribute__((unused)) static StructDef PlewArray_StructDef_get(PlewArray_StructDef a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
 __attribute__((unused)) static PlewArray_StructDef PlewArray_StructDef_copy(PlewArray_StructDef a) { PlewArray_StructDef r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (StructDef*)plew_arc_alloc(sizeof(StructDef) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = StructDef_copy(a.data[i]); } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
@@ -679,9 +679,9 @@ void StructDef_release(StructDef s) { PlewArray_Bind_release(s.typeParams); Plew
 Variant Variant_copy(Variant s) { Variant r = s; r.fields = PlewArray_FieldDef_copy(s.fields); return r; }
 Variant Variant_share(Variant s) { plew_arc_retain(s.fields.rc); return s; }
 void Variant_release(Variant s) { PlewArray_FieldDef_release(s.fields); }
-TraitDef TraitDef_copy(TraitDef s) { TraitDef r = s; r.reqs = PlewArray_Bind_copy(s.reqs); return r; }
+TraitDef TraitDef_copy(TraitDef s) { TraitDef r = s; r.reqs = PlewArray_Func_copy(s.reqs); return r; }
 TraitDef TraitDef_share(TraitDef s) { plew_arc_retain(s.reqs.rc); return s; }
-void TraitDef_release(TraitDef s) { PlewArray_Bind_release(s.reqs); }
+void TraitDef_release(TraitDef s) { PlewArray_Func_release(s.reqs); }
 Conform Conform_copy(Conform s) { Conform r = s; r.witnessed = PlewArray_Bind_copy(s.witnessed); return r; }
 Conform Conform_share(Conform s) { plew_arc_retain(s.witnessed.rc); return s; }
 void Conform_release(Conform s) { PlewArray_Bind_release(s.witnessed); }
@@ -754,6 +754,7 @@ PlewArray_Bind parseWhereClause_c_Comp(Comp* c);
 void parseFunc_c_Comp(Comp* c);
 void parseImpl_c_Comp(Comp* c);
 void parseTrait_c_Comp(Comp* c);
+Func parseReqSig_c_Comp_isAssoc_Bool(Comp* c, long long isAssoc);
 void parseStruct_c_Comp_isUnique_Bool(Comp* c, long long isUnique);
 void parseEnum_c_Comp(Comp* c);
 void markImport_c_Comp_segStart_U64_segLen_U64_nameStart_U64_nameLen_U64(Comp* c, uint64_t segStart, uint64_t segLen, uint64_t nameStart, uint64_t nameLen);
@@ -3639,7 +3640,7 @@ void parseTrait_c_Comp(Comp* c) {
     else {
     }
     }
-    PlewArray_Bind reqs = PlewArray_Bind_new();
+    PlewArray_Func reqs = PlewArray_Func_new();
     while (1) {
     Comp_skipNewlines(&((*c)));
     Kind k = Comp_curKind(&((*c)));
@@ -3654,61 +3655,64 @@ void parseTrait_c_Comp(Comp* c) {
     }
     else if (_m238.tag == 6) {
     Comp_advance(&((*c)));
-    Tok reqTok = Comp_cur(&((*c)));
-    Comp_advance(&((*c)));
-    PlewArray_Bind tps = parseTypeParams_c_Comp(&((*c)));
-    PlewArray_Param ps = parseParamList_c_Comp(&((*c)));
-    {
-    Kind _m239 = Comp_curKind(&((*c)));
-    if (_m239.tag == 59) {
-    Comp_advance(&((*c)));
-    PType rty = parseTypeTok_c_Comp(&((*c)));
-    recordArrayElem_c_Comp_ty_PType(&((*c)), rty);
-    }
-    else {
-    }
-    }
-    PlewArray_Bind_push(&(reqs), (Bind){.nameStart = reqTok.start, .nameLen = reqTok.len, .fieldStart = reqTok.start, .fieldLen = reqTok.len});
-    PlewArray_Param_release(ps);
-    PlewArray_Bind_release(tps);
+    PlewArray_Func_push(&(reqs), parseReqSig_c_Comp_isAssoc_Bool(&((*c)), 0));
     }
     else {
     if (Comp_identIs_kw_String(&((*c)), (PlewString){"assoc", 5})) {
     Comp_advance(&((*c)));
     {
-    Kind _m240 = Comp_curKind(&((*c)));
-    if (_m240.tag == 6) {
+    Kind _m239 = Comp_curKind(&((*c)));
+    if (_m239.tag == 6) {
     Comp_advance(&((*c)));
     }
     else {
     }
     }
-    Tok areqTok = Comp_cur(&((*c)));
+    PlewArray_Func_push(&(reqs), parseReqSig_c_Comp_isAssoc_Bool(&((*c)), 1));
+    }
+    else {
     Comp_advance(&((*c)));
-    PlewArray_Bind atps = parseTypeParams_c_Comp(&((*c)));
-    PlewArray_Param aps = parseParamList_c_Comp(&((*c)));
+    }
+    }
+    }
+    }
+    PlewArray_TraitDef_push(&((*c).traits), (TraitDef){.nameStart = nameTok.start, .nameLen = nameTok.len, .reqs = PlewArray_Func_share(reqs)});
+    PlewArray_Func_release(reqs);
+}
+Func parseReqSig_c_Comp_isAssoc_Bool(Comp* c, long long isAssoc) {
+    Tok reqTok = Comp_cur(&((*c)));
+    Comp_advance(&((*c)));
+    PlewArray_Bind tps = parseTypeParams_c_Comp(&((*c)));
+    PlewArray_Param ps = parseParamList_c_Comp(&((*c)));
+    long long hasRet = 0;
+    uint64_t rs = 0;
+    uint64_t rl = 0;
+    long long ria = 0;
+    uint64_t rr = 0;
     {
-    Kind _m241 = Comp_curKind(&((*c)));
-    if (_m241.tag == 59) {
+    Kind _m240 = Comp_curKind(&((*c)));
+    if (_m240.tag == 59) {
     Comp_advance(&((*c)));
-    PType arty = parseTypeTok_c_Comp(&((*c)));
-    recordArrayElem_c_Comp_ty_PType(&((*c)), arty);
+    PType rty = parseTypeTok_c_Comp(&((*c)));
+    hasRet = 1;
+    rs = rty.start;
+    rl = rty.len;
+    ria = rty.isArray;
+    rr = rty.ref;
+    recordArrayElem_c_Comp_ty_PType(&((*c)), rty);
     }
     else {
     }
     }
-    PlewArray_Bind_push(&(reqs), (Bind){.nameStart = areqTok.start, .nameLen = areqTok.len, .fieldStart = areqTok.start, .fieldLen = areqTok.len});
-    PlewArray_Param_release(aps);
-    PlewArray_Bind_release(atps);
-    }
-    else {
-    Comp_advance(&((*c)));
-    }
-    }
-    }
-    }
-    PlewArray_TraitDef_push(&((*c).traits), (TraitDef){.nameStart = nameTok.start, .nameLen = nameTok.len, .reqs = PlewArray_Bind_share(reqs)});
-    PlewArray_Bind_release(reqs);
+    Func sig = (Func){.nameStart = reqTok.start, .nameLen = reqTok.len, .typeParams = PlewArray_Bind_share(tps), .params = PlewArray_Param_share(ps), .hasRet = hasRet, .retStart = rs, .retLen = rl, .retIsArray = ria, .retTy = rr, .body = 0, .hasRecv = 0, .recvStart = 0, .recvLen = 0, .selfInout = 0, .selfMove = 0, .isAssoc = isAssoc};
+    { Func __ret241 = Func_share(sig);
+    Func_release(sig);
+    PlewArray_Param_release(ps);
+    PlewArray_Bind_release(tps);
+    return __ret241; }
+    Func_release(sig);
+    PlewArray_Param_release(ps);
+    PlewArray_Bind_release(tps);
 }
 void parseStruct_c_Comp_isUnique_Bool(Comp* c, long long isUnique) {
     Comp_advance(&((*c)));
@@ -6991,13 +6995,14 @@ void checkConformances_c_Comp(Comp* c) {
     found = 1;
     uint64_t ri = 0;
     while (ri < (long long)((t.reqs).len)) {
-    Bind r = PlewArray_Bind_get(t.reqs, (long long)(ri));
+    Func r = Func_share(PlewArray_Func_get(t.reqs, (long long)(ri)));
     if (witnessedHas_c_Comp_witnessed_ABind_start_U64_len_U64(&((*c)), cf.witnessed, r.nameStart, r.nameLen)) {
     }
     else {
     compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), cf.typeStart), (PlewString){"incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)", 100});
     }
     ri = ({ uint64_t __ov; if (__builtin_add_overflow((ri), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    Func_release(r);
     }
     }
     ti = ({ uint64_t __ov; if (__builtin_add_overflow((ti), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });

@@ -342,7 +342,7 @@ fn parseTrait(c: inout Comp) {
         Kind.LBrace => { c.advance() }
         _ => {}
     }
-    mut val reqs: Array[Bind] = []
+    mut val reqs: Array[Func] = []
     while true {
         c.skipNewlines()
         val k: Kind = c.curKind()
@@ -354,43 +354,18 @@ fn parseTrait(c: inout Comp) {
             Kind.Eof => { break }
             Kind.KwFn => {
                 c.advance()
-                val reqTok: Tok = c.cur()
-                c.advance()
-                // consume the signature: optional `[T]`, params, optional `-> ret`.
-                val tps: Array[Bind] = parseTypeParams(c: inout c)
-                val ps: Array[Param] = parseParamList(c: inout c)
-                match c.curKind() {
-                    Kind.Arrow => {
-                        c.advance()
-                        val rty: PType = parseTypeTok(c: inout c)
-                        recordArrayElem(c: inout c, ty: rty)
-                    }
-                    _ => {}
-                }
-                reqs.append(<Bind nameStart=reqTok.start nameLen=reqTok.len fieldStart=reqTok.start fieldLen=reqTok.len />)
+                reqs.append(parseReqSig(c: inout c, isAssoc: false))
             }
             _ => {
                 // `assoc fn name(...)` requirement (spec/12: operator requirements
-                // like `Eq.eq` are assoc fns). Record its name like a method req.
+                // like `Eq.eq` are assoc fns).
                 if c.identIs(kw: "assoc") {
                     c.advance()
                     match c.curKind() {
                         Kind.KwFn => { c.advance() }
                         _ => {}
                     }
-                    val areqTok: Tok = c.cur()
-                    c.advance()
-                    val atps: Array[Bind] = parseTypeParams(c: inout c)
-                    val aps: Array[Param] = parseParamList(c: inout c)
-                    match c.curKind() {
-                        Kind.Arrow => {
-                            c.advance()
-                            val arty: PType = parseTypeTok(c: inout c)
-                            recordArrayElem(c: inout c, ty: arty)
-                        }
-                        _ => {}
-                    }
-                    reqs.append(<Bind nameStart=areqTok.start nameLen=areqTok.len fieldStart=areqTok.start fieldLen=areqTok.len />)
+                    reqs.append(parseReqSig(c: inout c, isAssoc: true))
                 } else {
                     c.advance()
                 }
@@ -398,6 +373,36 @@ fn parseTrait(c: inout Comp) {
         }
     }
     c.traits.append(<TraitDef nameStart=nameTok.start nameLen=nameTok.len reqs=reqs />)
+}
+
+// Parse a trait requirement signature `name [typeParams] (params) [-> ret]` into
+// a body-less Func (body=0, hasRecv=false). The leading `fn`/`assoc fn` is
+// already consumed; `isAssoc` records which form.
+fn parseReqSig(c: inout Comp, isAssoc: Bool) -> Func {
+    val reqTok: Tok = c.cur()
+    c.advance()
+    val tps: Array[Bind] = parseTypeParams(c: inout c)
+    val ps: Array[Param] = parseParamList(c: inout c)
+    mut val hasRet: Bool = false
+    mut val rs: U64 = 0
+    mut val rl: U64 = 0
+    mut val ria: Bool = false
+    mut val rr: U64 = 0
+    match c.curKind() {
+        Kind.Arrow => {
+            c.advance()
+            val rty: PType = parseTypeTok(c: inout c)
+            hasRet = true
+            rs = rty.start
+            rl = rty.len
+            ria = rty.isArray
+            rr = rty.ref
+            recordArrayElem(c: inout c, ty: rty)
+        }
+        _ => {}
+    }
+    val sig: Func = <Func nameStart=reqTok.start nameLen=reqTok.len typeParams=tps params=ps hasRet=hasRet retStart=rs retLen=rl retIsArray=ria retTy=rr body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=isAssoc />
+    return sig
 }
 
 // `[unique] struct Name { (val|mut val) field: Type ... }`. Field modifiers

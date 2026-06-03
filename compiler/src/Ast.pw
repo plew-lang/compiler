@@ -269,7 +269,11 @@ struct Variant {
 struct TraitDef {
     val nameStart: U64
     val nameLen: U64
-    val reqs: Array[Bind]
+    // requirement signatures (spec/08): each a body-less Func carrying the
+    // requirement's name, params (labels + types), return type, and isAssoc.
+    // The abstract generic type-checker reads these to resolve `x.req(...)` on a
+    // bounded type parameter; the completeness check matches them to witnesses.
+    val reqs: Array[Func]
 }
 
 // A recorded conformance `impl Type as Trait { ... }` (spec/08: conformance is
