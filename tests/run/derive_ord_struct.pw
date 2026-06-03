@@ -1,0 +1,23 @@
+import @Std/Io with { print }
+
+// `@[Ord]` synthesizes a lexicographic compare over the fields (declared
+// `Ordering` is used — option B: not compiler-injected). `< <= > >=` then work.
+enum Ordering { Less  Equal  Greater }
+
+@[Ord]
+struct Version { val major: I64  val minor: I64 }
+
+fn boolI(b: Bool) -> I64 { if b { return 1I64 } return 0I64 }
+
+fn main() {
+    val a: Version = <Version major=1 minor=2 />
+    val b: Version = <Version major=1 minor=5 />
+    val c: Version = <Version major=2 minor=0 />
+    val d: Version = <Version major=1 minor=2 />
+    print(boolI(b: a < b))    // 1
+    print(boolI(b: a < c))    // 1
+    print(boolI(b: c < a))    // 0
+    print(boolI(b: a <= d))   // 1
+    print(boolI(b: b > a))    // 1
+    print(boolI(b: a >= d))   // 1
+}

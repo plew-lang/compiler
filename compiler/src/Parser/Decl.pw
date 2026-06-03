@@ -783,7 +783,65 @@ fn synthEnumEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind, b
     c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen traitStart=eqTrait.nameStart traitLen=eqTrait.nameLen derived=true witnessed=wit />)
 }
 
-// Synthesize all recorded `@[...]` derives (#5). Currently `@[Eq]` for structs.
+// An `<Ordering.Variant />` construction (Less/Equal/Greater) for derived Ord.
+fn synthOrdering(c: inout Comp, ordN: Bind, variantN: Bind) -> U64 {
+    val noFields: Array[MakeField] = []
+    return c.pushExpr(e: <Expr.Make typeStart=ordN.nameStart typeLen=ordN.nameLen variantStart=variantN.nameStart variantLen=variantN.nameLen isEnum=true ty=0 fields=noFields />)
+}
+
+// A `{ return <expr> }` block (one statement), returning its block index.
+fn synthReturnBlock(c: inout Comp, value: U64) -> U64 {
+    val ret: U64 = c.pushStmt(s: <Stmt.Return value=value hasValue=true />)
+    mut val stmts: Array[U64] = []
+    stmts.append(ret)
+    val blkId: U64 = c.blocks.count
+    c.blocks.append(<Block stmts=stmts />)
+    return blkId
+}
+
+// Synthesize `@[Ord]` for a struct: `compare(lhs: T, rhs: T) -> Ordering` as a
+// lexicographic field walk — `if lhs.f < rhs.f { return Less } if lhs.f > rhs.f
+// { return Greater }` per field, then `return Equal`. Each `<`/`>` lowers per the
+// field's type (scalar built-in; an Ord-bearing field via its compare). Plus a
+// derived Conform(T, Ord). Requires `enum Ordering` in scope.
+fn synthStructOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bind, ordN: Bind, lessN: Bind, greaterN: Bind, equalN: Bind, ordTrait: Bind) {
+    val si: U64 = structIndexByName(c: inout c, start: d.typeStart, len: d.typeLen)
+    if si >= c.structs.count {
+        return
+    }
+    val fields: Array[FieldDef] = c.structs[si].fields
+    mut val params: Array[Param] = []
+    params.append(synthParam(nameSpan: lhsN, tyStart: d.typeStart, tyLen: d.typeLen))
+    params.append(synthParam(nameSpan: rhsN, tyStart: d.typeStart, tyLen: d.typeLen))
+    val lhsId: U64 = c.pushExpr(e: <Expr.Ident start=lhsN.nameStart len=lhsN.nameLen />)
+    val rhsId: U64 = c.pushExpr(e: <Expr.Ident start=rhsN.nameStart len=rhsN.nameLen />)
+    mut val stmts: Array[U64] = []
+    mut val fi: U64 = 0
+    while fi < fields.count {
+        val f: FieldDef = fields[fi]
+        val lf1: U64 = c.pushExpr(e: <Expr.Field base=lhsId nameStart=f.nameStart nameLen=f.nameLen />)
+        val rf1: U64 = c.pushExpr(e: <Expr.Field base=rhsId nameStart=f.nameStart nameLen=f.nameLen />)
+        val lt: U64 = c.pushExpr(e: <Expr.Binary op=52 lhs=lf1 rhs=rf1 />)
+        val lessBlk: U64 = synthReturnBlock(c: inout c, value: synthOrdering(c: inout c, ordN: ordN, variantN: lessN))
+        stmts.append(c.pushStmt(s: <Stmt.If cond=lt thenBlk=lessBlk elseBlk=0 hasElse=false />))
+        val lf2: U64 = c.pushExpr(e: <Expr.Field base=lhsId nameStart=f.nameStart nameLen=f.nameLen />)
+        val rf2: U64 = c.pushExpr(e: <Expr.Field base=rhsId nameStart=f.nameStart nameLen=f.nameLen />)
+        val gt: U64 = c.pushExpr(e: <Expr.Binary op=54 lhs=lf2 rhs=rf2 />)
+        val grBlk: U64 = synthReturnBlock(c: inout c, value: synthOrdering(c: inout c, ordN: ordN, variantN: greaterN))
+        stmts.append(c.pushStmt(s: <Stmt.If cond=gt thenBlk=grBlk elseBlk=0 hasElse=false />))
+        fi += 1
+    }
+    stmts.append(c.pushStmt(s: <Stmt.Return value=synthOrdering(c: inout c, ordN: ordN, variantN: equalN) hasValue=true />))
+    val blkId: U64 = c.blocks.count
+    c.blocks.append(<Block stmts=stmts />)
+    val noTP: Array[Bind] = []
+    c.funcs.append(<Func nameStart=cmpN.nameStart nameLen=cmpN.nameLen typeParams=noTP params=params hasRet=true retStart=ordN.nameStart retLen=ordN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true />)
+    mut val wit: Array[Func] = []
+    c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen traitStart=ordTrait.nameStart traitLen=ordTrait.nameLen derived=true witnessed=wit />)
+}
+
+// Synthesize all recorded `@[...]` derives (#5): `@[Eq]` (struct + enum) and
+// `@[Ord]` (struct). `@[Ord]` requires `enum Ordering` in scope.
 fn synthesizeDerives(c: inout Comp) {
     if c.derives.count == 0 {
         return
@@ -793,6 +851,12 @@ fn synthesizeDerives(c: inout Comp) {
     val rhsN: Bind = internBytes(c: inout c, s: "rhs")
     val boolN: Bind = internBytes(c: inout c, s: "Bool")
     val eqTrait: Bind = internBytes(c: inout c, s: "Eq")
+    val cmpN: Bind = internBytes(c: inout c, s: "compare")
+    val ordN: Bind = internBytes(c: inout c, s: "Ordering")
+    val lessN: Bind = internBytes(c: inout c, s: "Less")
+    val greaterN: Bind = internBytes(c: inout c, s: "Greater")
+    val equalN: Bind = internBytes(c: inout c, s: "Equal")
+    val ordTrait: Bind = internBytes(c: inout c, s: "Ord")
     mut val i: U64 = 0
     while i < c.derives.count {
         val d: DeriveReq = c.derives[i]
@@ -801,6 +865,18 @@ fn synthesizeDerives(c: inout Comp) {
                 synthEnumEq(c: inout c, d: d, eqN: eqN, lhsN: lhsN, rhsN: rhsN, boolN: boolN, eqTrait: eqTrait)
             } else {
                 synthStructEq(c: inout c, d: d, eqN: eqN, lhsN: lhsN, rhsN: rhsN, boolN: boolN, eqTrait: eqTrait)
+            }
+        }
+        if rangeEquals(bytes: c.bytes, start: d.nameStart, len: d.nameLen, kw: "Ord") {
+            if enumIndexByName(c: inout c, start: ordN.nameStart, len: ordN.nameLen) >= c.enums.count {
+                compileErrorAt(line: lineOf(c: inout c, offset: d.nameStart), msg: "deriving `Ord` requires `enum Ordering` to be in scope")
+            } else {
+                if d.isEnum {
+                    // enum Ord (lexicographic over tags then payloads) is deferred.
+                    compileErrorAt(line: lineOf(c: inout c, offset: d.nameStart), msg: "`@[Ord]` on an enum is not yet supported (derive it on structs; enums: manual impl for now)")
+                } else {
+                    synthStructOrd(c: inout c, d: d, cmpN: cmpN, lhsN: lhsN, rhsN: rhsN, ordN: ordN, lessN: lessN, greaterN: greaterN, equalN: equalN, ordTrait: ordTrait)
+                }
             }
         }
         i += 1

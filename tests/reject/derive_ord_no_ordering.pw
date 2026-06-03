@@ -1,0 +1,4 @@
+import @Std/Io with { print }
+@[Ord]
+struct V { val n: I64 }
+fn main() { print(0) }
