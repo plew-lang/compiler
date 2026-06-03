@@ -7913,6 +7913,12 @@ void genStmt(Comp* c, uint64_t id) {
     else if (_m574.tag == 10) {
         uint64_t value = _m574.data.Give.value;
         (void)value;
+    TypeInfo gvt = exprType(&((*c)), value);
+    if (gvt.kind == 2) {
+    if (typeIsUnique(&((*c)), gvt.nameStart, gvt.nameLen)) {
+    compileErrorAt(lineOf(&((*c)), exprOffset(&((*c)), value)), (PlewString){"a value-position if/match cannot yield a unique value yet; use a statement form", 79});
+    }
+    }
     if ((*c).curGiveTmp != 0) {
     plew_write((PlewString){"    __r", 7});
     writeU64(({ uint64_t __ov; if (__builtin_sub_overflow(((*c).curGiveTmp), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; }));

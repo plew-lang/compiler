@@ -607,6 +607,17 @@ fn genStmt(c: inout Comp, id: U64) {
             write(s: ");\n")
         }
         Stmt.Give { val value } => {
+            // A value-position block (if/match expression) yielding a unique value
+            // is not supported yet: the result temp vs the block's scope drops need
+            // per-path move handling. Reject loudly (a bare place would double
+            // deinit; a `give move` of an outer local would be a conditional move).
+            // Use a statement-form if/match with the binding outside.
+            val gvt: TypeInfo = exprType(c: inout c, id: value)
+            if gvt.kind == 2 {
+                if typeIsUnique(c: inout c, start: gvt.nameStart, len: gvt.nameLen) {
+                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "a value-position if/match cannot yield a unique value yet; use a statement form")
+                }
+            }
             // assign the active value-position block's result temp (set by the
             // enclosing IfExpr/MatchExpr lowering).
             if c.curGiveTmp != 0 {

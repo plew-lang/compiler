@@ -1,0 +1,21 @@
+import @Std/Io with { write, print }
+
+// `inout` is valid for unique types (a mutable borrow consumes nothing): the
+// caller keeps ownership and deinit runs once at its scope.
+unique struct File {
+    mut val fd: I64
+    deinit { print(self.fd) }
+}
+impl File {
+    inout fn setFd(n: I64) { self.fd = n }
+    fn current() -> I64 { return self.fd }
+}
+fn bump(f: inout File) { f.setFd(n: 99) }
+
+fn main() {
+    mut val a: File = <File fd=1 />
+    a.setFd(n: 2)              // inout fn method (mutate in place)
+    bump(f: inout a)           // inout parameter
+    print(a.current())         // 99
+    write(s: "end\n")
+}                              // a deinit once: prints 99

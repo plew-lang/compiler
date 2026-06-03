@@ -1,0 +1,11 @@
+// A value-position if/match cannot yield a unique value yet (the result temp vs
+// the block's scope drops need per-path move handling). Use a statement form.
+import @Std/Io with { write, print }
+unique struct File { val fd: I64  deinit { print(self.fd) } }
+fn main() {
+    val a: File = <File fd=1 />
+    val b: File = <File fd=2 />
+    val cond: Bool = true
+    val c: File = if cond { give a } else { give b }
+    write(s: "end\n")
+}
