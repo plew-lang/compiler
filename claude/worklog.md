@@ -6,17 +6,13 @@
 
 🎉 **セルフホスト達成・stage0（Rust）退役済み。** 正典コンパイラ＝Plew パッケージ `compiler/src/`（root `_.pw` が `part` で全パートを綴じ込む 1 モジュール＝`Loader`・`Lexer`・`Ast`・`Parser/`〔Expr/Stmt/Decl〕・`Codegen/`〔Emit/Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array〕・part はサブディレクトリ可）。自分自身を不動点までコンパイルする。
 
-> **次の一歩＝(2) closure キャプチャ**（イベントループ第1段・Iterator コンビネータの前提）。✅ **traits step 1 ＋ 健全性ギャップ #1/#2/#3/#4/#6/#8/#9 すべて完了**（残＝#5 は derive 待ち・#7 は合意の上で据え置き）。
+> **次の一歩＝(2) closure キャプチャ**（イベントループ第1段・Iterator コンビネータの前提）。トレイト/generics は **step 1＋健全性監査＋ARC 修正まで完了**。
 >
-> **ギャップ修正済の一覧**：#1 `via` 先実体の存在検査（`checkViaTargets`）・#2 未知トレイト準拠を loud reject・#3 完全性チェックをセレクタ単位（名前＋引数型・`witnessedHas`/`paramSelectorEq`・オーバーロード要求を区別）・#4 Eq/Ord は `impl T as Eq/Ord` 準拠をゲート（inherent `eq` では動かない）・#6 transitive 単相化（generic→generic・worklist fixpoint）・**#9 eager generic 型検査**（タグ `eager-generic-check`＝`checkGenericBodies` が generic テンプレート本体を境界に対し1回検査＝型パラメータにメソッド/演算子を呼ぶには `where T: Trait` 必須＝C++ テンプレート脱却）。#8 はメソッド本体側を #9 が吸収。
+> **closure キャプチャの設計（着手用）**：現状は**非キャプチャのみ**（ラムダリフティング＝`__closure<id>` というベア関数ポインタ・body は params と globals のみ参照可）。spec は **Swift 流の参照キャプチャ**（外側ローカルを参照で捕捉・`mut val` キャプチャは可変/共有/永続＝`makeCounter` が `Ref` 不要）。実装＝**env＋fat closure**（`{fn ptr, env ptr}`）＋**エスケープするキャプチャ変数をヒープ化**（ARC 箱）。関数型表現（今はベア fn ポインタ）の根本変更で、関数型/呼び出し/全経路に波及＝incremental green が難しい大物。**`spawn { block }` の前提**でもある（spec/14・並行は単一スレッド限定・`mut val` 参照キャプチャ閉包は `Ref` 含む値同様 `local`）。詳細は item 5（イベントループ）。**ARC は安全**＝直前に配列要素の deep 所有を直済み（下記）。
 >
-> **トレイト健全性ギャップは #7 を除き全消化**（#1〜#4・#6・#8・#9・#5）。**次の一歩＝(2) closure キャプチャ**。
+> **完了済（このフェーズ）**：trait T1–T3・assoc fn・Eq/Ord 配線・`@[Eq]`(struct/enum)/`@[Ord]`(struct) derive・健全性ギャップ #1–#4/#6/#8/#9（eager generic 型検査＝C++ テンプレート脱却）・監査の沈黙逸脱群（インライン制約/supertrait/同セレクタ衝突/ambient impl/`move fn`-copyable を reject・primitive が Eq/Ord 境界を満たす・比較非結合）・**ARC バグ修正**（配列 `_push`/`_set` が struct 要素を `E_copy`＝deep 所有・`_copy`/`_release` と対称＝過剰解放/UAF 解消・ASan 自己コンパイル clean）。タグ `traits-t1`〜`arc-array-elem-fix`。**残ギャップは provisional.md**（演算子トレイト全配線〔大物・需要駆動〕・曖昧リテラル/method 値化〔小・clang 止まり〕・`@[Ord]` on enum・#7 明示型引数〔据え置き〕）。
 >
-> ✅ **#5 derive 実質完了**（タグ `derive-eq-struct`/`derive-eq-enum`/`derive-ord-struct`）＝**最小ビルトイン derive**＝`@[...]` ディレクティブ（`@`＝Unknown＋`[`）→ `DeriveReq` 記録 → `synthesizeDerives` が AST 合成（合成識別子は `c.bytes`〔mut 化〕末尾に intern した span 参照）。**`@[Eq]`**＝struct（`lhs.f==rhs.f && …`）＋enum（入れ子 MatchExpr で tag→payload）。**`@[Ord]`**＝struct（フィールド順 `<`/`>` で if-return→Equal）。derived `Conform` を登録するので `==`/`<` 配線も `where T: Eq/Ord` も合成（Binary ディスパッチは **witness を enum tag 比較より優先**）。**供給は option B**＝`Ordering`/`Eq`/`Ord` をコンパイラ注入せず・derived `Conform` は完全性/未知トレイト検査を**免除**（`cf.derived`）・`@[Ord]` は宣言済み `enum Ordering` を要求（無ければ loud）。後で Plew ネイティブ derive に実装だけ移行可（`@[Eq]` サーフェス不変）。**残＝`@[Ord]` on enum**（tag→payload 辞書順・現状は loud な未対応エラー）。
->
-> **#7**（明示型引数 `f[I32](x)`）＝Go 式の構文曖昧で低価値×高コスト＝据え置き合意。
->
-> **順序＝(2) closures → 〔関連型＋Iterator〕→ Hash→Dictionary**。closures は #9 と直交・Iterator コンビネータ（`map(fn)`）の前提。関連型は Iterator 着手時に #9 を拡張（`where T: Iterator` の `it.next()->Optional[T.Item]`）。`any P` 存在型は最終フェーズ。
+> **順序＝(2) closures → 〔関連型＋Iterator〕→ Hash→Dictionary**。関連型は Iterator 着手時に #9 を拡張（`where T: Iterator` の `it.next()->Optional[T.Item]`）。`any P` 存在型は最終フェーズ。
 
 - **ビルド**：`./bootstrap.sh`＝C 種 `compiler/plewc.seed.c`→clang→`plewc0`→`compiler/src/_.pw` を自己コンパイル→不動点 cmp（Rust 不要）。`./bootstrap.sh --reseed` で種更新。**preamble/codegen 出力/AST フィールド変更後は reseed を2回**。
 - **テスト**：`./test.sh`＝`tests/run/*.pw`（`.out` 照合・任意 `.in`）＋`tests/part/`（複数ファイル）＋`tests/reject/*.pw`（plewc 非ゼロ終了で reject＝受理の健全性）＋`tests/panic/*.pw`（compile+link 成功・実行は非ゼロ＋`.panic` stderr 部分一致）＋不動点。
