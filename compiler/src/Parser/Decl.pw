@@ -94,7 +94,7 @@ fn parseParamList(c: inout Comp) -> Array[Param] {
 // receiver marker for methods) is already consumed; the current token is the
 // name. `hasRecv`/`recv*`/`selfInout` describe an `impl Type` method receiver
 // (none for a free function).
-fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, selfInout: Bool, implParams: Array[Bind]) {
+fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, selfInout: Bool, selfMove: Bool, implParams: Array[Bind]) {
     val nameTok: Tok = c.cur()
     c.advance()
     // type parameters in scope = those introduced by the enclosing `impl[T]`
@@ -132,14 +132,14 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
     }
     c.skipNewlines()
     val body: U64 = parseBlock(c: inout c)
-    c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvStart recvLen=recvLen selfInout=selfInout />)
+    c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvStart recvLen=recvLen selfInout=selfInout selfMove=selfMove />)
 }
 
 // `fn name(...)`: a free function. The current token is `fn`.
 fn parseFunc(c: inout Comp) {
     c.advance()
     val noParams: Array[Bind] = []
-    parseFuncCommon(c: inout c, hasRecv: false, recvStart: 0, recvLen: 0, selfInout: false, implParams: noParams)
+    parseFuncCommon(c: inout c, hasRecv: false, recvStart: 0, recvLen: 0, selfInout: false, selfMove: false, implParams: noParams)
 }
 
 // `impl Type { (fn | inout fn) name(...) ... }`: inherent methods. Each member
@@ -173,21 +173,30 @@ fn parseImpl(c: inout Comp) {
                     Kind.KwFn => { c.advance() }
                     _ => {}
                 }
-                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: true, implParams: implParams)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: true, selfMove: false, implParams: implParams)
             }
             Kind.KwFn => {
                 c.advance()
-                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, implParams: implParams)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams)
             }
             Kind.KwMove => {
-                // `move fn` (consuming self) is not implemented yet; reject loudly
-                // rather than silently dropping the `move` (which would treat self
-                // as a by-value read). Until then, use a free function taking a
-                // `move T` parameter.
-                compileErrorAt(line: lineOf(c: inout c, offset: c.cur().start), msg: "`move fn` (consuming self) is not yet supported; use a free function with a `move T` parameter")
+                // `move fn` (consuming self): the method takes ownership of self.
+                c.advance()
+                match c.curKind() {
+                    Kind.KwFn => { c.advance() }
+                    _ => {}
+                }
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: true, implParams: implParams)
             }
             Kind.KwBorrow => {
-                compileErrorAt(line: lineOf(c: inout c, offset: c.cur().start), msg: "`borrow fn` (borrowing self) is not yet supported; use `fn` or a free function with a `borrow T` parameter")
+                // `borrow fn` (read self, non-consuming): observationally identical
+                // to `fn` for a unique value, so accept it as a synonym.
+                c.advance()
+                match c.curKind() {
+                    Kind.KwFn => { c.advance() }
+                    _ => {}
+                }
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams)
             }
             Kind.KwDeinit => {
                 // `deinit { body }` (spec/03): no params, no return, read self.
@@ -199,7 +208,7 @@ fn parseImpl(c: inout Comp) {
                 val body: U64 = parseBlock(c: inout c)
                 val noParams: Array[Param] = []
                 val noTypeParams: Array[Bind] = []
-                c.funcs.append(<Func nameStart=deinitTok.start nameLen=deinitTok.len typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=false />)
+                c.funcs.append(<Func nameStart=deinitTok.start nameLen=deinitTok.len typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=false selfMove=false />)
                 c.deinits.append(<Bind nameStart=recvStart nameLen=recvLen fieldStart=recvStart fieldLen=recvLen />)
             }
             _ => { c.advance() }
@@ -239,7 +248,7 @@ fn parseStruct(c: inout Comp, isUnique: Bool) {
                 val body: U64 = parseBlock(c: inout c)
                 val noParams: Array[Param] = []
                 val noTypeParams: Array[Bind] = []
-                c.funcs.append(<Func nameStart=deinitTok.start nameLen=deinitTok.len typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nameTok.start recvLen=nameTok.len selfInout=false />)
+                c.funcs.append(<Func nameStart=deinitTok.start nameLen=deinitTok.len typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nameTok.start recvLen=nameTok.len selfInout=false selfMove=false />)
                 c.deinits.append(<Bind nameStart=nameTok.start nameLen=nameTok.len fieldStart=nameTok.start fieldLen=nameTok.len />)
             }
             _ => {

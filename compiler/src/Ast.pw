@@ -290,6 +290,11 @@ struct Func {
     val recvStart: U64
     val recvLen: U64
     val selfInout: Bool
+    // `move fn` (spec/03): the method consumes self (a unique value), so self is
+    // owned here — deinit runs at the method's scope exit — and the call site marks
+    // the receiver moved. `fn`/`borrow fn` read self by value (not consumed);
+    // `inout fn` borrows it mutably. (`borrow fn` is accepted as a synonym of `fn`.)
+    val selfMove: Bool
 }
 
 struct Comp {
@@ -338,6 +343,9 @@ struct Comp {
     mut val curRecvStart: U64
     mut val curRecvLen: U64
     mut val curSelfInout: Bool
+    // the current method is a `move fn` (consumes self): self is deinit'd at every
+    // exit of the body (set per-function during codegen).
+    mut val curSelfMove: Bool
     // generic body substitution env: when emitting a monomorphized generic
     // function/method body, curTypeParams[i] (a type-param name) maps to the
     // concrete TypeRef curTypeArgs[i]. Empty outside a generic instantiation.

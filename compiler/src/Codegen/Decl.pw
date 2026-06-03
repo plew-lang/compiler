@@ -567,6 +567,24 @@ fn genSignature(c: inout Comp, f: Func) {
     write(s: ")")
 }
 
+// Emit self's deinit+release for a `move fn` method (it owns the consumed self).
+// The C parameter is literally `self`. Called at every exit (returns + fall-
+// through); past a `return` it is unreachable (harmless), like owned params.
+fn emitSelfDeinit(c: inout Comp) {
+    if c.curSelfMove {
+        if structHasDeinit(c: inout c, start: c.curRecvStart, len: c.curRecvLen) {
+            write(s: "    ")
+            writeSpan(c: inout c, start: c.curRecvStart, len: c.curRecvLen)
+            write(s: "_deinit(self);\n")
+        }
+        if structNeedsRelease(c: inout c, start: c.curRecvStart, len: c.curRecvLen) {
+            write(s: "    ")
+            writeSpan(c: inout c, start: c.curRecvStart, len: c.curRecvLen)
+            write(s: "_release(self);\n")
+        }
+    }
+}
+
 fn genFunc(c: inout Comp, fi: U64) {
     val f: Func = c.funcs[fi]
     val isMain: Bool = nameIsMain(c: inout c, f: f)
@@ -590,6 +608,7 @@ fn genFunc(c: inout Comp, fi: U64) {
     c.curRecvStart = f.recvStart
     c.curRecvLen = f.recvLen
     c.curSelfInout = f.selfInout
+    c.curSelfMove = f.selfMove
     c.curBranchBase = 0
     // fresh local scope for this function: parameters are the initial bindings
     c.locals = []
@@ -613,6 +632,8 @@ fn genFunc(c: inout Comp, fi: U64) {
     // params sit below its mark. For a body that ends in `return` this is
     // unreachable (the return already dropped them); for fall-through it is live.
     emitScopeDrops(c: inout c, mark: 0, exclIdx: c.locals.count)
+    // a `move fn` deinits its consumed self at the body's end (fall-through path).
+    emitSelfDeinit(c: inout c)
     if isMain {
         write(s: "    return 0;\n")
     }

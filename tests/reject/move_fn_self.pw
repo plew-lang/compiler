@@ -1,8 +1,0 @@
-// `move fn` (consuming self) is not yet supported; it must not be silently
-// treated as a by-value `fn`.
-import @Std/Io with { write }
-unique struct File { val fd: I64 }
-impl File {
-    move fn close() { write(s: "closing\n") }
-}
-fn main() { write(s: "x\n") }

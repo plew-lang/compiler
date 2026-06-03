@@ -1,0 +1,23 @@
+import @Std/Io with { write, print }
+
+// A `move fn` consumes self (a unique value): the method takes ownership and runs
+// self's deinit at its scope exit; the call site consumes the receiver, so it is
+// not deinit'd again. `borrow fn` reads self without consuming (like `fn`).
+unique struct File {
+    val fd: I64
+    deinit { print(self.fd) }
+}
+impl File {
+    move fn close() {
+        write(s: "closing\n")
+        print(self.fd)            // read self in the body
+    }
+    borrow fn peek() -> I64 { return self.fd }
+}
+
+fn main() {
+    val a: File = <File fd=5 />
+    print(a.peek())               // 5 (borrow fn, non-consuming)
+    a.close()                     // consumes a: closing, 5 (body), 5 (deinit)
+    write(s: "end\n")             // a NOT deinit'd again
+}

@@ -454,6 +454,7 @@ fn genStmt(c: inout Comp, id: U64) {
             } else {
                 if c.curRetVoid {
                     emitScopeDrops(c: inout c, mark: 0, exclIdx: c.locals.count)
+                    emitSelfDeinit(c: inout c)
                     write(s: "    return;\n")
                 } else {
                     if hasValue {
@@ -489,6 +490,11 @@ fn genStmt(c: inout Comp, id: U64) {
                             if typeIsUnique(c: inout c, start: vt.nameStart, len: vt.nameLen) {
                                 match c.exprs[value] {
                                     Expr.Ident { val start, val len } => {
+                                        if c.curSelfMove {
+                                            if isSelfRef(c: inout c, start: start, len: len) {
+                                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "returning `self` from a `move fn` is not yet supported")
+                                            }
+                                        }
                                         retExcl = localIndexByName(c: inout c, start: start, len: len)
                                     }
                                     Expr.Field { val base, val nameStart, val nameLen } => {
@@ -503,6 +509,7 @@ fn genStmt(c: inout Comp, id: U64) {
                         }
                     }
                     emitScopeDrops(c: inout c, mark: 0, exclIdx: retExcl)
+                    emitSelfDeinit(c: inout c)
                     write(s: "    return __ret")
                     writeU64(n: rt)
                     write(s: "; }\n")

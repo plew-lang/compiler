@@ -1,0 +1,7 @@
+// Calling a `move fn` consumes the receiver, so it cannot be called on a borrowed
+// value (the caller still owns it -> double deinit).
+import @Std/Io with { write }
+unique struct File { val fd: I64 }
+impl File { move fn close() { write(s: "x\n") } }
+fn use(f: borrow File) { f.close() }
+fn main() { write(s: "y\n") }

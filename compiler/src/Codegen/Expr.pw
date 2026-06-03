@@ -26,6 +26,11 @@ fn genExpr(c: inout Comp, id: U64) {
                 // `move` to a bare local until field/element moves are supported.
                 match c.exprs[operand] {
                     Expr.Ident { val start, val len } => {
+                        // moving `self` onward (out of a `move fn`) isn't tracked yet
+                        // (self isn't a tracked local), so it would double-deinit.
+                        if isSelfRef(c: inout c, start: start, len: len) {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "moving `self` is not yet supported")
+                        }
                         // conditional move guard: a local declared outside the
                         // enclosing branch (index < curBranchBase) would be moved
                         // only on this path, but the moved flag persists across all
@@ -374,6 +379,35 @@ fn genExpr(c: inout Comp, id: U64) {
                         return
                     }
                 }
+                // a `move fn` consumes its receiver (the method deinits self). The
+                // receiver must be a consumable owned local, not a borrow/field/
+                // element, and not consumed conditionally (same hazard as `move`).
+                if mf.selfMove {
+                    match c.exprs[recv] {
+                        Expr.Ident { val start, val len } => {
+                            if isSelfRef(c: inout c, start: start, len: len) {
+                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "calling a `move fn` on `self` is not yet supported")
+                            }
+                            val li: U64 = localIndexByName(c: inout c, start: start, len: len)
+                            if li < c.locals.count {
+                                if c.locals[li].owned {
+                                } else {
+                                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call a `move fn` on a borrowed value (it consumes the receiver)")
+                                }
+                            }
+                            if li < c.curBranchBase {
+                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call a `move fn` on a variable declared outside the enclosing conditional/loop (the consume would be conditional)")
+                            }
+                        }
+                        Expr.Field { val base, val nameStart, val nameLen } => {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call a `move fn` on a field (partial move, not yet supported)")
+                        }
+                        Expr.Index { val base, val index } => {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call a `move fn` on an element (partial move, not yet supported)")
+                        }
+                        _ => {}
+                    }
+                }
                 if isGenericInst(c: inout c, ref: bt.ref) {
                     emitMangle(c: inout c, ref: bt.ref)
                 } else {
@@ -403,6 +437,11 @@ fn genExpr(c: inout Comp, id: U64) {
                     i += 1
                 }
                 write(s: ")")
+                // the move fn has consumed the receiver: mark it moved-out so it is
+                // not used again nor released by the caller (the method deinits it).
+                if mf.selfMove {
+                    markMovedExpr(c: inout c, exprId: recv)
+                }
             }
         }
         Expr.Array { val elems } => {
