@@ -11348,8 +11348,37 @@ void collectFnInsts_c_Comp(Comp* c) {
     fi = ({ uint64_t __ov; if (__builtin_add_overflow((fi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     Func_release(f);
     }
+    uint64_t si = 0;
+    while (si < (long long)(((*c).fnInsts).len)) {
+    FnInst fin = FnInst_share(PlewArray_FnInst_get((*c).fnInsts, (long long)(si)));
+    Func gf = Func_share(PlewArray_Func_get((*c).funcs, (long long)(fin.fnIdx)));
     (*c).locals = PlewArray_Local_new();
     (*c).curHasRecv = 0;
+    (*c).curRecvStart = 0;
+    (*c).curRecvLen = 0;
+    (*c).curSelfInout = 0;
+    (*c).curRecvInstRef = 0;
+    (*c).curTypeParams = PlewArray_Bind_share(gf.typeParams);
+    (*c).curTypeArgs = PlewArray_U64_share(fin.args);
+    uint64_t gpi = 0;
+    while (gpi < (long long)((gf.params).len)) {
+    Param gp = PlewArray_Param_get(gf.params, (long long)(gpi));
+    addLocal_c_Comp_nameStart_U64_nameLen_U64_tyStart_U64_tyLen_U64_isArray_Bool_ty_U64_isInout_Bool_isMut_Bool_owned_Bool(&((*c)), gp.nameStart, gp.nameLen, gp.tyStart, gp.tyLen, gp.tyIsArray, gp.ty, gp.isInout, 0, 0);
+    gpi = ({ uint64_t __ov; if (__builtin_add_overflow((gpi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    scanBlockInsts_c_Comp_blkId_U64(&((*c)), gf.body);
+    si = ({ uint64_t __ov; if (__builtin_add_overflow((si), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    Func_release(gf);
+    FnInst_release(fin);
+    }
+    PlewArray_Bind noP = PlewArray_Bind_new();
+    PlewArray_U64 noA = PlewArray_U64_new();
+    (*c).locals = PlewArray_Local_new();
+    (*c).curHasRecv = 0;
+    (*c).curTypeParams = PlewArray_Bind_share(noP);
+    (*c).curTypeArgs = PlewArray_U64_share(noA);
+    PlewArray_U64_release(noA);
+    PlewArray_Bind_release(noP);
 }
 void emitMonoFn_c_Comp_instIdx_U64_proto_Bool(Comp* c, uint64_t instIdx, long long proto) {
     FnInst fin = FnInst_share(PlewArray_FnInst_get((*c).fnInsts, (long long)(instIdx)));

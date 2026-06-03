@@ -1041,8 +1041,38 @@ fn collectFnInsts(c: inout Comp) {
         }
         fi += 1
     }
+    // transitive instantiation: walk each generic free function instance's body
+    // with its type-parameter env active (so type-parameter-typed args resolve to
+    // concrete types), registering the instances it calls. The loop re-reads
+    // c.fnInsts.count each step, so newly appended instances are scanned too — a
+    // worklist that runs to fixpoint (a generic fn calling another generic fn).
+    mut val si: U64 = 0
+    while si < c.fnInsts.count {
+        val fin: FnInst = c.fnInsts[si]
+        val gf: Func = c.funcs[fin.fnIdx]
+        c.locals = []
+        c.curHasRecv = false
+        c.curRecvStart = 0
+        c.curRecvLen = 0
+        c.curSelfInout = false
+        c.curRecvInstRef = 0
+        c.curTypeParams = gf.typeParams
+        c.curTypeArgs = fin.args
+        mut val gpi: U64 = 0
+        while gpi < gf.params.count {
+            val gp: Param = gf.params[gpi]
+            addLocal(c: inout c, nameStart: gp.nameStart, nameLen: gp.nameLen, tyStart: gp.tyStart, tyLen: gp.tyLen, isArray: gp.tyIsArray, ty: gp.ty, isInout: gp.isInout, isMut: false, owned: false)
+            gpi += 1
+        }
+        scanBlockInsts(c: inout c, blkId: gf.body)
+        si += 1
+    }
+    val noP: Array[Bind] = []
+    val noA: Array[U64] = []
     c.locals = []
     c.curHasRecv = false
+    c.curTypeParams = noP
+    c.curTypeArgs = noA
 }
 
 // Emit one generic free function instance (prototype or body) under its

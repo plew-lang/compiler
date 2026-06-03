@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+// Transitive monomorphization: a generic free function calling another generic
+// free function (the inner instance is discovered via the worklist).
+struct A { val n: I64 }
+impl A { fn get() -> I64 { return self.n } }
+struct B { val m: I64 }
+impl B { fn get() -> I64 { return self.m * 10I64 } }
+
+fn inner[T](x: T) -> I64 { return x.get() }
+fn outer[U](y: U) -> I64 { return inner(x: y) + 1I64 }
+
+fn main() {
+    val a: A = <A n=5 />
+    val b: B = <B m=3 />
+    print(outer(y: a))   // 5 + 1 = 6
+    print(outer(y: b))   // 30 + 1 = 31
+}
