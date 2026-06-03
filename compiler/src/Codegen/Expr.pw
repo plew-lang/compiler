@@ -272,7 +272,26 @@ fn genExpr(c: inout Comp, id: U64) {
             if cfi == c.funcs.count {
                 writeSpan(c: inout c, start: nameStart, len: nameLen)
             } else {
-                writeFnSelector(c: inout c, f: c.funcs[cfi])
+                // a generic free function call mangles with its inferred concrete
+                // type args (`f_x_Counter`) under a temporary env, matching the
+                // instance's definition. A non-registered instantiation (the
+                // deferred transitive case) falls back to the literal selector.
+                if isGenericFreeFn(c: inout c, fi: cfi) {
+                    val inferred: Array[U64] = inferFnArgs(c: inout c, f: c.funcs[cfi], args: args)
+                    if fnInstExists(c: inout c, fnIdx: cfi, args: inferred) {
+                        val savedP: Array[Bind] = c.curTypeParams
+                        val savedA: Array[U64] = c.curTypeArgs
+                        c.curTypeParams = c.funcs[cfi].typeParams
+                        c.curTypeArgs = inferred
+                        writeFnSelector(c: inout c, f: c.funcs[cfi])
+                        c.curTypeParams = savedP
+                        c.curTypeArgs = savedA
+                    } else {
+                        writeFnSelector(c: inout c, f: c.funcs[cfi])
+                    }
+                } else {
+                    writeFnSelector(c: inout c, f: c.funcs[cfi])
+                }
             }
             write(s: "(")
             mut val i: U64 = 0

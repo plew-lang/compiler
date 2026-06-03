@@ -297,6 +297,16 @@ struct MethodAlias {
     val realLen: U64
 }
 
+// A concrete instantiation of a generic free function (`fn f[T](x: T)` called
+// with T = a concrete type). `fnIdx` indexes c.funcs; `args` are the concrete
+// type arguments (TypeRef indices) aligned to the function's typeParams.
+// Discovered from call sites (only ground/concrete instantiations); each gets a
+// specialized C function `f_<arg-mangle...>` emitted under the type-param env.
+struct FnInst {
+    val fnIdx: U64
+    val args: Array[U64]
+}
+
 struct EnumDef {
     val nameStart: U64
     val nameLen: U64
@@ -360,6 +370,9 @@ struct Comp {
     // structurally), collected from use sites after parsing. Post-order so a
     // by-value nested instance is defined before the type that contains it.
     mut val genInsts: Array[U64]
+    // concrete instantiations of generic free functions (FnInst), discovered
+    // from call sites after parsing. Each is emitted as a specialized C function.
+    mut val fnInsts: Array[FnInst]
     // distinct function-type TypeRefs (head `fn`), for emitting a C function
     // pointer typedef per signature. Collected with genInsts during scanType.
     mut val fnTypes: Array[U64]

@@ -711,6 +711,20 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                         val lt2: TypeRef = c.types[lo.ty]
                         return <TypeInfo kind=2 nameStart=lt2.nameStart nameLen=lt2.nameLen ref=lo.ty />
                     }
+                    // resolve a type-parameter-typed local under the active
+                    // monomorphization env (so `x: T` reports as the concrete type
+                    // for method dispatch inside a generic instance body).
+                    if lo.isArray {
+                    } else {
+                        mut val k: U64 = 0
+                        while k < c.curTypeParams.count {
+                            val tp: Bind = c.curTypeParams[k]
+                            if spansEqual(c: inout c, aStart: lo.tyStart, aLen: lo.tyLen, bStart: tp.nameStart, bLen: tp.nameLen) {
+                                return typeInfoOfRef(c: inout c, ref: c.curTypeArgs[k])
+                            }
+                            k += 1
+                        }
+                    }
                     return typeInfoOfName(c: inout c, start: lo.tyStart, len: lo.tyLen, isArray: lo.isArray)
                 }
             }
@@ -755,6 +769,26 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             if fi < c.funcs.count {
                 val f: Func = c.funcs[fi]
                 if f.hasRet {
+                    // a generic free function returning a bare type parameter:
+                    // substitute it with the inferred concrete type argument.
+                    if isGenericFreeFn(c: inout c, fi: fi) {
+                        if f.retIsArray {
+                        } else {
+                            val inferred: Array[U64] = inferFnArgs(c: inout c, f: f, args: args)
+                            mut val k: U64 = 0
+                            while k < f.typeParams.count {
+                                val tp: Bind = f.typeParams[k]
+                                if spansEqual(c: inout c, aStart: f.retStart, aLen: f.retLen, bStart: tp.nameStart, bLen: tp.nameLen) {
+                                    if k < inferred.count {
+                                        if inferred[k] != 0 {
+                                            return typeInfoOfRef(c: inout c, ref: inferred[k])
+                                        }
+                                    }
+                                }
+                                k += 1
+                            }
+                        }
+                    }
                     if isGenericInst(c: inout c, ref: f.retTy) {
                         val rtr: TypeRef = c.types[f.retTy]
                         return <TypeInfo kind=2 nameStart=rtr.nameStart nameLen=rtr.nameLen ref=f.retTy />

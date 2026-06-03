@@ -561,10 +561,37 @@ fn writeFnSelector(c: inout Comp, f: Func) {
         write(s: "_")
         writeSpan(c: inout c, start: p.nameStart, len: p.nameLen)
         write(s: "_")
-        if p.tyIsArray {
-            write(s: "A")
+        // resolve a bare type-parameter param under the active monomorphization
+        // env so a generic free function's instance mangles with the concrete
+        // type (`f_x_Counter`), matching the call site. Only for free functions:
+        // a generic method's instantiation is already disambiguated by its mangled
+        // receiver prefix (`Box_I32_`), so its selector keeps the literal type-param
+        // name (`replace_n_T`) — unchanged on both the definition and call side.
+        mut val resolved: Bool = false
+        if f.hasRecv {
+        } else {
+            if p.tyIsArray {
+            } else {
+                mut val k: U64 = 0
+                while k < c.curTypeParams.count {
+                    val tp: Bind = c.curTypeParams[k]
+                    if spansEqual(c: inout c, aStart: p.tyStart, aLen: p.tyLen, bStart: tp.nameStart, bLen: tp.nameLen) {
+                        emitMangle(c: inout c, ref: c.curTypeArgs[k])
+                        resolved = true
+                        k = c.curTypeParams.count
+                    } else {
+                        k += 1
+                    }
+                }
+            }
         }
-        writeSpan(c: inout c, start: p.tyStart, len: p.tyLen)
+        if resolved {
+        } else {
+            if p.tyIsArray {
+                write(s: "A")
+            }
+            writeSpan(c: inout c, start: p.tyStart, len: p.tyLen)
+        }
         i += 1
     }
 }
