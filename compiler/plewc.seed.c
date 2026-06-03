@@ -3040,8 +3040,7 @@ PatInfo parsePattern_c_Comp(Comp* c) {
     {
     Kind _m173 = Comp_curKind(&((*c)));
     if (_m173.tag == 33) {
-    Comp_advance(&((*c)));
-    popen = 1;
+    compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), Comp_cur(&((*c))).start), (PlewString){"destructure an enum variant with parentheses, e.g. `Optional.Some(val v)`", 73});
     }
     else if (_m173.tag == 29) {
     Comp_advance(&((*c)));
@@ -3055,11 +3054,7 @@ PatInfo parsePattern_c_Comp(Comp* c) {
     Comp_skipNewlines(&((*c)));
     {
     Kind _m174 = Comp_curKind(&((*c)));
-    if (_m174.tag == 34) {
-    Comp_advance(&((*c)));
-    break;
-    }
-    else if (_m174.tag == 30) {
+    if (_m174.tag == 30) {
     Comp_advance(&((*c)));
     break;
     }
@@ -4042,8 +4037,7 @@ void parseEnum_c_Comp(Comp* c) {
     {
     Kind _m256 = Comp_curKind(&((*c)));
     if (_m256.tag == 33) {
-    Comp_advance(&((*c)));
-    vopen = 1;
+    compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), Comp_cur(&((*c))).start), (PlewString){"enum variant payloads use parentheses, e.g. `Foo(x: I32, y: I32)`", 65});
     }
     else if (_m256.tag == 29) {
     Comp_advance(&((*c)));
@@ -4057,11 +4051,7 @@ void parseEnum_c_Comp(Comp* c) {
     Comp_skipNewlines(&((*c)));
     {
     Kind _m257 = Comp_curKind(&((*c)));
-    if (_m257.tag == 34) {
-    Comp_advance(&((*c)));
-    break;
-    }
-    else if (_m257.tag == 30) {
+    if (_m257.tag == 30) {
     Comp_advance(&((*c)));
     break;
     }

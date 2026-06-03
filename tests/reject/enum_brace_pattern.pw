@@ -1,0 +1,6 @@
+import @Std/Io with { print }
+enum E { Foo(x: I32) }
+fn main() {
+    val e: E = <E.Foo x=1 />
+    match e { E.Foo { val x } => print(x) }
+}

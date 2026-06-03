@@ -29,7 +29,7 @@ struct Counter {
 ```plew
 @[All, Eq, Hash]  // ディレクティブ（オプション）
 export enum Color[T] where T: Format {
-    Red { intensity: F64 }
+    Red(intensity: F64)
     Green
     Blue
 }
@@ -43,14 +43,15 @@ export enum Color[T] where T: Format {
 
 | | 構造体 | 列挙型バリアント |
 | --- | --- | --- |
-| 宣言 | `struct S { val field: T }` | `enum E { V { field: T } }` |
+| 宣言 | `struct S { val field: T }` | `enum E { V(field: T) }` |
 | 生成 | `<S field=expr />` | `<E.V field=expr />` |
-| 分解 | `S { field: val binding }` | `E.V { field: val binding }` |
+| 分解 | `S { field: val binding }` | `E.V(field: val binding)` |
 
 - 生成は JSX ライク構文のみ（下記 [インスタンス生成](#インスタンス生成) 参照）。
-- 分解は必ず**型名を先頭に置く**ため、`{` 始まりのブロックと曖昧になりません（[制御構造](../03-expressions/11-control-flow.md) 参照）。
+- **構造体は `{ }`・バリアントペイロードは `( )`**：構造体本体は記憶域（`val`/`mut val`・`pub`・メソッド）を持つ宣言ブロックなので `{ }`、バリアントのペイロードは**ラベル付きレコード `(field: Type)` そのもの**なので `( )`。この区別が「これはレコードだ」を構文で明示します。分解側も同じ括弧に従う（構造体 `S { … }`／バリアント `E.V(…)`）ため、`E.V(` の `(` でレコードを開けていることが読み手に分かります。
+- 分解は必ず**型名を先頭に置く**ため、ブロックと曖昧になりません（[制御構造](../03-expressions/11-control-flow.md) 参照）。
 
-> **バリアントのフィールドに修飾子（`val`/`mut val`/`pub`）を書かない理由**：構造体フィールドの `val`/`mut val` は[記憶域可変性](../01-basics/03-values.md)（`c.n += 1` のような場所越しの変更）を、`pub`/`pub(get)` は[可視性](../04-execution/15-modules.md)を表します。バリアントのフィールドは **`match` で取り出すしかなく**、`e.V.field = …` のように場所として書き換える手段がない（変更はバリアントを作り直す）ので可変性修飾は意味を持ちません。可視性も列挙型単位（バリアントが見えれば `match` で全フィールドが見える）で、フィールド個別には意味を持ちません。意味を持たない修飾子を文法に残すのは冗長なので、バリアントのフィールドは `field: Type` だけにします（ラベル付きレコード `(field: Type)` と同形）。分解時の束縛 `{ val binding }` の `val` は**新しい変数の束縛**を表す別物で、こちらは従来どおりです。
+> **バリアントのフィールドに修飾子（`val`/`mut val`/`pub`）を書かない**：バリアントのフィールドは **`match` で取り出すしかなく**（`e.V.field = …` のような場所書き換えはできず、変更はバリアントを作り直す）、可視性も列挙型単位（バリアントが見えれば全フィールドが見える）。だから個別の可変性/可視性修飾は意味を持たず、`field: Type` だけ＝**ラベル付きレコード `(field: Type)` と同形**です（だから `( )` で書く）。分解時の束縛 `(val binding)` の `val` は**新しい変数の束縛**を表す別物で、こちらは従来どおりです。
 
 ## 標準の Optional / Result
 
@@ -59,14 +60,14 @@ export enum Color[T] where T: Format {
 ```plew
 @[All, Eq]
 export enum Optional[T] {
-    Some { value: T }
+    Some(value: T)
     None
 }
 
 @[All, Eq]
 export enum Result[T, E] {
-    Ok { value: T }
-    Err { error: E }
+    Ok(value: T)
+    Err(error: E)
 }
 ```
 
@@ -75,8 +76,8 @@ val some = <Optional.Some value=42 />
 val none = <Optional.None />
 
 match maybeValue {
-    Optional.Some { value: val v } => v
-    Optional.None                  => 0
+    Optional.Some(value: val v) => v
+    Optional.None               => 0
 }
 ```
 
@@ -96,7 +97,7 @@ struct TreeNode {
 }
 
 enum List[T] {
-    Cons { head: T, tail: List[T] }   // 自己参照
+    Cons(head: T, tail: List[T])   // 自己参照
     Nil
 }
 ```
@@ -247,7 +248,7 @@ impl Temperature {
 
     // Optional[Self]：パースできなければ None
     optional factory parse(text: String) {
-        guard Optional.Some { value: val c } = parseF64(text: text) {
+        guard Optional.Some(value: val c) = parseF64(text: text) {
             return <Optional.None />
         }
         return <Optional.Some value=<Temperature celsius=c /> />
@@ -298,7 +299,7 @@ val n: Optional[I32] = <.None />            // ペイロードなしバリアン
 - **marker は `<.Name`**。式が `.` で始まるのは**常に `<.` に続けてメンバ名がある形に限られ**、裸の `.foo` が浮くことはありません。これにより「型省略の構築」だと構文で一意に分かり、Swift/Zig が必要とする「期待型まで名前解決を遅延する」曖昧さが出ません。出どころ（型名）は左辺の注釈や受け側のシグネチャに**ローカルに明記**されているので ambient ではなく、provenance は回収可能です。
 - **使えるのは期待型が一意に定まる位置だけ**：明示注釈（`val a: A = …`）・宣言済みの戻り型（`return …`）・型が単一に決まる引数位置。**leading-dot 式そのものを使って期待型を決めることはしません**（鶏卵を避ける）。
 - **型オーバーロードでは使えない**：同一セレクタで引数型だけ違う候補がある引数位置は期待型が割れるので `<.…/>` 不可 ── `<A.foo …/>` のように型を明示する。**ラベルオーバーロードは可**：型は一意のままラベルが候補を絞るので `<.…/>` で書ける。
-- **パターンには波及しない**：[パターン](../03-expressions/11-control-flow.md#パターンマッチング)のバリアントは `Enum.Variant { … }`（JSX ではない）で書き、leading-dot の対象外です。`.` が `<.` 以外で始まらない不変条件を保つため、パターン側は型名を省きません。
+- **パターンには波及しない**：[パターン](../03-expressions/11-control-flow.md#パターンマッチング)のバリアントは `Enum.Variant(…)`（JSX ではない）で書き、leading-dot の対象外です。`.` が `<.` 以外で始まらない不変条件を保つため、パターン側は型名を省きません。
 
 ## メンバの可視性
 

@@ -2,8 +2,8 @@
 // cross-name payload or-pattern unified via rename to a common binding.
 import @Std/Io with { print }
 
-enum Shape { Circle { radius: I64 } Square { side: I64 } }
-enum Pair { P { a: I64, b: I64 } }
+enum Shape { Circle(radius: I64) Square(side: I64) }
+enum Pair { P(a: I64, b: I64) }
 
 fn doubled(s: Shape) -> I64 {
     return match s {

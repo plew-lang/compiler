@@ -106,7 +106,7 @@ val r2 = r                   // ハンドルをコピー＝同じ箱を共有（
 ```plew
 val w = r.weak()                  // ダウングレード（. ＝ハンドル操作）
 match w.upgrade() {               // Optional[Ref[T]]
-    Optional.Some { value: val r } => r->x   // 強参照に格上げ済み＝生存保証・直接 deref 可
+    Optional.Some(value: val r) => r->x   // 強参照に格上げ済み＝生存保証・直接 deref 可
     Optional.None                  => skip()
 }
 ```
@@ -121,7 +121,7 @@ match w.upgrade() {               // Optional[Ref[T]]
 
 ```plew
 val config = load()                 // Optional[Config]
-guard Optional.Some { value: val config } = config { panic "missing" }
+guard Optional.Some(value: val config) = config { panic "missing" }
 // 以降 config は Config（元の Optional は退役）
 
 val raw = read()                    // Bytes

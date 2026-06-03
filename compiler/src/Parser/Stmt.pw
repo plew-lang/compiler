@@ -411,14 +411,13 @@ fn parsePattern(c: inout Comp) -> PatInfo {
         variantStart = vTok.start
         variantLen = vTok.len
         c.advance()
-        // optional payload destructuring `V(val f, ...)` (record-form, spec/11).
-        // The legacy brace form `V { val f }` is still accepted during migration;
-        // either bracket closes it.
+        // optional payload destructuring `V(val f, ...)` (record-form, spec/11):
+        // the variant payload is a labelled record, so it uses parentheses. The
+        // old brace form is rejected with a hint.
         mut val popen: Bool = false
         match c.curKind() {
             Kind.LBrace => {
-                c.advance()
-                popen = true
+                compileErrorAt(line: lineOf(c: inout c, offset: c.cur().start), msg: "destructure an enum variant with parentheses, e.g. `Optional.Some(val v)`")
             }
             Kind.LParen => {
                 c.advance()
@@ -430,10 +429,6 @@ fn parsePattern(c: inout Comp) -> PatInfo {
             while true {
                 c.skipNewlines()
                 match c.curKind() {
-                    Kind.RBrace => {
-                        c.advance()
-                        break
-                    }
                     Kind.RParen => {
                         c.advance()
                         break

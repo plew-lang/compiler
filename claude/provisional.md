@@ -66,7 +66,7 @@
 
 ## 制御フロー・match
 
-- **`match` 網羅性をコンパイル時検査** → **実装済**（`_` ワイルドカード or enum 全 variant 被覆・非網羅は `compileError` で reject・網羅 match は末尾 `__builtin_unreachable()`）。パターンは `E.V { val f }` 一段＋`_`＋**rename `{ field: val name }`・discard `{ field: _ }`**＋**or パターン `A | B | …`**（全フィールド束縛必須・選択肢間の束縛名集合不一致はパース時 reject・異名フィールドを rename で共通束縛に揃える payload-or 可）。残：束縛名一致だが**型が食い違う**選択肢は C エラー fallback（クリーン診断でない）・**ガード・ネストパターン無し**・到達不能アーム警告無し。spec/11。
+- **`match` 網羅性をコンパイル時検査** → **実装済**（`_` ワイルドカード or enum 全 variant 被覆・非網羅は `compileError` で reject・網羅 match は末尾 `__builtin_unreachable()`）。パターンは `E.V(val f)` 一段＋`_`＋**rename `(field: val name)`・discard `(field: _)`**＋**or パターン `A | B | …`**（全フィールド束縛必須・選択肢間の束縛名集合不一致はパース時 reject・異名フィールドを rename で共通束縛に揃える payload-or 可）。残：束縛名一致だが**型が食い違う**選択肢は C エラー fallback（クリーン診断でない）・**ガード・ネストパターン無し**・到達不能アーム警告無し。spec/11。
 - **値位置の `match`／`if`** → **実装済**（`return match …`／`val x = match …`／`val x = if c { … give a } else { give b }`・ネスト/`else if` 可・C statement-expression 脱糖・`if` 式は `else` 必須）。残：`match` 式の結果型がバインド依存だと誤推論し得る／`give` 値が配列リテラルのときの型付けは未対応。spec/11。
 - **`panic`（発散文）** → **実装済**（`panic <msg>`→noreturn `plew_panic`・stderr `panic: <msg>`＋`exit(1)`・unwind なし・`deinit` 非走行）。配列範囲外 panic は個別ランタイムで exit。残：式位置の `panic` は文のみ。
 

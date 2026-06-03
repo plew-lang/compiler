@@ -2,7 +2,7 @@
 // both alternatives bind `value`, so they can share one body.
 import @Std/Io with { print }
 
-enum Node { Leaf { value: I64 } Unary { value: I64 } Bin { value: I64 } }
+enum Node { Leaf(value: I64) Unary(value: I64) Bin(value: I64) }
 
 fn weight(n: Node) -> I64 {
     return match n {

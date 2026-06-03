@@ -3,7 +3,7 @@
 import @Std/Io with { print, write }
 
 enum Color { Red Green Blue }
-enum Shape { Circle { r: I64 } Square { s: I64 } }
+enum Shape { Circle(r: I64) Square(s: I64) }
 
 fn rank(c: Color) -> I64 {
     return match c {

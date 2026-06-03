@@ -38,12 +38,12 @@ val result = if condition {
 節は左→右に短絡評価され、ある節が不成立になった時点で残りは評価されず、チェーン全体が不成立になります。束縛節が導入した変数は、**後続の節とブロック本体**で有効です。
 
 ```plew
-if Optional.Some { value: val flag } = optional && flag {
+if Optional.Some(value: val flag) = optional && flag {
     // optional が Some で、かつ束縛した flag が真のときだけ実行
     // flag はここで使える
 }
 
-while Optional.Some { value: val line } = reader.next() && !line.isEmpty() {
+while Optional.Some(value: val line) = reader.next() && !line.isEmpty() {
     process(line: line)
 }
 ```
@@ -58,15 +58,15 @@ while Optional.Some { value: val line } = reader.next() && !line.isEmpty() {
 ```plew
 val result = match expression {
     42                                      => "the answer"
-    Color.Red { intensity: val intensity }  => "red with intensity {intensity}"
+    Color.Red(intensity: val intensity)  => "red with intensity {intensity}"
     (val x, val y)                          => "record x={x}, y={y}"
     _                                       => "default case"
 }
 ```
 
-パターンの**束縛は `val`／`mut val` で明示**します（refutable な `match`/`if`/`while`/`guard` では、bare の名前は既存の値・リテラル・バリアントとの**マッチ**）。フィールド名と束縛名が同じなら **punning** で省略でき、`Color.Red { val intensity }` ≡ `Color.Red { intensity: val intensity }`、`(val x)` ≡ `(x: val x)` です。
+パターンの**束縛は `val`／`mut val` で明示**します（refutable な `match`/`if`/`while`/`guard` では、bare の名前は既存の値・リテラル・バリアントとの**マッチ**）。フィールド名と束縛名が同じなら **punning** で省略でき、`Color.Red(val intensity)` ≡ `Color.Red(intensity: val intensity)`、`(val x)` ≡ `(x: val x)` です。
 
-- **破棄 `_`** — 値を受け取らずに捨てるワイルドカードです。束縛を作らないので `val` は付けません（`Optional.Some { value: _ }`、`(val x, _)` など、パターンが書ける位置ならどこでも）。`_` は**書き込み専用のシンク**で、値式としては読めません（`val x = _` のような取り出しは不可）。
+- **破棄 `_`** — 値を受け取らずに捨てるワイルドカードです。束縛を作らないので `val` は付けません（`Optional.Some(value: _)`、`(val x, _)` など、パターンが書ける位置ならどこでも）。`_` は**書き込み専用のシンク**で、値式としては読めません（`val x = _` のような取り出しは不可）。
 - **全フィールド明示** — 構造体・レコード・enum バリアントを `{ … }`／`( … )` で開くパターンは、その型の**全フィールドを明示**します（`val`/bare で束縛するか `_` で破棄）。未記載フィールドの暗黙無視はせず、残り全部を捨てる `..` も持ちません（Rust の「全フィールド or `..`」から `..` の逃げ道を外した形）。**フィールドを増やすと既存パターンがコンパイルエラーになり**、新フィールドの扱いを必ず決めさせます（静かな取りこぼしを防ぐ）。値全体をそのまま受けたいだけなら、開かずに `val x`（束縛）か `_`（破棄）を書きます。
 - **or パターン `Pat1 | Pat2 | …`** — `|` で並べた選択肢の**どれかに一致すれば成立**し、1 つのアーム本体を共有します（`Color.Red | Color.Green => …`）。網羅性は列挙した全バリアントを数えます。`|` はパターン位置でのみ区切りで、`=>` 以降の本体に書く `|` は通常のビット OR です。
   - **束縛は全選択肢で一致**（Rust と同じ）。各選択肢は**同じ束縛名の集合を同じ型で**導入しなければなりません（本体はどの選択肢で一致しても同じ束縛を見るため）。食い違えばコンパイルエラー。**nullary バリアントは束縛を持たないので常に並べられます**（最頻ケース）。
@@ -74,12 +74,12 @@ val result = match expression {
 
     ```plew
     match shape {
-        Shape.Circle { radius: val size } | Shape.Square { side: val size } => size * 2  // 両者 size: I64
+        Shape.Circle(radius: val size) | Shape.Square(side: val size) => size * 2  // 両者 size: I64
         Shape.Point                                                         => 0
     }
     ```
 
-    フィールド名が同じバリアント同士なら punning でそのまま（`Node.Leaf { val value } | Node.Unary { val value }`）。`_` で捨てたフィールドは束縛を作らないので選択肢間で一致する必要はありません（`A { x: val v, y: _ } | B { z: val v, w: _ }` は `v` だけ揃えばよい）。**束縛名や型が食い違うのはエラー**（`Circle { val r } | Square { val s }` は `r`/`s` が全選択肢で束縛されず不可）。
+    フィールド名が同じバリアント同士なら punning でそのまま（`Node.Leaf(val value) | Node.Unary(val value)`）。`_` で捨てたフィールドは束縛を作らないので選択肢間で一致する必要はありません（`A(x: val v, y: _) | B(z: val v, w: _)` は `v` だけ揃えばよい）。**束縛名や型が食い違うのはエラー**（`Circle(val r) | Square(val s)` は `r`/`s` が全選択肢で束縛されず不可）。
 
 アームの右辺は次の 3 形式：
 
@@ -157,7 +157,7 @@ trait Iterable {
 mut val it = e.iterator()                  // next が inout ゆえ mut val
 loop {
     match it.next() {
-        Optional.Some { value: val x } => { /* 本体 */ }
+        Optional.Some(value: val x) => { /* 本体 */ }
         Optional.None                  => break
     }
 }
@@ -189,13 +189,13 @@ guard user.isAuthenticated() && user.hasPermission(name: "read") {
 // ここに到達するのは guard 条件が true の場合のみ
 
 // 列挙型のunwrapと変数代入
-guard Result.Ok { value: val value } = someResult {
+guard Result.Ok(value: val value) = someResult {
     return <Error.Failed />
 }
 // ここでは value が使用可能
 
 // 複数の条件を組み合わせ
-guard Optional.Some { value: val data } = maybeData && data.isValid() {
+guard Optional.Some(value: val data) = maybeData && data.isValid() {
     return <Error.Invalid />
 }
 // ここでは data が使用可能
@@ -206,12 +206,12 @@ guard Optional.Some { value: val data } = maybeData && data.isValid() {
 `panic "メッセージ"` はプログラムを停止させる**文**です（`return`/`break` と同じく、その先へ進まない＝発散する制御フロー）。回復可能な失敗には使わず（それは `Result`/`try`）、**回復不能なバグ**を即座に・大きな声で落とすために使います。catch はできません。
 
 ```plew
-guard Optional.Some { value: val config } = maybeConfig {
+guard Optional.Some(value: val config) = maybeConfig {
     panic "config is missing"   // guard 本体は発散する必要がある → panic で満たす
 }
 
 val config = match maybeConfig {
-    Optional.Some { value: val v } => v
+    Optional.Some(value: val v) => v
     Optional.None                  => { panic "config is missing" }  // 発散アーム
 }
 ```

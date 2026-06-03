@@ -1,5 +1,5 @@
 import @Std/Io with { print }
-enum Maybe[T] { Just { mut val v: T }  Nothing }
+enum Maybe[T] { Just(v: T)  Nothing }
 fn main() {
     mut val a: Maybe[Array[I32]] = <Maybe[Array[I32]].Just v=[1, 2] />
     mut val b: Maybe[Array[I32]] = a

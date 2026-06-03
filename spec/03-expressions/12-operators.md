@@ -302,7 +302,7 @@ trait Chain {
 
 ```plew
 match receiver.chain() {
-    Optional.Some { value: val v } => <O.fromValue value=v.member />
+    Optional.Some(value: val v) => <O.fromValue value=v.member />
     Optional.None                  => <O.empty />
 }
 ```
@@ -359,7 +359,7 @@ impl Optional[T] as Coalesce[Optional[T]] {
 
     assoc fn coalesce(lhs: Optional[T], rhs: Optional[T]) -> Optional[T] {
         return match lhs {
-            Optional.Some { value: val v } => <Optional.Some value=v />
+            Optional.Some(value: val v) => <Optional.Some value=v />
             Optional.None                  => rhs
         }
     }
@@ -371,7 +371,7 @@ impl Optional[T] as Coalesce[T] {
 
     assoc fn coalesce(lhs: Optional[T], rhs: T) -> T {
         return match lhs {
-            Optional.Some { value: val v } => v
+            Optional.Some(value: val v) => v
             Optional.None                  => rhs
         }
     }

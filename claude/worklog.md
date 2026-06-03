@@ -4,6 +4,8 @@
 
 ## 現在地
 
+> **🔤 enum バリアントを record 形式に移行（2026-06-04・✅完了）**：`enum E { V { x: I32 } }` → `enum E { V(x: I32) }`、分解 `E.V { val x }` → `E.V(val x)`（生成は JSX のまま `<E.V x=1 />`）。バリアントペイロード＝ラベル付きレコード `(field: Type)` ゆえ括弧（struct 本体は記憶域ブロックゆえ `{ }` 不変）。Swift の `case v(x:y:)` と一致。**ADD→USE→REMOVE**：(1) パーサが両構文受理 (2) 全ソース（コンパイラ/std/tests/examples）を機械置換＝両形は同一 AST で生成 C 不変ゆえ **reseed なしで fixpoint 保持＝挙動不変を実証** (3) 旧 `{ }` を loud-reject（`Foo(x: I32)` を案内）。spec/05,11,12,03 と claude docs 同期済。test `run/enum_record_form`＋`reject/enum_brace_{decl,pattern}`。決定の根拠は design-decisions.md。
+>
 > **🐛 バグ調査カタログ（2026-06-04・能動プローブで発見・着手中）**：共通根＝**「`integer literal has no type from context`」が多くの未対応経路の catch-all 誤診断**で複数バグを覆い隠す。重大度順：
 > - **F1〔大・✅修正済〕** 注釈なし `val x = expr` が String/Array/struct/関数戻り値/変数コピーで型推論せず `long long` を吐き壊れた C（`val b=a`/`val a=mk()` 全滅）。根因＝`Stmt.Let`（Codegen/Stmt.pw:376）が注釈なし時 `exprType(init)` を使わず空型→`long long` fallback。修正＝注釈なし（`tyLen==0 && !tyIsArray`）なら `exprType(init)` の TypeInfo（kind 0=scalar/1=String/2=struct·Ref·generic/3=array）を eff* 値へ写し注釈付き経路を再利用。String 裸リテラルも **String 推論**（2026-06-04 決定＝String 単相確定）＝`stringTypeSpan` がソース中の "String" 6バイトを span 流用（皆無の degenerate のみ注釈要求 fallback）。テスト `run/let_infer`＋`run/let_infer_string`。残＝`val bs = s.bytes` は **gap #2（`.bytes` exprType 未対応）** で別件・Ref `value=` 内のリテラル型付けは別の小ギャップ（注釈ありでも `<Ref[I32] value=7/>` が落ちる）。
 > - **F2〔大・✅修正済〕** 同一ブロック内シャドーイング `val x=1; val x=2` が C `redefinition`（ネストブロックは OK）。spec/03,11＝無制限 shadowing。修正＝`let` binding が live な同名 local を持つとき C 名に suffix `_s<n>`（`Local.cnum`・宣言/読み/scope drop の3点に writeLocalCName/writeNameCn で一致適用・for/match-bind/param は別 C ブロックゆえ cnum=0 のまま）。test `run/shadowing`。
