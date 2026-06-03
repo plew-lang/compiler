@@ -465,7 +465,10 @@ fn genStmt(c: inout Comp, id: U64) {
             write(s: "    while (")
             genCond(c: inout c, id: cond)
             write(s: ") {\n")
+            val savedLoopMark: U64 = c.curLoopMark
+            c.curLoopMark = scopeMark(c: inout c)
             genBlock(c: inout c, id: body)
+            c.curLoopMark = savedLoopMark
             write(s: "    }\n")
         }
         Stmt.For { val varStart, val varLen, val isRange, val inclusive, val iter, val rangeHi, val body } => {
@@ -476,6 +479,11 @@ fn genStmt(c: inout Comp, id: U64) {
             c.tmp = c.tmp + 1
             // the loop variable is scoped to the for-statement (popped below).
             val forMark: U64 = scopeMark(c: inout c)
+            // break/continue inside the body release owned locals pushed since
+            // here (the for-var is a borrow, so it is skipped). Save/restore for
+            // nested loops.
+            val savedLoopMark: U64 = c.curLoopMark
+            c.curLoopMark = forMark
             if isRange {
                 // for (long long var = lo; var (< | <=) __fe; var++) { body }
                 write(s: "    {\n")
@@ -537,6 +545,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 genBlock(c: inout c, id: body)
                 write(s: "    }\n    }\n")
             }
+            c.curLoopMark = savedLoopMark
             scopeExit(c: inout c, mark: forMark)
         }
         Stmt.Panic { val msg, val offset } => {
@@ -557,9 +566,13 @@ fn genStmt(c: inout Comp, id: U64) {
             }
         }
         Stmt.Break => {
+            // break exits the loop: release owned locals pushed in the body.
+            emitScopeDrops(c: inout c, mark: c.curLoopMark)
             write(s: "    break;\n")
         }
         Stmt.Continue => {
+            // continue ends the iteration: release the body's owned locals.
+            emitScopeDrops(c: inout c, mark: c.curLoopMark)
             write(s: "    continue;\n")
         }
         Stmt.Match { val scrut, val arms } => {

@@ -342,6 +342,7 @@ struct Comp {
     PlewArray_U64 curTypeArgs;
     uint64_t curRecvInstRef;
     uint64_t curGiveTmp;
+    uint64_t curLoopMark;
     long long impPrint;
     long long impWrite;
     long long impWriteByte;
@@ -857,7 +858,7 @@ int main(int argc, char** argv) {
     }
     Lexer lx = (Lexer){.bytes = PlewArray_U8_share(combined), .pos = 0, .toks = PlewArray_Tok_new(), .depth = 0};
     lex(&(lx));
-    Comp c = (Comp){.bytes = PlewArray_U8_share(combined), .toks = PlewArray_Tok_share(lx.toks), .pos = 0, .exprs = PlewArray_Expr_new(), .stmts = PlewArray_Stmt_new(), .blocks = PlewArray_Block_new(), .funcs = PlewArray_Func_new(), .structs = PlewArray_StructDef_new(), .enums = PlewArray_EnumDef_new(), .types = PlewArray_TypeRef_new(), .genInsts = PlewArray_U64_new(), .fnTypes = PlewArray_U64_new(), .arrayElems = PlewArray_Bind_new(), .locals = PlewArray_Local_new(), .tmp = 0, .curIsMain = 0, .curRetVoid = 0, .curRetStart = 0, .curRetLen = 0, .curRetIsArray = 0, .curRetTy = 0, .curHasRecv = 0, .curRecvStart = 0, .curRecvLen = 0, .curSelfInout = 0, .curTypeParams = PlewArray_Bind_new(), .curTypeArgs = PlewArray_U64_new(), .curRecvInstRef = 0, .curGiveTmp = 0, .impPrint = 0, .impWrite = 0, .impWriteByte = 0, .impReadStdin = 0, .impReadFile = 0, .impArgCount = 0, .impArgAt = 0, .impEprint = 0, .impExit = 0, .impReadFileBytes = 0, .impFileExists = 0};
+    Comp c = (Comp){.bytes = PlewArray_U8_share(combined), .toks = PlewArray_Tok_share(lx.toks), .pos = 0, .exprs = PlewArray_Expr_new(), .stmts = PlewArray_Stmt_new(), .blocks = PlewArray_Block_new(), .funcs = PlewArray_Func_new(), .structs = PlewArray_StructDef_new(), .enums = PlewArray_EnumDef_new(), .types = PlewArray_TypeRef_new(), .genInsts = PlewArray_U64_new(), .fnTypes = PlewArray_U64_new(), .arrayElems = PlewArray_Bind_new(), .locals = PlewArray_Local_new(), .tmp = 0, .curIsMain = 0, .curRetVoid = 0, .curRetStart = 0, .curRetLen = 0, .curRetIsArray = 0, .curRetTy = 0, .curHasRecv = 0, .curRecvStart = 0, .curRecvLen = 0, .curSelfInout = 0, .curTypeParams = PlewArray_Bind_new(), .curTypeArgs = PlewArray_U64_new(), .curRecvInstRef = 0, .curGiveTmp = 0, .curLoopMark = 0, .impPrint = 0, .impWrite = 0, .impWriteByte = 0, .impReadStdin = 0, .impReadFile = 0, .impArgCount = 0, .impArgAt = 0, .impEprint = 0, .impExit = 0, .impReadFileBytes = 0, .impFileExists = 0};
     PlewArray_TypeRef_push(&(c.types), (TypeRef){.nameStart = 0, .nameLen = 0, .args = PlewArray_U64_new()});
     parseProgram(&(c));
     collectGenInsts(&(c));
@@ -7294,7 +7295,10 @@ void genStmt(Comp* c, uint64_t id) {
     plew_write((PlewString){"    while (", 11});
     genCond(&((*c)), cond);
     plew_write((PlewString){") {\n", 4});
+    uint64_t savedLoopMark = (*c).curLoopMark;
+    (*c).curLoopMark = scopeMark(&((*c)));
     genBlock(&((*c)), body);
+    (*c).curLoopMark = savedLoopMark;
     plew_write((PlewString){"    }\n", 6});
     }
     else if (_m552.tag == 7) {
@@ -7318,6 +7322,8 @@ void genStmt(Comp* c, uint64_t id) {
     uint64_t t = (*c).tmp;
     (*c).tmp = ({ uint64_t __ov; if (__builtin_add_overflow(((*c).tmp), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     uint64_t forMark = scopeMark(&((*c)));
+    uint64_t savedLoopMark = (*c).curLoopMark;
+    (*c).curLoopMark = forMark;
     if (isRange) {
     plew_write((PlewString){"    {\n", 6});
     plew_write((PlewString){"    long long __fe", 18});
@@ -7379,6 +7385,7 @@ void genStmt(Comp* c, uint64_t id) {
     genBlock(&((*c)), body);
     plew_write((PlewString){"    }\n    }\n", 12});
     }
+    (*c).curLoopMark = savedLoopMark;
     scopeExit(&((*c)), forMark);
     }
     else if (_m552.tag == 9) {
@@ -7402,9 +7409,11 @@ void genStmt(Comp* c, uint64_t id) {
     }
     }
     else if (_m552.tag == 11) {
+    emitScopeDrops(&((*c)), (*c).curLoopMark);
     plew_write((PlewString){"    break;\n", 11});
     }
     else if (_m552.tag == 12) {
+    emitScopeDrops(&((*c)), (*c).curLoopMark);
     plew_write((PlewString){"    continue;\n", 14});
     }
     else if (_m552.tag == 8) {
