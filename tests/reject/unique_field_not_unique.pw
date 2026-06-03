@@ -1,0 +1,5 @@
+// Field contagion: a struct owning a unique value must itself be `unique`.
+import @Std/Io with { write }
+unique struct File { val fd: I64 }
+struct Holder { val f: File }
+fn main() { write(s: "x\n") }

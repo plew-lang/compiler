@@ -1,0 +1,5 @@
+// A unique-type parameter must state a mode (move/borrow/inout); bare is illegal.
+import @Std/Io with { write }
+unique struct File { val fd: I64 }
+fn use(f: File) { write(s: "x\n") }
+fn main() { write(s: "y\n") }

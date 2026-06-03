@@ -99,6 +99,10 @@ fn main() {
     // (synthetic locals, untyped positions) never aliases a real parsed type.
     c.types.append(<TypeRef nameStart=0 nameLen=0 args=[] />)
     parseProgram(c: inout c)
+    // ownership validity (spec/03): a struct owning a unique value must be
+    // `unique`; parameter access modes must match copyability. Both exit on error.
+    checkFieldContagion(c: inout c)
+    checkAllParamModes(c: inout c)
     // discover concrete generic instantiations to monomorphize.
     collectGenInsts(c: inout c)
     // runtime preamble: includes, immutable String, and the I/O builtins'
