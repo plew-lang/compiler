@@ -6,7 +6,7 @@
 
 🎉 **セルフホスト達成・stage0（Rust）退役済み。** 正典コンパイラ＝Plew パッケージ `compiler/src/`（root `_.pw` が `part` で全パートを綴じ込む 1 モジュール＝`Loader`・`Lexer`・`Ast`・`Parser/`〔Expr/Stmt/Decl〕・`Codegen/`〔Emit/Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array〕・part はサブディレクトリ可）。自分自身を不動点までコンパイルする。
 
-> **次の一歩＝traits コア（T1）**：`trait Name { fn req(...) -> T … }` をパース（要求＝本体なし・`TraitDef`）→ `impl Type as Trait { fn req(){…} | … via real }`（witness メソッドを Type に登録＝既存メソッド機構に乗る・conformance 記録）→ `x.req()` が呼べる。その後 T2＝提供メソッド `impl Trait { fn provided(){…} }`、T3＝`where T: Trait` 境界、→ Eq/Ord を `==`/`<` へ配線。**前提のオーバーロードは完了済**（item 6）。`trait` は未 lex（Ident 扱い）・`impl`/`as`（KwAs）は既存・conformance AST は未（グリーンフィールド）。詳細は item 7・spec/08。
+> **次の一歩＝traits T2（提供メソッド）**：✅ T1 完了（タグ `traits-t1`）＝`trait Name { fn req(...) -> T }`（`TraitDef`・要求名のみ記録〔Bind〕・field/assoc-type/factory 要求は未パース＝additive）＋`impl Type as Trait { fn req(){…} | fn req() via real }`（`Conform` 記録・body 形は Type にメソッド登録〔既存機構に乗る〕・`via` 形は `MethodAlias` 記録で findMethod が要求名→実体名へ redirect）＋**完全性チェック** `checkConformances`（全要求が impl 内で witness されないと loud error＝spec/08 の暗黙準拠なし）。`x.req()`/`x.real()` 両方が同一実体へ解決。**次＝T2 提供メソッド** `impl Trait { fn provided(){self.req()…} }`＝bare `impl Trait`（主語＝トレイト）を recv=Trait でパース→ 後パスで各 Conform(Type, Trait) に provided メソッドを recv=Type で複製（同一 body を Type 文脈で emit＝`self.req()` が Type の witness に解決・trait-recv 版は emit しない）。その後 T3＝`where T: Trait` 境界、→ Eq/Ord を `==`/`<` へ配線。**T1 既知ギャップ（additive）**：`via` 先実体の存在/シグネチャ未検証（呼出時に loud fail）・未知トレイト名への準拠は無視・完全性は名前一致のみ（同名別シグ要求未対応）。詳細は item 7・spec/08。
 
 - **ビルド**：`./bootstrap.sh`＝C 種 `compiler/plewc.seed.c`→clang→`plewc0`→`compiler/src/_.pw` を自己コンパイル→不動点 cmp（Rust 不要）。`./bootstrap.sh --reseed` で種更新。**preamble/codegen 出力/AST フィールド変更後は reseed を2回**。
 - **テスト**：`./test.sh`＝`tests/run/*.pw`（`.out` 照合・任意 `.in`）＋`tests/part/`（複数ファイル）＋`tests/reject/*.pw`（plewc 非ゼロ終了で reject＝受理の健全性）＋`tests/panic/*.pw`（compile+link 成功・実行は非ゼロ＋`.panic` stderr 部分一致）＋不動点。
@@ -24,6 +24,7 @@
 - **★`unique` 型＋`deinit`＋所有権**＝`unique struct`＋`deinit`（決定的破棄・型本体→フィールド宣言順・ネスト再帰）・`move`/`borrow` モード（前置＋引数）・線形 move 追跡（use-after-move/bare コピー/伝染/モード必須を reject）。詳細は下のロードマップ item 4b。
 - **★クロージャ/関数値**＝関数型 `fn(...)->R`・関数を第一級値・非キャプチャのクロージャリテラル（ラムダリフティング）・高階関数。**ラベル抑制 `~:`**・**デフォルト引数 `name: T = expr`**。
 - **★オーバーロード完成**（タグ `overload-mangle`/`overloading`）＝関数/メソッドを **名前＋ラベル＋引数型** のセレクタで解決。C 名は `writeFnSelector` でマングル（名前＋各 param の ラベル＋型頭・配列 `A` 接頭）。arity/label/type の3軸・自由関数もメソッドも。traits（`via`・多重 conformance）の土台。詳細は下のロードマップ item 6。
+- **★traits T1**（タグ `traits-t1`）＝`trait Name { fn req(...) -> T }`（要求宣言・本体なし）＋`impl Type as Trait { fn req(){…} | fn req() via real }`（準拠＝body witness は Type のメソッドに登録・`via` は要求名→実体名のエイリアス〔findMethod が redirect〕）＋完全性チェック（未 witness の要求は loud error＝暗黙準拠なし）。提供メソッド/`where` 境界/`any P`/Eq・Ord 配線は T2 以降。詳細は item 7。
 - **値意味論・generics・クロージャを有効化したまま自己ホスト不動点維持**。生成 C は警告クリーン。**コンパイラ自身がメソッド/match 式で自己記述**（dogfood）。
 
 ## ★ ロードマップ（generics → コアライブラリ → ランタイム）
