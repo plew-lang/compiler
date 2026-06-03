@@ -18,9 +18,19 @@ fn genExpr(c: inout Comp, id: U64) {
             // `move`/`borrow` lower to the operand's value (a unique struct is a
             // bit-copy). `move` then marks the source place moved-out so it is
             // neither used again nor double-released; `borrow` leaves it live.
-            genExpr(c: inout c, id: operand)
             if isBorrow {
+                genExpr(c: inout c, id: operand)
             } else {
+                // partial moves (out of a field/element) aren't tracked yet, so
+                // the source would not be marked moved -> double-release. Restrict
+                // `move` to a bare local until field/element moves are supported.
+                match c.exprs[operand] {
+                    Expr.Ident { val start, val len } => {}
+                    _ => {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "`move` is only supported from a local variable (field/element moves are not yet supported)")
+                    }
+                }
+                genExpr(c: inout c, id: operand)
                 markMovedExpr(c: inout c, exprId: operand)
             }
         }
