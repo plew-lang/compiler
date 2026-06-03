@@ -1,0 +1,5 @@
+import @Std/Io with { print }
+trait Drawable { fn draw() -> I64 }
+struct S { val w: I64 }
+impl S as Drawable { fn draw() -> I64 via render }
+fn main() { print(0) }

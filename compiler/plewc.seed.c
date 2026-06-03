@@ -860,7 +860,10 @@ TypeInfo makeFieldType_c_Comp_typeStart_U64_typeLen_U64_variantStart_U64_variant
 void checkMakeFields_c_Comp_typeStart_U64_typeLen_U64_variantStart_U64_variantLen_U64_isEnum_Bool_ty_U64_fields_AMakeField(Comp* c, uint64_t typeStart, uint64_t typeLen, uint64_t variantStart, uint64_t variantLen, long long isEnum, uint64_t ty, PlewArray_MakeField fields);
 long long witnessedHas_c_Comp_witnessed_ABind_start_U64_len_U64(Comp* c, PlewArray_Bind witnessed, uint64_t start, uint64_t len);
 void checkConformances_c_Comp(Comp* c);
+long long typeHasMember_c_Comp_recvStart_U64_recvLen_U64_nameStart_U64_nameLen_U64(Comp* c, uint64_t recvStart, uint64_t recvLen, uint64_t nameStart, uint64_t nameLen);
+void checkViaTargets_c_Comp(Comp* c);
 long long typeConformsTo_c_Comp_typeStart_U64_typeLen_U64_traitStart_U64_traitLen_U64(Comp* c, uint64_t typeStart, uint64_t typeLen, uint64_t traitStart, uint64_t traitLen);
+long long typeConformsToName_c_Comp_typeStart_U64_typeLen_U64_traitName_String(Comp* c, uint64_t typeStart, uint64_t typeLen, PlewString traitName);
 void checkFnBounds_c_Comp(Comp* c);
 void genExpr_c_Comp_id_U64(Comp* c, uint64_t id);
 long long isPlaceExpr_c_Comp_id_U64(Comp* c, uint64_t id);
@@ -876,6 +879,7 @@ void emitEnumTagCmp_c_Comp_lhs_U64_rhs_U64_op_I64_outer_Bool(Comp* c, uint64_t l
 uint64_t findAssocByName_c_Comp_typeStart_U64_typeLen_U64_name_String(Comp* c, uint64_t typeStart, uint64_t typeLen, PlewString name);
 uint64_t orderingVariantIndex_c_Comp_name_String(Comp* c, PlewString name);
 long long hasCompareWitness_c_Comp_op_I64_lhs_U64(Comp* c, int64_t op, uint64_t lhs);
+long long eqWitnessReady_c_Comp_ti_TypeInfo(Comp* c, TypeInfo ti);
 void emitEqCall_c_Comp_typeStart_U64_typeLen_U64_lhs_U64_rhs_U64(Comp* c, uint64_t typeStart, uint64_t typeLen, uint64_t lhs, uint64_t rhs);
 void emitTraitCompare_c_Comp_op_I64_lhs_U64_rhs_U64(Comp* c, int64_t op, uint64_t lhs, uint64_t rhs);
 void genCond_c_Comp_id_U64(Comp* c, uint64_t id);
@@ -6979,10 +6983,12 @@ void checkConformances_c_Comp(Comp* c) {
     uint64_t ci = 0;
     while (ci < (long long)(((*c).conforms).len)) {
     Conform cf = Conform_share(PlewArray_Conform_get((*c).conforms, (long long)(ci)));
+    long long found = 0;
     uint64_t ti = 0;
     while (ti < (long long)(((*c).traits).len)) {
     TraitDef t = TraitDef_share(PlewArray_TraitDef_get((*c).traits, (long long)(ti)));
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), t.nameStart, t.nameLen, cf.traitStart, cf.traitLen)) {
+    found = 1;
     uint64_t ri = 0;
     while (ri < (long long)((t.reqs).len)) {
     Bind r = PlewArray_Bind_get(t.reqs, (long long)(ri));
@@ -6997,8 +7003,56 @@ void checkConformances_c_Comp(Comp* c) {
     ti = ({ uint64_t __ov; if (__builtin_add_overflow((ti), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     TraitDef_release(t);
     }
+    if (found) {
+    }
+    else {
+    compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), cf.traitStart), (PlewString){"conformance to an unknown trait (is it declared / imported?)", 60});
+    }
     ci = ({ uint64_t __ov; if (__builtin_add_overflow((ci), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     Conform_release(cf);
+    }
+    checkViaTargets_c_Comp(&((*c)));
+}
+long long typeHasMember_c_Comp_recvStart_U64_recvLen_U64_nameStart_U64_nameLen_U64(Comp* c, uint64_t recvStart, uint64_t recvLen, uint64_t nameStart, uint64_t nameLen) {
+    uint64_t i = 0;
+    while (i < (long long)(((*c).funcs).len)) {
+    Func f = Func_share(PlewArray_Func_get((*c).funcs, (long long)(i)));
+    if (f.hasRecv) {
+    if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), f.recvStart, f.recvLen, recvStart, recvLen)) {
+    if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), f.nameStart, f.nameLen, nameStart, nameLen)) {
+    { long long __ret593 = 1;
+    Func_release(f);
+    return __ret593; }
+    }
+    }
+    }
+    else {
+    if (f.isAssoc) {
+    if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), f.recvStart, f.recvLen, recvStart, recvLen)) {
+    if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), f.nameStart, f.nameLen, nameStart, nameLen)) {
+    { long long __ret594 = 1;
+    Func_release(f);
+    return __ret594; }
+    }
+    }
+    }
+    }
+    i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    Func_release(f);
+    }
+    { long long __ret595 = 0;
+    return __ret595; }
+}
+void checkViaTargets_c_Comp(Comp* c) {
+    uint64_t i = 0;
+    while (i < (long long)(((*c).methodAliases).len)) {
+    MethodAlias al = PlewArray_MethodAlias_get((*c).methodAliases, (long long)(i));
+    if (typeHasMember_c_Comp_recvStart_U64_recvLen_U64_nameStart_U64_nameLen_U64(&((*c)), al.recvStart, al.recvLen, al.realStart, al.realLen)) {
+    }
+    else {
+    compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), al.aliasStart), (PlewString){"`via` target is not a member of this type", 41});
+    }
+    i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
 }
 long long typeConformsTo_c_Comp_typeStart_U64_typeLen_U64_traitStart_U64_traitLen_U64(Comp* c, uint64_t typeStart, uint64_t typeLen, uint64_t traitStart, uint64_t traitLen) {
@@ -7007,16 +7061,33 @@ long long typeConformsTo_c_Comp_typeStart_U64_typeLen_U64_traitStart_U64_traitLe
     Conform cf = Conform_share(PlewArray_Conform_get((*c).conforms, (long long)(i)));
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), cf.typeStart, cf.typeLen, typeStart, typeLen)) {
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), cf.traitStart, cf.traitLen, traitStart, traitLen)) {
-    { long long __ret593 = 1;
+    { long long __ret596 = 1;
     Conform_release(cf);
-    return __ret593; }
+    return __ret596; }
     }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     Conform_release(cf);
     }
-    { long long __ret594 = 0;
-    return __ret594; }
+    { long long __ret597 = 0;
+    return __ret597; }
+}
+long long typeConformsToName_c_Comp_typeStart_U64_typeLen_U64_traitName_String(Comp* c, uint64_t typeStart, uint64_t typeLen, PlewString traitName) {
+    uint64_t i = 0;
+    while (i < (long long)(((*c).conforms).len)) {
+    Conform cf = Conform_share(PlewArray_Conform_get((*c).conforms, (long long)(i)));
+    if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), cf.typeStart, cf.typeLen, typeStart, typeLen)) {
+    if (rangeEquals_bytes_AU8_start_U64_len_U64_kw_String((*c).bytes, cf.traitStart, cf.traitLen, traitName)) {
+    { long long __ret598 = 1;
+    Conform_release(cf);
+    return __ret598; }
+    }
+    }
+    i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    Conform_release(cf);
+    }
+    { long long __ret599 = 0;
+    return __ret599; }
 }
 void checkFnBounds_c_Comp(Comp* c) {
     uint64_t ii = 0;
@@ -7054,16 +7125,16 @@ void checkFnBounds_c_Comp(Comp* c) {
 void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     Expr e = PlewArray_Expr_get((*c).exprs, (long long)(id));
     {
-    Expr _m595 = e;
-    if (_m595.tag == 0) {
-        int64_t value = _m595.data.Int.value;
+    Expr _m600 = e;
+    if (_m600.tag == 0) {
+        int64_t value = _m600.data.Int.value;
         (void)value;
     writeInt_n_I64(value);
     }
-    else if (_m595.tag == 1) {
-        uint64_t start = _m595.data.Ident.start;
+    else if (_m600.tag == 1) {
+        uint64_t start = _m600.data.Ident.start;
         (void)start;
-        uint64_t len = _m595.data.Ident.len;
+        uint64_t len = _m600.data.Ident.len;
         (void)len;
     if (localMoved_c_Comp_start_U64_len_U64(&((*c)), start, len)) {
     compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), start), (PlewString){"use of moved value (it was consumed by an earlier `move`)", 57});
@@ -7088,21 +7159,21 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     }
     }
     }
-    else if (_m595.tag == 18) {
-        uint64_t operand = _m595.data.Move.operand;
+    else if (_m600.tag == 18) {
+        uint64_t operand = _m600.data.Move.operand;
         (void)operand;
-        long long isBorrow = _m595.data.Move.isBorrow;
+        long long isBorrow = _m600.data.Move.isBorrow;
         (void)isBorrow;
     if (isBorrow) {
     genExpr_c_Comp_id_U64(&((*c)), operand);
     }
     else {
     {
-    Expr _m596 = PlewArray_Expr_get((*c).exprs, (long long)(operand));
-    if (_m596.tag == 1) {
-        uint64_t start = _m596.data.Ident.start;
+    Expr _m601 = PlewArray_Expr_get((*c).exprs, (long long)(operand));
+    if (_m601.tag == 1) {
+        uint64_t start = _m601.data.Ident.start;
         (void)start;
-        uint64_t len = _m596.data.Ident.len;
+        uint64_t len = _m601.data.Ident.len;
         (void)len;
     if (isSelfRef_c_Comp_start_U64_len_U64(&((*c)), start, len)) {
     compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), exprOffset_c_Comp_id_U64(&((*c)), operand)), (PlewString){"moving `self` is not yet supported", 34});
@@ -7119,10 +7190,10 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     markMovedExpr_c_Comp_exprId_U64(&((*c)), operand);
     }
     }
-    else if (_m595.tag == 2) {
-        int64_t op = _m595.data.Unary.op;
+    else if (_m600.tag == 2) {
+        int64_t op = _m600.data.Unary.op;
         (void)op;
-        uint64_t operand = _m595.data.Unary.operand;
+        uint64_t operand = _m600.data.Unary.operand;
         (void)operand;
     long long negChecked = 0;
     if (op == 57) {
@@ -7145,12 +7216,12 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     plew_write((PlewString){")", 1});
     }
     }
-    else if (_m595.tag == 3) {
-        int64_t op = _m595.data.Binary.op;
+    else if (_m600.tag == 3) {
+        int64_t op = _m600.data.Binary.op;
         (void)op;
-        uint64_t lhs = _m595.data.Binary.lhs;
+        uint64_t lhs = _m600.data.Binary.lhs;
         (void)lhs;
-        uint64_t rhs = _m595.data.Binary.rhs;
+        uint64_t rhs = _m600.data.Binary.rhs;
         (void)rhs;
     if (isStringEq_c_Comp_op_I64_lhs_U64(&((*c)), op, lhs)) {
     if (op == 51) {
@@ -7237,12 +7308,12 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     }
     }
     }
-    else if (_m595.tag == 4) {
-        uint64_t nameStart = _m595.data.Call.nameStart;
+    else if (_m600.tag == 4) {
+        uint64_t nameStart = _m600.data.Call.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m595.data.Call.nameLen;
+        uint64_t nameLen = _m600.data.Call.nameLen;
         (void)nameLen;
-        PlewArray_Arg args = _m595.data.Call.args;
+        PlewArray_Arg args = _m600.data.Call.args;
         (void)args;
     if (rangeEquals_bytes_AU8_start_U64_len_U64_kw_String((*c).bytes, nameStart, nameLen, (PlewString){"write", 5})) {
     if ((*c).impWrite) {
@@ -7418,12 +7489,12 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     }
     plew_write((PlewString){")", 1});
     }
-    else if (_m595.tag == 5) {
-        uint64_t base = _m595.data.Field.base;
+    else if (_m600.tag == 5) {
+        uint64_t base = _m600.data.Field.base;
         (void)base;
-        uint64_t nameStart = _m595.data.Field.nameStart;
+        uint64_t nameStart = _m600.data.Field.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m595.data.Field.nameLen;
+        uint64_t nameLen = _m600.data.Field.nameLen;
         (void)nameLen;
     TypeInfo bt = exprType_c_Comp_id_U64(&((*c)), base);
     if (bt.kind == 1) {
@@ -7442,10 +7513,10 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     plew_write((PlewString){".", 1});
     writeSpan_c_Comp_start_U64_len_U64(&((*c)), nameStart, nameLen);
     }
-    else if (_m595.tag == 7) {
-        uint64_t start = _m595.data.Str.start;
+    else if (_m600.tag == 7) {
+        uint64_t start = _m600.data.Str.start;
         (void)start;
-        uint64_t len = _m595.data.Str.len;
+        uint64_t len = _m600.data.Str.len;
         (void)len;
     plew_write((PlewString){"(PlewString){\"", 14});
     writeSpan_c_Comp_start_U64_len_U64(&((*c)), ({ uint64_t __ov; if (__builtin_add_overflow((start), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; }), ({ uint64_t __ov; if (__builtin_sub_overflow((len), (2), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; }));
@@ -7453,10 +7524,10 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     writeInt_n_I64(strDecodedLen_c_Comp_start_U64_len_U64(&((*c)), start, len));
     plew_write((PlewString){"}", 1});
     }
-    else if (_m595.tag == 9) {
-        uint64_t base = _m595.data.Index.base;
+    else if (_m600.tag == 9) {
+        uint64_t base = _m600.data.Index.base;
         (void)base;
-        uint64_t index = _m595.data.Index.index;
+        uint64_t index = _m600.data.Index.index;
         (void)index;
     TypeInfo bt = exprType_c_Comp_id_U64(&((*c)), base);
     plew_write((PlewString){"PlewArray_", 10});
@@ -7467,44 +7538,44 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     genExpr_c_Comp_id_U64(&((*c)), index);
     plew_write((PlewString){"))", 2});
     }
-    else if (_m595.tag == 16) {
-        uint64_t base = _m595.data.Arrow.base;
+    else if (_m600.tag == 16) {
+        uint64_t base = _m600.data.Arrow.base;
         (void)base;
-        uint64_t nameStart = _m595.data.Arrow.nameStart;
+        uint64_t nameStart = _m600.data.Arrow.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m595.data.Arrow.nameLen;
+        uint64_t nameLen = _m600.data.Arrow.nameLen;
         (void)nameLen;
     plew_write((PlewString){"(", 1});
     genExpr_c_Comp_id_U64(&((*c)), base);
     plew_write((PlewString){")->", 3});
     writeSpan_c_Comp_start_U64_len_U64(&((*c)), nameStart, nameLen);
     }
-    else if (_m595.tag == 17) {
-        PlewArray_Param params = _m595.data.Closure.params;
+    else if (_m600.tag == 17) {
+        PlewArray_Param params = _m600.data.Closure.params;
         (void)params;
-        long long hasRet = _m595.data.Closure.hasRet;
+        long long hasRet = _m600.data.Closure.hasRet;
         (void)hasRet;
-        uint64_t retStart = _m595.data.Closure.retStart;
+        uint64_t retStart = _m600.data.Closure.retStart;
         (void)retStart;
-        uint64_t retLen = _m595.data.Closure.retLen;
+        uint64_t retLen = _m600.data.Closure.retLen;
         (void)retLen;
-        long long retIsArray = _m595.data.Closure.retIsArray;
+        long long retIsArray = _m600.data.Closure.retIsArray;
         (void)retIsArray;
-        uint64_t retTy = _m595.data.Closure.retTy;
+        uint64_t retTy = _m600.data.Closure.retTy;
         (void)retTy;
-        uint64_t body = _m595.data.Closure.body;
+        uint64_t body = _m600.data.Closure.body;
         (void)body;
     plew_write((PlewString){"__closure", 9});
     writeU64_n_U64(id);
     }
-    else if (_m595.tag == 10) {
-        uint64_t recv = _m595.data.Method.recv;
+    else if (_m600.tag == 10) {
+        uint64_t recv = _m600.data.Method.recv;
         (void)recv;
-        uint64_t nameStart = _m595.data.Method.nameStart;
+        uint64_t nameStart = _m600.data.Method.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m595.data.Method.nameLen;
+        uint64_t nameLen = _m600.data.Method.nameLen;
         (void)nameLen;
-        PlewArray_Arg args = _m595.data.Method.args;
+        PlewArray_Arg args = _m600.data.Method.args;
         (void)args;
     Bind arn = assocRecvName_c_Comp_recv_U64(&((*c)), recv);
     if (arn.nameLen != 0) {
@@ -7588,11 +7659,11 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     }
     if (mf.selfMove) {
     {
-    Expr _m597 = PlewArray_Expr_get((*c).exprs, (long long)(recv));
-    if (_m597.tag == 1) {
-        uint64_t start = _m597.data.Ident.start;
+    Expr _m602 = PlewArray_Expr_get((*c).exprs, (long long)(recv));
+    if (_m602.tag == 1) {
+        uint64_t start = _m602.data.Ident.start;
         (void)start;
-        uint64_t len = _m597.data.Ident.len;
+        uint64_t len = _m602.data.Ident.len;
         (void)len;
     if (isSelfRef_c_Comp_start_U64_len_U64(&((*c)), start, len)) {
     compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), exprOffset_c_Comp_id_U64(&((*c)), recv)), (PlewString){"calling a `move fn` on `self` is not yet supported", 50});
@@ -7609,19 +7680,19 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), exprOffset_c_Comp_id_U64(&((*c)), recv)), (PlewString){"cannot call a `move fn` on a variable declared outside the enclosing conditional/loop (the consume would be conditional)", 120});
     }
     }
-    else if (_m597.tag == 5) {
-        uint64_t base = _m597.data.Field.base;
+    else if (_m602.tag == 5) {
+        uint64_t base = _m602.data.Field.base;
         (void)base;
-        uint64_t nameStart = _m597.data.Field.nameStart;
+        uint64_t nameStart = _m602.data.Field.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m597.data.Field.nameLen;
+        uint64_t nameLen = _m602.data.Field.nameLen;
         (void)nameLen;
     compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), exprOffset_c_Comp_id_U64(&((*c)), recv)), (PlewString){"cannot call a `move fn` on a field (partial move, not yet supported)", 68});
     }
-    else if (_m597.tag == 9) {
-        uint64_t base = _m597.data.Index.base;
+    else if (_m602.tag == 9) {
+        uint64_t base = _m602.data.Index.base;
         (void)base;
-        uint64_t index = _m597.data.Index.index;
+        uint64_t index = _m602.data.Index.index;
         (void)index;
     compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), exprOffset_c_Comp_id_U64(&((*c)), recv)), (PlewString){"cannot call a `move fn` on an element (partial move, not yet supported)", 71});
     }
@@ -7667,26 +7738,26 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     Func_release(mf);
     }
     }
-    else if (_m595.tag == 8) {
-        PlewArray_U64 elems = _m595.data.Array.elems;
+    else if (_m600.tag == 8) {
+        PlewArray_U64 elems = _m600.data.Array.elems;
         (void)elems;
     plew_write((PlewString){"0", 1});
     }
-    else if (_m595.tag == 11) {
-        uint64_t operand = _m595.data.Cast.operand;
+    else if (_m600.tag == 11) {
+        uint64_t operand = _m600.data.Cast.operand;
         (void)operand;
-        uint64_t tyStart = _m595.data.Cast.tyStart;
+        uint64_t tyStart = _m600.data.Cast.tyStart;
         (void)tyStart;
-        uint64_t tyLen = _m595.data.Cast.tyLen;
+        uint64_t tyLen = _m600.data.Cast.tyLen;
         (void)tyLen;
     if (isIntType_c_Comp_start_U64_len_U64(&((*c)), tyStart, tyLen)) {
     Expr opE = PlewArray_Expr_get((*c).exprs, (long long)(operand));
     {
-    Expr _m598 = opE;
-    if (_m598.tag == 0) {
-        int64_t value = _m598.data.Int.value;
+    Expr _m603 = opE;
+    if (_m603.tag == 0) {
+        int64_t value = _m603.data.Int.value;
         (void)value;
-        uint64_t offset = _m598.data.Int.offset;
+        uint64_t offset = _m603.data.Int.offset;
         (void)offset;
     if (litFitsType_c_Comp_value_I64_dstStart_U64_dstLen_U64(&((*c)), value, tyStart, tyLen)) {
     }
@@ -7714,20 +7785,20 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     genExpr_c_Comp_id_U64(&((*c)), operand);
     plew_write((PlewString){"))", 2});
     }
-    else if (_m595.tag == 6) {
-        uint64_t typeStart = _m595.data.Make.typeStart;
+    else if (_m600.tag == 6) {
+        uint64_t typeStart = _m600.data.Make.typeStart;
         (void)typeStart;
-        uint64_t typeLen = _m595.data.Make.typeLen;
+        uint64_t typeLen = _m600.data.Make.typeLen;
         (void)typeLen;
-        uint64_t variantStart = _m595.data.Make.variantStart;
+        uint64_t variantStart = _m600.data.Make.variantStart;
         (void)variantStart;
-        uint64_t variantLen = _m595.data.Make.variantLen;
+        uint64_t variantLen = _m600.data.Make.variantLen;
         (void)variantLen;
-        long long isEnum = _m595.data.Make.isEnum;
+        long long isEnum = _m600.data.Make.isEnum;
         (void)isEnum;
-        uint64_t ty = _m595.data.Make.ty;
+        uint64_t ty = _m600.data.Make.ty;
         (void)ty;
-        PlewArray_MakeField fields = _m595.data.Make.fields;
+        PlewArray_MakeField fields = _m600.data.Make.fields;
         (void)fields;
     if (isRefInst_c_Comp_ref_U64(&((*c)), ty)) {
     TypeRef rt = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(ty)));
@@ -7837,10 +7908,10 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     plew_write((PlewString){"}", 1});
     }
     }
-    else if (_m595.tag == 12) {
-        uint64_t scrut = _m595.data.MatchExpr.scrut;
+    else if (_m600.tag == 12) {
+        uint64_t scrut = _m600.data.MatchExpr.scrut;
         (void)scrut;
-        PlewArray_MatchArm arms = _m595.data.MatchExpr.arms;
+        PlewArray_MatchArm arms = _m600.data.MatchExpr.arms;
         (void)arms;
     if (matchExhaustive_c_Comp_arms_AMatchArm(&((*c)), arms)) {
     }
@@ -7959,12 +8030,12 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     writeU64_n_U64(t);
     plew_write((PlewString){"; })", 4});
     }
-    else if (_m595.tag == 13) {
-        uint64_t cond = _m595.data.IfExpr.cond;
+    else if (_m600.tag == 13) {
+        uint64_t cond = _m600.data.IfExpr.cond;
         (void)cond;
-        uint64_t thenBlk = _m595.data.IfExpr.thenBlk;
+        uint64_t thenBlk = _m600.data.IfExpr.thenBlk;
         (void)thenBlk;
-        uint64_t elseBlk = _m595.data.IfExpr.elseBlk;
+        uint64_t elseBlk = _m600.data.IfExpr.elseBlk;
         (void)elseBlk;
     uint64_t t = (*c).tmp;
     (*c).tmp = ({ uint64_t __ov; if (__builtin_add_overflow(((*c).tmp), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
@@ -7990,10 +8061,10 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     writeU64_n_U64(t);
     plew_write((PlewString){"; })", 4});
     }
-    else if (_m595.tag == 14) {
-        uint64_t opt = _m595.data.Coalesce.opt;
+    else if (_m600.tag == 14) {
+        uint64_t opt = _m600.data.Coalesce.opt;
         (void)opt;
-        uint64_t deflt = _m595.data.Coalesce.deflt;
+        uint64_t deflt = _m600.data.Coalesce.deflt;
         (void)deflt;
     uint64_t t = (*c).tmp;
     (*c).tmp = ({ uint64_t __ov; if (__builtin_add_overflow(((*c).tmp), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
@@ -8017,8 +8088,8 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     genExpr_c_Comp_id_U64(&((*c)), deflt);
     plew_write((PlewString){"); })", 5});
     }
-    else if (_m595.tag == 15) {
-        uint64_t expr = _m595.data.Try.expr;
+    else if (_m600.tag == 15) {
+        uint64_t expr = _m600.data.Try.expr;
         (void)expr;
     uint64_t t = (*c).tmp;
     (*c).tmp = ({ uint64_t __ov; if (__builtin_add_overflow(((*c).tmp), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
@@ -8049,36 +8120,36 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
 }
 long long isPlaceExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     {
-    Expr _m599 = PlewArray_Expr_get((*c).exprs, (long long)(id));
-    if (_m599.tag == 1) {
-        uint64_t start = _m599.data.Ident.start;
+    Expr _m604 = PlewArray_Expr_get((*c).exprs, (long long)(id));
+    if (_m604.tag == 1) {
+        uint64_t start = _m604.data.Ident.start;
         (void)start;
-        uint64_t len = _m599.data.Ident.len;
+        uint64_t len = _m604.data.Ident.len;
         (void)len;
-    { long long __ret600 = 1;
-    return __ret600; }
+    { long long __ret605 = 1;
+    return __ret605; }
     }
-    else if (_m599.tag == 5) {
-        uint64_t base = _m599.data.Field.base;
+    else if (_m604.tag == 5) {
+        uint64_t base = _m604.data.Field.base;
         (void)base;
-        uint64_t nameStart = _m599.data.Field.nameStart;
+        uint64_t nameStart = _m604.data.Field.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m599.data.Field.nameLen;
+        uint64_t nameLen = _m604.data.Field.nameLen;
         (void)nameLen;
-    { long long __ret601 = 1;
-    return __ret601; }
+    { long long __ret606 = 1;
+    return __ret606; }
     }
-    else if (_m599.tag == 9) {
-        uint64_t base = _m599.data.Index.base;
+    else if (_m604.tag == 9) {
+        uint64_t base = _m604.data.Index.base;
         (void)base;
-        uint64_t index = _m599.data.Index.index;
+        uint64_t index = _m604.data.Index.index;
         (void)index;
-    { long long __ret602 = 1;
-    return __ret602; }
+    { long long __ret607 = 1;
+    return __ret607; }
     }
     else {
-    { long long __ret603 = 0;
-    return __ret603; }
+    { long long __ret608 = 0;
+    return __ret608; }
     }
     }
 }
@@ -8095,9 +8166,9 @@ void genArrayValue_c_Comp_exprId_U64_elemStart_U64_elemLen_U64(Comp* c, uint64_t
 void genArrayLiteral_c_Comp_exprId_U64_elemStart_U64_elemLen_U64(Comp* c, uint64_t exprId, uint64_t elemStart, uint64_t elemLen) {
     Expr e = PlewArray_Expr_get((*c).exprs, (long long)(exprId));
     {
-    Expr _m604 = e;
-    if (_m604.tag == 8) {
-        PlewArray_U64 elems = _m604.data.Array.elems;
+    Expr _m609 = e;
+    if (_m609.tag == 8) {
+        PlewArray_U64 elems = _m609.data.Array.elems;
         (void)elems;
     if ((long long)((elems).len) == 0) {
     plew_write((PlewString){"PlewArray_", 10});
@@ -8134,28 +8205,28 @@ long long isStringEq_c_Comp_op_I64_lhs_U64(Comp* c, int64_t op, uint64_t lhs) {
     if (op == 51) {
     }
     else {
-    { long long __ret605 = 0;
-    return __ret605; }
+    { long long __ret610 = 0;
+    return __ret610; }
     }
     }
     TypeInfo lt = exprType_c_Comp_id_U64(&((*c)), lhs);
-    { long long __ret606 = (lt.kind == 1);
-    return __ret606; }
+    { long long __ret611 = (lt.kind == 1);
+    return __ret611; }
 }
 long long isEnumName_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uint64_t len) {
     uint64_t ei = 0;
     while (ei < (long long)(((*c).enums).len)) {
     EnumDef e = EnumDef_share(PlewArray_EnumDef_get((*c).enums, (long long)(ei)));
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), e.nameStart, e.nameLen, start, len)) {
-    { long long __ret607 = 1;
+    { long long __ret612 = 1;
     EnumDef_release(e);
-    return __ret607; }
+    return __ret612; }
     }
     ei = ({ uint64_t __ov; if (__builtin_add_overflow((ei), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     EnumDef_release(e);
     }
-    { long long __ret608 = 0;
-    return __ret608; }
+    { long long __ret613 = 0;
+    return __ret613; }
 }
 long long isAllNullary_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uint64_t len) {
     uint64_t ei = 0;
@@ -8167,26 +8238,26 @@ long long isAllNullary_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uint64_
     while (vi < (long long)((vars).len)) {
     Variant v = Variant_share(PlewArray_Variant_get(vars, (long long)(vi)));
     if ((long long)((v.fields).len) > 0) {
-    { long long __ret609 = 0;
+    { long long __ret614 = 0;
     Variant_release(v);
     PlewArray_Variant_release(vars);
     EnumDef_release(e);
-    return __ret609; }
+    return __ret614; }
     }
     vi = ({ uint64_t __ov; if (__builtin_add_overflow((vi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     Variant_release(v);
     }
-    { long long __ret610 = 1;
+    { long long __ret615 = 1;
     PlewArray_Variant_release(vars);
     EnumDef_release(e);
-    return __ret610; }
+    return __ret615; }
     PlewArray_Variant_release(vars);
     }
     ei = ({ uint64_t __ov; if (__builtin_add_overflow((ei), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     EnumDef_release(e);
     }
-    { long long __ret611 = 0;
-    return __ret611; }
+    { long long __ret616 = 0;
+    return __ret616; }
 }
 long long isEnumEq_c_Comp_op_I64_lhs_U64(Comp* c, int64_t op, uint64_t lhs) {
     if (op == 50) {
@@ -8195,61 +8266,61 @@ long long isEnumEq_c_Comp_op_I64_lhs_U64(Comp* c, int64_t op, uint64_t lhs) {
     if (op == 51) {
     }
     else {
-    { long long __ret612 = 0;
-    return __ret612; }
+    { long long __ret617 = 0;
+    return __ret617; }
     }
     }
     TypeInfo lt = exprType_c_Comp_id_U64(&((*c)), lhs);
     if (lt.kind == 2) {
-    { long long __ret613 = isEnumName_c_Comp_start_U64_len_U64(&((*c)), lt.nameStart, lt.nameLen);
-    return __ret613; }
+    { long long __ret618 = isEnumName_c_Comp_start_U64_len_U64(&((*c)), lt.nameStart, lt.nameLen);
+    return __ret618; }
     }
-    { long long __ret614 = 0;
-    return __ret614; }
+    { long long __ret619 = 0;
+    return __ret619; }
 }
 long long compareNeedsTrait_c_Comp_op_I64_lhs_U64(Comp* c, int64_t op, uint64_t lhs) {
     if (op < 50) {
-    { long long __ret615 = 0;
-    return __ret615; }
+    { long long __ret620 = 0;
+    return __ret620; }
     }
     if (op > 55) {
-    { long long __ret616 = 0;
-    return __ret616; }
+    { long long __ret621 = 0;
+    return __ret621; }
     }
     TypeInfo lt = exprType_c_Comp_id_U64(&((*c)), lhs);
     if (lt.kind == 3) {
-    { long long __ret617 = 1;
-    return __ret617; }
+    { long long __ret622 = 1;
+    return __ret622; }
     }
     if (lt.kind == 2) {
     if (isEnumName_c_Comp_start_U64_len_U64(&((*c)), lt.nameStart, lt.nameLen)) {
-    { long long __ret618 = 0;
-    return __ret618; }
+    { long long __ret623 = 0;
+    return __ret623; }
     }
-    { long long __ret619 = 1;
-    return __ret619; }
+    { long long __ret624 = 1;
+    return __ret624; }
     }
-    { long long __ret620 = 0;
-    return __ret620; }
+    { long long __ret625 = 0;
+    return __ret625; }
 }
 void emitEnumOperand_c_Comp_id_U64_enStart_U64_enLen_U64(Comp* c, uint64_t id, uint64_t enStart, uint64_t enLen) {
     Expr e = PlewArray_Expr_get((*c).exprs, (long long)(id));
     {
-    Expr _m621 = e;
-    if (_m621.tag == 6) {
-        uint64_t typeStart = _m621.data.Make.typeStart;
+    Expr _m626 = e;
+    if (_m626.tag == 6) {
+        uint64_t typeStart = _m626.data.Make.typeStart;
         (void)typeStart;
-        uint64_t typeLen = _m621.data.Make.typeLen;
+        uint64_t typeLen = _m626.data.Make.typeLen;
         (void)typeLen;
-        uint64_t variantStart = _m621.data.Make.variantStart;
+        uint64_t variantStart = _m626.data.Make.variantStart;
         (void)variantStart;
-        uint64_t variantLen = _m621.data.Make.variantLen;
+        uint64_t variantLen = _m626.data.Make.variantLen;
         (void)variantLen;
-        long long isEnum = _m621.data.Make.isEnum;
+        long long isEnum = _m626.data.Make.isEnum;
         (void)isEnum;
-        uint64_t ty = _m621.data.Make.ty;
+        uint64_t ty = _m626.data.Make.ty;
         (void)ty;
-        PlewArray_MakeField fields = _m621.data.Make.fields;
+        PlewArray_MakeField fields = _m626.data.Make.fields;
         (void)fields;
     if (isEnum) {
     writeU64_n_U64(variantIndex_c_Comp_enumStart_U64_enumLen_U64_variantStart_U64_variantLen_U64(&((*c)), enStart, enLen, variantStart, variantLen));
@@ -8304,17 +8375,17 @@ uint64_t findAssocByName_c_Comp_typeStart_U64_typeLen_U64_name_String(Comp* c, u
     if (f.isAssoc) {
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), f.recvStart, f.recvLen, typeStart, typeLen)) {
     if (rangeEquals_bytes_AU8_start_U64_len_U64_kw_String((*c).bytes, f.nameStart, f.nameLen, name)) {
-    { uint64_t __ret622 = i;
+    { uint64_t __ret627 = i;
     Func_release(f);
-    return __ret622; }
+    return __ret627; }
     }
     }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     Func_release(f);
     }
-    { uint64_t __ret623 = (long long)(((*c).funcs).len);
-    return __ret623; }
+    { uint64_t __ret628 = (long long)(((*c).funcs).len);
+    return __ret628; }
 }
 uint64_t orderingVariantIndex_c_Comp_name_String(Comp* c, PlewString name) {
     uint64_t ei = 0;
@@ -8325,10 +8396,10 @@ uint64_t orderingVariantIndex_c_Comp_name_String(Comp* c, PlewString name) {
     uint64_t vi = 0;
     while (vi < (long long)((vars).len)) {
     if (rangeEquals_bytes_AU8_start_U64_len_U64_kw_String((*c).bytes, PlewArray_Variant_get(vars, (long long)(vi)).nameStart, PlewArray_Variant_get(vars, (long long)(vi)).nameLen, name)) {
-    { uint64_t __ret624 = vi;
+    { uint64_t __ret629 = vi;
     PlewArray_Variant_release(vars);
     EnumDef_release(e);
-    return __ret624; }
+    return __ret629; }
     }
     vi = ({ uint64_t __ov; if (__builtin_add_overflow((vi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
@@ -8337,29 +8408,39 @@ uint64_t orderingVariantIndex_c_Comp_name_String(Comp* c, PlewString name) {
     ei = ({ uint64_t __ov; if (__builtin_add_overflow((ei), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     EnumDef_release(e);
     }
-    { uint64_t __ret625 = 0;
-    return __ret625; }
+    { uint64_t __ret630 = 0;
+    return __ret630; }
 }
 long long hasCompareWitness_c_Comp_op_I64_lhs_U64(Comp* c, int64_t op, uint64_t lhs) {
     TypeInfo lt = exprType_c_Comp_id_U64(&((*c)), lhs);
     if (lt.kind == 2) {
     if (op == 50) {
-    { long long __ret626 = (findAssocByName_c_Comp_typeStart_U64_typeLen_U64_name_String(&((*c)), lt.nameStart, lt.nameLen, (PlewString){"eq", 2}) < (long long)(((*c).funcs).len));
-    return __ret626; }
+    { long long __ret631 = eqWitnessReady_c_Comp_ti_TypeInfo(&((*c)), lt);
+    return __ret631; }
     }
     if (op == 51) {
-    { long long __ret627 = (findAssocByName_c_Comp_typeStart_U64_typeLen_U64_name_String(&((*c)), lt.nameStart, lt.nameLen, (PlewString){"eq", 2}) < (long long)(((*c).funcs).len));
-    return __ret627; }
+    { long long __ret632 = eqWitnessReady_c_Comp_ti_TypeInfo(&((*c)), lt);
+    return __ret632; }
     }
     if (op >= 52) {
     if (op <= 55) {
-    { long long __ret628 = (findAssocByName_c_Comp_typeStart_U64_typeLen_U64_name_String(&((*c)), lt.nameStart, lt.nameLen, (PlewString){"compare", 7}) < (long long)(((*c).funcs).len));
-    return __ret628; }
+    if (typeConformsToName_c_Comp_typeStart_U64_typeLen_U64_traitName_String(&((*c)), lt.nameStart, lt.nameLen, (PlewString){"Ord", 3})) {
+    { long long __ret633 = (findAssocByName_c_Comp_typeStart_U64_typeLen_U64_name_String(&((*c)), lt.nameStart, lt.nameLen, (PlewString){"compare", 7}) < (long long)(((*c).funcs).len));
+    return __ret633; }
     }
     }
     }
-    { long long __ret629 = 0;
-    return __ret629; }
+    }
+    { long long __ret634 = 0;
+    return __ret634; }
+}
+long long eqWitnessReady_c_Comp_ti_TypeInfo(Comp* c, TypeInfo ti) {
+    if (typeConformsToName_c_Comp_typeStart_U64_typeLen_U64_traitName_String(&((*c)), ti.nameStart, ti.nameLen, (PlewString){"Eq", 2})) {
+    { long long __ret635 = (findAssocByName_c_Comp_typeStart_U64_typeLen_U64_name_String(&((*c)), ti.nameStart, ti.nameLen, (PlewString){"eq", 2}) < (long long)(((*c).funcs).len));
+    return __ret635; }
+    }
+    { long long __ret636 = 0;
+    return __ret636; }
 }
 void emitEqCall_c_Comp_typeStart_U64_typeLen_U64_lhs_U64_rhs_U64(Comp* c, uint64_t typeStart, uint64_t typeLen, uint64_t lhs, uint64_t rhs) {
     uint64_t fi = findAssocByName_c_Comp_typeStart_U64_typeLen_U64_name_String(&((*c)), typeStart, typeLen, (PlewString){"eq", 2});
@@ -8417,13 +8498,13 @@ void emitTraitCompare_c_Comp_op_I64_lhs_U64_rhs_U64(Comp* c, int64_t op, uint64_
 void genCond_c_Comp_id_U64(Comp* c, uint64_t id) {
     Expr e = PlewArray_Expr_get((*c).exprs, (long long)(id));
     {
-    Expr _m630 = e;
-    if (_m630.tag == 3) {
-        int64_t op = _m630.data.Binary.op;
+    Expr _m637 = e;
+    if (_m637.tag == 3) {
+        int64_t op = _m637.data.Binary.op;
         (void)op;
-        uint64_t lhs = _m630.data.Binary.lhs;
+        uint64_t lhs = _m637.data.Binary.lhs;
         (void)lhs;
-        uint64_t rhs = _m630.data.Binary.rhs;
+        uint64_t rhs = _m637.data.Binary.rhs;
         (void)rhs;
     if (isStringEq_c_Comp_op_I64_lhs_U64(&((*c)), op, lhs)) {
     genExpr_c_Comp_id_U64(&((*c)), id);
@@ -8457,23 +8538,23 @@ void genCond_c_Comp_id_U64(Comp* c, uint64_t id) {
 void genStmt_c_Comp_id_U64(Comp* c, uint64_t id) {
     Stmt s = PlewArray_Stmt_get((*c).stmts, (long long)(id));
     {
-    Stmt _m631 = s;
-    if (_m631.tag == 0) {
-        long long mutable = _m631.data.Let.mutable;
+    Stmt _m638 = s;
+    if (_m638.tag == 0) {
+        long long mutable = _m638.data.Let.mutable;
         (void)mutable;
-        uint64_t nameStart = _m631.data.Let.nameStart;
+        uint64_t nameStart = _m638.data.Let.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m631.data.Let.nameLen;
+        uint64_t nameLen = _m638.data.Let.nameLen;
         (void)nameLen;
-        uint64_t tyStart = _m631.data.Let.tyStart;
+        uint64_t tyStart = _m638.data.Let.tyStart;
         (void)tyStart;
-        uint64_t tyLen = _m631.data.Let.tyLen;
+        uint64_t tyLen = _m638.data.Let.tyLen;
         (void)tyLen;
-        long long tyIsArray = _m631.data.Let.tyIsArray;
+        long long tyIsArray = _m638.data.Let.tyIsArray;
         (void)tyIsArray;
-        uint64_t ty = _m631.data.Let.ty;
+        uint64_t ty = _m638.data.Let.ty;
         (void)ty;
-        uint64_t init = _m631.data.Let.init;
+        uint64_t init = _m638.data.Let.init;
         (void)init;
     checkLitSpan_c_Comp_id_U64_tyStart_U64_tyLen_U64_isArray_Bool(&((*c)), init, tyStart, tyLen, tyIsArray);
     checkUniquePlaceCopy_c_Comp_exprId_U64_inoutOk_Bool(&((*c)), init, 0);
@@ -8491,20 +8572,20 @@ void genStmt_c_Comp_id_U64(Comp* c, uint64_t id) {
     plew_write((PlewString){";\n", 2});
     addLocal_c_Comp_nameStart_U64_nameLen_U64_tyStart_U64_tyLen_U64_isArray_Bool_ty_U64_isInout_Bool_isMut_Bool_owned_Bool(&((*c)), nameStart, nameLen, tyStart, tyLen, tyIsArray, ty, 0, mutable, 1);
     }
-    else if (_m631.tag == 1) {
-        int64_t op = _m631.data.Assign.op;
+    else if (_m638.tag == 1) {
+        int64_t op = _m638.data.Assign.op;
         (void)op;
-        uint64_t target = _m631.data.Assign.target;
+        uint64_t target = _m638.data.Assign.target;
         (void)target;
-        uint64_t value = _m631.data.Assign.value;
+        uint64_t value = _m638.data.Assign.value;
         (void)value;
     Expr te = PlewArray_Expr_get((*c).exprs, (long long)(target));
     {
-    Expr _m632 = te;
-    if (_m632.tag == 9) {
-        uint64_t base = _m632.data.Index.base;
+    Expr _m639 = te;
+    if (_m639.tag == 9) {
+        uint64_t base = _m639.data.Index.base;
         (void)base;
-        uint64_t index = _m632.data.Index.index;
+        uint64_t index = _m639.data.Index.index;
         (void)index;
     if (placeIsMutable_c_Comp_id_U64(&((*c)), base)) {
     }
@@ -8660,10 +8741,10 @@ void genStmt_c_Comp_id_U64(Comp* c, uint64_t id) {
     }
     }
     }
-    else if (_m631.tag == 2) {
-        uint64_t expr = _m631.data.Print.expr;
+    else if (_m638.tag == 2) {
+        uint64_t expr = _m638.data.Print.expr;
         (void)expr;
-        uint64_t offset = _m631.data.Print.offset;
+        uint64_t offset = _m638.data.Print.offset;
         (void)offset;
     if ((*c).impPrint) {
     checkLitCtx_c_Comp_id_U64_eKind_U64_eBits_U64_eSgn_Bool(&((*c)), expr, 1, 64, 1);
@@ -8675,18 +8756,18 @@ void genStmt_c_Comp_id_U64(Comp* c, uint64_t id) {
     compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), offset), (PlewString){"print is not ambient; import it from @Std/Io", 44});
     }
     }
-    else if (_m631.tag == 3) {
-        uint64_t expr = _m631.data.ExprStmt.expr;
+    else if (_m638.tag == 3) {
+        uint64_t expr = _m638.data.ExprStmt.expr;
         (void)expr;
     checkLitCtx_c_Comp_id_U64_eKind_U64_eBits_U64_eSgn_Bool(&((*c)), expr, 0, 0, 0);
     plew_write((PlewString){"    ", 4});
     genExpr_c_Comp_id_U64(&((*c)), expr);
     plew_write((PlewString){";\n", 2});
     }
-    else if (_m631.tag == 4) {
-        uint64_t value = _m631.data.Return.value;
+    else if (_m638.tag == 4) {
+        uint64_t value = _m638.data.Return.value;
         (void)value;
-        long long hasValue = _m631.data.Return.hasValue;
+        long long hasValue = _m638.data.Return.hasValue;
         (void)hasValue;
     if ((*c).curIsMain) {
     emitScopeDrops_c_Comp_mark_U64_exclIdx_U64(&((*c)), 0, (long long)(((*c).locals).len));
@@ -8722,11 +8803,11 @@ void genStmt_c_Comp_id_U64(Comp* c, uint64_t id) {
     if (vt.kind == 2) {
     if (typeIsUnique_c_Comp_start_U64_len_U64(&((*c)), vt.nameStart, vt.nameLen)) {
     {
-    Expr _m633 = PlewArray_Expr_get((*c).exprs, (long long)(value));
-    if (_m633.tag == 1) {
-        uint64_t start = _m633.data.Ident.start;
+    Expr _m640 = PlewArray_Expr_get((*c).exprs, (long long)(value));
+    if (_m640.tag == 1) {
+        uint64_t start = _m640.data.Ident.start;
         (void)start;
-        uint64_t len = _m633.data.Ident.len;
+        uint64_t len = _m640.data.Ident.len;
         (void)len;
     if ((*c).curSelfMove) {
     if (isSelfRef_c_Comp_start_U64_len_U64(&((*c)), start, len)) {
@@ -8735,19 +8816,19 @@ void genStmt_c_Comp_id_U64(Comp* c, uint64_t id) {
     }
     retExcl = localIndexByName_c_Comp_start_U64_len_U64(&((*c)), start, len);
     }
-    else if (_m633.tag == 5) {
-        uint64_t base = _m633.data.Field.base;
+    else if (_m640.tag == 5) {
+        uint64_t base = _m640.data.Field.base;
         (void)base;
-        uint64_t nameStart = _m633.data.Field.nameStart;
+        uint64_t nameStart = _m640.data.Field.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m633.data.Field.nameLen;
+        uint64_t nameLen = _m640.data.Field.nameLen;
         (void)nameLen;
     compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), exprOffset_c_Comp_id_U64(&((*c)), value)), (PlewString){"returning a field of a unique value is a partial move (not yet supported)", 73});
     }
-    else if (_m633.tag == 9) {
-        uint64_t base = _m633.data.Index.base;
+    else if (_m640.tag == 9) {
+        uint64_t base = _m640.data.Index.base;
         (void)base;
-        uint64_t index = _m633.data.Index.index;
+        uint64_t index = _m640.data.Index.index;
         (void)index;
     compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), exprOffset_c_Comp_id_U64(&((*c)), value)), (PlewString){"returning an element of a unique value is a partial move (not yet supported)", 76});
     }
@@ -8765,14 +8846,14 @@ void genStmt_c_Comp_id_U64(Comp* c, uint64_t id) {
     }
     }
     }
-    else if (_m631.tag == 5) {
-        uint64_t cond = _m631.data.If.cond;
+    else if (_m638.tag == 5) {
+        uint64_t cond = _m638.data.If.cond;
         (void)cond;
-        uint64_t thenBlk = _m631.data.If.thenBlk;
+        uint64_t thenBlk = _m638.data.If.thenBlk;
         (void)thenBlk;
-        uint64_t elseBlk = _m631.data.If.elseBlk;
+        uint64_t elseBlk = _m638.data.If.elseBlk;
         (void)elseBlk;
-        long long hasElse = _m631.data.If.hasElse;
+        long long hasElse = _m638.data.If.hasElse;
         (void)hasElse;
     checkLitCtx_c_Comp_id_U64_eKind_U64_eBits_U64_eSgn_Bool(&((*c)), cond, 0, 0, 0);
     plew_write((PlewString){"    if (", 8});
@@ -8790,10 +8871,10 @@ void genStmt_c_Comp_id_U64(Comp* c, uint64_t id) {
     }
     (*c).curBranchBase = savedBB;
     }
-    else if (_m631.tag == 6) {
-        uint64_t cond = _m631.data.While.cond;
+    else if (_m638.tag == 6) {
+        uint64_t cond = _m638.data.While.cond;
         (void)cond;
-        uint64_t body = _m631.data.While.body;
+        uint64_t body = _m638.data.While.body;
         (void)body;
     checkLitCtx_c_Comp_id_U64_eKind_U64_eBits_U64_eSgn_Bool(&((*c)), cond, 0, 0, 0);
     plew_write((PlewString){"    while (", 11});
@@ -8808,20 +8889,20 @@ void genStmt_c_Comp_id_U64(Comp* c, uint64_t id) {
     (*c).curLoopMark = savedLoopMark;
     plew_write((PlewString){"    }\n", 6});
     }
-    else if (_m631.tag == 7) {
-        uint64_t varStart = _m631.data.For.varStart;
+    else if (_m638.tag == 7) {
+        uint64_t varStart = _m638.data.For.varStart;
         (void)varStart;
-        uint64_t varLen = _m631.data.For.varLen;
+        uint64_t varLen = _m638.data.For.varLen;
         (void)varLen;
-        long long isRange = _m631.data.For.isRange;
+        long long isRange = _m638.data.For.isRange;
         (void)isRange;
-        long long inclusive = _m631.data.For.inclusive;
+        long long inclusive = _m638.data.For.inclusive;
         (void)inclusive;
-        uint64_t iter = _m631.data.For.iter;
+        uint64_t iter = _m638.data.For.iter;
         (void)iter;
-        uint64_t rangeHi = _m631.data.For.rangeHi;
+        uint64_t rangeHi = _m638.data.For.rangeHi;
         (void)rangeHi;
-        uint64_t body = _m631.data.For.body;
+        uint64_t body = _m638.data.For.body;
         (void)body;
     if (isRange) {
     checkArithNoCtx_c_Comp_lhs_U64_rhs_U64(&((*c)), iter, rangeHi);
@@ -8898,17 +8979,17 @@ void genStmt_c_Comp_id_U64(Comp* c, uint64_t id) {
     (*c).curLoopMark = savedLoopMark;
     scopeExit_c_Comp_mark_U64(&((*c)), forMark);
     }
-    else if (_m631.tag == 9) {
-        uint64_t msg = _m631.data.Panic.msg;
+    else if (_m638.tag == 9) {
+        uint64_t msg = _m638.data.Panic.msg;
         (void)msg;
-        uint64_t offset = _m631.data.Panic.offset;
+        uint64_t offset = _m638.data.Panic.offset;
         (void)offset;
     plew_write((PlewString){"    plew_panic(", 15});
     genExpr_c_Comp_id_U64(&((*c)), msg);
     plew_write((PlewString){");\n", 3});
     }
-    else if (_m631.tag == 10) {
-        uint64_t value = _m631.data.Give.value;
+    else if (_m638.tag == 10) {
+        uint64_t value = _m638.data.Give.value;
         (void)value;
     TypeInfo gvt = exprType_c_Comp_id_U64(&((*c)), value);
     if (gvt.kind == 2) {
@@ -8924,18 +9005,18 @@ void genStmt_c_Comp_id_U64(Comp* c, uint64_t id) {
     plew_write((PlewString){");\n", 3});
     }
     }
-    else if (_m631.tag == 11) {
+    else if (_m638.tag == 11) {
     emitScopeDrops_c_Comp_mark_U64_exclIdx_U64(&((*c)), (*c).curLoopMark, (long long)(((*c).locals).len));
     plew_write((PlewString){"    break;\n", 11});
     }
-    else if (_m631.tag == 12) {
+    else if (_m638.tag == 12) {
     emitScopeDrops_c_Comp_mark_U64_exclIdx_U64(&((*c)), (*c).curLoopMark, (long long)(((*c).locals).len));
     plew_write((PlewString){"    continue;\n", 14});
     }
-    else if (_m631.tag == 8) {
-        uint64_t scrut = _m631.data.Match.scrut;
+    else if (_m638.tag == 8) {
+        uint64_t scrut = _m638.data.Match.scrut;
         (void)scrut;
-        PlewArray_MatchArm arms = _m631.data.Match.arms;
+        PlewArray_MatchArm arms = _m638.data.Match.arms;
         (void)arms;
     if (matchExhaustive_c_Comp_arms_AMatchArm(&((*c)), arms)) {
     }
@@ -9069,34 +9150,34 @@ void genBlock_c_Comp_id_U64(Comp* c, uint64_t id) {
 }
 long long nameIsMain_c_Comp_f_Func(Comp* c, Func f) {
     if (f.hasRecv) {
-    { long long __ret634 = 0;
-    return __ret634; }
+    { long long __ret641 = 0;
+    return __ret641; }
     }
-    { long long __ret635 = rangeEquals_bytes_AU8_start_U64_len_U64_kw_String((*c).bytes, f.nameStart, f.nameLen, (PlewString){"main", 4});
-    return __ret635; }
+    { long long __ret642 = rangeEquals_bytes_AU8_start_U64_len_U64_kw_String((*c).bytes, f.nameStart, f.nameLen, (PlewString){"main", 4});
+    return __ret642; }
 }
 long long isTraitName_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uint64_t len) {
     uint64_t i = 0;
     while (i < (long long)(((*c).traits).len)) {
     TraitDef t = TraitDef_share(PlewArray_TraitDef_get((*c).traits, (long long)(i)));
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), t.nameStart, t.nameLen, start, len)) {
-    { long long __ret636 = 1;
+    { long long __ret643 = 1;
     TraitDef_release(t);
-    return __ret636; }
+    return __ret643; }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     TraitDef_release(t);
     }
-    { long long __ret637 = 0;
-    return __ret637; }
+    { long long __ret644 = 0;
+    return __ret644; }
 }
 long long methodRecvIsTrait_c_Comp_f_Func(Comp* c, Func f) {
     if (f.hasRecv) {
-    { long long __ret638 = isTraitName_c_Comp_start_U64_len_U64(&((*c)), f.recvStart, f.recvLen);
-    return __ret638; }
+    { long long __ret645 = isTraitName_c_Comp_start_U64_len_U64(&((*c)), f.recvStart, f.recvLen);
+    return __ret645; }
     }
-    { long long __ret639 = 0;
-    return __ret639; }
+    { long long __ret646 = 0;
+    return __ret646; }
 }
 void instantiateProvidedMethods_c_Comp(Comp* c) {
     uint64_t nFuncs = (long long)(((*c).funcs).len);
@@ -9124,22 +9205,22 @@ uint64_t structIndexByName_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uin
     StructDef s = StructDef_share(PlewArray_StructDef_get((*c).structs, (long long)(i)));
     if ((long long)((s.typeParams).len) == 0) {
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), s.nameStart, s.nameLen, start, len)) {
-    { uint64_t __ret640 = i;
+    { uint64_t __ret647 = i;
     StructDef_release(s);
-    return __ret640; }
+    return __ret647; }
     }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     StructDef_release(s);
     }
-    { uint64_t __ret641 = (long long)(((*c).structs).len);
-    return __ret641; }
+    { uint64_t __ret648 = (long long)(((*c).structs).len);
+    return __ret648; }
 }
 long long structNeedsCopy_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uint64_t len) {
     uint64_t si = structIndexByName_c_Comp_start_U64_len_U64(&((*c)), start, len);
     if (si >= (long long)(((*c).structs).len)) {
-    { long long __ret642 = 0;
-    return __ret642; }
+    { long long __ret649 = 0;
+    return __ret649; }
     }
     StructDef s = StructDef_share(PlewArray_StructDef_get((*c).structs, (long long)(si)));
     PlewArray_FieldDef fields = PlewArray_FieldDef_share(s.fields);
@@ -9147,33 +9228,33 @@ long long structNeedsCopy_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uint
     while (i < (long long)((fields).len)) {
     FieldDef f = PlewArray_FieldDef_get(fields, (long long)(i));
     if (f.tyIsArray) {
-    { long long __ret643 = 1;
+    { long long __ret650 = 1;
     PlewArray_FieldDef_release(fields);
     StructDef_release(s);
-    return __ret643; }
+    return __ret650; }
     }
     else {
     if (structNeedsCopy_c_Comp_start_U64_len_U64(&((*c)), f.tyStart, f.tyLen)) {
-    { long long __ret644 = 1;
+    { long long __ret651 = 1;
     PlewArray_FieldDef_release(fields);
     StructDef_release(s);
-    return __ret644; }
+    return __ret651; }
     }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { long long __ret645 = 0;
+    { long long __ret652 = 0;
     PlewArray_FieldDef_release(fields);
     StructDef_release(s);
-    return __ret645; }
+    return __ret652; }
     PlewArray_FieldDef_release(fields);
     StructDef_release(s);
 }
 long long structNeedsRelease_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uint64_t len) {
     uint64_t si = structIndexByName_c_Comp_start_U64_len_U64(&((*c)), start, len);
     if (si >= (long long)(((*c).structs).len)) {
-    { long long __ret646 = 0;
-    return __ret646; }
+    { long long __ret653 = 0;
+    return __ret653; }
     }
     StructDef s = StructDef_share(PlewArray_StructDef_get((*c).structs, (long long)(si)));
     PlewArray_FieldDef fields = PlewArray_FieldDef_share(s.fields);
@@ -9181,31 +9262,31 @@ long long structNeedsRelease_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, u
     while (i < (long long)((fields).len)) {
     FieldDef f = PlewArray_FieldDef_get(fields, (long long)(i));
     if (f.tyIsArray) {
-    { long long __ret647 = 1;
+    { long long __ret654 = 1;
     PlewArray_FieldDef_release(fields);
     StructDef_release(s);
-    return __ret647; }
+    return __ret654; }
     }
     else {
     if (typeIsUnique_c_Comp_start_U64_len_U64(&((*c)), f.tyStart, f.tyLen)) {
-    { long long __ret648 = 1;
+    { long long __ret655 = 1;
     PlewArray_FieldDef_release(fields);
     StructDef_release(s);
-    return __ret648; }
+    return __ret655; }
     }
     if (structNeedsRelease_c_Comp_start_U64_len_U64(&((*c)), f.tyStart, f.tyLen)) {
-    { long long __ret649 = 1;
+    { long long __ret656 = 1;
     PlewArray_FieldDef_release(fields);
     StructDef_release(s);
-    return __ret649; }
+    return __ret656; }
     }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { long long __ret650 = 0;
+    { long long __ret657 = 0;
     PlewArray_FieldDef_release(fields);
     StructDef_release(s);
-    return __ret650; }
+    return __ret657; }
     PlewArray_FieldDef_release(fields);
     StructDef_release(s);
 }
@@ -9377,9 +9458,9 @@ long long monoStructNeedsCopy_c_Comp_instRef_U64(Comp* c, uint64_t instRef) {
     TypeRef t = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(instRef)));
     uint64_t si = genericStructIndex_c_Comp_nameStart_U64_nameLen_U64(&((*c)), t.nameStart, t.nameLen);
     if (si >= (long long)(((*c).structs).len)) {
-    { long long __ret651 = 0;
+    { long long __ret658 = 0;
     TypeRef_release(t);
-    return __ret651; }
+    return __ret658; }
     }
     StructDef s = StructDef_share(PlewArray_StructDef_get((*c).structs, (long long)(si)));
     PlewArray_FieldDef fields = PlewArray_FieldDef_share(s.fields);
@@ -9387,19 +9468,19 @@ long long monoStructNeedsCopy_c_Comp_instRef_U64(Comp* c, uint64_t instRef) {
     while (i < (long long)((fields).len)) {
     TypeInfo ti = substTypeInfo_c_Comp_instRef_U64_params_ABind_tyRef_U64(&((*c)), instRef, s.typeParams, PlewArray_FieldDef_get(fields, (long long)(i)).ty);
     if (ti.kind == 3) {
-    { long long __ret652 = 1;
+    { long long __ret659 = 1;
     PlewArray_FieldDef_release(fields);
     StructDef_release(s);
     TypeRef_release(t);
-    return __ret652; }
+    return __ret659; }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { long long __ret653 = 0;
+    { long long __ret660 = 0;
     PlewArray_FieldDef_release(fields);
     StructDef_release(s);
     TypeRef_release(t);
-    return __ret653; }
+    return __ret660; }
     PlewArray_FieldDef_release(fields);
     StructDef_release(s);
     TypeRef_release(t);
@@ -9453,9 +9534,9 @@ long long monoEnumNeedsCopy_c_Comp_instRef_U64(Comp* c, uint64_t instRef) {
     TypeRef t = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(instRef)));
     uint64_t ei = genericEnumIndex_c_Comp_nameStart_U64_nameLen_U64(&((*c)), t.nameStart, t.nameLen);
     if (ei >= (long long)(((*c).enums).len)) {
-    { long long __ret654 = 0;
+    { long long __ret661 = 0;
     TypeRef_release(t);
-    return __ret654; }
+    return __ret661; }
     }
     EnumDef e = EnumDef_share(PlewArray_EnumDef_get((*c).enums, (long long)(ei)));
     PlewArray_Variant vars = PlewArray_Variant_share(e.variants);
@@ -9466,23 +9547,23 @@ long long monoEnumNeedsCopy_c_Comp_instRef_U64(Comp* c, uint64_t instRef) {
     while (fi < (long long)((fs).len)) {
     TypeInfo ti = substTypeInfo_c_Comp_instRef_U64_params_ABind_tyRef_U64(&((*c)), instRef, e.typeParams, PlewArray_FieldDef_get(fs, (long long)(fi)).ty);
     if (ti.kind == 3) {
-    { long long __ret655 = 1;
+    { long long __ret662 = 1;
     PlewArray_FieldDef_release(fs);
     PlewArray_Variant_release(vars);
     EnumDef_release(e);
     TypeRef_release(t);
-    return __ret655; }
+    return __ret662; }
     }
     fi = ({ uint64_t __ov; if (__builtin_add_overflow((fi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     vi = ({ uint64_t __ov; if (__builtin_add_overflow((vi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     PlewArray_FieldDef_release(fs);
     }
-    { long long __ret656 = 0;
+    { long long __ret663 = 0;
     PlewArray_Variant_release(vars);
     EnumDef_release(e);
     TypeRef_release(t);
-    return __ret656; }
+    return __ret663; }
     PlewArray_Variant_release(vars);
     EnumDef_release(e);
     TypeRef_release(t);
@@ -9806,21 +9887,21 @@ void genFunc_c_Comp_fi_U64(Comp* c, uint64_t fi) {
 }
 void genClosure_c_Comp_id_U64_proto_Bool(Comp* c, uint64_t id, long long proto) {
     {
-    Expr _m657 = PlewArray_Expr_get((*c).exprs, (long long)(id));
-    if (_m657.tag == 17) {
-        PlewArray_Param params = _m657.data.Closure.params;
+    Expr _m664 = PlewArray_Expr_get((*c).exprs, (long long)(id));
+    if (_m664.tag == 17) {
+        PlewArray_Param params = _m664.data.Closure.params;
         (void)params;
-        long long hasRet = _m657.data.Closure.hasRet;
+        long long hasRet = _m664.data.Closure.hasRet;
         (void)hasRet;
-        uint64_t retStart = _m657.data.Closure.retStart;
+        uint64_t retStart = _m664.data.Closure.retStart;
         (void)retStart;
-        uint64_t retLen = _m657.data.Closure.retLen;
+        uint64_t retLen = _m664.data.Closure.retLen;
         (void)retLen;
-        long long retIsArray = _m657.data.Closure.retIsArray;
+        long long retIsArray = _m664.data.Closure.retIsArray;
         (void)retIsArray;
-        uint64_t retTy = _m657.data.Closure.retTy;
+        uint64_t retTy = _m664.data.Closure.retTy;
         (void)retTy;
-        uint64_t body = _m657.data.Closure.body;
+        uint64_t body = _m664.data.Closure.body;
         (void)body;
     if (hasRet) {
     (*c).curRetVoid = 0;
@@ -9888,21 +9969,21 @@ void emitClosures_c_Comp_proto_Bool(Comp* c, long long proto) {
     uint64_t i = 0;
     while (i < (long long)(((*c).exprs).len)) {
     {
-    Expr _m658 = PlewArray_Expr_get((*c).exprs, (long long)(i));
-    if (_m658.tag == 17) {
-        PlewArray_Param params = _m658.data.Closure.params;
+    Expr _m665 = PlewArray_Expr_get((*c).exprs, (long long)(i));
+    if (_m665.tag == 17) {
+        PlewArray_Param params = _m665.data.Closure.params;
         (void)params;
-        long long hasRet = _m658.data.Closure.hasRet;
+        long long hasRet = _m665.data.Closure.hasRet;
         (void)hasRet;
-        uint64_t retStart = _m658.data.Closure.retStart;
+        uint64_t retStart = _m665.data.Closure.retStart;
         (void)retStart;
-        uint64_t retLen = _m658.data.Closure.retLen;
+        uint64_t retLen = _m665.data.Closure.retLen;
         (void)retLen;
-        long long retIsArray = _m658.data.Closure.retIsArray;
+        long long retIsArray = _m665.data.Closure.retIsArray;
         (void)retIsArray;
-        uint64_t retTy = _m658.data.Closure.retTy;
+        uint64_t retTy = _m665.data.Closure.retTy;
         (void)retTy;
-        uint64_t body = _m658.data.Closure.body;
+        uint64_t body = _m665.data.Closure.body;
         (void)body;
     genClosure_c_Comp_id_U64_proto_Bool(&((*c)), i, proto);
     }
@@ -9959,16 +10040,16 @@ uint64_t genericStructIndex_c_Comp_nameStart_U64_nameLen_U64(Comp* c, uint64_t n
     StructDef s = StructDef_share(PlewArray_StructDef_get((*c).structs, (long long)(i)));
     if ((long long)((s.typeParams).len) > 0) {
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), s.nameStart, s.nameLen, nameStart, nameLen)) {
-    { uint64_t __ret659 = i;
+    { uint64_t __ret666 = i;
     StructDef_release(s);
-    return __ret659; }
+    return __ret666; }
     }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     StructDef_release(s);
     }
-    { uint64_t __ret660 = (long long)(((*c).structs).len);
-    return __ret660; }
+    { uint64_t __ret667 = (long long)(((*c).structs).len);
+    return __ret667; }
 }
 uint64_t genericEnumIndex_c_Comp_nameStart_U64_nameLen_U64(Comp* c, uint64_t nameStart, uint64_t nameLen) {
     uint64_t i = 0;
@@ -9976,118 +10057,118 @@ uint64_t genericEnumIndex_c_Comp_nameStart_U64_nameLen_U64(Comp* c, uint64_t nam
     EnumDef e = EnumDef_share(PlewArray_EnumDef_get((*c).enums, (long long)(i)));
     if ((long long)((e.typeParams).len) > 0) {
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), e.nameStart, e.nameLen, nameStart, nameLen)) {
-    { uint64_t __ret661 = i;
+    { uint64_t __ret668 = i;
     EnumDef_release(e);
-    return __ret661; }
+    return __ret668; }
     }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     EnumDef_release(e);
     }
-    { uint64_t __ret662 = (long long)(((*c).enums).len);
-    return __ret662; }
+    { uint64_t __ret669 = (long long)(((*c).enums).len);
+    return __ret669; }
 }
 long long isGenericInst_c_Comp_ref_U64(Comp* c, uint64_t ref) {
     if (ref >= (long long)(((*c).types).len)) {
-    { long long __ret663 = 0;
-    return __ret663; }
+    { long long __ret670 = 0;
+    return __ret670; }
     }
     TypeRef t = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(ref)));
     if ((long long)((t.args).len) == 0) {
-    { long long __ret664 = 0;
+    { long long __ret671 = 0;
     TypeRef_release(t);
-    return __ret664; }
+    return __ret671; }
     }
     if (genericStructIndex_c_Comp_nameStart_U64_nameLen_U64(&((*c)), t.nameStart, t.nameLen) < (long long)(((*c).structs).len)) {
-    { long long __ret665 = 1;
+    { long long __ret672 = 1;
     TypeRef_release(t);
-    return __ret665; }
+    return __ret672; }
     }
-    { long long __ret666 = (genericEnumIndex_c_Comp_nameStart_U64_nameLen_U64(&((*c)), t.nameStart, t.nameLen) < (long long)(((*c).enums).len));
+    { long long __ret673 = (genericEnumIndex_c_Comp_nameStart_U64_nameLen_U64(&((*c)), t.nameStart, t.nameLen) < (long long)(((*c).enums).len));
     TypeRef_release(t);
-    return __ret666; }
+    return __ret673; }
     TypeRef_release(t);
 }
 long long isFnType_c_Comp_ref_U64(Comp* c, uint64_t ref) {
     if (ref >= (long long)(((*c).types).len)) {
-    { long long __ret667 = 0;
-    return __ret667; }
+    { long long __ret674 = 0;
+    return __ret674; }
     }
     TypeRef t = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(ref)));
-    { long long __ret668 = rangeEquals_bytes_AU8_start_U64_len_U64_kw_String((*c).bytes, t.nameStart, t.nameLen, (PlewString){"fn", 2});
+    { long long __ret675 = rangeEquals_bytes_AU8_start_U64_len_U64_kw_String((*c).bytes, t.nameStart, t.nameLen, (PlewString){"fn", 2});
     TypeRef_release(t);
-    return __ret668; }
+    return __ret675; }
     TypeRef_release(t);
 }
 long long isRefInst_c_Comp_ref_U64(Comp* c, uint64_t ref) {
     if (ref >= (long long)(((*c).types).len)) {
-    { long long __ret669 = 0;
-    return __ret669; }
+    { long long __ret676 = 0;
+    return __ret676; }
     }
     TypeRef t = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(ref)));
     if ((long long)((t.args).len) != 1) {
-    { long long __ret670 = 0;
+    { long long __ret677 = 0;
     TypeRef_release(t);
-    return __ret670; }
+    return __ret677; }
     }
-    { long long __ret671 = rangeEquals_bytes_AU8_start_U64_len_U64_kw_String((*c).bytes, t.nameStart, t.nameLen, (PlewString){"Ref", 3});
+    { long long __ret678 = rangeEquals_bytes_AU8_start_U64_len_U64_kw_String((*c).bytes, t.nameStart, t.nameLen, (PlewString){"Ref", 3});
     TypeRef_release(t);
-    return __ret671; }
+    return __ret678; }
     TypeRef_release(t);
 }
 long long isGenericEnumInst_c_Comp_ref_U64(Comp* c, uint64_t ref) {
     if (ref >= (long long)(((*c).types).len)) {
-    { long long __ret672 = 0;
-    return __ret672; }
+    { long long __ret679 = 0;
+    return __ret679; }
     }
     TypeRef t = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(ref)));
     if ((long long)((t.args).len) == 0) {
-    { long long __ret673 = 0;
+    { long long __ret680 = 0;
     TypeRef_release(t);
-    return __ret673; }
+    return __ret680; }
     }
-    { long long __ret674 = (genericEnumIndex_c_Comp_nameStart_U64_nameLen_U64(&((*c)), t.nameStart, t.nameLen) < (long long)(((*c).enums).len));
+    { long long __ret681 = (genericEnumIndex_c_Comp_nameStart_U64_nameLen_U64(&((*c)), t.nameStart, t.nameLen) < (long long)(((*c).enums).len));
     TypeRef_release(t);
-    return __ret674; }
+    return __ret681; }
     TypeRef_release(t);
 }
 long long typeRefEq_c_Comp_a_U64_b_U64(Comp* c, uint64_t a, uint64_t b) {
     if (a == b) {
-    { long long __ret675 = 1;
-    return __ret675; }
+    { long long __ret682 = 1;
+    return __ret682; }
     }
     TypeRef ta = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(a)));
     TypeRef tb = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(b)));
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), ta.nameStart, ta.nameLen, tb.nameStart, tb.nameLen)) {
     }
     else {
-    { long long __ret676 = 0;
+    { long long __ret683 = 0;
     TypeRef_release(tb);
     TypeRef_release(ta);
-    return __ret676; }
+    return __ret683; }
     }
     if ((long long)((ta.args).len) != (long long)((tb.args).len)) {
-    { long long __ret677 = 0;
+    { long long __ret684 = 0;
     TypeRef_release(tb);
     TypeRef_release(ta);
-    return __ret677; }
+    return __ret684; }
     }
     uint64_t i = 0;
     while (i < (long long)((ta.args).len)) {
     if (typeRefEq_c_Comp_a_U64_b_U64(&((*c)), PlewArray_U64_get(ta.args, (long long)(i)), PlewArray_U64_get(tb.args, (long long)(i)))) {
     }
     else {
-    { long long __ret678 = 0;
+    { long long __ret685 = 0;
     TypeRef_release(tb);
     TypeRef_release(ta);
-    return __ret678; }
+    return __ret685; }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { long long __ret679 = 1;
+    { long long __ret686 = 1;
     TypeRef_release(tb);
     TypeRef_release(ta);
-    return __ret679; }
+    return __ret686; }
     TypeRef_release(tb);
     TypeRef_release(ta);
 }
@@ -10147,8 +10228,8 @@ void emitFieldCType_c_Comp_ref_U64_params_ABind_args_AU64(Comp* c, uint64_t ref,
 }
 uint64_t resolveTy_c_Comp_tyRef_U64(Comp* c, uint64_t tyRef) {
     if (tyRef >= (long long)(((*c).types).len)) {
-    { uint64_t __ret680 = tyRef;
-    return __ret680; }
+    { uint64_t __ret687 = tyRef;
+    return __ret687; }
     }
     TypeRef t = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(tyRef)));
     if ((long long)((t.args).len) == 0) {
@@ -10156,16 +10237,16 @@ uint64_t resolveTy_c_Comp_tyRef_U64(Comp* c, uint64_t tyRef) {
     while (i < (long long)(((*c).curTypeParams).len)) {
     Bind p = PlewArray_Bind_get((*c).curTypeParams, (long long)(i));
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), t.nameStart, t.nameLen, p.nameStart, p.nameLen)) {
-    { uint64_t __ret681 = PlewArray_U64_get((*c).curTypeArgs, (long long)(i));
+    { uint64_t __ret688 = PlewArray_U64_get((*c).curTypeArgs, (long long)(i));
     TypeRef_release(t);
-    return __ret681; }
+    return __ret688; }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     }
-    { uint64_t __ret682 = tyRef;
+    { uint64_t __ret689 = tyRef;
     TypeRef_release(t);
-    return __ret682; }
+    return __ret689; }
     TypeRef_release(t);
 }
 void genCTypeOf_c_Comp_tyRef_U64_fallStart_U64_fallLen_U64_isArray_Bool(Comp* c, uint64_t tyRef, uint64_t fallStart, uint64_t fallLen, long long isArray) {
@@ -10199,9 +10280,9 @@ long long isTypeParamName_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uint
     uint64_t k = 0;
     while (k < (long long)((tp).len)) {
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), PlewArray_Bind_get(tp, (long long)(k)).nameStart, PlewArray_Bind_get(tp, (long long)(k)).nameLen, start, len)) {
-    { long long __ret683 = 1;
+    { long long __ret690 = 1;
     PlewArray_Bind_release(tp);
-    return __ret683; }
+    return __ret690; }
     }
     k = ({ uint64_t __ov; if (__builtin_add_overflow((k), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
@@ -10214,9 +10295,9 @@ long long isTypeParamName_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uint
     uint64_t k2 = 0;
     while (k2 < (long long)((tp2).len)) {
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), PlewArray_Bind_get(tp2, (long long)(k2)).nameStart, PlewArray_Bind_get(tp2, (long long)(k2)).nameLen, start, len)) {
-    { long long __ret684 = 1;
+    { long long __ret691 = 1;
     PlewArray_Bind_release(tp2);
-    return __ret684; }
+    return __ret691; }
     }
     k2 = ({ uint64_t __ov; if (__builtin_add_overflow((k2), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
@@ -10229,43 +10310,43 @@ long long isTypeParamName_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uint
     uint64_t k3 = 0;
     while (k3 < (long long)((tp3).len)) {
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), PlewArray_Bind_get(tp3, (long long)(k3)).nameStart, PlewArray_Bind_get(tp3, (long long)(k3)).nameLen, start, len)) {
-    { long long __ret685 = 1;
+    { long long __ret692 = 1;
     PlewArray_Bind_release(tp3);
-    return __ret685; }
+    return __ret692; }
     }
     k3 = ({ uint64_t __ov; if (__builtin_add_overflow((k3), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     fi = ({ uint64_t __ov; if (__builtin_add_overflow((fi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     PlewArray_Bind_release(tp3);
     }
-    { long long __ret686 = 0;
-    return __ret686; }
+    { long long __ret693 = 0;
+    return __ret693; }
 }
 long long tyRefIsGround_c_Comp_ref_U64(Comp* c, uint64_t ref) {
     if (ref >= (long long)(((*c).types).len)) {
-    { long long __ret687 = 1;
-    return __ret687; }
+    { long long __ret694 = 1;
+    return __ret694; }
     }
     TypeRef t = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(ref)));
     if (isTypeParamName_c_Comp_start_U64_len_U64(&((*c)), t.nameStart, t.nameLen)) {
-    { long long __ret688 = 0;
+    { long long __ret695 = 0;
     TypeRef_release(t);
-    return __ret688; }
+    return __ret695; }
     }
     uint64_t i = 0;
     while (i < (long long)((t.args).len)) {
     if (tyRefIsGround_c_Comp_ref_U64(&((*c)), PlewArray_U64_get(t.args, (long long)(i)))) {
     }
     else {
-    { long long __ret689 = 0;
+    { long long __ret696 = 0;
     TypeRef_release(t);
-    return __ret689; }
+    return __ret696; }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { long long __ret690 = 1;
+    { long long __ret697 = 1;
     TypeRef_release(t);
-    return __ret690; }
+    return __ret697; }
     TypeRef_release(t);
 }
 void registerArrayElemRef_c_Comp_elemRef_U64(Comp* c, uint64_t elemRef) {
@@ -10390,9 +10471,9 @@ void collectGenInsts_c_Comp(Comp* c) {
     uint64_t sti = 0;
     while (sti < (long long)(((*c).stmts).len)) {
     {
-    Stmt _m691 = PlewArray_Stmt_get((*c).stmts, (long long)(sti));
-    if (_m691.tag == 0) {
-        uint64_t ty = _m691.data.Let.ty;
+    Stmt _m698 = PlewArray_Stmt_get((*c).stmts, (long long)(sti));
+    if (_m698.tag == 0) {
+        uint64_t ty = _m698.data.Let.ty;
         (void)ty;
     scanType_c_Comp_ref_U64(&((*c)), ty);
     }
@@ -10404,32 +10485,32 @@ void collectGenInsts_c_Comp(Comp* c) {
     uint64_t xi = 0;
     while (xi < (long long)(((*c).exprs).len)) {
     {
-    Expr _m692 = PlewArray_Expr_get((*c).exprs, (long long)(xi));
-    if (_m692.tag == 11) {
-        uint64_t operand = _m692.data.Cast.operand;
+    Expr _m699 = PlewArray_Expr_get((*c).exprs, (long long)(xi));
+    if (_m699.tag == 11) {
+        uint64_t operand = _m699.data.Cast.operand;
         (void)operand;
-        uint64_t tyStart = _m692.data.Cast.tyStart;
+        uint64_t tyStart = _m699.data.Cast.tyStart;
         (void)tyStart;
-        uint64_t tyLen = _m692.data.Cast.tyLen;
+        uint64_t tyLen = _m699.data.Cast.tyLen;
         (void)tyLen;
-        uint64_t ty = _m692.data.Cast.ty;
+        uint64_t ty = _m699.data.Cast.ty;
         (void)ty;
     scanType_c_Comp_ref_U64(&((*c)), ty);
     }
-    else if (_m692.tag == 6) {
-        uint64_t typeStart = _m692.data.Make.typeStart;
+    else if (_m699.tag == 6) {
+        uint64_t typeStart = _m699.data.Make.typeStart;
         (void)typeStart;
-        uint64_t typeLen = _m692.data.Make.typeLen;
+        uint64_t typeLen = _m699.data.Make.typeLen;
         (void)typeLen;
-        uint64_t variantStart = _m692.data.Make.variantStart;
+        uint64_t variantStart = _m699.data.Make.variantStart;
         (void)variantStart;
-        uint64_t variantLen = _m692.data.Make.variantLen;
+        uint64_t variantLen = _m699.data.Make.variantLen;
         (void)variantLen;
-        long long isEnum = _m692.data.Make.isEnum;
+        long long isEnum = _m699.data.Make.isEnum;
         (void)isEnum;
-        uint64_t ty = _m692.data.Make.ty;
+        uint64_t ty = _m699.data.Make.ty;
         (void)ty;
-        PlewArray_MakeField fields = _m692.data.Make.fields;
+        PlewArray_MakeField fields = _m699.data.Make.fields;
         (void)fields;
     scanType_c_Comp_ref_U64(&((*c)), ty);
     }
@@ -10442,21 +10523,21 @@ void collectGenInsts_c_Comp(Comp* c) {
 TypeInfo typeInfoOfRef_c_Comp_ref_U64(Comp* c, uint64_t ref) {
     TypeRef t = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(ref)));
     if ((long long)((t.args).len) == 0) {
-    { TypeInfo __ret693 = typeInfoOfName_c_Comp_start_U64_len_U64_isArray_Bool(&((*c)), t.nameStart, t.nameLen, 0);
+    { TypeInfo __ret700 = typeInfoOfName_c_Comp_start_U64_len_U64_isArray_Bool(&((*c)), t.nameStart, t.nameLen, 0);
     TypeRef_release(t);
-    return __ret693; }
+    return __ret700; }
     }
     if (rangeEquals_bytes_AU8_start_U64_len_U64_kw_String((*c).bytes, t.nameStart, t.nameLen, (PlewString){"Array", 5})) {
     TypeRef el = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(PlewArray_U64_get(t.args, (long long)(0)))));
-    { TypeInfo __ret694 = typeInfoOfName_c_Comp_start_U64_len_U64_isArray_Bool(&((*c)), el.nameStart, el.nameLen, 1);
+    { TypeInfo __ret701 = typeInfoOfName_c_Comp_start_U64_len_U64_isArray_Bool(&((*c)), el.nameStart, el.nameLen, 1);
     TypeRef_release(el);
     TypeRef_release(t);
-    return __ret694; }
+    return __ret701; }
     TypeRef_release(el);
     }
-    { TypeInfo __ret695 = typeInfoOfName_c_Comp_start_U64_len_U64_isArray_Bool(&((*c)), t.nameStart, t.nameLen, 0);
+    { TypeInfo __ret702 = typeInfoOfName_c_Comp_start_U64_len_U64_isArray_Bool(&((*c)), t.nameStart, t.nameLen, 0);
     TypeRef_release(t);
-    return __ret695; }
+    return __ret702; }
     TypeRef_release(t);
 }
 TypeInfo substTypeInfo_c_Comp_instRef_U64_params_ABind_tyRef_U64(Comp* c, uint64_t instRef, PlewArray_Bind params, uint64_t tyRef) {
@@ -10467,27 +10548,27 @@ TypeInfo substTypeInfo_c_Comp_instRef_U64_params_ABind_tyRef_U64(Comp* c, uint64
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), t.nameStart, t.nameLen, p.nameStart, p.nameLen)) {
     TypeRef inst = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(instRef)));
     if (i < (long long)((inst.args).len)) {
-    { TypeInfo __ret696 = typeInfoOfRef_c_Comp_ref_U64(&((*c)), PlewArray_U64_get(inst.args, (long long)(i)));
+    { TypeInfo __ret703 = typeInfoOfRef_c_Comp_ref_U64(&((*c)), PlewArray_U64_get(inst.args, (long long)(i)));
     TypeRef_release(inst);
     TypeRef_release(t);
-    return __ret696; }
+    return __ret703; }
     }
     TypeRef_release(inst);
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { TypeInfo __ret697 = typeInfoOfRef_c_Comp_ref_U64(&((*c)), tyRef);
+    { TypeInfo __ret704 = typeInfoOfRef_c_Comp_ref_U64(&((*c)), tyRef);
     TypeRef_release(t);
-    return __ret697; }
+    return __ret704; }
     TypeRef_release(t);
 }
 TypeInfo genericFieldTypeInfo_c_Comp_instRef_U64_fieldStart_U64_fieldLen_U64(Comp* c, uint64_t instRef, uint64_t fieldStart, uint64_t fieldLen) {
     TypeRef t = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(instRef)));
     uint64_t si = genericStructIndex_c_Comp_nameStart_U64_nameLen_U64(&((*c)), t.nameStart, t.nameLen);
     if (si >= (long long)(((*c).structs).len)) {
-    { TypeInfo __ret698 = scalarInfo();
+    { TypeInfo __ret705 = scalarInfo();
     TypeRef_release(t);
-    return __ret698; }
+    return __ret705; }
     }
     StructDef s = StructDef_share(PlewArray_StructDef_get((*c).structs, (long long)(si)));
     PlewArray_FieldDef fields = PlewArray_FieldDef_share(s.fields);
@@ -10500,30 +10581,30 @@ TypeInfo genericFieldTypeInfo_c_Comp_instRef_U64_fieldStart_U64_fieldLen_U64(Com
     while (pi < (long long)((s.typeParams).len)) {
     Bind p = PlewArray_Bind_get(s.typeParams, (long long)(pi));
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), ftr.nameStart, ftr.nameLen, p.nameStart, p.nameLen)) {
-    { TypeInfo __ret699 = typeInfoOfRef_c_Comp_ref_U64(&((*c)), PlewArray_U64_get(t.args, (long long)(pi)));
+    { TypeInfo __ret706 = typeInfoOfRef_c_Comp_ref_U64(&((*c)), PlewArray_U64_get(t.args, (long long)(pi)));
     TypeRef_release(ftr);
     PlewArray_FieldDef_release(fields);
     StructDef_release(s);
     TypeRef_release(t);
-    return __ret699; }
+    return __ret706; }
     }
     pi = ({ uint64_t __ov; if (__builtin_add_overflow((pi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { TypeInfo __ret700 = typeInfoOfRef_c_Comp_ref_U64(&((*c)), fd.ty);
+    { TypeInfo __ret707 = typeInfoOfRef_c_Comp_ref_U64(&((*c)), fd.ty);
     TypeRef_release(ftr);
     PlewArray_FieldDef_release(fields);
     StructDef_release(s);
     TypeRef_release(t);
-    return __ret700; }
+    return __ret707; }
     TypeRef_release(ftr);
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { TypeInfo __ret701 = scalarInfo();
+    { TypeInfo __ret708 = scalarInfo();
     PlewArray_FieldDef_release(fields);
     StructDef_release(s);
     TypeRef_release(t);
-    return __ret701; }
+    return __ret708; }
     PlewArray_FieldDef_release(fields);
     StructDef_release(s);
     TypeRef_release(t);
@@ -10532,9 +10613,9 @@ TypeInfo genericEnumFieldTypeInfo_c_Comp_instRef_U64_variantStart_U64_variantLen
     TypeRef t = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(instRef)));
     uint64_t ei = genericEnumIndex_c_Comp_nameStart_U64_nameLen_U64(&((*c)), t.nameStart, t.nameLen);
     if (ei >= (long long)(((*c).enums).len)) {
-    { TypeInfo __ret702 = scalarInfo();
+    { TypeInfo __ret709 = scalarInfo();
     TypeRef_release(t);
-    return __ret702; }
+    return __ret709; }
     }
     EnumDef e = EnumDef_share(PlewArray_EnumDef_get((*c).enums, (long long)(ei)));
     PlewArray_Variant vars = PlewArray_Variant_share(e.variants);
@@ -10552,25 +10633,25 @@ TypeInfo genericEnumFieldTypeInfo_c_Comp_instRef_U64_variantStart_U64_variantLen
     while (pi < (long long)((e.typeParams).len)) {
     Bind p = PlewArray_Bind_get(e.typeParams, (long long)(pi));
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), ftr.nameStart, ftr.nameLen, p.nameStart, p.nameLen)) {
-    { TypeInfo __ret703 = typeInfoOfRef_c_Comp_ref_U64(&((*c)), PlewArray_U64_get(t.args, (long long)(pi)));
+    { TypeInfo __ret710 = typeInfoOfRef_c_Comp_ref_U64(&((*c)), PlewArray_U64_get(t.args, (long long)(pi)));
     TypeRef_release(ftr);
     PlewArray_FieldDef_release(fs);
     Variant_release(v);
     PlewArray_Variant_release(vars);
     EnumDef_release(e);
     TypeRef_release(t);
-    return __ret703; }
+    return __ret710; }
     }
     pi = ({ uint64_t __ov; if (__builtin_add_overflow((pi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { TypeInfo __ret704 = typeInfoOfRef_c_Comp_ref_U64(&((*c)), fd.ty);
+    { TypeInfo __ret711 = typeInfoOfRef_c_Comp_ref_U64(&((*c)), fd.ty);
     TypeRef_release(ftr);
     PlewArray_FieldDef_release(fs);
     Variant_release(v);
     PlewArray_Variant_release(vars);
     EnumDef_release(e);
     TypeRef_release(t);
-    return __ret704; }
+    return __ret711; }
     TypeRef_release(ftr);
     }
     fi = ({ uint64_t __ov; if (__builtin_add_overflow((fi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
@@ -10580,11 +10661,11 @@ TypeInfo genericEnumFieldTypeInfo_c_Comp_instRef_U64_variantStart_U64_variantLen
     vi = ({ uint64_t __ov; if (__builtin_add_overflow((vi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     Variant_release(v);
     }
-    { TypeInfo __ret705 = scalarInfo();
+    { TypeInfo __ret712 = scalarInfo();
     PlewArray_Variant_release(vars);
     EnumDef_release(e);
     TypeRef_release(t);
-    return __ret705; }
+    return __ret712; }
     PlewArray_Variant_release(vars);
     EnumDef_release(e);
     TypeRef_release(t);
@@ -10704,24 +10785,24 @@ long long methodMatchesInst_c_Comp_f_Func_instRef_U64(Comp* c, Func f, uint64_t 
     if (f.hasRecv) {
     }
     else {
-    { long long __ret706 = 0;
-    return __ret706; }
+    { long long __ret713 = 0;
+    return __ret713; }
     }
     if ((long long)((f.typeParams).len) == 0) {
-    { long long __ret707 = 0;
-    return __ret707; }
+    { long long __ret714 = 0;
+    return __ret714; }
     }
     TypeRef inst = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(instRef)));
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), f.recvStart, f.recvLen, inst.nameStart, inst.nameLen)) {
     }
     else {
-    { long long __ret708 = 0;
+    { long long __ret715 = 0;
     TypeRef_release(inst);
-    return __ret708; }
+    return __ret715; }
     }
-    { long long __ret709 = ((long long)((f.typeParams).len) == (long long)((inst.args).len));
+    { long long __ret716 = ((long long)((f.typeParams).len) == (long long)((inst.args).len));
     TypeRef_release(inst);
-    return __ret709; }
+    return __ret716; }
     TypeRef_release(inst);
 }
 void emitMonoMethod_c_Comp_fi_U64_instRef_U64_proto_Bool(Comp* c, uint64_t fi, uint64_t instRef, long long proto) {
@@ -10762,18 +10843,18 @@ void emitMonoMethods_c_Comp_proto_Bool(Comp* c, long long proto) {
 }
 long long isGenericFreeFn_c_Comp_fi_U64(Comp* c, uint64_t fi) {
     if (fi >= (long long)(((*c).funcs).len)) {
-    { long long __ret710 = 0;
-    return __ret710; }
+    { long long __ret717 = 0;
+    return __ret717; }
     }
     Func f = Func_share(PlewArray_Func_get((*c).funcs, (long long)(fi)));
     if (f.hasRecv) {
-    { long long __ret711 = 0;
+    { long long __ret718 = 0;
     Func_release(f);
-    return __ret711; }
+    return __ret718; }
     }
-    { long long __ret712 = ((long long)((f.typeParams).len) > 0);
+    { long long __ret719 = ((long long)((f.typeParams).len) > 0);
     Func_release(f);
-    return __ret712; }
+    return __ret719; }
     Func_release(f);
 }
 uint64_t findOrAddTypeRef_c_Comp_nameStart_U64_nameLen_U64(Comp* c, uint64_t nameStart, uint64_t nameLen) {
@@ -10782,35 +10863,35 @@ uint64_t findOrAddTypeRef_c_Comp_nameStart_U64_nameLen_U64(Comp* c, uint64_t nam
     TypeRef t = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(i)));
     if ((long long)((t.args).len) == 0) {
     if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), t.nameStart, t.nameLen, nameStart, nameLen)) {
-    { uint64_t __ret713 = i;
+    { uint64_t __ret720 = i;
     TypeRef_release(t);
-    return __ret713; }
+    return __ret720; }
     }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     TypeRef_release(t);
     }
     PlewArray_U64 noArgs = PlewArray_U64_new();
-    { uint64_t __ret714 = Comp_pushType_t_TypeRef(&((*c)), (TypeRef){.nameStart = nameStart, .nameLen = nameLen, .args = PlewArray_U64_share(noArgs)});
+    { uint64_t __ret721 = Comp_pushType_t_TypeRef(&((*c)), (TypeRef){.nameStart = nameStart, .nameLen = nameLen, .args = PlewArray_U64_share(noArgs)});
     PlewArray_U64_release(noArgs);
-    return __ret714; }
+    return __ret721; }
     PlewArray_U64_release(noArgs);
 }
 uint64_t tyRefOfInfo_c_Comp_ti_TypeInfo(Comp* c, TypeInfo ti) {
     if (ti.ref != 0) {
-    { uint64_t __ret715 = ti.ref;
-    return __ret715; }
+    { uint64_t __ret722 = ti.ref;
+    return __ret722; }
     }
     if (ti.nameLen == 0) {
-    { uint64_t __ret716 = 0;
-    return __ret716; }
+    { uint64_t __ret723 = 0;
+    return __ret723; }
     }
     if (ti.kind == 3) {
-    { uint64_t __ret717 = 0;
-    return __ret717; }
+    { uint64_t __ret724 = 0;
+    return __ret724; }
     }
-    { uint64_t __ret718 = findOrAddTypeRef_c_Comp_nameStart_U64_nameLen_U64(&((*c)), ti.nameStart, ti.nameLen);
-    return __ret718; }
+    { uint64_t __ret725 = findOrAddTypeRef_c_Comp_nameStart_U64_nameLen_U64(&((*c)), ti.nameStart, ti.nameLen);
+    return __ret725; }
 }
 PlewArray_U64 inferFnArgs_c_Comp_f_Func_args_AArg(Comp* c, Func f, PlewArray_Arg args) {
     PlewArray_U64 out = PlewArray_U64_new();
@@ -10836,32 +10917,32 @@ PlewArray_U64 inferFnArgs_c_Comp_f_Func_args_AArg(Comp* c, Func f, PlewArray_Arg
     PlewArray_U64_push(&(out), found);
     ti = ({ uint64_t __ov; if (__builtin_add_overflow((ti), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { PlewArray_U64 __ret719 = PlewArray_U64_share(out);
+    { PlewArray_U64 __ret726 = PlewArray_U64_share(out);
     PlewArray_U64_release(out);
-    return __ret719; }
+    return __ret726; }
     PlewArray_U64_release(out);
 }
 long long fnArgsAllGround_c_Comp_args_AU64(Comp* c, PlewArray_U64 args) {
     if ((long long)((args).len) == 0) {
-    { long long __ret720 = 0;
-    return __ret720; }
+    { long long __ret727 = 0;
+    return __ret727; }
     }
     uint64_t i = 0;
     while (i < (long long)((args).len)) {
     if (PlewArray_U64_get(args, (long long)(i)) == 0) {
-    { long long __ret721 = 0;
-    return __ret721; }
+    { long long __ret728 = 0;
+    return __ret728; }
     }
     if (tyRefIsGround_c_Comp_ref_U64(&((*c)), PlewArray_U64_get(args, (long long)(i)))) {
     }
     else {
-    { long long __ret722 = 0;
-    return __ret722; }
+    { long long __ret729 = 0;
+    return __ret729; }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { long long __ret723 = 1;
-    return __ret723; }
+    { long long __ret730 = 1;
+    return __ret730; }
 }
 long long fnInstExists_c_Comp_fnIdx_U64_args_AU64(Comp* c, uint64_t fnIdx, PlewArray_U64 args) {
     uint64_t i = 0;
@@ -10880,17 +10961,17 @@ long long fnInstExists_c_Comp_fnIdx_U64_args_AU64(Comp* c, uint64_t fnIdx, PlewA
     j = ({ uint64_t __ov; if (__builtin_add_overflow((j), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     if (same) {
-    { long long __ret724 = 1;
+    { long long __ret731 = 1;
     FnInst_release(fin);
-    return __ret724; }
+    return __ret731; }
     }
     }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     FnInst_release(fin);
     }
-    { long long __ret725 = 0;
-    return __ret725; }
+    { long long __ret732 = 0;
+    return __ret732; }
 }
 void registerCallInst_c_Comp_nameStart_U64_nameLen_U64_args_AArg(Comp* c, uint64_t nameStart, uint64_t nameLen, PlewArray_Arg args) {
     uint64_t fi = findFunc_c_Comp_nameStart_U64_nameLen_U64_args_AArg(&((*c)), nameStart, nameLen, args);
@@ -10910,30 +10991,30 @@ void registerCallInst_c_Comp_nameStart_U64_nameLen_U64_args_AArg(Comp* c, uint64
 }
 void scanExprInsts_c_Comp_exprId_U64(Comp* c, uint64_t exprId) {
     {
-    Expr _m726 = PlewArray_Expr_get((*c).exprs, (long long)(exprId));
-    if (_m726.tag == 2) {
-        int64_t op = _m726.data.Unary.op;
+    Expr _m733 = PlewArray_Expr_get((*c).exprs, (long long)(exprId));
+    if (_m733.tag == 2) {
+        int64_t op = _m733.data.Unary.op;
         (void)op;
-        uint64_t operand = _m726.data.Unary.operand;
+        uint64_t operand = _m733.data.Unary.operand;
         (void)operand;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), operand);
     }
-    else if (_m726.tag == 3) {
-        int64_t op = _m726.data.Binary.op;
+    else if (_m733.tag == 3) {
+        int64_t op = _m733.data.Binary.op;
         (void)op;
-        uint64_t lhs = _m726.data.Binary.lhs;
+        uint64_t lhs = _m733.data.Binary.lhs;
         (void)lhs;
-        uint64_t rhs = _m726.data.Binary.rhs;
+        uint64_t rhs = _m733.data.Binary.rhs;
         (void)rhs;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), lhs);
     scanExprInsts_c_Comp_exprId_U64(&((*c)), rhs);
     }
-    else if (_m726.tag == 4) {
-        uint64_t nameStart = _m726.data.Call.nameStart;
+    else if (_m733.tag == 4) {
+        uint64_t nameStart = _m733.data.Call.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m726.data.Call.nameLen;
+        uint64_t nameLen = _m733.data.Call.nameLen;
         (void)nameLen;
-        PlewArray_Arg args = _m726.data.Call.args;
+        PlewArray_Arg args = _m733.data.Call.args;
         (void)args;
     uint64_t i = 0;
     while (i < (long long)((args).len)) {
@@ -10942,14 +11023,14 @@ void scanExprInsts_c_Comp_exprId_U64(Comp* c, uint64_t exprId) {
     }
     registerCallInst_c_Comp_nameStart_U64_nameLen_U64_args_AArg(&((*c)), nameStart, nameLen, args);
     }
-    else if (_m726.tag == 10) {
-        uint64_t recv = _m726.data.Method.recv;
+    else if (_m733.tag == 10) {
+        uint64_t recv = _m733.data.Method.recv;
         (void)recv;
-        uint64_t nameStart = _m726.data.Method.nameStart;
+        uint64_t nameStart = _m733.data.Method.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m726.data.Method.nameLen;
+        uint64_t nameLen = _m733.data.Method.nameLen;
         (void)nameLen;
-        PlewArray_Arg args = _m726.data.Method.args;
+        PlewArray_Arg args = _m733.data.Method.args;
         (void)args;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), recv);
     uint64_t i = 0;
@@ -10958,37 +11039,37 @@ void scanExprInsts_c_Comp_exprId_U64(Comp* c, uint64_t exprId) {
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     }
-    else if (_m726.tag == 5) {
-        uint64_t base = _m726.data.Field.base;
+    else if (_m733.tag == 5) {
+        uint64_t base = _m733.data.Field.base;
         (void)base;
-        uint64_t nameStart = _m726.data.Field.nameStart;
+        uint64_t nameStart = _m733.data.Field.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m726.data.Field.nameLen;
+        uint64_t nameLen = _m733.data.Field.nameLen;
         (void)nameLen;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), base);
     }
-    else if (_m726.tag == 9) {
-        uint64_t base = _m726.data.Index.base;
+    else if (_m733.tag == 9) {
+        uint64_t base = _m733.data.Index.base;
         (void)base;
-        uint64_t index = _m726.data.Index.index;
+        uint64_t index = _m733.data.Index.index;
         (void)index;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), base);
     scanExprInsts_c_Comp_exprId_U64(&((*c)), index);
     }
-    else if (_m726.tag == 6) {
-        uint64_t typeStart = _m726.data.Make.typeStart;
+    else if (_m733.tag == 6) {
+        uint64_t typeStart = _m733.data.Make.typeStart;
         (void)typeStart;
-        uint64_t typeLen = _m726.data.Make.typeLen;
+        uint64_t typeLen = _m733.data.Make.typeLen;
         (void)typeLen;
-        uint64_t variantStart = _m726.data.Make.variantStart;
+        uint64_t variantStart = _m733.data.Make.variantStart;
         (void)variantStart;
-        uint64_t variantLen = _m726.data.Make.variantLen;
+        uint64_t variantLen = _m733.data.Make.variantLen;
         (void)variantLen;
-        long long isEnum = _m726.data.Make.isEnum;
+        long long isEnum = _m733.data.Make.isEnum;
         (void)isEnum;
-        uint64_t ty = _m726.data.Make.ty;
+        uint64_t ty = _m733.data.Make.ty;
         (void)ty;
-        PlewArray_MakeField fields = _m726.data.Make.fields;
+        PlewArray_MakeField fields = _m733.data.Make.fields;
         (void)fields;
     uint64_t i = 0;
     while (i < (long long)((fields).len)) {
@@ -10996,8 +11077,8 @@ void scanExprInsts_c_Comp_exprId_U64(Comp* c, uint64_t exprId) {
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     }
-    else if (_m726.tag == 8) {
-        PlewArray_U64 elems = _m726.data.Array.elems;
+    else if (_m733.tag == 8) {
+        PlewArray_U64 elems = _m733.data.Array.elems;
         (void)elems;
     uint64_t i = 0;
     while (i < (long long)((elems).len)) {
@@ -11005,54 +11086,54 @@ void scanExprInsts_c_Comp_exprId_U64(Comp* c, uint64_t exprId) {
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     }
-    else if (_m726.tag == 11) {
-        uint64_t operand = _m726.data.Cast.operand;
+    else if (_m733.tag == 11) {
+        uint64_t operand = _m733.data.Cast.operand;
         (void)operand;
-        uint64_t tyStart = _m726.data.Cast.tyStart;
+        uint64_t tyStart = _m733.data.Cast.tyStart;
         (void)tyStart;
-        uint64_t tyLen = _m726.data.Cast.tyLen;
+        uint64_t tyLen = _m733.data.Cast.tyLen;
         (void)tyLen;
-        uint64_t ty = _m726.data.Cast.ty;
+        uint64_t ty = _m733.data.Cast.ty;
         (void)ty;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), operand);
     }
-    else if (_m726.tag == 14) {
-        uint64_t opt = _m726.data.Coalesce.opt;
+    else if (_m733.tag == 14) {
+        uint64_t opt = _m733.data.Coalesce.opt;
         (void)opt;
-        uint64_t deflt = _m726.data.Coalesce.deflt;
+        uint64_t deflt = _m733.data.Coalesce.deflt;
         (void)deflt;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), opt);
     scanExprInsts_c_Comp_exprId_U64(&((*c)), deflt);
     }
-    else if (_m726.tag == 15) {
-        uint64_t expr = _m726.data.Try.expr;
+    else if (_m733.tag == 15) {
+        uint64_t expr = _m733.data.Try.expr;
         (void)expr;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), expr);
     }
-    else if (_m726.tag == 16) {
-        uint64_t base = _m726.data.Arrow.base;
+    else if (_m733.tag == 16) {
+        uint64_t base = _m733.data.Arrow.base;
         (void)base;
-        uint64_t nameStart = _m726.data.Arrow.nameStart;
+        uint64_t nameStart = _m733.data.Arrow.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m726.data.Arrow.nameLen;
+        uint64_t nameLen = _m733.data.Arrow.nameLen;
         (void)nameLen;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), base);
     }
-    else if (_m726.tag == 13) {
-        uint64_t cond = _m726.data.IfExpr.cond;
+    else if (_m733.tag == 13) {
+        uint64_t cond = _m733.data.IfExpr.cond;
         (void)cond;
-        uint64_t thenBlk = _m726.data.IfExpr.thenBlk;
+        uint64_t thenBlk = _m733.data.IfExpr.thenBlk;
         (void)thenBlk;
-        uint64_t elseBlk = _m726.data.IfExpr.elseBlk;
+        uint64_t elseBlk = _m733.data.IfExpr.elseBlk;
         (void)elseBlk;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), cond);
     scanBlockInsts_c_Comp_blkId_U64(&((*c)), thenBlk);
     scanBlockInsts_c_Comp_blkId_U64(&((*c)), elseBlk);
     }
-    else if (_m726.tag == 12) {
-        uint64_t scrut = _m726.data.MatchExpr.scrut;
+    else if (_m733.tag == 12) {
+        uint64_t scrut = _m733.data.MatchExpr.scrut;
         (void)scrut;
-        PlewArray_MatchArm arms = _m726.data.MatchExpr.arms;
+        PlewArray_MatchArm arms = _m733.data.MatchExpr.arms;
         (void)arms;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), scrut);
     uint64_t ai = 0;
@@ -11066,10 +11147,10 @@ void scanExprInsts_c_Comp_exprId_U64(Comp* c, uint64_t exprId) {
     MatchArm_release(a);
     }
     }
-    else if (_m726.tag == 18) {
-        uint64_t operand = _m726.data.Move.operand;
+    else if (_m733.tag == 18) {
+        uint64_t operand = _m733.data.Move.operand;
         (void)operand;
-        long long isBorrow = _m726.data.Move.isBorrow;
+        long long isBorrow = _m733.data.Move.isBorrow;
         (void)isBorrow;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), operand);
     }
@@ -11087,66 +11168,66 @@ void scanAddArmBinds_c_Comp_a_MatchArm(Comp* c, MatchArm a) {
 }
 void scanStmtInsts_c_Comp_stmtId_U64(Comp* c, uint64_t stmtId) {
     {
-    Stmt _m727 = PlewArray_Stmt_get((*c).stmts, (long long)(stmtId));
-    if (_m727.tag == 0) {
-        long long mutable = _m727.data.Let.mutable;
+    Stmt _m734 = PlewArray_Stmt_get((*c).stmts, (long long)(stmtId));
+    if (_m734.tag == 0) {
+        long long mutable = _m734.data.Let.mutable;
         (void)mutable;
-        uint64_t nameStart = _m727.data.Let.nameStart;
+        uint64_t nameStart = _m734.data.Let.nameStart;
         (void)nameStart;
-        uint64_t nameLen = _m727.data.Let.nameLen;
+        uint64_t nameLen = _m734.data.Let.nameLen;
         (void)nameLen;
-        uint64_t tyStart = _m727.data.Let.tyStart;
+        uint64_t tyStart = _m734.data.Let.tyStart;
         (void)tyStart;
-        uint64_t tyLen = _m727.data.Let.tyLen;
+        uint64_t tyLen = _m734.data.Let.tyLen;
         (void)tyLen;
-        long long tyIsArray = _m727.data.Let.tyIsArray;
+        long long tyIsArray = _m734.data.Let.tyIsArray;
         (void)tyIsArray;
-        uint64_t ty = _m727.data.Let.ty;
+        uint64_t ty = _m734.data.Let.ty;
         (void)ty;
-        uint64_t init = _m727.data.Let.init;
+        uint64_t init = _m734.data.Let.init;
         (void)init;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), init);
     addLocal_c_Comp_nameStart_U64_nameLen_U64_tyStart_U64_tyLen_U64_isArray_Bool_ty_U64_isInout_Bool_isMut_Bool_owned_Bool(&((*c)), nameStart, nameLen, tyStart, tyLen, tyIsArray, ty, 0, mutable, 1);
     }
-    else if (_m727.tag == 1) {
-        int64_t op = _m727.data.Assign.op;
+    else if (_m734.tag == 1) {
+        int64_t op = _m734.data.Assign.op;
         (void)op;
-        uint64_t target = _m727.data.Assign.target;
+        uint64_t target = _m734.data.Assign.target;
         (void)target;
-        uint64_t value = _m727.data.Assign.value;
+        uint64_t value = _m734.data.Assign.value;
         (void)value;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), target);
     scanExprInsts_c_Comp_exprId_U64(&((*c)), value);
     }
-    else if (_m727.tag == 2) {
-        uint64_t expr = _m727.data.Print.expr;
+    else if (_m734.tag == 2) {
+        uint64_t expr = _m734.data.Print.expr;
         (void)expr;
-        uint64_t offset = _m727.data.Print.offset;
+        uint64_t offset = _m734.data.Print.offset;
         (void)offset;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), expr);
     }
-    else if (_m727.tag == 3) {
-        uint64_t expr = _m727.data.ExprStmt.expr;
+    else if (_m734.tag == 3) {
+        uint64_t expr = _m734.data.ExprStmt.expr;
         (void)expr;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), expr);
     }
-    else if (_m727.tag == 4) {
-        uint64_t value = _m727.data.Return.value;
+    else if (_m734.tag == 4) {
+        uint64_t value = _m734.data.Return.value;
         (void)value;
-        long long hasValue = _m727.data.Return.hasValue;
+        long long hasValue = _m734.data.Return.hasValue;
         (void)hasValue;
     if (hasValue) {
     scanExprInsts_c_Comp_exprId_U64(&((*c)), value);
     }
     }
-    else if (_m727.tag == 5) {
-        uint64_t cond = _m727.data.If.cond;
+    else if (_m734.tag == 5) {
+        uint64_t cond = _m734.data.If.cond;
         (void)cond;
-        uint64_t thenBlk = _m727.data.If.thenBlk;
+        uint64_t thenBlk = _m734.data.If.thenBlk;
         (void)thenBlk;
-        uint64_t elseBlk = _m727.data.If.elseBlk;
+        uint64_t elseBlk = _m734.data.If.elseBlk;
         (void)elseBlk;
-        long long hasElse = _m727.data.If.hasElse;
+        long long hasElse = _m734.data.If.hasElse;
         (void)hasElse;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), cond);
     scanBlockInsts_c_Comp_blkId_U64(&((*c)), thenBlk);
@@ -11154,28 +11235,28 @@ void scanStmtInsts_c_Comp_stmtId_U64(Comp* c, uint64_t stmtId) {
     scanBlockInsts_c_Comp_blkId_U64(&((*c)), elseBlk);
     }
     }
-    else if (_m727.tag == 6) {
-        uint64_t cond = _m727.data.While.cond;
+    else if (_m734.tag == 6) {
+        uint64_t cond = _m734.data.While.cond;
         (void)cond;
-        uint64_t body = _m727.data.While.body;
+        uint64_t body = _m734.data.While.body;
         (void)body;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), cond);
     scanBlockInsts_c_Comp_blkId_U64(&((*c)), body);
     }
-    else if (_m727.tag == 7) {
-        uint64_t varStart = _m727.data.For.varStart;
+    else if (_m734.tag == 7) {
+        uint64_t varStart = _m734.data.For.varStart;
         (void)varStart;
-        uint64_t varLen = _m727.data.For.varLen;
+        uint64_t varLen = _m734.data.For.varLen;
         (void)varLen;
-        long long isRange = _m727.data.For.isRange;
+        long long isRange = _m734.data.For.isRange;
         (void)isRange;
-        long long inclusive = _m727.data.For.inclusive;
+        long long inclusive = _m734.data.For.inclusive;
         (void)inclusive;
-        uint64_t iter = _m727.data.For.iter;
+        uint64_t iter = _m734.data.For.iter;
         (void)iter;
-        uint64_t rangeHi = _m727.data.For.rangeHi;
+        uint64_t rangeHi = _m734.data.For.rangeHi;
         (void)rangeHi;
-        uint64_t body = _m727.data.For.body;
+        uint64_t body = _m734.data.For.body;
         (void)body;
     uint64_t forMark = scopeMark_c_Comp(&((*c)));
     scanExprInsts_c_Comp_exprId_U64(&((*c)), iter);
@@ -11190,10 +11271,10 @@ void scanStmtInsts_c_Comp_stmtId_U64(Comp* c, uint64_t stmtId) {
     scanBlockInsts_c_Comp_blkId_U64(&((*c)), body);
     popLocals_c_Comp_mark_U64(&((*c)), forMark);
     }
-    else if (_m727.tag == 8) {
-        uint64_t scrut = _m727.data.Match.scrut;
+    else if (_m734.tag == 8) {
+        uint64_t scrut = _m734.data.Match.scrut;
         (void)scrut;
-        PlewArray_MatchArm arms = _m727.data.Match.arms;
+        PlewArray_MatchArm arms = _m734.data.Match.arms;
         (void)arms;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), scrut);
     uint64_t ai = 0;
@@ -11207,21 +11288,21 @@ void scanStmtInsts_c_Comp_stmtId_U64(Comp* c, uint64_t stmtId) {
     MatchArm_release(a);
     }
     }
-    else if (_m727.tag == 9) {
-        uint64_t msg = _m727.data.Panic.msg;
+    else if (_m734.tag == 9) {
+        uint64_t msg = _m734.data.Panic.msg;
         (void)msg;
-        uint64_t offset = _m727.data.Panic.offset;
+        uint64_t offset = _m734.data.Panic.offset;
         (void)offset;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), msg);
     }
-    else if (_m727.tag == 10) {
-        uint64_t value = _m727.data.Give.value;
+    else if (_m734.tag == 10) {
+        uint64_t value = _m734.data.Give.value;
         (void)value;
     scanExprInsts_c_Comp_exprId_U64(&((*c)), value);
     }
-    else if (_m727.tag == 11) {
+    else if (_m734.tag == 11) {
     }
-    else if (_m727.tag == 12) {
+    else if (_m734.tag == 12) {
     }
     else { __builtin_unreachable(); }
     }
@@ -11399,8 +11480,8 @@ void genArrayRuntimeFns_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemS
     plew_write((PlewString){") * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }\n", 185});
 }
 long long isU8Elem_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemStart, uint64_t elemLen) {
-    { long long __ret728 = rangeEquals_bytes_AU8_start_U64_len_U64_kw_String((*c).bytes, elemStart, elemLen, (PlewString){"U8", 2});
-    return __ret728; }
+    { long long __ret735 = rangeEquals_bytes_AU8_start_U64_len_U64_kw_String((*c).bytes, elemStart, elemLen, (PlewString){"U8", 2});
+    return __ret735; }
 }
 void genU8ArrayTypedef(void) {
     plew_write((PlewString){"typedef struct { unsigned char* data; long long len; long long cap; long long* rc; } PlewArray_U8;\n", 99});
@@ -11417,22 +11498,22 @@ void genU8ArrayRuntime(void) {
 }
 long long isPathTokKind_k_Kind(Kind k) {
     {
-    Kind _m729 = k;
-    if (_m729.tag == 37) {
-    { long long __ret730 = 1;
-    return __ret730; }
+    Kind _m736 = k;
+    if (_m736.tag == 37) {
+    { long long __ret737 = 1;
+    return __ret737; }
     }
-    else if (_m729.tag == 48) {
-    { long long __ret731 = 1;
-    return __ret731; }
+    else if (_m736.tag == 48) {
+    { long long __ret738 = 1;
+    return __ret738; }
     }
-    else if (_m729.tag == 5) {
-    { long long __ret732 = 1;
-    return __ret732; }
+    else if (_m736.tag == 5) {
+    { long long __ret739 = 1;
+    return __ret739; }
     }
     else {
-    { long long __ret733 = 0;
-    return __ret733; }
+    { long long __ret740 = 0;
+    return __ret740; }
     }
     }
 }
@@ -11443,8 +11524,8 @@ PlewArray_Bind collectParts_rootBytes_AU8_toks_ATok(PlewArray_U8 rootBytes, Plew
     Tok t = PlewArray_Tok_get(toks, (long long)(i));
     long long isKw = 0;
     {
-    Kind _m734 = t.kind;
-    if (_m734.tag == 5) {
+    Kind _m741 = t.kind;
+    if (_m741.tag == 5) {
     if (rangeEquals_bytes_AU8_start_U64_len_U64_kw_String(rootBytes, t.start, t.len, (PlewString){"part", 4})) {
     isKw = 1;
     }
@@ -11460,11 +11541,11 @@ PlewArray_Bind collectParts_rootBytes_AU8_toks_ATok(PlewArray_U8 rootBytes, Plew
     Tok first = PlewArray_Tok_get(toks, (long long)(({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; })));
     long long starts = 0;
     {
-    Kind _m735 = first.kind;
-    if (_m735.tag == 37) {
+    Kind _m742 = first.kind;
+    if (_m742.tag == 37) {
     starts = 1;
     }
-    else if (_m735.tag == 48) {
+    else if (_m742.tag == 48) {
     starts = 1;
     }
     else {
@@ -11506,9 +11587,9 @@ PlewArray_Bind collectParts_rootBytes_AU8_toks_ATok(PlewArray_U8 rootBytes, Plew
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { PlewArray_Bind __ret736 = PlewArray_Bind_share(parts);
+    { PlewArray_Bind __ret743 = PlewArray_Bind_share(parts);
     PlewArray_Bind_release(parts);
-    return __ret736; }
+    return __ret743; }
     PlewArray_Bind_release(parts);
 }
 uint64_t stripParents_path_AU8_baseLen_U64_n_U64(PlewArray_U8 path, uint64_t baseLen, uint64_t n) {
@@ -11534,15 +11615,15 @@ uint64_t stripParents_path_AU8_baseLen_U64_n_U64(PlewArray_U8 path, uint64_t bas
     }
     c = ({ uint64_t __ov; if (__builtin_add_overflow((c), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { uint64_t __ret737 = end;
-    return __ret737; }
+    { uint64_t __ret744 = end;
+    return __ret744; }
 }
 PlewArray_U8 resolveImport_src_AU8_pStart_U64_pLen_U64_importer_AU8_baseLen_U64_srcRoot_AU8_srcRootLen_U64_stdRoot_AU8_stdRootLen_U64(PlewArray_U8 src, uint64_t pStart, uint64_t pLen, PlewArray_U8 importer, uint64_t baseLen, PlewArray_U8 srcRoot, uint64_t srcRootLen, PlewArray_U8 stdRoot, uint64_t stdRootLen) {
     PlewArray_U8 out = PlewArray_U8_new();
     if (pLen == 0) {
-    { PlewArray_U8 __ret738 = PlewArray_U8_share(out);
+    { PlewArray_U8 __ret745 = PlewArray_U8_share(out);
     PlewArray_U8_release(out);
-    return __ret738; }
+    return __ret745; }
     }
     uint64_t end = ({ uint64_t __ov; if (__builtin_add_overflow((pStart), (pLen), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     unsigned char b0 = PlewArray_U8_get(src, (long long)(pStart));
@@ -11553,9 +11634,9 @@ PlewArray_U8 resolveImport_src_AU8_pStart_U64_pLen_U64_importer_AU8_baseLen_U64_
     if (PlewArray_U8_get(src, (long long)(({ uint64_t __ov; if (__builtin_add_overflow((pStart), (3), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; }))) == 100) {
     if (PlewArray_U8_get(src, (long long)(({ uint64_t __ov; if (__builtin_add_overflow((pStart), (4), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; }))) == 47) {
     if (stdRootLen == 0) {
-    { PlewArray_U8 __ret739 = PlewArray_U8_share(out);
+    { PlewArray_U8 __ret746 = PlewArray_U8_share(out);
     PlewArray_U8_release(out);
-    return __ret739; }
+    return __ret746; }
     }
     uint64_t si = 0;
     while (si < stdRootLen) {
@@ -11570,23 +11651,23 @@ PlewArray_U8 resolveImport_src_AU8_pStart_U64_pLen_U64_importer_AU8_baseLen_U64_
     PlewArray_U8_push(&(out), 46);
     PlewArray_U8_push(&(out), 112);
     PlewArray_U8_push(&(out), 119);
-    { PlewArray_U8 __ret740 = PlewArray_U8_share(out);
+    { PlewArray_U8 __ret747 = PlewArray_U8_share(out);
     PlewArray_U8_release(out);
-    return __ret740; }
+    return __ret747; }
     }
     }
     }
     }
     }
-    { PlewArray_U8 __ret741 = PlewArray_U8_share(out);
+    { PlewArray_U8 __ret748 = PlewArray_U8_share(out);
     PlewArray_U8_release(out);
-    return __ret741; }
+    return __ret748; }
     }
     if (b0 == 47) {
     if (srcRootLen == 0) {
-    { PlewArray_U8 __ret742 = PlewArray_U8_share(out);
+    { PlewArray_U8 __ret749 = PlewArray_U8_share(out);
     PlewArray_U8_release(out);
-    return __ret742; }
+    return __ret749; }
     }
     uint64_t i = 0;
     while (i < srcRootLen) {
@@ -11601,9 +11682,9 @@ PlewArray_U8 resolveImport_src_AU8_pStart_U64_pLen_U64_importer_AU8_baseLen_U64_
     PlewArray_U8_push(&(out), 46);
     PlewArray_U8_push(&(out), 112);
     PlewArray_U8_push(&(out), 119);
-    { PlewArray_U8 __ret743 = PlewArray_U8_share(out);
+    { PlewArray_U8 __ret750 = PlewArray_U8_share(out);
     PlewArray_U8_release(out);
-    return __ret743; }
+    return __ret750; }
     }
     uint64_t rest = pStart;
     uint64_t parents = 0;
@@ -11655,9 +11736,9 @@ PlewArray_U8 resolveImport_src_AU8_pStart_U64_pLen_U64_importer_AU8_baseLen_U64_
     PlewArray_U8_push(&(out), 46);
     PlewArray_U8_push(&(out), 112);
     PlewArray_U8_push(&(out), 119);
-    { PlewArray_U8 __ret744 = PlewArray_U8_share(out);
+    { PlewArray_U8 __ret751 = PlewArray_U8_share(out);
     PlewArray_U8_release(out);
-    return __ret744; }
+    return __ret751; }
     PlewArray_U8_release(out);
 }
 void appendBytes_into_AU8_from_AU8(PlewArray_U8* into, PlewArray_U8 from) {
@@ -11674,9 +11755,9 @@ PlewArray_U8 extractSpan_buf_AU8_start_U64_len_U64(PlewArray_U8 buf, uint64_t st
     PlewArray_U8_push(&(out), PlewArray_U8_get(buf, (long long)(({ uint64_t __ov; if (__builtin_add_overflow((start), (i), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; }))));
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { PlewArray_U8 __ret745 = PlewArray_U8_share(out);
+    { PlewArray_U8 __ret752 = PlewArray_U8_share(out);
     PlewArray_U8_release(out);
-    return __ret745; }
+    return __ret752; }
     PlewArray_U8_release(out);
 }
 uint64_t dirPrefixLen_path_AU8(PlewArray_U8 path) {
@@ -11688,8 +11769,8 @@ uint64_t dirPrefixLen_path_AU8(PlewArray_U8 path) {
     }
     k = ({ uint64_t __ov; if (__builtin_add_overflow((k), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { uint64_t __ret746 = pre;
-    return __ret746; }
+    { uint64_t __ret753 = pre;
+    return __ret753; }
 }
 PlewArray_U8 computeStdRoot_arg0_AU8(PlewArray_U8 arg0) {
     uint64_t pre = dirPrefixLen_path_AU8(arg0);
@@ -11703,9 +11784,9 @@ PlewArray_U8 computeStdRoot_arg0_AU8(PlewArray_U8 arg0) {
     PlewArray_U8_push(&(out), 116);
     PlewArray_U8_push(&(out), 100);
     PlewArray_U8_push(&(out), 47);
-    { PlewArray_U8 __ret747 = PlewArray_U8_share(out);
+    { PlewArray_U8 __ret754 = PlewArray_U8_share(out);
     PlewArray_U8_release(out);
-    return __ret747; }
+    return __ret754; }
     PlewArray_U8_release(out);
 }
 PlewArray_U8 findSrcRoot_entry_AU8(PlewArray_U8 entry) {
@@ -11729,12 +11810,12 @@ PlewArray_U8 findSrcRoot_entry_AU8(PlewArray_U8 entry) {
     }
     PlewArray_U8 sx = PlewArray_U8_share(({ PlewString __s = (PlewString){"src/", 4}; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; }));
     appendBytes_into_AU8_from_AU8(&(sr), sx);
-    { PlewArray_U8 __ret748 = PlewArray_U8_share(sr);
+    { PlewArray_U8 __ret755 = PlewArray_U8_share(sr);
     PlewArray_U8_release(sx);
     PlewArray_U8_release(sr);
     PlewArray_U8_release(mn);
     PlewArray_U8_release(mani);
-    return __ret748; }
+    return __ret755; }
     PlewArray_U8_release(sx);
     PlewArray_U8_release(sr);
     }
@@ -11754,9 +11835,9 @@ PlewArray_U8 findSrcRoot_entry_AU8(PlewArray_U8 entry) {
     PlewArray_U8_release(mani);
     }
     PlewArray_U8 empty = PlewArray_U8_new();
-    { PlewArray_U8 __ret749 = PlewArray_U8_share(empty);
+    { PlewArray_U8 __ret756 = PlewArray_U8_share(empty);
     PlewArray_U8_release(empty);
-    return __ret749; }
+    return __ret756; }
     PlewArray_U8_release(empty);
 }
 long long pathSeen_buf_AU8_loaded_ABind_path_AU8(PlewArray_U8 buf, PlewArray_Bind loaded, PlewArray_U8 path) {
@@ -11773,12 +11854,12 @@ long long pathSeen_buf_AU8_loaded_ABind_path_AU8(PlewArray_U8 buf, PlewArray_Bin
     j = ({ uint64_t __ov; if (__builtin_add_overflow((j), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     if (eq) {
-    { long long __ret750 = 1;
-    return __ret750; }
+    { long long __ret757 = 1;
+    return __ret757; }
     }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { long long __ret751 = 0;
-    return __ret751; }
+    { long long __ret758 = 0;
+    return __ret758; }
 }

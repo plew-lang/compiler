@@ -252,17 +252,29 @@ fn orderingVariantIndex(c: inout Comp, name: String) -> U64 {
 fn hasCompareWitness(c: inout Comp, op: I64, lhs: U64) -> Bool {
     val lt: TypeInfo = exprType(c: inout c, id: lhs)
     if lt.kind == 2 {
+        // `==`/`!=` desugar to Eq.eq; gated on an explicit `impl T as Eq` (spec/12:
+        // operators are trait sugar, not implicit). `< <= > >=` likewise on Ord.
         if op == 50 {
-            return findAssocByName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: "eq") < c.funcs.count
+            return eqWitnessReady(c: inout c, ti: lt)
         }
         if op == 51 {
-            return findAssocByName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: "eq") < c.funcs.count
+            return eqWitnessReady(c: inout c, ti: lt)
         }
         if op >= 52 {
             if op <= 55 {
-                return findAssocByName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: "compare") < c.funcs.count
+                if typeConformsToName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, traitName: "Ord") {
+                    return findAssocByName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: "compare") < c.funcs.count
+                }
             }
         }
+    }
+    return false
+}
+
+// Whether the operand type both conforms to Eq and carries the `eq` witness.
+fn eqWitnessReady(c: inout Comp, ti: TypeInfo) -> Bool {
+    if typeConformsToName(c: inout c, typeStart: ti.nameStart, typeLen: ti.nameLen, traitName: "Eq") {
+        return findAssocByName(c: inout c, typeStart: ti.nameStart, typeLen: ti.nameLen, name: "eq") < c.funcs.count
     }
     return false
 }

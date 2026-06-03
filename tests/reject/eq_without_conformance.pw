@@ -1,0 +1,9 @@
+import @Std/Io with { print }
+struct P { val v: I64 }
+impl P { assoc fn eq(lhs: P, rhs: P) -> Bool { return lhs.v == rhs.v } }
+fn boolI(b: Bool) -> I64 { if b { return 1I64 } return 0I64 }
+fn main() {
+    val a: P = <P v=1 />
+    val b: P = <P v=1 />
+    print(boolI(b: a == b))
+}
