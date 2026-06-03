@@ -264,6 +264,12 @@ struct FieldDef {
     // for enum variant fields (they take no modifier). Used for the composite
     // mutability check on `base.field = x` (spec: both binding and field `mut`).
     val isMut: Bool
+    // declared default value `val x: T = expr` (spec/05: memberwise-factory
+    // default-arg sugar). hasDefault gates it; defaultVal is the Comp.exprs id of
+    // the default expression (re-evaluated at each construction site that omits
+    // the field). Always false for enum variant fields (they take no default).
+    val hasDefault: Bool
+    val defaultVal: U64
 }
 
 struct StructDef {

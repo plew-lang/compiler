@@ -1,0 +1,28 @@
+// F13: an array-typed default argument (`xs: Array[T] = []`) must use the
+// typed array constructor; previously it emitted a bare `0`, miscompiling.
+// The default is re-evaluated each call (a fresh empty array, no shared state).
+import @Std/Io with { print }
+
+fn tally(xs: Array[I32] = []) -> U64 {
+    mut val ys: Array[I32] = xs
+    ys.append(1)
+    return ys.count
+}
+
+fn total(xs: Array[I32] = [10, 20]) -> I32 {
+    mut val s: I32 = 0
+    mut val i: U64 = 0
+    while i < xs.count {
+        s += xs[i]
+        i += 1
+    }
+    return s
+}
+
+fn main() {
+    print(tally())
+    print(tally())
+    print(tally(xs: [1, 2, 3]))
+    print(total())
+    print(total(xs: [1, 2, 3]))
+}

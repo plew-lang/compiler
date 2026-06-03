@@ -1,0 +1,23 @@
+// F14: struct field default values `val x: T = expr` (spec/05 — memberwise
+// factory default-arg sugar). A construction that omits a field gets its
+// declared default; the default expression is re-evaluated at each site.
+// Previously `= expr` after a field was mis-parsed into phantom fields.
+import @Std/Io with { print }
+
+struct Config {
+    val timeout: I32 = 30
+    mut val retries: I32 = 3
+    val tags: Array[I32] = []
+}
+
+fn main() {
+    val a: Config = <Config />
+    print(a.timeout)
+    print(a.retries)
+    print(a.tags.count)
+    // override some, default the rest
+    val b: Config = <Config timeout=99 tags=[1, 2] />
+    print(b.timeout)
+    print(b.retries)
+    print(b.tags.count)
+}

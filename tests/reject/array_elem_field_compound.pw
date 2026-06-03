@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+struct P { mut val x: I32 }
+fn main() {
+    mut val xs: Array[P] = []
+    xs.append(<P x=1 />)
+    xs[0].x += 5
+    print(xs[0].x)
+}

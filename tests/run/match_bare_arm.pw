@@ -1,0 +1,27 @@
+// Bare-expression match arms in statement position (spec/11: `=> v` is allowed,
+// not only `=> { ... }`). Previously a bare arm was handed to parseBlock, which
+// greedily swallowed the following arms — leaving only the first registered, so
+// the match was wrongly judged non-exhaustive (and miscompiled).
+import @Std/Io with { print }
+
+enum Shape {
+    Circle { r: I32 }
+    Rect { w: I32, h: I32 }
+}
+
+fn main() {
+    val s: Shape = <Shape.Rect w=3 h=4 />
+    match s {
+        Shape.Circle { val r } => print(r * r)
+        Shape.Rect { val w, val h } => print(w * h)
+    }
+    // a no-field enum with bare arms
+    val c: Color = <Color.Green />
+    match c {
+        Color.Red => print(0)
+        Color.Green => print(1)
+        Color.Blue => print(2)
+    }
+}
+
+enum Color { Red Green Blue }

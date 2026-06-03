@@ -534,6 +534,25 @@ fn parseArmPatterns(c: inout Comp) -> Array[PatInfo] {
 
 // `match scrut { (pattern => { body })* }` in statement position: arm bodies are
 // blocks. (Expression-position match with bare-expression arms is parseMatchExpr.)
+// A statement-match arm body: either a `{ ... }` block or a single bare
+// statement (`=> expr` / `=> give v` / `=> return v`, spec/11), wrapped into a
+// one-statement block. Without this a bare arm handed to parseBlock (which has
+// no `{`) would greedily consume the following arms as statements — leaving only
+// the first arm registered, which broke both exhaustiveness and codegen.
+fn parseArmBody(c: inout Comp) -> U64 {
+    match c.curKind() {
+        Kind.LBrace => { return parseBlock(c: inout c) }
+        _ => {
+            val s: U64 = parseStmt(c: inout c)
+            mut val stmts: Array[U64] = []
+            stmts.append(s)
+            val id: U64 = c.blocks.count
+            c.blocks.append(<Block stmts=stmts />)
+            return id
+        }
+    }
+}
+
 fn parseMatch(c: inout Comp) -> U64 {
     c.advance()
     val scrut: U64 = parseExpr(c: inout c)
@@ -555,7 +574,7 @@ fn parseMatch(c: inout Comp) -> U64 {
             _ => {
                 val pats: Array[PatInfo] = parseArmPatterns(c: inout c)
                 c.skipNewlines()
-                val body: U64 = parseBlock(c: inout c)
+                val body: U64 = parseArmBody(c: inout c)
                 for val pi in pats {
                     arms.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body />)
                 }

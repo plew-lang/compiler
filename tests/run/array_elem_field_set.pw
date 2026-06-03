@@ -1,0 +1,23 @@
+// F10: place mutation through an array element `arr[i].field = v`
+// (CLAUDE.md / spec/03 get-modify-set). Was emitting an unassignable rvalue
+// `PlewArray_E_get(...).field = v`.
+import @Std/Io with { print }
+
+struct P {
+    mut val x: I32
+    val tag: I32
+}
+
+fn main() {
+    mut val xs: Array[P] = []
+    xs.append(<P x=1 tag=10 />)
+    xs.append(<P x=2 tag=20 />)
+    xs[0].x = 99
+    print(xs[0].x)
+    print(xs[1].x)
+    print(xs[0].tag)
+    // mutate via a computed index
+    mut val i: U64 = 1
+    xs[i].x = 77
+    print(xs[i].x)
+}

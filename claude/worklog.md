@@ -13,12 +13,23 @@
 > - **F6〔小・既知〕** `;` 文区切り誤診断・catch-all 誤診断全般。
 > - **F7〔小・✅修正済〕** カンマ区切り struct フィールドが幻の空フィールド `long long ,;` を生成。修正＝`parseStruct` のフィールドループに `Kind.Comma` の loud-reject（spec はフィールド改行区切り）。test `reject/struct_comma_fields`。
 > - **別の小ギャップ** Ref 構築 `<Ref[I32] value=7/>` の `value=` 内リテラルが Ref[I32] の T から型付けされず注釈ありでも落ちる（要 suffix）。
+> - **F9〔中・✅修正済（未コミット）〕** bare-expr の match アーム（`=> expr`/`=> give v`）が statement 位置で壊れる＝`parseBlock` が後続アームを文として飲み込み最初のアームだけ登録→網羅判定が誤って非網羅に＋アーム欠落。修正＝`parseMatch` が `parseArmBody`（`{}` or 単一文をブロック化）を使う。test `run/match_bare_arm`。これで E1/E3/e1b/e1c 系の「網羅なのに非網羅」誤判定が解消。
+> - **F10〔中・一部✅修正済（未コミット）〕** 配列要素越しの place 変更 `arr[i].field = x` が未実装で不正 C（`get(...).field = v`＝rvalue 代入）。修正＝`tryArrayElemFieldAssign` で get-modify-set 脱糖（plain `=`）。compound は loud-reject・inout メソッド経由（`arr[i].m()`）は未対応＝review-items 参照。
+> - **F11〔中〕** ネスト配列 `Array[Array[T]]` が要素型に `Array` を literal 出力＝不正 C。→ review-items。
+> - **F12〔中〕** U64 リテラル ∈ [2^63, 2^64-1] で plewc がクラッシュ（値を I64 蓄積→overflow panic）。整数リテラル符号モデルに波及＝GPG 回復後に。→ review-items。
+> - **F13〔✅修正済〕** 配列型の関数デフォルト引数 `fn f(xs: Array[I32] = [])` の省略呼びが `f(0)`＝不正 C。修正＝default-fill で array param は genArrayValue。test `run/default_arg_array`。
+> - **F16〔✅修正済〕** 配列リテラルを引数で渡すと `f(xs: [1,2,3])`→`f(0)`＝不正 C。修正＝提供引数ループで array param は genArrayValue。
+> - **F15〔小〕** ビルトインメソッド名（`count` 等）と同名のユーザー自由関数呼びが誤コンパイル。→ review-items。
+> - **F14〔中・重要・✅修正済（未コミット）〕** struct フィールド既定値 `val x: T = expr`（spec/05）が完全破損（`parseStruct` が `= expr` を消費せず phantom field）。修正＝`FieldDef.hasDefault/defaultVal`＋`Expr.Make` で省略フィールドへ default 挿入（`makeProvides`）。test `run/field_defaults`。残＝generic struct の field default 未対応・default 式の literal 型検査未。
+> - 健全確認済（プローブで OK）：generic struct/method・closure（引数/高階/キャプチャ）・trait+where境界・provided method・Ref 共有変更・nested struct place 変更・`??`・mutual recursion・char リテラル・wildcard match・while break/continue・unique/move/deinit（決定的・use-after-move/bare-copy reject）・配列成長・struct 戻り値 inline・nested generic `Box[Box[T]]`。
+> - **F8〔小〕** 裸の no-field enum variant 値 `Color.Green`（JSX `<Color.Green/>` でない）が不正な C（`Color.Green` をそのまま出力）を生成。コンパイラ自身は常に `<Kind.X/>` を使う＝裸は非サポート構文。loud-reject すべき（silent 剥離）。→ review-items。
 > - 非バグ＝`print` の String 非対応は整数専用 placeholder shim（仕様面でない）。
 > 推奨順＝F1→F2→F4→F3（F1/F2 は局所修正で広範な有効コードが通る）。**進捗：F1・F2・F5・F7 修正済み。残＝F3・F4・F6＋下記の据え置き群。**
 > **あとでユーザーと確認したい項目（要判断／据え置き）は [review-items.md](review-items.md) に集約**（String 裸リテラル推論の loud-error 是非・カンマ区切りフィールド・F3/F4 実装・`.bytes` 型・Ref リテラル型付け 等）。
 
 🎉 **セルフホスト達成・stage0（Rust）退役済み。** 正典コンパイラ＝Plew パッケージ `compiler/src/`（root `_.pw` が `part` で全パートを綴じ込む 1 モジュール＝`Loader`・`Lexer`・`Ast`・`Parser/`〔Expr/Stmt/Decl〕・`Codegen/`〔Emit/Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array〕・part はサブディレクトリ可）。自分自身を不動点までコンパイルする。
 
+>
 > **次の一歩＝(3) 関連型＋Iterator/Iterable**（closure は (2) 完了＝必要十分）。**closure 完了**＝(2a) fat closure 表現＋不変値キャプチャ（スカラー＋array/Ref/struct/String）／(2b-1) スカラー `mut val` 参照キャプチャ（`makeCounter`）／(2b-2) **leak 解消**（env drop＋scope 末 closure/cell release＋bind/return share＝macOS `leaks` で 0 leaks 確認）。タグ `closures-stage-a`／`closures-capture-scalar`／`closures-capture-heap`／`closures-mut-capture`／`closures-leak-free`。残＝(2b-3) `mut val` 非スカラー箱化・`local` マーク（spawn 段）。トレイト/generics は step 1＋健全性監査＋ARC 修正まで完了。
 >
 > **closure キャプチャの現状と設計（着手用）**：関数値は一律 **fat closure `PlewClosure{fn,env,rc,drop}`**（旧ベア関数ポインタから移行・ABI `R fn(void* env, params...)`・bare 関数値はサンク `<sel>__thunk` 経由・呼び位置で `.fn` を具体署名へキャスト）。**実装済キャプチャ**：(1)不変 `val` の値キャプチャ＝スカラー/String/array/Ref/plain struct（env 構造体 `__closure_env<id>`・body は `((__closure_env<id>*)__env)->name`・ヒープ所有は env に retain〔share〕＝エスケープ後も生存・`val` 不変ゆえ値=参照キャプチャと観測同一＝spec 準拠）。(2)**スカラー `mut val` 参照キャプチャ＝箱化**（外側ローカルを `T*` ヒープ ARC セル化〔`plew_arc_alloc`〕・env は `plew_ref_share` で retain ポインタ保持・両側 deref で共有＝`makeCounter`・boxed は body で `(*…->name)`・`isBoxedLocalAt`/`isBoxedCaptureOf`）。**ライフタイム＝leak 解消済**＝`PlewClosure.drop`＝`__closure_env<id>_release`（emitClosureEnvDrop が boxed セル/array/Ref/struct キャプチャを release）・所有 closure ローカルは `emitScopeDrops` で `plew_closure_release`・箱化セルも scope 末 `plew_arc_release`・bind/return は `genCopyValue` の fn 型分岐で `plew_closure_share`（retain）＝rc 均衡（macOS `leaks` で 0 leaks 確認）。**未対応は loud reject**（`mut val` 非スカラー／`unique`・generic・enum・関数値／ネスト closure／val capture への代入）。残 hidden cost＝引数直渡しの一時 capturing 閉包（束縛されず env 残り得る・小）・Ref pointee 残留。**(2b-3)**＝`mut val` 非スカラー箱化・`mut val` 参照キャプチャ閉包の `local` マーク（spawn 不可・spec/14・`spawn { block }` 前提）。詳細は item 5（イベントループ）。

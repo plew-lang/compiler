@@ -508,7 +508,21 @@ fn parseStruct(c: inout Comp, isUnique: Bool) {
                     }
                     _ => {}
                 }
-                fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isMut=isMut />)
+                // optional field default `val x: T = expr` (spec/05). Consume the
+                // `=` and the expression so it lands in FieldDef (else `= expr`
+                // would be mis-parsed as phantom fields); used by the memberwise
+                // factory when a construction omits this field.
+                mut val hasDefault: Bool = false
+                mut val defaultVal: U64 = 0
+                match c.curKind() {
+                    Kind.Eq => {
+                        c.advance()
+                        defaultVal = parseExpr(c: inout c)
+                        hasDefault = true
+                    }
+                    _ => {}
+                }
+                fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isMut=isMut hasDefault=hasDefault defaultVal=defaultVal />)
             }
         }
     }
@@ -571,7 +585,7 @@ fn parseEnum(c: inout Comp) {
                                         }
                                         _ => {}
                                     }
-                                    fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isMut=false />)
+                                    fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isMut=false hasDefault=false defaultVal=0 />)
                                     match c.curKind() {
                                         Kind.Comma => { c.advance() }
                                         _ => {}

@@ -84,6 +84,20 @@ fn emitCaptureInit(c: inout Comp, e: CaptureEntry) {
     writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
 }
 
+// Does a JSX construction's field list provide a value for `name`? (Used to
+// decide whether to fill in a declared field default — spec/05.)
+fn makeProvides(c: inout Comp, fields: Array[MakeField], nameStart: U64, nameLen: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < fields.count {
+        val mf: MakeField = fields[i]
+        if spansEqual(c: inout c, aStart: mf.nameStart, aLen: mf.nameLen, bStart: nameStart, bLen: nameLen) {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
 fn genExpr(c: inout Comp, id: U64) {
     val e: Expr = c.exprs[id]
     match e {
@@ -440,7 +454,24 @@ fn genExpr(c: inout Comp, id: U64) {
                     genExpr(c: inout c, id: ar.expr)
                     write(s: ")")
                 } else {
-                    genExpr(c: inout c, id: ar.expr)
+                    // an array-typed parameter receiving an array literal needs the
+                    // typed array constructor; a bare genExpr would emit 0 (an
+                    // untyped `[...]` has no element-type context here).
+                    mut val argIsArr: Bool = false
+                    if cfi < c.funcs.count {
+                        val cf0: Func = c.funcs[cfi]
+                        if i < cf0.params.count {
+                            if cf0.params[i].tyIsArray {
+                                argIsArr = true
+                            }
+                        }
+                    }
+                    if argIsArr {
+                        val cf1: Func = c.funcs[cfi]
+                        genArrayValue(c: inout c, exprId: ar.expr, elemStart: cf1.params[i].tyStart, elemLen: cf1.params[i].tyLen)
+                    } else {
+                        genExpr(c: inout c, id: ar.expr)
+                    }
                 }
                 i += 1
             }
@@ -454,7 +485,13 @@ fn genExpr(c: inout Comp, id: U64) {
                     if di > 0 {
                         write(s: ", ")
                     }
-                    genExpr(c: inout c, id: cps[di].defaultExpr)
+                    // an array-typed default (`xs: Array[T] = []`) needs the typed
+                    // array constructor, not a bare genExpr (which would emit 0).
+                    if cps[di].tyIsArray {
+                        genArrayValue(c: inout c, exprId: cps[di].defaultExpr, elemStart: cps[di].tyStart, elemLen: cps[di].tyLen)
+                    } else {
+                        genExpr(c: inout c, id: cps[di].defaultExpr)
+                    }
                     di += 1
                 }
             }
@@ -577,7 +614,11 @@ fn genExpr(c: inout Comp, id: U64) {
                     if adi > 0 {
                         write(s: ", ")
                     }
-                    genExpr(c: inout c, id: af.params[adi].defaultExpr)
+                    if af.params[adi].tyIsArray {
+                        genArrayValue(c: inout c, exprId: af.params[adi].defaultExpr, elemStart: af.params[adi].tyStart, elemLen: af.params[adi].tyLen)
+                    } else {
+                        genExpr(c: inout c, id: af.params[adi].defaultExpr)
+                    }
                     adi += 1
                 }
                 write(s: ")")
@@ -826,6 +867,43 @@ fn genExpr(c: inout Comp, id: U64) {
                         genExpr(c: inout c, id: mf.value)
                     }
                     i += 1
+                }
+                // declared field defaults (spec/05): fill in any field with a
+                // default value that this construction omitted. The default
+                // expression is re-evaluated here (each construction site).
+                if generic {
+                } else {
+                    mut val dEmitted: U64 = fields.count
+                    mut val si: U64 = 0
+                    while si < c.structs.count {
+                        val sd: StructDef = c.structs[si]
+                        if spansEqual(c: inout c, aStart: sd.nameStart, aLen: sd.nameLen, bStart: typeStart, bLen: typeLen) {
+                            val flds: Array[FieldDef] = sd.fields
+                            mut val fi: U64 = 0
+                            while fi < flds.count {
+                                val fd: FieldDef = flds[fi]
+                                if fd.hasDefault {
+                                    if makeProvides(c: inout c, fields: fields, nameStart: fd.nameStart, nameLen: fd.nameLen) {
+                                    } else {
+                                        if dEmitted > 0 {
+                                            write(s: ", ")
+                                        }
+                                        write(s: ".")
+                                        writeSpan(c: inout c, start: fd.nameStart, len: fd.nameLen)
+                                        write(s: " = ")
+                                        if fd.tyIsArray {
+                                            genArrayValue(c: inout c, exprId: fd.defaultVal, elemStart: fd.tyStart, elemLen: fd.tyLen)
+                                        } else {
+                                            genExpr(c: inout c, id: fd.defaultVal)
+                                        }
+                                        dEmitted += 1
+                                    }
+                                }
+                                fi += 1
+                            }
+                        }
+                        si += 1
+                    }
                 }
                 write(s: "}")
             }

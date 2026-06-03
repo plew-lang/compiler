@@ -370,6 +370,60 @@ fn genCond(c: inout Comp, id: U64) {
     }
 }
 
+// `arr[i].field = v` -> get-modify-set (CLAUDE.md / spec/03): the element is a
+// value, so we copy it out, set the field on the copy, and store it back via
+// PlewArray_E_set (which bounds-checks and CoW-uniques). Returns true if it
+// handled the assignment (target is a field of an array element), false to let
+// the normal target dispatch run. Compound ops and inout-method-through-element
+// are not handled here yet (see review-items.md).
+fn tryArrayElemFieldAssign(c: inout Comp, op: I64, target: U64, value: U64) -> Bool {
+    val te: Expr = c.exprs[target]
+    match te {
+        Expr.Field { val base, val nameStart, val nameLen } => {
+            val be: Expr = c.exprs[base]
+            match be {
+                Expr.Index { base: val abase, index: val index } => {
+                    val bt: TypeInfo = exprType(c: inout c, id: abase)
+                    if bt.kind == 3 {
+                    } else {
+                        return false
+                    }
+                    if placeIsMutable(c: inout c, id: target) {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "cannot assign through this place; the binding and field must be declared `mut val`")
+                        return true
+                    }
+                    if op == 49 {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "compound assignment through an array element field is not yet supported; read the element, modify it, and assign `arr[i] = ...`")
+                        return true
+                    }
+                    val ft: TypeInfo = fieldType(c: inout c, structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
+                    checkLitTi(c: inout c, id: value, ti: ft)
+                    write(s: "    PlewArray_")
+                    writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
+                    write(s: "_set(&(")
+                    genExpr(c: inout c, id: abase)
+                    write(s: "), (long long)(")
+                    genExpr(c: inout c, id: index)
+                    write(s: "), ({ ")
+                    genCElem(c: inout c, start: bt.nameStart, len: bt.nameLen)
+                    write(s: " __ge = ")
+                    genArrayGet(c: inout c, base: abase, index: index, elemStart: bt.nameStart, elemLen: bt.nameLen)
+                    write(s: "; __ge.")
+                    writeSpan(c: inout c, start: nameStart, len: nameLen)
+                    write(s: " = ")
+                    genExpr(c: inout c, id: value)
+                    write(s: "; __ge; }));\n")
+                    return true
+                }
+                _ => { return false }
+            }
+        }
+        _ => { return false }
+    }
+}
+
 fn genStmt(c: inout Comp, id: U64) {
     val s: Stmt = c.stmts[id]
     match s {
@@ -450,6 +504,13 @@ fn genStmt(c: inout Comp, id: U64) {
             addLocalCn(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: effStart, tyLen: effLen, isArray: effArr, ty: effTy, isInout: false, isMut: mutable, owned: true, cnum: cnum)
         }
         Stmt.Assign { val op, val target, val value } => {
+            // place mutation through an array element: `arr[i].field = v`
+            // (CLAUDE.md / spec/03 — get-modify-set). Without this the generic
+            // Field path emits `PlewArray_E_get(...).field = v`, an unassignable
+            // rvalue. Handle it before the normal target dispatch.
+            if tryArrayElemFieldAssign(c: inout c, op: op, target: target, value: value) {
+                return
+            }
             val te: Expr = c.exprs[target]
             match te {
                 Expr.Index { val base, val index } => {
