@@ -3469,14 +3469,12 @@ void parseFuncCommon_c_Comp_hasRecv_Bool_recvStart_U64_recvLen_U64_selfInout_Boo
     PlewArray_Bind boundParams = parseWhereClause_c_Comp(&((*c)));
     PlewArray_Bind boundTraits = PlewArray_Bind_share((*c).curWhereTraits);
     if (traitImpl) {
-    Func wsig = (Func){.nameStart = nameTok.start, .nameLen = nameTok.len, .typeParams = PlewArray_Bind_share(typeParams), .params = PlewArray_Param_share(params), .hasRet = hasRet, .retStart = retStart, .retLen = retLen, .retIsArray = retIsArray, .retTy = retRef, .body = 0, .hasRecv = 0, .recvStart = 0, .recvLen = 0, .selfInout = 0, .selfMove = 0, .isAssoc = 0};
     if (Comp_identIs_kw_String(&((*c)), (PlewString){"via", 3})) {
     Comp_advance(&((*c)));
     Tok realTok = Comp_cur(&((*c)));
     Comp_advance(&((*c)));
     PlewArray_MethodAlias_push(&((*c).methodAliases), (MethodAlias){.recvStart = recvStart, .recvLen = recvLen, .aliasStart = nameTok.start, .aliasLen = nameTok.len, .realStart = realTok.start, .realLen = realTok.len});
-    PlewArray_Func_push(&((*c).curWitnessed), wsig);
-    Func_release(wsig);
+    PlewArray_Func_push(&((*c).curWitnessed), (Func){.nameStart = nameTok.start, .nameLen = nameTok.len, .typeParams = PlewArray_Bind_share(typeParams), .params = PlewArray_Param_share(params), .hasRet = hasRet, .retStart = retStart, .retLen = retLen, .retIsArray = retIsArray, .retTy = retRef, .body = 0, .hasRecv = 0, .recvStart = 0, .recvLen = 0, .selfInout = 0, .selfMove = 0, .isAssoc = 0});
     PlewArray_Bind_release(boundTraits);
     PlewArray_Bind_release(boundParams);
     PlewArray_Param_release(params);
@@ -3484,8 +3482,7 @@ void parseFuncCommon_c_Comp_hasRecv_Bool_recvStart_U64_recvLen_U64_selfInout_Boo
     PlewArray_Bind_release(ownParams);
     return;
     }
-    PlewArray_Func_push(&((*c).curWitnessed), wsig);
-    Func_release(wsig);
+    PlewArray_Func_push(&((*c).curWitnessed), (Func){.nameStart = nameTok.start, .nameLen = nameTok.len, .typeParams = PlewArray_Bind_share(typeParams), .params = PlewArray_Param_share(params), .hasRet = hasRet, .retStart = retStart, .retLen = retLen, .retIsArray = retIsArray, .retTy = retRef, .body = 0, .hasRecv = 0, .recvStart = 0, .recvLen = 0, .selfInout = 0, .selfMove = 0, .isAssoc = 0});
     }
     Comp_skipNewlines(&((*c)));
     uint64_t body = parseBlock_c_Comp(&((*c)));

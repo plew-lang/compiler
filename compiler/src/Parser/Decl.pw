@@ -140,17 +140,20 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
     // the signature on the same line; record the witnessed requirement name.
     if traitImpl {
         // record the witnessed requirement's signature (name + params + ret) so
-        // the completeness check can match by selector, not just name.
-        val wsig: Func = <Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false />
+        // the completeness check can match by selector, not just name. Append the
+        // Func inline (no intermediate local): a `val wsig` local would, at the
+        // `via` early return, release its `params` array a second time (struct
+        // literal field bind does not retain, but the local's release does),
+        // freeing the buffer the appended copy still references — a UAF.
         if c.identIs(kw: "via") {
             c.advance()
             val realTok: Tok = c.cur()
             c.advance()
             c.methodAliases.append(<MethodAlias recvStart=recvStart recvLen=recvLen aliasStart=nameTok.start aliasLen=nameTok.len realStart=realTok.start realLen=realTok.len />)
-            c.curWitnessed.append(wsig)
+            c.curWitnessed.append(<Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false />)
             return
         }
-        c.curWitnessed.append(wsig)
+        c.curWitnessed.append(<Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false />)
     }
     c.skipNewlines()
     val body: U64 = parseBlock(c: inout c)
