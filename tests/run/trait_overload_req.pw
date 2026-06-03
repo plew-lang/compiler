@@ -1,0 +1,16 @@
+import @Std/Io with { print }
+// Witnessing both overloaded requirements satisfies the conformance.
+trait Writer {
+    fn put(data: I64) -> I64
+    fn put(data: String) -> I64
+}
+struct F {}
+impl F as Writer {
+    fn put(data: I64) -> I64 { return data }
+    fn put(data: String) -> I64 { return 99I64 }
+}
+fn main() {
+    val f: F = <F />
+    print(f.put(data: 7I64))     // 7
+    print(f.put(data: "hi"))     // 99
+}

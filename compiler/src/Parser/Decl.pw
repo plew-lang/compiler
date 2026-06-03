@@ -139,15 +139,18 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
     // to an existing member) or by defining a body here (spec/08). `via` follows
     // the signature on the same line; record the witnessed requirement name.
     if traitImpl {
+        // record the witnessed requirement's signature (name + params + ret) so
+        // the completeness check can match by selector, not just name.
+        val wsig: Func = <Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false />
         if c.identIs(kw: "via") {
             c.advance()
             val realTok: Tok = c.cur()
             c.advance()
             c.methodAliases.append(<MethodAlias recvStart=recvStart recvLen=recvLen aliasStart=nameTok.start aliasLen=nameTok.len realStart=realTok.start realLen=realTok.len />)
-            c.curWitnessed.append(<Bind nameStart=nameTok.start nameLen=nameTok.len fieldStart=nameTok.start fieldLen=nameTok.len />)
+            c.curWitnessed.append(wsig)
             return
         }
-        c.curWitnessed.append(<Bind nameStart=nameTok.start nameLen=nameTok.len fieldStart=nameTok.start fieldLen=nameTok.len />)
+        c.curWitnessed.append(wsig)
     }
     c.skipNewlines()
     val body: U64 = parseBlock(c: inout c)

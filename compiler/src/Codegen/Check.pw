@@ -591,12 +591,40 @@ fn checkMakeFields(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U6
 // Whether `witnessed` (a conformance's satisfied requirement names) contains the
 // requirement named (start,len). T1 matches on name only (overloaded
 // requirements with the same name and differing signatures are a later concern).
-fn witnessedHas(c: inout Comp, witnessed: Array[Bind], start: U64, len: U64) -> Bool {
+// Whether two parameter lists have the same selector: equal arity and, position
+// by position, equal labels and type heads. Distinguishes same-name overloaded
+// requirements (e.g. `write(data: Bytes)` vs `write(data: String)`).
+fn paramSelectorEq(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
+    if a.count != b.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.count {
+        val pa: Param = a[i]
+        val pb: Param = b[i]
+        if spansEqual(c: inout c, aStart: pa.nameStart, aLen: pa.nameLen, bStart: pb.nameStart, bLen: pb.nameLen) {
+        } else {
+            return false
+        }
+        if spansEqual(c: inout c, aStart: pa.tyStart, aLen: pa.tyLen, bStart: pb.tyStart, bLen: pb.tyLen) {
+        } else {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// Whether `witnessed` contains a member matching requirement `r`'s selector
+// (name + params). Distinguishes overloaded requirements by signature.
+fn witnessedHas(c: inout Comp, witnessed: Array[Func], r: Func) -> Bool {
     mut val i: U64 = 0
     while i < witnessed.count {
-        val w: Bind = witnessed[i]
-        if spansEqual(c: inout c, aStart: w.nameStart, aLen: w.nameLen, bStart: start, bLen: len) {
-            return true
+        val w: Func = witnessed[i]
+        if spansEqual(c: inout c, aStart: w.nameStart, aLen: w.nameLen, bStart: r.nameStart, bLen: r.nameLen) {
+            if paramSelectorEq(c: inout c, a: w.params, b: r.params) {
+                return true
+            }
         }
         i += 1
     }
@@ -621,7 +649,7 @@ fn checkConformances(c: inout Comp) {
                 mut val ri: U64 = 0
                 while ri < t.reqs.count {
                     val r: Func = t.reqs[ri]
-                    if witnessedHas(c: inout c, witnessed: cf.witnessed, start: r.nameStart, len: r.nameLen) {
+                    if witnessedHas(c: inout c, witnessed: cf.witnessed, r: r) {
                     } else {
                         compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)")
                     }

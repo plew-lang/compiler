@@ -1,0 +1,12 @@
+import @Std/Io with { print }
+// Two same-name requirements differing by parameter type; witnessing only one
+// is incomplete (selector-level completeness, gap #3).
+trait Writer {
+    fn put(data: I64) -> I64
+    fn put(data: String) -> I64
+}
+struct F {}
+impl F as Writer {
+    fn put(data: I64) -> I64 { return data }
+}
+fn main() { print(0) }
