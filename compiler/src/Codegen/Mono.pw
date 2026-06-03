@@ -832,10 +832,43 @@ fn registerCallInst(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg
 // Walk an expression, registering any generic free function calls it contains
 // (args before self, so a nested generic call is registered before the outer one
 // whose argument type may depend on it).
+// Can an enclosing local of this shape be value-captured? Scalars, String,
+// arrays, Ref, and plain (non-unique, non-generic) structs can: an immutable
+// `val` value-captured is observationally identical to a reference capture, and
+// heap-owning captures are retained into the env (then leaked). A `unique` type
+// (no copy), a generic instantiation (per-inst share machinery), an enum, or a
+// function-typed capture are not supported yet.
+fn captureSupported(c: inout Comp, lo: Local) -> Bool {
+    if lo.isArray {
+        return true
+    }
+    if isPrimType(c: inout c, start: lo.tyStart, len: lo.tyLen) {
+        return true
+    }
+    if rangeEquals(bytes: c.bytes, start: lo.tyStart, len: lo.tyLen, kw: "String") {
+        return true
+    }
+    if rangeEquals(bytes: c.bytes, start: lo.tyStart, len: lo.tyLen, kw: "Ref") {
+        return true
+    }
+    val si: U64 = structIndexByName(c: inout c, start: lo.tyStart, len: lo.tyLen)
+    if si < c.structs.count {
+        if c.structs[si].isUnique {
+            return false
+        }
+        if c.structs[si].typeParams.count > 0 {
+            return false
+        }
+        return true
+    }
+    return false
+}
+
 // Record that the active closure captures the enclosing local at `localIdx`.
-// Dedup per (closure, name). v1: value-capture of immutable scalars only — a
-// `mut val`, array, struct, string or other non-scalar capture is rejected
-// loudly (no silent meaning loss; reference/heap capture is additive later).
+// Dedup per (closure, name). v1: value-capture of immutable values — a `mut val`
+// (needs shared reference semantics) and unsupported shapes (unique / generic
+// instantiation / enum / function value) are rejected loudly (no silent meaning
+// loss; mutable reference capture is additive later).
 fn recordCapture(c: inout Comp, closureId: U64, localIdx: U64) {
     val lo: Local = c.locals[localIdx]
     mut val i: U64 = 0
@@ -851,12 +884,9 @@ fn recordCapture(c: inout Comp, closureId: U64, localIdx: U64) {
     if lo.isMut {
         compileErrorAt(line: lineOf(c: inout c, offset: lo.nameStart), msg: "capturing a mutable variable (`mut val`) in a closure is not yet supported")
     }
-    if lo.isArray {
-        compileErrorAt(line: lineOf(c: inout c, offset: lo.nameStart), msg: "capturing a non-scalar value (array/struct/string) in a closure is not yet supported")
-    }
-    if isPrimType(c: inout c, start: lo.tyStart, len: lo.tyLen) {
+    if captureSupported(c: inout c, lo: lo) {
     } else {
-        compileErrorAt(line: lineOf(c: inout c, offset: lo.nameStart), msg: "capturing a non-scalar value (array/struct/string) in a closure is not yet supported")
+        compileErrorAt(line: lineOf(c: inout c, offset: lo.nameStart), msg: "capturing this value (unique / generic / enum / function) in a closure is not yet supported")
     }
     c.captures.append(<CaptureEntry closureId=closureId nameStart=lo.nameStart nameLen=lo.nameLen tyStart=lo.tyStart tyLen=lo.tyLen isArray=lo.isArray ty=lo.ty />)
 }

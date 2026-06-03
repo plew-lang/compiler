@@ -768,6 +768,24 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 }
                 return typeInfoOfName(c: inout c, start: c.curRecvStart, len: c.curRecvLen, isArray: false)
             }
+            // inside a closure body a captured name is not a local; recover its
+            // type from the capture entry (so field/index dispatch on it works).
+            if c.curInClosure {
+                mut val ci: U64 = 0
+                while ci < c.captures.count {
+                    val ce: CaptureEntry = c.captures[ci]
+                    if ce.closureId == c.curClosureId {
+                        if spansEqual(c: inout c, aStart: ce.nameStart, aLen: ce.nameLen, bStart: start, bLen: len) {
+                            if isRefInst(c: inout c, ref: ce.ty) {
+                                val rt2: TypeRef = c.types[ce.ty]
+                                return <TypeInfo kind=2 nameStart=rt2.nameStart nameLen=rt2.nameLen ref=ce.ty />
+                            }
+                            return typeInfoOfName(c: inout c, start: ce.tyStart, len: ce.tyLen, isArray: ce.isArray)
+                        }
+                    }
+                    ci += 1
+                }
+            }
             mut val i: U64 = c.locals.count
             while i > 0 {
                 i -= 1

@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+struct Pt { val x: I32; val y: I32 }
+
+fn makeFirst(xs: Array[I32]) -> fn() -> I32 {
+    return fn() -> I32 { return xs[0] }
+}
+
+fn main() {
+    val ys: Array[I32] = [10, 20, 30]
+    val first: fn() -> I32 = makeFirst(xs: ys)
+    print(first())
+    print(ys[1])
+    val p: Pt = <Pt x=7 y=8 />
+    val getX: fn() -> I32 = fn() -> I32 { return p.x }
+    print(getX())
+    val s: String = "hi"
+    val isHi: fn() -> Bool = fn() -> Bool { return s == "hi" }
+    if isHi() { print(1) } else { print(0) }
+}

@@ -38,6 +38,44 @@ fn emitClosureCall(c: inout Comp, tyRef: U64, nameStart: U64, nameLen: U64, args
     write(s: ")")
 }
 
+// Emit the initializer for one capture field `__e->name = <here>`. Heap-owning
+// captures are retained (share) so the env keeps the value alive after the
+// enclosing scope releases its binding; immutable so a shared alias is correct.
+// Strings carry no rc (static/leaked bytes) and scalars are plain — both copy.
+fn emitCaptureInit(c: inout Comp, e: CaptureEntry) {
+    if e.isArray {
+        write(s: "PlewArray_")
+        writeSpan(c: inout c, start: e.tyStart, len: e.tyLen)
+        write(s: "_share(")
+        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+        write(s: ")")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: e.tyStart, len: e.tyLen, kw: "Ref") {
+        write(s: "plew_ref_share(")
+        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+        write(s: ")")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: e.tyStart, len: e.tyLen, kw: "String") {
+        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+        return
+    }
+    if isPrimType(c: inout c, start: e.tyStart, len: e.tyLen) {
+        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+        return
+    }
+    // a plain struct: retain its heap-owning fields if it has any, else bit-copy.
+    if structNeedsRelease(c: inout c, start: e.tyStart, len: e.tyLen) {
+        writeSpan(c: inout c, start: e.tyStart, len: e.tyLen)
+        write(s: "_share(")
+        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+        write(s: ")")
+        return
+    }
+    writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+}
+
 fn genExpr(c: inout Comp, id: U64) {
     val e: Expr = c.exprs[id]
     match e {
@@ -461,7 +499,7 @@ fn genExpr(c: inout Comp, id: U64) {
                         write(s: "__e->")
                         writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
                         write(s: " = ")
-                        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+                        emitCaptureInit(c: inout c, e: e)
                         write(s: "; ")
                     }
                     ci += 1
