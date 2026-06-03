@@ -1,13 +1,16 @@
 import @Std/Io with { print }
 
-// Generic free functions are monomorphized per call site (the type args are
-// inferred from the arguments). One template, multiple instantiations.
-struct A { val n: I64 }
-impl A { fn get() -> I64 { return self.n } }
-struct B { val m: I64 }
-impl B { fn get() -> I64 { return self.m + 100I64 } }
+// Generic free functions are monomorphized per call site, and their bodies are
+// eagerly checked against `where` bounds (#9): `x.get()` is valid because T is
+// bounded by Getter, which declares get().
+trait Getter { fn get() -> I64 }
 
-fn step[T](x: T) -> I64 { return x.get() }
+struct A { val n: I64 }
+impl A as Getter { fn get() -> I64 { return self.n } }
+struct B { val m: I64 }
+impl B as Getter { fn get() -> I64 { return self.m + 100I64 } }
+
+fn step[T](x: T) -> I64 where T: Getter { return x.get() }
 fn firstOf[T, U](a: T, b: U) -> T { return a }
 
 fn main() {
@@ -15,7 +18,7 @@ fn main() {
     val b: B = <B m=2 />
     print(step(x: a))                 // 1   (T = A)
     print(step(x: b))                 // 102 (T = B)
-    val r: A = firstOf(a: a, b: b)    // T = A, U = B; returns A
+    val r: A = firstOf(a: a, b: b)    // T = A, U = B; returns A (no method on T)
     print(r.get())                    // 1
     print(firstOf(a: b, b: a).get())  // 102 (T = B)
 }

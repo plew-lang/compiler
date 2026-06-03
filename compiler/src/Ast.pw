@@ -384,6 +384,10 @@ struct Comp {
     mut val methodAliases: Array[MethodAlias]
     // `where T: Trait` bounds on functions (spec/08), keyed by function index.
     mut val funcBounds: Array[FuncBound]
+    // the function index currently being checked by the eager generic
+    // type-checker (#9), so method/operator bound checks can look up its type
+    // parameters and `where` bounds. c.funcs.count when not checking.
+    mut val curCheckFn: U64
     // scratch: requirement names witnessed by the trait impl currently being
     // parsed (body method or `via` alias). Reset at each `impl Type as Trait`
     // entry; folded into the Conform record at the impl's close.

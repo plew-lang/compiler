@@ -1,14 +1,15 @@
 import @Std/Io with { print }
 
-// Transitive monomorphization: a generic free function calling another generic
-// free function (the inner instance is discovered via the worklist).
+// Transitive monomorphization with eager bound checking: outer[U] forwards to
+// inner[T], and the bound (Getter) propagates so both bodies type-check.
+trait Getter { fn get() -> I64 }
 struct A { val n: I64 }
-impl A { fn get() -> I64 { return self.n } }
+impl A as Getter { fn get() -> I64 { return self.n } }
 struct B { val m: I64 }
-impl B { fn get() -> I64 { return self.m * 10I64 } }
+impl B as Getter { fn get() -> I64 { return self.m * 10I64 } }
 
-fn inner[T](x: T) -> I64 { return x.get() }
-fn outer[U](y: U) -> I64 { return inner(x: y) + 1I64 }
+fn inner[T](x: T) -> I64 where T: Getter { return x.get() }
+fn outer[U](y: U) -> I64 where U: Getter { return inner(x: y) + 1I64 }
 
 fn main() {
     val a: A = <A n=5 />

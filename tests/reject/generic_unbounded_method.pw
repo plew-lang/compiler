@@ -1,0 +1,5 @@
+import @Std/Io with { print }
+// T has no bound providing get(), so calling x.get() is rejected at the
+// definition (eager generic type-check, #9) — not deferred to instantiation.
+fn step[T](x: T) -> I64 { return x.get() }
+fn main() { print(0) }

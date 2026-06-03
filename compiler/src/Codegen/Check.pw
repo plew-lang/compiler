@@ -744,3 +744,296 @@ fn checkFnBounds(c: inout Comp) {
         ii += 1
     }
 }
+
+// ---- #9: eager generic type-checking (check templates, not just instances) ----
+//
+// A generic function/method body is checked once, abstractly: a type parameter
+// `T` is treated as a value whose only members are those its `where T: Trait`
+// bounds provide. Calling a method (or `==`/`<`) on a `T`-typed value that no
+// bound provides is an error at the *definition*, not deep in an instantiation
+// (escaping C++-template ergonomics). Associated types are deferred, so chained
+// calls whose receiver type is a type parameter's result degrade to unchecked.
+
+// Whether (start,len) is a type parameter of function `fnIdx`.
+fn isTypeParamOf(c: inout Comp, fnIdx: U64, start: U64, len: U64) -> Bool {
+    if fnIdx >= c.funcs.count {
+        return false
+    }
+    val tps: Array[Bind] = c.funcs[fnIdx].typeParams
+    mut val i: U64 = 0
+    while i < tps.count {
+        if spansEqual(c: inout c, aStart: tps[i].nameStart, aLen: tps[i].nameLen, bStart: start, bLen: len) {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Whether some `where`-bound trait of type parameter (tpStart,tpLen) on function
+// `fnIdx` provides a member named (nameStart,nameLen) whose labels match `args`
+// — as a requirement (TraitDef.reqs) or a provided method (recv = the trait).
+fn boundProvidesMethod(c: inout Comp, fnIdx: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
+    mut val bi: U64 = 0
+    while bi < c.funcBounds.count {
+        val fb: FuncBound = c.funcBounds[bi]
+        if fb.fnIdx == fnIdx {
+            if spansEqual(c: inout c, aStart: fb.paramStart, aLen: fb.paramLen, bStart: tpStart, bLen: tpLen) {
+                // requirement of the bound trait
+                mut val ti: U64 = 0
+                while ti < c.traits.count {
+                    val t: TraitDef = c.traits[ti]
+                    if spansEqual(c: inout c, aStart: t.nameStart, aLen: t.nameLen, bStart: fb.traitStart, bLen: fb.traitLen) {
+                        mut val ri: U64 = 0
+                        while ri < t.reqs.count {
+                            val r: Func = t.reqs[ri]
+                            if spansEqual(c: inout c, aStart: r.nameStart, aLen: r.nameLen, bStart: nameStart, bLen: nameLen) {
+                                if paramsLabelsOk(c: inout c, params: r.params, args: args) {
+                                    return true
+                                }
+                            }
+                            ri += 1
+                        }
+                    }
+                    ti += 1
+                }
+                // provided method of the bound trait (a method with recv = trait)
+                mut val gi: U64 = 0
+                while gi < c.funcs.count {
+                    val g: Func = c.funcs[gi]
+                    if g.hasRecv {
+                        if spansEqual(c: inout c, aStart: g.recvStart, aLen: g.recvLen, bStart: fb.traitStart, bLen: fb.traitLen) {
+                            if spansEqual(c: inout c, aStart: g.nameStart, aLen: g.nameLen, bStart: nameStart, bLen: nameLen) {
+                                if paramsLabelsOk(c: inout c, params: g.params, args: args) {
+                                    return true
+                                }
+                            }
+                        }
+                    }
+                    gi += 1
+                }
+            }
+        }
+        bi += 1
+    }
+    return false
+}
+
+// Whether type parameter (tpStart,tpLen) on `fnIdx` is bound by a trait named
+// `traitName` (for the Eq/Ord operator checks).
+fn boundHasTraitNamed(c: inout Comp, fnIdx: U64, tpStart: U64, tpLen: U64, traitName: String) -> Bool {
+    mut val bi: U64 = 0
+    while bi < c.funcBounds.count {
+        val fb: FuncBound = c.funcBounds[bi]
+        if fb.fnIdx == fnIdx {
+            if spansEqual(c: inout c, aStart: fb.paramStart, aLen: fb.paramLen, bStart: tpStart, bLen: tpLen) {
+                if rangeEquals(bytes: c.bytes, start: fb.traitStart, len: fb.traitLen, kw: traitName) {
+                    return true
+                }
+            }
+        }
+        bi += 1
+    }
+    return false
+}
+
+fn checkBoundsExpr(c: inout Comp, exprId: U64) {
+    match c.exprs[exprId] {
+        Expr.Unary { val op, val operand } => { checkBoundsExpr(c: inout c, exprId: operand) }
+        Expr.Binary { val op, val lhs, val rhs } => {
+            checkBoundsExpr(c: inout c, exprId: lhs)
+            checkBoundsExpr(c: inout c, exprId: rhs)
+            if op >= 50 {
+                if op <= 55 {
+                    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+                    if lt.kind == 2 {
+                        if isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: lt.nameStart, len: lt.nameLen) {
+                            mut val need: String = "Ord"
+                            if op == 50 { need = "Eq" }
+                            if op == 51 { need = "Eq" }
+                            if boundHasTraitNamed(c: inout c, fnIdx: c.curCheckFn, tpStart: lt.nameStart, tpLen: lt.nameLen, traitName: need) {
+                            } else {
+                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "comparison on a type parameter needs an Eq/Ord bound (add `where T: Eq` / `: Ord`)")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Expr.Call { val nameStart, val nameLen, val args } => {
+            mut val i: U64 = 0
+            while i < args.count {
+                checkBoundsExpr(c: inout c, exprId: args[i].expr)
+                i += 1
+            }
+        }
+        Expr.Method { val recv, val nameStart, val nameLen, val args } => {
+            checkBoundsExpr(c: inout c, exprId: recv)
+            mut val i: U64 = 0
+            while i < args.count {
+                checkBoundsExpr(c: inout c, exprId: args[i].expr)
+                i += 1
+            }
+            val rt: TypeInfo = exprType(c: inout c, id: recv)
+            if rt.kind == 2 {
+                if isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: rt.nameStart, len: rt.nameLen) {
+                    if boundProvidesMethod(c: inout c, fnIdx: c.curCheckFn, tpStart: rt.nameStart, tpLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args) {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
+                    }
+                }
+            }
+        }
+        Expr.Field { val base, val nameStart, val nameLen } => { checkBoundsExpr(c: inout c, exprId: base) }
+        Expr.Index { val base, val index } => {
+            checkBoundsExpr(c: inout c, exprId: base)
+            checkBoundsExpr(c: inout c, exprId: index)
+        }
+        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
+            mut val i: U64 = 0
+            while i < fields.count {
+                checkBoundsExpr(c: inout c, exprId: fields[i].value)
+                i += 1
+            }
+        }
+        Expr.Array { val elems } => {
+            mut val i: U64 = 0
+            while i < elems.count {
+                checkBoundsExpr(c: inout c, exprId: elems[i])
+                i += 1
+            }
+        }
+        Expr.Cast { val operand, val tyStart, val tyLen, val ty } => { checkBoundsExpr(c: inout c, exprId: operand) }
+        Expr.Coalesce { val opt, val deflt } => {
+            checkBoundsExpr(c: inout c, exprId: opt)
+            checkBoundsExpr(c: inout c, exprId: deflt)
+        }
+        Expr.Try { val expr } => { checkBoundsExpr(c: inout c, exprId: expr) }
+        Expr.Arrow { val base, val nameStart, val nameLen } => { checkBoundsExpr(c: inout c, exprId: base) }
+        Expr.IfExpr { val cond, val thenBlk, val elseBlk } => {
+            checkBoundsExpr(c: inout c, exprId: cond)
+            checkBoundsBlock(c: inout c, blkId: thenBlk)
+            checkBoundsBlock(c: inout c, blkId: elseBlk)
+        }
+        Expr.MatchExpr { val scrut, val arms } => {
+            checkBoundsExpr(c: inout c, exprId: scrut)
+            mut val ai: U64 = 0
+            while ai < arms.count {
+                val a: MatchArm = arms[ai]
+                val mark: U64 = scopeMark(c: inout c)
+                scanAddArmBinds(c: inout c, a: a)
+                checkBoundsExpr(c: inout c, exprId: a.body)
+                popLocals(c: inout c, mark: mark)
+                ai += 1
+            }
+        }
+        Expr.Move { val operand, val isBorrow } => { checkBoundsExpr(c: inout c, exprId: operand) }
+        _ => {}
+    }
+}
+
+fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
+    match c.stmts[stmtId] {
+        Stmt.Let { val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init } => {
+            checkBoundsExpr(c: inout c, exprId: init)
+            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
+        }
+        Stmt.Assign { val op, val target, val value } => {
+            checkBoundsExpr(c: inout c, exprId: target)
+            checkBoundsExpr(c: inout c, exprId: value)
+        }
+        Stmt.Print { val expr, val offset } => { checkBoundsExpr(c: inout c, exprId: expr) }
+        Stmt.ExprStmt { val expr } => { checkBoundsExpr(c: inout c, exprId: expr) }
+        Stmt.Return { val value, val hasValue } => {
+            if hasValue {
+                checkBoundsExpr(c: inout c, exprId: value)
+            }
+        }
+        Stmt.If { val cond, val thenBlk, val elseBlk, val hasElse } => {
+            checkBoundsExpr(c: inout c, exprId: cond)
+            checkBoundsBlock(c: inout c, blkId: thenBlk)
+            if hasElse {
+                checkBoundsBlock(c: inout c, blkId: elseBlk)
+            }
+        }
+        Stmt.While { val cond, val body } => {
+            checkBoundsExpr(c: inout c, exprId: cond)
+            checkBoundsBlock(c: inout c, blkId: body)
+        }
+        Stmt.For { val varStart, val varLen, val isRange, val inclusive, val iter, val rangeHi, val body } => {
+            val forMark: U64 = scopeMark(c: inout c)
+            checkBoundsExpr(c: inout c, exprId: iter)
+            if isRange {
+                checkBoundsExpr(c: inout c, exprId: rangeHi)
+                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+            } else {
+                val et: TypeInfo = exprType(c: inout c, id: iter)
+                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+            }
+            checkBoundsBlock(c: inout c, blkId: body)
+            popLocals(c: inout c, mark: forMark)
+        }
+        Stmt.Match { val scrut, val arms } => {
+            checkBoundsExpr(c: inout c, exprId: scrut)
+            mut val ai: U64 = 0
+            while ai < arms.count {
+                val a: MatchArm = arms[ai]
+                val mark: U64 = scopeMark(c: inout c)
+                scanAddArmBinds(c: inout c, a: a)
+                checkBoundsBlock(c: inout c, blkId: a.body)
+                popLocals(c: inout c, mark: mark)
+                ai += 1
+            }
+        }
+        Stmt.Panic { val msg, val offset } => { checkBoundsExpr(c: inout c, exprId: msg) }
+        Stmt.Give { val value } => { checkBoundsExpr(c: inout c, exprId: value) }
+        Stmt.Break => {}
+        Stmt.Continue => {}
+    }
+}
+
+fn checkBoundsBlock(c: inout Comp, blkId: U64) {
+    val mark: U64 = scopeMark(c: inout c)
+    val stmts: Array[U64] = c.blocks[blkId].stmts
+    mut val i: U64 = 0
+    while i < stmts.count {
+        checkBoundsStmt(c: inout c, stmtId: stmts[i])
+        i += 1
+    }
+    popLocals(c: inout c, mark: mark)
+}
+
+// Eager type-check every generic template body (#9): a method/operator on a
+// type-parameter-typed value must be provided by that parameter's `where`
+// bounds. Runs once per template, with no concrete env (so a type-parameter
+// local reports as its abstract name). Does not emit C (a validation pass).
+fn checkGenericBodies(c: inout Comp) {
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        val f: Func = c.funcs[fi]
+        if f.typeParams.count > 0 {
+            val noParams: Array[Bind] = []
+            val noArgs: Array[U64] = []
+            c.locals = []
+            c.curHasRecv = f.hasRecv
+            c.curRecvStart = f.recvStart
+            c.curRecvLen = f.recvLen
+            c.curSelfInout = f.selfInout
+            c.curRecvInstRef = 0
+            c.curTypeParams = noParams
+            c.curTypeArgs = noArgs
+            c.curCheckFn = fi
+            mut val pi: U64 = 0
+            while pi < f.params.count {
+                val p: Param = f.params[pi]
+                addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
+                pi += 1
+            }
+            checkBoundsBlock(c: inout c, blkId: f.body)
+        }
+        fi += 1
+    }
+    c.locals = []
+    c.curHasRecv = false
+    c.curCheckFn = c.funcs.count
+}
