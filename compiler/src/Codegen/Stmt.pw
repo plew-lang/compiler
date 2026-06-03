@@ -374,7 +374,37 @@ fn genStmt(c: inout Comp, id: U64) {
     val s: Stmt = c.stmts[id]
     match s {
         Stmt.Let { val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init } => {
-            checkLitSpan(c: inout c, id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray)
+            // No annotation (`val x = expr`): infer the binding's type from the
+            // initializer. Without this the type stays empty and genCTypeOf falls
+            // back to `long long`, miscompiling every non-integer initializer
+            // (String/Array/struct/Ref/call result/var copy). exprType's TypeInfo
+            // kinds: 0=scalar 1=String 2=struct/Ref/generic 3=array.
+            mut val effStart: U64 = tyStart
+            mut val effLen: U64 = tyLen
+            mut val effArr: Bool = tyIsArray
+            mut val effTy: U64 = ty
+            if tyLen == 0 {
+                if tyIsArray {
+                } else {
+                    val ti: TypeInfo = exprType(c: inout c, id: init)
+                    effStart = ti.nameStart
+                    effLen = ti.nameLen
+                    effTy = ti.ref
+                    if ti.kind == 3 {
+                        effArr = true
+                    }
+                    // A bare string literal (or other String-valued expr with no
+                    // type name to recover) carries no span to name PlewString;
+                    // require an annotation rather than silently miscompile.
+                    if ti.kind == 1 {
+                        if effLen == 0 {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: init)), msg: "cannot infer the type of this binding; add a type annotation (e.g. `: String`)")
+                            return
+                        }
+                    }
+                }
+            }
+            checkLitSpan(c: inout c, id: init, tyStart: effStart, tyLen: effLen, isArray: effArr)
             // unique values are move-only: `val g = f` (a bare unique place) is a
             // forbidden copy — require `val g = move f`.
             checkUniquePlaceCopy(c: inout c, exprId: init, inoutOk: false)
@@ -383,36 +413,36 @@ fn genStmt(c: inout Comp, id: U64) {
             // is a pointer; reads/writes dereference it (genExpr handles that).
             if isBoxedLocalAt(c: inout c, nameStart: nameStart) {
                 write(s: "    ")
-                genCTypeOf(c: inout c, tyRef: ty, fallStart: tyStart, fallLen: tyLen, isArray: tyIsArray)
+                genCTypeOf(c: inout c, tyRef: effTy, fallStart: effStart, fallLen: effLen, isArray: effArr)
                 write(s: "* ")
                 writeSpan(c: inout c, start: nameStart, len: nameLen)
                 write(s: " = (")
-                genCTypeOf(c: inout c, tyRef: ty, fallStart: tyStart, fallLen: tyLen, isArray: tyIsArray)
+                genCTypeOf(c: inout c, tyRef: effTy, fallStart: effStart, fallLen: effLen, isArray: effArr)
                 write(s: "*)plew_arc_alloc(sizeof(")
-                genCTypeOf(c: inout c, tyRef: ty, fallStart: tyStart, fallLen: tyLen, isArray: tyIsArray)
+                genCTypeOf(c: inout c, tyRef: effTy, fallStart: effStart, fallLen: effLen, isArray: effArr)
                 write(s: ")); *")
                 writeSpan(c: inout c, start: nameStart, len: nameLen)
                 write(s: " = ")
                 genExpr(c: inout c, id: init)
                 write(s: ";\n")
-                addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
+                addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: effStart, tyLen: effLen, isArray: effArr, ty: effTy, isInout: false, isMut: mutable, owned: true)
                 return
             }
             write(s: "    ")
-            genCTypeOf(c: inout c, tyRef: ty, fallStart: tyStart, fallLen: tyLen, isArray: tyIsArray)
+            genCTypeOf(c: inout c, tyRef: effTy, fallStart: effStart, fallLen: effLen, isArray: effArr)
             write(s: " ")
             writeSpan(c: inout c, start: nameStart, len: nameLen)
             write(s: " = ")
-            if tyIsArray {
-                genArrayValue(c: inout c, exprId: init, elemStart: tyStart, elemLen: tyLen)
+            if effArr {
+                genArrayValue(c: inout c, exprId: init, elemStart: effStart, elemLen: effLen)
             } else {
                 // CoW: both mutable and immutable bindings share-on-bind (structs
                 // retain heap fields; scalars/Strings/fresh values emit directly).
                 // The mutable/immutable split now only governs assignability.
-                genCopyValue(c: inout c, exprId: init, tyRef: ty, fallStart: tyStart, fallLen: tyLen, isArray: false)
+                genCopyValue(c: inout c, exprId: init, tyRef: effTy, fallStart: effStart, fallLen: effLen, isArray: false)
             }
             write(s: ";\n")
-            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
+            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: effStart, tyLen: effLen, isArray: effArr, ty: effTy, isInout: false, isMut: mutable, owned: true)
         }
         Stmt.Assign { val op, val target, val value } => {
             val te: Expr = c.exprs[target]

@@ -9916,38 +9916,61 @@ void genStmt_c_Comp_id_U64(Comp* c, uint64_t id) {
         (void)ty;
         uint64_t init = _m685.data.Let.init;
         (void)init;
-    checkLitSpan_c_Comp_id_U64_tyStart_U64_tyLen_U64_isArray_Bool(&((*c)), init, tyStart, tyLen, tyIsArray);
+    uint64_t effStart = tyStart;
+    uint64_t effLen = tyLen;
+    long long effArr = tyIsArray;
+    uint64_t effTy = ty;
+    if (tyLen == 0) {
+    if (tyIsArray) {
+    }
+    else {
+    TypeInfo ti = exprType_c_Comp_id_U64(&((*c)), init);
+    effStart = ti.nameStart;
+    effLen = ti.nameLen;
+    effTy = ti.ref;
+    if (ti.kind == 3) {
+    effArr = 1;
+    }
+    if (ti.kind == 1) {
+    if (effLen == 0) {
+    compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), exprOffset_c_Comp_id_U64(&((*c)), init)), (PlewString){"cannot infer the type of this binding; add a type annotation (e.g. `: String`)", 78});
+    return;
+    }
+    }
+    }
+    }
+    checkLitSpan_c_Comp_id_U64_tyStart_U64_tyLen_U64_isArray_Bool(&((*c)), init, effStart, effLen, effArr);
     checkUniquePlaceCopy_c_Comp_exprId_U64_inoutOk_Bool(&((*c)), init, 0);
     if (isBoxedLocalAt_c_Comp_nameStart_U64(&((*c)), nameStart)) {
     plew_write((PlewString){"    ", 4});
-    genCTypeOf_c_Comp_tyRef_U64_fallStart_U64_fallLen_U64_isArray_Bool(&((*c)), ty, tyStart, tyLen, tyIsArray);
+    genCTypeOf_c_Comp_tyRef_U64_fallStart_U64_fallLen_U64_isArray_Bool(&((*c)), effTy, effStart, effLen, effArr);
     plew_write((PlewString){"* ", 2});
     writeSpan_c_Comp_start_U64_len_U64(&((*c)), nameStart, nameLen);
     plew_write((PlewString){" = (", 4});
-    genCTypeOf_c_Comp_tyRef_U64_fallStart_U64_fallLen_U64_isArray_Bool(&((*c)), ty, tyStart, tyLen, tyIsArray);
+    genCTypeOf_c_Comp_tyRef_U64_fallStart_U64_fallLen_U64_isArray_Bool(&((*c)), effTy, effStart, effLen, effArr);
     plew_write((PlewString){"*)plew_arc_alloc(sizeof(", 24});
-    genCTypeOf_c_Comp_tyRef_U64_fallStart_U64_fallLen_U64_isArray_Bool(&((*c)), ty, tyStart, tyLen, tyIsArray);
+    genCTypeOf_c_Comp_tyRef_U64_fallStart_U64_fallLen_U64_isArray_Bool(&((*c)), effTy, effStart, effLen, effArr);
     plew_write((PlewString){")); *", 5});
     writeSpan_c_Comp_start_U64_len_U64(&((*c)), nameStart, nameLen);
     plew_write((PlewString){" = ", 3});
     genExpr_c_Comp_id_U64(&((*c)), init);
     plew_write((PlewString){";\n", 2});
-    addLocal_c_Comp_nameStart_U64_nameLen_U64_tyStart_U64_tyLen_U64_isArray_Bool_ty_U64_isInout_Bool_isMut_Bool_owned_Bool(&((*c)), nameStart, nameLen, tyStart, tyLen, tyIsArray, ty, 0, mutable, 1);
+    addLocal_c_Comp_nameStart_U64_nameLen_U64_tyStart_U64_tyLen_U64_isArray_Bool_ty_U64_isInout_Bool_isMut_Bool_owned_Bool(&((*c)), nameStart, nameLen, effStart, effLen, effArr, effTy, 0, mutable, 1);
     return;
     }
     plew_write((PlewString){"    ", 4});
-    genCTypeOf_c_Comp_tyRef_U64_fallStart_U64_fallLen_U64_isArray_Bool(&((*c)), ty, tyStart, tyLen, tyIsArray);
+    genCTypeOf_c_Comp_tyRef_U64_fallStart_U64_fallLen_U64_isArray_Bool(&((*c)), effTy, effStart, effLen, effArr);
     plew_write((PlewString){" ", 1});
     writeSpan_c_Comp_start_U64_len_U64(&((*c)), nameStart, nameLen);
     plew_write((PlewString){" = ", 3});
-    if (tyIsArray) {
-    genArrayValue_c_Comp_exprId_U64_elemStart_U64_elemLen_U64(&((*c)), init, tyStart, tyLen);
+    if (effArr) {
+    genArrayValue_c_Comp_exprId_U64_elemStart_U64_elemLen_U64(&((*c)), init, effStart, effLen);
     }
     else {
-    genCopyValue_c_Comp_exprId_U64_tyRef_U64_fallStart_U64_fallLen_U64_isArray_Bool(&((*c)), init, ty, tyStart, tyLen, 0);
+    genCopyValue_c_Comp_exprId_U64_tyRef_U64_fallStart_U64_fallLen_U64_isArray_Bool(&((*c)), init, effTy, effStart, effLen, 0);
     }
     plew_write((PlewString){";\n", 2});
-    addLocal_c_Comp_nameStart_U64_nameLen_U64_tyStart_U64_tyLen_U64_isArray_Bool_ty_U64_isInout_Bool_isMut_Bool_owned_Bool(&((*c)), nameStart, nameLen, tyStart, tyLen, tyIsArray, ty, 0, mutable, 1);
+    addLocal_c_Comp_nameStart_U64_nameLen_U64_tyStart_U64_tyLen_U64_isArray_Bool_ty_U64_isInout_Bool_isMut_Bool_owned_Bool(&((*c)), nameStart, nameLen, effStart, effLen, effArr, effTy, 0, mutable, 1);
     }
     else if (_m685.tag == 1) {
         int64_t op = _m685.data.Assign.op;

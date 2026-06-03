@@ -4,6 +4,18 @@
 
 ## 現在地
 
+> **🐛 バグ調査カタログ（2026-06-04・能動プローブで発見・着手中）**：共通根＝**「`integer literal has no type from context`」が多くの未対応経路の catch-all 誤診断**で複数バグを覆い隠す。重大度順：
+> - **F1〔大・✅修正済〕** 注釈なし `val x = expr` が String/Array/struct/関数戻り値/変数コピーで型推論せず `long long` を吐き壊れた C（`val b=a`/`val a=mk()` 全滅）。根因＝`Stmt.Let`（Codegen/Stmt.pw:376）が注釈なし時 `exprType(init)` を使わず空型→`long long` fallback。修正＝注釈なし（`tyLen==0 && !tyIsArray`）なら `exprType(init)` の TypeInfo（kind 0=scalar/1=String/2=struct·Ref·generic/3=array）を eff* 値へ写し注釈付き経路を再利用。String 裸リテラル（kind1 nameLen=0）は name span が無いので **loud-error**（注釈要求・silent 誤コンパイル排除）。テスト `run/let_infer`＋`reject/let_infer_bare_string`。残＝`val bs = s.bytes` は **gap #2（`.bytes` exprType 未対応）** で別件・Ref `value=` 内のリテラル型付けは別の小ギャップ（注釈ありでも `<Ref[I32] value=7/>` が落ちる）。
+> - **F2〔大〕** 同一ブロック内シャドーイング `val x=1; val x=2` が C `redefinition`（ネストブロックは OK）。spec/03,11＝無制限 shadowing。修正＝shadow した local を C 名でユニーク化（suffix）。
+> - **F3〔大・feature 規模〕** トップレベル変数 `val`/`mut val` を `parseProgram`（Parser/Decl.pw:988）が処理せず1トークンずつ黙殺＝"undeclared identifier"・エラーも出ない silent 剥離。spec/15 の init 順（全トップレベル/assoc val→main）が絡む。
+> - **F4〔中〕** struct 分解パターン `P { val x, val y }`（spec/11:70,129 正典）が match/for で catch-all 誤診断で落ちる（enum バリアント分解は OK）。
+> - **F5〔小〕** 存在しない入力ファイルで plewc が rc=0（preamble だけ吐く）＝loud-fail すべき。
+> - **F6〔小・既知〕** `;` 文区切り誤診断・catch-all 誤診断全般。
+> - **F7〔小〕** カンマ区切り struct フィールド `struct P { val x: I32, val y: I32 }` が**幻の空フィールド `long long ,;` を生成**（spec はフィールド改行区切り＝カンマ非対応）。loud-reject すべき（silent 剥離）。
+> - **別の小ギャップ** Ref 構築 `<Ref[I32] value=7/>` の `value=` 内リテラルが Ref[I32] の T から型付けされず注釈ありでも落ちる（要 suffix）。
+> - 非バグ＝`print` の String 非対応は整数専用 placeholder shim（仕様面でない）。
+> 推奨順＝F1→F2→F4→F3（F1/F2 は局所修正で広範な有効コードが通る）。
+
 🎉 **セルフホスト達成・stage0（Rust）退役済み。** 正典コンパイラ＝Plew パッケージ `compiler/src/`（root `_.pw` が `part` で全パートを綴じ込む 1 モジュール＝`Loader`・`Lexer`・`Ast`・`Parser/`〔Expr/Stmt/Decl〕・`Codegen/`〔Emit/Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array〕・part はサブディレクトリ可）。自分自身を不動点までコンパイルする。
 
 > **次の一歩＝(3) 関連型＋Iterator/Iterable**（closure は (2) 完了＝必要十分）。**closure 完了**＝(2a) fat closure 表現＋不変値キャプチャ（スカラー＋array/Ref/struct/String）／(2b-1) スカラー `mut val` 参照キャプチャ（`makeCounter`）／(2b-2) **leak 解消**（env drop＋scope 末 closure/cell release＋bind/return share＝macOS `leaks` で 0 leaks 確認）。タグ `closures-stage-a`／`closures-capture-scalar`／`closures-capture-heap`／`closures-mut-capture`／`closures-leak-free`。残＝(2b-3) `mut val` 非スカラー箱化・`local` マーク（spawn 段）。トレイト/generics は step 1＋健全性監査＋ARC 修正まで完了。

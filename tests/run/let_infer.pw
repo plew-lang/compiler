@@ -1,0 +1,26 @@
+// F1: `val x = expr` with no type annotation infers the binding's full type
+// from the initializer (previously only integers/bools worked; structs,
+// arrays, call results and variable copies fell back to `long long`).
+import @Std/Io with { print }
+
+struct P {
+    val x: I32
+    val y: I32
+}
+
+fn mk() -> Array[I32] {
+    return [10, 20, 30]
+}
+
+fn main() {
+    val p = <P x=3 y=4 />
+    print(p.x + p.y)
+    val q = p
+    print(q.y)
+    val a = mk()
+    print(a[1])
+    mut val b = a
+    b[0] = 99
+    print(a[0])
+    print(b[0])
+}
