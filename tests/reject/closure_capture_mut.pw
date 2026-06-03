@@ -1,6 +1,0 @@
-import @Std/Io with { print }
-fn main() {
-    mut val n: I32 = 0
-    val f: fn() -> I32 = fn() -> I32 { return n }
-    print(f())
-}

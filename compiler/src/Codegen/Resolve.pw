@@ -556,6 +556,13 @@ fn localIsMutable(c: inout Comp, start: U64, len: U64) -> Bool {
         // `self` is assignable only through an `inout fn` receiver.
         return c.curSelfInout
     }
+    // inside a closure, a capture is assignable only if it is a boxed (`mut val`)
+    // reference capture; a by-value (`val`) capture is immutable.
+    if c.curInClosure {
+        if isCaptureOf(c: inout c, closureId: c.curClosureId, start: start, len: len) {
+            return isBoxedCaptureOf(c: inout c, closureId: c.curClosureId, start: start, len: len)
+        }
+    }
     mut val i: U64 = c.locals.count
     while i > 0 {
         i -= 1

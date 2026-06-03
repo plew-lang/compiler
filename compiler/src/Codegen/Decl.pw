@@ -965,6 +965,40 @@ fn closureHasCaptures(c: inout Comp, id: U64) -> Bool {
     return false
 }
 
+// Is the local declared at source offset `nameStart` boxed (a `mut val` captured
+// by some closure, so it lives in a shared ARC cell)? Matched by exact offset —
+// a declaration site is unique — so it does not confuse same-named locals.
+fn isBoxedLocalAt(c: inout Comp, nameStart: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.captures.count {
+        val e: CaptureEntry = c.captures[i]
+        if e.boxed {
+            if e.nameStart == nameStart {
+                return true
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// Is (start,len) a boxed (mutable, reference) capture of closure `closureId`?
+fn isBoxedCaptureOf(c: inout Comp, closureId: U64, start: U64, len: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.captures.count {
+        val e: CaptureEntry = c.captures[i]
+        if e.closureId == closureId {
+            if e.boxed {
+                if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) {
+                    return true
+                }
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
 // Is (start,len) the name of one of closure `closureId`'s captures?
 fn isCaptureOf(c: inout Comp, closureId: U64, start: U64, len: U64) -> Bool {
     mut val i: U64 = 0
@@ -990,6 +1024,10 @@ fn emitClosureEnvStruct(c: inout Comp, id: U64) {
         val e: CaptureEntry = c.captures[j]
         if e.closureId == id {
             genCTypeOf(c: inout c, tyRef: e.ty, fallStart: e.tyStart, fallLen: e.tyLen, isArray: e.isArray)
+            // a boxed (mutable) capture stores a pointer to the shared cell.
+            if e.boxed {
+                write(s: "*")
+            }
             write(s: " ")
             writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
             write(s: "; ")

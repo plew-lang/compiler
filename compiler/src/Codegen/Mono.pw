@@ -881,14 +881,27 @@ fn recordCapture(c: inout Comp, closureId: U64, localIdx: U64) {
         }
         i += 1
     }
+    mut val boxed: Bool = false
     if lo.isMut {
-        compileErrorAt(line: lineOf(c: inout c, offset: lo.nameStart), msg: "capturing a mutable variable (`mut val`) in a closure is not yet supported")
-    }
-    if captureSupported(c: inout c, lo: lo) {
+        // a mutable capture must share storage (reference capture). v1 boxes only
+        // scalar (`mut val`) cells; mutable non-scalar capture is additive later.
+        // (an array's type span names its element, so guard isArray explicitly.)
+        if lo.isArray {
+            compileErrorAt(line: lineOf(c: inout c, offset: lo.nameStart), msg: "capturing a mutable non-scalar value (`mut val` array/struct/string) in a closure is not yet supported")
+        } else {
+            if isPrimType(c: inout c, start: lo.tyStart, len: lo.tyLen) {
+                boxed = true
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: lo.nameStart), msg: "capturing a mutable non-scalar value (`mut val` array/struct/string) in a closure is not yet supported")
+            }
+        }
     } else {
-        compileErrorAt(line: lineOf(c: inout c, offset: lo.nameStart), msg: "capturing this value (unique / generic / enum / function) in a closure is not yet supported")
+        if captureSupported(c: inout c, lo: lo) {
+        } else {
+            compileErrorAt(line: lineOf(c: inout c, offset: lo.nameStart), msg: "capturing this value (unique / generic / enum / function) in a closure is not yet supported")
+        }
     }
-    c.captures.append(<CaptureEntry closureId=closureId nameStart=lo.nameStart nameLen=lo.nameLen tyStart=lo.tyStart tyLen=lo.tyLen isArray=lo.isArray ty=lo.ty />)
+    c.captures.append(<CaptureEntry closureId=closureId nameStart=lo.nameStart nameLen=lo.nameLen tyStart=lo.tyStart tyLen=lo.tyLen isArray=lo.isArray ty=lo.ty boxed=boxed />)
 }
 
 fn scanExprInsts(c: inout Comp, exprId: U64) {

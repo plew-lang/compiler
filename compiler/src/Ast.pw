@@ -46,6 +46,10 @@ struct CaptureEntry {
     val tyLen: U64
     val isArray: Bool
     val ty: U64
+    // a `mut val` capture: the enclosing local is heap-boxed (an implicit ARC
+    // cell) and the env holds a retained pointer to it, so mutations are shared
+    // (Swift-style reference capture). Non-mut captures are by-value (boxed=false).
+    val boxed: Bool
 }
 
 struct Local {

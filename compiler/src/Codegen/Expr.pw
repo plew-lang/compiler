@@ -43,6 +43,14 @@ fn emitClosureCall(c: inout Comp, tyRef: U64, nameStart: U64, nameLen: U64, args
 // enclosing scope releases its binding; immutable so a shared alias is correct.
 // Strings carry no rc (static/leaked bytes) and scalars are plain — both copy.
 fn emitCaptureInit(c: inout Comp, e: CaptureEntry) {
+    // a boxed (mutable) capture: the enclosing local is already a pointer to the
+    // shared cell; retain it (rc++) and store the pointer so writes are shared.
+    if e.boxed {
+        write(s: "plew_ref_share(")
+        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+        write(s: ")")
+        return
+    }
     if e.isArray {
         write(s: "PlewArray_")
         writeSpan(c: inout c, start: e.tyStart, len: e.tyLen)
@@ -85,10 +93,20 @@ fn genExpr(c: inout Comp, id: U64) {
             // env: `((__closure_env<id>*)__env)->name`.
             if c.curInClosure {
                 if isCaptureOf(c: inout c, closureId: c.curClosureId, start: start, len: len) {
-                    write(s: "((__closure_env")
+                    // a boxed (mutable) capture is a pointer to the shared cell:
+                    // dereference it so reads/writes hit the shared storage.
+                    val boxedCap: Bool = isBoxedCaptureOf(c: inout c, closureId: c.curClosureId, start: start, len: len)
+                    if boxedCap {
+                        write(s: "(*((__closure_env")
+                    } else {
+                        write(s: "((__closure_env")
+                    }
                     writeU64(n: c.curClosureId)
                     write(s: "*)__env)->")
                     writeSpan(c: inout c, start: start, len: len)
+                    if boxedCap {
+                        write(s: ")")
+                    }
                     return
                 }
             }
@@ -103,8 +121,17 @@ fn genExpr(c: inout Comp, id: U64) {
                 // a bare free-function name used as a value (function pointer) must
                 // emit the function's selector-mangled C symbol, not the raw name.
                 // Locals shadow functions, so only do this when it isn't a local.
-                if localIndexByName(c: inout c, start: start, len: len) < c.locals.count {
-                    writeSpan(c: inout c, start: start, len: len)
+                val lvi: U64 = localIndexByName(c: inout c, start: start, len: len)
+                if lvi < c.locals.count {
+                    // a boxed (captured `mut val`) local lives in a shared ARC cell:
+                    // the C variable is the pointer, so dereference to read/write it.
+                    if isBoxedLocalAt(c: inout c, nameStart: c.locals[lvi].nameStart) {
+                        write(s: "(*")
+                        writeSpan(c: inout c, start: start, len: len)
+                        write(s: ")")
+                    } else {
+                        writeSpan(c: inout c, start: start, len: len)
+                    }
                 } else {
                     val fvi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)
                     if fvi < c.funcs.count {

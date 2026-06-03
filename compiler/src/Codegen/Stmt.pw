@@ -378,6 +378,26 @@ fn genStmt(c: inout Comp, id: U64) {
             // unique values are move-only: `val g = f` (a bare unique place) is a
             // forbidden copy — require `val g = move f`.
             checkUniquePlaceCopy(c: inout c, exprId: init, inoutOk: false)
+            // a `mut val` captured by a closure is heap-boxed (an implicit ARC
+            // cell) so the closure and this scope share one storage. The C local
+            // is a pointer; reads/writes dereference it (genExpr handles that).
+            if isBoxedLocalAt(c: inout c, nameStart: nameStart) {
+                write(s: "    ")
+                genCTypeOf(c: inout c, tyRef: ty, fallStart: tyStart, fallLen: tyLen, isArray: tyIsArray)
+                write(s: "* ")
+                writeSpan(c: inout c, start: nameStart, len: nameLen)
+                write(s: " = (")
+                genCTypeOf(c: inout c, tyRef: ty, fallStart: tyStart, fallLen: tyLen, isArray: tyIsArray)
+                write(s: "*)plew_arc_alloc(sizeof(")
+                genCTypeOf(c: inout c, tyRef: ty, fallStart: tyStart, fallLen: tyLen, isArray: tyIsArray)
+                write(s: ")); *")
+                writeSpan(c: inout c, start: nameStart, len: nameLen)
+                write(s: " = ")
+                genExpr(c: inout c, id: init)
+                write(s: ";\n")
+                addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
+                return
+            }
             write(s: "    ")
             genCTypeOf(c: inout c, tyRef: ty, fallStart: tyStart, fallLen: tyLen, isArray: tyIsArray)
             write(s: " ")
