@@ -664,6 +664,125 @@ fn synthStructEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind,
     c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen traitStart=eqTrait.nameStart traitLen=eqTrait.nameLen derived=true witnessed=wit />)
 }
 
+// A decimal digit (0-9) as its ASCII byte. (`48 + d` would need a U64->U8 cast,
+// which the lossless-`as` discipline forbids, so spell it out.)
+fn digitByte(d: U64) -> U8 {
+    if d == 0 { return 48 }
+    if d == 1 { return 49 }
+    if d == 2 { return 50 }
+    if d == 3 { return 51 }
+    if d == 4 { return 52 }
+    if d == 5 { return 53 }
+    if d == 6 { return 54 }
+    if d == 7 { return 55 }
+    if d == 8 { return 56 }
+    return 57
+}
+
+fn appendU64Digits(c: inout Comp, n: U64) {
+    if n >= 10 {
+        appendU64Digits(c: inout c, n: n / 10)
+    }
+    c.bytes.append(digitByte(d: n % 10))
+}
+
+// Intern a fresh synthetic name `<prefix><n>` (e.g. `L0`, `R3`) for a match bind.
+fn internName(c: inout Comp, prefix: U8, n: U64) -> Bind {
+    val start: U64 = c.bytes.count
+    c.bytes.append(prefix)
+    appendU64Digits(c: inout c, n: n)
+    val len: U64 = c.bytes.count - start
+    return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
+}
+
+// Index of the enum named (start,len), or c.enums.count if none.
+fn enumIndexByName(c: inout Comp, start: U64, len: U64) -> U64 {
+    mut val i: U64 = 0
+    while i < c.enums.count {
+        if spansEqual(c: inout c, aStart: c.enums[i].nameStart, aLen: c.enums[i].nameLen, bStart: start, bLen: len) {
+            return i
+        }
+        i += 1
+    }
+    return c.enums.count
+}
+
+// A `true`/`false` Bool literal expression.
+fn synthBool(c: inout Comp, v: I64) -> U64 {
+    return c.pushExpr(e: <Expr.Int value=v offset=0 isBool=true tyStart=0 tyLen=0 />)
+}
+
+// Synthesize `@[Eq]` for an enum: `eq(lhs: E, rhs: E) -> Bool` as a value-position
+// match `match lhs { E.V { L.. } => match rhs { E.V { R.. } => L0==R0 && ..., _ => false }, ... }`
+// (tags must agree, then payloads compare field-wise). The outer match is
+// exhaustive over the variants; each inner match has a `_ => false` for tag
+// mismatch. Plus a derived `Conform(E, Eq)`.
+fn synthEnumEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind, boolN: Bind, eqTrait: Bind) {
+    val ei: U64 = enumIndexByName(c: inout c, start: d.typeStart, len: d.typeLen)
+    if ei >= c.enums.count {
+        return
+    }
+    val variants: Array[Variant] = c.enums[ei].variants
+    mut val params: Array[Param] = []
+    params.append(synthParam(nameSpan: lhsN, tyStart: d.typeStart, tyLen: d.typeLen))
+    params.append(synthParam(nameSpan: rhsN, tyStart: d.typeStart, tyLen: d.typeLen))
+    val lhsId: U64 = c.pushExpr(e: <Expr.Ident start=lhsN.nameStart len=lhsN.nameLen />)
+    val rhsId: U64 = c.pushExpr(e: <Expr.Ident start=rhsN.nameStart len=rhsN.nameLen />)
+    mut val counter: U64 = 0
+    mut val outerArms: Array[MatchArm] = []
+    mut val vi: U64 = 0
+    while vi < variants.count {
+        val v: Variant = variants[vi]
+        val flds: Array[FieldDef] = v.fields
+        // lhs/rhs payload binds (fresh names L<n>/R<n>) + the field comparison.
+        mut val lhsBinds: Array[Bind] = []
+        mut val rhsBinds: Array[Bind] = []
+        mut val payload: U64 = 0
+        mut val firstp: Bool = true
+        mut val fj: U64 = 0
+        while fj < flds.count {
+            val f: FieldDef = flds[fj]
+            val ln: Bind = internName(c: inout c, prefix: 76, n: counter)
+            counter += 1
+            val rn: Bind = internName(c: inout c, prefix: 82, n: counter)
+            counter += 1
+            lhsBinds.append(<Bind nameStart=ln.nameStart nameLen=ln.nameLen fieldStart=f.nameStart fieldLen=f.nameLen />)
+            rhsBinds.append(<Bind nameStart=rn.nameStart nameLen=rn.nameLen fieldStart=f.nameStart fieldLen=f.nameLen />)
+            val li: U64 = c.pushExpr(e: <Expr.Ident start=ln.nameStart len=ln.nameLen />)
+            val ri: U64 = c.pushExpr(e: <Expr.Ident start=rn.nameStart len=rn.nameLen />)
+            val eqj: U64 = c.pushExpr(e: <Expr.Binary op=50 lhs=li rhs=ri />)
+            if firstp {
+                payload = eqj
+                firstp = false
+            } else {
+                payload = c.pushExpr(e: <Expr.Binary op=61 lhs=payload rhs=eqj />)
+            }
+            fj += 1
+        }
+        if firstp {
+            payload = synthBool(c: inout c, v: 1)
+        }
+        // inner match on rhs: this variant -> payload, anything else -> false.
+        mut val innerArms: Array[MatchArm] = []
+        innerArms.append(<MatchArm isWildcard=false enumStart=d.typeStart enumLen=d.typeLen variantStart=v.nameStart variantLen=v.nameLen binds=rhsBinds body=payload />)
+        val noBinds: Array[Bind] = []
+        innerArms.append(<MatchArm isWildcard=true enumStart=0 enumLen=0 variantStart=0 variantLen=0 binds=noBinds body=synthBool(c: inout c, v: 0) />)
+        val innerMatch: U64 = c.pushExpr(e: <Expr.MatchExpr scrut=rhsId arms=innerArms />)
+        outerArms.append(<MatchArm isWildcard=false enumStart=d.typeStart enumLen=d.typeLen variantStart=v.nameStart variantLen=v.nameLen binds=lhsBinds body=innerMatch />)
+        vi += 1
+    }
+    val outerMatch: U64 = c.pushExpr(e: <Expr.MatchExpr scrut=lhsId arms=outerArms />)
+    val ret: U64 = c.pushStmt(s: <Stmt.Return value=outerMatch hasValue=true />)
+    mut val stmts: Array[U64] = []
+    stmts.append(ret)
+    val blkId: U64 = c.blocks.count
+    c.blocks.append(<Block stmts=stmts />)
+    val noTP: Array[Bind] = []
+    c.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true />)
+    mut val wit: Array[Func] = []
+    c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen traitStart=eqTrait.nameStart traitLen=eqTrait.nameLen derived=true witnessed=wit />)
+}
+
 // Synthesize all recorded `@[...]` derives (#5). Currently `@[Eq]` for structs.
 fn synthesizeDerives(c: inout Comp) {
     if c.derives.count == 0 {
@@ -679,6 +798,7 @@ fn synthesizeDerives(c: inout Comp) {
         val d: DeriveReq = c.derives[i]
         if rangeEquals(bytes: c.bytes, start: d.nameStart, len: d.nameLen, kw: "Eq") {
             if d.isEnum {
+                synthEnumEq(c: inout c, d: d, eqN: eqN, lhsN: lhsN, rhsN: rhsN, boolN: boolN, eqTrait: eqTrait)
             } else {
                 synthStructEq(c: inout c, d: d, eqN: eqN, lhsN: lhsN, rhsN: rhsN, boolN: boolN, eqTrait: eqTrait)
             }

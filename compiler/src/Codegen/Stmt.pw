@@ -349,11 +349,11 @@ fn genCond(c: inout Comp, id: U64) {
             if isStringEq(c: inout c, op: op, lhs: lhs) {
                 genExpr(c: inout c, id: id)
             } else {
-                if isEnumEq(c: inout c, op: op, lhs: lhs) {
-                    emitEnumTagCmp(c: inout c, lhs: lhs, rhs: rhs, op: op, outer: false)
+                if hasCompareWitness(c: inout c, op: op, lhs: lhs) {
+                    emitTraitCompare(c: inout c, op: op, lhs: lhs, rhs: rhs)
                 } else {
-                    if hasCompareWitness(c: inout c, op: op, lhs: lhs) {
-                        emitTraitCompare(c: inout c, op: op, lhs: lhs, rhs: rhs)
+                    if isEnumEq(c: inout c, op: op, lhs: lhs) {
+                        emitEnumTagCmp(c: inout c, lhs: lhs, rhs: rhs, op: op, outer: false)
                     } else {
                         if compareNeedsTrait(c: inout c, op: op, lhs: lhs) {
                             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "comparison needs Eq/Ord; not available for a struct or array")

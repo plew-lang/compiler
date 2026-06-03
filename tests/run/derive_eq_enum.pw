@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+// `@[Eq]` on an enum synthesizes structural equality: tags must agree, then
+// payloads compare field-wise (payload variants no longer need a manual impl).
+@[Eq]
+enum Shape {
+    Circle { val r: I64 }
+    Rect { val w: I64  val h: I64 }
+    Unit
+}
+
+fn boolI(b: Bool) -> I64 { if b { return 1I64 } return 0I64 }
+
+fn main() {
+    val a: Shape = <Shape.Circle r=5 />
+    val b: Shape = <Shape.Circle r=5 />
+    val c: Shape = <Shape.Circle r=9 />
+    val d: Shape = <Shape.Rect w=2 h=3 />
+    val e: Shape = <Shape.Rect w=2 h=3 />
+    val u: Shape = <Shape.Unit />
+    print(boolI(b: a == b))   // 1
+    print(boolI(b: a == c))   // 0
+    print(boolI(b: a == d))   // 0
+    print(boolI(b: d == e))   // 1
+    print(boolI(b: a == u))   // 0
+    print(boolI(b: u == u))   // 1
+}
