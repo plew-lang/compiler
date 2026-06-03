@@ -17,9 +17,10 @@
 
 ## メモリ・所有権（最大の剥離）
 
-- **値意味論＋CoW** → ✅ **実装済**（非アトミック refcount＋copy-on-write）。`Array[T]`/struct は `rc` 付き（`{data,len,cap,long long* rc}`・NULL＝借り物〔`.bytes`/文字列リテラル〕）。束縛は **O(1) 共有＋retain**（`_share`/`Struct_share`）、変異点（`_set`/`_push` の `_unique`）で **rc>1 なら複製してから書く**＝値意味論を保ったまま遅延コピー。`Ref` 箱も同じ rc ヘッダで refcount 化（共有可変のまま）。解放＝scope 末・早期 exit（`return`/`break`/`continue`・`panic` は不走）・成長時の旧バッファで、配列要素/struct フィールドを再帰解放（深い `_copy` とセット）。**RC は非アトミック**（spawn 境界で実体化ゆえ・→ [design-decisions.md](design-decisions.md)）。全 fixpoint＋ASan（テスト＋自己コンパイル）で実証。残：`deinit`（unique 型前提・未）・`WeakRef`・循環回収・mono struct/enum の share/release（mono 局所 leak・安全）。spec/03。
-- **ARC / `WeakRef` / 循環回収** → 無し（リークで代用）。
-- **`unique`/`local`/`borrow`/`move`/`deinit`** → 無し。すべてコピー可能・by-value。そもそも unique 型が無い。
+- **値意味論＋CoW** → ✅ **実装済**（非アトミック refcount＋copy-on-write）。`Array[T]`/struct は `rc` 付き（`{data,len,cap,long long* rc}`・NULL＝借り物〔`.bytes`/文字列リテラル〕）。束縛は **O(1) 共有＋retain**（`_share`/`Struct_share`）、変異点（`_set`/`_push` の `_unique`）で **rc>1 なら複製してから書く**＝値意味論を保ったまま遅延コピー。`Ref` 箱も同じ rc ヘッダで refcount 化（共有可変のまま）。解放＝scope 末・早期 exit（`return`/`break`/`continue`・`panic` は不走）・成長時の旧バッファで、配列要素/struct フィールドを再帰解放（深い `_copy` とセット）。**RC は非アトミック**（spawn 境界で実体化ゆえ・→ [design-decisions.md](design-decisions.md)）。全 fixpoint＋ASan（テスト＋自己コンパイル）で実証。残：`WeakRef`・循環回収・mono struct/enum の share/release（mono 局所 leak・安全）。spec/03。
+- **`WeakRef` / 循環回収** → 無し（リークで代用）。
+- **`unique`/`borrow`/`move`/`deinit`** → ✅ **実装済**（タグ `unique-deinit`/`unique-move`/`unique-checks`/`unique-nested`）。`unique struct`＋`deinit`（決定的破棄・型本体→フィールド宣言順・ネスト再帰・合成 `Type_deinit`）・`move`/`borrow` 前置＋引数モード・線形 move 追跡（`Local.moved`・use-after-move/bare コピー/bare 引数/伝染/モード必須を reject・`return` の暗黙 move・`move T` 引数は callee 所有）。残：**field/element の部分 move**（未追跡ゆえ `move h.f` は reject）・`Array[unique]`/generic-unique（`allowUnique` 未・`Ref` 包み前提）・分岐内 move の保守近似（codegen 順で moved 持続）・`move fn`/`borrow fn` self（未パース）。spec/03。
+- **`local` 型**（spawn を越えられない・`Ref` 持ちは必須）→ 無し。spawn/async 実装時に。spec/03,14。
 - **`inout`** → 実装済（C ポインタ）。**単純変数・合成可変性（`base.field`・`a[i]`・`.append`/`inout fn` 受信側）の代入可変性検査あり**。残：**重なり inout 検査なし**（spec は同一場所への複数 inout を禁止・lint＋限定 panic）。spec/03。
 - **place 越しの get-modify-set 脱糖**（`arr[i].field=x` 等） → 未実装（単純な代入のみ）。spec/03。
 
@@ -91,7 +92,7 @@
 
 ## 共有可変・並行性・メタプログラミング
 
-- **`Ref[T]`（共有可変）** → ✅ **基本実装済**：ヒープ箱（C `T*`）・`<Ref[T] value=e/>`・`r->field`・コピーで共有。残：**ARC retain/release＋`deinit`（スコープ解放追跡）**・`WeakRef`＋`upgrade()`・循環回収・bare `<Ref value=e/>` 型推論（明示 `[T]` 必須）。spec/03,14。
+- **`Ref[T]`（共有可変）** → ✅ **基本実装済**：rc ヘッダ付きヒープ箱・`<Ref[T] value=e/>`・`r->field`・コピーで retain 共有・scope 末で release（最後の解放で箱を free＋pointee の配列/struct を release）。残：**最後の `Ref` 解放で pointee の `deinit` 走行**（`Ref[unique]`＝今は `structNeedsCopy` 経由で deinit を呼ばない＝unique pointee の deinit 漏れ）・`WeakRef`＋`upgrade()`・循環回収・bare `<Ref value=e/>` 型推論（明示 `[T]` 必須）。spec/03,14。
 - **`async`/`await`/`spawn`/`Promise`/`JoinHandle`/チャネル** → **未実装**（イベントループ＝最大の残）。✅ 土台＝関数値＋非キャプチャクロージャは実装済（spawn にはキャプチャが要る）。
 - **メタプログラミング（`Derive`・コード生成）** → 未実装（spec 上も最後）。
 
@@ -101,4 +102,4 @@
 
 ---
 
-**再訪の優先度（私見）**：観測挙動を歪める残りの剥離＝①トレイト/`where`/Dictionary ②クロージャキャプチャ→spawn→async ③`deinit`（unique 型前提）。整数幅・match・ラベル・診断・値意味論・**CoW＋refcount 解放（配列/struct/Ref・非アトミック）**・generics・`Optional`/`Result`/`try`/`??` は解消済。残る hidden cost＝循環回収（`WeakRef` 手動 or サイクルコレクタ）・mono 局所 leak。
+**再訪の優先度（私見）**：観測挙動を歪める残りの剥離＝①トレイト/`where`/Dictionary ②クロージャキャプチャ→spawn→async。整数幅・match・ラベル・診断・値意味論・**CoW＋refcount 解放（配列/struct/Ref・非アトミック）**・generics・`Optional`/`Result`/`try`/`??`・**`unique`＋`deinit`＋move 所有権**は解消済。残る hidden cost＝循環回収（`WeakRef` 手動 or サイクルコレクタ）・mono 局所 leak・`Array[unique]`/部分 move。
