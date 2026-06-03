@@ -169,14 +169,28 @@ fn parseImpl(c: inout Comp) {
                 c.advance()
                 parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, implParams: implParams)
             }
+            Kind.KwDeinit => {
+                // `deinit { body }` (spec/03): no params, no return, read self.
+                // Lowered to a synthetic method `Type_deinit(Type self)` (name span
+                // = the `deinit` keyword) and recorded so scope-exit drops fire it.
+                val deinitTok: Tok = c.cur()
+                c.advance()
+                c.skipNewlines()
+                val body: U64 = parseBlock(c: inout c)
+                val noParams: Array[Param] = []
+                val noTypeParams: Array[Bind] = []
+                c.funcs.append(<Func nameStart=deinitTok.start nameLen=deinitTok.len typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=false />)
+                c.deinits.append(<Bind nameStart=recvStart nameLen=recvLen fieldStart=recvStart fieldLen=recvLen />)
+            }
             _ => { c.advance() }
         }
     }
 }
 
-// `struct Name { (val|mut val) field: Type ... }`. Field modifiers (val/mut/
-// pub) are consumed and ignored; codegen maps each field's type to a C type.
-fn parseStruct(c: inout Comp) {
+// `[unique] struct Name { (val|mut val) field: Type ... }`. Field modifiers
+// (val/mut/pub) are consumed and ignored; codegen maps each field's type to a C
+// type. `isUnique` is set when a leading `unique` keyword was consumed.
+fn parseStruct(c: inout Comp, isUnique: Bool) {
     c.advance()
     val nameTok: Tok = c.cur()
     c.advance()
@@ -195,6 +209,19 @@ fn parseStruct(c: inout Comp) {
                 break
             }
             Kind.Eof => { break }
+            Kind.KwDeinit => {
+                // `deinit { body }` written in the struct body (spec/03's primary
+                // form). Same lowering as the impl form: a synthetic
+                // `Type_deinit(Type self)` method + a c.deinits record.
+                val deinitTok: Tok = c.cur()
+                c.advance()
+                c.skipNewlines()
+                val body: U64 = parseBlock(c: inout c)
+                val noParams: Array[Param] = []
+                val noTypeParams: Array[Bind] = []
+                c.funcs.append(<Func nameStart=deinitTok.start nameLen=deinitTok.len typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nameTok.start recvLen=nameTok.len selfInout=false />)
+                c.deinits.append(<Bind nameStart=nameTok.start nameLen=nameTok.len fieldStart=nameTok.start fieldLen=nameTok.len />)
+            }
             _ => {
                 // a field declaration: `[mut] val name : Type`. `mut val` marks
                 // assignable storage; bare `val` is immutable.
@@ -232,7 +259,7 @@ fn parseStruct(c: inout Comp) {
             }
         }
     }
-    c.structs.append(<StructDef nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams fields=fields />)
+    c.structs.append(<StructDef nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams fields=fields isUnique=isUnique />)
 }
 
 // `enum Name { Variant [{ field: Type, ... }] ... }`. Variant fields take no
@@ -392,7 +419,17 @@ fn parseProgram(c: inout Comp) {
         val k: Kind = c.curKind()
         match k {
             Kind.KwFn => { parseFunc(c: inout c) }
-            Kind.KwStruct => { parseStruct(c: inout c) }
+            Kind.KwStruct => { parseStruct(c: inout c, isUnique: false) }
+            Kind.KwUnique => {
+                // `unique struct ...`: consume `unique`, then the struct keyword
+                // follows (parseStruct skips it). `unique` on anything else is a
+                // parse no-op for now (only structs may be unique in v1).
+                c.advance()
+                match c.curKind() {
+                    Kind.KwStruct => { parseStruct(c: inout c, isUnique: true) }
+                    _ => {}
+                }
+            }
             Kind.KwEnum => { parseEnum(c: inout c) }
             Kind.Ident => {
                 if c.identIs(kw: "import") {

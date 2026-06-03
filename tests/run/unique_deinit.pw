@@ -1,0 +1,30 @@
+import @Std/Io with { write, print }
+
+// A unique (copy-incapable, move-only) resource type with a `deinit` that runs
+// deterministically when its last owner leaves scope (spec/03).
+unique struct File {
+    val fd: I64
+    deinit { print(self.fd) }
+}
+
+// deinit may also be declared in an `impl` block.
+unique struct Socket {
+    val id: I64
+}
+impl Socket {
+    deinit { print(self.id) }
+}
+
+// deinit fires on early return too: this function's `f` is dropped at `return`.
+fn open(fd: I64) -> I64 {
+    val f: File = <File fd=fd />
+    write(s: "opened\n")
+    return fd
+}
+
+fn main() {
+    val a: File = <File fd=1 />
+    val s: Socket = <Socket id=7 />
+    val r: I64 = open(fd: 9)
+    write(s: "main done\n")
+}

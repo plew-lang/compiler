@@ -25,6 +25,10 @@ enum Kind {
     KwIn
     KwAs
     KwInout
+    KwUnique
+    KwDeinit
+    KwMove
+    KwBorrow
     KwTrue
     KwFalse
     LParen
@@ -228,6 +232,18 @@ fn identKind(bytes: Array[U8], start: U64, len: U64) -> Kind {
     }
     if rangeEquals(bytes: bytes, start: start, len: len, kw: "inout") {
         return <Kind.KwInout />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "unique") {
+        return <Kind.KwUnique />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "deinit") {
+        return <Kind.KwDeinit />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "move") {
+        return <Kind.KwMove />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "borrow") {
+        return <Kind.KwBorrow />
     }
     if rangeEquals(bytes: bytes, start: start, len: len, kw: "true") {
         return <Kind.KwTrue />
@@ -572,6 +588,10 @@ fn kindCode(k: Kind) -> I64 {
         Kind.KwIn => 24
         Kind.KwAs => 25
         Kind.KwInout => 26
+        Kind.KwUnique => 29
+        Kind.KwDeinit => 30
+        Kind.KwMove => 31
+        Kind.KwBorrow => 32
         Kind.KwTrue => 27
         Kind.KwFalse => 28
         Kind.LParen => 40

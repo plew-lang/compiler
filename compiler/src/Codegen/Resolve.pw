@@ -237,6 +237,17 @@ fn emitScopeDrops(c: inout Comp, mark: U64) {
                     // an owned Ref local: release its refcounted box.
                     emitRefRelease(c: inout c, nameStart: lo.nameStart, nameLen: lo.nameLen, refTy: lo.ty)
                 } else {
+                    // a unique type's owned local runs `deinit` first (spec/03:
+                    // type body before fields), then field release below. The call
+                    // is emitted in a function body (after every proto), so the
+                    // synthetic `Type_deinit` is in scope.
+                    if structHasDeinit(c: inout c, start: lo.tyStart, len: lo.tyLen) {
+                        write(s: "    ")
+                        writeSpan(c: inout c, start: lo.tyStart, len: lo.tyLen)
+                        write(s: "_deinit(")
+                        writeSpan(c: inout c, start: lo.nameStart, len: lo.nameLen)
+                        write(s: ");\n")
+                    }
                     // an owned struct local that owns heap fields: release them.
                     // Safe now that struct bindings share-on-bind (retain), so the
                     // local genuinely co-owns its fields rather than aliasing
@@ -284,6 +295,20 @@ fn emitRefRelease(c: inout Comp, nameStart: U64, nameLen: U64, refTy: U64) {
         }
     }
     write(s: " free(__rrc); } }\n")
+}
+
+// Whether the type named (start,len) declared a `deinit` (spec/03). Checked at
+// every owned-local scope drop so the last owner runs `deinit` deterministically.
+fn structHasDeinit(c: inout Comp, start: U64, len: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.deinits.count {
+        val d: Bind = c.deinits[i]
+        if spansEqual(c: inout c, aStart: d.nameStart, aLen: d.nameLen, bStart: start, bLen: len) {
+            return true
+        }
+        i += 1
+    }
+    return false
 }
 
 // Whether an owned struct local of type (start,len) should be released at scope

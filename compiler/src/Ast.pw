@@ -235,6 +235,10 @@ struct StructDef {
     // skipped at parse time (v1: allowUnique unimplemented, noLocal a no-op).
     val typeParams: Array[Bind]
     val fields: Array[FieldDef]
+    // declared `unique struct` (spec/03): copy-incapable, move-only, may carry a
+    // `deinit`. A unique value is never CoW-shared; bindings move ownership and
+    // the last owner runs `deinit` at scope exit. Default false = copyable.
+    val isUnique: Bool
 }
 
 struct Variant {
@@ -352,6 +356,11 @@ struct Comp {
     mut val impExit: Bool
     mut val impReadFileBytes: Bool
     mut val impFileExists: Bool
+    // types that declared a `deinit { ... }` (spec/03). Each entry reuses Bind as
+    // a (start,len) pair naming the receiver type. The deinit body itself is a
+    // synthetic Func named `deinit` (hasRecv) in c.funcs; this list lets codegen
+    // ask "does type T have a deinit?" so scope-exit drops fire it.
+    mut val deinits: Array[Bind]
 }
 
 // ---- cursor helpers ----
