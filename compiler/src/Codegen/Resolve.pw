@@ -289,7 +289,16 @@ fn emitRefRelease(c: inout Comp, nameStart: U64, nameLen: U64, refTy: U64) {
         write(s: ");")
     } else {
         if bti.kind == 2 {
-            if structNeedsCopy(c: inout c, start: bti.nameStart, len: bti.nameLen) {
+            // last owner of the box: run the pointee's deinit (spec/03 — the last
+            // Ref drop is a deterministic deinit point), then release its fields.
+            if structHasDeinit(c: inout c, start: bti.nameStart, len: bti.nameLen) {
+                write(s: " ")
+                writeSpan(c: inout c, start: bti.nameStart, len: bti.nameLen)
+                write(s: "_deinit(*")
+                writeSpan(c: inout c, start: nameStart, len: nameLen)
+                write(s: ");")
+            }
+            if structNeedsRelease(c: inout c, start: bti.nameStart, len: bti.nameLen) {
                 write(s: " ")
                 writeSpan(c: inout c, start: bti.nameStart, len: bti.nameLen)
                 write(s: "_release(*")

@@ -4532,7 +4532,14 @@ void emitRefRelease(Comp* c, uint64_t nameStart, uint64_t nameLen, uint64_t refT
     }
     else {
     if (bti.kind == 2) {
-    if (structNeedsCopy(&((*c)), bti.nameStart, bti.nameLen)) {
+    if (structHasDeinit(&((*c)), bti.nameStart, bti.nameLen)) {
+    plew_write((PlewString){" ", 1});
+    writeSpan(&((*c)), bti.nameStart, bti.nameLen);
+    plew_write((PlewString){"_deinit(*", 9});
+    writeSpan(&((*c)), nameStart, nameLen);
+    plew_write((PlewString){");", 2});
+    }
+    if (structNeedsRelease(&((*c)), bti.nameStart, bti.nameLen)) {
     plew_write((PlewString){" ", 1});
     writeSpan(&((*c)), bti.nameStart, bti.nameLen);
     plew_write((PlewString){"_release(*", 10});

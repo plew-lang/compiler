@@ -1,0 +1,17 @@
+import @Std/Io with { write, print }
+
+// The spec-blessed way to share/store a unique value is to wrap it in Ref[T]
+// (unique values cannot go in generics/arrays directly). The last Ref to drop
+// runs the pointee's deinit exactly once (spec/03).
+unique struct File {
+    val fd: I64
+    deinit { print(self.fd) }
+}
+
+fn main() {
+    val r: Ref[File] = <Ref[File] value=<File fd=5 /> />
+    val r2: Ref[File] = r          // shares the box (refcount 2)
+    write(s: "made\n")
+    r->fd = 8                       // mutate through the shared box
+    print(r2->fd)                   // 8 — visible to both handles
+}                                   // last Ref drops here: deinit prints 8 once
