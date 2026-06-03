@@ -94,7 +94,7 @@ fn main() {
     }
     mut val lx: Lexer = <Lexer bytes=combined pos=0 toks=[] depth=0 />
     lex(lx: inout lx)
-    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] traits=[] conforms=[] methodAliases=[] curWitnessed=[] types=[] genInsts=[] fnInsts=[] fnTypes=[] arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curRetTy=0 curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curSelfMove=false curTypeParams=[] curTypeArgs=[] curRecvInstRef=0 curGiveTmp=0 curLoopMark=0 curBranchBase=0 impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false impEprint=false impExit=false impReadFileBytes=false impFileExists=false deinits=[] />
+    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] traits=[] conforms=[] methodAliases=[] funcBounds=[] curWitnessed=[] curWhereTraits=[] types=[] genInsts=[] fnInsts=[] fnTypes=[] arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curRetTy=0 curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curSelfMove=false curTypeParams=[] curTypeArgs=[] curRecvInstRef=0 curGiveTmp=0 curLoopMark=0 curBranchBase=0 impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false impEprint=false impExit=false impReadFileBytes=false impFileExists=false deinits=[] />
     // reserve TypeRef index 0 as the "no type" sentinel so a `ty` field of 0
     // (synthetic locals, untyped positions) never aliases a real parsed type.
     c.types.append(<TypeRef nameStart=0 nameLen=0 args=[] />)
@@ -115,6 +115,9 @@ fn main() {
     // discover concrete instantiations of generic free functions from call sites
     // (each emitted as a specialized C function `f_<arg-mangle>`).
     collectFnInsts(c: inout c)
+    // enforce `where T: Trait` bounds (spec/08): each instantiation's concrete
+    // type argument must conform to the trait its parameter is bound to.
+    checkFnBounds(c: inout c)
     // unique types cannot be generic type arguments (wrap in Ref[T]); checked
     // after instantiation discovery since it scans the concrete genInsts.
     checkGenericUniqueArgs(c: inout c)

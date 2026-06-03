@@ -297,6 +297,19 @@ struct MethodAlias {
     val realLen: U64
 }
 
+// A trait bound `where T: Trait` on a function (spec/08). `fnIdx` indexes
+// c.funcs; (paramStart,paramLen) names the bounded type parameter; (traitStart,
+// traitLen) the required trait. `where T: A + B` and `where T: A, U: B` expand to
+// one FuncBound per atom. Enforced at instantiation: the concrete type bound to
+// the parameter must conform to the trait, else a loud error.
+struct FuncBound {
+    val fnIdx: U64
+    val paramStart: U64
+    val paramLen: U64
+    val traitStart: U64
+    val traitLen: U64
+}
+
 // A concrete instantiation of a generic free function (`fn f[T](x: T)` called
 // with T = a concrete type). `fnIdx` indexes c.funcs; `args` are the concrete
 // type arguments (TypeRef indices) aligned to the function's typeParams.
@@ -359,10 +372,15 @@ struct Comp {
     mut val traits: Array[TraitDef]
     mut val conforms: Array[Conform]
     mut val methodAliases: Array[MethodAlias]
+    // `where T: Trait` bounds on functions (spec/08), keyed by function index.
+    mut val funcBounds: Array[FuncBound]
     // scratch: requirement names witnessed by the trait impl currently being
     // parsed (body method or `via` alias). Reset at each `impl Type as Trait`
     // entry; folded into the Conform record at the impl's close.
     mut val curWitnessed: Array[Bind]
+    // scratch: the trait spans parsed by parseWhereClause, parallel to its
+    // returned param spans (a second return value without a tuple type).
+    mut val curWhereTraits: Array[Bind]
     // structured type references (TypeRef arena), indexed by the `ty`/`ref`
     // fields above. Built during parsing; consumed by generic monomorphization.
     mut val types: Array[TypeRef]

@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+// `where T: Trait` bound: a generic function dispatches the trait's requirements
+// and provided methods on the concrete type argument (static, monomorphized).
+trait Stepper { fn step() -> I64 }
+impl Stepper { fn doubleStep() -> I64 { return self.step() + self.step() } }
+
+struct Counter { val n: I64 }
+impl Counter as Stepper { fn step() -> I64 { return self.n } }
+struct Tenfold { val k: I64 }
+impl Tenfold as Stepper { fn step() -> I64 { return self.k * 10I64 } }
+
+fn run[T](x: T) -> I64 where T: Stepper { return x.doubleStep() }
+
+fn main() {
+    val c: Counter = <Counter n=4 />
+    val t: Tenfold = <Tenfold k=3 />
+    print(run(x: c))   // 8
+    print(run(x: t))   // 60
+}

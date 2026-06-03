@@ -1,0 +1,10 @@
+import @Std/Io with { print }
+trait Stepper { fn step() -> I64 }
+struct Counter { val n: I64 }
+impl Counter as Stepper { fn step() -> I64 { return self.n } }
+struct Other { val z: I64 }
+fn run[T](x: T) -> I64 where T: Stepper { return x.step() }
+fn main() {
+    val o: Other = <Other z=1 />
+    print(run(x: o))
+}

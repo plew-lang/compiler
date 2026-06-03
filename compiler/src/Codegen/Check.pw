@@ -631,3 +631,52 @@ fn checkConformances(c: inout Comp) {
         ci += 1
     }
 }
+
+// Whether the type named (typeStart,typeLen) conforms to the trait named
+// (traitStart,traitLen) — i.e. an `impl Type as Trait` was recorded (spec/08).
+fn typeConformsTo(c: inout Comp, typeStart: U64, typeLen: U64, traitStart: U64, traitLen: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.conforms.count {
+        val cf: Conform = c.conforms[i]
+        if spansEqual(c: inout c, aStart: cf.typeStart, aLen: cf.typeLen, bStart: typeStart, bLen: typeLen) {
+            if spansEqual(c: inout c, aStart: cf.traitStart, aLen: cf.traitLen, bStart: traitStart, bLen: traitLen) {
+                return true
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// Enforce `where T: Trait` bounds (spec/08) at each instantiation: the concrete
+// type argument bound to a constrained type parameter must conform to the
+// required trait, else a loud error. Runs after instantiation discovery.
+fn checkFnBounds(c: inout Comp) {
+    mut val ii: U64 = 0
+    while ii < c.fnInsts.count {
+        val fin: FnInst = c.fnInsts[ii]
+        val f: Func = c.funcs[fin.fnIdx]
+        mut val bi: U64 = 0
+        while bi < c.funcBounds.count {
+            val fb: FuncBound = c.funcBounds[bi]
+            if fb.fnIdx == fin.fnIdx {
+                mut val pi: U64 = 0
+                while pi < f.typeParams.count {
+                    val tp: Bind = f.typeParams[pi]
+                    if spansEqual(c: inout c, aStart: tp.nameStart, aLen: tp.nameLen, bStart: fb.paramStart, bLen: fb.paramLen) {
+                        if pi < fin.args.count {
+                            val at: TypeRef = c.types[fin.args[pi]]
+                            if typeConformsTo(c: inout c, typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen) {
+                            } else {
+                                compileErrorAt(line: lineOf(c: inout c, offset: fb.paramStart), msg: "type argument does not conform to the trait required by `where`")
+                            }
+                        }
+                    }
+                    pi += 1
+                }
+            }
+            bi += 1
+        }
+        ii += 1
+    }
+}

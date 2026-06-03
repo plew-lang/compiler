@@ -130,6 +130,11 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
         }
         _ => {}
     }
+    // optional `where T: Trait [+ Trait] [, U: Trait]` bounds (spec/08). Each
+    // atom (one trait per `+`/`,` expansion) is collected as parallel param/trait
+    // spans and recorded as a FuncBound once the function's index is known.
+    val boundParams: Array[Bind] = parseWhereClause(c: inout c)
+    mut val boundTraits: Array[Bind] = c.curWhereTraits
     // a trait-impl member witnesses a requirement either by `via real` (an alias
     // to an existing member) or by defining a body here (spec/08). `via` follows
     // the signature on the same line; record the witnessed requirement name.
@@ -146,7 +151,64 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
     }
     c.skipNewlines()
     val body: U64 = parseBlock(c: inout c)
+    val fnIdx: U64 = c.funcs.count
     c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvStart recvLen=recvLen selfInout=selfInout selfMove=selfMove />)
+    mut val wbi: U64 = 0
+    while wbi < boundParams.count {
+        val bp: Bind = boundParams[wbi]
+        val bt: Bind = boundTraits[wbi]
+        c.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=bp.nameStart paramLen=bp.nameLen traitStart=bt.nameStart traitLen=bt.nameLen />)
+        wbi += 1
+    }
+}
+
+// Parse an optional `where T: Trait [+ Trait] [, U: Trait]` clause. Returns the
+// bounded type-parameter spans; the parallel trait spans are left in
+// c.curWhereTraits (a scratch slot — two return values are awkward without a
+// tuple). Empty when no `where` is present. Stops at `{`, newline, or EOF.
+fn parseWhereClause(c: inout Comp) -> Array[Bind] {
+    mut val boundParams: Array[Bind] = []
+    mut val boundTraits: Array[Bind] = []
+    if c.identIs(kw: "where") {
+        c.advance()
+        mut val cont: Bool = true
+        while cont {
+            c.skipNewlines()
+            match c.curKind() {
+                Kind.Ident => {
+                    val pTok: Tok = c.cur()
+                    c.advance()
+                    match c.curKind() {
+                        Kind.Colon => { c.advance() }
+                        _ => {}
+                    }
+                    mut val moreTraits: Bool = true
+                    while moreTraits {
+                        match c.curKind() {
+                            Kind.Ident => {
+                                val tTok: Tok = c.cur()
+                                c.advance()
+                                boundParams.append(<Bind nameStart=pTok.start nameLen=pTok.len fieldStart=pTok.start fieldLen=pTok.len />)
+                                boundTraits.append(<Bind nameStart=tTok.start nameLen=tTok.len fieldStart=tTok.start fieldLen=tTok.len />)
+                            }
+                            _ => {}
+                        }
+                        match c.curKind() {
+                            Kind.Plus => { c.advance() }
+                            _ => { moreTraits = false }
+                        }
+                    }
+                    match c.curKind() {
+                        Kind.Comma => { c.advance() }
+                        _ => { cont = false }
+                    }
+                }
+                _ => { cont = false }
+            }
+        }
+    }
+    c.curWhereTraits = boundTraits
+    return boundParams
 }
 
 // `fn name(...)`: a free function. The current token is `fn`.
