@@ -11,7 +11,19 @@ fn genExpr(c: inout Comp, id: U64) {
                 writeSpan(c: inout c, start: start, len: len)
                 write(s: ")")
             } else {
-                writeSpan(c: inout c, start: start, len: len)
+                // a bare free-function name used as a value (function pointer) must
+                // emit the function's selector-mangled C symbol, not the raw name.
+                // Locals shadow functions, so only do this when it isn't a local.
+                if localIndexByName(c: inout c, start: start, len: len) < c.locals.count {
+                    writeSpan(c: inout c, start: start, len: len)
+                } else {
+                    val fvi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)
+                    if fvi < c.funcs.count {
+                        writeFnSelector(c: inout c, f: c.funcs[fvi])
+                    } else {
+                        writeSpan(c: inout c, start: start, len: len)
+                    }
+                }
             }
         }
         Expr.Move { val operand, val isBorrow } => {
@@ -254,7 +266,14 @@ fn genExpr(c: inout Comp, id: U64) {
                 compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "argument labels do not match the function parameters")
                 return
             }
-            writeSpan(c: inout c, start: nameStart, len: nameLen)
+            // resolve the (possibly overloaded) callee, then emit its selector-
+            // mangled C name so the call reaches the right overload's symbol.
+            val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            if cfi == c.funcs.count {
+                writeSpan(c: inout c, start: nameStart, len: nameLen)
+            } else {
+                writeFnSelector(c: inout c, f: c.funcs[cfi])
+            }
             write(s: "(")
             mut val i: U64 = 0
             while i < args.count {
@@ -272,7 +291,6 @@ fn genExpr(c: inout Comp, id: U64) {
                 i += 1
             }
             // fill omitted trailing params with their default expressions.
-            val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen)
             if cfi == c.funcs.count {
             } else {
                 val cf: Func = c.funcs[cfi]
@@ -414,7 +432,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
                 }
                 write(s: "_")
-                writeSpan(c: inout c, start: nameStart, len: nameLen)
+                writeFnSelector(c: inout c, f: mf)
                 write(s: "(")
                 if mf.selfInout {
                     write(s: "&(")

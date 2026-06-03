@@ -456,7 +456,7 @@ fn checkUniqueArgModes(c: inout Comp, args: Array[Arg]) {
 // user function) keep their args lenient at I64 (placeholder I/O shims).
 fn checkCallArgs(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) {
     checkUniqueArgModes(c: inout c, args: args)
-    val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen)
+    val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
     if fi == c.funcs.count {
         mut val i: U64 = 0
         while i < args.count {

@@ -495,6 +495,29 @@ fn genStructDef(c: inout Comp, si: U64) {
     write(s: "};\n")
 }
 
+// Emit a function's selector-mangled C name: `<name>` then, per parameter,
+// `_<label>_<typehead>` (an array type head is prefixed `A`). Two overloads that
+// differ in arity, labels, or parameter types thus get distinct C symbols. The
+// receiver prefix (for a method) is emitted separately by the caller. Emitted
+// identically at the definition, prototype, and every call site, so they agree.
+// `main` and intercepted builtins never reach here.
+fn writeFnSelector(c: inout Comp, f: Func) {
+    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+    val params: Array[Param] = f.params
+    mut val i: U64 = 0
+    while i < params.count {
+        val p: Param = params[i]
+        write(s: "_")
+        writeSpan(c: inout c, start: p.nameStart, len: p.nameLen)
+        write(s: "_")
+        if p.tyIsArray {
+            write(s: "A")
+        }
+        writeSpan(c: inout c, start: p.tyStart, len: p.tyLen)
+        i += 1
+    }
+}
+
 // Emit a C function signature (no trailing `;` or `{`). `main` is special:
 // `int main(void)`. The return type and each parameter type come from the
 // declared Plew types via genCType (scalars -> long long, named types echoed).
@@ -519,7 +542,7 @@ fn genSignature(c: inout Comp, f: Func) {
         }
         write(s: "_")
     }
-    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+    writeFnSelector(c: inout c, f: f)
     write(s: "(")
     val params: Array[Param] = f.params
     if f.hasRecv {

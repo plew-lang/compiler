@@ -2,7 +2,32 @@
 // Names are unique (no overloading in this compiler), so the first match wins.
 // Returns `c.funcs.count` (one past the end) when there is no match — kept as a
 // U64 sentinel so callers never need a signed index (lossless-`as` discipline).
-fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
+// Resolve a free-function call to its overload. Candidates share the name; among
+// them the one whose selector (labels + arg types) matches the call is chosen
+// (see selectorMatchesCall). `args` carries the call's labels/types. Returns the
+// func index, or c.funcs.count if none matches.
+fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.hasRecv {
+        } else {
+            if spansEqual(c: inout c, aStart: nameStart, aLen: nameLen, bStart: f.nameStart, bLen: f.nameLen) {
+                if paramsLabelsOk(c: inout c, params: f.params, args: args) {
+                    return i
+                }
+            }
+        }
+        i += 1
+    }
+    return c.funcs.count
+}
+
+// Index of the first free function named (start,len), or c.funcs.count if none.
+// Used where a bare function name is taken as a value (function pointer): there is
+// no call to pick an overload, so the first is used (overloaded fn-values are a
+// later concern).
+fn firstFuncByName(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
@@ -15,6 +40,13 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
         i += 1
     }
     return c.funcs.count
+}
+
+// Whether any free function (non-method) is named (start,len), regardless of
+// signature. Distinguishes "unknown name / builtin" from "name exists but no
+// overload's labels matched" for diagnostics.
+fn funcNameExists(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
+    return firstFuncByName(c: inout c, nameStart: nameStart, nameLen: nameLen) != c.funcs.count
 }
 
 // Index of the method named (nameStart,nameLen) on receiver type
@@ -80,12 +112,12 @@ fn paramsLabelsOk(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bool
 // resolve to a user function (I/O builtins, methods) return true here — they're
 // handled on their own paths and keep their provisional calling conventions.
 fn callLabelsOk(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
-    val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen)
-    if fi == c.funcs.count {
-        return true
+    if funcNameExists(c: inout c, nameStart: nameStart, nameLen: nameLen) {
+        // a user function by this name exists: some overload's labels must match.
+        return findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args) != c.funcs.count
     }
-    val f: Func = c.funcs[fi]
-    return paramsLabelsOk(c: inout c, params: f.params, args: args)
+    // not a user function (I/O builtin etc.) — handled on its own path.
+    return true
 }
 
 // Does some arm cover the variant (variantStart,variantLen)? A wildcard arm
