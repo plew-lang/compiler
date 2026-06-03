@@ -732,6 +732,7 @@ long long typeIsTransitivelyUnique(Comp* c, uint64_t start, uint64_t len);
 void checkFieldContagion(Comp* c);
 void checkParamModes(Comp* c, PlewArray_Param params);
 void checkArrayElemsNotUnique(Comp* c);
+void checkGenericUniqueArgs(Comp* c);
 void checkAllParamModes(Comp* c);
 void checkUniquePlaceCopy(Comp* c, uint64_t exprId, long long inoutOk);
 void checkUniqueArgModes(Comp* c, PlewArray_Arg args);
@@ -893,6 +894,7 @@ int main(int argc, char** argv) {
     checkAllParamModes(&(c));
     checkArrayElemsNotUnique(&(c));
     collectGenInsts(&(c));
+    checkGenericUniqueArgs(&(c));
     plew_write((PlewString){"#include <stdio.h>\n#include <stdint.h>\n#include <stdlib.h>\n#include <string.h>\n", 79});
     plew_write((PlewString){"typedef struct { const char* data; long long len; } PlewString;\n", 64});
     plew_write((PlewString){"__attribute__((unused)) static void* plew_arc_alloc(long long bytes) { long long* p = (long long*)malloc(sizeof(long long) + (size_t)bytes); p[0] = 1; return (void*)(p + 1); }\n", 176});
@@ -6136,6 +6138,32 @@ void checkArrayElemsNotUnique(Comp* c) {
     compileErrorAt(lineOf(&((*c)), ae.nameStart), (PlewString){"a unique type cannot be stored in an Array; wrap it in Ref[T]", 61});
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+}
+void checkGenericUniqueArgs(Comp* c) {
+    uint64_t i = 0;
+    while (i < (long long)(((*c).types).len)) {
+    TypeRef t = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(i)));
+    if ((long long)((t.args).len) == 0) {
+    }
+    else {
+    if (isRefInst(&((*c)), i)) {
+    }
+    else {
+    uint64_t j = 0;
+    while (j < (long long)((t.args).len)) {
+    TypeInfo ai = typeInfoOfRef(&((*c)), PlewArray_U64_get(t.args, (long long)(j)));
+    if (ai.kind == 2) {
+    if (typeIsUnique(&((*c)), ai.nameStart, ai.nameLen)) {
+    compileErrorAt(lineOf(&((*c)), ai.nameStart), (PlewString){"a unique type cannot be a generic type argument; wrap it in Ref[T]", 66});
+    }
+    }
+    j = ({ uint64_t __ov; if (__builtin_add_overflow((j), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    }
+    }
+    i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    TypeRef_release(t);
     }
 }
 void checkAllParamModes(Comp* c) {

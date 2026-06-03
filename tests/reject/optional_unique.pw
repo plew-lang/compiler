@@ -1,0 +1,8 @@
+// Even the lang-item generics (Optional/Result) reject a unique argument; the
+// canonical form is Optional[Ref[File]].
+import @Std/Io with { write }
+unique struct File { val fd: I64 }
+fn main() {
+    val o: Optional[File] = <Optional.Some value=<File fd=1 /> />
+    write(s: "x\n")
+}

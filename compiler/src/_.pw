@@ -106,6 +106,9 @@ fn main() {
     checkArrayElemsNotUnique(c: inout c)
     // discover concrete generic instantiations to monomorphize.
     collectGenInsts(c: inout c)
+    // unique types cannot be generic type arguments (wrap in Ref[T]); checked
+    // after instantiation discovery since it scans the concrete genInsts.
+    checkGenericUniqueArgs(c: inout c)
     // runtime preamble: includes, immutable String, and the I/O builtins'
     // C runtime (the contract stage0 also injects — emitted here so stage1's
     // output is self-contained).

@@ -1,0 +1,9 @@
+// A unique type cannot be a generic type argument (v1 generics are copyable-only,
+// so the unique value would be copied and silently never deinit'd). Wrap in Ref.
+import @Std/Io with { write }
+unique struct File { val fd: I64 }
+struct Box[T] { val v: T }
+fn main() {
+    val b: Box[File] = <Box[File] v=<File fd=1 /> />
+    write(s: "x\n")
+}

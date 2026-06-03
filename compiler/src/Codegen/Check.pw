@@ -384,6 +384,36 @@ fn checkArrayElemsNotUnique(c: inout Comp) {
     }
 }
 
+// Reject a unique type as a generic type argument (spec/03): v1 generics are
+// copyable-only, so `Box[File]`/`Optional[File]`/`Result[File, E]` would copy (and
+// silently fail to deinit) the unique value. The sanctioned container is `Ref[T]`
+// (which itself wraps the unique), so Ref instantiations are exempt. Scans the
+// whole TypeRef arena (not just genInsts) so lang-item enums like Optional/Result
+// are covered too; generic templates carry type-param args (not unique) and pass.
+fn checkGenericUniqueArgs(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.types.count {
+        val t: TypeRef = c.types[i]
+        if t.args.count == 0 {
+        } else {
+            if isRefInst(c: inout c, ref: i) {
+            } else {
+                mut val j: U64 = 0
+                while j < t.args.count {
+                    val ai: TypeInfo = typeInfoOfRef(c: inout c, ref: t.args[j])
+                    if ai.kind == 2 {
+                        if typeIsUnique(c: inout c, start: ai.nameStart, len: ai.nameLen) {
+                            compileErrorAt(line: lineOf(c: inout c, offset: ai.nameStart), msg: "a unique type cannot be a generic type argument; wrap it in Ref[T]")
+                        }
+                    }
+                    j += 1
+                }
+            }
+        }
+        i += 1
+    }
+}
+
 // Run param-mode validity over every function/method declaration.
 fn checkAllParamModes(c: inout Comp) {
     mut val i: U64 = 0
