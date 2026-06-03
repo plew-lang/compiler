@@ -1,5 +1,0 @@
-import @Std/Io with { print }
-fn main() {
-    val s = "hi"
-    print(s.bytes.count)
-}

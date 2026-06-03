@@ -1,0 +1,17 @@
+// F1 (String): string literals are monomorphic, so `val s = "..."` infers
+// `String` with no annotation. The type is recovered from a "String" span in
+// the source (any occurrence; here via the parameter types of `pick`).
+import @Std/Io with { print }
+
+fn pick(a: String, b: String, useA: Bool) -> String {
+    if useA { return a }
+    return b
+}
+
+fn main() {
+    val s = "hello"
+    val t = "world"
+    val r: String = pick(a: s, b: t, useA: true)
+    if r == s { print(1) } else { print(0) }
+    if s == t { print(1) } else { print(0) }
+}

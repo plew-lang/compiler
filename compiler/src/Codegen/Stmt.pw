@@ -447,13 +447,20 @@ fn genStmt(c: inout Comp, id: U64) {
                     if ti.kind == 3 {
                         effArr = true
                     }
-                    // A bare string literal (or other String-valued expr with no
-                    // type name to recover) carries no span to name PlewString;
-                    // require an annotation rather than silently miscompile.
+                    // A bare string literal (or other String-valued expr) carries
+                    // no type-name span. String is monomorphic, so the type is
+                    // unambiguously `String` — recover a "String" span from the
+                    // source to name PlewString. (Only the degenerate case where
+                    // "String" appears nowhere falls back to requiring annotation.)
                     if ti.kind == 1 {
                         if effLen == 0 {
-                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: init)), msg: "cannot infer the type of this binding; add a type annotation (e.g. `: String`)")
-                            return
+                            val ss: Bind = stringTypeSpan(c: inout c)
+                            if ss.nameLen == 0 {
+                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: init)), msg: "cannot infer the type of this binding; add a type annotation (e.g. `: String`)")
+                                return
+                            }
+                            effStart = ss.nameStart
+                            effLen = ss.nameLen
                         }
                     }
                 }

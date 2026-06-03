@@ -360,6 +360,29 @@ fn scalarInfo() -> TypeInfo {
     return <TypeInfo kind=0 nameStart=0 nameLen=0 ref=0 />
 }
 
+// A source span whose bytes read "String". String literals are monomorphic
+// (always `String`), so `val s = "hi"` infers `String` — but the type system
+// recovers a named type from a (start,len) span, and a string literal carries
+// none. Reuse any occurrence of "String" in the source as a label span (the
+// match is purely the 6 bytes; a comment/string occurrence works too). Returns
+// nameLen=0 if "String" never appears, in which case the caller keeps requiring
+// an explicit annotation. Self-compile cost is nil (plewc.pw annotates).
+fn stringTypeSpan(c: inout Comp) -> Bind {
+    val n: U64 = c.bytes.count
+    if n < 6 {
+        return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+    }
+    mut val i: U64 = 0
+    val last: U64 = n - 6
+    while i <= last {
+        if rangeEquals(bytes: c.bytes, start: i, len: 6, kw: "String") {
+            return <Bind nameStart=i nameLen=6 fieldStart=i fieldLen=6 />
+        }
+        i += 1
+    }
+    return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+}
+
 fn typeInfoOfName(c: inout Comp, start: U64, len: U64, isArray: Bool) -> TypeInfo {
     if isArray {
         return <TypeInfo kind=3 nameStart=start nameLen=len ref=0 />
