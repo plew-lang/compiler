@@ -408,25 +408,42 @@ fn genStmt(c: inout Comp, id: U64) {
             write(s: ";\n")
         }
         Stmt.Return { val value, val hasValue } => {
+            // ARC: a return exits every enclosing scope, so release all owned
+            // locals here (emitScopeDrops from 0; params are borrows, skipped).
+            // The return value is captured into a temp first — a returned local
+            // shares its buffer into the temp (retain) and is then released
+            // (net-zero), handing the caller a balanced reference.
             if c.curIsMain {
+                emitScopeDrops(c: inout c, mark: 0)
                 write(s: "    return 0;\n")
             } else {
                 if c.curRetVoid {
+                    emitScopeDrops(c: inout c, mark: 0)
                     write(s: "    return;\n")
                 } else {
                     if hasValue {
                         checkLitSpan(c: inout c, id: value, tyStart: c.curRetStart, tyLen: c.curRetLen, isArray: c.curRetIsArray)
                     }
-                    write(s: "    return ")
+                    val rt: U64 = c.tmp
+                    c.tmp = c.tmp + 1
+                    write(s: "    { ")
+                    genCTypeOf(c: inout c, tyRef: c.curRetTy, fallStart: c.curRetStart, fallLen: c.curRetLen, isArray: c.curRetIsArray)
+                    write(s: " __ret")
+                    writeU64(n: rt)
+                    write(s: " = ")
                     if hasValue {
                         // value semantics: returning a place array/struct hands
-                        // back an independent copy (else the caller could mutate
-                        // the callee's source, e.g. `return self.items`).
+                        // back an independent (CoW-shared) value, so the caller
+                        // cannot mutate the callee's source (e.g. `return self.items`).
                         genCopyValue(c: inout c, exprId: value, tyRef: c.curRetTy, fallStart: c.curRetStart, fallLen: c.curRetLen, isArray: c.curRetIsArray)
                     } else {
                         write(s: "0")
                     }
                     write(s: ";\n")
+                    emitScopeDrops(c: inout c, mark: 0)
+                    write(s: "    return __ret")
+                    writeU64(n: rt)
+                    write(s: "; }\n")
                 }
             }
         }
