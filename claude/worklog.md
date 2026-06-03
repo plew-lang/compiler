@@ -43,7 +43,9 @@
    - **クロージャのキャプチャ**＝外側ローカル参照（`makeCounter`）。**env＋fat closure（{fn ptr, env ptr}）＋エスケープでキャプチャ変数をヒープ化**。現状の bare 関数ポインタ表現の根本変更で、関数型/呼び出し/全経路に波及（相互依存が強く incremental green が困難）＝**`spawn { block }` の前提**。spec は参照キャプチャ（Swift 流・`mut val` 共有可変）。
    - **spawn**＝pthread。境界で CoW 値は eager 実体化・`Ref` は越えられない（spec/14）。`JoinHandle[T]`/`join()→Promise[T]` は async 機構依存（blocking join に簡略化するなら言語表面の判断＝要確認）。
    - **async/await**＝状態機械変換 or コルーチン＝最難。`Promise[T]` 自動ラップ・`await` 展開・スケジューラ。spec 表面（Promise API）に密接。
-- **traits**（`Eq`/`Ord`/`Iterator`＋`where` 境界）・**Dictionary**（`[k:v]`・Hash）は別の大物（generics 後・コアライブラリと並走で純 Plew 化）。**I2**（import の with ゲート＝定義のモジュール所属追跡＋可視性検査・今は全フラット）は多モジュール化が進む段で additive。
+6. ✅ **関数/メソッドのオーバーロード 完成**（タグ `overload-mangle`/`overloading`）＝traits の土台（セレクタ＝名前＋ラベル＋型のモデル・`via` 別名／多重 conformance／同名別シグ要求の前提）。C 名を `writeFnSelector`（名前＋各 param の ラベル＋型頭・配列は `A` 接頭）でマングルし、proto/def/呼び出し/関数値で同一に出力。`findFunc`/`findMethod` がラベル＋引数型で解決（arity/label/type の3軸・`exprType` も解決経由・単一名は first-label fallback で従来通り）。`overload` テスト。
+7. 🔄 **traits → closures → Iterator/Dictionary**（現在進行・ユーザー合意の順）。**(1) traits コア＋Eq/Ord**（trait 宣言・`impl A as Trait`・`where T: Trait` 解決・提供メソッド・`via`）→ **(2) closure キャプチャ**（イベントループ第1段・Iterator コンビネータの前提）→ **(3) Iterator/Iterable＋Hash/Dictionary/Set**。`any P` 存在型は traits の重い尻尾＝最後。spec/08。**オーバーロード（item 6）は完了済の前提。**
+- **イベントループ（async/await/spawn）**は最後の大物（上の item 5）。**Dictionary** の `[k:v]` リテラルは traits（Hash）後。**I2**（import の with ゲート＝定義のモジュール所属追跡＋可視性検査・今は全フラット）は多モジュール化が進む段で additive。
 
 ## 機能を plewc.pw に足す手順（ADD→reseed→USE）
 
