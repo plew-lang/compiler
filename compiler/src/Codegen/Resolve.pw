@@ -217,10 +217,15 @@ fn scopeMark(c: inout Comp) -> U64 {
 // elements until recursive release lands; .bytes views carry rc=0 so the call
 // is a no-op). Array `let` bindings are always uniquely owned — genArrayValue
 // copies a place and news a literal — so freeing them needs no retain bookkeeping.
-fn emitScopeDrops(c: inout Comp, mark: U64) {
+fn emitScopeDrops(c: inout Comp, mark: U64, exclIdx: U64) {
     mut val i: U64 = c.locals.count
     while i > mark {
         i -= 1
+        if i == exclIdx {
+            // excluded for this exit only (a unique value returned on this path:
+            // its bits went to the caller, so the callee must not deinit it — but
+            // we do not persist the move, so other exit paths still drop it).
+        } else {
         val lo: Local = c.locals[i]
         if lo.moved {
             // moved-out: ownership left this binding; the new owner releases it.
@@ -265,6 +270,7 @@ fn emitScopeDrops(c: inout Comp, mark: U64) {
                     }
                 }
             }
+        }
         }
         }
     }
@@ -353,7 +359,7 @@ fn popLocals(c: inout Comp, mark: U64) {
 
 // Leave a scope: drop its bindings, then pop them off the resolution stack.
 fn scopeExit(c: inout Comp, mark: U64) {
-    emitScopeDrops(c: inout c, mark: mark)
+    emitScopeDrops(c: inout c, mark: mark, exclIdx: c.locals.count)
     popLocals(c: inout c, mark: mark)
 }
 
@@ -411,6 +417,19 @@ fn typeIsUnique(c: inout Comp, start: U64, len: U64) -> Bool {
         return false
     }
     return c.structs[si].isUnique
+}
+
+// Index of the innermost local named (start,len), or c.locals.count if none.
+fn localIndexByName(c: inout Comp, start: U64, len: U64) -> U64 {
+    mut val i: U64 = c.locals.count
+    while i > 0 {
+        i -= 1
+        val lo: Local = c.locals[i]
+        if spansEqual(c: inout c, aStart: lo.nameStart, aLen: lo.nameLen, bStart: start, bLen: len) {
+            return i
+        }
+    }
+    return c.locals.count
 }
 
 // Whether `name` refers to a moved-out local (spec/03): using it is an error.

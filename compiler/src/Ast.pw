@@ -356,6 +356,12 @@ struct Comp {
     // release the owned locals pushed since (the iteration's scopes); saved and
     // restored across nested loops. 0 when not inside a loop.
     mut val curLoopMark: U64
+    // locals high-water mark at entry to the innermost conditional/loop body. An
+    // explicit `move` of a local with a smaller index (declared outside the branch)
+    // would be a conditional move — unsound without flow analysis (the persisted
+    // moved flag would skip the value's deinit on the not-taken path) — so it is
+    // rejected. 0 at function top level (straight-line moves always allowed).
+    mut val curBranchBase: U64
     // which I/O builtins the file has imported (acceptance soundness: spec makes
     // these non-ambient, so using one without `import @Std/Io`/`@Std/Process`
     // is a compile error). One flag per builtin, matched to its module.

@@ -590,6 +590,7 @@ fn genFunc(c: inout Comp, fi: U64) {
     c.curRecvStart = f.recvStart
     c.curRecvLen = f.recvLen
     c.curSelfInout = f.selfInout
+    c.curBranchBase = 0
     // fresh local scope for this function: parameters are the initial bindings
     c.locals = []
     val params: Array[Param] = f.params
@@ -611,7 +612,7 @@ fn genFunc(c: inout Comp, fi: U64) {
     // deinit/release here). genBlock dropped only the body's block-scope locals;
     // params sit below its mark. For a body that ends in `return` this is
     // unreachable (the return already dropped them); for fall-through it is live.
-    emitScopeDrops(c: inout c, mark: 0)
+    emitScopeDrops(c: inout c, mark: 0, exclIdx: c.locals.count)
     if isMain {
         write(s: "    return 0;\n")
     }
@@ -666,6 +667,7 @@ fn genClosure(c: inout Comp, id: U64, proto: Bool) {
             } else {
                 c.curIsMain = false
                 c.curHasRecv = false
+                c.curBranchBase = 0
                 c.locals = []
                 mut val pj: U64 = 0
                 while pj < params.count {

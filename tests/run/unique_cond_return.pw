@@ -1,0 +1,24 @@
+import @Std/Io with { write, print }
+
+// Returning a unique value on one branch must not skip the deinit of the value
+// the *other* branch would return. The exclusion is per-exit, not a persisted
+// move, so each path deinits exactly the locals it does not hand back.
+unique struct File {
+    val fd: I64
+    deinit { print(self.fd) }
+}
+
+fn pick(cond: Bool) -> File {
+    val a: File = <File fd=1 />
+    val b: File = <File fd=2 />
+    if cond { return a }    // returns a; b deinits here (prints 2)
+    return b                // returns b; a deinits here (prints 1)
+}
+
+fn sink(f: move File) { write(s: "got\n") }
+
+fn main() {
+    sink(f: pick(cond: true))     // pick: 2 ; sink deinits a: 1
+    write(s: "--\n")
+    sink(f: pick(cond: false))    // pick: 1 ; sink deinits b: 2
+}

@@ -25,7 +25,16 @@ fn genExpr(c: inout Comp, id: U64) {
                 // the source would not be marked moved -> double-release. Restrict
                 // `move` to a bare local until field/element moves are supported.
                 match c.exprs[operand] {
-                    Expr.Ident { val start, val len } => {}
+                    Expr.Ident { val start, val len } => {
+                        // conditional move guard: a local declared outside the
+                        // enclosing branch (index < curBranchBase) would be moved
+                        // only on this path, but the moved flag persists across all
+                        // paths -> its deinit silently skipped on the others.
+                        // Reject until flow analysis tracks per-path move state.
+                        if localIndexByName(c: inout c, start: start, len: len) < c.curBranchBase {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "cannot `move` a variable declared outside the enclosing conditional/loop (the move would be conditional); move it unconditionally")
+                        }
+                    }
                     _ => {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "`move` is only supported from a local variable (field/element moves are not yet supported)")
                     }

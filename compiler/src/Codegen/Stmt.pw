@@ -417,11 +417,11 @@ fn genStmt(c: inout Comp, id: U64) {
             // shares its buffer into the temp (retain) and is then released
             // (net-zero), handing the caller a balanced reference.
             if c.curIsMain {
-                emitScopeDrops(c: inout c, mark: 0)
+                emitScopeDrops(c: inout c, mark: 0, exclIdx: c.locals.count)
                 write(s: "    return 0;\n")
             } else {
                 if c.curRetVoid {
-                    emitScopeDrops(c: inout c, mark: 0)
+                    emitScopeDrops(c: inout c, mark: 0, exclIdx: c.locals.count)
                     write(s: "    return;\n")
                 } else {
                     if hasValue {
@@ -443,20 +443,34 @@ fn genStmt(c: inout Comp, id: U64) {
                         write(s: "0")
                     }
                     write(s: ";\n")
-                    // returning a unique place consumes it: mark it moved so the
-                    // about-to-run scope drops do not deinit the value the caller
-                    // now owns (returning always consumes — no aliasing risk).
+                    // returning a unique place consumes it: exclude that one local
+                    // from THIS exit's drops so the callee doesn't deinit the value
+                    // the caller now owns. The exclusion is per-exit (not a
+                    // persisted move), so a different return path still drops it —
+                    // `if c { return a } return b` deinits the unreturned one on
+                    // each path. A unique field/element return is a partial move
+                    // (untracked) and is rejected.
+                    mut val retExcl: U64 = c.locals.count
                     if hasValue {
-                        if isPlaceExpr(c: inout c, id: value) {
-                            val vt: TypeInfo = exprType(c: inout c, id: value)
-                            if vt.kind == 2 {
-                                if typeIsUnique(c: inout c, start: vt.nameStart, len: vt.nameLen) {
-                                    markMovedExpr(c: inout c, exprId: value)
+                        val vt: TypeInfo = exprType(c: inout c, id: value)
+                        if vt.kind == 2 {
+                            if typeIsUnique(c: inout c, start: vt.nameStart, len: vt.nameLen) {
+                                match c.exprs[value] {
+                                    Expr.Ident { val start, val len } => {
+                                        retExcl = localIndexByName(c: inout c, start: start, len: len)
+                                    }
+                                    Expr.Field { val base, val nameStart, val nameLen } => {
+                                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "returning a field of a unique value is a partial move (not yet supported)")
+                                    }
+                                    Expr.Index { val base, val index } => {
+                                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "returning an element of a unique value is a partial move (not yet supported)")
+                                    }
+                                    _ => {}
                                 }
                             }
                         }
                     }
-                    emitScopeDrops(c: inout c, mark: 0)
+                    emitScopeDrops(c: inout c, mark: 0, exclIdx: retExcl)
                     write(s: "    return __ret")
                     writeU64(n: rt)
                     write(s: "; }\n")
@@ -468,13 +482,19 @@ fn genStmt(c: inout Comp, id: U64) {
             write(s: "    if (")
             genCond(c: inout c, id: cond)
             write(s: ") {\n")
+            // moves inside a branch may only consume locals declared in the branch
+            // (a conditional move of an outer local is unsound — see curBranchBase).
+            val savedBB: U64 = c.curBranchBase
+            c.curBranchBase = scopeMark(c: inout c)
             genBlock(c: inout c, id: thenBlk)
             write(s: "    }\n")
             if hasElse {
                 write(s: "    else {\n")
+                c.curBranchBase = scopeMark(c: inout c)
                 genBlock(c: inout c, id: elseBlk)
                 write(s: "    }\n")
             }
+            c.curBranchBase = savedBB
         }
         Stmt.While { val cond, val body } => {
             checkLitCtx(c: inout c, id: cond, eKind: 0, eBits: 0, eSgn: false)
@@ -483,7 +503,10 @@ fn genStmt(c: inout Comp, id: U64) {
             write(s: ") {\n")
             val savedLoopMark: U64 = c.curLoopMark
             c.curLoopMark = scopeMark(c: inout c)
+            val savedBB: U64 = c.curBranchBase
+            c.curBranchBase = scopeMark(c: inout c)
             genBlock(c: inout c, id: body)
+            c.curBranchBase = savedBB
             c.curLoopMark = savedLoopMark
             write(s: "    }\n")
         }
@@ -500,6 +523,8 @@ fn genStmt(c: inout Comp, id: U64) {
             // nested loops.
             val savedLoopMark: U64 = c.curLoopMark
             c.curLoopMark = forMark
+            val savedBB: U64 = c.curBranchBase
+            c.curBranchBase = forMark
             if isRange {
                 // for (long long var = lo; var (< | <=) __fe; var++) { body }
                 write(s: "    {\n")
@@ -561,6 +586,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 genBlock(c: inout c, id: body)
                 write(s: "    }\n    }\n")
             }
+            c.curBranchBase = savedBB
             c.curLoopMark = savedLoopMark
             scopeExit(c: inout c, mark: forMark)
         }
@@ -583,12 +609,12 @@ fn genStmt(c: inout Comp, id: U64) {
         }
         Stmt.Break => {
             // break exits the loop: release owned locals pushed in the body.
-            emitScopeDrops(c: inout c, mark: c.curLoopMark)
+            emitScopeDrops(c: inout c, mark: c.curLoopMark, exclIdx: c.locals.count)
             write(s: "    break;\n")
         }
         Stmt.Continue => {
             // continue ends the iteration: release the body's owned locals.
-            emitScopeDrops(c: inout c, mark: c.curLoopMark)
+            emitScopeDrops(c: inout c, mark: c.curLoopMark, exclIdx: c.locals.count)
             write(s: "    continue;\n")
         }
         Stmt.Match { val scrut, val arms } => {
@@ -637,10 +663,13 @@ fn genStmt(c: inout Comp, id: U64) {
             write(s: ";\n")
             mut val i: U64 = 0
             mut val firstCond: Bool = true
+            // each arm body is a branch: moves may only consume arm-local binds.
+            val savedBB: U64 = c.curBranchBase
             while i < arms.count {
                 val a: MatchArm = arms[i]
                 if a.isWildcard {
                     write(s: "    else {\n")
+                    c.curBranchBase = scopeMark(c: inout c)
                     genBlock(c: inout c, id: a.body)
                     write(s: "    }\n")
                 } else {
@@ -687,12 +716,14 @@ fn genStmt(c: inout Comp, id: U64) {
                         }
                         bi += 1
                     }
+                    c.curBranchBase = armMark
                     genBlock(c: inout c, id: a.body)
                     scopeExit(c: inout c, mark: armMark)
                     write(s: "    }\n")
                 }
                 i += 1
             }
+            c.curBranchBase = savedBB
             // exhaustive match without a wildcard: the final fall-through is
             // unreachable (so a value-returning function does not "fall off").
             if hasWildcard {
