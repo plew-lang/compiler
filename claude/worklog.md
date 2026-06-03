@@ -6,7 +6,7 @@
 
 🎉 **セルフホスト達成・stage0（Rust）退役済み。** 正典コンパイラ＝Plew パッケージ `compiler/src/`（root `_.pw` が `part` で全パートを綴じ込む 1 モジュール＝`Loader`・`Lexer`・`Ast`・`Parser/`〔Expr/Stmt/Decl〕・`Codegen/`〔Emit/Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array〕・part はサブディレクトリ可）。自分自身を不動点までコンパイルする。
 
-> **次の一歩＝traits T2（提供メソッド）**：✅ T1 完了（タグ `traits-t1`）＝`trait Name { fn req(...) -> T }`（`TraitDef`・要求名のみ記録〔Bind〕・field/assoc-type/factory 要求は未パース＝additive）＋`impl Type as Trait { fn req(){…} | fn req() via real }`（`Conform` 記録・body 形は Type にメソッド登録〔既存機構に乗る〕・`via` 形は `MethodAlias` 記録で findMethod が要求名→実体名へ redirect）＋**完全性チェック** `checkConformances`（全要求が impl 内で witness されないと loud error＝spec/08 の暗黙準拠なし）。`x.req()`/`x.real()` 両方が同一実体へ解決。**次＝T2 提供メソッド** `impl Trait { fn provided(){self.req()…} }`＝bare `impl Trait`（主語＝トレイト）を recv=Trait でパース→ 後パスで各 Conform(Type, Trait) に provided メソッドを recv=Type で複製（同一 body を Type 文脈で emit＝`self.req()` が Type の witness に解決・trait-recv 版は emit しない）。その後 T3＝`where T: Trait` 境界、→ Eq/Ord を `==`/`<` へ配線。**T1 既知ギャップ（additive）**：`via` 先実体の存在/シグネチャ未検証（呼出時に loud fail）・未知トレイト名への準拠は無視・完全性は名前一致のみ（同名別シグ要求未対応）。詳細は item 7・spec/08。
+> **次の一歩＝Eq/Ord を `==`/`<` へ配線**（traits step 1 の残り）：✅ T1/T2/T3 完了（タグ `traits-t1`/`traits-t2`/`generic-free-fn`/`traits-t3`）。**T1**＝trait 宣言＋`impl Type as Trait`（body/`via` witness）＋完全性チェック。**T2**＝提供メソッド（bare `impl Trait`→各 Conform 型へ recv=Type で複製）。**T3a**＝generic free 関数の呼び出し位置単相化（`FnInst`・スコープ復元した木探索 `collectFnInsts` で引数型推論・`writeFnSelector` が free 関数のみ型引数解決・戻り型置換）。**T3b**＝`where T: Trait` 境界（`parseWhereClause`・`FuncBound`・`checkFnBounds` がインスタンス化時に非準拠を loud reject）。残り＝**Eq/Ord 演算子配線**＝`a == b`/`a < b`（ユーザー型）を Eq/Ord witness へ脱糖。spec/12 では演算子要求＝`assoc fn`（`T.add(lhs:,rhs:)`）ゆえ **assoc fn（静的メソッド）未実装が前提**＝先に assoc fn を足す。**既知ギャップ（additive）**：`via` 先実体の存在/シグ未検証・未知トレイト名準拠は無視・完全性は名前一致のみ・generic free 関数の transitive 単相化（generic body 内からの generic 呼び出し）は未・generic メソッドの `where` 強制は未・generic テンプレート本体は未インスタンス時に型検査しない（単相化時のみ＝既存 generics と同方針）。詳細は item 7・spec/08,12。
 
 - **ビルド**：`./bootstrap.sh`＝C 種 `compiler/plewc.seed.c`→clang→`plewc0`→`compiler/src/_.pw` を自己コンパイル→不動点 cmp（Rust 不要）。`./bootstrap.sh --reseed` で種更新。**preamble/codegen 出力/AST フィールド変更後は reseed を2回**。
 - **テスト**：`./test.sh`＝`tests/run/*.pw`（`.out` 照合・任意 `.in`）＋`tests/part/`（複数ファイル）＋`tests/reject/*.pw`（plewc 非ゼロ終了で reject＝受理の健全性）＋`tests/panic/*.pw`（compile+link 成功・実行は非ゼロ＋`.panic` stderr 部分一致）＋不動点。
@@ -24,14 +24,14 @@
 - **★`unique` 型＋`deinit`＋所有権**＝`unique struct`＋`deinit`（決定的破棄・型本体→フィールド宣言順・ネスト再帰）・`move`/`borrow` モード（前置＋引数）・線形 move 追跡（use-after-move/bare コピー/伝染/モード必須を reject）。詳細は下のロードマップ item 4b。
 - **★クロージャ/関数値**＝関数型 `fn(...)->R`・関数を第一級値・非キャプチャのクロージャリテラル（ラムダリフティング）・高階関数。**ラベル抑制 `~:`**・**デフォルト引数 `name: T = expr`**。
 - **★オーバーロード完成**（タグ `overload-mangle`/`overloading`）＝関数/メソッドを **名前＋ラベル＋引数型** のセレクタで解決。C 名は `writeFnSelector` でマングル（名前＋各 param の ラベル＋型頭・配列 `A` 接頭）。arity/label/type の3軸・自由関数もメソッドも。traits（`via`・多重 conformance）の土台。詳細は下のロードマップ item 6。
-- **★traits T1**（タグ `traits-t1`）＝`trait Name { fn req(...) -> T }`（要求宣言・本体なし）＋`impl Type as Trait { fn req(){…} | fn req() via real }`（準拠＝body witness は Type のメソッドに登録・`via` は要求名→実体名のエイリアス〔findMethod が redirect〕）＋完全性チェック（未 witness の要求は loud error＝暗黙準拠なし）。提供メソッド/`where` 境界/`any P`/Eq・Ord 配線は T2 以降。詳細は item 7。
+- **★traits T1–T3＋generic free 関数**（タグ `traits-t1`/`traits-t2`/`generic-free-fn`/`traits-t3`）＝**T1** trait 宣言＋`impl Type as Trait`（body/`via` witness・findMethod redirect）＋完全性チェック（暗黙準拠なし）。**T2** 提供メソッド `impl Trait`（各 Conform 型へ recv=Type 複製）。**T3a** generic free 関数の**呼び出し位置単相化**（`FnInst`・スコープ復元木探索で引数型推論・`writeFnSelector` が free 関数のみ型引数解決・戻り型置換）。**T3b** `where T: Trait` 境界（`FuncBound`・`checkFnBounds` が非準拠を loud reject）。Eq/Ord 演算子配線・`any P` 存在型は未（item 7）。
 - **値意味論・generics・クロージャを有効化したまま自己ホスト不動点維持**。生成 C は警告クリーン。**コンパイラ自身がメソッド/match 式で自己記述**（dogfood）。
 
 ## ★ ロードマップ（generics → コアライブラリ → ランタイム）
 
 意味論の hidden-meaning は大半解消済み（整数幅・match・ラベル・診断・受理の健全性チェックリストは [provisional.md](provisional.md) で全項解消）。残りは大物が中心。**拠り所「意味は最優先・コストは裏で後回し可」**：leak ランタイムは hidden-cost ゆえ後回し可。
 
-1. ✅ **generics 完了**。残 additive：generic free 関数（呼び出し位置推論＋明示 `id[I32](x)` の Go 式判別）・`map[U]`（メソッド own 型パラメータ＋推移的インスタンス化＝単相化中の発見を worklist で fixpoint）。
+1. ✅ **generics 完了**。✅ **generic free 関数も完了**（タグ `generic-free-fn`＝呼び出し位置で引数型から単相化・`FnInst`）。残 additive：明示 `id[I32](x)` の型引数指定（Go 式判別・今は推論のみ）・transitive 単相化（generic body 内からの generic 呼び出し＝worklist で fixpoint）・`map[U]`（メソッド own 型パラメータ）・generic 型引数の配列（`f[T]` に `Array[E]` を渡す）。
 2. ✅ **コアライブラリ（純 Plew）大筋完了**（`@Std/Core`・`try`/`??`・`assert`）。残り：**可謬 I/O（`readFile`→`Result`）→ S2 を閉じる**（ただし std モジュールが intrinsic を使う際の import ゲート整合に注意）・ambient 化・`try` の From 変換・`?.`。
 3. ✅ **値意味論＋CoW 完成**（item 4 の ARC とセット＝refcount＋copy-on-write＋解放）。
 4. ✅ **コア ARC＋CoW 完成**（非アトミック refcount・配列/struct/`Ref`・fixpoint＋97テスト〔通常＋ASan〕＋ASan 自己コンパイルで実証）。
@@ -48,7 +48,7 @@
    - **spawn**＝pthread。境界で CoW 値は eager 実体化・`Ref` は越えられない（spec/14）。`JoinHandle[T]`/`join()→Promise[T]` は async 機構依存（blocking join に簡略化するなら言語表面の判断＝要確認）。
    - **async/await**＝状態機械変換 or コルーチン＝最難。`Promise[T]` 自動ラップ・`await` 展開・スケジューラ。spec 表面（Promise API）に密接。
 6. ✅ **関数/メソッドのオーバーロード 完成**（タグ `overload-mangle`/`overloading`）＝traits の土台（セレクタ＝名前＋ラベル＋型のモデル・`via` 別名／多重 conformance／同名別シグ要求の前提）。C 名を `writeFnSelector`（名前＋各 param の ラベル＋型頭・配列は `A` 接頭）でマングルし、proto/def/呼び出し/関数値で同一に出力。`findFunc`/`findMethod` がラベル＋引数型で解決（arity/label/type の3軸・`exprType` も解決経由・単一名は first-label fallback で従来通り）。`overload` テスト。
-7. 🔄 **traits → closures → Iterator/Dictionary**（現在進行・ユーザー合意の順）。**(1) traits コア＋Eq/Ord**（trait 宣言・`impl A as Trait`・`where T: Trait` 解決・提供メソッド・`via`）→ **(2) closure キャプチャ**（イベントループ第1段・Iterator コンビネータの前提）→ **(3) Iterator/Iterable＋Hash/Dictionary/Set**。`any P` 存在型は traits の重い尻尾＝最後。spec/08。**オーバーロード（item 6）は完了済の前提。**
+7. 🔄 **traits → closures → Iterator/Dictionary**（現在進行・ユーザー合意の順）。**(1) traits コア＋Eq/Ord**：✅ trait 宣言・`impl A as Trait`（body/`via`）・提供メソッド・`where T: Trait` 解決＋強制・generic free 関数単相化〔T1–T3・タグ `traits-t1`〜`traits-t3`〕／🔲 残＝**Eq/Ord を `==`/`<` へ配線**（spec/12 で演算子要求＝`assoc fn` ゆえ **assoc fn 静的メソッドを先に実装**→ `a==b`/`a<b` をユーザー型の witness へ脱糖）。→ **(2) closure キャプチャ**（イベントループ第1段・Iterator コンビネータの前提）→ **(3) Iterator/Iterable＋Hash/Dictionary/Set**。`any P` 存在型は traits の重い尻尾＝最後。spec/08,12。**オーバーロード（item 6）は完了済の前提。**
 - **イベントループ（async/await/spawn）**は最後の大物（上の item 5）。**Dictionary** の `[k:v]` リテラルは traits（Hash）後。**I2**（import の with ゲート＝定義のモジュール所属追跡＋可視性検査・今は全フラット）は多モジュール化が進む段で additive。
 
 ## 機能を plewc.pw に足す手順（ADD→reseed→USE）
