@@ -17,7 +17,7 @@
 
 ## メモリ・所有権（最大の剥離）
 
-- **値意味論＋CoW** → **観測的には eager copy で達成**（配列/struct/generic コンテナを let/代入/JSX/return でコピー・タグ `value-semantics-complete`）。残（hidden cost）：**遅延コピー＋解放（leak 解消）＝refcount 版 ARC とセット**。`Array[T]` は `{T* data; len; cap}` でヒープ確保し **free しない**（append 旧バッファもリーク）。String は不変ゆえ共有で観測的に正しい。**by-value 引数はコピーしない＝穴ではない**：spec で関数引数はイミュータブル（変更は `inout`）ゆえ共有とコピーは観測同一・`inout` はポインタ（意図的共有）。これで eager copy を hot path に入れず済み自己ホスト性能を保つ（全引数 deep copy なら O(n)/call で壊滅）。spec/03。
+- **値意味論＋CoW** → ✅ **実装済**（非アトミック refcount＋copy-on-write）。`Array[T]`/struct は `rc` 付き（`{data,len,cap,long long* rc}`・NULL＝借り物〔`.bytes`/文字列リテラル〕）。束縛は **O(1) 共有＋retain**（`_share`/`Struct_share`）、変異点（`_set`/`_push` の `_unique`）で **rc>1 なら複製してから書く**＝値意味論を保ったまま遅延コピー。`Ref` 箱も同じ rc ヘッダで refcount 化（共有可変のまま）。解放＝scope 末・早期 exit（`return`/`break`/`continue`・`panic` は不走）・成長時の旧バッファで、配列要素/struct フィールドを再帰解放（深い `_copy` とセット）。**RC は非アトミック**（spawn 境界で実体化ゆえ・→ [design-decisions.md](design-decisions.md)）。全 fixpoint＋ASan（テスト＋自己コンパイル）で実証。残：`deinit`（unique 型前提・未）・`WeakRef`・循環回収・mono struct/enum の share/release（mono 局所 leak・安全）。spec/03。
 - **ARC / `WeakRef` / 循環回収** → 無し（リークで代用）。
 - **`unique`/`local`/`borrow`/`move`/`deinit`** → 無し。すべてコピー可能・by-value。そもそも unique 型が無い。
 - **`inout`** → 実装済（C ポインタ）。**単純変数・合成可変性（`base.field`・`a[i]`・`.append`/`inout fn` 受信側）の代入可変性検査あり**。残：**重なり inout 検査なし**（spec は同一場所への複数 inout を禁止・lint＋限定 panic）。spec/03。
@@ -39,7 +39,7 @@
 
 ## 配列・辞書・集合・タプル
 
-- `Array[T]`：✅ **値意味論は観測的に達成**（上述 eager copy）。添字 `U64`・範囲外 panic は spec 通り。`[E; N]`/const generics/`Slice`/部分文字列は **spec 自体が当面保留**。残（hidden cost）：遅延 CoW＋解放＝ARC とセット。
+- `Array[T]`：✅ **値意味論＋CoW＋解放を実装**（上述メモリ節）。添字 `U64`・範囲外 panic は spec 通り。`[E; N]`/const generics/`Slice`/部分文字列は **spec 自体が当面保留**。
 - **`Dictionary[K,V]`（lang item・`[k:v]` リテラル）／`Set[E]`** → **未実装**（Hash が要る大物）。
 - **ラベル付き無名レコード `(x: I32, y: I32)`** → 未実装（struct のみ）。
 
@@ -101,4 +101,4 @@
 
 ---
 
-**再訪の優先度（私見）**：観測挙動を歪める残りの剥離＝①完全 CoW（遅延コピー＋解放）＝ARC とセット（最重要）②トレイト/`where`/Dictionary ③クロージャキャプチャ→spawn→async。整数幅・match・ラベル・診断・値意味論（観測）・generics・`Optional`/`Result`/`try`/`??`・`Ref` 基本は解消済。hidden cost だけの剥離（leak→ARC 等）は性能要求が出てから。
+**再訪の優先度（私見）**：観測挙動を歪める残りの剥離＝①トレイト/`where`/Dictionary ②クロージャキャプチャ→spawn→async ③`deinit`（unique 型前提）。整数幅・match・ラベル・診断・値意味論・**CoW＋refcount 解放（配列/struct/Ref・非アトミック）**・generics・`Optional`/`Result`/`try`/`??` は解消済。残る hidden cost＝循環回収（`WeakRef` 手動 or サイクルコレクタ）・mono 局所 leak。
