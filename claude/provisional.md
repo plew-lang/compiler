@@ -100,6 +100,23 @@
 
 - 改行自動終端＋括弧内継続は **spec 準拠**（剥離ではない）。残る剥離：コメントは `//` 行コメントのみ（**ブロックコメント未対応**）。
 
+## トレイト/generics 監査の残課題（3エージェント＋実機確認・2026-06）
+
+トレイト/generics を spec/06,07,08,12 と突き合わせた監査結果。**修正済**（タグ `audit-fixes-1`）：primitive が built-in Eq/Ord 境界を満たす・比較演算子の非結合（`a==b==c` は構文エラー）・提供メソッド衝突を loud error 化。**以下は未修正**：
+
+- **【ARC バグ・要 ASan 調査】`via` ＋引数つき要求が誤拒否**：`fn put(x: I64) via real` が「incomplete conformance」になる。原因は**コンパイラ自身の ARC heap-use-after-free**（ASan で `plew_arc_retain` 上の UAF 確認）＝3段ネスト `Array[Conform]→Array[Func]→Array[Param]` で nested array の retain 漏れ→`Conform.witnessed` 経由で `params` バッファが解放後参照。**body 形・via＋0引数は無事**。回避＝body 形で witness。早期 return 除去では直らず＝値意味論の copy/share/release 自体の疑い（広域 ARC バグの可能性）。spec でなく実装の正しさ問題。
+- **【silent 逸脱】インライン制約 `[T: Trait]` を誤パース**（spec/06「制約は `where` のみ」）：`f[T: Show]` を受理し最後の ident を型パラメータ名にして `T` を捨てる→壊れたマングル。`:` を型パラメータ列で reject すべき。
+- **【silent 逸脱】generic vs 具体の同セレクタ共存を受理**（spec/07「一律エラー」）：`g[T](x:T)`＋`g(x:I32)` を黙って受理し引数型でディスパッチ。
+- **【silent 逸脱】曖昧な無サフィックス整数リテラルが先頭オーバーロードを選ぶ**（spec/07「文脈で一意でなければエラー」）：`k(a:I32)`/`k(a:U64)` に `k(a:5)`。
+- **【silent 逸脱】supertrait `trait Sub: Super` を黙ってドロップ**（spec/08「無ければエラー」）：`: Super` 句を無視し `Super` 準拠を要求しない。
+- **【silent 逸脱】`val f = obj.method`（メソッド値化）を受理**（spec/07 は reject）・**ambient 型への無名 impl 受理**（`impl I32 {}`・spec/07「自モジュール型のみ」）・**コピー可能型への `move fn` 受理**（spec/07「unique のみ」）。
+- **【missing・clang 止まり】Eq/Ord 以外の演算子トレイト未配線**：`Add/Sub/Mul/Div/Rem`・`Neg/Not/BitNot`・`Index/IndexSet`・`Coalesce`・`Pow`・`From/TryFrom` はユーザー型で脱糖されず生 C→clang で落ちる（Plew 診断なし）。eager checker も比較op(50-55)のみ境界チェック・算術 op 素通り。大物の残作業。
+- **【missing・loud】`@[Ord]` on enum**・**`@[Ord]` は `@[Eq]` を含意しない**（`Ord: Eq`）。
+- **【pre-existing・broad】`val x = expr`（注釈なし）の型推論なし**＝generic 呼び出しの引数型推論も連鎖劣化（注釈必須）。
+- **既知 deferred**：`any P`・関連型・トレイト型引数 `Add[Rhs]`・`#Ext`・`a#P.foo()` 源選択・明示型引数 `f[I32](x)`・`Self` 入力要求の witness 置換（hand-written のみ・derive は無事）。
+
+**優先度（私見）**：ARC バグ（via＋引数）は実装の正しさで要調査。silent 逸脱群（インライン制約・同セレクタ共存・曖昧リテラル・supertrait・method 値化）は拠り所「明示・正直」のため reject 化が望ましい（各小）。演算子トレイト全配線は大物・需要駆動。
+
 ---
 
 **再訪の優先度（私見）**：観測挙動を歪める残りの剥離＝①トレイト/`where`/Dictionary ②クロージャキャプチャ→spawn→async。整数幅・match・ラベル・診断・値意味論・**CoW＋refcount 解放（配列/struct/Ref・非アトミック）**・generics・`Optional`/`Result`/`try`/`??`・**`unique`＋`deinit`＋move 所有権**は解消済。残る hidden cost＝循環回収（`WeakRef` 手動 or サイクルコレクタ）・mono 局所 leak・`Array[unique]`/部分 move。
