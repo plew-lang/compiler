@@ -1,0 +1,39 @@
+// Record-form enum variants `V(x: I32, y: I32)` (spec/05). Declaration and
+// pattern both use parentheses (the variant payload IS a labelled record);
+// construction stays JSX. The legacy brace form is still accepted during the
+// migration but the canonical syntax is parentheses.
+import @Std/Io with { print }
+
+enum Shape {
+    Circle(r: I32)
+    Rect(w: I32, h: I32)
+    Unit
+}
+
+enum Opt[T] {
+    Some(v: T)
+    None
+}
+
+fn area(s: Shape) -> I32 {
+    return match s {
+        Shape.Circle(val r) => r * r
+        Shape.Rect(val w, val h) => w * h
+        Shape.Unit => 0
+    }
+}
+
+fn unwrap(o: Opt[I32], d: I32) -> I32 {
+    return match o {
+        Opt.Some(val v) => v
+        Opt.None => d
+    }
+}
+
+fn main() {
+    print(area(s: <Shape.Circle r=3 />))
+    print(area(s: <Shape.Rect w=4 h=5 />))
+    print(area(s: <Shape.Unit />))
+    print(unwrap(o: <Opt[I32].Some v=7 />, d: 0))
+    print(unwrap(o: <Opt[I32].None />, d: 99))
+}

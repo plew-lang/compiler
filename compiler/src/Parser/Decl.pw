@@ -555,47 +555,62 @@ fn parseEnum(c: inout Comp) {
                 val vTok: Tok = c.cur()
                 c.advance()
                 mut val fields: Array[FieldDef] = []
+                // variant payload is record-form `V(x: I32, y: I32)` (spec/05).
+                // The legacy brace form `V { x: I32 }` is still accepted during
+                // the migration; either bracket closes it.
+                mut val vopen: Bool = false
                 match c.curKind() {
                     Kind.LBrace => {
                         c.advance()
-                        while true {
-                            c.skipNewlines()
-                            match c.curKind() {
-                                Kind.RBrace => {
-                                    c.advance()
-                                    break
-                                }
-                                Kind.Eof => { break }
-                                Kind.Ident => {
-                                    val fTok: Tok = c.cur()
-                                    c.advance()
-                                    mut val tyStart: U64 = 0
-                                    mut val tyLen: U64 = 0
-                                    mut val tyIsArray: Bool = false
-                                    mut val tyRef: U64 = 0
-                                    match c.curKind() {
-                                        Kind.Colon => {
-                                            c.advance()
-                                            val ty: PType = parseTypeTok(c: inout c)
-                                            tyStart = ty.start
-                                            tyLen = ty.len
-                                            tyIsArray = ty.isArray
-                                            tyRef = ty.ref
-                                            recordArrayElem(c: inout c, ty: ty)
-                                        }
-                                        _ => {}
-                                    }
-                                    fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isMut=false hasDefault=false defaultVal=0 />)
-                                    match c.curKind() {
-                                        Kind.Comma => { c.advance() }
-                                        _ => {}
-                                    }
-                                }
-                                _ => { c.advance() }
-                            }
-                        }
+                        vopen = true
+                    }
+                    Kind.LParen => {
+                        c.advance()
+                        vopen = true
                     }
                     _ => {}
+                }
+                if vopen {
+                    while true {
+                        c.skipNewlines()
+                        match c.curKind() {
+                            Kind.RBrace => {
+                                c.advance()
+                                break
+                            }
+                            Kind.RParen => {
+                                c.advance()
+                                break
+                            }
+                            Kind.Eof => { break }
+                            Kind.Ident => {
+                                val fTok: Tok = c.cur()
+                                c.advance()
+                                mut val tyStart: U64 = 0
+                                mut val tyLen: U64 = 0
+                                mut val tyIsArray: Bool = false
+                                mut val tyRef: U64 = 0
+                                match c.curKind() {
+                                    Kind.Colon => {
+                                        c.advance()
+                                        val ty: PType = parseTypeTok(c: inout c)
+                                        tyStart = ty.start
+                                        tyLen = ty.len
+                                        tyIsArray = ty.isArray
+                                        tyRef = ty.ref
+                                        recordArrayElem(c: inout c, ty: ty)
+                                    }
+                                    _ => {}
+                                }
+                                fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isMut=false hasDefault=false defaultVal=0 />)
+                                match c.curKind() {
+                                    Kind.Comma => { c.advance() }
+                                    _ => {}
+                                }
+                            }
+                            _ => { c.advance() }
+                        }
+                    }
                 }
                 variants.append(<Variant nameStart=vTok.start nameLen=vTok.len fields=fields />)
             }

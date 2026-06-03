@@ -411,59 +411,73 @@ fn parsePattern(c: inout Comp) -> PatInfo {
         variantStart = vTok.start
         variantLen = vTok.len
         c.advance()
-        // optional `{ val f, ... }`
+        // optional payload destructuring `V(val f, ...)` (record-form, spec/11).
+        // The legacy brace form `V { val f }` is still accepted during migration;
+        // either bracket closes it.
+        mut val popen: Bool = false
         match c.curKind() {
             Kind.LBrace => {
                 c.advance()
-                while true {
-                    c.skipNewlines()
-                    match c.curKind() {
-                        Kind.RBrace => {
-                            c.advance()
-                            break
-                        }
-                        Kind.Eof => { break }
-                        Kind.KwVal => {
-                            // punning `val x`: field and binding are the same name.
-                            c.advance()
-                            val bTok: Tok = c.cur()
-                            c.advance()
-                            binds.append(<Bind nameStart=bTok.start nameLen=bTok.len fieldStart=bTok.start fieldLen=bTok.len />)
-                            match c.curKind() {
-                                Kind.Comma => { c.advance() }
-                                _ => {}
-                            }
-                        }
-                        Kind.Ident => {
-                            // `field: val name` (rename) or `field: _` (discard).
-                            val fTok: Tok = c.cur()
-                            c.advance()
-                            match c.curKind() {
-                                Kind.Colon => { c.advance() }
-                                _ => {}
-                            }
-                            match c.curKind() {
-                                Kind.KwVal => {
-                                    c.advance()
-                                    val bTok: Tok = c.cur()
-                                    c.advance()
-                                    binds.append(<Bind nameStart=bTok.start nameLen=bTok.len fieldStart=fTok.start fieldLen=fTok.len />)
-                                }
-                                _ => {
-                                    // `field: _` -> discard (consume the `_`), no binding.
-                                    c.advance()
-                                }
-                            }
-                            match c.curKind() {
-                                Kind.Comma => { c.advance() }
-                                _ => {}
-                            }
-                        }
-                        _ => { c.advance() }
-                    }
-                }
+                popen = true
+            }
+            Kind.LParen => {
+                c.advance()
+                popen = true
             }
             _ => {}
+        }
+        if popen {
+            while true {
+                c.skipNewlines()
+                match c.curKind() {
+                    Kind.RBrace => {
+                        c.advance()
+                        break
+                    }
+                    Kind.RParen => {
+                        c.advance()
+                        break
+                    }
+                    Kind.Eof => { break }
+                    Kind.KwVal => {
+                        // punning `val x`: field and binding are the same name.
+                        c.advance()
+                        val bTok: Tok = c.cur()
+                        c.advance()
+                        binds.append(<Bind nameStart=bTok.start nameLen=bTok.len fieldStart=bTok.start fieldLen=bTok.len />)
+                        match c.curKind() {
+                            Kind.Comma => { c.advance() }
+                            _ => {}
+                        }
+                    }
+                    Kind.Ident => {
+                        // `field: val name` (rename) or `field: _` (discard).
+                        val fTok: Tok = c.cur()
+                        c.advance()
+                        match c.curKind() {
+                            Kind.Colon => { c.advance() }
+                            _ => {}
+                        }
+                        match c.curKind() {
+                            Kind.KwVal => {
+                                c.advance()
+                                val bTok: Tok = c.cur()
+                                c.advance()
+                                binds.append(<Bind nameStart=bTok.start nameLen=bTok.len fieldStart=fTok.start fieldLen=fTok.len />)
+                            }
+                            _ => {
+                                // `field: _` -> discard (consume the `_`), no binding.
+                                c.advance()
+                            }
+                        }
+                        match c.curKind() {
+                            Kind.Comma => { c.advance() }
+                            _ => {}
+                        }
+                    }
+                    _ => { c.advance() }
+                }
+            }
         }
     }
     return <PatInfo isWildcard=isWildcard enumStart=enumStart enumLen=enumLen variantStart=variantStart variantLen=variantLen binds=binds />

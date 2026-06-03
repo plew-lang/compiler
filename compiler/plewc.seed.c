@@ -3036,15 +3036,30 @@ PatInfo parsePattern_c_Comp(Comp* c) {
     variantStart = vTok.start;
     variantLen = vTok.len;
     Comp_advance(&((*c)));
+    long long popen = 0;
     {
     Kind _m173 = Comp_curKind(&((*c)));
     if (_m173.tag == 33) {
     Comp_advance(&((*c)));
+    popen = 1;
+    }
+    else if (_m173.tag == 29) {
+    Comp_advance(&((*c)));
+    popen = 1;
+    }
+    else {
+    }
+    }
+    if (popen) {
     while (1) {
     Comp_skipNewlines(&((*c)));
     {
     Kind _m174 = Comp_curKind(&((*c)));
     if (_m174.tag == 34) {
+    Comp_advance(&((*c)));
+    break;
+    }
+    else if (_m174.tag == 30) {
     Comp_advance(&((*c)));
     break;
     }
@@ -3101,9 +3116,6 @@ PatInfo parsePattern_c_Comp(Comp* c) {
     Comp_advance(&((*c)));
     }
     }
-    }
-    }
-    else {
     }
     }
     }
@@ -4026,15 +4038,30 @@ void parseEnum_c_Comp(Comp* c) {
     Tok vTok = Comp_cur(&((*c)));
     Comp_advance(&((*c)));
     PlewArray_FieldDef fields = PlewArray_FieldDef_new();
+    long long vopen = 0;
     {
     Kind _m256 = Comp_curKind(&((*c)));
     if (_m256.tag == 33) {
     Comp_advance(&((*c)));
+    vopen = 1;
+    }
+    else if (_m256.tag == 29) {
+    Comp_advance(&((*c)));
+    vopen = 1;
+    }
+    else {
+    }
+    }
+    if (vopen) {
     while (1) {
     Comp_skipNewlines(&((*c)));
     {
     Kind _m257 = Comp_curKind(&((*c)));
     if (_m257.tag == 34) {
+    Comp_advance(&((*c)));
+    break;
+    }
+    else if (_m257.tag == 30) {
     Comp_advance(&((*c)));
     break;
     }
@@ -4076,9 +4103,6 @@ void parseEnum_c_Comp(Comp* c) {
     Comp_advance(&((*c)));
     }
     }
-    }
-    }
-    else {
     }
     }
     PlewArray_Variant_push(&(variants), (Variant){.nameStart = vTok.start, .nameLen = vTok.len, .fields = PlewArray_FieldDef_share(fields)});
