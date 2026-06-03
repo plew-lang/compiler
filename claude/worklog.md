@@ -6,11 +6,13 @@
 
 🎉 **セルフホスト達成・stage0（Rust）退役済み。** 正典コンパイラ＝Plew パッケージ `compiler/src/`（root `_.pw` が `part` で全パートを綴じ込む 1 モジュール＝`Loader`・`Lexer`・`Ast`・`Parser/`〔Expr/Stmt/Decl〕・`Codegen/`〔Emit/Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array〕・part はサブディレクトリ可）。自分自身を不動点までコンパイルする。
 
-> **次の一歩＝#9＝eager generic 型検査（C++ テンプレート脱却・ユーザー最優先）**。✅ **traits step 1 完了**＝T1/T2/T3・assoc fn・Eq/Ord 配線（タグ `traits-t1`〜`traits-t3`/`assoc-fn`/`traits-eq-ord`）。✅ **健全性ギャップ #1/#2/#4/#6 修正済**（タグ `traits-gaps-124`/`generic-transitive`）＝#1 `via` 先実体の存在検査・#2 未知トレイト準拠を loud reject・#4 Eq/Ord は `impl T as Eq/Ord` 準拠をゲート（inherent `eq` では動かない）・#6 transitive 単相化（generic→generic・worklist fixpoint）。
+> **次の一歩＝(2) closure キャプチャ**（イベントループ第1段・Iterator コンビネータの前提）。✅ **traits step 1 ＋ 健全性ギャップ #1/#2/#3/#4/#6/#8/#9 すべて完了**（残＝#5 は derive 待ち・#7 は合意の上で据え置き）。
 >
-> **残ギャップ＝#7 と #9。** **#7**（明示型引数 `f[I32](x)`）＝戻り値だけに型パラメータが出る稀ケース用・**Go 式の構文曖昧（`f[I32]` が添字と衝突）**で低価値×高コスト＝**当面据え置き**（要判断）。**#9**（未インスタンス化テンプレートを型検査）＝**単発修正でなく「境界ベースの抽象 generic 型検査器」を作ること**＝ユーザー最優先。**#9 ⊃ #8**（メソッド境界強制）・**#9 ⊃ #3**（要求をシグネチャ付きで保持）・**#9 ↔ 関連型**（`where T: Iterator` の `it.next()->Optional[T.Item]` は関連型必須＝Iterator 着手時に拡張・Eq/Ord/自前トレイト境界は関連型なしで検査可）。**#9 ⊥ closures**。**順序＝#9（関連型なし版）→ closures →〔関連型＋Iterator〕→ Hash→Dictionary**（Iterator/Dict 前倒しは消費者ゆえ #9 を楽にしない）。**最小 `@[Eq]/@[Ord]` derive**＝#5 を閉じる小物・#9 と無関係にいつでも差せる。
+> **ギャップ修正済の一覧**：#1 `via` 先実体の存在検査（`checkViaTargets`）・#2 未知トレイト準拠を loud reject・#3 完全性チェックをセレクタ単位（名前＋引数型・`witnessedHas`/`paramSelectorEq`・オーバーロード要求を区別）・#4 Eq/Ord は `impl T as Eq/Ord` 準拠をゲート（inherent `eq` では動かない）・#6 transitive 単相化（generic→generic・worklist fixpoint）・**#9 eager generic 型検査**（タグ `eager-generic-check`＝`checkGenericBodies` が generic テンプレート本体を境界に対し1回検査＝型パラメータにメソッド/演算子を呼ぶには `where T: Trait` 必須＝C++ テンプレート脱却）。#8 はメソッド本体側を #9 が吸収。
 >
-> **#9 設計メモ（着手用）**：(a) **トレイト要求/提供メソッドをシグネチャ付きで保持**（今は要求＝名前のみ `Array[Bind]`→ メンバ名＋params＋ret へ拡張＝#3 解消）。(b) **境界環境**＝generic 関数/メソッド本体の検査時、型パラメータ T を「bounds＝where 由来トレイト集合」を持つ抽象型として扱う。(c) **抽象メソッド/演算子解決**＝`x.m()`（x:T）は T の各 bound トレイトの要求＋提供メソッドから selector 一致を探す（無ければ**テンプレート定義地点で**「bound にそのメソッドが無い」エラー）。(d) **`a==b`（a:T）** は T が Eq を bound に持つか検査。(e) codegen は現状の単相化を維持（検査は別パス・出力不変）＝C++ 流の「使うまで気づかない」を排除。
+> **残＝#5 と #7（どちらも据え置き合意）**。**#5**（enum/struct の Eq/Ord witness 自動化）＝**最小 `@[Eq]/@[Ord]` derive**（コンパイラが witness を合成・Rust の `#[derive]` 相当のビルトイン特別扱い・フルのメタプロ spec/16 は不要）で閉じる・#9 と無関係にいつでも差せる小物。**#7**（明示型引数 `f[I32](x)`）＝Go 式の構文曖昧で低価値×高コスト＝当面据え置き。**#8 残**＝generic メソッドの**インスタンス時**境界 conformance 強制（`checkFnBounds` は free 関数のみ・メソッド本体側は #9 が検査済・稀ケース）。
+>
+> **順序＝(2) closures → 〔関連型＋Iterator〕→ Hash→Dictionary**。closures は #9 と直交・Iterator コンビネータ（`map(fn)`）の前提。関連型は Iterator 着手時に #9 を拡張（`where T: Iterator` の `it.next()->Optional[T.Item]`）。`any P` 存在型は最終フェーズ。
 
 - **ビルド**：`./bootstrap.sh`＝C 種 `compiler/plewc.seed.c`→clang→`plewc0`→`compiler/src/_.pw` を自己コンパイル→不動点 cmp（Rust 不要）。`./bootstrap.sh --reseed` で種更新。**preamble/codegen 出力/AST フィールド変更後は reseed を2回**。
 - **テスト**：`./test.sh`＝`tests/run/*.pw`（`.out` 照合・任意 `.in`）＋`tests/part/`（複数ファイル）＋`tests/reject/*.pw`（plewc 非ゼロ終了で reject＝受理の健全性）＋`tests/panic/*.pw`（compile+link 成功・実行は非ゼロ＋`.panic` stderr 部分一致）＋不動点。
@@ -29,6 +31,7 @@
 - **★クロージャ/関数値**＝関数型 `fn(...)->R`・関数を第一級値・非キャプチャのクロージャリテラル（ラムダリフティング）・高階関数。**ラベル抑制 `~:`**・**デフォルト引数 `name: T = expr`**。
 - **★オーバーロード完成**（タグ `overload-mangle`/`overloading`）＝関数/メソッドを **名前＋ラベル＋引数型** のセレクタで解決。C 名は `writeFnSelector` でマングル（名前＋各 param の ラベル＋型頭・配列 `A` 接頭）。arity/label/type の3軸・自由関数もメソッドも。traits（`via`・多重 conformance）の土台。詳細は下のロードマップ item 6。
 - **★traits step 1 完了**（タグ `traits-t1`/`traits-t2`/`generic-free-fn`/`traits-t3`/`assoc-fn`/`traits-eq-ord`）＝**T1** trait 宣言＋`impl Type as Trait`（body/`via` witness・findMethod redirect）＋完全性チェック（暗黙準拠なし）。**T2** 提供メソッド `impl Trait`（各 Conform 型へ recv=Type 複製）。**T3a** generic free 関数の**呼び出し位置単相化**（`FnInst`・スコープ復元木探索で引数型推論・`writeFnSelector` が free 関数のみ型引数解決・戻り型置換）。**T3b** `where T: Trait` 境界（`FuncBound`・`checkFnBounds` が非準拠を loud reject）。**assoc fn**＝`assoc fn name(...)`（静的・self 無し・`Type.name(args)`・`findAssoc`/`assocRecvName`）。**Eq/Ord 配線**＝`== != < <= > >=` をユーザー型の `eq`/`compare` witness へ脱糖（`hasCompareWitness`/`emitTraitCompare`・Ord は Ordering タグ）。`any P` 存在型は未（item 7・最終）。
+- **★traits 健全性ギャップ修正＋eager generic 型検査**（タグ `traits-gaps-124`/`generic-transitive`/`eager-generic-check`/`traits-gap-3`）＝#1 `via` 先存在検査・#2 未知トレイト準拠 reject・#3 完全性をセレクタ単位（名前＋引数型・オーバーロード要求区別）・#4 Eq/Ord は `as Eq/Ord` 準拠ゲート・#6 transitive 単相化・**#9 eager generic 型検査**＝`checkGenericBodies` が generic テンプレート本体を `where` 境界に対し1回検査（型パラメータへのメソッド/演算子は `where T: Trait` 必須＝C++ テンプレート脱却・別パスで出力不変）。残＝#5（derive 待ち）・#7（据え置き）。
 - **値意味論・generics・クロージャを有効化したまま自己ホスト不動点維持**。生成 C は警告クリーン。**コンパイラ自身がメソッド/match 式で自己記述**（dogfood）。
 
 ## ★ ロードマップ（generics → コアライブラリ → ランタイム）
@@ -52,7 +55,7 @@
    - **spawn**＝pthread。境界で CoW 値は eager 実体化・`Ref` は越えられない（spec/14）。`JoinHandle[T]`/`join()→Promise[T]` は async 機構依存（blocking join に簡略化するなら言語表面の判断＝要確認）。
    - **async/await**＝状態機械変換 or コルーチン＝最難。`Promise[T]` 自動ラップ・`await` 展開・スケジューラ。spec 表面（Promise API）に密接。
 6. ✅ **関数/メソッドのオーバーロード 完成**（タグ `overload-mangle`/`overloading`）＝traits の土台（セレクタ＝名前＋ラベル＋型のモデル・`via` 別名／多重 conformance／同名別シグ要求の前提）。C 名を `writeFnSelector`（名前＋各 param の ラベル＋型頭・配列は `A` 接頭）でマングルし、proto/def/呼び出し/関数値で同一に出力。`findFunc`/`findMethod` がラベル＋引数型で解決（arity/label/type の3軸・`exprType` も解決経由・単一名は first-label fallback で従来通り）。`overload` テスト。
-7. 🔄 **traits → closures → Iterator/Dictionary**（現在進行・ユーザー合意の順）。✅ **(1) traits コア＋Eq/Ord 完了**＝trait 宣言・`impl A as Trait`（body/`via`）・完全性チェック・提供メソッド・`where T: Trait` 解決＋強制・generic free 関数単相化・assoc fn（静的メソッド）・Eq/Ord 演算子配線〔T1–T3＋assoc fn＋Eq/Ord・タグ `traits-t1`〜`traits-t3`/`assoc-fn`/`traits-eq-ord`〕。→ 🔲 **(2) closure キャプチャ**（イベントループ第1段・Iterator コンビネータの前提＝外側ローカル参照キャプチャ・env＋fat closure・item 5 参照）→ **(3) Iterator/Iterable＋Hash/Dictionary/Set**。`any P` 存在型は traits の重い尻尾＝最後。spec/08,12。**オーバーロード（item 6）は完了済の前提。**
+7. 🔄 **traits → closures → Iterator/Dictionary**（現在進行・ユーザー合意の順）。✅ **(1) traits コア＋Eq/Ord＋健全性ギャップ＋eager 型検査 完了**＝trait 宣言・`impl A as Trait`（body/`via`）・完全性チェック（セレクタ単位）・提供メソッド・`where T: Trait` 解決＋強制・generic free 関数単相化（transitive 含む）・assoc fn・Eq/Ord 演算子配線・**eager generic 型検査（#9・C++ テンプレート脱却）**〔タグ `traits-t1`〜`traits-t3`/`assoc-fn`/`traits-eq-ord`/`traits-gaps-124`/`generic-transitive`/`eager-generic-check`/`traits-gap-3`〕。残＝#5（最小 `@[Eq]/@[Ord]` derive 待ち）・#7（明示型引数・据え置き）。→ 🔲 **(2) closure キャプチャ**（イベントループ第1段・Iterator コンビネータの前提＝外側ローカル参照キャプチャ・env＋fat closure・item 5 参照）→ **(3) 関連型＋Iterator/Iterable＋Hash/Dictionary/Set**（関連型で #9 を拡張）。`any P` 存在型は traits の重い尻尾＝最後。spec/08,12。
 - **イベントループ（async/await/spawn）**は最後の大物（上の item 5）。**Dictionary** の `[k:v]` リテラルは traits（Hash）後。**I2**（import の with ゲート＝定義のモジュール所属追跡＋可視性検査・今は全フラット）は多モジュール化が進む段で additive。
 
 ## 機能を plewc.pw に足す手順（ADD→reseed→USE）
