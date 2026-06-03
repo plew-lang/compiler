@@ -1,0 +1,32 @@
+import @Std/Io with { print }
+
+// Function overloading: selector = name + labels + argument types.
+fn f(x: I64) -> I64 { return x + 1I64 }            // by arity
+fn f(x: I64, y: I64) -> I64 { return x + y }
+fn f(y: I64) -> I64 { return y + 100I64 }          // by label (x vs y)
+fn g(x: I64) -> I64 { return x }                   // by argument type
+fn g(x: String) -> I64 { return 99I64 }
+
+struct C { val n: I64 }
+impl C {
+    fn add(x: I64) -> I64 { return self.n + x }    // method overloads too
+    fn add(x: I64, y: I64) -> I64 { return self.n + x + y }
+}
+
+fn main() {
+    val a: I64 = f(x: 3I64)            // 4
+    val b: I64 = f(x: 3I64, y: 4I64)   // 7
+    val c: I64 = f(y: 3I64)            // 103
+    val d: I64 = g(x: 5I64)            // 5
+    val e: I64 = g(x: "hi")            // 99
+    val o: C = <C n=10 />
+    val p: I64 = o.add(x: 2I64)        // 12
+    val q: I64 = o.add(x: 2I64, y: 3I64) // 15
+    print(a)
+    print(b)
+    print(c)
+    print(d)
+    print(e)
+    print(p)
+    print(q)
+}

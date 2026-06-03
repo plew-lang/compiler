@@ -486,7 +486,7 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
     checkLitCtx(c: inout c, id: recv, eKind: 0, eBits: 0, eSgn: false)
     val rt: TypeInfo = exprType(c: inout c, id: recv)
     if rt.kind == 2 {
-        val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen)
+        val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
         if mi != c.funcs.count {
             val mf: Func = c.funcs[mi]
             val ps: Array[Param] = mf.params

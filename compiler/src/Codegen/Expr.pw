@@ -377,7 +377,7 @@ fn genExpr(c: inout Comp, id: U64) {
             } else {
                 // user method on a named type: `recv.m(args)` -> Recv_m(self, args)
                 // (self by value, or &recv for an `inout fn` receiver).
-                val mi: U64 = findMethod(c: inout c, recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen)
+                val mi: U64 = findMethod(c: inout c, recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mi == c.funcs.count {
                     compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "no such method on this type")
                     return

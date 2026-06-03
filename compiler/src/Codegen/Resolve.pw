@@ -1,12 +1,14 @@
-// Index of the top-level function named (nameStart,nameLen), or -1 if none.
-// Names are unique (no overloading in this compiler), so the first match wins.
-// Returns `c.funcs.count` (one past the end) when there is no match — kept as a
-// U64 sentinel so callers never need a signed index (lossless-`as` discipline).
 // Resolve a free-function call to its overload. Candidates share the name; among
-// them the one whose selector (labels + arg types) matches the call is chosen
-// (see selectorMatchesCall). `args` carries the call's labels/types. Returns the
-// func index, or c.funcs.count if none matches.
+// them the one whose selector (labels + arg types) matches the call is chosen.
+// `args` carries the call's labels/types. Returns the func index, or
+// c.funcs.count (a U64 sentinel, no signed index) if none matches.
 fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    // Among candidates whose labels match, prefer the one whose parameter types
+    // match the argument types (type-based overload). Fall back to the first
+    // label match when none type-matches (or there is a single candidate) — so a
+    // unique-name call resolves exactly as before.
+    mut val firstLabel: U64 = c.funcs.count
+    mut val typeMatch: U64 = c.funcs.count
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
@@ -14,13 +16,23 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U6
         } else {
             if spansEqual(c: inout c, aStart: nameStart, aLen: nameLen, bStart: f.nameStart, bLen: f.nameLen) {
                 if paramsLabelsOk(c: inout c, params: f.params, args: args) {
-                    return i
+                    if firstLabel == c.funcs.count {
+                        firstLabel = i
+                    }
+                    if typeMatch == c.funcs.count {
+                        if paramsTypesMatch(c: inout c, params: f.params, args: args) {
+                            typeMatch = i
+                        }
+                    }
                 }
             }
         }
         i += 1
     }
-    return c.funcs.count
+    if typeMatch != c.funcs.count {
+        return typeMatch
+    }
+    return firstLabel
 }
 
 // Index of the first free function named (start,len), or c.funcs.count if none.
@@ -50,21 +62,36 @@ fn funcNameExists(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
 }
 
 // Index of the method named (nameStart,nameLen) on receiver type
-// (recvStart,recvLen), or `c.funcs.count` (one past the end) if none.
-fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> U64 {
+// (recvStart,recvLen), resolving overloads by labels + arg types (like findFunc),
+// or `c.funcs.count` if none. Falls back to the first label match.
+fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    mut val firstLabel: U64 = c.funcs.count
+    mut val typeMatch: U64 = c.funcs.count
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
         if f.hasRecv {
             if spansEqual(c: inout c, aStart: nameStart, aLen: nameLen, bStart: f.nameStart, bLen: f.nameLen) {
                 if spansEqual(c: inout c, aStart: recvStart, aLen: recvLen, bStart: f.recvStart, bLen: f.recvLen) {
-                    return i
+                    if paramsLabelsOk(c: inout c, params: f.params, args: args) {
+                        if firstLabel == c.funcs.count {
+                            firstLabel = i
+                        }
+                        if typeMatch == c.funcs.count {
+                            if paramsTypesMatch(c: inout c, params: f.params, args: args) {
+                                typeMatch = i
+                            }
+                        }
+                    }
                 }
             }
         }
         i += 1
     }
-    return c.funcs.count
+    if typeMatch != c.funcs.count {
+        return typeMatch
+    }
+    return firstLabel
 }
 
 // Check call args against a parameter list: arg count matches and every arg
@@ -98,6 +125,47 @@ fn paramsLabelsOk(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bool
                 } else {
                     return false
                 }
+            } else {
+                return false
+            }
+        }
+        i += 1
+    }
+    return true
+}
+
+// Whether an argument's recovered type matches a parameter's declared type head
+// (used to discriminate same-label overloads — spec: overload by argument type).
+// An untyped integer literal (no suffix) matches any integer-typed parameter.
+fn argMatchesParam(c: inout Comp, argExpr: U64, p: Param) -> Bool {
+    val ti: TypeInfo = exprType(c: inout c, id: argExpr)
+    if p.tyIsArray {
+        if ti.kind == 3 {
+            return spansEqual(c: inout c, aStart: ti.nameStart, aLen: ti.nameLen, bStart: p.tyStart, bLen: p.tyLen)
+        }
+        return false
+    }
+    if ti.kind == 1 {
+        return rangeEquals(bytes: c.bytes, start: p.tyStart, len: p.tyLen, kw: "String")
+    }
+    if ti.kind == 2 {
+        return spansEqual(c: inout c, aStart: ti.nameStart, aLen: ti.nameLen, bStart: p.tyStart, bLen: p.tyLen)
+    }
+    // ti.kind == 0: a scalar / integer. A suffixed/typed value carries its name;
+    // an untyped literal (no name) adapts to any integer parameter.
+    if ti.nameLen != 0 {
+        return spansEqual(c: inout c, aStart: ti.nameStart, aLen: ti.nameLen, bStart: p.tyStart, bLen: p.tyLen)
+    }
+    return isIntType(c: inout c, start: p.tyStart, len: p.tyLen)
+}
+
+// Whether every argument's type matches its parameter's declared type. Provided
+// (non-defaulted) args only; trailing defaulted params are not type-checked here.
+fn paramsTypesMatch(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bool {
+    mut val i: U64 = 0
+    while i < args.count {
+        if i < params.count {
+            if argMatchesParam(c: inout c, argExpr: args[i].expr, p: params[i]) {
             } else {
                 return false
             }
@@ -667,20 +735,18 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argAt") {
                 return <TypeInfo kind=1 nameStart=0 nameLen=0 ref=0 />
             }
-            mut val fi: U64 = 0
-            while fi < c.funcs.count {
+            // resolve the right overload (by labels + arg types) for its return.
+            val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            if fi < c.funcs.count {
                 val f: Func = c.funcs[fi]
-                if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: nameStart, bLen: nameLen) {
-                    if f.hasRet {
-                        if isGenericInst(c: inout c, ref: f.retTy) {
-                            val rtr: TypeRef = c.types[f.retTy]
-                            return <TypeInfo kind=2 nameStart=rtr.nameStart nameLen=rtr.nameLen ref=f.retTy />
-                        }
-                        return typeInfoOfName(c: inout c, start: f.retStart, len: f.retLen, isArray: f.retIsArray)
+                if f.hasRet {
+                    if isGenericInst(c: inout c, ref: f.retTy) {
+                        val rtr: TypeRef = c.types[f.retTy]
+                        return <TypeInfo kind=2 nameStart=rtr.nameStart nameLen=rtr.nameLen ref=f.retTy />
                     }
-                    return scalarInfo()
+                    return typeInfoOfName(c: inout c, start: f.retStart, len: f.retLen, isArray: f.retIsArray)
                 }
-                fi += 1
+                return scalarInfo()
             }
             return scalarInfo()
         }
@@ -712,7 +778,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
         Expr.Method { val recv, val nameStart, val nameLen, val args } => {
             val rt: TypeInfo = exprType(c: inout c, id: recv)
             if rt.kind == 2 {
-                val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen)
+                val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mi == c.funcs.count {
                     return scalarInfo()
                 }
