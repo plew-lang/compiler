@@ -101,8 +101,8 @@ fn makeProvides(c: inout Comp, fields: Array[MakeField], nameStart: U64, nameLen
 fn genExpr(c: inout Comp, id: U64) {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Int { val value, offset: _, isBool: _, tyStart: _, tyLen: _ } => { writeInt(n: value) }
-        Expr.Ident { val start, val len } => {
+        Expr.Int(val value, offset: _, isBool: _, tyStart: _, tyLen: _) => { writeInt(n: value) }
+        Expr.Ident(val start, val len) => {
             // inside a closure body, a captured enclosing variable reads from the
             // env: `((__closure_env<id>*)__env)->name`.
             if c.curInClosure {
@@ -161,7 +161,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 }
             }
         }
-        Expr.Move { val operand, val isBorrow } => {
+        Expr.Move(val operand, val isBorrow) => {
             // `move`/`borrow` lower to the operand's value (a unique struct is a
             // bit-copy). `move` then marks the source place moved-out so it is
             // neither used again nor double-released; `borrow` leaves it live.
@@ -172,7 +172,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 // the source would not be marked moved -> double-release. Restrict
                 // `move` to a bare local until field/element moves are supported.
                 match c.exprs[operand] {
-                    Expr.Ident { val start, val len } => {
+                    Expr.Ident(val start, val len) => {
                         // moving `self` onward (out of a `move fn`) isn't tracked yet
                         // (self isn't a tracked local), so it would double-deinit.
                         if isSelfRef(c: inout c, start: start, len: len) {
@@ -195,7 +195,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 markMovedExpr(c: inout c, exprId: operand)
             }
         }
-        Expr.Unary { val op, val operand } => {
+        Expr.Unary(val op, val operand) => {
             mut val negChecked: Bool = false
             if op == 57 {
                 val ot: TypeInfo = exprType(c: inout c, id: operand)
@@ -216,7 +216,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 write(s: ")")
             }
         }
-        Expr.Binary { val op, val lhs, val rhs } => {
+        Expr.Binary(val op, val lhs, val rhs) => {
             if isStringEq(c: inout c, op: op, lhs: lhs) {
                 if op == 51 {
                     write(s: "(!PlewString_eq(")
@@ -294,7 +294,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 }
             }
         }
-        Expr.Call { val nameStart, val nameLen, val args } => {
+        Expr.Call(val nameStart, val nameLen, val args) => {
             // compileError / compileErrorAt are ordinary module functions (defined
             // above via eprint/exit), so they are NOT special-cased here — calls
             // lower like any other user-function call. (Kept spec-valid: no ambient
@@ -497,7 +497,7 @@ fn genExpr(c: inout Comp, id: U64) {
             }
             write(s: ")")
         }
-        Expr.Field { val base, val nameStart, val nameLen } => {
+        Expr.Field(val base, val nameStart, val nameLen) => {
             val bt: TypeInfo = exprType(c: inout c, id: base)
             if bt.kind == 1 {
                 // String.bytes: a borrowed Array[U8] view of the string buffer
@@ -518,14 +518,14 @@ fn genExpr(c: inout Comp, id: U64) {
             write(s: ".")
             writeSpan(c: inout c, start: nameStart, len: nameLen)
         }
-        Expr.Str { val start, val len } => {
+        Expr.Str(val start, val len) => {
             write(s: "(PlewString){\"")
             writeSpan(c: inout c, start: start + 1, len: len - 2)
             write(s: "\", ")
             writeInt(n: strDecodedLen(c: inout c, start: start, len: len))
             write(s: "}")
         }
-        Expr.Index { val base, val index } => {
+        Expr.Index(val base, val index) => {
             val bt: TypeInfo = exprType(c: inout c, id: base)
             write(s: "PlewArray_")
             writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
@@ -535,14 +535,14 @@ fn genExpr(c: inout Comp, id: U64) {
             genExpr(c: inout c, id: index)
             write(s: "))")
         }
-        Expr.Arrow { val base, val nameStart, val nameLen } => {
+        Expr.Arrow(val base, val nameStart, val nameLen) => {
             // Ref pointee field access: `(base)->field` (Ref[T] is a C T*).
             write(s: "(")
             genExpr(c: inout c, id: base)
             write(s: ")->")
             writeSpan(c: inout c, start: nameStart, len: nameLen)
         }
-        Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
+        Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
             // value = a fat closure. A non-capturing closure has a NULL env; a
             // capturing one allocates an env block (rc-headed) and copies each
             // captured scalar into it. drop=0: scalar envs own no heap, so they
@@ -579,7 +579,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 write(s: ", 0, 0, 0}")
             }
         }
-        Expr.Method { val recv, val nameStart, val nameLen, val args } => {
+        Expr.Method(val recv, val nameStart, val nameLen, val args) => {
             // `Type.name(args)` (assoc fn call): the receiver is a bare type name,
             // not a value. Dispatch to the assoc fn `Type_name(args)` (no self).
             val arn: Bind = assocRecvName(c: inout c, recv: recv)
@@ -669,7 +669,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 // element, and not consumed conditionally (same hazard as `move`).
                 if mf.selfMove {
                     match c.exprs[recv] {
-                        Expr.Ident { val start, val len } => {
+                        Expr.Ident(val start, val len) => {
                             if isSelfRef(c: inout c, start: start, len: len) {
                                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "calling a `move fn` on `self` is not yet supported")
                             }
@@ -684,10 +684,10 @@ fn genExpr(c: inout Comp, id: U64) {
                                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call a `move fn` on a variable declared outside the enclosing conditional/loop (the consume would be conditional)")
                             }
                         }
-                        Expr.Field { val base, val nameStart, val nameLen } => {
+                        Expr.Field(val base, val nameStart, val nameLen) => {
                             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call a `move fn` on a field (partial move, not yet supported)")
                         }
-                        Expr.Index { val base, val index } => {
+                        Expr.Index(val base, val index) => {
                             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call a `move fn` on an element (partial move, not yet supported)")
                         }
                         _ => {}
@@ -729,13 +729,13 @@ fn genExpr(c: inout Comp, id: U64) {
                 }
             }
         }
-        Expr.Array { val elems } => {
+        Expr.Array(val elems) => {
             // Array literals appear only in typed positions (let init / JSX
             // field / array assignment), handled by genArrayLiteral with the
             // declared element type. A bare literal here has no element context.
             write(s: "0")
         }
-        Expr.Cast { val operand, val tyStart, val tyLen, ty: _ } => {
+        Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
             // lossless-`as` check (spec: `as` is infallible/lossless; narrowing or
             // signedness change must go through TryFrom). Only checked when the
             // target is an integer type and the source is a literal or has a
@@ -743,7 +743,7 @@ fn genExpr(c: inout Comp, id: U64) {
             if isIntType(c: inout c, start: tyStart, len: tyLen) {
                 val opE: Expr = c.exprs[operand]
                 match opE {
-                    Expr.Int { val value, val offset, isBool: _, tyStart: _, tyLen: _ } => {
+                    Expr.Int(val value, val offset, isBool: _, tyStart: _, tyLen: _) => {
                         if litFitsType(c: inout c, value: value, dstStart: tyStart, dstLen: tyLen) {
                         } else {
                             compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal is out of range for the target type of `as`")
@@ -768,7 +768,7 @@ fn genExpr(c: inout Comp, id: U64) {
             genExpr(c: inout c, id: operand)
             write(s: "))")
         }
-        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
+        Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
             if isRefInst(c: inout c, ref: ty) {
                 // `<Ref value=e />` -> a refcounted heap box (plew_arc_alloc puts
                 // an rc header before the pointee; the Ref value is the pointer
@@ -908,7 +908,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 write(s: "}")
             }
         }
-        Expr.MatchExpr { val scrut, val arms } => {
+        Expr.MatchExpr(val scrut, val arms) => {
             // value-position match -> C statement-expression. Mirrors the
             // Stmt.Match lowering but each arm assigns the result temp __mr.
             if matchExhaustive(c: inout c, arms: arms) {
@@ -1019,7 +1019,7 @@ fn genExpr(c: inout Comp, id: U64) {
             writeU64(n: t)
             write(s: "; })")
         }
-        Expr.IfExpr { val cond, val thenBlk, val elseBlk } => {
+        Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
             // value-position if -> C statement-expression. Each branch is a block
             // ending in `give`, which assigns the result temp __r<t>.
             val t: U64 = c.tmp
@@ -1046,7 +1046,7 @@ fn genExpr(c: inout Comp, id: U64) {
             writeU64(n: t)
             write(s: "; })")
         }
-        Expr.Coalesce { val opt, val deflt } => {
+        Expr.Coalesce(val opt, val deflt) => {
             // `opt ?? deflt` -> read the Optional's tag; Some(0) yields its `v`,
             // else the default. Couples to @Std/Core Optional (Some=0, field v).
             val t: U64 = c.tmp
@@ -1070,7 +1070,7 @@ fn genExpr(c: inout Comp, id: U64) {
             genExpr(c: inout c, id: deflt)
             write(s: "); })")
         }
-        Expr.Try { val expr } => {
+        Expr.Try(val expr) => {
             // `try expr` -> if Err(tag 1), early-return the function's own Result
             // error variant; else yield the Ok value. Couples to @Std/Core Result
             // (Ok=0 field value, Err=1 field error). First cut: error types match.

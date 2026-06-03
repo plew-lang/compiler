@@ -795,7 +795,7 @@ fn genFunc(c: inout Comp, fi: U64) {
 // params and globals only). The expression `<id>` is the Closure's arena index.
 fn genClosure(c: inout Comp, id: U64, proto: Bool) {
     match c.exprs[id] {
-        Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
+        Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
             if hasRet {
                 c.curRetVoid = false
                 c.curRetStart = retStart
@@ -883,7 +883,7 @@ fn collectFnThunks(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.exprs.count {
         match c.exprs[i] {
-            Expr.Ident { val start, val len } => {
+            Expr.Ident(val start, val len) => {
                 val fvi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)
                 if fvi < c.funcs.count {
                     val f: Func = c.funcs[fvi]
@@ -1108,7 +1108,7 @@ fn emitClosureEnvs(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.exprs.count {
         match c.exprs[i] {
-            Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
+            Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
                 if closureHasCaptures(c: inout c, id: i) {
                     emitClosureEnvStruct(c: inout c, id: i)
                     emitClosureEnvDrop(c: inout c, id: i)
@@ -1126,7 +1126,7 @@ fn emitClosures(c: inout Comp, proto: Bool) {
     mut val i: U64 = 0
     while i < c.exprs.count {
         match c.exprs[i] {
-            Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
+            Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
                 genClosure(c: inout c, id: i, proto: proto)
             }
             _ => {}

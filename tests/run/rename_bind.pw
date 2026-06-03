@@ -7,14 +7,14 @@ enum Pair { P { a: I64, b: I64 } }
 
 fn doubled(s: Shape) -> I64 {
     return match s {
-        Shape.Circle { radius: val size } | Shape.Square { side: val size } => size * 2
+        Shape.Circle(radius: val size) | Shape.Square(side: val size) => size * 2
     }
 }
 
 fn firstOnly(p: Pair) -> I64 {
     // discard the second field
     return match p {
-        Pair.P { a: val x, b: _ } => x
+        Pair.P(a: val x, b: _) => x
     }
 }
 

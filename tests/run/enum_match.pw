@@ -1,15 +1,15 @@
 import @Std/Io with { print }
 
 enum Shape {
-    Circle { r: I64 }
-    Rect { w: I64, h: I64 }
+    Circle(r: I64)
+    Rect(w: I64, h: I64)
 }
 fn area(s: Shape) -> I64 {
     match s {
-        Shape.Circle { val r } => {
+        Shape.Circle(val r) => {
             return r * r * 3
         }
-        Shape.Rect { val w, val h } => {
+        Shape.Rect(val w, val h) => {
             return w * h
         }
     }

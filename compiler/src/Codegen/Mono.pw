@@ -409,7 +409,7 @@ fn collectGenInsts(c: inout Comp) {
     mut val sti: U64 = 0
     while sti < c.stmts.count {
         match c.stmts[sti] {
-            Stmt.Let { mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, val ty, init: _ } => {
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, val ty, init: _) => {
                 scanType(c: inout c, ref: ty)
             }
             _ => {}
@@ -419,10 +419,10 @@ fn collectGenInsts(c: inout Comp) {
     mut val xi: U64 = 0
     while xi < c.exprs.count {
         match c.exprs[xi] {
-            Expr.Cast { val operand, val tyStart, val tyLen, val ty } => {
+            Expr.Cast(val operand, val tyStart, val tyLen, val ty) => {
                 scanType(c: inout c, ref: ty)
             }
-            Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
+            Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 scanType(c: inout c, ref: ty)
             }
             _ => {}
@@ -906,7 +906,7 @@ fn recordCapture(c: inout Comp, closureId: U64, localIdx: U64) {
 
 fn scanExprInsts(c: inout Comp, exprId: U64) {
     match c.exprs[exprId] {
-        Expr.Ident { val start, val len } => {
+        Expr.Ident(val start, val len) => {
             // capture detection: inside a closure, an identifier that resolves to
             // a local below the closure's entry mark is an enclosing capture.
             if c.curInClosure {
@@ -916,7 +916,7 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
                 }
             }
         }
-        Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
+        Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
             // a closure literal lexically inside another closure body: the inner
             // env construction would have to reach the outer env, which is not
             // wired yet — reject loudly rather than miscompile.
@@ -945,12 +945,12 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
             c.curInClosure = savedIn
             c.curCaptureMark = savedMark
         }
-        Expr.Unary { val op, val operand } => { scanExprInsts(c: inout c, exprId: operand) }
-        Expr.Binary { val op, val lhs, val rhs } => {
+        Expr.Unary(val op, val operand) => { scanExprInsts(c: inout c, exprId: operand) }
+        Expr.Binary(val op, val lhs, val rhs) => {
             scanExprInsts(c: inout c, exprId: lhs)
             scanExprInsts(c: inout c, exprId: rhs)
         }
-        Expr.Call { val nameStart, val nameLen, val args } => {
+        Expr.Call(val nameStart, val nameLen, val args) => {
             mut val i: U64 = 0
             while i < args.count {
                 scanExprInsts(c: inout c, exprId: args[i].expr)
@@ -958,7 +958,7 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
             }
             registerCallInst(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
         }
-        Expr.Method { val recv, val nameStart, val nameLen, val args } => {
+        Expr.Method(val recv, val nameStart, val nameLen, val args) => {
             scanExprInsts(c: inout c, exprId: recv)
             mut val i: U64 = 0
             while i < args.count {
@@ -966,38 +966,38 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
                 i += 1
             }
         }
-        Expr.Field { val base, val nameStart, val nameLen } => { scanExprInsts(c: inout c, exprId: base) }
-        Expr.Index { val base, val index } => {
+        Expr.Field(val base, val nameStart, val nameLen) => { scanExprInsts(c: inout c, exprId: base) }
+        Expr.Index(val base, val index) => {
             scanExprInsts(c: inout c, exprId: base)
             scanExprInsts(c: inout c, exprId: index)
         }
-        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
+        Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
             mut val i: U64 = 0
             while i < fields.count {
                 scanExprInsts(c: inout c, exprId: fields[i].value)
                 i += 1
             }
         }
-        Expr.Array { val elems } => {
+        Expr.Array(val elems) => {
             mut val i: U64 = 0
             while i < elems.count {
                 scanExprInsts(c: inout c, exprId: elems[i])
                 i += 1
             }
         }
-        Expr.Cast { val operand, val tyStart, val tyLen, val ty } => { scanExprInsts(c: inout c, exprId: operand) }
-        Expr.Coalesce { val opt, val deflt } => {
+        Expr.Cast(val operand, val tyStart, val tyLen, val ty) => { scanExprInsts(c: inout c, exprId: operand) }
+        Expr.Coalesce(val opt, val deflt) => {
             scanExprInsts(c: inout c, exprId: opt)
             scanExprInsts(c: inout c, exprId: deflt)
         }
-        Expr.Try { val expr } => { scanExprInsts(c: inout c, exprId: expr) }
-        Expr.Arrow { val base, val nameStart, val nameLen } => { scanExprInsts(c: inout c, exprId: base) }
-        Expr.IfExpr { val cond, val thenBlk, val elseBlk } => {
+        Expr.Try(val expr) => { scanExprInsts(c: inout c, exprId: expr) }
+        Expr.Arrow(val base, val nameStart, val nameLen) => { scanExprInsts(c: inout c, exprId: base) }
+        Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
             scanExprInsts(c: inout c, exprId: cond)
             scanBlockInsts(c: inout c, blkId: thenBlk)
             scanBlockInsts(c: inout c, blkId: elseBlk)
         }
-        Expr.MatchExpr { val scrut, val arms } => {
+        Expr.MatchExpr(val scrut, val arms) => {
             scanExprInsts(c: inout c, exprId: scrut)
             mut val ai: U64 = 0
             while ai < arms.count {
@@ -1009,7 +1009,7 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
                 ai += 1
             }
         }
-        Expr.Move { val operand, val isBorrow } => { scanExprInsts(c: inout c, exprId: operand) }
+        Expr.Move(val operand, val isBorrow) => { scanExprInsts(c: inout c, exprId: operand) }
         _ => {}
     }
 }
@@ -1029,33 +1029,33 @@ fn scanAddArmBinds(c: inout Comp, a: MatchArm) {
 // local scope for type recovery (mirrors codegen's binding management).
 fn scanStmtInsts(c: inout Comp, stmtId: U64) {
     match c.stmts[stmtId] {
-        Stmt.Let { val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init } => {
+        Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
             scanExprInsts(c: inout c, exprId: init)
             addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
         }
-        Stmt.Assign { val op, val target, val value } => {
+        Stmt.Assign(val op, val target, val value) => {
             scanExprInsts(c: inout c, exprId: target)
             scanExprInsts(c: inout c, exprId: value)
         }
-        Stmt.Print { val expr, val offset } => { scanExprInsts(c: inout c, exprId: expr) }
-        Stmt.ExprStmt { val expr } => { scanExprInsts(c: inout c, exprId: expr) }
-        Stmt.Return { val value, val hasValue } => {
+        Stmt.Print(val expr, val offset) => { scanExprInsts(c: inout c, exprId: expr) }
+        Stmt.ExprStmt(val expr) => { scanExprInsts(c: inout c, exprId: expr) }
+        Stmt.Return(val value, val hasValue) => {
             if hasValue {
                 scanExprInsts(c: inout c, exprId: value)
             }
         }
-        Stmt.If { val cond, val thenBlk, val elseBlk, val hasElse } => {
+        Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
             scanExprInsts(c: inout c, exprId: cond)
             scanBlockInsts(c: inout c, blkId: thenBlk)
             if hasElse {
                 scanBlockInsts(c: inout c, blkId: elseBlk)
             }
         }
-        Stmt.While { val cond, val body } => {
+        Stmt.While(val cond, val body) => {
             scanExprInsts(c: inout c, exprId: cond)
             scanBlockInsts(c: inout c, blkId: body)
         }
-        Stmt.For { val varStart, val varLen, val isRange, val inclusive, val iter, val rangeHi, val body } => {
+        Stmt.For(val varStart, val varLen, val isRange, val inclusive, val iter, val rangeHi, val body) => {
             val forMark: U64 = scopeMark(c: inout c)
             scanExprInsts(c: inout c, exprId: iter)
             if isRange {
@@ -1068,7 +1068,7 @@ fn scanStmtInsts(c: inout Comp, stmtId: U64) {
             scanBlockInsts(c: inout c, blkId: body)
             popLocals(c: inout c, mark: forMark)
         }
-        Stmt.Match { val scrut, val arms } => {
+        Stmt.Match(val scrut, val arms) => {
             scanExprInsts(c: inout c, exprId: scrut)
             mut val ai: U64 = 0
             while ai < arms.count {
@@ -1080,8 +1080,8 @@ fn scanStmtInsts(c: inout Comp, stmtId: U64) {
                 ai += 1
             }
         }
-        Stmt.Panic { val msg, val offset } => { scanExprInsts(c: inout c, exprId: msg) }
-        Stmt.Give { val value } => { scanExprInsts(c: inout c, exprId: value) }
+        Stmt.Panic(val msg, val offset) => { scanExprInsts(c: inout c, exprId: msg) }
+        Stmt.Give(val value) => { scanExprInsts(c: inout c, exprId: value) }
         Stmt.Break => {}
         Stmt.Continue => {}
     }

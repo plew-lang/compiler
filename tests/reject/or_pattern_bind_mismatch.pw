@@ -7,7 +7,7 @@ enum Shape { Circle { r: I64 } Square { s: I64 } }
 fn main() {
     val sh: Shape = <Shape.Circle r=2 />
     val n: I64 = match sh {
-        Shape.Circle { val r } | Shape.Square { val s } => r
+        Shape.Circle(val r) | Shape.Square(val s) => r
         _ => 0
     }
     print(n)

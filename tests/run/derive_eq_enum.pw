@@ -4,8 +4,8 @@ import @Std/Io with { print }
 // payloads compare field-wise (payload variants no longer need a manual impl).
 @[Eq]
 enum Shape {
-    Circle { val r: I64 }
-    Rect { val w: I64  val h: I64 }
+    Circle(r: I64)
+    Rect(w: I64  h: I64)
     Unit
 }
 

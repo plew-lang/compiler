@@ -322,23 +322,23 @@ fn lineOf(c: inout Comp, offset: U64) -> I64 {
 fn exprOffset(c: inout Comp, id: U64) -> U64 {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Int { value: _, val offset, isBool: _, tyStart: _, tyLen: _ } => { return offset }
-        Expr.Ident { val start, val len } => { return start }
-        Expr.Str { val start, val len } => { return start }
-        Expr.Call { val nameStart, val nameLen, val args } => { return nameStart }
-        Expr.Method { val recv, val nameStart, val nameLen, val args } => { return nameStart }
-        Expr.Field { val base, val nameStart, val nameLen } => { return exprOffset(c: inout c, id: base) }
-        Expr.Index { val base, val index } => { return exprOffset(c: inout c, id: base) }
-        Expr.Binary { val op, val lhs, val rhs } => { return exprOffset(c: inout c, id: lhs) }
-        Expr.Unary { val op, val operand } => { return exprOffset(c: inout c, id: operand) }
-        Expr.Cast { val operand, val tyStart, val tyLen, ty: _ } => { return exprOffset(c: inout c, id: operand) }
-        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => { return typeStart }
-        Expr.MatchExpr { val scrut, val arms } => { return exprOffset(c: inout c, id: scrut) }
-        Expr.IfExpr { val cond, val thenBlk, val elseBlk } => { return exprOffset(c: inout c, id: cond) }
-        Expr.Coalesce { val opt, val deflt } => { return exprOffset(c: inout c, id: opt) }
-        Expr.Try { val expr } => { return exprOffset(c: inout c, id: expr) }
-        Expr.Arrow { val base, val nameStart, val nameLen } => { return exprOffset(c: inout c, id: base) }
-        Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => { return retStart }
+        Expr.Int(value: _, val offset, isBool: _, tyStart: _, tyLen: _) => { return offset }
+        Expr.Ident(val start, val len) => { return start }
+        Expr.Str(val start, val len) => { return start }
+        Expr.Call(val nameStart, val nameLen, val args) => { return nameStart }
+        Expr.Method(val recv, val nameStart, val nameLen, val args) => { return nameStart }
+        Expr.Field(val base, val nameStart, val nameLen) => { return exprOffset(c: inout c, id: base) }
+        Expr.Index(val base, val index) => { return exprOffset(c: inout c, id: base) }
+        Expr.Binary(val op, val lhs, val rhs) => { return exprOffset(c: inout c, id: lhs) }
+        Expr.Unary(val op, val operand) => { return exprOffset(c: inout c, id: operand) }
+        Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => { return exprOffset(c: inout c, id: operand) }
+        Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => { return typeStart }
+        Expr.MatchExpr(val scrut, val arms) => { return exprOffset(c: inout c, id: scrut) }
+        Expr.IfExpr(val cond, val thenBlk, val elseBlk) => { return exprOffset(c: inout c, id: cond) }
+        Expr.Coalesce(val opt, val deflt) => { return exprOffset(c: inout c, id: opt) }
+        Expr.Try(val expr) => { return exprOffset(c: inout c, id: expr) }
+        Expr.Arrow(val base, val nameStart, val nameLen) => { return exprOffset(c: inout c, id: base) }
+        Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => { return retStart }
         _ => { return 0 }
     }
 }

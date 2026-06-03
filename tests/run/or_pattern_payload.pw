@@ -6,8 +6,8 @@ enum Node { Leaf { value: I64 } Unary { value: I64 } Bin { value: I64 } }
 
 fn weight(n: Node) -> I64 {
     return match n {
-        Node.Leaf { val value } | Node.Unary { val value } => value
-        Node.Bin { val value } => value * 100
+        Node.Leaf(val value) | Node.Unary(val value) => value
+        Node.Bin(val value) => value * 100
     }
 }
 

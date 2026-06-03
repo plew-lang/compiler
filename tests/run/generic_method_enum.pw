@@ -1,20 +1,20 @@
 import @Std/Io with { print }
 
 enum Optional[T] {
-    Some { val v: T }
+    Some(v: T)
     None
 }
 
 impl[T] Optional[T] {
     fn unwrapOr(fallback: T) -> T {
         match self {
-            Optional.Some { val v } => { return v }
+            Optional.Some(val v) => { return v }
             Optional.None => { return fallback }
         }
     }
     fn isSome() -> I32 {
         match self {
-            Optional.Some { val v } => { return 1 }
+            Optional.Some(val v) => { return 1 }
             Optional.None => { return 0 }
         }
     }

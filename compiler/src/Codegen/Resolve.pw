@@ -163,7 +163,7 @@ fn isTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
 // returning len 0. Used by call codegen/type recovery to route `Type.name(args)`.
 fn assocRecvName(c: inout Comp, recv: U64) -> Bind {
     match c.exprs[recv] {
-        Expr.Ident { val start, val len } => {
+        Expr.Ident(val start, val len) => {
             if isSelfRef(c: inout c, start: start, len: len) {
                 return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
             }
@@ -745,7 +745,7 @@ fn markMovedLocal(c: inout Comp, start: U64, len: U64) {
 // lowering `move <ident>`). Non-identifier operands aren't tracked places yet.
 fn markMovedExpr(c: inout Comp, exprId: U64) {
     match c.exprs[exprId] {
-        Expr.Ident { val start, val len } => { markMovedLocal(c: inout c, start: start, len: len) }
+        Expr.Ident(val start, val len) => { markMovedLocal(c: inout c, start: start, len: len) }
         _ => {}
     }
 }
@@ -801,10 +801,10 @@ fn fieldDeclaredMut(c: inout Comp, structStart: U64, structLen: U64, fieldStart:
 fn placeIsMutable(c: inout Comp, id: U64) -> Bool {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Ident { val start, val len } => {
+        Expr.Ident(val start, val len) => {
             return localIsMutable(c: inout c, start: start, len: len)
         }
-        Expr.Field { val base, val nameStart, val nameLen } => {
+        Expr.Field(val base, val nameStart, val nameLen) => {
             val bt: TypeInfo = exprType(c: inout c, id: base)
             if bt.kind == 2 {
                 if fieldDeclaredMut(c: inout c, structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) {
@@ -814,10 +814,10 @@ fn placeIsMutable(c: inout Comp, id: U64) -> Bool {
             }
             return placeIsMutable(c: inout c, id: base)
         }
-        Expr.Index { val base, val index } => {
+        Expr.Index(val base, val index) => {
             return placeIsMutable(c: inout c, id: base)
         }
-        Expr.Arrow { val base, val nameStart, val nameLen } => {
+        Expr.Arrow(val base, val nameStart, val nameLen) => {
             // a Ref's pointee is mutable even through a `val` Ref binding (spec:
             // `->` is not gated by val/mut; sharing is the Ref's purpose).
             return true
@@ -831,7 +831,7 @@ fn placeIsMutable(c: inout Comp, id: U64) -> Bool {
 fn exprType(c: inout Comp, id: U64) -> TypeInfo {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Int { value: _, offset: _, isBool: _, val tyStart, val tyLen } => {
+        Expr.Int(value: _, offset: _, isBool: _, val tyStart, val tyLen) => {
             // a suffixed literal (`5U64`) carries its own type; otherwise the
             // type comes from context and is recovered elsewhere.
             if tyLen != 0 {
@@ -839,8 +839,8 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             return scalarInfo()
         }
-        Expr.Str { val start, val len } => { return <TypeInfo kind=1 nameStart=0 nameLen=0 ref=0 /> }
-        Expr.Ident { val start, val len } => {
+        Expr.Str(val start, val len) => { return <TypeInfo kind=1 nameStart=0 nameLen=0 ref=0 /> }
+        Expr.Ident(val start, val len) => {
             if isSelfRef(c: inout c, start: start, len: len) {
                 if c.curRecvInstRef != 0 {
                     val rt: TypeRef = c.types[c.curRecvInstRef]
@@ -898,13 +898,13 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             return scalarInfo()
         }
-        Expr.Unary { val op, val operand } => {
+        Expr.Unary(val op, val operand) => {
             // `-` / `~` preserve the operand's width; `!` is Bool (width-less).
             if op == 57 { return exprType(c: inout c, id: operand) }
             if op == 79 { return exprType(c: inout c, id: operand) }
             return scalarInfo()
         }
-        Expr.Binary { val op, val lhs, val rhs } => {
+        Expr.Binary(val op, val lhs, val rhs) => {
             // Arithmetic (56-60) and bitwise/shift (74-78) take the left
             // operand's width; comparisons (50-55) and logical (61,62) are Bool.
             if op >= 56 {
@@ -919,7 +919,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             return scalarInfo()
         }
-        Expr.Call { val nameStart, val nameLen, val args } => {
+        Expr.Call(val nameStart, val nameLen, val args) => {
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readStdin") {
                 return <TypeInfo kind=1 nameStart=0 nameLen=0 ref=0 />
             }
@@ -967,7 +967,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             return scalarInfo()
         }
-        Expr.Field { val base, val nameStart, val nameLen } => {
+        Expr.Field(val base, val nameStart, val nameLen) => {
             val bt: TypeInfo = exprType(c: inout c, id: base)
             // a generic struct instantiation's field type is substituted.
             if isGenericInst(c: inout c, ref: bt.ref) {
@@ -978,21 +978,21 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             return scalarInfo()
         }
-        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
+        Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
             if isGenericInst(c: inout c, ref: ty) {
                 return <TypeInfo kind=2 nameStart=typeStart nameLen=typeLen ref=ty />
             }
             return <TypeInfo kind=2 nameStart=typeStart nameLen=typeLen ref=0 />
         }
-        Expr.Array { val elems } => { return scalarInfo() }
-        Expr.Index { val base, val index } => {
+        Expr.Array(val elems) => { return scalarInfo() }
+        Expr.Index(val base, val index) => {
             val bt: TypeInfo = exprType(c: inout c, id: base)
             if bt.kind == 3 {
                 return typeInfoOfName(c: inout c, start: bt.nameStart, len: bt.nameLen, isArray: false)
             }
             return scalarInfo()
         }
-        Expr.Method { val recv, val nameStart, val nameLen, val args } => {
+        Expr.Method(val recv, val nameStart, val nameLen, val args) => {
             // `Type.name(args)` assoc-fn call: return type from the assoc fn.
             val arn: Bind = assocRecvName(c: inout c, recv: recv)
             if arn.nameLen != 0 {
@@ -1020,27 +1020,27 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             return scalarInfo()
         }
-        Expr.Cast { val operand, val tyStart, val tyLen, ty: _ } => {
+        Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
             return typeInfoOfName(c: inout c, start: tyStart, len: tyLen, isArray: false)
         }
-        Expr.MatchExpr { val scrut, val arms } => {
+        Expr.MatchExpr(val scrut, val arms) => {
             if arms.count > 0 {
                 return exprType(c: inout c, id: arms[0].body)
             }
             return scalarInfo()
         }
-        Expr.IfExpr { val cond, val thenBlk, val elseBlk } => {
+        Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
             val g: U64 = blockGiveExpr(c: inout c, blkId: thenBlk)
             if g < c.exprs.count {
                 return exprType(c: inout c, id: g)
             }
             return scalarInfo()
         }
-        Expr.Coalesce { val opt, val deflt } => {
+        Expr.Coalesce(val opt, val deflt) => {
             // result type = the Optional's element T = the default's type.
             return exprType(c: inout c, id: deflt)
         }
-        Expr.Try { val expr } => {
+        Expr.Try(val expr) => {
             // result type = the Result's Ok payload T (args[0] of Result[T, E]).
             val rt: TypeInfo = exprType(c: inout c, id: expr)
             if isGenericInst(c: inout c, ref: rt.ref) {
@@ -1051,7 +1051,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             return scalarInfo()
         }
-        Expr.Arrow { val base, val nameStart, val nameLen } => {
+        Expr.Arrow(val base, val nameStart, val nameLen) => {
             // pointee field type: base is Ref[T]; resolve T then T's field.
             val bt: TypeInfo = exprType(c: inout c, id: base)
             if isRefInst(c: inout c, ref: bt.ref) {
@@ -1063,10 +1063,10 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             return scalarInfo()
         }
-        Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
+        Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
             return scalarInfo()
         }
-        Expr.Move { val operand, val isBorrow } => {
+        Expr.Move(val operand, val isBorrow) => {
             // `move`/`borrow` have the operand's type (the value just flows).
             return exprType(c: inout c, id: operand)
         }
@@ -1085,7 +1085,7 @@ fn blockGiveExpr(c: inout Comp, blkId: U64) -> U64 {
     while i < stmts.count {
         val s: Stmt = c.stmts[stmts[i]]
         match s {
-            Stmt.Give { val value } => { found = value }
+            Stmt.Give(val value) => { found = value }
             _ => {}
         }
         i += 1

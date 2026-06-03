@@ -1,7 +1,7 @@
 import @Std/Io with { print }
 
 enum Optional[T] {
-    Some { val v: T }
+    Some(v: T)
     None
 }
 
@@ -9,11 +9,11 @@ fn main() {
     val a: Optional[I32] = <Optional[I32].Some v=42 />
     val b: Optional[I32] = <Optional[I32].None />
     match a {
-        Optional.Some { val v } => { print(v) }
+        Optional.Some(val v) => { print(v) }
         Optional.None => { print(0) }
     }
     match b {
-        Optional.Some { val v } => { print(v) }
+        Optional.Some(val v) => { print(v) }
         Optional.None => { print(99) }
     }
 }

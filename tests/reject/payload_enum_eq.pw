@@ -1,5 +1,5 @@
 enum E {
-    A { v: I64 }
+    A(v: I64)
     B
 }
 fn main() {

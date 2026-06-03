@@ -22,8 +22,8 @@ fn label(c: Color) -> String {
 
 fn area(s: Shape) -> I64 {
     return match s {
-        Shape.Circle { val r } => r * r * 3
-        Shape.Square { val s } => s * s
+        Shape.Circle(val r) => r * r * 3
+        Shape.Square(val s) => s * s
     }
 }
 

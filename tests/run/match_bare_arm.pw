@@ -5,15 +5,15 @@
 import @Std/Io with { print }
 
 enum Shape {
-    Circle { r: I32 }
-    Rect { w: I32, h: I32 }
+    Circle(r: I32)
+    Rect(w: I32, h: I32)
 }
 
 fn main() {
     val s: Shape = <Shape.Rect w=3 h=4 />
     match s {
-        Shape.Circle { val r } => print(r * r)
-        Shape.Rect { val w, val h } => print(w * h)
+        Shape.Circle(val r) => print(r * r)
+        Shape.Rect(val w, val h) => print(w * h)
     }
     // a no-field enum with bare arms
     val c: Color = <Color.Green />

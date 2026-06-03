@@ -487,8 +487,8 @@ fn lex(lx: inout Lexer) {
 // ---- parser over the token stream ----
 
 enum Expr {
-    Num { value: I64 }
-    Bin { op: U8, lhs: U64, rhs: U64 }
+    Num(value: I64)
+    Bin(op: U8, lhs: U64, rhs: U64)
 }
 
 struct Parser {
@@ -598,8 +598,8 @@ fn parseExpr(p: inout Parser) -> U64 {
 fn eval(nodes: Array[Expr], id: U64) -> I64 {
     val node: Expr = nodes[id]
     match node {
-        Expr.Num { val value } => { return value }
-        Expr.Bin { val op, val lhs, val rhs } => {
+        Expr.Num(val value) => { return value }
+        Expr.Bin(val op, val lhs, val rhs) => {
             val l: I64 = eval(nodes: nodes, id: lhs)
             val r: I64 = eval(nodes: nodes, id: rhs)
             if op == 43 { return l + r }

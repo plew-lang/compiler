@@ -774,7 +774,7 @@ fn synthBool(c: inout Comp, v: I64) -> U64 {
 }
 
 // Synthesize `@[Eq]` for an enum: `eq(lhs: E, rhs: E) -> Bool` as a value-position
-// match `match lhs { E.V { L.. } => match rhs { E.V { R.. } => L0==R0 && ..., _ => false }, ... }`
+// match `match lhs { E.V(L..) => match rhs { E.V(R..) => L0==R0 && ..., _ => false }, ... }`
 // (tags must agree, then payloads compare field-wise). The outer match is
 // exhaustive over the variants; each inner match has a `_ => false` for tag
 // mismatch. Plus a derived `Conform(E, Eq)`.

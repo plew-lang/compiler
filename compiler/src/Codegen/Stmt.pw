@@ -3,9 +3,9 @@
 // whether copying an array value is needed for value semantics.
 fn isPlaceExpr(c: inout Comp, id: U64) -> Bool {
     match c.exprs[id] {
-        Expr.Ident { val start, val len } => { return true }
-        Expr.Field { val base, val nameStart, val nameLen } => { return true }
-        Expr.Index { val base, val index } => { return true }
+        Expr.Ident(val start, val len) => { return true }
+        Expr.Field(val base, val nameStart, val nameLen) => { return true }
+        Expr.Index(val base, val index) => { return true }
         _ => { return false }
     }
 }
@@ -33,7 +33,7 @@ fn genArrayValue(c: inout Comp, exprId: U64, elemStart: U64, elemLen: U64) {
 fn genArrayLiteral(c: inout Comp, exprId: U64, elemStart: U64, elemLen: U64) {
     val e: Expr = c.exprs[exprId]
     match e {
-        Expr.Array { val elems } => {
+        Expr.Array(val elems) => {
             if elems.count == 0 {
                 write(s: "PlewArray_")
                 writeSpan(c: inout c, start: elemStart, len: elemLen)
@@ -157,7 +157,7 @@ fn compareNeedsTrait(c: inout Comp, op: I64, lhs: U64) -> Bool {
 fn emitEnumOperand(c: inout Comp, id: U64, enStart: U64, enLen: U64) {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
+        Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
             if isEnum {
                 writeU64(n: variantIndex(c: inout c, enumStart: enStart, enumLen: enLen, variantStart: variantStart, variantLen: variantLen))
                 return
@@ -345,7 +345,7 @@ fn emitTraitCompare(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
 fn genCond(c: inout Comp, id: U64) {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Binary { val op, val lhs, val rhs } => {
+        Expr.Binary(val op, val lhs, val rhs) => {
             if isStringEq(c: inout c, op: op, lhs: lhs) {
                 genExpr(c: inout c, id: id)
             } else {
@@ -379,10 +379,10 @@ fn genCond(c: inout Comp, id: U64) {
 fn tryArrayElemFieldAssign(c: inout Comp, op: I64, target: U64, value: U64) -> Bool {
     val te: Expr = c.exprs[target]
     match te {
-        Expr.Field { val base, val nameStart, val nameLen } => {
+        Expr.Field(val base, val nameStart, val nameLen) => {
             val be: Expr = c.exprs[base]
             match be {
-                Expr.Index { base: val abase, index: val index } => {
+                Expr.Index(base: val abase, index: val index) => {
                     val bt: TypeInfo = exprType(c: inout c, id: abase)
                     if bt.kind == 3 {
                     } else {
@@ -427,7 +427,7 @@ fn tryArrayElemFieldAssign(c: inout Comp, op: I64, target: U64, value: U64) -> B
 fn genStmt(c: inout Comp, id: U64) {
     val s: Stmt = c.stmts[id]
     match s {
-        Stmt.Let { val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init } => {
+        Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
             // No annotation (`val x = expr`): infer the binding's type from the
             // initializer. Without this the type stays empty and genCTypeOf falls
             // back to `long long`, miscompiling every non-integer initializer
@@ -510,7 +510,7 @@ fn genStmt(c: inout Comp, id: U64) {
             write(s: ";\n")
             addLocalCn(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: effStart, tyLen: effLen, isArray: effArr, ty: effTy, isInout: false, isMut: mutable, owned: true, cnum: cnum)
         }
-        Stmt.Assign { val op, val target, val value } => {
+        Stmt.Assign(val op, val target, val value) => {
             // place mutation through an array element: `arr[i].field = v`
             // (CLAUDE.md / spec/03 — get-modify-set). Without this the generic
             // Field path emits `PlewArray_E_get(...).field = v`, an unassignable
@@ -520,7 +520,7 @@ fn genStmt(c: inout Comp, id: U64) {
             }
             val te: Expr = c.exprs[target]
             match te {
-                Expr.Index { val base, val index } => {
+                Expr.Index(val base, val index) => {
                     // a[i] = v / a[i] OP= v -> bounds-checked PlewArray_E_set.
                     // The array binding must be a mutable place (mutating an
                     // element is a mutation of the array value).
@@ -683,7 +683,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 }
             }
         }
-        Stmt.Print { val expr, val offset } => {
+        Stmt.Print(val expr, val offset) => {
             if c.impPrint {
                 // print is a placeholder I/O builtin that accepts any integer; its
                 // literal arg defaults to I64 (a documented shim, not spec surface).
@@ -695,13 +695,13 @@ fn genStmt(c: inout Comp, id: U64) {
                 compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "print is not ambient; import it from @Std/Io")
             }
         }
-        Stmt.ExprStmt { val expr } => {
+        Stmt.ExprStmt(val expr) => {
             checkLitCtx(c: inout c, id: expr, eKind: 0, eBits: 0, eSgn: false)
             write(s: "    ")
             genExpr(c: inout c, id: expr)
             write(s: ";\n")
         }
-        Stmt.Return { val value, val hasValue } => {
+        Stmt.Return(val value, val hasValue) => {
             // ARC: a return exits every enclosing scope, so release all owned
             // locals here (emitScopeDrops from 0; params are borrows, skipped).
             // The return value is captured into a temp first — a returned local
@@ -748,7 +748,7 @@ fn genStmt(c: inout Comp, id: U64) {
                         if vt.kind == 2 {
                             if typeIsUnique(c: inout c, start: vt.nameStart, len: vt.nameLen) {
                                 match c.exprs[value] {
-                                    Expr.Ident { val start, val len } => {
+                                    Expr.Ident(val start, val len) => {
                                         if c.curSelfMove {
                                             if isSelfRef(c: inout c, start: start, len: len) {
                                                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "returning `self` from a `move fn` is not yet supported")
@@ -756,10 +756,10 @@ fn genStmt(c: inout Comp, id: U64) {
                                         }
                                         retExcl = localIndexByName(c: inout c, start: start, len: len)
                                     }
-                                    Expr.Field { val base, val nameStart, val nameLen } => {
+                                    Expr.Field(val base, val nameStart, val nameLen) => {
                                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "returning a field of a unique value is a partial move (not yet supported)")
                                     }
-                                    Expr.Index { val base, val index } => {
+                                    Expr.Index(val base, val index) => {
                                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "returning an element of a unique value is a partial move (not yet supported)")
                                     }
                                     _ => {}
@@ -775,7 +775,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 }
             }
         }
-        Stmt.If { val cond, val thenBlk, val elseBlk, val hasElse } => {
+        Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
             checkLitCtx(c: inout c, id: cond, eKind: 0, eBits: 0, eSgn: false)
             write(s: "    if (")
             genCond(c: inout c, id: cond)
@@ -794,7 +794,7 @@ fn genStmt(c: inout Comp, id: U64) {
             }
             c.curBranchBase = savedBB
         }
-        Stmt.While { val cond, val body } => {
+        Stmt.While(val cond, val body) => {
             checkLitCtx(c: inout c, id: cond, eKind: 0, eBits: 0, eSgn: false)
             write(s: "    while (")
             genCond(c: inout c, id: cond)
@@ -808,7 +808,7 @@ fn genStmt(c: inout Comp, id: U64) {
             c.curLoopMark = savedLoopMark
             write(s: "    }\n")
         }
-        Stmt.For { val varStart, val varLen, val isRange, val inclusive, val iter, val rangeHi, val body } => {
+        Stmt.For(val varStart, val varLen, val isRange, val inclusive, val iter, val rangeHi, val body) => {
             if isRange {
                 checkArithNoCtx(c: inout c, lhs: iter, rhs: rangeHi)
             }
@@ -888,13 +888,13 @@ fn genStmt(c: inout Comp, id: U64) {
             c.curLoopMark = savedLoopMark
             scopeExit(c: inout c, mark: forMark)
         }
-        Stmt.Panic { val msg, val offset } => {
+        Stmt.Panic(val msg, val offset) => {
             // diverging: plew_panic is noreturn (writes the message + exit(1)).
             write(s: "    plew_panic(")
             genExpr(c: inout c, id: msg)
             write(s: ");\n")
         }
-        Stmt.Give { val value } => {
+        Stmt.Give(val value) => {
             // A value-position block (if/match expression) yielding a unique value
             // is not supported yet: the result temp vs the block's scope drops need
             // per-path move handling. Reject loudly (a bare place would double
@@ -926,7 +926,7 @@ fn genStmt(c: inout Comp, id: U64) {
             emitScopeDrops(c: inout c, mark: c.curLoopMark, exclIdx: c.locals.count)
             write(s: "    continue;\n")
         }
-        Stmt.Match { val scrut, val arms } => {
+        Stmt.Match(val scrut, val arms) => {
             if matchExhaustive(c: inout c, arms: arms) {
             } else {
                 // non-exhaustive match -> undeclared identifier so the C compile

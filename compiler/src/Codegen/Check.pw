@@ -22,18 +22,18 @@ fn notConst() -> ConstInt {
 fn foldConst(c: inout Comp, id: U64) -> ConstInt {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Int { val value, offset: _, val isBool, tyStart: _, tyLen: _ } => {
+        Expr.Int(val value, offset: _, val isBool, tyStart: _, tyLen: _) => {
             if isBool { return notConst() }
             return <ConstInt isConst=true value=value />
         }
-        Expr.Unary { val op, val operand } => {
+        Expr.Unary(val op, val operand) => {
             if op == 57 {
                 val o: ConstInt = foldConst(c: inout c, id: operand)
                 if o.isConst { return <ConstInt isConst=true value=0 - o.value /> }
             }
             return notConst()
         }
-        Expr.Binary { val op, val lhs, val rhs } => {
+        Expr.Binary(val op, val lhs, val rhs) => {
             val a: ConstInt = foldConst(c: inout c, id: lhs)
             val b: ConstInt = foldConst(c: inout c, id: rhs)
             if a.isConst {
@@ -91,17 +91,17 @@ fn checkLitLeaf(c: inout Comp, value: I64, offset: U64, isBool: Bool, tyStart: U
 fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Int { val value, val offset, val isBool, val tyStart, val tyLen } => {
+        Expr.Int(val value, val offset, val isBool, val tyStart, val tyLen) => {
             checkLitLeaf(c: inout c, value: value, offset: offset, isBool: isBool, tyStart: tyStart, tyLen: tyLen, eKind: eKind, eBits: eBits, eSgn: eSgn)
         }
-        Expr.Unary { val op, val operand } => {
+        Expr.Unary(val op, val operand) => {
             if op == 57 {
                 // a leading `-` on a literal folds into the literal (`-128:I8` is
                 // valid even though `128` alone exceeds I8), so check the negated
                 // value; otherwise recurse into the operand with the same type.
                 val oe: Expr = c.exprs[operand]
                 match oe {
-                    Expr.Int { val value, val offset, val isBool, val tyStart, val tyLen } => {
+                    Expr.Int(val value, val offset, val isBool, val tyStart, val tyLen) => {
                         checkLitLeaf(c: inout c, value: 0 - value, offset: offset, isBool: isBool, tyStart: tyStart, tyLen: tyLen, eKind: eKind, eBits: eBits, eSgn: eSgn)
                     }
                     _ => { checkLitCtx(c: inout c, id: operand, eKind: eKind, eBits: eBits, eSgn: eSgn) }
@@ -112,7 +112,7 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
                 }
             }
         }
-        Expr.Binary { val op, val lhs, val rhs } => {
+        Expr.Binary(val op, val lhs, val rhs) => {
             mut val isArith: Bool = false
             if op >= 56 { if op <= 60 { isArith = true } }
             if op >= 74 { if op <= 78 { isArith = true } }
@@ -134,39 +134,39 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
                 checkArithNoCtx(c: inout c, lhs: lhs, rhs: rhs)
             }
         }
-        Expr.Call { val nameStart, val nameLen, val args } => {
+        Expr.Call(val nameStart, val nameLen, val args) => {
             checkCallArgs(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
         }
-        Expr.Method { val recv, val nameStart, val nameLen, val args } => {
+        Expr.Method(val recv, val nameStart, val nameLen, val args) => {
             checkMethodArgs(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
         }
-        Expr.Cast { val operand, val tyStart, val tyLen, ty: _ } => {
+        Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
             // The operand has its own type; a direct-literal operand is range-
             // checked by the cast itself, so only recurse into compound operands.
             val oe: Expr = c.exprs[operand]
             match oe {
-                Expr.Int { value: _, offset: _, isBool: _, tyStart: _, tyLen: _ } => {}
+                Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _) => {}
                 _ => { checkLitCtx(c: inout c, id: operand, eKind: 0, eBits: 0, eSgn: false) }
             }
         }
-        Expr.Field { val base, val nameStart, val nameLen } => {
+        Expr.Field(val base, val nameStart, val nameLen) => {
             checkLitCtx(c: inout c, id: base, eKind: 0, eBits: 0, eSgn: false)
         }
-        Expr.Index { val base, val index } => {
+        Expr.Index(val base, val index) => {
             checkLitCtx(c: inout c, id: base, eKind: 0, eBits: 0, eSgn: false)
             checkLitCtx(c: inout c, id: index, eKind: 1, eBits: 64, eSgn: false)
         }
-        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
+        Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
             checkMakeFields(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ty, fields: fields)
         }
-        Expr.Array { val elems } => {
+        Expr.Array(val elems) => {
             mut val i: U64 = 0
             while i < elems.count {
                 checkLitCtx(c: inout c, id: elems[i], eKind: eKind, eBits: eBits, eSgn: eSgn)
                 i += 1
             }
         }
-        Expr.MatchExpr { val scrut, val arms } => {
+        Expr.MatchExpr(val scrut, val arms) => {
             checkLitCtx(c: inout c, id: scrut, eKind: 0, eBits: 0, eSgn: false)
             mut val i: U64 = 0
             while i < arms.count {
@@ -174,13 +174,13 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
                 i += 1
             }
         }
-        Expr.Coalesce { val opt, val deflt } => {
+        Expr.Coalesce(val opt, val deflt) => {
             // the default carries the surrounding context (it is the result T);
             // the Optional operand is self-typed.
             checkLitCtx(c: inout c, id: opt, eKind: 0, eBits: 0, eSgn: false)
             checkLitCtx(c: inout c, id: deflt, eKind: eKind, eBits: eBits, eSgn: eSgn)
         }
-        Expr.Try { val expr } => {
+        Expr.Try(val expr) => {
             checkLitCtx(c: inout c, id: expr, eKind: 0, eBits: 0, eSgn: false)
         }
         _ => {}
@@ -204,13 +204,13 @@ fn exprIntTy(c: inout Comp, id: U64) -> IntTy {
     }
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Call { val nameStart, val nameLen, val args } => {
+        Expr.Call(val nameStart, val nameLen, val args) => {
             // argCount() is the one integer-returning I/O builtin (I64).
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argCount") {
                 return <IntTy known=true bits=64 sgn=true />
             }
         }
-        Expr.Field { val base, val nameStart, val nameLen } => {
+        Expr.Field(val base, val nameStart, val nameLen) => {
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "count") {
                 val bt: TypeInfo = exprType(c: inout c, id: base)
                 if bt.kind == 3 {
@@ -218,7 +218,7 @@ fn exprIntTy(c: inout Comp, id: U64) -> IntTy {
                 }
             }
         }
-        Expr.Index { val base, val index } => {
+        Expr.Index(val base, val index) => {
             val bt: TypeInfo = exprType(c: inout c, id: base)
             if bt.kind == 3 {
                 if isIntType(c: inout c, start: bt.nameStart, len: bt.nameLen) {
@@ -273,7 +273,7 @@ fn checkLitSpan(c: inout Comp, id: U64, tyStart: U64, tyLen: U64, isArray: Bool)
 fn checkLitArray(c: inout Comp, id: U64, elemStart: U64, elemLen: U64) {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Array { val elems } => {
+        Expr.Array(val elems) => {
             mut val i: U64 = 0
             while i < elems.count {
                 checkLitSpan(c: inout c, id: elems[i], tyStart: elemStart, tyLen: elemLen, isArray: false)
@@ -946,8 +946,8 @@ fn boundHasTraitNamed(c: inout Comp, fnIdx: U64, tpStart: U64, tpLen: U64, trait
 
 fn checkBoundsExpr(c: inout Comp, exprId: U64) {
     match c.exprs[exprId] {
-        Expr.Unary { val op, val operand } => { checkBoundsExpr(c: inout c, exprId: operand) }
-        Expr.Binary { val op, val lhs, val rhs } => {
+        Expr.Unary(val op, val operand) => { checkBoundsExpr(c: inout c, exprId: operand) }
+        Expr.Binary(val op, val lhs, val rhs) => {
             checkBoundsExpr(c: inout c, exprId: lhs)
             checkBoundsExpr(c: inout c, exprId: rhs)
             if op >= 50 {
@@ -967,14 +967,14 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                 }
             }
         }
-        Expr.Call { val nameStart, val nameLen, val args } => {
+        Expr.Call(val nameStart, val nameLen, val args) => {
             mut val i: U64 = 0
             while i < args.count {
                 checkBoundsExpr(c: inout c, exprId: args[i].expr)
                 i += 1
             }
         }
-        Expr.Method { val recv, val nameStart, val nameLen, val args } => {
+        Expr.Method(val recv, val nameStart, val nameLen, val args) => {
             checkBoundsExpr(c: inout c, exprId: recv)
             mut val i: U64 = 0
             while i < args.count {
@@ -991,38 +991,38 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                 }
             }
         }
-        Expr.Field { val base, val nameStart, val nameLen } => { checkBoundsExpr(c: inout c, exprId: base) }
-        Expr.Index { val base, val index } => {
+        Expr.Field(val base, val nameStart, val nameLen) => { checkBoundsExpr(c: inout c, exprId: base) }
+        Expr.Index(val base, val index) => {
             checkBoundsExpr(c: inout c, exprId: base)
             checkBoundsExpr(c: inout c, exprId: index)
         }
-        Expr.Make { val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields } => {
+        Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
             mut val i: U64 = 0
             while i < fields.count {
                 checkBoundsExpr(c: inout c, exprId: fields[i].value)
                 i += 1
             }
         }
-        Expr.Array { val elems } => {
+        Expr.Array(val elems) => {
             mut val i: U64 = 0
             while i < elems.count {
                 checkBoundsExpr(c: inout c, exprId: elems[i])
                 i += 1
             }
         }
-        Expr.Cast { val operand, val tyStart, val tyLen, val ty } => { checkBoundsExpr(c: inout c, exprId: operand) }
-        Expr.Coalesce { val opt, val deflt } => {
+        Expr.Cast(val operand, val tyStart, val tyLen, val ty) => { checkBoundsExpr(c: inout c, exprId: operand) }
+        Expr.Coalesce(val opt, val deflt) => {
             checkBoundsExpr(c: inout c, exprId: opt)
             checkBoundsExpr(c: inout c, exprId: deflt)
         }
-        Expr.Try { val expr } => { checkBoundsExpr(c: inout c, exprId: expr) }
-        Expr.Arrow { val base, val nameStart, val nameLen } => { checkBoundsExpr(c: inout c, exprId: base) }
-        Expr.IfExpr { val cond, val thenBlk, val elseBlk } => {
+        Expr.Try(val expr) => { checkBoundsExpr(c: inout c, exprId: expr) }
+        Expr.Arrow(val base, val nameStart, val nameLen) => { checkBoundsExpr(c: inout c, exprId: base) }
+        Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
             checkBoundsExpr(c: inout c, exprId: cond)
             checkBoundsBlock(c: inout c, blkId: thenBlk)
             checkBoundsBlock(c: inout c, blkId: elseBlk)
         }
-        Expr.MatchExpr { val scrut, val arms } => {
+        Expr.MatchExpr(val scrut, val arms) => {
             checkBoundsExpr(c: inout c, exprId: scrut)
             mut val ai: U64 = 0
             while ai < arms.count {
@@ -1034,40 +1034,40 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                 ai += 1
             }
         }
-        Expr.Move { val operand, val isBorrow } => { checkBoundsExpr(c: inout c, exprId: operand) }
+        Expr.Move(val operand, val isBorrow) => { checkBoundsExpr(c: inout c, exprId: operand) }
         _ => {}
     }
 }
 
 fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
     match c.stmts[stmtId] {
-        Stmt.Let { val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init } => {
+        Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
             checkBoundsExpr(c: inout c, exprId: init)
             addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
         }
-        Stmt.Assign { val op, val target, val value } => {
+        Stmt.Assign(val op, val target, val value) => {
             checkBoundsExpr(c: inout c, exprId: target)
             checkBoundsExpr(c: inout c, exprId: value)
         }
-        Stmt.Print { val expr, val offset } => { checkBoundsExpr(c: inout c, exprId: expr) }
-        Stmt.ExprStmt { val expr } => { checkBoundsExpr(c: inout c, exprId: expr) }
-        Stmt.Return { val value, val hasValue } => {
+        Stmt.Print(val expr, val offset) => { checkBoundsExpr(c: inout c, exprId: expr) }
+        Stmt.ExprStmt(val expr) => { checkBoundsExpr(c: inout c, exprId: expr) }
+        Stmt.Return(val value, val hasValue) => {
             if hasValue {
                 checkBoundsExpr(c: inout c, exprId: value)
             }
         }
-        Stmt.If { val cond, val thenBlk, val elseBlk, val hasElse } => {
+        Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
             checkBoundsExpr(c: inout c, exprId: cond)
             checkBoundsBlock(c: inout c, blkId: thenBlk)
             if hasElse {
                 checkBoundsBlock(c: inout c, blkId: elseBlk)
             }
         }
-        Stmt.While { val cond, val body } => {
+        Stmt.While(val cond, val body) => {
             checkBoundsExpr(c: inout c, exprId: cond)
             checkBoundsBlock(c: inout c, blkId: body)
         }
-        Stmt.For { val varStart, val varLen, val isRange, val inclusive, val iter, val rangeHi, val body } => {
+        Stmt.For(val varStart, val varLen, val isRange, val inclusive, val iter, val rangeHi, val body) => {
             val forMark: U64 = scopeMark(c: inout c)
             checkBoundsExpr(c: inout c, exprId: iter)
             if isRange {
@@ -1080,7 +1080,7 @@ fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
             checkBoundsBlock(c: inout c, blkId: body)
             popLocals(c: inout c, mark: forMark)
         }
-        Stmt.Match { val scrut, val arms } => {
+        Stmt.Match(val scrut, val arms) => {
             checkBoundsExpr(c: inout c, exprId: scrut)
             mut val ai: U64 = 0
             while ai < arms.count {
@@ -1092,8 +1092,8 @@ fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
                 ai += 1
             }
         }
-        Stmt.Panic { val msg, val offset } => { checkBoundsExpr(c: inout c, exprId: msg) }
-        Stmt.Give { val value } => { checkBoundsExpr(c: inout c, exprId: value) }
+        Stmt.Panic(val msg, val offset) => { checkBoundsExpr(c: inout c, exprId: msg) }
+        Stmt.Give(val value) => { checkBoundsExpr(c: inout c, exprId: value) }
         Stmt.Break => {}
         Stmt.Continue => {}
     }

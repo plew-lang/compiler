@@ -102,7 +102,7 @@ struct MakeField {
     val value: U64
 }
 
-// One field binding inside a match pattern `E.V { val a, b: val c }`. `name` is
+// One field binding inside a match pattern `E.V(val a, b: val c)`. `name` is
 // the introduced local; `field` is the variant field it reads. For punning
 // (`val a`) the two are equal; for rename (`b: val c`) field=b, name=c.
 // (Also reused elsewhere as a plain (name) span pair — array element names,
@@ -131,51 +131,51 @@ enum Expr {
     // `isBool` marks `true`/`false` (lowered to 1/0 but typed Bool, never an
     // ambiguous integer). `tyStart`/`tyLen` is an optional type suffix span
     // (`5U64`, `1I32`); tyLen 0 = no suffix, so the type comes from context.
-    Int { value: I64, offset: U64, isBool: Bool, tyStart: U64, tyLen: U64 }
-    Ident { start: U64, len: U64 }
-    Unary { op: I64, operand: U64 }
-    Binary { op: I64, lhs: U64, rhs: U64 }
-    Call { nameStart: U64, nameLen: U64, args: Array[Arg] }
-    Field { base: U64, nameStart: U64, nameLen: U64 }
-    Make { typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: Array[MakeField] }
-    Str { start: U64, len: U64 }
-    Array { elems: Array[U64] }
-    Index { base: U64, index: U64 }
-    Method { recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg] }
-    Cast { operand: U64, tyStart: U64, tyLen: U64, ty: U64 }
+    Int(value: I64, offset: U64, isBool: Bool, tyStart: U64, tyLen: U64)
+    Ident(start: U64, len: U64)
+    Unary(op: I64, operand: U64)
+    Binary(op: I64, lhs: U64, rhs: U64)
+    Call(nameStart: U64, nameLen: U64, args: Array[Arg])
+    Field(base: U64, nameStart: U64, nameLen: U64)
+    Make(typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: Array[MakeField])
+    Str(start: U64, len: U64)
+    Array(elems: Array[U64])
+    Index(base: U64, index: U64)
+    Method(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg])
+    Cast(operand: U64, tyStart: U64, tyLen: U64, ty: U64)
     // value-position `match scrut { Pat => expr, ... }`: like Stmt.Match but each
     // arm yields an expression (MatchArm.body is an Expr index, not a Block).
     // Lowers to a C statement-expression.
-    MatchExpr { scrut: U64, arms: Array[MatchArm] }
+    MatchExpr(scrut: U64, arms: Array[MatchArm])
     // value-position `if cond { ... give a } else { ... give b }`: each branch is
     // a block ending in `give`. Lowers to a C statement-expression (like
     // MatchExpr). `else` is mandatory in value position (it must always yield).
-    IfExpr { cond: U64, thenBlk: U64, elseBlk: U64 }
+    IfExpr(cond: U64, thenBlk: U64, elseBlk: U64)
     // `opt ?? default` (nil-coalescing on Optional): the value inside `Some`,
     // else `default`. Lowers to a C statement-expression reading the Optional's
     // tag. Couples to @Std/Core's Optional shape (Some = tag 0, field `v`).
-    Coalesce { opt: U64, deflt: U64 }
+    Coalesce(opt: U64, deflt: U64)
     // `try expr` (Result early return): if `expr` is `Err`, return it from the
     // enclosing function (rebuilt as the function's own Result error variant);
     // otherwise the `Ok` value. Couples to @Std/Core's Result shape (Ok = tag 0
     // field `value`, Err = tag 1 field `error`). First cut: error types must
     // match (no `From` conversion yet).
-    Try { expr: U64 }
+    Try(expr: U64)
     // `ref->field` — access a field of a `Ref[T]`'s pointee. `Ref[T]` lowers to
     // a C `T*`, so this is C's `ref->field`. `->` is spec's pointee accessor;
     // the bare handle is `.` (rare). Shared mutation is visible at `->`.
-    Arrow { base: U64, nameStart: U64, nameLen: U64 }
+    Arrow(base: U64, nameStart: U64, nameLen: U64)
     // a closure literal `fn(params) -> ret { body }`. Lambda-lifted to a
     // top-level C function named `__closure<exprIndex>` taking a leading env
     // pointer. The expression value is a fat PlewClosure {fn, env, rc, drop}.
     // Captures of enclosing locals are recorded in Comp.captures keyed by this
     // node's arena index; the body reads each via `((__closure_env<id>*)__env)`.
-    Closure { params: Array[Param], hasRet: Bool, retStart: U64, retLen: U64, retIsArray: Bool, retTy: U64, body: U64 }
+    Closure(params: Array[Param], hasRet: Bool, retStart: U64, retLen: U64, retIsArray: Bool, retTy: U64, body: U64)
     // `move operand` / `borrow operand` (spec/03): an access-mode prefix on a
     // `unique` value in a binding/argument/return position. Lowers to the
     // operand's value (a unique struct is a bit-copy); `move` additionally marks
     // the operand's place moved-out so the source is dead and not double-released.
-    Move { operand: U64, isBorrow: Bool }
+    Move(operand: U64, isBorrow: Bool)
 }
 
 // One arm of a match: either `_ => block` (wildcard) or `Enum.Variant
@@ -204,24 +204,24 @@ struct PatInfo {
 }
 
 enum Stmt {
-    Let { mutable: Bool, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64 }
-    Assign { op: I64, target: U64, value: U64 }
-    Print { expr: U64, offset: U64 }
-    ExprStmt { expr: U64 }
-    Return { value: U64, hasValue: Bool }
-    If { cond: U64, thenBlk: U64, elseBlk: U64, hasElse: Bool }
-    While { cond: U64, body: U64 }
+    Let(mutable: Bool, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64)
+    Assign(op: I64, target: U64, value: U64)
+    Print(expr: U64, offset: U64)
+    ExprStmt(expr: U64)
+    Return(value: U64, hasValue: Bool)
+    If(cond: U64, thenBlk: U64, elseBlk: U64, hasElse: Bool)
+    While(cond: U64, body: U64)
     // `for val name in iter { body }`. isRange: iter is `lo ..(< | =) hi`
     // (inclusive picks <=); otherwise iter is an array, walked by index.
-    For { varStart: U64, varLen: U64, isRange: Bool, inclusive: Bool, iter: U64, rangeHi: U64, body: U64 }
-    Match { scrut: U64, arms: Array[MatchArm] }
+    For(varStart: U64, varLen: U64, isRange: Bool, inclusive: Bool, iter: U64, rangeHi: U64, body: U64)
+    Match(scrut: U64, arms: Array[MatchArm])
     // `panic <msg>`: a diverging statement (spec: unrecoverable, never returns).
     // msg is a String expression; offset is the `panic` keyword for diagnostics.
-    Panic { msg: U64, offset: U64 }
+    Panic(msg: U64, offset: U64)
     // `give <expr>`: yields the value of the enclosing block-expression (an
     // `if`/`match` used in value position). Codegen assigns it to the active
     // result temp.
-    Give { value: U64 }
+    Give(value: U64)
     Break
     Continue
 }
