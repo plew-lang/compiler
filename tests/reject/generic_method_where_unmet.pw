@@ -1,0 +1,15 @@
+import @Std/Io with { print }
+// M has an inherent bar() but does NOT `impl as Bar`, so Box[M].useBar() must be
+// rejected at instantiation (gap #8: the where bound is a real conformance check,
+// not merely "the method happens to exist").
+trait Bar { fn bar() -> I64 }
+struct M { val v: I64 }
+impl M { fn bar() -> I64 { return self.v } }
+struct Box[T] { val item: T }
+impl[T] Box[T] {
+    fn useBar() -> I64 where T: Bar { return self.item.bar() }
+}
+fn main() {
+    val b: Box[M] = <Box[M] item=<M v=7 /> />
+    print(b.useBar())
+}

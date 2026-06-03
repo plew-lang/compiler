@@ -771,6 +771,50 @@ fn checkFnBounds(c: inout Comp) {
         }
         ii += 1
     }
+    checkMethodBounds(c: inout c)
+}
+
+// Enforce `where T: Trait` bounds on generic *methods* at instantiation (gap #8,
+// the receiver-driven counterpart of checkFnBounds). For each concrete receiver
+// instantiation (Box[X]) and each of its methods carrying a `where` bound, the
+// type argument bound to the constrained parameter must conform — else a loud
+// error (closing the lenient hole where a non-conforming type that happens to
+// have the method would slip through).
+fn checkMethodBounds(c: inout Comp) {
+    mut val gi: U64 = 0
+    while gi < c.genInsts.count {
+        val instRef: U64 = c.genInsts[gi]
+        val inst: TypeRef = c.types[instRef]
+        mut val mfi: U64 = 0
+        while mfi < c.funcs.count {
+            if methodMatchesInst(c: inout c, f: c.funcs[mfi], instRef: instRef) {
+                val f: Func = c.funcs[mfi]
+                mut val bi: U64 = 0
+                while bi < c.funcBounds.count {
+                    val fb: FuncBound = c.funcBounds[bi]
+                    if fb.fnIdx == mfi {
+                        mut val pi: U64 = 0
+                        while pi < f.typeParams.count {
+                            val tp: Bind = f.typeParams[pi]
+                            if spansEqual(c: inout c, aStart: tp.nameStart, aLen: tp.nameLen, bStart: fb.paramStart, bLen: fb.paramLen) {
+                                if pi < inst.args.count {
+                                    val at: TypeRef = c.types[inst.args[pi]]
+                                    if typeConformsTo(c: inout c, typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen) {
+                                    } else {
+                                        compileErrorAt(line: lineOf(c: inout c, offset: fb.paramStart), msg: "receiver type argument does not conform to the trait required by the method's `where`")
+                                    }
+                                }
+                            }
+                            pi += 1
+                        }
+                    }
+                    bi += 1
+                }
+            }
+            mfi += 1
+        }
+        gi += 1
+    }
 }
 
 // ---- #9: eager generic type-checking (check templates, not just instances) ----

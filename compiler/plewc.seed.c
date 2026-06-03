@@ -868,6 +868,7 @@ void checkViaTargets_c_Comp(Comp* c);
 long long typeConformsTo_c_Comp_typeStart_U64_typeLen_U64_traitStart_U64_traitLen_U64(Comp* c, uint64_t typeStart, uint64_t typeLen, uint64_t traitStart, uint64_t traitLen);
 long long typeConformsToName_c_Comp_typeStart_U64_typeLen_U64_traitName_String(Comp* c, uint64_t typeStart, uint64_t typeLen, PlewString traitName);
 void checkFnBounds_c_Comp(Comp* c);
+void checkMethodBounds_c_Comp(Comp* c);
 long long isTypeParamOf_c_Comp_fnIdx_U64_start_U64_len_U64(Comp* c, uint64_t fnIdx, uint64_t start, uint64_t len);
 long long boundProvidesMethod_c_Comp_fnIdx_U64_tpStart_U64_tpLen_U64_nameStart_U64_nameLen_U64_args_AArg(Comp* c, uint64_t fnIdx, uint64_t tpStart, uint64_t tpLen, uint64_t nameStart, uint64_t nameLen, PlewArray_Arg args);
 long long boundHasTraitNamed_c_Comp_fnIdx_U64_tpStart_U64_tpLen_U64_traitName_String(Comp* c, uint64_t fnIdx, uint64_t tpStart, uint64_t tpLen, PlewString traitName);
@@ -7168,6 +7169,47 @@ void checkFnBounds_c_Comp(Comp* c) {
     ii = ({ uint64_t __ov; if (__builtin_add_overflow((ii), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     Func_release(f);
     FnInst_release(fin);
+    }
+    checkMethodBounds_c_Comp(&((*c)));
+}
+void checkMethodBounds_c_Comp(Comp* c) {
+    uint64_t gi = 0;
+    while (gi < (long long)(((*c).genInsts).len)) {
+    uint64_t instRef = PlewArray_U64_get((*c).genInsts, (long long)(gi));
+    TypeRef inst = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(instRef)));
+    uint64_t mfi = 0;
+    while (mfi < (long long)(((*c).funcs).len)) {
+    if (methodMatchesInst_c_Comp_f_Func_instRef_U64(&((*c)), PlewArray_Func_get((*c).funcs, (long long)(mfi)), instRef)) {
+    Func f = Func_share(PlewArray_Func_get((*c).funcs, (long long)(mfi)));
+    uint64_t bi = 0;
+    while (bi < (long long)(((*c).funcBounds).len)) {
+    FuncBound fb = PlewArray_FuncBound_get((*c).funcBounds, (long long)(bi));
+    if (fb.fnIdx == mfi) {
+    uint64_t pi = 0;
+    while (pi < (long long)((f.typeParams).len)) {
+    Bind tp = PlewArray_Bind_get(f.typeParams, (long long)(pi));
+    if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), tp.nameStart, tp.nameLen, fb.paramStart, fb.paramLen)) {
+    if (pi < (long long)((inst.args).len)) {
+    TypeRef at = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(PlewArray_U64_get(inst.args, (long long)(pi)))));
+    if (typeConformsTo_c_Comp_typeStart_U64_typeLen_U64_traitStart_U64_traitLen_U64(&((*c)), at.nameStart, at.nameLen, fb.traitStart, fb.traitLen)) {
+    }
+    else {
+    compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), fb.paramStart), (PlewString){"receiver type argument does not conform to the trait required by the method's `where`", 85});
+    }
+    TypeRef_release(at);
+    }
+    }
+    pi = ({ uint64_t __ov; if (__builtin_add_overflow((pi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    }
+    bi = ({ uint64_t __ov; if (__builtin_add_overflow((bi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    Func_release(f);
+    }
+    mfi = ({ uint64_t __ov; if (__builtin_add_overflow((mfi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    gi = ({ uint64_t __ov; if (__builtin_add_overflow((gi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    TypeRef_release(inst);
     }
 }
 long long isTypeParamOf_c_Comp_fnIdx_U64_start_U64_len_U64(Comp* c, uint64_t fnIdx, uint64_t start, uint64_t len) {
