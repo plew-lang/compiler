@@ -327,7 +327,7 @@ fn structLocalReleasable(c: inout Comp, start: U64, len: U64) -> Bool {
     if c.structs[si].typeParams.count > 0 {
         return false
     }
-    return structNeedsCopy(c: inout c, start: start, len: len)
+    return structNeedsRelease(c: inout c, start: start, len: len)
 }
 
 // Pop the locals stack back to `mark` (Array has no truncate, so rebuild the

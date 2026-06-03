@@ -218,14 +218,23 @@ fn main() {
     // struct copy/share/release prototypes — emitted BEFORE the array runtime
     // because array _copy/_release recurse into struct elements (mutual
     // recursion: struct fns also call the array runtime, whose defs come later).
+    // deinit prototypes first, so struct _release defs can call a unique field's
+    // deinit (the synthetic deinit Func's own proto comes later, redundantly).
+    emitDeinitProtos(c: inout c)
     mut val spp: U64 = 0
     while spp < c.structs.count {
         val cps: StructDef = c.structs[spp]
         if cps.typeParams.count > 0 {
         } else {
-            if structNeedsCopy(c: inout c, start: cps.nameStart, len: cps.nameLen) {
-                emitStructCopyProto(c: inout c, si: spp)
-                emitStructShareProto(c: inout c, si: spp)
+            // CoW copy/share only for copyable structs (unique types never copy).
+            if cps.isUnique {
+            } else {
+                if structNeedsCopy(c: inout c, start: cps.nameStart, len: cps.nameLen) {
+                    emitStructCopyProto(c: inout c, si: spp)
+                    emitStructShareProto(c: inout c, si: spp)
+                }
+            }
+            if structNeedsRelease(c: inout c, start: cps.nameStart, len: cps.nameLen) {
                 emitStructReleaseProto(c: inout c, si: spp)
             }
         }
@@ -249,9 +258,14 @@ fn main() {
         val cs2: StructDef = c.structs[scd]
         if cs2.typeParams.count > 0 {
         } else {
-            if structNeedsCopy(c: inout c, start: cs2.nameStart, len: cs2.nameLen) {
-                emitStructCopyDef(c: inout c, si: scd)
-                emitStructShareDef(c: inout c, si: scd)
+            if cs2.isUnique {
+            } else {
+                if structNeedsCopy(c: inout c, start: cs2.nameStart, len: cs2.nameLen) {
+                    emitStructCopyDef(c: inout c, si: scd)
+                    emitStructShareDef(c: inout c, si: scd)
+                }
+            }
+            if structNeedsRelease(c: inout c, start: cs2.nameStart, len: cs2.nameLen) {
                 emitStructReleaseDef(c: inout c, si: scd)
             }
         }

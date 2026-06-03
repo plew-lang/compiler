@@ -46,6 +46,53 @@ fn structNeedsCopy(c: inout Comp, start: U64, len: U64) -> Bool {
     return false
 }
 
+// Does a struct need a `_release` function? Like structNeedsCopy (array or a
+// nested struct that needs release), but also true for a `unique` field — whose
+// `deinit`/release must run when the owner is destroyed even with no heap. This
+// gates release emission; structNeedsCopy still gates the CoW copy/share (which
+// unique types never use).
+fn structNeedsRelease(c: inout Comp, start: U64, len: U64) -> Bool {
+    val si: U64 = structIndexByName(c: inout c, start: start, len: len)
+    if si >= c.structs.count {
+        return false
+    }
+    val s: StructDef = c.structs[si]
+    val fields: Array[FieldDef] = s.fields
+    mut val i: U64 = 0
+    while i < fields.count {
+        val f: FieldDef = fields[i]
+        if f.tyIsArray {
+            return true
+        } else {
+            if typeIsUnique(c: inout c, start: f.tyStart, len: f.tyLen) {
+                return true
+            }
+            if structNeedsRelease(c: inout c, start: f.tyStart, len: f.tyLen) {
+                return true
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// `void <T>_deinit(<T> self);` prototypes for every type with a `deinit`, emitted
+// early (before struct release defs) so a parent's `_release` can call a unique
+// field's deinit. The synthetic deinit Func re-emits an identical prototype later
+// (a redundant C prototype is legal).
+fn emitDeinitProtos(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.deinits.count {
+        val d: Bind = c.deinits[i]
+        write(s: "void ")
+        writeSpan(c: inout c, start: d.nameStart, len: d.nameLen)
+        write(s: "_deinit(")
+        genCTypeRef(c: inout c, start: d.nameStart, len: d.nameLen, isArray: false)
+        write(s: " self);\n")
+        i += 1
+    }
+}
+
 // `Name Name_copy(Name s)` prototype.
 fn emitStructCopyProto(c: inout Comp, si: U64) {
     val s: StructDef = c.structs[si]
@@ -175,12 +222,31 @@ fn emitStructReleaseDef(c: inout Comp, si: U64) {
             writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
             write(s: ");")
         } else {
-            if structNeedsCopy(c: inout c, start: f.tyStart, len: f.tyLen) {
-                write(s: " ")
-                writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
-                write(s: "_release(s.")
-                writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                write(s: ");")
+            // a unique field is destroyed in place (spec/03: fields in declaration
+            // order): run its deinit body, then release its own fields.
+            if typeIsUnique(c: inout c, start: f.tyStart, len: f.tyLen) {
+                if structHasDeinit(c: inout c, start: f.tyStart, len: f.tyLen) {
+                    write(s: " ")
+                    writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
+                    write(s: "_deinit(s.")
+                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                    write(s: ");")
+                }
+                if structNeedsRelease(c: inout c, start: f.tyStart, len: f.tyLen) {
+                    write(s: " ")
+                    writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
+                    write(s: "_release(s.")
+                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                    write(s: ");")
+                }
+            } else {
+                if structNeedsRelease(c: inout c, start: f.tyStart, len: f.tyLen) {
+                    write(s: " ")
+                    writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
+                    write(s: "_release(s.")
+                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                    write(s: ");")
+                }
             }
         }
         i += 1

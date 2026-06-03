@@ -1,0 +1,26 @@
+import @Std/Io with { write, print }
+
+// Nested unique types: when an owner is destroyed, its own `deinit` body runs
+// first, then each field's deinit in declaration order, recursively (spec/03).
+unique struct File {
+    val fd: I64
+    deinit { print(self.fd) }
+}
+unique struct Pair {
+    val a: File
+    val b: File
+    deinit { print(0) }
+}
+
+// Moving a nested-unique value transfers the whole tree; deinit still runs once.
+fn sink(p: move Pair) {
+    write(s: "sink\n")
+}
+
+fn main() {
+    val p: Pair = <Pair a=<File fd=1 /> b=<File fd=2 /> />
+    sink(p: move p)              // p's tree destroyed in sink: 0, then 1, then 2
+    write(s: "---\n")
+    val q: Pair = <Pair a=<File fd=3 /> b=<File fd=4 /> />
+    write(s: "end\n")            // q destroyed at main exit: 0, then 3, then 4
+}
