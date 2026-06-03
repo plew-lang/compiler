@@ -369,7 +369,32 @@ fn parseTrait(c: inout Comp) {
                 }
                 reqs.append(<Bind nameStart=reqTok.start nameLen=reqTok.len fieldStart=reqTok.start fieldLen=reqTok.len />)
             }
-            _ => { c.advance() }
+            _ => {
+                // `assoc fn name(...)` requirement (spec/12: operator requirements
+                // like `Eq.eq` are assoc fns). Record its name like a method req.
+                if c.identIs(kw: "assoc") {
+                    c.advance()
+                    match c.curKind() {
+                        Kind.KwFn => { c.advance() }
+                        _ => {}
+                    }
+                    val areqTok: Tok = c.cur()
+                    c.advance()
+                    val atps: Array[Bind] = parseTypeParams(c: inout c)
+                    val aps: Array[Param] = parseParamList(c: inout c)
+                    match c.curKind() {
+                        Kind.Arrow => {
+                            c.advance()
+                            val arty: PType = parseTypeTok(c: inout c)
+                            recordArrayElem(c: inout c, ty: arty)
+                        }
+                        _ => {}
+                    }
+                    reqs.append(<Bind nameStart=areqTok.start nameLen=areqTok.len fieldStart=areqTok.start fieldLen=areqTok.len />)
+                } else {
+                    c.advance()
+                }
+            }
         }
     }
     c.traits.append(<TraitDef nameStart=nameTok.start nameLen=nameTok.len reqs=reqs />)

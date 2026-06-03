@@ -1,0 +1,36 @@
+import @Std/Io with { print }
+
+// Eq/Ord operator wiring (spec/12): `==`/`!=` desugar to the Eq witness `eq`,
+// and `< <= > >=` to the Ord witness `compare` (a tag test on its Ordering).
+enum Ordering { Less  Equal  Greater }
+
+struct Money { val cents: I64 }
+trait Eq { assoc fn eq(lhs: Money, rhs: Money) -> Bool }
+trait Ord { assoc fn compare(lhs: Money, rhs: Money) -> Ordering }
+impl Money as Eq {
+    assoc fn eq(lhs: Money, rhs: Money) -> Bool { return lhs.cents == rhs.cents }
+}
+impl Money as Ord {
+    assoc fn compare(lhs: Money, rhs: Money) -> Ordering {
+        if lhs.cents < rhs.cents { return <Ordering.Less /> }
+        if lhs.cents > rhs.cents { return <Ordering.Greater /> }
+        return <Ordering.Equal />
+    }
+}
+
+fn boolI(b: Bool) -> I64 { if b { return 1I64 } return 0I64 }
+
+fn main() {
+    val a: Money = <Money cents=100 />
+    val b: Money = <Money cents=200 />
+    val c: Money = <Money cents=100 />
+    print(boolI(b: a == c))   // 1
+    print(boolI(b: a == b))   // 0
+    print(boolI(b: a != b))   // 1
+    print(boolI(b: a < b))    // 1
+    print(boolI(b: b < a))    // 0
+    print(boolI(b: a <= c))   // 1
+    print(boolI(b: b >= a))   // 1
+    print(boolI(b: a > b))    // 0
+    if a < b { print(7) } else { print(8) }   // 7 (condition position)
+}

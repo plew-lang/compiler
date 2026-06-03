@@ -206,6 +206,126 @@ fn emitEnumTagCmp(c: inout Comp, lhs: U64, rhs: U64, op: I64, outer: Bool) {
     }
 }
 
+// Index of an assoc fn named `name` on type (typeStart,typeLen), or c.funcs.count.
+// (A by-name lookup for the operator witnesses Eq.eq / Ord.compare, which have a
+// single witness per type.)
+fn findAssocByName(c: inout Comp, typeStart: U64, typeLen: U64, name: String) -> U64 {
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.isAssoc {
+            if spansEqual(c: inout c, aStart: f.recvStart, aLen: f.recvLen, bStart: typeStart, bLen: typeLen) {
+                if rangeEquals(bytes: c.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
+                    return i
+                }
+            }
+        }
+        i += 1
+    }
+    return c.funcs.count
+}
+
+// Tag index of the `Ordering` enum's variant named `name` (Less/Equal/Greater),
+// or 0 if `Ordering` is not declared. Used to lower Ord comparisons.
+fn orderingVariantIndex(c: inout Comp, name: String) -> U64 {
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val e: EnumDef = c.enums[ei]
+        if rangeEquals(bytes: c.bytes, start: e.nameStart, len: e.nameLen, kw: "Ordering") {
+            val vars: Array[Variant] = e.variants
+            mut val vi: U64 = 0
+            while vi < vars.count {
+                if rangeEquals(bytes: c.bytes, start: vars[vi].nameStart, len: vars[vi].nameLen, kw: name) {
+                    return vi
+                }
+                vi += 1
+            }
+        }
+        ei += 1
+    }
+    return 0
+}
+
+// Whether the operand type carries the witness an operator needs: Eq's `eq` for
+// `==`/`!=`, Ord's `compare` for `< <= > >=` (spec/12). Only named (struct)
+// operands — scalars/String/enums have their own lowerings.
+fn hasCompareWitness(c: inout Comp, op: I64, lhs: U64) -> Bool {
+    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    if lt.kind == 2 {
+        if op == 50 {
+            return findAssocByName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: "eq") < c.funcs.count
+        }
+        if op == 51 {
+            return findAssocByName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: "eq") < c.funcs.count
+        }
+        if op >= 52 {
+            if op <= 55 {
+                return findAssocByName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: "compare") < c.funcs.count
+            }
+        }
+    }
+    return false
+}
+
+// Emit `T_eq_...(lhs, rhs)` for the Eq witness assoc fn.
+fn emitEqCall(c: inout Comp, typeStart: U64, typeLen: U64, lhs: U64, rhs: U64) {
+    val fi: U64 = findAssocByName(c: inout c, typeStart: typeStart, typeLen: typeLen, name: "eq")
+    writeSpan(c: inout c, start: typeStart, len: typeLen)
+    write(s: "_")
+    writeFnSelector(c: inout c, f: c.funcs[fi])
+    write(s: "(")
+    genExpr(c: inout c, id: lhs)
+    write(s: ", ")
+    genExpr(c: inout c, id: rhs)
+    write(s: ")")
+}
+
+// Lower an Eq/Ord comparison on a struct to its trait witness (spec/12):
+// `==` -> eq, `!=` -> !eq, and `< <= > >=` -> a tag test on `compare`'s Ordering
+// (`a<b` ⟺ compare(a,b) == Less, `a<=b` ⟺ != Greater, etc.).
+fn emitTraitCompare(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
+    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    if op == 50 {
+        emitEqCall(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, lhs: lhs, rhs: rhs)
+        return
+    }
+    if op == 51 {
+        write(s: "(!")
+        emitEqCall(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, lhs: lhs, rhs: rhs)
+        write(s: ")")
+        return
+    }
+    val ci: U64 = findAssocByName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: "compare")
+    val lessIdx: U64 = orderingVariantIndex(c: inout c, name: "Less")
+    val greaterIdx: U64 = orderingVariantIndex(c: inout c, name: "Greater")
+    write(s: "(")
+    writeSpan(c: inout c, start: lt.nameStart, len: lt.nameLen)
+    write(s: "_")
+    writeFnSelector(c: inout c, f: c.funcs[ci])
+    write(s: "(")
+    genExpr(c: inout c, id: lhs)
+    write(s: ", ")
+    genExpr(c: inout c, id: rhs)
+    write(s: ").tag ")
+    if op == 52 {
+        write(s: "== ")
+        writeU64(n: lessIdx)
+    }
+    if op == 53 {
+        write(s: "!= ")
+        writeU64(n: greaterIdx)
+    }
+    if op == 54 {
+        write(s: "== ")
+        writeU64(n: greaterIdx)
+    }
+    if op == 55 {
+        write(s: "!= ")
+        writeU64(n: lessIdx)
+    }
+    write(s: ")")
+}
+
 // Emit an expression in condition position. A top-level binary drops its outer
 // parens (the `if (...)` / `while (...)` already supplies them), which avoids
 // the `-Wparentheses-equality` warning on `if ((a == b))`. String/enum equality
@@ -220,12 +340,16 @@ fn genCond(c: inout Comp, id: U64) {
                 if isEnumEq(c: inout c, op: op, lhs: lhs) {
                     emitEnumTagCmp(c: inout c, lhs: lhs, rhs: rhs, op: op, outer: false)
                 } else {
-                    if compareNeedsTrait(c: inout c, op: op, lhs: lhs) {
-                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "comparison needs Eq/Ord; not available for a struct or array")
+                    if hasCompareWitness(c: inout c, op: op, lhs: lhs) {
+                        emitTraitCompare(c: inout c, op: op, lhs: lhs, rhs: rhs)
                     } else {
-                        genExpr(c: inout c, id: lhs)
-                        write(s: binOpStr(op: op))
-                        genExpr(c: inout c, id: rhs)
+                        if compareNeedsTrait(c: inout c, op: op, lhs: lhs) {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "comparison needs Eq/Ord; not available for a struct or array")
+                        } else {
+                            genExpr(c: inout c, id: lhs)
+                            write(s: binOpStr(op: op))
+                            genExpr(c: inout c, id: rhs)
+                        }
                     }
                 }
             }
