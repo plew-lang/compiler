@@ -1,0 +1,21 @@
+import @Std/Io with { print }
+
+// A struct holding an Array of structs, constructed into a local, appended to an
+// array, then dropped at scope exit — exercises value-semantics ownership of
+// struct-element arrays (the array deep-owns its elements; push/set copy them).
+struct Item { val v: I64 }
+struct Box { val items: Array[Item] }
+
+fn build(flag: Bool) -> I64 {
+    mut val store: Array[Box] = []
+    val its: Array[Item] = [<Item v=1 />, <Item v=2 />]
+    val b: Box = <Box items=its />
+    store.append(b)
+    if flag { return store[0].items[0].v }
+    return store[0].items[1].v
+}
+
+fn main() {
+    print(build(flag: true))    // 1
+    print(build(flag: false))   // 2
+}

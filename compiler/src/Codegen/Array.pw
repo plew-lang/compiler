@@ -104,7 +104,18 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     genCElem(c: inout c, start: elemStart, len: elemLen)
     write(s: " v) { if (i < 0 || i >= a->len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
-    write(s: "_unique(a); a->data[i] = v; }\n")
+    write(s: "_unique(a); ")
+    if structNeedsCopy(c: inout c, start: elemStart, len: elemLen) {
+        // value semantics: the array owns its elements (deep). Release the old
+        // element's heap, then store a deep copy of the new value — symmetric with
+        // _copy/_release, so no aliasing with the source (which double-freed).
+        writeSpan(c: inout c, start: elemStart, len: elemLen)
+        write(s: "_release(a->data[i]); a->data[i] = ")
+        writeSpan(c: inout c, start: elemStart, len: elemLen)
+        write(s: "_copy(v); }\n")
+    } else {
+        write(s: "a->data[i] = v; }\n")
+    }
 
     write(s: "__attribute__((unused)) static void ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
@@ -120,7 +131,17 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     genCElem(c: inout c, start: elemStart, len: elemLen)
     write(s: "*)plew_arc_alloc(sizeof(")
     genCElem(c: inout c, start: elemStart, len: elemLen)
-    write(s: ") * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }\n")
+    write(s: ") * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = ")
+    if structNeedsCopy(c: inout c, start: elemStart, len: elemLen) {
+        // value semantics: store a deep copy so the array owns its element (the
+        // source keeps its own), symmetric with _copy/_release — fixes the
+        // over-release when both the array and the source are dropped.
+        writeSpan(c: inout c, start: elemStart, len: elemLen)
+        write(s: "_copy(v)")
+    } else {
+        write(s: "v")
+    }
+    write(s: "; a->len++; }\n")
 }
 
 fn isU8Elem(c: inout Comp, elemStart: U64, elemLen: U64) -> Bool {
