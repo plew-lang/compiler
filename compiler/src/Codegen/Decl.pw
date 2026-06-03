@@ -833,9 +833,17 @@ fn genClosure(c: inout Comp, id: U64, proto: Bool) {
                     addLocal(c: inout c, nameStart: p2.nameStart, nameLen: p2.nameLen, tyStart: p2.tyStart, tyLen: p2.tyLen, isArray: p2.tyIsArray, ty: p2.ty, isInout: p2.isInout, isMut: false, owned: p2.isMove)
                     pj += 1
                 }
+                // mark this closure active so captured identifiers in the body
+                // lower to env accesses; the env pointer arrives as `__env`.
+                val savedId: U64 = c.curClosureId
+                val savedIn: Bool = c.curInClosure
+                c.curClosureId = id
+                c.curInClosure = true
                 write(s: " {\n")
                 genBlock(c: inout c, id: body)
                 write(s: "}\n")
+                c.curClosureId = savedId
+                c.curInClosure = savedIn
             }
         }
         _ => {}
@@ -941,6 +949,70 @@ fn emitThunks(c: inout Comp, proto: Bool) {
     mut val i: U64 = 0
     while i < c.fnThunks.count {
         genThunk(c: inout c, fi: c.fnThunks[i], proto: proto)
+        i += 1
+    }
+}
+
+// Does the closure at arena id capture any enclosing locals?
+fn closureHasCaptures(c: inout Comp, id: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.captures.count {
+        if c.captures[i].closureId == id {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Is (start,len) the name of one of closure `closureId`'s captures?
+fn isCaptureOf(c: inout Comp, closureId: U64, start: U64, len: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.captures.count {
+        val e: CaptureEntry = c.captures[i]
+        if e.closureId == closureId {
+            if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) {
+                return true
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// `typedef struct { <ct> cap; ... } __closure_env<id>;` — the env layout for one
+// capturing closure (scalar capture fields). The rc header lives just before the
+// block (plew_arc_alloc), so it is not a struct field.
+fn emitClosureEnvStruct(c: inout Comp, id: U64) {
+    write(s: "typedef struct { ")
+    mut val j: U64 = 0
+    while j < c.captures.count {
+        val e: CaptureEntry = c.captures[j]
+        if e.closureId == id {
+            genCTypeOf(c: inout c, tyRef: e.ty, fallStart: e.tyStart, fallLen: e.tyLen, isArray: e.isArray)
+            write(s: " ")
+            writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+            write(s: "; ")
+        }
+        j += 1
+    }
+    write(s: "} __closure_env")
+    writeU64(n: id)
+    write(s: ";\n")
+}
+
+// Emit an env-struct typedef for every capturing closure.
+fn emitClosureEnvs(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.exprs.count {
+        match c.exprs[i] {
+            Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
+                if closureHasCaptures(c: inout c, id: i) {
+                    emitClosureEnvStruct(c: inout c, id: i)
+                }
+            }
+            _ => {}
+        }
         i += 1
     }
 }

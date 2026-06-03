@@ -1,0 +1,6 @@
+import @Std/Io with { print }
+fn main() {
+    val xs: Array[I32] = [1, 2, 3]
+    val f: fn() -> I32 = fn() -> I32 { return xs[0] }
+    print(f())
+}

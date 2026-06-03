@@ -43,6 +43,17 @@ fn genExpr(c: inout Comp, id: U64) {
     match e {
         Expr.Int { val value, offset: _, isBool: _, tyStart: _, tyLen: _ } => { writeInt(n: value) }
         Expr.Ident { val start, val len } => {
+            // inside a closure body, a captured enclosing variable reads from the
+            // env: `((__closure_env<id>*)__env)->name`.
+            if c.curInClosure {
+                if isCaptureOf(c: inout c, closureId: c.curClosureId, start: start, len: len) {
+                    write(s: "((__closure_env")
+                    writeU64(n: c.curClosureId)
+                    write(s: "*)__env)->")
+                    writeSpan(c: inout c, start: start, len: len)
+                    return
+                }
+            }
             if localMoved(c: inout c, start: start, len: len) {
                 compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "use of moved value (it was consumed by an earlier `move`)")
             }
@@ -430,12 +441,39 @@ fn genExpr(c: inout Comp, id: U64) {
             writeSpan(c: inout c, start: nameStart, len: nameLen)
         }
         Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
-            // value = a fat closure: the lambda-lifted function plus a NULL env
-            // (non-capturing for now). The env/rc/drop slots stay 0 until capture
-            // support fills them.
-            write(s: "(PlewClosure){(void*)&__closure")
-            writeU64(n: id)
-            write(s: ", 0, 0, 0}")
+            // value = a fat closure. A non-capturing closure has a NULL env; a
+            // capturing one allocates an env block (rc-headed) and copies each
+            // captured scalar into it. drop=0: scalar envs own no heap, so they
+            // need no field release (the env block itself is reclaimed at the
+            // last reference / leaked — a hidden cost, never a meaning change).
+            if closureHasCaptures(c: inout c, id: id) {
+                write(s: "({ __closure_env")
+                writeU64(n: id)
+                write(s: "* __e = (__closure_env")
+                writeU64(n: id)
+                write(s: "*)plew_arc_alloc(sizeof(__closure_env")
+                writeU64(n: id)
+                write(s: ")); ")
+                mut val ci: U64 = 0
+                while ci < c.captures.count {
+                    val e: CaptureEntry = c.captures[ci]
+                    if e.closureId == id {
+                        write(s: "__e->")
+                        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+                        write(s: " = ")
+                        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+                        write(s: "; ")
+                    }
+                    ci += 1
+                }
+                write(s: "(PlewClosure){(void*)&__closure")
+                writeU64(n: id)
+                write(s: ", (void*)__e, ((long long*)__e) - 1, 0}; })")
+            } else {
+                write(s: "(PlewClosure){(void*)&__closure")
+                writeU64(n: id)
+                write(s: ", 0, 0, 0}")
+            }
         }
         Expr.Method { val recv, val nameStart, val nameLen, val args } => {
             // `Type.name(args)` (assoc fn call): the receiver is a bare type name,

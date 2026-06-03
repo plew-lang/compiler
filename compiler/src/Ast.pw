@@ -34,6 +34,20 @@ struct TypeRef {
 
 // A variable binding in scope during codegen (param, let, or match bind), used
 // to recover an expression's type for monomorphization and `.bytes` dispatch.
+// One enclosing local captured by a closure (value capture, immutable scalars
+// only for now). Flat list keyed by `closureId` (the Closure node's arena
+// index); querying a closure's captures filters by it. The capture becomes a
+// field of `__closure_env<closureId>`, read in the body via `__env`.
+struct CaptureEntry {
+    val closureId: U64
+    val nameStart: U64
+    val nameLen: U64
+    val tyStart: U64
+    val tyLen: U64
+    val isArray: Bool
+    val ty: U64
+}
+
 struct Local {
     val nameStart: U64
     val nameLen: U64
@@ -142,9 +156,10 @@ enum Expr {
     // the bare handle is `.` (rare). Shared mutation is visible at `->`.
     Arrow { base: U64, nameStart: U64, nameLen: U64 }
     // a closure literal `fn(params) -> ret { body }`. Lambda-lifted to a
-    // top-level C function named `__closure<exprIndex>`; the expression value is
-    // that function's pointer. v1: non-capturing (the body may reference its
-    // params and globals, not enclosing locals).
+    // top-level C function named `__closure<exprIndex>` taking a leading env
+    // pointer. The expression value is a fat PlewClosure {fn, env, rc, drop}.
+    // Captures of enclosing locals are recorded in Comp.captures keyed by this
+    // node's arena index; the body reads each via `((__closure_env<id>*)__env)`.
     Closure { params: Array[Param], hasRet: Bool, retStart: U64, retLen: U64, retIsArray: Bool, retTy: U64, body: U64 }
     // `move operand` / `borrow operand` (spec/03): an access-mode prefix on a
     // `unique` value in a binding/argument/return position. Lowers to the
@@ -440,6 +455,17 @@ struct Comp {
     // function to the uniform closure ABI. Collected before signatures are
     // emitted (collectFnThunks), so the thunk protos precede every use.
     mut val fnThunks: Array[U64]
+    // closure value captures (flat, keyed by closure arena id). Collected by the
+    // scope-aware scan; drives env-struct emission and in-body capture access.
+    mut val captures: Array[CaptureEntry]
+    // the closure arena id currently being emitted (so an Ident that names one of
+    // its captures lowers to an env access). Guarded by curInClosure.
+    mut val curClosureId: U64
+    mut val curInClosure: Bool
+    // during capture collection: the locals high-water mark at the active
+    // closure's entry. An identifier resolving below it is an enclosing local
+    // (a capture); at or above it is a closure param / body-local.
+    mut val curCaptureMark: U64
     // distinct Array element type names seen in declarations (for monomorphizing
     // PlewArray_<E> + runtime); each entry reuses Bind as a (start,len) pair.
     mut val arrayElems: Array[Bind]

@@ -94,7 +94,7 @@ fn main() {
     }
     mut val lx: Lexer = <Lexer bytes=combined pos=0 toks=[] depth=0 />
     lex(lx: inout lx)
-    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] traits=[] conforms=[] methodAliases=[] derives=[] pendingDerives=[] funcBounds=[] curCheckFn=0 curWitnessed=[] curWhereTraits=[] types=[] genInsts=[] fnInsts=[] fnTypes=[] fnThunks=[] arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curRetTy=0 curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curSelfMove=false curTypeParams=[] curTypeArgs=[] curRecvInstRef=0 curGiveTmp=0 curLoopMark=0 curBranchBase=0 impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false impEprint=false impExit=false impReadFileBytes=false impFileExists=false deinits=[] />
+    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] traits=[] conforms=[] methodAliases=[] derives=[] pendingDerives=[] funcBounds=[] curCheckFn=0 curWitnessed=[] curWhereTraits=[] types=[] genInsts=[] fnInsts=[] fnTypes=[] fnThunks=[] captures=[] curClosureId=0 curInClosure=false curCaptureMark=0 arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curRetTy=0 curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curSelfMove=false curTypeParams=[] curTypeArgs=[] curRecvInstRef=0 curGiveTmp=0 curLoopMark=0 curBranchBase=0 impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false impEprint=false impExit=false impReadFileBytes=false impFileExists=false deinits=[] />
     // reserve TypeRef index 0 as the "no type" sentinel so a `ty` field of 0
     // (synthetic locals, untyped positions) never aliases a real parsed type.
     c.types.append(<TypeRef nameStart=0 nameLen=0 args=[] />)
@@ -341,6 +341,9 @@ fn main() {
     }
     // (Function types need no per-signature typedef: every function value is the
     // uniform PlewClosure struct from the preamble.)
+    // closure env structs (after all value types, before any signature/closure
+    // that allocates one).
+    emitClosureEnvs(c: inout c)
     // prototypes (skip main and generic templates — the latter are emitted per
     // instantiation below).
     mut val i: U64 = 0

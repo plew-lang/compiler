@@ -1,0 +1,16 @@
+import @Std/Io with { print }
+
+fn makeAdder(base: I32) -> fn(n: I32) -> I32 {
+    return fn(n: I32) -> I32 { return n + base }
+}
+
+fn main() {
+    val add10: fn(n: I32) -> I32 = makeAdder(base: 10)
+    print(add10(n: 5))
+    val add100: fn(n: I32) -> I32 = makeAdder(base: 100)
+    print(add100(n: 5))
+    val threshold: I32 = 3
+    val pred: fn(x: I32) -> Bool = fn(x: I32) -> Bool { return x > threshold }
+    if pred(x: 5) { print(1) } else { print(0) }
+    if pred(x: 2) { print(1) } else { print(0) }
+}

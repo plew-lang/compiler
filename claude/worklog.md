@@ -6,9 +6,9 @@
 
 🎉 **セルフホスト達成・stage0（Rust）退役済み。** 正典コンパイラ＝Plew パッケージ `compiler/src/`（root `_.pw` が `part` で全パートを綴じ込む 1 モジュール＝`Loader`・`Lexer`・`Ast`・`Parser/`〔Expr/Stmt/Decl〕・`Codegen/`〔Emit/Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array〕・part はサブディレクトリ可）。自分自身を不動点までコンパイルする。
 
-> **次の一歩＝(2) closure キャプチャ**（イベントループ第1段・Iterator コンビネータの前提）。トレイト/generics は **step 1＋健全性監査＋ARC 修正まで完了**。
+> **次の一歩＝(2b) closure キャプチャの拡張**（`mut val`／非スカラーキャプチャ）。**(2a) 完了**＝fat closure 表現＋不変スカラー値キャプチャ（タグ `closures-stage-a`／`closures-capture-scalar`）。トレイト/generics は step 1＋健全性監査＋ARC 修正まで完了。
 >
-> **closure キャプチャの設計（着手用）**：現状は**非キャプチャのみ**（ラムダリフティング＝`__closure<id>` というベア関数ポインタ・body は params と globals のみ参照可）。spec は **Swift 流の参照キャプチャ**（外側ローカルを参照で捕捉・`mut val` キャプチャは可変/共有/永続＝`makeCounter` が `Ref` 不要）。実装＝**env＋fat closure**（`{fn ptr, env ptr}`）＋**エスケープするキャプチャ変数をヒープ化**（ARC 箱）。関数型表現（今はベア fn ポインタ）の根本変更で、関数型/呼び出し/全経路に波及＝incremental green が難しい大物。**`spawn { block }` の前提**でもある（spec/14・並行は単一スレッド限定・`mut val` 参照キャプチャ閉包は `Ref` 含む値同様 `local`）。詳細は item 5（イベントループ）。**ARC は安全**＝直前に配列要素の deep 所有を直済み（下記）。
+> **closure キャプチャの現状と設計（着手用）**：関数値は一律 **fat closure `PlewClosure{fn,env,rc,drop}`**（旧ベア関数ポインタから移行・ABI `R fn(void* env, params...)`・bare 関数値はサンク `<sel>__thunk` 経由・呼び位置で `.fn` を具体署名へキャスト）。**不変スカラー（整数/Bool）の値キャプチャまで実装**（`val` 不変ゆえ値キャプチャ＝参照キャプチャと観測同一＝spec 準拠・env 構造体 `__closure_env<id>` にコピー・body は `((__closure_env<id>*)__env)->name`）。**未対応は loud reject**（`mut val`／array・struct・String・Ref／ネスト closure）。env は今 leak（スカラーのみ・hidden cost・double-free 無し・`plew_closure_share/release` は配備済）。**(2b) 残**＝spec の **Swift 流参照キャプチャ**＝`mut val` キャプチャは可変/共有/永続（`makeCounter`）＋非スカラー＝**エスケープ変数をヒープ化（ARC 箱）＋ env drop（閉包 release 配線）＋閉包ライフタイム/move 追跡**。`spawn { block }` の前提（spec/14・`mut val` 参照キャプチャ閉包は `Ref` 含む値同様 `local`）。詳細は item 5（イベントループ）。
 >
 > **完了済（このフェーズ）**：trait T1–T3・assoc fn・Eq/Ord 配線・`@[Eq]`(struct/enum)/`@[Ord]`(struct) derive・健全性ギャップ #1–#4/#6/#8/#9（eager generic 型検査＝C++ テンプレート脱却）・監査の沈黙逸脱群（インライン制約/supertrait/同セレクタ衝突/ambient impl/`move fn`-copyable を reject・primitive が Eq/Ord 境界を満たす・比較非結合）・**ARC バグ修正**（配列 `_push`/`_set` が struct 要素を `E_copy`＝deep 所有・`_copy`/`_release` と対称＝過剰解放/UAF 解消・ASan 自己コンパイル clean）。タグ `traits-t1`〜`arc-array-elem-fix`。**残ギャップは provisional.md**（演算子トレイト全配線〔大物・需要駆動〕・曖昧リテラル/method 値化〔小・clang 止まり〕・`@[Ord]` on enum・#7 明示型引数〔据え置き〕）。
 >

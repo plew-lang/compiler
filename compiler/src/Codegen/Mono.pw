@@ -832,8 +832,76 @@ fn registerCallInst(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg
 // Walk an expression, registering any generic free function calls it contains
 // (args before self, so a nested generic call is registered before the outer one
 // whose argument type may depend on it).
+// Record that the active closure captures the enclosing local at `localIdx`.
+// Dedup per (closure, name). v1: value-capture of immutable scalars only — a
+// `mut val`, array, struct, string or other non-scalar capture is rejected
+// loudly (no silent meaning loss; reference/heap capture is additive later).
+fn recordCapture(c: inout Comp, closureId: U64, localIdx: U64) {
+    val lo: Local = c.locals[localIdx]
+    mut val i: U64 = 0
+    while i < c.captures.count {
+        val e: CaptureEntry = c.captures[i]
+        if e.closureId == closureId {
+            if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: lo.nameStart, bLen: lo.nameLen) {
+                return
+            }
+        }
+        i += 1
+    }
+    if lo.isMut {
+        compileErrorAt(line: lineOf(c: inout c, offset: lo.nameStart), msg: "capturing a mutable variable (`mut val`) in a closure is not yet supported")
+    }
+    if lo.isArray {
+        compileErrorAt(line: lineOf(c: inout c, offset: lo.nameStart), msg: "capturing a non-scalar value (array/struct/string) in a closure is not yet supported")
+    }
+    if isPrimType(c: inout c, start: lo.tyStart, len: lo.tyLen) {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: lo.nameStart), msg: "capturing a non-scalar value (array/struct/string) in a closure is not yet supported")
+    }
+    c.captures.append(<CaptureEntry closureId=closureId nameStart=lo.nameStart nameLen=lo.nameLen tyStart=lo.tyStart tyLen=lo.tyLen isArray=lo.isArray ty=lo.ty />)
+}
+
 fn scanExprInsts(c: inout Comp, exprId: U64) {
     match c.exprs[exprId] {
+        Expr.Ident { val start, val len } => {
+            // capture detection: inside a closure, an identifier that resolves to
+            // a local below the closure's entry mark is an enclosing capture.
+            if c.curInClosure {
+                val li: U64 = localIndexByName(c: inout c, start: start, len: len)
+                if li < c.curCaptureMark {
+                    recordCapture(c: inout c, closureId: c.curClosureId, localIdx: li)
+                }
+            }
+        }
+        Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
+            // a closure literal lexically inside another closure body: the inner
+            // env construction would have to reach the outer env, which is not
+            // wired yet — reject loudly rather than miscompile.
+            if c.curInClosure {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: exprId)), msg: "nested closures are not yet supported")
+            }
+            // walk the body with the closure's own scope so enclosing references
+            // become captures. Save/restore the capture context (single-level;
+            // nested closures keep their own mark).
+            val savedId: U64 = c.curClosureId
+            val savedIn: Bool = c.curInClosure
+            val savedMark: U64 = c.curCaptureMark
+            val enclMark: U64 = scopeMark(c: inout c)
+            c.curClosureId = exprId
+            c.curInClosure = true
+            c.curCaptureMark = enclMark
+            mut val pi: U64 = 0
+            while pi < params.count {
+                val p: Param = params[pi]
+                addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
+                pi += 1
+            }
+            scanBlockInsts(c: inout c, blkId: body)
+            popLocals(c: inout c, mark: enclMark)
+            c.curClosureId = savedId
+            c.curInClosure = savedIn
+            c.curCaptureMark = savedMark
+        }
         Expr.Unary { val op, val operand } => { scanExprInsts(c: inout c, exprId: operand) }
         Expr.Binary { val op, val lhs, val rhs } => {
             scanExprInsts(c: inout c, exprId: lhs)
@@ -1050,6 +1118,9 @@ fn collectFnInsts(c: inout Comp) {
     c.curHasRecv = false
     c.curTypeParams = noP
     c.curTypeArgs = noA
+    c.curInClosure = false
+    c.curClosureId = 0
+    c.curCaptureMark = 0
 }
 
 // Emit one generic free function instance (prototype or body) under its
