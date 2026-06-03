@@ -252,7 +252,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 }
             }
             write(s: ";\n")
-            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable)
+            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
         }
         Stmt.Assign { val op, val target, val value } => {
             val te: Expr = c.exprs[target]
@@ -481,7 +481,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 write(s: "; ")
                 writeSpan(c: inout c, start: varStart, len: varLen)
                 write(s: "++) {\n")
-                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false)
+                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 genBlock(c: inout c, id: body)
                 write(s: "    }\n    }\n")
             } else {
@@ -515,7 +515,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 write(s: ", __fi")
                 writeU64(n: t)
                 write(s: ");\n")
-                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false)
+                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 genBlock(c: inout c, id: body)
                 write(s: "    }\n    }\n")
             }
@@ -634,7 +634,7 @@ fn genStmt(c: inout Comp, id: U64) {
                         write(s: ";\n")
                         if genericMatch {
                             val bti: TypeInfo = genericEnumFieldTypeInfo(c: inout c, instRef: scrutRef, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
-                            addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false)
+                            addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false)
                         } else {
                             addBindLocal(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
                         }

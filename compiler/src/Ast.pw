@@ -48,6 +48,10 @@ struct Local {
     // function params, for-loop vars and match binds are immutable (spec: `val`
     // is immutable, `mut val` is the mutable storage form).
     val isMut: Bool
+    // owns its value (a `let` binding) and so releases it at scope exit, vs a
+    // borrow (param / for-loop var / match bind) that aliases someone else's
+    // storage and must not free it. ARC: only owned heap locals are released.
+    val owned: Bool
 }
 
 // The recovered type of an expression. kind: 0 scalar (long long), 1 String,

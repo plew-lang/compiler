@@ -193,8 +193,8 @@ fn typeInfoOfName(c: inout Comp, start: U64, len: U64, isArray: Bool) -> TypeInf
     return <TypeInfo kind=2 nameStart=start nameLen=len ref=0 />
 }
 
-fn addLocal(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool) {
-    c.locals.append(<Local nameStart=nameStart nameLen=nameLen tyStart=tyStart tyLen=tyLen isArray=isArray ty=ty isInout=isInout isMut=isMut />)
+fn addLocal(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool) {
+    c.locals.append(<Local nameStart=nameStart nameLen=nameLen tyStart=tyStart tyLen=tyLen isArray=isArray ty=ty isInout=isInout isMut=isMut owned=owned />)
 }
 
 // --- scope frames (the ARC drop backbone) ---
@@ -212,9 +212,24 @@ fn scopeMark(c: inout Comp) -> U64 {
 }
 
 // Emit the releases for every binding pushed since `mark`, in reverse
-// declaration order (construction is forward, destruction is reverse).
-// TODO(arc): wire to ARC release / `deinit` once ownership is tracked.
+// declaration order (construction is forward, destruction is reverse). Only
+// owned array locals are released here (buffer-only: arrays-of-heap leak their
+// elements until recursive release lands; .bytes views carry rc=0 so the call
+// is a no-op). Array `let` bindings are always uniquely owned — genArrayValue
+// copies a place and news a literal — so freeing them needs no retain bookkeeping.
 fn emitScopeDrops(c: inout Comp, mark: U64) {
+    mut val i: U64 = c.locals.count
+    while i > mark {
+        i -= 1
+        val lo: Local = c.locals[i]
+        if lo.owned {
+            if lo.isArray {
+                write(s: "    plew_arc_release(")
+                writeSpan(c: inout c, start: lo.nameStart, len: lo.nameLen)
+                write(s: ".rc);\n")
+            }
+        }
+    }
 }
 
 // Pop the locals stack back to `mark` (Array has no truncate, so rebuild the
@@ -577,7 +592,7 @@ fn addBindLocal(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, 
                     while fi < fs.count {
                         val f: FieldDef = fs[fi]
                         if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: fieldStart, bLen: fieldLen) {
-                            addLocal(c: inout c, nameStart: bindStart, nameLen: bindLen, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray, ty: f.ty, isInout: false, isMut: false)
+                            addLocal(c: inout c, nameStart: bindStart, nameLen: bindLen, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray, ty: f.ty, isInout: false, isMut: false, owned: false)
                             return
                         }
                         fi += 1
