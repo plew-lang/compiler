@@ -99,6 +99,9 @@ fn main() {
     // (synthetic locals, untyped positions) never aliases a real parsed type.
     c.types.append(<TypeRef nameStart=0 nameLen=0 args=[] />)
     parseProgram(c: inout c)
+    // trait provided methods (spec/08): copy each `impl Trait { }` provided
+    // method onto every conforming type, so they ride normal method resolution.
+    instantiateProvidedMethods(c: inout c)
     // ownership validity (spec/03): a struct owning a unique value must be
     // `unique`; parameter access modes must match copyability. Both exit on error.
     checkFieldContagion(c: inout c)
@@ -322,8 +325,13 @@ fn main() {
         } else {
             if f.typeParams.count > 0 {
             } else {
-                genSignature(c: inout c, f: f)
-                write(s: ";\n")
+                if methodRecvIsTrait(c: inout c, f: f) {
+                    // a provided-method template (receiver = a trait): emitted per
+                    // conforming type, not under the trait name.
+                } else {
+                    genSignature(c: inout c, f: f)
+                    write(s: ";\n")
+                }
             }
         }
         i += 1
@@ -337,7 +345,11 @@ fn main() {
         val fb: Func = c.funcs[j]
         if fb.typeParams.count > 0 {
         } else {
-            genFunc(c: inout c, fi: j)
+            if methodRecvIsTrait(c: inout c, f: fb) {
+                // provided-method template — skip (emitted per conforming type).
+            } else {
+                genFunc(c: inout c, fi: j)
+            }
         }
     }
     // generic method bodies.

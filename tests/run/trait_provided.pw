@@ -1,0 +1,28 @@
+import @Std/Io with { print }
+
+// Provided methods (spec/08): `impl Trait { }` builds on the requirements.
+// Each conforming type gains doubleStep, instantiated per type.
+trait Stepper {
+    fn step() -> I64
+}
+impl Stepper {
+    fn doubleStep() -> I64 { return self.step() + self.step() }
+}
+
+struct Counter { val n: I64 }
+impl Counter as Stepper {
+    fn step() -> I64 { return self.n }
+}
+
+struct Two { val m: I64 }
+impl Two as Stepper {
+    fn step() -> I64 { return self.m * 2I64 }
+}
+
+fn main() {
+    val c: Counter = <Counter n=5 />
+    print(c.step())
+    print(c.doubleStep())
+    val t: Two = <Two m=3 />
+    print(t.doubleStep())
+}
