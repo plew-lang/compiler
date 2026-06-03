@@ -13,8 +13,9 @@ fn genArrayTypedef(c: inout Comp, elemStart: U64, elemLen: U64) {
     write(s: ";\n")
 }
 
-// Monomorphized array runtime for one element type (new / get / set / push).
-// Old buffers leak on growth (stage0/stage1 never free — throwaway model).
+// Monomorphized array runtime for one element type. Order matters: _copy,
+// _share and _unique are emitted before _set/_push, which call _unique to
+// realize copy-on-write (mutate a private buffer when the value is shared).
 fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     write(s: "__attribute__((unused)) static ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
@@ -32,29 +33,7 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: " a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } return a.data[i]; }\n")
 
-    write(s: "__attribute__((unused)) static void ")
-    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
-    write(s: "_set(")
-    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
-    write(s: "* a, long long i, ")
-    genCElem(c: inout c, start: elemStart, len: elemLen)
-    write(s: " v) { if (i < 0 || i >= a->len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } a->data[i] = v; }\n")
-
-    write(s: "__attribute__((unused)) static void ")
-    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
-    write(s: "_push(")
-    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
-    write(s: "* a, ")
-    genCElem(c: inout c, start: elemStart, len: elemLen)
-    write(s: " v) { if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; ")
-    genCElem(c: inout c, start: elemStart, len: elemLen)
-    write(s: "* nd = (")
-    genCElem(c: inout c, start: elemStart, len: elemLen)
-    write(s: "*)plew_arc_alloc(sizeof(")
-    genCElem(c: inout c, start: elemStart, len: elemLen)
-    write(s: ") * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }\n")
-
-    // value-semantics deep copy (eager): a fresh buffer with the same elements.
+    // value-semantics deep copy: a fresh buffer (rc=1) with the same elements.
     // Element copy is by C assignment (correct for scalars, immutable Strings,
     // and structs of those); nested mutable aggregates are a documented gap.
     write(s: "__attribute__((unused)) static ")
@@ -70,6 +49,53 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     write(s: "*)plew_arc_alloc(sizeof(")
     genCElem(c: inout c, start: elemStart, len: elemLen)
     write(s: ") * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }\n")
+
+    // CoW share: retain and alias the same buffer (the binding gets its own ref).
+    write(s: "__attribute__((unused)) static ")
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+    write(s: " ")
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+    write(s: "_share(")
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+    write(s: " a) { plew_arc_retain(a.rc); return a; }\n")
+
+    // CoW make-unique: if the buffer is shared (rc>1), replace it with a private
+    // copy before any in-place mutation, so writes never leak across bindings.
+    write(s: "__attribute__((unused)) static void ")
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+    write(s: "_unique(")
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+    write(s: "* a) { if (a->rc && (*(a->rc)) > 1) { ")
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+    write(s: " nc = ")
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+    write(s: "_copy(*a); plew_arc_release(a->rc); *a = nc; } }\n")
+
+    write(s: "__attribute__((unused)) static void ")
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+    write(s: "_set(")
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+    write(s: "* a, long long i, ")
+    genCElem(c: inout c, start: elemStart, len: elemLen)
+    write(s: " v) { if (i < 0 || i >= a->len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } ")
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+    write(s: "_unique(a); a->data[i] = v; }\n")
+
+    write(s: "__attribute__((unused)) static void ")
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+    write(s: "_push(")
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+    write(s: "* a, ")
+    genCElem(c: inout c, start: elemStart, len: elemLen)
+    write(s: " v) { ")
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+    write(s: "_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; ")
+    genCElem(c: inout c, start: elemStart, len: elemLen)
+    write(s: "* nd = (")
+    genCElem(c: inout c, start: elemStart, len: elemLen)
+    write(s: "*)plew_arc_alloc(sizeof(")
+    genCElem(c: inout c, start: elemStart, len: elemLen)
+    write(s: ") * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }\n")
 }
 
 fn isU8Elem(c: inout Comp, elemStart: U64, elemLen: U64) -> Bool {
@@ -85,8 +111,10 @@ fn genU8ArrayTypedef() {
 fn genU8ArrayRuntime() {
     write(s: "__attribute__((unused)) static PlewArray_U8 PlewArray_U8_new(void) { PlewArray_U8 a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }\n")
     write(s: "__attribute__((unused)) static unsigned char PlewArray_U8_get(PlewArray_U8 a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } return a.data[i]; }\n")
-    write(s: "__attribute__((unused)) static void PlewArray_U8_set(PlewArray_U8* a, long long i, unsigned char v) { if (i < 0 || i >= a->len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } a->data[i] = v; }\n")
-    write(s: "__attribute__((unused)) static void PlewArray_U8_push(PlewArray_U8* a, unsigned char v) { if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; unsigned char* nd = (unsigned char*)plew_arc_alloc(sizeof(unsigned char) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }\n")
     write(s: "__attribute__((unused)) static PlewArray_U8 PlewArray_U8_copy(PlewArray_U8 a) { PlewArray_U8 r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (unsigned char*)plew_arc_alloc(sizeof(unsigned char) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }\n")
+    write(s: "__attribute__((unused)) static PlewArray_U8 PlewArray_U8_share(PlewArray_U8 a) { plew_arc_retain(a.rc); return a; }\n")
+    write(s: "__attribute__((unused)) static void PlewArray_U8_unique(PlewArray_U8* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_U8 nc = PlewArray_U8_copy(*a); plew_arc_release(a->rc); *a = nc; } }\n")
+    write(s: "__attribute__((unused)) static void PlewArray_U8_set(PlewArray_U8* a, long long i, unsigned char v) { if (i < 0 || i >= a->len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } PlewArray_U8_unique(a); a->data[i] = v; }\n")
+    write(s: "__attribute__((unused)) static void PlewArray_U8_push(PlewArray_U8* a, unsigned char v) { PlewArray_U8_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; unsigned char* nd = (unsigned char*)plew_arc_alloc(sizeof(unsigned char) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }\n")
 }
 
