@@ -6,7 +6,9 @@
 
 🎉 **セルフホスト達成・stage0（Rust）退役済み。** 正典コンパイラ＝Plew パッケージ `compiler/src/`（root `_.pw` が `part` で全パートを綴じ込む 1 モジュール＝`Loader`・`Lexer`・`Ast`・`Parser/`〔Expr/Stmt/Decl〕・`Codegen/`〔Emit/Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array〕・part はサブディレクトリ可）。自分自身を不動点までコンパイルする。
 
-- **ビルド**：`./bootstrap.sh`＝C 種 `compiler/plewc.seed.c`→clang→`plewc0`→`compiler/src/_.pw` を自己コンパイル→不動点 cmp（Rust 不要）。`./bootstrap.sh --reseed` で種更新。
+> **次の一歩＝traits コア（T1）**：`trait Name { fn req(...) -> T … }` をパース（要求＝本体なし・`TraitDef`）→ `impl Type as Trait { fn req(){…} | … via real }`（witness メソッドを Type に登録＝既存メソッド機構に乗る・conformance 記録）→ `x.req()` が呼べる。その後 T2＝提供メソッド `impl Trait { fn provided(){…} }`、T3＝`where T: Trait` 境界、→ Eq/Ord を `==`/`<` へ配線。**前提のオーバーロードは完了済**（item 6）。`trait` は未 lex（Ident 扱い）・`impl`/`as`（KwAs）は既存・conformance AST は未（グリーンフィールド）。詳細は item 7・spec/08。
+
+- **ビルド**：`./bootstrap.sh`＝C 種 `compiler/plewc.seed.c`→clang→`plewc0`→`compiler/src/_.pw` を自己コンパイル→不動点 cmp（Rust 不要）。`./bootstrap.sh --reseed` で種更新。**preamble/codegen 出力/AST フィールド変更後は reseed を2回**。
 - **テスト**：`./test.sh`＝`tests/run/*.pw`（`.out` 照合・任意 `.in`）＋`tests/part/`（複数ファイル）＋`tests/reject/*.pw`（plewc 非ゼロ終了で reject＝受理の健全性）＋`tests/panic/*.pw`（compile+link 成功・実行は非ゼロ＋`.panic` stderr 部分一致）＋不動点。
 
 ### サポート済の言語（現状スナップショット・経緯は git/タグ）
@@ -21,6 +23,7 @@
 - **★`Ref[T]`（共有可変・refcount 化）**＝rc ヘッダ付きヒープ箱・`<Ref[T] value=e/>`・`r->field`・コピーで retain 共有・scope 末で release。
 - **★`unique` 型＋`deinit`＋所有権**＝`unique struct`＋`deinit`（決定的破棄・型本体→フィールド宣言順・ネスト再帰）・`move`/`borrow` モード（前置＋引数）・線形 move 追跡（use-after-move/bare コピー/伝染/モード必須を reject）。詳細は下のロードマップ item 4b。
 - **★クロージャ/関数値**＝関数型 `fn(...)->R`・関数を第一級値・非キャプチャのクロージャリテラル（ラムダリフティング）・高階関数。**ラベル抑制 `~:`**・**デフォルト引数 `name: T = expr`**。
+- **★オーバーロード完成**（タグ `overload-mangle`/`overloading`）＝関数/メソッドを **名前＋ラベル＋引数型** のセレクタで解決。C 名は `writeFnSelector` でマングル（名前＋各 param の ラベル＋型頭・配列 `A` 接頭）。arity/label/type の3軸・自由関数もメソッドも。traits（`via`・多重 conformance）の土台。詳細は下のロードマップ item 6。
 - **値意味論・generics・クロージャを有効化したまま自己ホスト不動点維持**。生成 C は警告クリーン。**コンパイラ自身がメソッド/match 式で自己記述**（dogfood）。
 
 ## ★ ロードマップ（generics → コアライブラリ → ランタイム）
