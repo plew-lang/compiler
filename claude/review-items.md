@@ -9,8 +9,8 @@
 
 - **（決定済 2026-06-04）String リテラルは単相のまま確定**：数値リテラルを多相にした動機（自然な既定型が無い）が String には無く（`String` が唯一の正典型）、Plew は暗黙の literal 多相（Swift `ExpressibleByStringLiteral`）より明示構築（`<T from="…"/>`＝`From`）を好むため。将来「文字列リテラルから作る別型」（`StaticString`・`b"…"`→`Array[U8]`・Char）が要れば**別リテラル構文 or `From`** で解く（リテラル多相化はしない）。→ この決定に伴い **F1 の String 裸リテラル推論の loud-error は撤回し `val s = "…"` を素直に String 推論**するよう修正済（`stringTypeSpan` がソース中の "String" 6バイトを span として流用＝既存の名前ベース型機構に乗せる・"String" がソースに皆無の degenerate ケースのみ注釈要求の fallback）。test `run/let_infer_string`。
 
-- **（未決）struct/enum フィールド・variant フィールドの区切り**：spec/05 の例は**改行区切り**のみ。F7 でカンマ区切り struct フィールドを loud-reject にした（`struct P { val x: I32, val y: I32 }` → エラー）。
-  - **確認したいこと**：カンマ区切りも許容したいか（friendlier だが spec に無い）。現状は spec 準拠で改行のみ・カンマ reject。enum variant フィールドの複数列挙の区切りも同様に要確認（現状コンパイラは単一フィールド variant しか使っていない）。
+- **（決定済 2026-06-04）struct フィールド宣言の区切りは改行のみ・カンマ不採用**：spec/05 通り改行区切りで確定（カンマは friendlier だが spec に無いので採らない）。現状の F7（カンマ区切り struct フィールドを loud-reject）が確定挙動＝**コード変更不要**。
+  - **注意（矛盾ではない）**：enum の variant フィールドは `(label: Type)` の**レコード（ラベル付きタプル）と同形**で、レコードはカンマ区切り（`(x: I32, y: I32)`）。よって「struct フィールド宣言＝改行／variant フィールド＝カンマ」は意図的な区別で正しい（parseEnum が variant フィールドでカンマを受けるのは正常）。
 
 ## ② 判断不要・据え置いた実装（メモのみ・順次対応可）
 
