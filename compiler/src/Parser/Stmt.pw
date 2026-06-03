@@ -150,6 +150,13 @@ fn parseTypeParams(c: inout Comp) -> Array[Bind] {
                     }
                     Kind.Eof => { break }
                     Kind.Comma => { c.advance() }
+                    Kind.Colon => {
+                        // inline trait constraint `[T: Trait]` (spec/06: not
+                        // allowed — constraints go in a `where` clause). Reject
+                        // loudly rather than silently dropping it.
+                        compileErrorAt(line: lineOf(c: inout c, offset: c.cur().start), msg: "inline trait constraint is not allowed in `[...]`; use a `where` clause")
+                        c.advance()
+                    }
                     Kind.Ident => {
                         // consume consecutive idents in this entry; the param
                         // name is the last (any leading idents are markers).

@@ -341,6 +341,29 @@ fn parseTrait(c: inout Comp) {
     c.advance()
     val nameTok: Tok = c.cur()
     c.advance()
+    // optional supertraits `: Super [+ Super2]` (spec/08: a constraint).
+    mut val supertraits: Array[Bind] = []
+    match c.curKind() {
+        Kind.Colon => {
+            c.advance()
+            mut val more: Bool = true
+            while more {
+                match c.curKind() {
+                    Kind.Ident => {
+                        val st: Tok = c.cur()
+                        c.advance()
+                        supertraits.append(<Bind nameStart=st.start nameLen=st.len fieldStart=st.start fieldLen=st.len />)
+                    }
+                    _ => {}
+                }
+                match c.curKind() {
+                    Kind.Plus => { c.advance() }
+                    _ => { more = false }
+                }
+            }
+        }
+        _ => {}
+    }
     match c.curKind() {
         Kind.LBrace => { c.advance() }
         _ => {}
@@ -375,7 +398,7 @@ fn parseTrait(c: inout Comp) {
             }
         }
     }
-    c.traits.append(<TraitDef nameStart=nameTok.start nameLen=nameTok.len reqs=reqs />)
+    c.traits.append(<TraitDef nameStart=nameTok.start nameLen=nameTok.len supertraits=supertraits reqs=reqs />)
 }
 
 // Parse a trait requirement signature `name [typeParams] (params) [-> ret]` into

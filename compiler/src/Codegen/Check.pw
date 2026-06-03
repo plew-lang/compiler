@@ -660,6 +660,17 @@ fn checkConformances(c: inout Comp) {
                     }
                     ri += 1
                 }
+                // supertraits (spec/08): conforming to Sub requires conforming to
+                // each Super (a constraint, not auto-implemented).
+                mut val sti: U64 = 0
+                while sti < t.supertraits.count {
+                    val sup: Bind = t.supertraits[sti]
+                    if typeConformsTo(c: inout c, typeStart: cf.typeStart, typeLen: cf.typeLen, traitStart: sup.nameStart, traitLen: sup.nameLen) {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "supertrait not satisfied: this type must also conform to the trait's supertrait")
+                    }
+                    sti += 1
+                }
             }
             ti += 1
         }
@@ -1132,4 +1143,103 @@ fn checkGenericBodies(c: inout Comp) {
     c.locals = []
     c.curHasRecv = false
     c.curCheckFn = c.funcs.count
+}
+
+// Whether two parameter lists have the same label sequence (arity + labels) —
+// the "selector" minus types. Used to detect a generic/concrete overload clash.
+fn sameLabels(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
+    if a.count != b.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.count {
+        if spansEqual(c: inout c, aStart: a[i].nameStart, aLen: a[i].nameLen, bStart: b[i].nameStart, bLen: b[i].nameLen) {
+        } else {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// Reject a generic and another overload that share the same selector (name +
+// labels) — spec/07 forbids a generic-vs-concrete (or generic-vs-generic) clash
+// even if it could otherwise resolve. Free functions only (methods overload per
+// receiver type). Synthesized members are methods/assoc fns and so skipped.
+fn checkOverloadCollisions(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val fi: Func = c.funcs[i]
+        if fi.hasRecv {
+        } else {
+            if fi.isAssoc {
+            } else {
+                mut val j: U64 = i + 1
+                while j < c.funcs.count {
+                    val fj: Func = c.funcs[j]
+                    if fj.hasRecv {
+                    } else {
+                        if fj.isAssoc {
+                        } else {
+                            if spansEqual(c: inout c, aStart: fi.nameStart, aLen: fi.nameLen, bStart: fj.nameStart, bLen: fj.nameLen) {
+                                if sameLabels(c: inout c, a: fi.params, b: fj.params) {
+                                    if fi.typeParams.count > 0 {
+                                        compileErrorAt(line: lineOf(c: inout c, offset: fj.nameStart), msg: "a generic function shares its selector (name + labels) with another overload; spec forbids generic/concrete overload on the same selector")
+                                    } else {
+                                        if fj.typeParams.count > 0 {
+                                            compileErrorAt(line: lineOf(c: inout c, offset: fj.nameStart), msg: "a generic function shares its selector (name + labels) with another overload; spec forbids generic/concrete overload on the same selector")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    j += 1
+                }
+            }
+        }
+        i += 1
+    }
+}
+
+// Reject defining methods on a built-in type (spec/07: anonymous/inherent impl
+// only for a type your module defines; primitives/String are never user-defined,
+// so an `impl I32 { }` / `impl String { }` is always illegal). Trait additions to
+// built-ins go through `#Ext` (deferred).
+fn checkImplOnBuiltin(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        mut val onBuiltin: Bool = false
+        if f.hasRecv {
+            onBuiltin = isPrimType(c: inout c, start: f.recvStart, len: f.recvLen) || rangeEquals(bytes: c.bytes, start: f.recvStart, len: f.recvLen, kw: "String")
+        } else {
+            if f.isAssoc {
+                onBuiltin = isPrimType(c: inout c, start: f.recvStart, len: f.recvLen) || rangeEquals(bytes: c.bytes, start: f.recvStart, len: f.recvLen, kw: "String")
+            }
+        }
+        if onBuiltin {
+            compileErrorAt(line: lineOf(c: inout c, offset: f.nameStart), msg: "cannot define methods on a built-in type")
+        }
+        i += 1
+    }
+}
+
+// Reject `move fn` (consuming self) on a non-unique type (spec/07: a consuming
+// receiver is only meaningful for a unique/move-only type; on a copyable type it
+// is a footgun, like `move` on a copyable parameter).
+fn checkMoveFnReceivers(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.hasRecv {
+            if f.selfMove {
+                if typeIsUnique(c: inout c, start: f.recvStart, len: f.recvLen) {
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: f.nameStart), msg: "`move fn` (consuming self) is only allowed on a unique type")
+                }
+            }
+        }
+        i += 1
+    }
 }

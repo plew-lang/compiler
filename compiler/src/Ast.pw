@@ -269,6 +269,10 @@ struct Variant {
 struct TraitDef {
     val nameStart: U64
     val nameLen: U64
+    // supertraits from `trait Sub: Super + ...` (spec/08): conforming to Sub
+    // requires conforming to each Super (a constraint, not auto-impl). Each entry
+    // reuses Bind as a (start,len) trait-name span.
+    val supertraits: Array[Bind]
     // requirement signatures (spec/08): each a body-less Func carrying the
     // requirement's name, params (labels + types), return type, and isAssoc.
     // The abstract generic type-checker reads these to resolve `x.req(...)` on a

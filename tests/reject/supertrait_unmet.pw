@@ -1,0 +1,7 @@
+import @Std/Io with { print }
+// Conforming to Sub requires conforming to its supertrait Super (spec/08).
+trait Super { fn a() -> I64 }
+trait Sub: Super { fn b() -> I64 }
+struct X { val n: I64 }
+impl X as Sub { fn b() -> I64 { return self.n } }
+fn main() { print(0) }
