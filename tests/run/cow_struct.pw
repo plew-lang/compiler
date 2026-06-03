@@ -1,0 +1,20 @@
+// Copy-on-write through a struct field: `y = x` shares x's `items` buffer, but
+// mutating x.items splits off a private copy so y.items keeps the original. The
+// struct is value-copied and its array field is CoW-shared — observably each
+// binding is an independent value.
+import @Std/Io with { print }
+
+struct Bag {
+    mut val items: Array[I32]
+}
+
+fn main() {
+    mut val x: Bag = <Bag items=[1, 2, 3] />
+    val y: Bag = x
+    x.items[0] = 99
+    x.items.append(4)
+    print(x.items[0])
+    print(y.items[0])
+    print(x.items.count)
+    print(y.items.count)
+}

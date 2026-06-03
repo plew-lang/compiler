@@ -247,11 +247,10 @@ fn genStmt(c: inout Comp, id: U64) {
             if tyIsArray {
                 genArrayValue(c: inout c, exprId: init, elemStart: tyStart, elemLen: tyLen)
             } else {
-                if mutable {
-                    genCopyValue(c: inout c, exprId: init, tyRef: ty, fallStart: tyStart, fallLen: tyLen, isArray: false)
-                } else {
-                    genExpr(c: inout c, id: init)
-                }
+                // CoW: both mutable and immutable bindings share-on-bind (structs
+                // retain heap fields; scalars/Strings/fresh values emit directly).
+                // The mutable/immutable split now only governs assignability.
+                genCopyValue(c: inout c, exprId: init, tyRef: ty, fallStart: tyStart, fallLen: tyLen, isArray: false)
             }
             write(s: ";\n")
             addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)

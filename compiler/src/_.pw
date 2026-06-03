@@ -228,6 +228,8 @@ fn main() {
         } else {
             if structNeedsCopy(c: inout c, start: cs.nameStart, len: cs.nameLen) {
                 emitStructCopyProto(c: inout c, si: scp)
+                emitStructShareProto(c: inout c, si: scp)
+                emitStructReleaseProto(c: inout c, si: scp)
             }
         }
         scp += 1
@@ -239,6 +241,8 @@ fn main() {
         } else {
             if structNeedsCopy(c: inout c, start: cs2.nameStart, len: cs2.nameLen) {
                 emitStructCopyDef(c: inout c, si: scd)
+                emitStructShareDef(c: inout c, si: scd)
+                emitStructReleaseDef(c: inout c, si: scd)
             }
         }
         scd += 1

@@ -97,6 +97,95 @@ fn emitStructCopyDef(c: inout Comp, si: U64) {
     write(s: " return r; }\n")
 }
 
+// `Name Name_share(Name s);` prototype.
+fn emitStructShareProto(c: inout Comp, si: U64) {
+    val s: StructDef = c.structs[si]
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: " ")
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: "_share(")
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: " s);\n")
+}
+
+// `Name Name_share(Name s) { plew_arc_retain(s.arr.rc); Field_share(s.f); return s; }`
+// — CoW share of a struct: retain each owned heap field's buffer and alias the
+// struct (shallow). The binding gets its own ref on every shared buffer.
+fn emitStructShareDef(c: inout Comp, si: U64) {
+    val s: StructDef = c.structs[si]
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: " ")
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: "_share(")
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: " s) {")
+    val fields: Array[FieldDef] = s.fields
+    mut val i: U64 = 0
+    while i < fields.count {
+        val f: FieldDef = fields[i]
+        if f.tyIsArray {
+            write(s: " plew_arc_retain(s.")
+            writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+            write(s: ".rc);")
+        } else {
+            if structNeedsCopy(c: inout c, start: f.tyStart, len: f.tyLen) {
+                write(s: " ")
+                writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
+                write(s: "_share(s.")
+                writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                write(s: ");")
+            }
+        }
+        i += 1
+    }
+    write(s: " return s; }\n")
+}
+
+// `void Name_release(Name s);` prototype.
+fn emitStructReleaseProto(c: inout Comp, si: U64) {
+    val s: StructDef = c.structs[si]
+    write(s: "void ")
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: "_release(")
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: " s);\n")
+}
+
+// `void Name_release(Name s) { plew_arc_release(s.arr.rc); Field_release(s.f); }`
+// — release a struct's owned heap fields. Array fields are buffer-only (their
+// struct elements' inner buffers are shared by the shallow array copy, so
+// recursing would double-free — matches genArray copy's documented gap). Safe
+// now that struct bindings retain-on-share (so a released struct's fields are
+// genuinely co-owned, not aliased without a refcount).
+fn emitStructReleaseDef(c: inout Comp, si: U64) {
+    val s: StructDef = c.structs[si]
+    write(s: "void ")
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: "_release(")
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    write(s: " s) {")
+    val fields: Array[FieldDef] = s.fields
+    mut val i: U64 = 0
+    while i < fields.count {
+        val f: FieldDef = fields[i]
+        if f.tyIsArray {
+            write(s: " plew_arc_release(s.")
+            writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+            write(s: ".rc);")
+        } else {
+            if structNeedsCopy(c: inout c, start: f.tyStart, len: f.tyLen) {
+                write(s: " ")
+                writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
+                write(s: "_release(s.")
+                writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                write(s: ");")
+            }
+        }
+        i += 1
+    }
+    write(s: " }\n")
+}
+
 // Does a monomorphized generic struct instantiation need a deep copy? True if
 // any field, after substituting the instantiation's type args, is an array.
 // (Nested mono-struct fields needing copy are deferred.)
@@ -262,8 +351,9 @@ fn emitMonoEnumCopyDef(c: inout Comp, instRef: U64) {
 fn genStructValue(c: inout Comp, exprId: U64, structStart: U64, structLen: U64) {
     if isPlaceExpr(c: inout c, id: exprId) {
         if structNeedsCopy(c: inout c, start: structStart, len: structLen) {
+            // CoW: share (retain heap fields) instead of deep-copying.
             writeSpan(c: inout c, start: structStart, len: structLen)
-            write(s: "_copy(")
+            write(s: "_share(")
             genExpr(c: inout c, id: exprId)
             write(s: ")")
             return
