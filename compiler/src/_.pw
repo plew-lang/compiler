@@ -46,6 +46,16 @@ fn main() {
         // into a single buffer (the compiler is single-arena / single-C-output).
         val rootPath: String = argAt(1)
         val entryBytes: Array[U8] = rootPath.bytes
+        // Loud-fail on a missing entry file: without this readFileBytes returns an
+        // empty string and the compiler silently emits an empty program (exit 0),
+        // which hides a typo'd path. (Acceptance soundness: never silently accept.)
+        if fileExists(path: entryBytes) {
+        } else {
+            eprint(text: "plewc: error: cannot open source file: ")
+            eprint(text: rootPath)
+            eprint(text: "\n")
+            exit(code: 1)
+        }
         mut val pathBuf: Array[U8] = []
         mut val loaded: Array[Bind] = []
         // package src root for `/…` absolute imports (from the Plew.toml walk-up;

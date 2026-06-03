@@ -456,6 +456,12 @@ fn parseStruct(c: inout Comp, isUnique: Bool) {
                 break
             }
             Kind.Eof => { break }
+            Kind.Comma => {
+                // Struct fields are newline-separated (spec/05). A comma would
+                // otherwise be swallowed as an empty-named field (`long long ,;`),
+                // so reject it loudly instead of miscompiling.
+                compileErrorAt(line: lineOf(c: inout c, offset: c.cur().start), msg: "struct fields are separated by newlines, not commas")
+            }
             Kind.KwDeinit => {
                 // `deinit { body }` written in the struct body (spec/03's primary
                 // form). Same lowering as the impl form: a synthetic

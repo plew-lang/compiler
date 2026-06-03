@@ -1,0 +1,6 @@
+import @Std/Io with { print }
+struct P { val x: I32, val y: I32 }
+fn main() {
+    val p: P = <P x=1 y=2 />
+    print(p.x)
+}

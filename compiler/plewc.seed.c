@@ -1075,6 +1075,14 @@ int main(int argc, char** argv) {
     if (plew_arg_count() > 1) {
     PlewString rootPath = plew_arg_at((long long)(1));
     PlewArray_U8 entryBytes = PlewArray_U8_share(({ PlewString __s = rootPath; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; }));
+    if (plew_file_exists(entryBytes)) {
+    }
+    else {
+    plew_eprint((PlewString){"plewc: error: cannot open source file: ", 39});
+    plew_eprint(rootPath);
+    plew_eprint((PlewString){"\n", 1});
+    exit((int)(1));
+    }
     PlewArray_U8 pathBuf = PlewArray_U8_new();
     PlewArray_Bind loaded = PlewArray_Bind_new();
     PlewArray_U8 srcRoot = findSrcRoot_entry_AU8(entryBytes);
@@ -3881,6 +3889,9 @@ void parseStruct_c_Comp_isUnique_Bool(Comp* c, long long isUnique) {
     }
     else if (_m246.tag == 0) {
     break;
+    }
+    else if (_m246.tag == 35) {
+    compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), Comp_cur(&((*c))).start), (PlewString){"struct fields are separated by newlines, not commas", 51});
     }
     else if (_m246.tag == 24) {
     Tok deinitTok = Comp_cur(&((*c)));
