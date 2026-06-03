@@ -1,0 +1,11 @@
+import @Std/Io with { print }
+// Two conformed traits both provide `foo()`; the bare call is ambiguous.
+trait P {} impl P { fn foo() -> I64 { return 1I64 } }
+trait Q {} impl Q { fn foo() -> I64 { return 2I64 } }
+struct A { val x: I64 }
+impl A as P {}
+impl A as Q {}
+fn main() {
+    val a: A = <A x=0 />
+    print(a.foo())
+}

@@ -713,9 +713,27 @@ fn checkViaTargets(c: inout Comp) {
     }
 }
 
+// Built-in conformance of primitives/String to Eq/Ord (spec/12: numeric types,
+// Bool, String are Eq/Ord without an explicit impl). Lets `where T: Eq`/`: Ord`
+// be instantiated with a primitive (the canonical `max`/`min` over numbers).
+fn builtinEqOrd(c: inout Comp, typeStart: U64, typeLen: U64, traitStart: U64, traitLen: U64) -> Bool {
+    val isEqOrd: Bool = rangeEquals(bytes: c.bytes, start: traitStart, len: traitLen, kw: "Eq") || rangeEquals(bytes: c.bytes, start: traitStart, len: traitLen, kw: "Ord")
+    if isEqOrd {
+        if isPrimType(c: inout c, start: typeStart, len: typeLen) {
+            return true
+        }
+        return rangeEquals(bytes: c.bytes, start: typeStart, len: typeLen, kw: "String")
+    }
+    return false
+}
+
 // Whether the type named (typeStart,typeLen) conforms to the trait named
-// (traitStart,traitLen) — i.e. an `impl Type as Trait` was recorded (spec/08).
+// (traitStart,traitLen) — i.e. an `impl Type as Trait` was recorded (spec/08),
+// or it is a built-in Eq/Ord conformance of a primitive/String.
 fn typeConformsTo(c: inout Comp, typeStart: U64, typeLen: U64, traitStart: U64, traitLen: U64) -> Bool {
+    if builtinEqOrd(c: inout c, typeStart: typeStart, typeLen: typeLen, traitStart: traitStart, traitLen: traitLen) {
+        return true
+    }
     mut val i: U64 = 0
     while i < c.conforms.count {
         val cf: Conform = c.conforms[i]

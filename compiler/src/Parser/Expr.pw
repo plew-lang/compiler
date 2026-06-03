@@ -412,6 +412,13 @@ fn parseBin(c: inout Comp, minPrec: I64) -> U64 {
                 c.advance()
                 val right: U64 = parseBin(c: inout c, minPrec: prec + 1)
                 left = c.pushExpr(e: <Expr.Binary op=op lhs=left rhs=right />)
+                // comparison/equality operators are non-associative (spec/12):
+                // `a < b < c` / `a == b == c` are syntax errors — require parens.
+                if prec == 3 {
+                    if binPrec(k: c.curKind()) == 3 {
+                        compileErrorAt(line: lineOf(c: inout c, offset: c.cur().start), msg: "comparison operators are non-associative; add parentheses (e.g. `(a < b) && (b < c)`)")
+                    }
+                }
             }
         }
     }

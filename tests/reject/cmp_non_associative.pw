@@ -1,0 +1,10 @@
+import @Std/Io with { print }
+// Comparison/equality is non-associative (spec/12): `a == b == c` is a syntax
+// error (would silently misread as "three are equal").
+fn main() {
+    val a: I64 = 1
+    val b: I64 = 1
+    val c: I64 = 1
+    val r: Bool = a == b == c
+    print(0)
+}

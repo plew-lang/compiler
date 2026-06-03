@@ -37,6 +37,24 @@ fn methodRecvIsTrait(c: inout Comp, f: Func) -> Bool {
 // = the trait), append a copy with receiver = Type, sharing the same body — so
 // codegen emits `Type_p`, whose `self.req()` resolves to Type's witness. Runs
 // once after parsing, before instantiation discovery and codegen.
+// Whether a method named (nameStart,nameLen) on receiver (recvStart,recvLen)
+// exists in c.funcs[lo..hi). Used to detect provided-method shadowing/collision.
+fn methodInRange(c: inout Comp, lo: U64, hi: U64, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
+    mut val i: U64 = lo
+    while i < hi {
+        val f: Func = c.funcs[i]
+        if f.hasRecv {
+            if spansEqual(c: inout c, aStart: f.recvStart, aLen: f.recvLen, bStart: recvStart, bLen: recvLen) {
+                if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: nameStart, bLen: nameLen) {
+                    return true
+                }
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
 fn instantiateProvidedMethods(c: inout Comp) {
     val nFuncs: U64 = c.funcs.count
     mut val ci: U64 = 0
@@ -47,7 +65,19 @@ fn instantiateProvidedMethods(c: inout Comp) {
             val f: Func = c.funcs[fi]
             if f.hasRecv {
                 if spansEqual(c: inout c, aStart: f.recvStart, aLen: f.recvLen, bStart: cf.traitStart, bLen: cf.traitLen) {
-                    c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen typeParams=f.typeParams params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc />)
+                    // shadowing/collision (spec/08): an inherent method of the same
+                    // name on the type wins (skip the provided copy); a provided
+                    // method already copied from another trait collides — the bare
+                    // call would be ambiguous, so error (use-site `#`-disambiguation
+                    // is not yet supported).
+                    if methodInRange(c: inout c, lo: 0, hi: nFuncs, recvStart: cf.typeStart, recvLen: cf.typeLen, nameStart: f.nameStart, nameLen: f.nameLen) {
+                    } else {
+                        if methodInRange(c: inout c, lo: nFuncs, hi: c.funcs.count, recvStart: cf.typeStart, recvLen: cf.typeLen, nameStart: f.nameStart, nameLen: f.nameLen) {
+                            compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "two conformed traits provide a method of the same name; the bare call is ambiguous (`#`-disambiguation not yet supported)")
+                        } else {
+                            c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen typeParams=f.typeParams params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc />)
+                        }
+                    }
                 }
             }
             fi += 1
