@@ -379,7 +379,41 @@ fn typeInfoOfName(c: inout Comp, start: U64, len: U64, isArray: Bool) -> TypeInf
 }
 
 fn addLocal(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool) {
-    c.locals.append(<Local nameStart=nameStart nameLen=nameLen tyStart=tyStart tyLen=tyLen isArray=isArray ty=ty isInout=isInout isMut=isMut owned=owned moved=false />)
+    addLocalCn(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: isArray, ty: ty, isInout: isInout, isMut: isMut, owned: owned, cnum: 0)
+}
+
+// Like addLocal but with an explicit C-name disambiguator (see Local.cnum).
+fn addLocalCn(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool, cnum: U64) {
+    c.locals.append(<Local nameStart=nameStart nameLen=nameLen tyStart=tyStart tyLen=tyLen isArray=isArray ty=ty isInout=isInout isMut=isMut owned=owned moved=false cnum=cnum />)
+}
+
+// How many currently-live locals already carry this name (used by `let`
+// bindings to pick a fresh C-name suffix so shadowing doesn't collide in C).
+fn shadowCount(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
+    mut val n: U64 = 0
+    mut val i: U64 = 0
+    while i < c.locals.count {
+        val lo: Local = c.locals[i]
+        if spansEqual(c: inout c, aStart: lo.nameStart, aLen: lo.nameLen, bStart: nameStart, bLen: nameLen) {
+            n += 1
+        }
+        i += 1
+    }
+    return n
+}
+
+// Emit a local's C name, with its shadowing suffix when it has one.
+fn writeLocalCName(c: inout Comp, lo: Local) {
+    writeNameCn(c: inout c, start: lo.nameStart, len: lo.nameLen, cnum: lo.cnum)
+}
+
+// Emit `<name>` or, when cnum>0, `<name>_s<cnum>` (the shadowing-safe C name).
+fn writeNameCn(c: inout Comp, start: U64, len: U64, cnum: U64) {
+    writeSpan(c: inout c, start: start, len: len)
+    if cnum > 0 {
+        write(s: "_s")
+        writeU64(n: cnum)
+    }
 }
 
 // --- scope frames (the ARC drop backbone) ---
@@ -423,26 +457,26 @@ fn emitScopeDrops(c: inout Comp, mark: U64, exclIdx: U64) {
                 write(s: "    ")
                 wPA(c: inout c, elemStart: lo.tyStart, elemLen: lo.tyLen)
                 write(s: "_release(")
-                writeSpan(c: inout c, start: lo.nameStart, len: lo.nameLen)
+                writeLocalCName(c: inout c, lo: lo)
                 write(s: ");\n")
             } else {
                 if isBoxedLocalAt(c: inout c, nameStart: lo.nameStart) {
                     // a boxed (captured `mut val`) cell: drop this scope's reference
                     // to the shared ARC cell (a capturing closure holds its own).
                     write(s: "    plew_arc_release(((long long*)")
-                    writeSpan(c: inout c, start: lo.nameStart, len: lo.nameLen)
+                    writeLocalCName(c: inout c, lo: lo)
                     write(s: ") - 1);\n")
                 } else {
                 if isFnType(c: inout c, ref: lo.ty) {
                     // an owned closure: release its env (runs drop = release the
                     // captured heap, then frees the env block) at the last ref.
                     write(s: "    plew_closure_release(")
-                    writeSpan(c: inout c, start: lo.nameStart, len: lo.nameLen)
+                    writeLocalCName(c: inout c, lo: lo)
                     write(s: ");\n")
                 } else {
                 if isRefInst(c: inout c, ref: lo.ty) {
                     // an owned Ref local: release its refcounted box.
-                    emitRefRelease(c: inout c, nameStart: lo.nameStart, nameLen: lo.nameLen, refTy: lo.ty)
+                    emitRefRelease(c: inout c, nameStart: lo.nameStart, nameLen: lo.nameLen, refTy: lo.ty, cnum: lo.cnum)
                 } else {
                     // a unique type's owned local runs `deinit` first (spec/03:
                     // type body before fields), then field release below. The call
@@ -452,7 +486,7 @@ fn emitScopeDrops(c: inout Comp, mark: U64, exclIdx: U64) {
                         write(s: "    ")
                         writeSpan(c: inout c, start: lo.tyStart, len: lo.tyLen)
                         write(s: "_deinit(")
-                        writeSpan(c: inout c, start: lo.nameStart, len: lo.nameLen)
+                        writeLocalCName(c: inout c, lo: lo)
                         write(s: ");\n")
                     }
                     // an owned struct local that owns heap fields: release them.
@@ -464,7 +498,7 @@ fn emitScopeDrops(c: inout Comp, mark: U64, exclIdx: U64) {
                         write(s: "    ")
                         writeSpan(c: inout c, start: lo.tyStart, len: lo.tyLen)
                         write(s: "_release(")
-                        writeSpan(c: inout c, start: lo.nameStart, len: lo.nameLen)
+                        writeLocalCName(c: inout c, lo: lo)
                         write(s: ");\n")
                     }
                 }
@@ -480,19 +514,19 @@ fn emitScopeDrops(c: inout Comp, mark: U64, exclIdx: U64) {
 // Release an owned Ref local: drop the box's refcount (header before the
 // pointee); at zero, release the boxed value if it owns heap (an array or a
 // heap-owning struct) then free the box.
-fn emitRefRelease(c: inout Comp, nameStart: U64, nameLen: U64, refTy: U64) {
+fn emitRefRelease(c: inout Comp, nameStart: U64, nameLen: U64, refTy: U64, cnum: U64) {
     val rt: TypeRef = c.types[refTy]
     val bti: TypeInfo = typeInfoOfRef(c: inout c, ref: rt.args[0])
     write(s: "    if (")
-    writeSpan(c: inout c, start: nameStart, len: nameLen)
+    writeNameCn(c: inout c, start: nameStart, len: nameLen, cnum: cnum)
     write(s: ") { long long* __rrc = ((long long*)")
-    writeSpan(c: inout c, start: nameStart, len: nameLen)
+    writeNameCn(c: inout c, start: nameStart, len: nameLen, cnum: cnum)
     write(s: ") - 1; if ((--(*__rrc)) == 0) {")
     if bti.kind == 3 {
         write(s: " ")
         wPA(c: inout c, elemStart: bti.nameStart, elemLen: bti.nameLen)
         write(s: "_release(*")
-        writeSpan(c: inout c, start: nameStart, len: nameLen)
+        writeNameCn(c: inout c, start: nameStart, len: nameLen, cnum: cnum)
         write(s: ");")
     } else {
         if bti.kind == 2 {
@@ -502,14 +536,14 @@ fn emitRefRelease(c: inout Comp, nameStart: U64, nameLen: U64, refTy: U64) {
                 write(s: " ")
                 writeSpan(c: inout c, start: bti.nameStart, len: bti.nameLen)
                 write(s: "_deinit(*")
-                writeSpan(c: inout c, start: nameStart, len: nameLen)
+                writeNameCn(c: inout c, start: nameStart, len: nameLen, cnum: cnum)
                 write(s: ");")
             }
             if structNeedsRelease(c: inout c, start: bti.nameStart, len: bti.nameLen) {
                 write(s: " ")
                 writeSpan(c: inout c, start: bti.nameStart, len: bti.nameLen)
                 write(s: "_release(*")
-                writeSpan(c: inout c, start: nameStart, len: nameLen)
+                writeNameCn(c: inout c, start: nameStart, len: nameLen, cnum: cnum)
                 write(s: ");")
             }
         }
@@ -675,7 +709,7 @@ fn markMovedLocal(c: inout Comp, start: U64, len: U64) {
     while j < c.locals.count {
         val lo: Local = c.locals[j]
         if j == target {
-            rebuilt.append(<Local nameStart=lo.nameStart nameLen=lo.nameLen tyStart=lo.tyStart tyLen=lo.tyLen isArray=lo.isArray ty=lo.ty isInout=lo.isInout isMut=lo.isMut owned=lo.owned moved=true />)
+            rebuilt.append(<Local nameStart=lo.nameStart nameLen=lo.nameLen tyStart=lo.tyStart tyLen=lo.tyLen isArray=lo.isArray ty=lo.ty isInout=lo.isInout isMut=lo.isMut owned=lo.owned moved=true cnum=lo.cnum />)
         } else {
             rebuilt.append(lo)
         }

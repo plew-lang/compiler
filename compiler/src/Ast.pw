@@ -74,6 +74,12 @@ struct Local {
     // this local is dead — using it again is an error and it is NOT released at
     // scope exit (the new owner releases). Set during codegen as moves are seen.
     val moved: Bool
+    // shadowing disambiguator for the emitted C name (spec/03,11: shadowing is
+    // unlimited). 0 = emit the bare source name; N>0 = emit `<name>_sN` so two
+    // same-named `val`/`mut val` bindings in one block don't collide in C. Only
+    // `let` bindings ever get N>0 (for-vars/match-binds/params open nested C
+    // scopes, so C shadowing covers them and they stay 0).
+    val cnum: U64
 }
 
 // The recovered type of an expression. kind: 0 scalar (long long), 1 String,

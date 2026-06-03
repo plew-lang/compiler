@@ -408,6 +408,11 @@ fn genStmt(c: inout Comp, id: U64) {
             // unique values are move-only: `val g = f` (a bare unique place) is a
             // forbidden copy — require `val g = move f`.
             checkUniquePlaceCopy(c: inout c, exprId: init, inoutOk: false)
+            // shadowing (spec/03,11 — unlimited): if this name already names a
+            // live local, give the C variable a fresh suffix so two same-named
+            // bindings in one block don't collide. Computed before addLocal so it
+            // counts only the prior bindings.
+            val cnum: U64 = shadowCount(c: inout c, nameStart: nameStart, nameLen: nameLen)
             // a `mut val` captured by a closure is heap-boxed (an implicit ARC
             // cell) so the closure and this scope share one storage. The C local
             // is a pointer; reads/writes dereference it (genExpr handles that).
@@ -415,23 +420,23 @@ fn genStmt(c: inout Comp, id: U64) {
                 write(s: "    ")
                 genCTypeOf(c: inout c, tyRef: effTy, fallStart: effStart, fallLen: effLen, isArray: effArr)
                 write(s: "* ")
-                writeSpan(c: inout c, start: nameStart, len: nameLen)
+                writeNameCn(c: inout c, start: nameStart, len: nameLen, cnum: cnum)
                 write(s: " = (")
                 genCTypeOf(c: inout c, tyRef: effTy, fallStart: effStart, fallLen: effLen, isArray: effArr)
                 write(s: "*)plew_arc_alloc(sizeof(")
                 genCTypeOf(c: inout c, tyRef: effTy, fallStart: effStart, fallLen: effLen, isArray: effArr)
                 write(s: ")); *")
-                writeSpan(c: inout c, start: nameStart, len: nameLen)
+                writeNameCn(c: inout c, start: nameStart, len: nameLen, cnum: cnum)
                 write(s: " = ")
                 genExpr(c: inout c, id: init)
                 write(s: ";\n")
-                addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: effStart, tyLen: effLen, isArray: effArr, ty: effTy, isInout: false, isMut: mutable, owned: true)
+                addLocalCn(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: effStart, tyLen: effLen, isArray: effArr, ty: effTy, isInout: false, isMut: mutable, owned: true, cnum: cnum)
                 return
             }
             write(s: "    ")
             genCTypeOf(c: inout c, tyRef: effTy, fallStart: effStart, fallLen: effLen, isArray: effArr)
             write(s: " ")
-            writeSpan(c: inout c, start: nameStart, len: nameLen)
+            writeNameCn(c: inout c, start: nameStart, len: nameLen, cnum: cnum)
             write(s: " = ")
             if effArr {
                 genArrayValue(c: inout c, exprId: init, elemStart: effStart, elemLen: effLen)
@@ -442,7 +447,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 genCopyValue(c: inout c, exprId: init, tyRef: effTy, fallStart: effStart, fallLen: effLen, isArray: false)
             }
             write(s: ";\n")
-            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: effStart, tyLen: effLen, isArray: effArr, ty: effTy, isInout: false, isMut: mutable, owned: true)
+            addLocalCn(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: effStart, tyLen: effLen, isArray: effArr, ty: effTy, isInout: false, isMut: mutable, owned: true, cnum: cnum)
         }
         Stmt.Assign { val op, val target, val value } => {
             val te: Expr = c.exprs[target]

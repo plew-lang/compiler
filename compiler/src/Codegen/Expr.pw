@@ -127,10 +127,10 @@ fn genExpr(c: inout Comp, id: U64) {
                     // the C variable is the pointer, so dereference to read/write it.
                     if isBoxedLocalAt(c: inout c, nameStart: c.locals[lvi].nameStart) {
                         write(s: "(*")
-                        writeSpan(c: inout c, start: start, len: len)
+                        writeLocalCName(c: inout c, lo: c.locals[lvi])
                         write(s: ")")
                     } else {
-                        writeSpan(c: inout c, start: start, len: len)
+                        writeLocalCName(c: inout c, lo: c.locals[lvi])
                     }
                 } else {
                     val fvi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)

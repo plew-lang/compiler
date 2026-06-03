@@ -1,0 +1,22 @@
+// F2: shadowing (spec/03,11 — unlimited). Re-declaring a name in the same
+// block must not collide in the generated C.
+import @Std/Io with { print }
+
+struct P {
+    val x: I32
+}
+
+fn main() {
+    val n: I32 = 1
+    val n: I32 = n + 10
+    val n: I32 = n + 100
+    print(n)
+    // shadow with a different type (struct), then read a field
+    val v: I32 = 5
+    val v: P = <P x=42 />
+    print(v.x)
+    // shadow an array binding, mutate the copy
+    mut val a: Array[I32] = [1, 2, 3]
+    val a: Array[I32] = a
+    print(a[0] + a[2])
+}

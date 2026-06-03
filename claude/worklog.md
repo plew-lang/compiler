@@ -9,9 +9,9 @@
 > - **F2〔大〕** 同一ブロック内シャドーイング `val x=1; val x=2` が C `redefinition`（ネストブロックは OK）。spec/03,11＝無制限 shadowing。修正＝shadow した local を C 名でユニーク化（suffix）。
 > - **F3〔大・feature 規模〕** トップレベル変数 `val`/`mut val` を `parseProgram`（Parser/Decl.pw:988）が処理せず1トークンずつ黙殺＝"undeclared identifier"・エラーも出ない silent 剥離。spec/15 の init 順（全トップレベル/assoc val→main）が絡む。
 > - **F4〔中〕** struct 分解パターン `P { val x, val y }`（spec/11:70,129 正典）が match/for で catch-all 誤診断で落ちる（enum バリアント分解は OK）。
-> - **F5〔小〕** 存在しない入力ファイルで plewc が rc=0（preamble だけ吐く）＝loud-fail すべき。
+> - **F5〔小・✅修正済〕** 存在しない入力ファイルで plewc が rc=0（preamble だけ吐く）。修正＝`main`（_.pw）で entry を `fileExists` 検証し `cannot open source file: <path>` で exit(1)。
 > - **F6〔小・既知〕** `;` 文区切り誤診断・catch-all 誤診断全般。
-> - **F7〔小〕** カンマ区切り struct フィールド `struct P { val x: I32, val y: I32 }` が**幻の空フィールド `long long ,;` を生成**（spec はフィールド改行区切り＝カンマ非対応）。loud-reject すべき（silent 剥離）。
+> - **F7〔小・✅修正済〕** カンマ区切り struct フィールドが幻の空フィールド `long long ,;` を生成。修正＝`parseStruct` のフィールドループに `Kind.Comma` の loud-reject（spec はフィールド改行区切り）。test `reject/struct_comma_fields`。
 > - **別の小ギャップ** Ref 構築 `<Ref[I32] value=7/>` の `value=` 内リテラルが Ref[I32] の T から型付けされず注釈ありでも落ちる（要 suffix）。
 > - 非バグ＝`print` の String 非対応は整数専用 placeholder shim（仕様面でない）。
 > 推奨順＝F1→F2→F4→F3（F1/F2 は局所修正で広範な有効コードが通る）。
