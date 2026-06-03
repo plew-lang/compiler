@@ -1,0 +1,10 @@
+// Reassigning a unique place would copy the RHS place (double deinit) and drop the
+// old value without deinit. Rejected until deinit-on-reassign exists.
+import @Std/Io with { write, print }
+unique struct File { val fd: I64  deinit { print(self.fd) } }
+fn main() {
+    mut val x: File = <File fd=1 />
+    val a: File = <File fd=2 />
+    x = a
+    write(s: "end\n")
+}

@@ -333,6 +333,16 @@ fn genStmt(c: inout Comp, id: U64) {
                         return
                     }
                     val ctt: TypeInfo = exprType(c: inout c, id: target)
+                    // reassigning a unique place would copy a place RHS (double
+                    // deinit) and overwrite the old value without deinit (its deinit
+                    // skipped). Both are unsound; reject until deinit-on-reassign
+                    // lands. Bind a new `val` instead.
+                    if ctt.kind == 2 {
+                        if typeIsUnique(c: inout c, start: ctt.nameStart, len: ctt.nameLen) {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "reassigning a unique value is not yet supported (the previous value's deinit would be skipped); bind a new `val`")
+                            return
+                        }
+                    }
                     if ctt.kind == 3 {
                         checkLitArray(c: inout c, id: value, elemStart: ctt.nameStart, elemLen: ctt.nameLen)
                     } else {

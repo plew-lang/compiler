@@ -1,0 +1,15 @@
+import @Std/Io with { write, print }
+
+// A unique value can be moved into a struct field at construction; the source is
+// consumed, so deinit runs exactly once (via the new owner).
+unique struct File {
+    val fd: I64
+    deinit { print(self.fd) }
+}
+unique struct Holder { val f: File }
+
+fn main() {
+    val a: File = <File fd=7 />
+    val h: Holder = <Holder f=move a />   // a moved into h.f
+    write(s: "end\n")                      // h destroyed at exit: deinit prints 7 once
+}

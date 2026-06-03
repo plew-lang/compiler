@@ -565,6 +565,9 @@ fn checkMakeFields(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U6
     mut val i: U64 = 0
     while i < fields.count {
         val mf: MakeField = fields[i]
+        // a unique field value must be moved/constructed in, not copied from a
+        // place (which would double-deinit: the source and the new owner).
+        checkUniquePlaceCopy(c: inout c, exprId: mf.value, inoutOk: false)
         mut val ft: TypeInfo = scalarInfo()
         if isGenericEnumInst(c: inout c, ref: ty) {
             ft = genericEnumFieldTypeInfo(c: inout c, instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)

@@ -6315,6 +6315,7 @@ void checkMakeFields(Comp* c, uint64_t typeStart, uint64_t typeLen, uint64_t var
     uint64_t i = 0;
     while (i < (long long)((fields).len)) {
     MakeField mf = PlewArray_MakeField_get(fields, (long long)(i));
+    checkUniquePlaceCopy(&((*c)), mf.value, 0);
     TypeInfo ft = scalarInfo();
     if (isGenericEnumInst(&((*c)), ty)) {
     ft = genericEnumFieldTypeInfo(&((*c)), ty, variantStart, variantLen, mf.nameStart, mf.nameLen);
@@ -7603,6 +7604,12 @@ void genStmt(Comp* c, uint64_t id) {
     return;
     }
     TypeInfo ctt = exprType(&((*c)), target);
+    if (ctt.kind == 2) {
+    if (typeIsUnique(&((*c)), ctt.nameStart, ctt.nameLen)) {
+    compileErrorAt(lineOf(&((*c)), exprOffset(&((*c)), target)), (PlewString){"reassigning a unique value is not yet supported (the previous value's deinit would be skipped); bind a new `val`", 112});
+    return;
+    }
+    }
     if (ctt.kind == 3) {
     checkLitArray(&((*c)), value, ctt.nameStart, ctt.nameLen);
     }

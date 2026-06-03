@@ -1,0 +1,10 @@
+// Constructing a struct with a unique field from a bare place copies the unique
+// value (double deinit). Require `move` (or a fresh value).
+import @Std/Io with { write }
+unique struct File { val fd: I64 }
+unique struct Holder { val f: File }
+fn main() {
+    val a: File = <File fd=7 />
+    val h: Holder = <Holder f=a />
+    write(s: "x\n")
+}
