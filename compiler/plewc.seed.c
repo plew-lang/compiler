@@ -7606,7 +7606,30 @@ void genStmt(Comp* c, uint64_t id) {
     TypeInfo ctt = exprType(&((*c)), target);
     if (ctt.kind == 2) {
     if (typeIsUnique(&((*c)), ctt.nameStart, ctt.nameLen)) {
-    compileErrorAt(lineOf(&((*c)), exprOffset(&((*c)), target)), (PlewString){"reassigning a unique value is not yet supported (the previous value's deinit would be skipped); bind a new `val`", 112});
+    if (op == 49) {
+    }
+    else {
+    compileErrorAt(lineOf(&((*c)), exprOffset(&((*c)), target)), (PlewString){"compound assignment is not valid for a unique value", 51});
+    return;
+    }
+    checkUniquePlaceCopy(&((*c)), value, 0);
+    plew_write((PlewString){"    ", 4});
+    if (structHasDeinit(&((*c)), ctt.nameStart, ctt.nameLen)) {
+    writeSpan(&((*c)), ctt.nameStart, ctt.nameLen);
+    plew_write((PlewString){"_deinit(", 8});
+    genExpr(&((*c)), target);
+    plew_write((PlewString){"); ", 3});
+    }
+    if (structNeedsRelease(&((*c)), ctt.nameStart, ctt.nameLen)) {
+    writeSpan(&((*c)), ctt.nameStart, ctt.nameLen);
+    plew_write((PlewString){"_release(", 9});
+    genExpr(&((*c)), target);
+    plew_write((PlewString){"); ", 3});
+    }
+    genExpr(&((*c)), target);
+    plew_write((PlewString){" = ", 3});
+    genCopyValue(&((*c)), value, ctt.ref, ctt.nameStart, ctt.nameLen, 0);
+    plew_write((PlewString){";\n", 2});
     return;
     }
     }

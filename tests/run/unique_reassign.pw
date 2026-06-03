@@ -1,0 +1,18 @@
+import @Std/Io with { write, print }
+
+// Reassigning a `mut val` unique deinits the previous value first (deterministic),
+// then takes ownership of the new (moved or freshly constructed) one — each value's
+// deinit runs exactly once.
+unique struct File {
+    val fd: I64
+    deinit { print(self.fd) }
+}
+
+fn main() {
+    mut val x: File = <File fd=1 />
+    val y: File = <File fd=2 />
+    x = move y                  // deinit old x (1); x owns 2
+    write(s: "mid\n")
+    x = <File fd=3 />           // deinit old x (2); x owns 3
+    write(s: "end\n")
+}                               // x deinit (3) at scope exit

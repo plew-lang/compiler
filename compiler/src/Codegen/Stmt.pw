@@ -333,13 +333,35 @@ fn genStmt(c: inout Comp, id: U64) {
                         return
                     }
                     val ctt: TypeInfo = exprType(c: inout c, id: target)
-                    // reassigning a unique place would copy a place RHS (double
-                    // deinit) and overwrite the old value without deinit (its deinit
-                    // skipped). Both are unsound; reject until deinit-on-reassign
-                    // lands. Bind a new `val` instead.
+                    // reassigning a unique place: deinit the previous value first
+                    // (deterministic — it would otherwise be skipped), then store the
+                    // new one. The RHS must be moved/fresh, not a copied place (which
+                    // would double-deinit). Only plain `=` is valid for a unique.
                     if ctt.kind == 2 {
                         if typeIsUnique(c: inout c, start: ctt.nameStart, len: ctt.nameLen) {
-                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "reassigning a unique value is not yet supported (the previous value's deinit would be skipped); bind a new `val`")
+                            if op == 49 {
+                            } else {
+                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "compound assignment is not valid for a unique value")
+                                return
+                            }
+                            checkUniquePlaceCopy(c: inout c, exprId: value, inoutOk: false)
+                            write(s: "    ")
+                            if structHasDeinit(c: inout c, start: ctt.nameStart, len: ctt.nameLen) {
+                                writeSpan(c: inout c, start: ctt.nameStart, len: ctt.nameLen)
+                                write(s: "_deinit(")
+                                genExpr(c: inout c, id: target)
+                                write(s: "); ")
+                            }
+                            if structNeedsRelease(c: inout c, start: ctt.nameStart, len: ctt.nameLen) {
+                                writeSpan(c: inout c, start: ctt.nameStart, len: ctt.nameLen)
+                                write(s: "_release(")
+                                genExpr(c: inout c, id: target)
+                                write(s: "); ")
+                            }
+                            genExpr(c: inout c, id: target)
+                            write(s: " = ")
+                            genCopyValue(c: inout c, exprId: value, tyRef: ctt.ref, fallStart: ctt.nameStart, fallLen: ctt.nameLen, isArray: false)
+                            write(s: ";\n")
                             return
                         }
                     }
