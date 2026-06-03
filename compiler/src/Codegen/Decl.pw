@@ -47,7 +47,7 @@ fn instantiateProvidedMethods(c: inout Comp) {
             val f: Func = c.funcs[fi]
             if f.hasRecv {
                 if spansEqual(c: inout c, aStart: f.recvStart, aLen: f.recvLen, bStart: cf.traitStart, bLen: cf.traitLen) {
-                    c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen typeParams=f.typeParams params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove />)
+                    c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen typeParams=f.typeParams params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc />)
                 }
             }
             fi += 1
@@ -612,6 +612,7 @@ fn genSignature(c: inout Comp, f: Func) {
     }
     // method: mangle to `Recv_name` with a leading `self` parameter. For a
     // generic method, the receiver is the mangled instantiation (`Optional_I32`).
+    // An assoc fn also takes the `Recv_` prefix (its namespace) but no self.
     if f.hasRecv {
         if c.curRecvInstRef != 0 {
             emitMangle(c: inout c, ref: c.curRecvInstRef)
@@ -619,6 +620,11 @@ fn genSignature(c: inout Comp, f: Func) {
             writeSpan(c: inout c, start: f.recvStart, len: f.recvLen)
         }
         write(s: "_")
+    } else {
+        if f.isAssoc {
+            writeSpan(c: inout c, start: f.recvStart, len: f.recvLen)
+            write(s: "_")
+        }
     }
     writeFnSelector(c: inout c, f: f)
     write(s: "(")

@@ -354,6 +354,12 @@ struct Func {
     // the receiver moved. `fn`/`borrow fn` read self by value (not consumed);
     // `inout fn` borrows it mutably. (`borrow fn` is accepted as a synonym of `fn`.)
     val selfMove: Bool
+    // `assoc fn` (spec/07,12): an associated (static) function — it lives in a
+    // type's namespace but takes no `self`. hasRecv is false (no self parameter),
+    // yet recvStart/recvLen still name the owning type, so the C name mangles
+    // `Type_name` and a call `Type.name(args)` resolves. Operator requirements
+    // (`Eq.eq`, `Ord.compare`, `Add.add`) are assoc fns.
+    val isAssoc: Bool
 }
 
 struct Comp {

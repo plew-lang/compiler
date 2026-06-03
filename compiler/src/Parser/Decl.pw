@@ -94,7 +94,7 @@ fn parseParamList(c: inout Comp) -> Array[Param] {
 // receiver marker for methods) is already consumed; the current token is the
 // name. `hasRecv`/`recv*`/`selfInout` describe an `impl Type` method receiver
 // (none for a free function).
-fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, selfInout: Bool, selfMove: Bool, implParams: Array[Bind], traitImpl: Bool) {
+fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, selfInout: Bool, selfMove: Bool, implParams: Array[Bind], traitImpl: Bool, isAssoc: Bool) {
     val nameTok: Tok = c.cur()
     c.advance()
     // type parameters in scope = those introduced by the enclosing `impl[T]`
@@ -152,7 +152,7 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
     c.skipNewlines()
     val body: U64 = parseBlock(c: inout c)
     val fnIdx: U64 = c.funcs.count
-    c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvStart recvLen=recvLen selfInout=selfInout selfMove=selfMove />)
+    c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvStart recvLen=recvLen selfInout=selfInout selfMove=selfMove isAssoc=isAssoc />)
     mut val wbi: U64 = 0
     while wbi < boundParams.count {
         val bp: Bind = boundParams[wbi]
@@ -215,7 +215,7 @@ fn parseWhereClause(c: inout Comp) -> Array[Bind] {
 fn parseFunc(c: inout Comp) {
     c.advance()
     val noParams: Array[Bind] = []
-    parseFuncCommon(c: inout c, hasRecv: false, recvStart: 0, recvLen: 0, selfInout: false, selfMove: false, implParams: noParams, traitImpl: false)
+    parseFuncCommon(c: inout c, hasRecv: false, recvStart: 0, recvLen: 0, selfInout: false, selfMove: false, implParams: noParams, traitImpl: false, isAssoc: false)
 }
 
 // `impl Type { (fn | inout fn) name(...) ... }`: inherent methods. Each member
@@ -268,11 +268,11 @@ fn parseImpl(c: inout Comp) {
                     Kind.KwFn => { c.advance() }
                     _ => {}
                 }
-                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: true, selfMove: false, implParams: implParams, traitImpl: isTraitImpl)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: true, selfMove: false, implParams: implParams, traitImpl: isTraitImpl, isAssoc: false)
             }
             Kind.KwFn => {
                 c.advance()
-                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams, traitImpl: isTraitImpl)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams, traitImpl: isTraitImpl, isAssoc: false)
             }
             Kind.KwMove => {
                 // `move fn` (consuming self): the method takes ownership of self.
@@ -281,7 +281,7 @@ fn parseImpl(c: inout Comp) {
                     Kind.KwFn => { c.advance() }
                     _ => {}
                 }
-                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: true, implParams: implParams, traitImpl: isTraitImpl)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: true, implParams: implParams, traitImpl: isTraitImpl, isAssoc: false)
             }
             Kind.KwBorrow => {
                 // `borrow fn` (read self, non-consuming): observationally identical
@@ -291,7 +291,7 @@ fn parseImpl(c: inout Comp) {
                     Kind.KwFn => { c.advance() }
                     _ => {}
                 }
-                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams, traitImpl: isTraitImpl)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams, traitImpl: isTraitImpl, isAssoc: false)
             }
             Kind.KwDeinit => {
                 // `deinit { body }` (spec/03): no params, no return, read self.
@@ -303,10 +303,24 @@ fn parseImpl(c: inout Comp) {
                 val body: U64 = parseBlock(c: inout c)
                 val noParams: Array[Param] = []
                 val noTypeParams: Array[Bind] = []
-                c.funcs.append(<Func nameStart=deinitTok.start nameLen=deinitTok.len typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=false selfMove=false />)
+                c.funcs.append(<Func nameStart=deinitTok.start nameLen=deinitTok.len typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=false selfMove=false isAssoc=false />)
                 c.deinits.append(<Bind nameStart=recvStart nameLen=recvLen fieldStart=recvStart fieldLen=recvLen />)
             }
-            _ => { c.advance() }
+            _ => {
+                // `assoc fn name(...)` (spec/07,12): an associated function on the
+                // type — no `self`, but mangled into the type's namespace. The
+                // call site is `Type.name(args)`. Any other ident is skipped.
+                if c.identIs(kw: "assoc") {
+                    c.advance()
+                    match c.curKind() {
+                        Kind.KwFn => { c.advance() }
+                        _ => {}
+                    }
+                    parseFuncCommon(c: inout c, hasRecv: false, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams, traitImpl: isTraitImpl, isAssoc: true)
+                } else {
+                    c.advance()
+                }
+            }
         }
     }
     // record the conformance with the requirement names it witnessed, for the
@@ -393,7 +407,7 @@ fn parseStruct(c: inout Comp, isUnique: Bool) {
                 val body: U64 = parseBlock(c: inout c)
                 val noParams: Array[Param] = []
                 val noTypeParams: Array[Bind] = []
-                c.funcs.append(<Func nameStart=deinitTok.start nameLen=deinitTok.len typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nameTok.start recvLen=nameTok.len selfInout=false selfMove=false />)
+                c.funcs.append(<Func nameStart=deinitTok.start nameLen=deinitTok.len typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nameTok.start recvLen=nameTok.len selfInout=false selfMove=false isAssoc=false />)
                 c.deinits.append(<Bind nameStart=nameTok.start nameLen=nameTok.len fieldStart=nameTok.start fieldLen=nameTok.len />)
             }
             _ => {

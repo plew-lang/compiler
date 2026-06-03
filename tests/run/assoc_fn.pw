@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+// Associated (static) functions: `assoc fn` takes no self, called `Type.name(args)`.
+struct Vec2 { val x: I64  val y: I64 }
+impl Vec2 {
+    assoc fn add(lhs: Vec2, rhs: Vec2) -> Vec2 {
+        return <Vec2 x=(lhs.x + rhs.x) y=(lhs.y + rhs.y) />
+    }
+    assoc fn origin() -> Vec2 { return <Vec2 x=0 y=0 /> }
+    fn sum() -> I64 { return self.x + self.y }
+}
+
+fn main() {
+    val a: Vec2 = <Vec2 x=1 y=2 />
+    val b: Vec2 = <Vec2 x=3 y=4 />
+    print(Vec2.add(lhs: a, rhs: b).sum())   // 10
+    print(Vec2.origin().sum())              // 0
+}

@@ -376,6 +376,46 @@ fn genExpr(c: inout Comp, id: U64) {
             writeU64(n: id)
         }
         Expr.Method { val recv, val nameStart, val nameLen, val args } => {
+            // `Type.name(args)` (assoc fn call): the receiver is a bare type name,
+            // not a value. Dispatch to the assoc fn `Type_name(args)` (no self).
+            val arn: Bind = assocRecvName(c: inout c, recv: recv)
+            if arn.nameLen != 0 {
+                val afi: U64 = findAssoc(c: inout c, recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                if afi == c.funcs.count {
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "no such associated function on this type")
+                    return
+                }
+                val af: Func = c.funcs[afi]
+                writeSpan(c: inout c, start: arn.nameStart, len: arn.nameLen)
+                write(s: "_")
+                writeFnSelector(c: inout c, f: af)
+                write(s: "(")
+                mut val ai: U64 = 0
+                while ai < args.count {
+                    if ai > 0 {
+                        write(s: ", ")
+                    }
+                    val aa: Arg = args[ai]
+                    if aa.isInout {
+                        write(s: "&(")
+                        genExpr(c: inout c, id: aa.expr)
+                        write(s: ")")
+                    } else {
+                        genExpr(c: inout c, id: aa.expr)
+                    }
+                    ai += 1
+                }
+                mut val adi: U64 = args.count
+                while adi < af.params.count {
+                    if adi > 0 {
+                        write(s: ", ")
+                    }
+                    genExpr(c: inout c, id: af.params[adi].defaultExpr)
+                    adi += 1
+                }
+                write(s: ")")
+                return
+            }
             val bt: TypeInfo = exprType(c: inout c, id: recv)
             if bt.kind == 3 {
                 // array builtin: `.append(v)` mutates the receiver, so it must be

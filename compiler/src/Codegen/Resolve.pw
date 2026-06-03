@@ -109,6 +109,76 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
     return c.funcs.count
 }
 
+// Index of the assoc fn named (nameStart,nameLen) on type (recvStart,recvLen),
+// resolving overloads by labels + arg types, or c.funcs.count if none. An assoc
+// fn has hasRecv=false (no self) but recvStart/recvLen name its owning type.
+fn findAssoc(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    mut val firstLabel: U64 = c.funcs.count
+    mut val typeMatch: U64 = c.funcs.count
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.isAssoc {
+            if spansEqual(c: inout c, aStart: nameStart, aLen: nameLen, bStart: f.nameStart, bLen: f.nameLen) {
+                if spansEqual(c: inout c, aStart: recvStart, aLen: recvLen, bStart: f.recvStart, bLen: f.recvLen) {
+                    if paramsLabelsOk(c: inout c, params: f.params, args: args) {
+                        if firstLabel == c.funcs.count {
+                            firstLabel = i
+                        }
+                        if typeMatch == c.funcs.count {
+                            if paramsTypesMatch(c: inout c, params: f.params, args: args) {
+                                typeMatch = i
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        i += 1
+    }
+    if typeMatch != c.funcs.count {
+        return typeMatch
+    }
+    return firstLabel
+}
+
+// Whether (start,len) names a struct or enum type (used to detect an assoc-fn
+// call `Type.name(args)`, where the receiver is a bare type name, not a value).
+fn isTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
+    if structIndexByName(c: inout c, start: start, len: len) < c.structs.count {
+        return true
+    }
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        if spansEqual(c: inout c, aStart: c.enums[ei].nameStart, aLen: c.enums[ei].nameLen, bStart: start, bLen: len) {
+            return true
+        }
+        ei += 1
+    }
+    return genericStructIndex(c: inout c, nameStart: start, nameLen: len) < c.structs.count
+}
+
+// If `recv` is a bare identifier naming a type (not a local value), return that
+// type's name span as an assoc-fn receiver; else signal "not an assoc call" by
+// returning len 0. Used by call codegen/type recovery to route `Type.name(args)`.
+fn assocRecvName(c: inout Comp, recv: U64) -> Bind {
+    match c.exprs[recv] {
+        Expr.Ident { val start, val len } => {
+            if isSelfRef(c: inout c, start: start, len: len) {
+                return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+            }
+            if localIndexByName(c: inout c, start: start, len: len) < c.locals.count {
+                return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+            }
+            if isTypeName(c: inout c, start: start, len: len) {
+                return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
+            }
+            return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+        }
+        _ => { return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 /> }
+    }
+}
+
 // Check call args against a parameter list: arg count matches and every arg
 // carries its parameter's label in declaration order (spec: labels required).
 fn paramsLabelsOk(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bool {
@@ -825,6 +895,19 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             return scalarInfo()
         }
         Expr.Method { val recv, val nameStart, val nameLen, val args } => {
+            // `Type.name(args)` assoc-fn call: return type from the assoc fn.
+            val arn: Bind = assocRecvName(c: inout c, recv: recv)
+            if arn.nameLen != 0 {
+                val afi: U64 = findAssoc(c: inout c, recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                if afi == c.funcs.count {
+                    return scalarInfo()
+                }
+                val af: Func = c.funcs[afi]
+                if af.hasRet {
+                    return typeInfoOfName(c: inout c, start: af.retStart, len: af.retLen, isArray: af.retIsArray)
+                }
+                return scalarInfo()
+            }
             val rt: TypeInfo = exprType(c: inout c, id: recv)
             if rt.kind == 2 {
                 val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
