@@ -228,6 +228,12 @@ fn emitScopeDrops(c: inout Comp, mark: U64) {
                 writeSpan(c: inout c, start: lo.nameStart, len: lo.nameLen)
                 write(s: ".rc);\n")
             }
+            // Owned struct locals are NOT released here: immutable struct
+            // bindings (`val f = c.funcs[i]`) are shallow views that alias the
+            // source's array fields, so releasing them would double-free. Struct
+            // release is safe only once bindings retain-on-share (CoW), so it is
+            // deferred to that stage. Array locals are always uniquely owned
+            // (genArrayValue copies), so releasing them needs no such guard.
         }
     }
 }
