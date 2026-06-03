@@ -280,11 +280,24 @@ struct TraitDef {
 // explicit, never implicit). `witnessed` lists the requirement names this impl
 // satisfied (via a body method or a `via` alias), so the completeness check can
 // verify every requirement of `Trait` is met (incomplete conformance = error).
+// A `@[Eq]` / `@[Ord]` derive request recorded on a struct/enum declaration.
+// Resolved after parsing by synthesizing the witness `impl Type as Eq/Ord`.
+struct DeriveReq {
+    val typeStart: U64
+    val typeLen: U64
+    val isEnum: Bool
+    val nameStart: U64
+    val nameLen: U64
+}
+
 struct Conform {
     val typeStart: U64
     val typeLen: U64
     val traitStart: U64
     val traitLen: U64
+    // synthesized by `@[Eq]`/`@[Ord]` derive: exempt from the unknown-trait and
+    // completeness checks (the witness is compiler-generated and complete).
+    val derived: Bool
     // signatures of the members this impl witnessed (body method or `via` line),
     // so the completeness check matches requirements by selector (name + param
     // types), distinguishing same-name overloaded requirements.
@@ -370,7 +383,10 @@ struct Func {
 }
 
 struct Comp {
-    val bytes: Array[U8]
+    // source bytes. `mut val` so the derive synthesizer can append synthetic
+    // identifier names ("eq", "lhs", ...) and reference them by span — existing
+    // token offsets are unaffected (appends land past the end).
+    mut val bytes: Array[U8]
     val toks: Array[Tok]
     mut val pos: U64
     mut val exprs: Array[Expr]
@@ -385,6 +401,10 @@ struct Comp {
     mut val traits: Array[TraitDef]
     mut val conforms: Array[Conform]
     mut val methodAliases: Array[MethodAlias]
+    // `@[...]` derive requests recorded on type declarations, plus the scratch
+    // list of derive names parsed for the *next* type declaration.
+    mut val derives: Array[DeriveReq]
+    mut val pendingDerives: Array[Bind]
     // `where T: Trait` bounds on functions (spec/08), keyed by function index.
     mut val funcBounds: Array[FuncBound]
     // the function index currently being checked by the eager generic

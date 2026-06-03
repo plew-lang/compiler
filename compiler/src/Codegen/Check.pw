@@ -638,6 +638,11 @@ fn checkConformances(c: inout Comp) {
     mut val ci: U64 = 0
     while ci < c.conforms.count {
         val cf: Conform = c.conforms[ci]
+        if cf.derived {
+            // compiler-synthesized (`@[Eq]`/`@[Ord]`): trivially complete, and its
+            // trait is compiler-known — exempt from unknown-trait/completeness.
+            ci += 1
+        } else {
         // find the trait being conformed to; a conformance to an undeclared trait
         // (typo / missing import) is a loud error (spec/08: explicit conformance).
         mut val found: Bool = false
@@ -663,6 +668,7 @@ fn checkConformances(c: inout Comp) {
             compileErrorAt(line: lineOf(c: inout c, offset: cf.traitStart), msg: "conformance to an unknown trait (is it declared / imported?)")
         }
         ci += 1
+        }
     }
     checkViaTargets(c: inout c)
 }

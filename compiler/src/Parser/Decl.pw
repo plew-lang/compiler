@@ -329,7 +329,7 @@ fn parseImpl(c: inout Comp) {
     // record the conformance with the requirement names it witnessed, for the
     // completeness check (spec/08: every requirement must be witnessed).
     if isTraitImpl {
-        c.conforms.append(<Conform typeStart=recvStart typeLen=recvLen traitStart=traitStart traitLen=traitLen witnessed=c.curWitnessed />)
+        c.conforms.append(<Conform typeStart=recvStart typeLen=recvLen traitStart=traitStart traitLen=traitLen derived=false witnessed=c.curWitnessed />)
     }
 }
 
@@ -481,6 +481,7 @@ fn parseStruct(c: inout Comp, isUnique: Bool) {
         }
     }
     c.structs.append(<StructDef nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams fields=fields isUnique=isUnique />)
+    drainDerives(c: inout c, typeStart: nameTok.start, typeLen: nameTok.len, isEnum: false)
 }
 
 // `enum Name { Variant [{ field: Type, ... }] ... }`. Variant fields take no
@@ -556,6 +557,134 @@ fn parseEnum(c: inout Comp) {
         }
     }
     c.enums.append(<EnumDef nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams variants=variants />)
+    drainDerives(c: inout c, typeStart: nameTok.start, typeLen: nameTok.len, isEnum: true)
+}
+
+// `@[Eq, Ord, ...]` directive (spec/16): collect the derive names into
+// pendingDerives, applied to the next type declaration. The `@` lexes as
+// Kind.Unknown; the leading `@` is the current token.
+fn parseDirective(c: inout Comp) {
+    c.advance()
+    match c.curKind() {
+        Kind.LBracket => { c.advance() }
+        _ => {}
+    }
+    while true {
+        match c.curKind() {
+            Kind.RBracket => {
+                c.advance()
+                break
+            }
+            Kind.Eof => { break }
+            Kind.Comma => { c.advance() }
+            Kind.Ident => {
+                val t: Tok = c.cur()
+                c.advance()
+                c.pendingDerives.append(<Bind nameStart=t.start nameLen=t.len fieldStart=t.start fieldLen=t.len />)
+            }
+            _ => { c.advance() }
+        }
+    }
+}
+
+// Attach the pending `@[...]` derive requests to the just-parsed type, then clear
+// the scratch list for the next declaration.
+fn drainDerives(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool) {
+    mut val i: U64 = 0
+    while i < c.pendingDerives.count {
+        val d: Bind = c.pendingDerives[i]
+        c.derives.append(<DeriveReq typeStart=typeStart typeLen=typeLen isEnum=isEnum nameStart=d.nameStart nameLen=d.nameLen />)
+        i += 1
+    }
+    c.pendingDerives = []
+}
+
+// Append a string's bytes to c.bytes and return its (start,len) span — for
+// synthetic identifier names referenced by derived code (#5: `@[Eq]`/`@[Ord]`).
+fn internBytes(c: inout Comp, s: String) -> Bind {
+    val start: U64 = c.bytes.count
+    val sb: Array[U8] = s.bytes
+    mut val i: U64 = 0
+    while i < sb.count {
+        c.bytes.append(sb[i])
+        i += 1
+    }
+    return <Bind nameStart=start nameLen=sb.count fieldStart=start fieldLen=sb.count />
+}
+
+// A type-typed parameter `name: Type` (copyable, no mode/default) for a
+// synthesized assoc fn.
+fn synthParam(nameSpan: Bind, tyStart: U64, tyLen: U64) -> Param {
+    val p: Param = <Param nameStart=nameSpan.nameStart nameLen=nameSpan.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=false ty=0 isInout=false isMove=false isBorrow=false noLabel=false hasDefault=false defaultExpr=0 />
+    return p
+}
+
+// Synthesize `@[Eq]` for a struct: an assoc fn `eq(lhs: T, rhs: T) -> Bool` whose
+// body is `lhs.f0 == rhs.f0 && lhs.f1 == rhs.f1 && ...` (true for a field-less
+// struct), plus a derived `Conform(T, Eq)`. Each field `==` lowers per its own
+// type (scalar/String built-in; a struct field needs its own Eq).
+fn synthStructEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind, boolN: Bind, eqTrait: Bind) {
+    val si: U64 = structIndexByName(c: inout c, start: d.typeStart, len: d.typeLen)
+    if si >= c.structs.count {
+        return
+    }
+    val fields: Array[FieldDef] = c.structs[si].fields
+    mut val params: Array[Param] = []
+    params.append(synthParam(nameSpan: lhsN, tyStart: d.typeStart, tyLen: d.typeLen))
+    params.append(synthParam(nameSpan: rhsN, tyStart: d.typeStart, tyLen: d.typeLen))
+    val lhsId: U64 = c.pushExpr(e: <Expr.Ident start=lhsN.nameStart len=lhsN.nameLen />)
+    val rhsId: U64 = c.pushExpr(e: <Expr.Ident start=rhsN.nameStart len=rhsN.nameLen />)
+    mut val acc: U64 = 0
+    mut val first: Bool = true
+    mut val fi: U64 = 0
+    while fi < fields.count {
+        val f: FieldDef = fields[fi]
+        val lf: U64 = c.pushExpr(e: <Expr.Field base=lhsId nameStart=f.nameStart nameLen=f.nameLen />)
+        val rf: U64 = c.pushExpr(e: <Expr.Field base=rhsId nameStart=f.nameStart nameLen=f.nameLen />)
+        val eqi: U64 = c.pushExpr(e: <Expr.Binary op=50 lhs=lf rhs=rf />)
+        if first {
+            acc = eqi
+            first = false
+        } else {
+            acc = c.pushExpr(e: <Expr.Binary op=61 lhs=acc rhs=eqi />)
+        }
+        fi += 1
+    }
+    if first {
+        acc = c.pushExpr(e: <Expr.Int value=1 offset=0 isBool=true tyStart=0 tyLen=0 />)
+    }
+    val ret: U64 = c.pushStmt(s: <Stmt.Return value=acc hasValue=true />)
+    mut val stmts: Array[U64] = []
+    stmts.append(ret)
+    val blkId: U64 = c.blocks.count
+    c.blocks.append(<Block stmts=stmts />)
+    val noTP: Array[Bind] = []
+    c.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true />)
+    mut val wit: Array[Func] = []
+    c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen traitStart=eqTrait.nameStart traitLen=eqTrait.nameLen derived=true witnessed=wit />)
+}
+
+// Synthesize all recorded `@[...]` derives (#5). Currently `@[Eq]` for structs.
+fn synthesizeDerives(c: inout Comp) {
+    if c.derives.count == 0 {
+        return
+    }
+    val eqN: Bind = internBytes(c: inout c, s: "eq")
+    val lhsN: Bind = internBytes(c: inout c, s: "lhs")
+    val rhsN: Bind = internBytes(c: inout c, s: "rhs")
+    val boolN: Bind = internBytes(c: inout c, s: "Bool")
+    val eqTrait: Bind = internBytes(c: inout c, s: "Eq")
+    mut val i: U64 = 0
+    while i < c.derives.count {
+        val d: DeriveReq = c.derives[i]
+        if rangeEquals(bytes: c.bytes, start: d.nameStart, len: d.nameLen, kw: "Eq") {
+            if d.isEnum {
+            } else {
+                synthStructEq(c: inout c, d: d, eqN: eqN, lhsN: lhsN, rhsN: rhsN, boolN: boolN, eqTrait: eqTrait)
+            }
+        }
+        i += 1
+    }
 }
 
 // Enable the builtin named (nameStart,nameLen) iff it was imported from its
@@ -668,7 +797,14 @@ fn parseProgram(c: inout Comp) {
                 }
             }
             Kind.Eof => { break }
-            _ => { c.advance() }
+            _ => {
+                // `@[Eq, Ord]` derive directive (`@` lexes as Unknown, then `[`).
+                if c.peekKind(off: 1) == <Kind.LBracket /> {
+                    parseDirective(c: inout c)
+                } else {
+                    c.advance()
+                }
+            }
         }
     }
 }
