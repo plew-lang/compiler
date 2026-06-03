@@ -285,8 +285,39 @@ fn checkLitArray(c: inout Comp, id: U64, elemStart: U64, elemLen: U64) {
 }
 
 // Check call args against the callee's parameter types. Builtins (not found as a
+// A bare place (variable/field/element) of a `unique` type in a value position
+// is a forbidden copy (spec/03): unique values are move-only. Require `move`
+// (consume), `borrow` (read), or `inout` (mutable borrow) at the use site.
+// Fresh values (construction / call results) and the `move`/`borrow` prefixes
+// (which lower to Expr.Move, not a place) pass. `inoutOk` exempts `inout` args.
+fn checkUniquePlaceCopy(c: inout Comp, exprId: U64, inoutOk: Bool) {
+    if inoutOk {
+        return
+    }
+    if isPlaceExpr(c: inout c, id: exprId) {
+        val ti: TypeInfo = exprType(c: inout c, id: exprId)
+        if ti.kind == 2 {
+            if typeIsUnique(c: inout c, start: ti.nameStart, len: ti.nameLen) {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: exprId)), msg: "a unique value cannot be copied; use `move`, `borrow`, or `inout`")
+            }
+        }
+    }
+}
+
+// Reject any bare unique place among call/method arguments (a non-inout arg that
+// is a plain place of unique type). `move`/`borrow` lower to Expr.Move (not a
+// place) and `inout` is flagged, so only an unmoded unique place trips this.
+fn checkUniqueArgModes(c: inout Comp, args: Array[Arg]) {
+    mut val i: U64 = 0
+    while i < args.count {
+        checkUniquePlaceCopy(c: inout c, exprId: args[i].expr, inoutOk: args[i].isInout)
+        i += 1
+    }
+}
+
 // user function) keep their args lenient at I64 (placeholder I/O shims).
 fn checkCallArgs(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    checkUniqueArgModes(c: inout c, args: args)
     val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen)
     if fi == c.funcs.count {
         mut val i: U64 = 0
@@ -313,6 +344,7 @@ fn checkCallArgs(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) 
 // Check method-call args against the method's params; array `.append(x)` checks
 // `x` against the element type. Other builtins keep args lenient at I64.
 fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    checkUniqueArgModes(c: inout c, args: args)
     checkLitCtx(c: inout c, id: recv, eKind: 0, eBits: 0, eSgn: false)
     val rt: TypeInfo = exprType(c: inout c, id: recv)
     if rt.kind == 2 {

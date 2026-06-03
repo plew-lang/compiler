@@ -530,7 +530,9 @@ fn genFunc(c: inout Comp, fi: U64) {
     mut val pi: U64 = 0
     while pi < params.count {
         val p: Param = params[pi]
-        addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
+        // a `move T` parameter transfers ownership to the callee, so it is owned
+        // here and runs deinit/release at this function's scope exit.
+        addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: p.isMove)
         pi += 1
     }
     genSignature(c: inout c, f: f)
@@ -539,6 +541,11 @@ fn genFunc(c: inout Comp, fi: U64) {
         write(s: "    plew_argc = argc; plew_argv = argv;\n")
     }
     genBlock(c: inout c, id: f.body)
+    // drop owned parameters at function end (a `move T` param is owned and runs
+    // deinit/release here). genBlock dropped only the body's block-scope locals;
+    // params sit below its mark. For a body that ends in `return` this is
+    // unreachable (the return already dropped them); for fall-through it is live.
+    emitScopeDrops(c: inout c, mark: 0)
     if isMain {
         write(s: "    return 0;\n")
     }
@@ -597,7 +604,7 @@ fn genClosure(c: inout Comp, id: U64, proto: Bool) {
                 mut val pj: U64 = 0
                 while pj < params.count {
                     val p2: Param = params[pj]
-                    addLocal(c: inout c, nameStart: p2.nameStart, nameLen: p2.nameLen, tyStart: p2.tyStart, tyLen: p2.tyLen, isArray: p2.tyIsArray, ty: p2.ty, isInout: p2.isInout, isMut: false, owned: false)
+                    addLocal(c: inout c, nameStart: p2.nameStart, nameLen: p2.nameLen, tyStart: p2.tyStart, tyLen: p2.tyLen, isArray: p2.tyIsArray, ty: p2.ty, isInout: p2.isInout, isMut: false, owned: p2.isMove)
                     pj += 1
                 }
                 write(s: " {\n")

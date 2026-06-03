@@ -194,7 +194,7 @@ fn typeInfoOfName(c: inout Comp, start: U64, len: U64, isArray: Bool) -> TypeInf
 }
 
 fn addLocal(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool) {
-    c.locals.append(<Local nameStart=nameStart nameLen=nameLen tyStart=tyStart tyLen=tyLen isArray=isArray ty=ty isInout=isInout isMut=isMut owned=owned />)
+    c.locals.append(<Local nameStart=nameStart nameLen=nameLen tyStart=tyStart tyLen=tyLen isArray=isArray ty=ty isInout=isInout isMut=isMut owned=owned moved=false />)
 }
 
 // --- scope frames (the ARC drop backbone) ---
@@ -222,6 +222,9 @@ fn emitScopeDrops(c: inout Comp, mark: U64) {
     while i > mark {
         i -= 1
         val lo: Local = c.locals[i]
+        if lo.moved {
+            // moved-out: ownership left this binding; the new owner releases it.
+        } else {
         if lo.owned {
             if lo.isArray {
                 // recursive release: PlewArray_E_release frees heap-owning struct
@@ -262,6 +265,7 @@ fn emitScopeDrops(c: inout Comp, mark: U64) {
                     }
                 }
             }
+        }
         }
     }
 }
@@ -389,6 +393,68 @@ fn isInoutLocal(c: inout Comp, start: U64, len: U64) -> Bool {
         }
     }
     return false
+}
+
+// Whether the type named (start,len) is a `unique struct` (spec/03).
+fn typeIsUnique(c: inout Comp, start: U64, len: U64) -> Bool {
+    val si: U64 = structIndexByName(c: inout c, start: start, len: len)
+    if si >= c.structs.count {
+        return false
+    }
+    return c.structs[si].isUnique
+}
+
+// Whether `name` refers to a moved-out local (spec/03): using it is an error.
+fn localMoved(c: inout Comp, start: U64, len: U64) -> Bool {
+    mut val i: U64 = c.locals.count
+    while i > 0 {
+        i -= 1
+        val lo: Local = c.locals[i]
+        if spansEqual(c: inout c, aStart: lo.nameStart, aLen: lo.nameLen, bStart: start, bLen: len) {
+            return lo.moved
+        }
+    }
+    return false
+}
+
+// Mark the local named (start,len) moved-out — the last (innermost) binding with
+// that name. Rebuilds c.locals (no struct-array IndexSet in self-host) flipping
+// `moved` at that one index. A no-op if the name is not a local (e.g. `self`).
+fn markMovedLocal(c: inout Comp, start: U64, len: U64) {
+    mut val target: U64 = c.locals.count
+    mut val i: U64 = c.locals.count
+    while i > 0 {
+        i -= 1
+        val lo: Local = c.locals[i]
+        if spansEqual(c: inout c, aStart: lo.nameStart, aLen: lo.nameLen, bStart: start, bLen: len) {
+            target = i
+            i = 0
+        }
+    }
+    if target >= c.locals.count {
+        return
+    }
+    mut val rebuilt: Array[Local] = []
+    mut val j: U64 = 0
+    while j < c.locals.count {
+        val lo: Local = c.locals[j]
+        if j == target {
+            rebuilt.append(<Local nameStart=lo.nameStart nameLen=lo.nameLen tyStart=lo.tyStart tyLen=lo.tyLen isArray=lo.isArray ty=lo.ty isInout=lo.isInout isMut=lo.isMut owned=lo.owned moved=true />)
+        } else {
+            rebuilt.append(lo)
+        }
+        j += 1
+    }
+    c.locals = rebuilt
+}
+
+// If `exprId` is a bare identifier naming a local, mark it moved-out (used when
+// lowering `move <ident>`). Non-identifier operands aren't tracked places yet.
+fn markMovedExpr(c: inout Comp, exprId: U64) {
+    match c.exprs[exprId] {
+        Expr.Ident { val start, val len } => { markMovedLocal(c: inout c, start: start, len: len) }
+        _ => {}
+    }
 }
 
 // Type of field `fieldName` declared in struct `structName` (else scalar).
@@ -643,6 +709,10 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
         }
         Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
             return scalarInfo()
+        }
+        Expr.Move { val operand, val isBorrow } => {
+            // `move`/`borrow` have the operand's type (the value just flows).
+            return exprType(c: inout c, id: operand)
         }
     }
     return scalarInfo()

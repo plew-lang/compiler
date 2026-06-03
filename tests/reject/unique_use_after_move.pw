@@ -1,0 +1,8 @@
+// After `move a`, the source `a` is dead — using it is an error.
+import @Std/Io with { print }
+unique struct File { val fd: I64 }
+fn main() {
+    val a: File = <File fd=1 />
+    val b: File = move a
+    print(a.fd)
+}

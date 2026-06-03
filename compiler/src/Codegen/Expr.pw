@@ -3,12 +3,25 @@ fn genExpr(c: inout Comp, id: U64) {
     match e {
         Expr.Int { val value, offset: _, isBool: _, tyStart: _, tyLen: _ } => { writeInt(n: value) }
         Expr.Ident { val start, val len } => {
+            if localMoved(c: inout c, start: start, len: len) {
+                compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "use of moved value (it was consumed by an earlier `move`)")
+            }
             if isInoutLocal(c: inout c, start: start, len: len) {
                 write(s: "(*")
                 writeSpan(c: inout c, start: start, len: len)
                 write(s: ")")
             } else {
                 writeSpan(c: inout c, start: start, len: len)
+            }
+        }
+        Expr.Move { val operand, val isBorrow } => {
+            // `move`/`borrow` lower to the operand's value (a unique struct is a
+            // bit-copy). `move` then marks the source place moved-out so it is
+            // neither used again nor double-released; `borrow` leaves it live.
+            genExpr(c: inout c, id: operand)
+            if isBorrow {
+            } else {
+                markMovedExpr(c: inout c, exprId: operand)
             }
         }
         Expr.Unary { val op, val operand } => {

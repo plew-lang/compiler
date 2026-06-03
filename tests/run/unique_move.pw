@@ -1,0 +1,33 @@
+import @Std/Io with { write, print }
+
+// Move semantics for unique types (spec/03): ownership transfers on `move`, the
+// source goes dead, and `deinit` still runs exactly once — for whoever owns the
+// value last.
+unique struct File {
+    val fd: I64
+    deinit { print(self.fd) }
+}
+
+// `move T` parameter: the callee takes ownership and runs deinit at its scope.
+fn consume(f: move File) {
+    write(s: "consuming\n")
+}
+
+// `borrow T` parameter: a non-consuming read; the caller keeps ownership.
+fn peek(f: borrow File) -> I64 {
+    return f.fd
+}
+
+// Returning a unique value implicitly moves it out (the callee does not deinit).
+fn makeFile(n: I64) -> File {
+    val f: File = <File fd=n />
+    return f
+}
+
+fn main() {
+    val a: File = makeFile(n: 1)
+    val b: File = move a            // a -> b; `a` is now dead
+    print(peek(f: borrow b))        // 1 (b still owned afterwards)
+    consume(f: move b)              // b moved into consume, deinit fires there
+    write(s: "main end\n")
+}

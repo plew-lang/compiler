@@ -1,0 +1,9 @@
+// A unique value is move-only: binding `val b = a` (a bare unique place) is a
+// forbidden copy. It must be `val b = move a`.
+import @Std/Io with { write }
+unique struct File { val fd: I64 }
+fn main() {
+    val a: File = <File fd=1 />
+    val b: File = a
+    write(s: "x\n")
+}

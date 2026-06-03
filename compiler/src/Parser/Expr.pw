@@ -227,6 +227,18 @@ fn parseUnary(c: inout Comp) -> U64 {
     }
     val k: Kind = c.curKind()
     match k {
+        Kind.KwMove => {
+            // `move <postfix-chain>` (spec/03): access-mode prefix on a unique
+            // value. Binds the postfix chain like `try`.
+            c.advance()
+            val o: U64 = parsePostfix(c: inout c)
+            return c.pushExpr(e: <Expr.Move operand=o isBorrow=false />)
+        }
+        Kind.KwBorrow => {
+            c.advance()
+            val o: U64 = parsePostfix(c: inout c)
+            return c.pushExpr(e: <Expr.Move operand=o isBorrow=true />)
+        }
         Kind.Minus => {
             c.advance()
             val o: U64 = parseUnary(c: inout c)

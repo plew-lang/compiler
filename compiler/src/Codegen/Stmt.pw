@@ -239,6 +239,9 @@ fn genStmt(c: inout Comp, id: U64) {
     match s {
         Stmt.Let { val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init } => {
             checkLitSpan(c: inout c, id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray)
+            // unique values are move-only: `val g = f` (a bare unique place) is a
+            // forbidden copy — require `val g = move f`.
+            checkUniquePlaceCopy(c: inout c, exprId: init, inoutOk: false)
             write(s: "    ")
             genCTypeOf(c: inout c, tyRef: ty, fallStart: tyStart, fallLen: tyLen, isArray: tyIsArray)
             write(s: " ")
@@ -440,6 +443,19 @@ fn genStmt(c: inout Comp, id: U64) {
                         write(s: "0")
                     }
                     write(s: ";\n")
+                    // returning a unique place consumes it: mark it moved so the
+                    // about-to-run scope drops do not deinit the value the caller
+                    // now owns (returning always consumes — no aliasing risk).
+                    if hasValue {
+                        if isPlaceExpr(c: inout c, id: value) {
+                            val vt: TypeInfo = exprType(c: inout c, id: value)
+                            if vt.kind == 2 {
+                                if typeIsUnique(c: inout c, start: vt.nameStart, len: vt.nameLen) {
+                                    markMovedExpr(c: inout c, exprId: value)
+                                }
+                            }
+                        }
+                    }
                     emitScopeDrops(c: inout c, mark: 0)
                     write(s: "    return __ret")
                     writeU64(n: rt)

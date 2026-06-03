@@ -1,0 +1,9 @@
+// Passing a unique value by argument requires a mode (`move`/`borrow`/`inout`);
+// a bare place is a forbidden copy.
+import @Std/Io with { write }
+unique struct File { val fd: I64 }
+fn use(f: borrow File) { write(s: "x\n") }
+fn main() {
+    val a: File = <File fd=1 />
+    use(f: a)
+}

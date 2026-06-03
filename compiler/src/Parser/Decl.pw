@@ -25,6 +25,8 @@ fn parseParamList(c: inout Comp) -> Array[Param] {
                         mut val pTyIsArray: Bool = false
                         mut val pTyRef: U64 = 0
                         mut val pIsInout: Bool = false
+                        mut val pIsMove: Bool = false
+                        mut val pIsBorrow: Bool = false
                         // label suppression `name~:` -> the arg is positional.
                         mut val pNoLabel: Bool = false
                         match c.curKind() {
@@ -43,6 +45,14 @@ fn parseParamList(c: inout Comp) -> Array[Param] {
                                     Kind.KwInout => {
                                         c.advance()
                                         pIsInout = true
+                                    }
+                                    Kind.KwMove => {
+                                        c.advance()
+                                        pIsMove = true
+                                    }
+                                    Kind.KwBorrow => {
+                                        c.advance()
+                                        pIsBorrow = true
                                     }
                                     _ => {}
                                 }
@@ -66,7 +76,7 @@ fn parseParamList(c: inout Comp) -> Array[Param] {
                             }
                             _ => {}
                         }
-                        params.append(<Param nameStart=pTok.start nameLen=pTok.len tyStart=pTyStart tyLen=pTyLen tyIsArray=pTyIsArray ty=pTyRef isInout=pIsInout noLabel=pNoLabel hasDefault=pHasDefault defaultExpr=pDefault />)
+                        params.append(<Param nameStart=pTok.start nameLen=pTok.len tyStart=pTyStart tyLen=pTyLen tyIsArray=pTyIsArray ty=pTyRef isInout=pIsInout isMove=pIsMove isBorrow=pIsBorrow noLabel=pNoLabel hasDefault=pHasDefault defaultExpr=pDefault />)
                         match c.curKind() {
                             Kind.Comma => { c.advance() }
                             _ => {}

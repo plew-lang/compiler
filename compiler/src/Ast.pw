@@ -52,6 +52,10 @@ struct Local {
     // borrow (param / for-loop var / match bind) that aliases someone else's
     // storage and must not free it. ARC: only owned heap locals are released.
     val owned: Bool
+    // moved-out (spec/03): a `move` binding/arg transferred ownership away, so
+    // this local is dead — using it again is an error and it is NOT released at
+    // scope exit (the new owner releases). Set during codegen as moves are seen.
+    val moved: Bool
 }
 
 // The recovered type of an expression. kind: 0 scalar (long long), 1 String,
@@ -142,6 +146,11 @@ enum Expr {
     // that function's pointer. v1: non-capturing (the body may reference its
     // params and globals, not enclosing locals).
     Closure { params: Array[Param], hasRet: Bool, retStart: U64, retLen: U64, retIsArray: Bool, retTy: U64, body: U64 }
+    // `move operand` / `borrow operand` (spec/03): an access-mode prefix on a
+    // `unique` value in a binding/argument/return position. Lowers to the
+    // operand's value (a unique struct is a bit-copy); `move` additionally marks
+    // the operand's place moved-out so the source is dead and not double-released.
+    Move { operand: U64, isBorrow: Bool }
 }
 
 // One arm of a match: either `_ => block` (wildcard) or `Enum.Variant
@@ -204,6 +213,11 @@ struct Param {
     val tyIsArray: Bool
     val ty: U64
     val isInout: Bool
+    // access mode for a `unique`-typed parameter (spec/03): `move T` transfers
+    // ownership to the callee (it runs deinit at its scope exit), `borrow T` is a
+    // non-consuming read (callee never deinits). Copyable types use neither.
+    val isMove: Bool
+    val isBorrow: Bool
     // label-suppressed `name~: Type` (spec/04): the argument is passed without a
     // label (positional). Default false = labelled (the normal case).
     val noLabel: Bool
