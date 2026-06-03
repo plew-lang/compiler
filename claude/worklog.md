@@ -10,7 +10,7 @@
 >
 > **ギャップ修正済の一覧**：#1 `via` 先実体の存在検査（`checkViaTargets`）・#2 未知トレイト準拠を loud reject・#3 完全性チェックをセレクタ単位（名前＋引数型・`witnessedHas`/`paramSelectorEq`・オーバーロード要求を区別）・#4 Eq/Ord は `impl T as Eq/Ord` 準拠をゲート（inherent `eq` では動かない）・#6 transitive 単相化（generic→generic・worklist fixpoint）・**#9 eager generic 型検査**（タグ `eager-generic-check`＝`checkGenericBodies` が generic テンプレート本体を境界に対し1回検査＝型パラメータにメソッド/演算子を呼ぶには `where T: Trait` 必須＝C++ テンプレート脱却）。#8 はメソッド本体側を #9 が吸収。
 >
-> **残＝#5 と #7（どちらも据え置き合意）**。**#5**（enum/struct の Eq/Ord witness 自動化）＝**最小 `@[Eq]/@[Ord]` derive**（コンパイラが witness を合成・Rust の `#[derive]` 相当のビルトイン特別扱い・フルのメタプロ spec/16 は不要）で閉じる・#9 と無関係にいつでも差せる小物。**#7**（明示型引数 `f[I32](x)`）＝Go 式の構文曖昧で低価値×高コスト＝当面据え置き。**#8 残**＝generic メソッドの**インスタンス時**境界 conformance 強制（`checkFnBounds` は free 関数のみ・メソッド本体側は #9 が検査済・稀ケース）。
+> **残＝#5 のみ（#7 は据え置き合意）**。✅ **#8 完了**（タグ `traits-gap-8`・`checkMethodBounds`＝generic メソッドのインスタンス時に受信側型引数の境界 conformance を強制・#4 と対称）。**#5**（enum/struct の Eq/Ord witness 自動化）＝**最小 `@[Eq]/@[Ord]` derive**（コンパイラが witness を合成・Rust の `#[derive]` 相当のビルトイン特別扱い・フルのメタプロ spec/16 は不要）で閉じる。**#5 着手前の要決定＝Eq/Ord/Ordering の供給方法**（コンパイラ組み込み/ambient か、std 宣言を要求か＝ambient 型一覧の言語表面判断）。**#7**（明示型引数 `f[I32](x)`）＝Go 式の構文曖昧で低価値×高コスト＝据え置き。
 >
 > **順序＝(2) closures → 〔関連型＋Iterator〕→ Hash→Dictionary**。closures は #9 と直交・Iterator コンビネータ（`map(fn)`）の前提。関連型は Iterator 着手時に #9 を拡張（`where T: Iterator` の `it.next()->Optional[T.Item]`）。`any P` 存在型は最終フェーズ。
 
