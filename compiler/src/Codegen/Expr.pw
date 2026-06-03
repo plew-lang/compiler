@@ -254,10 +254,11 @@ fn genExpr(c: inout Comp, id: U64) {
         Expr.Field { val base, val nameStart, val nameLen } => {
             val bt: TypeInfo = exprType(c: inout c, id: base)
             if bt.kind == 1 {
-                // String.bytes: view the string buffer as an Array[U8] (shared).
+                // String.bytes: a borrowed Array[U8] view of the string buffer
+                // (rc=0 so ARC never frees it — strings are static/leaked).
                 write(s: "({ PlewString __s = ")
                 genExpr(c: inout c, id: base)
-                write(s: "; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len}; })")
+                write(s: "; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; })")
                 return
             }
             if bt.kind == 3 {
