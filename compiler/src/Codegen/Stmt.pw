@@ -16,8 +16,10 @@ fn isPlaceExpr(c: inout Comp, id: U64) -> Bool {
 // cost. Copying from a place gives the binding its own buffer.)
 fn genArrayValue(c: inout Comp, exprId: U64, elemStart: U64, elemLen: U64) {
     if isPlaceExpr(c: inout c, id: exprId) {
+        // CoW: binding from a place shares the buffer (retain) rather than deep-
+        // copying; a later mutation through _set/_push splits off a private copy.
         wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
-        write(s: "_copy(")
+        write(s: "_share(")
         genExpr(c: inout c, id: exprId)
         write(s: ")")
         return

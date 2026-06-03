@@ -1,0 +1,16 @@
+// Copy-on-write value semantics: binding `b = a` shares a's buffer, but a
+// mutation through `a` (element store or append) splits off a private copy, so
+// `b` keeps the original value. The sharing is invisible — observably each
+// binding is an independent value.
+import @Std/Io with { print }
+
+fn main() {
+    mut val a: Array[I32] = [1, 2, 3]
+    val b: Array[I32] = a
+    a[0] = 99
+    a.append(4)
+    print(a[0])
+    print(b[0])
+    print(a.count)
+    print(b.count)
+}
