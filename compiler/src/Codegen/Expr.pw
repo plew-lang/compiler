@@ -533,7 +533,9 @@ fn genExpr(c: inout Comp, id: U64) {
                 }
                 write(s: "(PlewClosure){(void*)&__closure")
                 writeU64(n: id)
-                write(s: ", (void*)__e, ((long long*)__e) - 1, 0}; })")
+                write(s: ", (void*)__e, ((long long*)__e) - 1, &__closure_env")
+                writeU64(n: id)
+                write(s: "_release}; })")
             } else {
                 write(s: "(PlewClosure){(void*)&__closure")
                 writeU64(n: id)

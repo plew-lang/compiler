@@ -1005,6 +1005,7 @@ long long isBoxedLocalAt_c_Comp_nameStart_U64(Comp* c, uint64_t nameStart);
 long long isBoxedCaptureOf_c_Comp_closureId_U64_start_U64_len_U64(Comp* c, uint64_t closureId, uint64_t start, uint64_t len);
 long long isCaptureOf_c_Comp_closureId_U64_start_U64_len_U64(Comp* c, uint64_t closureId, uint64_t start, uint64_t len);
 void emitClosureEnvStruct_c_Comp_id_U64(Comp* c, uint64_t id);
+void emitClosureEnvDrop_c_Comp_id_U64(Comp* c, uint64_t id);
 void emitClosureEnvs_c_Comp(Comp* c);
 void emitClosures_c_Comp_proto_Bool(Comp* c, long long proto);
 void genEnumDef_c_Comp_ei_U64(Comp* c, uint64_t ei);
@@ -5589,6 +5590,18 @@ void emitScopeDrops_c_Comp_mark_U64_exclIdx_U64(Comp* c, uint64_t mark, uint64_t
     plew_write((PlewString){");\n", 3});
     }
     else {
+    if (isBoxedLocalAt_c_Comp_nameStart_U64(&((*c)), lo.nameStart)) {
+    plew_write((PlewString){"    plew_arc_release(((long long*)", 34});
+    writeSpan_c_Comp_start_U64_len_U64(&((*c)), lo.nameStart, lo.nameLen);
+    plew_write((PlewString){") - 1);\n", 8});
+    }
+    else {
+    if (isFnType_c_Comp_ref_U64(&((*c)), lo.ty)) {
+    plew_write((PlewString){"    plew_closure_release(", 25});
+    writeSpan_c_Comp_start_U64_len_U64(&((*c)), lo.nameStart, lo.nameLen);
+    plew_write((PlewString){");\n", 3});
+    }
+    else {
     if (isRefInst_c_Comp_ref_U64(&((*c)), lo.ty)) {
     emitRefRelease_c_Comp_nameStart_U64_nameLen_U64_refTy_U64(&((*c)), lo.nameStart, lo.nameLen, lo.ty);
     }
@@ -5606,6 +5619,8 @@ void emitScopeDrops_c_Comp_mark_U64_exclIdx_U64(Comp* c, uint64_t mark, uint64_t
     plew_write((PlewString){"_release(", 9});
     writeSpan_c_Comp_start_U64_len_U64(&((*c)), lo.nameStart, lo.nameLen);
     plew_write((PlewString){");\n", 3});
+    }
+    }
     }
     }
     }
@@ -8903,7 +8918,9 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     }
     plew_write((PlewString){"(PlewClosure){(void*)&__closure", 31});
     writeU64_n_U64(id);
-    plew_write((PlewString){", (void*)__e, ((long long*)__e) - 1, 0}; })", 43});
+    plew_write((PlewString){", (void*)__e, ((long long*)__e) - 1, &__closure_env", 51});
+    writeU64_n_U64(id);
+    plew_write((PlewString){"_release}; })", 13});
     }
     else {
     plew_write((PlewString){"(PlewClosure){(void*)&__closure", 31});
@@ -11050,6 +11067,16 @@ void genCopyValue_c_Comp_exprId_U64_tyRef_U64_fallStart_U64_fallLen_U64_isArray_
     genExpr_c_Comp_id_U64(&((*c)), exprId);
     return;
     }
+    if (isFnType_c_Comp_ref_U64(&((*c)), tyRef)) {
+    if (isPlaceExpr_c_Comp_id_U64(&((*c)), exprId)) {
+    plew_write((PlewString){"plew_closure_share(", 19});
+    genExpr_c_Comp_id_U64(&((*c)), exprId);
+    plew_write((PlewString){")", 1});
+    return;
+    }
+    genExpr_c_Comp_id_U64(&((*c)), exprId);
+    return;
+    }
     if (isGenericInst_c_Comp_ref_U64(&((*c)), tyRef)) {
     long long needs = 0;
     if (isGenericEnumInst_c_Comp_ref_U64(&((*c)), tyRef)) {
@@ -11537,6 +11564,53 @@ void emitClosureEnvStruct_c_Comp_id_U64(Comp* c, uint64_t id) {
     writeU64_n_U64(id);
     plew_write((PlewString){";\n", 2});
 }
+void emitClosureEnvDrop_c_Comp_id_U64(Comp* c, uint64_t id) {
+    plew_write((PlewString){"__attribute__((unused)) static void __closure_env", 49});
+    writeU64_n_U64(id);
+    plew_write((PlewString){"_release(void* __p) {\n    __closure_env", 39});
+    writeU64_n_U64(id);
+    plew_write((PlewString){"* e = (__closure_env", 20});
+    writeU64_n_U64(id);
+    plew_write((PlewString){"*)__p; (void)e;\n", 16});
+    uint64_t j = 0;
+    while (j < (long long)(((*c).captures).len)) {
+    CaptureEntry e = PlewArray_CaptureEntry_get((*c).captures, (long long)(j));
+    if (e.closureId == id) {
+    if (e.boxed) {
+    plew_write((PlewString){"    plew_arc_release(((long long*)e->", 37});
+    writeSpan_c_Comp_start_U64_len_U64(&((*c)), e.nameStart, e.nameLen);
+    plew_write((PlewString){") - 1);\n", 8});
+    }
+    else {
+    if (e.isArray) {
+    plew_write((PlewString){"    PlewArray_", 14});
+    writeSpan_c_Comp_start_U64_len_U64(&((*c)), e.tyStart, e.tyLen);
+    plew_write((PlewString){"_release(e->", 12});
+    writeSpan_c_Comp_start_U64_len_U64(&((*c)), e.nameStart, e.nameLen);
+    plew_write((PlewString){");\n", 3});
+    }
+    else {
+    if (rangeEquals_bytes_AU8_start_U64_len_U64_kw_String((*c).bytes, e.tyStart, e.tyLen, (PlewString){"Ref", 3})) {
+    plew_write((PlewString){"    plew_arc_release(((long long*)e->", 37});
+    writeSpan_c_Comp_start_U64_len_U64(&((*c)), e.nameStart, e.nameLen);
+    plew_write((PlewString){") - 1);\n", 8});
+    }
+    else {
+    if (structNeedsRelease_c_Comp_start_U64_len_U64(&((*c)), e.tyStart, e.tyLen)) {
+    plew_write((PlewString){"    ", 4});
+    writeSpan_c_Comp_start_U64_len_U64(&((*c)), e.tyStart, e.tyLen);
+    plew_write((PlewString){"_release(e->", 12});
+    writeSpan_c_Comp_start_U64_len_U64(&((*c)), e.nameStart, e.nameLen);
+    plew_write((PlewString){");\n", 3});
+    }
+    }
+    }
+    }
+    }
+    j = ({ uint64_t __ov; if (__builtin_add_overflow((j), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    plew_write((PlewString){"}\n", 2});
+}
 void emitClosureEnvs_c_Comp(Comp* c) {
     uint64_t i = 0;
     while (i < (long long)(((*c).exprs).len)) {
@@ -11559,6 +11633,7 @@ void emitClosureEnvs_c_Comp(Comp* c) {
         (void)body;
     if (closureHasCaptures_c_Comp_id_U64(&((*c)), i)) {
     emitClosureEnvStruct_c_Comp_id_U64(&((*c)), i);
+    emitClosureEnvDrop_c_Comp_id_U64(&((*c)), i);
     }
     }
     else {

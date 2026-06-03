@@ -426,6 +426,20 @@ fn emitScopeDrops(c: inout Comp, mark: U64, exclIdx: U64) {
                 writeSpan(c: inout c, start: lo.nameStart, len: lo.nameLen)
                 write(s: ");\n")
             } else {
+                if isBoxedLocalAt(c: inout c, nameStart: lo.nameStart) {
+                    // a boxed (captured `mut val`) cell: drop this scope's reference
+                    // to the shared ARC cell (a capturing closure holds its own).
+                    write(s: "    plew_arc_release(((long long*)")
+                    writeSpan(c: inout c, start: lo.nameStart, len: lo.nameLen)
+                    write(s: ") - 1);\n")
+                } else {
+                if isFnType(c: inout c, ref: lo.ty) {
+                    // an owned closure: release its env (runs drop = release the
+                    // captured heap, then frees the env block) at the last ref.
+                    write(s: "    plew_closure_release(")
+                    writeSpan(c: inout c, start: lo.nameStart, len: lo.nameLen)
+                    write(s: ");\n")
+                } else {
                 if isRefInst(c: inout c, ref: lo.ty) {
                     // an owned Ref local: release its refcounted box.
                     emitRefRelease(c: inout c, nameStart: lo.nameStart, nameLen: lo.nameLen, refTy: lo.ty)
@@ -453,6 +467,8 @@ fn emitScopeDrops(c: inout Comp, mark: U64, exclIdx: U64) {
                         writeSpan(c: inout c, start: lo.nameStart, len: lo.nameLen)
                         write(s: ");\n")
                     }
+                }
+                }
                 }
             }
         }

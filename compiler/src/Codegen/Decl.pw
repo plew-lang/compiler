@@ -531,6 +531,19 @@ fn genCopyValue(c: inout Comp, exprId: U64, tyRef: U64, fallStart: U64, fallLen:
         genExpr(c: inout c, id: exprId)
         return
     }
+    if isFnType(c: inout c, ref: tyRef) {
+        // a closure value: binding/returning from a live place retains the env
+        // (so both references can release it); a fresh closure (literal / call
+        // result) transfers its env rc and is emitted directly.
+        if isPlaceExpr(c: inout c, id: exprId) {
+            write(s: "plew_closure_share(")
+            genExpr(c: inout c, id: exprId)
+            write(s: ")")
+            return
+        }
+        genExpr(c: inout c, id: exprId)
+        return
+    }
     if isGenericInst(c: inout c, ref: tyRef) {
         mut val needs: Bool = false
         if isGenericEnumInst(c: inout c, ref: tyRef) {
@@ -1039,7 +1052,58 @@ fn emitClosureEnvStruct(c: inout Comp, id: U64) {
     write(s: ";\n")
 }
 
-// Emit an env-struct typedef for every capturing closure.
+// `static void __closure_env<id>_release(void* p)` — the env's drop: release
+// every heap-owning capture (boxed mut cell, array, Ref box, heap struct) so the
+// closure's last reference reclaims them. Scalars/Strings own no heap. Stored in
+// PlewClosure.drop and run by plew_closure_release before the env block is freed.
+fn emitClosureEnvDrop(c: inout Comp, id: U64) {
+    write(s: "__attribute__((unused)) static void __closure_env")
+    writeU64(n: id)
+    write(s: "_release(void* __p) {\n    __closure_env")
+    writeU64(n: id)
+    write(s: "* e = (__closure_env")
+    writeU64(n: id)
+    write(s: "*)__p; (void)e;\n")
+    mut val j: U64 = 0
+    while j < c.captures.count {
+        val e: CaptureEntry = c.captures[j]
+        if e.closureId == id {
+            if e.boxed {
+                write(s: "    plew_arc_release(((long long*)e->")
+                writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+                write(s: ") - 1);\n")
+            } else {
+                if e.isArray {
+                    write(s: "    PlewArray_")
+                    writeSpan(c: inout c, start: e.tyStart, len: e.tyLen)
+                    write(s: "_release(e->")
+                    writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+                    write(s: ");\n")
+                } else {
+                    if rangeEquals(bytes: c.bytes, start: e.tyStart, len: e.tyLen, kw: "Ref") {
+                        // drop the Ref box's rc (the pointee's own heap, if any, is
+                        // a rare residual leak — acceptable hidden cost for now).
+                        write(s: "    plew_arc_release(((long long*)e->")
+                        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+                        write(s: ") - 1);\n")
+                    } else {
+                        if structNeedsRelease(c: inout c, start: e.tyStart, len: e.tyLen) {
+                            write(s: "    ")
+                            writeSpan(c: inout c, start: e.tyStart, len: e.tyLen)
+                            write(s: "_release(e->")
+                            writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+                            write(s: ");\n")
+                        }
+                    }
+                }
+            }
+        }
+        j += 1
+    }
+    write(s: "}\n")
+}
+
+// Emit an env-struct typedef + its drop function for every capturing closure.
 fn emitClosureEnvs(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.exprs.count {
@@ -1047,6 +1111,7 @@ fn emitClosureEnvs(c: inout Comp) {
             Expr.Closure { val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body } => {
                 if closureHasCaptures(c: inout c, id: i) {
                     emitClosureEnvStruct(c: inout c, id: i)
+                    emitClosureEnvDrop(c: inout c, id: i)
                 }
             }
             _ => {}
