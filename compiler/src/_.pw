@@ -40,6 +40,13 @@ fn main() {
     // directives, and concatenate every file into one buffer; with no argument
     // we read a single program from stdin.
     mut val combined: Array[U8] = []
+    // module identity (spec/15): each file belongs to a module = root + its `part`
+    // tree. `moduleRanges` records each file's [start,len) span in `combined` tagged
+    // with its module id (Bind: nameStart=span start, nameLen=len, fieldStart=module
+    // id), so `moduleOf(offset)` reverse-maps a declaration to its module. An
+    // `import` child starts a fresh module; a `part` child inherits the parent's.
+    mut val moduleRanges: Array[Bind] = []
+    mut val nextModuleId: U64 = 1
     if argCount() > 1 {
         // Module loader: a recursive, deduplicated worklist over local includes.
         // Each file's `part ./Name` / `import ./Name` directives resolve relative
@@ -59,6 +66,7 @@ fn main() {
         }
         mut val pathBuf: Array[U8] = []
         mut val loaded: Array[Bind] = []
+        // `loaded[i].fieldStart` carries each queued file's module id.
         // package src root for `/…` absolute imports (from the Plew.toml walk-up;
         // empty if no manifest is found, in which case `/…` imports are skipped).
         val srcRoot: Array[U8] = findSrcRoot(entry: entryBytes)
@@ -67,18 +75,21 @@ fn main() {
         val stdRoot: Array[U8] = computeStdRoot(arg0: argAt(0).bytes)
         val es: U64 = pathBuf.count
         appendBytes(into: inout pathBuf, from: entryBytes)
-        loaded.append(<Bind nameStart=es nameLen=entryBytes.count fieldStart=es fieldLen=entryBytes.count />)
+        loaded.append(<Bind nameStart=es nameLen=entryBytes.count fieldStart=0 fieldLen=entryBytes.count />)
         mut val qi: U64 = 0
         while qi < loaded.count {
             val ent: Bind = loaded[qi]
             qi += 1
+            val moduleId: U64 = ent.fieldStart
             val path: Array[U8] = extractSpan(buf: pathBuf, start: ent.nameStart, len: ent.nameLen)
             val src: String = readFileBytes(path)
             val sb: Array[U8] = src.bytes
             if combined.count > 0 {
                 combined.append(10)
             }
+            val rangeStart: U64 = combined.count
             appendBytes(into: inout combined, from: sb)
+            moduleRanges.append(<Bind nameStart=rangeStart nameLen=combined.count - rangeStart fieldStart=moduleId fieldLen=0 />)
             mut val lxp: Lexer = <Lexer bytes=sb pos=0 toks=[] depth=0 />
             lex(lx: inout lxp)
             val incs: Array[Bind] = collectParts(rootBytes: sb, toks: lxp.toks)
@@ -91,9 +102,16 @@ fn main() {
                 } else {
                     if pathSeen(buf: pathBuf, loaded: loaded, path: childPath) {
                     } else {
+                        // a `part` child (pb.fieldStart == 0) joins this module; an
+                        // `import` child (== 1) starts a fresh module.
+                        mut val childModule: U64 = moduleId
+                        if pb.fieldStart == 1 {
+                            childModule = nextModuleId
+                            nextModuleId = nextModuleId + 1
+                        }
                         val cs: U64 = pathBuf.count
                         appendBytes(into: inout pathBuf, from: childPath)
-                        loaded.append(<Bind nameStart=cs nameLen=childPath.count fieldStart=cs fieldLen=childPath.count />)
+                        loaded.append(<Bind nameStart=cs nameLen=childPath.count fieldStart=childModule fieldLen=childPath.count />)
                     }
                 }
                 pj += 1
@@ -101,7 +119,9 @@ fn main() {
         }
     } else {
         val s: String = readStdin()
+        val rangeStart: U64 = combined.count
         appendBytes(into: inout combined, from: s.bytes)
+        moduleRanges.append(<Bind nameStart=rangeStart nameLen=combined.count - rangeStart fieldStart=0 fieldLen=0 />)
     }
     // Auto-load the implicit prelude (the ambient Array methods), appended so it
     // never shifts a user line number. It lives next to the binary at `std/Prelude.pw`
@@ -116,7 +136,11 @@ fn main() {
         if combined.count > 0 {
             combined.append(10)
         }
+        // the implicit prelude is its own module (@Std/Prelude).
+        val prelStart: U64 = combined.count
         appendBytes(into: inout combined, from: prelSrc.bytes)
+        moduleRanges.append(<Bind nameStart=prelStart nameLen=combined.count - prelStart fieldStart=nextModuleId fieldLen=0 />)
+        nextModuleId = nextModuleId + 1
     }
     // Append a trailing comment naming built-in types. Some values have a known
     // type with no source span to point at (a string literal's `String`, the
@@ -127,7 +151,7 @@ fn main() {
     appendBytes(into: inout combined, from: "\n// kwSpan builtins: String U8 U64 Bool Array\n".bytes)
     mut val lx: Lexer = <Lexer bytes=combined pos=0 toks=[] depth=0 />
     lex(lx: inout lx)
-    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] traits=[] conforms=[] methodAliases=[] derives=[] pendingDerives=[] funcBounds=[] curCheckFn=0 curWitnessed=[] curWhereTraits=[] types=[] genInsts=[] fnInsts=[] fnTypes=[] fnThunks=[] captures=[] curClosureId=0 curInClosure=false curCaptureMark=0 arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curRetTy=0 curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curSelfMove=false curTypeParams=[] curTypeArgs=[] curRecvInstRef=0 curGiveTmp=0 curLoopMark=0 curBranchBase=0 deinits=[] curAsync=false asyncState=0 curAsyncFn=0 asyncVarSeq=0 />
+    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] traits=[] conforms=[] methodAliases=[] derives=[] pendingDerives=[] funcBounds=[] curCheckFn=0 curWitnessed=[] curWhereTraits=[] types=[] genInsts=[] fnInsts=[] fnTypes=[] fnThunks=[] captures=[] curClosureId=0 curInClosure=false curCaptureMark=0 arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curRetTy=0 curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curSelfMove=false curTypeParams=[] curTypeArgs=[] curRecvInstRef=0 curGiveTmp=0 curLoopMark=0 curBranchBase=0 deinits=[] curAsync=false asyncState=0 curAsyncFn=0 asyncVarSeq=0 moduleRanges=moduleRanges />
     // reserve TypeRef index 0 as the "no type" sentinel so a `ty` field of 0
     // (synthetic locals, untyped positions) never aliases a real parsed type.
     c.types.append(<TypeRef nameStart=0 nameLen=0 args=[] />)

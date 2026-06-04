@@ -582,6 +582,12 @@ struct Comp {
     // names legitimately repeat). The frame-field collection and the resume-body
     // codegen walk the body in the same DFS order, so they assign matching suffixes.
     mut val asyncVarSeq: U64
+    // module identity (spec/15 visibility): each entry (reusing Bind) records a
+    // source file's [start,len) span in `bytes` tagged with its module id
+    // (fieldStart). Built by the loader; `moduleOf(offset)` reverse-maps a decl/use
+    // to its module so export/import visibility can be enforced across module lines
+    // (a module = a root file + its `part` tree; each `import` target is another).
+    mut val moduleRanges: Array[Bind]
 }
 
 // ---- cursor helpers ----

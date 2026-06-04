@@ -1,3 +1,22 @@
+// The module id owning the source byte `offset` (spec/15 visibility): the loader
+// tags each file's [start,len) span in `bytes` with a module id (a module = a root
+// file + its `part` tree; each `import` target a separate one). A declaration's or
+// use's module is `moduleOf(its name offset)`. Returns 0 (the entry module) if no
+// range matches (e.g. synthetic spans appended after loading).
+fn moduleOf(c: inout Comp, offset: U64) -> U64 {
+    mut val i: U64 = 0
+    while i < c.moduleRanges.count {
+        val r: Bind = c.moduleRanges[i]
+        if offset >= r.nameStart {
+            if offset < r.nameStart + r.nameLen {
+                return r.fieldStart
+            }
+        }
+        i += 1
+    }
+    return 0
+}
+
 // The effective declared type of a `val`/`mut val` binding: the written
 // annotation, or — when omitted (`val x = expr`) — inferred from the initializer.
 // (start,len,arr) is the head/array view; ty the structured TypeRef. Shared by
