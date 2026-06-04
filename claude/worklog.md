@@ -52,7 +52,7 @@ switch 先頭ディスパッチが `goto __L<N>` で再入。全ローカル hoi
 
 - **ビルド**：`./bootstrap.sh`＝C 種 `compiler/plewc.seed.c`→clang→`plewc0`→`compiler/src/_.pw` を自己コンパイル→不動点 cmp（Rust 不要）。`./bootstrap.sh --reseed` で種更新（→ `compiler/plewc.seed.c` を commit）。
 - **テスト**：`./test.sh`＝`tests/run/*.pw`（`.out` 照合・任意 `.in`）＋`tests/part/`（複数ファイル）＋`tests/reject/*.pw`（plewc 非ゼロ終了＝受理の健全性）＋`tests/panic/*.pw`（compile+link 成功・実行は非ゼロ＋`.panic` stderr 部分一致）＋不動点。メモリは `ASAN=1 ./test.sh` ＋ ASan ビルドのコンパイラで自己コンパイル（`compiler/plewc _.pw > p.c; clang -fsanitize=address p.c -o pa; ASAN_OPTIONS=detect_leaks=0 pa _.pw`＝UAF/double-free）。
-- **機能追加＝ADD→reseed→USE**：新機能を plewc.pw の**ソースで使う**には ①`compiler/src/` の codegen に足す（ADD）→ ②`./bootstrap.sh --reseed` で種更新→ ③ソースで使う（USE）。「ソースが使う機能は常にひとつ前のコンパイラがサポート済み」を守れば不動点は壊れない。**新しい preamble 行・codegen 出力変化・AST フィールド追加を足したら reseed を 2 回**（1 回目で挙動を種に焼き、2 回目で種ファイルを一致させる）。暗黙ビルトイン→実 `@Std`/`extern` 移行も同じ ADD→USE→REMOVE で flag day にしない。
+- **機能追加＝ADD→reseed→USE**：新機能を plewc.pw の**ソースで使う**には ①`compiler/src/` の codegen に足す（ADD）→ ②`./bootstrap.sh --reseed` で種更新→ ③ソースで使う（USE）。「ソースが使う機能は常にひとつ前のコンパイラがサポート済み」を守れば不動点は壊れない。**新しい preamble 行・codegen 出力変化・AST フィールド追加を足したら reseed を 2 回**（1 回目で挙動を種に焼き、2 回目で種ファイルを一致させる）。暗黙ビルトイン→実 `@Std`/`extern` 移行も同じ ADD→USE→REMOVE で flag day にしない。**重要な落とし穴＝コンパイラは `@Std/Io`→`@Std/Core` を import するので、Core/Io/Process の `.pw` も「コンパイラ自身がコンパイルするソース」の一部**。よって **Core に「種のコンパイラがまだ受理しない構文/機能」を足すと bootstrap が即壊れる**（例：`impl String {}` を Core に足したら、種のコンパイラが inherent-on-builtin を拒否して [2/3] で落ちた）。回避＝**機能を先に種へ焼いてから Core で使う**：①コンパイラ側の許可変更だけ入れ Core の新 .pw 機能は外したまま `--reseed`（種に許可を焼く）→②Core にその機能を足して新コンパイラで `--reseed`（USE）。`--reseed` 自体も古い種で plewc0 を作るので、この順を破ると `--reseed` ごと詰む。
 
 ## 運用メモ
 
