@@ -1,4 +1,4 @@
 import @Std/Io with { print }
 // Inline trait constraints are not allowed (spec/06: use a `where` clause).
 fn f[T: Show](x: T) -> I64 { return 0I64 }
-fn main() { print(0) }
+fn main() { print(0I64) }

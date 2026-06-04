@@ -16,5 +16,5 @@ fn main() {
     print(getX())
     val s: String = "hi"
     val isHi: fn() -> Bool = fn() -> Bool { return s == "hi" }
-    if isHi() { print(1) } else { print(0) }
+    if isHi() { print(1I64) } else { print(0I64) }
 }

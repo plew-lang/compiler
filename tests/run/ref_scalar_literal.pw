@@ -8,7 +8,7 @@ import @Std/Io with { print }
 fn main() {
     val r: Ref[I32] = <Ref[I32] value=7 />
     val s: Ref[I32] = r
-    print(1)
+    print(1I64)
     val u: Ref[U8] = <Ref[U8] value=200 />
-    print(2)
+    print(2I64)
 }

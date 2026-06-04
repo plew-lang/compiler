@@ -14,5 +14,5 @@ async fn main() {
     val b: Promise[I64] = delayed(label: 1, ms: 50)
     await a
     await b
-    print(9)
+    print(9I64)
 }

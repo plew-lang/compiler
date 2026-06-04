@@ -9,4 +9,4 @@ struct F {}
 impl F as Writer {
     fn put(data: I64) -> I64 { return data }
 }
-fn main() { print(0) }
+fn main() { print(0I64) }

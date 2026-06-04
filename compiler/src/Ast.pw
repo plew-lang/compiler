@@ -217,7 +217,6 @@ struct PatInfo {
 enum Stmt {
     Let(mutable: Bool, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64)
     Assign(op: I64, target: U64, value: U64)
-    Print(expr: U64, offset: U64)
     ExprStmt(expr: U64)
     Return(value: U64, hasValue: Bool)
     If(cond: U64, thenBlk: U64, elseBlk: U64, hasElse: Bool)
@@ -564,11 +563,6 @@ struct Comp {
     // moved flag would skip the value's deinit on the not-taken path) — so it is
     // rejected. 0 at function top level (straight-line moves always allowed).
     mut val curBranchBase: U64
-    // `print` was imported from @Std/Io. `print` is still a compiler builtin
-    // (non-ambient: using it without the import is a compile error). The other
-    // @Std functions are ordinary `extern "plew-intrinsic"` declarations resolved
-    // by name, so they need no per-builtin flag.
-    mut val impPrint: Bool
     // types that declared a `deinit { ... }` (spec/03). Each entry reuses Bind as
     // a (start,len) pair naming the receiver type. The deinit body itself is a
     // synthetic Func named `deinit` (hasRecv) in c.funcs; this list lets codegen

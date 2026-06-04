@@ -32,5 +32,5 @@ fn main() {
     print(boolI(b: a <= c))   // 1
     print(boolI(b: b >= a))   // 1
     print(boolI(b: a > b))    // 0
-    if a < b { print(7) } else { print(8) }   // 7 (condition position)
+    if a < b { print(7I64) } else { print(8I64) }   // 7 (condition position)
 }

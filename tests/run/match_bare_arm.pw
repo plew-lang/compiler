@@ -18,9 +18,9 @@ fn main() {
     // a no-field enum with bare arms
     val c: Color = <Color.Green />
     match c {
-        Color.Red => print(0)
-        Color.Green => print(1)
-        Color.Blue => print(2)
+        Color.Red => print(0I64)
+        Color.Green => print(1I64)
+        Color.Blue => print(2I64)
     }
 }
 

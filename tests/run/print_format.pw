@@ -1,0 +1,12 @@
+// print is `print[T: Format]` in pure Plew (@Std/Io), formatting via the Format
+// trait Core implements for every primitive. Covers all int widths + Bool.
+import @Std/Io with { print }
+fn main() {
+    print(0I64)
+    print(-128I8)
+    print(255U8)
+    print(2147483647I32)
+    print(18446744073709551615U64)
+    print(true)
+    print(false)
+}

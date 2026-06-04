@@ -1107,7 +1107,7 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
             while ai < arms.count {
                 val a: MatchArm = arms[ai]
                 val mark: U64 = scopeMark(c: inout c)
-                scanAddArmBinds(c: inout c, a: a, scrutRef: exprType(c: inout c, id: scrut).ref)
+                scanAddArmBinds(c: inout c, a: a, scrutTi: exprType(c: inout c, id: scrut))
                 checkBoundsExpr(c: inout c, exprId: a.body)
                 popLocals(c: inout c, mark: mark)
                 ai += 1
@@ -1128,7 +1128,6 @@ fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
             checkBoundsExpr(c: inout c, exprId: target)
             checkBoundsExpr(c: inout c, exprId: value)
         }
-        Stmt.Print(val expr, val offset) => { checkBoundsExpr(c: inout c, exprId: expr) }
         Stmt.ExprStmt(val expr) => { checkBoundsExpr(c: inout c, exprId: expr) }
         Stmt.Return(val value, val hasValue) => {
             if hasValue {
@@ -1169,7 +1168,7 @@ fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
             while ai < arms.count {
                 val a: MatchArm = arms[ai]
                 val mark: U64 = scopeMark(c: inout c)
-                scanAddArmBinds(c: inout c, a: a, scrutRef: exprType(c: inout c, id: scrut).ref)
+                scanAddArmBinds(c: inout c, a: a, scrutTi: exprType(c: inout c, id: scrut))
                 checkBoundsBlock(c: inout c, blkId: a.body)
                 popLocals(c: inout c, mark: mark)
                 ai += 1
@@ -1289,19 +1288,32 @@ fn checkOverloadCollisions(c: inout Comp) {
 // only for a type your module defines; primitives/String are never user-defined,
 // so an `impl I32 { }` / `impl String { }` is always illegal). Trait additions to
 // built-ins go through `#Ext` (deferred).
-// Does some module declare (start,len) as an `extern "plew-intrinsic" { struct
-// … }` lang-item type? Such a type is *owned* by the declaring module (Core),
-// so it may coherently carry `impl`s — the impl-on-builtin prohibition lifts.
-fn isExternStructName(c: inout Comp, start: U64, len: U64) -> Bool {
-    mut val i: U64 = 0
-    while i < c.structs.count {
-        val s: StructDef = c.structs[i]
-        if s.isExtern {
-            if spansEqual(c: inout c, aStart: s.nameStart, aLen: s.nameLen, bStart: start, bLen: len) {
-                return true
+
+// Does the method/assoc named (mStart,mLen) on type (recvStart,recvLen) witness a
+// trait the type conforms to? (i.e. the type has an `impl T as Trait` and Trait
+// declares a requirement of this name.) Used to allow Core's `impl I32 as Format`
+// while still rejecting an inherent `impl I32 { fn foo }` on a primitive.
+fn methodWitnessesAConformance(c: inout Comp, recvStart: U64, recvLen: U64, mStart: U64, mLen: U64) -> Bool {
+    mut val ci: U64 = 0
+    while ci < c.conforms.count {
+        val cf: Conform = c.conforms[ci]
+        if spansEqual(c: inout c, aStart: cf.typeStart, aLen: cf.typeLen, bStart: recvStart, bLen: recvLen) {
+            mut val ti: U64 = 0
+            while ti < c.traits.count {
+                val tr: TraitDef = c.traits[ti]
+                if spansEqual(c: inout c, aStart: tr.nameStart, aLen: tr.nameLen, bStart: cf.traitStart, bLen: cf.traitLen) {
+                    mut val ri: U64 = 0
+                    while ri < tr.reqs.count {
+                        if spansEqual(c: inout c, aStart: tr.reqs[ri].nameStart, aLen: tr.reqs[ri].nameLen, bStart: mStart, bLen: mLen) {
+                            return true
+                        }
+                        ri += 1
+                    }
+                }
+                ti += 1
             }
         }
-        i += 1
+        ci += 1
     }
     return false
 }
@@ -1318,17 +1330,20 @@ fn checkImplOnBuiltin(c: inout Comp) {
                 onBuiltin = isPrimType(c: inout c, start: f.recvStart, len: f.recvLen) || rangeEquals(bytes: c.bytes, start: f.recvStart, len: f.recvLen, kw: "String")
             }
         }
-        // a primitive/String the std core declares (`extern { struct I32 }`) is an
-        // owned type, so impls on it are coherent (spec/07,09: type-ownership).
-        // Full orphan enforcement (only the owner may declare it) awaits module
-        // identity; for now any `extern struct <name>` in scope lifts the ban.
+        // a *trait-conformance* member on a primitive/String is allowed: Core owns
+        // the type (`extern { struct I32 }`) and may coherently `impl I32 as Format`
+        // (spec/07,09). An *inherent* method on a primitive (`impl I32 { fn foo }`)
+        // is still rejected — primitive behaviour is trait-only, and a third party
+        // must use `#Ext`. (Full owner-only enforcement of conformances awaits
+        // module identity; a non-witnessing inherent method is the case we can tell
+        // apart in the flat model, and it covers the impl-on-builtin footgun.)
         if onBuiltin {
-            if isExternStructName(c: inout c, start: f.recvStart, len: f.recvLen) {
+            if methodWitnessesAConformance(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, mStart: f.nameStart, mLen: f.nameLen) {
                 onBuiltin = false
             }
         }
         if onBuiltin {
-            compileErrorAt(line: lineOf(c: inout c, offset: f.nameStart), msg: "cannot define methods on a built-in type you do not own (declare it in core, or use an extension `#Ext`)")
+            compileErrorAt(line: lineOf(c: inout c, offset: f.nameStart), msg: "cannot define methods on a built-in type you do not own (use a trait conformance via core, or an extension `#Ext`)")
         }
         i += 1
     }

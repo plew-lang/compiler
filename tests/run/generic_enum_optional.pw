@@ -10,10 +10,10 @@ fn main() {
     val b: Optional[I32] = <Optional[I32].None />
     match a {
         Optional.Some(val v) => { print(v) }
-        Optional.None => { print(0) }
+        Optional.None => { print(0I64) }
     }
     match b {
         Optional.Some(val v) => { print(v) }
-        Optional.None => { print(99) }
+        Optional.None => { print(99I64) }
     }
 }

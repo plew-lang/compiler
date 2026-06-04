@@ -885,7 +885,15 @@ fn placeIsMutable(c: inout Comp, id: U64) -> Bool {
 fn exprType(c: inout Comp, id: U64) -> TypeInfo {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Int(value: _, offset: _, isBool: _, val tyStart, val tyLen) => {
+        Expr.Int(value: _, offset: _, val isBool, val tyStart, val tyLen) => {
+            // a `true`/`false` literal is `Bool`: recover a "Bool" span so a generic
+            // call like `print(true)` infers T = Bool.
+            if isBool {
+                val b: Bind = kwSpan(c: inout c, kw: "Bool", kwLen: 4)
+                if b.nameLen != 0 {
+                    return <TypeInfo kind=0 nameStart=b.nameStart nameLen=b.nameLen ref=0 />
+                }
+            }
             // a suffixed literal (`5U64`) carries its own type; otherwise the
             // type comes from context and is recovered elsewhere.
             if tyLen != 0 {
@@ -1082,6 +1090,14 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                                 return <TypeInfo kind=3 nameStart=xn.nameStart nameLen=xn.nameLen ref=0 />
                             }
                         }
+                        // a compound element (`Ref[Cell]`, `Box[I32]`): carry its
+                        // structured ref so `arr[i]->field` / a generic field access
+                        // can recover the pointee/instantiation (typeInfoOfRef would
+                        // drop the ref for a non-Array compound). Only for compound
+                        // elements — a simple scalar element (`U8`) must stay scalar.
+                        if isCompoundType(c: inout c, ref: rr) {
+                            return <TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=rr />
+                        }
                     }
                 }
                 return typeInfoOfName(c: inout c, start: bt.nameStart, len: bt.nameLen, isArray: false)
@@ -1110,6 +1126,20 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 }
                 val mf: Func = c.funcs[mi]
                 if mf.hasRet {
+                    // a generic method (`impl[T] Box[T] { fn get() -> T }`) returning
+                    // a type parameter: substitute it with the receiver's concrete
+                    // instantiation argument (else `box.get()` types as the bare `T`).
+                    if isGenericInst(c: inout c, ref: rt.ref) {
+                        val gt: TypeRef = c.types[rt.ref]
+                        val gsi: U64 = genericStructIndex(c: inout c, nameStart: gt.nameStart, nameLen: gt.nameLen)
+                        if gsi < c.structs.count {
+                            return substTypeInfo(c: inout c, instRef: rt.ref, params: c.structs[gsi].typeParams, tyRef: mf.retTy)
+                        }
+                        val gei: U64 = genericEnumIndex(c: inout c, nameStart: gt.nameStart, nameLen: gt.nameLen)
+                        if gei < c.enums.count {
+                            return substTypeInfo(c: inout c, instRef: rt.ref, params: c.enums[gei].typeParams, tyRef: mf.retTy)
+                        }
+                    }
                     return typeInfoOfName(c: inout c, start: mf.retStart, len: mf.retLen, isArray: mf.retIsArray)
                 }
                 return scalarInfo()

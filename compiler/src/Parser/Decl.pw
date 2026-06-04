@@ -1023,9 +1023,6 @@ fn synthesizeDerives(c: inout Comp) {
 // need no import flag. A name from the wrong module stays disabled (so
 // `import @Std/Process with { print }` is still rejected as not-ambient).
 fn markImport(c: inout Comp, segStart: U64, segLen: U64, nameStart: U64, nameLen: U64) {
-    if rangeEquals(bytes: c.bytes, start: segStart, len: segLen, kw: "Io") {
-        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "print") { c.impPrint = true }
-    }
 }
 
 // `import <path> [with { name, ... }]`. The leading `import` ident is current.

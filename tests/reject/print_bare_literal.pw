@@ -1,0 +1,6 @@
+// `print(42)` is ambiguous: print is generic over T: Format and a bare integer
+// literal has no default type (spec/02). A suffix is required: print(42I64).
+import @Std/Io with { print }
+fn main() {
+    print(42)
+}

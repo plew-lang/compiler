@@ -1,4 +1,4 @@
 // `borrow` is redundant on a copyable type (by-value already reads independently).
 import @Std/Io with { print }
 fn peek(n: borrow I64) -> I64 { return n }
-fn main() { print(0) }
+fn main() { print(0I64) }

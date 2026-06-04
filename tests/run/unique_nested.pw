@@ -9,7 +9,7 @@ unique struct File {
 unique struct Pair {
     val a: File
     val b: File
-    deinit { print(0) }
+    deinit { print(0I64) }
 }
 
 // Moving a nested-unique value transfers the whole tree; deinit still runs once.

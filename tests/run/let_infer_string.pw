@@ -12,6 +12,6 @@ fn main() {
     val s = "hello"
     val t = "world"
     val r: String = pick(a: s, b: t, useA: true)
-    if r == s { print(1) } else { print(0) }
-    if s == t { print(1) } else { print(0) }
+    if r == s { print(1I64) } else { print(0I64) }
+    if s == t { print(1I64) } else { print(0I64) }
 }

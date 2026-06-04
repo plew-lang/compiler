@@ -255,17 +255,6 @@ fn parseLet(c: inout Comp, mutable: Bool) -> U64 {
     return c.pushStmt(s: <Stmt.Let mutable=mutable nameStart=nameTok.start nameLen=nameTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=init />)
 }
 
-fn parsePrint(c: inout Comp) -> U64 {
-    val kw: Tok = c.cur()
-    c.advance()
-    c.advance()
-    val e: U64 = parseExpr(c: inout c)
-    match c.curKind() {
-        Kind.RParen => { c.advance() }
-        _ => {}
-    }
-    return c.pushStmt(s: <Stmt.Print expr=e offset=kw.start />)
-}
 
 // `panic <msg>`: a diverging statement. The `panic` identifier is current.
 fn parsePanic(c: inout Comp) -> U64 {
@@ -722,12 +711,6 @@ fn parseStmt(c: inout Comp) -> U64 {
         }
         Kind.KwReturn => { return parseReturn(c: inout c) }
         Kind.Ident => {
-            if c.identIs(kw: "print") {
-                match c.peekKind(off: 1) {
-                    Kind.LParen => { return parsePrint(c: inout c) }
-                    _ => { return parseExprOrAssign(c: inout c) }
-                }
-            }
             if c.identIs(kw: "panic") {
                 return parsePanic(c: inout c)
             }

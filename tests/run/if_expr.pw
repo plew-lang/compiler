@@ -20,10 +20,10 @@ fn main() {
     } else {
         give 0
     }
-    print(a)                 // 15
-    print(classify(n: 0 - 7))    // -1
-    print(classify(n: 0))    // 0
-    print(classify(n: 42))   // 1
+    print(a)                 // 15I64
+    print(classify(n: 0I64 - 7I64))    // -1I64
+    print(classify(n: 0I64))    // 0I64
+    print(classify(n: 42I64))   // 1I64
     // nested directly in an expression
-    print(1 + if true { give 100 } else { give 200 })   // 101
+    print(1I64 + if true { give 100I64 } else { give 200I64 })   // 101I64
 }

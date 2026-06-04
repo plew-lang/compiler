@@ -4,25 +4,25 @@
 import @Std/Io with { print }
 
 fn main() {
-    print(17 / 5)            // 3
-    print(17 % 5)            // 2
-    print((0 - 17) / 5)      // -3 (truncated toward zero)
-    print((0 - 17) % 5)      // -2 (sign of dividend)
+    print(17I64 / 5I64)            // 3I64
+    print(17I64 % 5I64)            // 2I64
+    print((0I64 - 17I64) / 5I64)      // -3I64 (truncated toward zero)
+    print((0I64 - 17I64) % 5I64)      // -2I64 (sign of dividend)
     val a: I64 = 100
     val b: I64 = 7
-    print(a / b)             // 14
-    print(a % b)             // 2
+    print(a / b)             // 14I64
+    print(a % b)             // 2I64
     // compound assign also routes through the checked helpers
     mut val c: I64 = 20
     c /= 6
-    print(c)                 // 3
+    print(c)                 // 3I64
     mut val d: I64 = 20
     d %= 6
-    print(d)                 // 2
+    print(d)                 // 2I64
     // through an array place
     mut val xs: Array[I64] = [20, 23]
     xs[0] /= 6
     xs[1] %= 6
-    print(xs[0])             // 3
-    print(xs[1])             // 5
+    print(xs[0I64])             // 3I64
+    print(xs[1I64])             // 5I64
 }

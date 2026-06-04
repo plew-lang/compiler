@@ -25,6 +25,6 @@ fn main() {
     print(bad.isErr())
     val some: Optional[I32] = <Optional[I32].Some v=5 />
     val none: Optional[I32] = <Optional[I32].None />
-    print(some ?? 0)
-    print(none ?? 42)
+    print(some ?? 0I64)
+    print(none ?? 42I64)
 }

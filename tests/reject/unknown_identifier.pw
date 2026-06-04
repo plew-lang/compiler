@@ -3,4 +3,4 @@ struct P { val n: I32 }
 impl P {
     fn get() -> I32 { return n }
 }
-fn main() { print(0) }
+fn main() { print(0I64) }

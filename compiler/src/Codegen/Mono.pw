@@ -605,7 +605,10 @@ fn typeInfoOfRef(c: inout Comp, ref: U64) -> TypeInfo {
         val el: TypeRef = c.types[t.args[0]]
         return typeInfoOfName(c: inout c, start: el.nameStart, len: el.nameLen, isArray: true)
     }
-    return typeInfoOfName(c: inout c, start: t.nameStart, len: t.nameLen, isArray: false)
+    // a compound type (`Ref[T]`, `Box[I32]`, `Optional[I32]`): keep its structured
+    // ref so downstream `->`/`.field`/method resolution can recover the pointee or
+    // instantiation arguments (dropping it loses generic/Ref-ness).
+    return <TypeInfo kind=2 nameStart=t.nameStart nameLen=t.nameLen ref=ref />
 }
 
 // TypeInfo of a type `tyRef` after substituting any type parameter (`params[i]`)
@@ -1224,7 +1227,7 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
             while ai < arms.count {
                 val a: MatchArm = arms[ai]
                 val mark: U64 = scopeMark(c: inout c)
-                scanAddArmBinds(c: inout c, a: a, scrutRef: exprType(c: inout c, id: scrut).ref)
+                scanAddArmBinds(c: inout c, a: a, scrutTi: exprType(c: inout c, id: scrut))
                 scanExprInsts(c: inout c, exprId: a.body)
                 popLocals(c: inout c, mark: mark)
                 ai += 1
@@ -1237,13 +1240,20 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
 
 // Add a match arm's field binds to the local scope (for type recovery during the
 // instance-collection walk; mirrors codegen's addBindLocal, minus emission).
-fn scanAddArmBinds(c: inout Comp, a: MatchArm, scrutRef: U64) {
-    val genericMatch: Bool = isGenericEnumInst(c: inout c, ref: scrutRef)
+fn scanAddArmBinds(c: inout Comp, a: MatchArm, scrutTi: TypeInfo) {
+    // a struct-destructure arm `S { val x }`: bind each field from the scrutinee
+    // struct (mirrors codegen's addForStructBinds), so a generic call on a bound
+    // field (`print(items.count)`) recovers its type.
+    if a.isStruct {
+        addForStructBinds(c: inout c, et: scrutTi, binds: a.binds)
+        return
+    }
+    val genericMatch: Bool = isGenericEnumInst(c: inout c, ref: scrutTi.ref)
     mut val bi: U64 = 0
     while bi < a.binds.count {
         val bd: Bind = a.binds[bi]
         if genericMatch {
-            val bti: TypeInfo = genericEnumFieldTypeInfo(c: inout c, instRef: scrutRef, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+            val bti: TypeInfo = genericEnumFieldTypeInfo(c: inout c, instRef: scrutTi.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
             addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false)
         } else {
             addBindLocal(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
@@ -1269,7 +1279,6 @@ fn scanStmtInsts(c: inout Comp, stmtId: U64) {
             scanExprInsts(c: inout c, exprId: target)
             scanExprInsts(c: inout c, exprId: value)
         }
-        Stmt.Print(val expr, val offset) => { scanExprInsts(c: inout c, exprId: expr) }
         Stmt.ExprStmt(val expr) => { scanExprInsts(c: inout c, exprId: expr) }
         Stmt.Return(val value, val hasValue) => {
             if hasValue {
@@ -1310,7 +1319,7 @@ fn scanStmtInsts(c: inout Comp, stmtId: U64) {
             while ai < arms.count {
                 val a: MatchArm = arms[ai]
                 val mark: U64 = scopeMark(c: inout c)
-                scanAddArmBinds(c: inout c, a: a, scrutRef: exprType(c: inout c, id: scrut).ref)
+                scanAddArmBinds(c: inout c, a: a, scrutTi: exprType(c: inout c, id: scrut))
                 scanBlockInsts(c: inout c, blkId: a.body)
                 popLocals(c: inout c, mark: mark)
                 ai += 1

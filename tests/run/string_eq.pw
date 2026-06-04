@@ -3,14 +3,14 @@ import @Std/Io with { print }
 fn main() {
     val s: String = "fn"
     if s == "fn" {
-        print(1)
+        print(1I64)
     } else {
-        print(0)
+        print(0I64)
     }
     if s != "x" {
-        print(1)
+        print(1I64)
     } else {
-        print(0)
+        print(0I64)
     }
     mut val xs: Array[I64] = [1, 2, 3]
     xs[0] = 40

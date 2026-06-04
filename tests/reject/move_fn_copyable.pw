@@ -2,4 +2,4 @@ import @Std/Io with { print }
 // `move fn` (consuming self) is only for unique types (spec/07).
 struct W { val n: I64 }
 impl W { move fn consume() -> I64 { return self.n } }
-fn main() { print(0) }
+fn main() { print(0I64) }

@@ -2,5 +2,5 @@ import @Std/Io with { print }
 enum Color { Red Green Blue }
 fn main() {
     val c: Color = Color.Green
-    print(0)
+    print(0I64)
 }

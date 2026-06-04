@@ -1,4 +1,4 @@
 import @Std/Io with { print }
 struct A { val n: I64 }
 impl A as Nonexistent { fn foo() -> I64 { return self.n } }
-fn main() { print(0) }
+fn main() { print(0I64) }

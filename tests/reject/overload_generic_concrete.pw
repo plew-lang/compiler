@@ -2,4 +2,4 @@ import @Std/Io with { print }
 // A generic and a concrete overload may not share the same selector (spec/07).
 fn g[T](x: T) -> I32 { return 1I32 }
 fn g(x: I32) -> I32 { return 2I32 }
-fn main() { print(0) }
+fn main() { print(0I64) }

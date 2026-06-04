@@ -17,9 +17,9 @@ async fn main() {
     }
     if i > 2 {
         await sleep(ms: 5)
-        print(100)
+        print(100I64)
     } else {
-        print(200)
+        print(200I64)
     }
-    print(9)
+    print(9I64)
 }

@@ -2,4 +2,4 @@ import @Std/Io with { print }
 // Cannot define methods on a built-in type (spec/07: inherent impl only for a
 // type your module defines).
 impl I32 { fn foo() -> I32 { return 0I32 } }
-fn main() { print(0) }
+fn main() { print(0I64) }

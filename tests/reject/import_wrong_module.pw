@@ -3,5 +3,5 @@
 import @Std/Process with { print }
 
 fn main() {
-    print(42)
+    print(42I64)
 }

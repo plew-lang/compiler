@@ -7,7 +7,7 @@ enum Color { Red Green Blue }
 fn main() {
     val col: Color = <Color.Red />
     match col {
-        Color.Red => { print(1) }
-        Color.Green => { print(2) }
+        Color.Red => { print(1I64) }
+        Color.Green => { print(2I64) }
     }
 }

@@ -80,7 +80,6 @@ fn rejectAsyncUnsupported(c: inout Comp, blockId: U64) {
             Stmt.Assign(op: _, target: _, value: _) => {}
             Stmt.ExprStmt(expr: _) => {}
             Stmt.Return(value: _, hasValue: _) => {}
-            Stmt.Print(expr: _, offset: _) => {}
             Stmt.Break => {}
             Stmt.Continue => {}
             Stmt.Panic(msg: _, offset: _) => {}

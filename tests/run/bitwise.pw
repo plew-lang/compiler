@@ -4,13 +4,13 @@
 import @Std/Io with { print }
 
 fn main() {
-    print(12 & 10)        // 8
-    print(12 | 10)        // 14
-    print(12 ^ 10)        // 6
-    print(1 << 4)         // 16
-    print(255 >> 4)       // 15
-    print(6 & 3 | 8)      // (6&3)|8 = 10
-    print(1 << 2 + 1)     // 1 << (2+1) = 8
+    print(12I64 & 10I64)        // 8I64
+    print(12I64 | 10I64)        // 14I64
+    print(12I64 ^ 10I64)        // 6I64
+    print(1I64 << 4I64)         // 16I64
+    print(255I64 >> 4I64)       // 15I64
+    print(6I64 & 3I64 | 8I64)      // (6I64&3I64)|8I64 = 10I64
+    print(1I64 << 2I64 + 1I64)     // 1I64 << (2I64+1I64) = 8I64
     val x: I64 = 5
-    print(~x)             // -6
+    print(~x)             // -6I64
 }

@@ -1,4 +1,4 @@
 // `move` is a footgun on a copyable type (disables a value that could be copied).
 import @Std/Io with { print }
 fn eat(n: move I64) { print(n) }
-fn main() { print(0) }
+fn main() { print(0I64) }

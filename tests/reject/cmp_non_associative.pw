@@ -6,5 +6,5 @@ fn main() {
     val b: I64 = 1
     val c: I64 = 1
     val r: Bool = a == b == c
-    print(0)
+    print(0I64)
 }

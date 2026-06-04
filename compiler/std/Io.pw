@@ -6,9 +6,9 @@
 // (the compiler owns `String` ⇄ `PlewString` etc.), so no C-type vocabulary
 // appears here — that is `extern "C"` (future, real FFI).
 //
-// (`print` is still a compiler builtin for now: it formats by the argument's
-// integer type, which needs a Display/number-formatting story before it can be
-// written in pure Plew. It will move here once that lands.)
+
+import @Std/Core with { Format }
+
 extern "plew-intrinsic" {
     // Write a string to stdout (no trailing newline).
     fn write(s: String)
@@ -24,4 +24,12 @@ extern "plew-intrinsic" {
     fn eprint(text: String)
     // Does a file at the given byte path exist?
     fn fileExists(path: Array[U8]) -> Bool
+}
+
+// Write a value's textual form (`Format`) to stdout, followed by a newline.
+// `print(x)` infers the type of `x`; a bare integer literal needs a suffix
+// (`print(42I64)`) since numeric literals have no default type (spec/02).
+fn print[T](value~: T) where T: Format {
+    write(s: value.format(format: ""))
+    write(s: "\n")
 }

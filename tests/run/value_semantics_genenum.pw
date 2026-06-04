@@ -5,11 +5,11 @@ fn main() {
     mut val b: Maybe[Array[I32]] = a
     match b {
         Maybe.Just(val v) => { print(v[0]) }
-        Maybe.Nothing => { print(0) }
+        Maybe.Nothing => { print(0I64) }
     }
     b = <Maybe[Array[I32]].Just v=[7, 8] />
     match a {
         Maybe.Just(val v) => { print(v[0]) }
-        Maybe.Nothing => { print(0) }
+        Maybe.Nothing => { print(0I64) }
     }
 }

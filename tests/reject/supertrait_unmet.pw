@@ -4,4 +4,4 @@ trait Super { fn a() -> I64 }
 trait Sub: Super { fn b() -> I64 }
 struct X { val n: I64 }
 impl X as Sub { fn b() -> I64 { return self.n } }
-fn main() { print(0) }
+fn main() { print(0I64) }

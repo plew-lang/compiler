@@ -11,6 +11,6 @@ fn main() {
     print(add100(n: 5))
     val threshold: I32 = 3
     val pred: fn(x: I32) -> Bool = fn(x: I32) -> Bool { return x > threshold }
-    if pred(x: 5) { print(1) } else { print(0) }
-    if pred(x: 2) { print(1) } else { print(0) }
+    if pred(x: 5) { print(1I64) } else { print(0I64) }
+    if pred(x: 2) { print(1I64) } else { print(0I64) }
 }

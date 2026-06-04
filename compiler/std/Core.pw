@@ -218,3 +218,13 @@ impl U16 as Format {
 impl U32 as Format {
     fn format(format: String) -> String { return (self as U64).format(format: format) }
 }
+impl Bool as Format {
+    // Bool prints as 1/0 (matching the integer lowering), not true/false.
+    fn format(format: String) -> String {
+        if self {
+            return "1"
+        } else {
+            return "0"
+        }
+    }
+}
