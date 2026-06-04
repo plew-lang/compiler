@@ -232,6 +232,14 @@ fn parseUnary(c: inout Comp) -> U64 {
     }
     val k: Kind = c.curKind()
     match k {
+        Kind.KwAwait => {
+            // `await <postfix-chain>` (spec/12,14): suspend on a Promise, yield its
+            // value. Binds the whole postfix chain like `try` (`await a.b()` is
+            // `await (a.b())`); to await mid-chain write `(await a).b()`.
+            c.advance()
+            val o: U64 = parsePostfix(c: inout c)
+            return c.pushExpr(e: <Expr.Await operand=o />)
+        }
         Kind.KwMove => {
             // `move <postfix-chain>` (spec/03): access-mode prefix on a unique
             // value. Binds the postfix chain like `try`.

@@ -1101,6 +1101,18 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // `move`/`borrow` have the operand's type (the value just flows).
             return exprType(c: inout c, id: operand)
         }
+        Expr.Await(val operand) => {
+            // `await e` (e: Promise[T]) yields T: recover the operand's generic
+            // type argument. A value-less Promise[()] (args empty) yields a scalar.
+            val ot: TypeInfo = exprType(c: inout c, id: operand)
+            if ot.ref != 0 {
+                val tr: TypeRef = c.types[ot.ref]
+                if tr.args.count > 0 {
+                    return typeInfoOfRef(c: inout c, ref: tr.args[0])
+                }
+            }
+            return scalarInfo()
+        }
     }
     return scalarInfo()
 }

@@ -178,6 +178,11 @@ enum Expr {
     // operand's value (a unique struct is a bit-copy); `move` additionally marks
     // the operand's place moved-out so the source is dead and not double-released.
     Move(operand: U64, isBorrow: Bool)
+    // `await operand` (spec/14): suspend the enclosing `async fn` until `operand`
+    // (a `Promise[T]`) resolves, then yield the `T`. Only valid in statement-head
+    // position for now (`val x = await e` / `await e` / `return await e`); the
+    // async lowering expands it to a save-state / suspend / resume sequence.
+    Await(operand: U64)
 }
 
 // One arm of a match: either `_ => block` (wildcard) or `Enum.Variant
@@ -425,6 +430,10 @@ struct Func {
     // `Type_name` and a call `Type.name(args)` resolves. Operator requirements
     // (`Eq.eq`, `Ord.compare`, `Add.add`) are assoc fns.
     val isAssoc: Bool
+    // `async fn` (spec/14): the function suspends at `await` points and returns a
+    // `Promise[T]`. Lowered to a stackless state machine (frame + resume + entry)
+    // rather than a plain C function. Default false = an ordinary synchronous fn.
+    val isAsync: Bool
 }
 
 struct Comp {

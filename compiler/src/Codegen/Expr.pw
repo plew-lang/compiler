@@ -1260,6 +1260,13 @@ fn genExpr(c: inout Comp, id: U64) {
             writeU64(n: t)
             write(s: ".data.Ok.value; })")
         }
+        Expr.Await(val operand) => {
+            // `await` is lowered specially by the async statement emitter (a
+            // suspend/resume sequence). Reaching genExpr means it was used outside
+            // a statement-head position in an `async fn`, or in a non-async fn —
+            // both unsupported for now. (Mid-expression await is additive: stage 3+.)
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "`await` is only allowed at statement head in an `async fn` (`val x = await e` / `await e` / `return await e`) for now")
+        }
     }
 }
 
