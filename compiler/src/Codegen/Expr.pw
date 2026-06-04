@@ -498,6 +498,20 @@ fn genExpr(c: inout Comp, id: U64) {
             write(s: ")")
         }
         Expr.Field(val base, val nameStart, val nameLen) => {
+            // `Color.Green` (an enum type name `.` a variant) is not a value:
+            // enum values are constructed with JSX. Reject it rather than emit
+            // the invalid `Color.Green` (acceptance soundness — no silent C error).
+            match c.exprs[base] {
+                Expr.Ident(start: val bs, len: val bl) => {
+                    if localIndexByName(c: inout c, start: bs, len: bl) < c.locals.count {
+                    } else {
+                        if isEnumName(c: inout c, start: bs, len: bl) {
+                            compileErrorAt(line: lineOf(c: inout c, offset: bs), msg: "an enum variant is not a value; construct it with JSX, e.g. `<Color.Green />`")
+                        }
+                    }
+                }
+                _ => {}
+            }
             val bt: TypeInfo = exprType(c: inout c, id: base)
             if bt.kind == 1 {
                 // String.bytes: a borrowed Array[U8] view of the string buffer
