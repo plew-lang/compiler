@@ -219,7 +219,11 @@ enum Stmt {
     While(cond: U64, body: U64)
     // `for val name in iter { body }`. isRange: iter is `lo ..(< | =) hi`
     // (inclusive picks <=); otherwise iter is an array, walked by index.
-    For(varStart: U64, varLen: U64, isRange: Bool, inclusive: Bool, iter: U64, rangeHi: U64, body: U64)
+    // isStruct: the header is a struct-destructure pattern `for S { val x } in
+    // arr` — patStart/patLen name the written struct type and binds list the
+    // fields to bind from each element (varStart/varLen unused then). isStruct
+    // false is the single-binding form (binds empty).
+    For(varStart: U64, varLen: U64, isRange: Bool, inclusive: Bool, iter: U64, rangeHi: U64, body: U64, isStruct: Bool, patStart: U64, patLen: U64, binds: Array[Bind])
     Match(scrut: U64, arms: Array[MatchArm])
     // `panic <msg>`: a diverging statement (spec: unrecoverable, never returns).
     // msg is a String expression; offset is the `panic` keyword for diagnostics.

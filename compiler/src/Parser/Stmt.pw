@@ -365,12 +365,41 @@ fn parseWhile(c: inout Comp) -> U64 {
 // (a range) or an array expression.
 fn parseFor(c: inout Comp) -> U64 {
     c.advance()
+    // struct-destructure header `for S { val x, val y } in arr`: an undotted type
+    // name immediately followed by `{` is a struct pattern (mirrors match). The
+    // single-binding forms (`for val i`, `for i`) take a name token instead.
+    mut val isStruct: Bool = false
+    mut val patStart: U64 = 0
+    mut val patLen: U64 = 0
+    mut val binds: Array[Bind] = []
+    mut val nameStart: U64 = 0
+    mut val nameLen: U64 = 0
+    mut val isPattern: Bool = false
     match c.curKind() {
-        Kind.KwVal => { c.advance() }
+        Kind.Ident => {
+            match c.peekKind(off: 1) {
+                Kind.LBrace => { isPattern = true }
+                _ => {}
+            }
+        }
         _ => {}
     }
-    val nameTok: Tok = c.cur()
-    c.advance()
+    if isPattern {
+        val pi: PatInfo = parsePattern(c: inout c)
+        isStruct = pi.isStruct
+        patStart = pi.enumStart
+        patLen = pi.enumLen
+        binds = pi.binds
+    } else {
+        match c.curKind() {
+            Kind.KwVal => { c.advance() }
+            _ => {}
+        }
+        val nameTok: Tok = c.cur()
+        nameStart = nameTok.start
+        nameLen = nameTok.len
+        c.advance()
+    }
     match c.curKind() {
         Kind.KwIn => { c.advance() }
         _ => {}
@@ -395,7 +424,7 @@ fn parseFor(c: inout Comp) -> U64 {
     }
     c.skipNewlines()
     val body: U64 = parseBlock(c: inout c)
-    return c.pushStmt(s: <Stmt.For varStart=nameTok.start varLen=nameTok.len isRange=isRange inclusive=inclusive iter=lo rangeHi=hi body=body />)
+    return c.pushStmt(s: <Stmt.For varStart=nameStart varLen=nameLen isRange=isRange inclusive=inclusive iter=lo rangeHi=hi body=body isStruct=isStruct patStart=patStart patLen=patLen binds=binds />)
 }
 
 fn parseExprOrAssign(c: inout Comp) -> U64 {

@@ -1,0 +1,36 @@
+// F4: struct-destructure in a for-loop header (spec/11) — `for S { val x } in
+// arr` binds each element's fields directly, mirroring the match struct pattern.
+// Punning (`val name`), rename (`age: val a`), and discard (`name: _`) all work.
+import @Std/Io with { print }
+
+struct Person {
+    val name: I64
+    val age: I64
+}
+
+struct Group {
+    val members: Array[I64]
+}
+
+fn main() {
+    val people: Array[Person] = [<Person name=1 age=30 />, <Person name=2 age=40 />]
+    mut val sum: I64 = 0
+    for Person { val name, val age } in people {
+        sum += name + age
+    }
+    print(sum)          // (1+30)+(2+40) = 73
+
+    mut val ages: I64 = 0
+    for Person { age: val a, name: _ } in people {
+        ages += a
+    }
+    print(ages)         // 30+40 = 70
+
+    // a heap (Array) field destructures too: bind it and read its count.
+    val groups: Array[Group] = [<Group members=[1, 2, 3] />, <Group members=[4] />]
+    mut val total: U64 = 0
+    for Group { val members } in groups {
+        total += members.count
+    }
+    print(total)        // 3+1 = 4
+}

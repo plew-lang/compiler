@@ -1146,7 +1146,7 @@ fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
             checkBoundsExpr(c: inout c, exprId: cond)
             checkBoundsBlock(c: inout c, blkId: body)
         }
-        Stmt.For(val varStart, val varLen, val isRange, val inclusive, val iter, val rangeHi, val body) => {
+        Stmt.For(val varStart, val varLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
             val forMark: U64 = scopeMark(c: inout c)
             checkBoundsExpr(c: inout c, exprId: iter)
             if isRange {
@@ -1154,7 +1154,11 @@ fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
                 addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
             } else {
                 val et: TypeInfo = exprType(c: inout c, id: iter)
-                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                if isStruct {
+                    addForStructBinds(c: inout c, et: et, binds: binds)
+                } else {
+                    addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                }
             }
             checkBoundsBlock(c: inout c, blkId: body)
             popLocals(c: inout c, mark: forMark)

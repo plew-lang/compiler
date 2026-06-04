@@ -1,0 +1,11 @@
+// A for-loop struct-destructure pattern must name the element's struct type;
+// using an unrelated struct is rejected (no silent mis-field-binding).
+import @Std/Io with { print }
+struct A { val x: I64 }
+struct B { val x: I64 }
+fn main() {
+    val xs: Array[A] = [<A x=1 />]
+    for B { val x } in xs {
+        print(x)
+    }
+}

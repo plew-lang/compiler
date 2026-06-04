@@ -20,6 +20,6 @@
 
 ## ③ 残（順次対応可・小〜中）
 
-- **F4 残：for / guard の struct 分解**：`for Person { val name } in people`・`guard S { val x } = …`（spec/11）。match の struct 分解は実装済（`run/struct_pattern`）。for/guard のヘッダ分解は別 codegen で未対応。
+- **F4 残：for の tuple 分解／`guard` 文**（struct 分解は✅実装済）：`for Person { val name } in people` は実装（`run/for_struct_destructure`・要素 struct を `parsePattern` で分解しフィールドを各反復で束縛・パターン型不一致と range 反復は loud reject）。**残**＝(a) `for (val k, val v) in dict` の tuple/record 分解＝dict 反復子か record 要素が要る（別機能）／(b) `guard` 文そのものが未実装（`KwGuard`/`parseGuard`/`Stmt.Guard` なし・`if`/`while` も refutable 束縛・条件チェーン未対応＝spec/11 の条件チェーン束縛は丸ごと別 feature）。いずれもバグでなく未実装機能。
 - **closure が shadow された local をキャプチャ〔極小・稀・loud〕**：F2 の shadow 用 C 名 suffix（`cnum`）が `emitCaptureInit`（enclosing 名を素の writeSpan で出す）に未配線。shadow 変数をキャプチャする極端ケースのみ C 名不一致になり得る（壊れても clang エラー＝loud・silent でない）。well-tested な closure コードへの回帰リスクに見合わず低優先。
 - **N4b〔小・ほぼ by-design〕for ループ変数の型注釈が範囲境界へ伝播しない**：`for val i: I32 in 0..<5` は境界リテラルに型文脈が伝わらず「no type from context」。回避＝境界に suffix（`0..<5I32`）。設計上「範囲境界リテラルは型必須」（for.pw 明記）なので非バグ寄りだが、ループ変数注釈を context に使う改善余地。
