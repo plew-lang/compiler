@@ -64,7 +64,16 @@ switch 先頭ディスパッチが `goto __L<N>` で再入。全ローカル hoi
 
 **`.append`＝✅純 Plew 化済**：`impl Array { inout fn append(value~: T) { arrayPush(a: inout self, v: value) } }` へ dispatch（要素型ごと mono）。push ハードコードは**プレリュード不在時の fallback のみ**残置（freshly-seeded 保険）。`genArrayUserMethod` に要素型引数ハンドリング（`argIsElementTyped`+`emitArrayElemValue`）を足し `m.append([1,2,3])`（ネスト配列）も動く。
 
-**残＝`.count`/`arr[i]`**：どちらも**フィールド/添字構文**（`digits.count` 括弧なし・`m[i]`）で、メソッド化＝構文変更が要るので **ii-b（struct 化）でまとめて**扱う（struct なら count は `len` フィールド・`[i]` は Index トレイト脱糖）。append/get/set が Plew 化できたので ii-a の主目的（メソッドを Plew で書ける）は達成。
+**残＝`.count`/`arr[i]`**：どちらも**フィールド/添字構文**（`digits.count` 括弧なし・`m[i]`）で、メソッド化＝構文変更が要るので **ii-b（struct 化）でまとめて**扱う。append/get/set が Plew 化できたので ii-a の主目的（メソッドを Plew で書ける）は達成。
+
+**⚠ ii-b の `count` は stored field（重要）**：**Plew は computed property を持たない**ので、`.count`（括弧なしフィールドアクセス）は `fn count()` メソッドにできない＝**`pub(get) mut val count: U64` の stored field 必須**。よって struct は：
+```
+struct Array[T] {
+    data: RawBuffer[T]
+    pub(get) mut val count: U64   // .count はこのフィールド読み出し
+}
+```
+`pub(get)`＝外から読めるが書けるのは Array 自身のメソッドのみ（append が `count += 1`）。`mut val`＝可変記憶域。`xs.count` はこのフィールドアクセスに落ちる（メソッド呼びでない）。`len` という名前にすると `.count` が `.len` フィールドに化けるので**フィールド名は `count`**。
 
 **(ii-b) 表現 swap（真の flag-day・最後）**：`struct Array[T] { data: RawBuffer[T]; len: U64 }` を Core に・`PlewArray_<E>` 撤去・`RawBuffer` 値意味論（コピー share・破棄 release）を Ref の各サイトに配線。
 
