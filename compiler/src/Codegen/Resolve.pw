@@ -974,18 +974,9 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             return scalarInfo()
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readStdin") {
-                return <TypeInfo kind=1 nameStart=0 nameLen=0 ref=0 />
-            }
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readFile") {
-                return <TypeInfo kind=1 nameStart=0 nameLen=0 ref=0 />
-            }
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readFileBytes") {
-                return <TypeInfo kind=1 nameStart=0 nameLen=0 ref=0 />
-            }
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argAt") {
-                return <TypeInfo kind=1 nameStart=0 nameLen=0 ref=0 />
-            }
+            // (I/O builtins are ordinary `extern "plew-intrinsic"` declarations now,
+            // so their return type comes from the resolved Func below — no special
+            // cases here.)
             // resolve the right overload (by labels + arg types) for its return.
             val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
             if fi < c.funcs.count {

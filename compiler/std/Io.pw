@@ -1,0 +1,27 @@
+// @Std/Io — text and file I/O.
+//
+// These are runtime intrinsics: body-less declarations bound to the runtime
+// symbol `plew_<name>` (spec/15 core-library boundary). The compiler supplies
+// the bodies; a call lowers to `plew_<name>(args)`. Plew types cross the boundary
+// (the compiler owns `String` ⇄ `PlewString` etc.), so no C-type vocabulary
+// appears here — that is `extern "C"` (future, real FFI).
+//
+// (`print` is still a compiler builtin for now: it formats by the argument's
+// integer type, which needs a Display/number-formatting story before it can be
+// written in pure Plew. It will move here once that lands.)
+extern "plew-intrinsic" {
+    // Write a string to stdout (no trailing newline).
+    fn write(s: String)
+    // Write a single byte to stdout.
+    fn writeByte(b~: U8)
+    // Read all of stdin as a string.
+    fn readStdin() -> String
+    // Read a file's contents as a string (empty on error).
+    fn readFile(path~: String) -> String
+    // Read a file named by a byte path as a string (used by the multi-file loader).
+    fn readFileBytes(path~: Array[U8]) -> String
+    // Write a string to stderr (no trailing newline).
+    fn eprint(text: String)
+    // Does a file at the given byte path exist?
+    fn fileExists(path: Array[U8]) -> Bool
+}

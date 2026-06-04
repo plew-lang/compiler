@@ -1,0 +1,7 @@
+// @Std/Async — the event loop's timer primitive (runtime intrinsic; see @Std/Io
+// for the boundary mechanism). `await sleep(ms:)` suspends the current async fn
+// until the timer fires. The Promise carries no meaningful value (the element
+// type is a placeholder until value-less / unit Promises are modelled).
+extern "plew-intrinsic" {
+    fn sleep(ms: I64) -> Promise[I64]
+}

@@ -348,117 +348,6 @@ fn genExpr(c: inout Comp, id: U64) {
             // above via eprint/exit), so they are NOT special-cased here — calls
             // lower like any other user-function call. (Kept spec-valid: no ambient
             // diagnostic builtin.)
-            // I/O builtins -> C runtime.
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "write") {
-                if c.impWrite {
-                    write(s: "plew_write(")
-                    genExpr(c: inout c, id: args[0].expr)
-                    write(s: ")")
-                } else {
-                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "write is not ambient; import it from @Std/Io")
-                }
-                return
-            }
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "sleep") {
-                // `sleep(ms:)` -> a timer-backed Promise (spec/14). Non-ambient:
-                // requires `import @Std/Async with { sleep }`.
-                if c.impSleep {
-                    write(s: "plew_sleep((long long)(")
-                    genExpr(c: inout c, id: args[0].expr)
-                    write(s: "))")
-                } else {
-                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "sleep is not ambient; import it from @Std/Async")
-                }
-                return
-            }
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "writeByte") {
-                if c.impWriteByte {
-                    write(s: "putchar((int)(")
-                    genExpr(c: inout c, id: args[0].expr)
-                    write(s: "))")
-                } else {
-                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "writeByte is not ambient; import it from @Std/Io")
-                }
-                return
-            }
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "eprint") {
-                if c.impEprint {
-                    write(s: "plew_eprint(")
-                    genExpr(c: inout c, id: args[0].expr)
-                    write(s: ")")
-                } else {
-                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "eprint is not ambient; import it from @Std/Io")
-                }
-                return
-            }
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "exit") {
-                if c.impExit {
-                    write(s: "exit((int)(")
-                    genExpr(c: inout c, id: args[0].expr)
-                    write(s: "))")
-                } else {
-                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "exit is not ambient; import it from @Std/Process")
-                }
-                return
-            }
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readStdin") {
-                if c.impReadStdin {
-                    write(s: "plew_read_stdin()")
-                } else {
-                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "readStdin is not ambient; import it from @Std/Io")
-                }
-                return
-            }
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readFile") {
-                if c.impReadFile {
-                    write(s: "plew_read_file(")
-                    genExpr(c: inout c, id: args[0].expr)
-                    write(s: ")")
-                } else {
-                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "readFile is not ambient; import it from @Std/Io")
-                }
-                return
-            }
-            // readFileBytes(path: Array[U8]) -> String. Bundled under the same
-            // `readFile` import (an internal helper for multi-file `part`).
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readFileBytes") {
-                if c.impReadFile {
-                    write(s: "plew_read_file_bytes(")
-                    genExpr(c: inout c, id: args[0].expr)
-                    write(s: ")")
-                } else {
-                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "readFile is not ambient; import it from @Std/Io")
-                }
-                return
-            }
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "fileExists") {
-                if c.impFileExists {
-                    write(s: "plew_file_exists(")
-                    genExpr(c: inout c, id: args[0].expr)
-                    write(s: ")")
-                } else {
-                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "fileExists is not ambient; import it from @Std/Io")
-                }
-                return
-            }
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argCount") {
-                if c.impArgCount {
-                    write(s: "plew_arg_count()")
-                } else {
-                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "argCount is not ambient; import it from @Std/Process")
-                }
-                return
-            }
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argAt") {
-                if c.impArgAt {
-                    write(s: "plew_arg_at((long long)(")
-                    genExpr(c: inout c, id: args[0].expr)
-                    write(s: "))")
-                } else {
-                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "argAt is not ambient; import it from @Std/Process")
-                }
-                return
-            }
             if callLabelsOk(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args) {
             } else {
                 // label missing / wrong / out of order -> undeclared identifier
@@ -480,7 +369,12 @@ fn genExpr(c: inout Comp, id: U64) {
             // mangled C name so the call reaches the right overload's symbol.
             val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
             if cfi == c.funcs.count {
-                writeSpan(c: inout c, start: nameStart, len: nameLen)
+                // unresolved free-function call: a typo, or a non-ambient builtin
+                // used without its `import @Std/…` (now a real declaration, so it
+                // is simply unknown without the import). Reject loudly at compile
+                // time rather than emit a bare name that might collide with a libc
+                // symbol (e.g. `exit`) — acceptance soundness.
+                compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "unknown function (a typo, or a builtin used without its `import @Std/…`)")
             } else {
                 if c.funcs[cfi].isExtern {
                     // `extern "plew-intrinsic"` callee: lower to the runtime symbol

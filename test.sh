@@ -125,6 +125,9 @@ for pw in tests/reject/*.pw; do
 done
 
 # --- self-host fixpoint ---
+# plewc1 resolves `@Std/…` relative to its own binary (computeStdRoot = argv[0]'s
+# dir), so the std library must sit next to it in $TMP.
+cp -r compiler/std "$TMP/std" 2>/dev/null
 if "$PLEWC" "$PW" > "$TMP/a.c" 2>/dev/null \
     && clang -w "$TMP/a.c" -o "$TMP/plewc1" 2>/dev/null \
     && "$TMP/plewc1" "$PW" > "$TMP/b.c" 2>/dev/null \
