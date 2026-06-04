@@ -9575,9 +9575,6 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    if (generic) {
-    }
-    else {
     uint64_t dEmitted = (long long)((fields).len);
     uint64_t si = 0;
     while (si < (long long)(((*c).structs).len)) {
@@ -9612,7 +9609,6 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     }
     si = ({ uint64_t __ov; if (__builtin_add_overflow((si), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     StructDef_release(sd);
-    }
     }
     plew_write((PlewString){"}", 1});
     }

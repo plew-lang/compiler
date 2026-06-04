@@ -987,40 +987,40 @@ fn genExpr(c: inout Comp, id: U64) {
                 }
                 // declared field defaults (spec/05): fill in any field with a
                 // default value that this construction omitted. The default
-                // expression is re-evaluated here (each construction site).
-                if generic {
-                } else {
-                    mut val dEmitted: U64 = fields.count
-                    mut val si: U64 = 0
-                    while si < c.structs.count {
-                        val sd: StructDef = c.structs[si]
-                        if spansEqual(c: inout c, aStart: sd.nameStart, aLen: sd.nameLen, bStart: typeStart, bLen: typeLen) {
-                            val flds: Array[FieldDef] = sd.fields
-                            mut val fi: U64 = 0
-                            while fi < flds.count {
-                                val fd: FieldDef = flds[fi]
-                                if fd.hasDefault {
-                                    if makeProvides(c: inout c, fields: fields, nameStart: fd.nameStart, nameLen: fd.nameLen) {
-                                    } else {
-                                        if dEmitted > 0 {
-                                            write(s: ", ")
-                                        }
-                                        write(s: ".")
-                                        writeSpan(c: inout c, start: fd.nameStart, len: fd.nameLen)
-                                        write(s: " = ")
-                                        if fd.tyIsArray {
-                                            genArrayValue(c: inout c, exprId: fd.defaultVal, elemStart: fd.tyStart, elemLen: fd.tyLen)
-                                        } else {
-                                            genExpr(c: inout c, id: fd.defaultVal)
-                                        }
-                                        dEmitted += 1
+                // expression is re-evaluated here (each construction site). Works
+                // for generic structs too — defaults are self-contained values
+                // (they cannot reference other fields or `self`), so a concretely
+                // typed default field needs no type substitution.
+                mut val dEmitted: U64 = fields.count
+                mut val si: U64 = 0
+                while si < c.structs.count {
+                    val sd: StructDef = c.structs[si]
+                    if spansEqual(c: inout c, aStart: sd.nameStart, aLen: sd.nameLen, bStart: typeStart, bLen: typeLen) {
+                        val flds: Array[FieldDef] = sd.fields
+                        mut val fi: U64 = 0
+                        while fi < flds.count {
+                            val fd: FieldDef = flds[fi]
+                            if fd.hasDefault {
+                                if makeProvides(c: inout c, fields: fields, nameStart: fd.nameStart, nameLen: fd.nameLen) {
+                                } else {
+                                    if dEmitted > 0 {
+                                        write(s: ", ")
                                     }
+                                    write(s: ".")
+                                    writeSpan(c: inout c, start: fd.nameStart, len: fd.nameLen)
+                                    write(s: " = ")
+                                    if fd.tyIsArray {
+                                        genArrayValue(c: inout c, exprId: fd.defaultVal, elemStart: fd.tyStart, elemLen: fd.tyLen)
+                                    } else {
+                                        genExpr(c: inout c, id: fd.defaultVal)
+                                    }
+                                    dEmitted += 1
                                 }
-                                fi += 1
                             }
+                            fi += 1
                         }
-                        si += 1
                     }
+                    si += 1
                 }
                 write(s: "}")
             }

@@ -1,0 +1,20 @@
+// Field defaults work on generic structs too: a concretely-typed default
+// field (`val tag: I32 = 99`) is filled when the construction omits it.
+// (Defaults are self-contained, so no type-parameter substitution is needed.)
+import @Std/Io with { print }
+
+struct Box[T] {
+    val v: T
+    val tag: I32 = 99
+    val tags: Array[I32] = []
+}
+
+fn main() {
+    val a: Box[I32] = <Box[I32] v=5 />
+    print(a.v)
+    print(a.tag)
+    print(a.tags.count)
+    val b: Box[I32] = <Box[I32] v=7 tag=1 tags=[1, 2] />
+    print(b.tag)
+    print(b.tags.count)
+}
