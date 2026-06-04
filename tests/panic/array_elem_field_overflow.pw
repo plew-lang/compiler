@@ -1,8 +1,8 @@
 import @Std/Io with { print }
-struct P { mut val x: I32 }
+struct P { mut val x: I8 }
 fn main() {
     mut val xs: Array[P] = []
-    xs.append(<P x=1 />)
-    xs[0].x += 5
+    xs.append(<P x=120 />)
+    xs[0].x += 50
     print(xs[0].x)
 }

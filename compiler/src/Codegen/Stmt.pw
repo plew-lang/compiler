@@ -393,13 +393,14 @@ fn tryArrayElemFieldAssign(c: inout Comp, op: I64, target: U64, value: U64) -> B
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "cannot assign through this place; the binding and field must be declared `mut val`")
                         return true
                     }
-                    if op == 49 {
-                    } else {
-                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "compound assignment through an array element field is not yet supported; read the element, modify it, and assign `arr[i] = ...`")
-                        return true
-                    }
                     val ft: TypeInfo = fieldType(c: inout c, structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
-                    checkLitTi(c: inout c, id: value, ti: ft)
+                    if op == 49 {
+                        checkLitTi(c: inout c, id: value, ti: ft)
+                    }
+                    // get-modify-set: store back `({ E __ge = get; __ge.field = …; __ge; })`.
+                    // For `OP=` the new field value is computed from the current
+                    // `__ge.field` with the same overflow/zero-divisor checks as a
+                    // plain field compound-assign.
                     write(s: "    PlewArray_")
                     writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
                     write(s: "_set(&(")
@@ -413,7 +414,43 @@ fn tryArrayElemFieldAssign(c: inout Comp, op: I64, target: U64, value: U64) -> B
                     write(s: "; __ge.")
                     writeSpan(c: inout c, start: nameStart, len: nameLen)
                     write(s: " = ")
-                    genExpr(c: inout c, id: value)
+                    if op == 49 {
+                        genExpr(c: inout c, id: value)
+                    } else {
+                        val cbin: I64 = compoundCheckedBin(op: op)
+                        val fieldInt: Bool = isIntType(c: inout c, start: ft.nameStart, len: ft.nameLen)
+                        if isCompoundDiv(op: op) {
+                            write(s: compoundDivFn(op: op))
+                            write(s: "__ge.")
+                            writeSpan(c: inout c, start: nameStart, len: nameLen)
+                            write(s: ", ")
+                            genExpr(c: inout c, id: value)
+                            write(s: ")")
+                        } else {
+                            mut val checkedF: Bool = false
+                            if cbin != 0 {
+                                if fieldInt {
+                                    checkedF = true
+                                }
+                            }
+                            if checkedF {
+                                write(s: "({ ")
+                                genCElem(c: inout c, start: ft.nameStart, len: ft.nameLen)
+                                write(s: " __ov; if (")
+                                write(s: overflowBuiltin(op: cbin))
+                                write(s: "((__ge.")
+                                writeSpan(c: inout c, start: nameStart, len: nameLen)
+                                write(s: "), (")
+                                genExpr(c: inout c, id: value)
+                                write(s: "), &__ov)) plew_panic((PlewString){\"integer overflow\", 16}); __ov; })")
+                            } else {
+                                write(s: "__ge.")
+                                writeSpan(c: inout c, start: nameStart, len: nameLen)
+                                write(s: assignToBinStr(op: op))
+                                genExpr(c: inout c, id: value)
+                            }
+                        }
+                    }
                     write(s: "; __ge; }));\n")
                     return true
                 }

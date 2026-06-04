@@ -1,0 +1,24 @@
+// Compound assignment through an array element field `arr[i].field OP= v`
+// (get-modify-set with the same overflow / zero-divisor checks as a plain
+// field compound-assign). Previously loud-rejected as unsupported.
+import @Std/Io with { print }
+
+struct P {
+    mut val x: I32
+}
+
+fn main() {
+    mut val xs: Array[P] = []
+    xs.append(<P x=10 />)
+    xs.append(<P x=100 />)
+    xs[0].x += 5
+    print(xs[0].x)
+    xs[0].x *= 3
+    print(xs[0].x)
+    mut val i: U64 = 1
+    xs[i].x -= 40
+    print(xs[i].x)
+    xs[i].x /= 2
+    print(xs[i].x)
+    print(xs[0].x)
+}
