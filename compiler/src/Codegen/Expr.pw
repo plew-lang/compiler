@@ -482,6 +482,13 @@ fn genExpr(c: inout Comp, id: U64) {
             if cfi == c.funcs.count {
                 writeSpan(c: inout c, start: nameStart, len: nameLen)
             } else {
+                if c.funcs[cfi].isExtern {
+                    // `extern "plew-intrinsic"` callee: lower to the runtime symbol
+                    // `plew_<name>` (args emitted below, positionally, respecting
+                    // inout). No overload mangling — intrinsics are not overloaded.
+                    write(s: "plew_")
+                    writeSpan(c: inout c, start: c.funcs[cfi].nameStart, len: c.funcs[cfi].nameLen)
+                } else {
                 // a generic free function call mangles with its inferred concrete
                 // type args (`f_x_Counter`) under a temporary env, matching the
                 // instance's definition. A non-registered instantiation (the
@@ -501,6 +508,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     }
                 } else {
                     writeFnSelector(c: inout c, f: c.funcs[cfi])
+                }
                 }
             }
             write(s: "(")

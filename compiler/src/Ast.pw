@@ -434,6 +434,10 @@ struct Func {
     // `Promise[T]`. Lowered to a stackless state machine (frame + resume + entry)
     // rather than a plain C function. Default false = an ordinary synchronous fn.
     val isAsync: Bool
+    // `extern "plew-intrinsic"` declaration (spec/15 core-library boundary): a
+    // body-less signature bound to the runtime symbol `plew_<name>`. The compiler
+    // emits no prototype/body; a call lowers to `plew_<name>(args)`. Default false.
+    val isExtern: Bool
 }
 
 struct Comp {

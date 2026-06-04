@@ -31,6 +31,7 @@ enum Kind {
     KwBorrow
     KwAsync
     KwAwait
+    KwExtern
     KwTrue
     KwFalse
     LParen
@@ -252,6 +253,9 @@ fn identKind(bytes: Array[U8], start: U64, len: U64) -> Kind {
     }
     if rangeEquals(bytes: bytes, start: start, len: len, kw: "await") {
         return <Kind.KwAwait />
+    }
+    if rangeEquals(bytes: bytes, start: start, len: len, kw: "extern") {
+        return <Kind.KwExtern />
     }
     if rangeEquals(bytes: bytes, start: start, len: len, kw: "true") {
         return <Kind.KwTrue />
@@ -602,6 +606,7 @@ fn kindCode(k: Kind) -> I64 {
         Kind.KwBorrow => 32
         Kind.KwAsync => 33
         Kind.KwAwait => 34
+        Kind.KwExtern => 35
         Kind.KwTrue => 27
         Kind.KwFalse => 28
         Kind.LParen => 40

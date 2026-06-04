@@ -376,6 +376,10 @@ fn main() {
         val f: Func = c.funcs[i]
         if nameIsMain(c: inout c, f: f) {
         } else {
+            if f.isExtern {
+                // `extern "plew-intrinsic"` fn: the runtime provides `plew_<name>`;
+                // emit no prototype/body (calls lower to it directly).
+            } else {
             if f.typeParams.count > 0 {
             } else {
                 if methodRecvIsTrait(c: inout c, f: f) {
@@ -385,6 +389,7 @@ fn main() {
                     genSignature(c: inout c, f: f)
                     write(s: ";\n")
                 }
+            }
             }
         }
         i += 1
@@ -402,6 +407,9 @@ fn main() {
         val fb: Func = c.funcs[j]
         if fb.typeParams.count > 0 {
         } else {
+            if fb.isExtern {
+                // `extern "plew-intrinsic"` fn: runtime-provided, no body.
+            } else {
             if methodRecvIsTrait(c: inout c, f: fb) {
                 // provided-method template — skip (emitted per conforming type).
             } else {
@@ -410,6 +418,7 @@ fn main() {
                 } else {
                     genFunc(c: inout c, fi: j)
                 }
+            }
             }
         }
     }

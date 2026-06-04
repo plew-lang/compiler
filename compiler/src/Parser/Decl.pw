@@ -150,15 +150,15 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
             val realTok: Tok = c.cur()
             c.advance()
             c.methodAliases.append(<MethodAlias recvStart=recvStart recvLen=recvLen aliasStart=nameTok.start aliasLen=nameTok.len realStart=realTok.start realLen=realTok.len />)
-            c.curWitnessed.append(<Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false />)
+            c.curWitnessed.append(<Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
             return
         }
-        c.curWitnessed.append(<Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false />)
+        c.curWitnessed.append(<Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
     }
     c.skipNewlines()
     val body: U64 = parseBlock(c: inout c)
     val fnIdx: U64 = c.funcs.count
-    c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvStart recvLen=recvLen selfInout=selfInout selfMove=selfMove isAssoc=isAssoc isAsync=isAsync />)
+    c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvStart recvLen=recvLen selfInout=selfInout selfMove=selfMove isAssoc=isAssoc isAsync=isAsync isExtern=false />)
     mut val wbi: U64 = 0
     while wbi < boundParams.count {
         val bp: Bind = boundParams[wbi]
@@ -329,7 +329,7 @@ fn parseImpl(c: inout Comp) {
                 val body: U64 = parseBlock(c: inout c)
                 val noParams: Array[Param] = []
                 val noTypeParams: Array[Bind] = []
-                c.funcs.append(<Func nameStart=deinitTok.start nameLen=deinitTok.len typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=false selfMove=false isAssoc=false isAsync=false />)
+                c.funcs.append(<Func nameStart=deinitTok.start nameLen=deinitTok.len typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
                 c.deinits.append(<Bind nameStart=recvStart nameLen=recvLen fieldStart=recvStart fieldLen=recvLen />)
             }
             _ => {
@@ -403,7 +403,7 @@ fn parseTrait(c: inout Comp) {
             Kind.Eof => { break }
             Kind.KwFn => {
                 c.advance()
-                reqs.append(parseReqSig(c: inout c, isAssoc: false))
+                reqs.append(parseReqSig(c: inout c, isAssoc: false, isExtern: false))
             }
             _ => {
                 // `assoc fn name(...)` requirement (spec/12: operator requirements
@@ -414,7 +414,7 @@ fn parseTrait(c: inout Comp) {
                         Kind.KwFn => { c.advance() }
                         _ => {}
                     }
-                    reqs.append(parseReqSig(c: inout c, isAssoc: true))
+                    reqs.append(parseReqSig(c: inout c, isAssoc: true, isExtern: false))
                 } else {
                     c.advance()
                 }
@@ -427,7 +427,7 @@ fn parseTrait(c: inout Comp) {
 // Parse a trait requirement signature `name [typeParams] (params) [-> ret]` into
 // a body-less Func (body=0, hasRecv=false). The leading `fn`/`assoc fn` is
 // already consumed; `isAssoc` records which form.
-fn parseReqSig(c: inout Comp, isAssoc: Bool) -> Func {
+fn parseReqSig(c: inout Comp, isAssoc: Bool, isExtern: Bool) -> Func {
     val reqTok: Tok = c.cur()
     c.advance()
     val tps: Array[Bind] = parseTypeParams(c: inout c)
@@ -450,8 +450,55 @@ fn parseReqSig(c: inout Comp, isAssoc: Bool) -> Func {
         }
         _ => {}
     }
-    val sig: Func = <Func nameStart=reqTok.start nameLen=reqTok.len typeParams=tps params=ps hasRet=hasRet retStart=rs retLen=rl retIsArray=ria retTy=rr body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=isAssoc isAsync=false />
+    val sig: Func = <Func nameStart=reqTok.start nameLen=reqTok.len typeParams=tps params=ps hasRet=hasRet retStart=rs retLen=rl retIsArray=ria retTy=rr body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=isAssoc isAsync=false isExtern=isExtern />
     return sig
+}
+
+// `extern "plew-intrinsic" { fn name(params) [-> ret] ... }` (spec/15 core-library
+// boundary): a block of body-less signatures bound to the runtime. Each `fn`
+// becomes a Func with isExtern=true (hasRecv=false); the leading `extern` is the
+// current token. Only the `"plew-intrinsic"` ABI is accepted for now (`"C"` =
+// real FFI is future). Lines that are not `fn` are skipped.
+fn parseExtern(c: inout Comp) {
+    val externTok: Tok = c.cur()
+    c.advance()
+    mut val abiOk: Bool = false
+    match c.curKind() {
+        Kind.Str => {
+            val t: Tok = c.cur()
+            // the Str span includes the surrounding quotes; compare the interior.
+            if t.len >= 2 {
+                if rangeEquals(bytes: c.bytes, start: t.start + 1, len: t.len - 2, kw: "plew-intrinsic") {
+                    abiOk = true
+                }
+            }
+            c.advance()
+        }
+        _ => {}
+    }
+    if abiOk {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: externTok.start), msg: "only `extern \"plew-intrinsic\"` blocks are supported for now")
+    }
+    match c.curKind() {
+        Kind.LBrace => { c.advance() }
+        _ => {}
+    }
+    while true {
+        c.skipNewlines()
+        match c.curKind() {
+            Kind.RBrace => {
+                c.advance()
+                break
+            }
+            Kind.Eof => { break }
+            Kind.KwFn => {
+                c.advance()
+                c.funcs.append(parseReqSig(c: inout c, isAssoc: false, isExtern: true))
+            }
+            _ => { c.advance() }
+        }
+    }
 }
 
 // `[unique] struct Name { (val|mut val) field: Type ... }`. Field modifiers
@@ -492,7 +539,7 @@ fn parseStruct(c: inout Comp, isUnique: Bool) {
                 val body: U64 = parseBlock(c: inout c)
                 val noParams: Array[Param] = []
                 val noTypeParams: Array[Bind] = []
-                c.funcs.append(<Func nameStart=deinitTok.start nameLen=deinitTok.len typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nameTok.start recvLen=nameTok.len selfInout=false selfMove=false isAssoc=false isAsync=false />)
+                c.funcs.append(<Func nameStart=deinitTok.start nameLen=deinitTok.len typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nameTok.start recvLen=nameTok.len selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
                 c.deinits.append(<Bind nameStart=nameTok.start nameLen=nameTok.len fieldStart=nameTok.start fieldLen=nameTok.len />)
             }
             _ => {
@@ -735,7 +782,7 @@ fn synthStructEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind,
     val blkId: U64 = c.blocks.count
     c.blocks.append(<Block stmts=stmts />)
     val noTP: Array[Bind] = []
-    c.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false />)
+    c.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
     mut val wit: Array[Func] = []
     c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen traitStart=eqTrait.nameStart traitLen=eqTrait.nameLen derived=true witnessed=wit />)
 }
@@ -854,7 +901,7 @@ fn synthEnumEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind, b
     val blkId: U64 = c.blocks.count
     c.blocks.append(<Block stmts=stmts />)
     val noTP: Array[Bind] = []
-    c.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false />)
+    c.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
     mut val wit: Array[Func] = []
     c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen traitStart=eqTrait.nameStart traitLen=eqTrait.nameLen derived=true witnessed=wit />)
 }
@@ -911,7 +958,7 @@ fn synthStructOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bin
     val blkId: U64 = c.blocks.count
     c.blocks.append(<Block stmts=stmts />)
     val noTP: Array[Bind] = []
-    c.funcs.append(<Func nameStart=cmpN.nameStart nameLen=cmpN.nameLen typeParams=noTP params=params hasRet=true retStart=ordN.nameStart retLen=ordN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false />)
+    c.funcs.append(<Func nameStart=cmpN.nameStart nameLen=cmpN.nameLen typeParams=noTP params=params hasRet=true retStart=ordN.nameStart retLen=ordN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
     mut val wit: Array[Func] = []
     c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen traitStart=ordTrait.nameStart traitLen=ordTrait.nameLen derived=true witnessed=wit />)
 }
@@ -1065,6 +1112,7 @@ fn parseProgram(c: inout Comp) {
                 }
             }
             Kind.KwEnum => { parseEnum(c: inout c) }
+            Kind.KwExtern => { parseExtern(c: inout c) }
             Kind.Ident => {
                 if c.identIs(kw: "import") {
                     parseImport(c: inout c)
