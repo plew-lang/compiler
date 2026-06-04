@@ -25,16 +25,26 @@
 
 残ギャップ（別途・additive）：将来 Dictionary/Set 向けに **コレクション値意味論の一般化**（要素別 deep copy/release を `RawBuffer` 上の任意コレクションで再利用可能に）。今は配列専用ランタイム（`Array_E_copy/share/release/unique`）。
 
+## 🔄 着手中＝可視性強制（I2・branch `visibility`・stdが育つ前にロック）
+
+Phase B（モジュール可視性）→ A（メンバ可視性）の順（[[visibility-before-stdlib-grows]] 方針）。
+- ✅ **I1＝module identity**：loader が各ファイルに module id（`part`=親と同・`import`=新）を割り当て、combined 内オフセット範囲を `Comp.moduleRanges` に記録、`moduleOf(offset)` で逆引き。
+- ✅ **I2＝export パース＋import 記録**：`export <decl>`／`export extern { }`／`export fn`/`trait` を `Comp.exports` に記録。`import … with { name [as alias] }` を `Comp.imports`（fieldStart=importing module id）に記録。
+- ✅ **I3＝import-export 強制（4a）**：`checkImports`＝`with` import した名前は loaded な export 集合に在ること。std に `export` 付与（Io print＋extern・Process・Async sleep・Core Format）。間違ったモジュール import は当該モジュール未ロードで自然に落ちる。`tests/part/crossimport` を spec 準拠化（可視性無視だった）・reject `import_not_exported` 追加。209 緑・不動点。
+- 🔲 **4b＝use-without-import 強制**：flat namespace に頼った「import せず cross-module 名を使う」を拒否（関数呼び/型参照の use-site module ゲート・lang item/同一 module/builtin は除外）。**4a だけだと import しない flat 使用は素通り**＝これが残る穴。広いゲートで要注意。
+- 🔲 **Phase A＝メンバ可視性**：`pub`/`pub(get)`/private を FieldDef/Func に格納→フィールド read/write・メソッド・無名 impl 文脈を検査。spec の private＝「無名 impl 内のみ」がコンパイラの自由関数→struct フィールド直接様式と衝突→`Comp`/`Lexer`/`TypeRef` 等の **pub 大掃除**（機械的・spec準拠化）。
+
 ## ロードマップ（残りの大物・前向きのみ）
 
-1. ✅ **Array struct 化＝完了**（上記・`array-struct`→main）。次の収穫＝**コレクション値意味論の一般化**（配列専用ランタイムを `RawBuffer` 上の任意コレクションへ＝Dictionary/Set の前提）。
-2. 🔲 **関連型＋Iterator/Iterable**（`for` 脱糖の正式化・提供メソッド map/filter…）。署名は core-lib。
-3. 🔲 **Hash/Hasher → Dictionary（`[k:v]` lang item）/Set**（要：コレクション値意味論の一般化）。
-4. 🔲 **イベントループ tail＋spawn**（実スレッド・`JoinHandle[T]`・closure 残ギャップ）。
-5. 🔲 **`any P` 存在型**（型消去・動的ディスパッチ・トレイトの最後）。
-6. 🔲 **メタプログラミング**（`Derive`・コード生成・spec 上も最後）。
+1. ✅ **Array struct 化＝完了**（`array-struct`→main）。次の収穫＝**コレクション値意味論の一般化**（配列専用ランタイムを `RawBuffer` 上の任意コレクションへ＝Dictionary/Set の前提）。
+2. 🔄 **可視性強制（I2・上記）**＝着手中。
+3. 🔲 **関連型＋Iterator/Iterable**（`for` 脱糖の正式化・提供メソッド map/filter…）。署名は core-lib。
+4. 🔲 **Hash/Hasher → Dictionary（`[k:v]` lang item）/Set**（要：コレクション値意味論の一般化）。
+5. 🔲 **イベントループ tail＋spawn**（実スレッド・`JoinHandle[T]`・closure 残ギャップ）。
+6. 🔲 **`any P` 存在型**（型消去・動的ディスパッチ・トレイトの最後）。
+7. 🔲 **メタプログラミング**（`Derive`・コード生成・spec 上も最後）。
 
-横断 additive：演算子トレイト全配線（Eq/Ord 以外・需要駆動）・I2（import の with ゲート＝可視性検査・今は全フラット）・循環回収（Ref グラフ限定サイクルコレクタ）。詳細は [provisional.md](provisional.md)。
+横断 additive：演算子トレイト全配線（Eq/Ord 以外・需要駆動）・循環回収（Ref グラフ限定サイクルコレクタ）。詳細は [provisional.md](provisional.md)。
 
 ## ビルド・テスト・機能追加手順
 
