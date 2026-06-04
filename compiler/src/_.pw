@@ -103,6 +103,21 @@ fn main() {
         val s: String = readStdin()
         appendBytes(into: inout combined, from: s.bytes)
     }
+    // Auto-load the implicit prelude (the ambient Array methods), appended so it
+    // never shifts a user line number. It lives next to the binary at `std/Prelude.pw`
+    // and needs no `import` — like the `Array` lang-item type itself, its methods
+    // (`xs.append(v)`, `xs.get(i:…)`) are always in scope. Skipped if absent (a
+    // freshly-seeded compiler before the file exists still builds).
+    mut val prelPath: Array[U8] = []
+    appendBytes(into: inout prelPath, from: computeStdRoot(arg0: argAt(0).bytes))
+    appendBytes(into: inout prelPath, from: "Prelude.pw".bytes)
+    if fileExists(path: prelPath) {
+        val prelSrc: String = readFileBytes(prelPath)
+        if combined.count > 0 {
+            combined.append(10)
+        }
+        appendBytes(into: inout combined, from: prelSrc.bytes)
+    }
     // Append a trailing comment naming built-in types. Some values have a known
     // type with no source span to point at (a string literal's `String`, the
     // `U8` element of `String.bytes`); the type system recovers a named type

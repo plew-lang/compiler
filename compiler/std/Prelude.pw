@@ -1,0 +1,30 @@
+// @Std/Prelude — the implicit prelude, auto-loaded into every program (no import,
+// like the ambient lang-item types). It carries the pure-Plew methods of the
+// builtin `Array`, written over the array intrinsic floor. Array's storage is
+// still the compiler's `PlewArray_<E>` runtime; a later step moves it to a Core
+// struct over `RawBuffer[T]`. Keeping these methods here (not in `@Std/Core`)
+// preserves their ambience: `xs.append(v)` / `xs.get(i: …)` need no import, just
+// like the `Array` type and `[…]` literals.
+
+// The array intrinsic floor (spec/02): lowered by the compiler to the per-element
+// runtime `PlewArray_<E>_<op>`. The element type E is recovered from the first
+// `Array[T]` argument (the compiler knows these names).
+extern "plew-intrinsic" {
+    fn arrayPush[T](a: inout Array[T], v: T)
+    fn arrayGet[T](a: Array[T], i: U64) -> T
+    fn arraySet[T](a: inout Array[T], i: U64, v: T)
+    fn arrayLen[T](a: Array[T]) -> U64
+}
+
+// Methods on the builtin Array, in pure Plew over the floor above. Monomorphized
+// per element type and dispatched by name (emitArrayMethods).
+impl[T] Array[T] {
+    // The element at `i` (panics when out of range — same as `xs[i]`).
+    fn get(i: U64) -> T {
+        return arrayGet(a: self, i: i)
+    }
+    // Replace the element at `i` (panics when out of range).
+    inout fn set(i: U64, value: T) {
+        arraySet(a: inout self, i: i, v: value)
+    }
+}

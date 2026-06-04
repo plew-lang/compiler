@@ -1,10 +1,7 @@
 import @Std/Io with { print }
-extern "plew-intrinsic" {
-    fn arrayGet[T](a: Array[T], i: U64) -> T
-    fn arrayLen[T](a: Array[T]) -> U64
-}
 // User methods on the builtin Array, written in pure Plew over the array
-// intrinsics — monomorphized per element type and dispatched by name.
+// intrinsics (provided ambiently by the prelude) — monomorphized per element
+// type and dispatched by name.
 impl[T] Array[T] {
     fn first() -> T { return arrayGet(a: self, i: 0U64) }
     fn second() -> T { return arrayGet(a: self, i: 1U64) }

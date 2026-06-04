@@ -1,0 +1,11 @@
+import @Std/Io with { print }
+// `get`/`set` come from the implicit prelude — no import needed (ambient, like
+// the `Array` type itself).
+fn main() {
+    mut val xs: Array[I64] = []
+    xs.append(5I64)
+    xs.append(9I64)
+    xs.set(i: 0U64, value: 7I64)
+    print(xs.get(i: 0U64))
+    print(xs.get(i: 1U64))
+}

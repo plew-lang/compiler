@@ -1159,6 +1159,58 @@ PlewString U8_format_format_String(unsigned char self, PlewString format);
 PlewString U16_format_format_String(uint16_t self, PlewString format);
 PlewString U32_format_format_String(uint32_t self, PlewString format);
 PlewString Bool_format_format_String(long long self, PlewString format);
+unsigned char Array_U8_get_i_U64(PlewArray_U8 self, uint64_t i);
+void Array_U8_set_i_U64_value_T(PlewArray_U8* self, uint64_t i, unsigned char value);
+Bind Array_Bind_get_i_U64(PlewArray_Bind self, uint64_t i);
+void Array_Bind_set_i_U64_value_T(PlewArray_Bind* self, uint64_t i, Bind value);
+Tok Array_Tok_get_i_U64(PlewArray_Tok self, uint64_t i);
+void Array_Tok_set_i_U64_value_T(PlewArray_Tok* self, uint64_t i, Tok value);
+uint64_t Array_U64_get_i_U64(PlewArray_U64 self, uint64_t i);
+void Array_U64_set_i_U64_value_T(PlewArray_U64* self, uint64_t i, uint64_t value);
+Arg Array_Arg_get_i_U64(PlewArray_Arg self, uint64_t i);
+void Array_Arg_set_i_U64_value_T(PlewArray_Arg* self, uint64_t i, Arg value);
+MakeField Array_MakeField_get_i_U64(PlewArray_MakeField self, uint64_t i);
+void Array_MakeField_set_i_U64_value_T(PlewArray_MakeField* self, uint64_t i, MakeField value);
+MatchArm Array_MatchArm_get_i_U64(PlewArray_MatchArm self, uint64_t i);
+void Array_MatchArm_set_i_U64_value_T(PlewArray_MatchArm* self, uint64_t i, MatchArm value);
+Param Array_Param_get_i_U64(PlewArray_Param self, uint64_t i);
+void Array_Param_set_i_U64_value_T(PlewArray_Param* self, uint64_t i, Param value);
+FieldDef Array_FieldDef_get_i_U64(PlewArray_FieldDef self, uint64_t i);
+void Array_FieldDef_set_i_U64_value_T(PlewArray_FieldDef* self, uint64_t i, FieldDef value);
+Func Array_Func_get_i_U64(PlewArray_Func self, uint64_t i);
+void Array_Func_set_i_U64_value_T(PlewArray_Func* self, uint64_t i, Func value);
+Variant Array_Variant_get_i_U64(PlewArray_Variant self, uint64_t i);
+void Array_Variant_set_i_U64_value_T(PlewArray_Variant* self, uint64_t i, Variant value);
+Expr Array_Expr_get_i_U64(PlewArray_Expr self, uint64_t i);
+void Array_Expr_set_i_U64_value_T(PlewArray_Expr* self, uint64_t i, Expr value);
+Stmt Array_Stmt_get_i_U64(PlewArray_Stmt self, uint64_t i);
+void Array_Stmt_set_i_U64_value_T(PlewArray_Stmt* self, uint64_t i, Stmt value);
+Block Array_Block_get_i_U64(PlewArray_Block self, uint64_t i);
+void Array_Block_set_i_U64_value_T(PlewArray_Block* self, uint64_t i, Block value);
+StructDef Array_StructDef_get_i_U64(PlewArray_StructDef self, uint64_t i);
+void Array_StructDef_set_i_U64_value_T(PlewArray_StructDef* self, uint64_t i, StructDef value);
+EnumDef Array_EnumDef_get_i_U64(PlewArray_EnumDef self, uint64_t i);
+void Array_EnumDef_set_i_U64_value_T(PlewArray_EnumDef* self, uint64_t i, EnumDef value);
+TraitDef Array_TraitDef_get_i_U64(PlewArray_TraitDef self, uint64_t i);
+void Array_TraitDef_set_i_U64_value_T(PlewArray_TraitDef* self, uint64_t i, TraitDef value);
+Conform Array_Conform_get_i_U64(PlewArray_Conform self, uint64_t i);
+void Array_Conform_set_i_U64_value_T(PlewArray_Conform* self, uint64_t i, Conform value);
+MethodAlias Array_MethodAlias_get_i_U64(PlewArray_MethodAlias self, uint64_t i);
+void Array_MethodAlias_set_i_U64_value_T(PlewArray_MethodAlias* self, uint64_t i, MethodAlias value);
+DeriveReq Array_DeriveReq_get_i_U64(PlewArray_DeriveReq self, uint64_t i);
+void Array_DeriveReq_set_i_U64_value_T(PlewArray_DeriveReq* self, uint64_t i, DeriveReq value);
+FuncBound Array_FuncBound_get_i_U64(PlewArray_FuncBound self, uint64_t i);
+void Array_FuncBound_set_i_U64_value_T(PlewArray_FuncBound* self, uint64_t i, FuncBound value);
+TypeRef Array_TypeRef_get_i_U64(PlewArray_TypeRef self, uint64_t i);
+void Array_TypeRef_set_i_U64_value_T(PlewArray_TypeRef* self, uint64_t i, TypeRef value);
+FnInst Array_FnInst_get_i_U64(PlewArray_FnInst self, uint64_t i);
+void Array_FnInst_set_i_U64_value_T(PlewArray_FnInst* self, uint64_t i, FnInst value);
+CaptureEntry Array_CaptureEntry_get_i_U64(PlewArray_CaptureEntry self, uint64_t i);
+void Array_CaptureEntry_set_i_U64_value_T(PlewArray_CaptureEntry* self, uint64_t i, CaptureEntry value);
+Local Array_Local_get_i_U64(PlewArray_Local self, uint64_t i);
+void Array_Local_set_i_U64_value_T(PlewArray_Local* self, uint64_t i, Local value);
+PatInfo Array_PatInfo_get_i_U64(PlewArray_PatInfo self, uint64_t i);
+void Array_PatInfo_set_i_U64_value_T(PlewArray_PatInfo* self, uint64_t i, PatInfo value);
 int main(int argc, char** argv) {
     plew_argc = argc; plew_argv = argv;
     PlewArray_U8 combined = PlewArray_U8_new();
@@ -1227,6 +1279,16 @@ int main(int argc, char** argv) {
     else {
     PlewString s = plew_readStdin();
     appendBytes_into_AU8_from_AU8(&(combined), PlewArray_U8_share(({ PlewString __s = s; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; })));
+    }
+    PlewArray_U8 prelPath = PlewArray_U8_new();
+    appendBytes_into_AU8_from_AU8(&(prelPath), computeStdRoot_arg0_AU8(PlewArray_U8_share(({ PlewString __s = plew_argAt(0); (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; }))));
+    appendBytes_into_AU8_from_AU8(&(prelPath), PlewArray_U8_share(({ PlewString __s = (PlewString){"Prelude.pw", 10}; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; })));
+    if (plew_fileExists(PlewArray_U8_share(prelPath))) {
+    PlewString prelSrc = plew_readFileBytes(PlewArray_U8_share(prelPath));
+    if ((long long)((combined).len) > 0) {
+    PlewArray_U8_push(&(combined), 10);
+    }
+    appendBytes_into_AU8_from_AU8(&(combined), PlewArray_U8_share(({ PlewString __s = prelSrc; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; })));
     }
     appendBytes_into_AU8_from_AU8(&(combined), PlewArray_U8_share(({ PlewString __s = (PlewString){"\n// kwSpan builtins: String U8 U64 Bool Array\n", 46}; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; })));
     Lexer lx = (Lexer){.bytes = PlewArray_U8_share(combined), .pos = 0, .toks = PlewArray_Tok_new(), .depth = 0};
@@ -1504,6 +1566,7 @@ int main(int argc, char** argv) {
     emitClosures_c_Comp_proto_Bool(&(c), 0);
     Comp_release(c);
     Lexer_release(lx);
+    PlewArray_U8_release(prelPath);
     PlewArray_U8_release(combined);
     return 0;
 }
@@ -16096,4 +16159,186 @@ PlewString Bool_format_format_String(long long self, PlewString format) {
     { PlewString __ret980 = (PlewString){"0", 1};
     return __ret980; }
     }
+}
+unsigned char Array_U8_get_i_U64(PlewArray_U8 self, uint64_t i) {
+    { unsigned char __ret981 = PlewArray_U8_get((self), (long long)(i));
+    return __ret981; }
+}
+void Array_U8_set_i_U64_value_T(PlewArray_U8* self, uint64_t i, unsigned char value) {
+    PlewArray_U8_set(&((*self)), (long long)(i), value);
+}
+Bind Array_Bind_get_i_U64(PlewArray_Bind self, uint64_t i) {
+    { Bind __ret982 = PlewArray_Bind_get((self), (long long)(i));
+    return __ret982; }
+}
+void Array_Bind_set_i_U64_value_T(PlewArray_Bind* self, uint64_t i, Bind value) {
+    PlewArray_Bind_set(&((*self)), (long long)(i), value);
+}
+Tok Array_Tok_get_i_U64(PlewArray_Tok self, uint64_t i) {
+    { Tok __ret983 = PlewArray_Tok_get((self), (long long)(i));
+    return __ret983; }
+}
+void Array_Tok_set_i_U64_value_T(PlewArray_Tok* self, uint64_t i, Tok value) {
+    PlewArray_Tok_set(&((*self)), (long long)(i), value);
+}
+uint64_t Array_U64_get_i_U64(PlewArray_U64 self, uint64_t i) {
+    { uint64_t __ret984 = PlewArray_U64_get((self), (long long)(i));
+    return __ret984; }
+}
+void Array_U64_set_i_U64_value_T(PlewArray_U64* self, uint64_t i, uint64_t value) {
+    PlewArray_U64_set(&((*self)), (long long)(i), value);
+}
+Arg Array_Arg_get_i_U64(PlewArray_Arg self, uint64_t i) {
+    { Arg __ret985 = PlewArray_Arg_get((self), (long long)(i));
+    return __ret985; }
+}
+void Array_Arg_set_i_U64_value_T(PlewArray_Arg* self, uint64_t i, Arg value) {
+    PlewArray_Arg_set(&((*self)), (long long)(i), value);
+}
+MakeField Array_MakeField_get_i_U64(PlewArray_MakeField self, uint64_t i) {
+    { MakeField __ret986 = PlewArray_MakeField_get((self), (long long)(i));
+    return __ret986; }
+}
+void Array_MakeField_set_i_U64_value_T(PlewArray_MakeField* self, uint64_t i, MakeField value) {
+    PlewArray_MakeField_set(&((*self)), (long long)(i), value);
+}
+MatchArm Array_MatchArm_get_i_U64(PlewArray_MatchArm self, uint64_t i) {
+    { MatchArm __ret987 = PlewArray_MatchArm_get((self), (long long)(i));
+    return __ret987; }
+}
+void Array_MatchArm_set_i_U64_value_T(PlewArray_MatchArm* self, uint64_t i, MatchArm value) {
+    PlewArray_MatchArm_set(&((*self)), (long long)(i), value);
+}
+Param Array_Param_get_i_U64(PlewArray_Param self, uint64_t i) {
+    { Param __ret988 = PlewArray_Param_get((self), (long long)(i));
+    return __ret988; }
+}
+void Array_Param_set_i_U64_value_T(PlewArray_Param* self, uint64_t i, Param value) {
+    PlewArray_Param_set(&((*self)), (long long)(i), value);
+}
+FieldDef Array_FieldDef_get_i_U64(PlewArray_FieldDef self, uint64_t i) {
+    { FieldDef __ret989 = PlewArray_FieldDef_get((self), (long long)(i));
+    return __ret989; }
+}
+void Array_FieldDef_set_i_U64_value_T(PlewArray_FieldDef* self, uint64_t i, FieldDef value) {
+    PlewArray_FieldDef_set(&((*self)), (long long)(i), value);
+}
+Func Array_Func_get_i_U64(PlewArray_Func self, uint64_t i) {
+    { Func __ret990 = PlewArray_Func_get((self), (long long)(i));
+    return __ret990; }
+}
+void Array_Func_set_i_U64_value_T(PlewArray_Func* self, uint64_t i, Func value) {
+    PlewArray_Func_set(&((*self)), (long long)(i), value);
+}
+Variant Array_Variant_get_i_U64(PlewArray_Variant self, uint64_t i) {
+    { Variant __ret991 = PlewArray_Variant_get((self), (long long)(i));
+    return __ret991; }
+}
+void Array_Variant_set_i_U64_value_T(PlewArray_Variant* self, uint64_t i, Variant value) {
+    PlewArray_Variant_set(&((*self)), (long long)(i), value);
+}
+Expr Array_Expr_get_i_U64(PlewArray_Expr self, uint64_t i) {
+    { Expr __ret992 = PlewArray_Expr_get((self), (long long)(i));
+    return __ret992; }
+}
+void Array_Expr_set_i_U64_value_T(PlewArray_Expr* self, uint64_t i, Expr value) {
+    PlewArray_Expr_set(&((*self)), (long long)(i), value);
+}
+Stmt Array_Stmt_get_i_U64(PlewArray_Stmt self, uint64_t i) {
+    { Stmt __ret993 = PlewArray_Stmt_get((self), (long long)(i));
+    return __ret993; }
+}
+void Array_Stmt_set_i_U64_value_T(PlewArray_Stmt* self, uint64_t i, Stmt value) {
+    PlewArray_Stmt_set(&((*self)), (long long)(i), value);
+}
+Block Array_Block_get_i_U64(PlewArray_Block self, uint64_t i) {
+    { Block __ret994 = PlewArray_Block_get((self), (long long)(i));
+    return __ret994; }
+}
+void Array_Block_set_i_U64_value_T(PlewArray_Block* self, uint64_t i, Block value) {
+    PlewArray_Block_set(&((*self)), (long long)(i), value);
+}
+StructDef Array_StructDef_get_i_U64(PlewArray_StructDef self, uint64_t i) {
+    { StructDef __ret995 = PlewArray_StructDef_get((self), (long long)(i));
+    return __ret995; }
+}
+void Array_StructDef_set_i_U64_value_T(PlewArray_StructDef* self, uint64_t i, StructDef value) {
+    PlewArray_StructDef_set(&((*self)), (long long)(i), value);
+}
+EnumDef Array_EnumDef_get_i_U64(PlewArray_EnumDef self, uint64_t i) {
+    { EnumDef __ret996 = PlewArray_EnumDef_get((self), (long long)(i));
+    return __ret996; }
+}
+void Array_EnumDef_set_i_U64_value_T(PlewArray_EnumDef* self, uint64_t i, EnumDef value) {
+    PlewArray_EnumDef_set(&((*self)), (long long)(i), value);
+}
+TraitDef Array_TraitDef_get_i_U64(PlewArray_TraitDef self, uint64_t i) {
+    { TraitDef __ret997 = PlewArray_TraitDef_get((self), (long long)(i));
+    return __ret997; }
+}
+void Array_TraitDef_set_i_U64_value_T(PlewArray_TraitDef* self, uint64_t i, TraitDef value) {
+    PlewArray_TraitDef_set(&((*self)), (long long)(i), value);
+}
+Conform Array_Conform_get_i_U64(PlewArray_Conform self, uint64_t i) {
+    { Conform __ret998 = PlewArray_Conform_get((self), (long long)(i));
+    return __ret998; }
+}
+void Array_Conform_set_i_U64_value_T(PlewArray_Conform* self, uint64_t i, Conform value) {
+    PlewArray_Conform_set(&((*self)), (long long)(i), value);
+}
+MethodAlias Array_MethodAlias_get_i_U64(PlewArray_MethodAlias self, uint64_t i) {
+    { MethodAlias __ret999 = PlewArray_MethodAlias_get((self), (long long)(i));
+    return __ret999; }
+}
+void Array_MethodAlias_set_i_U64_value_T(PlewArray_MethodAlias* self, uint64_t i, MethodAlias value) {
+    PlewArray_MethodAlias_set(&((*self)), (long long)(i), value);
+}
+DeriveReq Array_DeriveReq_get_i_U64(PlewArray_DeriveReq self, uint64_t i) {
+    { DeriveReq __ret1000 = PlewArray_DeriveReq_get((self), (long long)(i));
+    return __ret1000; }
+}
+void Array_DeriveReq_set_i_U64_value_T(PlewArray_DeriveReq* self, uint64_t i, DeriveReq value) {
+    PlewArray_DeriveReq_set(&((*self)), (long long)(i), value);
+}
+FuncBound Array_FuncBound_get_i_U64(PlewArray_FuncBound self, uint64_t i) {
+    { FuncBound __ret1001 = PlewArray_FuncBound_get((self), (long long)(i));
+    return __ret1001; }
+}
+void Array_FuncBound_set_i_U64_value_T(PlewArray_FuncBound* self, uint64_t i, FuncBound value) {
+    PlewArray_FuncBound_set(&((*self)), (long long)(i), value);
+}
+TypeRef Array_TypeRef_get_i_U64(PlewArray_TypeRef self, uint64_t i) {
+    { TypeRef __ret1002 = PlewArray_TypeRef_get((self), (long long)(i));
+    return __ret1002; }
+}
+void Array_TypeRef_set_i_U64_value_T(PlewArray_TypeRef* self, uint64_t i, TypeRef value) {
+    PlewArray_TypeRef_set(&((*self)), (long long)(i), value);
+}
+FnInst Array_FnInst_get_i_U64(PlewArray_FnInst self, uint64_t i) {
+    { FnInst __ret1003 = PlewArray_FnInst_get((self), (long long)(i));
+    return __ret1003; }
+}
+void Array_FnInst_set_i_U64_value_T(PlewArray_FnInst* self, uint64_t i, FnInst value) {
+    PlewArray_FnInst_set(&((*self)), (long long)(i), value);
+}
+CaptureEntry Array_CaptureEntry_get_i_U64(PlewArray_CaptureEntry self, uint64_t i) {
+    { CaptureEntry __ret1004 = PlewArray_CaptureEntry_get((self), (long long)(i));
+    return __ret1004; }
+}
+void Array_CaptureEntry_set_i_U64_value_T(PlewArray_CaptureEntry* self, uint64_t i, CaptureEntry value) {
+    PlewArray_CaptureEntry_set(&((*self)), (long long)(i), value);
+}
+Local Array_Local_get_i_U64(PlewArray_Local self, uint64_t i) {
+    { Local __ret1005 = PlewArray_Local_get((self), (long long)(i));
+    return __ret1005; }
+}
+void Array_Local_set_i_U64_value_T(PlewArray_Local* self, uint64_t i, Local value) {
+    PlewArray_Local_set(&((*self)), (long long)(i), value);
+}
+PatInfo Array_PatInfo_get_i_U64(PlewArray_PatInfo self, uint64_t i) {
+    { PatInfo __ret1006 = PlewArray_PatInfo_get((self), (long long)(i));
+    return __ret1006; }
+}
+void Array_PatInfo_set_i_U64_value_T(PlewArray_PatInfo* self, uint64_t i, PatInfo value) {
+    PlewArray_PatInfo_set(&((*self)), (long long)(i), value);
 }
