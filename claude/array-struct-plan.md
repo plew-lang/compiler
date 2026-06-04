@@ -66,6 +66,56 @@ existing machinery handles most of it for free:
 So the special-casing that remains is only: **literals `[…]`**, **index `[i]`**,
 **`for`**, and **ambient-ness** (the lang-item, no import — already handled).
 
+## Bootstrap seam — why the swap is TWO flips, not one
+
+The compiler uses `Array` for its own data (`c.types`, `c.funcs`, source bytes,
+`xs.append`, `[i]`, `for`). A representation swap must be compilable by the
+*previous* (builtin-`PlewArray`) compiler into a *working* struct-aware compiler.
+The trap: **pure-Plew struct method bodies** (`self.data: RawBuffer`,
+`self.count = …`) are mis-compiled by the builtin compiler — it sees `self` as a
+`PlewArray` (`.len`, no `.count` store), so the methods the compiler itself calls
+break. The bodies can only be compiled correctly by a struct-aware compiler — but
+that is the very compiler we are trying to build (circular).
+
+The escape is a **stable seam**: the intrinsic floor (`arrayPush`/`arrayGet`/
+`arraySet`/`arrayLen`). Method bodies that are thin intrinsic wrappers compile
+correctly under *both* compilers — the builtin one lowers `arrayPush` →
+`PlewArray_E_push`, the struct-aware one lowers it → a struct push. So the swap is:
+
+- **Flip 1 (representation; methods stay intrinsic wrappers).** Make `Array[E]` a
+  genInst struct over `RawBuffer` (`struct Array[T] { data: RawBuffer[T];
+  pub(get) mut val count }`); flip the `array*` intrinsics' lowering from
+  `PlewArray_E_*` to struct ops (a per-element C runtime `Array_E_{get,set,push}`,
+  with copy/share/release coming free from emitMonoStruct's RawBuffer-field
+  handling); flip `Array[E]` C type, literals, `.count`, `[i]`, `for`, `.bytes`;
+  remove the A0 guard, `emitArrayMethods`, and the `PlewArray` runtime. The
+  builtin compiler compiles this source (intrinsic-wrapper bodies → builtin push;
+  guard still active in its *binary* keeps Array builtin for its own arrays) into
+  a working struct-emitting compiler. Reseed ×2 → fixpoint. **This achieves the
+  representation goal: Array is a Plew struct over RawBuffer.**
+- **Flip 2 (methods → pure Plew).** Now struct-aware, rewrite the method bodies to
+  pure-Plew raw-floor logic (grow/CoW in Plew, mirroring `tests/run/raw_struct_cow`
+  `VecI.push`); remove the `array*` intrinsics + their C runtime. The Flip-1
+  compiler compiles the struct bodies correctly. Reseed → done.
+
+`.bytes` coupling: `String.bytes` is currently a borrowed, header-less
+`PlewArray_U8` view; a struct-Array assumes a `RawBuffer` header and value
+semantics (binding copies → reads the header). `.bytes` is bound to locals in 44
+sites in the compiler, so it must yield an **independent** `Array[U8]` —
+materialize it by copying the string bytes into a fresh RawBuffer-backed
+`Array_U8` (value-semantics-honest; hidden O(n) cost is allowed). Array can't be
+split by element (a generic `Array[T]` mono'd for `U8` must match the one
+representation), so U8 flips with everything else.
+
+Prerequisite status (from the `Vec`/`VecI` spike): **(A) return-context inference
+is NOT a blocker** — Array values are only ever built by literals (`[…]`/`[]`),
+which the compiler lowers with the element type known from context, so it
+synthesizes `(Array_E){…}` directly without generic field inference; truly
+context-free `val xs = []` stays an error (needs annotation, Swift-like). It
+remains independently useful → deferred as a separate additive. **`pub(get)`
+parsing is done.** **Self sibling-method calls** are sidestepped by keeping
+Array's methods flat (Flip 2 inlines grow/CoW into append/set).
+
 ## Execution order (each step compiles; the swap itself is one commit)
 
 1. **RawBuffer value semantics** (additive, do first, testable alone): mirror `Ref`

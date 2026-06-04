@@ -255,27 +255,34 @@ fn main() {
         emitMonoForward(c: inout c, instRef: c.genInsts[mfi])
         mfi += 1
     }
-    // array typedefs (element by pointer -> forward decls suffice). U8 is always
-    // present (String.bytes); other element types come from declarations.
+    // `Array[E]` genInst bodies are emitted HERE (before the nominal struct bodies),
+    // unlike other genInsts: an `Array_E` is `{ E* data; uint64_t count; }`, so its
+    // element is behind a pointer and only needs E forward-declared (done above) —
+    // and a nominal struct (e.g. Comp) holds arrays by value, so `Array_E` must be a
+    // complete type before those bodies. Non-array genInsts can hold a type by value
+    // and so stay in the post-order mono pass after the nominal bodies.
+    mut val afi: U64 = 0
+    while afi < c.genInsts.count {
+        val aft: TypeRef = c.types[c.genInsts[afi]]
+        if rangeEquals(bytes: c.bytes, start: aft.nameStart, len: aft.nameLen, kw: "Array") {
+            emitMonoStruct(c: inout c, instRef: c.genInsts[afi])
+        }
+        afi += 1
+    }
+    // Array_U8 is always present (String.bytes / file paths). It is hand-written
+    // and kept out of the genInst machinery (the U8 guard in isGenericInst); every
+    // other `Array[E]` C type comes from the prelude `struct Array[T]` via
+    // emitMonoForward/emitMonoStruct above.
     genU8ArrayTypedef()
     // readFileBytes: read a file named by an Array[U8] path (used by multi-file
-    // `part` to read a path built from byte spans). Needs PlewArray_U8 above and
+    // `part` to read a path built from byte spans). Needs Array_U8 above and
     // plew_readFile from the preamble.
-    write(s: "__attribute__((unused)) static PlewString plew_readFileBytes(PlewArray_U8 p) { char* path = (char*)malloc((size_t)p.len + 1); memcpy(path, p.data, (size_t)p.len); path[p.len] = 0; PlewString r = plew_readFile((PlewString){path, p.len}); free(path); return r; }\n")
-    write(s: "__attribute__((unused)) static long long plew_fileExists(PlewArray_U8 p) { char* path = (char*)malloc((size_t)p.len + 1); memcpy(path, p.data, (size_t)p.len); path[p.len] = 0; FILE* f = fopen(path, \"rb\"); free(path); if (f) { fclose(f); return 1; } return 0; }\n")
+    write(s: "__attribute__((unused)) static PlewString plew_readFileBytes(Array_U8 p) { char* path = (char*)malloc((size_t)p.count + 1); memcpy(path, p.data, (size_t)p.count); path[p.count] = 0; PlewString r = plew_readFile((PlewString){path, p.count}); free(path); return r; }\n")
+    write(s: "__attribute__((unused)) static long long plew_fileExists(Array_U8 p) { char* path = (char*)malloc((size_t)p.count + 1); memcpy(path, p.data, (size_t)p.count); path[p.count] = 0; FILE* f = fopen(path, \"rb\"); free(path); if (f) { fclose(f); return 1; } return 0; }\n")
     // String construction from a byte array (Core's `stringFromBytes` intrinsic):
     // copies the bytes into a fresh buffer the String owns. (Strings are not yet
     // ARC-freed, so this leaks like other Strings — acceptable for now.)
-    write(s: "__attribute__((unused)) static PlewString plew_stringFromBytes(PlewArray_U8 p) { char* buf = (char*)malloc((size_t)p.len + 1); memcpy(buf, p.data, (size_t)p.len); buf[p.len] = 0; PlewString s; s.data = buf; s.len = p.len; return s; }\n")
-    mut val ai: U64 = 0
-    while ai < c.arrayElems.count {
-        val ae: Bind = c.arrayElems[ai]
-        if skipArrayElem(c: inout c, ae: ae) {
-        } else {
-            genArrayTypedef(c: inout c, elemStart: ae.nameStart, elemLen: ae.nameLen)
-        }
-        ai += 1
-    }
+    write(s: "__attribute__((unused)) static PlewString plew_stringFromBytes(Array_U8 p) { char* buf = (char*)malloc((size_t)p.count + 1); memcpy(buf, p.data, (size_t)p.count); buf[p.count] = 0; PlewString s; s.data = buf; s.len = p.count; return s; }\n")
     // nominal bodies (may contain arrays by value; typedefs above are complete).
     // Enums first: a struct may hold an enum by value (e.g. Tok holds Kind), but
     // no enum holds a struct by value, so this order resolves the dependency.
@@ -298,13 +305,19 @@ fn main() {
         }
         sj += 1
     }
-    // monomorphized generic bodies (post-order: nested instances first).
+    // monomorphized generic bodies (post-order: nested instances first). Array
+    // genInst bodies were already emitted above (before the nominal bodies), so
+    // skip them here to avoid a duplicate definition.
     mut val mbi: U64 = 0
     while mbi < c.genInsts.count {
-        if isGenericEnumInst(c: inout c, ref: c.genInsts[mbi]) {
-            emitMonoEnum(c: inout c, instRef: c.genInsts[mbi])
+        val mbt: TypeRef = c.types[c.genInsts[mbi]]
+        if rangeEquals(bytes: c.bytes, start: mbt.nameStart, len: mbt.nameLen, kw: "Array") {
         } else {
-            emitMonoStruct(c: inout c, instRef: c.genInsts[mbi])
+            if isGenericEnumInst(c: inout c, ref: c.genInsts[mbi]) {
+                emitMonoEnum(c: inout c, instRef: c.genInsts[mbi])
+            } else {
+                emitMonoStruct(c: inout c, instRef: c.genInsts[mbi])
+            }
         }
         mbi += 1
     }

@@ -941,6 +941,13 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 i -= 1
                 val lo: Local = c.locals[i]
                 if spansEqual(c: inout c, aStart: lo.nameStart, aLen: lo.nameLen, bStart: start, bLen: len) {
+                    // an array local stays kind 3 (element by name) even though
+                    // `Array[E]` is now a genInst struct — all the array-special
+                    // codegen (index/for/.count/methods/value-semantics) keys off
+                    // kind 3, so it must not be reported as a kind-2 instantiation.
+                    if lo.isArray {
+                        return typeInfoOfName(c: inout c, start: lo.tyStart, len: lo.tyLen, isArray: true)
+                    }
                     if isGenericInst(c: inout c, ref: lo.ty) {
                         val lt: TypeRef = c.types[lo.ty]
                         return <TypeInfo kind=2 nameStart=lt.nameStart nameLen=lt.nameLen ref=lo.ty />
@@ -1068,9 +1075,14 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                             }
                         }
                     }
-                    if isGenericInst(c: inout c, ref: f.retTy) {
-                        val rtr: TypeRef = c.types[f.retTy]
-                        return <TypeInfo kind=2 nameStart=rtr.nameStart nameLen=rtr.nameLen ref=f.retTy />
+                    // an `Array[E]` return stays kind 3 (handled below); only a true
+                    // kind-2 instantiation (`Box[I32]`, an enum) reports as a genInst.
+                    if f.retIsArray {
+                    } else {
+                        if isGenericInst(c: inout c, ref: f.retTy) {
+                            val rtr: TypeRef = c.types[f.retTy]
+                            return <TypeInfo kind=2 nameStart=rtr.nameStart nameLen=rtr.nameLen ref=f.retTy />
+                        }
                     }
                     return typeInfoOfName(c: inout c, start: f.retStart, len: f.retLen, isArray: f.retIsArray)
                 }

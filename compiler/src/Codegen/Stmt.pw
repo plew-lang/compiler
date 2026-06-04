@@ -399,7 +399,7 @@ fn tryArrayElemFieldAssign(c: inout Comp, op: I64, target: U64, value: U64) -> B
                     // For `OP=` the new field value is computed from the current
                     // `__ge.field` with the same overflow/zero-divisor checks as a
                     // plain field compound-assign.
-                    write(s: "    PlewArray_")
+                    write(s: "    Array_")
                     writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
                     write(s: "_set(&(")
                     genExpr(c: inout c, id: abase)
@@ -617,7 +617,7 @@ fn genStmt(c: inout Comp, id: U64) {
                     if bt.kind == 3 {
                         checkLitSpan(c: inout c, id: value, tyStart: bt.nameStart, tyLen: bt.nameLen, isArray: false)
                     }
-                    write(s: "    PlewArray_")
+                    write(s: "    Array_")
                     writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
                     write(s: "_set(&(")
                     genExpr(c: inout c, id: base)
@@ -956,9 +956,9 @@ fn genStmt(c: inout Comp, id: U64) {
                 writeU64(n: t)
                 write(s: " = 0; __fi")
                 writeU64(n: t)
-                write(s: " < __fa")
+                write(s: " < (long long)__fa")
                 writeU64(n: t)
-                write(s: ".len; __fi")
+                write(s: ".count; __fi")
                 writeU64(n: t)
                 write(s: "++) {\n")
                 if isStruct {

@@ -118,6 +118,11 @@ fn structNeedsCopy(c: inout Comp, start: U64, len: U64) -> Bool {
         if f.tyIsArray {
             return true
         } else {
+            // a RawBuffer field is a refcounted heap buffer: bind shares it (the
+            // deep copy is lazy, in the owner's copy-on-write methods).
+            if rangeEquals(bytes: c.bytes, start: f.tyStart, len: f.tyLen, kw: "RawBuffer") {
+                return true
+            }
             if structNeedsCopy(c: inout c, start: f.tyStart, len: f.tyLen) {
                 return true
             }
@@ -145,6 +150,9 @@ fn structNeedsRelease(c: inout Comp, start: U64, len: U64) -> Bool {
         if f.tyIsArray {
             return true
         } else {
+            if rangeEquals(bytes: c.bytes, start: f.tyStart, len: f.tyLen, kw: "RawBuffer") {
+                return true
+            }
             if typeIsUnique(c: inout c, start: f.tyStart, len: f.tyLen) {
                 return true
             }
@@ -210,14 +218,23 @@ fn emitStructCopyDef(c: inout Comp, si: U64) {
             writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
             write(s: ");")
         } else {
-            if structNeedsCopy(c: inout c, start: f.tyStart, len: f.tyLen) {
-                write(s: " r.")
-                writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                write(s: " = ")
-                writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
-                write(s: "_copy(s.")
+            if rangeEquals(bytes: c.bytes, start: f.tyStart, len: f.tyLen, kw: "RawBuffer") {
+                // CoW: a copy shares the buffer (retain); the deep copy is lazy, in
+                // the owner's mutating methods (which check rawIsUnique). r.field is
+                // already == s.field via `r = s`, so this just bumps the refcount.
+                write(s: " plew_rawbuf_share((void*)s.")
                 writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
                 write(s: ");")
+            } else {
+                if structNeedsCopy(c: inout c, start: f.tyStart, len: f.tyLen) {
+                    write(s: " r.")
+                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                    write(s: " = ")
+                    writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
+                    write(s: "_copy(s.")
+                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                    write(s: ");")
+                }
             }
         }
         i += 1
@@ -252,16 +269,26 @@ fn emitStructShareDef(c: inout Comp, si: U64) {
     while i < fields.count {
         val f: FieldDef = fields[i]
         if f.tyIsArray {
-            write(s: " plew_arc_retain(s.")
+            // retain the array field's buffer (its rc lives in the RawBuffer
+            // header now, so go through the array runtime rather than `.rc`).
+            write(s: " ")
+            wPA(c: inout c, elemStart: f.tyStart, elemLen: f.tyLen)
+            write(s: "_share(s.")
             writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-            write(s: ".rc);")
+            write(s: ");")
         } else {
-            if structNeedsCopy(c: inout c, start: f.tyStart, len: f.tyLen) {
-                write(s: " ")
-                writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
-                write(s: "_share(s.")
+            if rangeEquals(bytes: c.bytes, start: f.tyStart, len: f.tyLen, kw: "RawBuffer") {
+                write(s: " plew_rawbuf_share((void*)s.")
                 writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
                 write(s: ");")
+            } else {
+                if structNeedsCopy(c: inout c, start: f.tyStart, len: f.tyLen) {
+                    write(s: " ")
+                    writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
+                    write(s: "_share(s.")
+                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                    write(s: ");")
+                }
             }
         }
         i += 1
@@ -303,6 +330,11 @@ fn emitStructReleaseDef(c: inout Comp, si: U64) {
             writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
             write(s: ");")
         } else {
+            if rangeEquals(bytes: c.bytes, start: f.tyStart, len: f.tyLen, kw: "RawBuffer") {
+                write(s: " plew_rawbuf_release((void*)s.")
+                writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+                write(s: ");")
+            } else {
             // a unique field is destroyed in place (spec/03: fields in declaration
             // order): run its deinit body, then release its own fields.
             if typeIsUnique(c: inout c, start: f.tyStart, len: f.tyLen) {
@@ -328,6 +360,7 @@ fn emitStructReleaseDef(c: inout Comp, si: U64) {
                     writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
                     write(s: ");")
                 }
+            }
             }
         }
         i += 1
@@ -1078,7 +1111,7 @@ fn emitClosureEnvDrop(c: inout Comp, id: U64) {
                 write(s: ") - 1);\n")
             } else {
                 if e.isArray {
-                    write(s: "    PlewArray_")
+                    write(s: "    Array_")
                     writeSpan(c: inout c, start: e.tyStart, len: e.tyLen)
                     write(s: "_release(e->")
                     writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)

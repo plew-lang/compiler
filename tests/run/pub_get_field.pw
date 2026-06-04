@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+// `pub(get)` field visibility parses (recorded by intent; not yet enforced while
+// the module with-gate is unimplemented — observationally identical to plain
+// storage in the current all-flat model). Accepted so ambient types like
+// `Array`'s `pub(get) mut val count` parse as written.
+struct Counter {
+    pub(get) mut val count: U64
+    pub val tag: U64
+    val secret: U64
+}
+
+fn main() {
+    mut val c = <Counter count=5U64 tag=7U64 secret=99U64 />
+    print(c.count)
+    print(c.tag)
+    print(c.secret)
+    c.count = c.count + 1U64
+    print(c.count)
+}
