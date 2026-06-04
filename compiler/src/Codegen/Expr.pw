@@ -377,7 +377,12 @@ fn genExpr(c: inout Comp, id: U64) {
                 compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "unknown function (a typo, or a builtin used without its `import @Std/…`)")
             } else {
                 if c.funcs[cfi].isExtern {
-                    // `extern "plew-intrinsic"` callee: lower to the runtime symbol
+                    // array intrinsics (`arrayPush`/`arrayGet`/…) lower to the
+                    // per-element runtime `PlewArray_<E>_<op>` (whole call emitted).
+                    if emitArrayIntrinsic(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args) {
+                        return
+                    }
+                    // other `extern "plew-intrinsic"` callees: the runtime symbol
                     // `plew_<name>` (args emitted below, positionally, respecting
                     // inout). No overload mangling — intrinsics are not overloaded.
                     write(s: "plew_")

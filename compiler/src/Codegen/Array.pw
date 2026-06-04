@@ -1,3 +1,82 @@
+// The array intrinsic floor (spec/15 core-library boundary): a handful of named
+// `extern "plew-intrinsic"` generic functions that Core's `Array` methods call,
+// each lowering to the per-element-type runtime `PlewArray_<E>_<op>`. The element
+// type E is recovered from the first argument (an `Array[T]`). This is the
+// irreducible array floor (cf. Swift's `Builtin` array ops); the methods on top
+// (`append`, …) are pure Plew. Returns true if `(nameStart,nameLen)` named one.
+fn emitArrayIntrinsic(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arrayPush") {
+        val et: TypeInfo = exprType(c: inout c, id: args[0].expr)
+        wPA(c: inout c, elemStart: et.nameStart, elemLen: et.nameLen)
+        write(s: "_push(&(")
+        genExpr(c: inout c, id: args[0].expr)
+        write(s: "), ")
+        emitArrayElemValue(c: inout c, argExpr: args[1].expr, arrStart: et.nameStart, arrLen: et.nameLen)
+        write(s: ")")
+        return true
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arrayGet") {
+        val et: TypeInfo = exprType(c: inout c, id: args[0].expr)
+        wPA(c: inout c, elemStart: et.nameStart, elemLen: et.nameLen)
+        write(s: "_get((")
+        genExpr(c: inout c, id: args[0].expr)
+        write(s: "), (long long)(")
+        genExpr(c: inout c, id: args[1].expr)
+        write(s: "))")
+        return true
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arraySet") {
+        val et: TypeInfo = exprType(c: inout c, id: args[0].expr)
+        wPA(c: inout c, elemStart: et.nameStart, elemLen: et.nameLen)
+        write(s: "_set(&(")
+        genExpr(c: inout c, id: args[0].expr)
+        write(s: "), (long long)(")
+        genExpr(c: inout c, id: args[1].expr)
+        write(s: "), ")
+        emitArrayElemValue(c: inout c, argExpr: args[2].expr, arrStart: et.nameStart, arrLen: et.nameLen)
+        write(s: ")")
+        return true
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arrayLen") {
+        write(s: "((")
+        genExpr(c: inout c, id: args[0].expr)
+        write(s: ").len)")
+        return true
+    }
+    return false
+}
+
+// Emit an element value being pushed/set into `Array[E]`. When the element is
+// itself an `Array[X]` the value is an array (literal/value) needing the typed
+// constructor; otherwise a plain expression.
+fn emitArrayElemValue(c: inout Comp, argExpr: U64, arrStart: U64, arrLen: U64) {
+    val aer: U64 = arrayElemRef(c: inout c, start: arrStart, len: arrLen)
+    if aer != 0 {
+        val arr2: U64 = resolveTy(c: inout c, tyRef: aer)
+        if arr2 < c.types.count {
+            val atp: TypeRef = c.types[arr2]
+            if rangeEquals(bytes: c.bytes, start: atp.nameStart, len: atp.nameLen, kw: "Array") {
+                if atp.args.count > 0 {
+                    val xn: Bind = arrayElemNameForRef(c: inout c, elemRef: atp.args[0])
+                    genArrayValue(c: inout c, exprId: argExpr, elemStart: xn.nameStart, elemLen: xn.nameLen)
+                    return
+                }
+            }
+        }
+    }
+    genExpr(c: inout c, id: argExpr)
+}
+
+// Is `(nameStart,nameLen)` an array intrinsic name (for the exprType of its
+// result and the call lowering)?
+fn isArrayIntrinsicName(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arrayPush") { return true }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arrayGet") { return true }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arraySet") { return true }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arrayLen") { return true }
+    return false
+}
+
 // Write the array C name `PlewArray_<elem>`. A type-parameter element name
 // (`Array[T]` inside a generic instance) resolves to its concrete argument's
 // mangle via the active env, so the name matches the instantiated runtime.
