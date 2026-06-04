@@ -1167,14 +1167,24 @@ fn genStmt(c: inout Comp, id: U64) {
                     mut val bi: U64 = 0
                     while bi < binds.count {
                         val bd: Bind = binds[bi]
-                        write(s: "        ")
-                        if genericMatch {
-                            genBindTypeInst(c: inout c, instRef: scrutRef, variantStart: a.variantStart, variantLen: a.variantLen, bindStart: bd.fieldStart, bindLen: bd.fieldLen)
+                        // in an async fn the bind is a frame field (`__f->name_sN`)
+                        // so it survives an await inside the arm; otherwise a normal
+                        // C local. The payload read is identical.
+                        mut val bcn: U64 = 0
+                        if c.curAsync {
+                            bcn = nextAsyncVar(c: inout c)
+                            write(s: "        __f->")
+                            writeNameCn(c: inout c, start: bd.nameStart, len: bd.nameLen, cnum: bcn)
                         } else {
-                            genBindType(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, bindStart: bd.fieldStart, bindLen: bd.fieldLen)
+                            write(s: "        ")
+                            if genericMatch {
+                                genBindTypeInst(c: inout c, instRef: scrutRef, variantStart: a.variantStart, variantLen: a.variantLen, bindStart: bd.fieldStart, bindLen: bd.fieldLen)
+                            } else {
+                                genBindType(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, bindStart: bd.fieldStart, bindLen: bd.fieldLen)
+                            }
+                            write(s: " ")
+                            writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
                         }
-                        write(s: " ")
-                        writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
                         write(s: " = _m")
                         writeU64(n: t)
                         write(s: ".data.")
@@ -1182,15 +1192,19 @@ fn genStmt(c: inout Comp, id: U64) {
                         write(s: ".")
                         writeSpan(c: inout c, start: bd.fieldStart, len: bd.fieldLen)
                         write(s: ";\n")
-                        // mark used so an unreferenced bind doesn't warn
-                        write(s: "        (void)")
-                        writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
-                        write(s: ";\n")
+                        if c.curAsync {
+                            // (-w silences unused warnings; no `(void)` needed.)
+                        } else {
+                            // mark used so an unreferenced bind doesn't warn
+                            write(s: "        (void)")
+                            writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
+                            write(s: ";\n")
+                        }
                         if genericMatch {
                             val bti: TypeInfo = genericEnumFieldTypeInfo(c: inout c, instRef: scrutRef, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
-                            addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false)
+                            addLocalCn(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false, cnum: bcn)
                         } else {
-                            addBindLocal(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
+                            addBindLocalCn(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen, cnum: bcn)
                         }
                         bi += 1
                     }

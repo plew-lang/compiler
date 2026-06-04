@@ -93,8 +93,21 @@ fn rejectAsyncUnsupported(c: inout Comp, blockId: U64) {
             Stmt.While(cond: _, val body) => {
                 rejectAsyncUnsupported(c: inout c, blockId: body)
             }
+            Stmt.Match(scrut: _, val arms) => {
+                // enum match is supported; struct-destructure match is additive.
+                if arms.count > 0 {
+                    if arms[0].isStruct {
+                        compileError(msg: "struct-destructure `match` is not yet supported inside an `async fn` (enum match is; this is additive)")
+                    }
+                }
+                mut val ai: U64 = 0
+                while ai < arms.count {
+                    rejectAsyncUnsupported(c: inout c, blockId: arms[ai].body)
+                    ai += 1
+                }
+            }
             _ => {
-                compileError(msg: "this statement is not yet supported inside an `async fn` (for / match / give and mid-expression await are additive; if / while / bindings / calls / returns are supported)")
+                compileError(msg: "this statement is not yet supported inside an `async fn` (for / give and mid-expression await are additive; if / while / match / bindings / calls / returns are supported)")
             }
         }
         i += 1
@@ -102,12 +115,10 @@ fn rejectAsyncUnsupported(c: inout Comp, blockId: U64) {
 }
 
 // Recursively collect an async body's bindings into frame-struct fields (so
-// every local survives `await` suspensions). Mirrors genStmt's Let lowering for
-// the field type. Names must be unique within the async fn: the frame is flat
-// (no nested C scopes), so shadowing a name — even across sibling branches —
-// would collide; reject it for now rather than miscompile (additive: name
-// disambiguation). Recurses into if/while bodies; locals are never popped during
-// collection so the uniqueness check sees the whole function.
+// every local survives `await` suspensions). Each binding gets a monotonic suffix
+// (nextAsyncVar) so repeated names across sibling branches / match arms don't
+// collide in the flat frame. Walks the body in the SAME DFS order as the resume
+// codegen, so the suffixes line up. Recurses into if/while/match bodies.
 fn collectAsyncFields(c: inout Comp, blockId: U64) {
     val b: Block = c.blocks[blockId]
     val stmts: Array[U64] = b.stmts
@@ -115,16 +126,14 @@ fn collectAsyncFields(c: inout Comp, blockId: U64) {
     while i < stmts.count {
         match c.stmts[stmts[i]] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
-                if localIndexByName(c: inout c, start: nameStart, len: nameLen) < c.locals.count {
-                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "shadowing a binding inside an `async fn` is not yet supported; use distinct names")
-                }
+                val cnum: U64 = nextAsyncVar(c: inout c)
                 val le: LetEff = inferLetType(c: inout c, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
                 write(s: "    ")
                 genCTypeOf(c: inout c, tyRef: le.ty, fallStart: le.start, fallLen: le.len, isArray: le.arr)
                 write(s: " ")
-                writeSpan(c: inout c, start: nameStart, len: nameLen)
+                writeNameCn(c: inout c, start: nameStart, len: nameLen, cnum: cnum)
                 write(s: ";\n")
-                addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: false)
+                addLocalCn(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: false, cnum: cnum)
             }
             Stmt.If(cond: _, val thenBlk, val elseBlk, val hasElse) => {
                 collectAsyncFields(c: inout c, blockId: thenBlk)
@@ -135,9 +144,55 @@ fn collectAsyncFields(c: inout Comp, blockId: U64) {
             Stmt.While(cond: _, val body) => {
                 collectAsyncFields(c: inout c, blockId: body)
             }
+            Stmt.Match(val scrut, val arms) => {
+                val scrutRef: U64 = exprType(c: inout c, id: scrut).ref
+                val genericMatch: Bool = isGenericEnumInst(c: inout c, ref: scrutRef)
+                mut val ai: U64 = 0
+                while ai < arms.count {
+                    val a: MatchArm = arms[ai]
+                    if a.isWildcard {
+                    } else {
+                        if a.isStruct {
+                            // struct-destructure match is rejected in async (below);
+                            // skip its binds here (the body is never codegen'd).
+                        } else {
+                            collectAsyncMatchBinds(c: inout c, scrutRef: scrutRef, genericMatch: genericMatch, arm: a)
+                        }
+                    }
+                    collectAsyncFields(c: inout c, blockId: a.body)
+                    ai += 1
+                }
+            }
             _ => {}
         }
         i += 1
+    }
+}
+
+// Collect one enum-match arm's payload binds as frame fields (mirrors the resume
+// codegen's bind emission: same type lookup, same monotonic suffix order).
+fn collectAsyncMatchBinds(c: inout Comp, scrutRef: U64, genericMatch: Bool, arm: MatchArm) {
+    val binds: Array[Bind] = arm.binds
+    mut val bi: U64 = 0
+    while bi < binds.count {
+        val bd: Bind = binds[bi]
+        val cnum: U64 = nextAsyncVar(c: inout c)
+        write(s: "    ")
+        if genericMatch {
+            genBindTypeInst(c: inout c, instRef: scrutRef, variantStart: arm.variantStart, variantLen: arm.variantLen, bindStart: bd.fieldStart, bindLen: bd.fieldLen)
+        } else {
+            genBindType(c: inout c, enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen, bindStart: bd.fieldStart, bindLen: bd.fieldLen)
+        }
+        write(s: " ")
+        writeNameCn(c: inout c, start: bd.nameStart, len: bd.nameLen, cnum: cnum)
+        write(s: ";\n")
+        if genericMatch {
+            val bti: TypeInfo = genericEnumFieldTypeInfo(c: inout c, instRef: scrutRef, variantStart: arm.variantStart, variantLen: arm.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+            addLocalCn(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false, cnum: cnum)
+        } else {
+            addBindLocalCn(c: inout c, enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen, cnum: cnum)
+        }
+        bi += 1
     }
 }
 
@@ -159,27 +214,35 @@ fn emitAsyncSuspend(c: inout Comp, operandId: U64) {
     write(s: ": ;\n")
 }
 
+// The next per-async-fn binding suffix (see Comp.asyncVarSeq). Frame fields and
+// resume-body references both pull from this in matching DFS order.
+fn nextAsyncVar(c: inout Comp) -> U64 {
+    c.asyncVarSeq = c.asyncVarSeq + 1
+    return c.asyncVarSeq
+}
+
 // Lower a top-level binding inside an async fn to a frame-field assignment
-// `__f->name = init;` (the field is declared in the frame struct). An
+// `__f->name_sN = init;` (the field is declared in the frame struct). An
 // `await`-initialized binding first suspends, then reads `__f->__sub->value`.
 // Called from genStmt's Let arm when c.curAsync.
 fn genAsyncLet(c: inout Comp, nameStart: U64, nameLen: U64, effStart: U64, effLen: U64, effArr: Bool, effTy: U64, init: U64, mutable: Bool) {
+    val cnum: U64 = nextAsyncVar(c: inout c)
     match c.exprs[init] {
         Expr.Await(val operand) => {
             emitAsyncSuspend(c: inout c, operandId: operand)
             // record the local first so writeLocalCName routes the LHS to the frame.
-            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: effStart, tyLen: effLen, isArray: effArr, ty: effTy, isInout: false, isMut: mutable, owned: false)
+            addLocalCn(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: effStart, tyLen: effLen, isArray: effArr, ty: effTy, isInout: false, isMut: mutable, owned: false, cnum: cnum)
             write(s: "    __f->")
-            writeSpan(c: inout c, start: nameStart, len: nameLen)
+            writeNameCn(c: inout c, start: nameStart, len: nameLen, cnum: cnum)
             write(s: " = (")
             genCTypeOf(c: inout c, tyRef: effTy, fallStart: effStart, fallLen: effLen, isArray: effArr)
             write(s: ")(__f->__sub->value);\n")
         }
         _ => {
             checkLitSpan(c: inout c, id: init, tyStart: effStart, tyLen: effLen, isArray: effArr)
-            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: effStart, tyLen: effLen, isArray: effArr, ty: effTy, isInout: false, isMut: mutable, owned: false)
+            addLocalCn(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: effStart, tyLen: effLen, isArray: effArr, ty: effTy, isInout: false, isMut: mutable, owned: false, cnum: cnum)
             write(s: "    __f->")
-            writeSpan(c: inout c, start: nameStart, len: nameLen)
+            writeNameCn(c: inout c, start: nameStart, len: nameLen, cnum: cnum)
             write(s: " = ")
             if effArr {
                 genArrayValue(c: inout c, exprId: init, elemStart: effStart, elemLen: effLen)
@@ -234,6 +297,7 @@ fn emitAsyncFrameStruct(c: inout Comp, fi: U64) {
         addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: false, isMut: false, owned: false)
         pi += 1
     }
+    c.asyncVarSeq = 0
     collectAsyncFields(c: inout c, blockId: f.body)
     write(s: "} ")
     writeAsyncFrameName(c: inout c, f: f)
@@ -302,13 +366,16 @@ fn genAsyncFunc(c: inout Comp, fi: U64) {
         write(s: ";\n")
         pi += 1
     }
-    write(s: "    __f->__self = plew_promise_new();\n    ")
+    // Capture __self in a local BEFORE resume: a synchronously-completing async
+    // fn (no suspension) frees __f inside resume, so reading __f->__self after the
+    // call would be a use-after-free. The local copy is safe.
+    write(s: "    PlewPromise* __self = plew_promise_new();\n    __f->__self = __self;\n    ")
     writeAsyncFrameName(c: inout c, f: f)
     write(s: "_resume((void*)__f);\n")
     if isMain {
         write(s: "    plew_loop_run();\n    return 0;\n}\n")
     } else {
-        write(s: "    return __f->__self;\n}\n")
+        write(s: "    return __self;\n}\n")
     }
     // ---- resume function ----
     rejectAsyncUnsupported(c: inout c, blockId: f.body)
@@ -339,6 +406,7 @@ fn genAsyncFunc(c: inout Comp, fi: U64) {
     c.locals = []
     c.curAsync = true
     c.asyncState = 0
+    c.asyncVarSeq = 0
     c.curAsyncFn = fi
     c.curIsMain = false
     c.curHasRecv = false
@@ -392,6 +460,13 @@ fn countAsyncAwaits(c: inout Comp, blockId: U64) -> U64 {
             }
             Stmt.While(cond: _, val body) => {
                 n += countAsyncAwaits(c: inout c, blockId: body)
+            }
+            Stmt.Match(scrut: _, val arms) => {
+                mut val ai: U64 = 0
+                while ai < arms.count {
+                    n += countAsyncAwaits(c: inout c, blockId: arms[ai].body)
+                    ai += 1
+                }
             }
             _ => {}
         }

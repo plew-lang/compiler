@@ -8,7 +8,9 @@
 
 意味論の hidden-meaning（整数幅・match 網羅・ラベル・診断・受理の健全性チェック・値意味論/CoW・`unique`/`deinit`/move・generics・トレイト step 1＋Eq/Ord＋derive・クロージャ）は概ね解消済み。**残っている剥離（実装済/未実装の現況）はすべて [provisional.md](provisional.md) が正典**（このログには個別バグ/完了項目を溜めない）。
 
-## 次の一歩＝イベントループ（async/await/Promise・最大の残・着手中）
+**イベントループ（async/await）＝段階 1・2・3（match まで）実装済**（spec/14・方式 B＝stackless ステートマシン・native-C）。`async fn`（free）/`await`/`Promise[T]`/`sleep`（`@Std/Async`）が動く：frame 構造体＋resume＋entry へ下ろし、await で suspend/resume、イベントループ（ready キュー＋仮想時計タイマ）を drain。**await は if/while/（enum）match の中でも可・複数中断点可**（全ローカル＋match バインドを frame に hoist〔monotonic suffix `name_sN` で兄弟アーム衝突回避〕＋goto ディスパッチで再入）。entry は `__self` をローカル退避してから resume（同期完了で frame が free されても UAF にならない）。実装は `Codegen/Async.pw`。テスト＝`tests/run/async_{basic,order,control,match}`。**残る async の tail（additive・いずれもクリーンに reject）**：await-in-`for`（誘導変数 `__fa`/`__fi`/loop-var の frame 化が要る・while で代替可）・struct-destructure match・式中 await（`await a + 1`＝await を文へ持ち上げる正規化）・async メソッド（self の frame 化）・generic async・String/struct を値に持つ `Promise`（値スロットは当面 `long long`）・frame/`__self`/Promise の ARC（当面リーク）。次の自然な一歩は spawn（実スレッド）か await-in-for。
+
+## 次の一歩＝イベントループ（async/await/Promise・段階 3 の tail と spawn）
 
 **方式は B＝stackless ステートマシン**（Node/V8 と同じ・colored async）に確定。**native-C 先行**で意味論（suspend/resume・drain 順・ARC across await）を固め、その後 WASM（Asyncify/JSPI）。**A＝スタックフルは却下**（Node を範とすると終着点が B・A は async fn ローワリング〔難所〕を作り直す中継ぎになる）。根拠・却下案は [design-decisions.md](design-decisions.md)「async fn のローワリング」。
 

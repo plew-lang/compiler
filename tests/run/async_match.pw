@@ -1,0 +1,30 @@
+// await inside a match arm (the arm's payload binds are frame fields so they
+// survive the suspension); a synchronously-completing arm (Stop) exercises the
+// no-suspension path (entry must not read a freed frame).
+import @Std/Io with { print }
+import @Std/Async with { sleep }
+
+enum Step {
+    Go(n: I64)
+    Stop
+}
+
+async fn fetch(s: Step) -> Promise[I64] {
+    match s {
+        Step.Go(val n) => {
+            await sleep(ms: n)
+            print(n)
+            return n
+        }
+        Step.Stop => {
+            return 0
+        }
+    }
+}
+
+async fn main() {
+    val r: I64 = await fetch(s: <Step.Go n=7 />)
+    print(r)
+    val z: I64 = await fetch(s: <Step.Stop />)
+    print(z)
+}

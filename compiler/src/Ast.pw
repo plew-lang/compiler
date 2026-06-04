@@ -584,6 +584,12 @@ struct Comp {
     mut val curAsync: Bool
     mut val asyncState: U64
     mut val curAsyncFn: U64
+    // monotonic per-async-fn binding counter: every binding (Let / match bind) in
+    // an async body gets a unique C-name suffix (`name_s<n>`) so the flat frame
+    // struct has no collisions across sibling branches / match arms (where source
+    // names legitimately repeat). The frame-field collection and the resume-body
+    // codegen walk the body in the same DFS order, so they assign matching suffixes.
+    mut val asyncVarSeq: U64
 }
 
 // ---- cursor helpers ----

@@ -1191,6 +1191,13 @@ fn blockGiveExpr(c: inout Comp, blkId: U64) -> U64 {
 // (fieldStart,fieldLen); the local is named (bindStart,bindLen) — equal for
 // punning, different for a `field: val name` rename.
 fn addBindLocal(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64, bindStart: U64, bindLen: U64) {
+    addBindLocalCn(c: inout c, enumStart: enumStart, enumLen: enumLen, variantStart: variantStart, variantLen: variantLen, fieldStart: fieldStart, fieldLen: fieldLen, bindStart: bindStart, bindLen: bindLen, cnum: 0)
+}
+
+// Like addBindLocal but with an explicit C-name disambiguator (async frame
+// fields use a monotonic suffix so repeated match-bind names across arms don't
+// collide in the flat frame struct).
+fn addBindLocalCn(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64, bindStart: U64, bindLen: U64, cnum: U64) {
     mut val ei: U64 = 0
     while ei < c.enums.count {
         val e: EnumDef = c.enums[ei]
@@ -1205,7 +1212,7 @@ fn addBindLocal(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, 
                     while fi < fs.count {
                         val f: FieldDef = fs[fi]
                         if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: fieldStart, bLen: fieldLen) {
-                            addLocal(c: inout c, nameStart: bindStart, nameLen: bindLen, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray, ty: f.ty, isInout: false, isMut: false, owned: false)
+                            addLocalCn(c: inout c, nameStart: bindStart, nameLen: bindLen, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray, ty: f.ty, isInout: false, isMut: false, owned: false, cnum: cnum)
                             return
                         }
                         fi += 1
