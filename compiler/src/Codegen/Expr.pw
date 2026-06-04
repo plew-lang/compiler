@@ -382,6 +382,11 @@ fn genExpr(c: inout Comp, id: U64) {
                     if emitArrayIntrinsic(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args) {
                         return
                     }
+                    // raw-memory floor intrinsics (`rawAlloc`/`rawLoad`/…) lower to
+                    // inlined buffer access + type-agnostic runtime (whole call).
+                    if emitRawIntrinsic(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args) {
+                        return
+                    }
                     // other `extern "plew-intrinsic"` callees: the runtime symbol
                     // `plew_<name>` (args emitted below, positionally, respecting
                     // inout). No overload mangling — intrinsics are not overloaded.

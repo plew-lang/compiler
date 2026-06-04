@@ -171,6 +171,16 @@ fn main() {
     // Ref boxes carry the same inline rc header (the Ref value points past it).
     // plew_ref_share retains and returns the pointer for share-on-bind.
     write(s: "__attribute__((unused)) static void* plew_ref_share(void* p) { if (p) ((long long*)p)[-1] += 1; return p; }\n")
+    // RawBuffer floor: a refcounted raw buffer, the layer under Array. The block
+    // is `[cap][rc][data...]` (two long-long header slots before data); the value
+    // points past both, so data[-1]=rc and data[-2]=cap. alloc/cap/isUnique/share/
+    // release are type-agnostic (they only touch the header through the void*);
+    // the per-element bits (sizeof, indexing) are inlined at the call site.
+    write(s: "__attribute__((unused)) static void* plew_rawbuf_alloc(long long elemSize, long long cap) { long long* h = (long long*)malloc(2 * sizeof(long long) + (size_t)(elemSize * cap)); h[0] = cap; h[1] = 1; return (void*)(h + 2); }\n")
+    write(s: "__attribute__((unused)) static long long plew_rawbuf_cap(void* p) { return p ? ((long long*)p)[-2] : 0; }\n")
+    write(s: "__attribute__((unused)) static int plew_rawbuf_is_unique(void* p) { return p ? (((long long*)p)[-1] == 1) : 1; }\n")
+    write(s: "__attribute__((unused)) static void* plew_rawbuf_share(void* p) { if (p) ((long long*)p)[-1] += 1; return p; }\n")
+    write(s: "__attribute__((unused)) static void plew_rawbuf_release(void* p) { if (p && (--(((long long*)p)[-1])) == 0) free(((long long*)p) - 2); }\n")
     // A first-class function value (closure) is a fat pointer: the C function
     // (uniform ABI `R fn(void* env, params...)`), an env pointer (NULL for
     // non-capturing closures and bare-function thunks), an inline rc header for

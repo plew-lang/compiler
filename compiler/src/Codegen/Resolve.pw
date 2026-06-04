@@ -941,6 +941,12 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                         val lt2: TypeRef = c.types[lo.ty]
                         return <TypeInfo kind=2 nameStart=lt2.nameStart nameLen=lt2.nameLen ref=lo.ty />
                     }
+                    // a RawBuffer[T] local: keep the structured ref so rawLoad can
+                    // recover the element type T from its argument.
+                    if isRawBufInst(c: inout c, ref: lo.ty) {
+                        val lt3: TypeRef = c.types[lo.ty]
+                        return <TypeInfo kind=2 nameStart=lt3.nameStart nameLen=lt3.nameLen ref=lo.ty />
+                    }
                     // resolve a type-parameter-typed local under the active
                     // monomorphization env (so `x: T` reports as the concrete type
                     // for method dispatch inside a generic instance body).
@@ -982,6 +988,35 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             return scalarInfo()
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
+            // raw-memory floor: rawLoad returns the element type of its RawBuffer[T]
+            // argument, rawCap returns U64, rawIsUnique returns Bool. rawAlloc's
+            // result is always bound through an explicit RawBuffer[T] annotation, so
+            // a scalar placeholder suffices here (never the source of the type).
+            if isRawIntrinsicName(c: inout c, nameStart: nameStart, nameLen: nameLen) {
+                if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawLoad") {
+                    val bt: TypeInfo = exprType(c: inout c, id: args[0].expr)
+                    if bt.ref < c.types.count {
+                        val rb: TypeRef = c.types[bt.ref]
+                        if rb.args.count == 1 {
+                            return typeInfoOfRef(c: inout c, ref: rb.args[0])
+                        }
+                    }
+                    return scalarInfo()
+                }
+                if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawCap") {
+                    val u64: Bind = kwSpan(c: inout c, kw: "U64", kwLen: 3)
+                    if u64.nameLen != 0 {
+                        return <TypeInfo kind=0 nameStart=u64.nameStart nameLen=u64.nameLen ref=0 />
+                    }
+                }
+                if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawIsUnique") {
+                    val bl: Bind = kwSpan(c: inout c, kw: "Bool", kwLen: 4)
+                    if bl.nameLen != 0 {
+                        return <TypeInfo kind=0 nameStart=bl.nameStart nameLen=bl.nameLen ref=0 />
+                    }
+                }
+                return scalarInfo()
+            }
             // array intrinsics: arrayGet returns the element type of its `Array[T]`
             // argument, arrayLen returns U64 (arrayPush/arraySet return ()).
             if isArrayIntrinsicName(c: inout c, nameStart: nameStart, nameLen: nameLen) {

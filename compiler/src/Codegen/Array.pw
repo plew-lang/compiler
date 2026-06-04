@@ -67,6 +67,86 @@ fn emitArrayElemValue(c: inout Comp, argExpr: U64, arrStart: U64, arrLen: U64) {
     genExpr(c: inout c, id: argExpr)
 }
 
+// The raw-memory floor (spec/02): `RawBuffer[T]` intrinsics, the irreducible
+// layer under `Array`. `RawBuffer[T]` lowers to a C `Tc*` whose data is preceded
+// by a `[cap][rc]` header (two long longs); alloc/cap/isUnique/share/release are
+// type-agnostic runtime calls (operating on the header via the void*), while the
+// per-element bits (`sizeof(Tc)`, `b[i]`) are inlined here. Returns true if
+// `(nameStart,nameLen)` named one.
+//   rawAlloc(cap: U64, of: T) -> RawBuffer[T]   (`of` is a type witness; until
+//       return-context inference lands, T comes from `of`'s type — spec/06)
+//   rawLoad(b: RawBuffer[T], i: U64) -> T   rawStore(b: RawBuffer[T], i: U64, v: T)
+//   rawCap(b: RawBuffer[T]) -> U64          rawIsUnique(b: RawBuffer[T]) -> Bool
+fn emitRawIntrinsic(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawAlloc") {
+        val et: TypeInfo = exprType(c: inout c, id: args[1].expr)
+        write(s: "(")
+        emitElemCType(c: inout c, elemStart: et.nameStart, elemLen: et.nameLen)
+        write(s: "*)plew_rawbuf_alloc(sizeof(")
+        emitElemCType(c: inout c, elemStart: et.nameStart, elemLen: et.nameLen)
+        write(s: "), (long long)(")
+        genExpr(c: inout c, id: args[0].expr)
+        write(s: "))")
+        return true
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawLoad") {
+        write(s: "((")
+        genExpr(c: inout c, id: args[0].expr)
+        write(s: ")[(")
+        genExpr(c: inout c, id: args[1].expr)
+        write(s: ")])")
+        return true
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawStore") {
+        write(s: "((")
+        genExpr(c: inout c, id: args[0].expr)
+        write(s: ")[(")
+        genExpr(c: inout c, id: args[1].expr)
+        write(s: ")] = (")
+        genExpr(c: inout c, id: args[2].expr)
+        write(s: "))")
+        return true
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawCap") {
+        write(s: "plew_rawbuf_cap((void*)(")
+        genExpr(c: inout c, id: args[0].expr)
+        write(s: "))")
+        return true
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawIsUnique") {
+        write(s: "plew_rawbuf_is_unique((void*)(")
+        genExpr(c: inout c, id: args[0].expr)
+        write(s: "))")
+        return true
+    }
+    return false
+}
+
+// Write the C element type for a `RawBuffer`/array element name (a type-parameter
+// element resolves through the active mono env, like `wPA`; otherwise `genCElem`).
+fn emitElemCType(c: inout Comp, elemStart: U64, elemLen: U64) {
+    mut val k: U64 = 0
+    while k < c.curTypeParams.count {
+        val p: Bind = c.curTypeParams[k]
+        if spansEqual(c: inout c, aStart: p.nameStart, aLen: p.nameLen, bStart: elemStart, bLen: elemLen) {
+            emitConcreteCType(c: inout c, ref: c.curTypeArgs[k])
+            return
+        }
+        k += 1
+    }
+    genCElem(c: inout c, start: elemStart, len: elemLen)
+}
+
+// Is `(nameStart,nameLen)` a raw-floor intrinsic name?
+fn isRawIntrinsicName(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawAlloc") { return true }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawLoad") { return true }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawStore") { return true }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawCap") { return true }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawIsUnique") { return true }
+    return false
+}
+
 // Is `(nameStart,nameLen)` an array intrinsic name (for the exprType of its
 // result and the call lowering)?
 fn isArrayIntrinsicName(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {

@@ -75,6 +75,20 @@ fn isRefInst(c: inout Comp, ref: U64) -> Bool {
     return rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref")
 }
 
+// Is `ref` a `RawBuffer[T]` instantiation? `RawBuffer` is a blessed primitive
+// (the refcounted raw buffer that Array's storage is built on), lowered like
+// `Ref` to a C `T*` (with a {rc,cap} header before data) — not a user type.
+fn isRawBufInst(c: inout Comp, ref: U64) -> Bool {
+    if ref >= c.types.count {
+        return false
+    }
+    val t: TypeRef = c.types[ref]
+    if t.args.count != 1 {
+        return false
+    }
+    return rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "RawBuffer")
+}
+
 // Is `ref` a `Promise[T]` instantiation? `Promise` is a blessed lang item (the
 // result of an `async fn`), lowered to a runtime `PlewPromise*` — not a user
 // struct/enum, and not monomorphized (its value slot is type-erased for now).
@@ -231,6 +245,13 @@ fn emitConcreteCType(c: inout Comp, ref: U64) {
         write(s: "*")
         return
     }
+    // RawBuffer[T] is a refcounted raw buffer (the array floor) -> a C pointer to
+    // T, with a {rc, cap} header stored before data[0] (spec/02 raw-memory floor).
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "RawBuffer") {
+        emitConcreteCType(c: inout c, ref: t.args[0])
+        write(s: "*")
+        return
+    }
     // Promise[T] (async result) -> the runtime PlewPromise* (value type-erased).
     if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Promise") {
         write(s: "PlewPromise*")
@@ -300,6 +321,10 @@ fn genCTypeOf(c: inout Comp, tyRef: U64, fallStart: U64, fallLen: U64, isArray: 
         return
     }
     if isRefInst(c: inout c, ref: tyRef) {
+        emitConcreteCType(c: inout c, ref: tyRef)
+        return
+    }
+    if isRawBufInst(c: inout c, ref: tyRef) {
         emitConcreteCType(c: inout c, ref: tyRef)
         return
     }
@@ -1041,6 +1066,12 @@ fn fnInstExists(c: inout Comp, fnIdx: U64, args: Array[U64]) -> Bool {
 fn registerCallInst(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) {
     val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
     if fi < c.funcs.count {
+        if c.funcs[fi].isExtern {
+            // a generic `extern "plew-intrinsic"` (e.g. `rawAlloc[T]`, `arrayPush[T]`):
+            // lowered inline at the call site, so it has no monomorphized instance —
+            // never register one (else a bogus prototype/body with an unmapped return
+            // type leaks out).
+        } else {
         if isGenericFreeFn(c: inout c, fi: fi) {
             val inferred: Array[U64] = inferFnArgs(c: inout c, f: c.funcs[fi], args: args)
             if fnArgsAllGround(c: inout c, args: inferred) {
@@ -1049,6 +1080,7 @@ fn registerCallInst(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg
                     c.fnInsts.append(<FnInst fnIdx=fi args=inferred />)
                 }
             }
+        }
         }
     }
 }

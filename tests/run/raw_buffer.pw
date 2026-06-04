@@ -1,0 +1,17 @@
+import @Std/Io with { print }
+extern "plew-intrinsic" {
+    fn rawAlloc[T](cap: U64, of: T) -> RawBuffer[T]
+    fn rawLoad[T](b: RawBuffer[T], i: U64) -> T
+    fn rawStore[T](b: RawBuffer[T], i: U64, v: T)
+    fn rawCap[T](b: RawBuffer[T]) -> U64
+    fn rawIsUnique[T](b: RawBuffer[T]) -> Bool
+}
+fn main() {
+    mut val b: RawBuffer[I64] = rawAlloc(cap: 4U64, of: 0I64)
+    rawStore(b: b, i: 0U64, v: 99I64)
+    rawStore(b: b, i: 1U64, v: 7I64)
+    print(rawLoad(b: b, i: 0U64))
+    print(rawLoad(b: b, i: 1U64))
+    print(rawCap(b: b))
+    if rawIsUnique(b: b) { print(1I64) } else { print(0I64) }
+}

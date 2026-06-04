@@ -194,6 +194,7 @@
 - **`where` の述語は `型: 制約` のみ。型等価述語 `where T = I32` は持たない**。特定具体型への実装は型の位置に直接書く（`impl MyStruct[I32] as Trait`）。
 - **「トレイト境界」→「トレイト制約」と呼ぶ**（`境界` は boundary の語に温存：モジュール／パッケージ境界・区間の境界条件 `i<b`・FFI 境界変換/境界コピー）。
 - **デフォルト型引数（`[T = …]` / `Add[Rhs = Self]`）は持たない**（後付け additive）。Rust の実需は①演算子 `Rhs = Self`②末尾 policy 引数に集約されるが、Plew は①を明示 `Add[Self]` で書き、②は ARC でアロケータ引数が surface せずハッシャ型も出ないため不要。Rust の既定型引数は推論に参加しない狭い糖衣でもある。
+- **型変数が返り値だけに出る generic は「返り値文脈推論」で型を決める（決定・Swift/Rust/Haskell 流・実装は段階的）**: `makeZero[T]() -> T` や `Array.new[T]()`・`Set[T]()`・空コレクション・各種 factory のように **T が引数に現れず返り値型にだけ出る**呼び出しは、**期待型（束縛の型注釈・引数位置の期待型・戻り値型）から T を推論**する＝`val b: RawBuffer[I64] = rawAlloc(cap: 4)` で T=I64。**根拠**：`new()`/空コレクションで普遍的に再発する必要・標準的で驚きが少ない・**「型注釈に書いた意味がそのまま発現する」**＝拠り所（意味は唱えた通り）と整合。**却下：明示型引数 `rawAlloc[I64](...)`**（新呼び出し構文・`new[I64]()` が随所に出て実用上うるさい・(A) があれば不要／将来 additive で足すのは可）。**現況**：引数からの推論は実装済（`wrap(x: 42I64)`・配列 intrinsic）だが**返り値文脈推論は未実装**（`val b: I64 = makeZero()` は素の `makeZero()` を出し monomorphize されない）。コレクション一般化の段で実装。それまで生メモリ床の `rawAlloc` は intrinsic 専用に束縛型から要素型を読む narrow 対応で通す。→ [worklog](worklog.md)。
 
 ### `assoc`（static 相当・→ [spec/07](../spec/02-type-system/07-methods-impl.md)）
 - Plew の static メソッド/変数は **`assoc fn` / `assoc val`**（名前が違うだけで static と同等機能）。命名は `static`（不変と誤読）/ `class` / `ass` を却下し `assoc`（associated）に。
