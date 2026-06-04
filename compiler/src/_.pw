@@ -201,7 +201,7 @@ fn main() {
     mut val si: U64 = 0
     while si < c.structs.count {
         val s: StructDef = c.structs[si]
-        if s.typeParams.count > 0 {
+        if s.typeParams.count > 0 || s.isExtern {
         } else {
             write(s: "typedef struct ")
             writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
@@ -263,7 +263,7 @@ fn main() {
     mut val sj: U64 = 0
     while sj < c.structs.count {
         val gs: StructDef = c.structs[sj]
-        if gs.typeParams.count > 0 {
+        if gs.typeParams.count > 0 || gs.isExtern {
         } else {
             genStructDef(c: inout c, si: sj)
         }
@@ -288,7 +288,7 @@ fn main() {
     mut val spp: U64 = 0
     while spp < c.structs.count {
         val cps: StructDef = c.structs[spp]
-        if cps.typeParams.count > 0 {
+        if cps.typeParams.count > 0 || cps.isExtern {
         } else {
             // CoW copy/share only for copyable structs (unique types never copy).
             if cps.isUnique {
@@ -320,7 +320,7 @@ fn main() {
     mut val scd: U64 = 0
     while scd < c.structs.count {
         val cs2: StructDef = c.structs[scd]
-        if cs2.typeParams.count > 0 {
+        if cs2.typeParams.count > 0 || cs2.isExtern {
         } else {
             if cs2.isUnique {
             } else {

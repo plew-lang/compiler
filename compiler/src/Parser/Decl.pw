@@ -496,6 +496,17 @@ fn parseExtern(c: inout Comp) {
                 c.advance()
                 c.funcs.append(parseReqSig(c: inout c, isAssoc: false, isExtern: true))
             }
+            Kind.KwStruct => {
+                // a body-less lang-item type declaration `struct I32`: an opaque
+                // intrinsic type owned by this module (representation is the
+                // compiler's existing name->C-type mapping). No `{ }` body.
+                c.advance()
+                val sTok: Tok = c.cur()
+                c.advance()
+                val noTP: Array[Bind] = []
+                val noFields: Array[FieldDef] = []
+                c.structs.append(<StructDef nameStart=sTok.start nameLen=sTok.len typeParams=noTP fields=noFields isUnique=false isExtern=true />)
+            }
             _ => { c.advance() }
         }
     }
@@ -593,7 +604,7 @@ fn parseStruct(c: inout Comp, isUnique: Bool) {
             }
         }
     }
-    c.structs.append(<StructDef nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams fields=fields isUnique=isUnique />)
+    c.structs.append(<StructDef nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams fields=fields isUnique=isUnique isExtern=false />)
     drainDerives(c: inout c, typeStart: nameTok.start, typeLen: nameTok.len, isEnum: false)
 }
 

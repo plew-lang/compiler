@@ -299,6 +299,12 @@ struct StructDef {
     // `deinit`. A unique value is never CoW-shared; bindings move ownership and
     // the last owner runs `deinit` at scope exit. Default false = copyable.
     val isUnique: Bool
+    // declared body-less in an `extern "plew-intrinsic"` block (spec/15 core-
+    // library boundary): an opaque lang-item type whose representation is
+    // compiler-intrinsic (`I32`→int32_t, `String`→PlewString). Codegen emits no C
+    // struct for it; the declaration only establishes that this module (Core)
+    // *owns* the type, so it may coherently `impl` traits for it. Default false.
+    val isExtern: Bool
 }
 
 struct Variant {
