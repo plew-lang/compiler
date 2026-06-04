@@ -17,7 +17,7 @@
 > - **別の小ギャップ** Ref 構築 `<Ref[I32] value=7/>` の `value=` 内リテラルが Ref[I32] の T から型付けされず注釈ありでも落ちる（要 suffix）。
 > - **F9〔中・✅修正済（未コミット）〕** bare-expr の match アーム（`=> expr`/`=> give v`）が statement 位置で壊れる＝`parseBlock` が後続アームを文として飲み込み最初のアームだけ登録→網羅判定が誤って非網羅に＋アーム欠落。修正＝`parseMatch` が `parseArmBody`（`{}` or 単一文をブロック化）を使う。test `run/match_bare_arm`。これで E1/E3/e1b/e1c 系の「網羅なのに非網羅」誤判定が解消。
 > - **F10〔中・一部✅修正済（未コミット）〕** 配列要素越しの place 変更 `arr[i].field = x` が未実装で不正 C（`get(...).field = v`＝rvalue 代入）。修正＝`tryArrayElemFieldAssign` で get-modify-set 脱糖（plain `=`）。compound は loud-reject・inout メソッド経由（`arr[i].m()`）は未対応＝review-items 参照。
-> - **F11〔中〕** ネスト配列 `Array[Array[T]]` が要素型に `Array` を literal 出力＝不正 C。→ review-items。
+> - **F11〔大筋✅実装済〕** 複合要素型の配列。`Array[Ref[T]]`/`Array[Box[T]]`/`Array[Array[T]]` が動作（複合要素にマングル名 span を与え、C 型/ARC は ref から復元・単純要素は出力不変）。残＝literal 要素 append・要素 ARC（Ref 箱の leak）・generic 経由実体化。→ review-items。
 > - **F12〔中〕** U64 リテラル ∈ [2^63, 2^64-1] で plewc がクラッシュ（値を I64 蓄積→overflow panic）。整数リテラル符号モデルに波及＝GPG 回復後に。→ review-items。
 > - **F13〔✅修正済〕** 配列型の関数デフォルト引数 `fn f(xs: Array[I32] = [])` の省略呼びが `f(0)`＝不正 C。修正＝default-fill で array param は genArrayValue。test `run/default_arg_array`。
 > - **F16〔✅修正済〕** 配列リテラルを引数で渡すと `f(xs: [1,2,3])`→`f(0)`＝不正 C。修正＝提供引数ループで array param は genArrayValue。

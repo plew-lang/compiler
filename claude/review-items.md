@@ -11,7 +11,10 @@
 
 ## ② 据え置き（理由あり・大物 or 設計）
 
-- **F11〔中・据え置き：構造化要素型 refactor〕複合要素型の配列**：`Array[Array[T]]`・`Array[Ref[T]]`・`Array[Box[T]]` 等、要素が複合型だと要素型マングルが内側型を解決できず頭名（`Array`/`Ref`/…）を literal 出力（`PlewArray_Ref`＝unknown type）。配列の**要素型を名前 span（`c.arrayElems`）で持つ設計**に根ざし、マングル/ランタイム（copy/release の ARC）/要素 C 型/単相化探索の全経路を**構造化要素型へ拡張**する必要＝規模ゆえ別タスク。`Array[Ref[T]]` は spec 推奨パターンなので価値は高い。
+- **F11〔大筋✅実装済・残は精緻化〕複合要素型の配列**：`Array[Ref[T]]`（spec 推奨の共有/unique 要素）・`Array[Box[T]]`（generic struct 要素）・`Array[Array[T]]`（ネスト・依存順序＋`m[i][j]`）が動作。仕組み＝複合要素にマングル名 span（`appendMangle` で `Ref_I32` を `c.bytes` 末尾に追記）を与え全経路で共有、C 型/ARC は `c.arrayElems` の ref から `genCElem`/runtime が復元（単純要素は頭名のまま＝出力不変・fixpoint 保持）。test `run/array_compound_elem`・`run/array_nested`。**残（精緻化）**：
+  - (a) 配列リテラルを要素として append（`m.append([1,2,3])`）が要素型文脈を得られず「no type from context」＝check/codegen 両方に append 引数の要素型を渡す要あり（変数形 `m.append(row)` は動く）。
+  - (b) **要素 ARC**：`Array[Ref[T]]` の Ref 箱は現状ビットコピー（retain/release せず）＝箱が leak（project の hidden-cost 許容方針内）。`xs.append(refVar)` 後に refVar を release する稀パターンでは UAF 余地あり＝runtime の要素 retain/release（push/set/copy/release）を ref のkind別に出す精緻化が要る。
+  - (c) 単相化（generic param 由来の `Array[Ref[T]]` を型引数で実体化）経路の検証。
 - **F12〔中・据え置き：整数リテラル符号モデル〕U64 リテラル ∈ [2^63, 2^64-1] で plewc がクラッシュ**：`tokenValue` が値を I64 で蓄積（`v*10+digit`）し I64 範囲超過でコンパイラ自身の overflow check が panic。直すには値表現を U64 化（`Expr.Int.value` U64・lexer 蓄積 U64・符号なし codegen・範囲検査・**負リテラル `-128` 畳み込みとの両立に符号フラグ**）＝整数リテラルの符号モデルに波及。影響はユーザーの巨大 U64 リテラルのみ（稀）。
 - **演算子トレイト（Eq/Ord 以外）/ `@[Ord]` on enum / 曖昧な untyped-literal オーバーロード**：トレイト体系の大物・需要駆動。[provisional.md](provisional.md) のロードマップで管理。
 
