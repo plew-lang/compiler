@@ -562,8 +562,36 @@ fn parseStruct(c: inout Comp, isUnique: Bool) {
                 c.deinits.append(<Bind nameStart=nameTok.start nameLen=nameTok.len fieldStart=nameTok.start fieldLen=nameTok.len />)
             }
             _ => {
-                // a field declaration: `[mut] val name : Type`. `mut val` marks
-                // assignable storage; bare `val` is immutable.
+                // a field declaration: `[pub[(get|set)]] [mut] val name : Type`.
+                // `mut val` marks assignable storage; bare `val` is immutable.
+                // Field visibility (`pub` / `pub(get)`) is consumed and recorded by
+                // intent only — the module with-gate (I2) is not yet enforced, so in
+                // the current all-flat visibility model `pub(get)` and plain storage
+                // are observationally identical. It is accepted now so ambient types
+                // (e.g. `Array`'s `pub(get) mut val count`) parse as written.
+                match c.curKind() {
+                    Kind.Ident => {
+                        val pubTok: Tok = c.cur()
+                        if rangeEquals(bytes: c.bytes, start: pubTok.start, len: pubTok.len, kw: "pub") {
+                            c.advance()
+                            match c.curKind() {
+                                Kind.LParen => {
+                                    c.advance()
+                                    match c.curKind() {
+                                        Kind.Ident => { c.advance() }
+                                        _ => {}
+                                    }
+                                    match c.curKind() {
+                                        Kind.RParen => { c.advance() }
+                                        _ => {}
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    _ => {}
+                }
                 mut val isMut: Bool = false
                 match c.curKind() {
                     Kind.KwMut => {
