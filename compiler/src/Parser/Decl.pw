@@ -1053,12 +1053,119 @@ fn synthesizeDerives(c: inout Comp) {
     }
 }
 
-// Record that `print` was imported from `@Std/Io`. `print` is still a compiler
-// builtin (it formats by the argument's integer type); the other @Std functions
-// are ordinary `extern "plew-intrinsic"` declarations resolved by name, so they
-// need no import flag. A name from the wrong module stays disabled (so
-// `import @Std/Process with { print }` is still rejected as not-ambient).
+// Record that the name `(nameStart,nameLen)` was brought into the current module
+// via `import <path> with { … }` (spec/15). The imported name token sits in the
+// importing file, so `moduleOf(nameStart)` is the importing module; it is stored as
+// the entry's `fieldStart`. A use of a cross-module name is visible only if it was
+// imported here (and exported by its own module). `(segStart,segLen)` is the path's
+// last segment (the source submodule) — kept for a future path-correctness check.
 fn markImport(c: inout Comp, segStart: U64, segLen: U64, nameStart: U64, nameLen: U64) {
+    c.imports.append(<Bind nameStart=nameStart nameLen=nameLen fieldStart=moduleOf(c: inout c, offset: nameStart) fieldLen=0 />)
+}
+
+// `export <decl>` (spec/15): marks a top-level decl as part of the module's public
+// surface (recorded in `c.exports` by name span). `export <path> [with { … }]`
+// (re-export = pure forwarding) is parsed-and-skipped for now (no module uses it
+// yet; recording it for enforcement is additive). The leading `export` is current.
+fn parseExport(c: inout Comp) {
+    c.advance()
+    // re-export: a path follows (`.`/`..`→Dot, `/`→Slash, or `@…` whose first byte
+    // is '@' = 64). Consume the path and an optional `with { }` block, record nothing.
+    mut val isPath: Bool = false
+    match c.curKind() {
+        Kind.Dot => { isPath = true }
+        Kind.Slash => { isPath = true }
+        Kind.Ident => {
+            val ft: Tok = c.cur()
+            if c.bytes[ft.start] == 64 {
+                isPath = true
+            }
+        }
+        _ => {}
+    }
+    if isPath {
+        mut val go: Bool = true
+        while go {
+            match c.curKind() {
+                Kind.Eof => { go = false }
+                Kind.LBrace => { go = false }
+                Kind.Ident => {
+                    if c.identIs(kw: "with") {
+                        c.advance()
+                        go = false
+                    } else {
+                        c.advance()
+                    }
+                }
+                _ => { c.advance() }
+            }
+        }
+        match c.curKind() {
+            Kind.LBrace => {
+                c.advance()
+                mut val g2: Bool = true
+                while g2 {
+                    match c.curKind() {
+                        Kind.RBrace => { c.advance() g2 = false }
+                        Kind.Eof => { g2 = false }
+                        _ => { c.advance() }
+                    }
+                }
+            }
+            _ => {}
+        }
+        return
+    }
+    // `export <decl>`: parse the declaration normally, then record the new decl's
+    // name as exported (exactly one of structs/enums/funcs/traits gains an entry).
+    val sB: U64 = c.structs.count
+    val eB: U64 = c.enums.count
+    val fB: U64 = c.funcs.count
+    val tB: U64 = c.traits.count
+    match c.curKind() {
+        Kind.KwFn => { parseFunc(c: inout c, isAsync: false) }
+        Kind.KwAsync => {
+            c.advance()
+            match c.curKind() {
+                Kind.KwFn => { parseFunc(c: inout c, isAsync: true) }
+                _ => {}
+            }
+        }
+        Kind.KwStruct => { parseStruct(c: inout c, isUnique: false) }
+        Kind.KwUnique => {
+            c.advance()
+            match c.curKind() {
+                Kind.KwStruct => { parseStruct(c: inout c, isUnique: true) }
+                _ => {}
+            }
+        }
+        Kind.KwEnum => { parseEnum(c: inout c) }
+        Kind.Ident => {
+            if c.identIs(kw: "trait") {
+                parseTrait(c: inout c)
+            }
+        }
+        _ => {}
+    }
+    if c.structs.count > sB {
+        recordExport(c: inout c, nameStart: c.structs[sB].nameStart, nameLen: c.structs[sB].nameLen)
+    } else {
+        if c.enums.count > eB {
+            recordExport(c: inout c, nameStart: c.enums[eB].nameStart, nameLen: c.enums[eB].nameLen)
+        } else {
+            if c.funcs.count > fB {
+                recordExport(c: inout c, nameStart: c.funcs[fB].nameStart, nameLen: c.funcs[fB].nameLen)
+            } else {
+                if c.traits.count > tB {
+                    recordExport(c: inout c, nameStart: c.traits[tB].nameStart, nameLen: c.traits[tB].nameLen)
+                }
+            }
+        }
+    }
+}
+
+fn recordExport(c: inout Comp, nameStart: U64, nameLen: U64) {
+    c.exports.append(<Bind nameStart=nameStart nameLen=nameLen fieldStart=moduleOf(c: inout c, offset: nameStart) fieldLen=0 />)
 }
 
 // `import <path> [with { name, ... }]`. The leading `import` ident is current.
@@ -1106,6 +1213,19 @@ fn parseImport(c: inout Comp) {
                         val t: Tok = c.cur()
                         markImport(c: inout c, segStart: segStart, segLen: segLen, nameStart: t.start, nameLen: t.len)
                         c.advance()
+                        // `Bar as Q` — consume the alias (binding the imported decl
+                        // under a local name `Q`). The alias rename is additive; for
+                        // now the original name is recorded as imported.
+                        match c.curKind() {
+                            Kind.KwAs => {
+                                c.advance()
+                                match c.curKind() {
+                                    Kind.Ident => { c.advance() }
+                                    _ => {}
+                                }
+                            }
+                            _ => {}
+                        }
                     }
                     _ => { c.advance() }
                 }
@@ -1147,13 +1267,17 @@ fn parseProgram(c: inout Comp) {
                 if c.identIs(kw: "import") {
                     parseImport(c: inout c)
                 } else {
-                    if c.identIs(kw: "impl") {
-                        parseImpl(c: inout c)
+                    if c.identIs(kw: "export") {
+                        parseExport(c: inout c)
                     } else {
-                        if c.identIs(kw: "trait") {
-                            parseTrait(c: inout c)
+                        if c.identIs(kw: "impl") {
+                            parseImpl(c: inout c)
                         } else {
-                            c.advance()
+                            if c.identIs(kw: "trait") {
+                                parseTrait(c: inout c)
+                            } else {
+                                c.advance()
+                            }
                         }
                     }
                 }

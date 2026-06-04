@@ -588,6 +588,15 @@ struct Comp {
     // to its module so export/import visibility can be enforced across module lines
     // (a module = a root file + its `part` tree; each `import` target is another).
     mut val moduleRanges: Array[Bind]
+    // exported declarations (spec/15 `export`): each entry (Bind) is the name span
+    // of a top-level decl marked `export`. A name is part of its module's public
+    // surface iff it appears here; cross-module use requires it.
+    mut val exports: Array[Bind]
+    // imported names (spec/15 `import … with { }`): each entry (Bind) is an imported
+    // name span with `fieldStart` = the importing module id. A use of a name from
+    // another module is visible only if the name was imported into the using module
+    // (and exported by its own). Aliases (`as`) and namespace imports are additive.
+    mut val imports: Array[Bind]
 }
 
 // ---- cursor helpers ----
