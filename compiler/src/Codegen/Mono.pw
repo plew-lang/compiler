@@ -157,6 +157,38 @@ fn appendMangleSpan(c: inout Comp, ref: U64) -> Bind {
     return <Bind nameStart=start nameLen=(n - start) fieldStart=ref fieldLen=0 />
 }
 
+// Do two type refs have the same mangled name (same head + same args,
+// recursively)? Type refs are not interned — the same type parsed twice gets
+// distinct indices — so identity must compare structure, not the index.
+fn sameMangle(c: inout Comp, refA: U64, refB: U64) -> Bool {
+    val ra: U64 = resolveTy(c: inout c, tyRef: refA)
+    val rb: U64 = resolveTy(c: inout c, tyRef: refB)
+    if ra >= c.types.count {
+        return false
+    }
+    if rb >= c.types.count {
+        return false
+    }
+    val a: TypeRef = c.types[ra]
+    val b: TypeRef = c.types[rb]
+    if spansEqual(c: inout c, aStart: a.nameStart, aLen: a.nameLen, bStart: b.nameStart, bLen: b.nameLen) {
+    } else {
+        return false
+    }
+    if a.args.count != b.args.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.args.count {
+        if sameMangle(c: inout c, refA: a.args[i], refB: b.args[i]) {
+        } else {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
 // Is `ref` a compound type (a generic application / Ref / Array — has type
 // arguments), as opposed to a simple named type whose head name is enough?
 fn isCompoundType(c: inout Comp, ref: U64) -> Bool {

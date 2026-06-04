@@ -225,8 +225,12 @@ fn arrayElemNameForRef(c: inout Comp, elemRef: U64) -> Bind {
     mut val i: U64 = 0
     while i < c.arrayElems.count {
         val ae: Bind = c.arrayElems[i]
-        if ae.fieldStart == elemRef {
-            return <Bind nameStart=ae.nameStart nameLen=ae.nameLen fieldStart=elemRef fieldLen=0 />
+        // match by mangle (type refs are not interned, so the same type can have
+        // a different index than the one stored at registration).
+        if ae.fieldStart != 0 {
+            if sameMangle(c: inout c, refA: ae.fieldStart, refB: elemRef) {
+                return <Bind nameStart=ae.nameStart nameLen=ae.nameLen fieldStart=elemRef fieldLen=0 />
+            }
         }
         i += 1
     }

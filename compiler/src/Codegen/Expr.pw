@@ -702,7 +702,32 @@ fn genExpr(c: inout Comp, id: U64) {
                 write(s: "_push(&(")
                 genExpr(c: inout c, id: recv)
                 write(s: "), ")
-                genExpr(c: inout c, id: args[0].expr)
+                // when the element is itself an `Array[X]`, the value is an array
+                // (literal/value) — emit it via the typed array constructor (a bare
+                // genExpr of a literal would have no element context and emit 0).
+                mut val elemIsArr: Bool = false
+                mut val ixStart: U64 = 0
+                mut val ixLen: U64 = 0
+                val aer: U64 = arrayElemRef(c: inout c, start: bt.nameStart, len: bt.nameLen)
+                if aer != 0 {
+                    val arr2: U64 = resolveTy(c: inout c, tyRef: aer)
+                    if arr2 < c.types.count {
+                        val atp: TypeRef = c.types[arr2]
+                        if rangeEquals(bytes: c.bytes, start: atp.nameStart, len: atp.nameLen, kw: "Array") {
+                            if atp.args.count > 0 {
+                                val xn2: Bind = arrayElemNameForRef(c: inout c, elemRef: atp.args[0])
+                                elemIsArr = true
+                                ixStart = xn2.nameStart
+                                ixLen = xn2.nameLen
+                            }
+                        }
+                    }
+                }
+                if elemIsArr {
+                    genArrayValue(c: inout c, exprId: args[0].expr, elemStart: ixStart, elemLen: ixLen)
+                } else {
+                    genExpr(c: inout c, id: args[0].expr)
+                }
                 write(s: ")")
             } else {
                 // user method on a named type: `recv.m(args)` -> Recv_m(self, args)

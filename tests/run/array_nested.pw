@@ -1,18 +1,23 @@
-// F11 nested arrays `Array[Array[T]]`: the inner `PlewArray_<inner>` is emitted
-// before the outer (dependency ordering), and indexing `m[i]` yields an array
-// (so `m[i][j]` and `m[i].count` work). Uses variable rows; appending a bare
-// array literal as an element is a separate (element-context) gap.
+// F11 nested arrays `Array[Array[T]]`: dependency ordering (inner runtime first)
+// and nested indexing (`m[i][j]`, `m[i].count`). Appending works with a variable
+// row and with a bare array literal (`m.append([1,2,3])`), including deeper
+// nesting where the appended element is itself a nested array.
 import @Std/Io with { print }
 
 fn main() {
     mut val m: Array[Array[I32]] = []
-    mut val r0: Array[I32] = [1, 2, 3]
+    m.append([1, 2, 3])
     mut val r1: Array[I32] = [4, 5]
-    m.append(r0)
     m.append(r1)
     print(m[0][1])
     print(m[1][0])
     print(m.count)
     print(m[0].count)
-    print(m[1].count)
+
+    mut val t: Array[Array[Array[I32]]] = []
+    mut val inner: Array[Array[I32]] = []
+    inner.append([7, 8])
+    t.append(inner)
+    print(t[0][0][1])
+    print(t.count)
 }

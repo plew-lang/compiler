@@ -513,9 +513,34 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
     }
     if rt.kind == 3 {
         if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "append") {
+            // if the element type is itself an `Array[X]`, the appended value is
+            // an array (e.g. `m.append([1,2,3])`) — check its elements against the
+            // inner element X, not the outer (mangled) element name as a scalar.
+            mut val innerArr: Bool = false
+            mut val innerStart: U64 = 0
+            mut val innerLen: U64 = 0
+            val er: U64 = arrayElemRef(c: inout c, start: rt.nameStart, len: rt.nameLen)
+            if er != 0 {
+                val rr: U64 = resolveTy(c: inout c, tyRef: er)
+                if rr < c.types.count {
+                    val rtp: TypeRef = c.types[rr]
+                    if rangeEquals(bytes: c.bytes, start: rtp.nameStart, len: rtp.nameLen, kw: "Array") {
+                        if rtp.args.count > 0 {
+                            val xn: Bind = arrayElemNameForRef(c: inout c, elemRef: rtp.args[0])
+                            innerArr = true
+                            innerStart = xn.nameStart
+                            innerLen = xn.nameLen
+                        }
+                    }
+                }
+            }
             mut val i: U64 = 0
             while i < args.count {
-                checkLitSpan(c: inout c, id: args[i].expr, tyStart: rt.nameStart, tyLen: rt.nameLen, isArray: false)
+                if innerArr {
+                    checkLitArray(c: inout c, id: args[i].expr, elemStart: innerStart, elemLen: innerLen)
+                } else {
+                    checkLitSpan(c: inout c, id: args[i].expr, tyStart: rt.nameStart, tyLen: rt.nameLen, isArray: false)
+                }
                 i += 1
             }
             return
