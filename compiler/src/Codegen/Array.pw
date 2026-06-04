@@ -175,26 +175,38 @@ fn wPA(c: inout Comp, elemStart: U64, elemLen: U64) {
     writeSpan(c: inout c, start: elemStart, len: elemLen)
 }
 
-// `typedef struct { ET* data; long long len; long long cap; } PlewArray_E;`
+// `typedef struct { ET* data; long long len; } PlewArray_E;`. The buffer `data`
+// is a `RawBuffer` (spec/02): a `[cap][rc]` header (two long longs) precedes the
+// elements, so capacity and the CoW refcount live with the allocation, not in the
+// array value. Only `data` (which RawBuffer the array points at) and `len` (the
+// live count) are array state — this is the same C shape the prelude's
+// `struct Array[T] { data: RawBuffer[T]; count }` will lower to.
 fn genArrayTypedef(c: inout Comp, elemStart: U64, elemLen: U64) {
     write(s: "typedef struct { ")
     genCElem(c: inout c, start: elemStart, len: elemLen)
-    write(s: "* data; long long len; long long cap; long long* rc; } ")
+    write(s: "* data; long long len; } ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: ";\n")
 }
 
-// Monomorphized array runtime for one element type. Order matters: _copy,
-// _share and _unique are emitted before _set/_push, which call _unique to
-// realize copy-on-write (mutate a private buffer when the value is shared).
+// Monomorphized array runtime for one element type, over the `RawBuffer` floor
+// (cap + CoW refcount live in the buffer header, reached via `plew_rawbuf_*`).
+// Order matters: _copy, _share and _unique are emitted before _set/_push, which
+// call _unique to realize copy-on-write (mutate a private buffer when shared).
 fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
+    // empty: a fresh 0-capacity RawBuffer (header present so cap/unique/share are
+    // well-defined; the first push grows it).
     write(s: "__attribute__((unused)) static ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: " ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: "_new(void) { ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
-    write(s: " a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }\n")
+    write(s: " a; a.data = (")
+    genCElem(c: inout c, start: elemStart, len: elemLen)
+    write(s: "*)plew_rawbuf_alloc(sizeof(")
+    genCElem(c: inout c, start: elemStart, len: elemLen)
+    write(s: "), 0); a.len = 0; return a; }\n")
 
     write(s: "__attribute__((unused)) static ")
     genCElem(c: inout c, start: elemStart, len: elemLen)
@@ -204,9 +216,10 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: " a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } return a.data[i]; }\n")
 
-    // value-semantics deep copy: a fresh buffer (rc=1) with the same elements.
-    // Element copy is by C assignment (correct for scalars, immutable Strings,
-    // and structs of those); nested mutable aggregates are a documented gap.
+    // value-semantics deep copy: a fresh private buffer (rc=1) with the same
+    // elements. Element copy is by C assignment for scalars/immutable Strings; Ref
+    // elements are retained and struct elements deep-copied (so a CoW split yields
+    // independent elements — required for release below to be double-free-safe).
     write(s: "__attribute__((unused)) static ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: " ")
@@ -215,46 +228,42 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: " a) { ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
-    write(s: " r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (")
+    write(s: " r; r.len = a.len; r.data = (")
     genCElem(c: inout c, start: elemStart, len: elemLen)
-    write(s: "*)plew_arc_alloc(sizeof(")
+    write(s: "*)plew_rawbuf_alloc(sizeof(")
     genCElem(c: inout c, start: elemStart, len: elemLen)
-    write(s: ") * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) ")
+    write(s: "), a.len); for (long long i = 0; i < a.len; i++) ")
     if structNeedsCopy(c: inout c, start: elemStart, len: elemLen) {
-        // deep copy of struct elements (so a CoW split / copy yields independent
-        // elements — required for recursive release below to be double-free-safe).
         write(s: "r.data[i] = ")
         writeSpan(c: inout c, start: elemStart, len: elemLen)
         write(s: "_copy(a.data[i]);")
     } else {
         if elemIsRef(c: inout c, elemStart: elemStart, elemLen: elemLen) {
-            // a Ref element: the copy co-owns the box (retain its refcount).
             write(s: "r.data[i] = plew_ref_share(a.data[i]);")
         } else {
             write(s: "r.data[i] = a.data[i];")
         }
     }
-    write(s: " } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }\n")
+    write(s: " return r; }\n")
 
-    // release: drop one ref; at zero, recursively release heap-owning struct
-    // elements (safe because _copy above is deep, so each buffer's elements are
-    // uniquely owned) then free the buffer. A borrowed buffer (rc=0) is a no-op.
+    // release: drop one buffer ref. At the last reference (rc==1 before release)
+    // recursively release heap-owning elements — safe because _copy is deep, so
+    // each buffer's elements are uniquely owned — then free the buffer.
     write(s: "__attribute__((unused)) static void ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: "_release(")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
-    write(s: " a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; ")
+    write(s: " a) { if (!a.data) return; ")
     if structNeedsCopy(c: inout c, start: elemStart, len: elemLen) {
-        write(s: "for (long long i = 0; i < a.len; i++) ")
+        write(s: "if (plew_rawbuf_is_unique((void*)a.data)) { for (long long i = 0; i < a.len; i++) ")
         writeSpan(c: inout c, start: elemStart, len: elemLen)
-        write(s: "_release(a.data[i]); ")
+        write(s: "_release(a.data[i]); } ")
     } else {
         if elemIsRef(c: inout c, elemStart: elemStart, elemLen: elemLen) {
-            // release each Ref element's box (free its pointee at the last owner).
-            write(s: "for (long long i = 0; i < a.len; i++) if (a.data[i]) { long long* __erc = ((long long*)a.data[i]) - 1; if ((--(*__erc)) == 0) free(__erc); } ")
+            write(s: "if (plew_rawbuf_is_unique((void*)a.data)) { for (long long i = 0; i < a.len; i++) if (a.data[i]) { long long* __erc = ((long long*)a.data[i]) - 1; if ((--(*__erc)) == 0) free(__erc); } } ")
         }
     }
-    write(s: "free(a.rc); }\n")
+    write(s: "plew_rawbuf_release((void*)a.data); }\n")
 
     // CoW share: retain and alias the same buffer (the binding gets its own ref).
     write(s: "__attribute__((unused)) static ")
@@ -263,19 +272,21 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: "_share(")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
-    write(s: " a) { plew_arc_retain(a.rc); return a; }\n")
+    write(s: " a) { plew_rawbuf_share((void*)a.data); return a; }\n")
 
-    // CoW make-unique: if the buffer is shared (rc>1), replace it with a private
-    // copy before any in-place mutation, so writes never leak across bindings.
+    // CoW make-unique: if the buffer is shared (not unique), replace it with a
+    // private deep copy before any in-place mutation, so writes never leak across
+    // bindings. Releasing the old buffer only decrements (it stays alive for the
+    // other owners), so no element release here.
     write(s: "__attribute__((unused)) static void ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: "_unique(")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
-    write(s: "* a) { if (a->rc && (*(a->rc)) > 1) { ")
+    write(s: "* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: " nc = ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
-    write(s: "_copy(*a); plew_arc_release(a->rc); *a = nc; } }\n")
+    write(s: "_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }\n")
 
     write(s: "__attribute__((unused)) static void ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
@@ -287,16 +298,12 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: "_unique(a); ")
     if structNeedsCopy(c: inout c, start: elemStart, len: elemLen) {
-        // value semantics: the array owns its elements (deep). Release the old
-        // element's heap, then store a deep copy of the new value — symmetric with
-        // _copy/_release, so no aliasing with the source (which double-freed).
         writeSpan(c: inout c, start: elemStart, len: elemLen)
         write(s: "_release(a->data[i]); a->data[i] = ")
         writeSpan(c: inout c, start: elemStart, len: elemLen)
         write(s: "_copy(v); }\n")
     } else {
         if elemIsRef(c: inout c, elemStart: elemStart, elemLen: elemLen) {
-            // release the old Ref box, retain the new one (the array co-owns it).
             write(s: "if (a->data[i]) { long long* __erc = ((long long*)a->data[i]) - 1; if ((--(*__erc)) == 0) free(__erc); } a->data[i] = plew_ref_share(v); }\n")
         } else {
             write(s: "a->data[i] = v; }\n")
@@ -311,22 +318,18 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     genCElem(c: inout c, start: elemStart, len: elemLen)
     write(s: " v) { ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
-    write(s: "_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; ")
+    write(s: "_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; ")
     genCElem(c: inout c, start: elemStart, len: elemLen)
     write(s: "* nd = (")
     genCElem(c: inout c, start: elemStart, len: elemLen)
-    write(s: "*)plew_arc_alloc(sizeof(")
+    write(s: "*)plew_rawbuf_alloc(sizeof(")
     genCElem(c: inout c, start: elemStart, len: elemLen)
-    write(s: ") * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = ")
+    write(s: "), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = ")
     if structNeedsCopy(c: inout c, start: elemStart, len: elemLen) {
-        // value semantics: store a deep copy so the array owns its element (the
-        // source keeps its own), symmetric with _copy/_release — fixes the
-        // over-release when both the array and the source are dropped.
         writeSpan(c: inout c, start: elemStart, len: elemLen)
         write(s: "_copy(v)")
     } else {
         if elemIsRef(c: inout c, elemStart: elemStart, elemLen: elemLen) {
-            // retain the pushed Ref box (the array co-owns it).
             write(s: "plew_ref_share(v)")
         } else {
             write(s: "v")
@@ -365,19 +368,20 @@ fn skipArrayElem(c: inout Comp, ae: Bind) -> Bool {
 }
 
 // PlewArray_U8 is always available (String.bytes yields it) and is emitted with
-// literal text so it needs no source span for "U8".
+// literal text so it needs no source span for "U8". Same RawBuffer-backed shape
+// as the generated element runtime: cap + rc live in the buffer header.
 fn genU8ArrayTypedef() {
-    write(s: "typedef struct { unsigned char* data; long long len; long long cap; long long* rc; } PlewArray_U8;\n")
+    write(s: "typedef struct { unsigned char* data; long long len; } PlewArray_U8;\n")
 }
 
 fn genU8ArrayRuntime() {
-    write(s: "__attribute__((unused)) static PlewArray_U8 PlewArray_U8_new(void) { PlewArray_U8 a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }\n")
+    write(s: "__attribute__((unused)) static PlewArray_U8 PlewArray_U8_new(void) { PlewArray_U8 a; a.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), 0); a.len = 0; return a; }\n")
     write(s: "__attribute__((unused)) static unsigned char PlewArray_U8_get(PlewArray_U8 a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } return a.data[i]; }\n")
-    write(s: "__attribute__((unused)) static PlewArray_U8 PlewArray_U8_copy(PlewArray_U8 a) { PlewArray_U8 r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (unsigned char*)plew_arc_alloc(sizeof(unsigned char) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }\n")
-    write(s: "__attribute__((unused)) static void PlewArray_U8_release(PlewArray_U8 a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; free(a.rc); }\n")
-    write(s: "__attribute__((unused)) static PlewArray_U8 PlewArray_U8_share(PlewArray_U8 a) { plew_arc_retain(a.rc); return a; }\n")
-    write(s: "__attribute__((unused)) static void PlewArray_U8_unique(PlewArray_U8* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_U8 nc = PlewArray_U8_copy(*a); plew_arc_release(a->rc); *a = nc; } }\n")
+    write(s: "__attribute__((unused)) static PlewArray_U8 PlewArray_U8_copy(PlewArray_U8 a) { PlewArray_U8 r; r.len = a.len; r.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; return r; }\n")
+    write(s: "__attribute__((unused)) static void PlewArray_U8_release(PlewArray_U8 a) { if (!a.data) return; plew_rawbuf_release((void*)a.data); }\n")
+    write(s: "__attribute__((unused)) static PlewArray_U8 PlewArray_U8_share(PlewArray_U8 a) { plew_rawbuf_share((void*)a.data); return a; }\n")
+    write(s: "__attribute__((unused)) static void PlewArray_U8_unique(PlewArray_U8* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_U8 nc = PlewArray_U8_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }\n")
     write(s: "__attribute__((unused)) static void PlewArray_U8_set(PlewArray_U8* a, long long i, unsigned char v) { if (i < 0 || i >= a->len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } PlewArray_U8_unique(a); a->data[i] = v; }\n")
-    write(s: "__attribute__((unused)) static void PlewArray_U8_push(PlewArray_U8* a, unsigned char v) { PlewArray_U8_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; unsigned char* nd = (unsigned char*)plew_arc_alloc(sizeof(unsigned char) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }\n")
+    write(s: "__attribute__((unused)) static void PlewArray_U8_push(PlewArray_U8* a, unsigned char v) { PlewArray_U8_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; unsigned char* nd = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = v; a->len++; }\n")
 }
 

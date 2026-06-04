@@ -572,11 +572,15 @@ fn genExpr(c: inout Comp, id: U64) {
             }
             val bt: TypeInfo = exprType(c: inout c, id: base)
             if bt.kind == 1 {
-                // String.bytes: a borrowed Array[U8] view of the string buffer
-                // (rc=0 so ARC never frees it — strings are static/leaked).
+                // String.bytes: an INDEPENDENT Array[U8] of the string's bytes.
+                // A RawBuffer-backed array carries a `[cap][rc]` header and value
+                // semantics (binding shares the buffer), so a borrowed header-less
+                // view of the String's own buffer can't be used — materialize a
+                // fresh owned buffer by copying. (Hidden O(n); value-semantics-
+                // honest — `.bytes` is an independent value. spec/02.)
                 write(s: "({ PlewString __s = ")
                 genExpr(c: inout c, id: base)
-                write(s: "; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; })")
+                write(s: "; PlewArray_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.len = __s.len; __b; })")
                 return
             }
             if bt.kind == 3 {

@@ -61,35 +61,35 @@ typedef struct IntTy IntTy;
 typedef struct Kind Kind;
 typedef struct Expr Expr;
 typedef struct Stmt Stmt;
-typedef struct { unsigned char* data; long long len; long long cap; long long* rc; } PlewArray_U8;
+typedef struct { unsigned char* data; long long len; } PlewArray_U8;
 __attribute__((unused)) static PlewString plew_readFileBytes(PlewArray_U8 p) { char* path = (char*)malloc((size_t)p.len + 1); memcpy(path, p.data, (size_t)p.len); path[p.len] = 0; PlewString r = plew_readFile((PlewString){path, p.len}); free(path); return r; }
 __attribute__((unused)) static long long plew_fileExists(PlewArray_U8 p) { char* path = (char*)malloc((size_t)p.len + 1); memcpy(path, p.data, (size_t)p.len); path[p.len] = 0; FILE* f = fopen(path, "rb"); free(path); if (f) { fclose(f); return 1; } return 0; }
 __attribute__((unused)) static PlewString plew_stringFromBytes(PlewArray_U8 p) { char* buf = (char*)malloc((size_t)p.len + 1); memcpy(buf, p.data, (size_t)p.len); buf[p.len] = 0; PlewString s; s.data = buf; s.len = p.len; return s; }
-typedef struct { Bind* data; long long len; long long cap; long long* rc; } PlewArray_Bind;
-typedef struct { Tok* data; long long len; long long cap; long long* rc; } PlewArray_Tok;
-typedef struct { uint64_t* data; long long len; long long cap; long long* rc; } PlewArray_U64;
-typedef struct { Arg* data; long long len; long long cap; long long* rc; } PlewArray_Arg;
-typedef struct { MakeField* data; long long len; long long cap; long long* rc; } PlewArray_MakeField;
-typedef struct { MatchArm* data; long long len; long long cap; long long* rc; } PlewArray_MatchArm;
-typedef struct { Param* data; long long len; long long cap; long long* rc; } PlewArray_Param;
-typedef struct { FieldDef* data; long long len; long long cap; long long* rc; } PlewArray_FieldDef;
-typedef struct { Func* data; long long len; long long cap; long long* rc; } PlewArray_Func;
-typedef struct { Variant* data; long long len; long long cap; long long* rc; } PlewArray_Variant;
-typedef struct { Expr* data; long long len; long long cap; long long* rc; } PlewArray_Expr;
-typedef struct { Stmt* data; long long len; long long cap; long long* rc; } PlewArray_Stmt;
-typedef struct { Block* data; long long len; long long cap; long long* rc; } PlewArray_Block;
-typedef struct { StructDef* data; long long len; long long cap; long long* rc; } PlewArray_StructDef;
-typedef struct { EnumDef* data; long long len; long long cap; long long* rc; } PlewArray_EnumDef;
-typedef struct { TraitDef* data; long long len; long long cap; long long* rc; } PlewArray_TraitDef;
-typedef struct { Conform* data; long long len; long long cap; long long* rc; } PlewArray_Conform;
-typedef struct { MethodAlias* data; long long len; long long cap; long long* rc; } PlewArray_MethodAlias;
-typedef struct { DeriveReq* data; long long len; long long cap; long long* rc; } PlewArray_DeriveReq;
-typedef struct { FuncBound* data; long long len; long long cap; long long* rc; } PlewArray_FuncBound;
-typedef struct { TypeRef* data; long long len; long long cap; long long* rc; } PlewArray_TypeRef;
-typedef struct { FnInst* data; long long len; long long cap; long long* rc; } PlewArray_FnInst;
-typedef struct { CaptureEntry* data; long long len; long long cap; long long* rc; } PlewArray_CaptureEntry;
-typedef struct { Local* data; long long len; long long cap; long long* rc; } PlewArray_Local;
-typedef struct { PatInfo* data; long long len; long long cap; long long* rc; } PlewArray_PatInfo;
+typedef struct { Bind* data; long long len; } PlewArray_Bind;
+typedef struct { Tok* data; long long len; } PlewArray_Tok;
+typedef struct { uint64_t* data; long long len; } PlewArray_U64;
+typedef struct { Arg* data; long long len; } PlewArray_Arg;
+typedef struct { MakeField* data; long long len; } PlewArray_MakeField;
+typedef struct { MatchArm* data; long long len; } PlewArray_MatchArm;
+typedef struct { Param* data; long long len; } PlewArray_Param;
+typedef struct { FieldDef* data; long long len; } PlewArray_FieldDef;
+typedef struct { Func* data; long long len; } PlewArray_Func;
+typedef struct { Variant* data; long long len; } PlewArray_Variant;
+typedef struct { Expr* data; long long len; } PlewArray_Expr;
+typedef struct { Stmt* data; long long len; } PlewArray_Stmt;
+typedef struct { Block* data; long long len; } PlewArray_Block;
+typedef struct { StructDef* data; long long len; } PlewArray_StructDef;
+typedef struct { EnumDef* data; long long len; } PlewArray_EnumDef;
+typedef struct { TraitDef* data; long long len; } PlewArray_TraitDef;
+typedef struct { Conform* data; long long len; } PlewArray_Conform;
+typedef struct { MethodAlias* data; long long len; } PlewArray_MethodAlias;
+typedef struct { DeriveReq* data; long long len; } PlewArray_DeriveReq;
+typedef struct { FuncBound* data; long long len; } PlewArray_FuncBound;
+typedef struct { TypeRef* data; long long len; } PlewArray_TypeRef;
+typedef struct { FnInst* data; long long len; } PlewArray_FnInst;
+typedef struct { CaptureEntry* data; long long len; } PlewArray_CaptureEntry;
+typedef struct { Local* data; long long len; } PlewArray_Local;
+typedef struct { PatInfo* data; long long len; } PlewArray_PatInfo;
 struct Kind {
     long long tag;
     union {
@@ -520,252 +520,252 @@ void Func_release(Func s);
 Comp Comp_copy(Comp s);
 Comp Comp_share(Comp s);
 void Comp_release(Comp s);
-__attribute__((unused)) static PlewArray_U8 PlewArray_U8_new(void) { PlewArray_U8 a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static PlewArray_U8 PlewArray_U8_new(void) { PlewArray_U8 a; a.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), 0); a.len = 0; return a; }
 __attribute__((unused)) static unsigned char PlewArray_U8_get(PlewArray_U8 a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_U8 PlewArray_U8_copy(PlewArray_U8 a) { PlewArray_U8 r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (unsigned char*)plew_arc_alloc(sizeof(unsigned char) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_U8_release(PlewArray_U8 a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; free(a.rc); }
-__attribute__((unused)) static PlewArray_U8 PlewArray_U8_share(PlewArray_U8 a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_U8_unique(PlewArray_U8* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_U8 nc = PlewArray_U8_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_U8 PlewArray_U8_copy(PlewArray_U8 a) { PlewArray_U8 r; r.len = a.len; r.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; return r; }
+__attribute__((unused)) static void PlewArray_U8_release(PlewArray_U8 a) { if (!a.data) return; plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_U8 PlewArray_U8_share(PlewArray_U8 a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_U8_unique(PlewArray_U8* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_U8 nc = PlewArray_U8_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_U8_set(PlewArray_U8* a, long long i, unsigned char v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_U8_unique(a); a->data[i] = v; }
-__attribute__((unused)) static void PlewArray_U8_push(PlewArray_U8* a, unsigned char v) { PlewArray_U8_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; unsigned char* nd = (unsigned char*)plew_arc_alloc(sizeof(unsigned char) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
-__attribute__((unused)) static PlewArray_Bind PlewArray_Bind_new(void) { PlewArray_Bind a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_U8_push(PlewArray_U8* a, unsigned char v) { PlewArray_U8_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; unsigned char* nd = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = v; a->len++; }
+__attribute__((unused)) static PlewArray_Bind PlewArray_Bind_new(void) { PlewArray_Bind a; a.data = (Bind*)plew_rawbuf_alloc(sizeof(Bind), 0); a.len = 0; return a; }
 __attribute__((unused)) static Bind PlewArray_Bind_get(PlewArray_Bind a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_Bind PlewArray_Bind_copy(PlewArray_Bind a) { PlewArray_Bind r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (Bind*)plew_arc_alloc(sizeof(Bind) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_Bind_release(PlewArray_Bind a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; free(a.rc); }
-__attribute__((unused)) static PlewArray_Bind PlewArray_Bind_share(PlewArray_Bind a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_Bind_unique(PlewArray_Bind* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_Bind nc = PlewArray_Bind_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_Bind PlewArray_Bind_copy(PlewArray_Bind a) { PlewArray_Bind r; r.len = a.len; r.data = (Bind*)plew_rawbuf_alloc(sizeof(Bind), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; return r; }
+__attribute__((unused)) static void PlewArray_Bind_release(PlewArray_Bind a) { if (!a.data) return; plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_Bind PlewArray_Bind_share(PlewArray_Bind a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_Bind_unique(PlewArray_Bind* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_Bind nc = PlewArray_Bind_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_Bind_set(PlewArray_Bind* a, long long i, Bind v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_Bind_unique(a); a->data[i] = v; }
-__attribute__((unused)) static void PlewArray_Bind_push(PlewArray_Bind* a, Bind v) { PlewArray_Bind_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; Bind* nd = (Bind*)plew_arc_alloc(sizeof(Bind) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
-__attribute__((unused)) static PlewArray_Tok PlewArray_Tok_new(void) { PlewArray_Tok a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_Bind_push(PlewArray_Bind* a, Bind v) { PlewArray_Bind_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; Bind* nd = (Bind*)plew_rawbuf_alloc(sizeof(Bind), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = v; a->len++; }
+__attribute__((unused)) static PlewArray_Tok PlewArray_Tok_new(void) { PlewArray_Tok a; a.data = (Tok*)plew_rawbuf_alloc(sizeof(Tok), 0); a.len = 0; return a; }
 __attribute__((unused)) static Tok PlewArray_Tok_get(PlewArray_Tok a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_Tok PlewArray_Tok_copy(PlewArray_Tok a) { PlewArray_Tok r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (Tok*)plew_arc_alloc(sizeof(Tok) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_Tok_release(PlewArray_Tok a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; free(a.rc); }
-__attribute__((unused)) static PlewArray_Tok PlewArray_Tok_share(PlewArray_Tok a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_Tok_unique(PlewArray_Tok* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_Tok nc = PlewArray_Tok_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_Tok PlewArray_Tok_copy(PlewArray_Tok a) { PlewArray_Tok r; r.len = a.len; r.data = (Tok*)plew_rawbuf_alloc(sizeof(Tok), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; return r; }
+__attribute__((unused)) static void PlewArray_Tok_release(PlewArray_Tok a) { if (!a.data) return; plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_Tok PlewArray_Tok_share(PlewArray_Tok a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_Tok_unique(PlewArray_Tok* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_Tok nc = PlewArray_Tok_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_Tok_set(PlewArray_Tok* a, long long i, Tok v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_Tok_unique(a); a->data[i] = v; }
-__attribute__((unused)) static void PlewArray_Tok_push(PlewArray_Tok* a, Tok v) { PlewArray_Tok_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; Tok* nd = (Tok*)plew_arc_alloc(sizeof(Tok) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
-__attribute__((unused)) static PlewArray_U64 PlewArray_U64_new(void) { PlewArray_U64 a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_Tok_push(PlewArray_Tok* a, Tok v) { PlewArray_Tok_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; Tok* nd = (Tok*)plew_rawbuf_alloc(sizeof(Tok), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = v; a->len++; }
+__attribute__((unused)) static PlewArray_U64 PlewArray_U64_new(void) { PlewArray_U64 a; a.data = (uint64_t*)plew_rawbuf_alloc(sizeof(uint64_t), 0); a.len = 0; return a; }
 __attribute__((unused)) static uint64_t PlewArray_U64_get(PlewArray_U64 a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_U64 PlewArray_U64_copy(PlewArray_U64 a) { PlewArray_U64 r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (uint64_t*)plew_arc_alloc(sizeof(uint64_t) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_U64_release(PlewArray_U64 a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; free(a.rc); }
-__attribute__((unused)) static PlewArray_U64 PlewArray_U64_share(PlewArray_U64 a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_U64_unique(PlewArray_U64* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_U64 nc = PlewArray_U64_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_U64 PlewArray_U64_copy(PlewArray_U64 a) { PlewArray_U64 r; r.len = a.len; r.data = (uint64_t*)plew_rawbuf_alloc(sizeof(uint64_t), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; return r; }
+__attribute__((unused)) static void PlewArray_U64_release(PlewArray_U64 a) { if (!a.data) return; plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_U64 PlewArray_U64_share(PlewArray_U64 a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_U64_unique(PlewArray_U64* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_U64 nc = PlewArray_U64_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_U64_set(PlewArray_U64* a, long long i, uint64_t v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_U64_unique(a); a->data[i] = v; }
-__attribute__((unused)) static void PlewArray_U64_push(PlewArray_U64* a, uint64_t v) { PlewArray_U64_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; uint64_t* nd = (uint64_t*)plew_arc_alloc(sizeof(uint64_t) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
-__attribute__((unused)) static PlewArray_Arg PlewArray_Arg_new(void) { PlewArray_Arg a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_U64_push(PlewArray_U64* a, uint64_t v) { PlewArray_U64_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; uint64_t* nd = (uint64_t*)plew_rawbuf_alloc(sizeof(uint64_t), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = v; a->len++; }
+__attribute__((unused)) static PlewArray_Arg PlewArray_Arg_new(void) { PlewArray_Arg a; a.data = (Arg*)plew_rawbuf_alloc(sizeof(Arg), 0); a.len = 0; return a; }
 __attribute__((unused)) static Arg PlewArray_Arg_get(PlewArray_Arg a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_Arg PlewArray_Arg_copy(PlewArray_Arg a) { PlewArray_Arg r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (Arg*)plew_arc_alloc(sizeof(Arg) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_Arg_release(PlewArray_Arg a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; free(a.rc); }
-__attribute__((unused)) static PlewArray_Arg PlewArray_Arg_share(PlewArray_Arg a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_Arg_unique(PlewArray_Arg* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_Arg nc = PlewArray_Arg_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_Arg PlewArray_Arg_copy(PlewArray_Arg a) { PlewArray_Arg r; r.len = a.len; r.data = (Arg*)plew_rawbuf_alloc(sizeof(Arg), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; return r; }
+__attribute__((unused)) static void PlewArray_Arg_release(PlewArray_Arg a) { if (!a.data) return; plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_Arg PlewArray_Arg_share(PlewArray_Arg a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_Arg_unique(PlewArray_Arg* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_Arg nc = PlewArray_Arg_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_Arg_set(PlewArray_Arg* a, long long i, Arg v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_Arg_unique(a); a->data[i] = v; }
-__attribute__((unused)) static void PlewArray_Arg_push(PlewArray_Arg* a, Arg v) { PlewArray_Arg_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; Arg* nd = (Arg*)plew_arc_alloc(sizeof(Arg) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
-__attribute__((unused)) static PlewArray_MakeField PlewArray_MakeField_new(void) { PlewArray_MakeField a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_Arg_push(PlewArray_Arg* a, Arg v) { PlewArray_Arg_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; Arg* nd = (Arg*)plew_rawbuf_alloc(sizeof(Arg), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = v; a->len++; }
+__attribute__((unused)) static PlewArray_MakeField PlewArray_MakeField_new(void) { PlewArray_MakeField a; a.data = (MakeField*)plew_rawbuf_alloc(sizeof(MakeField), 0); a.len = 0; return a; }
 __attribute__((unused)) static MakeField PlewArray_MakeField_get(PlewArray_MakeField a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_MakeField PlewArray_MakeField_copy(PlewArray_MakeField a) { PlewArray_MakeField r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (MakeField*)plew_arc_alloc(sizeof(MakeField) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_MakeField_release(PlewArray_MakeField a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; free(a.rc); }
-__attribute__((unused)) static PlewArray_MakeField PlewArray_MakeField_share(PlewArray_MakeField a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_MakeField_unique(PlewArray_MakeField* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_MakeField nc = PlewArray_MakeField_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_MakeField PlewArray_MakeField_copy(PlewArray_MakeField a) { PlewArray_MakeField r; r.len = a.len; r.data = (MakeField*)plew_rawbuf_alloc(sizeof(MakeField), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; return r; }
+__attribute__((unused)) static void PlewArray_MakeField_release(PlewArray_MakeField a) { if (!a.data) return; plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_MakeField PlewArray_MakeField_share(PlewArray_MakeField a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_MakeField_unique(PlewArray_MakeField* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_MakeField nc = PlewArray_MakeField_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_MakeField_set(PlewArray_MakeField* a, long long i, MakeField v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_MakeField_unique(a); a->data[i] = v; }
-__attribute__((unused)) static void PlewArray_MakeField_push(PlewArray_MakeField* a, MakeField v) { PlewArray_MakeField_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; MakeField* nd = (MakeField*)plew_arc_alloc(sizeof(MakeField) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
-__attribute__((unused)) static PlewArray_MatchArm PlewArray_MatchArm_new(void) { PlewArray_MatchArm a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_MakeField_push(PlewArray_MakeField* a, MakeField v) { PlewArray_MakeField_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; MakeField* nd = (MakeField*)plew_rawbuf_alloc(sizeof(MakeField), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = v; a->len++; }
+__attribute__((unused)) static PlewArray_MatchArm PlewArray_MatchArm_new(void) { PlewArray_MatchArm a; a.data = (MatchArm*)plew_rawbuf_alloc(sizeof(MatchArm), 0); a.len = 0; return a; }
 __attribute__((unused)) static MatchArm PlewArray_MatchArm_get(PlewArray_MatchArm a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_MatchArm PlewArray_MatchArm_copy(PlewArray_MatchArm a) { PlewArray_MatchArm r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (MatchArm*)plew_arc_alloc(sizeof(MatchArm) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = MatchArm_copy(a.data[i]); } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_MatchArm_release(PlewArray_MatchArm a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; for (long long i = 0; i < a.len; i++) MatchArm_release(a.data[i]); free(a.rc); }
-__attribute__((unused)) static PlewArray_MatchArm PlewArray_MatchArm_share(PlewArray_MatchArm a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_MatchArm_unique(PlewArray_MatchArm* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_MatchArm nc = PlewArray_MatchArm_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_MatchArm PlewArray_MatchArm_copy(PlewArray_MatchArm a) { PlewArray_MatchArm r; r.len = a.len; r.data = (MatchArm*)plew_rawbuf_alloc(sizeof(MatchArm), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = MatchArm_copy(a.data[i]); return r; }
+__attribute__((unused)) static void PlewArray_MatchArm_release(PlewArray_MatchArm a) { if (!a.data) return; if (plew_rawbuf_is_unique((void*)a.data)) { for (long long i = 0; i < a.len; i++) MatchArm_release(a.data[i]); } plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_MatchArm PlewArray_MatchArm_share(PlewArray_MatchArm a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_MatchArm_unique(PlewArray_MatchArm* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_MatchArm nc = PlewArray_MatchArm_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_MatchArm_set(PlewArray_MatchArm* a, long long i, MatchArm v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_MatchArm_unique(a); MatchArm_release(a->data[i]); a->data[i] = MatchArm_copy(v); }
-__attribute__((unused)) static void PlewArray_MatchArm_push(PlewArray_MatchArm* a, MatchArm v) { PlewArray_MatchArm_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; MatchArm* nd = (MatchArm*)plew_arc_alloc(sizeof(MatchArm) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = MatchArm_copy(v); a->len++; }
-__attribute__((unused)) static PlewArray_Param PlewArray_Param_new(void) { PlewArray_Param a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_MatchArm_push(PlewArray_MatchArm* a, MatchArm v) { PlewArray_MatchArm_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; MatchArm* nd = (MatchArm*)plew_rawbuf_alloc(sizeof(MatchArm), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = MatchArm_copy(v); a->len++; }
+__attribute__((unused)) static PlewArray_Param PlewArray_Param_new(void) { PlewArray_Param a; a.data = (Param*)plew_rawbuf_alloc(sizeof(Param), 0); a.len = 0; return a; }
 __attribute__((unused)) static Param PlewArray_Param_get(PlewArray_Param a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_Param PlewArray_Param_copy(PlewArray_Param a) { PlewArray_Param r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (Param*)plew_arc_alloc(sizeof(Param) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_Param_release(PlewArray_Param a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; free(a.rc); }
-__attribute__((unused)) static PlewArray_Param PlewArray_Param_share(PlewArray_Param a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_Param_unique(PlewArray_Param* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_Param nc = PlewArray_Param_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_Param PlewArray_Param_copy(PlewArray_Param a) { PlewArray_Param r; r.len = a.len; r.data = (Param*)plew_rawbuf_alloc(sizeof(Param), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; return r; }
+__attribute__((unused)) static void PlewArray_Param_release(PlewArray_Param a) { if (!a.data) return; plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_Param PlewArray_Param_share(PlewArray_Param a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_Param_unique(PlewArray_Param* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_Param nc = PlewArray_Param_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_Param_set(PlewArray_Param* a, long long i, Param v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_Param_unique(a); a->data[i] = v; }
-__attribute__((unused)) static void PlewArray_Param_push(PlewArray_Param* a, Param v) { PlewArray_Param_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; Param* nd = (Param*)plew_arc_alloc(sizeof(Param) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
-__attribute__((unused)) static PlewArray_FieldDef PlewArray_FieldDef_new(void) { PlewArray_FieldDef a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_Param_push(PlewArray_Param* a, Param v) { PlewArray_Param_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; Param* nd = (Param*)plew_rawbuf_alloc(sizeof(Param), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = v; a->len++; }
+__attribute__((unused)) static PlewArray_FieldDef PlewArray_FieldDef_new(void) { PlewArray_FieldDef a; a.data = (FieldDef*)plew_rawbuf_alloc(sizeof(FieldDef), 0); a.len = 0; return a; }
 __attribute__((unused)) static FieldDef PlewArray_FieldDef_get(PlewArray_FieldDef a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_FieldDef PlewArray_FieldDef_copy(PlewArray_FieldDef a) { PlewArray_FieldDef r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (FieldDef*)plew_arc_alloc(sizeof(FieldDef) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_FieldDef_release(PlewArray_FieldDef a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; free(a.rc); }
-__attribute__((unused)) static PlewArray_FieldDef PlewArray_FieldDef_share(PlewArray_FieldDef a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_FieldDef_unique(PlewArray_FieldDef* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_FieldDef nc = PlewArray_FieldDef_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_FieldDef PlewArray_FieldDef_copy(PlewArray_FieldDef a) { PlewArray_FieldDef r; r.len = a.len; r.data = (FieldDef*)plew_rawbuf_alloc(sizeof(FieldDef), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; return r; }
+__attribute__((unused)) static void PlewArray_FieldDef_release(PlewArray_FieldDef a) { if (!a.data) return; plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_FieldDef PlewArray_FieldDef_share(PlewArray_FieldDef a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_FieldDef_unique(PlewArray_FieldDef* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_FieldDef nc = PlewArray_FieldDef_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_FieldDef_set(PlewArray_FieldDef* a, long long i, FieldDef v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_FieldDef_unique(a); a->data[i] = v; }
-__attribute__((unused)) static void PlewArray_FieldDef_push(PlewArray_FieldDef* a, FieldDef v) { PlewArray_FieldDef_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; FieldDef* nd = (FieldDef*)plew_arc_alloc(sizeof(FieldDef) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
-__attribute__((unused)) static PlewArray_Func PlewArray_Func_new(void) { PlewArray_Func a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_FieldDef_push(PlewArray_FieldDef* a, FieldDef v) { PlewArray_FieldDef_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; FieldDef* nd = (FieldDef*)plew_rawbuf_alloc(sizeof(FieldDef), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = v; a->len++; }
+__attribute__((unused)) static PlewArray_Func PlewArray_Func_new(void) { PlewArray_Func a; a.data = (Func*)plew_rawbuf_alloc(sizeof(Func), 0); a.len = 0; return a; }
 __attribute__((unused)) static Func PlewArray_Func_get(PlewArray_Func a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_Func PlewArray_Func_copy(PlewArray_Func a) { PlewArray_Func r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (Func*)plew_arc_alloc(sizeof(Func) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = Func_copy(a.data[i]); } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_Func_release(PlewArray_Func a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; for (long long i = 0; i < a.len; i++) Func_release(a.data[i]); free(a.rc); }
-__attribute__((unused)) static PlewArray_Func PlewArray_Func_share(PlewArray_Func a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_Func_unique(PlewArray_Func* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_Func nc = PlewArray_Func_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_Func PlewArray_Func_copy(PlewArray_Func a) { PlewArray_Func r; r.len = a.len; r.data = (Func*)plew_rawbuf_alloc(sizeof(Func), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = Func_copy(a.data[i]); return r; }
+__attribute__((unused)) static void PlewArray_Func_release(PlewArray_Func a) { if (!a.data) return; if (plew_rawbuf_is_unique((void*)a.data)) { for (long long i = 0; i < a.len; i++) Func_release(a.data[i]); } plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_Func PlewArray_Func_share(PlewArray_Func a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_Func_unique(PlewArray_Func* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_Func nc = PlewArray_Func_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_Func_set(PlewArray_Func* a, long long i, Func v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_Func_unique(a); Func_release(a->data[i]); a->data[i] = Func_copy(v); }
-__attribute__((unused)) static void PlewArray_Func_push(PlewArray_Func* a, Func v) { PlewArray_Func_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; Func* nd = (Func*)plew_arc_alloc(sizeof(Func) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = Func_copy(v); a->len++; }
-__attribute__((unused)) static PlewArray_Variant PlewArray_Variant_new(void) { PlewArray_Variant a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_Func_push(PlewArray_Func* a, Func v) { PlewArray_Func_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; Func* nd = (Func*)plew_rawbuf_alloc(sizeof(Func), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = Func_copy(v); a->len++; }
+__attribute__((unused)) static PlewArray_Variant PlewArray_Variant_new(void) { PlewArray_Variant a; a.data = (Variant*)plew_rawbuf_alloc(sizeof(Variant), 0); a.len = 0; return a; }
 __attribute__((unused)) static Variant PlewArray_Variant_get(PlewArray_Variant a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_Variant PlewArray_Variant_copy(PlewArray_Variant a) { PlewArray_Variant r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (Variant*)plew_arc_alloc(sizeof(Variant) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = Variant_copy(a.data[i]); } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_Variant_release(PlewArray_Variant a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; for (long long i = 0; i < a.len; i++) Variant_release(a.data[i]); free(a.rc); }
-__attribute__((unused)) static PlewArray_Variant PlewArray_Variant_share(PlewArray_Variant a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_Variant_unique(PlewArray_Variant* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_Variant nc = PlewArray_Variant_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_Variant PlewArray_Variant_copy(PlewArray_Variant a) { PlewArray_Variant r; r.len = a.len; r.data = (Variant*)plew_rawbuf_alloc(sizeof(Variant), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = Variant_copy(a.data[i]); return r; }
+__attribute__((unused)) static void PlewArray_Variant_release(PlewArray_Variant a) { if (!a.data) return; if (plew_rawbuf_is_unique((void*)a.data)) { for (long long i = 0; i < a.len; i++) Variant_release(a.data[i]); } plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_Variant PlewArray_Variant_share(PlewArray_Variant a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_Variant_unique(PlewArray_Variant* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_Variant nc = PlewArray_Variant_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_Variant_set(PlewArray_Variant* a, long long i, Variant v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_Variant_unique(a); Variant_release(a->data[i]); a->data[i] = Variant_copy(v); }
-__attribute__((unused)) static void PlewArray_Variant_push(PlewArray_Variant* a, Variant v) { PlewArray_Variant_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; Variant* nd = (Variant*)plew_arc_alloc(sizeof(Variant) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = Variant_copy(v); a->len++; }
-__attribute__((unused)) static PlewArray_Expr PlewArray_Expr_new(void) { PlewArray_Expr a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_Variant_push(PlewArray_Variant* a, Variant v) { PlewArray_Variant_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; Variant* nd = (Variant*)plew_rawbuf_alloc(sizeof(Variant), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = Variant_copy(v); a->len++; }
+__attribute__((unused)) static PlewArray_Expr PlewArray_Expr_new(void) { PlewArray_Expr a; a.data = (Expr*)plew_rawbuf_alloc(sizeof(Expr), 0); a.len = 0; return a; }
 __attribute__((unused)) static Expr PlewArray_Expr_get(PlewArray_Expr a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_Expr PlewArray_Expr_copy(PlewArray_Expr a) { PlewArray_Expr r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (Expr*)plew_arc_alloc(sizeof(Expr) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_Expr_release(PlewArray_Expr a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; free(a.rc); }
-__attribute__((unused)) static PlewArray_Expr PlewArray_Expr_share(PlewArray_Expr a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_Expr_unique(PlewArray_Expr* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_Expr nc = PlewArray_Expr_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_Expr PlewArray_Expr_copy(PlewArray_Expr a) { PlewArray_Expr r; r.len = a.len; r.data = (Expr*)plew_rawbuf_alloc(sizeof(Expr), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; return r; }
+__attribute__((unused)) static void PlewArray_Expr_release(PlewArray_Expr a) { if (!a.data) return; plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_Expr PlewArray_Expr_share(PlewArray_Expr a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_Expr_unique(PlewArray_Expr* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_Expr nc = PlewArray_Expr_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_Expr_set(PlewArray_Expr* a, long long i, Expr v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_Expr_unique(a); a->data[i] = v; }
-__attribute__((unused)) static void PlewArray_Expr_push(PlewArray_Expr* a, Expr v) { PlewArray_Expr_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; Expr* nd = (Expr*)plew_arc_alloc(sizeof(Expr) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
-__attribute__((unused)) static PlewArray_Stmt PlewArray_Stmt_new(void) { PlewArray_Stmt a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_Expr_push(PlewArray_Expr* a, Expr v) { PlewArray_Expr_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; Expr* nd = (Expr*)plew_rawbuf_alloc(sizeof(Expr), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = v; a->len++; }
+__attribute__((unused)) static PlewArray_Stmt PlewArray_Stmt_new(void) { PlewArray_Stmt a; a.data = (Stmt*)plew_rawbuf_alloc(sizeof(Stmt), 0); a.len = 0; return a; }
 __attribute__((unused)) static Stmt PlewArray_Stmt_get(PlewArray_Stmt a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_Stmt PlewArray_Stmt_copy(PlewArray_Stmt a) { PlewArray_Stmt r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (Stmt*)plew_arc_alloc(sizeof(Stmt) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_Stmt_release(PlewArray_Stmt a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; free(a.rc); }
-__attribute__((unused)) static PlewArray_Stmt PlewArray_Stmt_share(PlewArray_Stmt a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_Stmt_unique(PlewArray_Stmt* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_Stmt nc = PlewArray_Stmt_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_Stmt PlewArray_Stmt_copy(PlewArray_Stmt a) { PlewArray_Stmt r; r.len = a.len; r.data = (Stmt*)plew_rawbuf_alloc(sizeof(Stmt), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; return r; }
+__attribute__((unused)) static void PlewArray_Stmt_release(PlewArray_Stmt a) { if (!a.data) return; plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_Stmt PlewArray_Stmt_share(PlewArray_Stmt a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_Stmt_unique(PlewArray_Stmt* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_Stmt nc = PlewArray_Stmt_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_Stmt_set(PlewArray_Stmt* a, long long i, Stmt v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_Stmt_unique(a); a->data[i] = v; }
-__attribute__((unused)) static void PlewArray_Stmt_push(PlewArray_Stmt* a, Stmt v) { PlewArray_Stmt_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; Stmt* nd = (Stmt*)plew_arc_alloc(sizeof(Stmt) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
-__attribute__((unused)) static PlewArray_Block PlewArray_Block_new(void) { PlewArray_Block a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_Stmt_push(PlewArray_Stmt* a, Stmt v) { PlewArray_Stmt_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; Stmt* nd = (Stmt*)plew_rawbuf_alloc(sizeof(Stmt), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = v; a->len++; }
+__attribute__((unused)) static PlewArray_Block PlewArray_Block_new(void) { PlewArray_Block a; a.data = (Block*)plew_rawbuf_alloc(sizeof(Block), 0); a.len = 0; return a; }
 __attribute__((unused)) static Block PlewArray_Block_get(PlewArray_Block a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_Block PlewArray_Block_copy(PlewArray_Block a) { PlewArray_Block r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (Block*)plew_arc_alloc(sizeof(Block) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = Block_copy(a.data[i]); } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_Block_release(PlewArray_Block a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; for (long long i = 0; i < a.len; i++) Block_release(a.data[i]); free(a.rc); }
-__attribute__((unused)) static PlewArray_Block PlewArray_Block_share(PlewArray_Block a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_Block_unique(PlewArray_Block* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_Block nc = PlewArray_Block_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_Block PlewArray_Block_copy(PlewArray_Block a) { PlewArray_Block r; r.len = a.len; r.data = (Block*)plew_rawbuf_alloc(sizeof(Block), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = Block_copy(a.data[i]); return r; }
+__attribute__((unused)) static void PlewArray_Block_release(PlewArray_Block a) { if (!a.data) return; if (plew_rawbuf_is_unique((void*)a.data)) { for (long long i = 0; i < a.len; i++) Block_release(a.data[i]); } plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_Block PlewArray_Block_share(PlewArray_Block a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_Block_unique(PlewArray_Block* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_Block nc = PlewArray_Block_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_Block_set(PlewArray_Block* a, long long i, Block v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_Block_unique(a); Block_release(a->data[i]); a->data[i] = Block_copy(v); }
-__attribute__((unused)) static void PlewArray_Block_push(PlewArray_Block* a, Block v) { PlewArray_Block_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; Block* nd = (Block*)plew_arc_alloc(sizeof(Block) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = Block_copy(v); a->len++; }
-__attribute__((unused)) static PlewArray_StructDef PlewArray_StructDef_new(void) { PlewArray_StructDef a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_Block_push(PlewArray_Block* a, Block v) { PlewArray_Block_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; Block* nd = (Block*)plew_rawbuf_alloc(sizeof(Block), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = Block_copy(v); a->len++; }
+__attribute__((unused)) static PlewArray_StructDef PlewArray_StructDef_new(void) { PlewArray_StructDef a; a.data = (StructDef*)plew_rawbuf_alloc(sizeof(StructDef), 0); a.len = 0; return a; }
 __attribute__((unused)) static StructDef PlewArray_StructDef_get(PlewArray_StructDef a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_StructDef PlewArray_StructDef_copy(PlewArray_StructDef a) { PlewArray_StructDef r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (StructDef*)plew_arc_alloc(sizeof(StructDef) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = StructDef_copy(a.data[i]); } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_StructDef_release(PlewArray_StructDef a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; for (long long i = 0; i < a.len; i++) StructDef_release(a.data[i]); free(a.rc); }
-__attribute__((unused)) static PlewArray_StructDef PlewArray_StructDef_share(PlewArray_StructDef a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_StructDef_unique(PlewArray_StructDef* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_StructDef nc = PlewArray_StructDef_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_StructDef PlewArray_StructDef_copy(PlewArray_StructDef a) { PlewArray_StructDef r; r.len = a.len; r.data = (StructDef*)plew_rawbuf_alloc(sizeof(StructDef), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = StructDef_copy(a.data[i]); return r; }
+__attribute__((unused)) static void PlewArray_StructDef_release(PlewArray_StructDef a) { if (!a.data) return; if (plew_rawbuf_is_unique((void*)a.data)) { for (long long i = 0; i < a.len; i++) StructDef_release(a.data[i]); } plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_StructDef PlewArray_StructDef_share(PlewArray_StructDef a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_StructDef_unique(PlewArray_StructDef* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_StructDef nc = PlewArray_StructDef_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_StructDef_set(PlewArray_StructDef* a, long long i, StructDef v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_StructDef_unique(a); StructDef_release(a->data[i]); a->data[i] = StructDef_copy(v); }
-__attribute__((unused)) static void PlewArray_StructDef_push(PlewArray_StructDef* a, StructDef v) { PlewArray_StructDef_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; StructDef* nd = (StructDef*)plew_arc_alloc(sizeof(StructDef) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = StructDef_copy(v); a->len++; }
-__attribute__((unused)) static PlewArray_EnumDef PlewArray_EnumDef_new(void) { PlewArray_EnumDef a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_StructDef_push(PlewArray_StructDef* a, StructDef v) { PlewArray_StructDef_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; StructDef* nd = (StructDef*)plew_rawbuf_alloc(sizeof(StructDef), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = StructDef_copy(v); a->len++; }
+__attribute__((unused)) static PlewArray_EnumDef PlewArray_EnumDef_new(void) { PlewArray_EnumDef a; a.data = (EnumDef*)plew_rawbuf_alloc(sizeof(EnumDef), 0); a.len = 0; return a; }
 __attribute__((unused)) static EnumDef PlewArray_EnumDef_get(PlewArray_EnumDef a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_EnumDef PlewArray_EnumDef_copy(PlewArray_EnumDef a) { PlewArray_EnumDef r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (EnumDef*)plew_arc_alloc(sizeof(EnumDef) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = EnumDef_copy(a.data[i]); } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_EnumDef_release(PlewArray_EnumDef a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; for (long long i = 0; i < a.len; i++) EnumDef_release(a.data[i]); free(a.rc); }
-__attribute__((unused)) static PlewArray_EnumDef PlewArray_EnumDef_share(PlewArray_EnumDef a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_EnumDef_unique(PlewArray_EnumDef* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_EnumDef nc = PlewArray_EnumDef_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_EnumDef PlewArray_EnumDef_copy(PlewArray_EnumDef a) { PlewArray_EnumDef r; r.len = a.len; r.data = (EnumDef*)plew_rawbuf_alloc(sizeof(EnumDef), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = EnumDef_copy(a.data[i]); return r; }
+__attribute__((unused)) static void PlewArray_EnumDef_release(PlewArray_EnumDef a) { if (!a.data) return; if (plew_rawbuf_is_unique((void*)a.data)) { for (long long i = 0; i < a.len; i++) EnumDef_release(a.data[i]); } plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_EnumDef PlewArray_EnumDef_share(PlewArray_EnumDef a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_EnumDef_unique(PlewArray_EnumDef* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_EnumDef nc = PlewArray_EnumDef_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_EnumDef_set(PlewArray_EnumDef* a, long long i, EnumDef v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_EnumDef_unique(a); EnumDef_release(a->data[i]); a->data[i] = EnumDef_copy(v); }
-__attribute__((unused)) static void PlewArray_EnumDef_push(PlewArray_EnumDef* a, EnumDef v) { PlewArray_EnumDef_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; EnumDef* nd = (EnumDef*)plew_arc_alloc(sizeof(EnumDef) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = EnumDef_copy(v); a->len++; }
-__attribute__((unused)) static PlewArray_TraitDef PlewArray_TraitDef_new(void) { PlewArray_TraitDef a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_EnumDef_push(PlewArray_EnumDef* a, EnumDef v) { PlewArray_EnumDef_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; EnumDef* nd = (EnumDef*)plew_rawbuf_alloc(sizeof(EnumDef), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = EnumDef_copy(v); a->len++; }
+__attribute__((unused)) static PlewArray_TraitDef PlewArray_TraitDef_new(void) { PlewArray_TraitDef a; a.data = (TraitDef*)plew_rawbuf_alloc(sizeof(TraitDef), 0); a.len = 0; return a; }
 __attribute__((unused)) static TraitDef PlewArray_TraitDef_get(PlewArray_TraitDef a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_TraitDef PlewArray_TraitDef_copy(PlewArray_TraitDef a) { PlewArray_TraitDef r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (TraitDef*)plew_arc_alloc(sizeof(TraitDef) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = TraitDef_copy(a.data[i]); } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_TraitDef_release(PlewArray_TraitDef a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; for (long long i = 0; i < a.len; i++) TraitDef_release(a.data[i]); free(a.rc); }
-__attribute__((unused)) static PlewArray_TraitDef PlewArray_TraitDef_share(PlewArray_TraitDef a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_TraitDef_unique(PlewArray_TraitDef* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_TraitDef nc = PlewArray_TraitDef_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_TraitDef PlewArray_TraitDef_copy(PlewArray_TraitDef a) { PlewArray_TraitDef r; r.len = a.len; r.data = (TraitDef*)plew_rawbuf_alloc(sizeof(TraitDef), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = TraitDef_copy(a.data[i]); return r; }
+__attribute__((unused)) static void PlewArray_TraitDef_release(PlewArray_TraitDef a) { if (!a.data) return; if (plew_rawbuf_is_unique((void*)a.data)) { for (long long i = 0; i < a.len; i++) TraitDef_release(a.data[i]); } plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_TraitDef PlewArray_TraitDef_share(PlewArray_TraitDef a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_TraitDef_unique(PlewArray_TraitDef* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_TraitDef nc = PlewArray_TraitDef_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_TraitDef_set(PlewArray_TraitDef* a, long long i, TraitDef v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_TraitDef_unique(a); TraitDef_release(a->data[i]); a->data[i] = TraitDef_copy(v); }
-__attribute__((unused)) static void PlewArray_TraitDef_push(PlewArray_TraitDef* a, TraitDef v) { PlewArray_TraitDef_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; TraitDef* nd = (TraitDef*)plew_arc_alloc(sizeof(TraitDef) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = TraitDef_copy(v); a->len++; }
-__attribute__((unused)) static PlewArray_Conform PlewArray_Conform_new(void) { PlewArray_Conform a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_TraitDef_push(PlewArray_TraitDef* a, TraitDef v) { PlewArray_TraitDef_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; TraitDef* nd = (TraitDef*)plew_rawbuf_alloc(sizeof(TraitDef), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = TraitDef_copy(v); a->len++; }
+__attribute__((unused)) static PlewArray_Conform PlewArray_Conform_new(void) { PlewArray_Conform a; a.data = (Conform*)plew_rawbuf_alloc(sizeof(Conform), 0); a.len = 0; return a; }
 __attribute__((unused)) static Conform PlewArray_Conform_get(PlewArray_Conform a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_Conform PlewArray_Conform_copy(PlewArray_Conform a) { PlewArray_Conform r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (Conform*)plew_arc_alloc(sizeof(Conform) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = Conform_copy(a.data[i]); } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_Conform_release(PlewArray_Conform a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; for (long long i = 0; i < a.len; i++) Conform_release(a.data[i]); free(a.rc); }
-__attribute__((unused)) static PlewArray_Conform PlewArray_Conform_share(PlewArray_Conform a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_Conform_unique(PlewArray_Conform* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_Conform nc = PlewArray_Conform_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_Conform PlewArray_Conform_copy(PlewArray_Conform a) { PlewArray_Conform r; r.len = a.len; r.data = (Conform*)plew_rawbuf_alloc(sizeof(Conform), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = Conform_copy(a.data[i]); return r; }
+__attribute__((unused)) static void PlewArray_Conform_release(PlewArray_Conform a) { if (!a.data) return; if (plew_rawbuf_is_unique((void*)a.data)) { for (long long i = 0; i < a.len; i++) Conform_release(a.data[i]); } plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_Conform PlewArray_Conform_share(PlewArray_Conform a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_Conform_unique(PlewArray_Conform* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_Conform nc = PlewArray_Conform_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_Conform_set(PlewArray_Conform* a, long long i, Conform v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_Conform_unique(a); Conform_release(a->data[i]); a->data[i] = Conform_copy(v); }
-__attribute__((unused)) static void PlewArray_Conform_push(PlewArray_Conform* a, Conform v) { PlewArray_Conform_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; Conform* nd = (Conform*)plew_arc_alloc(sizeof(Conform) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = Conform_copy(v); a->len++; }
-__attribute__((unused)) static PlewArray_MethodAlias PlewArray_MethodAlias_new(void) { PlewArray_MethodAlias a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_Conform_push(PlewArray_Conform* a, Conform v) { PlewArray_Conform_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; Conform* nd = (Conform*)plew_rawbuf_alloc(sizeof(Conform), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = Conform_copy(v); a->len++; }
+__attribute__((unused)) static PlewArray_MethodAlias PlewArray_MethodAlias_new(void) { PlewArray_MethodAlias a; a.data = (MethodAlias*)plew_rawbuf_alloc(sizeof(MethodAlias), 0); a.len = 0; return a; }
 __attribute__((unused)) static MethodAlias PlewArray_MethodAlias_get(PlewArray_MethodAlias a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_MethodAlias PlewArray_MethodAlias_copy(PlewArray_MethodAlias a) { PlewArray_MethodAlias r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (MethodAlias*)plew_arc_alloc(sizeof(MethodAlias) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_MethodAlias_release(PlewArray_MethodAlias a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; free(a.rc); }
-__attribute__((unused)) static PlewArray_MethodAlias PlewArray_MethodAlias_share(PlewArray_MethodAlias a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_MethodAlias_unique(PlewArray_MethodAlias* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_MethodAlias nc = PlewArray_MethodAlias_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_MethodAlias PlewArray_MethodAlias_copy(PlewArray_MethodAlias a) { PlewArray_MethodAlias r; r.len = a.len; r.data = (MethodAlias*)plew_rawbuf_alloc(sizeof(MethodAlias), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; return r; }
+__attribute__((unused)) static void PlewArray_MethodAlias_release(PlewArray_MethodAlias a) { if (!a.data) return; plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_MethodAlias PlewArray_MethodAlias_share(PlewArray_MethodAlias a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_MethodAlias_unique(PlewArray_MethodAlias* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_MethodAlias nc = PlewArray_MethodAlias_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_MethodAlias_set(PlewArray_MethodAlias* a, long long i, MethodAlias v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_MethodAlias_unique(a); a->data[i] = v; }
-__attribute__((unused)) static void PlewArray_MethodAlias_push(PlewArray_MethodAlias* a, MethodAlias v) { PlewArray_MethodAlias_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; MethodAlias* nd = (MethodAlias*)plew_arc_alloc(sizeof(MethodAlias) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
-__attribute__((unused)) static PlewArray_DeriveReq PlewArray_DeriveReq_new(void) { PlewArray_DeriveReq a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_MethodAlias_push(PlewArray_MethodAlias* a, MethodAlias v) { PlewArray_MethodAlias_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; MethodAlias* nd = (MethodAlias*)plew_rawbuf_alloc(sizeof(MethodAlias), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = v; a->len++; }
+__attribute__((unused)) static PlewArray_DeriveReq PlewArray_DeriveReq_new(void) { PlewArray_DeriveReq a; a.data = (DeriveReq*)plew_rawbuf_alloc(sizeof(DeriveReq), 0); a.len = 0; return a; }
 __attribute__((unused)) static DeriveReq PlewArray_DeriveReq_get(PlewArray_DeriveReq a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_DeriveReq PlewArray_DeriveReq_copy(PlewArray_DeriveReq a) { PlewArray_DeriveReq r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (DeriveReq*)plew_arc_alloc(sizeof(DeriveReq) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_DeriveReq_release(PlewArray_DeriveReq a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; free(a.rc); }
-__attribute__((unused)) static PlewArray_DeriveReq PlewArray_DeriveReq_share(PlewArray_DeriveReq a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_DeriveReq_unique(PlewArray_DeriveReq* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_DeriveReq nc = PlewArray_DeriveReq_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_DeriveReq PlewArray_DeriveReq_copy(PlewArray_DeriveReq a) { PlewArray_DeriveReq r; r.len = a.len; r.data = (DeriveReq*)plew_rawbuf_alloc(sizeof(DeriveReq), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; return r; }
+__attribute__((unused)) static void PlewArray_DeriveReq_release(PlewArray_DeriveReq a) { if (!a.data) return; plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_DeriveReq PlewArray_DeriveReq_share(PlewArray_DeriveReq a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_DeriveReq_unique(PlewArray_DeriveReq* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_DeriveReq nc = PlewArray_DeriveReq_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_DeriveReq_set(PlewArray_DeriveReq* a, long long i, DeriveReq v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_DeriveReq_unique(a); a->data[i] = v; }
-__attribute__((unused)) static void PlewArray_DeriveReq_push(PlewArray_DeriveReq* a, DeriveReq v) { PlewArray_DeriveReq_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; DeriveReq* nd = (DeriveReq*)plew_arc_alloc(sizeof(DeriveReq) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
-__attribute__((unused)) static PlewArray_FuncBound PlewArray_FuncBound_new(void) { PlewArray_FuncBound a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_DeriveReq_push(PlewArray_DeriveReq* a, DeriveReq v) { PlewArray_DeriveReq_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; DeriveReq* nd = (DeriveReq*)plew_rawbuf_alloc(sizeof(DeriveReq), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = v; a->len++; }
+__attribute__((unused)) static PlewArray_FuncBound PlewArray_FuncBound_new(void) { PlewArray_FuncBound a; a.data = (FuncBound*)plew_rawbuf_alloc(sizeof(FuncBound), 0); a.len = 0; return a; }
 __attribute__((unused)) static FuncBound PlewArray_FuncBound_get(PlewArray_FuncBound a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_FuncBound PlewArray_FuncBound_copy(PlewArray_FuncBound a) { PlewArray_FuncBound r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (FuncBound*)plew_arc_alloc(sizeof(FuncBound) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_FuncBound_release(PlewArray_FuncBound a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; free(a.rc); }
-__attribute__((unused)) static PlewArray_FuncBound PlewArray_FuncBound_share(PlewArray_FuncBound a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_FuncBound_unique(PlewArray_FuncBound* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_FuncBound nc = PlewArray_FuncBound_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_FuncBound PlewArray_FuncBound_copy(PlewArray_FuncBound a) { PlewArray_FuncBound r; r.len = a.len; r.data = (FuncBound*)plew_rawbuf_alloc(sizeof(FuncBound), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; return r; }
+__attribute__((unused)) static void PlewArray_FuncBound_release(PlewArray_FuncBound a) { if (!a.data) return; plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_FuncBound PlewArray_FuncBound_share(PlewArray_FuncBound a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_FuncBound_unique(PlewArray_FuncBound* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_FuncBound nc = PlewArray_FuncBound_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_FuncBound_set(PlewArray_FuncBound* a, long long i, FuncBound v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_FuncBound_unique(a); a->data[i] = v; }
-__attribute__((unused)) static void PlewArray_FuncBound_push(PlewArray_FuncBound* a, FuncBound v) { PlewArray_FuncBound_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; FuncBound* nd = (FuncBound*)plew_arc_alloc(sizeof(FuncBound) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
-__attribute__((unused)) static PlewArray_TypeRef PlewArray_TypeRef_new(void) { PlewArray_TypeRef a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_FuncBound_push(PlewArray_FuncBound* a, FuncBound v) { PlewArray_FuncBound_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; FuncBound* nd = (FuncBound*)plew_rawbuf_alloc(sizeof(FuncBound), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = v; a->len++; }
+__attribute__((unused)) static PlewArray_TypeRef PlewArray_TypeRef_new(void) { PlewArray_TypeRef a; a.data = (TypeRef*)plew_rawbuf_alloc(sizeof(TypeRef), 0); a.len = 0; return a; }
 __attribute__((unused)) static TypeRef PlewArray_TypeRef_get(PlewArray_TypeRef a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_TypeRef PlewArray_TypeRef_copy(PlewArray_TypeRef a) { PlewArray_TypeRef r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (TypeRef*)plew_arc_alloc(sizeof(TypeRef) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = TypeRef_copy(a.data[i]); } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_TypeRef_release(PlewArray_TypeRef a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; for (long long i = 0; i < a.len; i++) TypeRef_release(a.data[i]); free(a.rc); }
-__attribute__((unused)) static PlewArray_TypeRef PlewArray_TypeRef_share(PlewArray_TypeRef a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_TypeRef_unique(PlewArray_TypeRef* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_TypeRef nc = PlewArray_TypeRef_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_TypeRef PlewArray_TypeRef_copy(PlewArray_TypeRef a) { PlewArray_TypeRef r; r.len = a.len; r.data = (TypeRef*)plew_rawbuf_alloc(sizeof(TypeRef), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = TypeRef_copy(a.data[i]); return r; }
+__attribute__((unused)) static void PlewArray_TypeRef_release(PlewArray_TypeRef a) { if (!a.data) return; if (plew_rawbuf_is_unique((void*)a.data)) { for (long long i = 0; i < a.len; i++) TypeRef_release(a.data[i]); } plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_TypeRef PlewArray_TypeRef_share(PlewArray_TypeRef a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_TypeRef_unique(PlewArray_TypeRef* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_TypeRef nc = PlewArray_TypeRef_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_TypeRef_set(PlewArray_TypeRef* a, long long i, TypeRef v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_TypeRef_unique(a); TypeRef_release(a->data[i]); a->data[i] = TypeRef_copy(v); }
-__attribute__((unused)) static void PlewArray_TypeRef_push(PlewArray_TypeRef* a, TypeRef v) { PlewArray_TypeRef_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; TypeRef* nd = (TypeRef*)plew_arc_alloc(sizeof(TypeRef) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = TypeRef_copy(v); a->len++; }
-__attribute__((unused)) static PlewArray_FnInst PlewArray_FnInst_new(void) { PlewArray_FnInst a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_TypeRef_push(PlewArray_TypeRef* a, TypeRef v) { PlewArray_TypeRef_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; TypeRef* nd = (TypeRef*)plew_rawbuf_alloc(sizeof(TypeRef), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = TypeRef_copy(v); a->len++; }
+__attribute__((unused)) static PlewArray_FnInst PlewArray_FnInst_new(void) { PlewArray_FnInst a; a.data = (FnInst*)plew_rawbuf_alloc(sizeof(FnInst), 0); a.len = 0; return a; }
 __attribute__((unused)) static FnInst PlewArray_FnInst_get(PlewArray_FnInst a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_FnInst PlewArray_FnInst_copy(PlewArray_FnInst a) { PlewArray_FnInst r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (FnInst*)plew_arc_alloc(sizeof(FnInst) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = FnInst_copy(a.data[i]); } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_FnInst_release(PlewArray_FnInst a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; for (long long i = 0; i < a.len; i++) FnInst_release(a.data[i]); free(a.rc); }
-__attribute__((unused)) static PlewArray_FnInst PlewArray_FnInst_share(PlewArray_FnInst a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_FnInst_unique(PlewArray_FnInst* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_FnInst nc = PlewArray_FnInst_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_FnInst PlewArray_FnInst_copy(PlewArray_FnInst a) { PlewArray_FnInst r; r.len = a.len; r.data = (FnInst*)plew_rawbuf_alloc(sizeof(FnInst), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = FnInst_copy(a.data[i]); return r; }
+__attribute__((unused)) static void PlewArray_FnInst_release(PlewArray_FnInst a) { if (!a.data) return; if (plew_rawbuf_is_unique((void*)a.data)) { for (long long i = 0; i < a.len; i++) FnInst_release(a.data[i]); } plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_FnInst PlewArray_FnInst_share(PlewArray_FnInst a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_FnInst_unique(PlewArray_FnInst* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_FnInst nc = PlewArray_FnInst_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_FnInst_set(PlewArray_FnInst* a, long long i, FnInst v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_FnInst_unique(a); FnInst_release(a->data[i]); a->data[i] = FnInst_copy(v); }
-__attribute__((unused)) static void PlewArray_FnInst_push(PlewArray_FnInst* a, FnInst v) { PlewArray_FnInst_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; FnInst* nd = (FnInst*)plew_arc_alloc(sizeof(FnInst) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = FnInst_copy(v); a->len++; }
-__attribute__((unused)) static PlewArray_CaptureEntry PlewArray_CaptureEntry_new(void) { PlewArray_CaptureEntry a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_FnInst_push(PlewArray_FnInst* a, FnInst v) { PlewArray_FnInst_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; FnInst* nd = (FnInst*)plew_rawbuf_alloc(sizeof(FnInst), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = FnInst_copy(v); a->len++; }
+__attribute__((unused)) static PlewArray_CaptureEntry PlewArray_CaptureEntry_new(void) { PlewArray_CaptureEntry a; a.data = (CaptureEntry*)plew_rawbuf_alloc(sizeof(CaptureEntry), 0); a.len = 0; return a; }
 __attribute__((unused)) static CaptureEntry PlewArray_CaptureEntry_get(PlewArray_CaptureEntry a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_CaptureEntry PlewArray_CaptureEntry_copy(PlewArray_CaptureEntry a) { PlewArray_CaptureEntry r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (CaptureEntry*)plew_arc_alloc(sizeof(CaptureEntry) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_CaptureEntry_release(PlewArray_CaptureEntry a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; free(a.rc); }
-__attribute__((unused)) static PlewArray_CaptureEntry PlewArray_CaptureEntry_share(PlewArray_CaptureEntry a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_CaptureEntry_unique(PlewArray_CaptureEntry* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_CaptureEntry nc = PlewArray_CaptureEntry_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_CaptureEntry PlewArray_CaptureEntry_copy(PlewArray_CaptureEntry a) { PlewArray_CaptureEntry r; r.len = a.len; r.data = (CaptureEntry*)plew_rawbuf_alloc(sizeof(CaptureEntry), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; return r; }
+__attribute__((unused)) static void PlewArray_CaptureEntry_release(PlewArray_CaptureEntry a) { if (!a.data) return; plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_CaptureEntry PlewArray_CaptureEntry_share(PlewArray_CaptureEntry a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_CaptureEntry_unique(PlewArray_CaptureEntry* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_CaptureEntry nc = PlewArray_CaptureEntry_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_CaptureEntry_set(PlewArray_CaptureEntry* a, long long i, CaptureEntry v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_CaptureEntry_unique(a); a->data[i] = v; }
-__attribute__((unused)) static void PlewArray_CaptureEntry_push(PlewArray_CaptureEntry* a, CaptureEntry v) { PlewArray_CaptureEntry_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; CaptureEntry* nd = (CaptureEntry*)plew_arc_alloc(sizeof(CaptureEntry) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
-__attribute__((unused)) static PlewArray_Local PlewArray_Local_new(void) { PlewArray_Local a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_CaptureEntry_push(PlewArray_CaptureEntry* a, CaptureEntry v) { PlewArray_CaptureEntry_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; CaptureEntry* nd = (CaptureEntry*)plew_rawbuf_alloc(sizeof(CaptureEntry), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = v; a->len++; }
+__attribute__((unused)) static PlewArray_Local PlewArray_Local_new(void) { PlewArray_Local a; a.data = (Local*)plew_rawbuf_alloc(sizeof(Local), 0); a.len = 0; return a; }
 __attribute__((unused)) static Local PlewArray_Local_get(PlewArray_Local a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_Local PlewArray_Local_copy(PlewArray_Local a) { PlewArray_Local r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (Local*)plew_arc_alloc(sizeof(Local) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_Local_release(PlewArray_Local a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; free(a.rc); }
-__attribute__((unused)) static PlewArray_Local PlewArray_Local_share(PlewArray_Local a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_Local_unique(PlewArray_Local* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_Local nc = PlewArray_Local_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_Local PlewArray_Local_copy(PlewArray_Local a) { PlewArray_Local r; r.len = a.len; r.data = (Local*)plew_rawbuf_alloc(sizeof(Local), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; return r; }
+__attribute__((unused)) static void PlewArray_Local_release(PlewArray_Local a) { if (!a.data) return; plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_Local PlewArray_Local_share(PlewArray_Local a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_Local_unique(PlewArray_Local* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_Local nc = PlewArray_Local_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_Local_set(PlewArray_Local* a, long long i, Local v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_Local_unique(a); a->data[i] = v; }
-__attribute__((unused)) static void PlewArray_Local_push(PlewArray_Local* a, Local v) { PlewArray_Local_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; Local* nd = (Local*)plew_arc_alloc(sizeof(Local) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }
-__attribute__((unused)) static PlewArray_PatInfo PlewArray_PatInfo_new(void) { PlewArray_PatInfo a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }
+__attribute__((unused)) static void PlewArray_Local_push(PlewArray_Local* a, Local v) { PlewArray_Local_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; Local* nd = (Local*)plew_rawbuf_alloc(sizeof(Local), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = v; a->len++; }
+__attribute__((unused)) static PlewArray_PatInfo PlewArray_PatInfo_new(void) { PlewArray_PatInfo a; a.data = (PatInfo*)plew_rawbuf_alloc(sizeof(PatInfo), 0); a.len = 0; return a; }
 __attribute__((unused)) static PatInfo PlewArray_PatInfo_get(PlewArray_PatInfo a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } return a.data[i]; }
-__attribute__((unused)) static PlewArray_PatInfo PlewArray_PatInfo_copy(PlewArray_PatInfo a) { PlewArray_PatInfo r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (PatInfo*)plew_arc_alloc(sizeof(PatInfo) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = PatInfo_copy(a.data[i]); } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }
-__attribute__((unused)) static void PlewArray_PatInfo_release(PlewArray_PatInfo a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; for (long long i = 0; i < a.len; i++) PatInfo_release(a.data[i]); free(a.rc); }
-__attribute__((unused)) static PlewArray_PatInfo PlewArray_PatInfo_share(PlewArray_PatInfo a) { plew_arc_retain(a.rc); return a; }
-__attribute__((unused)) static void PlewArray_PatInfo_unique(PlewArray_PatInfo* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_PatInfo nc = PlewArray_PatInfo_copy(*a); plew_arc_release(a->rc); *a = nc; } }
+__attribute__((unused)) static PlewArray_PatInfo PlewArray_PatInfo_copy(PlewArray_PatInfo a) { PlewArray_PatInfo r; r.len = a.len; r.data = (PatInfo*)plew_rawbuf_alloc(sizeof(PatInfo), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = PatInfo_copy(a.data[i]); return r; }
+__attribute__((unused)) static void PlewArray_PatInfo_release(PlewArray_PatInfo a) { if (!a.data) return; if (plew_rawbuf_is_unique((void*)a.data)) { for (long long i = 0; i < a.len; i++) PatInfo_release(a.data[i]); } plew_rawbuf_release((void*)a.data); }
+__attribute__((unused)) static PlewArray_PatInfo PlewArray_PatInfo_share(PlewArray_PatInfo a) { plew_rawbuf_share((void*)a.data); return a; }
+__attribute__((unused)) static void PlewArray_PatInfo_unique(PlewArray_PatInfo* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_PatInfo nc = PlewArray_PatInfo_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }
 __attribute__((unused)) static void PlewArray_PatInfo_set(PlewArray_PatInfo* a, long long i, PatInfo v) { if (i < 0 || i >= a->len) { fprintf(stderr, "panic: index out of range\n"); exit(1); } PlewArray_PatInfo_unique(a); PatInfo_release(a->data[i]); a->data[i] = PatInfo_copy(v); }
-__attribute__((unused)) static void PlewArray_PatInfo_push(PlewArray_PatInfo* a, PatInfo v) { PlewArray_PatInfo_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; PatInfo* nd = (PatInfo*)plew_arc_alloc(sizeof(PatInfo) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = PatInfo_copy(v); a->len++; }
+__attribute__((unused)) static void PlewArray_PatInfo_push(PlewArray_PatInfo* a, PatInfo v) { PlewArray_PatInfo_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; PatInfo* nd = (PatInfo*)plew_rawbuf_alloc(sizeof(PatInfo), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = PatInfo_copy(v); a->len++; }
 Lexer Lexer_copy(Lexer s) { Lexer r = s; r.bytes = PlewArray_U8_copy(s.bytes); r.toks = PlewArray_Tok_copy(s.toks); return r; }
-Lexer Lexer_share(Lexer s) { plew_arc_retain(s.bytes.rc); plew_arc_retain(s.toks.rc); return s; }
+Lexer Lexer_share(Lexer s) { PlewArray_U8_share(s.bytes); PlewArray_Tok_share(s.toks); return s; }
 void Lexer_release(Lexer s) { PlewArray_U8_release(s.bytes); PlewArray_Tok_release(s.toks); }
 TypeRef TypeRef_copy(TypeRef s) { TypeRef r = s; r.args = PlewArray_U64_copy(s.args); return r; }
-TypeRef TypeRef_share(TypeRef s) { plew_arc_retain(s.args.rc); return s; }
+TypeRef TypeRef_share(TypeRef s) { PlewArray_U64_share(s.args); return s; }
 void TypeRef_release(TypeRef s) { PlewArray_U64_release(s.args); }
 MatchArm MatchArm_copy(MatchArm s) { MatchArm r = s; r.binds = PlewArray_Bind_copy(s.binds); return r; }
-MatchArm MatchArm_share(MatchArm s) { plew_arc_retain(s.binds.rc); return s; }
+MatchArm MatchArm_share(MatchArm s) { PlewArray_Bind_share(s.binds); return s; }
 void MatchArm_release(MatchArm s) { PlewArray_Bind_release(s.binds); }
 PatInfo PatInfo_copy(PatInfo s) { PatInfo r = s; r.binds = PlewArray_Bind_copy(s.binds); return r; }
-PatInfo PatInfo_share(PatInfo s) { plew_arc_retain(s.binds.rc); return s; }
+PatInfo PatInfo_share(PatInfo s) { PlewArray_Bind_share(s.binds); return s; }
 void PatInfo_release(PatInfo s) { PlewArray_Bind_release(s.binds); }
 Block Block_copy(Block s) { Block r = s; r.stmts = PlewArray_U64_copy(s.stmts); return r; }
-Block Block_share(Block s) { plew_arc_retain(s.stmts.rc); return s; }
+Block Block_share(Block s) { PlewArray_U64_share(s.stmts); return s; }
 void Block_release(Block s) { PlewArray_U64_release(s.stmts); }
 StructDef StructDef_copy(StructDef s) { StructDef r = s; r.typeParams = PlewArray_Bind_copy(s.typeParams); r.fields = PlewArray_FieldDef_copy(s.fields); return r; }
-StructDef StructDef_share(StructDef s) { plew_arc_retain(s.typeParams.rc); plew_arc_retain(s.fields.rc); return s; }
+StructDef StructDef_share(StructDef s) { PlewArray_Bind_share(s.typeParams); PlewArray_FieldDef_share(s.fields); return s; }
 void StructDef_release(StructDef s) { PlewArray_Bind_release(s.typeParams); PlewArray_FieldDef_release(s.fields); }
 Variant Variant_copy(Variant s) { Variant r = s; r.fields = PlewArray_FieldDef_copy(s.fields); return r; }
-Variant Variant_share(Variant s) { plew_arc_retain(s.fields.rc); return s; }
+Variant Variant_share(Variant s) { PlewArray_FieldDef_share(s.fields); return s; }
 void Variant_release(Variant s) { PlewArray_FieldDef_release(s.fields); }
 TraitDef TraitDef_copy(TraitDef s) { TraitDef r = s; r.supertraits = PlewArray_Bind_copy(s.supertraits); r.reqs = PlewArray_Func_copy(s.reqs); return r; }
-TraitDef TraitDef_share(TraitDef s) { plew_arc_retain(s.supertraits.rc); plew_arc_retain(s.reqs.rc); return s; }
+TraitDef TraitDef_share(TraitDef s) { PlewArray_Bind_share(s.supertraits); PlewArray_Func_share(s.reqs); return s; }
 void TraitDef_release(TraitDef s) { PlewArray_Bind_release(s.supertraits); PlewArray_Func_release(s.reqs); }
 Conform Conform_copy(Conform s) { Conform r = s; r.witnessed = PlewArray_Func_copy(s.witnessed); return r; }
-Conform Conform_share(Conform s) { plew_arc_retain(s.witnessed.rc); return s; }
+Conform Conform_share(Conform s) { PlewArray_Func_share(s.witnessed); return s; }
 void Conform_release(Conform s) { PlewArray_Func_release(s.witnessed); }
 FnInst FnInst_copy(FnInst s) { FnInst r = s; r.args = PlewArray_U64_copy(s.args); return r; }
-FnInst FnInst_share(FnInst s) { plew_arc_retain(s.args.rc); return s; }
+FnInst FnInst_share(FnInst s) { PlewArray_U64_share(s.args); return s; }
 void FnInst_release(FnInst s) { PlewArray_U64_release(s.args); }
 EnumDef EnumDef_copy(EnumDef s) { EnumDef r = s; r.typeParams = PlewArray_Bind_copy(s.typeParams); r.variants = PlewArray_Variant_copy(s.variants); return r; }
-EnumDef EnumDef_share(EnumDef s) { plew_arc_retain(s.typeParams.rc); plew_arc_retain(s.variants.rc); return s; }
+EnumDef EnumDef_share(EnumDef s) { PlewArray_Bind_share(s.typeParams); PlewArray_Variant_share(s.variants); return s; }
 void EnumDef_release(EnumDef s) { PlewArray_Bind_release(s.typeParams); PlewArray_Variant_release(s.variants); }
 Func Func_copy(Func s) { Func r = s; r.typeParams = PlewArray_Bind_copy(s.typeParams); r.params = PlewArray_Param_copy(s.params); return r; }
-Func Func_share(Func s) { plew_arc_retain(s.typeParams.rc); plew_arc_retain(s.params.rc); return s; }
+Func Func_share(Func s) { PlewArray_Bind_share(s.typeParams); PlewArray_Param_share(s.params); return s; }
 void Func_release(Func s) { PlewArray_Bind_release(s.typeParams); PlewArray_Param_release(s.params); }
 Comp Comp_copy(Comp s) { Comp r = s; r.bytes = PlewArray_U8_copy(s.bytes); r.toks = PlewArray_Tok_copy(s.toks); r.exprs = PlewArray_Expr_copy(s.exprs); r.stmts = PlewArray_Stmt_copy(s.stmts); r.blocks = PlewArray_Block_copy(s.blocks); r.funcs = PlewArray_Func_copy(s.funcs); r.structs = PlewArray_StructDef_copy(s.structs); r.enums = PlewArray_EnumDef_copy(s.enums); r.traits = PlewArray_TraitDef_copy(s.traits); r.conforms = PlewArray_Conform_copy(s.conforms); r.methodAliases = PlewArray_MethodAlias_copy(s.methodAliases); r.derives = PlewArray_DeriveReq_copy(s.derives); r.pendingDerives = PlewArray_Bind_copy(s.pendingDerives); r.funcBounds = PlewArray_FuncBound_copy(s.funcBounds); r.curWitnessed = PlewArray_Func_copy(s.curWitnessed); r.curWhereTraits = PlewArray_Bind_copy(s.curWhereTraits); r.types = PlewArray_TypeRef_copy(s.types); r.genInsts = PlewArray_U64_copy(s.genInsts); r.fnInsts = PlewArray_FnInst_copy(s.fnInsts); r.fnTypes = PlewArray_U64_copy(s.fnTypes); r.fnThunks = PlewArray_U64_copy(s.fnThunks); r.captures = PlewArray_CaptureEntry_copy(s.captures); r.arrayElems = PlewArray_Bind_copy(s.arrayElems); r.locals = PlewArray_Local_copy(s.locals); r.curTypeParams = PlewArray_Bind_copy(s.curTypeParams); r.curTypeArgs = PlewArray_U64_copy(s.curTypeArgs); r.deinits = PlewArray_Bind_copy(s.deinits); return r; }
-Comp Comp_share(Comp s) { plew_arc_retain(s.bytes.rc); plew_arc_retain(s.toks.rc); plew_arc_retain(s.exprs.rc); plew_arc_retain(s.stmts.rc); plew_arc_retain(s.blocks.rc); plew_arc_retain(s.funcs.rc); plew_arc_retain(s.structs.rc); plew_arc_retain(s.enums.rc); plew_arc_retain(s.traits.rc); plew_arc_retain(s.conforms.rc); plew_arc_retain(s.methodAliases.rc); plew_arc_retain(s.derives.rc); plew_arc_retain(s.pendingDerives.rc); plew_arc_retain(s.funcBounds.rc); plew_arc_retain(s.curWitnessed.rc); plew_arc_retain(s.curWhereTraits.rc); plew_arc_retain(s.types.rc); plew_arc_retain(s.genInsts.rc); plew_arc_retain(s.fnInsts.rc); plew_arc_retain(s.fnTypes.rc); plew_arc_retain(s.fnThunks.rc); plew_arc_retain(s.captures.rc); plew_arc_retain(s.arrayElems.rc); plew_arc_retain(s.locals.rc); plew_arc_retain(s.curTypeParams.rc); plew_arc_retain(s.curTypeArgs.rc); plew_arc_retain(s.deinits.rc); return s; }
+Comp Comp_share(Comp s) { PlewArray_U8_share(s.bytes); PlewArray_Tok_share(s.toks); PlewArray_Expr_share(s.exprs); PlewArray_Stmt_share(s.stmts); PlewArray_Block_share(s.blocks); PlewArray_Func_share(s.funcs); PlewArray_StructDef_share(s.structs); PlewArray_EnumDef_share(s.enums); PlewArray_TraitDef_share(s.traits); PlewArray_Conform_share(s.conforms); PlewArray_MethodAlias_share(s.methodAliases); PlewArray_DeriveReq_share(s.derives); PlewArray_Bind_share(s.pendingDerives); PlewArray_FuncBound_share(s.funcBounds); PlewArray_Func_share(s.curWitnessed); PlewArray_Bind_share(s.curWhereTraits); PlewArray_TypeRef_share(s.types); PlewArray_U64_share(s.genInsts); PlewArray_FnInst_share(s.fnInsts); PlewArray_U64_share(s.fnTypes); PlewArray_U64_share(s.fnThunks); PlewArray_CaptureEntry_share(s.captures); PlewArray_Bind_share(s.arrayElems); PlewArray_Local_share(s.locals); PlewArray_Bind_share(s.curTypeParams); PlewArray_U64_share(s.curTypeArgs); PlewArray_Bind_share(s.deinits); return s; }
 void Comp_release(Comp s) { PlewArray_U8_release(s.bytes); PlewArray_Tok_release(s.toks); PlewArray_Expr_release(s.exprs); PlewArray_Stmt_release(s.stmts); PlewArray_Block_release(s.blocks); PlewArray_Func_release(s.funcs); PlewArray_StructDef_release(s.structs); PlewArray_EnumDef_release(s.enums); PlewArray_TraitDef_release(s.traits); PlewArray_Conform_release(s.conforms); PlewArray_MethodAlias_release(s.methodAliases); PlewArray_DeriveReq_release(s.derives); PlewArray_Bind_release(s.pendingDerives); PlewArray_FuncBound_release(s.funcBounds); PlewArray_Func_release(s.curWitnessed); PlewArray_Bind_release(s.curWhereTraits); PlewArray_TypeRef_release(s.types); PlewArray_U64_release(s.genInsts); PlewArray_FnInst_release(s.fnInsts); PlewArray_U64_release(s.fnTypes); PlewArray_U64_release(s.fnThunks); PlewArray_CaptureEntry_release(s.captures); PlewArray_Bind_release(s.arrayElems); PlewArray_Local_release(s.locals); PlewArray_Bind_release(s.curTypeParams); PlewArray_U64_release(s.curTypeArgs); PlewArray_Bind_release(s.deinits); }
 unsigned char Lexer_at_off_U64(Lexer self, uint64_t off);
 void Lexer_emit_k_Kind_start_U64_len_U64(Lexer* self, Kind k, uint64_t start, uint64_t len);
@@ -1243,7 +1243,7 @@ int main(int argc, char** argv) {
     PlewArray_U8 combined = PlewArray_U8_new();
     if (plew_argCount() > 1) {
     PlewString rootPath = plew_argAt(1);
-    PlewArray_U8 entryBytes = PlewArray_U8_share(({ PlewString __s = rootPath; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; }));
+    PlewArray_U8 entryBytes = PlewArray_U8_share(({ PlewString __s = rootPath; PlewArray_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.len = __s.len; __b; }));
     if (plew_fileExists(PlewArray_U8_share(entryBytes))) {
     }
     else {
@@ -1255,7 +1255,7 @@ int main(int argc, char** argv) {
     PlewArray_U8 pathBuf = PlewArray_U8_new();
     PlewArray_Bind loaded = PlewArray_Bind_new();
     PlewArray_U8 srcRoot = findSrcRoot_entry_AU8(PlewArray_U8_share(entryBytes));
-    PlewArray_U8 stdRoot = computeStdRoot_arg0_AU8(PlewArray_U8_share(({ PlewString __s = plew_argAt(0); (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; })));
+    PlewArray_U8 stdRoot = computeStdRoot_arg0_AU8(PlewArray_U8_share(({ PlewString __s = plew_argAt(0); PlewArray_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.len = __s.len; __b; })));
     uint64_t es = (long long)((pathBuf).len);
     appendBytes_into_AU8_from_AU8(&(pathBuf), PlewArray_U8_share(entryBytes));
     Array_Bind_append_value_T(&(loaded), (Bind){.nameStart = es, .nameLen = (long long)((entryBytes).len), .fieldStart = es, .fieldLen = (long long)((entryBytes).len)});
@@ -1265,7 +1265,7 @@ int main(int argc, char** argv) {
     qi = ({ uint64_t __ov; if (__builtin_add_overflow((qi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     PlewArray_U8 path = extractSpan_buf_AU8_start_U64_len_U64(PlewArray_U8_share(pathBuf), ent.nameStart, ent.nameLen);
     PlewString src = plew_readFileBytes(PlewArray_U8_share(path));
-    PlewArray_U8 sb = PlewArray_U8_share(({ PlewString __s = src; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; }));
+    PlewArray_U8 sb = PlewArray_U8_share(({ PlewString __s = src; PlewArray_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.len = __s.len; __b; }));
     if ((long long)((combined).len) > 0) {
     Array_U8_append_value_T(&(combined), 10);
     }
@@ -1305,19 +1305,19 @@ int main(int argc, char** argv) {
     }
     else {
     PlewString s = plew_readStdin();
-    appendBytes_into_AU8_from_AU8(&(combined), PlewArray_U8_share(({ PlewString __s = s; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; })));
+    appendBytes_into_AU8_from_AU8(&(combined), PlewArray_U8_share(({ PlewString __s = s; PlewArray_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.len = __s.len; __b; })));
     }
     PlewArray_U8 prelPath = PlewArray_U8_new();
-    appendBytes_into_AU8_from_AU8(&(prelPath), computeStdRoot_arg0_AU8(PlewArray_U8_share(({ PlewString __s = plew_argAt(0); (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; }))));
-    appendBytes_into_AU8_from_AU8(&(prelPath), PlewArray_U8_share(({ PlewString __s = (PlewString){"Prelude.pw", 10}; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; })));
+    appendBytes_into_AU8_from_AU8(&(prelPath), computeStdRoot_arg0_AU8(PlewArray_U8_share(({ PlewString __s = plew_argAt(0); PlewArray_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.len = __s.len; __b; }))));
+    appendBytes_into_AU8_from_AU8(&(prelPath), PlewArray_U8_share(({ PlewString __s = (PlewString){"Prelude.pw", 10}; PlewArray_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.len = __s.len; __b; })));
     if (plew_fileExists(PlewArray_U8_share(prelPath))) {
     PlewString prelSrc = plew_readFileBytes(PlewArray_U8_share(prelPath));
     if ((long long)((combined).len) > 0) {
     Array_U8_append_value_T(&(combined), 10);
     }
-    appendBytes_into_AU8_from_AU8(&(combined), PlewArray_U8_share(({ PlewString __s = prelSrc; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; })));
+    appendBytes_into_AU8_from_AU8(&(combined), PlewArray_U8_share(({ PlewString __s = prelSrc; PlewArray_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.len = __s.len; __b; })));
     }
-    appendBytes_into_AU8_from_AU8(&(combined), PlewArray_U8_share(({ PlewString __s = (PlewString){"\n// kwSpan builtins: String U8 U64 Bool Array\n", 46}; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; })));
+    appendBytes_into_AU8_from_AU8(&(combined), PlewArray_U8_share(({ PlewString __s = (PlewString){"\n// kwSpan builtins: String U8 U64 Bool Array\n", 46}; PlewArray_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.len = __s.len; __b; })));
     Lexer lx = (Lexer){.bytes = PlewArray_U8_share(combined), .pos = 0, .toks = PlewArray_Tok_new(), .depth = 0};
     lex_lx_Lexer(&(lx));
     Comp c = (Comp){.bytes = PlewArray_U8_share(combined), .toks = PlewArray_Tok_share(lx.toks), .pos = 0, .exprs = PlewArray_Expr_new(), .stmts = PlewArray_Stmt_new(), .blocks = PlewArray_Block_new(), .funcs = PlewArray_Func_new(), .structs = PlewArray_StructDef_new(), .enums = PlewArray_EnumDef_new(), .traits = PlewArray_TraitDef_new(), .conforms = PlewArray_Conform_new(), .methodAliases = PlewArray_MethodAlias_new(), .derives = PlewArray_DeriveReq_new(), .pendingDerives = PlewArray_Bind_new(), .funcBounds = PlewArray_FuncBound_new(), .curCheckFn = 0, .curWitnessed = PlewArray_Func_new(), .curWhereTraits = PlewArray_Bind_new(), .types = PlewArray_TypeRef_new(), .genInsts = PlewArray_U64_new(), .fnInsts = PlewArray_FnInst_new(), .fnTypes = PlewArray_U64_new(), .fnThunks = PlewArray_U64_new(), .captures = PlewArray_CaptureEntry_new(), .curClosureId = 0, .curInClosure = 0, .curCaptureMark = 0, .arrayElems = PlewArray_Bind_new(), .locals = PlewArray_Local_new(), .tmp = 0, .curIsMain = 0, .curRetVoid = 0, .curRetStart = 0, .curRetLen = 0, .curRetIsArray = 0, .curRetTy = 0, .curHasRecv = 0, .curRecvStart = 0, .curRecvLen = 0, .curSelfInout = 0, .curSelfMove = 0, .curTypeParams = PlewArray_Bind_new(), .curTypeArgs = PlewArray_U64_new(), .curRecvInstRef = 0, .curGiveTmp = 0, .curLoopMark = 0, .curBranchBase = 0, .deinits = PlewArray_Bind_new(), .curAsync = 0, .asyncState = 0, .curAsyncFn = 0, .asyncVarSeq = 0};
@@ -1669,7 +1669,7 @@ long long isAlnum_b_U8(unsigned char b) {
     return __ret16; }
 }
 long long rangeEquals_bytes_AU8_start_U64_len_U64_kw_String(PlewArray_U8 bytes, uint64_t start, uint64_t len, PlewString kw) {
-    PlewArray_U8 kb = PlewArray_U8_share(({ PlewString __s = kw; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; }));
+    PlewArray_U8 kb = PlewArray_U8_share(({ PlewString __s = kw; PlewArray_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.len = __s.len; __b; }));
     if (len != (long long)((kb).len)) {
     { long long __ret17 = 0;
     PlewArray_U8_release(kb);
@@ -4534,7 +4534,7 @@ void drainDerives_c_Comp_typeStart_U64_typeLen_U64_isEnum_Bool(Comp* c, uint64_t
 }
 Bind internBytes_c_Comp_s_String(Comp* c, PlewString s) {
     uint64_t start = (long long)(((*c).bytes).len);
-    PlewArray_U8 sb = PlewArray_U8_share(({ PlewString __s = s; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; }));
+    PlewArray_U8 sb = PlewArray_U8_share(({ PlewString __s = s; PlewArray_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.len = __s.len; __b; }));
     uint64_t i = 0;
     while (i < (long long)((sb).len)) {
     Array_U8_append_value_T(&((*c).bytes), PlewArray_U8_get(sb, (long long)(i)));
@@ -9773,7 +9773,7 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     if (bt.kind == 1) {
     plew_write((PlewString){"({ PlewString __s = ", 20});
     genExpr_c_Comp_id_U64(&((*c)), base);
-    plew_write((PlewString){"; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; })", 67});
+    plew_write((PlewString){"; PlewArray_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.len = __s.len; __b; })", 216});
     return;
     }
     if (bt.kind == 3) {
@@ -12139,9 +12139,11 @@ void emitStructShareDef_c_Comp_si_U64(Comp* c, uint64_t si) {
     while (i < (long long)((fields).len)) {
     FieldDef f = PlewArray_FieldDef_get(fields, (long long)(i));
     if (f.tyIsArray) {
-    plew_write((PlewString){" plew_arc_retain(s.", 19});
+    plew_write((PlewString){" ", 1});
+    wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), f.tyStart, f.tyLen);
+    plew_write((PlewString){"_share(s.", 9});
     writeSpan_c_Comp_start_U64_len_U64(&((*c)), f.nameStart, f.nameLen);
-    plew_write((PlewString){".rc);", 5});
+    plew_write((PlewString){");", 2});
     }
     else {
     if (rangeEquals_bytes_AU8_start_U64_len_U64_kw_String(PlewArray_U8_share((*c).bytes), f.tyStart, f.tyLen, (PlewString){"RawBuffer", 9})) {
@@ -15067,7 +15069,7 @@ void wPA_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemStart, uint64_t 
 void genArrayTypedef_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemStart, uint64_t elemLen) {
     plew_write((PlewString){"typedef struct { ", 17});
     genCElem_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen);
-    plew_write((PlewString){"* data; long long len; long long cap; long long* rc; } ", 55});
+    plew_write((PlewString){"* data; long long len; } ", 25});
     wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen);
     plew_write((PlewString){";\n", 2});
 }
@@ -15078,7 +15080,11 @@ void genArrayRuntimeFns_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemS
     wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen);
     plew_write((PlewString){"_new(void) { ", 13});
     wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen);
-    plew_write((PlewString){" a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }\n", 60});
+    plew_write((PlewString){" a; a.data = (", 14});
+    genCElem_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen);
+    plew_write((PlewString){"*)plew_rawbuf_alloc(sizeof(", 27});
+    genCElem_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen);
+    plew_write((PlewString){"), 0); a.len = 0; return a; }\n", 30});
     plew_write((PlewString){"__attribute__((unused)) static ", 31});
     genCElem_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen);
     plew_write((PlewString){" ", 1});
@@ -15094,11 +15100,11 @@ void genArrayRuntimeFns_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemS
     wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen);
     plew_write((PlewString){" a) { ", 6});
     wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen);
-    plew_write((PlewString){" r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (", 61});
+    plew_write((PlewString){" r; r.len = a.len; r.data = (", 29});
     genCElem_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen);
-    plew_write((PlewString){"*)plew_arc_alloc(sizeof(", 24});
+    plew_write((PlewString){"*)plew_rawbuf_alloc(sizeof(", 27});
     genCElem_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen);
-    plew_write((PlewString){") * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) ", 83});
+    plew_write((PlewString){"), a.len); for (long long i = 0; i < a.len; i++) ", 49});
     if (structNeedsCopy_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen)) {
     plew_write((PlewString){"r.data[i] = ", 12});
     writeSpan_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen);
@@ -15112,39 +15118,39 @@ void genArrayRuntimeFns_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemS
     plew_write((PlewString){"r.data[i] = a.data[i];", 22});
     }
     }
-    plew_write((PlewString){" } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }\n", 57});
+    plew_write((PlewString){" return r; }\n", 13});
     plew_write((PlewString){"__attribute__((unused)) static void ", 36});
     wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen);
     plew_write((PlewString){"_release(", 9});
     wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen);
-    plew_write((PlewString){" a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; ", 55});
+    plew_write((PlewString){" a) { if (!a.data) return; ", 27});
     if (structNeedsCopy_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen)) {
-    plew_write((PlewString){"for (long long i = 0; i < a.len; i++) ", 38});
+    plew_write((PlewString){"if (plew_rawbuf_is_unique((void*)a.data)) { for (long long i = 0; i < a.len; i++) ", 82});
     writeSpan_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen);
-    plew_write((PlewString){"_release(a.data[i]); ", 21});
+    plew_write((PlewString){"_release(a.data[i]); } ", 23});
     }
     else {
     if (elemIsRef_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen)) {
-    plew_write((PlewString){"for (long long i = 0; i < a.len; i++) if (a.data[i]) { long long* __erc = ((long long*)a.data[i]) - 1; if ((--(*__erc)) == 0) free(__erc); } ", 141});
+    plew_write((PlewString){"if (plew_rawbuf_is_unique((void*)a.data)) { for (long long i = 0; i < a.len; i++) if (a.data[i]) { long long* __erc = ((long long*)a.data[i]) - 1; if ((--(*__erc)) == 0) free(__erc); } } ", 187});
     }
     }
-    plew_write((PlewString){"free(a.rc); }\n", 14});
+    plew_write((PlewString){"plew_rawbuf_release((void*)a.data); }\n", 38});
     plew_write((PlewString){"__attribute__((unused)) static ", 31});
     wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen);
     plew_write((PlewString){" ", 1});
     wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen);
     plew_write((PlewString){"_share(", 7});
     wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen);
-    plew_write((PlewString){" a) { plew_arc_retain(a.rc); return a; }\n", 41});
+    plew_write((PlewString){" a) { plew_rawbuf_share((void*)a.data); return a; }\n", 52});
     plew_write((PlewString){"__attribute__((unused)) static void ", 36});
     wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen);
     plew_write((PlewString){"_unique(", 8});
     wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen);
-    plew_write((PlewString){"* a) { if (a->rc && (*(a->rc)) > 1) { ", 38});
+    plew_write((PlewString){"* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { ", 53});
     wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen);
     plew_write((PlewString){" nc = ", 6});
     wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen);
-    plew_write((PlewString){"_copy(*a); plew_arc_release(a->rc); *a = nc; } }\n", 49});
+    plew_write((PlewString){"_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }\n", 61});
     plew_write((PlewString){"__attribute__((unused)) static void ", 36});
     wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen);
     plew_write((PlewString){"_set(", 5});
@@ -15176,13 +15182,13 @@ void genArrayRuntimeFns_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemS
     genCElem_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen);
     plew_write((PlewString){" v) { ", 6});
     wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen);
-    plew_write((PlewString){"_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; ", 80});
+    plew_write((PlewString){"_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; ", 176});
     genCElem_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen);
     plew_write((PlewString){"* nd = (", 8});
     genCElem_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen);
-    plew_write((PlewString){"*)plew_arc_alloc(sizeof(", 24});
+    plew_write((PlewString){"*)plew_rawbuf_alloc(sizeof(", 27});
     genCElem_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen);
-    plew_write((PlewString){") * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = ", 170});
+    plew_write((PlewString){"), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = ", 138});
     if (structNeedsCopy_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen)) {
     writeSpan_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen);
     plew_write((PlewString){"_copy(v)", 8});
@@ -15223,17 +15229,17 @@ long long skipArrayElem_c_Comp_ae_Bind(Comp* c, Bind ae) {
     return __ret925; }
 }
 void genU8ArrayTypedef(void) {
-    plew_write((PlewString){"typedef struct { unsigned char* data; long long len; long long cap; long long* rc; } PlewArray_U8;\n", 99});
+    plew_write((PlewString){"typedef struct { unsigned char* data; long long len; } PlewArray_U8;\n", 69});
 }
 void genU8ArrayRuntime(void) {
-    plew_write((PlewString){"__attribute__((unused)) static PlewArray_U8 PlewArray_U8_new(void) { PlewArray_U8 a; a.data = 0; a.len = 0; a.cap = 0; a.rc = 0; return a; }\n", 141});
+    plew_write((PlewString){"__attribute__((unused)) static PlewArray_U8 PlewArray_U8_new(void) { PlewArray_U8 a; a.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), 0); a.len = 0; return a; }\n", 178});
     plew_write((PlewString){"__attribute__((unused)) static unsigned char PlewArray_U8_get(PlewArray_U8 a, long long i) { if (i < 0 || i >= a.len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } return a.data[i]; }\n", 199});
-    plew_write((PlewString){"__attribute__((unused)) static PlewArray_U8 PlewArray_U8_copy(PlewArray_U8 a) { PlewArray_U8 r; r.len = a.len; r.cap = a.len; if (a.len > 0) { r.data = (unsigned char*)plew_arc_alloc(sizeof(unsigned char) * a.len); r.rc = ((long long*)r.data) - 1; for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }\n", 365});
-    plew_write((PlewString){"__attribute__((unused)) static void PlewArray_U8_release(PlewArray_U8 a) { if (!a.rc) return; if ((--(*a.rc)) != 0) return; free(a.rc); }\n", 138});
-    plew_write((PlewString){"__attribute__((unused)) static PlewArray_U8 PlewArray_U8_share(PlewArray_U8 a) { plew_arc_retain(a.rc); return a; }\n", 116});
-    plew_write((PlewString){"__attribute__((unused)) static void PlewArray_U8_unique(PlewArray_U8* a) { if (a->rc && (*(a->rc)) > 1) { PlewArray_U8 nc = PlewArray_U8_copy(*a); plew_arc_release(a->rc); *a = nc; } }\n", 185});
+    plew_write((PlewString){"__attribute__((unused)) static PlewArray_U8 PlewArray_U8_copy(PlewArray_U8 a) { PlewArray_U8 r; r.len = a.len; r.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), a.len); for (long long i = 0; i < a.len; i++) r.data[i] = a.data[i]; return r; }\n", 258});
+    plew_write((PlewString){"__attribute__((unused)) static void PlewArray_U8_release(PlewArray_U8 a) { if (!a.data) return; plew_rawbuf_release((void*)a.data); }\n", 134});
+    plew_write((PlewString){"__attribute__((unused)) static PlewArray_U8 PlewArray_U8_share(PlewArray_U8 a) { plew_rawbuf_share((void*)a.data); return a; }\n", 127});
+    plew_write((PlewString){"__attribute__((unused)) static void PlewArray_U8_unique(PlewArray_U8* a) { if (!plew_rawbuf_is_unique((void*)a->data)) { PlewArray_U8 nc = PlewArray_U8_copy(*a); plew_rawbuf_release((void*)a->data); *a = nc; } }\n", 212});
     plew_write((PlewString){"__attribute__((unused)) static void PlewArray_U8_set(PlewArray_U8* a, long long i, unsigned char v) { if (i < 0 || i >= a->len) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } PlewArray_U8_unique(a); a->data[i] = v; }\n", 231});
-    plew_write((PlewString){"__attribute__((unused)) static void PlewArray_U8_push(PlewArray_U8* a, unsigned char v) { PlewArray_U8_unique(a); if (a->len >= a->cap) { long long nc = a->cap < 4 ? 4 : a->cap * 2; unsigned char* nd = (unsigned char*)plew_arc_alloc(sizeof(unsigned char) * nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_arc_release(a->rc); a->data = nd; a->rc = ((long long*)nd) - 1; a->cap = nc; } a->data[a->len] = v; a->len++; }\n", 438});
+    plew_write((PlewString){"__attribute__((unused)) static void PlewArray_U8_push(PlewArray_U8* a, unsigned char v) { PlewArray_U8_unique(a); if (a->len >= (long long)plew_rawbuf_cap((void*)a->data)) { long long __cap = (long long)plew_rawbuf_cap((void*)a->data); long long nc = __cap < 4 ? 4 : __cap * 2; unsigned char* nd = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), nc); for (long long i = 0; i < a->len; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->len] = v; a->len++; }\n", 505});
 }
 long long hasAnyAsync_c_Comp(Comp* c) {
     uint64_t i = 0;
@@ -16041,7 +16047,7 @@ PlewArray_U8 findSrcRoot_entry_AU8(PlewArray_U8 entry) {
     Array_U8_append_value_T(&(mani), PlewArray_U8_get(entry, (long long)(i)));
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    PlewArray_U8 mn = PlewArray_U8_share(({ PlewString __s = (PlewString){"Plew.toml", 9}; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; }));
+    PlewArray_U8 mn = PlewArray_U8_share(({ PlewString __s = (PlewString){"Plew.toml", 9}; PlewArray_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.len = __s.len; __b; }));
     appendBytes_into_AU8_from_AU8(&(mani), PlewArray_U8_share(mn));
     if (plew_fileExists(PlewArray_U8_share(mani))) {
     PlewArray_U8 sr = PlewArray_U8_new();
@@ -16050,7 +16056,7 @@ PlewArray_U8 findSrcRoot_entry_AU8(PlewArray_U8 entry) {
     Array_U8_append_value_T(&(sr), PlewArray_U8_get(entry, (long long)(j)));
     j = ({ uint64_t __ov; if (__builtin_add_overflow((j), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    PlewArray_U8 sx = PlewArray_U8_share(({ PlewString __s = (PlewString){"src/", 4}; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; }));
+    PlewArray_U8 sx = PlewArray_U8_share(({ PlewString __s = (PlewString){"src/", 4}; PlewArray_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.len = __s.len; __b; }));
     appendBytes_into_AU8_from_AU8(&(sr), PlewArray_U8_share(sx));
     { PlewArray_U8 __ret957 = PlewArray_U8_share(sr);
     PlewArray_U8_release(sx);
@@ -16113,7 +16119,7 @@ void assert_cond_Bool_message_String(long long cond, PlewString message) {
     }
 }
 long long String_isEmpty(PlewString self) {
-    { long long __ret961 = ((long long)((({ PlewString __s = self; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; })).len) == 0);
+    { long long __ret961 = ((long long)((({ PlewString __s = self; PlewArray_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.len = __s.len; __b; })).len) == 0);
     return __ret961; }
 }
 unsigned char digitByteI_d_I64(int64_t d) {

@@ -269,9 +269,13 @@ fn emitStructShareDef(c: inout Comp, si: U64) {
     while i < fields.count {
         val f: FieldDef = fields[i]
         if f.tyIsArray {
-            write(s: " plew_arc_retain(s.")
+            // retain the array field's buffer (its rc lives in the RawBuffer
+            // header now, so go through the array runtime rather than `.rc`).
+            write(s: " ")
+            wPA(c: inout c, elemStart: f.tyStart, elemLen: f.tyLen)
+            write(s: "_share(s.")
             writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-            write(s: ".rc);")
+            write(s: ");")
         } else {
             if rangeEquals(bytes: c.bytes, start: f.tyStart, len: f.tyLen, kw: "RawBuffer") {
                 write(s: " plew_rawbuf_share((void*)s.")
