@@ -19,6 +19,10 @@ extern "plew-intrinsic" {
 // Methods on the builtin Array, in pure Plew over the floor above. Monomorphized
 // per element type and dispatched by name (emitArrayMethods).
 impl[T] Array[T] {
+    // Append `value` to the end (growing the storage as needed).
+    inout fn append(value~: T) {
+        arrayPush(a: inout self, v: value)
+    }
     // The element at `i` (panics when out of range — same as `xs[i]`).
     fn get(i: U64) -> T {
         return arrayGet(a: self, i: i)

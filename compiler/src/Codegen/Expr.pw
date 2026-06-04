@@ -122,10 +122,34 @@ fn genArrayUserMethod(c: inout Comp, recv: U64, elemStart: U64, elemLen: U64, na
     mut val i: U64 = 0
     while i < args.count {
         write(s: ", ")
-        genExpr(c: inout c, id: args[i].expr)
+        // a parameter typed by the element type parameter T (e.g. append's `value`)
+        // receives an element value: when the element is itself an array, the arg is
+        // an array (literal/value) needing the typed constructor (emitArrayElemValue
+        // genArrayValue's it; for a scalar element it just genExpr's).
+        if argIsElementTyped(c: inout c, mf: mf, i: i) {
+            emitArrayElemValue(c: inout c, argExpr: args[i].expr, arrStart: elemStart, arrLen: elemLen)
+        } else {
+            genExpr(c: inout c, id: args[i].expr)
+        }
         i += 1
     }
     write(s: ")")
+}
+
+// Is the i-th argument bound to a parameter typed by the receiver's element type
+// parameter T (the first impl type param)? Such an argument is an element value.
+fn argIsElementTyped(c: inout Comp, mf: Func, i: U64) -> Bool {
+    if i >= mf.params.count {
+        return false
+    }
+    if mf.typeParams.count == 0 {
+        return false
+    }
+    val p: Param = mf.params[i]
+    if p.tyIsArray {
+        return false
+    }
+    return spansEqual(c: inout c, aStart: p.tyStart, aLen: p.tyLen, bStart: mf.typeParams[0].nameStart, bLen: mf.typeParams[0].nameLen)
 }
 
 // Does a JSX construction's field list provide a value for `name`? (Used to
@@ -683,11 +707,18 @@ fn genExpr(c: inout Comp, id: U64) {
             }
             if bt.kind == 3 {
                 if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "append") {
+                    // `.append` is a pure-Plew prelude method (`impl Array { append }`):
+                    // dispatch to it. The builtin push below remains only as a fallback
+                    // for when the prelude is absent (a freshly seeded compiler).
+                    val arrName: Bind = kwSpan(c: inout c, kw: "Array", kwLen: 5)
+                    val ami: U64 = findMethod(c: inout c, recvStart: arrName.nameStart, recvLen: arrName.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    if ami != c.funcs.count {
+                        genArrayUserMethod(c: inout c, recv: recv, elemStart: bt.nameStart, elemLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                        return
+                    }
                 } else {
                     // a user method on `Array[E]` (`impl[T] Array[T] { … }`): dispatch
                     // to its monomorphized `Array_<E>_<selector>` (emitArrayMethods).
-                    // (`.append` keeps its builtin push lowering below, as a fallback
-                    // until it too becomes a pure-Plew method.)
                     genArrayUserMethod(c: inout c, recv: recv, elemStart: bt.nameStart, elemLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                     return
                 }
