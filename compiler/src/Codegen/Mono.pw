@@ -127,6 +127,46 @@ fn emitMangle(c: inout Comp, ref: U64) {
     }
 }
 
+// Append the mangled name of `ref` (the same text emitMangle would write) to the
+// end of c.bytes, so a compound array element type (`Ref[I32]`, `Array[I32]`,
+// `Box[I32]`) gets a unique source-span name (`Ref_I32`) the existing name-span
+// machinery can use. The bytes trail all real source, so they never shift a
+// diagnostic line; the lexer has already run, so appending is safe.
+fn appendMangle(c: inout Comp, ref: U64) {
+    val t: TypeRef = c.types[resolveTy(c: inout c, tyRef: ref)]
+    mut val j: U64 = 0
+    while j < t.nameLen {
+        c.bytes.append(c.bytes[t.nameStart + j])
+        j += 1
+    }
+    mut val i: U64 = 0
+    while i < t.args.count {
+        c.bytes.append(95)
+        appendMangle(c: inout c, ref: t.args[i])
+        i += 1
+    }
+}
+
+// A compound type's mangled name as a (start,len) span, with the element ref
+// stashed in fieldStart so genCElem / the array runtime can recover the C type
+// and ARC behaviour. Used for compound Array element types.
+fn appendMangleSpan(c: inout Comp, ref: U64) -> Bind {
+    val start: U64 = c.bytes.count
+    appendMangle(c: inout c, ref: ref)
+    val n: U64 = c.bytes.count
+    return <Bind nameStart=start nameLen=(n - start) fieldStart=ref fieldLen=0 />
+}
+
+// Is `ref` a compound type (a generic application / Ref / Array — has type
+// arguments), as opposed to a simple named type whose head name is enough?
+fn isCompoundType(c: inout Comp, ref: U64) -> Bool {
+    val r: U64 = resolveTy(c: inout c, tyRef: ref)
+    if r >= c.types.count {
+        return false
+    }
+    return c.types[r].args.count > 0
+}
+
 // Emit the C type for a concrete TypeRef (type parameters resolved via the env).
 fn emitConcreteCType(c: inout Comp, ref: U64) {
     val r: U64 = resolveTy(c: inout c, tyRef: ref)
@@ -294,16 +334,27 @@ fn registerArrayElemRef(c: inout Comp, elemRef: U64) {
     if elemRef >= c.types.count {
         return
     }
-    val e: TypeRef = c.types[elemRef]
+    // a compound element (`Ref[I32]`, `Array[I32]`, `Box[I32]`) gets a mangled
+    // name span + its ref, matching the parser's recordArrayElem (so the runtime
+    // and use sites agree); a simple element uses its head name.
+    mut val nStart: U64 = c.types[elemRef].nameStart
+    mut val nLen: U64 = c.types[elemRef].nameLen
+    mut val fRef: U64 = 0
+    if isCompoundType(c: inout c, ref: elemRef) {
+        val mn: Bind = appendMangleSpan(c: inout c, ref: elemRef)
+        nStart = mn.nameStart
+        nLen = mn.nameLen
+        fRef = elemRef
+    }
     mut val i: U64 = 0
     while i < c.arrayElems.count {
         val ae: Bind = c.arrayElems[i]
-        if spansEqual(c: inout c, aStart: ae.nameStart, aLen: ae.nameLen, bStart: e.nameStart, bLen: e.nameLen) {
+        if spansEqual(c: inout c, aStart: ae.nameStart, aLen: ae.nameLen, bStart: nStart, bLen: nLen) {
             return
         }
         i += 1
     }
-    c.arrayElems.append(<Bind nameStart=e.nameStart nameLen=e.nameLen fieldStart=e.nameStart fieldLen=e.nameLen />)
+    c.arrayElems.append(<Bind nameStart=nStart nameLen=nLen fieldStart=fRef fieldLen=0 />)
 }
 
 fn scanType(c: inout Comp, ref: U64) {

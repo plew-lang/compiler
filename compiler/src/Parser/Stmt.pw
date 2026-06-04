@@ -126,6 +126,18 @@ fn parseTypeTok(c: inout Comp) -> PType {
     val ref: U64 = c.pushType(t: <TypeRef nameStart=head.start nameLen=head.len args=args />)
     if bracketed {
         if rangeEquals(bytes: c.bytes, start: head.start, len: head.len, kw: "Array") {
+            // A compound element type (`Array[Ref[I32]]`, `Array[Array[I32]]`,
+            // `Array[Box[I32]]`) gets a mangled element-name span (`Ref_I32`) so
+            // the whole pipeline (Local type, exprType, `PlewArray_<elem>` at use
+            // sites) uses a unique name; genCElem / the runtime recover the C type
+            // and ARC from the ref via c.arrayElems. A simple element keeps its
+            // head name (byte-identical output, fixpoint-preserving).
+            if args.count > 0 {
+                if isCompoundType(c: inout c, ref: args[0]) {
+                    val mn: Bind = appendMangleSpan(c: inout c, ref: args[0])
+                    return <PType start=mn.nameStart len=mn.nameLen isArray=true ref=ref />
+                }
+            }
             return <PType start=elemStart len=elemLen isArray=true ref=ref />
         }
     }
@@ -184,7 +196,10 @@ fn parseTypeParams(c: inout Comp) -> Array[Bind] {
     return ps
 }
 
-// Register an Array element type name for later monomorphization (deduped).
+// Register an Array element type name for later monomorphization (deduped by the
+// element name span, which is mangled for compound elements). fieldStart carries
+// the element's structured ref so genCElem / the runtime recover its C type and
+// ARC behaviour (0 = a simple named element — use the name path).
 fn recordArrayElem(c: inout Comp, ty: PType) {
     if ty.isArray {
         mut val i: U64 = 0
@@ -195,7 +210,14 @@ fn recordArrayElem(c: inout Comp, ty: PType) {
             }
             i += 1
         }
-        c.arrayElems.append(<Bind nameStart=ty.start nameLen=ty.len fieldStart=ty.start fieldLen=ty.len />)
+        mut val elemRef: U64 = 0
+        if ty.ref < c.types.count {
+            val at: TypeRef = c.types[ty.ref]
+            if at.args.count > 0 {
+                elemRef = at.args[0]
+            }
+        }
+        c.arrayElems.append(<Bind nameStart=ty.start nameLen=ty.len fieldStart=elemRef fieldLen=0 />)
     }
 }
 

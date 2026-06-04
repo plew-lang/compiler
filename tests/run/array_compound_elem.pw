@@ -1,0 +1,31 @@
+// F11 (step 1): arrays of compound element types — `Array[Ref[T]]` (the
+// spec-recommended pattern for shared/unique elements) and `Array[Box[T]]`
+// (a generic-struct element). The element type is mangled (`PlewArray_Ref_Cell`)
+// so the runtime/use-sites agree; the C type and ARC come from the element ref.
+import @Std/Io with { print }
+
+struct Cell {
+    mut val v: I32
+}
+
+struct Box[T] {
+    val v: T
+}
+
+fn main() {
+    // Array[Ref[T]]: shared mutation through an element
+    mut val cells: Array[Ref[Cell]] = []
+    cells.append(<Ref[Cell] value=<Cell v=1 /> />)
+    cells.append(<Ref[Cell] value=<Cell v=2 /> />)
+    val r: Ref[Cell] = cells[0]
+    r->v = 88
+    print(cells[0]->v)
+    print(cells[1]->v)
+    print(cells.count)
+    // Array[Box[T]]: a generic-struct element (value semantics)
+    mut val boxes: Array[Box[I32]] = []
+    boxes.append(<Box[I32] v=10 />)
+    boxes.append(<Box[I32] v=20 />)
+    print(boxes[0].v)
+    print(boxes[1].v)
+}
