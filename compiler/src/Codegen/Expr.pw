@@ -685,6 +685,60 @@ fn genExpr(c: inout Comp, id: U64) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
                         return
                     }
+                    // `arr[i].mutate()` (inout method through an array element):
+                    // the element is a value, so `&(get(arr,i))` would be an rvalue
+                    // address. Lower to get-modify-set (CLAUDE.md / spec/03): load
+                    // the element, call the method on the temp, store it back,
+                    // yielding the method's return value.
+                    match c.exprs[recv] {
+                        Expr.Index(base: val abase, index: val aidx) => {
+                            if exprType(c: inout c, id: abase).kind == 3 {
+                                write(s: "({ ")
+                                genCElem(c: inout c, start: bt.nameStart, len: bt.nameLen)
+                                write(s: " __ge = ")
+                                genArrayGet(c: inout c, base: abase, index: aidx, elemStart: bt.nameStart, elemLen: bt.nameLen)
+                                write(s: "; ")
+                                if mf.hasRet {
+                                    genCTypeOf(c: inout c, tyRef: mf.retTy, fallStart: mf.retStart, fallLen: mf.retLen, isArray: mf.retIsArray)
+                                    write(s: " __mr = ")
+                                }
+                                if isGenericInst(c: inout c, ref: bt.ref) {
+                                    emitMangle(c: inout c, ref: bt.ref)
+                                } else {
+                                    writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
+                                }
+                                write(s: "_")
+                                writeFnSelector(c: inout c, f: mf)
+                                write(s: "(&__ge")
+                                mut val gi: U64 = 0
+                                while gi < args.count {
+                                    write(s: ", ")
+                                    val ga: Arg = args[gi]
+                                    if ga.isInout {
+                                        write(s: "&(")
+                                        genExpr(c: inout c, id: ga.expr)
+                                        write(s: ")")
+                                    } else {
+                                        genExpr(c: inout c, id: ga.expr)
+                                    }
+                                    gi += 1
+                                }
+                                write(s: "); PlewArray_")
+                                writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
+                                write(s: "_set(&(")
+                                genExpr(c: inout c, id: abase)
+                                write(s: "), (long long)(")
+                                genExpr(c: inout c, id: aidx)
+                                write(s: "), __ge); ")
+                                if mf.hasRet {
+                                    write(s: "__mr; ")
+                                }
+                                write(s: "})")
+                                return
+                            }
+                        }
+                        _ => {}
+                    }
                 }
                 // a `move fn` consumes its receiver (the method deinits self). The
                 // receiver must be a consumable owned local, not a borrow/field/

@@ -1,0 +1,35 @@
+// Calling an `inout fn` method through an array element `arr[i].mutate()`
+// (CLAUDE.md / spec/03 get-modify-set). Previously emitted `&(get(arr,i))`,
+// the address of an rvalue. Covers void- and value-returning inout methods
+// and a computed index.
+import @Std/Io with { print }
+
+struct Cnt {
+    mut val n: I32
+}
+
+impl Cnt {
+    inout fn bump(by: I32) {
+        self.n += by
+    }
+    inout fn takeAndReset() -> I32 {
+        val old: I32 = self.n
+        self.n = 0
+        return old
+    }
+}
+
+fn main() {
+    mut val xs: Array[Cnt] = []
+    xs.append(<Cnt n=10 />)
+    xs.append(<Cnt n=20 />)
+    xs[0].bump(by: 5)
+    print(xs[0].n)
+    print(xs[1].n)
+    mut val i: U64 = 1
+    xs[i].bump(by: 100)
+    print(xs[i].n)
+    val taken: I32 = xs[0].takeAndReset()
+    print(taken)
+    print(xs[0].n)
+}
