@@ -66,9 +66,10 @@ fn writeAsyncFrameName(c: inout Comp, f: Func) {
     writeFnSelector(c: inout c, f: f)
 }
 
-// Reject async-body constructs the stage 1-2 lowering does not handle yet
-// (nested control flow, give, panic). Only Let / ExprStmt / Return / Print are
-// flat-safe; the rest is additive (stage 3 adds await-in-loop/branch/match).
+// Reject async-body constructs the lowering does not handle yet. Stage 3a adds
+// `if`/`while` (and the await points inside them); `for`/`match`/`give` and
+// mid-expression await remain additive (stage 3b/3c). Recurses into if/while
+// bodies so a rejected construct nested under them is still caught.
 fn rejectAsyncUnsupported(c: inout Comp, blockId: U64) {
     val b: Block = c.blocks[blockId]
     val stmts: Array[U64] = b.stmts
@@ -76,12 +77,65 @@ fn rejectAsyncUnsupported(c: inout Comp, blockId: U64) {
     while i < stmts.count {
         match c.stmts[stmts[i]] {
             Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => {}
+            Stmt.Assign(op: _, target: _, value: _) => {}
             Stmt.ExprStmt(expr: _) => {}
             Stmt.Return(value: _, hasValue: _) => {}
             Stmt.Print(expr: _, offset: _) => {}
-            _ => {
-                compileErrorAt(line: lineOf(c: inout c, offset: 0), msg: "this statement is not yet supported inside an `async fn` (stage 1-2 supports a flat sequence of bindings, calls and returns; control flow is additive)")
+            Stmt.Break => {}
+            Stmt.Continue => {}
+            Stmt.Panic(msg: _, offset: _) => {}
+            Stmt.If(cond: _, val thenBlk, val elseBlk, val hasElse) => {
+                rejectAsyncUnsupported(c: inout c, blockId: thenBlk)
+                if hasElse {
+                    rejectAsyncUnsupported(c: inout c, blockId: elseBlk)
+                }
             }
+            Stmt.While(cond: _, val body) => {
+                rejectAsyncUnsupported(c: inout c, blockId: body)
+            }
+            _ => {
+                compileError(msg: "this statement is not yet supported inside an `async fn` (for / match / give and mid-expression await are additive; if / while / bindings / calls / returns are supported)")
+            }
+        }
+        i += 1
+    }
+}
+
+// Recursively collect an async body's bindings into frame-struct fields (so
+// every local survives `await` suspensions). Mirrors genStmt's Let lowering for
+// the field type. Names must be unique within the async fn: the frame is flat
+// (no nested C scopes), so shadowing a name — even across sibling branches —
+// would collide; reject it for now rather than miscompile (additive: name
+// disambiguation). Recurses into if/while bodies; locals are never popped during
+// collection so the uniqueness check sees the whole function.
+fn collectAsyncFields(c: inout Comp, blockId: U64) {
+    val b: Block = c.blocks[blockId]
+    val stmts: Array[U64] = b.stmts
+    mut val i: U64 = 0
+    while i < stmts.count {
+        match c.stmts[stmts[i]] {
+            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+                if localIndexByName(c: inout c, start: nameStart, len: nameLen) < c.locals.count {
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "shadowing a binding inside an `async fn` is not yet supported; use distinct names")
+                }
+                val le: LetEff = inferLetType(c: inout c, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                write(s: "    ")
+                genCTypeOf(c: inout c, tyRef: le.ty, fallStart: le.start, fallLen: le.len, isArray: le.arr)
+                write(s: " ")
+                writeSpan(c: inout c, start: nameStart, len: nameLen)
+                write(s: ";\n")
+                addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: false)
+            }
+            Stmt.If(cond: _, val thenBlk, val elseBlk, val hasElse) => {
+                collectAsyncFields(c: inout c, blockId: thenBlk)
+                if hasElse {
+                    collectAsyncFields(c: inout c, blockId: elseBlk)
+                }
+            }
+            Stmt.While(cond: _, val body) => {
+                collectAsyncFields(c: inout c, blockId: body)
+            }
+            _ => {}
         }
         i += 1
     }
@@ -180,24 +234,7 @@ fn emitAsyncFrameStruct(c: inout Comp, fi: U64) {
         addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: false, isMut: false, owned: false)
         pi += 1
     }
-    val b: Block = c.blocks[f.body]
-    val stmts: Array[U64] = b.stmts
-    mut val si: U64 = 0
-    while si < stmts.count {
-        match c.stmts[stmts[si]] {
-            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
-                val le: LetEff = inferLetType(c: inout c, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
-                write(s: "    ")
-                genCTypeOf(c: inout c, tyRef: le.ty, fallStart: le.start, fallLen: le.len, isArray: le.arr)
-                write(s: " ")
-                writeSpan(c: inout c, start: nameStart, len: nameLen)
-                write(s: ";\n")
-                addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: false)
-            }
-            _ => {}
-        }
-        si += 1
-    }
+    collectAsyncFields(c: inout c, blockId: f.body)
     write(s: "} ")
     writeAsyncFrameName(c: inout c, f: f)
     write(s: ";\n")
@@ -320,9 +357,9 @@ fn genAsyncFunc(c: inout Comp, fi: U64) {
     c.locals = savedLocals
 }
 
-// Count `await` suspension points in an async body's top-level statements (each
-// is one resume state). Stage 1-2: await only at statement head (Let init,
-// Return value, bare ExprStmt).
+// Count `await` suspension points in an async body (each is one resume state).
+// Recurses into if/while bodies (stage 3a). await is at statement head (Let
+// init, Return value, bare ExprStmt).
 fn countAsyncAwaits(c: inout Comp, blockId: U64) -> U64 {
     val b: Block = c.blocks[blockId]
     val stmts: Array[U64] = b.stmts
@@ -346,6 +383,15 @@ fn countAsyncAwaits(c: inout Comp, blockId: U64) -> U64 {
                 if exprIsAwait(c: inout c, id: expr) {
                     n += 1
                 }
+            }
+            Stmt.If(cond: _, val thenBlk, val elseBlk, val hasElse) => {
+                n += countAsyncAwaits(c: inout c, blockId: thenBlk)
+                if hasElse {
+                    n += countAsyncAwaits(c: inout c, blockId: elseBlk)
+                }
+            }
+            Stmt.While(cond: _, val body) => {
+                n += countAsyncAwaits(c: inout c, blockId: body)
             }
             _ => {}
         }

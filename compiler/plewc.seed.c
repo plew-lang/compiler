@@ -1114,6 +1114,7 @@ long long hasAnyAsync_c_Comp(Comp* c);
 void emitAsyncRuntime_c_Comp(Comp* c);
 void writeAsyncFrameName_c_Comp_f_Func(Comp* c, Func f);
 void rejectAsyncUnsupported_c_Comp_blockId_U64(Comp* c, uint64_t blockId);
+void collectAsyncFields_c_Comp_blockId_U64(Comp* c, uint64_t blockId);
 void emitAsyncSuspend_c_Comp_operandId_U64(Comp* c, uint64_t operandId);
 void genAsyncLet_c_Comp_nameStart_U64_nameLen_U64_effStart_U64_effLen_U64_effArr_Bool_effTy_U64_init_U64_mutable_Bool(Comp* c, uint64_t nameStart, uint64_t nameLen, uint64_t effStart, uint64_t effLen, long long effArr, uint64_t effTy, uint64_t init, long long mutable);
 void genAsyncReturn_c_Comp_value_U64_hasValue_Bool(Comp* c, uint64_t value, long long hasValue);
@@ -14699,14 +14700,99 @@ void rejectAsyncUnsupported_c_Comp_blockId_U64(Comp* c, uint64_t blockId) {
     Stmt _m873 = PlewArray_Stmt_get((*c).stmts, (long long)(PlewArray_U64_get(stmts, (long long)(i))));
     if (_m873.tag == 0) {
     }
+    else if (_m873.tag == 1) {
+    }
     else if (_m873.tag == 3) {
     }
     else if (_m873.tag == 4) {
     }
     else if (_m873.tag == 2) {
     }
+    else if (_m873.tag == 11) {
+    }
+    else if (_m873.tag == 12) {
+    }
+    else if (_m873.tag == 9) {
+    }
+    else if (_m873.tag == 5) {
+        uint64_t thenBlk = _m873.data.If.thenBlk;
+        (void)thenBlk;
+        uint64_t elseBlk = _m873.data.If.elseBlk;
+        (void)elseBlk;
+        long long hasElse = _m873.data.If.hasElse;
+        (void)hasElse;
+    rejectAsyncUnsupported_c_Comp_blockId_U64(&((*c)), thenBlk);
+    if (hasElse) {
+    rejectAsyncUnsupported_c_Comp_blockId_U64(&((*c)), elseBlk);
+    }
+    }
+    else if (_m873.tag == 6) {
+        uint64_t body = _m873.data.While.body;
+        (void)body;
+    rejectAsyncUnsupported_c_Comp_blockId_U64(&((*c)), body);
+    }
     else {
-    compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), 0), (PlewString){"this statement is not yet supported inside an `async fn` (stage 1-2 supports a flat sequence of bindings, calls and returns; control flow is additive)", 150});
+    compileError_msg_String((PlewString){"this statement is not yet supported inside an `async fn` (for / match / give and mid-expression await are additive; if / while / bindings / calls / returns are supported)", 170});
+    }
+    }
+    i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    PlewArray_U64_release(stmts);
+    Block_release(b);
+}
+void collectAsyncFields_c_Comp_blockId_U64(Comp* c, uint64_t blockId) {
+    Block b = Block_share(PlewArray_Block_get((*c).blocks, (long long)(blockId)));
+    PlewArray_U64 stmts = PlewArray_U64_share(b.stmts);
+    uint64_t i = 0;
+    while (i < (long long)((stmts).len)) {
+    {
+    Stmt _m874 = PlewArray_Stmt_get((*c).stmts, (long long)(PlewArray_U64_get(stmts, (long long)(i))));
+    if (_m874.tag == 0) {
+        long long mutable = _m874.data.Let.mutable;
+        (void)mutable;
+        uint64_t nameStart = _m874.data.Let.nameStart;
+        (void)nameStart;
+        uint64_t nameLen = _m874.data.Let.nameLen;
+        (void)nameLen;
+        uint64_t tyStart = _m874.data.Let.tyStart;
+        (void)tyStart;
+        uint64_t tyLen = _m874.data.Let.tyLen;
+        (void)tyLen;
+        long long tyIsArray = _m874.data.Let.tyIsArray;
+        (void)tyIsArray;
+        uint64_t ty = _m874.data.Let.ty;
+        (void)ty;
+        uint64_t init = _m874.data.Let.init;
+        (void)init;
+    if (localIndexByName_c_Comp_start_U64_len_U64(&((*c)), nameStart, nameLen) < (long long)(((*c).locals).len)) {
+    compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), nameStart), (PlewString){"shadowing a binding inside an `async fn` is not yet supported; use distinct names", 81});
+    }
+    LetEff le = inferLetType_c_Comp_tyStart_U64_tyLen_U64_tyIsArray_Bool_ty_U64_init_U64(&((*c)), tyStart, tyLen, tyIsArray, ty, init);
+    plew_write((PlewString){"    ", 4});
+    genCTypeOf_c_Comp_tyRef_U64_fallStart_U64_fallLen_U64_isArray_Bool(&((*c)), le.ty, le.start, le.len, le.arr);
+    plew_write((PlewString){" ", 1});
+    writeSpan_c_Comp_start_U64_len_U64(&((*c)), nameStart, nameLen);
+    plew_write((PlewString){";\n", 2});
+    addLocal_c_Comp_nameStart_U64_nameLen_U64_tyStart_U64_tyLen_U64_isArray_Bool_ty_U64_isInout_Bool_isMut_Bool_owned_Bool(&((*c)), nameStart, nameLen, le.start, le.len, le.arr, le.ty, 0, mutable, 0);
+    }
+    else if (_m874.tag == 5) {
+        uint64_t thenBlk = _m874.data.If.thenBlk;
+        (void)thenBlk;
+        uint64_t elseBlk = _m874.data.If.elseBlk;
+        (void)elseBlk;
+        long long hasElse = _m874.data.If.hasElse;
+        (void)hasElse;
+    collectAsyncFields_c_Comp_blockId_U64(&((*c)), thenBlk);
+    if (hasElse) {
+    collectAsyncFields_c_Comp_blockId_U64(&((*c)), elseBlk);
+    }
+    }
+    else if (_m874.tag == 6) {
+        uint64_t body = _m874.data.While.body;
+        (void)body;
+    collectAsyncFields_c_Comp_blockId_U64(&((*c)), body);
+    }
+    else {
     }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
@@ -14729,9 +14815,9 @@ void emitAsyncSuspend_c_Comp_operandId_U64(Comp* c, uint64_t operandId) {
 }
 void genAsyncLet_c_Comp_nameStart_U64_nameLen_U64_effStart_U64_effLen_U64_effArr_Bool_effTy_U64_init_U64_mutable_Bool(Comp* c, uint64_t nameStart, uint64_t nameLen, uint64_t effStart, uint64_t effLen, long long effArr, uint64_t effTy, uint64_t init, long long mutable) {
     {
-    Expr _m874 = PlewArray_Expr_get((*c).exprs, (long long)(init));
-    if (_m874.tag == 19) {
-        uint64_t operand = _m874.data.Await.operand;
+    Expr _m875 = PlewArray_Expr_get((*c).exprs, (long long)(init));
+    if (_m875.tag == 19) {
+        uint64_t operand = _m875.data.Await.operand;
         (void)operand;
     emitAsyncSuspend_c_Comp_operandId_U64(&((*c)), operand);
     addLocal_c_Comp_nameStart_U64_nameLen_U64_tyStart_U64_tyLen_U64_isArray_Bool_ty_U64_isInout_Bool_isMut_Bool_owned_Bool(&((*c)), nameStart, nameLen, effStart, effLen, effArr, effTy, 0, mutable, 0);
@@ -14760,9 +14846,9 @@ void genAsyncLet_c_Comp_nameStart_U64_nameLen_U64_effStart_U64_effLen_U64_effArr
 void genAsyncReturn_c_Comp_value_U64_hasValue_Bool(Comp* c, uint64_t value, long long hasValue) {
     if (hasValue) {
     {
-    Expr _m875 = PlewArray_Expr_get((*c).exprs, (long long)(value));
-    if (_m875.tag == 19) {
-        uint64_t operand = _m875.data.Await.operand;
+    Expr _m876 = PlewArray_Expr_get((*c).exprs, (long long)(value));
+    if (_m876.tag == 19) {
+        uint64_t operand = _m876.data.Await.operand;
         (void)operand;
     emitAsyncSuspend_c_Comp_operandId_U64(&((*c)), operand);
     plew_write((PlewString){"    plew_promise_resolve(__f->__self, (long long)(__f->__sub->value));\n", 71});
@@ -14797,42 +14883,7 @@ void emitAsyncFrameStruct_c_Comp_fi_U64(Comp* c, uint64_t fi) {
     addLocal_c_Comp_nameStart_U64_nameLen_U64_tyStart_U64_tyLen_U64_isArray_Bool_ty_U64_isInout_Bool_isMut_Bool_owned_Bool(&((*c)), p.nameStart, p.nameLen, p.tyStart, p.tyLen, p.tyIsArray, p.ty, 0, 0, 0);
     pi = ({ uint64_t __ov; if (__builtin_add_overflow((pi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    Block b = Block_share(PlewArray_Block_get((*c).blocks, (long long)(f.body)));
-    PlewArray_U64 stmts = PlewArray_U64_share(b.stmts);
-    uint64_t si = 0;
-    while (si < (long long)((stmts).len)) {
-    {
-    Stmt _m876 = PlewArray_Stmt_get((*c).stmts, (long long)(PlewArray_U64_get(stmts, (long long)(si))));
-    if (_m876.tag == 0) {
-        long long mutable = _m876.data.Let.mutable;
-        (void)mutable;
-        uint64_t nameStart = _m876.data.Let.nameStart;
-        (void)nameStart;
-        uint64_t nameLen = _m876.data.Let.nameLen;
-        (void)nameLen;
-        uint64_t tyStart = _m876.data.Let.tyStart;
-        (void)tyStart;
-        uint64_t tyLen = _m876.data.Let.tyLen;
-        (void)tyLen;
-        long long tyIsArray = _m876.data.Let.tyIsArray;
-        (void)tyIsArray;
-        uint64_t ty = _m876.data.Let.ty;
-        (void)ty;
-        uint64_t init = _m876.data.Let.init;
-        (void)init;
-    LetEff le = inferLetType_c_Comp_tyStart_U64_tyLen_U64_tyIsArray_Bool_ty_U64_init_U64(&((*c)), tyStart, tyLen, tyIsArray, ty, init);
-    plew_write((PlewString){"    ", 4});
-    genCTypeOf_c_Comp_tyRef_U64_fallStart_U64_fallLen_U64_isArray_Bool(&((*c)), le.ty, le.start, le.len, le.arr);
-    plew_write((PlewString){" ", 1});
-    writeSpan_c_Comp_start_U64_len_U64(&((*c)), nameStart, nameLen);
-    plew_write((PlewString){";\n", 2});
-    addLocal_c_Comp_nameStart_U64_nameLen_U64_tyStart_U64_tyLen_U64_isArray_Bool_ty_U64_isInout_Bool_isMut_Bool_owned_Bool(&((*c)), nameStart, nameLen, le.start, le.len, le.arr, le.ty, 0, mutable, 0);
-    }
-    else {
-    }
-    }
-    si = ({ uint64_t __ov; if (__builtin_add_overflow((si), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
-    }
+    collectAsyncFields_c_Comp_blockId_U64(&((*c)), f.body);
     plew_write((PlewString){"} ", 2});
     writeAsyncFrameName_c_Comp_f_Func(&((*c)), f);
     plew_write((PlewString){";\n", 2});
@@ -14840,8 +14891,6 @@ void emitAsyncFrameStruct_c_Comp_fi_U64(Comp* c, uint64_t fi) {
     writeAsyncFrameName_c_Comp_f_Func(&((*c)), f);
     plew_write((PlewString){"_resume(void*);\n", 16});
     (*c).locals = PlewArray_Local_share(savedLocals);
-    PlewArray_U64_release(stmts);
-    Block_release(b);
     PlewArray_Param_release(params);
     PlewArray_Local_release(savedLocals);
     Func_release(f);
@@ -14982,6 +15031,23 @@ uint64_t countAsyncAwaits_c_Comp_blockId_U64(Comp* c, uint64_t blockId) {
     if (exprIsAwait_c_Comp_id_U64(&((*c)), expr)) {
     n = ({ uint64_t __ov; if (__builtin_add_overflow((n), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
+    }
+    else if (_m877.tag == 5) {
+        uint64_t thenBlk = _m877.data.If.thenBlk;
+        (void)thenBlk;
+        uint64_t elseBlk = _m877.data.If.elseBlk;
+        (void)elseBlk;
+        long long hasElse = _m877.data.If.hasElse;
+        (void)hasElse;
+    n = ({ uint64_t __ov; if (__builtin_add_overflow((n), (countAsyncAwaits_c_Comp_blockId_U64(&((*c)), thenBlk)), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    if (hasElse) {
+    n = ({ uint64_t __ov; if (__builtin_add_overflow((n), (countAsyncAwaits_c_Comp_blockId_U64(&((*c)), elseBlk)), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    }
+    else if (_m877.tag == 6) {
+        uint64_t body = _m877.data.While.body;
+        (void)body;
+    n = ({ uint64_t __ov; if (__builtin_add_overflow((n), (countAsyncAwaits_c_Comp_blockId_U64(&((*c)), body)), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     else {
     }

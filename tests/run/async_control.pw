@@ -1,0 +1,25 @@
+// await inside a while loop (state reused each iteration) and inside an if
+// branch (a second suspension point). Exercises stage-3a control flow.
+import @Std/Io with { print }
+import @Std/Async with { sleep }
+
+async fn tick(x: I64) -> Promise[I64] {
+    await sleep(ms: 1)
+    return x + 1
+}
+
+async fn main() {
+    mut val i: I64 = 0
+    while i < 3 {
+        val v: I64 = await tick(x: i)
+        print(v)
+        i = v
+    }
+    if i > 2 {
+        await sleep(ms: 5)
+        print(100)
+    } else {
+        print(200)
+    }
+    print(9)
+}
