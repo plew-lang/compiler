@@ -90,3 +90,110 @@ fn assert(cond~: Bool, message: String = "assertion failed") {
         panic message
     }
 }
+
+// --- lang-item primitive type declarations (spec/15 core-library boundary) ---
+// Opaque intrinsic types (representation is the compiler's int*_t / PlewString
+// mapping); declaring them here makes Core their owner, so Core may coherently
+// `impl` traits for them (spec/07,09 type-ownership).
+extern "plew-intrinsic" {
+    struct I8   struct I16  struct I32  struct I64
+    struct U8   struct U16  struct U32  struct U64
+    struct Bool struct String
+}
+
+// Build a String from a byte array (the bytes must be valid UTF-8; decimal
+// digits always are). Runtime-provided: `plew_stringFromBytes`.
+extern "plew-intrinsic" {
+    fn stringFromBytes(b~: Array[U8]) -> String
+}
+
+// A decimal digit (0-9) as its ASCII byte. Two width-typed copies: with no
+// implicit numeric conversion an I64 digit cannot call a U64 helper (and `48+d`
+// would need a forbidden cast), so each spells out the glyph table.
+fn digitByteI(d: I64) -> U8 {
+    if d == 0 { return 48 }
+    if d == 1 { return 49 }
+    if d == 2 { return 50 }
+    if d == 3 { return 51 }
+    if d == 4 { return 52 }
+    if d == 5 { return 53 }
+    if d == 6 { return 54 }
+    if d == 7 { return 55 }
+    if d == 8 { return 56 }
+    return 57
+}
+fn digitByteU(d: U64) -> U8 {
+    if d == 0 { return 48 }
+    if d == 1 { return 49 }
+    if d == 2 { return 50 }
+    if d == 3 { return 51 }
+    if d == 4 { return 52 }
+    if d == 5 { return 53 }
+    if d == 6 { return 54 }
+    if d == 7 { return 55 }
+    if d == 8 { return 56 }
+    return 57
+}
+
+// Textual formatting (spec/02): `{x}` interpolation desugars to x.format(format:).
+// The `format` spec string (e.g. ".2") is accepted but ignored for integers for
+// now (no precision/padding yet — additive).
+trait Format {
+    fn format(format: String) -> String
+}
+
+impl I64 as Format {
+    fn format(format: String) -> String {
+        mut val n: I64 = self
+        mut val neg: Bool = false
+        if n < 0 {
+            neg = true
+        }
+        // collect digits least-significant-first (works in I64: a negative
+        // remainder is flipped, avoiding any I64->U64 magnitude conversion).
+        mut val digits: Array[U8] = []
+        if n == 0 {
+            digits.append(48)
+        }
+        while n != 0 {
+            mut val d: I64 = n % 10
+            if d < 0 {
+                d = 0 - d
+            }
+            digits.append(digitByteI(d: d))
+            n = n / 10
+        }
+        mut val out: Array[U8] = []
+        if neg {
+            out.append(45)
+        }
+        mut val i: U64 = digits.count
+        while i > 0 {
+            i = i - 1
+            out.append(digits[i])
+        }
+        return stringFromBytes(out)
+    }
+}
+
+impl U64 as Format {
+    fn format(format: String) -> String {
+        mut val n: U64 = self
+        mut val digits: Array[U8] = []
+        if n == 0 {
+            digits.append(48)
+        }
+        while n != 0 {
+            val d: U64 = n % 10
+            digits.append(digitByteU(d: d))
+            n = n / 10
+        }
+        mut val out: Array[U8] = []
+        mut val i: U64 = digits.count
+        while i > 0 {
+            i = i - 1
+            out.append(digits[i])
+        }
+        return stringFromBytes(out)
+    }
+}

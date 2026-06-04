@@ -59,6 +59,7 @@ typedef struct Stmt Stmt;
 typedef struct { unsigned char* data; long long len; long long cap; long long* rc; } PlewArray_U8;
 __attribute__((unused)) static PlewString plew_readFileBytes(PlewArray_U8 p) { char* path = (char*)malloc((size_t)p.len + 1); memcpy(path, p.data, (size_t)p.len); path[p.len] = 0; PlewString r = plew_readFile((PlewString){path, p.len}); free(path); return r; }
 __attribute__((unused)) static long long plew_fileExists(PlewArray_U8 p) { char* path = (char*)malloc((size_t)p.len + 1); memcpy(path, p.data, (size_t)p.len); path[p.len] = 0; FILE* f = fopen(path, "rb"); free(path); if (f) { fclose(f); return 1; } return 0; }
+__attribute__((unused)) static PlewString plew_stringFromBytes(PlewArray_U8 p) { char* buf = (char*)malloc((size_t)p.len + 1); memcpy(buf, p.data, (size_t)p.len); buf[p.len] = 0; PlewString s; s.data = buf; s.len = p.len; return s; }
 typedef struct { Bind* data; long long len; long long cap; long long* rc; } PlewArray_Bind;
 typedef struct { Tok* data; long long len; long long cap; long long* rc; } PlewArray_Tok;
 typedef struct { uint64_t* data; long long len; long long cap; long long* rc; } PlewArray_U64;
@@ -1285,6 +1286,7 @@ int main(int argc, char** argv) {
     genU8ArrayTypedef();
     plew_write((PlewString){"__attribute__((unused)) static PlewString plew_readFileBytes(PlewArray_U8 p) { char* path = (char*)malloc((size_t)p.len + 1); memcpy(path, p.data, (size_t)p.len); path[p.len] = 0; PlewString r = plew_readFile((PlewString){path, p.len}); free(path); return r; }\n", 261});
     plew_write((PlewString){"__attribute__((unused)) static long long plew_fileExists(PlewArray_U8 p) { char* path = (char*)malloc((size_t)p.len + 1); memcpy(path, p.data, (size_t)p.len); path[p.len] = 0; FILE* f = fopen(path, \"rb\"); free(path); if (f) { fclose(f); return 1; } return 0; }\n", 261});
+    plew_write((PlewString){"__attribute__((unused)) static PlewString plew_stringFromBytes(PlewArray_U8 p) { char* buf = (char*)malloc((size_t)p.len + 1); memcpy(buf, p.data, (size_t)p.len); buf[p.len] = 0; PlewString s; s.data = buf; s.len = p.len; return s; }\n", 234});
     uint64_t ai = 0;
     while (ai < (long long)((c.arrayElems).len)) {
     Bind ae = PlewArray_Bind_get(c.arrayElems, (long long)(ai));
