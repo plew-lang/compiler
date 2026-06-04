@@ -11,7 +11,6 @@
 
 ## ② 判断不要・据え置いた実装（メモのみ・順次対応可）
 
-- **F3 トップレベル変数（`val`/`mut val` をモジュール直下）**：`parseProgram` が未対応で黙殺＝"undeclared identifier"。実装には spec/15 の初期化順（全トップレベル/assoc val → main）の配線が要る（feature 規模）。まず最低限 **loud-reject**（未対応と明示）に倒すのが安全な中間段。
 - **F4 struct 分解パターン `P { val x, val y }`**（match/for/guard）：spec/11 正典。現状 enum バリアント分解（record 形式 `E.V(...)`）のみ対応で、非 enum struct パターン（`{ }`）は catch-all 誤診断で落ちる。`parsePattern` が型名後に `.` 無しでも variant を読む点の修正＋ match codegen に struct（タグ無し・`_m.field` 直読み・irrefutable 単一アーム）経路の追加が要る。
 - **F11〔中・重要〕複合要素型の配列**：要素型が**複合型**（`Array[Array[T]]`・`Array[Ref[T]]`・`Array[Box[T]]` 等の generic/Ref/array）だと要素型マングルが内側型を解決できず、要素型名に頭名（`Array`/`Ref`/…）を literal 出力（`PlewArray_Ref`・`Ref* data`＝unknown type）。**`Array[Ref[T]]` は spec 推奨の「unique 要素は Ref 包み」「共有要素」パターンなので重要度高**（matrix／list-of-list／shared 要素配列で顕在化）。`recordArrayElem`／要素型マングル（`wPA`/`genCElem` 系）が要素の structured type を解決して `PlewArray_Ref_Cell` 等に正しくマングルするよう拡張が要る。
 - **F12〔中〕U64 リテラル ∈ [2^63, 2^64-1] で plewc がクラッシュ**：`18446744073709551615U64` 等で「panic: integer overflow」。リテラル値が `Expr.Int.value: I64` に蓄積され、`tokenValue` の digit 蓄積（`value*10+digit`）が I64 範囲を超え、コンパイラ自身の overflow check が panic。修正＝値表現を U64 化（lexer 蓄積 U64・`Expr.Int.value` U64・codegen の符号なし出力・範囲検査と負リテラル畳み込みの符号配慮）＝**整数リテラルの符号モデルに波及**。コンパイラ自身は該当リテラルを使わずビルド可＝影響はユーザーの巨大 U64 リテラルのみ（edge）。

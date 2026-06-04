@@ -85,6 +85,7 @@
 - **lang item / ambient 型** → 概念なし（名前空間はフラット）。`print`/`write`/`writeByte`/`readStdin`/`readFile`/`argCount`/`argAt` は **import で gate される埋め込みビルトイン**（本来は `@Std`＋`Format` 等・`argCount`/`argAt` は `Process.args()` の暫定スタンドイン）。移行レシピは [worklog.md](worklog.md)。
 - **`Optional`/`Result` が ambient でなく明示 `import @Std/Core` を要求**（spec ではこの 2 つは lang item＝import 不要）。**意図的に放置する既知の spec 違反**。理由と直し方：名前空間は今フラット（全ファイルを 1 `Comp` に連結・可視性ゲート I2 未実装）なので、「ambient」＝「ローダが起動時に無条件 load」・「import 必須」＝「import directive を見た時だけ load」の差でしかなく、中間（一部だけ ambient）を可視性で作れない。ambient 化の本体は Core を起動時に無条件 load するだけ（explicit `import @Std/Core` は `pathSeen` dedup で冪等に併存）だが、付随して **(1) `assert` の巻き込み**＝Core 丸ごと load すると spec で import 必須の `assert` も ambient 化するので **prelude ファイル分割**（lang item 型だけ無条件 load・`assert` は別 import モジュールへ）が要る、**(2) 既存テストの自前 `enum Optional` との重複定義**＝lang item は再定義不可なので重複エラーが spec 的に正しく、テスト移行が要る。これらを処理する気になったら着手（フラットモデルのままでも A=無条件 load＋ファイル分割で可能・本物の可視性 I2 は不要）。
 - **エントリ `fn main`**：`int main(int argc, char** argv)` に固定脱糖（spec の `fn main`/`async fn main`・戻り `()|Result` とは別）。
+- **トップレベル変数（モジュール直下 `val`/`mut val`）** → **未実装・意図的に放置**（2026-06-04 ユーザー判断）。spec/CLAUDE.md ではトップレベル変数（`val` 定数・`mut val` 可変）は在るが、`parseProgram` が `KwVal`/`KwMut` を処理せず 1 トークンずつ黙って読み飛ばす＝宣言が丸ごと消え、参照側は "undeclared identifier"（生成 C で未定義）になる。**現状は silent**（hidden meaning＝本来 loud-reject か実装が筋）だが当面放置。実装するなら spec/15 の初期化順（①全トップレベル/`assoc val` 初期化→②`main`）の配線が要る＝feature 規模。トップレベル**関数**は実装済（こちらは在る）。
 
 ## 構築・factory
 
