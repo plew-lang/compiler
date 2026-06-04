@@ -932,6 +932,7 @@ void checkLitSpan_c_Comp_id_U64_tyStart_U64_tyLen_U64_isArray_Bool(Comp* c, uint
 void checkLitArray_c_Comp_id_U64_elemStart_U64_elemLen_U64(Comp* c, uint64_t id, uint64_t elemStart, uint64_t elemLen);
 long long typeIsTransitivelyUnique_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uint64_t len);
 void checkFieldContagion_c_Comp(Comp* c);
+void checkFieldDefaults_c_Comp(Comp* c);
 void checkParamModes_c_Comp_params_AParam(Comp* c, PlewArray_Param params);
 void checkArrayElemsNotUnique_c_Comp(Comp* c);
 void checkGenericUniqueArgs_c_Comp(Comp* c);
@@ -1178,6 +1179,7 @@ int main(int argc, char** argv) {
     synthesizeDerives_c_Comp(&(c));
     instantiateProvidedMethods_c_Comp(&(c));
     checkFieldContagion_c_Comp(&(c));
+    checkFieldDefaults_c_Comp(&(c));
     checkAllParamModes_c_Comp(&(c));
     checkArrayElemsNotUnique_c_Comp(&(c));
     checkConformances_c_Comp(&(c));
@@ -7547,6 +7549,22 @@ void checkFieldContagion_c_Comp(Comp* c) {
     }
     j = ({ uint64_t __ov; if (__builtin_add_overflow((j), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
+    }
+    i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    StructDef_release(s);
+    }
+}
+void checkFieldDefaults_c_Comp(Comp* c) {
+    uint64_t i = 0;
+    while (i < (long long)(((*c).structs).len)) {
+    StructDef s = StructDef_share(PlewArray_StructDef_get((*c).structs, (long long)(i)));
+    uint64_t j = 0;
+    while (j < (long long)((s.fields).len)) {
+    FieldDef f = PlewArray_FieldDef_get(s.fields, (long long)(j));
+    if (f.hasDefault) {
+    checkLitSpan_c_Comp_id_U64_tyStart_U64_tyLen_U64_isArray_Bool(&((*c)), f.defaultVal, f.tyStart, f.tyLen, f.tyIsArray);
+    }
+    j = ({ uint64_t __ov; if (__builtin_add_overflow((j), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     StructDef_release(s);

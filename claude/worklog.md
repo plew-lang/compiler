@@ -22,7 +22,7 @@
 > - **F13〔✅修正済〕** 配列型の関数デフォルト引数 `fn f(xs: Array[I32] = [])` の省略呼びが `f(0)`＝不正 C。修正＝default-fill で array param は genArrayValue。test `run/default_arg_array`。
 > - **F16〔✅修正済〕** 配列リテラルを引数で渡すと `f(xs: [1,2,3])`→`f(0)`＝不正 C。修正＝提供引数ループで array param は genArrayValue。
 > - **F15〔小〕** ビルトインメソッド名（`count` 等）と同名のユーザー自由関数呼びが誤コンパイル。→ review-items。
-> - **F14〔中・重要・✅修正済（未コミット）〕** struct フィールド既定値 `val x: T = expr`（spec/05）が完全破損（`parseStruct` が `= expr` を消費せず phantom field）。修正＝`FieldDef.hasDefault/defaultVal`＋`Expr.Make` で省略フィールドへ default 挿入（`makeProvides`）。test `run/field_defaults`。残＝generic struct の field default 未対応・default 式の literal 型検査未。
+> - **F14〔中・重要・✅修正済（未コミット）〕** struct フィールド既定値 `val x: T = expr`（spec/05）が完全破損（`parseStruct` が `= expr` を消費せず phantom field）。修正＝`FieldDef.hasDefault/defaultVal`＋`Expr.Make` で省略フィールドへ default 挿入（`makeProvides`）。test `run/field_defaults`。**残も解消済**＝generic struct の concretely-typed field default は動作（`run/field_defaults_generic`）・default 式の literal 型検査＝`checkFieldDefaults`（`checkLitSpan` で field 型へ範囲検査・`reject/field_default_overflow`）。
 > - 健全確認済（プローブで OK）：generic struct/method・closure（引数/高階/キャプチャ）・trait+where境界・provided method・Ref 共有変更・nested struct place 変更・`??`・mutual recursion・char リテラル・wildcard match・while break/continue・unique/move/deinit（決定的・use-after-move/bare-copy reject）・配列成長・struct 戻り値 inline・nested generic `Box[Box[T]]`。
 > - **F8〔小〕** 裸の no-field enum variant 値 `Color.Green`（JSX `<Color.Green/>` でない）が不正な C（`Color.Green` をそのまま出力）を生成。コンパイラ自身は常に `<Kind.X/>` を使う＝裸は非サポート構文。loud-reject すべき（silent 剥離）。→ review-items。
 > - 非バグ＝`print` の String 非対応は整数専用 placeholder shim（仕様面でない）。

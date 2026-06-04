@@ -124,6 +124,7 @@ fn main() {
     // ownership validity (spec/03): a struct owning a unique value must be
     // `unique`; parameter access modes must match copyability. Both exit on error.
     checkFieldContagion(c: inout c)
+    checkFieldDefaults(c: inout c)
     checkAllParamModes(c: inout c)
     checkArrayElemsNotUnique(c: inout c)
     // trait conformance is explicit and complete (spec/08): every requirement of

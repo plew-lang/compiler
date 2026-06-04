@@ -1,0 +1,13 @@
+// A struct field's default value is memberwise-factory default-arg sugar, so it
+// must fit the field's type. `300` does not fit I8 — rejected at compile time
+// (not silently truncated when a construction omits the field).
+import @Std/Io with { print }
+
+struct Config {
+    val limit: I8 = 300
+}
+
+fn main() {
+    val c: Config = <Config />
+    print(c.limit)
+}

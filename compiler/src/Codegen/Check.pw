@@ -364,6 +364,27 @@ fn checkFieldContagion(c: inout Comp) {
     }
 }
 
+// Range-check each struct field's default-value literal against the field's
+// declared type (spec/05: `val x: T = expr` is memberwise-factory default-arg
+// sugar, so the default must fit T exactly as an explicit construction would —
+// `val n: I8 = 300` is rejected here, not silently truncated at codegen). Enum
+// variant fields take no default, so only struct fields are visited.
+fn checkFieldDefaults(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.structs.count {
+        val s: StructDef = c.structs[i]
+        mut val j: U64 = 0
+        while j < s.fields.count {
+            val f: FieldDef = s.fields[j]
+            if f.hasDefault {
+                checkLitSpan(c: inout c, id: f.defaultVal, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray)
+            }
+            j += 1
+        }
+        i += 1
+    }
+}
+
 // Access-mode validity on parameters (spec/03): a unique-type parameter needs a
 // mode (`move`/`borrow`/`inout`); a copyable-type parameter rejects `move` (a
 // footgun: disables a value that could just be copied) and `borrow` (redundant

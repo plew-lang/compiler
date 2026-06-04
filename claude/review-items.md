@@ -21,6 +21,5 @@
 ## ③ 残（順次対応可・小〜中）
 
 - **F4 残：for / guard の struct 分解**：`for Person { val name } in people`・`guard S { val x } = …`（spec/11）。match の struct 分解は実装済（`run/struct_pattern`）。for/guard のヘッダ分解は別 codegen で未対応。
-- **F14 残：default 式の literal 型検査**：generic/非 generic とも、フィールド既定値式（`val n: I32 = 0`）の literal が field 型に対して型検査されていない（codegen は通る）。検査を足すと健全性が上がる。
 - **closure が shadow された local をキャプチャ〔極小・稀・loud〕**：F2 の shadow 用 C 名 suffix（`cnum`）が `emitCaptureInit`（enclosing 名を素の writeSpan で出す）に未配線。shadow 変数をキャプチャする極端ケースのみ C 名不一致になり得る（壊れても clang エラー＝loud・silent でない）。well-tested な closure コードへの回帰リスクに見合わず低優先。
 - **N4b〔小・ほぼ by-design〕for ループ変数の型注釈が範囲境界へ伝播しない**：`for val i: I32 in 0..<5` は境界リテラルに型文脈が伝わらず「no type from context」。回避＝境界に suffix（`0..<5I32`）。設計上「範囲境界リテラルは型必須」（for.pw 明記）なので非バグ寄りだが、ループ変数注釈を context に使う改善余地。
