@@ -58,7 +58,13 @@ switch 先頭ディスパッチが `goto __L<N>` で再入。全ローカル hoi
 - **runtime プリアンブル**：`void* plew_rawbuf_alloc(long long elemSize, long long cap)`（malloc(header+elemSize*cap)・rc=1・cap 格納・data 返す）／`void* plew_rawbuf_share(void* p)`（rc++・`plew_ref_share` と同型）／`void plew_rawbuf_release(void* p)`（rc--・0 で free）／`long long plew_rawbuf_cap(void* p)`／`int plew_rawbuf_is_unique(void* p)`（rc==1）。
 - **standalone テスト**：`mut val b: RawBuffer[I64] = rawAlloc(cap: 4U64); rawStore(b: b, i: 0U64, v: 99I64); print(rawLoad(b: b, i: 0U64))`→99・`rawCap`/`rawIsUnique` も。
 
-**(ii) 着手・実装経路を精査済（次セッションで実装）**。安全な順序＝**ii-a（additive・Array 表現は PlewArray のまま generic メソッドを Plew 化）→ ii-b（表現を Core struct へ swap＝真の flag-day）**。ii-a の経路（調査で確定）：
+**(ii-a) ✅実装済**（`tests/run/array_methods`・205緑・不動点）：`impl[T] Array[T] { fn … }` のユーザーメソッドが**純 Plew で動く**（要素型ごとに monomorphize＋名前で dispatch・Array 表現は PlewArray のまま）。「配列メソッド＝無条件 append」ハードコードは **append 以外を撤廃**（append 自身は移行 fallback として残置）。実装＝①`parseImpl`：`impl Array[T]` は受信子が array 型としてパースされ span が要素を指すので、メソッドを**頭名 "Array" で登録**（headTok）。②`emitArrayMethods`：`emitMonoMethods` と並行の専用パス＝`c.arrayElems`（要素型）でキー（Array は mono struct でないので genInsts に入れられない）・**型パラメータ要素（`Array[T]` の T）はスキップ**（自己参照 env＝genCElem 無限再帰を回避）。③`genExpr` Method：append 以外の配列メソッドを `Array_<E>_<selector>` へ dispatch。④`exprType`：Array メソッド内の self は array（kind 3・要素名）型・配列への Method 呼びは戻り値型 T を要素型に置換。
+
+**残る ii-a（次）＝`.append`/`.count`/`arr[i]` を Plew メソッド化しハードコード撤去**：Core に `impl[T] Array[T] { inout fn append(v: T) { arrayPush(a: inout self, v: v) } fn count() -> U64 { arrayLen(a: self) } }` 等を書き、dispatch を Core メソッド優先へ→ ハードコード削除（ADD→reseed→USE・**コンパイラ自身が `.append`/`.count` を全面利用**するので各段で種が新ソースをコンパイルできることを確認しながら）。`arr[i]` は Index トレイト脱糖へ。
+
+**(ii-b) 表現 swap（真の flag-day・最後）**：`struct Array[T] { data: RawBuffer[T]; len: U64 }` を Core に・`PlewArray_<E>` 撤去・`RawBuffer` 値意味論（コピー share・破棄 release）を Ref の各サイトに配線。
+
+**(ii) 実装経路メモ（ii-a は実装済・以下は記録）**：
 - `methodMatchesInst`（Mono.pw:845）は `inst.nameStart=="Array"`（recv "Array"）で**既に Array メソッドにマッチ**＝条件は揃っている。
 - ただし `c.genInsts` に `Array[E]` を足すと mono **struct**（`emitMonoStructs`）も emit され `PlewArray_<E>` と衝突する。→ **専用パス `emitArrayMethods(proto)`** を新設（`c.arrayElems` × recv=="Array" のメソッドを `emitMonoMethod(method, arrayInstRef[E])` で emit・`_.pw` の `emitMonoMethods` の隣に proto/body 両方）。`emitMangle(Array[E])`＝`Array_<E>`・self 型は `emitConcreteCType(Array[E])`＝`PlewArray_<E>` なので genSignature はそのまま使える。
 - **dispatch**：`genExpr` Method の `bt.kind==3`（Expr.pw:640）は**メソッド名を見ず無条件で append/push**。→ 名前が `append` 以外なら `findMethod(recvStart="Array"〔kwSpan で span〕, name, args)` で Array メソッドを引き、`Array_<E>_<selector>(selfInout? &recv : recv, args)` を emit（`.append`/`.count`/`[i]` のハードコードは移行中 fallback として残す）。
