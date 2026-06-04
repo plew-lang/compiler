@@ -52,7 +52,7 @@ fn emitCaptureInit(c: inout Comp, e: CaptureEntry) {
         return
     }
     if e.isArray {
-        write(s: "PlewArray_")
+        write(s: "Array_")
         writeSpan(c: inout c, start: e.tyStart, len: e.tyLen)
         write(s: "_share(")
         writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
@@ -580,14 +580,14 @@ fn genExpr(c: inout Comp, id: U64) {
                 // honest — `.bytes` is an independent value. spec/02.)
                 write(s: "({ PlewString __s = ")
                 genExpr(c: inout c, id: base)
-                write(s: "; PlewArray_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.len = __s.len; __b; })")
+                write(s: "; Array_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.count = __s.len; __b; })")
                 return
             }
             if bt.kind == 3 {
-                // arr.count -> length
+                // arr.count -> the struct's `count` field
                 write(s: "(long long)((")
                 genExpr(c: inout c, id: base)
-                write(s: ").len)")
+                write(s: ").count)")
                 return
             }
             genExpr(c: inout c, id: base)
@@ -825,7 +825,7 @@ fn genExpr(c: inout Comp, id: U64) {
                                     }
                                     gi += 1
                                 }
-                                write(s: "); PlewArray_")
+                                write(s: "); Array_")
                                 writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
                                 write(s: "_set(&(")
                                 genExpr(c: inout c, id: abase)

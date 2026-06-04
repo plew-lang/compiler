@@ -1111,7 +1111,7 @@ fn emitClosureEnvDrop(c: inout Comp, id: U64) {
                 write(s: ") - 1);\n")
             } else {
                 if e.isArray {
-                    write(s: "    PlewArray_")
+                    write(s: "    Array_")
                     writeSpan(c: inout c, start: e.tyStart, len: e.tyLen)
                     write(s: "_release(e->")
                     writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)

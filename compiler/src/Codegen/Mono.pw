@@ -47,14 +47,16 @@ fn isGenericInst(c: inout Comp, ref: U64) -> Bool {
     if t.args.count == 0 {
         return false
     }
-    // ARRAY-STRUCT MIGRATION (dormant guard): the prelude's `struct Array[T]` is
-    // defined ahead of the representation flip, while `Array[E]` is still lowered
-    // to the builtin `PlewArray_<E>`. Force `Array` to be treated as builtin here
-    // so it never enters the genInst path — otherwise its methods would be emitted
-    // twice (once via emitMonoMethods, once via the builtin emitArrayMethods) and
-    // its struct body would shadow the builtin runtime. Removed when the flip lands.
+    // `Array[U8]` stays out of the genInst machinery: its C type (`Array_U8`) and
+    // runtime are hand-written and always emitted (file paths / String.bytes need
+    // it even when no source mentions `Array[U8]`), so it must not also get a
+    // genInst typedef. Every other `Array[E]` is an ordinary genInst of the prelude
+    // `struct Array[T]`.
     if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-        return false
+        val a0: TypeRef = c.types[t.args[0]]
+        if rangeEquals(bytes: c.bytes, start: a0.nameStart, len: a0.nameLen, kw: "U8") {
+            return false
+        }
     }
     if genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen) < c.structs.count {
         return true
@@ -239,13 +241,6 @@ fn emitConcreteCType(c: inout Comp, ref: U64) {
     val t: TypeRef = c.types[r]
     if t.args.count == 0 {
         genCElem(c: inout c, start: t.nameStart, len: t.nameLen)
-        return
-    }
-    // Array keeps the legacy `PlewArray_<elem>` C type (generic-arg arrays are
-    // deferred; the element mangle is its head name).
-    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-        write(s: "PlewArray_")
-        emitMangle(c: inout c, ref: t.args[0])
         return
     }
     // Ref[T] is a shared mutable heap box -> a C pointer to T.
@@ -946,14 +941,22 @@ fn emitArrayMethods(c: inout Comp, proto: Bool) {
 fn emitMonoMethods(c: inout Comp, proto: Bool) {
     mut val gi: U64 = 0
     while gi < c.genInsts.count {
-        mut val mfi: U64 = 0
-        while mfi < c.funcs.count {
-            if methodMatchesInst(c: inout c, f: c.funcs[mfi], instRef: c.genInsts[gi]) {
-                emitMonoMethod(c: inout c, fi: mfi, instRef: c.genInsts[gi], proto: proto)
+        // `Array[E]` is a genInst for its C struct typedef only; its methods stay on
+        // the array-special pass (emitArrayMethods, keyed on arrayElems) so they
+        // are not emitted twice. Skip Array instantiations here.
+        val gt: TypeRef = c.types[c.genInsts[gi]]
+        if rangeEquals(bytes: c.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array") {
+            gi += 1
+        } else {
+            mut val mfi: U64 = 0
+            while mfi < c.funcs.count {
+                if methodMatchesInst(c: inout c, f: c.funcs[mfi], instRef: c.genInsts[gi]) {
+                    emitMonoMethod(c: inout c, fi: mfi, instRef: c.genInsts[gi], proto: proto)
+                }
+                mfi += 1
             }
-            mfi += 1
+            gi += 1
         }
-        gi += 1
     }
 }
 
