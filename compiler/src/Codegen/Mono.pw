@@ -1224,7 +1224,7 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
             while ai < arms.count {
                 val a: MatchArm = arms[ai]
                 val mark: U64 = scopeMark(c: inout c)
-                scanAddArmBinds(c: inout c, a: a)
+                scanAddArmBinds(c: inout c, a: a, scrutRef: exprType(c: inout c, id: scrut).ref)
                 scanExprInsts(c: inout c, exprId: a.body)
                 popLocals(c: inout c, mark: mark)
                 ai += 1
@@ -1237,11 +1237,17 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
 
 // Add a match arm's field binds to the local scope (for type recovery during the
 // instance-collection walk; mirrors codegen's addBindLocal, minus emission).
-fn scanAddArmBinds(c: inout Comp, a: MatchArm) {
+fn scanAddArmBinds(c: inout Comp, a: MatchArm, scrutRef: U64) {
+    val genericMatch: Bool = isGenericEnumInst(c: inout c, ref: scrutRef)
     mut val bi: U64 = 0
     while bi < a.binds.count {
         val bd: Bind = a.binds[bi]
-        addBindLocal(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
+        if genericMatch {
+            val bti: TypeInfo = genericEnumFieldTypeInfo(c: inout c, instRef: scrutRef, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+            addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false)
+        } else {
+            addBindLocal(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
+        }
         bi += 1
     }
 }
@@ -1304,7 +1310,7 @@ fn scanStmtInsts(c: inout Comp, stmtId: U64) {
             while ai < arms.count {
                 val a: MatchArm = arms[ai]
                 val mark: U64 = scopeMark(c: inout c)
-                scanAddArmBinds(c: inout c, a: a)
+                scanAddArmBinds(c: inout c, a: a, scrutRef: exprType(c: inout c, id: scrut).ref)
                 scanBlockInsts(c: inout c, blkId: a.body)
                 popLocals(c: inout c, mark: mark)
                 ai += 1

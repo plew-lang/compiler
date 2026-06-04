@@ -1039,6 +1039,16 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     }
                 }
             }
+            // `arr.count` is U64 (spec/02). Recover a "U64" span so a generic call
+            // like `print(arr.count)` infers T = U64.
+            if bt.kind == 3 {
+                if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "count") {
+                    val u64: Bind = kwSpan(c: inout c, kw: "U64", kwLen: 3)
+                    if u64.nameLen != 0 {
+                        return <TypeInfo kind=0 nameStart=u64.nameStart nameLen=u64.nameLen ref=0 />
+                    }
+                }
+            }
             // a generic struct instantiation's field type is substituted.
             if isGenericInst(c: inout c, ref: bt.ref) {
                 return genericFieldTypeInfo(c: inout c, instRef: bt.ref, fieldStart: nameStart, fieldLen: nameLen)

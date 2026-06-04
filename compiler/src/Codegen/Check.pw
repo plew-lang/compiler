@@ -1107,7 +1107,7 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
             while ai < arms.count {
                 val a: MatchArm = arms[ai]
                 val mark: U64 = scopeMark(c: inout c)
-                scanAddArmBinds(c: inout c, a: a)
+                scanAddArmBinds(c: inout c, a: a, scrutRef: exprType(c: inout c, id: scrut).ref)
                 checkBoundsExpr(c: inout c, exprId: a.body)
                 popLocals(c: inout c, mark: mark)
                 ai += 1
@@ -1169,7 +1169,7 @@ fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
             while ai < arms.count {
                 val a: MatchArm = arms[ai]
                 val mark: U64 = scopeMark(c: inout c)
-                scanAddArmBinds(c: inout c, a: a)
+                scanAddArmBinds(c: inout c, a: a, scrutRef: exprType(c: inout c, id: scrut).ref)
                 checkBoundsBlock(c: inout c, blkId: a.body)
                 popLocals(c: inout c, mark: mark)
                 ai += 1
