@@ -11,8 +11,11 @@
 
 ## ② 据え置き（理由あり・大物 or 設計）
 
-- **F11〔大筋✅実装済・残は (b) 要素 ARC のみ〕複合要素型の配列**：`Array[Ref[T]]`（spec 推奨の共有/unique 要素）・`Array[Box[T]]`・`Array[Array[T]]`（ネスト・依存順序＋`m[i][j]`）＋ **(a) 配列リテラル要素 append**（`m.append([1,2,3])`）＋ **(c) `Array[T]` の単相化（generic struct・関数とも・単純/複合 T）** が動作。仕組み＝複合要素にマングル名 span（`appendMangle`）を与え全経路で共有、C 型/ARC は `c.arrayElems` の ref から復元、型パラメータ要素は `wPA`/`genCElem` が env で解決。test `run/array_compound_elem`・`run/array_nested`・`run/array_generic_field`・`run/array_generic_fn`。**残（(b) のみ）**：
-  - (b) **要素 ARC**：`Array[Ref[T]]` の Ref 箱は現状ビットコピー（retain/release せず）＝箱が leak（project の hidden-cost 許容方針内）。`xs.append(refVar)` 後に refVar を release する稀パターンでは UAF 余地あり＝runtime の要素 retain/release（push/set/copy/release）を ref のkind別に出す精緻化が要る。
+- **F11〔✅実装済（主要ケース）〕複合要素型の配列**：`Array[Ref[T]]`（spec 推奨）・`Array[Box[T]]`・`Array[Array[T]]`（ネスト）＋ (a) 配列リテラル要素 append ＋ (b) **Ref 要素 ARC**（retain/release・UAF 解消・ASan clean）＋ (c) `Array[T]` 単相化（generic struct・関数・単純/複合 T）が動作。仕組み＝複合要素にマングル名 span（`appendMangle`）、C 型/ARC は ref から復元、型パラメータ要素は `wPA`/`genCElem` が env 解決、Ref 要素は runtime で retain/release。test `run/array_compound_elem`・`array_nested`・`array_generic_field`・`array_generic_fn`・`array_ref_arc`。**残る精緻化（小・後回し可）**：
+  - fresh-temp append（`xs.append(<Ref…/>)`）は box を1つ leak（temp の所有権が transfer でなく retain・hidden-cost 許容）。
+  - heap 持ち Ref pointee の深い release（`Array[Ref[StructWithHeap]]` の pointee の配列/Ref フィールドが leak・no UAF）。
+  - ネスト配列 `Array[Array[T]]` の inner-array 要素 ARC（現状ビットコピー＝leak・no UAF）。
+- **Arrow-place 代入のリテラル型付け〔小・新規発見〕**：`ys[0]->v = 42`（Ref pointee フィールドへの代入）の `42` が「no type from context」＝Arrow place 代入の右辺リテラルに pointee フィールド型の文脈が渡らない（`42I32` or 変数で回避可）。`a.b = lit`（通常 field）は動くが `ref->field = lit`（Arrow）が未対応。
 - **F12〔中・据え置き：整数リテラル符号モデル〕U64 リテラル ∈ [2^63, 2^64-1] で plewc がクラッシュ**：`tokenValue` が値を I64 で蓄積（`v*10+digit`）し I64 範囲超過でコンパイラ自身の overflow check が panic。直すには値表現を U64 化（`Expr.Int.value` U64・lexer 蓄積 U64・符号なし codegen・範囲検査・**負リテラル `-128` 畳み込みとの両立に符号フラグ**）＝整数リテラルの符号モデルに波及。影響はユーザーの巨大 U64 リテラルのみ（稀）。
 - **演算子トレイト（Eq/Ord 以外）/ `@[Ord]` on enum / 曖昧な untyped-literal オーバーロード**：トレイト体系の大物・需要駆動。[provisional.md](provisional.md) のロードマップで管理。
 
