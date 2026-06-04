@@ -106,6 +106,34 @@ So the special-casing that remains is only: **literals `[…]`**, **index `[i]`*
 5. **Reseed** (twice — codegen output changes), run the full suite + fixpoint, only
    then merge `array-struct` → main.
 
+## Validated + discovered prerequisites (from the `Vec`/`VecI` spike)
+
+✅ **The core value-semantics/CoW is proven** (`tests/run/raw_struct_cow`): a struct
+`{ data: RawBuffer; count }` with share-on-bind (RawBuffer retained by step-1 struct
+value-semantics) + copy-on-write in `push` (`rawIsUnique` → realloc+copy when shared)
+behaves correctly — after `val w = v; v.push(x)`, `w` is unchanged. So the design
+holds; the work left is wiring it to the builtin Array syntax.
+
+The spike surfaced **3 prerequisites** that block the *generic, ambient* Array and
+must land before step 3:
+1. **Return-context type inference (A)** — generic struct construction `<Array …/>`
+   where T is hidden inside the `RawBuffer[T]` field (and the empty literal `[]`,
+   which has no element witness) can't infer T from the fields; it currently emits
+   the bare `(Array){…}` instead of `(Array_I32){…}`. Decision A is already taken
+   (design-decisions); it must actually be implemented. Without it, `[]`/construction
+   need a witness or a special case.
+2. **`pub(get)` field parsing** — `pub(get) mut val count: U64` currently lexes as
+   separate `pub` / `(` / `get` / `)` / `count` fields (garbage struct). Needed so
+   `.count` is externally readable but internally-only writable. (Plain `mut val
+   count` works within a module but isn't the right visibility for an ambient type.)
+3. **Sibling method calls on `self`** — `self.helper()` inside a generic struct
+   method fails ("no such method on this type"); the spike inlined the helper. Either
+   fix self-method dispatch, or keep Array's methods flat (inline the grow/CoW helper
+   into append/set).
+
+Recommended order now: implement (A) return-context inference (independently useful,
+unblocks empty literals + construction), then `pub(get)` fields, then the step-3 swap.
+
 ## Why this is gated, not rushed
 
 The compiler compiles itself with its own arrays; if any array operation breaks
