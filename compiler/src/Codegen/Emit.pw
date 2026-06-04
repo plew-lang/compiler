@@ -218,6 +218,25 @@ fn arrayElemRef(c: inout Comp, start: U64, len: U64) -> U64 {
     return 0
 }
 
+// The registered array-element name span for a given element ref (head name for
+// a simple element, the mangled name for a compound one). Falls back to the
+// type's head name. Used to recover a nested array's element name in exprType.
+fn arrayElemNameForRef(c: inout Comp, elemRef: U64) -> Bind {
+    mut val i: U64 = 0
+    while i < c.arrayElems.count {
+        val ae: Bind = c.arrayElems[i]
+        if ae.fieldStart == elemRef {
+            return <Bind nameStart=ae.nameStart nameLen=ae.nameLen fieldStart=elemRef fieldLen=0 />
+        }
+        i += 1
+    }
+    if elemRef < c.types.count {
+        val t: TypeRef = c.types[elemRef]
+        return <Bind nameStart=t.nameStart nameLen=t.nameLen fieldStart=elemRef fieldLen=0 />
+    }
+    return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+}
+
 fn genCElem(c: inout Comp, start: U64, len: U64) {
     if len == 0 {
         write(s: "long long")

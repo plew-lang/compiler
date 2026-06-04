@@ -217,6 +217,9 @@ fn recordArrayElem(c: inout Comp, ty: PType) {
                 elemRef = at.args[0]
             }
         }
+        // a nested array element (`Array[Array[I32]]`) needs the inner
+        // `PlewArray_<inner>` registered (and emitted) first.
+        ensureArrayElemDeps(c: inout c, elemRef: elemRef)
         c.arrayElems.append(<Bind nameStart=ty.start nameLen=ty.len fieldStart=elemRef fieldLen=0 />)
     }
 }

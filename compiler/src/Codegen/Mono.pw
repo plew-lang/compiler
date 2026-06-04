@@ -330,10 +330,31 @@ fn tyRefIsGround(c: inout Comp, ref: U64) -> Bool {
 // still mentions a type parameter (a template like `Box[T]`) is not collected.
 // Register the element type of an Array reached via a type argument into
 // c.arrayElems (deduped by name span) so its PlewArray runtime is emitted.
+// If an array element is itself an `Array[X]`, its C type is `PlewArray_<X>`, so
+// the inner element X must be registered (and emitted) before the outer. Register
+// the inner first (recursively, for deeper nesting) so it lands earlier in
+// c.arrayElems and its runtime is defined before the dependent one.
+fn ensureArrayElemDeps(c: inout Comp, elemRef: U64) {
+    if elemRef == 0 {
+        return
+    }
+    val r: U64 = resolveTy(c: inout c, tyRef: elemRef)
+    if r >= c.types.count {
+        return
+    }
+    val t: TypeRef = c.types[r]
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+        if t.args.count > 0 {
+            registerArrayElemRef(c: inout c, elemRef: t.args[0])
+        }
+    }
+}
+
 fn registerArrayElemRef(c: inout Comp, elemRef: U64) {
     if elemRef >= c.types.count {
         return
     }
+    ensureArrayElemDeps(c: inout c, elemRef: elemRef)
     // a compound element (`Ref[I32]`, `Array[I32]`, `Box[I32]`) gets a mangled
     // name span + its ref, matching the parser's recordArrayElem (so the runtime
     // and use sites agree); a simple element uses its head name.
