@@ -11,10 +11,8 @@
 
 ## ② 据え置き（理由あり・大物 or 設計）
 
-- **F11〔大筋✅実装済・残は精緻化〕複合要素型の配列**：`Array[Ref[T]]`（spec 推奨の共有/unique 要素）・`Array[Box[T]]`（generic struct 要素）・`Array[Array[T]]`（ネスト・依存順序＋`m[i][j]`）が動作。仕組み＝複合要素にマングル名 span（`appendMangle` で `Ref_I32` を `c.bytes` 末尾に追記）を与え全経路で共有、C 型/ARC は `c.arrayElems` の ref から `genCElem`/runtime が復元（単純要素は頭名のまま＝出力不変・fixpoint 保持）。test `run/array_compound_elem`・`run/array_nested`。**残（精緻化）**：
-  - (a) 配列リテラルを**要素として** append（`m.append([1,2,3])` for `Array[Array[I32]]`）が「no type from context」。`.append`/`.push` はビルトインで専用 codegen 経路を通り、要素型が配列のとき引数の内側リテラルを型付けしない（ユーザー関数の配列リテラル引数は F16 で対応済だがビルトインは未）。check/codegen で要素型が配列なら `checkLitArray`＋`genArrayValue` を使う。スカラー append（`xs.append(10)`）・変数 append（`m.append(row)`）は動く。
+- **F11〔大筋✅実装済・残は (b) 要素 ARC のみ〕複合要素型の配列**：`Array[Ref[T]]`（spec 推奨の共有/unique 要素）・`Array[Box[T]]`・`Array[Array[T]]`（ネスト・依存順序＋`m[i][j]`）＋ **(a) 配列リテラル要素 append**（`m.append([1,2,3])`）＋ **(c) `Array[T]` の単相化（generic struct・関数とも・単純/複合 T）** が動作。仕組み＝複合要素にマングル名 span（`appendMangle`）を与え全経路で共有、C 型/ARC は `c.arrayElems` の ref から復元、型パラメータ要素は `wPA`/`genCElem` が env で解決。test `run/array_compound_elem`・`run/array_nested`・`run/array_generic_field`・`run/array_generic_fn`。**残（(b) のみ）**：
   - (b) **要素 ARC**：`Array[Ref[T]]` の Ref 箱は現状ビットコピー（retain/release せず）＝箱が leak（project の hidden-cost 許容方針内）。`xs.append(refVar)` 後に refVar を release する稀パターンでは UAF 余地あり＝runtime の要素 retain/release（push/set/copy/release）を ref のkind別に出す精緻化が要る。
-  - (c)〔**F11 特有でなく既存の generics ギャップ**〕**`Array[T]`（型パラメータ要素）の単相化**：generic struct/関数の `Array[T]` フィールド/引数を具体型で実体化すると、配列ランタイムが要素名 "T" を literal 出力（`PlewArray_T`・`T* data`＝unknown）＝**単純 T=I32 でも落ちる**（worklog の「generic 型引数の配列」additive 項）。F11 は直接書いた `Array[Ref[Cell]]` を直したが、`Holder[Ref[Cell]]`（field が `Array[T]`）等は型引数越しでこのギャップに当たる。直し＝配列要素の型パラメータを `curTypeArgs` で解決し mangle 名へ substitute（複合 T も同時に通る）。
 - **F12〔中・据え置き：整数リテラル符号モデル〕U64 リテラル ∈ [2^63, 2^64-1] で plewc がクラッシュ**：`tokenValue` が値を I64 で蓄積（`v*10+digit`）し I64 範囲超過でコンパイラ自身の overflow check が panic。直すには値表現を U64 化（`Expr.Int.value` U64・lexer 蓄積 U64・符号なし codegen・範囲検査・**負リテラル `-128` 畳み込みとの両立に符号フラグ**）＝整数リテラルの符号モデルに波及。影響はユーザーの巨大 U64 リテラルのみ（稀）。
 - **演算子トレイト（Eq/Ord 以外）/ `@[Ord]` on enum / 曖昧な untyped-literal オーバーロード**：トレイト体系の大物・需要駆動。[provisional.md](provisional.md) のロードマップで管理。
 
