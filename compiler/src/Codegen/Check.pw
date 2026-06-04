@@ -1371,3 +1371,33 @@ fn checkMoveFnReceivers(c: inout Comp) {
         i += 1
     }
 }
+
+// Is `(nameStart,nameLen)` the name of an `export`ed declaration (spec/15)? Matched
+// by text against the recorded export name spans (across all loaded modules).
+fn isExportedName(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.exports.count {
+        val e: Bind = c.exports[i]
+        if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: nameStart, bLen: nameLen) {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Module visibility (spec/15): every name brought in by `import … with { }` must be
+// part of some loaded module's public surface (`export`). A use of a non-exported
+// name — or an import from the wrong module (whose own module then isn't loaded, so
+// the name is absent from the exported set) — is a compile error.
+fn checkImports(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.imports.count {
+        val im: Bind = c.imports[i]
+        if isExportedName(c: inout c, nameStart: im.nameStart, nameLen: im.nameLen) {
+        } else {
+            compileErrorAt(line: lineOf(c: inout c, offset: im.nameStart), msg: "imported name is not exported (mark it `export` in its module, or import it from the right module)")
+        }
+        i += 1
+    }
+}

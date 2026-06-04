@@ -1116,6 +1116,28 @@ fn parseExport(c: inout Comp) {
         }
         return
     }
+    // `export extern "plew-intrinsic" { fn … }` (spec/15 core-library boundary):
+    // the runtime-backed intrinsics ARE a module's public functions, so the block
+    // form exports every decl it adds. Record all funcs added by parseExtern.
+    match c.curKind() {
+        Kind.KwExtern => {
+            val xfB: U64 = c.funcs.count
+            val xsB: U64 = c.structs.count
+            parseExtern(c: inout c)
+            mut val xi: U64 = xfB
+            while xi < c.funcs.count {
+                recordExport(c: inout c, nameStart: c.funcs[xi].nameStart, nameLen: c.funcs[xi].nameLen)
+                xi += 1
+            }
+            mut val xj: U64 = xsB
+            while xj < c.structs.count {
+                recordExport(c: inout c, nameStart: c.structs[xj].nameStart, nameLen: c.structs[xj].nameLen)
+                xj += 1
+            }
+            return
+        }
+        _ => {}
+    }
     // `export <decl>`: parse the declaration normally, then record the new decl's
     // name as exported (exactly one of structs/enums/funcs/traits gains an entry).
     val sB: U64 = c.structs.count

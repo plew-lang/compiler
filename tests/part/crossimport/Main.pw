@@ -3,7 +3,7 @@
 // must be included exactly once (dedup).
 import @Std/Io with { print }
 import ./Helper with { addOne }
-import ./Util
+import ./Util with { triple }
 
 fn main() {
     print(addOne(n: 41I64))      // 42

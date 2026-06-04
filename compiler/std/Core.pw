@@ -147,7 +147,7 @@ fn digitByteU(d: U64) -> U8 {
 // Textual formatting (spec/02): `{x}` interpolation desugars to x.format(format:).
 // The `format` spec string (e.g. ".2") is accepted but ignored for integers for
 // now (no precision/padding yet — additive).
-trait Format {
+export trait Format {
     fn format(format: String) -> String
 }
 

@@ -9,7 +9,7 @@
 
 import @Std/Core with { Format }
 
-extern "plew-intrinsic" {
+export extern "plew-intrinsic" {
     // Write a string to stdout (no trailing newline).
     fn write(s: String)
     // Write a single byte to stdout.
@@ -29,7 +29,7 @@ extern "plew-intrinsic" {
 // Write a value's textual form (`Format`) to stdout, followed by a newline.
 // `print(x)` infers the type of `x`; a bare integer literal needs a suffix
 // (`print(42I64)`) since numeric literals have no default type (spec/02).
-fn print[T](value~: T) where T: Format {
+export fn print[T](value~: T) where T: Format {
     write(s: value.format(format: ""))
     write(s: "\n")
 }
