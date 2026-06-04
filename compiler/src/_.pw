@@ -25,6 +25,7 @@ part ./Codegen/Stmt
 part ./Codegen/Decl
 part ./Codegen/Mono
 part ./Codegen/Array
+part ./Codegen/Async
 part ./Loader
 
 // ---- driver ----
@@ -111,7 +112,7 @@ fn main() {
     appendBytes(into: inout combined, from: "\n// kwSpan builtins: String U8 Array\n".bytes)
     mut val lx: Lexer = <Lexer bytes=combined pos=0 toks=[] depth=0 />
     lex(lx: inout lx)
-    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] traits=[] conforms=[] methodAliases=[] derives=[] pendingDerives=[] funcBounds=[] curCheckFn=0 curWitnessed=[] curWhereTraits=[] types=[] genInsts=[] fnInsts=[] fnTypes=[] fnThunks=[] captures=[] curClosureId=0 curInClosure=false curCaptureMark=0 arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curRetTy=0 curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curSelfMove=false curTypeParams=[] curTypeArgs=[] curRecvInstRef=0 curGiveTmp=0 curLoopMark=0 curBranchBase=0 impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false impEprint=false impExit=false impReadFileBytes=false impFileExists=false deinits=[] />
+    mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] traits=[] conforms=[] methodAliases=[] derives=[] pendingDerives=[] funcBounds=[] curCheckFn=0 curWitnessed=[] curWhereTraits=[] types=[] genInsts=[] fnInsts=[] fnTypes=[] fnThunks=[] captures=[] curClosureId=0 curInClosure=false curCaptureMark=0 arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curRetTy=0 curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curSelfMove=false curTypeParams=[] curTypeArgs=[] curRecvInstRef=0 curGiveTmp=0 curLoopMark=0 curBranchBase=0 impPrint=false impWrite=false impWriteByte=false impReadStdin=false impReadFile=false impArgCount=false impArgAt=false impEprint=false impExit=false impReadFileBytes=false impFileExists=false impSleep=false deinits=[] curAsync=false asyncState=0 curAsyncFn=0 />
     // reserve TypeRef index 0 as the "no type" sentinel so a `ty` field of 0
     // (synthetic locals, untyped positions) never aliases a real parsed type.
     c.types.append(<TypeRef nameStart=0 nameLen=0 args=[] />)
@@ -191,6 +192,9 @@ fn main() {
     write(s: "__attribute__((unused)) static long long plew_arg_count(void) { return (long long)plew_argc; }\n")
     write(s: "__attribute__((unused)) static PlewString plew_arg_at(long long i) { PlewString s; if (i < 0 || i >= plew_argc) { s.data = \"\"; s.len = 0; return s; } s.data = plew_argv[i]; s.len = (long long)strlen(plew_argv[i]); return s; }\n")
     write(s: "__attribute__((unused)) static PlewString plew_read_file(PlewString path) { FILE* f = fopen(path.data, \"rb\"); PlewString s; if (!f) { s.data = \"\"; s.len = 0; return s; } fseek(f, 0, SEEK_END); long sz = ftell(f); fseek(f, 0, SEEK_SET); char* buf = (char*)malloc((size_t)sz + 1); size_t n = fread(buf, 1, (size_t)sz, f); fclose(f); buf[n] = 0; s.data = buf; s.len = (long long)n; return s; }\n")
+    // async runtime (event loop / promises / timers), emitted only when the
+    // program has an `async fn` (so non-async output stays byte-identical).
+    emitAsyncRuntime(c: inout c)
     // forward typedefs for every nominal type (structs + enums).
     mut val si: U64 = 0
     while si < c.structs.count {
@@ -362,6 +366,9 @@ fn main() {
     // closure env structs (after all value types, before any signature/closure
     // that allocates one).
     emitClosureEnvs(c: inout c)
+    // async frame structs + resume forward-decls (frame fields may hold any value
+    // type, so emit after all nominal/array/closure-env defs, before prototypes).
+    emitAsyncDecls(c: inout c)
     // prototypes (skip main and generic templates — the latter are emitted per
     // instantiation below).
     mut val i: U64 = 0
@@ -398,7 +405,11 @@ fn main() {
             if methodRecvIsTrait(c: inout c, f: fb) {
                 // provided-method template — skip (emitted per conforming type).
             } else {
-                genFunc(c: inout c, fi: j)
+                if fb.isAsync {
+                    genAsyncFunc(c: inout c, fi: j)
+                } else {
+                    genFunc(c: inout c, fi: j)
+                }
             }
         }
     }

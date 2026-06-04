@@ -979,6 +979,9 @@ fn markImport(c: inout Comp, segStart: U64, segLen: U64, nameStart: U64, nameLen
         if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argAt") { c.impArgAt = true }
         if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "exit") { c.impExit = true }
     }
+    if rangeEquals(bytes: c.bytes, start: segStart, len: segLen, kw: "Async") {
+        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "sleep") { c.impSleep = true }
+    }
 }
 
 // `import <path> [with { name, ... }]`. The leading `import` ident is current.

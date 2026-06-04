@@ -1,0 +1,7 @@
+// `await` mid-expression (not at statement head) is not supported yet.
+import @Std/Async with { sleep }
+
+async fn f() -> Promise[I64] {
+    val x: I64 = await sleep(ms: 1) + 1
+    return x
+}

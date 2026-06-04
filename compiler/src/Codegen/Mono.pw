@@ -75,6 +75,17 @@ fn isRefInst(c: inout Comp, ref: U64) -> Bool {
     return rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref")
 }
 
+// Is `ref` a `Promise[T]` instantiation? `Promise` is a blessed lang item (the
+// result of an `async fn`), lowered to a runtime `PlewPromise*` — not a user
+// struct/enum, and not monomorphized (its value slot is type-erased for now).
+fn isPromiseInst(c: inout Comp, ref: U64) -> Bool {
+    if ref >= c.types.count {
+        return false
+    }
+    val t: TypeRef = c.types[ref]
+    return rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Promise")
+}
+
 // Is `ref` a concrete generic *enum* instantiation specifically?
 fn isGenericEnumInst(c: inout Comp, ref: U64) -> Bool {
     if ref >= c.types.count {
@@ -220,6 +231,11 @@ fn emitConcreteCType(c: inout Comp, ref: U64) {
         write(s: "*")
         return
     }
+    // Promise[T] (async result) -> the runtime PlewPromise* (value type-erased).
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Promise") {
+        write(s: "PlewPromise*")
+        return
+    }
     // a function type -> the uniform fat-closure struct (fn ptr + env + rc).
     if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "fn") {
         write(s: "PlewClosure")
@@ -284,6 +300,10 @@ fn genCTypeOf(c: inout Comp, tyRef: U64, fallStart: U64, fallLen: U64, isArray: 
         return
     }
     if isRefInst(c: inout c, ref: tyRef) {
+        emitConcreteCType(c: inout c, ref: tyRef)
+        return
+    }
+    if isPromiseInst(c: inout c, ref: tyRef) {
         emitConcreteCType(c: inout c, ref: tyRef)
         return
     }

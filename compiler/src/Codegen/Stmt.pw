@@ -534,41 +534,20 @@ fn genStmt(c: inout Comp, id: U64) {
     match s {
         Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
             // No annotation (`val x = expr`): infer the binding's type from the
-            // initializer. Without this the type stays empty and genCTypeOf falls
-            // back to `long long`, miscompiling every non-integer initializer
-            // (String/Array/struct/Ref/call result/var copy). exprType's TypeInfo
-            // kinds: 0=scalar 1=String 2=struct/Ref/generic 3=array.
-            mut val effStart: U64 = tyStart
-            mut val effLen: U64 = tyLen
-            mut val effArr: Bool = tyIsArray
-            mut val effTy: U64 = ty
-            if tyLen == 0 {
-                if tyIsArray {
-                } else {
-                    val ti: TypeInfo = exprType(c: inout c, id: init)
-                    effStart = ti.nameStart
-                    effLen = ti.nameLen
-                    effTy = ti.ref
-                    if ti.kind == 3 {
-                        effArr = true
-                    }
-                    // A bare string literal (or other String-valued expr) carries
-                    // no type-name span. String is monomorphic, so the type is
-                    // unambiguously `String` — recover a "String" span from the
-                    // source to name PlewString. (Only the degenerate case where
-                    // "String" appears nowhere falls back to requiring annotation.)
-                    if ti.kind == 1 {
-                        if effLen == 0 {
-                            val ss: Bind = stringTypeSpan(c: inout c)
-                            if ss.nameLen == 0 {
-                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: init)), msg: "cannot infer the type of this binding; add a type annotation (e.g. `: String`)")
-                                return
-                            }
-                            effStart = ss.nameStart
-                            effLen = ss.nameLen
-                        }
-                    }
-                }
+            // initializer (shared with the async frame-field collection). Without
+            // this the type stays empty and genCTypeOf falls back to `long long`,
+            // miscompiling every non-integer initializer (String/Array/struct/Ref/
+            // call result/var copy). TypeInfo kinds: 0 scalar 1 String 2 named 3 array.
+            val le: LetEff = inferLetType(c: inout c, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+            val effStart: U64 = le.start
+            val effLen: U64 = le.len
+            val effArr: Bool = le.arr
+            val effTy: U64 = le.ty
+            // an async fn lowers each top-level binding to a frame-struct field
+            // (`__f->name = init`) so its value survives `await` suspensions.
+            if c.curAsync {
+                genAsyncLet(c: inout c, nameStart: nameStart, nameLen: nameLen, effStart: effStart, effLen: effLen, effArr: effArr, effTy: effTy, init: init, mutable: mutable)
+                return
             }
             checkLitSpan(c: inout c, id: init, tyStart: effStart, tyLen: effLen, isArray: effArr)
             // unique values are move-only: `val g = f` (a bare unique place) is a
@@ -819,12 +798,29 @@ fn genStmt(c: inout Comp, id: U64) {
             }
         }
         Stmt.ExprStmt(val expr) => {
+            // a bare `await e` (discarded) inside an async fn suspends, ignoring
+            // the resolved value.
+            if c.curAsync {
+                match c.exprs[expr] {
+                    Expr.Await(val operand) => {
+                        emitAsyncSuspend(c: inout c, operandId: operand)
+                        return
+                    }
+                    _ => {}
+                }
+            }
             checkLitCtx(c: inout c, id: expr, eKind: 0, eBits: 0, eSgn: false)
             write(s: "    ")
             genExpr(c: inout c, id: expr)
             write(s: ";\n")
         }
         Stmt.Return(val value, val hasValue) => {
+            // inside an async fn, `return e` resolves the frame's `__self` promise
+            // (a `return await e` first suspends) and frees the frame.
+            if c.curAsync {
+                genAsyncReturn(c: inout c, value: value, hasValue: hasValue)
+                return
+            }
             // ARC: a return exits every enclosing scope, so release all owned
             // locals here (emitScopeDrops from 0; params are borrows, skipped).
             // The return value is captured into a temp first — a returned local

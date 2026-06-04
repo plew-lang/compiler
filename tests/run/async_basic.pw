@@ -1,0 +1,15 @@
+// Sequential awaits with value passing through an async fn's Promise result.
+import @Std/Io with { print }
+import @Std/Async with { sleep }
+
+async fn doubler(x: I64) -> Promise[I64] {
+    await sleep(ms: 5)
+    return x + x
+}
+
+async fn main() {
+    val r: I64 = await doubler(x: 21)
+    print(r)
+    val s: I64 = await doubler(x: r)
+    print(s)
+}

@@ -359,6 +359,18 @@ fn genExpr(c: inout Comp, id: U64) {
                 }
                 return
             }
+            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "sleep") {
+                // `sleep(ms:)` -> a timer-backed Promise (spec/14). Non-ambient:
+                // requires `import @Std/Async with { sleep }`.
+                if c.impSleep {
+                    write(s: "plew_sleep((long long)(")
+                    genExpr(c: inout c, id: args[0].expr)
+                    write(s: "))")
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "sleep is not ambient; import it from @Std/Async")
+                }
+                return
+            }
             if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "writeByte") {
                 if c.impWriteByte {
                     write(s: "putchar((int)(")

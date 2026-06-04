@@ -568,11 +568,22 @@ struct Comp {
     mut val impExit: Bool
     mut val impReadFileBytes: Bool
     mut val impFileExists: Bool
+    // `sleep` from @Std/Async (spec/14): a timer-backed `Promise` builtin. Like
+    // the I/O builtins it is non-ambient, so using it without the import errors.
+    mut val impSleep: Bool
     // types that declared a `deinit { ... }` (spec/03). Each entry reuses Bind as
     // a (start,len) pair naming the receiver type. The deinit body itself is a
     // synthetic Func named `deinit` (hasRecv) in c.funcs; this list lets codegen
     // ask "does type T have a deinit?" so scope-exit drops fire it.
     mut val deinits: Array[Bind]
+    // async lowering state (spec/14). curAsync: emitting an `async fn` body, so a
+    // top-level binding lowers to a frame-struct field and a local reference to
+    // `__f->name`. asyncState: the next `await` suspension index (a `switch`
+    // resume case). curAsyncFn: the func index being lowered (so an await knows
+    // its frame type and resume-function name). Reset around each function.
+    mut val curAsync: Bool
+    mut val asyncState: U64
+    mut val curAsyncFn: U64
 }
 
 // ---- cursor helpers ----
