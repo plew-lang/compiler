@@ -210,7 +210,12 @@ fn parsePrimary(c: inout Comp) -> U64 {
             return c.pushExpr(e: <Expr.Array elems=elems />)
         }
         _ => {
+            // An expression was expected but the token can't start one (e.g. a
+            // stray `;` — statements are newline-separated, there is no `;`).
+            // Reject cleanly instead of synthesizing a value-0 Int that later
+            // surfaces as a misleading "integer literal has no type" error.
             val te: Tok = c.cur()
+            compileErrorAt(line: lineOf(c: inout c, offset: te.start), msg: "expected an expression")
             c.advance()
             return c.pushExpr(e: <Expr.Int value=0 offset=te.start isBool=false tyStart=0 tyLen=0 />)
         }

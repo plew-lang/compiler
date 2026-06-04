@@ -2200,6 +2200,7 @@ uint64_t parsePrimary_c_Comp(Comp* c) {
     }
     else {
     Tok te = Comp_cur(&((*c)));
+    compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), te.start), (PlewString){"expected an expression", 22});
     Comp_advance(&((*c)));
     { uint64_t __ret84 = Comp_pushExpr_e_Expr(&((*c)), (Expr){.tag = 0, .data.Int = {.value = 0, .offset = te.start, .isBool = 0, .tyStart = 0, .tyLen = 0}});
     return __ret84; }
