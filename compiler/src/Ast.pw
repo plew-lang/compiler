@@ -190,6 +190,9 @@ struct MatchArm {
     val binds: Array[Bind]
     // body is a Block index for Stmt.Match, or an Expr index for Expr.MatchExpr.
     val body: U64
+    // a struct destructuring pattern `S { val x }` (irrefutable, no tag): bind
+    // fields directly from the scrutinee. enumStart names the struct type.
+    val isStruct: Bool
 }
 
 // The pattern part of a match arm (everything before `=>`), shared by statement
@@ -201,6 +204,7 @@ struct PatInfo {
     val variantStart: U64
     val variantLen: U64
     val binds: Array[Bind]
+    val isStruct: Bool
 }
 
 enum Stmt {

@@ -1,0 +1,47 @@
+// F4: struct destructuring patterns in match `S { val x, val y }` (spec/11).
+// Irrefutable (a struct has one shape), so no tag — fields bind directly.
+// Covers punning, rename (`field: val name`), discard (`field: _`), array and
+// nested-struct fields, a generic struct, and value-position match.
+import @Std/Io with { print }
+
+struct Inner {
+    val n: I32
+}
+
+struct Outer {
+    val tag: I32
+    val items: Array[I32]
+    val inner: Inner
+}
+
+struct Box[T] {
+    val v: T
+    val w: I32
+}
+
+fn sumBox(b: Box[I32]) -> I32 {
+    return match b {
+        Box { val v, val w } => v + w
+    }
+}
+
+fn main() {
+    val o: Outer = <Outer tag=5 items=[10, 20, 30] inner=<Inner n=99 /> />
+    match o {
+        Outer { val tag, val items, val inner } => {
+            print(tag)
+            print(items.count)
+            print(items[2])
+            print(inner.n)
+        }
+    }
+    // rename + discard
+    match o {
+        Outer { tag: val t, val items, inner: _ } => {
+            print(t)
+            print(items[0])
+        }
+    }
+    // generic struct + value position
+    print(sumBox(b: <Box[I32] v=40 w=2 />))
+}

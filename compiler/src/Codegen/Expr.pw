@@ -98,6 +98,47 @@ fn makeProvides(c: inout Comp, fields: Array[MakeField], nameStart: U64, nameLen
     return false
 }
 
+// Value-position struct destructuring match `return match s { S { val x } => x }`:
+// a C statement-expression that binds the fields then yields the arm expression.
+fn emitStructMatchExpr(c: inout Comp, scrut: U64, arm: MatchArm) {
+    val t: U64 = c.tmp
+    c.tmp = c.tmp + 1
+    val st: TypeInfo = exprType(c: inout c, id: scrut)
+    val generic: Bool = isGenericInst(c: inout c, ref: st.ref)
+    val mark: U64 = scopeMark(c: inout c)
+    write(s: "({ ")
+    genCTypeOf(c: inout c, tyRef: st.ref, fallStart: st.nameStart, fallLen: st.nameLen, isArray: false)
+    write(s: " _m")
+    writeU64(n: t)
+    write(s: " = ")
+    genExpr(c: inout c, id: scrut)
+    write(s: "; ")
+    val binds: Array[Bind] = arm.binds
+    mut val bi: U64 = 0
+    while bi < binds.count {
+        val bd: Bind = binds[bi]
+        mut val ft: TypeInfo = scalarInfo()
+        if generic {
+            ft = genericFieldTypeInfo(c: inout c, instRef: st.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+        } else {
+            ft = fieldType(c: inout c, structStart: st.nameStart, structLen: st.nameLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+        }
+        genCTypeOf(c: inout c, tyRef: ft.ref, fallStart: ft.nameStart, fallLen: ft.nameLen, isArray: ft.kind == 3)
+        write(s: " ")
+        writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
+        write(s: " = _m")
+        writeU64(n: t)
+        write(s: ".")
+        writeSpan(c: inout c, start: bd.fieldStart, len: bd.fieldLen)
+        write(s: "; ")
+        addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
+        bi += 1
+    }
+    genExpr(c: inout c, id: arm.body)
+    write(s: "; })")
+    popLocals(c: inout c, mark: mark)
+}
+
 fn genExpr(c: inout Comp, id: U64) {
     val e: Expr = c.exprs[id]
     match e {
@@ -987,6 +1028,12 @@ fn genExpr(c: inout Comp, id: U64) {
         Expr.MatchExpr(val scrut, val arms) => {
             // value-position match -> C statement-expression. Mirrors the
             // Stmt.Match lowering but each arm assigns the result temp __mr.
+            if arms.count > 0 {
+                if arms[0].isStruct {
+                    emitStructMatchExpr(c: inout c, scrut: scrut, arm: arms[0])
+                    return
+                }
+            }
             if matchExhaustive(c: inout c, arms: arms) {
             } else {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")

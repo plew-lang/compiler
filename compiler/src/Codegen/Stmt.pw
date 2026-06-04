@@ -461,6 +461,53 @@ fn tryArrayElemFieldAssign(c: inout Comp, op: I64, target: U64, value: U64) -> B
     }
 }
 
+// Emit a struct destructuring match arm (irrefutable): bind each pattern field
+// from the scrutinee temp and run the body. `arm.enumStart` names the struct.
+fn emitStructMatch(c: inout Comp, scrut: U64, arm: MatchArm) {
+    val t: U64 = c.tmp
+    c.tmp = c.tmp + 1
+    val st: TypeInfo = exprType(c: inout c, id: scrut)
+    val generic: Bool = isGenericInst(c: inout c, ref: st.ref)
+    val mark: U64 = scopeMark(c: inout c)
+    write(s: "    {\n    ")
+    genCTypeOf(c: inout c, tyRef: st.ref, fallStart: st.nameStart, fallLen: st.nameLen, isArray: false)
+    write(s: " _m")
+    writeU64(n: t)
+    write(s: " = ")
+    genExpr(c: inout c, id: scrut)
+    write(s: ";\n")
+    val binds: Array[Bind] = arm.binds
+    mut val bi: U64 = 0
+    while bi < binds.count {
+        val bd: Bind = binds[bi]
+        mut val ft: TypeInfo = scalarInfo()
+        if generic {
+            ft = genericFieldTypeInfo(c: inout c, instRef: st.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+        } else {
+            ft = fieldType(c: inout c, structStart: st.nameStart, structLen: st.nameLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+        }
+        write(s: "        ")
+        genCTypeOf(c: inout c, tyRef: ft.ref, fallStart: ft.nameStart, fallLen: ft.nameLen, isArray: ft.kind == 3)
+        write(s: " ")
+        writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
+        write(s: " = _m")
+        writeU64(n: t)
+        write(s: ".")
+        writeSpan(c: inout c, start: bd.fieldStart, len: bd.fieldLen)
+        write(s: ";\n        (void)")
+        writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
+        write(s: ";\n")
+        addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
+        bi += 1
+    }
+    val savedBB: U64 = c.curBranchBase
+    c.curBranchBase = mark
+    genBlock(c: inout c, id: arm.body)
+    c.curBranchBase = savedBB
+    scopeExit(c: inout c, mark: mark)
+    write(s: "    }\n")
+}
+
 fn genStmt(c: inout Comp, id: U64) {
     val s: Stmt = c.stmts[id]
     match s {
@@ -964,6 +1011,15 @@ fn genStmt(c: inout Comp, id: U64) {
             write(s: "    continue;\n")
         }
         Stmt.Match(val scrut, val arms) => {
+            // struct destructuring `match s { S { val x, val y } => … }`: the
+            // pattern is irrefutable (a struct has one shape), so there is one arm
+            // and no tag — bind the fields directly from the scrutinee temp.
+            if arms.count > 0 {
+                if arms[0].isStruct {
+                    emitStructMatch(c: inout c, scrut: scrut, arm: arms[0])
+                    return
+                }
+            }
             if matchExhaustive(c: inout c, arms: arms) {
             } else {
                 // non-exhaustive match -> undeclared identifier so the C compile

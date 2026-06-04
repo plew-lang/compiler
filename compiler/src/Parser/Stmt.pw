@@ -395,6 +395,7 @@ fn parsePattern(c: inout Comp) -> PatInfo {
     mut val variantStart: U64 = 0
     mut val variantLen: U64 = 0
     mut val binds: Array[Bind] = []
+    mut val isStruct: Bool = false
     if rangeEquals(bytes: c.bytes, start: firstTok.start, len: firstTok.len, kw: "_") {
         isWildcard = true
         c.advance()
@@ -402,34 +403,50 @@ fn parsePattern(c: inout Comp) -> PatInfo {
         enumStart = firstTok.start
         enumLen = firstTok.len
         c.advance()
-        // `.Variant`
-        match c.curKind() {
-            Kind.Dot => { c.advance() }
-            _ => {}
-        }
-        val vTok: Tok = c.cur()
-        variantStart = vTok.start
-        variantLen = vTok.len
-        c.advance()
-        // optional payload destructuring `V(val f, ...)` (record-form, spec/11):
-        // the variant payload is a labelled record, so it uses parentheses. The
-        // old brace form is rejected with a hint.
         mut val popen: Bool = false
         match c.curKind() {
-            Kind.LBrace => {
-                compileErrorAt(line: lineOf(c: inout c, offset: c.cur().start), msg: "destructure an enum variant with parentheses, e.g. `Optional.Some(val v)`")
+            Kind.Dot => {
+                // `Enum.Variant(payload)`: a dot introduces an enum variant; its
+                // payload is a labelled record, so parentheses (the brace form is
+                // rejected with a hint).
+                c.advance()
+                val vTok: Tok = c.cur()
+                variantStart = vTok.start
+                variantLen = vTok.len
+                c.advance()
+                match c.curKind() {
+                    Kind.LBrace => {
+                        compileErrorAt(line: lineOf(c: inout c, offset: c.cur().start), msg: "destructure an enum variant with parentheses, e.g. `Optional.Some(val v)`")
+                    }
+                    Kind.LParen => {
+                        c.advance()
+                        popen = true
+                    }
+                    _ => {}
+                }
             }
-            Kind.LParen => {
+            Kind.LBrace => {
+                // `Struct { val x, val y }`: an undotted name + braces is a struct
+                // destructuring pattern (irrefutable). The struct body is a storage
+                // block, so braces (mirrors the struct declaration).
+                isStruct = true
                 c.advance()
                 popen = true
             }
-            _ => {}
+            _ => {
+                // bare name: a literal or a no-payload variant; enumStart is the
+                // whole pattern (no variant, no payload).
+            }
         }
         if popen {
             while true {
                 c.skipNewlines()
                 match c.curKind() {
                     Kind.RParen => {
+                        c.advance()
+                        break
+                    }
+                    Kind.RBrace => {
                         c.advance()
                         break
                     }
@@ -475,7 +492,7 @@ fn parsePattern(c: inout Comp) -> PatInfo {
             }
         }
     }
-    return <PatInfo isWildcard=isWildcard enumStart=enumStart enumLen=enumLen variantStart=variantStart variantLen=variantLen binds=binds />
+    return <PatInfo isWildcard=isWildcard enumStart=enumStart enumLen=enumLen variantStart=variantStart variantLen=variantLen binds=binds isStruct=isStruct />
 }
 
 // Do two bind lists introduce the same set of names? (order-independent; names
@@ -585,7 +602,7 @@ fn parseMatch(c: inout Comp) -> U64 {
                 c.skipNewlines()
                 val body: U64 = parseArmBody(c: inout c)
                 for val pi in pats {
-                    arms.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body />)
+                    arms.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body isStruct=pi.isStruct />)
                 }
             }
         }
@@ -617,7 +634,7 @@ fn parseMatchExpr(c: inout Comp) -> U64 {
                 val pats: Array[PatInfo] = parseArmPatterns(c: inout c)
                 val body: U64 = parseExpr(c: inout c)
                 for val pi in pats {
-                    arms.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body />)
+                    arms.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body isStruct=pi.isStruct />)
                 }
                 match c.curKind() {
                     Kind.Comma => { c.advance() }

@@ -820,11 +820,11 @@ fn synthEnumEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind, b
         }
         // inner match on rhs: this variant -> payload, anything else -> false.
         mut val innerArms: Array[MatchArm] = []
-        innerArms.append(<MatchArm isWildcard=false enumStart=d.typeStart enumLen=d.typeLen variantStart=v.nameStart variantLen=v.nameLen binds=rhsBinds body=payload />)
+        innerArms.append(<MatchArm isWildcard=false enumStart=d.typeStart enumLen=d.typeLen variantStart=v.nameStart variantLen=v.nameLen binds=rhsBinds body=payload isStruct=false />)
         val noBinds: Array[Bind] = []
-        innerArms.append(<MatchArm isWildcard=true enumStart=0 enumLen=0 variantStart=0 variantLen=0 binds=noBinds body=synthBool(c: inout c, v: 0) />)
+        innerArms.append(<MatchArm isWildcard=true enumStart=0 enumLen=0 variantStart=0 variantLen=0 binds=noBinds body=synthBool(c: inout c, v: 0) isStruct=false />)
         val innerMatch: U64 = c.pushExpr(e: <Expr.MatchExpr scrut=rhsId arms=innerArms />)
-        outerArms.append(<MatchArm isWildcard=false enumStart=d.typeStart enumLen=d.typeLen variantStart=v.nameStart variantLen=v.nameLen binds=lhsBinds body=innerMatch />)
+        outerArms.append(<MatchArm isWildcard=false enumStart=d.typeStart enumLen=d.typeLen variantStart=v.nameStart variantLen=v.nameLen binds=lhsBinds body=innerMatch isStruct=false />)
         vi += 1
     }
     val outerMatch: U64 = c.pushExpr(e: <Expr.MatchExpr scrut=lhsId arms=outerArms />)
