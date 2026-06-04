@@ -47,9 +47,9 @@ Token 列
 AST（arena 確保・index 参照）
   │  セマンティック解析
   │   1. 名前解決（モジュール / import / スコープ）
-  │   2. 型推論・型検査（ジェネリクス、where 句）
-  │   3. trait/impl 解決・拡張解決（#Extension）※ 現状は未実装
-  │   4. 並行性検査（spawn キャプチャ）※ 現状は未実装
+  │   2. 型推論・型検査（ジェネリクス、where 句）※ 実装済
+  │   3. trait/impl 解決（step 1＋Eq/Ord＋derive）※ 実装済 / 拡張解決（#Extension）※ 未実装
+  │   4. 並行性検査（spawn キャプチャ）※ 未実装（イベントループ段）
   ▼
 型付き AST
   │  C コード生成（+ ARC ランタイム C をリンク）
@@ -62,13 +62,14 @@ C ソース
 
 ### 各フェーズの実装メモ（意味論＝言語非依存の契約）
 
-以下は「コンパイラがどう振る舞うべきか」の意味論メモ。多くは**現状まだ未実装**の検査・最適化だが、これから実装するときの索引として残す。
+以下は「コンパイラがどう振る舞うべきか」の意味論メモ。一部は実装済（型検査・trait step 1・ARC・クロージャ）、一部は未実装（拡張解決・並行性・async）で、これから実装するときの索引として残す。
 
 - **AST builder**: トークン列から自前 AST へ。arena に確保し相互参照は index で持つ。`@[...]` 組み込みディレクティブは AST に属性として保持し専用フェーズで変換（ユーザー定義メタプロはビルドと独立した別コマンドで別ファイルへコード生成する別方式へ転換）。→ [design-decisions.md](design-decisions.md) / [spec/16](../spec/04-execution/16-metaprogramming.md)。
 - **拡張解決（最重要）**: メソッド/演算子のバインドは「呼び出し位置の `#Extension` 指定」だけで決定論的に決め、import スコープに依存させない。無名（デフォルト）`impl` はそのまま発動、`extension Name { impl … }` は `#Name` 明示時のみ。一意に定まらなければエラー。→ [language-semantics.md](language-semantics.md)。
 - **並行性検査**: `spawn { … }` のキャプチャはコピー可能のみ、`unique` を渡すなら `spawn fn` の `move` 引数。**借用は async/spawn 境界を越えず、`Ref`/`local` 型は spawn を越えられない**（推移的に `Ref`-free＝`local` でないことを検査）→ スレッド間に共有可変が無く実質 race-free（Mutex 不要）。戻りは `join() -> Promise[T]` ハンドル。
   - **codegen の責務（CoW × spawn）**: CoW 値は内部バッファを**非 atomic** refcount で共有するので、**spawn 境界を越えるコピー可能値には eager な実体化（ディープコピー）を挿入**（async 境界では遅延のまま）。これで非 atomic count を 2 スレッドから触られず全面 atomic ARC を避ける → [spec/14](../spec/04-execution/14-concurrency.md#cow-値は-spawn-境界で実体化するeager-copy)。
   - **クロージャ変換（capture）**: 通常の閉包は外側変数を**参照キャプチャ**（`mut val` は可変・共有・永続）。**脱出する閉包のキャプチャ変数はヒープへ昇格（box 化）**。`mut val` 参照キャプチャした閉包は共有可変ストレージを持つ＝`local` 扱いで spawn 不可。→ [spec/04 環境のキャプチャ](../spec/01-basics/04-functions.md#環境のキャプチャ)。
+- **async/await ローワリング（方式 B＝stackless ステートマシン・確定・未実装）**: `async fn` を**状態機械**に変換する（Node/V8・Rust・C# と同じ・colored async）。`await` をまたいで生きる local だけを**ヒープのフレーム構造体のフィールド**へ昇格し（またがない local は通常の C スタック変数のまま）、`await p` は `state=N`／フレーム退避／PENDING return、resume は `switch(state)` で再突入。`async fn f()` はフレームを確保し `Promise[T]` を返す。**スタックフル（方式 A＝コルーチン/ucontext）は却下**：観測挙動は colored 前提で A/B 同一だが、Node を範とすると終着点は B（軽量大量タスク・WASM 直行）で、A は async fn ローワリング〔難所〕を作り直す中継ぎになる。native-C 先行（意味論を固める）→ WASM（Asyncify/JSPI）。**なぜ B**＝[design-decisions.md](design-decisions.md)「async fn のローワリング」。
 - **ARC**: 循環は `WeakRef`。自動回収は **Ref グラフ限定のサイクルコレクタ**（Bacon–Rajan・per-thread・idle）を additive に足す方向で確定。検出時は loud 報告＋メモリ回収＋**循環メンバの deinit は走らせない**（deinit の有無で分けない＝panic と対称の契約外脱出）→ [design-decisions「循環回収」](design-decisions.md)。
 - **再帰的な値型の自動箱化（codegen）**: 自己参照 `struct`/`enum`（木・連結リスト・AST）は**コンパイラが再帰を検出し必要なフィールドを CoW ヒープセルで自動箱化**しレイアウトを有限化（`indirect` 等の修飾語なし）。値意味論の再帰型は循環を作れないので `WeakRef` 不要 → [spec/05 再帰的な値型](../spec/02-type-system/05-structs-enums.md#再帰的な値型)。
 - **トップレベル/`assoc val` 初期化（runtime）**: 起動時 **eager**（`main` 前に全完了）。各値は **memoize サンク**で force-on-read で依存順を自動算出（静的依存解析なし）。**循環は起動時 panic**（async はデッドロック検出）。→ [spec/15 トップレベル初期化](../spec/04-execution/15-modules.md#トップレベル初期化と実行順序)。

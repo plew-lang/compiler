@@ -22,16 +22,16 @@
 - **`unique`/`borrow`/`move`/`deinit`** → ✅ **実装済＋健全性ハードニング完了**（タグ `unique-deinit`/`unique-move`/`unique-checks`/`unique-nested`/`unique-ref-deinit`/`unique-loud-rejects`/`unique-cond-flow`/`unique-no-generic-args`/`unique-no-double-deinit`/`unique-give-guard`）。`unique struct`＋`deinit`（決定的破棄・型本体→フィールド宣言順・ネスト再帰・合成 `Type_deinit`）・`move`/`borrow` 前置＋引数モード・線形 move 追跡（`Local.moved`・use-after-move/bare コピー/bare 引数/伝染/モード必須を reject・`return` の per-exit 除外）・`Ref[unique]` の最後の解放で deinit 発火・`inout`/`inout fn` は正規動作。**unique 値が黙ってコピー/leak/二重 deinit する穴を全て塞いだ**（`Array[unique]`・generic 型引数・条件付き move・struct フィールド/`Ref`/`give` への place コピーを全て loud に reject）＝危険な unique パスは「正しく動く」か「loud に弾く」だけ。**追加機能も実装済**（タグ `unique-reassign`/`unique-move-fn`）＝`mut val` unique の**再代入**（旧値 deinit→新値 store・直線版）・**消費メソッド `move fn` self**（self 所有・全 exit で deinit・呼び出しでレシーバ moved 印・`borrow fn`＝`fn` 同義）。残（全て loud reject か N/A）：部分 move/return・条件付き move/消費（flow 解析 TODO）・分岐内 unique 再代入・value-position `give`・`local struct`（spawn 段）。spec/03。
 - **`local` 型**（spawn を越えられない・`Ref` 持ちは必須）→ 無し。spawn/async 実装時に。spec/03,14。
 - **`inout`** → 実装済（C ポインタ）。**単純変数・合成可変性（`base.field`・`a[i]`・`.append`/`inout fn` 受信側）の代入可変性検査あり**。残：**重なり inout 検査なし**（spec は同一場所への複数 inout を禁止・lint＋限定 panic）。spec/03。
-- **place 越しの get-modify-set 脱糖**（`arr[i].field=x` 等） → 未実装（単純な代入のみ）。spec/03。
+- **place 越しの get-modify-set 脱糖**（`arr[i].field=x` 等） → **部分実装**：`arr[i].field = x`（`tryArrayElemFieldAssign`＝get-modify-set 脱糖）は動く。残：compound 要素は loud-reject・`arr[i].inoutMethod()`（inout メソッド経由）未対応・**Arrow place 代入の右辺リテラル型付け**（`ys[0]->v = 42` の `42` が「no type from context」＝pointee フィールド型の文脈が渡らない・`42I32`/変数で回避可・`a.b = lit` 通常 field は動くが `ref->field = lit` が未対応）。spec/03。
 
 ## 数値モデル
 
-- **幅つき整数 `I8..U64`** → ✅ **厳密幅 stdint で実装**（各型が `int8_t…int64_t`/`uint16_t…uint64_t`・**U8 は `unsigned char`**＝`.bytes` バッファ共有のため・`Bool` だけ `long long`）。**overflow/0除算 panic**（`__builtin_*_overflow`・符号付き `INT_MIN/-1`・`x % -1`=0 で C UB 回避）・**リテラル文脈型付け**（範囲検査＋厳密 no-default・型サフィックス `5U64`・先頭 `-` 畳み込み）。残（rare な穴）：両オペランドが幅不明な式の算術（`(1+1)` 等リテラルのみ）と配列要素 `/= %=` の narrow-signed `INT_MIN/-1`。`wrapping*` メソッドは additive 予定。
+- **幅つき整数 `I8..U64`** → ✅ **厳密幅 stdint で実装**（各型が `int8_t…int64_t`/`uint16_t…uint64_t`・**U8 は `unsigned char`**＝`.bytes` バッファ共有のため・`Bool` だけ `long long`）。**overflow/0除算 panic**（`__builtin_*_overflow`・符号付き `INT_MIN/-1`・`x % -1`=0 で C UB 回避）・**リテラル文脈型付け**（範囲検査＋厳密 no-default・型サフィックス `5U64`・先頭 `-` 畳み込み）。**リテラルは U64 magnitude モデル**＝全 U64 範囲 [0, 2^64-1] が valid（codegen は >2^63-1 に `ULL`）・2^64-1 超過は lexer で clean なコンパイルエラー・負は Unary `-`＋符号で範囲検査。残（rare な穴）：両オペランドが幅不明な式の算術（`(1+1)` 等リテラルのみ）と配列要素 `/= %=` の narrow-signed `INT_MIN/-1`。`wrapping*` メソッドは additive 予定。
 - **浮動小数点 `F32/F64`** → **未実装**（NaN 比較 panic・float `assert` も float 待ち）。spec/02,12。
 
 ## レンジ（暫定）
 
-- **`a..<b`/`a..=b` は第一級の値**（`HalfOpenRange`/`ClosedRange` 2 型・JSX 糖衣・要素 `Ord`・`Step` で反復） → **現状：`for` のヘッドでしか書けない**。`for val i in a..<b`/`a..=b` をその場で C の for ループに脱糖するだけ。レンジ型・値・`Step`/`Ord`・素の `..` は無い。spec/02,11。
+- **`a..<b`/`a..=b` は第一級の値**（`HalfOpenRange`/`ClosedRange` 2 型・JSX 糖衣・要素 `Ord`・`Step` で反復） → **現状：`for` のヘッドでしか書けない**。`for val i in a..<b`/`a..=b` をその場で C の for ループに脱糖するだけ。レンジ型・値・`Step`/`Ord`・素の `..` は無い。**小・ほぼ by-design**：`for val i: I32 in 0..<5` のループ変数型注釈が範囲境界リテラルへ伝播せず「no type from context」（境界に suffix `0..<5I32` で回避・設計上「範囲境界リテラルは型必須」だが注釈を context に使う改善余地）。spec/02,11。
 
 ## 文字列
 
@@ -40,7 +40,7 @@
 
 ## 配列・辞書・集合・タプル
 
-- `Array[T]`：✅ **値意味論＋CoW＋解放を実装**（上述メモリ節）。添字 `U64`・範囲外 panic は spec 通り。`[E; N]`/const generics/`Slice`/部分文字列は **spec 自体が当面保留**。
+- `Array[T]`：✅ **値意味論＋CoW＋解放を実装**（上述メモリ節）。添字 `U64`・範囲外 panic は spec 通り。**複合要素型も実装済**＝`Array[Ref[T]]`/`Array[Box[T]]`/`Array[Array[T]]`（ネスト）＋配列リテラル要素 append＋`Array[T]` の generic struct/関数での単相化（複合要素にマングル名 span を与え C 型/ARC は要素 ref から復元）。**残る小・hidden-cost ARC 残留（no UAF）**：fresh-temp append（`xs.append(<Ref…/>)`）が box を 1 つ leak（temp 所有権が transfer でなく retain）・heap 持ち Ref pointee の深い release（`Array[Ref[StructWithHeap]]` の pointee の配列/Ref フィールドが leak）・ネスト配列 `Array[Array[T]]` の inner-array 要素 ARC（ビットコピー＝leak）。`[E; N]`/const generics/`Slice`/部分文字列は **spec 自体が当面保留**。
 - **`Dictionary[K,V]`（lang item・`[k:v]` リテラル）／`Set[E]`** → **未実装**（Hash が要る大物）。
 - **ラベル付き無名レコード `(x: I32, y: I32)`** → 未実装（struct のみ）。
 
@@ -56,7 +56,7 @@
 
 - **引数ラベルは必須・宣言順・関数型の同一性の一部** → **部分実装**。ユーザー定義トップレベル関数・メソッドの呼び出しはラベル検査（`hasLabel`＋宣言順で param 名一致・arg 数一致・不一致は `compileError` 診断で reject）。C 出力自体はラベルを落とし位置引数。✅ **ラベル抑制 `~:`**（位置引数・`Param.noLabel`）・**デフォルト引数 `name: T = expr`**（末尾省略のみ）は実装済。✅ **オーバーロード完成**（タグ `overload-mangle`/`overloading`）＝C 名をセレクタ（名前＋各パラメータの ラベル＋型頭）でマングル（`writeFnSelector`）し、`findFunc`/`findMethod` がラベル＋引数型で解決（arity／label／type の3軸・自由関数もメソッドも・`exprType` も解決経由で戻り型を選ぶ・単一名は first-label に fallback で従来通り）。残：**I/O ビルトイン**（暫定シグネチャゆえ非検査）・**関数型同一性へのラベル反映**・オーバーロードした関数値（fn-value は first-by-name）・デフォルト引数の中間省略/配列・struct デフォルト。spec/04,07。
 - **インヘレントメソッド `impl Type { fn m(...) }`** → **実装済（subset）**。`fn`（by-value self）/`inout fn`（self 可変・C ポインタ）の 2 モード・`recv.m(label: arg)`・ラベル検査・C へ `Type_m(self, …)` マングル（`self` 暗黙）。✅ **引数型オーバーロード**（セレクタ＝名前＋ラベル＋型・タグ `overloading`）・✅ **`move fn`／`borrow fn` self**（消費／借用メソッド）実装済。残：トレイト/拡張のメソッド・一時値レシーバへの `inout`。spec/07。
-- **クロージャ／関数値** → ✅ **実装済（不変値キャプチャ＋スカラー mut 参照キャプチャ）**：関数型 `fn(...)->R` は一律 **fat closure `PlewClosure{fn,env,rc,drop}`**（C 関数ポインタ単体から移行・呼び出し ABI は `R fn(void* env, params...)`・bare 関数値はサンク `<sel>__thunk` 経由・呼び出し位置で `.fn` を具体署名へキャスト）。クロージャリテラル＝`__closure<id>(void* __env, ...)`・高階関数。**キャプチャ**：(1)**不変（`val`）の値キャプチャ**＝スカラー（整数/Bool）・String・array・Ref・plain struct（env 構造体 `__closure_env<id>` に格納・ヒープ所有は retain〔share〕して格納＝エスケープ後も生存・`val` 不変ゆえ値キャプチャ＝参照キャプチャと観測同一＝spec 準拠）。(2)**`mut val` の参照キャプチャ＝スカラーのみ**（**箱化**＝外側ローカルを `T*` のヒープ ARC セルにし〔`plew_arc_alloc`〕・env は `plew_ref_share` で retain したポインタを保持・読み書きは両側 deref で**共有**＝`makeCounter` が動く・Swift 流）。body は `((__closure_env<id>*)__env)->name`、boxed は `(*…->name)`。**未対応は loud reject**（silent な意味逸脱を出さない）：**`mut val` 非スカラー**（array/struct/String の参照キャプチャ）・`unique`/generic 実体化/enum/関数値のキャプチャ・**ネスト closure**・**val capture への代入**。**ライフタイム＝leak 解消済**（B2b-2）＝閉包は `PlewClosure.drop`＝`__closure_env<id>_release`（boxed セル/array/struct/Ref キャプチャを release）を持ち、所有 closure ローカルは scope 末で `plew_closure_release`、箱化セルは scope 末で `plew_arc_release`、閉包の bind/return は `plew_closure_share`（retain）＝rc 会計が均衡。**`makeCounter`・エスケープした array キャプチャとも macOS `leaks` で 0 leaks／double-free・UAF 無し**を確認。残る hidden cost＝**引数に直接渡す一時 capturing 閉包**（束縛されない＝env を明示 release しないので env ブロックが残り得る・小・テストでは未観測）・Ref キャプチャ pointee の残留。メソッド値は spec で禁止（spec 通り未対応）。**次（B2b-3）**＝`mut val` 非スカラー箱化・`mut val` 参照キャプチャ閉包の `local` マーク（spawn 不可・spec/14・`spawn { block }` 前提）。
+- **クロージャ／関数値** → ✅ **実装済（不変値キャプチャ＋スカラー mut 参照キャプチャ）**：関数型 `fn(...)->R` は一律 **fat closure `PlewClosure{fn,env,rc,drop}`**（C 関数ポインタ単体から移行・呼び出し ABI は `R fn(void* env, params...)`・bare 関数値はサンク `<sel>__thunk` 経由・呼び出し位置で `.fn` を具体署名へキャスト）。クロージャリテラル＝`__closure<id>(void* __env, ...)`・高階関数。**キャプチャ**：(1)**不変（`val`）の値キャプチャ**＝スカラー（整数/Bool）・String・array・Ref・plain struct（env 構造体 `__closure_env<id>` に格納・ヒープ所有は retain〔share〕して格納＝エスケープ後も生存・`val` 不変ゆえ値キャプチャ＝参照キャプチャと観測同一＝spec 準拠）。(2)**`mut val` の参照キャプチャ＝スカラーのみ**（**箱化**＝外側ローカルを `T*` のヒープ ARC セルにし〔`plew_arc_alloc`〕・env は `plew_ref_share` で retain したポインタを保持・読み書きは両側 deref で**共有**＝`makeCounter` が動く・Swift 流）。body は `((__closure_env<id>*)__env)->name`、boxed は `(*…->name)`。**未対応は loud reject**（silent な意味逸脱を出さない）：**`mut val` 非スカラー**（array/struct/String の参照キャプチャ）・`unique`/generic 実体化/enum/関数値のキャプチャ・**ネスト closure**・**val capture への代入**。**ライフタイム＝leak 解消済**（B2b-2）＝閉包は `PlewClosure.drop`＝`__closure_env<id>_release`（boxed セル/array/struct/Ref キャプチャを release）を持ち、所有 closure ローカルは scope 末で `plew_closure_release`、箱化セルは scope 末で `plew_arc_release`、閉包の bind/return は `plew_closure_share`（retain）＝rc 会計が均衡。**`makeCounter`・エスケープした array キャプチャとも macOS `leaks` で 0 leaks／double-free・UAF 無し**を確認。残る hidden cost＝**引数に直接渡す一時 capturing 閉包**（束縛されない＝env を明示 release しないので env ブロックが残り得る・小・テストでは未観測）・Ref キャプチャ pointee の残留。**小・稀・loud な穴**＝shadow された local をキャプチャすると C 名不一致になり得る（F2 の shadow 用 C 名 suffix `cnum` が `emitCaptureInit` の enclosing 名出力に未配線・壊れても clang エラー＝loud・silent でない・回帰リスクに見合わず低優先）。メソッド値は spec で禁止（spec 通り未対応）。**次（B2b-3）**＝`mut val` 非スカラー箱化・`mut val` 参照キャプチャ閉包の `local` マーク（spawn 不可・spec/14・`spawn { block }` 前提）。
 - **`;` 文区切り** → ⚠️ **既存の未対応（クロージャ無関係）**：Plew は文を改行区切りにし、`;` を文区切りとして使えない。`a; b` を書くと `;` 位置に value 0 の合成 Int ノードができ「integer literal has no type from context」という的外れエラーで落ちる（通常関数本体でも同様）。本来は構文エラーで loud に弾くべき＝パーサ堅牢化の TODO。
 
 ## enum 等価（暫定）
@@ -68,6 +68,7 @@
 
 - **`match` 網羅性をコンパイル時検査** → **実装済**（`_` ワイルドカード or enum 全 variant 被覆・非網羅は `compileError` で reject・網羅 match は末尾 `__builtin_unreachable()`）。パターンは `E.V(val f)` 一段＋`_`＋**rename `(field: val name)`・discard `(field: _)`**＋**or パターン `A | B | …`**（全フィールド束縛必須・選択肢間の束縛名集合不一致はパース時 reject・異名フィールドを rename で共通束縛に揃える payload-or 可）。残：束縛名一致だが**型が食い違う**選択肢は C エラー fallback（クリーン診断でない）・**ガード・ネストパターン無し**・到達不能アーム警告無し。spec/11。
 - **値位置の `match`／`if`** → **実装済**（`return match …`／`val x = match …`／`val x = if c { … give a } else { give b }`・ネスト/`else if` 可・C statement-expression 脱糖・`if` 式は `else` 必須）。残：`match` 式の結果型がバインド依存だと誤推論し得る／`give` 値が配列リテラルのときの型付けは未対応。spec/11。
+- **struct 分解パターン `S { val x, val y }`** → **実装済**（match＝`run/struct_pattern`・for ヘッダ＝`run/for_struct_destructure`＝要素 struct を各反復で分解・punning/rename/discard 可・パターン型不一致と range 反復は loud reject・heap フィールドは borrow＝ASan clean）。**残（未実装機能・非バグ）**：(a) **`for (val k, val v) in dict` の tuple/record 分解**＝dict 反復子か record 要素サポートが前提（別機能）。(b) **`guard` 文そのもの**＝`KwGuard`/`parseGuard`/`Stmt.Guard` が無く、`if`/`while` も refutable 束縛・条件チェーン未対応＝spec/11 の条件チェーン束縛は `if`/`while`/`guard` 横断の丸ごと別 feature。spec/11。
 - **`panic`（発散文）** → **実装済**（`panic <msg>`→noreturn `plew_panic`・stderr `panic: <msg>`＋`exit(1)`・unwind なし・`deinit` 非走行）。配列範囲外 panic は個別ランタイムで exit。残：式位置の `panic` は文のみ。
 
 ## 演算子（subset）
@@ -95,7 +96,7 @@
 ## 共有可変・並行性・メタプログラミング
 
 - **`Ref[T]`（共有可変）** → ✅ **基本実装済**：rc ヘッダ付きヒープ箱・`<Ref[T] value=e/>`・`r->field`・コピーで retain 共有・scope 末で release（最後の解放で箱を free＋pointee の配列/struct を release・**`Ref[unique]` は pointee の `deinit`→`release` を発火**＝unique を共有/格納する正規パターンが動く）。残：`WeakRef`＋`upgrade()`・循環回収・bare `<Ref value=e/>` 型推論（明示 `[T]` 必須）。spec/03,14。
-- **`async`/`await`/`spawn`/`Promise`/`JoinHandle`/チャネル** → **未実装**（イベントループ＝最大の残）。✅ 土台＝関数値＋非キャプチャクロージャは実装済（spawn にはキャプチャが要る）。
+- **`async`/`await`/`spawn`/`Promise`/`JoinHandle`/チャネル** → **未実装**（イベントループ＝最大の残・**方式 B＝stackless ステートマシン確定**・native-C 先行→WASM・[design-decisions.md](design-decisions.md)「async fn のローワリング」）。✅ 土台＝関数値＋leak-free クロージャキャプチャ（不変値＋スカラー `mut val` 参照）・ARC・generics（`Promise[T]`）・`try`/`Result`/`Optional` は実装済。残る closure ギャップ（`mut val` 非スカラー箱化・`local` マーク）は spawn 段で回収（単一スレッド async は Ref 可ゆえ async 段では不要）。
 - **メタプログラミング（`Derive`・コード生成）** → 未実装（spec 上も最後）。
 
 ## 字句・文の区切り
@@ -112,11 +113,10 @@
 - **【missing・clang 止まり】Eq/Ord 以外の演算子トレイト未配線**：`Add/Sub/Mul/Div/Rem`・`Neg/Not/BitNot`・`Index/IndexSet`・`Coalesce`・`Pow`・`From/TryFrom` はユーザー型で脱糖されず生 C→clang で落ちる（Plew 診断なし）。eager checker も比較op(50-55)のみ境界チェック・算術 op 素通り。大物の残作業。
 - **【silent 逸脱・小】曖昧な無サフィックス整数リテラルが先頭オーバーロードを選ぶ**（`k(a:I32)`/`k(a:U64)` に `k(a:5)`・呼出位置の曖昧検出が要る）・**`val f = obj.method`（メソッド値化）を受理**（scope 復元の型回復が要る・現状 clang 止まり）。
 - **【missing・loud】`@[Ord]` on enum**・**`@[Ord]` は `@[Eq]` を含意しない**（`Ord: Eq`）。
-- **【pre-existing・broad】`val x = expr`（注釈なし）の型推論なし**＝generic 呼び出しの引数型推論も連鎖劣化（注釈必須）。
 - **既知 deferred**：`any P`・関連型・トレイト型引数 `Add[Rhs]`・`#Ext`・`a#P.foo()` 源選択・明示型引数 `f[I32](x)`・`Self` 入力要求の witness 置換（hand-written のみ・derive は無事）。
 
 **優先度（私見）**：演算子トレイト全配線は大物・需要駆動。残る silent 逸脱2件（曖昧リテラル・method 値化）は小だが実装にやや手間（呼出位置/scope 復元）。
 
 ---
 
-**再訪の優先度（私見）**：観測挙動を歪める残りの剥離＝①トレイト/`where`/Dictionary ②クロージャキャプチャ→spawn→async。整数幅・match・ラベル・診断・値意味論・**CoW＋refcount 解放（配列/struct/Ref・非アトミック）**・generics・`Optional`/`Result`/`try`/`??`・**`unique`＋`deinit`＋move 所有権**は解消済。残る hidden cost＝循環回収（`WeakRef` 手動 or サイクルコレクタ）・mono 局所 leak・`Array[unique]`/部分 move。
+**再訪の優先度（私見）**：観測挙動を歪める残りの剥離＝①**イベントループ（async/await→spawn・方式 B）**＝最大の残 ②演算子トレイト全配線（Eq/Ord 以外・需要駆動）／関連型 Iterator ／Dictionary。整数幅・match・ラベル・診断・値意味論・**CoW＋refcount 解放（配列/struct/Ref・非アトミック）**・generics・`Optional`/`Result`/`try`/`??`・**`unique`＋`deinit`＋move 所有権**・**クロージャ（leak-free キャプチャ）**は解消済。残る hidden cost＝循環回収（`WeakRef` 手動 or サイクルコレクタ）・mono 局所 leak・`Array[unique]`/部分 move・F11 の ARC 残留。
