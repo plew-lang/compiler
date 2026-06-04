@@ -8,17 +8,31 @@
 
 意味論の hidden-meaning（整数幅・match 網羅・ラベル・診断・受理の健全性チェック・値意味論/CoW・`unique`/`deinit`/move・generics・トレイト step 1＋Eq/Ord＋derive・クロージャ）は概ね解消済み。**残っている剥離（実装済/未実装の現況）はすべて [provisional.md](provisional.md) が正典**（このログには個別バグ/完了項目を溜めない）。
 
-## 次の一歩＝イベントループ（async/await/Promise・最大の残）
+## 次の一歩＝イベントループ（async/await/Promise・最大の残・着手中）
 
 **方式は B＝stackless ステートマシン**（Node/V8 と同じ・colored async）に確定。**native-C 先行**で意味論（suspend/resume・drain 順・ARC across await）を固め、その後 WASM（Asyncify/JSPI）。**A＝スタックフルは却下**（Node を範とすると終着点が B・A は async fn ローワリング〔難所〕を作り直す中継ぎになる）。根拠・却下案は [design-decisions.md](design-decisions.md)「async fn のローワリング」。
 
-土台は揃っている：関数値＝fat closure＋leak-free キャプチャ（不変値＋スカラー `mut val` 参照）・ARC・generics（`Promise[T]` 用）・`try`/`Result`/`Optional`。タスク＝`()->()` 閉包/フレームで表現でき `any` 不要。
+### C ローワリング設計（確定・実装中）
 
-増分の切り方（最小サブセットから additive に）：
-1. `async fn`/`await`/`Promise[T]` の言語表面（lexer→parser→型）＋**単一中断点**のステートマシン化（await をまたぐ live local だけフレーム構造体へ昇格・`await` で `state=N`／フレーム退避／PENDING return・resume は `switch(state)`）。
-2. イベントループ（タスクキュー＋drain）＋ `async fn main`＋ タイマ 1 本（`sleep(ms)` 相当）＝**最小マイルストン**（遅延 2 タスクが期日順に発火するゴールデンテスト）。
-3. await-in-loop / await-in-branch / await-in-match / 複数中断点へ拡張。
-4. `spawn`＝実スレッド（pthread・境界で CoW 値を eager 実体化・`Ref` は越えられない）・`JoinHandle[T]`/`join()->Promise[T]`。ここで closure の残ギャップ（`mut val` 非スカラー箱化・`mut val` 参照キャプチャ閉包の `local` マーク）を回収（単一スレッド async では Ref 可ゆえ async 段では不要）。
+`async fn f(p…) -> Promise[T]` を **3 つの C 実体**へ下ろす（goto ベース stackless コルーチン＝protothread 流）：
+1. **frame 構造体** `__af_<sel>`：`int __state` ＋ awaiting 中の sub-promise `PlewPromise* __sub` ＋ 自分が返す `PlewPromise* __self` ＋ **全パラメータ＋全ローカル**（await を跨ぐ値の退避ゆえ live 解析せず一律 hoist）。
+2. **resume 関数** `void __af_<sel>_resume(void* __fp)`：先頭で `switch(__f->__state){case 0:break; case N: goto __L<N>; …}`。本体を素直に emit し、await 点だけ suspend/resume に展開。
+3. **entry 関数** `PlewPromise* <sel>(p…)`：frame を `plew_arc_alloc`、state=0・params コピー・`__self=plew_promise_new()`、resume を 1 回呼び、`__self` を返す。
+
+**ローカル参照の振り向け**：`c.curAsync` フラグ＋`writeLocalCName` を async 時に `__f->name` へ（1 箇所で読み書きの大半を回収）。宣言サイト（Let/for-var/binds）は async 時 `T name = init` を `__f->name = init`（型前置なし＝field は frame で宣言済み）に切替。
+
+**await の制限（段階 1-2）**：await は**文頭位置限定**＝`val x = await e`／`await e`（破棄）／`return await e`。式中 await（`await a + 1`）は段階 3+ additive（reject）。await 展開：
+```
+__f->__sub = (e の Promise);  __f->__state = N;
+if (!__f->__sub->done) { __f->__sub->k=resume; __f->__sub->kframe=__f; return; }
+__L<N>: ;  __f->x = __f->__sub->value;   // val x = await e のとき
+```
+switch 先頭ディスパッチが `goto __L<N>` で再入。全ローカル hoist ゆえ if/while/for/match の中へ goto しても宣言跨ぎが無く C 的に安全＝**段階 3（await-in-loop/branch/match）も同じ goto 機構で自然に伸びる**。
+
+**ランタイム（preamble）**：`PlewPromise{int done; long long value; PlewResumeFn k; void* kframe;}`（値スロットは当面 `long long`＝()／整数／Bool。String/struct 値の Promise は additive）＋ready キュー＋タイマ（deadline 配列）＋`plew_loop_run()`（ready→タイマ drain）＋`plew_sleep(ms)->PlewPromise*`。`async fn main` の `int main` は frame 確保→resume 1 回→`plew_loop_run()`→return 0。
+
+**段階**：1. 言語表面＋単一中断点（着手）→ 2. ループ＋`async fn main`＋`sleep`＝最小マイルストン（遅延 2 タスクが期日順に発火）→ 3. await-in-loop/branch/match・複数中断点・式中 await。
+4（当面スキップ）. `spawn`＝実スレッド（pthread・境界で CoW eager 実体化・`Ref` 不可）・`JoinHandle[T]`/`join()->Promise[T]`。closure 残ギャップ（`mut val` 非スカラー箱化・参照キャプチャ閉包の `local` マーク）回収。
 
 ## ロードマップ（残りの大物・前向きのみ）
 
