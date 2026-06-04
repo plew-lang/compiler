@@ -31,8 +31,8 @@ Phase B（モジュール可視性）→ A（メンバ可視性）の順（[[vis
 - ✅ **I1＝module identity**：loader が各ファイルに module id（`part`=親と同・`import`=新）を割り当て、combined 内オフセット範囲を `Comp.moduleRanges` に記録、`moduleOf(offset)` で逆引き。
 - ✅ **I2＝export パース＋import 記録**：`export <decl>`／`export extern { }`／`export fn`/`trait` を `Comp.exports` に記録。`import … with { name [as alias] }` を `Comp.imports`（fieldStart=importing module id）に記録。
 - ✅ **I3＝import-export 強制（4a）**：`checkImports`＝`with` import した名前は loaded な export 集合に在ること。std に `export` 付与（Io print＋extern・Process・Async sleep・Core Format）。間違ったモジュール import は当該モジュール未ロードで自然に落ちる。`tests/part/crossimport` を spec 準拠化（可視性無視だった）・reject `import_not_exported` 追加。209 緑・不動点。
-- 🔲 **4b＝use-without-import 強制**：flat namespace に頼った「import せず cross-module 名を使う」を拒否（関数呼び/型参照の use-site module ゲート・lang item/同一 module/builtin は除外）。**4a だけだと import しない flat 使用は素通り**＝これが残る穴。広いゲートで要注意。
-- 🔲 **Phase A＝メンバ可視性**：`pub`/`pub(get)`/private を FieldDef/Func に格納→フィールド read/write・メソッド・無名 impl 文脈を検査。spec の private＝「無名 impl 内のみ」がコンパイラの自由関数→struct フィールド直接様式と衝突→`Comp`/`Lexer`/`TypeRef` 等の **pub 大掃除**（機械的・spec準拠化）。
+- ✅ **I4＝use-without-import 強制（4b）**：`checkUseVisibility`＝expr arena を走査し、別モジュール定義の自由関数呼びは use-site module へ import 済みでなければ拒否（同一 module〔コンパイラは1 module〕・未解決〔local/closure〕は除外・型は ambient ゆえ関数呼びのみ）。4a だけの flat 使用穴を塞いだ。可視性無視テストを spec 準拠化（assert を `export fn`＋`with` import・rootimport export＋with・array_methods は public `self.get`/`self.count` 使用＝raw intrinsic は非公開 floor）。reject `use_without_import` 追加。210 緑・不動点。**＝Phase B（モジュール可視性）完成**（export ゲート＋import ゲート両方向）。
+- 🔲 **Phase A＝メンバ可視性**：`pub`/`pub(get)`/private を FieldDef/Func に格納→フィールド read/write・メソッド・無名 impl 文脈を検査。spec の private＝「無名 impl 内のみ」がコンパイラの自由関数→struct フィールド直接様式と衝突→`Comp`/`Lexer`/`TypeRef` 等の **pub 大掃除**（機械的・コンパイラ struct は全 pub 化＝spec準拠で実害なし・enforcement の実価値は stdlib の pub(get)/private〔Array.count 等〕を将来含め守ること）。
 
 ## ロードマップ（残りの大物・前向きのみ）
 
