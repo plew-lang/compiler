@@ -47,6 +47,15 @@ fn isGenericInst(c: inout Comp, ref: U64) -> Bool {
     if t.args.count == 0 {
         return false
     }
+    // ARRAY-STRUCT MIGRATION (dormant guard): the prelude's `struct Array[T]` is
+    // defined ahead of the representation flip, while `Array[E]` is still lowered
+    // to the builtin `PlewArray_<E>`. Force `Array` to be treated as builtin here
+    // so it never enters the genInst path — otherwise its methods would be emitted
+    // twice (once via emitMonoMethods, once via the builtin emitArrayMethods) and
+    // its struct body would shadow the builtin runtime. Removed when the flip lands.
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+        return false
+    }
     if genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen) < c.structs.count {
         return true
     }
