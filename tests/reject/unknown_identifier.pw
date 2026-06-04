@@ -1,0 +1,6 @@
+import @Std/Io with { print }
+struct P { val n: I32 }
+impl P {
+    fn get() -> I32 { return n }
+}
+fn main() { print(0) }

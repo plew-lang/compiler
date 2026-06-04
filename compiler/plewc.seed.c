@@ -8618,7 +8618,12 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     plew_write((PlewString){"__thunk, 0, 0, 0}", 17});
     }
     else {
+    if (isSelfRef_c_Comp_start_U64_len_U64(&((*c)), start, len)) {
     writeSpan_c_Comp_start_U64_len_U64(&((*c)), start, len);
+    }
+    else {
+    compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), start), (PlewString){"unknown identifier", 18});
+    }
     }
     }
     }

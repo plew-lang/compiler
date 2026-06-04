@@ -156,7 +156,15 @@ fn genExpr(c: inout Comp, id: U64) {
                         writeFnSelector(c: inout c, f: c.funcs[fvi])
                         write(s: "__thunk, 0, 0, 0}")
                     } else {
-                        writeSpan(c: inout c, start: start, len: len)
+                        if isSelfRef(c: inout c, start: start, len: len) {
+                            // `self` is the method's first C parameter (emitted raw).
+                            writeSpan(c: inout c, start: start, len: len)
+                        } else {
+                            // resolves to no local, parameter, function, or `self`:
+                            // reject rather than echo the raw name into invalid C
+                            // (e.g. a field used without `self.`, or a typo).
+                            compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "unknown identifier")
+                        }
                     }
                 }
             }
