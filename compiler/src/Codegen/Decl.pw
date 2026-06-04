@@ -376,6 +376,12 @@ fn emitMonoStructCopyDef(c: inout Comp, instRef: U64) {
         return
     }
     val s: StructDef = c.structs[si]
+    // env so an array field whose element is a type parameter resolves to the
+    // instantiation's concrete element in wPA.
+    val savedP: Array[Bind] = c.curTypeParams
+    val savedA: Array[U64] = c.curTypeArgs
+    c.curTypeParams = s.typeParams
+    c.curTypeArgs = t.args
     emitMangle(c: inout c, ref: instRef)
     write(s: " ")
     emitMangle(c: inout c, ref: instRef)
@@ -401,6 +407,8 @@ fn emitMonoStructCopyDef(c: inout Comp, instRef: U64) {
         i += 1
     }
     write(s: " return r; }\n")
+    c.curTypeParams = savedP
+    c.curTypeArgs = savedA
 }
 
 // Does a mono generic enum instantiation need a deep copy? True if any variant

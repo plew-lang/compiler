@@ -246,6 +246,17 @@ fn genCElem(c: inout Comp, start: U64, len: U64) {
         write(s: "long long")
         return
     }
+    // a type-parameter element (`Array[T]` in a generic instance) resolves to its
+    // concrete argument's C type via the active env.
+    mut val k: U64 = 0
+    while k < c.curTypeParams.count {
+        val p: Bind = c.curTypeParams[k]
+        if spansEqual(c: inout c, aStart: p.nameStart, aLen: p.nameLen, bStart: start, bLen: len) {
+            emitConcreteCType(c: inout c, ref: c.curTypeArgs[k])
+            return
+        }
+        k += 1
+    }
     // a compound array element (`Ref[I32]`, `Array[I32]`, `Box[I32]`) has a
     // mangled name span; recover its real C type from the stored ref.
     val er: U64 = arrayElemRef(c: inout c, start: start, len: len)

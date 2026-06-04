@@ -1,5 +1,17 @@
-// Write the array C name `PlewArray_<elem>`.
+// Write the array C name `PlewArray_<elem>`. A type-parameter element name
+// (`Array[T]` inside a generic instance) resolves to its concrete argument's
+// mangle via the active env, so the name matches the instantiated runtime.
 fn wPA(c: inout Comp, elemStart: U64, elemLen: U64) {
+    mut val k: U64 = 0
+    while k < c.curTypeParams.count {
+        val p: Bind = c.curTypeParams[k]
+        if spansEqual(c: inout c, aStart: p.nameStart, aLen: p.nameLen, bStart: elemStart, bLen: elemLen) {
+            write(s: "PlewArray_")
+            emitMangle(c: inout c, ref: c.curTypeArgs[k])
+            return
+        }
+        k += 1
+    }
     write(s: "PlewArray_")
     writeSpan(c: inout c, start: elemStart, len: elemLen)
 }
@@ -146,6 +158,19 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
 
 fn isU8Elem(c: inout Comp, elemStart: U64, elemLen: U64) -> Bool {
     return rangeEquals(bytes: c.bytes, start: elemStart, len: elemLen, kw: "U8")
+}
+
+// Whether an array element entry should be skipped by the runtime-emit loop:
+// U8 (its runtime is hand-written) or a bare type-parameter name (`Array[T]` in
+// a generic template — only its concrete instantiations get a runtime).
+fn skipArrayElem(c: inout Comp, ae: Bind) -> Bool {
+    if isU8Elem(c: inout c, elemStart: ae.nameStart, elemLen: ae.nameLen) {
+        return true
+    }
+    if isTypeParamName(c: inout c, start: ae.nameStart, len: ae.nameLen) {
+        return true
+    }
+    return false
 }
 
 // PlewArray_U8 is always available (String.bytes yields it) and is emitted with

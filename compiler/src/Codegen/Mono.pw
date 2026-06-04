@@ -383,21 +383,25 @@ fn ensureArrayElemDeps(c: inout Comp, elemRef: U64) {
 }
 
 fn registerArrayElemRef(c: inout Comp, elemRef: U64) {
-    if elemRef >= c.types.count {
+    // resolve a bare type parameter (`Array[T]` inside a generic instance) to its
+    // concrete argument under the active env, so the runtime is emitted for the
+    // instantiation (`Array[I32]`), not the template (`PlewArray_T`).
+    val re: U64 = resolveTy(c: inout c, tyRef: elemRef)
+    if re >= c.types.count {
         return
     }
-    ensureArrayElemDeps(c: inout c, elemRef: elemRef)
+    ensureArrayElemDeps(c: inout c, elemRef: re)
     // a compound element (`Ref[I32]`, `Array[I32]`, `Box[I32]`) gets a mangled
     // name span + its ref, matching the parser's recordArrayElem (so the runtime
     // and use sites agree); a simple element uses its head name.
-    mut val nStart: U64 = c.types[elemRef].nameStart
-    mut val nLen: U64 = c.types[elemRef].nameLen
+    mut val nStart: U64 = c.types[re].nameStart
+    mut val nLen: U64 = c.types[re].nameLen
     mut val fRef: U64 = 0
-    if isCompoundType(c: inout c, ref: elemRef) {
-        val mn: Bind = appendMangleSpan(c: inout c, ref: elemRef)
+    if isCompoundType(c: inout c, ref: re) {
+        val mn: Bind = appendMangleSpan(c: inout c, ref: re)
         nStart = mn.nameStart
         nLen = mn.nameLen
-        fRef = elemRef
+        fRef = re
     }
     mut val i: U64 = 0
     while i < c.arrayElems.count {
@@ -452,7 +456,41 @@ fn scanType(c: inout Comp, ref: U64) {
                 j += 1
             }
             c.genInsts.append(ref)
+            // scan the generic struct's fields under this instantiation's env so an
+            // `Array[T]` field registers its concrete element (`Array[I32]`) — the
+            // runtime is keyed off the instantiation, not the `PlewArray_T` template.
+            scanGenInstFields(c: inout c, instRef: ref)
         }
+    }
+}
+
+// Scan the fields of the generic struct named by `instRef` with the env set to
+// this instantiation (params -> args), so array-typed fields register their
+// resolved element type.
+fn scanGenInstFields(c: inout Comp, instRef: U64) {
+    val inst: TypeRef = c.types[instRef]
+    mut val si: U64 = 0
+    while si < c.structs.count {
+        val sd: StructDef = c.structs[si]
+        if spansEqual(c: inout c, aStart: sd.nameStart, aLen: sd.nameLen, bStart: inst.nameStart, bLen: inst.nameLen) {
+            if sd.typeParams.count == inst.args.count {
+                if sd.typeParams.count > 0 {
+                    val savedP: Array[Bind] = c.curTypeParams
+                    val savedA: Array[U64] = c.curTypeArgs
+                    c.curTypeParams = sd.typeParams
+                    c.curTypeArgs = inst.args
+                    val fs: Array[FieldDef] = sd.fields
+                    mut val k: U64 = 0
+                    while k < fs.count {
+                        scanType(c: inout c, ref: fs[k].ty)
+                        k += 1
+                    }
+                    c.curTypeParams = savedP
+                    c.curTypeArgs = savedA
+                }
+            }
+        }
+        si += 1
     }
 }
 
@@ -592,6 +630,27 @@ fn genericFieldTypeInfo(c: inout Comp, instRef: U64, fieldStart: U64, fieldLen: 
                 }
                 pi += 1
             }
+            // an `Array[T]` field: resolve the element type parameter so the
+            // use site (e.g. the memberwise factory) gets the concrete element.
+            if rangeEquals(bytes: c.bytes, start: ftr.nameStart, len: ftr.nameLen, kw: "Array") {
+                if ftr.args.count > 0 {
+                    val elr: TypeRef = c.types[ftr.args[0]]
+                    mut val ej: U64 = 0
+                    while ej < s.typeParams.count {
+                        val ep: Bind = s.typeParams[ej]
+                        if spansEqual(c: inout c, aStart: elr.nameStart, aLen: elr.nameLen, bStart: ep.nameStart, bLen: ep.nameLen) {
+                            val argRef: U64 = t.args[ej]
+                            if isCompoundType(c: inout c, ref: argRef) {
+                                val mn: Bind = appendMangleSpan(c: inout c, ref: argRef)
+                                return <TypeInfo kind=3 nameStart=mn.nameStart nameLen=mn.nameLen ref=0 />
+                            }
+                            val at: TypeRef = c.types[argRef]
+                            return <TypeInfo kind=3 nameStart=at.nameStart nameLen=at.nameLen ref=0 />
+                        }
+                        ej += 1
+                    }
+                }
+            }
             return typeInfoOfRef(c: inout c, ref: fd.ty)
         }
         i += 1
@@ -665,6 +724,12 @@ fn emitMonoStruct(c: inout Comp, instRef: U64) {
         return
     }
     val s: StructDef = c.structs[si]
+    // env so an array field element type parameter (`Array[T]`) resolves to the
+    // instantiation's concrete argument inside emitFieldCType -> emitMangle.
+    val savedP: Array[Bind] = c.curTypeParams
+    val savedA: Array[U64] = c.curTypeArgs
+    c.curTypeParams = s.typeParams
+    c.curTypeArgs = t.args
     write(s: "struct ")
     emitMangle(c: inout c, ref: instRef)
     write(s: " {\n")
@@ -680,6 +745,8 @@ fn emitMonoStruct(c: inout Comp, instRef: U64) {
         i += 1
     }
     write(s: "};\n")
+    c.curTypeParams = savedP
+    c.curTypeArgs = savedA
 }
 
 // `struct Optional_I32 { long long tag; union { ... } data; };` — a generic

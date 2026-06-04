@@ -234,7 +234,7 @@ fn main() {
     mut val ai: U64 = 0
     while ai < c.arrayElems.count {
         val ae: Bind = c.arrayElems[ai]
-        if isU8Elem(c: inout c, elemStart: ae.nameStart, elemLen: ae.nameLen) {
+        if skipArrayElem(c: inout c, ae: ae) {
         } else {
             genArrayTypedef(c: inout c, elemStart: ae.nameStart, elemLen: ae.nameLen)
         }
@@ -302,7 +302,7 @@ fn main() {
     mut val ar: U64 = 0
     while ar < c.arrayElems.count {
         val ae2: Bind = c.arrayElems[ar]
-        if isU8Elem(c: inout c, elemStart: ae2.nameStart, elemLen: ae2.nameLen) {
+        if skipArrayElem(c: inout c, ae: ae2) {
         } else {
             genArrayRuntimeFns(c: inout c, elemStart: ae2.nameStart, elemLen: ae2.nameLen)
         }
