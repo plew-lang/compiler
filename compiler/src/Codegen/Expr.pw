@@ -617,7 +617,16 @@ fn genExpr(c: inout Comp, id: U64) {
                 write(s: ")")
                 return
             }
-            val bt: TypeInfo = exprType(c: inout c, id: recv)
+            mut val bt: TypeInfo = exprType(c: inout c, id: recv)
+            // a String value method (`s.isEmpty()`): exprType carries no name span
+            // for String, so recover "String" and treat it as a named receiver so
+            // `impl String { … }` methods resolve and mangle to `String_<m>`.
+            if bt.kind == 1 {
+                val ss: Bind = stringTypeSpan(c: inout c)
+                if ss.nameLen != 0 {
+                    bt = <TypeInfo kind=2 nameStart=ss.nameStart nameLen=ss.nameLen ref=0 />
+                }
+            }
             if bt.kind == 3 {
                 // array builtin: `.append(v)` mutates the receiver, so it must be
                 // a mutable place (spec: `val` arrays are immutable).

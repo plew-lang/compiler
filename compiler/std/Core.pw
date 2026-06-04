@@ -107,6 +107,15 @@ extern "plew-intrinsic" {
     fn stringFromBytes(b~: Array[U8]) -> String
 }
 
+// String methods, written in pure Plew over the exposed `bytes` view (spec/02:
+// `String` is an owned lang-item that Core owns, so it carries inherent methods).
+impl String {
+    // Is the string empty (zero bytes)?
+    fn isEmpty() -> Bool {
+        return self.bytes.count == 0
+    }
+}
+
 // A decimal digit (0-9) as its ASCII byte. Two width-typed copies: with no
 // implicit numeric conversion an I64 digit cannot call a U64 helper (and `48+d`
 // would need a forbidden cast), so each spells out the glyph table.

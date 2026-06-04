@@ -1,0 +1,9 @@
+// String methods written in pure Plew in @Std/Core (over the exposed `bytes`).
+import @Std/Io with { print }
+import @Std/Core with { Format }
+fn main() {
+    val a: String = ""
+    val b: String = "hi"
+    if a.isEmpty() { print(1I64) } else { print(0I64) }
+    if b.isEmpty() { print(1I64) } else { print(0I64) }
+}

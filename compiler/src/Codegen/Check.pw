@@ -1322,12 +1322,16 @@ fn checkImplOnBuiltin(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
+        // only primitive *scalars* (I8..U64, Bool) are method-less: their behaviour
+        // is trait-only, so an inherent method on one is rejected. `String`/`Array`
+        // are owned aggregate lang-items that legitimately carry inherent methods
+        // (`isEmpty`, `append`, …) written in Core, so they are not in this group.
         mut val onBuiltin: Bool = false
         if f.hasRecv {
-            onBuiltin = isPrimType(c: inout c, start: f.recvStart, len: f.recvLen) || rangeEquals(bytes: c.bytes, start: f.recvStart, len: f.recvLen, kw: "String")
+            onBuiltin = isPrimType(c: inout c, start: f.recvStart, len: f.recvLen)
         } else {
             if f.isAssoc {
-                onBuiltin = isPrimType(c: inout c, start: f.recvStart, len: f.recvLen) || rangeEquals(bytes: c.bytes, start: f.recvStart, len: f.recvLen, kw: "String")
+                onBuiltin = isPrimType(c: inout c, start: f.recvStart, len: f.recvLen)
             }
         }
         // a *trait-conformance* member on a primitive/String is allowed: Core owns

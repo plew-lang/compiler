@@ -1118,7 +1118,15 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 }
                 return scalarInfo()
             }
-            val rt: TypeInfo = exprType(c: inout c, id: recv)
+            mut val rt: TypeInfo = exprType(c: inout c, id: recv)
+            // a String value method's receiver: recover "String" so the method
+            // resolves (exprType carries no name span for String).
+            if rt.kind == 1 {
+                val ss: Bind = stringTypeSpan(c: inout c)
+                if ss.nameLen != 0 {
+                    rt = <TypeInfo kind=2 nameStart=ss.nameStart nameLen=ss.nameLen ref=0 />
+                }
+            }
             if rt.kind == 2 {
                 val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mi == c.funcs.count {
