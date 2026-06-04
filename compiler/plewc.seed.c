@@ -1082,6 +1082,7 @@ void wPA_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemStart, uint64_t 
 void genArrayTypedef_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemStart, uint64_t elemLen);
 void genArrayRuntimeFns_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemStart, uint64_t elemLen);
 long long isU8Elem_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemStart, uint64_t elemLen);
+long long elemIsRef_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemStart, uint64_t elemLen);
 long long skipArrayElem_c_Comp_ae_Bind(Comp* c, Bind ae);
 void genU8ArrayTypedef(void);
 void genU8ArrayRuntime(void);
@@ -14138,7 +14139,12 @@ void genArrayRuntimeFns_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemS
     plew_write((PlewString){"_copy(a.data[i]);", 17});
     }
     else {
+    if (elemIsRef_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen)) {
+    plew_write((PlewString){"r.data[i] = plew_ref_share(a.data[i]);", 38});
+    }
+    else {
     plew_write((PlewString){"r.data[i] = a.data[i];", 22});
+    }
     }
     plew_write((PlewString){" } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }\n", 57});
     plew_write((PlewString){"__attribute__((unused)) static void ", 36});
@@ -14150,6 +14156,11 @@ void genArrayRuntimeFns_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemS
     plew_write((PlewString){"for (long long i = 0; i < a.len; i++) ", 38});
     writeSpan_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen);
     plew_write((PlewString){"_release(a.data[i]); ", 21});
+    }
+    else {
+    if (elemIsRef_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen)) {
+    plew_write((PlewString){"for (long long i = 0; i < a.len; i++) if (a.data[i]) { long long* __erc = ((long long*)a.data[i]) - 1; if ((--(*__erc)) == 0) free(__erc); } ", 141});
+    }
     }
     plew_write((PlewString){"free(a.rc); }\n", 14});
     plew_write((PlewString){"__attribute__((unused)) static ", 31});
@@ -14184,7 +14195,12 @@ void genArrayRuntimeFns_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemS
     plew_write((PlewString){"_copy(v); }\n", 12});
     }
     else {
+    if (elemIsRef_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen)) {
+    plew_write((PlewString){"if (a->data[i]) { long long* __erc = ((long long*)a->data[i]) - 1; if ((--(*__erc)) == 0) free(__erc); } a->data[i] = plew_ref_share(v); }\n", 139});
+    }
+    else {
     plew_write((PlewString){"a->data[i] = v; }\n", 18});
+    }
     }
     plew_write((PlewString){"__attribute__((unused)) static void ", 36});
     wPA_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen);
@@ -14206,7 +14222,12 @@ void genArrayRuntimeFns_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemS
     plew_write((PlewString){"_copy(v)", 8});
     }
     else {
+    if (elemIsRef_c_Comp_elemStart_U64_elemLen_U64(&((*c)), elemStart, elemLen)) {
+    plew_write((PlewString){"plew_ref_share(v)", 17});
+    }
+    else {
     plew_write((PlewString){"v", 1});
+    }
     }
     plew_write((PlewString){"; a->len++; }\n", 14});
 }
@@ -14214,17 +14235,26 @@ long long isU8Elem_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemStart,
     { long long __ret844 = rangeEquals_bytes_AU8_start_U64_len_U64_kw_String(PlewArray_U8_share((*c).bytes), elemStart, elemLen, (PlewString){"U8", 2});
     return __ret844; }
 }
-long long skipArrayElem_c_Comp_ae_Bind(Comp* c, Bind ae) {
-    if (isU8Elem_c_Comp_elemStart_U64_elemLen_U64(&((*c)), ae.nameStart, ae.nameLen)) {
-    { long long __ret845 = 1;
+long long elemIsRef_c_Comp_elemStart_U64_elemLen_U64(Comp* c, uint64_t elemStart, uint64_t elemLen) {
+    uint64_t er = arrayElemRef_c_Comp_start_U64_len_U64(&((*c)), elemStart, elemLen);
+    if (er == 0) {
+    { long long __ret845 = 0;
     return __ret845; }
     }
-    if (isTypeParamName_c_Comp_start_U64_len_U64(&((*c)), ae.nameStart, ae.nameLen)) {
-    { long long __ret846 = 1;
+    { long long __ret846 = isRefInst_c_Comp_ref_U64(&((*c)), er);
     return __ret846; }
-    }
-    { long long __ret847 = 0;
+}
+long long skipArrayElem_c_Comp_ae_Bind(Comp* c, Bind ae) {
+    if (isU8Elem_c_Comp_elemStart_U64_elemLen_U64(&((*c)), ae.nameStart, ae.nameLen)) {
+    { long long __ret847 = 1;
     return __ret847; }
+    }
+    if (isTypeParamName_c_Comp_start_U64_len_U64(&((*c)), ae.nameStart, ae.nameLen)) {
+    { long long __ret848 = 1;
+    return __ret848; }
+    }
+    { long long __ret849 = 0;
+    return __ret849; }
 }
 void genU8ArrayTypedef(void) {
     plew_write((PlewString){"typedef struct { unsigned char* data; long long len; long long cap; long long* rc; } PlewArray_U8;\n", 99});
@@ -14241,22 +14271,22 @@ void genU8ArrayRuntime(void) {
 }
 long long isPathTokKind_k_Kind(Kind k) {
     {
-    Kind _m848 = k;
-    if (_m848.tag == 37) {
-    { long long __ret849 = 1;
-    return __ret849; }
-    }
-    else if (_m848.tag == 48) {
-    { long long __ret850 = 1;
-    return __ret850; }
-    }
-    else if (_m848.tag == 5) {
+    Kind _m850 = k;
+    if (_m850.tag == 37) {
     { long long __ret851 = 1;
     return __ret851; }
     }
-    else {
-    { long long __ret852 = 0;
+    else if (_m850.tag == 48) {
+    { long long __ret852 = 1;
     return __ret852; }
+    }
+    else if (_m850.tag == 5) {
+    { long long __ret853 = 1;
+    return __ret853; }
+    }
+    else {
+    { long long __ret854 = 0;
+    return __ret854; }
     }
     }
 }
@@ -14267,8 +14297,8 @@ PlewArray_Bind collectParts_rootBytes_AU8_toks_ATok(PlewArray_U8 rootBytes, Plew
     Tok t = PlewArray_Tok_get(toks, (long long)(i));
     long long isKw = 0;
     {
-    Kind _m853 = t.kind;
-    if (_m853.tag == 5) {
+    Kind _m855 = t.kind;
+    if (_m855.tag == 5) {
     if (rangeEquals_bytes_AU8_start_U64_len_U64_kw_String(PlewArray_U8_share(rootBytes), t.start, t.len, (PlewString){"part", 4})) {
     isKw = 1;
     }
@@ -14284,11 +14314,11 @@ PlewArray_Bind collectParts_rootBytes_AU8_toks_ATok(PlewArray_U8 rootBytes, Plew
     Tok first = PlewArray_Tok_get(toks, (long long)(({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; })));
     long long starts = 0;
     {
-    Kind _m854 = first.kind;
-    if (_m854.tag == 37) {
+    Kind _m856 = first.kind;
+    if (_m856.tag == 37) {
     starts = 1;
     }
-    else if (_m854.tag == 48) {
+    else if (_m856.tag == 48) {
     starts = 1;
     }
     else {
@@ -14330,9 +14360,9 @@ PlewArray_Bind collectParts_rootBytes_AU8_toks_ATok(PlewArray_U8 rootBytes, Plew
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { PlewArray_Bind __ret855 = PlewArray_Bind_share(parts);
+    { PlewArray_Bind __ret857 = PlewArray_Bind_share(parts);
     PlewArray_Bind_release(parts);
-    return __ret855; }
+    return __ret857; }
     PlewArray_Bind_release(parts);
 }
 uint64_t stripParents_path_AU8_baseLen_U64_n_U64(PlewArray_U8 path, uint64_t baseLen, uint64_t n) {
@@ -14358,15 +14388,15 @@ uint64_t stripParents_path_AU8_baseLen_U64_n_U64(PlewArray_U8 path, uint64_t bas
     }
     c = ({ uint64_t __ov; if (__builtin_add_overflow((c), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { uint64_t __ret856 = end;
-    return __ret856; }
+    { uint64_t __ret858 = end;
+    return __ret858; }
 }
 PlewArray_U8 resolveImport_src_AU8_pStart_U64_pLen_U64_importer_AU8_baseLen_U64_srcRoot_AU8_srcRootLen_U64_stdRoot_AU8_stdRootLen_U64(PlewArray_U8 src, uint64_t pStart, uint64_t pLen, PlewArray_U8 importer, uint64_t baseLen, PlewArray_U8 srcRoot, uint64_t srcRootLen, PlewArray_U8 stdRoot, uint64_t stdRootLen) {
     PlewArray_U8 out = PlewArray_U8_new();
     if (pLen == 0) {
-    { PlewArray_U8 __ret857 = PlewArray_U8_share(out);
+    { PlewArray_U8 __ret859 = PlewArray_U8_share(out);
     PlewArray_U8_release(out);
-    return __ret857; }
+    return __ret859; }
     }
     uint64_t end = ({ uint64_t __ov; if (__builtin_add_overflow((pStart), (pLen), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     unsigned char b0 = PlewArray_U8_get(src, (long long)(pStart));
@@ -14377,9 +14407,9 @@ PlewArray_U8 resolveImport_src_AU8_pStart_U64_pLen_U64_importer_AU8_baseLen_U64_
     if (PlewArray_U8_get(src, (long long)(({ uint64_t __ov; if (__builtin_add_overflow((pStart), (3), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; }))) == 100) {
     if (PlewArray_U8_get(src, (long long)(({ uint64_t __ov; if (__builtin_add_overflow((pStart), (4), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; }))) == 47) {
     if (stdRootLen == 0) {
-    { PlewArray_U8 __ret858 = PlewArray_U8_share(out);
+    { PlewArray_U8 __ret860 = PlewArray_U8_share(out);
     PlewArray_U8_release(out);
-    return __ret858; }
+    return __ret860; }
     }
     uint64_t si = 0;
     while (si < stdRootLen) {
@@ -14394,23 +14424,23 @@ PlewArray_U8 resolveImport_src_AU8_pStart_U64_pLen_U64_importer_AU8_baseLen_U64_
     PlewArray_U8_push(&(out), 46);
     PlewArray_U8_push(&(out), 112);
     PlewArray_U8_push(&(out), 119);
-    { PlewArray_U8 __ret859 = PlewArray_U8_share(out);
-    PlewArray_U8_release(out);
-    return __ret859; }
-    }
-    }
-    }
-    }
-    }
-    { PlewArray_U8 __ret860 = PlewArray_U8_share(out);
-    PlewArray_U8_release(out);
-    return __ret860; }
-    }
-    if (b0 == 47) {
-    if (srcRootLen == 0) {
     { PlewArray_U8 __ret861 = PlewArray_U8_share(out);
     PlewArray_U8_release(out);
     return __ret861; }
+    }
+    }
+    }
+    }
+    }
+    { PlewArray_U8 __ret862 = PlewArray_U8_share(out);
+    PlewArray_U8_release(out);
+    return __ret862; }
+    }
+    if (b0 == 47) {
+    if (srcRootLen == 0) {
+    { PlewArray_U8 __ret863 = PlewArray_U8_share(out);
+    PlewArray_U8_release(out);
+    return __ret863; }
     }
     uint64_t i = 0;
     while (i < srcRootLen) {
@@ -14425,9 +14455,9 @@ PlewArray_U8 resolveImport_src_AU8_pStart_U64_pLen_U64_importer_AU8_baseLen_U64_
     PlewArray_U8_push(&(out), 46);
     PlewArray_U8_push(&(out), 112);
     PlewArray_U8_push(&(out), 119);
-    { PlewArray_U8 __ret862 = PlewArray_U8_share(out);
+    { PlewArray_U8 __ret864 = PlewArray_U8_share(out);
     PlewArray_U8_release(out);
-    return __ret862; }
+    return __ret864; }
     }
     uint64_t rest = pStart;
     uint64_t parents = 0;
@@ -14479,9 +14509,9 @@ PlewArray_U8 resolveImport_src_AU8_pStart_U64_pLen_U64_importer_AU8_baseLen_U64_
     PlewArray_U8_push(&(out), 46);
     PlewArray_U8_push(&(out), 112);
     PlewArray_U8_push(&(out), 119);
-    { PlewArray_U8 __ret863 = PlewArray_U8_share(out);
+    { PlewArray_U8 __ret865 = PlewArray_U8_share(out);
     PlewArray_U8_release(out);
-    return __ret863; }
+    return __ret865; }
     PlewArray_U8_release(out);
 }
 void appendBytes_into_AU8_from_AU8(PlewArray_U8* into, PlewArray_U8 from) {
@@ -14498,9 +14528,9 @@ PlewArray_U8 extractSpan_buf_AU8_start_U64_len_U64(PlewArray_U8 buf, uint64_t st
     PlewArray_U8_push(&(out), PlewArray_U8_get(buf, (long long)(({ uint64_t __ov; if (__builtin_add_overflow((start), (i), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; }))));
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { PlewArray_U8 __ret864 = PlewArray_U8_share(out);
+    { PlewArray_U8 __ret866 = PlewArray_U8_share(out);
     PlewArray_U8_release(out);
-    return __ret864; }
+    return __ret866; }
     PlewArray_U8_release(out);
 }
 uint64_t dirPrefixLen_path_AU8(PlewArray_U8 path) {
@@ -14512,8 +14542,8 @@ uint64_t dirPrefixLen_path_AU8(PlewArray_U8 path) {
     }
     k = ({ uint64_t __ov; if (__builtin_add_overflow((k), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { uint64_t __ret865 = pre;
-    return __ret865; }
+    { uint64_t __ret867 = pre;
+    return __ret867; }
 }
 PlewArray_U8 computeStdRoot_arg0_AU8(PlewArray_U8 arg0) {
     uint64_t pre = dirPrefixLen_path_AU8(PlewArray_U8_share(arg0));
@@ -14527,9 +14557,9 @@ PlewArray_U8 computeStdRoot_arg0_AU8(PlewArray_U8 arg0) {
     PlewArray_U8_push(&(out), 116);
     PlewArray_U8_push(&(out), 100);
     PlewArray_U8_push(&(out), 47);
-    { PlewArray_U8 __ret866 = PlewArray_U8_share(out);
+    { PlewArray_U8 __ret868 = PlewArray_U8_share(out);
     PlewArray_U8_release(out);
-    return __ret866; }
+    return __ret868; }
     PlewArray_U8_release(out);
 }
 PlewArray_U8 findSrcRoot_entry_AU8(PlewArray_U8 entry) {
@@ -14553,12 +14583,12 @@ PlewArray_U8 findSrcRoot_entry_AU8(PlewArray_U8 entry) {
     }
     PlewArray_U8 sx = PlewArray_U8_share(({ PlewString __s = (PlewString){"src/", 4}; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; }));
     appendBytes_into_AU8_from_AU8(&(sr), PlewArray_U8_share(sx));
-    { PlewArray_U8 __ret867 = PlewArray_U8_share(sr);
+    { PlewArray_U8 __ret869 = PlewArray_U8_share(sr);
     PlewArray_U8_release(sx);
     PlewArray_U8_release(sr);
     PlewArray_U8_release(mn);
     PlewArray_U8_release(mani);
-    return __ret867; }
+    return __ret869; }
     PlewArray_U8_release(sx);
     PlewArray_U8_release(sr);
     }
@@ -14578,9 +14608,9 @@ PlewArray_U8 findSrcRoot_entry_AU8(PlewArray_U8 entry) {
     PlewArray_U8_release(mani);
     }
     PlewArray_U8 empty = PlewArray_U8_new();
-    { PlewArray_U8 __ret868 = PlewArray_U8_share(empty);
+    { PlewArray_U8 __ret870 = PlewArray_U8_share(empty);
     PlewArray_U8_release(empty);
-    return __ret868; }
+    return __ret870; }
     PlewArray_U8_release(empty);
 }
 long long pathSeen_buf_AU8_loaded_ABind_path_AU8(PlewArray_U8 buf, PlewArray_Bind loaded, PlewArray_U8 path) {
@@ -14597,12 +14627,12 @@ long long pathSeen_buf_AU8_loaded_ABind_path_AU8(PlewArray_U8 buf, PlewArray_Bin
     j = ({ uint64_t __ov; if (__builtin_add_overflow((j), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     if (eq) {
-    { long long __ret869 = 1;
-    return __ret869; }
+    { long long __ret871 = 1;
+    return __ret871; }
     }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
-    { long long __ret870 = 0;
-    return __ret870; }
+    { long long __ret872 = 0;
+    return __ret872; }
 }

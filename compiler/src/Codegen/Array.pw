@@ -68,7 +68,12 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
         writeSpan(c: inout c, start: elemStart, len: elemLen)
         write(s: "_copy(a.data[i]);")
     } else {
-        write(s: "r.data[i] = a.data[i];")
+        if elemIsRef(c: inout c, elemStart: elemStart, elemLen: elemLen) {
+            // a Ref element: the copy co-owns the box (retain its refcount).
+            write(s: "r.data[i] = plew_ref_share(a.data[i]);")
+        } else {
+            write(s: "r.data[i] = a.data[i];")
+        }
     }
     write(s: " } else { r.data = 0; r.cap = 0; r.rc = 0; } return r; }\n")
 
@@ -84,6 +89,11 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
         write(s: "for (long long i = 0; i < a.len; i++) ")
         writeSpan(c: inout c, start: elemStart, len: elemLen)
         write(s: "_release(a.data[i]); ")
+    } else {
+        if elemIsRef(c: inout c, elemStart: elemStart, elemLen: elemLen) {
+            // release each Ref element's box (free its pointee at the last owner).
+            write(s: "for (long long i = 0; i < a.len; i++) if (a.data[i]) { long long* __erc = ((long long*)a.data[i]) - 1; if ((--(*__erc)) == 0) free(__erc); } ")
+        }
     }
     write(s: "free(a.rc); }\n")
 
@@ -126,7 +136,12 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
         writeSpan(c: inout c, start: elemStart, len: elemLen)
         write(s: "_copy(v); }\n")
     } else {
-        write(s: "a->data[i] = v; }\n")
+        if elemIsRef(c: inout c, elemStart: elemStart, elemLen: elemLen) {
+            // release the old Ref box, retain the new one (the array co-owns it).
+            write(s: "if (a->data[i]) { long long* __erc = ((long long*)a->data[i]) - 1; if ((--(*__erc)) == 0) free(__erc); } a->data[i] = plew_ref_share(v); }\n")
+        } else {
+            write(s: "a->data[i] = v; }\n")
+        }
     }
 
     write(s: "__attribute__((unused)) static void ")
@@ -151,13 +166,30 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
         writeSpan(c: inout c, start: elemStart, len: elemLen)
         write(s: "_copy(v)")
     } else {
-        write(s: "v")
+        if elemIsRef(c: inout c, elemStart: elemStart, elemLen: elemLen) {
+            // retain the pushed Ref box (the array co-owns it).
+            write(s: "plew_ref_share(v)")
+        } else {
+            write(s: "v")
+        }
     }
     write(s: "; a->len++; }\n")
 }
 
 fn isU8Elem(c: inout Comp, elemStart: U64, elemLen: U64) -> Bool {
     return rangeEquals(bytes: c.bytes, start: elemStart, len: elemLen, kw: "U8")
+}
+
+// Is the array element a `Ref[T]` (a refcounted box)? Such an element is ARC'd:
+// the array retains it on copy/store and releases it at scope exit, so it is not
+// freed while the array still references it (and is freed when the last owner
+// drops). Deep release of a heap-owning pointee is a further refinement.
+fn elemIsRef(c: inout Comp, elemStart: U64, elemLen: U64) -> Bool {
+    val er: U64 = arrayElemRef(c: inout c, start: elemStart, len: elemLen)
+    if er == 0 {
+        return false
+    }
+    return isRefInst(c: inout c, ref: er)
 }
 
 // Whether an array element entry should be skipped by the runtime-emit loop:
