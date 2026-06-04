@@ -14,11 +14,16 @@
 
 **あるべき姿の最終段＝Array の表現も Plew struct に**（Swift/Rust モデル・`PlewArray_<E>` 撤去）。**詳細プラン＝[array-struct-plan.md](array-struct-plan.md) が正典**（target の Plew コード・実行順・値意味論サイト・gating の理由）。
 
+**設計の核心＝2 段階 flip**（bootstrap seam＝intrinsic 境界・詳細は [array-struct-plan.md](array-struct-plan.md)）。純 Plew の struct メソッド本体は旧（ビルトイン）コンパイラにミスコンパイルされる（`self.count` 代入を扱えない）ので、表現スワップ（Flip1）と methods 純 Plew 化（Flip2）を分ける。**(A) 返り値文脈推論は不要**（リテラルはコンパイラ lowering で E 既知）→ 別 additive に降格。
+
 branch `array-struct` の進捗：
-- ✅ **step 1＝RawBuffer の値意味論**（struct のフィールドに RawBuffer があれば `structNeedsCopy/Release`＋`_copy`/`_share`/`_release` が `plew_rawbuf_share/release`・`_copy` は share〔deep copy は owner の CoW メソッドで lazy〕・additive で出力不変）。
-- ✅ **core 検証**（`tests/run/raw_struct_cow`）：`struct{data:RawBuffer; count}＋push(grow+CoW)＋at` が end-to-end で正しい＝share-on-bind＋copy-on-write で別名コピーが不変。**あるべき姿 Array の中身は動くと実証済**。
-- 🔲 **発見した3前提**（generic で ambient な本物の Array に必要）：**(A) 返り値文脈推論**（`<Array …/>` で T が `RawBuffer[T]` に隠れる・空 `[]` は要素 witness なし・今 `(Array)` を出す）／**`pub(get)` フィールド構文の解析**（今 `pub`/`(`/`get`/`)`/`count` に分解）／**`self.method()`（self の兄弟メソッド呼び）**（generic struct で失敗・spike は inline 回避）。
-- 推奨順：**(A) 返り値文脈推論 → `pub(get)` 解析 → step-3 swap**（リテラル `[…]`/添字 `[i]`/`for`/`.count` を struct へ・`PlewArray` ランタイム撤去・reseed→緑で main merge）。
+- ✅ **step 1＝RawBuffer の値意味論**（struct フィールドの RawBuffer は share-on-bind／deep copy は owner の CoW メソッドで lazy）。
+- ✅ **core 検証**（`tests/run/raw_struct_cow`）：`struct{data:RawBuffer; count}＋push(grow+CoW)＋at` が end-to-end 正しい。
+- ✅ **`pub(get)` フィールド構文の解析**（consume-and-record・visibility 未強制ゆえ観測同一・I2 で強制）。
+- ✅ **A0＝dormant ガード**（`isGenericInst(Array)=false` 固定＝struct 定義があってもビルトイン扱い・二重生成回避）。
+- ✅ **Flip1a＝ビルトイン Array を RawBuffer 床へ**（tag `array-rawbuffer-floor`）：`PlewArray_<E>` の C 表現を `{data; len; cap; rc}`→`{data; len}`（cap/rc はバッファヘッダ）・ランタイムを `plew_rawbuf_*` で再実装（要素別 deep copy/release 維持）・struct array-field share も配列ランタイム経由・**`String.bytes` は独立 owned `Array[U8]` をコピー生成**（借用ビュー廃止＝値意味論が要求）。Array はまだビルトイン＝これが struct `Array[T]{data:RawBuffer; count}` と同じ C 形状。208 緑（ASan 含む）＋不動点。
+- 🔲 **Flip1b＝Array を genInst の Plew struct へ昇格**：Prelude に `struct Array[T]`・ガード除去・型/フィールド/メソッド/リテラル/添字/for を genInst 機構へ・**Array 専用の値意味論**（count+要素別 deep copy/release＝generic struct の shallow rawbuf では不足）・emitArrayMethods 撤去・PlewArray ランタイム撤去。
+- 🔲 **Flip2＝methods を純 Plew 化**（grow/CoW を Plew で・`arrayPush` intrinsic＋C ランタイム撤去）→ あるべき姿完成・main merge。
 
 ## ロードマップ（残りの大物・前向きのみ）
 
