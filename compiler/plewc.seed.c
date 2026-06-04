@@ -1132,6 +1132,7 @@ PlewArray_U8 computeStdRoot_arg0_AU8(PlewArray_U8 arg0);
 PlewArray_U8 findSrcRoot_entry_AU8(PlewArray_U8 entry);
 long long pathSeen_buf_AU8_loaded_ABind_path_AU8(PlewArray_U8 buf, PlewArray_Bind loaded, PlewArray_U8 path);
 void assert_cond_Bool_message_String(long long cond, PlewString message);
+long long String_isEmpty(PlewString self);
 unsigned char digitByteI_d_I64(int64_t d);
 unsigned char digitByteU_d_U64(uint64_t d);
 PlewString I64_format_format_String(int64_t self, PlewString format);
@@ -6678,6 +6679,12 @@ TypeInfo exprType_c_Comp_id_U64(Comp* c, uint64_t id) {
     Func_release(af);
     }
     TypeInfo rt = exprType_c_Comp_id_U64(&((*c)), recv);
+    if (rt.kind == 1) {
+    Bind ss = stringTypeSpan_c_Comp(&((*c)));
+    if (ss.nameLen != 0) {
+    rt = (TypeInfo){.kind = 2, .nameStart = ss.nameStart, .nameLen = ss.nameLen, .ref = 0};
+    }
+    }
     if (rt.kind == 2) {
     uint64_t mi = findMethod_c_Comp_recvStart_U64_recvLen_U64_nameStart_U64_nameLen_U64_args_AArg(&((*c)), rt.nameStart, rt.nameLen, nameStart, nameLen, PlewArray_Arg_share(args));
     if (mi == (long long)(((*c).funcs).len)) {
@@ -8909,11 +8916,11 @@ void checkImplOnBuiltin_c_Comp(Comp* c) {
     Func f = Func_share(PlewArray_Func_get((*c).funcs, (long long)(i)));
     long long onBuiltin = 0;
     if (f.hasRecv) {
-    onBuiltin = (isPrimType_c_Comp_start_U64_len_U64(&((*c)), f.recvStart, f.recvLen) || rangeEquals_bytes_AU8_start_U64_len_U64_kw_String(PlewArray_U8_share((*c).bytes), f.recvStart, f.recvLen, (PlewString){"String", 6}));
+    onBuiltin = isPrimType_c_Comp_start_U64_len_U64(&((*c)), f.recvStart, f.recvLen);
     }
     else {
     if (f.isAssoc) {
-    onBuiltin = (isPrimType_c_Comp_start_U64_len_U64(&((*c)), f.recvStart, f.recvLen) || rangeEquals_bytes_AU8_start_U64_len_U64_kw_String(PlewArray_U8_share((*c).bytes), f.recvStart, f.recvLen, (PlewString){"String", 6}));
+    onBuiltin = isPrimType_c_Comp_start_U64_len_U64(&((*c)), f.recvStart, f.recvLen);
     }
     }
     if (onBuiltin) {
@@ -9600,6 +9607,12 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     Func_release(af);
     }
     TypeInfo bt = exprType_c_Comp_id_U64(&((*c)), recv);
+    if (bt.kind == 1) {
+    Bind ss = stringTypeSpan_c_Comp(&((*c)));
+    if (ss.nameLen != 0) {
+    bt = (TypeInfo){.kind = 2, .nameStart = ss.nameStart, .nameLen = ss.nameLen, .ref = 0};
+    }
+    }
     if (bt.kind == 3) {
     if (placeIsMutable_c_Comp_id_U64(&((*c)), recv)) {
     }
@@ -15488,85 +15501,89 @@ void assert_cond_Bool_message_String(long long cond, PlewString message) {
     plew_panic(message);
     }
 }
+long long String_isEmpty(PlewString self) {
+    { long long __ret909 = ((long long)((({ PlewString __s = self; (PlewArray_U8){(unsigned char*)__s.data, __s.len, __s.len, 0}; })).len) == 0);
+    return __ret909; }
+}
 unsigned char digitByteI_d_I64(int64_t d) {
     if (d == 0) {
-    { unsigned char __ret909 = 48;
-    return __ret909; }
-    }
-    if (d == 1) {
-    { unsigned char __ret910 = 49;
+    { unsigned char __ret910 = 48;
     return __ret910; }
     }
-    if (d == 2) {
-    { unsigned char __ret911 = 50;
+    if (d == 1) {
+    { unsigned char __ret911 = 49;
     return __ret911; }
     }
-    if (d == 3) {
-    { unsigned char __ret912 = 51;
+    if (d == 2) {
+    { unsigned char __ret912 = 50;
     return __ret912; }
     }
-    if (d == 4) {
-    { unsigned char __ret913 = 52;
+    if (d == 3) {
+    { unsigned char __ret913 = 51;
     return __ret913; }
     }
-    if (d == 5) {
-    { unsigned char __ret914 = 53;
+    if (d == 4) {
+    { unsigned char __ret914 = 52;
     return __ret914; }
     }
-    if (d == 6) {
-    { unsigned char __ret915 = 54;
+    if (d == 5) {
+    { unsigned char __ret915 = 53;
     return __ret915; }
     }
-    if (d == 7) {
-    { unsigned char __ret916 = 55;
+    if (d == 6) {
+    { unsigned char __ret916 = 54;
     return __ret916; }
     }
-    if (d == 8) {
-    { unsigned char __ret917 = 56;
+    if (d == 7) {
+    { unsigned char __ret917 = 55;
     return __ret917; }
     }
-    { unsigned char __ret918 = 57;
+    if (d == 8) {
+    { unsigned char __ret918 = 56;
     return __ret918; }
+    }
+    { unsigned char __ret919 = 57;
+    return __ret919; }
 }
 unsigned char digitByteU_d_U64(uint64_t d) {
     if (d == 0) {
-    { unsigned char __ret919 = 48;
-    return __ret919; }
-    }
-    if (d == 1) {
-    { unsigned char __ret920 = 49;
+    { unsigned char __ret920 = 48;
     return __ret920; }
     }
-    if (d == 2) {
-    { unsigned char __ret921 = 50;
+    if (d == 1) {
+    { unsigned char __ret921 = 49;
     return __ret921; }
     }
-    if (d == 3) {
-    { unsigned char __ret922 = 51;
+    if (d == 2) {
+    { unsigned char __ret922 = 50;
     return __ret922; }
     }
-    if (d == 4) {
-    { unsigned char __ret923 = 52;
+    if (d == 3) {
+    { unsigned char __ret923 = 51;
     return __ret923; }
     }
-    if (d == 5) {
-    { unsigned char __ret924 = 53;
+    if (d == 4) {
+    { unsigned char __ret924 = 52;
     return __ret924; }
     }
-    if (d == 6) {
-    { unsigned char __ret925 = 54;
+    if (d == 5) {
+    { unsigned char __ret925 = 53;
     return __ret925; }
     }
-    if (d == 7) {
-    { unsigned char __ret926 = 55;
+    if (d == 6) {
+    { unsigned char __ret926 = 54;
     return __ret926; }
     }
-    if (d == 8) {
-    { unsigned char __ret927 = 56;
+    if (d == 7) {
+    { unsigned char __ret927 = 55;
     return __ret927; }
     }
-    { unsigned char __ret928 = 57;
+    if (d == 8) {
+    { unsigned char __ret928 = 56;
     return __ret928; }
+    }
+    { unsigned char __ret929 = 57;
+    return __ret929; }
 }
 PlewString I64_format_format_String(int64_t self, PlewString format) {
     int64_t n = self;
@@ -15595,10 +15612,10 @@ PlewString I64_format_format_String(int64_t self, PlewString format) {
     i = ({ uint64_t __ov; if (__builtin_sub_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     PlewArray_U8_push(&(out), PlewArray_U8_get(digits, (long long)(i)));
     }
-    { PlewString __ret929 = plew_stringFromBytes(PlewArray_U8_share(out));
+    { PlewString __ret930 = plew_stringFromBytes(PlewArray_U8_share(out));
     PlewArray_U8_release(out);
     PlewArray_U8_release(digits);
-    return __ret929; }
+    return __ret930; }
     PlewArray_U8_release(out);
     PlewArray_U8_release(digits);
 }
@@ -15619,44 +15636,44 @@ PlewString U64_format_format_String(uint64_t self, PlewString format) {
     i = ({ uint64_t __ov; if (__builtin_sub_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     PlewArray_U8_push(&(out), PlewArray_U8_get(digits, (long long)(i)));
     }
-    { PlewString __ret930 = plew_stringFromBytes(PlewArray_U8_share(out));
+    { PlewString __ret931 = plew_stringFromBytes(PlewArray_U8_share(out));
     PlewArray_U8_release(out);
     PlewArray_U8_release(digits);
-    return __ret930; }
+    return __ret931; }
     PlewArray_U8_release(out);
     PlewArray_U8_release(digits);
 }
 PlewString I8_format_format_String(int8_t self, PlewString format) {
-    { PlewString __ret931 = I64_format_format_String(((int64_t)(self)), format);
-    return __ret931; }
-}
-PlewString I16_format_format_String(int16_t self, PlewString format) {
     { PlewString __ret932 = I64_format_format_String(((int64_t)(self)), format);
     return __ret932; }
 }
-PlewString I32_format_format_String(int32_t self, PlewString format) {
+PlewString I16_format_format_String(int16_t self, PlewString format) {
     { PlewString __ret933 = I64_format_format_String(((int64_t)(self)), format);
     return __ret933; }
 }
-PlewString U8_format_format_String(unsigned char self, PlewString format) {
-    { PlewString __ret934 = U64_format_format_String(((uint64_t)(self)), format);
+PlewString I32_format_format_String(int32_t self, PlewString format) {
+    { PlewString __ret934 = I64_format_format_String(((int64_t)(self)), format);
     return __ret934; }
 }
-PlewString U16_format_format_String(uint16_t self, PlewString format) {
+PlewString U8_format_format_String(unsigned char self, PlewString format) {
     { PlewString __ret935 = U64_format_format_String(((uint64_t)(self)), format);
     return __ret935; }
 }
-PlewString U32_format_format_String(uint32_t self, PlewString format) {
+PlewString U16_format_format_String(uint16_t self, PlewString format) {
     { PlewString __ret936 = U64_format_format_String(((uint64_t)(self)), format);
     return __ret936; }
 }
+PlewString U32_format_format_String(uint32_t self, PlewString format) {
+    { PlewString __ret937 = U64_format_format_String(((uint64_t)(self)), format);
+    return __ret937; }
+}
 PlewString Bool_format_format_String(long long self, PlewString format) {
     if (self) {
-    { PlewString __ret937 = (PlewString){"1", 1};
-    return __ret937; }
+    { PlewString __ret938 = (PlewString){"1", 1};
+    return __ret938; }
     }
     else {
-    { PlewString __ret938 = (PlewString){"0", 1};
-    return __ret938; }
+    { PlewString __ret939 = (PlewString){"0", 1};
+    return __ret939; }
     }
 }
