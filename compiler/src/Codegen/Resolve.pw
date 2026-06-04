@@ -1010,6 +1010,20 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 }
                 return scalarInfo()
             }
+            // a call to a fn-typed local (a closure value): its result type is the
+            // function type's return (args[0] of the `fn` TypeRef). Without this a
+            // generic call like `print(closure(x))` can't recover the arg type and
+            // misses its instantiation (and `val r = closure(x)` mis-infers r).
+            val lvi: U64 = localIndexByName(c: inout c, start: nameStart, len: nameLen)
+            if lvi < c.locals.count {
+                val lty: U64 = c.locals[lvi].ty
+                if isFnType(c: inout c, ref: lty) {
+                    val ftr: TypeRef = c.types[lty]
+                    if ftr.args.count > 0 {
+                        return typeInfoOfRef(c: inout c, ref: ftr.args[0])
+                    }
+                }
+            }
             return scalarInfo()
         }
         Expr.Field(val base, val nameStart, val nameLen) => {
