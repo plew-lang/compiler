@@ -58,7 +58,15 @@ switch 先頭ディスパッチが `goto __L<N>` で再入。全ローカル hoi
 - **runtime プリアンブル**：`void* plew_rawbuf_alloc(long long elemSize, long long cap)`（malloc(header+elemSize*cap)・rc=1・cap 格納・data 返す）／`void* plew_rawbuf_share(void* p)`（rc++・`plew_ref_share` と同型）／`void plew_rawbuf_release(void* p)`（rc--・0 で free）／`long long plew_rawbuf_cap(void* p)`／`int plew_rawbuf_is_unique(void* p)`（rc==1）。
 - **standalone テスト**：`mut val b: RawBuffer[I64] = rawAlloc(cap: 4U64); rawStore(b: b, i: 0U64, v: 99I64); print(rawLoad(b: b, i: 0U64))`→99・`rawCap`/`rawIsUnique` も。
 
-**(ii) Array を Core struct へ（flag-day・最注意）**：`struct Array[T] { mut val data: RawBuffer[T]; mut val len: U64 }`＋`impl[T] Array[T] { append/get/count/… }`（CoW＝変更系で `rawIsUnique` 見て共有なら複製）。リテラル `[..]`→`Array.new()`+append、`arr[i]`→Index、`.count`→メソッド に寄せ、専用ランタイム `PlewArray_<E>`＋決め打ちを撤去。**Array はコンパイラ自身が全面利用**ゆえ種は旧 Array・新ソースは新 Array＝flag-day。先に (i) を種へ焼いてから一気に切替。String の `bytes`（Array[U8]）も連動。
+**(ii) 着手・実装経路を精査済（次セッションで実装）**。安全な順序＝**ii-a（additive・Array 表現は PlewArray のまま generic メソッドを Plew 化）→ ii-b（表現を Core struct へ swap＝真の flag-day）**。ii-a の経路（調査で確定）：
+- `methodMatchesInst`（Mono.pw:845）は `inst.nameStart=="Array"`（recv "Array"）で**既に Array メソッドにマッチ**＝条件は揃っている。
+- ただし `c.genInsts` に `Array[E]` を足すと mono **struct**（`emitMonoStructs`）も emit され `PlewArray_<E>` と衝突する。→ **専用パス `emitArrayMethods(proto)`** を新設（`c.arrayElems` × recv=="Array" のメソッドを `emitMonoMethod(method, arrayInstRef[E])` で emit・`_.pw` の `emitMonoMethods` の隣に proto/body 両方）。`emitMangle(Array[E])`＝`Array_<E>`・self 型は `emitConcreteCType(Array[E])`＝`PlewArray_<E>` なので genSignature はそのまま使える。
+- **dispatch**：`genExpr` Method の `bt.kind==3`（Expr.pw:640）は**メソッド名を見ず無条件で append/push**。→ 名前が `append` 以外なら `findMethod(recvStart="Array"〔kwSpan で span〕, name, args)` で Array メソッドを引き、`Array_<E>_<selector>(selfInout? &recv : recv, args)` を emit（`.append`/`.count`/`[i]` のハードコードは移行中 fallback として残す）。
+- **前提の小改修**：`c.arrayElems` は要素 ref（`fieldStart`）を **compound 型のみ**保存（simple `I64` は 0・名前のみ＝Mono.pw:444-459）。`Array[E]` ref 合成と env の `T→I64` 置換に要素 ref が要るので、**`fieldStart=re` を常時保存**へ（`arrayElemNameForRef` の `fieldStart!=0` ガードは sameMangle で正しく動くので安全のはず・要 reseed 検証）。`arrayInstRef(elemRef)`＝`Array[elemRef]` TypeRef を c.types に append（"Array" span は `kwSpan(c, "Array", 5)`）。
+- **移行手順（ADD→reseed→USE で flag-day 回避）**：①`emitArrayMethods`＋dispatch を足す（append ハードコードは残す）→ reseed →②Core に `impl[T] Array[T] { fn first()… }` を Plew で書き standalone+self 検証 →③`.append` 等を Plew メソッド化しハードコード撤去 → reseed。各段で種が新ソースをコンパイルできる。
+- **ii-b（表現 swap・真の flag-day）**：`struct Array[T] { data: RawBuffer[T]; len: U64 }` を Core に・`PlewArray_<E>` ランタイム撤去・`RawBuffer` の値意味論（コピー share・破棄 release）を Ref の各サイトに配線・リテラル/`[i]`/`.count` 振替。**Array はコンパイラ自身が全面利用**ゆえ最注意（種は旧 Array・新ソースは新 Array）。先に ii-a を固めてから。
+
+**(ii) 旧メモ（表現 swap の最終像・参考）**：`struct Array[T] { mut val data: RawBuffer[T]; mut val len: U64 }`＋`impl[T] Array[T] { append/get/count/… }`（CoW＝変更系で `rawIsUnique` 見て共有なら複製）。リテラル `[..]`→`Array.new()`+append、`arr[i]`→Index、`.count`→メソッド に寄せ、専用ランタイム `PlewArray_<E>`＋決め打ちを撤去。**Array はコンパイラ自身が全面利用**ゆえ種は旧 Array・新ソースは新 Array＝flag-day。先に (i) を種へ焼いてから一気に切替。String の `bytes`（Array[U8]）も連動。
 
 横断 additive：演算子トレイト全配線（Eq/Ord 以外・需要駆動）・I2（import の with ゲート＝可視性検査・今は全フラット）・循環回収（Ref グラフ限定サイクルコレクタ）。詳細は [provisional.md](provisional.md)。
 
