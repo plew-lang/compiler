@@ -197,3 +197,24 @@ impl U64 as Format {
         return stringFromBytes(out)
     }
 }
+
+// The narrower integer types delegate to the 64-bit formatters via a lossless
+// widening (`as` allows signed->wider-signed and unsigned->wider-unsigned).
+impl I8 as Format {
+    fn format(format: String) -> String { return (self as I64).format(format: format) }
+}
+impl I16 as Format {
+    fn format(format: String) -> String { return (self as I64).format(format: format) }
+}
+impl I32 as Format {
+    fn format(format: String) -> String { return (self as I64).format(format: format) }
+}
+impl U8 as Format {
+    fn format(format: String) -> String { return (self as U64).format(format: format) }
+}
+impl U16 as Format {
+    fn format(format: String) -> String { return (self as U64).format(format: format) }
+}
+impl U32 as Format {
+    fn format(format: String) -> String { return (self as U64).format(format: format) }
+}
