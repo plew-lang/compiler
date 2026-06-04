@@ -84,6 +84,50 @@ fn emitCaptureInit(c: inout Comp, e: CaptureEntry) {
     writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
 }
 
+// Dispatch a user method on `Array[E]` (`impl[T] Array[T] { … }`) to its
+// monomorphized `Array_<E>_<selector>` (emitArrayMethods). Array methods resolve
+// against the receiver name "Array"; the element name `(elemStart,elemLen)` (a
+// head name, or a compound mangle like `Ref_I32`) supplies the instance mangle.
+fn genArrayUserMethod(c: inout Comp, recv: U64, elemStart: U64, elemLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    val arrName: Bind = kwSpan(c: inout c, kw: "Array", kwLen: 5)
+    val mi: U64 = findMethod(c: inout c, recvStart: arrName.nameStart, recvLen: arrName.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+    if mi == c.funcs.count {
+        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "no such method on this array type")
+        return
+    }
+    val mf: Func = c.funcs[mi]
+    if paramsLabelsOk(c: inout c, params: mf.params, args: args) {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "argument labels do not match the method parameters")
+        return
+    }
+    if mf.selfInout {
+        if placeIsMutable(c: inout c, id: recv) {
+        } else {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
+            return
+        }
+    }
+    write(s: "Array_")
+    writeSpan(c: inout c, start: elemStart, len: elemLen)
+    write(s: "_")
+    writeFnSelector(c: inout c, f: mf)
+    if mf.selfInout {
+        write(s: "(&(")
+    } else {
+        write(s: "((")
+    }
+    genExpr(c: inout c, id: recv)
+    write(s: ")")
+    mut val i: U64 = 0
+    while i < args.count {
+        write(s: ", ")
+        genExpr(c: inout c, id: args[i].expr)
+        i += 1
+    }
+    write(s: ")")
+}
+
 // Does a JSX construction's field list provide a value for `name`? (Used to
 // decide whether to fill in a declared field default — spec/05.)
 fn makeProvides(c: inout Comp, fields: Array[MakeField], nameStart: U64, nameLen: U64) -> Bool {
@@ -638,6 +682,15 @@ fn genExpr(c: inout Comp, id: U64) {
                 }
             }
             if bt.kind == 3 {
+                if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "append") {
+                } else {
+                    // a user method on `Array[E]` (`impl[T] Array[T] { … }`): dispatch
+                    // to its monomorphized `Array_<E>_<selector>` (emitArrayMethods).
+                    // (`.append` keeps its builtin push lowering below, as a fallback
+                    // until it too becomes a pure-Plew method.)
+                    genArrayUserMethod(c: inout c, recv: recv, elemStart: bt.nameStart, elemLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    return
+                }
                 // array builtin: `.append(v)` mutates the receiver, so it must be
                 // a mutable place (spec: `val` arrays are immutable).
                 if placeIsMutable(c: inout c, id: recv) {

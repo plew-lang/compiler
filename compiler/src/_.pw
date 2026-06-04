@@ -412,6 +412,8 @@ fn main() {
     }
     // generic method prototypes (one per receiver instantiation).
     emitMonoMethods(c: inout c, proto: true)
+    // generic Array method prototypes (one per array element type).
+    emitArrayMethods(c: inout c, proto: true)
     // generic free function instance prototypes (one per call-site instantiation).
     emitMonoFns(c: inout c, proto: true)
     // function-value thunk prototypes.
@@ -440,6 +442,8 @@ fn main() {
     }
     // generic method bodies.
     emitMonoMethods(c: inout c, proto: false)
+    // generic Array method bodies (one per array element type).
+    emitArrayMethods(c: inout c, proto: false)
     // generic free function instance bodies.
     emitMonoFns(c: inout c, proto: false)
     // function-value thunk bodies.

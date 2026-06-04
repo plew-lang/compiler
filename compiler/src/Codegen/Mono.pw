@@ -880,6 +880,58 @@ fn emitMonoMethod(c: inout Comp, fi: U64, instRef: U64, proto: Bool) {
     c.curTypeArgs = noArgs
 }
 
+// Build an `Array[E]` TypeRef (appended to c.types) for an array-element entry,
+// to drive the receiver-instance mangle (`Array_<E>`) and self-type (`PlewArray_<E>`)
+// when emitting Array methods. A compound element carries its ref (ae.fieldStart);
+// a simple one synthesizes a scalar TypeRef from its head name. Returns c.types.count
+// if no "Array" name span exists (no Array type named here -> nothing to emit).
+fn arrayInstRef(c: inout Comp, ae: Bind) -> U64 {
+    val arrName: Bind = kwSpan(c: inout c, kw: "Array", kwLen: 5)
+    if arrName.nameLen == 0 {
+        return c.types.count
+    }
+    mut val elemRef: U64 = ae.fieldStart
+    if elemRef == 0 {
+        val noArgs: Array[U64] = []
+        elemRef = c.types.count
+        c.types.append(<TypeRef nameStart=ae.nameStart nameLen=ae.nameLen args=noArgs />)
+    }
+    val args: Array[U64] = [elemRef]
+    val idx: U64 = c.types.count
+    c.types.append(<TypeRef nameStart=arrName.nameStart nameLen=arrName.nameLen args=args />)
+    return idx
+}
+
+// Emit prototypes/bodies for generic methods whose receiver is the builtin Array,
+// one per array element type (c.arrayElems). They flow through the same path as
+// user generic methods (emitMonoMethod), but Array is not a genInst (its storage
+// is the PlewArray runtime, not a mono struct), so they are emitted here — keyed
+// on element types rather than struct/enum instantiations.
+fn emitArrayMethods(c: inout Comp, proto: Bool) {
+    mut val ei: U64 = 0
+    while ei < c.arrayElems.count {
+        // skip a type-parameter element (`Array[T]` in the impl/method signatures
+        // registers `T` as an element): it is not a concrete type, and binding the
+        // method's T to the element "T" would be a self-referential env (infinite
+        // recursion in genCElem). Only concrete element types get a method instance.
+        if isTypeParamName(c: inout c, start: c.arrayElems[ei].nameStart, len: c.arrayElems[ei].nameLen) {
+            ei += 1
+        } else {
+        val inst: U64 = arrayInstRef(c: inout c, ae: c.arrayElems[ei])
+        if inst < c.types.count {
+            mut val mfi: U64 = 0
+            while mfi < c.funcs.count {
+                if methodMatchesInst(c: inout c, f: c.funcs[mfi], instRef: inst) {
+                    emitMonoMethod(c: inout c, fi: mfi, instRef: inst, proto: proto)
+                }
+                mfi += 1
+            }
+        }
+        ei += 1
+        }
+    }
+}
+
 // Emit prototypes (proto=true) or bodies (proto=false) for every generic
 // method, one per receiver instantiation in c.genInsts.
 fn emitMonoMethods(c: inout Comp, proto: Bool) {

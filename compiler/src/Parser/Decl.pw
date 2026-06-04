@@ -234,9 +234,17 @@ fn parseImpl(c: inout Comp) {
     // recvStart/recvLen names the receiver head; the self type's `[T]` args are
     // consumed by parseTypeTok and the params flow to each method's typeParams.
     val implParams: Array[Bind] = parseTypeParams(c: inout c)
+    val headTok: Tok = c.cur()
     val recvPty: PType = parseTypeTok(c: inout c)
-    val recvStart: U64 = recvPty.start
-    val recvLen: U64 = recvPty.len
+    mut val recvStart: U64 = recvPty.start
+    mut val recvLen: U64 = recvPty.len
+    // `impl[T] Array[T]`: the receiver parses as an array type (its `start/len`
+    // name the element T, not the head), so register methods under the head name
+    // "Array" — that is the receiver they resolve and monomorphize against.
+    if recvPty.isArray {
+        recvStart = headTok.start
+        recvLen = headTok.len
+    }
     // `impl Type as Trait { ... }` (spec/08): a conformance. The members witness
     // the trait's requirements (body or `via`); each `fn` is registered as a
     // method on Type exactly like an inherent member, so it rides the existing
