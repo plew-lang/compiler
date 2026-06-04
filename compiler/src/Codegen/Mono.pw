@@ -910,6 +910,30 @@ fn tyRefOfInfo(c: inout Comp, ti: TypeInfo) -> U64 {
 // For each type parameter, find a parameter declared with exactly that bare
 // type-parameter name and take the matching argument's concrete TypeRef. Returns
 // an array aligned to f.typeParams; an entry is 0 where inference failed.
+// The element TypeRef of an array-typed argument expression (for inferring a
+// type parameter from an `Array[T]` parameter), or 0. Recovered from the arg's
+// binding type, since exprType does not carry an array's element ref.
+fn argArrayElemRef(c: inout Comp, argExpr: U64) -> U64 {
+    match c.exprs[argExpr] {
+        Expr.Ident(val start, val len) => {
+            val li: U64 = localIndexByName(c: inout c, start: start, len: len)
+            if li < c.locals.count {
+                val lo: Local = c.locals[li]
+                if lo.ty < c.types.count {
+                    val lt: TypeRef = c.types[lo.ty]
+                    if rangeEquals(bytes: c.bytes, start: lt.nameStart, len: lt.nameLen, kw: "Array") {
+                        if lt.args.count > 0 {
+                            return lt.args[0]
+                        }
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    return 0
+}
+
 fn inferFnArgs(c: inout Comp, f: Func, args: Array[Arg]) -> Array[U64] {
     mut val out: Array[U64] = []
     mut val ti: U64 = 0
@@ -920,6 +944,12 @@ fn inferFnArgs(c: inout Comp, f: Func, args: Array[Arg]) -> Array[U64] {
         while pi < f.params.count {
             val p: Param = f.params[pi]
             if p.tyIsArray {
+                // `Array[T]` param: infer T from the argument array's element.
+                if spansEqual(c: inout c, aStart: p.tyStart, aLen: p.tyLen, bStart: tp.nameStart, bLen: tp.nameLen) {
+                    if pi < args.count {
+                        found = argArrayElemRef(c: inout c, argExpr: args[pi].expr)
+                    }
+                }
             } else {
                 if spansEqual(c: inout c, aStart: p.tyStart, aLen: p.tyLen, bStart: tp.nameStart, bLen: tp.nameLen) {
                     if pi < args.count {

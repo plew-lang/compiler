@@ -517,7 +517,24 @@ fn genExpr(c: inout Comp, id: U64) {
                     }
                     if argIsArr {
                         val cf1: Func = c.funcs[cfi]
-                        genArrayValue(c: inout c, exprId: ar.expr, elemStart: cf1.params[i].tyStart, elemLen: cf1.params[i].tyLen)
+                        // use the argument's concrete element type, not the param's
+                        // (which may be a type parameter `T` here, at the call site
+                        // where no monomorphization env is active).
+                        mut val es: U64 = cf1.params[i].tyStart
+                        mut val el: U64 = cf1.params[i].tyLen
+                        val aref: U64 = argArrayElemRef(c: inout c, argExpr: ar.expr)
+                        if aref != 0 {
+                            if isCompoundType(c: inout c, ref: aref) {
+                                val mn: Bind = appendMangleSpan(c: inout c, ref: aref)
+                                es = mn.nameStart
+                                el = mn.nameLen
+                            } else {
+                                val at3: TypeRef = c.types[aref]
+                                es = at3.nameStart
+                                el = at3.nameLen
+                            }
+                        }
+                        genArrayValue(c: inout c, exprId: ar.expr, elemStart: es, elemLen: el)
                     } else {
                         genExpr(c: inout c, id: ar.expr)
                     }
@@ -590,8 +607,7 @@ fn genExpr(c: inout Comp, id: U64) {
         }
         Expr.Index(val base, val index) => {
             val bt: TypeInfo = exprType(c: inout c, id: base)
-            write(s: "PlewArray_")
-            writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
+            wPA(c: inout c, elemStart: bt.nameStart, elemLen: bt.nameLen)
             write(s: "_get(")
             genExpr(c: inout c, id: base)
             write(s: ", (long long)(")
@@ -697,8 +713,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     return
                 }
                 // array builtin: `.append(v)` -> PlewArray_E_push(&recv, v).
-                write(s: "PlewArray_")
-                writeSpan(c: inout c, start: bt.nameStart, len: bt.nameLen)
+                wPA(c: inout c, elemStart: bt.nameStart, elemLen: bt.nameLen)
                 write(s: "_push(&(")
                 genExpr(c: inout c, id: recv)
                 write(s: "), ")

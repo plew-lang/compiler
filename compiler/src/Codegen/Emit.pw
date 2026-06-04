@@ -314,8 +314,9 @@ fn genCElem(c: inout Comp, start: U64, len: U64) {
 // (the element name is C-identifier-safe, so it doubles as the mangle).
 fn genCTypeRef(c: inout Comp, start: U64, len: U64, isArray: Bool) {
     if isArray {
-        write(s: "PlewArray_")
-        writeSpan(c: inout c, start: start, len: len)
+        // wPA resolves a type-parameter element (`Array[T]` -> `PlewArray_I32`)
+        // via the active env; in a non-generic context it is just `PlewArray_<elem>`.
+        wPA(c: inout c, elemStart: start, elemLen: len)
         return
     }
     genCElem(c: inout c, start: start, len: len)
@@ -338,8 +339,7 @@ fn genTypeInfoCType(c: inout Comp, ti: TypeInfo) {
         return
     }
     if ti.kind == 3 {
-        write(s: "PlewArray_")
-        writeSpan(c: inout c, start: ti.nameStart, len: ti.nameLen)
+        wPA(c: inout c, elemStart: ti.nameStart, elemLen: ti.nameLen)
         return
     }
     write(s: "long long")

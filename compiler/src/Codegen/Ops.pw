@@ -108,8 +108,7 @@ fn genCheckedArith(c: inout Comp, op: I64, lhs: U64, rhs: U64, tyStart: U64, tyL
 
 // Emit a bounds-checked array element read: `PlewArray_<E>_get(base, (idx))`.
 fn genArrayGet(c: inout Comp, base: U64, index: U64, elemStart: U64, elemLen: U64) {
-    write(s: "PlewArray_")
-    writeSpan(c: inout c, start: elemStart, len: elemLen)
+    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: "_get(")
     genExpr(c: inout c, id: base)
     write(s: ", (long long)(")

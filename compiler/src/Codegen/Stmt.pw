@@ -35,19 +35,17 @@ fn genArrayLiteral(c: inout Comp, exprId: U64, elemStart: U64, elemLen: U64) {
     match e {
         Expr.Array(val elems) => {
             if elems.count == 0 {
-                write(s: "PlewArray_")
-                writeSpan(c: inout c, start: elemStart, len: elemLen)
+                wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
                 write(s: "_new()")
             } else {
-                write(s: "({ PlewArray_")
-                writeSpan(c: inout c, start: elemStart, len: elemLen)
-                write(s: " __a = PlewArray_")
-                writeSpan(c: inout c, start: elemStart, len: elemLen)
+                write(s: "({ ")
+                wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
+                write(s: " __a = ")
+                wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
                 write(s: "_new(); ")
                 mut val i: U64 = 0
                 while i < elems.count {
-                    write(s: "PlewArray_")
-                    writeSpan(c: inout c, start: elemStart, len: elemLen)
+                    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
                     write(s: "_push(&__a, ")
                     genExpr(c: inout c, id: elems[i])
                     write(s: "); ")

@@ -1,0 +1,30 @@
+// F11 (c, functions): a generic function with an `Array[T]` parameter is
+// monomorphized per call — `first[T](Array[T])` instantiates `PlewArray_I32` /
+// `PlewArray_Ref_Cell` from the argument's element type (previously the array
+// runtime / selector mangled with the literal `T`, so nothing linked).
+import @Std/Io with { print }
+
+struct Cell {
+    mut val v: I32
+}
+
+fn first[T](xs: Array[T]) -> T {
+    return xs[0]
+}
+
+fn lengthOf[T](xs: Array[T]) -> U64 {
+    return xs.count
+}
+
+fn main() {
+    mut val ints: Array[I32] = []
+    ints.append(42)
+    ints.append(7)
+    print(first(xs: ints))
+    print(lengthOf(xs: ints))
+
+    mut val cells: Array[Ref[Cell]] = []
+    cells.append(<Ref[Cell] value=<Cell v=9 /> />)
+    val r: Ref[Cell] = first(xs: cells)
+    print(r->v)
+}
