@@ -181,6 +181,7 @@ fn main() {
     // module also fails here — that module doesn't get loaded, so the name isn't
     // among the exported (loaded) declarations.
     checkImports(c: inout c)
+    checkUseVisibility(c: inout c)
     // discover concrete generic instantiations to monomorphize.
     collectGenInsts(c: inout c)
     // discover concrete instantiations of generic free functions from call sites

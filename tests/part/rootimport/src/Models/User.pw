@@ -1,1 +1,1 @@
-fn userId() -> I64 { return 777 }
+export fn userId() -> I64 { return 777 }

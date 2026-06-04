@@ -1401,3 +1401,48 @@ fn checkImports(c: inout Comp) {
         i += 1
     }
 }
+
+// Was the name `(nameStart,nameLen)` imported into module `mod` via `import … with`?
+fn isImportedInto(c: inout Comp, mod: U64, nameStart: U64, nameLen: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.imports.count {
+        val im: Bind = c.imports[i]
+        if im.fieldStart == mod {
+            if spansEqual(c: inout c, aStart: im.nameStart, aLen: im.nameLen, bStart: nameStart, bLen: nameLen) {
+                return true
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// Use-site module visibility (spec/15): a free-function call whose callee is defined
+// in another module is valid only if that name was imported into the using module
+// (`import … with { }`) — relying on the flat namespace is not allowed. Same-module
+// calls (the whole compiler is one module = its `part` tree) and unresolved names
+// (locals/closures/builtins not in c.funcs) are left alone. Types stay ambient, so
+// only function calls are gated here; member/method visibility is a separate axis.
+fn checkUseVisibility(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.exprs.count {
+        match c.exprs[i] {
+            Expr.Call(val nameStart, val nameLen, val args) => {
+                val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+                if fi < c.funcs.count {
+                    val useMod: U64 = moduleOf(c: inout c, offset: nameStart)
+                    val defMod: U64 = moduleOf(c: inout c, offset: c.funcs[fi].nameStart)
+                    if useMod == defMod {
+                    } else {
+                        if isImportedInto(c: inout c, mod: useMod, nameStart: nameStart, nameLen: nameLen) {
+                        } else {
+                            compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "use of a function from another module without importing it (add `import … with { … }`)")
+                        }
+                    }
+                }
+                i += 1
+            }
+            _ => { i += 1 }
+        }
+    }
+}

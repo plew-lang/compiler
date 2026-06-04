@@ -1,4 +1,4 @@
-import @Std/Core
+import @Std/Core with { assert }
 fn main() {
     val x: I32 = 5
     assert(x > 10)

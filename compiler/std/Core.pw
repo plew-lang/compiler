@@ -84,7 +84,7 @@ impl[T, E] Result[T, E] {
 // false (spec/11: always on, all builds). Returns (). The condition is
 // label-suppressed (`cond~:`, positional); the diagnostic message is an
 // optional labelled argument with a default.
-fn assert(cond~: Bool, message: String = "assertion failed") {
+export fn assert(cond~: Bool, message: String = "assertion failed") {
     if cond {
     } else {
         panic message

@@ -1,4 +1,4 @@
-import @Std/Core
+import @Std/Core with { assert }
 import @Std/Io with { print }
 fn main() {
     val x: I32 = 5

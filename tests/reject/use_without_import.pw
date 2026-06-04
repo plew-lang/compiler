@@ -1,0 +1,9 @@
+// A namespace import (`import @Std/Core`, no `with`) loads the module but binds no
+// flat names. Calling `assert` as a bare name relies on the old flat namespace and
+// must be rejected (spec/15: a cross-module function is visible only when imported
+// with `with { … }`). The fix is `import @Std/Core with { assert }`.
+import @Std/Core
+
+fn main() {
+    assert(true)
+}
