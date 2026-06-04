@@ -60,7 +60,11 @@ switch 先頭ディスパッチが `goto __L<N>` で再入。全ローカル hoi
 
 **(ii-a) ✅実装済**（`tests/run/array_methods`・205緑・不動点）：`impl[T] Array[T] { fn … }` のユーザーメソッドが**純 Plew で動く**（要素型ごとに monomorphize＋名前で dispatch・Array 表現は PlewArray のまま）。「配列メソッド＝無条件 append」ハードコードは **append 以外を撤廃**（append 自身は移行 fallback として残置）。実装＝①`parseImpl`：`impl Array[T]` は受信子が array 型としてパースされ span が要素を指すので、メソッドを**頭名 "Array" で登録**（headTok）。②`emitArrayMethods`：`emitMonoMethods` と並行の専用パス＝`c.arrayElems`（要素型）でキー（Array は mono struct でないので genInsts に入れられない）・**型パラメータ要素（`Array[T]` の T）はスキップ**（自己参照 env＝genCElem 無限再帰を回避）。③`genExpr` Method：append 以外の配列メソッドを `Array_<E>_<selector>` へ dispatch。④`exprType`：Array メソッド内の self は array（kind 3・要素名）型・配列への Method 呼びは戻り値型 T を要素型に置換。
 
-**残る ii-a（次）＝`.append`/`.count`/`arr[i]` を Plew メソッド化しハードコード撤去**：Core に `impl[T] Array[T] { inout fn append(v: T) { arrayPush(a: inout self, v: v) } fn count() -> U64 { arrayLen(a: self) } }` 等を書き、dispatch を Core メソッド優先へ→ ハードコード削除（ADD→reseed→USE・**コンパイラ自身が `.append`/`.count` を全面利用**するので各段で種が新ソースをコンパイルできることを確認しながら）。`arr[i]` は Index トレイト脱糖へ。
+**プレリュード機構＝✅実装済**（`std/Prelude.pw`・`tests/run/prelude_array`）：**ambient な Array メソッドの置き場**。loader が全プログラムに**自動ロード**（末尾 append＝ユーザー行番号を動かさない・`computeStdRoot`+"Prelude.pw"・無ければスキップ）。import 不要で `xs.get(i:…)`/`xs.set(i:…, value:…)`/`xs.append(v)` が使える（lang-item Array の一部）。中身＝配列 intrinsic 床（`arrayPush`/`Get`/`Set`/`Len` を `extern "plew-intrinsic"` 宣言）＋`impl[T] Array[T] { append, get, set }`。**ii-b の `struct Array` もここに置く**。
+
+**`.append`＝✅純 Plew 化済**：`impl Array { inout fn append(value~: T) { arrayPush(a: inout self, v: value) } }` へ dispatch（要素型ごと mono）。push ハードコードは**プレリュード不在時の fallback のみ**残置（freshly-seeded 保険）。`genArrayUserMethod` に要素型引数ハンドリング（`argIsElementTyped`+`emitArrayElemValue`）を足し `m.append([1,2,3])`（ネスト配列）も動く。
+
+**残＝`.count`/`arr[i]`**：どちらも**フィールド/添字構文**（`digits.count` 括弧なし・`m[i]`）で、メソッド化＝構文変更が要るので **ii-b（struct 化）でまとめて**扱う（struct なら count は `len` フィールド・`[i]` は Index トレイト脱糖）。append/get/set が Plew 化できたので ii-a の主目的（メソッドを Plew で書ける）は達成。
 
 **(ii-b) 表現 swap（真の flag-day・最後）**：`struct Array[T] { data: RawBuffer[T]; len: U64 }` を Core に・`PlewArray_<E>` 撤去・`RawBuffer` 値意味論（コピー share・破棄 release）を Ref の各サイトに配線。
 
