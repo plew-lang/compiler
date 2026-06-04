@@ -44,7 +44,7 @@ switch 先頭ディスパッチが `goto __L<N>` で再入。全ローカル hoi
 4. 🔲 **`any P` 存在型**（トレイトの重い尻尾＝最後・型消去・動的ディスパッチ）。
 5. 🔲 **メタプログラミング**（`Derive`・コード生成・spec 上も最後）。
 
-**コアライブラリ境界＝整理済**：`@Std/Io`・`Process`・`Async` は実 `.pw` の `extern "plew-intrinsic"` 宣言（名前 intercept 撤去・呼びは `plew_<name>`・ランタイム symbol camelCase）。lang item は名前ベース解決。残＝`print` のみビルトイン（整形 std 後に純 Plew 化）・`String`/`Array` メソッドの Plew 化（generic intrinsic 床が前提）。機構は [design-decisions.md](design-decisions.md)「コアライブラリの境界」。
+**コアライブラリ境界＝整理済**：`@Std/Io`・`Process`・`Async` は実 `.pw` の `extern "plew-intrinsic"` 宣言（名前 intercept 撤去・呼びは `plew_<name>`・ランタイム symbol camelCase）。lang item 型は **`extern "plew-intrinsic" { struct I32 … }`** で Core が宣言＝所有（Swift モデル・表現不変・コヒーレンス是正）。**`Format` トレイト＋全整数型 impl を純 Plew で Core に実装済**（`stringFromBytes` intrinsic＋桁ロジック・`(x).format(format: "")` が動く）。機構は [design-decisions.md](design-decisions.md)「コアライブラリの境界」。**残＝`print` の純 Plew 化（`print[T: Format]`）は延期**：generic free fn の monomorphization の **scan 時型復元が未 robust**（closure 呼び結果・一部の式で instance を取りこぼし `print_value_T` を吐く）＝generic 機構のハードニングが前提の別件。それまで print はビルトイン継続。`String`/`Array` メソッドの Plew 化（generic intrinsic 床）も同じ generic ハードニング待ち。
 
 横断 additive：演算子トレイト全配線（Eq/Ord 以外・需要駆動）・I2（import の with ゲート＝可視性検査・今は全フラット）・循環回収（Ref グラフ限定サイクルコレクタ）。詳細は [provisional.md](provisional.md)。
 
