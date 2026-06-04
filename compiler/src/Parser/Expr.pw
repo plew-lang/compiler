@@ -35,7 +35,7 @@ fn binPrec(k: Kind) -> I64 {
 // Unicode codepoint. Only a single scalar is allowed; multi-scalar (Grapheme)
 // literals are rejected (Grapheme type unimplemented). UTF-8 is decoded with the
 // canonical bitwise form (continuation bytes carry 6 bits each).
-fn charValue(c: inout Comp, t: Tok) -> I64 {
+fn charValue(c: inout Comp, t: Tok) -> U64 {
     val contentLen: U64 = t.len - 2
     if contentLen == 0 {
         compileErrorAt(line: lineOf(c: inout c, offset: t.start), msg: "empty character literal")
@@ -55,7 +55,7 @@ fn charValue(c: inout Comp, t: Tok) -> I64 {
         return e
     }
     mut val consumed: U64 = 1
-    mut val value: I64 = 0
+    mut val value: U64 = 0
     if b0 < 128 {
         consumed = 1
         value = b0
@@ -85,7 +85,7 @@ fn parsePrimary(c: inout Comp) -> U64 {
         Kind.Int => {
             val t: Tok = c.cur()
             c.advance()
-            val v: I64 = c.tokenValue(t: t)
+            val v: U64 = tokenValue(c: inout c, t: t)
             // optional type suffix: an integer-type name written immediately
             // after the digits with no space (`5U64`, `1I32`). It gives a
             // context-free literal its type (spec: no default type).
@@ -109,7 +109,7 @@ fn parsePrimary(c: inout Comp) -> U64 {
         Kind.Char => {
             val t: Tok = c.cur()
             c.advance()
-            val v: I64 = charValue(c: inout c, t: t)
+            val v: U64 = charValue(c: inout c, t: t)
             return c.pushExpr(e: <Expr.Int value=v offset=t.start isBool=false tyStart=0 tyLen=0 />)
         }
         Kind.Ident => {

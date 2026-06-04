@@ -767,10 +767,28 @@ fn genStmt(c: inout Comp, id: U64) {
         }
         Stmt.Print(val expr, val offset) => {
             if c.impPrint {
-                // print is a placeholder I/O builtin that accepts any integer; its
-                // literal arg defaults to I64 (a documented shim, not spec surface).
-                checkLitCtx(c: inout c, id: expr, eKind: 1, eBits: 64, eSgn: true)
-                write(s: "    printf(\"%lld\\n\", (long long)(")
+                // print is a placeholder I/O builtin that accepts any integer. The
+                // arg's recovered type picks the format: an unsigned type prints
+                // via %llu (so the full U64 range round-trips), everything else via
+                // %lld with the literal arg defaulting to signed I64 (documented
+                // shim, not spec surface).
+                val pt: TypeInfo = exprType(c: inout c, id: expr)
+                mut val uns: Bool = false
+                if pt.kind == 0 {
+                    if isIntType(c: inout c, start: pt.nameStart, len: pt.nameLen) {
+                        if intSigned(c: inout c, start: pt.nameStart, len: pt.nameLen) {
+                        } else {
+                            uns = true
+                        }
+                    }
+                }
+                if uns {
+                    checkLitCtx(c: inout c, id: expr, eKind: 1, eBits: 64, eSgn: false)
+                    write(s: "    printf(\"%llu\\n\", (unsigned long long)(")
+                } else {
+                    checkLitCtx(c: inout c, id: expr, eKind: 1, eBits: 64, eSgn: true)
+                    write(s: "    printf(\"%lld\\n\", (long long)(")
+                }
                 genExpr(c: inout c, id: expr)
                 write(s: "));\n")
             } else {

@@ -127,11 +127,13 @@ struct Arg {
 }
 
 enum Expr {
-    // An integer (or Bool) literal. `offset` is the source byte for diagnostics.
+    // An integer (or Bool) literal. `value` is the non-negative magnitude (U64,
+    // so the full unsigned range up to 2^64-1 fits); a leading `-` is a separate
+    // Unary node, not folded in here. `offset` is the source byte for diagnostics.
     // `isBool` marks `true`/`false` (lowered to 1/0 but typed Bool, never an
     // ambiguous integer). `tyStart`/`tyLen` is an optional type suffix span
     // (`5U64`, `1I32`); tyLen 0 = no suffix, so the type comes from context.
-    Int(value: I64, offset: U64, isBool: Bool, tyStart: U64, tyLen: U64)
+    Int(value: U64, offset: U64, isBool: Bool, tyStart: U64, tyLen: U64)
     Ident(start: U64, len: U64)
     Unary(op: I64, operand: U64)
     Binary(op: I64, lhs: U64, rhs: U64)
@@ -619,16 +621,30 @@ impl Comp {
         self.types.append(t)
         return id
     }
-    // Read an Int token's value out of the source bytes via its (start,len) span.
-    inout fn tokenValue(t: Tok) -> I64 {
-        mut val v: I64 = 0
-        mut val j: U64 = 0
-        while j < t.len {
-            val b: U8 = self.bytes[t.start + j]
-            v = v * 10 + (b as I64 - 48)
-            j += 1
+}
+
+// Read an Int token's value out of the source bytes via its (start,len) span.
+// Accumulates in U64 so the whole unsigned range fits; a literal that would
+// exceed 2^64-1 is a clean compile error (not a compiler crash). The overflow
+// guard never runs the unchecked `v*10+d` past U64 max: `floor(U64max/10)` is
+// 1844674407370955161 and U64max ends in 5, so at that boundary only digits
+// <= 5 still fit. The guard constant fits I64, so this stays expressible.
+fn tokenValue(c: inout Comp, t: Tok) -> U64 {
+    mut val v: U64 = 0
+    mut val j: U64 = 0
+    while j < t.len {
+        val d: U64 = (c.bytes[t.start + j] as U64) - 48
+        if v > 1844674407370955161U64 {
+            compileErrorAt(line: lineOf(c: inout c, offset: t.start), msg: "integer literal exceeds the maximum value (18446744073709551615 = U64 max)")
         }
-        return v
+        if v == 1844674407370955161U64 {
+            if d > 5 {
+                compileErrorAt(line: lineOf(c: inout c, offset: t.start), msg: "integer literal exceeds the maximum value (18446744073709551615 = U64 max)")
+            }
+        }
+        v = v * 10 + d
+        j += 1
     }
+    return v
 }
 

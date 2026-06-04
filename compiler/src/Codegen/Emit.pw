@@ -53,6 +53,16 @@ fn writeU64(n: U64) {
     write(s: digitStrU(d: n % 10))
 }
 
+// Emit an integer-literal magnitude (Expr.Int.value; a leading `-` is emitted
+// separately by the Unary node). A bare C decimal constant > LLONG_MAX is ill-
+// formed, so values above 2^63-1 get a `ULL` suffix to read as unsigned.
+fn writeIntLit(n: U64) {
+    writeU64(n: n)
+    if n > 9223372036854775807U64 {
+        write(s: "ULL")
+    }
+}
+
 fn writeSpan(c: inout Comp, start: U64, len: U64) {
     mut val j: U64 = 0
     while j < len {
@@ -150,52 +160,41 @@ fn losslessInt(c: inout Comp, srcStart: U64, srcLen: U64, dstStart: U64, dstLen:
     return dBits >= sBits
 }
 
-// Whether the literal `value` fits the target integer type's range.
-fn litFitsType(c: inout Comp, value: I64, dstStart: U64, dstLen: U64) -> Bool {
+// Whether the literal (magnitude `value`, negated if `neg`) fits the target
+// integer type's range.
+fn litFitsType(c: inout Comp, value: U64, neg: Bool, dstStart: U64, dstLen: U64) -> Bool {
     val bits: U64 = intBits(c: inout c, start: dstStart, len: dstLen)
     val sgn: Bool = intSigned(c: inout c, start: dstStart, len: dstLen)
-    return litFitsBits(value: value, bits: bits, sgn: sgn)
+    return litFitsBits(value: value, neg: neg, bits: bits, sgn: sgn)
 }
 
-// Whether `value` fits an integer type of the given width and signedness. Span-
-// free core of litFitsType, so synthetic contexts (index = U64, print = I64)
-// can range-check literals without a type-name span in the source buffer.
-fn litFitsBits(value: I64, bits: U64, sgn: Bool) -> Bool {
-    // Per-width bounds as literals (no `1 << 31` / `1 << 32`, which would overflow
-    // a 32-bit C int and give the wrong bound). Bounds fit I64 (< 2^63).
+// Whether the literal (non-negative magnitude `value`, negated when `neg`) fits
+// an integer type of the given width and signedness. Span-free core of
+// litFitsType, so synthetic contexts (index = U64, print = I64) can range-check
+// literals without a type-name span. The 64-bit signed-negative bound (2^63) is
+// expressed via `value - 1 <= 2^63-1` so no 2^63 literal is needed.
+fn litFitsBits(value: U64, neg: Bool, bits: U64, sgn: Bool) -> Bool {
+    if neg {
+        // a negative literal needs a signed target; magnitude <= 2^(bits-1).
+        if sgn {
+        } else {
+            return false
+        }
+        if bits == 8 { return value <= 128 }
+        if bits == 16 { return value <= 32768 }
+        if bits == 32 { return value <= 2147483648 }
+        if value == 0 { return true }
+        return (value - 1) <= 9223372036854775807U64
+    }
     if sgn {
-        if bits == 8 {
-            if value < (0 - 128) { return false }
-            if value > 127 { return false }
-            return true
-        }
-        if bits == 16 {
-            if value < (0 - 32768) { return false }
-            if value > 32767 { return false }
-            return true
-        }
-        if bits == 32 {
-            if value < (0 - 2147483648) { return false }
-            if value > 2147483647 { return false }
-            return true
-        }
-        return true
+        if bits == 8 { return value <= 127 }
+        if bits == 16 { return value <= 32767 }
+        if bits == 32 { return value <= 2147483647 }
+        return value <= 9223372036854775807U64
     }
-    if value < 0 {
-        return false
-    }
-    if bits == 8 {
-        if value > 255 { return false }
-        return true
-    }
-    if bits == 16 {
-        if value > 65535 { return false }
-        return true
-    }
-    if bits == 32 {
-        if value > 4294967295 { return false }
-        return true
-    }
+    if bits == 8 { return value <= 255 }
+    if bits == 16 { return value <= 65535 }
+    if bits == 32 { return value <= 4294967295 }
     return true
 }
 

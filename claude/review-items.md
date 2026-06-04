@@ -16,7 +16,6 @@
   - heap 持ち Ref pointee の深い release（`Array[Ref[StructWithHeap]]` の pointee の配列/Ref フィールドが leak・no UAF）。
   - ネスト配列 `Array[Array[T]]` の inner-array 要素 ARC（現状ビットコピー＝leak・no UAF）。
 - **Arrow-place 代入のリテラル型付け〔小・新規発見〕**：`ys[0]->v = 42`（Ref pointee フィールドへの代入）の `42` が「no type from context」＝Arrow place 代入の右辺リテラルに pointee フィールド型の文脈が渡らない（`42I32` or 変数で回避可）。`a.b = lit`（通常 field）は動くが `ref->field = lit`（Arrow）が未対応。
-- **F12〔中・据え置き：整数リテラル符号モデル〕U64 リテラル ∈ [2^63, 2^64-1] で plewc がクラッシュ**：`tokenValue` が値を I64 で蓄積（`v*10+digit`）し I64 範囲超過でコンパイラ自身の overflow check が panic。直すには値表現を U64 化（`Expr.Int.value` U64・lexer 蓄積 U64・符号なし codegen・範囲検査・**負リテラル `-128` 畳み込みとの両立に符号フラグ**）＝整数リテラルの符号モデルに波及。影響はユーザーの巨大 U64 リテラルのみ（稀）。
 - **演算子トレイト（Eq/Ord 以外）/ `@[Ord]` on enum / 曖昧な untyped-literal オーバーロード**：トレイト体系の大物・需要駆動。[provisional.md](provisional.md) のロードマップで管理。
 
 ## ③ 残（順次対応可・小〜中）

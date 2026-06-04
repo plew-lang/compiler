@@ -5,31 +5,53 @@
 // expression that overflows its type is rejected at compile time. checkLit*
 // is a pure validation pass (emits compileError; does not change the C output).
 
+// A folded constant integer: non-negative magnitude `value` (U64) plus a `neg`
+// sign, mirroring the literal model (Expr.Int is a magnitude; `-` is a Unary).
 struct ConstInt {
     val isConst: Bool
-    val value: I64
+    val neg: Bool
+    val value: U64
 }
 
 fn notConst() -> ConstInt {
-    return <ConstInt isConst=false value=0 />
+    return <ConstInt isConst=false neg=false value=0 />
+}
+
+// Build a ConstInt, normalizing -0 to +0.
+fn mkConst(neg: Bool, mag: U64) -> ConstInt {
+    if mag == 0 { return <ConstInt isConst=true neg=false value=0 /> }
+    return <ConstInt isConst=true neg=neg value=mag />
+}
+
+// (na,a) + (nb,b) as a signed magnitude, or notConst if the result magnitude
+// would exceed the fold domain (2^63-1; keeps every magnitude expressible).
+fn addConst(na: Bool, a: U64, nb: Bool, b: U64) -> ConstInt {
+    if na == nb {
+        if a > 9223372036854775807U64 - b { return notConst() }
+        return mkConst(neg: na, mag: a + b)
+    }
+    if a >= b { return mkConst(neg: na, mag: a - b) }
+    return mkConst(neg: nb, mag: b - a)
 }
 
 // Fold a constant integer expression (literals, unary `-`, and `+ - *`). Lets us
 // catch constant overflow whose individual leaves each fit but whose result does
 // not (`val f: U8 = 200 + 100`). Other operators yield non-const (leaf checks
-// still apply). The fold runs in the compiler's own checked I64 arithmetic, so a
-// constant that overflows I64 itself aborts the compile loudly (pathological).
+// still apply). The fold works in a signed magnitude bounded by 2^63-1; a leaf
+// or intermediate beyond that yields non-const (the per-leaf range check still
+// applies), so the fold never needs an unrepresentable bound.
 fn foldConst(c: inout Comp, id: U64) -> ConstInt {
     val e: Expr = c.exprs[id]
     match e {
         Expr.Int(val value, offset: _, val isBool, tyStart: _, tyLen: _) => {
             if isBool { return notConst() }
-            return <ConstInt isConst=true value=value />
+            if value > 9223372036854775807U64 { return notConst() }
+            return <ConstInt isConst=true neg=false value=value />
         }
         Expr.Unary(val op, val operand) => {
             if op == 57 {
                 val o: ConstInt = foldConst(c: inout c, id: operand)
-                if o.isConst { return <ConstInt isConst=true value=0 - o.value /> }
+                if o.isConst { return mkConst(neg: !o.neg, mag: o.value) }
             }
             return notConst()
         }
@@ -38,9 +60,13 @@ fn foldConst(c: inout Comp, id: U64) -> ConstInt {
             val b: ConstInt = foldConst(c: inout c, id: rhs)
             if a.isConst {
                 if b.isConst {
-                    if op == 56 { return <ConstInt isConst=true value=a.value + b.value /> }
-                    if op == 57 { return <ConstInt isConst=true value=a.value - b.value /> }
-                    if op == 58 { return <ConstInt isConst=true value=a.value * b.value /> }
+                    if op == 56 { return addConst(na: a.neg, a: a.value, nb: b.neg, b: b.value) }
+                    if op == 57 { return addConst(na: a.neg, a: a.value, nb: !b.neg, b: b.value) }
+                    if op == 58 {
+                        if a.value == 0 { return mkConst(neg: false, mag: 0) }
+                        if b.value > 9223372036854775807U64 / a.value { return notConst() }
+                        return mkConst(neg: a.neg != b.neg, mag: a.value * b.value)
+                    }
                 }
             }
             return notConst()
@@ -64,20 +90,20 @@ fn tiIsInt(c: inout Comp, ti: TypeInfo) -> Bool {
 // with no type is a compile error), 1 = integer of (eBits, eSgn), 2 = a non-
 // integer type (skip int checks). A `true`/`false` (isBool) or a suffixed
 // literal (`5U64`) carries its own type and is never context-ambiguous.
-fn checkLitLeaf(c: inout Comp, value: I64, offset: U64, isBool: Bool, tyStart: U64, tyLen: U64, eKind: U64, eBits: U64, eSgn: Bool) {
+fn checkLitLeaf(c: inout Comp, value: U64, neg: Bool, offset: U64, isBool: Bool, tyStart: U64, tyLen: U64, eKind: U64, eBits: U64, eSgn: Bool) {
     if isBool {
         return
     }
     if tyLen != 0 {
         // explicit type suffix: range-check against it (never ambiguous).
-        if litFitsType(c: inout c, value: value, dstStart: tyStart, dstLen: tyLen) {
+        if litFitsType(c: inout c, value: value, neg: neg, dstStart: tyStart, dstLen: tyLen) {
         } else {
             compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal is out of range for its type")
         }
         return
     }
     if eKind == 1 {
-        if litFitsBits(value: value, bits: eBits, sgn: eSgn) {
+        if litFitsBits(value: value, neg: neg, bits: eBits, sgn: eSgn) {
         } else {
             compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal is out of range for its type")
         }
@@ -92,17 +118,17 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
     val e: Expr = c.exprs[id]
     match e {
         Expr.Int(val value, val offset, val isBool, val tyStart, val tyLen) => {
-            checkLitLeaf(c: inout c, value: value, offset: offset, isBool: isBool, tyStart: tyStart, tyLen: tyLen, eKind: eKind, eBits: eBits, eSgn: eSgn)
+            checkLitLeaf(c: inout c, value: value, neg: false, offset: offset, isBool: isBool, tyStart: tyStart, tyLen: tyLen, eKind: eKind, eBits: eBits, eSgn: eSgn)
         }
         Expr.Unary(val op, val operand) => {
             if op == 57 {
                 // a leading `-` on a literal folds into the literal (`-128:I8` is
-                // valid even though `128` alone exceeds I8), so check the negated
-                // value; otherwise recurse into the operand with the same type.
+                // valid even though `128` alone exceeds I8), so check the magnitude
+                // with the negative sign; otherwise recurse with the same type.
                 val oe: Expr = c.exprs[operand]
                 match oe {
                     Expr.Int(val value, val offset, val isBool, val tyStart, val tyLen) => {
-                        checkLitLeaf(c: inout c, value: 0 - value, offset: offset, isBool: isBool, tyStart: tyStart, tyLen: tyLen, eKind: eKind, eBits: eBits, eSgn: eSgn)
+                        checkLitLeaf(c: inout c, value: value, neg: true, offset: offset, isBool: isBool, tyStart: tyStart, tyLen: tyLen, eKind: eKind, eBits: eBits, eSgn: eSgn)
                     }
                     _ => { checkLitCtx(c: inout c, id: operand, eKind: eKind, eBits: eBits, eSgn: eSgn) }
                 }
@@ -120,7 +146,7 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
                 if eKind == 1 {
                     val cf: ConstInt = foldConst(c: inout c, id: id)
                     if cf.isConst {
-                        if litFitsBits(value: cf.value, bits: eBits, sgn: eSgn) {
+                        if litFitsBits(value: cf.value, neg: cf.neg, bits: eBits, sgn: eSgn) {
                         } else {
                             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "constant expression is out of range for its type")
                         }

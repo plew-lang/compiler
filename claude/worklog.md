@@ -18,7 +18,7 @@
 > - **F9〔中・✅修正済（未コミット）〕** bare-expr の match アーム（`=> expr`/`=> give v`）が statement 位置で壊れる＝`parseBlock` が後続アームを文として飲み込み最初のアームだけ登録→網羅判定が誤って非網羅に＋アーム欠落。修正＝`parseMatch` が `parseArmBody`（`{}` or 単一文をブロック化）を使う。test `run/match_bare_arm`。これで E1/E3/e1b/e1c 系の「網羅なのに非網羅」誤判定が解消。
 > - **F10〔中・一部✅修正済（未コミット）〕** 配列要素越しの place 変更 `arr[i].field = x` が未実装で不正 C（`get(...).field = v`＝rvalue 代入）。修正＝`tryArrayElemFieldAssign` で get-modify-set 脱糖（plain `=`）。compound は loud-reject・inout メソッド経由（`arr[i].m()`）は未対応＝review-items 参照。
 > - **F11〔大筋✅実装済〕** 複合要素型の配列。`Array[Ref[T]]`/`Array[Box[T]]`/`Array[Array[T]]` が動作（複合要素にマングル名 span を与え、C 型/ARC は ref から復元・単純要素は出力不変）。残＝literal 要素 append・要素 ARC（Ref 箱の leak）・generic 経由実体化。→ review-items。
-> - **F12〔中〕** U64 リテラル ∈ [2^63, 2^64-1] で plewc がクラッシュ（値を I64 蓄積→overflow panic）。整数リテラル符号モデルに波及＝GPG 回復後に。→ review-items。
+> - **F12〔中・✅修正済〕** U64 リテラル ∈ [2^63, 2^64-1] で plewc がクラッシュ（値を I64 蓄積→overflow panic）＋ 2^64-1 超過は crash。修正＝`Expr.Int.value` を **U64 magnitude**化（符号は従来通り Unary `-`）・`tokenValue` を free 関数化し U64 蓄積＋桁あふれ検出（`floor(U64max/10)=1844674407370955161`＋末桁≤5 ガードで panic せず clean error）・codegen は `writeIntLit`（>2^63-1 に `ULL`）・範囲検査 `litFitsBits/litFitsType/checkLitLeaf` を (U64 magnitude, neg) 化（負の I64 下限 2^63 は `value-1 ≤ 2^63-1` で表現・2^63 リテラル不要）・`ConstInt` を (neg, U64) 化し符号付き fold（2^63-1 で notConst バイアウト）・`print` shim を符号判別（unsigned は `%llu`）。test `run/u64_literal`・`run/int_literal_neg`・`reject/int_literal_overflow`。
 > - **F13〔✅修正済〕** 配列型の関数デフォルト引数 `fn f(xs: Array[I32] = [])` の省略呼びが `f(0)`＝不正 C。修正＝default-fill で array param は genArrayValue。test `run/default_arg_array`。
 > - **F16〔✅修正済〕** 配列リテラルを引数で渡すと `f(xs: [1,2,3])`→`f(0)`＝不正 C。修正＝提供引数ループで array param は genArrayValue。
 > - **F15〔小〕** ビルトインメソッド名（`count` 等）と同名のユーザー自由関数呼びが誤コンパイル。→ review-items。

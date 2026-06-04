@@ -1,0 +1,13 @@
+// A leading `-` is a separate unary node over a non-negative magnitude literal;
+// the magnitude is range-checked against the signed target with the sign, so a
+// type's minimum (`-128` for I8) is accepted even though `128` alone overflows.
+import @Std/Io with { print }
+
+fn main() {
+    val a: I8 = -128         // I8 min: magnitude 128 == 2^7
+    print(a)
+    val b: I32 = -2147483648 // I32 min: magnitude 2^31
+    print(b)
+    val c: I64 = -1
+    print(c)
+}

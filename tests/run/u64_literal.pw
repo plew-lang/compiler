@@ -1,0 +1,13 @@
+// Integer literals span the full U64 range. Values in [2^63, 2^64-1] used to
+// crash the compiler (I64 accumulation overflowed its own overflow check);
+// they now type-check and codegen as unsigned (ULL suffix in the emitted C).
+import @Std/Io with { print }
+
+fn main() {
+    val max: U64 = 18446744073709551615U64   // 2^64 - 1
+    print(max)
+    val p63: U64 = 9223372036854775808U64     // 2^63
+    print(p63)
+    val viaCtx: U64 = 18446744073709551615    // same, type from context
+    print(viaCtx)
+}

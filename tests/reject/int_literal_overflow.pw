@@ -1,0 +1,8 @@
+// A literal beyond 2^64-1 is a clean compile error, not a compiler crash:
+// the lexer's value accumulation detects the overflow and reports it.
+import @Std/Io with { print }
+
+fn main() {
+    val x: U64 = 999999999999999999999999999999999
+    print(x)
+}
