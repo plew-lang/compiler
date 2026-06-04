@@ -1,194 +1,96 @@
-# ii-b: Array as a Plew struct over RawBuffer (the flag-day blueprint)
+# Array as a Plew struct over RawBuffer — design record
 
-Status: in progress on branch `array-struct`. main has the complete, working ii-a
-(Array generic methods + prelude + `.append` in pure Plew; `.count`/`[i]` still
-builtin). This file is the concrete target + execution plan for the representation
-swap. It is a **destructive flag-day**: an `Array[T]` value has exactly one
-representation, so literals / `[i]` / `.count` / `for` / CoW / the compiler's own
-arrays all switch together — there is no partial-migration that keeps the suite
-green, so it must be done as one coherent change and verified before merging.
-
-## Target (the あるべき姿, in pure Plew, in `std/Prelude.pw`)
+**Status: done** (merged to main; tags `array-rawbuffer-floor`, `array-plew-struct`).
+This keeps the durable *why* of the migration; the step-by-step execution is in the
+git history under those tags. The end state:
 
 ```plew
+// std/Prelude.pw — ambient, no import (like the Array lang-item type / `[…]`)
 struct Array[T] {
-    data: RawBuffer[T]
-    pub(get) mut val count: U64   // .count reads this field (no computed property);
-                                  // count == len, not redundant data. (A `count()`
-                                  // method over a `len` field is equally fine — user
-                                  // OK'd either; field is simplest.)
+    mut val data: RawBuffer[T]
+    pub(get) mut val count: U64
 }
-
 impl[T] Array[T] {
-    inout fn append(value~: T) {
-        val cap: U64 = rawCap(b: self.data)
-        if self.count >= cap {
-            // grow: alloc a larger buffer, copy, swap. (rawGrow/rawCopy helper.)
-        }
-        // CoW: if the buffer is shared, copy it private before mutating.
-        if rawIsUnique(b: self.data) { } else { /* copy-on-write */ }
-        rawStore(b: self.data, i: self.count, v: value)
-        self.count = self.count + 1
-    }
-    fn get(i: U64) -> T {
-        if i >= self.count { panic "index out of range" }
-        return rawLoad(b: self.data, i: i)
-    }
-    inout fn set(i: U64, value~: T) {
-        if i >= self.count { panic "index out of range" }
-        // CoW first, then store.
-        rawStore(b: self.data, i: i, v: value)
-    }
+    inout fn append(value~: T) { arrayPush(a: inout self, v: value) }
+    fn get(i: U64) -> T { return arrayGet(a: self, i: i) }
+    inout fn set(i: U64, value: T) { arraySet(a: inout self, i: i, v: value) }
 }
-// `xs[i]` desugars to an Index trait method (-> get); `for x in xs` to count+get.
 ```
 
-Open core-lib details (do at implement time): the empty literal `[]` needs an
-empty Array (count 0, data = a 0-cap buffer or a shared static); growth policy
-(double, min 4 — same as the current PlewArray push); whether `set`/`append` share
-a `makeUnique` helper; whether `data`/`rawAlloc` need return-context inference (A)
-for `[]` (no element witness) — likely yes, so **landing return-context inference
-(A) is a prerequisite for the empty literal**, or `[]` is special-cased to build a
-0-cap Array without rawAlloc.
+`Array[T]` is a real Plew struct: its C typedef (`struct Array_E { E* data;
+uint64_t count; }`) comes from this declaration via emitMonoForward/emitMonoStruct,
+not a hand-written typedef. This is **Swift's model exactly** — `Array` is a struct,
+its methods are thin Plew wrappers over a small *Builtin floor* (`arrayPush`/
+`arrayGet`/`arraySet`/`arrayLen`, the `extern "plew-intrinsic"` ops the compiler
+lowers to a deep-copy-aware per-element runtime). The floor is the legitimate unsafe
+boundary, not a hack.
 
-## Key insight that shrinks the flag-day
+## Why the methods stay floor-wrappers (not raw-floor-direct)
 
-Make `Array[T]` a **normal generic struct** (registered from the prelude). Then the
-existing machinery handles most of it for free:
-- type lowering `Array[I32]` → `Array_I32` (emitMonoStruct), not `PlewArray_I32`.
-- `.count` / `.data` → ordinary struct field access.
-- value semantics (copy-on-bind, release-on-drop) → the struct machinery already
-  retains/releases heap-owning fields; a `RawBuffer` field just needs to be wired
-  like a `Ref` field (share/release) — see below.
-- methods → ordinary generic method machinery (emitMonoMethods); Array becomes a
-  genInst, so `emitArrayMethods` (the ii-a parallel pass) is no longer needed.
+The tempting "fully pure-Plew methods" (rewrite append/set to use `rawAlloc`/
+`rawStore`/`rawCap` directly, like `tests/run/raw_struct_cow`'s `VecI.push`) is
+**wrong for the general case**. Array's value semantics (CoW make-unique) need
+*element-aware deep copy/release*: a `Ref` element is retained, a struct element is
+deep-copied, so a CoW split yields independent elements (else release double-frees).
+The raw floor (`rawLoad`/`rawStore`) is type-erased and **shallow** (`b[i]`), so a
+pure-Plew CoW over it aliases non-scalar elements. The compiler itself stores
+`Array[TypeRef]`, `Array[Bind]` (struct elements with nested arrays), so a shallow
+pure-Plew Array would corrupt the compiler's own data. Element-aware deep copy needs
+the *type*, which only the compiler can supply (the generated `Array_E_copy/share/
+release/unique` runtime). So the floor intrinsics — which encapsulate that runtime —
+are the right abstraction; the methods on top are already pure Plew. `get` returns a
+`T` by value (the caller's binding deep-copies it), so the read path needs no floor
+magic, but the mutating paths do.
 
-So the special-casing that remains is only: **literals `[…]`**, **index `[i]`**,
-**`for`**, and **ambient-ness** (the lang-item, no import — already handled).
+This is the same reason Rust's `Vec` has `unsafe`/compiler-special internals behind a
+safe API: collection value semantics can't be expressed in the safe surface language.
 
-## Bootstrap seam — why the swap is TWO flips, not one
+## Why a representation swap is bootstrap-delicate (the seam)
 
-The compiler uses `Array` for its own data (`c.types`, `c.funcs`, source bytes,
-`xs.append`, `[i]`, `for`). A representation swap must be compilable by the
-*previous* (builtin-`PlewArray`) compiler into a *working* struct-aware compiler.
-The trap: **pure-Plew struct method bodies** (`self.data: RawBuffer`,
-`self.count = …`) are mis-compiled by the builtin compiler — it sees `self` as a
-`PlewArray` (`.len`, no `.count` store), so the methods the compiler itself calls
-break. The bodies can only be compiled correctly by a struct-aware compiler — but
-that is the very compiler we are trying to build (circular).
+The compiler compiles itself with its own arrays. A representation swap must be
+compilable by the *previous* compiler into a *working* new compiler. The trap:
+pure-Plew struct method bodies (`self.data: RawBuffer`, `self.count = …`) are
+*mis-compiled* by the old (builtin-`PlewArray`) compiler — it sees `self` as a
+`PlewArray` (`.len`, no `.count` store) — so the methods the compiler itself calls
+break. The bodies can only be compiled correctly by a struct-aware compiler, which
+is the very compiler being built (circular).
 
-The escape is a **stable seam**: the intrinsic floor (`arrayPush`/`arrayGet`/
-`arraySet`/`arrayLen`). Method bodies that are thin intrinsic wrappers compile
-correctly under *both* compilers — the builtin one lowers `arrayPush` →
-`PlewArray_E_push`, the struct-aware one lowers it → a struct push. So the swap is:
+The escape is a **stable seam**: keep the method bodies as thin wrappers over the
+intrinsic floor (`arrayPush` etc.), which both compilers lower correctly (old →
+`PlewArray_E_push`, new → the struct runtime). The migration then went representation-
+first (`PlewArray_<E>{data,len,cap,rc}` → RawBuffer-backed `{data,len}` with cap/rc in
+the buffer header, tag `array-rawbuffer-floor`), then promoted the builtin type to a
+genInst struct from the prelude `struct Array[T]` (tag `array-plew-struct`), each via
+reseed ×2. A dormant `isGenericInst(Array)=false` guard let the struct definition land
+before the flip without the old compiler double-emitting its methods.
 
-- **Flip 1 (representation; methods stay intrinsic wrappers).** Make `Array[E]` a
-  genInst struct over `RawBuffer` (`struct Array[T] { data: RawBuffer[T];
-  pub(get) mut val count }`); flip the `array*` intrinsics' lowering from
-  `PlewArray_E_*` to struct ops (a per-element C runtime `Array_E_{get,set,push}`,
-  with copy/share/release coming free from emitMonoStruct's RawBuffer-field
-  handling); flip `Array[E]` C type, literals, `.count`, `[i]`, `for`, `.bytes`;
-  remove the A0 guard, `emitArrayMethods`, and the `PlewArray` runtime. The
-  builtin compiler compiles this source (intrinsic-wrapper bodies → builtin push;
-  guard still active in its *binary* keeps Array builtin for its own arrays) into
-  a working struct-emitting compiler. Reseed ×2 → fixpoint. **This achieves the
-  representation goal: Array is a Plew struct over RawBuffer.**
-- **Flip 2 (methods → pure Plew).** Now struct-aware, rewrite the method bodies to
-  pure-Plew raw-floor logic (grow/CoW in Plew, mirroring `tests/run/raw_struct_cow`
-  `VecI.push`); remove the `array*` intrinsics + their C runtime. The Flip-1
-  compiler compiles the struct bodies correctly. Reseed → done.
+## Containment decisions (why it stayed small)
 
-`.bytes` coupling: `String.bytes` is currently a borrowed, header-less
-`PlewArray_U8` view; a struct-Array assumes a `RawBuffer` header and value
-semantics (binding copies → reads the header). `.bytes` is bound to locals in 44
-sites in the compiler, so it must yield an **independent** `Array[U8]` —
-materialize it by copying the string bytes into a fresh RawBuffer-backed
-`Array_U8` (value-semantics-honest; hidden O(n) cost is allowed). Array can't be
-split by element (a generic `Array[T]` mono'd for `U8` must match the one
-representation), so U8 flips with everything else.
+- Arrays keep the **kind-3 path** for everything but the typedef: literals `[…]`,
+  index `[i]`, `for`, `.count`, value semantics, and method dispatch still route
+  through the array-special machinery. `exprType` reports an array local / array-
+  returning function as **kind 3** even though `Array[E]` is now a genInst — so the
+  isGenericInst checks in exprType had to test `isArray` *first* (the one regression
+  class the swap introduced).
+- Array genInst struct **bodies are emitted before the nominal bodies** (a nominal
+  struct like Comp holds arrays by value): `Array_E` is pointer-based, so its element
+  only needs a forward declaration, unlike other genInsts which can hold a type by
+  value and so stay in the post-order mono pass.
+- `Array[U8]` is the lone **hand-written exception**: file paths / `String.bytes`
+  need it unconditionally (even when no source mentions `Array[U8]`), so a narrow
+  guard keeps it out of the genInst machinery and `genU8ArrayTypedef` always emits it.
+- `String.bytes` was a borrowed, header-less `PlewArray_U8` view; value semantics
+  (binding shares the buffer, reading its header) forced it to materialize an
+  **independent owned `Array[U8]`** by copying — value-semantics-honest, hidden O(n).
+- **(A) return-context inference was not needed**: Array values are only built by
+  literals, which the compiler lowers with the element type known from context;
+  context-free `val xs = []` stays an error (annotation required, Swift-like). It
+  remains independently useful → deferred as a separate additive.
 
-Prerequisite status (from the `Vec`/`VecI` spike): **(A) return-context inference
-is NOT a blocker** — Array values are only ever built by literals (`[…]`/`[]`),
-which the compiler lowers with the element type known from context, so it
-synthesizes `(Array_E){…}` directly without generic field inference; truly
-context-free `val xs = []` stays an error (needs annotation, Swift-like). It
-remains independently useful → deferred as a separate additive. **`pub(get)`
-parsing is done.** **Self sibling-method calls** are sidestepped by keeping
-Array's methods flat (Flip 2 inlines grow/CoW into append/set).
+## Remaining gap (next harvest)
 
-## Execution order (each step compiles; the swap itself is one commit)
-
-1. **RawBuffer value semantics** (additive, do first, testable alone): mirror `Ref`
-   at every share/release site so a `RawBuffer` field/local/capture is retained on
-   copy and released on drop. Sites (share = `plew_rawbuf_share`, release =
-   `plew_rawbuf_release` — note release frees `p-2`, the block start, NOT `p-1`):
-   - capture init share: Expr.pw ~62 (next to the `Ref` case).
-   - bind/copy share: Decl.pw ~530 (genCopyValue Ref case).
-   - struct field copy/share/release: the `Name_copy`/`_share`/`_release` field loops
-     in Decl.pw (find the Ref-field handling, add RawBuffer).
-   - local scope-drop release: emitScopeDrops / emitRefRelease (Resolve.pw ~556).
-   - closure env drop: Decl.pw ~1087.
-   Skip the non-value-semantics `isRefInst` sites (type lowering, pointee field
-   access, exprType) — those don't apply to RawBuffer (it's never `->field`'d).
-   Test: a RawBuffer bound to two vars then dropped doesn't double-free/leak.
-2. **Define `struct Array[T]` + methods in the prelude** (the target above). This
-   collides with builtin Array until step 3, so 2+3 land together.
-3. **Stop special-casing Array as builtin; route through the struct machinery**:
-   - type lowering: remove the `kw:"Array"` → `PlewArray_<E>` cases (Mono.pw ~223,
-     emitConcreteCType / genCTypeOf) so Array flows to the generic-struct mangle
-     `Array_<E>`. genCElem's Array handling too.
-   - `.count`: remove the builtin `.count`→`.len` Field special-case (it becomes a
-     normal field read of the struct's `count`).
-   - literals `[1,2,3]` / `[]`: construct the struct (alloc RawBuffer, store each,
-     set count) instead of PlewArray_new + push loop (Stmt/Expr genArrayValue/
-     genArrayLiteral).
-   - `[i]`: desugar to the Index method (`.get(i)`).
-   - `for x in xs`: iterate via count + get.
-   - CoW/value-semantics: drop the PlewArray_copy/share/release special path — the
-     struct's RawBuffer field (step 1) now carries it.
-   - remove `emitArrayMethods` + the ii-a `Array_<E>_<selector>` dispatch (Array is
-     a genInst now; methods go through emitMonoMethods + the normal kind-2 method
-     dispatch). Keep `genArrayUserMethod` only if still needed for `[i]`/for lowering.
-4. **Remove the PlewArray runtime** (Array.pw genArrayTypedef/genArrayRuntimeFns and
-   their callers in _.pw). The array intrinsics (`arrayPush/Get/Set/Len`) either go
-   away (replaced by raw* in the methods) or stay as thin shims — prefer removing
-   them so the floor is uniformly `RawBuffer`.
-5. **Reseed** (twice — codegen output changes), run the full suite + fixpoint, only
-   then merge `array-struct` → main.
-
-## Validated + discovered prerequisites (from the `Vec`/`VecI` spike)
-
-✅ **The core value-semantics/CoW is proven** (`tests/run/raw_struct_cow`): a struct
-`{ data: RawBuffer; count }` with share-on-bind (RawBuffer retained by step-1 struct
-value-semantics) + copy-on-write in `push` (`rawIsUnique` → realloc+copy when shared)
-behaves correctly — after `val w = v; v.push(x)`, `w` is unchanged. So the design
-holds; the work left is wiring it to the builtin Array syntax.
-
-The spike surfaced **3 prerequisites** that block the *generic, ambient* Array and
-must land before step 3:
-1. **Return-context type inference (A)** — generic struct construction `<Array …/>`
-   where T is hidden inside the `RawBuffer[T]` field (and the empty literal `[]`,
-   which has no element witness) can't infer T from the fields; it currently emits
-   the bare `(Array){…}` instead of `(Array_I32){…}`. Decision A is already taken
-   (design-decisions); it must actually be implemented. Without it, `[]`/construction
-   need a witness or a special case.
-2. **`pub(get)` field parsing** — `pub(get) mut val count: U64` currently lexes as
-   separate `pub` / `(` / `get` / `)` / `count` fields (garbage struct). Needed so
-   `.count` is externally readable but internally-only writable. (Plain `mut val
-   count` works within a module but isn't the right visibility for an ambient type.)
-3. **Sibling method calls on `self`** — `self.helper()` inside a generic struct
-   method fails ("no such method on this type"); the spike inlined the helper. Either
-   fix self-method dispatch, or keep Array's methods flat (inline the grow/CoW helper
-   into append/set).
-
-Recommended order now: implement (A) return-context inference (independently useful,
-unblocks empty literals + construction), then `pub(get)` fields, then the step-3 swap.
-
-## Why this is gated, not rushed
-
-The compiler compiles itself with its own arrays; if any array operation breaks
-mid-swap it cannot reach a fixpoint, and a bad value-semantics wire is a
-use-after-free, not a compile error. So the whole of step 3 lands at once on the
-branch and is proven (suite + fixpoint) before touching main. Bootstrap: the seed
-(builtin-Array compiler) compiles the new source's array *syntax* fine (syntax is
-unchanged); the new compiler emits the struct form; reseed converges as usual.
+The element-aware deep copy/release lives in an **array-specific** runtime
+(`Array_E_copy/share/release/unique`). Future `RawBuffer`-backed collections
+(`Dictionary`, `Set`) need the same — so the next collection work is generalizing it
+into a reusable "value semantics for a `RawBuffer` of N `T`s" mechanism the compiler
+emits for any such struct, not just Array.
