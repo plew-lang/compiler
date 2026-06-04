@@ -1006,28 +1006,14 @@ fn synthesizeDerives(c: inout Comp) {
     }
 }
 
-// Enable the builtin named (nameStart,nameLen) iff it was imported from its
-// correct @Std submodule. `@Std/Io` owns print/write/writeByte/readStdin/
-// readFile; `@Std/Process` owns argCount/argAt. A name imported from the wrong
-// module stays disabled (so `import @Std/Process with { print }` is rejected).
+// Record that `print` was imported from `@Std/Io`. `print` is still a compiler
+// builtin (it formats by the argument's integer type); the other @Std functions
+// are ordinary `extern "plew-intrinsic"` declarations resolved by name, so they
+// need no import flag. A name from the wrong module stays disabled (so
+// `import @Std/Process with { print }` is still rejected as not-ambient).
 fn markImport(c: inout Comp, segStart: U64, segLen: U64, nameStart: U64, nameLen: U64) {
     if rangeEquals(bytes: c.bytes, start: segStart, len: segLen, kw: "Io") {
         if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "print") { c.impPrint = true }
-        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "write") { c.impWrite = true }
-        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "writeByte") { c.impWriteByte = true }
-        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readStdin") { c.impReadStdin = true }
-        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readFile") { c.impReadFile = true }
-        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readFileBytes") { c.impReadFileBytes = true }
-        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "eprint") { c.impEprint = true }
-        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "fileExists") { c.impFileExists = true }
-    }
-    if rangeEquals(bytes: c.bytes, start: segStart, len: segLen, kw: "Process") {
-        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argCount") { c.impArgCount = true }
-        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argAt") { c.impArgAt = true }
-        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "exit") { c.impExit = true }
-    }
-    if rangeEquals(bytes: c.bytes, start: segStart, len: segLen, kw: "Async") {
-        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "sleep") { c.impSleep = true }
     }
 }
 

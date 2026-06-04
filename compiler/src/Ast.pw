@@ -558,23 +558,11 @@ struct Comp {
     // moved flag would skip the value's deinit on the not-taken path) — so it is
     // rejected. 0 at function top level (straight-line moves always allowed).
     mut val curBranchBase: U64
-    // which I/O builtins the file has imported (acceptance soundness: spec makes
-    // these non-ambient, so using one without `import @Std/Io`/`@Std/Process`
-    // is a compile error). One flag per builtin, matched to its module.
+    // `print` was imported from @Std/Io. `print` is still a compiler builtin
+    // (non-ambient: using it without the import is a compile error). The other
+    // @Std functions are ordinary `extern "plew-intrinsic"` declarations resolved
+    // by name, so they need no per-builtin flag.
     mut val impPrint: Bool
-    mut val impWrite: Bool
-    mut val impWriteByte: Bool
-    mut val impReadStdin: Bool
-    mut val impReadFile: Bool
-    mut val impArgCount: Bool
-    mut val impArgAt: Bool
-    mut val impEprint: Bool
-    mut val impExit: Bool
-    mut val impReadFileBytes: Bool
-    mut val impFileExists: Bool
-    // `sleep` from @Std/Async (spec/14): a timer-backed `Promise` builtin. Like
-    // the I/O builtins it is non-ambient, so using it without the import errors.
-    mut val impSleep: Bool
     // types that declared a `deinit { ... }` (spec/03). Each entry reuses Bind as
     // a (start,len) pair naming the receiver type. The deinit body itself is a
     // synthetic Func named `deinit` (hasRecv) in c.funcs; this list lets codegen
