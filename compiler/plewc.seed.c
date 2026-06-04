@@ -7619,6 +7619,12 @@ void checkMakeFields_c_Comp_typeStart_U64_typeLen_U64_variantStart_U64_variantLe
     MakeField mf = PlewArray_MakeField_get(fields, (long long)(i));
     checkUniquePlaceCopy_c_Comp_exprId_U64_inoutOk_Bool(&((*c)), mf.value, 0);
     TypeInfo ft = scalarInfo();
+    if (isRefInst_c_Comp_ref_U64(&((*c)), ty)) {
+    TypeRef rt = TypeRef_share(PlewArray_TypeRef_get((*c).types, (long long)(ty)));
+    ft = typeInfoOfRef_c_Comp_ref_U64(&((*c)), PlewArray_U64_get(rt.args, (long long)(0)));
+    TypeRef_release(rt);
+    }
+    else {
     if (isGenericEnumInst_c_Comp_ref_U64(&((*c)), ty)) {
     ft = genericEnumFieldTypeInfo_c_Comp_instRef_U64_variantStart_U64_variantLen_U64_fieldStart_U64_fieldLen_U64(&((*c)), ty, variantStart, variantLen, mf.nameStart, mf.nameLen);
     }
@@ -7628,6 +7634,7 @@ void checkMakeFields_c_Comp_typeStart_U64_typeLen_U64_variantStart_U64_variantLe
     }
     else {
     ft = makeFieldType_c_Comp_typeStart_U64_typeLen_U64_variantStart_U64_variantLen_U64_isEnum_Bool_fieldStart_U64_fieldLen_U64(&((*c)), typeStart, typeLen, variantStart, variantLen, isEnum, mf.nameStart, mf.nameLen);
+    }
     }
     }
     if (ft.kind == 3) {

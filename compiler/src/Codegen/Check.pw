@@ -569,13 +569,20 @@ fn checkMakeFields(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U6
         // place (which would double-deinit: the source and the new owner).
         checkUniquePlaceCopy(c: inout c, exprId: mf.value, inoutOk: false)
         mut val ft: TypeInfo = scalarInfo()
-        if isGenericEnumInst(c: inout c, ref: ty) {
-            ft = genericEnumFieldTypeInfo(c: inout c, instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+        if isRefInst(c: inout c, ref: ty) {
+            // `<Ref[T] value=… />`: the `value` field has the pointee type T, so
+            // a literal (`value=7`) types from T (else "no type from context").
+            val rt: TypeRef = c.types[ty]
+            ft = typeInfoOfRef(c: inout c, ref: rt.args[0])
         } else {
-            if isGenericInst(c: inout c, ref: ty) {
-                ft = genericFieldTypeInfo(c: inout c, instRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+            if isGenericEnumInst(c: inout c, ref: ty) {
+                ft = genericEnumFieldTypeInfo(c: inout c, instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
             } else {
-                ft = makeFieldType(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                if isGenericInst(c: inout c, ref: ty) {
+                    ft = genericFieldTypeInfo(c: inout c, instRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                } else {
+                    ft = makeFieldType(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                }
             }
         }
         if ft.kind == 3 {
