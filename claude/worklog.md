@@ -10,26 +10,26 @@
 - ✅ **コアライブラリ境界＝整理済**：`@Std/Io`・`Process`・`Async` は実 `.pw` の `extern "plew-intrinsic"` 宣言（呼びは `plew_<name>`）。lang item 型は `extern "plew-intrinsic" { struct I32 … }` で Core が宣言＝所有（Swift モデル・コヒーレンス是正）。`Format` トレイト＋全整数/Bool の impl・**`print` も純 Plew**（`@Std/Io` の `print[T](value~: T) where T: Format`・裸 `print(42)` はサフィックス必須＝既定型なし）。これを通すため generic free fn の monomorphization をハードニング（scan 時 exprType を codegen 同等に）。機構は [design-decisions.md](design-decisions.md)「コアライブラリの境界」。
 - ✅ **Array メソッドの Plew 化（あるべき姿 Level 2 への道）**：①**生メモリ床 `RawBuffer[T]`**（`Ref` 同様 C `Tc*`＋`[cap][rc]` ヘッダ・intrinsic `rawAlloc/Load/Store/Cap/IsUnique`・型非依存ランタイム `plew_rawbuf_*`・`tests/run/raw_buffer`）。②**Array generic メソッド**（`impl[T] Array[T] { fn … }` が要素型ごと mono＋名前 dispatch・`emitArrayMethods`・`tests/run/array_methods`）。③**プレリュード `std/Prelude.pw`**（loader が全プログラムに自動ロード＝ambient な Array メソッドの置き場・import 不要で `xs.get/set/append`・`tests/run/prelude_array`）。④**`.append` を純 Plew 化**（`impl Array { append }` へ dispatch・push ハードコードは不在時 fallback のみ）。
 
-## 次の一歩＝ii-b：Array を `struct Array[T] { data: RawBuffer[T]; count }` に（branch `array-struct`）
+## ✅ 完了＝Array を `struct Array[T] { data: RawBuffer[T]; pub(get) mut val count: U64 }` に（branch `array-struct`）
 
-**あるべき姿の最終段＝Array の表現も Plew struct に**（Swift/Rust モデル・`PlewArray_<E>` 撤去）。**詳細プラン＝[array-struct-plan.md](array-struct-plan.md) が正典**（target の Plew コード・実行順・値意味論サイト・gating の理由）。
+**あるべき姿 達成＝Array の表現が Plew struct に**（Swift モデル・`PlewArray_<E>` 撤去・C typedef は StructDef 由来）。経緯・設計の核心は [array-struct-plan.md](array-struct-plan.md)。**設計の核心＝段階 flip**（bootstrap seam＝intrinsic 境界）。**(A) 返り値文脈推論は不要だった**（リテラルはコンパイラ lowering で E 既知）→ 別 additive に降格。
 
-**設計の核心＝2 段階 flip**（bootstrap seam＝intrinsic 境界・詳細は [array-struct-plan.md](array-struct-plan.md)）。純 Plew の struct メソッド本体は旧（ビルトイン）コンパイラにミスコンパイルされる（`self.count` 代入を扱えない）ので、表現スワップ（Flip1）と methods 純 Plew 化（Flip2）を分ける。**(A) 返り値文脈推論は不要**（リテラルはコンパイラ lowering で E 既知）→ 別 additive に降格。
-
-branch `array-struct` の進捗：
+進捗（すべて完了）：
 - ✅ **step 1＝RawBuffer の値意味論**（struct フィールドの RawBuffer は share-on-bind／deep copy は owner の CoW メソッドで lazy）。
 - ✅ **core 検証**（`tests/run/raw_struct_cow`）：`struct{data:RawBuffer; count}＋push(grow+CoW)＋at` が end-to-end 正しい。
 - ✅ **`pub(get)` フィールド構文の解析**（consume-and-record・visibility 未強制ゆえ観測同一・I2 で強制）。
 - ✅ **A0＝dormant ガード**（`isGenericInst(Array)=false` 固定＝struct 定義があってもビルトイン扱い・二重生成回避）。
 - ✅ **Flip1a＝ビルトイン Array を RawBuffer 床へ**（tag `array-rawbuffer-floor`）：`PlewArray_<E>` の C 表現を `{data; len; cap; rc}`→`{data; len}`（cap/rc はバッファヘッダ）・ランタイムを `plew_rawbuf_*` で再実装（要素別 deep copy/release 維持）・struct array-field share も配列ランタイム経由・**`String.bytes` は独立 owned `Array[U8]` をコピー生成**（借用ビュー廃止＝値意味論が要求）。Array はまだビルトイン＝これが struct `Array[T]{data:RawBuffer; count}` と同じ C 形状。208 緑（ASan 含む）＋不動点。
-- 🔲 **Flip1b＝Array を genInst の Plew struct へ昇格**：Prelude に `struct Array[T]`・ガード除去・型/フィールド/メソッド/リテラル/添字/for を genInst 機構へ・**Array 専用の値意味論**（count+要素別 deep copy/release＝generic struct の shallow rawbuf では不足）・emitArrayMethods 撤去・PlewArray ランタイム撤去。
-- 🔲 **Flip2＝methods を純 Plew 化**（grow/CoW を Plew で・`arrayPush` intrinsic＋C ランタイム撤去）→ あるべき姿完成・main merge。
+- ✅ **Flip1b＝Array を Plew struct へ昇格**（tag `array-plew-struct`）：Prelude の `struct Array[T] { data: RawBuffer[T]; pub(get) mut val count: U64 }` が C typedef を供給（`struct Array_E { E* data; uint64_t count; }`＝emitMonoForward/emitMonoStruct 由来・hand-written typedef 廃止）。A0 ガード除去で `Array[E]` が genInst 化。名前を `PlewArray_E`/`.len`→`Array_E`/`.count` に統一。**配列を値で持つ nominal struct のため Array genInst body を nominal body より前に出力**（ポインタベースゆえ前方宣言で足る）。封じ込めのため**リテラル/添字/for/値意味論/メソッドは kind-3 経路のまま**（exprType は配列ローカル/配列戻り値を genInst でなく kind-3 と報告）。`Array[U8]` のみ hand-written 維持（ファイルパス/String.bytes が無条件に要る・narrow guard で genInst 外）。208 緑（ASan 含む）＋不動点。
+- ✅ **あるべき姿 達成**：append/get/set は**既に純 Plew メソッド**（Prelude の `impl[T] Array[T]`）で、floor＝`arrayPush/Get/Set/Len`（Swift の Builtin 相当・deep-copy-aware ランタイムへの正当な境界）を呼ぶ。Swift の Array と同型＝「Plew struct ＋ floor 上の薄い純 Plew メソッド」。**Flip2（methods の raw floor 直接化）は不要**：配列の値意味論（CoW make-unique の要素別 deep copy/release）は型を知るコンパイラ生成ランタイムが必須で、raw floor（型消去・shallow）では `Array[TypeRef]` 等の struct 要素が別名化バグになる。floor intrinsics がその境界を正しく担う。
+
+残ギャップ（別途・additive）：将来 Dictionary/Set 向けに **コレクション値意味論の一般化**（要素別 deep copy/release を `RawBuffer` 上の任意コレクションで再利用可能に）。今は配列専用ランタイム（`Array_E_copy/share/release/unique`）。
 
 ## ロードマップ（残りの大物・前向きのみ）
 
-1. 🔄 **ii-b＝Array struct 化**（上記・着手中）。
+1. ✅ **Array struct 化＝完了**（上記・`array-struct`→main）。次の収穫＝**コレクション値意味論の一般化**（配列専用ランタイムを `RawBuffer` 上の任意コレクションへ＝Dictionary/Set の前提）。
 2. 🔲 **関連型＋Iterator/Iterable**（`for` 脱糖の正式化・提供メソッド map/filter…）。署名は core-lib。
-3. 🔲 **Hash/Hasher → Dictionary（`[k:v]` lang item）/Set**。
+3. 🔲 **Hash/Hasher → Dictionary（`[k:v]` lang item）/Set**（要：コレクション値意味論の一般化）。
 4. 🔲 **イベントループ tail＋spawn**（実スレッド・`JoinHandle[T]`・closure 残ギャップ）。
 5. 🔲 **`any P` 存在型**（型消去・動的ディスパッチ・トレイトの最後）。
 6. 🔲 **メタプログラミング**（`Derive`・コード生成・spec 上も最後）。
