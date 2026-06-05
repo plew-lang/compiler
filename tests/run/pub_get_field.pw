@@ -1,20 +1,29 @@
 import @Std/Io with { print }
 
-// `pub(get)` field visibility parses (recorded by intent; not yet enforced while
-// the module with-gate is unimplemented — observationally identical to plain
-// storage in the current all-flat model). Accepted so ambient types like
-// `Array`'s `pub(get) mut val count` parse as written.
+// Member visibility (spec/05), per-field: `pub(get)` reads publicly but is written
+// only inside the type's anonymous impl; `pub` is read+write public; unmarked is
+// private (anonymous impl only). A `pub impl` method is part of the anonymous impl,
+// so it may read the private field and write the pub(get) one.
 struct Counter {
     pub(get) mut val count: U64
-    pub val tag: U64
-    val secret: U64
+    pub mut val tag: U64
+    mut val secret: U64
+}
+
+pub impl Counter {
+    inout fn bump() {
+        self.count = self.count + self.secret
+    }
+    fn revealSecret() -> U64 { return self.secret }
 }
 
 fn main() {
-    mut val c = <Counter count=5U64 tag=7U64 secret=99U64 />
-    print(c.count)
+    mut val c = <Counter count=5U64 tag=7U64 secret=3U64 />
+    print(c.count)            // pub(get): read OK
+    print(c.tag)              // pub: read OK
+    c.tag = 9U64              // pub: write OK
     print(c.tag)
-    print(c.secret)
-    c.count = c.count + 1U64
+    c.bump()                  // method writes count (pub(get)) + reads secret (private)
     print(c.count)
+    print(c.revealSecret())   // private read via method
 }

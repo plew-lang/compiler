@@ -4,11 +4,11 @@
 import @Std/Io with { print }
 
 struct Cell {
-    mut val v: I32
+    pub mut val v: I32
 }
 
 struct Holder[T] {
-    val items: Array[T]
+    pub val items: Array[T]
 }
 
 fn main() {

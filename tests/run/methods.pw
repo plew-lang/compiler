@@ -3,10 +3,10 @@
 import @Std/Io with { print }
 
 struct Counter {
-    mut val n: I64
+    pub mut val n: I64
 }
 
-impl Counter {
+pub impl Counter {
     fn doubled() -> I64 {
         return self.n * 2
     }

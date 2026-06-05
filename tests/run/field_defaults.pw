@@ -5,9 +5,9 @@
 import @Std/Io with { print }
 
 struct Config {
-    val timeout: I32 = 30
-    mut val retries: I32 = 3
-    val tags: Array[I32] = []
+    pub val timeout: I32 = 30
+    pub mut val retries: I32 = 3
+    pub val tags: Array[I32] = []
 }
 
 fn main() {

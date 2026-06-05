@@ -4,8 +4,8 @@
 import @Std/Io with { print }
 
 struct P {
-    val x: I32
-    val y: I32
+    pub val x: I32
+    pub val y: I32
 }
 
 fn mk() -> Array[I32] {

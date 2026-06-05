@@ -5,7 +5,7 @@ import @Std/Io with { print }
 enum Ordering { Less  Equal  Greater }
 
 @[Ord]
-struct Version { val major: I64  val minor: I64 }
+struct Version { pub val major: I64  pub val minor: I64 }
 
 fn boolI(b: Bool) -> I64 { if b { return 1I64 } return 0I64 }
 

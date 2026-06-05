@@ -24,12 +24,16 @@ fn isPathTokKind(k: Kind) -> Bool {
 // extends across adjacent path tokens (no whitespace gap), so it stops before a
 // space-separated `with`. `@Std/…` starts with an Ident (no leading `.`/`/`) and
 // is skipped here. resolveImport later turns each span into a file path.
+// The returned Bind's `fieldStart` tags the include kind: 0 = `part` (same
+// module), 1 = `import` (a separate module). The loader uses this to assign module
+// ids (part children inherit the parent's id; an import child starts a new one).
 fn collectParts(rootBytes: Array[U8], toks: Array[Tok]) -> Array[Bind] {
     mut val parts: Array[Bind] = []
     mut val i: U64 = 0
     while i < toks.count {
         val t: Tok = toks[i]
         mut val isKw: Bool = false
+        mut val isImport: Bool = false
         match t.kind {
             Kind.Ident => {
                 if rangeEquals(bytes: rootBytes, start: t.start, len: t.len, kw: "part") {
@@ -37,6 +41,7 @@ fn collectParts(rootBytes: Array[U8], toks: Array[Tok]) -> Array[Bind] {
                 }
                 if rangeEquals(bytes: rootBytes, start: t.start, len: t.len, kw: "import") {
                     isKw = true
+                    isImport = true
                 }
             }
             _ => {}
@@ -79,7 +84,11 @@ fn collectParts(rootBytes: Array[U8], toks: Array[Tok]) -> Array[Bind] {
                         }
                     }
                     val pl: U64 = pathEnd - pathStart
-                    parts.append(<Bind nameStart=pathStart nameLen=pl fieldStart=pathStart fieldLen=pl />)
+                    mut val kind: U64 = 0
+                    if isImport {
+                        kind = 1
+                    }
+                    parts.append(<Bind nameStart=pathStart nameLen=pl fieldStart=kind fieldLen=pl />)
                     i = j - 1
                 }
             }

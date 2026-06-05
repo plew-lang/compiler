@@ -4,7 +4,7 @@
 import @Std/Io with { print }
 
 struct P {
-    mut val x: I32
+    pub mut val x: I32
 }
 
 fn main() {

@@ -1,11 +1,11 @@
 import @Std/Io with { print }
-// User methods on the builtin Array, written in pure Plew over the array
-// intrinsics (provided ambiently by the prelude) — monomorphized per element
-// type and dispatched by name.
+// User methods on the builtin Array, written in pure Plew over Array's public
+// methods (the ambient prelude API; the raw `array*` intrinsics are the private
+// floor) — monomorphized per element type and dispatched by name.
 impl[T] Array[T] {
-    fn first() -> T { return arrayGet(a: self, i: 0U64) }
-    fn second() -> T { return arrayGet(a: self, i: 1U64) }
-    fn size() -> U64 { return arrayLen(a: self) }
+    fn first() -> T { return self.get(i: 0U64) }
+    fn second() -> T { return self.get(i: 1U64) }
+    fn size() -> U64 { return self.count }
 }
 fn main() {
     mut val xs: Array[I64] = []

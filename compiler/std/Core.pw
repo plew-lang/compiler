@@ -12,7 +12,7 @@ enum Optional[T] {
     None
 }
 
-impl[T] Optional[T] {
+pub impl[T] Optional[T] {
     // Is this `Some`?
     fn isSome() -> Bool {
         match self {
@@ -49,7 +49,7 @@ enum Result[T, E] {
     Err(error: E)
 }
 
-impl[T, E] Result[T, E] {
+pub impl[T, E] Result[T, E] {
     // Is this `Ok`?
     fn isOk() -> Bool {
         match self {
@@ -84,7 +84,7 @@ impl[T, E] Result[T, E] {
 // false (spec/11: always on, all builds). Returns (). The condition is
 // label-suppressed (`cond~:`, positional); the diagnostic message is an
 // optional labelled argument with a default.
-fn assert(cond~: Bool, message: String = "assertion failed") {
+export fn assert(cond~: Bool, message: String = "assertion failed") {
     if cond {
     } else {
         panic message
@@ -109,7 +109,7 @@ extern "plew-intrinsic" {
 
 // String methods, written in pure Plew over the exposed `bytes` view (spec/02:
 // `String` is an owned lang-item that Core owns, so it carries inherent methods).
-impl String {
+pub impl String {
     // Is the string empty (zero bytes)?
     fn isEmpty() -> Bool {
         return self.bytes.count == 0
@@ -147,11 +147,11 @@ fn digitByteU(d: U64) -> U8 {
 // Textual formatting (spec/02): `{x}` interpolation desugars to x.format(format:).
 // The `format` spec string (e.g. ".2") is accepted but ignored for integers for
 // now (no precision/padding yet — additive).
-trait Format {
+export trait Format {
     fn format(format: String) -> String
 }
 
-impl I64 as Format {
+pub impl I64 as Format {
     fn format(format: String) -> String {
         mut val n: I64 = self
         mut val neg: Bool = false
@@ -185,7 +185,7 @@ impl I64 as Format {
     }
 }
 
-impl U64 as Format {
+pub impl U64 as Format {
     fn format(format: String) -> String {
         mut val n: U64 = self
         mut val digits: Array[U8] = []
@@ -209,25 +209,25 @@ impl U64 as Format {
 
 // The narrower integer types delegate to the 64-bit formatters via a lossless
 // widening (`as` allows signed->wider-signed and unsigned->wider-unsigned).
-impl I8 as Format {
+pub impl I8 as Format {
     fn format(format: String) -> String { return (self as I64).format(format: format) }
 }
-impl I16 as Format {
+pub impl I16 as Format {
     fn format(format: String) -> String { return (self as I64).format(format: format) }
 }
-impl I32 as Format {
+pub impl I32 as Format {
     fn format(format: String) -> String { return (self as I64).format(format: format) }
 }
-impl U8 as Format {
+pub impl U8 as Format {
     fn format(format: String) -> String { return (self as U64).format(format: format) }
 }
-impl U16 as Format {
+pub impl U16 as Format {
     fn format(format: String) -> String { return (self as U64).format(format: format) }
 }
-impl U32 as Format {
+pub impl U32 as Format {
     fn format(format: String) -> String { return (self as U64).format(format: format) }
 }
-impl Bool as Format {
+pub impl Bool as Format {
     // Bool prints as 1/0 (matching the integer lowering), not true/false.
     fn format(format: String) -> String {
         if self {

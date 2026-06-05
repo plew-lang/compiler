@@ -5,18 +5,18 @@
 import @Std/Io with { print }
 
 struct Inner {
-    val n: I32
+    pub val n: I32
 }
 
 struct Outer {
-    val tag: I32
-    val items: Array[I32]
-    val inner: Inner
+    pub val tag: I32
+    pub val items: Array[I32]
+    pub val inner: Inner
 }
 
 struct Box[T] {
-    val v: T
-    val w: I32
+    pub val v: T
+    pub val w: I32
 }
 
 fn sumBox(b: Box[I32]) -> I32 {

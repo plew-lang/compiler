@@ -1,8 +1,8 @@
 import @Std/Io with { print }
 
 // Associated (static) functions: `assoc fn` takes no self, called `Type.name(args)`.
-struct Vec2 { val x: I64  val y: I64 }
-impl Vec2 {
+struct Vec2 { pub val x: I64  pub val y: I64 }
+pub impl Vec2 {
     assoc fn add(lhs: Vec2, rhs: Vec2) -> Vec2 {
         return <Vec2 x=(lhs.x + rhs.x) y=(lhs.y + rhs.y) />
     }

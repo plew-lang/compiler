@@ -4,7 +4,7 @@ struct Box[T] {
     val v: T
 }
 
-impl[T] Box[T] {
+pub impl[T] Box[T] {
     fn get() -> T {
         return self.v
     }

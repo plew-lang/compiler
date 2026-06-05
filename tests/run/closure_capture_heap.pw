@@ -1,6 +1,6 @@
 import @Std/Io with { print }
 
-struct Pt { val x: I32; val y: I32 }
+struct Pt { pub val x: I32; pub val y: I32 }
 
 fn makeFirst(xs: Array[I32]) -> fn() -> I32 {
     return fn() -> I32 { return xs[0] }

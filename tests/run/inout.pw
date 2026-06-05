@@ -1,8 +1,8 @@
 import @Std/Io with { print }
 
 struct Counter {
-    mut val n: I64
-    mut val xs: Array[I64]
+    pub mut val n: I64
+    pub mut val xs: Array[I64]
 }
 fn bump(c: inout Counter, by: I64) {
     c.n += by

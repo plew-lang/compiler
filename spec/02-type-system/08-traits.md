@@ -176,6 +176,10 @@ impl Sprite as Drawable {
 
 同名の要求が複数ある（要求がオーバーロードされている）トレイトも、左辺のシグネチャで一意に witness できます。
 
+### 準拠の可視性（`pub impl`）
+
+準拠も他の `impl` と同じく**ブロック単位の可視性**を持ちます（→ [メンバの可視性](05-structs-enums.md#トレイト準拠の可視性)）。**`pub impl Type as Trait { … }` は公開準拠**で、`Type` が見える所どこでもその準拠が与えるメソッドを（トレイト名を書かずに）呼べます。修飾なし `impl Type as Trait { … }` は**内部準拠**で、準拠の事実はモジュール内で成立し `where T: Trait`／`any Trait` に使えますが、外部からメソッドを呼ぶと可視性エラーになります（内部用ヘルパトレイトへの準拠を閉じるのに使う）。Plew はトレイトメソッドをレシーバ型だけで解決し import を要さないため、Rust の「トレイトがスコープに無ければ呼べない」が自然には効かず、**隠す軸はこの `pub impl` か否か**になります。`export impl` は無く、外部到達は「型の `export`」＋「`pub impl`」で決まります（coherence の大域事実である準拠そのものは隠さず、隠すのはメソッドアクセス）。
+
 ```plew
 trait Writer {
     fn write(data: Bytes) -> Result[I32, Error]    // 同名・別シグネチャの要求

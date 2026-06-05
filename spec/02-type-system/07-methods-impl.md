@@ -5,33 +5,38 @@
 > **無名 impl を書けるのは、その型を自分のモジュールで定義している場合だけ**です（コヒーレンス＝由来の一意性のため）。外部型（他モジュール定義）への実装は、トレイトの所有を問わず名前付き拡張 `#Ext` で行います（→ [拡張](09-extensions.md)、配置の詳細は [モジュール](../04-execution/15-modules.md) の「無名 impl の配置」）。
 
 ```plew
-impl MyType {
+pub impl MyType {                          // pub impl → ブロック内のメンバは全て公開
     // インスタンスメソッド（self を読み借用）
-    pub fn instanceMethod(arg: Type) -> ReturnType {
+    fn instanceMethod(arg: Type) -> ReturnType {
         // メソッド本体
     }
 
     // 可変メソッド（self を可変借用＝inout self）
-    pub inout fn mutableMethod(arg: Type) {
+    inout fn mutableMethod(arg: Type) {
         // self のフィールドを書き換えられる
     }
 
     // 消費メソッド（self を move＝呼ぶと self は使えなくなる）
     // ※ move fn は unique 型でのみ。コピー可能型はコピーで済むため move は冗長＝エラー（→ spec/03）
-    pub move fn intoOther() -> Other {
+    move fn intoOther() -> Other {
         // self を消費して別の値を返す
     }
 
     // 関連関数（静的メソッド相当）
-    pub assoc fn associatedFunction() -> ReturnType {
+    assoc fn associatedFunction() -> ReturnType {
         // 関連関数本体
     }
 
     // 関連変数（静的変数相当）
     assoc val associatedValue: Type = defaultValue
 }
+
+impl MyType {                              // 修飾なし impl → ブロック内は全て非公開
+    fn helper() { /* この型の無名 impl からのみ見える */ }
+}
 ```
 
+- **メンバの可視性は `impl` ブロック単位**（[メンバの可視性](05-structs-enums.md#メンバの可視性)）。`pub impl Type { … }` はブロック内のメソッド・関連関数・`factory` をすべて公開し、修飾なし `impl Type { … }` はすべて非公開（その型の無名 impl からのみ見える）にします。**メソッド個別の `pub`（`pub fn`）は書けません** ── 公開と非公開を混在させたいときは `pub impl` と `impl` の **2 ブロックに分けます**（フィールドは読み書きの非対称＝`pub(get)` があるので例外的にフィールド単位 → [メンバの可視性](05-structs-enums.md#メンバの可視性)）。
 - **`assoc val` の初期化はトップレベル `val` と同じ規則**：起動時 eager・依存順（force-on-read）・循環は起動時 panic・トップレベル await 可（→ [モジュール § トップレベル初期化と実行順序](../04-execution/15-modules.md#トップレベル初期化と実行順序)）。ジェネリック型の `assoc val` が型引数ごとに別実体になるか（単相化）は実装詳細として別途。
 
 - **self のモードは `fn`（読み借用）／`inout fn`（可変借用）／`move fn`（消費）** ── [アクセスモード](../01-basics/03-values.md#アクセスモードborrow--inout--move)と同じ語。`inout fn`/`move fn` は対象が可変束縛／唯一所有のときだけ呼べる。**`Ref` 越しは `fn`/`inout fn` のみ**（`move fn` は共有を消費するため不可 → [Ref](../01-basics/03-values.md#ref--weakref共有可変)）。

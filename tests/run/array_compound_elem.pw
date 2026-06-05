@@ -5,11 +5,11 @@
 import @Std/Io with { print }
 
 struct Cell {
-    mut val v: I32
+    pub mut val v: I32
 }
 
 struct Box[T] {
-    val v: T
+    pub val v: T
 }
 
 fn main() {

@@ -1,0 +1,7 @@
+// A `pub(get)` field is readable but writable only inside the type's anonymous
+// impl — an external write is a visibility error (spec/05).
+struct Counter { pub(get) mut val n: I64 }
+fn main() {
+    mut val c = <Counter n=1 />
+    c.n = 5
+}

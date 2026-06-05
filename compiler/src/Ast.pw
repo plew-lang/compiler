@@ -11,15 +11,15 @@
 // A parsed type: for `Array[E]`, (start,len) names the element E and isArray is
 // true; otherwise (start,len) names the type itself (scalar / String / named).
 struct PType {
-    val start: U64
-    val len: U64
-    val isArray: Bool
+    pub val start: U64
+    pub val len: U64
+    pub val isArray: Bool
     // index into Comp.types of the full structured type (head name + type
     // arguments). The (start,len,isArray) triple above is the legacy "head"
     // view kept for the Array / scalar / named paths; `ref` carries the general
     // `Name[Arg, ...]` shape (nested, multi-arg) for generics. For `Array[E]`
     // the triple still names E with isArray=true, and ref is {Array, [E]}.
-    val ref: U64
+    pub val ref: U64
 }
 
 // A structured type reference: a head type name span plus a list of type
@@ -27,9 +27,9 @@ struct PType {
 // list. `Array[E]` is {name="Array", args=[E]}; `Optional[I32]` is
 // {name="Optional", args=[I32]}; a bare `I32` is {name="I32", args=[]}.
 struct TypeRef {
-    val nameStart: U64
-    val nameLen: U64
-    val args: Array[U64]
+    pub val nameStart: U64
+    pub val nameLen: U64
+    pub val args: Array[U64]
 }
 
 // A variable binding in scope during codegen (param, let, or match bind), used
@@ -39,67 +39,67 @@ struct TypeRef {
 // index); querying a closure's captures filters by it. The capture becomes a
 // field of `__closure_env<closureId>`, read in the body via `__env`.
 struct CaptureEntry {
-    val closureId: U64
-    val nameStart: U64
-    val nameLen: U64
-    val tyStart: U64
-    val tyLen: U64
-    val isArray: Bool
-    val ty: U64
+    pub val closureId: U64
+    pub val nameStart: U64
+    pub val nameLen: U64
+    pub val tyStart: U64
+    pub val tyLen: U64
+    pub val isArray: Bool
+    pub val ty: U64
     // a `mut val` capture: the enclosing local is heap-boxed (an implicit ARC
     // cell) and the env holds a retained pointer to it, so mutations are shared
     // (Swift-style reference capture). Non-mut captures are by-value (boxed=false).
-    val boxed: Bool
+    pub val boxed: Bool
 }
 
 struct Local {
-    val nameStart: U64
-    val nameLen: U64
-    val tyStart: U64
-    val tyLen: U64
-    val isArray: Bool
+    pub val nameStart: U64
+    pub val nameLen: U64
+    pub val tyStart: U64
+    pub val tyLen: U64
+    pub val isArray: Bool
     // structured type (Comp.types index); carries generic type arguments that
     // the (tyStart,tyLen,isArray) head view cannot.
-    val ty: U64
-    val isInout: Bool
+    pub val ty: U64
+    pub val isInout: Bool
     // assignable? `mut val` locals and `inout` params are; plain `val` locals,
     // function params, for-loop vars and match binds are immutable (spec: `val`
     // is immutable, `mut val` is the mutable storage form).
-    val isMut: Bool
+    pub val isMut: Bool
     // owns its value (a `let` binding) and so releases it at scope exit, vs a
     // borrow (param / for-loop var / match bind) that aliases someone else's
     // storage and must not free it. ARC: only owned heap locals are released.
-    val owned: Bool
+    pub val owned: Bool
     // moved-out (spec/03): a `move` binding/arg transferred ownership away, so
     // this local is dead — using it again is an error and it is NOT released at
     // scope exit (the new owner releases). Set during codegen as moves are seen.
-    val moved: Bool
+    pub val moved: Bool
     // shadowing disambiguator for the emitted C name (spec/03,11: shadowing is
     // unlimited). 0 = emit the bare source name; N>0 = emit `<name>_sN` so two
     // same-named `val`/`mut val` bindings in one block don't collide in C. Only
     // `let` bindings ever get N>0 (for-vars/match-binds/params open nested C
     // scopes, so C shadowing covers them and they stay 0).
-    val cnum: U64
+    pub val cnum: U64
 }
 
 // The recovered type of an expression. kind: 0 scalar (long long), 1 String,
 // 2 named struct/enum, 3 array. For named: (nameStart,len) is the type name;
 // for array: the element type name (always backed by a real declaration span).
 struct TypeInfo {
-    val kind: I64
-    val nameStart: U64
-    val nameLen: U64
+    pub val kind: I64
+    pub val nameStart: U64
+    pub val nameLen: U64
     // Comp.types index of the full structured type when this is a generic
     // instantiation (e.g. `Optional[I32]`), so match/dispatch can recover the
     // mangled C name and substitute type parameters. 0 (sentinel) otherwise.
-    val ref: U64
+    pub val ref: U64
 }
 
 // One `field=expr` pair inside a JSX construction `<Type field=expr ... />`.
 struct MakeField {
-    val nameStart: U64
-    val nameLen: U64
-    val value: U64
+    pub val nameStart: U64
+    pub val nameLen: U64
+    pub val value: U64
 }
 
 // One field binding inside a match pattern `E.V(val a, b: val c)`. `name` is
@@ -108,22 +108,22 @@ struct MakeField {
 // (Also reused elsewhere as a plain (name) span pair — array element names,
 // part directives — where the field span is just set equal to the name.)
 struct Bind {
-    val nameStart: U64
-    val nameLen: U64
-    val fieldStart: U64
-    val fieldLen: U64
+    pub val nameStart: U64
+    pub val nameLen: U64
+    pub val fieldStart: U64
+    pub val fieldLen: U64
 }
 
 // A call argument: the expression plus whether it was passed `inout` (which
 // lowers to `&(expr)` at the call site, matching a pointer parameter).
 struct Arg {
-    val expr: U64
-    val isInout: Bool
+    pub val expr: U64
+    pub val isInout: Bool
     // the argument label `name:` (spec: required, in declaration order). Empty
     // when the call site omitted it (then a user-function call is rejected).
-    val labelStart: U64
-    val labelLen: U64
-    val hasLabel: Bool
+    pub val labelStart: U64
+    pub val labelLen: U64
+    pub val hasLabel: Bool
 }
 
 enum Expr {
@@ -189,29 +189,29 @@ enum Expr {
 // [{ val f ... }] => block`. The pattern names the enum and variant, so codegen
 // resolves the tag index and field types without any type inference.
 struct MatchArm {
-    val isWildcard: Bool
-    val enumStart: U64
-    val enumLen: U64
-    val variantStart: U64
-    val variantLen: U64
-    val binds: Array[Bind]
+    pub val isWildcard: Bool
+    pub val enumStart: U64
+    pub val enumLen: U64
+    pub val variantStart: U64
+    pub val variantLen: U64
+    pub val binds: Array[Bind]
     // body is a Block index for Stmt.Match, or an Expr index for Expr.MatchExpr.
-    val body: U64
+    pub val body: U64
     // a struct destructuring pattern `S { val x }` (irrefutable, no tag): bind
     // fields directly from the scrutinee. enumStart names the struct type.
-    val isStruct: Bool
+    pub val isStruct: Bool
 }
 
 // The pattern part of a match arm (everything before `=>`), shared by statement
 // and expression match parsing. Mirrors MatchArm minus the body.
 struct PatInfo {
-    val isWildcard: Bool
-    val enumStart: U64
-    val enumLen: U64
-    val variantStart: U64
-    val variantLen: U64
-    val binds: Array[Bind]
-    val isStruct: Bool
+    pub val isWildcard: Bool
+    pub val enumStart: U64
+    pub val enumLen: U64
+    pub val variantStart: U64
+    pub val variantLen: U64
+    pub val binds: Array[Bind]
+    pub val isStruct: Bool
 }
 
 enum Stmt {
@@ -241,75 +241,80 @@ enum Stmt {
 }
 
 struct Block {
-    val stmts: Array[U64]
+    pub val stmts: Array[U64]
 }
 
 struct Param {
-    val nameStart: U64
-    val nameLen: U64
-    val tyStart: U64
-    val tyLen: U64
-    val tyIsArray: Bool
-    val ty: U64
-    val isInout: Bool
+    pub val nameStart: U64
+    pub val nameLen: U64
+    pub val tyStart: U64
+    pub val tyLen: U64
+    pub val tyIsArray: Bool
+    pub val ty: U64
+    pub val isInout: Bool
     // access mode for a `unique`-typed parameter (spec/03): `move T` transfers
     // ownership to the callee (it runs deinit at its scope exit), `borrow T` is a
     // non-consuming read (callee never deinits). Copyable types use neither.
-    val isMove: Bool
-    val isBorrow: Bool
+    pub val isMove: Bool
+    pub val isBorrow: Bool
     // label-suppressed `name~: Type` (spec/04): the argument is passed without a
     // label (positional). Default false = labelled (the normal case).
-    val noLabel: Bool
+    pub val noLabel: Bool
     // default argument `name: T = expr` (spec/04): when the call omits this
     // param, `defaultExpr` is emitted in its place. v1 supports omitting trailing
     // defaulted params. `hasDefault` false = required.
-    val hasDefault: Bool
-    val defaultExpr: U64
+    pub val hasDefault: Bool
+    pub val defaultExpr: U64
 }
 
 struct FieldDef {
-    val nameStart: U64
-    val nameLen: U64
-    val tyStart: U64
-    val tyLen: U64
-    val tyIsArray: Bool
-    val ty: U64
+    pub val nameStart: U64
+    pub val nameLen: U64
+    pub val tyStart: U64
+    pub val tyLen: U64
+    pub val tyIsArray: Bool
+    pub val ty: U64
     // declared `mut val` (assignable storage) vs `val` (immutable). Always false
     // for enum variant fields (they take no modifier). Used for the composite
     // mutability check on `base.field = x` (spec: both binding and field `mut`).
-    val isMut: Bool
+    pub val isMut: Bool
     // declared default value `val x: T = expr` (spec/05: memberwise-factory
     // default-arg sugar). hasDefault gates it; defaultVal is the Comp.exprs id of
     // the default expression (re-evaluated at each construction site that omits
     // the field). Always false for enum variant fields (they take no default).
-    val hasDefault: Bool
-    val defaultVal: U64
+    pub val hasDefault: Bool
+    pub val defaultVal: U64
+    // member visibility (spec/05): 0 = private (anonymous impl only), 1 = pub(get)
+    // (read public, write internal), 2 = pub (read+write public). Per-field (unlike
+    // methods, which are per-impl-block) because pub(get)'s read/write asymmetry
+    // can't fold into a block. Default 0 = private.
+    pub val vis: U64 = 0
 }
 
 struct StructDef {
-    val nameStart: U64
-    val nameLen: U64
+    pub val nameStart: U64
+    pub val nameLen: U64
     // generic type parameters `[T, U]` (each a name span; reuses Bind). Empty
     // for a non-generic struct. Capability markers (noLocal/allowUnique) are
     // skipped at parse time (v1: allowUnique unimplemented, noLocal a no-op).
-    val typeParams: Array[Bind]
-    val fields: Array[FieldDef]
+    pub val typeParams: Array[Bind]
+    pub val fields: Array[FieldDef]
     // declared `unique struct` (spec/03): copy-incapable, move-only, may carry a
     // `deinit`. A unique value is never CoW-shared; bindings move ownership and
     // the last owner runs `deinit` at scope exit. Default false = copyable.
-    val isUnique: Bool
+    pub val isUnique: Bool
     // declared body-less in an `extern "plew-intrinsic"` block (spec/15 core-
     // library boundary): an opaque lang-item type whose representation is
     // compiler-intrinsic (`I32`→int32_t, `String`→PlewString). Codegen emits no C
     // struct for it; the declaration only establishes that this module (Core)
     // *owns* the type, so it may coherently `impl` traits for it. Default false.
-    val isExtern: Bool
+    pub val isExtern: Bool
 }
 
 struct Variant {
-    val nameStart: U64
-    val nameLen: U64
-    val fields: Array[FieldDef]
+    pub val nameStart: U64
+    pub val nameLen: U64
+    pub val fields: Array[FieldDef]
 }
 
 // A trait declaration `trait Name { fn req(...) -> T ... }` (spec/08). The body
@@ -318,17 +323,17 @@ struct Variant {
 // consumes the full signature but labels/types are recovered later. Field/
 // associated-type/factory requirements are not parsed yet (additive).
 struct TraitDef {
-    val nameStart: U64
-    val nameLen: U64
+    pub val nameStart: U64
+    pub val nameLen: U64
     // supertraits from `trait Sub: Super + ...` (spec/08): conforming to Sub
     // requires conforming to each Super (a constraint, not auto-impl). Each entry
     // reuses Bind as a (start,len) trait-name span.
-    val supertraits: Array[Bind]
+    pub val supertraits: Array[Bind]
     // requirement signatures (spec/08): each a body-less Func carrying the
     // requirement's name, params (labels + types), return type, and isAssoc.
     // The abstract generic type-checker reads these to resolve `x.req(...)` on a
     // bounded type parameter; the completeness check matches them to witnesses.
-    val reqs: Array[Func]
+    pub val reqs: Array[Func]
 }
 
 // A recorded conformance `impl Type as Trait { ... }` (spec/08: conformance is
@@ -338,25 +343,25 @@ struct TraitDef {
 // A `@[Eq]` / `@[Ord]` derive request recorded on a struct/enum declaration.
 // Resolved after parsing by synthesizing the witness `impl Type as Eq/Ord`.
 struct DeriveReq {
-    val typeStart: U64
-    val typeLen: U64
-    val isEnum: Bool
-    val nameStart: U64
-    val nameLen: U64
+    pub val typeStart: U64
+    pub val typeLen: U64
+    pub val isEnum: Bool
+    pub val nameStart: U64
+    pub val nameLen: U64
 }
 
 struct Conform {
-    val typeStart: U64
-    val typeLen: U64
-    val traitStart: U64
-    val traitLen: U64
+    pub val typeStart: U64
+    pub val typeLen: U64
+    pub val traitStart: U64
+    pub val traitLen: U64
     // synthesized by `@[Eq]`/`@[Ord]` derive: exempt from the unknown-trait and
     // completeness checks (the witness is compiler-generated and complete).
-    val derived: Bool
+    pub val derived: Bool
     // signatures of the members this impl witnessed (body method or `via` line),
     // so the completeness check matches requirements by selector (name + param
     // types), distinguishing same-name overloaded requirements.
-    val witnessed: Array[Func]
+    pub val witnessed: Array[Func]
 }
 
 // A `via` alias `fn req(...) -> T via real` inside a trait impl (spec/08: the
@@ -364,12 +369,12 @@ struct Conform {
 // findMethod, on missing `alias` for `recv`, retries with `real` — so both
 // `x.req()` and `x.real()` resolve to the one real method.
 struct MethodAlias {
-    val recvStart: U64
-    val recvLen: U64
-    val aliasStart: U64
-    val aliasLen: U64
-    val realStart: U64
-    val realLen: U64
+    pub val recvStart: U64
+    pub val recvLen: U64
+    pub val aliasStart: U64
+    pub val aliasLen: U64
+    pub val realStart: U64
+    pub val realLen: U64
 }
 
 // A trait bound `where T: Trait` on a function (spec/08). `fnIdx` indexes
@@ -378,11 +383,11 @@ struct MethodAlias {
 // one FuncBound per atom. Enforced at instantiation: the concrete type bound to
 // the parameter must conform to the trait, else a loud error.
 struct FuncBound {
-    val fnIdx: U64
-    val paramStart: U64
-    val paramLen: U64
-    val traitStart: U64
-    val traitLen: U64
+    pub val fnIdx: U64
+    pub val paramStart: U64
+    pub val paramLen: U64
+    pub val traitStart: U64
+    pub val traitLen: U64
 }
 
 // A concrete instantiation of a generic free function (`fn f[T](x: T)` called
@@ -391,197 +396,217 @@ struct FuncBound {
 // Discovered from call sites (only ground/concrete instantiations); each gets a
 // specialized C function `f_<arg-mangle...>` emitted under the type-param env.
 struct FnInst {
-    val fnIdx: U64
-    val args: Array[U64]
+    pub val fnIdx: U64
+    pub val args: Array[U64]
 }
 
 struct EnumDef {
-    val nameStart: U64
-    val nameLen: U64
+    pub val nameStart: U64
+    pub val nameLen: U64
     // generic type parameters `[T, U]` (see StructDef.typeParams).
-    val typeParams: Array[Bind]
-    val variants: Array[Variant]
+    pub val typeParams: Array[Bind]
+    pub val variants: Array[Variant]
 }
 
 struct Func {
-    val nameStart: U64
-    val nameLen: U64
+    pub val nameStart: U64
+    pub val nameLen: U64
     // generic type parameters `fn id[T](...)` (name spans; empty if not
     // generic). For a method, an `impl[T] Type[T]`-introduced parameter also
     // lands here. Consumed by G3 monomorphization.
-    val typeParams: Array[Bind]
-    val params: Array[Param]
-    val hasRet: Bool
-    val retStart: U64
-    val retLen: U64
-    val retIsArray: Bool
-    val retTy: U64
-    val body: U64
+    pub val typeParams: Array[Bind]
+    pub val params: Array[Param]
+    pub val hasRet: Bool
+    pub val retStart: U64
+    pub val retLen: U64
+    pub val retIsArray: Bool
+    pub val retTy: U64
+    pub val body: U64
     // method receiver: an `impl Type { ... }` member carries the receiver type
     // (recvStart,recvLen) and whether self is `inout` (`inout fn` vs `fn`). The
     // C function is mangled `Type_name` with an extra leading `self` parameter.
-    val hasRecv: Bool
-    val recvStart: U64
-    val recvLen: U64
-    val selfInout: Bool
+    pub val hasRecv: Bool
+    pub val recvStart: U64
+    pub val recvLen: U64
+    pub val selfInout: Bool
     // `move fn` (spec/03): the method consumes self (a unique value), so self is
     // owned here — deinit runs at the method's scope exit — and the call site marks
     // the receiver moved. `fn`/`borrow fn` read self by value (not consumed);
     // `inout fn` borrows it mutably. (`borrow fn` is accepted as a synonym of `fn`.)
-    val selfMove: Bool
+    pub val selfMove: Bool
     // `assoc fn` (spec/07,12): an associated (static) function — it lives in a
     // type's namespace but takes no `self`. hasRecv is false (no self parameter),
     // yet recvStart/recvLen still name the owning type, so the C name mangles
     // `Type_name` and a call `Type.name(args)` resolves. Operator requirements
     // (`Eq.eq`, `Ord.compare`, `Add.add`) are assoc fns.
-    val isAssoc: Bool
+    pub val isAssoc: Bool
     // `async fn` (spec/14): the function suspends at `await` points and returns a
     // `Promise[T]`. Lowered to a stackless state machine (frame + resume + entry)
     // rather than a plain C function. Default false = an ordinary synchronous fn.
-    val isAsync: Bool
+    pub val isAsync: Bool
     // `extern "plew-intrinsic"` declaration (spec/15 core-library boundary): a
     // body-less signature bound to the runtime symbol `plew_<name>`. The compiler
     // emits no prototype/body; a call lowers to `plew_<name>(args)`. Default false.
-    val isExtern: Bool
+    pub val isExtern: Bool
+    // member visibility (spec/05): true when this method/assoc-fn lives in a
+    // `pub impl Type { … }` block (publicly callable wherever the type is visible).
+    // Default false = the method is private — visible only inside the type's
+    // anonymous impl. Visibility is per-impl-block (no per-method `pub fn`).
+    pub val isPub: Bool = false
 }
 
 struct Comp {
     // source bytes. `mut val` so the derive synthesizer can append synthetic
     // identifier names ("eq", "lhs", ...) and reference them by span — existing
     // token offsets are unaffected (appends land past the end).
-    mut val bytes: Array[U8]
-    val toks: Array[Tok]
-    mut val pos: U64
-    mut val exprs: Array[Expr]
-    mut val stmts: Array[Stmt]
-    mut val blocks: Array[Block]
-    mut val funcs: Array[Func]
-    mut val structs: Array[StructDef]
-    mut val enums: Array[EnumDef]
+    pub mut val bytes: Array[U8]
+    pub val toks: Array[Tok]
+    pub mut val pos: U64
+    pub mut val exprs: Array[Expr]
+    pub mut val stmts: Array[Stmt]
+    pub mut val blocks: Array[Block]
+    pub mut val funcs: Array[Func]
+    pub mut val structs: Array[StructDef]
+    pub mut val enums: Array[EnumDef]
     // trait declarations, recorded conformances, and `via` method aliases
     // (spec/08). `traits`/`conforms` drive the conformance-completeness check;
     // `methodAliases` redirect a requirement name to its real witness method.
-    mut val traits: Array[TraitDef]
-    mut val conforms: Array[Conform]
-    mut val methodAliases: Array[MethodAlias]
+    pub mut val traits: Array[TraitDef]
+    pub mut val conforms: Array[Conform]
+    pub mut val methodAliases: Array[MethodAlias]
     // `@[...]` derive requests recorded on type declarations, plus the scratch
     // list of derive names parsed for the *next* type declaration.
-    mut val derives: Array[DeriveReq]
-    mut val pendingDerives: Array[Bind]
+    pub mut val derives: Array[DeriveReq]
+    pub mut val pendingDerives: Array[Bind]
     // `where T: Trait` bounds on functions (spec/08), keyed by function index.
-    mut val funcBounds: Array[FuncBound]
+    pub mut val funcBounds: Array[FuncBound]
     // the function index currently being checked by the eager generic
     // type-checker (#9), so method/operator bound checks can look up its type
     // parameters and `where` bounds. c.funcs.count when not checking.
-    mut val curCheckFn: U64
+    pub mut val curCheckFn: U64
     // scratch: requirement names witnessed by the trait impl currently being
     // parsed (body method or `via` alias). Reset at each `impl Type as Trait`
     // entry; folded into the Conform record at the impl's close.
-    mut val curWitnessed: Array[Func]
+    pub mut val curWitnessed: Array[Func]
     // scratch: the trait spans parsed by parseWhereClause, parallel to its
     // returned param spans (a second return value without a tuple type).
-    mut val curWhereTraits: Array[Bind]
+    pub mut val curWhereTraits: Array[Bind]
     // structured type references (TypeRef arena), indexed by the `ty`/`ref`
     // fields above. Built during parsing; consumed by generic monomorphization.
-    mut val types: Array[TypeRef]
+    pub mut val types: Array[TypeRef]
     // concrete generic instantiations to monomorphize (TypeRef indices, deduped
     // structurally), collected from use sites after parsing. Post-order so a
     // by-value nested instance is defined before the type that contains it.
-    mut val genInsts: Array[U64]
+    pub mut val genInsts: Array[U64]
     // concrete instantiations of generic free functions (FnInst), discovered
     // from call sites after parsing. Each is emitted as a specialized C function.
-    mut val fnInsts: Array[FnInst]
+    pub mut val fnInsts: Array[FnInst]
     // distinct function-type TypeRefs (head `fn`), for emitting a C function
     // pointer typedef per signature. Collected with genInsts during scanType.
-    mut val fnTypes: Array[U64]
+    pub mut val fnTypes: Array[U64]
     // function indices used as a bare value (a function reference, not a call):
     // each needs a thunk `<sel>__thunk(void* env, ...)` to adapt the plain C
     // function to the uniform closure ABI. Collected before signatures are
     // emitted (collectFnThunks), so the thunk protos precede every use.
-    mut val fnThunks: Array[U64]
+    pub mut val fnThunks: Array[U64]
     // closure value captures (flat, keyed by closure arena id). Collected by the
     // scope-aware scan; drives env-struct emission and in-body capture access.
-    mut val captures: Array[CaptureEntry]
+    pub mut val captures: Array[CaptureEntry]
     // the closure arena id currently being emitted (so an Ident that names one of
     // its captures lowers to an env access). Guarded by curInClosure.
-    mut val curClosureId: U64
-    mut val curInClosure: Bool
+    pub mut val curClosureId: U64
+    pub mut val curInClosure: Bool
     // during capture collection: the locals high-water mark at the active
     // closure's entry. An identifier resolving below it is an enclosing local
     // (a capture); at or above it is a closure param / body-local.
-    mut val curCaptureMark: U64
+    pub mut val curCaptureMark: U64
     // distinct Array element type names seen in declarations (for monomorphizing
     // PlewArray_<E> + runtime); each entry reuses Bind as a (start,len) pair.
-    mut val arrayElems: Array[Bind]
+    pub mut val arrayElems: Array[Bind]
     // variables in scope during codegen (params / lets / match binds), for type
     // recovery (monomorphization + `.bytes` dispatch).
-    mut val locals: Array[Local]
+    pub mut val locals: Array[Local]
     // fresh-temp counter for match scrutinee bindings (`_m0`, `_m1`, ...)
-    mut val tmp: U64
+    pub mut val tmp: U64
     // set per-function during codegen so `return` lowers correctly
-    mut val curIsMain: Bool
-    mut val curRetVoid: Bool
+    pub mut val curIsMain: Bool
+    pub mut val curRetVoid: Bool
     // the current function's return type span (for literal range-checking a
     // `return <expr>` against the declared return type). Valid when !curRetVoid.
-    mut val curRetStart: U64
-    mut val curRetLen: U64
-    mut val curRetIsArray: Bool
+    pub mut val curRetStart: U64
+    pub mut val curRetLen: U64
+    pub mut val curRetIsArray: Bool
     // the current function's structured return type (TypeRef index), so `try`
     // can rebuild the function's Result error variant. 0 outside a function.
-    mut val curRetTy: U64
+    pub mut val curRetTy: U64
     // set per-function during codegen for the implicit method receiver: whether
     // the current function is a method, and if so its receiver type span and
     // whether self is `inout` (so a bare `self` lowers to `(*self)`).
-    mut val curHasRecv: Bool
-    mut val curRecvStart: U64
-    mut val curRecvLen: U64
-    mut val curSelfInout: Bool
+    pub mut val curHasRecv: Bool
+    pub mut val curRecvStart: U64
+    pub mut val curRecvLen: U64
+    pub mut val curSelfInout: Bool
     // the current method is a `move fn` (consumes self): self is deinit'd at every
     // exit of the body (set per-function during codegen).
-    mut val curSelfMove: Bool
+    pub mut val curSelfMove: Bool
     // generic body substitution env: when emitting a monomorphized generic
     // function/method body, curTypeParams[i] (a type-param name) maps to the
     // concrete TypeRef curTypeArgs[i]. Empty outside a generic instantiation.
-    mut val curTypeParams: Array[Bind]
-    mut val curTypeArgs: Array[U64]
+    pub mut val curTypeParams: Array[Bind]
+    pub mut val curTypeArgs: Array[U64]
     // the receiver's concrete instantiation TypeRef when emitting a generic
     // method (so the mangled C name and `self`'s type resolve). 0 otherwise.
-    mut val curRecvInstRef: U64
+    pub mut val curRecvInstRef: U64
     // result temp id of the innermost value-position block (`if`/`match` expr)
     // currently being lowered, so a `give` statement knows which `__r<n>` to
     // assign — stored as `id + 1` so 0 means "not inside a block-expression" (a
     // bare `give` is then a no-op). The +1 encoding keeps it U64 (no signed
     // sentinel) under the lossless-`as` discipline.
-    mut val curGiveTmp: U64
+    pub mut val curGiveTmp: U64
     // locals high-water mark at the current loop body's entry. break/continue
     // release the owned locals pushed since (the iteration's scopes); saved and
     // restored across nested loops. 0 when not inside a loop.
-    mut val curLoopMark: U64
+    pub mut val curLoopMark: U64
     // locals high-water mark at entry to the innermost conditional/loop body. An
     // explicit `move` of a local with a smaller index (declared outside the branch)
     // would be a conditional move — unsound without flow analysis (the persisted
     // moved flag would skip the value's deinit on the not-taken path) — so it is
     // rejected. 0 at function top level (straight-line moves always allowed).
-    mut val curBranchBase: U64
+    pub mut val curBranchBase: U64
     // types that declared a `deinit { ... }` (spec/03). Each entry reuses Bind as
     // a (start,len) pair naming the receiver type. The deinit body itself is a
     // synthetic Func named `deinit` (hasRecv) in c.funcs; this list lets codegen
     // ask "does type T have a deinit?" so scope-exit drops fire it.
-    mut val deinits: Array[Bind]
+    pub mut val deinits: Array[Bind]
     // async lowering state (spec/14). curAsync: emitting an `async fn` body, so a
     // top-level binding lowers to a frame-struct field and a local reference to
     // `__f->name`. asyncState: the next `await` suspension index (a `switch`
     // resume case). curAsyncFn: the func index being lowered (so an await knows
     // its frame type and resume-function name). Reset around each function.
-    mut val curAsync: Bool
-    mut val asyncState: U64
-    mut val curAsyncFn: U64
+    pub mut val curAsync: Bool
+    pub mut val asyncState: U64
+    pub mut val curAsyncFn: U64
     // monotonic per-async-fn binding counter: every binding (Let / match bind) in
     // an async body gets a unique C-name suffix (`name_s<n>`) so the flat frame
     // struct has no collisions across sibling branches / match arms (where source
     // names legitimately repeat). The frame-field collection and the resume-body
     // codegen walk the body in the same DFS order, so they assign matching suffixes.
-    mut val asyncVarSeq: U64
+    pub mut val asyncVarSeq: U64
+    // module identity (spec/15 visibility): each entry (reusing Bind) records a
+    // source file's [start,len) span in `bytes` tagged with its module id
+    // (fieldStart). Built by the loader; `moduleOf(offset)` reverse-maps a decl/use
+    // to its module so export/import visibility can be enforced across module lines
+    // (a module = a root file + its `part` tree; each `import` target is another).
+    pub mut val moduleRanges: Array[Bind]
+    // exported declarations (spec/15 `export`): each entry (Bind) is the name span
+    // of a top-level decl marked `export`. A name is part of its module's public
+    // surface iff it appears here; cross-module use requires it.
+    pub mut val exports: Array[Bind]
+    // imported names (spec/15 `import … with { }`): each entry (Bind) is an imported
+    // name span with `fieldStart` = the importing module id. A use of a name from
+    // another module is visible only if the name was imported into the using module
+    // (and exported by its own). Aliases (`as`) and namespace imports are additive.
+    pub mut val imports: Array[Bind]
 }
 
 // ---- cursor helpers ----
@@ -590,7 +615,7 @@ struct Comp {
 // Comp struct is large, so a by-value receiver would copy every arena header on
 // each call; the cursor is always held by `inout` anyway.
 
-impl Comp {
+pub impl Comp {
     // The kind of the token under the cursor.
     inout fn curKind() -> Kind {
         return self.toks[self.pos].kind

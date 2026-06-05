@@ -571,6 +571,17 @@ fn genExpr(c: inout Comp, id: U64) {
                 _ => {}
             }
             val bt: TypeInfo = exprType(c: inout c, id: base)
+            // member visibility (spec/05): a private field is readable only inside
+            // its type's anonymous impl. (String's `.bytes` and scalars aren't real
+            // struct fields, so fieldVis returns not-found and they're skipped.)
+            if bt.kind == 2 {
+                checkFieldReadVis(c: inout c, ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+            } else {
+                if bt.kind == 3 {
+                    val arrName: Bind = kwSpan(c: inout c, kw: "Array", kwLen: 5)
+                    checkFieldReadVis(c: inout c, ownerStart: arrName.nameStart, ownerLen: arrName.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+                }
+            }
             if bt.kind == 1 {
                 // String.bytes: an INDEPENDENT Array[U8] of the string's bytes.
                 // A RawBuffer-backed array carries a `[cap][rc]` header and value
@@ -774,6 +785,10 @@ fn genExpr(c: inout Comp, id: U64) {
                     return
                 }
                 val mf: Func = c.funcs[mi]
+                // member visibility (spec/05): a method in a bare `impl` (private)
+                // is callable only inside the type's anonymous impl; `pub impl`
+                // methods are public.
+                checkMethodVis(c: inout c, ownerStart: bt.nameStart, ownerLen: bt.nameLen, mf: mf, offset: nameStart)
                 if paramsLabelsOk(c: inout c, params: mf.params, args: args) {
                 } else {
                     compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "argument labels do not match the method parameters")

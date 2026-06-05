@@ -25,16 +25,26 @@
 
 残ギャップ（別途・additive）：将来 Dictionary/Set 向けに **コレクション値意味論の一般化**（要素別 deep copy/release を `RawBuffer` 上の任意コレクションで再利用可能に）。今は配列専用ランタイム（`Array_E_copy/share/release/unique`）。
 
+## ✅ 完了＝可視性強制（I2・branch `visibility`・stdが育つ前にロック）
+
+Phase B（モジュール可視性）→ A（メンバ可視性）の順で**両方完成**（[[visibility-before-stdlib-grows]] 方針）。export/import/with/pub/pub(get) を spec 通り強制。
+- ✅ **I1＝module identity**：loader が各ファイルに module id（`part`=親と同・`import`=新）を割り当て、combined 内オフセット範囲を `Comp.moduleRanges` に記録、`moduleOf(offset)` で逆引き。
+- ✅ **I2＝export パース＋import 記録**：`export <decl>`／`export extern { }`／`export fn`/`trait` を `Comp.exports` に記録。`import … with { name [as alias] }` を `Comp.imports`（fieldStart=importing module id）に記録。
+- ✅ **I3＝import-export 強制（4a）**：`checkImports`＝`with` import した名前は loaded な export 集合に在ること。std に `export` 付与（Io print＋extern・Process・Async sleep・Core Format）。間違ったモジュール import は当該モジュール未ロードで自然に落ちる。`tests/part/crossimport` を spec 準拠化（可視性無視だった）・reject `import_not_exported` 追加。209 緑・不動点。
+- ✅ **I4＝use-without-import 強制（4b）**：`checkUseVisibility`＝expr arena を走査し、別モジュール定義の自由関数呼びは use-site module へ import 済みでなければ拒否（同一 module〔コンパイラは1 module〕・未解決〔local/closure〕は除外・型は ambient ゆえ関数呼びのみ）。4a だけの flat 使用穴を塞いだ。可視性無視テストを spec 準拠化（assert を `export fn`＋`with` import・rootimport export＋with・array_methods は public `self.get`/`self.count` 使用＝raw intrinsic は非公開 floor）。reject `use_without_import` 追加。210 緑・不動点。**＝Phase B（モジュール可視性）完成**（export ゲート＋import ゲート両方向）。
+- ✅ **Phase A＝メンバ可視性＝完成**：可視性は **impl ブロック単位**（`pub impl`・per-method `pub fn` は廃止）＋**フィールドは per-field**（`pub`/`pub(get)`・読み書き非対称ゆえ）。`FieldDef.vis`（0/1/2・既定値付き）＋`Func.isPub`（既定値付き＝構築点無改修）。`checkFieldReadVis`/`checkFieldWriteVis`/`checkMethodVis`（codegen の Field/assign/Method に挿入・curRecv で「無名 impl 内か」判定＝private は無名 impl のみ・pub(get) は read 公開/write 内部のみ・pub は完全公開）。提供メソッドのコピーは isPub 継承（公開準拠の提供メソッドは公開）。**コンパイラの pub 大掃除**（全 struct フィールド pub・全 impl を pub impl・Array は data private/count pub(get) の意図的カプセル化を維持）。可視性無視だったテストを spec 準拠化（外部公開フィールドは pub・外部呼びメソッドは pub impl）。reject 3 種追加。213 緑・不動点。**＝可視性（export/import/with/pub/pub(get)）を spec 通り完全強制。**
+
 ## ロードマップ（残りの大物・前向きのみ）
 
-1. ✅ **Array struct 化＝完了**（上記・`array-struct`→main）。次の収穫＝**コレクション値意味論の一般化**（配列専用ランタイムを `RawBuffer` 上の任意コレクションへ＝Dictionary/Set の前提）。
-2. 🔲 **関連型＋Iterator/Iterable**（`for` 脱糖の正式化・提供メソッド map/filter…）。署名は core-lib。
-3. 🔲 **Hash/Hasher → Dictionary（`[k:v]` lang item）/Set**（要：コレクション値意味論の一般化）。
-4. 🔲 **イベントループ tail＋spawn**（実スレッド・`JoinHandle[T]`・closure 残ギャップ）。
-5. 🔲 **`any P` 存在型**（型消去・動的ディスパッチ・トレイトの最後）。
-6. 🔲 **メタプログラミング**（`Derive`・コード生成・spec 上も最後）。
+1. ✅ **Array struct 化＝完了**（`array-struct`→main）。次の収穫＝**コレクション値意味論の一般化**（配列専用ランタイムを `RawBuffer` 上の任意コレクションへ＝Dictionary/Set の前提）。
+2. ✅ **可視性強制（I2・上記）**＝完成（`visibility`→main 予定）。
+3. 🔲 **関連型＋Iterator/Iterable**（`for` 脱糖の正式化・提供メソッド map/filter…）。署名は core-lib。
+4. 🔲 **Hash/Hasher → Dictionary（`[k:v]` lang item）/Set**（要：コレクション値意味論の一般化）。
+5. 🔲 **イベントループ tail＋spawn**（実スレッド・`JoinHandle[T]`・closure 残ギャップ）。
+6. 🔲 **`any P` 存在型**（型消去・動的ディスパッチ・トレイトの最後）。
+7. 🔲 **メタプログラミング**（`Derive`・コード生成・spec 上も最後）。
 
-横断 additive：演算子トレイト全配線（Eq/Ord 以外・需要駆動）・I2（import の with ゲート＝可視性検査・今は全フラット）・循環回収（Ref グラフ限定サイクルコレクタ）。詳細は [provisional.md](provisional.md)。
+横断 additive：演算子トレイト全配線（Eq/Ord 以外・需要駆動）・循環回収（Ref グラフ限定サイクルコレクタ）。詳細は [provisional.md](provisional.md)。
 
 ## ビルド・テスト・機能追加手順
 

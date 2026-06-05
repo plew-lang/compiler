@@ -1,5 +1,5 @@
 import @Std/Io with { print }
-struct Holder { val items: Array[I32] }
+struct Holder { pub val items: Array[I32] }
 fn main() {
     mut val a: Array[I32] = [10, 20]
     mut val b: Array[I32] = [0]

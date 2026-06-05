@@ -146,6 +146,14 @@
 - **ディレクトリパスの解決＝`_.pw`**: 固定英単語（`Mod`/`Index`）や同名重複（`Foo/Foo.pw`）を避け、`_` は「ディレクトリ名をそのまま継ぐ代表ファイル」の意。**`_.pw` はディレクトリを集約せず単なる単一ファイルモジュール**。検索性低下は軽微（エディタで吸収）と判断して許容。
 - **再エクスポート**: `export <path> with {...}`（`import` を付けず・ローカル非束縛＝JS の `export...from` 相当）。全取り込みは `with *`（`all` は camelCase メンバ名と衝突しうるため `*` を採用）。1ファイル1モジュールゆえ再エクスポートは必須で、公開 API の「バレル」構築に使う。
 
+### メンバ可視性＝impl ブロック単位（`pub impl`・決定・→ [spec/05](../spec/02-type-system/05-structs-enums.md#メンバの可視性)）
+- **メソッド・関連関数・factory の可視性は `impl` ブロック単位**＝`pub impl Type { … }` でブロック内全公開、修飾なし `impl Type { … }` で全非公開（無名 impl 内のみ）。**メソッド個別の `pub fn` は廃止＝エラー**。混在は `pub impl`/`impl` の **2 ブロックに分割**。**フィールドだけは per-field**（`pub`/`pub(get)`）＝`pub(get)` の「読み公開・書き内部」という読み書き非対称はブロックに畳めないため。
+- **根拠**：①**conformance は単位**＝トレイトの全要求を満たすので「一部公開・一部非公開」は中途半端で不整合。②**`via` と相性**＝`impl A as P { via existingMethod }` で witness が既存メソッド（自前可視性持ち）のとき per-method `pub` は曖昧、ブロック単位なら「この準拠が公開か」だけで決まる。③**明示 > 暗黙の方針**＝可視性の指定点が 1 箇所に集約。④**Swift と同型**（conformance/extension にアクセスレベル）。**却下案＝per-method `pub fn`**（Rust/Swift 流）は ①②に反し、conformance で半公開の不整合を許す。
+- **トレイト準拠の可視性も同形**：`pub impl Type as Trait`＝公開準拠／修飾なし＝内部準拠（事実はモジュール内成立で `where`/`any` に使えるが外部メソッド呼びは可視性エラー）。**`export impl` は無し**（外部到達は型の `export`＋`pub impl` の組）。
+- **Plew 固有の核心＝resolve-by-type ゆえメンバ可視性が trait メソッドを隠す唯一の軸**：Plew はトレイトメソッドを**レシーバ型だけで解決**し呼び出し側に trait を import させない（[lang item 方針](../spec/04-execution/15-modules.md#言語アイテムは常にスコープにあるimport-不要)）。よって **Rust の「trait がスコープに無ければ trait メソッドも見えない」自然ゲートが効かない**。Rust は trait 可視性がメソッド可視性を兼ねるが、Plew は分離するので「export していない内部実装も（暗黙 public だと）外から呼べてしまう」問題が出る。これを `pub impl` か否か（メンバ可視性）で塞ぐ＝**「暗黙 public」を却下**し witness にもブロック可視性を適用。**Swift の確認**：public 型×public protocol の準拠は witness を明示 public にせよとエラー強制（自動 public でない）＝Plew の「private witness で内部準拠」は Rust 的「内部は内部に閉じる」を member 軸で実現。
+- **直交 2 軸**：`export`＝モジュール境界（その型/関数/トレイトに到達できるか）／`pub impl`・`pub`＝型カプセル化（到達した型のどのメンバを使えるか）。spec/15 のモジュール可視性と spec/05 のメンバ可視性は独立。
+- **実装**（worklog の I2）：Phase B＝モジュール可視性（export/import 強制）→ Phase A＝メンバ可視性。**コンパイラは自由関数が struct のフィールド/メソッドを直接触る様式**で spec の private＝「無名 impl 内のみ」と衝突するので、`Comp`/`Lexer`/`TypeRef` 等の impl を `pub impl`・触るフィールドを `pub` にする**機械的大掃除**が要る（コンパイラ struct 全 pub 化＝spec 準拠で実害なし・enforcement の実価値は stdlib の pub(get)/内部準拠を将来含め守ること）。[[visibility-before-stdlib-grows]]。
+
 ### パッケージ（分散・TOML マニフェスト・→ [spec/15](../spec/04-execution/15-modules.md)）
 - **中央レジストリ無し**（Go modules / SwiftPM 思想）。各パッケージは **TOML マニフェスト**（暫定名 `Plew.toml`）を持ち、依存を **git / ローカルパス**で指定。
 - **依存はローカル名に束縛**し `import @Name` で使う。上流のパッケージ名衝突は**消費側のローカル名**で解決（Cargo の rename / Go の replace 相当）。

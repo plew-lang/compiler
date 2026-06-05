@@ -5,17 +5,17 @@ import @Std/Io with { print }
 trait Stepper {
     fn step() -> I64
 }
-impl Stepper {
+pub impl Stepper {
     fn doubleStep() -> I64 { return self.step() + self.step() }
 }
 
 struct Counter { val n: I64 }
-impl Counter as Stepper {
+pub impl Counter as Stepper {
     fn step() -> I64 { return self.n }
 }
 
 struct Two { val m: I64 }
-impl Two as Stepper {
+pub impl Two as Stepper {
     fn step() -> I64 { return self.m * 2I64 }
 }
 

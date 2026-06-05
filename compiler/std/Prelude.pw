@@ -27,7 +27,7 @@ extern "plew-intrinsic" {
 
 // Methods on the builtin Array, in pure Plew over the floor above. Monomorphized
 // per element type and dispatched by name (emitArrayMethods).
-impl[T] Array[T] {
+pub impl[T] Array[T] {
     // Append `value` to the end (growing the storage as needed).
     inout fn append(value~: T) {
         arrayPush(a: inout self, v: value)
