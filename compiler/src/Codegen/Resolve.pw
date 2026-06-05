@@ -1407,7 +1407,10 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             return scalarInfo()
         }
         Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
-            return scalarInfo()
+            // a closure literal's type is `fn(params) -> ret`; recover it so a
+            // generic call can structurally infer a type parameter from it
+            // (`map(f: fn(x:I64)->I64)` -> B = I64).
+            return typeInfoOfRef(c: inout c, ref: closureFnTypeRef(c: inout c, params: params, retTy: retTy))
         }
         Expr.Move(val operand, val isBorrow) => {
             // `move`/`borrow` have the operand's type (the value just flows).

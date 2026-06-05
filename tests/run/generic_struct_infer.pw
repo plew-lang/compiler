@@ -1,0 +1,7 @@
+import @Std/Io with { print }
+fn applyTo[B](f: fn(x: I64) -> B, n: I64) -> B {
+    return f(x: n)
+}
+fn main() {
+    print(applyTo(f: fn(x: I64) -> I64 { return x * 2 }, n: 21))
+}

@@ -1295,6 +1295,59 @@ fn findOrAddTypeRef(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
 // scalar type maps to a bare TypeRef by its name span. Returns 0 (the no-type
 // sentinel) when there is no name to mangle (an untyped literal / array), which
 // the caller reads as "inference failed".
+// Build a `fn(params) -> ret` TypeRef for a closure literal (so its type can be
+// structurally unified against a `fn(...)->B` parameter). The fn-type layout is
+// args[0] = return, args[1..] = parameter types (matching parseTypeTok / the
+// closure-call ABI). Appended fresh; deduping is unnecessary (used transiently).
+fn closureFnTypeRef(c: inout Comp, params: Array[Param], retTy: U64) -> U64 {
+    val fnName: Bind = kwSpan(c: inout c, kw: "fn", kwLen: 2)
+    mut val args: Array[U64] = []
+    args.append(retTy)
+    mut val i: U64 = 0
+    while i < params.count {
+        args.append(params[i].ty)
+        i += 1
+    }
+    val idx: U64 = c.types.count
+    c.types.append(<TypeRef nameStart=fnName.nameStart nameLen=fnName.nameLen args=args />)
+    return idx
+}
+
+// Structurally unify a parameter type `paramRef` against an argument type `argRef`
+// to find the binding for the type parameter (tpStart,tpLen). When the parameter
+// type IS the type parameter (`x: T`), bind it to the whole argument type; for a
+// compound parameter (`f: fn(x: Item) -> B`, `b: Box[T]`) recurse into matching
+// argument slots, returning the first binding found (0 if none). This generalizes
+// inference from "the parameter is the type variable" to "the variable appears
+// anywhere inside the parameter's type".
+fn unifyTypeParam(c: inout Comp, paramRef: U64, argRef: U64, tpStart: U64, tpLen: U64) -> U64 {
+    if paramRef >= c.types.count {
+        return 0
+    }
+    val pt: TypeRef = c.types[paramRef]
+    if pt.args.count == 0 {
+        if spansEqual(c: inout c, aStart: pt.nameStart, aLen: pt.nameLen, bStart: tpStart, bLen: tpLen) {
+            return argRef
+        }
+        return 0
+    }
+    if argRef >= c.types.count {
+        return 0
+    }
+    val at: TypeRef = c.types[argRef]
+    mut val i: U64 = 0
+    while i < pt.args.count {
+        if i < at.args.count {
+            val r: U64 = unifyTypeParam(c: inout c, paramRef: pt.args[i], argRef: at.args[i], tpStart: tpStart, tpLen: tpLen)
+            if r != 0 {
+                return r
+            }
+        }
+        i += 1
+    }
+    return 0
+}
+
 fn tyRefOfInfo(c: inout Comp, ti: TypeInfo) -> U64 {
     if ti.ref != 0 {
         return ti.ref
@@ -1350,14 +1403,20 @@ fn inferFnArgs(c: inout Comp, f: Func, args: Array[Arg]) -> Array[U64] {
                 // `Array[T]` param: infer T from the argument array's element.
                 if spansEqual(c: inout c, aStart: p.tyStart, aLen: p.tyLen, bStart: tp.nameStart, bLen: tp.nameLen) {
                     if pi < args.count {
-                        found = argArrayElemRef(c: inout c, argExpr: args[pi].expr)
+                        if found == 0 {
+                            found = argArrayElemRef(c: inout c, argExpr: args[pi].expr)
+                        }
                     }
                 }
             } else {
-                if spansEqual(c: inout c, aStart: p.tyStart, aLen: p.tyLen, bStart: tp.nameStart, bLen: tp.nameLen) {
-                    if pi < args.count {
+                // structurally unify the parameter's type against the argument's, so
+                // `T` is found whether it is the whole parameter type (`x: T`) or
+                // nested in it (`f: fn(x: Item) -> T`).
+                if pi < args.count {
+                    if found == 0 {
                         val at: TypeInfo = exprType(c: inout c, id: args[pi].expr)
-                        found = tyRefOfInfo(c: inout c, ti: at)
+                        val argRef: U64 = tyRefOfInfo(c: inout c, ti: at)
+                        found = unifyTypeParam(c: inout c, paramRef: p.ty, argRef: argRef, tpStart: tp.nameStart, tpLen: tp.nameLen)
                     }
                 }
             }
