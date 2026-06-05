@@ -656,10 +656,7 @@ fn parseStruct(c: inout Comp, isUnique: Bool) {
                                         }
                                         _ => {}
                                     }
-                                    match c.curKind() {
-                                        Kind.RParen => { c.advance() }
-                                        _ => {}
-                                    }
+                                    expect(c: inout c, k: <Kind.RParen />, msg: "expected ')' to close a `pub(...)` visibility modifier")
                                 }
                                 _ => {}
                             }

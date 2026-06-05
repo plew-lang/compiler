@@ -358,10 +358,7 @@ fn parseMake(c: inout Comp) -> U64 {
                 val arg: PType = parseTypeTok(c: inout c)
                 targs.append(arg.ref)
             }
-            match c.curKind() {
-                Kind.RBracket => { c.advance() }
-                _ => {}
-            }
+            expect(c: inout c, k: <Kind.RBracket />, msg: "expected ']' to close generic type arguments")
             tyRef = c.pushType(t: <TypeRef nameStart=typeTok.start nameLen=typeTok.len args=targs />)
         }
         _ => {}

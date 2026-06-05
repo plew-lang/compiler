@@ -116,10 +116,7 @@ fn parseTypeTok(c: inout Comp) -> PType {
                     elemLen = arg.len
                 }
             }
-            match c.curKind() {
-                Kind.RBracket => { c.advance() }
-                _ => {}
-            }
+            expect(c: inout c, k: <Kind.RBracket />, msg: "expected ']' to close generic type arguments")
         }
         _ => {}
     }
