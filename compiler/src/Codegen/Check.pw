@@ -8,9 +8,9 @@
 // A folded constant integer: non-negative magnitude `value` (U64) plus a `neg`
 // sign, mirroring the literal model (Expr.Int is a magnitude; `-` is a Unary).
 struct ConstInt {
-    val isConst: Bool
-    val neg: Bool
-    val value: U64
+    pub val isConst: Bool
+    pub val neg: Bool
+    pub val value: U64
 }
 
 fn notConst() -> ConstInt {
@@ -214,9 +214,9 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
 }
 
 struct IntTy {
-    val known: Bool
-    val bits: U64
-    val sgn: Bool
+    pub val known: Bool
+    pub val bits: U64
+    pub val sgn: Bool
 }
 
 // Recover an expression's integer type as (bits, sgn). Covers what exprType

@@ -84,19 +84,19 @@ enum Kind {
 }
 
 struct Tok {
-    val kind: Kind
-    val start: U64
-    val len: U64
+    pub val kind: Kind
+    pub val start: U64
+    pub val len: U64
 }
 
 struct Lexer {
-    val bytes: Array[U8]
-    mut val pos: U64
-    mut val toks: Array[Tok]
-    mut val depth: I64
+    pub val bytes: Array[U8]
+    pub mut val pos: U64
+    pub mut val toks: Array[Tok]
+    pub mut val depth: I64
 }
 
-impl Lexer {
+pub impl Lexer {
     // The byte `off` positions ahead of the cursor, or 0 past the end.
     fn at(off: U64) -> U8 {
         val i: U64 = self.pos + off

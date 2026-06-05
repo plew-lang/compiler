@@ -22,10 +22,10 @@ fn moduleOf(c: inout Comp, offset: U64) -> U64 {
 // (start,len,arr) is the head/array view; ty the structured TypeRef. Shared by
 // genStmt's Let lowering and the async frame-field collection so they agree.
 struct LetEff {
-    val start: U64
-    val len: U64
-    val arr: Bool
-    val ty: U64
+    pub val start: U64
+    pub val len: U64
+    pub val arr: Bool
+    pub val ty: U64
 }
 
 // Compute a binding's effective type (see LetEff). Mirrors genStmt's Let
