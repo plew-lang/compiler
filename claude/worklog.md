@@ -29,7 +29,11 @@
   - **demand-driven 単相化（＝理想）**：提供 self-returning は無限型族（`FilterIter[FilterIter[…]]`）。`isRegisteredGenInst`/`providedRetReachable` で**戻り adapter inst が到達可能（登録済）なときだけ発行**＝emitMonoMethods／_.pw 両 loop に skip。未到達コピーは出さずカスケード回避。
   - **for-loop が bare Iterator も受理**：iterand に `iterator()` が無ければ自身を iterator として `next()` 駆動（`compileIterableFor`/`iterableItemInfo`）。
   - test `iter_filter_provided`（手動 drive）・`iter_for_filter`（for）・`iter_for_bare`・`iter_filter_adapter`。
-- 🔲 **step 5c＝`map[B]`＝method-level 型パラメータ**。`map[B](f: fn(x: Item)->B) -> MapIter[Self,…,B]` は **B を呼び出しのクロージャ引数 `fn(x:I64)->I64` から推論**し receiver×B でメソッドを単相化する必要がある＝generic method on concrete receiver（`scanExprInsts` の Method は instantiation 未登録・method-level 型パラメータ未対応）。`filter` は B 不要（出力 Item）で完了済。要：(1) メソッド呼びで method-own 型パラメータを引数型から推論（free fn の `inferFnArgs` 相当を method 化）、(2) (receiver, B) ごとのメソッド FnInst 発行、(3) call-site mangle 整合。これが入れば `reduce`/`take` 等も同型で展開可。
+- ✅ **step 5c＝`map[B]`＝method-level 型パラメータ＋構造的型推論 完了**（`for v in xs.map(f:…)` が動く・B≠Item も可＝test `iter_for_map`/`iter_map_retype`）：
+  - **構造的型推論**（`unifyTypeParam`）＝引数型とパラメータ型を再帰的に突き合わせ、型変数が `fn(x:Item)->B` 等に**埋まっていても**取り出す（従来は `x: T` 直接のみ）。クロージャの型回復＝`exprType(Closure)`＝`fn(params)->ret`（`closureFnTypeRef`）。test `generic_struct_infer`（free `applyTo[B]`）。
+  - **method-level instantiation**＝generic method on **非 generic receiver**（`Counter.map[B]`）：`registerMethodInst` が引数から型引数推論→FnInst 登録＋戻り adapter（`MapIter[Counter,…,I64]`）を scan 登録。`emitMonoFn` が method instance も発行（Self/Item env）。mangle＝`Recv_selector_<argMangle>`（`writeMethodInstSuffix`・def=genSignature／call=Expr.Method で一致）。`exprType(Method)` も推論 B を束縛。
+- 🔲 **step 5d＝コンビネータの連鎖**（`xs.map(f).filter(p)`）。**残＝generic receiver 上の提供/method-instance**：`.filter()` を MapIter（generic 準拠型）に呼ぶと checkFnBounds で落ちる（line 82）。`registerMethodInst` は generic receiver を skip・provided on generic conformer の per-call 発行が未整備。単独の map/filter は完動。次：generic receiver 上の (a) provided 非 generic メソッド呼びの per-inst 発行、(b) method-own generic メソッドの per-(recvInst, B) 発行。
+- 🔲 **step 5e＝std 化**（MapIter/FilterIter と map/filter を `@Std/Core` へ）・`reduce`/`take`/`enumerate`（同型で additive）・Array/Range を Iterable に。
 - 🔲 **step 5c＝Iterator を Iterable に**（`for y in xs.map(…)` 用＝blanket `impl[I] I as Iterable where I: Iterator { iterator()->I { self } }` 或いは for 脱糖が Iterator も受理）。
 - 🔲 **step 6＝Array/Range を Iterable に**（fast-path は観測一致のまま維持）。
 

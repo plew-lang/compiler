@@ -1,0 +1,32 @@
+import @Std/Io with { print }
+import @Std/Core with { Iterator, Iterable }
+struct Counter { pub mut val n: I64 }
+pub impl Counter as Iterator {
+    type Item = I64
+    inout fn next() -> Optional[I64] {
+        if self.n >= 5 { return <Optional.None /> }
+        self.n = self.n + 1
+        return <Optional.Some v=self.n />
+    }
+}
+struct MapIter[I, F, B] { pub mut val inner: I  pub val f: F }
+pub impl[I, F, B] MapIter[I, F, B] as Iterator where I: Iterator {
+    type Item = B
+    inout fn next() -> Optional[B] {
+        match self.inner.next() {
+            Optional.Some(val v) => { return <Optional.Some v=self.f(x: v) /> }
+            Optional.None => { return <Optional.None /> }
+        }
+    }
+}
+pub impl Iterator {
+    fn map[B](f: fn(x: Item) -> B) -> MapIter[Self, fn(x: Item) -> B, B] {
+        return <MapIter[Self, fn(x: Item) -> B, B] inner=self f=f />
+    }
+}
+fn main() {
+    // B = Bool, different from Item = I64
+    for val v in <Counter n=0 />.map(f: fn(x: I64) -> Bool { return x > 2 }) {
+        print(v)
+    }
+}
