@@ -19,7 +19,7 @@
 
 **M0＝済**（tag `metaprogramming-m0`）。`plewc --gen <file>` モード＋`@Std/Syntax`（最小）＋ローダ auto-part＋`plew-gen.sh`＋`tests/gen/`。自明マクロ（固定文字列を返す）が `@[Greet]`→harness→`Greet.deriveFromSource`→`App.gen.pw`→通常ビルドで auto-part→生成関数実行、まで端から端まで貫通。実装メモは末尾「再利用資産・罠」の gen 項。
 
-- **M1**（次）＝`@Std/Syntax` の宣言 AST＋parser：`DeclAst`（struct/enum＝`name`/`fields(name,type)`/`variants`・関数シグネチャ・型式 `TypeExpr`〔再帰値型〕・span は**原本座標**）と `parseItem`（lex+parse・現状の stub を実装に）。M0 は `source: ""` 固定なので、**ハーネスに対象項の実ソース slice を渡す**（decl span 捕捉＝directive `@` 〜閉じ `}`）のも M1 で。
+- **M1**（次）＝`@Std/Syntax` の本実装＝**理想形＝構文層を唯一の真実に**（lexer＋完全値ツリー AST＋parser＋unparser・**構文 vs 意味で切る**・コンパイラとマクロが**同一の 1 AST**を共有〔syn/rustc drift を構造的に回避〕＝詳細は [metaprogramming-architecture.md](metaprogramming-architecture.md)「理想形（最終状態）」）。具体物は `DeclAst`/`TypeExpr`（String 名・再帰・全ノード原本座標 span・struct/enum/fn 網羅）と `parseItem`（base offset でスライスを原本座標 parse・stub を実装に）。M0 は `source: ""` 固定なので**対象項の実ソース slice をハーネスへ渡す**（decl span 捕捉＝directive `@`〜閉じ `}`）のも M1。**未決＝射程**：理想は式・文まで構文層まるごと共有だが、初手をどこまで（宣言レイヤ先行か一気か）／**コンパイラのレクサを `@Std/Syntax` に移して本体も import する一本化**（レクサは Comp 非依存で抽出可）は確定方向・パーサ/AST 全面共有は重い D の前倒しで射程判断中。**Dictionary は後**（理想ツリーは String 名で自己完結＝インターン化〔Phase C・Dictionary が道具〕は直交した後乗せ最適化・先行不要）。
 - **M2**＝dogfood（特権 Eq/Ord をマクロ化→`@[Hash]`→`Dictionary`）→ **M3** パッケージ管理後に外部切り出し。
 
 ## 並行・後続（renovate の残り・ロードマップ）
