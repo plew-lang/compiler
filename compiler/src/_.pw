@@ -1,8 +1,9 @@
 // The self-hosted Plew compiler: hand-written lexer + recursive-descent parser
 // -> arena AST (index handles) -> C transpilation. It compiles itself to a
 // fixpoint (see bootstrap.sh). This is the module root; the compiler is split
-// across part files (Lexer / Ast / Parser / Codegen) plus the module loader
-// (Loader), stitched in below; only the driver (`main`) stays here.
+// across part files (Ast / Parser / Codegen) plus the module loader (Loader),
+// stitched in below; only the driver (`main`) stays here. The lexer is no longer
+// a part — it lives in @Std/Syntax (shared with metaprogramming) and is imported.
 //
 // I/O is not ambient in Plew (spec: `print` et al. live in @Std, must be
 // imported). These imports are also what the compiler now *enforces* on every
@@ -10,8 +11,10 @@
 
 import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileBytes, eprint, fileExists }
 import @Std/Process with { argCount, argAt, exit }
+// The lexer is shared with metaprogramming: the compiler frontend and @Std/Syntax's
+// `parseItem` lex through the same code (spec/16 — one syntactic layer, no drift).
+import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals }
 
-part ./Lexer
 part ./Ast
 part ./Parser/Expr
 part ./Parser/Stmt

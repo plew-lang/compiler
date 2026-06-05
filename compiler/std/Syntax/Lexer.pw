@@ -1,7 +1,11 @@
-// Part of the Plew compiler module (root: _.pw). Lexer: source bytes ->
-// token stream. See _.pw for imports and the driver.
+// @Std/Syntax lexer (spec/16). Source bytes -> token stream. This is the ONE
+// lexer: both the compiler frontend and the metaprogramming `parseItem` lex
+// through it, so a macro and the compiler never drift on tokenization. Part of
+// the @Std/Syntax module (root: Syntax.pw). The public surface — `Kind`, `Tok`,
+// `Lexer`, `lex`, `kindCode`, `rangeEquals` — is `export`ed for the compiler to
+// `import`; the byte/keyword helpers stay module-private.
 
-enum Kind {
+export enum Kind {
     Eof
     Newline
     Int
@@ -83,13 +87,13 @@ enum Kind {
     Unknown
 }
 
-struct Tok {
+export struct Tok {
     pub val kind: Kind
     pub val start: U64
     pub val len: U64
 }
 
-struct Lexer {
+export struct Lexer {
     pub val bytes: Array[U8]
     pub mut val pos: U64
     pub mut val toks: Array[Tok]
@@ -169,7 +173,7 @@ fn isAlnum(b: U8) -> Bool {
     return isDigit(b: b)
 }
 
-fn rangeEquals(bytes: Array[U8], start: U64, len: U64, kw: String) -> Bool {
+export fn rangeEquals(bytes: Array[U8], start: U64, len: U64, kw: String) -> Bool {
     val kb: Array[U8] = kw.bytes
     if len != kb.count {
         return false
@@ -266,7 +270,7 @@ fn identKind(bytes: Array[U8], start: U64, len: U64) -> Kind {
     return <Kind.Ident />
 }
 
-fn lex(lx: inout Lexer) {
+export fn lex(lx: inout Lexer) {
     while lx.pos < lx.bytes.count {
         val b: U8 = lx.at(off: 0)
         if b == ' ' {
@@ -575,7 +579,7 @@ fn lex(lx: inout Lexer) {
     lx.toks.append(<Tok kind=<Kind.Eof /> start=lx.pos len=0 />)
 }
 
-fn kindCode(k: Kind) -> I64 {
+export fn kindCode(k: Kind) -> I64 {
     return match k {
         Kind.Eof => 0
         Kind.Newline => 1

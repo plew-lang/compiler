@@ -12,6 +12,13 @@
 // (returns fixed text) flows from `@[Name]` through the runner to `<Foo>.gen.pw`.
 // The real declaration AST (name/fields/variants/signatures/type-exprs, with
 // original-coordinate spans) lands in M1.
+//
+// M1 (in progress): the syntactic layer lives here as the one shared core. The
+// lexer (`part ./Syntax/Lexer`) is shared with the compiler frontend — both lex
+// through the same `lex`/`Kind`/`Tok`. The value-tree AST + parser follow, so
+// `parseItem` returns the real declaration structure.
+
+part ./Syntax/Lexer
 
 // The parsed syntax tree of an annotated item. M0: empty placeholder; M1 fills
 // it with the declaration's structure (name, fields, variants, …).
