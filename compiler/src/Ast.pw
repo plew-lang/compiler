@@ -514,6 +514,13 @@ struct Comp {
     // scratch: the trait spans parsed by parseWhereClause, parallel to its
     // returned param spans (a second return value without a tuple type).
     pub mut val curWhereTraits: Array[Bind]
+    // scratch: the impl-level `where T: Trait` bounds of the impl currently being
+    // parsed (`impl[I] Wrap[I] where I: Iterator { ... }`), parallel param/trait
+    // spans. Each member fn folds these into c.funcBounds for its own index, so a
+    // method body can call the bound trait's methods on the type parameter. Reset
+    // to [] at the impl's close (so top-level fns and later impls don't inherit).
+    pub mut val curImplBoundParams: Array[Bind] = []
+    pub mut val curImplBoundTraits: Array[Bind] = []
     // structured type references (TypeRef arena), indexed by the `ty`/`ref`
     // fields above. Built during parsing; consumed by generic monomorphization.
     pub mut val types: Array[TypeRef]

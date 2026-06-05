@@ -166,6 +166,15 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
         c.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=bp.nameStart paramLen=bp.nameLen traitStart=bt.nameStart traitLen=bt.nameLen />)
         wbi += 1
     }
+    // fold the enclosing impl's `where` bounds into this member (so a body call on
+    // the type parameter sees them); harmless for members that don't use the param.
+    mut val ibi: U64 = 0
+    while ibi < c.curImplBoundParams.count {
+        val ibp: Bind = c.curImplBoundParams[ibi]
+        val ibt: Bind = c.curImplBoundTraits[ibi]
+        c.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=ibp.nameStart paramLen=ibp.nameLen traitStart=ibt.nameStart traitLen=ibt.nameLen />)
+        ibi += 1
+    }
 }
 
 // Parse an optional `where T: Trait [+ Trait] [, U: Trait]` clause. Returns the
@@ -264,6 +273,13 @@ fn parseImpl(c: inout Comp, isPub: Bool) {
         }
         _ => {}
     }
+    // optional impl-level `where I: Trait` (spec/08): the bounds apply to every
+    // member, so a method body may call the bound trait's methods on the type
+    // parameter (`self.inner.next()` where `inner: I, I: Iterator`). parseFuncCommon
+    // folds these into each member's funcBounds; reset to [] at the impl's close.
+    val implBoundParams: Array[Bind] = parseWhereClause(c: inout c)
+    c.curImplBoundParams = implBoundParams
+    c.curImplBoundTraits = c.curWhereTraits
     match c.curKind() {
         Kind.LBrace => { c.advance() }
         _ => {}
@@ -383,6 +399,10 @@ fn parseImpl(c: inout Comp, isPub: Bool) {
     if isTraitImpl {
         c.conforms.append(<Conform typeStart=recvStart typeLen=recvLen traitStart=traitStart traitLen=traitLen derived=false witnessed=c.curWitnessed />)
     }
+    // clear the impl-level where bounds so the next top-level fn / impl starts clean.
+    val noBounds: Array[Bind] = []
+    c.curImplBoundParams = noBounds
+    c.curImplBoundTraits = noBounds
 }
 
 // `trait Name { fn req(...) [-> T] ... }` (spec/08). The body holds only
