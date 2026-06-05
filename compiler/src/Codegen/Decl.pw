@@ -205,73 +205,6 @@ fn emitStructCopyProto(c: inout Comp, si: U64) {
     write(s: " s);\n")
 }
 
-// `Name Name_copy(Name s) { Name r = s; r.arr = PlewArray_E_copy(s.arr); ...; return r; }`
-// — value-semantics deep copy of a struct's array / nested-struct fields.
-fn emitStructCopyDef(c: inout Comp, si: U64) {
-    val s: StructDef = c.structs[si]
-    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
-    write(s: " ")
-    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
-    write(s: "_copy(")
-    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
-    write(s: " s) { ")
-    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
-    write(s: " r = s;")
-    val fields: Array[FieldDef] = s.fields
-    mut val i: U64 = 0
-    while i < fields.count {
-        val f: FieldDef = fields[i]
-        if fieldIsBoxed(c: inout c, f: f) {
-            // boxed (recursive) field: `r = s` shared the pointer; retain the cell
-            // (CoW — value semantics hold because reads deref-copy and writes
-            // repoint, so a shared cell is never mutated).
-            emitBoxedFieldRetain(c: inout c, f: f, isEnum: false, vStart: 0, vLen: 0)
-        } else {
-        if f.tyIsArray {
-            write(s: " r.")
-            writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-            write(s: " = ")
-            wPA(c: inout c, elemStart: f.tyStart, elemLen: f.tyLen)
-            write(s: "_copy(s.")
-            writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-            write(s: ");")
-        } else {
-            if rangeEquals(bytes: c.bytes, start: f.tyStart, len: f.tyLen, kw: "RawBuffer") {
-                // CoW: a copy shares the buffer (retain); the deep copy is lazy, in
-                // the owner's mutating methods (which check rawIsUnique). r.field is
-                // already == s.field via `r = s`, so this just bumps the refcount.
-                write(s: " plew_rawbuf_share((void*)s.")
-                writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                write(s: ");")
-            } else {
-                if structNeedsCopy(c: inout c, start: f.tyStart, len: f.tyLen) {
-                    write(s: " r.")
-                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                    write(s: " = ")
-                    writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
-                    write(s: "_copy(s.")
-                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                    write(s: ");")
-                } else {
-                    // a concrete-enum field that owns heap (e.g. a recursive enum):
-                    // deep-copy it (retains its boxed payloads).
-                    if enumNeedsCopy(c: inout c, start: f.tyStart, len: f.tyLen) {
-                        write(s: " r.")
-                        writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                        write(s: " = ")
-                        writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
-                        write(s: "_copy(s.")
-                        writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                        write(s: ");")
-                    }
-                }
-            }
-        }
-        }
-        i += 1
-    }
-    write(s: " return r; }\n")
-}
 
 // `Name Name_share(Name s);` prototype.
 fn emitStructShareProto(c: inout Comp, si: U64) {
@@ -284,61 +217,6 @@ fn emitStructShareProto(c: inout Comp, si: U64) {
     write(s: " s);\n")
 }
 
-// `Name Name_share(Name s) { plew_arc_retain(s.arr.rc); Field_share(s.f); return s; }`
-// — CoW share of a struct: retain each owned heap field's buffer and alias the
-// struct (shallow). The binding gets its own ref on every shared buffer.
-fn emitStructShareDef(c: inout Comp, si: U64) {
-    val s: StructDef = c.structs[si]
-    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
-    write(s: " ")
-    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
-    write(s: "_share(")
-    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
-    write(s: " s) {")
-    val fields: Array[FieldDef] = s.fields
-    mut val i: U64 = 0
-    while i < fields.count {
-        val f: FieldDef = fields[i]
-        if fieldIsBoxed(c: inout c, f: f) {
-            // boxed (recursive) field: retain the shared cell (CoW).
-            emitBoxedFieldRetain(c: inout c, f: f, isEnum: false, vStart: 0, vLen: 0)
-        } else {
-        if f.tyIsArray {
-            // retain the array field's buffer (its rc lives in the RawBuffer
-            // header now, so go through the array runtime rather than `.rc`).
-            write(s: " ")
-            wPA(c: inout c, elemStart: f.tyStart, elemLen: f.tyLen)
-            write(s: "_share(s.")
-            writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-            write(s: ");")
-        } else {
-            if rangeEquals(bytes: c.bytes, start: f.tyStart, len: f.tyLen, kw: "RawBuffer") {
-                write(s: " plew_rawbuf_share((void*)s.")
-                writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                write(s: ");")
-            } else {
-                if structNeedsCopy(c: inout c, start: f.tyStart, len: f.tyLen) {
-                    write(s: " ")
-                    writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
-                    write(s: "_share(s.")
-                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                    write(s: ");")
-                } else {
-                    if enumNeedsCopy(c: inout c, start: f.tyStart, len: f.tyLen) {
-                        write(s: " ")
-                        writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
-                        write(s: "_share(s.")
-                        writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                        write(s: ");")
-                    }
-                }
-            }
-        }
-        }
-        i += 1
-    }
-    write(s: " return s; }\n")
-}
 
 // ── value-semantics ARC for enums & recursive boxes (spec/03) ────────────────
 // Mirrors the struct copy/share/release machinery onto enums (concrete + mono)
@@ -576,110 +454,42 @@ fn emitStructReleaseProto(c: inout Comp, si: U64) {
     write(s: " s);\n")
 }
 
-// `void Name_release(Name s) { plew_arc_release(s.arr.rc); Field_release(s.f); }`
-// — release a struct's owned heap fields. Array fields are buffer-only (their
-// struct elements' inner buffers are shared by the shallow array copy, so
-// recursing would double-free — matches genArray copy's documented gap). Safe
-// now that struct bindings retain-on-share (so a released struct's fields are
-// genuinely co-owned, not aliased without a refcount).
-fn emitStructReleaseDef(c: inout Comp, si: U64) {
-    val s: StructDef = c.structs[si]
-    write(s: "void ")
-    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
-    write(s: "_release(")
-    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
-    write(s: " s) {")
-    val fields: Array[FieldDef] = s.fields
-    mut val i: U64 = 0
-    while i < fields.count {
-        val f: FieldDef = fields[i]
-        if fieldIsBoxed(c: inout c, f: f) {
-            // boxed (recursive) field: drop the cell's refcount; at zero release the
-            // pointee (recursively) and free the cell.
-            emitBoxedFieldRelease(c: inout c, f: f, isEnum: false, vStart: 0, vLen: 0)
-        } else {
-        if f.tyIsArray {
-            write(s: " ")
-            wPA(c: inout c, elemStart: f.tyStart, elemLen: f.tyLen)
-            write(s: "_release(s.")
-            writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-            write(s: ");")
-        } else {
-            if rangeEquals(bytes: c.bytes, start: f.tyStart, len: f.tyLen, kw: "RawBuffer") {
-                write(s: " plew_rawbuf_release((void*)s.")
-                writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                write(s: ");")
-            } else {
-            // a unique field is destroyed in place (spec/03: fields in declaration
-            // order): run its deinit body, then release its own fields.
-            if typeIsUnique(c: inout c, start: f.tyStart, len: f.tyLen) {
-                if structHasDeinit(c: inout c, start: f.tyStart, len: f.tyLen) {
-                    write(s: " ")
-                    writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
-                    write(s: "_deinit(s.")
-                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                    write(s: ");")
-                }
-                if structNeedsRelease(c: inout c, start: f.tyStart, len: f.tyLen) {
-                    write(s: " ")
-                    writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
-                    write(s: "_release(s.")
-                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                    write(s: ");")
-                }
-            } else {
-                if structNeedsRelease(c: inout c, start: f.tyStart, len: f.tyLen) {
-                    write(s: " ")
-                    writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
-                    write(s: "_release(s.")
-                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                    write(s: ");")
-                } else {
-                    if enumNeedsRelease(c: inout c, start: f.tyStart, len: f.tyLen) {
-                        write(s: " ")
-                        writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
-                        write(s: "_release(s.")
-                        writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                        write(s: ");")
-                    }
-                }
-            }
-            }
-        }
-        }
-        i += 1
-    }
-    write(s: " }\n")
-}
 
-// Write `obj.data.<variant>.<field>` — the C access path for an enum payload field.
-fn weAccF(c: inout Comp, obj: String, vStart: U64, vLen: U64, f: FieldDef) {
+// Write the C access path for a field. A struct field is `obj.field`; an enum
+// payload field is `obj.data.<variant>.field`.
+fn weAccF(c: inout Comp, obj: String, isEnum: Bool, vStart: U64, vLen: U64, f: FieldDef) {
     write(s: obj)
-    write(s: ".data.")
-    writeSpan(c: inout c, start: vStart, len: vLen)
-    write(s: ".")
+    if isEnum {
+        write(s: ".data.")
+        writeSpan(c: inout c, start: vStart, len: vLen)
+        write(s: ".")
+    } else {
+        write(s: ".")
+    }
     writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
 }
 
-// Emit the copy(0)/share(1)/release(2) action for one enum payload field. The
-// source value is `s`, the (copy) target `r`. Mirrors the struct field handlers.
-fn emitEnumFieldAction(c: inout Comp, f: FieldDef, vStart: U64, vLen: U64, mode: U64) {
+// Emit the copy(0)/share(1)/release(2) action for ONE field — shared by struct
+// and (concrete) enum ARC emitters. The source value is `s`, the (copy) target
+// `r`; `isEnum`+variant select the access path. This is the single place the
+// field-class cascade (boxed / array / RawBuffer / unique / nested) is encoded.
+fn emitFieldAction(c: inout Comp, f: FieldDef, isEnum: Bool, vStart: U64, vLen: U64, mode: U64) {
     if fieldIsBoxed(c: inout c, f: f) {
         if mode == 2 {
-            emitBoxedFieldRelease(c: inout c, f: f, isEnum: true, vStart: vStart, vLen: vLen)
+            emitBoxedFieldRelease(c: inout c, f: f, isEnum: isEnum, vStart: vStart, vLen: vLen)
         } else {
-            emitBoxedFieldRetain(c: inout c, f: f, isEnum: true, vStart: vStart, vLen: vLen)
+            emitBoxedFieldRetain(c: inout c, f: f, isEnum: isEnum, vStart: vStart, vLen: vLen)
         }
         return
     }
     if f.tyIsArray {
         if mode == 0 {
             write(s: " ")
-            weAccF(c: inout c, obj: "r", vStart: vStart, vLen: vLen, f: f)
+            weAccF(c: inout c, obj: "r", isEnum: isEnum, vStart: vStart, vLen: vLen, f: f)
             write(s: " = ")
             wPA(c: inout c, elemStart: f.tyStart, elemLen: f.tyLen)
             write(s: "_copy(")
-            weAccF(c: inout c, obj: "s", vStart: vStart, vLen: vLen, f: f)
+            weAccF(c: inout c, obj: "s", isEnum: isEnum, vStart: vStart, vLen: vLen, f: f)
             write(s: ");")
         } else {
             write(s: " ")
@@ -689,7 +499,7 @@ fn emitEnumFieldAction(c: inout Comp, f: FieldDef, vStart: U64, vLen: U64, mode:
             } else {
                 write(s: "_release(")
             }
-            weAccF(c: inout c, obj: "s", vStart: vStart, vLen: vLen, f: f)
+            weAccF(c: inout c, obj: "s", isEnum: isEnum, vStart: vStart, vLen: vLen, f: f)
             write(s: ");")
         }
         return
@@ -700,14 +510,35 @@ fn emitEnumFieldAction(c: inout Comp, f: FieldDef, vStart: U64, vLen: U64, mode:
         } else {
             write(s: " plew_rawbuf_share((void*)")
         }
-        weAccF(c: inout c, obj: "s", vStart: vStart, vLen: vLen, f: f)
+        weAccF(c: inout c, obj: "s", isEnum: isEnum, vStart: vStart, vLen: vLen, f: f)
         write(s: ");")
         return
     }
+    // a unique field is destroyed in place on release (spec/03: type body before
+    // fields): run its deinit, then release its own heap. (Unique types never
+    // copy/share, so this is release-only.)
+    if mode == 2 {
+        if typeIsUnique(c: inout c, start: f.tyStart, len: f.tyLen) {
+            if structHasDeinit(c: inout c, start: f.tyStart, len: f.tyLen) {
+                write(s: " ")
+                writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
+                write(s: "_deinit(")
+                weAccF(c: inout c, obj: "s", isEnum: isEnum, vStart: vStart, vLen: vLen, f: f)
+                write(s: ");")
+            }
+            if structNeedsRelease(c: inout c, start: f.tyStart, len: f.tyLen) {
+                write(s: " ")
+                writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
+                write(s: "_release(")
+                weAccF(c: inout c, obj: "s", isEnum: isEnum, vStart: vStart, vLen: vLen, f: f)
+                write(s: ");")
+            }
+            return
+        }
+    }
     // nominal struct/enum field (concrete or mono instantiation).
-    val isGen: Bool = f.ty != 0
     mut val gen: Bool = false
-    if isGen {
+    if f.ty != 0 {
         gen = isGenericInst(c: inout c, ref: f.ty)
     }
     mut val needs: Bool = false
@@ -722,7 +553,7 @@ fn emitEnumFieldAction(c: inout Comp, f: FieldDef, vStart: U64, vLen: U64, mode:
     }
     if mode == 0 {
         write(s: " ")
-        weAccF(c: inout c, obj: "r", vStart: vStart, vLen: vLen, f: f)
+        weAccF(c: inout c, obj: "r", isEnum: isEnum, vStart: vStart, vLen: vLen, f: f)
         write(s: " = ")
         if gen {
             emitMangle(c: inout c, ref: f.ty)
@@ -730,7 +561,7 @@ fn emitEnumFieldAction(c: inout Comp, f: FieldDef, vStart: U64, vLen: U64, mode:
             writeSpan(c: inout c, start: f.tyStart, len: f.tyLen)
         }
         write(s: "_copy(")
-        weAccF(c: inout c, obj: "s", vStart: vStart, vLen: vLen, f: f)
+        weAccF(c: inout c, obj: "s", isEnum: isEnum, vStart: vStart, vLen: vLen, f: f)
         write(s: ");")
     } else {
         write(s: " ")
@@ -744,7 +575,7 @@ fn emitEnumFieldAction(c: inout Comp, f: FieldDef, vStart: U64, vLen: U64, mode:
         } else {
             write(s: "_release(")
         }
-        weAccF(c: inout c, obj: "s", vStart: vStart, vLen: vLen, f: f)
+        weAccF(c: inout c, obj: "s", isEnum: isEnum, vStart: vStart, vLen: vLen, f: f)
         write(s: ");")
     }
 }
@@ -833,7 +664,7 @@ fn emitEnumModeDef(c: inout Comp, ei: U64, mode: U64) {
             val fs: Array[FieldDef] = v.fields
             mut val fi: U64 = 0
             while fi < fs.count {
-                emitEnumFieldAction(c: inout c, f: fs[fi], vStart: v.nameStart, vLen: v.nameLen, mode: mode)
+                emitFieldAction(c: inout c, f: fs[fi], isEnum: true, vStart: v.nameStart, vLen: v.nameLen, mode: mode)
                 fi += 1
             }
             write(s: " }")
@@ -853,88 +684,204 @@ fn emitEnumModeDef(c: inout Comp, ei: U64, mode: U64) {
     }
 }
 
-// Mono enum share/release prototypes + defs (copy already exists). Substituted
-// payload types drive each per-variant action.
-fn emitMonoEnumModeProto(c: inout Comp, instRef: U64, mode: U64) {
+// `Name Name_copy(Name s) { Name r = s; <field actions> return r; }` — the flat
+// (struct) counterpart of emitEnumModeDef, sharing emitFieldAction. mode 0/1/2 =
+// copy/share/release. Replaces the former emitStruct{Copy,Share,Release}Def.
+fn emitStructModeDef(c: inout Comp, si: U64, mode: U64) {
+    val s: StructDef = c.structs[si]
     if mode == 2 {
         write(s: "void ")
     } else {
-        emitMangle(c: inout c, ref: instRef)
+        writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
         write(s: " ")
     }
-    emitMangle(c: inout c, ref: instRef)
-    if mode == 1 {
-        write(s: "_share(")
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+    if mode == 0 {
+        write(s: "_copy(")
     } else {
-        write(s: "_release(")
+        if mode == 1 {
+            write(s: "_share(")
+        } else {
+            write(s: "_release(")
+        }
     }
-    emitMangle(c: inout c, ref: instRef)
-    write(s: " s);\n")
-}
-fn emitMonoEnumModeDef(c: inout Comp, instRef: U64, mode: U64) {
-    val t: TypeRef = c.types[instRef]
-    val ei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
-    if ei >= c.enums.count {
-        return
-    }
-    val e: EnumDef = c.enums[ei]
-    if mode == 2 {
-        write(s: "void ")
-    } else {
-        emitMangle(c: inout c, ref: instRef)
-        write(s: " ")
-    }
-    emitMangle(c: inout c, ref: instRef)
-    if mode == 1 {
-        write(s: "_share(")
-    } else {
-        write(s: "_release(")
-    }
-    emitMangle(c: inout c, ref: instRef)
+    writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
     write(s: " s) {")
-    val vars: Array[Variant] = e.variants
-    mut val vi: U64 = 0
-    while vi < vars.count {
-        val v: Variant = vars[vi]
-        val fs: Array[FieldDef] = v.fields
-        mut val any: Bool = false
-        mut val ck: U64 = 0
-        while ck < fs.count {
-            val cti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: e.typeParams, tyRef: fs[ck].ty)
-            if mode == 2 {
-                if typeInfoNeedsRelease(c: inout c, ti: cti) {
-                    any = true
-                }
-            } else {
-                if typeInfoNeedsCopy(c: inout c, ti: cti) {
-                    any = true
-                }
-            }
-            ck += 1
-        }
-        if any {
-            write(s: " if (s.tag == ")
-            writeU64(n: vi)
-            write(s: ") {")
-            mut val fi: U64 = 0
-            while fi < fs.count {
-                val ti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: e.typeParams, tyRef: fs[fi].ty)
-                emitMonoEnumFieldAction(c: inout c, ti: ti, v: v, f: fs[fi], mode: mode)
-                fi += 1
-            }
-            write(s: " }")
-        }
-        vi += 1
+    if mode == 0 {
+        write(s: " ")
+        writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+        write(s: " r = s;")
+    }
+    val fields: Array[FieldDef] = s.fields
+    mut val i: U64 = 0
+    while i < fields.count {
+        emitFieldAction(c: inout c, f: fields[i], isEnum: false, vStart: 0, vLen: 0, mode: mode)
+        i += 1
     }
     if mode == 2 {
         write(s: " }\n")
     } else {
-        write(s: " return s; }\n")
+        write(s: " return ")
+        if mode == 0 {
+            write(s: "r")
+        } else {
+            write(s: "s")
+        }
+        write(s: "; }\n")
     }
 }
 
-// One mono-enum payload field action, driven by its substituted type `ti`.
-fn emitMonoEnumFieldAction(c: inout Comp, ti: TypeInfo, v: Variant, f: FieldDef, mode: U64) {
+// Mono struct/enum copy(0)/share(1)/release(2) prototype + definition, unified.
+// Replaces the former emitMono{Struct,Enum}Copy* + emitMonoEnumMode*.
+fn emitMonoModeProto(c: inout Comp, instRef: U64, mode: U64) {
+    if mode == 2 {
+        write(s: "void ")
+    } else {
+        emitMangle(c: inout c, ref: instRef)
+        write(s: " ")
+    }
+    emitMangle(c: inout c, ref: instRef)
+    if mode == 0 {
+        write(s: "_copy(")
+    } else {
+        if mode == 1 {
+            write(s: "_share(")
+        } else {
+            write(s: "_release(")
+        }
+    }
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " s);\n")
+}
+fn emitMonoModeDef(c: inout Comp, instRef: U64, isEnum: Bool, mode: U64) {
+    val t: TypeRef = c.types[instRef]
+    mut val params: Array[Bind] = []
+    mut val vars: Array[Variant] = []
+    mut val fields: Array[FieldDef] = []
+    if isEnum {
+        val ei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+        if ei >= c.enums.count {
+            return
+        }
+        params = c.enums[ei].typeParams
+        vars = c.enums[ei].variants
+    } else {
+        val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+        if si >= c.structs.count {
+            return
+        }
+        params = c.structs[si].typeParams
+        fields = c.structs[si].fields
+    }
+    // env so a type-parameter array element resolves to the concrete element in wPA.
+    val savedP: Array[Bind] = c.curTypeParams
+    val savedA: Array[U64] = c.curTypeArgs
+    c.curTypeParams = params
+    c.curTypeArgs = t.args
+    if mode == 2 {
+        write(s: "void ")
+    } else {
+        emitMangle(c: inout c, ref: instRef)
+        write(s: " ")
+    }
+    emitMangle(c: inout c, ref: instRef)
+    if mode == 0 {
+        write(s: "_copy(")
+    } else {
+        if mode == 1 {
+            write(s: "_share(")
+        } else {
+            write(s: "_release(")
+        }
+    }
+    emitMangle(c: inout c, ref: instRef)
+    write(s: " s) {")
+    if mode == 0 {
+        write(s: " ")
+        emitMangle(c: inout c, ref: instRef)
+        write(s: " r = s;")
+    }
+    if isEnum {
+        mut val vi: U64 = 0
+        while vi < vars.count {
+            val v: Variant = vars[vi]
+            val fs: Array[FieldDef] = v.fields
+            mut val any: Bool = false
+            mut val ck: U64 = 0
+            while ck < fs.count {
+                val cti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: params, tyRef: fs[ck].ty)
+                if mode == 2 {
+                    if typeInfoNeedsRelease(c: inout c, ti: cti) {
+                        any = true
+                    }
+                } else {
+                    if typeInfoNeedsCopy(c: inout c, ti: cti) {
+                        any = true
+                    }
+                }
+                ck += 1
+            }
+            if any {
+                write(s: " if (s.tag == ")
+                writeU64(n: vi)
+                write(s: ") {")
+                mut val fi: U64 = 0
+                while fi < fs.count {
+                    val ti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: params, tyRef: fs[fi].ty)
+                    emitMonoFieldAction(c: inout c, ti: ti, isEnum: true, vStart: v.nameStart, vLen: v.nameLen, f: fs[fi], mode: mode)
+                    fi += 1
+                }
+                write(s: " }")
+            }
+            vi += 1
+        }
+    } else {
+        mut val fi: U64 = 0
+        while fi < fields.count {
+            val ti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: params, tyRef: fields[fi].ty)
+            emitMonoFieldAction(c: inout c, ti: ti, isEnum: false, vStart: 0, vLen: 0, f: fields[fi], mode: mode)
+            fi += 1
+        }
+    }
+    if mode == 2 {
+        write(s: " }\n")
+    } else {
+        write(s: " return ")
+        if mode == 0 {
+            write(s: "r")
+        } else {
+            write(s: "s")
+        }
+        write(s: "; }\n")
+    }
+    c.curTypeParams = savedP
+    c.curTypeArgs = savedA
+}
+
+// Does a mono struct instantiation need release? Any field (substituted) does.
+fn monoStructNeedsRelease(c: inout Comp, instRef: U64) -> Bool {
+    val t: TypeRef = c.types[instRef]
+    val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if si >= c.structs.count {
+        return false
+    }
+    val s: StructDef = c.structs[si]
+    val fields: Array[FieldDef] = s.fields
+    mut val i: U64 = 0
+    while i < fields.count {
+        val ti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: s.typeParams, tyRef: fields[i].ty)
+        if typeInfoNeedsRelease(c: inout c, ti: ti) {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// One mono (struct or enum) field action, driven by its substituted type `ti`.
+// Shared by mono struct + mono enum copy(0)/share(1)/release(2). `isEnum`+variant
+// select the access path. Mono fields are never boxed (boxing is concrete-only).
+fn emitMonoFieldAction(c: inout Comp, ti: TypeInfo, isEnum: Bool, vStart: U64, vLen: U64, f: FieldDef, mode: U64) {
     mut val needs: Bool = false
     if mode == 2 {
         needs = typeInfoNeedsRelease(c: inout c, ti: ti)
@@ -945,47 +892,33 @@ fn emitMonoEnumFieldAction(c: inout Comp, ti: TypeInfo, v: Variant, f: FieldDef,
     } else {
         return
     }
-    if ti.kind == 3 {
-        // array payload
+    if mode == 0 {
         write(s: " ")
-        wPA(c: inout c, elemStart: ti.nameStart, elemLen: ti.nameLen)
-        if mode == 0 {
-            write(s: "_copy(")
+        weAccF(c: inout c, obj: "r", isEnum: isEnum, vStart: vStart, vLen: vLen, f: f)
+        write(s: " = ")
+        if ti.kind == 3 {
+            wPA(c: inout c, elemStart: ti.nameStart, elemLen: ti.nameLen)
         } else {
-            if mode == 1 {
-                write(s: "_share(")
-            } else {
-                write(s: "_release(")
-            }
+            emitTypeInfoCName(c: inout c, ti: ti)
         }
-        weAccF(c: inout c, obj: "s", vStart: v.nameStart, vLen: v.nameLen, f: f)
+        write(s: "_copy(")
+        weAccF(c: inout c, obj: "s", isEnum: isEnum, vStart: vStart, vLen: vLen, f: f)
         write(s: ");")
         return
     }
-    // nominal payload: name is either a mono-instantiation mangle or a concrete name.
-    if mode == 1 {
-        write(s: " ")
-        emitTypeInfoCName(c: inout c, ti: ti)
-        write(s: "_share(")
-        weAccF(c: inout c, obj: "s", vStart: v.nameStart, vLen: v.nameLen, f: f)
-        write(s: ");")
+    write(s: " ")
+    if ti.kind == 3 {
+        wPA(c: inout c, elemStart: ti.nameStart, elemLen: ti.nameLen)
     } else {
-        if mode == 2 {
-            write(s: " ")
-            emitTypeInfoCName(c: inout c, ti: ti)
-            write(s: "_release(")
-            weAccF(c: inout c, obj: "s", vStart: v.nameStart, vLen: v.nameLen, f: f)
-            write(s: ");")
-        } else {
-            // copy is not currently emitted for mono enums (only share/release); the
-            // existing emitMonoEnumCopyDef handles arrays. Fall back to share.
-            write(s: " ")
-            emitTypeInfoCName(c: inout c, ti: ti)
-            write(s: "_share(")
-            weAccF(c: inout c, obj: "s", vStart: v.nameStart, vLen: v.nameLen, f: f)
-            write(s: ");")
-        }
+        emitTypeInfoCName(c: inout c, ti: ti)
     }
+    if mode == 1 {
+        write(s: "_share(")
+    } else {
+        write(s: "_release(")
+    }
+    weAccF(c: inout c, obj: "s", isEnum: isEnum, vStart: vStart, vLen: vLen, f: f)
+    write(s: ");")
 }
 
 // Write the C type name for a recovered TypeInfo (mono mangle or concrete span).
@@ -1000,8 +933,7 @@ fn emitTypeInfoCName(c: inout Comp, ti: TypeInfo) {
 }
 
 // Does a monomorphized generic struct instantiation need a deep copy? True if
-// any field, after substituting the instantiation's type args, is an array.
-// (Nested mono-struct fields needing copy are deferred.)
+// any field, after substituting the instantiation's type args, needs copy.
 fn monoStructNeedsCopy(c: inout Comp, instRef: U64) -> Bool {
     val t: TypeRef = c.types[instRef]
     val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
@@ -1013,66 +945,12 @@ fn monoStructNeedsCopy(c: inout Comp, instRef: U64) -> Bool {
     mut val i: U64 = 0
     while i < fields.count {
         val ti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: s.typeParams, tyRef: fields[i].ty)
-        if ti.kind == 3 {
+        if typeInfoNeedsCopy(c: inout c, ti: ti) {
             return true
         }
         i += 1
     }
     return false
-}
-
-// `Mangle Mangle_copy(Mangle s);` prototype for a mono struct instantiation.
-fn emitMonoStructCopyProto(c: inout Comp, instRef: U64) {
-    emitMangle(c: inout c, ref: instRef)
-    write(s: " ")
-    emitMangle(c: inout c, ref: instRef)
-    write(s: "_copy(")
-    emitMangle(c: inout c, ref: instRef)
-    write(s: " s);\n")
-}
-
-// Deep-copy definition for a mono struct instantiation: copy each array field
-// (after substitution) with PlewArray_E_copy; everything else stays shallow.
-fn emitMonoStructCopyDef(c: inout Comp, instRef: U64) {
-    val t: TypeRef = c.types[instRef]
-    val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
-    if si >= c.structs.count {
-        return
-    }
-    val s: StructDef = c.structs[si]
-    // env so an array field whose element is a type parameter resolves to the
-    // instantiation's concrete element in wPA.
-    val savedP: Array[Bind] = c.curTypeParams
-    val savedA: Array[U64] = c.curTypeArgs
-    c.curTypeParams = s.typeParams
-    c.curTypeArgs = t.args
-    emitMangle(c: inout c, ref: instRef)
-    write(s: " ")
-    emitMangle(c: inout c, ref: instRef)
-    write(s: "_copy(")
-    emitMangle(c: inout c, ref: instRef)
-    write(s: " s) { ")
-    emitMangle(c: inout c, ref: instRef)
-    write(s: " r = s;")
-    val fields: Array[FieldDef] = s.fields
-    mut val i: U64 = 0
-    while i < fields.count {
-        val f: FieldDef = fields[i]
-        val ti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: s.typeParams, tyRef: f.ty)
-        if ti.kind == 3 {
-            write(s: " r.")
-            writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-            write(s: " = ")
-            wPA(c: inout c, elemStart: ti.nameStart, elemLen: ti.nameLen)
-            write(s: "_copy(s.")
-            writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-            write(s: ");")
-        }
-        i += 1
-    }
-    write(s: " return r; }\n")
-    c.curTypeParams = savedP
-    c.curTypeArgs = savedA
 }
 
 // Does a mono generic enum instantiation need a deep copy? True if any variant
@@ -1101,71 +979,6 @@ fn monoEnumNeedsCopy(c: inout Comp, instRef: U64) -> Bool {
     return false
 }
 
-// `Mangle Mangle_copy(Mangle s);` prototype for a mono enum instantiation.
-fn emitMonoEnumCopyProto(c: inout Comp, instRef: U64) {
-    emitMonoStructCopyProto(c: inout c, instRef: instRef)
-}
-
-// Deep-copy a mono enum instantiation: for each variant holding an array
-// (after substitution), copy that variant's array fields under its tag.
-fn emitMonoEnumCopyDef(c: inout Comp, instRef: U64) {
-    val t: TypeRef = c.types[instRef]
-    val ei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
-    if ei >= c.enums.count {
-        return
-    }
-    val e: EnumDef = c.enums[ei]
-    emitMangle(c: inout c, ref: instRef)
-    write(s: " ")
-    emitMangle(c: inout c, ref: instRef)
-    write(s: "_copy(")
-    emitMangle(c: inout c, ref: instRef)
-    write(s: " s) { ")
-    emitMangle(c: inout c, ref: instRef)
-    write(s: " r = s;")
-    val vars: Array[Variant] = e.variants
-    mut val vi: U64 = 0
-    while vi < vars.count {
-        val v: Variant = vars[vi]
-        val fs: Array[FieldDef] = v.fields
-        mut val anyArray: Bool = false
-        mut val ck: U64 = 0
-        while ck < fs.count {
-            val cti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: e.typeParams, tyRef: fs[ck].ty)
-            if cti.kind == 3 {
-                anyArray = true
-            }
-            ck += 1
-        }
-        if anyArray {
-            write(s: " if (r.tag == ")
-            writeU64(n: vi)
-            write(s: ") {")
-            mut val fi: U64 = 0
-            while fi < fs.count {
-                val f: FieldDef = fs[fi]
-                val ti: TypeInfo = substTypeInfo(c: inout c, instRef: instRef, params: e.typeParams, tyRef: f.ty)
-                if ti.kind == 3 {
-                    write(s: " r.data.")
-                    writeSpan(c: inout c, start: v.nameStart, len: v.nameLen)
-                    write(s: ".")
-                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                    write(s: " = ")
-                    wPA(c: inout c, elemStart: ti.nameStart, elemLen: ti.nameLen)
-                    write(s: "_copy(s.data.")
-                    writeSpan(c: inout c, start: v.nameStart, len: v.nameLen)
-                    write(s: ".")
-                    writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                    write(s: ");")
-                }
-                fi += 1
-            }
-            write(s: " }")
-        }
-        vi += 1
-    }
-    write(s: " return r; }\n")
-}
 
 // Emit a struct *value* for a mutable binding/store: deep-copy when the source
 // is a place and the struct needs copying (value semantics), else emit directly.

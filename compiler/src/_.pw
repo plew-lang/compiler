@@ -397,17 +397,31 @@ fn main() {
         }
         epp += 1
     }
-    // mono enum share/release prototypes — emitted here (before struct defs) so a
-    // struct's `_release` may call a boxed generic-enum field's `<Mangle>_release`.
+    // ALL mono struct/enum copy/share/release prototypes — emitted here (before
+    // struct/enum defs) so a `_release`/`_copy` may forward-reference any mono
+    // instance's `<Mangle>_release` etc. (e.g. a struct's release calling a boxed
+    // generic-enum field's release).
     mut val mep: U64 = 0
     while mep < c.genInsts.count {
-        if isGenericEnumInst(c: inout c, ref: c.genInsts[mep]) {
-            if monoEnumNeedsCopy(c: inout c, instRef: c.genInsts[mep]) {
-                emitMonoEnumModeProto(c: inout c, instRef: c.genInsts[mep], mode: 1)
+        val mei: U64 = c.genInsts[mep]
+        val meEnum: Bool = isGenericEnumInst(c: inout c, ref: mei)
+        mut val meCopy: Bool = false
+        mut val meRel: Bool = false
+        if meEnum {
+            meCopy = monoEnumNeedsCopy(c: inout c, instRef: mei)
+            meRel = monoEnumNeedsRelease(c: inout c, instRef: mei)
+        } else {
+            if isGenericInst(c: inout c, ref: mei) {
+                meCopy = monoStructNeedsCopy(c: inout c, instRef: mei)
+                meRel = monoStructNeedsRelease(c: inout c, instRef: mei)
             }
-            if monoEnumNeedsRelease(c: inout c, instRef: c.genInsts[mep]) {
-                emitMonoEnumModeProto(c: inout c, instRef: c.genInsts[mep], mode: 2)
-            }
+        }
+        if meCopy {
+            emitMonoModeProto(c: inout c, instRef: mei, mode: 0)
+            emitMonoModeProto(c: inout c, instRef: mei, mode: 1)
+        }
+        if meRel {
+            emitMonoModeProto(c: inout c, instRef: mei, mode: 2)
         }
         mep += 1
     }
@@ -432,12 +446,12 @@ fn main() {
             if cs2.isUnique {
             } else {
                 if structNeedsCopy(c: inout c, start: cs2.nameStart, len: cs2.nameLen) {
-                    emitStructCopyDef(c: inout c, si: scd)
-                    emitStructShareDef(c: inout c, si: scd)
+                    emitStructModeDef(c: inout c, si: scd, mode: 0)
+                    emitStructModeDef(c: inout c, si: scd, mode: 1)
                 }
             }
             if structNeedsRelease(c: inout c, start: cs2.nameStart, len: cs2.nameLen) {
-                emitStructReleaseDef(c: inout c, si: scd)
+                emitStructModeDef(c: inout c, si: scd, mode: 2)
             }
         }
         scd += 1
@@ -458,35 +472,28 @@ fn main() {
         }
         ecd += 1
     }
-    // deep-copy fns for monomorphized generic struct instantiations holding
-    // arrays (e.g. `Box[Array[I32]]`): prototypes then definitions.
-    mut val mcp: U64 = 0
-    while mcp < c.genInsts.count {
-        if isGenericEnumInst(c: inout c, ref: c.genInsts[mcp]) {
-            if monoEnumNeedsCopy(c: inout c, instRef: c.genInsts[mcp]) {
-                emitMonoEnumCopyProto(c: inout c, instRef: c.genInsts[mcp])
-            }
-        } else {
-            if monoStructNeedsCopy(c: inout c, instRef: c.genInsts[mcp]) {
-                emitMonoStructCopyProto(c: inout c, instRef: c.genInsts[mcp])
-            }
-        }
-        mcp += 1
-    }
+    // mono struct/enum copy/share/release definitions (unified; protos above).
     mut val mcd: U64 = 0
     while mcd < c.genInsts.count {
-        if isGenericEnumInst(c: inout c, ref: c.genInsts[mcd]) {
-            if monoEnumNeedsCopy(c: inout c, instRef: c.genInsts[mcd]) {
-                emitMonoEnumCopyDef(c: inout c, instRef: c.genInsts[mcd])
-                emitMonoEnumModeDef(c: inout c, instRef: c.genInsts[mcd], mode: 1)
-            }
-            if monoEnumNeedsRelease(c: inout c, instRef: c.genInsts[mcd]) {
-                emitMonoEnumModeDef(c: inout c, instRef: c.genInsts[mcd], mode: 2)
-            }
+        val mdi: U64 = c.genInsts[mcd]
+        val mdEnum: Bool = isGenericEnumInst(c: inout c, ref: mdi)
+        mut val mdCopy: Bool = false
+        mut val mdRel: Bool = false
+        if mdEnum {
+            mdCopy = monoEnumNeedsCopy(c: inout c, instRef: mdi)
+            mdRel = monoEnumNeedsRelease(c: inout c, instRef: mdi)
         } else {
-            if monoStructNeedsCopy(c: inout c, instRef: c.genInsts[mcd]) {
-                emitMonoStructCopyDef(c: inout c, instRef: c.genInsts[mcd])
+            if isGenericInst(c: inout c, ref: mdi) {
+                mdCopy = monoStructNeedsCopy(c: inout c, instRef: mdi)
+                mdRel = monoStructNeedsRelease(c: inout c, instRef: mdi)
             }
+        }
+        if mdCopy {
+            emitMonoModeDef(c: inout c, instRef: mdi, isEnum: mdEnum, mode: 0)
+            emitMonoModeDef(c: inout c, instRef: mdi, isEnum: mdEnum, mode: 1)
+        }
+        if mdRel {
+            emitMonoModeDef(c: inout c, instRef: mdi, isEnum: mdEnum, mode: 2)
         }
         mcd += 1
     }

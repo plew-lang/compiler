@@ -574,10 +574,16 @@ fn emitScopeDrops(c: inout Comp, mark: U64, exclIdx: U64) {
                     // an owned Ref local: release its refcounted box.
                     emitRefRelease(c: inout c, nameStart: lo.nameStart, nameLen: lo.nameLen, refTy: lo.ty, cnum: lo.cnum)
                 } else {
-                if isGenericEnumInst(c: inout c, ref: lo.ty) {
-                    // an owned mono-enum local (e.g. `Optional[Node]`): release its
-                    // payload's owned heap (recursive boxes) if any.
-                    if monoEnumNeedsRelease(c: inout c, instRef: lo.ty) {
+                if isGenericInst(c: inout c, ref: lo.ty) {
+                    // an owned mono struct/enum local (e.g. `Optional[Node]`,
+                    // `Box[Array[I32]]`): release its owned heap if any.
+                    mut val miNeeds: Bool = false
+                    if isGenericEnumInst(c: inout c, ref: lo.ty) {
+                        miNeeds = monoEnumNeedsRelease(c: inout c, instRef: lo.ty)
+                    } else {
+                        miNeeds = monoStructNeedsRelease(c: inout c, instRef: lo.ty)
+                    }
+                    if miNeeds {
                         write(s: "    ")
                         emitMangle(c: inout c, ref: lo.ty)
                         write(s: "_release(")
