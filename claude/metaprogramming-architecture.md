@@ -41,8 +41,9 @@ spec/16 は **入力＝TokenStream（span 付き）＋ヘルパで TokenStream�
 
 ## 実装の段取り（パッケージ管理より前に動かす）
 
-- **M0＝配管を端から端まで（自明マクロ）**。`plew gen` モード（plewc の一機能）：`@[Name(args)]` 付き項を走査 → 各々で**ハーネス `.pw` を合成**（`<Name args/>.deriveFromSource(...)` を `print` する `main`＋マクロモジュールと `@Std/Syntax` の import）→ **コンパイル&別プロセス実行**（既存 .pw→C→bin を再利用）→ stdout を `<Foo>.gen.pw` へ。ローダ側は `<Foo>.pw` に `@[...]` を見たら `<Foo>.gen.pw` を自動 part（gen 中はその auto-part を抑制＝これから作るので）。自明マクロ（固定文字列を返す）で貫通＝**ここが工数の本体**（AST 中身は空でいい）。
-  - source の渡し方（stdin/原本ファイル/リテラル）は**実装時に最も楽な形**で決める（spec 非依存）。入力エラーの span が原本座標になるよう `(source, start, end)` を `parseItem` に渡す。
+- **M0＝配管を端から端まで（自明マクロ）＝✅実装済**（tag `metaprogramming-m0`）。実装は当初案（plewc が別ハーネス `.pw` を合成→再 import）より一段クリーンに倒した：**`plewc --gen <file>` は通常コンパイルの変種**。対象ファイルの全モジュール木（part/import 込み）を普通にロード・パースし（マクロ struct と instantiate 済み `deriveFromSource` がそのまま scope に入る）、**ユーザー自身の `main` を抑制し、代わりに各 `@[Name]` について `write(s: <Name/>.deriveFromSource(...))` する harness `main` を合成**して C を出す。シェルランナー `plew-gen.sh` が `plewc --gen <file> | clang | run > <Foo>.gen.pw`（bootstrap/test と同じ orchestration・**新 intrinsic 不要**）。別ハーネスファイルの import 解決が要らず、同一モジュール derive も import 越し derive もローダが木を綴じるので一様に動く。実装の要点・罠は [worklog.md](worklog.md) 末尾「再利用資産・罠」の gen 項。
+  - source の渡し方：M0 は `source: ""` 固定（自明マクロは入力を読まない・`parseItem` は stub）。実ソース slice（原本座標 `start..end`）を渡すのは M1（decl span 捕捉とセット）。
+  - `@Std/Io` を gen モードで強制ロード（harness の `write` 用）。auto-part 抑制・user `main` skip は gen モードフラグ（`Comp.genMode`）で分岐。
 - **M1＝`@Std/Syntax` の宣言 AST＋parser**。`DeclAst`（struct/enum＝`name`/`fields(name,type)`/`variants`・関数シグネチャ・型式 `TypeExpr`＝再帰値型）と `parseItem`（lex+parse・span は原本座標）と `Derive` トレイト（要求 `derive`＋提供 `deriveFromSource`）を `@Std/Syntax` に置く。**再帰値型・型付き AST seam（Phase B）が前提として既に整っている**。移行期は arena→`DeclAst` 変換でもよいが、最終形は `@Std/Syntax` 自前の lex+parse。
   - **authoring 層（ハイライト対応テンプレート/quote）は future・additive**。コアは String 出力のまま。
 - **M2＝コアライブラリのマクロを dogfood**：`Eq`/`Hash` をこの機構で書く。現行のコンパイラ特権合成（`synthStructEq` 等）から段階移行（特権版を残したまま並行→検証→差し替え）。`Hash` が出れば `Dictionary`（`[k:v]`）に接続。

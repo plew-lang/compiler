@@ -16,7 +16,7 @@
 
 コンパイラは **手書き lexer + 再帰下降パーサ**で構文解析し、**C へトランスパイル → clang** でネイティブを出力する（旧 C#/.NET ＋ ANTLR4 ＋ LLVMSharp は技術選定ごと破棄）。ブートストラップは使い捨ての **stage0（Rust 製）**で始めたが、self-host 達成後に**退役・削除**し、いまは **C 種からの自己ブートストラップ**（Rust 不要）。**第一目標＝「Plew でコンパイラが書ける状態」→ 即セルフホスティング＝✅達成済**。LLVM/WASM は self-host 後に Plew 側で追加（意味論が揃ってから並行バックエンドとして・C は捨てない）。性能より拠り所（意味は唱えた通り・難しい魔法は隠す）を優先。経緯は [claude/architecture.md](claude/architecture.md)。
 
-> **現状＝🎉 セルフホスト達成・stage0 退役済み。** 正典のコンパイラは **Plew 製の `compiler/src/_.pw`**＝自分自身をコンパイルして不動点に達する。ブートストラップは **C 種 `compiler/plewc.seed.c`**（plewc.pw の C 訳・チェックイン）から＝`./bootstrap.sh` で clang→plewc0→plewc.pw 自己コンパイル→不動点検証（Rust/cargo 不要）。Rust stage0 は削除済（`git checkout stage0-final -- bootstrap` で復旧可）。**今後の言語機能はすべて `plewc.pw` に Plew で additive に足す**。**受理の健全性**（このコンパイラが受理するコードは spec でも valid＝import なしの `print` を拒否する等・hidden meaning を潰す）は概ね達成。**イベントループ（async/await）段階 1-3＝実装済**（方式 B＝stackless ステートマシン・native-C）。`print`/Format・String/Array メソッドも **純 Plew 化済**（コアライブラリ境界の確立＝`extern "plew-intrinsic"`＋生メモリ床 `RawBuffer`＋ambient プレリュード）。**`Array` も `RawBuffer` 床の上の Plew struct 化＝済**（`struct Array[T] { data: RawBuffer[T]; pub(get) mut val count: U64 }`＝C typedef は StructDef 由来・Swift モデル・経緯は [claude/array-struct-plan.md](claude/array-struct-plan.md)）。**可視性も spec 通り完全強制＝済**（`export`/`import with`/`pub impl`/`pub`/`pub(get)`・モジュール＋メンバの直交 2 軸・tag `visibility-enforced`）。**Iterator/Iterable＋lazy map/filter・再帰値型 auto-boxing＋ARC・コンパイラ renovate（Phase A＝ARC 1 本化/Op enum/expect、Phase B＝型付き AST キャッシュ）＝済**。**現在の大物＝メタプログラミング基盤**（入力＝AST 確定・実装は M0 配管から＝詳細は worklog/spec16）。残る剥離・暫定は [claude/provisional.md](claude/provisional.md)。テストは Rust 非依存の `./test.sh`。現在地・次の一歩は [claude/worklog.md](claude/worklog.md)。
+> **現状＝🎉 セルフホスト達成・stage0 退役済み。** 正典のコンパイラは **Plew 製の `compiler/src/_.pw`**＝自分自身をコンパイルして不動点に達する。ブートストラップは **C 種 `compiler/plewc.seed.c`**（plewc.pw の C 訳・チェックイン）から＝`./bootstrap.sh` で clang→plewc0→plewc.pw 自己コンパイル→不動点検証（Rust/cargo 不要）。Rust stage0 は削除済（`git checkout stage0-final -- bootstrap` で復旧可）。**今後の言語機能はすべて `plewc.pw` に Plew で additive に足す**。**受理の健全性**（このコンパイラが受理するコードは spec でも valid＝import なしの `print` を拒否する等・hidden meaning を潰す）は概ね達成。**イベントループ（async/await）段階 1-3＝実装済**（方式 B＝stackless ステートマシン・native-C）。`print`/Format・String/Array メソッドも **純 Plew 化済**（コアライブラリ境界の確立＝`extern "plew-intrinsic"`＋生メモリ床 `RawBuffer`＋ambient プレリュード）。**`Array` も `RawBuffer` 床の上の Plew struct 化＝済**（`struct Array[T] { data: RawBuffer[T]; pub(get) mut val count: U64 }`＝C typedef は StructDef 由来・Swift モデル・経緯は [claude/array-struct-plan.md](claude/array-struct-plan.md)）。**可視性も spec 通り完全強制＝済**（`export`/`import with`/`pub impl`/`pub`/`pub(get)`・モジュール＋メンバの直交 2 軸・tag `visibility-enforced`）。**Iterator/Iterable＋lazy map/filter・再帰値型 auto-boxing＋ARC・コンパイラ renovate（Phase A＝ARC 1 本化/Op enum/expect、Phase B＝型付き AST キャッシュ）＝済**。**現在の大物＝メタプログラミング基盤**（入力＝AST 確定・**M0 配管＝実装済**〔`plewc --gen` モード＋最小 `@Std/Syntax`＋ローダ auto-part＋`plew-gen.sh`・自明マクロで端から端まで貫通・tag `metaprogramming-m0`〕・次は M1＝`@Std/Syntax` の `DeclAst`＋`parseItem`＝詳細は worklog/spec16）。残る剥離・暫定は [claude/provisional.md](claude/provisional.md)。テストは Rust 非依存の `./test.sh`。現在地・次の一歩は [claude/worklog.md](claude/worklog.md)。
 
 ## ドキュメント
 
@@ -43,10 +43,12 @@
 
 ```
 bootstrap.sh          C 種からコンパイラをビルド＋不動点検証（Rust 不要・clang のみ）
-test.sh               言語テストスイート（.pw ゴールデン＋reject＋不動点・Rust 非依存）
+test.sh               言語テストスイート（.pw ゴールデン＋reject＋gen＋不動点・Rust 非依存）
+plew-gen.sh           メタプロ生成（`plewc --gen <file> | clang | run > <file>.gen.pw`・spec/16）
 tests/
   run/<name>.pw,.out  コンパイル&実行→stdout 照合（任意の .in を stdin に）
   reject/<name>.pw    spec-invalid＝コンパイル失敗すべきケース（受理の健全性）
+  gen/<name>/App.pw   メタプロ（マクロ＋`@[...]`）→ gen→auto-part→実行→App.out 照合
 compiler/             ★ 正典のコンパイラ＝Plew パッケージ（今後の機能はここに Plew で）
   src/                ★ root `_.pw` が `part` で全パートを綴じ込む 1 モジュール（part はサブディレクトリ可）
     _.pw              root モジュール＝import＋part マニフェスト＋driver（`fn main`）
@@ -54,8 +56,8 @@ compiler/             ★ 正典のコンパイラ＝Plew パッケージ（今�
     Lexer.pw          ソースバイト→トークン列（Kind/Tok/Lexer・lex・kindCode）
     Ast.pw            arena ノード型（Expr/Stmt 等）＋Comp 状態＋カーソルヘルパ
     Parser/           再帰下降パーサ（トークン→arena AST）＝Expr/Stmt/Decl の 3 part
-    Codegen/          arena AST→C＋軽量型復元＋受理健全性チェック＝Emit/Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array/Async の 10 part
-  std/                言語標準ライブラリ＝Core/Io/Process/Async＋Prelude（全プログラム自動ロード＝ambient な Array メソッド等）
+    Codegen/          arena AST→C＋軽量型復元＋受理健全性チェック＝Emit/Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array/Async/Gen の 11 part（Gen＝`plewc --gen` の harness 合成）
+  std/                言語標準ライブラリ＝Core/Io/Process/Async/Syntax＋Prelude（全プログラム自動ロード＝ambient な Array メソッド等／Syntax＝メタプロ `@Std/Syntax`）
   plewc.seed.c        ブートストラップ種＝コンパイラ全体の C 訳（チェックイン・clang だけで起動）
   (plewc / plewc.c    ビルド生成物・gitignore)
 examples/             実証用 Plew プログラム（hello.pw＋self-host 途上の小コンパイラ群）
@@ -84,7 +86,7 @@ clang は生成 C のコンパイルに使う（Apple clang で可）。**今後
 
 1. **正典は `SPEC.md`／`spec/*.md`**。`grammer/Plew.g4`（ANTLR 文法）は実装着手時に破棄済み＝**構文解析は手書き再帰下降パーサ**。パーサが支えるべき構文の一覧は [claude/grammar.md](claude/grammar.md)（構文リファレンス）。`note/` は記法が変遷した一次資料で、矛盾したら仕様優先。
 2. **全制約の根 = 値意味論 + CoW + ARC + opt-in 所有権**。代入・受け渡しは独立コピー（CoW で遅延）、共有可変は `Ref` のみ、メモリは ARC（循環は `WeakRef`）。`val` の不変性が信頼でき・エイリアスバグが無く・`deinit` で資源を決定的に解放できる。並行性は「借用は async/spawn 境界を越えず・spawn は move/copy のみ・`Ref` は spawn 不可」で **実質 race-free・`Mutex` 不要**（→ 下の「値・所有権」「並行性」項・spec/03,14）。
-3. **メタプログラミングは骨格確定・基盤実装フェーズへ**（閉じた→ユーザー定義可能）。確定＝マクロ＝`Derive` 実装 struct・**入力 `AST`（注釈対象項の構文木・span は原本座標で入力エラー用）／出力 `String`（生成ソース・出力エラーは `.gen.pw`）**（当初の TokenStream 入力から AST へ確定＝共有 AST パッケージで安定境界の必要が消え・derive 専用の Plew には AST で十分・生トークンは将来 escape hatch）・`Derive` は**要求 `derive(input: AST)`＋提供 `deriveFromSource(source,span)`**（構文ライブラリが String→AST 変換＋委譲＝中間層不要）・ディレクティブ引数＝マクロ struct のフィールド（`@[Name(a: 32)]`＝`Name{a:32}.derive(...)`）・**別コマンド `plew gen` がハーネス合成→compile→run→`<Foo>.gen.pw` 生成**（ランナーは String↔String の版非依存な機械・AST 型に触れない／コミット・原本不変・add-only）・取り込みは **`@[...]` の存在でローダが自動 part**（同一パッケージ derive 可・gen 中は auto-part 抑制）・**構文ライブラリ＝当面 `@Std/Syntax`（in-tree）・最終形は外部共有パッケージ**（コンパイラもマクロも同一版に依存＝Rust の 2 パーサ/AST 版違い問題回避）・組み込み `Eq`/`Ord`/`Hash` は当面コンパイラ特権で将来 dogfood。正典は [spec/04-execution/16-metaprogramming.md](spec/04-execution/16-metaprogramming.md)、実装段取り・実行系は [claude/metaprogramming-architecture.md](claude/metaprogramming-architecture.md)。**実装順＝M0 配管（`plew gen` 骨格＋ハーネス＋`.gen.pw`＋自動 part・自明マクロで貫通）→ M1 `@Std/Syntax`（`DeclAst`＋parser＋`Derive`）→ M2 dogfood（Eq/Hash → Dictionary）→ M3 パッケージ管理後に外部切り出し**。
+3. **メタプログラミングは骨格確定・基盤実装フェーズへ**（閉じた→ユーザー定義可能）。確定＝マクロ＝`Derive` 実装 struct・**入力 `AST`（注釈対象項の構文木・span は原本座標で入力エラー用）／出力 `String`（生成ソース・出力エラーは `.gen.pw`）**（当初の TokenStream 入力から AST へ確定＝共有 AST パッケージで安定境界の必要が消え・derive 専用の Plew には AST で十分・生トークンは将来 escape hatch）・`Derive` は**要求 `derive(input: AST)`＋提供 `deriveFromSource(source,span)`**（構文ライブラリが String→AST 変換＋委譲＝中間層不要）・ディレクティブ引数＝マクロ struct のフィールド（`@[Name(a: 32)]`＝`Name{a:32}.derive(...)`）・**別コマンド `plew gen` がハーネス合成→compile→run→`<Foo>.gen.pw` 生成**（ランナーは String↔String の版非依存な機械・AST 型に触れない／コミット・原本不変・add-only）・取り込みは **`@[...]` の存在でローダが自動 part**（同一パッケージ derive 可・gen 中は auto-part 抑制）・**構文ライブラリ＝当面 `@Std/Syntax`（in-tree）・最終形は外部共有パッケージ**（コンパイラもマクロも同一版に依存＝Rust の 2 パーサ/AST 版違い問題回避）・組み込み `Eq`/`Ord`/`Hash` は当面コンパイラ特権で将来 dogfood。正典は [spec/04-execution/16-metaprogramming.md](spec/04-execution/16-metaprogramming.md)、実装段取り・実行系は [claude/metaprogramming-architecture.md](claude/metaprogramming-architecture.md)。**実装順＝M0 配管（`plew gen` 骨格＋ハーネス＋`.gen.pw`＋自動 part・自明マクロで貫通）＝✅済（tag `metaprogramming-m0`）→ M1 `@Std/Syntax`（`DeclAst`＋parser＋`Derive`・実ソース slice 渡し）→ M2 dogfood（Eq/Hash → Dictionary）→ M3 パッケージ管理後に外部切り出し**。
 4. **実装前に [claude/design-decisions.md](claude/design-decisions.md) の未決事項を確認**。言語設計の大物（型・トレイト・並行性・拡張・モジュール・制御フロー・演算子・文字列/配列/レンジ）はほぼ決着し、残る未決は**実装／コアライブラリ寄り**が中心：チャネル API・ARC/refcount 方式（循環回収は Ref グラフ限定サイクルコレクタを additive に足す方向で確定＝検出時は全ビルド loud 報告＋メモリ回収＋循環メンバ deinit 不走〔panic と対称・deinit 有無で分けない〕・残るはスキャン頻度/refcount 表現の細目）・メタプログラミング詳細・FFI 型マッピング・イテレータ/`Step` プロトコル・`Hash`/`Hasher` プロトコル（方向は Rust 流確定・シグネチャ未策定）・文字列ビルダ/正規化・`Slice`/部分文字列・固定長配列 `[E; N]`・ambient 型の正確な一覧・数値トレイトタワーのメンバ/署名（分解原理＝原子＋分類 supertrait 束は決定・`assert`＝常時 ON・ラップ＝`wrapping*` メソッドのみ・`pow`＝`Pow[Exp]` で決定／残りは core-lib）・テスト機構（言語表面＝`test` ブロック・配置・無条件発見・リンク除外・`expect*` 族・power-assert 不採用は決定／残りは失敗チャネル・`Debug`/`is*`・`assert` 置き場・async/doc テスト＝実装/ランナー/core-lib）・import 体系（3 ルート `@…`/`/`/`./`・`/`＝ルート起点絶対・`@Std` 予約＋分割・任意深さサブパス・`public`/path=file は決定／std 領域一覧は core-lib）など。
 
 他言語の直感と違うので、設計/実装の前に該当 spec を必ず読むこと（ここは地図）：
@@ -113,7 +115,7 @@ clang は生成 C のコンパイルに使う（Apple clang で可）。**今後
 
 これまでのセッションで分かった進め方。
 
-- **現フェーズ＝セルフホスト達成後の機能追加＋コンパイラ renovate**（仕様策定はほぼ完了・stage0〔Rust〕退役済み・async 1-3／コアライブラリ Plew 化／Array struct 化／可視性強制／Iterator＋lazy／再帰値型＋ARC／renovate Phase A・B は済・現在の大物＝メタプログラミング基盤〔入力＝AST 確定・M0 配管から〕）。現在地・次の一歩は [claude/worklog.md](claude/worklog.md)。理想は**人手を介さず自走で**進めること。
+- **現フェーズ＝セルフホスト達成後の機能追加＋コンパイラ renovate**（仕様策定はほぼ完了・stage0〔Rust〕退役済み・async 1-3／コアライブラリ Plew 化／Array struct 化／可視性強制／Iterator＋lazy／再帰値型＋ARC／renovate Phase A・B は済・現在の大物＝メタプログラミング基盤〔入力＝AST 確定・M0 配管済・次は M1〕）。現在地・次の一歩は [claude/worklog.md](claude/worklog.md)。理想は**人手を介さず自走で**進めること。
 - **判断を仰ぐときは「選択肢＋トレードオフ＋推奨（理由）」を簡潔に**。ユーザーは納得すれば即決する。決定の含意を最後まで追い、他所に生じる矛盾・抜け（呼び出し側の整合、既存規則との衝突）を**先回りで指摘**する。
 - **実装の順序・段取りは全面委任**（どの機能から作るか・増分の切り方・何を先に作るかは一切確認不要で自走してよい）。一方で**言語表面の設計判断や後戻りが重い分岐**（spec に未記載の構文・意味論の決定など）は引き続き確認する＝「順序」は仰がない／「言語仕様の決定」は仰ぐ。**明白に不要なファイルは容赦なく消してよい**。迷ったら突き進まず仰ぐ。
 - **リファクタは随時・委任**：保守性が落ちないよう、機能追加のついでに古い実装を整理してよい（言語機能が増える前に書かれた回りくどい箇所が多い＝後付け機能で素直に書き直せる）。観測挙動（生成 C・テスト・不動点）を変えない純リファクタは確認不要で進める。意味論を変える整理だけ仰ぐ。

@@ -8,15 +8,19 @@
 
 完了した大物（詳細は git・記述的タグ）：async/await 段階 1-3（stackless SM）・コアライブラリ境界（`@Std` の `extern "plew-intrinsic"`）・**Array＝`RawBuffer` 床の Plew struct**（[array-struct-plan.md](array-struct-plan.md)）・可視性完全強制・**Iterator/Iterable＋lazy map/filter**・**再帰値型 auto-boxing＋ARC**・**コンパイラ renovate Phase A**（ARC 1 本化・Op enum・expect）・**Phase B B0-B2**（型付き AST キャッシュ）・**D quick-wins**（Loader 掃除・expect 仕上げ）。renovate vs rewrite の判断・負債の地図は [architecture.md](architecture.md)「負債監査の結論」、言語設計の根拠は [design-decisions.md](design-decisions.md)、再利用機構は本書末尾「再利用資産・罠」。
 
-## 次の一歩＝メタプログラミング（M0 から）
+## 次の一歩＝メタプログラミング M1（M0 は済）
 
 **入力モデル確定＝AST 入力**（当初の TokenStream から変更）。正典＝[spec/04-execution/16-metaprogramming.md](../spec/04-execution/16-metaprogramming.md)、実行系の段取り＝[metaprogramming-architecture.md](metaprogramming-architecture.md)。要点：
 
 - **`Derive` トレイト＝要求 `derive(input: AST) -> String`（ユーザー）＋提供 `deriveFromSource(source, span)`**（構文ライブラリが String→AST 変換＋委譲＝中間 dispatcher 層は不要）。
-- **ランナー（`plew gen`）＝String↔String の版非依存な機械**：`@[Name(args)]` ごとにハーネス（`<Name args/>.deriveFromSource(...)` を `print` する `main`）を合成→compile→別プロセス run→stdout を `<Foo>.gen.pw` へ。**版固定はハーネスがリンクする固定 `@Std/Syntax` で自然成立**（ランナーは AST 型に触れない）。
+- **ランナー（`plew gen`）＝String↔String の版非依存な機械**：`@[Name(args)]` ごとにハーネス（`<Name args/>.deriveFromSource(...)` を `write` する `main`）を合成→compile→別プロセス run→stdout を `<Foo>.gen.pw` へ。**版固定はハーネスがリンクする固定 `@Std/Syntax` で自然成立**（ランナーは AST 型に触れない）。
 - **構文ライブラリ＝当面 `@Std/Syntax`（in-tree）・最終形は外部共有パッケージ**（コンパイラもマクロも同一版に依存＝Rust の 2 パーサ/AST 版違い問題を回避）。生トークンは将来 escape hatch（関数形/DSL マクロを入れる時のみ）。
 - 出力モデル：`<Foo>.gen.pw` コミット・原本不変・add-only、`@[...]` でローダ自動 part（gen 中は抑制）。
-- **段取り**：**M0** 配管（`plew gen` 骨格＋ハーネス＋`.gen.pw`＋自動 part・自明マクロ〔固定文字列〕で端から端まで貫通＝ここが工数の本体）→ **M1** `@Std/Syntax`（`DeclAst`〔struct/enum・関数シグネチャ・型式〕＋`parseItem`＋`Derive`）→ **M2** dogfood（特権 Eq/Ord をマクロ化→`@[Hash]`→`Dictionary`）→ **M3** パッケージ管理後に外部切り出し。
+
+**M0＝済**（tag `metaprogramming-m0`）。`plewc --gen <file>` モード＋`@Std/Syntax`（最小）＋ローダ auto-part＋`plew-gen.sh`＋`tests/gen/`。自明マクロ（固定文字列を返す）が `@[Greet]`→harness→`Greet.deriveFromSource`→`App.gen.pw`→通常ビルドで auto-part→生成関数実行、まで端から端まで貫通。実装メモは末尾「再利用資産・罠」の gen 項。
+
+- **M1**（次）＝`@Std/Syntax` の宣言 AST＋parser：`DeclAst`（struct/enum＝`name`/`fields(name,type)`/`variants`・関数シグネチャ・型式 `TypeExpr`〔再帰値型〕・span は**原本座標**）と `parseItem`（lex+parse・現状の stub を実装に）。M0 は `source: ""` 固定なので、**ハーネスに対象項の実ソース slice を渡す**（decl span 捕捉＝directive `@` 〜閉じ `}`）のも M1 で。
+- **M2**＝dogfood（特権 Eq/Ord をマクロ化→`@[Hash]`→`Dictionary`）→ **M3** パッケージ管理後に外部切り出し。
 
 ## 並行・後続（renovate の残り・ロードマップ）
 
@@ -33,11 +37,13 @@
 - **値意味論 ARC の在処**：concrete＝`emitFieldAction`（struct/enum 共有・unique-deinit 込み）、mono＝`emitMonoFieldAction`/`emitMonoModeDef`。**heap フィールド種を足すのはこの 2 dispatcher**。need 判定は `fieldNeedsCopy/Release`・`typeInfoNeedsCopy/Release`。
 - **Iterator/generic 機構**：method-level 型パラメータ（`FnInst.recvInstRef`・`registerMethodInst`・mangle suffix は method-own tail のみ）・**demand-driven 単相化**（`providedRetReachable`＝`FilterIter[FilterIter…]` の無限型族を到達時のみ発行）・Self/Item 解決（`curSelfRef`/`curItemRef`＋`resolveTy`）・構造的型推論（`unifyTypeParam`）・impl レベル `where`（funcBounds へ畳む）。**罠**：型パラメータ名 vs 具体型名のグローバル衝突（ユーザー struct `B` と `MapIter[…,B]` の `B`）→ `isTypeParamName` は宣言済 struct/enum 名を具体型扱い。
 - **演算子 opcode**：`op` フィールドは `kindCode(Kind)` の整数。`Ops.pw` の `opAdd()..opCoalesce()`（`kindCode(<Kind.X/>)`）が**単一の symbolic 源**（magic 数を codegen に漏らさない）。
+- **gen モード（`plew gen`・M0）**：`plewc --gen <file>`＝通常コンパイルの変種。`Comp.genMode`/`genMainIdx`、合成は `Codegen/Gen.pw`（`synthGenMain`＝`@[Name]` ごとに `write(s: <Name/>.deriveFromSource(source:"",start:0,end:0))` を arena AST で組む・`isBuiltinDerive` で Eq/Ord 除外）。driver（`_.pw`）で **①argv `--gen` 検出→entry を argv[2] へ ②`@Std/Io` 強制ロード（harness の `write` 用）③ローダ auto-part 抑制 ④checks 後に `synthGenMain`（import hygiene を回避）⑤body emission で user `main` を skip**。ローダ＝`hasDirective`（`@`+`[` 隣接トークン）で `@[...]` を検出し `<Foo>.gen.pw`（存在時のみ）を同一モジュール part に enqueue。**罠**：`Expr.Str` は span が引用符込み前提（codegen が `start+1`/`len-2`）＝0 長 span は U64 アンダーフロー panic→合成側で実 `""`（2 バイト）を intern して指す。gen 中は user 自身の `main` が生成物を使っても OK（skip されるので未定義参照でも落ちない）＝「同一モジュール derive」が自然成立。auto-part の loud-fail（gen 未実行で `.gen.pw` 欠落）は directive→マクロ分類が要るので M1 以降。
 
 ## ビルド・テスト・機能追加手順
 
 - **ビルド**：`./bootstrap.sh`＝C 種 `compiler/plewc.seed.c`→clang→`plewc0`→`compiler/src/_.pw` を自己コンパイル→不動点 cmp（Rust 不要）。`./bootstrap.sh --reseed` で種更新（→ `compiler/plewc.seed.c` を commit）。
-- **テスト**：`./test.sh`＝`tests/run/*.pw`（`.out` 照合・任意 `.in`）＋`tests/part/`（複数ファイル）＋`tests/reject/*.pw`（plewc 非ゼロ＝受理の健全性）＋`tests/panic/*.pw`（compile+link 成功・実行は非ゼロ＋`.panic` stderr 部分一致）＋不動点。メモリは `ASAN=1 ./test.sh`。**⚠ macOS の ASan は leak 非対応**（`detect_leaks` 不可）＝UAF/二重free は ASan、リークは `MallocStackLogging=1 leaks --atExit -- <bin>` で検証。
+- **メタプロ生成**：`./plew-gen.sh <file.pw> …`＝`plewc --gen <file> | clang | run > <file>.gen.pw`。`@[...]` 付きファイルに対し derive マクロを走らせ生成 part を吐く（コミットする・通常ビルドが auto-part）。
+- **テスト**：`./test.sh`＝`tests/run/*.pw`（`.out` 照合・任意 `.in`）＋`tests/part/`（複数ファイル）＋`tests/reject/*.pw`（plewc 非ゼロ＝受理の健全性）＋`tests/panic/*.pw`（compile+link 成功・実行は非ゼロ＋`.panic` stderr 部分一致）＋`tests/gen/*/`（`App.pw`＝マクロ＋`@[...]`／hermetic に gen→auto-part→実行→`App.out` 照合・`.gen.pw` は毎回 $TMP で再生成）＋不動点。メモリは `ASAN=1 ./test.sh`。**⚠ macOS の ASan は leak 非対応**（`detect_leaks` 不可）＝UAF/二重free は ASan、リークは `MallocStackLogging=1 leaks --atExit -- <bin>` で検証。
 - **機能追加＝ADD→reseed→USE**：新機能を plewc.pw の**ソースで使う**には ①`compiler/src/` の codegen に足す（ADD）→ ②`--reseed` で種更新→ ③ソースで使う（USE）。「ソースが使う機能は常にひとつ前のコンパイラがサポート済み」を守れば不動点は壊れない。**codegen 出力変化・AST フィールド追加・新 preamble 行は reseed 2 回**、**codegen 出力を変えない検査追加は reseed 1 回**。
 - **AST フィールド追加のコツ＝デフォルト値**：`val isPub: Bool = false` とデフォルトを付けると既存の構築点が省略でそのまま通る＝多数の構築点を改修せず済む（`<Comp .../>` リテラルも省略可）。
 - **⚠ 落とし穴＝コンパイラは `@Std/Io`→`@Std/Core` を import** するので、Core/Io/Process/**Prelude**（全プログラム自動ロード）も「コンパイラ自身がコンパイルするソース」。種がまだ受理しない構文/機能を足すと bootstrap が即壊れる＝**機能を先に種へ焼いてから Core/Prelude で使う**（ADD→reseed→USE）。表現スワップ等の大変更は seam（intrinsic 境界）で担保（→ array-struct-plan.md）。
