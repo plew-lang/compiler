@@ -38,6 +38,54 @@ fn emitClosureCall(c: inout Comp, tyRef: U64, nameStart: U64, nameLen: U64, args
     write(s: ")")
 }
 
+// Call a closure stored in a field: `recv.f(args)` where `f` holds a PlewClosure
+// (function type `tyRef`). Unlike emitClosureCall (a named local), the closure is
+// an arbitrary place, so bind it to a temp to evaluate `recv.f` once, then invoke
+// via the uniform ABI (`ret fn(void* env, params...)`, `.env` passed first).
+fn emitClosureFieldCall(c: inout Comp, tyRef: U64, recv: U64, fieldStart: U64, fieldLen: U64, args: Array[Arg]) {
+    val t: TypeRef = c.types[tyRef]
+    val tmp: U64 = c.tmp
+    c.tmp = c.tmp + 1
+    write(s: "({ PlewClosure __cl")
+    writeU64(n: tmp)
+    write(s: " = (")
+    genExpr(c: inout c, id: recv)
+    write(s: ").")
+    writeSpan(c: inout c, start: fieldStart, len: fieldLen)
+    write(s: "; ((")
+    if t.args.count > 0 {
+        emitConcreteCType(c: inout c, ref: t.args[0])
+    } else {
+        write(s: "void")
+    }
+    write(s: " (*)(void*")
+    mut val pi: U64 = 1
+    while pi < t.args.count {
+        write(s: ", ")
+        emitConcreteCType(c: inout c, ref: t.args[pi])
+        pi += 1
+    }
+    write(s: "))(__cl")
+    writeU64(n: tmp)
+    write(s: ".fn))(__cl")
+    writeU64(n: tmp)
+    write(s: ".env")
+    mut val i: U64 = 0
+    while i < args.count {
+        write(s: ", ")
+        val ar: Arg = args[i]
+        if ar.isInout {
+            write(s: "&(")
+            genExpr(c: inout c, id: ar.expr)
+            write(s: ")")
+        } else {
+            genExpr(c: inout c, id: ar.expr)
+        }
+        i += 1
+    }
+    write(s: "); })")
+}
+
 // Emit the initializer for one capture field `__e->name = <here>`. Heap-owning
 // captures are retained (share) so the env keeps the value alive after the
 // enclosing scope releases its binding; immutable so a shared alias is correct.
@@ -781,6 +829,18 @@ fn genExpr(c: inout Comp, id: U64) {
                 // (self by value, or &recv for an `inout fn` receiver).
                 val mi: U64 = findMethod(c: inout c, recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mi == c.funcs.count {
+                    // no method by that name: maybe a field holding a closure value
+                    // (`recv.f(args)` where `f: fn(...) -> ...`). Invoke the closure.
+                    mut val fti: TypeInfo = scalarInfo()
+                    if isGenericInst(c: inout c, ref: bt.ref) {
+                        fti = genericFieldTypeInfo(c: inout c, instRef: bt.ref, fieldStart: nameStart, fieldLen: nameLen)
+                    } else {
+                        fti = fieldType(c: inout c, structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
+                    }
+                    if isFnType(c: inout c, ref: fti.ref) {
+                        emitClosureFieldCall(c: inout c, tyRef: fti.ref, recv: recv, fieldStart: nameStart, fieldLen: nameLen, args: args)
+                        return
+                    }
                     compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "no such method on this type")
                     return
                 }

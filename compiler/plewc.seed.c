@@ -1127,6 +1127,7 @@ void checkImports_c_Comp(Comp* c);
 long long isImportedInto_c_Comp_mod_U64_nameStart_U64_nameLen_U64(Comp* c, uint64_t mod, uint64_t nameStart, uint64_t nameLen);
 void checkUseVisibility_c_Comp(Comp* c);
 void emitClosureCall_c_Comp_tyRef_U64_nameStart_U64_nameLen_U64_args_AArg(Comp* c, uint64_t tyRef, uint64_t nameStart, uint64_t nameLen, Array_Arg args);
+void emitClosureFieldCall_c_Comp_tyRef_U64_recv_U64_fieldStart_U64_fieldLen_U64_args_AArg(Comp* c, uint64_t tyRef, uint64_t recv, uint64_t fieldStart, uint64_t fieldLen, Array_Arg args);
 void emitCaptureInit_c_Comp_e_CaptureEntry(Comp* c, CaptureEntry e);
 void genArrayUserMethod_c_Comp_recv_U64_elemStart_U64_elemLen_U64_nameStart_U64_nameLen_U64_args_AArg(Comp* c, uint64_t recv, uint64_t elemStart, uint64_t elemLen, uint64_t nameStart, uint64_t nameLen, Array_Arg args);
 long long argIsElementTyped_c_Comp_mf_Func_i_U64(Comp* c, Func mf, uint64_t i);
@@ -9879,6 +9880,52 @@ void emitClosureCall_c_Comp_tyRef_U64_nameStart_U64_nameLen_U64_args_AArg(Comp* 
     plew_write((PlewString){")", 1});
     TypeRef_release(t);
 }
+void emitClosureFieldCall_c_Comp_tyRef_U64_recv_U64_fieldStart_U64_fieldLen_U64_args_AArg(Comp* c, uint64_t tyRef, uint64_t recv, uint64_t fieldStart, uint64_t fieldLen, Array_Arg args) {
+    TypeRef t = TypeRef_share(Array_TypeRef_get((*c).types, (long long)(tyRef)));
+    uint64_t tmp = (*c).tmp;
+    (*c).tmp = ({ uint64_t __ov; if (__builtin_add_overflow(((*c).tmp), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    plew_write((PlewString){"({ PlewClosure __cl", 19});
+    writeU64_n_U64(tmp);
+    plew_write((PlewString){" = (", 4});
+    genExpr_c_Comp_id_U64(&((*c)), recv);
+    plew_write((PlewString){").", 2});
+    writeSpan_c_Comp_start_U64_len_U64(&((*c)), fieldStart, fieldLen);
+    plew_write((PlewString){"; ((", 4});
+    if ((long long)((t.args).count) > 0) {
+    emitConcreteCType_c_Comp_ref_U64(&((*c)), Array_U64_get(t.args, (long long)(0)));
+    }
+    else {
+    plew_write((PlewString){"void", 4});
+    }
+    plew_write((PlewString){" (*)(void*", 10});
+    uint64_t pi = 1;
+    while (pi < (long long)((t.args).count)) {
+    plew_write((PlewString){", ", 2});
+    emitConcreteCType_c_Comp_ref_U64(&((*c)), Array_U64_get(t.args, (long long)(pi)));
+    pi = ({ uint64_t __ov; if (__builtin_add_overflow((pi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    plew_write((PlewString){"))(__cl", 7});
+    writeU64_n_U64(tmp);
+    plew_write((PlewString){".fn))(__cl", 10});
+    writeU64_n_U64(tmp);
+    plew_write((PlewString){".env", 4});
+    uint64_t i = 0;
+    while (i < (long long)((args).count)) {
+    plew_write((PlewString){", ", 2});
+    Arg ar = Array_Arg_get(args, (long long)(i));
+    if (ar.isInout) {
+    plew_write((PlewString){"&(", 2});
+    genExpr_c_Comp_id_U64(&((*c)), ar.expr);
+    plew_write((PlewString){")", 1});
+    }
+    else {
+    genExpr_c_Comp_id_U64(&((*c)), ar.expr);
+    }
+    i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    plew_write((PlewString){"); })", 5});
+    TypeRef_release(t);
+}
 void emitCaptureInit_c_Comp_e_CaptureEntry(Comp* c, CaptureEntry e) {
     if (e.boxed) {
     plew_write((PlewString){"plew_ref_share(", 15});
@@ -10637,6 +10684,17 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     else {
     uint64_t mi = findMethod_c_Comp_recvStart_U64_recvLen_U64_nameStart_U64_nameLen_U64_args_AArg(&((*c)), bt.nameStart, bt.nameLen, nameStart, nameLen, Array_Arg_share(args));
     if (mi == (long long)(((*c).funcs).count)) {
+    TypeInfo fti = scalarInfo();
+    if (isGenericInst_c_Comp_ref_U64(&((*c)), bt.ref)) {
+    fti = genericFieldTypeInfo_c_Comp_instRef_U64_fieldStart_U64_fieldLen_U64(&((*c)), bt.ref, nameStart, nameLen);
+    }
+    else {
+    fti = fieldType_c_Comp_structStart_U64_structLen_U64_fieldStart_U64_fieldLen_U64(&((*c)), bt.nameStart, bt.nameLen, nameStart, nameLen);
+    }
+    if (isFnType_c_Comp_ref_U64(&((*c)), fti.ref)) {
+    emitClosureFieldCall_c_Comp_tyRef_U64_recv_U64_fieldStart_U64_fieldLen_U64_args_AArg(&((*c)), fti.ref, recv, nameStart, nameLen, Array_Arg_share(args));
+    return;
+    }
     compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), nameStart), (PlewString){"no such method on this type", 27});
     return;
     }

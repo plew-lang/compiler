@@ -1,0 +1,24 @@
+import @Std/Io with { print }
+
+// A closure stored in a (generic) struct field, invoked through `self.f(...)`.
+// This is the machinery lazy iterator adapters need: an adapter struct holds the
+// mapping/predicate closure as a field and calls it in `next()`.
+struct Apply[F] {
+    pub val f: F
+}
+
+pub impl[F] Apply[F] {
+    fn run(x: I64) -> I64 {
+        return self.f(n: x)
+    }
+}
+
+fn main() {
+    // non-capturing closure field
+    val dbl: Apply[fn(n: I64) -> I64] = <Apply[fn(n: I64) -> I64] f=fn(n: I64) -> I64 { return n * 2 } />
+    print(dbl.run(x: 21))
+    // capturing closure field (env carries `base`)
+    val base: I64 = 100
+    val add: Apply[fn(n: I64) -> I64] = <Apply[fn(n: I64) -> I64] f=fn(n: I64) -> I64 { return n + base } />
+    print(add.run(x: 5))
+}
