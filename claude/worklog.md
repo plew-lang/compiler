@@ -8,7 +8,14 @@
 
 完了した大物（詳細は git・記述的タグ）：async/await 段階 1-3（stackless SM）・コアライブラリ境界（`@Std` の `extern "plew-intrinsic"`）・**Array＝`RawBuffer` 床の Plew struct**（[array-struct-plan.md](array-struct-plan.md)）・可視性完全強制・**Iterator/Iterable＋lazy map/filter**・**再帰値型 auto-boxing＋ARC**・**コンパイラ renovate Phase A**（ARC 1 本化・Op enum・expect）・**Phase B B0-B2**（型付き AST キャッシュ）・**D quick-wins**（Loader 掃除・expect 仕上げ）。renovate vs rewrite の判断・負債の地図は [architecture.md](architecture.md)「負債監査の結論」、言語設計の根拠は [design-decisions.md](design-decisions.md)、再利用機構は本書末尾「再利用資産・罠」。
 
-## 次の一歩＝メタプログラミング M1（M0 は済）
+## 次の一歩＝M1 コア達成後の選択（M0・M1 コア済）
+
+**M1 コア＝✅達成**（直下「M1 の現状」参照・tag `metaprogramming-m1`・244/244 緑）。次の大きな分岐は **(a) M1 の理想完成（本体フロントエンドを共有パーサへ統合＝真の 1 AST・重複パーサ退役）／(b) 構文層を式・文・パターンまで拡張（マクロが関数本体を読める）／(c) M2 dogfood（Eq/Hash をマクロ化→`Dictionary`）** の 3 つ。
+- **(a) は不動点 byte 同一性の制約が重い**＝慎重な増分が要る（壊すと回復に時間）。
+- **(c) は `Hash`/`Hasher` の署名が未策定（core-lib 送り・言語/ライブラリ判断）**＝着手前にユーザー確認向き。
+- いずれも「順序の委任」を超える分岐なので、再開時にユーザーと方向を確認するのが安全。下記は M1 の入力モデル確定メモ（参考）。
+
+
 
 **入力モデル確定＝AST 入力**（当初の TokenStream から変更）。正典＝[spec/04-execution/16-metaprogramming.md](../spec/04-execution/16-metaprogramming.md)、実行系の段取り＝[metaprogramming-architecture.md](metaprogramming-architecture.md)。要点：
 
