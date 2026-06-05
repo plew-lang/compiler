@@ -460,8 +460,16 @@ fn main() {
                     // a provided-method template (receiver = a trait): emitted per
                     // conforming type, not under the trait name.
                 } else {
+                    // a copied provided method's signature may mention `Self`/`Item`;
+                    // set the env so its prototype matches the body (`genFunc` sets it).
+                    if f.hasRecv {
+                        setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0)
+                    } else {
+                        clearSelfItemEnv(c: inout c)
+                    }
                     genSignature(c: inout c, f: f)
                     write(s: ";\n")
+                    clearSelfItemEnv(c: inout c)
                 }
             }
             }

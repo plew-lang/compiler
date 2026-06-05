@@ -406,6 +406,14 @@ fn tyRefIsGround(c: inout Comp, ref: U64) -> Bool {
     if isTypeParamName(c: inout c, start: t.nameStart, len: t.nameLen) {
         return false
     }
+    // `Self` is a contextual keyword, not concrete without a method env; a flat
+    // scan (Make/Cast) reaching a provided body's `<FilterIter[Self,…]>` must not
+    // register it (the method-aware scan grounds the real instance). `Item` is NOT
+    // treated this way — it is a legal user type name; resolveTy only rewrites it
+    // when an Iterator method env is active (curItemRef set).
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
+        return false
+    }
     mut val i: U64 = 0
     while i < t.args.count {
         if tyRefIsGround(c: inout c, ref: t.args[i]) {
@@ -723,6 +731,15 @@ fn collectGenInsts(c: inout Comp) {
         // parameters (not concrete), resolved per instantiation instead.
         if f.typeParams.count > 0 {
         } else {
+            // a provided method copied onto a concrete conformer (`filter` on
+            // Counter) may mention `Self`/`Item` in its signature; resolve them to
+            // the receiver so its adapter instantiation (`FilterIter[Counter,…,I64]`)
+            // grounds instead of leaking literal `Self`.
+            if f.hasRecv {
+                setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0)
+            } else {
+                clearSelfItemEnv(c: inout c)
+            }
             if f.hasRet {
                 scanType(c: inout c, ref: f.retTy)
             }
@@ -732,6 +749,7 @@ fn collectGenInsts(c: inout Comp) {
                 scanType(c: inout c, ref: ps[pi].ty)
                 pi += 1
             }
+            clearSelfItemEnv(c: inout c)
         }
         fi += 1
     }
@@ -1072,8 +1090,12 @@ fn emitMonoMethod(c: inout Comp, fi: U64, instRef: U64, proto: Bool) {
     c.curTypeParams = f.typeParams
     c.curTypeArgs = inst.args
     if proto {
+        // a provided method's signature may mention `Self`/`Item`; set the env so
+        // the prototype matches the body (genFunc sets it from curRecvInstRef).
+        setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: instRef)
         genSignature(c: inout c, f: f)
         write(s: ";\n")
+        clearSelfItemEnv(c: inout c)
     } else {
         genFunc(c: inout c, fi: fi)
     }
