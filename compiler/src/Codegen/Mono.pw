@@ -1730,6 +1730,15 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
                 i += 1
             }
             registerMethodInst(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+            // register the call's result type: a combinator on a generic receiver
+            // (`mapIter.filter(p)`) yields a new adapter instantiation
+            // (`FilterIter[MapIter[…],…]`) that no field/signature scan reaches, so
+            // its typedef + methods (and the provided method's reachability) depend
+            // on registering it here.
+            val mrt: TypeInfo = exprType(c: inout c, id: exprId)
+            if mrt.ref != 0 {
+                scanType(c: inout c, ref: mrt.ref)
+            }
         }
         Expr.Field(val base, val nameStart, val nameLen) => { scanExprInsts(c: inout c, exprId: base) }
         Expr.Index(val base, val index) => {

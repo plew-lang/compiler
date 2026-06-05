@@ -55,6 +55,33 @@ fn methodInRange(c: inout Comp, lo: U64, hi: U64, recvStart: U64, recvLen: U64, 
     return false
 }
 
+// The type params for a provided method copied onto a conformer named
+// (recvStart,recvLen): the conformer's own type params (so the copy is emitted per
+// receiver instantiation), followed by the provided method's own params. Empty for
+// a non-generic conformer (returns the method's own params unchanged).
+fn providedCopyTypeParams(c: inout Comp, recvStart: U64, recvLen: U64, ownParams: Array[Bind]) -> Array[Bind] {
+    mut val out: Array[Bind] = []
+    mut val si: U64 = 0
+    while si < c.structs.count {
+        if c.structs[si].typeParams.count > 0 {
+            if spansEqual(c: inout c, aStart: c.structs[si].nameStart, aLen: c.structs[si].nameLen, bStart: recvStart, bLen: recvLen) {
+                mut val k: U64 = 0
+                while k < c.structs[si].typeParams.count {
+                    out.append(c.structs[si].typeParams[k])
+                    k += 1
+                }
+            }
+        }
+        si += 1
+    }
+    mut val oi: U64 = 0
+    while oi < ownParams.count {
+        out.append(ownParams[oi])
+        oi += 1
+    }
+    return out
+}
+
 fn instantiateProvidedMethods(c: inout Comp) {
     val nFuncs: U64 = c.funcs.count
     mut val ci: U64 = 0
@@ -75,7 +102,13 @@ fn instantiateProvidedMethods(c: inout Comp) {
                         if methodInRange(c: inout c, lo: nFuncs, hi: c.funcs.count, recvStart: cf.typeStart, recvLen: cf.typeLen, nameStart: f.nameStart, nameLen: f.nameLen) {
                             compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "two conformed traits provide a method of the same name; the bare call is ambiguous (`#`-disambiguation not yet supported)")
                         } else {
-                            c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen typeParams=f.typeParams params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true />)
+                            // a provided method copied onto a *generic* conformer inherits
+                            // the conformer's type params (prepended), so methodMatchesInst
+                            // emits it per receiver instantiation (`MapIter[Counter,…]`) like
+                            // an inherent method. Onto a non-generic conformer this is a
+                            // no-op (the conformer has no params).
+                            val copiedTP: Array[Bind] = providedCopyTypeParams(c: inout c, recvStart: cf.typeStart, recvLen: cf.typeLen, ownParams: f.typeParams)
+                            c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true />)
                         }
                     }
                 }

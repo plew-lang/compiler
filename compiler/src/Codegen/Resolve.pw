@@ -1313,8 +1313,14 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                             // deep-substitute the receiver's instantiation env through the
                             // whole return type, so a compound return (`MapIter[I,F,B].next()
                             // -> Optional[B]`) grounds to `Optional[I64]`, not just a bare
-                            // type-parameter return.
+                            // type-parameter return. Also set the Self/Item env so a provided
+                            // combinator on a generic receiver (`mapIter.filter()` ->
+                            // `FilterIter[Self,…,Item]`) resolves Self to the receiver inst
+                            // and Item to its element (else the chain's loop var types as
+                            // the literal `Item`).
+                            setSelfItemEnv(c: inout c, recvStart: gt.nameStart, recvLen: gt.nameLen, recvInstRef: rt.ref)
                             val gr: U64 = groundUnderInst(c: inout c, instRef: rt.ref, tyRef: mf.retTy)
+                            clearSelfItemEnv(c: inout c)
                             return typeInfoOfRef(c: inout c, ref: gr)
                         }
                         val gei: U64 = genericEnumIndex(c: inout c, nameStart: gt.nameStart, nameLen: gt.nameLen)
