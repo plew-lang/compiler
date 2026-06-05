@@ -498,6 +498,36 @@ fn groundTypeRef(c: inout Comp, ref: U64) -> U64 {
     return ref
 }
 
+// Ground `tyRef` under the env of the generic struct instantiation `instRef`
+// (its type params -> its concrete args). Returns `tyRef` unchanged when `instRef`
+// is not a ground generic struct instance. Used to resolve an iterable's
+// iterator()/next() return types through the concrete iterand (`Box[I64]` ->
+// `BoxIter[I64]`, then `BoxIter[I64]`'s `next` -> `Optional[I64]`).
+fn groundUnderInst(c: inout Comp, instRef: U64, tyRef: U64) -> U64 {
+    if isGenericInst(c: inout c, ref: instRef) {
+    } else {
+        return tyRef
+    }
+    val inst: TypeRef = c.types[instRef]
+    val si: U64 = genericStructIndex(c: inout c, nameStart: inst.nameStart, nameLen: inst.nameLen)
+    if si >= c.structs.count {
+        return tyRef
+    }
+    val sd: StructDef = c.structs[si]
+    if sd.typeParams.count == inst.args.count {
+    } else {
+        return tyRef
+    }
+    val savedP: Array[Bind] = c.curTypeParams
+    val savedA: Array[U64] = c.curTypeArgs
+    c.curTypeParams = sd.typeParams
+    c.curTypeArgs = inst.args
+    val g: U64 = groundTypeRef(c: inout c, ref: tyRef)
+    c.curTypeParams = savedP
+    c.curTypeArgs = savedA
+    return g
+}
+
 fn scanType(c: inout Comp, ref: U64) {
     if ref >= c.types.count {
         return
@@ -575,6 +605,29 @@ fn scanGenInstFields(c: inout Comp, instRef: U64) {
                     while k < fs.count {
                         scanType(c: inout c, ref: fs[k].ty)
                         k += 1
+                    }
+                    // also scan this struct's methods' return/param types under the
+                    // env, so a method returning another generic type (an iterable's
+                    // `iterator() -> BoxIter[T]`) registers its grounded instantiation
+                    // (`BoxIter[I64]`), whose typedef/methods would else be missing. A
+                    // leftover (generic-method) param stays non-ground and is skipped.
+                    mut val mfi: U64 = 0
+                    while mfi < c.funcs.count {
+                        val mf: Func = c.funcs[mfi]
+                        if mf.hasRecv {
+                            if spansEqual(c: inout c, aStart: mf.recvStart, aLen: mf.recvLen, bStart: inst.nameStart, bLen: inst.nameLen) {
+                                if mf.hasRet {
+                                    scanType(c: inout c, ref: mf.retTy)
+                                }
+                                val mps: Array[Param] = mf.params
+                                mut val mpi: U64 = 0
+                                while mpi < mps.count {
+                                    scanType(c: inout c, ref: mps[mpi].ty)
+                                    mpi += 1
+                                }
+                            }
+                        }
+                        mfi += 1
                     }
                     c.curTypeParams = savedP
                     c.curTypeArgs = savedA
@@ -700,8 +753,12 @@ fn iterableItemInfo(c: inout Comp, et: TypeInfo) -> TypeInfo {
         return scalarInfo()
     }
     val nmf: Func = c.funcs[nmi]
-    if nmf.retTy < c.types.count {
-        val ot: TypeRef = c.types[nmf.retTy]
+    // resolve Optional[Item] through the iterand's instantiation (Box[I64] ->
+    // BoxIter[I64] -> Optional[I64]) so a generic iterand yields the concrete Item.
+    val itRef: U64 = groundUnderInst(c: inout c, instRef: et.ref, tyRef: imf.retTy)
+    val optRef: U64 = groundUnderInst(c: inout c, instRef: itRef, tyRef: nmf.retTy)
+    if optRef < c.types.count {
+        val ot: TypeRef = c.types[optRef]
         if ot.args.count > 0 {
             return typeInfoOfRef(c: inout c, ref: ot.args[0])
         }

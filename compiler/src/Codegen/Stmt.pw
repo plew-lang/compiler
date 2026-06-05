@@ -554,10 +554,17 @@ fn compileIterableFor(c: inout Comp, t: U64, varStart: U64, varLen: U64, iter: U
         return
     }
     val nmf: Func = c.funcs[nmi]
+    // Resolve the iterator instantiation through the (possibly generic) iterand:
+    // `Box[I64].iterator()` returns `BoxIter[I64]`, not the template `BoxIter[T]`.
+    val itRef: U64 = groundUnderInst(c: inout c, instRef: et.ref, tyRef: imf.retTy)
+    val itGeneric: Bool = isGenericInst(c: inout c, ref: itRef)
+    // next() lives on the iterator type; resolve its Optional[Item] through itRef
+    // so a generic iterator yields the concrete element (`Optional[I64]`).
+    val optRef: U64 = groundUnderInst(c: inout c, instRef: itRef, tyRef: nmf.retTy)
     // Item = the type argument of the Optional[Item] that next() returns.
     mut val itemRef: U64 = 0
-    if nmf.retTy < c.types.count {
-        val ot: TypeRef = c.types[nmf.retTy]
+    if optRef < c.types.count {
+        val ot: TypeRef = c.types[optRef]
         if ot.args.count > 0 {
             itemRef = ot.args[0]
         }
@@ -567,7 +574,7 @@ fn compileIterableFor(c: inout Comp, t: U64, varStart: U64, varLen: U64, iter: U
     // { IterT __it = Recv_iterator(iter);
     write(s: "    {\n")
     write(s: "    ")
-    genCTypeOf(c: inout c, tyRef: imf.retTy, fallStart: imf.retStart, fallLen: imf.retLen, isArray: imf.retIsArray)
+    genCTypeOf(c: inout c, tyRef: itRef, fallStart: imf.retStart, fallLen: imf.retLen, isArray: imf.retIsArray)
     write(s: " __it")
     writeU64(n: t)
     write(s: " = ")
@@ -582,12 +589,12 @@ fn compileIterableFor(c: inout Comp, t: U64, varStart: U64, varLen: U64, iter: U
     // while (1) { OptT __o = Iter_next(&__it); if (__o.tag != 0) break;
     write(s: "    while (1) {\n")
     write(s: "        ")
-    genCTypeOf(c: inout c, tyRef: nmf.retTy, fallStart: nmf.retStart, fallLen: nmf.retLen, isArray: nmf.retIsArray)
+    genCTypeOf(c: inout c, tyRef: optRef, fallStart: nmf.retStart, fallLen: nmf.retLen, isArray: nmf.retIsArray)
     write(s: " __o")
     writeU64(n: t)
     write(s: " = ")
-    if isGenericInst(c: inout c, ref: imf.retTy) {
-        emitMangle(c: inout c, ref: imf.retTy)
+    if itGeneric {
+        emitMangle(c: inout c, ref: itRef)
     } else {
         writeSpan(c: inout c, start: imf.retStart, len: imf.retLen)
     }
