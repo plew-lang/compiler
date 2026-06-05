@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+import @Std/Core with { Iterator }
+struct Counter { pub mut val n: I64 }
+pub impl Counter as Iterator {
+    type Item = I64
+    inout fn next() -> Optional[I64] {
+        if self.n >= 6 { return <Optional.None /> }
+        self.n = self.n + 1
+        return <Optional.Some v=self.n />
+    }
+}
+fn main() {
+    for val v in <Counter n=0 />
+        .filter(p: fn(x: I64) -> Bool { return x % 2 == 0 })
+        .map(f: fn(x: I64) -> I64 { return x * 100 }) {
+        print(v)
+    }
+}

@@ -2727,6 +2727,18 @@ uint64_t parsePostfix_c_Comp(Comp* c) {
     PType ty = parseTypeTok_c_Comp(&((*c)));
     e = Comp_pushExpr_e_Expr(&((*c)), (Expr){.tag = 11, .data.Cast = {.operand = e, .tyStart = ty.start, .tyLen = ty.len, .ty = ty.ref}});
     }
+    else if (_m97.tag == 1) {
+    uint64_t off = 1;
+    while ((Comp_peekKind_off_U64(&((*c)), off)).tag == 1) {
+    off = ({ uint64_t __ov; if (__builtin_add_overflow((off), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    if ((Comp_peekKind_off_U64(&((*c)), off)).tag == 40) {
+    Comp_skipNewlines(&((*c)));
+    }
+    else {
+    break;
+    }
+    }
     else {
     break;
     }

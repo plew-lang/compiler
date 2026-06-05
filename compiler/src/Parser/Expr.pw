@@ -312,6 +312,20 @@ fn parsePostfix(c: inout Comp) -> U64 {
                 val ty: PType = parseTypeTok(c: inout c)
                 e = c.pushExpr(e: <Expr.Cast operand=e tyStart=ty.start tyLen=ty.len ty=ty.ref />)
             }
+            Kind.Newline => {
+                // a method chain may continue on the next line(s) with a leading
+                // `.` (`xs\n  .filter(p)\n  .map(f)`). Skip the newline(s) only when
+                // a `.` follows; otherwise the newline ends the expression.
+                mut val off: U64 = 1
+                while c.peekKind(off: off) == <Kind.Newline /> {
+                    off += 1
+                }
+                if c.peekKind(off: off) == <Kind.Dot /> {
+                    c.skipNewlines()
+                } else {
+                    break
+                }
+            }
             _ => { break }
         }
     }
