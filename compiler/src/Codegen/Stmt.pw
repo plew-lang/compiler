@@ -61,9 +61,9 @@ fn genArrayLiteral(c: inout Comp, exprId: U64, elemStart: U64, elemLen: U64) {
 // Whether `lhs OP rhs` is a String `==` / `!=` (which lowers to PlewString_eq
 // rather than a C struct comparison).
 fn isStringEq(c: inout Comp, op: I64, lhs: U64) -> Bool {
-    if op == 50 {
+    if op == opEq() {
     } else {
-        if op == 51 {
+        if op == opNe() {
         } else {
             return false
         }
@@ -111,9 +111,9 @@ fn isAllNullary(c: inout Comp, start: U64, len: U64) -> Bool {
 // (variant) comparison, NOT a payload-aware structural Eq. For all-nullary
 // enums this coincides with structural equality; full Eq comes with @[Eq].
 fn isEnumEq(c: inout Comp, op: I64, lhs: U64) -> Bool {
-    if op == 50 {
+    if op == opEq() {
     } else {
-        if op == 51 {
+        if op == opNe() {
         } else {
             return false
         }
@@ -193,7 +193,7 @@ fn emitEnumTagCmp(c: inout Comp, lhs: U64, rhs: U64, op: I64, outer: Bool) {
         write(s: "(")
     }
     emitEnumOperand(c: inout c, id: lhs, enStart: enStart, enLen: enLen)
-    if op == 51 {
+    if op == opNe() {
         write(s: " != ")
     } else {
         write(s: " == ")
@@ -252,10 +252,10 @@ fn hasCompareWitness(c: inout Comp, op: I64, lhs: U64) -> Bool {
     if lt.kind == 2 {
         // `==`/`!=` desugar to Eq.eq; gated on an explicit `impl T as Eq` (spec/12:
         // operators are trait sugar, not implicit). `< <= > >=` likewise on Ord.
-        if op == 50 {
+        if op == opEq() {
             return eqWitnessReady(c: inout c, ti: lt)
         }
-        if op == 51 {
+        if op == opNe() {
             return eqWitnessReady(c: inout c, ti: lt)
         }
         if op >= 52 {
@@ -295,11 +295,11 @@ fn emitEqCall(c: inout Comp, typeStart: U64, typeLen: U64, lhs: U64, rhs: U64) {
 // (`a<b` ⟺ compare(a,b) == Less, `a<=b` ⟺ != Greater, etc.).
 fn emitTraitCompare(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
     val lt: TypeInfo = exprType(c: inout c, id: lhs)
-    if op == 50 {
+    if op == opEq() {
         emitEqCall(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, lhs: lhs, rhs: rhs)
         return
     }
-    if op == 51 {
+    if op == opNe() {
         write(s: "(!")
         emitEqCall(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, lhs: lhs, rhs: rhs)
         write(s: ")")
@@ -317,19 +317,19 @@ fn emitTraitCompare(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
     write(s: ", ")
     genExpr(c: inout c, id: rhs)
     write(s: ").tag ")
-    if op == 52 {
+    if op == opLt() {
         write(s: "== ")
         writeU64(n: lessIdx)
     }
-    if op == 53 {
+    if op == opLe() {
         write(s: "!= ")
         writeU64(n: greaterIdx)
     }
-    if op == 54 {
+    if op == opGt() {
         write(s: "== ")
         writeU64(n: greaterIdx)
     }
-    if op == 55 {
+    if op == opGe() {
         write(s: "!= ")
         writeU64(n: lessIdx)
     }
@@ -392,7 +392,7 @@ fn tryArrayElemFieldAssign(c: inout Comp, op: I64, target: U64, value: U64) -> B
                         return true
                     }
                     val ft: TypeInfo = fieldType(c: inout c, structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
-                    if op == 49 {
+                    if op == opAssign() {
                         checkLitTi(c: inout c, id: value, ti: ft)
                     }
                     // get-modify-set: store back `({ E __ge = get; __ge.field = …; __ge; })`.
@@ -412,7 +412,7 @@ fn tryArrayElemFieldAssign(c: inout Comp, op: I64, target: U64, value: U64) -> B
                     write(s: "; __ge.")
                     writeSpan(c: inout c, start: nameStart, len: nameLen)
                     write(s: " = ")
-                    if op == 49 {
+                    if op == opAssign() {
                         genExpr(c: inout c, id: value)
                     } else {
                         val cbin: I64 = compoundCheckedBin(op: op)
@@ -732,7 +732,7 @@ fn genStmt(c: inout Comp, id: U64) {
                     write(s: "), (long long)(")
                     genExpr(c: inout c, id: index)
                     write(s: "), ")
-                    if op == 49 {
+                    if op == opAssign() {
                         genExpr(c: inout c, id: value)
                     } else {
                         // `a[i] OP= v` -> set(a, i, get(a, i) OP v). Arithmetic
@@ -798,7 +798,7 @@ fn genStmt(c: inout Comp, id: U64) {
                                 val afd: FieldDef = findFieldDef(c: inout c, typeStart: fbt.nameStart, typeLen: fbt.nameLen, variantStart: 0, variantLen: 0, isEnum: false, fieldStart: nameStart, fieldLen: nameLen)
                                 if afd.nameLen > 0 {
                                     if fieldIsBoxed(c: inout c, f: afd) {
-                                        if op == 49 {
+                                        if op == opAssign() {
                                             write(s: "    ")
                                             genExpr(c: inout c, id: base)
                                             write(s: ".")
@@ -826,7 +826,7 @@ fn genStmt(c: inout Comp, id: U64) {
                     // would double-deinit). Only plain `=` is valid for a unique.
                     if ctt.kind == 2 {
                         if typeIsUnique(c: inout c, start: ctt.nameStart, len: ctt.nameLen) {
-                            if op == 49 {
+                            if op == opAssign() {
                             } else {
                                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "compound assignment is not valid for a unique value")
                                 return
@@ -866,7 +866,7 @@ fn genStmt(c: inout Comp, id: U64) {
                         val dt: TypeInfo = exprType(c: inout c, id: target)
                         if dt.kind == 0 {
                             if isIntType(c: inout c, start: dt.nameStart, len: dt.nameLen) {
-                                genCheckedDiv(c: inout c, lhs: target, rhs: value, tyStart: dt.nameStart, tyLen: dt.nameLen, isMod: op == 71)
+                                genCheckedDiv(c: inout c, lhs: target, rhs: value, tyStart: dt.nameStart, tyLen: dt.nameLen, isMod: op == opRemAssign())
                             } else {
                                 write(s: compoundDivFn(op: op))
                                 genExpr(c: inout c, id: target)
@@ -900,7 +900,7 @@ fn genStmt(c: inout Comp, id: U64) {
                             genCheckedArith(c: inout c, op: cbin, lhs: target, rhs: value, tyStart: tt.nameStart, tyLen: tt.nameLen)
                         } else {
                             write(s: assignOpStr(op: op))
-                            if op == 49 {
+                            if op == opAssign() {
                                 genCopyValue(c: inout c, exprId: value, tyRef: tt.ref, fallStart: tt.nameStart, fallLen: tt.nameLen, isArray: tt.kind == 3)
                             } else {
                                 genExpr(c: inout c, id: value)

@@ -1119,8 +1119,8 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
         }
         Expr.Unary(val op, val operand) => {
             // `-` / `~` preserve the operand's width; `!` is Bool (width-less).
-            if op == 57 { return exprType(c: inout c, id: operand) }
-            if op == 79 { return exprType(c: inout c, id: operand) }
+            if op == opSub() { return exprType(c: inout c, id: operand) }
+            if op == opBitNot() { return exprType(c: inout c, id: operand) }
             return scalarInfo()
         }
         Expr.Binary(val op, val lhs, val rhs) => {

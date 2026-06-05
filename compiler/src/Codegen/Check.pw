@@ -49,7 +49,7 @@ fn foldConst(c: inout Comp, id: U64) -> ConstInt {
             return <ConstInt isConst=true neg=false value=value />
         }
         Expr.Unary(val op, val operand) => {
-            if op == 57 {
+            if op == opSub() {
                 val o: ConstInt = foldConst(c: inout c, id: operand)
                 if o.isConst { return mkConst(neg: !o.neg, mag: o.value) }
             }
@@ -60,9 +60,9 @@ fn foldConst(c: inout Comp, id: U64) -> ConstInt {
             val b: ConstInt = foldConst(c: inout c, id: rhs)
             if a.isConst {
                 if b.isConst {
-                    if op == 56 { return addConst(na: a.neg, a: a.value, nb: b.neg, b: b.value) }
-                    if op == 57 { return addConst(na: a.neg, a: a.value, nb: !b.neg, b: b.value) }
-                    if op == 58 {
+                    if op == opAdd() { return addConst(na: a.neg, a: a.value, nb: b.neg, b: b.value) }
+                    if op == opSub() { return addConst(na: a.neg, a: a.value, nb: !b.neg, b: b.value) }
+                    if op == opMul() {
                         if a.value == 0 { return mkConst(neg: false, mag: 0) }
                         if b.value > 9223372036854775807U64 / a.value { return notConst() }
                         return mkConst(neg: a.neg != b.neg, mag: a.value * b.value)
@@ -121,7 +121,7 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
             checkLitLeaf(c: inout c, value: value, neg: false, offset: offset, isBool: isBool, tyStart: tyStart, tyLen: tyLen, eKind: eKind, eBits: eBits, eSgn: eSgn)
         }
         Expr.Unary(val op, val operand) => {
-            if op == 57 {
+            if op == opSub() {
                 // a leading `-` on a literal folds into the literal (`-128:I8` is
                 // valid even though `128` alone exceeds I8), so check the magnitude
                 // with the negative sign; otherwise recurse with the same type.
@@ -133,7 +133,7 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
                     _ => { checkLitCtx(c: inout c, id: operand, eKind: eKind, eBits: eBits, eSgn: eSgn) }
                 }
             } else {
-                if op == 79 {
+                if op == opBitNot() {
                     checkLitCtx(c: inout c, id: operand, eKind: eKind, eBits: eBits, eSgn: eSgn)
                 }
             }
@@ -1084,8 +1084,8 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                     if lt.kind == 2 {
                         if isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: lt.nameStart, len: lt.nameLen) {
                             mut val need: String = "Ord"
-                            if op == 50 { need = "Eq" }
-                            if op == 51 { need = "Eq" }
+                            if op == opEq() { need = "Eq" }
+                            if op == opNe() { need = "Eq" }
                             if boundHasTraitNamed(c: inout c, fnIdx: c.curCheckFn, tpStart: lt.nameStart, tpLen: lt.nameLen, traitName: need) {
                             } else {
                                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "comparison on a type parameter needs an Eq/Ord bound (add `where T: Eq` / `: Ord`)")

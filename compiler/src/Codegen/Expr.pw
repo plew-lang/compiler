@@ -362,7 +362,7 @@ fn genExpr(c: inout Comp, id: U64) {
         }
         Expr.Unary(val op, val operand) => {
             mut val negChecked: Bool = false
-            if op == 57 {
+            if op == opSub() {
                 val ot: TypeInfo = exprType(c: inout c, id: operand)
                 if ot.kind == 0 {
                     if isIntType(c: inout c, start: ot.nameStart, len: ot.nameLen) {
@@ -383,7 +383,7 @@ fn genExpr(c: inout Comp, id: U64) {
         }
         Expr.Binary(val op, val lhs, val rhs) => {
             if isStringEq(c: inout c, op: op, lhs: lhs) {
-                if op == 51 {
+                if op == opNe() {
                     write(s: "(!PlewString_eq(")
                 } else {
                     write(s: "PlewString_eq(")
@@ -391,7 +391,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 genExpr(c: inout c, id: lhs)
                 write(s: ", ")
                 genExpr(c: inout c, id: rhs)
-                if op == 51 {
+                if op == opNe() {
                     write(s: "))")
                 } else {
                     write(s: ")")
@@ -406,7 +406,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     if compareNeedsTrait(c: inout c, op: op, lhs: lhs) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "comparison needs Eq/Ord; not available for a struct or array")
                     } else {
-                        if op == 59 {
+                        if op == opDiv() {
                             // `/`: zero divisor always panics; signed INT_MIN/-1
                             // overflows. Width-aware when the type is known; else
                             // the generic (zero-checked) plew_div.
@@ -421,7 +421,7 @@ fn genExpr(c: inout Comp, id: U64) {
                                 write(s: ")")
                             }
                         } else {
-                            if op == 60 {
+                            if op == opRem() {
                                 // `%`: same — divisor must be nonzero.
                                 val mt: TypeInfo = arithIntType(c: inout c, lhs: lhs, rhs: rhs)
                                 if mt.nameLen > 0 {

@@ -1,28 +1,65 @@
+// Operator opcodes. The `op` field of Expr.Binary/Unary/Assign stores a
+// `kindCode(Kind)` (the lexer's stable token-kind number). These named accessors
+// are the single symbolic source for codegen comparisons — renumbering a token
+// in `kindCode` flows through here, so no bare magic numbers leak into codegen.
+fn opEq() -> I64 { return kindCode(k: <Kind.EqEq />) }
+fn opNe() -> I64 { return kindCode(k: <Kind.Ne />) }
+fn opLt() -> I64 { return kindCode(k: <Kind.Lt />) }
+fn opLe() -> I64 { return kindCode(k: <Kind.Le />) }
+fn opGt() -> I64 { return kindCode(k: <Kind.Gt />) }
+fn opGe() -> I64 { return kindCode(k: <Kind.Ge />) }
+fn opAdd() -> I64 { return kindCode(k: <Kind.Plus />) }
+fn opSub() -> I64 { return kindCode(k: <Kind.Minus />) }
+fn opMul() -> I64 { return kindCode(k: <Kind.Star />) }
+fn opDiv() -> I64 { return kindCode(k: <Kind.Slash />) }
+fn opRem() -> I64 { return kindCode(k: <Kind.Percent />) }
+fn opAnd() -> I64 { return kindCode(k: <Kind.AmpAmp />) }
+fn opOr() -> I64 { return kindCode(k: <Kind.PipePipe />) }
+fn opNot() -> I64 { return kindCode(k: <Kind.Bang />) }
+fn opBitAnd() -> I64 { return kindCode(k: <Kind.Amp />) }
+fn opBitOr() -> I64 { return kindCode(k: <Kind.Pipe />) }
+fn opBitXor() -> I64 { return kindCode(k: <Kind.Caret />) }
+fn opShl() -> I64 { return kindCode(k: <Kind.Shl />) }
+fn opShr() -> I64 { return kindCode(k: <Kind.Shr />) }
+fn opBitNot() -> I64 { return kindCode(k: <Kind.Tilde />) }
+fn opAssign() -> I64 { return kindCode(k: <Kind.Eq />) }
+fn opAddAssign() -> I64 { return kindCode(k: <Kind.PlusEq />) }
+fn opSubAssign() -> I64 { return kindCode(k: <Kind.MinusEq />) }
+fn opMulAssign() -> I64 { return kindCode(k: <Kind.StarEq />) }
+fn opDivAssign() -> I64 { return kindCode(k: <Kind.SlashEq />) }
+fn opRemAssign() -> I64 { return kindCode(k: <Kind.PercentEq />) }
+fn opBitAndAssign() -> I64 { return kindCode(k: <Kind.AmpEq />) }
+fn opBitOrAssign() -> I64 { return kindCode(k: <Kind.PipeEq />) }
+fn opBitXorAssign() -> I64 { return kindCode(k: <Kind.CaretEq />) }
+fn opShlAssign() -> I64 { return kindCode(k: <Kind.ShlEq />) }
+fn opShrAssign() -> I64 { return kindCode(k: <Kind.ShrEq />) }
+fn opCoalesce() -> I64 { return kindCode(k: <Kind.Coalesce />) }
+
 fn binOpStr(op: I64) -> String {
-    if op == 56 { return " + " }
-    if op == 57 { return " - " }
-    if op == 58 { return " * " }
-    if op == 59 { return " / " }
-    if op == 60 { return " % " }
-    if op == 50 { return " == " }
-    if op == 51 { return " != " }
-    if op == 52 { return " < " }
-    if op == 53 { return " <= " }
-    if op == 54 { return " > " }
-    if op == 55 { return " >= " }
-    if op == 61 { return " && " }
-    if op == 62 { return " || " }
-    if op == 74 { return " & " }
-    if op == 75 { return " | " }
-    if op == 76 { return " ^ " }
-    if op == 77 { return " << " }
-    if op == 78 { return " >> " }
+    if op == opAdd() { return " + " }
+    if op == opSub() { return " - " }
+    if op == opMul() { return " * " }
+    if op == opDiv() { return " / " }
+    if op == opRem() { return " % " }
+    if op == opEq() { return " == " }
+    if op == opNe() { return " != " }
+    if op == opLt() { return " < " }
+    if op == opLe() { return " <= " }
+    if op == opGt() { return " > " }
+    if op == opGe() { return " >= " }
+    if op == opAnd() { return " && " }
+    if op == opOr() { return " || " }
+    if op == opBitAnd() { return " & " }
+    if op == opBitOr() { return " | " }
+    if op == opBitXor() { return " ^ " }
+    if op == opShl() { return " << " }
+    if op == opShr() { return " >> " }
     return " ? "
 }
 
 fn unaryOpStr(op: I64) -> String {
-    if op == 57 { return "-" }
-    if op == 79 { return "~" }
+    if op == opSub() { return "-" }
+    if op == opBitNot() { return "~" }
     return "!"
 }
 
@@ -48,9 +85,9 @@ fn strDecodedLen(c: inout Comp, start: U64, len: U64) -> I64 {
 // the operand type (spec: integer overflow always panics). `/` panics only on a
 // zero divisor (handled by plew_div); shifts/bitwise never overflow.
 fn isCheckedArith(op: I64) -> Bool {
-    if op == 56 { return true }
-    if op == 57 { return true }
-    if op == 58 { return true }
+    if op == opAdd() { return true }
+    if op == opSub() { return true }
+    if op == opMul() { return true }
     return false
 }
 
@@ -58,16 +95,16 @@ fn isCheckedArith(op: I64) -> Bool {
 // overflow check; 0 for ops whose compound form can't overflow (bitwise/shift)
 // or isn't arithmetic. (/= and %= go through the checked plew_div/plew_mod.)
 fn compoundCheckedBin(op: I64) -> I64 {
-    if op == 67 { return 56 }
-    if op == 68 { return 57 }
-    if op == 69 { return 58 }
+    if op == opAddAssign() { return opAdd() }
+    if op == opSubAssign() { return opSub() }
+    if op == opMulAssign() { return opMul() }
     return 0
 }
 
 // The clang overflow-detecting builtin for a checked-arith op.
 fn overflowBuiltin(op: I64) -> String {
-    if op == 56 { return "__builtin_add_overflow" }
-    if op == 57 { return "__builtin_sub_overflow" }
+    if op == opAdd() { return "__builtin_add_overflow" }
+    if op == opSub() { return "__builtin_sub_overflow" }
     return "__builtin_mul_overflow"
 }
 
@@ -176,47 +213,47 @@ fn genCheckedDiv(c: inout Comp, lhs: U64, rhs: U64, tyStart: U64, tyLen: U64, is
 }
 
 fn assignOpStr(op: I64) -> String {
-    if op == 49 { return " = " }
-    if op == 67 { return " += " }
-    if op == 68 { return " -= " }
-    if op == 69 { return " *= " }
-    if op == 70 { return " /= " }
-    if op == 71 { return " %= " }
-    if op == 80 { return " &= " }
-    if op == 81 { return " |= " }
-    if op == 82 { return " ^= " }
-    if op == 83 { return " <<= " }
+    if op == opAssign() { return " = " }
+    if op == opAddAssign() { return " += " }
+    if op == opSubAssign() { return " -= " }
+    if op == opMulAssign() { return " *= " }
+    if op == opDivAssign() { return " /= " }
+    if op == opRemAssign() { return " %= " }
+    if op == opBitAndAssign() { return " &= " }
+    if op == opBitOrAssign() { return " |= " }
+    if op == opBitXorAssign() { return " ^= " }
+    if op == opShlAssign() { return " <<= " }
     return " >>= "
 }
 
 // Whether a compound-assign op is `/=` (70) or `%=` (71), whose expansion must
 // go through the checked plew_div/plew_mod (spec: division by zero panics).
 fn isCompoundDiv(op: I64) -> Bool {
-    if op == 70 { return true }
-    if op == 71 { return true }
+    if op == opDivAssign() { return true }
+    if op == opRemAssign() { return true }
     return false
 }
 
 // The checked-division C function (with its open paren) for `/=`/`%=`; "" for
 // any other op (so callers can prefix unconditionally).
 fn compoundDivFn(op: I64) -> String {
-    if op == 70 { return "plew_div(" }
-    if op == 71 { return "plew_mod(" }
+    if op == opDivAssign() { return "plew_div(" }
+    if op == opRemAssign() { return "plew_mod(" }
     return ""
 }
 
 // The binary operator underlying a compound assignment (`+=` -> ` + `), used to
 // expand `a[i] OP= v` into `set(a, i, get(a, i) OP v)`.
 fn assignToBinStr(op: I64) -> String {
-    if op == 67 { return " + " }
-    if op == 68 { return " - " }
-    if op == 69 { return " * " }
-    if op == 70 { return " / " }
-    if op == 71 { return " % " }
-    if op == 80 { return " & " }
-    if op == 81 { return " | " }
-    if op == 82 { return " ^ " }
-    if op == 83 { return " << " }
+    if op == opAddAssign() { return " + " }
+    if op == opSubAssign() { return " - " }
+    if op == opMulAssign() { return " * " }
+    if op == opDivAssign() { return " / " }
+    if op == opRemAssign() { return " % " }
+    if op == opBitAndAssign() { return " & " }
+    if op == opBitOrAssign() { return " | " }
+    if op == opBitXorAssign() { return " ^ " }
+    if op == opShlAssign() { return " << " }
     return " >> "
 }
 
