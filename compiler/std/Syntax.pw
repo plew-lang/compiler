@@ -20,6 +20,7 @@ import @Std/Core with { stringFromBytes }
 part ./Syntax/Lexer
 part ./Syntax/Ast
 part ./Syntax/Parser
+part ./Syntax/Build
 
 // A macro = a struct implementing `Derive`. The required `derive` receives the
 // item's `DeclAst` and returns generated source; the provided `deriveFromSource`

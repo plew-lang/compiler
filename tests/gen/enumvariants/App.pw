@@ -1,0 +1,44 @@
+import @Std/Io with { write }
+import @Std/Syntax with { Derive, DeclAst, Src, newSrc }
+
+// A derive over an enum that lists its variants (using the @Std/Syntax Src builder).
+struct VariantNames { }
+
+pub impl VariantNames as Derive {
+    fn derive(input: DeclAst) -> String {
+        mut val s: Src = newSrc()
+        s.put("fn variantNames() -> String {\n    return \"")
+        mut val i: U64 = 0
+        while i < input.variants.count {
+            s.put(input.variants[i].name)
+            s.put("(")
+            s.put(countStr(n: input.variants[i].fields.count))
+            s.put(")")
+            s.putByte(44)
+            i += 1
+        }
+        s.put("\"\n}\n")
+        return s.finish()
+    }
+}
+
+fn countStr(n: U64) -> String {
+    mut val s: Src = newSrc()
+    if n == 0 { s.putByte(48) }
+    if n == 1 { s.putByte(49) }
+    if n == 2 { s.putByte(50) }
+    if n == 3 { s.putByte(51) }
+    return s.finish()
+}
+
+@[VariantNames]
+enum Shape {
+    Circle(r: I64)
+    Rect(w: I64, h: I64)
+    Empty
+}
+
+fn main() {
+    write(s: variantNames())
+    write(s: "\n")
+}
