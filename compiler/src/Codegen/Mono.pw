@@ -358,6 +358,28 @@ fn genCTypeOf(c: inout Comp, tyRef: U64, fallStart: U64, fallLen: U64, isArray: 
 // Is (start,len) the name of a generic type parameter of some struct/enum/fn?
 // (Used to tell a template type like `Box[T]` from a concrete `Box[I32]`.)
 fn isTypeParamName(c: inout Comp, start: U64, len: U64) -> Bool {
+    // a name that names a declared struct/enum is a concrete type, never a type
+    // parameter — even if some *other* generic's parameter shares the name (a user
+    // struct `B` vs `MapIter[I, F, B]`'s `B`). Concrete types win the global check;
+    // a template's own parameter is resolved by the active env before this matters.
+    mut val ni: U64 = 0
+    while ni < c.structs.count {
+        if c.structs[ni].typeParams.count == 0 {
+            if spansEqual(c: inout c, aStart: c.structs[ni].nameStart, aLen: c.structs[ni].nameLen, bStart: start, bLen: len) {
+                return false
+            }
+        }
+        ni += 1
+    }
+    mut val nj: U64 = 0
+    while nj < c.enums.count {
+        if c.enums[nj].typeParams.count == 0 {
+            if spansEqual(c: inout c, aStart: c.enums[nj].nameStart, aLen: c.enums[nj].nameLen, bStart: start, bLen: len) {
+                return false
+            }
+        }
+        nj += 1
+    }
     mut val si: U64 = 0
     while si < c.structs.count {
         val tp: Array[Bind] = c.structs[si].typeParams
@@ -735,7 +757,20 @@ fn collectGenInsts(c: inout Comp) {
         // method (it is copied onto each conformer), and scanning its signature
         // would resolve `Self` to the trait name and register a bogus instantiation
         // (`FilterIter[Iterator,…]`). The per-conformer copies are scanned instead.
+        // Likewise skip a provided method copied onto a *generic* conformer (`filter`
+        // on `MapIter`): it is still a template (Self/Item are the conformer's type
+        // params, not concrete), emitted per receiver instantiation — scanning it as
+        // concrete would register garbage like `FilterIter[MapIter, fn, B]`.
+        mut val skipProvidedTemplate: Bool = false
         if methodRecvIsTrait(c: inout c, f: f) {
+            skipProvidedTemplate = true
+        }
+        if f.isProvided {
+            if genericStructIndex(c: inout c, nameStart: f.recvStart, nameLen: f.recvLen) < c.structs.count {
+                skipProvidedTemplate = true
+            }
+        }
+        if skipProvidedTemplate {
         } else {
             // a provided method copied onto a concrete conformer (`filter` on
             // Counter) may mention `Self`/`Item` in its signature; resolve them to

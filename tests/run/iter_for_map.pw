@@ -1,6 +1,7 @@
 import @Std/Io with { print }
-import @Std/Core with { Iterator, Iterable }
+import @Std/Core with { Iterator }
 
+// map comes from @Std/Core (no local adapter). Output type may differ from Item.
 struct Counter { pub mut val n: I64 }
 pub impl Counter as Iterator {
     type Item = I64
@@ -8,24 +9,6 @@ pub impl Counter as Iterator {
         if self.n >= 3 { return <Optional.None /> }
         self.n = self.n + 1
         return <Optional.Some v=self.n />
-    }
-}
-struct MapIter[I, F, B] {
-    pub mut val inner: I
-    pub val f: F
-}
-pub impl[I, F, B] MapIter[I, F, B] as Iterator where I: Iterator {
-    type Item = B
-    inout fn next() -> Optional[B] {
-        match self.inner.next() {
-            Optional.Some(val v) => { return <Optional.Some v=self.f(x: v) /> }
-            Optional.None => { return <Optional.None /> }
-        }
-    }
-}
-pub impl Iterator {
-    fn map[B](f: fn(x: Item) -> B) -> MapIter[Self, fn(x: Item) -> B, B] {
-        return <MapIter[Self, fn(x: Item) -> B, B] inner=self f=f />
     }
 }
 fn main() {
