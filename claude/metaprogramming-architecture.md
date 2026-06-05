@@ -70,9 +70,10 @@ spec/16 は **入力＝TokenStream（span 付き）＋ヘルパで TokenStream�
 ## 実装の段取り（パッケージ管理より前に動かす）
 
 - **M0＝配管を端から端まで（自明マクロ）＝✅実装済**（tag `metaprogramming-m0`）。実装は当初案（plewc が別ハーネス `.pw` を合成→再 import）より一段クリーンに倒した：**`plewc --gen <file>` は通常コンパイルの変種**。対象ファイルの全モジュール木（part/import 込み）を普通にロード・パースし（マクロ struct と instantiate 済み `deriveFromSource` がそのまま scope に入る）、**ユーザー自身の `main` を抑制し、代わりに各 `@[Name]` について `write(s: <Name/>.deriveFromSource(...))` する harness `main` を合成**して C を出す。シェルランナー `plew-gen.sh` が `plewc --gen <file> | clang | run > <Foo>.gen.pw`（bootstrap/test と同じ orchestration・**新 intrinsic 不要**）。別ハーネスファイルの import 解決が要らず、同一モジュール derive も import 越し derive もローダが木を綴じるので一様に動く。実装の要点・罠は [worklog.md](worklog.md) 末尾「再利用資産・罠」の gen 項。
-  - source の渡し方：M0 は `source: ""` 固定（自明マクロは入力を読まない・`parseItem` は stub）。実ソース slice（原本座標 `start..end`）を渡すのは M1（decl span 捕捉とセット）。
+  - source の渡し方：M0 は `source: ""` 固定（`parseItem` stub）。**M1 で実ソースを渡す＝✅**：`source` ＝対象項の実テキスト（エスケープして string literal 埋め込み）、`start` ＝原本オフセット（span の base）、`end` ＝informational。`parseItem` は `source` を丸ごとレックスし base=start で原本座標 span を返す。
   - `@Std/Io` を gen モードで強制ロード（harness の `write` 用）。auto-part 抑制・user `main` skip は gen モードフラグ（`Comp.genMode`）で分岐。
-- **M1＝構文層を共有コアへ切り出し**（「理想形（最終状態）」を実装に落とす段）。**射程確定**＝レクサ＋クリーン値ツリー AST＋共有パーサ（`String→AST`＝切り出しの本体）を `@Std/Syntax` に置き、**コンパイラ本体も同じ共有レクサ/パーサを使う**（コピーでなく同一物・1 AST 原則）。コンパイラは共有パーサで構文ツリーを得て**既存 `Comp` arena へ lower**（checks/codegen は無改修＝不動点が守る・パーサの codegen 播種は lower へ移す）。**arena→`DeclAst` 変換のショートカットは採らない**（それだと 1 AST 原則が崩れマクロ用とコンパイラ用が別物になる＝syn/rustc drift）。**やらない＝重なりの外**：codegen を型付き IR 化し arena を消す負債根 #1（境界の下・マクロ不可視・別件で後日 part 単位）。確定手順（レクサ一本化→ツリー型→共有パーサ〔宣言先行〕→本体フロントエンド差し替え→`parseItem` 本物化）は [worklog.md](worklog.md)「M1 の進め方」。**再帰値型 auto-boxing が前提として既に整っている**（自己参照 AST を Plew で書ける）。
+- **M1＝構文層を共有コアへ切り出し＝コア機能✅実装済**（tag `metaprogramming-m1`）。**マクロが対象宣言の実構造を読んで生成できる**：`@Std/Syntax` に共有レクサ（`Syntax/Lexer.pw`・コンパイラ本体も import＝レクサ 1 本）＋クリーン値ツリー AST（`Syntax/Ast.pw`＝Span/TypeAst/FieldAst/VariantAst/ParamAst/DeclAst〔タグ付き struct・DeclKind〕）＋宣言パーサ（`Syntax/Parser.pw`＝`parseItem`・struct/enum/fn シグネチャ＋型式）＋出力ビルダ（`Syntax/Build.pw`＝`Src`）。`parseItem` 本物化＝ハーネスが対象項の実ソースをエスケープ埋め込み（`internSourceLiteral`）＋原本オフセット（`DeriveReq.declStart/declEnd`）を base に渡す。**ディレクティブ引数 `@[Name(label: expr)]`** も実装（`parseDirectiveArgs`・`DeriveReq.args`・synthGenMain が `<Name label=expr/>` 構築）。gen テスト＝fieldnames/directiveargs/enumvariants/deriveshow（最後は `pub impl T as Show` 生成＝実用 derive）。
+  - **残（M1 の理想完成）**：①**本体フロントエンドの共有パーサ統合**（共有パーサ→tree→lower→arena・旧 `parseProgram/parseStruct/Enum/Func` 退役＝真の 1 AST・重複パーサ解消・不動点 byte 同一性が重い）＝**未着手**。②**構文層の式・文・パターン**（関数本体を木で surface）。現状はマクロ前進優先で **1→2→3〔宣言〕→5** を先に通した（parseItem は arena 独立なので本体無改修でマクロが動く）。**arena→`DeclAst` 変換のショートカットは採らない**（1 AST 原則）。**やらない＝重なりの外**：codegen を型付き IR 化し arena を消す負債根 #1（境界の下・マクロ不可視・別件）。確定手順は [worklog.md](worklog.md)「M1 の進め方」、暫定判断はローカル review-items。
   - **authoring 層（ハイライト対応テンプレート/quote）は future・additive**。コアは String 出力のまま。
 - **M2＝コアライブラリのマクロを dogfood**：`Eq`/`Hash` をこの機構で書く。現行のコンパイラ特権合成（`synthStructEq` 等）から段階移行（特権版を残したまま並行→検証→差し替え）。`Hash` が出れば `Dictionary`（`[k:v]`）に接続。
 - **M3＝パッケージ管理導入後に切り出し**：`@Std/Syntax`（lexer+parser+AST）を独立した**外部共有パッケージ**へ昇格。コンパイラもマクロツールも同一パッケージ版に依存する構成へ。
@@ -110,8 +111,8 @@ spec/16 は **入力＝TokenStream（span 付き）＋ヘルパで TokenStream�
 
 ## 未確定で実装前に詰める点
 
-- **`@Std/Syntax` の `DeclAst` 具体形**（struct/enum＝`name`/`fields(name,type)`/`variants`・関数シグネチャ・型式 `TypeExpr`＝再帰値型・span の持ち方〔原本座標〕）。← M1 で詰める。
-- `parseItem` の実装＝確定（`@Std/Syntax` 共有レクサ/パーサを対象項のスライス＋base offset で呼ぶ薄いラッパ・原本座標で木が返る）。
+- **`@Std/Syntax` の `DeclAst` 具体形＝✅確定・実装済**（`Syntax/Ast.pw`）：`DeclAst`＝タグ付き struct（`kind: DeclKind`＋`name`/`typeParams`/`span`＋struct 用 `isUnique`/`fields`、enum 用 `variants`、fn 用 `params`/`hasRet`/`ret`）。`FieldAst`＝`name`/`ty: TypeAst`/`isMut`/`vis`/`hasDefault`、`VariantAst`＝`name`/`fields`、`ParamAst`＝`name`/`ty`/モード/`noLabel`、`TypeAst`＝`name`/`args: Array[TypeAst]`/`span`（原本座標）。enum-of-structs でなくタグ付き struct なのは codegen の依存順制約回避（ローカル review-items 参照）。
+- `parseItem` の実装＝✅確定・実装済（`@Std/Syntax` 共有レクサ/パーサ・原本座標で木が返る）。
 - 生成コマンド名・設定（どこに対象を書くか・対象ディレクトリ）・source の渡し方（最も楽な形で）。
 - authoring 層（テンプレート/quote）の具体（future・additive・コアは String 出力のまま）。
 - 生トークン escape hatch（関数形/DSL マクロを将来入れる場合のみ）。
