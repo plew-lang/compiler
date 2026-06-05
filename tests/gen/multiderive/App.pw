@@ -1,0 +1,40 @@
+import @Std/Io with { write }
+import @Std/Syntax with { Derive, DeclAst, Src, newSrc }
+
+struct A { }
+pub impl A as Derive {
+    fn derive(input: DeclAst) -> String {
+        mut val s: Src = newSrc()
+        s.put("fn fromA() -> String { return \"A:")
+        s.put(input.name)
+        s.put("\" }\n")
+        return s.finish()
+    }
+}
+
+struct B { }
+pub impl B as Derive {
+    fn derive(input: DeclAst) -> String {
+        mut val s: Src = newSrc()
+        s.put("fn fromB() -> String { return \"B:")
+        s.put(input.name)
+        s.put("\" }\n")
+        return s.finish()
+    }
+}
+
+@[A, Eq, B]
+struct Thing {
+    pub val v: I64
+}
+
+fn main() {
+    write(s: fromA())
+    write(s: "\n")
+    write(s: fromB())
+    write(s: "\n")
+    // Eq (builtin) also applied: equality works
+    val p: Thing = <Thing v=5 />
+    val q: Thing = <Thing v=5 />
+    if p == q { write(s: "eq-ok\n") }
+}
