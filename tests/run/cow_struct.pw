@@ -5,7 +5,7 @@
 import @Std/Io with { print }
 
 struct Bag {
-    mut val items: Array[I32]
+    pub mut val items: Array[I32]
 }
 
 fn main() {

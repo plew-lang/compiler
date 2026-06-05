@@ -7,7 +7,7 @@ unique struct File {
     val fd: I64
     deinit { print(self.fd) }
 }
-impl File {
+pub impl File {
     move fn close() {
         write(s: "closing\n")
         print(self.fd)            // read self in the body

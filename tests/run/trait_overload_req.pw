@@ -5,7 +5,7 @@ trait Writer {
     fn put(data: String) -> I64
 }
 struct F {}
-impl F as Writer {
+pub impl F as Writer {
     fn put(data: I64) -> I64 { return data }
     fn put(data: String) -> I64 { return 99I64 }
 }

@@ -1,12 +1,12 @@
 import @Std/Io with { print }
 
 struct Pair[A, B] {
-    val first: A
-    val second: B
+    pub val first: A
+    pub val second: B
 }
 
 struct Box[T] {
-    val v: T
+    pub val v: T
 }
 
 fn main() {

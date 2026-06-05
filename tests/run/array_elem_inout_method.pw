@@ -5,10 +5,10 @@
 import @Std/Io with { print }
 
 struct Cnt {
-    mut val n: I32
+    pub mut val n: I32
 }
 
-impl Cnt {
+pub impl Cnt {
     inout fn bump(by: I32) {
         self.n += by
     }

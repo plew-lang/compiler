@@ -6,7 +6,7 @@ trait Stepper {
 }
 
 struct Counter { val n: I64 }
-impl Counter as Stepper {
+pub impl Counter as Stepper {
     fn step() -> I64 { return self.n }
 }
 

@@ -675,6 +675,23 @@ fn genStmt(c: inout Comp, id: U64) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "cannot assign to an immutable place; the binding and field must be declared `mut val`")
                         return
                     }
+                    // member visibility (spec/05): writing `base.field` needs the
+                    // field externally writable — only `pub` (vis 2); private and
+                    // pub(get) are writable only inside the type's anonymous impl.
+                    match c.exprs[target] {
+                        Expr.Field(val base, val nameStart, val nameLen) => {
+                            val fbt: TypeInfo = exprType(c: inout c, id: base)
+                            if fbt.kind == 2 {
+                                checkFieldWriteVis(c: inout c, ownerStart: fbt.nameStart, ownerLen: fbt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+                            } else {
+                                if fbt.kind == 3 {
+                                    val arrW: Bind = kwSpan(c: inout c, kw: "Array", kwLen: 5)
+                                    checkFieldWriteVis(c: inout c, ownerStart: arrW.nameStart, ownerLen: arrW.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
                     val ctt: TypeInfo = exprType(c: inout c, id: target)
                     // reassigning a unique place: deinit the previous value first
                     // (deterministic — it would otherwise be skipped), then store the

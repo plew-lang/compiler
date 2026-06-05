@@ -866,6 +866,86 @@ fn fieldDeclaredMut(c: inout Comp, structStart: U64, structLen: U64, fieldStart:
     return true
 }
 
+// Member visibility (spec/05). A field's visibility 0=private / 1=pub(get) / 2=pub,
+// or 3 when the struct/field isn't found (e.g. String's special `.bytes` view, or a
+// scalar) — then visibility is not enforced.
+fn fieldVis(c: inout Comp, structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> U64 {
+    mut val si: U64 = 0
+    while si < c.structs.count {
+        val s: StructDef = c.structs[si]
+        if spansEqual(c: inout c, aStart: s.nameStart, aLen: s.nameLen, bStart: structStart, bLen: structLen) {
+            val fs: Array[FieldDef] = s.fields
+            mut val fi: U64 = 0
+            while fi < fs.count {
+                val f: FieldDef = fs[fi]
+                if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: fieldStart, bLen: fieldLen) {
+                    return f.vis
+                }
+                fi += 1
+            }
+        }
+        si += 1
+    }
+    return 3U64
+}
+
+// Are we lowering code inside the type `(ownerStart,ownerLen)`'s own anonymous impl
+// (the only place its non-public members are visible — spec/05)? True when the
+// current function is a method whose receiver head names that type. Extensions
+// (`#Ext`) aren't implemented, so any method context is an anonymous impl.
+fn inAnonImplOf(c: inout Comp, ownerStart: U64, ownerLen: U64) -> Bool {
+    if c.curHasRecv {
+        return spansEqual(c: inout c, aStart: c.curRecvStart, aLen: c.curRecvLen, bStart: ownerStart, bLen: ownerLen)
+    }
+    return false
+}
+
+// Reading `base.field` (spec/05): a private field (vis 0) is visible only inside its
+// type's anonymous impl. pub(get)/pub are readable anywhere the type is.
+fn checkFieldReadVis(c: inout Comp, ownerStart: U64, ownerLen: U64, fieldStart: U64, fieldLen: U64, offset: U64) {
+    val v: U64 = fieldVis(c: inout c, structStart: ownerStart, structLen: ownerLen, fieldStart: fieldStart, fieldLen: fieldLen)
+    if v == 0U64 {
+        if inAnonImplOf(c: inout c, ownerStart: ownerStart, ownerLen: ownerLen) {
+        } else {
+            compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "field is private (visible only in its type's anonymous impl)")
+        }
+    }
+}
+
+// Writing `base.field = …` (spec/05): both a private field (vis 0) and a `pub(get)`
+// field (vis 1) are writable only inside the type's anonymous impl; only `pub`
+// (vis 2) is externally writable.
+fn checkFieldWriteVis(c: inout Comp, ownerStart: U64, ownerLen: U64, fieldStart: U64, fieldLen: U64, offset: U64) {
+    val v: U64 = fieldVis(c: inout c, structStart: ownerStart, structLen: ownerLen, fieldStart: fieldStart, fieldLen: fieldLen)
+    if v == 0U64 {
+        if inAnonImplOf(c: inout c, ownerStart: ownerStart, ownerLen: ownerLen) {
+        } else {
+            compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "field is private (writable only in its type's anonymous impl)")
+        }
+    } else {
+        if v == 1U64 {
+            if inAnonImplOf(c: inout c, ownerStart: ownerStart, ownerLen: ownerLen) {
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "field is `pub(get)` — readable but writable only in its type's anonymous impl")
+            }
+        }
+    }
+}
+
+// Calling `recv.method(…)` (spec/05): a method in a bare `impl` block (Func.isPub
+// false) is private — visible only inside the type's anonymous impl. `pub impl`
+// methods are callable wherever the type is. `ownerStart/Len` names the receiver
+// type head (so generic receivers match by name).
+fn checkMethodVis(c: inout Comp, ownerStart: U64, ownerLen: U64, mf: Func, offset: U64) {
+    if mf.isPub {
+    } else {
+        if inAnonImplOf(c: inout c, ownerStart: ownerStart, ownerLen: ownerLen) {
+        } else {
+            compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "method is private (callable only in its type's anonymous impl; put it in a `pub impl`)")
+        }
+    }
+}
+
 // Whether an assignment target is a mutable *place* (spec: composite mutability).
 // A bare binding must be `mut val`/`inout`; a field access additionally needs the
 // field declared `mut val` and its base to be a mutable place; an index follows

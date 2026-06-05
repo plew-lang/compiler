@@ -1,0 +1,7 @@
+// Reading an unmarked (private) field from outside the type's anonymous impl is
+// a visibility error (spec/05): private members are anonymous-impl-only.
+struct Box { val secret: I64 }
+fn main() {
+    val b = <Box secret=5 />
+    val x: I64 = b.secret
+}

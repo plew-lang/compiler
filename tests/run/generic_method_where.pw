@@ -4,10 +4,10 @@ import @Std/Io with { print }
 // the receiver instantiation's type argument must conform (#8).
 trait Bar { fn bar() -> I64 }
 struct N { val v: I64 }
-impl N as Bar { fn bar() -> I64 { return self.v } }
+pub impl N as Bar { fn bar() -> I64 { return self.v } }
 
 struct Box[T] { val item: T }
-impl[T] Box[T] {
+pub impl[T] Box[T] {
     fn useBar() -> I64 where T: Bar { return self.item.bar() }
 }
 

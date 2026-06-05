@@ -1,0 +1,10 @@
+// A method in a bare `impl` (not `pub impl`) is private — calling it from outside
+// the type's anonymous impl is a visibility error (spec/05).
+struct Widget { pub val id: I64 }
+impl Widget {
+    fn secretName() -> I64 { return self.id }
+}
+fn main() {
+    val w = <Widget id=7 />
+    val n: I64 = w.secretName()
+}

@@ -3,7 +3,7 @@ import @Std/Io with { print }
 // `@[Eq]` synthesizes a field-wise Eq witness (and registers the conformance),
 // so `==`/`!=` work and the type satisfies a `where T: Eq` bound — no manual impl.
 @[Eq]
-struct Point { val x: I64  val y: I64 }
+struct Point { pub val x: I64  pub val y: I64 }
 
 fn same[T](a: T, b: T) -> Bool where T: Eq { return a == b }
 fn boolI(b: Bool) -> I64 { if b { return 1I64 } return 0I64 }

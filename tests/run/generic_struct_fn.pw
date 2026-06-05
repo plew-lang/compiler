@@ -1,7 +1,7 @@
 import @Std/Io with { print }
 
 struct Box[T] {
-    val v: T
+    pub val v: T
 }
 
 fn unwrap(b: Box[I32]) -> I32 {

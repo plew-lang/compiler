@@ -7,10 +7,10 @@ trait Drawable {
 }
 
 struct Sprite { val w: I64 }
-impl Sprite {
+pub impl Sprite {
     fn render() -> I64 { return self.w }
 }
-impl Sprite as Drawable {
+pub impl Sprite as Drawable {
     fn draw() -> I64 via render
 }
 

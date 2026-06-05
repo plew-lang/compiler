@@ -7,10 +7,10 @@ extern "plew-intrinsic" {
     fn rawIsUnique(b: RawBuffer[I64]) -> Bool
 }
 struct VecI {
-    mut val data: RawBuffer[I64]
-    mut val count: U64
+    pub mut val data: RawBuffer[I64]
+    pub mut val count: U64
 }
-impl VecI {
+pub impl VecI {
     inout fn push(value~: I64) {
         val cap: U64 = rawCap(b: self.data)
         mut val grow: Bool = true

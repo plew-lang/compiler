@@ -1,5 +1,5 @@
 import @Std/Io with { print }
-struct Bag { mut val items: Array[I32]  mut val tag: I32 }
+struct Bag { pub mut val items: Array[I32]  pub mut val tag: I32 }
 fn main() {
     mut val a: Bag = <Bag items=[1, 2] tag=5 />
     mut val b: Bag = a

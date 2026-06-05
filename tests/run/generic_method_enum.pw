@@ -5,7 +5,7 @@ enum Maybe[T] {
     None
 }
 
-impl[T] Maybe[T] {
+pub impl[T] Maybe[T] {
     fn unwrapOr(fallback: T) -> T {
         match self {
             Maybe.Some(val v) => { return v }

@@ -4,8 +4,8 @@
 import @Std/Io with { print }
 
 struct Counter {
-    mut val n: I64
-    val base: I64
+    pub mut val n: I64
+    pub val base: I64
 }
 
 fn main() {

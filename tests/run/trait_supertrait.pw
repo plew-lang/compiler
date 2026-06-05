@@ -3,8 +3,8 @@ import @Std/Io with { print }
 trait Super { fn base() -> I64 }
 trait Sub: Super { fn extra() -> I64 }
 struct X { val n: I64 }
-impl X as Super { fn base() -> I64 { return self.n } }
-impl X as Sub { fn extra() -> I64 { return self.n + 1I64 } }
+pub impl X as Super { fn base() -> I64 { return self.n } }
+pub impl X as Sub { fn extra() -> I64 { return self.n + 1I64 } }
 fn main() {
     val x: X = <X n=5 />
     print(x.base())    // 5

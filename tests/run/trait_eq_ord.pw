@@ -4,7 +4,7 @@ import @Std/Io with { print }
 // and `< <= > >=` to the Ord witness `compare` (a tag test on its Ordering).
 enum Ordering { Less  Equal  Greater }
 
-struct Money { val cents: I64 }
+struct Money { pub val cents: I64 }
 trait Eq { assoc fn eq(lhs: Money, rhs: Money) -> Bool }
 trait Ord { assoc fn compare(lhs: Money, rhs: Money) -> Ordering }
 impl Money as Eq {

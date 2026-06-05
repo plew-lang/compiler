@@ -3,8 +3,8 @@ import @Std/Io with { print }
 // A struct holding an Array of structs, constructed into a local, appended to an
 // array, then dropped at scope exit — exercises value-semantics ownership of
 // struct-element arrays (the array deep-owns its elements; push/set copy them).
-struct Item { val v: I64 }
-struct Box { val items: Array[Item] }
+struct Item { pub val v: I64 }
+struct Box { pub val items: Array[Item] }
 
 fn build(flag: Bool) -> I64 {
     mut val store: Array[Box] = []

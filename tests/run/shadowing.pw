@@ -3,7 +3,7 @@
 import @Std/Io with { print }
 
 struct P {
-    val x: I32
+    pub val x: I32
 }
 
 fn main() {

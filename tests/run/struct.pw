@@ -1,12 +1,12 @@
 import @Std/Io with { print }
 
 struct Point {
-    val x: I64
-    val y: I64
+    pub val x: I64
+    pub val y: I64
 }
 struct Line {
-    val a: Point
-    val b: Point
+    pub val a: Point
+    pub val b: Point
 }
 fn main() {
     val p: Point = <Point x=3 y=4 />

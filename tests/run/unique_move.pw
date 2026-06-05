@@ -4,7 +4,7 @@ import @Std/Io with { write, print }
 // source goes dead, and `deinit` still runs exactly once — for whoever owns the
 // value last.
 unique struct File {
-    val fd: I64
+    pub val fd: I64
     deinit { print(self.fd) }
 }
 

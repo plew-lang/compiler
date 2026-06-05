@@ -1,7 +1,7 @@
 import @Std/Io with { print }
 
 struct Box {
-    val xs: Array[I64]
+    pub val xs: Array[I64]
 }
 fn sum(b: Box) -> I64 {
     mut val s: I64 = 0
