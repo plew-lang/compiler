@@ -29,23 +29,36 @@ struct Point {
 
 ユーザーが独自のコード生成を定義できます。骨格は以下の通り確定。
 
-### マクロ = `Derive` を実装する構造体・入出力は `TokenStream`
+### マクロ = `Derive` を実装する構造体・入力は `TokenStream`／出力は `String`
 
-マクロは **`TokenStream` を受け取り `TokenStream` を返す**メソッドを持つ構造体として定義し、`Derive` トレイトを実装します（Rust の手続き的マクロに近い）。
+マクロは **`TokenStream`（注釈対象項のトークン列）を受け取り、生成する Plew ソースを `String` で返す**メソッドを持つ構造体として定義し、`Derive` トレイトを実装します。
 
 ```plew
-// ⚠️ シグネチャ・quote 構文は確定前のたたき台。
-struct MyDerive { }
+// ⚠️ 細部は確定前のたたき台。
+struct MyDerive {
+    val a: I32              // ← ディレクティブ引数 = このフィールド
+}
 pub impl MyDerive as Derive {
-    fn derive(input: TokenStream) -> TokenStream {
-        // input を解析し、生成するコードを TokenStream として返す
+    fn derive(input: TokenStream) -> String {
+        // self.a で引数を読み、input を解析し、生成ソースを String で返す
+        return ""
     }
 }
+
+@[MyDerive(a: 32)]            // = MyDerive { a: 32 } を構築して .derive(input) を呼ぶ
+struct P { }
 ```
 
-**なぜ `TokenStream`（typed reflection でなく）か。** メタプログラミングに不要な制約を作らないため。derive 引数には型宣言だけでなく**関数・`impl` など任意の項**も渡せるようにしたく、入力を「型の構造サマリ」に固定すると表現力が足りない。`TokenStream` は最大限汎用で、かつ**安定境界**（文法が増えてもトークン表現は additive）。
+**入力 `TokenStream`／出力 `String` の非対称は、エラーをどこに出すかと一致している。**
 
-**リッチな AST はコンパイラ外のライブラリに分離する（将来）。** Rust が `rustc` と `syn` で**2 つのパーサ**を持ち同期に苦しむのを避けるため、Plew は self-host の利を活かし **lexer+parser+AST を 1 つのライブラリに切り出し、コンパイラもマクロもそれに依存**する構成を目指す（真実の源が 1 つ＝版管理が綺麗）。ただし**現状パッケージ管理機構が無い**ため切り出しは後回しで、当面は `lex`/`render`/`quote` 等を**コンパイラ提供の組み込み**として露出する（→ architecture doc の段取り）。
+- **入力＝`TokenStream`（span 付き）**：マクロが入力を解析して拒否する（「この型は Hash 不可」等）とき、**ユーザーの元ソース位置を指す**必要がある。`String` は位置を失うので、span を持つ `TokenStream` が要る。
+- **出力＝`String`**：生成コードのエラーは**生成ファイル `<Foo>.gen.pw`（実ファイル）の普通のコンパイルエラー**で出るので、出力側に span は要らない（再コンパイルが位置を持つ）。`quote` のような埋め込み構文を作らず、生成は**普通の Plew 文字列・既存の補間 `"{…}"`** で組む（「Plew の中の Plew でないもの」を作らない・ハイライトもただの Plew）。
+
+**ディレクティブ引数 = マクロ struct のフィールド。** `@[Name(a: 32)]` は `Name { a: 32 }` を構築して `.derive(input)` を呼ぶ糖衣。マクロ struct のフィールドがそのまま設定スキーマで、`derive` は `self`（構築済み設定）からそれを読む。`@[Eq]` は引数なし＝既定構築。既存の labeled args / 構築構文を再利用し、新概念を作らない。
+
+**なぜ `TokenStream`（typed reflection でなく）入力か。** メタプログラミングに不要な制約を作らないため。derive 対象/引数には型宣言だけでなく**関数・`impl` など任意の項**も渡せるようにしたく、入力を「型の構造サマリ」に固定すると表現力が足りない。`TokenStream` は最大限汎用かつ**安定境界**（文法が増えてもトークン表現は additive）。型 derive の 99% は**parse ヘルパ**（`TokenStream → DeriveInput { name, fields, variants }`・span 保持）で構造化して回す。
+
+**リッチな AST はコンパイラ外のライブラリに分離する（将来）。** Rust が `rustc` と `syn` で**2 つのパーサ**を持ち同期に苦しむのを避けるため、Plew は self-host の利を活かし **lexer+parser+AST を 1 つのライブラリに切り出し、コンパイラもマクロもそれに依存**する構成を目指す（真実の源が 1 つ＝版管理が綺麗）。ただし**現状パッケージ管理機構が無い**ため切り出しは後回しで、当面は `TokenStream` 型・parse ヘルパ・span エラー関数を**コンパイラ提供の組み込み**として露出する（→ architecture doc の段取り）。
 
 ### 出力モデル：別ファイル・原本不変・add-only（透明性の要）
 
@@ -73,10 +86,10 @@ pub impl MyDerive as Derive {
 
 ## 未決事項
 
-- `Derive` トレイトの正確なシグネチャ（引数の数＝ディレクティブ引数 `@[Encode(rename: …)]` をどう渡すか・構造体に設定を持たせる形か）。
-- `TokenStream` の正確な型・API（トークン表現・構築/分解の手段）。実行系のプロセス境界はテキストとし、マクロ内で `lex`/`render` する方針（→ architecture doc）。
-- `quote` の補間規則（テンプレート構文・typed な穴の差し込み）。
+- `TokenStream` の正確な型・API（トークン表現・span の持ち方・parse ヘルパが返す `DeriveInput` の具体形＝何を構造で持ち、型などの素片を `String`/トークン片で持つか）。
+- span エラー関数の形（マクロが入力トークンの位置を指してエラーを出す手段）。
 - 生成コマンドの名前・設定方法。
+- **authoring 層（将来・additive）**：`String` 直書きはシンタックスハイライトが効かない。テンプレートファイル方式（ほぼ Plew の雛形を読み込んで穴埋め）や opt-in の `quote` を**コアを汚さず後付け**で足す。コア（TokenStream in / String out）は不変。
 - マクロ自身のビルドと配布（パッケージ管理導入後・同一リポジトリ内か別パッケージか）。
 - AST/マクロ用ライブラリの切り出し（パッケージ管理導入後）。
 - [拡張システム](../02-type-system/09-extensions.md)（`#Extension`）との関係。

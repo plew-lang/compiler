@@ -4,16 +4,22 @@
 
 ## 全体像
 
-マクロは **`TokenStream` を受け取り `TokenStream` を返す `Derive` 実装の Plew コード**。専用コマンドが derive を実行し、**読める Plew ソース `<Foo>.gen.pw` を生成**（コミット）。ビルドは生成済みを読むだけ。原本 `<Foo>.pw` は不変、取り込みは `@[...]` の存在でローダが自動。
+マクロは **`TokenStream`（注釈対象項のトークン・span 付き）を受け取り、生成 Plew ソースを `String` で返す `Derive` 実装の Plew コード**。専用コマンドが derive を実行し、**読める Plew ソース `<Foo>.gen.pw` を生成**（コミット）。ビルドは生成済みを読むだけ。原本 `<Foo>.pw` は不変、取り込みは `@[...]` の存在でローダが自動。
+
+- **入力＝TokenStream（span）／出力＝String** の非対称はエラーの出どころと一致：入力エラー（マクロが対象を拒否）はユーザー元ソースを指す＝span 要る／出力エラー（生成コードが通らない）は `<Foo>.gen.pw` の普通のコンパイルエラー＝span 不要。だから**出力に `quote` のような埋め込み構文は作らず**、普通の Plew 文字列＋既存補間 `"{…}"` で組む。
+- **ディレクティブ引数＝マクロ struct のフィールド**：`@[Name(a: 32)]` ＝ `Name { a: 32 }` を構築して `.derive(input)`（`derive` はメソッド・self ＝設定）。
 
 リッチな AST は**将来コンパイラ外のライブラリに切り出す**（lexer+parser+AST を 1 つにし、コンパイラもマクロも依存＝Rust の 2 パーサ問題を回避）。だが**パッケージ管理機構が無い現状では非現実的**なので、当面は組み込みヘルパで代替する。
 
 ## 実装の段取り（パッケージ管理より前に動かす）
 
-1. **マクロ機構（`TokenStream` 入出力 ＋ 最小の組み込みヘルパ）**
-   - `TokenStream` 型と組み込み：`lex`（テキスト→トークン）・`render`（トークン→テキスト）・`quote`（テンプレート→トークン）・型宣言を軽く構造化する parse ヘルパ（`{ name, fields:[(name,type)], variants }` 程度）。
+1. **マクロ機構（`TokenStream` 入力 / `String` 出力 ＋ 最小の組み込み）**
+   - `TokenStream` 型（span 付き・既存 `Tok`/`Kind` を束ねる）。
+   - 組み込み：**parse ヘルパ**（`TokenStream → DeriveInput { name, fields:[(name,type)], variants }`・span 保持）と **span エラー関数**（入力トークンの位置を指してエラー）。
+   - 出力は普通の `String` を返すだけなので `render`/`quote` は不要。入力 lex はランナーがやるのでマクロ側 lex も不要。
    - これらは「コンパイラが既に持つ lexer/parser を組み込みとして露出するだけ」＝`print` と同じ立て付けで、**パッケージ管理は不要**。
-   - 生トークンだけだと Eq すら書くのが辛いので、`quote`（出力）と最小 parse（入力）を**最初から**出すのが肝（ステップ3 を実際に書けるようにする）。
+   - 生トークンだけだと Eq すら書くのが辛いので、parse ヘルパ（`DeriveInput`）を**最初から**出すのが肝（ステップ3 を実際に書けるようにする）。
+   - **authoring 層（ハイライト対応のテンプレート/quote）は future・additive**。コアは String 出力のまま据え置く。
 2. **実行コマンド（仮 `plew gen`）**
    - `@[Name]` を走査 → 対応する `Name` の `derive` を呼ぶ小さな `main` を合成 → **コンパイルして別プロセスで実行**（既存の .pw→C→実行を再利用）→ 出力を `<Foo>.gen.pw` に書く。
    - **プロセス境界はソーステキスト**：マクロ入力＝注釈対象項のソース片、出力＝生成ソース。マクロ内では `lex`/`render`/`quote` で TokenStream を扱う。トークンのバイナリ直列化形式を設計せずに済む。
@@ -24,13 +30,14 @@
 
 ## 実行系の具体（ステップ2）
 
-- マクロは「`fn derive(input: TokenStream) -> TokenStream` を持つ `Derive` 実装」を含む通常の Plew パッケージ。
+- マクロは「`fn derive(input: TokenStream) -> String` を持つ `Derive` 実装」を含む通常の Plew パッケージ。
 - `plew gen` の 1 ファイル分の処理：
-  1. ソースをロード（`part`/`import` 解決）し、`@[Name]` 付き型宣言を集める。
-  2. 各 `(対象項, Name)` について、`Name.derive(<対象項のソース片>)` を呼ぶ `main` を合成（テキスト I/O＝stdin で対象片、stdout で生成片）。
+  1. ソースをロード（`part`/`import` 解決）し、`@[Name(args)]` 付き対象項を集める。**gen 中は `.gen.pw` の auto-part 取り込みを抑制**（これから作るので）。
+  2. 各 `(対象項, Name(args))` について、`Name { args }` を構築し `.derive(input)` を呼ぶ `main` を合成。`input` ＝対象項のソース片を lex した `TokenStream`（ランナーが lex）。出力は `String`（生成ソース）。プロセス境界はテキスト（stdin で対象片、stdout で生成 String）。
   3. それをコンパイル（.pw→C→bin）し、サブプロセス実行。複数 derive は出力を連結。
   4. `<Foo>.pw` 由来の生成片を `<Foo>.gen.pw` に書き出す（既存があれば上書き＝生成物は決定的）。
-- ローダ側：`<Foo>.pw` に `@[...]` を見たら `<Foo>.gen.pw` を同モジュールの part として自動ロード（無ければ「`plew gen` を走らせよ」と loud に失敗）。
+- ローダ側（ビルド時）：`<Foo>.pw` に `@[...]` を見たら `<Foo>.gen.pw` を同モジュールの part として自動ロード（無ければ「`plew gen` を走らせよ」と loud に失敗）。
+- マクロが入力を拒否する場合は span エラー関数で**対象項の元位置**を指す（出力エラーは別＝`.gen.pw` の再コンパイルが指す）。
 
 ## 同一パッケージ/モジュール内 derive（Rust の別クレート制約は不要）
 
@@ -50,8 +57,9 @@
 
 ## 未確定で実装前に詰める点
 
-- `TokenStream` の in-memory 表現（既存 `Tok`/`Kind` を束ねるだけで足りるか）。
-- `quote` の補間構文（`${expr}` / フィールド反復 `${for f in … { … }}` の正確な規則・typed な穴）。
-- ディレクティブ引数 `@[Encode(rename: …)]` の渡し方（第 2 引数の TokenStream か・マクロ struct の設定フィールドか）。
+- `TokenStream` の in-memory 表現（既存 `Tok`/`Kind` を束ねるだけで足りるか・span の持ち方）。
+- **`DeriveInput` の具体形**（parse ヘルパの戻り＝何を構造で持ち、フィールド型などの素片を `String`/トークン片で持つか）。← 次に詰める。
+- span エラー関数の形（入力トークン位置を指す手段）。
 - 生成コマンド名・設定（どこに対象を書くか・対象ディレクトリ）。
+- authoring 層（テンプレート/quote）の具体（future・additive・コアは String 出力のまま）。
 - `#Extension` との関係（生成した `impl` を拡張として出すか）。
