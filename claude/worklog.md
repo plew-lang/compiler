@@ -19,7 +19,27 @@
 
 **M0＝済**（tag `metaprogramming-m0`）。`plewc --gen <file>` モード＋`@Std/Syntax`（最小）＋ローダ auto-part＋`plew-gen.sh`＋`tests/gen/`。自明マクロ（固定文字列を返す）が `@[Greet]`→harness→`Greet.deriveFromSource`→`App.gen.pw`→通常ビルドで auto-part→生成関数実行、まで端から端まで貫通。実装メモは末尾「再利用資産・罠」の gen 項。
 
-- **M1**（次）＝`@Std/Syntax` の本実装＝**理想形＝構文層を唯一の真実に**（lexer＋完全値ツリー AST＋parser＋unparser・**構文 vs 意味で切る**・コンパイラとマクロが**同一の 1 AST**を共有〔syn/rustc drift を構造的に回避〕＝詳細は [metaprogramming-architecture.md](metaprogramming-architecture.md)「理想形（最終状態）」）。具体物は `DeclAst`/`TypeExpr`（String 名・再帰・全ノード原本座標 span・struct/enum/fn 網羅）と `parseItem`（base offset でスライスを原本座標 parse・stub を実装に）。M0 は `source: ""` 固定なので**対象項の実ソース slice をハーネスへ渡す**（decl span 捕捉＝directive `@`〜閉じ `}`）のも M1。**未決＝射程**：理想は式・文まで構文層まるごと共有だが、初手をどこまで（宣言レイヤ先行か一気か）／**コンパイラのレクサを `@Std/Syntax` に移して本体も import する一本化**（レクサは Comp 非依存で抽出可）は確定方向・パーサ/AST 全面共有は重い D の前倒しで射程判断中。**Dictionary は後**（理想ツリーは String 名で自己完結＝インターン化〔Phase C・Dictionary が道具〕は直交した後乗せ最適化・先行不要）。
+**M1＝`@Std/Syntax` の本実装＝構文層を共有コアへ切り出し（射程確定済）。** 理想形の正典は [metaprogramming-architecture.md](metaprogramming-architecture.md)「理想形（最終状態）」。下は確定した進め方。
+
+## M1 の進め方（確定手順・構文層の切り出し）
+
+**狙い＝「文字列→AST（レクサ＋クリーン値ツリー＋パーサ）」をコンパイラとマクロの唯一の共有物にする。** 切る線＝**構文（form）vs 意味（meaning）**。`String→AST` こそが切り出しの本体で、`parseItem` はその共有パーサを「対象項のソーススライス＋base offset」で呼ぶ薄いラッパ（原本座標で木が返る）。コンパイラ自身も同じ共有パーサを使う＝*コピーでなく同一物*（1 AST 原則＝マクロ専用の縮小 AST は作らない＝syn/rustc drift 回避）。
+
+**射程の確定（重要）**：
+- **やる＝構文層まるごと**（lexer＋完全値ツリー AST〔宣言・式・文・パターン・`TypeExpr`、String 名・全ノード原本座標 span〕＋parser）。コンパイラ本体はこの共有パーサで**構文ツリーを得て、それを既存の `Comp` arena へ lower** する（＝従来の parse-into-arena を「共有 parse→tree → lower→arena」に置換）。**checks も codegen も無改修**（arena を読むまま＝不動点が守る）。パーサが今やっている codegen 播種（`recordArrayElem` 等）は **lower 側へ移す**＝パーサは純粋（tokens→tree）。
+- **やらない＝重なりの外**：codegen を arena から型付き IR に作り替え arena を消す（負債根 #1）。これは**共有境界の下・マクロ不可視**で、メタプロにも境界の理想にも無益。境界の理想を達成した後に part 単位で増分（不動点が各 part を守る）＝今バンドルしない（青天井化を避ける）。lower→arena で当面 arena は残る＝**境界の理想は 1mm も損なわれない**（マクロは arena を見ない）。
+- **Dictionary は後**：理想ツリーは String 名で自己完結。インターン化（負債根 #2 の完済・`spansEqual`/`rangeEquals` 259 箇所を整数比較）＝Phase C で Dictionary を道具に。**先行不要・直交**。
+- **unparser（AST→source）は additive 後乗せ**（フォーマッタ/`quote`/round-trip の土台・derive は当面 String 出力なので M1 の機能には不要・ブロックしない）。
+
+**手順（各ステップで不動点＋`./test.sh` 緑を維持・ADD→reseed→USE）**：
+1. **レクサ一本化**：`compiler/src/Lexer.pw`（`Kind`/`Tok`/`lex`・Comp 非依存）を `@Std/Syntax` へ移設し、本体 `compiler/src/_.pw` も `import @Std/Syntax with { … }`。これでレクサが 1 本。⚠ 本体が `@Std/Syntax` を import する＝それが本体のブートストラップ・ソースに入る（seed が支える機能だけ使う）。
+2. **クリーン値ツリー AST 型を `@Std/Syntax` に定義**（`Decl`/`Field`/`Variant`/`Param`/`TypeExpr`/`Expr`/`Stmt`/`Pattern`…・String 名・再帰〔auto-boxing 既に在り〕・全ノード span）。
+3. **共有パーサ `tokens → tree`**（純粋・回復可能エラー・base offset 対応）。まず**宣言（struct/enum/fn シグネチャ＋TypeExpr）**を先行実装＝ここが M1 の機能マイルストン（マクロが型/フィールド/関数を読める）。式・文・パターンは続けて埋め構文層を完成。
+4. **本体フロントエンドを差し替え**：`lex`（共有）→ `parse`（共有・tree）→ `lower(tree)→Comp`（新パス＝arena 充填＋codegen 播種をここへ）。`parseProgram`/`parseStruct/Enum/Func` を置換。checks/codegen は不変。
+5. **`parseItem` を本物化**：対象項の実ソース slice＋base offset で共有パーサ→宣言ツリー。**ハーネスに実ソース slice を渡す**（M0 は `source: ""`・decl span 捕捉＝directive `@`〜閉じ `}`）。derive が実際に宣言を読んで生成＝M1 完了。
+6. （additive）**unparser**＝AST→source。
+
+**進捗の刻み方**：手順 1（レクサ）と 3（宣言パーサ）+4（lower）+5（parseItem）で「マクロが対象型を読める」M1 緑を取り、その後 3 の式・文・パターンで構文層を完成。auto-part の loud-fail（gen 未実行で `.gen.pw` 欠落）は directive→マクロ分類が要るので並行 additive。
 - **M2**＝dogfood（特権 Eq/Ord をマクロ化→`@[Hash]`→`Dictionary`）→ **M3** パッケージ管理後に外部切り出し。
 
 ## 並行・後続（renovate の残り・ロードマップ）
