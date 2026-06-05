@@ -360,6 +360,12 @@ struct DeriveReq {
     // declStart as the span base so the macro sees original coordinates.
     pub val declStart: U64 = 0
     pub val declEnd: U64 = 0
+    // directive arguments `@[Name(label: expr, ...)]` (spec/16): the macro struct
+    // is constructed `<Name label=expr .../>` so its `derive` reads them via
+    // `self.label`. Empty for a bare `@[Name]`. Reused as the element type of
+    // `pendingDerives` (the scratch list before the target type is known), where
+    // only nameStart/nameLen/args are meaningful.
+    pub val args: Array[MakeField] = []
 }
 
 // An associated-type binding `type Item = Concrete` from a conformance `impl Type
@@ -514,7 +520,7 @@ struct Comp {
     // `@[...]` derive requests recorded on type declarations, plus the scratch
     // list of derive names parsed for the *next* type declaration.
     pub mut val derives: Array[DeriveReq]
-    pub mut val pendingDerives: Array[Bind]
+    pub mut val pendingDerives: Array[DeriveReq]
     // gen mode (spec/16 `plew gen`): set when invoked as `plewc --gen <file>`.
     // The driver then suppresses the user's own `main` and the auto-part of
     // `<Foo>.gen.pw`, and emits a synthesized harness `main` (`genMainIdx`) that

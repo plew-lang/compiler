@@ -1,0 +1,43 @@
+import @Std/Io with { write }
+import @Std/Syntax with { Derive, DeclAst }
+import @Std/Core with { stringFromBytes }
+
+// A parameterized derive: `@[Tagged(prefix: "hello", times: 3)]`. The directive
+// args become fields the macro reads via self.
+struct Tagged {
+    val prefix: String
+    val times: I64
+}
+
+pub impl Tagged as Derive {
+    fn derive(input: DeclAst) -> String {
+        mut val out: Array[U8] = []
+        pushStr(into: inout out, s: "fn tag() -> String {\n    return \"")
+        mut val i: I64 = 0
+        while i < self.times {
+            pushStr(into: inout out, s: self.prefix)
+            pushStr(into: inout out, s: "-")
+            i += 1
+        }
+        pushStr(into: inout out, s: input.name)
+        pushStr(into: inout out, s: "\"\n}\n")
+        return stringFromBytes(out)
+    }
+}
+
+fn pushStr(into: inout Array[U8], s: String) {
+    val b: Array[U8] = s.bytes
+    mut val i: U64 = 0
+    while i < b.count {
+        into.append(b[i])
+        i += 1
+    }
+}
+
+@[Tagged(prefix: "hi", times: 3)]
+struct Widget { }
+
+fn main() {
+    write(s: tag())
+    write(s: "\n")
+}

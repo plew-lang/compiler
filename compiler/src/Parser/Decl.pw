@@ -810,9 +810,11 @@ fn parseEnum(c: inout Comp) {
     drainDerives(c: inout c, typeStart: nameTok.start, typeLen: nameTok.len, isEnum: true, declStart: declStart, declEnd: declEnd)
 }
 
-// `@[Eq, Ord, ...]` directive (spec/16): collect the derive names into
-// pendingDerives, applied to the next type declaration. The `@` lexes as
-// Kind.Unknown; the leading `@` is the current token.
+// `@[Eq, Ord, Name(label: expr, ...), ...]` directive (spec/16): collect the
+// derive names — each with optional construction arguments — into pendingDerives,
+// applied to the next type declaration. `@[Name(a: 32)]` constructs `Name{a: 32}`
+// (the args become fields the macro's `derive` reads via `self.a`). The `@` lexes
+// as Kind.Unknown; the leading `@` is the current token.
 fn parseDirective(c: inout Comp) {
     c.advance()
     match c.curKind() {
@@ -830,11 +832,46 @@ fn parseDirective(c: inout Comp) {
             Kind.Ident => {
                 val t: Tok = c.cur()
                 c.advance()
-                c.pendingDerives.append(<Bind nameStart=t.start nameLen=t.len fieldStart=t.start fieldLen=t.len />)
+                val args: Array[MakeField] = parseDirectiveArgs(c: inout c)
+                c.pendingDerives.append(<DeriveReq typeStart=0 typeLen=0 isEnum=false nameStart=t.start nameLen=t.len declStart=0 declEnd=0 args=args />)
             }
             _ => { c.advance() }
         }
     }
+}
+
+// Optional directive arguments `(label: expr, ...)` after a derive name (spec/16).
+// Each is a labelled value that becomes a field on the constructed macro struct
+// (reuses MakeField: name span + expr id). Returns empty when no `(` follows.
+fn parseDirectiveArgs(c: inout Comp) -> Array[MakeField] {
+    mut val fields: Array[MakeField] = []
+    match c.curKind() {
+        Kind.LParen => { c.advance() }
+        _ => { return fields }
+    }
+    while true {
+        c.skipNewlines()
+        match c.curKind() {
+            Kind.RParen => {
+                c.advance()
+                break
+            }
+            Kind.Eof => { break }
+            Kind.Comma => { c.advance() }
+            Kind.Ident => {
+                val labelTok: Tok = c.cur()
+                c.advance()
+                match c.curKind() {
+                    Kind.Colon => { c.advance() }
+                    _ => {}
+                }
+                val v: U64 = parseExpr(c: inout c)
+                fields.append(<MakeField nameStart=labelTok.start nameLen=labelTok.len value=v />)
+            }
+            _ => { c.advance() }
+        }
+    }
+    return fields
 }
 
 // Attach the pending `@[...]` derive requests to the just-parsed type, then clear
@@ -842,8 +879,8 @@ fn parseDirective(c: inout Comp) {
 fn drainDerives(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool, declStart: U64, declEnd: U64) {
     mut val i: U64 = 0
     while i < c.pendingDerives.count {
-        val d: Bind = c.pendingDerives[i]
-        c.derives.append(<DeriveReq typeStart=typeStart typeLen=typeLen isEnum=isEnum nameStart=d.nameStart nameLen=d.nameLen declStart=declStart declEnd=declEnd />)
+        val d: DeriveReq = c.pendingDerives[i]
+        c.derives.append(<DeriveReq typeStart=typeStart typeLen=typeLen isEnum=isEnum nameStart=d.nameStart nameLen=d.nameLen declStart=declStart declEnd=declEnd args=d.args />)
         i += 1
     }
     c.pendingDerives = []

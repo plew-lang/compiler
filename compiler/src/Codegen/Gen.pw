@@ -94,9 +94,10 @@ fn synthGenMain(c: inout Comp) {
         val d: DeriveReq = c.derives[i]
         if isBuiltinDerive(c: inout c, start: d.nameStart, len: d.nameLen) {
         } else {
-            // `<Name />` (the macro struct; M0 has no directive args).
-            val noFields: Array[MakeField] = []
-            val mk: U64 = c.pushExpr(e: <Expr.Make typeStart=d.nameStart typeLen=d.nameLen variantStart=0 variantLen=0 isEnum=false ty=0 fields=noFields />)
+            // `<Name label=expr .../>` — the macro struct, constructed with the
+            // directive arguments `@[Name(label: expr)]` as fields (empty for a
+            // bare `@[Name]`), so its `derive` reads them via `self.label`.
+            val mk: U64 = c.pushExpr(e: <Expr.Make typeStart=d.nameStart typeLen=d.nameLen variantStart=0 variantLen=0 isEnum=false ty=0 fields=d.args />)
             // `.deriveFromSource(source: <item src>, start: declStart, end: declEnd)`
             // — the annotated item's own source slice, with its original offset so
             // the macro sees spans in original coordinates.

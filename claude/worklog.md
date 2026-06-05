@@ -23,7 +23,7 @@
 
 ## M1 の現状（2026-06-06）＝マクロが実宣言を読める＝達成 🎉
 
-**M1 のコア機能は完成**：`@[Name]` マクロが `derive(input: DeclAst)` で**対象宣言の実構造**（型名・フィールド名/型/可視性・enum バリアント/ペイロード・fn シグネチャ・ジェネリクス）を読んで生成できる。テスト `tests/gen/fieldnames`（`@[FieldList] struct Point{x,y,z}` → `fieldNames()=="x,y,z,"`）が end-to-end で緑（239/239・不動点維持）。
+**M1 のコア機能は完成**：`@[Name]` マクロが `derive(input: DeclAst)` で**対象宣言の実構造**（型名・フィールド名/型/可視性・enum バリアント/ペイロード・fn シグネチャ・ジェネリクス）を読んで生成できる。さらに**ディレクティブ引数 `@[Name(label: expr)]`** も実装＝マクロ struct のフィールドに渡り `self.label` で読める（`parseDirectiveArgs`・`DeriveReq.args`・synthGenMain が `<Name label=expr/>` 構築）。テスト `tests/gen/fieldnames`（`@[FieldList] struct Point{x,y,z}`→`"x,y,z,"`）と `tests/gen/directiveargs`（`@[Tagged(prefix:"hi",times:3)] struct Widget`→`"hi-hi-hi-Widget"`）が end-to-end で緑（240/240・不動点維持）。
 
 **実装済（下の確定手順のうち）**：1（レクサ一本化＝`@Std/Syntax/Lexer.pw`・本体は import）／2（値ツリー AST＝`@Std/Syntax/Ast.pw`＝Span/TypeAst/FieldAst/VariantAst/ParamAst/DeclAst＋DeclKind）／3 の**宣言サブセット**（`@Std/Syntax/Parser.pw`＝struct/enum/fn シグネチャ＋型式）／5（parseItem 本物化＝ハーネスが対象項の実ソースをエスケープ埋め込み＋原本オフセットを base に渡す＝`DeriveReq.declStart/declEnd`・`internSourceLiteral`）。
 
