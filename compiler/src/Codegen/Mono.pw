@@ -1546,9 +1546,7 @@ fn registerMethodInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, ar
     } else {
         return
     }
-    if isGenericInst(c: inout c, ref: rt.ref) {
-        return
-    }
+    val genericRecv: Bool = isGenericInst(c: inout c, ref: rt.ref)
     val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
     if mi == c.funcs.count {
         return
@@ -1557,20 +1555,58 @@ fn registerMethodInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, ar
     if mf.typeParams.count == 0 {
         return
     }
-    setSelfItemEnv(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: 0)
-    val inferred: Array[U64] = inferFnArgs(c: inout c, f: mf, args: args)
-    if fnArgsAllGround(c: inout c, args: inferred) {
-        if fnInstExists(c: inout c, fnIdx: mi, args: inferred) {
+    // a generic receiver supplies the first `rcount` type params; the method must
+    // have its OWN params beyond that to need a call-site instance (`filterIter.map`).
+    // Without own params (`filterIter.filter`) it is emitted per receiver
+    // instantiation (emitMonoMethods), so skip it here.
+    mut val rcount: U64 = 0
+    mut val recvInst: U64 = 0
+    if genericRecv {
+        rcount = recvParamCount(c: inout c, nameStart: rt.nameStart, nameLen: rt.nameLen)
+        recvInst = rt.ref
+        if mf.typeParams.count > rcount {
         } else {
-            c.fnInsts.append(<FnInst fnIdx=mi args=inferred />)
+            return
         }
-        // register the grounded return-type adapter (`MapIter[Counter,…,I64]`) and
-        // its transitive instantiations, so its typedef + methods get emitted (a
-        // generic method is skipped by the struct-field/signature scans).
+    }
+    setSelfItemEnv(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: recvInst)
+    val inferred: Array[U64] = inferFnArgs(c: inout c, f: mf, args: args)
+    // build the full type-arg vector: the receiver's args fill the first `rcount`
+    // slots (not inferrable from the call), the method-own args the rest.
+    mut val fullArgs: Array[U64] = []
+    if genericRecv {
+        val inst: TypeRef = c.types[recvInst]
+        mut val ri: U64 = 0
+        while ri < rcount {
+            if ri < inst.args.count {
+                fullArgs.append(inst.args[ri])
+            }
+            ri += 1
+        }
+        mut val oi: U64 = rcount
+        while oi < inferred.count {
+            fullArgs.append(inferred[oi])
+            oi += 1
+        }
+    } else {
+        mut val ai: U64 = 0
+        while ai < inferred.count {
+            fullArgs.append(inferred[ai])
+            ai += 1
+        }
+    }
+    if fnArgsAllGround(c: inout c, args: fullArgs) {
+        if fnInstExists(c: inout c, fnIdx: mi, args: fullArgs) {
+        } else {
+            c.fnInsts.append(<FnInst fnIdx=mi args=fullArgs recvInstRef=recvInst />)
+        }
+        // register the grounded return adapter (`MapIter[…,I64]`) + its transitive
+        // instantiations, so its typedef/methods get emitted (a generic method is
+        // skipped by the struct-field/signature scans).
         val savedP: Array[Bind] = c.curTypeParams
         val savedA: Array[U64] = c.curTypeArgs
         c.curTypeParams = mf.typeParams
-        c.curTypeArgs = inferred
+        c.curTypeArgs = fullArgs
         if mf.hasRet {
             scanType(c: inout c, ref: mf.retTy)
         }
@@ -1580,12 +1616,30 @@ fn registerMethodInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, ar
     clearSelfItemEnv(c: inout c)
 }
 
-// Append `_<argMangle>` per type argument, to uniquely name a generic method
-// instance on a non-generic receiver (its method-own type params are not encoded
-// by the receiver mangle nor the selector). Emitted identically at the definition
-// (genSignature) and the call site so they agree.
-fn writeMethodInstSuffix(c: inout Comp, typeArgs: Array[U64]) {
-    mut val i: U64 = 0
+// The number of type parameters a struct/enum named (start,len) declares (0 if it
+// is not a generic type). For a generic method on a generic receiver, the first
+// this-many of the method's type args come from the receiver instantiation; the
+// rest are the method's own (encoded in the mangle suffix).
+fn recvParamCount(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
+    val gsi: U64 = genericStructIndex(c: inout c, nameStart: nameStart, nameLen: nameLen)
+    if gsi < c.structs.count {
+        return c.structs[gsi].typeParams.count
+    }
+    val gei: U64 = genericEnumIndex(c: inout c, nameStart: nameStart, nameLen: nameLen)
+    if gei < c.enums.count {
+        return c.enums[gei].typeParams.count
+    }
+    return 0
+}
+
+// Append `_<argMangle>` for the method-own type args (typeArgs[startIdx..]), to
+// uniquely name a generic method instance: its own type params are encoded by
+// neither the receiver mangle (which covers typeArgs[0..startIdx]) nor the
+// selector. Emitted identically at the definition (genSignature) and the call
+// site so they agree. startIdx = the receiver's param count (0 for a non-generic
+// receiver, where every type arg is method-own).
+fn writeMethodInstSuffixFrom(c: inout Comp, typeArgs: Array[U64], startIdx: U64) {
+    mut val i: U64 = startIdx
     while i < typeArgs.count {
         write(s: "_")
         emitMangle(c: inout c, ref: typeArgs[i])
@@ -1975,12 +2029,15 @@ fn emitMonoFn(c: inout Comp, instIdx: U64, proto: Bool) {
     val f: Func = c.funcs[fin.fnIdx]
     c.curTypeParams = f.typeParams
     c.curTypeArgs = fin.args
+    // a method instance on a generic receiver carries its receiver instantiation,
+    // so the receiver mangles `Recv_inst_…` and `self` types as the instance.
+    c.curRecvInstRef = fin.recvInstRef
     if proto {
         // a generic *method* instance (`Counter.map[B]`): set the Self/Item env so
         // its prototype's adapter return (`MapIter[Self,…,B]`) grounds like the body
         // does (genFunc sets it). genFunc handles the body's env itself.
         if f.hasRecv {
-            setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0)
+            setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: fin.recvInstRef)
         }
         genSignature(c: inout c, f: f)
         write(s: ";\n")
@@ -1990,6 +2047,7 @@ fn emitMonoFn(c: inout Comp, instIdx: U64, proto: Bool) {
     }
     val noParams: Array[Bind] = []
     val noArgs: Array[U64] = []
+    c.curRecvInstRef = 0
     c.curTypeParams = noParams
     c.curTypeArgs = noArgs
 }

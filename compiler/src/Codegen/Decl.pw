@@ -740,15 +740,19 @@ fn genSignature(c: inout Comp, f: Func) {
         }
     }
     writeFnSelector(c: inout c, f: f)
-    // a generic method instance on a non-generic receiver (`Counter.map[B=I64]`):
-    // its method-own type args are not in the receiver mangle or the selector, so
-    // append them as a suffix (matched at the call site) to keep instances distinct.
+    // a generic method instance: its method-own type args are encoded by neither the
+    // receiver mangle nor the selector, so append them as a suffix (matched at the
+    // call site). On a generic receiver the first `rcount` args are the receiver's
+    // (already in its mangle); only the method-own tail is appended (empty for a
+    // method with no own params, e.g. `filter` on `MapIter`).
     if f.hasRecv {
-        if c.curRecvInstRef == 0 {
-            if f.typeParams.count > 0 {
-                if c.curTypeArgs.count > 0 {
-                    writeMethodInstSuffix(c: inout c, typeArgs: c.curTypeArgs)
+        if f.typeParams.count > 0 {
+            if c.curTypeArgs.count > 0 {
+                mut val rcount: U64 = 0
+                if c.curRecvInstRef != 0 {
+                    rcount = recvParamCount(c: inout c, nameStart: f.recvStart, nameLen: f.recvLen)
                 }
+                writeMethodInstSuffixFrom(c: inout c, typeArgs: c.curTypeArgs, startIdx: rcount)
             }
         }
     }

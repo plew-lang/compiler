@@ -1310,16 +1310,38 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                         val gt: TypeRef = c.types[rt.ref]
                         val gsi: U64 = genericStructIndex(c: inout c, nameStart: gt.nameStart, nameLen: gt.nameLen)
                         if gsi < c.structs.count {
-                            // deep-substitute the receiver's instantiation env through the
-                            // whole return type, so a compound return (`MapIter[I,F,B].next()
-                            // -> Optional[B]`) grounds to `Optional[I64]`, not just a bare
-                            // type-parameter return. Also set the Self/Item env so a provided
-                            // combinator on a generic receiver (`mapIter.filter()` ->
-                            // `FilterIter[Self,…,Item]`) resolves Self to the receiver inst
-                            // and Item to its element (else the chain's loop var types as
-                            // the literal `Item`).
+                            // ground the return type through the receiver's instantiation
+                            // AND the method's own type params (a combinator on a generic
+                            // receiver: `filterIter.map(f) -> MapIter[Self, …, B]`). The
+                            // env is the receiver's args (first rcount) plus the method-own
+                            // args inferred from the call; Self/Item resolve to the receiver
+                            // inst and its element (else the chain's loop var types as the
+                            // literal `Item`/`B`).
                             setSelfItemEnv(c: inout c, recvStart: gt.nameStart, recvLen: gt.nameLen, recvInstRef: rt.ref)
-                            val gr: U64 = groundUnderInst(c: inout c, instRef: rt.ref, tyRef: mf.retTy)
+                            val gSavedP: Array[Bind] = c.curTypeParams
+                            val gSavedA: Array[U64] = c.curTypeArgs
+                            val rcount: U64 = c.structs[gsi].typeParams.count
+                            mut val gfa: Array[U64] = []
+                            mut val gri: U64 = 0
+                            while gri < rcount {
+                                if gri < gt.args.count {
+                                    gfa.append(gt.args[gri])
+                                }
+                                gri += 1
+                            }
+                            if mf.typeParams.count > rcount {
+                                val ginf: Array[U64] = inferFnArgs(c: inout c, f: mf, args: args)
+                                mut val goi: U64 = rcount
+                                while goi < ginf.count {
+                                    gfa.append(ginf[goi])
+                                    goi += 1
+                                }
+                            }
+                            c.curTypeParams = mf.typeParams
+                            c.curTypeArgs = gfa
+                            val gr: U64 = groundTypeRef(c: inout c, ref: mf.retTy)
+                            c.curTypeParams = gSavedP
+                            c.curTypeArgs = gSavedA
                             clearSelfItemEnv(c: inout c)
                             return typeInfoOfRef(c: inout c, ref: gr)
                         }

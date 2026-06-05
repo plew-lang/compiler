@@ -953,17 +953,22 @@ fn genExpr(c: inout Comp, id: U64) {
                 }
                 write(s: "_")
                 writeFnSelector(c: inout c, f: mf)
-                // a generic method on a non-generic receiver (`counter.map(f)`):
-                // append its inferred type-arg suffix, matching the definition's
-                // mangle (genSignature) so the call resolves to the right instance.
+                // a generic method (`counter.map(f)` / `filterIter.map(f)`): append
+                // its inferred method-own type-arg suffix, matching the definition's
+                // mangle (genSignature). On a generic receiver the first `rcount`
+                // inferred slots are the receiver's params (already in its mangle);
+                // only the method-own tail is appended.
                 if mf.typeParams.count > 0 {
+                    mut val rcount: U64 = 0
+                    mut val recvInst: U64 = 0
                     if isGenericInst(c: inout c, ref: bt.ref) {
-                    } else {
-                        setSelfItemEnv(c: inout c, recvStart: bt.nameStart, recvLen: bt.nameLen, recvInstRef: 0)
-                        val mArgs: Array[U64] = inferFnArgs(c: inout c, f: mf, args: args)
-                        clearSelfItemEnv(c: inout c)
-                        writeMethodInstSuffix(c: inout c, typeArgs: mArgs)
+                        rcount = recvParamCount(c: inout c, nameStart: bt.nameStart, nameLen: bt.nameLen)
+                        recvInst = bt.ref
                     }
+                    setSelfItemEnv(c: inout c, recvStart: bt.nameStart, recvLen: bt.nameLen, recvInstRef: recvInst)
+                    val mArgs: Array[U64] = inferFnArgs(c: inout c, f: mf, args: args)
+                    clearSelfItemEnv(c: inout c)
+                    writeMethodInstSuffixFrom(c: inout c, typeArgs: mArgs, startIdx: rcount)
                 }
                 write(s: "(")
                 if mf.selfInout {

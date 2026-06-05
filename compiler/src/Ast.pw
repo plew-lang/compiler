@@ -421,6 +421,10 @@ struct FuncBound {
 struct FnInst {
     pub val fnIdx: U64
     pub val args: Array[U64]
+    // for a generic *method* instance on a generic receiver (`filterIter.map(f)`):
+    // the receiver's instantiation TypeRef, so emission can mangle `Recv_inst_…`
+    // and set the Self/Item env. 0 for a free function or a non-generic receiver.
+    pub val recvInstRef: U64 = 0
 }
 
 struct EnumDef {
