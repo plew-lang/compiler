@@ -94,7 +94,7 @@ fn parseParamList(c: inout Comp) -> Array[Param] {
 // receiver marker for methods) is already consumed; the current token is the
 // name. `hasRecv`/`recv*`/`selfInout` describe an `impl Type` method receiver
 // (none for a free function).
-fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, selfInout: Bool, selfMove: Bool, implParams: Array[Bind], traitImpl: Bool, isAssoc: Bool, isAsync: Bool) {
+fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, selfInout: Bool, selfMove: Bool, implParams: Array[Bind], traitImpl: Bool, isAssoc: Bool, isAsync: Bool, isPub: Bool) {
     val nameTok: Tok = c.cur()
     c.advance()
     // type parameters in scope = those introduced by the enclosing `impl[T]`
@@ -158,7 +158,7 @@ fn parseFuncCommon(c: inout Comp, hasRecv: Bool, recvStart: U64, recvLen: U64, s
     c.skipNewlines()
     val body: U64 = parseBlock(c: inout c)
     val fnIdx: U64 = c.funcs.count
-    c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvStart recvLen=recvLen selfInout=selfInout selfMove=selfMove isAssoc=isAssoc isAsync=isAsync isExtern=false />)
+    c.funcs.append(<Func nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvStart recvLen=recvLen selfInout=selfInout selfMove=selfMove isAssoc=isAssoc isAsync=isAsync isExtern=false isPub=isPub />)
     mut val wbi: U64 = 0
     while wbi < boundParams.count {
         val bp: Bind = boundParams[wbi]
@@ -222,13 +222,13 @@ fn parseWhereClause(c: inout Comp) -> Array[Bind] {
 fn parseFunc(c: inout Comp, isAsync: Bool) {
     c.advance()
     val noParams: Array[Bind] = []
-    parseFuncCommon(c: inout c, hasRecv: false, recvStart: 0, recvLen: 0, selfInout: false, selfMove: false, implParams: noParams, traitImpl: false, isAssoc: false, isAsync: isAsync)
+    parseFuncCommon(c: inout c, hasRecv: false, recvStart: 0, recvLen: 0, selfInout: false, selfMove: false, implParams: noParams, traitImpl: false, isAssoc: false, isAsync: isAsync, isPub: false)
 }
 
 // `impl Type { (fn | inout fn) name(...) ... }`: inherent methods. Each member
 // is a function with an implicit `self` receiver (`inout fn` makes self
 // mutable). The current token is the `impl` identifier.
-fn parseImpl(c: inout Comp) {
+fn parseImpl(c: inout Comp, isPub: Bool) {
     c.advance()
     // optional `impl[T]` binder, then the receiver type (`Box[T]` / `Comp`).
     // recvStart/recvLen names the receiver head; the self type's `[T]` args are
@@ -283,11 +283,11 @@ fn parseImpl(c: inout Comp) {
                     Kind.KwFn => { c.advance() }
                     _ => {}
                 }
-                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: true, selfMove: false, implParams: implParams, traitImpl: isTraitImpl, isAssoc: false, isAsync: false)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: true, selfMove: false, implParams: implParams, traitImpl: isTraitImpl, isAssoc: false, isAsync: false, isPub: isPub)
             }
             Kind.KwFn => {
                 c.advance()
-                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams, traitImpl: isTraitImpl, isAssoc: false, isAsync: false)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams, traitImpl: isTraitImpl, isAssoc: false, isAsync: false, isPub: isPub)
             }
             Kind.KwAsync => {
                 // `async fn` / `async move fn` method (spec/14): async methods
@@ -306,7 +306,7 @@ fn parseImpl(c: inout Comp) {
                     Kind.KwFn => { c.advance() }
                     _ => {}
                 }
-                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: asyncMove, implParams: implParams, traitImpl: isTraitImpl, isAssoc: false, isAsync: true)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: asyncMove, implParams: implParams, traitImpl: isTraitImpl, isAssoc: false, isAsync: true, isPub: isPub)
             }
             Kind.KwMove => {
                 // `move fn` (consuming self): the method takes ownership of self.
@@ -315,7 +315,7 @@ fn parseImpl(c: inout Comp) {
                     Kind.KwFn => { c.advance() }
                     _ => {}
                 }
-                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: true, implParams: implParams, traitImpl: isTraitImpl, isAssoc: false, isAsync: false)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: true, implParams: implParams, traitImpl: isTraitImpl, isAssoc: false, isAsync: false, isPub: isPub)
             }
             Kind.KwBorrow => {
                 // `borrow fn` (read self, non-consuming): observationally identical
@@ -325,7 +325,7 @@ fn parseImpl(c: inout Comp) {
                     Kind.KwFn => { c.advance() }
                     _ => {}
                 }
-                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams, traitImpl: isTraitImpl, isAssoc: false, isAsync: false)
+                parseFuncCommon(c: inout c, hasRecv: true, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams, traitImpl: isTraitImpl, isAssoc: false, isAsync: false, isPub: isPub)
             }
             Kind.KwDeinit => {
                 // `deinit { body }` (spec/03): no params, no return, read self.
@@ -350,7 +350,7 @@ fn parseImpl(c: inout Comp) {
                         Kind.KwFn => { c.advance() }
                         _ => {}
                     }
-                    parseFuncCommon(c: inout c, hasRecv: false, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams, traitImpl: isTraitImpl, isAssoc: true, isAsync: false)
+                    parseFuncCommon(c: inout c, hasRecv: false, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams, traitImpl: isTraitImpl, isAssoc: true, isAsync: false, isPub: isPub)
                 } else {
                     c.advance()
                 }
@@ -562,23 +562,30 @@ fn parseStruct(c: inout Comp, isUnique: Bool) {
                 c.deinits.append(<Bind nameStart=nameTok.start nameLen=nameTok.len fieldStart=nameTok.start fieldLen=nameTok.len />)
             }
             _ => {
-                // a field declaration: `[pub[(get|set)]] [mut] val name : Type`.
+                // a field declaration: `[pub[(get)]] [mut] val name : Type`.
                 // `mut val` marks assignable storage; bare `val` is immutable.
-                // Field visibility (`pub` / `pub(get)`) is consumed and recorded by
-                // intent only — the module with-gate (I2) is not yet enforced, so in
-                // the current all-flat visibility model `pub(get)` and plain storage
-                // are observationally identical. It is accepted now so ambient types
-                // (e.g. `Array`'s `pub(get) mut val count`) parse as written.
+                // Field visibility (spec/05): bare `pub` -> 2 (read+write public),
+                // `pub(get)` -> 1 (read public, write internal), none -> 0 (private,
+                // anonymous impl only). Per-field because pub(get)'s read/write
+                // asymmetry can't fold into an impl block.
+                mut val vis: U64 = 0
                 match c.curKind() {
                     Kind.Ident => {
                         val pubTok: Tok = c.cur()
                         if rangeEquals(bytes: c.bytes, start: pubTok.start, len: pubTok.len, kw: "pub") {
                             c.advance()
+                            vis = 2
                             match c.curKind() {
                                 Kind.LParen => {
                                     c.advance()
                                     match c.curKind() {
-                                        Kind.Ident => { c.advance() }
+                                        Kind.Ident => {
+                                            val qt: Tok = c.cur()
+                                            if rangeEquals(bytes: c.bytes, start: qt.start, len: qt.len, kw: "get") {
+                                                vis = 1
+                                            }
+                                            c.advance()
+                                        }
                                         _ => {}
                                     }
                                     match c.curKind() {
@@ -636,7 +643,7 @@ fn parseStruct(c: inout Comp, isUnique: Bool) {
                     }
                     _ => {}
                 }
-                fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isMut=isMut hasDefault=hasDefault defaultVal=defaultVal />)
+                fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isMut=isMut hasDefault=hasDefault defaultVal=defaultVal vis=vis />)
             }
         }
     }
@@ -1293,12 +1300,25 @@ fn parseProgram(c: inout Comp) {
                         parseExport(c: inout c)
                     } else {
                         if c.identIs(kw: "impl") {
-                            parseImpl(c: inout c)
+                            parseImpl(c: inout c, isPub: false)
                         } else {
-                            if c.identIs(kw: "trait") {
-                                parseTrait(c: inout c)
-                            } else {
+                            if c.identIs(kw: "pub") {
+                                // `pub impl Type { … }` (spec/05): a public impl block —
+                                // its members are callable wherever the type is visible.
+                                // `pub` at top level only prefixes `impl` (fields take
+                                // `pub` in the struct body; methods are per-block).
                                 c.advance()
+                                if c.identIs(kw: "impl") {
+                                    parseImpl(c: inout c, isPub: true)
+                                } else {
+                                    c.advance()
+                                }
+                            } else {
+                                if c.identIs(kw: "trait") {
+                                    parseTrait(c: inout c)
+                                } else {
+                                    c.advance()
+                                }
                             }
                         }
                     }
