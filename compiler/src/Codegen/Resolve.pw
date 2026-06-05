@@ -1322,6 +1322,13 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                             return substTypeInfo(c: inout c, instRef: rt.ref, params: c.enums[gei].typeParams, tyRef: mf.retTy)
                         }
                     }
+                    // a non-generic receiver whose method returns a generic instantiation
+                    // (`Counter.next() -> Optional[I64]`): keep the full ref so the caller
+                    // (e.g. a `match` scrutinee) recovers the mangled `Optional_I64`, not
+                    // the bare head `Optional`.
+                    if isGenericInst(c: inout c, ref: mf.retTy) {
+                        return typeInfoOfRef(c: inout c, ref: mf.retTy)
+                    }
                     return typeInfoOfName(c: inout c, start: mf.retStart, len: mf.retLen, isArray: mf.retIsArray)
                 }
                 return scalarInfo()
