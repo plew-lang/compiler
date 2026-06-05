@@ -1,0 +1,41 @@
+import @Std/Io with { write }
+import @Std/Syntax with { Derive, DeclAst, Src, newSrc }
+
+trait Show {
+    fn show() -> String
+}
+
+// A realistic derive: generate `pub impl <T> as Show { fn show() ... }` that lists
+// the struct's field names. Generated source is auto-parted into this module.
+struct DeriveShow { }
+
+pub impl DeriveShow as Derive {
+    fn derive(input: DeclAst) -> String {
+        mut val s: Src = newSrc()
+        s.put("pub impl ")
+        s.put(input.name)
+        s.put(" as Show {\n    fn show() -> String {\n        return \"")
+        s.put(input.name)
+        s.put(" { ")
+        mut val i: U64 = 0
+        while i < input.fields.count {
+            s.put(input.fields[i].name)
+            s.put(" ")
+            i += 1
+        }
+        s.put("}\"\n    }\n}\n")
+        return s.finish()
+    }
+}
+
+@[DeriveShow]
+struct Point {
+    pub val x: I64
+    pub val y: I64
+}
+
+fn main() {
+    val p: Point = <Point x=1 y=2 />
+    write(s: p.show())
+    write(s: "\n")
+}
