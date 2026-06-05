@@ -53,9 +53,11 @@
   - **Phase A✅（クイックウィン・完了）**：①**ARC エミッタ 1 本化**＝`emitFieldAction`（concrete struct/enum 共有・unique-deinit 込み）＋`emitMonoFieldAction`/`emitMonoModeDef`（mono struct/enum 共有）に集約。旧 `emitStruct{Copy,Share,Release}Def`・`emitMono{Struct,Enum}Copy*`・`emitMonoEnumMode*` を削除。**mono-struct の share/release を新設＝documented leak を解消**（`monoStructNeedsRelease`＋driver＋scope-drop 配線）。「heap フィールド種を足す＝2 dispatcher を触るだけ」に。②**演算子 magic 数を named helper 化**＝`opAdd()..opCoalesce()`（`Ops.pw`・`kindCode(<Kind.X/>)` が単一の源）で `op == 57` 等を全置換。③**`expect()` パーサヘルパ**＝tolerant な「無ければ黙って進む」を mandatory トークンで loud reject に（`)`/`=`/`]` を変換・reject テスト 3 本追加・残サイトは additive）。**全部 behavior-preserving＋不動点維持・suite 236/0**。
   - **Phase B🔄（最大レバレッジ）＝型付き AST**（着手中）。根①（codegen 中の `exprType` 都度復元）を「読む」へ反転。
     - **B0✅＝kwSpan ハック除去**：型名のソース全検索＋偽コメントを `buildKwCache`（既知オフセットへ 1 回並べ O(1)）に。
-    - **B1✅＝`typeOf` キャッシュ seam**：`typeOf(c,id)` を導入し codegen 出力地点（Expr/Stmt/Ops の 32 箇所）を移行。ノード型を `Comp` の **4 並列 scalar 配列**にキャッシュ（self-host は struct 配列 IndexSet 非対応ゆえ）。**`typeCacheable()`＝純粋 free function 文脈のみキャッシュ**（型パラメータ/recv/Self/Item/recvInstRef 全部無し）＝env 非依存＋本体 1 回 emit。**メソッド/generic/provided 本体は除外**（provided trait メソッドは 1 body を準拠型ごとに emit＝Self で型が変わる）→ 初版で全メソッド文脈をキャッシュし trait_provided/trait_where が壊れたのを gate で修正。behavior-preserving・236/0（output＋ASan）・不動点。
-    - **B 次の一歩**：①free-fn キャッシュを **pre-fill パス**化（codegen を pure-read に）→ ②generic 本体を**テンプレート型 TypeRef** で持ち読み出し時 ground（案B）→ ③`exprType` 再導出駆逐。
-    - **設計メモ**：案A（名前解決パス）は**挟まない**＝B が内包（型付けにスコープ解決が要る）・A 単体は消費者が無く検証弱／B はノード型を codegen が読む＝不動点で検証可。スコープ走査の codegen 一致が唯一の難所。
+    - **B1✅＝`typeOf` キャッシュ seam**：`typeOf(c,id)` を導入し codegen 出力地点を移行。ノード型を `Comp` の **4 並列 scalar 配列**にキャッシュ（self-host は struct 配列 IndexSet 非対応ゆえ・`b.xs[i]=v` の scalar IndexSet は可）。最初 free function 文脈のみキャッシュ（provided trait メソッドは 1 body を準拠型ごとに emit＝Self で型が変わるので全メソッド文脈キャッシュは trait_provided/trait_where を壊した）。
+    - **B2✅＝全文脈キャッシュ（per-function clear）**：制限を撤廃し**全 emission 文脈でキャッシュ**、**body emission のエントリ（`genFunc`/`genClosure`/`genAsyncFunc`）で `clearExprTyCache`**。grounded 型は「その body の 1 回の emission 中だけ読まれる」＝env（Self/型 args/インスタンス）が一定なので、メソッド・generic インスタンス・provided・closure・async も全部キャッシュ可（インスタンスごとに clear→refill）。clear は filled-id リストのみ reset で O(fills)。残る emission 経路（Array/Async/Mono）も `typeOf` へ。**`exprType` は今や `typeOf`（body ごと初回 touch）／自身の再帰／pre-codegen checks からのみ**到達。**決め手＝不動点バイト一致**（コンパイラ全体の methods/generics/closures/async/traits でキャッシュが再導出を完全再現）。236/0（output＋ASan）・再帰 ARC 0 leaks。
+    - **現状＝codegen の型復元は「冗長な再導出」→「body ごと 1 回計算してキャッシュを読む」に反転済み**。根①（codegen 中 exprType 都度復元）の主部は解消。
+    - **残り（より大きく・要 supervised）**：①checks（10 箇所）を typed-AST に統合＝3 重 walker 一本化（別ゴール・大物）／②pre-fill パスで codegen を完全 pure-read（lazy 初回 touch すら排除・要スコープ walker）／③`exprType` 自身の再帰を `typeOf` 経由にして中間レベルも dedup（typeOf↔exprType 相互再帰・要慎重）／④generic を**テンプレート型**で持つ（per-function clear で grounded をキャッシュできた今、必須ではなくなった）。いずれも不動点で検証しつつ後日。
+    - **設計メモ**：案A（名前解決パス単体）は不採用＝B が内包（A は消費者無しで検証弱／B はノード型を codegen が読む＝不動点検証可）。per-function clear で「env はずっと安定でなくてよい・body 内だけ一定なら良い」と判明し、テンプレート型なしで全文脈に広げられた。
   - **Phase C**：名前 interning（`spansEqual` 一掃）・`MonoEnv` 明示パラメータ化 → **`@Std/Syntax` 値ツリー AST＝この型付き AST**としてマクロへ公開（＝メタプロ土台に合流）。
   - **deferred**：分割コンパイル（Loader 連結モデル）。
 - **先日の Phase 0（box ARC）は依然有効**＝AST を再帰値型に載せる前提。**次の着手＝Phase A（ARC 1 本化から）**を推奨。
@@ -81,7 +83,7 @@
 ## ロードマップ（残りの大物・前向きのみ）
 
 1. ✅ Array struct 化・✅ 可視性強制・✅ Iterator/Iterable＋lazy map/filter・✅ 再帰値型 auto-boxing。
-2. 🔄 **メタプロ基盤＝値ツリー AST 化**（上記・Phase 0 box ARC 実装中→Phase 1-3 @Std/Syntax＋lowering＋マクロ）。
+2. 🔄 **コンパイラ renovate（型付き AST）＋メタプロ基盤**：✅ Phase 0 box ARC・✅ Phase A（ARC 1 本化/Op enum/expect）・✅ Phase B B0-B2（型付き AST＝codegen 型復元を per-body キャッシュ読みに反転・不動点バイト一致）→ 残 Phase B（checks 統合/pre-fill/exprType 駆逐は supervised）→ Phase C interning → @Std/Syntax 値ツリー AST＋マクロ。
 3. 🔲 **Hash/Hasher → Dictionary（`[k:v]` lang item）/Set**（メタプロ③で `@[Hash]` を出してから・要：コレクション値意味論の一般化）。
 4. 🔲 **イベントループ tail＋spawn**（実スレッド・`JoinHandle[T]`・closure 残ギャップ）。
 5. 🔲 **`any P` 存在型**（型消去・動的ディスパッチ・トレイトの最後）。
