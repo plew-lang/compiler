@@ -1,15 +1,26 @@
 # メタプログラミングの実装アーキテクチャ
 
-> spec の正典は [spec/04-execution/16-metaprogramming.md](../spec/04-execution/16-metaprogramming.md)。本書は**実装の段取り・実行系の具体・将来計画**（「どう作るか」）を置く。確定方針（TokenStream 入出力・別ファイル add-only 出力・`@[...]` 含意 part・組み込みは当面特権）は spec を参照。
+> spec の正典は [spec/04-execution/16-metaprogramming.md](../spec/04-execution/16-metaprogramming.md)。本書は**実装の段取り・実行系の具体・将来計画**（「どう作るか」）を置く。確定方針（**AST 入力/String 出力**・別ファイル add-only 出力・`@[...]` 含意 part・組み込みは当面特権）は spec を参照。
 
 ## 全体像
 
-マクロは **`TokenStream`（注釈対象項のトークン・span 付き）を受け取り、生成 Plew ソースを `String` で返す `Derive` 実装の Plew コード**。専用コマンドが derive を実行し、**読める Plew ソース `<Foo>.gen.pw` を生成**（コミット）。ビルドは生成済みを読むだけ。原本 `<Foo>.pw` は不変、取り込みは `@[...]` の存在でローダが自動。
+マクロは **注釈対象項の構文木（`AST`）を受け取り、生成 Plew ソースを `String` で返す `Derive` 実装の Plew コード**。専用コマンド（仮 `plew gen`）が derive を実行し、**読める Plew ソース `<Foo>.gen.pw` を生成**（コミット）。ビルドは生成済みを読むだけ。原本 `<Foo>.pw` は不変、取り込みは `@[...]` の存在でローダが自動。
 
-- **入力＝TokenStream（span）／出力＝String** の非対称はエラーの出どころと一致：入力エラー（マクロが対象を拒否）はユーザー元ソースを指す＝span 要る／出力エラー（生成コードが通らない）は `<Foo>.gen.pw` の普通のコンパイルエラー＝span 不要。だから**出力に `quote` のような埋め込み構文は作らず**、普通の Plew 文字列＋既存補間 `"{…}"` で組む。
+- **入力＝AST（span 付き）／出力＝String** の非対称はエラーの出どころと一致：入力エラー（マクロが対象を拒否）は AST ノードの span（原本座標）でユーザー元ソースを指す／出力エラー（生成コードが通らない）は `<Foo>.gen.pw` の普通のコンパイルエラー。だから**出力に `quote` のような埋め込み構文は作らず**、普通の Plew 文字列＋既存補間 `"{…}"` で組む。
 - **ディレクティブ引数＝マクロ struct のフィールド**：`@[Name(a: 32)]` ＝ `Name { a: 32 }` を構築して `.derive(input)`（`derive` はメソッド・self ＝設定）。
 
-リッチな AST は**将来コンパイラ外のライブラリに切り出す**（lexer+parser+AST を 1 つにし、コンパイラもマクロも依存＝Rust の 2 パーサ問題を回避）。だが**パッケージ管理機構が無い現状では非現実的**なので、当面は組み込みヘルパで代替する。
+**`Derive` トレイト＝要求＋提供の 2 メソッド**（構文ライブラリ `@Std/Syntax` が提供）：
+```plew
+trait Derive { fn derive(input: DeclAst) -> String }              // 要求：ユーザー実装
+impl Derive {                                                     // 提供（blanket）：変換＋委譲
+  fn deriveFromSource(source~: String, start: U64, end: U64) -> String {
+    return self.derive(input: parseItem(source: source, start: start, end: end))
+  }
+}
+```
+**ランナーは String↔String の版非依存な機械**：`@[Name(args)]` ごとにハーネス（`<Name args/>.deriveFromSource(...)` を `print` する `main`）を合成→**コンパイル&別プロセス実行**（マクロが固定依存する `@Std/Syntax` 版がリンク＝版固定が自然成立）→ stdout を `<Foo>.gen.pw` へ。AST 型・lexer/parser はハーネスが import する `@Std/Syntax` 側にあり、**ランナーは AST に一切触れない**。
+
+リッチな AST は**最終形でコンパイラ外の共有パッケージに切り出す**（lexer+parser+AST を 1 つにし、コンパイラもマクロも同じ版に依存＝Rust の 2 パーサ問題を回避・AST 版違いのツラミ最小化）。パッケージ管理が無い現状は **`@Std/Syntax`（in-tree）が一時的にその役**。
 
 ## 長期ビジョン（最終形）と `@Std/Syntax` の位置づけ
 
@@ -26,35 +37,31 @@ spec/16 は **入力＝TokenStream（span 付き）＋ヘルパで TokenStream�
 - **String→TokenStream を誰が**＝`plew gen` ランナー（注釈対象項のソーステキストを持つのはランナー）。共有パッケージの lexer を使う。
 - ここで効くのが**「無駄説」**：ランナーはどのみち lex する。入力を TokenStream にすると**マクロ側が即 `parse(ts)→AST` を呼ぶだけ**で、*同じ parse を毎マクロで再実行*。一方ランナーが text→AST まで済ませて **AST を渡せば parse は 1 回・マクロは即構造を読む**。derive ではトークン段は冗長な中間表現。
 
-**現状の暫定結論（要確定）**：**derive 中心なら入力＝AST（`DeriveInput` 値ツリー）が単純十分**。移行期も「arena→値ツリーの変換」を境界で 1 回やるだけで、TokenStream 経由（@Std/Syntax に parser が要る＋マクロ側 reparse）より**コードが少ない**。汎用トークンが本当に要るマクロには、**AST item から生トークン片を取れる escape hatch** を後付けで足せる（汎用性は塞がない）。→ これは spec/16（TokenStream 入力）の見直しを含む**未確定の言語表面判断**。
+**結論（確定）**：**入力＝AST**。境界＝String（ランナーは版非依存）、String→AST は `Derive` 提供メソッド `deriveFromSource` が担う（中間 dispatcher 層は不要）。Rust でも生 TokenStream 必須は `json!`/`html!`/`quote!` 等の**関数形/DSL マクロ**だけで、**derive は常に AST へ parse**＝Plew の derive 専用モデルには AST で十分。汎用トークンが要るマクロを将来入れるなら `derive(input: TokenStream)` を additive escape hatch に。spec/16 を AST 入力へ更新済み。
 
 ## 実装の段取り（パッケージ管理より前に動かす）
 
-1. **マクロ機構（`TokenStream` 入力 / `String` 出力 ＋ 最小の組み込み）**
-   - `TokenStream` 型（span 付き・既存 `Tok`/`Kind` を束ねる）。
-   - 組み込み：**parse ヘルパ**（`TokenStream → DeriveInput { name, fields:[(name,type)], variants }`・span 保持）と **span エラー関数**（入力トークンの位置を指してエラー）。
-   - 出力は普通の `String` を返すだけなので `render`/`quote` は不要。入力 lex はランナーがやるのでマクロ側 lex も不要。
-   - これらは「コンパイラが既に持つ lexer/parser を組み込みとして露出するだけ」＝`print` と同じ立て付けで、**パッケージ管理は不要**。
-   - 生トークンだけだと Eq すら書くのが辛いので、parse ヘルパ（`DeriveInput`）を**最初から**出すのが肝（ステップ3 を実際に書けるようにする）。
-   - **authoring 層（ハイライト対応のテンプレート/quote）は future・additive**。コアは String 出力のまま据え置く。
-2. **実行コマンド（仮 `plew gen`）**
-   - `@[Name]` を走査 → 対応する `Name` の `derive` を呼ぶ小さな `main` を合成 → **コンパイルして別プロセスで実行**（既存の .pw→C→実行を再利用）→ 出力を `<Foo>.gen.pw` に書く。
-   - **プロセス境界はソーステキスト**：マクロ入力＝注釈対象項のソース片、出力＝生成ソース。マクロ内では `lex`/`render`/`quote` で TokenStream を扱う。トークンのバイナリ直列化形式を設計せずに済む。
-3. **コアライブラリのマクロを dogfood**：`Eq`/`Hash` をこの機構で書く。現行のコンパイラ特権合成（`synthStructEq` 等）から段階移行（特権版を残したまま並行→検証→差し替え）。`Hash` が出れば `Dictionary`（`[k:v]`）に接続。
-4. **パッケージ管理導入後に切り出し**：lexer+parser+AST を独立ライブラリへ。コンパイラとマクロツールが同一ライブラリに依存する構成へ移行。組み込みヘルパを正式ライブラリ API に昇格。
+- **M0＝配管を端から端まで（自明マクロ）**。`plew gen` モード（plewc の一機能）：`@[Name(args)]` 付き項を走査 → 各々で**ハーネス `.pw` を合成**（`<Name args/>.deriveFromSource(...)` を `print` する `main`＋マクロモジュールと `@Std/Syntax` の import）→ **コンパイル&別プロセス実行**（既存 .pw→C→bin を再利用）→ stdout を `<Foo>.gen.pw` へ。ローダ側は `<Foo>.pw` に `@[...]` を見たら `<Foo>.gen.pw` を自動 part（gen 中はその auto-part を抑制＝これから作るので）。自明マクロ（固定文字列を返す）で貫通＝**ここが工数の本体**（AST 中身は空でいい）。
+  - source の渡し方（stdin/原本ファイル/リテラル）は**実装時に最も楽な形**で決める（spec 非依存）。入力エラーの span が原本座標になるよう `(source, start, end)` を `parseItem` に渡す。
+- **M1＝`@Std/Syntax` の宣言 AST＋parser**。`DeclAst`（struct/enum＝`name`/`fields(name,type)`/`variants`・関数シグネチャ・型式 `TypeExpr`＝再帰値型）と `parseItem`（lex+parse・span は原本座標）と `Derive` トレイト（要求 `derive`＋提供 `deriveFromSource`）を `@Std/Syntax` に置く。**再帰値型・型付き AST seam（Phase B）が前提として既に整っている**。移行期は arena→`DeclAst` 変換でもよいが、最終形は `@Std/Syntax` 自前の lex+parse。
+  - **authoring 層（ハイライト対応テンプレート/quote）は future・additive**。コアは String 出力のまま。
+- **M2＝コアライブラリのマクロを dogfood**：`Eq`/`Hash` をこの機構で書く。現行のコンパイラ特権合成（`synthStructEq` 等）から段階移行（特権版を残したまま並行→検証→差し替え）。`Hash` が出れば `Dictionary`（`[k:v]`）に接続。
+- **M3＝パッケージ管理導入後に切り出し**：`@Std/Syntax`（lexer+parser+AST）を独立した**外部共有パッケージ**へ昇格。コンパイラもマクロツールも同一パッケージ版に依存する構成へ。
+
+> 当初の理想順は「ライブラリ切り出し → その上に機構」だったが、入れ物（パッケージ管理）が無いので**機構を in-tree（`@Std/Syntax`）で先に作り、外部切り出しは最後**に倒した。各段階で実利（コンパイラが綺麗になる／Dictionary が進む）が出る。**重い D（legacy 型 triple／パーサの codegen 仕事）と Phase C（名前 interning）はこの後**＝Dictionary が来てから interning を綺麗にやる順。
 
 > 当初の理想順は「ライブラリ切り出し → その上に機構」だったが、入れ物（パッケージ管理）が無いので**機構を in-tree で先に作り、切り出しは最後**に倒した。各段階で実利（コンパイラが綺麗になる／Dictionary が進む）が出る。
 
-## 実行系の具体（ステップ2）
+## 実行系の具体（M0）
 
-- マクロは「`fn derive(input: TokenStream) -> String` を持つ `Derive` 実装」を含む通常の Plew パッケージ。
+- マクロは「要求 `fn derive(input: DeclAst) -> String` を持つ `Derive` 実装」を含む通常の Plew パッケージ（`@Std/Syntax` に依存）。
 - `plew gen` の 1 ファイル分の処理：
   1. ソースをロード（`part`/`import` 解決）し、`@[Name(args)]` 付き対象項を集める。**gen 中は `.gen.pw` の auto-part 取り込みを抑制**（これから作るので）。
-  2. 各 `(対象項, Name(args))` について、`Name { args }` を構築し `.derive(input)` を呼ぶ `main` を合成。`input` ＝対象項のソース片を lex した `TokenStream`（ランナーが lex）。出力は `String`（生成ソース）。プロセス境界はテキスト（stdin で対象片、stdout で生成 String）。
+  2. 各 `(対象項, Name(args))` について、`Name { args }` を構築し**提供メソッド `.deriveFromSource(source, start, end)`** を呼ぶ `main` を合成（＝String→AST 変換＋ユーザー `derive` 委譲は `@Std/Syntax` 内で起きる）。`source` の渡し方（stdin/原本ファイル/リテラル）は最も楽な形で。プロセス境界は**テキスト**（ランナーは AST/TokenStream 型に触れない＝版非依存）。
   3. それをコンパイル（.pw→C→bin）し、サブプロセス実行。複数 derive は出力を連結。
   4. `<Foo>.pw` 由来の生成片を `<Foo>.gen.pw` に書き出す（既存があれば上書き＝生成物は決定的）。
 - ローダ側（ビルド時）：`<Foo>.pw` に `@[...]` を見たら `<Foo>.gen.pw` を同モジュールの part として自動ロード（無ければ「`plew gen` を走らせよ」と loud に失敗）。
-- マクロが入力を拒否する場合は span エラー関数で**対象項の元位置**を指す（出力エラーは別＝`.gen.pw` の再コンパイルが指す）。
+- マクロが入力を拒否する場合は AST ノードの span（**原本座標**）で**対象項の元位置**を指す（出力エラーは別＝`.gen.pw` の再コンパイルが指す）。
 
 ## 同一パッケージ/モジュール内 derive（Rust の別クレート制約は不要）
 
@@ -74,9 +81,9 @@ spec/16 は **入力＝TokenStream（span 付き）＋ヘルパで TokenStream�
 
 ## 未確定で実装前に詰める点
 
-- `TokenStream` の in-memory 表現（既存 `Tok`/`Kind` を束ねるだけで足りるか・span の持ち方）。
-- **`DeriveInput` の具体形**（parse ヘルパの戻り＝何を構造で持ち、フィールド型などの素片を `String`/トークン片で持つか）。← 次に詰める。
-- span エラー関数の形（入力トークン位置を指す手段）。
-- 生成コマンド名・設定（どこに対象を書くか・対象ディレクトリ）。
+- **`@Std/Syntax` の `DeclAst` 具体形**（struct/enum＝`name`/`fields(name,type)`/`variants`・関数シグネチャ・型式 `TypeExpr`＝再帰値型・span の持ち方〔原本座標〕）。← M1 で詰める。
+- `parseItem` の実装（移行期＝arena→`DeclAst` 変換 or `@Std/Syntax` 自前 lex+parse のどちらから入るか）。
+- 生成コマンド名・設定（どこに対象を書くか・対象ディレクトリ）・source の渡し方（最も楽な形で）。
 - authoring 層（テンプレート/quote）の具体（future・additive・コアは String 出力のまま）。
+- 生トークン escape hatch（関数形/DSL マクロを将来入れる場合のみ）。
 - `#Extension` との関係（生成した `impl` を拡張として出すか）。

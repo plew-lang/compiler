@@ -1,6 +1,6 @@
 # メタプログラミング
 
-> **状態: 方針確定・基盤未実装。** 当初の「閉じたメタプログラミング」（言語提供の `@[...]` のみ）から、**ユーザー定義可能なメタプログラミング**へ転換し、その骨格（入出力モデル・出力先・取り込み方法・実行モデル）を確定した。本章はその確定方針の正典。`TokenStream` の正確な表現・`quote` の補間規則・引数の渡し方など**細部はなお未決**で末尾に残す。実装の段取り・実行系の具体は [claude/metaprogramming-architecture.md](../../claude/metaprogramming-architecture.md)。
+> **状態: 方針確定・基盤未実装。** 当初の「閉じたメタプログラミング」（言語提供の `@[...]` のみ）から、**ユーザー定義可能なメタプログラミング**へ転換し、その骨格（入出力モデル・出力先・取り込み方法・実行モデル）を確定した。本章はその確定方針の正典。**入力はかつて `TokenStream` だったが、AST 構文ライブラリを共有する設計（下記）に伴い `AST`（構文木）に確定**した。AST 構文木の正確な型・`quote` 等 authoring 層・生成コマンド設定など**細部はなお未決**で末尾に残す。実装の段取り・実行系の具体は [claude/metaprogramming-architecture.md](../../claude/metaprogramming-architecture.md)。
 
 ## 組み込みディレクティブ `@[...]`
 
@@ -29,18 +29,18 @@ struct Point {
 
 ユーザーが独自のコード生成を定義できます。骨格は以下の通り確定。
 
-### マクロ = `Derive` を実装する構造体・入力は `TokenStream`／出力は `String`
+### マクロ = `Derive` を実装する構造体・入力は `AST`／出力は `String`
 
-マクロは **`TokenStream`（注釈対象項のトークン列）を受け取り、生成する Plew ソースを `String` で返す**メソッドを持つ構造体として定義し、`Derive` トレイトを実装します。
+マクロは **注釈対象項の構文木（`AST`）を受け取り、生成する Plew ソースを `String` で返す**メソッドを持つ構造体として定義し、`Derive` トレイトを実装します。`Derive` トレイトと `AST` 型は**構文ライブラリ**（当面 `@Std/Syntax`・将来は外部共有パッケージ＝後述）が提供します。
 
 ```plew
-// ⚠️ 細部は確定前のたたき台。
+// ⚠️ AST 型の正確な形は確定前のたたき台。
 struct MyDerive {
     val a: I32              // ← ディレクティブ引数 = このフィールド
 }
 pub impl MyDerive as Derive {
-    fn derive(input: TokenStream) -> String {
-        // self.a で引数を読み、input を解析し、生成ソースを String で返す
+    fn derive(input: DeclAst) -> String {
+        // self.a で引数を読み、input（構造化済みの宣言 AST）から生成ソースを String で返す
         return ""
     }
 }
@@ -49,16 +49,18 @@ pub impl MyDerive as Derive {
 struct P { }
 ```
 
-**入力 `TokenStream`／出力 `String` の非対称は、エラーをどこに出すかと一致している。**
+**入力 `AST`／出力 `String` の非対称は、エラーをどこに出すかと一致している。**
 
-- **入力＝`TokenStream`（span 付き）**：マクロが入力を解析して拒否する（「この型は Hash 不可」等）とき、**ユーザーの元ソース位置を指す**必要がある。`String` は位置を失うので、span を持つ `TokenStream` が要る。
+- **入力＝`AST`（span 付きノード）**：マクロが入力を解析して拒否する（「この型は Hash 不可」等）とき、**ユーザーの元ソース位置を指す**必要がある。AST ノードは span を保持し、その span は**原本座標**（`<Foo>.pw` の位置）なので、入力エラーはユーザー元位置を指せる。
 - **出力＝`String`**：生成コードのエラーは**生成ファイル `<Foo>.gen.pw`（実ファイル）の普通のコンパイルエラー**で出るので、出力側に span は要らない（再コンパイルが位置を持つ）。`quote` のような埋め込み構文を作らず、生成は**普通の Plew 文字列・既存の補間 `"{…}"`** で組む（「Plew の中の Plew でないもの」を作らない・ハイライトもただの Plew）。
 
 **ディレクティブ引数 = マクロ struct のフィールド。** `@[Name(a: 32)]` は `Name { a: 32 }` を構築して `.derive(input)` を呼ぶ糖衣。マクロ struct のフィールドがそのまま設定スキーマで、`derive` は `self`（構築済み設定）からそれを読む。`@[Eq]` は引数なし＝既定構築。既存の labeled args / 構築構文を再利用し、新概念を作らない。
 
-**なぜ `TokenStream`（typed reflection でなく）入力か。** メタプログラミングに不要な制約を作らないため。derive 対象/引数には型宣言だけでなく**関数・`impl` など任意の項**も渡せるようにしたく、入力を「型の構造サマリ」に固定すると表現力が足りない。`TokenStream` は最大限汎用かつ**安定境界**（文法が増えてもトークン表現は additive）。型 derive の 99% は**parse ヘルパ**（`TokenStream → DeriveInput { name, fields, variants }`・span 保持）で構造化して回す。
+**なぜ `TokenStream` でなく `AST` 入力か（当初は TokenStream だった）。** 当初 `TokenStream` 入力を選んだ理由は (a) **安定境界**（トークンは AST より文法版に強い）と (b) **汎用性**（型宣言に限らず任意のトークン列を渡せる）。だが下記「共有 AST パッケージ」を最終形に据えると **(a) は消える**——AST も真実の源が 1 つで安定するので、トークンを緩衝材にする必要がない。しかも **derive は結局 AST へ parse して使う**ので、トークン段の安定性の恩恵を受けない（生トークンのまま処理するマクロだけが恩恵を受けるが、それは別 flavor）。残る (b) 汎用性は、Plew が **宣言への derive 専用**（関数形 `macro!(…)` / DSL マクロを持たない）なので出番が稀。Rust でも生 `TokenStream` 必須なのは `json!`/`html!`/`sql!`/`quote!` のような**関数形/DSL マクロ**で、**derive はほぼ常に `syn` で AST へ parse**する＝Plew の derive には AST で十分。よって入力は `AST`、生トークンは**将来の escape hatch**（構文ライブラリは内部に TokenStream/lexer/parser を持つので、関数形マクロを後で入れるなら `derive(input: TokenStream)` を別提供メソッドとして additive に足せる）。
 
-**リッチな AST はコンパイラ外のライブラリに分離する（将来）。** Rust が `rustc` と `syn` で**2 つのパーサ**を持ち同期に苦しむのを避けるため、Plew は self-host の利を活かし **lexer+parser+AST を 1 つのライブラリに切り出し、コンパイラもマクロもそれに依存**する構成を目指す（真実の源が 1 つ＝版管理が綺麗）。ただし**現状パッケージ管理機構が無い**ため切り出しは後回しで、当面は `TokenStream` 型・parse ヘルパ・span エラー関数を**コンパイラ提供の組み込み**として露出する（→ architecture doc の段取り）。
+**String → AST 変換と受け渡しは `Derive` の提供メソッドが担う（中間層は不要）。** `Derive` トレイトは**要求メソッド `fn derive(input: AST) -> String`**（ユーザー実装）と、**提供メソッド `fn deriveFromSource(source, span) -> String`**（構文ライブラリの blanket `impl Derive`＝「String を lex+parse して AST にし、`self.derive(input:)` へ委譲」）を持つ。ランナー（生成コマンド）はこの提供メソッドを呼ぶハーネスを合成・実行するだけ＝**ランナーは String↔String の版非依存な機械**で、AST 型に一切触れない（AST 型・parser はマクロが固定依存する構文ライブラリ版のもの）。詳細は architecture doc。
+
+**リッチな AST はコンパイラ外のライブラリに分離する（最終形）。** Rust が `rustc` と `syn` で**2 つのパーサ**を持ち同期に苦しむのを避けるため、Plew は self-host の利を活かし **lexer+parser+AST を 1 つのライブラリに切り出し、コンパイラもマクロもそれに依存**する構成を目指す（真実の源が 1 つ＝AST のバージョン違いのツラミを最小化）。ただし**現状パッケージ管理機構が無い**ため切り出しは後回しで、**当面は `@Std/Syntax`（in-tree）が AST 型・lexer/parser・`Derive` 提供メソッドを持つ一時的な置き換え**（パッケージ管理導入後に外部共有パッケージへ昇格）。
 
 ### 出力モデル：別ファイル・原本不変・add-only（透明性の要）
 
@@ -68,7 +70,7 @@ struct P { }
 
 3. **原本（`<Foo>.pw`）は決して編集しない。** マクロは既存コードを**書き換えず追加するだけ（add-only）**。「上書き／削除するマクロ」は提供しない。
 
-> この出力モデルが「**唱えた通りに発現・明示 > 暗黙**」を守る要。入力が `TokenStream` で何でも読めても、**出力は読める別ファイルへの追記のみ**で原本は不変なので、「書いた通りが残る」透明性が壊れない（入力の自由は最大・出力は追跡可能な追記のみ）。
+> この出力モデルが「**唱えた通りに発現・明示 > 暗黙**」を守る要。マクロが入力 AST を自由に読めても、**出力は読める別ファイルへの追記のみ**で原本は不変なので、「書いた通りが残る」透明性が壊れない（入力の自由は最大・出力は追跡可能な追記のみ）。
 
 ### 取り込み：`@[...]` の存在でローダが自動 part
 
@@ -84,12 +86,22 @@ struct P { }
 
 組み込み（`Eq`/`Ord`/`Hash` …）も理想は同じ `Derive` 実装。だが bootstrap・性能・基盤未整備のため、**当面はコンパイラ特権の合成のまま**据え置き、API が固まってからユーザーマクロと同じ仕組みへ移行（dogfood）する。現行の `@[Eq]`/`@[Ord]` 合成はその特権実装。
 
+## 確定した骨格（まとめ）
+
+- マクロ＝`Derive` 実装 struct。**要求 `fn derive(input: AST) -> String`**（ユーザー）＋**提供 `deriveFromSource`**（構文ライブラリ＝String→AST 変換＋委譲）。
+- 入力＝**AST**（span は原本座標・入力エラーはユーザー元位置）／出力＝**String**（生成ソース・出力エラーは `.gen.pw` 再コンパイル）。
+- ディレクティブ引数＝マクロ struct のフィールド（`@[Name(a:32)]`＝`Name{a:32}.derive(...)`）。
+- 出力＝**別ファイル `<Foo>.gen.pw`・原本不変・add-only**、`@[...]` でローダ自動 part。
+- ランナー（生成コマンド）＝**String↔String の版非依存な機械**（ハーネス合成→compile→run→stdout 回収）。AST 型・parser はマクロが固定依存する構文ライブラリ版のもの。
+- 構文ライブラリ＝当面 `@Std/Syntax`（in-tree）・最終形は外部共有パッケージ（コンパイラもマクロも依存）。
+- 組み込み Eq/Ord/Hash は当面コンパイラ特権・将来 dogfood。
+
 ## 未決事項
 
-- `TokenStream` の正確な型・API（トークン表現・span の持ち方・parse ヘルパが返す `DeriveInput` の具体形＝何を構造で持ち、型などの素片を `String`/トークン片で持つか）。
-- span エラー関数の形（マクロが入力トークンの位置を指してエラーを出す手段）。
-- 生成コマンドの名前・設定方法。
-- **authoring 層（将来・additive）**：`String` 直書きはシンタックスハイライトが効かない。テンプレートファイル方式（ほぼ Plew の雛形を読み込んで穴埋め）や opt-in の `quote` を**コアを汚さず後付け**で足す。コア（TokenStream in / String out）は不変。
+- **AST 構文木の正確な型**（`@Std/Syntax` の宣言 AST＝`name`/`fields(name,type)`/`variants`/関数シグネチャ等の具体形・span の持ち方・型式 `TypeExpr` の表現）。
+- 生成コマンドの名前・設定方法・source の渡し方（stdin/ファイル/リテラル＝実装時に最も楽な形で確定）。
+- **authoring 層（将来・additive）**：`String` 直書きはシンタックスハイライトが効かない。テンプレートファイル方式（ほぼ Plew の雛形を読み込んで穴埋め）や opt-in の `quote` を**コアを汚さず後付け**で足す。コア（AST in / String out）は不変。
+- **生トークン escape hatch**（関数形/DSL マクロを将来入れるなら `derive(input: TokenStream)` を additive に）。
 - マクロ自身のビルドと配布（パッケージ管理導入後・同一リポジトリ内か別パッケージか）。
-- AST/マクロ用ライブラリの切り出し（パッケージ管理導入後）。
+- 構文ライブラリの外部パッケージ切り出し（パッケージ管理導入後）。
 - [拡張システム](../02-type-system/09-extensions.md)（`#Extension`）との関係。

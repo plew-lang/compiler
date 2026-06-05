@@ -78,7 +78,7 @@
   - **Phase 4（任意）＝lowering を構文ごとに削り**値ツリー直走り codegen へ収束。
 - ⚠ **Phase 0 完了で一旦停止して方針相談**（ユーザー指示）。
 
-> 旧メタプロ詳細（TokenStream 入力前提・spec/16）は上の方針で見直し予定：入力は span 付き構造化値ツリーになり生 TokenStream 再パースが不要化する見込み（@Std/Syntax を組んでから判断）。正典＝[spec/04-execution/16-metaprogramming.md](../spec/04-execution/16-metaprogramming.md)、計画＝[metaprogramming-architecture.md](metaprogramming-architecture.md)。
+> **入力モデル確定（2026-06-05）＝AST 入力**（TokenStream から変更）。共有 AST パッケージ（最終形）で安定境界の必要が消え、derive 専用 Plew には AST で十分（Rust でも生 TokenStream 必須は json!/html!/quote! 等の関数形/DSL マクロだけ・derive は常に AST へ parse）。**ランナーは String↔String の版非依存な機械**（ハーネス合成→compile→run→`.gen.pw`）、**String→AST 変換は `Derive` 提供メソッド `deriveFromSource`**（中間層不要・版固定はハーネスの固定 `@Std/Syntax` で成立）。生トークンは将来 escape hatch。spec/16・architecture doc・CLAUDE.md#3 を更新済み。**次の着手＝M0 配管**（`plew gen` 骨格＋ハーネス＋`.gen.pw`＋自動 part・自明マクロで貫通）。正典＝[spec/04-execution/16-metaprogramming.md](../spec/04-execution/16-metaprogramming.md)、計画＝[metaprogramming-architecture.md](metaprogramming-architecture.md)。
 
 ## ロードマップ（残りの大物・前向きのみ）
 
