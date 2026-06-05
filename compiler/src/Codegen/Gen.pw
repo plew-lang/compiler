@@ -27,8 +27,54 @@ fn isBuiltinDerive(c: inout Comp, start: U64, len: U64) -> Bool {
     return false
 }
 
+// Intern the source slice `c.bytes[from..to]` as a quoted, escaped string literal
+// (appended to c.bytes) and return its (start,len) span including the quotes. The
+// Expr.Str emitter splices the bytes between the quotes raw into a C "..." literal,
+// so backslash/quote/newline/CR/tab must be escaped here; the C compiler then
+// reconstructs the original text at runtime. Used by gen mode to embed the
+// annotated item's own source so the macro's `parseItem` can read it.
+fn internSourceLiteral(c: inout Comp, from: U64, to: U64) -> Bind {
+    val start: U64 = c.bytes.count
+    c.bytes.append('"')
+    mut val i: U64 = from
+    while i < to {
+        val b: U8 = c.bytes[i]
+        if b == '\\' {
+            c.bytes.append('\\')
+            c.bytes.append('\\')
+        } else {
+            if b == '"' {
+                c.bytes.append('\\')
+                c.bytes.append('"')
+            } else {
+                if b == '\n' {
+                    c.bytes.append('\\')
+                    c.bytes.append('n')
+                } else {
+                    if b == '\r' {
+                        c.bytes.append('\\')
+                        c.bytes.append('r')
+                    } else {
+                        if b == '\t' {
+                            c.bytes.append('\\')
+                            c.bytes.append('t')
+                        } else {
+                            c.bytes.append(b)
+                        }
+                    }
+                }
+            }
+        }
+        i += 1
+    }
+    c.bytes.append('"')
+    val len: U64 = c.bytes.count - start
+    return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
+}
+
 // Synthesize the harness `main` for gen mode: for every user `@[Name]` derive
-// request, append `write(s: <Name />.deriveFromSource(source: "", start: 0, end: 0))`.
+// request, append `write(s: <Name />.deriveFromSource(source: <item src>, start:
+// declStart, end: declEnd))`.
 // Built as arena AST (like synthesizeDerives), so it rides normal codegen — the
 // `deriveFromSource` method resolves on the conforming macro struct (instantiated
 // by instantiateProvidedMethods) and `write` lowers to the runtime intrinsic.
@@ -42,10 +88,6 @@ fn synthGenMain(c: inout Comp) {
     val startN: Bind = internBytes(c: inout c, s: "start")
     val endN: Bind = internBytes(c: inout c, s: "end")
     val mainN: Bind = internBytes(c: inout c, s: "main")
-    // Expr.Str spans include the surrounding quotes (codegen strips them via
-    // start+1/len-2), so intern a real `""` and point at it — a 0-length span
-    // would underflow. M0 passes empty source; M1 passes the item's real slice.
-    val emptyStr: Bind = internBytes(c: inout c, s: "\"\"")
     mut val stmts: Array[U64] = []
     mut val i: U64 = 0
     while i < c.derives.count {
@@ -55,10 +97,13 @@ fn synthGenMain(c: inout Comp) {
             // `<Name />` (the macro struct; M0 has no directive args).
             val noFields: Array[MakeField] = []
             val mk: U64 = c.pushExpr(e: <Expr.Make typeStart=d.nameStart typeLen=d.nameLen variantStart=0 variantLen=0 isEnum=false ty=0 fields=noFields />)
-            // `.deriveFromSource(source: "", start: 0, end: 0)` — empty slice for M0.
-            val srcE: U64 = c.pushExpr(e: <Expr.Str start=emptyStr.nameStart len=emptyStr.nameLen />)
-            val startE: U64 = c.pushExpr(e: <Expr.Int value=0 offset=0 isBool=false tyStart=0 tyLen=0 />)
-            val endE: U64 = c.pushExpr(e: <Expr.Int value=0 offset=0 isBool=false tyStart=0 tyLen=0 />)
+            // `.deriveFromSource(source: <item src>, start: declStart, end: declEnd)`
+            // — the annotated item's own source slice, with its original offset so
+            // the macro sees spans in original coordinates.
+            val srcLit: Bind = internSourceLiteral(c: inout c, from: d.declStart, to: d.declEnd)
+            val srcE: U64 = c.pushExpr(e: <Expr.Str start=srcLit.nameStart len=srcLit.nameLen />)
+            val startE: U64 = c.pushExpr(e: <Expr.Int value=d.declStart offset=0 isBool=false tyStart=0 tyLen=0 />)
+            val endE: U64 = c.pushExpr(e: <Expr.Int value=d.declEnd offset=0 isBool=false tyStart=0 tyLen=0 />)
             mut val dargs: Array[Arg] = []
             dargs.append(<Arg expr=srcE isInout=false labelStart=srcN.nameStart labelLen=srcN.nameLen hasLabel=true />)
             dargs.append(<Arg expr=startE isInout=false labelStart=startN.nameStart labelLen=startN.nameLen hasLabel=true />)

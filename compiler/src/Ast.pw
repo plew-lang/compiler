@@ -354,6 +354,12 @@ struct DeriveReq {
     pub val isEnum: Bool
     pub val nameStart: U64
     pub val nameLen: U64
+    // the annotated item's full source range `[declStart, declEnd)` in c.bytes
+    // (the type keyword through its closing `}`). gen mode (spec/16) embeds this
+    // slice as the `source` string the macro's `parseItem` reads, and passes
+    // declStart as the span base so the macro sees original coordinates.
+    pub val declStart: U64 = 0
+    pub val declEnd: U64 = 0
 }
 
 // An associated-type binding `type Item = Concrete` from a conformance `impl Type

@@ -1,0 +1,46 @@
+// Metaprogramming gen test (spec/16, M1): a derive macro that READS the annotated
+// declaration's real structure. `@[FieldList]` reads `Point`'s actual fields (via
+// the @Std/Syntax value-tree `DeclAst`) and generates a `fieldNames()` returning
+// their comma-separated names — proving the macro receives the parsed declaration,
+// not a stub.
+import @Std/Io with { write }
+import @Std/Syntax with { Derive, DeclAst }
+import @Std/Core with { stringFromBytes }
+
+struct FieldList { }
+
+pub impl FieldList as Derive {
+    fn derive(input: DeclAst) -> String {
+        mut val out: Array[U8] = []
+        pushStr(into: inout out, s: "fn fieldNames() -> String {\n    return \"")
+        mut val i: U64 = 0
+        while i < input.fields.count {
+            pushStr(into: inout out, s: input.fields[i].name)
+            out.append(',')
+            i += 1
+        }
+        pushStr(into: inout out, s: "\"\n}\n")
+        return stringFromBytes(out)
+    }
+}
+
+fn pushStr(into: inout Array[U8], s: String) {
+    val b: Array[U8] = s.bytes
+    mut val i: U64 = 0
+    while i < b.count {
+        into.append(b[i])
+        i += 1
+    }
+}
+
+@[FieldList]
+struct Point {
+    pub val x: I64
+    pub val y: I64
+    pub val z: I64
+}
+
+fn main() {
+    write(s: fieldNames())
+    write(s: "\n")
+}

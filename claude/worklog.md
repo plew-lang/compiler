@@ -21,6 +21,19 @@
 
 **M1＝`@Std/Syntax` の本実装＝構文層を共有コアへ切り出し（射程確定済）。** 理想形の正典は [metaprogramming-architecture.md](metaprogramming-architecture.md)「理想形（最終状態）」。下は確定した進め方。
 
+## M1 の現状（2026-06-06）＝マクロが実宣言を読める＝達成 🎉
+
+**M1 のコア機能は完成**：`@[Name]` マクロが `derive(input: DeclAst)` で**対象宣言の実構造**（型名・フィールド名/型/可視性・enum バリアント/ペイロード・fn シグネチャ・ジェネリクス）を読んで生成できる。テスト `tests/gen/fieldnames`（`@[FieldList] struct Point{x,y,z}` → `fieldNames()=="x,y,z,"`）が end-to-end で緑（239/239・不動点維持）。
+
+**実装済（下の確定手順のうち）**：1（レクサ一本化＝`@Std/Syntax/Lexer.pw`・本体は import）／2（値ツリー AST＝`@Std/Syntax/Ast.pw`＝Span/TypeAst/FieldAst/VariantAst/ParamAst/DeclAst＋DeclKind）／3 の**宣言サブセット**（`@Std/Syntax/Parser.pw`＝struct/enum/fn シグネチャ＋型式）／5（parseItem 本物化＝ハーネスが対象項の実ソースをエスケープ埋め込み＋原本オフセットを base に渡す＝`DeriveReq.declStart/declEnd`・`internSourceLiteral`）。
+
+**順序を組み替えた**：マクロ前進を最優先し **1→2→3(宣言)→5** を先に通した（手順4＝本体フロントエンド差し替えは未着手）。理由＝parseItem は arena と独立なので、本体フロントエンドを触らずにマクロが動く。最終到達点（1 AST・重複パーサ解消）は不変。
+
+**残（M1 の理想完成まで）**：
+- **手順4＝本体フロントエンド差し替え**（共有パーサ→tree→lower→arena・旧 `parseProgram/parseStruct/Enum/Func` 退役＝重複パーサ解消）。これで真の 1 AST。**未着手**（不動点 byte 同一性の制約が重い・別増分）。
+- **手順3 の残り＝式・文・パターンツリー**（関数本体・デフォルト式を木で surface）。現状は本体/デフォルト式を skip（presence フラグのみ）。
+- **暫定判断はローカル `<memory-dir>/review-items.md` に記録**（DeclAst をタグ付き struct にした件＝codegen の enum-holds-struct 依存順バグ回避／`unique`/`export` 修飾子が slice 外で isUnique が macro 視点で false／func 型式を bare 名に潰す 等）。
+
 ## M1 の進め方（確定手順・構文層の切り出し）
 
 **狙い＝「文字列→AST（レクサ＋クリーン値ツリー＋パーサ）」をコンパイラとマクロの唯一の共有物にする。** 切る線＝**構文（form）vs 意味（meaning）**。`String→AST` こそが切り出しの本体で、`parseItem` はその共有パーサを「対象項のソーススライス＋base offset」で呼ぶ薄いラッパ（原本座標で木が返る）。コンパイラ自身も同じ共有パーサを使う＝*コピーでなく同一物*（1 AST 原則＝マクロ専用の縮小 AST は作らない＝syn/rustc drift 回避）。

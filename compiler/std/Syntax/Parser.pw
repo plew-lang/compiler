@@ -558,20 +558,14 @@ fn parseFuncDecl(p: inout P) -> DeclAst {
     return <DeclAst kind=<DeclKind.Func /> name=name typeParams=typeParams span=<Span start=sStart end=sEnd /> isUnique=false fields=[] variants=[] params=params hasRet=hasRet ret=ret />
 }
 
-// Parse an item's source slice `source[start..end]` into a `DeclAst` (struct /
-// enum / fn). Spans are in original coordinates (offset by `start`). An item the
-// M1 subset doesn't model yet yields an empty struct decl (logged: traits/impls/
-// newtypes are additive).
+// Parse an item's source into a `DeclAst` (struct / enum / fn). `source` is the
+// item's own text (the declaration through its closing `}`); `start` is that
+// text's absolute offset in the original file, used as the base so every emitted
+// `Span` is in ORIGINAL coordinates (an input error points at the user's text);
+// `end` (= start + source length) is informational. An item the M1 subset doesn't
+// model yet yields an empty struct decl (logged: traits/impls/newtypes additive).
 export fn parseItem(source: String, start: U64, end: U64) -> DeclAst {
-    mut val sb: Array[U8] = []
-    val srcBytes: Array[U8] = source.bytes
-    mut val i: U64 = start
-    while i < end {
-        if i < srcBytes.count {
-            sb.append(srcBytes[i])
-        }
-        i += 1
-    }
+    val sb: Array[U8] = source.bytes
     mut val lx: Lexer = <Lexer bytes=sb pos=0 toks=[] depth=0 />
     lex(lx: inout lx)
     mut val p: P = <P bytes=sb toks=lx.toks pos=0 base=start />

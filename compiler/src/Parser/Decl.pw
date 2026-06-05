@@ -592,6 +592,10 @@ fn parseExtern(c: inout Comp) {
 // (val/mut/pub) are consumed and ignored; codegen maps each field's type to a C
 // type. `isUnique` is set when a leading `unique` keyword was consumed.
 fn parseStruct(c: inout Comp, isUnique: Bool) {
+    // declStart: the `struct` keyword (the cursor's current token). declEnd is set
+    // when the closing `}` is consumed. Used by gen mode to slice the item source.
+    val declStart: U64 = c.cur().start
+    mut val declEnd: U64 = declStart
     c.advance()
     val nameTok: Tok = c.cur()
     c.advance()
@@ -606,6 +610,7 @@ fn parseStruct(c: inout Comp, isUnique: Bool) {
         val k: Kind = c.curKind()
         match k {
             Kind.RBrace => {
+                declEnd = c.cur().start + c.cur().len
                 c.advance()
                 break
             }
@@ -713,12 +718,14 @@ fn parseStruct(c: inout Comp, isUnique: Bool) {
         }
     }
     c.structs.append(<StructDef nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams fields=fields isUnique=isUnique isExtern=false />)
-    drainDerives(c: inout c, typeStart: nameTok.start, typeLen: nameTok.len, isEnum: false)
+    drainDerives(c: inout c, typeStart: nameTok.start, typeLen: nameTok.len, isEnum: false, declStart: declStart, declEnd: declEnd)
 }
 
 // `enum Name { Variant [{ field: Type, ... }] ... }`. Variant fields take no
 // modifiers (bare `name: Type`), per the language's variant-field rule.
 fn parseEnum(c: inout Comp) {
+    val declStart: U64 = c.cur().start
+    mut val declEnd: U64 = declStart
     c.advance()
     val nameTok: Tok = c.cur()
     c.advance()
@@ -733,6 +740,7 @@ fn parseEnum(c: inout Comp) {
         val k: Kind = c.curKind()
         match k {
             Kind.RBrace => {
+                declEnd = c.cur().start + c.cur().len
                 c.advance()
                 break
             }
@@ -799,7 +807,7 @@ fn parseEnum(c: inout Comp) {
         }
     }
     c.enums.append(<EnumDef nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams variants=variants />)
-    drainDerives(c: inout c, typeStart: nameTok.start, typeLen: nameTok.len, isEnum: true)
+    drainDerives(c: inout c, typeStart: nameTok.start, typeLen: nameTok.len, isEnum: true, declStart: declStart, declEnd: declEnd)
 }
 
 // `@[Eq, Ord, ...]` directive (spec/16): collect the derive names into
@@ -831,11 +839,11 @@ fn parseDirective(c: inout Comp) {
 
 // Attach the pending `@[...]` derive requests to the just-parsed type, then clear
 // the scratch list for the next declaration.
-fn drainDerives(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool) {
+fn drainDerives(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool, declStart: U64, declEnd: U64) {
     mut val i: U64 = 0
     while i < c.pendingDerives.count {
         val d: Bind = c.pendingDerives[i]
-        c.derives.append(<DeriveReq typeStart=typeStart typeLen=typeLen isEnum=isEnum nameStart=d.nameStart nameLen=d.nameLen />)
+        c.derives.append(<DeriveReq typeStart=typeStart typeLen=typeLen isEnum=isEnum nameStart=d.nameStart nameLen=d.nameLen declStart=declStart declEnd=declEnd />)
         i += 1
     }
     c.pendingDerives = []
