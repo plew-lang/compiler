@@ -12,7 +12,7 @@ pub impl VariantNames as Derive {
         while i < input.variants.count {
             s.put(input.variants[i].name)
             s.put("(")
-            s.put(countStr(n: input.variants[i].fields.count))
+            s.putInt(input.variants[i].fields.count)
             s.put(")")
             s.putByte(44)
             i += 1
@@ -20,15 +20,6 @@ pub impl VariantNames as Derive {
         s.put("\"\n}\n")
         return s.finish()
     }
-}
-
-fn countStr(n: U64) -> String {
-    mut val s: Src = newSrc()
-    if n == 0 { s.putByte(48) }
-    if n == 1 { s.putByte(49) }
-    if n == 2 { s.putByte(50) }
-    if n == 3 { s.putByte(51) }
-    return s.finish()
 }
 
 @[VariantNames]
