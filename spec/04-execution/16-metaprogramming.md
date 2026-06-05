@@ -20,7 +20,7 @@ struct Point {
 - `Encode`, `Decode` — シリアライズ用の実装を合成。
 - enum 専用 `All` — 全バリアントを列挙する `Enum.all()` を合成。
 
-> ディレクティブは**トレイト実装などのコードを合成する derive 専用**です。既定 factory（memberwise）の合成・公開は derive ではなく**コア言語の構築意味論＋素の構文**で扱います（フィールド既定値と `pub factory` 公開 → [既定 factory（memberwise）とフィールドの既定値](../02-type-system/05-structs-enums.md#既定-factorymemberwiseとフィールドの既定値)）。可視性制御のような言語機能を `@[...]` の祝福ディレクティブにしないことで、ディレクティブ名前空間にはユーザー定義可能な derive だけが残ります。
+> ディレクティブは**トレイト実装などのコードを合成する derive 専用**です。既定 factory（memberwise）の合成・公開は derive ではなく**コア言語の構築意味論＋素の構文**で扱います（フィールド既定値と `pub impl { factory }` 公開 → [既定 factory（memberwise）とフィールドの既定値](../02-type-system/05-structs-enums.md#既定-factorymemberwiseとフィールドの既定値)）。可視性制御のような言語機能を `@[...]` の祝福ディレクティブにしないことで、ディレクティブ名前空間にはユーザー定義可能な derive だけが残ります。
 - enum 用（集約エラー、名称未定） — 各 variant が単一ペイロードでソースエラー型を保持する enum に `From[各ソース]`（variant ラップ）を合成し、`try` のエラー変換の boilerplate を消す（Rust の `thiserror` 相当）。`try` 側の機構は単一の `From` のまま（→ [エラーハンドリング](../03-expressions/13-error-handling.md)）。
 
 > 命名規則: ディレクティブは（理想的には）すべて後述の `Derive` トレイトを実装する**構造体**として表されるため、組み込み・ユーザー定義を問わず **PascalCase** です（`Eq` / `Hash` / `Encode` / `Decode` / `All`）。一方、ディレクティブが**生成する**メンバ（例: `Enum.all()`）は通常の関数・変数なので camelCase です。

@@ -75,7 +75,7 @@ val raw: F64 = d as F64
 
 ```plew
 struct Rgb { pub val code: I32 }
-impl Rgb { pub factory }   // 既定 factory を公開（pub フィールドのみ）
+pub impl Rgb { factory }   // 既定 factory を公開（pub フィールドのみ）
 
 newtype Brand = Rgb
 
