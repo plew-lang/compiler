@@ -460,16 +460,22 @@ fn main() {
                     // a provided-method template (receiver = a trait): emitted per
                     // conforming type, not under the trait name.
                 } else {
-                    // a copied provided method's signature may mention `Self`/`Item`;
-                    // set the env so its prototype matches the body (`genFunc` sets it).
-                    if f.hasRecv {
-                        setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0)
+                    // demand-driven: a copied provided combinator is emitted only if
+                    // its adapter return is reachable, else its prototype references an
+                    // unregistered FilterIter[…] (an unbounded self-returning family).
+                    if f.isProvided && !providedRetReachable(c: inout c, mf: f, recvInstRef: 0) {
                     } else {
+                        // its signature may mention `Self`/`Item`; set the env so the
+                        // prototype matches the body (`genFunc` sets it).
+                        if f.hasRecv {
+                            setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0)
+                        } else {
+                            clearSelfItemEnv(c: inout c)
+                        }
+                        genSignature(c: inout c, f: f)
+                        write(s: ";\n")
                         clearSelfItemEnv(c: inout c)
                     }
-                    genSignature(c: inout c, f: f)
-                    write(s: ";\n")
-                    clearSelfItemEnv(c: inout c)
                 }
             }
             }
@@ -497,10 +503,14 @@ fn main() {
             if methodRecvIsTrait(c: inout c, f: fb) {
                 // provided-method template — skip (emitted per conforming type).
             } else {
-                if fb.isAsync {
-                    genAsyncFunc(c: inout c, fi: j)
+                if fb.isProvided && !providedRetReachable(c: inout c, mf: fb, recvInstRef: 0) {
+                    // demand-driven: matches the prototype loop's skip above.
                 } else {
-                    genFunc(c: inout c, fi: j)
+                    if fb.isAsync {
+                        genAsyncFunc(c: inout c, fi: j)
+                    } else {
+                        genFunc(c: inout c, fi: j)
+                    }
                 }
             }
             }

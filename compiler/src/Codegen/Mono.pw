@@ -731,6 +731,12 @@ fn collectGenInsts(c: inout Comp) {
         // parameters (not concrete), resolved per instantiation instead.
         if f.typeParams.count > 0 {
         } else {
+        // skip a provided-method template (receiver = a trait): it is not a real
+        // method (it is copied onto each conformer), and scanning its signature
+        // would resolve `Self` to the trait name and register a bogus instantiation
+        // (`FilterIter[Iterator,…]`). The per-conformer copies are scanned instead.
+        if methodRecvIsTrait(c: inout c, f: f) {
+        } else {
             // a provided method copied onto a concrete conformer (`filter` on
             // Counter) may mention `Self`/`Item` in its signature; resolve them to
             // the receiver so its adapter instantiation (`FilterIter[Counter,…,I64]`)
@@ -750,6 +756,7 @@ fn collectGenInsts(c: inout Comp) {
                 pi += 1
             }
             clearSelfItemEnv(c: inout c)
+        }
         }
         fi += 1
     }
@@ -1128,6 +1135,50 @@ fn arrayInstRef(c: inout Comp, ae: Bind) -> U64 {
     return idx
 }
 
+// Is `ref` a registered (already-discovered) generic instantiation? A non-generic
+// ref needs no registration (always true). Drives demand-driven provided-method
+// emission below.
+fn isRegisteredGenInst(c: inout Comp, ref: U64) -> Bool {
+    if isGenericInst(c: inout c, ref: ref) {
+    } else {
+        return true
+    }
+    mut val i: U64 = 0
+    while i < c.genInsts.count {
+        if typeRefEq(c: inout c, a: c.genInsts[i], b: ref) {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Should a provided method `mf` (copied onto a conformer) be emitted for this
+// receiver? Only if its adapter return type — `FilterIter[Self, …]` grounded under
+// the receiver (recvInstRef, 0 if non-generic) — is a registered (reachable)
+// instantiation. This makes provided self-returning combinators demand-driven (the
+// ideal: monomorphize only what a call site reaches): `filter` returns
+// `FilterIter[Self,…]`, an unbounded family (`FilterIter[FilterIter[…]]`) never
+// instantiated unless chained, so unreachable copies are skipped (no cascade).
+fn providedRetReachable(c: inout Comp, mf: Func, recvInstRef: U64) -> Bool {
+    if mf.hasRet {
+    } else {
+        return true
+    }
+    val savedP: Array[Bind] = c.curTypeParams
+    val savedA: Array[U64] = c.curTypeArgs
+    if recvInstRef != 0 {
+        c.curTypeParams = mf.typeParams
+        c.curTypeArgs = c.types[recvInstRef].args
+    }
+    setSelfItemEnv(c: inout c, recvStart: mf.recvStart, recvLen: mf.recvLen, recvInstRef: recvInstRef)
+    val gret: U64 = groundTypeRef(c: inout c, ref: mf.retTy)
+    clearSelfItemEnv(c: inout c)
+    c.curTypeParams = savedP
+    c.curTypeArgs = savedA
+    return isRegisteredGenInst(c: inout c, ref: gret)
+}
+
 // Emit prototypes/bodies for generic methods whose receiver is the builtin Array,
 // one per array element type (c.arrayElems). They flow through the same path as
 // user generic methods (emitMonoMethod), but Array is not a genInst (its storage
@@ -1173,7 +1224,18 @@ fn emitMonoMethods(c: inout Comp, proto: Bool) {
             mut val mfi: U64 = 0
             while mfi < c.funcs.count {
                 if methodMatchesInst(c: inout c, f: c.funcs[mfi], instRef: c.genInsts[gi]) {
-                    emitMonoMethod(c: inout c, fi: mfi, instRef: c.genInsts[gi], proto: proto)
+                    // demand-driven: skip a provided combinator whose adapter return is
+                    // unreachable for this receiver (avoids the self-returning cascade).
+                    mut val emit: Bool = true
+                    if c.funcs[mfi].isProvided {
+                        if providedRetReachable(c: inout c, mf: c.funcs[mfi], recvInstRef: c.genInsts[gi]) {
+                        } else {
+                            emit = false
+                        }
+                    }
+                    if emit {
+                        emitMonoMethod(c: inout c, fi: mfi, instRef: c.genInsts[gi], proto: proto)
+                    }
                 }
                 mfi += 1
             }
