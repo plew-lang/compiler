@@ -140,10 +140,7 @@ fn parsePrimary(c: inout Comp) -> U64 {
         Kind.LParen => {
             c.advance()
             val inner: U64 = parseExpr(c: inout c)
-            match c.curKind() {
-                Kind.RParen => { c.advance() }
-                _ => {}
-            }
+            expect(c: inout c, k: <Kind.RParen />, msg: "expected ')' to close a parenthesized expression")
             return inner
         }
         Kind.KwFn => {
@@ -294,10 +291,7 @@ fn parsePostfix(c: inout Comp) -> U64 {
             Kind.LBracket => {
                 c.advance()
                 val idx: U64 = parseExpr(c: inout c)
-                match c.curKind() {
-                    Kind.RBracket => { c.advance() }
-                    _ => {}
-                }
+                expect(c: inout c, k: <Kind.RBracket />, msg: "expected ']' to close an index")
                 e = c.pushExpr(e: <Expr.Index base=e index=idx />)
             }
             Kind.Arrow => {

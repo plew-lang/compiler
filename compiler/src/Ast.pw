@@ -727,6 +727,17 @@ pub impl Comp {
     }
 }
 
+// Consume a mandatory token: if the cursor is on `k`, advance; otherwise reject
+// with `msg` (acceptance soundness — a missing delimiter is an error, not silently
+// skipped). Kinds compare via their stable `kindCode`.
+fn expect(c: inout Comp, k: Kind, msg: String) {
+    if kindCode(k: c.curKind()) == kindCode(k: k) {
+        c.advance()
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: c.cur().start), msg: msg)
+    }
+}
+
 // Read an Int token's value out of the source bytes via its (start,len) span.
 // Accumulates in U64 so the whole unsigned range fits; a literal that would
 // exceed 2^64-1 is a clean compile error (not a compiler crash). The overflow

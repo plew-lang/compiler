@@ -246,11 +246,8 @@ fn parseLet(c: inout Comp, mutable: Bool) -> U64 {
         }
         _ => {}
     }
-    // `=`
-    match c.curKind() {
-        Kind.Eq => { c.advance() }
-        _ => {}
-    }
+    // `=` (initialization is mandatory — Plew has no uninitialized declarations)
+    expect(c: inout c, k: <Kind.Eq />, msg: "expected '=' — a variable declaration must be initialized")
     val init: U64 = parseExpr(c: inout c)
     return c.pushStmt(s: <Stmt.Let mutable=mutable nameStart=nameTok.start nameLen=nameTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=init />)
 }
