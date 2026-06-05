@@ -296,6 +296,18 @@ fn resolveTy(c: inout Comp, tyRef: U64) -> U64 {
     }
     val t: TypeRef = c.types[tyRef]
     if t.args.count == 0 {
+        // `Self`/`Item` as types (provided methods on a trait): resolve to the
+        // receiver type and its associated `Item` binding (set per method).
+        if c.curSelfRef != 0 {
+            if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
+                return c.curSelfRef
+            }
+        }
+        if c.curItemRef != 0 {
+            if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") {
+                return c.curItemRef
+            }
+        }
         mut val i: U64 = 0
         while i < c.curTypeParams.count {
             val p: Bind = c.curTypeParams[i]
@@ -528,6 +540,58 @@ fn groundUnderInst(c: inout Comp, instRef: U64, tyRef: U64) -> U64 {
     return g
 }
 
+// Append a bare (no-args) TypeRef for a type name, returning its index. Used to
+// give `Self` a concrete TypeRef when the receiver is non-generic (no inst ref).
+fn simpleTypeRef(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
+    val noArgs: Array[U64] = []
+    val idx: U64 = c.types.count
+    c.types.append(<TypeRef nameStart=nameStart nameLen=nameLen args=noArgs />)
+    return idx
+}
+
+// The bound type ref of a receiver's `type Item = X` associated binding (the
+// Iterator conformance's element), or 0 if none. Keyed by the receiver type name.
+fn assocItemRef(c: inout Comp, recvStart: U64, recvLen: U64) -> U64 {
+    mut val i: U64 = 0
+    while i < c.assocBindings.count {
+        val ab: AssocBinding = c.assocBindings[i]
+        if spansEqual(c: inout c, aStart: ab.recvStart, aLen: ab.recvLen, bStart: recvStart, bLen: recvLen) {
+            if rangeEquals(bytes: c.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Item") {
+                return ab.ty
+            }
+        }
+        i += 1
+    }
+    return 0
+}
+
+// Set the `Self`/`Item`-as-type env for a method on the given receiver (recvInstRef
+// = its concrete instantiation when generic, else 0). Self = the receiver type;
+// Item = its `type Item` binding, grounded under the instantiation so a generic
+// receiver's Item resolves to the concrete element. Pair with clearSelfItemEnv.
+fn setSelfItemEnv(c: inout Comp, recvStart: U64, recvLen: U64, recvInstRef: U64) {
+    if recvInstRef != 0 {
+        c.curSelfRef = recvInstRef
+    } else {
+        c.curSelfRef = simpleTypeRef(c: inout c, nameStart: recvStart, nameLen: recvLen)
+    }
+    val itemR0: U64 = assocItemRef(c: inout c, recvStart: recvStart, recvLen: recvLen)
+    if itemR0 == 0 {
+        c.curItemRef = 0
+    } else {
+        if recvInstRef != 0 {
+            c.curItemRef = groundUnderInst(c: inout c, instRef: recvInstRef, tyRef: itemR0)
+        } else {
+            c.curItemRef = itemR0
+        }
+    }
+}
+
+fn clearSelfItemEnv(c: inout Comp) {
+    c.curSelfRef = 0
+    c.curItemRef = 0
+}
+
 fn scanType(c: inout Comp, ref: U64) {
     if ref >= c.types.count {
         return
@@ -615,7 +679,15 @@ fn scanGenInstFields(c: inout Comp, instRef: U64) {
                     while mfi < c.funcs.count {
                         val mf: Func = c.funcs[mfi]
                         if mf.hasRecv {
+                            // skip copied provided methods (`map[B] -> MapIter[Self,…]`):
+                            // their instances come from call sites, and expanding one here
+                            // under Self=this inst would recurse forever (MapIter[MapIter[…]]).
+                            if mf.isProvided {
+                            } else {
                             if spansEqual(c: inout c, aStart: mf.recvStart, aLen: mf.recvLen, bStart: inst.nameStart, bLen: inst.nameLen) {
+                                // a non-generic method may still mention `Self`/`Item`
+                                // (`fn iterator() -> Self`); resolve them to this inst.
+                                setSelfItemEnv(c: inout c, recvStart: inst.nameStart, recvLen: inst.nameLen, recvInstRef: instRef)
                                 if mf.hasRet {
                                     scanType(c: inout c, ref: mf.retTy)
                                 }
@@ -625,6 +697,8 @@ fn scanGenInstFields(c: inout Comp, instRef: U64) {
                                     scanType(c: inout c, ref: mps[mpi].ty)
                                     mpi += 1
                                 }
+                                clearSelfItemEnv(c: inout c)
+                            }
                             }
                         }
                         mfi += 1

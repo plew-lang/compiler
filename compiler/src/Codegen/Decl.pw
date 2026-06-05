@@ -75,7 +75,7 @@ fn instantiateProvidedMethods(c: inout Comp) {
                         if methodInRange(c: inout c, lo: nFuncs, hi: c.funcs.count, recvStart: cf.typeStart, recvLen: cf.typeLen, nameStart: f.nameStart, nameLen: f.nameLen) {
                             compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "two conformed traits provide a method of the same name; the bare call is ambiguous (`#`-disambiguation not yet supported)")
                         } else {
-                            c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen typeParams=f.typeParams params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub />)
+                            c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen typeParams=f.typeParams params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true />)
                         }
                     }
                 }
@@ -796,6 +796,13 @@ fn genFunc(c: inout Comp, fi: U64) {
     c.curRecvLen = f.recvLen
     c.curSelfInout = f.selfInout
     c.curSelfMove = f.selfMove
+    // `Self`/`Item`-as-type env for the body (a provided method's `<MapIter[Self,
+    // …]>` / `fn(x: Item)`): Self = receiver, Item = its `type Item` binding.
+    if f.hasRecv {
+        setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: c.curRecvInstRef)
+    } else {
+        clearSelfItemEnv(c: inout c)
+    }
     c.curBranchBase = 0
     // fresh local scope for this function: parameters are the initial bindings
     c.locals = []
@@ -825,6 +832,7 @@ fn genFunc(c: inout Comp, fi: U64) {
         write(s: "    return 0;\n")
     }
     write(s: "}\n")
+    clearSelfItemEnv(c: inout c)
 }
 
 // Emit a lambda-lifted closure: signature `<ret> __closure<id>(<params>)`, then

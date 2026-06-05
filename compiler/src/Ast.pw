@@ -476,6 +476,10 @@ struct Func {
     // Default false = the method is private — visible only inside the type's
     // anonymous impl. Visibility is per-impl-block (no per-method `pub fn`).
     pub val isPub: Bool = false
+    // a provided trait method copied onto a conformer by instantiateProvidedMethods
+    // (its body/signature may mention `Self`/`Item`; its generic instances come from
+    // call sites). Default false = an ordinary inherent/conformance/free method.
+    pub val isProvided: Bool = false
 }
 
 struct Comp {
@@ -587,6 +591,14 @@ struct Comp {
     // the receiver's concrete instantiation TypeRef when emitting a generic
     // method (so the mangled C name and `self`'s type resolve). 0 otherwise.
     pub mut val curRecvInstRef: U64
+    // `Self` (the receiver type) and the associated `Item` resolved as *types*,
+    // when processing a method whose signature/body mention them (a provided
+    // method on Iterator: `map[B](f: fn(x: Item)->B) -> MapIter[Self, …, B]`).
+    // TypeRef indices; 0 = not set. resolveTy maps a bare `Self`/`Item` ref to
+    // these. Set per method (codegen/scan/check) from the receiver and its
+    // `type Item` binding; reset to 0 outside a method that needs them.
+    pub mut val curSelfRef: U64 = 0
+    pub mut val curItemRef: U64 = 0
     // result temp id of the innermost value-position block (`if`/`match` expr)
     // currently being lowered, so a `give` statement knows which `__r<n>` to
     // assign — stored as `id + 1` so 0 means "not inside a block-expression" (a
