@@ -11,7 +11,11 @@
 - ✅ **Array＝`RawBuffer` 床の上の Plew struct**（tag `array-plew-struct`・経緯/設計は [array-struct-plan.md](array-struct-plan.md)）：`struct Array[T] { data: RawBuffer[T]; pub(get) mut val count }` が C typedef を供給（`Array_E { E* data; uint64_t count }`）。append/get/set は floor intrinsics（`arrayPush/Get/Set/Len`＝Swift の Builtin 相当・deep-copy-aware ランタイム）上の純 Plew メソッド＝Swift の Array と同型。封じ込めで literal/index/for/値意味論/メソッドは kind-3 経路維持・`Array[U8]` のみ hand-written。**残ギャップ＝コレクション値意味論の一般化**（配列専用 deep copy/release ランタイムを `RawBuffer` 上の任意コレクションへ＝Dictionary/Set の前提）。
 - ✅ **可視性 `export`/`import with`/`pub impl`/`pub`/`pub(get)` を spec 通り完全強制**（tag `visibility-enforced`・根拠は design-decisions「メンバ可視性＝impl ブロック単位」＋[[visibility-before-stdlib-grows]]）：①**モジュール可視性**＝loader の module identity（`moduleOf(offset)`）・`checkImports`〔import した名前は export 必須〕・`checkUseVisibility`〔import せず cross-module 関数使用を拒否〕。②**メンバ可視性**＝**impl ブロック単位 `pub impl`**（per-method `pub fn` 廃止）・フィールド per-field `pub`/`pub(get)`・private＝無名 impl のみ・トレイト準拠も `pub impl A as P`＝公開/無修飾＝内部。コンパイラは pub 大掃除で spec 準拠化。
 
-## 🔄 着手中＝Iterator/Iterable（反復プロトコル・[[next-iterator-iterable]]）
+## 🔄 着手中＝メタプログラミング基盤（spec/16＋[metaprogramming-architecture.md](metaprogramming-architecture.md)）
+
+**設計確定済・実装フェーズへ**。確定方針＝`TokenStream` 入出力の `Derive` 実装 struct／別コマンドで `<Foo>.gen.pw` 生成（コミット・原本不変・add-only）／取り込みは `@[...]` の存在でローダ自動 part／リッチ AST は将来コンパイラ外ライブラリ（パッケージ管理後）／組み込み Eq/Ord/Hash は当面コンパイラ特権で将来 dogfood。次の一歩＝**実装段取り①の機構**（`TokenStream` 型＋組み込み `lex`/`render`/`quote`/軽量 parse ヘルパ）。実装前に未決（`quote` 補間規則・`TokenStream` 表現・引数渡し）を architecture doc で詰める。
+
+## ✅ 完了＝Iterator/Iterable（反復プロトコル・lazy map/filter・[[next-iterator-iterable]]・[[lazy-iterators-direction]]）
 
 基盤の関連型から進める順（ユーザー判断＝ダックタイピング for を先に作る手戻りを避ける）。
 - ✅ **step 1＝関連型 `type Item`**：trait 宣言（`TraitDef.assocTypes`・`type Item` をパース）・impl 束縛（`type Item = Concrete`→`AssocBinding`/`Comp.assocBindings`）・**適合検査が要求の `Item` を束縛で置換**してから witness とセレクタ照合（`firstOr(fallback: Item)`＋`type Item=I64`→`firstOr(fallback: I64)` にマッチ）。同型が別 Item で複数準拠可。test `assoc_type`。AST 追加は全てデフォルト値付き＝構築点無改修。
@@ -43,11 +47,11 @@
 
 1. ✅ **Array struct 化**。次の収穫＝コレクション値意味論の一般化。
 2. ✅ **可視性強制**。
-3. 🔄 **Iterator/Iterable**（上記・着手中＝step 1 関連型 済）。
-4. 🔲 **Hash/Hasher → Dictionary（`[k:v]` lang item）/Set**（要：コレクション値意味論の一般化）。
-5. 🔲 **イベントループ tail＋spawn**（実スレッド・`JoinHandle[T]`・closure 残ギャップ）。
-6. 🔲 **`any P` 存在型**（型消去・動的ディスパッチ・トレイトの最後）。
-7. 🔲 **メタプログラミング**（`Derive`・コード生成・spec 上も最後）。
+3. ✅ **Iterator/Iterable**（反復プロトコル＋ lazy `map`/`filter` 完成・任意順連鎖・複数行チェーン・std 化済＝下記 step 5 群）。
+4. 🔄 **メタプログラミング（基盤）＝現在の大物**（**設計確定済**＝spec/16＋[metaprogramming-architecture.md](metaprogramming-architecture.md)）。実装順：①機構（`TokenStream`＋組み込み `lex`/`render`/`quote`/parse ヘルパ）→ ②`plew gen` コマンド → ③コアライブラリ derive を dogfood → ④パッケージ管理後にライブラリ切り出し。**Hash はこの③で出す**（Eq/Hash → Dictionary）。foundation-first（ユーザー判断＝先延ばしにせず基盤を固めてから Hash を正しく乗せる）。
+5. 🔲 **Hash/Hasher → Dictionary（`[k:v]` lang item）/Set**（メタプロ③で `@[Hash]` を出してから・要：コレクション値意味論の一般化）。
+6. 🔲 **イベントループ tail＋spawn**（実スレッド・`JoinHandle[T]`・closure 残ギャップ）。
+7. 🔲 **`any P` 存在型**（型消去・動的ディスパッチ・トレイトの最後）。
 
 横断 additive：演算子トレイト全配線（Eq/Ord 以外・需要駆動）・循環回収（Ref グラフ限定サイクルコレクタ）。詳細は [provisional.md](provisional.md)。
 
