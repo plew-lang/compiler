@@ -112,13 +112,13 @@ fn overflowBuiltin(op: I64) -> String {
 // either operand's recovered int type works). Width-less scalar if neither is a
 // recoverable integer type — then the overflow check is skipped (documented gap).
 fn arithIntType(c: inout Comp, lhs: U64, rhs: U64) -> TypeInfo {
-    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
     if lt.kind == 0 {
         if isIntType(c: inout c, start: lt.nameStart, len: lt.nameLen) {
             return lt
         }
     }
-    val rt: TypeInfo = exprType(c: inout c, id: rhs)
+    val rt: TypeInfo = typeOf(c: inout c, id: rhs)
     if rt.kind == 0 {
         if isIntType(c: inout c, start: rt.nameStart, len: rt.nameLen) {
             return rt

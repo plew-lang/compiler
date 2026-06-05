@@ -68,7 +68,7 @@ fn isStringEq(c: inout Comp, op: I64, lhs: U64) -> Bool {
             return false
         }
     }
-    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
     return lt.kind == 1
 }
 
@@ -118,7 +118,7 @@ fn isEnumEq(c: inout Comp, op: I64, lhs: U64) -> Bool {
             return false
         }
     }
-    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
     if lt.kind == 2 {
         return isEnumName(c: inout c, start: lt.nameStart, len: lt.nameLen)
     }
@@ -137,7 +137,7 @@ fn compareNeedsTrait(c: inout Comp, op: I64, lhs: U64) -> Bool {
     if op > 55 {
         return false
     }
-    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
     if lt.kind == 3 {
         return true
     }
@@ -173,14 +173,14 @@ fn emitEnumOperand(c: inout Comp, id: U64, enStart: U64, enLen: U64) {
 // allowed; a payload-bearing enum emits an undeclared identifier so the C
 // compile fails loudly (structural Eq awaits @[Eq] — never compare blind).
 fn emitEnumTagCmp(c: inout Comp, lhs: U64, rhs: U64, op: I64, outer: Bool) {
-    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
     mut val enStart: U64 = 0
     mut val enLen: U64 = 0
     if lt.kind == 2 {
         enStart = lt.nameStart
         enLen = lt.nameLen
     } else {
-        val rt: TypeInfo = exprType(c: inout c, id: rhs)
+        val rt: TypeInfo = typeOf(c: inout c, id: rhs)
         enStart = rt.nameStart
         enLen = rt.nameLen
     }
@@ -248,7 +248,7 @@ fn orderingVariantIndex(c: inout Comp, name: String) -> U64 {
 // `==`/`!=`, Ord's `compare` for `< <= > >=` (spec/12). Only named (struct)
 // operands — scalars/String/enums have their own lowerings.
 fn hasCompareWitness(c: inout Comp, op: I64, lhs: U64) -> Bool {
-    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
     if lt.kind == 2 {
         // `==`/`!=` desugar to Eq.eq; gated on an explicit `impl T as Eq` (spec/12:
         // operators are trait sugar, not implicit). `< <= > >=` likewise on Ord.
@@ -294,7 +294,7 @@ fn emitEqCall(c: inout Comp, typeStart: U64, typeLen: U64, lhs: U64, rhs: U64) {
 // `==` -> eq, `!=` -> !eq, and `< <= > >=` -> a tag test on `compare`'s Ordering
 // (`a<b` ⟺ compare(a,b) == Less, `a<=b` ⟺ != Greater, etc.).
 fn emitTraitCompare(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
-    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
     if op == opEq() {
         emitEqCall(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, lhs: lhs, rhs: rhs)
         return
@@ -381,7 +381,7 @@ fn tryArrayElemFieldAssign(c: inout Comp, op: I64, target: U64, value: U64) -> B
             val be: Expr = c.exprs[base]
             match be {
                 Expr.Index(base: val abase, index: val index) => {
-                    val bt: TypeInfo = exprType(c: inout c, id: abase)
+                    val bt: TypeInfo = typeOf(c: inout c, id: abase)
                     if bt.kind == 3 {
                     } else {
                         return false
@@ -464,7 +464,7 @@ fn tryArrayElemFieldAssign(c: inout Comp, op: I64, target: U64, value: U64) -> B
 fn emitStructMatch(c: inout Comp, scrut: U64, arm: MatchArm) {
     val t: U64 = c.tmp
     c.tmp = c.tmp + 1
-    val st: TypeInfo = exprType(c: inout c, id: scrut)
+    val st: TypeInfo = typeOf(c: inout c, id: scrut)
     val generic: Bool = isGenericInst(c: inout c, ref: st.ref)
     val mark: U64 = scopeMark(c: inout c)
     write(s: "    {\n    ")
@@ -721,7 +721,7 @@ fn genStmt(c: inout Comp, id: U64) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "cannot assign to an element of an immutable binding; declare it with `mut val`")
                         return
                     }
-                    val bt: TypeInfo = exprType(c: inout c, id: base)
+                    val bt: TypeInfo = typeOf(c: inout c, id: base)
                     if bt.kind == 3 {
                         checkLitSpan(c: inout c, id: value, tyStart: bt.nameStart, tyLen: bt.nameLen, isArray: false)
                     }
@@ -788,7 +788,7 @@ fn genStmt(c: inout Comp, id: U64) {
                     // pub(get) are writable only inside the type's anonymous impl.
                     match c.exprs[target] {
                         Expr.Field(val base, val nameStart, val nameLen) => {
-                            val fbt: TypeInfo = exprType(c: inout c, id: base)
+                            val fbt: TypeInfo = typeOf(c: inout c, id: base)
                             if fbt.kind == 2 {
                                 checkFieldWriteVis(c: inout c, ownerStart: fbt.nameStart, ownerLen: fbt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
                                 // boxed (recursive) field write: repoint the pointer to a
@@ -819,7 +819,7 @@ fn genStmt(c: inout Comp, id: U64) {
                         }
                         _ => {}
                     }
-                    val ctt: TypeInfo = exprType(c: inout c, id: target)
+                    val ctt: TypeInfo = typeOf(c: inout c, id: target)
                     // reassigning a unique place: deinit the previous value first
                     // (deterministic — it would otherwise be skipped), then store the
                     // new one. The RHS must be moved/fresh, not a copied place (which
@@ -863,7 +863,7 @@ fn genStmt(c: inout Comp, id: U64) {
                         // `x /= v` / `x %= v` -> x = checked(x / v): zero divisor
                         // and signed INT_MIN/-1 panic, like `x = x / v`.
                         write(s: " = ")
-                        val dt: TypeInfo = exprType(c: inout c, id: target)
+                        val dt: TypeInfo = typeOf(c: inout c, id: target)
                         if dt.kind == 0 {
                             if isIntType(c: inout c, start: dt.nameStart, len: dt.nameLen) {
                                 genCheckedDiv(c: inout c, lhs: target, rhs: value, tyStart: dt.nameStart, tyLen: dt.nameLen, isMod: op == opRemAssign())
@@ -882,7 +882,7 @@ fn genStmt(c: inout Comp, id: U64) {
                             write(s: ")")
                         }
                     } else {
-                        val tt: TypeInfo = exprType(c: inout c, id: target)
+                        val tt: TypeInfo = typeOf(c: inout c, id: target)
                         val cbin: I64 = compoundCheckedBin(op: op)
                         mut val checked: Bool = false
                         if cbin != 0 {
@@ -977,7 +977,7 @@ fn genStmt(c: inout Comp, id: U64) {
                     // (untracked) and is rejected.
                     mut val retExcl: U64 = c.locals.count
                     if hasValue {
-                        val vt: TypeInfo = exprType(c: inout c, id: value)
+                        val vt: TypeInfo = typeOf(c: inout c, id: value)
                         if vt.kind == 2 {
                             if typeIsUnique(c: inout c, start: vt.nameStart, len: vt.nameLen) {
                                 match c.exprs[value] {
@@ -1087,7 +1087,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 write(s: "    }\n    }\n")
             } else {
                 // walk an array by index, binding `var` to each element
-                val et: TypeInfo = exprType(c: inout c, id: iter)
+                val et: TypeInfo = typeOf(c: inout c, id: iter)
                 if et.kind == 3 {
                 } else {
                     // not an array: a general Iterable (struct with iterator()).
@@ -1186,7 +1186,7 @@ fn genStmt(c: inout Comp, id: U64) {
             // per-path move handling. Reject loudly (a bare place would double
             // deinit; a `give move` of an outer local would be a conditional move).
             // Use a statement-form if/match with the binding outside.
-            val gvt: TypeInfo = exprType(c: inout c, id: value)
+            val gvt: TypeInfo = typeOf(c: inout c, id: value)
             if gvt.kind == 2 {
                 if typeIsUnique(c: inout c, start: gvt.nameStart, len: gvt.nameLen) {
                     compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "a value-position if/match cannot yield a unique value yet; use a statement form")
@@ -1233,7 +1233,7 @@ fn genStmt(c: inout Comp, id: U64) {
             c.tmp = c.tmp + 1
             // a generic enum scrutinee (`Optional[I32]`) lowers its temp to the
             // mangled C name and substitutes bind field types.
-            val scrutRef: U64 = exprType(c: inout c, id: scrut).ref
+            val scrutRef: U64 = typeOf(c: inout c, id: scrut).ref
             val genericMatch: Bool = isGenericEnumInst(c: inout c, ref: scrutRef)
             // enum type for the scrutinee temp = the enum named by the first
             // non-wildcard arm's pattern.

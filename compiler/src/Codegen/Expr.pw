@@ -219,7 +219,7 @@ fn makeProvides(c: inout Comp, fields: Array[MakeField], nameStart: U64, nameLen
 fn emitStructMatchExpr(c: inout Comp, scrut: U64, arm: MatchArm) {
     val t: U64 = c.tmp
     c.tmp = c.tmp + 1
-    val st: TypeInfo = exprType(c: inout c, id: scrut)
+    val st: TypeInfo = typeOf(c: inout c, id: scrut)
     val generic: Bool = isGenericInst(c: inout c, ref: st.ref)
     val mark: U64 = scopeMark(c: inout c)
     write(s: "({ ")
@@ -363,7 +363,7 @@ fn genExpr(c: inout Comp, id: U64) {
         Expr.Unary(val op, val operand) => {
             mut val negChecked: Bool = false
             if op == opSub() {
-                val ot: TypeInfo = exprType(c: inout c, id: operand)
+                val ot: TypeInfo = typeOf(c: inout c, id: operand)
                 if ot.kind == 0 {
                     if isIntType(c: inout c, start: ot.nameStart, len: ot.nameLen) {
                         if intSigned(c: inout c, start: ot.nameStart, len: ot.nameLen) {
@@ -618,7 +618,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 }
                 _ => {}
             }
-            val bt: TypeInfo = exprType(c: inout c, id: base)
+            val bt: TypeInfo = typeOf(c: inout c, id: base)
             // member visibility (spec/05): a private field is readable only inside
             // its type's anonymous impl. (String's `.bytes` and scalars aren't real
             // struct fields, so fieldVis returns not-found and they're skipped.)
@@ -678,7 +678,7 @@ fn genExpr(c: inout Comp, id: U64) {
             write(s: "}")
         }
         Expr.Index(val base, val index) => {
-            val bt: TypeInfo = exprType(c: inout c, id: base)
+            val bt: TypeInfo = typeOf(c: inout c, id: base)
             wPA(c: inout c, elemStart: bt.nameStart, elemLen: bt.nameLen)
             write(s: "_get(")
             genExpr(c: inout c, id: base)
@@ -775,7 +775,7 @@ fn genExpr(c: inout Comp, id: U64) {
                 write(s: ")")
                 return
             }
-            mut val bt: TypeInfo = exprType(c: inout c, id: recv)
+            mut val bt: TypeInfo = typeOf(c: inout c, id: recv)
             // a String value method (`s.isEmpty()`): exprType carries no name span
             // for String, so recover "String" and treat it as a named receiver so
             // `impl String { … }` methods resolve and mangle to `String_<m>`.
@@ -886,7 +886,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     // yielding the method's return value.
                     match c.exprs[recv] {
                         Expr.Index(base: val abase, index: val aidx) => {
-                            if exprType(c: inout c, id: abase).kind == 3 {
+                            if typeOf(c: inout c, id: abase).kind == 3 {
                                 write(s: "({ ")
                                 genCElem(c: inout c, start: bt.nameStart, len: bt.nameLen)
                                 write(s: " __ge = ")
@@ -1038,7 +1038,7 @@ fn genExpr(c: inout Comp, id: U64) {
                         }
                     }
                     _ => {
-                        val st: TypeInfo = exprType(c: inout c, id: operand)
+                        val st: TypeInfo = typeOf(c: inout c, id: operand)
                         if isIntType(c: inout c, start: st.nameStart, len: st.nameLen) {
                             if losslessInt(c: inout c, srcStart: st.nameStart, srcLen: st.nameLen, dstStart: tyStart, dstLen: tyLen) {
                             } else {
@@ -1240,8 +1240,8 @@ fn genExpr(c: inout Comp, id: U64) {
             c.tmp = c.tmp + 1
             // result type inferred from the first arm's expression (provisional:
             // a result type that depends on a pattern bind may mis-infer).
-            val rt: TypeInfo = exprType(c: inout c, id: arms[0].body)
-            val scrutRef: U64 = exprType(c: inout c, id: scrut).ref
+            val rt: TypeInfo = typeOf(c: inout c, id: arms[0].body)
+            val scrutRef: U64 = typeOf(c: inout c, id: scrut).ref
             val genericMatch: Bool = isGenericEnumInst(c: inout c, ref: scrutRef)
             mut val enumStart: U64 = 0
             mut val enumLen: U64 = 0
@@ -1362,7 +1362,7 @@ fn genExpr(c: inout Comp, id: U64) {
             val g: U64 = blockGiveExpr(c: inout c, blkId: thenBlk)
             mut val rt: TypeInfo = scalarInfo()
             if g < c.exprs.count {
-                rt = exprType(c: inout c, id: g)
+                rt = typeOf(c: inout c, id: g)
             }
             write(s: "({ ")
             genTypeInfoCType(c: inout c, ti: rt)
@@ -1386,7 +1386,7 @@ fn genExpr(c: inout Comp, id: U64) {
             // else the default. Couples to @Std/Core Optional (Some=0, field v).
             val t: U64 = c.tmp
             c.tmp = c.tmp + 1
-            val ot: TypeInfo = exprType(c: inout c, id: opt)
+            val ot: TypeInfo = typeOf(c: inout c, id: opt)
             write(s: "({ ")
             if isGenericInst(c: inout c, ref: ot.ref) {
                 emitMangle(c: inout c, ref: ot.ref)
@@ -1411,7 +1411,7 @@ fn genExpr(c: inout Comp, id: U64) {
             // (Ok=0 field value, Err=1 field error). First cut: error types match.
             val t: U64 = c.tmp
             c.tmp = c.tmp + 1
-            val et: TypeInfo = exprType(c: inout c, id: expr)
+            val et: TypeInfo = typeOf(c: inout c, id: expr)
             write(s: "({ ")
             if isGenericInst(c: inout c, ref: et.ref) {
                 emitMangle(c: inout c, ref: et.ref)

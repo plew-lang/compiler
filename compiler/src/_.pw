@@ -203,6 +203,9 @@ fn main() {
     // unique types cannot be generic type arguments (wrap in Ref[T]); checked
     // after instantiation discovery since it scans the concrete genInsts.
     checkGenericUniqueArgs(c: inout c)
+    // typed-AST cache (Phase B): one type slot per expression node, filled lazily
+    // by `typeOf` during non-generic emission. Built now — expr ids are stable.
+    buildExprTyTable(c: inout c)
     // runtime preamble: includes, immutable String, and the I/O builtins'
     // C runtime (the contract stage0 also injects — emitted here so stage1's
     // output is self-contained).

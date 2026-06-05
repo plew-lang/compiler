@@ -534,6 +534,17 @@ struct Comp {
     // by appending the names to `bytes` at known offsets, so kwSpan is an O(1) table
     // lookup instead of an O(n) source scan + a planted-comment occurrence guarantee.
     pub mut val kwCache: Array[Bind] = []
+    // typed-AST cache (Phase B): each expression node's recovered `TypeInfo`,
+    // stored as 4 parallel scalar arrays keyed by expr id (struct-array IndexSet
+    // isn't available in the self-host subset). `typeOf` fills these lazily during
+    // codegen in a NON-generic context (where a node's type is env-independent and
+    // computed once) and reads them back, so codegen stops re-deriving types via
+    // `exprType`. `exprTyKind == typeUnfilled` marks an uncomputed slot. Built by
+    // buildExprTyTable before emission.
+    pub mut val exprTyKind: Array[I64] = []
+    pub mut val exprTyStart: Array[U64] = []
+    pub mut val exprTyLen: Array[U64] = []
+    pub mut val exprTyRef: Array[U64] = []
     // recursive-value-type boxing (spec/03): the set of fields whose declared type
     // transitively reaches their owning concrete struct/enum (a containment cycle).
     // Such a field is stored behind a heap pointer (`T*`) so the C type is finite —
