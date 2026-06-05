@@ -140,30 +140,14 @@ fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[U8], ba
         // `@Std/<rest>` -> stdRoot + <rest> + ".pw" (the language std library).
         // Other `@dep/...` (external packages) are not resolved yet -> skip.
         if pLen >= 5 {
-            if src[pStart + 1] == 83 {
-                if src[pStart + 2] == 116 {
-                    if src[pStart + 3] == 100 {
-                        if src[pStart + 4] == 47 {
-                            if stdRootLen == 0 {
-                                return out
-                            }
-                            mut val si: U64 = 0
-                            while si < stdRootLen {
-                                out.append(stdRoot[si])
-                                si += 1
-                            }
-                            mut val sj: U64 = pStart + 5
-                            while sj < end {
-                                out.append(src[sj])
-                                sj += 1
-                            }
-                            out.append(46)
-                            out.append(112)
-                            out.append(119)
-                            return out
-                        }
-                    }
+            if rangeEquals(bytes: src, start: pStart + 1, len: 4, kw: "Std/") {
+                if stdRootLen == 0 {
+                    return out
                 }
+                appendBytes(into: inout out, from: stdRoot)
+                appendBytes(into: inout out, from: extractSpan(buf: src, start: pStart + 5, len: end - (pStart + 5)))
+                appendBytes(into: inout out, from: ".pw".bytes)
+                return out
             }
         }
         return out
@@ -172,19 +156,9 @@ fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[U8], ba
         if srcRootLen == 0 {
             return out
         }
-        mut val i: U64 = 0
-        while i < srcRootLen {
-            out.append(srcRoot[i])
-            i += 1
-        }
-        mut val j: U64 = pStart + 1
-        while j < end {
-            out.append(src[j])
-            j += 1
-        }
-        out.append(46)
-        out.append(112)
-        out.append(119)
+        appendBytes(into: inout out, from: srcRoot)
+        appendBytes(into: inout out, from: extractSpan(buf: src, start: pStart + 1, len: end - (pStart + 1)))
+        appendBytes(into: inout out, from: ".pw".bytes)
         return out
     }
     // relative ('.')
@@ -220,19 +194,9 @@ fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[U8], ba
         }
     }
     val dirLen: U64 = stripParents(path: importer, baseLen: baseLen, n: parents)
-    mut val k: U64 = 0
-    while k < dirLen {
-        out.append(importer[k])
-        k += 1
-    }
-    mut val m: U64 = rest
-    while m < end {
-        out.append(src[m])
-        m += 1
-    }
-    out.append(46)
-    out.append(112)
-    out.append(119)
+    appendBytes(into: inout out, from: extractSpan(buf: importer, start: 0, len: dirLen))
+    appendBytes(into: inout out, from: extractSpan(buf: src, start: rest, len: end - rest))
+    appendBytes(into: inout out, from: ".pw".bytes)
     return out
 }
 
@@ -276,15 +240,8 @@ fn dirPrefixLen(path: Array[U8]) -> U64 {
 fn computeStdRoot(arg0: Array[U8]) -> Array[U8] {
     val pre: U64 = dirPrefixLen(path: arg0)
     mut val out: Array[U8] = []
-    mut val i: U64 = 0
-    while i < pre {
-        out.append(arg0[i])
-        i += 1
-    }
-    out.append(115)
-    out.append(116)
-    out.append(100)
-    out.append(47)
+    appendBytes(into: inout out, from: extractSpan(buf: arg0, start: 0, len: pre))
+    appendBytes(into: inout out, from: "std/".bytes)
     return out
 }
 
