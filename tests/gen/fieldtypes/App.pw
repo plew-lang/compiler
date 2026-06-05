@@ -1,0 +1,48 @@
+import @Std/Io with { write }
+import @Std/Syntax with { Derive, DeclAst, TypeAst, Src, newSrc }
+
+// A derive that reads each field's TYPE (including nested generic args) and
+// generates a function returning a flattened "name=Type[args]" listing.
+struct TypeList { }
+
+fn putType(s: inout Src, t: TypeAst) {
+    s.put(t.name)
+    if t.args.count > 0 {
+        s.put("[")
+        mut val i: U64 = 0
+        while i < t.args.count {
+            putType(s: inout s, t: t.args[i])
+            i += 1
+        }
+        s.put("]")
+    }
+}
+
+pub impl TypeList as Derive {
+    fn derive(input: DeclAst) -> String {
+        mut val s: Src = newSrc()
+        s.put("fn fieldTypes() -> String {\n    return \"")
+        mut val i: U64 = 0
+        while i < input.fields.count {
+            s.put(input.fields[i].name)
+            s.put("=")
+            putType(s: inout s, t: input.fields[i].ty)
+            s.put(";")
+            i += 1
+        }
+        s.put("\"\n}\n")
+        return s.finish()
+    }
+}
+
+@[TypeList]
+struct Holder {
+    pub val a: Array[I64]
+    pub val b: Array[Array[I64]]
+    pub val c: I32
+}
+
+fn main() {
+    write(s: fieldTypes())
+    write(s: "\n")
+}
