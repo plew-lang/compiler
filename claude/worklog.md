@@ -51,7 +51,11 @@
 - **なぜ rewrite でなく renovate**：①高価で正しい意味論（`unique-*` 等の長いエッジケース蓄積）を捨てて踏み直すことになる（Joel 典型）②不動点の安全網を長期間失う（renovate は各ステップ緑）③2 つの根は再帰値型が動く今だからこそ増分で剥がせる。
 - **ロードマップ**（メタプロと合流）：
   - **Phase A✅（クイックウィン・完了）**：①**ARC エミッタ 1 本化**＝`emitFieldAction`（concrete struct/enum 共有・unique-deinit 込み）＋`emitMonoFieldAction`/`emitMonoModeDef`（mono struct/enum 共有）に集約。旧 `emitStruct{Copy,Share,Release}Def`・`emitMono{Struct,Enum}Copy*`・`emitMonoEnumMode*` を削除。**mono-struct の share/release を新設＝documented leak を解消**（`monoStructNeedsRelease`＋driver＋scope-drop 配線）。「heap フィールド種を足す＝2 dispatcher を触るだけ」に。②**演算子 magic 数を named helper 化**＝`opAdd()..opCoalesce()`（`Ops.pw`・`kindCode(<Kind.X/>)` が単一の源）で `op == 57` 等を全置換。③**`expect()` パーサヘルパ**＝tolerant な「無ければ黙って進む」を mandatory トークンで loud reject に（`)`/`=`/`]` を変換・reject テスト 3 本追加・残サイトは additive）。**全部 behavior-preserving＋不動点維持・suite 236/0**。
-  - **Phase B（最大レバレッジ）＝型付き AST**：式ノードに `ty` を足し**今の `exprType` を種に一度で埋め**、`exprType(id)`→`node.ty` をノード種ごとに移行（**同じ答え＝生成 C バイト不変＝不動点緑のまま**「再導出→読む」に反転）。`kwSpan` は自然死。
+  - **Phase B🔄（最大レバレッジ）＝型付き AST**（着手中）。根①（codegen 中の `exprType` 都度復元）を「読む」へ反転。
+    - **B0✅＝kwSpan ハック除去**：型名のソース全検索＋偽コメントを `buildKwCache`（既知オフセットへ 1 回並べ O(1)）に。
+    - **B1✅＝`typeOf` キャッシュ seam**：`typeOf(c,id)` を導入し codegen 出力地点（Expr/Stmt/Ops の 32 箇所）を移行。ノード型を `Comp` の **4 並列 scalar 配列**にキャッシュ（self-host は struct 配列 IndexSet 非対応ゆえ）。**`typeCacheable()`＝純粋 free function 文脈のみキャッシュ**（型パラメータ/recv/Self/Item/recvInstRef 全部無し）＝env 非依存＋本体 1 回 emit。**メソッド/generic/provided 本体は除外**（provided trait メソッドは 1 body を準拠型ごとに emit＝Self で型が変わる）→ 初版で全メソッド文脈をキャッシュし trait_provided/trait_where が壊れたのを gate で修正。behavior-preserving・236/0（output＋ASan）・不動点。
+    - **B 次の一歩**：①free-fn キャッシュを **pre-fill パス**化（codegen を pure-read に）→ ②generic 本体を**テンプレート型 TypeRef** で持ち読み出し時 ground（案B）→ ③`exprType` 再導出駆逐。
+    - **設計メモ**：案A（名前解決パス）は**挟まない**＝B が内包（型付けにスコープ解決が要る）・A 単体は消費者が無く検証弱／B はノード型を codegen が読む＝不動点で検証可。スコープ走査の codegen 一致が唯一の難所。
   - **Phase C**：名前 interning（`spansEqual` 一掃）・`MonoEnv` 明示パラメータ化 → **`@Std/Syntax` 値ツリー AST＝この型付き AST**としてマクロへ公開（＝メタプロ土台に合流）。
   - **deferred**：分割コンパイル（Loader 連結モデル）。
 - **先日の Phase 0（box ARC）は依然有効**＝AST を再帰値型に載せる前提。**次の着手＝Phase A（ARC 1 本化から）**を推奨。
