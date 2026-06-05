@@ -1330,7 +1330,18 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     // yields `FilterIter[Counter,…,I64]`, not the literal template.
                     if isGenericInst(c: inout c, ref: mf.retTy) {
                         setSelfItemEnv(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: 0)
+                        // a generic method (`Counter.map[B]`): bind its method-own type
+                        // params from the call (B from the closure arg) so the return
+                        // `MapIter[Self,…,B]` grounds to `MapIter[Counter,…,I64]`.
+                        val savedTP: Array[Bind] = c.curTypeParams
+                        val savedTA: Array[U64] = c.curTypeArgs
+                        if mf.typeParams.count > 0 {
+                            c.curTypeParams = mf.typeParams
+                            c.curTypeArgs = inferFnArgs(c: inout c, f: mf, args: args)
+                        }
                         val gr2: U64 = groundTypeRef(c: inout c, ref: mf.retTy)
+                        c.curTypeParams = savedTP
+                        c.curTypeArgs = savedTA
                         clearSelfItemEnv(c: inout c)
                         return typeInfoOfRef(c: inout c, ref: gr2)
                     }

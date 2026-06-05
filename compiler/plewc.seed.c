@@ -1262,6 +1262,8 @@ Array_U64 inferFnArgs_c_Comp_f_Func_args_AArg(Comp* c, Func f, Array_Arg args);
 long long fnArgsAllGround_c_Comp_args_AU64(Comp* c, Array_U64 args);
 long long fnInstExists_c_Comp_fnIdx_U64_args_AU64(Comp* c, uint64_t fnIdx, Array_U64 args);
 void registerCallInst_c_Comp_nameStart_U64_nameLen_U64_args_AArg(Comp* c, uint64_t nameStart, uint64_t nameLen, Array_Arg args);
+void registerMethodInst_c_Comp_recv_U64_nameStart_U64_nameLen_U64_args_AArg(Comp* c, uint64_t recv, uint64_t nameStart, uint64_t nameLen, Array_Arg args);
+void writeMethodInstSuffix_c_Comp_typeArgs_AU64(Comp* c, Array_U64 typeArgs);
 long long captureSupported_c_Comp_lo_Local(Comp* c, Local lo);
 void recordCapture_c_Comp_closureId_U64_localIdx_U64(Comp* c, uint64_t closureId, uint64_t localIdx);
 void scanExprInsts_c_Comp_exprId_U64(Comp* c, uint64_t exprId);
@@ -7495,11 +7497,23 @@ TypeInfo exprType_c_Comp_id_U64(Comp* c, uint64_t id) {
     }
     if (isGenericInst_c_Comp_ref_U64(&((*c)), mf.retTy)) {
     setSelfItemEnv_c_Comp_recvStart_U64_recvLen_U64_recvInstRef_U64(&((*c)), rt.nameStart, rt.nameLen, 0);
+    Array_Bind savedTP = Array_Bind_share((*c).curTypeParams);
+    Array_U64 savedTA = Array_U64_share((*c).curTypeArgs);
+    if ((long long)((mf.typeParams).count) > 0) {
+    (*c).curTypeParams = Array_Bind_share(mf.typeParams);
+    (*c).curTypeArgs = inferFnArgs_c_Comp_f_Func_args_AArg(&((*c)), mf, Array_Arg_share(args));
+    }
     uint64_t gr2 = groundTypeRef_c_Comp_ref_U64(&((*c)), mf.retTy);
+    (*c).curTypeParams = Array_Bind_share(savedTP);
+    (*c).curTypeArgs = Array_U64_share(savedTA);
     clearSelfItemEnv_c_Comp(&((*c)));
     { TypeInfo __ret559 = typeInfoOfRef_c_Comp_ref_U64(&((*c)), gr2);
+    Array_U64_release(savedTA);
+    Array_Bind_release(savedTP);
     Func_release(mf);
     return __ret559; }
+    Array_U64_release(savedTA);
+    Array_Bind_release(savedTP);
     }
     { TypeInfo __ret560 = typeInfoOfName_c_Comp_start_U64_len_U64_isArray_Bool(&((*c)), mf.retStart, mf.retLen, mf.retIsArray);
     Func_release(mf);
@@ -10877,6 +10891,17 @@ void genExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     }
     plew_write((PlewString){"_", 1});
     writeFnSelector_c_Comp_f_Func(&((*c)), mf);
+    if ((long long)((mf.typeParams).count) > 0) {
+    if (isGenericInst_c_Comp_ref_U64(&((*c)), bt.ref)) {
+    }
+    else {
+    setSelfItemEnv_c_Comp_recvStart_U64_recvLen_U64_recvInstRef_U64(&((*c)), bt.nameStart, bt.nameLen, 0);
+    Array_U64 mArgs = inferFnArgs_c_Comp_f_Func_args_AArg(&((*c)), mf, Array_Arg_share(args));
+    clearSelfItemEnv_c_Comp(&((*c)));
+    writeMethodInstSuffix_c_Comp_typeArgs_AU64(&((*c)), Array_U64_share(mArgs));
+    Array_U64_release(mArgs);
+    }
+    }
     plew_write((PlewString){"(", 1});
     if (mf.selfInout) {
     plew_write((PlewString){"&(", 2});
@@ -13477,6 +13502,15 @@ void genSignature_c_Comp_f_Func(Comp* c, Func f) {
     }
     }
     writeFnSelector_c_Comp_f_Func(&((*c)), f);
+    if (f.hasRecv) {
+    if ((*c).curRecvInstRef == 0) {
+    if ((long long)((f.typeParams).count) > 0) {
+    if ((long long)(((*c).curTypeArgs).count) > 0) {
+    writeMethodInstSuffix_c_Comp_typeArgs_AU64(&((*c)), Array_U64_share((*c).curTypeArgs));
+    }
+    }
+    }
+    }
     plew_write((PlewString){"(", 1});
     Array_Param params = Array_Param_share(f.params);
     if (f.hasRecv) {
@@ -15593,6 +15627,57 @@ void registerCallInst_c_Comp_nameStart_U64_nameLen_U64_args_AArg(Comp* c, uint64
     }
     }
 }
+void registerMethodInst_c_Comp_recv_U64_nameStart_U64_nameLen_U64_args_AArg(Comp* c, uint64_t recv, uint64_t nameStart, uint64_t nameLen, Array_Arg args) {
+    TypeInfo rt = exprType_c_Comp_id_U64(&((*c)), recv);
+    if (rt.kind == 2) {
+    }
+    else {
+    return;
+    }
+    if (isGenericInst_c_Comp_ref_U64(&((*c)), rt.ref)) {
+    return;
+    }
+    uint64_t mi = findMethod_c_Comp_recvStart_U64_recvLen_U64_nameStart_U64_nameLen_U64_args_AArg(&((*c)), rt.nameStart, rt.nameLen, nameStart, nameLen, Array_Arg_share(args));
+    if (mi == (long long)(((*c).funcs).count)) {
+    return;
+    }
+    Func mf = Func_share(Array_Func_get((*c).funcs, (long long)(mi)));
+    if ((long long)((mf.typeParams).count) == 0) {
+    Func_release(mf);
+    return;
+    }
+    setSelfItemEnv_c_Comp_recvStart_U64_recvLen_U64_recvInstRef_U64(&((*c)), rt.nameStart, rt.nameLen, 0);
+    Array_U64 inferred = inferFnArgs_c_Comp_f_Func_args_AArg(&((*c)), mf, Array_Arg_share(args));
+    if (fnArgsAllGround_c_Comp_args_AU64(&((*c)), Array_U64_share(inferred))) {
+    if (fnInstExists_c_Comp_fnIdx_U64_args_AU64(&((*c)), mi, Array_U64_share(inferred))) {
+    }
+    else {
+    Array_FnInst_append_value_T(&((*c).fnInsts), (FnInst){.fnIdx = mi, .args = Array_U64_share(inferred)});
+    }
+    Array_Bind savedP = Array_Bind_share((*c).curTypeParams);
+    Array_U64 savedA = Array_U64_share((*c).curTypeArgs);
+    (*c).curTypeParams = Array_Bind_share(mf.typeParams);
+    (*c).curTypeArgs = Array_U64_share(inferred);
+    if (mf.hasRet) {
+    scanType_c_Comp_ref_U64(&((*c)), mf.retTy);
+    }
+    (*c).curTypeParams = Array_Bind_share(savedP);
+    (*c).curTypeArgs = Array_U64_share(savedA);
+    Array_U64_release(savedA);
+    Array_Bind_release(savedP);
+    }
+    clearSelfItemEnv_c_Comp(&((*c)));
+    Array_U64_release(inferred);
+    Func_release(mf);
+}
+void writeMethodInstSuffix_c_Comp_typeArgs_AU64(Comp* c, Array_U64 typeArgs) {
+    uint64_t i = 0;
+    while (i < (long long)((typeArgs).count)) {
+    plew_write((PlewString){"_", 1});
+    emitMangle_c_Comp_ref_U64(&((*c)), Array_U64_get(typeArgs, (long long)(i)));
+    i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+}
 long long captureSupported_c_Comp_lo_Local(Comp* c, Local lo) {
     if (lo.isArray) {
     { long long __ret951 = 1;
@@ -15759,6 +15844,7 @@ void scanExprInsts_c_Comp_exprId_U64(Comp* c, uint64_t exprId) {
     scanExprInsts_c_Comp_exprId_U64(&((*c)), Array_Arg_get(args, (long long)(i)).expr);
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
+    registerMethodInst_c_Comp_recv_U64_nameStart_U64_nameLen_U64_args_AArg(&((*c)), recv, nameStart, nameLen, Array_Arg_share(args));
     }
     else if (_m959.tag == 5) {
         uint64_t base = _m959.data.Field.base;
@@ -16134,8 +16220,12 @@ void emitMonoFn_c_Comp_instIdx_U64_proto_Bool(Comp* c, uint64_t instIdx, long lo
     (*c).curTypeParams = Array_Bind_share(f.typeParams);
     (*c).curTypeArgs = Array_U64_share(fin.args);
     if (proto) {
+    if (f.hasRecv) {
+    setSelfItemEnv_c_Comp_recvStart_U64_recvLen_U64_recvInstRef_U64(&((*c)), f.recvStart, f.recvLen, 0);
+    }
     genSignature_c_Comp_f_Func(&((*c)), f);
     plew_write((PlewString){";\n", 2});
+    clearSelfItemEnv_c_Comp(&((*c)));
     }
     else {
     genFunc_c_Comp_fi_U64(&((*c)), fin.fnIdx);

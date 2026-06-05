@@ -953,6 +953,18 @@ fn genExpr(c: inout Comp, id: U64) {
                 }
                 write(s: "_")
                 writeFnSelector(c: inout c, f: mf)
+                // a generic method on a non-generic receiver (`counter.map(f)`):
+                // append its inferred type-arg suffix, matching the definition's
+                // mangle (genSignature) so the call resolves to the right instance.
+                if mf.typeParams.count > 0 {
+                    if isGenericInst(c: inout c, ref: bt.ref) {
+                    } else {
+                        setSelfItemEnv(c: inout c, recvStart: bt.nameStart, recvLen: bt.nameLen, recvInstRef: 0)
+                        val mArgs: Array[U64] = inferFnArgs(c: inout c, f: mf, args: args)
+                        clearSelfItemEnv(c: inout c)
+                        writeMethodInstSuffix(c: inout c, typeArgs: mArgs)
+                    }
+                }
                 write(s: "(")
                 if mf.selfInout {
                     write(s: "&(")

@@ -1499,6 +1499,65 @@ fn registerCallInst(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg
     }
 }
 
+// Register a generic method call on a non-generic receiver (`counter.map[B](f)`)
+// as an instance to emit, type args inferred from the call (Self/Item resolved so
+// `fn(x: Item) -> B` yields B). Methods on a generic receiver are emitted per
+// receiver instantiation (emitMonoMethods), so are skipped here. Reuses the FnInst
+// machinery; the receiver is recovered from the Func (recvStart). The instance
+// mangles `Recv_selector_<argMangle…>` (writeMethodInstSuffix) at def and call.
+fn registerMethodInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    val rt: TypeInfo = exprType(c: inout c, id: recv)
+    if rt.kind == 2 {
+    } else {
+        return
+    }
+    if isGenericInst(c: inout c, ref: rt.ref) {
+        return
+    }
+    val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+    if mi == c.funcs.count {
+        return
+    }
+    val mf: Func = c.funcs[mi]
+    if mf.typeParams.count == 0 {
+        return
+    }
+    setSelfItemEnv(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: 0)
+    val inferred: Array[U64] = inferFnArgs(c: inout c, f: mf, args: args)
+    if fnArgsAllGround(c: inout c, args: inferred) {
+        if fnInstExists(c: inout c, fnIdx: mi, args: inferred) {
+        } else {
+            c.fnInsts.append(<FnInst fnIdx=mi args=inferred />)
+        }
+        // register the grounded return-type adapter (`MapIter[Counter,…,I64]`) and
+        // its transitive instantiations, so its typedef + methods get emitted (a
+        // generic method is skipped by the struct-field/signature scans).
+        val savedP: Array[Bind] = c.curTypeParams
+        val savedA: Array[U64] = c.curTypeArgs
+        c.curTypeParams = mf.typeParams
+        c.curTypeArgs = inferred
+        if mf.hasRet {
+            scanType(c: inout c, ref: mf.retTy)
+        }
+        c.curTypeParams = savedP
+        c.curTypeArgs = savedA
+    }
+    clearSelfItemEnv(c: inout c)
+}
+
+// Append `_<argMangle>` per type argument, to uniquely name a generic method
+// instance on a non-generic receiver (its method-own type params are not encoded
+// by the receiver mangle nor the selector). Emitted identically at the definition
+// (genSignature) and the call site so they agree.
+fn writeMethodInstSuffix(c: inout Comp, typeArgs: Array[U64]) {
+    mut val i: U64 = 0
+    while i < typeArgs.count {
+        write(s: "_")
+        emitMangle(c: inout c, ref: typeArgs[i])
+        i += 1
+    }
+}
+
 // Walk an expression, registering any generic free function calls it contains
 // (args before self, so a nested generic call is registered before the outer one
 // whose argument type may depend on it).
@@ -1635,6 +1694,7 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
                 scanExprInsts(c: inout c, exprId: args[i].expr)
                 i += 1
             }
+            registerMethodInst(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.Field(val base, val nameStart, val nameLen) => { scanExprInsts(c: inout c, exprId: base) }
         Expr.Index(val base, val index) => {
@@ -1872,8 +1932,15 @@ fn emitMonoFn(c: inout Comp, instIdx: U64, proto: Bool) {
     c.curTypeParams = f.typeParams
     c.curTypeArgs = fin.args
     if proto {
+        // a generic *method* instance (`Counter.map[B]`): set the Self/Item env so
+        // its prototype's adapter return (`MapIter[Self,…,B]`) grounds like the body
+        // does (genFunc sets it). genFunc handles the body's env itself.
+        if f.hasRecv {
+            setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0)
+        }
         genSignature(c: inout c, f: f)
         write(s: ";\n")
+        clearSelfItemEnv(c: inout c)
     } else {
         genFunc(c: inout c, fi: fin.fnIdx)
     }
