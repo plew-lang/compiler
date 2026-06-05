@@ -435,6 +435,17 @@ fn parseTrait(c: inout Comp) {
                 c.advance()
                 reqs.append(parseReqSig(c: inout c, isAssoc: false, isExtern: false))
             }
+            Kind.KwInout => {
+                // `inout fn next()` requirement: an iterator's `next` mutates self.
+                // Conformance matches by selector (name+labels+types), not self-mode,
+                // so the `inout` is consumed and the signature recorded as a plain req.
+                c.advance()
+                match c.curKind() {
+                    Kind.KwFn => { c.advance() }
+                    _ => {}
+                }
+                reqs.append(parseReqSig(c: inout c, isAssoc: false, isExtern: false))
+            }
             _ => {
                 // `assoc fn name(...)` requirement (spec/12: operator requirements
                 // like `Eq.eq` are assoc fns).

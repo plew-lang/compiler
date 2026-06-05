@@ -529,6 +529,87 @@ fn addForStructBinds(c: inout Comp, et: TypeInfo, binds: Array[Bind]) {
     }
 }
 
+// A `for x in iterable` over a user type that conforms to Iterable: desugar to
+// the iterator protocol — `it = iterable.iterator(); while { match it.next() {
+// Some(v) => { x = v; body } None => break } }`. The array and range iterands
+// keep their fast paths (handled in the For arm); this covers any struct that
+// has an `iterator()` method. The iterator and Item types are recovered from the
+// method return types (concrete instantiations for now; generic iterables and
+// the iterator struct's ARC drop are later steps).
+fn compileIterableFor(c: inout Comp, t: U64, varStart: U64, varLen: U64, iter: U64, body: U64, et: TypeInfo) {
+    val noArgs: Array[Arg] = []
+    // iterator(): find on the iterand type, recover its return (iterator) type.
+    val itName: Bind = kwSpan(c: inout c, kw: "iterator", kwLen: 8)
+    val imi: U64 = findMethod(c: inout c, recvStart: et.nameStart, recvLen: et.nameLen, nameStart: itName.nameStart, nameLen: itName.nameLen, args: noArgs)
+    if imi == c.funcs.count {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: iter)), msg: "type is not iterable: no `iterator()` method (conform to Iterable)")
+        return
+    }
+    val imf: Func = c.funcs[imi]
+    // next(): find on the iterator type, recover Optional[Item] -> Item.
+    val nxName: Bind = kwSpan(c: inout c, kw: "next", kwLen: 4)
+    val nmi: U64 = findMethod(c: inout c, recvStart: imf.retStart, recvLen: imf.retLen, nameStart: nxName.nameStart, nameLen: nxName.nameLen, args: noArgs)
+    if nmi == c.funcs.count {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: iter)), msg: "the iterator type has no `next()` method (conform to Iterator)")
+        return
+    }
+    val nmf: Func = c.funcs[nmi]
+    // Item = the type argument of the Optional[Item] that next() returns.
+    mut val itemRef: U64 = 0
+    if nmf.retTy < c.types.count {
+        val ot: TypeRef = c.types[nmf.retTy]
+        if ot.args.count > 0 {
+            itemRef = ot.args[0]
+        }
+    }
+    val itemInfo: TypeInfo = typeInfoOfRef(c: inout c, ref: itemRef)
+    val itemIsArr: Bool = itemInfo.kind == 3
+    // { IterT __it = Recv_iterator(iter);
+    write(s: "    {\n")
+    write(s: "    ")
+    genCTypeOf(c: inout c, tyRef: imf.retTy, fallStart: imf.retStart, fallLen: imf.retLen, isArray: imf.retIsArray)
+    write(s: " __it")
+    writeU64(n: t)
+    write(s: " = ")
+    if isGenericInst(c: inout c, ref: et.ref) {
+        emitMangle(c: inout c, ref: et.ref)
+    } else {
+        writeSpan(c: inout c, start: et.nameStart, len: et.nameLen)
+    }
+    write(s: "_iterator(")
+    genExpr(c: inout c, id: iter)
+    write(s: ");\n")
+    // while (1) { OptT __o = Iter_next(&__it); if (__o.tag != 0) break;
+    write(s: "    while (1) {\n")
+    write(s: "        ")
+    genCTypeOf(c: inout c, tyRef: nmf.retTy, fallStart: nmf.retStart, fallLen: nmf.retLen, isArray: nmf.retIsArray)
+    write(s: " __o")
+    writeU64(n: t)
+    write(s: " = ")
+    if isGenericInst(c: inout c, ref: imf.retTy) {
+        emitMangle(c: inout c, ref: imf.retTy)
+    } else {
+        writeSpan(c: inout c, start: imf.retStart, len: imf.retLen)
+    }
+    write(s: "_next(&__it")
+    writeU64(n: t)
+    write(s: ");\n")
+    write(s: "        if (__o")
+    writeU64(n: t)
+    write(s: ".tag != 0) { break; }\n")
+    // ElemT var = __o.data.Some.v;
+    write(s: "        ")
+    genCTypeOf(c: inout c, tyRef: itemRef, fallStart: itemInfo.nameStart, fallLen: itemInfo.nameLen, isArray: itemIsArr)
+    write(s: " ")
+    writeSpan(c: inout c, start: varStart, len: varLen)
+    write(s: " = __o")
+    writeU64(n: t)
+    write(s: ".data.Some.v;\n")
+    addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: itemInfo.nameStart, tyLen: itemInfo.nameLen, isArray: itemIsArr, ty: itemRef, isInout: false, isMut: false, owned: false)
+    genBlock(c: inout c, id: body)
+    write(s: "    }\n    }\n")
+}
+
 fn genStmt(c: inout Comp, id: U64) {
     val s: Stmt = c.stmts[id]
     match s {
@@ -961,6 +1042,18 @@ fn genStmt(c: inout Comp, id: U64) {
             } else {
                 // walk an array by index, binding `var` to each element
                 val et: TypeInfo = exprType(c: inout c, id: iter)
+                if et.kind == 3 {
+                } else {
+                    // not an array: a general Iterable (struct with iterator()).
+                    if isStruct {
+                        compileErrorAt(line: lineOf(c: inout c, offset: patStart), msg: "a struct-destructure for-loop iterates an array, not an iterable")
+                    }
+                    compileIterableFor(c: inout c, t: t, varStart: varStart, varLen: varLen, iter: iter, body: body, et: et)
+                    c.curBranchBase = savedBB
+                    c.curLoopMark = savedLoopMark
+                    scopeExit(c: inout c, mark: forMark)
+                    return
+                }
                 write(s: "    {\n")
                 write(s: "    ")
                 wPA(c: inout c, elemStart: et.nameStart, elemLen: et.nameLen)

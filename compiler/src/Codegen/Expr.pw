@@ -993,9 +993,27 @@ fn genExpr(c: inout Comp, id: U64) {
                 return
             }
             if isEnum {
+                // `<Optional.Some v=… />` with no explicit `[I64]`: the parsed `ty`
+                // is the bare generic enum. Infer the instantiation from the expected
+                // return type when it names the same generic enum (e.g. an iterator's
+                // `next() -> Optional[Item]` constructing `<Optional.Some … />`), so
+                // the C cast/field types use the mangled `Optional_I64`.
+                mut val ety: U64 = ty
+                if isGenericEnumInst(c: inout c, ref: ety) {
+                } else {
+                    val gei: U64 = genericEnumIndex(c: inout c, nameStart: typeStart, nameLen: typeLen)
+                    if gei < c.enums.count {
+                        if isGenericEnumInst(c: inout c, ref: c.curRetTy) {
+                            val rt2: TypeRef = c.types[c.curRetTy]
+                            if spansEqual(c: inout c, aStart: rt2.nameStart, aLen: rt2.nameLen, bStart: typeStart, bLen: typeLen) {
+                                ety = c.curRetTy
+                            }
+                        }
+                    }
+                }
                 write(s: "(")
-                if isGenericEnumInst(c: inout c, ref: ty) {
-                    emitConcreteCType(c: inout c, ref: ty)
+                if isGenericEnumInst(c: inout c, ref: ety) {
+                    emitConcreteCType(c: inout c, ref: ety)
                 } else {
                     writeSpan(c: inout c, start: typeStart, len: typeLen)
                 }
@@ -1015,8 +1033,8 @@ fn genExpr(c: inout Comp, id: U64) {
                         writeSpan(c: inout c, start: mf.nameStart, len: mf.nameLen)
                         write(s: " = ")
                         mut val eft: TypeInfo = scalarInfo()
-                        if isGenericEnumInst(c: inout c, ref: ty) {
-                            eft = genericEnumFieldTypeInfo(c: inout c, instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                        if isGenericEnumInst(c: inout c, ref: ety) {
+                            eft = genericEnumFieldTypeInfo(c: inout c, instRef: ety, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
                         } else {
                             eft = makeFieldType(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: true, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
                         }

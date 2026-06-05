@@ -15,9 +15,9 @@
 
 基盤の関連型から進める順（ユーザー判断＝ダックタイピング for を先に作る手戻りを避ける）。
 - ✅ **step 1＝関連型 `type Item`**：trait 宣言（`TraitDef.assocTypes`・`type Item` をパース）・impl 束縛（`type Item = Concrete`→`AssocBinding`/`Comp.assocBindings`）・**適合検査が要求の `Item` を束縛で置換**してから witness とセレクタ照合（`firstOr(fallback: Item)`＋`type Item=I64`→`firstOr(fallback: I64)` にマッチ）。同型が別 Item で複数準拠可。test `assoc_type`。AST 追加は全てデフォルト値付き＝構築点無改修。
-- 🔲 **step 2＝Iterator/Iterable トレイトを std に**（`Iterator{type Item; inout next()->Optional[Item]}` / `Iterable{type Item; type Iter; iterator()->Iter}`）。署名詳細は core-lib。
-- 🔲 **step 3＝`for` を一般 Iterable 適合で脱糖**（`val it=x.iterator(); while { match it.next() { Some(v)=>body; None=>break } }`・配列/レンジは fast-path 維持＝観測挙動は Iterable と一致）。
-- 🔲 **step 4＝Array/Range を Iterable に**（＋ ArrayIterator 等の iterator struct）。
+- ✅ **step 2＝Iterator/Iterable トレイトを std に**（`@Std/Core`：`Iterator{type Item; inout next()->Optional[Item]}` / `Iterable{type Item; type Iter; iterator()->Iter}`）。trait 要求に `inout fn` を解禁（`parseTrait` に `Kind.KwInout`・適合はセレクタ一致で self-mode 非検査）。`Iter: Iterator[Item=Item]` の境界は未強制（additive）。
+- ✅ **step 3＝`for` を一般 Iterable 適合で脱糖**（`Codegen/Stmt.compileIterableFor`）：`et.kind != 3`（配列でない）の for は `iterator()`/`next()` をダックタイピングで解決し `{ Iter __it = Recv_iterator(e); while(1){ Opt __o = Iter_next(&__it); if(__o.tag!=0) break; Elem var = __o.data.Some.v; body } }` を直接 C で吐く。Item は `next()` の戻り `Optional[Item]` の型引数から復元（`iterableItemInfo`＝check/mono/codegen 共有）。配列/レンジは fast-path 維持。test `iter_custom`・reject `for_not_iterable`。**併せて enum JSX 構築の型推論**：`<Optional.Some v=… />`（明示 `[I64]` なし）を return 位置の `curRetTy`（同名 generic enum）から instantiation 推論し mangled `Optional_I64` を吐く（`Expr.Make` の enum 枝）。**現状＝具体型のみ**（generic iterable／iterator struct の ARC drop は step 4 以降）。
+- 🔲 **step 4＝Array/Range を Iterable に**（＋ ArrayIterator 等の iterator struct）。配列/レンジ fast-path は観測挙動を Iterable と一致させたまま残す。generic iterand 対応もここ。
 - 🔲 **step 5＝提供メソッド** map/filter/reduce（`impl Iterator { }`・additive）。
 
 ## ロードマップ（残りの大物・前向きのみ）

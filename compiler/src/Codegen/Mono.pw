@@ -640,6 +640,33 @@ fn typeInfoOfRef(c: inout Comp, ref: U64) -> TypeInfo {
     return <TypeInfo kind=2 nameStart=t.nameStart nameLen=t.nameLen ref=ref />
 }
 
+// The element (`Item`) type of an Iterable iterand of type `et` (a struct with an
+// `iterator()` method), recovered from the iterator's `next() -> Optional[Item]`
+// return type. Returns scalarInfo() when `et` is not iterable. Shared by the for-
+// loop's check, mono scan, and codegen so all three agree on the loop-var type.
+fn iterableItemInfo(c: inout Comp, et: TypeInfo) -> TypeInfo {
+    val noArgs: Array[Arg] = []
+    val itName: Bind = kwSpan(c: inout c, kw: "iterator", kwLen: 8)
+    val imi: U64 = findMethod(c: inout c, recvStart: et.nameStart, recvLen: et.nameLen, nameStart: itName.nameStart, nameLen: itName.nameLen, args: noArgs)
+    if imi == c.funcs.count {
+        return scalarInfo()
+    }
+    val imf: Func = c.funcs[imi]
+    val nxName: Bind = kwSpan(c: inout c, kw: "next", kwLen: 4)
+    val nmi: U64 = findMethod(c: inout c, recvStart: imf.retStart, recvLen: imf.retLen, nameStart: nxName.nameStart, nameLen: nxName.nameLen, args: noArgs)
+    if nmi == c.funcs.count {
+        return scalarInfo()
+    }
+    val nmf: Func = c.funcs[nmi]
+    if nmf.retTy < c.types.count {
+        val ot: TypeRef = c.types[nmf.retTy]
+        if ot.args.count > 0 {
+            return typeInfoOfRef(c: inout c, ref: ot.args[0])
+        }
+    }
+    return scalarInfo()
+}
+
 // TypeInfo of a type `tyRef` after substituting any type parameter (`params[i]`)
 // with the instantiation `instRef`'s concrete argument. Used to resolve a
 // generic method's parameter types at a call site.
@@ -1403,7 +1430,12 @@ fn scanStmtInsts(c: inout Comp, stmtId: U64) {
                 if isStruct {
                     addForStructBinds(c: inout c, et: et, binds: binds)
                 } else {
-                    addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                    if et.kind == 3 {
+                        addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                    } else {
+                        val elemTi: TypeInfo = iterableItemInfo(c: inout c, et: et)
+                        addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
+                    }
                 }
             }
             scanBlockInsts(c: inout c, blkId: body)

@@ -43,6 +43,24 @@ pub impl[T] Optional[T] {
     }
 }
 
+// The iteration protocol (spec/02,11). `Iterator` produces values one at a
+// time: `next` advances the iterator (mutating self, hence `inout`) and yields
+// `Some(v)` until exhausted, then `None` forever. `Iterable` is a type that can
+// produce a fresh iterator over its elements; `for x in xs` desugars to
+// `it = xs.iterator(); while { match it.next() { Some(v) => …; None => break } }`
+// (the compiler keeps a fast path for the built-in Array/Range iterands). The
+// associated `Item` is the element type; `Iter` is the concrete iterator type.
+export trait Iterator {
+    type Item
+    inout next() -> Optional[Item]
+}
+
+export trait Iterable {
+    type Item
+    type Iter
+    fn iterator() -> Iter
+}
+
 // The result of a fallible operation: `Ok` holds a `T`, `Err` holds an `E`.
 enum Result[T, E] {
     Ok(value: T)

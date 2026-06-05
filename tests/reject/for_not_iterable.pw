@@ -1,0 +1,11 @@
+// A `for` over a struct that does not conform to Iterable (no iterator() method)
+// must be rejected: the iterand has no iteration protocol to desugar to.
+struct Plain {
+    pub val n: I64
+}
+
+fn main() {
+    for val x in <Plain n=3 /> {
+        x
+    }
+}
