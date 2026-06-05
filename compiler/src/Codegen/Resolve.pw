@@ -1324,10 +1324,15 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     }
                     // a non-generic receiver whose method returns a generic instantiation
                     // (`Counter.next() -> Optional[I64]`): keep the full ref so the caller
-                    // (e.g. a `match` scrutinee) recovers the mangled `Optional_I64`, not
-                    // the bare head `Optional`.
+                    // (a `match` scrutinee / `for` iterand) recovers the mangled
+                    // `Optional_I64`, not the bare head. Ground `Self`/`Item` first so a
+                    // provided combinator (`Counter.filter() -> FilterIter[Self,…,Item]`)
+                    // yields `FilterIter[Counter,…,I64]`, not the literal template.
                     if isGenericInst(c: inout c, ref: mf.retTy) {
-                        return typeInfoOfRef(c: inout c, ref: mf.retTy)
+                        setSelfItemEnv(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: 0)
+                        val gr2: U64 = groundTypeRef(c: inout c, ref: mf.retTy)
+                        clearSelfItemEnv(c: inout c)
+                        return typeInfoOfRef(c: inout c, ref: gr2)
                     }
                     return typeInfoOfName(c: inout c, start: mf.retStart, len: mf.retLen, isArray: mf.retIsArray)
                 }

@@ -840,21 +840,28 @@ fn typeInfoOfRef(c: inout Comp, ref: U64) -> TypeInfo {
 // loop's check, mono scan, and codegen so all three agree on the loop-var type.
 fn iterableItemInfo(c: inout Comp, et: TypeInfo) -> TypeInfo {
     val noArgs: Array[Arg] = []
+    // Iterable: iterator() returns the iterator; bare Iterator: the iterand is the
+    // iterator (so `for v in xs.filter(p)` recovers the right element type).
     val itName: Bind = kwSpan(c: inout c, kw: "iterator", kwLen: 8)
     val imi: U64 = findMethod(c: inout c, recvStart: et.nameStart, recvLen: et.nameLen, nameStart: itName.nameStart, nameLen: itName.nameLen, args: noArgs)
+    mut val itRef: U64 = et.ref
+    mut val nrStart: U64 = et.nameStart
+    mut val nrLen: U64 = et.nameLen
     if imi == c.funcs.count {
-        return scalarInfo()
+    } else {
+        val imf: Func = c.funcs[imi]
+        itRef = groundUnderInst(c: inout c, instRef: et.ref, tyRef: imf.retTy)
+        nrStart = imf.retStart
+        nrLen = imf.retLen
     }
-    val imf: Func = c.funcs[imi]
     val nxName: Bind = kwSpan(c: inout c, kw: "next", kwLen: 4)
-    val nmi: U64 = findMethod(c: inout c, recvStart: imf.retStart, recvLen: imf.retLen, nameStart: nxName.nameStart, nameLen: nxName.nameLen, args: noArgs)
+    val nmi: U64 = findMethod(c: inout c, recvStart: nrStart, recvLen: nrLen, nameStart: nxName.nameStart, nameLen: nxName.nameLen, args: noArgs)
     if nmi == c.funcs.count {
         return scalarInfo()
     }
     val nmf: Func = c.funcs[nmi]
     // resolve Optional[Item] through the iterand's instantiation (Box[I64] ->
     // BoxIter[I64] -> Optional[I64]) so a generic iterand yields the concrete Item.
-    val itRef: U64 = groundUnderInst(c: inout c, instRef: et.ref, tyRef: imf.retTy)
     val optRef: U64 = groundUnderInst(c: inout c, instRef: itRef, tyRef: nmf.retTy)
     if optRef < c.types.count {
         val ot: TypeRef = c.types[optRef]

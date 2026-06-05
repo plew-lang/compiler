@@ -538,26 +538,41 @@ fn addForStructBinds(c: inout Comp, et: TypeInfo, binds: Array[Bind]) {
 // the iterator struct's ARC drop are later steps).
 fn compileIterableFor(c: inout Comp, t: U64, varStart: U64, varLen: U64, iter: U64, body: U64, et: TypeInfo) {
     val noArgs: Array[Arg] = []
-    // iterator(): find on the iterand type, recover its return (iterator) type.
+    // An Iterable iterand has `iterator()` (returning a fresh iterator); a bare
+    // Iterator iterand has only `next()` and is its own iterator (so `for v in
+    // xs.filter(p)` works). Pick the iterator's type ref + fallback name span + the
+    // init expression accordingly.
     val itName: Bind = kwSpan(c: inout c, kw: "iterator", kwLen: 8)
     val imi: U64 = findMethod(c: inout c, recvStart: et.nameStart, recvLen: et.nameLen, nameStart: itName.nameStart, nameLen: itName.nameLen, args: noArgs)
+    mut val itRef: U64 = 0
+    mut val itFallStart: U64 = 0
+    mut val itFallLen: U64 = 0
+    mut val itFallArr: Bool = false
+    mut val isIterable: Bool = false
     if imi == c.funcs.count {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: iter)), msg: "type is not iterable: no `iterator()` method (conform to Iterable)")
-        return
+        // not Iterable: the iterand is itself the iterator (its type is the iterator).
+        itRef = et.ref
+        itFallStart = et.nameStart
+        itFallLen = et.nameLen
+    } else {
+        // Iterable: resolve the iterator instantiation through the (possibly generic)
+        // iterand (`Box[I64].iterator()` -> `BoxIter[I64]`, not the template).
+        isIterable = true
+        val imf: Func = c.funcs[imi]
+        itRef = groundUnderInst(c: inout c, instRef: et.ref, tyRef: imf.retTy)
+        itFallStart = imf.retStart
+        itFallLen = imf.retLen
+        itFallArr = imf.retIsArray
     }
-    val imf: Func = c.funcs[imi]
+    val itGeneric: Bool = isGenericInst(c: inout c, ref: itRef)
     // next(): find on the iterator type, recover Optional[Item] -> Item.
     val nxName: Bind = kwSpan(c: inout c, kw: "next", kwLen: 4)
-    val nmi: U64 = findMethod(c: inout c, recvStart: imf.retStart, recvLen: imf.retLen, nameStart: nxName.nameStart, nameLen: nxName.nameLen, args: noArgs)
+    val nmi: U64 = findMethod(c: inout c, recvStart: itFallStart, recvLen: itFallLen, nameStart: nxName.nameStart, nameLen: nxName.nameLen, args: noArgs)
     if nmi == c.funcs.count {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: iter)), msg: "the iterator type has no `next()` method (conform to Iterator)")
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: iter)), msg: "type is not iterable: no `iterator()` or `next()` method (conform to Iterable or Iterator)")
         return
     }
     val nmf: Func = c.funcs[nmi]
-    // Resolve the iterator instantiation through the (possibly generic) iterand:
-    // `Box[I64].iterator()` returns `BoxIter[I64]`, not the template `BoxIter[T]`.
-    val itRef: U64 = groundUnderInst(c: inout c, instRef: et.ref, tyRef: imf.retTy)
-    val itGeneric: Bool = isGenericInst(c: inout c, ref: itRef)
     // next() lives on the iterator type; resolve its Optional[Item] through itRef
     // so a generic iterator yields the concrete element (`Optional[I64]`).
     val optRef: U64 = groundUnderInst(c: inout c, instRef: itRef, tyRef: nmf.retTy)
@@ -571,21 +586,26 @@ fn compileIterableFor(c: inout Comp, t: U64, varStart: U64, varLen: U64, iter: U
     }
     val itemInfo: TypeInfo = typeInfoOfRef(c: inout c, ref: itemRef)
     val itemIsArr: Bool = itemInfo.kind == 3
-    // { IterT __it = Recv_iterator(iter);
+    // { IterT __it = recv.iterator()  (Iterable)  |  recv  (bare Iterator);
     write(s: "    {\n")
     write(s: "    ")
-    genCTypeOf(c: inout c, tyRef: itRef, fallStart: imf.retStart, fallLen: imf.retLen, isArray: imf.retIsArray)
+    genCTypeOf(c: inout c, tyRef: itRef, fallStart: itFallStart, fallLen: itFallLen, isArray: itFallArr)
     write(s: " __it")
     writeU64(n: t)
     write(s: " = ")
-    if isGenericInst(c: inout c, ref: et.ref) {
-        emitMangle(c: inout c, ref: et.ref)
+    if isIterable {
+        if isGenericInst(c: inout c, ref: et.ref) {
+            emitMangle(c: inout c, ref: et.ref)
+        } else {
+            writeSpan(c: inout c, start: et.nameStart, len: et.nameLen)
+        }
+        write(s: "_iterator(")
+        genExpr(c: inout c, id: iter)
+        write(s: ")")
     } else {
-        writeSpan(c: inout c, start: et.nameStart, len: et.nameLen)
+        genExpr(c: inout c, id: iter)
     }
-    write(s: "_iterator(")
-    genExpr(c: inout c, id: iter)
-    write(s: ");\n")
+    write(s: ";\n")
     // while (1) { OptT __o = Iter_next(&__it); if (__o.tag != 0) break;
     write(s: "    while (1) {\n")
     write(s: "        ")
@@ -596,7 +616,7 @@ fn compileIterableFor(c: inout Comp, t: U64, varStart: U64, varLen: U64, iter: U
     if itGeneric {
         emitMangle(c: inout c, ref: itRef)
     } else {
-        writeSpan(c: inout c, start: imf.retStart, len: imf.retLen)
+        writeSpan(c: inout c, start: itFallStart, len: itFallLen)
     }
     write(s: "_next(&__it")
     writeU64(n: t)

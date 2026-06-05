@@ -1,0 +1,39 @@
+import @Std/Io with { print }
+import @Std/Core with { Iterator, Iterable }
+
+struct Counter { pub mut val n: I64 }
+pub impl Counter as Iterator {
+    type Item = I64
+    inout fn next() -> Optional[I64] {
+        if self.n >= 6 { return <Optional.None /> }
+        self.n = self.n + 1
+        return <Optional.Some v=self.n />
+    }
+}
+struct FilterIter[I, P, E] {
+    pub mut val inner: I
+    pub val p: P
+}
+pub impl[I, P, E] FilterIter[I, P, E] as Iterator where I: Iterator {
+    type Item = E
+    inout fn next() -> Optional[E] {
+        mut val go: Bool = true
+        while go {
+            match self.inner.next() {
+                Optional.Some(val v) => { if self.p(x: v) { return <Optional.Some v=v /> } }
+                Optional.None => { go = false }
+            }
+        }
+        return <Optional.None />
+    }
+}
+pub impl Iterator {
+    fn filter(p: fn(x: Item) -> Bool) -> FilterIter[Self, fn(x: Item) -> Bool, Item] {
+        return <FilterIter[Self, fn(x: Item) -> Bool, Item] inner=self p=p />
+    }
+}
+fn main() {
+    for val v in <Counter n=0 />.filter(p: fn(x: I64) -> Bool { return x % 2 == 0 }) {
+        print(v)
+    }
+}
