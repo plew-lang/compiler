@@ -694,14 +694,57 @@ fn paramSelectorEq(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
     return true
 }
 
+// The concrete type span that the conforming type `(recvStart,recvLen)` binds for
+// the associated type named `(nameStart,nameLen)` (spec/08 `type Item = Concrete`),
+// or the input name unchanged when it is not an associated type / has no binding.
+fn assocBindingSpan(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bind {
+    mut val i: U64 = 0
+    while i < c.assocBindings.count {
+        val ab: AssocBinding = c.assocBindings[i]
+        if spansEqual(c: inout c, aStart: ab.recvStart, aLen: ab.recvLen, bStart: recvStart, bLen: recvLen) {
+            if spansEqual(c: inout c, aStart: ab.nameStart, aLen: ab.nameLen, bStart: nameStart, bLen: nameLen) {
+                return <Bind nameStart=ab.tyStart nameLen=ab.tyLen fieldStart=ab.tyStart fieldLen=ab.tyLen />
+            }
+        }
+        i += 1
+    }
+    return <Bind nameStart=nameStart nameLen=nameLen fieldStart=nameStart fieldLen=nameLen />
+}
+
+// Like paramSelectorEq, but substitutes the requirement side's associated types with
+// the conforming type's bindings before comparing (so `firstOr(fallback: Item)` with
+// `type Item = I64` matches a witness `firstOr(fallback: I64)`).
+fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvStart: U64, recvLen: U64) -> Bool {
+    if w.count != r.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < w.count {
+        val pw: Param = w[i]
+        val pr: Param = r[i]
+        if spansEqual(c: inout c, aStart: pw.nameStart, aLen: pw.nameLen, bStart: pr.nameStart, bLen: pr.nameLen) {
+        } else {
+            return false
+        }
+        val sub: Bind = assocBindingSpan(c: inout c, recvStart: recvStart, recvLen: recvLen, nameStart: pr.tyStart, nameLen: pr.tyLen)
+        if spansEqual(c: inout c, aStart: pw.tyStart, aLen: pw.tyLen, bStart: sub.nameStart, bLen: sub.nameLen) {
+        } else {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
 // Whether `witnessed` contains a member matching requirement `r`'s selector
-// (name + params). Distinguishes overloaded requirements by signature.
-fn witnessedHas(c: inout Comp, witnessed: Array[Func], r: Func) -> Bool {
+// (name + params). Distinguishes overloaded requirements by signature. Requirement
+// param types are substituted through the conforming type's associated-type bindings.
+fn witnessedHas(c: inout Comp, witnessed: Array[Func], r: Func, recvStart: U64, recvLen: U64) -> Bool {
     mut val i: U64 = 0
     while i < witnessed.count {
         val w: Func = witnessed[i]
         if spansEqual(c: inout c, aStart: w.nameStart, aLen: w.nameLen, bStart: r.nameStart, bLen: r.nameLen) {
-            if paramSelectorEq(c: inout c, a: w.params, b: r.params) {
+            if paramSelectorEqSubst(c: inout c, w: w.params, r: r.params, recvStart: recvStart, recvLen: recvLen) {
                 return true
             }
         }
@@ -733,7 +776,7 @@ fn checkConformances(c: inout Comp) {
                 mut val ri: U64 = 0
                 while ri < t.reqs.count {
                     val r: Func = t.reqs[ri]
-                    if witnessedHas(c: inout c, witnessed: cf.witnessed, r: r) {
+                    if witnessedHas(c: inout c, witnessed: cf.witnessed, r: r, recvStart: cf.typeStart, recvLen: cf.typeLen) {
                     } else {
                         compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)")
                     }

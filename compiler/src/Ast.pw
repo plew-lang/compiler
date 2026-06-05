@@ -334,6 +334,12 @@ struct TraitDef {
     // The abstract generic type-checker reads these to resolve `x.req(...)` on a
     // bounded type parameter; the completeness check matches them to witnesses.
     pub val reqs: Array[Func]
+    // associated type requirements (spec/08): `type Item` declares an output type
+    // a conforming impl binds with `type Item = Concrete`. Each entry (Bind) is the
+    // associated type's name span; a requirement signature may reference it by name
+    // (`next() -> Optional[Item]`). The conformance's binding lives in
+    // Comp.assocBindings. Default empty for traits without associated types.
+    pub val assocTypes: Array[Bind] = []
 }
 
 // A recorded conformance `impl Type as Trait { ... }` (spec/08: conformance is
@@ -348,6 +354,23 @@ struct DeriveReq {
     pub val isEnum: Bool
     pub val nameStart: U64
     pub val nameLen: U64
+}
+
+// An associated-type binding `type Item = Concrete` from a conformance `impl Type
+// as Trait { type Item = Concrete }` (spec/08). Records, for the conforming type,
+// which concrete type the trait's associated type resolves to — so a requirement
+// signature's `Item` substitutes to `Concrete` when checking/resolving on Type.
+struct AssocBinding {
+    pub val recvStart: U64
+    pub val recvLen: U64
+    // associated type name (e.g. `Item`).
+    pub val nameStart: U64
+    pub val nameLen: U64
+    // bound concrete type (head span + structured ref + array flag).
+    pub val tyStart: U64
+    pub val tyLen: U64
+    pub val tyIsArray: Bool
+    pub val ty: U64
 }
 
 struct Conform {
@@ -607,6 +630,10 @@ struct Comp {
     // another module is visible only if the name was imported into the using module
     // (and exported by its own). Aliases (`as`) and namespace imports are additive.
     pub mut val imports: Array[Bind]
+    // associated-type bindings (spec/08): `type Item = Concrete` lines from
+    // conformances, recording how each conforming type resolves a trait's associated
+    // type. Default empty; populated by parseImpl.
+    pub mut val assocBindings: Array[AssocBinding] = []
 }
 
 // ---- cursor helpers ----

@@ -1,0 +1,34 @@
+import @Std/Io with { print }
+
+// Associated types (spec/08): a trait declares an output type `Item` that each
+// conformer binds with `type Item = Concrete`. A requirement signature references
+// it (`firstOr(fallback: Item) -> Item`); the conformance check substitutes the
+// binding so the witness's concrete signature matches.
+trait Container {
+    type Item
+    fn firstOr(fallback: Item) -> Item
+    fn size() -> U64
+}
+
+struct IntBox { pub val v: I64 }
+pub impl IntBox as Container {
+    type Item = I64
+    fn firstOr(fallback: I64) -> I64 { return self.v }
+    fn size() -> U64 { return 1U64 }
+}
+
+struct Pair { pub val a: I64  pub val b: I64 }
+pub impl Pair as Container {
+    type Item = I64
+    fn firstOr(fallback: I64) -> I64 { return self.a }
+    fn size() -> U64 { return 2U64 }
+}
+
+fn main() {
+    val box = <IntBox v=42 />
+    print(box.firstOr(fallback: 0I64))
+    print(box.size())
+    val p = <Pair a=7 b=9 />
+    print(p.firstOr(fallback: 0I64))
+    print(p.size())
+}

@@ -352,7 +352,28 @@ fn parseImpl(c: inout Comp, isPub: Bool) {
                     }
                     parseFuncCommon(c: inout c, hasRecv: false, recvStart: recvStart, recvLen: recvLen, selfInout: false, selfMove: false, implParams: implParams, traitImpl: isTraitImpl, isAssoc: true, isAsync: false, isPub: isPub)
                 } else {
-                    c.advance()
+                    // `type Item = Concrete` (spec/08): bind the trait's associated
+                    // type for this conforming type. Recorded in c.assocBindings so a
+                    // requirement signature's `Item` resolves to `Concrete` on Type.
+                    if c.identIs(kw: "type") {
+                        c.advance()
+                        match c.curKind() {
+                            Kind.Ident => {
+                                val atName: Tok = c.cur()
+                                c.advance()
+                                match c.curKind() {
+                                    Kind.Eq => { c.advance() }
+                                    _ => {}
+                                }
+                                val cty: PType = parseTypeTok(c: inout c)
+                                recordArrayElem(c: inout c, ty: cty)
+                                c.assocBindings.append(<AssocBinding recvStart=recvStart recvLen=recvLen nameStart=atName.start nameLen=atName.len tyStart=cty.start tyLen=cty.len tyIsArray=cty.isArray ty=cty.ref />)
+                            }
+                            _ => {}
+                        }
+                    } else {
+                        c.advance()
+                    }
                 }
             }
         }
@@ -400,6 +421,7 @@ fn parseTrait(c: inout Comp) {
         _ => {}
     }
     mut val reqs: Array[Func] = []
+    mut val assocTypes: Array[Bind] = []
     while true {
         c.skipNewlines()
         val k: Kind = c.curKind()
@@ -424,12 +446,27 @@ fn parseTrait(c: inout Comp) {
                     }
                     reqs.append(parseReqSig(c: inout c, isAssoc: true, isExtern: false))
                 } else {
-                    c.advance()
+                    // `type Item` associated-type requirement (spec/08): the output
+                    // type a conformer binds. Record the name; a requirement signature
+                    // may reference it (`next() -> Optional[Item]`).
+                    if c.identIs(kw: "type") {
+                        c.advance()
+                        match c.curKind() {
+                            Kind.Ident => {
+                                val at: Tok = c.cur()
+                                c.advance()
+                                assocTypes.append(<Bind nameStart=at.start nameLen=at.len fieldStart=at.start fieldLen=at.len />)
+                            }
+                            _ => {}
+                        }
+                    } else {
+                        c.advance()
+                    }
                 }
             }
         }
     }
-    c.traits.append(<TraitDef nameStart=nameTok.start nameLen=nameTok.len supertraits=supertraits reqs=reqs />)
+    c.traits.append(<TraitDef nameStart=nameTok.start nameLen=nameTok.len supertraits=supertraits reqs=reqs assocTypes=assocTypes />)
 }
 
 // Parse a trait requirement signature `name [typeParams] (params) [-> ret]` into
