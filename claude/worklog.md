@@ -39,7 +39,26 @@
 - **残（additive）**：box セルの **ARC 解放未配線＝leak**（観測挙動は正しい・短命プロセスで無害）→ share=retain/release=deref-free の CoW box へ。**終端なし循環**（`struct A{a:A}`）は構築不能だがクラッシュせず通る＝loud reject は将来。
 - テスト＝`rec_list`/`rec_struct_optional`/`rec_tree`/`rec_mutual`/`rec_value_semantics`。
 
-## 🔄 着手中＝メタプロ基盤の前段：値ツリー AST 化（方針合意済・Phase 0 実装中）
+## 🔄 着手中＝コンパイラ負債監査の結論：RENOVATE（rewrite せず段階改修）
+
+**監査済（2026-06-05・5 サブシステム並行精査）。結論＝全領域 RENOVATE 一致**（rewrite は不採用）。「表現力が貧弱な時代の設計」由来の負債は実在するが**局所的・legible・増分修正可**、意味論は正しく高価な資産。詳細根拠は本節に集約（design-decisions の「なぜ rewrite しないか」も兼ねる）。
+
+- **根① 型付き IR が無い**（最大）：型は codegen 中に `exprType` が AST を歩いて都度復元（74 箇所・未対応は scalar 落ち `Resolve.pw:1014,1502`）。帰結＝emission 順序が正しさの前提・3 パス＋codegen が別々に再導出・復元外れで健全性チェック黙過・**単相化が codegen 全体のモード化**（149 touchpoints・発見 walk が束縛ロジックを ~300 行二重実装）。
+- **根② 名前がソースバイトオフセット**（symbol table 無し）：`spansEqual`/`rangeEquals` 259 箇所・`kwSpan` がソース全検索＋偽コメント植え（`_.pw:151`）・`appendMangle` がソース buffer に書込み・Loader が全ファイル 1 buffer 連結（モジュール隔離なし）。
+- **集中重複③ ARC 4 重複**（struct/enum×concrete/mono・分類カスケード ~6 回再実装・mono-struct share/release 欠落＝leak）。**enum の `mode` 引数版が正解形**。**局所④** 演算子 opcode が手番 magic 整数（`kindCode`・`op==57` 素マッチ）→`Op` enum 化で解消。**局所⑤** パーサが codegen 仕事（mangle 書込み・arrayElems 種まき・型 triple/ref 二重表現）／derive 合成 ~280 行がパーサ内／tolerant パース（無ければ黙って進む＝受理健全性を損なう・`expect()` 不在）／最初のエラーで `exit(1)` 回復なし。
+- **綺麗な所（honesty）**：意味論は全て正しい＝ARC scope-drop・async stackless SM（UAF 対策/仮想時計/loud reject）・checked 算術・RawBuffer 床・需要駆動単相化＋combinator 到達性ゲート・再帰 boxing 解析・パターン/優先順位パース。不動点 self-host が稼働・ドキュメント規律が高い＝**読める負債**ゆえ renovate が効く。
+- **renovation が届かない唯一＝ソース連結モジュールモデル**（Loader＋`*Start/*Len` span 規約）。分割/incremental compile はここを触らないと不可だが Loader に隔離・**分割コンパイルが要るまで後回し**。
+- **なぜ rewrite でなく renovate**：①高価で正しい意味論（`unique-*` 等の長いエッジケース蓄積）を捨てて踏み直すことになる（Joel 典型）②不動点の安全網を長期間失う（renovate は各ステップ緑）③2 つの根は再帰値型が動く今だからこそ増分で剥がせる。
+- **ロードマップ**（メタプロと合流）：
+  - **Phase A（クイックウィン・IR 不要・低リスク）**：ARC エミッタを `mode` 引数で 1 本化（今回の痛み解消＋mono-struct leak も閉じる）／`Op` enum／`expect()` ヘルパ。
+  - **Phase B（最大レバレッジ）＝型付き AST**：式ノードに `ty` を足し**今の `exprType` を種に一度で埋め**、`exprType(id)`→`node.ty` をノード種ごとに移行（**同じ答え＝生成 C バイト不変＝不動点緑のまま**「再導出→読む」に反転）。`kwSpan` は自然死。
+  - **Phase C**：名前 interning（`spansEqual` 一掃）・`MonoEnv` 明示パラメータ化 → **`@Std/Syntax` 値ツリー AST＝この型付き AST**としてマクロへ公開（＝メタプロ土台に合流）。
+  - **deferred**：分割コンパイル（Loader 連結モデル）。
+- **先日の Phase 0（box ARC）は依然有効**＝AST を再帰値型に載せる前提。**次の着手＝Phase A（ARC 1 本化から）**を推奨。
+
+---
+
+### （旧・参考）メタプロ基盤の前段：値ツリー AST 化（box ARC は上記 renovate に吸収）
 
 ユーザーと方針合意（2026-06-05 セッション）。**マクロには AST を全部公開する**（関数本体まで＝手続き的マクロの将来も塞がない・「全公開のデメリットは本質的に無い、コストは refactor だけ」）。ただし**「全公開」と「codegen 全書き直し」は別物**＝以下の lowering shim で安全に到達する。
 
