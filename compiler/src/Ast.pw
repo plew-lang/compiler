@@ -529,6 +529,11 @@ struct Comp {
     // to [] at the impl's close (so top-level fns and later impls don't inherit).
     pub mut val curImplBoundParams: Array[Bind] = []
     pub mut val curImplBoundTraits: Array[Bind] = []
+    // cached source spans for built-in type/method names that have no guaranteed
+    // syntactic occurrence (String/U64/Array/iterator/…). Built once (buildKwCache)
+    // by appending the names to `bytes` at known offsets, so kwSpan is an O(1) table
+    // lookup instead of an O(n) source scan + a planted-comment occurrence guarantee.
+    pub mut val kwCache: Array[Bind] = []
     // recursive-value-type boxing (spec/03): the set of fields whose declared type
     // transitively reaches their owning concrete struct/enum (a containment cycle).
     // Such a field is stored behind a heap pointer (`T*`) so the C type is finite —

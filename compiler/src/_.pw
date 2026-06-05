@@ -142,13 +142,9 @@ fn main() {
         moduleRanges.append(<Bind nameStart=prelStart nameLen=combined.count - prelStart fieldStart=nextModuleId fieldLen=0 />)
         nextModuleId = nextModuleId + 1
     }
-    // Append a trailing comment naming built-in types. Some values have a known
-    // type with no source span to point at (a string literal's `String`, the
-    // `U8` element of `String.bytes`); the type system recovers a named type
-    // from a (start,len) span, so `kwSpan` reuses an occurrence of the name in
-    // the source. This guarantees one exists. The lexer skips the comment, and
-    // it trails all real source so it never shifts a diagnostic line number.
-    appendBytes(into: inout combined, from: "\n// kwSpan builtins: String U8 U64 Bool Array\n".bytes)
+    // (Built-in type/method names that have no syntactic occurrence get their
+    // source spans from `buildKwCache`, which appends them after parsing — so no
+    // planted comment is needed here.)
     mut val lx: Lexer = <Lexer bytes=combined pos=0 toks=[] depth=0 />
     lex(lx: inout lx)
     mut val c: Comp = <Comp bytes=combined toks=lx.toks pos=0 exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] traits=[] conforms=[] methodAliases=[] derives=[] pendingDerives=[] funcBounds=[] curCheckFn=0 curWitnessed=[] curWhereTraits=[] types=[] genInsts=[] fnInsts=[] fnTypes=[] fnThunks=[] captures=[] curClosureId=0 curInClosure=false curCaptureMark=0 arrayElems=[] locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curRetTy=0 curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curSelfMove=false curTypeParams=[] curTypeArgs=[] curRecvInstRef=0 curGiveTmp=0 curLoopMark=0 curBranchBase=0 deinits=[] curAsync=false asyncState=0 curAsyncFn=0 asyncVarSeq=0 moduleRanges=moduleRanges exports=[] imports=[] />
@@ -156,6 +152,10 @@ fn main() {
     // (synthetic locals, untyped positions) never aliases a real parsed type.
     c.types.append(<TypeRef nameStart=0 nameLen=0 args=[] />)
     parseProgram(c: inout c)
+    // built-in-name span cache (kwSpan): append the lang-item names at known
+    // offsets so type recovery can name `String`/`U64`/`Array`/… without scanning
+    // the source. Before any analysis (which calls kwSpan via exprType).
+    buildKwCache(c: inout c)
     // derive (#5): synthesize `@[Eq]`/`@[Ord]` witnesses before any analysis.
     synthesizeDerives(c: inout c)
     // trait provided methods (spec/08): copy each `impl Trait { }` provided

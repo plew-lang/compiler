@@ -429,7 +429,46 @@ fn scalarInfo() -> TypeInfo {
 // source span to point at (a string literal's `String`, `.bytes`'s `U8`). Reuse
 // any occurrence of `kw` in the source as a label span (the match is purely the
 // bytes; a comment/string occurrence works too). nameLen=0 if `kw` never appears.
+// Append `kw`'s bytes to `c.bytes` and record their span in `c.kwCache`, so a
+// built-in name with no guaranteed source occurrence has a stable, addressable
+// span without scanning (or planting a comment in) the source.
+fn addKwSpan(c: inout Comp, kw: String) {
+    val start: U64 = c.bytes.count
+    val b: Array[U8] = kw.bytes
+    mut val i: U64 = 0
+    while i < b.count {
+        c.bytes.append(b[i])
+        i += 1
+    }
+    c.kwCache.append(<Bind nameStart=start nameLen=b.count fieldStart=start fieldLen=b.count />)
+}
+
+// Build the built-in-name span cache once (before any kwSpan use). Covers exactly
+// the names kwSpan is asked for. Appended after the lexed source, so token offsets
+// are unaffected.
+fn buildKwCache(c: inout Comp) {
+    addKwSpan(c: inout c, kw: "String")
+    addKwSpan(c: inout c, kw: "U8")
+    addKwSpan(c: inout c, kw: "U64")
+    addKwSpan(c: inout c, kw: "Bool")
+    addKwSpan(c: inout c, kw: "Array")
+    addKwSpan(c: inout c, kw: "fn")
+    addKwSpan(c: inout c, kw: "iterator")
+    addKwSpan(c: inout c, kw: "next")
+}
+
+// Return a stable source span naming `kw`. O(1) lookup in the prebuilt cache; any
+// name not pre-cached falls back to a source scan (a len-0 Bind if absent, which
+// callers treat as "no span").
 fn kwSpan(c: inout Comp, kw: String, kwLen: U64) -> Bind {
+    mut val ci: U64 = 0
+    while ci < c.kwCache.count {
+        val e: Bind = c.kwCache[ci]
+        if rangeEquals(bytes: c.bytes, start: e.nameStart, len: e.nameLen, kw: kw) {
+            return e
+        }
+        ci += 1
+    }
     val n: U64 = c.bytes.count
     if n < kwLen {
         return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
