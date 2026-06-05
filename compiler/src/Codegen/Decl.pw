@@ -1250,6 +1250,9 @@ fn emitSelfDeinit(c: inout Comp) {
 }
 
 fn genFunc(c: inout Comp, fi: U64) {
+    // fresh type cache per body emission (a cached grounded type is only valid for
+    // this body's env — Self / type args / instantiation).
+    clearExprTyCache(c: inout c)
     val f: Func = c.funcs[fi]
     val isMain: Bool = nameIsMain(c: inout c, f: f)
     c.curIsMain = isMain
@@ -1316,6 +1319,8 @@ fn genFunc(c: inout Comp, fi: U64) {
 // `;` (proto) or the body. v1 closures are non-capturing (the body sees its
 // params and globals only). The expression `<id>` is the Closure's arena index.
 fn genClosure(c: inout Comp, id: U64, proto: Bool) {
+    // fresh type cache per closure body (its env differs from the enclosing body).
+    clearExprTyCache(c: inout c)
     match c.exprs[id] {
         Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
             if hasRet {

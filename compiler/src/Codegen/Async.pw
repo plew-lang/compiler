@@ -144,7 +144,7 @@ fn collectAsyncFields(c: inout Comp, blockId: U64) {
                 collectAsyncFields(c: inout c, blockId: body)
             }
             Stmt.Match(val scrut, val arms) => {
-                val scrutRef: U64 = exprType(c: inout c, id: scrut).ref
+                val scrutRef: U64 = typeOf(c: inout c, id: scrut).ref
                 val genericMatch: Bool = isGenericEnumInst(c: inout c, ref: scrutRef)
                 mut val ai: U64 = 0
                 while ai < arms.count {
@@ -337,6 +337,7 @@ fn emitAsyncDecls(c: inout Comp) {
 // state machine. `async fn main` keeps the C `int main(...)` shape and, after a
 // single resume, drains the event loop.
 fn genAsyncFunc(c: inout Comp, fi: U64) {
+    clearExprTyCache(c: inout c)
     val f: Func = c.funcs[fi]
     val isMain: Bool = nameIsMain(c: inout c, f: f)
     val params: Array[Param] = f.params

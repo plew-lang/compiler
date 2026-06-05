@@ -6,7 +6,7 @@
 // (`append`, …) are pure Plew. Returns true if `(nameStart,nameLen)` named one.
 fn emitArrayIntrinsic(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arrayPush") {
-        val et: TypeInfo = exprType(c: inout c, id: args[0].expr)
+        val et: TypeInfo = typeOf(c: inout c, id: args[0].expr)
         wPA(c: inout c, elemStart: et.nameStart, elemLen: et.nameLen)
         write(s: "_push(&(")
         genExpr(c: inout c, id: args[0].expr)
@@ -16,7 +16,7 @@ fn emitArrayIntrinsic(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[A
         return true
     }
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arrayGet") {
-        val et: TypeInfo = exprType(c: inout c, id: args[0].expr)
+        val et: TypeInfo = typeOf(c: inout c, id: args[0].expr)
         wPA(c: inout c, elemStart: et.nameStart, elemLen: et.nameLen)
         write(s: "_get((")
         genExpr(c: inout c, id: args[0].expr)
@@ -26,7 +26,7 @@ fn emitArrayIntrinsic(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[A
         return true
     }
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arraySet") {
-        val et: TypeInfo = exprType(c: inout c, id: args[0].expr)
+        val et: TypeInfo = typeOf(c: inout c, id: args[0].expr)
         wPA(c: inout c, elemStart: et.nameStart, elemLen: et.nameLen)
         write(s: "_set(&(")
         genExpr(c: inout c, id: args[0].expr)
@@ -79,7 +79,7 @@ fn emitArrayElemValue(c: inout Comp, argExpr: U64, arrStart: U64, arrLen: U64) {
 //   rawCap(b: RawBuffer[T]) -> U64          rawIsUnique(b: RawBuffer[T]) -> Bool
 fn emitRawIntrinsic(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawAlloc") {
-        val et: TypeInfo = exprType(c: inout c, id: args[1].expr)
+        val et: TypeInfo = typeOf(c: inout c, id: args[1].expr)
         write(s: "(")
         emitElemCType(c: inout c, elemStart: et.nameStart, elemLen: et.nameLen)
         write(s: "*)plew_rawbuf_alloc(sizeof(")

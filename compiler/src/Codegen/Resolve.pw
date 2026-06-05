@@ -1083,39 +1083,33 @@ fn buildExprTyTable(c: inout Comp) {
 // (its node types vary with Self); generic bodies vary per instantiation. Those
 // re-derive every time.
 fn typeOf(c: inout Comp, id: U64) -> TypeInfo {
-    if typeCacheable(c: inout c) {
-        if id < c.exprTyKind.count {
-            if c.exprTyKind[id] == typeUnfilled() {
-                val t: TypeInfo = exprType(c: inout c, id: id)
-                c.exprTyKind[id] = t.kind
-                c.exprTyStart[id] = t.nameStart
-                c.exprTyLen[id] = t.nameLen
-                c.exprTyRef[id] = t.ref
-                return t
-            }
-            return <TypeInfo kind=c.exprTyKind[id] nameStart=c.exprTyStart[id] nameLen=c.exprTyLen[id] ref=c.exprTyRef[id] />
+    if id < c.exprTyKind.count {
+        if c.exprTyKind[id] == typeUnfilled() {
+            val t: TypeInfo = exprType(c: inout c, id: id)
+            c.exprTyKind[id] = t.kind
+            c.exprTyStart[id] = t.nameStart
+            c.exprTyLen[id] = t.nameLen
+            c.exprTyRef[id] = t.ref
+            c.exprTyFilled.append(id)
+            return t
         }
+        return <TypeInfo kind=c.exprTyKind[id] nameStart=c.exprTyStart[id] nameLen=c.exprTyLen[id] ref=c.exprTyRef[id] />
     }
     return exprType(c: inout c, id: id)
 }
 
-// Is the current emission context a pure free function (no type params, no
-// receiver/Self/Item, no receiver instantiation)? Only then is a node's type
-// env-independent and its body emitted once, so the typeOf cache is sound.
-fn typeCacheable(c: inout Comp) -> Bool {
-    if c.curTypeParams.count != 0 {
-        return false
+// Reset the type cache (called at each function/closure body-emission entry). The
+// (grounded) types cached during one body emission are only valid for that body's
+// env, so they are discarded before the next — a node is re-typed per generic
+// instantiation / per conforming type. Resets only the filled slots.
+fn clearExprTyCache(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.exprTyFilled.count {
+        c.exprTyKind[c.exprTyFilled[i]] = typeUnfilled()
+        i += 1
     }
-    if c.curRecvInstRef != 0 {
-        return false
-    }
-    if c.curHasRecv {
-        return false
-    }
-    if c.curSelfRef != 0 {
-        return false
-    }
-    return c.curItemRef == 0
+    val empty: Array[U64] = []
+    c.exprTyFilled = empty
 }
 
 // Recover an expression's type. Only the cases plewc.pw exercises on the base

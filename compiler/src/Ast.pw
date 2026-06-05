@@ -545,6 +545,12 @@ struct Comp {
     pub mut val exprTyStart: Array[U64] = []
     pub mut val exprTyLen: Array[U64] = []
     pub mut val exprTyRef: Array[U64] = []
+    // ids filled since the last clear, so clearExprTyCache resets only those (O(fills)
+    // not O(nodes)). The cache is cleared at each function/closure body-emission entry,
+    // so a cached (grounded) type is only ever read within the single body emission
+    // that produced it — env (Self/type args) is constant there, so methods and
+    // generic instantiations can cache too (each instantiation refills after a clear).
+    pub mut val exprTyFilled: Array[U64] = []
     // recursive-value-type boxing (spec/03): the set of fields whose declared type
     // transitively reaches their owning concrete struct/enum (a containment cycle).
     // Such a field is stored behind a heap pointer (`T*`) so the C type is finite —
