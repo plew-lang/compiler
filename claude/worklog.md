@@ -39,19 +39,26 @@
 - **残（additive）**：box セルの **ARC 解放未配線＝leak**（観測挙動は正しい・短命プロセスで無害）→ share=retain/release=deref-free の CoW box へ。**終端なし循環**（`struct A{a:A}`）は構築不能だがクラッシュせず通る＝loud reject は将来。
 - テスト＝`rec_list`/`rec_struct_optional`/`rec_tree`/`rec_mutual`/`rec_value_semantics`。
 
-## 🔄 次の大物＝メタプログラミング基盤（設計確定済）
+## 🔄 着手中＝メタプロ基盤の前段：値ツリー AST 化（方針合意済・Phase 0 実装中）
 
-正典＝spec/16、実装計画＝[metaprogramming-architecture.md](metaprogramming-architecture.md)。確定方針：
-- マクロ＝`Derive` 実装 struct・**入力 `TokenStream`（span 付き・入力エラー用）／出力 `String`（生成ソース・出力エラーは `.gen.pw`）**・`quote` 等の埋め込み構文は作らず普通の Plew 文字列＋補間で組む。
-- ディレクティブ引数＝マクロ struct のフィールド（`@[Name(a: 32)]`＝`Name{a:32}.derive(input)`）。
-- 別コマンド `plew gen` で `<Foo>.gen.pw` 生成（コミット・**原本不変・add-only**）。取り込みは **`@[...]` の存在でローダ自動 part**（同一パッケージ derive 可・gen 中は auto-part 抑制）。
-- リッチ AST＝**値ツリーを `@Std/Syntax` に切り出し**（型宣言だけ先・コンパイラもマクロも import・パッケージ管理不要・後でパッケージ化容易）。組み込み Eq/Ord/Hash は当面コンパイラ特権で将来 dogfood。
-- **実装順**：①機構（`TokenStream`＋parse ヘルパ→値ツリー `DeriveInput`・span エラー関数）→ ②`plew gen` → ③コアライブラリ derive を dogfood（**Hash はここ**→Dictionary）→ ④パッケージ管理後にライブラリ昇格。
+ユーザーと方針合意（2026-06-05 セッション）。**マクロには AST を全部公開する**（関数本体まで＝手続き的マクロの将来も塞がない・「全公開のデメリットは本質的に無い、コストは refactor だけ」）。ただし**「全公開」と「codegen 全書き直し」は別物**＝以下の lowering shim で安全に到達する。
+
+- **「源を1つ」＝二重パーサ（syn/rustc 問題）回避**：パーサも AST 型も **`@Std/Syntax` に一本化**し、コンパイラはそれを import。
+- **codegen は温存**：`@Std/Syntax` の値ツリー →（lowering 一段）→ 既存 arena に落として、~8k 行の codegen を書き直さない。lowering は標準的な surface-AST→IR の一段で、二重パーサにはならない。後から構文ごとに lowering を削って**純粋な値ツリー codegen へ段階収束**できる（不動点を保ったまま・急がない）。
+- **段取り（不動点を緑に保つ増分）**：
+  - **Phase 0✅＝box の ARC 解放を配線（完了）**。box＝`plew_arc_alloc` の rc ヘッダ付きセル・copy/share は `plew_ref_share` で retain・書換えは fresh box に repoint(rc=1)・release は rc 減算→0 で pointee 再帰 release＋free。**enum（concrete＋mono）に copy/share/release を新設**＝struct 版を enum へミラー（`enumNeedsCopy/Release`・`monoEnumNeedsRelease`・`emitEnumModeDef`・`emitMonoEnumModeDef`・`typeInfoNeedsCopy/Release`・`fieldNeedsCopy/Release`）。mono enum release proto は struct defs より前に emit（struct release が boxed generic-enum 場の release を呼ぶため）。**構築は retain-on-place**＝`genExpr`→`genCopyValue`（場の値を埋め込むとき share・fresh 値は直接＝二重 release を防ぐ・`genCopyValue` に concrete-enum share を追加）。local scope 末 release を concrete/mono enum local へ拡張。**検証**＝5 再帰テスト output＋ASan clean・5000 ノードの build/copy/sum stress で **0 leaks**（macOS `leaks`・ASan は Darwin で leak 非対応ゆえ `leaks` 併用）・全 suite 233/0（output＋ASan）・不動点 OK（reseed 2 回）。残リークは print/String が ARC 未解放な既存ギャップのみ（box 由来は 0）。
+  - **Phase 1＝`@Std/Syntax`**：Token/Span・TypeExpr・Decl（FnDecl 含む）・Expr・Stmt を再帰値型で全定義＋手書き lexer/parser を移植して値ツリーを吐く。
+  - **Phase 2＝コンパイラが採用**：`lower(値ツリー)→arena` を足し既存 codegen 温存。**ここで「源1つ・両者が使う・関数本体まで公開」成立。**
+  - **Phase 3＝マクロ＋`plew gen`** を実 AST 上に（使い捨て DeriveInput なし）。Eq/Hash dogfood→Dictionary。
+  - **Phase 4（任意）＝lowering を構文ごとに削り**値ツリー直走り codegen へ収束。
+- ⚠ **Phase 0 完了で一旦停止して方針相談**（ユーザー指示）。
+
+> 旧メタプロ詳細（TokenStream 入力前提・spec/16）は上の方針で見直し予定：入力は span 付き構造化値ツリーになり生 TokenStream 再パースが不要化する見込み（@Std/Syntax を組んでから判断）。正典＝[spec/04-execution/16-metaprogramming.md](../spec/04-execution/16-metaprogramming.md)、計画＝[metaprogramming-architecture.md](metaprogramming-architecture.md)。
 
 ## ロードマップ（残りの大物・前向きのみ）
 
 1. ✅ Array struct 化・✅ 可視性強制・✅ Iterator/Iterable＋lazy map/filter・✅ 再帰値型 auto-boxing。
-2. 🔄 **メタプログラミング基盤**（設計確定・上記の実装順 ①→④）。値ツリー AST の前提（再帰型）は整った。
+2. 🔄 **メタプロ基盤＝値ツリー AST 化**（上記・Phase 0 box ARC 実装中→Phase 1-3 @Std/Syntax＋lowering＋マクロ）。
 3. 🔲 **Hash/Hasher → Dictionary（`[k:v]` lang item）/Set**（メタプロ③で `@[Hash]` を出してから・要：コレクション値意味論の一般化）。
 4. 🔲 **イベントループ tail＋spawn**（実スレッド・`JoinHandle[T]`・closure 残ギャップ）。
 5. 🔲 **`any P` 存在型**（型消去・動的ディスパッチ・トレイトの最後）。

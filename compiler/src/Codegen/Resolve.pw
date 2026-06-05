@@ -574,6 +574,17 @@ fn emitScopeDrops(c: inout Comp, mark: U64, exclIdx: U64) {
                     // an owned Ref local: release its refcounted box.
                     emitRefRelease(c: inout c, nameStart: lo.nameStart, nameLen: lo.nameLen, refTy: lo.ty, cnum: lo.cnum)
                 } else {
+                if isGenericEnumInst(c: inout c, ref: lo.ty) {
+                    // an owned mono-enum local (e.g. `Optional[Node]`): release its
+                    // payload's owned heap (recursive boxes) if any.
+                    if monoEnumNeedsRelease(c: inout c, instRef: lo.ty) {
+                        write(s: "    ")
+                        emitMangle(c: inout c, ref: lo.ty)
+                        write(s: "_release(")
+                        writeLocalCName(c: inout c, lo: lo)
+                        write(s: ");\n")
+                    }
+                } else {
                     // a unique type's owned local runs `deinit` first (spec/03:
                     // type body before fields), then field release below. The call
                     // is emitted in a function body (after every proto), so the
@@ -596,7 +607,18 @@ fn emitScopeDrops(c: inout Comp, mark: U64, exclIdx: U64) {
                         write(s: "_release(")
                         writeLocalCName(c: inout c, lo: lo)
                         write(s: ");\n")
+                    } else {
+                        // an owned concrete-enum local (e.g. a recursive `List`):
+                        // release its boxed payloads.
+                        if enumNeedsRelease(c: inout c, start: lo.tyStart, len: lo.tyLen) {
+                            write(s: "    ")
+                            writeSpan(c: inout c, start: lo.tyStart, len: lo.tyLen)
+                            write(s: "_release(")
+                            writeLocalCName(c: inout c, lo: lo)
+                            write(s: ");\n")
+                        }
                     }
+                }
                 }
                 }
                 }

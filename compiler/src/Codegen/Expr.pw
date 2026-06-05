@@ -1140,11 +1140,7 @@ fn genExpr(c: inout Comp, id: U64) {
                                 continue
                             }
                         }
-                        if eft.kind == 3 {
-                            genArrayValue(c: inout c, exprId: mf.value, elemStart: eft.nameStart, elemLen: eft.nameLen)
-                        } else {
-                            genExpr(c: inout c, id: mf.value)
-                        }
+                        genCopyValue(c: inout c, exprId: mf.value, tyRef: eft.ref, fallStart: eft.nameStart, fallLen: eft.nameLen, isArray: eft.kind == 3)
                         i += 1
                     }
                     write(s: "}")
@@ -1182,11 +1178,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     if sBoxed {
                         genBoxCell(c: inout c, fd: sfd, valueId: mf.value)
                     } else {
-                        if ft.kind == 3 {
-                            genArrayValue(c: inout c, exprId: mf.value, elemStart: ft.nameStart, elemLen: ft.nameLen)
-                        } else {
-                            genExpr(c: inout c, id: mf.value)
-                        }
+                        genCopyValue(c: inout c, exprId: mf.value, tyRef: ft.ref, fallStart: ft.nameStart, fallLen: ft.nameLen, isArray: ft.kind == 3)
                     }
                     i += 1
                 }

@@ -317,10 +317,11 @@ fn findFieldDef(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, 
     return noField()
 }
 
-// Emit a boxed field's construction value: heap-allocate a cell of the field's
-// declared (pointee) type, store the value into it, and yield the pointer. The
-// value is plain-copied into the cell (same as the inline path); value semantics
-// hold because reads deref-copy and writes repoint (shared cells stay immutable).
+// Emit a boxed field's construction value: heap-allocate a refcounted cell of the
+// field's declared (pointee) type, store the value into it, and yield the pointer.
+// The cell carries an ARC header (plew_arc_alloc, rc=1) so copies retain and the
+// last owner frees it. The value is plain-copied into the cell; value semantics
+// hold because reads deref-copy and writes repoint (a shared cell is immutable).
 fn genBoxCell(c: inout Comp, fd: FieldDef, valueId: U64) {
     val t: U64 = c.tmp
     c.tmp = c.tmp + 1
@@ -330,7 +331,7 @@ fn genBoxCell(c: inout Comp, fd: FieldDef, valueId: U64) {
     writeU64(n: t)
     write(s: " = (")
     genCTypeOf(c: inout c, tyRef: fd.ty, fallStart: fd.tyStart, fallLen: fd.tyLen, isArray: false)
-    write(s: "*)malloc(sizeof(")
+    write(s: "*)plew_arc_alloc(sizeof(")
     genCTypeOf(c: inout c, tyRef: fd.ty, fallStart: fd.tyStart, fallLen: fd.tyLen, isArray: false)
     write(s: ")); *__box")
     writeU64(n: t)
@@ -339,7 +340,7 @@ fn genBoxCell(c: inout Comp, fd: FieldDef, valueId: U64) {
     // field's instantiation so a nested `<Optional.Some …/>` infers `Optional_Node`.
     val savedRet: U64 = c.curRetTy
     c.curRetTy = fd.ty
-    genExpr(c: inout c, id: valueId)
+    genCopyValue(c: inout c, exprId: valueId, tyRef: fd.ty, fallStart: fd.tyStart, fallLen: fd.tyLen, isArray: false)
     c.curRetTy = savedRet
     write(s: "); __box")
     writeU64(n: t)

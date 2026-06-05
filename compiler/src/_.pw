@@ -380,6 +380,37 @@ fn main() {
         }
         spp += 1
     }
+    // concrete enum copy/share/release prototypes (value-semantics ARC for
+    // recursive enums / enums owning heap). Alongside the struct ones.
+    mut val epp: U64 = 0
+    while epp < c.enums.count {
+        val cpe: EnumDef = c.enums[epp]
+        if cpe.typeParams.count > 0 {
+        } else {
+            if enumNeedsCopy(c: inout c, start: cpe.nameStart, len: cpe.nameLen) {
+                emitEnumCopyProto(c: inout c, ei: epp)
+                emitEnumShareProto(c: inout c, ei: epp)
+            }
+            if enumNeedsRelease(c: inout c, start: cpe.nameStart, len: cpe.nameLen) {
+                emitEnumReleaseProto(c: inout c, ei: epp)
+            }
+        }
+        epp += 1
+    }
+    // mono enum share/release prototypes — emitted here (before struct defs) so a
+    // struct's `_release` may call a boxed generic-enum field's `<Mangle>_release`.
+    mut val mep: U64 = 0
+    while mep < c.genInsts.count {
+        if isGenericEnumInst(c: inout c, ref: c.genInsts[mep]) {
+            if monoEnumNeedsCopy(c: inout c, instRef: c.genInsts[mep]) {
+                emitMonoEnumModeProto(c: inout c, instRef: c.genInsts[mep], mode: 1)
+            }
+            if monoEnumNeedsRelease(c: inout c, instRef: c.genInsts[mep]) {
+                emitMonoEnumModeProto(c: inout c, instRef: c.genInsts[mep], mode: 2)
+            }
+        }
+        mep += 1
+    }
     // array runtime (element by value -> needs full nominal defs above).
     genU8ArrayRuntime()
     mut val ar: U64 = 0
@@ -411,6 +442,22 @@ fn main() {
         }
         scd += 1
     }
+    // concrete enum copy/share/release definitions.
+    mut val ecd: U64 = 0
+    while ecd < c.enums.count {
+        val ce2: EnumDef = c.enums[ecd]
+        if ce2.typeParams.count > 0 {
+        } else {
+            if enumNeedsCopy(c: inout c, start: ce2.nameStart, len: ce2.nameLen) {
+                emitEnumModeDef(c: inout c, ei: ecd, mode: 0)
+                emitEnumModeDef(c: inout c, ei: ecd, mode: 1)
+            }
+            if enumNeedsRelease(c: inout c, start: ce2.nameStart, len: ce2.nameLen) {
+                emitEnumModeDef(c: inout c, ei: ecd, mode: 2)
+            }
+        }
+        ecd += 1
+    }
     // deep-copy fns for monomorphized generic struct instantiations holding
     // arrays (e.g. `Box[Array[I32]]`): prototypes then definitions.
     mut val mcp: U64 = 0
@@ -431,6 +478,10 @@ fn main() {
         if isGenericEnumInst(c: inout c, ref: c.genInsts[mcd]) {
             if monoEnumNeedsCopy(c: inout c, instRef: c.genInsts[mcd]) {
                 emitMonoEnumCopyDef(c: inout c, instRef: c.genInsts[mcd])
+                emitMonoEnumModeDef(c: inout c, instRef: c.genInsts[mcd], mode: 1)
+            }
+            if monoEnumNeedsRelease(c: inout c, instRef: c.genInsts[mcd]) {
+                emitMonoEnumModeDef(c: inout c, instRef: c.genInsts[mcd], mode: 2)
             }
         } else {
             if monoStructNeedsCopy(c: inout c, instRef: c.genInsts[mcd]) {
