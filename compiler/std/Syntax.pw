@@ -1,0 +1,40 @@
+// @Std/Syntax — the syntax library for user-defined metaprogramming (spec/16).
+//
+// A macro is a struct implementing `Derive`: it receives the annotated item's
+// syntax tree (`DeclAst`) and returns generated Plew source (`String`). The
+// `plew gen` runner synthesizes a harness that calls the provided method
+// `deriveFromSource` (which lexes+parses the item's source text into a `DeclAst`
+// and delegates to the user's `derive`), so the runner stays a version-agnostic
+// String↔String machine that never touches the AST types.
+//
+// M0 status: this is the minimal end-to-end plumbing. `DeclAst` is an empty
+// placeholder and `parseItem` is a stub — enough to prove a trivial macro
+// (returns fixed text) flows from `@[Name]` through the runner to `<Foo>.gen.pw`.
+// The real declaration AST (name/fields/variants/signatures/type-exprs, with
+// original-coordinate spans) lands in M1.
+
+// The parsed syntax tree of an annotated item. M0: empty placeholder; M1 fills
+// it with the declaration's structure (name, fields, variants, …).
+export struct DeclAst { }
+
+// A macro = a struct implementing `Derive`. The required `derive` receives the
+// item's `DeclAst` and returns generated source; the provided `deriveFromSource`
+// is what the runner calls (String in, String out).
+export trait Derive {
+    fn derive(input: DeclAst) -> String
+}
+
+pub impl Derive {
+    // Lex+parse the item's source text (original coordinates `start..end`) into a
+    // `DeclAst`, then delegate to the user's `derive`. The runner calls this so it
+    // need not know the AST type — the String boundary keeps it version-agnostic.
+    fn deriveFromSource(source: String, start: U64, end: U64) -> String {
+        return self.derive(input: parseItem(source: source, start: start, end: end))
+    }
+}
+
+// Parse an item's source slice into a `DeclAst`. M0 stub (empty tree); M1 wires
+// the real lexer+parser over `source[start..end]`.
+export fn parseItem(source: String, start: U64, end: U64) -> DeclAst {
+    return <DeclAst />
+}

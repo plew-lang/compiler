@@ -288,6 +288,46 @@ fn findSrcRoot(entry: Array[U8]) -> Array[U8] {
     return empty
 }
 
+// Does the token stream contain a `@[` directive (the `@` lexes as an Unknown
+// token whose first byte is '@' = 64, directly followed by a `[`)? Marks a file
+// whose generated sibling `<Foo>.gen.pw` should be auto-parted (spec/16). The
+// adjacent-token check mirrors the parser's directive recognition and excludes
+// `@Std/…` imports (where `@` is followed by an Ident, not `[`).
+fn hasDirective(bytes: Array[U8], toks: Array[Tok]) -> Bool {
+    mut val i: U64 = 0
+    while i + 1 < toks.count {
+        val t: Tok = toks[i]
+        if bytes[t.start] == 64 {
+            match toks[i + 1].kind {
+                Kind.LBracket => { return true }
+                _ => {}
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// `<path>.pw` -> `<path>.gen.pw` (the auto-parted generated sibling). Empty if
+// `path` does not end in `.pw` (46='.', 112='p', 119='w').
+fn genSiblingPath(path: Array[U8]) -> Array[U8] {
+    mut val out: Array[U8] = []
+    val n: U64 = path.count
+    if n < 3 {
+        return out
+    }
+    if path[n - 3] == 46 {
+        if path[n - 2] == 112 {
+            if path[n - 1] == 119 {
+                appendBytes(into: inout out, from: extractSpan(buf: path, start: 0, len: n - 3))
+                appendBytes(into: inout out, from: ".gen.pw".bytes)
+                return out
+            }
+        }
+    }
+    return out
+}
+
 // Whether `path` is already in the loaded set (each Bind is a span into `buf`).
 // Dedup keeps a module included once and makes import cycles terminate.
 fn pathSeen(buf: Array[U8], loaded: Array[Bind], path: Array[U8]) -> Bool {

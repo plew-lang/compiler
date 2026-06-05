@@ -509,6 +509,13 @@ struct Comp {
     // list of derive names parsed for the *next* type declaration.
     pub mut val derives: Array[DeriveReq]
     pub mut val pendingDerives: Array[Bind]
+    // gen mode (spec/16 `plew gen`): set when invoked as `plewc --gen <file>`.
+    // The driver then suppresses the user's own `main` and the auto-part of
+    // `<Foo>.gen.pw`, and emits a synthesized harness `main` (`genMainIdx`) that
+    // prints each user macro's generated source (captured by the runner). Off in
+    // a normal build (which instead auto-parts the already-generated `.gen.pw`).
+    pub mut val genMode: Bool = false
+    pub mut val genMainIdx: U64 = 0
     // `where T: Trait` bounds on functions (spec/08), keyed by function index.
     pub mut val funcBounds: Array[FuncBound]
     // the function index currently being checked by the eager generic

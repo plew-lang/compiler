@@ -26,6 +26,7 @@ part ./Codegen/Decl
 part ./Codegen/Mono
 part ./Codegen/Array
 part ./Codegen/Async
+part ./Codegen/Gen
 part ./Loader
 
 // ---- driver ----
@@ -47,12 +48,22 @@ fn main() {
     // `import` child starts a fresh module; a `part` child inherits the parent's.
     mut val moduleRanges: Array[Bind] = []
     mut val nextModuleId: U64 = 1
+    // gen mode (spec/16): `plewc --gen <file>` synthesizes a derive-runner harness
+    // instead of compiling the user program. The entry path then sits at argv[2].
+    mut val genMode: Bool = false
+    mut val entryArgIdx: I64 = 1
     if argCount() > 1 {
+        if argAt(1) == "--gen" {
+            genMode = true
+            entryArgIdx = 2
+        }
+    }
+    if argCount() > entryArgIdx {
         // Module loader: a recursive, deduplicated worklist over local includes.
         // Each file's `part ./Name` / `import ./Name` directives resolve relative
         // to that file's own directory; every distinct file is concatenated once
         // into a single buffer (the compiler is single-arena / single-C-output).
-        val rootPath: String = argAt(1)
+        val rootPath: String = argAt(entryArgIdx)
         val entryBytes: Array[U8] = rootPath.bytes
         // Loud-fail on a missing entry file: without this readFileBytes returns an
         // empty string and the compiler silently emits an empty program (exit 0),
@@ -76,6 +87,19 @@ fn main() {
         val es: U64 = pathBuf.count
         appendBytes(into: inout pathBuf, from: entryBytes)
         loaded.append(<Bind nameStart=es nameLen=entryBytes.count fieldStart=0 fieldLen=entryBytes.count />)
+        // gen mode: force-load @Std/Io as its own module so the synthesized harness
+        // `main` can call `write` even if the target file doesn't import it.
+        if genMode {
+            mut val ioPath: Array[U8] = []
+            appendBytes(into: inout ioPath, from: stdRoot)
+            appendBytes(into: inout ioPath, from: "Io.pw".bytes)
+            if fileExists(path: ioPath) {
+                val ios: U64 = pathBuf.count
+                appendBytes(into: inout pathBuf, from: ioPath)
+                loaded.append(<Bind nameStart=ios nameLen=ioPath.count fieldStart=nextModuleId fieldLen=ioPath.count />)
+                nextModuleId = nextModuleId + 1
+            }
+        }
         mut val qi: U64 = 0
         while qi < loaded.count {
             val ent: Bind = loaded[qi]
@@ -116,6 +140,27 @@ fn main() {
                 }
                 pj += 1
             }
+            // auto-part (spec/16): a file annotated with `@[...]` pulls in its
+            // generated sibling `<file>.gen.pw` as a part of the same module. Only
+            // when the sibling exists (a built-in `@[Eq]`/`@[Ord]` derive generates
+            // none); suppressed in gen mode, which is producing that sibling.
+            if genMode {
+            } else {
+                if hasDirective(bytes: sb, toks: lxp.toks) {
+                    val genPath: Array[U8] = genSiblingPath(path: path)
+                    if genPath.count == 0 {
+                    } else {
+                        if fileExists(path: genPath) {
+                            if pathSeen(buf: pathBuf, loaded: loaded, path: genPath) {
+                            } else {
+                                val gs: U64 = pathBuf.count
+                                appendBytes(into: inout pathBuf, from: genPath)
+                                loaded.append(<Bind nameStart=gs nameLen=genPath.count fieldStart=moduleId fieldLen=genPath.count />)
+                            }
+                        }
+                    }
+                }
+            }
         }
     } else {
         val s: String = readStdin()
@@ -151,6 +196,7 @@ fn main() {
     // reserve TypeRef index 0 as the "no type" sentinel so a `ty` field of 0
     // (synthetic locals, untyped positions) never aliases a real parsed type.
     c.types.append(<TypeRef nameStart=0 nameLen=0 args=[] />)
+    c.genMode = genMode
     parseProgram(c: inout c)
     // built-in-name span cache (kwSpan): append the lang-item names at known
     // offsets so type recovery can name `String`/`U64`/`Array`/… without scanning
@@ -186,6 +232,13 @@ fn main() {
     // among the exported (loaded) declarations.
     checkImports(c: inout c)
     checkUseVisibility(c: inout c)
+    // gen mode (spec/16): replace the program with the synthesized derive-runner
+    // harness `main`. Added after the user-code checks (so its synthetic call to
+    // `deriveFromSource`/`write` is exempt from import hygiene) and before
+    // instantiation discovery (so its `print`/method instances are emitted).
+    if c.genMode {
+        synthGenMain(c: inout c)
+    }
     // discover concrete generic instantiations to monomorphize.
     collectGenInsts(c: inout c)
     // discover concrete instantiations of generic free functions from call sites
@@ -560,6 +613,20 @@ fn main() {
     // bodies (skip generic templates).
     for val j in 0..<c.funcs.count {
         val fb: Func = c.funcs[j]
+        // gen mode: the user's own `main` is dead (the synthesized harness main at
+        // `genMainIdx` is the program), so skip every other `main` to avoid two C
+        // `main`s. Non-gen builds emit all funcs as usual.
+        mut val skipUserMain: Bool = false
+        if c.genMode {
+            if nameIsMain(c: inout c, f: fb) {
+                if j == c.genMainIdx {
+                } else {
+                    skipUserMain = true
+                }
+            }
+        }
+        if skipUserMain {
+        } else {
         if fb.typeParams.count > 0 {
         } else {
             if fb.isExtern {
@@ -579,6 +646,7 @@ fn main() {
                 }
             }
             }
+        }
         }
     }
     // generic method bodies.

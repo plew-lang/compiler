@@ -124,6 +124,41 @@ for pw in tests/reject/*.pw; do
     fi
 done
 
+# --- gen/ : metaprogramming (spec/16). Each subdir's App.pw defines a derive
+#     macro and a `@[...]`-annotated type; `plewc --gen` produces App.gen.pw, the
+#     normal build auto-parts it, and `main` exercises the generated code. Run
+#     hermetically in $TMP (copy sources, drop any committed .gen.pw) so the repo
+#     tree stays clean and the generation is proven from scratch each run. ---
+for app in tests/gen/*/App.pw; do
+    [ -f "$app" ] || continue
+    dir=$(dirname "$app")
+    name=$(basename "$dir")
+    work="$TMP/gen-$name"
+    mkdir -p "$work"
+    cp "$dir"/*.pw "$work/" 2>/dev/null
+    rm -f "$work"/*.gen.pw
+    if ! "$PLEWC" --gen "$work/App.pw" > "$work/harness.c" 2>"$TMP/err"; then
+        echo "FAIL  gen/$name  (plewc --gen errored)"; fail=$((fail + 1)); continue
+    fi
+    if ! clang $CC_FLAGS "$work/harness.c" -o "$work/harness" 2>"$TMP/err"; then
+        echo "FAIL  gen/$name  (clang rejected harness C)"; fail=$((fail + 1)); continue
+    fi
+    "$work/harness" > "$work/App.gen.pw"
+    if ! "$PLEWC" "$work/App.pw" > "$work/app.c" 2>"$TMP/err"; then
+        echo "FAIL  gen/$name  (plewc errored on the generated build)"; fail=$((fail + 1)); continue
+    fi
+    if ! clang $CC_FLAGS "$work/app.c" -o "$work/app" 2>"$TMP/err"; then
+        echo "FAIL  gen/$name  (clang rejected generated build C)"; fail=$((fail + 1)); continue
+    fi
+    got=$("$work/app")
+    want=$(cat "$dir/App.out")
+    if [ "$got" = "$want" ]; then
+        pass=$((pass + 1))
+    else
+        echo "FAIL  gen/$name  (output: got [$got] want [$want])"; fail=$((fail + 1))
+    fi
+done
+
 # --- self-host fixpoint ---
 # plewc1 resolves `@Std/…` relative to its own binary (computeStdRoot = argv[0]'s
 # dir), so the std library must sit next to it in $TMP.
