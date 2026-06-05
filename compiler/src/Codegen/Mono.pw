@@ -463,7 +463,49 @@ fn registerArrayElemRef(c: inout Comp, elemRef: U64) {
     c.arrayElems.append(<Bind nameStart=nStart nameLen=nLen fieldStart=fRef fieldLen=0 />)
 }
 
+// Substitute the active monomorphization env (curTypeParams -> curTypeArgs) into
+// a TypeRef, returning a ground ref. A bare type parameter resolves to its arg; a
+// compound type (`Array[T]`, `Box[T]`) rebuilds with grounded args (appending a
+// fresh TypeRef only when an arg actually changed). Returns `ref` unchanged when
+// it is already ground or a param has no binding. Used so a generic struct's
+// non-ground field type (`Array[T]` inside `Box[I64]`) registers its grounded
+// instantiation (`Array[I64]`), whose C typedef would otherwise never be emitted.
+fn groundTypeRef(c: inout Comp, ref: U64) -> U64 {
+    if ref >= c.types.count {
+        return ref
+    }
+    val t: TypeRef = c.types[ref]
+    if t.args.count == 0 {
+        return resolveTy(c: inout c, tyRef: ref)
+    }
+    mut val newArgs: Array[U64] = []
+    mut val changed: Bool = false
+    mut val i: U64 = 0
+    while i < t.args.count {
+        val g: U64 = groundTypeRef(c: inout c, ref: t.args[i])
+        if g == t.args[i] {
+        } else {
+            changed = true
+        }
+        newArgs.append(g)
+        i += 1
+    }
+    if changed {
+        val idx: U64 = c.types.count
+        c.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen args=newArgs />)
+        return idx
+    }
+    return ref
+}
+
 fn scanType(c: inout Comp, ref: U64) {
+    if ref >= c.types.count {
+        return
+    }
+    // resolve any active env (a generic struct's field `Array[T]` -> `Array[I64]`)
+    // so the grounded instantiation, not the template, is what gets registered.
+    // (Shadows the parameter; the public label stays `ref` for all callers.)
+    val ref: U64 = groundTypeRef(c: inout c, ref: ref)
     if ref >= c.types.count {
         return
     }

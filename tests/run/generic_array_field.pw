@@ -1,0 +1,24 @@
+import @Std/Io with { print }
+
+// A generic struct whose field is `Array[T]`: instantiating `Box[I64]` must emit
+// the nested `Array_I64` typedef (its element resolved through the instantiation
+// env), not just the template. Regression for nested-generic-field mono (G2a).
+struct Box[T] {
+    pub val items: Array[T]
+}
+
+pub impl[T] Box[T] {
+    fn at(i: U64) -> T {
+        return self.items[i]
+    }
+    fn size() -> U64 {
+        return self.items.count
+    }
+}
+
+fn main() {
+    val b: Box[I64] = <Box[I64] items=[10, 20, 30] />
+    print(b.at(i: 0U64))
+    print(b.at(i: 2U64))
+    print(b.size())
+}
