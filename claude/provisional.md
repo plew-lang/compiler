@@ -46,6 +46,7 @@
 
 ## 型システム：ジェネリクス・トレイト・拡張
 
+- **再帰値型 `struct A { child: Optional[A] }` / `enum B { P(child: B) Q }`** → **未実装（着手予定）**。現状は enum ペイロードをインライン展開するので C で incomplete type（無限サイズ）になり**コンパイル不可**。spec/拠り所では**有限であるべき**＝コンパイラが裏で間接化（enum ペイロードをヒープ box・ARC）する hidden cost（明示 `Box`/`Ref`/`indirect` は書かせない）。値意味論（コピーは独立・CoW）を box 越しでも保つのが実装の肝。連結リスト/木の基本機能であり、メタプロの値ツリー AST（`@Std/Syntax`）の前提。→ worklog「着手中」。
 - **ジェネリクス `[T]`／`[T,U]`** → ✅ **実装済（タグ `generics-data`/`generics-methods`）**：struct/enum/fn/`impl[T]` の型パラメータ・単相化（`Box_I32`）・generic struct/enum（`Optional`/`Result` 含む）・generic メソッド（レシーバ型由来）。残 additive：generic free 関数の呼び出し位置推論＋明示 `id[I32](x)`・メソッド own 型パラメータ `map[U]`＋推移的インスタンス化・`where` 制約（traits 待ち）。**関連型 `type Item` は実装済**（trait 宣言＋impl 束縛＋適合検査での `Item` 置換照合・test `assoc_type`）＝残るは generic 抽象コードでの `T::Item` 解決（concrete では不要）。
 - **トレイト（`via` 準拠・提供メソッド・`any P` 存在型・blanket・継承）** → **全て未実装**（大物）。
 - **演算子→トレイト脱糖**（`+`↔`Add` 等） → 無し。**演算子は数値/String にハードコード**（対象演算子も subset・下記）。
