@@ -327,10 +327,16 @@ fn typeIsTransitivelyUnique(c: inout Comp, start: U64, len: U64) -> Bool {
     mut val i: U64 = 0
     while i < s.fields.count {
         val f: FieldDef = s.fields[i]
-        if f.tyIsArray {
+        if fieldIsBoxed(c: inout c, f: f) {
+            // a boxed (recursive) field is behind indirection (like an array); its
+            // contents don't transmit unique contagion, and skipping it breaks the
+            // cycle that would otherwise make this walk diverge.
         } else {
-            if typeIsTransitivelyUnique(c: inout c, start: f.tyStart, len: f.tyLen) {
-                return true
+            if f.tyIsArray {
+            } else {
+                if typeIsTransitivelyUnique(c: inout c, start: f.tyStart, len: f.tyLen) {
+                    return true
+                }
             }
         }
         i += 1

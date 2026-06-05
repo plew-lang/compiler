@@ -649,9 +649,26 @@ fn genExpr(c: inout Comp, id: U64) {
                 write(s: ").count)")
                 return
             }
-            genExpr(c: inout c, id: base)
-            write(s: ".")
-            writeSpan(c: inout c, start: nameStart, len: nameLen)
+            mut val rdBoxed: Bool = false
+            if bt.kind == 2 {
+                val rfd: FieldDef = findFieldDef(c: inout c, typeStart: bt.nameStart, typeLen: bt.nameLen, variantStart: 0, variantLen: 0, isEnum: false, fieldStart: nameStart, fieldLen: nameLen)
+                if rfd.nameLen > 0 {
+                    rdBoxed = fieldIsBoxed(c: inout c, f: rfd)
+                }
+            }
+            if rdBoxed {
+                // boxed (recursive) field: stored as a pointer; deref to read the
+                // value (a copy — value semantics; the cell stays immutable).
+                write(s: "(*(")
+                genExpr(c: inout c, id: base)
+                write(s: ".")
+                writeSpan(c: inout c, start: nameStart, len: nameLen)
+                write(s: "))")
+            } else {
+                genExpr(c: inout c, id: base)
+                write(s: ".")
+                writeSpan(c: inout c, start: nameStart, len: nameLen)
+            }
         }
         Expr.Str(val start, val len) => {
             write(s: "(PlewString){\"")
@@ -1115,6 +1132,14 @@ fn genExpr(c: inout Comp, id: U64) {
                         } else {
                             eft = makeFieldType(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: true, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
                         }
+                        val efd: FieldDef = findFieldDef(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: true, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                        if efd.nameLen > 0 {
+                            if fieldIsBoxed(c: inout c, f: efd) {
+                                genBoxCell(c: inout c, fd: efd, valueId: mf.value)
+                                i += 1
+                                continue
+                            }
+                        }
                         if eft.kind == 3 {
                             genArrayValue(c: inout c, exprId: mf.value, elemStart: eft.nameStart, elemLen: eft.nameLen)
                         } else {
@@ -1149,10 +1174,19 @@ fn genExpr(c: inout Comp, id: U64) {
                     } else {
                         ft = fieldType(c: inout c, structStart: typeStart, structLen: typeLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
                     }
-                    if ft.kind == 3 {
-                        genArrayValue(c: inout c, exprId: mf.value, elemStart: ft.nameStart, elemLen: ft.nameLen)
+                    val sfd: FieldDef = findFieldDef(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: 0, variantLen: 0, isEnum: false, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                    mut val sBoxed: Bool = false
+                    if sfd.nameLen > 0 {
+                        sBoxed = fieldIsBoxed(c: inout c, f: sfd)
+                    }
+                    if sBoxed {
+                        genBoxCell(c: inout c, fd: sfd, valueId: mf.value)
                     } else {
-                        genExpr(c: inout c, id: mf.value)
+                        if ft.kind == 3 {
+                            genArrayValue(c: inout c, exprId: mf.value, elemStart: ft.nameStart, elemLen: ft.nameLen)
+                        } else {
+                            genExpr(c: inout c, id: mf.value)
+                        }
                     }
                     i += 1
                 }
@@ -1278,14 +1312,29 @@ fn genExpr(c: inout Comp, id: U64) {
                         } else {
                             genBindType(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, bindStart: bd.fieldStart, bindLen: bd.fieldLen)
                         }
+                        mut val mBoxed: Bool = false
+                        if genericMatch {
+                        } else {
+                            val mfd: FieldDef = findFieldDef(c: inout c, typeStart: a.enumStart, typeLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, isEnum: true, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                            if mfd.nameLen > 0 {
+                                mBoxed = fieldIsBoxed(c: inout c, f: mfd)
+                            }
+                        }
                         write(s: " ")
                         writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
-                        write(s: " = __ms")
+                        write(s: " = ")
+                        if mBoxed {
+                            write(s: "*(")
+                        }
+                        write(s: "__ms")
                         writeU64(n: t)
                         write(s: ".data.")
                         writeSpan(c: inout c, start: a.variantStart, len: a.variantLen)
                         write(s: ".")
                         writeSpan(c: inout c, start: bd.fieldStart, len: bd.fieldLen)
+                        if mBoxed {
+                            write(s: ")")
+                        }
                         write(s: "; (void)")
                         writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
                         write(s: "; ")

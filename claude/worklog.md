@@ -12,6 +12,7 @@
 - ✅ **Array＝`RawBuffer` 床の上の Plew struct**（tag `array-plew-struct`・[array-struct-plan.md](array-struct-plan.md)）。残ギャップ＝コレクション値意味論の一般化（Dictionary/Set の前提）。
 - ✅ **可視性 `export`/`import with`/`pub impl`/`pub`/`pub(get)` 完全強制**（tag `visibility-enforced`）。
 - ✅ **Iterator/Iterable ＋ lazy コンビネータ完成**（下記）。
+- ✅ **再帰値型の auto-boxing 完成**（下記）。
 
 ### ✅ Iterator/Iterable ＋ lazy map/filter（完了・[[lazy-iterators-direction]]）
 
@@ -28,15 +29,17 @@
 
 残 additive（Iterator）：`reduce`/`fold`/`take`/`enumerate`/`zip`・`String` 出力 map（`String: Format` 要）・Array/Range を Iterable に。
 
-## 🔄 着手中＝再帰値型の auto-boxing（メタプロ基盤の前提・かつ基本機能）
+### ✅ 再帰値型の auto-boxing（完了・spec/03「再帰する値型」）
 
-**発見**：`struct A { child: Optional[A] }` / `enum B { P(child: B) Q }` は**現状コンパイル不可**（enum ペイロードをインライン展開→C で incomplete type＝無限サイズ）。だが spec/拠り所（「唱えた通りに発現・仕組みは問わない・hidden cost 可」）からは**有限で定義できるべき**＝**コンパイラが裏で間接化（box）する hidden cost**（Rust の `Box`・Swift の `indirect` のような明示キーワードは書かせない）。連結リスト・木という基本機能でもある。
+`enum List { Cons(head, tail: List) Nil }` / `struct Node { next: Optional[Node] }` が**有限で定義・構築・反復**できる。循環を閉じるフィールドだけをコンパイラが裏で `T*` にヒープ間接化する hidden cost（明示 `Box`/`indirect` なし）。値意味論は box 越しでも保つ（コピー独立）。
 
-- **やること**：再帰型の自動間接化。**入れ所＝enum ペイロード**（variant のペイロードが推移的に自分を含むとき、そのペイロードをヒープ box＝ARC）。`Optional[A]` を `{ tag, ptr }` 表現にして `A` を有限化。
-- **なぜ先にやるか**：メタプロの**値ツリー AST**（`@Std/Syntax`・再帰する `TypeExpr` を直接書く）に必須の前提。かつ言語の基本機能。
-- **次の一歩**：①spec に「再帰型は有限・間接化は hidden cost」を明記（02 基本型 or 03 値）→ ②実装（enum 再帰検出＋ペイロード box＋値意味論〔コピー/解放〕の ARC 配線）。値意味論（コピーは独立・CoW）を box 越しでも保つのが肝。
+- **検出**＝`markBoxedFields`（`Mono.pw`・`Comp.boxedFields`＝field の `nameStart` キー）：concrete struct/enum の到達可能性ウォークで back-edge を閉じる**ユーザー型側フィールド**を box。`Array`/`RawBuffer`/`Ref`/`WeakRef` は cut（既に間接）・`Optional`/`Result` は透過して引数を辿る（だから Optional 自体は box せず＝hardcoded `.data.Some.v` を温存）。
+- **codegen**＝そのフィールドだけ `T*`（`genStructDef`/`genEnumDef`）・構築は `genBoxCell`（`malloc`＋値コピー＋`curRetTy=fd.ty` で nested JSX を mangle 推論）・読みは deref コピー（`Expr.Field`／match payload bind の両所）・代入は **fresh box に repoint**（共有セルを in-place 変更しないので値意味論が成立）。
+- **横断修正**：`fieldType` が generic-inst フィールドの `ref` を載せる（field の match が `Optional_Node` を復元）。`structNeedsCopy`/`structNeedsRelease`/`emitStruct{Copy,Share,Release}Def`/`typeIsTransitivelyUnique` は **boxed フィールドを skip**（plain 共有ポインタ＝managed copy/release 不要・かつ `struct A{a:A}` の無限再帰ウォークを断つ＝segfault 回避）。
+- **残（additive）**：box セルの **ARC 解放未配線＝leak**（観測挙動は正しい・短命プロセスで無害）→ share=retain/release=deref-free の CoW box へ。**終端なし循環**（`struct A{a:A}`）は構築不能だがクラッシュせず通る＝loud reject は将来。
+- テスト＝`rec_list`/`rec_struct_optional`/`rec_tree`/`rec_mutual`/`rec_value_semantics`。
 
-## 🔜 次の大物＝メタプログラミング基盤（設計確定済）
+## 🔄 次の大物＝メタプログラミング基盤（設計確定済）
 
 正典＝spec/16、実装計画＝[metaprogramming-architecture.md](metaprogramming-architecture.md)。確定方針：
 - マクロ＝`Derive` 実装 struct・**入力 `TokenStream`（span 付き・入力エラー用）／出力 `String`（生成ソース・出力エラーは `.gen.pw`）**・`quote` 等の埋め込み構文は作らず普通の Plew 文字列＋補間で組む。
@@ -47,12 +50,11 @@
 
 ## ロードマップ（残りの大物・前向きのみ）
 
-1. ✅ Array struct 化・✅ 可視性強制・✅ Iterator/Iterable＋lazy map/filter。
-2. 🔄 **再帰値型の auto-boxing**（現在の着手・上記）。メタプロ値ツリー AST の前提＋基本機能。
-3. 🔲 **メタプログラミング基盤**（設計確定・上記の実装順 ①→④）。
-4. 🔲 **Hash/Hasher → Dictionary（`[k:v]` lang item）/Set**（メタプロ③で `@[Hash]` を出してから・要：コレクション値意味論の一般化）。
-5. 🔲 **イベントループ tail＋spawn**（実スレッド・`JoinHandle[T]`・closure 残ギャップ）。
-6. 🔲 **`any P` 存在型**（型消去・動的ディスパッチ・トレイトの最後）。
+1. ✅ Array struct 化・✅ 可視性強制・✅ Iterator/Iterable＋lazy map/filter・✅ 再帰値型 auto-boxing。
+2. 🔄 **メタプログラミング基盤**（設計確定・上記の実装順 ①→④）。値ツリー AST の前提（再帰型）は整った。
+3. 🔲 **Hash/Hasher → Dictionary（`[k:v]` lang item）/Set**（メタプロ③で `@[Hash]` を出してから・要：コレクション値意味論の一般化）。
+4. 🔲 **イベントループ tail＋spawn**（実スレッド・`JoinHandle[T]`・closure 残ギャップ）。
+5. 🔲 **`any P` 存在型**（型消去・動的ディスパッチ・トレイトの最後）。
 
 横断 additive：Iterator 拡充（reduce/take 等）・演算子トレイト全配線（Eq/Ord 以外・需要駆動）・循環回収（Ref グラフ限定サイクルコレクタ）。詳細は [provisional.md](provisional.md)。
 

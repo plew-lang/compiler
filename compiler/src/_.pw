@@ -161,6 +161,10 @@ fn main() {
     // trait provided methods (spec/08): copy each `impl Trait { }` provided
     // method onto every conforming type, so they ride normal method resolution.
     instantiateProvidedMethods(c: inout c)
+    // recursive value types (spec/03): mark fields that close a containment cycle
+    // onto their owner; codegen stores them behind a heap pointer so the C type is
+    // finite (hidden indirection; value semantics kept by deref-read/repoint-write).
+    markBoxedFields(c: inout c)
     // ownership validity (spec/03): a struct owning a unique value must be
     // `unique`; parameter access modes must match copyability. Both exit on error.
     checkFieldContagion(c: inout c)

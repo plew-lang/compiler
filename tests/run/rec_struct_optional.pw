@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+// A recursive value struct: `next` is `Optional[Node]`, which transitively
+// contains `Node`. The compiler boxes the `next` field (heap indirection) so
+// `Node` is finite, while `Optional` keeps its inline layout. spec/03.
+struct Node {
+    pub val v: I64
+    pub val next: Optional[Node]
+}
+
+fn length(n: Node) -> I64 {
+    match n.next {
+        Optional.Some(v: val nx) => { return 1 + length(n: nx) }
+        Optional.None => { return 1 }
+    }
+}
+
+fn main() {
+    val a: Node = <Node v=10 next=<Optional.Some v=<Node v=20 next=<Optional.Some v=<Node v=30 next=<Optional.None /> /> /> /> /> />
+    print(length(n: a))
+    print(a.v)
+    // read a boxed field's value (a deref copy) and reach into it
+    match a.next {
+        Optional.Some(v: val nx) => { print(nx.v) }
+        Optional.None => { val z: I64 = 0  print(z) }
+    }
+}

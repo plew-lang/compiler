@@ -1,0 +1,33 @@
+import @Std/Io with { print }
+
+// A binary tree: a `Branch` payload holds two recursive `Tree` children, both
+// boxed independently. Exercises multiple boxed fields in one variant. spec/03.
+enum Tree {
+    Leaf(value: I64)
+    Branch(left: Tree, right: Tree)
+}
+
+fn total(t: Tree) -> I64 {
+    match t {
+        Tree.Leaf(value: val v) => { return v }
+        Tree.Branch(left: val l, right: val r) => { return total(t: l) + total(t: r) }
+    }
+}
+
+fn depth(t: Tree) -> I64 {
+    match t {
+        Tree.Leaf(value: val v) => { return 1 }
+        Tree.Branch(left: val l, right: val r) => {
+            val dl: I64 = depth(t: l)
+            val dr: I64 = depth(t: r)
+            if dl > dr { return 1 + dl }
+            return 1 + dr
+        }
+    }
+}
+
+fn main() {
+    val t: Tree = <Tree.Branch left=<Tree.Branch left=<Tree.Leaf value=1 /> right=<Tree.Leaf value=2 /> /> right=<Tree.Leaf value=3 /> />
+    print(total(t: t))
+    print(depth(t: t))
+}

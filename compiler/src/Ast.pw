@@ -529,6 +529,13 @@ struct Comp {
     // to [] at the impl's close (so top-level fns and later impls don't inherit).
     pub mut val curImplBoundParams: Array[Bind] = []
     pub mut val curImplBoundTraits: Array[Bind] = []
+    // recursive-value-type boxing (spec/03): the set of fields whose declared type
+    // transitively reaches their owning concrete struct/enum (a containment cycle).
+    // Such a field is stored behind a heap pointer (`T*`) so the C type is finite —
+    // a hidden indirection cost; value semantics are preserved by deref-on-read and
+    // repoint-on-write. Keyed by the field declaration's `nameStart` (unique per
+    // source field). Computed by markBoxedFields before codegen.
+    pub mut val boxedFields: Array[U64] = []
     // structured type references (TypeRef arena), indexed by the `ty`/`ref`
     // fields above. Built during parsing; consumed by generic monomorphization.
     pub mut val types: Array[TypeRef]

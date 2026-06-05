@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+// Mutual recursion: Expr contains Term, Term refers back to Expr via Optional.
+// The cycle is broken by boxing the field(s) that close it. spec/03.
+struct Term {
+    pub val n: I64
+    pub val rest: Optional[Sum]
+}
+struct Sum {
+    pub val head: Term
+}
+
+fn evalTerm(t: Term) -> I64 {
+    match t.rest {
+        Optional.Some(v: val s) => { return t.n + evalSum(s: s) }
+        Optional.None => { return t.n }
+    }
+}
+fn evalSum(s: Sum) -> I64 {
+    return evalTerm(t: s.head)
+}
+
+fn main() {
+    val inner: Sum = <Sum head=<Term n=5 rest=<Optional.None /> /> />
+    val t: Term = <Term n=10 rest=<Optional.Some v=inner /> />
+    print(evalTerm(t: t))
+}

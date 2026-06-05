@@ -148,6 +148,12 @@ fn structNeedsCopy(c: inout Comp, start: U64, len: U64) -> Bool {
     mut val i: U64 = 0
     while i < fields.count {
         val f: FieldDef = fields[i]
+        if fieldIsBoxed(c: inout c, f: f) {
+            // a boxed (recursive) field is a plain shared pointer — no managed
+            // copy (and it breaks the cycle that would make this walk diverge).
+            i += 1
+            continue
+        }
         if f.tyIsArray {
             return true
         } else {
@@ -180,6 +186,12 @@ fn structNeedsRelease(c: inout Comp, start: U64, len: U64) -> Bool {
     mut val i: U64 = 0
     while i < fields.count {
         val f: FieldDef = fields[i]
+        if fieldIsBoxed(c: inout c, f: f) {
+            // a boxed (recursive) field's heap cell is currently leaked (no ARC
+            // release wired yet) — and skipping it also breaks the diverging walk.
+            i += 1
+            continue
+        }
         if f.tyIsArray {
             return true
         } else {
@@ -242,6 +254,13 @@ fn emitStructCopyDef(c: inout Comp, si: U64) {
     mut val i: U64 = 0
     while i < fields.count {
         val f: FieldDef = fields[i]
+        if fieldIsBoxed(c: inout c, f: f) {
+            // boxed (recursive) field: `r = s` already shared the pointer (a plain
+            // copy). value semantics hold because reads deref-copy and writes
+            // repoint, so the shared cell is never mutated. (ARC is future work.)
+            i += 1
+            continue
+        }
         if f.tyIsArray {
             write(s: " r.")
             writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
@@ -301,6 +320,12 @@ fn emitStructShareDef(c: inout Comp, si: U64) {
     mut val i: U64 = 0
     while i < fields.count {
         val f: FieldDef = fields[i]
+        if fieldIsBoxed(c: inout c, f: f) {
+            // boxed (recursive) field: a plain shared pointer; nothing to retain
+            // (ARC for boxes is future work). Skipping also breaks the cycle walk.
+            i += 1
+            continue
+        }
         if f.tyIsArray {
             // retain the array field's buffer (its rc lives in the RawBuffer
             // header now, so go through the array runtime rather than `.rc`).
@@ -356,6 +381,12 @@ fn emitStructReleaseDef(c: inout Comp, si: U64) {
     mut val i: U64 = 0
     while i < fields.count {
         val f: FieldDef = fields[i]
+        if fieldIsBoxed(c: inout c, f: f) {
+            // boxed (recursive) field: its heap cell is leaked (no ARC release yet);
+            // skip so we neither emit an invalid free nor diverge on the cycle.
+            i += 1
+            continue
+        }
         if f.tyIsArray {
             write(s: " ")
             wPA(c: inout c, elemStart: f.tyStart, elemLen: f.tyLen)
@@ -656,6 +687,11 @@ fn genStructDef(c: inout Comp, si: U64) {
         write(s: "    ")
         genCTypeOf(c: inout c, tyRef: f.ty, fallStart: f.tyStart, fallLen: f.tyLen, isArray: f.tyIsArray)
         write(s: " ")
+        if fieldIsBoxed(c: inout c, f: f) {
+            // recursive field: stored behind a heap pointer (spec/03) so the C
+            // struct is finite. The pointee type is only forward-declared here.
+            write(s: "*")
+        }
         writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
         write(s: ";\n")
         i += 1
@@ -1254,6 +1290,11 @@ fn genEnumDef(c: inout Comp, ei: U64) {
                 write(s: " ")
                 genCTypeOf(c: inout c, tyRef: f.ty, fallStart: f.tyStart, fallLen: f.tyLen, isArray: f.tyIsArray)
                 write(s: " ")
+                if fieldIsBoxed(c: inout c, f: f) {
+                    // recursive payload field: heap pointer (spec/03) so the C
+                    // union is finite. Pointee only forward-declared here.
+                    write(s: "*")
+                }
                 writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
                 write(s: ";")
                 fi += 1

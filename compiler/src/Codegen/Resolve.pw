@@ -834,6 +834,15 @@ fn fieldType(c: inout Comp, structStart: U64, structLen: U64, fieldStart: U64, f
             while fi < fs.count {
                 val f: FieldDef = fs[fi]
                 if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: fieldStart, bLen: fieldLen) {
+                    // a generic-instantiation field type (`Optional[Node]`) carries its
+                    // structured ref, so a match/dispatch on the field recovers the
+                    // mangled C name (`Optional_Node`) and substitutes payload types.
+                    if f.tyIsArray {
+                    } else {
+                        if isGenericInst(c: inout c, ref: f.ty) {
+                            return <TypeInfo kind=2 nameStart=f.tyStart nameLen=f.tyLen ref=f.ty />
+                        }
+                    }
                     return typeInfoOfName(c: inout c, start: f.tyStart, len: f.tyLen, isArray: f.tyIsArray)
                 }
                 fi += 1

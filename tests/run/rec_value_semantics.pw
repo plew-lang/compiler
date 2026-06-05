@@ -1,0 +1,24 @@
+import @Std/Io with { print }
+
+// Value semantics must hold across the hidden box: a copy is independent, and a
+// later repoint of one binding's boxed field must not be observed through the
+// other. spec/03 (value semantics + CoW; the box is an implementation detail).
+struct Node {
+    pub mut val v: I64
+    pub mut val next: Optional[Node]
+}
+
+fn main() {
+    mut val a: Node = <Node v=1 next=<Optional.Some v=<Node v=2 next=<Optional.None /> /> /> />
+    val b: Node = a
+    // repoint a's boxed field; b shares nothing observable
+    a.next = <Optional.None />
+    match b.next {
+        Optional.Some(v: val nx) => { print(nx.v) }
+        Optional.None => { val z: I64 = 100  print(z) }
+    }
+    match a.next {
+        Optional.Some(v: val nx) => { print(nx.v) }
+        Optional.None => { val z: I64 = 9  print(z) }
+    }
+}

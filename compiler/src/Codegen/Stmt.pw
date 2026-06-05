@@ -791,6 +791,25 @@ fn genStmt(c: inout Comp, id: U64) {
                             val fbt: TypeInfo = exprType(c: inout c, id: base)
                             if fbt.kind == 2 {
                                 checkFieldWriteVis(c: inout c, ownerStart: fbt.nameStart, ownerLen: fbt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+                                // boxed (recursive) field write: repoint the pointer to a
+                                // FRESH heap cell rather than mutate the (possibly shared)
+                                // cell in place — preserves value semantics. Plain `=` only
+                                // (boxed fields are struct/enum values, never arithmetic).
+                                val afd: FieldDef = findFieldDef(c: inout c, typeStart: fbt.nameStart, typeLen: fbt.nameLen, variantStart: 0, variantLen: 0, isEnum: false, fieldStart: nameStart, fieldLen: nameLen)
+                                if afd.nameLen > 0 {
+                                    if fieldIsBoxed(c: inout c, f: afd) {
+                                        if op == 49 {
+                                            write(s: "    ")
+                                            genExpr(c: inout c, id: base)
+                                            write(s: ".")
+                                            writeSpan(c: inout c, start: nameStart, len: nameLen)
+                                            write(s: " = ")
+                                            genBoxCell(c: inout c, fd: afd, valueId: value)
+                                            write(s: ";\n")
+                                            return
+                                        }
+                                    }
+                                }
                             } else {
                                 if fbt.kind == 3 {
                                     val arrW: Bind = kwSpan(c: inout c, kw: "Array", kwLen: 5)
@@ -1292,12 +1311,28 @@ fn genStmt(c: inout Comp, id: U64) {
                             write(s: " ")
                             writeSpan(c: inout c, start: bd.nameStart, len: bd.nameLen)
                         }
-                        write(s: " = _m")
+                        mut val smBoxed: Bool = false
+                        if genericMatch {
+                        } else {
+                            val smfd: FieldDef = findFieldDef(c: inout c, typeStart: a.enumStart, typeLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, isEnum: true, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                            if smfd.nameLen > 0 {
+                                smBoxed = fieldIsBoxed(c: inout c, f: smfd)
+                            }
+                        }
+                        write(s: " = ")
+                        if smBoxed {
+                            // boxed (recursive) payload: deref the heap cell (copy out).
+                            write(s: "*(")
+                        }
+                        write(s: "_m")
                         writeU64(n: t)
                         write(s: ".data.")
                         writeSpan(c: inout c, start: a.variantStart, len: a.variantLen)
                         write(s: ".")
                         writeSpan(c: inout c, start: bd.fieldStart, len: bd.fieldLen)
+                        if smBoxed {
+                            write(s: ")")
+                        }
                         write(s: ";\n")
                         if c.curAsync {
                             // (-w silences unused warnings; no `(void)` needed.)

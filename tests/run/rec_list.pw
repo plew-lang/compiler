@@ -1,0 +1,28 @@
+import @Std/Io with { print }
+
+// A recursive value enum: `Cons` holds a `List` payload that the compiler boxes
+// (heap indirection) so the type is finite. spec/03.
+enum List {
+    Cons(head: I64, tail: List)
+    Nil
+}
+
+fn sum(xs: List) -> I64 {
+    match xs {
+        List.Cons(head: val h, tail: val t) => { return h + sum(xs: t) }
+        List.Nil => { return 0 }
+    }
+}
+
+fn length(xs: List) -> I64 {
+    match xs {
+        List.Cons(head: val h, tail: val t) => { return 1 + length(xs: t) }
+        List.Nil => { return 0 }
+    }
+}
+
+fn main() {
+    val l: List = <List.Cons head=1 tail=<List.Cons head=2 tail=<List.Cons head=3 tail=<List.Nil /> /> /> />
+    print(sum(xs: l))
+    print(length(xs: l))
+}
