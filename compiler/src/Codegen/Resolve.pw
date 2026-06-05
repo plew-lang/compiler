@@ -1310,7 +1310,12 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                         val gt: TypeRef = c.types[rt.ref]
                         val gsi: U64 = genericStructIndex(c: inout c, nameStart: gt.nameStart, nameLen: gt.nameLen)
                         if gsi < c.structs.count {
-                            return substTypeInfo(c: inout c, instRef: rt.ref, params: c.structs[gsi].typeParams, tyRef: mf.retTy)
+                            // deep-substitute the receiver's instantiation env through the
+                            // whole return type, so a compound return (`MapIter[I,F,B].next()
+                            // -> Optional[B]`) grounds to `Optional[I64]`, not just a bare
+                            // type-parameter return.
+                            val gr: U64 = groundUnderInst(c: inout c, instRef: rt.ref, tyRef: mf.retTy)
+                            return typeInfoOfRef(c: inout c, ref: gr)
                         }
                         val gei: U64 = genericEnumIndex(c: inout c, nameStart: gt.nameStart, nameLen: gt.nameLen)
                         if gei < c.enums.count {

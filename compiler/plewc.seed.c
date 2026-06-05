@@ -7452,7 +7452,8 @@ TypeInfo exprType_c_Comp_id_U64(Comp* c, uint64_t id) {
     TypeRef gt = TypeRef_share(Array_TypeRef_get((*c).types, (long long)(rt.ref)));
     uint64_t gsi = genericStructIndex_c_Comp_nameStart_U64_nameLen_U64(&((*c)), gt.nameStart, gt.nameLen);
     if (gsi < (long long)(((*c).structs).count)) {
-    { TypeInfo __ret557 = substTypeInfo_c_Comp_instRef_U64_params_ABind_tyRef_U64(&((*c)), rt.ref, Array_Bind_share(Array_StructDef_get((*c).structs, (long long)(gsi)).typeParams), mf.retTy);
+    uint64_t gr = groundUnderInst_c_Comp_instRef_U64_tyRef_U64(&((*c)), rt.ref, mf.retTy);
+    { TypeInfo __ret557 = typeInfoOfRef_c_Comp_ref_U64(&((*c)), gr);
     TypeRef_release(gt);
     Func_release(mf);
     return __ret557; }
