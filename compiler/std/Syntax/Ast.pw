@@ -1,0 +1,103 @@
+// @Std/Syntax value-tree AST (spec/16). The self-contained syntax tree that
+// `parseItem` produces and a `Derive` macro reads. Unlike the compiler's internal
+// arena (offset handles entangled with `Comp`), this is a plain value tree:
+//
+//   * names are `String` values (not byte spans) — a macro can read/compare them
+//     directly without the original buffer;
+//   * every node carries a `Span` in ORIGINAL source coordinates (absolute byte
+//     offsets into the item's source), so an input-error points at the user's text;
+//   * recursion (a generic type's arguments) goes through `Array`, which is
+//     heap-backed, so the value tree is finite without explicit boxing.
+//
+// This is the ONE AST: the eventual goal is the compiler frontend lowering this
+// same tree into its arena, so the compiler and macros never parse differently
+// (structurally avoids Rust's syn-vs-rustc drift). M1 covers the DECLARATION
+// subset — struct / enum / fn signature + type expressions. Expression, statement,
+// and pattern trees (function bodies, field defaults) are additive follow-ups.
+
+// A byte range in the original source: `[start, end)`, absolute offsets.
+export struct Span {
+    pub val start: U64
+    pub val end: U64
+}
+
+// A type expression. `Array[U8]` -> name="Array", args=[U8]; a bare `T` ->
+// name="T", args=[]. (Function types `fn(...)->T` are an additive follow-up.)
+export struct TypeAst {
+    pub val name: String
+    pub val args: Array[TypeAst]
+    pub val span: Span
+}
+
+// A struct field / enum-variant payload field. For a variant payload field,
+// `isMut` is false and `vis` is 0 (variants take no modifiers). `vis`: 0 = private,
+// 1 = pub(get), 2 = pub (matches the compiler's encoding). Default values
+// (`val x: T = expr`) are not surfaced yet — `hasDefault` records their presence.
+export struct FieldAst {
+    pub val name: String
+    pub val ty: TypeAst
+    pub val isMut: Bool
+    pub val vis: U64
+    pub val hasDefault: Bool
+    pub val span: Span
+}
+
+// An enum variant. `fields` is the record payload `V(x: I32, y: I32)`; empty for a
+// payload-less variant `V`.
+export struct VariantAst {
+    pub val name: String
+    pub val fields: Array[FieldAst]
+    pub val span: Span
+}
+
+// A function parameter. Access modes (spec/03): `inout`/`move`/`borrow`. A
+// label-suppressed `name~: T` sets `noLabel`. Defaults are flagged, not surfaced.
+export struct ParamAst {
+    pub val name: String
+    pub val ty: TypeAst
+    pub val isInout: Bool
+    pub val isMove: Bool
+    pub val isBorrow: Bool
+    pub val noLabel: Bool
+    pub val hasDefault: Bool
+    pub val span: Span
+}
+
+// Which kind of declaration a `DeclAst` is.
+export enum DeclKind {
+    Struct
+    Enum
+    Func
+}
+
+// The parsed top-level item a macro is attached to. A tagged record: `kind`
+// selects struct / enum / fn, and the kind-specific fields below are populated
+// accordingly (the others stay empty). A `Derive` switches on `kind` and reads
+// the relevant fields.
+//
+// (This is a flat tagged struct rather than an `enum DeclAst { Struct(StructDecl)
+// … }` because the C backend does not yet emit nominal bodies in dependency
+// order — an enum holding a struct payload by value would forward-reference an
+// incomplete type. A struct holding an enum tag + struct fields by value is fine.
+// Restoring the enum form is a follow-up once the backend topologically orders
+// nominal bodies.)
+export struct DeclAst {
+    pub val kind: DeclKind
+    pub val name: String
+    pub val typeParams: Array[String]
+    pub val span: Span
+    // struct (`kind == Struct`)
+    pub val isUnique: Bool
+    pub val fields: Array[FieldAst]
+    // enum (`kind == Enum`)
+    pub val variants: Array[VariantAst]
+    // fn (`kind == Func`)
+    pub val params: Array[ParamAst]
+    pub val hasRet: Bool
+    pub val ret: TypeAst
+}
+
+// An empty type expression (placeholder for a missing/absent type position).
+export fn emptyTypeAst() -> TypeAst {
+    return <TypeAst name="" args=[] span=<Span start=0 end=0 /> />
+}

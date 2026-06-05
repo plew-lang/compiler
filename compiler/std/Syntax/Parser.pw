@@ -1,0 +1,597 @@
+// @Std/Syntax declaration parser (spec/16). Turns an item's source slice into the
+// value-tree AST (`Ast.pw`). This is the shared parser the metaprogramming path
+// uses; its grammar mirrors the compiler's own declaration parser (Parser/Decl.pw,
+// Parser/Stmt.pw) so a macro and the compiler agree on what a declaration is.
+//
+// M1 covers the DECLARATION subset: struct / enum / fn signature + type
+// expressions. Function bodies and field/param default *expressions* are skipped
+// (their presence is flagged, but the expression tree is an additive follow-up).
+//
+// Coordinates: `parseItem` lexes the slice `source[start..end]` (slice-relative
+// token offsets) and threads `base = start` so every emitted `Span` is in ORIGINAL
+// source coordinates — an input error can point at the user's actual text.
+
+// A token cursor over a lexed item slice. `base` is the absolute offset of
+// `bytes[0]` in the original source (added into every span).
+struct P {
+    pub val bytes: Array[U8]
+    pub val toks: Array[Tok]
+    pub mut val pos: U64
+    pub val base: U64
+}
+
+pub impl P {
+    // The current token (clamped to the trailing Eof past the end).
+    fn curTok() -> Tok {
+        if self.pos < self.toks.count {
+            return self.toks[self.pos]
+        }
+        return self.toks[self.toks.count - 1]
+    }
+    fn curKind() -> Kind {
+        return self.curTok().kind
+    }
+    fn peekKind(off: U64) -> Kind {
+        val i: U64 = self.pos + off
+        if i < self.toks.count {
+            return self.toks[i].kind
+        }
+        return <Kind.Eof />
+    }
+    inout fn advance() {
+        if self.pos < self.toks.count {
+            self.pos += 1
+        }
+    }
+    inout fn skipNewlines() {
+        while true {
+            match self.curKind() {
+                Kind.Newline => { self.advance() }
+                _ => { break }
+            }
+        }
+    }
+    // The source text of token `t`, as a String (built from the slice bytes).
+    fn text(t: Tok) -> String {
+        mut val out: Array[U8] = []
+        mut val i: U64 = 0
+        while i < t.len {
+            out.append(self.bytes[t.start + i])
+            i += 1
+        }
+        return stringFromBytes(out)
+    }
+    // Original-coordinate span of token `t`.
+    fn spanOf(t: Tok) -> Span {
+        return <Span start=self.base + t.start end=self.base + t.start + t.len />
+    }
+    // Absolute end offset of the most recently consumed token (for a node's span).
+    fn prevEnd() -> U64 {
+        if self.pos == 0 {
+            return self.base
+        }
+        val t: Tok = self.toks[self.pos - 1]
+        return self.base + t.start + t.len
+    }
+}
+
+// Does the current token match keyword text `kw` (an Ident like `pub`/`export`/
+// `get`/`where`)? `export`/`pub`/`where` are contextual identifiers, not Kinds.
+fn curIs(p: inout P, kw: String) -> Bool {
+    match p.curKind() {
+        Kind.Ident => {
+            val t: Tok = p.curTok()
+            return rangeEquals(bytes: p.bytes, start: t.start, len: t.len, kw: kw)
+        }
+        _ => { return false }
+    }
+}
+
+// Skip a balanced `[ ... ]` group (current token must be the opening `[`).
+fn skipBracketGroup(p: inout P) {
+    mut val depth: I64 = 0
+    while true {
+        match p.curKind() {
+            Kind.LBracket => {
+                depth += 1
+                p.advance()
+            }
+            Kind.RBracket => {
+                depth -= 1
+                p.advance()
+                if depth == 0 {
+                    break
+                }
+            }
+            Kind.Eof => { break }
+            _ => { p.advance() }
+        }
+    }
+}
+
+// Skip leading newlines, the `@[...]` directive(s), and an `export` modifier, so
+// the cursor lands on the item keyword (`struct`/`enum`/`fn`/`unique`).
+fn skipLeading(p: inout P) {
+    while true {
+        match p.curKind() {
+            Kind.Newline => { p.advance() }
+            Kind.Unknown => {
+                // a directive: `@` lexes as Unknown; skip it and its `[...]`.
+                p.advance()
+                match p.curKind() {
+                    Kind.LBracket => { skipBracketGroup(p: inout p) }
+                    _ => {}
+                }
+            }
+            Kind.Ident => {
+                if curIs(p: inout p, kw: "export") {
+                    p.advance()
+                } else {
+                    break
+                }
+            }
+            _ => { break }
+        }
+    }
+}
+
+// Skip a default-value expression `= expr` (the `=` is already consumed). The
+// expression tree is not surfaced in M1; this consumes its tokens so the
+// surrounding declaration parses. Stops at a top-level separator (paren/bracket
+// depth 0): newline, `}`, `)`, `]`, or `,`.
+fn skipDefaultExpr(p: inout P) {
+    mut val depth: I64 = 0
+    while true {
+        match p.curKind() {
+            Kind.LParen => {
+                depth += 1
+                p.advance()
+            }
+            Kind.LBracket => {
+                depth += 1
+                p.advance()
+            }
+            Kind.RParen => {
+                if depth == 0 {
+                    break
+                }
+                depth -= 1
+                p.advance()
+            }
+            Kind.RBracket => {
+                if depth == 0 {
+                    break
+                }
+                depth -= 1
+                p.advance()
+            }
+            Kind.Comma => {
+                if depth == 0 {
+                    break
+                }
+                p.advance()
+            }
+            Kind.Newline => { break }
+            Kind.RBrace => { break }
+            Kind.Eof => { break }
+            _ => { p.advance() }
+        }
+    }
+}
+
+// Skip a brace-delimited body block `{ ... }`: advance to the first `{`, then
+// balance braces. (Used for function bodies, which M1 does not surface.)
+fn skipBlock(p: inout P) {
+    while true {
+        match p.curKind() {
+            Kind.LBrace => { break }
+            Kind.Eof => { return }
+            _ => { p.advance() }
+        }
+    }
+    mut val depth: I64 = 0
+    while true {
+        match p.curKind() {
+            Kind.LBrace => {
+                depth += 1
+                p.advance()
+            }
+            Kind.RBrace => {
+                depth -= 1
+                p.advance()
+                if depth == 0 {
+                    break
+                }
+            }
+            Kind.Eof => { break }
+            _ => { p.advance() }
+        }
+    }
+}
+
+// A type expression `Name` or `Name[Arg, ...]`. Mirrors parseTypeTok's nominal
+// path (function types `fn(...)->R` are an additive follow-up — skipped to a bare
+// name here). The current token is the type head.
+fn parseType(p: inout P) -> TypeAst {
+    val head: Tok = p.curTok()
+    val name: String = p.text(t: head)
+    val sStart: U64 = p.base + head.start
+    p.advance()
+    mut val args: Array[TypeAst] = []
+    match p.curKind() {
+        Kind.LBracket => {
+            p.advance()
+            while true {
+                match p.curKind() {
+                    Kind.RBracket => {
+                        p.advance()
+                        break
+                    }
+                    Kind.Eof => { break }
+                    Kind.Comma => { p.advance() }
+                    _ => {
+                        args.append(parseType(p: inout p))
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    return <TypeAst name=name args=args span=<Span start=sStart end=p.prevEnd() /> />
+}
+
+// An optional generic parameter list `[T, U]` -> the parameter names. Capability
+// markers (noLocal/allowUnique) precede the name and are dropped (the name is the
+// last ident of an entry), mirroring parseTypeParams.
+fn parseTypeParamNames(p: inout P) -> Array[String] {
+    mut val ps: Array[String] = []
+    match p.curKind() {
+        Kind.LBracket => {
+            p.advance()
+            while true {
+                match p.curKind() {
+                    Kind.RBracket => {
+                        p.advance()
+                        break
+                    }
+                    Kind.Eof => { break }
+                    Kind.Comma => { p.advance() }
+                    Kind.Ident => {
+                        mut val name: String = ""
+                        while true {
+                            match p.curKind() {
+                                Kind.Ident => {
+                                    name = p.text(t: p.curTok())
+                                    p.advance()
+                                }
+                                _ => { break }
+                            }
+                        }
+                        ps.append(name)
+                    }
+                    _ => { p.advance() }
+                }
+            }
+        }
+        _ => {}
+    }
+    return ps
+}
+
+// A struct field: `[pub[(get)]] [mut] val name [: Type] [= expr]`. The cursor is
+// at the field start (caller has skipped newlines and ruled out `}`/`deinit`).
+fn parseStructField(p: inout P) -> FieldAst {
+    val fStart: U64 = p.base + p.curTok().start
+    mut val vis: U64 = 0
+    if curIs(p: inout p, kw: "pub") {
+        p.advance()
+        vis = 2
+        match p.curKind() {
+            Kind.LParen => {
+                p.advance()
+                if curIs(p: inout p, kw: "get") {
+                    vis = 1
+                }
+                match p.curKind() {
+                    Kind.Ident => { p.advance() }
+                    _ => {}
+                }
+                match p.curKind() {
+                    Kind.RParen => { p.advance() }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+    mut val isMut: Bool = false
+    match p.curKind() {
+        Kind.KwMut => {
+            p.advance()
+            isMut = true
+        }
+        _ => {}
+    }
+    match p.curKind() {
+        Kind.KwVal => { p.advance() }
+        _ => {}
+    }
+    val nameTok: Tok = p.curTok()
+    val name: String = p.text(t: nameTok)
+    p.advance()
+    mut val ty: TypeAst = emptyTypeAst()
+    match p.curKind() {
+        Kind.Colon => {
+            p.advance()
+            ty = parseType(p: inout p)
+        }
+        _ => {}
+    }
+    mut val hasDefault: Bool = false
+    match p.curKind() {
+        Kind.Eq => {
+            p.advance()
+            skipDefaultExpr(p: inout p)
+            hasDefault = true
+        }
+        _ => {}
+    }
+    return <FieldAst name=name ty=ty isMut=isMut vis=vis hasDefault=hasDefault span=<Span start=fStart end=p.prevEnd() /> />
+}
+
+// A struct declaration. The cursor is at `struct` (the `unique` modifier, if any,
+// is already consumed and passed as `isUnique`).
+fn parseStructDecl(p: inout P, isUnique: Bool) -> DeclAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    val nameTok: Tok = p.curTok()
+    val name: String = p.text(t: nameTok)
+    p.advance()
+    val typeParams: Array[String] = parseTypeParamNames(p: inout p)
+    match p.curKind() {
+        Kind.LBrace => { p.advance() }
+        _ => {}
+    }
+    mut val fields: Array[FieldAst] = []
+    while true {
+        p.skipNewlines()
+        match p.curKind() {
+            Kind.RBrace => {
+                p.advance()
+                break
+            }
+            Kind.Eof => { break }
+            Kind.KwDeinit => {
+                p.advance()
+                skipBlock(p: inout p)
+            }
+            _ => {
+                fields.append(parseStructField(p: inout p))
+            }
+        }
+    }
+    return <DeclAst kind=<DeclKind.Struct /> name=name typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=isUnique fields=fields variants=[] params=[] hasRet=false ret=emptyTypeAst() />
+}
+
+// An enum variant payload field `name: Type` (no modifiers). The cursor is at the
+// field name.
+fn parseVariantField(p: inout P) -> FieldAst {
+    val fStart: U64 = p.base + p.curTok().start
+    val nameTok: Tok = p.curTok()
+    val name: String = p.text(t: nameTok)
+    p.advance()
+    mut val ty: TypeAst = emptyTypeAst()
+    match p.curKind() {
+        Kind.Colon => {
+            p.advance()
+            ty = parseType(p: inout p)
+        }
+        _ => {}
+    }
+    return <FieldAst name=name ty=ty isMut=false vis=0 hasDefault=false span=<Span start=fStart end=p.prevEnd() /> />
+}
+
+// An enum declaration. The cursor is at `enum`.
+fn parseEnumDecl(p: inout P) -> DeclAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    val nameTok: Tok = p.curTok()
+    val name: String = p.text(t: nameTok)
+    p.advance()
+    val typeParams: Array[String] = parseTypeParamNames(p: inout p)
+    match p.curKind() {
+        Kind.LBrace => { p.advance() }
+        _ => {}
+    }
+    mut val variants: Array[VariantAst] = []
+    while true {
+        p.skipNewlines()
+        match p.curKind() {
+            Kind.RBrace => {
+                p.advance()
+                break
+            }
+            Kind.Eof => { break }
+            Kind.Ident => {
+                val vTok: Tok = p.curTok()
+                val vName: String = p.text(t: vTok)
+                val vStart: U64 = p.base + vTok.start
+                p.advance()
+                mut val vfields: Array[FieldAst] = []
+                match p.curKind() {
+                    Kind.LParen => {
+                        p.advance()
+                        while true {
+                            p.skipNewlines()
+                            match p.curKind() {
+                                Kind.RParen => {
+                                    p.advance()
+                                    break
+                                }
+                                Kind.Eof => { break }
+                                Kind.Ident => {
+                                    vfields.append(parseVariantField(p: inout p))
+                                    match p.curKind() {
+                                        Kind.Comma => { p.advance() }
+                                        _ => {}
+                                    }
+                                }
+                                _ => { p.advance() }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                variants.append(<VariantAst name=vName fields=vfields span=<Span start=vStart end=p.prevEnd() /> />)
+            }
+            _ => { p.advance() }
+        }
+    }
+    return <DeclAst kind=<DeclKind.Enum /> name=name typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=false fields=[] variants=variants params=[] hasRet=false ret=emptyTypeAst() />
+}
+
+// A function parameter `name[~]: [inout|move|borrow] Type [= expr]`. The cursor is
+// at the parameter name.
+fn parseParamAst(p: inout P) -> ParamAst {
+    val pStart: U64 = p.base + p.curTok().start
+    val nameTok: Tok = p.curTok()
+    val name: String = p.text(t: nameTok)
+    p.advance()
+    mut val noLabel: Bool = false
+    match p.curKind() {
+        Kind.Tilde => {
+            if p.peekKind(off: 1) == <Kind.Colon /> {
+                p.advance()
+                noLabel = true
+            }
+        }
+        _ => {}
+    }
+    mut val ty: TypeAst = emptyTypeAst()
+    mut val isInout: Bool = false
+    mut val isMove: Bool = false
+    mut val isBorrow: Bool = false
+    match p.curKind() {
+        Kind.Colon => {
+            p.advance()
+            match p.curKind() {
+                Kind.KwInout => {
+                    p.advance()
+                    isInout = true
+                }
+                Kind.KwMove => {
+                    p.advance()
+                    isMove = true
+                }
+                Kind.KwBorrow => {
+                    p.advance()
+                    isBorrow = true
+                }
+                _ => {}
+            }
+            ty = parseType(p: inout p)
+        }
+        _ => {}
+    }
+    mut val hasDefault: Bool = false
+    match p.curKind() {
+        Kind.Eq => {
+            p.advance()
+            skipDefaultExpr(p: inout p)
+            hasDefault = true
+        }
+        _ => {}
+    }
+    return <ParamAst name=name ty=ty isInout=isInout isMove=isMove isBorrow=isBorrow noLabel=noLabel hasDefault=hasDefault span=<Span start=pStart end=p.prevEnd() /> />
+}
+
+// A parenthesized parameter list `( params )`. The cursor is at `(` (or anything
+// else for a zero-arg fn with no list).
+fn parseParamAsts(p: inout P) -> Array[ParamAst] {
+    mut val params: Array[ParamAst] = []
+    match p.curKind() {
+        Kind.LParen => {
+            p.advance()
+            while true {
+                p.skipNewlines()
+                match p.curKind() {
+                    Kind.RParen => {
+                        p.advance()
+                        break
+                    }
+                    Kind.Eof => { break }
+                    Kind.Comma => { p.advance() }
+                    _ => {
+                        params.append(parseParamAst(p: inout p))
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    return params
+}
+
+// A function declaration `fn name[T,...](params) [-> Ret] [where ...] { body }`.
+// The cursor is at `fn`. The body is skipped (not surfaced in M1).
+fn parseFuncDecl(p: inout P) -> DeclAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    val nameTok: Tok = p.curTok()
+    val name: String = p.text(t: nameTok)
+    p.advance()
+    val typeParams: Array[String] = parseTypeParamNames(p: inout p)
+    val params: Array[ParamAst] = parseParamAsts(p: inout p)
+    mut val hasRet: Bool = false
+    mut val ret: TypeAst = emptyTypeAst()
+    match p.curKind() {
+        Kind.Arrow => {
+            p.advance()
+            ret = parseType(p: inout p)
+            hasRet = true
+        }
+        _ => {}
+    }
+    val sEnd: U64 = p.prevEnd()
+    // skip an optional `where ...` clause and the body block.
+    skipBlock(p: inout p)
+    return <DeclAst kind=<DeclKind.Func /> name=name typeParams=typeParams span=<Span start=sStart end=sEnd /> isUnique=false fields=[] variants=[] params=params hasRet=hasRet ret=ret />
+}
+
+// Parse an item's source slice `source[start..end]` into a `DeclAst` (struct /
+// enum / fn). Spans are in original coordinates (offset by `start`). An item the
+// M1 subset doesn't model yet yields an empty struct decl (logged: traits/impls/
+// newtypes are additive).
+export fn parseItem(source: String, start: U64, end: U64) -> DeclAst {
+    mut val sb: Array[U8] = []
+    val srcBytes: Array[U8] = source.bytes
+    mut val i: U64 = start
+    while i < end {
+        if i < srcBytes.count {
+            sb.append(srcBytes[i])
+        }
+        i += 1
+    }
+    mut val lx: Lexer = <Lexer bytes=sb pos=0 toks=[] depth=0 />
+    lex(lx: inout lx)
+    mut val p: P = <P bytes=sb toks=lx.toks pos=0 base=start />
+    skipLeading(p: inout p)
+    match p.curKind() {
+        Kind.KwStruct => {
+            return parseStructDecl(p: inout p, isUnique: false)
+        }
+        Kind.KwUnique => {
+            p.advance()
+            return parseStructDecl(p: inout p, isUnique: true)
+        }
+        Kind.KwEnum => {
+            return parseEnumDecl(p: inout p)
+        }
+        Kind.KwFn => {
+            return parseFuncDecl(p: inout p)
+        }
+        _ => {
+            return <DeclAst kind=<DeclKind.Struct /> name="" typeParams=[] span=<Span start=start end=end /> isUnique=false fields=[] variants=[] params=[] hasRet=false ret=emptyTypeAst() />
+        }
+    }
+}

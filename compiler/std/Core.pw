@@ -178,8 +178,9 @@ extern "plew-intrinsic" {
 }
 
 // Build a String from a byte array (the bytes must be valid UTF-8; decimal
-// digits always are). Runtime-provided: `plew_stringFromBytes`.
-extern "plew-intrinsic" {
+// digits always are). Runtime-provided: `plew_stringFromBytes`. Exported so
+// @Std/Syntax's parser can turn token byte-ranges into name Strings.
+export extern "plew-intrinsic" {
     fn stringFromBytes(b~: Array[U8]) -> String
 }
 
