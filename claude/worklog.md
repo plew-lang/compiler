@@ -18,12 +18,14 @@
 
 A 完了で M1 の理想形（真の 1 AST）に到達・impl/trait もマクロ対象済。**Eq/Ord トレイト演算子配線＋`@[Eq]`/`@[Ord]` derive は実装済**（commit `d33e17e`/`a9e15f2`・[provisional.md](provisional.md)「Eq/Ord」節）。
 
-向かう先＝**Hash → Dictionary（M2 dogfood の本丸）**。ユーザー決定＝**(B) generic Hasher 形**（`fn hash[H](hasher: inout H) where H: Hasher`・マップが算法を選べる Rust 厳密形・FNV-1a 起点・算法選択は将来）。
+向かう先＝**Hash → Dictionary（M2 dogfood の本丸）**。ユーザー決定＝**(B) generic Hasher 形**（`fn hash[H](hasher: inout H) where H: Hasher`・マップが算法を選べる Rust 厳密形）。**アルゴリズム＝SipHash-1-3（Rust と同じ・rotl＋wrappingAdd＋xor の U64 のみ＝乗算不要・`wrappingAdd` 実装済）**。
+
+> **🔴 必須 TODO（忘れない）＝ランダムシード（RandomState 相当）**。Rust の `HashMap` は SipHash-1-3 ＋ **マップごとにランダムキー**（DoS 耐性）。Plew にはまだ RNG（`Random`）が無いので、**当面は固定キー（決定的）で SipHash を実装**し、**`Random`/RNG 着手後にマップごとのランダムシードへ差し替える**（アルゴリズム・トレイト形は不変・シード源を差すだけ＝additive）。固定キー間は DoS 耐性なし（コンパイラ内部マップには無害・反復順は spec 未規定なので契約は破れない）。**RNG が入ったら必ずランダムシード化すること。**
 
 - **✅ 前提工事＝完了**：(B) が要求する「**メソッド固有型引数 `[H]`＋メソッド `where H: Trait` 境界＋トレイトディスパッチ越しの `inout H`**」は実装済（commit 後述・test `generic_method_bound_inout`）。`registerMethodInst` をプリミティブ受信者にも拡張（`u64.hash[H]` のインスタンスを登録）＋`collectFnInsts` の推移スキャンにレシーバ env を張り（derive struct の `self.field.hash(...)` が field の generic-method インスタンスを推移 discover）。自由関数 `where` 境界・名前付きメソッド呼びは既に動いていた（差はメソッド経路のみだった）。
 - **(a) 残り＝Hash/Dictionary 本体**：
-  1. **(prereq) `wrappingMul`/`wrappingAdd`（最低 U64）**＝FNV の乗算は U64 を意図的にオーバーフローさせるが Plew の `*` は overflow panic（wrap は `wrapping*` メソッド明示・現状未実装）。C では `uint64_t*` が自然に wrap するので、`wrapping*` は overflow チェックなしの素の C 演算へ lower するだけ＝小。
-  2. **`Hash`/`Hasher` トレイト＋具体 Hasher（FNV-1a）を std に**（(B) 形・`Hash: Eq`・プリミティブ群に `impl … as Hash`）。
+  1. **✅ `wrappingMul`/`wrappingAdd`/`wrappingSub`（整数全幅）＝実装済**（commit `aabb800`・privileged codegen lowering・uint64_t で計算→受信者幅へ truncate・test `wrapping_arith`）。
+  2. **`Hash`/`Hasher` トレイト＋SipHash-1-3 Hasher を std に**（(B) 形・`Hash: Eq`・プリミティブ群に `impl … as Hash`・**シードは当面固定**＝上の 🔴 TODO）。
   3. **`@[Hash]` derive**（構造的 hash メソッド合成・現行 `synth*` 特権合成に追加）。
   4. **`Dictionary[K,V]` lang item**（`[k:v]`/`[:]` リテラル・`K: Hash`・`dict[k]` 欠落 panic・`get`/`remove`）。
   現行のコンパイラ特権合成（`synthStructEq` 等）から段階移行（特権版を残したまま並行→検証→差し替え）。

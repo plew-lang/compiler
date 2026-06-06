@@ -43,6 +43,7 @@
 
 ```
 bootstrap.sh          C 種からコンパイラをビルド＋不動点検証（Rust 不要・clang のみ）
+dev-rebuild.sh        編集後の高速 in-place 再ビルド（`compiler/plewc` を上書き・不動点/種なし＝検証用バイナリは常に1本）
 test.sh               言語テストスイート（.pw ゴールデン＋reject＋gen＋不動点・Rust 非依存）
 plew-gen.sh           メタプロ生成（`plewc --gen <file> | clang | run > <file>.gen.pw`・spec/16）
 tests/
@@ -79,6 +80,8 @@ compiler/plewc foo.pw | clang -x c - -o foo && ./foo   # 正典コンパイラ�
 ```
 
 clang は生成 C のコンパイルに使う（Apple clang で可）。**今後の言語機能追加は `compiler/src/_.pw` に Plew で**書く。新機能を plewc.pw 自身で使うときは「stage1 codegen に足す → `./bootstrap.sh --reseed` で種更新 → plewc.pw で使う」（ADD→reseed→USE）。
+
+> **⚠️ バイナリは常に1本＝`compiler/plewc`**。`compiler/src/*.pw` を編集したら `./dev-rebuild.sh` で `compiler/plewc` を**その場で**再ビルドし、検証は必ず `compiler/plewc` で行う。**`/tmp/plewcN` のような別ビルドを作らない**（古い `compiler/plewc` で誤テストする取り違えが頻発する元）。確定後に `./bootstrap.sh --reseed`＋`./bootstrap.sh`（不動点）＋`./test.sh`。
 
 仕様書（`spec/`）は **mdBook** で閲覧する。設定は `book.toml`（`src = "spec"`）、目次は `spec/SUMMARY.md`、ランディングは `spec/README.md`。`mdbook serve --open` でライブリロード閲覧、`mdbook build` で `book/`（gitignore 済）へ出力。章の追加・改番時は `SUMMARY.md` も更新する。
 
