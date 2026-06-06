@@ -2253,6 +2253,65 @@ fn scanBlockInsts(c: inout Comp, blkId: U64) {
 // non-generic function's body with its local scope reconstructed (params, lets,
 // for/match binds) so argument types recover. Generic templates are skipped
 // (their body types are unresolved — transitive instantiation is deferred).
+// Walk every generic-receiver method body once per receiver instantiation, under
+// the same env emitMonoMethod uses (type params -> the receiver's args, Self/Item
+// set), so nested generic calls (`key.hash[H]`) register their instances. Mirrors
+// the per-instance method *signature* scan in collectGenInsts, but scans the body.
+// One-shot over the genInsts known after collectGenInsts; a method body that
+// introduces a brand-new genInst is a follow-up (none arise from the prelude yet).
+fn scanGenInstMethodBodies(c: inout Comp) {
+    mut val gi: U64 = 0
+    while gi < c.genInsts.count {
+        val instRef: U64 = c.genInsts[gi]
+        val inst: TypeRef = c.types[instRef]
+        // `Array[E]` user methods are emitted by the Array-specific path
+        // (emitArrayMethods, keyed off kind-3 receivers), not emitMonoMethods —
+        // scanning them here would mis-ground `self` and register `Array_T_*`.
+        if rangeEquals(bytes: c.bytes, start: inst.nameStart, len: inst.nameLen, kw: "Array") {
+            gi += 1
+        } else {
+        mut val mfi: U64 = 0
+        while mfi < c.funcs.count {
+            val mf: Func = c.funcs[mfi]
+            if methodMatchesInst(c: inout c, f: mf, instRef: instRef) {
+                // provided combinators (`map[B]`) instantiate from call sites, not here.
+                if mf.isProvided {
+                } else {
+                    if mf.body != 0 {
+                        c.locals = []
+                        c.curHasRecv = true
+                        c.curRecvStart = mf.recvStart
+                        c.curRecvLen = mf.recvLen
+                        c.curSelfInout = mf.selfInout
+                        c.curRecvInstRef = instRef
+                        c.curTypeParams = mf.typeParams
+                        c.curTypeArgs = inst.args
+                        setSelfItemEnv(c: inout c, recvStart: mf.recvStart, recvLen: mf.recvLen, recvInstRef: instRef)
+                        mut val pi: U64 = 0
+                        while pi < mf.params.count {
+                            val p: Param = mf.params[pi]
+                            addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
+                            pi += 1
+                        }
+                        scanBlockInsts(c: inout c, blkId: mf.body)
+                        clearSelfItemEnv(c: inout c)
+                    }
+                }
+            }
+            mfi += 1
+        }
+        gi += 1
+        }
+    }
+    val noP: Array[Bind] = []
+    val noA: Array[U64] = []
+    c.locals = []
+    c.curHasRecv = false
+    c.curRecvInstRef = 0
+    c.curTypeParams = noP
+    c.curTypeArgs = noA
+}
+
 fn collectFnInsts(c: inout Comp) {
     mut val fi: U64 = 0
     while fi < c.funcs.count {
@@ -2281,6 +2340,12 @@ fn collectFnInsts(c: inout Comp) {
         }
         fi += 1
     }
+    // generic-receiver method bodies (`Dictionary[String,U64].insert`): each is
+    // emitted per receiver instantiation (emitMonoMethods), but its body may call
+    // another generic method/fn (`key.hash[H]` -> `String.hash[SipHasher]`) whose
+    // instance no signature scan reaches. Walk those bodies under the receiver env
+    // so the nested instances register; the transitive loop below then scans them.
+    scanGenInstMethodBodies(c: inout c)
     // transitive instantiation: walk each generic free function instance's body
     // with its type-parameter env active (so type-parameter-typed args resolve to
     // concrete types), registering the instances it calls. The loop re-reads
