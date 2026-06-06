@@ -24,19 +24,24 @@ part ./Syntax/Parser
 part ./Syntax/ParseBody
 part ./Syntax/Build
 
-// A macro = a struct implementing `Derive`. The required `derive` receives the
-// annotated item's `TopItemAst` (the macro matches on its kind — `Decl` for a
-// struct/enum/fn, `Impl`, `Trait`, …) and returns generated source; the provided
-// `deriveFromSource` is what the runner calls (String in, String out).
+// A derive is anything that implements a derive interface; `@[X]` is valid when X
+// does (spec/16). The single axis is whether the derive carries configuration:
+//
+// - no config → `Derive` (an `assoc fn derive`, no `self`): invoked bare `@[X]`.
+//   A trait can implement it (`impl Hash as Derive` — the deriver lives here in
+//   Derive's module, coherent, referencing the ambient `Hash`), as can a no-field
+//   struct (`impl Show as Derive`). The annotated item arrives as `TopItemAst`
+//   (the deriver `match`es its kind: `Decl` for struct/enum/fn, `Impl`, `Trait`).
+// - config → `ParameterizedDerive` (an instance `fn derive`, `self` = the config
+//   struct built from the directive args): invoked `@[X(args)]`.
+//
+// The `plew gen` runner synthesizes a harness that calls `X.derive(input:
+// parseItem(...))` (bare) or `<X args/>.derive(input: parseItem(...))` (config) and
+// writes the returned String — so the runner stays a version-agnostic String↔String
+// machine. (`parseItem` turns the item's source slice into the `TopItemAst`.)
 export trait Derive {
-    fn derive(input: TopItemAst) -> String
+    assoc fn derive(input: TopItemAst) -> String
 }
-
-pub impl Derive {
-    // Lex+parse the item's source text (original coordinates `start..end`) into a
-    // `TopItemAst`, then delegate to the user's `derive`. The runner calls this so it
-    // need not know the AST type — the String boundary keeps it version-agnostic.
-    fn deriveFromSource(source: String, start: U64, end: U64) -> String {
-        return self.derive(input: parseItem(source: source, start: start, end: end))
-    }
+export trait ParameterizedDerive {
+    fn derive(input: TopItemAst) -> String
 }

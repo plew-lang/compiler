@@ -5,7 +5,7 @@ import @Std/Syntax with { Derive, TopItemAst, DeclAst, Src, newSrc }
 struct VariantNames { }
 
 pub impl VariantNames as Derive {
-    fn derive(input: TopItemAst) -> String {
+    assoc fn derive(input: TopItemAst) -> String {
         match input {
             TopItemAst.Decl(val d) => {
                 mut val s: Src = newSrc()

@@ -10,7 +10,7 @@ import @Std/Core with { stringFromBytes }
 struct FieldList { }
 
 pub impl FieldList as Derive {
-    fn derive(input: TopItemAst) -> String {
+    assoc fn derive(input: TopItemAst) -> String {
         match input {
             TopItemAst.Decl(val d) => {
                 mut val out: Array[U8] = []

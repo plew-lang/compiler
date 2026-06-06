@@ -1,5 +1,5 @@
 import @Std/Io with { write }
-import @Std/Syntax with { Derive, TopItemAst, DeclAst }
+import @Std/Syntax with { ParameterizedDerive, TopItemAst, DeclAst }
 import @Std/Core with { stringFromBytes }
 
 // A parameterized derive: `@[Tagged(prefix: "hello", times: 3)]`. The directive
@@ -10,7 +10,7 @@ struct Tagged {
     pub val times: I64
 }
 
-pub impl Tagged as Derive {
+pub impl Tagged as ParameterizedDerive {
     fn derive(input: TopItemAst) -> String {
         match input {
             TopItemAst.Decl(val d) => {

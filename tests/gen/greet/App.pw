@@ -5,7 +5,7 @@ import @Std/Io with { write }
 
 struct Greet { }
 pub impl Greet as Derive {
-    fn derive(input: TopItemAst) -> String {
+    assoc fn derive(input: TopItemAst) -> String {
         return "fn widgetTag() -> String {\n    return \"tagged!\\n\"\n}\n"
     }
 }

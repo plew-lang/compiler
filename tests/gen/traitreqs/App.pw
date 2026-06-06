@@ -7,7 +7,7 @@ import @Std/Syntax with { Derive, TopItemAst, TraitAst, Src, newSrc }
 struct ReqList { }
 
 pub impl ReqList as Derive {
-    fn derive(input: TopItemAst) -> String {
+    assoc fn derive(input: TopItemAst) -> String {
         match input {
             TopItemAst.Trait(val t) => {
                 mut val s: Src = newSrc()

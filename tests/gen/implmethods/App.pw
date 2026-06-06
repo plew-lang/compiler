@@ -7,7 +7,7 @@ import @Std/Syntax with { Derive, TopItemAst, ImplAst, Src, newSrc }
 struct MethodList { }
 
 pub impl MethodList as Derive {
-    fn derive(input: TopItemAst) -> String {
+    assoc fn derive(input: TopItemAst) -> String {
         match input {
             TopItemAst.Impl(val im) => {
                 mut val s: Src = newSrc()

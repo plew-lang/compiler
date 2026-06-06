@@ -2332,6 +2332,20 @@ int main(int argc, char** argv) {
     Array_Bind_append_value_T(&(loaded), (Bind){.nameStart = ios, .nameLen = (long long)((ioPath).count), .fieldStart = nextModuleId, .fieldLen = (long long)((ioPath).count)});
     nextModuleId = ({ uint64_t __ov; if (__builtin_add_overflow((nextModuleId), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
+    Array_U8 synPath = Array_U8_new();
+    appendBytes_into_AU8_from_AU8(&(synPath), Array_U8_share(stdRoot));
+    appendBytes_into_AU8_from_AU8(&(synPath), Array_U8_share(({ PlewString __s = (PlewString){"Syntax.pw", 9}; Array_U8 __b; __b.data = (unsigned char*)plew_rawbuf_alloc(sizeof(unsigned char), __s.len); for (long long __i = 0; __i < __s.len; __i++) __b.data[__i] = (unsigned char)__s.data[__i]; __b.count = __s.len; __b; })));
+    if (plew_fileExists(Array_U8_share(synPath))) {
+    if (pathSeen_buf_AU8_loaded_ABind_path_AU8(Array_U8_share(pathBuf), Array_Bind_share(loaded), Array_U8_share(synPath))) {
+    }
+    else {
+    uint64_t sys = (long long)((pathBuf).count);
+    appendBytes_into_AU8_from_AU8(&(pathBuf), Array_U8_share(synPath));
+    Array_Bind_append_value_T(&(loaded), (Bind){.nameStart = sys, .nameLen = (long long)((synPath).count), .fieldStart = nextModuleId, .fieldLen = (long long)((synPath).count)});
+    nextModuleId = ({ uint64_t __ov; if (__builtin_add_overflow((nextModuleId), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    }
+    Array_U8_release(synPath);
     Array_U8_release(ioPath);
     }
     uint64_t qi = 0;
@@ -16640,7 +16654,9 @@ void checkDirectiveArgsPublic_c_Comp_d_DeriveReq(Comp* c, DeriveReq d) {
 void synthGenMain_c_Comp(Comp* c) {
     Bind writeN = internBytes_c_Comp_s_String(&((*c)), (PlewString){"write", 5});
     Bind sN = internBytes_c_Comp_s_String(&((*c)), (PlewString){"s", 1});
-    Bind dfsN = internBytes_c_Comp_s_String(&((*c)), (PlewString){"deriveFromSource", 16});
+    Bind deriveN = internBytes_c_Comp_s_String(&((*c)), (PlewString){"derive", 6});
+    Bind parseN = internBytes_c_Comp_s_String(&((*c)), (PlewString){"parseItem", 9});
+    Bind inputN = internBytes_c_Comp_s_String(&((*c)), (PlewString){"input", 5});
     Bind srcN = internBytes_c_Comp_s_String(&((*c)), (PlewString){"source", 6});
     Bind startN = internBytes_c_Comp_s_String(&((*c)), (PlewString){"start", 5});
     Bind endN = internBytes_c_Comp_s_String(&((*c)), (PlewString){"end", 3});
@@ -16653,22 +16669,32 @@ void synthGenMain_c_Comp(Comp* c) {
     }
     else {
     checkDirectiveArgsPublic_c_Comp_d_DeriveReq(&((*c)), d);
-    uint64_t mk = Comp_pushExpr_e_Expr(&((*c)), (Expr){.tag = 6, .data.Make = {.typeStart = d.nameStart, .typeLen = d.nameLen, .variantStart = 0, .variantLen = 0, .isEnum = 0, .ty = 0, .fields = Array_MakeField_share(d.args)}});
     Bind srcLit = internSourceLiteral_c_Comp_from_U64_to_U64(&((*c)), d.declStart, d.declEnd);
     uint64_t srcE = Comp_pushExpr_e_Expr(&((*c)), (Expr){.tag = 7, .data.Str = {.start = srcLit.nameStart, .len = srcLit.nameLen}});
     uint64_t startE = Comp_pushExpr_e_Expr(&((*c)), (Expr){.tag = 0, .data.Int = {.value = d.declStart, .offset = 0, .isBool = 0, .tyStart = 0, .tyLen = 0}});
     uint64_t endE = Comp_pushExpr_e_Expr(&((*c)), (Expr){.tag = 0, .data.Int = {.value = d.declEnd, .offset = 0, .isBool = 0, .tyStart = 0, .tyLen = 0}});
+    Array_Arg pargs = Array_Arg_new();
+    Array_Arg_append_value_T(&(pargs), (Arg){.expr = srcE, .isInout = 0, .labelStart = srcN.nameStart, .labelLen = srcN.nameLen, .hasLabel = 1});
+    Array_Arg_append_value_T(&(pargs), (Arg){.expr = startE, .isInout = 0, .labelStart = startN.nameStart, .labelLen = startN.nameLen, .hasLabel = 1});
+    Array_Arg_append_value_T(&(pargs), (Arg){.expr = endE, .isInout = 0, .labelStart = endN.nameStart, .labelLen = endN.nameLen, .hasLabel = 1});
+    uint64_t parseCall = Comp_pushExpr_e_Expr(&((*c)), (Expr){.tag = 4, .data.Call = {.nameStart = parseN.nameStart, .nameLen = parseN.nameLen, .args = Array_Arg_share(pargs)}});
+    uint64_t recv = 0;
+    if ((long long)((d.args).count) == 0) {
+    recv = Comp_pushExpr_e_Expr(&((*c)), (Expr){.tag = 1, .data.Ident = {.start = d.nameStart, .len = d.nameLen}});
+    }
+    else {
+    recv = Comp_pushExpr_e_Expr(&((*c)), (Expr){.tag = 6, .data.Make = {.typeStart = d.nameStart, .typeLen = d.nameLen, .variantStart = 0, .variantLen = 0, .isEnum = 0, .ty = 0, .fields = Array_MakeField_share(d.args)}});
+    }
     Array_Arg dargs = Array_Arg_new();
-    Array_Arg_append_value_T(&(dargs), (Arg){.expr = srcE, .isInout = 0, .labelStart = srcN.nameStart, .labelLen = srcN.nameLen, .hasLabel = 1});
-    Array_Arg_append_value_T(&(dargs), (Arg){.expr = startE, .isInout = 0, .labelStart = startN.nameStart, .labelLen = startN.nameLen, .hasLabel = 1});
-    Array_Arg_append_value_T(&(dargs), (Arg){.expr = endE, .isInout = 0, .labelStart = endN.nameStart, .labelLen = endN.nameLen, .hasLabel = 1});
-    uint64_t call = Comp_pushExpr_e_Expr(&((*c)), (Expr){.tag = 10, .data.Method = {.recv = mk, .nameStart = dfsN.nameStart, .nameLen = dfsN.nameLen, .args = Array_Arg_share(dargs)}});
+    Array_Arg_append_value_T(&(dargs), (Arg){.expr = parseCall, .isInout = 0, .labelStart = inputN.nameStart, .labelLen = inputN.nameLen, .hasLabel = 1});
+    uint64_t call = Comp_pushExpr_e_Expr(&((*c)), (Expr){.tag = 10, .data.Method = {.recv = recv, .nameStart = deriveN.nameStart, .nameLen = deriveN.nameLen, .args = Array_Arg_share(dargs)}});
     Array_Arg wargs = Array_Arg_new();
     Array_Arg_append_value_T(&(wargs), (Arg){.expr = call, .isInout = 0, .labelStart = sN.nameStart, .labelLen = sN.nameLen, .hasLabel = 1});
     uint64_t wc = Comp_pushExpr_e_Expr(&((*c)), (Expr){.tag = 4, .data.Call = {.nameStart = writeN.nameStart, .nameLen = writeN.nameLen, .args = Array_Arg_share(wargs)}});
     Array_U64_append_value_T(&(stmts), Comp_pushStmt_s_Stmt(&((*c)), (Stmt){.tag = 2, .data.ExprStmt = {.expr = wc}}));
     Array_Arg_release(wargs);
     Array_Arg_release(dargs);
+    Array_Arg_release(pargs);
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     DeriveReq_release(d);
