@@ -1,0 +1,107 @@
+// @Std/Syntax expression / statement / pattern value tree (spec/16). The body-level
+// counterpart to the declaration tree (Ast.pw): a clean, self-contained value tree
+// mirroring the compiler's arena Expr/Stmt/MatchArm/Block, but with String names,
+// recursive children (auto-boxed), Array children, and original-coordinate spans.
+//
+// This is the data model the shared parser produces for full programs, so the
+// compiler frontend can lower it into its arena (one parser, no drift) and macros
+// can read function bodies. Recursive/mutually-recursive enums (Expr ↔ Stmt ↔
+// Block) are finite because every back-edge goes through a boxed field or an Array.
+
+// A call/construction argument `[label:] [inout] expr`.
+export struct ArgAst {
+    pub val label: String
+    pub val hasLabel: Bool
+    pub val isInout: Bool
+    pub val value: ExprAst
+    pub val span: Span
+}
+
+// A field binding in a JSX construction `<T field=expr />`.
+export struct MakeFieldAst {
+    pub val name: String
+    pub val value: ExprAst
+    pub val span: Span
+}
+
+// One field bind inside a pattern. `field` is the variant/struct field read;
+// `name` is the local introduced (equal for punning `val x`).
+export struct BindAst {
+    pub val field: String
+    pub val name: String
+    pub val span: Span
+}
+
+// A match pattern (everything before `=>`): wildcard `_`, an enum variant
+// `E.V(binds)`, or a struct destructure `S { binds }`.
+export struct PatternAst {
+    pub val isWildcard: Bool
+    pub val isStruct: Bool
+    pub val typeName: String
+    pub val variant: String
+    pub val binds: Array[BindAst]
+    pub val span: Span
+}
+
+// One match arm: a pattern and a body block (a single-`give` block in expression
+// position).
+export struct MatchArmAst {
+    pub val pattern: PatternAst
+    pub val body: BlockAst
+    pub val span: Span
+}
+
+// A `{ ... }` block: a sequence of statements.
+export struct BlockAst {
+    pub val stmts: Array[StmtAst]
+}
+
+// An expression. `op` fields carry the operator's lexer kind code (kindCode).
+export enum ExprAst {
+    IntLit(value: U64, isBool: Bool, tySuffix: String, span: Span)
+    StrLit(raw: String, span: Span)
+    Ident(name: String, span: Span)
+    Unary(op: I64, operand: ExprAst, span: Span)
+    Binary(op: I64, lhs: ExprAst, rhs: ExprAst, span: Span)
+    Call(name: String, args: Array[ArgAst], span: Span)
+    Field(base: ExprAst, name: String, span: Span)
+    Method(recv: ExprAst, name: String, args: Array[ArgAst], span: Span)
+    Index(base: ExprAst, index: ExprAst, span: Span)
+    Make(typeName: String, typeArgs: Array[TypeAst], variant: String, isEnum: Bool, fields: Array[MakeFieldAst], span: Span)
+    ArrayLit(elems: Array[ExprAst], span: Span)
+    Cast(operand: ExprAst, ty: TypeAst, span: Span)
+    MatchExpr(scrut: ExprAst, arms: Array[MatchArmAst], span: Span)
+    IfExpr(cond: ExprAst, thenBlk: BlockAst, elseBlk: BlockAst, span: Span)
+    Coalesce(opt: ExprAst, deflt: ExprAst, span: Span)
+    Try(operand: ExprAst, span: Span)
+    Arrow(base: ExprAst, name: String, span: Span)
+    Closure(params: Array[ParamAst], hasRet: Bool, ret: TypeAst, body: BlockAst, span: Span)
+    Move(operand: ExprAst, isBorrow: Bool, span: Span)
+    Await(operand: ExprAst, span: Span)
+}
+
+// A statement.
+export enum StmtAst {
+    Let(mutable: Bool, name: String, hasTy: Bool, ty: TypeAst, init: ExprAst, span: Span)
+    Assign(op: I64, target: ExprAst, value: ExprAst, span: Span)
+    ExprStmt(expr: ExprAst, span: Span)
+    Return(value: ExprAst, hasValue: Bool, span: Span)
+    If(cond: ExprAst, thenBlk: BlockAst, elseBlk: BlockAst, hasElse: Bool, span: Span)
+    While(cond: ExprAst, body: BlockAst, span: Span)
+    For(varName: String, isRange: Bool, inclusive: Bool, iter: ExprAst, rangeHi: ExprAst, body: BlockAst, isStruct: Bool, patType: String, binds: Array[BindAst], span: Span)
+    Match(scrut: ExprAst, arms: Array[MatchArmAst], span: Span)
+    Panic(msg: ExprAst, span: Span)
+    Give(value: ExprAst, span: Span)
+    Break(span: Span)
+    Continue(span: Span)
+}
+
+// A placeholder expression (an absent value position, e.g. `return` with no value).
+export fn emptyExpr() -> ExprAst {
+    return <ExprAst.IntLit value=0 isBool=false tySuffix="" span=<Span start=0 end=0 /> />
+}
+
+// An empty block.
+export fn emptyBlock() -> BlockAst {
+    return <BlockAst stmts=[] />
+}

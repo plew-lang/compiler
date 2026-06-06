@@ -19,7 +19,9 @@ import @Std/Core with { stringFromBytes }
 
 part ./Syntax/Lexer
 part ./Syntax/Ast
+part ./Syntax/Trees
 part ./Syntax/Parser
+part ./Syntax/ParseBody
 part ./Syntax/Build
 
 // A macro = a struct implementing `Derive`. The required `derive` receives the

@@ -95,6 +95,9 @@ export struct DeclAst {
     pub val params: Array[ParamAst]
     pub val hasRet: Bool
     pub val ret: TypeAst
+    // fn body (`kind == Func`): the parsed `{ ... }` block (empty for struct/enum
+    // and for a body-less signature). Lets a macro read/transform a function body.
+    pub val body: BlockAst
 }
 
 // An empty type expression (placeholder for a missing/absent type position).

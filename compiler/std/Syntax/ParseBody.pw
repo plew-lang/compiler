@@ -1,0 +1,938 @@
+// @Std/Syntax body parser (spec/16): tokens -> expression / statement / pattern
+// value tree (Trees.pw). Mirrors the compiler's Parser/Expr.pw + Parser/Stmt.pw
+// grammar so the shared parser agrees with the compiler on what a body is. Uses
+// the same P cursor as the declaration parser (Parser.pw).
+//
+// NB: every free function here is suffixed `Ast` to avoid colliding with the
+// compiler's own same-named parser functions (parseExpr/parseStmt/…). The compiler
+// imports @Std/Syntax, and free-function name resolution does not yet scope private
+// names per module, so a duplicate name would be ambiguous across modules.
+
+// Binary operator precedence (higher binds tighter); 0 = not a binary operator.
+fn binPrecAst(k: Kind) -> I64 {
+    return match k {
+        Kind.PipePipe => 1
+        Kind.AmpAmp => 2
+        Kind.EqEq => 3
+        Kind.Ne => 3
+        Kind.Lt => 3
+        Kind.Le => 3
+        Kind.Gt => 3
+        Kind.Ge => 3
+        Kind.Coalesce => 4
+        Kind.Pipe => 5
+        Kind.Caret => 6
+        Kind.Amp => 7
+        Kind.Shl => 8
+        Kind.Shr => 8
+        Kind.Plus => 9
+        Kind.Minus => 9
+        Kind.Star => 10
+        Kind.Slash => 10
+        Kind.Percent => 10
+        _ => 0
+    }
+}
+
+fn isAssignOpAst(k: Kind) -> Bool {
+    return match k {
+        Kind.Eq => true
+        Kind.PlusEq => true
+        Kind.MinusEq => true
+        Kind.StarEq => true
+        Kind.SlashEq => true
+        Kind.PercentEq => true
+        Kind.AmpEq => true
+        Kind.PipeEq => true
+        Kind.CaretEq => true
+        Kind.ShlEq => true
+        Kind.ShrEq => true
+        _ => false
+    }
+}
+
+fn isIntTypeAst(p: inout P, t: Tok) -> Bool {
+    if rangeEquals(bytes: p.bytes, start: t.start, len: t.len, kw: "I8") { return true }
+    if rangeEquals(bytes: p.bytes, start: t.start, len: t.len, kw: "I16") { return true }
+    if rangeEquals(bytes: p.bytes, start: t.start, len: t.len, kw: "I32") { return true }
+    if rangeEquals(bytes: p.bytes, start: t.start, len: t.len, kw: "I64") { return true }
+    if rangeEquals(bytes: p.bytes, start: t.start, len: t.len, kw: "U8") { return true }
+    if rangeEquals(bytes: p.bytes, start: t.start, len: t.len, kw: "U16") { return true }
+    if rangeEquals(bytes: p.bytes, start: t.start, len: t.len, kw: "U32") { return true }
+    if rangeEquals(bytes: p.bytes, start: t.start, len: t.len, kw: "U64") { return true }
+    return false
+}
+
+// Decode a decimal integer token to U64.
+fn tokenU64Ast(p: inout P, t: Tok) -> U64 {
+    mut val v: U64 = 0
+    mut val j: U64 = 0
+    while j < t.len {
+        val d: U64 = (p.bytes[t.start + j] as U64) - 48
+        v = v * 10 + d
+        j += 1
+    }
+    return v
+}
+
+// Decode a character literal token `'…'` (span includes both quotes) to its
+// codepoint. Best-effort (mirrors the compiler's charValue without diagnostics).
+fn charValueAst(p: inout P, t: Tok) -> U64 {
+    if t.len < 3 {
+        return 0
+    }
+    val start: U64 = t.start + 1
+    val b0: U8 = p.bytes[start]
+    if b0 == '\\' {
+        val e: U8 = p.bytes[start + 1]
+        if e == 'n' { return 10 }
+        if e == 't' { return 9 }
+        if e == 'r' { return 13 }
+        if e == '0' { return 0 }
+        return e as U64
+    }
+    if b0 < 128 {
+        return b0 as U64
+    }
+    if b0 < 224 {
+        return ((b0 & 31) as U64 << 6) | ((p.bytes[start + 1] & 63) as U64)
+    }
+    if b0 < 240 {
+        return ((b0 & 15) as U64 << 12) | ((p.bytes[start + 1] & 63) as U64 << 6) | ((p.bytes[start + 2] & 63) as U64)
+    }
+    return ((b0 & 7) as U64 << 18) | ((p.bytes[start + 1] & 63) as U64 << 12) | ((p.bytes[start + 2] & 63) as U64 << 6) | ((p.bytes[start + 3] & 63) as U64)
+}
+
+// Parse a call/construction argument list (current token just past `(`).
+fn parseCallArgsAst(p: inout P) -> Array[ArgAst] {
+    mut val args: Array[ArgAst] = []
+    while true {
+        p.skipNewlines()
+        match p.curKind() {
+            Kind.RParen => {
+                p.advance()
+                break
+            }
+            Kind.Eof => { break }
+            _ => {
+                val aStart: U64 = p.base + p.curTok().start
+                mut val label: String = ""
+                mut val hasLabel: Bool = false
+                match p.curKind() {
+                    Kind.Ident => {
+                        if p.peekKind(off: 1) == <Kind.Colon /> {
+                            label = p.text(t: p.curTok())
+                            hasLabel = true
+                            p.advance()
+                            p.advance()
+                        }
+                    }
+                    _ => {}
+                }
+                mut val isInout: Bool = false
+                match p.curKind() {
+                    Kind.KwInout => {
+                        p.advance()
+                        isInout = true
+                    }
+                    _ => {}
+                }
+                val e: ExprAst = parseExprAst(p: inout p)
+                args.append(<ArgAst label=label hasLabel=hasLabel isInout=isInout value=e span=<Span start=aStart end=p.prevEnd() /> />)
+                match p.curKind() {
+                    Kind.Comma => { p.advance() }
+                    _ => {}
+                }
+            }
+        }
+    }
+    return args
+}
+
+// JSX construction `<Type[args].Variant field=expr ... />`. Current token is `<`.
+fn parseMakeAst(p: inout P) -> ExprAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    val typeName: String = p.text(t: p.curTok())
+    p.advance()
+    mut val typeArgs: Array[TypeAst] = []
+    match p.curKind() {
+        Kind.LBracket => {
+            p.advance()
+            while true {
+                match p.curKind() {
+                    Kind.RBracket => {
+                        p.advance()
+                        break
+                    }
+                    Kind.Eof => { break }
+                    Kind.Comma => { p.advance() }
+                    _ => {
+                        typeArgs.append(parseType(p: inout p))
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    mut val variant: String = ""
+    mut val isEnum: Bool = false
+    match p.curKind() {
+        Kind.Dot => {
+            p.advance()
+            variant = p.text(t: p.curTok())
+            p.advance()
+            isEnum = true
+        }
+        _ => {}
+    }
+    mut val fields: Array[MakeFieldAst] = []
+    while true {
+        p.skipNewlines()
+        match p.curKind() {
+            Kind.SlashGt => {
+                p.advance()
+                break
+            }
+            Kind.Gt => {
+                p.advance()
+                break
+            }
+            Kind.Eof => { break }
+            Kind.Ident => {
+                val fStart: U64 = p.base + p.curTok().start
+                val fname: String = p.text(t: p.curTok())
+                p.advance()
+                match p.curKind() {
+                    Kind.Eq => { p.advance() }
+                    _ => {}
+                }
+                val v: ExprAst = parseExprAst(p: inout p)
+                fields.append(<MakeFieldAst name=fname value=v span=<Span start=fStart end=p.prevEnd() /> />)
+            }
+            _ => { p.advance() }
+        }
+    }
+    return <ExprAst.Make typeName=typeName typeArgs=typeArgs variant=variant isEnum=isEnum fields=fields span=<Span start=sStart end=p.prevEnd() /> />
+}
+
+fn parsePrimaryAst(p: inout P) -> ExprAst {
+    val sStart: U64 = p.base + p.curTok().start
+    match p.curKind() {
+        Kind.Int => {
+            val t: Tok = p.curTok()
+            p.advance()
+            val v: U64 = tokenU64Ast(p: inout p, t: t)
+            mut val suffix: String = ""
+            match p.curKind() {
+                Kind.Ident => {
+                    val st: Tok = p.curTok()
+                    if st.start == t.start + t.len {
+                        if isIntTypeAst(p: inout p, t: st) {
+                            suffix = p.text(t: st)
+                            p.advance()
+                        }
+                    }
+                }
+                _ => {}
+            }
+            return <ExprAst.IntLit value=v isBool=false tySuffix=suffix span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        Kind.Char => {
+            val t: Tok = p.curTok()
+            p.advance()
+            return <ExprAst.IntLit value=charValueAst(p: inout p, t: t) isBool=false tySuffix="" span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        Kind.KwTrue => {
+            p.advance()
+            return <ExprAst.IntLit value=1 isBool=true tySuffix="" span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        Kind.KwFalse => {
+            p.advance()
+            return <ExprAst.IntLit value=0 isBool=true tySuffix="" span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        Kind.Str => {
+            val t: Tok = p.curTok()
+            p.advance()
+            return <ExprAst.StrLit raw=p.text(t: t) span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        Kind.Ident => {
+            val t: Tok = p.curTok()
+            match p.peekKind(off: 1) {
+                Kind.LParen => {
+                    p.advance()
+                    p.advance()
+                    val args: Array[ArgAst] = parseCallArgsAst(p: inout p)
+                    return <ExprAst.Call name=p.text(t: t) args=args span=<Span start=sStart end=p.prevEnd() /> />
+                }
+                _ => {
+                    p.advance()
+                    return <ExprAst.Ident name=p.text(t: t) span=<Span start=sStart end=p.prevEnd() /> />
+                }
+            }
+        }
+        Kind.LParen => {
+            p.advance()
+            val inner: ExprAst = parseExprAst(p: inout p)
+            match p.curKind() {
+                Kind.RParen => { p.advance() }
+                _ => {}
+            }
+            return inner
+        }
+        Kind.KwFn => {
+            p.advance()
+            val params: Array[ParamAst] = parseParamAsts(p: inout p)
+            mut val hasRet: Bool = false
+            mut val ret: TypeAst = emptyTypeAst()
+            match p.curKind() {
+                Kind.Arrow => {
+                    p.advance()
+                    ret = parseType(p: inout p)
+                    hasRet = true
+                }
+                _ => {}
+            }
+            p.skipNewlines()
+            val body: BlockAst = parseBlockAst(p: inout p)
+            return <ExprAst.Closure params=params hasRet=hasRet ret=ret body=body span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        Kind.Lt => {
+            return parseMakeAst(p: inout p)
+        }
+        Kind.KwMatch => {
+            return parseMatchExprAst(p: inout p)
+        }
+        Kind.KwIf => {
+            return parseIfExprAst(p: inout p)
+        }
+        Kind.LBracket => {
+            p.advance()
+            mut val elems: Array[ExprAst] = []
+            while true {
+                p.skipNewlines()
+                match p.curKind() {
+                    Kind.RBracket => {
+                        p.advance()
+                        break
+                    }
+                    Kind.Eof => { break }
+                    _ => {
+                        elems.append(parseExprAst(p: inout p))
+                        match p.curKind() {
+                            Kind.Comma => { p.advance() }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            return <ExprAst.ArrayLit elems=elems span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        _ => {
+            p.advance()
+            return <ExprAst.IntLit value=0 isBool=false tySuffix="" span=<Span start=sStart end=p.prevEnd() /> />
+        }
+    }
+}
+
+fn parseUnaryAst(p: inout P) -> ExprAst {
+    val sStart: U64 = p.base + p.curTok().start
+    if curIs(p: inout p, kw: "try") {
+        p.advance()
+        val inner: ExprAst = parsePostfixAst(p: inout p)
+        return <ExprAst.Try operand=inner span=<Span start=sStart end=p.prevEnd() /> />
+    }
+    match p.curKind() {
+        Kind.KwAwait => {
+            p.advance()
+            val o: ExprAst = parsePostfixAst(p: inout p)
+            return <ExprAst.Await operand=o span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        Kind.KwMove => {
+            p.advance()
+            val o: ExprAst = parsePostfixAst(p: inout p)
+            return <ExprAst.Move operand=o isBorrow=false span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        Kind.KwBorrow => {
+            p.advance()
+            val o: ExprAst = parsePostfixAst(p: inout p)
+            return <ExprAst.Move operand=o isBorrow=true span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        Kind.Minus => {
+            p.advance()
+            val o: ExprAst = parseUnaryAst(p: inout p)
+            return <ExprAst.Unary op=57 operand=o span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        Kind.Bang => {
+            p.advance()
+            val o: ExprAst = parseUnaryAst(p: inout p)
+            return <ExprAst.Unary op=63 operand=o span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        Kind.Tilde => {
+            p.advance()
+            val o: ExprAst = parseUnaryAst(p: inout p)
+            return <ExprAst.Unary op=79 operand=o span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        _ => { return parsePostfixAst(p: inout p) }
+    }
+}
+
+fn parsePostfixAst(p: inout P) -> ExprAst {
+    val sStart: U64 = p.base + p.curTok().start
+    mut val e: ExprAst = parsePrimaryAst(p: inout p)
+    while true {
+        match p.curKind() {
+            Kind.Dot => {
+                p.advance()
+                val nameTok: Tok = p.curTok()
+                val nm: String = p.text(t: nameTok)
+                p.advance()
+                match p.curKind() {
+                    Kind.LParen => {
+                        p.advance()
+                        val args: Array[ArgAst] = parseCallArgsAst(p: inout p)
+                        e = <ExprAst.Method recv=e name=nm args=args span=<Span start=sStart end=p.prevEnd() /> />
+                    }
+                    _ => {
+                        e = <ExprAst.Field base=e name=nm span=<Span start=sStart end=p.prevEnd() /> />
+                    }
+                }
+            }
+            Kind.LBracket => {
+                p.advance()
+                val idx: ExprAst = parseExprAst(p: inout p)
+                match p.curKind() {
+                    Kind.RBracket => { p.advance() }
+                    _ => {}
+                }
+                e = <ExprAst.Index base=e index=idx span=<Span start=sStart end=p.prevEnd() /> />
+            }
+            Kind.Arrow => {
+                p.advance()
+                val nameTok: Tok = p.curTok()
+                val nm: String = p.text(t: nameTok)
+                p.advance()
+                e = <ExprAst.Arrow base=e name=nm span=<Span start=sStart end=p.prevEnd() /> />
+            }
+            Kind.KwAs => {
+                p.advance()
+                val ty: TypeAst = parseType(p: inout p)
+                e = <ExprAst.Cast operand=e ty=ty span=<Span start=sStart end=p.prevEnd() /> />
+            }
+            Kind.Newline => {
+                mut val off: U64 = 1
+                while p.peekKind(off: off) == <Kind.Newline /> {
+                    off += 1
+                }
+                if p.peekKind(off: off) == <Kind.Dot /> {
+                    p.skipNewlines()
+                } else {
+                    break
+                }
+            }
+            _ => { break }
+        }
+    }
+    return e
+}
+
+fn parseBinAst(p: inout P, minPrec: I64) -> ExprAst {
+    val sStart: U64 = p.base + p.curTok().start
+    mut val left: ExprAst = parseUnaryAst(p: inout p)
+    while true {
+        val k: Kind = p.curKind()
+        val prec: I64 = binPrecAst(k: k)
+        if prec == 0 {
+            break
+        }
+        if prec < minPrec {
+            break
+        }
+        match k {
+            Kind.Coalesce => {
+                p.advance()
+                val rhs: ExprAst = parseBinAst(p: inout p, minPrec: prec)
+                left = <ExprAst.Coalesce opt=left deflt=rhs span=<Span start=sStart end=p.prevEnd() /> />
+            }
+            _ => {
+                val op: I64 = kindCode(k: k)
+                p.advance()
+                val right: ExprAst = parseBinAst(p: inout p, minPrec: prec + 1)
+                left = <ExprAst.Binary op=op lhs=left rhs=right span=<Span start=sStart end=p.prevEnd() /> />
+            }
+        }
+    }
+    return left
+}
+
+// Parse a full expression. Exported: the entry point for body parsing (and for
+// macros that read an expression position).
+export fn parseExprAst(p: inout P) -> ExprAst {
+    return parseBinAst(p: inout p, minPrec: 1)
+}
+
+// ---- patterns ----
+
+fn parsePatternAst(p: inout P) -> PatternAst {
+    val sStart: U64 = p.base + p.curTok().start
+    val firstTok: Tok = p.curTok()
+    mut val isWildcard: Bool = false
+    mut val isStruct: Bool = false
+    mut val typeName: String = ""
+    mut val variant: String = ""
+    mut val binds: Array[BindAst] = []
+    if rangeEquals(bytes: p.bytes, start: firstTok.start, len: firstTok.len, kw: "_") {
+        isWildcard = true
+        p.advance()
+    } else {
+        typeName = p.text(t: firstTok)
+        p.advance()
+        mut val popen: Bool = false
+        match p.curKind() {
+            Kind.Dot => {
+                p.advance()
+                variant = p.text(t: p.curTok())
+                p.advance()
+                match p.curKind() {
+                    Kind.LParen => {
+                        p.advance()
+                        popen = true
+                    }
+                    _ => {}
+                }
+            }
+            Kind.LBrace => {
+                isStruct = true
+                p.advance()
+                popen = true
+            }
+            _ => {}
+        }
+        if popen {
+            while true {
+                p.skipNewlines()
+                match p.curKind() {
+                    Kind.RParen => {
+                        p.advance()
+                        break
+                    }
+                    Kind.RBrace => {
+                        p.advance()
+                        break
+                    }
+                    Kind.Eof => { break }
+                    Kind.KwVal => {
+                        p.advance()
+                        val bTok: Tok = p.curTok()
+                        val bn: String = p.text(t: bTok)
+                        val bStart: U64 = p.base + bTok.start
+                        p.advance()
+                        binds.append(<BindAst field=bn name=bn span=<Span start=bStart end=p.prevEnd() /> />)
+                        match p.curKind() {
+                            Kind.Comma => { p.advance() }
+                            _ => {}
+                        }
+                    }
+                    Kind.Ident => {
+                        val fTok: Tok = p.curTok()
+                        val fname: String = p.text(t: fTok)
+                        val bStart: U64 = p.base + fTok.start
+                        p.advance()
+                        match p.curKind() {
+                            Kind.Colon => { p.advance() }
+                            _ => {}
+                        }
+                        match p.curKind() {
+                            Kind.KwVal => {
+                                p.advance()
+                                val nm: String = p.text(t: p.curTok())
+                                p.advance()
+                                binds.append(<BindAst field=fname name=nm span=<Span start=bStart end=p.prevEnd() /> />)
+                            }
+                            _ => {
+                                p.advance()
+                            }
+                        }
+                        match p.curKind() {
+                            Kind.Comma => { p.advance() }
+                            _ => {}
+                        }
+                    }
+                    _ => { p.advance() }
+                }
+            }
+        }
+    }
+    return <PatternAst isWildcard=isWildcard isStruct=isStruct typeName=typeName variant=variant binds=binds span=<Span start=sStart end=p.prevEnd() /> />
+}
+
+// Parse an arm's `Pat ( | Pat )*` and consume the `=>`. Returns one PatternAst per
+// alternative (the caller shares the body across them).
+fn parseArmPatternsAst(p: inout P) -> Array[PatternAst] {
+    mut val pats: Array[PatternAst] = []
+    pats.append(parsePatternAst(p: inout p))
+    while true {
+        match p.curKind() {
+            Kind.Pipe => {
+                p.advance()
+                p.skipNewlines()
+                pats.append(parsePatternAst(p: inout p))
+            }
+            _ => { break }
+        }
+    }
+    match p.curKind() {
+        Kind.FatArrow => { p.advance() }
+        _ => {}
+    }
+    return pats
+}
+
+// A statement-position match-arm body: a `{ }` block or a single bare statement
+// wrapped into a one-statement block.
+fn parseArmBodyAst(p: inout P) -> BlockAst {
+    match p.curKind() {
+        Kind.LBrace => { return parseBlockAst(p: inout p) }
+        _ => {
+            mut val stmts: Array[StmtAst] = []
+            stmts.append(parseStmtAst(p: inout p))
+            return <BlockAst stmts=stmts />
+        }
+    }
+}
+
+fn parseMatchStmtAst(p: inout P) -> StmtAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    val scrut: ExprAst = parseExprAst(p: inout p)
+    p.skipNewlines()
+    match p.curKind() {
+        Kind.LBrace => { p.advance() }
+        _ => {}
+    }
+    mut val arms: Array[MatchArmAst] = []
+    while true {
+        p.skipNewlines()
+        match p.curKind() {
+            Kind.RBrace => {
+                p.advance()
+                break
+            }
+            Kind.Eof => { break }
+            _ => {
+                val armStart: U64 = p.base + p.curTok().start
+                val pats: Array[PatternAst] = parseArmPatternsAst(p: inout p)
+                p.skipNewlines()
+                val body: BlockAst = parseArmBodyAst(p: inout p)
+                mut val pi: U64 = 0
+                while pi < pats.count {
+                    arms.append(<MatchArmAst pattern=pats[pi] body=body span=<Span start=armStart end=p.prevEnd() /> />)
+                    pi += 1
+                }
+            }
+        }
+    }
+    return <StmtAst.Match scrut=scrut arms=arms span=<Span start=sStart end=p.prevEnd() /> />
+}
+
+fn parseMatchExprAst(p: inout P) -> ExprAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    val scrut: ExprAst = parseExprAst(p: inout p)
+    p.skipNewlines()
+    match p.curKind() {
+        Kind.LBrace => { p.advance() }
+        _ => {}
+    }
+    mut val arms: Array[MatchArmAst] = []
+    while true {
+        p.skipNewlines()
+        match p.curKind() {
+            Kind.RBrace => {
+                p.advance()
+                break
+            }
+            Kind.Eof => { break }
+            _ => {
+                val armStart: U64 = p.base + p.curTok().start
+                val pats: Array[PatternAst] = parseArmPatternsAst(p: inout p)
+                val bodyExpr: ExprAst = parseExprAst(p: inout p)
+                mut val one: Array[StmtAst] = []
+                one.append(<StmtAst.Give value=bodyExpr span=<Span start=armStart end=p.prevEnd() /> />)
+                val body: BlockAst = <BlockAst stmts=one />
+                mut val pi: U64 = 0
+                while pi < pats.count {
+                    arms.append(<MatchArmAst pattern=pats[pi] body=body span=<Span start=armStart end=p.prevEnd() /> />)
+                    pi += 1
+                }
+                match p.curKind() {
+                    Kind.Comma => { p.advance() }
+                    _ => {}
+                }
+            }
+        }
+    }
+    return <ExprAst.MatchExpr scrut=scrut arms=arms span=<Span start=sStart end=p.prevEnd() /> />
+}
+
+// ---- statements ----
+
+fn parseLetAst(p: inout P, mutable: Bool) -> StmtAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    val nm: String = p.text(t: p.curTok())
+    p.advance()
+    mut val hasTy: Bool = false
+    mut val ty: TypeAst = emptyTypeAst()
+    match p.curKind() {
+        Kind.Colon => {
+            p.advance()
+            ty = parseType(p: inout p)
+            hasTy = true
+        }
+        _ => {}
+    }
+    match p.curKind() {
+        Kind.Eq => { p.advance() }
+        _ => {}
+    }
+    val init: ExprAst = parseExprAst(p: inout p)
+    return <StmtAst.Let mutable=mutable name=nm hasTy=hasTy ty=ty init=init span=<Span start=sStart end=p.prevEnd() /> />
+}
+
+fn parseReturnAst(p: inout P) -> StmtAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    match p.curKind() {
+        Kind.Newline => { return <StmtAst.Return value=emptyExpr() hasValue=false span=<Span start=sStart end=p.prevEnd() /> /> }
+        Kind.RBrace => { return <StmtAst.Return value=emptyExpr() hasValue=false span=<Span start=sStart end=p.prevEnd() /> /> }
+        Kind.Eof => { return <StmtAst.Return value=emptyExpr() hasValue=false span=<Span start=sStart end=p.prevEnd() /> /> }
+        _ => {
+            val e: ExprAst = parseExprAst(p: inout p)
+            return <StmtAst.Return value=e hasValue=true span=<Span start=sStart end=p.prevEnd() /> />
+        }
+    }
+}
+
+fn parseIfStmtAst(p: inout P) -> StmtAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    val cond: ExprAst = parseExprAst(p: inout p)
+    val thenBlk: BlockAst = parseBlockAst(p: inout p)
+    p.skipNewlines()
+    match p.curKind() {
+        Kind.KwElse => {
+            p.advance()
+            match p.curKind() {
+                Kind.KwIf => {
+                    val nested: StmtAst = parseIfStmtAst(p: inout p)
+                    mut val one: Array[StmtAst] = []
+                    one.append(nested)
+                    return <StmtAst.If cond=cond thenBlk=thenBlk elseBlk=<BlockAst stmts=one /> hasElse=true span=<Span start=sStart end=p.prevEnd() /> />
+                }
+                _ => {
+                    val elseBlk: BlockAst = parseBlockAst(p: inout p)
+                    return <StmtAst.If cond=cond thenBlk=thenBlk elseBlk=elseBlk hasElse=true span=<Span start=sStart end=p.prevEnd() /> />
+                }
+            }
+        }
+        _ => {
+            return <StmtAst.If cond=cond thenBlk=thenBlk elseBlk=emptyBlock() hasElse=false span=<Span start=sStart end=p.prevEnd() /> />
+        }
+    }
+}
+
+fn parseIfExprAst(p: inout P) -> ExprAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    val cond: ExprAst = parseExprAst(p: inout p)
+    val thenBlk: BlockAst = parseBlockAst(p: inout p)
+    p.skipNewlines()
+    match p.curKind() {
+        Kind.KwElse => { p.advance() }
+        _ => {}
+    }
+    match p.curKind() {
+        Kind.KwIf => {
+            val nested: ExprAst = parseIfExprAst(p: inout p)
+            mut val one: Array[StmtAst] = []
+            one.append(<StmtAst.Give value=nested span=<Span start=sStart end=p.prevEnd() /> />)
+            return <ExprAst.IfExpr cond=cond thenBlk=thenBlk elseBlk=<BlockAst stmts=one /> span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        _ => {
+            val elseBlk: BlockAst = parseBlockAst(p: inout p)
+            return <ExprAst.IfExpr cond=cond thenBlk=thenBlk elseBlk=elseBlk span=<Span start=sStart end=p.prevEnd() /> />
+        }
+    }
+}
+
+fn parseWhileAst(p: inout P) -> StmtAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    val cond: ExprAst = parseExprAst(p: inout p)
+    val body: BlockAst = parseBlockAst(p: inout p)
+    return <StmtAst.While cond=cond body=body span=<Span start=sStart end=p.prevEnd() /> />
+}
+
+fn parseForAst(p: inout P) -> StmtAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    mut val isStruct: Bool = false
+    mut val patType: String = ""
+    mut val binds: Array[BindAst] = []
+    mut val varName: String = ""
+    mut val isPattern: Bool = false
+    match p.curKind() {
+        Kind.Ident => {
+            if p.peekKind(off: 1) == <Kind.LBrace /> {
+                isPattern = true
+            }
+        }
+        _ => {}
+    }
+    if isPattern {
+        val pi: PatternAst = parsePatternAst(p: inout p)
+        isStruct = pi.isStruct
+        patType = pi.typeName
+        binds = pi.binds
+    } else {
+        match p.curKind() {
+            Kind.KwVal => { p.advance() }
+            _ => {}
+        }
+        varName = p.text(t: p.curTok())
+        p.advance()
+    }
+    match p.curKind() {
+        Kind.KwIn => { p.advance() }
+        _ => {}
+    }
+    val lo: ExprAst = parseExprAst(p: inout p)
+    mut val isRange: Bool = false
+    mut val inclusive: Bool = false
+    mut val hi: ExprAst = emptyExpr()
+    match p.curKind() {
+        Kind.DotDotLt => {
+            p.advance()
+            isRange = true
+            hi = parseExprAst(p: inout p)
+        }
+        Kind.DotDotEq => {
+            p.advance()
+            isRange = true
+            inclusive = true
+            hi = parseExprAst(p: inout p)
+        }
+        _ => {}
+    }
+    p.skipNewlines()
+    val body: BlockAst = parseBlockAst(p: inout p)
+    return <StmtAst.For varName=varName isRange=isRange inclusive=inclusive iter=lo rangeHi=hi body=body isStruct=isStruct patType=patType binds=binds span=<Span start=sStart end=p.prevEnd() /> />
+}
+
+fn parsePanicAst(p: inout P) -> StmtAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    val msg: ExprAst = parseExprAst(p: inout p)
+    return <StmtAst.Panic msg=msg span=<Span start=sStart end=p.prevEnd() /> />
+}
+
+fn parseGiveAst(p: inout P) -> StmtAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    val v: ExprAst = parseExprAst(p: inout p)
+    return <StmtAst.Give value=v span=<Span start=sStart end=p.prevEnd() /> />
+}
+
+fn parseExprOrAssignAst(p: inout P) -> StmtAst {
+    val sStart: U64 = p.base + p.curTok().start
+    val lhs: ExprAst = parseExprAst(p: inout p)
+    val k: Kind = p.curKind()
+    if isAssignOpAst(k: k) {
+        val op: I64 = kindCode(k: k)
+        p.advance()
+        val rhs: ExprAst = parseExprAst(p: inout p)
+        return <StmtAst.Assign op=op target=lhs value=rhs span=<Span start=sStart end=p.prevEnd() /> />
+    }
+    return <StmtAst.ExprStmt expr=lhs span=<Span start=sStart end=p.prevEnd() /> />
+}
+
+fn parseStmtAst(p: inout P) -> StmtAst {
+    val sStart: U64 = p.base + p.curTok().start
+    match p.curKind() {
+        Kind.KwVal => { return parseLetAst(p: inout p, mutable: false) }
+        Kind.KwMut => {
+            p.advance()
+            return parseLetAst(p: inout p, mutable: true)
+        }
+        Kind.KwIf => { return parseIfStmtAst(p: inout p) }
+        Kind.KwWhile => { return parseWhileAst(p: inout p) }
+        Kind.KwFor => { return parseForAst(p: inout p) }
+        Kind.KwMatch => { return parseMatchStmtAst(p: inout p) }
+        Kind.KwBreak => {
+            p.advance()
+            return <StmtAst.Break span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        Kind.KwContinue => {
+            p.advance()
+            return <StmtAst.Continue span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        Kind.KwReturn => { return parseReturnAst(p: inout p) }
+        Kind.KwGive => { return parseGiveAst(p: inout p) }
+        Kind.Ident => {
+            if curIs(p: inout p, kw: "panic") {
+                return parsePanicAst(p: inout p)
+            }
+            return parseExprOrAssignAst(p: inout p)
+        }
+        _ => { return parseExprOrAssignAst(p: inout p) }
+    }
+}
+
+// Parse `{ stmt* }` into a BlockAst. Current token should be `{`. Exported for the
+// frontend lowering and for macros that read a body.
+export fn parseBlockAst(p: inout P) -> BlockAst {
+    match p.curKind() {
+        Kind.LBrace => { p.advance() }
+        _ => {}
+    }
+    mut val stmts: Array[StmtAst] = []
+    while true {
+        p.skipNewlines()
+        match p.curKind() {
+            Kind.RBrace => {
+                p.advance()
+                break
+            }
+            Kind.Eof => { break }
+            _ => {
+                stmts.append(parseStmtAst(p: inout p))
+            }
+        }
+    }
+    return <BlockAst stmts=stmts />
+}
+
+// ---- convenience entry points (build the cursor internally) ----
+//
+// The P cursor is module-private; these let callers (the frontend lowering, macros,
+// tests) parse from source text. `source` is the text; `start` is its absolute
+// offset in the original file (the span base, for original coordinates).
+
+// Lex `source` and parse a single expression.
+export fn parseExprFrom(source: String, start: U64) -> ExprAst {
+    val sb: Array[U8] = source.bytes
+    mut val lx: Lexer = <Lexer bytes=sb pos=0 toks=[] depth=0 />
+    lex(lx: inout lx)
+    mut val p: P = <P bytes=sb toks=lx.toks pos=0 base=start />
+    return parseExprAst(p: inout p)
+}
+
+// Lex `source` and parse a brace-delimited block `{ ... }`.
+export fn parseBlockFrom(source: String, start: U64) -> BlockAst {
+    val sb: Array[U8] = source.bytes
+    mut val lx: Lexer = <Lexer bytes=sb pos=0 toks=[] depth=0 />
+    lex(lx: inout lx)
+    mut val p: P = <P bytes=sb toks=lx.toks pos=0 base=start />
+    return parseBlockAst(p: inout p)
+}

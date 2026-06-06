@@ -370,7 +370,7 @@ fn parseStructDecl(p: inout P, isUnique: Bool) -> DeclAst {
             }
         }
     }
-    return <DeclAst kind=<DeclKind.Struct /> name=name typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=isUnique fields=fields variants=[] params=[] hasRet=false ret=emptyTypeAst() />
+    return <DeclAst kind=<DeclKind.Struct /> name=name typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=isUnique fields=fields variants=[] params=[] hasRet=false ret=emptyTypeAst() body=emptyBlock() />
 }
 
 // An enum variant payload field `name: Type` (no modifiers). The cursor is at the
@@ -447,7 +447,7 @@ fn parseEnumDecl(p: inout P) -> DeclAst {
             _ => { p.advance() }
         }
     }
-    return <DeclAst kind=<DeclKind.Enum /> name=name typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=false fields=[] variants=variants params=[] hasRet=false ret=emptyTypeAst() />
+    return <DeclAst kind=<DeclKind.Enum /> name=name typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=false fields=[] variants=variants params=[] hasRet=false ret=emptyTypeAst() body=emptyBlock() />
 }
 
 // A function parameter `name[~]: [inout|move|borrow] Type [= expr]`. The cursor is
@@ -552,10 +552,17 @@ fn parseFuncDecl(p: inout P) -> DeclAst {
         }
         _ => {}
     }
-    val sEnd: U64 = p.prevEnd()
-    // skip an optional `where ...` clause and the body block.
-    skipBlock(p: inout p)
-    return <DeclAst kind=<DeclKind.Func /> name=name typeParams=typeParams span=<Span start=sStart end=sEnd /> isUnique=false fields=[] variants=[] params=params hasRet=hasRet ret=ret />
+    // optional `where ...` clause: skip to the body `{` (the constraint tree is an
+    // additive follow-up; the body is parsed).
+    while true {
+        match p.curKind() {
+            Kind.LBrace => { break }
+            Kind.Eof => { break }
+            _ => { p.advance() }
+        }
+    }
+    val body: BlockAst = parseBlockAst(p: inout p)
+    return <DeclAst kind=<DeclKind.Func /> name=name typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=false fields=[] variants=[] params=params hasRet=hasRet ret=ret body=body />
 }
 
 // Parse an item's source into a `DeclAst` (struct / enum / fn). `source` is the
@@ -585,7 +592,7 @@ export fn parseItem(source: String, start: U64, end: U64) -> DeclAst {
             return parseFuncDecl(p: inout p)
         }
         _ => {
-            return <DeclAst kind=<DeclKind.Struct /> name="" typeParams=[] span=<Span start=start end=end /> isUnique=false fields=[] variants=[] params=[] hasRet=false ret=emptyTypeAst() />
+            return <DeclAst kind=<DeclKind.Struct /> name="" typeParams=[] span=<Span start=start end=end /> isUnique=false fields=[] variants=[] params=[] hasRet=false ret=emptyTypeAst() body=emptyBlock() />
         }
     }
 }
