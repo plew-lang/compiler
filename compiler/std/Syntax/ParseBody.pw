@@ -818,6 +818,8 @@ fn parseForAst(p: inout P) -> StmtAst {
     mut val patType: String = ""
     mut val binds: Array[BindAst] = []
     mut val varName: String = ""
+    mut val varTy: TypeAst = emptyTypeAst()
+    mut val hasVarTy: Bool = false
     mut val isPattern: Bool = false
     match p.curKind() {
         Kind.Ident => {
@@ -839,6 +841,16 @@ fn parseForAst(p: inout P) -> StmtAst {
         }
         varName = p.text(t: p.curTok())
         p.advance()
+        // optional loop-variable type annotation (`for val i: I32 in …`): it types
+        // the range bounds / element binding so bare literals need no suffix.
+        match p.curKind() {
+            Kind.Colon => {
+                p.advance()
+                varTy = parseType(p: inout p)
+                hasVarTy = true
+            }
+            _ => {}
+        }
     }
     match p.curKind() {
         Kind.KwIn => { p.advance() }
@@ -864,7 +876,7 @@ fn parseForAst(p: inout P) -> StmtAst {
     }
     p.skipNewlines()
     val body: BlockAst = parseBlockAst(p: inout p)
-    return <StmtAst.For varName=varName isRange=isRange inclusive=inclusive iter=lo rangeHi=hi body=body isStruct=isStruct patType=patType binds=binds span=<Span start=sStart end=p.prevEnd() /> />
+    return <StmtAst.For varName=varName varTy=varTy hasVarTy=hasVarTy isRange=isRange inclusive=inclusive iter=lo rangeHi=hi body=body isStruct=isStruct patType=patType binds=binds span=<Span start=sStart end=p.prevEnd() /> />
 }
 
 fn parsePanicAst(p: inout P) -> StmtAst {

@@ -22,7 +22,7 @@
 - **`unique`/`borrow`/`move`/`deinit`** → ✅ **実装済＋健全性ハードニング完了**（タグ `unique-deinit`/`unique-move`/`unique-checks`/`unique-nested`/`unique-ref-deinit`/`unique-loud-rejects`/`unique-cond-flow`/`unique-no-generic-args`/`unique-no-double-deinit`/`unique-give-guard`）。`unique struct`＋`deinit`（決定的破棄・型本体→フィールド宣言順・ネスト再帰・合成 `Type_deinit`）・`move`/`borrow` 前置＋引数モード・線形 move 追跡（`Local.moved`・use-after-move/bare コピー/bare 引数/伝染/モード必須を reject・`return` の per-exit 除外）・`Ref[unique]` の最後の解放で deinit 発火・`inout`/`inout fn` は正規動作。**unique 値が黙ってコピー/leak/二重 deinit する穴を全て塞いだ**（`Array[unique]`・generic 型引数・条件付き move・struct フィールド/`Ref`/`give` への place コピーを全て loud に reject）＝危険な unique パスは「正しく動く」か「loud に弾く」だけ。**追加機能も実装済**（タグ `unique-reassign`/`unique-move-fn`）＝`mut val` unique の**再代入**（旧値 deinit→新値 store・直線版）・**消費メソッド `move fn` self**（self 所有・全 exit で deinit・呼び出しでレシーバ moved 印・`borrow fn`＝`fn` 同義）。残（全て loud reject か N/A）：部分 move/return・条件付き move/消費（flow 解析 TODO）・分岐内 unique 再代入・value-position `give`・`local struct`（spawn 段）。spec/03。
 - **`local` 型**（spawn を越えられない・`Ref` 持ちは必須）→ 無し。spawn/async 実装時に。spec/03,14。
 - **`inout`** → 実装済（C ポインタ）。**単純変数・合成可変性（`base.field`・`a[i]`・`.append`/`inout fn` 受信側）の代入可変性検査あり**。残：**重なり inout 検査なし**（spec は同一場所への複数 inout を禁止・lint＋限定 panic）。spec/03。
-- **place 越しの get-modify-set 脱糖**（`arr[i].field=x` 等） → **部分実装**：`arr[i].field = x`（`tryArrayElemFieldAssign`＝get-modify-set 脱糖）は動く。残：compound 要素は loud-reject・`arr[i].inoutMethod()`（inout メソッド経由）未対応・**Arrow place 代入の右辺リテラル型付け**（`ys[0]->v = 42` の `42` が「no type from context」＝pointee フィールド型の文脈が渡らない・`42I32`/変数で回避可・`a.b = lit` 通常 field は動くが `ref->field = lit` が未対応）。spec/03。
+- **place 越しの get-modify-set 脱糖**（`arr[i].field=x` 等） → **部分実装**：`arr[i].field = x`（`tryArrayElemFieldAssign`＝get-modify-set 脱糖）は動く。残：compound 要素は loud-reject・`arr[i].inoutMethod()`（inout メソッド経由）未対応。**Arrow place 代入の右辺リテラル型付け**（`r->v = 42`/`ys[0]->v = 42`）は**実装済**（pointee フィールド型が文脈として渡る・test run/arrow_store_literal）。spec/03。
 
 ## 数値モデル
 
@@ -31,7 +31,7 @@
 
 ## レンジ（暫定）
 
-- **`a..<b`/`a..=b` は第一級の値**（`HalfOpenRange`/`ClosedRange` 2 型・JSX 糖衣・要素 `Ord`・`Step` で反復） → **現状：`for` のヘッドでしか書けない**。`for val i in a..<b`/`a..=b` をその場で C の for ループに脱糖するだけ。レンジ型・値・`Step`/`Ord`・素の `..` は無い。**小・ほぼ by-design**：`for val i: I32 in 0..<5` のループ変数型注釈が範囲境界リテラルへ伝播せず「no type from context」（境界に suffix `0..<5I32` で回避・設計上「範囲境界リテラルは型必須」だが注釈を context に使う改善余地）。spec/02,11。
+- **`a..<b`/`a..=b` は第一級の値**（`HalfOpenRange`/`ClosedRange` 2 型・JSX 糖衣・要素 `Ord`・`Step` で反復） → **現状：`for` のヘッドでしか書けない**。`for val i in a..<b`/`a..=b` をその場で C の for ループに脱糖するだけ。レンジ型・値・`Step`/`Ord`・素の `..` は無い。**ループ変数型注釈は実装済**：`for val i: I32 in 0..<5` の `: I32` が範囲境界リテラルを型付けし loop var にも伝播（境界 suffix `0..<5I32` でも可・どちらも `print(i)` まで ground・test run/for_var_type_annotation）。spec/02,11。
 
 ## 文字列
 

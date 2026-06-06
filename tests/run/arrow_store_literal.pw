@@ -1,0 +1,13 @@
+import @Std/Io with { print }
+// Storing a bare integer literal through a Ref arrow place (`r->field = 42`) takes
+// its type from the pointee field — no suffix needed.
+struct Box { pub(get) mut val v: I32 }
+fn main() {
+    mut val r: Ref[Box] = <Ref[Box] value=<Box v=1 /> />
+    r->v = 42
+    print(r->v)
+    mut val ys: Array[Ref[Box]] = []
+    ys.append(<Ref[Box] value=<Box v=7 /> />)
+    ys[0]->v = 99
+    print(ys[0]->v)
+}

@@ -88,7 +88,7 @@ export enum StmtAst {
     Return(value: ExprAst, hasValue: Bool, span: Span)
     If(cond: ExprAst, thenBlk: BlockAst, elseBlk: BlockAst, hasElse: Bool, span: Span)
     While(cond: ExprAst, body: BlockAst, span: Span)
-    For(varName: String, isRange: Bool, inclusive: Bool, iter: ExprAst, rangeHi: ExprAst, body: BlockAst, isStruct: Bool, patType: String, binds: Array[BindAst], span: Span)
+    For(varName: String, varTy: TypeAst, hasVarTy: Bool, isRange: Bool, inclusive: Bool, iter: ExprAst, rangeHi: ExprAst, body: BlockAst, isStruct: Bool, patType: String, binds: Array[BindAst], span: Span)
     Match(scrut: ExprAst, arms: Array[MatchArmAst], span: Span)
     Panic(msg: ExprAst, span: Span)
     Give(value: ExprAst, span: Span)

@@ -2196,12 +2196,23 @@ fn scanStmtInsts(c: inout Comp, stmtId: U64) {
             scanExprInsts(c: inout c, exprId: cond)
             scanBlockInsts(c: inout c, blkId: body)
         }
-        Stmt.For(val varStart, val varLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
+        Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
             val forMark: U64 = scopeMark(c: inout c)
             scanExprInsts(c: inout c, exprId: iter)
             if isRange {
                 scanExprInsts(c: inout c, exprId: rangeHi)
-                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                // type the loop var so generic calls on it in the body (`print(i)`)
+                // ground: the annotation if given, else the bound's own type.
+                mut val rtS: U64 = varTyStart
+                mut val rtL: U64 = varTyLen
+                if rtL == 0 {
+                    val bt: TypeInfo = typeOf(c: inout c, id: rangeHi)
+                    if bt.kind == 0 {
+                        rtS = bt.nameStart
+                        rtL = bt.nameLen
+                    }
+                }
+                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: rtS, tyLen: rtL, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
             } else {
                 val et: TypeInfo = typeOf(c: inout c, id: iter)
                 if isStruct {

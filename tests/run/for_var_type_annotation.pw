@@ -1,0 +1,11 @@
+import @Std/Io with { print }
+// A loop-variable type annotation types the range bounds, so bare literals need
+// no suffix, and the loop var carries that type into the body (`print(i)` grounds).
+fn main() {
+    for val i: I32 in 0..<3 {
+        print(i)
+    }
+    for val j: U64 in 1..=3 {
+        print(j)
+    }
+}

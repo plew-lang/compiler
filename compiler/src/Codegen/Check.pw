@@ -1309,7 +1309,7 @@ fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
             checkBoundsExpr(c: inout c, exprId: cond)
             checkBoundsBlock(c: inout c, blkId: body)
         }
-        Stmt.For(val varStart, val varLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
+        Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
             val forMark: U64 = scopeMark(c: inout c)
             checkBoundsExpr(c: inout c, exprId: iter)
             if isRange {

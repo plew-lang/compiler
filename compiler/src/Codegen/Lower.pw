@@ -389,13 +389,20 @@ fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
             val bd: U64 = lowerBlock(c: inout c, b: body)
             result = c.pushStmt(s: <Stmt.While cond=cnd body=bd />)
         }
-        StmtAst.For(val varName, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patType, val binds, val span) => {
+        StmtAst.For(val varName, val varTy, val hasVarTy, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patType, val binds, val span) => {
             mut val vStart: U64 = 0
             mut val vLen: U64 = 0
             if varName.bytes.count > 0 {
                 val vb: Bind = internBytes(c: inout c, s: varName)
                 vStart = vb.nameStart
                 vLen = vb.nameLen
+            }
+            mut val vtStart: U64 = 0
+            mut val vtLen: U64 = 0
+            if hasVarTy {
+                val vpt: PType = lowerType(c: inout c, t: varTy)
+                vtStart = vpt.start
+                vtLen = vpt.len
             }
             val lo: U64 = lowerExpr(c: inout c, e: iter)
             mut val hi: U64 = 0
@@ -411,7 +418,7 @@ fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
                 pLen = pb.nameLen
             }
             val bnds: Array[Bind] = lowerBinds(c: inout c, binds: binds)
-            result = c.pushStmt(s: <Stmt.For varStart=vStart varLen=vLen isRange=isRange inclusive=inclusive iter=lo rangeHi=hi body=bd isStruct=isStruct patStart=pStart patLen=pLen binds=bnds />)
+            result = c.pushStmt(s: <Stmt.For varStart=vStart varLen=vLen varTyStart=vtStart varTyLen=vtLen isRange=isRange inclusive=inclusive iter=lo rangeHi=hi body=bd isStruct=isStruct patStart=pStart patLen=pLen binds=bnds />)
         }
         StmtAst.Match(val scrut, val arms, val span) => {
             val sc: U64 = lowerExpr(c: inout c, e: scrut)

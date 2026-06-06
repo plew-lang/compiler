@@ -1041,9 +1041,17 @@ fn genStmt(c: inout Comp, id: U64) {
             c.curLoopMark = savedLoopMark
             write(s: "    }\n")
         }
-        Stmt.For(val varStart, val varLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
+        Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
             if isRange {
-                checkArithNoCtx(c: inout c, lhs: iter, rhs: rangeHi)
+                // a loop-var type annotation (`for val i: I32 in 0..<5`) types the
+                // range bounds, so bare literals need no suffix; otherwise both bounds
+                // must determine their own type (checkArithNoCtx).
+                if varTyLen != 0 {
+                    checkLitSpan(c: inout c, id: iter, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
+                    checkLitSpan(c: inout c, id: rangeHi, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
+                } else {
+                    checkArithNoCtx(c: inout c, lhs: iter, rhs: rangeHi)
+                }
                 if isStruct {
                     compileErrorAt(line: lineOf(c: inout c, offset: patStart), msg: "a struct-destructure for-loop iterates an array, not a range")
                 }
@@ -1082,7 +1090,19 @@ fn genStmt(c: inout Comp, id: U64) {
                 write(s: "; ")
                 writeSpan(c: inout c, start: varStart, len: varLen)
                 write(s: "++) {\n")
-                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                // record the loop var with its type so the body sees `i: I32` (and
+                // generic calls on it ground): the annotation if given, else the
+                // bound's own type. Mirrors the mono scan (Mono.pw For).
+                mut val ltS: U64 = varTyStart
+                mut val ltL: U64 = varTyLen
+                if ltL == 0 {
+                    val bt2: TypeInfo = typeOf(c: inout c, id: rangeHi)
+                    if bt2.kind == 0 {
+                        ltS = bt2.nameStart
+                        ltL = bt2.nameLen
+                    }
+                }
+                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: ltS, tyLen: ltL, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 genBlock(c: inout c, id: body)
                 write(s: "    }\n    }\n")
             } else {
