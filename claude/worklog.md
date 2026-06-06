@@ -80,6 +80,7 @@
 - **重い D（後日・本物の refactor）**：legacy 型 triple `(start,len,isArray)+ref` の ref 一本化／パーサが codegen 仕事（`appendMangleSpan` でソース buffer に mangle 書込み・`recordArrayElem` で `arrayElems` 種まき）を post-parse へ／derive 合成 ~280 行がパーサ内（＝メタプロ dogfood で置換されるので触らない）。
 - **deferred＝分割コンパイル**（Loader のソース連結モデル＋`*Start/*Len` span 規約。renovation が届かない唯一・分割/incremental が要るまで後回し）。
 - **横断 additive**：Iterator 拡充（reduce/take/zip 等）・演算子トレイト全配線（Eq/Ord 以外・需要駆動）・循環回収（Ref グラフ限定サイクルコレクタ）・async tail＋spawn（実スレッド `JoinHandle[T]`）・`any P` 存在型。詳細は [provisional.md](provisional.md)。
+- **既知のバグ＝free 関数のモジュール跨ぎ同名衝突**（2026-06-06 発見・要修正）：別モジュールに同名の private free 関数があると、同モジュール内の正しい呼び出しが「別モジュールの関数を import せず使用」エラーで誤検出される（例：`@Std/Syntax` に private `digitByte` を足すと本体 `Parser/Decl.pw` の同名 `digitByte` 呼びが壊れた→`srcDigitByte` に改名して回避）。期待＝free 関数解決は **same-module 優先**、他モジュールは import 済み名のみ候補。現状は loaded 全モジュールの同名を拾い非 import なら error。一般ユーザーも別モジュールに同名 private 関数を置くと踏む独立バグ（メタプロ/A とは無関係）。
 
 ## 再利用資産・罠（git で拾いにくい知見）
 
