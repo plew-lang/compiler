@@ -63,8 +63,7 @@
 ## Eq/Ord（実装済・残ギャップ小）
 
 - **`Eq`/`Ord` トレイト演算子配線 → ✅ 実装済**（commit `d33e17e`）：`==`/`!=` は Eq の witness `eq(lhs,rhs)->Bool` へ、`< <= > >=` は Ord の witness `compare(lhs,rhs)->Ordering` の tag テストへ脱糖（`hasCompareWitness`/`emitTraitCompare`／式位置と条件位置の両方）。**struct も対象**＝手書き `impl T as Eq`/`as Ord` が動く（test `trait_eq_ord`）。プリミティブは built-in 境界、String `==`/`!=` は `PlewString_eq`。**Eq/Ord 無しの struct/array 比較は loud reject**（`compareNeedsTrait`＝受理健全性）。
-- **`@[Eq]`/`@[Ord]` derive → ✅ 実装済**（commit `a9e15f2`＋enum）：`@[Eq]` は struct＝フィールド毎 `eq`／enum＝構造的（tag 一致→payload フィールド毎・test `derive_eq_struct`/`derive_eq_enum`）、`@[Ord]` は struct＝フィールド辞書順 `compare`（test `derive_ord_struct`）。derive した Eq は `where T: Eq` 境界も満たす。`Ordering` enum は **ユーザー宣言が必要**（option B＝コンパイラ injection しない・未宣言で `@[Ord]` は loud reject・test `derive_ord_no_ordering`）。**当面コンパイラ特権合成**（spec/16・将来 dogfood）。
-- **残ギャップ（小・loud）**：(a) **`@[Ord]` on enum 未実装**（struct のみ）。(b) **`@[Ord]` は `@[Eq]` を含意しない**（`Ord: Eq` supertrait を derive 連動させていない）。(c) payload 持ち enum の手書き `impl as Eq` を書かず `==` だけ使うと、derive 無しでは依然 reject（全 nullary enum のみ tag 比較で許可）。spec/08,12,16。
+- **`@[Eq]`/`@[Ord]` derive → ✅ 実装済**（commit `a9e15f2`＋enum）：`@[Eq]` は struct＝フィールド毎 `eq`／enum＝構造的（tag 一致→payload フィールド毎・test `derive_eq_struct`/`derive_eq_enum`）、`@[Ord]` は struct＝フィールド辞書順 `compare`／**enum＝tag 辞書順→同 tag は payload lexicographic**（`synthEnumOrd`/`synthOrdChainExpr`・test `derive_ord_enum`）。**`@[Ord]` は `@[Eq]` を含意**（`Ord: Eq`・Ord 合成時に Eq witness も合成・明示 `@[Eq]` 併記なら重複回避・test `derive_ord_implies_eq`）。derive した Eq は `where T: Eq` 境界も満たす。**派生 `eq`/`compare` は private フィールドも読める**（`inAnonImplOf` を assoc fn に拡張）。`Ordering` enum は **ユーザー宣言が必要**（option B＝コンパイラ injection しない・未宣言で `@[Ord]` は loud reject・test `derive_ord_no_ordering`）。**当面コンパイラ特権合成**（spec/16・将来 dogfood）。
 - 補足：variant 値は **JSX 必須**（`<Kind.LParen />`・bare 不採用＝「生成は常に JSX」を維持）。型省略 JSX `<.LParen />`（文脈推論）は surface 追加の未決。
 
 ## 制御フロー・match
@@ -119,7 +118,7 @@
 **残（未修正）**：
 - **【missing・clang 止まり】算術・その他の演算子トレイト未配線**（Eq/Ord は配線済＝上記「Eq/Ord」節）：`Add/Sub/Mul/Div/Rem`・`Neg/Not/BitNot`・`Index/IndexSet`・`Coalesce`・`Pow`・`From/TryFrom` はユーザー型で脱糖されず生 C→clang で落ちる（Plew 診断なし）。eager checker も比較op(50-55)のみ境界チェック・算術 op 素通り。**トレイト型引数 `Add[Rhs]` が前提**（deferred）＝大物の残作業。
 - **【silent 逸脱・小】曖昧な無サフィックス整数リテラルが先頭オーバーロードを選ぶ**（`k(a:I32)`/`k(a:U64)` に `k(a:5)`・呼出位置の曖昧検出が要る）・**`val f = obj.method`（メソッド値化）を受理**（scope 復元の型回復が要る・現状 clang 止まり）。
-- **【missing・loud】`@[Ord]` on enum**・**`@[Ord]` は `@[Eq]` を含意しない**（`Ord: Eq`）＝Eq/Ord derive の残ギャップ（上記「Eq/Ord」節）。
+- **【済】`@[Ord]` on enum＋`@[Ord]` が `@[Eq]` を含意**（`Ord: Eq`）＝実装済（上記「Eq/Ord」節）。
 - **既知 deferred**：`any P`・トレイト型引数 `Add[Rhs]`・`#Ext`・`a#P.foo()` 源選択・明示型引数 `f[I32](x)`・`Self` 入力要求の witness 置換（hand-written のみ・derive は無事）。**関連型 `type Item`＝基本実装済**（残＝generic 抽象 `T::Item` 解決）。
 
 **優先度（私見）**：算術演算子トレイト配線は大物・需要駆動（`Add[Rhs]` 型引数が前提）。残る silent 逸脱2件（曖昧リテラル・method 値化）は小だが実装にやや手間（呼出位置/scope 復元）。

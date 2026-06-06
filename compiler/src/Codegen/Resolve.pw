@@ -1099,10 +1099,16 @@ fn typeHasMethodNamed(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U6
 
 // Are we lowering code inside the type `(ownerStart,ownerLen)`'s own anonymous impl
 // (the only place its non-public members are visible — spec/05)? True when the
-// current function is a method whose receiver head names that type. Extensions
-// (`#Ext`) aren't implemented, so any method context is an anonymous impl.
+// current function is a method OR an associated function whose receiver/owner head
+// names that type — both are part of the type's impl, so they see its private
+// fields (this is what lets derived `eq`/`compare` read private fields). A free
+// function has no owner (recvStart 0). Extensions (`#Ext`) aren't implemented, so
+// any such context is an anonymous impl.
 fn inAnonImplOf(c: inout Comp, ownerStart: U64, ownerLen: U64) -> Bool {
     if c.curHasRecv {
+        return spansEqual(c: inout c, aStart: c.curRecvStart, aLen: c.curRecvLen, bStart: ownerStart, bLen: ownerLen)
+    }
+    if c.curRecvStart != 0 {
         return spansEqual(c: inout c, aStart: c.curRecvStart, aLen: c.curRecvLen, bStart: ownerStart, bLen: ownerLen)
     }
     return false

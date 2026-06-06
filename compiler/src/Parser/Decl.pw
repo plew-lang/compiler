@@ -263,6 +263,133 @@ fn synthStructOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bin
     c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen traitStart=ordTrait.nameStart traitLen=ordTrait.nameLen derived=true witnessed=wit />)
 }
 
+// A `{ give <value> }` block (one statement) — an if-expression branch.
+fn synthGiveBlock(c: inout Comp, value: U64) -> U64 {
+    val g: U64 = c.pushStmt(s: <Stmt.Give value=value />)
+    mut val stmts: Array[U64] = []
+    stmts.append(g)
+    val blkId: U64 = c.blocks.count
+    c.blocks.append(<Block stmts=stmts />)
+    return blkId
+}
+
+// Lexicographic `Ordering` over parallel payload binds (lhsNames[i] vs rhsNames[i]):
+// `if l0 < r0 { give Less } else { if l0 > r0 { give Greater } else { <rest> } }`,
+// base = Equal. Fresh Ident nodes per comparison (expr nodes are not shared). Each
+// `<`/`>` lowers per the field type (scalar built-in, or an Ord-bearing field).
+fn synthOrdChainExpr(c: inout Comp, lhsNames: Array[Bind], rhsNames: Array[Bind], ordN: Bind, lessN: Bind, greaterN: Bind, equalN: Bind) -> U64 {
+    mut val acc: U64 = synthOrdering(c: inout c, ordN: ordN, variantN: equalN)
+    mut val k: U64 = lhsNames.count
+    while k > 0 {
+        k -= 1
+        val l1: U64 = c.pushExpr(e: <Expr.Ident start=lhsNames[k].nameStart len=lhsNames[k].nameLen />)
+        val r1: U64 = c.pushExpr(e: <Expr.Ident start=rhsNames[k].nameStart len=rhsNames[k].nameLen />)
+        val lt: U64 = c.pushExpr(e: <Expr.Binary op=52 lhs=l1 rhs=r1 />)
+        val l2: U64 = c.pushExpr(e: <Expr.Ident start=lhsNames[k].nameStart len=lhsNames[k].nameLen />)
+        val r2: U64 = c.pushExpr(e: <Expr.Ident start=rhsNames[k].nameStart len=rhsNames[k].nameLen />)
+        val gt: U64 = c.pushExpr(e: <Expr.Binary op=54 lhs=l2 rhs=r2 />)
+        val greaterE: U64 = synthOrdering(c: inout c, ordN: ordN, variantN: greaterN)
+        val innerIf: U64 = c.pushExpr(e: <Expr.IfExpr cond=gt thenBlk=synthGiveBlock(c: inout c, value: greaterE) elseBlk=synthGiveBlock(c: inout c, value: acc) />)
+        val lessE: U64 = synthOrdering(c: inout c, ordN: ordN, variantN: lessN)
+        acc = c.pushExpr(e: <Expr.IfExpr cond=lt thenBlk=synthGiveBlock(c: inout c, value: lessE) elseBlk=synthGiveBlock(c: inout c, value: innerIf) />)
+    }
+    return acc
+}
+
+// Synthesize `@[Ord]` for an enum: `compare(lhs, rhs) -> Ordering` lexicographic
+// over (variant tag, then payload). lhs tag < rhs tag -> Less, > -> Greater, equal
+// tag -> compare same-variant payloads via synthOrdChainExpr (Equal if nullary).
+// Tags are the declaration order of variants (known at synthesis). Requires
+// `enum Ordering` in scope. Mirrors synthEnumEq's two-level match shape.
+fn synthEnumOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bind, ordN: Bind, lessN: Bind, greaterN: Bind, equalN: Bind, ordTrait: Bind) {
+    val ei: U64 = enumIndexByName(c: inout c, start: d.typeStart, len: d.typeLen)
+    if ei >= c.enums.count {
+        return
+    }
+    val variants: Array[Variant] = c.enums[ei].variants
+    mut val params: Array[Param] = []
+    params.append(synthParam(nameSpan: lhsN, tyStart: d.typeStart, tyLen: d.typeLen))
+    params.append(synthParam(nameSpan: rhsN, tyStart: d.typeStart, tyLen: d.typeLen))
+    val lhsId: U64 = c.pushExpr(e: <Expr.Ident start=lhsN.nameStart len=lhsN.nameLen />)
+    val rhsId: U64 = c.pushExpr(e: <Expr.Ident start=rhsN.nameStart len=rhsN.nameLen />)
+    mut val counter: U64 = 0
+    mut val outerArms: Array[MatchArm] = []
+    mut val oi: U64 = 0
+    while oi < variants.count {
+        val lv: Variant = variants[oi]
+        // bind lhs payloads of this variant to fresh L<n> names.
+        mut val lhsBinds: Array[Bind] = []
+        mut val lhsNames: Array[Bind] = []
+        mut val lf: U64 = 0
+        while lf < lv.fields.count {
+            val f: FieldDef = lv.fields[lf]
+            val ln: Bind = internName(c: inout c, prefix: 76, n: counter)
+            counter += 1
+            lhsBinds.append(<Bind nameStart=ln.nameStart nameLen=ln.nameLen fieldStart=f.nameStart fieldLen=f.nameLen />)
+            lhsNames.append(ln)
+            lf += 1
+        }
+        // inner match on rhs: an arm per rhs variant, comparing tags then payloads.
+        mut val innerArms: Array[MatchArm] = []
+        mut val oj: U64 = 0
+        while oj < variants.count {
+            val rv: Variant = variants[oj]
+            mut val rhsBinds: Array[Bind] = []
+            mut val rhsNames: Array[Bind] = []
+            mut val rf: U64 = 0
+            while rf < rv.fields.count {
+                val f: FieldDef = rv.fields[rf]
+                val rn: Bind = internName(c: inout c, prefix: 82, n: counter)
+                counter += 1
+                rhsBinds.append(<Bind nameStart=rn.nameStart nameLen=rn.nameLen fieldStart=f.nameStart fieldLen=f.nameLen />)
+                rhsNames.append(rn)
+                rf += 1
+            }
+            mut val body: U64 = 0
+            if oi < oj {
+                body = synthOrdering(c: inout c, ordN: ordN, variantN: lessN)
+            } else {
+                if oi > oj {
+                    body = synthOrdering(c: inout c, ordN: ordN, variantN: greaterN)
+                } else {
+                    body = synthOrdChainExpr(c: inout c, lhsNames: lhsNames, rhsNames: rhsNames, ordN: ordN, lessN: lessN, greaterN: greaterN, equalN: equalN)
+                }
+            }
+            innerArms.append(<MatchArm isWildcard=false enumStart=d.typeStart enumLen=d.typeLen variantStart=rv.nameStart variantLen=rv.nameLen binds=rhsBinds body=body isStruct=false />)
+            oj += 1
+        }
+        val innerMatch: U64 = c.pushExpr(e: <Expr.MatchExpr scrut=rhsId arms=innerArms />)
+        outerArms.append(<MatchArm isWildcard=false enumStart=d.typeStart enumLen=d.typeLen variantStart=lv.nameStart variantLen=lv.nameLen binds=lhsBinds body=innerMatch isStruct=false />)
+        oi += 1
+    }
+    val outerMatch: U64 = c.pushExpr(e: <Expr.MatchExpr scrut=lhsId arms=outerArms />)
+    val ret: U64 = c.pushStmt(s: <Stmt.Return value=outerMatch hasValue=true />)
+    mut val stmts: Array[U64] = []
+    stmts.append(ret)
+    val blkId: U64 = c.blocks.count
+    c.blocks.append(<Block stmts=stmts />)
+    val noTP: Array[Bind] = []
+    c.funcs.append(<Func nameStart=cmpN.nameStart nameLen=cmpN.nameLen typeParams=noTP params=params hasRet=true retStart=ordN.nameStart retLen=ordN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
+    mut val wit: Array[Func] = []
+    c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen traitStart=ordTrait.nameStart traitLen=ordTrait.nameLen derived=true witnessed=wit />)
+}
+
+// Whether an explicit `@[Eq]` derive is also recorded for the same type as `d`
+// (so `@[Ord]`, which implies Eq via `Ord: Eq`, must not synthesize Eq twice).
+fn hasEqDeriveFor(c: inout Comp, d: DeriveReq) -> Bool {
+    mut val i: U64 = 0
+    while i < c.derives.count {
+        val e: DeriveReq = c.derives[i]
+        if rangeEquals(bytes: c.bytes, start: e.nameStart, len: e.nameLen, kw: "Eq") {
+            if spansEqual(c: inout c, aStart: e.typeStart, aLen: e.typeLen, bStart: d.typeStart, bLen: d.typeLen) {
+                return true
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
 // Synthesize all recorded `@[...]` derives (#5): `@[Eq]` (struct + enum) and
 // `@[Ord]` (struct). `@[Ord]` requires `enum Ordering` in scope.
 fn synthesizeDerives(c: inout Comp) {
@@ -295,10 +422,20 @@ fn synthesizeDerives(c: inout Comp) {
                 compileErrorAt(line: lineOf(c: inout c, offset: d.nameStart), msg: "deriving `Ord` requires `enum Ordering` to be in scope")
             } else {
                 if d.isEnum {
-                    // enum Ord (lexicographic over tags then payloads) is deferred.
-                    compileErrorAt(line: lineOf(c: inout c, offset: d.nameStart), msg: "`@[Ord]` on an enum is not yet supported (derive it on structs; enums: manual impl for now)")
+                    synthEnumOrd(c: inout c, d: d, cmpN: cmpN, lhsN: lhsN, rhsN: rhsN, ordN: ordN, lessN: lessN, greaterN: greaterN, equalN: equalN, ordTrait: ordTrait)
                 } else {
                     synthStructOrd(c: inout c, d: d, cmpN: cmpN, lhsN: lhsN, rhsN: rhsN, ordN: ordN, lessN: lessN, greaterN: greaterN, equalN: equalN, ordTrait: ordTrait)
+                }
+                // `Ord: Eq` (spec/08): deriving Ord implies Eq, so also synthesize the
+                // Eq witness unless the user already wrote an explicit `@[Eq]` for it
+                // (which would otherwise duplicate the witness/conformance).
+                if hasEqDeriveFor(c: inout c, d: d) {
+                } else {
+                    if d.isEnum {
+                        synthEnumEq(c: inout c, d: d, eqN: eqN, lhsN: lhsN, rhsN: rhsN, boolN: boolN, eqTrait: eqTrait)
+                    } else {
+                        synthStructEq(c: inout c, d: d, eqN: eqN, lhsN: lhsN, rhsN: rhsN, boolN: boolN, eqTrait: eqTrait)
+                    }
                 }
             }
         }
