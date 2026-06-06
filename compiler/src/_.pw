@@ -18,7 +18,6 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, emptyExpr }
 
 part ./Ast
-part ./Parser/Expr
 part ./Parser/Stmt
 part ./Parser/Decl
 part ./Codegen/Emit
