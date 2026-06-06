@@ -348,6 +348,17 @@ fn parsePrimaryAst(p: inout P) -> ExprAst {
             return <ExprAst.ArrayLit elems=elems span=<Span start=sStart end=p.prevEnd() /> />
         }
         _ => {
+            // An unexpected token where an expression (operand) was expected. Without
+            // this, a stray token (notably `;`, which Plew does not use as a statement
+            // separator — statements end at newlines) was silently turned into a
+            // 0-valued Int, surfacing later as a misleading "integer literal has no
+            // type from context". Fail loudly at the parser instead.
+            val tk: Tok = p.curTok()
+            if p.text(t: tk) == ";" {
+                p.fail(off: sStart, msg: "`;` is not a statement separator in Plew; put each statement on its own line")
+            } else {
+                p.fail(off: sStart, msg: "expected an expression")
+            }
             p.advance()
             return <ExprAst.IntLit value=0 isBool=false tySuffix="" span=<Span start=sStart end=p.prevEnd() /> />
         }
