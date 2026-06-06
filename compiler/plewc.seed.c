@@ -1761,6 +1761,7 @@ void checkUniqueArgModes_c_Comp_args_AArg(Comp* c, Array_Arg args);
 void checkCallArgs_c_Comp_nameStart_U64_nameLen_U64_args_AArg(Comp* c, uint64_t nameStart, uint64_t nameLen, Array_Arg args);
 void checkMethodArgs_c_Comp_recv_U64_nameStart_U64_nameLen_U64_args_AArg(Comp* c, uint64_t recv, uint64_t nameStart, uint64_t nameLen, Array_Arg args);
 TypeInfo makeFieldType_c_Comp_typeStart_U64_typeLen_U64_variantStart_U64_variantLen_U64_isEnum_Bool_fieldStart_U64_fieldLen_U64(Comp* c, uint64_t typeStart, uint64_t typeLen, uint64_t variantStart, uint64_t variantLen, long long isEnum, uint64_t fieldStart, uint64_t fieldLen);
+void checkMakeFieldExists_c_Comp_typeStart_U64_typeLen_U64_variantStart_U64_variantLen_U64_isEnum_Bool_mf_MakeField(Comp* c, uint64_t typeStart, uint64_t typeLen, uint64_t variantStart, uint64_t variantLen, long long isEnum, MakeField mf);
 void checkMakeFields_c_Comp_typeStart_U64_typeLen_U64_variantStart_U64_variantLen_U64_isEnum_Bool_ty_U64_fields_AMakeField(Comp* c, uint64_t typeStart, uint64_t typeLen, uint64_t variantStart, uint64_t variantLen, long long isEnum, uint64_t ty, Array_MakeField fields);
 void checkBindsInFields_c_Comp_binds_ABind_fields_AFieldDef(Comp* c, Array_Bind binds, Array_FieldDef fields);
 void checkArmBinds_c_Comp_a_MatchArm(Comp* c, MatchArm a);
@@ -6976,10 +6977,31 @@ TypeInfo makeFieldType_c_Comp_typeStart_U64_typeLen_U64_variantStart_U64_variant
     { TypeInfo __ret441 = fieldType_c_Comp_structStart_U64_structLen_U64_fieldStart_U64_fieldLen_U64(&((*c)), typeStart, typeLen, fieldStart, fieldLen);
     return __ret441; }
 }
+void checkMakeFieldExists_c_Comp_typeStart_U64_typeLen_U64_variantStart_U64_variantLen_U64_isEnum_Bool_mf_MakeField(Comp* c, uint64_t typeStart, uint64_t typeLen, uint64_t variantStart, uint64_t variantLen, long long isEnum, MakeField mf) {
+    if (isEnum) {
+    if (concreteEnumIndex_c_Comp_nStart_U64_nLen_U64(&((*c)), typeStart, typeLen) >= (long long)(((*c).enums).count)) {
+    return;
+    }
+    }
+    else {
+    uint64_t si = structIndexByName_c_Comp_start_U64_len_U64(&((*c)), typeStart, typeLen);
+    if (si >= (long long)(((*c).structs).count)) {
+    return;
+    }
+    if (Array_StructDef_get((*c).structs, (long long)(si)).isExtern) {
+    return;
+    }
+    }
+    FieldDef fd = findFieldDef_c_Comp_typeStart_U64_typeLen_U64_variantStart_U64_variantLen_U64_isEnum_Bool_fieldStart_U64_fieldLen_U64(&((*c)), typeStart, typeLen, variantStart, variantLen, isEnum, mf.nameStart, mf.nameLen);
+    if (fd.nameLen == 0) {
+    compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), mf.nameStart), (PlewString){"no such field on this struct/variant (check the field name)", 59});
+    }
+}
 void checkMakeFields_c_Comp_typeStart_U64_typeLen_U64_variantStart_U64_variantLen_U64_isEnum_Bool_ty_U64_fields_AMakeField(Comp* c, uint64_t typeStart, uint64_t typeLen, uint64_t variantStart, uint64_t variantLen, long long isEnum, uint64_t ty, Array_MakeField fields) {
     uint64_t i = 0;
     while (i < (long long)((fields).count)) {
     MakeField mf = Array_MakeField_get(fields, (long long)(i));
+    checkMakeFieldExists_c_Comp_typeStart_U64_typeLen_U64_variantStart_U64_variantLen_U64_isEnum_Bool_mf_MakeField(&((*c)), typeStart, typeLen, variantStart, variantLen, isEnum, mf);
     checkUniquePlaceCopy_c_Comp_exprId_U64_inoutOk_Bool(&((*c)), mf.value, 0);
     TypeInfo ft = scalarInfo();
     if (isRefInst_c_Comp_ref_U64(&((*c)), ty)) {

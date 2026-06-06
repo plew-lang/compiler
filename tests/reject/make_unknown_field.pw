@@ -1,0 +1,10 @@
+// Constructing with a field the struct/variant does not have must be rejected
+// (acceptance soundness): the variant's field is `x`, not `input`. Previously this
+// slipped through (makeFieldType fell back to scalarInfo).
+import @Std/Io with { print }
+enum E { A(x: I64) B }
+fn main() {
+    val v: I64 = 9
+    val e: E = <E.A input=v />
+    print(0I64)
+}
