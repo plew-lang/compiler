@@ -401,15 +401,16 @@ fn parseStructField(p: inout P) -> FieldAst {
         _ => {}
     }
     mut val hasDefault: Bool = false
+    mut val defaultVal: ExprAst = emptyExpr()
     match p.curKind() {
         Kind.Eq => {
             p.advance()
-            skipDefaultExpr(p: inout p)
+            defaultVal = parseExprAst(p: inout p)
             hasDefault = true
         }
         _ => {}
     }
-    return <FieldAst name=name ty=ty isMut=isMut vis=vis hasDefault=hasDefault span=<Span start=fStart end=p.prevEnd() /> />
+    return <FieldAst name=name ty=ty isMut=isMut vis=vis hasDefault=hasDefault defaultVal=defaultVal span=<Span start=fStart end=p.prevEnd() /> />
 }
 
 // A struct declaration. The cursor is at `struct` (the `unique` modifier, if any,
@@ -461,7 +462,7 @@ fn parseVariantField(p: inout P) -> FieldAst {
         }
         _ => {}
     }
-    return <FieldAst name=name ty=ty isMut=false vis=0 hasDefault=false span=<Span start=fStart end=p.prevEnd() /> />
+    return <FieldAst name=name ty=ty isMut=false vis=0 hasDefault=false defaultVal=emptyExpr() span=<Span start=fStart end=p.prevEnd() /> />
 }
 
 // An enum declaration. The cursor is at `enum`.
@@ -567,15 +568,16 @@ fn parseParamAst(p: inout P) -> ParamAst {
         _ => {}
     }
     mut val hasDefault: Bool = false
+    mut val defaultVal: ExprAst = emptyExpr()
     match p.curKind() {
         Kind.Eq => {
             p.advance()
-            skipDefaultExpr(p: inout p)
+            defaultVal = parseExprAst(p: inout p)
             hasDefault = true
         }
         _ => {}
     }
-    return <ParamAst name=name ty=ty isInout=isInout isMove=isMove isBorrow=isBorrow noLabel=noLabel hasDefault=hasDefault span=<Span start=pStart end=p.prevEnd() /> />
+    return <ParamAst name=name ty=ty isInout=isInout isMove=isMove isBorrow=isBorrow noLabel=noLabel hasDefault=hasDefault defaultVal=defaultVal span=<Span start=pStart end=p.prevEnd() /> />
 }
 
 // A parenthesized parameter list `( params )`. The cursor is at `(` (or anything

@@ -777,6 +777,7 @@ struct FieldAst {
     long long isMut;
     uint64_t vis;
     long long hasDefault;
+    ExprAst defaultVal;
     Span span;
 };
 struct VariantAst {
@@ -792,6 +793,7 @@ struct ParamAst {
     long long isBorrow;
     long long noLabel;
     long long hasDefault;
+    ExprAst defaultVal;
     Span span;
 };
 struct DeclAst {
@@ -1312,15 +1314,15 @@ void Lexer_release(Lexer s) { Array_U8_release(s.bytes); Array_Tok_release(s.tok
 TypeAst TypeAst_copy(TypeAst s) { TypeAst r = s; r.args = Array_TypeAst_copy(s.args); return r; }
 TypeAst TypeAst_share(TypeAst s) { Array_TypeAst_share(s.args); return s; }
 void TypeAst_release(TypeAst s) { Array_TypeAst_release(s.args); }
-FieldAst FieldAst_copy(FieldAst s) { FieldAst r = s; r.ty = TypeAst_copy(s.ty); return r; }
-FieldAst FieldAst_share(FieldAst s) { TypeAst_share(s.ty); return s; }
-void FieldAst_release(FieldAst s) { TypeAst_release(s.ty); }
+FieldAst FieldAst_copy(FieldAst s) { FieldAst r = s; r.ty = TypeAst_copy(s.ty); r.defaultVal = ExprAst_copy(s.defaultVal); return r; }
+FieldAst FieldAst_share(FieldAst s) { TypeAst_share(s.ty); ExprAst_share(s.defaultVal); return s; }
+void FieldAst_release(FieldAst s) { TypeAst_release(s.ty); ExprAst_release(s.defaultVal); }
 VariantAst VariantAst_copy(VariantAst s) { VariantAst r = s; r.fields = Array_FieldAst_copy(s.fields); return r; }
 VariantAst VariantAst_share(VariantAst s) { Array_FieldAst_share(s.fields); return s; }
 void VariantAst_release(VariantAst s) { Array_FieldAst_release(s.fields); }
-ParamAst ParamAst_copy(ParamAst s) { ParamAst r = s; r.ty = TypeAst_copy(s.ty); return r; }
-ParamAst ParamAst_share(ParamAst s) { TypeAst_share(s.ty); return s; }
-void ParamAst_release(ParamAst s) { TypeAst_release(s.ty); }
+ParamAst ParamAst_copy(ParamAst s) { ParamAst r = s; r.ty = TypeAst_copy(s.ty); r.defaultVal = ExprAst_copy(s.defaultVal); return r; }
+ParamAst ParamAst_share(ParamAst s) { TypeAst_share(s.ty); ExprAst_share(s.defaultVal); return s; }
+void ParamAst_release(ParamAst s) { TypeAst_release(s.ty); ExprAst_release(s.defaultVal); }
 DeclAst DeclAst_copy(DeclAst s) { DeclAst r = s; r.typeParams = Array_String_copy(s.typeParams); r.fields = Array_FieldAst_copy(s.fields); r.variants = Array_VariantAst_copy(s.variants); r.params = Array_ParamAst_copy(s.params); r.ret = TypeAst_copy(s.ret); r.body = BlockAst_copy(s.body); return r; }
 DeclAst DeclAst_share(DeclAst s) { Array_String_share(s.typeParams); Array_FieldAst_share(s.fields); Array_VariantAst_share(s.variants); Array_ParamAst_share(s.params); TypeAst_share(s.ret); BlockAst_share(s.body); return s; }
 void DeclAst_release(DeclAst s) { Array_String_release(s.typeParams); Array_FieldAst_release(s.fields); Array_VariantAst_release(s.variants); Array_ParamAst_release(s.params); TypeAst_release(s.ret); BlockAst_release(s.body); }
@@ -20022,19 +20024,22 @@ FieldAst parseStructField_p_P(P* p) {
     }
     }
     long long hasDefault = 0;
+    ExprAst defaultVal = emptyExpr();
     {
     Kind _m1112 = P_curKind((*p));
     if (_m1112.tag == 41) {
     P_advance(&((*p)));
-    skipDefaultExpr_p_P(&((*p)));
+    defaultVal = parseExprAst_p_P(&((*p)));
     hasDefault = 1;
     }
     else {
     }
     }
-    { FieldAst __ret1113 = (FieldAst){.name = name, .ty = TypeAst_share(ty), .isMut = isMut, .vis = vis, .hasDefault = hasDefault, .span = (Span){.start = fStart, .end = P_prevEnd((*p))}};
+    { FieldAst __ret1113 = (FieldAst){.name = name, .ty = TypeAst_share(ty), .isMut = isMut, .vis = vis, .hasDefault = hasDefault, .defaultVal = ExprAst_share(defaultVal), .span = (Span){.start = fStart, .end = P_prevEnd((*p))}};
+    ExprAst_release(defaultVal);
     TypeAst_release(ty);
     return __ret1113; }
+    ExprAst_release(defaultVal);
     TypeAst_release(ty);
 }
 DeclAst parseStructDecl_p_P_isUnique_Bool(P* p, long long isUnique) {
@@ -20095,7 +20100,7 @@ FieldAst parseVariantField_p_P(P* p) {
     else {
     }
     }
-    { FieldAst __ret1118 = (FieldAst){.name = name, .ty = TypeAst_share(ty), .isMut = 0, .vis = 0, .hasDefault = 0, .span = (Span){.start = fStart, .end = P_prevEnd((*p))}};
+    { FieldAst __ret1118 = (FieldAst){.name = name, .ty = TypeAst_share(ty), .isMut = 0, .vis = 0, .hasDefault = 0, .defaultVal = emptyExpr(), .span = (Span){.start = fStart, .end = P_prevEnd((*p))}};
     TypeAst_release(ty);
     return __ret1118; }
     TypeAst_release(ty);
@@ -20231,19 +20236,22 @@ ParamAst parseParamAst_p_P(P* p) {
     }
     }
     long long hasDefault = 0;
+    ExprAst defaultVal = emptyExpr();
     {
     Kind _m1128 = P_curKind((*p));
     if (_m1128.tag == 41) {
     P_advance(&((*p)));
-    skipDefaultExpr_p_P(&((*p)));
+    defaultVal = parseExprAst_p_P(&((*p)));
     hasDefault = 1;
     }
     else {
     }
     }
-    { ParamAst __ret1129 = (ParamAst){.name = name, .ty = TypeAst_share(ty), .isInout = isInout, .isMove = isMove, .isBorrow = isBorrow, .noLabel = noLabel, .hasDefault = hasDefault, .span = (Span){.start = pStart, .end = P_prevEnd((*p))}};
+    { ParamAst __ret1129 = (ParamAst){.name = name, .ty = TypeAst_share(ty), .isInout = isInout, .isMove = isMove, .isBorrow = isBorrow, .noLabel = noLabel, .hasDefault = hasDefault, .defaultVal = ExprAst_share(defaultVal), .span = (Span){.start = pStart, .end = P_prevEnd((*p))}};
+    ExprAst_release(defaultVal);
     TypeAst_release(ty);
     return __ret1129; }
+    ExprAst_release(defaultVal);
     TypeAst_release(ty);
 }
 Array_ParamAst parseParamAsts_p_P(P* p) {

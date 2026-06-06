@@ -31,14 +31,16 @@ export struct TypeAst {
 
 // A struct field / enum-variant payload field. For a variant payload field,
 // `isMut` is false and `vis` is 0 (variants take no modifiers). `vis`: 0 = private,
-// 1 = pub(get), 2 = pub (matches the compiler's encoding). Default values
-// (`val x: T = expr`) are not surfaced yet — `hasDefault` records their presence.
+// 1 = pub(get), 2 = pub (matches the compiler's encoding). A default value
+// (`val x: T = expr`) is flagged by `hasDefault` and surfaced in `defaultVal` (an
+// `emptyExpr()` placeholder when absent).
 export struct FieldAst {
     pub val name: String
     pub val ty: TypeAst
     pub val isMut: Bool
     pub val vis: U64
     pub val hasDefault: Bool
+    pub val defaultVal: ExprAst
     pub val span: Span
 }
 
@@ -51,7 +53,8 @@ export struct VariantAst {
 }
 
 // A function parameter. Access modes (spec/03): `inout`/`move`/`borrow`. A
-// label-suppressed `name~: T` sets `noLabel`. Defaults are flagged, not surfaced.
+// label-suppressed `name~: T` sets `noLabel`. A default value (`name: T = expr`) is
+// flagged by `hasDefault` and surfaced in `defaultVal` (`emptyExpr()` when absent).
 export struct ParamAst {
     pub val name: String
     pub val ty: TypeAst
@@ -60,6 +63,7 @@ export struct ParamAst {
     pub val isBorrow: Bool
     pub val noLabel: Bool
     pub val hasDefault: Bool
+    pub val defaultVal: ExprAst
     pub val span: Span
 }
 
