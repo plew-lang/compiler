@@ -219,6 +219,18 @@ fn isTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
         }
         ei += 1
     }
+    // a trait name also qualifies as an assoc-fn receiver: a trait can own
+    // provided `assoc fn`s (no Self in their signature), called `Trait.fn(args)`
+    // — the single provided impl makes it unambiguous (the derive model's
+    // `Hash.derive(input)` rides on this). This is `isTypeName`'s only caller
+    // (assocRecvName), so traits qualify only for that routing.
+    mut val ti: U64 = 0
+    while ti < c.traits.count {
+        if spansEqual(c: inout c, aStart: c.traits[ti].nameStart, aLen: c.traits[ti].nameLen, bStart: start, bLen: len) {
+            return true
+        }
+        ti += 1
+    }
     return genericStructIndex(c: inout c, nameStart: start, nameLen: len) < c.structs.count
 }
 

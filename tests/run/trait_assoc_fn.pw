@@ -1,0 +1,15 @@
+import @Std/Io with { print }
+
+// A trait can own provided `assoc fn`s (no `self`, no `Self` in the signature),
+// called `Trait.fn(args)` — resolved to the single provided impl (the derive
+// model's `Hash.derive(input)` rides on this).
+trait Greeter { fn name() -> String }
+impl Greeter {
+    assoc fn banner() -> I64 { return 42I64 }
+    assoc fn add(a: I64, b: I64) -> I64 { return a + b }
+}
+
+fn main() {
+    print(Greeter.banner())            // 42
+    print(Greeter.add(a: 10I64, b: 5I64))  // 15
+}
