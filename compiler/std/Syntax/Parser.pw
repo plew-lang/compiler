@@ -1,15 +1,16 @@
-// @Std/Syntax declaration parser (spec/16). Turns an item's source slice into the
-// value-tree AST (`Ast.pw`). This is the shared parser the metaprogramming path
-// uses; its grammar mirrors the compiler's own declaration parser (Parser/Decl.pw,
-// Parser/Stmt.pw) so a macro and the compiler agree on what a declaration is.
-//
-// M1 covers the DECLARATION subset: struct / enum / fn signature + type
-// expressions. Function bodies and field/param default *expressions* are skipped
-// (their presence is flagged, but the expression tree is an additive follow-up).
+// @Std/Syntax declaration parser (spec/16). Turns source into the value-tree AST
+// (`Ast.pw`). This is the ONE shared parser: a macro's `parseItem` and the compiler
+// frontend both parse declarations through it (the compiler then lowers the value
+// tree into its arena — Codegen/Lower.pw), so there is no second declaration parser
+// to drift (worklog A). It covers struct / enum / fn / impl / trait / extern — full
+// signatures, bodies (via the shared body parser, ParseBody.pw), type expressions,
+// and field/param default expressions.
 //
 // Coordinates: `parseItem` lexes the slice `source[start..end]` (slice-relative
 // token offsets) and threads `base = start` so every emitted `Span` is in ORIGINAL
-// source coordinates — an input error can point at the user's actual text.
+// source coordinates — an input error can point at the user's actual text. The
+// compiler frontend drives the same parsers over its own token stream with base=0
+// (absolute offsets) and syncs the cursor back (`parseDecl`/`parseImplDecl`/…).
 
 // A token cursor over a lexed item slice. `base` is the absolute offset of
 // `bytes[0]` in the original source (added into every span). Exported so the
@@ -149,80 +150,6 @@ fn skipLeading(p: inout P) {
                 }
             }
             _ => { break }
-        }
-    }
-}
-
-// Skip a default-value expression `= expr` (the `=` is already consumed). The
-// expression tree is not surfaced in M1; this consumes its tokens so the
-// surrounding declaration parses. Stops at a top-level separator (paren/bracket
-// depth 0): newline, `}`, `)`, `]`, or `,`.
-fn skipDefaultExpr(p: inout P) {
-    mut val depth: I64 = 0
-    while true {
-        match p.curKind() {
-            Kind.LParen => {
-                depth += 1
-                p.advance()
-            }
-            Kind.LBracket => {
-                depth += 1
-                p.advance()
-            }
-            Kind.RParen => {
-                if depth == 0 {
-                    break
-                }
-                depth -= 1
-                p.advance()
-            }
-            Kind.RBracket => {
-                if depth == 0 {
-                    break
-                }
-                depth -= 1
-                p.advance()
-            }
-            Kind.Comma => {
-                if depth == 0 {
-                    break
-                }
-                p.advance()
-            }
-            Kind.Newline => { break }
-            Kind.RBrace => { break }
-            Kind.Eof => { break }
-            _ => { p.advance() }
-        }
-    }
-}
-
-// Skip a brace-delimited body block `{ ... }`: advance to the first `{`, then
-// balance braces. (Used for function bodies, which M1 does not surface.)
-fn skipBlock(p: inout P) {
-    while true {
-        match p.curKind() {
-            Kind.LBrace => { break }
-            Kind.Eof => { return }
-            _ => { p.advance() }
-        }
-    }
-    mut val depth: I64 = 0
-    while true {
-        match p.curKind() {
-            Kind.LBrace => {
-                depth += 1
-                p.advance()
-            }
-            Kind.RBrace => {
-                depth -= 1
-                p.advance()
-                if depth == 0 {
-                    break
-                }
-            }
-            Kind.Eof => { break }
-            _ => { p.advance() }
         }
     }
 }

@@ -1,4 +1,13 @@
-// ---- declaration parser ----
+// ---- compiler top-level frontend: dispatch + module/directive handling + derive
+// synthesis ----
+//
+// The declaration *parsers* (struct / enum / fn / impl / trait / extern) are retired:
+// `parseProgram` dispatches each item to the shared @Std/Syntax parser and lowers the
+// value tree into the arena (Codegen/Lower.pw — worklog A). What remains here is the
+// compiler-frontend work that produces Comp state directly, with no value-tree/macro
+// counterpart: the `@[...]` directive and `import`/`export` handling (module tagging
+// via original-offset spans — see moduleOf), and the `@[Eq]`/`@[Ord]` derive
+// synthesis (codegen that builds arena AST for the derived conformances).
 
 // `@[Eq, Ord, Name(label: expr, ...), ...]` directive (spec/16): collect the
 // derive names — each with optional construction arguments — into pendingDerives,
