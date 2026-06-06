@@ -682,7 +682,7 @@ fn genExpr(c: inout Comp, id: U64) {
         }
         Expr.Str(val start, val len) => {
             write(s: "(PlewString){\"")
-            writeSpan(c: inout c, start: start + 1, len: len - 2)
+            writeSpanRaw(c: inout c, start: start + 1, len: len - 2)
             write(s: "\", ")
             writeInt(n: strDecodedLen(c: inout c, start: start, len: len))
             write(s: "}")

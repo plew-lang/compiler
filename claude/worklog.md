@@ -18,7 +18,7 @@
 
 provisional.md に散在していた「ブロッカーなし・いつでも直せる」バグを棚卸しし、**一括で潰す**。各項＝症状／場所／直し／状態。完了したらこの節から落とし（git タグ＋provisional の該当行更新へ）、全完了でこの節ごと削除。compact 跨ぎの再開地図。
 
-- **Bug1 C 予約語識別子マングル**〔hidden meaning〕：`default`/`double`/`int` 等を名前に使うと生成 C 破壊。直し＝codegen の識別子出力（writeSpan 系）で C 予約語を安全名へマングル。場所＝Emit.pw の識別子出力点。状態＝未着手。
+- **Bug1 C 予約語識別子マングル**〔hidden meaning〕：✅**済**。`writeSpan`（識別子出力の単一経路・型名は PascalCase で非該当）が C 予約語の span に `_` を付与（`isCKeyword`・content-based で def/use 一貫）。文字列リテラル内容だけ `writeSpanRaw`（非マングル）に分離（Emit.pw・Expr.pw Str）。test run/c_reserved_idents（default/const/void/switch/double/int の var/param/field/fn＋文字列保全）。
 - **Bug2 曖昧無サフィックスリテラルが先頭 overload 選択**〔silent〕：✅**済**（`9ddfcdb`）。findFunc/findMethod/findAssoc が 2 つ目の type-match を検出し、無サフィックスリテラル引数が候補間で異なる整数パラメータ型へ写るとき loud reject（`overloadsAmbiguous`/`checkOverloadAmbiguity`・Resolve.pw）。test reject/overload_ambiguous_literal・run/overload_literal_suffix。
 - **Bug3 メソッド値化 `val f = obj.method` を受理**〔should be loud〕：✅**済**（`b8d87ed`）。struct レシーバの `.name` 式（非呼び出し）が「フィールド無し・メソッド有り」なら loud reject（`typeHasMethodNamed`・Expr.pw Field 経路）。Expr.Method 呼び出しは無影響。test reject/method_value。
 - **Bug4 free 関数のモジュール跨ぎ同名衝突**〔false positive＋C 名衝突＋誤ディスパッチ〕：✅**済**。別モジュールに同名 private free fn があると ①正しい呼びが誤 reject ②C シンボル `redefinition` ③誤ディスパッチ。直し＝(a) `findFunc` を **same-module 優先**（`typeMatchSame`/`firstLabelSame`・Resolve.pw＝誤 reject＋ディスパッチ解消）＋(b) `writeFnSelector` で **衝突する free 関数だけ**にモジュール識別子 `_m<id>` を付与（`freeFnSelectorCollides`/`sameFreeFnSelectorDecl`・Decl.pw＝C 衝突解消）。**全 free 関数に一律付与すると self-compile の dead-code 到達解析が揺れ fixpoint が壊れた**ため collision-gated に（コンパイラは同名衝突がない＝出力不変＝fixpoint 保持）。test part/samename。

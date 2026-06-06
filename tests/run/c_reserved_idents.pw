@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+// C reserved words (`default`, `double`, `int`, `void`, `const`, `switch`) are
+// legal Plew identifiers; codegen mangles them so the generated C compiles.
+struct Config {
+    pub(get) val default: I32
+    pub(get) val switch: I32
+}
+fn double(int~: I32) -> I32 { return int + int }
+fn main() {
+    mut val default: I32 = 5
+    val const: I32 = double(default)
+    print(const)
+    val void: I32 = 7
+    print(void)
+    val cfg: Config = <Config default=3 switch=4 />
+    print(cfg.default + cfg.switch)
+    val s: String = "default int void"
+    if s == "default int void" { print(1I32) } else { print(0I32) }
+}
