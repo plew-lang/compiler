@@ -435,3 +435,126 @@ fn parseExprC(c: inout Comp) -> U64 {
     }
     return lowerExpr(c: inout c, e: tree)
 }
+
+// ---- declaration lowering (shared DeclAst value tree -> the compiler arena) ----
+//
+// Mirrors Parser/Decl.pw's parseStruct/parseEnum arena seeding so the frontend can
+// parse nominal declarations through the ONE shared @Std/Syntax parser (spec/16,
+// worklog A). Names are re-interned (codegen reads bytes; the emitted C is
+// byte-identical) — struct/enum names never feed `moduleOf` (types are ambient, not
+// visibility-gated), so re-interning is sound here. (A *function* declaration name
+// does feed moduleOf; that path keeps the original offset — handled when free
+// functions move to this lowering.)
+
+// Lower generic parameter names `[T, U]` (Array[String]) to the arena's Bind spans.
+fn lowerTypeParamNames(c: inout Comp, names: Array[String]) -> Array[Bind] {
+    mut val out: Array[Bind] = []
+    mut val i: U64 = 0
+    while i < names.count {
+        out.append(internBytes(c: inout c, s: names[i]))
+        i += 1
+    }
+    return out
+}
+
+// Lower one field (struct or enum-variant payload) to a FieldDef. A field with no
+// type annotation leaves the type spans zero (matching parseTypeTok's behaviour),
+// rather than interning an empty type.
+fn lowerFieldDef(c: inout Comp, f: FieldAst) -> FieldDef {
+    val nm: Bind = internBytes(c: inout c, s: f.name)
+    mut val tyStart: U64 = 0
+    mut val tyLen: U64 = 0
+    mut val tyIsArray: Bool = false
+    mut val tyRef: U64 = 0
+    if f.ty.name.bytes.count > 0 {
+        val pt: PType = lowerType(c: inout c, t: f.ty)
+        tyStart = pt.start
+        tyLen = pt.len
+        tyIsArray = pt.isArray
+        tyRef = pt.ref
+    }
+    mut val hasDefault: Bool = false
+    mut val defaultVal: U64 = 0
+    if f.hasDefault {
+        defaultVal = lowerExpr(c: inout c, e: f.defaultVal)
+        hasDefault = true
+    }
+    return <FieldDef nameStart=nm.nameStart nameLen=nm.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isMut=f.isMut hasDefault=hasDefault defaultVal=defaultVal vis=f.vis />
+}
+
+// Lower a `struct` DeclAst: append a StructDef, a synthetic `Type_deinit` method +
+// a c.deinits record when the struct carries a `deinit`, then drain pending
+// `@[...]` derives onto the type. Mirrors parseStruct.
+fn lowerStructDecl(c: inout Comp, d: DeclAst) {
+    val nm: Bind = internBytes(c: inout c, s: d.name)
+    val typeParams: Array[Bind] = lowerTypeParamNames(c: inout c, names: d.typeParams)
+    mut val fields: Array[FieldDef] = []
+    mut val i: U64 = 0
+    while i < d.fields.count {
+        fields.append(lowerFieldDef(c: inout c, f: d.fields[i]))
+        i += 1
+    }
+    // a `deinit { body }` lowers to a synthetic method `Type_deinit(Type self)`
+    // (name span = the text "deinit") plus a c.deinits record so scope-exit drops
+    // fire it. Appended at the same point in c.funcs as the native parser (during
+    // this struct's processing), so the function stream order is preserved.
+    if d.hasDeinit {
+        val deinitN: Bind = internBytes(c: inout c, s: "deinit")
+        val body: U64 = lowerBlock(c: inout c, b: d.deinitBody)
+        val noParams: Array[Param] = []
+        val noTypeParams: Array[Bind] = []
+        c.funcs.append(<Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nm.nameStart recvLen=nm.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+        c.deinits.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen fieldStart=nm.nameStart fieldLen=nm.nameLen />)
+    }
+    c.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen typeParams=typeParams fields=fields isUnique=d.isUnique isExtern=false />)
+    drainDerives(c: inout c, typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
+}
+
+// Lower an `enum` DeclAst: append an EnumDef, then drain pending derives. Mirrors
+// parseEnum. Variant payload fields take no modifiers (vis 0, not mut, no default).
+fn lowerEnumDecl(c: inout Comp, d: DeclAst) {
+    val nm: Bind = internBytes(c: inout c, s: d.name)
+    val typeParams: Array[Bind] = lowerTypeParamNames(c: inout c, names: d.typeParams)
+    mut val variants: Array[Variant] = []
+    mut val i: U64 = 0
+    while i < d.variants.count {
+        val v: VariantAst = d.variants[i]
+        val vn: Bind = internBytes(c: inout c, s: v.name)
+        mut val vfields: Array[FieldDef] = []
+        mut val j: U64 = 0
+        while j < v.fields.count {
+            vfields.append(lowerFieldDef(c: inout c, f: v.fields[j]))
+            j += 1
+        }
+        variants.append(<Variant nameStart=vn.nameStart nameLen=vn.nameLen fields=vfields />)
+        i += 1
+    }
+    c.enums.append(<EnumDef nameStart=nm.nameStart nameLen=nm.nameLen typeParams=typeParams variants=variants />)
+    drainDerives(c: inout c, typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: true, declStart: d.span.start, declEnd: d.span.end)
+}
+
+// Lower a nominal declaration by kind (struct / enum; free functions are added to
+// this lowering in a later increment).
+fn lowerDecl(c: inout Comp, d: DeclAst) {
+    match d.kind {
+        DeclKind.Struct => { lowerStructDecl(c: inout c, d: d) }
+        DeclKind.Enum => { lowerEnumDecl(c: inout c, d: d) }
+        DeclKind.Func => {}
+    }
+}
+
+// Frontend integration: parse one nominal declaration (`[unique] struct` / `enum`)
+// via the shared `parseDecl` over the compiler's own token stream, then lower it.
+// Same cursor-drive + error-surface as parseBlock. The cursor must be at the item
+// keyword (parseProgram dispatched). Returns the DeclAst's name span so a caller
+// (`export <decl>`) can record the export.
+fn parseDeclItem(c: inout Comp) -> DeclAst {
+    mut val p: P = <P bytes=c.bytes toks=c.toks pos=c.pos base=0 />
+    val tree: DeclAst = parseDecl(p: inout p)
+    c.pos = p.pos
+    if p.hasErr {
+        compileErrorAt(line: lineOf(c: inout c, offset: p.errOff), msg: p.errMsg)
+    }
+    lowerDecl(c: inout c, d: tree)
+    return tree
+}

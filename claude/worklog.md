@@ -23,6 +23,7 @@
 
 **着手済（土台）**：
 - ✅ 共有 DeclAst が**デフォルト式を捕捉**（`FieldAst/ParamAst.defaultVal: ExprAst`・commit `abf9758`）＝メンバワイズ factory の default に必要。
+- ✅ **A-1＝struct/enum を共有パーサ＋lowerDecl へ統合・旧 parseStruct/parseEnum 退役**（245/245・不動点維持）。`DeclAst` に `nameSpan`/`hasDeinit`/`deinitBody` 追加（共有 parseStructDecl が deinit を実捕捉）。`Codegen/Lower.pw`＝`lowerDecl`/`lowerStructDecl`/`lowerEnumDecl`/`lowerFieldDef`/`lowerTypeParamNames`＋ブリッジ `parseDeclItem`（共有 `parseDecl` を本体トークン列で駆動→arena へ lower）。`parseProgram`/`parseExport` の struct/enum を routing。名前は再インターン（struct/enum 名は `moduleOf` に不参加＝型は ambient／export の fieldStart は never-read ゆえ byte 同一で安全）。診断移植＝enum brace payload・struct comma を `P.fail` で。**残り＝free fn（名前は原本 offset 必須＝`moduleOf`）→ impl → trait/extern/import/export。**
 
 **残り手順（各段 additive 緑→最後にスワップ）**：
 1. **DeclAst を完全 fn シグネチャへ拡張**：`isAsync`/`isPub`/`isAssoc`/`recv`（レシーバ型・メソッド用）/`selfMode`（fn/inout fn/move fn）/`isExtern`/`where` 句。共有 `parseFuncDecl` でパース。マクロも完全 fn を読める（additive 価値）。

@@ -415,11 +415,12 @@ fn parseStructField(p: inout P) -> FieldAst {
 
 // A struct declaration. The cursor is at `struct` (the `unique` modifier, if any,
 // is already consumed and passed as `isUnique`).
-fn parseStructDecl(p: inout P, isUnique: Bool) -> DeclAst {
+export fn parseStructDecl(p: inout P, isUnique: Bool) -> DeclAst {
     val sStart: U64 = p.base + p.curTok().start
     p.advance()
     val nameTok: Tok = p.curTok()
     val name: String = p.text(t: nameTok)
+    val nameSpan: Span = p.spanOf(t: nameTok)
     p.advance()
     val typeParams: Array[String] = parseTypeParamNames(p: inout p)
     match p.curKind() {
@@ -427,6 +428,8 @@ fn parseStructDecl(p: inout P, isUnique: Bool) -> DeclAst {
         _ => {}
     }
     mut val fields: Array[FieldAst] = []
+    mut val hasDeinit: Bool = false
+    mut val deinitBody: BlockAst = emptyBlock()
     while true {
         p.skipNewlines()
         match p.curKind() {
@@ -435,16 +438,24 @@ fn parseStructDecl(p: inout P, isUnique: Bool) -> DeclAst {
                 break
             }
             Kind.Eof => { break }
+            Kind.Comma => {
+                // struct fields are newline-separated (spec/05); a comma would be
+                // swallowed as an empty-named field, so reject it loudly.
+                p.fail(off: p.base + p.curTok().start, msg: "struct fields are separated by newlines, not commas")
+                p.advance()
+            }
             Kind.KwDeinit => {
                 p.advance()
-                skipBlock(p: inout p)
+                p.skipNewlines()
+                deinitBody = parseBlockAst(p: inout p)
+                hasDeinit = true
             }
             _ => {
                 fields.append(parseStructField(p: inout p))
             }
         }
     }
-    return <DeclAst kind=<DeclKind.Struct /> name=name typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=isUnique fields=fields variants=[] params=[] hasRet=false ret=emptyTypeAst() body=emptyBlock() />
+    return <DeclAst kind=<DeclKind.Struct /> name=name nameSpan=nameSpan typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=isUnique fields=fields hasDeinit=hasDeinit deinitBody=deinitBody variants=[] params=[] hasRet=false ret=emptyTypeAst() body=emptyBlock() />
 }
 
 // An enum variant payload field `name: Type` (no modifiers). The cursor is at the
@@ -466,11 +477,12 @@ fn parseVariantField(p: inout P) -> FieldAst {
 }
 
 // An enum declaration. The cursor is at `enum`.
-fn parseEnumDecl(p: inout P) -> DeclAst {
+export fn parseEnumDecl(p: inout P) -> DeclAst {
     val sStart: U64 = p.base + p.curTok().start
     p.advance()
     val nameTok: Tok = p.curTok()
     val name: String = p.text(t: nameTok)
+    val nameSpan: Span = p.spanOf(t: nameTok)
     p.advance()
     val typeParams: Array[String] = parseTypeParamNames(p: inout p)
     match p.curKind() {
@@ -493,6 +505,11 @@ fn parseEnumDecl(p: inout P) -> DeclAst {
                 p.advance()
                 mut val vfields: Array[FieldAst] = []
                 match p.curKind() {
+                    Kind.LBrace => {
+                        // variant payloads are record-form `V(x: I32, ...)` (spec/05):
+                        // the brace form is rejected with a hint (acceptance soundness).
+                        p.fail(off: p.base + p.curTok().start, msg: "enum variant payloads use parentheses, e.g. `Foo(x: I32, y: I32)`")
+                    }
                     Kind.LParen => {
                         p.advance()
                         while true {
@@ -521,7 +538,7 @@ fn parseEnumDecl(p: inout P) -> DeclAst {
             _ => { p.advance() }
         }
     }
-    return <DeclAst kind=<DeclKind.Enum /> name=name typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=false fields=[] variants=variants params=[] hasRet=false ret=emptyTypeAst() body=emptyBlock() />
+    return <DeclAst kind=<DeclKind.Enum /> name=name nameSpan=nameSpan typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=false fields=[] hasDeinit=false deinitBody=emptyBlock() variants=variants params=[] hasRet=false ret=emptyTypeAst() body=emptyBlock() />
 }
 
 // A function parameter `name[~]: [inout|move|borrow] Type [= expr]`. The cursor is
@@ -609,11 +626,12 @@ fn parseParamAsts(p: inout P) -> Array[ParamAst] {
 
 // A function declaration `fn name[T,...](params) [-> Ret] [where ...] { body }`.
 // The cursor is at `fn`. The body is skipped (not surfaced in M1).
-fn parseFuncDecl(p: inout P) -> DeclAst {
+export fn parseFuncDecl(p: inout P) -> DeclAst {
     val sStart: U64 = p.base + p.curTok().start
     p.advance()
     val nameTok: Tok = p.curTok()
     val name: String = p.text(t: nameTok)
+    val nameSpan: Span = p.spanOf(t: nameTok)
     p.advance()
     val typeParams: Array[String] = parseTypeParamNames(p: inout p)
     val params: Array[ParamAst] = parseParamAsts(p: inout p)
@@ -637,7 +655,7 @@ fn parseFuncDecl(p: inout P) -> DeclAst {
         }
     }
     val body: BlockAst = parseBlockAst(p: inout p)
-    return <DeclAst kind=<DeclKind.Func /> name=name typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=false fields=[] variants=[] params=params hasRet=hasRet ret=ret body=body />
+    return <DeclAst kind=<DeclKind.Func /> name=name nameSpan=nameSpan typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=false fields=[] hasDeinit=false deinitBody=emptyBlock() variants=[] params=params hasRet=hasRet ret=ret body=body />
 }
 
 // Parse an item's source into a `DeclAst` (struct / enum / fn). `source` is the
@@ -667,7 +685,28 @@ export fn parseItem(source: String, start: U64, end: U64) -> DeclAst {
             return parseFuncDecl(p: inout p)
         }
         _ => {
-            return <DeclAst kind=<DeclKind.Struct /> name="" typeParams=[] span=<Span start=start end=end /> isUnique=false fields=[] variants=[] params=[] hasRet=false ret=emptyTypeAst() body=emptyBlock() />
+            return <DeclAst kind=<DeclKind.Struct /> name="" nameSpan=<Span start=start end=start /> typeParams=[] span=<Span start=start end=end /> isUnique=false fields=[] hasDeinit=false deinitBody=emptyBlock() variants=[] params=[] hasRet=false ret=emptyTypeAst() body=emptyBlock() />
+        }
+    }
+}
+
+// Parse a single nominal declaration (`[unique] struct` / `enum` / `fn`) from the
+// compiler's own token stream — the cursor is already at the item keyword (the
+// frontend's `parseProgram` dispatched). Mirrors `parseItem`'s match without the
+// re-lex/skipLeading. The frontend drives this over its `P` (base 0 = absolute
+// c.bytes offsets) and lowers the result into its arena (Codegen/Lower.pw).
+export fn parseDecl(p: inout P) -> DeclAst {
+    match p.curKind() {
+        Kind.KwStruct => { return parseStructDecl(p: inout p, isUnique: false) }
+        Kind.KwUnique => {
+            p.advance()
+            return parseStructDecl(p: inout p, isUnique: true)
+        }
+        Kind.KwEnum => { return parseEnumDecl(p: inout p) }
+        Kind.KwFn => { return parseFuncDecl(p: inout p) }
+        _ => {
+            val off: U64 = p.base + p.curTok().start
+            return <DeclAst kind=<DeclKind.Struct /> name="" nameSpan=<Span start=off end=off /> typeParams=[] span=<Span start=off end=off /> isUnique=false fields=[] hasDeinit=false deinitBody=emptyBlock() variants=[] params=[] hasRet=false ret=emptyTypeAst() body=emptyBlock() />
         }
     }
 }

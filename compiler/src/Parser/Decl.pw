@@ -588,228 +588,6 @@ fn parseExtern(c: inout Comp) {
     }
 }
 
-// `[unique] struct Name { (val|mut val) field: Type ... }`. Field modifiers
-// (val/mut/pub) are consumed and ignored; codegen maps each field's type to a C
-// type. `isUnique` is set when a leading `unique` keyword was consumed.
-fn parseStruct(c: inout Comp, isUnique: Bool) {
-    // declStart: the `struct` keyword (the cursor's current token). declEnd is set
-    // when the closing `}` is consumed. Used by gen mode to slice the item source.
-    val declStart: U64 = c.cur().start
-    mut val declEnd: U64 = declStart
-    c.advance()
-    val nameTok: Tok = c.cur()
-    c.advance()
-    val typeParams: Array[Bind] = parseTypeParams(c: inout c)
-    match c.curKind() {
-        Kind.LBrace => { c.advance() }
-        _ => {}
-    }
-    mut val fields: Array[FieldDef] = []
-    while true {
-        c.skipNewlines()
-        val k: Kind = c.curKind()
-        match k {
-            Kind.RBrace => {
-                declEnd = c.cur().start + c.cur().len
-                c.advance()
-                break
-            }
-            Kind.Eof => { break }
-            Kind.Comma => {
-                // Struct fields are newline-separated (spec/05). A comma would
-                // otherwise be swallowed as an empty-named field (`long long ,;`),
-                // so reject it loudly instead of miscompiling.
-                compileErrorAt(line: lineOf(c: inout c, offset: c.cur().start), msg: "struct fields are separated by newlines, not commas")
-            }
-            Kind.KwDeinit => {
-                // `deinit { body }` written in the struct body (spec/03's primary
-                // form). Same lowering as the impl form: a synthetic
-                // `Type_deinit(Type self)` method + a c.deinits record.
-                val deinitTok: Tok = c.cur()
-                c.advance()
-                c.skipNewlines()
-                val body: U64 = parseBlock(c: inout c)
-                val noParams: Array[Param] = []
-                val noTypeParams: Array[Bind] = []
-                c.funcs.append(<Func nameStart=deinitTok.start nameLen=deinitTok.len typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nameTok.start recvLen=nameTok.len selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
-                c.deinits.append(<Bind nameStart=nameTok.start nameLen=nameTok.len fieldStart=nameTok.start fieldLen=nameTok.len />)
-            }
-            _ => {
-                // a field declaration: `[pub[(get)]] [mut] val name : Type`.
-                // `mut val` marks assignable storage; bare `val` is immutable.
-                // Field visibility (spec/05): bare `pub` -> 2 (read+write public),
-                // `pub(get)` -> 1 (read public, write internal), none -> 0 (private,
-                // anonymous impl only). Per-field because pub(get)'s read/write
-                // asymmetry can't fold into an impl block.
-                mut val vis: U64 = 0
-                match c.curKind() {
-                    Kind.Ident => {
-                        val pubTok: Tok = c.cur()
-                        if rangeEquals(bytes: c.bytes, start: pubTok.start, len: pubTok.len, kw: "pub") {
-                            c.advance()
-                            vis = 2
-                            match c.curKind() {
-                                Kind.LParen => {
-                                    c.advance()
-                                    match c.curKind() {
-                                        Kind.Ident => {
-                                            val qt: Tok = c.cur()
-                                            if rangeEquals(bytes: c.bytes, start: qt.start, len: qt.len, kw: "get") {
-                                                vis = 1
-                                            }
-                                            c.advance()
-                                        }
-                                        _ => {}
-                                    }
-                                    expect(c: inout c, k: <Kind.RParen />, msg: "expected ')' to close a `pub(...)` visibility modifier")
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-                mut val isMut: Bool = false
-                match c.curKind() {
-                    Kind.KwMut => {
-                        c.advance()
-                        isMut = true
-                    }
-                    _ => {}
-                }
-                match c.curKind() {
-                    Kind.KwVal => { c.advance() }
-                    _ => {}
-                }
-                val fTok: Tok = c.cur()
-                c.advance()
-                mut val tyStart: U64 = 0
-                mut val tyLen: U64 = 0
-                mut val tyIsArray: Bool = false
-                mut val tyRef: U64 = 0
-                match c.curKind() {
-                    Kind.Colon => {
-                        c.advance()
-                        val ty: PType = parseTypeTok(c: inout c)
-                        tyStart = ty.start
-                        tyLen = ty.len
-                        tyIsArray = ty.isArray
-                        tyRef = ty.ref
-                        recordArrayElem(c: inout c, ty: ty)
-                    }
-                    _ => {}
-                }
-                // optional field default `val x: T = expr` (spec/05). Consume the
-                // `=` and the expression so it lands in FieldDef (else `= expr`
-                // would be mis-parsed as phantom fields); used by the memberwise
-                // factory when a construction omits this field.
-                mut val hasDefault: Bool = false
-                mut val defaultVal: U64 = 0
-                match c.curKind() {
-                    Kind.Eq => {
-                        c.advance()
-                        defaultVal = parseExprC(c: inout c)
-                        hasDefault = true
-                    }
-                    _ => {}
-                }
-                fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isMut=isMut hasDefault=hasDefault defaultVal=defaultVal vis=vis />)
-            }
-        }
-    }
-    c.structs.append(<StructDef nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams fields=fields isUnique=isUnique isExtern=false />)
-    drainDerives(c: inout c, typeStart: nameTok.start, typeLen: nameTok.len, isEnum: false, declStart: declStart, declEnd: declEnd)
-}
-
-// `enum Name { Variant [{ field: Type, ... }] ... }`. Variant fields take no
-// modifiers (bare `name: Type`), per the language's variant-field rule.
-fn parseEnum(c: inout Comp) {
-    val declStart: U64 = c.cur().start
-    mut val declEnd: U64 = declStart
-    c.advance()
-    val nameTok: Tok = c.cur()
-    c.advance()
-    val typeParams: Array[Bind] = parseTypeParams(c: inout c)
-    match c.curKind() {
-        Kind.LBrace => { c.advance() }
-        _ => {}
-    }
-    mut val variants: Array[Variant] = []
-    while true {
-        c.skipNewlines()
-        val k: Kind = c.curKind()
-        match k {
-            Kind.RBrace => {
-                declEnd = c.cur().start + c.cur().len
-                c.advance()
-                break
-            }
-            Kind.Eof => { break }
-            Kind.Ident => {
-                val vTok: Tok = c.cur()
-                c.advance()
-                mut val fields: Array[FieldDef] = []
-                // variant payload is record-form `V(x: I32, y: I32)` (spec/05):
-                // the payload is a labelled record, so it uses parentheses. The
-                // old brace form is rejected with a hint.
-                mut val vopen: Bool = false
-                match c.curKind() {
-                    Kind.LBrace => {
-                        compileErrorAt(line: lineOf(c: inout c, offset: c.cur().start), msg: "enum variant payloads use parentheses, e.g. `Foo(x: I32, y: I32)`")
-                    }
-                    Kind.LParen => {
-                        c.advance()
-                        vopen = true
-                    }
-                    _ => {}
-                }
-                if vopen {
-                    while true {
-                        c.skipNewlines()
-                        match c.curKind() {
-                            Kind.RParen => {
-                                c.advance()
-                                break
-                            }
-                            Kind.Eof => { break }
-                            Kind.Ident => {
-                                val fTok: Tok = c.cur()
-                                c.advance()
-                                mut val tyStart: U64 = 0
-                                mut val tyLen: U64 = 0
-                                mut val tyIsArray: Bool = false
-                                mut val tyRef: U64 = 0
-                                match c.curKind() {
-                                    Kind.Colon => {
-                                        c.advance()
-                                        val ty: PType = parseTypeTok(c: inout c)
-                                        tyStart = ty.start
-                                        tyLen = ty.len
-                                        tyIsArray = ty.isArray
-                                        tyRef = ty.ref
-                                        recordArrayElem(c: inout c, ty: ty)
-                                    }
-                                    _ => {}
-                                }
-                                fields.append(<FieldDef nameStart=fTok.start nameLen=fTok.len tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isMut=false hasDefault=false defaultVal=0 />)
-                                match c.curKind() {
-                                    Kind.Comma => { c.advance() }
-                                    _ => {}
-                                }
-                            }
-                            _ => { c.advance() }
-                        }
-                    }
-                }
-                variants.append(<Variant nameStart=vTok.start nameLen=vTok.len fields=fields />)
-            }
-            _ => { c.advance() }
-        }
-    }
-    c.enums.append(<EnumDef nameStart=nameTok.start nameLen=nameTok.len typeParams=typeParams variants=variants />)
-    drainDerives(c: inout c, typeStart: nameTok.start, typeLen: nameTok.len, isEnum: true, declStart: declStart, declEnd: declEnd)
-}
-
 // `@[Eq, Ord, Name(label: expr, ...), ...]` directive (spec/16): collect the
 // derive names — each with optional construction arguments — into pendingDerives,
 // applied to the next type declaration. `@[Name(a: 32)]` constructs `Name{a: 32}`
@@ -1270,15 +1048,9 @@ fn parseExport(c: inout Comp) {
                 _ => {}
             }
         }
-        Kind.KwStruct => { parseStruct(c: inout c, isUnique: false) }
-        Kind.KwUnique => {
-            c.advance()
-            match c.curKind() {
-                Kind.KwStruct => { parseStruct(c: inout c, isUnique: true) }
-                _ => {}
-            }
-        }
-        Kind.KwEnum => { parseEnum(c: inout c) }
+        Kind.KwStruct => { val d: DeclAst = parseDeclItem(c: inout c) }
+        Kind.KwUnique => { val d: DeclAst = parseDeclItem(c: inout c) }
+        Kind.KwEnum => { val d: DeclAst = parseDeclItem(c: inout c) }
         Kind.Ident => {
             if c.identIs(kw: "trait") {
                 parseTrait(c: inout c)
@@ -1389,18 +1161,20 @@ fn parseProgram(c: inout Comp) {
                     _ => {}
                 }
             }
-            Kind.KwStruct => { parseStruct(c: inout c, isUnique: false) }
-            Kind.KwUnique => {
-                // `unique struct ...`: consume `unique`, then the struct keyword
-                // follows (parseStruct skips it). `unique` on anything else is a
-                // parse no-op for now (only structs may be unique in v1).
-                c.advance()
-                match c.curKind() {
-                    Kind.KwStruct => { parseStruct(c: inout c, isUnique: true) }
-                    _ => {}
-                }
+            Kind.KwStruct => {
+                // routed through the shared @Std/Syntax parser + lowerDecl (worklog A):
+                // the compiler no longer has its own struct/enum parser.
+                val d: DeclAst = parseDeclItem(c: inout c)
             }
-            Kind.KwEnum => { parseEnum(c: inout c) }
+            Kind.KwUnique => {
+                // `unique struct ...`: parseDecl consumes `unique`, then the struct.
+                // `unique` on anything else is a parse no-op for now (only structs may
+                // be unique in v1).
+                val d: DeclAst = parseDeclItem(c: inout c)
+            }
+            Kind.KwEnum => {
+                val d: DeclAst = parseDeclItem(c: inout c)
+            }
             Kind.KwExtern => { parseExtern(c: inout c) }
             Kind.Ident => {
                 if c.identIs(kw: "import") {

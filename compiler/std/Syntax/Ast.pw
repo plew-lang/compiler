@@ -88,11 +88,20 @@ export enum DeclKind {
 export struct DeclAst {
     pub val kind: DeclKind
     pub val name: String
+    // the NAME token's span (original coordinates). Distinct from `span` (the whole
+    // declaration, keyword..closing brace). The compiler frontend needs the name's
+    // ORIGINAL offset for a `fn`/`struct`/`enum` declaration so `moduleOf` (cross-
+    // module visibility) attributes it to the right module.
+    pub val nameSpan: Span
     pub val typeParams: Array[String]
     pub val span: Span
     // struct (`kind == Struct`)
     pub val isUnique: Bool
     pub val fields: Array[FieldAst]
+    // struct `deinit { ... }` (spec/03): the parsed block, flagged by `hasDeinit`.
+    // A macro can read it; the compiler lowers it to a synthetic `Type_deinit` method.
+    pub val hasDeinit: Bool
+    pub val deinitBody: BlockAst
     // enum (`kind == Enum`)
     pub val variants: Array[VariantAst]
     // fn (`kind == Func`)
