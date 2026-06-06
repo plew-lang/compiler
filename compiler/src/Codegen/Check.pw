@@ -1370,7 +1370,11 @@ fn checkGenericBodies(c: inout Comp) {
     mut val fi: U64 = 0
     while fi < c.funcs.count {
         val f: Func = c.funcs[fi]
-        if f.typeParams.count > 0 {
+        // skip extern fns: they have no body (`body == 0` is a sentinel, not a real
+        // block). Generic externs like `arrayPush[T]` would otherwise have block 0
+        // (some unrelated function's body) walked under their own bound-less type
+        // params, mis-flagging method calls inside it.
+        if f.typeParams.count > 0 && !f.isExtern {
             val noParams: Array[Bind] = []
             val noArgs: Array[U64] = []
             c.locals = []

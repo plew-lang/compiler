@@ -1,0 +1,24 @@
+import @Std/Io with { print }
+
+// Hash/Hasher + SipHash-1-3 (spec/02): hashing is deterministic (fixed seed for
+// now) and distinguishes distinct keys. Exact digests are algorithm-specific, so
+// this checks the observable contract, not magic numbers.
+fn hashU64(v: U64) -> U64 {
+    mut val h: SipHasher = SipHasher.new()
+    v.hash(hasher: inout h)
+    return h.finish()
+}
+fn hashStr(v: String) -> U64 {
+    mut val h: SipHasher = SipHasher.new()
+    v.hash(hasher: inout h)
+    return h.finish()
+}
+fn boolI(b: Bool) -> I64 { if b { return 1I64 } return 0I64 }
+
+fn main() {
+    print(boolI(b: hashU64(v: 42U64) == hashU64(v: 42U64)))      // 1 deterministic
+    print(boolI(b: hashU64(v: 42U64) == hashU64(v: 43U64)))      // 0 distinct
+    print(boolI(b: hashStr(v: "hello") == hashStr(v: "hello")))  // 1
+    print(boolI(b: hashStr(v: "hello") == hashStr(v: "world")))  // 0
+    print(boolI(b: hashStr(v: "ab") == hashStr(v: "ba")))        // 0 order matters
+}

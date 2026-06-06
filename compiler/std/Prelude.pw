@@ -41,3 +41,107 @@ pub impl[T] Array[T] {
         arraySet(a: inout self, i: i, v: value)
     }
 }
+
+// --- Hashing (spec/02): `Hash`/`Hasher` are referenced by the `[k:v]` dictionary
+// literal's key bound (`K: Hash`), so they live in the ambient prelude like
+// `Array`/`Dictionary`. Algorithm = SipHash-1-3 (same as Rust's default), with a
+// FIXED key for now — Plew has no RNG yet; switch to a per-map random seed once
+// `Random` lands (worklog 🔴 TODO). Until then hashing is deterministic (harmless:
+// iteration order is unspecified, and compiler-internal maps want determinism).
+
+// A streaming hasher absorbs U64 words and finalizes to a U64 digest.
+trait Hasher {
+    inout fn writeU64(n: U64)
+    fn finish() -> U64
+}
+
+// A type is hashable by feeding its value into a hasher (generic over the hasher
+// `H`, so a map picks the algorithm). The `@[Hash]` derive synthesizes this for a
+// struct/enum by hashing each field; primitives and `String` are hand-written below.
+trait Hash {
+    fn hash[H](hasher: inout H) where H: Hasher
+}
+
+// Rotate-left for U64 (shifts don't overflow-panic; b is always in 1..63 here).
+fn rotlU64(x: U64, b: U64) -> U64 {
+    return (x << b) | (x >> (64U64 - b))
+}
+
+// SipHash-1-3 state (four 64-bit words). Fixed key k0=k1=0 → the standard init
+// constants below. `new()` seeds it; `round()` is one SipRound mixing step.
+struct SipHasher {
+    mut val v0: U64
+    mut val v1: U64
+    mut val v2: U64
+    mut val v3: U64
+}
+pub impl SipHasher {
+    assoc fn new() -> SipHasher {
+        return <SipHasher v0=8317987319222330741U64 v1=7237128888997146477U64 v2=7816392313619706465U64 v3=8387220255154660723U64 />
+    }
+    inout fn round() {
+        self.v0 = self.v0.wrappingAdd(by: self.v1)
+        self.v1 = rotlU64(x: self.v1, b: 13U64)
+        self.v1 = self.v1 ^ self.v0
+        self.v0 = rotlU64(x: self.v0, b: 32U64)
+        self.v2 = self.v2.wrappingAdd(by: self.v3)
+        self.v3 = rotlU64(x: self.v3, b: 16U64)
+        self.v3 = self.v3 ^ self.v2
+        self.v0 = self.v0.wrappingAdd(by: self.v3)
+        self.v3 = rotlU64(x: self.v3, b: 21U64)
+        self.v3 = self.v3 ^ self.v0
+        self.v2 = self.v2.wrappingAdd(by: self.v1)
+        self.v1 = rotlU64(x: self.v1, b: 17U64)
+        self.v1 = self.v1 ^ self.v2
+        self.v2 = rotlU64(x: self.v2, b: 32U64)
+    }
+}
+pub impl SipHasher as Hasher {
+    // SipHash-1-3: 1 compression round per absorbed word.
+    inout fn writeU64(n: U64) {
+        self.v3 = self.v3 ^ n
+        self.round()
+        self.v0 = self.v0 ^ n
+    }
+    // SipHash-1-3: 3 finalization rounds (on a copy — `finish` doesn't consume).
+    fn finish() -> U64 {
+        mut val s: SipHasher = self
+        s.v2 = s.v2 ^ 255U64
+        s.round()
+        s.round()
+        s.round()
+        return ((s.v0 ^ s.v1) ^ s.v2) ^ s.v3
+    }
+}
+
+// Primitive + String conformances (the leaves a derived struct/enum hash bottoms
+// out at). Signed integers await a bit-reinterpret (`as` is lossless-only) — added
+// when needed; U64 + String cover dictionary's first keys (indices, interned names).
+pub impl U64 as Hash {
+    fn hash[H](hasher: inout H) where H: Hasher {
+        hasher.writeU64(n: self)
+    }
+}
+pub impl String as Hash {
+    fn hash[H](hasher: inout H) where H: Hasher {
+        val bs: Array[U8] = self.bytes
+        val n: U64 = bs.count
+        mut val i: U64 = 0
+        mut val word: U64 = 0
+        mut val shift: U64 = 0
+        while i < n {
+            word = word | ((bs[i] as U64) << shift)
+            shift = shift + 8U64
+            if shift == 64U64 {
+                hasher.writeU64(n: word)
+                word = 0U64
+                shift = 0U64
+            }
+            i = i + 1
+        }
+        if shift > 0U64 {
+            hasher.writeU64(n: word)
+        }
+        hasher.writeU64(n: n)
+    }
+}

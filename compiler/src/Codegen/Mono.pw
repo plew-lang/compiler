@@ -2257,7 +2257,9 @@ fn collectFnInsts(c: inout Comp) {
     mut val fi: U64 = 0
     while fi < c.funcs.count {
         val f: Func = c.funcs[fi]
-        if f.typeParams.count > 0 {
+        // skip generic templates (their instances come from call sites) and extern
+        // fns (body == 0 is a sentinel; walking block 0 would scan an unrelated body).
+        if f.typeParams.count > 0 || f.isExtern {
         } else {
             val noParams: Array[Bind] = []
             val noArgs: Array[U64] = []
