@@ -14,6 +14,25 @@
 
 完了した大物（詳細は git・記述的タグ）：async/await 段階 1-3（stackless SM）・コアライブラリ境界（`@Std` の `extern "plew-intrinsic"`）・**Array＝`RawBuffer` 床の Plew struct**（[array-struct-plan.md](array-struct-plan.md)）・可視性完全強制・Iterator/Iterable＋lazy map/filter・再帰値型 auto-boxing＋ARC・renovate Phase A（ARC 1 本化・Op enum・expect）＋Phase B B0-B2（型付き AST キャッシュ）・**メタプロ M0/M1**（マクロが実宣言を読んで生成・tag `metaprogramming-m1`）・**A＝フロントエンド統合**（全パース→共有 @Std/Syntax・パース駆動ローディング）・**マクロ入力 `TopItemAst`**（struct/enum/fn に加え **impl/trait** もマクロ対象）・**パターン/構築のフィールド実在検査**（`checkMatchBinds`/`checkMakeFieldExists`＝受理の健全性・旧 silent broken C を loud reject 化）。renovate vs rewrite の判断・負債の地図は [architecture.md](architecture.md)「負債監査の結論」、設計根拠は [design-decisions.md](design-decisions.md)、再利用機構は本書末尾「再利用資産・罠」。
 
+## 既知バグ一括修正（in progress・2026-06-07 着手）
+
+provisional.md に散在していた「ブロッカーなし・いつでも直せる」バグを棚卸しし、**一括で潰す**。各項＝症状／場所／直し／状態。完了したらこの節から落とし（git タグ＋provisional の該当行更新へ）、全完了でこの節ごと削除。compact 跨ぎの再開地図。
+
+- **Bug1 C 予約語識別子マングル**〔hidden meaning〕：`default`/`double`/`int` 等を名前に使うと生成 C 破壊。直し＝codegen の識別子出力（writeSpan 系）で C 予約語を安全名へマングル。場所＝Emit.pw の識別子出力点。状態＝未着手。
+- **Bug2 曖昧無サフィックスリテラルが先頭 overload 選択**〔silent〕：`k(a:5)` に `k(a:I32)`/`k(a:U64)`。直し＝findFunc/findMethod の解決で「型未確定リテラル引数が複数候補にマッチ」を曖昧 reject。場所＝Resolve.pw。状態＝未着手。
+- **Bug3 メソッド値化 `val f = obj.method` を受理**〔should be loud〕：spec 禁止。直し＝`Expr.Method` を値位置（呼び出しでない）で使ったら reject。場所＝Expr.pw/Check.pw。状態＝未着手。
+- **Bug4 free 関数のモジュール跨ぎ同名衝突 誤 reject**〔false positive〕：別モジュール同名 private で正しい呼びが誤 reject。直し＝free 関数解決を same-module 優先、他モジュールは import 済み名のみ候補。場所＝`checkUseVisibility`（Check.pw）。状態＝未着手。
+- **Bug5 `;` 文区切りが的外れエラー**：`a; b` が「integer literal has no type from context」。直し＝パーサ（ParseBody.pw の文/ブロック）で `;` を clean な構文エラーに。状態＝未着手。
+- **Bug6+7 文脈型が末端リテラルに伝播しない**〔同根〕：(6) `ys[0]->v = 42`（Arrow place 代入右辺）・(7) `for val i: I32 in 0..<5`（範囲境界）。直し＝注釈/pointee フィールド型を式文脈（curRetTy 系）として末端リテラルへ降ろす。場所＝Stmt.pw（for/assign）・Expr.pw（arrow store）。状態＝未着手。
+- **Bug8+9 `@[Ord]` 残ギャップ**〔loud〕：(8) enum 未実装（struct のみ）・(9) `@[Ord]` が `@[Eq]` を含意しない（`Ord: Eq`）。直し＝derive 合成（`synth*`・Parser/Decl.pw）に enum compare＋Eq 連動。状態＝未着手。
+- **Bug10 ネスト generic 不単相化**〔一般 generics・clang 止まり〕：`Array[Entry[K,V]]`→`Array_Entry_K_V`。直し＝mono がネスト inst 名へ型 args を再帰置換。場所＝Mono.pw。状態＝未着手・中規模。
+- **Bug11 generic コンストラクタ戻り型推論なし**：`Map.new()->Map[K,V]`／注釈からの `<Map .../>` が K,V 未推論。直し＝戻り型/注釈駆動の型引数推論。場所＝Mono.pw/Expr.pw。状態＝未着手・中規模。
+- **Bug12 Array メソッド実体の本体 env 未 bind（= dict-wip ブロッカー）**：`Array[U64]` フィールド等で emit された `Array_U64_first` の本体 `self.get(i:0)` が要素型 `T` 未置換のまま `Array_T_get` を吐く（`self.get` を内側で呼ぶ `first`/`second` だけ・`size` は無害）。**実機確認済の正体**＝実使用 `xs.first()`（call 駆動）の本体は ground されるのに、`emitArrayMethods` がフィールド由来で emit した実体は本体内の `self` 要素型 env が張られていない。直し＝`emitArrayMethods`→`emitMonoMethod` 経由の本体 emission で、receiver Array の要素型を inst の要素型へ bind（`typeOf(self)` が要素 `T` を inst 要素へ解決するよう env を張る）。場所＝Mono.pw `emitArrayMethods`/`emitMonoMethod`。状態＝正体判明・未着手。
+- **Bug13 shadow キャプチャの C 名不一致**〔loud・低優先〕：F2 の shadow suffix が `emitCaptureInit` の enclosing 名出力に未配線。場所＝Expr.pw。状態＝未着手・低優先。
+- **Bug14 パターン/構築フィールド名のエラー行が近似**：bind/MakeField 名が lower で再インターン＝原本 offset 無し。直し＝`BindAst`/`MakeFieldAst` に span 付与、lower で原本 offset 維持。場所＝Trees.pw/Lower.pw。状態＝未着手。
+
+> Bug12 が直れば dict-wip のブロッカーが外れて Dictionary を main へ出せる（Dictionary land 自体は別タスク＝下記 Dictionary 再開ガイド）。Bug10/11 が直れば Dictionary の回避策（平行配列・明示型引数）も不要にできるが、land には必須でない。
+
 ## 次の一歩
 
 A 完了で M1 の理想形（真の 1 AST）に到達・impl/trait もマクロ対象済。**Eq/Ord トレイト演算子配線＋`@[Eq]`/`@[Ord]` derive は実装済**（commit `d33e17e`/`a9e15f2`・[provisional.md](provisional.md)「Eq/Ord」節）。
