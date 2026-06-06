@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+// With a type suffix the literal resolves to exactly one overload.
+fn k(a: I32) -> I32 { return a }
+fn k(a: U64) -> U64 { return a }
+fn main() {
+    print(k(a: 5I32))
+    print(k(a: 7U64))
+}

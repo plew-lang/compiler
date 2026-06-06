@@ -73,6 +73,7 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U6
     // unique-name call resolves exactly as before.
     mut val firstLabel: U64 = c.funcs.count
     mut val typeMatch: U64 = c.funcs.count
+    mut val typeMatch2: U64 = c.funcs.count
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
@@ -83,9 +84,13 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U6
                     if firstLabel == c.funcs.count {
                         firstLabel = i
                     }
-                    if typeMatch == c.funcs.count {
-                        if paramsTypesMatch(c: inout c, params: f.params, args: args) {
+                    if paramsTypesMatch(c: inout c, params: f.params, args: args) {
+                        if typeMatch == c.funcs.count {
                             typeMatch = i
+                        } else {
+                            if typeMatch2 == c.funcs.count {
+                                typeMatch2 = i
+                            }
                         }
                     }
                 }
@@ -94,6 +99,7 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U6
         i += 1
     }
     if typeMatch != c.funcs.count {
+        checkOverloadAmbiguity(c: inout c, a: typeMatch, b: typeMatch2, args: args)
         return typeMatch
     }
     return firstLabel
@@ -131,6 +137,7 @@ fn funcNameExists(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
 fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     mut val firstLabel: U64 = c.funcs.count
     mut val typeMatch: U64 = c.funcs.count
+    mut val typeMatch2: U64 = c.funcs.count
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
@@ -141,9 +148,13 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
                         if firstLabel == c.funcs.count {
                             firstLabel = i
                         }
-                        if typeMatch == c.funcs.count {
-                            if paramsTypesMatch(c: inout c, params: f.params, args: args) {
+                        if paramsTypesMatch(c: inout c, params: f.params, args: args) {
+                            if typeMatch == c.funcs.count {
                                 typeMatch = i
+                            } else {
+                                if typeMatch2 == c.funcs.count {
+                                    typeMatch2 = i
+                                }
                             }
                         }
                     }
@@ -153,6 +164,7 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
         i += 1
     }
     if typeMatch != c.funcs.count {
+        checkOverloadAmbiguity(c: inout c, a: typeMatch, b: typeMatch2, args: args)
         return typeMatch
     }
     if firstLabel != c.funcs.count {
@@ -179,6 +191,7 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
 fn findAssoc(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     mut val firstLabel: U64 = c.funcs.count
     mut val typeMatch: U64 = c.funcs.count
+    mut val typeMatch2: U64 = c.funcs.count
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
@@ -189,9 +202,13 @@ fn findAssoc(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLe
                         if firstLabel == c.funcs.count {
                             firstLabel = i
                         }
-                        if typeMatch == c.funcs.count {
-                            if paramsTypesMatch(c: inout c, params: f.params, args: args) {
+                        if paramsTypesMatch(c: inout c, params: f.params, args: args) {
+                            if typeMatch == c.funcs.count {
                                 typeMatch = i
+                            } else {
+                                if typeMatch2 == c.funcs.count {
+                                    typeMatch2 = i
+                                }
                             }
                         }
                     }
@@ -201,6 +218,7 @@ fn findAssoc(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLe
         i += 1
     }
     if typeMatch != c.funcs.count {
+        checkOverloadAmbiguity(c: inout c, a: typeMatch, b: typeMatch2, args: args)
         return typeMatch
     }
     return firstLabel
@@ -334,6 +352,55 @@ fn paramsTypesMatch(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bo
         i += 1
     }
     return true
+}
+
+// An argument that is an unsuffixed integer literal carries no type name, so it
+// adapts to any integer parameter (argMatchesParam's last clause). Such an
+// argument is the only source of "one call matches two overloads": a typed value
+// matches exactly one parameter type.
+fn argIsUntypedIntLit(c: inout Comp, argExpr: U64) -> Bool {
+    val ti: TypeInfo = exprType(c: inout c, id: argExpr)
+    if ti.kind == 0 {
+        return ti.nameLen == 0
+    }
+    return false
+}
+
+// Two type-matching overloads are genuinely ambiguous for this call iff some
+// untyped integer-literal argument maps to differing parameter types between
+// them. (Overloads that agree on every provided arg type but differ only via
+// defaulted/omitted params are a separate concern, not flagged here.)
+fn overloadsAmbiguous(c: inout Comp, fa: Func, fb: Func, args: Array[Arg]) -> Bool {
+    mut val i: U64 = 0
+    while i < args.count {
+        if argIsUntypedIntLit(c: inout c, argExpr: args[i].expr) {
+            if i < fa.params.count {
+                if i < fb.params.count {
+                    if spansEqual(c: inout c, aStart: fa.params[i].tyStart, aLen: fa.params[i].tyLen, bStart: fb.params[i].tyStart, bLen: fb.params[i].tyLen) {
+                    } else {
+                        return true
+                    }
+                }
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// Loudly reject (exits) when the two type-matching overloads `a`/`b` are
+// ambiguous for this call — picking the first silently would invent meaning
+// (spec: 補完はする／忖度はしない／曖昧はエラー).
+fn checkOverloadAmbiguity(c: inout Comp, a: U64, b: U64, args: Array[Arg]) {
+    if b != c.funcs.count {
+        if overloadsAmbiguous(c: inout c, fa: c.funcs[a], fb: c.funcs[b], args: args) {
+            mut val off: U64 = 0
+            if args.count > 0 {
+                off = exprOffset(c: inout c, id: args[0].expr)
+            }
+            compileErrorAt(line: lineOf(c: inout c, offset: off), msg: "ambiguous call: an unsuffixed integer literal matches more than one overload; add a type suffix (e.g. `5I32`)")
+        }
+    }
 }
 
 // Acceptance soundness: spec requires every argument to carry its label, in

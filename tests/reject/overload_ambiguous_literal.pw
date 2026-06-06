@@ -1,0 +1,9 @@
+import @Std/Io with { print }
+// An unsuffixed integer literal matches both overloads (it adapts to any integer
+// type); the call is ambiguous and must be rejected, not silently bound to the
+// first overload (spec: 補完はする／忖度はしない／曖昧はエラー).
+fn k(a: I32) -> I32 { return a }
+fn k(a: U64) -> U64 { return a }
+fn main() {
+    print(k(a: 5))
+}
