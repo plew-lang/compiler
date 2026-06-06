@@ -765,3 +765,162 @@ export fn parseDecl(p: inout P) -> DeclAst {
         }
     }
 }
+
+// Parse a method/assoc-fn member after its mode keyword(s) and `fn` are consumed
+// (cursor at the method name): `name[T,...](params) [-> Ret] [where ...]
+// (via real | { body })`. `kind`/`selfInout`/`selfMove`/`isAsync` come from the
+// mode keyword the caller already consumed.
+fn parseMethodAfterFn(p: inout P, kind: MemberKind, selfInout: Bool, selfMove: Bool, isAsync: Bool) -> MemberAst {
+    val nameTok: Tok = p.curTok()
+    val name: String = p.text(t: nameTok)
+    val nameSpan: Span = p.spanOf(t: nameTok)
+    p.advance()
+    val typeParams: Array[String] = parseTypeParamNames(p: inout p)
+    val params: Array[ParamAst] = parseParamAsts(p: inout p)
+    mut val hasRet: Bool = false
+    mut val ret: TypeAst = emptyTypeAst()
+    match p.curKind() {
+        Kind.Arrow => {
+            p.advance()
+            ret = parseType(p: inout p)
+            hasRet = true
+        }
+        _ => {}
+    }
+    mut val whereParams: Array[String] = []
+    mut val whereTraits: Array[String] = []
+    parseWhereNames(p: inout p, params: inout whereParams, traits: inout whereTraits)
+    // `via real`: witnesses a requirement by aliasing an existing method (no body).
+    mut val isVia: Bool = false
+    mut val viaName: String = ""
+    if curIs(p: inout p, kw: "via") {
+        p.advance()
+        viaName = p.text(t: p.curTok())
+        p.advance()
+        isVia = true
+    }
+    mut val body: BlockAst = emptyBlock()
+    if isVia {
+    } else {
+        p.skipNewlines()
+        body = parseBlockAst(p: inout p)
+    }
+    return <MemberAst kind=kind name=name nameSpan=nameSpan typeParams=typeParams params=params hasRet=hasRet ret=ret whereParams=whereParams whereTraits=whereTraits isAsync=isAsync selfInout=selfInout selfMove=selfMove isVia=isVia viaName=viaName body=body assocTy=emptyTypeAst() />
+}
+
+// An `[pub] impl[T] Recv [as Trait] [where ...] { members }` block (spec/07,08).
+// The cursor is at the `impl` ident (the leading `pub`, if any, is already consumed
+// and passed as `isPub`). Mirrors the compiler's parseImpl.
+export fn parseImplDecl(p: inout P, isPub: Bool) -> ImplAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    val implParams: Array[String] = parseTypeParamNames(p: inout p)
+    val recvType: TypeAst = parseType(p: inout p)
+    mut val isTraitImpl: Bool = false
+    mut val traitName: String = ""
+    match p.curKind() {
+        Kind.KwAs => {
+            p.advance()
+            traitName = p.text(t: p.curTok())
+            p.advance()
+            isTraitImpl = true
+        }
+        _ => {}
+    }
+    mut val whereParams: Array[String] = []
+    mut val whereTraits: Array[String] = []
+    parseWhereNames(p: inout p, params: inout whereParams, traits: inout whereTraits)
+    match p.curKind() {
+        Kind.LBrace => { p.advance() }
+        _ => {}
+    }
+    mut val members: Array[MemberAst] = []
+    while true {
+        p.skipNewlines()
+        match p.curKind() {
+            Kind.RBrace => {
+                p.advance()
+                break
+            }
+            Kind.Eof => { break }
+            Kind.KwInout => {
+                p.advance()
+                match p.curKind() {
+                    Kind.KwFn => { p.advance() }
+                    _ => {}
+                }
+                members.append(parseMethodAfterFn(p: inout p, kind: <MemberKind.Method />, selfInout: true, selfMove: false, isAsync: false))
+            }
+            Kind.KwFn => {
+                p.advance()
+                members.append(parseMethodAfterFn(p: inout p, kind: <MemberKind.Method />, selfInout: false, selfMove: false, isAsync: false))
+            }
+            Kind.KwAsync => {
+                p.advance()
+                mut val asyncMove: Bool = false
+                match p.curKind() {
+                    Kind.KwMove => {
+                        p.advance()
+                        asyncMove = true
+                    }
+                    _ => {}
+                }
+                match p.curKind() {
+                    Kind.KwFn => { p.advance() }
+                    _ => {}
+                }
+                members.append(parseMethodAfterFn(p: inout p, kind: <MemberKind.Method />, selfInout: false, selfMove: asyncMove, isAsync: true))
+            }
+            Kind.KwMove => {
+                p.advance()
+                match p.curKind() {
+                    Kind.KwFn => { p.advance() }
+                    _ => {}
+                }
+                members.append(parseMethodAfterFn(p: inout p, kind: <MemberKind.Method />, selfInout: false, selfMove: true, isAsync: false))
+            }
+            Kind.KwBorrow => {
+                p.advance()
+                match p.curKind() {
+                    Kind.KwFn => { p.advance() }
+                    _ => {}
+                }
+                members.append(parseMethodAfterFn(p: inout p, kind: <MemberKind.Method />, selfInout: false, selfMove: false, isAsync: false))
+            }
+            Kind.KwDeinit => {
+                val dStart: U64 = p.base + p.curTok().start
+                p.advance()
+                p.skipNewlines()
+                val dbody: BlockAst = parseBlockAst(p: inout p)
+                members.append(<MemberAst kind=<MemberKind.Deinit /> name="" nameSpan=<Span start=dStart end=dStart /> typeParams=[] params=[] hasRet=false ret=emptyTypeAst() whereParams=[] whereTraits=[] isAsync=false selfInout=false selfMove=false isVia=false viaName="" body=dbody assocTy=emptyTypeAst() />)
+            }
+            _ => {
+                if curIs(p: inout p, kw: "assoc") {
+                    p.advance()
+                    match p.curKind() {
+                        Kind.KwFn => { p.advance() }
+                        _ => {}
+                    }
+                    members.append(parseMethodAfterFn(p: inout p, kind: <MemberKind.AssocFn />, selfInout: false, selfMove: false, isAsync: false))
+                } else {
+                    if curIs(p: inout p, kw: "type") {
+                        p.advance()
+                        val atTok: Tok = p.curTok()
+                        val atName: String = p.text(t: atTok)
+                        val atSpan: Span = p.spanOf(t: atTok)
+                        p.advance()
+                        match p.curKind() {
+                            Kind.Eq => { p.advance() }
+                            _ => {}
+                        }
+                        val aty: TypeAst = parseType(p: inout p)
+                        members.append(<MemberAst kind=<MemberKind.AssocType /> name=atName nameSpan=atSpan typeParams=[] params=[] hasRet=false ret=emptyTypeAst() whereParams=[] whereTraits=[] isAsync=false selfInout=false selfMove=false isVia=false viaName="" body=emptyBlock() assocTy=aty />)
+                    } else {
+                        p.advance()
+                    }
+                }
+            }
+        }
+    }
+    return <ImplAst recvType=recvType implParams=implParams isTraitImpl=isTraitImpl traitName=traitName whereParams=whereParams whereTraits=whereTraits isPub=isPub members=members span=<Span start=sStart end=p.prevEnd() /> />
+}

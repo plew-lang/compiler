@@ -127,3 +127,57 @@ export struct DeclAst {
 export fn emptyTypeAst() -> TypeAst {
     return <TypeAst name="" args=[] span=<Span start=0 end=0 /> />
 }
+
+// Which kind of member a `MemberAst` is inside an `impl` block (spec/07,08).
+export enum MemberKind {
+    Method      // `[inout|move|borrow] fn` / `async [move] fn` — has self
+    AssocFn     // `assoc fn` — namespaced on the type, no self
+    Deinit      // `deinit { ... }` — synthetic Type_deinit method
+    AssocType   // `type Item = Concrete` — conformance's associated-type binding
+}
+
+// A member of an `impl` block. A tagged record (`kind` selects the shape; the
+// kind-specific fields below are populated accordingly). For Method/AssocFn it is
+// a function signature + body (or a `via real` alias); for Deinit just a body; for
+// AssocType a name + bound type.
+export struct MemberAst {
+    pub val kind: MemberKind
+    pub val name: String
+    pub val nameSpan: Span
+    pub val typeParams: Array[String]
+    pub val params: Array[ParamAst]
+    pub val hasRet: Bool
+    pub val ret: TypeAst
+    pub val whereParams: Array[String]
+    pub val whereTraits: Array[String]
+    // `async fn` method (spec/14). `selfInout` = `inout fn` (mutable self),
+    // `selfMove` = `move fn`/`async move fn` (consuming self). A plain/`borrow fn`
+    // has both false.
+    pub val isAsync: Bool
+    pub val selfInout: Bool
+    pub val selfMove: Bool
+    // `fn req(...) -> T via real` (spec/08): witnesses a requirement by aliasing an
+    // existing method `real` (no body). `viaName` is `real`.
+    pub val isVia: Bool
+    pub val viaName: String
+    // Method/AssocFn/Deinit body (empty for `via` and AssocType).
+    pub val body: BlockAst
+    // AssocType's bound type `type Item = <assocTy>`.
+    pub val assocTy: TypeAst
+}
+
+// An `[pub] impl[T] Recv [as Trait] [where ...] { members }` block (spec/07,08).
+// `recvType` carries the receiver type (its head name is the type the members are
+// registered on; the `[T]` args are redundant with `implParams`).
+export struct ImplAst {
+    pub val recvType: TypeAst
+    pub val implParams: Array[String]
+    pub val isTraitImpl: Bool
+    pub val traitName: String
+    // impl-level `where I: Trait` (spec/08): folded into every member's bounds.
+    pub val whereParams: Array[String]
+    pub val whereTraits: Array[String]
+    pub val isPub: Bool
+    pub val members: Array[MemberAst]
+    pub val span: Span
+}
