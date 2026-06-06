@@ -1,101 +1,33 @@
-// ---- multi-file `part` ----
+// ---- multi-file module loading (parse-driven) ----
 //
-// A module may span several files: `part ./Name` stitches Name.pw into the same
-// module (shared scope, no namespace). We resolve this by assembling all files
-// into one byte buffer and lexing/parsing it as a unit (the single-arena, single
-// C-output model has no separate compilation). Only `part ./Name` (sibling file)
-// is supported for now; `_.pw` directories, `../`, and `/` roots are additive.
+// A module may span several files: `part <path>` stitches a file into the same
+// module (shared scope), `import <path>` pulls in a separate module. Loading is
+// PARSE-DRIVEN: the driver (main) appends each file's source to the arena's byte
+// buffer, parses it with the shared @Std/Syntax parser (parseAndLowerFile), lowers
+// its items, and follows the `import`/`part` nodes the parser returns to discover
+// more files — no separate directive pre-scan. Every distinct file is appended once
+// (single-arena, single-C-output; no separate compilation). `resolveImport` turns a
+// path node into a file path (`@Std/X`, `/Seg`, `./Name`, `../Name`).
 
-// A token kind that can appear inside an import/part path: `.`/`..`(Dot), `/`
-// (Slash), or a segment (Ident). `@` is not lexed as a token, so `@Std/…` paths
-// start with an Ident and are not captured here (intrinsic, handled elsewhere).
-fn isPathTokKind(k: Kind) -> Bool {
-    match k {
-        Kind.Dot => { return true }
-        Kind.Slash => { return true }
-        Kind.Ident => { return true }
-        _ => { return false }
+// Parse one already-appended file (its bytes sit at c.bytes[fileStart..]) through the
+// shared @Std/Syntax parser and lower its items into the arena (spec/15,16). `base =
+// fileStart` so every node span is an absolute offset into c.bytes (module tagging
+// via moduleOf works). Returns the parsed item list so the loader can follow the
+// `Import` items (part/import) to more files and notice `@[...]` directives.
+fn parseAndLowerFile(c: inout Comp, fileBytes: Array[U8], fileStart: U64) -> Array[TopItemAst] {
+    mut val lx: Lexer = <Lexer bytes=fileBytes pos=0 toks=[] depth=0 />
+    lex(lx: inout lx)
+    mut val p: P = <P bytes=fileBytes toks=lx.toks pos=0 base=fileStart />
+    val items: Array[TopItemAst] = parseProgramAst(p: inout p)
+    if p.hasErr {
+        compileErrorAt(line: lineOf(c: inout c, offset: p.errOff), msg: p.errMsg)
     }
-}
-
-// Scan a token stream for `part <path>` / `import <path>` directives and return
-// the full contiguous path spans (into `rootBytes`) — `./Name`, `../Name`,
-// `/Seg/Seg`, etc. A path starts at a `.`/`/` immediately after the keyword and
-// extends across adjacent path tokens (no whitespace gap), so it stops before a
-// space-separated `with`. `@Std/…` starts with an Ident (no leading `.`/`/`) and
-// is skipped here. resolveImport later turns each span into a file path.
-// The returned Bind's `fieldStart` tags the include kind: 0 = `part` (same
-// module), 1 = `import` (a separate module). The loader uses this to assign module
-// ids (part children inherit the parent's id; an import child starts a new one).
-fn collectParts(rootBytes: Array[U8], toks: Array[Tok]) -> Array[Bind] {
-    mut val parts: Array[Bind] = []
     mut val i: U64 = 0
-    while i < toks.count {
-        val t: Tok = toks[i]
-        mut val isKw: Bool = false
-        mut val isImport: Bool = false
-        match t.kind {
-            Kind.Ident => {
-                if rangeEquals(bytes: rootBytes, start: t.start, len: t.len, kw: "part") {
-                    isKw = true
-                }
-                if rangeEquals(bytes: rootBytes, start: t.start, len: t.len, kw: "import") {
-                    isKw = true
-                    isImport = true
-                }
-            }
-            _ => {}
-        }
-        if isKw {
-            if i + 1 < toks.count {
-                val first: Tok = toks[i + 1]
-                mut val starts: Bool = false
-                // `@`-imports (`@Std/Core`): `@` lexes as an Unknown token; the
-                // path starts there and extends across the following segments.
-                match first.kind {
-                    Kind.Dot => { starts = true }
-                    Kind.Slash => { starts = true }
-                    _ => {
-                        if rootBytes[first.start] == 64 {
-                            starts = true
-                        }
-                    }
-                }
-                if starts {
-                    val pathStart: U64 = first.start
-                    mut val pathEnd: U64 = first.start + first.len
-                    mut val j: U64 = i + 2
-                    mut val go: Bool = true
-                    while go {
-                        if j < toks.count {
-                            val nt: Tok = toks[j]
-                            if isPathTokKind(k: nt.kind) {
-                                if nt.start == pathEnd {
-                                    pathEnd = nt.start + nt.len
-                                    j += 1
-                                } else {
-                                    go = false
-                                }
-                            } else {
-                                go = false
-                            }
-                        } else {
-                            go = false
-                        }
-                    }
-                    val pl: U64 = pathEnd - pathStart
-                    mut val kind: U64 = 0
-                    if isImport {
-                        kind = 1
-                    }
-                    parts.append(<Bind nameStart=pathStart nameLen=pl fieldStart=kind fieldLen=pl />)
-                    i = j - 1
-                }
-            }
-        }
+    while i < items.count {
+        lowerTopItem(c: inout c, item: items[i])
         i += 1
     }
-    return parts
+    return items
 }
 
 // Remove `n` trailing directory components from the prefix path[0..baseLen]
@@ -287,27 +219,6 @@ fn findSrcRoot(entry: Array[U8]) -> Array[U8] {
     mut val empty: Array[U8] = []
     return empty
 }
-
-// Does the token stream contain a `@[` directive (the `@` lexes as an Unknown
-// token whose first byte is '@' = 64, directly followed by a `[`)? Marks a file
-// whose generated sibling `<Foo>.gen.pw` should be auto-parted (spec/16). The
-// adjacent-token check mirrors the parser's directive recognition and excludes
-// `@Std/…` imports (where `@` is followed by an Ident, not `[`).
-fn hasDirective(bytes: Array[U8], toks: Array[Tok]) -> Bool {
-    mut val i: U64 = 0
-    while i + 1 < toks.count {
-        val t: Tok = toks[i]
-        if bytes[t.start] == 64 {
-            match toks[i + 1].kind {
-                Kind.LBracket => { return true }
-                _ => {}
-            }
-        }
-        i += 1
-    }
-    return false
-}
-
 // `<path>.pw` -> `<path>.gen.pw` (the auto-parted generated sibling). Empty if
 // `path` does not end in `.pw` (46='.', 112='p', 119='w').
 fn genSiblingPath(path: Array[U8]) -> Array[U8] {

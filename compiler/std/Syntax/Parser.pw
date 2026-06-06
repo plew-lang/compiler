@@ -1012,11 +1012,13 @@ export fn parseExternDecl(p: inout P) -> ExternAst {
     return <ExternAst abiOk=abiOk abiSpan=abiSpan fns=fns structNames=structNames structSpans=structSpans span=<Span start=p.base + externTok.start end=p.prevEnd() /> />
 }
 
-// `import <path> [with { name [as Q], ... }]` (spec/15). The cursor is at the
-// `import` ident. Captures the full contiguous path span (for the loader to resolve
-// to a file), the last segment, and each `with` name (original span — feeds moduleOf
-// for the importing module). Mirrors the compiler's parseImport + collectParts.
-fn parseImportAst(p: inout P) -> ImportAst {
+// `import <path> [with { name [as Q], ... }]` or `part <path>` (spec/15). The cursor
+// is at the `import`/`part` ident (`isImport` distinguishes: an import starts a fresh
+// module, a part joins the current one). Captures the full contiguous path span (for
+// the loader to resolve to a file — parse-driven loading), the last segment, and each
+// `with` name (original span — feeds moduleOf for the importing module). A `part` has
+// no `with` list. Mirrors the compiler's parseImport + collectParts.
+fn parseImportAst(p: inout P, isImport: Bool) -> ImportAst {
     val startOff: U64 = p.base + p.curTok().start
     p.advance()
     // the path = contiguous tokens (`@`/`.`/`..`/`/` markers + segments), stopping
@@ -1095,7 +1097,7 @@ fn parseImportAst(p: inout P) -> ImportAst {
         }
         _ => {}
     }
-    return <ImportAst pathSpan=<Span start=pathStart end=pathEndAbs /> segSpan=<Span start=segStartAbs end=segStartAbs + segLen /> isImport=true names=names nameSpans=nameSpans span=<Span start=startOff end=p.prevEnd() /> />
+    return <ImportAst pathSpan=<Span start=pathStart end=pathEndAbs /> segSpan=<Span start=segStartAbs end=segStartAbs + segLen /> isImport=isImport names=names nameSpans=nameSpans span=<Span start=startOff end=p.prevEnd() /> />
 }
 
 // Optional directive arguments `(label: expr, ...)` after a derive name (spec/16).
@@ -1250,26 +1252,30 @@ export fn parseProgramAst(p: inout P) -> Array[TopItemAst] {
             Kind.KwExtern => { items.append(<TopItemAst.Extern e=parseExternDecl(p: inout p) />) }
             Kind.Ident => {
                 if curIs(p: inout p, kw: "import") {
-                    items.append(<TopItemAst.Import imp=parseImportAst(p: inout p) />)
+                    items.append(<TopItemAst.Import imp=parseImportAst(p: inout p, isImport: true) />)
                 } else {
-                    if curIs(p: inout p, kw: "export") {
-                        items.append(parseExportAst(p: inout p))
+                    if curIs(p: inout p, kw: "part") {
+                        items.append(<TopItemAst.Import imp=parseImportAst(p: inout p, isImport: false) />)
                     } else {
-                        if curIs(p: inout p, kw: "impl") {
-                            items.append(<TopItemAst.Impl im=parseImplDecl(p: inout p, isPub: false) />)
+                        if curIs(p: inout p, kw: "export") {
+                            items.append(parseExportAst(p: inout p))
                         } else {
-                            if curIs(p: inout p, kw: "pub") {
-                                p.advance()
-                                if curIs(p: inout p, kw: "impl") {
-                                    items.append(<TopItemAst.Impl im=parseImplDecl(p: inout p, isPub: true) />)
-                                } else {
-                                    p.advance()
-                                }
+                            if curIs(p: inout p, kw: "impl") {
+                                items.append(<TopItemAst.Impl im=parseImplDecl(p: inout p, isPub: false) />)
                             } else {
-                                if curIs(p: inout p, kw: "trait") {
-                                    items.append(<TopItemAst.Trait t=parseTraitDecl(p: inout p) />)
-                                } else {
+                                if curIs(p: inout p, kw: "pub") {
                                     p.advance()
+                                    if curIs(p: inout p, kw: "impl") {
+                                        items.append(<TopItemAst.Impl im=parseImplDecl(p: inout p, isPub: true) />)
+                                    } else {
+                                        p.advance()
+                                    }
+                                } else {
+                                    if curIs(p: inout p, kw: "trait") {
+                                        items.append(<TopItemAst.Trait t=parseTraitDecl(p: inout p) />)
+                                    } else {
+                                        p.advance()
+                                    }
                                 }
                             }
                         }

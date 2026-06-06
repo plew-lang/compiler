@@ -503,8 +503,6 @@ struct Comp {
     // identifier names ("eq", "lhs", ...) and reference them by span — existing
     // token offsets are unaffected (appends land past the end).
     pub mut val bytes: Array[U8]
-    pub val toks: Array[Tok]
-    pub mut val pos: U64
     pub mut val exprs: Array[Expr]
     pub mut val stmts: Array[Stmt]
     pub mut val blocks: Array[Block]
@@ -707,46 +705,23 @@ struct Comp {
     pub mut val assocBindings: Array[AssocBinding] = []
 }
 
-// ---- cursor helpers ----
+// ---- arena helpers ----
 //
-// Methods on the parse cursor. All take `inout self` (even read-only ones): the
-// Comp struct is large, so a by-value receiver would copy every arena header on
-// each call; the cursor is always held by `inout` anyway.
+// Methods on the arena (Comp). All take `inout self`: the struct is large, so a
+// by-value receiver would copy every arena header on each call; it is always held by
+// `inout` anyway. (Source appends + node pushes used by the loader and derive
+// synthesis.)
 
 pub impl Comp {
-    // The kind of the token under the cursor.
-    inout fn curKind() -> Kind {
-        return self.toks[self.pos].kind
-    }
-    // The token under the cursor.
-    inout fn cur() -> Tok {
-        return self.toks[self.pos]
-    }
-    // The kind `off` tokens ahead, or Eof past the end.
-    inout fn peekKind(off: U64) -> Kind {
-        val i: U64 = self.pos + off
-        if i < self.toks.count {
-            return self.toks[i].kind
+    // Append a file's source bytes onto the arena's combined byte buffer (the loader
+    // builds it incrementally: each file's bytes are appended before its items are
+    // lowered, so original-offset name spans resolve into it).
+    inout fn appendSrc(from: Array[U8]) {
+        mut val i: U64 = 0
+        while i < from.count {
+            self.bytes.append(from[i])
+            i += 1
         }
-        return <Kind.Eof />
-    }
-    // Advance the cursor by one token.
-    inout fn advance() {
-        self.pos = self.pos + 1
-    }
-    // Skip a run of newline tokens.
-    inout fn skipNewlines() {
-        while true {
-            match self.curKind() {
-                Kind.Newline => { self.advance() }
-                _ => { break }
-            }
-        }
-    }
-    // Does the token under the cursor spell the keyword `kw`?
-    inout fn identIs(kw: String) -> Bool {
-        val t: Tok = self.toks[self.pos]
-        return rangeEquals(bytes: self.bytes, start: t.start, len: t.len, kw: kw)
     }
     // Append an expression node, returning its arena index.
     inout fn pushExpr(e: Expr) -> U64 {
@@ -765,17 +740,6 @@ pub impl Comp {
         val id: U64 = self.types.count
         self.types.append(t)
         return id
-    }
-}
-
-// Consume a mandatory token: if the cursor is on `k`, advance; otherwise reject
-// with `msg` (acceptance soundness — a missing delimiter is an error, not silently
-// skipped). Kinds compare via their stable `kindCode`.
-fn expect(c: inout Comp, k: Kind, msg: String) {
-    if kindCode(k: c.curKind()) == kindCode(k: k) {
-        c.advance()
-    } else {
-        compileErrorAt(line: lineOf(c: inout c, offset: c.cur().start), msg: msg)
     }
 }
 

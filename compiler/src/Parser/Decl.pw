@@ -319,23 +319,3 @@ fn markImport(c: inout Comp, segStart: U64, segLen: U64, nameStart: U64, nameLen
 fn recordExport(c: inout Comp, nameStart: U64, nameLen: U64) {
     c.exports.append(<Bind nameStart=nameStart nameLen=nameLen fieldStart=moduleOf(c: inout c, offset: nameStart) fieldLen=0 />)
 }
-
-// top-level item into the arena / Comp state (spec/15,16). The compiler has no
-// declaration/dispatch parser of its own: `parseProgramAst` returns the value-tree
-// items (decl / impl / trait / extern / import / export / directive) and
-// `lowerTopItem` (Codegen/Lower.pw) lowers them. Driven over the compiler's own
-// token stream (base=0 = absolute offsets), surfacing the first syntax error loudly.
-fn parseProgram(c: inout Comp) {
-    mut val p: P = <P bytes=c.bytes toks=c.toks pos=c.pos base=0 />
-    val items: Array[TopItemAst] = parseProgramAst(p: inout p)
-    c.pos = p.pos
-    if p.hasErr {
-        compileErrorAt(line: lineOf(c: inout c, offset: p.errOff), msg: p.errMsg)
-    }
-    mut val i: U64 = 0
-    while i < items.count {
-        lowerTopItem(c: inout c, item: items[i])
-        i += 1
-    }
-}
-
