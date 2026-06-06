@@ -23,12 +23,12 @@ A 完了で M1 の理想形（真の 1 AST）に到達・impl/trait もマクロ
 > **🔴 必須 TODO（忘れない）＝ランダムシード（RandomState 相当）**。Rust の `HashMap` は SipHash-1-3 ＋ **マップごとにランダムキー**（DoS 耐性）。Plew にはまだ RNG（`Random`）が無いので、**当面は固定キー（決定的）で SipHash を実装**し、**`Random`/RNG 着手後にマップごとのランダムシードへ差し替える**（アルゴリズム・トレイト形は不変・シード源を差すだけ＝additive）。固定キー間は DoS 耐性なし（コンパイラ内部マップには無害・反復順は spec 未規定なので契約は破れない）。**RNG が入ったら必ずランダムシード化すること。**
 
 - **✅ 前提工事＝完了**：(B) が要求する「**メソッド固有型引数 `[H]`＋メソッド `where H: Trait` 境界＋トレイトディスパッチ越しの `inout H`**」は実装済（commit 後述・test `generic_method_bound_inout`）。`registerMethodInst` をプリミティブ受信者にも拡張（`u64.hash[H]` のインスタンスを登録）＋`collectFnInsts` の推移スキャンにレシーバ env を張り（derive struct の `self.field.hash(...)` が field の generic-method インスタンスを推移 discover）。自由関数 `where` 境界・名前付きメソッド呼びは既に動いていた（差はメソッド経路のみだった）。
-- **(a) 残り＝Hash/Dictionary 本体**：
-  1. **✅ `wrappingMul`/`wrappingAdd`/`wrappingSub`（整数全幅）＝実装済**（commit `aabb800`・privileged codegen lowering・uint64_t で計算→受信者幅へ truncate・test `wrapping_arith`）。
-  2. **`Hash`/`Hasher` トレイト＋SipHash-1-3 Hasher を std に**（(B) 形・`Hash: Eq`・プリミティブ群に `impl … as Hash`・**シードは当面固定**＝上の 🔴 TODO）。
-  3. **`@[Hash]` derive**（構造的 hash メソッド合成・現行 `synth*` 特権合成に追加）。
-  4. **`Dictionary[K,V]` lang item**（`[k:v]`/`[:]` リテラル・`K: Hash`・`dict[k]` 欠落 panic・`get`/`remove`）。
-  現行のコンパイラ特権合成（`synthStructEq` 等）から段階移行（特権版を残したまま並行→検証→差し替え）。
+- **(a) Hash/Dictionary**：
+  1. **✅ `wrappingMul`/`wrappingAdd`/`wrappingSub`（整数全幅）**（commit `aabb800`・privileged codegen lowering・uint64_t で計算→受信者幅へ truncate・test `wrapping_arith`）。
+  2. **✅ `Hash`/`Hasher` トレイト＋SipHash-1-3 Hasher（Prelude・固定シード）＋U64/String の `impl … as Hash`**（commit `d8eedb6`・test `hash_siphasher`）。同時に extern body-walk バグ修正。
+  3. **✅ `@[Hash]` derive を dogfood（特権合成でなく実 `impl Hash as Derive`）**（commit `4167151`・@Std/Syntax・test gen `derivehash`）。前提として trait 提供 assoc fn 呼び（commit `31c6fe1`）＋derive モデル `Derive`(assoc)/`ParameterizedDerive`(instance)（commit `b90ed6e`）を実装。
+  4. **🚧 `Dictionary[K,V]` lang item＝WIP（branch `dict-wip` ＋ `/tmp/dict-wip.patch`）**。ランタイムは**単体で完動**：平行配列（`keys: Array[K]`/`vals: Array[V]`/`hashes: Array[U64]`＋open-addressing の `buckets: Array[U64]`）＋SipHash・insert/update/getOr/contains/count/grow を検証済。**ネスト generic（`Array[Entry[K,V]]`）は単相化されない**ので平行配列で回避、**generic コンストラクタの戻り型推論が無い**ので構築は明示型引数（リテラル lower が供給予定）。`collectFnInsts` に generic-レシーバ・メソッド本体の推移スキャン（`scanGenInstMethodBodies`）を足し `Dictionary.hashOf` 内の `key.hash[H]`→`String.hash[SipHasher]` を discover。**未マージの理由**：Dictionary を**常時ロードの Prelude に置くと `array_methods` が回帰**（`Array[K]`/`Array[V]` フィールド由来の `Array[concrete]` genInst が Array 専用 emit 経路と干渉し、ground されない `Array_T_get` を吐く）。**次にやる＝この Array×genInst 干渉の修正**（Array を genInst emit 経路から除外＝Array は emitArrayMethods 専用、を切り分ける）。その後 `[k:v]`/`[:]` リテラル（@Std/Syntax パーサ：先頭要素の後が `:` か否かで dict/array 判別・`[:]` は空 dict）＋`dict[k]`（Index・欠落 panic）/`dict[k]=v`（IndexSet）。`get -> Optional[V]` は Optional ambient 化後。
+  現行のコンパイラ特権合成（`synthStructEq` 等＝Eq/Ord）は据え置き（Hash が dogfood の先駆け・Eq/Ord 移行は後）。
 - **(b) M3**：パッケージ管理導入後に `@Std/Syntax` を in-tree から外部共有パッケージへ昇格（コンパイラもマクロも同一版に依存）。
 - **小さな additive（任意）**：パターン/構築のフィールド名エラー行が近似（bind/MakeField 名が lower で再インターン＝原本 offset を持たない）。`BindAst`/`MakeFieldAst` に span を持たせ lower で原本 offset を維持すれば行が正確になる。
 
