@@ -1,0 +1,44 @@
+import @Std/Io with { print }
+
+// A method-own type parameter `[H]` with a `where H: Trait` bound, calling the
+// bound trait's methods through a generic `inout H` receiver (the machinery the
+// `@[Hash]` derive rides on: a `hash[H](hasher: inout H) where H: Hasher`).
+// Exercises three things at once: (1) a method-own type param + where bound,
+// (2) a generic method on a *primitive* receiver (`U64.absorb`), and (3) a
+// struct conformance that threads the same `inout H` into each field's call.
+
+trait Sink {
+    inout fn put(n: U64)
+    fn total() -> U64
+}
+
+struct Bag { pub mut val sum: U64 }
+pub impl Bag as Sink {
+    inout fn put(n: U64) { self.sum = self.sum ^ n }
+    fn total() -> U64 { return self.sum }
+}
+
+trait Absorb {
+    fn absorb[S](sink: inout S) where S: Sink
+}
+
+// generic method on a primitive receiver: its instance per concrete `S` must be
+// discovered transitively (it has no use site other than the struct below).
+pub impl U64 as Absorb {
+    fn absorb[S](sink: inout S) where S: Sink { sink.put(n: self) }
+}
+
+struct Pair { pub val a: U64  pub val b: U64 }
+pub impl Pair as Absorb {
+    fn absorb[S](sink: inout S) where S: Sink {
+        self.a.absorb(sink: inout sink)
+        self.b.absorb(sink: inout sink)
+    }
+}
+
+fn main() {
+    val p: Pair = <Pair a=6U64 b=3U64 />
+    mut val bag: Bag = <Bag sum=0U64 />
+    p.absorb(sink: inout bag)
+    print(bag.total())   // 6 XOR 3 = 5
+}

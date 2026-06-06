@@ -16,9 +16,17 @@
 
 ## 次の一歩
 
-A 完了で M1 の理想形（真の 1 AST）に到達・impl/trait もマクロ対象済。次の大きな分岐：
+A 完了で M1 の理想形（真の 1 AST）に到達・impl/trait もマクロ対象済。**Eq/Ord トレイト演算子配線＋`@[Eq]`/`@[Ord]` derive は実装済**（commit `d33e17e`/`a9e15f2`・[provisional.md](provisional.md)「Eq/Ord」節）。
 
-- **(a) M2 dogfood**：マクロで `Eq`/`Hash` を生成→`Dictionary`（`[k:v]`）に接続。現行のコンパイラ特権合成（`synthStructEq` 等）から段階移行（特権版を残したまま並行→検証→差し替え）。**`Hash`/`Hasher` の署名が未策定**（方向は Rust 流確定・core-lib／言語判断）＝**着手前にユーザー確認向き**。
+向かう先＝**Hash → Dictionary（M2 dogfood の本丸）**。ユーザー決定＝**(B) generic Hasher 形**（`fn hash[H](hasher: inout H) where H: Hasher`・マップが算法を選べる Rust 厳密形・FNV-1a 起点・算法選択は将来）。
+
+- **✅ 前提工事＝完了**：(B) が要求する「**メソッド固有型引数 `[H]`＋メソッド `where H: Trait` 境界＋トレイトディスパッチ越しの `inout H`**」は実装済（commit 後述・test `generic_method_bound_inout`）。`registerMethodInst` をプリミティブ受信者にも拡張（`u64.hash[H]` のインスタンスを登録）＋`collectFnInsts` の推移スキャンにレシーバ env を張り（derive struct の `self.field.hash(...)` が field の generic-method インスタンスを推移 discover）。自由関数 `where` 境界・名前付きメソッド呼びは既に動いていた（差はメソッド経路のみだった）。
+- **(a) 残り＝Hash/Dictionary 本体**：
+  1. **(prereq) `wrappingMul`/`wrappingAdd`（最低 U64）**＝FNV の乗算は U64 を意図的にオーバーフローさせるが Plew の `*` は overflow panic（wrap は `wrapping*` メソッド明示・現状未実装）。C では `uint64_t*` が自然に wrap するので、`wrapping*` は overflow チェックなしの素の C 演算へ lower するだけ＝小。
+  2. **`Hash`/`Hasher` トレイト＋具体 Hasher（FNV-1a）を std に**（(B) 形・`Hash: Eq`・プリミティブ群に `impl … as Hash`）。
+  3. **`@[Hash]` derive**（構造的 hash メソッド合成・現行 `synth*` 特権合成に追加）。
+  4. **`Dictionary[K,V]` lang item**（`[k:v]`/`[:]` リテラル・`K: Hash`・`dict[k]` 欠落 panic・`get`/`remove`）。
+  現行のコンパイラ特権合成（`synthStructEq` 等）から段階移行（特権版を残したまま並行→検証→差し替え）。
 - **(b) M3**：パッケージ管理導入後に `@Std/Syntax` を in-tree から外部共有パッケージへ昇格（コンパイラもマクロも同一版に依存）。
 - **小さな additive（任意）**：パターン/構築のフィールド名エラー行が近似（bind/MakeField 名が lower で再インターン＝原本 offset を持たない）。`BindAst`/`MakeFieldAst` に span を持たせ lower で原本 offset を維持すれば行が正確になる。
 

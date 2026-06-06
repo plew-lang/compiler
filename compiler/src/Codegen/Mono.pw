@@ -1823,9 +1823,23 @@ fn registerCallInst(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg
 // machinery; the receiver is recovered from the Func (recvStart). The instance
 // mangles `Recv_selector_<argMangle…>` (writeMethodInstSuffix) at def and call.
 fn registerMethodInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
-    val rt: TypeInfo = typeOf(c: inout c, id: recv)
-    if rt.kind == 2 {
-    } else {
+    val rt0: TypeInfo = typeOf(c: inout c, id: recv)
+    // recover the receiver type-name span: a struct/enum (kind 2) carries it; a
+    // String value (kind 1) recovers "String"; a primitive (kind 0, e.g. `U64`)
+    // already carries its name. A generic method on a primitive (`u64.hash[H]`)
+    // must register its instance too, so we no longer bail on non-struct kinds —
+    // only arrays (kind 3, handled per element type) and nameless values are skipped.
+    mut val rt: TypeInfo = rt0
+    if rt0.kind == 1 {
+        val ss: Bind = stringTypeSpan(c: inout c)
+        if ss.nameLen != 0 {
+            rt = <TypeInfo kind=2 nameStart=ss.nameStart nameLen=ss.nameLen ref=0 />
+        }
+    }
+    if rt.kind == 3 {
+        return
+    }
+    if rt.nameLen == 0 {
         return
     }
     val genericRecv: Bool = isGenericInst(c: inout c, ref: rt.ref)
@@ -2275,11 +2289,20 @@ fn collectFnInsts(c: inout Comp) {
         val fin: FnInst = c.fnInsts[si]
         val gf: Func = c.funcs[fin.fnIdx]
         c.locals = []
-        c.curHasRecv = false
-        c.curRecvStart = 0
-        c.curRecvLen = 0
-        c.curSelfInout = false
-        c.curRecvInstRef = 0
+        // a generic *method* instance carries a receiver: set the self env (and the
+        // receiver instantiation for a generic receiver) so `self`/`self.field`
+        // resolve while scanning its body — without this, a derived `hash[H]` that
+        // calls `self.field.hash(...)` can't type `self.field`, so the field's own
+        // (transitive) generic-method instance is never discovered. A free function
+        // has hasRecv=false, so this is a no-op for it (env stays cleared).
+        c.curHasRecv = gf.hasRecv
+        c.curRecvStart = gf.recvStart
+        c.curRecvLen = gf.recvLen
+        c.curSelfInout = gf.selfInout
+        c.curRecvInstRef = fin.recvInstRef
+        if gf.hasRecv {
+            setSelfItemEnv(c: inout c, recvStart: gf.recvStart, recvLen: gf.recvLen, recvInstRef: fin.recvInstRef)
+        }
         c.curTypeParams = gf.typeParams
         c.curTypeArgs = fin.args
         mut val gpi: U64 = 0
@@ -2289,6 +2312,9 @@ fn collectFnInsts(c: inout Comp) {
             gpi += 1
         }
         scanBlockInsts(c: inout c, blkId: gf.body)
+        if gf.hasRecv {
+            clearSelfItemEnv(c: inout c)
+        }
         si += 1
     }
     val noP: Array[Bind] = []

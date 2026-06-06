@@ -14952,10 +14952,18 @@ void registerCallInst_c_Comp_nameStart_U64_nameLen_U64_args_AArg(Comp* c, uint64
     }
 }
 void registerMethodInst_c_Comp_recv_U64_nameStart_U64_nameLen_U64_args_AArg(Comp* c, uint64_t recv, uint64_t nameStart, uint64_t nameLen, Array_Arg args) {
-    TypeInfo rt = typeOf_c_Comp_id_U64(&((*c)), recv);
-    if (rt.kind == 2) {
+    TypeInfo rt0 = typeOf_c_Comp_id_U64(&((*c)), recv);
+    TypeInfo rt = rt0;
+    if (rt0.kind == 1) {
+    Bind ss = stringTypeSpan_c_Comp(&((*c)));
+    if (ss.nameLen != 0) {
+    rt = (TypeInfo){.kind = 2, .nameStart = ss.nameStart, .nameLen = ss.nameLen, .ref = 0};
     }
-    else {
+    }
+    if (rt.kind == 3) {
+    return;
+    }
+    if (rt.nameLen == 0) {
     return;
     }
     long long genericRecv = isGenericInst_c_Comp_ref_U64(&((*c)), rt.ref);
@@ -15561,11 +15569,14 @@ void collectFnInsts_c_Comp(Comp* c) {
     FnInst fin = FnInst_share(Array_FnInst_get((*c).fnInsts, (long long)(si)));
     Func gf = Func_share(Array_Func_get((*c).funcs, (long long)(fin.fnIdx)));
     (*c).locals = Array_Local_new();
-    (*c).curHasRecv = 0;
-    (*c).curRecvStart = 0;
-    (*c).curRecvLen = 0;
-    (*c).curSelfInout = 0;
-    (*c).curRecvInstRef = 0;
+    (*c).curHasRecv = gf.hasRecv;
+    (*c).curRecvStart = gf.recvStart;
+    (*c).curRecvLen = gf.recvLen;
+    (*c).curSelfInout = gf.selfInout;
+    (*c).curRecvInstRef = fin.recvInstRef;
+    if (gf.hasRecv) {
+    setSelfItemEnv_c_Comp_recvStart_U64_recvLen_U64_recvInstRef_U64(&((*c)), gf.recvStart, gf.recvLen, fin.recvInstRef);
+    }
     (*c).curTypeParams = Array_Bind_share(gf.typeParams);
     (*c).curTypeArgs = Array_U64_share(fin.args);
     uint64_t gpi = 0;
@@ -15575,6 +15586,9 @@ void collectFnInsts_c_Comp(Comp* c) {
     gpi = ({ uint64_t __ov; if (__builtin_add_overflow((gpi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     }
     scanBlockInsts_c_Comp_blkId_U64(&((*c)), gf.body);
+    if (gf.hasRecv) {
+    clearSelfItemEnv_c_Comp(&((*c)));
+    }
     si = ({ uint64_t __ov; if (__builtin_add_overflow((si), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     Func_release(gf);
     FnInst_release(fin);
