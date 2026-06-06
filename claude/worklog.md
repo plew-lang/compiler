@@ -19,11 +19,19 @@
 - `55ec756`＝フィールド/引数デフォルト式・ディレクティブ引数も共有経路（`parseExprC`）。
 - `0541bd8`＝**旧式・文パーサを削除**（`Parser/Expr.pw` 全削除・`Parser/Stmt.pw` は型パーサ〔parseTypeTok/parseTypeParams/recordArrayElem〕のみに・~700 行減）。
 
-**A の残り＝宣言/トップレベルの統合（最後の重複・大物・別エフォート向き）**：コンパイラの `parseProgram`＋`Parser/Decl.pw`（parseStruct/Enum/Func/Impl/Trait/Extern/Import/Export/Directive）はまだ本体独自。マクロ用の共有宣言パーサ（`@Std/Syntax/Parser.pw`＝DeclAst）と二重。完全 1 AST には共有側を拡張＋宣言 lower が要る：
-- 共有 DeclAst が**デフォルト式を捨てている**（`skipDefaultExpr`）→ フィールド/引数の default を ExprAst で持つ拡張が要る（メンバワイズ factory に必要）。
-- **impl/trait/extern/import/export/part** の値ツリー＋パーサ（impl＝レシーバ＋メソッド＋conformance＋`via`、trait＝要求、where 句、generic params、async/pub/factory 等）。本体の parseImpl/parseFuncCommon は詳細が多い。
-- **module tagging**（import/export は `moduleOf(name offset)` で原本 offset 必須）・derive 合成（directive→DeriveReq）・codegen 播種（recordArrayElem）を lower で再現。
-- 完成すれば `Parser/Decl.pw` の parse 部退役＝真の 1 AST。式・文ほどドリフトしない文法ゆえ価値は逓減だが、A の完全形。
+**A の残り＝宣言/トップレベルの統合（ユーザー判断＝やり切る・大物・別エフォート向き）**：コンパイラの `parseProgram`＋`Parser/Decl.pw`（parseStruct/Enum/Func/Impl/Trait/Extern/Import/Export/Directive）はまだ本体独自。マクロ用の共有宣言パーサ（`@Std/Syntax/Parser.pw`＝DeclAst）と二重。**式・文と違い綺麗な単一切替点がなく all-or-nothing**（`parseProgram` が多形へ分岐）。~2000 行規模。
+
+**着手済（土台）**：
+- ✅ 共有 DeclAst が**デフォルト式を捕捉**（`FieldAst/ParamAst.defaultVal: ExprAst`・commit `abf9758`）＝メンバワイズ factory の default に必要。
+
+**残り手順（各段 additive 緑→最後にスワップ）**：
+1. **DeclAst を完全 fn シグネチャへ拡張**：`isAsync`/`isPub`/`isAssoc`/`recv`（レシーバ型・メソッド用）/`selfMode`（fn/inout fn/move fn）/`isExtern`/`where` 句。共有 `parseFuncDecl` でパース。マクロも完全 fn を読める（additive 価値）。
+2. **新トップレベル値ツリー＋パーサ**：`ImplAst`（レシーバ＋generic params＋conformance〔`impl A as Trait`〕＋`via` alias＋メソッド〔DeclAst func〕＋isPub）／`TraitAst`（supertraits＋要求）／`ExternAst`（intrinsic 宣言列）／`ImportAst`/`ExportAst`/`PartAst`（パス＋with リスト）／directive（`@[...]`）。`parseProgramAst -> Array[TopItemAst]`。struct の `deinit` も共有側で。
+3. **宣言 lower**（`Codegen/Lower.pw` 拡張）：DeclAst→StructDef/EnumDef/Func、Impl→メソッド（recv 付き Func）＋Conform＋MethodAlias、Trait→TraitDef、Extern→Func（isExtern）、Import/Export→`c.imports/exports`（**module tagging＝原本 offset で `moduleOf` を効かせる**）、Directive→`pendingDerives`/drainDerives。codegen 播種（`recordArrayElem`）は lowerType が既に実施。
+4. **`parseProgram` を共有 parse+lower にスワップ**。**診断移植が要点**：`Parser/Decl.pw` の専用エラー（「struct フィールドはカンマでなく改行」「enum ペイロードは括弧」「inline trait 制約不可」等）を共有パーサの `P.fail` 機構へ全部移植（reject スイートが落として強制＝漏れは tests/reject が検出）。
+5. **`Parser/Decl.pw` の parse 部退役**（derive 合成 ~280 行は codegen として残す）。完成で真の 1 AST。
+
+**注意**：lower の module tagging と derive を間違えると cross-module 可視性/derive が壊れる（テストが概ね捕捉するが慎重に）。スワップは緑＋不動点でなければ revert。
 
 **Phase 2 着手時にまとめて決める暫定判断（M1 自走中の宿題）**：
 - **`DeclAst` を enum へ戻す**：現状はタグ付き struct（`kind: DeclKind` ＋未使用フィールド空）。当初は codegen バグ（enum が struct を値で持つと不完全型）回避のためだったが、そのバグは Phase 1 の topo emit（`ded0f4a`）で解消済＝技術的に `enum DeclAst { Struct(StructDecl) … }` へ戻せる。**戻すと gen テスト6件の macro API が churn**（`d.kind` の match → `match d`）するので、手順5 で値ツリーを整える際に一括で enum 化するのが筋（個別にやらない）。
