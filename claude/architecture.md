@@ -1,6 +1,6 @@
 # コンパイラ アーキテクチャ
 
-Plew コンパイラの実装方針。**🎉 セルフホスト達成済み**＝正典コンパイラは Plew 製のパッケージ `compiler/src/`（root `_.pw` が `part` で全パート〔Loader/Lexer/Ast/`Parser/`/`Codegen/`〕を綴じ込む 1 モジュール・part はサブディレクトリ可・手書きパーサ→C→clang・自分を不動点までコンパイル）。本書はパイプライン設計と、**そこへ至るブートストラップの経緯**（使い捨て Rust stage0→退役）を残す。現在地・次の一歩は [worklog.md](worklog.md)。
+Plew コンパイラの実装方針。**🎉 セルフホスト達成済み**＝正典コンパイラは Plew 製のパッケージ `compiler/src/`（root `_.pw` が `part` で全パート〔Loader/Ast/`Parser/Decl`/`Codegen/`〕を綴じ込む 1 モジュール・part はサブディレクトリ可・自分を不動点までコンパイル）。**構文解析（レクサ・式/文/宣言/トップレベルパーサ）は共有 `@Std/Syntax` に統合済**（コンパイラもマクロも同一パーサ＝真の 1 AST＝A フロントエンド統合・[metaprogramming-architecture.md](metaprogramming-architecture.md)）＝本体は共有経路で parse→`Codegen/Lower.pw` で arena へ lower→C→clang。本書はパイプライン設計と、**そこへ至るブートストラップの経緯**（使い捨て Rust stage0→退役）を残す。現在地・次の一歩は [worklog.md](worklog.md)。
 
 ## ゴールと第一目標
 
@@ -64,7 +64,7 @@ C ソース
 
 以下は「コンパイラがどう振る舞うべきか」の意味論メモ。一部は実装済（型検査・trait step 1・ARC・クロージャ）、一部は未実装（拡張解決・並行性・async）で、これから実装するときの索引として残す。
 
-- **AST builder**: トークン列から自前 AST へ。arena に確保し相互参照は index で持つ。`@[...]` 組み込みディレクティブは AST に属性として保持し専用フェーズで変換（ユーザー定義メタプロはビルドと独立した別コマンドで別ファイルへコード生成する別方式へ転換）。→ [design-decisions.md](design-decisions.md) / [spec/16](../spec/04-execution/16-metaprogramming.md)。
+- **フロントエンド（実体＝A 後）**: 上図の「Token 列→手書き Parser→arena AST」は、実装では**共有 `@Std/Syntax` パーサが値ツリー（`TopItemAst`/`DeclAst`/`ExprAst`…・String 名・原本座標 span）を返し、`Codegen/Lower.pw` が arena（index 参照ノード）へ lower** する 2 段（コンパイラもマクロも同一パーサ＝[metaprogramming-architecture.md](metaprogramming-architecture.md)）。ローディングもパース駆動＝ファイルを parse して木の `import`/`part` ノードを辿る（事前スキャンなし）。`@[...]` ディレクティブは木の `Directive` ノードで、ユーザー定義メタプロはビルドと独立した別コマンド（`plew gen`）で別ファイル `<Foo>.gen.pw` へコード生成→ローダが auto-part。→ [design-decisions.md](design-decisions.md) / [spec/16](../spec/04-execution/16-metaprogramming.md)。
 - **拡張解決（最重要）**: メソッド/演算子のバインドは「呼び出し位置の `#Extension` 指定」だけで決定論的に決め、import スコープに依存させない。無名（デフォルト）`impl` はそのまま発動、`extension Name { impl … }` は `#Name` 明示時のみ。一意に定まらなければエラー。→ [language-semantics.md](language-semantics.md)。
 - **並行性検査**: `spawn { … }` のキャプチャはコピー可能のみ、`unique` を渡すなら `spawn fn` の `move` 引数。**借用は async/spawn 境界を越えず、`Ref`/`local` 型は spawn を越えられない**（推移的に `Ref`-free＝`local` でないことを検査）→ スレッド間に共有可変が無く実質 race-free（Mutex 不要）。戻りは `join() -> Promise[T]` ハンドル。
   - **codegen の責務（CoW × spawn）**: CoW 値は内部バッファを**非 atomic** refcount で共有するので、**spawn 境界を越えるコピー可能値には eager な実体化（ディープコピー）を挿入**（async 境界では遅延のまま）。これで非 atomic count を 2 スレッドから触られず全面 atomic ARC を避ける → [spec/14](../spec/04-execution/14-concurrency.md#cow-値は-spawn-境界で実体化するeager-copy)。
@@ -82,7 +82,7 @@ C ソース
 上のパイプライン図は**理想形**で、実体は乖離がある（「表現力が貧弱な時代の設計」由来）。コンパイラ全フェーズを監査した結論＝**段階的 renovate（rewrite しない）**。負債は実在するが**局所的・legible・増分修正可**で、意味論は正しく高価な資産（`unique-*` 等の長いエッジケース蓄積）。
 
 - **根① 型付き IR が無い**（最大）：図の「型付き AST」は実在せず、**型は codegen 中に都度復元**していた（`exprType` が AST を歩く）。帰結＝emission 順序が正しさの前提・3 パス＋codegen が別々に再導出・**単相化が codegen 全体のモード**（ambient な `curTypeParams`/`curRecvInstRef`）。**Phase B で `typeOf` キャッシュへ反転**（body ごと 1 回計算して読む・per-function clear）＝主部は解消、残り（checks 統合・pre-fill・`exprType` 駆逐）は worklog。
-- **根② 名前がソースバイトオフセット**（symbol table 無し）：`spansEqual`/`rangeEquals` 多数・Loader が全ファイルを 1 buffer 連結（モジュール隔離なし・可視性は `moduleRanges` で後付け）。interning は Phase C（`Dictionary` 導入後が得）。
+- **根② 名前がソースバイトオフセット**（symbol table 無し）：`spansEqual`/`rangeEquals` 多数・Loader が全ファイルを 1 buffer（`c.bytes`）へ追記（パース駆動＝各ファイルを parse 直後に lower するのでソースと再インターン名が交互配置・モジュール隔離なし・可視性は `moduleRanges`〔per-file レンジ〕で後付け）。interning は Phase C（`Dictionary` 導入後が得）。
 - **なぜ rewrite でなく renovate**：①高価で正しい意味論を捨てて踏み直すことになる（Joel 典型）②**不動点の安全網**を長期間失う（renovate は各ステップ緑）③2 つの根は再帰値型が動く今だからこそ増分で剥がせる。
 - **意味論は全て正しい（綺麗な所）**：ARC scope-drop・async stackless SM・checked 算術・RawBuffer 床・需要駆動単相化＋combinator 到達性ゲート・再帰 boxing 解析・パターン/優先順位パース。
 - **renovation が届かない唯一＝ソース連結モジュールモデル**（Loader＋`*Start/*Len` span 規約）。分割/incremental compile はここを触らないと不可だが Loader に隔離・分割が要るまで後回し。
