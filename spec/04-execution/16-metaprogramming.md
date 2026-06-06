@@ -23,48 +23,61 @@ struct Point {
 
 > ディレクティブは**コードを合成する derive 専用**です。既定 factory（memberwise）の合成・公開は derive ではなく**コア言語の構築意味論＋素の構文**で扱います（フィールド既定値と `pub impl { factory }` 公開 → [既定 factory（memberwise）とフィールドの既定値](../02-type-system/05-structs-enums.md#既定-factorymemberwiseとフィールドの既定値)）。可視性制御のような言語機能を `@[...]` の祝福ディレクティブにしないことで、ディレクティブ名前空間にはユーザー定義可能な derive だけが残ります。
 
-> 命名規則: ディレクティブは（理想的には）すべて後述の `Derive` トレイトを実装する**構造体**として表されるため、組み込み・ユーザー定義を問わず **PascalCase** です（`Eq` / `Hash` / `Encode` / `Decode` / `All`）。一方、ディレクティブが**生成する**メンバ（例: `Enum.all()`）は通常の関数・変数なので camelCase です。
+> 命名規則: ディレクティブ名は後述の derive インターフェース（`Derive` / `ParameterizedDerive`）を実装する**トレイトまたは構造体**で、組み込み・ユーザー定義を問わず **PascalCase** です（`Eq` / `Hash` / `Encode` / `Decode` / `All`）。一方、ディレクティブが**生成する**メンバ（例: `Enum.all()`）は通常の関数・変数なので camelCase です。
 
 ## ユーザー定義メタプログラミング
 
 ユーザーが独自のコード生成を定義できます。骨格は以下の通り確定。
 
-### マクロ = `Derive` を実装する構造体・入力は `AST`／出力は `String`
+### マクロ = derive インターフェースの実装・入力は `AST`／出力は `String`
 
-マクロは **注釈対象項の構文木（`AST`）を受け取り、生成する Plew ソースを `String` で返す**メソッドを持つ構造体として定義し、`Derive` トレイトを実装します。`Derive` トレイトと `AST` 型は**構文ライブラリ**（当面 `@Std/Syntax`・将来は外部共有パッケージ＝後述）が提供します。**入力型 = `TopItemAst`**（注釈対象のトップレベル項の値ツリー＝`Decl`〔struct/enum/fn〕・`Impl`・`Trait`・… のタグ付き union）。マクロは `match` で対象の種別に分岐する＝対象が何かを**明示**して扱う（struct 専用 derive は `Decl` だけ扱い他を弾く）。これは「コンパイラとマクロが唯一の同一 AST を読む（1 AST 原則）」の帰結で、マクロ専用の縮小 AST を作らない。
+**derive 可能性 = derive インターフェースを実装していること。** `@[X]` が有効なのは、**`X` が derive インターフェース（下記 `Derive` / `ParameterizedDerive`）を実装しているとき**だけ。`X` は **トレイトでも構造体でもよい**——`@[Hash]` の `Hash` は**トレイトそのもの**（`impl Hash as Derive` で「derive 可能」を後付け）、`@[All]` の `All` はトレイトを持たない**構造体**（`impl All as Derive`）。いずれも生成メソッド（要求＝`derive(input: TopItemAst) -> String`）を提供し、**注釈対象項の構文木を受け取り生成 Plew ソースを `String` で返す**。`Derive` 系トレイトと `AST` 型は**構文ライブラリ**（当面 `@Std/Syntax`・将来は外部共有パッケージ＝後述）が提供します。**入力型 = `TopItemAst`**（注釈対象のトップレベル項の値ツリー＝`Decl`〔struct/enum/fn〕・`Impl`・`Trait`・… のタグ付き union）。マクロは `match` で対象の種別に分岐する＝対象が何かを**明示**して扱う（struct 専用 derive は `Decl` だけ扱い他を弾く）。これは「コンパイラとマクロが唯一の同一 AST を読む（1 AST 原則）」の帰結で、マクロ専用の縮小 AST を作らない。
+
+**derive インターフェースは「設定（引数）の有無」で 2 つに分かれる。** derive の唯一の本質的な軸は設定を持つかどうかで、それが invocation 構文に直結する：
+
+- **設定なし → `Derive`**（要求 `assoc fn derive(input: TopItemAst) -> String`・`self` 無し）。**bare `@[X]`** で呼ぶ。Eq/Ord/Hash/All 等、derive の大半。`Self` を含まない `assoc fn` なので、**トレイト**（`impl Hash as Derive`）でも**フィールド無し構造体**（`impl All as Derive`）でも実装でき、インスタンスを作らずに `X.derive(input)` を一意に呼べる。
+- **設定あり → `ParameterizedDerive`**（要求 `fn derive(input: TopItemAst) -> String`・`self` = 設定構造体）。**`@[X(args)]`** で呼ぶ（`@[X()]` のように**括弧を強制**）。設定は構造体の型付きフィールドで、`self` から読む（`@[Builder(prefix: "with")]` 等）。
+
+**`()` 規約が構文に機構を持たせる。** **bare `@[X]` は `Derive`（assoc）を、括弧つき `@[X(args)]`／`@[X()]` は `ParameterizedDerive`（インスタンス構築）を指す。** 引数を一切取らない構造体 derive も括弧を付けて `@[A()]` と書く（`()`＝「インスタンスを構築する」の合図）。bare `@[A]` と書きたければ `A` は `Derive`（assoc）を実装する。これにより、`@[X]` を見ただけでどちらの機構かが一意に決まる。
 
 ```plew
-struct MyDerive {
-    val a: I32              // ← ディレクティブ引数 = このフィールド
-}
-pub impl MyDerive as Derive {
-    fn derive(input: TopItemAst) -> String {
-        // self.a で引数を読み、input（注釈対象項の AST）を match して生成ソースを String で返す
+// 設定なし derive：トレイトが自身の deriver を持つ（`struct Hash` を作らない＝衝突しない）
+pub impl Hash as Derive {
+    assoc fn derive(input: TopItemAst) -> String {
         match input {
-            TopItemAst.Decl(val d) => { /* d.name / d.fields … から生成 */ return "" }
-            _ => { return "" }   // impl / trait など、このマクロが扱わない対象
+            TopItemAst.Decl(val d) => { /* d.name / d.fields … から `pub impl T as Hash {…}` を生成 */ return "" }
+            _ => { return "" }
         }
     }
 }
+@[Hash]                          // bare = Hash.derive(input) を呼ぶ（インスタンス不要）
+struct Point { }
 
-@[MyDerive(a: 32)]            // = MyDerive { a: 32 } を構築して .derive(input) を呼ぶ
-struct P { }
+// 設定あり derive：構造体のフィールドが設定スキーマ・`@[X(args)]` で構築
+struct Builder { pub val prefix: String }
+pub impl Builder as ParameterizedDerive {
+    fn derive(input: TopItemAst) -> String { /* self.prefix を使って生成 */ return "" }
+}
+@[Builder(prefix: "with")]       // = Builder { prefix: "with" } を構築して .derive(input)
+struct Config { }
 ```
 
 注釈は struct / enum / fn だけでなく **`impl` ブロック・`trait`** にも付けられる（`@[Name] impl T { … }`・`@[Name] trait U { … }`）＝そのとき `input` は `TopItemAst.Impl` / `TopItemAst.Trait`。
+
+**なぜこの 2 分割か（trait と derive の同名衝突の解消）。** Plew は **型とトレイトが同一名前空間**なので、Rust 流に「`trait Hash` ＋ derive 用 `struct Hash`」を共存させられない（Rust はマクロ名前空間と型名前空間が別なので可能だが、Plew には無い）。そこで **derive を必ず構造体にする前提を外し、トレイト derive はトレイト自身が `assoc fn derive` を持つ**ことで `struct Hash` を不要にした＝`Hash` は 1 エンティティ（トレイト）のまま衝突しない。`All`/`Builder` のような**トレイトを持たない** derive だけが構造体（対応するトレイトが無いので衝突もしない）。**却下案**：(A) Rust 流の別名前空間＝Plew に無く、Core 内でモジュールを分けて名前空間で逃がすのは不自然。(C) trait と derive を別名（`@[DeriveEq]` 等）＝同名前空間なら筋は通るが、共通ケース（設定なし derive が大半）に恒久的な命名負担が乗り「`Eq` の derive は何という名前か」が毎回問われ混乱する。**採用**＝設定なしを無印 `Derive`（assoc）に置くことで共通ケースに修飾子が要らず、命名問題そのものが消える。→ [claude/design-decisions.md](../../claude/design-decisions.md)「trait と derive の同名」。
 
 **入力 `AST`／出力 `String` の非対称は、エラーをどこに出すかと一致している。**
 
 - **入力＝`AST`（span 付きノード）**：マクロが入力を解析して拒否する（「この型は Hash 不可」等）とき、**ユーザーの元ソース位置を指す**必要がある。AST ノードは span を保持し、その span は**原本座標**（`<Foo>.pw` の位置）なので、入力エラーはユーザー元位置を指せる。
 - **出力＝`String`**：生成コードのエラーは**生成ファイル `<Foo>.gen.pw`（実ファイル）の普通のコンパイルエラー**で出るので、出力側に span は要らない（再コンパイルが位置を持つ）。`quote` のような埋め込み構文を作らず、生成は**普通の Plew 文字列・既存の補間 `"{…}"`** で組む（「Plew の中の Plew でないもの」を作らない・ハイライトもただの Plew）。
 
-**ディレクティブ引数 = マクロ struct のフィールド。** `@[Name(a: 32)]` は `Name { a: 32 }` を構築して `.derive(input)` を呼ぶ糖衣。マクロ struct のフィールドがそのまま設定スキーマで、`derive` は `self`（構築済み設定）からそれを読む。`@[Eq]` は引数なし＝既定構築。既存の labeled args / 構築構文を再利用し、新概念を作らない。
+**ディレクティブ引数 = `ParameterizedDerive` マクロ struct のフィールド。** `@[Name(a: 32)]` は `Name { a: 32 }` を構築して `.derive(input)` を呼ぶ糖衣（`ParameterizedDerive`・instance）。マクロ struct のフィールドがそのまま設定スキーマで、`derive` は `self`（構築済み設定）からそれを読む。既存の labeled args / 構築構文を再利用し、新概念を作らない。**設定なし derive（`@[Eq]`/`@[Hash]` 等）は bare＝`Derive`（assoc）で構築を伴わない**（上の `()` 規約）。
 
 **ディレクティブ引数はマクロ struct の[ファクトリ可視性](../02-type-system/05-structs-enums.md#既定-factorymemberwiseとフィールドの既定値)に従う。** `@[Name(a: 32)]` は `Name` をハーネス（生成コマンド側＝マクロ定義モジュールの外）が構築するので、これは**外部からの `<Name a=32 />` 構築と同じ規則**に服す：マクロ struct は**公開ファクトリ（`pub impl Name { factory }`）を露出し、引数に渡すフィールドが `pub`** でなければならない（既定 factory は非公開なので、引数を取るマクロは明示的に公開する）。したがって**ディレクティブ引数を取れるかどうかはファクトリ可視性で決まる**＝引数を一切取らない `@[Name]` は構築が `Name {}`（フィールド設定なし）なので公開ファクトリ不要だが、`@[Name(a: …)]` のように引数を取るには公開ファクトリが要る。引数フィールドが非公開なら生成時にエラー。
 
 **なぜ `TokenStream` でなく `AST` 入力か（当初は TokenStream だった）。** 当初 `TokenStream` 入力を選んだ理由は (a) **安定境界**（トークンは AST より文法版に強い）と (b) **汎用性**（型宣言に限らず任意のトークン列を渡せる）。だが下記「共有 AST パッケージ」を最終形に据えると **(a) は消える**——AST も真実の源が 1 つで安定するので、トークンを緩衝材にする必要がない。しかも **derive は結局 AST へ parse して使う**ので、トークン段の安定性の恩恵を受けない（生トークンのまま処理するマクロだけが恩恵を受けるが、それは別 flavor）。残る (b) 汎用性は、Plew が **宣言への derive 専用**（関数形 `macro!(…)` / DSL マクロを持たない）なので出番が稀。Rust でも生 `TokenStream` 必須なのは `json!`/`html!`/`sql!`/`quote!` のような**関数形/DSL マクロ**で、**derive はほぼ常に `syn` で AST へ parse**する＝Plew の derive には AST で十分。よって入力は `AST`、生トークンは**将来の escape hatch**（構文ライブラリは内部に TokenStream/lexer/parser を持つので、関数形マクロを後で入れるなら `derive(input: TokenStream)` を別提供メソッドとして additive に足せる）。
 
-**String → AST 変換と受け渡しは `Derive` の提供メソッドが担う（中間層は不要）。** `Derive` トレイトは**要求メソッド `fn derive(input: AST) -> String`**（ユーザー実装）と、**提供メソッド `fn deriveFromSource(source, span) -> String`**（構文ライブラリの blanket `impl Derive`＝「String を lex+parse して AST にし、`self.derive(input:)` へ委譲」）を持つ。ランナー（生成コマンド）はこの提供メソッドを呼ぶハーネスを合成・実行するだけ＝**ランナーは String↔String の版非依存な機械**で、AST 型に一切触れない（AST 型・parser はマクロが固定依存する構文ライブラリ版のもの）。詳細は architecture doc。
+**String → AST 変換と受け渡しは derive インターフェースの提供メソッドが担う（中間層は不要）。** `Derive`（assoc）／`ParameterizedDerive`（instance）はそれぞれ**要求メソッド `derive(input: AST) -> String`**（ユーザー実装）に加え、**提供メソッド `deriveFromSource(source, span) -> String`**（構文ライブラリ提供＝「String を lex+parse して AST にし、`derive(input:)` へ委譲」）を持つ。ランナー（生成コマンド）はこの提供メソッドを呼ぶハーネスを合成・実行するだけ＝**ランナーは String↔String の版非依存な機械**で、AST 型に一切触れない（AST 型・parser はマクロが固定依存する構文ライブラリ版のもの）。詳細は architecture doc。
 
 **リッチな AST はコンパイラ外のライブラリに分離する（最終形）。** Rust が `rustc` と `syn` で**2 つのパーサ**を持ち同期に苦しむのを避けるため、Plew は self-host の利を活かし **lexer+parser+AST を 1 つのライブラリに切り出し、コンパイラもマクロもそれに依存**する構成を目指す（真実の源が 1 つ＝AST のバージョン違いのツラミを最小化）。ただし**現状パッケージ管理機構が無い**ため切り出しは後回しで、**当面は `@Std/Syntax`（in-tree）が AST 型・lexer/parser・`Derive` 提供メソッドを持つ一時的な置き換え**（パッケージ管理導入後に外部共有パッケージへ昇格）。
 
@@ -94,9 +107,10 @@ struct P { }
 
 ## 確定した骨格（まとめ）
 
-- マクロ＝`Derive` 実装 struct。**要求 `fn derive(input: AST) -> String`**（ユーザー）＋**提供 `deriveFromSource`**（構文ライブラリ＝String→AST 変換＋委譲）。
+- **derive 可能性＝derive インターフェースの実装**（`X` はトレイトでも struct でもよい）。**設定なし→`Derive`（`assoc fn derive(input: AST) -> String`・bare `@[X]`）／設定あり→`ParameterizedDerive`（`fn derive`・self=設定 struct・`@[X(args)]`）**。`()` 規約で構文が機構を表す（bare=assoc／括弧=構築）。+**提供 `deriveFromSource`**（構文ライブラリ＝String→AST 変換＋委譲）。
+- trait と derive の同名衝突（Plew は型/トレイト同一名前空間）は、**トレイト derive をトレイト自身の `assoc fn derive` にする**（`struct Hash` 不要）ことで解消。`All`/`Builder` 等トレイトを持たない derive のみ struct。
 - 入力＝**AST**（span は原本座標・入力エラーはユーザー元位置）／出力＝**String**（生成ソース・出力エラーは `.gen.pw` 再コンパイル）。
-- ディレクティブ引数＝マクロ struct のフィールド（`@[Name(a:32)]`＝`Name{a:32}.derive(...)`）。
+- ディレクティブ引数＝`ParameterizedDerive` マクロ struct のフィールド（`@[Name(a:32)]`＝`Name{a:32}.derive(...)`）。
 - 出力＝**別ファイル `<Foo>.gen.pw`・原本不変・add-only**、`@[...]` でローダ自動 part。
 - ランナー（生成コマンド）＝**String↔String の版非依存な機械**（ハーネス合成→compile→run→stdout 回収）。AST 型・parser はマクロが固定依存する構文ライブラリ版のもの。
 - 構文ライブラリ＝当面 `@Std/Syntax`（in-tree）・最終形は外部共有パッケージ（コンパイラもマクロも依存）。
@@ -105,6 +119,7 @@ struct P { }
 ## 未決事項
 
 - **AST 構文木の具体形の細部**（入力型は **`TopItemAst`** に確定済＝`@Std/Syntax` の値ツリー。`Decl`〔`name`/`fields(name,type,vis)`/`variants`/fn シグネチャ＋本体〕・`Impl`〔`members`〕・`Trait`〔`reqs`〕…・全ノード原本座標 span。残るは各ノードのフィールド追加や型式 `TypeAst` の表現の磨き込み＝additive）。
+- **`Derive` のトレイト名の最終確定**（**設定なし＝無印 `Derive`〔assoc〕・設定あり＝`ParameterizedDerive`〔instance〕** の方向は確定／正確な綴りは dogfood 着手時）。dogfood の前提として、**`Self` を含まないトレイト提供 `assoc fn` を、その trait 名で実体型なしに一意呼び出しする機構**が要る（`Hash.derive(input)`＝`impl Hash as Derive` が提供する唯一の deriver なのでディスパッチ不要・当面はメタ機構限定で実装可）。組み込み Eq/Ord/Hash が特権合成のうちは未着手で問題ない。
 - 生成コマンドの名前・設定方法・source の渡し方（stdin/ファイル/リテラル＝実装時に最も楽な形で確定）。
 - **authoring 層（将来・additive）**：`String` 直書きはシンタックスハイライトが効かない。テンプレートファイル方式（ほぼ Plew の雛形を読み込んで穴埋め）や opt-in の `quote` を**コアを汚さず後付け**で足す。コア（AST in / String out）は不変。
 - **生トークン escape hatch**（関数形/DSL マクロを将来入れるなら `derive(input: TokenStream)` を additive に）。
