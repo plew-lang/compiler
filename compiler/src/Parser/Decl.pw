@@ -72,7 +72,7 @@ fn parseParamList(c: inout Comp) -> Array[Param] {
                             Kind.Eq => {
                                 c.advance()
                                 pHasDefault = true
-                                pDefault = parseExpr(c: inout c)
+                                pDefault = parseExprC(c: inout c)
                             }
                             _ => {}
                         }
@@ -708,7 +708,7 @@ fn parseStruct(c: inout Comp, isUnique: Bool) {
                 match c.curKind() {
                     Kind.Eq => {
                         c.advance()
-                        defaultVal = parseExpr(c: inout c)
+                        defaultVal = parseExprC(c: inout c)
                         hasDefault = true
                     }
                     _ => {}
@@ -865,7 +865,7 @@ fn parseDirectiveArgs(c: inout Comp) -> Array[MakeField] {
                     Kind.Colon => { c.advance() }
                     _ => {}
                 }
-                val v: U64 = parseExpr(c: inout c)
+                val v: U64 = parseExprC(c: inout c)
                 fields.append(<MakeField nameStart=labelTok.start nameLen=labelTok.len value=v />)
             }
             _ => { c.advance() }

@@ -421,3 +421,17 @@ fn parseBlock(c: inout Comp) -> U64 {
     }
     return lowerBlock(c: inout c, b: tree)
 }
+
+// Parse a single expression via the shared parser and lower it — used for the
+// expression positions still driven by the compiler's declaration parser (field /
+// parameter default values, directive arguments). Same cursor-drive + error-surface
+// as parseBlock.
+fn parseExprC(c: inout Comp) -> U64 {
+    mut val p: P = <P bytes=c.bytes toks=c.toks pos=c.pos base=0 />
+    val tree: ExprAst = parseExprAst(p: inout p)
+    c.pos = p.pos
+    if p.hasErr {
+        compileErrorAt(line: lineOf(c: inout c, offset: p.errOff), msg: p.errMsg)
+    }
+    return lowerExpr(c: inout c, e: tree)
+}
