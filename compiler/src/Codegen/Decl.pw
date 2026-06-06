@@ -1063,10 +1063,147 @@ fn genCopyValue(c: inout Comp, exprId: U64, tyRef: U64, fallStart: U64, fallLen:
     genStructValue(c: inout c, exprId: exprId, structStart: fallStart, structLen: fallLen)
 }
 
+// ---- dependency-ordered emission of concrete nominal bodies ----
+//
+// A type's C body must appear after every type it holds BY VALUE (a by-value
+// field needs the complete type). The old order ("all enums, then all structs in
+// source order") only works when no enum holds a struct by value and structs are
+// already source-ordered by dependency. emitNominalBodiesTopo lifts both: it emits
+// concrete (non-generic, non-extern) struct/enum bodies in a post-order DFS over
+// the by-value containment graph, so an enum may hold a struct payload by value
+// (e.g. value-tree ASTs) and structs may be defined in any order.
+//
+// Edges exclude indirection — boxed (recursive), Array, Ref/WeakRef, RawBuffer,
+// and monomorphized generic fields are all behind a pointer/emitted elsewhere, so
+// they impose no completeness constraint. By-value containment is therefore a DAG
+// (mutual by-value recursion is impossible — the compiler boxes one side), so the
+// DFS terminates.
+
+// Is field `f` a pointer-like indirection that imposes no by-value dependency?
+fn fieldIsIndirect(c: inout Comp, f: FieldDef) -> Bool {
+    if fieldIsBoxed(c: inout c, f: f) {
+        return true
+    }
+    if f.tyIsArray {
+        return true
+    }
+    if f.ty != 0 {
+        if isGenericInst(c: inout c, ref: f.ty) {
+            return true
+        }
+    }
+    if rangeEquals(bytes: c.bytes, start: f.tyStart, len: f.tyLen, kw: "Ref") {
+        return true
+    }
+    if rangeEquals(bytes: c.bytes, start: f.tyStart, len: f.tyLen, kw: "WeakRef") {
+        return true
+    }
+    if rangeEquals(bytes: c.bytes, start: f.tyStart, len: f.tyLen, kw: "RawBuffer") {
+        return true
+    }
+    return false
+}
+
+// Recurse into each by-value nominal dependency of the given fields, emitting it
+// (and its transitive deps) first.
+fn emitFieldDeps(c: inout Comp, fields: Array[FieldDef], doneS: inout Array[Bool], doneE: inout Array[Bool]) {
+    mut val k: U64 = 0
+    while k < fields.count {
+        val f: FieldDef = fields[k]
+        if fieldIsIndirect(c: inout c, f: f) {
+        } else {
+            val si: U64 = structIndexByName(c: inout c, start: f.tyStart, len: f.tyLen)
+            if si < c.structs.count {
+                val isExtern: Bool = c.structs[si].isExtern
+                val tp: U64 = c.structs[si].typeParams.count
+                if isExtern {
+                } else {
+                    if tp > 0 {
+                    } else {
+                        emitNominalNode(c: inout c, isEnum: false, idx: si, doneS: inout doneS, doneE: inout doneE)
+                    }
+                }
+            } else {
+                val ei: U64 = concreteEnumIndex(c: inout c, nStart: f.tyStart, nLen: f.tyLen)
+                if ei < c.enums.count {
+                    emitNominalNode(c: inout c, isEnum: true, idx: ei, doneS: inout doneS, doneE: inout doneE)
+                }
+            }
+        }
+        k += 1
+    }
+}
+
+// Emit one concrete nominal body after its by-value deps (post-order). `done*`
+// guards re-emission (and, harmlessly given the DAG, any back-edge).
+fn emitNominalNode(c: inout Comp, isEnum: Bool, idx: U64, doneS: inout Array[Bool], doneE: inout Array[Bool]) {
+    if isEnum {
+        if idx >= c.enums.count {
+            return
+        }
+        if doneE[idx] {
+            return
+        }
+        doneE[idx] = true
+        if c.enums[idx].typeParams.count > 0 {
+            return
+        }
+        val vars: Array[Variant] = c.enums[idx].variants
+        mut val vi: U64 = 0
+        while vi < vars.count {
+            emitFieldDeps(c: inout c, fields: vars[vi].fields, doneS: inout doneS, doneE: inout doneE)
+            vi += 1
+        }
+        genEnumDef(c: inout c, ei: idx)
+    } else {
+        if idx >= c.structs.count {
+            return
+        }
+        if doneS[idx] {
+            return
+        }
+        doneS[idx] = true
+        if c.structs[idx].typeParams.count > 0 || c.structs[idx].isExtern {
+            return
+        }
+        val fields: Array[FieldDef] = c.structs[idx].fields
+        emitFieldDeps(c: inout c, fields: fields, doneS: inout doneS, doneE: inout doneE)
+        genStructDef(c: inout c, si: idx)
+    }
+}
+
+// Emit all concrete nominal bodies in dependency order. Roots iterate enums then
+// structs (matching the old order when there are no cross edges); the DFS pulls
+// each type's by-value deps ahead of it.
+fn emitNominalBodiesTopo(c: inout Comp) {
+    mut val doneS: Array[Bool] = []
+    mut val si0: U64 = 0
+    while si0 < c.structs.count {
+        doneS.append(false)
+        si0 += 1
+    }
+    mut val doneE: Array[Bool] = []
+    mut val ei0: U64 = 0
+    while ei0 < c.enums.count {
+        doneE.append(false)
+        ei0 += 1
+    }
+    mut val ej: U64 = 0
+    while ej < c.enums.count {
+        emitNominalNode(c: inout c, isEnum: true, idx: ej, doneS: inout doneS, doneE: inout doneE)
+        ej += 1
+    }
+    mut val sj: U64 = 0
+    while sj < c.structs.count {
+        emitNominalNode(c: inout c, isEnum: false, idx: sj, doneS: inout doneS, doneE: inout doneE)
+        sj += 1
+    }
+}
+
 // Emit a struct body `struct Name { <ctype> field; ... };`. Forward typedefs
 // are emitted separately so structs can reference each other by name; by-value
-// struct fields still require their definition to appear earlier (v3 relies on
-// source order being dependency order).
+// struct fields still require their definition to appear earlier (emitted in
+// dependency order by emitNominalBodiesTopo).
 fn genStructDef(c: inout Comp, si: U64) {
     val s: StructDef = c.structs[si]
     write(s: "struct ")

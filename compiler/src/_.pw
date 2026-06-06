@@ -377,27 +377,10 @@ fn main() {
     // ARC-freed, so this leaks like other Strings — acceptable for now.)
     write(s: "__attribute__((unused)) static PlewString plew_stringFromBytes(Array_U8 p) { char* buf = (char*)malloc((size_t)p.count + 1); memcpy(buf, p.data, (size_t)p.count); buf[p.count] = 0; PlewString s; s.data = buf; s.len = p.count; return s; }\n")
     // nominal bodies (may contain arrays by value; typedefs above are complete).
-    // Enums first: a struct may hold an enum by value (e.g. Tok holds Kind), but
-    // no enum holds a struct by value, so this order resolves the dependency.
-    // (A full topological sort is future work if that assumption breaks.)
-    mut val ej: U64 = 0
-    while ej < c.enums.count {
-        val ge: EnumDef = c.enums[ej]
-        if ge.typeParams.count > 0 {
-        } else {
-            genEnumDef(c: inout c, ei: ej)
-        }
-        ej += 1
-    }
-    mut val sj: U64 = 0
-    while sj < c.structs.count {
-        val gs: StructDef = c.structs[sj]
-        if gs.typeParams.count > 0 || gs.isExtern {
-        } else {
-            genStructDef(c: inout c, si: sj)
-        }
-        sj += 1
-    }
+    // Emitted in by-value dependency order (a type after every type it holds by
+    // value): supports an enum holding a struct payload by value and any struct
+    // definition order. See emitNominalBodiesTopo (Codegen/Decl).
+    emitNominalBodiesTopo(c: inout c)
     // monomorphized generic bodies (post-order: nested instances first). Array
     // genInst bodies were already emitted above (before the nominal bodies), so
     // skip them here to avoid a duplicate definition.
