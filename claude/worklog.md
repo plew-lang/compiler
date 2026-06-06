@@ -19,10 +19,10 @@
 provisional.md に散在していた「ブロッカーなし・いつでも直せる」バグを棚卸しし、**一括で潰す**。各項＝症状／場所／直し／状態。完了したらこの節から落とし（git タグ＋provisional の該当行更新へ）、全完了でこの節ごと削除。compact 跨ぎの再開地図。
 
 - **Bug1 C 予約語識別子マングル**〔hidden meaning〕：`default`/`double`/`int` 等を名前に使うと生成 C 破壊。直し＝codegen の識別子出力（writeSpan 系）で C 予約語を安全名へマングル。場所＝Emit.pw の識別子出力点。状態＝未着手。
-- **Bug2 曖昧無サフィックスリテラルが先頭 overload 選択**〔silent〕：`k(a:5)` に `k(a:I32)`/`k(a:U64)`。直し＝findFunc/findMethod の解決で「型未確定リテラル引数が複数候補にマッチ」を曖昧 reject。場所＝Resolve.pw。状態＝未着手。
+- **Bug2 曖昧無サフィックスリテラルが先頭 overload 選択**〔silent〕：✅**済**（`9ddfcdb`）。findFunc/findMethod/findAssoc が 2 つ目の type-match を検出し、無サフィックスリテラル引数が候補間で異なる整数パラメータ型へ写るとき loud reject（`overloadsAmbiguous`/`checkOverloadAmbiguity`・Resolve.pw）。test reject/overload_ambiguous_literal・run/overload_literal_suffix。
 - **Bug3 メソッド値化 `val f = obj.method` を受理**〔should be loud〕：spec 禁止。直し＝`Expr.Method` を値位置（呼び出しでない）で使ったら reject。場所＝Expr.pw/Check.pw。状態＝未着手。
 - **Bug4 free 関数のモジュール跨ぎ同名衝突 誤 reject**〔false positive〕：別モジュール同名 private で正しい呼びが誤 reject。直し＝free 関数解決を same-module 優先、他モジュールは import 済み名のみ候補。場所＝`checkUseVisibility`（Check.pw）。状態＝未着手。
-- **Bug5 `;` 文区切りが的外れエラー**：`a; b` が「integer literal has no type from context」。直し＝パーサ（ParseBody.pw の文/ブロック）で `;` を clean な構文エラーに。状態＝未着手。
+- **Bug5 `;` 文区切りが的外れエラー**：✅**済**（`b6c9ab8`）。`parsePrimaryAst` の default 末端が未知トークンを 0-Int に黙って変えていた→`p.fail` で loud（`;` 専用メッセージ付き・ParseBody.pw）。reject/semicolon_separator が既存でカバー。
 - **Bug6+7 文脈型が末端リテラルに伝播しない**〔同根〕：(6) `ys[0]->v = 42`（Arrow place 代入右辺）・(7) `for val i: I32 in 0..<5`（範囲境界）。直し＝注釈/pointee フィールド型を式文脈（curRetTy 系）として末端リテラルへ降ろす。場所＝Stmt.pw（for/assign）・Expr.pw（arrow store）。状態＝未着手。
 - **Bug8+9 `@[Ord]` 残ギャップ**〔loud〕：(8) enum 未実装（struct のみ）・(9) `@[Ord]` が `@[Eq]` を含意しない（`Ord: Eq`）。直し＝derive 合成（`synth*`・Parser/Decl.pw）に enum compare＋Eq 連動。状態＝未着手。
 - **Bug10 ネスト generic 不単相化**〔一般 generics・clang 止まり〕：`Array[Entry[K,V]]`→`Array_Entry_K_V`。直し＝mono がネスト inst 名へ型 args を再帰置換。場所＝Mono.pw。状態＝未着手・中規模。

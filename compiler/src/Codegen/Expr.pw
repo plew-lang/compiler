@@ -623,6 +623,16 @@ fn genExpr(c: inout Comp, id: U64) {
             // its type's anonymous impl. (String's `.bytes` and scalars aren't real
             // struct fields, so fieldVis returns not-found and they're skipped.)
             if bt.kind == 2 {
+                // `val f = obj.method` (a method name in value position, not a call):
+                // a method cannot be bound to a value (spec/07). Without this the
+                // field access falls through and emits broken C (the struct has no
+                // such member). Reject loudly when the name is not a field but is a
+                // method of the receiver type.
+                if fieldVis(c: inout c, structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) == 3U64 {
+                    if typeHasMethodNamed(c: inout c, recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen) {
+                        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "a method cannot be used as a value; call it, or wrap it in a closure (e.g. `fn() { obj.method() }`)")
+                    }
+                }
                 checkFieldReadVis(c: inout c, ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
             } else {
                 if bt.kind == 3 {

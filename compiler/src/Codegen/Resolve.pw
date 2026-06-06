@@ -1044,6 +1044,25 @@ fn fieldVis(c: inout Comp, structStart: U64, structLen: U64, fieldStart: U64, fi
     return 3U64
 }
 
+// Whether type (recvStart,recvLen) has any method named (nameStart,nameLen),
+// regardless of signature. Used to reject method-value expressions `obj.method`
+// (spec/07: a method cannot be bound to a value — wrap it in a closure).
+fn typeHasMethodNamed(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.hasRecv {
+            if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: nameStart, bLen: nameLen) {
+                if spansEqual(c: inout c, aStart: f.recvStart, aLen: f.recvLen, bStart: recvStart, bLen: recvLen) {
+                    return true
+                }
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
 // Are we lowering code inside the type `(ownerStart,ownerLen)`'s own anonymous impl
 // (the only place its non-public members are visible — spec/05)? True when the
 // current function is a method whose receiver head names that type. Extensions
