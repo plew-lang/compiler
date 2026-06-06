@@ -3,10 +3,11 @@ import @Std/Syntax with { Derive, DeclAst }
 import @Std/Core with { stringFromBytes }
 
 // A parameterized derive: `@[Tagged(prefix: "hello", times: 3)]`. The directive
-// args become fields the macro reads via self.
+// args become fields the macro reads via self. They must be `pub` — a macro that
+// takes directive arguments must expose a public factory (the harness constructs it).
 struct Tagged {
-    val prefix: String
-    val times: I64
+    pub val prefix: String
+    pub val times: I64
 }
 
 pub impl Tagged as Derive {

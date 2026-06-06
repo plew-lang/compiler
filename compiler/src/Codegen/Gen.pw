@@ -72,6 +72,25 @@ fn internSourceLiteral(c: inout Comp, from: U64, to: U64) -> Bind {
     return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
 }
 
+// A macro that takes directive arguments `@[Name(field: …)]` is constructed
+// `<Name field=… />` by the harness, which writes those fields. The harness is
+// synthesized after the visibility checks, so enforce the construction rule here:
+// each directive-argument field must be publicly settable on the macro struct
+// (not private), exactly as an explicit external `<Name field=… />` would require.
+// This keeps the macro model honest — to be configured via `@[Name(…)]`, a macro
+// must expose a public factory (its fields `pub`/`pub(get)`, not private).
+fn checkDirectiveArgsPublic(c: inout Comp, d: DeriveReq) {
+    mut val ai: U64 = 0
+    while ai < d.args.count {
+        val mf: MakeField = d.args[ai]
+        val v: U64 = fieldVis(c: inout c, structStart: d.nameStart, structLen: d.nameLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+        if v == 0U64 {
+            compileErrorAt(line: lineOf(c: inout c, offset: mf.nameStart), msg: "directive argument sets a private field of the macro struct; a macro taking `@[Name(field: …)]` arguments must expose those fields publicly (mark them `pub`)")
+        }
+        ai += 1
+    }
+}
+
 // Synthesize the harness `main` for gen mode: for every user `@[Name]` derive
 // request, append `write(s: <Name />.deriveFromSource(source: <item src>, start:
 // declStart, end: declEnd))`.
@@ -94,6 +113,9 @@ fn synthGenMain(c: inout Comp) {
         val d: DeriveReq = c.derives[i]
         if isBuiltinDerive(c: inout c, start: d.nameStart, len: d.nameLen) {
         } else {
+            // directive arguments must set publicly-settable fields (enforce the
+            // construction rule the post-checks pass skipped for this synthetic Make).
+            checkDirectiveArgsPublic(c: inout c, d: d)
             // `<Name label=expr .../>` — the macro struct, constructed with the
             // directive arguments `@[Name(label: expr)]` as fields (empty for a
             // bare `@[Name]`), so its `derive` reads them via `self.label`.

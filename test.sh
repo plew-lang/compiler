@@ -159,6 +159,19 @@ for app in tests/gen/*/App.pw; do
     fi
 done
 
+# --- genreject/ : metaprogramming inputs that `plewc --gen` must REJECT (e.g. a
+#     directive argument setting a private macro-struct field — a macro taking
+#     `@[Name(field: …)]` args must expose a public factory). ---
+for app in tests/genreject/*/App.pw; do
+    [ -f "$app" ] || continue
+    name=$(basename "$(dirname "$app")")
+    if "$PLEWC" --gen "$app" > /dev/null 2>/dev/null; then
+        echo "FAIL  genreject/$name  (plewc --gen accepted it, but it should be rejected)"; fail=$((fail + 1))
+    else
+        pass=$((pass + 1))
+    fi
+done
+
 # --- self-host fixpoint ---
 # plewc1 resolves `@Std/…` relative to its own binary (computeStdRoot = argv[0]'s
 # dir), so the std library must sit next to it in $TMP.

@@ -1817,6 +1817,7 @@ uint64_t countAsyncAwaits_c_Comp_blockId_U64(Comp* c, uint64_t blockId);
 long long exprIsAwait_c_Comp_id_U64(Comp* c, uint64_t id);
 long long isBuiltinDerive_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uint64_t len);
 Bind internSourceLiteral_c_Comp_from_U64_to_U64(Comp* c, uint64_t from, uint64_t to);
+void checkDirectiveArgsPublic_c_Comp_d_DeriveReq(Comp* c, DeriveReq d);
 void synthGenMain_c_Comp(Comp* c);
 long long isPathTokKind_k_Kind(Kind k);
 Array_Bind collectParts_rootBytes_AU8_toks_ATok(Array_U8 rootBytes, Array_Tok toks);
@@ -18988,6 +18989,17 @@ Bind internSourceLiteral_c_Comp_from_U64_to_U64(Comp* c, uint64_t from, uint64_t
     { Bind __ret1083 = (Bind){.nameStart = start, .nameLen = len, .fieldStart = start, .fieldLen = len};
     return __ret1083; }
 }
+void checkDirectiveArgsPublic_c_Comp_d_DeriveReq(Comp* c, DeriveReq d) {
+    uint64_t ai = 0;
+    while (ai < (long long)((d.args).count)) {
+    MakeField mf = Array_MakeField_get(d.args, (long long)(ai));
+    uint64_t v = fieldVis_c_Comp_structStart_U64_structLen_U64_fieldStart_U64_fieldLen_U64(&((*c)), d.nameStart, d.nameLen, mf.nameStart, mf.nameLen);
+    if (v == 0) {
+    compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), mf.nameStart), (PlewString){"directive argument sets a private field of the macro struct; a macro taking `@[Name(field: …)]` arguments must expose those fields publicly (mark them `pub`)", 159});
+    }
+    ai = ({ uint64_t __ov; if (__builtin_add_overflow((ai), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+}
 void synthGenMain_c_Comp(Comp* c) {
     Bind writeN = internBytes_c_Comp_s_String(&((*c)), (PlewString){"write", 5});
     Bind sN = internBytes_c_Comp_s_String(&((*c)), (PlewString){"s", 1});
@@ -19003,6 +19015,7 @@ void synthGenMain_c_Comp(Comp* c) {
     if (isBuiltinDerive_c_Comp_start_U64_len_U64(&((*c)), d.nameStart, d.nameLen)) {
     }
     else {
+    checkDirectiveArgsPublic_c_Comp_d_DeriveReq(&((*c)), d);
     uint64_t mk = Comp_pushExpr_e_Expr(&((*c)), (Expr){.tag = 6, .data.Make = {.typeStart = d.nameStart, .typeLen = d.nameLen, .variantStart = 0, .variantLen = 0, .isEnum = 0, .ty = 0, .fields = Array_MakeField_share(d.args)}});
     Bind srcLit = internSourceLiteral_c_Comp_from_U64_to_U64(&((*c)), d.declStart, d.declEnd);
     uint64_t srcE = Comp_pushExpr_e_Expr(&((*c)), (Expr){.tag = 7, .data.Str = {.start = srcLit.nameStart, .len = srcLit.nameLen}});
