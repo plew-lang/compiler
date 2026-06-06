@@ -8,21 +8,16 @@
 
 完了した大物（詳細は git・記述的タグ）：async/await 段階 1-3（stackless SM）・コアライブラリ境界（`@Std` の `extern "plew-intrinsic"`）・**Array＝`RawBuffer` 床の Plew struct**（[array-struct-plan.md](array-struct-plan.md)）・可視性完全強制・**Iterator/Iterable＋lazy map/filter**・**再帰値型 auto-boxing＋ARC**・**コンパイラ renovate Phase A**（ARC 1 本化・Op enum・expect）・**Phase B B0-B2**（型付き AST キャッシュ）・**D quick-wins**（Loader 掃除・expect 仕上げ）。renovate vs rewrite の判断・負債の地図は [architecture.md](architecture.md)「負債監査の結論」、言語設計の根拠は [design-decisions.md](design-decisions.md)、再利用機構は本書末尾「再利用資産・罠」。
 
-## A（フロントエンド統合）Phase 1 大半済・⚠ 未コミットの緑状態あり（2026-06-06）
+## A（フロントエンド統合）Phase 1 済・コミット済（2026-06-06）
 
-**ユーザー指示＝A を進める（離席中も止まらず緑をディスクに溜める）。** 以下すべて**実装済・緑（244/244・不動点維持・reseed 済）だが GPG 凍結でコミットできずディスク上に蓄積**：
+**ユーザー指示＝A を進める。** Phase 1＝コミット済（244/244・不動点維持）：
+1. **codegen の nominal body emit を依存順（トポロジカル）化**（`emitNominalBodiesTopo`／`Codegen/Decl.pw`）＝commit `ded0f4a`。実バグ修正（`enum E { A(s: Struct) }` が不完全型でコンパイル不可を解消）かつ A の土台（値ツリーを enum で書ける）。
+2-4. **共有値ツリー＋ボディパーサ**＝commit `5a76a94`：`@Std/Syntax/Trees.pw`（`ExprAst`/`StmtAst`/`PatternAst`/`BlockAst` 等・enum・String 名・原本座標 Span）／`@Std/Syntax/ParseBody.pw`（式・文・パターン・ブロックを `Parser/Expr.pw`+`Stmt.pw` どおりミラー・`*Ast` 接尾辞で本体と衝突回避・`export parseExprAst`/`parseBlockAst`/`parseExprFrom`/`parseBlockFrom`）／`parseFuncDecl` が関数本体を実パース（`DeclAst.body: BlockAst`＝マクロが本体を読める）。単体検証済。
 
-1. **codegen の nominal body emit を依存順（トポロジカル）化**（`emitNominalBodiesTopo`／`Codegen/Decl.pw`・`_.pw` の旧 2 ループを置換）。実バグ修正（`enum E { A(s: Struct) }` が不完全型でコンパイル不可だったのを解消＝検証済）かつ A の土台（値ツリーを enum で書ける）。
-2. **値ツリー型クラスタ**（`@Std/Syntax/Trees.pw`＝`ExprAst`/`StmtAst`/`PatternAst`/`BlockAst`/`ArgAst`/`MakeFieldAst`/`BindAst`/`MatchArmAst`・String 名・全ノード Span・再帰子は auto-box・enum）。
-3. **共有ボディパーサ**（`@Std/Syntax/ParseBody.pw`＝式・文・パターン・ブロックを `Parser/Expr.pw`+`Stmt.pw` の文法どおりミラー）。`*Ast` 接尾辞で本体の同名関数と衝突回避。`export parseExprAst`/`parseBlockAst`＋便利関数 `parseExprFrom`/`parseBlockFrom`（String→tree）。単体検証済（優先順位・呼出・フィールド連鎖・単項・配列・JSX・let/assign/if/while/for/match）。
-4. **`parseFuncDecl` が関数本体を実パース**（`DeclAst.body: BlockAst` 追加）＝マクロが関数本体を読める（検証済＝`fn add` の body 3 文を抽出）。
-
-**⚠ GPG 署名キャッシュが離席で切れ commit が署名タイムアウトで凍結中。** HEAD＝`docs: reframe...` 312d062 のまま。`--no-gpg-sign` は使わない。**キャッシュ回復後（ユーザー復帰でパスフレーズ入力 or `git commit` 手動実行）に上記をコミット**（論理単位で：①topo 修正 ②値ツリー＋ボディパーサ ③fn body）。バックアップ patch＝`/tmp/plew-A-green.patch`（全 diff・381KB）。
-
-**A の残り（commit 可能になってから＝スワップはリスク高でチェックポイント必須）**：
-5. 共有パーサを**全トップレベル**（impl/trait/extern/import/export/part）＋宣言の body まで広げ `parseProgramAst`（プログラム全体→宣言木列）に。DeclAst に impl/trait 等の表現追加。
-6. `lower(tree)→Comp arena`（名前は再インターン＝offset は診断行番号のみ・テスト非対象）。
-7. `parseProgram` を共有 parse+lower にスワップ＝**旧 `Parser/Expr/Stmt/Decl` 退役＝真の 1 AST**。検証＝全テスト＋不動点。緑でなければ revert。self-compile が壊れると復旧困難ゆえ commit チェックポイントが取れる状態でやる。
+**A の残り（Phase 2＝スワップはリスク高・commit チェックポイントを取りながら）**：
+5. 共有パーサを**全トップレベル**（impl/trait/extern/import/export/part）まで広げ `parseProgramAst`（プログラム全体→トップレベル項の木列）に。impl/trait 等の値ツリー表現を追加（impl＝レシーバ型＋メソッド〔DeclAst func〕列＋isPub、trait＝要求列、extern＝intrinsic 列、import/export/part＝パス）。
+6. `lower(tree)→Comp arena`（値ツリーを走査し `pushExpr`/`pushStmt`/`pushType`/arrayElems 種まきを再現。名前は再インターン＝offset は診断行番号のみに影響・テスト非対象）。
+7. `parseProgram` を共有 parse+lower にスワップ＝**旧 `Parser/Expr/Stmt/Decl` 退役＝真の 1 AST**。検証＝全テスト＋不動点。緑でなければ revert（self-compile が壊れると復旧困難）。
 
 ## 次の一歩＝M1 コア達成後の選択（M0・M1 コア済）
 
