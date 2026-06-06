@@ -237,7 +237,15 @@ fn lowerParams(c: inout Comp, params: Array[ParamAst]) -> Array[Param] {
             tyIsArray = pt.isArray
             tyRef = pt.ref
         }
-        out.append(<Param nameStart=nm.nameStart nameLen=nm.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isInout=p.isInout isMove=p.isMove isBorrow=p.isBorrow noLabel=p.noLabel hasDefault=false defaultExpr=0 />)
+        // a default argument `name: T = expr` (spec/04). Closures never carry one
+        // (hasDefault is always false there), so this is a no-op for closure params.
+        mut val hasDefault: Bool = false
+        mut val defaultExpr: U64 = 0
+        if p.hasDefault {
+            defaultExpr = lowerExpr(c: inout c, e: p.defaultVal)
+            hasDefault = true
+        }
+        out.append(<Param nameStart=nm.nameStart nameLen=nm.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isInout=p.isInout isMove=p.isMove isBorrow=p.isBorrow noLabel=p.noLabel hasDefault=hasDefault defaultExpr=defaultExpr />)
         i += 1
     }
     return out
@@ -533,13 +541,45 @@ fn lowerEnumDecl(c: inout Comp, d: DeclAst) {
     drainDerives(c: inout c, typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: true, declStart: d.span.start, declEnd: d.span.end)
 }
 
-// Lower a nominal declaration by kind (struct / enum; free functions are added to
-// this lowering in a later increment).
+// Lower a free function DeclAst: append a Func, then a FuncBound per `where` atom.
+// Mirrors parseFunc/parseFuncCommon for the free-function case (no receiver, no
+// impl-level bounds). The function's NAME keeps its ORIGINAL offset (d.nameSpan):
+// `moduleOf` attributes the declaration to its module for cross-module visibility
+// (checkUseVisibility), so it must not be re-interned.
+fn lowerFuncDecl(c: inout Comp, d: DeclAst) {
+    val nameStart: U64 = d.nameSpan.start
+    val nameLen: U64 = d.nameSpan.end - d.nameSpan.start
+    val typeParams: Array[Bind] = lowerTypeParamNames(c: inout c, names: d.typeParams)
+    val params: Array[Param] = lowerParams(c: inout c, params: d.params)
+    mut val retStart: U64 = 0
+    mut val retLen: U64 = 0
+    mut val retIsArray: Bool = false
+    mut val retRef: U64 = 0
+    if d.hasRet {
+        val pt: PType = lowerType(c: inout c, t: d.ret)
+        retStart = pt.start
+        retLen = pt.len
+        retIsArray = pt.isArray
+        retRef = pt.ref
+    }
+    val body: U64 = lowerBlock(c: inout c, b: d.body)
+    val fnIdx: U64 = c.funcs.count
+    c.funcs.append(<Func nameStart=nameStart nameLen=nameLen typeParams=typeParams params=params hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExtern=false />)
+    mut val wi: U64 = 0
+    while wi < d.whereParams.count {
+        val pn: Bind = internBytes(c: inout c, s: d.whereParams[wi])
+        val tn: Bind = internBytes(c: inout c, s: d.whereTraits[wi])
+        c.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen traitStart=tn.nameStart traitLen=tn.nameLen />)
+        wi += 1
+    }
+}
+
+// Lower a nominal declaration by kind (struct / enum / free function).
 fn lowerDecl(c: inout Comp, d: DeclAst) {
     match d.kind {
         DeclKind.Struct => { lowerStructDecl(c: inout c, d: d) }
         DeclKind.Enum => { lowerEnumDecl(c: inout c, d: d) }
-        DeclKind.Func => {}
+        DeclKind.Func => { lowerFuncDecl(c: inout c, d: d) }
     }
 }
 

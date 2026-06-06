@@ -108,6 +108,16 @@ export struct DeclAst {
     pub val params: Array[ParamAst]
     pub val hasRet: Bool
     pub val ret: TypeAst
+    // `async fn` (spec/14): the function is a stackless state machine returning a
+    // Promise. Default false. (The caller of a top-level `async fn` consumes the
+    // `async` keyword and threads it in.)
+    pub val isAsync: Bool
+    // `where T: A + B, U: C` trait bounds (spec/08), as parallel name lists: each
+    // atom (one trait per `+`/`,` expansion) is a (param, trait) pair. Empty for an
+    // unconstrained function. A macro reads them; the compiler lowers them to
+    // FuncBound records.
+    pub val whereParams: Array[String]
+    pub val whereTraits: Array[String]
     // fn body (`kind == Func`): the parsed `{ ... }` block (empty for struct/enum
     // and for a body-less signature). Lets a macro read/transform a function body.
     pub val body: BlockAst

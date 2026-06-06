@@ -329,6 +329,12 @@ fn parseTypeParamNames(p: inout P) -> Array[String] {
                     }
                     Kind.Eof => { break }
                     Kind.Comma => { p.advance() }
+                    Kind.Colon => {
+                        // inline trait constraint `[T: Trait]` (spec/06: not allowed —
+                        // constraints go in a `where` clause). Reject loudly.
+                        p.fail(off: p.base + p.curTok().start, msg: "inline trait constraint is not allowed in `[...]`; use a `where` clause")
+                        p.advance()
+                    }
                     Kind.Ident => {
                         mut val name: String = ""
                         while true {
@@ -455,7 +461,7 @@ export fn parseStructDecl(p: inout P, isUnique: Bool) -> DeclAst {
             }
         }
     }
-    return <DeclAst kind=<DeclKind.Struct /> name=name nameSpan=nameSpan typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=isUnique fields=fields hasDeinit=hasDeinit deinitBody=deinitBody variants=[] params=[] hasRet=false ret=emptyTypeAst() body=emptyBlock() />
+    return <DeclAst kind=<DeclKind.Struct /> name=name nameSpan=nameSpan typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=isUnique fields=fields hasDeinit=hasDeinit deinitBody=deinitBody variants=[] params=[] hasRet=false ret=emptyTypeAst() isAsync=false whereParams=[] whereTraits=[] body=emptyBlock() />
 }
 
 // An enum variant payload field `name: Type` (no modifiers). The cursor is at the
@@ -538,7 +544,7 @@ export fn parseEnumDecl(p: inout P) -> DeclAst {
             _ => { p.advance() }
         }
     }
-    return <DeclAst kind=<DeclKind.Enum /> name=name nameSpan=nameSpan typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=false fields=[] hasDeinit=false deinitBody=emptyBlock() variants=variants params=[] hasRet=false ret=emptyTypeAst() body=emptyBlock() />
+    return <DeclAst kind=<DeclKind.Enum /> name=name nameSpan=nameSpan typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=false fields=[] hasDeinit=false deinitBody=emptyBlock() variants=variants params=[] hasRet=false ret=emptyTypeAst() isAsync=false whereParams=[] whereTraits=[] body=emptyBlock() />
 }
 
 // A function parameter `name[~]: [inout|move|borrow] Type [= expr]`. The cursor is
@@ -624,9 +630,55 @@ fn parseParamAsts(p: inout P) -> Array[ParamAst] {
     return params
 }
 
+// A `where T: A + B, U: C` trait-bound clause (spec/08) into parallel name lists
+// (one (param, trait) pair per `+`/`,` atom). Appends into `params`/`traits`. The
+// cursor may or may not be at `where`; a non-`where` token leaves both untouched.
+// Mirrors the compiler's parseWhereClause.
+fn parseWhereNames(p: inout P, params: inout Array[String], traits: inout Array[String]) {
+    if curIs(p: inout p, kw: "where") {
+        p.advance()
+        mut val cont: Bool = true
+        while cont {
+            p.skipNewlines()
+            match p.curKind() {
+                Kind.Ident => {
+                    val pName: String = p.text(t: p.curTok())
+                    p.advance()
+                    match p.curKind() {
+                        Kind.Colon => { p.advance() }
+                        _ => {}
+                    }
+                    mut val moreTraits: Bool = true
+                    while moreTraits {
+                        match p.curKind() {
+                            Kind.Ident => {
+                                val tName: String = p.text(t: p.curTok())
+                                p.advance()
+                                params.append(pName)
+                                traits.append(tName)
+                            }
+                            _ => {}
+                        }
+                        match p.curKind() {
+                            Kind.Plus => { p.advance() }
+                            _ => { moreTraits = false }
+                        }
+                    }
+                    match p.curKind() {
+                        Kind.Comma => { p.advance() }
+                        _ => { cont = false }
+                    }
+                }
+                _ => { cont = false }
+            }
+        }
+    }
+}
+
 // A function declaration `fn name[T,...](params) [-> Ret] [where ...] { body }`.
-// The cursor is at `fn`. The body is skipped (not surfaced in M1).
-export fn parseFuncDecl(p: inout P) -> DeclAst {
+// The cursor is at `fn` (a leading `async`, if any, is already consumed and passed
+// as `isAsync`). The body is parsed; the where-bounds are captured.
+export fn parseFuncDecl(p: inout P, isAsync: Bool) -> DeclAst {
     val sStart: U64 = p.base + p.curTok().start
     p.advance()
     val nameTok: Tok = p.curTok()
@@ -645,17 +697,12 @@ export fn parseFuncDecl(p: inout P) -> DeclAst {
         }
         _ => {}
     }
-    // optional `where ...` clause: skip to the body `{` (the constraint tree is an
-    // additive follow-up; the body is parsed).
-    while true {
-        match p.curKind() {
-            Kind.LBrace => { break }
-            Kind.Eof => { break }
-            _ => { p.advance() }
-        }
-    }
+    mut val whereParams: Array[String] = []
+    mut val whereTraits: Array[String] = []
+    parseWhereNames(p: inout p, params: inout whereParams, traits: inout whereTraits)
+    p.skipNewlines()
     val body: BlockAst = parseBlockAst(p: inout p)
-    return <DeclAst kind=<DeclKind.Func /> name=name nameSpan=nameSpan typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=false fields=[] hasDeinit=false deinitBody=emptyBlock() variants=[] params=params hasRet=hasRet ret=ret body=body />
+    return <DeclAst kind=<DeclKind.Func /> name=name nameSpan=nameSpan typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=false fields=[] hasDeinit=false deinitBody=emptyBlock() variants=[] params=params hasRet=hasRet ret=ret isAsync=isAsync whereParams=whereParams whereTraits=whereTraits body=body />
 }
 
 // Parse an item's source into a `DeclAst` (struct / enum / fn). `source` is the
@@ -682,10 +729,14 @@ export fn parseItem(source: String, start: U64, end: U64) -> DeclAst {
             return parseEnumDecl(p: inout p)
         }
         Kind.KwFn => {
-            return parseFuncDecl(p: inout p)
+            return parseFuncDecl(p: inout p, isAsync: false)
+        }
+        Kind.KwAsync => {
+            p.advance()
+            return parseFuncDecl(p: inout p, isAsync: true)
         }
         _ => {
-            return <DeclAst kind=<DeclKind.Struct /> name="" nameSpan=<Span start=start end=start /> typeParams=[] span=<Span start=start end=end /> isUnique=false fields=[] hasDeinit=false deinitBody=emptyBlock() variants=[] params=[] hasRet=false ret=emptyTypeAst() body=emptyBlock() />
+            return <DeclAst kind=<DeclKind.Struct /> name="" nameSpan=<Span start=start end=start /> typeParams=[] span=<Span start=start end=end /> isUnique=false fields=[] hasDeinit=false deinitBody=emptyBlock() variants=[] params=[] hasRet=false ret=emptyTypeAst() isAsync=false whereParams=[] whereTraits=[] body=emptyBlock() />
         }
     }
 }
@@ -703,10 +754,14 @@ export fn parseDecl(p: inout P) -> DeclAst {
             return parseStructDecl(p: inout p, isUnique: true)
         }
         Kind.KwEnum => { return parseEnumDecl(p: inout p) }
-        Kind.KwFn => { return parseFuncDecl(p: inout p) }
+        Kind.KwFn => { return parseFuncDecl(p: inout p, isAsync: false) }
+        Kind.KwAsync => {
+            p.advance()
+            return parseFuncDecl(p: inout p, isAsync: true)
+        }
         _ => {
             val off: U64 = p.base + p.curTok().start
-            return <DeclAst kind=<DeclKind.Struct /> name="" nameSpan=<Span start=off end=off /> typeParams=[] span=<Span start=off end=off /> isUnique=false fields=[] hasDeinit=false deinitBody=emptyBlock() variants=[] params=[] hasRet=false ret=emptyTypeAst() body=emptyBlock() />
+            return <DeclAst kind=<DeclKind.Struct /> name="" nameSpan=<Span start=off end=off /> typeParams=[] span=<Span start=off end=off /> isUnique=false fields=[] hasDeinit=false deinitBody=emptyBlock() variants=[] params=[] hasRet=false ret=emptyTypeAst() isAsync=false whereParams=[] whereTraits=[] body=emptyBlock() />
         }
     }
 }

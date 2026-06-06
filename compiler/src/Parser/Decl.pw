@@ -226,14 +226,6 @@ fn parseWhereClause(c: inout Comp) -> Array[Bind] {
     return boundParams
 }
 
-// `[async] fn name(...)`: a free function. The current token is `fn` (the leading
-// `async`, if any, is already consumed and signalled via `isAsync`).
-fn parseFunc(c: inout Comp, isAsync: Bool) {
-    c.advance()
-    val noParams: Array[Bind] = []
-    parseFuncCommon(c: inout c, hasRecv: false, recvStart: 0, recvLen: 0, selfInout: false, selfMove: false, implParams: noParams, traitImpl: false, isAssoc: false, isAsync: isAsync, isPub: false)
-}
-
 // `impl Type { (fn | inout fn) name(...) ... }`: inherent methods. Each member
 // is a function with an implicit `self` receiver (`inout fn` makes self
 // mutable). The current token is the `impl` identifier.
@@ -1040,14 +1032,8 @@ fn parseExport(c: inout Comp) {
     val fB: U64 = c.funcs.count
     val tB: U64 = c.traits.count
     match c.curKind() {
-        Kind.KwFn => { parseFunc(c: inout c, isAsync: false) }
-        Kind.KwAsync => {
-            c.advance()
-            match c.curKind() {
-                Kind.KwFn => { parseFunc(c: inout c, isAsync: true) }
-                _ => {}
-            }
-        }
+        Kind.KwFn => { val d: DeclAst = parseDeclItem(c: inout c) }
+        Kind.KwAsync => { val d: DeclAst = parseDeclItem(c: inout c) }
         Kind.KwStruct => { val d: DeclAst = parseDeclItem(c: inout c) }
         Kind.KwUnique => { val d: DeclAst = parseDeclItem(c: inout c) }
         Kind.KwEnum => { val d: DeclAst = parseDeclItem(c: inout c) }
@@ -1151,19 +1137,14 @@ fn parseProgram(c: inout Comp) {
         c.skipNewlines()
         val k: Kind = c.curKind()
         match k {
-            Kind.KwFn => { parseFunc(c: inout c, isAsync: false) }
+            Kind.KwFn => { val d: DeclAst = parseDeclItem(c: inout c) }
             Kind.KwAsync => {
-                // `async fn ...` (spec/14): consume `async`, then the function
-                // (only `fn` may follow at top level).
-                c.advance()
-                match c.curKind() {
-                    Kind.KwFn => { parseFunc(c: inout c, isAsync: true) }
-                    _ => {}
-                }
+                // `async fn ...` (spec/14): parseDecl consumes `async`, then the fn.
+                val d: DeclAst = parseDeclItem(c: inout c)
             }
             Kind.KwStruct => {
                 // routed through the shared @Std/Syntax parser + lowerDecl (worklog A):
-                // the compiler no longer has its own struct/enum parser.
+                // the compiler no longer has its own struct/enum/fn parser.
                 val d: DeclAst = parseDeclItem(c: inout c)
             }
             Kind.KwUnique => {
