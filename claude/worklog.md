@@ -19,6 +19,11 @@
 6. `lower(tree)→Comp arena`（値ツリーを走査し `pushExpr`/`pushStmt`/`pushType`/arrayElems 種まきを再現。名前は再インターン＝offset は診断行番号のみに影響・テスト非対象）。
 7. `parseProgram` を共有 parse+lower にスワップ＝**旧 `Parser/Expr/Stmt/Decl` 退役＝真の 1 AST**。検証＝全テスト＋不動点。緑でなければ revert（self-compile が壊れると復旧困難）。
 
+**Phase 2 着手時にまとめて決める暫定判断（M1 自走中の宿題）**：
+- **`DeclAst` を enum へ戻す**：現状はタグ付き struct（`kind: DeclKind` ＋未使用フィールド空）。当初は codegen バグ（enum が struct を値で持つと不完全型）回避のためだったが、そのバグは Phase 1 の topo emit（`ded0f4a`）で解消済＝技術的に `enum DeclAst { Struct(StructDecl) … }` へ戻せる。**戻すと gen テスト6件の macro API が churn**（`d.kind` の match → `match d`）するので、手順5 で値ツリーを整える際に一括で enum 化するのが筋（個別にやらない）。
+- **共有パーサの現スコープ**：宣言＋本体（式/文/パターン）は実装済。**未対応＝トップレベルの impl/trait/extern/import/export/part のみ**（＝手順5 そのもの）。`parseFuncDecl` は body を実パース済だが、フィールド/引数のデフォルト式は依然 skip（presence フラグのみ）・`fn(...)->R` 型式は bare 名に潰している＝lower で本体と突き合わせる際に補完要否を判断。
+- **`Src` 出力ビルダの API 形状**（`Src`/`newSrc`/`put(text~:)`/`putByte(b~:)`/`putInt(n~:)`/`finish()`）は additive で容易に変更可。マクロを実運用して不満が出たら改名/拡張。今は確定不要。
+
 ## 次の一歩＝M1 コア達成後の選択（M0・M1 コア済）
 
 **M1 コア＝✅達成**（直下「M1 の現状」参照・tag `metaprogramming-m1`・244/244 緑）。次の大きな分岐は **(a) M1 の理想完成（本体フロントエンドを共有パーサへ統合＝真の 1 AST・重複パーサ退役）／(b) 構文層を式・文・パターンまで拡張（マクロが関数本体を読める）／(c) M2 dogfood（Eq/Hash をマクロ化→`Dictionary`）** の 3 つ。
