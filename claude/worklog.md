@@ -27,8 +27,35 @@ A 完了で M1 の理想形（真の 1 AST）に到達・impl/trait もマクロ
   1. **✅ `wrappingMul`/`wrappingAdd`/`wrappingSub`（整数全幅）**（commit `aabb800`・privileged codegen lowering・uint64_t で計算→受信者幅へ truncate・test `wrapping_arith`）。
   2. **✅ `Hash`/`Hasher` トレイト＋SipHash-1-3 Hasher（Prelude・固定シード）＋U64/String の `impl … as Hash`**（commit `d8eedb6`・test `hash_siphasher`）。同時に extern body-walk バグ修正。
   3. **✅ `@[Hash]` derive を dogfood（特権合成でなく実 `impl Hash as Derive`）**（commit `4167151`・@Std/Syntax・test gen `derivehash`）。前提として trait 提供 assoc fn 呼び（commit `31c6fe1`）＋derive モデル `Derive`(assoc)/`ParameterizedDerive`(instance)（commit `b90ed6e`）を実装。
-  4. **🚧 `Dictionary[K,V]` lang item＝WIP（branch `dict-wip` ＋ `/tmp/dict-wip.patch`）**。ランタイムは**単体で完動**：平行配列（`keys: Array[K]`/`vals: Array[V]`/`hashes: Array[U64]`＋open-addressing の `buckets: Array[U64]`）＋SipHash・insert/update/getOr/contains/count/grow を検証済。**ネスト generic（`Array[Entry[K,V]]`）は単相化されない**ので平行配列で回避、**generic コンストラクタの戻り型推論が無い**ので構築は明示型引数（リテラル lower が供給予定）。`collectFnInsts` に generic-レシーバ・メソッド本体の推移スキャン（`scanGenInstMethodBodies`）を足し `Dictionary.hashOf` 内の `key.hash[H]`→`String.hash[SipHasher]` を discover。**未マージの理由**：Dictionary を**常時ロードの Prelude に置くと `array_methods` が回帰**（`Array[K]`/`Array[V]` フィールド由来の `Array[concrete]` genInst が Array 専用 emit 経路と干渉し、ground されない `Array_T_get` を吐く）。**次にやる＝この Array×genInst 干渉の修正**（Array を genInst emit 経路から除外＝Array は emitArrayMethods 専用、を切り分ける）。その後 `[k:v]`/`[:]` リテラル（@Std/Syntax パーサ：先頭要素の後が `:` か否かで dict/array 判別・`[:]` は空 dict）＋`dict[k]`（Index・欠落 panic）/`dict[k]=v`（IndexSet）。`get -> Optional[V]` は Optional ambient 化後。
+  4. **🚧 `Dictionary[K,V]` lang item＝WIP**（branch `dict-wip`・main 未マージ）。ランタイムは単体完動だが Prelude 統合で `array_methods` 回帰のため退避。**詳細な再開ガイド＝下記「Dictionary 再開ガイド」**。
   現行のコンパイラ特権合成（`synthStructEq` 等＝Eq/Ord）は据え置き（Hash が dogfood の先駆け・Eq/Ord 移行は後）。
+
+## Dictionary 再開ガイド（dict-wip ブランチ）
+
+**状態**：Dictionary のランタイムは**単体で完動**（後述の検証済み）。だが main へマージすると `array_methods` テストが回帰するため、`dict-wip` ブランチ（origin に push 済・commit `368fa10`）へ退避。main は green の `@[Hash]` dogfood（`4167151`）。再開＝`git checkout dict-wip`（`/tmp/dict-wip.patch` は揮発する可能性・**ブランチが正本**）。
+
+### Dictionary の設計（dict-wip で実装済・検証済）
+- **全て Array 上に構築**（RawBuffer 直は将来最適化）。`compiler/std/Prelude.pw` 末尾：
+  `struct Dictionary[K, V] { mut val keys: Array[K]; mut val vals: Array[V]; mut val hashes: Array[U64]; mut val buckets: Array[U64]; pub(get) mut val count: U64 }`
+- **open addressing・線形プロービング**。`buckets[slot]` ＝ エントリindex+1（0=空）。`keys`/`vals`/`hashes` は密に append。**空構築（全 `[]`）＋初回 insert で grow**（cap 0→8）。負荷 0.75 で倍化 grow＋`hashes` から再配置（rehash）。
+- メソッド（`pub impl[K, V] Dictionary[K, V]`・1ブロックに集約＝可視性回避）：`hashOf(key)->U64 where K: Hash`（SipHasher.new→key.hash→finish）・`inout grow() where K: Hash`・`inout insert(key, value) where K: Hash, K: Eq`・`find(key)->U64 where K: Hash, K: Eq`（index+1, 0=不在）・`contains`・`getOr(key, fallback)`・`at(key)`（欠落 panic＝`dict[k]` の脱糖先）。
+- **`get(key)->Optional[V]` は当面なし**（Optional が ambient でなく Core import を要するため）。Optional ambient 化後に追加。
+- **シード固定**（上の 🔴 RNG TODO）。
+
+### 踏んだ generics の壁（dict-wip での回避・修正）
+1. **ネスト generic 不単相化**：`Array[Entry[K,V]]`（Array of 汎用 struct）を Dictionary[String,U64] で使うと `Array_Entry_K_V`（K,V 未置換）のまま emit。**回避＝Entry struct を捨て平行配列**（`Array[K]`/`Array[V]`/`Array[U64]`＝単層なら単相化される）。
+2. **generic コンストラクタの戻り型のみ推論が無い**：`assoc fn new()->Map[K,V]` の `Map.new()` も `<Map keys=.. />`（注釈 `m: Map[String,U64]` から）も K,V を推論せず `Map_new`/`(Map)` を未単相化 emit。**回避＝明示型引数 `<Map[String, U64] keys=.. />`（これは動く）**。Dictionary リテラル lower は明示型引数で構築すればよい。
+3. **generic-レシーバ・メソッド本体の推移的インスタンス探索が無い**（**dict-wip で修正済・良い修正なので残す**）：`Dictionary[String,U64].hashOf` の本体 `key.hash[H]`→`String.hash[SipHasher]` が discover されず C で未定義参照。**修正＝`compiler/src/Codegen/Mono.pw` の `collectFnInsts` に `scanGenInstMethodBodies` を追加**（各 genInst のメソッド本体を `emitMonoMethod` と同じ env〔curTypeParams=メソッドの型params, curTypeArgs=inst.args, curRecvInstRef, setSelfItemEnv〕で `scanBlockInsts`→nested fnInst 登録、推移ループが拾う）。**Array レシーバはスキップ**（emitArrayMethods 専用経路ゆえ）。
+
+### 🐛 未解決ブロッカー＝Array×genInst 干渉（次にやる修正）
+**症状**：Dictionary を常時ロードの Prelude に入れると `array_methods` テストが clang で落ちる＝`first()`（`impl[T] Array[T] { fn first()->T { return self.get(i:0) } }`）の本体が ground されない **`Array_T_get_i_U64`**（未宣言）を吐く（要素型 `T` 未置換のまま emit）。
+**当たりを付けた原因（未確定）**：`Array` は `struct Array[T]` ゆえ `isGenericInst("Array[X]")` が true → `Array[concrete]` が `c.genInsts` に載り（`Mono.pw` ~955 の `c.genInsts.append`）、**Array 専用の runtime emit 経路（`emitArrayMethods`＝要素型キー）と genInst のメソッド emit 経路（`emitMonoMethods`）が二重/干渉**。`emitArrayMethods` は `isTypeParamName`/`skipArrayElem` で要素 "T" をスキップするが、`emitMonoMethods`（genInst 経路）にはそのスキップが無い。**ただし未確定**：`array_methods` 単体（`Array[I64]` も genInst）は Dictionary 無しで green だったので「Array が genInst」だけが原因ではなく、**Dictionary（`Array[K]`/`Array[V]` を持つ generic struct）特有の何か**がトリガ。`Array-skip` ガードを `scanGenInstMethodBodies` に足しても直らなかった＝原因は scan でなく Dictionary を Prelude に置くこと自体。
+**修正方針**：(a) まず原因確定＝`isTypeParamName("T")` が Dictionary 在/不在で false に転じるか、`emitMonoMethods` が `Array[?]` を emit して `Array_T_*` を出すか、を `eprintInt`（コンパイラ内製・`as I64` は U8 のみ可）で特定。(b) **Array を genInst の emit/scan 経路から一貫して除外**（Array は `emitArrayMethods` 専用＝要素型キー、`emitMonoMethods`/`emitMonoStruct`/genInst-method-body-scan では Array をスキップ）。`emitArrayMethods` 側のスキップ（`skipArrayElem`/`isTypeParamName`）と対称に、genInst 経路でも `rangeEquals(inst.name, "Array")` で除外する。(c) 両方（`array_methods` ＋ Dictionary）が green になるまで。**注意**：デバッグは必ず `./dev-rebuild.sh`→`compiler/plewc` の1本で（`/tmp/plewcN` を作らない）。
+
+### Array 干渉が直った後の残り（Dictionary 完成）
+- **`[k:v]`/`[:]` リテラル**：`compiler/std/Syntax/ParseBody.pw` の `Kind.LBracket` 分岐（配列リテラル・~328行）を拡張＝`[` の後 `:`+`]` なら空 dict（`[:]`）、最初の式の後が `:` なら dict（`: value` を読み `, k: v` を繰り返す）、それ以外は配列。`ExprAst.DictLit { keys, vals, span }` を `Syntax/Trees.pw` に追加。**lower＝明示型引数で `<Dictionary[K,V] keys=[] vals=[] hashes=[] buckets=[] count=0 />`＋各ペアに insert** を合成（`[:]` の K,V は文脈注釈から）。
+- **`dict[k]`**（Index・欠落 panic）→ `.at(key:)` へ脱糖／**`dict[k]=v`**（IndexSet）→ `.insert(key:, value:)` へ脱糖。Dictionary 添字の codegen。
+- リテラルを使う run テストを追加（現状は明示構築 `<Dictionary[..] keys=[] .../>` で検証＝private フィールド構築が緩く通っている前提・リテラル lower はコンパイラ合成なので可視性を回避）。
 - **(b) M3**：パッケージ管理導入後に `@Std/Syntax` を in-tree から外部共有パッケージへ昇格（コンパイラもマクロも同一版に依存）。
 - **小さな additive（任意）**：パターン/構築のフィールド名エラー行が近似（bind/MakeField 名が lower で再インターン＝原本 offset を持たない）。`BindAst`/`MakeFieldAst` に span を持たせ lower で原本 offset を維持すれば行が正確になる。
 
