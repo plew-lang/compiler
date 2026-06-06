@@ -45,3 +45,33 @@ export trait Derive {
 export trait ParameterizedDerive {
     fn derive(input: TopItemAst) -> String
 }
+
+// Built-in `@[Hash]` derive, dogfooded as a real `Derive` (spec/16). It lives here
+// — in `Derive`'s own module — so conforming the ambient `Hash` trait (Prelude) to
+// `Derive` is coherent (no orphan, no colliding `struct Hash`). It loads only when
+// @Std/Syntax loads (gen mode + the compiler's own build, where it is dead code);
+// normal builds read the committed `.gen.pw`. Generates a field-wise
+// `pub impl T as Hash { fn hash[H](hasher: inout H) ... }` for a struct, hashing
+// each field via its own `Hash`. (Enum payloads are a follow-up.)
+pub impl Hash as Derive {
+    assoc fn derive(input: TopItemAst) -> String {
+        match input {
+            TopItemAst.Decl(val d) => {
+                mut val s: Src = newSrc()
+                s.put("pub impl ")
+                s.put(d.name)
+                s.put(" as Hash {\n    fn hash[H](hasher: inout H) where H: Hasher {\n")
+                mut val i: U64 = 0
+                while i < d.fields.count {
+                    s.put("        self.")
+                    s.put(d.fields[i].name)
+                    s.put(".hash(hasher: inout hasher)\n")
+                    i += 1
+                }
+                s.put("    }\n}\n")
+                return s.finish()
+            }
+            _ => { return "" }
+        }
+    }
+}

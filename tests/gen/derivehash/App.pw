@@ -1,0 +1,28 @@
+import @Std/Io with { print }
+
+// `@[Hash]` is a built-in derive, dogfooded as a real `impl Hash as Derive` in
+// @Std/Syntax (no compiler-privileged synthesis). It generates a field-wise
+// `pub impl Point as Hash { ... }` into App.gen.pw, auto-parted here. Hashing is
+// done inline in `main` (gen mode skips `main`, so the harness need not compile
+// against the not-yet-generated `Point.hash`).
+@[Hash]
+struct Point {
+    pub val x: U64
+    pub val y: U64
+}
+
+fn boolI(b: Bool) -> I64 { if b { return 1I64 } return 0I64 }
+
+fn main() {
+    val a: Point = <Point x=1U64 y=2U64 />
+    val b: Point = <Point x=1U64 y=2U64 />
+    val c: Point = <Point x=9U64 y=2U64 />
+    mut val ha: SipHasher = SipHasher.new()
+    a.hash(hasher: inout ha)
+    mut val hb: SipHasher = SipHasher.new()
+    b.hash(hasher: inout hb)
+    mut val hc: SipHasher = SipHasher.new()
+    c.hash(hasher: inout hc)
+    print(boolI(b: ha.finish() == hb.finish()))   // 1 (equal structs hash equal)
+    print(boolI(b: ha.finish() == hc.finish()))    // 0 (distinct)
+}
