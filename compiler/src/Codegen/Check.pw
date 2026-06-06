@@ -673,6 +673,93 @@ fn checkMakeFields(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U6
 }
 
 
+// Acceptance soundness: a variant/struct match pattern binds fields BY NAME, and
+// codegen emits `_m.data.<Variant>.<field>` (or `scrut.<field>` for a struct), so a
+// pattern that names a field the variant/struct does not have would produce broken
+// C (a clang error). Reject it loudly in Plew instead. (The bind field name is
+// re-interned during lowering, so the reported line is approximate.)
+fn checkBindsInFields(c: inout Comp, binds: Array[Bind], fields: Array[FieldDef]) {
+    mut val i: U64 = 0
+    while i < binds.count {
+        val bd: Bind = binds[i]
+        mut val found: Bool = false
+        mut val fj: U64 = 0
+        while fj < fields.count {
+            if spansEqual(c: inout c, aStart: fields[fj].nameStart, aLen: fields[fj].nameLen, bStart: bd.fieldStart, bLen: bd.fieldLen) {
+                found = true
+            }
+            fj += 1
+        }
+        if found {
+        } else {
+            compileErrorAt(line: lineOf(c: inout c, offset: bd.fieldStart), msg: "match pattern binds a field that does not exist on this variant/struct (check the field name; payload binds are `Variant(field: val name)` or punning `Variant(val field)`)")
+        }
+        i += 1
+    }
+}
+
+// Validate one match arm's pattern field names against the actual variant/struct
+// fields. Skips wildcard arms and arms whose enum/struct/variant is not found (a
+// separate concern — e.g. a match on a type parameter).
+fn checkArmBinds(c: inout Comp, a: MatchArm) {
+    if a.isWildcard {
+        return
+    }
+    if a.isStruct {
+        val si: U64 = structIndexByName(c: inout c, start: a.enumStart, len: a.enumLen)
+        if si < c.structs.count {
+            checkBindsInFields(c: inout c, binds: a.binds, fields: c.structs[si].fields)
+        }
+        return
+    }
+    val ei: U64 = enumIndexByName(c: inout c, start: a.enumStart, len: a.enumLen)
+    if ei >= c.enums.count {
+        return
+    }
+    val variants: Array[Variant] = c.enums[ei].variants
+    mut val vi: U64 = 0
+    while vi < variants.count {
+        if spansEqual(c: inout c, aStart: variants[vi].nameStart, aLen: variants[vi].nameLen, bStart: a.variantStart, bLen: a.variantLen) {
+            checkBindsInFields(c: inout c, binds: a.binds, fields: variants[vi].fields)
+            return
+        }
+        vi += 1
+    }
+}
+
+// Validate every match pattern (statement and expression position) names real
+// fields. Run before codegen so a bad pattern is a clean Plew error.
+fn checkMatchBinds(c: inout Comp) {
+    mut val si: U64 = 0
+    while si < c.stmts.count {
+        match c.stmts[si] {
+            Stmt.Match(val scrut, val arms) => {
+                mut val ai: U64 = 0
+                while ai < arms.count {
+                    checkArmBinds(c: inout c, a: arms[ai])
+                    ai += 1
+                }
+            }
+            _ => {}
+        }
+        si += 1
+    }
+    mut val xi: U64 = 0
+    while xi < c.exprs.count {
+        match c.exprs[xi] {
+            Expr.MatchExpr(val scrut, val arms) => {
+                mut val ai: U64 = 0
+                while ai < arms.count {
+                    checkArmBinds(c: inout c, a: arms[ai])
+                    ai += 1
+                }
+            }
+            _ => {}
+        }
+        xi += 1
+    }
+}
+
 // Whether `witnessed` (a conformance's satisfied requirement names) contains the
 // requirement named (start,len). T1 matches on name only (overloaded
 // requirements with the same name and differing signatures are a later concern).

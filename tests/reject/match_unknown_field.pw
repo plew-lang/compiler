@@ -1,0 +1,12 @@
+// A variant pattern that names a field the variant does not have must be rejected
+// (acceptance soundness): codegen would otherwise emit `_m.data.A.input` for a
+// non-existent field and clang would fail. The variant's field is `x`, not `input`.
+import @Std/Io with { print }
+enum E { A(x: I64) B }
+fn pick(e: E) -> I64 {
+    match e {
+        E.A(val input) => { return input }
+        E.B => { return 0I64 }
+    }
+}
+fn main() { print(0I64) }

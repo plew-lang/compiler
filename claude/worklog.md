@@ -16,7 +16,7 @@
 
 ## 次の一歩
 
-A 完了で M1 の理想形（真の 1 AST）に到達。**マクロ入力型を `TopItemAst` に確定＝impl/trait もマクロ対象＝✅実装済**（`derive(input: TopItemAst)`・`match input { Decl/Impl/Trait … }`・`lowerFuncDecl`/`lowerImpl`/`lowerTrait` も `drainDerives` で directive attach・gen テスト traitreqs/implmethods・spec/16 更新済。罠＝match payload を param 同名に bind すると provisional F2 shadow バグ→新名 `val d` に bind）。次：
+A 完了で M1 の理想形（真の 1 AST）に到達。**マクロ入力型を `TopItemAst` に確定＝impl/trait もマクロ対象＝✅実装済**（`derive(input: TopItemAst)`・`match input { Decl/Impl/Trait … }`・`lowerFuncDecl`/`lowerImpl`/`lowerTrait` も `drainDerives` で directive attach・gen テスト traitreqs/implmethods・spec/16 更新済。注意＝variant パターンは punning〔`Decl(val input)`＝「`input` 名のフィールド束縛」・`Decl` のフィールドは `d`〕＝別名束縛は `Decl(d: val x)`／punning は `Decl(val d)`・存在しないフィールド名は `checkMatchBinds` で loud reject〔受理の健全性・旧 silent broken C を修正〕）。次：
 
 - **(a) M2 dogfood**：マクロで `Eq`/`Hash` を生成→`Dictionary`（`[k:v]`）に接続。現行のコンパイラ特権合成（`synthStructEq` 等）から段階移行（特権版を残したまま並行→検証→差し替え）。**`Hash`/`Hasher` の署名が未策定**（方向は Rust 流確定・core-lib／言語判断）＝**着手前にユーザー確認向き**。
 - **(b) M3**：パッケージ管理導入後に `@Std/Syntax` を in-tree から外部共有パッケージへ昇格（コンパイラもマクロも同一版に依存）。
