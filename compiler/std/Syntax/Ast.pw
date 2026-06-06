@@ -218,3 +218,48 @@ export struct ImplAst {
     pub val members: Array[MemberAst]
     pub val span: Span
 }
+
+// An `import <path> [with { name [as Q], ... }]` statement (spec/15). `pathSpan` is
+// the full contiguous path text (`@Std/Io` / `./Foo` / `/Models/User`) in original
+// coordinates — the loader resolves it to a file (parse-driven loading). `segSpan`
+// is the last path segment (the submodule). Each `with` name keeps its original span
+// (the importing-side occurrence — feeds moduleOf for the importing module).
+export struct ImportAst {
+    pub val pathSpan: Span
+    pub val segSpan: Span
+    pub val isImport: Bool
+    pub val names: Array[String]
+    pub val nameSpans: Array[Span]
+    pub val span: Span
+}
+
+// One `@[Name(label: expr, ...)]` derive request: the macro/derive name + its
+// directive arguments (each a labelled value that becomes a field on the constructed
+// macro struct). `nameSpan` keeps the original coordinates (text-matched downstream).
+export struct DeriveReqAst {
+    pub val name: String
+    pub val nameSpan: Span
+    pub val args: Array[MakeFieldAst]
+}
+
+// An `@[Eq, Ord, Name(a: 32), ...]` directive (spec/16): the comma-separated derive
+// requests applied to the next type declaration.
+export struct DirectiveAst {
+    pub val reqs: Array[DeriveReqAst]
+}
+
+// A top-level item of a program (spec/15). The shared `parseProgramAst` returns a
+// list of these; the compiler frontend lowers each (Codegen/Lower.pw) into its arena
+// or Comp state, and follows `Import` nodes to load further files. `Export` wraps the
+// exported inner item (recursive — auto-boxed); `ReExport` is an `export <path>` (a
+// pure forwarding re-export, recorded as nothing for now).
+export enum TopItemAst {
+    Decl(d: DeclAst)
+    Impl(im: ImplAst)
+    Trait(t: TraitAst)
+    Extern(e: ExternAst)
+    Import(imp: ImportAst)
+    Export(inner: TopItemAst)
+    ReExport(pathSpan: Span)
+    Directive(dir: DirectiveAst)
+}

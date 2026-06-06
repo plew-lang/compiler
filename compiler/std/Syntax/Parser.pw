@@ -1011,3 +1011,280 @@ export fn parseExternDecl(p: inout P) -> ExternAst {
     }
     return <ExternAst abiOk=abiOk abiSpan=abiSpan fns=fns structNames=structNames structSpans=structSpans span=<Span start=p.base + externTok.start end=p.prevEnd() /> />
 }
+
+// `import <path> [with { name [as Q], ... }]` (spec/15). The cursor is at the
+// `import` ident. Captures the full contiguous path span (for the loader to resolve
+// to a file), the last segment, and each `with` name (original span — feeds moduleOf
+// for the importing module). Mirrors the compiler's parseImport + collectParts.
+fn parseImportAst(p: inout P) -> ImportAst {
+    val startOff: U64 = p.base + p.curTok().start
+    p.advance()
+    // the path = contiguous tokens (`@`/`.`/`..`/`/` markers + segments), stopping
+    // before a space-separated `with`, a `{`, or a newline.
+    mut val pathStart: U64 = p.base + p.curTok().start
+    mut val pathEndSlice: U64 = p.curTok().start
+    mut val segStartAbs: U64 = pathStart
+    mut val segLen: U64 = 0
+    mut val firstPath: Bool = true
+    while true {
+        match p.curKind() {
+            Kind.Newline => { break }
+            Kind.Eof => { break }
+            Kind.LBrace => { break }
+            _ => {
+                if curIs(p: inout p, kw: "with") {
+                    p.advance()
+                    break
+                }
+                val t: Tok = p.curTok()
+                if firstPath {
+                } else {
+                    if t.start == pathEndSlice {
+                    } else {
+                        break
+                    }
+                }
+                firstPath = false
+                pathEndSlice = t.start + t.len
+                match t.kind {
+                    Kind.Ident => {
+                        segStartAbs = p.base + t.start
+                        segLen = t.len
+                    }
+                    _ => {}
+                }
+                p.advance()
+            }
+        }
+    }
+    val pathEndAbs: U64 = p.base + pathEndSlice
+    mut val names: Array[String] = []
+    mut val nameSpans: Array[Span] = []
+    match p.curKind() {
+        Kind.LBrace => {
+            p.advance()
+            while true {
+                p.skipNewlines()
+                match p.curKind() {
+                    Kind.RBrace => {
+                        p.advance()
+                        break
+                    }
+                    Kind.Eof => { break }
+                    Kind.Comma => { p.advance() }
+                    Kind.Ident => {
+                        val t: Tok = p.curTok()
+                        names.append(p.text(t: t))
+                        nameSpans.append(p.spanOf(t: t))
+                        p.advance()
+                        // `name as Q`: consume the alias (the original name is recorded).
+                        match p.curKind() {
+                            Kind.KwAs => {
+                                p.advance()
+                                match p.curKind() {
+                                    Kind.Ident => { p.advance() }
+                                    _ => {}
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => { p.advance() }
+                }
+            }
+        }
+        _ => {}
+    }
+    return <ImportAst pathSpan=<Span start=pathStart end=pathEndAbs /> segSpan=<Span start=segStartAbs end=segStartAbs + segLen /> isImport=true names=names nameSpans=nameSpans span=<Span start=startOff end=p.prevEnd() /> />
+}
+
+// Optional directive arguments `(label: expr, ...)` after a derive name (spec/16).
+// Mirrors the compiler's parseDirectiveArgs.
+fn parseDirectiveArgsAst(p: inout P) -> Array[MakeFieldAst] {
+    mut val fields: Array[MakeFieldAst] = []
+    match p.curKind() {
+        Kind.LParen => { p.advance() }
+        _ => { return fields }
+    }
+    while true {
+        p.skipNewlines()
+        match p.curKind() {
+            Kind.RParen => {
+                p.advance()
+                break
+            }
+            Kind.Eof => { break }
+            Kind.Comma => { p.advance() }
+            Kind.Ident => {
+                val labelTok: Tok = p.curTok()
+                val label: String = p.text(t: labelTok)
+                val labelSpan: Span = p.spanOf(t: labelTok)
+                p.advance()
+                match p.curKind() {
+                    Kind.Colon => { p.advance() }
+                    _ => {}
+                }
+                val v: ExprAst = parseExprAst(p: inout p)
+                fields.append(<MakeFieldAst name=label value=v span=labelSpan />)
+            }
+            _ => { p.advance() }
+        }
+    }
+    return fields
+}
+
+// `@[Name, Name(a: 32), ...]` directive (spec/16). The cursor is at the `@` (lexed
+// as Unknown). Mirrors the compiler's parseDirective.
+fn parseDirectiveAst(p: inout P) -> DirectiveAst {
+    p.advance()
+    match p.curKind() {
+        Kind.LBracket => { p.advance() }
+        _ => {}
+    }
+    mut val reqs: Array[DeriveReqAst] = []
+    while true {
+        match p.curKind() {
+            Kind.RBracket => {
+                p.advance()
+                break
+            }
+            Kind.Eof => { break }
+            Kind.Comma => { p.advance() }
+            Kind.Ident => {
+                val t: Tok = p.curTok()
+                val name: String = p.text(t: t)
+                val nameSpan: Span = p.spanOf(t: t)
+                p.advance()
+                val args: Array[MakeFieldAst] = parseDirectiveArgsAst(p: inout p)
+                reqs.append(<DeriveReqAst name=name nameSpan=nameSpan args=args />)
+            }
+            _ => { p.advance() }
+        }
+    }
+    return <DirectiveAst reqs=reqs />
+}
+
+// `export <decl> | export extern { } | export <path> [with]` (spec/15). The cursor
+// is at the `export` ident. Returns the wrapped item (`Export`) or a re-export path
+// (`ReExport`, recorded as nothing for now). Mirrors the compiler's parseExport.
+fn parseExportAst(p: inout P) -> TopItemAst {
+    val startOff: U64 = p.base + p.curTok().start
+    p.advance()
+    // re-export: a `./`, `../`, or `/` path follows (the `@…` form is unused).
+    mut val isPath: Bool = false
+    match p.curKind() {
+        Kind.Dot => { isPath = true }
+        Kind.Slash => { isPath = true }
+        _ => {}
+    }
+    if isPath {
+        val pStart: U64 = p.base + p.curTok().start
+        mut val pEndSlice: U64 = p.curTok().start
+        mut val go: Bool = true
+        while go {
+            match p.curKind() {
+                Kind.Eof => { go = false }
+                Kind.LBrace => { go = false }
+                _ => {
+                    if curIs(p: inout p, kw: "with") {
+                        p.advance()
+                        go = false
+                    } else {
+                        pEndSlice = p.curTok().start + p.curTok().len
+                        p.advance()
+                    }
+                }
+            }
+        }
+        match p.curKind() {
+            Kind.LBrace => {
+                p.advance()
+                mut val g2: Bool = true
+                while g2 {
+                    match p.curKind() {
+                        Kind.RBrace => {
+                            p.advance()
+                            g2 = false
+                        }
+                        Kind.Eof => { g2 = false }
+                        _ => { p.advance() }
+                    }
+                }
+            }
+            _ => {}
+        }
+        return <TopItemAst.ReExport pathSpan=<Span start=pStart end=p.base + pEndSlice /> />
+    }
+    match p.curKind() {
+        Kind.KwExtern => { return <TopItemAst.Export inner=<TopItemAst.Extern e=parseExternDecl(p: inout p) /> /> }
+        Kind.KwFn => { return <TopItemAst.Export inner=<TopItemAst.Decl d=parseDecl(p: inout p) /> /> }
+        Kind.KwAsync => { return <TopItemAst.Export inner=<TopItemAst.Decl d=parseDecl(p: inout p) /> /> }
+        Kind.KwStruct => { return <TopItemAst.Export inner=<TopItemAst.Decl d=parseDecl(p: inout p) /> /> }
+        Kind.KwUnique => { return <TopItemAst.Export inner=<TopItemAst.Decl d=parseDecl(p: inout p) /> /> }
+        Kind.KwEnum => { return <TopItemAst.Export inner=<TopItemAst.Decl d=parseDecl(p: inout p) /> /> }
+        Kind.Ident => {
+            if curIs(p: inout p, kw: "trait") {
+                return <TopItemAst.Export inner=<TopItemAst.Trait t=parseTraitDecl(p: inout p) /> />
+            }
+            return <TopItemAst.ReExport pathSpan=<Span start=startOff end=startOff /> />
+        }
+        _ => { return <TopItemAst.ReExport pathSpan=<Span start=startOff end=startOff /> /> }
+    }
+}
+
+// Parse a whole program (a file's tokens) into a flat list of top-level items
+// (spec/15). The compiler frontend drives this over its own token stream (base=0)
+// and lowers each item (Codegen/Lower.pw), following `Import` items to load further
+// files. This is the single top-level entry — the compiler has no separate
+// declaration/dispatch parser. Mirrors the compiler's old parseProgram dispatch.
+export fn parseProgramAst(p: inout P) -> Array[TopItemAst] {
+    mut val items: Array[TopItemAst] = []
+    while true {
+        p.skipNewlines()
+        match p.curKind() {
+            Kind.KwFn => { items.append(<TopItemAst.Decl d=parseDecl(p: inout p) />) }
+            Kind.KwAsync => { items.append(<TopItemAst.Decl d=parseDecl(p: inout p) />) }
+            Kind.KwStruct => { items.append(<TopItemAst.Decl d=parseDecl(p: inout p) />) }
+            Kind.KwUnique => { items.append(<TopItemAst.Decl d=parseDecl(p: inout p) />) }
+            Kind.KwEnum => { items.append(<TopItemAst.Decl d=parseDecl(p: inout p) />) }
+            Kind.KwExtern => { items.append(<TopItemAst.Extern e=parseExternDecl(p: inout p) />) }
+            Kind.Ident => {
+                if curIs(p: inout p, kw: "import") {
+                    items.append(<TopItemAst.Import imp=parseImportAst(p: inout p) />)
+                } else {
+                    if curIs(p: inout p, kw: "export") {
+                        items.append(parseExportAst(p: inout p))
+                    } else {
+                        if curIs(p: inout p, kw: "impl") {
+                            items.append(<TopItemAst.Impl im=parseImplDecl(p: inout p, isPub: false) />)
+                        } else {
+                            if curIs(p: inout p, kw: "pub") {
+                                p.advance()
+                                if curIs(p: inout p, kw: "impl") {
+                                    items.append(<TopItemAst.Impl im=parseImplDecl(p: inout p, isPub: true) />)
+                                } else {
+                                    p.advance()
+                                }
+                            } else {
+                                if curIs(p: inout p, kw: "trait") {
+                                    items.append(<TopItemAst.Trait t=parseTraitDecl(p: inout p) />)
+                                } else {
+                                    p.advance()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Kind.Eof => { break }
+            _ => {
+                if p.peekKind(off: 1) == <Kind.LBracket /> {
+                    items.append(<TopItemAst.Directive dir=parseDirectiveAst(p: inout p) />)
+                } else {
+                    p.advance()
+                }
+            }
+        }
+    }
+    return items
+}

@@ -444,35 +444,6 @@ fn lowerBlock(c: inout Comp, b: BlockAst) -> U64 {
     return id
 }
 
-// Frontend integration: parse `{ ... }` via the shared body parser and lower it.
-// Drives `parseBlockAst` over the compiler's own token stream (base 0 = absolute
-// c.bytes offsets), then syncs the compiler cursor past the consumed tokens.
-fn parseBlock(c: inout Comp) -> U64 {
-    mut val p: P = <P bytes=c.bytes toks=c.toks pos=c.pos base=0 />
-    val tree: BlockAst = parseBlockAst(p: inout p)
-    c.pos = p.pos
-    // the shared parser is recoverable; surface its first syntax error loudly so
-    // the compiler keeps rejecting spec-invalid code (acceptance soundness).
-    if p.hasErr {
-        compileErrorAt(line: lineOf(c: inout c, offset: p.errOff), msg: p.errMsg)
-    }
-    return lowerBlock(c: inout c, b: tree)
-}
-
-// Parse a single expression via the shared parser and lower it — used for the
-// expression positions still driven by the compiler's declaration parser (field /
-// parameter default values, directive arguments). Same cursor-drive + error-surface
-// as parseBlock.
-fn parseExprC(c: inout Comp) -> U64 {
-    mut val p: P = <P bytes=c.bytes toks=c.toks pos=c.pos base=0 />
-    val tree: ExprAst = parseExprAst(p: inout p)
-    c.pos = p.pos
-    if p.hasErr {
-        compileErrorAt(line: lineOf(c: inout c, offset: p.errOff), msg: p.errMsg)
-    }
-    return lowerExpr(c: inout c, e: tree)
-}
-
 // ---- declaration lowering (shared DeclAst value tree -> the compiler arena) ----
 //
 // Mirrors Parser/Decl.pw's parseStruct/parseEnum arena seeding so the frontend can
@@ -781,43 +752,6 @@ fn lowerExtern(c: inout Comp, e: ExternAst) {
     }
 }
 
-// Frontend integration: parse a `trait` declaration via the shared parser and lower
-// it. The cursor is at the `trait` ident (parseProgram dispatched).
-fn parseTraitItem(c: inout Comp) {
-    mut val p: P = <P bytes=c.bytes toks=c.toks pos=c.pos base=0 />
-    val tree: TraitAst = parseTraitDecl(p: inout p)
-    c.pos = p.pos
-    if p.hasErr {
-        compileErrorAt(line: lineOf(c: inout c, offset: p.errOff), msg: p.errMsg)
-    }
-    lowerTrait(c: inout c, t: tree)
-}
-
-// Frontend integration: parse an `extern` block via the shared parser and lower it.
-// The cursor is at the `extern` keyword (parseProgram/parseExport dispatched).
-fn parseExternItem(c: inout Comp) {
-    mut val p: P = <P bytes=c.bytes toks=c.toks pos=c.pos base=0 />
-    val tree: ExternAst = parseExternDecl(p: inout p)
-    c.pos = p.pos
-    if p.hasErr {
-        compileErrorAt(line: lineOf(c: inout c, offset: p.errOff), msg: p.errMsg)
-    }
-    lowerExtern(c: inout c, e: tree)
-}
-
-// Frontend integration: parse one `impl` block via the shared parser and lower it.
-// The cursor is at the `impl` ident (parseProgram dispatched; `pub` already consumed
-// and passed as isPub).
-fn parseImplItem(c: inout Comp, isPub: Bool) {
-    mut val p: P = <P bytes=c.bytes toks=c.toks pos=c.pos base=0 />
-    val tree: ImplAst = parseImplDecl(p: inout p, isPub: isPub)
-    c.pos = p.pos
-    if p.hasErr {
-        compileErrorAt(line: lineOf(c: inout c, offset: p.errOff), msg: p.errMsg)
-    }
-    lowerImpl(c: inout c, im: tree)
-}
-
 // Lower a nominal declaration by kind (struct / enum / free function).
 fn lowerDecl(c: inout Comp, d: DeclAst) {
     match d.kind {
@@ -827,18 +761,86 @@ fn lowerDecl(c: inout Comp, d: DeclAst) {
     }
 }
 
-// Frontend integration: parse one nominal declaration (`[unique] struct` / `enum`)
-// via the shared `parseDecl` over the compiler's own token stream, then lower it.
-// Same cursor-drive + error-surface as parseBlock. The cursor must be at the item
-// keyword (parseProgram dispatched). Returns the DeclAst's name span so a caller
-// (`export <decl>`) can record the export.
-fn parseDeclItem(c: inout Comp) -> DeclAst {
-    mut val p: P = <P bytes=c.bytes toks=c.toks pos=c.pos base=0 />
-    val tree: DeclAst = parseDecl(p: inout p)
-    c.pos = p.pos
-    if p.hasErr {
-        compileErrorAt(line: lineOf(c: inout c, offset: p.errOff), msg: p.errMsg)
+// Lower an `import … with { names }` statement (spec/15): record each imported name
+// in c.imports (its ORIGINAL offset feeds moduleOf for the importing module). The
+// path itself is consumed by the loader to find files; nothing else is recorded.
+fn lowerImport(c: inout Comp, imp: ImportAst) {
+    mut val i: U64 = 0
+    while i < imp.names.count {
+        val nspan: Span = imp.nameSpans[i]
+        markImport(c: inout c, segStart: imp.segSpan.start, segLen: imp.segSpan.end - imp.segSpan.start, nameStart: nspan.start, nameLen: nspan.end - nspan.start)
+        i += 1
     }
-    lowerDecl(c: inout c, d: tree)
-    return tree
 }
+
+// Lower a `@[...]` directive (spec/16): each derive request becomes a pendingDerive
+// (applied to the next type declaration via drainDerives). The directive name keeps
+// its ORIGINAL offset (text-matched downstream); args lower to MakeField.
+fn lowerDirective(c: inout Comp, dir: DirectiveAst) {
+    mut val i: U64 = 0
+    while i < dir.reqs.count {
+        val r: DeriveReqAst = dir.reqs[i]
+        val args: Array[MakeField] = lowerMakeFields(c: inout c, fields: r.args)
+        c.pendingDerives.append(<DeriveReq typeStart=0 typeLen=0 isEnum=false nameStart=r.nameSpan.start nameLen=r.nameSpan.end - r.nameSpan.start declStart=0 declEnd=0 args=args />)
+        i += 1
+    }
+}
+
+// Lower an `export <inner>` item: lower the inner declaration, then record its
+// name(s) as exported (spec/15). Mirrors parseExport's per-kind recording: a struct/
+// enum/fn/trait records the one decl; an `export extern { }` block records every fn
+// and opaque struct it adds.
+fn lowerExportItem(c: inout Comp, inner: TopItemAst) {
+    match inner {
+        TopItemAst.Extern(val e) => {
+            val xfB: U64 = c.funcs.count
+            val xsB: U64 = c.structs.count
+            lowerExtern(c: inout c, e: e)
+            mut val xi: U64 = xfB
+            while xi < c.funcs.count {
+                recordExport(c: inout c, nameStart: c.funcs[xi].nameStart, nameLen: c.funcs[xi].nameLen)
+                xi += 1
+            }
+            mut val xj: U64 = xsB
+            while xj < c.structs.count {
+                recordExport(c: inout c, nameStart: c.structs[xj].nameStart, nameLen: c.structs[xj].nameLen)
+                xj += 1
+            }
+        }
+        TopItemAst.Decl(val d) => {
+            val sB: U64 = c.structs.count
+            val eB: U64 = c.enums.count
+            val fB: U64 = c.funcs.count
+            lowerDecl(c: inout c, d: d)
+            match d.kind {
+                DeclKind.Struct => { recordExport(c: inout c, nameStart: c.structs[sB].nameStart, nameLen: c.structs[sB].nameLen) }
+                DeclKind.Enum => { recordExport(c: inout c, nameStart: c.enums[eB].nameStart, nameLen: c.enums[eB].nameLen) }
+                DeclKind.Func => { recordExport(c: inout c, nameStart: c.funcs[fB].nameStart, nameLen: c.funcs[fB].nameLen) }
+            }
+        }
+        TopItemAst.Trait(val t) => {
+            val tB: U64 = c.traits.count
+            lowerTrait(c: inout c, t: t)
+            recordExport(c: inout c, nameStart: c.traits[tB].nameStart, nameLen: c.traits[tB].nameLen)
+        }
+        _ => { lowerTopItem(c: inout c, item: inner) }
+    }
+}
+
+// Lower one top-level item (spec/15): dispatch each parsed `TopItemAst` to its arena
+// / Comp-state lowering. This is the single frontend lowering entry; the compiler's
+// `parseProgram` parses a file with the shared `parseProgramAst` and lowers each item
+// through here.
+fn lowerTopItem(c: inout Comp, item: TopItemAst) {
+    match item {
+        TopItemAst.Decl(val d) => { lowerDecl(c: inout c, d: d) }
+        TopItemAst.Impl(val im) => { lowerImpl(c: inout c, im: im) }
+        TopItemAst.Trait(val t) => { lowerTrait(c: inout c, t: t) }
+        TopItemAst.Extern(val e) => { lowerExtern(c: inout c, e: e) }
+        TopItemAst.Import(val imp) => { lowerImport(c: inout c, imp: imp) }
+        TopItemAst.Export(val inner) => { lowerExportItem(c: inout c, inner: inner) }
+        TopItemAst.ReExport(val pathSpan) => {}
+        TopItemAst.Directive(val dir) => { lowerDirective(c: inout c, dir: dir) }
+    }
+}
+

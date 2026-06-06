@@ -15,7 +15,7 @@ import @Std/Process with { argCount, argAt, exit }
 // frontend and @Std/Syntax's `parseItem` lex+parse through the same code (spec/16 —
 // one syntactic layer, no drift). The compiler drives the shared body parser (P /
 // parseBlockAst) over its own tokens and lowers the value tree into its arena.
-import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseDecl, parseImplDecl, parseTraitDecl, parseExternDecl, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, emptyExpr }
+import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
 
 part ./Ast
 part ./Parser/Decl

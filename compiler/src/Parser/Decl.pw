@@ -1,77 +1,14 @@
-// ---- compiler top-level frontend: dispatch + module/directive handling + derive
-// synthesis ----
+// ---- compiler top-level frontend: parse-driven program lowering + derive synthesis
+// ----
 //
-// The declaration *parsers* (struct / enum / fn / impl / trait / extern) are retired:
-// `parseProgram` dispatches each item to the shared @Std/Syntax parser and lowers the
-// value tree into the arena (Codegen/Lower.pw — worklog A). What remains here is the
-// compiler-frontend work that produces Comp state directly, with no value-tree/macro
-// counterpart: the `@[...]` directive and `import`/`export` handling (module tagging
-// via original-offset spans — see moduleOf), and the `@[Eq]`/`@[Ord]` derive
-// synthesis (codegen that builds arena AST for the derived conformances).
-
-// `@[Eq, Ord, Name(label: expr, ...), ...]` directive (spec/16): collect the
-// derive names — each with optional construction arguments — into pendingDerives,
-// applied to the next type declaration. `@[Name(a: 32)]` constructs `Name{a: 32}`
-// (the args become fields the macro's `derive` reads via `self.a`). The `@` lexes
-// as Kind.Unknown; the leading `@` is the current token.
-fn parseDirective(c: inout Comp) {
-    c.advance()
-    match c.curKind() {
-        Kind.LBracket => { c.advance() }
-        _ => {}
-    }
-    while true {
-        match c.curKind() {
-            Kind.RBracket => {
-                c.advance()
-                break
-            }
-            Kind.Eof => { break }
-            Kind.Comma => { c.advance() }
-            Kind.Ident => {
-                val t: Tok = c.cur()
-                c.advance()
-                val args: Array[MakeField] = parseDirectiveArgs(c: inout c)
-                c.pendingDerives.append(<DeriveReq typeStart=0 typeLen=0 isEnum=false nameStart=t.start nameLen=t.len declStart=0 declEnd=0 args=args />)
-            }
-            _ => { c.advance() }
-        }
-    }
-}
-
-// Optional directive arguments `(label: expr, ...)` after a derive name (spec/16).
-// Each is a labelled value that becomes a field on the constructed macro struct
-// (reuses MakeField: name span + expr id). Returns empty when no `(` follows.
-fn parseDirectiveArgs(c: inout Comp) -> Array[MakeField] {
-    mut val fields: Array[MakeField] = []
-    match c.curKind() {
-        Kind.LParen => { c.advance() }
-        _ => { return fields }
-    }
-    while true {
-        c.skipNewlines()
-        match c.curKind() {
-            Kind.RParen => {
-                c.advance()
-                break
-            }
-            Kind.Eof => { break }
-            Kind.Comma => { c.advance() }
-            Kind.Ident => {
-                val labelTok: Tok = c.cur()
-                c.advance()
-                match c.curKind() {
-                    Kind.Colon => { c.advance() }
-                    _ => {}
-                }
-                val v: U64 = parseExprC(c: inout c)
-                fields.append(<MakeField nameStart=labelTok.start nameLen=labelTok.len value=v />)
-            }
-            _ => { c.advance() }
-        }
-    }
-    return fields
-}
+// ALL parsing is the shared @Std/Syntax parser's job now: `parseProgram` runs
+// `parseProgramAst` over the compiler's token stream and `lowerTopItem`
+// (Codegen/Lower.pw) lowers each value-tree item (decl / impl / trait / extern /
+// import / export / directive) into the arena or Comp state. What remains here is the
+// pure semantic-side work that has no value-tree/macro counterpart: module-tag
+// helpers (markImport / recordExport, using original-offset spans — see moduleOf),
+// derive accumulation (drainDerives), and the `@[Eq]`/`@[Ord]` derive synthesis
+// (codegen that builds arena AST for the derived conformances).
 
 // Attach the pending `@[...]` derive requests to the just-parsed type, then clear
 // the scratch list for the next declaration.
@@ -379,255 +316,26 @@ fn markImport(c: inout Comp, segStart: U64, segLen: U64, nameStart: U64, nameLen
     c.imports.append(<Bind nameStart=nameStart nameLen=nameLen fieldStart=moduleOf(c: inout c, offset: nameStart) fieldLen=0 />)
 }
 
-// `export <decl>` (spec/15): marks a top-level decl as part of the module's public
-// surface (recorded in `c.exports` by name span). `export <path> [with { … }]`
-// (re-export = pure forwarding) is parsed-and-skipped for now (no module uses it
-// yet; recording it for enforcement is additive). The leading `export` is current.
-fn parseExport(c: inout Comp) {
-    c.advance()
-    // re-export: a path follows (`.`/`..`→Dot, `/`→Slash, or `@…` whose first byte
-    // is '@' = 64). Consume the path and an optional `with { }` block, record nothing.
-    mut val isPath: Bool = false
-    match c.curKind() {
-        Kind.Dot => { isPath = true }
-        Kind.Slash => { isPath = true }
-        Kind.Ident => {
-            val ft: Tok = c.cur()
-            if c.bytes[ft.start] == 64 {
-                isPath = true
-            }
-        }
-        _ => {}
-    }
-    if isPath {
-        mut val go: Bool = true
-        while go {
-            match c.curKind() {
-                Kind.Eof => { go = false }
-                Kind.LBrace => { go = false }
-                Kind.Ident => {
-                    if c.identIs(kw: "with") {
-                        c.advance()
-                        go = false
-                    } else {
-                        c.advance()
-                    }
-                }
-                _ => { c.advance() }
-            }
-        }
-        match c.curKind() {
-            Kind.LBrace => {
-                c.advance()
-                mut val g2: Bool = true
-                while g2 {
-                    match c.curKind() {
-                        Kind.RBrace => { c.advance() g2 = false }
-                        Kind.Eof => { g2 = false }
-                        _ => { c.advance() }
-                    }
-                }
-            }
-            _ => {}
-        }
-        return
-    }
-    // `export extern "plew-intrinsic" { fn … }` (spec/15 core-library boundary):
-    // the runtime-backed intrinsics ARE a module's public functions, so the block
-    // form exports every decl it adds. Record all funcs added by parseExtern.
-    match c.curKind() {
-        Kind.KwExtern => {
-            val xfB: U64 = c.funcs.count
-            val xsB: U64 = c.structs.count
-            parseExternItem(c: inout c)
-            mut val xi: U64 = xfB
-            while xi < c.funcs.count {
-                recordExport(c: inout c, nameStart: c.funcs[xi].nameStart, nameLen: c.funcs[xi].nameLen)
-                xi += 1
-            }
-            mut val xj: U64 = xsB
-            while xj < c.structs.count {
-                recordExport(c: inout c, nameStart: c.structs[xj].nameStart, nameLen: c.structs[xj].nameLen)
-                xj += 1
-            }
-            return
-        }
-        _ => {}
-    }
-    // `export <decl>`: parse the declaration normally, then record the new decl's
-    // name as exported (exactly one of structs/enums/funcs/traits gains an entry).
-    val sB: U64 = c.structs.count
-    val eB: U64 = c.enums.count
-    val fB: U64 = c.funcs.count
-    val tB: U64 = c.traits.count
-    match c.curKind() {
-        Kind.KwFn => { val d: DeclAst = parseDeclItem(c: inout c) }
-        Kind.KwAsync => { val d: DeclAst = parseDeclItem(c: inout c) }
-        Kind.KwStruct => { val d: DeclAst = parseDeclItem(c: inout c) }
-        Kind.KwUnique => { val d: DeclAst = parseDeclItem(c: inout c) }
-        Kind.KwEnum => { val d: DeclAst = parseDeclItem(c: inout c) }
-        Kind.Ident => {
-            if c.identIs(kw: "trait") {
-                parseTraitItem(c: inout c)
-            }
-        }
-        _ => {}
-    }
-    if c.structs.count > sB {
-        recordExport(c: inout c, nameStart: c.structs[sB].nameStart, nameLen: c.structs[sB].nameLen)
-    } else {
-        if c.enums.count > eB {
-            recordExport(c: inout c, nameStart: c.enums[eB].nameStart, nameLen: c.enums[eB].nameLen)
-        } else {
-            if c.funcs.count > fB {
-                recordExport(c: inout c, nameStart: c.funcs[fB].nameStart, nameLen: c.funcs[fB].nameLen)
-            } else {
-                if c.traits.count > tB {
-                    recordExport(c: inout c, nameStart: c.traits[tB].nameStart, nameLen: c.traits[tB].nameLen)
-                }
-            }
-        }
-    }
-}
-
 fn recordExport(c: inout Comp, nameStart: U64, nameLen: U64) {
     c.exports.append(<Bind nameStart=nameStart nameLen=nameLen fieldStart=moduleOf(c: inout c, offset: nameStart) fieldLen=0 />)
 }
 
-// `import <path> [with { name, ... }]`. The leading `import` ident is current.
-// We track the last path segment (the submodule, e.g. `Io` in `@Std/Io`) and,
-// for the selective `with` list, enable each recognized (module, name) builtin.
-// Only the `with { }` form binds flat names; the namespace form binds nothing
-// the compiler can call bare (it would need `Io.print`, unsupported for now).
-fn parseImport(c: inout Comp) {
-    c.advance()
-    mut val segStart: U64 = 0
-    mut val segLen: U64 = 0
-    while true {
-        val k: Kind = c.curKind()
-        match k {
-            Kind.Newline => { break }
-            Kind.Eof => { break }
-            Kind.LBrace => { break }
-            Kind.Ident => {
-                if c.identIs(kw: "with") {
-                    c.advance()
-                    break
-                }
-                val t: Tok = c.cur()
-                segStart = t.start
-                segLen = t.len
-                c.advance()
-            }
-            _ => { c.advance() }
-        }
-    }
-    match c.curKind() {
-        Kind.LBrace => {
-            c.advance()
-            while true {
-                c.skipNewlines()
-                val k: Kind = c.curKind()
-                match k {
-                    Kind.RBrace => {
-                        c.advance()
-                        break
-                    }
-                    Kind.Eof => { break }
-                    Kind.Comma => { c.advance() }
-                    Kind.Ident => {
-                        val t: Tok = c.cur()
-                        markImport(c: inout c, segStart: segStart, segLen: segLen, nameStart: t.start, nameLen: t.len)
-                        c.advance()
-                        // `Bar as Q` — consume the alias (binding the imported decl
-                        // under a local name `Q`). The alias rename is additive; for
-                        // now the original name is recorded as imported.
-                        match c.curKind() {
-                            Kind.KwAs => {
-                                c.advance()
-                                match c.curKind() {
-                                    Kind.Ident => { c.advance() }
-                                    _ => {}
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    _ => { c.advance() }
-                }
-            }
-        }
-        _ => {}
-    }
-}
-
+// top-level item into the arena / Comp state (spec/15,16). The compiler has no
+// declaration/dispatch parser of its own: `parseProgramAst` returns the value-tree
+// items (decl / impl / trait / extern / import / export / directive) and
+// `lowerTopItem` (Codegen/Lower.pw) lowers them. Driven over the compiler's own
+// token stream (base=0 = absolute offsets), surfacing the first syntax error loudly.
 fn parseProgram(c: inout Comp) {
-    while true {
-        c.skipNewlines()
-        val k: Kind = c.curKind()
-        match k {
-            Kind.KwFn => { val d: DeclAst = parseDeclItem(c: inout c) }
-            Kind.KwAsync => {
-                // `async fn ...` (spec/14): parseDecl consumes `async`, then the fn.
-                val d: DeclAst = parseDeclItem(c: inout c)
-            }
-            Kind.KwStruct => {
-                // routed through the shared @Std/Syntax parser + lowerDecl (worklog A):
-                // the compiler no longer has its own struct/enum/fn parser.
-                val d: DeclAst = parseDeclItem(c: inout c)
-            }
-            Kind.KwUnique => {
-                // `unique struct ...`: parseDecl consumes `unique`, then the struct.
-                // `unique` on anything else is a parse no-op for now (only structs may
-                // be unique in v1).
-                val d: DeclAst = parseDeclItem(c: inout c)
-            }
-            Kind.KwEnum => {
-                val d: DeclAst = parseDeclItem(c: inout c)
-            }
-            Kind.KwExtern => { parseExternItem(c: inout c) }
-            Kind.Ident => {
-                if c.identIs(kw: "import") {
-                    parseImport(c: inout c)
-                } else {
-                    if c.identIs(kw: "export") {
-                        parseExport(c: inout c)
-                    } else {
-                        if c.identIs(kw: "impl") {
-                            parseImplItem(c: inout c, isPub: false)
-                        } else {
-                            if c.identIs(kw: "pub") {
-                                // `pub impl Type { … }` (spec/05): a public impl block —
-                                // its members are callable wherever the type is visible.
-                                // `pub` at top level only prefixes `impl` (fields take
-                                // `pub` in the struct body; methods are per-block).
-                                c.advance()
-                                if c.identIs(kw: "impl") {
-                                    parseImplItem(c: inout c, isPub: true)
-                                } else {
-                                    c.advance()
-                                }
-                            } else {
-                                if c.identIs(kw: "trait") {
-                                    parseTraitItem(c: inout c)
-                                } else {
-                                    c.advance()
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            Kind.Eof => { break }
-            _ => {
-                // `@[Eq, Ord]` derive directive (`@` lexes as Unknown, then `[`).
-                if c.peekKind(off: 1) == <Kind.LBracket /> {
-                    parseDirective(c: inout c)
-                } else {
-                    c.advance()
-                }
-            }
-        }
+    mut val p: P = <P bytes=c.bytes toks=c.toks pos=c.pos base=0 />
+    val items: Array[TopItemAst] = parseProgramAst(p: inout p)
+    c.pos = p.pos
+    if p.hasErr {
+        compileErrorAt(line: lineOf(c: inout c, offset: p.errOff), msg: p.errMsg)
+    }
+    mut val i: U64 = 0
+    while i < items.count {
+        lowerTopItem(c: inout c, item: items[i])
+        i += 1
     }
 }
 
