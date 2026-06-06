@@ -1,0 +1,3 @@
+// Helper has its OWN private (non-export) free fn named `helper`.
+fn helper(n: I64) -> I64 { return n * 10 }
+export fn addOne(n: I64) -> I64 { return n + 1 }

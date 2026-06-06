@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+import ./Helper with { addOne }
+// Main has its OWN private free fn named `helper`, distinct from Helper's.
+fn helper(n: I64) -> I64 { return n + 100 }
+fn main() {
+    print(helper(n: 5I64))   // 105 — calls Main's own helper
+    print(addOne(n: 41I64))  // 42
+}

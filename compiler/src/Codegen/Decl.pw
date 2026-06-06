@@ -1234,6 +1234,65 @@ fn genStructDef(c: inout Comp, si: U64) {
 // receiver prefix (for a method) is emitted separately by the caller. Emitted
 // identically at the definition, prototype, and every call site, so they agree.
 // `main` and intercepted builtins never reach here.
+// Do two free functions emit the same C base name (same function name, parameter
+// labels, and parameter type heads)? Compares the DECLARED selector — generic
+// instances are further disambiguated by their resolved type-arg suffix, so a
+// declared-selector clash is the necessary condition for any C-symbol clash.
+fn sameFreeFnSelectorDecl(c: inout Comp, a: Func, b: Func) -> Bool {
+    if spansEqual(c: inout c, aStart: a.nameStart, aLen: a.nameLen, bStart: b.nameStart, bLen: b.nameLen) {
+    } else {
+        return false
+    }
+    if a.params.count == b.params.count {
+    } else {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.params.count {
+        val pa: Param = a.params[i]
+        val pb: Param = b.params[i]
+        if spansEqual(c: inout c, aStart: pa.nameStart, aLen: pa.nameLen, bStart: pb.nameStart, bLen: pb.nameLen) {
+        } else {
+            return false
+        }
+        if spansEqual(c: inout c, aStart: pa.tyStart, aLen: pa.tyLen, bStart: pb.tyStart, bLen: pb.tyLen) {
+        } else {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// Whether another free function in a DIFFERENT module shares f's C base name.
+// Only then does f need a module discriminator. Most names are unique, so this is
+// false for nearly every function — the common-case C output (and the self-host
+// fixpoint) is unchanged; only a genuine cross-module clash gets disambiguated.
+fn freeFnSelectorCollides(c: inout Comp, f: Func) -> Bool {
+    val myMod: U64 = moduleOf(c: inout c, offset: f.nameStart)
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val g: Func = c.funcs[i]
+        if g.hasRecv {
+        } else {
+            if g.isAssoc {
+            } else {
+                if g.isExtern {
+                } else {
+                    if moduleOf(c: inout c, offset: g.nameStart) == myMod {
+                    } else {
+                        if sameFreeFnSelectorDecl(c: inout c, a: f, b: g) {
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
 fn writeFnSelector(c: inout Comp, f: Func) {
     writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
     val params: Array[Param] = f.params
@@ -1271,6 +1330,28 @@ fn writeFnSelector(c: inout Comp, f: Func) {
             writeSpan(c: inout c, start: p.tyStart, len: p.tyLen)
         }
         i += 1
+    }
+    // Disambiguate a free function whose C base name clashes with a same-named one
+    // in another module (`redefinition` otherwise). Derived from f.nameStart, so
+    // the definition and every call site (writeFnSelector on the same resolved
+    // Func) agree. Methods/assoc fns carry a `Recv_` prefix; `main` and extern
+    // intrinsics keep their fixed C names. Gated on an actual clash, so non-clashing
+    // names (the norm — including the whole compiler) are emitted unchanged.
+    if f.hasRecv {
+    } else {
+        if f.isAssoc {
+        } else {
+            if f.isExtern {
+            } else {
+                if nameIsMain(c: inout c, f: f) {
+                } else {
+                    if freeFnSelectorCollides(c: inout c, f: f) {
+                        write(s: "_m")
+                        writeU64(n: moduleOf(c: inout c, offset: f.nameStart))
+                    }
+                }
+            }
+        }
     }
 }
 

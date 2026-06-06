@@ -20,8 +20,8 @@ provisional.md に散在していた「ブロッカーなし・いつでも直�
 
 - **Bug1 C 予約語識別子マングル**〔hidden meaning〕：`default`/`double`/`int` 等を名前に使うと生成 C 破壊。直し＝codegen の識別子出力（writeSpan 系）で C 予約語を安全名へマングル。場所＝Emit.pw の識別子出力点。状態＝未着手。
 - **Bug2 曖昧無サフィックスリテラルが先頭 overload 選択**〔silent〕：✅**済**（`9ddfcdb`）。findFunc/findMethod/findAssoc が 2 つ目の type-match を検出し、無サフィックスリテラル引数が候補間で異なる整数パラメータ型へ写るとき loud reject（`overloadsAmbiguous`/`checkOverloadAmbiguity`・Resolve.pw）。test reject/overload_ambiguous_literal・run/overload_literal_suffix。
-- **Bug3 メソッド値化 `val f = obj.method` を受理**〔should be loud〕：spec 禁止。直し＝`Expr.Method` を値位置（呼び出しでない）で使ったら reject。場所＝Expr.pw/Check.pw。状態＝未着手。
-- **Bug4 free 関数のモジュール跨ぎ同名衝突 誤 reject**〔false positive〕：別モジュール同名 private で正しい呼びが誤 reject。直し＝free 関数解決を same-module 優先、他モジュールは import 済み名のみ候補。場所＝`checkUseVisibility`（Check.pw）。状態＝未着手。
+- **Bug3 メソッド値化 `val f = obj.method` を受理**〔should be loud〕：✅**済**（`b8d87ed`）。struct レシーバの `.name` 式（非呼び出し）が「フィールド無し・メソッド有り」なら loud reject（`typeHasMethodNamed`・Expr.pw Field 経路）。Expr.Method 呼び出しは無影響。test reject/method_value。
+- **Bug4 free 関数のモジュール跨ぎ同名衝突**〔false positive＋C 名衝突＋誤ディスパッチ〕：✅**済**。別モジュールに同名 private free fn があると ①正しい呼びが誤 reject ②C シンボル `redefinition` ③誤ディスパッチ。直し＝(a) `findFunc` を **same-module 優先**（`typeMatchSame`/`firstLabelSame`・Resolve.pw＝誤 reject＋ディスパッチ解消）＋(b) `writeFnSelector` で **衝突する free 関数だけ**にモジュール識別子 `_m<id>` を付与（`freeFnSelectorCollides`/`sameFreeFnSelectorDecl`・Decl.pw＝C 衝突解消）。**全 free 関数に一律付与すると self-compile の dead-code 到達解析が揺れ fixpoint が壊れた**ため collision-gated に（コンパイラは同名衝突がない＝出力不変＝fixpoint 保持）。test part/samename。
 - **Bug5 `;` 文区切りが的外れエラー**：✅**済**（`b6c9ab8`）。`parsePrimaryAst` の default 末端が未知トークンを 0-Int に黙って変えていた→`p.fail` で loud（`;` 専用メッセージ付き・ParseBody.pw）。reject/semicolon_separator が既存でカバー。
 - **Bug6+7 文脈型が末端リテラルに伝播しない**〔同根〕：(6) `ys[0]->v = 42`（Arrow place 代入右辺）・(7) `for val i: I32 in 0..<5`（範囲境界）。直し＝注釈/pointee フィールド型を式文脈（curRetTy 系）として末端リテラルへ降ろす。場所＝Stmt.pw（for/assign）・Expr.pw（arrow store）。状態＝未着手。
 - **Bug8+9 `@[Ord]` 残ギャップ**〔loud〕：(8) enum 未実装（struct のみ）・(9) `@[Ord]` が `@[Eq]` を含意しない（`Ord: Eq`）。直し＝derive 合成（`synth*`・Parser/Decl.pw）に enum compare＋Eq 連動。状態＝未着手。

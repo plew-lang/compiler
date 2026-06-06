@@ -70,10 +70,19 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U6
     // Among candidates whose labels match, prefer the one whose parameter types
     // match the argument types (type-based overload). Fall back to the first
     // label match when none type-matches (or there is a single candidate) — so a
-    // unique-name call resolves exactly as before.
+    // unique-name call resolves exactly as before. A free fn defined in the SAME
+    // module as the call wins over a same-named one in another module (spec/15:
+    // free-fn resolution is same-module first; another module's name is reachable
+    // only when imported) — without this, a private free fn in another loaded
+    // module could shadow the caller's own and trigger a spurious "use without
+    // importing" reject (and the wrong C symbol).
+    val useMod: U64 = moduleOf(c: inout c, offset: nameStart)
     mut val firstLabel: U64 = c.funcs.count
     mut val typeMatch: U64 = c.funcs.count
     mut val typeMatch2: U64 = c.funcs.count
+    mut val firstLabelSame: U64 = c.funcs.count
+    mut val typeMatchSame: U64 = c.funcs.count
+    mut val typeMatch2Same: U64 = c.funcs.count
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
@@ -81,8 +90,14 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U6
         } else {
             if spansEqual(c: inout c, aStart: nameStart, aLen: nameLen, bStart: f.nameStart, bLen: f.nameLen) {
                 if paramsLabelsOk(c: inout c, params: f.params, args: args) {
+                    val same: Bool = moduleOf(c: inout c, offset: f.nameStart) == useMod
                     if firstLabel == c.funcs.count {
                         firstLabel = i
+                    }
+                    if same {
+                        if firstLabelSame == c.funcs.count {
+                            firstLabelSame = i
+                        }
                     }
                     if paramsTypesMatch(c: inout c, params: f.params, args: args) {
                         if typeMatch == c.funcs.count {
@@ -92,12 +107,31 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U6
                                 typeMatch2 = i
                             }
                         }
+                        if same {
+                            if typeMatchSame == c.funcs.count {
+                                typeMatchSame = i
+                            } else {
+                                if typeMatch2Same == c.funcs.count {
+                                    typeMatch2Same = i
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
         i += 1
     }
+    // same-module first
+    if typeMatchSame != c.funcs.count {
+        checkOverloadAmbiguity(c: inout c, a: typeMatchSame, b: typeMatch2Same, args: args)
+        return typeMatchSame
+    }
+    if firstLabelSame != c.funcs.count {
+        return firstLabelSame
+    }
+    // no same-module candidate: fall back to any module (cross-module use is still
+    // gated separately by checkUseVisibility, which requires an import).
     if typeMatch != c.funcs.count {
         checkOverloadAmbiguity(c: inout c, a: typeMatch, b: typeMatch2, args: args)
         return typeMatch
