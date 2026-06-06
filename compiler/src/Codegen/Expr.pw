@@ -842,6 +842,28 @@ fn genExpr(c: inout Comp, id: U64) {
                 }
                 write(s: ")")
             } else {
+                // wrapping arithmetic on an integer receiver (`x.wrappingMul(by: y)`
+                // etc.): a privileged lowering to the unchecked C op (spec/02 — the
+                // only way to opt out of overflow panic). Compute in uint64_t then
+                // truncate to the receiver's width: `mod 2^W` is a ring homomorphism
+                // so this wraps correctly at any width, and it avoids signed-overflow
+                // UB. Recognized here before method resolution (no real fn exists yet).
+                if isWrappingMethod(c: inout c, nameStart: nameStart, nameLen: nameLen) {
+                    if isIntType(c: inout c, start: bt.nameStart, len: bt.nameLen) {
+                        if args.count == 1 {
+                            write(s: "(")
+                            genCElem(c: inout c, start: bt.nameStart, len: bt.nameLen)
+                            write(s: ")((uint64_t)(")
+                            genExpr(c: inout c, id: recv)
+                            write(s: ")")
+                            write(s: wrappingOpStr(c: inout c, nameStart: nameStart, nameLen: nameLen))
+                            write(s: "(uint64_t)(")
+                            genExpr(c: inout c, id: args[0].expr)
+                            write(s: "))")
+                            return
+                        }
+                    }
+                }
                 // user method on a named type: `recv.m(args)` -> Recv_m(self, args)
                 // (self by value, or &recv for an `inout fn` receiver).
                 val mi: U64 = findMethod(c: inout c, recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)

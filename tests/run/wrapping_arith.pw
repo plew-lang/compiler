@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+
+// Wrapping arithmetic (spec/02): `* + -` panic on overflow; the `wrapping*`
+// methods opt into two's-complement wraparound (the only way to wrap).
+fn main() {
+    val maxU: U64 = 18446744073709551615U64
+    print(maxU.wrappingAdd(by: 1U64))    // 0
+    print(maxU.wrappingAdd(by: 3U64))    // 2
+    print(0U64.wrappingSub(by: 1U64))    // 18446744073709551615
+    val big: U64 = 6364136223846793005U64
+    print(big.wrappingMul(by: 3U64))     // wraps mod 2^64
+    val w: U8 = 250U8
+    print(w.wrappingAdd(by: 10U8))       // 4 (wraps at 8 bits)
+}

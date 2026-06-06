@@ -1429,6 +1429,14 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     rt = <TypeInfo kind=2 nameStart=ss.nameStart nameLen=ss.nameLen ref=0 />
                 }
             }
+            // wrapping arithmetic on an integer receiver yields the receiver's type
+            // (`x.wrappingMul(by: y): U64` when x: U64) — a privileged lowering with
+            // no real fn, so its type is recovered here (see Expr.pw codegen).
+            if isWrappingMethod(c: inout c, nameStart: nameStart, nameLen: nameLen) {
+                if isIntType(c: inout c, start: rt.nameStart, len: rt.nameLen) {
+                    return rt
+                }
+            }
             if rt.kind == 2 {
                 val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mi == c.funcs.count {

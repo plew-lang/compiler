@@ -63,6 +63,24 @@ fn unaryOpStr(op: I64) -> String {
     return "!"
 }
 
+// Wrapping arithmetic (spec/02): integer `* + -` panic on overflow; the
+// `wrapping*` methods opt into two's-complement wraparound instead (the only
+// way to wrap — there is no `&+` operator). A privileged lowering on integer
+// receivers until the integer trait tower subsumes it. Whether a method name is
+// one of the supported wrapping ops, and its C operator.
+fn isWrappingMethod(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "wrappingMul") { return true }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "wrappingAdd") { return true }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "wrappingSub") { return true }
+    return false
+}
+
+fn wrappingOpStr(c: inout Comp, nameStart: U64, nameLen: U64) -> String {
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "wrappingMul") { return " * " }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "wrappingSub") { return " - " }
+    return " + "
+}
+
 // Decoded byte length of a string literal (span includes both quotes). Escapes
 // like \n / \" / \\ count as one byte; plewc.pw uses only C-compatible escapes,
 // so the content is emitted verbatim and just the length is computed here.
