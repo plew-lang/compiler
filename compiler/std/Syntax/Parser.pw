@@ -638,34 +638,53 @@ export fn parseFuncDecl(p: inout P, isAsync: Bool) -> DeclAst {
 // `Span` is in ORIGINAL coordinates (an input error points at the user's text);
 // `end` (= start + source length) is informational. An item the M1 subset doesn't
 // model yet yields an empty struct decl (logged: traits/impls/newtypes additive).
-export fn parseItem(source: String, start: U64, end: U64) -> DeclAst {
+export fn parseItem(source: String, start: U64, end: U64) -> TopItemAst {
     val sb: Array[U8] = source.bytes
     mut val lx: Lexer = <Lexer bytes=sb pos=0 toks=[] depth=0 />
     lex(lx: inout lx)
     mut val p: P = <P bytes=sb toks=lx.toks pos=0 base=start />
     skipLeading(p: inout p)
+    // dispatch the one annotated item, mirroring parseProgramAst (a macro target is
+    // a struct / enum / fn / impl / trait / extern). The result is the `TopItemAst`
+    // the macro's `derive` matches on.
     match p.curKind() {
-        Kind.KwStruct => {
-            return parseStructDecl(p: inout p, isUnique: false)
-        }
+        Kind.KwStruct => { return <TopItemAst.Decl d=parseStructDecl(p: inout p, isUnique: false) /> }
         Kind.KwUnique => {
             p.advance()
-            return parseStructDecl(p: inout p, isUnique: true)
+            return <TopItemAst.Decl d=parseStructDecl(p: inout p, isUnique: true) />
         }
-        Kind.KwEnum => {
-            return parseEnumDecl(p: inout p)
-        }
-        Kind.KwFn => {
-            return parseFuncDecl(p: inout p, isAsync: false)
-        }
+        Kind.KwEnum => { return <TopItemAst.Decl d=parseEnumDecl(p: inout p) /> }
+        Kind.KwFn => { return <TopItemAst.Decl d=parseFuncDecl(p: inout p, isAsync: false) /> }
         Kind.KwAsync => {
             p.advance()
-            return parseFuncDecl(p: inout p, isAsync: true)
+            return <TopItemAst.Decl d=parseFuncDecl(p: inout p, isAsync: true) />
         }
-        _ => {
-            return <DeclAst kind=<DeclKind.Struct /> name="" nameSpan=<Span start=start end=start /> typeParams=[] span=<Span start=start end=end /> isUnique=false fields=[] hasDeinit=false deinitBody=emptyBlock() variants=[] params=[] hasRet=false ret=emptyTypeAst() isAsync=false whereParams=[] whereTraits=[] body=emptyBlock() />
+        Kind.KwExtern => { return <TopItemAst.Extern e=parseExternDecl(p: inout p) /> }
+        Kind.Ident => {
+            if curIs(p: inout p, kw: "trait") {
+                return <TopItemAst.Trait t=parseTraitDecl(p: inout p) />
+            }
+            if curIs(p: inout p, kw: "pub") {
+                p.advance()
+                if curIs(p: inout p, kw: "impl") {
+                    return <TopItemAst.Impl im=parseImplDecl(p: inout p, isPub: true) />
+                }
+                return emptyTopItem(off: p.base + p.curTok().start)
+            }
+            if curIs(p: inout p, kw: "impl") {
+                return <TopItemAst.Impl im=parseImplDecl(p: inout p, isPub: false) />
+            }
+            return emptyTopItem(off: p.base + p.curTok().start)
         }
+        _ => { return emptyTopItem(off: start) }
     }
+}
+
+// A placeholder `TopItemAst` for an item the parser does not recognize (a macro on
+// an unsupported target). An empty struct declaration so `.derive` can match `Decl`
+// and fall through.
+fn emptyTopItem(off: U64) -> TopItemAst {
+    return <TopItemAst.Decl d=<DeclAst kind=<DeclKind.Struct /> name="" nameSpan=<Span start=off end=off /> typeParams=[] span=<Span start=off end=off /> isUnique=false fields=[] hasDeinit=false deinitBody=emptyBlock() variants=[] params=[] hasRet=false ret=emptyTypeAst() isAsync=false whereParams=[] whereTraits=[] body=emptyBlock() /> />
 }
 
 // Parse a single nominal declaration (`[unique] struct` / `enum` / `fn`) from the

@@ -1,6 +1,6 @@
 # メタプログラミング
 
-> **状態: 方針確定・基盤実装中（M1 済）。** 当初の「閉じたメタプログラミング」（言語提供の `@[...]` のみ）から、**ユーザー定義可能なメタプログラミング**へ転換し、その骨格（入出力モデル・出力先・取り込み方法・実行モデル）を確定した。本章はその確定方針の正典。**入力はかつて `TokenStream` だったが、AST 構文ライブラリを共有する設計（下記）に伴い `AST`（構文木）に確定**した。**M1 まで実装済**＝`plewc --gen` モード＋共有 `@Std/Syntax`（レクサ＋値ツリー AST `DeclAst`＋宣言パーサ `parseItem`）＋ローダ自動 part＋`plew gen` ランナーで、**マクロが対象宣言の実構造（型名・フィールド名/型/可視性・enum バリアント/ペイロード・fn シグネチャ・ジェネリクス）を読んで生成し、`@[Name(label: expr)]` のディレクティブ引数も `self` から読める**まで貫通する（`@[Name]`→`<Foo>.gen.pw`→通常ビルドで取り込み）。残るのは構文層の式・文・パターン（関数本体）と、本体フロントエンドの共有パーサ統合（真の 1 AST＝重複パーサ退役）。`quote` 等 authoring 層・生成コマンド設定など**細部はなお未決**で末尾に残す。実装の段取り・実行系の具体は [claude/metaprogramming-architecture.md](../../claude/metaprogramming-architecture.md)。
+> **状態: 方針確定・基盤実装済（M1＋共有パーサ統合済）。** 当初の「閉じたメタプログラミング」（言語提供の `@[...]` のみ）から、**ユーザー定義可能なメタプログラミング**へ転換し、その骨格（入出力モデル・出力先・取り込み方法・実行モデル）を確定した。本章はその確定方針の正典。**入力はかつて `TokenStream` だったが、AST 構文ライブラリを共有する設計（下記）に伴い `AST`（構文木＝`TopItemAst`）に確定**した。**実装済**＝`plewc --gen` モード＋共有 `@Std/Syntax`（レクサ＋値ツリー AST＋宣言/本体/トップレベルパーサ `parseProgramAst`/`parseItem`）＋ローダ自動 part＋`plew gen` ランナーで、**マクロが注釈対象項の実構造（型名・フィールド名/型/可視性・enum バリアント/ペイロード・fn シグネチャ＋本体・impl のメンバ・trait の要求）を読んで生成し、`@[Name(label: expr)]` のディレクティブ引数も `self` から読める**まで貫通する（`@[Name]`→`<Foo>.gen.pw`→通常ビルドで取り込み）。**コンパイラ本体もこの共有パーサで構文解析する（真の 1 AST＝重複パーサなし）**＝マクロが見るのはコンパイラが見た構文そのもの。注釈対象は struct/enum/fn に加え **impl/trait** も可。`quote` 等 authoring 層・生成コマンド設定など**細部はなお未決**で末尾に残す。実装の段取り・実行系の具体は [claude/metaprogramming-architecture.md](../../claude/metaprogramming-architecture.md)。
 
 ## 組み込みディレクティブ `@[...]`
 
@@ -31,23 +31,27 @@ struct Point {
 
 ### マクロ = `Derive` を実装する構造体・入力は `AST`／出力は `String`
 
-マクロは **注釈対象項の構文木（`AST`）を受け取り、生成する Plew ソースを `String` で返す**メソッドを持つ構造体として定義し、`Derive` トレイトを実装します。`Derive` トレイトと `AST` 型は**構文ライブラリ**（当面 `@Std/Syntax`・将来は外部共有パッケージ＝後述）が提供します。
+マクロは **注釈対象項の構文木（`AST`）を受け取り、生成する Plew ソースを `String` で返す**メソッドを持つ構造体として定義し、`Derive` トレイトを実装します。`Derive` トレイトと `AST` 型は**構文ライブラリ**（当面 `@Std/Syntax`・将来は外部共有パッケージ＝後述）が提供します。**入力型 = `TopItemAst`**（注釈対象のトップレベル項の値ツリー＝`Decl`〔struct/enum/fn〕・`Impl`・`Trait`・… のタグ付き union）。マクロは `match` で対象の種別に分岐する＝対象が何かを**明示**して扱う（struct 専用 derive は `Decl` だけ扱い他を弾く）。これは「コンパイラとマクロが唯一の同一 AST を読む（1 AST 原則）」の帰結で、マクロ専用の縮小 AST を作らない。
 
 ```plew
-// ⚠️ AST 型の正確な形は確定前のたたき台。
 struct MyDerive {
     val a: I32              // ← ディレクティブ引数 = このフィールド
 }
 pub impl MyDerive as Derive {
-    fn derive(input: DeclAst) -> String {
-        // self.a で引数を読み、input（構造化済みの宣言 AST）から生成ソースを String で返す
-        return ""
+    fn derive(input: TopItemAst) -> String {
+        // self.a で引数を読み、input（注釈対象項の AST）を match して生成ソースを String で返す
+        match input {
+            TopItemAst.Decl(val d) => { /* d.name / d.fields … から生成 */ return "" }
+            _ => { return "" }   // impl / trait など、このマクロが扱わない対象
+        }
     }
 }
 
 @[MyDerive(a: 32)]            // = MyDerive { a: 32 } を構築して .derive(input) を呼ぶ
 struct P { }
 ```
+
+注釈は struct / enum / fn だけでなく **`impl` ブロック・`trait`** にも付けられる（`@[Name] impl T { … }`・`@[Name] trait U { … }`）＝そのとき `input` は `TopItemAst.Impl` / `TopItemAst.Trait`。
 
 **入力 `AST`／出力 `String` の非対称は、エラーをどこに出すかと一致している。**
 
@@ -100,7 +104,7 @@ struct P { }
 
 ## 未決事項
 
-- **AST 構文木の正確な型**（`@Std/Syntax` の宣言 AST＝`name`/`fields(name,type)`/`variants`/関数シグネチャ等の具体形・span の持ち方・型式 `TypeExpr` の表現）。
+- **AST 構文木の具体形の細部**（入力型は **`TopItemAst`** に確定済＝`@Std/Syntax` の値ツリー。`Decl`〔`name`/`fields(name,type,vis)`/`variants`/fn シグネチャ＋本体〕・`Impl`〔`members`〕・`Trait`〔`reqs`〕…・全ノード原本座標 span。残るは各ノードのフィールド追加や型式 `TypeAst` の表現の磨き込み＝additive）。
 - 生成コマンドの名前・設定方法・source の渡し方（stdin/ファイル/リテラル＝実装時に最も楽な形で確定）。
 - **authoring 層（将来・additive）**：`String` 直書きはシンタックスハイライトが効かない。テンプレートファイル方式（ほぼ Plew の雛形を読み込んで穴埋め）や opt-in の `quote` を**コアを汚さず後付け**で足す。コア（AST in / String out）は不変。
 - **生トークン escape hatch**（関数形/DSL マクロを将来入れるなら `derive(input: TokenStream)` を additive に）。

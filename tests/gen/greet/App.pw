@@ -1,11 +1,11 @@
 // gen test (spec/16 M0): a user-defined macro `Greet` generates a top-level
 // function into App.gen.pw, which the normal build auto-parts and `main` calls.
-import @Std/Syntax with { Derive, DeclAst }
+import @Std/Syntax with { Derive, TopItemAst }
 import @Std/Io with { write }
 
 struct Greet { }
 pub impl Greet as Derive {
-    fn derive(input: DeclAst) -> String {
+    fn derive(input: TopItemAst) -> String {
         return "fn widgetTag() -> String {\n    return \"tagged!\\n\"\n}\n"
     }
 }

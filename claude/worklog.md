@@ -16,11 +16,10 @@
 
 ## 次の一歩
 
-A 完了で M1 の理想形（真の 1 AST）に到達。次の自然な分岐：
+A 完了で M1 の理想形（真の 1 AST）に到達。**マクロ入力型を `TopItemAst` に確定＝impl/trait もマクロ対象＝✅実装済**（`derive(input: TopItemAst)`・`match input { Decl/Impl/Trait … }`・`lowerFuncDecl`/`lowerImpl`/`lowerTrait` も `drainDerives` で directive attach・gen テスト traitreqs/implmethods・spec/16 更新済。罠＝match payload を param 同名に bind すると provisional F2 shadow バグ→新名 `val d` に bind）。次：
 
-- **(a) impl/trait もマクロ対象に（軽い additive）**：`parseItem` は現状 struct/enum/fn のみディスパッチ。値型 `ImplAst`/`TraitAst` は A で既にあるので、`parseItem` がそれらも返し `DeclAst` 同様マクロに渡せばよい。マクロ入力を `DeclAst` から「対象項の TopItemAst」に広げる小工事。
-- **(b) M2 dogfood**：マクロで `Eq`/`Hash` を生成→`Dictionary`（`[k:v]`）に接続。現行のコンパイラ特権合成（`synthStructEq` 等）から段階移行（特権版を残したまま並行→検証→差し替え）。**`Hash`/`Hasher` の署名が未策定**（方向は Rust 流確定・core-lib／言語判断）＝**着手前にユーザー確認向き**。
-- **(c) M3**：パッケージ管理導入後に `@Std/Syntax` を in-tree から外部共有パッケージへ昇格（コンパイラもマクロも同一版に依存）。
+- **(a) M2 dogfood**：マクロで `Eq`/`Hash` を生成→`Dictionary`（`[k:v]`）に接続。現行のコンパイラ特権合成（`synthStructEq` 等）から段階移行（特権版を残したまま並行→検証→差し替え）。**`Hash`/`Hasher` の署名が未策定**（方向は Rust 流確定・core-lib／言語判断）＝**着手前にユーザー確認向き**。
+- **(b) M3**：パッケージ管理導入後に `@Std/Syntax` を in-tree から外部共有パッケージへ昇格（コンパイラもマクロも同一版に依存）。
 
 実装の段取り・実行系の具体は [metaprogramming-architecture.md](metaprogramming-architecture.md)。
 

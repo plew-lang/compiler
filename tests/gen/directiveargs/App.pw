@@ -1,5 +1,5 @@
 import @Std/Io with { write }
-import @Std/Syntax with { Derive, DeclAst }
+import @Std/Syntax with { Derive, TopItemAst, DeclAst }
 import @Std/Core with { stringFromBytes }
 
 // A parameterized derive: `@[Tagged(prefix: "hello", times: 3)]`. The directive
@@ -11,18 +11,23 @@ struct Tagged {
 }
 
 pub impl Tagged as Derive {
-    fn derive(input: DeclAst) -> String {
-        mut val out: Array[U8] = []
-        pushStr(into: inout out, s: "fn tag() -> String {\n    return \"")
-        mut val i: I64 = 0
-        while i < self.times {
-            pushStr(into: inout out, s: self.prefix)
-            pushStr(into: inout out, s: "-")
-            i += 1
+    fn derive(input: TopItemAst) -> String {
+        match input {
+            TopItemAst.Decl(val d) => {
+                mut val out: Array[U8] = []
+                pushStr(into: inout out, s: "fn tag() -> String {\n    return \"")
+                mut val i: I64 = 0
+                while i < self.times {
+                    pushStr(into: inout out, s: self.prefix)
+                    pushStr(into: inout out, s: "-")
+                    i += 1
+                }
+                pushStr(into: inout out, s: d.name)
+                pushStr(into: inout out, s: "\"\n}\n")
+                return stringFromBytes(out)
+            }
+            _ => { return "" }
         }
-        pushStr(into: inout out, s: input.name)
-        pushStr(into: inout out, s: "\"\n}\n")
-        return stringFromBytes(out)
     }
 }
 

@@ -1,0 +1,38 @@
+// Metaprogramming gen test (spec/16): a derive macro attached to a TRAIT. The
+// macro receives the trait as `TopItemAst.Trait` and reads its requirement names,
+// generating a `reqNames()` listing them — proving impl/trait are macro targets.
+import @Std/Io with { write }
+import @Std/Syntax with { Derive, TopItemAst, TraitAst, Src, newSrc }
+
+struct ReqList { }
+
+pub impl ReqList as Derive {
+    fn derive(input: TopItemAst) -> String {
+        match input {
+            TopItemAst.Trait(val t) => {
+                mut val s: Src = newSrc()
+                s.put("fn reqNames() -> String {\n    return \"")
+                mut val i: U64 = 0
+                while i < t.reqs.count {
+                    s.put(t.reqs[i].name)
+                    s.put(",")
+                    i += 1
+                }
+                s.put("\"\n}\n")
+                return s.finish()
+            }
+            _ => { return "" }
+        }
+    }
+}
+
+@[ReqList]
+trait Greeter {
+    fn hello() -> String
+    fn bye() -> String
+}
+
+fn main() {
+    write(s: reqNames())
+    write(s: "\n")
+}

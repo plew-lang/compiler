@@ -572,6 +572,9 @@ fn lowerFuncDecl(c: inout Comp, d: DeclAst) {
         c.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen traitStart=tn.nameStart traitLen=tn.nameLen />)
         wi += 1
     }
+    // attach pending `@[...]` directives to this fn (a macro on a free function);
+    // declStart/declEnd = the fn's source span for the gen harness slice.
+    drainDerives(c: inout c, typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
 }
 
 // Append a FuncBound per `where` atom (parallel name lists) onto function `fnIdx`.
@@ -676,6 +679,9 @@ fn lowerImpl(c: inout Comp, im: ImplAst) {
         val traitN: Bind = internBytes(c: inout c, s: im.traitName)
         c.conforms.append(<Conform typeStart=recvN.nameStart typeLen=recvN.nameLen traitStart=traitN.nameStart traitLen=traitN.nameLen derived=false witnessed=witnessed />)
     }
+    // attach pending `@[...]` directives to this impl block (a macro on an impl);
+    // declStart/declEnd = the impl block's source span for the gen harness slice.
+    drainDerives(c: inout c, typeStart: recvN.nameStart, typeLen: recvN.nameLen, isEnum: false, declStart: im.span.start, declEnd: im.span.end)
 }
 
 // Lower a body-less signature (trait requirement / extern decl) to a Func. The
@@ -726,6 +732,9 @@ fn lowerTrait(c: inout Comp, t: TraitAst) {
         ai += 1
     }
     c.traits.append(<TraitDef nameStart=nameStart nameLen=nameLen supertraits=supertraits reqs=reqs assocTypes=assocTypes />)
+    // attach pending `@[...]` directives to this trait (a macro on a trait);
+    // declStart/declEnd = the trait's source span for the gen harness slice.
+    drainDerives(c: inout c, typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: t.span.start, declEnd: t.span.end)
 }
 
 // Lower an `extern "plew-intrinsic"` block (spec/15): each fn -> a Func(isExtern),

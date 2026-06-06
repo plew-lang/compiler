@@ -25,15 +25,16 @@ part ./Syntax/ParseBody
 part ./Syntax/Build
 
 // A macro = a struct implementing `Derive`. The required `derive` receives the
-// item's `DeclAst` and returns generated source; the provided `deriveFromSource`
-// is what the runner calls (String in, String out).
+// annotated item's `TopItemAst` (the macro matches on its kind — `Decl` for a
+// struct/enum/fn, `Impl`, `Trait`, …) and returns generated source; the provided
+// `deriveFromSource` is what the runner calls (String in, String out).
 export trait Derive {
-    fn derive(input: DeclAst) -> String
+    fn derive(input: TopItemAst) -> String
 }
 
 pub impl Derive {
     // Lex+parse the item's source text (original coordinates `start..end`) into a
-    // `DeclAst`, then delegate to the user's `derive`. The runner calls this so it
+    // `TopItemAst`, then delegate to the user's `derive`. The runner calls this so it
     // need not know the AST type — the String boundary keeps it version-agnostic.
     fn deriveFromSource(source: String, start: U64, end: U64) -> String {
         return self.derive(input: parseItem(source: source, start: start, end: end))

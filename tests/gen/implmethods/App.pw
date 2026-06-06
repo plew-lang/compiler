@@ -1,0 +1,46 @@
+// Metaprogramming gen test (spec/16): a derive macro attached to an IMPL block. The
+// macro receives the impl as `TopItemAst.Impl` and reads its member names,
+// generating a `methodNames()` listing them.
+import @Std/Io with { write }
+import @Std/Syntax with { Derive, TopItemAst, ImplAst, Src, newSrc }
+
+struct MethodList { }
+
+pub impl MethodList as Derive {
+    fn derive(input: TopItemAst) -> String {
+        match input {
+            TopItemAst.Impl(val im) => {
+                mut val s: Src = newSrc()
+                s.put("fn methodNames() -> String {\n    return \"")
+                mut val i: U64 = 0
+                while i < im.members.count {
+                    s.put(im.members[i].name)
+                    s.put(",")
+                    i += 1
+                }
+                s.put("\"\n}\n")
+                return s.finish()
+            }
+            _ => { return "" }
+        }
+    }
+}
+
+struct Widget {
+    pub val n: I64
+}
+
+@[MethodList]
+pub impl Widget {
+    fn area() -> I64 {
+        return 42I64
+    }
+    fn label() -> String {
+        return "w"
+    }
+}
+
+fn main() {
+    write(s: methodNames())
+    write(s: "\n")
+}
