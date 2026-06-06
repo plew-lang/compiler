@@ -12,15 +12,33 @@
 // source coordinates — an input error can point at the user's actual text.
 
 // A token cursor over a lexed item slice. `base` is the absolute offset of
-// `bytes[0]` in the original source (added into every span).
-struct P {
+// `bytes[0]` in the original source (added into every span). Exported so the
+// compiler frontend can drive the shared parser over its own token stream
+// (constructing `<P bytes=… toks=… pos=… base=0 />`, then syncing `pos` back).
+export struct P {
     pub val bytes: Array[U8]
     pub val toks: Array[Tok]
     pub mut val pos: U64
     pub val base: U64
+    // recoverable error state: the parser keeps going (for macro robustness) but
+    // records the first syntax error (original-coordinate offset + message). The
+    // compiler frontend checks `hasErr` after a parse and reports it loudly; a macro
+    // can inspect it or ignore it.
+    pub mut val hasErr: Bool = false
+    pub mut val errOff: U64 = 0
+    pub mut val errMsg: String = ""
 }
 
 pub impl P {
+    // Record a syntax error (first one wins) at original-coordinate offset `off`.
+    inout fn fail(off: U64, msg: String) {
+        if self.hasErr {
+        } else {
+            self.hasErr = true
+            self.errOff = off
+            self.errMsg = msg
+        }
+    }
     // The current token (clamped to the trailing Eof past the end).
     fn curTok() -> Tok {
         if self.pos < self.toks.count {
@@ -210,13 +228,68 @@ fn skipBlock(p: inout P) {
 }
 
 // A type expression `Name` or `Name[Arg, ...]`. Mirrors parseTypeTok's nominal
-// path (function types `fn(...)->R` are an additive follow-up — skipped to a bare
-// name here). The current token is the type head.
+// path; a function type `fn(label: T, ...) -> R` is modeled as name="fn" with
+// args = [R, T1, T2, ...] (labels/`inout` dropped — they aren't part of the C
+// calling convention), mirroring the compiler's parseTypeTok. The current token is
+// the type head.
 fn parseType(p: inout P) -> TypeAst {
     val head: Tok = p.curTok()
     val name: String = p.text(t: head)
     val sStart: U64 = p.base + head.start
     p.advance()
+    match head.kind {
+        Kind.KwFn => {
+            mut val fparams: Array[TypeAst] = []
+            match p.curKind() {
+                Kind.LParen => { p.advance() }
+                _ => {}
+            }
+            while true {
+                match p.curKind() {
+                    Kind.RParen => {
+                        p.advance()
+                        break
+                    }
+                    Kind.Eof => { break }
+                    Kind.Comma => { p.advance() }
+                    _ => {
+                        // optional `label:` (or `label~:`) before the type.
+                        match p.curKind() {
+                            Kind.Ident => {
+                                if p.peekKind(off: 1) == <Kind.Colon /> {
+                                    p.advance()
+                                    p.advance()
+                                }
+                            }
+                            _ => {}
+                        }
+                        match p.curKind() {
+                            Kind.KwInout => { p.advance() }
+                            _ => {}
+                        }
+                        fparams.append(parseType(p: inout p))
+                    }
+                }
+            }
+            mut val fret: TypeAst = emptyTypeAst()
+            match p.curKind() {
+                Kind.Arrow => {
+                    p.advance()
+                    fret = parseType(p: inout p)
+                }
+                _ => {}
+            }
+            mut val fargs: Array[TypeAst] = []
+            fargs.append(fret)
+            mut val fk: U64 = 0
+            while fk < fparams.count {
+                fargs.append(fparams[fk])
+                fk += 1
+            }
+            return <TypeAst name=name args=fargs span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        _ => {}
+    }
     mut val args: Array[TypeAst] = []
     match p.curKind() {
         Kind.LBracket => {

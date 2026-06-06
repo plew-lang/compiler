@@ -1,0 +1,423 @@
+// Part of the Plew compiler module (root: _.pw). Lowering: the shared @Std/Syntax
+// body value tree (ExprAst / StmtAst / BlockAst / PatternAst) -> the compiler's
+// arena (Expr / Stmt / Block / MatchArm). This is how the compiler frontend reuses
+// the ONE shared parser (spec/16, worklog A): `parseBlock` drives the shared
+// `parseBlockAst` over the compiler's own token stream and lowers the result here,
+// so function bodies are parsed by exactly the code metaprogramming uses — no
+// second parser to drift.
+//
+// Names: most are re-interned into c.bytes (codegen `writeSpan` emits the text and
+// resolution compares bytes, both of which work on a re-interned copy). The two
+// names that feed `moduleOf` (cross-module visibility) keep their ORIGINAL offset:
+// a `Call` name (at its node span's start) and a function *declaration* name (still
+// produced by the compiler's own declaration parser, untouched here). String and
+// `Ident` text also use the original span (exact bytes matter for string literals).
+
+// Byte length of a span.
+fn spanLen(s: Span) -> U64 {
+    return s.end - s.start
+}
+
+// Lower a type expression, reproducing parseTypeTok's arena seeding (head name +
+// recursively-lowered args, Array element span / compound mangling). Records the
+// array element for monomorphization. (Function types `fn(...)->R` are not modeled
+// by the shared TypeAst yet — they appear only in signatures, not bodies.)
+fn lowerType(c: inout Comp, t: TypeAst) -> PType {
+    val nm: Bind = internBytes(c: inout c, s: t.name)
+    mut val args: Array[U64] = []
+    mut val argPtys: Array[PType] = []
+    mut val i: U64 = 0
+    while i < t.args.count {
+        val ap: PType = lowerType(c: inout c, t: t.args[i])
+        argPtys.append(ap)
+        args.append(ap.ref)
+        i += 1
+    }
+    val ref: U64 = c.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args />)
+    mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
+    if t.args.count > 0 {
+        if rangeEquals(bytes: c.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {
+            if isCompoundType(c: inout c, ref: args[0]) {
+                val mn: Bind = appendMangleSpan(c: inout c, ref: args[0])
+                result = <PType start=mn.nameStart len=mn.nameLen isArray=true ref=ref />
+            } else {
+                result = <PType start=argPtys[0].start len=argPtys[0].len isArray=true ref=ref />
+            }
+            recordArrayElem(c: inout c, ty: result)
+        }
+    }
+    return result
+}
+
+// Lower a call/construction argument list.
+fn lowerArgs(c: inout Comp, args: Array[ArgAst]) -> Array[Arg] {
+    mut val out: Array[Arg] = []
+    mut val i: U64 = 0
+    while i < args.count {
+        val a: ArgAst = args[i]
+        val e: U64 = lowerExpr(c: inout c, e: a.value)
+        mut val labelStart: U64 = 0
+        mut val labelLen: U64 = 0
+        if a.hasLabel {
+            val lb: Bind = internBytes(c: inout c, s: a.label)
+            labelStart = lb.nameStart
+            labelLen = lb.nameLen
+        }
+        out.append(<Arg expr=e isInout=a.isInout labelStart=labelStart labelLen=labelLen hasLabel=a.hasLabel />)
+        i += 1
+    }
+    return out
+}
+
+fn lowerMakeFields(c: inout Comp, fields: Array[MakeFieldAst]) -> Array[MakeField] {
+    mut val out: Array[MakeField] = []
+    mut val i: U64 = 0
+    while i < fields.count {
+        val f: MakeFieldAst = fields[i]
+        val v: U64 = lowerExpr(c: inout c, e: f.value)
+        val nm: Bind = internBytes(c: inout c, s: f.name)
+        out.append(<MakeField nameStart=nm.nameStart nameLen=nm.nameLen value=v />)
+        i += 1
+    }
+    return out
+}
+
+fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
+    mut val result: U64 = 0
+    match e {
+        ExprAst.IntLit(val value, val isBool, val tySuffix, val span) => {
+            mut val sStart: U64 = 0
+            mut val sLen: U64 = 0
+            if tySuffix.bytes.count > 0 {
+                val sf: Bind = internBytes(c: inout c, s: tySuffix)
+                sStart = sf.nameStart
+                sLen = sf.nameLen
+            }
+            result = c.pushExpr(e: <Expr.Int value=value offset=span.start isBool=isBool tyStart=sStart tyLen=sLen />)
+        }
+        ExprAst.StrLit(val raw, val span) => {
+            result = c.pushExpr(e: <Expr.Str start=span.start len=spanLen(s: span) />)
+        }
+        ExprAst.Ident(val name, val span) => {
+            result = c.pushExpr(e: <Expr.Ident start=span.start len=spanLen(s: span) />)
+        }
+        ExprAst.Unary(val op, val operand, val span) => {
+            val o: U64 = lowerExpr(c: inout c, e: operand)
+            result = c.pushExpr(e: <Expr.Unary op=op operand=o />)
+        }
+        ExprAst.Binary(val op, val lhs, val rhs, val span) => {
+            val l: U64 = lowerExpr(c: inout c, e: lhs)
+            val r: U64 = lowerExpr(c: inout c, e: rhs)
+            result = c.pushExpr(e: <Expr.Binary op=op lhs=l rhs=r />)
+        }
+        ExprAst.Call(val name, val args, val span) => {
+            // ORIGINAL offset (name is at the call's span start) — feeds moduleOf.
+            val a: Array[Arg] = lowerArgs(c: inout c, args: args)
+            result = c.pushExpr(e: <Expr.Call nameStart=span.start nameLen=name.bytes.count args=a />)
+        }
+        ExprAst.Field(val base, val name, val span) => {
+            val b: U64 = lowerExpr(c: inout c, e: base)
+            val nm: Bind = internBytes(c: inout c, s: name)
+            result = c.pushExpr(e: <Expr.Field base=b nameStart=nm.nameStart nameLen=nm.nameLen />)
+        }
+        ExprAst.Method(val recv, val name, val args, val span) => {
+            val r: U64 = lowerExpr(c: inout c, e: recv)
+            val a: Array[Arg] = lowerArgs(c: inout c, args: args)
+            val nm: Bind = internBytes(c: inout c, s: name)
+            result = c.pushExpr(e: <Expr.Method recv=r nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
+        }
+        ExprAst.Index(val base, val index, val span) => {
+            val b: U64 = lowerExpr(c: inout c, e: base)
+            val idx: U64 = lowerExpr(c: inout c, e: index)
+            result = c.pushExpr(e: <Expr.Index base=b index=idx />)
+        }
+        ExprAst.Make(val typeName, val typeArgs, val variant, val isEnum, val fields, val span) => {
+            val tn: Bind = internBytes(c: inout c, s: typeName)
+            mut val tyRef: U64 = 0
+            if typeArgs.count > 0 {
+                mut val targs: Array[U64] = []
+                mut val ti: U64 = 0
+                while ti < typeArgs.count {
+                    targs.append(lowerType(c: inout c, t: typeArgs[ti]).ref)
+                    ti += 1
+                }
+                tyRef = c.pushType(t: <TypeRef nameStart=tn.nameStart nameLen=tn.nameLen args=targs />)
+            }
+            mut val vStart: U64 = 0
+            mut val vLen: U64 = 0
+            if isEnum {
+                val vb: Bind = internBytes(c: inout c, s: variant)
+                vStart = vb.nameStart
+                vLen = vb.nameLen
+            }
+            val fs: Array[MakeField] = lowerMakeFields(c: inout c, fields: fields)
+            result = c.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=vStart variantLen=vLen isEnum=isEnum ty=tyRef fields=fs />)
+        }
+        ExprAst.ArrayLit(val elems, val span) => {
+            mut val es: Array[U64] = []
+            mut val i: U64 = 0
+            while i < elems.count {
+                es.append(lowerExpr(c: inout c, e: elems[i]))
+                i += 1
+            }
+            result = c.pushExpr(e: <Expr.Array elems=es />)
+        }
+        ExprAst.Cast(val operand, val ty, val span) => {
+            val o: U64 = lowerExpr(c: inout c, e: operand)
+            val pt: PType = lowerType(c: inout c, t: ty)
+            result = c.pushExpr(e: <Expr.Cast operand=o tyStart=pt.start tyLen=pt.len ty=pt.ref />)
+        }
+        ExprAst.MatchExpr(val scrut, val arms, val span) => {
+            val s: U64 = lowerExpr(c: inout c, e: scrut)
+            val ma: Array[MatchArm] = lowerMatchArms(c: inout c, arms: arms, isExpr: true)
+            result = c.pushExpr(e: <Expr.MatchExpr scrut=s arms=ma />)
+        }
+        ExprAst.IfExpr(val cond, val thenBlk, val elseBlk, val span) => {
+            val cnd: U64 = lowerExpr(c: inout c, e: cond)
+            val tb: U64 = lowerBlock(c: inout c, b: thenBlk)
+            val eb: U64 = lowerBlock(c: inout c, b: elseBlk)
+            result = c.pushExpr(e: <Expr.IfExpr cond=cnd thenBlk=tb elseBlk=eb />)
+        }
+        ExprAst.Coalesce(val opt, val deflt, val span) => {
+            val o: U64 = lowerExpr(c: inout c, e: opt)
+            val d: U64 = lowerExpr(c: inout c, e: deflt)
+            result = c.pushExpr(e: <Expr.Coalesce opt=o deflt=d />)
+        }
+        ExprAst.Try(val operand, val span) => {
+            val o: U64 = lowerExpr(c: inout c, e: operand)
+            result = c.pushExpr(e: <Expr.Try expr=o />)
+        }
+        ExprAst.Arrow(val base, val name, val span) => {
+            val b: U64 = lowerExpr(c: inout c, e: base)
+            val nm: Bind = internBytes(c: inout c, s: name)
+            result = c.pushExpr(e: <Expr.Arrow base=b nameStart=nm.nameStart nameLen=nm.nameLen />)
+        }
+        ExprAst.Closure(val params, val hasRet, val ret, val body, val span) => {
+            val ps: Array[Param] = lowerParams(c: inout c, params: params)
+            mut val rStart: U64 = 0
+            mut val rLen: U64 = 0
+            mut val rIsArray: Bool = false
+            mut val rTy: U64 = 0
+            if hasRet {
+                val pt: PType = lowerType(c: inout c, t: ret)
+                rStart = pt.start
+                rLen = pt.len
+                rIsArray = pt.isArray
+                rTy = pt.ref
+            }
+            val bd: U64 = lowerBlock(c: inout c, b: body)
+            result = c.pushExpr(e: <Expr.Closure params=ps hasRet=hasRet retStart=rStart retLen=rLen retIsArray=rIsArray retTy=rTy body=bd />)
+        }
+        ExprAst.Move(val operand, val isBorrow, val span) => {
+            val o: U64 = lowerExpr(c: inout c, e: operand)
+            result = c.pushExpr(e: <Expr.Move operand=o isBorrow=isBorrow />)
+        }
+        ExprAst.Await(val operand, val span) => {
+            val o: U64 = lowerExpr(c: inout c, e: operand)
+            result = c.pushExpr(e: <Expr.Await operand=o />)
+        }
+    }
+    return result
+}
+
+fn lowerParams(c: inout Comp, params: Array[ParamAst]) -> Array[Param] {
+    mut val out: Array[Param] = []
+    mut val i: U64 = 0
+    while i < params.count {
+        val p: ParamAst = params[i]
+        val nm: Bind = internBytes(c: inout c, s: p.name)
+        mut val tyStart: U64 = 0
+        mut val tyLen: U64 = 0
+        mut val tyIsArray: Bool = false
+        mut val tyRef: U64 = 0
+        if p.ty.name.bytes.count > 0 {
+            val pt: PType = lowerType(c: inout c, t: p.ty)
+            tyStart = pt.start
+            tyLen = pt.len
+            tyIsArray = pt.isArray
+            tyRef = pt.ref
+        }
+        out.append(<Param nameStart=nm.nameStart nameLen=nm.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isInout=p.isInout isMove=p.isMove isBorrow=p.isBorrow noLabel=p.noLabel hasDefault=false defaultExpr=0 />)
+        i += 1
+    }
+    return out
+}
+
+fn lowerBinds(c: inout Comp, binds: Array[BindAst]) -> Array[Bind] {
+    mut val out: Array[Bind] = []
+    mut val i: U64 = 0
+    while i < binds.count {
+        val b: BindAst = binds[i]
+        val nm: Bind = internBytes(c: inout c, s: b.name)
+        val fd: Bind = internBytes(c: inout c, s: b.field)
+        out.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen fieldStart=fd.nameStart fieldLen=fd.nameLen />)
+        i += 1
+    }
+    return out
+}
+
+// Lower a pattern into the arena MatchArm fields (minus the body).
+fn lowerPatternInfo(c: inout Comp, p: PatternAst) -> PatInfo {
+    if p.isWildcard {
+        val noBinds: Array[Bind] = []
+        return <PatInfo isWildcard=true enumStart=0 enumLen=0 variantStart=0 variantLen=0 binds=noBinds isStruct=false />
+    }
+    val en: Bind = internBytes(c: inout c, s: p.typeName)
+    mut val vStart: U64 = 0
+    mut val vLen: U64 = 0
+    if p.variant.bytes.count > 0 {
+        val vb: Bind = internBytes(c: inout c, s: p.variant)
+        vStart = vb.nameStart
+        vLen = vb.nameLen
+    }
+    val binds: Array[Bind] = lowerBinds(c: inout c, binds: p.binds)
+    return <PatInfo isWildcard=false enumStart=en.nameStart enumLen=en.nameLen variantStart=vStart variantLen=vLen binds=binds isStruct=p.isStruct />
+}
+
+// Lower match arms. For an expression-position match (isExpr), each arm's body is a
+// synthesized one-`give` block; its arena `body` is the give value's Expr index.
+// For a statement-position match, the arena `body` is the block index.
+fn lowerMatchArms(c: inout Comp, arms: Array[MatchArmAst], isExpr: Bool) -> Array[MatchArm] {
+    mut val out: Array[MatchArm] = []
+    mut val i: U64 = 0
+    while i < arms.count {
+        val arm: MatchArmAst = arms[i]
+        val pi: PatInfo = lowerPatternInfo(c: inout c, p: arm.pattern)
+        mut val body: U64 = 0
+        if isExpr {
+            // the give-block's single statement is `give <expr>`; lower that expr.
+            mut val gv: ExprAst = emptyExpr()
+            if arm.body.stmts.count > 0 {
+                match arm.body.stmts[0] {
+                    StmtAst.Give(val value, val span) => { gv = value }
+                    _ => {}
+                }
+            }
+            body = lowerExpr(c: inout c, e: gv)
+        } else {
+            body = lowerBlock(c: inout c, b: arm.body)
+        }
+        out.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body isStruct=pi.isStruct />)
+        i += 1
+    }
+    return out
+}
+
+fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
+    mut val result: U64 = 0
+    match s {
+        StmtAst.Let(val mutable, val name, val hasTy, val ty, val init, val span) => {
+            val nm: Bind = internBytes(c: inout c, s: name)
+            mut val tyStart: U64 = 0
+            mut val tyLen: U64 = 0
+            mut val tyIsArray: Bool = false
+            mut val tyRef: U64 = 0
+            if hasTy {
+                val pt: PType = lowerType(c: inout c, t: ty)
+                tyStart = pt.start
+                tyLen = pt.len
+                tyIsArray = pt.isArray
+                tyRef = pt.ref
+            }
+            val iv: U64 = lowerExpr(c: inout c, e: init)
+            result = c.pushStmt(s: <Stmt.Let mutable=mutable nameStart=nm.nameStart nameLen=nm.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=iv />)
+        }
+        StmtAst.Assign(val op, val target, val value, val span) => {
+            val t: U64 = lowerExpr(c: inout c, e: target)
+            val v: U64 = lowerExpr(c: inout c, e: value)
+            result = c.pushStmt(s: <Stmt.Assign op=op target=t value=v />)
+        }
+        StmtAst.ExprStmt(val expr, val span) => {
+            val e: U64 = lowerExpr(c: inout c, e: expr)
+            result = c.pushStmt(s: <Stmt.ExprStmt expr=e />)
+        }
+        StmtAst.Return(val value, val hasValue, val span) => {
+            mut val v: U64 = 0
+            if hasValue {
+                v = lowerExpr(c: inout c, e: value)
+            }
+            result = c.pushStmt(s: <Stmt.Return value=v hasValue=hasValue />)
+        }
+        StmtAst.If(val cond, val thenBlk, val elseBlk, val hasElse, val span) => {
+            val cnd: U64 = lowerExpr(c: inout c, e: cond)
+            val tb: U64 = lowerBlock(c: inout c, b: thenBlk)
+            mut val eb: U64 = 0
+            if hasElse {
+                eb = lowerBlock(c: inout c, b: elseBlk)
+            }
+            result = c.pushStmt(s: <Stmt.If cond=cnd thenBlk=tb elseBlk=eb hasElse=hasElse />)
+        }
+        StmtAst.While(val cond, val body, val span) => {
+            val cnd: U64 = lowerExpr(c: inout c, e: cond)
+            val bd: U64 = lowerBlock(c: inout c, b: body)
+            result = c.pushStmt(s: <Stmt.While cond=cnd body=bd />)
+        }
+        StmtAst.For(val varName, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patType, val binds, val span) => {
+            mut val vStart: U64 = 0
+            mut val vLen: U64 = 0
+            if varName.bytes.count > 0 {
+                val vb: Bind = internBytes(c: inout c, s: varName)
+                vStart = vb.nameStart
+                vLen = vb.nameLen
+            }
+            val lo: U64 = lowerExpr(c: inout c, e: iter)
+            mut val hi: U64 = 0
+            if isRange {
+                hi = lowerExpr(c: inout c, e: rangeHi)
+            }
+            val bd: U64 = lowerBlock(c: inout c, b: body)
+            mut val pStart: U64 = 0
+            mut val pLen: U64 = 0
+            if patType.bytes.count > 0 {
+                val pb: Bind = internBytes(c: inout c, s: patType)
+                pStart = pb.nameStart
+                pLen = pb.nameLen
+            }
+            val bnds: Array[Bind] = lowerBinds(c: inout c, binds: binds)
+            result = c.pushStmt(s: <Stmt.For varStart=vStart varLen=vLen isRange=isRange inclusive=inclusive iter=lo rangeHi=hi body=bd isStruct=isStruct patStart=pStart patLen=pLen binds=bnds />)
+        }
+        StmtAst.Match(val scrut, val arms, val span) => {
+            val sc: U64 = lowerExpr(c: inout c, e: scrut)
+            val ma: Array[MatchArm] = lowerMatchArms(c: inout c, arms: arms, isExpr: false)
+            result = c.pushStmt(s: <Stmt.Match scrut=sc arms=ma />)
+        }
+        StmtAst.Panic(val msg, val span) => {
+            val m: U64 = lowerExpr(c: inout c, e: msg)
+            result = c.pushStmt(s: <Stmt.Panic msg=m offset=span.start />)
+        }
+        StmtAst.Give(val value, val span) => {
+            val v: U64 = lowerExpr(c: inout c, e: value)
+            result = c.pushStmt(s: <Stmt.Give value=v />)
+        }
+        StmtAst.Break(val span) => { result = c.pushStmt(s: <Stmt.Break />) }
+        StmtAst.Continue(val span) => { result = c.pushStmt(s: <Stmt.Continue />) }
+    }
+    return result
+}
+
+fn lowerBlock(c: inout Comp, b: BlockAst) -> U64 {
+    mut val stmts: Array[U64] = []
+    mut val i: U64 = 0
+    while i < b.stmts.count {
+        stmts.append(lowerStmt(c: inout c, s: b.stmts[i]))
+        i += 1
+    }
+    val id: U64 = c.blocks.count
+    c.blocks.append(<Block stmts=stmts />)
+    return id
+}
+
+// Frontend integration: parse `{ ... }` via the shared body parser and lower it.
+// Drives `parseBlockAst` over the compiler's own token stream (base 0 = absolute
+// c.bytes offsets), then syncs the compiler cursor past the consumed tokens.
+fn parseBlock(c: inout Comp) -> U64 {
+    mut val p: P = <P bytes=c.bytes toks=c.toks pos=c.pos base=0 />
+    val tree: BlockAst = parseBlockAst(p: inout p)
+    c.pos = p.pos
+    // the shared parser is recoverable; surface its first syntax error loudly so
+    // the compiler keeps rejecting spec-invalid code (acceptance soundness).
+    if p.hasErr {
+        compileErrorAt(line: lineOf(c: inout c, offset: p.errOff), msg: p.errMsg)
+    }
+    return lowerBlock(c: inout c, b: tree)
+}

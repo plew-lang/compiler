@@ -76,14 +76,20 @@ fn tokenU64Ast(p: inout P, t: Tok) -> U64 {
 }
 
 // Decode a character literal token `'…'` (span includes both quotes) to its
-// codepoint. Best-effort (mirrors the compiler's charValue without diagnostics).
+// codepoint. Mirrors the compiler's charValue, including the single-scalar check:
+// a multi-scalar (Grapheme) literal is recorded as an error.
 fn charValueAst(p: inout P, t: Tok) -> U64 {
     if t.len < 3 {
+        p.fail(off: p.base + t.start, msg: "empty character literal")
         return 0
     }
+    val contentLen: U64 = t.len - 2
     val start: U64 = t.start + 1
     val b0: U8 = p.bytes[start]
     if b0 == '\\' {
+        if contentLen != 2 {
+            p.fail(off: p.base + t.start, msg: "character literal must be a single scalar")
+        }
         val e: U8 = p.bytes[start + 1]
         if e == 'n' { return 10 }
         if e == 't' { return 9 }
@@ -91,16 +97,29 @@ fn charValueAst(p: inout P, t: Tok) -> U64 {
         if e == '0' { return 0 }
         return e as U64
     }
+    mut val consumed: U64 = 1
+    mut val value: U64 = 0
     if b0 < 128 {
-        return b0 as U64
+        consumed = 1
+        value = b0 as U64
+    } else {
+        if b0 < 224 {
+            consumed = 2
+            value = ((b0 & 31) as U64 << 6) | ((p.bytes[start + 1] & 63) as U64)
+        } else {
+            if b0 < 240 {
+                consumed = 3
+                value = ((b0 & 15) as U64 << 12) | ((p.bytes[start + 1] & 63) as U64 << 6) | ((p.bytes[start + 2] & 63) as U64)
+            } else {
+                consumed = 4
+                value = ((b0 & 7) as U64 << 18) | ((p.bytes[start + 1] & 63) as U64 << 12) | ((p.bytes[start + 2] & 63) as U64 << 6) | ((p.bytes[start + 3] & 63) as U64)
+            }
+        }
     }
-    if b0 < 224 {
-        return ((b0 & 31) as U64 << 6) | ((p.bytes[start + 1] & 63) as U64)
+    if contentLen != consumed {
+        p.fail(off: p.base + t.start, msg: "multi-scalar character literal (Grapheme) is not yet supported")
     }
-    if b0 < 240 {
-        return ((b0 & 15) as U64 << 12) | ((p.bytes[start + 1] & 63) as U64 << 6) | ((p.bytes[start + 2] & 63) as U64)
-    }
-    return ((b0 & 7) as U64 << 18) | ((p.bytes[start + 1] & 63) as U64 << 12) | ((p.bytes[start + 2] & 63) as U64 << 6) | ((p.bytes[start + 3] & 63) as U64)
+    return value
 }
 
 // Parse a call/construction argument list (current token just past `(`).
@@ -276,7 +295,7 @@ fn parsePrimaryAst(p: inout P) -> ExprAst {
             val inner: ExprAst = parseExprAst(p: inout p)
             match p.curKind() {
                 Kind.RParen => { p.advance() }
-                _ => {}
+                _ => { p.fail(off: p.base + p.curTok().start, msg: "expected ')' to close a parenthesized expression") }
             }
             return inner
         }
@@ -403,7 +422,7 @@ fn parsePostfixAst(p: inout P) -> ExprAst {
                 val idx: ExprAst = parseExprAst(p: inout p)
                 match p.curKind() {
                     Kind.RBracket => { p.advance() }
-                    _ => {}
+                    _ => { p.fail(off: p.base + p.curTok().start, msg: "expected ']' to close an index") }
                 }
                 e = <ExprAst.Index base=e index=idx span=<Span start=sStart end=p.prevEnd() /> />
             }
@@ -459,6 +478,13 @@ fn parseBinAst(p: inout P, minPrec: I64) -> ExprAst {
                 p.advance()
                 val right: ExprAst = parseBinAst(p: inout p, minPrec: prec + 1)
                 left = <ExprAst.Binary op=op lhs=left rhs=right span=<Span start=sStart end=p.prevEnd() /> />
+                // comparison/equality operators are non-associative (spec/12):
+                // `a < b < c` / `a == b == c` are syntax errors — require parens.
+                if prec == 3 {
+                    if binPrecAst(k: p.curKind()) == 3 {
+                        p.fail(off: p.base + p.curTok().start, msg: "comparison operators are non-associative; add parentheses (e.g. `(a < b) && (b < c)`)")
+                    }
+                }
             }
         }
     }
@@ -694,7 +720,7 @@ fn parseLetAst(p: inout P, mutable: Bool) -> StmtAst {
     }
     match p.curKind() {
         Kind.Eq => { p.advance() }
-        _ => {}
+        _ => { p.fail(off: p.base + p.curTok().start, msg: "expected '=' — a variable declaration must be initialized") }
     }
     val init: ExprAst = parseExprAst(p: inout p)
     return <StmtAst.Let mutable=mutable name=nm hasTy=hasTy ty=ty init=init span=<Span start=sStart end=p.prevEnd() /> />

@@ -715,30 +715,7 @@ fn parseStmt(c: inout Comp) -> U64 {
     }
 }
 
-// Parse `{ stmt* }`. Current token must be `{`.
-fn parseBlock(c: inout Comp) -> U64 {
-    match c.curKind() {
-        Kind.LBrace => { c.advance() }
-        _ => {}
-    }
-    mut val stmts: Array[U64] = []
-    while true {
-        c.skipNewlines()
-        val k: Kind = c.curKind()
-        match k {
-            Kind.RBrace => {
-                c.advance()
-                break
-            }
-            Kind.Eof => { break }
-            _ => {
-                val s: U64 = parseStmt(c: inout c)
-                stmts.append(s)
-            }
-        }
-    }
-    val id: U64 = c.blocks.count
-    c.blocks.append(<Block stmts=stmts />)
-    return id
-}
+// `parseBlock` now lives in Codegen/Lower.pw: it drives the shared @Std/Syntax body
+// parser over the compiler's token stream and lowers the result into the arena
+// (worklog A — one shared parser). The old token-by-token block parser was removed.
 

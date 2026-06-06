@@ -11,9 +11,11 @@
 
 import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileBytes, eprint, fileExists }
 import @Std/Process with { argCount, argAt, exit }
-// The lexer is shared with metaprogramming: the compiler frontend and @Std/Syntax's
-// `parseItem` lex through the same code (spec/16 — one syntactic layer, no drift).
-import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals }
+// The lexer AND the body parser are shared with metaprogramming: the compiler
+// frontend and @Std/Syntax's `parseItem` lex+parse through the same code (spec/16 —
+// one syntactic layer, no drift). The compiler drives the shared body parser (P /
+// parseBlockAst) over its own tokens and lowers the value tree into its arena.
+import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, emptyExpr }
 
 part ./Ast
 part ./Parser/Expr
@@ -30,6 +32,7 @@ part ./Codegen/Mono
 part ./Codegen/Array
 part ./Codegen/Async
 part ./Codegen/Gen
+part ./Codegen/Lower
 part ./Loader
 
 // ---- driver ----
