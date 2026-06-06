@@ -4,20 +4,26 @@
 
 ## 現在地
 
-🎉 **セルフホスト達成・stage0（Rust）退役済み。** 正典コンパイラ＝Plew パッケージ `compiler/src/`（root `_.pw` が `part` で全パートを綴じる 1 モジュール＝`Loader`・`Lexer`・`Ast`・`Parser/`〔Expr/Stmt/Decl〕・`Codegen/`〔Emit/Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array/Async〕）。自分自身を不動点までコンパイル。hidden-meaning（整数幅・match 網羅・ラベル・受理の健全性・値意味論/CoW・`unique`/`deinit`/move・generics・トレイト＋Eq/Ord＋derive＋関連型・クロージャ）は概ね解消。**残る剥離・暫定は [provisional.md](provisional.md) が正典**。
+🎉 **セルフホスト達成・stage0（Rust）退役済み。** 正典コンパイラ＝Plew パッケージ `compiler/src/`（root `_.pw` が `part` で全パートを綴じる 1 モジュール＝`Loader`・`Ast`・`Parser/`〔Stmt〔型パーサのみ〕/Decl〕・`Codegen/`〔Emit/Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array/Async/Gen/Lower〕）。**レクサと式・文パーサは `@Std/Syntax` に移し本体は共有経路で parse→`Codegen/Lower.pw` で arena へ lower**（メタプロと同一・ドリフトなし＝A Phase 1+2）。自分自身を不動点までコンパイル。hidden-meaning（整数幅・match 網羅・ラベル・受理の健全性・値意味論/CoW・`unique`/`deinit`/move・generics・トレイト＋Eq/Ord＋derive＋関連型・クロージャ）は概ね解消。**残る剥離・暫定は [provisional.md](provisional.md) が正典**。
 
 完了した大物（詳細は git・記述的タグ）：async/await 段階 1-3（stackless SM）・コアライブラリ境界（`@Std` の `extern "plew-intrinsic"`）・**Array＝`RawBuffer` 床の Plew struct**（[array-struct-plan.md](array-struct-plan.md)）・可視性完全強制・**Iterator/Iterable＋lazy map/filter**・**再帰値型 auto-boxing＋ARC**・**コンパイラ renovate Phase A**（ARC 1 本化・Op enum・expect）・**Phase B B0-B2**（型付き AST キャッシュ）・**D quick-wins**（Loader 掃除・expect 仕上げ）。renovate vs rewrite の判断・負債の地図は [architecture.md](architecture.md)「負債監査の結論」、言語設計の根拠は [design-decisions.md](design-decisions.md)、再利用機構は本書末尾「再利用資産・罠」。
 
-## A（フロントエンド統合）Phase 1 済・コミット済（2026-06-06）
+## A（フロントエンド統合）Phase 1+2 済・式文は完全 1 本化（2026-06-06）
 
 **ユーザー指示＝A を進める。** Phase 1＝コミット済（244/244・不動点維持）：
 1. **codegen の nominal body emit を依存順（トポロジカル）化**（`emitNominalBodiesTopo`／`Codegen/Decl.pw`）＝commit `ded0f4a`。実バグ修正（`enum E { A(s: Struct) }` が不完全型でコンパイル不可を解消）かつ A の土台（値ツリーを enum で書ける）。
 2-4. **共有値ツリー＋ボディパーサ**＝commit `5a76a94`：`@Std/Syntax/Trees.pw`（`ExprAst`/`StmtAst`/`PatternAst`/`BlockAst` 等・enum・String 名・原本座標 Span）／`@Std/Syntax/ParseBody.pw`（式・文・パターン・ブロックを `Parser/Expr.pw`+`Stmt.pw` どおりミラー・`*Ast` 接尾辞で本体と衝突回避・`export parseExprAst`/`parseBlockAst`/`parseExprFrom`/`parseBlockFrom`）／`parseFuncDecl` が関数本体を実パース（`DeclAst.body: BlockAst`＝マクロが本体を読める）。単体検証済。
 
-**A の残り（Phase 2＝スワップはリスク高・commit チェックポイントを取りながら）**：
-5. 共有パーサを**全トップレベル**（impl/trait/extern/import/export/part）まで広げ `parseProgramAst`（プログラム全体→トップレベル項の木列）に。impl/trait 等の値ツリー表現を追加（impl＝レシーバ型＋メソッド〔DeclAst func〕列＋isPub、trait＝要求列、extern＝intrinsic 列、import/export/part＝パス）。
-6. `lower(tree)→Comp arena`（値ツリーを走査し `pushExpr`/`pushStmt`/`pushType`/arrayElems 種まきを再現。名前は再インターン＝offset は診断行番号のみに影響・テスト非対象）。
-7. `parseProgram` を共有 parse+lower にスワップ＝**旧 `Parser/Expr/Stmt/Decl` 退役＝真の 1 AST**。検証＝全テスト＋不動点。緑でなければ revert（self-compile が壊れると復旧困難）。
+**Phase 2＝式・文の統一＋旧パーサ削除＝✅達成**（2026-06-06・245/245・不動点維持）。コンパイラ本体は**全ての式・文・パターン・本体・デフォルト式・ディレクティブ引数を共有 @Std/Syntax パーサで parse → `Codegen/Lower.pw` で arena へ lower**する。ドリフトの主因（演算子優先順位等の式・文文法）は完全に 1 本化。コミット列：
+- `4c2793d`＝関数本体を共有経路に（`parseBlock` が `parseBlockAst`+`lowerBlock`・`Codegen/Lower.pw`＝`lowerExpr/Stmt/Block/Pattern/Type`・Call 名/文字列は原本 offset・他は再インターン）。共有 `parseType` に関数型 `fn(...)->R`、`P` にエラー記録（`hasErr`/`errOff`/`errMsg`+`fail`）追加＝missing `)`/`]`/`=`・非結合比較・multiscalar char を本体が報告。
+- `55ec756`＝フィールド/引数デフォルト式・ディレクティブ引数も共有経路（`parseExprC`）。
+- `0541bd8`＝**旧式・文パーサを削除**（`Parser/Expr.pw` 全削除・`Parser/Stmt.pw` は型パーサ〔parseTypeTok/parseTypeParams/recordArrayElem〕のみに・~700 行減）。
+
+**A の残り＝宣言/トップレベルの統合（最後の重複・大物・別エフォート向き）**：コンパイラの `parseProgram`＋`Parser/Decl.pw`（parseStruct/Enum/Func/Impl/Trait/Extern/Import/Export/Directive）はまだ本体独自。マクロ用の共有宣言パーサ（`@Std/Syntax/Parser.pw`＝DeclAst）と二重。完全 1 AST には共有側を拡張＋宣言 lower が要る：
+- 共有 DeclAst が**デフォルト式を捨てている**（`skipDefaultExpr`）→ フィールド/引数の default を ExprAst で持つ拡張が要る（メンバワイズ factory に必要）。
+- **impl/trait/extern/import/export/part** の値ツリー＋パーサ（impl＝レシーバ＋メソッド＋conformance＋`via`、trait＝要求、where 句、generic params、async/pub/factory 等）。本体の parseImpl/parseFuncCommon は詳細が多い。
+- **module tagging**（import/export は `moduleOf(name offset)` で原本 offset 必須）・derive 合成（directive→DeriveReq）・codegen 播種（recordArrayElem）を lower で再現。
+- 完成すれば `Parser/Decl.pw` の parse 部退役＝真の 1 AST。式・文ほどドリフトしない文法ゆえ価値は逓減だが、A の完全形。
 
 **Phase 2 着手時にまとめて決める暫定判断（M1 自走中の宿題）**：
 - **`DeclAst` を enum へ戻す**：現状はタグ付き struct（`kind: DeclKind` ＋未使用フィールド空）。当初は codegen バグ（enum が struct を値で持つと不完全型）回避のためだったが、そのバグは Phase 1 の topo emit（`ded0f4a`）で解消済＝技術的に `enum DeclAst { Struct(StructDecl) … }` へ戻せる。**戻すと gen テスト6件の macro API が churn**（`d.kind` の match → `match d`）するので、手順5 で値ツリーを整える際に一括で enum 化するのが筋（個別にやらない）。
