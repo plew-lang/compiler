@@ -166,6 +166,43 @@ export struct MemberAst {
     pub val assocTy: TypeAst
 }
 
+// A body-less function signature: a trait requirement (`fn req(...) -> T`) or an
+// `extern "plew-intrinsic"` declaration (spec/08,15). `name`/`nameSpan` keep the
+// original coordinates (an extern fn name feeds moduleOf for cross-module calls).
+export struct SigAst {
+    pub val name: String
+    pub val nameSpan: Span
+    pub val typeParams: Array[String]
+    pub val params: Array[ParamAst]
+    pub val hasRet: Bool
+    pub val ret: TypeAst
+    pub val isAssoc: Bool
+}
+
+// A `trait Name [: Super + ...] { requirements }` declaration (spec/08). The body
+// holds only requirement signatures (no bodies) + associated-type names.
+export struct TraitAst {
+    pub val name: String
+    pub val nameSpan: Span
+    pub val supertraits: Array[String]
+    pub val reqs: Array[SigAst]
+    pub val assocTypes: Array[String]
+    pub val span: Span
+}
+
+// An `extern "abi" { fn ... ; struct ... }` block (spec/15 core-library boundary).
+// `abiOk` is true iff the ABI string is `"plew-intrinsic"` (the only one accepted);
+// `abiSpan` points at the `extern` keyword for the error. `fns` are body-less
+// intrinsic signatures; `structNames`/`structSpans` are opaque lang-item types.
+export struct ExternAst {
+    pub val abiOk: Bool
+    pub val abiSpan: Span
+    pub val fns: Array[SigAst]
+    pub val structNames: Array[String]
+    pub val structSpans: Array[Span]
+    pub val span: Span
+}
+
 // An `[pub] impl[T] Recv [as Trait] [where ...] { members }` block (spec/07,08).
 // `recvType` carries the receiver type (its head name is the type the members are
 // registered on; the `[T]` args are redundant with `implParams`).

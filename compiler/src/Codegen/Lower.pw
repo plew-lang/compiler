@@ -18,6 +18,35 @@ fn spanLen(s: Span) -> U64 {
     return s.end - s.start
 }
 
+// Register an Array element type name for later monomorphization (deduped by the
+// element name span, which is mangled for compound elements). fieldStart carries
+// the element's structured ref so genCElem / the runtime recover its C type and
+// ARC behaviour (0 = a simple named element — use the name path). Driven by
+// lowerType when it lowers an `Array[E]`.
+fn recordArrayElem(c: inout Comp, ty: PType) {
+    if ty.isArray {
+        mut val i: U64 = 0
+        while i < c.arrayElems.count {
+            val e: Bind = c.arrayElems[i]
+            if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: ty.start, bLen: ty.len) {
+                return
+            }
+            i += 1
+        }
+        mut val elemRef: U64 = 0
+        if ty.ref < c.types.count {
+            val at: TypeRef = c.types[ty.ref]
+            if at.args.count > 0 {
+                elemRef = at.args[0]
+            }
+        }
+        // a nested array element (`Array[Array[I32]]`) needs the inner
+        // `PlewArray_<inner>` registered (and emitted) first.
+        ensureArrayElemDeps(c: inout c, elemRef: elemRef)
+        c.arrayElems.append(<Bind nameStart=ty.start nameLen=ty.len fieldStart=elemRef fieldLen=0 />)
+    }
+}
+
 // Lower a type expression, reproducing parseTypeTok's arena seeding (head name +
 // recursively-lowered args, Array element span / compound mangling). Records the
 // array element for monomorphization. (Function types `fn(...)->R` are not modeled
@@ -676,6 +705,104 @@ fn lowerImpl(c: inout Comp, im: ImplAst) {
         val traitN: Bind = internBytes(c: inout c, s: im.traitName)
         c.conforms.append(<Conform typeStart=recvN.nameStart typeLen=recvN.nameLen traitStart=traitN.nameStart traitLen=traitN.nameLen derived=false witnessed=witnessed />)
     }
+}
+
+// Lower a body-less signature (trait requirement / extern decl) to a Func. The
+// name keeps its ORIGINAL offset (sig.nameSpan): an extern fn name feeds moduleOf
+// for cross-module calls; a trait req name is harmless to keep original. Mirrors
+// parseReqSig.
+fn lowerSigToFunc(c: inout Comp, sig: SigAst, isExtern: Bool) -> Func {
+    val nameStart: U64 = sig.nameSpan.start
+    val nameLen: U64 = sig.nameSpan.end - sig.nameSpan.start
+    val typeParams: Array[Bind] = lowerTypeParamNames(c: inout c, names: sig.typeParams)
+    val params: Array[Param] = lowerParams(c: inout c, params: sig.params)
+    mut val retStart: U64 = 0
+    mut val retLen: U64 = 0
+    mut val retIsArray: Bool = false
+    mut val retRef: U64 = 0
+    if sig.hasRet {
+        val pt: PType = lowerType(c: inout c, t: sig.ret)
+        retStart = pt.start
+        retLen = pt.len
+        retIsArray = pt.isArray
+        retRef = pt.ref
+    }
+    return <Func nameStart=nameStart nameLen=nameLen typeParams=typeParams params=params hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern />
+}
+
+// Lower a `trait` declaration to a TraitDef (spec/08). Requirement signatures are
+// body-less Funcs; supertrait/assoc-type names are re-interned (text-matched
+// downstream). Mirrors parseTrait.
+fn lowerTrait(c: inout Comp, t: TraitAst) {
+    val nameStart: U64 = t.nameSpan.start
+    val nameLen: U64 = t.nameSpan.end - t.nameSpan.start
+    mut val supertraits: Array[Bind] = []
+    mut val si: U64 = 0
+    while si < t.supertraits.count {
+        supertraits.append(internBytes(c: inout c, s: t.supertraits[si]))
+        si += 1
+    }
+    mut val reqs: Array[Func] = []
+    mut val ri: U64 = 0
+    while ri < t.reqs.count {
+        reqs.append(lowerSigToFunc(c: inout c, sig: t.reqs[ri], isExtern: false))
+        ri += 1
+    }
+    mut val assocTypes: Array[Bind] = []
+    mut val ai: U64 = 0
+    while ai < t.assocTypes.count {
+        assocTypes.append(internBytes(c: inout c, s: t.assocTypes[ai]))
+        ai += 1
+    }
+    c.traits.append(<TraitDef nameStart=nameStart nameLen=nameLen supertraits=supertraits reqs=reqs assocTypes=assocTypes />)
+}
+
+// Lower an `extern "plew-intrinsic"` block (spec/15): each fn -> a Func(isExtern),
+// each opaque struct -> a body-less StructDef(isExtern). Mirrors parseExtern. fns
+// are appended before structs; within each array order is source order, which is
+// all that matters (the arrays are independent). Reports a non-intrinsic ABI.
+fn lowerExtern(c: inout Comp, e: ExternAst) {
+    if e.abiOk {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: e.abiSpan.start), msg: "only `extern \"plew-intrinsic\"` blocks are supported for now")
+    }
+    mut val fi: U64 = 0
+    while fi < e.fns.count {
+        c.funcs.append(lowerSigToFunc(c: inout c, sig: e.fns[fi], isExtern: true))
+        fi += 1
+    }
+    mut val si: U64 = 0
+    while si < e.structNames.count {
+        val nm: Bind = internBytes(c: inout c, s: e.structNames[si])
+        val noTP: Array[Bind] = []
+        val noFields: Array[FieldDef] = []
+        c.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen typeParams=noTP fields=noFields isUnique=false isExtern=true />)
+        si += 1
+    }
+}
+
+// Frontend integration: parse a `trait` declaration via the shared parser and lower
+// it. The cursor is at the `trait` ident (parseProgram dispatched).
+fn parseTraitItem(c: inout Comp) {
+    mut val p: P = <P bytes=c.bytes toks=c.toks pos=c.pos base=0 />
+    val tree: TraitAst = parseTraitDecl(p: inout p)
+    c.pos = p.pos
+    if p.hasErr {
+        compileErrorAt(line: lineOf(c: inout c, offset: p.errOff), msg: p.errMsg)
+    }
+    lowerTrait(c: inout c, t: tree)
+}
+
+// Frontend integration: parse an `extern` block via the shared parser and lower it.
+// The cursor is at the `extern` keyword (parseProgram/parseExport dispatched).
+fn parseExternItem(c: inout Comp) {
+    mut val p: P = <P bytes=c.bytes toks=c.toks pos=c.pos base=0 />
+    val tree: ExternAst = parseExternDecl(p: inout p)
+    c.pos = p.pos
+    if p.hasErr {
+        compileErrorAt(line: lineOf(c: inout c, offset: p.errOff), msg: p.errMsg)
+    }
+    lowerExtern(c: inout c, e: tree)
 }
 
 // Frontend integration: parse one `impl` block via the shared parser and lower it.

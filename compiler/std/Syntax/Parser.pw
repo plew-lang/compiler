@@ -924,3 +924,163 @@ export fn parseImplDecl(p: inout P, isPub: Bool) -> ImplAst {
     }
     return <ImplAst recvType=recvType implParams=implParams isTraitImpl=isTraitImpl traitName=traitName whereParams=whereParams whereTraits=whereTraits isPub=isPub members=members span=<Span start=sStart end=p.prevEnd() /> />
 }
+
+// A body-less function signature `name[T,...](params) [-> ret]` (a trait requirement
+// or extern declaration). The leading `fn`/`assoc fn`/`inout fn` is already consumed
+// (the cursor is at the name); `isAssoc` records the form. Mirrors parseReqSig.
+fn parseSigAst(p: inout P, isAssoc: Bool) -> SigAst {
+    val nameTok: Tok = p.curTok()
+    val name: String = p.text(t: nameTok)
+    val nameSpan: Span = p.spanOf(t: nameTok)
+    p.advance()
+    val typeParams: Array[String] = parseTypeParamNames(p: inout p)
+    val params: Array[ParamAst] = parseParamAsts(p: inout p)
+    mut val hasRet: Bool = false
+    mut val ret: TypeAst = emptyTypeAst()
+    match p.curKind() {
+        Kind.Arrow => {
+            p.advance()
+            ret = parseType(p: inout p)
+            hasRet = true
+        }
+        _ => {}
+    }
+    return <SigAst name=name nameSpan=nameSpan typeParams=typeParams params=params hasRet=hasRet ret=ret isAssoc=isAssoc />
+}
+
+// A `trait Name [: Super + ...] { fn req ... ; type Item }` declaration (spec/08).
+// The cursor is at the `trait` ident. Mirrors the compiler's parseTrait.
+export fn parseTraitDecl(p: inout P) -> TraitAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    val nameTok: Tok = p.curTok()
+    val name: String = p.text(t: nameTok)
+    val nameSpan: Span = p.spanOf(t: nameTok)
+    p.advance()
+    mut val supertraits: Array[String] = []
+    match p.curKind() {
+        Kind.Colon => {
+            p.advance()
+            mut val more: Bool = true
+            while more {
+                match p.curKind() {
+                    Kind.Ident => {
+                        supertraits.append(p.text(t: p.curTok()))
+                        p.advance()
+                    }
+                    _ => {}
+                }
+                match p.curKind() {
+                    Kind.Plus => { p.advance() }
+                    _ => { more = false }
+                }
+            }
+        }
+        _ => {}
+    }
+    match p.curKind() {
+        Kind.LBrace => { p.advance() }
+        _ => {}
+    }
+    mut val reqs: Array[SigAst] = []
+    mut val assocTypes: Array[String] = []
+    while true {
+        p.skipNewlines()
+        match p.curKind() {
+            Kind.RBrace => {
+                p.advance()
+                break
+            }
+            Kind.Eof => { break }
+            Kind.KwFn => {
+                p.advance()
+                reqs.append(parseSigAst(p: inout p, isAssoc: false))
+            }
+            Kind.KwInout => {
+                // `inout fn next()` requirement: conformance matches by selector, not
+                // self-mode, so the `inout` is consumed and a plain req recorded.
+                p.advance()
+                match p.curKind() {
+                    Kind.KwFn => { p.advance() }
+                    _ => {}
+                }
+                reqs.append(parseSigAst(p: inout p, isAssoc: false))
+            }
+            _ => {
+                if curIs(p: inout p, kw: "assoc") {
+                    p.advance()
+                    match p.curKind() {
+                        Kind.KwFn => { p.advance() }
+                        _ => {}
+                    }
+                    reqs.append(parseSigAst(p: inout p, isAssoc: true))
+                } else {
+                    if curIs(p: inout p, kw: "type") {
+                        p.advance()
+                        match p.curKind() {
+                            Kind.Ident => {
+                                assocTypes.append(p.text(t: p.curTok()))
+                                p.advance()
+                            }
+                            _ => {}
+                        }
+                    } else {
+                        p.advance()
+                    }
+                }
+            }
+        }
+    }
+    return <TraitAst name=name nameSpan=nameSpan supertraits=supertraits reqs=reqs assocTypes=assocTypes span=<Span start=sStart end=p.prevEnd() /> />
+}
+
+// An `extern "plew-intrinsic" { fn ... ; struct ... }` block (spec/15). The cursor
+// is at the `extern` keyword. Mirrors the compiler's parseExtern.
+export fn parseExternDecl(p: inout P) -> ExternAst {
+    val externTok: Tok = p.curTok()
+    val abiSpan: Span = p.spanOf(t: externTok)
+    p.advance()
+    mut val abiOk: Bool = false
+    match p.curKind() {
+        Kind.Str => {
+            val t: Tok = p.curTok()
+            if t.len >= 2 {
+                if rangeEquals(bytes: p.bytes, start: t.start + 1, len: t.len - 2, kw: "plew-intrinsic") {
+                    abiOk = true
+                }
+            }
+            p.advance()
+        }
+        _ => {}
+    }
+    match p.curKind() {
+        Kind.LBrace => { p.advance() }
+        _ => {}
+    }
+    mut val fns: Array[SigAst] = []
+    mut val structNames: Array[String] = []
+    mut val structSpans: Array[Span] = []
+    while true {
+        p.skipNewlines()
+        match p.curKind() {
+            Kind.RBrace => {
+                p.advance()
+                break
+            }
+            Kind.Eof => { break }
+            Kind.KwFn => {
+                p.advance()
+                fns.append(parseSigAst(p: inout p, isAssoc: false))
+            }
+            Kind.KwStruct => {
+                p.advance()
+                val sTok: Tok = p.curTok()
+                structNames.append(p.text(t: sTok))
+                structSpans.append(p.spanOf(t: sTok))
+                p.advance()
+            }
+            _ => { p.advance() }
+        }
+    }
+    return <ExternAst abiOk=abiOk abiSpan=abiSpan fns=fns structNames=structNames structSpans=structSpans span=<Span start=p.base + externTok.start end=p.prevEnd() /> />
+}

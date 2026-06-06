@@ -1,278 +1,5 @@
 // ---- declaration parser ----
 
-// Parse a parenthesized parameter list `( name: [inout] Type, ... )` into
-// Param nodes (shared by function/method declarations and closure literals).
-// If the current token is not `(`, returns an empty list.
-fn parseParamList(c: inout Comp) -> Array[Param] {
-    mut val params: Array[Param] = []
-    match c.curKind() {
-        Kind.LParen => {
-            c.advance()
-            while true {
-                c.skipNewlines()
-                val k: Kind = c.curKind()
-                match k {
-                    Kind.RParen => {
-                        c.advance()
-                        break
-                    }
-                    Kind.Eof => { break }
-                    _ => {
-                        val pTok: Tok = c.cur()
-                        c.advance()
-                        mut val pTyStart: U64 = 0
-                        mut val pTyLen: U64 = 0
-                        mut val pTyIsArray: Bool = false
-                        mut val pTyRef: U64 = 0
-                        mut val pIsInout: Bool = false
-                        mut val pIsMove: Bool = false
-                        mut val pIsBorrow: Bool = false
-                        // label suppression `name~:` -> the arg is positional.
-                        mut val pNoLabel: Bool = false
-                        match c.curKind() {
-                            Kind.Tilde => {
-                                if c.peekKind(off: 1) == <Kind.Colon /> {
-                                    c.advance()
-                                    pNoLabel = true
-                                }
-                            }
-                            _ => {}
-                        }
-                        match c.curKind() {
-                            Kind.Colon => {
-                                c.advance()
-                                match c.curKind() {
-                                    Kind.KwInout => {
-                                        c.advance()
-                                        pIsInout = true
-                                    }
-                                    Kind.KwMove => {
-                                        c.advance()
-                                        pIsMove = true
-                                    }
-                                    Kind.KwBorrow => {
-                                        c.advance()
-                                        pIsBorrow = true
-                                    }
-                                    _ => {}
-                                }
-                                val pty: PType = parseTypeTok(c: inout c)
-                                pTyStart = pty.start
-                                pTyLen = pty.len
-                                pTyIsArray = pty.isArray
-                                pTyRef = pty.ref
-                                recordArrayElem(c: inout c, ty: pty)
-                            }
-                            _ => {}
-                        }
-                        // optional default `= expr`.
-                        mut val pHasDefault: Bool = false
-                        mut val pDefault: U64 = 0
-                        match c.curKind() {
-                            Kind.Eq => {
-                                c.advance()
-                                pHasDefault = true
-                                pDefault = parseExprC(c: inout c)
-                            }
-                            _ => {}
-                        }
-                        params.append(<Param nameStart=pTok.start nameLen=pTok.len tyStart=pTyStart tyLen=pTyLen tyIsArray=pTyIsArray ty=pTyRef isInout=pIsInout isMove=pIsMove isBorrow=pIsBorrow noLabel=pNoLabel hasDefault=pHasDefault defaultExpr=pDefault />)
-                        match c.curKind() {
-                            Kind.Comma => { c.advance() }
-                            _ => {}
-                        }
-                    }
-                }
-            }
-        }
-        _ => {}
-    }
-    return params
-}
-
-// `trait Name { fn req(...) [-> T] ... }` (spec/08). The body holds only
-// requirements (no body). T1 records each method requirement's name; the
-// signature (type params, params, return) is parsed and discarded. Non-`fn`
-// lines (field / associated-type / factory requirements) are skipped for now.
-fn parseTrait(c: inout Comp) {
-    c.advance()
-    val nameTok: Tok = c.cur()
-    c.advance()
-    // optional supertraits `: Super [+ Super2]` (spec/08: a constraint).
-    mut val supertraits: Array[Bind] = []
-    match c.curKind() {
-        Kind.Colon => {
-            c.advance()
-            mut val more: Bool = true
-            while more {
-                match c.curKind() {
-                    Kind.Ident => {
-                        val st: Tok = c.cur()
-                        c.advance()
-                        supertraits.append(<Bind nameStart=st.start nameLen=st.len fieldStart=st.start fieldLen=st.len />)
-                    }
-                    _ => {}
-                }
-                match c.curKind() {
-                    Kind.Plus => { c.advance() }
-                    _ => { more = false }
-                }
-            }
-        }
-        _ => {}
-    }
-    match c.curKind() {
-        Kind.LBrace => { c.advance() }
-        _ => {}
-    }
-    mut val reqs: Array[Func] = []
-    mut val assocTypes: Array[Bind] = []
-    while true {
-        c.skipNewlines()
-        val k: Kind = c.curKind()
-        match k {
-            Kind.RBrace => {
-                c.advance()
-                break
-            }
-            Kind.Eof => { break }
-            Kind.KwFn => {
-                c.advance()
-                reqs.append(parseReqSig(c: inout c, isAssoc: false, isExtern: false))
-            }
-            Kind.KwInout => {
-                // `inout fn next()` requirement: an iterator's `next` mutates self.
-                // Conformance matches by selector (name+labels+types), not self-mode,
-                // so the `inout` is consumed and the signature recorded as a plain req.
-                c.advance()
-                match c.curKind() {
-                    Kind.KwFn => { c.advance() }
-                    _ => {}
-                }
-                reqs.append(parseReqSig(c: inout c, isAssoc: false, isExtern: false))
-            }
-            _ => {
-                // `assoc fn name(...)` requirement (spec/12: operator requirements
-                // like `Eq.eq` are assoc fns).
-                if c.identIs(kw: "assoc") {
-                    c.advance()
-                    match c.curKind() {
-                        Kind.KwFn => { c.advance() }
-                        _ => {}
-                    }
-                    reqs.append(parseReqSig(c: inout c, isAssoc: true, isExtern: false))
-                } else {
-                    // `type Item` associated-type requirement (spec/08): the output
-                    // type a conformer binds. Record the name; a requirement signature
-                    // may reference it (`next() -> Optional[Item]`).
-                    if c.identIs(kw: "type") {
-                        c.advance()
-                        match c.curKind() {
-                            Kind.Ident => {
-                                val at: Tok = c.cur()
-                                c.advance()
-                                assocTypes.append(<Bind nameStart=at.start nameLen=at.len fieldStart=at.start fieldLen=at.len />)
-                            }
-                            _ => {}
-                        }
-                    } else {
-                        c.advance()
-                    }
-                }
-            }
-        }
-    }
-    c.traits.append(<TraitDef nameStart=nameTok.start nameLen=nameTok.len supertraits=supertraits reqs=reqs assocTypes=assocTypes />)
-}
-
-// Parse a trait requirement signature `name [typeParams] (params) [-> ret]` into
-// a body-less Func (body=0, hasRecv=false). The leading `fn`/`assoc fn` is
-// already consumed; `isAssoc` records which form.
-fn parseReqSig(c: inout Comp, isAssoc: Bool, isExtern: Bool) -> Func {
-    val reqTok: Tok = c.cur()
-    c.advance()
-    val tps: Array[Bind] = parseTypeParams(c: inout c)
-    val ps: Array[Param] = parseParamList(c: inout c)
-    mut val hasRet: Bool = false
-    mut val rs: U64 = 0
-    mut val rl: U64 = 0
-    mut val ria: Bool = false
-    mut val rr: U64 = 0
-    match c.curKind() {
-        Kind.Arrow => {
-            c.advance()
-            val rty: PType = parseTypeTok(c: inout c)
-            hasRet = true
-            rs = rty.start
-            rl = rty.len
-            ria = rty.isArray
-            rr = rty.ref
-            recordArrayElem(c: inout c, ty: rty)
-        }
-        _ => {}
-    }
-    val sig: Func = <Func nameStart=reqTok.start nameLen=reqTok.len typeParams=tps params=ps hasRet=hasRet retStart=rs retLen=rl retIsArray=ria retTy=rr body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=isAssoc isAsync=false isExtern=isExtern />
-    return sig
-}
-
-// `extern "plew-intrinsic" { fn name(params) [-> ret] ... }` (spec/15 core-library
-// boundary): a block of body-less signatures bound to the runtime. Each `fn`
-// becomes a Func with isExtern=true (hasRecv=false); the leading `extern` is the
-// current token. Only the `"plew-intrinsic"` ABI is accepted for now (`"C"` =
-// real FFI is future). Lines that are not `fn` are skipped.
-fn parseExtern(c: inout Comp) {
-    val externTok: Tok = c.cur()
-    c.advance()
-    mut val abiOk: Bool = false
-    match c.curKind() {
-        Kind.Str => {
-            val t: Tok = c.cur()
-            // the Str span includes the surrounding quotes; compare the interior.
-            if t.len >= 2 {
-                if rangeEquals(bytes: c.bytes, start: t.start + 1, len: t.len - 2, kw: "plew-intrinsic") {
-                    abiOk = true
-                }
-            }
-            c.advance()
-        }
-        _ => {}
-    }
-    if abiOk {
-    } else {
-        compileErrorAt(line: lineOf(c: inout c, offset: externTok.start), msg: "only `extern \"plew-intrinsic\"` blocks are supported for now")
-    }
-    match c.curKind() {
-        Kind.LBrace => { c.advance() }
-        _ => {}
-    }
-    while true {
-        c.skipNewlines()
-        match c.curKind() {
-            Kind.RBrace => {
-                c.advance()
-                break
-            }
-            Kind.Eof => { break }
-            Kind.KwFn => {
-                c.advance()
-                c.funcs.append(parseReqSig(c: inout c, isAssoc: false, isExtern: true))
-            }
-            Kind.KwStruct => {
-                // a body-less lang-item type declaration `struct I32`: an opaque
-                // intrinsic type owned by this module (representation is the
-                // compiler's existing name->C-type mapping). No `{ }` body.
-                c.advance()
-                val sTok: Tok = c.cur()
-                c.advance()
-                val noTP: Array[Bind] = []
-                val noFields: Array[FieldDef] = []
-                c.structs.append(<StructDef nameStart=sTok.start nameLen=sTok.len typeParams=noTP fields=noFields isUnique=false isExtern=true />)
-            }
-            _ => { c.advance() }
-        }
-    }
-}
-
 // `@[Eq, Ord, Name(label: expr, ...), ...]` directive (spec/16): collect the
 // derive names — each with optional construction arguments — into pendingDerives,
 // applied to the next type declaration. `@[Name(a: 32)]` constructs `Name{a: 32}`
@@ -703,7 +430,7 @@ fn parseExport(c: inout Comp) {
         Kind.KwExtern => {
             val xfB: U64 = c.funcs.count
             val xsB: U64 = c.structs.count
-            parseExtern(c: inout c)
+            parseExternItem(c: inout c)
             mut val xi: U64 = xfB
             while xi < c.funcs.count {
                 recordExport(c: inout c, nameStart: c.funcs[xi].nameStart, nameLen: c.funcs[xi].nameLen)
@@ -732,7 +459,7 @@ fn parseExport(c: inout Comp) {
         Kind.KwEnum => { val d: DeclAst = parseDeclItem(c: inout c) }
         Kind.Ident => {
             if c.identIs(kw: "trait") {
-                parseTrait(c: inout c)
+                parseTraitItem(c: inout c)
             }
         }
         _ => {}
@@ -849,7 +576,7 @@ fn parseProgram(c: inout Comp) {
             Kind.KwEnum => {
                 val d: DeclAst = parseDeclItem(c: inout c)
             }
-            Kind.KwExtern => { parseExtern(c: inout c) }
+            Kind.KwExtern => { parseExternItem(c: inout c) }
             Kind.Ident => {
                 if c.identIs(kw: "import") {
                     parseImport(c: inout c)
@@ -873,7 +600,7 @@ fn parseProgram(c: inout Comp) {
                                 }
                             } else {
                                 if c.identIs(kw: "trait") {
-                                    parseTrait(c: inout c)
+                                    parseTraitItem(c: inout c)
                                 } else {
                                     c.advance()
                                 }
