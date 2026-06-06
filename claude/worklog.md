@@ -8,18 +8,19 @@
 
 **構文解析は完全に `@Std/Syntax` の責務（A＝フロントエンド統合・完了）。** コンパイラとマクロは**唯一の共有パーサ**を通る＝ドリフトする文法に二重パーサなし。
 
-- **`@Std/Syntax`（構文＝form）**：レクサ `Syntax/Lexer.pw`／値ツリー AST `Syntax/Ast.pw`＋`Syntax/Trees.pw`（String 名・全ノード原本座標 span）／パーサ `Syntax/Parser.pw`（宣言・トップレベル）＋`Syntax/ParseBody.pw`（式・文・パターン・ブロック）／出力ビルダ `Syntax/Build.pw`（`Src`）。入口は `parseProgramAst(p) -> Array[TopItemAst]`（プログラム全体）と `parseItem(source,start,end) -> DeclAst`（マクロ用＝1 項）。
+- **`@Std/Syntax`（構文＝form）**：レクサ `Syntax/Lexer.pw`／値ツリー AST `Syntax/Ast.pw`＋`Syntax/Trees.pw`（String 名・全ノード原本座標 span）／パーサ `Syntax/Parser.pw`（宣言・トップレベル）＋`Syntax/ParseBody.pw`（式・文・パターン・ブロック）／出力ビルダ `Syntax/Build.pw`（`Src`）。入口は `parseProgramAst(p) -> Array[TopItemAst]`（プログラム全体）と `parseItem(source,start,end) -> TopItemAst`（マクロ用＝注釈対象 1 項）。
 - **コンパイラ（意味＝meaning）**：`compiler/src/`＝`Loader`（パース駆動ローディング＋パス解決）・`Ast`（arena ノード＋`Comp`）・`Parser/Decl`（＝module-tag helper `markImport`/`recordExport`＋derive 合成 `synth*`。**宣言パーサは持たない**）・`Codegen/`〔Emit/Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array/Async/Gen/**Lower**〕。`Codegen/Lower.pw` が共有値ツリー（TopItemAst/DeclAst/ImplAst/…）を arena へ lower。
 - **ローディングもパース駆動**：driver（`main`）が各ファイルを `c.bytes` に追記→`parseAndLowerFile`（共有パーサで parse＋lower）→返った木の `Import` ノード（import＋part）を辿って子ファイル探索（ハンドロールの事前スキャンなし）。残る I/O（読込・パス解決）と arena バイト配置・module tagging はコンパイラ側＝構文解析でない部分のみ。
 
-完了した大物（詳細は git・記述的タグ）：async/await 段階 1-3（stackless SM）・コアライブラリ境界（`@Std` の `extern "plew-intrinsic"`）・**Array＝`RawBuffer` 床の Plew struct**（[array-struct-plan.md](array-struct-plan.md)）・可視性完全強制・Iterator/Iterable＋lazy map/filter・再帰値型 auto-boxing＋ARC・renovate Phase A（ARC 1 本化・Op enum・expect）＋Phase B B0-B2（型付き AST キャッシュ）・**メタプロ M0/M1**（マクロが実宣言を読んで生成・tag `metaprogramming-m1`）・**A＝フロントエンド統合**（全パース→共有 @Std/Syntax・パース駆動ローディング）。renovate vs rewrite の判断・負債の地図は [architecture.md](architecture.md)「負債監査の結論」、設計根拠は [design-decisions.md](design-decisions.md)、再利用機構は本書末尾「再利用資産・罠」。
+完了した大物（詳細は git・記述的タグ）：async/await 段階 1-3（stackless SM）・コアライブラリ境界（`@Std` の `extern "plew-intrinsic"`）・**Array＝`RawBuffer` 床の Plew struct**（[array-struct-plan.md](array-struct-plan.md)）・可視性完全強制・Iterator/Iterable＋lazy map/filter・再帰値型 auto-boxing＋ARC・renovate Phase A（ARC 1 本化・Op enum・expect）＋Phase B B0-B2（型付き AST キャッシュ）・**メタプロ M0/M1**（マクロが実宣言を読んで生成・tag `metaprogramming-m1`）・**A＝フロントエンド統合**（全パース→共有 @Std/Syntax・パース駆動ローディング）・**マクロ入力 `TopItemAst`**（struct/enum/fn に加え **impl/trait** もマクロ対象）・**パターン/構築のフィールド実在検査**（`checkMatchBinds`/`checkMakeFieldExists`＝受理の健全性・旧 silent broken C を loud reject 化）。renovate vs rewrite の判断・負債の地図は [architecture.md](architecture.md)「負債監査の結論」、設計根拠は [design-decisions.md](design-decisions.md)、再利用機構は本書末尾「再利用資産・罠」。
 
 ## 次の一歩
 
-A 完了で M1 の理想形（真の 1 AST）に到達。**マクロ入力型を `TopItemAst` に確定＝impl/trait もマクロ対象＝✅実装済**（`derive(input: TopItemAst)`・`match input { Decl/Impl/Trait … }`・`lowerFuncDecl`/`lowerImpl`/`lowerTrait` も `drainDerives` で directive attach・gen テスト traitreqs/implmethods・spec/16 更新済。注意＝variant パターンは punning〔`Decl(val input)`＝「`input` 名のフィールド束縛」・`Decl` のフィールドは `d`〕＝別名束縛は `Decl(d: val x)`／punning は `Decl(val d)`・存在しないフィールド名は `checkMatchBinds` で loud reject〔受理の健全性・旧 silent broken C を修正〕）。次：
+A 完了で M1 の理想形（真の 1 AST）に到達・impl/trait もマクロ対象済。次の大きな分岐：
 
 - **(a) M2 dogfood**：マクロで `Eq`/`Hash` を生成→`Dictionary`（`[k:v]`）に接続。現行のコンパイラ特権合成（`synthStructEq` 等）から段階移行（特権版を残したまま並行→検証→差し替え）。**`Hash`/`Hasher` の署名が未策定**（方向は Rust 流確定・core-lib／言語判断）＝**着手前にユーザー確認向き**。
 - **(b) M3**：パッケージ管理導入後に `@Std/Syntax` を in-tree から外部共有パッケージへ昇格（コンパイラもマクロも同一版に依存）。
+- **小さな additive（任意）**：パターン/構築のフィールド名エラー行が近似（bind/MakeField 名が lower で再インターン＝原本 offset を持たない）。`BindAst`/`MakeFieldAst` に span を持たせ lower で原本 offset を維持すれば行が正確になる。
 
 実装の段取り・実行系の具体は [metaprogramming-architecture.md](metaprogramming-architecture.md)。
 

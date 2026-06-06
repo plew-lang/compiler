@@ -11,7 +11,7 @@
 
 **`Derive` トレイト＝要求＋提供の 2 メソッド**（構文ライブラリ `@Std/Syntax` が提供）：
 ```plew
-trait Derive { fn derive(input: DeclAst) -> String }              // 要求：ユーザー実装
+trait Derive { fn derive(input: TopItemAst) -> String }           // 要求：ユーザー実装（match で種別分岐）
 impl Derive {                                                     // 提供（blanket）：変換＋委譲
   fn deriveFromSource(source~: String, start: U64, end: U64) -> String {
     return self.derive(input: parseItem(source: source, start: start, end: end))
@@ -83,7 +83,7 @@ spec/16 は **入力＝TokenStream（span 付き）＋ヘルパで TokenStream�
 
 ## 実行系の具体（M0）
 
-- マクロは「要求 `fn derive(input: DeclAst) -> String` を持つ `Derive` 実装」を含む通常の Plew パッケージ（`@Std/Syntax` に依存）。
+- マクロは「要求 `fn derive(input: TopItemAst) -> String` を持つ `Derive` 実装」を含む通常の Plew パッケージ（`@Std/Syntax` に依存）。
 - `plew gen` の 1 ファイル分の処理：
   1. ソースをロード（`part`/`import` 解決）し、`@[Name(args)]` 付き対象項を集める。**gen 中は `.gen.pw` の auto-part 取り込みを抑制**（これから作るので）。
   2. 各 `(対象項, Name(args))` について、`Name { args }` を構築し**提供メソッド `.deriveFromSource(source, start, end)`** を呼ぶ `main` を合成（＝String→AST 変換＋ユーザー `derive` 委譲は `@Std/Syntax` 内で起きる）。`source` の渡し方（stdin/原本ファイル/リテラル）は最も楽な形で。プロセス境界は**テキスト**（ランナーは AST/TokenStream 型に触れない＝版非依存）。
