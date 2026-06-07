@@ -30,7 +30,7 @@
 
 **⚠ 真因は markBoxedFields でなく `Array[Enum]` の浅い要素 copy/release だった**（撤回済の旧診断＝「再帰値型へバリアント追加で boxing が壊れる」は誤り）。`ExprAst.DictLit` 追加で array-of-compound（`[<P x=1/>]`/`[[1,2]]`）が plewc 自身を crash させたのは、**コンパイラ自身が新パーサで `val first` 名前付きローカルを by-value で `append` に渡し（コピーされず浅く格納）→scope 末で `release(first)` し、格納済み要素がダングリング**したため（→「by-value 引数の罠」）。根因は別にあり＝`Array[E]` の要素 deep copy/release 判定 `structNeedsCopy` が **struct しか見ず enum を落とす**ので、heap 持ち variant を含む `Array[Enum]`（`Array[ExprAst]`/`Array[StmtAst]` 等）が浅い要素管理になり leak＋UAF（append したローカルを drop すると壊れる＝既存の潜在バグ）。修正＝`arrayElemNeedsDeep`（`structNeedsCopy` OR `enumNeedsCopy`）を `Codegen/Array.pw` の copy/release/set/push 4 箇所に配線（enum の `<Elem>_copy`/`_release` は既存）。test run/array_enum_arc（ORIGINAL では heap-use-after-free・修正後 ASan クリーン）。
 
-## 残バグ（低優先・未着手）
+## 最近修正したバグ（経緯・再発防止＝全て✅修正済）
 
 - **Bug13 shadow キャプチャの C 名不一致＝✅修正済**：shadow された `mut val` を closure がキャプチャすると、capture-init が enclosing 名を bare（`x`）で出していて C の最初の x（cnum 無し・別型かも）に解決されていた。`emitCaptureInit` の enclosing 名出力を `writeCaptureName`（emit 時に `localIndexByName` で in-scope ローカルの cnum を引き `writeNameCn` で `x_s<cnum>`）に変更。cnum は scan 時（capture 記録時）にはまだ未採番なので `CaptureEntry` に持たせず emit 時に解決。test run/closure_shadow_capture。
 - **Bug14 パターン/構築フィールド名のエラー行が近似＝✅修正済**：`BindAst`/`MakeFieldAst` は元々 `span` を持つので、arena の `Bind`/`MakeField` に `offset: U64 = 0` を足し lower で `span.start`（原本 offset）を運び、`checkMakeFieldExists`/`checkBindsInFields` のエラーで `nameStart`/`fieldStart`（再インターン）でなく `offset` を使う（0 ならフォールバック）。reject test make_unknown_field/match_unknown_field（行は harness 非検証だが拒否経路を通す）。
