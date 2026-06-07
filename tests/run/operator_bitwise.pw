@@ -1,0 +1,29 @@
+import @Std/Io with { print }
+
+// O3: bitwise/shift operators desugar to operator-trait witnesses (spec/12).
+trait BitAnd[Rhs] { type Output  assoc fn bitand(lhs: Self, rhs: Rhs) -> Output }
+trait BitOr[Rhs]  { type Output  assoc fn bitor(lhs: Self, rhs: Rhs) -> Output }
+trait Shl[Rhs]    { type Output  assoc fn shl(lhs: Self, rhs: Rhs) -> Output }
+
+struct Flags { pub val bits: U64 }
+
+impl Flags as BitAnd[Flags] {
+    type Output = Flags
+    assoc fn bitand(lhs: Flags, rhs: Flags) -> Flags { return <Flags bits=(lhs.bits & rhs.bits) /> }
+}
+impl Flags as BitOr[Flags] {
+    type Output = Flags
+    assoc fn bitor(lhs: Flags, rhs: Flags) -> Flags { return <Flags bits=(lhs.bits | rhs.bits) /> }
+}
+impl Flags as Shl[U64] {
+    type Output = Flags
+    assoc fn shl(lhs: Flags, rhs: U64) -> Flags { return <Flags bits=(lhs.bits << rhs) /> }
+}
+
+fn main() {
+    val a: Flags = <Flags bits=6 />   // 110
+    val b: Flags = <Flags bits=3 />   // 011
+    print((a & b).bits)               // 2  (010)
+    print((a | b).bits)               // 7  (111)
+    print((a << 2U64).bits)           // 24 (11000)
+}
