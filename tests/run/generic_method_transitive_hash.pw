@@ -1,0 +1,37 @@
+// A generic struct method body that calls a trait-bound generic method on its
+// own type parameter (`key.hash[H]` -> `String.hash[SipHasher]`) discovers and
+// emits that nested instance, even when the struct is the entry file's first
+// definition (so its method body lands at the reserved-past block 0). Exercises
+// scanGenInstMethodBodies + the block-0 "no body" sentinel reservation. This is
+// the Dictionary `hashOf` pattern in miniature.
+import @Std/Io with { print }
+
+struct Hasher1[K] {
+    pub(get) mut val seed: U64
+}
+
+pub impl[K] Hasher1[K] {
+    fn digest(key: K) -> U64 where K: Hash {
+        mut val h: SipHasher = SipHasher.new()
+        key.hash(hasher: inout h)
+        return h.finish()
+    }
+}
+
+fn main() {
+    val hk: Hasher1[String] = <Hasher1 seed=0 />
+    val a: U64 = hk.digest(key: "alpha")
+    val b: U64 = hk.digest(key: "alpha")
+    val c: U64 = hk.digest(key: "beta")
+    // same key -> same digest; different key -> (almost surely) different
+    if a == b {
+        print(1U64)
+    } else {
+        print(0U64)
+    }
+    if a == c {
+        print(0U64)
+    } else {
+        print(1U64)
+    }
+}

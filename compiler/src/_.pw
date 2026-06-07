@@ -63,6 +63,12 @@ fn main() {
     // reserve TypeRef index 0 as the "no type" sentinel so a `ty` field of 0
     // (synthetic locals, untyped positions) never aliases a real parsed type.
     c.types.append(<TypeRef nameStart=0 nameLen=0 args=[] />)
+    // reserve Block index 0 as a dummy so a `body` field of 0 is an unambiguous
+    // "no body" sentinel (extern fns, trait-requirement signatures). Without this,
+    // the first function body lowered (the entry file, which loads before the
+    // ambient Prelude) would land at block 0 and be indistinguishable from no body
+    // — wrongly skipped by the body-walks that gate on `body != 0`.
+    c.blocks.append(<Block stmts=[] />)
     c.genMode = genMode
     mut val nextModuleId: U64 = 1
     if argCount() > entryArgIdx {

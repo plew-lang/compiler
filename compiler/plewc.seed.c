@@ -1991,6 +1991,7 @@ void scanExprInsts_c_Comp_exprId_U64(Comp* c, uint64_t exprId);
 void scanAddArmBinds_c_Comp_a_MatchArm_scrutTi_TypeInfo(Comp* c, MatchArm a, TypeInfo scrutTi);
 void scanStmtInsts_c_Comp_stmtId_U64(Comp* c, uint64_t stmtId);
 void scanBlockInsts_c_Comp_blkId_U64(Comp* c, uint64_t blkId);
+void scanGenInstMethodBodies_c_Comp(Comp* c);
 void collectFnInsts_c_Comp(Comp* c);
 void emitMonoFn_c_Comp_instIdx_U64_proto_Bool(Comp* c, uint64_t instIdx, long long proto);
 void emitMonoFns_c_Comp_proto_Bool(Comp* c, long long proto);
@@ -2318,6 +2319,7 @@ int main(int argc, char** argv) {
     }
     Comp c = (Comp){.bytes = Array_U8_new(), .exprs = Array_Expr_new(), .stmts = Array_Stmt_new(), .blocks = Array_Block_new(), .funcs = Array_Func_new(), .structs = Array_StructDef_new(), .enums = Array_EnumDef_new(), .traits = Array_TraitDef_new(), .conforms = Array_Conform_new(), .methodAliases = Array_MethodAlias_new(), .derives = Array_DeriveReq_new(), .pendingDerives = Array_DeriveReq_new(), .funcBounds = Array_FuncBound_new(), .curCheckFn = 0, .curWitnessed = Array_Func_new(), .curWhereTraits = Array_Bind_new(), .types = Array_TypeRef_new(), .genInsts = Array_U64_new(), .fnInsts = Array_FnInst_new(), .fnTypes = Array_U64_new(), .fnThunks = Array_U64_new(), .captures = Array_CaptureEntry_new(), .curClosureId = 0, .curInClosure = 0, .curCaptureMark = 0, .arrayElems = Array_Bind_new(), .locals = Array_Local_new(), .tmp = 0, .curIsMain = 0, .curRetVoid = 0, .curRetStart = 0, .curRetLen = 0, .curRetIsArray = 0, .curRetTy = 0, .curHasRecv = 0, .curRecvStart = 0, .curRecvLen = 0, .curSelfInout = 0, .curSelfMove = 0, .curTypeParams = Array_Bind_new(), .curTypeArgs = Array_U64_new(), .curRecvInstRef = 0, .curGiveTmp = 0, .curLoopMark = 0, .curBranchBase = 0, .deinits = Array_Bind_new(), .curAsync = 0, .asyncState = 0, .curAsyncFn = 0, .asyncVarSeq = 0, .moduleRanges = Array_Bind_new(), .exports = Array_Bind_new(), .imports = Array_Bind_new(), .genMode = 0, .genMainIdx = 0, .lowerRetTy = 0, .curImplBoundParams = Array_Bind_new(), .curImplBoundTraits = Array_Bind_new(), .kwCache = Array_Bind_new(), .exprTyKind = Array_I64_new(), .exprTyStart = Array_U64_new(), .exprTyLen = Array_U64_new(), .exprTyRef = Array_U64_new(), .exprTyFilled = Array_U64_new(), .boxedFields = Array_U64_new(), .curSelfRef = 0, .curItemRef = 0, .assocBindings = Array_AssocBinding_new()};
     Array_TypeRef_append_value_T(&(c.types), (TypeRef){.nameStart = 0, .nameLen = 0, .args = Array_U64_new()});
+    Array_Block_append_value_T(&(c.blocks), (Block){.stmts = Array_U64_new()});
     c.genMode = genMode;
     uint64_t nextModuleId = 1;
     if (plew_argCount() > entryArgIdx) {
@@ -16248,6 +16250,60 @@ void scanBlockInsts_c_Comp_blkId_U64(Comp* c, uint64_t blkId) {
     popLocals_c_Comp_mark_U64(&((*c)), mark);
     Array_U64_release(stmts);
 }
+void scanGenInstMethodBodies_c_Comp(Comp* c) {
+    uint64_t gi = 0;
+    while (gi < (long long)(((*c).genInsts).count)) {
+    uint64_t instRef = Array_U64_get((*c).genInsts, (long long)(gi));
+    TypeRef inst = TypeRef_share(Array_TypeRef_get((*c).types, (long long)(instRef)));
+    if (rangeEquals_bytes_AU8_start_U64_len_U64_kw_String(Array_U8_share((*c).bytes), inst.nameStart, inst.nameLen, (PlewString){"Array", 5})) {
+    gi = ({ uint64_t __ov; if (__builtin_add_overflow((gi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    else {
+    uint64_t mfi = 0;
+    while (mfi < (long long)(((*c).funcs).count)) {
+    Func mf = Func_share(Array_Func_get((*c).funcs, (long long)(mfi)));
+    if (methodMatchesInst_c_Comp_f_Func_instRef_U64(&((*c)), mf, instRef)) {
+    if (mf.isProvided) {
+    }
+    else {
+    if (mf.body != 0) {
+    (*c).locals = Array_Local_new();
+    (*c).curHasRecv = 1;
+    (*c).curRecvStart = mf.recvStart;
+    (*c).curRecvLen = mf.recvLen;
+    (*c).curSelfInout = mf.selfInout;
+    (*c).curRecvInstRef = instRef;
+    (*c).curTypeParams = Array_Bind_share(mf.typeParams);
+    (*c).curTypeArgs = Array_U64_share(inst.args);
+    setSelfItemEnv_c_Comp_recvStart_U64_recvLen_U64_recvInstRef_U64(&((*c)), mf.recvStart, mf.recvLen, instRef);
+    uint64_t pi = 0;
+    while (pi < (long long)((mf.params).count)) {
+    Param p = Array_Param_get(mf.params, (long long)(pi));
+    addLocal_c_Comp_nameStart_U64_nameLen_U64_tyStart_U64_tyLen_U64_isArray_Bool_ty_U64_isInout_Bool_isMut_Bool_owned_Bool(&((*c)), p.nameStart, p.nameLen, p.tyStart, p.tyLen, p.tyIsArray, p.ty, p.isInout, 0, 0);
+    pi = ({ uint64_t __ov; if (__builtin_add_overflow((pi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    scanBlockInsts_c_Comp_blkId_U64(&((*c)), mf.body);
+    clearSelfItemEnv_c_Comp(&((*c)));
+    }
+    }
+    }
+    mfi = ({ uint64_t __ov; if (__builtin_add_overflow((mfi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    Func_release(mf);
+    }
+    gi = ({ uint64_t __ov; if (__builtin_add_overflow((gi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
+    }
+    TypeRef_release(inst);
+    }
+    Array_Bind noP = Array_Bind_new();
+    Array_U64 noA = Array_U64_new();
+    (*c).locals = Array_Local_new();
+    (*c).curHasRecv = 0;
+    (*c).curRecvInstRef = 0;
+    (*c).curTypeParams = Array_Bind_share(noP);
+    (*c).curTypeArgs = Array_U64_share(noA);
+    Array_U64_release(noA);
+    Array_Bind_release(noP);
+}
 void collectFnInsts_c_Comp(Comp* c) {
     uint64_t fi = 0;
     while (fi < (long long)(((*c).funcs).count)) {
@@ -16278,6 +16334,7 @@ void collectFnInsts_c_Comp(Comp* c) {
     fi = ({ uint64_t __ov; if (__builtin_add_overflow((fi), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     Func_release(f);
     }
+    scanGenInstMethodBodies_c_Comp(&((*c)));
     uint64_t si = 0;
     while (si < (long long)(((*c).fnInsts).count)) {
     FnInst fin = FnInst_share(Array_FnInst_get((*c).fnInsts, (long long)(si)));
