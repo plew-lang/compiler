@@ -18,16 +18,29 @@
 
 **直近の到達点**：M2 dogfood（Hash/Hasher＋SipHash-1-3＋`@[Hash]`・`Dictionary[K,V]` lang item）達成＋renovate **Phase C＝名前 interning（宣言名）→ Phase D＝型 interning（型 span/型パラメータ照合）完了**（下記「並行・後続」「名前/型 interning」）。
 
-**推奨する順序（理由つき）**：
+**➡ 現在の作業＝演算子トレイトの spec 準拠配線（active）**。下記「演算子トレイト配線」参照。
 
-1. **➡ Iterator 拡充（次の一手・推奨）**＝軽い・実用・低リスク。重いリファクタ（Dictionary→Phase C）が続いたので、ユーザーに見える additive で一区切り。**demand-driven 単相化が既に動いている**（`MapIter`/`FilterIter`＋`pub impl Iterator { }` の提供メソッド・`@Std/Core`）ので設計判断ほぼ不要、確立パターンに沿って 1 個ずつ足すだけ：
-   - **終端（消費して値を返す・新 struct 不要・`while next()` ループ）**：`reduce`/`fold`・`count`・`sum`・`forEach`・`collect`（→`Array[Item]`）・`any`/`all`・`first`。
-   - **遅延 adapter（新 struct＋`as Iterator`・`MapIter`/`FilterIter` をテンプレに）**：`take(n)`＝`TakeIter`・`zip`＝`ZipIter`・`enumerate`・`skip(n)`。
-   - 署名の細部は core-lib 裁量（spec 決定ほぼ不要）。各メソッド独立に追加→`tests/run` 追加→検証。
-2. **本線＝並行 additive（その後・腰を据えて）**＝Plew のターゲット（複雑状態クライアント＋ステートレスサーバ）の核。**現状 `spawn`/`JoinHandle`/チャネルは未実装**（async/await 段階 1-3＝単一スレッド+イベントループは実装済）。`spawn fn … -> JoinHandle[T]`（`join() -> Promise[T]`）・spawn 境界の意味論強制（move/copy のみ越境・`Ref` は spawn 不可＝推移的 Ref-free・ベア `spawn { }` はコピー可能のみ暗黙キャプチャ）・ランタイム（pthread 等）C 生成・`local` 伝染の静的解析。**重い**（ランタイム＋新意味論・チャネル API 等で言語仕様の決定が出る＝その都度確認）。これで「借用は境界を越えない・Ref は spawn 不可」で実質 race-free をコンパイラが保証、という目玉を立証。
-3. **`any P` 存在型（フロントエンド最後の大物・別軸）**＝「トレイト配列を素直に書ける」拠り所の目玉が唯一空いている。動的ディスパッチ（vtable 相当の C 生成・メンバ単位の呼び出し可否診断・`Array[any P]` 異種混在）＝設計判断多く重い。並行とは独立に着手可。
+**その後の候補**：
 
-**循環回収**＝設計確定済だが優先度中。
+1. **Iterator 拡充**＝終端（reduce/fold/count/sum/collect/any/all/first）＋遅延 adapter（take/zip/enumerate/skip・`MapIter`/`FilterIter` をテンプレに）。demand-driven 単相化が既に動くので確立パターンに沿うだけ。
+2. **並行 additive**＝`spawn`/`JoinHandle`/チャネル（未実装）・spawn 境界の意味論強制（move/copy のみ越境・`Ref` は spawn 不可）・ランタイム C 生成・`local` 伝染解析。重い（言語仕様の決定が出る）。
+3. **`any P` 存在型**＝動的ディスパッチ（vtable 相当・メンバ単位診断・異種混在）。重い・別軸。
+4. **循環回収**＝設計確定済・優先度中。
+
+## 演算子トレイト配線（active・spec/12 準拠）
+
+**目標**：算術 `+ - * / %`（Add/Sub/Mul/Div/Rem）・ビット `& | ^ << >>`（BitAnd/…/Shr）・単項 `! - ~`（Not/Neg/BitNot）・`??`（Coalesce）・添字 `[]`/`[]=`（Index/IndexSet）・`?.`（Chain）・`pow`（Pow）を**全てトレイト脱糖**にする。Eq/Ord は配線済（`hasCompareWitness`→`emitTraitCompare`＝テンプレ）。
+
+**ユーザー方針＝プリミティブも特別扱いしない**（Format/print/Array 脱ハードコードと同じ哲学）：`impl I32 as Add[I32] { type Output = I32  assoc fn add(lhs: Self, rhs: I32) -> Output { return i32Add(lhs, rhs) } }` のように **Core.pw で primitive を impl・算術 intrinsic（`i32Add` 等＝checked add/div0 panic/signed rem の現 built-in C を `extern "plew-intrinsic"` 床に）を呼ぶ**。演算子脱糖は primitive/ユーザー型を区別せず `typeConformsTo(T, Add) ? witness : error` に一本化。
+
+**最大の前提＝トレイト型引数 `Add[Rhs]` が未実装**：パーサが `as Trait[Arg]` を読まず・`ImplAst`/`Conform` も `TraitDef` 型パラメータも記録しない。spec の `trait Add[Rhs]`/`impl V as Add[V]`/`Self`/`Rhs`/`type Output` を通すには **トレイト型引数 ＋ witness 照合での `Self`→recv・trait型パラメータ→conform traitArg・`Output`→assocBinding 置換**が要る。**現 Eq/Ord は具体型でトレイトを書いて回避**（test `trait_eq_ord` の `trait Eq { assoc fn eq(lhs: Money, rhs: Money) }`）＝Self 置換は未実装。再利用：関連型 `type Item`/`assoc fn` 要求/witness 照合（`witnessedHas`/`paramSelectorEqSubst`/`assocBindingSpan`）は実装済。
+
+**段取り（縦に1ファミリ貫通→横展開→primitive 脱ハードコード）**：
+- **O1 機構**：①パーサ＝`trait Add[Rhs]`（trait 型パラメータ）＋`impl V as Add[V]`（trait 引数）→ `TraitAst.typeParams`/`ImplAst.traitArgs`。②lower＝`TraitDef.typeParams`/`Conform.traitArgs`。③witness 照合＝`paramSelectorEqSubst` に Self/trait型パラメータ/Output 置換。（additive・既存トレイトは空型パラメータで不変＝bootstrap 安全。各サブステップ reseed）
+- **O2 算術ユーザー型**：二項 `+ - * / %` を `typeConformsTo(typeof a, Add) ? T.add(lhs:a,rhs:b) : 現状` に（Eq/Ord テンプレ）。結果型＝assocBinding `Output`。未準拠ユーザー型は loud reject。primitive は当面 built-in fast-path 据え置き（fallback）。
+- **O3-O5 横展開**：ビット/シフト・単項（Neg/Not/BitNot）・`??`（Coalesce）を同テンプレで。
+- **O6 primitive 脱ハードコード（ユーザーの核心要望）**：算術 intrinsic（`i32Add` 等）＋ preamble C（`static inline plew_i32Add`）＋ Core.pw の `impl <Prim> as Add/…[<Prim>]` → 脱糖を primitive にも適用し built-in fast-path を撤去（`+` 全部が witness 経由＝C は嵩むが inline でゼロコスト）。**bootstrap 注意**＝ADD→reseed→USE（trait引数 parse→reseed→Core 使用・intrinsic→reseed→impl 使用・脱糖一本化は codegen 出力変化で reseed 2 回）。比較（Eq/Ord）の primitive 脱ハードコードは C 肥大が大きいので後続判断。
+- **O7-O8**：Index/IndexSet・Chain をユーザー型トレイトへ一般化（現 built-in Array/Dictionary/Optional パスに触る＝高リスク・最後）／`pow`＝`Pow[Exp]` トレイト。
 
 **M3＝パッケージ管理導入後に `@Std/Syntax` を in-tree から外部共有パッケージへ昇格**（コンパイラもマクロも同一版に依存＝Rust の 2 パーサ版違い問題回避）。
 
