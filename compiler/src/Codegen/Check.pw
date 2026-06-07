@@ -975,7 +975,12 @@ fn checkConformances(c: inout Comp) {
         mut val ti: U64 = 0
         while ti < c.traits.count {
             val t: TraitDef = c.traits[ti]
-            if t.nameId == cf.traitId {
+            // match by name AND type-param arity: a same-named trait of a different
+            // arity is a genuinely different trait, so `impl X as Sub` (0 args) is
+            // not a conformance to the operator `Sub[Rhs]` (1 param). This keeps a
+            // user trait from colliding with an ambient operator trait of the same
+            // name (e.g. a subtrait `Sub` vs Core's subtraction `Sub[Rhs]`).
+            if t.nameId == cf.traitId && t.typeParams.count == cf.traitArgs.count {
                 found = true
                 mut val ri: U64 = 0
                 while ri < t.reqs.count {

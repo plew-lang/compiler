@@ -2328,6 +2328,99 @@ void Src_putByte_b_U8(Src* self, unsigned char b);
 void Src_putInt_n_U64(Src* self, uint64_t n);
 PlewString Src_finish(Src self);
 unsigned char srcDigitByte_d_U64(uint64_t d);
+int8_t I8_add_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs);
+int8_t I8_sub_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs);
+int8_t I8_mul_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs);
+int8_t I8_div_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs);
+int8_t I8_rem_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs);
+int8_t I8_bitand_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs);
+int8_t I8_bitor_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs);
+int8_t I8_bitxor_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs);
+int8_t I8_shl_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs);
+int8_t I8_shr_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs);
+int8_t I8_bitnot_value_I8(int8_t value);
+int8_t I8_neg_value_I8(int8_t value);
+int16_t I16_add_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs);
+int16_t I16_sub_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs);
+int16_t I16_mul_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs);
+int16_t I16_div_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs);
+int16_t I16_rem_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs);
+int16_t I16_bitand_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs);
+int16_t I16_bitor_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs);
+int16_t I16_bitxor_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs);
+int16_t I16_shl_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs);
+int16_t I16_shr_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs);
+int16_t I16_bitnot_value_I16(int16_t value);
+int16_t I16_neg_value_I16(int16_t value);
+int32_t I32_add_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs);
+int32_t I32_sub_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs);
+int32_t I32_mul_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs);
+int32_t I32_div_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs);
+int32_t I32_rem_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs);
+int32_t I32_bitand_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs);
+int32_t I32_bitor_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs);
+int32_t I32_bitxor_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs);
+int32_t I32_shl_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs);
+int32_t I32_shr_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs);
+int32_t I32_bitnot_value_I32(int32_t value);
+int32_t I32_neg_value_I32(int32_t value);
+int64_t I64_add_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs);
+int64_t I64_sub_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs);
+int64_t I64_mul_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs);
+int64_t I64_div_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs);
+int64_t I64_rem_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs);
+int64_t I64_bitand_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs);
+int64_t I64_bitor_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs);
+int64_t I64_bitxor_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs);
+int64_t I64_shl_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs);
+int64_t I64_shr_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs);
+int64_t I64_bitnot_value_I64(int64_t value);
+int64_t I64_neg_value_I64(int64_t value);
+unsigned char U8_add_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs);
+unsigned char U8_sub_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs);
+unsigned char U8_mul_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs);
+unsigned char U8_div_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs);
+unsigned char U8_rem_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs);
+unsigned char U8_bitand_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs);
+unsigned char U8_bitor_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs);
+unsigned char U8_bitxor_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs);
+unsigned char U8_shl_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs);
+unsigned char U8_shr_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs);
+unsigned char U8_bitnot_value_U8(unsigned char value);
+uint16_t U16_add_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs);
+uint16_t U16_sub_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs);
+uint16_t U16_mul_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs);
+uint16_t U16_div_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs);
+uint16_t U16_rem_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs);
+uint16_t U16_bitand_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs);
+uint16_t U16_bitor_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs);
+uint16_t U16_bitxor_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs);
+uint16_t U16_shl_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs);
+uint16_t U16_shr_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs);
+uint16_t U16_bitnot_value_U16(uint16_t value);
+uint32_t U32_add_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs);
+uint32_t U32_sub_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs);
+uint32_t U32_mul_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs);
+uint32_t U32_div_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs);
+uint32_t U32_rem_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs);
+uint32_t U32_bitand_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs);
+uint32_t U32_bitor_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs);
+uint32_t U32_bitxor_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs);
+uint32_t U32_shl_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs);
+uint32_t U32_shr_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs);
+uint32_t U32_bitnot_value_U32(uint32_t value);
+uint64_t U64_add_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs);
+uint64_t U64_sub_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs);
+uint64_t U64_mul_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs);
+uint64_t U64_div_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs);
+uint64_t U64_rem_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs);
+uint64_t U64_bitand_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs);
+uint64_t U64_bitor_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs);
+uint64_t U64_bitxor_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs);
+uint64_t U64_shl_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs);
+uint64_t U64_shr_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs);
+uint64_t U64_bitnot_value_U64(uint64_t value);
+long long Bool_not_value_Bool(long long value);
 uint64_t rotlU64_x_U64_b_U64(uint64_t x, uint64_t b);
 SipHasher SipHasher_new(void);
 void SipHasher_round(SipHasher* self);
@@ -4575,7 +4668,7 @@ uint64_t findFunc_c_Comp_nameStart_U64_nameLen_U64_args_AArg(Comp* c, uint64_t n
     uint64_t i = 0;
     while (i < (long long)(((*c).funcs).count)) {
     Func f = Func_share(Array_Func_get((*c).funcs, (long long)(i)));
-    if (f.hasRecv) {
+    if (f.hasRecv || f.isAssoc) {
     }
     else {
     if (f.nameId == qId) {
@@ -4637,7 +4730,7 @@ uint64_t firstFuncByName_c_Comp_nameStart_U64_nameLen_U64(Comp* c, uint64_t name
     uint64_t i = 0;
     while (i < (long long)(((*c).funcs).count)) {
     Func f = Func_share(Array_Func_get((*c).funcs, (long long)(i)));
-    if (f.hasRecv) {
+    if (f.hasRecv || f.isAssoc) {
     }
     else {
     if (f.nameId == qId) {
@@ -8236,7 +8329,7 @@ void checkConformances_c_Comp(Comp* c) {
     uint64_t ti = 0;
     while (ti < (long long)(((*c).traits).count)) {
     TraitDef t = TraitDef_share(Array_TraitDef_get((*c).traits, (long long)(ti)));
-    if (t.nameId == cf.traitId) {
+    if ((t.nameId == cf.traitId) && ((long long)((t.typeParams).count) == (long long)((cf.traitArgs).count))) {
     found = 1;
     uint64_t ri = 0;
     while (ri < (long long)((t.reqs).count)) {
@@ -23957,13 +24050,385 @@ unsigned char srcDigitByte_d_U64(uint64_t d) {
     { unsigned char __ret1483 = 57;
     return __ret1483; }
 }
-uint64_t rotlU64_x_U64_b_U64(uint64_t x, uint64_t b) {
-    { uint64_t __ret1484 = ((x << b) | (x >> ({ uint64_t __ov; if (__builtin_sub_overflow((64), (b), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; })));
+int8_t I8_add_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs) {
+    { int8_t __ret1484 = plew_i8Add(lhs, rhs);
     return __ret1484; }
 }
-SipHasher SipHasher_new(void) {
-    { SipHasher __ret1485 = (SipHasher){.v0 = 8317987319222330741, .v1 = 7237128888997146477, .v2 = 7816392313619706465, .v3 = 8387220255154660723};
+int8_t I8_sub_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs) {
+    { int8_t __ret1485 = plew_i8Sub(lhs, rhs);
     return __ret1485; }
+}
+int8_t I8_mul_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs) {
+    { int8_t __ret1486 = plew_i8Mul(lhs, rhs);
+    return __ret1486; }
+}
+int8_t I8_div_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs) {
+    { int8_t __ret1487 = plew_i8Div(lhs, rhs);
+    return __ret1487; }
+}
+int8_t I8_rem_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs) {
+    { int8_t __ret1488 = plew_i8Rem(lhs, rhs);
+    return __ret1488; }
+}
+int8_t I8_bitand_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs) {
+    { int8_t __ret1489 = plew_i8BitAnd(lhs, rhs);
+    return __ret1489; }
+}
+int8_t I8_bitor_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs) {
+    { int8_t __ret1490 = plew_i8BitOr(lhs, rhs);
+    return __ret1490; }
+}
+int8_t I8_bitxor_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs) {
+    { int8_t __ret1491 = plew_i8BitXor(lhs, rhs);
+    return __ret1491; }
+}
+int8_t I8_shl_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs) {
+    { int8_t __ret1492 = plew_i8Shl(lhs, rhs);
+    return __ret1492; }
+}
+int8_t I8_shr_lhs_I8_rhs_I8(int8_t lhs, int8_t rhs) {
+    { int8_t __ret1493 = plew_i8Shr(lhs, rhs);
+    return __ret1493; }
+}
+int8_t I8_bitnot_value_I8(int8_t value) {
+    { int8_t __ret1494 = plew_i8BitNot(value);
+    return __ret1494; }
+}
+int8_t I8_neg_value_I8(int8_t value) {
+    { int8_t __ret1495 = plew_i8Neg(value);
+    return __ret1495; }
+}
+int16_t I16_add_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs) {
+    { int16_t __ret1496 = plew_i16Add(lhs, rhs);
+    return __ret1496; }
+}
+int16_t I16_sub_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs) {
+    { int16_t __ret1497 = plew_i16Sub(lhs, rhs);
+    return __ret1497; }
+}
+int16_t I16_mul_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs) {
+    { int16_t __ret1498 = plew_i16Mul(lhs, rhs);
+    return __ret1498; }
+}
+int16_t I16_div_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs) {
+    { int16_t __ret1499 = plew_i16Div(lhs, rhs);
+    return __ret1499; }
+}
+int16_t I16_rem_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs) {
+    { int16_t __ret1500 = plew_i16Rem(lhs, rhs);
+    return __ret1500; }
+}
+int16_t I16_bitand_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs) {
+    { int16_t __ret1501 = plew_i16BitAnd(lhs, rhs);
+    return __ret1501; }
+}
+int16_t I16_bitor_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs) {
+    { int16_t __ret1502 = plew_i16BitOr(lhs, rhs);
+    return __ret1502; }
+}
+int16_t I16_bitxor_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs) {
+    { int16_t __ret1503 = plew_i16BitXor(lhs, rhs);
+    return __ret1503; }
+}
+int16_t I16_shl_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs) {
+    { int16_t __ret1504 = plew_i16Shl(lhs, rhs);
+    return __ret1504; }
+}
+int16_t I16_shr_lhs_I16_rhs_I16(int16_t lhs, int16_t rhs) {
+    { int16_t __ret1505 = plew_i16Shr(lhs, rhs);
+    return __ret1505; }
+}
+int16_t I16_bitnot_value_I16(int16_t value) {
+    { int16_t __ret1506 = plew_i16BitNot(value);
+    return __ret1506; }
+}
+int16_t I16_neg_value_I16(int16_t value) {
+    { int16_t __ret1507 = plew_i16Neg(value);
+    return __ret1507; }
+}
+int32_t I32_add_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs) {
+    { int32_t __ret1508 = plew_i32Add(lhs, rhs);
+    return __ret1508; }
+}
+int32_t I32_sub_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs) {
+    { int32_t __ret1509 = plew_i32Sub(lhs, rhs);
+    return __ret1509; }
+}
+int32_t I32_mul_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs) {
+    { int32_t __ret1510 = plew_i32Mul(lhs, rhs);
+    return __ret1510; }
+}
+int32_t I32_div_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs) {
+    { int32_t __ret1511 = plew_i32Div(lhs, rhs);
+    return __ret1511; }
+}
+int32_t I32_rem_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs) {
+    { int32_t __ret1512 = plew_i32Rem(lhs, rhs);
+    return __ret1512; }
+}
+int32_t I32_bitand_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs) {
+    { int32_t __ret1513 = plew_i32BitAnd(lhs, rhs);
+    return __ret1513; }
+}
+int32_t I32_bitor_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs) {
+    { int32_t __ret1514 = plew_i32BitOr(lhs, rhs);
+    return __ret1514; }
+}
+int32_t I32_bitxor_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs) {
+    { int32_t __ret1515 = plew_i32BitXor(lhs, rhs);
+    return __ret1515; }
+}
+int32_t I32_shl_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs) {
+    { int32_t __ret1516 = plew_i32Shl(lhs, rhs);
+    return __ret1516; }
+}
+int32_t I32_shr_lhs_I32_rhs_I32(int32_t lhs, int32_t rhs) {
+    { int32_t __ret1517 = plew_i32Shr(lhs, rhs);
+    return __ret1517; }
+}
+int32_t I32_bitnot_value_I32(int32_t value) {
+    { int32_t __ret1518 = plew_i32BitNot(value);
+    return __ret1518; }
+}
+int32_t I32_neg_value_I32(int32_t value) {
+    { int32_t __ret1519 = plew_i32Neg(value);
+    return __ret1519; }
+}
+int64_t I64_add_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs) {
+    { int64_t __ret1520 = plew_i64Add(lhs, rhs);
+    return __ret1520; }
+}
+int64_t I64_sub_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs) {
+    { int64_t __ret1521 = plew_i64Sub(lhs, rhs);
+    return __ret1521; }
+}
+int64_t I64_mul_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs) {
+    { int64_t __ret1522 = plew_i64Mul(lhs, rhs);
+    return __ret1522; }
+}
+int64_t I64_div_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs) {
+    { int64_t __ret1523 = plew_i64Div(lhs, rhs);
+    return __ret1523; }
+}
+int64_t I64_rem_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs) {
+    { int64_t __ret1524 = plew_i64Rem(lhs, rhs);
+    return __ret1524; }
+}
+int64_t I64_bitand_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs) {
+    { int64_t __ret1525 = plew_i64BitAnd(lhs, rhs);
+    return __ret1525; }
+}
+int64_t I64_bitor_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs) {
+    { int64_t __ret1526 = plew_i64BitOr(lhs, rhs);
+    return __ret1526; }
+}
+int64_t I64_bitxor_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs) {
+    { int64_t __ret1527 = plew_i64BitXor(lhs, rhs);
+    return __ret1527; }
+}
+int64_t I64_shl_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs) {
+    { int64_t __ret1528 = plew_i64Shl(lhs, rhs);
+    return __ret1528; }
+}
+int64_t I64_shr_lhs_I64_rhs_I64(int64_t lhs, int64_t rhs) {
+    { int64_t __ret1529 = plew_i64Shr(lhs, rhs);
+    return __ret1529; }
+}
+int64_t I64_bitnot_value_I64(int64_t value) {
+    { int64_t __ret1530 = plew_i64BitNot(value);
+    return __ret1530; }
+}
+int64_t I64_neg_value_I64(int64_t value) {
+    { int64_t __ret1531 = plew_i64Neg(value);
+    return __ret1531; }
+}
+unsigned char U8_add_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs) {
+    { unsigned char __ret1532 = plew_u8Add(lhs, rhs);
+    return __ret1532; }
+}
+unsigned char U8_sub_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs) {
+    { unsigned char __ret1533 = plew_u8Sub(lhs, rhs);
+    return __ret1533; }
+}
+unsigned char U8_mul_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs) {
+    { unsigned char __ret1534 = plew_u8Mul(lhs, rhs);
+    return __ret1534; }
+}
+unsigned char U8_div_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs) {
+    { unsigned char __ret1535 = plew_u8Div(lhs, rhs);
+    return __ret1535; }
+}
+unsigned char U8_rem_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs) {
+    { unsigned char __ret1536 = plew_u8Rem(lhs, rhs);
+    return __ret1536; }
+}
+unsigned char U8_bitand_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs) {
+    { unsigned char __ret1537 = plew_u8BitAnd(lhs, rhs);
+    return __ret1537; }
+}
+unsigned char U8_bitor_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs) {
+    { unsigned char __ret1538 = plew_u8BitOr(lhs, rhs);
+    return __ret1538; }
+}
+unsigned char U8_bitxor_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs) {
+    { unsigned char __ret1539 = plew_u8BitXor(lhs, rhs);
+    return __ret1539; }
+}
+unsigned char U8_shl_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs) {
+    { unsigned char __ret1540 = plew_u8Shl(lhs, rhs);
+    return __ret1540; }
+}
+unsigned char U8_shr_lhs_U8_rhs_U8(unsigned char lhs, unsigned char rhs) {
+    { unsigned char __ret1541 = plew_u8Shr(lhs, rhs);
+    return __ret1541; }
+}
+unsigned char U8_bitnot_value_U8(unsigned char value) {
+    { unsigned char __ret1542 = plew_u8BitNot(value);
+    return __ret1542; }
+}
+uint16_t U16_add_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs) {
+    { uint16_t __ret1543 = plew_u16Add(lhs, rhs);
+    return __ret1543; }
+}
+uint16_t U16_sub_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs) {
+    { uint16_t __ret1544 = plew_u16Sub(lhs, rhs);
+    return __ret1544; }
+}
+uint16_t U16_mul_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs) {
+    { uint16_t __ret1545 = plew_u16Mul(lhs, rhs);
+    return __ret1545; }
+}
+uint16_t U16_div_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs) {
+    { uint16_t __ret1546 = plew_u16Div(lhs, rhs);
+    return __ret1546; }
+}
+uint16_t U16_rem_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs) {
+    { uint16_t __ret1547 = plew_u16Rem(lhs, rhs);
+    return __ret1547; }
+}
+uint16_t U16_bitand_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs) {
+    { uint16_t __ret1548 = plew_u16BitAnd(lhs, rhs);
+    return __ret1548; }
+}
+uint16_t U16_bitor_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs) {
+    { uint16_t __ret1549 = plew_u16BitOr(lhs, rhs);
+    return __ret1549; }
+}
+uint16_t U16_bitxor_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs) {
+    { uint16_t __ret1550 = plew_u16BitXor(lhs, rhs);
+    return __ret1550; }
+}
+uint16_t U16_shl_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs) {
+    { uint16_t __ret1551 = plew_u16Shl(lhs, rhs);
+    return __ret1551; }
+}
+uint16_t U16_shr_lhs_U16_rhs_U16(uint16_t lhs, uint16_t rhs) {
+    { uint16_t __ret1552 = plew_u16Shr(lhs, rhs);
+    return __ret1552; }
+}
+uint16_t U16_bitnot_value_U16(uint16_t value) {
+    { uint16_t __ret1553 = plew_u16BitNot(value);
+    return __ret1553; }
+}
+uint32_t U32_add_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs) {
+    { uint32_t __ret1554 = plew_u32Add(lhs, rhs);
+    return __ret1554; }
+}
+uint32_t U32_sub_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs) {
+    { uint32_t __ret1555 = plew_u32Sub(lhs, rhs);
+    return __ret1555; }
+}
+uint32_t U32_mul_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs) {
+    { uint32_t __ret1556 = plew_u32Mul(lhs, rhs);
+    return __ret1556; }
+}
+uint32_t U32_div_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs) {
+    { uint32_t __ret1557 = plew_u32Div(lhs, rhs);
+    return __ret1557; }
+}
+uint32_t U32_rem_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs) {
+    { uint32_t __ret1558 = plew_u32Rem(lhs, rhs);
+    return __ret1558; }
+}
+uint32_t U32_bitand_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs) {
+    { uint32_t __ret1559 = plew_u32BitAnd(lhs, rhs);
+    return __ret1559; }
+}
+uint32_t U32_bitor_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs) {
+    { uint32_t __ret1560 = plew_u32BitOr(lhs, rhs);
+    return __ret1560; }
+}
+uint32_t U32_bitxor_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs) {
+    { uint32_t __ret1561 = plew_u32BitXor(lhs, rhs);
+    return __ret1561; }
+}
+uint32_t U32_shl_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs) {
+    { uint32_t __ret1562 = plew_u32Shl(lhs, rhs);
+    return __ret1562; }
+}
+uint32_t U32_shr_lhs_U32_rhs_U32(uint32_t lhs, uint32_t rhs) {
+    { uint32_t __ret1563 = plew_u32Shr(lhs, rhs);
+    return __ret1563; }
+}
+uint32_t U32_bitnot_value_U32(uint32_t value) {
+    { uint32_t __ret1564 = plew_u32BitNot(value);
+    return __ret1564; }
+}
+uint64_t U64_add_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs) {
+    { uint64_t __ret1565 = plew_u64Add(lhs, rhs);
+    return __ret1565; }
+}
+uint64_t U64_sub_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs) {
+    { uint64_t __ret1566 = plew_u64Sub(lhs, rhs);
+    return __ret1566; }
+}
+uint64_t U64_mul_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs) {
+    { uint64_t __ret1567 = plew_u64Mul(lhs, rhs);
+    return __ret1567; }
+}
+uint64_t U64_div_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs) {
+    { uint64_t __ret1568 = plew_u64Div(lhs, rhs);
+    return __ret1568; }
+}
+uint64_t U64_rem_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs) {
+    { uint64_t __ret1569 = plew_u64Rem(lhs, rhs);
+    return __ret1569; }
+}
+uint64_t U64_bitand_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs) {
+    { uint64_t __ret1570 = plew_u64BitAnd(lhs, rhs);
+    return __ret1570; }
+}
+uint64_t U64_bitor_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs) {
+    { uint64_t __ret1571 = plew_u64BitOr(lhs, rhs);
+    return __ret1571; }
+}
+uint64_t U64_bitxor_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs) {
+    { uint64_t __ret1572 = plew_u64BitXor(lhs, rhs);
+    return __ret1572; }
+}
+uint64_t U64_shl_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs) {
+    { uint64_t __ret1573 = plew_u64Shl(lhs, rhs);
+    return __ret1573; }
+}
+uint64_t U64_shr_lhs_U64_rhs_U64(uint64_t lhs, uint64_t rhs) {
+    { uint64_t __ret1574 = plew_u64Shr(lhs, rhs);
+    return __ret1574; }
+}
+uint64_t U64_bitnot_value_U64(uint64_t value) {
+    { uint64_t __ret1575 = plew_u64BitNot(value);
+    return __ret1575; }
+}
+long long Bool_not_value_Bool(long long value) {
+    { long long __ret1576 = plew_boolNot(value);
+    return __ret1576; }
+}
+uint64_t rotlU64_x_U64_b_U64(uint64_t x, uint64_t b) {
+    { uint64_t __ret1577 = ((x << b) | (x >> ({ uint64_t __ov; if (__builtin_sub_overflow((64), (b), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; })));
+    return __ret1577; }
+}
+SipHasher SipHasher_new(void) {
+    { SipHasher __ret1578 = (SipHasher){.v0 = 8317987319222330741, .v1 = 7237128888997146477, .v2 = 7816392313619706465, .v3 = 8387220255154660723};
+    return __ret1578; }
 }
 void SipHasher_round(SipHasher* self) {
     (*self).v0 = (uint64_t)((uint64_t)((*self).v0) + (uint64_t)((*self).v1));
@@ -23992,15 +24457,15 @@ uint64_t SipHasher_finish(SipHasher self) {
     SipHasher_round(&(s));
     SipHasher_round(&(s));
     SipHasher_round(&(s));
-    { uint64_t __ret1486 = (((s.v0 ^ s.v1) ^ s.v2) ^ s.v3);
-    return __ret1486; }
+    { uint64_t __ret1579 = (((s.v0 ^ s.v1) ^ s.v2) ^ s.v3);
+    return __ret1579; }
 }
 void Array_U8_append_value_T(Array_U8* self, unsigned char value) {
     Array_U8_push(&((*self)), value);
 }
 unsigned char Array_U8_get_i_U64(Array_U8 self, uint64_t i) {
-    { unsigned char __ret1487 = Array_U8_get((self), (long long)(i));
-    return __ret1487; }
+    { unsigned char __ret1580 = Array_U8_get((self), (long long)(i));
+    return __ret1580; }
 }
 void Array_U8_set_i_U64_value_T(Array_U8* self, uint64_t i, unsigned char value) {
     Array_U8_set(&((*self)), (long long)(i), value);
@@ -24009,8 +24474,8 @@ void Array_Bind_append_value_T(Array_Bind* self, Bind value) {
     Array_Bind_push(&((*self)), value);
 }
 Bind Array_Bind_get_i_U64(Array_Bind self, uint64_t i) {
-    { Bind __ret1488 = Array_Bind_get((self), (long long)(i));
-    return __ret1488; }
+    { Bind __ret1581 = Array_Bind_get((self), (long long)(i));
+    return __ret1581; }
 }
 void Array_Bind_set_i_U64_value_T(Array_Bind* self, uint64_t i, Bind value) {
     Array_Bind_set(&((*self)), (long long)(i), value);
@@ -24019,8 +24484,8 @@ void Array_TopItemAst_append_value_T(Array_TopItemAst* self, TopItemAst value) {
     Array_TopItemAst_push(&((*self)), value);
 }
 TopItemAst Array_TopItemAst_get_i_U64(Array_TopItemAst self, uint64_t i) {
-    { TopItemAst __ret1489 = Array_TopItemAst_get((self), (long long)(i));
-    return __ret1489; }
+    { TopItemAst __ret1582 = Array_TopItemAst_get((self), (long long)(i));
+    return __ret1582; }
 }
 void Array_TopItemAst_set_i_U64_value_T(Array_TopItemAst* self, uint64_t i, TopItemAst value) {
     Array_TopItemAst_set(&((*self)), (long long)(i), value);
@@ -24029,8 +24494,8 @@ void Array_U64_append_value_T(Array_U64* self, uint64_t value) {
     Array_U64_push(&((*self)), value);
 }
 uint64_t Array_U64_get_i_U64(Array_U64 self, uint64_t i) {
-    { uint64_t __ret1490 = Array_U64_get((self), (long long)(i));
-    return __ret1490; }
+    { uint64_t __ret1583 = Array_U64_get((self), (long long)(i));
+    return __ret1583; }
 }
 void Array_U64_set_i_U64_value_T(Array_U64* self, uint64_t i, uint64_t value) {
     Array_U64_set(&((*self)), (long long)(i), value);
@@ -24039,8 +24504,8 @@ void Array_Arg_append_value_T(Array_Arg* self, Arg value) {
     Array_Arg_push(&((*self)), value);
 }
 Arg Array_Arg_get_i_U64(Array_Arg self, uint64_t i) {
-    { Arg __ret1491 = Array_Arg_get((self), (long long)(i));
-    return __ret1491; }
+    { Arg __ret1584 = Array_Arg_get((self), (long long)(i));
+    return __ret1584; }
 }
 void Array_Arg_set_i_U64_value_T(Array_Arg* self, uint64_t i, Arg value) {
     Array_Arg_set(&((*self)), (long long)(i), value);
@@ -24049,8 +24514,8 @@ void Array_MakeField_append_value_T(Array_MakeField* self, MakeField value) {
     Array_MakeField_push(&((*self)), value);
 }
 MakeField Array_MakeField_get_i_U64(Array_MakeField self, uint64_t i) {
-    { MakeField __ret1492 = Array_MakeField_get((self), (long long)(i));
-    return __ret1492; }
+    { MakeField __ret1585 = Array_MakeField_get((self), (long long)(i));
+    return __ret1585; }
 }
 void Array_MakeField_set_i_U64_value_T(Array_MakeField* self, uint64_t i, MakeField value) {
     Array_MakeField_set(&((*self)), (long long)(i), value);
@@ -24059,8 +24524,8 @@ void Array_MatchArm_append_value_T(Array_MatchArm* self, MatchArm value) {
     Array_MatchArm_push(&((*self)), value);
 }
 MatchArm Array_MatchArm_get_i_U64(Array_MatchArm self, uint64_t i) {
-    { MatchArm __ret1493 = Array_MatchArm_get((self), (long long)(i));
-    return __ret1493; }
+    { MatchArm __ret1586 = Array_MatchArm_get((self), (long long)(i));
+    return __ret1586; }
 }
 void Array_MatchArm_set_i_U64_value_T(Array_MatchArm* self, uint64_t i, MatchArm value) {
     Array_MatchArm_set(&((*self)), (long long)(i), value);
@@ -24069,8 +24534,8 @@ void Array_Param_append_value_T(Array_Param* self, Param value) {
     Array_Param_push(&((*self)), value);
 }
 Param Array_Param_get_i_U64(Array_Param self, uint64_t i) {
-    { Param __ret1494 = Array_Param_get((self), (long long)(i));
-    return __ret1494; }
+    { Param __ret1587 = Array_Param_get((self), (long long)(i));
+    return __ret1587; }
 }
 void Array_Param_set_i_U64_value_T(Array_Param* self, uint64_t i, Param value) {
     Array_Param_set(&((*self)), (long long)(i), value);
@@ -24079,8 +24544,8 @@ void Array_FieldDef_append_value_T(Array_FieldDef* self, FieldDef value) {
     Array_FieldDef_push(&((*self)), value);
 }
 FieldDef Array_FieldDef_get_i_U64(Array_FieldDef self, uint64_t i) {
-    { FieldDef __ret1495 = Array_FieldDef_get((self), (long long)(i));
-    return __ret1495; }
+    { FieldDef __ret1588 = Array_FieldDef_get((self), (long long)(i));
+    return __ret1588; }
 }
 void Array_FieldDef_set_i_U64_value_T(Array_FieldDef* self, uint64_t i, FieldDef value) {
     Array_FieldDef_set(&((*self)), (long long)(i), value);
@@ -24089,8 +24554,8 @@ void Array_Func_append_value_T(Array_Func* self, Func value) {
     Array_Func_push(&((*self)), value);
 }
 Func Array_Func_get_i_U64(Array_Func self, uint64_t i) {
-    { Func __ret1496 = Array_Func_get((self), (long long)(i));
-    return __ret1496; }
+    { Func __ret1589 = Array_Func_get((self), (long long)(i));
+    return __ret1589; }
 }
 void Array_Func_set_i_U64_value_T(Array_Func* self, uint64_t i, Func value) {
     Array_Func_set(&((*self)), (long long)(i), value);
@@ -24099,8 +24564,8 @@ void Array_Variant_append_value_T(Array_Variant* self, Variant value) {
     Array_Variant_push(&((*self)), value);
 }
 Variant Array_Variant_get_i_U64(Array_Variant self, uint64_t i) {
-    { Variant __ret1497 = Array_Variant_get((self), (long long)(i));
-    return __ret1497; }
+    { Variant __ret1590 = Array_Variant_get((self), (long long)(i));
+    return __ret1590; }
 }
 void Array_Variant_set_i_U64_value_T(Array_Variant* self, uint64_t i, Variant value) {
     Array_Variant_set(&((*self)), (long long)(i), value);
@@ -24109,8 +24574,8 @@ void Array_Expr_append_value_T(Array_Expr* self, Expr value) {
     Array_Expr_push(&((*self)), value);
 }
 Expr Array_Expr_get_i_U64(Array_Expr self, uint64_t i) {
-    { Expr __ret1498 = Array_Expr_get((self), (long long)(i));
-    return __ret1498; }
+    { Expr __ret1591 = Array_Expr_get((self), (long long)(i));
+    return __ret1591; }
 }
 void Array_Expr_set_i_U64_value_T(Array_Expr* self, uint64_t i, Expr value) {
     Array_Expr_set(&((*self)), (long long)(i), value);
@@ -24119,8 +24584,8 @@ void Array_Stmt_append_value_T(Array_Stmt* self, Stmt value) {
     Array_Stmt_push(&((*self)), value);
 }
 Stmt Array_Stmt_get_i_U64(Array_Stmt self, uint64_t i) {
-    { Stmt __ret1499 = Array_Stmt_get((self), (long long)(i));
-    return __ret1499; }
+    { Stmt __ret1592 = Array_Stmt_get((self), (long long)(i));
+    return __ret1592; }
 }
 void Array_Stmt_set_i_U64_value_T(Array_Stmt* self, uint64_t i, Stmt value) {
     Array_Stmt_set(&((*self)), (long long)(i), value);
@@ -24129,8 +24594,8 @@ void Array_Block_append_value_T(Array_Block* self, Block value) {
     Array_Block_push(&((*self)), value);
 }
 Block Array_Block_get_i_U64(Array_Block self, uint64_t i) {
-    { Block __ret1500 = Array_Block_get((self), (long long)(i));
-    return __ret1500; }
+    { Block __ret1593 = Array_Block_get((self), (long long)(i));
+    return __ret1593; }
 }
 void Array_Block_set_i_U64_value_T(Array_Block* self, uint64_t i, Block value) {
     Array_Block_set(&((*self)), (long long)(i), value);
@@ -24139,8 +24604,8 @@ void Array_StructDef_append_value_T(Array_StructDef* self, StructDef value) {
     Array_StructDef_push(&((*self)), value);
 }
 StructDef Array_StructDef_get_i_U64(Array_StructDef self, uint64_t i) {
-    { StructDef __ret1501 = Array_StructDef_get((self), (long long)(i));
-    return __ret1501; }
+    { StructDef __ret1594 = Array_StructDef_get((self), (long long)(i));
+    return __ret1594; }
 }
 void Array_StructDef_set_i_U64_value_T(Array_StructDef* self, uint64_t i, StructDef value) {
     Array_StructDef_set(&((*self)), (long long)(i), value);
@@ -24149,8 +24614,8 @@ void Array_EnumDef_append_value_T(Array_EnumDef* self, EnumDef value) {
     Array_EnumDef_push(&((*self)), value);
 }
 EnumDef Array_EnumDef_get_i_U64(Array_EnumDef self, uint64_t i) {
-    { EnumDef __ret1502 = Array_EnumDef_get((self), (long long)(i));
-    return __ret1502; }
+    { EnumDef __ret1595 = Array_EnumDef_get((self), (long long)(i));
+    return __ret1595; }
 }
 void Array_EnumDef_set_i_U64_value_T(Array_EnumDef* self, uint64_t i, EnumDef value) {
     Array_EnumDef_set(&((*self)), (long long)(i), value);
@@ -24159,8 +24624,8 @@ void Array_TraitDef_append_value_T(Array_TraitDef* self, TraitDef value) {
     Array_TraitDef_push(&((*self)), value);
 }
 TraitDef Array_TraitDef_get_i_U64(Array_TraitDef self, uint64_t i) {
-    { TraitDef __ret1503 = Array_TraitDef_get((self), (long long)(i));
-    return __ret1503; }
+    { TraitDef __ret1596 = Array_TraitDef_get((self), (long long)(i));
+    return __ret1596; }
 }
 void Array_TraitDef_set_i_U64_value_T(Array_TraitDef* self, uint64_t i, TraitDef value) {
     Array_TraitDef_set(&((*self)), (long long)(i), value);
@@ -24169,8 +24634,8 @@ void Array_Conform_append_value_T(Array_Conform* self, Conform value) {
     Array_Conform_push(&((*self)), value);
 }
 Conform Array_Conform_get_i_U64(Array_Conform self, uint64_t i) {
-    { Conform __ret1504 = Array_Conform_get((self), (long long)(i));
-    return __ret1504; }
+    { Conform __ret1597 = Array_Conform_get((self), (long long)(i));
+    return __ret1597; }
 }
 void Array_Conform_set_i_U64_value_T(Array_Conform* self, uint64_t i, Conform value) {
     Array_Conform_set(&((*self)), (long long)(i), value);
@@ -24179,8 +24644,8 @@ void Array_MethodAlias_append_value_T(Array_MethodAlias* self, MethodAlias value
     Array_MethodAlias_push(&((*self)), value);
 }
 MethodAlias Array_MethodAlias_get_i_U64(Array_MethodAlias self, uint64_t i) {
-    { MethodAlias __ret1505 = Array_MethodAlias_get((self), (long long)(i));
-    return __ret1505; }
+    { MethodAlias __ret1598 = Array_MethodAlias_get((self), (long long)(i));
+    return __ret1598; }
 }
 void Array_MethodAlias_set_i_U64_value_T(Array_MethodAlias* self, uint64_t i, MethodAlias value) {
     Array_MethodAlias_set(&((*self)), (long long)(i), value);
@@ -24189,8 +24654,8 @@ void Array_DeriveReq_append_value_T(Array_DeriveReq* self, DeriveReq value) {
     Array_DeriveReq_push(&((*self)), value);
 }
 DeriveReq Array_DeriveReq_get_i_U64(Array_DeriveReq self, uint64_t i) {
-    { DeriveReq __ret1506 = Array_DeriveReq_get((self), (long long)(i));
-    return __ret1506; }
+    { DeriveReq __ret1599 = Array_DeriveReq_get((self), (long long)(i));
+    return __ret1599; }
 }
 void Array_DeriveReq_set_i_U64_value_T(Array_DeriveReq* self, uint64_t i, DeriveReq value) {
     Array_DeriveReq_set(&((*self)), (long long)(i), value);
@@ -24199,8 +24664,8 @@ void Array_FuncBound_append_value_T(Array_FuncBound* self, FuncBound value) {
     Array_FuncBound_push(&((*self)), value);
 }
 FuncBound Array_FuncBound_get_i_U64(Array_FuncBound self, uint64_t i) {
-    { FuncBound __ret1507 = Array_FuncBound_get((self), (long long)(i));
-    return __ret1507; }
+    { FuncBound __ret1600 = Array_FuncBound_get((self), (long long)(i));
+    return __ret1600; }
 }
 void Array_FuncBound_set_i_U64_value_T(Array_FuncBound* self, uint64_t i, FuncBound value) {
     Array_FuncBound_set(&((*self)), (long long)(i), value);
@@ -24209,8 +24674,8 @@ void Array_I64_append_value_T(Array_I64* self, int64_t value) {
     Array_I64_push(&((*self)), value);
 }
 int64_t Array_I64_get_i_U64(Array_I64 self, uint64_t i) {
-    { int64_t __ret1508 = Array_I64_get((self), (long long)(i));
-    return __ret1508; }
+    { int64_t __ret1601 = Array_I64_get((self), (long long)(i));
+    return __ret1601; }
 }
 void Array_I64_set_i_U64_value_T(Array_I64* self, uint64_t i, int64_t value) {
     Array_I64_set(&((*self)), (long long)(i), value);
@@ -24219,8 +24684,8 @@ void Array_TypeRef_append_value_T(Array_TypeRef* self, TypeRef value) {
     Array_TypeRef_push(&((*self)), value);
 }
 TypeRef Array_TypeRef_get_i_U64(Array_TypeRef self, uint64_t i) {
-    { TypeRef __ret1509 = Array_TypeRef_get((self), (long long)(i));
-    return __ret1509; }
+    { TypeRef __ret1602 = Array_TypeRef_get((self), (long long)(i));
+    return __ret1602; }
 }
 void Array_TypeRef_set_i_U64_value_T(Array_TypeRef* self, uint64_t i, TypeRef value) {
     Array_TypeRef_set(&((*self)), (long long)(i), value);
@@ -24229,8 +24694,8 @@ void Array_FnInst_append_value_T(Array_FnInst* self, FnInst value) {
     Array_FnInst_push(&((*self)), value);
 }
 FnInst Array_FnInst_get_i_U64(Array_FnInst self, uint64_t i) {
-    { FnInst __ret1510 = Array_FnInst_get((self), (long long)(i));
-    return __ret1510; }
+    { FnInst __ret1603 = Array_FnInst_get((self), (long long)(i));
+    return __ret1603; }
 }
 void Array_FnInst_set_i_U64_value_T(Array_FnInst* self, uint64_t i, FnInst value) {
     Array_FnInst_set(&((*self)), (long long)(i), value);
@@ -24239,8 +24704,8 @@ void Array_CaptureEntry_append_value_T(Array_CaptureEntry* self, CaptureEntry va
     Array_CaptureEntry_push(&((*self)), value);
 }
 CaptureEntry Array_CaptureEntry_get_i_U64(Array_CaptureEntry self, uint64_t i) {
-    { CaptureEntry __ret1511 = Array_CaptureEntry_get((self), (long long)(i));
-    return __ret1511; }
+    { CaptureEntry __ret1604 = Array_CaptureEntry_get((self), (long long)(i));
+    return __ret1604; }
 }
 void Array_CaptureEntry_set_i_U64_value_T(Array_CaptureEntry* self, uint64_t i, CaptureEntry value) {
     Array_CaptureEntry_set(&((*self)), (long long)(i), value);
@@ -24249,8 +24714,8 @@ void Array_Local_append_value_T(Array_Local* self, Local value) {
     Array_Local_push(&((*self)), value);
 }
 Local Array_Local_get_i_U64(Array_Local self, uint64_t i) {
-    { Local __ret1512 = Array_Local_get((self), (long long)(i));
-    return __ret1512; }
+    { Local __ret1605 = Array_Local_get((self), (long long)(i));
+    return __ret1605; }
 }
 void Array_Local_set_i_U64_value_T(Array_Local* self, uint64_t i, Local value) {
     Array_Local_set(&((*self)), (long long)(i), value);
@@ -24259,8 +24724,8 @@ void Array_AssocBinding_append_value_T(Array_AssocBinding* self, AssocBinding va
     Array_AssocBinding_push(&((*self)), value);
 }
 AssocBinding Array_AssocBinding_get_i_U64(Array_AssocBinding self, uint64_t i) {
-    { AssocBinding __ret1513 = Array_AssocBinding_get((self), (long long)(i));
-    return __ret1513; }
+    { AssocBinding __ret1606 = Array_AssocBinding_get((self), (long long)(i));
+    return __ret1606; }
 }
 void Array_AssocBinding_set_i_U64_value_T(Array_AssocBinding* self, uint64_t i, AssocBinding value) {
     Array_AssocBinding_set(&((*self)), (long long)(i), value);
@@ -24269,8 +24734,8 @@ void Array_Bool_append_value_T(Array_Bool* self, long long value) {
     Array_Bool_push(&((*self)), value);
 }
 long long Array_Bool_get_i_U64(Array_Bool self, uint64_t i) {
-    { long long __ret1514 = Array_Bool_get((self), (long long)(i));
-    return __ret1514; }
+    { long long __ret1607 = Array_Bool_get((self), (long long)(i));
+    return __ret1607; }
 }
 void Array_Bool_set_i_U64_value_T(Array_Bool* self, uint64_t i, long long value) {
     Array_Bool_set(&((*self)), (long long)(i), value);
@@ -24279,8 +24744,8 @@ void Array_PType_append_value_T(Array_PType* self, PType value) {
     Array_PType_push(&((*self)), value);
 }
 PType Array_PType_get_i_U64(Array_PType self, uint64_t i) {
-    { PType __ret1515 = Array_PType_get((self), (long long)(i));
-    return __ret1515; }
+    { PType __ret1608 = Array_PType_get((self), (long long)(i));
+    return __ret1608; }
 }
 void Array_PType_set_i_U64_value_T(Array_PType* self, uint64_t i, PType value) {
     Array_PType_set(&((*self)), (long long)(i), value);
@@ -24289,8 +24754,8 @@ void Array_ArgAst_append_value_T(Array_ArgAst* self, ArgAst value) {
     Array_ArgAst_push(&((*self)), value);
 }
 ArgAst Array_ArgAst_get_i_U64(Array_ArgAst self, uint64_t i) {
-    { ArgAst __ret1516 = Array_ArgAst_get((self), (long long)(i));
-    return __ret1516; }
+    { ArgAst __ret1609 = Array_ArgAst_get((self), (long long)(i));
+    return __ret1609; }
 }
 void Array_ArgAst_set_i_U64_value_T(Array_ArgAst* self, uint64_t i, ArgAst value) {
     Array_ArgAst_set(&((*self)), (long long)(i), value);
@@ -24299,8 +24764,8 @@ void Array_MakeFieldAst_append_value_T(Array_MakeFieldAst* self, MakeFieldAst va
     Array_MakeFieldAst_push(&((*self)), value);
 }
 MakeFieldAst Array_MakeFieldAst_get_i_U64(Array_MakeFieldAst self, uint64_t i) {
-    { MakeFieldAst __ret1517 = Array_MakeFieldAst_get((self), (long long)(i));
-    return __ret1517; }
+    { MakeFieldAst __ret1610 = Array_MakeFieldAst_get((self), (long long)(i));
+    return __ret1610; }
 }
 void Array_MakeFieldAst_set_i_U64_value_T(Array_MakeFieldAst* self, uint64_t i, MakeFieldAst value) {
     Array_MakeFieldAst_set(&((*self)), (long long)(i), value);
@@ -24309,8 +24774,8 @@ void Array_ExprAst_append_value_T(Array_ExprAst* self, ExprAst value) {
     Array_ExprAst_push(&((*self)), value);
 }
 ExprAst Array_ExprAst_get_i_U64(Array_ExprAst self, uint64_t i) {
-    { ExprAst __ret1518 = Array_ExprAst_get((self), (long long)(i));
-    return __ret1518; }
+    { ExprAst __ret1611 = Array_ExprAst_get((self), (long long)(i));
+    return __ret1611; }
 }
 void Array_ExprAst_set_i_U64_value_T(Array_ExprAst* self, uint64_t i, ExprAst value) {
     Array_ExprAst_set(&((*self)), (long long)(i), value);
@@ -24319,8 +24784,8 @@ void Array_ParamAst_append_value_T(Array_ParamAst* self, ParamAst value) {
     Array_ParamAst_push(&((*self)), value);
 }
 ParamAst Array_ParamAst_get_i_U64(Array_ParamAst self, uint64_t i) {
-    { ParamAst __ret1519 = Array_ParamAst_get((self), (long long)(i));
-    return __ret1519; }
+    { ParamAst __ret1612 = Array_ParamAst_get((self), (long long)(i));
+    return __ret1612; }
 }
 void Array_ParamAst_set_i_U64_value_T(Array_ParamAst* self, uint64_t i, ParamAst value) {
     Array_ParamAst_set(&((*self)), (long long)(i), value);
@@ -24329,8 +24794,8 @@ void Array_BindAst_append_value_T(Array_BindAst* self, BindAst value) {
     Array_BindAst_push(&((*self)), value);
 }
 BindAst Array_BindAst_get_i_U64(Array_BindAst self, uint64_t i) {
-    { BindAst __ret1520 = Array_BindAst_get((self), (long long)(i));
-    return __ret1520; }
+    { BindAst __ret1613 = Array_BindAst_get((self), (long long)(i));
+    return __ret1613; }
 }
 void Array_BindAst_set_i_U64_value_T(Array_BindAst* self, uint64_t i, BindAst value) {
     Array_BindAst_set(&((*self)), (long long)(i), value);
@@ -24339,8 +24804,8 @@ void Array_MatchArmAst_append_value_T(Array_MatchArmAst* self, MatchArmAst value
     Array_MatchArmAst_push(&((*self)), value);
 }
 MatchArmAst Array_MatchArmAst_get_i_U64(Array_MatchArmAst self, uint64_t i) {
-    { MatchArmAst __ret1521 = Array_MatchArmAst_get((self), (long long)(i));
-    return __ret1521; }
+    { MatchArmAst __ret1614 = Array_MatchArmAst_get((self), (long long)(i));
+    return __ret1614; }
 }
 void Array_MatchArmAst_set_i_U64_value_T(Array_MatchArmAst* self, uint64_t i, MatchArmAst value) {
     Array_MatchArmAst_set(&((*self)), (long long)(i), value);
@@ -24349,8 +24814,8 @@ void Array_String_append_value_T(Array_String* self, PlewString value) {
     Array_String_push(&((*self)), value);
 }
 PlewString Array_String_get_i_U64(Array_String self, uint64_t i) {
-    { PlewString __ret1522 = Array_String_get((self), (long long)(i));
-    return __ret1522; }
+    { PlewString __ret1615 = Array_String_get((self), (long long)(i));
+    return __ret1615; }
 }
 void Array_String_set_i_U64_value_T(Array_String* self, uint64_t i, PlewString value) {
     Array_String_set(&((*self)), (long long)(i), value);
@@ -24359,8 +24824,8 @@ void Array_Tok_append_value_T(Array_Tok* self, Tok value) {
     Array_Tok_push(&((*self)), value);
 }
 Tok Array_Tok_get_i_U64(Array_Tok self, uint64_t i) {
-    { Tok __ret1523 = Array_Tok_get((self), (long long)(i));
-    return __ret1523; }
+    { Tok __ret1616 = Array_Tok_get((self), (long long)(i));
+    return __ret1616; }
 }
 void Array_Tok_set_i_U64_value_T(Array_Tok* self, uint64_t i, Tok value) {
     Array_Tok_set(&((*self)), (long long)(i), value);
@@ -24369,8 +24834,8 @@ void Array_TypeAst_append_value_T(Array_TypeAst* self, TypeAst value) {
     Array_TypeAst_push(&((*self)), value);
 }
 TypeAst Array_TypeAst_get_i_U64(Array_TypeAst self, uint64_t i) {
-    { TypeAst __ret1524 = Array_TypeAst_get((self), (long long)(i));
-    return __ret1524; }
+    { TypeAst __ret1617 = Array_TypeAst_get((self), (long long)(i));
+    return __ret1617; }
 }
 void Array_TypeAst_set_i_U64_value_T(Array_TypeAst* self, uint64_t i, TypeAst value) {
     Array_TypeAst_set(&((*self)), (long long)(i), value);
@@ -24379,8 +24844,8 @@ void Array_FieldAst_append_value_T(Array_FieldAst* self, FieldAst value) {
     Array_FieldAst_push(&((*self)), value);
 }
 FieldAst Array_FieldAst_get_i_U64(Array_FieldAst self, uint64_t i) {
-    { FieldAst __ret1525 = Array_FieldAst_get((self), (long long)(i));
-    return __ret1525; }
+    { FieldAst __ret1618 = Array_FieldAst_get((self), (long long)(i));
+    return __ret1618; }
 }
 void Array_FieldAst_set_i_U64_value_T(Array_FieldAst* self, uint64_t i, FieldAst value) {
     Array_FieldAst_set(&((*self)), (long long)(i), value);
@@ -24389,8 +24854,8 @@ void Array_VariantAst_append_value_T(Array_VariantAst* self, VariantAst value) {
     Array_VariantAst_push(&((*self)), value);
 }
 VariantAst Array_VariantAst_get_i_U64(Array_VariantAst self, uint64_t i) {
-    { VariantAst __ret1526 = Array_VariantAst_get((self), (long long)(i));
-    return __ret1526; }
+    { VariantAst __ret1619 = Array_VariantAst_get((self), (long long)(i));
+    return __ret1619; }
 }
 void Array_VariantAst_set_i_U64_value_T(Array_VariantAst* self, uint64_t i, VariantAst value) {
     Array_VariantAst_set(&((*self)), (long long)(i), value);
@@ -24399,8 +24864,8 @@ void Array_SigAst_append_value_T(Array_SigAst* self, SigAst value) {
     Array_SigAst_push(&((*self)), value);
 }
 SigAst Array_SigAst_get_i_U64(Array_SigAst self, uint64_t i) {
-    { SigAst __ret1527 = Array_SigAst_get((self), (long long)(i));
-    return __ret1527; }
+    { SigAst __ret1620 = Array_SigAst_get((self), (long long)(i));
+    return __ret1620; }
 }
 void Array_SigAst_set_i_U64_value_T(Array_SigAst* self, uint64_t i, SigAst value) {
     Array_SigAst_set(&((*self)), (long long)(i), value);
@@ -24409,8 +24874,8 @@ void Array_Span_append_value_T(Array_Span* self, Span value) {
     Array_Span_push(&((*self)), value);
 }
 Span Array_Span_get_i_U64(Array_Span self, uint64_t i) {
-    { Span __ret1528 = Array_Span_get((self), (long long)(i));
-    return __ret1528; }
+    { Span __ret1621 = Array_Span_get((self), (long long)(i));
+    return __ret1621; }
 }
 void Array_Span_set_i_U64_value_T(Array_Span* self, uint64_t i, Span value) {
     Array_Span_set(&((*self)), (long long)(i), value);
@@ -24419,8 +24884,8 @@ void Array_MemberAst_append_value_T(Array_MemberAst* self, MemberAst value) {
     Array_MemberAst_push(&((*self)), value);
 }
 MemberAst Array_MemberAst_get_i_U64(Array_MemberAst self, uint64_t i) {
-    { MemberAst __ret1529 = Array_MemberAst_get((self), (long long)(i));
-    return __ret1529; }
+    { MemberAst __ret1622 = Array_MemberAst_get((self), (long long)(i));
+    return __ret1622; }
 }
 void Array_MemberAst_set_i_U64_value_T(Array_MemberAst* self, uint64_t i, MemberAst value) {
     Array_MemberAst_set(&((*self)), (long long)(i), value);
@@ -24429,8 +24894,8 @@ void Array_DeriveReqAst_append_value_T(Array_DeriveReqAst* self, DeriveReqAst va
     Array_DeriveReqAst_push(&((*self)), value);
 }
 DeriveReqAst Array_DeriveReqAst_get_i_U64(Array_DeriveReqAst self, uint64_t i) {
-    { DeriveReqAst __ret1530 = Array_DeriveReqAst_get((self), (long long)(i));
-    return __ret1530; }
+    { DeriveReqAst __ret1623 = Array_DeriveReqAst_get((self), (long long)(i));
+    return __ret1623; }
 }
 void Array_DeriveReqAst_set_i_U64_value_T(Array_DeriveReqAst* self, uint64_t i, DeriveReqAst value) {
     Array_DeriveReqAst_set(&((*self)), (long long)(i), value);
@@ -24439,8 +24904,8 @@ void Array_StmtAst_append_value_T(Array_StmtAst* self, StmtAst value) {
     Array_StmtAst_push(&((*self)), value);
 }
 StmtAst Array_StmtAst_get_i_U64(Array_StmtAst self, uint64_t i) {
-    { StmtAst __ret1531 = Array_StmtAst_get((self), (long long)(i));
-    return __ret1531; }
+    { StmtAst __ret1624 = Array_StmtAst_get((self), (long long)(i));
+    return __ret1624; }
 }
 void Array_StmtAst_set_i_U64_value_T(Array_StmtAst* self, uint64_t i, StmtAst value) {
     Array_StmtAst_set(&((*self)), (long long)(i), value);
@@ -24449,8 +24914,8 @@ void Array_PatternAst_append_value_T(Array_PatternAst* self, PatternAst value) {
     Array_PatternAst_push(&((*self)), value);
 }
 PatternAst Array_PatternAst_get_i_U64(Array_PatternAst self, uint64_t i) {
-    { PatternAst __ret1532 = Array_PatternAst_get((self), (long long)(i));
-    return __ret1532; }
+    { PatternAst __ret1625 = Array_PatternAst_get((self), (long long)(i));
+    return __ret1625; }
 }
 void Array_PatternAst_set_i_U64_value_T(Array_PatternAst* self, uint64_t i, PatternAst value) {
     Array_PatternAst_set(&((*self)), (long long)(i), value);

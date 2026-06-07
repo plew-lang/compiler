@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+// O6 stage 2: the primitive numeric types carry real operator-trait witnesses
+// (Core's `impl I32 as Add[I32]` etc., generated over the intrinsic floor). Call
+// them explicitly as associated fns — the operator desugar for primitives is
+// wired separately (stage 3). This proves witness -> intrinsic -> plew_* works.
+fn main() {
+    print(I32.add(lhs: 2, rhs: 3))            // 5
+    print(I64.sub(lhs: 10I64, rhs: 4I64))     // 6
+    print(U64.mul(lhs: 6U64, rhs: 7U64))      // 42
+    print(I32.div(lhs: 20, rhs: 5))           // 4
+    print(I32.rem(lhs: 20, rhs: 6))           // 2
+    print(U64.bitand(lhs: 6U64, rhs: 3U64))   // 2
+    print(U64.bitor(lhs: 6U64, rhs: 1U64))    // 7
+    print(U64.shl(lhs: 3U64, rhs: 2U64))      // 12
+    print(I64.neg(value: 7I64))               // -7
+    print(U8.bitnot(value: 0U8))              // 255
+}

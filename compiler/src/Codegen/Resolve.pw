@@ -87,7 +87,11 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U6
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
-        if f.hasRecv {
+        // a bare call never resolves to a method (`hasRecv`) or an associated fn
+        // (`isAssoc`, e.g. an operator witness `add`): both require `Type.` (or
+        // `recv.`) qualification. Skipping them keeps a free fn / local closure
+        // named `add` from colliding with Core's `Add.add` (spec/07).
+        if f.hasRecv || f.isAssoc {
         } else {
             if f.nameId == qId {
                 if paramsLabelsOk(c: inout c, params: f.params, args: args) {
@@ -149,7 +153,9 @@ fn firstFuncByName(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
-        if f.hasRecv {
+        // skip methods and associated fns: a bare name only names a free fn (see
+        // findFunc — operator witnesses like `add` are assoc, not free).
+        if f.hasRecv || f.isAssoc {
         } else {
             if f.nameId == qId {
                 return i
