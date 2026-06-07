@@ -1,0 +1,28 @@
+// A closure capturing a shadowed local must reference the correct (innermost)
+// binding. The C name of a shadowed binding carries a `_s<n>` suffix; the capture
+// init used to emit the bare name, resolving to the earlier shadowed binding (a
+// different — possibly differently typed — C variable). spec/03,11 (unlimited
+// shadowing) + closures capture by reference.
+import @Std/Io with { print }
+
+fn main() {
+    // value capture of a shadowed immutable binding
+    mut val x: U64 = 1
+    mut val x: U64 = 100
+    val read: fn() -> U64 = fn() -> U64 { return x }
+    print(read())
+
+    // mutable (reference) capture of a shadowed `mut val`: shared box
+    mut val n: U64 = 5
+    mut val n: U64 = 10
+    val inc: fn() -> U64 = fn() -> U64 { n += 1  return n }
+    print(inc())
+    print(inc())
+    print(n)
+
+    // String shadow capture
+    val s: String = "first"
+    val s: String = "second"
+    val tail: fn() -> String = fn() -> String { return s }
+    print(tail())
+}

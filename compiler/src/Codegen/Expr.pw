@@ -90,12 +90,27 @@ fn emitClosureFieldCall(c: inout Comp, tyRef: U64, recv: U64, fieldStart: U64, f
 // captures are retained (share) so the env keeps the value alive after the
 // enclosing scope releases its binding; immutable so a shared alias is correct.
 // Strings carry no rc (static/leaked bytes) and scalars are plain — both copy.
+// Emit the enclosing local's C name for a capture: like writeSpan but carrying the
+// shadow disambiguator (`_s<cnum>`) so a captured shadowed `mut val` references the
+// right binding (the bare name would resolve to an earlier, possibly differently
+// typed, shadowed local). The cnum is recovered at emit time from the in-scope
+// enclosing local (the capture entry is recorded during the pre-codegen scan,
+// before shadow cnums are assigned, so it cannot carry the cnum itself).
+fn writeCaptureName(c: inout Comp, e: CaptureEntry) {
+    val li: U64 = localIndexByName(c: inout c, start: e.nameStart, len: e.nameLen)
+    mut val cnum: U64 = 0
+    if li < c.locals.count {
+        cnum = c.locals[li].cnum
+    }
+    writeNameCn(c: inout c, start: e.nameStart, len: e.nameLen, cnum: cnum)
+}
+
 fn emitCaptureInit(c: inout Comp, e: CaptureEntry) {
     // a boxed (mutable) capture: the enclosing local is already a pointer to the
     // shared cell; retain it (rc++) and store the pointer so writes are shared.
     if e.boxed {
         write(s: "plew_ref_share(")
-        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+        writeCaptureName(c: inout c, e: e)
         write(s: ")")
         return
     }
@@ -103,33 +118,33 @@ fn emitCaptureInit(c: inout Comp, e: CaptureEntry) {
         write(s: "Array_")
         writeSpan(c: inout c, start: e.tyStart, len: e.tyLen)
         write(s: "_share(")
-        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+        writeCaptureName(c: inout c, e: e)
         write(s: ")")
         return
     }
     if rangeEquals(bytes: c.bytes, start: e.tyStart, len: e.tyLen, kw: "Ref") {
         write(s: "plew_ref_share(")
-        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+        writeCaptureName(c: inout c, e: e)
         write(s: ")")
         return
     }
     if rangeEquals(bytes: c.bytes, start: e.tyStart, len: e.tyLen, kw: "String") {
-        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+        writeCaptureName(c: inout c, e: e)
         return
     }
     if isPrimType(c: inout c, start: e.tyStart, len: e.tyLen) {
-        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+        writeCaptureName(c: inout c, e: e)
         return
     }
     // a plain struct: retain its heap-owning fields if it has any, else bit-copy.
     if structNeedsRelease(c: inout c, start: e.tyStart, len: e.tyLen) {
         writeSpan(c: inout c, start: e.tyStart, len: e.tyLen)
         write(s: "_share(")
-        writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+        writeCaptureName(c: inout c, e: e)
         write(s: ")")
         return
     }
-    writeSpan(c: inout c, start: e.nameStart, len: e.nameLen)
+    writeCaptureName(c: inout c, e: e)
 }
 
 // Dispatch a user method on `Array[E]` (`impl[T] Array[T] { … }`) to its

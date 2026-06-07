@@ -32,7 +32,7 @@
 
 ## 残バグ（低優先・未着手）
 
-- **Bug13 shadow キャプチャの C 名不一致**〔loud〕：F2 の shadow suffix が `emitCaptureInit` の enclosing 名出力に未配線（Expr.pw）。
+- **Bug13 shadow キャプチャの C 名不一致＝✅修正済**：shadow された `mut val` を closure がキャプチャすると、capture-init が enclosing 名を bare（`x`）で出していて C の最初の x（cnum 無し・別型かも）に解決されていた。`emitCaptureInit` の enclosing 名出力を `writeCaptureName`（emit 時に `localIndexByName` で in-scope ローカルの cnum を引き `writeNameCn` で `x_s<cnum>`）に変更。cnum は scan 時（capture 記録時）にはまだ未採番なので `CaptureEntry` に持たせず emit 時に解決。test run/closure_shadow_capture。
 - **Bug14 パターン/構築フィールド名のエラー行が近似**：bind/MakeField 名が lower で再インターン＝原本 offset 無し→`BindAst`/`MakeFieldAst` に span 付与、lower で原本 offset 維持（Trees.pw/Lower.pw）。
 - **Bug15 非 void 関数で return せず末尾到達＝silent ゴミ**〔silent・既存・要言語判断〕：Plew は**末尾式を暗黙 return しない**設計（`fn f() -> U64 { 5U64 }` すらゴミ＝spec は `return` 明示・`give` はブロック式専用）。よって `fn f() -> T { match e { … => give v } }`（give アームの tail match）も値を返さず未初期化（`-Wreturn-type`）。これは「tail-match が返すべき」ではなく「**全経路 return せず関数末尾に達するのを loud なコンパイルエラーにすべき**」（拠り所＝silent ゴミは不可）。修正＝非 `()` 関数の本体が全経路で `return`/`panic`/発散で抜けることを検査（spec/11 の発散規則 L223＝panic/return/break/continue で抜けるブロックは値を生まない・に整合）。**制御フロー解析を要し言語表面の判断なので未着手＝ユーザー相談待ち**。
 - **Bug16 `print(String)` が壊れる＝✅修正済**：原因 2 つ＝(1) **String が `Format` 非準拠**だった（`print[T] where T: Format` の境界違反＝`print(stringVar)`/struct field/match-bind が `does not conform to the trait required by where`）→ `compiler/std/Core.pw` に `pub impl String as Format { format → self }` 追加。(2) **文字列リテラル引数が generic の T を推論させない**（`Expr.Str` の typeOf が `kind=1 nameLen=0`＝名前なし→`tyRefOfInfo`=0→`print("hi")` が T 未推論で `print_value_T` 未定義を呼ぶ壊れた C）→ `Resolve.pw` で `Expr.Str` の typeOf に "String" 名 span を付与（`stringTypeSpan`）。enum/match/struct 無関係の `print` 一般バグだった。test run/print_string。
