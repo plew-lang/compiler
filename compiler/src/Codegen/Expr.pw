@@ -1479,6 +1479,36 @@ fn genExpr(c: inout Comp, id: U64) {
             writeU64(n: t)
             write(s: "; })")
         }
+        Expr.OptChain(val base, val memberStart, val memberLen) => {
+            // `base?.member` -> read the Optional; Some(v) yields Some(v.member),
+            // None yields None (short-circuit). Result is Optional[U]. Couples to
+            // @Std/Core Optional (Some = tag 0, field v).
+            val rr: U64 = optChainResultRef(c: inout c, base: base, memberStart: memberStart, memberLen: memberLen)
+            if rr == 0 {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "`?.` needs an Optional whose element has the named field (concrete types only)")
+                return
+            }
+            val bt: TypeInfo = typeOf(c: inout c, id: base)
+            val t: U64 = c.tmp
+            c.tmp = c.tmp + 1
+            write(s: "({ ")
+            emitMangle(c: inout c, ref: bt.ref)
+            write(s: " __oc")
+            writeU64(n: t)
+            write(s: " = (")
+            genExpr(c: inout c, id: base)
+            write(s: "); __oc")
+            writeU64(n: t)
+            write(s: ".tag == 0 ? ((")
+            emitMangle(c: inout c, ref: rr)
+            write(s: "){.tag = 0, .data.Some.v = __oc")
+            writeU64(n: t)
+            write(s: ".data.Some.v.")
+            writeSpan(c: inout c, start: memberStart, len: memberLen)
+            write(s: "}) : ((")
+            emitMangle(c: inout c, ref: rr)
+            write(s: "){.tag = 1}); })")
+        }
         Expr.Try(val expr) => {
             // `try expr` -> if Err(tag 1), early-return the function's own Result
             // error variant; else yield the Ok value. Couples to @Std/Core Result

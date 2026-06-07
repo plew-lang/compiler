@@ -181,6 +181,10 @@ enum Expr {
     // a block ending in `give`. Lowers to a C statement-expression (like
     // MatchExpr). `else` is mandatory in value position (it must always yield).
     IfExpr(cond: U64, thenBlk: U64, elseBlk: U64)
+    // `base?.member` (optional chaining, spec/12): if `base` (an Optional) is
+    // `Some(v)`, the result is `Some(v.member)`, else `None` — short-circuit member
+    // access. Couples to @Std/Core Optional (Some = tag 0, field `v`).
+    OptChain(base: U64, memberStart: U64, memberLen: U64)
     // `try expr` (Result early return): if `expr` is `Err`, return it from the
     // enclosing function (rebuilt as the function's own Result error variant);
     // otherwise the `Ok` value. Couples to @Std/Core's Result shape (Ok = tag 0

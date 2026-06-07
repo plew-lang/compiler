@@ -2153,6 +2153,15 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
             }
         }
         Expr.Cast(val operand, val tyStart, val tyLen, val ty) => { scanExprInsts(c: inout c, exprId: operand) }
+        Expr.OptChain(val base, val memberStart, val memberLen) => {
+            scanExprInsts(c: inout c, exprId: base)
+            // register the Optional[U] result so its C struct is emitted.
+            val rr: U64 = optChainResultRef(c: inout c, base: base, memberStart: memberStart, memberLen: memberLen)
+            if rr == 0 {
+            } else {
+                scanType(c: inout c, ref: rr)
+            }
+        }
         Expr.Try(val expr) => { scanExprInsts(c: inout c, exprId: expr) }
         Expr.Arrow(val base, val nameStart, val nameLen) => { scanExprInsts(c: inout c, exprId: base) }
         Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {

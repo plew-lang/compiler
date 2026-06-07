@@ -1,0 +1,21 @@
+import @Std/Io with { print }
+import @Std/Core
+
+struct Profile { pub val age: I32 }
+struct User { pub val profile: Profile }
+
+fn boolI(b: Bool) -> I64 { if b { return 1I64 } return 0I64 }
+
+fn main() {
+    val u: User = <User profile=<Profile age=42 /> />
+    val some: Optional[User] = <Optional[User].Some v=u />
+    val none: Optional[User] = <Optional[User].None />
+
+    val a: Optional[Profile] = some?.profile      // Some(Profile{42})
+    val b: Optional[I32] = some?.profile?.age      // Some(42)  (chained)
+    val c: Optional[I32] = none?.profile?.age      // None       (short-circuit)
+
+    print(boolI(b: a.isSome()))   // 1
+    print(b.unwrapOr(fallback: 0I32))   // 42
+    print(boolI(b: c.isSome()))   // 0
+}

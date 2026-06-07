@@ -659,6 +659,7 @@ fn exprOffset(c: inout Comp, id: U64) -> U64 {
         Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => { return typeStart }
         Expr.MatchExpr(val scrut, val arms) => { return exprOffset(c: inout c, id: scrut) }
         Expr.IfExpr(val cond, val thenBlk, val elseBlk) => { return exprOffset(c: inout c, id: cond) }
+        Expr.OptChain(val base, memberStart: _, memberLen: _) => { return exprOffset(c: inout c, id: base) }
         Expr.Try(val expr) => { return exprOffset(c: inout c, id: expr) }
         Expr.Arrow(val base, val nameStart, val nameLen) => { return exprOffset(c: inout c, id: base) }
         Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => { return retStart }

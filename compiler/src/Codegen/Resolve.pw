@@ -1049,6 +1049,40 @@ fn markMovedExpr(c: inout Comp, exprId: U64) {
 }
 
 // Type of field `fieldName` declared in struct `structName` (else scalar).
+// The result type ref of `base?.member` (spec/12): `base: Optional[T]` and `member`
+// a field of `T` typed `U` give `Optional[U]`. Returns 0 if `base` is not a ground
+// `Optional[T]` (the `?.` is then a loud error). Concrete `T`/`U` only for now —
+// a generic element/field would need env substitution (deferred).
+fn optChainResultRef(c: inout Comp, base: U64, memberStart: U64, memberLen: U64) -> U64 {
+    val bt: TypeInfo = typeOf(c: inout c, id: base)
+    if bt.kind == 2 {
+    } else {
+        return 0
+    }
+    if bt.ref < c.types.count {
+    } else {
+        return 0
+    }
+    val ot: TypeRef = c.types[bt.ref]
+    if rangeEquals(bytes: c.bytes, start: ot.nameStart, len: ot.nameLen, kw: "Optional") {
+    } else {
+        return 0
+    }
+    if ot.args.count < 1 {
+        return 0
+    }
+    val tInfo: TypeInfo = typeInfoOfRef(c: inout c, ref: ot.args[0])
+    val uInfo: TypeInfo = fieldType(c: inout c, structStart: tInfo.nameStart, structLen: tInfo.nameLen, fieldStart: memberStart, fieldLen: memberLen)
+    mut val uRef: U64 = uInfo.ref
+    if uRef == 0 {
+        val noArgs: Array[U64] = []
+        uRef = c.pushType(t: <TypeRef nameStart=uInfo.nameStart nameLen=uInfo.nameLen args=noArgs />)
+    }
+    mut val args: Array[U64] = []
+    args.append(uRef)
+    return c.pushType(t: <TypeRef nameStart=ot.nameStart nameLen=ot.nameLen args=args />)
+}
+
 fn fieldType(c: inout Comp, structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
     val qStruct: U64 = intern(c: inout c, start: structStart, len: structLen)
     val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
@@ -1837,6 +1871,14 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 return exprType(c: inout c, id: g)
             }
             return scalarInfo()
+        }
+        Expr.OptChain(val base, val memberStart, val memberLen) => {
+            // `base?.member` : Optional[U] where U is `member`'s type on the element.
+            val rr: U64 = optChainResultRef(c: inout c, base: base, memberStart: memberStart, memberLen: memberLen)
+            if rr == 0 {
+                return scalarInfo()
+            }
+            return typeInfoOfRef(c: inout c, ref: rr)
         }
         Expr.Try(val expr) => {
             // result type = the Result's Ok payload T (args[0] of Result[T, E]).
