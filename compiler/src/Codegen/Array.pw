@@ -355,6 +355,16 @@ fn skipArrayElem(c: inout Comp, ae: Bind) -> Bool {
     if isTypeParamName(c: inout c, start: ae.nameStart, len: ae.nameLen) {
         return true
     }
+    // a non-ground compound element (`Pair[K,V]` recorded from a generic struct's
+    // `Array[Pair[K,V]]` field template): only its ground instantiations
+    // (`Pair[I64,I64]`) get a runtime. The mangled name (`Pair_K_V`) is not a bare
+    // type-param name, so check the recorded element ref for residual type params.
+    if ae.fieldStart != 0 {
+        if tyRefIsGround(c: inout c, ref: ae.fieldStart) {
+        } else {
+            return true
+        }
+    }
     return false
 }
 

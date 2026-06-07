@@ -1,0 +1,41 @@
+// A generic struct whose field is `Array[Gen[K,V]]` (an array of another generic
+// struct using the enclosing type parameters) monomorphizes correctly: the field
+// action, the memberwise factory, index, and the struct's own methods all name
+// the ground runtime `Array_Entry_U64_U64` — not the un-substituted template
+// `Array_Entry_K_V` (which must not be emitted at all). The nested-generic
+// monomorphization cluster.
+import @Std/Io with { print }
+
+struct Entry[K, V] {
+    pub val key: K
+    pub val value: V
+}
+
+struct Map[K, V] {
+    pub(get) mut val entries: Array[Entry[K, V]]
+    pub(get) mut val count: U64
+}
+
+pub impl[K, V] Map[K, V] {
+    inout fn put(key: K, value: V) {
+        self.entries.append(<Entry[K, V] key=key value=value />)
+        self.count += 1
+    }
+    fn keyAt(i: U64) -> K {
+        return self.entries.get(i: i).key
+    }
+    fn valueAt(i: U64) -> V {
+        return self.entries.get(i: i).value
+    }
+}
+
+fn main() {
+    mut val m = <Map[U64, U64] entries=[] count=0 />
+    m.put(key: 100, value: 200)
+    m.put(key: 300, value: 400)
+    print(m.count)
+    print(m.keyAt(i: 0))
+    print(m.valueAt(i: 0))
+    print(m.keyAt(i: 1))
+    print(m.valueAt(i: 1))
+}

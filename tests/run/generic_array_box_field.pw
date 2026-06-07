@@ -1,0 +1,22 @@
+// A single-type-parameter variant: `Array[Box[T]]` field in `Holder[T]`. The
+// element `Box[T]` grounds to `Box[I64]` at the instance, so the array runtime,
+// the field action and the index site all name `Array_Box_I64`. (This input
+// previously crashed the compiler and emitted the template `Array_Box_T`.)
+import @Std/Io with { print }
+
+struct Box[T] {
+    pub val v: T
+}
+
+struct Holder[T] {
+    pub(get) mut val items: Array[Box[T]]
+}
+
+fn main() {
+    mut val h = <Holder[I64] items=[] />
+    h.items.append(<Box[I64] v=5 />)
+    h.items.append(<Box[I64] v=9 />)
+    print(h.items.count)
+    print(h.items[0].v)
+    print(h.items[1].v)
+}

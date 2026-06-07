@@ -1189,11 +1189,48 @@ fn iterableItemInfo(c: inout Comp, et: TypeInfo) -> TypeInfo {
     return scalarInfo()
 }
 
+// TypeInfo for an `Array[E]` field/parameter of a generic instance, grounding E's
+// type parameters via the instance env (`params` -> `instArgs`). Returns the
+// grounded element's name (its head for a simple element, its mangled name for a
+// compound one like `Box[T]` -> `Box_I64`) as a kind=3 (array) TypeInfo, so the
+// use site emits `Array_<grounded>` instead of the un-substituted template name
+// `Array_Box_T`. ref stays 0 (an array TypeInfo carries no element ref). Unifies
+// the bare-param (`Array[T]`) and compound-element (`Array[Box[T]]`) cases.
+fn groundedArrayFieldInfo(c: inout Comp, params: Array[Bind], instArgs: Array[U64], arrayTyRef: U64) -> TypeInfo {
+    val at: TypeRef = c.types[arrayTyRef]
+    if at.args.count == 0 {
+        return typeInfoOfRef(c: inout c, ref: arrayTyRef)
+    }
+    val savedP: Array[Bind] = c.curTypeParams
+    val savedA: Array[U64] = c.curTypeArgs
+    c.curTypeParams = params
+    c.curTypeArgs = instArgs
+    val grounded: U64 = groundTypeRef(c: inout c, ref: at.args[0])
+    mut val ti: TypeInfo = scalarInfo()
+    if isCompoundType(c: inout c, ref: grounded) {
+        val mn: Bind = appendMangleSpan(c: inout c, ref: grounded)
+        ti = <TypeInfo kind=3 nameStart=mn.nameStart nameLen=mn.nameLen ref=0 />
+    } else {
+        val gt: TypeRef = c.types[grounded]
+        ti = <TypeInfo kind=3 nameStart=gt.nameStart nameLen=gt.nameLen ref=0 />
+    }
+    c.curTypeParams = savedP
+    c.curTypeArgs = savedA
+    return ti
+}
+
 // TypeInfo of a type `tyRef` after substituting any type parameter (`params[i]`)
 // with the instantiation `instRef`'s concrete argument. Used to resolve a
 // generic method's parameter types at a call site.
 fn substTypeInfo(c: inout Comp, instRef: U64, params: Array[Bind], tyRef: U64) -> TypeInfo {
     val t: TypeRef = c.types[tyRef]
+    // an `Array[E]` field: ground E (which may be a bare param `T` or a compound
+    // `Box[T]`) through the instance env so the use site names the concrete runtime.
+    if t.args.count > 0 {
+        if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+            return groundedArrayFieldInfo(c: inout c, params: params, instArgs: c.types[instRef].args, arrayTyRef: tyRef)
+        }
+    }
     mut val i: U64 = 0
     while i < params.count {
         val p: Bind = params[i]
@@ -1231,25 +1268,12 @@ fn genericFieldTypeInfo(c: inout Comp, instRef: U64, fieldStart: U64, fieldLen: 
                 }
                 pi += 1
             }
-            // an `Array[T]` field: resolve the element type parameter so the
-            // use site (e.g. the memberwise factory) gets the concrete element.
+            // an `Array[E]` field: ground E (a bare param `T` or a compound
+            // `Box[T]`) through the instance env so the use site (memberwise
+            // factory, field action, index/method call) names the concrete runtime.
             if rangeEquals(bytes: c.bytes, start: ftr.nameStart, len: ftr.nameLen, kw: "Array") {
                 if ftr.args.count > 0 {
-                    val elr: TypeRef = c.types[ftr.args[0]]
-                    mut val ej: U64 = 0
-                    while ej < s.typeParams.count {
-                        val ep: Bind = s.typeParams[ej]
-                        if spansEqual(c: inout c, aStart: elr.nameStart, aLen: elr.nameLen, bStart: ep.nameStart, bLen: ep.nameLen) {
-                            val argRef: U64 = t.args[ej]
-                            if isCompoundType(c: inout c, ref: argRef) {
-                                val mn: Bind = appendMangleSpan(c: inout c, ref: argRef)
-                                return <TypeInfo kind=3 nameStart=mn.nameStart nameLen=mn.nameLen ref=0 />
-                            }
-                            val at: TypeRef = c.types[argRef]
-                            return <TypeInfo kind=3 nameStart=at.nameStart nameLen=at.nameLen ref=0 />
-                        }
-                        ej += 1
-                    }
+                    return groundedArrayFieldInfo(c: inout c, params: s.typeParams, instArgs: t.args, arrayTyRef: fd.ty)
                 }
             }
             return typeInfoOfRef(c: inout c, ref: fd.ty)
@@ -1286,6 +1310,12 @@ fn genericEnumFieldTypeInfo(c: inout Comp, instRef: U64, variantStart: U64, vari
                             return typeInfoOfRef(c: inout c, ref: t.args[pi])
                         }
                         pi += 1
+                    }
+                    // an `Array[E]` variant field: ground E through the instance env.
+                    if ftr.args.count > 0 {
+                        if rangeEquals(bytes: c.bytes, start: ftr.nameStart, len: ftr.nameLen, kw: "Array") {
+                            return groundedArrayFieldInfo(c: inout c, params: e.typeParams, instArgs: t.args, arrayTyRef: fd.ty)
+                        }
                     }
                     return typeInfoOfRef(c: inout c, ref: fd.ty)
                 }
@@ -1514,8 +1544,18 @@ fn emitArrayMethods(c: inout Comp, proto: Bool) {
         // skip a type-parameter element (`Array[T]` in the impl/method signatures
         // registers `T` as an element): it is not a concrete type, and binding the
         // method's T to the element "T" would be a self-referential env (infinite
-        // recursion in genCElem). Only concrete element types get a method instance.
-        if isTypeParamName(c: inout c, start: c.arrayElems[ei].nameStart, len: c.arrayElems[ei].nameLen) {
+        // recursion in genCElem). A non-ground compound element (`Pair[K,V]` from a
+        // generic struct's `Array[Pair[K,V]]` field) is likewise a template — only
+        // its ground instantiations get method instances. Only concrete element
+        // types get a method instance.
+        mut val skipElem: Bool = isTypeParamName(c: inout c, start: c.arrayElems[ei].nameStart, len: c.arrayElems[ei].nameLen)
+        if c.arrayElems[ei].fieldStart != 0 {
+            if tyRefIsGround(c: inout c, ref: c.arrayElems[ei].fieldStart) {
+            } else {
+                skipElem = true
+            }
+        }
+        if skipElem {
             ei += 1
         } else {
         val inst: U64 = arrayInstRef(c: inout c, ae: c.arrayElems[ei])
