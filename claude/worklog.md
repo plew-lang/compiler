@@ -45,30 +45,24 @@ A 完了で M1 の理想形（真の 1 AST）に到達・impl/trait もマクロ
   1. **✅ `wrappingMul`/`wrappingAdd`/`wrappingSub`（整数全幅）**（commit `aabb800`・privileged codegen lowering・uint64_t で計算→受信者幅へ truncate・test `wrapping_arith`）。
   2. **✅ `Hash`/`Hasher` トレイト＋SipHash-1-3 Hasher（Prelude・固定シード）＋U64/String の `impl … as Hash`**（commit `d8eedb6`・test `hash_siphasher`）。同時に extern body-walk バグ修正。
   3. **✅ `@[Hash]` derive を dogfood（特権合成でなく実 `impl Hash as Derive`）**（commit `4167151`・@Std/Syntax・test gen `derivehash`）。前提として trait 提供 assoc fn 呼び（commit `31c6fe1`）＋derive モデル `Derive`(assoc)/`ParameterizedDerive`(instance)（commit `b90ed6e`）を実装。
-  4. **🚧 `Dictionary[K,V]` lang item＝WIP**（branch `dict-wip`・main 未マージ）。ランタイムは単体完動だが Prelude 統合で `array_methods` 回帰のため退避。**詳細な再開ガイド＝下記「Dictionary 再開ガイド」**。
+  4. **🚧 `Dictionary[K,V]` lang item＝struct+メソッド+添字は land 済**（`79436b7`/添字 commit）。**残＝`[k:v]`/`[:]` リテラルのみ**（下記「Dictionary 残作業」＝再帰値型 boxing の罠で保留）。
   現行のコンパイラ特権合成（`synthStructEq` 等＝Eq/Ord）は据え置き（Hash が dogfood の先駆け・Eq/Ord 移行は後）。
 
-## Dictionary 再開ガイド（dict-wip ブランチ）
+## Dictionary 残作業（struct+メソッド+添字は land 済・残＝リテラルのみ）
 
-**状態**：Dictionary のランタイムは**単体で完動**（後述の検証済み）。だが main へマージすると `array_methods` テストが回帰するため、`dict-wip` ブランチ（origin に push 済・commit `368fa10`）へ退避。main は green の `@[Hash]` dogfood（`4167151`）。再開＝`git checkout dict-wip`（`/tmp/dict-wip.patch` は揮発する可能性・**ブランチが正本**）。
+**状態**：`Dictionary[K,V]` の struct＋メソッド＋**添字 `dict[k]`/`dict[k]=v`** は **land 済**。`Array[U64]` 等を持つ generic struct を Prelude に入れて顕在化した array-element 名解決バグ（真の Bug12）も修正済（`arrayElemNameForRef` が env 依存 `sameMangle` で template 要素 `T` を concrete に誤マッチ→非 ground エントリ skip で解消）。dict-wip ブランチは退役（古い・平行配列回避策含む・main が正本）。**構築は当面 `<Dictionary[K,V] keys=[] vals=[] hashes=[] buckets=[] count=0 />`〔private フィールド露出・可視性ゲート緩い〕＋添字/メソッド**で完動。
 
-### Dictionary の設計（dict-wip で実装済・検証済）
-- **全て Array 上に構築**（RawBuffer 直は将来最適化）。`compiler/std/Prelude.pw` 末尾：
-  `struct Dictionary[K, V] { mut val keys: Array[K]; mut val vals: Array[V]; mut val hashes: Array[U64]; mut val buckets: Array[U64]; pub(get) mut val count: U64 }`
-- **open addressing・線形プロービング**。`buckets[slot]` ＝ エントリindex+1（0=空）。`keys`/`vals`/`hashes` は密に append。**空構築（全 `[]`）＋初回 insert で grow**（cap 0→8）。負荷 0.75 で倍化 grow＋`hashes` から再配置（rehash）。
-- メソッド（`pub impl[K, V] Dictionary[K, V]`・1ブロックに集約＝可視性回避）：`hashOf(key)->U64 where K: Hash`（SipHasher.new→key.hash→finish）・`inout grow() where K: Hash`・`inout insert(key, value) where K: Hash, K: Eq`・`find(key)->U64 where K: Hash, K: Eq`（index+1, 0=不在）・`contains`・`getOr(key, fallback)`・`at(key)`（欠落 panic＝`dict[k]` の脱糖先）。
-- **`get(key)->Optional[V]` は当面なし**（Optional が ambient でなく Core import を要するため）。Optional ambient 化後に追加。
-- **シード固定**（上の 🔴 RNG TODO）。
+### Dictionary の設計（land 済）
+- **全て Array 上に構築**（平行配列＝CoW/値意味論は Array から継承）。`compiler/std/Prelude.pw` 末尾：
+  `struct Dictionary[K, V] { mut val keys: Array[K]  mut val vals: Array[V]  mut val hashes: Array[U64]  mut val buckets: Array[U64]  pub(get) mut val count: U64 }`
+- **open addressing・線形プロービング**。`buckets[slot]` ＝ エントリindex+1（0=空）。`keys`/`vals`/`hashes` は密に append。空構築（全 `[]`）＋初回 insert で grow（cap 0→8）。負荷 0.75 で倍化 grow＋rehash。
+- メソッド（`pub impl[K, V] Dictionary[K, V]`・1ブロック＝可視性集約）：`hashOf`/`grow`/`insert`/`find`/`contains`/`getOr`/`at`（欠落 panic＝`dict[k]` の脱糖先）。**`get(key)->Optional[V]` は当面なし**（Optional ambient 化後）。**シード固定**（上の 🔴 RNG TODO）。
+- **添字（land 済）**：`dict[k]`→`.at(key:)`／`dict[k]=v`→`.insert(key:,value:)`。base 型が Dictionary のとき codegen が合成 Method ノードを emit（`isDictionaryType`／`synthDictMethod`・Expr.pw Index 枝＋Stmt.pw assign 枝・exprType Index は V を返す）。test run/dictionary_subscript。
 
-### 踏んだ generics の壁（dict-wip での回避・修正）
-1. **ネスト generic 不単相化**：`Array[Entry[K,V]]`（Array of 汎用 struct）を Dictionary[String,U64] で使うと `Array_Entry_K_V`（K,V 未置換）のまま emit。**回避＝Entry struct を捨て平行配列**（`Array[K]`/`Array[V]`/`Array[U64]`＝単層なら単相化される）。
-2. **generic コンストラクタの戻り型のみ推論が無い**：`assoc fn new()->Map[K,V]` の `Map.new()` も `<Map keys=.. />`（注釈 `m: Map[String,U64]` から）も K,V を推論せず `Map_new`/`(Map)` を未単相化 emit。**回避＝明示型引数 `<Map[String, U64] keys=.. />`（これは動く）**。Dictionary リテラル lower は明示型引数で構築すればよい。
-3. **generic-レシーバ・メソッド本体の推移的インスタンス探索が無い**（**dict-wip で修正済・良い修正なので残す**）：`Dictionary[String,U64].hashOf` の本体 `key.hash[H]`→`String.hash[SipHasher]` が discover されず C で未定義参照。**修正＝`compiler/src/Codegen/Mono.pw` の `collectFnInsts` に `scanGenInstMethodBodies` を追加**（各 genInst のメソッド本体を `emitMonoMethod` と同じ env〔curTypeParams=メソッドの型params, curTypeArgs=inst.args, curRecvInstRef, setSelfItemEnv〕で `scanBlockInsts`→nested fnInst 登録、推移ループが拾う）。**Array レシーバはスキップ**（emitArrayMethods 専用経路ゆえ）。
-
-### 🐛 未解決ブロッカー＝Array×genInst 干渉（次にやる修正）
-**症状**：Dictionary を常時ロードの Prelude に入れると `array_methods` テストが clang で落ちる＝`first()`（`impl[T] Array[T] { fn first()->T { return self.get(i:0) } }`）の本体が ground されない **`Array_T_get_i_U64`**（未宣言）を吐く（要素型 `T` 未置換のまま emit）。
-**当たりを付けた原因（未確定）**：`Array` は `struct Array[T]` ゆえ `isGenericInst("Array[X]")` が true → `Array[concrete]` が `c.genInsts` に載り（`Mono.pw` ~955 の `c.genInsts.append`）、**Array 専用の runtime emit 経路（`emitArrayMethods`＝要素型キー）と genInst のメソッド emit 経路（`emitMonoMethods`）が二重/干渉**。`emitArrayMethods` は `isTypeParamName`/`skipArrayElem` で要素 "T" をスキップするが、`emitMonoMethods`（genInst 経路）にはそのスキップが無い。**ただし未確定**：`array_methods` 単体（`Array[I64]` も genInst）は Dictionary 無しで green だったので「Array が genInst」だけが原因ではなく、**Dictionary（`Array[K]`/`Array[V]` を持つ generic struct）特有の何か**がトリガ。`Array-skip` ガードを `scanGenInstMethodBodies` に足しても直らなかった＝原因は scan でなく Dictionary を Prelude に置くこと自体。
-**修正方針**：(a) まず原因確定＝`isTypeParamName("T")` が Dictionary 在/不在で false に転じるか、`emitMonoMethods` が `Array[?]` を emit して `Array_T_*` を出すか、を `eprintInt`（コンパイラ内製・`as I64` は U8 のみ可）で特定。(b) **Array を genInst の emit/scan 経路から一貫して除外**（Array は `emitArrayMethods` 専用＝要素型キー、`emitMonoMethods`/`emitMonoStruct`/genInst-method-body-scan では Array をスキップ）。`emitArrayMethods` 側のスキップ（`skipArrayElem`/`isTypeParamName`）と対称に、genInst 経路でも `rangeEquals(inst.name, "Array")` で除外する。(c) 両方（`array_methods` ＋ Dictionary）が green になるまで。**注意**：デバッグは必ず `./dev-rebuild.sh`→`compiler/plewc` の1本で（`/tmp/plewcN` を作らない）。
+### 残＝`[k:v]`/`[:]` リテラル（⚠ 再帰値型 boxing の罠で保留）
+- **試行と撤回**：`ExprAst.DictLit(keys: Array[ExprAst], vals: Array[ExprAst])` を `Syntax/Trees.pw` に足し、`ParseBody.pw` の `Kind.LBracket` を dict 検出に拡張、arena `Expr.DictLit` ＋ `lowerDictLit`（context 型は Bug11 の `lowerExprWithCtx` 経由）＋ genExpr の C statement-expression（empty dict 構築＋各ペア insert）＋ exprType/scanExprInsts を実装＝**リテラル自体は動いた**（`["a":1,"b":2]`/`[:]`/unsuffixed 全 OK）。**だが `ExprAst.DictLit` を ExprAst enum に足した瞬間、配列 of compound（`[<P x=1/>]`/`[[1,2]]`）が全部 segfault**＝`lowerExpr(e: ExprAst)` が `e` を**値渡しでコピー**する際の `ExprAst_copy` が壊れた（`match e` のタグ読みで segfault＝コピー結果が garbage）。原因は **再帰値型 ExprAst に新バリアント（しかも `Array[ExprAst]` を 2 本持つ）を足すと auto-boxing/copy 解析が乱れる**（`markBoxedFields`／value-tree の copy 生成）。enum 末尾に置いても再現＝タグ順でなく**バリアント追加そのもの**がトリガ。**全リテラル変更を revert**（main は green 267→添字で 268）。
+- **再開方針**：リテラル lower は arena 新バリアント不要にできる（添字と同じく codegen で synthesize）か、`markBoxedFields`/再帰値型 copy が「`Array[ExprAst]` を 2 本持つ新バリアント」で壊れる根因を先に潰す。最小再現＝`ExprAst` に `Foo(a: Array[ExprAst], b: Array[ExprAst])` を足すだけで `[<P x=1/>]` が落ちるはず（要確認）。**当面はリテラル無しでも `<Dictionary[..] .../>`＋`dict[k]=v` で実用可**。
+- **注意**：デバッグは必ず `./dev-rebuild.sh`→`compiler/plewc` の1本で（`/tmp/plewcN` を作らない・U64 stderr は `eprintInt` が I64 のみ＝一時 `eprintU`/`eprintSpan`〔stringFromBytes 要 import〕を足して使い終えたら消す）。**dev-rebuild は前回ビルドの plewc を使うので、miscompile 疑いは `./bootstrap.sh`〔種から plewc0→現ソース〕で clean 検証する**。
 
 ### Array 干渉が直った後の残り（Dictionary 完成）
 - **`[k:v]`/`[:]` リテラル**：`compiler/std/Syntax/ParseBody.pw` の `Kind.LBracket` 分岐（配列リテラル・~328行）を拡張＝`[` の後 `:`+`]` なら空 dict（`[:]`）、最初の式の後が `:` なら dict（`: value` を読み `, k: v` を繰り返す）、それ以外は配列。`ExprAst.DictLit { keys, vals, span }` を `Syntax/Trees.pw` に追加。**lower＝明示型引数で `<Dictionary[K,V] keys=[] vals=[] hashes=[] buckets=[] count=0 />`＋各ペアに insert** を合成（`[:]` の K,V は文脈注釈から）。

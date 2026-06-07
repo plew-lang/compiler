@@ -1,0 +1,19 @@
+// Dictionary[K,V] (ambient lang item, spec/02) via its methods and the subscript
+// sugar: `dict[k]` desugars to `.at(key:)` (returns the value, panics if absent)
+// and `dict[k] = v` to `.insert(key:, value:)` (insert or update). Construction is
+// the explicit empty form for now (the `[k:v]` literal is a follow-up). String
+// keys exercise the transitive `key.hash[SipHasher]` instantiation.
+import @Std/Io with { print }
+
+fn main() {
+    mut val d: Dictionary[String, U64] = <Dictionary[String, U64] keys=[] vals=[] hashes=[] buckets=[] count=0 />
+    d["alpha"] = 1U64
+    d["beta"] = 2U64
+    d["alpha"] = 10U64
+    print(d.count)
+    print(d["alpha"])
+    print(d["beta"])
+    print(d.getOr(key: "gamma", fallback: 99U64))
+    print(d.contains(key: "beta"))
+    print(d.contains(key: "gamma"))
+}

@@ -722,6 +722,21 @@ fn genStmt(c: inout Comp, id: U64) {
                         return
                     }
                     val bt: TypeInfo = typeOf(c: inout c, id: base)
+                    // `dict[k] = v` (spec/02): the Dictionary subscript-set desugars to
+                    // `.insert(key: k, value: v)` (insert-or-update). Compound forms
+                    // (`dict[k] += v`) are not yet supported.
+                    if isDictionaryType(c: inout c, ti: bt) {
+                        if op == opAssign() {
+                        } else {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "compound assignment to a dictionary element is not supported; use `dict[k] = ...`")
+                            return
+                        }
+                        write(s: "    ")
+                        val mexpr: U64 = synthDictMethod(c: inout c, recv: base, name: "insert", arg0Label: "key", arg0: index, hasArg1: true, arg1Label: "value", arg1: value)
+                        genExpr(c: inout c, id: mexpr)
+                        write(s: ";\n")
+                        return
+                    }
                     if bt.kind == 3 {
                         checkLitSpan(c: inout c, id: value, tyStart: bt.nameStart, tyLen: bt.nameLen, isArray: false)
                     }
