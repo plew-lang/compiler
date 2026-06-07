@@ -1271,7 +1271,13 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             return scalarInfo()
         }
-        Expr.Str(val start, val len) => { return <TypeInfo kind=1 nameStart=0 nameLen=0 ref=0 /> }
+        Expr.Str(val start, val len) => {
+            // carry the "String" name span so tyRefOfInfo can recover a String
+            // TypeRef — a generic call `print("hi")` then infers T = String (without
+            // the name, a string-literal argument left T uninferred -> no instance).
+            val ss: Bind = stringTypeSpan(c: inout c)
+            return <TypeInfo kind=1 nameStart=ss.nameStart nameLen=ss.nameLen ref=0 />
+        }
         Expr.Ident(val start, val len) => {
             if isSelfRef(c: inout c, start: start, len: len) {
                 if c.curRecvInstRef != 0 {

@@ -1,0 +1,28 @@
+// print of a String (spec/02): String conforms to Format, and a string-literal
+// argument infers the generic `print[T]`'s T = String. Before the fix, only
+// interpolated/integer prints worked: `print(s)` for any non-literal String hit a
+// bogus `where T: Format` rejection (String had no Format impl), and `print("x")`
+// emitted a call to an undefined monomorphization (the literal arg left T uninferred).
+import @Std/Io with { print }
+
+struct S { pub val text: String }
+enum Tok { Word(text: String) Eof }
+
+fn nameOf(t: Tok) -> String {
+    mut val r: String = "?"
+    match t {
+        Tok.Word(val text) => { r = text }
+        Tok.Eof => { r = "<eof>" }
+    }
+    return r
+}
+
+fn main() {
+    print("literal")                    // string-literal argument
+    val v: String = "variable"
+    print(v)                            // String variable
+    val s: S = <S text="field" />
+    print(s.text)                       // String struct field
+    print(nameOf(t: <Tok.Word text="bound" />))   // match-bound String
+    print(nameOf(t: <Tok.Eof />))
+}

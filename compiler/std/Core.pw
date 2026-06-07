@@ -314,3 +314,12 @@ pub impl Bool as Format {
         }
     }
 }
+
+pub impl String as Format {
+    // A string formats as itself (the `format` spec is ignored for now, like the
+    // integer impls). Without this conformance `print(s)` for a non-literal String
+    // fails the `where T: Format` bound on `print` (spec/02).
+    fn format(format: String) -> String {
+        return self
+    }
+}
