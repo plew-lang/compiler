@@ -1,0 +1,10 @@
+// One match arm returns, the other falls through -> not all paths return.
+import @Std/Io with { print }
+enum E { A(x: U64) B(y: U64) }
+fn f(e: E) -> U64 {
+    match e {
+        E.A(val x) => { return x }
+        E.B(val y) => { print(y) }
+    }
+}
+fn main() { }

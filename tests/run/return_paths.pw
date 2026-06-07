@@ -1,0 +1,40 @@
+// Valid all-paths-diverge forms accepted by the missing-return check (spec/11):
+// match where every arm returns, if/else where both branches return, an
+// unconditional `while true` whose only exit is a return, and a panic arm.
+import @Std/Io with { print }
+
+enum E { A(x: U64) B(y: U64) C }
+
+fn classify(e: E) -> U64 {
+    match e {
+        E.A(val x) => { return x }
+        E.B(val y) => { return y }
+        E.C => { panic "no C" }
+    }
+}
+
+fn pick(b: Bool) -> U64 {
+    if b {
+        return 10U64
+    } else {
+        return 20U64
+    }
+}
+
+fn firstU64() -> U64 {
+    mut val i: U64 = 0
+    while true {
+        if i >= 3 {
+            return i
+        }
+        i += 1
+    }
+}
+
+fn main() {
+    print(classify(e: <E.A x=1 />))
+    print(classify(e: <E.B y=2 />))
+    print(pick(b: true))
+    print(pick(b: false))
+    print(firstU64())
+}

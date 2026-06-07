@@ -1,0 +1,5 @@
+// spec/11: a non-`()` function must return on every path. A bare tail expression is
+// NOT an implicit return (give is for block-expressions, return is for functions),
+// so this falls off the end -> loud error (not silent garbage).
+fn f() -> U64 { 5U64 }
+fn main() { }

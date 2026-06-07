@@ -1,0 +1,7 @@
+// An `if` with no `else` does not return on the fall-through path.
+fn f(b: Bool) -> U64 {
+    if b {
+        return 1U64
+    }
+}
+fn main() { }

@@ -14,6 +14,25 @@ export async fn functionName[T, U](
 
 引数のモード（`borrow`／`inout`／`move`・コピー可能は既定で by-value）、`async fn`／`spawn fn`、型引数の能力マーカー（`allowUnique`／`noLocal`）は [値・変数・所有権](03-values.md)・[非同期処理とメモリ管理](../04-execution/14-concurrency.md)・[ジェネリクス](../02-type-system/06-generics.md) を参照。
 
+## 戻り値（`return` は明示）
+
+関数は**末尾式を暗黙に返しません**（Rust と異なる）。値を返すには `return` を書きます。`give` は[ブロック式](../03-expressions/11-control-flow.md)（`if`／`match` のアームや `val x = { … give v }`）専用で、関数本体の戻り値にはなりません。
+
+戻り型を持つ（`()` 以外の）関数は、**全ての経路で `return`／`panic`／発散して抜けなければコンパイルエラー**です（末尾に到達して値を返さない「素通り」は、未初期化の値を黙って返すことになるため loud に拒否します。[発散規則](../03-expressions/11-control-flow.md)に従い、`return`／`panic`・両枝が発散する `if`/`else`・全アームが発散する網羅 `match`・脱出 `break` のない `while true` は「発散」と見なされます）。
+
+```plew
+fn f(e: E) -> U64 {
+    match e {
+        E.A(val x) => { return x }
+        E.B(val y) => { return y }
+    }
+}                         // OK: 全アームが return
+
+fn bad() -> U64 { 5 }     // エラー: 末尾式は暗黙 return されない（`return 5` と書く）
+```
+
+`()` を返す関数（戻り型なし、または `-> ()`）はこの検査の対象外です。
+
 ## 引数ラベル
 
 全ての関数呼び出しは、各引数に**ラベル（= 引数名）が必須**です。関数・メソッド・関連関数だけでなく、**クロージャの呼び出しも同様**です。ラベルはパラメータ名と一致し、宣言順に並べます。
