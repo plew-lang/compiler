@@ -79,7 +79,7 @@ spec/16 は **入力＝TokenStream（span 付き）＋ヘルパで TokenStream�
 - **M2＝コアライブラリのマクロを dogfood**：`Eq`/`Hash` をこの機構で書く。現行のコンパイラ特権合成（`synthStructEq` 等）から段階移行（特権版を残したまま並行→検証→差し替え）。`Hash` が出れば `Dictionary`（`[k:v]`）に接続。
 - **M3＝パッケージ管理導入後に切り出し**：`@Std/Syntax`（lexer+parser+AST）を独立した**外部共有パッケージ**へ昇格。コンパイラもマクロツールも同一パッケージ版に依存する構成へ。
 
-> 当初の理想順は「ライブラリ切り出し → その上に機構」だったが、入れ物（パッケージ管理）が無いので**機構を in-tree（`@Std/Syntax`）で先に作り、外部切り出しは最後**に倒した。各段階で実利（コンパイラが綺麗になる／Dictionary が進む）が出る。**Phase C（名前 interning・宣言名スキャンを整数比較へ）は Dictionary の後に済**（経緯は worklog）。**重い D（legacy 型 triple／パーサの codegen 仕事）はこの後**＝Phase C で残した型 span 側を片付ける。
+> 当初の理想順は「ライブラリ切り出し → その上に機構」だったが、入れ物（パッケージ管理）が無いので**機構を in-tree（`@Std/Syntax`）で先に作り、外部切り出しは最後**に倒した。各段階で実利（コンパイラが綺麗になる／Dictionary が進む）が出る。**Phase C（名前 interning・宣言名）→ Phase D（型 interning・型 span/型パラメータ照合を整数比較へ）まで済**（経緯は worklog）。**重い D'（legacy 型 triple `(start,len,isArray)+ref` の構造的 ref 一本化／パーサの codegen 仕事）はこの後**＝Phase D は id を載せて照合を整数化した段で、triple そのものの構造的撤去は別。
 
 ## 実行系の具体（M0）
 
