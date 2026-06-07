@@ -1,0 +1,29 @@
+import @Std/Io with { print }
+
+// O6 stage 3: bare primitive operators desugar to the Core witnesses (over the
+// intrinsic floor), not a built-in fast path — primitives are not special-cased
+// (spec/12). Mixes typed operands and untyped literals (literal inference picks
+// the witness's rhs type), the signed type-minimum literal (folded, not Neg), and
+// the full operator set.
+fn main() {
+    mut val i: U64 = 5U64
+    print(i + 1U64)            // 6   (typed + typed)
+    print(i + 3)               // 8   (typed + untyped literal, inferred U64)
+    print(i * 2)               // 10
+    print(i - 2)               // 3
+    print(i / 2)               // 2
+    print(i % 3)               // 2
+    val a: I32 = 40
+    val b: I32 = 6
+    print(a + b)               // 46
+    print(a / b)               // 6
+    print(-a)                  // -40 (Neg witness on a variable)
+    print(-2147483648I32)      // -2147483648 (folded type-min literal)
+    val f: U64 = 12U64
+    print(f & 10U64)       // 8
+    print(f | 1U64)       // 13
+    print(f ^ 6U64)       // 10
+    print(f << 1U64)           // 24
+    print(f >> 2U64)           // 3
+    print(~0U8)                // 255
+}

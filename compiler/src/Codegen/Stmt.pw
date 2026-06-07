@@ -431,16 +431,22 @@ fn findBinTraitWitness(c: inout Comp, typeStart: U64, typeLen: U64, name: String
 
 // Whether the left operand of an arithmetic op carries the operator-trait witness
 // (spec/12: `a + b` desugars to `T.add(lhs: a, rhs: b)` iff `impl T as Add[…]`).
-// Only named (struct) operands — scalars use the built-in checked arithmetic.
+// A named struct (kind 2) OR a primitive scalar (kind 0 with a type name) whose
+// type conforms desugars to the witness — primitives are not special-cased (O6):
+// `I32 + I32` routes through Core's `impl I32 as Add` to the `i32Add` intrinsic.
+// An untyped literal (kind 0, no name), String, or array has no witness and keeps
+// the built-in checked arithmetic (the fallback below in the dispatch).
 fn hasBinTraitWitness(c: inout Comp, op: I64, lhs: U64) -> Bool {
     if isBinTraitOp(op: op) {
     } else {
         return false
     }
     val lt: TypeInfo = typeOf(c: inout c, id: lhs)
-    if lt.kind == 2 {
-        if typeConformsToName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, traitName: binTraitName(op: op)) {
-            return findAssocByName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op)) < c.funcs.count
+    if lt.kind == 2 || lt.kind == 0 {
+        if lt.nameLen > 0 {
+            if typeConformsToName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, traitName: binTraitName(op: op)) {
+                return findAssocByName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op)) < c.funcs.count
+            }
         }
     }
     return false
@@ -485,13 +491,33 @@ fn unaryMethodName(op: I64) -> String {
 }
 
 // Whether a prefix-unary operand carries the operator-trait witness (spec/12: `-x`
-// desugars to `T.neg(value: x)` iff `impl T as Neg`). Only named (struct) operands —
-// scalars use the built-in negate / logical-not / bit-not.
+// desugars to `T.neg(value: x)` iff `impl T as Neg`). A named struct (kind 2) OR a
+// primitive scalar (kind 0 with a type name) whose type conforms desugars to the
+// witness (O6 — `-i: I64` routes through Core's `impl I64 as Neg`). An untyped
+// literal / non-conforming scalar keeps the built-in negate / logical-not / bit-not.
+// Is the expression a bare integer/bool literal (an `Expr.Int`)?
+fn isIntLitExpr(c: inout Comp, id: U64) -> Bool {
+    match c.exprs[id] {
+        Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _) => { return true }
+        _ => { return false }
+    }
+}
+
 fn hasUnaryWitness(c: inout Comp, op: I64, operand: U64) -> Bool {
+    // a prefix operator applied to a LITERAL folds into the literal (spec/02:
+    // `-128I8` is the literal -128, not Neg(128I8)). Routing it through the checked
+    // witness would pass the out-of-range magnitude (128) into a typed parameter
+    // (int8_t -> -128) and then negate, spuriously overflowing; the built-in path
+    // negates in wider precision. So literal operands keep the built-in op.
+    if isIntLitExpr(c: inout c, id: operand) {
+        return false
+    }
     val ot: TypeInfo = typeOf(c: inout c, id: operand)
-    if ot.kind == 2 {
-        if typeConformsToName(c: inout c, typeStart: ot.nameStart, typeLen: ot.nameLen, traitName: unaryTraitName(op: op)) {
-            return findAssocByName(c: inout c, typeStart: ot.nameStart, typeLen: ot.nameLen, name: unaryMethodName(op: op)) < c.funcs.count
+    if ot.kind == 2 || ot.kind == 0 {
+        if ot.nameLen > 0 {
+            if typeConformsToName(c: inout c, typeStart: ot.nameStart, typeLen: ot.nameLen, traitName: unaryTraitName(op: op)) {
+                return findAssocByName(c: inout c, typeStart: ot.nameStart, typeLen: ot.nameLen, name: unaryMethodName(op: op)) < c.funcs.count
+            }
         }
     }
     return false
