@@ -8,11 +8,12 @@
 // Index in c.structs of a generic struct named (nameStart,nameLen), or
 // c.structs.count if there is no such generic struct.
 fn genericStructIndex(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
+    val qId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = 0
     while i < c.structs.count {
         val s: StructDef = c.structs[i]
         if s.typeParams.count > 0 {
-            if spansEqual(c: inout c, aStart: s.nameStart, aLen: s.nameLen, bStart: nameStart, bLen: nameLen) {
+            if s.nameId == qId {
                 return i
             }
         }
@@ -24,11 +25,12 @@ fn genericStructIndex(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
 // Index in c.enums of a generic enum named (nameStart,nameLen), or c.enums.count
 // if there is no such generic enum.
 fn genericEnumIndex(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
+    val qId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = 0
     while i < c.enums.count {
         val e: EnumDef = c.enums[i]
         if e.typeParams.count > 0 {
-            if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: nameStart, bLen: nameLen) {
+            if e.nameId == qId {
                 return i
             }
         }
@@ -145,11 +147,12 @@ fn isTransparentContainer(c: inout Comp, nStart: U64, nLen: U64) -> Bool {
 
 // Index of a concrete (non-generic) enum by name, else c.enums.count.
 fn concreteEnumIndex(c: inout Comp, nStart: U64, nLen: U64) -> U64 {
+    val qId: U64 = intern(c: inout c, start: nStart, len: nLen)
     mut val i: U64 = 0
     while i < c.enums.count {
         val e: EnumDef = c.enums[i]
         if e.typeParams.count == 0 {
-            if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: nStart, bLen: nLen) {
+            if e.nameId == qId {
                 return i
             }
         }
@@ -279,7 +282,9 @@ fn noField() -> FieldDef {
 // (isEnum=true) by name. Returns noField() (nameLen == 0) when not found. Used at
 // construction/access sites to recover a field's boxed flag and declared type.
 fn findFieldDef(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fieldStart: U64, fieldLen: U64) -> FieldDef {
+    val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
     if isEnum {
+        val qVar: U64 = intern(c: inout c, start: variantStart, len: variantLen)
         val ei: U64 = concreteEnumIndex(c: inout c, nStart: typeStart, nLen: typeLen)
         if ei >= c.enums.count {
             return noField()
@@ -288,11 +293,11 @@ fn findFieldDef(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, 
         mut val vi: U64 = 0
         while vi < vars.count {
             val v: Variant = vars[vi]
-            if spansEqual(c: inout c, aStart: v.nameStart, aLen: v.nameLen, bStart: variantStart, bLen: variantLen) {
+            if v.nameId == qVar {
                 val fs: Array[FieldDef] = v.fields
                 mut val fj: U64 = 0
                 while fj < fs.count {
-                    if spansEqual(c: inout c, aStart: fs[fj].nameStart, aLen: fs[fj].nameLen, bStart: fieldStart, bLen: fieldLen) {
+                    if fs[fj].nameId == qField {
                         return fs[fj]
                     }
                     fj += 1
@@ -309,7 +314,7 @@ fn findFieldDef(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, 
     val fs: Array[FieldDef] = c.structs[si].fields
     mut val fi: U64 = 0
     while fi < fs.count {
-        if spansEqual(c: inout c, aStart: fs[fi].nameStart, aLen: fs[fi].nameLen, bStart: fieldStart, bLen: fieldLen) {
+        if fs[fi].nameId == qField {
             return fs[fi]
         }
         fi += 1
@@ -644,10 +649,11 @@ fn isTypeParamName(c: inout Comp, start: U64, len: U64) -> Bool {
     // parameter — even if some *other* generic's parameter shares the name (a user
     // struct `B` vs `MapIter[I, F, B]`'s `B`). Concrete types win the global check;
     // a template's own parameter is resolved by the active env before this matters.
+    val qId: U64 = intern(c: inout c, start: start, len: len)
     mut val ni: U64 = 0
     while ni < c.structs.count {
         if c.structs[ni].typeParams.count == 0 {
-            if spansEqual(c: inout c, aStart: c.structs[ni].nameStart, aLen: c.structs[ni].nameLen, bStart: start, bLen: len) {
+            if c.structs[ni].nameId == qId {
                 return false
             }
         }
@@ -656,7 +662,7 @@ fn isTypeParamName(c: inout Comp, start: U64, len: U64) -> Bool {
     mut val nj: U64 = 0
     while nj < c.enums.count {
         if c.enums[nj].typeParams.count == 0 {
-            if spansEqual(c: inout c, aStart: c.enums[nj].nameStart, aLen: c.enums[nj].nameLen, bStart: start, bLen: len) {
+            if c.enums[nj].nameId == qId {
                 return false
             }
         }
@@ -864,10 +870,11 @@ fn simpleTypeRef(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
 // The bound type ref of a receiver's `type Item = X` associated binding (the
 // Iterator conformance's element), or 0 if none. Keyed by the receiver type name.
 fn assocItemRef(c: inout Comp, recvStart: U64, recvLen: U64) -> U64 {
+    val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     mut val i: U64 = 0
     while i < c.assocBindings.count {
         val ab: AssocBinding = c.assocBindings[i]
-        if spansEqual(c: inout c, aStart: ab.recvStart, aLen: ab.recvLen, bStart: recvStart, bLen: recvLen) {
+        if ab.recvId == qRecv {
             if rangeEquals(bytes: c.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Item") {
                 return ab.ty
             }
@@ -966,10 +973,11 @@ fn scanType(c: inout Comp, ref: U64) {
 // resolved element type.
 fn scanGenInstFields(c: inout Comp, instRef: U64) {
     val inst: TypeRef = c.types[instRef]
+    val qInst: U64 = intern(c: inout c, start: inst.nameStart, len: inst.nameLen)
     mut val si: U64 = 0
     while si < c.structs.count {
         val sd: StructDef = c.structs[si]
-        if spansEqual(c: inout c, aStart: sd.nameStart, aLen: sd.nameLen, bStart: inst.nameStart, bLen: inst.nameLen) {
+        if sd.nameId == qInst {
             if sd.typeParams.count == inst.args.count {
                 if sd.typeParams.count > 0 {
                     val savedP: Array[Bind] = c.curTypeParams
@@ -996,7 +1004,7 @@ fn scanGenInstFields(c: inout Comp, instRef: U64) {
                             // under Self=this inst would recurse forever (MapIter[MapIter[…]]).
                             if mf.isProvided {
                             } else {
-                            if spansEqual(c: inout c, aStart: mf.recvStart, aLen: mf.recvLen, bStart: inst.nameStart, bLen: inst.nameLen) {
+                            if mf.recvId == qInst {
                                 // a non-generic method may still mention `Self`/`Item`
                                 // (`fn iterator() -> Self`); resolve them to this inst.
                                 setSelfItemEnv(c: inout c, recvStart: inst.nameStart, recvLen: inst.nameLen, recvInstRef: instRef)
@@ -1255,10 +1263,11 @@ fn genericFieldTypeInfo(c: inout Comp, instRef: U64, fieldStart: U64, fieldLen: 
     }
     val s: StructDef = c.structs[si]
     val fields: Array[FieldDef] = s.fields
+    val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
     mut val i: U64 = 0
     while i < fields.count {
         val fd: FieldDef = fields[i]
-        if spansEqual(c: inout c, aStart: fd.nameStart, aLen: fd.nameLen, bStart: fieldStart, bLen: fieldLen) {
+        if fd.nameId == qField {
             val ftr: TypeRef = c.types[fd.ty]
             mut val pi: U64 = 0
             while pi < s.typeParams.count {
@@ -1293,15 +1302,17 @@ fn genericEnumFieldTypeInfo(c: inout Comp, instRef: U64, variantStart: U64, vari
     }
     val e: EnumDef = c.enums[ei]
     val vars: Array[Variant] = e.variants
+    val qVar: U64 = intern(c: inout c, start: variantStart, len: variantLen)
+    val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
     mut val vi: U64 = 0
     while vi < vars.count {
         val v: Variant = vars[vi]
-        if spansEqual(c: inout c, aStart: v.nameStart, aLen: v.nameLen, bStart: variantStart, bLen: variantLen) {
+        if v.nameId == qVar {
             val fs: Array[FieldDef] = v.fields
             mut val fi: U64 = 0
             while fi < fs.count {
                 val fd: FieldDef = fs[fi]
-                if spansEqual(c: inout c, aStart: fd.nameStart, aLen: fd.nameLen, bStart: fieldStart, bLen: fieldLen) {
+                if fd.nameId == qField {
                     val ftr: TypeRef = c.types[fd.ty]
                     mut val pi: U64 = 0
                     while pi < e.typeParams.count {
@@ -1434,7 +1445,7 @@ fn methodMatchesInst(c: inout Comp, f: Func, instRef: U64) -> Bool {
         return false
     }
     val inst: TypeRef = c.types[instRef]
-    if spansEqual(c: inout c, aStart: f.recvStart, aLen: f.recvLen, bStart: inst.nameStart, bLen: inst.nameLen) {
+    if f.recvId == intern(c: inout c, start: inst.nameStart, len: inst.nameLen) {
     } else {
         return false
     }
