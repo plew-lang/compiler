@@ -111,6 +111,38 @@ fn lowerMakeFields(c: inout Comp, fields: Array[MakeFieldAst]) -> Array[MakeFiel
     return out
 }
 
+// Lower an expression with a context type `ctxRef` (a TypeRef, 0 = none). A
+// type-argument-less generic constructor `<Box v=… />` whose head matches the
+// context type's head takes the context's type arguments (`Box[I64]`), so the
+// instance is named/typed concretely without explicit `<Box[I64] …>`. (Bug11 —
+// generic-constructor type-argument inference from the binding/return context.)
+// Everything else falls through to the plain lowerExpr.
+fn lowerExprWithCtx(c: inout Comp, e: ExprAst, ctxRef: U64) -> U64 {
+    if ctxRef != 0 {
+        if ctxRef < c.types.count {
+            val ct: TypeRef = c.types[ctxRef]
+            if ct.args.count > 0 {
+                match e {
+                    ExprAst.Make(val typeName, val typeArgs, val variant, val isEnum, val fields, val span) => {
+                        if isEnum {
+                        } else {
+                            if typeArgs.count == 0 {
+                                val tn: Bind = internBytes(c: inout c, s: typeName)
+                                if spansEqual(c: inout c, aStart: tn.nameStart, aLen: tn.nameLen, bStart: ct.nameStart, bLen: ct.nameLen) {
+                                    val fs: Array[MakeField] = lowerMakeFields(c: inout c, fields: fields)
+                                    return c.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fs />)
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    return lowerExpr(c: inout c, e: e)
+}
+
 fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
     mut val result: U64 = 0
     match e {
@@ -234,7 +266,10 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
                 rIsArray = pt.isArray
                 rTy = pt.ref
             }
+            val savedRet: U64 = c.lowerRetTy
+            c.lowerRetTy = rTy
             val bd: U64 = lowerBlock(c: inout c, b: body)
+            c.lowerRetTy = savedRet
             result = c.pushExpr(e: <Expr.Closure params=ps hasRet=hasRet retStart=rStart retLen=rLen retIsArray=rIsArray retTy=rTy body=bd />)
         }
         ExprAst.Move(val operand, val isBorrow, val span) => {
@@ -356,7 +391,7 @@ fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
                 tyIsArray = pt.isArray
                 tyRef = pt.ref
             }
-            val iv: U64 = lowerExpr(c: inout c, e: init)
+            val iv: U64 = lowerExprWithCtx(c: inout c, e: init, ctxRef: tyRef)
             result = c.pushStmt(s: <Stmt.Let mutable=mutable nameStart=nm.nameStart nameLen=nm.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=iv />)
         }
         StmtAst.Assign(val op, val target, val value, val span) => {
@@ -371,7 +406,7 @@ fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
         StmtAst.Return(val value, val hasValue, val span) => {
             mut val v: U64 = 0
             if hasValue {
-                v = lowerExpr(c: inout c, e: value)
+                v = lowerExprWithCtx(c: inout c, e: value, ctxRef: c.lowerRetTy)
             }
             result = c.pushStmt(s: <Stmt.Return value=v hasValue=hasValue />)
         }
@@ -569,7 +604,10 @@ fn lowerFuncDecl(c: inout Comp, d: DeclAst) {
         retIsArray = pt.isArray
         retRef = pt.ref
     }
+    val savedRet: U64 = c.lowerRetTy
+    c.lowerRetTy = retRef
     val body: U64 = lowerBlock(c: inout c, b: d.body)
+    c.lowerRetTy = savedRet
     val fnIdx: U64 = c.funcs.count
     c.funcs.append(<Func nameStart=nameStart nameLen=nameLen typeParams=typeParams params=params hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExtern=false />)
     mut val wi: U64 = 0
@@ -640,7 +678,10 @@ fn lowerMethodMember(c: inout Comp, im: ImplAst, m: MemberAst, recvN: Bind, impl
         }
         witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen typeParams=typeParams params=params hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
     }
+    val savedRet: U64 = c.lowerRetTy
+    c.lowerRetTy = retRef
     val body: U64 = lowerBlock(c: inout c, b: m.body)
+    c.lowerRetTy = savedRet
     val fnIdx: U64 = c.funcs.count
     c.funcs.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen typeParams=typeParams params=params hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub />)
     appendFuncBounds(c: inout c, fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits)

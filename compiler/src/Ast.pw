@@ -526,6 +526,10 @@ struct Comp {
     // a normal build (which instead auto-parts the already-generated `.gen.pw`).
     pub mut val genMode: Bool = false
     pub mut val genMainIdx: U64 = 0
+    // The declared return type (a TypeRef ref, 0 = none) of the function/closure
+    // currently being lowered, so a `return <Gen … />` generic constructor infers
+    // its type arguments from the return type (Bug11). Saved/restored per body.
+    pub mut val lowerRetTy: U64 = 0
     // `where T: Trait` bounds on functions (spec/08), keyed by function index.
     pub mut val funcBounds: Array[FuncBound]
     // the function index currently being checked by the eager generic

@@ -1,0 +1,32 @@
+// A type-argument-less generic constructor `<Box v=7 />` infers its type
+// arguments from the binding annotation (let context) or the function return
+// type (return context), so a bare literal field needs no suffix and the
+// instance is named concretely (`Box_I64`). Multi-parameter (`Map[U64,U64]`)
+// inference too. (Bug11 — generic-constructor type-arg inference from context.)
+import @Std/Io with { print }
+
+struct Box[T] {
+    pub val v: T
+}
+
+struct Pair[A, B] {
+    pub val a: A
+    pub val b: B
+}
+
+fn makeBox() -> Box[I64] {
+    return <Box v=42 />
+}
+
+fn main() {
+    // let-binding context
+    val b: Box[I64] = <Box v=7 />
+    print(b.v)
+    // function-return context
+    val r = makeBox()
+    print(r.v)
+    // multi-parameter let context
+    val p: Pair[U64, U64] = <Pair a=3 b=4 />
+    print(p.a)
+    print(p.b)
+}
