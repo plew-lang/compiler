@@ -544,11 +544,19 @@ fn hasUnaryWitness(c: inout Comp, op: I64, operand: U64) -> Bool {
     return false
 }
 
-// A struct/enum operand under a prefix unary op with no operator-trait witness:
-// a loud error (spec/12), not a fall-through to a meaningless C `-`/`!`/`~`.
+// A typed operand under a prefix unary op with no operator-trait witness is a loud
+// error (spec/12), not a fall-through to a meaningless C `-`/`!`/`~`: a struct/enum
+// (kind 2) and a known primitive with no witness (e.g. `-x` in a program that never
+// loaded @Std/Core). A genuinely width-less operand keeps the plain built-in op.
 fn unaryNeedsTrait(c: inout Comp, operand: U64) -> Bool {
     val ot: TypeInfo = typeOf(c: inout c, id: operand)
-    return ot.kind == 2
+    if ot.kind == 2 {
+        return true
+    }
+    if ot.kind == 0 {
+        return ot.nameLen > 0
+    }
+    return false
 }
 
 // Emit `T_<sel>(operand)` for the resolved unary witness assoc fn.

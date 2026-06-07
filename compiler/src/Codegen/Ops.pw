@@ -99,16 +99,6 @@ fn strDecodedLen(c: inout Comp, start: U64, len: U64) -> I64 {
     return n
 }
 
-// Whether a binary op is checked arithmetic (+ - *) whose result may overflow
-// the operand type (spec: integer overflow always panics). `/` panics only on a
-// zero divisor (handled by plew_div); shifts/bitwise never overflow.
-fn isCheckedArith(op: I64) -> Bool {
-    if op == opAdd() { return true }
-    if op == opSub() { return true }
-    if op == opMul() { return true }
-    return false
-}
-
 // Map a compound-assign op (+= -= *=) to its binary op (+ - *) for the
 // overflow check; 0 for ops whose compound form can't overflow (bitwise/shift)
 // or isn't arithmetic. (/= and %= go through the checked plew_div/plew_mod.)
@@ -145,22 +135,6 @@ fn arithIntType(c: inout Comp, lhs: U64, rhs: U64) -> TypeInfo {
     return scalarInfo()
 }
 
-// Emit `a OP b` as an overflow-checked statement-expression: compute into a
-// temp of the result type via the clang builtin, panic if it overflowed, else
-// yield the temp. The builtin detects overflow against the temp's exact width,
-// so storage being the declared width (Phase C) makes this precise.
-fn genCheckedArith(c: inout Comp, op: I64, lhs: U64, rhs: U64, tyStart: U64, tyLen: U64) {
-    write(s: "({ ")
-    genCElem(c: inout c, start: tyStart, len: tyLen)
-    write(s: " __ov; if (")
-    write(s: overflowBuiltin(op: op))
-    write(s: "((")
-    genExpr(c: inout c, id: lhs)
-    write(s: "), (")
-    genExpr(c: inout c, id: rhs)
-    write(s: "), &__ov)) plew_panic((PlewString){\"integer overflow\", 16}); __ov; })")
-}
-
 // Emit a bounds-checked array element read: `PlewArray_<E>_get(base, (idx))`.
 fn genArrayGet(c: inout Comp, base: U64, index: U64, elemStart: U64, elemLen: U64) {
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
@@ -171,64 +145,6 @@ fn genArrayGet(c: inout Comp, base: U64, index: U64, elemStart: U64, elemLen: U6
     write(s: "))")
 }
 
-// The stdint.h MIN macro for a signed integer type (used in the INT_MIN / -1
-// division-overflow guard). Assumes a signed int type span.
-fn intMinMacro(c: inout Comp, start: U64, len: U64) -> String {
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I8") { return "INT8_MIN" }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I16") { return "INT16_MIN" }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I32") { return "INT32_MIN" }
-    return "INT64_MIN"
-}
-
-// Emit `-x` as an overflow-checked negation: negating the signed minimum has no
-// representable result, so it panics. (Only emitted for signed int operands;
-// `-` on unsigned is a type error the front end will reject later.)
-fn genCheckedNeg(c: inout Comp, operand: U64, tyStart: U64, tyLen: U64) {
-    write(s: "({ ")
-    genCElem(c: inout c, start: tyStart, len: tyLen)
-    write(s: " __ov; if (__builtin_sub_overflow((")
-    genCElem(c: inout c, start: tyStart, len: tyLen)
-    write(s: ")0, (")
-    genExpr(c: inout c, id: operand)
-    write(s: "), &__ov)) plew_panic((PlewString){\"integer overflow\", 16}); __ov; })")
-}
-
-// Emit width- and sign-aware `/` or `%` (isMod) as a statement-expression:
-// always panic on a zero divisor; for signed division, INT_MIN / -1 overflows
-// (panic), and x % -1 is defined as 0 (sidesteps the C UB at INT_MIN % -1).
-// Unsigned has neither overflow case. Computes at the exact result width.
-fn genCheckedDiv(c: inout Comp, lhs: U64, rhs: U64, tyStart: U64, tyLen: U64, isMod: Bool) {
-    val signedTy: Bool = intSigned(c: inout c, start: tyStart, len: tyLen)
-    write(s: "({ ")
-    genCElem(c: inout c, start: tyStart, len: tyLen)
-    write(s: " __dl = (")
-    genExpr(c: inout c, id: lhs)
-    write(s: "); ")
-    genCElem(c: inout c, start: tyStart, len: tyLen)
-    write(s: " __dr = (")
-    genExpr(c: inout c, id: rhs)
-    write(s: "); if (__dr == 0) plew_panic((PlewString){")
-    if isMod {
-        write(s: "\"remainder by zero\", 17}); ")
-    } else {
-        write(s: "\"division by zero\", 16}); ")
-    }
-    if signedTy {
-        if isMod {
-            write(s: "(__dr == -1 ? 0 : __dl % __dr); })")
-        } else {
-            write(s: "if (__dr == -1 && __dl == ")
-            write(s: intMinMacro(c: inout c, start: tyStart, len: tyLen))
-            write(s: ") plew_panic((PlewString){\"integer overflow\", 16}); __dl / __dr; })")
-        }
-    } else {
-        if isMod {
-            write(s: "__dl % __dr; })")
-        } else {
-            write(s: "__dl / __dr; })")
-        }
-    }
-}
 
 // The binary opcode underlying a compound-assign op (`+=` -> `+`, `&=` -> `&`),
 // so `target OP= value` can desugar to `target = target OP value` and route the

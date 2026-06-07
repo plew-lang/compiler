@@ -426,25 +426,14 @@ fn genExpr(c: inout Comp, id: U64) {
             if unaryNeedsTrait(c: inout c, operand: operand) {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "unary operator needs Neg/Not/BitNot; not implemented for this type")
             } else {
-            mut val negChecked: Bool = false
-            if op == opSub() {
-                val ot: TypeInfo = typeOf(c: inout c, id: operand)
-                if ot.kind == 0 {
-                    if isIntType(c: inout c, start: ot.nameStart, len: ot.nameLen) {
-                        if intSigned(c: inout c, start: ot.nameStart, len: ot.nameLen) {
-                            genCheckedNeg(c: inout c, operand: operand, tyStart: ot.nameStart, tyLen: ot.nameLen)
-                            negChecked = true
-                        }
-                    }
-                }
-            }
-            if negChecked {
-            } else {
+                // a typed operand witnessed or errored above; only a width-less
+                // operand reaches here (a form typeOf cannot recover) — emit the
+                // plain C unary. No built-in checked negation remains (`-x` on a
+                // known signed int routes through the Neg witness).
                 write(s: unaryOpStr(op: op))
                 write(s: "(")
                 genExpr(c: inout c, id: operand)
                 write(s: ")")
-            }
             }
             }
         }
@@ -479,54 +468,16 @@ fn genExpr(c: inout Comp, id: U64) {
                     if binTraitNeedsTrait(c: inout c, op: op, lhs: lhs, rhs: rhs) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type")
                     } else {
-                        if op == opDiv() {
-                            // `/`: zero divisor always panics; signed INT_MIN/-1
-                            // overflows. Width-aware when the type is known; else
-                            // the generic (zero-checked) plew_div.
-                            val dt: TypeInfo = arithIntType(c: inout c, lhs: lhs, rhs: rhs)
-                            if dt.nameLen > 0 {
-                                genCheckedDiv(c: inout c, lhs: lhs, rhs: rhs, tyStart: dt.nameStart, tyLen: dt.nameLen, isMod: false)
-                            } else {
-                                write(s: "plew_div(")
-                                genExpr(c: inout c, id: lhs)
-                                write(s: ", ")
-                                genExpr(c: inout c, id: rhs)
-                                write(s: ")")
-                            }
-                        } else {
-                            if op == opRem() {
-                                // `%`: same — divisor must be nonzero.
-                                val mt: TypeInfo = arithIntType(c: inout c, lhs: lhs, rhs: rhs)
-                                if mt.nameLen > 0 {
-                                    genCheckedDiv(c: inout c, lhs: lhs, rhs: rhs, tyStart: mt.nameStart, tyLen: mt.nameLen, isMod: true)
-                                } else {
-                                    write(s: "plew_mod(")
-                                    genExpr(c: inout c, id: lhs)
-                                    write(s: ", ")
-                                    genExpr(c: inout c, id: rhs)
-                                    write(s: ")")
-                                }
-                            } else {
-                                val at: TypeInfo = arithIntType(c: inout c, lhs: lhs, rhs: rhs)
-                                if isCheckedArith(op: op) {
-                                    if at.nameLen > 0 {
-                                        genCheckedArith(c: inout c, op: op, lhs: lhs, rhs: rhs, tyStart: at.nameStart, tyLen: at.nameLen)
-                                    } else {
-                                        write(s: "(")
-                                        genExpr(c: inout c, id: lhs)
-                                        write(s: binOpStr(op: op))
-                                        genExpr(c: inout c, id: rhs)
-                                        write(s: ")")
-                                    }
-                                } else {
-                                    write(s: "(")
-                                    genExpr(c: inout c, id: lhs)
-                                    write(s: binOpStr(op: op))
-                                    genExpr(c: inout c, id: rhs)
-                                    write(s: ")")
-                                }
-                            }
-                        }
+                        // Arithmetic / bitwise / shift on a typed or width-less scalar
+                        // has already witnessed or errored above (binTraitNeedsTrait),
+                        // so the only ops reaching here are COMPARISONS whose operands
+                        // carry no recovered type (e.g. two match-payload binds) — emit
+                        // the plain C comparison. No built-in arithmetic remains.
+                        write(s: "(")
+                        genExpr(c: inout c, id: lhs)
+                        write(s: binOpStr(op: op))
+                        genExpr(c: inout c, id: rhs)
+                        write(s: ")")
                     }
                     }
                     }
