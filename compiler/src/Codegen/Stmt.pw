@@ -453,6 +453,28 @@ fn binWitnessType(c: inout Comp, lhs: U64, rhs: U64) -> TypeInfo {
     return arithIntType(c: inout c, lhs: lhs, rhs: rhs)
 }
 
+// For a place compound-assign (`arr[i] OP= v`, `arr[i].f OP= v`) whose place is a C
+// expression (not an Expr id): if the place's type carries the operator witness,
+// write the witness-call prefix `<T>_<sel>(` and return true — the caller then emits
+// the place's C, `, `, the value, and `)`. Routes a nested-place compound through
+// the witness like any other (no built-in inline overflow check). The rhs Expr id
+// disambiguates a right-operand overload.
+fn writePlaceBinWitness(c: inout Comp, binOp: I64, tyStart: U64, tyLen: U64, value: U64) -> Bool {
+    if isBinTraitOp(op: binOp) {
+        if typeConformsToName(c: inout c, typeStart: tyStart, typeLen: tyLen, traitName: binTraitName(op: binOp)) {
+            val fi: U64 = findBinTraitWitness(c: inout c, typeStart: tyStart, typeLen: tyLen, name: binTraitMethodName(op: binOp), rhs: value)
+            if fi < c.funcs.count {
+                writeSpan(c: inout c, start: tyStart, len: tyLen)
+                write(s: "_")
+                writeFnSelector(c: inout c, f: c.funcs[fi])
+                write(s: "(")
+                return true
+            }
+        }
+    }
+    return false
+}
+
 // Whether an arithmetic op's operands carry the operator-trait witness (spec/12:
 // `a + b` desugars to `T.add(lhs: a, rhs: b)` iff `impl T as Add[…]`). A named
 // struct OR a primitive scalar (incl. width-less ones recovered from the sibling)
@@ -650,32 +672,24 @@ fn tryArrayElemFieldAssign(c: inout Comp, op: I64, target: U64, value: U64) -> B
                     if op == opAssign() {
                         genExpr(c: inout c, id: value)
                     } else {
-                        val cbin: I64 = compoundCheckedBin(op: op)
-                        val fieldInt: Bool = isIntType(c: inout c, start: ft.nameStart, len: ft.nameLen)
-                        if isCompoundDiv(op: op) {
-                            write(s: compoundDivFn(op: op))
+                        // `__ge.f OP= v` -> the OP routes through the field type's
+                        // operator witness (`__ge.f = T_op(__ge.f, v)`); a width-less
+                        // field with no witness keeps the plain C op / checked div.
+                        val binOp: I64 = compoundBinOp(op: op)
+                        if writePlaceBinWitness(c: inout c, binOp: binOp, tyStart: ft.nameStart, tyLen: ft.nameLen, value: value) {
                             write(s: "__ge.")
                             writeSpan(c: inout c, start: nameStart, len: nameLen)
                             write(s: ", ")
                             genExpr(c: inout c, id: value)
                             write(s: ")")
                         } else {
-                            mut val checkedF: Bool = false
-                            if cbin != 0 {
-                                if fieldInt {
-                                    checkedF = true
-                                }
-                            }
-                            if checkedF {
-                                write(s: "({ ")
-                                genCElem(c: inout c, start: ft.nameStart, len: ft.nameLen)
-                                write(s: " __ov; if (")
-                                write(s: overflowBuiltin(op: cbin))
-                                write(s: "((__ge.")
+                            if isCompoundDiv(op: op) {
+                                write(s: compoundDivFn(op: op))
+                                write(s: "__ge.")
                                 writeSpan(c: inout c, start: nameStart, len: nameLen)
-                                write(s: "), (")
+                                write(s: ", ")
                                 genExpr(c: inout c, id: value)
-                                write(s: "), &__ov)) plew_panic((PlewString){\"integer overflow\", 16}); __ov; })")
+                                write(s: ")")
                             } else {
                                 write(s: "__ge.")
                                 writeSpan(c: inout c, start: nameStart, len: nameLen)
@@ -985,35 +999,22 @@ fn genStmt(c: inout Comp, id: U64) {
                     if op == opAssign() {
                         genExpr(c: inout c, id: value)
                     } else {
-                        // `a[i] OP= v` -> set(a, i, get(a, i) OP v). Arithmetic
-                        // is overflow-checked, `/=`/`%=` route through the checked
-                        // plew_div/plew_mod (zero divisor / INT64_MIN -1), same as
-                        // `a[i] = a[i] OP v`.
-                        val cbin: I64 = compoundCheckedBin(op: op)
-                        val elemInt: Bool = isIntType(c: inout c, start: bt.nameStart, len: bt.nameLen)
-                        if isCompoundDiv(op: op) {
-                            write(s: compoundDivFn(op: op))
+                        // `a[i] OP= v` -> set(a, i, get(a, i) OP v): the OP routes
+                        // through the element type's operator witness; a width-less
+                        // element with no witness keeps the plain C op / checked div.
+                        val binOp: I64 = compoundBinOp(op: op)
+                        if writePlaceBinWitness(c: inout c, binOp: binOp, tyStart: bt.nameStart, tyLen: bt.nameLen, value: value) {
                             genArrayGet(c: inout c, base: base, index: index, elemStart: bt.nameStart, elemLen: bt.nameLen)
                             write(s: ", ")
                             genExpr(c: inout c, id: value)
                             write(s: ")")
                         } else {
-                            mut val checkedElem: Bool = false
-                            if cbin != 0 {
-                                if elemInt {
-                                    checkedElem = true
-                                }
-                            }
-                            if checkedElem {
-                                write(s: "({ ")
-                                genCElem(c: inout c, start: bt.nameStart, len: bt.nameLen)
-                                write(s: " __ov; if (")
-                                write(s: overflowBuiltin(op: cbin))
-                                write(s: "((")
+                            if isCompoundDiv(op: op) {
+                                write(s: compoundDivFn(op: op))
                                 genArrayGet(c: inout c, base: base, index: index, elemStart: bt.nameStart, elemLen: bt.nameLen)
-                                write(s: "), (")
+                                write(s: ", ")
                                 genExpr(c: inout c, id: value)
-                                write(s: "), &__ov)) plew_panic((PlewString){\"integer overflow\", 16}); __ov; })")
+                                write(s: ")")
                             } else {
                                 genArrayGet(c: inout c, base: base, index: index, elemStart: bt.nameStart, elemLen: bt.nameLen)
                                 write(s: assignToBinStr(op: op))

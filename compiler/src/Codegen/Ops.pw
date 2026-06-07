@@ -99,23 +99,6 @@ fn strDecodedLen(c: inout Comp, start: U64, len: U64) -> I64 {
     return n
 }
 
-// Map a compound-assign op (+= -= *=) to its binary op (+ - *) for the
-// overflow check; 0 for ops whose compound form can't overflow (bitwise/shift)
-// or isn't arithmetic. (/= and %= go through the checked plew_div/plew_mod.)
-fn compoundCheckedBin(op: I64) -> I64 {
-    if op == opAddAssign() { return opAdd() }
-    if op == opSubAssign() { return opSub() }
-    if op == opMulAssign() { return opMul() }
-    return 0
-}
-
-// The clang overflow-detecting builtin for a checked-arith op.
-fn overflowBuiltin(op: I64) -> String {
-    if op == opAdd() { return "__builtin_add_overflow" }
-    if op == opSub() { return "__builtin_sub_overflow" }
-    return "__builtin_mul_overflow"
-}
-
 // The integer result type of an arithmetic binary (operands share a type, so
 // either operand's recovered int type works). Width-less scalar if neither is a
 // recoverable integer type — then the overflow check is skipped (documented gap).
