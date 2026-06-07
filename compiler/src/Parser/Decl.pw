@@ -38,7 +38,7 @@ fn internBytes(c: inout Comp, s: String) -> Bind {
 // A type-typed parameter `name: Type` (copyable, no mode/default) for a
 // synthesized assoc fn.
 fn synthParam(c: inout Comp, nameSpan: Bind, tyStart: U64, tyLen: U64) -> Param {
-    val p: Param = <Param nameStart=nameSpan.nameStart nameLen=nameSpan.nameLen nameId=intern(c: inout c, start: nameSpan.nameStart, len: nameSpan.nameLen) tyStart=tyStart tyLen=tyLen tyIsArray=false ty=0 isInout=false isMove=false isBorrow=false noLabel=false hasDefault=false defaultExpr=0 />
+    val p: Param = <Param nameStart=nameSpan.nameStart nameLen=nameSpan.nameLen nameId=intern(c: inout c, start: nameSpan.nameStart, len: nameSpan.nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout c, start: tyStart, len: tyLen) tyIsArray=false ty=0 isInout=false isMove=false isBorrow=false noLabel=false hasDefault=false defaultExpr=0 />
     return p
 }
 

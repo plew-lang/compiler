@@ -615,6 +615,7 @@ struct Local {
     uint64_t nameId;
     uint64_t tyStart;
     uint64_t tyLen;
+    uint64_t tyNameId;
     long long isArray;
     uint64_t ty;
     long long isInout;
@@ -677,6 +678,7 @@ struct Param {
     uint64_t nameId;
     uint64_t tyStart;
     uint64_t tyLen;
+    uint64_t tyNameId;
     long long tyIsArray;
     uint64_t ty;
     long long isInout;
@@ -692,6 +694,7 @@ struct FieldDef {
     uint64_t nameId;
     uint64_t tyStart;
     uint64_t tyLen;
+    uint64_t tyNameId;
     long long tyIsArray;
     uint64_t ty;
     long long isMut;
@@ -2963,7 +2966,7 @@ Bind internBytes_c_Comp_s_String(Comp* c, PlewString s) {
     Array_U8_release(sb);
 }
 Param synthParam_c_Comp_nameSpan_Bind_tyStart_U64_tyLen_U64(Comp* c, Bind nameSpan, uint64_t tyStart, uint64_t tyLen) {
-    Param p = (Param){.nameStart = nameSpan.nameStart, .nameLen = nameSpan.nameLen, .nameId = intern_c_Comp_start_U64_len_U64(&((*c)), nameSpan.nameStart, nameSpan.nameLen), .tyStart = tyStart, .tyLen = tyLen, .tyIsArray = 0, .ty = 0, .isInout = 0, .isMove = 0, .isBorrow = 0, .noLabel = 0, .hasDefault = 0, .defaultExpr = 0};
+    Param p = (Param){.nameStart = nameSpan.nameStart, .nameLen = nameSpan.nameLen, .nameId = intern_c_Comp_start_U64_len_U64(&((*c)), nameSpan.nameStart, nameSpan.nameLen), .tyStart = tyStart, .tyLen = tyLen, .tyNameId = intern_c_Comp_start_U64_len_U64(&((*c)), tyStart, tyLen), .tyIsArray = 0, .ty = 0, .isInout = 0, .isMove = 0, .isBorrow = 0, .noLabel = 0, .hasDefault = 0, .defaultExpr = 0};
     { Param __ret10 = p;
     return __ret10; }
 }
@@ -4648,7 +4651,7 @@ long long argMatchesParam_c_Comp_argExpr_U64_p_Param(Comp* c, uint64_t argExpr, 
     TypeInfo ti = exprType_c_Comp_id_U64(&((*c)), argExpr);
     if (p.tyIsArray) {
     if (ti.kind == 3) {
-    { long long __ret199 = spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), ti.nameStart, ti.nameLen, p.tyStart, p.tyLen);
+    { long long __ret199 = (intern_c_Comp_start_U64_len_U64(&((*c)), ti.nameStart, ti.nameLen) == p.tyNameId);
     return __ret199; }
     }
     { long long __ret200 = 0;
@@ -4659,11 +4662,11 @@ long long argMatchesParam_c_Comp_argExpr_U64_p_Param(Comp* c, uint64_t argExpr, 
     return __ret201; }
     }
     if (ti.kind == 2) {
-    { long long __ret202 = spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), ti.nameStart, ti.nameLen, p.tyStart, p.tyLen);
+    { long long __ret202 = (intern_c_Comp_start_U64_len_U64(&((*c)), ti.nameStart, ti.nameLen) == p.tyNameId);
     return __ret202; }
     }
     if (ti.nameLen != 0) {
-    { long long __ret203 = spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), ti.nameStart, ti.nameLen, p.tyStart, p.tyLen);
+    { long long __ret203 = (intern_c_Comp_start_U64_len_U64(&((*c)), ti.nameStart, ti.nameLen) == p.tyNameId);
     return __ret203; }
     }
     { long long __ret204 = isIntType_c_Comp_start_U64_len_U64(&((*c)), p.tyStart, p.tyLen);
@@ -4700,7 +4703,7 @@ long long overloadsAmbiguous_c_Comp_fa_Func_fb_Func_args_AArg(Comp* c, Func fa, 
     if (argIsUntypedIntLit_c_Comp_argExpr_U64(&((*c)), Array_Arg_get(args, (long long)(i)).expr)) {
     if (i < (long long)((fa.params).count)) {
     if (i < (long long)((fb.params).count)) {
-    if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), Array_Param_get(fa.params, (long long)(i)).tyStart, Array_Param_get(fa.params, (long long)(i)).tyLen, Array_Param_get(fb.params, (long long)(i)).tyStart, Array_Param_get(fb.params, (long long)(i)).tyLen)) {
+    if (Array_Param_get(fa.params, (long long)(i)).tyNameId == Array_Param_get(fb.params, (long long)(i)).tyNameId) {
     }
     else {
     { long long __ret209 = 1;
@@ -4917,7 +4920,7 @@ void addLocal_c_Comp_nameStart_U64_nameLen_U64_tyStart_U64_tyLen_U64_isArray_Boo
     addLocalCn_c_Comp_nameStart_U64_nameLen_U64_tyStart_U64_tyLen_U64_isArray_Bool_ty_U64_isInout_Bool_isMut_Bool_owned_Bool_cnum_U64(&((*c)), nameStart, nameLen, tyStart, tyLen, isArray, ty, isInout, isMut, owned, 0);
 }
 void addLocalCn_c_Comp_nameStart_U64_nameLen_U64_tyStart_U64_tyLen_U64_isArray_Bool_ty_U64_isInout_Bool_isMut_Bool_owned_Bool_cnum_U64(Comp* c, uint64_t nameStart, uint64_t nameLen, uint64_t tyStart, uint64_t tyLen, long long isArray, uint64_t ty, long long isInout, long long isMut, long long owned, uint64_t cnum) {
-    Array_Local_append_value_T(&((*c).locals), (Local){.nameStart = nameStart, .nameLen = nameLen, .nameId = intern_c_Comp_start_U64_len_U64(&((*c)), nameStart, nameLen), .tyStart = tyStart, .tyLen = tyLen, .isArray = isArray, .ty = ty, .isInout = isInout, .isMut = isMut, .owned = owned, .moved = 0, .cnum = cnum});
+    Array_Local_append_value_T(&((*c).locals), (Local){.nameStart = nameStart, .nameLen = nameLen, .nameId = intern_c_Comp_start_U64_len_U64(&((*c)), nameStart, nameLen), .tyStart = tyStart, .tyLen = tyLen, .tyNameId = intern_c_Comp_start_U64_len_U64(&((*c)), tyStart, tyLen), .isArray = isArray, .ty = ty, .isInout = isInout, .isMut = isMut, .owned = owned, .moved = 0, .cnum = cnum});
 }
 uint64_t shadowCount_c_Comp_nameStart_U64_nameLen_U64(Comp* c, uint64_t nameStart, uint64_t nameLen) {
     uint64_t qId = intern_c_Comp_start_U64_len_U64(&((*c)), nameStart, nameLen);
@@ -5223,7 +5226,7 @@ void markMovedLocal_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uint64_t l
     while (j < (long long)(((*c).locals).count)) {
     Local lo = Array_Local_get((*c).locals, (long long)(j));
     if (j == target) {
-    Array_Local_append_value_T(&(rebuilt), (Local){.nameStart = lo.nameStart, .nameLen = lo.nameLen, .nameId = lo.nameId, .tyStart = lo.tyStart, .tyLen = lo.tyLen, .isArray = lo.isArray, .ty = lo.ty, .isInout = lo.isInout, .isMut = lo.isMut, .owned = lo.owned, .moved = 1, .cnum = lo.cnum});
+    Array_Local_append_value_T(&(rebuilt), (Local){.nameStart = lo.nameStart, .nameLen = lo.nameLen, .nameId = lo.nameId, .tyStart = lo.tyStart, .tyLen = lo.tyLen, .tyNameId = lo.tyNameId, .isArray = lo.isArray, .ty = lo.ty, .isInout = lo.isInout, .isMut = lo.isMut, .owned = lo.owned, .moved = 1, .cnum = lo.cnum});
     }
     else {
     Array_Local_append_value_T(&(rebuilt), lo);
@@ -7881,7 +7884,7 @@ long long paramSelectorEq_c_Comp_a_AParam_b_AParam(Comp* c, Array_Param a, Array
     { long long __ret515 = 0;
     return __ret515; }
     }
-    if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), pa.tyStart, pa.tyLen, pb.tyStart, pb.tyLen)) {
+    if (pa.tyNameId == pb.tyNameId) {
     }
     else {
     { long long __ret516 = 0;
@@ -13544,7 +13547,7 @@ long long sameFreeFnSelectorDecl_c_Comp_a_Func_b_Func(Comp* c, Func a, Func b) {
     { long long __ret726 = 0;
     return __ret726; }
     }
-    if (spansEqual_c_Comp_aStart_U64_aLen_U64_bStart_U64_bLen_U64(&((*c)), pa.tyStart, pa.tyLen, pb.tyStart, pb.tyLen)) {
+    if (pa.tyNameId == pb.tyNameId) {
     }
     else {
     { long long __ret727 = 0;
@@ -14513,7 +14516,7 @@ long long fieldIsBoxed_c_Comp_f_FieldDef(Comp* c, FieldDef f) {
     return __ret790; }
 }
 FieldDef noField(void) {
-    { FieldDef __ret791 = (FieldDef){.nameStart = 0, .nameLen = 0, .tyStart = 0, .tyLen = 0, .tyIsArray = 0, .ty = 0, .isMut = 0, .hasDefault = 0, .defaultVal = 0, .vis = 0, .nameId = 0};
+    { FieldDef __ret791 = (FieldDef){.nameStart = 0, .nameLen = 0, .tyStart = 0, .tyLen = 0, .tyIsArray = 0, .ty = 0, .isMut = 0, .hasDefault = 0, .defaultVal = 0, .vis = 0, .nameId = 0, .tyNameId = 0};
     return __ret791; }
 }
 FieldDef findFieldDef_c_Comp_typeStart_U64_typeLen_U64_variantStart_U64_variantLen_U64_isEnum_Bool_fieldStart_U64_fieldLen_U64(Comp* c, uint64_t typeStart, uint64_t typeLen, uint64_t variantStart, uint64_t variantLen, long long isEnum, uint64_t fieldStart, uint64_t fieldLen) {
@@ -18478,7 +18481,7 @@ Array_Param lowerParams_c_Comp_params_AParamAst(Comp* c, Array_ParamAst params) 
     defaultExpr = lowerExpr_c_Comp_e_ExprAst(&((*c)), p.defaultVal);
     hasDefault = 1;
     }
-    Array_Param_append_value_T(&(out), (Param){.nameStart = nm.nameStart, .nameLen = nm.nameLen, .nameId = intern_c_Comp_start_U64_len_U64(&((*c)), nm.nameStart, nm.nameLen), .tyStart = tyStart, .tyLen = tyLen, .tyIsArray = tyIsArray, .ty = tyRef, .isInout = p.isInout, .isMove = p.isMove, .isBorrow = p.isBorrow, .noLabel = p.noLabel, .hasDefault = hasDefault, .defaultExpr = defaultExpr});
+    Array_Param_append_value_T(&(out), (Param){.nameStart = nm.nameStart, .nameLen = nm.nameLen, .nameId = intern_c_Comp_start_U64_len_U64(&((*c)), nm.nameStart, nm.nameLen), .tyStart = tyStart, .tyLen = tyLen, .tyNameId = intern_c_Comp_start_U64_len_U64(&((*c)), tyStart, tyLen), .tyIsArray = tyIsArray, .ty = tyRef, .isInout = p.isInout, .isMove = p.isMove, .isBorrow = p.isBorrow, .noLabel = p.noLabel, .hasDefault = hasDefault, .defaultExpr = defaultExpr});
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });
     ParamAst_release(p);
     }
@@ -18803,7 +18806,7 @@ FieldDef lowerFieldDef_c_Comp_f_FieldAst(Comp* c, FieldAst f) {
     defaultVal = lowerExpr_c_Comp_e_ExprAst(&((*c)), f.defaultVal);
     hasDefault = 1;
     }
-    { FieldDef __ret985 = (FieldDef){.nameStart = nm.nameStart, .nameLen = nm.nameLen, .nameId = intern_c_Comp_start_U64_len_U64(&((*c)), nm.nameStart, nm.nameLen), .tyStart = tyStart, .tyLen = tyLen, .tyIsArray = tyIsArray, .ty = tyRef, .isMut = f.isMut, .hasDefault = hasDefault, .defaultVal = defaultVal, .vis = f.vis};
+    { FieldDef __ret985 = (FieldDef){.nameStart = nm.nameStart, .nameLen = nm.nameLen, .nameId = intern_c_Comp_start_U64_len_U64(&((*c)), nm.nameStart, nm.nameLen), .tyStart = tyStart, .tyLen = tyLen, .tyNameId = intern_c_Comp_start_U64_len_U64(&((*c)), tyStart, tyLen), .tyIsArray = tyIsArray, .ty = tyRef, .isMut = f.isMut, .hasDefault = hasDefault, .defaultVal = defaultVal, .vis = f.vis};
     return __ret985; }
 }
 void lowerStructDecl_c_Comp_d_DeclAst(Comp* c, DeclAst d) {

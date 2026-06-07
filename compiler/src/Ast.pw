@@ -66,6 +66,11 @@ struct Local {
     pub val nameId: U64 = 0
     pub val tyStart: U64
     pub val tyLen: U64
+    // interned type-head id (Phase D): content-keyed id of (tyStart,tyLen). Set in
+    // addLocalCn; the move-rebuild copies it. May be the empty-span id for synthetic
+    // locals whose tyStart/tyLen are 0 (consistent: such a local never type-matches a
+    // real type). Type equality on a local becomes integer == instead of spansEqual.
+    pub val tyNameId: U64 = 0
     pub val isArray: Bool
     // structured type (Comp.types index); carries generic type arguments that
     // the (tyStart,tyLen,isArray) head view cannot.
@@ -266,6 +271,10 @@ struct Param {
     pub val nameId: U64 = 0
     pub val tyStart: U64
     pub val tyLen: U64
+    // interned type-head id (Phase D): the content-keyed id of (tyStart,tyLen) — the
+    // element name for an array type, the head name otherwise — so a param's declared
+    // type matches by integer == instead of `spansEqual`. Set at construction.
+    pub val tyNameId: U64 = 0
     pub val tyIsArray: Bool
     pub val ty: U64
     pub val isInout: Bool
@@ -291,6 +300,9 @@ struct FieldDef {
     pub val nameId: U64 = 0
     pub val tyStart: U64
     pub val tyLen: U64
+    // interned type-head id (Phase D): content-keyed id of (tyStart,tyLen). Set in
+    // lowerFieldDef. A field's declared type matches by integer == instead of spansEqual.
+    pub val tyNameId: U64 = 0
     pub val tyIsArray: Bool
     pub val ty: U64
     // declared `mut val` (assignable storage) vs `val` (immutable). Always false

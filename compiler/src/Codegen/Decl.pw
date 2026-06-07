@@ -1260,7 +1260,7 @@ fn sameFreeFnSelectorDecl(c: inout Comp, a: Func, b: Func) -> Bool {
         } else {
             return false
         }
-        if spansEqual(c: inout c, aStart: pa.tyStart, aLen: pa.tyLen, bStart: pb.tyStart, bLen: pb.tyLen) {
+        if pa.tyNameId == pb.tyNameId {
         } else {
             return false
         }

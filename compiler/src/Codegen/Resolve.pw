@@ -361,7 +361,7 @@ fn argMatchesParam(c: inout Comp, argExpr: U64, p: Param) -> Bool {
     val ti: TypeInfo = exprType(c: inout c, id: argExpr)
     if p.tyIsArray {
         if ti.kind == 3 {
-            return spansEqual(c: inout c, aStart: ti.nameStart, aLen: ti.nameLen, bStart: p.tyStart, bLen: p.tyLen)
+            return intern(c: inout c, start: ti.nameStart, len: ti.nameLen) == p.tyNameId
         }
         return false
     }
@@ -369,12 +369,12 @@ fn argMatchesParam(c: inout Comp, argExpr: U64, p: Param) -> Bool {
         return rangeEquals(bytes: c.bytes, start: p.tyStart, len: p.tyLen, kw: "String")
     }
     if ti.kind == 2 {
-        return spansEqual(c: inout c, aStart: ti.nameStart, aLen: ti.nameLen, bStart: p.tyStart, bLen: p.tyLen)
+        return intern(c: inout c, start: ti.nameStart, len: ti.nameLen) == p.tyNameId
     }
     // ti.kind == 0: a scalar / integer. A suffixed/typed value carries its name;
     // an untyped literal (no name) adapts to any integer parameter.
     if ti.nameLen != 0 {
-        return spansEqual(c: inout c, aStart: ti.nameStart, aLen: ti.nameLen, bStart: p.tyStart, bLen: p.tyLen)
+        return intern(c: inout c, start: ti.nameStart, len: ti.nameLen) == p.tyNameId
     }
     return isIntType(c: inout c, start: p.tyStart, len: p.tyLen)
 }
@@ -417,7 +417,7 @@ fn overloadsAmbiguous(c: inout Comp, fa: Func, fb: Func, args: Array[Arg]) -> Bo
         if argIsUntypedIntLit(c: inout c, argExpr: args[i].expr) {
             if i < fa.params.count {
                 if i < fb.params.count {
-                    if spansEqual(c: inout c, aStart: fa.params[i].tyStart, aLen: fa.params[i].tyLen, bStart: fb.params[i].tyStart, bLen: fb.params[i].tyLen) {
+                    if fa.params[i].tyNameId == fb.params[i].tyNameId {
                     } else {
                         return true
                     }
@@ -637,7 +637,7 @@ fn addLocal(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U6
 
 // Like addLocal but with an explicit C-name disambiguator (see Local.cnum).
 fn addLocalCn(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool, cnum: U64) {
-    c.locals.append(<Local nameStart=nameStart nameLen=nameLen nameId=intern(c: inout c, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen isArray=isArray ty=ty isInout=isInout isMut=isMut owned=owned moved=false cnum=cnum />)
+    c.locals.append(<Local nameStart=nameStart nameLen=nameLen nameId=intern(c: inout c, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout c, start: tyStart, len: tyLen) isArray=isArray ty=ty isInout=isInout isMut=isMut owned=owned moved=false cnum=cnum />)
 }
 
 // How many currently-live locals already carry this name (used by `let`
@@ -1001,7 +1001,7 @@ fn markMovedLocal(c: inout Comp, start: U64, len: U64) {
     while j < c.locals.count {
         val lo: Local = c.locals[j]
         if j == target {
-            rebuilt.append(<Local nameStart=lo.nameStart nameLen=lo.nameLen nameId=lo.nameId tyStart=lo.tyStart tyLen=lo.tyLen isArray=lo.isArray ty=lo.ty isInout=lo.isInout isMut=lo.isMut owned=lo.owned moved=true cnum=lo.cnum />)
+            rebuilt.append(<Local nameStart=lo.nameStart nameLen=lo.nameLen nameId=lo.nameId tyStart=lo.tyStart tyLen=lo.tyLen tyNameId=lo.tyNameId isArray=lo.isArray ty=lo.ty isInout=lo.isInout isMut=lo.isMut owned=lo.owned moved=true cnum=lo.cnum />)
         } else {
             rebuilt.append(lo)
         }

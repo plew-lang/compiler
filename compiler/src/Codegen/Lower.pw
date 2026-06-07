@@ -405,7 +405,7 @@ fn lowerParams(c: inout Comp, params: Array[ParamAst]) -> Array[Param] {
             defaultExpr = lowerExpr(c: inout c, e: p.defaultVal)
             hasDefault = true
         }
-        out.append(<Param nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isInout=p.isInout isMove=p.isMove isBorrow=p.isBorrow noLabel=p.noLabel hasDefault=hasDefault defaultExpr=defaultExpr />)
+        out.append(<Param nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout c, start: tyStart, len: tyLen) tyIsArray=tyIsArray ty=tyRef isInout=p.isInout isMove=p.isMove isBorrow=p.isBorrow noLabel=p.noLabel hasDefault=hasDefault defaultExpr=defaultExpr />)
         i += 1
     }
     return out
@@ -625,7 +625,7 @@ fn lowerFieldDef(c: inout Comp, f: FieldAst) -> FieldDef {
         defaultVal = lowerExpr(c: inout c, e: f.defaultVal)
         hasDefault = true
     }
-    return <FieldDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef isMut=f.isMut hasDefault=hasDefault defaultVal=defaultVal vis=f.vis />
+    return <FieldDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout c, start: tyStart, len: tyLen) tyIsArray=tyIsArray ty=tyRef isMut=f.isMut hasDefault=hasDefault defaultVal=defaultVal vis=f.vis />
 }
 
 // Lower a `struct` DeclAst: append a StructDef, a synthetic `Type_deinit` method +

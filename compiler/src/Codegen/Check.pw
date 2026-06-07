@@ -823,7 +823,7 @@ fn paramSelectorEq(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
         } else {
             return false
         }
-        if spansEqual(c: inout c, aStart: pa.tyStart, aLen: pa.tyLen, bStart: pb.tyStart, bLen: pb.tyLen) {
+        if pa.tyNameId == pb.tyNameId {
         } else {
             return false
         }
