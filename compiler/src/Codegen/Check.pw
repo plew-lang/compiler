@@ -851,10 +851,36 @@ fn assocBindingSpan(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64,
     return <Bind nameStart=nameStart nameLen=nameLen nameId=qName fieldStart=nameStart fieldLen=nameLen />
 }
 
-// Like paramSelectorEq, but substitutes the requirement side's associated types with
-// the conforming type's bindings before comparing (so `firstOr(fallback: Item)` with
-// `type Item = I64` matches a witness `firstOr(fallback: I64)`).
-fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvStart: U64, recvLen: U64) -> Bool {
+// The head-name id a requirement-param type resolves to, for the conforming type
+// (spec/08,12): `Self` -> the receiver type; a trait type parameter (`Rhs` of
+// `Add[Rhs]`) -> the conformance's i-th `traitArgs` binding; an associated type
+// (`Item`) -> its `type Item = X` binding; anything else (a concrete type) -> itself.
+// So a generic requirement `add(lhs: Self, rhs: Rhs)` matches a witness
+// `add(lhs: Money, rhs: Money)` on `impl Money as Add[Money]`.
+fn substReqParamHeadId(c: inout Comp, recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64], prStart: U64, prLen: U64) -> U64 {
+    if rangeEquals(bytes: c.bytes, start: prStart, len: prLen, kw: "Self") {
+        return intern(c: inout c, start: recvStart, len: recvLen)
+    }
+    val prId: U64 = intern(c: inout c, start: prStart, len: prLen)
+    mut val k: U64 = 0
+    while k < tps.count {
+        if tps[k].nameId == prId {
+            if k < targs.count {
+                return c.types[targs[k]].nameId
+            }
+        }
+        k += 1
+    }
+    val sub: Bind = assocBindingSpan(c: inout c, recvStart: recvStart, recvLen: recvLen, nameStart: prStart, nameLen: prLen)
+    return sub.nameId
+}
+
+// Like paramSelectorEq, but substitutes the requirement side's `Self` / trait type
+// parameters / associated types with the conforming type's bindings before comparing
+// (so `add(lhs: Self, rhs: Rhs)` with `impl Money as Add[Money]` matches a witness
+// `add(lhs: Money, rhs: Money)`). `tps`/`targs` are the trait's type parameters and
+// the conformance's bound type arguments (positional).
+fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64]) -> Bool {
     if w.count != r.count {
         return false
     }
@@ -866,8 +892,8 @@ fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvSta
         } else {
             return false
         }
-        val sub: Bind = assocBindingSpan(c: inout c, recvStart: recvStart, recvLen: recvLen, nameStart: pr.tyStart, nameLen: pr.tyLen)
-        if pw.tyNameId == sub.nameId {
+        val subId: U64 = substReqParamHeadId(c: inout c, recvStart: recvStart, recvLen: recvLen, tps: tps, targs: targs, prStart: pr.tyStart, prLen: pr.tyLen)
+        if pw.tyNameId == subId {
         } else {
             return false
         }
@@ -878,13 +904,14 @@ fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvSta
 
 // Whether `witnessed` contains a member matching requirement `r`'s selector
 // (name + params). Distinguishes overloaded requirements by signature. Requirement
-// param types are substituted through the conforming type's associated-type bindings.
-fn witnessedHas(c: inout Comp, witnessed: Array[Func], r: Func, recvStart: U64, recvLen: U64) -> Bool {
+// param types are substituted through the conforming type's Self / trait-type-arg /
+// associated-type bindings (`tps`/`targs` = the trait's type params + the conformance's args).
+fn witnessedHas(c: inout Comp, witnessed: Array[Func], r: Func, recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64]) -> Bool {
     mut val i: U64 = 0
     while i < witnessed.count {
         val w: Func = witnessed[i]
         if w.nameId == r.nameId {
-            if paramSelectorEqSubst(c: inout c, w: w.params, r: r.params, recvStart: recvStart, recvLen: recvLen) {
+            if paramSelectorEqSubst(c: inout c, w: w.params, r: r.params, recvStart: recvStart, recvLen: recvLen, tps: tps, targs: targs) {
                 return true
             }
         }
@@ -916,7 +943,7 @@ fn checkConformances(c: inout Comp) {
                 mut val ri: U64 = 0
                 while ri < t.reqs.count {
                     val r: Func = t.reqs[ri]
-                    if witnessedHas(c: inout c, witnessed: cf.witnessed, r: r, recvStart: cf.typeStart, recvLen: cf.typeLen) {
+                    if witnessedHas(c: inout c, witnessed: cf.witnessed, r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: cf.traitArgs) {
                     } else {
                         compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)")
                     }

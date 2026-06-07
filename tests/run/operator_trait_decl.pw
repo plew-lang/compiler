@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+// O1: a spec-shaped operator trait (type parameter [Rhs] + associated type
+// Output + `assoc fn add(lhs: Self, rhs: Rhs) -> Output`) declared once and
+// conformed by a user type. Desugaring of `+` comes later; here the assoc fn is
+// called directly to validate trait-type-arg parsing + Self/Rhs/Output witness
+// substitution in the completeness check.
+trait Add[Rhs] {
+    type Output
+    assoc fn add(lhs: Self, rhs: Rhs) -> Output
+}
+
+struct Vec2 { pub val x: I64 }
+
+impl Vec2 as Add[Vec2] {
+    type Output = Vec2
+    assoc fn add(lhs: Vec2, rhs: Vec2) -> Vec2 {
+        return <Vec2 x=(lhs.x + rhs.x) />
+    }
+}
+
+fn main() {
+    val a: Vec2 = <Vec2 x=3 />
+    val b: Vec2 = <Vec2 x=4 />
+    val c: Vec2 = Vec2.add(lhs: a, rhs: b)
+    print(c.x)   // 7
+}
