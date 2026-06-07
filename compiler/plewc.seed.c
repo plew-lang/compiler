@@ -834,14 +834,6 @@ struct Comp {
     Array_U64 internLens;
     Array_U64 internBuckets;
     uint64_t internCount;
-    uint64_t idString;
-    uint64_t idU8;
-    uint64_t idU64;
-    uint64_t idBool;
-    uint64_t idArray;
-    uint64_t idFn;
-    uint64_t idIterator;
-    uint64_t idNext;
     Array_I64 exprTyKind;
     Array_U64 exprTyStart;
     Array_U64 exprTyLen;
@@ -2365,7 +2357,7 @@ int main(int argc, char** argv) {
     entryArgIdx = 2;
     }
     }
-    Comp c = (Comp){.bytes = Array_U8_new(), .exprs = Array_Expr_new(), .stmts = Array_Stmt_new(), .blocks = Array_Block_new(), .funcs = Array_Func_new(), .structs = Array_StructDef_new(), .enums = Array_EnumDef_new(), .traits = Array_TraitDef_new(), .conforms = Array_Conform_new(), .methodAliases = Array_MethodAlias_new(), .derives = Array_DeriveReq_new(), .pendingDerives = Array_DeriveReq_new(), .funcBounds = Array_FuncBound_new(), .curCheckFn = 0, .curWitnessed = Array_Func_new(), .curWhereTraits = Array_Bind_new(), .types = Array_TypeRef_new(), .genInsts = Array_U64_new(), .fnInsts = Array_FnInst_new(), .fnTypes = Array_U64_new(), .fnThunks = Array_U64_new(), .captures = Array_CaptureEntry_new(), .curClosureId = 0, .curInClosure = 0, .curCaptureMark = 0, .arrayElems = Array_Bind_new(), .locals = Array_Local_new(), .tmp = 0, .curIsMain = 0, .curRetVoid = 0, .curRetStart = 0, .curRetLen = 0, .curRetIsArray = 0, .curRetTy = 0, .curHasRecv = 0, .curRecvStart = 0, .curRecvLen = 0, .curSelfInout = 0, .curSelfMove = 0, .curTypeParams = Array_Bind_new(), .curTypeArgs = Array_U64_new(), .curRecvInstRef = 0, .curGiveTmp = 0, .curLoopMark = 0, .curBranchBase = 0, .deinits = Array_Bind_new(), .curAsync = 0, .asyncState = 0, .curAsyncFn = 0, .asyncVarSeq = 0, .moduleRanges = Array_Bind_new(), .exports = Array_Bind_new(), .imports = Array_Bind_new(), .genMode = 0, .genMainIdx = 0, .lowerRetTy = 0, .curImplBoundParams = Array_Bind_new(), .curImplBoundTraits = Array_Bind_new(), .kwCache = Array_Bind_new(), .internStarts = Array_U64_new(), .internLens = Array_U64_new(), .internBuckets = Array_U64_new(), .internCount = 0, .idString = 0, .idU8 = 0, .idU64 = 0, .idBool = 0, .idArray = 0, .idFn = 0, .idIterator = 0, .idNext = 0, .exprTyKind = Array_I64_new(), .exprTyStart = Array_U64_new(), .exprTyLen = Array_U64_new(), .exprTyRef = Array_U64_new(), .exprTyFilled = Array_U64_new(), .boxedFields = Array_U64_new(), .curSelfRef = 0, .curItemRef = 0, .assocBindings = Array_AssocBinding_new()};
+    Comp c = (Comp){.bytes = Array_U8_new(), .exprs = Array_Expr_new(), .stmts = Array_Stmt_new(), .blocks = Array_Block_new(), .funcs = Array_Func_new(), .structs = Array_StructDef_new(), .enums = Array_EnumDef_new(), .traits = Array_TraitDef_new(), .conforms = Array_Conform_new(), .methodAliases = Array_MethodAlias_new(), .derives = Array_DeriveReq_new(), .pendingDerives = Array_DeriveReq_new(), .funcBounds = Array_FuncBound_new(), .curCheckFn = 0, .curWitnessed = Array_Func_new(), .curWhereTraits = Array_Bind_new(), .types = Array_TypeRef_new(), .genInsts = Array_U64_new(), .fnInsts = Array_FnInst_new(), .fnTypes = Array_U64_new(), .fnThunks = Array_U64_new(), .captures = Array_CaptureEntry_new(), .curClosureId = 0, .curInClosure = 0, .curCaptureMark = 0, .arrayElems = Array_Bind_new(), .locals = Array_Local_new(), .tmp = 0, .curIsMain = 0, .curRetVoid = 0, .curRetStart = 0, .curRetLen = 0, .curRetIsArray = 0, .curRetTy = 0, .curHasRecv = 0, .curRecvStart = 0, .curRecvLen = 0, .curSelfInout = 0, .curSelfMove = 0, .curTypeParams = Array_Bind_new(), .curTypeArgs = Array_U64_new(), .curRecvInstRef = 0, .curGiveTmp = 0, .curLoopMark = 0, .curBranchBase = 0, .deinits = Array_Bind_new(), .curAsync = 0, .asyncState = 0, .curAsyncFn = 0, .asyncVarSeq = 0, .moduleRanges = Array_Bind_new(), .exports = Array_Bind_new(), .imports = Array_Bind_new(), .genMode = 0, .genMainIdx = 0, .lowerRetTy = 0, .curImplBoundParams = Array_Bind_new(), .curImplBoundTraits = Array_Bind_new(), .kwCache = Array_Bind_new(), .internStarts = Array_U64_new(), .internLens = Array_U64_new(), .internBuckets = Array_U64_new(), .internCount = 0, .exprTyKind = Array_I64_new(), .exprTyStart = Array_U64_new(), .exprTyLen = Array_U64_new(), .exprTyRef = Array_U64_new(), .exprTyFilled = Array_U64_new(), .boxedFields = Array_U64_new(), .curSelfRef = 0, .curItemRef = 0, .assocBindings = Array_AssocBinding_new()};
     Array_TypeRef_append_value_T(&(c.types), (TypeRef){.nameStart = 0, .nameLen = 0, .args = Array_U64_new()});
     Array_Block_append_value_T(&(c.blocks), (Block){.stmts = Array_U64_new()});
     c.genMode = genMode;
@@ -4867,14 +4859,6 @@ void buildKwCache_c_Comp(Comp* c) {
     addKwSpan_c_Comp_kw_String(&((*c)), (PlewString){"fn", 2});
     addKwSpan_c_Comp_kw_String(&((*c)), (PlewString){"iterator", 8});
     addKwSpan_c_Comp_kw_String(&((*c)), (PlewString){"next", 4});
-    (*c).idString = intern_c_Comp_start_U64_len_U64(&((*c)), Array_Bind_get((*c).kwCache, (long long)(0)).nameStart, Array_Bind_get((*c).kwCache, (long long)(0)).nameLen);
-    (*c).idU8 = intern_c_Comp_start_U64_len_U64(&((*c)), Array_Bind_get((*c).kwCache, (long long)(1)).nameStart, Array_Bind_get((*c).kwCache, (long long)(1)).nameLen);
-    (*c).idU64 = intern_c_Comp_start_U64_len_U64(&((*c)), Array_Bind_get((*c).kwCache, (long long)(2)).nameStart, Array_Bind_get((*c).kwCache, (long long)(2)).nameLen);
-    (*c).idBool = intern_c_Comp_start_U64_len_U64(&((*c)), Array_Bind_get((*c).kwCache, (long long)(3)).nameStart, Array_Bind_get((*c).kwCache, (long long)(3)).nameLen);
-    (*c).idArray = intern_c_Comp_start_U64_len_U64(&((*c)), Array_Bind_get((*c).kwCache, (long long)(4)).nameStart, Array_Bind_get((*c).kwCache, (long long)(4)).nameLen);
-    (*c).idFn = intern_c_Comp_start_U64_len_U64(&((*c)), Array_Bind_get((*c).kwCache, (long long)(5)).nameStart, Array_Bind_get((*c).kwCache, (long long)(5)).nameLen);
-    (*c).idIterator = intern_c_Comp_start_U64_len_U64(&((*c)), Array_Bind_get((*c).kwCache, (long long)(6)).nameStart, Array_Bind_get((*c).kwCache, (long long)(6)).nameLen);
-    (*c).idNext = intern_c_Comp_start_U64_len_U64(&((*c)), Array_Bind_get((*c).kwCache, (long long)(7)).nameStart, Array_Bind_get((*c).kwCache, (long long)(7)).nameLen);
 }
 Bind kwSpan_c_Comp_kw_String_kwLen_U64(Comp* c, PlewString kw, uint64_t kwLen) {
     uint64_t ci = 0;

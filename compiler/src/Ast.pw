@@ -594,17 +594,6 @@ struct Comp {
     pub mut val internLens: Array[U64] = []
     pub mut val internBuckets: Array[U64] = []
     pub mut val internCount: U64 = 0
-    // pre-interned ids for built-in names with no guaranteed source occurrence
-    // (assigned by buildKwCache, which already appends these names to `bytes`).
-    // 0 until assigned; a real interned name is ≥ 1, so 0 never matches.
-    pub mut val idString: U64 = 0
-    pub mut val idU8: U64 = 0
-    pub mut val idU64: U64 = 0
-    pub mut val idBool: U64 = 0
-    pub mut val idArray: U64 = 0
-    pub mut val idFn: U64 = 0
-    pub mut val idIterator: U64 = 0
-    pub mut val idNext: U64 = 0
     // typed-AST cache (Phase B): each expression node's recovered `TypeInfo`,
     // stored as 4 parallel scalar arrays keyed by expr id (struct-array IndexSet
     // isn't available in the self-host subset). `typeOf` fills these lazily during
