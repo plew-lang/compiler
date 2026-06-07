@@ -18,7 +18,9 @@
 
 **直近の到達点**：renovate **Phase C/D（名前/型 interning）完了** ＋ **演算子トレイト配線 O1-O4＋O6（算術/ビット/単項）＋Eq/Ord 完了**（トレイト型引数＋`Self`/`Rhs`/`Output` 置換・**算術/ビット/単項/比較すべてユーザー型＋プリミティブで witness 脱糖**・リテラル推論・**プリミティブ脱ハードコード達成**〔`+ - * / % & | ^ << >> - ! ~ == != < <= > >=`〕・**真の負リテラル畳み込み**・**同名トレイトの構造的解決**／下記「演算子トレイト配線」）。
 
-**➡ 次の具体タスク**：①**built-in 算術＝実質撤去済**（コンパイラ自身も全テストも real built-in arith サイト 0＝全演算 witness 経由〔521→0〕・no-Core×known-primitive は loud error〔reject `arith_no_core`〕・複合代入も `target = target OP value` で witness 化〔`compoundBinOp`〕・両オペランド型復元〔`binWitnessType`〕＋binary 結果型復元〔`binResultTypeInfo`＝`0-big-1` の連鎖が幅伝播〕）。**残＝genCheckedArith/plew_div の emission コード自体の削除**＝width-less（`typeOf` が幅復元できない form＝match-payload bind 等）だけが届く benign fallback ゆえ、`typeOf` を全 form で完成させれば到達不能化して削除可（incremental・各 form の復元を足すごとに witness 化が進む・観測は不変）。②O5（`??` Coalesce）＋ O7-O8（Index/IndexSet/Chain/Pow＝現 built-in Array/Dictionary/Optional パスに触る・高リスク・最後）。
+**➡ 次の具体タスク＝O5（`??` Coalesce）＋ O7-O8（Index/IndexSet/Chain/Pow＝現 built-in Array/Dictionary/Optional パスに触る・高リスク・最後）。**
+
+**①built-in 算術＝完全削除済**：`+ - * / % & | ^ << >> -`（二項・単項・単純複合代入・**ネスト place 複合 `arr[i].f += v`**）すべて Core witness 経由・コンパイラの C に built-in checked-arith は皆無（`genCheckedArith`/`genCheckedDiv`/`genCheckedNeg`/`isCheckedArith`/`intMinMacro`/`overflowBuiltin`/`compoundCheckedBin` 削除済）。残る `__builtin_*_overflow` は preamble の intrinsic 床（`plew_iXAdd` 等）のみ＝clang inline。**機構**：複合代入を `target = target OP value` 脱糖（`compoundBinOp`）／両オペランド型復元（`binWitnessType`）＋binary 結果型復元（`binResultTypeInfo`）／**context 型を checker が記録→`typeOf` が読む side-table（`exprIntCtx`）**＝`val b:I32=0-1`・`match{}+1`・`f(arg:0-5)`・`if{give 0-1}`（checkLitCtx に IfExpr ケース追加）の width-less form が witness 経由に／width-less arith は loud error（`binTraitNeedsTrait` kind 0）／no-Core×known-primitive も loud error（reject `arith_no_core`）／nested-place は `writePlaceBinWitness`（place の型から witness 解決・struct-field place の `p.v+=other` も動く）。比較も同様に witness 化済（width-less 比較だけ plain C fallback）。test `compound_assign_witness`。bootstrap -O0 で +約27%（clang -O で消える）。
 
 **演算子が一段落した後の候補**：
 
