@@ -568,6 +568,17 @@ fn buildKwCache(c: inout Comp) {
     addKwSpan(c: inout c, kw: "fn")
     addKwSpan(c: inout c, kw: "iterator")
     addKwSpan(c: inout c, kw: "next")
+    // Phase C: pre-intern the built-in names so codegen can compare a span's id
+    // against a constant id (`== c.idArray`) instead of a byte-scan. Same content
+    // ⇒ same id, so these unify with any source occurrence interned earlier.
+    c.idString = intern(c: inout c, start: c.kwCache[0].nameStart, len: c.kwCache[0].nameLen)
+    c.idU8 = intern(c: inout c, start: c.kwCache[1].nameStart, len: c.kwCache[1].nameLen)
+    c.idU64 = intern(c: inout c, start: c.kwCache[2].nameStart, len: c.kwCache[2].nameLen)
+    c.idBool = intern(c: inout c, start: c.kwCache[3].nameStart, len: c.kwCache[3].nameLen)
+    c.idArray = intern(c: inout c, start: c.kwCache[4].nameStart, len: c.kwCache[4].nameLen)
+    c.idFn = intern(c: inout c, start: c.kwCache[5].nameStart, len: c.kwCache[5].nameLen)
+    c.idIterator = intern(c: inout c, start: c.kwCache[6].nameStart, len: c.kwCache[6].nameLen)
+    c.idNext = intern(c: inout c, start: c.kwCache[7].nameStart, len: c.kwCache[7].nameLen)
 }
 
 // Return a stable source span naming `kw`. O(1) lookup in the prebuilt cache; any

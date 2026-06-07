@@ -37,8 +37,8 @@ fn internBytes(c: inout Comp, s: String) -> Bind {
 
 // A type-typed parameter `name: Type` (copyable, no mode/default) for a
 // synthesized assoc fn.
-fn synthParam(nameSpan: Bind, tyStart: U64, tyLen: U64) -> Param {
-    val p: Param = <Param nameStart=nameSpan.nameStart nameLen=nameSpan.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=false ty=0 isInout=false isMove=false isBorrow=false noLabel=false hasDefault=false defaultExpr=0 />
+fn synthParam(c: inout Comp, nameSpan: Bind, tyStart: U64, tyLen: U64) -> Param {
+    val p: Param = <Param nameStart=nameSpan.nameStart nameLen=nameSpan.nameLen nameId=intern(c: inout c, start: nameSpan.nameStart, len: nameSpan.nameLen) tyStart=tyStart tyLen=tyLen tyIsArray=false ty=0 isInout=false isMove=false isBorrow=false noLabel=false hasDefault=false defaultExpr=0 />
     return p
 }
 
@@ -53,8 +53,8 @@ fn synthStructEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind,
     }
     val fields: Array[FieldDef] = c.structs[si].fields
     mut val params: Array[Param] = []
-    params.append(synthParam(nameSpan: lhsN, tyStart: d.typeStart, tyLen: d.typeLen))
-    params.append(synthParam(nameSpan: rhsN, tyStart: d.typeStart, tyLen: d.typeLen))
+    params.append(synthParam(c: inout c, nameSpan: lhsN, tyStart: d.typeStart, tyLen: d.typeLen))
+    params.append(synthParam(c: inout c, nameSpan: rhsN, tyStart: d.typeStart, tyLen: d.typeLen))
     val lhsId: U64 = c.pushExpr(e: <Expr.Ident start=lhsN.nameStart len=lhsN.nameLen />)
     val rhsId: U64 = c.pushExpr(e: <Expr.Ident start=rhsN.nameStart len=rhsN.nameLen />)
     mut val acc: U64 = 0
@@ -82,9 +82,9 @@ fn synthStructEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind,
     val blkId: U64 = c.blocks.count
     c.blocks.append(<Block stmts=stmts />)
     val noTP: Array[Bind] = []
-    c.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
+    c.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen nameId=intern(c: inout c, start: eqN.nameStart, len: eqN.nameLen) recvId=intern(c: inout c, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
     mut val wit: Array[Func] = []
-    c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen traitStart=eqTrait.nameStart traitLen=eqTrait.nameLen derived=true witnessed=wit />)
+    c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen typeId=intern(c: inout c, start: d.typeStart, len: d.typeLen) traitStart=eqTrait.nameStart traitLen=eqTrait.nameLen traitId=intern(c: inout c, start: eqTrait.nameStart, len: eqTrait.nameLen) derived=true witnessed=wit />)
 }
 
 // A decimal digit (0-9) as its ASCII byte. (`48 + d` would need a U64->U8 cast,
@@ -147,8 +147,8 @@ fn synthEnumEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind, b
     }
     val variants: Array[Variant] = c.enums[ei].variants
     mut val params: Array[Param] = []
-    params.append(synthParam(nameSpan: lhsN, tyStart: d.typeStart, tyLen: d.typeLen))
-    params.append(synthParam(nameSpan: rhsN, tyStart: d.typeStart, tyLen: d.typeLen))
+    params.append(synthParam(c: inout c, nameSpan: lhsN, tyStart: d.typeStart, tyLen: d.typeLen))
+    params.append(synthParam(c: inout c, nameSpan: rhsN, tyStart: d.typeStart, tyLen: d.typeLen))
     val lhsId: U64 = c.pushExpr(e: <Expr.Ident start=lhsN.nameStart len=lhsN.nameLen />)
     val rhsId: U64 = c.pushExpr(e: <Expr.Ident start=rhsN.nameStart len=rhsN.nameLen />)
     mut val counter: U64 = 0
@@ -201,9 +201,9 @@ fn synthEnumEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind, b
     val blkId: U64 = c.blocks.count
     c.blocks.append(<Block stmts=stmts />)
     val noTP: Array[Bind] = []
-    c.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
+    c.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen nameId=intern(c: inout c, start: eqN.nameStart, len: eqN.nameLen) recvId=intern(c: inout c, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
     mut val wit: Array[Func] = []
-    c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen traitStart=eqTrait.nameStart traitLen=eqTrait.nameLen derived=true witnessed=wit />)
+    c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen typeId=intern(c: inout c, start: d.typeStart, len: d.typeLen) traitStart=eqTrait.nameStart traitLen=eqTrait.nameLen traitId=intern(c: inout c, start: eqTrait.nameStart, len: eqTrait.nameLen) derived=true witnessed=wit />)
 }
 
 // An `<Ordering.Variant />` construction (Less/Equal/Greater) for derived Ord.
@@ -234,8 +234,8 @@ fn synthStructOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bin
     }
     val fields: Array[FieldDef] = c.structs[si].fields
     mut val params: Array[Param] = []
-    params.append(synthParam(nameSpan: lhsN, tyStart: d.typeStart, tyLen: d.typeLen))
-    params.append(synthParam(nameSpan: rhsN, tyStart: d.typeStart, tyLen: d.typeLen))
+    params.append(synthParam(c: inout c, nameSpan: lhsN, tyStart: d.typeStart, tyLen: d.typeLen))
+    params.append(synthParam(c: inout c, nameSpan: rhsN, tyStart: d.typeStart, tyLen: d.typeLen))
     val lhsId: U64 = c.pushExpr(e: <Expr.Ident start=lhsN.nameStart len=lhsN.nameLen />)
     val rhsId: U64 = c.pushExpr(e: <Expr.Ident start=rhsN.nameStart len=rhsN.nameLen />)
     mut val stmts: Array[U64] = []
@@ -258,9 +258,9 @@ fn synthStructOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bin
     val blkId: U64 = c.blocks.count
     c.blocks.append(<Block stmts=stmts />)
     val noTP: Array[Bind] = []
-    c.funcs.append(<Func nameStart=cmpN.nameStart nameLen=cmpN.nameLen typeParams=noTP params=params hasRet=true retStart=ordN.nameStart retLen=ordN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
+    c.funcs.append(<Func nameStart=cmpN.nameStart nameLen=cmpN.nameLen nameId=intern(c: inout c, start: cmpN.nameStart, len: cmpN.nameLen) recvId=intern(c: inout c, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=ordN.nameStart retLen=ordN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
     mut val wit: Array[Func] = []
-    c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen traitStart=ordTrait.nameStart traitLen=ordTrait.nameLen derived=true witnessed=wit />)
+    c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen typeId=intern(c: inout c, start: d.typeStart, len: d.typeLen) traitStart=ordTrait.nameStart traitLen=ordTrait.nameLen traitId=intern(c: inout c, start: ordTrait.nameStart, len: ordTrait.nameLen) derived=true witnessed=wit />)
 }
 
 // A `{ give <value> }` block (one statement) — an if-expression branch.
@@ -308,8 +308,8 @@ fn synthEnumOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bind,
     }
     val variants: Array[Variant] = c.enums[ei].variants
     mut val params: Array[Param] = []
-    params.append(synthParam(nameSpan: lhsN, tyStart: d.typeStart, tyLen: d.typeLen))
-    params.append(synthParam(nameSpan: rhsN, tyStart: d.typeStart, tyLen: d.typeLen))
+    params.append(synthParam(c: inout c, nameSpan: lhsN, tyStart: d.typeStart, tyLen: d.typeLen))
+    params.append(synthParam(c: inout c, nameSpan: rhsN, tyStart: d.typeStart, tyLen: d.typeLen))
     val lhsId: U64 = c.pushExpr(e: <Expr.Ident start=lhsN.nameStart len=lhsN.nameLen />)
     val rhsId: U64 = c.pushExpr(e: <Expr.Ident start=rhsN.nameStart len=rhsN.nameLen />)
     mut val counter: U64 = 0
@@ -369,9 +369,9 @@ fn synthEnumOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bind,
     val blkId: U64 = c.blocks.count
     c.blocks.append(<Block stmts=stmts />)
     val noTP: Array[Bind] = []
-    c.funcs.append(<Func nameStart=cmpN.nameStart nameLen=cmpN.nameLen typeParams=noTP params=params hasRet=true retStart=ordN.nameStart retLen=ordN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
+    c.funcs.append(<Func nameStart=cmpN.nameStart nameLen=cmpN.nameLen nameId=intern(c: inout c, start: cmpN.nameStart, len: cmpN.nameLen) recvId=intern(c: inout c, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=ordN.nameStart retLen=ordN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
     mut val wit: Array[Func] = []
-    c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen traitStart=ordTrait.nameStart traitLen=ordTrait.nameLen derived=true witnessed=wit />)
+    c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen typeId=intern(c: inout c, start: d.typeStart, len: d.typeLen) traitStart=ordTrait.nameStart traitLen=ordTrait.nameLen traitId=intern(c: inout c, start: ordTrait.nameStart, len: ordTrait.nameLen) derived=true witnessed=wit />)
 }
 
 // Whether an explicit `@[Eq]` derive is also recorded for the same type as `d`

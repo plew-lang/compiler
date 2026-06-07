@@ -55,6 +55,8 @@ struct CaptureEntry {
 struct Local {
     pub val nameStart: U64
     pub val nameLen: U64
+    // interned name id (Phase C): set when the local is pushed (addLocalCn); 0 sentinel.
+    pub val nameId: U64 = 0
     pub val tyStart: U64
     pub val tyLen: U64
     pub val isArray: Bool
@@ -253,6 +255,8 @@ struct Block {
 struct Param {
     pub val nameStart: U64
     pub val nameLen: U64
+    // interned label/name id (Phase C): set by internAllDecls; 0 sentinel.
+    pub val nameId: U64 = 0
     pub val tyStart: U64
     pub val tyLen: U64
     pub val tyIsArray: Bool
@@ -276,6 +280,8 @@ struct Param {
 struct FieldDef {
     pub val nameStart: U64
     pub val nameLen: U64
+    // interned name id (Phase C): set by internAllDecls; 0 until then.
+    pub val nameId: U64 = 0
     pub val tyStart: U64
     pub val tyLen: U64
     pub val tyIsArray: Bool
@@ -300,6 +306,7 @@ struct FieldDef {
 struct StructDef {
     pub val nameStart: U64
     pub val nameLen: U64
+    pub val nameId: U64 = 0
     // generic type parameters `[T, U]` (each a name span; reuses Bind). Empty
     // for a non-generic struct. Capability markers (noLocal/allowUnique) are
     // skipped at parse time (v1: allowUnique unimplemented, noLocal a no-op).
@@ -320,6 +327,7 @@ struct StructDef {
 struct Variant {
     pub val nameStart: U64
     pub val nameLen: U64
+    pub val nameId: U64 = 0
     pub val fields: Array[FieldDef]
 }
 
@@ -331,6 +339,7 @@ struct Variant {
 struct TraitDef {
     pub val nameStart: U64
     pub val nameLen: U64
+    pub val nameId: U64 = 0
     // supertraits from `trait Sub: Super + ...` (spec/08): conforming to Sub
     // requires conforming to each Super (a constraint, not auto-impl). Each entry
     // reuses Bind as a (start,len) trait-name span.
@@ -381,9 +390,11 @@ struct DeriveReq {
 struct AssocBinding {
     pub val recvStart: U64
     pub val recvLen: U64
+    pub val recvId: U64 = 0
     // associated type name (e.g. `Item`).
     pub val nameStart: U64
     pub val nameLen: U64
+    pub val nameId: U64 = 0
     // bound concrete type (head span + structured ref + array flag).
     pub val tyStart: U64
     pub val tyLen: U64
@@ -394,8 +405,10 @@ struct AssocBinding {
 struct Conform {
     pub val typeStart: U64
     pub val typeLen: U64
+    pub val typeId: U64 = 0
     pub val traitStart: U64
     pub val traitLen: U64
+    pub val traitId: U64 = 0
     // synthesized by `@[Eq]`/`@[Ord]` derive: exempt from the unknown-trait and
     // completeness checks (the witness is compiler-generated and complete).
     pub val derived: Bool
@@ -412,10 +425,13 @@ struct Conform {
 struct MethodAlias {
     pub val recvStart: U64
     pub val recvLen: U64
+    pub val recvId: U64 = 0
     pub val aliasStart: U64
     pub val aliasLen: U64
+    pub val aliasId: U64 = 0
     pub val realStart: U64
     pub val realLen: U64
+    pub val realId: U64 = 0
 }
 
 // A trait bound `where T: Trait` on a function (spec/08). `fnIdx` indexes
@@ -448,6 +464,7 @@ struct FnInst {
 struct EnumDef {
     pub val nameStart: U64
     pub val nameLen: U64
+    pub val nameId: U64 = 0
     // generic type parameters `[T, U]` (see StructDef.typeParams).
     pub val typeParams: Array[Bind]
     pub val variants: Array[Variant]
@@ -456,6 +473,9 @@ struct EnumDef {
 struct Func {
     pub val nameStart: U64
     pub val nameLen: U64
+    // interned ids (Phase C): name and (for methods/assoc) receiver type name.
+    pub val nameId: U64 = 0
+    pub val recvId: U64 = 0
     // generic type parameters `fn id[T](...)` (name spans; empty if not
     // generic). For a method, an `impl[T] Type[T]`-introduced parameter also
     // lands here. Consumed by G3 monomorphization.
@@ -561,6 +581,30 @@ struct Comp {
     // by appending the names to `bytes` at known offsets, so kwSpan is an O(1) table
     // lookup instead of an O(n) source scan + a planted-comment occurrence guarantee.
     pub mut val kwCache: Array[Bind] = []
+    // name interning (Phase C): a content-keyed table that maps each name span
+    // (start,len into `bytes`) to a stable 1-based integer id, so name equality
+    // becomes integer == instead of a byte-by-byte `spansEqual`. Declaration names
+    // (struct/enum/variant/field/func/trait/local/…) are pre-interned once into a
+    // `nameId` field on their table entry, so a name-vs-decl scan interns the query
+    // once and compares ids in the loop. `internStarts`/`internLens` hold the unique
+    // spans indexed by id-1; `internBuckets` is an open-addressing slot→id map
+    // (0 = empty). Re-interned names (internBytes gives each decl a distinct byte
+    // range) unify by CONTENT, which is the whole point — equal bytes ⇒ equal id.
+    pub mut val internStarts: Array[U64] = []
+    pub mut val internLens: Array[U64] = []
+    pub mut val internBuckets: Array[U64] = []
+    pub mut val internCount: U64 = 0
+    // pre-interned ids for built-in names with no guaranteed source occurrence
+    // (assigned by buildKwCache, which already appends these names to `bytes`).
+    // 0 until assigned; a real interned name is ≥ 1, so 0 never matches.
+    pub mut val idString: U64 = 0
+    pub mut val idU8: U64 = 0
+    pub mut val idU64: U64 = 0
+    pub mut val idBool: U64 = 0
+    pub mut val idArray: U64 = 0
+    pub mut val idFn: U64 = 0
+    pub mut val idIterator: U64 = 0
+    pub mut val idNext: U64 = 0
     // typed-AST cache (Phase B): each expression node's recovered `TypeInfo`,
     // stored as 4 parallel scalar arrays keyed by expr id (struct-array IndexSet
     // isn't available in the self-host subset). `typeOf` fills these lazily during

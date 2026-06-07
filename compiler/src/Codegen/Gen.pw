@@ -157,5 +157,5 @@ fn synthGenMain(c: inout Comp) {
     val noTP: Array[Bind] = []
     val noParams: Array[Param] = []
     c.genMainIdx = c.funcs.count
-    c.funcs.append(<Func nameStart=mainN.nameStart nameLen=mainN.nameLen typeParams=noTP params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    c.funcs.append(<Func nameStart=mainN.nameStart nameLen=mainN.nameLen nameId=intern(c: inout c, start: mainN.nameStart, len: mainN.nameLen) typeParams=noTP params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
 }
