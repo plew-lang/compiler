@@ -327,7 +327,75 @@ fn parsePrimaryAst(p: inout P) -> ExprAst {
         }
         Kind.LBracket => {
             p.advance()
+            p.skipNewlines()
+            // disambiguate dictionary literals from array literals (spec/02): `[:]`
+            // is the empty dictionary, `[k: v, ...]` a dictionary, `[]`/`[a, ...]` an
+            // array. The fork is decided by a leading `:` (empty) or a `:` right
+            // after the first element.
+            match p.curKind() {
+                Kind.Colon => {
+                    p.advance()
+                    p.skipNewlines()
+                    match p.curKind() {
+                        Kind.RBracket => { p.advance() }
+                        _ => {}
+                    }
+                    val noKeys: Array[ExprAst] = []
+                    val noVals: Array[ExprAst] = []
+                    return <ExprAst.DictLit keys=noKeys vals=noVals span=<Span start=sStart end=p.prevEnd() /> />
+                }
+                Kind.RBracket => {
+                    p.advance()
+                    val noElems: Array[ExprAst] = []
+                    return <ExprAst.ArrayLit elems=noElems span=<Span start=sStart end=p.prevEnd() /> />
+                }
+                _ => {}
+            }
+            // parse the first element directly into `elems` (a temporary argument,
+            // not a named local — a named local would be shallow-passed to `append`
+            // and then released, dangling the stored copy). A following `:` makes
+            // this a dictionary, where `elems` already holds the first key.
             mut val elems: Array[ExprAst] = []
+            elems.append(parseExprAst(p: inout p))
+            match p.curKind() {
+                Kind.Colon => {
+                    p.advance()
+                    mut val vals: Array[ExprAst] = []
+                    vals.append(parseExprAst(p: inout p))
+                    match p.curKind() {
+                        Kind.Comma => { p.advance() }
+                        _ => {}
+                    }
+                    while true {
+                        p.skipNewlines()
+                        match p.curKind() {
+                            Kind.RBracket => {
+                                p.advance()
+                                break
+                            }
+                            Kind.Eof => { break }
+                            _ => {
+                                elems.append(parseExprAst(p: inout p))
+                                match p.curKind() {
+                                    Kind.Colon => { p.advance() }
+                                    _ => {}
+                                }
+                                vals.append(parseExprAst(p: inout p))
+                                match p.curKind() {
+                                    Kind.Comma => { p.advance() }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                    return <ExprAst.DictLit keys=elems vals=vals span=<Span start=sStart end=p.prevEnd() /> />
+                }
+                _ => {}
+            }
+            match p.curKind() {
+                Kind.Comma => { p.advance() }
+                _ => {}
+            }
             while true {
                 p.skipNewlines()
                 match p.curKind() {

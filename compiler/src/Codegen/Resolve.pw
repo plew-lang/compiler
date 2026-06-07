@@ -1777,6 +1777,34 @@ fn blockGiveExpr(c: inout Comp, blkId: U64) -> U64 {
     return found
 }
 
+// The result type of a value-position block (if/match expression): the type of its
+// `give` expression. The give may name a local declared earlier in the same block
+// (`if c { val x = …; give x }`), so pre-register the block's `let`s before reading
+// the give's type, then pop them — genBlock re-declares them when it actually emits.
+// Without this peek a give-of-a-block-local resolves to a bogus scalar type.
+fn blockGiveType(c: inout Comp, blkId: U64) -> TypeInfo {
+    val mark: U64 = scopeMark(c: inout c)
+    val blk: Block = c.blocks[blkId]
+    val stmts: Array[U64] = blk.stmts
+    mut val i: U64 = 0
+    while i < stmts.count {
+        match c.stmts[stmts[i]] {
+            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+                addLocalCn(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true, cnum: 0)
+            }
+            _ => {}
+        }
+        i += 1
+    }
+    val g: U64 = blockGiveExpr(c: inout c, blkId: blkId)
+    mut val rt: TypeInfo = scalarInfo()
+    if g < c.exprs.count {
+        rt = typeOf(c: inout c, id: g)
+    }
+    popLocals(c: inout c, mark: mark)
+    return rt
+}
+
 // Register a match-bound field as an in-scope local with its declared type.
 // Register a match-bound field as an in-scope local. The field is found by
 // (fieldStart,fieldLen); the local is named (bindStart,bindLen) — equal for

@@ -69,6 +69,7 @@ export enum ExprAst {
     Index(base: ExprAst, index: ExprAst, span: Span)
     Make(typeName: String, typeArgs: Array[TypeAst], variant: String, isEnum: Bool, fields: Array[MakeFieldAst], span: Span)
     ArrayLit(elems: Array[ExprAst], span: Span)
+    DictLit(keys: Array[ExprAst], vals: Array[ExprAst], span: Span)
     Cast(operand: ExprAst, ty: TypeAst, span: Span)
     MatchExpr(scrut: ExprAst, arms: Array[MatchArmAst], span: Span)
     IfExpr(cond: ExprAst, thenBlk: BlockAst, elseBlk: BlockAst, span: Span)

@@ -1430,13 +1430,13 @@ fn genExpr(c: inout Comp, id: U64) {
             // ending in `give`, which assigns the result temp __r<t>.
             val t: U64 = c.tmp
             c.tmp = c.tmp + 1
-            val g: U64 = blockGiveExpr(c: inout c, blkId: thenBlk)
-            mut val rt: TypeInfo = scalarInfo()
-            if g < c.exprs.count {
-                rt = typeOf(c: inout c, id: g)
-            }
+            val rt: TypeInfo = blockGiveType(c: inout c, blkId: thenBlk)
             write(s: "({ ")
-            genTypeInfoCType(c: inout c, ti: rt)
+            if isGenericInst(c: inout c, ref: rt.ref) {
+                emitMangle(c: inout c, ref: rt.ref)
+            } else {
+                genTypeInfoCType(c: inout c, ti: rt)
+            }
             write(s: " __r")
             writeU64(n: t)
             write(s: "; if (")

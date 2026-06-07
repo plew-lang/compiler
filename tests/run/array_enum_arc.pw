@@ -1,0 +1,47 @@
+// Array[Enum] with a heap-owning variant field (here `Array[I32]`) must deep-copy
+// and deep-release its elements (value semantics + ARC), exactly like Array[Struct].
+// The element copy/release decision used to consult only structs, so an enum element
+// fell back to a shallow buffer copy: appending a named local then dropping it at
+// scope exit dangled the stored element. `build` appends locals carrying heap arrays
+// and returns the array; reading the elements after the locals are gone was a
+// use-after-free before the fix. Also checks CoW (copying then mutating the copy
+// leaves the source intact).
+import @Std/Io with { print }
+
+enum Word {
+    Tagged(tags: Array[I32])
+    Empty
+}
+
+fn first(w: Word) -> I32 {
+    mut val r: I32 = -1
+    match w {
+        Word.Tagged(val tags) => { r = tags[0] }
+        Word.Empty => { r = -1 }
+    }
+    return r
+}
+
+fn build() -> Array[Word] {
+    mut val xs: Array[Word] = []
+    val a: Word = <Word.Tagged tags=[10, 20] />
+    xs.append(a)
+    val b: Word = <Word.Tagged tags=[30] />
+    xs.append(b)
+    xs.append(<Word.Empty />)
+    return xs
+}
+
+fn main() {
+    val xs: Array[Word] = build()
+    print(first(w: xs[0]))
+    print(first(w: xs[1]))
+    print(first(w: xs[2]))
+    print(xs.count)
+    // CoW: copy then mutate the copy; the source is untouched
+    mut val ys: Array[Word] = xs
+    ys.append(<Word.Tagged tags=[99] />)
+    print(xs.count)
+    print(ys.count)
+    print(first(w: ys[3]))
+}

@@ -111,6 +111,94 @@ fn lowerMakeFields(c: inout Comp, fields: Array[MakeFieldAst]) -> Array[MakeFiel
     return out
 }
 
+// Build a fresh empty `<Dictionary keys=[] vals=[] hashes=[] buckets=[] count=0 />`
+// Make node typed as `ctxRef` (a `Dictionary[K, V]` TypeRef). The empty array
+// literals take their element type from the struct field at codegen, so no element
+// type is needed here.
+fn synthEmptyDict(c: inout Comp, ctxRef: U64) -> U64 {
+    val ct: TypeRef = c.types[ctxRef]
+    val kN: Bind = internBytes(c: inout c, s: "keys")
+    val vN: Bind = internBytes(c: inout c, s: "vals")
+    val hN: Bind = internBytes(c: inout c, s: "hashes")
+    val bN: Bind = internBytes(c: inout c, s: "buckets")
+    val cN: Bind = internBytes(c: inout c, s: "count")
+    val noElems: Array[U64] = []
+    val emptyKeys: U64 = c.pushExpr(e: <Expr.Array elems=noElems />)
+    val emptyVals: U64 = c.pushExpr(e: <Expr.Array elems=noElems />)
+    val emptyHashes: U64 = c.pushExpr(e: <Expr.Array elems=noElems />)
+    val emptyBuckets: U64 = c.pushExpr(e: <Expr.Array elems=noElems />)
+    val zero: U64 = c.pushExpr(e: <Expr.Int value=0 offset=0 isBool=false tyStart=0 tyLen=0 />)
+    mut val fields: Array[MakeField] = []
+    fields.append(<MakeField nameStart=kN.nameStart nameLen=kN.nameLen value=emptyKeys />)
+    fields.append(<MakeField nameStart=vN.nameStart nameLen=vN.nameLen value=emptyVals />)
+    fields.append(<MakeField nameStart=hN.nameStart nameLen=hN.nameLen value=emptyHashes />)
+    fields.append(<MakeField nameStart=bN.nameStart nameLen=bN.nameLen value=emptyBuckets />)
+    fields.append(<MakeField nameStart=cN.nameStart nameLen=cN.nameLen value=zero />)
+    return c.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fields />)
+}
+
+// Lower a dictionary literal `[k0: v0, ...]` / `[:]` (spec/02). The K/V types come
+// from the binding/return context (`ctxRef` must be a `Dictionary[K, V]` TypeRef):
+// there is no element-based inference, so the literal needs a context type (an
+// annotated `let`/`return`), just like an empty array does. Lowers to a
+// value-position block:
+//   if (1) { mut val __dl: Dictionary[K,V] = <empty>; __dl.insert(k, v); ...;
+//            give move __dl } else { give <empty> }
+// `give move __dl` transfers the freshly-built dictionary out with no deep copy —
+// the temp is marked moved so the block exit does not release it (the caller's
+// binding owns it). The else branch is dead (the cond is the constant `1`) but must
+// still yield a `Dictionary[K,V]` so the value-position block type-checks.
+fn lowerDictLit(c: inout Comp, keys: Array[ExprAst], vals: Array[ExprAst], ctxRef: U64, span: Span) -> U64 {
+    mut val ok: Bool = false
+    if ctxRef != 0 {
+        if ctxRef < c.types.count {
+            val ct: TypeRef = c.types[ctxRef]
+            if rangeEquals(bytes: c.bytes, start: ct.nameStart, len: ct.nameLen, kw: "Dictionary") {
+                if ct.args.count >= 2 {
+                    ok = true
+                }
+            }
+        }
+    }
+    if ok {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: span.start), msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)")
+        return c.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 />)
+    }
+    val ct: TypeRef = c.types[ctxRef]
+    val dlN: Bind = internBytes(c: inout c, s: "__dl")
+    mut val stmts: Array[U64] = []
+    val initMake: U64 = synthEmptyDict(c: inout c, ctxRef: ctxRef)
+    stmts.append(c.pushStmt(s: <Stmt.Let mutable=true nameStart=dlN.nameStart nameLen=dlN.nameLen tyStart=ct.nameStart tyLen=ct.nameLen tyIsArray=false ty=ctxRef init=initMake />))
+    val insN: Bind = internBytes(c: inout c, s: "insert")
+    val keyL: Bind = internBytes(c: inout c, s: "key")
+    val valL: Bind = internBytes(c: inout c, s: "value")
+    mut val i: U64 = 0
+    while i < keys.count {
+        val kId: U64 = lowerExpr(c: inout c, e: keys[i])
+        val vId: U64 = lowerExpr(c: inout c, e: vals[i])
+        val recv: U64 = c.pushExpr(e: <Expr.Ident start=dlN.nameStart len=dlN.nameLen />)
+        mut val args: Array[Arg] = []
+        args.append(<Arg expr=kId isInout=false labelStart=keyL.nameStart labelLen=keyL.nameLen hasLabel=true />)
+        args.append(<Arg expr=vId isInout=false labelStart=valL.nameStart labelLen=valL.nameLen hasLabel=true />)
+        val m: U64 = c.pushExpr(e: <Expr.Method recv=recv nameStart=insN.nameStart nameLen=insN.nameLen args=args />)
+        stmts.append(c.pushStmt(s: <Stmt.ExprStmt expr=m />))
+        i += 1
+    }
+    val giveRecv: U64 = c.pushExpr(e: <Expr.Ident start=dlN.nameStart len=dlN.nameLen />)
+    val mv: U64 = c.pushExpr(e: <Expr.Move operand=giveRecv isBorrow=false />)
+    stmts.append(c.pushStmt(s: <Stmt.Give value=mv />))
+    val thenBlk: U64 = c.blocks.count
+    c.blocks.append(<Block stmts=stmts />)
+    mut val elseStmts: Array[U64] = []
+    val elseDict: U64 = synthEmptyDict(c: inout c, ctxRef: ctxRef)
+    elseStmts.append(c.pushStmt(s: <Stmt.Give value=elseDict />))
+    val elseBlk: U64 = c.blocks.count
+    c.blocks.append(<Block stmts=elseStmts />)
+    val cond: U64 = c.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 />)
+    return c.pushExpr(e: <Expr.IfExpr cond=cond thenBlk=thenBlk elseBlk=elseBlk />)
+}
+
 // Lower an expression with a context type `ctxRef` (a TypeRef, 0 = none). A
 // type-argument-less generic constructor `<Box v=… />` whose head matches the
 // context type's head takes the context's type arguments (`Box[I64]`), so the
@@ -134,6 +222,9 @@ fn lowerExprWithCtx(c: inout Comp, e: ExprAst, ctxRef: U64) -> U64 {
                                 }
                             }
                         }
+                    }
+                    ExprAst.DictLit(val keys, val vals, val span) => {
+                        return lowerDictLit(c: inout c, keys: keys, vals: vals, ctxRef: ctxRef, span: span)
                     }
                     _ => {}
                 }
@@ -222,6 +313,11 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
                 i += 1
             }
             result = c.pushExpr(e: <Expr.Array elems=es />)
+        }
+        ExprAst.DictLit(val keys, val vals, val span) => {
+            // a bare dictionary literal with no binding/return context: K/V can't be
+            // inferred (lowerDictLit reports the error).
+            result = lowerDictLit(c: inout c, keys: keys, vals: vals, ctxRef: 0, span: span)
         }
         ExprAst.Cast(val operand, val ty, val span) => {
             val o: U64 = lowerExpr(c: inout c, e: operand)

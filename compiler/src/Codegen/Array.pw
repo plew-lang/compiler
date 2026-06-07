@@ -182,6 +182,20 @@ fn wPA(c: inout Comp, elemStart: U64, elemLen: U64) {
 
 // Monomorphized array runtime for one element type, over the `RawBuffer` floor
 // (cap + CoW refcount live in the buffer header, reached via `plew_rawbuf_*`).
+// Does an array element type need deep per-element copy/release? True for a struct
+// OR enum element with heap-owning fields (`Array[ExprAst]` where the enum carries
+// arrays / boxed recursive fields): the generated `<Elem>_copy` / `<Elem>_release`
+// are deep, so the array must call them per element. Without the enum arm an
+// `Array[Enum]` falls back to a shallow element copy, which leaks normally and
+// dangles when an element is released elsewhere (e.g. a temporary appended then
+// dropped). Mirrors typeInfoNeedsCopy's struct-or-enum split for plain elements.
+fn arrayElemNeedsDeep(c: inout Comp, start: U64, len: U64) -> Bool {
+    if structNeedsCopy(c: inout c, start: start, len: len) {
+        return true
+    }
+    return enumNeedsCopy(c: inout c, start: start, len: len)
+}
+
 // Order matters: _copy, _share and _unique are emitted before _set/_push, which
 // call _unique to realize copy-on-write (mutate a private buffer when shared).
 fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
@@ -224,7 +238,7 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     write(s: "*)plew_rawbuf_alloc(sizeof(")
     genCElem(c: inout c, start: elemStart, len: elemLen)
     write(s: "), a.count); for (long long i = 0; i < a.count; i++) ")
-    if structNeedsCopy(c: inout c, start: elemStart, len: elemLen) {
+    if arrayElemNeedsDeep(c: inout c, start: elemStart, len: elemLen) {
         write(s: "r.data[i] = ")
         writeSpan(c: inout c, start: elemStart, len: elemLen)
         write(s: "_copy(a.data[i]);")
@@ -245,7 +259,7 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     write(s: "_release(")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: " a) { if (!a.data) return; ")
-    if structNeedsCopy(c: inout c, start: elemStart, len: elemLen) {
+    if arrayElemNeedsDeep(c: inout c, start: elemStart, len: elemLen) {
         write(s: "if (plew_rawbuf_is_unique((void*)a.data)) { for (long long i = 0; i < a.count; i++) ")
         writeSpan(c: inout c, start: elemStart, len: elemLen)
         write(s: "_release(a.data[i]); } ")
@@ -288,7 +302,7 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     write(s: " v) { if (i < 0 || i >= a->count) { fprintf(stderr, \"panic: index out of range\\n\"); exit(1); } ")
     wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
     write(s: "_unique(a); ")
-    if structNeedsCopy(c: inout c, start: elemStart, len: elemLen) {
+    if arrayElemNeedsDeep(c: inout c, start: elemStart, len: elemLen) {
         writeSpan(c: inout c, start: elemStart, len: elemLen)
         write(s: "_release(a->data[i]); a->data[i] = ")
         writeSpan(c: inout c, start: elemStart, len: elemLen)
@@ -316,7 +330,7 @@ fn genArrayRuntimeFns(c: inout Comp, elemStart: U64, elemLen: U64) {
     write(s: "*)plew_rawbuf_alloc(sizeof(")
     genCElem(c: inout c, start: elemStart, len: elemLen)
     write(s: "), nc); for (long long i = 0; i < a->count; i++) nd[i] = a->data[i]; plew_rawbuf_release((void*)a->data); a->data = nd; } a->data[a->count] = ")
-    if structNeedsCopy(c: inout c, start: elemStart, len: elemLen) {
+    if arrayElemNeedsDeep(c: inout c, start: elemStart, len: elemLen) {
         writeSpan(c: inout c, start: elemStart, len: elemLen)
         write(s: "_copy(v)")
     } else {
