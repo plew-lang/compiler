@@ -26,7 +26,7 @@
 
 ## 数値モデル
 
-- **幅つき整数 `I8..U64`** → ✅ **厳密幅 stdint で実装**（各型が `int8_t…int64_t`/`uint16_t…uint64_t`・**U8 は `unsigned char`**＝`.bytes` バッファ共有のため・`Bool` だけ `long long`）。**overflow/0除算 panic**（`__builtin_*_overflow`・符号付き `INT_MIN/-1`・`x % -1`=0 で C UB 回避）・**リテラル文脈型付け**（範囲検査＋厳密 no-default・型サフィックス `5U64`・先頭 `-` 畳み込み）。**リテラルは U64 magnitude モデル**＝全 U64 範囲 [0, 2^64-1] が valid（codegen は >2^63-1 に `ULL`）・2^64-1 超過は lexer で clean なコンパイルエラー・負は Unary `-`＋符号で範囲検査。残（rare な穴）：両オペランドが幅不明な式の算術（`(1+1)` 等リテラルのみ）と配列要素 `/= %=` の narrow-signed `INT_MIN/-1`。`wrapping*` メソッドは additive 予定。
+- **幅つき整数 `I8..U64`** → ✅ **厳密幅 stdint で実装**（各型が `int8_t…int64_t`/`uint16_t…uint64_t`・**U8 は `unsigned char`**＝`.bytes` バッファ共有のため・`Bool` だけ `long long`）。**overflow/0除算 panic**（intrinsic 床 `plew_iXAdd` 等が `__builtin_*_overflow`・符号付き `INT_MIN/-1`・`x % -1`=0 で C UB 回避＝全演算 witness 経由の床）・**リテラル文脈型付け**（範囲検査＋厳密 no-default・型サフィックス `5U64`・先頭 `-` は lower で真に畳み込み＝`Expr.Int.isNeg`）。**リテラルは U64 magnitude モデル**＝全 U64 範囲 [0, 2^64-1] が valid（codegen は >2^63-1 に `ULL`）・2^64-1 超過は lexer で clean なコンパイルエラー。**幅不明な式の算術は loud error**（曖昧＝旧 silent built-in 穴は閉じた・typeOf を context-typed form まで完成）。`wrapping*` メソッドは additive 予定。
 - **浮動小数点 `F32/F64`** → **未実装**（NaN 比較 panic・float `assert` も float 待ち）。spec/02,12。
 
 ## レンジ（暫定）
@@ -41,7 +41,7 @@
 ## 配列・辞書・集合・タプル
 
 - `Array[T]`：✅ **値意味論＋CoW＋解放を実装**（上述メモリ節）。添字 `U64`・範囲外 panic は spec 通り。**複合要素型も実装済**＝`Array[Ref[T]]`/`Array[Box[T]]`/`Array[Array[T]]`（ネスト）＋配列リテラル要素 append＋`Array[T]` の generic struct/関数での単相化（複合要素にマングル名 span を与え C 型/ARC は要素 ref から復元）。**残る小・hidden-cost ARC 残留（no UAF）**：fresh-temp append（`xs.append(<Ref…/>)`）が box を 1 つ leak（temp 所有権が transfer でなく retain）・heap 持ち Ref pointee の深い release（`Array[Ref[StructWithHeap]]` の pointee の配列/Ref フィールドが leak）・ネスト配列 `Array[Array[T]]` の inner-array 要素 ARC（ビットコピー＝leak）。`[E; N]`/const generics/`Slice`/部分文字列は **spec 自体が当面保留**。
-- **`Dictionary[K,V]`（lang item・`[k:v]` リテラル）／`Set[E]`** → **未実装**（Hash が要る大物）。
+- **`Dictionary[K,V]`（lang item・`[k:v]`/`[:]` リテラル）** → ✅ **実装済**（struct+メソッド+添字+リテラル・Hash/SipHash-1-3 dogfood・[worklog.md](worklog.md)「Dictionary」）。残＝マップごとのランダムシード（RNG 後・固定キー実装済）・`get->Optional[V]`。**`Set[E]`** → **未実装**（リテラル無し＝非 lang item・import 要）。
 - **ラベル付き無名レコード `(x: I32, y: I32)`** → 未実装（struct のみ）。
 
 ## 型システム：ジェネリクス・トレイト・拡張
@@ -49,7 +49,7 @@
 - **再帰値型 `struct A { child: Optional[A] }` / `enum B { P(child: B) Q }`** → ✅ **実装済（field-level auto-boxing＋CoW ARC・観測挙動も解放も正しい）**。循環を閉じるフィールドを `markBoxedFields`（`Comp.boxedFields`・field の `nameStart` キー）が検出＝concrete struct/enum の到達可能性ウォーク（`Array`/`RawBuffer`/`Ref`/`WeakRef` は cut・`Optional`/`Result` は透過してその引数を辿る・back-edge を閉じる**ユーザー型側フィールド**を box＝Optional 自体は box せず hardcoded `.data.Some.v` を温存）。codegen＝そのフィールドだけ `T*`・構築 `genBoxCell`（`plew_arc_alloc` rc セル＋値コピー＋`curRetTy=fd.ty` で nested JSX 推論）・読み deref コピー・書き fresh box に repoint（共有セル不変＝値意味論）。**ARC 解放は配線済**（copy/share は `plew_ref_share` retain・release は rc→0 で pointee 再帰 release＋free・`emitFieldAction`/`emitMonoFieldAction` 経由）＝5000 ノード stress で 0 leaks（残リークは print/String の既存ギャップのみ・box 由来 0）。`fieldType` は generic-inst フィールドの `ref` を載せる（match が `Optional_Node` 復元）。テスト＝`rec_list`/`rec_struct_optional`/`rec_tree`/`rec_mutual`/`rec_value_semantics`。**残（minor）**：終端なし循環（`struct A { val a: A }`＝enum 経由でない構造体だけの循環）は有限型だが**構築不能**（住人なし・クラッシュせず通常コンパイル＝loud reject は将来）。spec/03「再帰する値型」。
 - **ジェネリクス `[T]`／`[T,U]`** → ✅ **実装済（タグ `generics-data`/`generics-methods`）**：struct/enum/fn/`impl[T]` の型パラメータ・単相化（`Box_I32`）・generic struct/enum（`Optional`/`Result` 含む）・generic メソッド（レシーバ型由来）。**`where T: Trait` 制約＋メソッド own 型パラメータ `[H]`＋推移的インスタンス化＝実装済**：境界型変数へのトレイトメソッド呼び（演算子 `==`/`<` も名前付きメソッド `x.m()` も）が定義地点で eager 検査（#9・`boundProvidesMethod`）され、モノモーフィズで具体 witness に解決。**`inout H`（境界型変数の可変借用）をトレイトディスパッチ越しに通す＝可**（`fn hash[H](hasher: inout H) where H: Hasher` 形）。**generic メソッドはプリミティブ受信者でも可**（`impl U64 as Hash { fn hash[H]… }`＝インスタンスは use site から推移的に discover・test `generic_method_bound_inout`）。残 additive：generic free 関数の**呼び出し位置推論なしの明示型引数 `id[I32](x)`**（推論は動く）・generic 抽象コードでの `T::Item` 解決（concrete では不要・関連型 `type Item` 自体は実装済＝trait 宣言＋impl 束縛＋適合検査での `Item` 置換照合・test `assoc_type`）。**ネスト generic 単相化＝✅ 解消**（[worklog.md](worklog.md)「Dictionary」「再利用資産」）：`struct Map[K,V] { entries: Array[Entry[K,V]] }`（汎用 struct を要素に持つ Array フィールド＝compound 要素が外側型パラメータを含む）が instance で要素を ground できず head 名 `Array_Entry`／template 名 `Array_Entry_K_V` を吐いていた。直し＝統一ヘルパ `groundedArrayFieldInfo`（`genericFieldTypeInfo`/`genericEnumFieldTypeInfo`/`substTypeInfo` の array 枝が要素を instance env で ground し ground 後 compound なら mangle 名・`ref` 不変＝波及ゼロ）＋template の非 ground compound 要素は runtime/method を emit しない（`skipArrayElem`/`emitArrayMethods` に `tyRefIsGround` 判定）。フィールド由来の Array メソッド本体（`self.entries.get` 等）も ground される。**平行配列回避策は不要**。推移的インスタンス探索 `scanGenInstMethodBodies`（generic-レシーバ・メソッド本体の nested generic 呼びを discover）も main に land 済（`Dictionary.hashOf` 内 `key.hash[H]`→`String.hash[SipHasher]`）。test run/generic_array_compound_field・generic_array_box_field。**generic コンストラクタ型引数推論＝✅ JSX 解消**：型引数なし JSX `<Box v=7 />`/`<Map entries=[] count=0 />` が **let 束縛注釈**と**関数/クロージャ戻り型**から型引数を推論（lower 時 context 渡し `lowerExprWithCtx`＋`Comp.lowerRetTy`・多パラメータ可・test run/generic_ctor_infer）。**残＝assoc 呼び出し位置の推論**（`Box.make(x:7)` で戻り `Box[T]` の T を call site から推論＝`Box_make_x_T` のまま・別機構で未着手・JSX 構築で回避）。
 - **トレイト（`via` 準拠・提供メソッド・`any P` 存在型・blanket・継承）** → **全て未実装**（大物）。
-- **演算子→トレイト脱糖**（`+`↔`Add` 等） → ✅ **実装済（O1-O4＋O6）**：ユーザー型＋**プリミティブ**の算術/ビット/単項が witness 脱糖（プリミティブは `@Std/Core` の `impl I32 as Add[I32]` 等→`i32Add` intrinsic 床経由＝**脱ハードコード達成**）。built-in は untyped リテラル/String/no-Core の fallback として残る。比較 `==`/`<`（Eq/Ord）は別経路で primitive 据え置き（下記）。
+- **演算子→トレイト脱糖**（`+`↔`Add` 等） → ✅ **実装済（O1-O8）**：ユーザー型＋**プリミティブ**の算術/ビット/単項/比較がすべて witness 脱糖（プリミティブは `@Std/Core` の `impl I32 as Add[I32]`/`as Ord` 等→`i32Add`/`i32Lt` intrinsic 床経由）。**built-in 算術は完全削除**（全演算 witness 経由・typeOf を context-typed form まで完成・no-Core/width-less は loud error）。Index/IndexSet（ユーザー型添字）・Chain `?.`（Optional 具体）も実装。`??` は演算子廃止→`Optional.unwrapOr`。残＝一般 Chain トレイト・`Pow`〔float 後〕・複合添字 `a[k]+=v`・`Output != Self`。
 - **拡張 `#Ext`／`defaultExtension`／`A#P` ビュー／無名 impl コヒーレンス** → 全て未実装。
 - **`newtype`** → 未実装。
 
@@ -62,7 +62,7 @@
 
 ## Eq/Ord（実装済・残ギャップ小）
 
-- **`Eq`/`Ord` トレイト演算子配線 → ✅ 実装済**（commit `d33e17e`）：`==`/`!=` は Eq の witness `eq(lhs,rhs)->Bool` へ、`< <= > >=` は Ord の witness `compare(lhs,rhs)->Ordering` の tag テストへ脱糖（`hasCompareWitness`/`emitTraitCompare`／式位置と条件位置の両方）。**struct も対象**＝手書き `impl T as Eq`/`as Ord` が動く（test `trait_eq_ord`）。プリミティブは built-in 境界、String `==`/`!=` は `PlewString_eq`。**Eq/Ord 無しの struct/array 比較は loud reject**（`compareNeedsTrait`＝受理健全性）。
+- **`Eq`/`Ord` トレイト演算子配線 → ✅ 実装済**（commit `d33e17e`）：`==`/`!=` は Eq の witness `eq(lhs,rhs)->Bool` へ、`< <= > >=` は Ord の witness `compare(lhs,rhs)->Ordering` の tag テストへ脱糖（`hasCompareWitness`/`emitTraitCompare`／式位置と条件位置の両方）。**struct も対象**＝手書き `impl T as Eq`/`as Ord` が動く（test `trait_eq_ord`）。**プリミティブも witness 経由**（`@Std/Core` の `impl <Prim> as Eq/Ord`＝O6 脱ハードコード済・gate kind 0）、String `==`/`!=` は `PlewString_eq`。**Eq/Ord 無しの struct/array 比較は loud reject**（`compareNeedsTrait`＝受理健全性）。
 - **`@[Eq]`/`@[Ord]` derive → ✅ 実装済**（commit `a9e15f2`＋enum）：`@[Eq]` は struct＝フィールド毎 `eq`／enum＝構造的（tag 一致→payload フィールド毎・test `derive_eq_struct`/`derive_eq_enum`）、`@[Ord]` は struct＝フィールド辞書順 `compare`／**enum＝tag 辞書順→同 tag は payload lexicographic**（`synthEnumOrd`/`synthOrdChainExpr`・test `derive_ord_enum`）。**`@[Ord]` は `@[Eq]` を含意**（`Ord: Eq`・Ord 合成時に Eq witness も合成・明示 `@[Eq]` 併記なら重複回避・test `derive_ord_implies_eq`）。derive した Eq は `where T: Eq` 境界も満たす。**派生 `eq`/`compare` は private フィールドも読める**（`inAnonImplOf` を assoc fn に拡張）。`Ordering` enum は **ユーザー宣言が必要**（option B＝コンパイラ injection しない・未宣言で `@[Ord]` は loud reject・test `derive_ord_no_ordering`）。**当面コンパイラ特権合成**（spec/16・将来 dogfood）。
 - 補足：variant 値は **JSX 必須**（`<Kind.LParen />`・bare 不採用＝「生成は常に JSX」を維持）。型省略 JSX `<.LParen />`（文脈推論）は surface 追加の未決。
 
@@ -77,8 +77,8 @@
 ## 演算子（subset）
 
 - **対応**：`+ - * / %`・比較 `== != < <= > >=`・論理 `&& ||`（C 短絡）・**ビット/シフト `& | ^ << >> ~`**・単項 `! - ~`・代入 `=`・複合 `+= -= *= /= %=`＋**ビット系 `&= |= ^= <<= >>=`**（純粋脱糖）・`Optional.unwrapOr(fallback:)`（eager 値/lazy クロージャのオーバーロード＝旧 `??` の代替）。
-- **トレイト脱糖済**（O1-O4＋O6）：算術 `+ - * / %`・ビット/シフト `& | ^ << >>`・単項 `- ! ~`（`Neg`/`Not`/`BitNot`）＝ユーザー型＋プリミティブとも witness 経由。
-- **未対応**：`pow`/`**`（`Pow[Exp]`）・`?.`（Chain）の一般トレイト化〔現 Optional 具体〕・複合添字 `a[k]+=v`・`as` 以外の数値変換・比較 `==`/`<` の primitive 脱ハードコード〔意図的保留〕。
+- **トレイト脱糖済**（O1-O8）：算術 `+ - * / %`・ビット/シフト `& | ^ << >>`・単項 `- ! ~`・比較 `== != < <= > >=`＝ユーザー型＋プリミティブとも witness 経由。添字 `[]`/`[]=`（Index/IndexSet・ユーザー型）・`?.`（Chain・Optional 具体）も。
+- **未対応**：`pow`/`**`（`Pow[Exp]`・float 後）・`?.`（Chain）の一般トレイト化〔現 Optional 具体〕・複合添字 `a[k]+=v`・`as` 以外の数値変換・`Output != Self`。
 - **優先順位**：`as`<シフト等は未実装段あり・実装済の相対順序は spec 13 段と一致（`?? 廃止済`）。比較/レンジの非結合は未強制。spec/12。
 - **`as`**：**数値↔数値の C キャストのみ**（無損失検査済＝source 幅を `TypeInfo` で復元し narrowing は reject・式幅も伝播）。残：`From`/`TryFrom`（`as` の全域変換脱糖・`try` の From 変換＝現状 `try` はソース/関数戻りの **エラー型一致 `E==E'` を要求**・違うと C 型不一致）・`?.`（オプショナルチェーン）は未実装。spec/12,13。
 - **`try` は `@Std/Core` の Result の tag/field レイアウトをハードコード前提**（Ok=tag0/`value`・Err=tag1/`error`）。lang-item ゆえ妥当だが、ユーザーが別形の Result を定義しても `try` はこの形を仮定。見直し：lang-item を spec で固定 or コンパイラが Core のシンボルを参照（ambient 化〔上記 import 節〕とセットで整理）。
@@ -117,13 +117,13 @@
 - **修正済 ARC**（タグ `arc-via-uaf`/`arc-array-elem-fix`）：`via`＋引数つき要求の誤拒否は**コンパイラ自身の ARC heap-use-after-free**だった＝根本は**配列 `_push`/`_set` が struct 要素の heap を deep-copy せず格納するのに `_copy`/`_release` は deep 所有**する非対称。`_push`/`_set` を `E_copy`（値意味論＝push は値をコピー）に直して解消。ASan ビルドのコンパイラ自己コンパイルも clean。
 
 **残（未修正）**：
-- **【演算子トレイト配線（spec/12）＝O1-O4＋O6 済】**（worklog「演算子トレイト配線」）：トレイト型引数 `Add[Rhs]` の parse/記録＋witness 照合の `Self`/trait型パラメータ/`Output` 置換／**ユーザー型＋プリミティブの二項（算術 `+ - * / %`・ビット `& | ^ << >>`）・単項（`Neg/Not/BitNot`）が witness 脱糖**（右オペランド型オーバーロード・未準拠は loud reject・無サフィックスリテラル推論込み）。**O6 primitive 脱ハードコード達成**＝`@Std/Core` の `impl I32 as Add[I32]`（`tools/gen-numops.pw` 生成・`part ./Core/Num`）→`i32Add` intrinsic 床（`Emit.pw` の `emitNumRuntime`＝preamble C）経由・脱糖 gate を kind 0 へ flip（コンパイラ自身も witness 経由・不動点維持・bootstrap +8%）・負リテラル畳み込みは `isIntLitExpr` で prefix-on-literal を built-in 維持。test `operator_trait_decl`/`operator_bitwise`/`operator_unary`/`operator_prim_witness`/`operator_prim_flip`・reject `arith_no_trait`。**残**＝O7-O8（Index/IndexSet/Chain 一般化・`pow`）・eager checker の算術 op 境界チェック・`Output != Self`。**完了**＝比較 Eq/Ord の primitive 脱ハードコード・負リテラルの真の畳み込み・built-in 算術完全削除・**O5＝`??` 演算子廃止**（`Optional.unwrapOr(fallback:)` のオーバーロードへ）。
+- **【演算子トレイト配線（spec/12）＝O1-O8 一段落】**（worklog「次の一歩」・git）：算術/ビット/単項/比較をユーザー型＋プリミティブとも witness 脱糖（トレイト型引数 `Add[Rhs]`＋`Self`/`Rhs`/`Output` 置換・右オペランド型オーバーロード・未準拠は loud reject・リテラル推論）。**built-in 算術は完全削除**（`@Std/Core` の `impl <Prim> as Add/Ord` 等→intrinsic 床経由・typeOf を context-typed form まで完成〔`exprIntCtx`〕・no-Core/width-less は loud error）。`??` は演算子廃止→`Optional.unwrapOr`。Index/IndexSet（ユーザー型添字）・Chain `?.`（Optional 具体）も実装。**残（小・additive）**＝一般 Chain トレイトディスパッチ・`Pow`〔float 後〕・複合添字 `a[k]+=v`・`Output != Self`・eager checker の算術 op 境界チェック。
 - **【silent 逸脱・小】曖昧な無サフィックス整数リテラルが先頭オーバーロードを選ぶ**（`k(a:I32)`/`k(a:U64)` に `k(a:5)`・呼出位置の曖昧検出が要る）・**`val f = obj.method`（メソッド値化）を受理**（scope 復元の型回復が要る・現状 clang 止まり）。
 - **【bug・既知】ユーザー struct/enum 名が lang-item の型パラメータ名と衝突すると壊れる**：`struct V {…}` は `Dictionary[K,V]` の型パラメータ `V` と名前衝突し、`isTypeParamName`/typedef 出力で template 扱いされ struct 定義を吐かず `Array_V` 未定義で clang 落ち（`K`/`V`/`T` 等）。`Vec`/`W` 等は無事。根治＝型パラメータ判定をスコープ化（グローバル名照合をやめる）。回避＝単一大文字で lang-item と被る名を避ける。
 - **【済】`@[Ord]` on enum＋`@[Ord]` が `@[Eq]` を含意**（`Ord: Eq`）＝実装済（上記「Eq/Ord」節）。
 - **既知 deferred**：`any P`・トレイト型引数 `Add[Rhs]`・`#Ext`・`a#P.foo()` 源選択・明示型引数 `f[I32](x)`・`Self` 入力要求の witness 置換（hand-written のみ・derive は無事）。**関連型 `type Item`＝基本実装済**（残＝generic 抽象 `T::Item` 解決）。
 
-**優先度（私見）**：演算子トレイト配線はユーザー型＋プリミティブ（O1-O4＋O6）まで達成・次は O7-O8（Index/Chain/Pow）〔`??` は廃止で決着〕。残る silent 逸脱2件（曖昧リテラル・method 値化）は小だが実装にやや手間（呼出位置/scope 復元）。
+**優先度（私見）**：演算子トレイト配線は O1-O8 で一段落（残は小・additive）。次の本命は Iterator 拡充・並行 spawn・`any P`・循環回収（worklog「次の一歩」）。残る silent 逸脱2件（曖昧リテラル・method 値化）は小だが実装にやや手間（呼出位置/scope 復元）。
 
 ---
 
