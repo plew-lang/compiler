@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+// A user trait may share a NAME (and even arity) with an ambient operator trait
+// from @Std/Core without colliding: conformance resolution is structural — a
+// conformance binds to the same-name/arity trait whose requirements it actually
+// witnesses (spec/08). Here `Not` and `Mul` collide by name with Core's operator
+// traits but carry different requirements; `Sub` collides by name but differs in
+// arity (0 vs Core's `Sub[Rhs]`). All must resolve to the user's trait.
+trait Not { fn flip() -> I64 }
+trait Mul { fn doubled() -> I64 }
+trait Sub: Mul { fn extra() -> I64 }
+
+struct Box { pub val n: I64 }
+
+pub impl Box as Not { fn flip() -> I64 { return 1I64 - self.n } }
+pub impl Box as Mul { fn doubled() -> I64 { return self.n * 2I64 } }
+pub impl Box as Sub { fn extra() -> I64 { return self.n + 100I64 } }
+
+fn main() {
+    val b: Box = <Box n=3 />
+    print(b.flip())      // -2  (user Not, not Core's Not{not})
+    print(b.doubled())   // 6   (user Mul, not Core's Mul[Rhs]{mul})
+    print(b.extra())     // 103 (user Sub: Mul, not Core's Sub[Rhs])
+    // Core's own primitive operators still work alongside the shadowing names.
+    print(-b.n)          // -3
+    print(b.n * 4)       // 12
+}

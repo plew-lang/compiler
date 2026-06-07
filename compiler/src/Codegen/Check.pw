@@ -960,6 +960,47 @@ fn witnessedHas(c: inout Comp, witnessed: Array[Func], r: Func, recvStart: U64, 
 // Conformance completeness (spec/08): every requirement of each `impl Type as
 // Trait` must be witnessed in that impl (a body method or a `via` alias). An
 // empty or partial conformance is an error (no implicit/silent conformance).
+// Are all of trait def `t`'s requirements witnessed by conformance `cf`?
+fn confWitnessesAll(c: inout Comp, cf: Conform, t: TraitDef) -> Bool {
+    mut val ri: U64 = 0
+    while ri < t.reqs.count {
+        val r: Func = t.reqs[ri]
+        if witnessedHas(c: inout c, witnessed: cf.witnessed, r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: cf.traitArgs) {
+        } else {
+            return false
+        }
+        ri += 1
+    }
+    return true
+}
+
+// Resolve the single trait def a conformance `impl X as P[...]` refers to (spec/08).
+// Trait identity is matched by name AND type-param arity (`impl X as Sub` with 0
+// args is not a conformance to the operator `Sub[Rhs]` with 1 param), and among
+// remaining same-name/arity candidates the one the conformance actually witnesses
+// is chosen — STRUCTURAL resolution. This separates a user trait (`Not { flip }`)
+// from an ambient operator trait of the same name (`Not { not }`) without needing
+// module/visibility info (the impl-site name spans are re-interned, so they carry
+// no reliable module). Returns the satisfied def, else the first candidate (to
+// drive the incomplete-conformance error), else c.traits.count (unknown trait).
+fn resolveTraitDef(c: inout Comp, cf: Conform) -> U64 {
+    mut val firstCandidate: U64 = c.traits.count
+    mut val ti: U64 = 0
+    while ti < c.traits.count {
+        val t: TraitDef = c.traits[ti]
+        if t.nameId == cf.traitId && t.typeParams.count == cf.traitArgs.count {
+            if firstCandidate == c.traits.count {
+                firstCandidate = ti
+            }
+            if confWitnessesAll(c: inout c, cf: cf, t: t) {
+                return ti
+            }
+        }
+        ti += 1
+    }
+    return firstCandidate
+}
+
 fn checkConformances(c: inout Comp) {
     mut val ci: U64 = 0
     while ci < c.conforms.count {
@@ -969,43 +1010,35 @@ fn checkConformances(c: inout Comp) {
             // trait is compiler-known — exempt from unknown-trait/completeness.
             ci += 1
         } else {
-        // find the trait being conformed to; a conformance to an undeclared trait
-        // (typo / missing import) is a loud error (spec/08: explicit conformance).
-        mut val found: Bool = false
-        mut val ti: U64 = 0
-        while ti < c.traits.count {
+        // resolve the one trait this conformance refers to (structural — see
+        // resolveTraitDef); a conformance to an undeclared/unimported trait is a
+        // loud error (spec/08: explicit conformance).
+        val ti: U64 = resolveTraitDef(c: inout c, cf: cf)
+        if ti < c.traits.count {
             val t: TraitDef = c.traits[ti]
-            // match by name AND type-param arity: a same-named trait of a different
-            // arity is a genuinely different trait, so `impl X as Sub` (0 args) is
-            // not a conformance to the operator `Sub[Rhs]` (1 param). This keeps a
-            // user trait from colliding with an ambient operator trait of the same
-            // name (e.g. a subtrait `Sub` vs Core's subtraction `Sub[Rhs]`).
-            if t.nameId == cf.traitId && t.typeParams.count == cf.traitArgs.count {
-                found = true
-                mut val ri: U64 = 0
-                while ri < t.reqs.count {
-                    val r: Func = t.reqs[ri]
-                    if witnessedHas(c: inout c, witnessed: cf.witnessed, r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: cf.traitArgs) {
-                    } else {
-                        compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)")
-                    }
-                    ri += 1
+            // re-check reqs on the resolved def: a fully-witnessed def passes; if
+            // resolveTraitDef fell back to the first candidate (none satisfied),
+            // this reports which requirement is missing.
+            mut val ri: U64 = 0
+            while ri < t.reqs.count {
+                val r: Func = t.reqs[ri]
+                if witnessedHas(c: inout c, witnessed: cf.witnessed, r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: cf.traitArgs) {
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)")
                 }
-                // supertraits (spec/08): conforming to Sub requires conforming to
-                // each Super (a constraint, not auto-implemented).
-                mut val sti: U64 = 0
-                while sti < t.supertraits.count {
-                    val sup: Bind = t.supertraits[sti]
-                    if typeConformsTo(c: inout c, typeStart: cf.typeStart, typeLen: cf.typeLen, traitStart: sup.nameStart, traitLen: sup.nameLen) {
-                    } else {
-                        compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "supertrait not satisfied: this type must also conform to the trait's supertrait")
-                    }
-                    sti += 1
-                }
+                ri += 1
             }
-            ti += 1
-        }
-        if found {
+            // supertraits (spec/08): conforming to Sub requires conforming to
+            // each Super (a constraint, not auto-implemented).
+            mut val sti: U64 = 0
+            while sti < t.supertraits.count {
+                val sup: Bind = t.supertraits[sti]
+                if typeConformsTo(c: inout c, typeStart: cf.typeStart, typeLen: cf.typeLen, traitStart: sup.nameStart, traitLen: sup.nameLen) {
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "supertrait not satisfied: this type must also conform to the trait's supertrait")
+                }
+                sti += 1
+            }
         } else {
             compileErrorAt(line: lineOf(c: inout c, offset: cf.traitStart), msg: "conformance to an unknown trait (is it declared / imported?)")
         }
