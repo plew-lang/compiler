@@ -1280,6 +1280,21 @@ fn clearExprTyCache(c: inout Comp) {
     c.exprTyFilled = empty
 }
 
+// The result type of an arithmetic/bitwise binary: the operands share a type, so
+// return whichever side carries one (a struct/String/array result, a typed scalar,
+// else the other operand). Lets a chained `0 - big - 1` recover I32 from `big`
+// rather than from the untyped `0`.
+fn binResultTypeInfo(c: inout Comp, lhs: U64, rhs: U64) -> TypeInfo {
+    val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    if lt.kind != 0 {
+        return lt
+    }
+    if lt.nameLen > 0 {
+        return lt
+    }
+    return exprType(c: inout c, id: rhs)
+}
+
 // Recover an expression's type. Only the cases plewc.pw exercises on the base
 // of a field/index/method are precise; everything else falls back to scalar.
 fn exprType(c: inout Comp, id: U64) -> TypeInfo {
@@ -1399,16 +1414,19 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             return scalarInfo()
         }
         Expr.Binary(val op, val lhs, val rhs) => {
-            // Arithmetic (56-60) and bitwise/shift (74-78) take the left
-            // operand's width; comparisons (50-55) and logical (61,62) are Bool.
+            // Arithmetic (56-60) and bitwise/shift (74-78) take the operands' shared
+            // type; comparisons (50-55) and logical (61,62) are Bool. Recover from
+            // whichever operand carries a type — `0 - big` (lhs is an untyped literal)
+            // is I32 from `big`, so a chained `0 - big - 1` propagates the width
+            // instead of reporting it as type-less. Comparisons fall to scalar Bool.
             if op >= 56 {
                 if op <= 60 {
-                    return exprType(c: inout c, id: lhs)
+                    return binResultTypeInfo(c: inout c, lhs: lhs, rhs: rhs)
                 }
             }
             if op >= 74 {
                 if op <= 78 {
-                    return exprType(c: inout c, id: lhs)
+                    return binResultTypeInfo(c: inout c, lhs: lhs, rhs: rhs)
                 }
             }
             return scalarInfo()
