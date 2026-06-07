@@ -609,20 +609,23 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
 // Declared type of a Make field (struct field or enum variant field).
 fn makeFieldType(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fieldStart: U64, fieldLen: U64) -> TypeInfo {
     if isEnum {
+        val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
+        val qVar: U64 = intern(c: inout c, start: variantStart, len: variantLen)
+        val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
         mut val ei: U64 = 0
         while ei < c.enums.count {
             val en: EnumDef = c.enums[ei]
-            if spansEqual(c: inout c, aStart: en.nameStart, aLen: en.nameLen, bStart: typeStart, bLen: typeLen) {
+            if en.nameId == qType {
                 val vars: Array[Variant] = en.variants
                 mut val vi: U64 = 0
                 while vi < vars.count {
                     val v: Variant = vars[vi]
-                    if spansEqual(c: inout c, aStart: v.nameStart, aLen: v.nameLen, bStart: variantStart, bLen: variantLen) {
+                    if v.nameId == qVar {
                         val fs: Array[FieldDef] = v.fields
                         mut val fj: U64 = 0
                         while fj < fs.count {
                             val fd: FieldDef = fs[fj]
-                            if spansEqual(c: inout c, aStart: fd.nameStart, aLen: fd.nameLen, bStart: fieldStart, bLen: fieldLen) {
+                            if fd.nameId == qField {
                                 return typeInfoOfName(c: inout c, start: fd.tyStart, len: fd.tyLen, isArray: fd.tyIsArray)
                             }
                             fj += 1
@@ -716,10 +719,11 @@ fn checkBindsInFields(c: inout Comp, binds: Array[Bind], fields: Array[FieldDef]
     mut val i: U64 = 0
     while i < binds.count {
         val bd: Bind = binds[i]
+        val qBd: U64 = intern(c: inout c, start: bd.fieldStart, len: bd.fieldLen)
         mut val found: Bool = false
         mut val fj: U64 = 0
         while fj < fields.count {
-            if spansEqual(c: inout c, aStart: fields[fj].nameStart, aLen: fields[fj].nameLen, bStart: bd.fieldStart, bLen: bd.fieldLen) {
+            if fields[fj].nameId == qBd {
                 found = true
             }
             fj += 1
@@ -757,9 +761,10 @@ fn checkArmBinds(c: inout Comp, a: MatchArm) {
         return
     }
     val variants: Array[Variant] = c.enums[ei].variants
+    val qVar: U64 = intern(c: inout c, start: a.variantStart, len: a.variantLen)
     mut val vi: U64 = 0
     while vi < variants.count {
-        if spansEqual(c: inout c, aStart: variants[vi].nameStart, aLen: variants[vi].nameLen, bStart: a.variantStart, bLen: a.variantLen) {
+        if variants[vi].nameId == qVar {
             checkBindsInFields(c: inout c, binds: a.binds, fields: variants[vi].fields)
             return
         }
@@ -814,7 +819,7 @@ fn paramSelectorEq(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
     while i < a.count {
         val pa: Param = a[i]
         val pb: Param = b[i]
-        if spansEqual(c: inout c, aStart: pa.nameStart, aLen: pa.nameLen, bStart: pb.nameStart, bLen: pb.nameLen) {
+        if pa.nameId == pb.nameId {
         } else {
             return false
         }
@@ -831,11 +836,13 @@ fn paramSelectorEq(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
 // the associated type named `(nameStart,nameLen)` (spec/08 `type Item = Concrete`),
 // or the input name unchanged when it is not an associated type / has no binding.
 fn assocBindingSpan(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bind {
+    val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
+    val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = 0
     while i < c.assocBindings.count {
         val ab: AssocBinding = c.assocBindings[i]
-        if spansEqual(c: inout c, aStart: ab.recvStart, aLen: ab.recvLen, bStart: recvStart, bLen: recvLen) {
-            if spansEqual(c: inout c, aStart: ab.nameStart, aLen: ab.nameLen, bStart: nameStart, bLen: nameLen) {
+        if ab.recvId == qRecv {
+            if ab.nameId == qName {
                 return <Bind nameStart=ab.tyStart nameLen=ab.tyLen fieldStart=ab.tyStart fieldLen=ab.tyLen />
             }
         }
@@ -855,7 +862,7 @@ fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvSta
     while i < w.count {
         val pw: Param = w[i]
         val pr: Param = r[i]
-        if spansEqual(c: inout c, aStart: pw.nameStart, aLen: pw.nameLen, bStart: pr.nameStart, bLen: pr.nameLen) {
+        if pw.nameId == pr.nameId {
         } else {
             return false
         }
@@ -876,7 +883,7 @@ fn witnessedHas(c: inout Comp, witnessed: Array[Func], r: Func, recvStart: U64, 
     mut val i: U64 = 0
     while i < witnessed.count {
         val w: Func = witnessed[i]
-        if spansEqual(c: inout c, aStart: w.nameStart, aLen: w.nameLen, bStart: r.nameStart, bLen: r.nameLen) {
+        if w.nameId == r.nameId {
             if paramSelectorEqSubst(c: inout c, w: w.params, r: r.params, recvStart: recvStart, recvLen: recvLen) {
                 return true
             }
@@ -904,7 +911,7 @@ fn checkConformances(c: inout Comp) {
         mut val ti: U64 = 0
         while ti < c.traits.count {
             val t: TraitDef = c.traits[ti]
-            if spansEqual(c: inout c, aStart: t.nameStart, aLen: t.nameLen, bStart: cf.traitStart, bLen: cf.traitLen) {
+            if t.nameId == cf.traitId {
                 found = true
                 mut val ri: U64 = 0
                 while ri < t.reqs.count {
@@ -942,19 +949,21 @@ fn checkConformances(c: inout Comp) {
 // Whether type (recvStart,recvLen) has a member named (nameStart,nameLen) — a
 // method (hasRecv) or an assoc fn. Used to validate `via` alias targets.
 fn typeHasMember(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
+    val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
+    val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
         if f.hasRecv {
-            if spansEqual(c: inout c, aStart: f.recvStart, aLen: f.recvLen, bStart: recvStart, bLen: recvLen) {
-                if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: nameStart, bLen: nameLen) {
+            if f.recvId == qRecv {
+                if f.nameId == qName {
                     return true
                 }
             }
         } else {
             if f.isAssoc {
-                if spansEqual(c: inout c, aStart: f.recvStart, aLen: f.recvLen, bStart: recvStart, bLen: recvLen) {
-                    if spansEqual(c: inout c, aStart: f.nameStart, aLen: f.nameLen, bStart: nameStart, bLen: nameLen) {
+                if f.recvId == qRecv {
+                    if f.nameId == qName {
                         return true
                     }
                 }
@@ -1000,11 +1009,13 @@ fn typeConformsTo(c: inout Comp, typeStart: U64, typeLen: U64, traitStart: U64, 
     if builtinEqOrd(c: inout c, typeStart: typeStart, typeLen: typeLen, traitStart: traitStart, traitLen: traitLen) {
         return true
     }
+    val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
+    val qTrait: U64 = intern(c: inout c, start: traitStart, len: traitLen)
     mut val i: U64 = 0
     while i < c.conforms.count {
         val cf: Conform = c.conforms[i]
-        if spansEqual(c: inout c, aStart: cf.typeStart, aLen: cf.typeLen, bStart: typeStart, bLen: typeLen) {
-            if spansEqual(c: inout c, aStart: cf.traitStart, aLen: cf.traitLen, bStart: traitStart, bLen: traitLen) {
+        if cf.typeId == qType {
+            if cf.traitId == qTrait {
                 return true
             }
         }
@@ -1017,10 +1028,11 @@ fn typeConformsTo(c: inout Comp, typeStart: U64, typeLen: U64, traitStart: U64, 
 // (a literal trait name, e.g. "Eq"/"Ord"). Used to gate operator desugaring on
 // an explicit `impl T as Eq`/`as Ord` conformance (spec/12).
 fn typeConformsToName(c: inout Comp, typeStart: U64, typeLen: U64, traitName: String) -> Bool {
+    val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
     mut val i: U64 = 0
     while i < c.conforms.count {
         val cf: Conform = c.conforms[i]
-        if spansEqual(c: inout c, aStart: cf.typeStart, aLen: cf.typeLen, bStart: typeStart, bLen: typeLen) {
+        if cf.typeId == qType {
             if rangeEquals(bytes: c.bytes, start: cf.traitStart, len: cf.traitLen, kw: traitName) {
                 return true
             }
@@ -1136,20 +1148,22 @@ fn isTypeParamOf(c: inout Comp, fnIdx: U64, start: U64, len: U64) -> Bool {
 // `fnIdx` provides a member named (nameStart,nameLen) whose labels match `args`
 // — as a requirement (TraitDef.reqs) or a provided method (recv = the trait).
 fn boundProvidesMethod(c: inout Comp, fnIdx: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
+    val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val bi: U64 = 0
     while bi < c.funcBounds.count {
         val fb: FuncBound = c.funcBounds[bi]
         if fb.fnIdx == fnIdx {
             if spansEqual(c: inout c, aStart: fb.paramStart, aLen: fb.paramLen, bStart: tpStart, bLen: tpLen) {
+                val qTrait: U64 = intern(c: inout c, start: fb.traitStart, len: fb.traitLen)
                 // requirement of the bound trait
                 mut val ti: U64 = 0
                 while ti < c.traits.count {
                     val t: TraitDef = c.traits[ti]
-                    if spansEqual(c: inout c, aStart: t.nameStart, aLen: t.nameLen, bStart: fb.traitStart, bLen: fb.traitLen) {
+                    if t.nameId == qTrait {
                         mut val ri: U64 = 0
                         while ri < t.reqs.count {
                             val r: Func = t.reqs[ri]
-                            if spansEqual(c: inout c, aStart: r.nameStart, aLen: r.nameLen, bStart: nameStart, bLen: nameLen) {
+                            if r.nameId == qName {
                                 if paramsLabelsOk(c: inout c, params: r.params, args: args) {
                                     return true
                                 }
@@ -1164,8 +1178,8 @@ fn boundProvidesMethod(c: inout Comp, fnIdx: U64, tpStart: U64, tpLen: U64, name
                 while gi < c.funcs.count {
                     val g: Func = c.funcs[gi]
                     if g.hasRecv {
-                        if spansEqual(c: inout c, aStart: g.recvStart, aLen: g.recvLen, bStart: fb.traitStart, bLen: fb.traitLen) {
-                            if spansEqual(c: inout c, aStart: g.nameStart, aLen: g.nameLen, bStart: nameStart, bLen: nameLen) {
+                        if g.recvId == qTrait {
+                            if g.nameId == qName {
                                 if paramsLabelsOk(c: inout c, params: g.params, args: args) {
                                     return true
                                 }
@@ -1421,7 +1435,7 @@ fn sameLabels(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
     }
     mut val i: U64 = 0
     while i < a.count {
-        if spansEqual(c: inout c, aStart: a[i].nameStart, aLen: a[i].nameLen, bStart: b[i].nameStart, bLen: b[i].nameLen) {
+        if a[i].nameId == b[i].nameId {
         } else {
             return false
         }
@@ -1449,7 +1463,7 @@ fn checkOverloadCollisions(c: inout Comp) {
                     } else {
                         if fj.isAssoc {
                         } else {
-                            if spansEqual(c: inout c, aStart: fi.nameStart, aLen: fi.nameLen, bStart: fj.nameStart, bLen: fj.nameLen) {
+                            if fi.nameId == fj.nameId {
                                 if sameLabels(c: inout c, a: fi.params, b: fj.params) {
                                     if fi.typeParams.count > 0 {
                                         compileErrorAt(line: lineOf(c: inout c, offset: fj.nameStart), msg: "a generic function shares its selector (name + labels) with another overload; spec forbids generic/concrete overload on the same selector")
@@ -1480,17 +1494,19 @@ fn checkOverloadCollisions(c: inout Comp) {
 // declares a requirement of this name.) Used to allow Core's `impl I32 as Format`
 // while still rejecting an inherent `impl I32 { fn foo }` on a primitive.
 fn methodWitnessesAConformance(c: inout Comp, recvStart: U64, recvLen: U64, mStart: U64, mLen: U64) -> Bool {
+    val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
+    val qM: U64 = intern(c: inout c, start: mStart, len: mLen)
     mut val ci: U64 = 0
     while ci < c.conforms.count {
         val cf: Conform = c.conforms[ci]
-        if spansEqual(c: inout c, aStart: cf.typeStart, aLen: cf.typeLen, bStart: recvStart, bLen: recvLen) {
+        if cf.typeId == qRecv {
             mut val ti: U64 = 0
             while ti < c.traits.count {
                 val tr: TraitDef = c.traits[ti]
-                if spansEqual(c: inout c, aStart: tr.nameStart, aLen: tr.nameLen, bStart: cf.traitStart, bLen: cf.traitLen) {
+                if tr.nameId == cf.traitId {
                     mut val ri: U64 = 0
                     while ri < tr.reqs.count {
-                        if spansEqual(c: inout c, aStart: tr.reqs[ri].nameStart, aLen: tr.reqs[ri].nameLen, bStart: mStart, bLen: mLen) {
+                        if tr.reqs[ri].nameId == qM {
                             return true
                         }
                         ri += 1
