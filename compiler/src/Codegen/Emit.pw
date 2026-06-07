@@ -629,7 +629,7 @@ fn lineOf(c: inout Comp, offset: U64) -> I64 {
 fn exprOffset(c: inout Comp, id: U64) -> U64 {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Int(value: _, val offset, isBool: _, tyStart: _, tyLen: _) => { return offset }
+        Expr.Int(value: _, val offset, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { return offset }
         Expr.Ident(val start, val len) => { return start }
         Expr.Str(val start, val len) => { return start }
         Expr.Call(val nameStart, val nameLen, val args) => { return nameStart }

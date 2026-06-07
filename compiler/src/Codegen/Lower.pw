@@ -127,7 +127,7 @@ fn synthEmptyDict(c: inout Comp, ctxRef: U64) -> U64 {
     val emptyVals: U64 = c.pushExpr(e: <Expr.Array elems=noElems />)
     val emptyHashes: U64 = c.pushExpr(e: <Expr.Array elems=noElems />)
     val emptyBuckets: U64 = c.pushExpr(e: <Expr.Array elems=noElems />)
-    val zero: U64 = c.pushExpr(e: <Expr.Int value=0 offset=0 isBool=false tyStart=0 tyLen=0 />)
+    val zero: U64 = c.pushExpr(e: <Expr.Int value=0 offset=0 isBool=false tyStart=0 tyLen=0 isNeg=false />)
     mut val fields: Array[MakeField] = []
     fields.append(<MakeField nameStart=kN.nameStart nameLen=kN.nameLen value=emptyKeys />)
     fields.append(<MakeField nameStart=vN.nameStart nameLen=vN.nameLen value=emptyVals />)
@@ -163,7 +163,7 @@ fn lowerDictLit(c: inout Comp, keys: Array[ExprAst], vals: Array[ExprAst], ctxRe
     if ok {
     } else {
         compileErrorAt(line: lineOf(c: inout c, offset: span.start), msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)")
-        return c.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 />)
+        return c.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 isNeg=false />)
     }
     val ct: TypeRef = c.types[ctxRef]
     val dlN: Bind = internBytes(c: inout c, s: "__dl")
@@ -195,7 +195,7 @@ fn lowerDictLit(c: inout Comp, keys: Array[ExprAst], vals: Array[ExprAst], ctxRe
     elseStmts.append(c.pushStmt(s: <Stmt.Give value=elseDict />))
     val elseBlk: U64 = c.blocks.count
     c.blocks.append(<Block stmts=elseStmts />)
-    val cond: U64 = c.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 />)
+    val cond: U64 = c.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />)
     return c.pushExpr(e: <Expr.IfExpr cond=cond thenBlk=thenBlk elseBlk=elseBlk />)
 }
 
@@ -245,7 +245,7 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
                 sStart = sf.nameStart
                 sLen = sf.nameLen
             }
-            result = c.pushExpr(e: <Expr.Int value=value offset=span.start isBool=isBool tyStart=sStart tyLen=sLen />)
+            result = c.pushExpr(e: <Expr.Int value=value offset=span.start isBool=isBool tyStart=sStart tyLen=sLen isNeg=false />)
         }
         ExprAst.StrLit(val raw, val span) => {
             result = c.pushExpr(e: <Expr.Str start=span.start len=spanLen(s: span) />)
@@ -254,8 +254,38 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
             result = c.pushExpr(e: <Expr.Ident start=span.start len=spanLen(s: span) />)
         }
         ExprAst.Unary(val op, val operand, val span) => {
-            val o: U64 = lowerExpr(c: inout c, e: operand)
-            result = c.pushExpr(e: <Expr.Unary op=op operand=o />)
+            // fold a leading `-` on a BARE integer literal into a negative literal
+            // (spec/02: `-128I8` is the literal -128, not Neg(128I8)). The parser
+            // has already resolved precedence, so `operand` is a plain IntLit only
+            // when the `-` binds directly to the literal (`-128.foo()` lowers its
+            // operand to a Method, not an IntLit — left as a real Neg). codegen then
+            // emits a constant `-128`, and the Neg witness is reserved for runtime
+            // operands (which is where the checked-overflow semantics belong).
+            mut val folded: Bool = false
+            if op == opSub() {
+                match operand {
+                    ExprAst.IntLit(val value, val isBool, val tySuffix, span: val litSpan) => {
+                        if isBool {
+                        } else {
+                            mut val sStart: U64 = 0
+                            mut val sLen: U64 = 0
+                            if tySuffix.bytes.count > 0 {
+                                val sf: Bind = internBytes(c: inout c, s: tySuffix)
+                                sStart = sf.nameStart
+                                sLen = sf.nameLen
+                            }
+                            result = c.pushExpr(e: <Expr.Int value=value offset=litSpan.start isBool=false tyStart=sStart tyLen=sLen isNeg=true />)
+                            folded = true
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if folded {
+            } else {
+                val o: U64 = lowerExpr(c: inout c, e: operand)
+                result = c.pushExpr(e: <Expr.Unary op=op operand=o />)
+            }
         }
         ExprAst.Binary(val op, val lhs, val rhs, val span) => {
             val l: U64 = lowerExpr(c: inout c, e: lhs)

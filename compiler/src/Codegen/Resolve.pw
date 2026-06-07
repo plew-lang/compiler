@@ -1285,7 +1285,7 @@ fn clearExprTyCache(c: inout Comp) {
 fn exprType(c: inout Comp, id: U64) -> TypeInfo {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Int(value: _, offset: _, val isBool, val tyStart, val tyLen) => {
+        Expr.Int(value: _, offset: _, val isBool, val tyStart, val tyLen, isNeg: _) => {
             // a `true`/`false` literal is `Bool`: recover a "Bool" span so a generic
             // call like `print(true)` infers T = Bool.
             if isBool {

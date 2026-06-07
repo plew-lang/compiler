@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+
+// A leading `-` on an integer literal folds into the literal (spec/02): `-128I8`
+// is the literal -128, valid even though `128` alone exceeds I8's positive range.
+// Folding happens at lower, so each type's minimum is a constant (not Neg of an
+// out-of-range magnitude), including I64's min via the INT64_MIN idiom. A `-` on a
+// runtime operand is a real Neg (checked). Precedence: `-` binds looser than
+// postfix, so a method/field on a literal is negated, not folded.
+fn main() {
+    print(-128I8)                       // -128  (I8 min)
+    print(-32768I16)                    // -32768 (I16 min)
+    print(-2147483648I32)               // -2147483648 (I32 min)
+    print(-9223372036854775808I64)      // -9223372036854775808 (I64 min)
+    val a: I8 = -5I8
+    print(a)                            // -5
+    print(-1I32 - 1I32)                 // -2  (folded -1 minus folded 1)
+    val n: I64 = 42I64
+    print(-n)                           // -42 (Neg witness on a variable)
+}

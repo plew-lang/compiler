@@ -304,7 +304,20 @@ fn synthDictMethod(c: inout Comp, recv: U64, name: String, arg0Label: String, ar
 fn genExpr(c: inout Comp, id: U64) {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Int(val value, offset: _, isBool: _, tyStart: _, tyLen: _) => { writeIntLit(n: value) }
+        Expr.Int(val value, offset: _, isBool: _, tyStart: _, tyLen: _, val isNeg) => {
+            if isNeg {
+                if value == 9223372036854775808U64 {
+                    // INT64_MIN: the magnitude 2^63 exceeds LLONG_MAX, so emitting
+                    // `-9223372036854775808` would misparse (the operand is unsigned).
+                    write(s: "(-9223372036854775807LL - 1)")
+                } else {
+                    write(s: "-")
+                    writeIntLit(n: value)
+                }
+            } else {
+                writeIntLit(n: value)
+            }
+        }
         Expr.Ident(val start, val len) => {
             // inside a closure body, a captured enclosing variable reads from the
             // env: `((__closure_env<id>*)__env)->name`.
@@ -1132,8 +1145,8 @@ fn genExpr(c: inout Comp, id: U64) {
             if isIntType(c: inout c, start: tyStart, len: tyLen) {
                 val opE: Expr = c.exprs[operand]
                 match opE {
-                    Expr.Int(val value, val offset, isBool: _, tyStart: _, tyLen: _) => {
-                        if litFitsType(c: inout c, value: value, neg: false, dstStart: tyStart, dstLen: tyLen) {
+                    Expr.Int(val value, val offset, isBool: _, tyStart: _, tyLen: _, val isNeg) => {
+                        if litFitsType(c: inout c, value: value, neg: isNeg, dstStart: tyStart, dstLen: tyLen) {
                         } else {
                             compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal is out of range for the target type of `as`")
                             return

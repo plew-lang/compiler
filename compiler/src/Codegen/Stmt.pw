@@ -495,23 +495,10 @@ fn unaryMethodName(op: I64) -> String {
 // primitive scalar (kind 0 with a type name) whose type conforms desugars to the
 // witness (O6 — `-i: I64` routes through Core's `impl I64 as Neg`). An untyped
 // literal / non-conforming scalar keeps the built-in negate / logical-not / bit-not.
-// Is the expression a bare integer/bool literal (an `Expr.Int`)?
-fn isIntLitExpr(c: inout Comp, id: U64) -> Bool {
-    match c.exprs[id] {
-        Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _) => { return true }
-        _ => { return false }
-    }
-}
-
+// A leading `-` on a bare integer literal is folded into a negative literal at
+// lower (`-128I8` is the literal -128, not Neg — spec/02), so it never reaches here
+// as a Unary: only runtime operands do, which is where checked-overflow Neg belongs.
 fn hasUnaryWitness(c: inout Comp, op: I64, operand: U64) -> Bool {
-    // a prefix operator applied to a LITERAL folds into the literal (spec/02:
-    // `-128I8` is the literal -128, not Neg(128I8)). Routing it through the checked
-    // witness would pass the out-of-range magnitude (128) into a typed parameter
-    // (int8_t -> -128) and then negate, spuriously overflowing; the built-in path
-    // negates in wider precision. So literal operands keep the built-in op.
-    if isIntLitExpr(c: inout c, id: operand) {
-        return false
-    }
     val ot: TypeInfo = typeOf(c: inout c, id: operand)
     if ot.kind == 2 || ot.kind == 0 {
         if ot.nameLen > 0 {

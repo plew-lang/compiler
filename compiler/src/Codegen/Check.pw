@@ -43,10 +43,10 @@ fn addConst(na: Bool, a: U64, nb: Bool, b: U64) -> ConstInt {
 fn foldConst(c: inout Comp, id: U64) -> ConstInt {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Int(val value, offset: _, val isBool, tyStart: _, tyLen: _) => {
+        Expr.Int(val value, offset: _, val isBool, tyStart: _, tyLen: _, val isNeg) => {
             if isBool { return notConst() }
             if value > 9223372036854775807U64 { return notConst() }
-            return <ConstInt isConst=true neg=false value=value />
+            return mkConst(neg: isNeg, mag: value)
         }
         Expr.Unary(val op, val operand) => {
             if op == opSub() {
@@ -117,8 +117,8 @@ fn checkLitLeaf(c: inout Comp, value: U64, neg: Bool, offset: U64, isBool: Bool,
 fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
     val e: Expr = c.exprs[id]
     match e {
-        Expr.Int(val value, val offset, val isBool, val tyStart, val tyLen) => {
-            checkLitLeaf(c: inout c, value: value, neg: false, offset: offset, isBool: isBool, tyStart: tyStart, tyLen: tyLen, eKind: eKind, eBits: eBits, eSgn: eSgn)
+        Expr.Int(val value, val offset, val isBool, val tyStart, val tyLen, val isNeg) => {
+            checkLitLeaf(c: inout c, value: value, neg: isNeg, offset: offset, isBool: isBool, tyStart: tyStart, tyLen: tyLen, eKind: eKind, eBits: eBits, eSgn: eSgn)
         }
         Expr.Unary(val op, val operand) => {
             if op == opSub() {
@@ -127,7 +127,7 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
                 // with the negative sign; otherwise recurse with the same type.
                 val oe: Expr = c.exprs[operand]
                 match oe {
-                    Expr.Int(val value, val offset, val isBool, val tyStart, val tyLen) => {
+                    Expr.Int(val value, val offset, val isBool, val tyStart, val tyLen, isNeg: _) => {
                         checkLitLeaf(c: inout c, value: value, neg: true, offset: offset, isBool: isBool, tyStart: tyStart, tyLen: tyLen, eKind: eKind, eBits: eBits, eSgn: eSgn)
                     }
                     _ => { checkLitCtx(c: inout c, id: operand, eKind: eKind, eBits: eBits, eSgn: eSgn) }
@@ -175,7 +175,7 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
             // checked by the cast itself, so only recurse into compound operands.
             val oe: Expr = c.exprs[operand]
             match oe {
-                Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _) => {}
+                Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => {}
                 _ => { checkLitCtx(c: inout c, id: operand, eKind: 0, eBits: 0, eSgn: false) }
             }
         }
@@ -1866,7 +1866,7 @@ fn condIsLiteralTrue(c: inout Comp, id: U64) -> Bool {
         return false
     }
     match c.exprs[id] {
-        Expr.Int(val value, val offset, val isBool, val tyStart, val tyLen) => {
+        Expr.Int(val value, val offset, val isBool, val tyStart, val tyLen, isNeg: _) => {
             return isBool && value == 1
         }
         _ => { return false }

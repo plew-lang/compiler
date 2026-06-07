@@ -124,8 +124,8 @@ fn synthGenMain(c: inout Comp) {
             // free-fn cross-module use of `parseItem` bypasses import hygiene.)
             val srcLit: Bind = internSourceLiteral(c: inout c, from: d.declStart, to: d.declEnd)
             val srcE: U64 = c.pushExpr(e: <Expr.Str start=srcLit.nameStart len=srcLit.nameLen />)
-            val startE: U64 = c.pushExpr(e: <Expr.Int value=d.declStart offset=0 isBool=false tyStart=0 tyLen=0 />)
-            val endE: U64 = c.pushExpr(e: <Expr.Int value=d.declEnd offset=0 isBool=false tyStart=0 tyLen=0 />)
+            val startE: U64 = c.pushExpr(e: <Expr.Int value=d.declStart offset=0 isBool=false tyStart=0 tyLen=0 isNeg=false />)
+            val endE: U64 = c.pushExpr(e: <Expr.Int value=d.declEnd offset=0 isBool=false tyStart=0 tyLen=0 isNeg=false />)
             mut val pargs: Array[Arg] = []
             pargs.append(<Arg expr=srcE isInout=false labelStart=srcN.nameStart labelLen=srcN.nameLen hasLabel=true />)
             pargs.append(<Arg expr=startE isInout=false labelStart=startN.nameStart labelLen=startN.nameLen hasLabel=true />)

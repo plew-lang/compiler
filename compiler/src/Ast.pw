@@ -155,11 +155,13 @@ struct Arg {
 enum Expr {
     // An integer (or Bool) literal. `value` is the non-negative magnitude (U64,
     // so the full unsigned range up to 2^64-1 fits); a leading `-` is a separate
-    // Unary node, not folded in here. `offset` is the source byte for diagnostics.
-    // `isBool` marks `true`/`false` (lowered to 1/0 but typed Bool, never an
-    // ambiguous integer). `tyStart`/`tyLen` is an optional type suffix span
-    // (`5U64`, `1I32`); tyLen 0 = no suffix, so the type comes from context.
-    Int(value: U64, offset: U64, isBool: Bool, tyStart: U64, tyLen: U64)
+    // `offset` is the source byte for diagnostics. `isBool` marks `true`/`false`
+    // (lowered to 1/0 but typed Bool, never an ambiguous integer). `tyStart`/`tyLen`
+    // is an optional type suffix span (`5U64`, `1I32`); tyLen 0 = no suffix, so the
+    // type comes from context. `isNeg` marks a folded negative literal (`-128I8` is
+    // the literal -128, not Neg(128) — spec/02): `value` is the magnitude, codegen
+    // emits the leading `-`, and the range check uses the negative sign.
+    Int(value: U64, offset: U64, isBool: Bool, tyStart: U64, tyLen: U64, isNeg: Bool)
     Ident(start: U64, len: U64)
     Unary(op: I64, operand: U64)
     Binary(op: I64, lhs: U64, rhs: U64)
