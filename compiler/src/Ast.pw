@@ -29,6 +29,13 @@ struct PType {
 struct TypeRef {
     pub val nameStart: U64
     pub val nameLen: U64
+    // interned head-name id (Phase D): the content-keyed id of (nameStart,nameLen),
+    // set centrally in `pushType` so every TypeRef in Comp.types carries it. Type-name
+    // equality becomes integer == on this id instead of a byte-by-byte `spansEqual`.
+    // Shares the global intern table with Phase C decl names: a TypeRef naming "Foo"
+    // gets the same id as the StructDef "Foo" (content-keyed), so type-vs-decl scans
+    // unify too. 0 only for the index-0 dummy sentinel.
+    pub val nameId: U64 = 0
     pub val args: Array[U64]
 }
 
@@ -778,10 +785,14 @@ pub impl Comp {
         self.stmts.append(s)
         return id
     }
-    // Append a structured type reference, returning its Comp.types index.
+    // Append a structured type reference, returning its Comp.types index. This is
+    // the single interning choke point for type names (Phase D): the head name span
+    // is interned here so every TypeRef carries its `nameId`, regardless of which
+    // construction site (lowerType / Mono substitution / Self synthesis) built it.
     inout fn pushType(t: TypeRef) -> U64 {
         val id: U64 = self.types.count
-        self.types.append(t)
+        val nid: U64 = intern(c: inout self, start: t.nameStart, len: t.nameLen)
+        self.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args />)
         return id
     }
 }

@@ -417,7 +417,7 @@ fn typeRefEq(c: inout Comp, a: U64, b: U64) -> Bool {
     }
     val ta: TypeRef = c.types[a]
     val tb: TypeRef = c.types[b]
-    if spansEqual(c: inout c, aStart: ta.nameStart, aLen: ta.nameLen, bStart: tb.nameStart, bLen: tb.nameLen) {
+    if ta.nameId == tb.nameId {
     } else {
         return false
     }
@@ -494,7 +494,7 @@ fn sameMangle(c: inout Comp, refA: U64, refB: U64) -> Bool {
     }
     val a: TypeRef = c.types[ra]
     val b: TypeRef = c.types[rb]
-    if spansEqual(c: inout c, aStart: a.nameStart, aLen: a.nameLen, bStart: b.nameStart, bLen: b.nameLen) {
+    if a.nameId == b.nameId {
     } else {
         return false
     }
@@ -821,9 +821,7 @@ fn groundTypeRef(c: inout Comp, ref: U64) -> U64 {
         i += 1
     }
     if changed {
-        val idx: U64 = c.types.count
-        c.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen args=newArgs />)
-        return idx
+        return c.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=newArgs />)
     }
     return ref
 }
@@ -862,9 +860,7 @@ fn groundUnderInst(c: inout Comp, instRef: U64, tyRef: U64) -> U64 {
 // give `Self` a concrete TypeRef when the receiver is non-generic (no inst ref).
 fn simpleTypeRef(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
     val noArgs: Array[U64] = []
-    val idx: U64 = c.types.count
-    c.types.append(<TypeRef nameStart=nameStart nameLen=nameLen args=noArgs />)
-    return idx
+    return c.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=noArgs />)
 }
 
 // The bound type ref of a receiver's `type Item = X` associated binding (the
@@ -1491,13 +1487,10 @@ fn arrayInstRef(c: inout Comp, ae: Bind) -> U64 {
     mut val elemRef: U64 = ae.fieldStart
     if elemRef == 0 {
         val noArgs: Array[U64] = []
-        elemRef = c.types.count
-        c.types.append(<TypeRef nameStart=ae.nameStart nameLen=ae.nameLen args=noArgs />)
+        elemRef = c.pushType(t: <TypeRef nameStart=ae.nameStart nameLen=ae.nameLen args=noArgs />)
     }
     val args: Array[U64] = [elemRef]
-    val idx: U64 = c.types.count
-    c.types.append(<TypeRef nameStart=arrName.nameStart nameLen=arrName.nameLen args=args />)
-    return idx
+    return c.pushType(t: <TypeRef nameStart=arrName.nameStart nameLen=arrName.nameLen args=args />)
 }
 
 // Is `ref` a registered (already-discovered) generic instantiation? A non-generic
@@ -1644,11 +1637,12 @@ fn isGenericFreeFn(c: inout Comp, fi: U64) -> Bool {
 // Find a bare (argument-less) TypeRef named (start,len), or create one. Dedups
 // by name bytes so the same concrete type maps to one TypeRef for mangling.
 fn findOrAddTypeRef(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
+    val q: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = 0
     while i < c.types.count {
         val t: TypeRef = c.types[i]
         if t.args.count == 0 {
-            if spansEqual(c: inout c, aStart: t.nameStart, aLen: t.nameLen, bStart: nameStart, bLen: nameLen) {
+            if t.nameId == q {
                 return i
             }
         }
@@ -1676,9 +1670,7 @@ fn closureFnTypeRef(c: inout Comp, params: Array[Param], retTy: U64) -> U64 {
         args.append(params[i].ty)
         i += 1
     }
-    val idx: U64 = c.types.count
-    c.types.append(<TypeRef nameStart=fnName.nameStart nameLen=fnName.nameLen args=args />)
-    return idx
+    return c.pushType(t: <TypeRef nameStart=fnName.nameStart nameLen=fnName.nameLen args=args />)
 }
 
 // Structurally unify a parameter type `paramRef` against an argument type `argRef`

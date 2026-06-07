@@ -216,7 +216,7 @@ fn lowerExprWithCtx(c: inout Comp, e: ExprAst, ctxRef: U64) -> U64 {
                         } else {
                             if typeArgs.count == 0 {
                                 val tn: Bind = internBytes(c: inout c, s: typeName)
-                                if spansEqual(c: inout c, aStart: tn.nameStart, aLen: tn.nameLen, bStart: ct.nameStart, bLen: ct.nameLen) {
+                                if intern(c: inout c, start: tn.nameStart, len: tn.nameLen) == ct.nameId {
                                     val fs: Array[MakeField] = lowerMakeFields(c: inout c, fields: fields)
                                     return c.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fs />)
                                 }
