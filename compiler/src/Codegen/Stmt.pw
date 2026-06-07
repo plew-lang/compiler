@@ -73,10 +73,11 @@ fn isStringEq(c: inout Comp, op: I64, lhs: U64) -> Bool {
 }
 
 fn isEnumName(c: inout Comp, start: U64, len: U64) -> Bool {
+    val qId: U64 = intern(c: inout c, start: start, len: len)
     mut val ei: U64 = 0
     while ei < c.enums.count {
         val e: EnumDef = c.enums[ei]
-        if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) {
+        if e.nameId == qId {
             return true
         }
         ei += 1
@@ -87,10 +88,11 @@ fn isEnumName(c: inout Comp, start: U64, len: U64) -> Bool {
 // Whether every variant of the named enum is nullary (no payload). Tag-only
 // `==` is exact for such enums; payload-bearing enums need structural Eq.
 fn isAllNullary(c: inout Comp, start: U64, len: U64) -> Bool {
+    val qId: U64 = intern(c: inout c, start: start, len: len)
     mut val ei: U64 = 0
     while ei < c.enums.count {
         val e: EnumDef = c.enums[ei]
-        if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) {
+        if e.nameId == qId {
             val vars: Array[Variant] = e.variants
             mut val vi: U64 = 0
             while vi < vars.count {
@@ -208,11 +210,12 @@ fn emitEnumTagCmp(c: inout Comp, lhs: U64, rhs: U64, op: I64, outer: Bool) {
 // (A by-name lookup for the operator witnesses Eq.eq / Ord.compare, which have a
 // single witness per type.)
 fn findAssocByName(c: inout Comp, typeStart: U64, typeLen: U64, name: String) -> U64 {
+    val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
         if f.isAssoc {
-            if spansEqual(c: inout c, aStart: f.recvStart, aLen: f.recvLen, bStart: typeStart, bLen: typeLen) {
+            if f.recvId == qType {
                 if rangeEquals(bytes: c.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
                     return i
                 }

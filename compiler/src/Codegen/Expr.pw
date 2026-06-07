@@ -1275,10 +1275,11 @@ fn genExpr(c: inout Comp, id: U64) {
                 // (they cannot reference other fields or `self`), so a concretely
                 // typed default field needs no type substitution.
                 mut val dEmitted: U64 = fields.count
+                val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
                 mut val si: U64 = 0
                 while si < c.structs.count {
                     val sd: StructDef = c.structs[si]
-                    if spansEqual(c: inout c, aStart: sd.nameStart, aLen: sd.nameLen, bStart: typeStart, bLen: typeLen) {
+                    if sd.nameId == qType {
                         val flds: Array[FieldDef] = sd.fields
                         mut val fi: U64 = 0
                         while fi < flds.count {
