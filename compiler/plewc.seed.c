@@ -3868,9 +3868,11 @@ Bind arrayElemNameForRef_c_Comp_elemRef_U64(Comp* c, uint64_t elemRef) {
     while (i < (long long)(((*c).arrayElems).count)) {
     Bind ae = Array_Bind_get((*c).arrayElems, (long long)(i));
     if (ae.fieldStart != 0) {
+    if (tyRefIsGround_c_Comp_ref_U64(&((*c)), ae.fieldStart)) {
     if (sameMangle_c_Comp_refA_U64_refB_U64(&((*c)), ae.fieldStart, elemRef)) {
     { Bind __ret138 = (Bind){.nameStart = ae.nameStart, .nameLen = ae.nameLen, .fieldStart = elemRef, .fieldLen = 0};
     return __ret138; }
+    }
     }
     }
     i = ({ uint64_t __ov; if (__builtin_add_overflow((i), (1), &__ov)) plew_panic((PlewString){"integer overflow", 16}); __ov; });

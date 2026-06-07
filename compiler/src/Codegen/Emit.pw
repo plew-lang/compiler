@@ -293,10 +293,17 @@ fn arrayElemNameForRef(c: inout Comp, elemRef: U64) -> Bind {
     while i < c.arrayElems.count {
         val ae: Bind = c.arrayElems[i]
         // match by mangle (type refs are not interned, so the same type can have
-        // a different index than the one stored at registration).
+        // a different index than the one stored at registration). Skip a non-ground
+        // (template) entry like `Array[T]`'s element `T`: sameMangle resolves through
+        // the active type-param env, so under an `impl[T] Array[T]` method's env
+        // (T -> the concrete element) a stored `T` would spuriously match the
+        // concrete lookup ref and return the template name (`Array_T_get`). Only a
+        // ground stored element is a real match; the fallback below covers the rest.
         if ae.fieldStart != 0 {
-            if sameMangle(c: inout c, refA: ae.fieldStart, refB: elemRef) {
-                return <Bind nameStart=ae.nameStart nameLen=ae.nameLen fieldStart=elemRef fieldLen=0 />
+            if tyRefIsGround(c: inout c, ref: ae.fieldStart) {
+                if sameMangle(c: inout c, refA: ae.fieldStart, refB: elemRef) {
+                    return <Bind nameStart=ae.nameStart nameLen=ae.nameLen fieldStart=elemRef fieldLen=0 />
+                }
             }
         }
         i += 1
