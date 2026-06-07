@@ -230,6 +230,23 @@ fn genCheckedDiv(c: inout Comp, lhs: U64, rhs: U64, tyStart: U64, tyLen: U64, is
     }
 }
 
+// The binary opcode underlying a compound-assign op (`+=` -> `+`, `&=` -> `&`),
+// so `target OP= value` can desugar to `target = target OP value` and route the
+// `OP` through the operator-trait witness dispatch (spec/12). 0 is never returned
+// for a real compound op (the caller guards `op == opAssign()` first).
+fn compoundBinOp(op: I64) -> I64 {
+    if op == opAddAssign() { return opAdd() }
+    if op == opSubAssign() { return opSub() }
+    if op == opMulAssign() { return opMul() }
+    if op == opDivAssign() { return opDiv() }
+    if op == opRemAssign() { return opRem() }
+    if op == opBitAndAssign() { return opBitAnd() }
+    if op == opBitOrAssign() { return opBitOr() }
+    if op == opBitXorAssign() { return opBitXor() }
+    if op == opShlAssign() { return opShl() }
+    return opShr()
+}
+
 fn assignOpStr(op: I64) -> String {
     if op == opAssign() { return " = " }
     if op == opAddAssign() { return " += " }

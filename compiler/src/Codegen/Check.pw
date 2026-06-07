@@ -237,8 +237,8 @@ fn spanIntTy(c: inout Comp, start: U64, len: U64) -> IntTy {
 // context". Returns false when lhs has no operator-trait witness (caller falls back
 // to the ordinary same-type arithmetic rule).
 fn checkBinTraitRhs(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
-    if hasBinTraitWitness(c: inout c, op: op, lhs: lhs) {
-        val lt: TypeInfo = typeOf(c: inout c, id: lhs)
+    if hasBinTraitWitness(c: inout c, op: op, lhs: lhs, rhs: rhs) {
+        val lt: TypeInfo = binWitnessType(c: inout c, lhs: lhs, rhs: rhs)
         val fi: U64 = findBinTraitWitness(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op), rhs: rhs)
         if fi < c.funcs.count {
             val f: Func = c.funcs[fi]

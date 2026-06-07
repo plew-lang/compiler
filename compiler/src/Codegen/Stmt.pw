@@ -435,19 +435,36 @@ fn findBinTraitWitness(c: inout Comp, typeStart: U64, typeLen: U64, name: String
     return firstMatch
 }
 
-// Whether the left operand of an arithmetic op carries the operator-trait witness
-// (spec/12: `a + b` desugars to `T.add(lhs: a, rhs: b)` iff `impl T as Add[…]`).
-// A named struct (kind 2) OR a primitive scalar (kind 0 with a type name) whose
-// type conforms desugars to the witness — primitives are not special-cased (O6):
-// `I32 + I32` routes through Core's `impl I32 as Add` to the `i32Add` intrinsic.
-// An untyped literal (kind 0, no name), String, or array has no witness and keeps
-// the built-in checked arithmetic (the fallback below in the dispatch).
-fn hasBinTraitWitness(c: inout Comp, op: I64, lhs: U64) -> Bool {
+// The type to use for an operator's witness lookup. A named struct (kind 2) or a
+// typed scalar (kind 0 with a name) uses its own type; a width-less scalar (a
+// `typeOf` that recovers no name — e.g. some method-return / chain forms) recovers
+// the SHARED int type from both operands (Plew: operands share a type), so
+// `someU64Fn() + 1` still finds `impl U64 as Add` rather than falling to built-in.
+fn binWitnessType(c: inout Comp, lhs: U64, rhs: U64) -> TypeInfo {
+    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
+    if lt.kind == 2 {
+        return lt
+    }
+    if lt.kind == 0 {
+        if lt.nameLen > 0 {
+            return lt
+        }
+    }
+    return arithIntType(c: inout c, lhs: lhs, rhs: rhs)
+}
+
+// Whether an arithmetic op's operands carry the operator-trait witness (spec/12:
+// `a + b` desugars to `T.add(lhs: a, rhs: b)` iff `impl T as Add[…]`). A named
+// struct OR a primitive scalar (incl. width-less ones recovered from the sibling)
+// whose type conforms desugars to the witness — primitives are not special-cased
+// (O6). A genuinely typeless operand (untyped literal / String / array) keeps the
+// built-in arithmetic (the fallback in the dispatch).
+fn hasBinTraitWitness(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
     if isBinTraitOp(op: op) {
     } else {
         return false
     }
-    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
+    val lt: TypeInfo = binWitnessType(c: inout c, lhs: lhs, rhs: rhs)
     if lt.kind == 2 || lt.kind == 0 {
         if lt.nameLen > 0 {
             if typeConformsToName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, traitName: binTraitName(op: op)) {
@@ -458,20 +475,27 @@ fn hasBinTraitWitness(c: inout Comp, op: I64, lhs: U64) -> Bool {
     return false
 }
 
-// A struct/enum left operand under an arithmetic op with no operator-trait witness:
-// the C `+`/`-`/... has no meaning, so it is a loud error (spec/12: an operator is
-// only callable when its trait is implemented), not a fall-through to clang.
-fn binTraitNeedsTrait(c: inout Comp, op: I64, lhs: U64) -> Bool {
+// A typed operand under an arithmetic op with no operator-trait witness: the C
+// `+`/`-`/... has no meaning, so it is a loud error (spec/12: an operator is only
+// callable when its trait is implemented), not a fall-through to clang. Covers a
+// struct/enum (kind 2) and a known primitive with no conformance (e.g. arithmetic
+// in a program that never loaded @Std/Core, so the primitive witnesses are absent).
+fn binTraitNeedsTrait(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
     if isBinTraitOp(op: op) {
-        val lt: TypeInfo = typeOf(c: inout c, id: lhs)
-        return lt.kind == 2
+        val lt: TypeInfo = binWitnessType(c: inout c, lhs: lhs, rhs: rhs)
+        if lt.kind == 2 {
+            return true
+        }
+        if lt.kind == 0 {
+            return lt.nameLen > 0
+        }
     }
     return false
 }
 
 // Emit `T_<sel>(lhs, rhs)` for the resolved arithmetic witness assoc fn.
 fn emitBinTraitCall(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
-    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
+    val lt: TypeInfo = binWitnessType(c: inout c, lhs: lhs, rhs: rhs)
     val fi: U64 = findBinTraitWitness(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op), rhs: rhs)
     writeSpan(c: inout c, start: lt.nameStart, len: lt.nameLen)
     write(s: "_")
@@ -1073,51 +1097,40 @@ fn genStmt(c: inout Comp, id: U64) {
                     }
                     write(s: "    ")
                     genExpr(c: inout c, id: target)
-                    if isCompoundDiv(op: op) {
-                        // `x /= v` / `x %= v` -> x = checked(x / v): zero divisor
-                        // and signed INT_MIN/-1 panic, like `x = x / v`.
-                        write(s: " = ")
-                        val dt: TypeInfo = typeOf(c: inout c, id: target)
-                        if dt.kind == 0 {
-                            if isIntType(c: inout c, start: dt.nameStart, len: dt.nameLen) {
-                                genCheckedDiv(c: inout c, lhs: target, rhs: value, tyStart: dt.nameStart, tyLen: dt.nameLen, isMod: op == opRemAssign())
-                            } else {
-                                write(s: compoundDivFn(op: op))
-                                genExpr(c: inout c, id: target)
-                                write(s: ", ")
-                                genExpr(c: inout c, id: value)
-                                write(s: ")")
-                            }
-                        } else {
-                            write(s: compoundDivFn(op: op))
-                            genExpr(c: inout c, id: target)
-                            write(s: ", ")
-                            genExpr(c: inout c, id: value)
-                            write(s: ")")
-                        }
-                    } else {
+                    if op == opAssign() {
+                        // plain assignment: value semantics (CoW copy of the rhs).
                         val tt: TypeInfo = typeOf(c: inout c, id: target)
-                        val cbin: I64 = compoundCheckedBin(op: op)
-                        mut val checked: Bool = false
-                        if cbin != 0 {
-                            if tt.kind == 0 {
-                                if isIntType(c: inout c, start: tt.nameStart, len: tt.nameLen) {
-                                    checked = true
-                                }
-                            }
-                        }
-                        if checked {
-                            // `x OP= v` -> `x = checked(x OP v)`. The place has no
-                            // side effects in this subset, so the re-evaluation is
-                            // observationally identical (hidden cost only).
-                            write(s: " = ")
-                            genCheckedArith(c: inout c, op: cbin, lhs: target, rhs: value, tyStart: tt.nameStart, tyLen: tt.nameLen)
+                        write(s: " = ")
+                        genCopyValue(c: inout c, exprId: value, tyRef: tt.ref, fallStart: tt.nameStart, fallLen: tt.nameLen, isArray: tt.kind == 3)
+                    } else {
+                        // `target OP= value` desugars to `target = target OP value`
+                        // (spec/12 pure desugar; the place has no side effects in this
+                        // subset, so re-evaluating it is observationally identical).
+                        // The `OP` routes through the operator-trait witness like any
+                        // binary — primitives are not special-cased (O6).
+                        val binOp: I64 = compoundBinOp(op: op)
+                        write(s: " = ")
+                        if hasBinTraitWitness(c: inout c, op: binOp, lhs: target, rhs: value) {
+                            emitBinTraitCall(c: inout c, op: binOp, lhs: target, rhs: value)
                         } else {
-                            write(s: assignOpStr(op: op))
-                            if op == opAssign() {
-                                genCopyValue(c: inout c, exprId: value, tyRef: tt.ref, fallStart: tt.nameStart, fallLen: tt.nameLen, isArray: tt.kind == 3)
+                            if binTraitNeedsTrait(c: inout c, op: binOp, lhs: target, rhs: value) {
+                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "compound-assignment operator needs its trait (Add/Sub/.../BitAnd/...); not implemented for this type")
                             } else {
-                                genExpr(c: inout c, id: value)
+                                // built-in fallback for a width-less place (no witness
+                                // recoverable): checked div / plain op, like a binary.
+                                if isCompoundDiv(op: op) {
+                                    write(s: compoundDivFn(op: op))
+                                    genExpr(c: inout c, id: target)
+                                    write(s: ", ")
+                                    genExpr(c: inout c, id: value)
+                                    write(s: ")")
+                                } else {
+                                    write(s: "(")
+                                    genExpr(c: inout c, id: target)
+                                    write(s: assignToBinStr(op: op))
+                                    genExpr(c: inout c, id: value)
+                                    write(s: ")")
+                                }
                             }
                         }
                     }

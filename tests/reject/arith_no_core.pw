@@ -1,0 +1,8 @@
+// A primitive arithmetic operator needs its Add/Sub/... witness, which lives in
+// @Std/Core. A program that never loads Core has no witness, so `x + x` is a loud
+// error (spec/12: operators are trait sugar — primitives are not special-cased,
+// so there is no built-in fast path to fall back to). Acceptance soundness.
+fn main() {
+    val x: I32 = 5
+    val y: I32 = x + x
+}

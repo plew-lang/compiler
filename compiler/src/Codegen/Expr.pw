@@ -473,10 +473,10 @@ fn genExpr(c: inout Comp, id: U64) {
                     if compareNeedsTrait(c: inout c, op: op, lhs: lhs) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "comparison needs Eq/Ord; not available for a struct or array")
                     } else {
-                    if hasBinTraitWitness(c: inout c, op: op, lhs: lhs) {
+                    if hasBinTraitWitness(c: inout c, op: op, lhs: lhs, rhs: rhs) {
                         emitBinTraitCall(c: inout c, op: op, lhs: lhs, rhs: rhs)
                     } else {
-                    if binTraitNeedsTrait(c: inout c, op: op, lhs: lhs) {
+                    if binTraitNeedsTrait(c: inout c, op: op, lhs: lhs, rhs: rhs) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type")
                     } else {
                         if op == opDiv() {
