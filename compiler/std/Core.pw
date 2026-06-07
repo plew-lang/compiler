@@ -32,11 +32,21 @@ pub impl[T] Optional[T] {
             Optional.None => { return true }
         }
     }
-    // The contained value, or `fallback` when `None`.
+    // The contained value, or `fallback` when `None` (eager — `fallback` is always
+    // evaluated). Overloaded by argument type with the lazy form below.
     fn unwrapOr(fallback: T) -> T {
         match self {
             Optional.Some(val v) => { return v }
             Optional.None => { return fallback }
+        }
+    }
+    // The contained value, or `fallback()` when `None` (lazy — the closure runs only
+    // on `None`). The explicit short-circuit form, replacing the removed `??`: the
+    // deferred evaluation is visible as a closure `{ … }`, not hidden in an operator.
+    fn unwrapOr(fallback: fn() -> T) -> T {
+        match self {
+            Optional.Some(val v) => { return v }
+            Optional.None => { return fallback() }
         }
     }
     // The contained value; panics when `None`.

@@ -33,7 +33,6 @@ fn opBitOrAssign() -> I64 { return kindCode(k: <Kind.PipeEq />) }
 fn opBitXorAssign() -> I64 { return kindCode(k: <Kind.CaretEq />) }
 fn opShlAssign() -> I64 { return kindCode(k: <Kind.ShlEq />) }
 fn opShrAssign() -> I64 { return kindCode(k: <Kind.ShrEq />) }
-fn opCoalesce() -> I64 { return kindCode(k: <Kind.Coalesce />) }
 
 fn binOpStr(op: I64) -> String {
     if op == opAdd() { return " + " }

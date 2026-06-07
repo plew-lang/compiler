@@ -1810,10 +1810,6 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             return scalarInfo()
         }
-        Expr.Coalesce(val opt, val deflt) => {
-            // result type = the Optional's element T = the default's type.
-            return exprType(c: inout c, id: deflt)
-        }
         Expr.Try(val expr) => {
             // result type = the Result's Ok payload T (args[0] of Result[T, E]).
             val rt: TypeInfo = exprType(c: inout c, id: expr)

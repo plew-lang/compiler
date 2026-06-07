@@ -303,6 +303,5 @@ fn f(a: any Eq, b: any Eq) {        // 型として持つ・配列に入れる�
 | 単項 | `Not` | 前置 `!`（eager） |
 | 添字 | `Index[Key]` | `collection[key]` |
 | Optional チェーン | `Chain` | `?.` |
-| nil 合体 | `Coalesce[Rhs]` | `??` |
 
-> **`&&` / `||` はトレイトではありません** — Bool 限定・オーバーロード不可の、短絡する制御フロー（`if` の糖衣）です（→ [論理結合子](../03-expressions/12-operators.md)）。
+> **`&&` / `||` はトレイトではありません** — Bool 限定・オーバーロード不可の、短絡する制御フロー（`if` の糖衣）です。`??`（nil 合体）は演算子として持たず（右オペランドの暗黙遅延を避けるため）、`Optional.unwrapOr(fallback:)` メソッドで代替します（→ [論理結合子・Nil 合体演算子は持たない](../03-expressions/12-operators.md)）。

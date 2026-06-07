@@ -240,12 +240,6 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
                 i += 1
             }
         }
-        Expr.Coalesce(val opt, val deflt) => {
-            // the default carries the surrounding context (it is the result T);
-            // the Optional operand is self-typed.
-            checkLitCtx(c: inout c, id: opt, eKind: 0, eBits: 0, eSgn: false)
-            checkLitCtx(c: inout c, id: deflt, eKind: eKind, eBits: eBits, eSgn: eSgn)
-        }
         Expr.Try(val expr) => {
             checkLitCtx(c: inout c, id: expr, eKind: 0, eBits: 0, eSgn: false)
         }
@@ -1421,10 +1415,6 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
             }
         }
         Expr.Cast(val operand, val tyStart, val tyLen, val ty) => { checkBoundsExpr(c: inout c, exprId: operand) }
-        Expr.Coalesce(val opt, val deflt) => {
-            checkBoundsExpr(c: inout c, exprId: opt)
-            checkBoundsExpr(c: inout c, exprId: deflt)
-        }
         Expr.Try(val expr) => { checkBoundsExpr(c: inout c, exprId: expr) }
         Expr.Arrow(val base, val nameStart, val nameLen) => { checkBoundsExpr(c: inout c, exprId: base) }
         Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {

@@ -1,0 +1,9 @@
+import @Std/Core
+import @Std/Io with { print }
+// `??` was removed (spec/12): the eager/lazy unwrap-or-default is explicit via
+// `Optional.unwrapOr(fallback:)` (overloaded value vs closure), not a special
+// short-circuit operator. Writing `??` is now a syntax error.
+fn main() {
+    val none: Optional[I32] = <Optional[I32].None />
+    print(none ?? 0)
+}

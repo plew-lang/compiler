@@ -73,7 +73,6 @@ export enum ExprAst {
     Cast(operand: ExprAst, ty: TypeAst, span: Span)
     MatchExpr(scrut: ExprAst, arms: Array[MatchArmAst], span: Span)
     IfExpr(cond: ExprAst, thenBlk: BlockAst, elseBlk: BlockAst, span: Span)
-    Coalesce(opt: ExprAst, deflt: ExprAst, span: Span)
     Try(operand: ExprAst, span: Span)
     Arrow(base: ExprAst, name: String, span: Span)
     Closure(params: Array[ParamAst], hasRet: Bool, ret: TypeAst, body: BlockAst, span: Span)

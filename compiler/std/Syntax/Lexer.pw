@@ -83,7 +83,6 @@ export enum Kind {
     ShrEq
     DotDotLt
     DotDotEq
-    Coalesce
     Unknown
 }
 
@@ -531,10 +530,6 @@ export fn lex(lx: inout Lexer) {
             continue
         }
         if b == '?' {
-            if b2 == '?' {
-                lx.emit(k: <Kind.Coalesce />, start: lx.pos, len: 2)
-                continue
-            }
             lx.emit(k: <Kind.Unknown />, start: lx.pos, len: 1)
             continue
         }
@@ -658,7 +653,6 @@ export fn kindCode(k: Kind) -> I64 {
         Kind.CaretEq => 82
         Kind.ShlEq => 83
         Kind.ShrEq => 84
-        Kind.Coalesce => 85
         Kind.Unknown => 99
     }
 }

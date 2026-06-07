@@ -2153,10 +2153,6 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
             }
         }
         Expr.Cast(val operand, val tyStart, val tyLen, val ty) => { scanExprInsts(c: inout c, exprId: operand) }
-        Expr.Coalesce(val opt, val deflt) => {
-            scanExprInsts(c: inout c, exprId: opt)
-            scanExprInsts(c: inout c, exprId: deflt)
-        }
         Expr.Try(val expr) => { scanExprInsts(c: inout c, exprId: expr) }
         Expr.Arrow(val base, val nameStart, val nameLen) => { scanExprInsts(c: inout c, exprId: base) }
         Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {

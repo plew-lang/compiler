@@ -76,12 +76,12 @@
 
 ## 演算子（subset）
 
-- **対応**：`+ - * / %`・比較 `== != < <= > >=`・論理 `&& ||`（C 短絡）・**ビット/シフト `& | ^ << >> ~`**・単項 `! - ~`・代入 `=`・複合 `+= -= *= /= %=`＋**ビット系 `&= |= ^= <<= >>=`**（純粋脱糖）・**`??`（Coalesce・Optional）**。
+- **対応**：`+ - * / %`・比較 `== != < <= > >=`・論理 `&& ||`（C 短絡）・**ビット/シフト `& | ^ << >> ~`**・単項 `! - ~`・代入 `=`・複合 `+= -= *= /= %=`＋**ビット系 `&= |= ^= <<= >>=`**（純粋脱糖）・`Optional.unwrapOr(fallback:)`（eager 値/lazy クロージャのオーバーロード＝旧 `??` の代替）。
 - **トレイト脱糖済**（O1-O4＋O6）：算術 `+ - * / %`・ビット/シフト `& | ^ << >>`・単項 `- ! ~`（`Neg`/`Not`/`BitNot`）＝ユーザー型＋プリミティブとも witness 経由。
-- **未対応**：`pow`/`**`（`Pow[Exp]`）・`??`（Coalesce）/添字（Index/IndexSet）/`?.`（Chain）のトレイト一般化〔現 built-in〕・`as` 以外の数値変換・比較 `==`/`<` の primitive 脱ハードコード〔意図的保留〕。
-- **優先順位**：`??` を含め 10 段（低→高：`|| < && < 比較 < ?? < | < ^ < & < シフト < +- < */%`・`??` 右結合）。spec の 14 段とビット/算術/論理/比較/`??` の相対順序は一致。未対応段（`as` の位置・レンジ）と比較/レンジの非結合は未強制。spec/12。
+- **未対応**：`pow`/`**`（`Pow[Exp]`）・添字（Index/IndexSet）/`?.`（Chain）のトレイト一般化〔現 built-in〕・`as` 以外の数値変換・比較 `==`/`<` の primitive 脱ハードコード〔意図的保留〕。
+- **優先順位**：`as`<シフト等は未実装段あり・実装済の相対順序は spec 13 段と一致（`?? 廃止済`）。比較/レンジの非結合は未強制。spec/12。
 - **`as`**：**数値↔数値の C キャストのみ**（無損失検査済＝source 幅を `TypeInfo` で復元し narrowing は reject・式幅も伝播）。残：`From`/`TryFrom`（`as` の全域変換脱糖・`try` の From 変換＝現状 `try` はソース/関数戻りの **エラー型一致 `E==E'` を要求**・違うと C 型不一致）・`?.`（オプショナルチェーン）は未実装。spec/12,13。
-- **`??`/`try` は `@Std/Core` の Optional/Result の tag/field レイアウトをハードコード前提**（Some=tag0/`v`・Ok=tag0/`value`・Err=tag1/`error`）。lang-item ゆえ妥当だが、ユーザーが別形の Optional/Result を定義しても `??`/`try` はこの形を仮定。見直し：lang-item を spec で固定 or コンパイラが Core のシンボルを参照（ambient 化〔上記 import 節〕とセットで整理）。
+- **`try` は `@Std/Core` の Result の tag/field レイアウトをハードコード前提**（Ok=tag0/`value`・Err=tag1/`error`）。lang-item ゆえ妥当だが、ユーザーが別形の Result を定義しても `try` はこの形を仮定。見直し：lang-item を spec で固定 or コンパイラが Core のシンボルを参照（ambient 化〔上記 import 節〕とセットで整理）。
 
 ## 可視性・モジュール・import
 
@@ -117,13 +117,13 @@
 - **修正済 ARC**（タグ `arc-via-uaf`/`arc-array-elem-fix`）：`via`＋引数つき要求の誤拒否は**コンパイラ自身の ARC heap-use-after-free**だった＝根本は**配列 `_push`/`_set` が struct 要素の heap を deep-copy せず格納するのに `_copy`/`_release` は deep 所有**する非対称。`_push`/`_set` を `E_copy`（値意味論＝push は値をコピー）に直して解消。ASan ビルドのコンパイラ自己コンパイルも clean。
 
 **残（未修正）**：
-- **【演算子トレイト配線（spec/12）＝O1-O4＋O6 済】**（worklog「演算子トレイト配線」）：トレイト型引数 `Add[Rhs]` の parse/記録＋witness 照合の `Self`/trait型パラメータ/`Output` 置換／**ユーザー型＋プリミティブの二項（算術 `+ - * / %`・ビット `& | ^ << >>`）・単項（`Neg/Not/BitNot`）が witness 脱糖**（右オペランド型オーバーロード・未準拠は loud reject・無サフィックスリテラル推論込み）。**O6 primitive 脱ハードコード達成**＝`@Std/Core` の `impl I32 as Add[I32]`（`tools/gen-numops.pw` 生成・`part ./Core/Num`）→`i32Add` intrinsic 床（`Emit.pw` の `emitNumRuntime`＝preamble C）経由・脱糖 gate を kind 0 へ flip（コンパイラ自身も witness 経由・不動点維持・bootstrap +8%）・負リテラル畳み込みは `isIntLitExpr` で prefix-on-literal を built-in 維持。test `operator_trait_decl`/`operator_bitwise`/`operator_unary`/`operator_prim_witness`/`operator_prim_flip`・reject `arith_no_trait`。**残**＝O5（`??` Coalesce）・O7-O8（Index/IndexSet/Chain 一般化・`pow`）・eager checker の算術 op 境界チェック・`Output != Self`・比較 `==`/`<` の primitive 脱ハードコード〔C 肥大ゆえ意図的保留〕・負リテラルの真の畳み込み〔parser/lower・additive〕。
+- **【演算子トレイト配線（spec/12）＝O1-O4＋O6 済】**（worklog「演算子トレイト配線」）：トレイト型引数 `Add[Rhs]` の parse/記録＋witness 照合の `Self`/trait型パラメータ/`Output` 置換／**ユーザー型＋プリミティブの二項（算術 `+ - * / %`・ビット `& | ^ << >>`）・単項（`Neg/Not/BitNot`）が witness 脱糖**（右オペランド型オーバーロード・未準拠は loud reject・無サフィックスリテラル推論込み）。**O6 primitive 脱ハードコード達成**＝`@Std/Core` の `impl I32 as Add[I32]`（`tools/gen-numops.pw` 生成・`part ./Core/Num`）→`i32Add` intrinsic 床（`Emit.pw` の `emitNumRuntime`＝preamble C）経由・脱糖 gate を kind 0 へ flip（コンパイラ自身も witness 経由・不動点維持・bootstrap +8%）・負リテラル畳み込みは `isIntLitExpr` で prefix-on-literal を built-in 維持。test `operator_trait_decl`/`operator_bitwise`/`operator_unary`/`operator_prim_witness`/`operator_prim_flip`・reject `arith_no_trait`。**残**＝O7-O8（Index/IndexSet/Chain 一般化・`pow`）・eager checker の算術 op 境界チェック・`Output != Self`。**完了**＝比較 Eq/Ord の primitive 脱ハードコード・負リテラルの真の畳み込み・built-in 算術完全削除・**O5＝`??` 演算子廃止**（`Optional.unwrapOr(fallback:)` のオーバーロードへ）。
 - **【silent 逸脱・小】曖昧な無サフィックス整数リテラルが先頭オーバーロードを選ぶ**（`k(a:I32)`/`k(a:U64)` に `k(a:5)`・呼出位置の曖昧検出が要る）・**`val f = obj.method`（メソッド値化）を受理**（scope 復元の型回復が要る・現状 clang 止まり）。
 - **【bug・既知】ユーザー struct/enum 名が lang-item の型パラメータ名と衝突すると壊れる**：`struct V {…}` は `Dictionary[K,V]` の型パラメータ `V` と名前衝突し、`isTypeParamName`/typedef 出力で template 扱いされ struct 定義を吐かず `Array_V` 未定義で clang 落ち（`K`/`V`/`T` 等）。`Vec`/`W` 等は無事。根治＝型パラメータ判定をスコープ化（グローバル名照合をやめる）。回避＝単一大文字で lang-item と被る名を避ける。
 - **【済】`@[Ord]` on enum＋`@[Ord]` が `@[Eq]` を含意**（`Ord: Eq`）＝実装済（上記「Eq/Ord」節）。
 - **既知 deferred**：`any P`・トレイト型引数 `Add[Rhs]`・`#Ext`・`a#P.foo()` 源選択・明示型引数 `f[I32](x)`・`Self` 入力要求の witness 置換（hand-written のみ・derive は無事）。**関連型 `type Item`＝基本実装済**（残＝generic 抽象 `T::Item` 解決）。
 
-**優先度（私見）**：演算子トレイト配線はユーザー型＋プリミティブ（O1-O4＋O6）まで達成・次は O5（`??`）・O7-O8（Index/Chain/Pow）。残る silent 逸脱2件（曖昧リテラル・method 値化）は小だが実装にやや手間（呼出位置/scope 復元）。
+**優先度（私見）**：演算子トレイト配線はユーザー型＋プリミティブ（O1-O4＋O6）まで達成・次は O7-O8（Index/Chain/Pow）〔`??` は廃止で決着〕。残る silent 逸脱2件（曖昧リテラル・method 値化）は小だが実装にやや手間（呼出位置/scope 復元）。
 
 ---
 

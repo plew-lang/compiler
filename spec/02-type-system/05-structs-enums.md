@@ -81,7 +81,7 @@ match maybeValue {
 }
 ```
 
-オプショナルチェーン（`?.`）・nil 合体（`??`）は、それぞれ `Chain` / `Coalesce` トレイトの実装によって有効になります（[型変換と演算子](../03-expressions/12-operators.md) 参照）。
+オプショナルチェーン（`?.`）は `Chain` トレイトの実装によって有効になります。nil 合体演算子（`??`）は持たず、フォールバックは `Optional.unwrapOr(fallback:)` メソッド（eager 値／lazy クロージャのオーバーロード）で書きます（[型変換と演算子](../03-expressions/12-operators.md) 参照）。
 
 > トレイトもカスタム型の一種ですが、要求・関連型・継承・準拠と `via` の意味論は独立章の[トレイト](08-traits.md)にまとめています。
 

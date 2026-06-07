@@ -59,7 +59,7 @@ val n = try <I8.convert from=big />      // try で早期 return（前置 try �
 
 ## 演算子システム
 
-全ての演算子は、対応するトレイトのメソッド呼び出しのシンタックスシュガーです。**演算子は、オペランドの型に対応するトレイトが実装されている場合にのみ呼び出せます。** 未実装の型に演算子を適用するとコンパイルエラーになります（これは二項演算子・単項演算子・添字アクセスすべてに共通します）。なお **`&&` / `||` は例外**で、短絡評価する制御フロー糖衣でありトレイトではありません（後述「論理結合子」）。
+全ての演算子は、対応するトレイトのメソッド呼び出しのシンタックスシュガーです。**演算子は、オペランドの型に対応するトレイトが実装されている場合にのみ呼び出せます。** 未実装の型に演算子を適用するとコンパイルエラーになります（これは二項演算子・単項演算子・添字アクセスすべてに共通します）。なお **`&&` / `||` は例外**で、短絡評価する制御フロー糖衣でありトレイトではありません（後述「論理結合子」）。（`??` は演算子として持ちません ── 後述「Nil 合体演算子は持たない」。）
 
 ```plew
 trait Add[Rhs] {
@@ -337,55 +337,22 @@ impl Optional[T] as Chain {
 
 > `chain()` の戻り値が空のケース（`Optional.None`）は付随する値を持たないため、`Result` のようにエラー情報を運ぶ型は `?.` の対象外です。エラーの早期リターンは [`try`](13-error-handling.md) を使います。
 
-## Nil 合体演算子（Coalesce トレイト）
+## Nil 合体演算子（`??`）は持たない
 
-`??` は二項演算子で、左辺が空のときに右辺へフォールバックします。`Coalesce[Rhs]` トレイトのシンタックスシュガーです。
-
-```plew
-trait Coalesce[Rhs] {
-    type Output
-    assoc fn coalesce(lhs: Self, rhs: Rhs) -> Output
-}
-
-val result = a ?? b  // T.coalesce(lhs: a, rhs: b) と同等
-```
-
-Optional は右辺の型に応じて 2 つの実装を与えます（`coalesce(rhs:)` を右辺型でオーバーロード）。
+Plew に `??` 演算子はありません（Rust と同じく**あえて入れません**）。Optional のフォールバックは `Optional.unwrapOr(fallback:)` メソッドで書き、eager（既定値）と lazy（クロージャ）を**引数型で明示的にオーバーロード**します：
 
 ```plew
-// a ?? b （右辺も Optional ならフォールバック結果も Optional）
-impl Optional[T] as Coalesce[Optional[T]] {
-    type Output = Optional[T]
-
-    assoc fn coalesce(lhs: Optional[T], rhs: Optional[T]) -> Optional[T] {
-        return match lhs {
-            Optional.Some(value: val v) => <Optional.Some value=v />
-            Optional.None                  => rhs
-        }
-    }
-}
-
-// a ?? b （右辺が非 Optional の既定値なら結果は T）
-impl Optional[T] as Coalesce[T] {
-    type Output = T
-
-    assoc fn coalesce(lhs: Optional[T], rhs: T) -> T {
-        return match lhs {
-            Optional.Some(value: val v) => v
-            Optional.None                  => rhs
-        }
-    }
-}
+val port: I32 = configPort.unwrapOr(fallback: 8080)                       // eager（8080 は常に評価）
+val port: I32 = configPort.unwrapOr(fallback: fn() -> I32 { return computeDefault() })  // lazy（None のときだけ走る）
 ```
 
-```plew
-val port: I32 = configPort ?? 8080  // 右辺 I32 → Coalesce[I32] → 結果 I32
-val merged: Optional[I32] = a ?? b   // 右辺 Optional → Coalesce[Optional[I32]] → 結果 Optional
-```
+`??` を採らない理由は **eager/lazy の遅延を明示にするため**。短絡する `??`（左辺が `Some` なら右辺を評価しない）は、右辺という**ユーザー提供の値**を暗黙に遅延評価します ── これは Plew が却下する `@autoclosure`（暗黙の遅延）と本質的に同じ隠れた挙動です。メソッド形なら lazy は**クロージャ `fn() -> T { … }` として目に見え**、eager との選択がコードに現れます（`&&` / `||` は遅延されるのが安価な `Bool` 節で、どの言語でも短絡と理解される普遍イディオムなので残しますが、任意の値を遅延する `??` は別格です）。
+
+> オプショナルチェーン `?.`（`Chain` トレイト）は残ります。`?.` の短絡は**受け手**側（左辺が `None` なら以降のメンバアクセスを飛ばす）で、遅延部分はコンパイラの `match` 脱糖が制御し、トレイトのメソッド（`chain()` 等）自体は eager です。だから `??`（遅延されるのがユーザー提供の右オペランド）と違ってトレイト化できます。
 
 ## 優先順位と結合性
 
-演算子の結合の強さ（番号が小さいほど強く＝先に結合する）と結合性は次の通りです。**`as`・算術・ビット・比較・`&&`/`||` の相対順は Rust と一致**します。Plew 固有の差は ① `??`（Rust に無く Swift と同位置）、② 前置 `try`/`await`（Rust の後置 `?` と逆）、③ 代入は文なので優先順位に乗らない、④ 単項の顔ぶれ（`~` を分離・deref/borrow なし）の 4 点だけです。
+演算子の結合の強さ（番号が小さいほど強く＝先に結合する）と結合性は次の通りです。**`as`・算術・ビット・比較・`&&`/`||` の相対順は Rust と一致**します。Plew 固有の差は ① 前置 `try`/`await`（Rust の後置 `?` と逆）、② 代入は文なので優先順位に乗らない、③ 単項の顔ぶれ（`~` を分離・deref/borrow なし）の 3 点です（`??` は Rust と同じく持ちません）。
 
 | 強さ | 演算子 | 結合性 |
 | --- | --- | --- |
@@ -398,11 +365,10 @@ val merged: Optional[I32] = a ?? b   // 右辺 Optional → Coalesce[Optional[I3
 | 7 | `&`（BitAnd） | 左 |
 | 8 | `^`（BitXor） | 左 |
 | 9 | `\|`（BitOr） | 左 |
-| 10 | `??`（Coalesce） | 右 |
-| 11 | `== != < <= > >=`（Eq/Ord） | **非結合** |
-| 12 | `&&` | 左 |
-| 13 | `\|\|` | 左 |
-| 14（最弱） | `..< ..=`（レンジ） | **非結合** |
+| 10 | `== != < <= > >=`（Eq/Ord） | **非結合** |
+| 11 | `&&` | 左 |
+| 12 | `\|\|` | 左 |
+| 13（最弱） | `..< ..=`（レンジ） | **非結合** |
 
 ### `as` は算術より強い（Lv3）
 
@@ -411,14 +377,6 @@ Plew は暗黙の数値拡幅を持たない（`I32`→`I64` も `x as I64` と�
 ### 前置 `try`/`await` は後置チェーン全体に掛かる
 
 `try`/`await` は前置で、**直後の後置チェーン全体**を取ります：`try a().b()` は `try (a().b())`（`a().b()` を評価してから `try`）。Rust の後置 `?`（`a()?.b()` ＝ `(a()?).b()`）とは逆なので、**チェーン途中で取り出すには括弧**を使います：`(try a()).b()`。`try`/`await` は二項演算子より強く（`try f() + 1` ＝ `(try f()) + 1`、`try f() as I64` ＝ `(try f()) as I64`）、後置より弱い位置にあります。`try` の意味論は [エラーハンドリング](13-error-handling.md) を参照。
-
-### `??` は Swift と同位置（Lv10・右結合）
-
-`??` は算術・ビット・`as` より弱く、比較・`&&`・`||`・レンジより強い位置で、右結合（`a ?? b ?? c` ＝ `a ?? (b ?? c)`）です。これにより `x ?? 0 == y` ＝ `(x ?? 0) == y` と素直に読めます（JS / C# は `??` を比較より弱くする流儀ですが、Swift・Kotlin は本表と同じく比較より強くします）。
-
-> **注意**：`??` は算術より弱いので `count ?? 0 + 1` は `count ?? (0 + 1)` になります（Swift・Kotlin・JS・C# すべてに共通の挙動）。フォールバックを得てから演算する意図なら括弧を付けてください：`(count ?? 0) + 1`。
-
-なお Swift はレンジを `??` より強く置きますが、Plew はレンジを最下位にした（下記）ので `a ?? b ..< c` ＝ `(a ?? b) ..< c` です（`(start ?? 0)..<end` のように読め、実害はありません）。
 
 ### 比較・等価は非結合（Lv11）
 
@@ -481,4 +439,4 @@ recv.indexSet(key: key, value: recv.index(key: key) + x)
 
 フィールド `obj.field += x` も同様にレシーバを 1 回評価します。
 
-> **`??=` は持ちません**：Rust に複合 nil 合体が無いので今回は入れません（Swift / JS / Kotlin にはあります）。必要になれば `a ??= b` ⟺ `a = a ?? b` を足すのは非破壊で、additive な検討事項です。
+> **`??=` は持ちません**：`??` 演算子自体を持たない（[Nil 合体演算子は持たない](#nil-合体演算子-は持たない)）ので、複合形もありません。フォールバックは `opt.unwrapOr(fallback:)` を使います。

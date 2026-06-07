@@ -25,6 +25,7 @@ fn main() {
     print(bad.isErr())
     val some: Optional[I32] = <Optional[I32].Some v=5 />
     val none: Optional[I32] = <Optional[I32].None />
-    print(some ?? 0I64)
-    print(none ?? 42I64)
+    print(some.unwrapOr(fallback: 0))         // 5   (eager: fallback unused)
+    print(none.unwrapOr(fallback: 42))        // 42  (eager)
+    print(none.unwrapOr(fallback: fn() -> I32 { return 99 }))    // 99  (lazy closure overload)
 }

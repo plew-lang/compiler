@@ -365,11 +365,6 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
             val eb: U64 = lowerBlock(c: inout c, b: elseBlk)
             result = c.pushExpr(e: <Expr.IfExpr cond=cnd thenBlk=tb elseBlk=eb />)
         }
-        ExprAst.Coalesce(val opt, val deflt, val span) => {
-            val o: U64 = lowerExpr(c: inout c, e: opt)
-            val d: U64 = lowerExpr(c: inout c, e: deflt)
-            result = c.pushExpr(e: <Expr.Coalesce opt=o deflt=d />)
-        }
         ExprAst.Try(val operand, val span) => {
             val o: U64 = lowerExpr(c: inout c, e: operand)
             result = c.pushExpr(e: <Expr.Try expr=o />)

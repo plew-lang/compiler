@@ -19,7 +19,6 @@ fn binPrecAst(k: Kind) -> I64 {
         Kind.Le => 3
         Kind.Gt => 3
         Kind.Ge => 3
-        Kind.Coalesce => 4
         Kind.Pipe => 5
         Kind.Caret => 6
         Kind.Amp => 7
@@ -546,24 +545,15 @@ fn parseBinAst(p: inout P, minPrec: I64) -> ExprAst {
         if prec < minPrec {
             break
         }
-        match k {
-            Kind.Coalesce => {
-                p.advance()
-                val rhs: ExprAst = parseBinAst(p: inout p, minPrec: prec)
-                left = <ExprAst.Coalesce opt=left deflt=rhs span=<Span start=sStart end=p.prevEnd() /> />
-            }
-            _ => {
-                val op: I64 = kindCode(k: k)
-                p.advance()
-                val right: ExprAst = parseBinAst(p: inout p, minPrec: prec + 1)
-                left = <ExprAst.Binary op=op lhs=left rhs=right span=<Span start=sStart end=p.prevEnd() /> />
-                // comparison/equality operators are non-associative (spec/12):
-                // `a < b < c` / `a == b == c` are syntax errors — require parens.
-                if prec == 3 {
-                    if binPrecAst(k: p.curKind()) == 3 {
-                        p.fail(off: p.base + p.curTok().start, msg: "comparison operators are non-associative; add parentheses (e.g. `(a < b) && (b < c)`)")
-                    }
-                }
+        val op: I64 = kindCode(k: k)
+        p.advance()
+        val right: ExprAst = parseBinAst(p: inout p, minPrec: prec + 1)
+        left = <ExprAst.Binary op=op lhs=left rhs=right span=<Span start=sStart end=p.prevEnd() /> />
+        // comparison/equality operators are non-associative (spec/12):
+        // `a < b < c` / `a == b == c` are syntax errors — require parens.
+        if prec == 3 {
+            if binPrecAst(k: p.curKind()) == 3 {
+                p.fail(off: p.base + p.curTok().start, msg: "comparison operators are non-associative; add parentheses (e.g. `(a < b) && (b < c)`)")
             }
         }
     }
