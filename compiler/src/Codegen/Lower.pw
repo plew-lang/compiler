@@ -418,7 +418,7 @@ fn lowerBinds(c: inout Comp, binds: Array[BindAst]) -> Array[Bind] {
         val b: BindAst = binds[i]
         val nm: Bind = internBytes(c: inout c, s: b.name)
         val fd: Bind = internBytes(c: inout c, s: b.field)
-        out.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen fieldStart=fd.nameStart fieldLen=fd.nameLen offset=b.span.start />)
+        out.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen nameId=nm.nameId fieldStart=fd.nameStart fieldLen=fd.nameLen offset=b.span.start />)
         i += 1
     }
     return out
@@ -710,7 +710,7 @@ fn lowerFuncDecl(c: inout Comp, d: DeclAst) {
     while wi < d.whereParams.count {
         val pn: Bind = internBytes(c: inout c, s: d.whereParams[wi])
         val tn: Bind = internBytes(c: inout c, s: d.whereTraits[wi])
-        c.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen traitStart=tn.nameStart traitLen=tn.nameLen />)
+        c.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen />)
         wi += 1
     }
     // attach pending `@[...]` directives to this fn (a macro on a free function);
@@ -726,7 +726,7 @@ fn appendFuncBounds(c: inout Comp, fnIdx: U64, params: Array[String], traits: Ar
     while i < params.count {
         val pn: Bind = internBytes(c: inout c, s: params[i])
         val tn: Bind = internBytes(c: inout c, s: traits[i])
-        c.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen traitStart=tn.nameStart traitLen=tn.nameLen />)
+        c.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen />)
         i += 1
     }
 }

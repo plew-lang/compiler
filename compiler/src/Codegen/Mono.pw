@@ -180,7 +180,7 @@ fn nameReachesOwner(c: inout Comp, nStart: U64, nLen: U64, args: Array[U64], tSt
     if isIndirectContainer(c: inout c, nStart: nStart, nLen: nLen) {
         return false
     }
-    if spansEqual(c: inout c, aStart: nStart, aLen: nLen, bStart: tStart, bLen: tLen) {
+    if intern(c: inout c, start: nStart, len: nLen) == intern(c: inout c, start: tStart, len: tLen) {
         return true
     }
     if isTransparentContainer(c: inout c, nStart: nStart, nLen: nLen) {
@@ -565,7 +565,7 @@ fn emitFieldCType(c: inout Comp, ref: U64, params: Array[Bind], args: Array[U64]
     mut val pi: U64 = 0
     while pi < params.count {
         val p: Bind = params[pi]
-        if spansEqual(c: inout c, aStart: t.nameStart, aLen: t.nameLen, bStart: p.nameStart, bLen: p.nameLen) {
+        if t.nameId == p.nameId {
             emitConcreteCType(c: inout c, ref: args[pi])
             return
         }
@@ -598,7 +598,7 @@ fn resolveTy(c: inout Comp, tyRef: U64) -> U64 {
         mut val i: U64 = 0
         while i < c.curTypeParams.count {
             val p: Bind = c.curTypeParams[i]
-            if spansEqual(c: inout c, aStart: t.nameStart, aLen: t.nameLen, bStart: p.nameStart, bLen: p.nameLen) {
+            if t.nameId == p.nameId {
                 return c.curTypeArgs[i]
             }
             i += 1
@@ -673,7 +673,7 @@ fn isTypeParamName(c: inout Comp, start: U64, len: U64) -> Bool {
         val tp: Array[Bind] = c.structs[si].typeParams
         mut val k: U64 = 0
         while k < tp.count {
-            if spansEqual(c: inout c, aStart: tp[k].nameStart, aLen: tp[k].nameLen, bStart: start, bLen: len) {
+            if tp[k].nameId == qId {
                 return true
             }
             k += 1
@@ -685,7 +685,7 @@ fn isTypeParamName(c: inout Comp, start: U64, len: U64) -> Bool {
         val tp2: Array[Bind] = c.enums[ei].typeParams
         mut val k2: U64 = 0
         while k2 < tp2.count {
-            if spansEqual(c: inout c, aStart: tp2[k2].nameStart, aLen: tp2[k2].nameLen, bStart: start, bLen: len) {
+            if tp2[k2].nameId == qId {
                 return true
             }
             k2 += 1
@@ -697,7 +697,7 @@ fn isTypeParamName(c: inout Comp, start: U64, len: U64) -> Bool {
         val tp3: Array[Bind] = c.funcs[fi].typeParams
         mut val k3: U64 = 0
         while k3 < tp3.count {
-            if spansEqual(c: inout c, aStart: tp3[k3].nameStart, aLen: tp3[k3].nameLen, bStart: start, bLen: len) {
+            if tp3[k3].nameId == qId {
                 return true
             }
             k3 += 1
@@ -1238,7 +1238,7 @@ fn substTypeInfo(c: inout Comp, instRef: U64, params: Array[Bind], tyRef: U64) -
     mut val i: U64 = 0
     while i < params.count {
         val p: Bind = params[i]
-        if spansEqual(c: inout c, aStart: t.nameStart, aLen: t.nameLen, bStart: p.nameStart, bLen: p.nameLen) {
+        if t.nameId == p.nameId {
             val inst: TypeRef = c.types[instRef]
             if i < inst.args.count {
                 return typeInfoOfRef(c: inout c, ref: inst.args[i])
@@ -1268,7 +1268,7 @@ fn genericFieldTypeInfo(c: inout Comp, instRef: U64, fieldStart: U64, fieldLen: 
             mut val pi: U64 = 0
             while pi < s.typeParams.count {
                 val p: Bind = s.typeParams[pi]
-                if spansEqual(c: inout c, aStart: ftr.nameStart, aLen: ftr.nameLen, bStart: p.nameStart, bLen: p.nameLen) {
+                if ftr.nameId == p.nameId {
                     return typeInfoOfRef(c: inout c, ref: t.args[pi])
                 }
                 pi += 1
@@ -1313,7 +1313,7 @@ fn genericEnumFieldTypeInfo(c: inout Comp, instRef: U64, variantStart: U64, vari
                     mut val pi: U64 = 0
                     while pi < e.typeParams.count {
                         val p: Bind = e.typeParams[pi]
-                        if spansEqual(c: inout c, aStart: ftr.nameStart, aLen: ftr.nameLen, bStart: p.nameStart, bLen: p.nameLen) {
+                        if ftr.nameId == p.nameId {
                             return typeInfoOfRef(c: inout c, ref: t.args[pi])
                         }
                         pi += 1
@@ -1686,7 +1686,7 @@ fn unifyTypeParam(c: inout Comp, paramRef: U64, argRef: U64, tpStart: U64, tpLen
     }
     val pt: TypeRef = c.types[paramRef]
     if pt.args.count == 0 {
-        if spansEqual(c: inout c, aStart: pt.nameStart, aLen: pt.nameLen, bStart: tpStart, bLen: tpLen) {
+        if pt.nameId == intern(c: inout c, start: tpStart, len: tpLen) {
             return argRef
         }
         return 0
@@ -1761,7 +1761,7 @@ fn inferFnArgs(c: inout Comp, f: Func, args: Array[Arg]) -> Array[U64] {
             val p: Param = f.params[pi]
             if p.tyIsArray {
                 // `Array[T]` param: infer T from the argument array's element.
-                if spansEqual(c: inout c, aStart: p.tyStart, aLen: p.tyLen, bStart: tp.nameStart, bLen: tp.nameLen) {
+                if p.tyNameId == tp.nameId {
                     if pi < args.count {
                         if found == 0 {
                             found = argArrayElemRef(c: inout c, argExpr: args[pi].expr)

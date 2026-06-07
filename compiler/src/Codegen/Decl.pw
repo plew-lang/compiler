@@ -1321,7 +1321,7 @@ fn writeFnSelector(c: inout Comp, f: Func) {
             mut val k: U64 = 0
             while k < c.curTypeParams.count {
                 val tp: Bind = c.curTypeParams[k]
-                if spansEqual(c: inout c, aStart: p.tyStart, aLen: p.tyLen, bStart: tp.nameStart, bLen: tp.nameLen) {
+                if p.tyNameId == tp.nameId {
                     emitMangle(c: inout c, ref: c.curTypeArgs[k])
                     resolved = true
                     k = c.curTypeParams.count

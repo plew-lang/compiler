@@ -843,12 +843,12 @@ fn assocBindingSpan(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64,
         val ab: AssocBinding = c.assocBindings[i]
         if ab.recvId == qRecv {
             if ab.nameId == qName {
-                return <Bind nameStart=ab.tyStart nameLen=ab.tyLen fieldStart=ab.tyStart fieldLen=ab.tyLen />
+                return <Bind nameStart=ab.tyStart nameLen=ab.tyLen nameId=intern(c: inout c, start: ab.tyStart, len: ab.tyLen) fieldStart=ab.tyStart fieldLen=ab.tyLen />
             }
         }
         i += 1
     }
-    return <Bind nameStart=nameStart nameLen=nameLen fieldStart=nameStart fieldLen=nameLen />
+    return <Bind nameStart=nameStart nameLen=nameLen nameId=qName fieldStart=nameStart fieldLen=nameLen />
 }
 
 // Like paramSelectorEq, but substitutes the requirement side's associated types with
@@ -867,7 +867,7 @@ fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvSta
             return false
         }
         val sub: Bind = assocBindingSpan(c: inout c, recvStart: recvStart, recvLen: recvLen, nameStart: pr.tyStart, nameLen: pr.tyLen)
-        if spansEqual(c: inout c, aStart: pw.tyStart, aLen: pw.tyLen, bStart: sub.nameStart, bLen: sub.nameLen) {
+        if pw.tyNameId == sub.nameId {
         } else {
             return false
         }
@@ -1057,7 +1057,7 @@ fn checkFnBounds(c: inout Comp) {
                 mut val pi: U64 = 0
                 while pi < f.typeParams.count {
                     val tp: Bind = f.typeParams[pi]
-                    if spansEqual(c: inout c, aStart: tp.nameStart, aLen: tp.nameLen, bStart: fb.paramStart, bLen: fb.paramLen) {
+                    if tp.nameId == fb.paramNameId {
                         if pi < fin.args.count {
                             val at: TypeRef = c.types[fin.args[pi]]
                             if typeConformsTo(c: inout c, typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen) {
@@ -1098,7 +1098,7 @@ fn checkMethodBounds(c: inout Comp) {
                         mut val pi: U64 = 0
                         while pi < f.typeParams.count {
                             val tp: Bind = f.typeParams[pi]
-                            if spansEqual(c: inout c, aStart: tp.nameStart, aLen: tp.nameLen, bStart: fb.paramStart, bLen: fb.paramLen) {
+                            if tp.nameId == fb.paramNameId {
                                 if pi < inst.args.count {
                                     val at: TypeRef = c.types[inst.args[pi]]
                                     if typeConformsTo(c: inout c, typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen) {
@@ -1134,9 +1134,10 @@ fn isTypeParamOf(c: inout Comp, fnIdx: U64, start: U64, len: U64) -> Bool {
         return false
     }
     val tps: Array[Bind] = c.funcs[fnIdx].typeParams
+    val qTp: U64 = intern(c: inout c, start: start, len: len)
     mut val i: U64 = 0
     while i < tps.count {
-        if spansEqual(c: inout c, aStart: tps[i].nameStart, aLen: tps[i].nameLen, bStart: start, bLen: len) {
+        if tps[i].nameId == qTp {
             return true
         }
         i += 1
@@ -1149,11 +1150,12 @@ fn isTypeParamOf(c: inout Comp, fnIdx: U64, start: U64, len: U64) -> Bool {
 // — as a requirement (TraitDef.reqs) or a provided method (recv = the trait).
 fn boundProvidesMethod(c: inout Comp, fnIdx: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
     val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
+    val qTp: U64 = intern(c: inout c, start: tpStart, len: tpLen)
     mut val bi: U64 = 0
     while bi < c.funcBounds.count {
         val fb: FuncBound = c.funcBounds[bi]
         if fb.fnIdx == fnIdx {
-            if spansEqual(c: inout c, aStart: fb.paramStart, aLen: fb.paramLen, bStart: tpStart, bLen: tpLen) {
+            if fb.paramNameId == qTp {
                 val qTrait: U64 = intern(c: inout c, start: fb.traitStart, len: fb.traitLen)
                 // requirement of the bound trait
                 mut val ti: U64 = 0
@@ -1198,11 +1200,12 @@ fn boundProvidesMethod(c: inout Comp, fnIdx: U64, tpStart: U64, tpLen: U64, name
 // Whether type parameter (tpStart,tpLen) on `fnIdx` is bound by a trait named
 // `traitName` (for the Eq/Ord operator checks).
 fn boundHasTraitNamed(c: inout Comp, fnIdx: U64, tpStart: U64, tpLen: U64, traitName: String) -> Bool {
+    val qTp: U64 = intern(c: inout c, start: tpStart, len: tpLen)
     mut val bi: U64 = 0
     while bi < c.funcBounds.count {
         val fb: FuncBound = c.funcBounds[bi]
         if fb.fnIdx == fnIdx {
-            if spansEqual(c: inout c, aStart: fb.paramStart, aLen: fb.paramLen, bStart: tpStart, bLen: tpLen) {
+            if fb.paramNameId == qTp {
                 if rangeEquals(bytes: c.bytes, start: fb.traitStart, len: fb.traitLen, kw: traitName) {
                     return true
                 }

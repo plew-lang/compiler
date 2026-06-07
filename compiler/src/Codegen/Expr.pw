@@ -212,7 +212,7 @@ fn argIsElementTyped(c: inout Comp, mf: Func, i: U64) -> Bool {
     if p.tyIsArray {
         return false
     }
-    return spansEqual(c: inout c, aStart: p.tyStart, aLen: p.tyLen, bStart: mf.typeParams[0].nameStart, bLen: mf.typeParams[0].nameLen)
+    return p.tyNameId == mf.typeParams[0].nameId
 }
 
 // Does a JSX construction's field list provide a value for `name`? (Used to
@@ -1185,7 +1185,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     if gei < c.enums.count {
                         if isGenericEnumInst(c: inout c, ref: c.curRetTy) {
                             val rt2: TypeRef = c.types[c.curRetTy]
-                            if spansEqual(c: inout c, aStart: rt2.nameStart, aLen: rt2.nameLen, bStart: typeStart, bLen: typeLen) {
+                            if rt2.nameId == intern(c: inout c, start: typeStart, len: typeLen) {
                                 ety = c.curRetTy
                             }
                         }

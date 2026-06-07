@@ -1371,7 +1371,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                         mut val k: U64 = 0
                         while k < c.curTypeParams.count {
                             val tp: Bind = c.curTypeParams[k]
-                            if spansEqual(c: inout c, aStart: lo.tyStart, aLen: lo.tyLen, bStart: tp.nameStart, bLen: tp.nameLen) {
+                            if lo.tyNameId == tp.nameId {
                                 return typeInfoOfRef(c: inout c, ref: c.curTypeArgs[k])
                             }
                             k += 1
@@ -1462,10 +1462,12 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                         if f.retIsArray {
                         } else {
                             val inferred: Array[U64] = inferFnArgs(c: inout c, f: f, args: args)
+                            val qRet: U64 = intern(c: inout c, start: f.retStart, len: f.retLen)
+
                             mut val k: U64 = 0
                             while k < f.typeParams.count {
                                 val tp: Bind = f.typeParams[k]
-                                if spansEqual(c: inout c, aStart: f.retStart, aLen: f.retLen, bStart: tp.nameStart, bLen: tp.nameLen) {
+                                if qRet == tp.nameId {
                                     if k < inferred.count {
                                         if inferred[k] != 0 {
                                             return typeInfoOfRef(c: inout c, ref: inferred[k])
@@ -1709,7 +1711,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     if mf.typeParams.count >= 1 {
                         if mf.retTy < c.types.count {
                             val rtt: TypeRef = c.types[mf.retTy]
-                            if spansEqual(c: inout c, aStart: rtt.nameStart, aLen: rtt.nameLen, bStart: mf.typeParams[0].nameStart, bLen: mf.typeParams[0].nameLen) {
+                            if rtt.nameId == mf.typeParams[0].nameId {
                                 return typeInfoOfName(c: inout c, start: rt.nameStart, len: rt.nameLen, isArray: false)
                             }
                         }

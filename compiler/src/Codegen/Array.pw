@@ -125,10 +125,11 @@ fn emitRawIntrinsic(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg
 // Write the C element type for a `RawBuffer`/array element name (a type-parameter
 // element resolves through the active mono env, like `wPA`; otherwise `genCElem`).
 fn emitElemCType(c: inout Comp, elemStart: U64, elemLen: U64) {
+    val qE: U64 = intern(c: inout c, start: elemStart, len: elemLen)
     mut val k: U64 = 0
     while k < c.curTypeParams.count {
         val p: Bind = c.curTypeParams[k]
-        if spansEqual(c: inout c, aStart: p.nameStart, aLen: p.nameLen, bStart: elemStart, bLen: elemLen) {
+        if p.nameId == qE {
             emitConcreteCType(c: inout c, ref: c.curTypeArgs[k])
             return
         }
@@ -161,10 +162,11 @@ fn isArrayIntrinsicName(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
 // (`Array[T]` inside a generic instance) resolves to its concrete argument's
 // mangle via the active env, so the name matches the instantiated runtime.
 fn wPA(c: inout Comp, elemStart: U64, elemLen: U64) {
+    val qE: U64 = intern(c: inout c, start: elemStart, len: elemLen)
     mut val k: U64 = 0
     while k < c.curTypeParams.count {
         val p: Bind = c.curTypeParams[k]
-        if spansEqual(c: inout c, aStart: p.nameStart, aLen: p.nameLen, bStart: elemStart, bLen: elemLen) {
+        if p.nameId == qE {
             write(s: "Array_")
             emitMangle(c: inout c, ref: c.curTypeArgs[k])
             return

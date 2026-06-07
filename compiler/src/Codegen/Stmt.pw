@@ -1157,7 +1157,7 @@ fn genStmt(c: inout Comp, id: U64) {
                 write(s: "++) {\n")
                 if isStruct {
                     // the written pattern type must name the element struct.
-                    if spansEqual(c: inout c, aStart: patStart, aLen: patLen, bStart: et.nameStart, bLen: et.nameLen) {
+                    if intern(c: inout c, start: patStart, len: patLen) == intern(c: inout c, start: et.nameStart, len: et.nameLen) {
                     } else {
                         compileErrorAt(line: lineOf(c: inout c, offset: patStart), msg: "for-loop destructure pattern type does not match the element type")
                     }

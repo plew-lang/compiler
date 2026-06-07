@@ -32,7 +32,8 @@ fn internBytes(c: inout Comp, s: String) -> Bind {
         c.bytes.append(sb[i])
         i += 1
     }
-    return <Bind nameStart=start nameLen=sb.count fieldStart=start fieldLen=sb.count />
+    val nid: U64 = intern(c: inout c, start: start, len: sb.count)
+    return <Bind nameStart=start nameLen=sb.count nameId=nid fieldStart=start fieldLen=sb.count />
 }
 
 // A type-typed parameter `name: Type` (copyable, no mode/default) for a
