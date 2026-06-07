@@ -100,6 +100,9 @@ struct MakeField {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val value: U64
+    // original-source byte offset of the field name (for diagnostics): nameStart is
+    // re-interned and so does not map back to a source line. 0 = unknown.
+    pub val offset: U64 = 0
 }
 
 // One field binding inside a match pattern `E.V(val a, b: val c)`. `name` is
@@ -112,6 +115,9 @@ struct Bind {
     pub val nameLen: U64
     pub val fieldStart: U64
     pub val fieldLen: U64
+    // original-source byte offset of the bound field name (for diagnostics):
+    // fieldStart is re-interned and does not map to a source line. 0 = unknown.
+    pub val offset: U64 = 0
 }
 
 // A call argument: the expression plus whether it was passed `inout` (which

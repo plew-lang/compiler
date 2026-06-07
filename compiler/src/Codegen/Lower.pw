@@ -105,7 +105,7 @@ fn lowerMakeFields(c: inout Comp, fields: Array[MakeFieldAst]) -> Array[MakeFiel
         val f: MakeFieldAst = fields[i]
         val v: U64 = lowerExpr(c: inout c, e: f.value)
         val nm: Bind = internBytes(c: inout c, s: f.name)
-        out.append(<MakeField nameStart=nm.nameStart nameLen=nm.nameLen value=v />)
+        out.append(<MakeField nameStart=nm.nameStart nameLen=nm.nameLen value=v offset=f.span.start />)
         i += 1
     }
     return out
@@ -418,7 +418,7 @@ fn lowerBinds(c: inout Comp, binds: Array[BindAst]) -> Array[Bind] {
         val b: BindAst = binds[i]
         val nm: Bind = internBytes(c: inout c, s: b.name)
         val fd: Bind = internBytes(c: inout c, s: b.field)
-        out.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen fieldStart=fd.nameStart fieldLen=fd.nameLen />)
+        out.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen fieldStart=fd.nameStart fieldLen=fd.nameLen offset=b.span.start />)
         i += 1
     }
     return out
