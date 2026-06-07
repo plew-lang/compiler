@@ -24,6 +24,99 @@ __attribute__((unused)) static void plew_eprint(PlewString s) { fwrite(s.data, 1
 __attribute__((noreturn)) static void plew_panic(PlewString m) { fputs("panic: ", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\n', stderr); exit(1); }
 __attribute__((unused)) static long long plew_div(long long a, long long b) { if (b == 0) plew_panic((PlewString){"division by zero", 16}); if (b == -1 && a == INT64_MIN) plew_panic((PlewString){"integer overflow", 16}); return a / b; }
 __attribute__((unused)) static long long plew_mod(long long a, long long b) { if (b == 0) plew_panic((PlewString){"remainder by zero", 17}); if (b == -1) return 0; return a % b; }
+__attribute__((unused)) static int8_t plew_i8Add(int8_t a, int8_t b) { int8_t r; if (__builtin_add_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static int8_t plew_i8Sub(int8_t a, int8_t b) { int8_t r; if (__builtin_sub_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static int8_t plew_i8Mul(int8_t a, int8_t b) { int8_t r; if (__builtin_mul_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static int8_t plew_i8Div(int8_t a, int8_t b) { if (b == 0) plew_panic((PlewString){"division by zero", 16}); if (b == -1 && a == INT8_MIN) plew_panic((PlewString){"integer overflow", 16}); return a / b; }
+__attribute__((unused)) static int8_t plew_i8Rem(int8_t a, int8_t b) { if (b == 0) plew_panic((PlewString){"remainder by zero", 17}); if (b == -1) return 0; return a % b; }
+__attribute__((unused)) static int8_t plew_i8BitAnd(int8_t a, int8_t b) { return a & b; }
+__attribute__((unused)) static int8_t plew_i8BitOr(int8_t a, int8_t b) { return a | b; }
+__attribute__((unused)) static int8_t plew_i8BitXor(int8_t a, int8_t b) { return a ^ b; }
+__attribute__((unused)) static int8_t plew_i8Shl(int8_t a, int8_t b) { return a << b; }
+__attribute__((unused)) static int8_t plew_i8Shr(int8_t a, int8_t b) { return a >> b; }
+__attribute__((unused)) static int8_t plew_i8BitNot(int8_t a) { return (int8_t)(~a); }
+__attribute__((unused)) static int8_t plew_i8Neg(int8_t a) { int8_t r; if (__builtin_sub_overflow((int8_t)0, a, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static int16_t plew_i16Add(int16_t a, int16_t b) { int16_t r; if (__builtin_add_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static int16_t plew_i16Sub(int16_t a, int16_t b) { int16_t r; if (__builtin_sub_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static int16_t plew_i16Mul(int16_t a, int16_t b) { int16_t r; if (__builtin_mul_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static int16_t plew_i16Div(int16_t a, int16_t b) { if (b == 0) plew_panic((PlewString){"division by zero", 16}); if (b == -1 && a == INT16_MIN) plew_panic((PlewString){"integer overflow", 16}); return a / b; }
+__attribute__((unused)) static int16_t plew_i16Rem(int16_t a, int16_t b) { if (b == 0) plew_panic((PlewString){"remainder by zero", 17}); if (b == -1) return 0; return a % b; }
+__attribute__((unused)) static int16_t plew_i16BitAnd(int16_t a, int16_t b) { return a & b; }
+__attribute__((unused)) static int16_t plew_i16BitOr(int16_t a, int16_t b) { return a | b; }
+__attribute__((unused)) static int16_t plew_i16BitXor(int16_t a, int16_t b) { return a ^ b; }
+__attribute__((unused)) static int16_t plew_i16Shl(int16_t a, int16_t b) { return a << b; }
+__attribute__((unused)) static int16_t plew_i16Shr(int16_t a, int16_t b) { return a >> b; }
+__attribute__((unused)) static int16_t plew_i16BitNot(int16_t a) { return (int16_t)(~a); }
+__attribute__((unused)) static int16_t plew_i16Neg(int16_t a) { int16_t r; if (__builtin_sub_overflow((int16_t)0, a, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static int32_t plew_i32Add(int32_t a, int32_t b) { int32_t r; if (__builtin_add_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static int32_t plew_i32Sub(int32_t a, int32_t b) { int32_t r; if (__builtin_sub_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static int32_t plew_i32Mul(int32_t a, int32_t b) { int32_t r; if (__builtin_mul_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static int32_t plew_i32Div(int32_t a, int32_t b) { if (b == 0) plew_panic((PlewString){"division by zero", 16}); if (b == -1 && a == INT32_MIN) plew_panic((PlewString){"integer overflow", 16}); return a / b; }
+__attribute__((unused)) static int32_t plew_i32Rem(int32_t a, int32_t b) { if (b == 0) plew_panic((PlewString){"remainder by zero", 17}); if (b == -1) return 0; return a % b; }
+__attribute__((unused)) static int32_t plew_i32BitAnd(int32_t a, int32_t b) { return a & b; }
+__attribute__((unused)) static int32_t plew_i32BitOr(int32_t a, int32_t b) { return a | b; }
+__attribute__((unused)) static int32_t plew_i32BitXor(int32_t a, int32_t b) { return a ^ b; }
+__attribute__((unused)) static int32_t plew_i32Shl(int32_t a, int32_t b) { return a << b; }
+__attribute__((unused)) static int32_t plew_i32Shr(int32_t a, int32_t b) { return a >> b; }
+__attribute__((unused)) static int32_t plew_i32BitNot(int32_t a) { return (int32_t)(~a); }
+__attribute__((unused)) static int32_t plew_i32Neg(int32_t a) { int32_t r; if (__builtin_sub_overflow((int32_t)0, a, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static int64_t plew_i64Add(int64_t a, int64_t b) { int64_t r; if (__builtin_add_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static int64_t plew_i64Sub(int64_t a, int64_t b) { int64_t r; if (__builtin_sub_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static int64_t plew_i64Mul(int64_t a, int64_t b) { int64_t r; if (__builtin_mul_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static int64_t plew_i64Div(int64_t a, int64_t b) { if (b == 0) plew_panic((PlewString){"division by zero", 16}); if (b == -1 && a == INT64_MIN) plew_panic((PlewString){"integer overflow", 16}); return a / b; }
+__attribute__((unused)) static int64_t plew_i64Rem(int64_t a, int64_t b) { if (b == 0) plew_panic((PlewString){"remainder by zero", 17}); if (b == -1) return 0; return a % b; }
+__attribute__((unused)) static int64_t plew_i64BitAnd(int64_t a, int64_t b) { return a & b; }
+__attribute__((unused)) static int64_t plew_i64BitOr(int64_t a, int64_t b) { return a | b; }
+__attribute__((unused)) static int64_t plew_i64BitXor(int64_t a, int64_t b) { return a ^ b; }
+__attribute__((unused)) static int64_t plew_i64Shl(int64_t a, int64_t b) { return a << b; }
+__attribute__((unused)) static int64_t plew_i64Shr(int64_t a, int64_t b) { return a >> b; }
+__attribute__((unused)) static int64_t plew_i64BitNot(int64_t a) { return (int64_t)(~a); }
+__attribute__((unused)) static int64_t plew_i64Neg(int64_t a) { int64_t r; if (__builtin_sub_overflow((int64_t)0, a, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static unsigned char plew_u8Add(unsigned char a, unsigned char b) { unsigned char r; if (__builtin_add_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static unsigned char plew_u8Sub(unsigned char a, unsigned char b) { unsigned char r; if (__builtin_sub_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static unsigned char plew_u8Mul(unsigned char a, unsigned char b) { unsigned char r; if (__builtin_mul_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static unsigned char plew_u8Div(unsigned char a, unsigned char b) { if (b == 0) plew_panic((PlewString){"division by zero", 16}); return a / b; }
+__attribute__((unused)) static unsigned char plew_u8Rem(unsigned char a, unsigned char b) { if (b == 0) plew_panic((PlewString){"remainder by zero", 17}); return a % b; }
+__attribute__((unused)) static unsigned char plew_u8BitAnd(unsigned char a, unsigned char b) { return a & b; }
+__attribute__((unused)) static unsigned char plew_u8BitOr(unsigned char a, unsigned char b) { return a | b; }
+__attribute__((unused)) static unsigned char plew_u8BitXor(unsigned char a, unsigned char b) { return a ^ b; }
+__attribute__((unused)) static unsigned char plew_u8Shl(unsigned char a, unsigned char b) { return a << b; }
+__attribute__((unused)) static unsigned char plew_u8Shr(unsigned char a, unsigned char b) { return a >> b; }
+__attribute__((unused)) static unsigned char plew_u8BitNot(unsigned char a) { return (unsigned char)(~a); }
+__attribute__((unused)) static uint16_t plew_u16Add(uint16_t a, uint16_t b) { uint16_t r; if (__builtin_add_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static uint16_t plew_u16Sub(uint16_t a, uint16_t b) { uint16_t r; if (__builtin_sub_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static uint16_t plew_u16Mul(uint16_t a, uint16_t b) { uint16_t r; if (__builtin_mul_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static uint16_t plew_u16Div(uint16_t a, uint16_t b) { if (b == 0) plew_panic((PlewString){"division by zero", 16}); return a / b; }
+__attribute__((unused)) static uint16_t plew_u16Rem(uint16_t a, uint16_t b) { if (b == 0) plew_panic((PlewString){"remainder by zero", 17}); return a % b; }
+__attribute__((unused)) static uint16_t plew_u16BitAnd(uint16_t a, uint16_t b) { return a & b; }
+__attribute__((unused)) static uint16_t plew_u16BitOr(uint16_t a, uint16_t b) { return a | b; }
+__attribute__((unused)) static uint16_t plew_u16BitXor(uint16_t a, uint16_t b) { return a ^ b; }
+__attribute__((unused)) static uint16_t plew_u16Shl(uint16_t a, uint16_t b) { return a << b; }
+__attribute__((unused)) static uint16_t plew_u16Shr(uint16_t a, uint16_t b) { return a >> b; }
+__attribute__((unused)) static uint16_t plew_u16BitNot(uint16_t a) { return (uint16_t)(~a); }
+__attribute__((unused)) static uint32_t plew_u32Add(uint32_t a, uint32_t b) { uint32_t r; if (__builtin_add_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static uint32_t plew_u32Sub(uint32_t a, uint32_t b) { uint32_t r; if (__builtin_sub_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static uint32_t plew_u32Mul(uint32_t a, uint32_t b) { uint32_t r; if (__builtin_mul_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static uint32_t plew_u32Div(uint32_t a, uint32_t b) { if (b == 0) plew_panic((PlewString){"division by zero", 16}); return a / b; }
+__attribute__((unused)) static uint32_t plew_u32Rem(uint32_t a, uint32_t b) { if (b == 0) plew_panic((PlewString){"remainder by zero", 17}); return a % b; }
+__attribute__((unused)) static uint32_t plew_u32BitAnd(uint32_t a, uint32_t b) { return a & b; }
+__attribute__((unused)) static uint32_t plew_u32BitOr(uint32_t a, uint32_t b) { return a | b; }
+__attribute__((unused)) static uint32_t plew_u32BitXor(uint32_t a, uint32_t b) { return a ^ b; }
+__attribute__((unused)) static uint32_t plew_u32Shl(uint32_t a, uint32_t b) { return a << b; }
+__attribute__((unused)) static uint32_t plew_u32Shr(uint32_t a, uint32_t b) { return a >> b; }
+__attribute__((unused)) static uint32_t plew_u32BitNot(uint32_t a) { return (uint32_t)(~a); }
+__attribute__((unused)) static uint64_t plew_u64Add(uint64_t a, uint64_t b) { uint64_t r; if (__builtin_add_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static uint64_t plew_u64Sub(uint64_t a, uint64_t b) { uint64_t r; if (__builtin_sub_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static uint64_t plew_u64Mul(uint64_t a, uint64_t b) { uint64_t r; if (__builtin_mul_overflow(a, b, &r)) plew_panic((PlewString){"integer overflow", 16}); return r; }
+__attribute__((unused)) static uint64_t plew_u64Div(uint64_t a, uint64_t b) { if (b == 0) plew_panic((PlewString){"division by zero", 16}); return a / b; }
+__attribute__((unused)) static uint64_t plew_u64Rem(uint64_t a, uint64_t b) { if (b == 0) plew_panic((PlewString){"remainder by zero", 17}); return a % b; }
+__attribute__((unused)) static uint64_t plew_u64BitAnd(uint64_t a, uint64_t b) { return a & b; }
+__attribute__((unused)) static uint64_t plew_u64BitOr(uint64_t a, uint64_t b) { return a | b; }
+__attribute__((unused)) static uint64_t plew_u64BitXor(uint64_t a, uint64_t b) { return a ^ b; }
+__attribute__((unused)) static uint64_t plew_u64Shl(uint64_t a, uint64_t b) { return a << b; }
+__attribute__((unused)) static uint64_t plew_u64Shr(uint64_t a, uint64_t b) { return a >> b; }
+__attribute__((unused)) static uint64_t plew_u64BitNot(uint64_t a) { return (uint64_t)(~a); }
+__attribute__((unused)) static long long plew_boolNot(long long a) { return !a; }
 static int plew_argc = 0;
 static char** plew_argv = 0;
 __attribute__((unused)) static long long plew_argCount(void) { return (long long)plew_argc; }
@@ -1672,6 +1765,11 @@ long long litFitsType_c_Comp_value_U64_neg_Bool_dstStart_U64_dstLen_U64(Comp* c,
 long long litFitsBits_value_U64_neg_Bool_bits_U64_sgn_Bool(uint64_t value, long long neg, uint64_t bits, long long sgn);
 uint64_t arrayElemRef_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uint64_t len);
 Bind arrayElemNameForRef_c_Comp_elemRef_U64(Comp* c, uint64_t elemRef);
+void wNumHdr2_c_Comp_p_String_name_String_ct_String(Comp* c, PlewString p, PlewString name, PlewString ct);
+void wNumChecked_c_Comp_p_String_name_String_ct_String_bi_String(Comp* c, PlewString p, PlewString name, PlewString ct, PlewString bi);
+void wNumPlain_c_Comp_p_String_name_String_ct_String_opc_String(Comp* c, PlewString p, PlewString name, PlewString ct, PlewString opc);
+void emitIntRuntime_c_Comp_p_String_ct_String_mn_String_sgn_Bool(Comp* c, PlewString p, PlewString ct, PlewString mn, long long sgn);
+void emitNumRuntime_c_Comp(Comp* c);
 void genCElem_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uint64_t len);
 void genCTypeRef_c_Comp_start_U64_len_U64_isArray_Bool(Comp* c, uint64_t start, uint64_t len, long long isArray);
 void genCType_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uint64_t len);
@@ -2588,6 +2686,7 @@ int main(int argc, char** argv) {
     plew_write((PlewString){"__attribute__((noreturn)) static void plew_panic(PlewString m) { fputs(\"panic: \", stderr); fwrite(m.data, 1, (size_t)m.len, stderr); fputc('\\n', stderr); exit(1); }\n", 165});
     plew_write((PlewString){"__attribute__((unused)) static long long plew_div(long long a, long long b) { if (b == 0) plew_panic((PlewString){\"division by zero\", 16}); if (b == -1 && a == INT64_MIN) plew_panic((PlewString){\"integer overflow\", 16}); return a / b; }\n", 237});
     plew_write((PlewString){"__attribute__((unused)) static long long plew_mod(long long a, long long b) { if (b == 0) plew_panic((PlewString){\"remainder by zero\", 17}); if (b == -1) return 0; return a % b; }\n", 180});
+    emitNumRuntime_c_Comp(&(c));
     plew_write((PlewString){"static int plew_argc = 0;\nstatic char** plew_argv = 0;\n", 55});
     plew_write((PlewString){"__attribute__((unused)) static long long plew_argCount(void) { return (long long)plew_argc; }\n", 94});
     plew_write((PlewString){"__attribute__((unused)) static PlewString plew_argAt(long long i) { PlewString s; if (i < 0 || i >= plew_argc) { s.data = \"\"; s.len = 0; return s; } s.data = plew_argv[i]; s.len = (long long)strlen(plew_argv[i]); return s; }\n", 225});
@@ -3956,6 +4055,88 @@ Bind arrayElemNameForRef_c_Comp_elemRef_U64(Comp* c, uint64_t elemRef) {
     }
     { Bind __ret140 = (Bind){.nameStart = 0, .nameLen = 0, .fieldStart = 0, .fieldLen = 0, .nameId = 0, .offset = 0};
     return __ret140; }
+}
+void wNumHdr2_c_Comp_p_String_name_String_ct_String(Comp* c, PlewString p, PlewString name, PlewString ct) {
+    plew_write((PlewString){"__attribute__((unused)) static ", 31});
+    plew_write(ct);
+    plew_write((PlewString){" plew_", 6});
+    plew_write(p);
+    plew_write(name);
+    plew_write((PlewString){"(", 1});
+    plew_write(ct);
+    plew_write((PlewString){" a, ", 4});
+    plew_write(ct);
+    plew_write((PlewString){" b) { ", 6});
+}
+void wNumChecked_c_Comp_p_String_name_String_ct_String_bi_String(Comp* c, PlewString p, PlewString name, PlewString ct, PlewString bi) {
+    wNumHdr2_c_Comp_p_String_name_String_ct_String(&((*c)), p, name, ct);
+    plew_write(ct);
+    plew_write((PlewString){" r; if (", 8});
+    plew_write(bi);
+    plew_write((PlewString){"(a, b, &r)) plew_panic((PlewString){\"integer overflow\", 16}); return r; }\n", 74});
+}
+void wNumPlain_c_Comp_p_String_name_String_ct_String_opc_String(Comp* c, PlewString p, PlewString name, PlewString ct, PlewString opc) {
+    wNumHdr2_c_Comp_p_String_name_String_ct_String(&((*c)), p, name, ct);
+    plew_write((PlewString){"return a", 8});
+    plew_write(opc);
+    plew_write((PlewString){"b; }\n", 5});
+}
+void emitIntRuntime_c_Comp_p_String_ct_String_mn_String_sgn_Bool(Comp* c, PlewString p, PlewString ct, PlewString mn, long long sgn) {
+    wNumChecked_c_Comp_p_String_name_String_ct_String_bi_String(&((*c)), p, (PlewString){"Add", 3}, ct, (PlewString){"__builtin_add_overflow", 22});
+    wNumChecked_c_Comp_p_String_name_String_ct_String_bi_String(&((*c)), p, (PlewString){"Sub", 3}, ct, (PlewString){"__builtin_sub_overflow", 22});
+    wNumChecked_c_Comp_p_String_name_String_ct_String_bi_String(&((*c)), p, (PlewString){"Mul", 3}, ct, (PlewString){"__builtin_mul_overflow", 22});
+    wNumHdr2_c_Comp_p_String_name_String_ct_String(&((*c)), p, (PlewString){"Div", 3}, ct);
+    plew_write((PlewString){"if (b == 0) plew_panic((PlewString){\"division by zero\", 16}); ", 62});
+    if (sgn) {
+    plew_write((PlewString){"if (b == -1 && a == ", 20});
+    plew_write(mn);
+    plew_write((PlewString){") plew_panic((PlewString){\"integer overflow\", 16}); ", 52});
+    }
+    plew_write((PlewString){"return a / b; }\n", 16});
+    wNumHdr2_c_Comp_p_String_name_String_ct_String(&((*c)), p, (PlewString){"Rem", 3}, ct);
+    plew_write((PlewString){"if (b == 0) plew_panic((PlewString){\"remainder by zero\", 17}); ", 63});
+    if (sgn) {
+    plew_write((PlewString){"if (b == -1) return 0; ", 23});
+    }
+    plew_write((PlewString){"return a % b; }\n", 16});
+    wNumPlain_c_Comp_p_String_name_String_ct_String_opc_String(&((*c)), p, (PlewString){"BitAnd", 6}, ct, (PlewString){" & ", 3});
+    wNumPlain_c_Comp_p_String_name_String_ct_String_opc_String(&((*c)), p, (PlewString){"BitOr", 5}, ct, (PlewString){" | ", 3});
+    wNumPlain_c_Comp_p_String_name_String_ct_String_opc_String(&((*c)), p, (PlewString){"BitXor", 6}, ct, (PlewString){" ^ ", 3});
+    wNumPlain_c_Comp_p_String_name_String_ct_String_opc_String(&((*c)), p, (PlewString){"Shl", 3}, ct, (PlewString){" << ", 4});
+    wNumPlain_c_Comp_p_String_name_String_ct_String_opc_String(&((*c)), p, (PlewString){"Shr", 3}, ct, (PlewString){" >> ", 4});
+    plew_write((PlewString){"__attribute__((unused)) static ", 31});
+    plew_write(ct);
+    plew_write((PlewString){" plew_", 6});
+    plew_write(p);
+    plew_write((PlewString){"BitNot(", 7});
+    plew_write(ct);
+    plew_write((PlewString){" a) { return (", 14});
+    plew_write(ct);
+    plew_write((PlewString){")(~a); }\n", 9});
+    if (sgn) {
+    plew_write((PlewString){"__attribute__((unused)) static ", 31});
+    plew_write(ct);
+    plew_write((PlewString){" plew_", 6});
+    plew_write(p);
+    plew_write((PlewString){"Neg(", 4});
+    plew_write(ct);
+    plew_write((PlewString){" a) { ", 6});
+    plew_write(ct);
+    plew_write((PlewString){" r; if (__builtin_sub_overflow((", 32});
+    plew_write(ct);
+    plew_write((PlewString){")0, a, &r)) plew_panic((PlewString){\"integer overflow\", 16}); return r; }\n", 74});
+    }
+}
+void emitNumRuntime_c_Comp(Comp* c) {
+    emitIntRuntime_c_Comp_p_String_ct_String_mn_String_sgn_Bool(&((*c)), (PlewString){"i8", 2}, (PlewString){"int8_t", 6}, (PlewString){"INT8_MIN", 8}, 1);
+    emitIntRuntime_c_Comp_p_String_ct_String_mn_String_sgn_Bool(&((*c)), (PlewString){"i16", 3}, (PlewString){"int16_t", 7}, (PlewString){"INT16_MIN", 9}, 1);
+    emitIntRuntime_c_Comp_p_String_ct_String_mn_String_sgn_Bool(&((*c)), (PlewString){"i32", 3}, (PlewString){"int32_t", 7}, (PlewString){"INT32_MIN", 9}, 1);
+    emitIntRuntime_c_Comp_p_String_ct_String_mn_String_sgn_Bool(&((*c)), (PlewString){"i64", 3}, (PlewString){"int64_t", 7}, (PlewString){"INT64_MIN", 9}, 1);
+    emitIntRuntime_c_Comp_p_String_ct_String_mn_String_sgn_Bool(&((*c)), (PlewString){"u8", 2}, (PlewString){"unsigned char", 13}, (PlewString){"", 0}, 0);
+    emitIntRuntime_c_Comp_p_String_ct_String_mn_String_sgn_Bool(&((*c)), (PlewString){"u16", 3}, (PlewString){"uint16_t", 8}, (PlewString){"", 0}, 0);
+    emitIntRuntime_c_Comp_p_String_ct_String_mn_String_sgn_Bool(&((*c)), (PlewString){"u32", 3}, (PlewString){"uint32_t", 8}, (PlewString){"", 0}, 0);
+    emitIntRuntime_c_Comp_p_String_ct_String_mn_String_sgn_Bool(&((*c)), (PlewString){"u64", 3}, (PlewString){"uint64_t", 8}, (PlewString){"", 0}, 0);
+    plew_write((PlewString){"__attribute__((unused)) static long long plew_boolNot(long long a) { return !a; }\n", 82});
 }
 void genCElem_c_Comp_start_U64_len_U64(Comp* c, uint64_t start, uint64_t len) {
     if (len == 0) {

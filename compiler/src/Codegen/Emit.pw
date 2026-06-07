@@ -315,6 +315,107 @@ fn arrayElemNameForRef(c: inout Comp, elemRef: U64) -> Bind {
     return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
 }
 
+// --- numeric intrinsic runtime (O6) ---------------------------------------
+// The C floor under the operator-trait witnesses: Core's `impl I32 as Add[I32]`
+// etc. call intrinsics (`i32Add`), which lower to these `plew_*` functions. Per
+// width and signedness: add/sub/mul are overflow-checked, div/rem zero-checked
+// (+ signed INT_MIN/-1 / x%-1==0), bitwise/shift unchecked, bitnot truncates,
+// neg checked (signed only). clang inlines them, so routing every `+` through a
+// witness call is free at -O (spec/12: primitives are not special-cased — the
+// operator desugars to a witness uniformly, the cost is hidden in the floor).
+
+// `__attribute__((unused)) static <ct> plew_<p><name>(<ct> a, <ct> b) { `
+fn wNumHdr2(c: inout Comp, p: String, name: String, ct: String) {
+    write(s: "__attribute__((unused)) static ")
+    write(s: ct)
+    write(s: " plew_")
+    write(s: p)
+    write(s: name)
+    write(s: "(")
+    write(s: ct)
+    write(s: " a, ")
+    write(s: ct)
+    write(s: " b) { ")
+}
+
+// An overflow-checked binary (`add`/`sub`/`mul`) via the clang builtin.
+fn wNumChecked(c: inout Comp, p: String, name: String, ct: String, bi: String) {
+    wNumHdr2(c: inout c, p: p, name: name, ct: ct)
+    write(s: ct)
+    write(s: " r; if (")
+    write(s: bi)
+    write(s: "(a, b, &r)) plew_panic((PlewString){\"integer overflow\", 16}); return r; }\n")
+}
+
+// An unchecked binary (`return a OP b;`): bitwise and shifts.
+fn wNumPlain(c: inout Comp, p: String, name: String, ct: String, opc: String) {
+    wNumHdr2(c: inout c, p: p, name: name, ct: ct)
+    write(s: "return a")
+    write(s: opc)
+    write(s: "b; }\n")
+}
+
+// All operator intrinsics for one integer width.
+fn emitIntRuntime(c: inout Comp, p: String, ct: String, mn: String, sgn: Bool) {
+    wNumChecked(c: inout c, p: p, name: "Add", ct: ct, bi: "__builtin_add_overflow")
+    wNumChecked(c: inout c, p: p, name: "Sub", ct: ct, bi: "__builtin_sub_overflow")
+    wNumChecked(c: inout c, p: p, name: "Mul", ct: ct, bi: "__builtin_mul_overflow")
+    wNumHdr2(c: inout c, p: p, name: "Div", ct: ct)
+    write(s: "if (b == 0) plew_panic((PlewString){\"division by zero\", 16}); ")
+    if sgn {
+        write(s: "if (b == -1 && a == ")
+        write(s: mn)
+        write(s: ") plew_panic((PlewString){\"integer overflow\", 16}); ")
+    }
+    write(s: "return a / b; }\n")
+    wNumHdr2(c: inout c, p: p, name: "Rem", ct: ct)
+    write(s: "if (b == 0) plew_panic((PlewString){\"remainder by zero\", 17}); ")
+    if sgn {
+        write(s: "if (b == -1) return 0; ")
+    }
+    write(s: "return a % b; }\n")
+    wNumPlain(c: inout c, p: p, name: "BitAnd", ct: ct, opc: " & ")
+    wNumPlain(c: inout c, p: p, name: "BitOr", ct: ct, opc: " | ")
+    wNumPlain(c: inout c, p: p, name: "BitXor", ct: ct, opc: " ^ ")
+    wNumPlain(c: inout c, p: p, name: "Shl", ct: ct, opc: " << ")
+    wNumPlain(c: inout c, p: p, name: "Shr", ct: ct, opc: " >> ")
+    write(s: "__attribute__((unused)) static ")
+    write(s: ct)
+    write(s: " plew_")
+    write(s: p)
+    write(s: "BitNot(")
+    write(s: ct)
+    write(s: " a) { return (")
+    write(s: ct)
+    write(s: ")(~a); }\n")
+    if sgn {
+        write(s: "__attribute__((unused)) static ")
+        write(s: ct)
+        write(s: " plew_")
+        write(s: p)
+        write(s: "Neg(")
+        write(s: ct)
+        write(s: " a) { ")
+        write(s: ct)
+        write(s: " r; if (__builtin_sub_overflow((")
+        write(s: ct)
+        write(s: ")0, a, &r)) plew_panic((PlewString){\"integer overflow\", 16}); return r; }\n")
+    }
+}
+
+// Emit the full numeric intrinsic floor (all widths + Bool's `not`).
+fn emitNumRuntime(c: inout Comp) {
+    emitIntRuntime(c: inout c, p: "i8", ct: "int8_t", mn: "INT8_MIN", sgn: true)
+    emitIntRuntime(c: inout c, p: "i16", ct: "int16_t", mn: "INT16_MIN", sgn: true)
+    emitIntRuntime(c: inout c, p: "i32", ct: "int32_t", mn: "INT32_MIN", sgn: true)
+    emitIntRuntime(c: inout c, p: "i64", ct: "int64_t", mn: "INT64_MIN", sgn: true)
+    emitIntRuntime(c: inout c, p: "u8", ct: "unsigned char", mn: "", sgn: false)
+    emitIntRuntime(c: inout c, p: "u16", ct: "uint16_t", mn: "", sgn: false)
+    emitIntRuntime(c: inout c, p: "u32", ct: "uint32_t", mn: "", sgn: false)
+    emitIntRuntime(c: inout c, p: "u64", ct: "uint64_t", mn: "", sgn: false)
+    write(s: "__attribute__((unused)) static long long plew_boolNot(long long a) { return !a; }\n")
+}
+
 fn genCElem(c: inout Comp, start: U64, len: U64) {
     if len == 0 {
         write(s: "long long")
