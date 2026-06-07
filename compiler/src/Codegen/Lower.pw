@@ -821,7 +821,14 @@ fn lowerImpl(c: inout Comp, im: ImplAst) {
     }
     if im.isTraitImpl {
         val traitN: Bind = internBytes(c: inout c, s: im.traitName)
-        c.conforms.append(<Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout c, start: traitN.nameStart, len: traitN.nameLen) derived=false witnessed=witnessed />)
+        mut val traitArgs: Array[U64] = []
+        mut val ti: U64 = 0
+        while ti < im.traitArgs.count {
+            val pt: PType = lowerType(c: inout c, t: im.traitArgs[ti])
+            traitArgs.append(pt.ref)
+            ti += 1
+        }
+        c.conforms.append(<Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout c, start: traitN.nameStart, len: traitN.nameLen) traitArgs=traitArgs derived=false witnessed=witnessed />)
     }
     // attach pending `@[...]` directives to this impl block (a macro on an impl);
     // declStart/declEnd = the impl block's source span for the gen harness slice.
@@ -875,7 +882,8 @@ fn lowerTrait(c: inout Comp, t: TraitAst) {
         assocTypes.append(internBytes(c: inout c, s: t.assocTypes[ai]))
         ai += 1
     }
-    c.traits.append(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout c, start: nameStart, len: nameLen) supertraits=supertraits reqs=reqs assocTypes=assocTypes />)
+    val typeParams: Array[Bind] = lowerTypeParamNames(c: inout c, names: t.typeParams)
+    c.traits.append(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout c, start: nameStart, len: nameLen) typeParams=typeParams supertraits=supertraits reqs=reqs assocTypes=assocTypes />)
     // attach pending `@[...]` directives to this trait (a macro on a trait);
     // declStart/declEnd = the trait's source span for the gen harness slice.
     drainDerives(c: inout c, typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: t.span.start, declEnd: t.span.end)

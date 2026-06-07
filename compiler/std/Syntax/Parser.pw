@@ -764,12 +764,32 @@ export fn parseImplDecl(p: inout P, isPub: Bool) -> ImplAst {
     val recvType: TypeAst = parseType(p: inout p)
     mut val isTraitImpl: Bool = false
     mut val traitName: String = ""
+    mut val traitArgs: Array[TypeAst] = []
     match p.curKind() {
         Kind.KwAs => {
             p.advance()
             traitName = p.text(t: p.curTok())
             p.advance()
             isTraitImpl = true
+            // trait type arguments `as Add[V]` (spec/12): bind the trait's type
+            // parameters. Comma-separated full types until `]`.
+            match p.curKind() {
+                Kind.LBracket => {
+                    p.advance()
+                    while true {
+                        match p.curKind() {
+                            Kind.RBracket => {
+                                p.advance()
+                                break
+                            }
+                            Kind.Eof => { break }
+                            Kind.Comma => { p.advance() }
+                            _ => { traitArgs.append(parseType(p: inout p)) }
+                        }
+                    }
+                }
+                _ => {}
+            }
         }
         _ => {}
     }
@@ -868,7 +888,7 @@ export fn parseImplDecl(p: inout P, isPub: Bool) -> ImplAst {
             }
         }
     }
-    return <ImplAst recvType=recvType implParams=implParams isTraitImpl=isTraitImpl traitName=traitName whereParams=whereParams whereTraits=whereTraits isPub=isPub members=members span=<Span start=sStart end=p.prevEnd() /> />
+    return <ImplAst recvType=recvType implParams=implParams isTraitImpl=isTraitImpl traitName=traitName traitArgs=traitArgs whereParams=whereParams whereTraits=whereTraits isPub=isPub members=members span=<Span start=sStart end=p.prevEnd() /> />
 }
 
 // A body-less function signature `name[T,...](params) [-> ret]` (a trait requirement
@@ -903,6 +923,8 @@ export fn parseTraitDecl(p: inout P) -> TraitAst {
     val name: String = p.text(t: nameTok)
     val nameSpan: Span = p.spanOf(t: nameTok)
     p.advance()
+    // trait type parameters `trait Add[Rhs]` (spec/12), before `: Super` / `{`.
+    val typeParams: Array[String] = parseTypeParamNames(p: inout p)
     mut val supertraits: Array[String] = []
     match p.curKind() {
         Kind.Colon => {
@@ -977,7 +999,7 @@ export fn parseTraitDecl(p: inout P) -> TraitAst {
             }
         }
     }
-    return <TraitAst name=name nameSpan=nameSpan supertraits=supertraits reqs=reqs assocTypes=assocTypes span=<Span start=sStart end=p.prevEnd() /> />
+    return <TraitAst name=name nameSpan=nameSpan typeParams=typeParams supertraits=supertraits reqs=reqs assocTypes=assocTypes span=<Span start=sStart end=p.prevEnd() /> />
 }
 
 // An `extern "plew-intrinsic" { fn ... ; struct ... }` block (spec/15). The cursor

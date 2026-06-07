@@ -184,6 +184,10 @@ export struct SigAst {
 export struct TraitAst {
     pub val name: String
     pub val nameSpan: Span
+    // trait type parameters `trait Add[Rhs]` (spec/12): the right-operand-type
+    // parameter of operator traits and any other trait type args. Empty for a
+    // non-parameterized trait (Eq/Ord/Hasher).
+    pub val typeParams: Array[String]
     pub val supertraits: Array[String]
     pub val reqs: Array[SigAst]
     pub val assocTypes: Array[String]
@@ -211,6 +215,9 @@ export struct ImplAst {
     pub val implParams: Array[String]
     pub val isTraitImpl: Bool
     pub val traitName: String
+    // trait type arguments `impl V as Add[V]` (spec/12): bind the trait's type
+    // parameters to concrete types. Empty for a bare `impl V as Trait`.
+    pub val traitArgs: Array[TypeAst]
     // impl-level `where I: Trait` (spec/08): folded into every member's bounds.
     pub val whereParams: Array[String]
     pub val whereTraits: Array[String]

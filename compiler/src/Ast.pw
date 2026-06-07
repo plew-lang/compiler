@@ -365,6 +365,11 @@ struct TraitDef {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64 = 0
+    // trait type parameters `trait Add[Rhs]` (spec/12): each a name span (reuses
+    // Bind). Empty for a non-parameterized trait. A requirement signature may use a
+    // type-parameter name (`add(lhs: Self, rhs: Rhs)`); the completeness check
+    // substitutes it with the conformance's matching `traitArgs` entry.
+    pub val typeParams: Array[Bind] = []
     // supertraits from `trait Sub: Super + ...` (spec/08): conforming to Sub
     // requires conforming to each Super (a constraint, not auto-impl). Each entry
     // reuses Bind as a (start,len) trait-name span.
@@ -434,6 +439,11 @@ struct Conform {
     pub val traitStart: U64
     pub val traitLen: U64
     pub val traitId: U64 = 0
+    // trait type arguments `impl V as Add[V]` (spec/12): TypeRef indices (Comp.types)
+    // bound to the trait's type parameters, positionally. Empty for a bare
+    // conformance. The completeness check substitutes the trait's i-th type
+    // parameter with traitArgs[i] when matching a requirement against its witness.
+    pub val traitArgs: Array[U64] = []
     // synthesized by `@[Eq]`/`@[Ord]` derive: exempt from the unknown-trait and
     // completeness checks (the witness is compiler-generated and complete).
     pub val derived: Bool
