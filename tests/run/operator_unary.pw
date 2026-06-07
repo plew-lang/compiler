@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+// O4: prefix unary operators desugar to operator-trait witnesses (spec/12).
+trait Neg { type Output  assoc fn neg(value: Self) -> Output }
+trait Not { type Output  assoc fn not(value: Self) -> Output }
+
+struct Money { pub val cents: I64 }
+struct Switch { pub val on: I64 }
+
+impl Money as Neg {
+    type Output = Money
+    assoc fn neg(value: Money) -> Money { return <Money cents=(0I64 - value.cents) /> }
+}
+impl Switch as Not {
+    type Output = Switch
+    assoc fn not(value: Switch) -> Switch {
+        if value.on == 0 { return <Switch on=1 /> }
+        return <Switch on=0 />
+    }
+}
+
+fn main() {
+    val m: Money = <Money cents=5 />
+    print((-m).cents)     // -5  (Neg.neg)
+    val s: Switch = <Switch on=0 />
+    print((!s).on)        // 1   (Not.not)
+}

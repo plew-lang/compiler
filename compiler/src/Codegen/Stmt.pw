@@ -457,6 +457,51 @@ fn emitBinTraitCall(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
     write(s: ")")
 }
 
+// The operator trait / witness names for a prefix unary op (spec/12): `-` -> Neg.neg,
+// `!` -> Not.not, `~` -> BitNot.bitnot.
+fn unaryTraitName(op: I64) -> String {
+    if op == opSub() { return "Neg" }
+    if op == opNot() { return "Not" }
+    return "BitNot"
+}
+fn unaryMethodName(op: I64) -> String {
+    if op == opSub() { return "neg" }
+    if op == opNot() { return "not" }
+    return "bitnot"
+}
+
+// Whether a prefix-unary operand carries the operator-trait witness (spec/12: `-x`
+// desugars to `T.neg(value: x)` iff `impl T as Neg`). Only named (struct) operands —
+// scalars use the built-in negate / logical-not / bit-not.
+fn hasUnaryWitness(c: inout Comp, op: I64, operand: U64) -> Bool {
+    val ot: TypeInfo = typeOf(c: inout c, id: operand)
+    if ot.kind == 2 {
+        if typeConformsToName(c: inout c, typeStart: ot.nameStart, typeLen: ot.nameLen, traitName: unaryTraitName(op: op)) {
+            return findAssocByName(c: inout c, typeStart: ot.nameStart, typeLen: ot.nameLen, name: unaryMethodName(op: op)) < c.funcs.count
+        }
+    }
+    return false
+}
+
+// A struct/enum operand under a prefix unary op with no operator-trait witness:
+// a loud error (spec/12), not a fall-through to a meaningless C `-`/`!`/`~`.
+fn unaryNeedsTrait(c: inout Comp, operand: U64) -> Bool {
+    val ot: TypeInfo = typeOf(c: inout c, id: operand)
+    return ot.kind == 2
+}
+
+// Emit `T_<sel>(operand)` for the resolved unary witness assoc fn.
+fn emitUnaryCall(c: inout Comp, op: I64, operand: U64) {
+    val ot: TypeInfo = typeOf(c: inout c, id: operand)
+    val fi: U64 = findAssocByName(c: inout c, typeStart: ot.nameStart, typeLen: ot.nameLen, name: unaryMethodName(op: op))
+    writeSpan(c: inout c, start: ot.nameStart, len: ot.nameLen)
+    write(s: "_")
+    writeFnSelector(c: inout c, f: c.funcs[fi])
+    write(s: "(")
+    genExpr(c: inout c, id: operand)
+    write(s: ")")
+}
+
 // Emit an expression in condition position. A top-level binary drops its outer
 // parens (the `if (...)` / `while (...)` already supplies them), which avoids
 // the `-Wparentheses-equality` warning on `if ((a == b))`. String/enum equality

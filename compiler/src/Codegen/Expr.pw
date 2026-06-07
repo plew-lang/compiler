@@ -407,6 +407,12 @@ fn genExpr(c: inout Comp, id: U64) {
             }
         }
         Expr.Unary(val op, val operand) => {
+            if hasUnaryWitness(c: inout c, op: op, operand: operand) {
+                emitUnaryCall(c: inout c, op: op, operand: operand)
+            } else {
+            if unaryNeedsTrait(c: inout c, operand: operand) {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "unary operator needs Neg/Not/BitNot; not implemented for this type")
+            } else {
             mut val negChecked: Bool = false
             if op == opSub() {
                 val ot: TypeInfo = typeOf(c: inout c, id: operand)
@@ -425,6 +431,8 @@ fn genExpr(c: inout Comp, id: U64) {
                 write(s: "(")
                 genExpr(c: inout c, id: operand)
                 write(s: ")")
+            }
+            }
             }
         }
         Expr.Binary(val op, val lhs, val rhs) => {

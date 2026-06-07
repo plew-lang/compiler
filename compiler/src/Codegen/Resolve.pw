@@ -1383,9 +1383,13 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             return scalarInfo()
         }
         Expr.Unary(val op, val operand) => {
+            // A struct operand is a trait-dispatched unary (Neg/Not/BitNot); its
+            // result is the trait's Output, which for standard operators is Self.
+            val ot: TypeInfo = exprType(c: inout c, id: operand)
+            if ot.kind == 2 { return ot }
             // `-` / `~` preserve the operand's width; `!` is Bool (width-less).
-            if op == opSub() { return exprType(c: inout c, id: operand) }
-            if op == opBitNot() { return exprType(c: inout c, id: operand) }
+            if op == opSub() { return ot }
+            if op == opBitNot() { return ot }
             return scalarInfo()
         }
         Expr.Binary(val op, val lhs, val rhs) => {
