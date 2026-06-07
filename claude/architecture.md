@@ -82,7 +82,7 @@ C ソース
 上のパイプライン図は**理想形**で、実体は乖離がある（「表現力が貧弱な時代の設計」由来）。コンパイラ全フェーズを監査した結論＝**段階的 renovate（rewrite しない）**。負債は実在するが**局所的・legible・増分修正可**で、意味論は正しく高価な資産（`unique-*` 等の長いエッジケース蓄積）。
 
 - **根① 型付き IR が無い**（最大）：図の「型付き AST」は実在せず、**型は codegen 中に都度復元**していた（`exprType` が AST を歩く）。帰結＝emission 順序が正しさの前提・3 パス＋codegen が別々に再導出・**単相化が codegen 全体のモード**（ambient な `curTypeParams`/`curRecvInstRef`）。**Phase B で `typeOf` キャッシュへ反転**（body ごと 1 回計算して読む・per-function clear）＝主部は解消、残り（checks 統合・pre-fill・`exprType` 駆逐）は worklog。
-- **根② 名前がソースバイトオフセット**（symbol table 無し）：`spansEqual`/`rangeEquals` 多数・Loader が全ファイルを 1 buffer（`c.bytes`）へ追記（パース駆動＝各ファイルを parse 直後に lower するのでソースと再インターン名が交互配置・モジュール隔離なし・可視性は `moduleRanges`〔per-file レンジ〕で後付け）。interning は Phase C（`Dictionary` 導入後が得）。
+- **根② 名前がソースバイトオフセット**（symbol table 無し）：Loader が全ファイルを 1 buffer（`c.bytes`）へ追記（パース駆動＝各ファイルを parse 直後に lower するのでソースと再インターン名が交互配置・モジュール隔離なし・可視性は `moduleRanges`〔per-file レンジ〕で後付け）。**Phase C＝名前 interning（スコープ版）で半分解消**：宣言名を構築点で `intern`→`nameId` に持たせ、宣言名スキャンを byte 比較から整数比較へ（src `spansEqual` 143→56・実装は worklog「名前 interning」）。**残り（型 span `tyStart/tyLen`／`TypeRef`／`kwSpan`）は Phase D（型 triple に id を載せる）の領分**＝型 span は emission が消費し id に逆写像が無いため Phase C では剥がせない。
 - **なぜ rewrite でなく renovate**：①高価で正しい意味論を捨てて踏み直すことになる（Joel 典型）②**不動点の安全網**を長期間失う（renovate は各ステップ緑）③2 つの根は再帰値型が動く今だからこそ増分で剥がせる。
 - **意味論は全て正しい（綺麗な所）**：ARC scope-drop・async stackless SM・checked 算術・RawBuffer 床・需要駆動単相化＋combinator 到達性ゲート・再帰 boxing 解析・パターン/優先順位パース。
 - **renovation が届かない唯一＝ソース連結モジュールモデル**（Loader＋`*Start/*Len` span 規約）。分割/incremental compile はここを触らないと不可だが Loader に隔離・分割が要るまで後回し。

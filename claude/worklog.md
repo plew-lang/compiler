@@ -16,7 +16,20 @@
 
 ## 次の一歩
 
-**M2 dogfood 達成**：`Hash`/`Hasher`＋SipHash-1-3＋`@[Hash]` derive、`Dictionary[K,V]` lang item（struct＋メソッド＋添字＋リテラル `[k:v]`/`[:]`）まで land 済（詳細＝下記「Dictionary」・要 RNG ランダムシード化の TODO あり）。次の本線は**並行 additive**（下記ロードマップ）。**M3＝パッケージ管理導入後に `@Std/Syntax` を in-tree から外部共有パッケージへ昇格**（コンパイラもマクロも同一版に依存＝Rust の 2 パーサ版違い問題回避）。
+**直近の到達点**：M2 dogfood（Hash/Hasher＋SipHash-1-3＋`@[Hash]`・`Dictionary[K,V]` lang item）達成＋renovate **Phase C＝名前 interning 完了**（下記「並行・後続」「名前 interning」）。
+
+**推奨する順序（理由つき）**：
+
+1. **➡ Iterator 拡充（次の一手・推奨）**＝軽い・実用・低リスク。重いリファクタ（Dictionary→Phase C）が続いたので、ユーザーに見える additive で一区切り。**demand-driven 単相化が既に動いている**（`MapIter`/`FilterIter`＋`pub impl Iterator { }` の提供メソッド・`@Std/Core`）ので設計判断ほぼ不要、確立パターンに沿って 1 個ずつ足すだけ：
+   - **終端（消費して値を返す・新 struct 不要・`while next()` ループ）**：`reduce`/`fold`・`count`・`sum`・`forEach`・`collect`（→`Array[Item]`）・`any`/`all`・`first`。
+   - **遅延 adapter（新 struct＋`as Iterator`・`MapIter`/`FilterIter` をテンプレに）**：`take(n)`＝`TakeIter`・`zip`＝`ZipIter`・`enumerate`・`skip(n)`。
+   - 署名の細部は core-lib 裁量（spec 決定ほぼ不要）。各メソッド独立に追加→`tests/run` 追加→検証。
+2. **本線＝並行 additive（その後・腰を据えて）**＝Plew のターゲット（複雑状態クライアント＋ステートレスサーバ）の核。**現状 `spawn`/`JoinHandle`/チャネルは未実装**（async/await 段階 1-3＝単一スレッド+イベントループは実装済）。`spawn fn … -> JoinHandle[T]`（`join() -> Promise[T]`）・spawn 境界の意味論強制（move/copy のみ越境・`Ref` は spawn 不可＝推移的 Ref-free・ベア `spawn { }` はコピー可能のみ暗黙キャプチャ）・ランタイム（pthread 等）C 生成・`local` 伝染の静的解析。**重い**（ランタイム＋新意味論・チャネル API 等で言語仕様の決定が出る＝その都度確認）。これで「借用は境界を越えない・Ref は spawn 不可」で実質 race-free をコンパイラが保証、という目玉を立証。
+3. **`any P` 存在型（フロントエンド最後の大物・別軸）**＝「トレイト配列を素直に書ける」拠り所の目玉が唯一空いている。動的ディスパッチ（vtable 相当の C 生成・メンバ単位の呼び出し可否診断・`Array[any P]` 異種混在）＝設計判断多く重い。並行とは独立に着手可。
+
+**今は推さない**：**Phase D（型 triple 一本化）**＝Phase C の続き（残り 56 spansEqual＋kwSpan を片付ける）だが `tyStart/tyLen/tyIsArray` が約 250 箇所に散って高リスク・内部だけの利益＝リファクタ 2 連発直後は消耗が大きいので**間を置く**（下記「重い D」）。**循環回収**＝設計確定済だが優先度中。
+
+**M3＝パッケージ管理導入後に `@Std/Syntax` を in-tree から外部共有パッケージへ昇格**（コンパイラもマクロも同一版に依存＝Rust の 2 パーサ版違い問題回避）。
 
 ## Dictionary[K,V]（lang item・完動）
 
@@ -31,7 +44,7 @@
 - **Phase B 残り（要 supervised）**：checks（10 箇所の `exprType`）を typed-AST に統合＝3 重 walker 一本化／pre-fill パスで codegen を完全 pure-read／`exprType` 再導出を駆逐。per-function clear で grounded をキャッシュできたので**テンプレート型は不要**になった。
 - **Phase C＝名前 interning＝✅済（スコープ版）**：宣言名スキャンを byte 比較から整数比較へ（src `spansEqual` 143→56）。残る 56 は型 span／型パラメータ名照合／非 decl の Bind リスト（capture・arrayElem・MakeField・DeriveReq・export/import）／intern 自身＝**Phase D（型 triple に id を載せる）まで剥がせない**。`kwSpan`/builtin `rangeEquals` も同理由で Phase C では剥がれない（型 span を生み・emission が消費＝id に逆写像なし）。実装＝下記「名前 interning」。**当初想定の「Dictionary を dogfood」は不採用**＝span キーの interner は `Dictionary[String,U64]` だと intern ごとに String アロケート（span→String スライス無し）でホットパスに不適＝手書き open-addressing span テーブルが正解（dogfood は別途 id キーの場所で）。
 - **重い D（後日・本物の refactor）**：legacy 型 triple `(start,len,isArray)+ref` の ref 一本化／derive 合成 ~280 行が `Parser/Decl.pw`（＝メタプロ dogfood で置換されるので触らない）。
-- **横断 additive**：Iterator 拡充（reduce/take/zip 等）・演算子トレイト全配線（Eq/Ord 以外・需要駆動）・循環回収（Ref グラフ限定サイクルコレクタ）・async tail＋spawn（実スレッド `JoinHandle[T]`）・`any P` 存在型。詳細は [provisional.md](provisional.md)。
+- **横断 additive**：優先順位つきの本命（Iterator 拡充・並行 spawn・`any P`）は上の「次の一歩」に詳細。その他＝演算子トレイト全配線（Eq/Ord 以外・需要駆動）・循環回収（Ref グラフ限定サイクルコレクタ・設計確定済）。詳細は [provisional.md](provisional.md)。
 
 ## 再利用資産・罠（git で拾いにくい知見）
 
