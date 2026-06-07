@@ -1238,8 +1238,37 @@ fn buildExprTyTable(c: inout Comp) {
         c.exprTyStart.append(0)
         c.exprTyLen.append(0)
         c.exprTyRef.append(0)
+        c.exprIntCtx.append(0)
         i += 1
     }
+}
+
+// The kw name for a recorded int-context code (1..8 -> I8..U64).
+fn intCtxKw(code: U64) -> String {
+    if code == 1 { return "I8" }
+    if code == 2 { return "I16" }
+    if code == 3 { return "I32" }
+    if code == 4 { return "I64" }
+    if code == 5 { return "U8" }
+    if code == 6 { return "U16" }
+    if code == 7 { return "U32" }
+    return "U64"
+}
+
+// The TypeInfo for `id`'s recorded int context (scalarInfo if none) — the fallback
+// `typeOf` uses for a width-less expression whose type came only from context.
+fn exprIntCtxTypeInfo(c: inout Comp, id: U64) -> TypeInfo {
+    if id < c.exprIntCtx.count {
+        val code: U64 = c.exprIntCtx[id]
+        if code != 0 {
+            val kw: String = intCtxKw(code: code)
+            val b: Bind = kwSpan(c: inout c, kw: kw, kwLen: kw.bytes.count)
+            if b.nameLen != 0 {
+                return <TypeInfo kind=0 nameStart=b.nameStart nameLen=b.nameLen ref=0 />
+            }
+        }
+    }
+    return scalarInfo()
 }
 
 // The type of expression `id` — the typed-AST read path codegen uses instead of
@@ -1251,19 +1280,34 @@ fn buildExprTyTable(c: inout Comp) {
 // (its node types vary with Self); generic bodies vary per instantiation. Those
 // re-derive every time.
 fn typeOf(c: inout Comp, id: U64) -> TypeInfo {
+    mut val t: TypeInfo = scalarInfo()
     if id < c.exprTyKind.count {
         if c.exprTyKind[id] == typeUnfilled() {
-            val t: TypeInfo = exprType(c: inout c, id: id)
+            t = exprType(c: inout c, id: id)
             c.exprTyKind[id] = t.kind
             c.exprTyStart[id] = t.nameStart
             c.exprTyLen[id] = t.nameLen
             c.exprTyRef[id] = t.ref
             c.exprTyFilled.append(id)
-            return t
+        } else {
+            t = <TypeInfo kind=c.exprTyKind[id] nameStart=c.exprTyStart[id] nameLen=c.exprTyLen[id] ref=c.exprTyRef[id] />
         }
-        return <TypeInfo kind=c.exprTyKind[id] nameStart=c.exprTyStart[id] nameLen=c.exprTyLen[id] ref=c.exprTyRef[id] />
+    } else {
+        t = exprType(c: inout c, id: id)
     }
-    return exprType(c: inout c, id: id)
+    // width-less recovery: a form whose type came only from context (`0-1` in an
+    // `I32` binding, `match{...}+1`) is type-less to the structural recovery but the
+    // checker recorded its int context — use it so the op routes through the witness.
+    // Read fresh (not cached) since exprIntCtx is filled during emission.
+    if t.kind == 0 {
+        if t.nameLen == 0 {
+            val ctx: TypeInfo = exprIntCtxTypeInfo(c: inout c, id: id)
+            if ctx.nameLen != 0 {
+                return ctx
+            }
+        }
+    }
+    return t
 }
 
 // Reset the type cache (called at each function/closure body-emission entry). The

@@ -487,13 +487,11 @@ fn binTraitNeedsTrait(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
             return true
         }
         if lt.kind == 0 {
-            // a KNOWN primitive with no witness (no @Std/Core loaded) is a loud
-            // error — no built-in fast path. A genuinely width-less operand
-            // (nameLen 0: a form `typeOf` cannot yet recover, e.g. a match-payload
-            // bind or an untyped-literal chain) keeps the built-in fallback, which
-            // is observationally identical — until `typeOf` is complete enough to
-            // route every primitive operation through a witness.
-            return lt.nameLen > 0
+            // any scalar operand under an arithmetic operator must resolve to a
+            // witness (no built-in fast path): a known primitive with no witness
+            // (no @Std/Core) and a width-less operand both error. [WIP: width-less
+            // error is on to catch every typeOf gap before deleting the built-in.]
+            return true
         }
     }
     return false

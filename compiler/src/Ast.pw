@@ -653,6 +653,14 @@ struct Comp {
     // that produced it — env (Self/type args) is constant there, so methods and
     // generic instantiations can cache too (each instantiation refills after a clear).
     pub mut val exprTyFilled: Array[U64] = []
+    // checker-recorded integer CONTEXT type for an expression (spec/02 literal
+    // context typing): a code 1..8 = I8/I16/I32/I64/U8/U16/U32/U64, 0 = none. The
+    // checker fills it whenever it applies a known int context (`val b: I32 = 0-1`,
+    // `match{...}+1`), so `typeOf` can recover the type of an otherwise width-less
+    // form whose type comes only from context — routing it through the operator
+    // witness instead of the built-in. Built alongside exprTyKind; persists (not
+    // cleared per body — a literal's context type is env-independent).
+    pub mut val exprIntCtx: Array[U64] = []
     // recursive-value-type boxing (spec/03): the set of fields whose declared type
     // transitively reaches their owning concrete struct/enum (a containment cycle).
     // Such a field is stored behind a heap pointer (`T*`) so the C type is finite —

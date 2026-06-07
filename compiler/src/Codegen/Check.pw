@@ -114,7 +114,30 @@ fn checkLitLeaf(c: inout Comp, value: U64, neg: Bool, offset: U64, isBool: Bool,
     }
 }
 
+// Encode a known int context (bits, sgn) as a code 1..8 (I8/I16/I32/I64/U8/U16/U32/U64).
+fn intCtxCode(bits: U64, sgn: Bool) -> U64 {
+    if sgn {
+        if bits == 8 { return 1 }
+        if bits == 16 { return 2 }
+        if bits == 32 { return 3 }
+        return 4
+    }
+    if bits == 8 { return 5 }
+    if bits == 16 { return 6 }
+    if bits == 32 { return 7 }
+    return 8
+}
+
 fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
+    // record the int context so `typeOf` can recover an otherwise width-less form
+    // (`0-1` / `match{...}+1` typed only by its binding) — see exprIntCtx. eKind 1
+    // means a definite int context (bits/sgn known); the recursion below propagates
+    // the same context to operands, so the whole arith subtree is recorded.
+    if eKind == 1 {
+        if id < c.exprIntCtx.count {
+            c.exprIntCtx[id] = intCtxCode(bits: eBits, sgn: eSgn)
+        }
+    }
     val e: Expr = c.exprs[id]
     match e {
         Expr.Int(val value, val offset, val isBool, val tyStart, val tyLen, val isNeg) => {
@@ -194,6 +217,19 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
             while i < elems.count {
                 checkLitCtx(c: inout c, id: elems[i], eKind: eKind, eBits: eBits, eSgn: eSgn)
                 i += 1
+            }
+        }
+        Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
+            // a value-position `if`'s result is its branches' `give` values, so the
+            // surrounding context flows to each give (an else-if chain recurses here
+            // via the nested IfExpr give). The condition is self-typed (Bool).
+            val tg: U64 = blockGiveExpr(c: inout c, blkId: thenBlk)
+            if tg < c.exprs.count {
+                checkLitCtx(c: inout c, id: tg, eKind: eKind, eBits: eBits, eSgn: eSgn)
+            }
+            val eg: U64 = blockGiveExpr(c: inout c, blkId: elseBlk)
+            if eg < c.exprs.count {
+                checkLitCtx(c: inout c, id: eg, eKind: eKind, eBits: eBits, eSgn: eSgn)
             }
         }
         Expr.MatchExpr(val scrut, val arms) => {
