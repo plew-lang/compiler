@@ -1,27 +1,58 @@
 import @Std/Io with { print }
 
-// O1: a spec-shaped operator trait (type parameter [Rhs] + associated type
-// Output + `assoc fn add(lhs: Self, rhs: Rhs) -> Output`) declared once and
-// conformed by a user type. Desugaring of `+` comes later; here the assoc fn is
-// called directly to validate trait-type-arg parsing + Self/Rhs/Output witness
-// substitution in the completeness check.
+// O2: arithmetic operators desugar to operator-trait witnesses for user types
+// (spec/12). `a + b` => Vec2.add(lhs: a, rhs: b); right-operand overloading picks
+// the conformance by the rhs type (Add[Vec2] vs Add[I64]).
 trait Add[Rhs] {
     type Output
     assoc fn add(lhs: Self, rhs: Rhs) -> Output
 }
+trait Sub[Rhs] {
+    type Output
+    assoc fn sub(lhs: Self, rhs: Rhs) -> Output
+}
+trait Mul[Rhs] {
+    type Output
+    assoc fn mul(lhs: Self, rhs: Rhs) -> Output
+}
 
-struct Vec2 { pub val x: I64 }
+struct Vec2 { pub val x: I64  pub val y: I64 }
 
 impl Vec2 as Add[Vec2] {
     type Output = Vec2
     assoc fn add(lhs: Vec2, rhs: Vec2) -> Vec2 {
-        return <Vec2 x=(lhs.x + rhs.x) />
+        return <Vec2 x=(lhs.x + rhs.x) y=(lhs.y + rhs.y) />
+    }
+}
+impl Vec2 as Add[I64] {
+    type Output = Vec2
+    assoc fn add(lhs: Vec2, rhs: I64) -> Vec2 {
+        return <Vec2 x=(lhs.x + rhs) y=(lhs.y + rhs) />
+    }
+}
+impl Vec2 as Sub[Vec2] {
+    type Output = Vec2
+    assoc fn sub(lhs: Vec2, rhs: Vec2) -> Vec2 {
+        return <Vec2 x=(lhs.x - rhs.x) y=(lhs.y - rhs.y) />
+    }
+}
+impl Vec2 as Mul[I64] {
+    type Output = Vec2
+    assoc fn mul(lhs: Vec2, rhs: I64) -> Vec2 {
+        return <Vec2 x=(lhs.x * rhs) y=(lhs.y * rhs) />
     }
 }
 
 fn main() {
-    val a: Vec2 = <Vec2 x=3 />
-    val b: Vec2 = <Vec2 x=4 />
-    val c: Vec2 = Vec2.add(lhs: a, rhs: b)
-    print(c.x)   // 7
+    val a: Vec2 = <Vec2 x=3 y=5 />
+    val b: Vec2 = <Vec2 x=4 y=1 />
+    val c: Vec2 = a + b           // Add[Vec2]
+    print(c.x)                    // 7
+    print(c.y)                    // 6
+    val d: Vec2 = a + 10I64          // Add[I64] (rhs-type overload)
+    print(d.x)                    // 13
+    val e: Vec2 = a - b           // Sub[Vec2]
+    print(e.x)                    // -1
+    val f: Vec2 = a * 2I64           // Mul[I64]
+    print(f.y)                    // 10
 }

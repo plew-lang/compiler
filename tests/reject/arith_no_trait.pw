@@ -1,0 +1,10 @@
+// spec/12: an arithmetic operator is only callable when its trait is implemented.
+// `Pt` does not conform to Add, so `a + b` is a loud compile error (not a
+// fall-through to clang on a meaningless struct `+`).
+struct Pt { pub val x: I64 }
+fn main() {
+    val a: Pt = <Pt x=1 />
+    val b: Pt = <Pt x=2 />
+    val c: Pt = a + b
+    print(c.x~)
+}

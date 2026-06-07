@@ -339,6 +339,107 @@ fn emitTraitCompare(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
     write(s: ")")
 }
 
+// Whether a binary op is an arithmetic operator (spec/12: Add/Sub/Mul/Div/Rem).
+fn isArithOp(op: I64) -> Bool {
+    if op == opAdd() { return true }
+    if op == opSub() { return true }
+    if op == opMul() { return true }
+    if op == opDiv() { return true }
+    if op == opRem() { return true }
+    return false
+}
+
+// The operator trait name for an arithmetic op (`+` -> "Add"). "" if not arithmetic.
+fn arithTraitName(op: I64) -> String {
+    if op == opAdd() { return "Add" }
+    if op == opSub() { return "Sub" }
+    if op == opMul() { return "Mul" }
+    if op == opDiv() { return "Div" }
+    return "Rem"
+}
+
+// The witness assoc-fn name for an arithmetic op (`+` -> "add").
+fn arithMethodName(op: I64) -> String {
+    if op == opAdd() { return "add" }
+    if op == opSub() { return "sub" }
+    if op == opMul() { return "mul" }
+    if op == opDiv() { return "div" }
+    return "rem"
+}
+
+// Resolve the arithmetic witness assoc fn named `name` on type (typeStart,typeLen),
+// disambiguating right-operand overloads (`Mul[Vector]` vs `Mul[F64]`) by the rhs
+// type: the assoc whose 2nd param type's head id matches typeOf(rhs). Falls back to
+// the first assoc of that name (e.g. an untyped-literal rhs). c.funcs.count = none.
+fn findArithWitness(c: inout Comp, typeStart: U64, typeLen: U64, name: String, rhs: U64) -> U64 {
+    val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
+    val rt: TypeInfo = typeOf(c: inout c, id: rhs)
+    val rhsId: U64 = intern(c: inout c, start: rt.nameStart, len: rt.nameLen)
+    mut val firstMatch: U64 = c.funcs.count
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.isAssoc {
+            if f.recvId == qType {
+                if rangeEquals(bytes: c.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
+                    if firstMatch == c.funcs.count {
+                        firstMatch = i
+                    }
+                    if f.params.count >= 2 {
+                        if f.params[1].tyNameId == rhsId {
+                            return i
+                        }
+                    }
+                }
+            }
+        }
+        i += 1
+    }
+    return firstMatch
+}
+
+// Whether the left operand of an arithmetic op carries the operator-trait witness
+// (spec/12: `a + b` desugars to `T.add(lhs: a, rhs: b)` iff `impl T as Add[…]`).
+// Only named (struct) operands — scalars use the built-in checked arithmetic.
+fn hasArithWitness(c: inout Comp, op: I64, lhs: U64) -> Bool {
+    if isArithOp(op: op) {
+    } else {
+        return false
+    }
+    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
+    if lt.kind == 2 {
+        if typeConformsToName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, traitName: arithTraitName(op: op)) {
+            return findAssocByName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: arithMethodName(op: op)) < c.funcs.count
+        }
+    }
+    return false
+}
+
+// A struct/enum left operand under an arithmetic op with no operator-trait witness:
+// the C `+`/`-`/... has no meaning, so it is a loud error (spec/12: an operator is
+// only callable when its trait is implemented), not a fall-through to clang.
+fn arithNeedsTrait(c: inout Comp, op: I64, lhs: U64) -> Bool {
+    if isArithOp(op: op) {
+        val lt: TypeInfo = typeOf(c: inout c, id: lhs)
+        return lt.kind == 2
+    }
+    return false
+}
+
+// Emit `T_<sel>(lhs, rhs)` for the resolved arithmetic witness assoc fn.
+fn emitArithCall(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
+    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
+    val fi: U64 = findArithWitness(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: arithMethodName(op: op), rhs: rhs)
+    writeSpan(c: inout c, start: lt.nameStart, len: lt.nameLen)
+    write(s: "_")
+    writeFnSelector(c: inout c, f: c.funcs[fi])
+    write(s: "(")
+    genExpr(c: inout c, id: lhs)
+    write(s: ", ")
+    genExpr(c: inout c, id: rhs)
+    write(s: ")")
+}
+
 // Emit an expression in condition position. A top-level binary drops its outer
 // parens (the `if (...)` / `while (...)` already supplies them), which avoids
 // the `-Wparentheses-equality` warning on `if ((a == b))`. String/enum equality

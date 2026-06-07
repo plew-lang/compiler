@@ -452,6 +452,12 @@ fn genExpr(c: inout Comp, id: U64) {
                     if compareNeedsTrait(c: inout c, op: op, lhs: lhs) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "comparison needs Eq/Ord; not available for a struct or array")
                     } else {
+                    if hasArithWitness(c: inout c, op: op, lhs: lhs) {
+                        emitArithCall(c: inout c, op: op, lhs: lhs, rhs: rhs)
+                    } else {
+                    if arithNeedsTrait(c: inout c, op: op, lhs: lhs) {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type")
+                    } else {
                         if op == opDiv() {
                             // `/`: zero divisor always panics; signed INT_MIN/-1
                             // overflows. Width-aware when the type is known; else
@@ -500,6 +506,8 @@ fn genExpr(c: inout Comp, id: U64) {
                                 }
                             }
                         }
+                    }
+                    }
                     }
                     }
                 }
