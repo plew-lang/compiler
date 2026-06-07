@@ -49,10 +49,10 @@ fn main() {
     val c: Vec2 = a + b           // Add[Vec2]
     print(c.x)                    // 7
     print(c.y)                    // 6
-    val d: Vec2 = a + 10I64          // Add[I64] (rhs-type overload)
+    val d: Vec2 = a + 10          // Add[I64] (rhs-type overload)
     print(d.x)                    // 13
     val e: Vec2 = a - b           // Sub[Vec2]
     print(e.x)                    // -1
-    val f: Vec2 = a * 2I64           // Mul[I64]
+    val f: Vec2 = a * 2           // Mul[I64]
     print(f.y)                    // 10
 }

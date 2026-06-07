@@ -392,7 +392,11 @@ fn findBinTraitWitness(c: inout Comp, typeStart: U64, typeLen: U64, name: String
     val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
     val rt: TypeInfo = typeOf(c: inout c, id: rhs)
     val rhsId: U64 = intern(c: inout c, start: rt.nameStart, len: rt.nameLen)
+    // an unsuffixed integer literal has no recovered type (kind 0, no name); it can
+    // adapt to any integer rhs, so prefer an overload whose rhs param is an int type.
+    val rhsUntyped: Bool = rt.kind == 0 && rt.nameLen == 0
     mut val firstMatch: U64 = c.funcs.count
+    mut val intMatch: U64 = c.funcs.count
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
@@ -406,11 +410,21 @@ fn findBinTraitWitness(c: inout Comp, typeStart: U64, typeLen: U64, name: String
                         if f.params[1].tyNameId == rhsId {
                             return i
                         }
+                        if intMatch == c.funcs.count {
+                            if isIntType(c: inout c, start: f.params[1].tyStart, len: f.params[1].tyLen) {
+                                intMatch = i
+                            }
+                        }
                     }
                 }
             }
         }
         i += 1
+    }
+    if rhsUntyped {
+        if intMatch < c.funcs.count {
+            return intMatch
+        }
     }
     return firstMatch
 }
