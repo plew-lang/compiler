@@ -1,0 +1,7 @@
+import @Std/Io with { print }
+// `a[k]` needs an Index implementation (spec/12); a plain struct has none.
+struct Foo { pub val n: I64 }
+fn main() {
+    val f: Foo = <Foo n=5 />
+    print(f[0I64])
+}

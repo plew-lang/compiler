@@ -176,6 +176,29 @@ fn funcNameExists(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
 // Index of the method named (nameStart,nameLen) on receiver type
 // (recvStart,recvLen), resolving overloads by labels + arg types (like findFunc),
 // or `c.funcs.count` if none. Falls back to the first label match.
+// The return type of the first method named `name` on type (typeStart,typeLen),
+// scalarInfo if none / void. Used to type a subscript `a[k]` (= `a.index(...)`):
+// the Index witness has one `index` per Key, so name-only lookup suffices.
+fn firstMethodRetType(c: inout Comp, typeStart: U64, typeLen: U64, name: String) -> TypeInfo {
+    val qRecv: U64 = intern(c: inout c, start: typeStart, len: typeLen)
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.hasRecv {
+            if f.recvId == qRecv {
+                if rangeEquals(bytes: c.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
+                    if f.hasRet {
+                        return typeInfoOfName(c: inout c, start: f.retStart, len: f.retLen, isArray: f.retIsArray)
+                    }
+                    return scalarInfo()
+                }
+            }
+        }
+        i += 1
+    }
+    return scalarInfo()
+}
+
 fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     mut val firstLabel: U64 = c.funcs.count
     mut val typeMatch: U64 = c.funcs.count
@@ -1654,6 +1677,11 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 if dt.args.count > 1 {
                     return typeInfoOfRef(c: inout c, ref: dt.args[1])
                 }
+            }
+            // a user type's `a[k]` desugars to `a.index(key:k)`; its type is the
+            // `index` method's return (the Index trait's `Output`).
+            if bt.kind == 2 {
+                return firstMethodRetType(c: inout c, typeStart: bt.nameStart, typeLen: bt.nameLen, name: "index")
             }
             return scalarInfo()
         }

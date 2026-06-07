@@ -986,6 +986,25 @@ fn genStmt(c: inout Comp, id: U64) {
                         write(s: ";\n")
                         return
                     }
+                    if bt.kind == 2 {
+                        // `a[k] = v` on a user type -> `a.indexSet(key: k, value: v)`
+                        // (the IndexSet witness, an inout method — spec/12). Compound
+                        // forms (`a[k] += v`) need get+modify+set; deferred.
+                        if typeHasMethodNamed(c: inout c, typeStart: bt.nameStart, typeLen: bt.nameLen, name: "indexSet") {
+                            if op == opAssign() {
+                            } else {
+                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "compound assignment to a user subscript is not yet supported; use `a[k] = ...`")
+                                return
+                            }
+                            write(s: "    ")
+                            val mexpr: U64 = synthDictMethod(c: inout c, recv: base, name: "indexSet", arg0Label: "key", arg0: index, hasArg1: true, arg1Label: "value", arg1: value)
+                            genExpr(c: inout c, id: mexpr)
+                            write(s: ";\n")
+                            return
+                        }
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "subscript assignment needs IndexSet; not implemented for this type")
+                        return
+                    }
                     if bt.kind == 3 {
                         checkLitSpan(c: inout c, id: value, tyStart: bt.nameStart, tyLen: bt.nameLen, isArray: false)
                     }

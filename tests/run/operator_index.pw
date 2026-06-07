@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+import @Std/Core with { Index, IndexSet }
+
+struct Grid { pub mut val cells: Array[I64] }
+pub impl Grid as Index[U64] {
+    type Output = I64
+    fn index(key: U64) -> I64 { return self.cells[key] }
+}
+pub impl Grid as IndexSet[U64] {
+    type Value = I64
+    inout fn indexSet(key: U64, value: I64) { self.cells[key] = value }
+}
+fn main() {
+    mut val g: Grid = <Grid cells=[0I64, 0I64, 0I64] />
+    g[0U64] = 7I64
+    g[2U64] = 9I64
+    print(g[0U64])   // 7
+    print(g[1U64])   // 0
+    print(g[2U64])   // 9
+}

@@ -219,6 +219,13 @@ export enum Ordering { Less  Equal  Greater }
 export trait Eq { assoc fn eq(lhs: Self, rhs: Self) -> Bool }
 export trait Ord: Eq { assoc fn compare(lhs: Self, rhs: Self) -> Ordering }
 
+// Subscript (spec/12): `a[k]` desugars to `a.index(key: k)`, `a[k] = v` to
+// `a.indexSet(key: k, value: v)`. Container accessors, so the requirement is a
+// method (receiver = the collection), not an assoc fn. Read and write are separate
+// traits (a read-only collection implements only Index).
+export trait Index[Key]    { type Output  fn index(key: Key) -> Output }
+export trait IndexSet[Key] { type Value   inout fn indexSet(key: Key, value: Value) }
+
 // Build a String from a byte array (the bytes must be valid UTF-8; decimal
 // digits always are). Runtime-provided: `plew_stringFromBytes`. Exported so
 // @Std/Syntax's parser can turn token byte-ranges into name Strings.
