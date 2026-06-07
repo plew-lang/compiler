@@ -16,11 +16,11 @@
 
 ## 次の一歩
 
-**直近の到達点**：M2 dogfood（Hash/Hasher＋SipHash-1-3＋`@[Hash]`・`Dictionary[K,V]` lang item）達成＋renovate **Phase C＝名前 interning（宣言名）→ Phase D＝型 interning（型 span/型パラメータ照合）完了**（下記「並行・後続」「名前/型 interning」）。
+**直近の到達点**：renovate **Phase C/D（名前/型 interning）完了** ＋ **演算子トレイト配線 O1-O4 完了**（トレイト型引数 `Add[Rhs]`＋`Self`/`Rhs`/`Output` 置換・算術/ビット/単項をユーザー型でトレイト脱糖・リテラル推論／下記「演算子トレイト配線」）。
 
-**➡ 現在の作業＝演算子トレイトの spec 準拠配線（active）**。下記「演算子トレイト配線」参照。
+**➡ 次の具体タスク＝O6 プリミティブ脱ハードコード**（あなたの核心要望・bootstrap-critical の大物）＝`impl I32 as Add[I32]` 等を**マクロ生成**＋算術 intrinsic 床＋脱糖 flip で、`+` 全体を primitive/ユーザー型問わず witness 経由に一本化。段取り・注意点は下記「演算子トレイト配線」O6。O5（`??`）と O7-O8（Index/IndexSet/Chain/Pow）は O6 後。
 
-**その後の候補**：
+**演算子が一段落した後の候補**：
 
 1. **Iterator 拡充**＝終端（reduce/fold/count/sum/collect/any/all/first）＋遅延 adapter（take/zip/enumerate/skip・`MapIter`/`FilterIter` をテンプレに）。demand-driven 単相化が既に動くので確立パターンに沿うだけ。
 2. **並行 additive**＝`spawn`/`JoinHandle`/チャネル（未実装）・spawn 境界の意味論強制（move/copy のみ越境・`Ref` は spawn 不可）・ランタイム C 生成・`local` 伝染解析。重い（言語仕様の決定が出る）。
@@ -37,7 +37,7 @@
 
 **段取り（縦に1ファミリ貫通→横展開→primitive 脱ハードコード）**：
 - **O1 機構**：①パーサ＝`trait Add[Rhs]`（trait 型パラメータ）＋`impl V as Add[V]`（trait 引数）→ `TraitAst.typeParams`/`ImplAst.traitArgs`。②lower＝`TraitDef.typeParams`/`Conform.traitArgs`。③witness 照合＝`paramSelectorEqSubst` に Self/trait型パラメータ/Output 置換。（additive・既存トレイトは空型パラメータで不変＝bootstrap 安全。各サブステップ reseed）
-- **O2 算術ユーザー型＝✅済**（test `operator_trait_decl`・reject `arith_no_trait`）：二項 `+ - * / %` を `hasArithWitness(typeof a, Add) ? emitArithCall : (arithNeedsTrait ? loud reject : built-in)` に（Eq/Ord テンプレ・`Codegen/Stmt.pw` の `isArithOp`/`arithTraitName`/`arithMethodName`/`findArithWitness`/`hasArithWitness`/`arithNeedsTrait`/`emitArithCall`・dispatch は `Codegen/Expr.pw` の Binary）。**右オペランド型でオーバーロード**（`findArithWitness` が assoc の 2nd param `tyNameId` を typeOf(rhs) と照合・`Add[Vec2]` vs `Add[I64]`）。結果型は `exprType` の Binary が `exprType(lhs)`＝Output=Self の一般ケースで正しい。primitive は built-in fast-path 据え置き（O6 で脱ハードコード）。**既知ギャップ**：①〔解消済〕演算子 witness の rhs param 型からのリテラル型推論を実装（`checkBinTraitRhs`＋`findBinTraitWitness` が無サフィックス整数リテラルで整数 rhs param overload を優先）＝`a + 10` が通る。②`Output != Self` は未対応（assocBinding `Output` 解決が要る・標準演算子は Output=Self が大半）。
+- **O2 算術ユーザー型＝✅済**（test `operator_trait_decl`・reject `arith_no_trait`）：二項 `+ - * / %` を `hasBinTraitWitness ? emitBinTraitCall : (binTraitNeedsTrait ? loud reject : built-in)` に（Eq/Ord テンプレ・ヘルパは `Codegen/Stmt.pw`〔O3 で「二項演算子トレイト」全般に一般化＝`isBinTraitOp`/`binTraitName`/`binTraitMethodName`/`findBinTraitWitness`/`hasBinTraitWitness`/`binTraitNeedsTrait`/`emitBinTraitCall`〕・dispatch は `Codegen/Expr.pw` の Binary）。**右オペランド型でオーバーロード**（`findBinTraitWitness` が assoc の 2nd param `tyNameId` を typeOf(rhs) と照合・無サフィックス整数リテラルは整数 rhs param overload を優先・`Add[Vec2]` vs `Add[I64]`）。結果型は `exprType` の Binary が `exprType(lhs)`＝Output=Self の一般ケースで正しい。primitive は built-in fast-path 据え置き（O6 で脱ハードコード）。**既知ギャップ**：①〔解消済〕演算子 witness の rhs param 型からのリテラル型推論を実装（`Codegen/Check.pw` の `checkBinTraitRhs`＋`spanIntTy`・`a + 10` が通る）。②`Output != Self` は未対応（assocBinding `Output` 解決が要る・標準演算子は Output=Self が大半）。
 - **O3 ビット/シフト＝✅済**（test `operator_bitwise`）：O2 ヘルパを「二項演算子トレイト」全般に一般化（`isArithOp`等→`isBinTraitOp`/`binTraitName`/`binTraitMethodName`等にリネーム＋BitAnd/BitOr/BitXor/Shl/Shr 追加）。dispatch 共通。
 - **O4 単項 Neg/Not/BitNot＝✅済**（test `operator_unary`）：Unary ノードに `hasUnaryWitness ? emitUnaryCall : (unaryNeedsTrait ? reject : built-in)` dispatch（`Codegen/Stmt.pw` の `unaryTraitName`/`unaryMethodName`/`hasUnaryWitness`/`unaryNeedsTrait`/`emitUnaryCall`）。`exprType` の Unary は struct オペランドで Output=Self を返すよう修正（`!s` が Bool 固定だった）。primitive（`-`signed/`!`Bool/`~`int）は built-in 据え置き。
 - **O5 横展開**：`??`（Coalesce）を同テンプレで（`Expr.Coalesce` の別 dispatch）。

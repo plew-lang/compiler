@@ -116,13 +116,13 @@
 - **修正済 ARC**（タグ `arc-via-uaf`/`arc-array-elem-fix`）：`via`＋引数つき要求の誤拒否は**コンパイラ自身の ARC heap-use-after-free**だった＝根本は**配列 `_push`/`_set` が struct 要素の heap を deep-copy せず格納するのに `_copy`/`_release` は deep 所有**する非対称。`_push`/`_set` を `E_copy`（値意味論＝push は値をコピー）に直して解消。ASan ビルドのコンパイラ自己コンパイルも clean。
 
 **残（未修正）**：
-- **【進行中＝演算子トレイト配線（spec/12）】**（active・worklog「演算子トレイト配線」）：トレイト型引数 `Add[Rhs]` の parse/記録＋witness 照合の `Self`/trait型パラメータ/`Output` 置換は **O1 実装済**（test `operator_trait_decl`）。残＝二項/単項脱糖（`+ - * / %`・ビット・`Neg/Not/BitNot`・`??`）・primitive 脱ハードコード（`impl I32 as Add` ＋ 算術 intrinsic）・eager checker の算術 op 境界チェック・`Index/IndexSet/Chain/Pow`。現状ユーザー型の `a + b` は未脱糖で clang 止まり。
+- **【進行中＝演算子トレイト配線（spec/12）】**（active・worklog「演算子トレイト配線」）：**O1-O4 実装済**＝トレイト型引数 `Add[Rhs]` の parse/記録＋witness 照合の `Self`/trait型パラメータ/`Output` 置換／**ユーザー型の二項（算術 `+ - * / %`・ビット `& | ^ << >>`）・単項（`Neg/Not/BitNot`）が witness 脱糖**（右オペランド型オーバーロード・未準拠は loud reject・無サフィックスリテラル推論込み）。test `operator_trait_decl`/`operator_bitwise`/`operator_unary`・reject `arith_no_trait`。**残**＝O6 primitive 脱ハードコード（`impl I32 as Add` をマクロ生成＋算術 intrinsic＋脱糖 flip・**次タスク**）・O5（`??` Coalesce）・O7-O8（Index/IndexSet/Chain 一般化・`pow`）・eager checker の算術 op 境界チェック・`Output != Self`。現状 primitive の `+` は built-in 据え置き。
 - **【silent 逸脱・小】曖昧な無サフィックス整数リテラルが先頭オーバーロードを選ぶ**（`k(a:I32)`/`k(a:U64)` に `k(a:5)`・呼出位置の曖昧検出が要る）・**`val f = obj.method`（メソッド値化）を受理**（scope 復元の型回復が要る・現状 clang 止まり）。
 - **【bug・既知】ユーザー struct/enum 名が lang-item の型パラメータ名と衝突すると壊れる**：`struct V {…}` は `Dictionary[K,V]` の型パラメータ `V` と名前衝突し、`isTypeParamName`/typedef 出力で template 扱いされ struct 定義を吐かず `Array_V` 未定義で clang 落ち（`K`/`V`/`T` 等）。`Vec`/`W` 等は無事。根治＝型パラメータ判定をスコープ化（グローバル名照合をやめる）。回避＝単一大文字で lang-item と被る名を避ける。
 - **【済】`@[Ord]` on enum＋`@[Ord]` が `@[Eq]` を含意**（`Ord: Eq`）＝実装済（上記「Eq/Ord」節）。
 - **既知 deferred**：`any P`・トレイト型引数 `Add[Rhs]`・`#Ext`・`a#P.foo()` 源選択・明示型引数 `f[I32](x)`・`Self` 入力要求の witness 置換（hand-written のみ・derive は無事）。**関連型 `type Item`＝基本実装済**（残＝generic 抽象 `T::Item` 解決）。
 
-**優先度（私見）**：算術演算子トレイト配線は大物・需要駆動（`Add[Rhs]` 型引数が前提）。残る silent 逸脱2件（曖昧リテラル・method 値化）は小だが実装にやや手間（呼出位置/scope 復元）。
+**優先度（私見）**：演算子トレイト配線はユーザー型（O1-O4）まで達成・次は O6 primitive 脱ハードコード（マクロ生成）。残る silent 逸脱2件（曖昧リテラル・method 値化）は小だが実装にやや手間（呼出位置/scope 復元）。
 
 ---
 
