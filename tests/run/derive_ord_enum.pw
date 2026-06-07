@@ -1,5 +1,5 @@
 import @Std/Io with { print }
-enum Ordering { Less Equal Greater }
+import @Std/Core with { Ordering }
 // @[Ord] on an enum: lexicographic over (variant tag, then payload). It also
 // implies Eq (Ord: Eq), so `==` works without a separate @[Eq].
 @[Ord]

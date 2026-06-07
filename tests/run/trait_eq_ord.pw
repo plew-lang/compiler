@@ -1,12 +1,10 @@
 import @Std/Io with { print }
+import @Std/Core with { Eq, Ord, Ordering }
 
 // Eq/Ord operator wiring (spec/12): `==`/`!=` desugar to the Eq witness `eq`,
 // and `< <= > >=` to the Ord witness `compare` (a tag test on its Ordering).
-enum Ordering { Less  Equal  Greater }
-
+// Eq/Ord/Ordering are @Std/Core traits (the primitive conformances ride them too).
 struct Money { pub val cents: I64 }
-trait Eq { assoc fn eq(lhs: Money, rhs: Money) -> Bool }
-trait Ord { assoc fn compare(lhs: Money, rhs: Money) -> Ordering }
 impl Money as Eq {
     assoc fn eq(lhs: Money, rhs: Money) -> Bool { return lhs.cents == rhs.cents }
 }

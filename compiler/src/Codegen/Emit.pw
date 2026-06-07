@@ -379,6 +379,22 @@ fn emitIntRuntime(c: inout Comp, p: String, ct: String, mn: String, sgn: Bool) {
     wNumPlain(c: inout c, p: p, name: "BitXor", ct: ct, opc: " ^ ")
     wNumPlain(c: inout c, p: p, name: "Shl", ct: ct, opc: " << ")
     wNumPlain(c: inout c, p: p, name: "Shr", ct: ct, opc: " >> ")
+    // comparison intrinsics return Bool (long long): Eq backs `==`, Lt backs
+    // Ord.compare (which the `< <= > >=` desugar tag-tests via Ordering).
+    write(s: "__attribute__((unused)) static long long plew_")
+    write(s: p)
+    write(s: "Eq(")
+    write(s: ct)
+    write(s: " a, ")
+    write(s: ct)
+    write(s: " b) { return a == b; }\n")
+    write(s: "__attribute__((unused)) static long long plew_")
+    write(s: p)
+    write(s: "Lt(")
+    write(s: ct)
+    write(s: " a, ")
+    write(s: ct)
+    write(s: " b) { return a < b; }\n")
     write(s: "__attribute__((unused)) static ")
     write(s: ct)
     write(s: " plew_")
@@ -414,6 +430,7 @@ fn emitNumRuntime(c: inout Comp) {
     emitIntRuntime(c: inout c, p: "u32", ct: "uint32_t", mn: "", sgn: false)
     emitIntRuntime(c: inout c, p: "u64", ct: "uint64_t", mn: "", sgn: false)
     write(s: "__attribute__((unused)) static long long plew_boolNot(long long a) { return !a; }\n")
+    write(s: "__attribute__((unused)) static long long plew_boolEq(long long a, long long b) { return a == b; }\n")
 }
 
 fn genCElem(c: inout Comp, start: U64, len: U64) {

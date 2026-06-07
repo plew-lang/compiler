@@ -248,11 +248,17 @@ fn orderingVariantIndex(c: inout Comp, name: String) -> U64 {
 }
 
 // Whether the operand type carries the witness an operator needs: Eq's `eq` for
-// `==`/`!=`, Ord's `compare` for `< <= > >=` (spec/12). Only named (struct)
-// operands — scalars/String/enums have their own lowerings.
+// `==`/`!=`, Ord's `compare` for `< <= > >=` (spec/12). A named struct (kind 2) OR
+// a primitive scalar (kind 0 with a type name) whose type conforms desugars to the
+// witness — primitives are not special-cased (O6): `I32 < I32` routes through Core's
+// `impl I32 as Ord` to the `i32Lt` intrinsic. An untyped literal / String / enum has
+// no Eq/Ord here and keeps its own lowering (the dispatch handles those first).
 fn hasCompareWitness(c: inout Comp, op: I64, lhs: U64) -> Bool {
     val lt: TypeInfo = typeOf(c: inout c, id: lhs)
-    if lt.kind == 2 {
+    if lt.kind == 2 || lt.kind == 0 {
+        if lt.nameLen == 0 {
+            return false
+        }
         // `==`/`!=` desugar to Eq.eq; gated on an explicit `impl T as Eq` (spec/12:
         // operators are trait sugar, not implicit). `< <= > >=` likewise on Ord.
         if op == opEq() {

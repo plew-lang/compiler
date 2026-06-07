@@ -87,6 +87,34 @@ fn implUn(ty: String, trn: String, meth: String, pfx: String, suf: String) {
     write(s: "(a: value) }\n}\n")
 }
 
+// impl <ty> as Eq { assoc fn eq(lhs,rhs) -> Bool { return <pfx>Eq(a:lhs, b:rhs) } }
+fn implEq(ty: String, pfx: String) {
+    write(s: "impl ")
+    write(s: ty)
+    write(s: " as Eq {\n    assoc fn eq(lhs: ")
+    write(s: ty)
+    write(s: ", rhs: ")
+    write(s: ty)
+    write(s: ") -> Bool { return ")
+    write(s: pfx)
+    write(s: "Eq(a: lhs, b: rhs) }\n}\n")
+}
+
+// impl <ty> as Ord { assoc fn compare(lhs,rhs) -> Ordering { Lt? Less : Eq? Equal : Greater } }
+fn implOrd(ty: String, pfx: String) {
+    write(s: "impl ")
+    write(s: ty)
+    write(s: " as Ord {\n    assoc fn compare(lhs: ")
+    write(s: ty)
+    write(s: ", rhs: ")
+    write(s: ty)
+    write(s: ") -> Ordering {\n        if ")
+    write(s: pfx)
+    write(s: "Lt(a: lhs, b: rhs) { return <Ordering.Less /> }\n        if ")
+    write(s: pfx)
+    write(s: "Eq(a: lhs, b: rhs) { return <Ordering.Equal /> }\n        return <Ordering.Greater />\n    }\n}\n")
+}
+
 fn main() {
     val tys: Array[String] = ["I8", "I16", "I32", "I64", "U8", "U16", "U32", "U64"]
     val pfx: Array[String] = ["i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64"]
@@ -112,9 +140,25 @@ fn main() {
         if signed[ti] {
             externUn(pfx: pfx[ti], suf: "Neg", ty: tys[ti])
         }
+        // comparison floor: Eq backs `==`, Lt backs Ord.compare. Both return Bool.
+        write(s: "    fn ")
+        write(s: pfx[ti])
+        write(s: "Eq(a: ")
+        write(s: tys[ti])
+        write(s: ", b: ")
+        write(s: tys[ti])
+        write(s: ") -> Bool\n")
+        write(s: "    fn ")
+        write(s: pfx[ti])
+        write(s: "Lt(a: ")
+        write(s: tys[ti])
+        write(s: ", b: ")
+        write(s: tys[ti])
+        write(s: ") -> Bool\n")
         ti += 1
     }
     write(s: "    fn boolNot(a: Bool) -> Bool\n")
+    write(s: "    fn boolEq(a: Bool, b: Bool) -> Bool\n")
     write(s: "}\n\n")
 
     // conformances
@@ -129,7 +173,10 @@ fn main() {
         if signed[ti] {
             implUn(ty: tys[ti], trn: "Neg", meth: "neg", pfx: pfx[ti], suf: "Neg")
         }
+        implEq(ty: tys[ti], pfx: pfx[ti])
+        implOrd(ty: tys[ti], pfx: pfx[ti])
         ti += 1
     }
     implUn(ty: "Bool", trn: "Not", meth: "not", pfx: "bool", suf: "Not")
+    implEq(ty: "Bool", pfx: "bool")
 }

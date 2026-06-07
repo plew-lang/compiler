@@ -2,7 +2,7 @@ import @Std/Io with { print }
 
 // `@[Ord]` synthesizes a lexicographic compare over the fields (declared
 // `Ordering` is used — option B: not compiler-injected). `< <= > >=` then work.
-enum Ordering { Less  Equal  Greater }
+import @Std/Core with { Ordering }
 
 @[Ord]
 struct Version { pub val major: I64  pub val minor: I64 }

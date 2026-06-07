@@ -1,5 +1,5 @@
 import @Std/Io with { print }
-enum Ordering { Less Equal Greater }
+import @Std/Core with { Ordering }
 // @[Ord] implies Eq (spec/08 Ord: Eq) and derives can read PRIVATE fields (the
 // derive is part of the type's own impl).
 @[Ord]

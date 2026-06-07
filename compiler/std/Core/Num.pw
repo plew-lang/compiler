@@ -16,6 +16,8 @@ extern "plew-intrinsic" {
     fn i8Shr(a: I8, b: I8) -> I8
     fn i8BitNot(a: I8) -> I8
     fn i8Neg(a: I8) -> I8
+    fn i8Eq(a: I8, b: I8) -> Bool
+    fn i8Lt(a: I8, b: I8) -> Bool
     fn i16Add(a: I16, b: I16) -> I16
     fn i16Sub(a: I16, b: I16) -> I16
     fn i16Mul(a: I16, b: I16) -> I16
@@ -28,6 +30,8 @@ extern "plew-intrinsic" {
     fn i16Shr(a: I16, b: I16) -> I16
     fn i16BitNot(a: I16) -> I16
     fn i16Neg(a: I16) -> I16
+    fn i16Eq(a: I16, b: I16) -> Bool
+    fn i16Lt(a: I16, b: I16) -> Bool
     fn i32Add(a: I32, b: I32) -> I32
     fn i32Sub(a: I32, b: I32) -> I32
     fn i32Mul(a: I32, b: I32) -> I32
@@ -40,6 +44,8 @@ extern "plew-intrinsic" {
     fn i32Shr(a: I32, b: I32) -> I32
     fn i32BitNot(a: I32) -> I32
     fn i32Neg(a: I32) -> I32
+    fn i32Eq(a: I32, b: I32) -> Bool
+    fn i32Lt(a: I32, b: I32) -> Bool
     fn i64Add(a: I64, b: I64) -> I64
     fn i64Sub(a: I64, b: I64) -> I64
     fn i64Mul(a: I64, b: I64) -> I64
@@ -52,6 +58,8 @@ extern "plew-intrinsic" {
     fn i64Shr(a: I64, b: I64) -> I64
     fn i64BitNot(a: I64) -> I64
     fn i64Neg(a: I64) -> I64
+    fn i64Eq(a: I64, b: I64) -> Bool
+    fn i64Lt(a: I64, b: I64) -> Bool
     fn u8Add(a: U8, b: U8) -> U8
     fn u8Sub(a: U8, b: U8) -> U8
     fn u8Mul(a: U8, b: U8) -> U8
@@ -63,6 +71,8 @@ extern "plew-intrinsic" {
     fn u8Shl(a: U8, b: U8) -> U8
     fn u8Shr(a: U8, b: U8) -> U8
     fn u8BitNot(a: U8) -> U8
+    fn u8Eq(a: U8, b: U8) -> Bool
+    fn u8Lt(a: U8, b: U8) -> Bool
     fn u16Add(a: U16, b: U16) -> U16
     fn u16Sub(a: U16, b: U16) -> U16
     fn u16Mul(a: U16, b: U16) -> U16
@@ -74,6 +84,8 @@ extern "plew-intrinsic" {
     fn u16Shl(a: U16, b: U16) -> U16
     fn u16Shr(a: U16, b: U16) -> U16
     fn u16BitNot(a: U16) -> U16
+    fn u16Eq(a: U16, b: U16) -> Bool
+    fn u16Lt(a: U16, b: U16) -> Bool
     fn u32Add(a: U32, b: U32) -> U32
     fn u32Sub(a: U32, b: U32) -> U32
     fn u32Mul(a: U32, b: U32) -> U32
@@ -85,6 +97,8 @@ extern "plew-intrinsic" {
     fn u32Shl(a: U32, b: U32) -> U32
     fn u32Shr(a: U32, b: U32) -> U32
     fn u32BitNot(a: U32) -> U32
+    fn u32Eq(a: U32, b: U32) -> Bool
+    fn u32Lt(a: U32, b: U32) -> Bool
     fn u64Add(a: U64, b: U64) -> U64
     fn u64Sub(a: U64, b: U64) -> U64
     fn u64Mul(a: U64, b: U64) -> U64
@@ -96,7 +110,10 @@ extern "plew-intrinsic" {
     fn u64Shl(a: U64, b: U64) -> U64
     fn u64Shr(a: U64, b: U64) -> U64
     fn u64BitNot(a: U64) -> U64
+    fn u64Eq(a: U64, b: U64) -> Bool
+    fn u64Lt(a: U64, b: U64) -> Bool
     fn boolNot(a: Bool) -> Bool
+    fn boolEq(a: Bool, b: Bool) -> Bool
 }
 
 impl I8 as Add[I8] {
@@ -147,6 +164,16 @@ impl I8 as Neg {
     type Output = I8
     assoc fn neg(value: I8) -> I8 { return i8Neg(a: value) }
 }
+impl I8 as Eq {
+    assoc fn eq(lhs: I8, rhs: I8) -> Bool { return i8Eq(a: lhs, b: rhs) }
+}
+impl I8 as Ord {
+    assoc fn compare(lhs: I8, rhs: I8) -> Ordering {
+        if i8Lt(a: lhs, b: rhs) { return <Ordering.Less /> }
+        if i8Eq(a: lhs, b: rhs) { return <Ordering.Equal /> }
+        return <Ordering.Greater />
+    }
+}
 impl I16 as Add[I16] {
     type Output = I16
     assoc fn add(lhs: I16, rhs: I16) -> I16 { return i16Add(a: lhs, b: rhs) }
@@ -194,6 +221,16 @@ impl I16 as BitNot {
 impl I16 as Neg {
     type Output = I16
     assoc fn neg(value: I16) -> I16 { return i16Neg(a: value) }
+}
+impl I16 as Eq {
+    assoc fn eq(lhs: I16, rhs: I16) -> Bool { return i16Eq(a: lhs, b: rhs) }
+}
+impl I16 as Ord {
+    assoc fn compare(lhs: I16, rhs: I16) -> Ordering {
+        if i16Lt(a: lhs, b: rhs) { return <Ordering.Less /> }
+        if i16Eq(a: lhs, b: rhs) { return <Ordering.Equal /> }
+        return <Ordering.Greater />
+    }
 }
 impl I32 as Add[I32] {
     type Output = I32
@@ -243,6 +280,16 @@ impl I32 as Neg {
     type Output = I32
     assoc fn neg(value: I32) -> I32 { return i32Neg(a: value) }
 }
+impl I32 as Eq {
+    assoc fn eq(lhs: I32, rhs: I32) -> Bool { return i32Eq(a: lhs, b: rhs) }
+}
+impl I32 as Ord {
+    assoc fn compare(lhs: I32, rhs: I32) -> Ordering {
+        if i32Lt(a: lhs, b: rhs) { return <Ordering.Less /> }
+        if i32Eq(a: lhs, b: rhs) { return <Ordering.Equal /> }
+        return <Ordering.Greater />
+    }
+}
 impl I64 as Add[I64] {
     type Output = I64
     assoc fn add(lhs: I64, rhs: I64) -> I64 { return i64Add(a: lhs, b: rhs) }
@@ -291,6 +338,16 @@ impl I64 as Neg {
     type Output = I64
     assoc fn neg(value: I64) -> I64 { return i64Neg(a: value) }
 }
+impl I64 as Eq {
+    assoc fn eq(lhs: I64, rhs: I64) -> Bool { return i64Eq(a: lhs, b: rhs) }
+}
+impl I64 as Ord {
+    assoc fn compare(lhs: I64, rhs: I64) -> Ordering {
+        if i64Lt(a: lhs, b: rhs) { return <Ordering.Less /> }
+        if i64Eq(a: lhs, b: rhs) { return <Ordering.Equal /> }
+        return <Ordering.Greater />
+    }
+}
 impl U8 as Add[U8] {
     type Output = U8
     assoc fn add(lhs: U8, rhs: U8) -> U8 { return u8Add(a: lhs, b: rhs) }
@@ -334,6 +391,16 @@ impl U8 as Shr[U8] {
 impl U8 as BitNot {
     type Output = U8
     assoc fn bitnot(value: U8) -> U8 { return u8BitNot(a: value) }
+}
+impl U8 as Eq {
+    assoc fn eq(lhs: U8, rhs: U8) -> Bool { return u8Eq(a: lhs, b: rhs) }
+}
+impl U8 as Ord {
+    assoc fn compare(lhs: U8, rhs: U8) -> Ordering {
+        if u8Lt(a: lhs, b: rhs) { return <Ordering.Less /> }
+        if u8Eq(a: lhs, b: rhs) { return <Ordering.Equal /> }
+        return <Ordering.Greater />
+    }
 }
 impl U16 as Add[U16] {
     type Output = U16
@@ -379,6 +446,16 @@ impl U16 as BitNot {
     type Output = U16
     assoc fn bitnot(value: U16) -> U16 { return u16BitNot(a: value) }
 }
+impl U16 as Eq {
+    assoc fn eq(lhs: U16, rhs: U16) -> Bool { return u16Eq(a: lhs, b: rhs) }
+}
+impl U16 as Ord {
+    assoc fn compare(lhs: U16, rhs: U16) -> Ordering {
+        if u16Lt(a: lhs, b: rhs) { return <Ordering.Less /> }
+        if u16Eq(a: lhs, b: rhs) { return <Ordering.Equal /> }
+        return <Ordering.Greater />
+    }
+}
 impl U32 as Add[U32] {
     type Output = U32
     assoc fn add(lhs: U32, rhs: U32) -> U32 { return u32Add(a: lhs, b: rhs) }
@@ -422,6 +499,16 @@ impl U32 as Shr[U32] {
 impl U32 as BitNot {
     type Output = U32
     assoc fn bitnot(value: U32) -> U32 { return u32BitNot(a: value) }
+}
+impl U32 as Eq {
+    assoc fn eq(lhs: U32, rhs: U32) -> Bool { return u32Eq(a: lhs, b: rhs) }
+}
+impl U32 as Ord {
+    assoc fn compare(lhs: U32, rhs: U32) -> Ordering {
+        if u32Lt(a: lhs, b: rhs) { return <Ordering.Less /> }
+        if u32Eq(a: lhs, b: rhs) { return <Ordering.Equal /> }
+        return <Ordering.Greater />
+    }
 }
 impl U64 as Add[U64] {
     type Output = U64
@@ -467,7 +554,20 @@ impl U64 as BitNot {
     type Output = U64
     assoc fn bitnot(value: U64) -> U64 { return u64BitNot(a: value) }
 }
+impl U64 as Eq {
+    assoc fn eq(lhs: U64, rhs: U64) -> Bool { return u64Eq(a: lhs, b: rhs) }
+}
+impl U64 as Ord {
+    assoc fn compare(lhs: U64, rhs: U64) -> Ordering {
+        if u64Lt(a: lhs, b: rhs) { return <Ordering.Less /> }
+        if u64Eq(a: lhs, b: rhs) { return <Ordering.Equal /> }
+        return <Ordering.Greater />
+    }
+}
 impl Bool as Not {
     type Output = Bool
     assoc fn not(value: Bool) -> Bool { return boolNot(a: value) }
+}
+impl Bool as Eq {
+    assoc fn eq(lhs: Bool, rhs: Bool) -> Bool { return boolEq(a: lhs, b: rhs) }
 }

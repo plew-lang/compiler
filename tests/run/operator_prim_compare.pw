@@ -1,0 +1,23 @@
+import @Std/Io with { print }
+
+// O6 (Eq/Ord): bare primitive comparisons desugar to Core's Eq/Ord witnesses over
+// the intrinsic floor (i32Eq / i32Lt -> Ordering tag test), not a built-in — the
+// same as a user type's `impl T as Ord` (spec/12). Covers every comparison and a
+// few widths; Bool uses Eq only.
+fn yn(b: Bool) -> I64 { if b { return 1I64 } return 0I64 }
+fn main() {
+    val a: I32 = 5
+    val b: I32 = 8
+    print(yn(b: a < b))          // 1
+    print(yn(b: a > b))          // 0
+    print(yn(b: a <= 5I32))      // 1
+    print(yn(b: b >= 8I32))      // 1
+    print(yn(b: a == 5I32))      // 1
+    print(yn(b: a != b))         // 1
+    val x: U64 = 100U64
+    print(yn(b: x > 99U64))      // 1
+    print(yn(b: x == 100U64))    // 1
+    print(yn(b: true == true))   // 1
+    print(yn(b: true == false))  // 0
+    if a < b { print(7I64) } else { print(9I64) }   // 7 (condition position)
+}

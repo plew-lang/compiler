@@ -2,7 +2,7 @@ import @Std/Io with { print }
 
 // Primitives satisfy built-in Eq/Ord, so a `where T: Ord` generic (the textbook
 // max) can be instantiated with a numeric type argument.
-enum Ordering { Less  Equal  Greater }
+import @Std/Core with { Eq, Ord, Ordering }
 fn maxOf[T](a: T, b: T) -> T where T: Ord { if a < b { return b } return a }
 fn eqOf[T](a: T, b: T) -> Bool where T: Eq { return a == b }
 fn boolI(b: Bool) -> I64 { if b { return 1I64 } return 0I64 }

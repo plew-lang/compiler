@@ -202,6 +202,13 @@ export trait Neg    { type Output  assoc fn neg(value: Self) -> Output }
 export trait Not    { type Output  assoc fn not(value: Self) -> Output }
 export trait BitNot { type Output  assoc fn bitnot(value: Self) -> Output }
 
+// Equality and ordering (spec/12): `==`/`!=` desugar to `Eq.eq`, and `< <= > >=`
+// to a tag test on `Ord.compare`'s three-way `Ordering`. Same-type relations, so
+// no type argument. The primitive conformances are generated into ./Core/Num.
+export enum Ordering { Less  Equal  Greater }
+export trait Eq { assoc fn eq(lhs: Self, rhs: Self) -> Bool }
+export trait Ord: Eq { assoc fn compare(lhs: Self, rhs: Self) -> Ordering }
+
 // Build a String from a byte array (the bytes must be valid UTF-8; decimal
 // digits always are). Runtime-provided: `plew_stringFromBytes`. Exported so
 // @Std/Syntax's parser can turn token byte-ranges into name Strings.
