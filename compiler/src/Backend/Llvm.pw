@@ -302,7 +302,14 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
         mut val ti: U64 = 0
         while ti < c.curTypeParams.count {
             if c.curTypeParams[ti].nameId == qid {
-                val at: TypeRef = c.types[c.curTypeArgs[ti]]
+                // a type param bound to a generic instance (`I -> MapIter[Counter,…]`)
+                // must resolve to that registered instance type — recursing on the
+                // bare name would drop the args and miss it.
+                val argRef: U64 = c.curTypeArgs[ti]
+                if isGenericInst(c: inout c, ref: argRef) {
+                    return llvmTypeOfRef(c: inout c, st: inout st, ref: argRef)
+                }
+                val at: TypeRef = c.types[argRef]
                 return llvmScalarTy(c: inout c, st: inout st, tyStart: at.nameStart, tyLen: at.nameLen)
             }
             ti += 1
@@ -638,8 +645,11 @@ fn genLlvmMakeEnum(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U6
         if gslot < st.genEnumRefs.count {
             val savedP: Array[Bind] = c.curTypeParams
             val savedA: Array[U64] = c.curTypeArgs
-            c.curTypeParams = c.enums[st.genEnumDefs[gslot]].typeParams
-            c.curTypeArgs = c.types[ty].args
+            // MERGE the enum's env onto the outer one (don't replace) so a payload
+            // sub-expression referencing the enclosing method's type params still
+            // grounds (e.g. `self.f` in MapIter.next's `<Optional.Some v=self.f(x:v)/>`).
+            c.curTypeParams = concatParams(add: c.enums[st.genEnumDefs[gslot]].typeParams, base: savedP)
+            c.curTypeArgs = concatArgs(add: c.types[ty].args, base: savedA)
             val v: LLVMValueRef = buildEnumValue(c: inout c, st: inout st, eid: st.genEnumDefs[gslot], ety: st.genEnumTys[gslot], typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, fields: fields)
             c.curTypeParams = savedP
             c.curTypeArgs = savedA
@@ -736,6 +746,10 @@ fn buildEnumFromValues(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMType
 // Register each concrete generic-struct instantiation (from c.genInsts) as a named
 // LLVM type with its type parameters substituted (env curTypeParams->curTypeArgs).
 fn registerGenStructs(c: inout Comp, st: inout LlvmCtx) {
+    // Pass A: create every instance's NAMED struct type (opaque, body unset) and
+    // record its def. Two passes so a field of generic-instance type (an adapter
+    // wrapping another adapter: FilterIter's inner = MapIter[…]) resolves to the
+    // already-created named type regardless of registration order.
     mut val k: U64 = 0
     while k < c.genInsts.count {
         val ref: U64 = c.genInsts[k]
@@ -743,31 +757,38 @@ fn registerGenStructs(c: inout Comp, st: inout LlvmCtx) {
             val t: TypeRef = c.types[ref]
             val defIdx: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
             if defIdx < c.structs.count {
-                val sd: StructDef = c.structs[defIdx]
-                val savedP: Array[Bind] = c.curTypeParams
-                val savedA: Array[U64] = c.curTypeArgs
-                c.curTypeParams = sd.typeParams
-                c.curTypeArgs = t.args
                 mut val nm: Array[U8] = []
                 appendBytes(into: inout nm, from: "gs".bytes)
                 appendU64Dec(into: inout nm, n: k)
                 nm.append(value: 0)
-                val ty: LLVMTypeRef = LLVMStructCreateNamed(st.ctx, arrayCPtr(nm))
-                mut val elems: Array[LLVMTypeRef] = []
-                mut val fi: U64 = 0
-                while fi < sd.fields.count {
-                    elems.append(value: llvmTypeFor(c: inout c, st: inout st, tyStart: sd.fields[fi].tyStart, tyLen: sd.fields[fi].tyLen, isArray: sd.fields[fi].tyIsArray))
-                    fi += 1
-                }
-                LLVMStructSetBody(ty, arrayCPtr(elems), sd.fields.count, 0I32)
-                c.curTypeParams = savedP
-                c.curTypeArgs = savedA
                 st.genStructRefs.append(value: ref)
-                st.genStructTys.append(value: ty)
+                st.genStructTys.append(value: LLVMStructCreateNamed(st.ctx, arrayCPtr(nm)))
                 st.genStructDefs.append(value: defIdx)
             }
         }
         k += 1
+    }
+    // Pass B: set each instance's body (field types under its substitution env; a
+    // generic-instance field now resolves via llvmTypeFor -> llvmScalarTy ->
+    // llvmTypeOfRef to the named type created in pass A).
+    mut val s: U64 = 0
+    while s < st.genStructRefs.count {
+        val ref: U64 = st.genStructRefs[s]
+        val sd: StructDef = c.structs[st.genStructDefs[s]]
+        val savedP: Array[Bind] = c.curTypeParams
+        val savedA: Array[U64] = c.curTypeArgs
+        c.curTypeParams = sd.typeParams
+        c.curTypeArgs = c.types[ref].args
+        mut val elems: Array[LLVMTypeRef] = []
+        mut val fi: U64 = 0
+        while fi < sd.fields.count {
+            elems.append(value: llvmTypeFor(c: inout c, st: inout st, tyStart: sd.fields[fi].tyStart, tyLen: sd.fields[fi].tyLen, isArray: sd.fields[fi].tyIsArray))
+            fi += 1
+        }
+        LLVMStructSetBody(st.genStructTys[s], arrayCPtr(elems), sd.fields.count, 0I32)
+        c.curTypeParams = savedP
+        c.curTypeArgs = savedA
+        s += 1
     }
 }
 
@@ -853,8 +874,20 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
                 if fidx < c.structs[sidx].fields.count {
                     val fd: FieldDef = c.structs[sidx].fields[fidx]
-                    if isGenericInst(c: inout c, ref: fd.ty) {
-                        return groundTypeRef(c: inout c, ref: fd.ty)
+                    // ground the field type through the active env first: a field of a
+                    // type param (`inner: I` inside a monomorphized adapter) grounds to
+                    // its concrete instance (`MapIter[Counter,…]`), so a chained
+                    // `self.inner.next()` routes through the generic-receiver path.
+                    mut val g: U64 = fd.ty
+                    if fd.ty != 0U64 {
+                        if c.curTypeParams.count > 0U64 {
+                            g = groundTypeRef(c: inout c, ref: fd.ty)
+                        }
+                    }
+                    if g != 0U64 {
+                        if isGenericInst(c: inout c, ref: g) {
+                            return g
+                        }
                     }
                 }
             }
@@ -862,6 +895,11 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
         Expr.OptChain(val base, val memberStart, val memberLen) => {
             // `base?.member : Optional[U]` — so a chained `a?.b?.c` types its inner.
             return optChainResultRefLL(c: inout c, st: inout st, base: base, memberStart: memberStart, memberLen: memberLen)
+        }
+        Expr.Method(val recv, val nameStart, val nameLen, args: _) => {
+            // `xs.map(f)` / `xs.filter(p)` : the lazy adapter instance it produces,
+            // so a `for v in xs.map(f).filter(p)` (and the chain) types its iterand.
+            return adapterCallResultInst(c: inout c, st: inout st, recv: recv, nameStart: nameStart, nameLen: nameLen)
         }
         _ => {}
     }
@@ -905,6 +943,29 @@ fn optChainResultRefLL(c: inout Comp, st: inout LlvmCtx, base: U64, memberStart:
     mut val rArgs: Array[U64] = []
     rArgs.append(value: uRef)
     return c.pushType(t: <TypeRef nameStart=bt.nameStart nameLen=bt.nameLen args=rArgs />)
+}
+
+// Concatenate two type-param lists (`add` first, then `base`). Used to MERGE a
+// nested generic construct's env onto the enclosing one — e.g. building
+// `<Optional.Some v=self.f(x:v) />` inside a monomorphized `MapIter.next`: the
+// field type `T` resolves via Optional's params while the payload sub-expression
+// `self.f` resolves via MapIter's (the outer env). Disjoint names, so first-match
+// in groundTypeRef picks the right one; same length so args pair 1:1.
+fn concatParams(add: Array[Bind], base: Array[Bind]) -> Array[Bind] {
+    mut val r: Array[Bind] = []
+    mut val i: U64 = 0
+    while i < add.count { r.append(value: add[i])  i += 1 }
+    mut val j: U64 = 0
+    while j < base.count { r.append(value: base[j])  j += 1 }
+    return r
+}
+fn concatArgs(add: Array[U64], base: Array[U64]) -> Array[U64] {
+    mut val r: Array[U64] = []
+    mut val i: U64 = 0
+    while i < add.count { r.append(value: add[i])  i += 1 }
+    mut val j: U64 = 0
+    while j < base.count { r.append(value: base[j])  j += 1 }
+    return r
 }
 
 // If `ref` is a generic enum instance, set the substitution env to it and return
@@ -1013,7 +1074,19 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                     val fld: FieldDef = c.structs[bsi].fields[fidx]
                     if fld.tyIsArray {
                     } else {
-                        return localStructIdxFor(c: inout c, st: inout st, start: fld.tyStart, len: fld.tyLen)
+                        // ground a generic field type through the active env (inside a
+                        // monomorphized method, `inner: I` resolves to its concrete
+                        // type) before resolving the struct index.
+                        mut val tStart: U64 = fld.tyStart
+                        mut val tLen: U64 = fld.tyLen
+                        if fld.ty != 0U64 {
+                            if c.curTypeParams.count > 0U64 {
+                                val gref: U64 = groundTypeRef(c: inout c, ref: fld.ty)
+                                tStart = c.types[gref].nameStart
+                                tLen = c.types[gref].nameLen
+                            }
+                        }
+                        return localStructIdxFor(c: inout c, st: inout st, start: tStart, len: tLen)
                     }
                 }
             }
@@ -2067,8 +2140,10 @@ fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, v
             val sd: StructDef = c.structs[st.genStructDefs[gslot]]
             val savedP: Array[Bind] = c.curTypeParams
             val savedA: Array[U64] = c.curTypeArgs
-            c.curTypeParams = sd.typeParams
-            c.curTypeArgs = c.types[gty].args
+            // MERGE (see genLlvmMakeEnum) so a field sub-expression referencing the
+            // enclosing method's type params still grounds.
+            c.curTypeParams = concatParams(add: sd.typeParams, base: savedP)
+            c.curTypeArgs = concatArgs(add: c.types[gty].args, base: savedA)
             val v: LLVMValueRef = buildStructValue(c: inout c, st: inout st, sd: sd, sty: st.genStructTys[gslot], fields: fields, errOffset: typeStart)
             c.curTypeParams = savedP
             c.curTypeArgs = savedA
@@ -2569,10 +2644,12 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
             return rv
         }
     }
-    // generic enum scrutinee: set the substitution env so payload types resolve.
+    // The scrutinee's enum instance ref. As in genLlvmMatch, the enum env is set
+    // ONLY around bindMatchPayload, never for the arm bodies (which keep the outer
+    // env so a body's `self.f` grounds against the enclosing method).
+    val scrutRef: U64 = exprTypeRef(c: inout c, st: inout st, id: scrut)
     val savedVP: Array[Bind] = c.curTypeParams
     val savedVA: Array[U64] = c.curTypeArgs
-    val didSetV: Bool = setEnumEnv(c: inout c, st: inout st, ref: exprTypeRef(c: inout c, st: inout st, id: scrut))
     mut val eid: U64 = c.enums.count
     mut val ai0: U64 = 0
     while ai0 < arms.count {
@@ -2589,10 +2666,6 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
     }
     if eid < c.enums.count {
     } else {
-        if didSetV {
-            c.curTypeParams = savedVP
-            c.curTypeArgs = savedVA
-        }
         compileErrorAt(line: 0, msg: "LLVM backend: value-match is only supported on a registered enum (so far)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -2624,7 +2697,12 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
         st.terminated = false
         if arm.isWildcard {
         } else {
+            val didB: Bool = setEnumEnv(c: inout c, st: inout st, ref: scrutRef)
             bindMatchPayload(c: inout c, st: inout st, eid: eid, arm: arm, scrutTy: sty, scrutSlot: sslot)
+            if didB {
+                c.curTypeParams = savedVP
+                c.curTypeArgs = savedVA
+            }
         }
         mut val armVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: arm.body)
         st.nLocals = saved
@@ -2647,10 +2725,6 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
     st.terminated = false
     val phi: LLVMValueRef = LLVMBuildPhi(st.b, LLVMTypeOf(phiVals[0]), anon())
     LLVMAddIncoming(phi, arrayCPtr(phiVals), arrayCPtr(phiBlocks), phiVals.count)
-    if didSetV {
-        c.curTypeParams = savedVP
-        c.curTypeArgs = savedVA
-    }
     return phi
 }
 
@@ -3256,6 +3330,96 @@ fn genLlvmCond(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
     return LLVMBuildICmp(st.b, llvmIntNe(), v, LLVMConstInt(st.i1ty, 0U64, 0I32), anon())
 }
 
+// ---- iterator adapter (map/filter) construction ----
+//
+// `xs.map(f)` / `xs.filter(p)` are lazy combinators (@Std/Core Iterator provided
+// methods): each just WRAPS the receiver iterator + the closure into an adapter
+// struct (MapIter/FilterIter) whose `next()` does the work. The provided method
+// has its own type param (B) and an associated-type `Item` in its signature —
+// monomorphizing its body is hard — but the body is a one-line construction
+// `<MapIter inner=self f=f />`, so we build the adapter inline at the call site
+// instead. The adapter instance is already registered (front-end mono), found
+// here by matching its first type arg (the inner) to the receiver's type.
+//
+// Find the registered adapter instance (head `headKw`, e.g. "MapIter") whose
+// inner (arg0) is the receiver's type, or 0 if none (the receiver isn't a known
+// Iterator feeding this combinator). Couples to the @Std/Core adapter names.
+fn findAdapterInst(c: inout Comp, st: inout LlvmCtx, recv: U64, headKw: String) -> U64 {
+    val recvRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
+    val recvSidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
+    mut val gi: U64 = 0
+    while gi < c.genInsts.count {
+        val ref: U64 = c.genInsts[gi]
+        val t: TypeRef = c.types[ref]
+        if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: headKw) {
+            if t.args.count > 0U64 {
+                val arg0: U64 = t.args[0]
+                if recvRef != 0U64 {
+                    if typeRefEq(c: inout c, a: arg0, b: recvRef) {
+                        return ref
+                    }
+                } else {
+                    if recvSidx < c.structs.count {
+                        val a0: TypeRef = c.types[arg0]
+                        if a0.args.count == 0U64 {
+                            if spansEqual(c: inout c, aStart: a0.nameStart, aLen: a0.nameLen, bStart: c.structs[recvSidx].nameStart, bLen: c.structs[recvSidx].nameLen) {
+                                return ref
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        gi += 1
+    }
+    return 0U64
+}
+
+// If `recv.name(args)` is a known iterator combinator (`map`/`filter`), the
+// registered adapter instance it produces, else 0. (The head names couple to
+// @Std/Core's MapIter / FilterIter.)
+fn adapterCallResultInst(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, nameLen: U64) -> U64 {
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "map") {
+        return findAdapterInst(c: inout c, st: inout st, recv: recv, headKw: "MapIter")
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "filter") {
+        return findAdapterInst(c: inout c, st: inout st, recv: recv, headKw: "FilterIter")
+    }
+    return 0U64
+}
+
+// Build the adapter struct value inline: field 0 (the inner) = the receiver, the
+// remaining fields = the method args in order (map's `f`, filter's `p`), under the
+// adapter instance's substitution env. Mirrors the provided method's one-line body
+// `<MapIter inner=self f=f />` with `self` = the receiver.
+fn genLlvmAdapterWrap(c: inout Comp, st: inout LlvmCtx, recv: U64, args: Array[Arg], adapterRef: U64) -> LLVMValueRef {
+    val gslot: U64 = genStructSlot(c: inout c, st: inout st, ref: adapterRef)
+    if gslot < st.genStructRefs.count {
+    } else {
+        compileErrorAt(line: 0, msg: "LLVM backend: iterator adapter struct is not registered")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val sd: StructDef = c.structs[st.genStructDefs[gslot]]
+    mut val fields: Array[MakeField] = []
+    // field 0 = inner = the receiver expression.
+    fields.append(value: <MakeField nameStart=sd.fields[0].nameStart nameLen=sd.fields[0].nameLen value=recv />)
+    mut val i: U64 = 1
+    while i < sd.fields.count {
+        if i - 1U64 < args.count {
+            fields.append(value: <MakeField nameStart=sd.fields[i].nameStart nameLen=sd.fields[i].nameLen value=args[i - 1U64].expr />)
+        }
+        i += 1
+    }
+    val savedP: Array[Bind] = c.curTypeParams
+    val savedA: Array[U64] = c.curTypeArgs
+    c.curTypeParams = sd.typeParams
+    c.curTypeArgs = c.types[adapterRef].args
+    val v: LLVMValueRef = buildStructValue(c: inout c, st: inout st, sd: sd, sty: st.genStructTys[gslot], fields: fields, errOffset: exprOffset(c: inout c, id: recv))
+    c.curTypeParams = savedP
+    c.curTypeArgs = savedA
+    return v
+}
+
 // ---- call emission ----
 //
 // Resolve the callee like the C backend (findFunc), then lower it. v1 supports the
@@ -3458,6 +3622,13 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
     }
+    // iterator combinator (`xs.map(f)` / `xs.filter(p)`): build the lazy adapter
+    // struct inline (it just wraps the receiver + closure), bypassing the provided
+    // method's body (which has method-own type params + an associated type).
+    val adapterRef: U64 = adapterCallResultInst(c: inout c, st: inout st, recv: recv, nameStart: nameStart, nameLen: nameLen)
+    if adapterRef != 0U64 {
+        return genLlvmAdapterWrap(c: inout c, st: inout st, recv: recv, args: args, adapterRef: adapterRef)
+    }
     // generic-receiver method dispatch (`box.get()`, `maybe.unwrapOr(...)`): the
     // receiver local carries its instantiation ref; route to the monomorphized
     // method instance emitted by declareGenMethods.
@@ -3608,6 +3779,24 @@ fn placePtrOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
             if li < st.nLocals {
                 return st.locPtr[li]
+            }
+        }
+        Expr.Field(val base, val nameStart, val nameLen) => {
+            // a field place `self.inner` (the adapter pattern: `self.inner.next()`
+            // with `inout` next): GEP into the base's storage so the callee mutates
+            // in place, not a copy. The base must be an addressable struct local.
+            match c.exprs[base] {
+                Expr.Ident(start: val bs, len: val bl) => {
+                    val bli: U64 = findLocal(c: inout c, st: inout st, start: bs, len: bl)
+                    val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+                    if bli < st.nLocals && bsi < c.structs.count {
+                        val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
+                        if fidx < c.structs[bsi].fields.count {
+                            return LLVMBuildStructGEP2(st.b, st.locTy[bli], st.locPtr[bli], fidx, anon())
+                        }
+                    }
+                }
+                _ => {}
             }
         }
         _ => {}
@@ -5263,10 +5452,13 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
             return
         }
     }
-    // generic enum scrutinee: set the substitution env so payload types resolve.
+    // The scrutinee's enum instance ref. The enum env (for payload-type resolution)
+    // is set ONLY around bindMatchPayload — NOT for the arm bodies, which must keep
+    // the outer (e.g. monomorphized-method) env so a body's `self.f` / `self.inner`
+    // still grounds. Saved here so each arm can set/restore around its bind.
+    val scrutRef: U64 = exprTypeRef(c: inout c, st: inout st, id: scrut)
     val savedMP: Array[Bind] = c.curTypeParams
     val savedMA: Array[U64] = c.curTypeArgs
-    val didSet: Bool = setEnumEnv(c: inout c, st: inout st, ref: exprTypeRef(c: inout c, st: inout st, id: scrut))
     // the enum: from the first non-wildcard, non-struct arm.
     mut val eid: U64 = c.enums.count
     mut val ai0: U64 = 0
@@ -5284,10 +5476,6 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
     }
     if eid < c.enums.count {
     } else {
-        if didSet {
-            c.curTypeParams = savedMP
-            c.curTypeArgs = savedMA
-        }
         compileErrorAt(line: 0, msg: "LLVM backend: match is only supported on a registered enum (so far)")
         return
     }
@@ -5324,7 +5512,14 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
         st.terminated = false
         if arm.isWildcard {
         } else {
+            // bind the payload under the enum env, then restore the outer env so the
+            // arm body grounds against the enclosing method/function, not the enum.
+            val didB: Bool = setEnumEnv(c: inout c, st: inout st, ref: scrutRef)
             bindMatchPayload(c: inout c, st: inout st, eid: eid, arm: arm, scrutTy: sty, scrutSlot: sslot)
+            if didB {
+                c.curTypeParams = savedMP
+                c.curTypeArgs = savedMA
+            }
         }
         genLlvmBlock(c: inout c, st: inout st, id: arm.body)
         st.nLocals = savedBB
@@ -5349,10 +5544,6 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
     } else {
         LLVMBuildUnreachable(st.b)
         st.terminated = true
-    }
-    if didSet {
-        c.curTypeParams = savedMP
-        c.curTypeArgs = savedMA
     }
 }
 
@@ -5654,8 +5845,17 @@ fn emitIterNextLoop(c: inout Comp, st: inout LlvmCtx, iterVal: LLVMValueRef, opt
     val xTy: LLVMTypeRef = LLVMTypeOf(xVal)
     val xSlot: LLVMValueRef = LLVMBuildAlloca(st.b, xTy, anon())
     LLVMBuildStore(st.b, xVal, xSlot)
-    val xStart: U64 = itemFs[0].tyStart
-    val xLen: U64 = itemFs[0].tyLen
+    mut val xStart: U64 = itemFs[0].tyStart
+    mut val xLen: U64 = itemFs[0].tyLen
+    // ground the element type through the active enum env so its kind is concrete
+    // (a `map`-to-Bool element is i1 -> kind 2, zero-extended on print, not -1).
+    if itemFs[0].ty != 0U64 {
+        if c.curTypeParams.count > 0U64 {
+            val gx: U64 = groundTypeRef(c: inout c, ref: itemFs[0].ty)
+            xStart = c.types[gx].nameStart
+            xLen = c.types[gx].nameLen
+        }
+    }
     pushLocalR(st: inout st, nameStart: varStart, nameLen: varLen, ptr: xSlot, ty: xTy, kind: kindFromTySpan(c: inout c, tyStart: xStart, tyLen: xLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: xStart, len: xLen), isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: 0U64)
     if didSet { c.curTypeParams = savedP  c.curTypeArgs = savedA }
     genLlvmBlock(c: inout c, st: inout st, id: body)
