@@ -3573,7 +3573,10 @@ fn isPlainUserFn(c: inout Comp, st: inout LlvmCtx, fi: U64) -> Bool {
     val f: Func = c.funcs[fi]
     if nameIsMain(c: inout c, f: f) { return false }
     if f.isExtern { return false }
-    if f.isProvided { return false }
+    // a provided trait method is copied onto each conformer (recv = conformer) and
+    // emitted like an inherent method through the hasRecv path below — gated to a
+    // registered struct in the entry module, so std-trait provided methods (whose
+    // shared body lives in std) stay excluded. (No blanket isProvided reject.)
     if f.typeParams.count > 0 { return false }
     if f.isAssoc {
         // an associated function (`Type.name(args)`, no self) is emitted like a
