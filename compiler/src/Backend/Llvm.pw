@@ -2675,6 +2675,21 @@ fn genLlvmAppend(c: inout Comp, st: inout LlvmCtx, recv: U64, valueExpr: U64) ->
     return LLVMConstInt(st.i64ty, 0U64, 0I32)
 }
 
+// `arr.set(i:, value:)`: bounds-checked element store through the array's shared
+// buffer (same place mutation as `arr[i] = v`; no CoW yet). Returns a unit value.
+fn genLlvmArraySet(c: inout Comp, st: inout LlvmCtx, recv: U64, indexExpr: U64, valueExpr: U64) -> LLVMValueRef {
+    val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: recv)
+    val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: recv)
+    val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 0U64, anon())
+    val count: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 1U64, anon())
+    val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: indexExpr)
+    emitBoundsCheck(c: inout c, st: inout st, idx: idx, count: count)
+    val ep: LLVMValueRef = arrElemPtr(st: inout st, elemTy: elemTy, data: data, idx: idx)
+    val rv: LLVMValueRef = coerceElem(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valueExpr), elemTy: elemTy)
+    LLVMBuildStore(st.b, rv, ep)
+    return LLVMConstInt(st.i64ty, 0U64, 0I32)
+}
+
 // The local index of an array-typed receiver Ident, or st.nLocals.
 fn arrLocalIndex(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
     match c.exprs[id] {
@@ -2864,12 +2879,20 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
             }
         }
     }
-    // array methods (append; others are TODO).
+    // array methods (append / get / set; user methods on Array are TODO).
     if exprIsArray(c: inout c, st: inout st, id: recv) {
         if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "append") {
             return genLlvmAppend(c: inout c, st: inout st, recv: recv, valueExpr: args[0].expr)
         }
-        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: this array method is not yet supported (append only)")
+        // `arr.get(i:)` is the prelude's checked element read (same as `arr[i]`).
+        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "get") {
+            return genLlvmIndex(c: inout c, st: inout st, base: recv, index: args[0].expr)
+        }
+        // `arr.set(i:, value:)` is the prelude's checked element write (`arr[i]=v`).
+        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "set") {
+            return genLlvmArraySet(c: inout c, st: inout st, recv: recv, indexExpr: args[0].expr, valueExpr: args[1].expr)
+        }
+        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: this array method is not yet supported (append / get / set)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     // wrapping arithmetic on a primitive integer receiver: two's-complement wrap
