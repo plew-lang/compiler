@@ -23,7 +23,7 @@ RT=/tmp/plew_llvm_rt.c
 
 # Known gaps the LLVM backend doesn't model yet (value-semantics CoW on arrays):
 # tracked separately so they don't mask real regressions. Remove as features land.
-KNOWN_GAP=" cow_array let_infer cow_struct value_semantics_more value_semantics_return value_semantics_struct "
+KNOWN_GAP=" let_infer cow_struct value_semantics_more value_semantics_return value_semantics_struct "
 
 pass=0; skip=0; fail=0; gap=0
 failed=""

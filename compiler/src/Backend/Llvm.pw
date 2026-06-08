@@ -3367,6 +3367,44 @@ fn rawbufAlloc(c: inout Comp, st: inout LlvmCtx, elemSize: LLVMValueRef, cap: LL
     return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U64, anon())
 }
 
+// Eager value-semantics copy of an array value `{data,count}`: allocate a fresh
+// buffer of `count` elements (size from elemTy) and memcpy, returning the new
+// `{newdata,count}`. Shallow — the elements themselves are bit-copied (correct for
+// primitives / flat structs; a deep copy of array/Ref-bearing elements is a later
+// ARC refinement). Used so binding/assigning an array from an existing place gives
+// an independent value (`val b = a` then `a[0]=…` leaves b unchanged).
+fn copyArrayValue(c: inout Comp, st: inout LlvmCtx, arrVal: LLVMValueRef, elemTy: LLVMTypeRef) -> LLVMValueRef {
+    val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arrVal, 0U64, anon())
+    val count: LLVMValueRef = LLVMBuildExtractValue(st.b, arrVal, 1U64, anon())
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: st.ptrty)
+    ptys.append(value: st.i64ty)
+    ptys.append(value: st.i64ty)
+    val fty: LLVMTypeRef = LLVMFunctionType(st.ptrty, arrayCPtr(ptys), 3U64, 0I32)
+    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_arr_copy", nameId: 24U64, fnTy: fty)
+    mut val av: Array[LLVMValueRef] = []
+    av.append(value: data)
+    av.append(value: LLVMSizeOf(elemTy))
+    av.append(value: count)
+    val nd: LLVMValueRef = LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 3U64, anon())
+    mut val agg: LLVMValueRef = LLVMGetUndef(st.arrayTy)
+    agg = LLVMBuildInsertValue(st.b, agg, nd, 0U64, anon())
+    agg = LLVMBuildInsertValue(st.b, agg, count, 1U64, anon())
+    return agg
+}
+
+// Whether an array-valued expression is an existing PLACE (an array local or a
+// struct field) — copying it makes a new independent owner (value semantics). A
+// literal `[…]`, an append/call result, etc. already produce a fresh owned buffer
+// and must NOT be re-copied.
+fn arrayExprIsPlace(c: inout Comp, id: U64) -> Bool {
+    match c.exprs[id] {
+        Expr.Ident(start: _, len: _) => { return true }
+        Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
+        _ => { return false }
+    }
+}
+
 // Bounds-check `i` against `count` via the runtime (panics on out-of-range).
 fn emitBoundsCheck(c: inout Comp, st: inout LlvmCtx, idx: LLVMValueRef, count: LLVMValueRef) {
     mut val ptys: Array[LLVMTypeRef] = []
@@ -5330,6 +5368,14 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                 }
                 v = genLlvmExpr(c: inout c, st: inout st, id: init)
                 st.expectedTy = 0U64
+                // value semantics: binding an array from an existing place (`val b = a`)
+                // copies the buffer so later mutation through one binding leaves the
+                // other unchanged (CoW, here eager).
+                if isArr {
+                    if arrayExprIsPlace(c: inout c, id: init) {
+                        v = copyArrayValue(c: inout c, st: inout st, arrVal: v, elemTy: elemTy)
+                    }
+                }
             }
             mut val kind: U64 = valueKind(c: inout c, st: inout st, id: init)
             if tyLen > 0U64 {
@@ -6364,5 +6410,6 @@ fn emitLlvmRuntime() {
     write(s: "void* plew_rawbuf_alloc(long long elemSize, long long cap){ long long* h=(long long*)malloc(2*sizeof(long long)+(size_t)(elemSize*cap)); h[0]=cap; h[1]=1; return (void*)(h+2); }\n")
     write(s: "long long plew_rawbuf_cap(void* p){ return p?((long long*)p)[-2]:0; }\n")
     write(s: "void* plew_arr_grow(void* data, long long elemSize, long long count){ long long cap=plew_rawbuf_cap(data); if(count<cap) return data; long long nc=cap<8?8:cap*2; void* nd=plew_rawbuf_alloc(elemSize,nc); if(count) memcpy(nd,data,(size_t)(elemSize*count)); return nd; }\n")
+    write(s: "void* plew_arr_copy(void* data, long long elemSize, long long count){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count) memcpy(nd,data,(size_t)(elemSize*count)); return nd; }\n")
     write(s: "void plew_bounds(long long i, long long n){ if(i<0||i>=n){ fputs(\"panic: index out of bounds\\n\",stderr); exit(1); } }\n")
 }
