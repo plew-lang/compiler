@@ -6445,6 +6445,22 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                                 if fidx < c.structs[sidx].fields.count {
                                     val fld: FieldDef = c.structs[sidx].fields[fidx]
                                     val gep: LLVMValueRef = LLVMBuildStructGEP2(st.b, st.locTy[li], st.locPtr[li], fidx, anon())
+                                    // a boxed (recursive) field (`a.next = <Optional.None/>`):
+                                    // build the value (its type is the expected type, so a
+                                    // bare construction infers its args), heap-allocate a
+                                    // FRESH cell, and repoint the field — value semantics
+                                    // (a copy that still points at the old cell is unchanged).
+                                    if op == opAssign() {
+                                        if fieldIsBoxed(c: inout c, f: fld) {
+                                            st.expectedTy = fld.ty
+                                            val bv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
+                                            st.expectedTy = 0U64
+                                            val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(LLVMTypeOf(bv)), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
+                                            LLVMBuildStore(st.b, bv, cell)
+                                            LLVMBuildStore(st.b, cell, gep)
+                                            return
+                                        }
+                                    }
                                     val rv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
                                     if op == opAssign() {
                                         LLVMBuildStore(st.b, rv, gep)
