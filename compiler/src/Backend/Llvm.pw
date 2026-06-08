@@ -268,6 +268,11 @@ struct LlvmCtx {
     // unsupported adapter — is never emitted), then their bodies drained after the
     // main pass (a body may reach further provided methods — fixpoint).
     pub mut val provEmit: Array[U64]
+    // generic-method instances declared LAZILY on demand (a std/non-entry-module
+    // generic method — Optional.unwrapOr, MapIter.next — reached by a call): the
+    // genMeth* slot index is queued here and its body drained after the main pass,
+    // looping until the queue stops growing (a body may reach further ones).
+    pub mut val genMethEmit: Array[U64]
 }
 
 // A NUL-terminated C string from a Plew literal, for the many `const char*` name
@@ -1387,6 +1392,20 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 if mfi < c.funcs.count {
                     if c.funcs[mfi].hasRet {
                         return kindFromTySpan(c: inout c, tyStart: c.funcs[mfi].retStart, tyLen: c.funcs[mfi].retLen)
+                    }
+                }
+            }
+            // a method on a generic enum/struct instance (`opt.isSome()`,
+            // `res.isOk()` -> Bool): resolve via the receiver's instance ref, since
+            // exprStructIdx doesn't see enums. The concrete return kind comes from
+            // the method's declared return span (Bool/numeric).
+            val rRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
+            if rRef != 0U64 {
+                val rt: TypeRef = c.types[rRef]
+                val gmfi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                if gmfi < c.funcs.count {
+                    if c.funcs[gmfi].hasRet {
+                        return kindFromTySpan(c: inout c, tyStart: c.funcs[gmfi].retStart, tyLen: c.funcs[gmfi].retLen)
                     }
                 }
             }
@@ -3222,7 +3241,7 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
             val grt: TypeRef = c.types[recvRef]
             val gmfi: U64 = findMethod(c: inout c, recvStart: grt.nameStart, recvLen: grt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
             if gmfi < c.funcs.count {
-                val gslot: U64 = genMethSlotFor(c: inout c, st: inout st, mfi: gmfi, instRef: recvRef)
+                val gslot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: gmfi, instRef: recvRef)
                 if gslot < st.genMethK.count {
                     return genGenMethodCall(c: inout c, st: inout st, recv: recv, mfi: gmfi, slot: gslot, instRef: recvRef, args: args)
                 }
@@ -3778,18 +3797,6 @@ fn ensureProvidedDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
     return st.fnIdx.count - 1U64
 }
 
-// Emit the bodies of provided methods reached during the main pass; a body may
-// reach further provided methods (declared lazily as it emits), so loop until the
-// queue stops growing.
-fn emitProvidedMethods(c: inout Comp, st: inout LlvmCtx) {
-    mut val i: U64 = 0
-    while i < st.provEmit.count {
-        val fi: U64 = st.provEmit[i]
-        genLlvmFuncBody(c: inout c, st: inout st, fi: fi, fv: st.fnVal[userFnSlot(st: inout st, idx: fi)])
-        i += 1
-    }
-}
-
 // Append the decimal digits of n to a byte buffer (for synthetic symbol names).
 // Uses digitStrU's per-digit String (its bytes are U8) to avoid a U64->U8 narrow,
 // which Plew's lossless `as` does not allow.
@@ -4022,24 +4029,63 @@ fn declareOneGenMethod(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64)
     st.curRecvInstRef = savedR
 }
 
-// Emit each generic-method instance body under its receiver's env.
+// Emit one generic-method instance body (slot index into genMeth*) under its
+// receiver's substitution env.
+fn emitOneGenMethod(c: inout Comp, st: inout LlvmCtx, slot: U64) {
+    val mfi: U64 = st.genMethK[slot]
+    val instRef: U64 = st.genMethInst[slot]
+    val mf: Func = c.funcs[mfi]
+    val savedP: Array[Bind] = c.curTypeParams
+    val savedA: Array[U64] = c.curTypeArgs
+    val savedR: U64 = st.curRecvInstRef
+    c.curTypeParams = mf.typeParams
+    c.curTypeArgs = c.types[instRef].args
+    st.curRecvInstRef = instRef
+    genLlvmFuncBody(c: inout c, st: inout st, fi: mfi, fv: st.genMethVal[slot])
+    c.curTypeParams = savedP
+    c.curTypeArgs = savedA
+    st.curRecvInstRef = savedR
+}
+
+// Emit each eagerly-declared generic-method instance body under its receiver's env.
 fn emitGenMethods(c: inout Comp, st: inout LlvmCtx) {
     mut val slot: U64 = 0
     while slot < st.genMethK.count {
-        val mfi: U64 = st.genMethK[slot]
-        val instRef: U64 = st.genMethInst[slot]
-        val mf: Func = c.funcs[mfi]
-        val savedP: Array[Bind] = c.curTypeParams
-        val savedA: Array[U64] = c.curTypeArgs
-        val savedR: U64 = st.curRecvInstRef
-        c.curTypeParams = mf.typeParams
-        c.curTypeArgs = c.types[instRef].args
-        st.curRecvInstRef = instRef
-        genLlvmFuncBody(c: inout c, st: inout st, fi: mfi, fv: st.genMethVal[slot])
-        c.curTypeParams = savedP
-        c.curTypeArgs = savedA
-        st.curRecvInstRef = savedR
+        emitOneGenMethod(c: inout c, st: inout st, slot: slot)
         slot += 1
+    }
+}
+
+// Declare a generic-method instance on demand — a std / non-entry-module generic
+// method (Optional.unwrapOr, MapIter.next) reached by a call — and queue its body
+// for the post-pass drain. Returns the genMeth* slot, or genMethK.count if it
+// can't be declared (the method has its own type params beyond the receiver
+// instance's — provided map[B]/filter is handled separately). Idempotent.
+fn ensureGenMethodDeclared(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64) -> U64 {
+    val existing: U64 = genMethSlotFor(c: inout c, st: inout st, mfi: mfi, instRef: instRef)
+    if existing < st.genMethK.count {
+        return existing
+    }
+    // the method's type params must pair 1:1 with the instance's type args (the
+    // instance fully grounds the method's env); a mismatch means method-own params.
+    val mf: Func = c.funcs[mfi]
+    if mf.typeParams.count == c.types[instRef].args.count {
+    } else {
+        return st.genMethK.count
+    }
+    declareOneGenMethod(c: inout c, st: inout st, mfi: mfi, instRef: instRef)
+    val slot: U64 = st.genMethK.count - 1U64
+    st.genMethEmit.append(value: slot)
+    return slot
+}
+
+// Drain the lazily-declared generic-method queue: emit each queued body (which may
+// reach further lazy generic methods, appending to the queue — so loop on count).
+fn emitQueuedGenMethods(c: inout Comp, st: inout LlvmCtx) {
+    mut val i: U64 = 0
+    while i < st.genMethEmit.count {
+        emitOneGenMethod(c: inout c, st: inout st, slot: st.genMethEmit[i])
+        i += 1
     }
 }
 
@@ -5288,7 +5334,7 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
     val itfi: U64 = findMethod(c: inout c, recvStart: gt.nameStart, recvLen: gt.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
     if itfi < c.funcs.count {
         // an Iterable: call iterator() and switch the instance ref to the iterator's.
-        val itSlot: U64 = genMethSlotFor(c: inout c, st: inout st, mfi: itfi, instRef: recvRef)
+        val itSlot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: itfi, instRef: recvRef)
         if itSlot < st.genMethK.count {
         } else {
             compileErrorAt(line: 0, msg: "LLVM backend: this generic Iterable's iterator method is not emittable yet")
@@ -5315,7 +5361,7 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
         compileErrorAt(line: 0, msg: "LLVM backend: generic Iterable for-loop needs a `next` method on the iterator")
         return
     }
-    val nSlot: U64 = genMethSlotFor(c: inout c, st: inout st, mfi: nfi, instRef: iterInstRef)
+    val nSlot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: nfi, instRef: iterInstRef)
     if nSlot < st.genMethK.count {
     } else {
         compileErrorAt(line: 0, msg: "LLVM backend: this generic iterator's next method is not emittable yet")
@@ -5528,7 +5574,7 @@ fn emitLlvm(c: inout Comp) {
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[]
-        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] provEmit=[] />
+        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] provEmit=[] genMethEmit=[] />
 
     // a "self" byte span (appended past the source) to bind method receivers.
     st.selfStart = c.bytes.count
@@ -5575,8 +5621,28 @@ fn emitLlvm(c: inout Comp) {
     // lambda-lifted closure bodies + function-value thunks.
     emitClosures(c: inout c, st: inout st)
     emitThunks(c: inout c, st: inout st)
-    // provided trait methods reached during the passes above (declared lazily).
-    emitProvidedMethods(c: inout c, st: inout st)
+    // provided trait methods + lazily-declared std/generic methods reached during
+    // the passes above. Both queues can grow as bodies emit (a provided body calls
+    // a std generic method, a generic body reaches a provided one), so drain to a
+    // fixpoint: loop until neither queue advances.
+    mut val provDone: U64 = 0
+    mut val genmDone: U64 = 0
+    mut val draining: Bool = true
+    while draining {
+        while provDone < st.provEmit.count {
+            genLlvmFuncBody(c: inout c, st: inout st, fi: st.provEmit[provDone], fv: st.fnVal[userFnSlot(st: inout st, idx: st.provEmit[provDone])])
+            provDone += 1
+        }
+        while genmDone < st.genMethEmit.count {
+            emitOneGenMethod(c: inout c, st: inout st, slot: st.genMethEmit[genmDone])
+            genmDone += 1
+        }
+        if provDone >= st.provEmit.count {
+            if genmDone >= st.genMethEmit.count {
+                draining = false
+            }
+        }
+    }
     if foundMain {
     } else {
         compileErrorAt(line: 0, msg: "LLVM backend: no `main` function found")
