@@ -44,11 +44,15 @@ extern(c) {
     fn LLVMVoidTypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
     fn LLVMPointerTypeInContext(ctx~: LLVMContextRef, addrSpace~: U32) -> LLVMTypeRef
     fn LLVMStructTypeInContext(ctx~: LLVMContextRef, elemTypes~: CPtr[LLVMTypeRef], count~: U32, packed~: I32) -> LLVMTypeRef
-    fn LLVMFunctionType(ret~: LLVMTypeRef, params~: CPtr[LLVMTypeRef], count~: U32, isVarArg~: I32) -> LLVMTypeRef
+    // count is the C API's `unsigned`; declared U64 here because Plew has no
+    // narrowing `as` yet (an Array.count is U64). Safe on LP64 (arm64/x86-64):
+    // the callee reads the low 32 bits, and our counts are tiny. Revisit once
+    // integer narrowing (wrapping / TryFrom) lands.
+    fn LLVMFunctionType(ret~: LLVMTypeRef, params~: CPtr[LLVMTypeRef], count~: U64, isVarArg~: I32) -> LLVMTypeRef
 
     // Functions / basic blocks / params.
     fn LLVMAddFunction(m~: LLVMModuleRef, name~: CPtr[U8], fnTy~: LLVMTypeRef) -> LLVMValueRef
-    fn LLVMGetParam(func~: LLVMValueRef, index~: U32) -> LLVMValueRef
+    fn LLVMGetParam(func~: LLVMValueRef, index~: U64) -> LLVMValueRef
     fn LLVMAppendBasicBlockInContext(ctx~: LLVMContextRef, func~: LLVMValueRef, name~: CPtr[U8]) -> LLVMBasicBlockRef
 
     // Constants.
@@ -59,7 +63,7 @@ extern(c) {
     fn LLVMPositionBuilderAtEnd(b~: LLVMBuilderRef, bb~: LLVMBasicBlockRef)
     fn LLVMBuildRet(b~: LLVMBuilderRef, v~: LLVMValueRef) -> LLVMValueRef
     fn LLVMBuildRetVoid(b~: LLVMBuilderRef) -> LLVMValueRef
-    fn LLVMBuildCall2(b~: LLVMBuilderRef, fnTy~: LLVMTypeRef, func~: LLVMValueRef, args~: CPtr[LLVMValueRef], numArgs~: U32, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildCall2(b~: LLVMBuilderRef, fnTy~: LLVMTypeRef, func~: LLVMValueRef, args~: CPtr[LLVMValueRef], numArgs~: U64, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildAdd(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildSub(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildMul(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
@@ -112,6 +116,18 @@ struct LlvmCtx {
     pub val strty: LLVMTypeRef
     pub mut val curFn: LLVMValueRef
     pub mut val terminated: Bool
+    // the function currently being emitted: is it `main` (returns i32 0), and its
+    // LLVM return type + whether it returns void (Plew `()`), so `return` and the
+    // fall-through epilogue terminate with the right instruction.
+    pub mut val curIsMain: Bool
+    pub mut val curRetVoid: Bool
+    pub mut val curRetTy: LLVMTypeRef
+    // declared user functions, cached by c.funcs index (parallel arrays), so a call
+    // resolves to the same LLVMValueRef without name mangling (the symbol name is a
+    // synthetic unique `pf<idx>`; only `main`/runtime symbols have meaningful names).
+    pub mut val fnIdx: Array[U64]
+    pub mut val fnVal: Array[LLVMValueRef]
+    pub mut val fnTy: Array[LLVMTypeRef]
     // local environment (parallel arrays).
     pub mut val locStart: Array[U64]
     pub mut val locLen: Array[U64]
@@ -264,12 +280,12 @@ fn emitStrSink(c: inout Comp, st: inout LlvmCtx, rtName: String, rtId: U64, argE
     mut val ptys: Array[LLVMTypeRef] = []
     ptys.append(value: st.ptrty)
     ptys.append(value: st.i64ty)
-    val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(ptys), 2U32, 0I32)
+    val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(ptys), 2U64, 0I32)
     val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: rtName, nameId: rtId, fnTy: fty)
     mut val av: Array[LLVMValueRef] = []
     av.append(value: ptr)
     av.append(value: len)
-    return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U32, anon())
+    return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U64, anon())
 }
 
 // ---- arithmetic / comparison ----
@@ -376,14 +392,146 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
         // void plew_exit(i64): truncate-free (the code is already i64), then call.
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(value: st.i64ty)
-        val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(ptys), 1U32, 0I32)
+        val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(ptys), 1U64, 0I32)
         val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_exit", nameId: 1U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
         av.append(value: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr))
-        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U32, anon())
+        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
-    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: this call is not yet supported (only `exit` so far)")
+    // a user-defined free function: resolve like the C backend, then call the
+    // cached LLVMValueRef (declared in pass 1). Generic / extern / overload cases
+    // beyond a plain match arrive in later increments.
+    val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+    if cfi < c.funcs.count {
+        val slot: U64 = userFnSlot(st: inout st, idx: cfi)
+        if slot < st.fnIdx.count {
+            mut val av2: Array[LLVMValueRef] = []
+            mut val ai: U64 = 0
+            while ai < args.count {
+                av2.append(value: genLlvmExpr(c: inout c, st: inout st, id: args[ai].expr))
+                ai += 1
+            }
+            return LLVMBuildCall2(st.b, st.fnTy[slot], st.fnVal[slot], arrayCPtr(av2), av2.count, anon())
+        }
+    }
+    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: this call is not yet supported (intrinsic or plain user function only)")
     return LLVMConstInt(st.i64ty, 0U64, 0I32)
+}
+
+// Index into st.fn* for a cached user function (by c.funcs index), or st.fnIdx.count.
+fn userFnSlot(st: inout LlvmCtx, idx: U64) -> U64 {
+    mut val i: U64 = 0
+    while i < st.fnIdx.count {
+        if st.fnIdx[i] == idx {
+            return i
+        }
+        i += 1
+    }
+    return st.fnIdx.count
+}
+
+// Whether a Func is a plain user free function the LLVM backend emits directly
+// (not main / extern / generic / method / assoc / provided / trait-receiver).
+// Restricted to the ENTRY module (id 0): the std library (Prelude/Core/…) is full
+// of features not yet covered, and a simple program doesn't call them — emitting
+// only the user's own module keeps bring-up tractable. (Proper call-graph
+// reachability, which will pull in exactly the reached std functions, replaces
+// this once arrays/methods/generics land.)
+fn isPlainUserFn(c: inout Comp, f: Func) -> Bool {
+    if nameIsMain(c: inout c, f: f) { return false }
+    if f.isExtern { return false }
+    if f.hasRecv { return false }
+    if f.isAssoc { return false }
+    if f.isProvided { return false }
+    if f.typeParams.count > 0 { return false }
+    if moduleOf(c: inout c, offset: f.nameStart) != 0U64 { return false }
+    return true
+}
+
+// The LLVM return type of a function (and whether it is void = Plew `()`).
+fn llvmFnRetTy(c: inout Comp, st: inout LlvmCtx, f: Func) -> LLVMTypeRef {
+    if f.hasRet {
+        return llvmScalarTy(c: inout c, st: inout st, tyStart: f.retStart, tyLen: f.retLen)
+    }
+    return st.voidty
+}
+
+// Pass 1: declare every plain user function as `pf<idx>` with its LLVM signature,
+// caching (idx -> value, type) so calls resolve without name mangling.
+fn declareUserFns(c: inout Comp, st: inout LlvmCtx) {
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        val f: Func = c.funcs[fi]
+        if isPlainUserFn(c: inout c, f: f) {
+            mut val ptys: Array[LLVMTypeRef] = []
+            mut val pi: U64 = 0
+            while pi < f.params.count {
+                ptys.append(value: llvmScalarTy(c: inout c, st: inout st, tyStart: f.params[pi].tyStart, tyLen: f.params[pi].tyLen))
+                pi += 1
+            }
+            val rty: LLVMTypeRef = llvmFnRetTy(c: inout c, st: inout st, f: f)
+            val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), f.params.count, 0I32)
+            mut val nm: Array[U8] = []
+            appendBytes(into: inout nm, from: "pf".bytes)
+            appendU64Dec(into: inout nm, n: fi)
+            nm.append(value: 0)
+            val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
+            st.fnIdx.append(value: fi)
+            st.fnVal.append(value: fv)
+            st.fnTy.append(value: fty)
+        }
+        fi += 1
+    }
+}
+
+// Append the decimal digits of n to a byte buffer (for synthetic symbol names).
+// Uses digitStrU's per-digit String (its bytes are U8) to avoid a U64->U8 narrow,
+// which Plew's lossless `as` does not allow.
+fn appendU64Dec(into: inout Array[U8], n: U64) {
+    if n >= 10U64 {
+        appendU64Dec(into: inout into, n: n / 10U64)
+    }
+    appendBytes(into: inout into, from: digitStrU(d: n % 10U64).bytes)
+}
+
+// Pass 2: emit a plain user function's body.
+fn genLlvmFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
+    val f: Func = c.funcs[fi]
+    val slot: U64 = userFnSlot(st: inout st, idx: fi)
+    val fv: LLVMValueRef = st.fnVal[slot]
+    st.curFn = fv
+    st.curIsMain = false
+    st.curRetVoid = !f.hasRet
+    st.curRetTy = llvmFnRetTy(c: inout c, st: inout st, f: f)
+    val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "entry"))
+    LLVMPositionBuilderAtEnd(st.b, entry)
+    st.terminated = false
+    // fresh local scope; bind each param into an alloca (so it reads/writes
+    // uniformly with locals).
+    st.locStart = []
+    st.locLen = []
+    st.locPtr = []
+    st.locTy = []
+    mut val pi: U64 = 0
+    while pi < f.params.count {
+        val p: Param = f.params[pi]
+        val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen)
+        val slot2: LLVMValueRef = LLVMBuildAlloca(st.b, pty, anon())
+        LLVMBuildStore(st.b, LLVMGetParam(fv, pi), slot2)
+        pushLocal(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty)
+        pi += 1
+    }
+    genLlvmBlock(c: inout c, st: inout st, id: f.body)
+    if st.terminated {
+    } else {
+        // checkReturns guarantees a non-() function diverges on every path, so a
+        // fall-through here is a () function: return void.
+        if st.curRetVoid {
+            LLVMBuildRetVoid(st.b)
+        } else {
+            LLVMBuildUnreachable(st.b)
+        }
+    }
 }
 
 // ---- statement / block emission ----
@@ -431,10 +579,17 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             LLVMBuildUnreachable(st.b)
             st.terminated = true
         }
-        Stmt.Return(value: _, val hasValue) => {
-            // main returns () -> the C `int main` returns 0. (Non-main / value
-            // returns arrive with user functions, a later increment.)
-            LLVMBuildRet(st.b, LLVMConstInt(st.i32ty, 0U64, 0I32))
+        Stmt.Return(val value, val hasValue) => {
+            if st.curIsMain {
+                // Plew `main` returns () -> C `int main` returns 0.
+                LLVMBuildRet(st.b, LLVMConstInt(st.i32ty, 0U64, 0I32))
+            } else {
+                if hasValue {
+                    LLVMBuildRet(st.b, genLlvmExpr(c: inout c, st: inout st, id: value))
+                } else {
+                    LLVMBuildRetVoid(st.b)
+                }
+            }
             st.terminated = true
         }
         Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
@@ -523,15 +678,24 @@ fn emitLlvm(c: inout Comp) {
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
+        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx)
+        fnIdx=[] fnVal=[] fnTy=[]
         locStart=[] locLen=[] locPtr=[] locTy=[] declId=[] declFn=[] declTy=[] />
 
-    // find and emit the user's `main`.
+    // pass 1: declare all plain user functions (so calls resolve before bodies).
+    declareUserFns(c: inout c, st: inout st)
+
+    // pass 2: emit `main` and every plain user function's body.
     mut val fi: U64 = 0
     mut val foundMain: Bool = false
     while fi < c.funcs.count {
         if nameIsMain(c: inout c, f: c.funcs[fi]) {
             genLlvmMain(c: inout c, st: inout st, fi: fi)
             foundMain = true
+        } else {
+            if isPlainUserFn(c: inout c, f: c.funcs[fi]) {
+                genLlvmFunc(c: inout c, st: inout st, fi: fi)
+            }
         }
         fi += 1
     }
@@ -548,9 +712,11 @@ fn emitLlvm(c: inout Comp) {
 // Emit the user `main` as C `i32 @main()` returning 0 (Plew main returns ()).
 fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     mut val noParams: Array[LLVMTypeRef] = []
-    val mainTy: LLVMTypeRef = LLVMFunctionType(st.i32ty, arrayCPtr(noParams), 0U32, 0I32)
+    val mainTy: LLVMTypeRef = LLVMFunctionType(st.i32ty, arrayCPtr(noParams), 0U64, 0I32)
     val mainFn: LLVMValueRef = LLVMAddFunction(st.mod, cstr(s: "main"), mainTy)
     st.curFn = mainFn
+    st.curIsMain = true
+    st.curRetVoid = false
     val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, mainFn, cstr(s: "entry"))
     LLVMPositionBuilderAtEnd(st.b, entry)
     st.terminated = false
