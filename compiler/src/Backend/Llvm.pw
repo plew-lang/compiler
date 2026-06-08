@@ -4215,6 +4215,31 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
     if adapterRef != 0U64 {
         return genLlvmAdapterWrap(c: inout c, st: inout st, recv: recv, args: args, adapterRef: adapterRef)
     }
+    // a method on a String receiver (`s.isEmpty()`): String is an extern lang-item
+    // (its value is strty), not a registered struct, so dispatch to its std method
+    // and lazily emit the body (which reads `self.bytes`).
+    if valueKind(c: inout c, st: inout st, id: recv) == 1U64 {
+        val strB: Bind = kwSpan(c: inout c, kw: "String", kwLen: 6U64)
+        val smfi: U64 = findMethod(c: inout c, recvStart: strB.nameStart, recvLen: strB.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        if smfi < c.funcs.count {
+            val sslot: U64 = ensureProvidedDeclared(c: inout c, st: inout st, fi: smfi)
+            if sslot < st.fnIdx.count {
+                val smf: Func = c.funcs[smfi]
+                mut val sav: Array[LLVMValueRef] = []
+                if smf.selfInout {
+                    sav.append(value: placePtrOf(c: inout c, st: inout st, id: recv))
+                } else {
+                    sav.append(value: genLlvmExpr(c: inout c, st: inout st, id: recv))
+                }
+                mut val sai: U64 = 0
+                while sai < args.count {
+                    sav.append(value: genArgValue(c: inout c, st: inout st, argExpr: args[sai].expr, p: smf.params[sai]))
+                    sai += 1
+                }
+                return LLVMBuildCall2(st.b, st.fnTy[sslot], st.fnVal[sslot], arrayCPtr(sav), sav.count, anon())
+            }
+        }
+    }
     // generic-receiver method dispatch (`box.get()`, `maybe.unwrapOr(...)`): the
     // receiver local carries its instantiation ref; route to the monomorphized
     // method instance emitted by declareGenMethods.
@@ -4830,9 +4855,14 @@ fn ensureProvidedDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
     } else {
         return st.fnIdx.count
     }
+    // a registered struct receiver, or the String lang-item (an extern struct whose
+    // value type is strty) — both have a well-defined self LLVM type.
     if structRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.structIdxs.count {
     } else {
-        return st.fnIdx.count
+        if rangeEquals(bytes: c.bytes, start: f.recvStart, len: f.recvLen, kw: "String") {
+        } else {
+            return st.fnIdx.count
+        }
     }
     mut val ptys: Array[LLVMTypeRef] = []
     ptys.append(value: selfParamTy(c: inout c, st: inout st, f: f))
@@ -5701,7 +5731,7 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
             selfPtr = LLVMBuildAlloca(st.b, recvTy, anon())
             LLVMBuildStore(st.b, LLVMGetParam(fv, 0U64), selfPtr)
         }
-        pushLocalR(st: inout st, nameStart: st.selfStart, nameLen: st.selfLen, ptr: selfPtr, ty: recvTy, kind: 0U64, structIdx: recvSidx, isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: recvRef)
+        pushLocalR(st: inout st, nameStart: st.selfStart, nameLen: st.selfLen, ptr: selfPtr, ty: recvTy, kind: kindFromTySpan(c: inout c, tyStart: f.recvStart, tyLen: f.recvLen), structIdx: recvSidx, isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: recvRef)
         // a `move fn` self is owned (deinit'd in the callee); `fn`/`inout fn`/
         // `borrow fn` self is a borrow the caller owns.
         setLocalOwned(st: inout st, owned: f.selfMove)
