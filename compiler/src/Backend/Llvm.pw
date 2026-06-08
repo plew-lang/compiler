@@ -101,6 +101,8 @@ extern(c) {
     fn LLVMBuildBr(b~: LLVMBuilderRef, dest~: LLVMBasicBlockRef) -> LLVMValueRef
     fn LLVMBuildCondBr(b~: LLVMBuilderRef, cond~: LLVMValueRef, thenBB~: LLVMBasicBlockRef, elseBB~: LLVMBasicBlockRef) -> LLVMValueRef
     fn LLVMBuildUnreachable(b~: LLVMBuilderRef) -> LLVMValueRef
+    fn LLVMBuildPhi(b~: LLVMBuilderRef, ty~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMAddIncoming(phi~: LLVMValueRef, vals~: CPtr[LLVMValueRef], blocks~: CPtr[LLVMBasicBlockRef], count~: U64)
 
     // Aggregates / globals (String = {ptr, i64}).
     fn LLVMGetUndef(ty~: LLVMTypeRef) -> LLVMValueRef
@@ -147,6 +149,9 @@ struct LlvmCtx {
     pub mut val curRetTy: LLVMTypeRef
     pub mut val curRetTyStart: U64
     pub mut val curRetTyLen: U64
+    // the value yielded by the innermost value-position block (a `give` statement
+    // sets it; IfExpr reads it after emitting each branch block).
+    pub mut val giveValue: LLVMValueRef
     // registered struct types (parallel: c.structs index -> named LLVM struct type).
     pub mut val structIdxs: Array[U64]
     pub mut val structTys: Array[LLVMTypeRef]
@@ -960,8 +965,8 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                     return emitStrEq(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
                 }
             }
-            val l: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: lhs)
-            val r: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: rhs)
+            mut val l: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: lhs)
+            mut val r: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: rhs)
             // a struct/enum (aggregate) operand routes through an Eq/Ord witness in
             // the C backend; that dispatch is not yet modeled here — reject loudly
             // rather than emit an invalid icmp/arith on an aggregate.
@@ -969,6 +974,18 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             } else {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "LLVM backend: struct/enum operator (Eq/Ord/Add/... witness) not yet supported")
                 return LLVMConstInt(st.i1ty, 0U64, 0I32)
+            }
+            // normalize operand widths: a context-less literal defaults to i64 but
+            // may meet a narrower typed operand — extend the narrower to the wider
+            // (using that operand's signedness) so the op is single-width.
+            val wl: U32 = LLVMGetIntTypeWidth(LLVMTypeOf(l))
+            val wr: U32 = LLVMGetIntTypeWidth(LLVMTypeOf(r))
+            if wl < wr {
+                l = coerceInt(st: inout st, v: l, target: LLVMTypeOf(r), unsigned: valueKind(c: inout c, st: inout st, id: lhs) == 3U64)
+            } else {
+                if wr < wl {
+                    r = coerceInt(st: inout st, v: r, target: LLVMTypeOf(l), unsigned: valueKind(c: inout c, st: inout st, id: rhs) == 3U64)
+                }
             }
             return buildBinOp(c: inout c, st: inout st, op: op, l: l, r: r)
         }
@@ -995,6 +1012,26 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
         Expr.Method(val recv, val nameStart, val nameLen, val args) => {
             return genLlvmMethod(c: inout c, st: inout st, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
         }
+        Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
+            return genLlvmIfExpr(c: inout c, st: inout st, cond: cond, thenBlk: thenBlk, elseBlk: elseBlk)
+        }
+        Expr.MatchExpr(val scrut, val arms) => {
+            return genLlvmMatchExpr(c: inout c, st: inout st, scrut: scrut, arms: arms)
+        }
+        Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
+            // `x as T` (spec/12: lossless): an int-width conversion (sext if the
+            // source is signed, zext if unsigned, or same width). Non-int / From
+            // conversions are not yet modeled.
+            val ov: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: operand)
+            if LLVMGetTypeKind(LLVMTypeOf(ov)) == 8U32 {
+                if kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen) == 1U64 {
+                } else {
+                    return coerceInt(st: inout st, v: ov, target: llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen), unsigned: valueKind(c: inout c, st: inout st, id: operand) == 3U64)
+                }
+            }
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "LLVM backend: this `as` conversion is not yet supported (int-width only)")
+            return LLVMConstInt(st.i64ty, 0U64, 0I32)
+        }
         Expr.Unary(val op, val operand) => {
             if op == opSub() {
                 return LLVMBuildNeg(st.b, genLlvmExpr(c: inout c, st: inout st, id: operand), anon())
@@ -1008,10 +1045,141 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
         _ => {
+            eprint(text: "[exprform] ")
+            eprint(text: exprFormName(c: inout c, id: id))
+            eprint(text: "\n")
             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "LLVM backend: expression form not yet supported")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
     }
+}
+
+// (diagnostic) The name of an expression's arena variant.
+fn exprFormName(c: inout Comp, id: U64) -> String {
+    match c.exprs[id] {
+        Expr.Index(base: _, index: _) => { return "Index" }
+        Expr.Array(elems: _) => { return "Array" }
+        Expr.Cast(operand: _, tyStart: _, tyLen: _, ty: _) => { return "Cast" }
+        Expr.MatchExpr(scrut: _, arms: _) => { return "MatchExpr" }
+        Expr.IfExpr(cond: _, thenBlk: _, elseBlk: _) => { return "IfExpr" }
+        Expr.OptChain(base: _, memberStart: _, memberLen: _) => { return "OptChain" }
+        Expr.Try(expr: _) => { return "Try" }
+        Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return "Arrow" }
+        Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => { return "Closure" }
+        Expr.Move(operand: _, isBorrow: _) => { return "Move" }
+        Expr.Await(operand: _) => { return "Await" }
+        _ => { return "other" }
+    }
+}
+
+// Value-position `if cond { … give a } else { … give b }`: emit each branch
+// block (its `give` sets st.giveValue), then a PHI merges the two results.
+fn genLlvmIfExpr(c: inout Comp, st: inout LlvmCtx, cond: U64, thenBlk: U64, elseBlk: U64) -> LLVMValueRef {
+    val cv: LLVMValueRef = genLlvmCond(c: inout c, st: inout st, id: cond)
+    val thenBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "vif.then"))
+    val elseBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "vif.else"))
+    val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "vif.end"))
+    LLVMBuildCondBr(st.b, cv, thenBB, elseBB)
+    LLVMPositionBuilderAtEnd(st.b, thenBB)
+    st.terminated = false
+    val markT: U64 = st.nLocals
+    genLlvmBlock(c: inout c, st: inout st, id: thenBlk)
+    st.nLocals = markT
+    val thenVal: LLVMValueRef = st.giveValue
+    val thenEnd: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
+    LLVMBuildBr(st.b, contBB)
+    LLVMPositionBuilderAtEnd(st.b, elseBB)
+    st.terminated = false
+    val markE: U64 = st.nLocals
+    genLlvmBlock(c: inout c, st: inout st, id: elseBlk)
+    st.nLocals = markE
+    val elseVal: LLVMValueRef = st.giveValue
+    val elseEnd: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
+    LLVMBuildBr(st.b, contBB)
+    LLVMPositionBuilderAtEnd(st.b, contBB)
+    st.terminated = false
+    val phi: LLVMValueRef = LLVMBuildPhi(st.b, LLVMTypeOf(thenVal), anon())
+    mut val vals: Array[LLVMValueRef] = []
+    vals.append(value: thenVal)
+    vals.append(value: elseVal)
+    mut val blocks: Array[LLVMBasicBlockRef] = []
+    blocks.append(value: thenEnd)
+    blocks.append(value: elseEnd)
+    LLVMAddIncoming(phi, arrayCPtr(vals), arrayCPtr(blocks), 2U64)
+    return phi
+}
+
+// Value-position `match scrut { Pat => exprValue, ... }`: each arm body is an
+// expression; a PHI over the arm blocks merges their values.
+fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchArm]) -> LLVMValueRef {
+    val sv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: scrut)
+    val sty: LLVMTypeRef = LLVMTypeOf(sv)
+    mut val eid: U64 = c.enums.count
+    mut val ai0: U64 = 0
+    while ai0 < arms.count {
+        if arms[ai0].isWildcard {
+        } else {
+            if arms[ai0].isStruct {
+            } else {
+                if eid == c.enums.count {
+                    eid = enumIdxByName(c: inout c, start: arms[ai0].enumStart, len: arms[ai0].enumLen)
+                }
+            }
+        }
+        ai0 += 1
+    }
+    if eid < c.enums.count {
+    } else {
+        compileErrorAt(line: 0, msg: "LLVM backend: value-match is only supported on a registered enum (so far)")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val sslot: LLVMValueRef = LLVMBuildAlloca(st.b, sty, anon())
+    LLVMBuildStore(st.b, sv, sslot)
+    val tag: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, LLVMBuildStructGEP2(st.b, sty, sslot, 0U64, anon()), anon())
+    val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "vmatch.end"))
+    mut val checkBB: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
+    mut val lastWasWildcard: Bool = false
+    mut val phiVals: Array[LLVMValueRef] = []
+    mut val phiBlocks: Array[LLVMBasicBlockRef] = []
+    mut val ai: U64 = 0
+    while ai < arms.count {
+        val arm: MatchArm = arms[ai]
+        val armBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "varm"))
+        LLVMPositionBuilderAtEnd(st.b, checkBB)
+        if arm.isWildcard {
+            LLVMBuildBr(st.b, armBB)
+            lastWasWildcard = true
+        } else {
+            val vi: U64 = variantIndex(c: inout c, enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
+            val nextBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "vmatch.next"))
+            LLVMBuildCondBr(st.b, LLVMBuildICmp(st.b, llvmIntEq(), tag, LLVMConstInt(st.i64ty, vi, 0I32), anon()), armBB, nextBB)
+            checkBB = nextBB
+            lastWasWildcard = false
+        }
+        val saved: U64 = st.nLocals
+        LLVMPositionBuilderAtEnd(st.b, armBB)
+        st.terminated = false
+        if arm.isWildcard {
+        } else {
+            bindMatchPayload(c: inout c, st: inout st, eid: eid, arm: arm, scrutTy: sty, scrutSlot: sslot)
+        }
+        val armVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: arm.body)
+        st.nLocals = saved
+        phiVals.append(value: armVal)
+        phiBlocks.append(value: LLVMGetInsertBlock(st.b))
+        LLVMBuildBr(st.b, contBB)
+        ai += 1
+    }
+    if lastWasWildcard {
+    } else {
+        LLVMPositionBuilderAtEnd(st.b, checkBB)
+        LLVMBuildUnreachable(st.b)
+    }
+    LLVMPositionBuilderAtEnd(st.b, contBB)
+    st.terminated = false
+    val phi: LLVMValueRef = LLVMBuildPhi(st.b, LLVMTypeOf(phiVals[0]), anon())
+    LLVMAddIncoming(phi, arrayCPtr(phiVals), arrayCPtr(phiBlocks), phiVals.count)
+    return phi
 }
 
 // Emit a condition expression as an i1. A comparison binary already yields i1; any
@@ -1370,7 +1538,12 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                 Expr.Ident(val start, val len) => {
                     val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
                     if li < st.nLocals {
-                        val rv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
+                        mut val rv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
+                        // coerce the value to the local's width (a context-less
+                        // literal may default wider/narrower).
+                        if LLVMGetTypeKind(LLVMTypeOf(rv)) == 8U32 {
+                            rv = coerceInt(st: inout st, v: rv, target: st.locTy[li], unsigned: st.locKind[li] == 3U64)
+                        }
                         if op == opAssign() {
                             LLVMBuildStore(st.b, rv, st.locPtr[li])
                         } else {
@@ -1492,6 +1665,10 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
         }
         Stmt.Match(val scrut, val arms) => {
             genLlvmMatch(c: inout c, st: inout st, scrut: scrut, arms: arms)
+        }
+        Stmt.Give(val value) => {
+            // yield the enclosing value-position block's result (IfExpr reads it).
+            st.giveValue = genLlvmExpr(c: inout c, st: inout st, id: value)
         }
         _ => {
             compileErrorAt(line: 0, msg: "LLVM backend: statement form not yet supported")
@@ -1659,7 +1836,7 @@ fn emitLlvm(c: inout Comp) {
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
-        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 structIdxs=[] structTys=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 nLocals=0
+        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[]
         locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] declId=[] declFn=[] declTy=[] />
 
