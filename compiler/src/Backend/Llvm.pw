@@ -1167,6 +1167,14 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             }
         }
         Expr.Method(recv: val mrecv, nameStart: val mnameStart, nameLen: val mnameLen, args: val margs) => {
+            // `arr.get(i:)` is array-index sugar — its element struct (so
+            // `self.entries.get(i:i).key` resolves Entry[K,V] inside a generic method).
+            if rangeEquals(bytes: c.bytes, start: mnameStart, len: mnameLen, kw: "get") {
+                val ger: U64 = arrFieldElemStructIdx(c: inout c, st: inout st, arrayExpr: mrecv)
+                if ger < c.structs.count {
+                    return ger
+                }
+            }
             // a method/assoc-fn result used as a struct (`Vec2.add(...).sum()`,
             // `p.scaled().x`): resolve the callee's return struct.
             val marn: Bind = assocRecvName(c: inout c, recv: mrecv)
@@ -1234,47 +1242,55 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             }
         }
         Expr.Index(val base, index: _) => {
-            // an array element used as a struct (`h.items[0].v`): resolve the array's
-            // element struct. For an array struct field (`h.items : Array[Box[T]]`),
-            // ground the element type under the base value's instance env.
-            match c.exprs[base] {
-                Expr.Field(base: val fbase, nameStart: val fns, nameLen: val fnl) => {
-                    val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: fbase)
-                    if bsi < c.structs.count {
-                        val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
-                        if fidx < c.structs[bsi].fields.count {
-                            val fd: FieldDef = c.structs[bsi].fields[fidx]
-                            if fd.tyIsArray {
-                                if fd.ty != 0U64 {
-                                    val ft: TypeRef = c.types[fd.ty]
-                                    if ft.args.count > 0U64 {
-                                        val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: fbase)
-                                        val savedP: Array[Bind] = c.curTypeParams
-                                        val savedA: Array[U64] = c.curTypeArgs
-                                        val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: baseRef)
-                                        val g: U64 = groundTypeRef(c: inout c, ref: ft.args[0])
-                                        val gt: TypeRef = c.types[g]
-                                        mut val r: U64 = c.structs.count
-                                        if isGenericInst(c: inout c, ref: g) {
-                                            val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: g)
-                                            if gs < st.genStructRefs.count {
-                                                r = st.genStructDefs[gs]
-                                            }
-                                        } else {
-                                            r = localStructIdxFor(c: inout c, st: inout st, start: gt.nameStart, len: gt.nameLen)
-                                        }
-                                        if didSet {
-                                            c.curTypeParams = savedP
-                                            c.curTypeArgs = savedA
-                                        }
-                                        return r
+            // an array element used as a struct (`h.items[0].v`): the array's element
+            // struct, grounded under the base value's instance env.
+            return arrFieldElemStructIdx(c: inout c, st: inout st, arrayExpr: base)
+        }
+        _ => {}
+    }
+    return c.structs.count
+}
+
+// The element struct def index of an array-typed struct field expression
+// (`h.items` / `self.entries`), grounded under the base value's generic instance
+// env, or c.structs.count if not such an array. Drives `arr[i].field` /
+// `arr.get(i:).field` dispatch.
+fn arrFieldElemStructIdx(c: inout Comp, st: inout LlvmCtx, arrayExpr: U64) -> U64 {
+    match c.exprs[arrayExpr] {
+        Expr.Field(base: val fbase, nameStart: val fns, nameLen: val fnl) => {
+            val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: fbase)
+            if bsi < c.structs.count {
+                val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
+                if fidx < c.structs[bsi].fields.count {
+                    val fd: FieldDef = c.structs[bsi].fields[fidx]
+                    if fd.tyIsArray {
+                        if fd.ty != 0U64 {
+                            val ft: TypeRef = c.types[fd.ty]
+                            if ft.args.count > 0U64 {
+                                val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: fbase)
+                                val savedP: Array[Bind] = c.curTypeParams
+                                val savedA: Array[U64] = c.curTypeArgs
+                                val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: baseRef)
+                                val g: U64 = groundTypeRef(c: inout c, ref: ft.args[0])
+                                val gt: TypeRef = c.types[g]
+                                mut val r: U64 = c.structs.count
+                                if isGenericInst(c: inout c, ref: g) {
+                                    val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: g)
+                                    if gs < st.genStructRefs.count {
+                                        r = st.genStructDefs[gs]
                                     }
+                                } else {
+                                    r = localStructIdxFor(c: inout c, st: inout st, start: gt.nameStart, len: gt.nameLen)
                                 }
+                                if didSet {
+                                    c.curTypeParams = savedP
+                                    c.curTypeArgs = savedA
+                                }
+                                return r
                             }
                         }
                     }
                 }
-                _ => {}
             }
         }
         _ => {}
