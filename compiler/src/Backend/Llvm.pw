@@ -11,14 +11,17 @@
 // `plewc-llvm --runtime` (PlewString / plew_* are ABI-identical to the C backend).
 //
 // COVERAGE: the entry module's `main` + plain free functions (params, returns,
-// recursion, default args, lexical scope/shadowing); integer locals + arithmetic
-// + comparisons (collapsed to signed i64 — widths/unsigned-ops/overflow-panic are
-// TODO); Bool; String (value `{ptr,i64}`, literals, ==/!=); `if`/`while`; and the
-// intrinsics exit / write / eprint / print / panic (print dispatches by the arg's
-// type-kind to a runtime formatter). A per-local type-kind tag (int/String/Bool/
-// uint) drives String-vs-int decisions without c.locals (unpopulated here).
-// NOT yet: structs/enums, arrays, generics, methods, closures, async, ARC,
-// multi-module user code (only module 0 is emitted). Anything unsupported is
+// recursion, default args, lexical scope/shadowing); width-accurate integers
+// (i8/i16/i32/i64 with sext/zext/trunc coercion at typed sinks — literal width
+// from the suffix or the checker's exprIntCtx; overflow-panic still TODO); the
+// full operator set (arithmetic / bitwise / shift / unary / comparison; >> is
+// arithmetic, a logical-shift-on-unsigned TODO); Bool; String (value `{ptr,i64}`,
+// literals, ==/!=); `if`/`while`; and the intrinsics exit / write / eprint /
+// print / panic (print dispatches by the arg's type-kind to a runtime formatter).
+// A per-local type-kind tag (int/String/Bool/uint) drives String-vs-int and
+// signed-vs-unsigned decisions without c.locals (which the backend doesn't
+// populate). NOT yet: structs/enums, arrays, generics, methods, closures, async,
+// ARC, multi-module user code (only module 0 is emitted). Anything unsupported is
 // rejected loudly (no silent miscompile — acceptance soundness).
 
 // ---- libLLVM-C bindings (raw FFI floor; positional, no labels) ----
@@ -62,6 +65,7 @@ extern(c) {
     // Constants / introspection.
     fn LLVMConstInt(ty~: LLVMTypeRef, n~: U64, signExtend~: I32) -> LLVMValueRef
     fn LLVMTypeOf(v~: LLVMValueRef) -> LLVMTypeRef
+    fn LLVMGetIntTypeWidth(ty~: LLVMTypeRef) -> U32
 
     // Builder + instructions.
     fn LLVMCreateBuilderInContext(ctx~: LLVMContextRef) -> LLVMBuilderRef
@@ -75,8 +79,15 @@ extern(c) {
     fn LLVMBuildSDiv(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildSRem(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildNeg(b~: LLVMBuilderRef, v~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildNot(b~: LLVMBuilderRef, v~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildAnd(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildOr(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildXor(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildShl(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildAShr(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildICmp(b~: LLVMBuilderRef, pred~: U32, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildZExt(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildSExt(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildTrunc(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildAlloca(b~: LLVMBuilderRef, ty~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildLoad2(b~: LLVMBuilderRef, ty~: LLVMTypeRef, ptr~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
@@ -113,6 +124,7 @@ struct LlvmCtx {
     pub mut val b: LLVMBuilderRef
     pub val i1ty: LLVMTypeRef
     pub val i8ty: LLVMTypeRef
+    pub val i16ty: LLVMTypeRef
     pub val i32ty: LLVMTypeRef
     pub val i64ty: LLVMTypeRef
     pub val voidty: LLVMTypeRef
@@ -127,6 +139,8 @@ struct LlvmCtx {
     pub mut val curIsMain: Bool
     pub mut val curRetVoid: Bool
     pub mut val curRetTy: LLVMTypeRef
+    pub mut val curRetTyStart: U64
+    pub mut val curRetTyLen: U64
     // declared user functions, cached by c.funcs index (parallel arrays), so a call
     // resolves to the same LLVMValueRef without name mangling (the symbol name is a
     // synthetic unique `pf<idx>`; only `main`/runtime symbols have meaningful names).
@@ -178,11 +192,54 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Bool") {
         return st.i1ty
     }
-    // All integer widths collapse to i64 for now (the C backend's `long long`
-    // default): keeps arithmetic single-width and correct for in-range values.
-    // Width-accurate types + sext/trunc on conversions, and per-width overflow
-    // semantics, arrive in a later increment.
+    // Width-accurate integers: I8/U8 -> i8, I16/U16 -> i16, I32/U32 -> i32, else
+    // i64 (signedness is tracked separately as a kind, not in the LLVM type).
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "I8") { return st.i8ty }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "U8") { return st.i8ty }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "I16") { return st.i16ty }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "U16") { return st.i16ty }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "I32") { return st.i32ty }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "U32") { return st.i32ty }
     return st.i64ty
+}
+
+// Sign/zero-extend an integer value to i64 for the runtime boundary (print / exit
+// take i64). No-op if already i64; unsigned -> zext, signed -> sext.
+fn extendToI64(st: inout LlvmCtx, v: LLVMValueRef, unsigned: Bool) -> LLVMValueRef {
+    if LLVMGetIntTypeWidth(LLVMTypeOf(v)) >= 64U32 {
+        return v
+    }
+    if unsigned {
+        return LLVMBuildZExt(st.b, v, st.i64ty, anon())
+    }
+    return LLVMBuildSExt(st.b, v, st.i64ty, anon())
+}
+
+// Adjust an integer value to a target integer width (trunc / sext / zext), so a
+// value reaching a typed sink (annotated let, call arg, return) matches the
+// expected width — e.g. an i64-defaulted literal `5` stored into an `I32` local.
+fn coerceInt(st: inout LlvmCtx, v: LLVMValueRef, target: LLVMTypeRef, unsigned: Bool) -> LLVMValueRef {
+    val vw: U32 = LLVMGetIntTypeWidth(LLVMTypeOf(v))
+    val tw: U32 = LLVMGetIntTypeWidth(target)
+    if vw == tw {
+        return v
+    }
+    if vw > tw {
+        return LLVMBuildTrunc(st.b, v, target, anon())
+    }
+    if unsigned {
+        return LLVMBuildZExt(st.b, v, target, anon())
+    }
+    return LLVMBuildSExt(st.b, v, target, anon())
+}
+
+// Coerce an int value to the integer type named by a type span, unless that type
+// is String (kind 1) — then pass through (no width concept).
+fn coerceIntTo(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, tyStart: U64, tyLen: U64) -> LLVMValueRef {
+    if kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen) == 1U64 {
+        return v
+    }
+    return coerceInt(st: inout st, v: v, target: llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen), unsigned: isUnsignedName(c: inout c, start: tyStart, len: tyLen))
 }
 
 // Is this type name an unsigned integer (for choosing signed vs unsigned ops /
@@ -241,6 +298,16 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             if li < st.nLocals {
                 return st.locKind[li]
             }
+        }
+        Expr.Unary(val op, val operand) => {
+            if op == opNot() { return 2U64 }
+            return valueKind(c: inout c, st: inout st, id: operand)
+        }
+        Expr.Binary(val op, val lhs, rhs: _) => {
+            if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
+                return 2U64
+            }
+            return valueKind(c: inout c, st: inout st, id: lhs)
         }
         _ => {}
     }
@@ -374,7 +441,7 @@ fn emitPrint(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> LLVMValueRef {
         val bv: LLVMValueRef = LLVMBuildZExt(st.b, genLlvmExpr(c: inout c, st: inout st, id: argExpr), st.i64ty, anon())
         return emitI64Sink(c: inout c, st: inout st, rtName: "plew_print_bool", rtId: 6U64, v: bv)
     }
-    val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: argExpr)
+    val v: LLVMValueRef = extendToI64(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: argExpr), unsigned: k == 3U64)
     if k == 3U64 {
         return emitI64Sink(c: inout c, st: inout st, rtName: "plew_print_u64", rtId: 7U64, v: v)
     }
@@ -421,6 +488,13 @@ fn buildBinOp(c: inout Comp, st: inout LlvmCtx, op: I64, l: LLVMValueRef, r: LLV
     if op == opMul() { return LLVMBuildMul(st.b, l, r, anon()) }
     if op == opDiv() { return LLVMBuildSDiv(st.b, l, r, anon()) }
     if op == opRem() { return LLVMBuildSRem(st.b, l, r, anon()) }
+    if op == opBitAnd() { return LLVMBuildAnd(st.b, l, r, anon()) }
+    if op == opBitOr() { return LLVMBuildOr(st.b, l, r, anon()) }
+    if op == opBitXor() { return LLVMBuildXor(st.b, l, r, anon()) }
+    if op == opShl() { return LLVMBuildShl(st.b, l, r, anon()) }
+    // >> is arithmetic (signed) here; unsigned types collapse to i64 so a logical
+    // shift on an unsigned value is a TODO (alongside width/signedness accuracy).
+    if op == opShr() { return LLVMBuildAShr(st.b, l, r, anon()) }
     if op == opEq() { return LLVMBuildICmp(st.b, llvmIntEq(), l, r, anon()) }
     if op == opNe() { return LLVMBuildICmp(st.b, llvmIntNe(), l, r, anon()) }
     if op == opLt() { return LLVMBuildICmp(st.b, llvmIntSlt(), l, r, anon()) }
@@ -444,6 +518,13 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             mut val ty: LLVMTypeRef = st.i64ty
             if isBool {
                 ty = st.i1ty
+            } else {
+                // width from the literal's recovered type (typeOf folds in the
+                // suffix and the checker-recorded context width exprIntCtx).
+                val t: TypeInfo = typeOf(c: inout c, id: id)
+                if t.kind == 0 {
+                    ty = llvmScalarTy(c: inout c, st: inout st, tyStart: t.nameStart, tyLen: t.nameLen)
+                }
             }
             val k: LLVMValueRef = LLVMConstInt(ty, value, 0I32)
             if isNeg {
@@ -480,6 +561,11 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
         Expr.Unary(val op, val operand) => {
             if op == opSub() {
                 return LLVMBuildNeg(st.b, genLlvmExpr(c: inout c, st: inout st, id: operand), anon())
+            }
+            // `!` (Bool) and `~` (BitNot) are both LLVM `xor x, -1` (i1: flips the
+            // single bit; iN: flips all bits).
+            if op == opNot() || op == opBitNot() {
+                return LLVMBuildNot(st.b, genLlvmExpr(c: inout c, st: inout st, id: operand), anon())
             }
             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "LLVM backend: unary operator not yet supported")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
@@ -527,7 +613,7 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
         val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(ptys), 1U64, 0I32)
         val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_exit", nameId: 1U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr))
+        av.append(value: extendToI64(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), unsigned: valueKind(c: inout c, st: inout st, id: args[0].expr) == 3U64))
         return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
     // a user-defined free function: resolve like the C backend, then call the
@@ -537,17 +623,18 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
     if cfi < c.funcs.count {
         val slot: U64 = userFnSlot(st: inout st, idx: cfi)
         if slot < st.fnIdx.count {
+            val cf: Func = c.funcs[cfi]
             mut val av2: Array[LLVMValueRef] = []
             mut val ai: U64 = 0
             while ai < args.count {
-                av2.append(value: genLlvmExpr(c: inout c, st: inout st, id: args[ai].expr))
+                // coerce each argument to the parameter's integer width.
+                av2.append(value: coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[ai].expr), tyStart: cf.params[ai].tyStart, tyLen: cf.params[ai].tyLen))
                 ai += 1
             }
             // fill omitted trailing params with their default expressions (spec/04).
-            val cf: Func = c.funcs[cfi]
             mut val di: U64 = args.count
             while di < cf.params.count {
-                av2.append(value: genLlvmExpr(c: inout c, st: inout st, id: cf.params[di].defaultExpr))
+                av2.append(value: coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: cf.params[di].defaultExpr), tyStart: cf.params[di].tyStart, tyLen: cf.params[di].tyLen))
                 di += 1
             }
             return LLVMBuildCall2(st.b, st.fnTy[slot], st.fnVal[slot], arrayCPtr(av2), av2.count, anon())
@@ -642,6 +729,8 @@ fn genLlvmFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     st.curIsMain = false
     st.curRetVoid = !f.hasRet
     st.curRetTy = llvmFnRetTy(c: inout c, st: inout st, f: f)
+    st.curRetTyStart = f.retStart
+    st.curRetTyLen = f.retLen
     val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "entry"))
     LLVMPositionBuilderAtEnd(st.b, entry)
     st.terminated = false
@@ -684,16 +773,16 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
     val s: Stmt = c.stmts[id]
     match s {
         Stmt.Let(mutable: _, val nameStart, val nameLen, val tyStart, val tyLen, tyIsArray: _, ty: _, val init) => {
-            // Compute the value first, then alloca its own LLVM type — robust for
-            // inferred lets (`val s = "..."`) with no annotation.
-            val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: init)
-            val lty: LLVMTypeRef = LLVMTypeOf(v)
-            // kind: prefer the annotation (so `val x: U64 = lit` is unsigned), else
-            // infer from the initializer.
+            // Compute the value first, coerce to the annotation's width if any (so
+            // `val a: I32 = 5` stores an i32, not an i64-defaulted literal), then
+            // alloca its LLVM type — robust for inferred lets (`val s = "..."`) too.
+            mut val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: init)
             mut val kind: U64 = valueKind(c: inout c, st: inout st, id: init)
             if tyLen > 0U64 {
+                v = coerceIntTo(c: inout c, st: inout st, v: v, tyStart: tyStart, tyLen: tyLen)
                 kind = kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen)
             }
+            val lty: LLVMTypeRef = LLVMTypeOf(v)
             val slot: LLVMValueRef = LLVMBuildAlloca(st.b, lty, anon())
             LLVMBuildStore(st.b, v, slot)
             pushLocal(st: inout st, nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind)
@@ -734,7 +823,11 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                 LLVMBuildRet(st.b, LLVMConstInt(st.i32ty, 0U64, 0I32))
             } else {
                 if hasValue {
-                    LLVMBuildRet(st.b, genLlvmExpr(c: inout c, st: inout st, id: value))
+                    mut val rv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
+                    if st.curRetTyLen > 0U64 {
+                        rv = coerceIntTo(c: inout c, st: inout st, v: rv, tyStart: st.curRetTyStart, tyLen: st.curRetTyLen)
+                    }
+                    LLVMBuildRet(st.b, rv)
                 } else {
                     LLVMBuildRetVoid(st.b)
                 }
@@ -827,11 +920,11 @@ fn emitLlvm(c: inout Comp) {
     val strty: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(strelems), 2U32, 0I32)
     mut val st: LlvmCtx = <LlvmCtx
         ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx)
-        i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx)
+        i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx) i16ty=LLVMInt16TypeInContext(ctx)
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
-        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) nLocals=0
+        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[]
         locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] declId=[] declFn=[] declTy=[] />
 
