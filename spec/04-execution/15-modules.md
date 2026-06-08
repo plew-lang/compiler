@@ -533,6 +533,8 @@ val m = LLVMModuleCreateWithNameInContext(name: cname.ptr, ctx: ctx)  // 呼び�
   リンクは「clang に渡すフラグ」に過ぎず、`#include` 不要なので追加の include パスも基本不要。
 - **C++ シムが要る場合**（libLLVM-C で足りず C++ API を使う時・rustc の `llvm-wrapper` と同型）：`extern "C"` を露出する `.cpp` を 1 枚書き、clang++ で別途コンパイルして libLLVM/libc++ とリンク。**Plew 側の言語機能は `extern(c)` のまま**（C++ には触れない）。シム source とコンパイル/リンク指定はマニフェストに列挙（後続）。
 
+> **決定済み／先送りの線引き**：①自己完結 C 出力（`#include` 不要）②リンクはソース構文でない（`extern(c)` は純粋宣言）③手フラグでの interim リンクは**今すぐ可能** ── ここは確定。**先送りは「宣言的/自動なリンク」だけ**（manifest のネイティブ依存スキーマ・`pkg-config`/`llvm-config` 探索・`plewc` による clang 駆動・C++ シム統合＝パッケージ管理 M3 と地続き）。**外部ライブラリと実際にリンクする手段は interim で確保済みなので、FFI も LLVM バックエンドもこの上に構築でき、進行はブロックされない**（manifest 化は後追いで非破壊に被せる）。
+
 ### 未決
 
 - **リンクのマニフェスト・スキーマ**：ネイティブ依存のキー（`link`/`pkg-config`/探索コマンド）・C++ シムのビルド統合。**パッケージ管理（M3）と地続き**ゆえそこで確定。
