@@ -192,6 +192,10 @@ struct LlvmCtx {
     pub mut val fnIdx: Array[U64]
     pub mut val fnVal: Array[LLVMValueRef]
     pub mut val fnTy: Array[LLVMTypeRef]
+    // generic free-function instances (parallel: c.fnInsts index -> value, type).
+    pub mut val genFnK: Array[U64]
+    pub mut val genFnVal: Array[LLVMValueRef]
+    pub mut val genFnTy: Array[LLVMTypeRef]
     // local environment (parallel arrays). `nLocals` is the logical count: blocks
     // save it on entry and restore it on exit (lexical scope), so a shadowing
     // binding inside a block leaves scope at the block's end and a later reference
@@ -2002,6 +2006,33 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
             }
             return LLVMBuildCall2(st.b, st.fnTy[slot], st.fnVal[slot], arrayCPtr(av2), av2.count, anon())
         }
+        // a generic free-function call: infer its concrete type args, find the
+        // instance, build args under the instance env, and call it.
+        if isGenericFreeFn(c: inout c, fi: cfi) {
+            val inferred: Array[U64] = inferFnArgs(c: inout c, f: c.funcs[cfi], args: args)
+            val gslot: U64 = genFnSlotFor(c: inout c, fnIdx: cfi, args: inferred, st: inout st)
+            if gslot < st.genFnK.count {
+                val cf: Func = c.funcs[cfi]
+                val savedP: Array[Bind] = c.curTypeParams
+                val savedA: Array[U64] = c.curTypeArgs
+                c.curTypeParams = cf.typeParams
+                c.curTypeArgs = inferred
+                mut val av3: Array[LLVMValueRef] = []
+                mut val ai3: U64 = 0
+                while ai3 < args.count {
+                    av3.append(value: genArgValue(c: inout c, st: inout st, argExpr: args[ai3].expr, p: cf.params[ai3]))
+                    ai3 += 1
+                }
+                mut val di3: U64 = args.count
+                while di3 < cf.params.count {
+                    av3.append(value: genArgValue(c: inout c, st: inout st, argExpr: cf.params[di3].defaultExpr, p: cf.params[di3]))
+                    di3 += 1
+                }
+                c.curTypeParams = savedP
+                c.curTypeArgs = savedA
+                return LLVMBuildCall2(st.b, st.genFnTy[gslot], st.genFnVal[gslot], arrayCPtr(av3), av3.count, anon())
+            }
+        }
     }
     compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: this call is not yet supported (intrinsic or plain user function only)")
     return LLVMConstInt(st.i64ty, 0U64, 0I32)
@@ -2245,10 +2276,103 @@ fn appendU64Dec(into: inout Array[U8], n: U64) {
 }
 
 // Pass 2: emit a plain user function's body.
+// Declare each concrete generic free-function instantiation (c.fnInsts) as a
+// symbol `gf<k>` with its signature built under the instance's substitution env.
+fn declareGenFns(c: inout Comp, st: inout LlvmCtx) {
+    mut val k: U64 = 0
+    while k < c.fnInsts.count {
+        val fin: FnInst = c.fnInsts[k]
+        // free-function instances only (recvInstRef == 0); methods are a later step.
+        // restrict to the entry module: a std generic fn (print[T] etc.) has a body
+        // full of not-yet-supported constructs and shouldn't be emitted (print is
+        // special-cased at the call site, so its instance is never called).
+        if fin.recvInstRef == 0U64 && moduleOf(c: inout c, offset: c.funcs[fin.fnIdx].nameStart) == 0U64 {
+            if isGenericFreeFn(c: inout c, fi: fin.fnIdx) {
+                val f: Func = c.funcs[fin.fnIdx]
+                val savedP: Array[Bind] = c.curTypeParams
+                val savedA: Array[U64] = c.curTypeArgs
+                c.curTypeParams = f.typeParams
+                c.curTypeArgs = fin.args
+                mut val ptys: Array[LLVMTypeRef] = []
+                mut val pi: U64 = 0
+                while pi < f.params.count {
+                    ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: f.params[pi]))
+                    pi += 1
+                }
+                val fty: LLVMTypeRef = LLVMFunctionType(llvmFnRetTy(c: inout c, st: inout st, f: f), arrayCPtr(ptys), f.params.count, 0I32)
+                mut val nm: Array[U8] = []
+                appendBytes(into: inout nm, from: "gf".bytes)
+                appendU64Dec(into: inout nm, n: k)
+                nm.append(value: 0)
+                val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
+                c.curTypeParams = savedP
+                c.curTypeArgs = savedA
+                st.genFnK.append(value: k)
+                st.genFnVal.append(value: fv)
+                st.genFnTy.append(value: fty)
+            }
+        }
+        k += 1
+    }
+}
+
+// Emit each generic free-function instance body under its env.
+fn emitGenFns(c: inout Comp, st: inout LlvmCtx) {
+    mut val slot: U64 = 0
+    while slot < st.genFnK.count {
+        val fin: FnInst = c.fnInsts[st.genFnK[slot]]
+        val f: Func = c.funcs[fin.fnIdx]
+        val savedP: Array[Bind] = c.curTypeParams
+        val savedA: Array[U64] = c.curTypeArgs
+        c.curTypeParams = f.typeParams
+        c.curTypeArgs = fin.args
+        genLlvmFuncBody(c: inout c, st: inout st, fi: fin.fnIdx, fv: st.genFnVal[slot])
+        c.curTypeParams = savedP
+        c.curTypeArgs = savedA
+        slot += 1
+    }
+}
+
+// Find the registered generic-fn instance slot for (fnIdx, args), or count.
+fn genFnSlotFor(c: inout Comp, fnIdx: U64, args: Array[U64], st: inout LlvmCtx) -> U64 {
+    mut val slot: U64 = 0
+    while slot < st.genFnK.count {
+        val fin: FnInst = c.fnInsts[st.genFnK[slot]]
+        if fin.fnIdx == fnIdx {
+            if typeArgsEq(c: inout c, a: fin.args, b: args) {
+                return slot
+            }
+        }
+        slot += 1
+    }
+    return st.genFnK.count
+}
+
+// Element-wise structural equality of two type-argument lists.
+fn typeArgsEq(c: inout Comp, a: Array[U64], b: Array[U64]) -> Bool {
+    if a.count != b.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.count {
+        if typeRefEq(c: inout c, a: a[i], b: b[i]) {
+        } else {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
 fn genLlvmFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
-    val f: Func = c.funcs[fi]
     val slot: U64 = userFnSlot(st: inout st, idx: fi)
-    val fv: LLVMValueRef = st.fnVal[slot]
+    genLlvmFuncBody(c: inout c, st: inout st, fi: fi, fv: st.fnVal[slot])
+}
+
+// Emit function `fi`'s body into the LLVM function value `fv` (under the active
+// substitution env, if any — used for both plain functions and generic instances).
+fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) {
+    val f: Func = c.funcs[fi]
     st.curFn = fv
     st.curIsMain = false
     st.curRetVoid = !f.hasRet
@@ -2845,7 +2969,7 @@ fn emitLlvm(c: inout Comp) {
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 nLocals=0
-        fnIdx=[] fnVal=[] fnTy=[]
+        fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[]
         locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] declId=[] declFn=[] declTy=[] />
 
     // a "self" byte span (appended past the source) to bind method receivers.
@@ -2859,8 +2983,9 @@ fn emitLlvm(c: inout Comp) {
     registerGenStructs(c: inout c, st: inout st)
     registerGenEnums(c: inout c, st: inout st)
 
-    // pass 1: declare all plain user functions (so calls resolve before bodies).
+    // pass 1: declare all plain user functions + generic free-fn instances.
     declareUserFns(c: inout c, st: inout st)
+    declareGenFns(c: inout c, st: inout st)
 
     // pass 2: emit `main` and every plain user function's body.
     mut val fi: U64 = 0
@@ -2876,6 +3001,8 @@ fn emitLlvm(c: inout Comp) {
         }
         fi += 1
     }
+    // generic free-function instance bodies.
+    emitGenFns(c: inout c, st: inout st)
     if foundMain {
     } else {
         compileErrorAt(line: 0, msg: "LLVM backend: no `main` function found")
