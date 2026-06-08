@@ -38,7 +38,11 @@ for f in tests/run/*.pw; do
         skip=$((skip + 1)); continue
     fi
     bin="/tmp/llt_$name"
-    if ! clang -w "$ll" "$RT" $("$LC" --ldflags) -o "$bin" 2>/dev/null; then
+    # optional companion C source (tests/run/<name>.c): linked alongside, for
+    # extern(c) FFI tests that provide foreign symbols without a system library.
+    extra_c=""
+    [ -f "tests/run/$name.c" ] && extra_c="tests/run/$name.c"
+    if ! clang -w "$ll" "$RT" $extra_c $("$LC" --ldflags) -o "$bin" 2>/dev/null; then
         fail=$((fail + 1)); failed="$failed $name(link)"; continue
     fi
     infile="tests/run/$name.in"

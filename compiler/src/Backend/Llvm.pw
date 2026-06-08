@@ -350,6 +350,10 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "RawBuffer") {
         return st.ptrty
     }
+    // FFI raw pointers (`CPtr[T]`) are opaque pointers (spec/15).
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "CPtr") {
+        return st.ptrty
+    }
     // a function-value type `fn(...) -> ...` is the {fn, env} closure fat pointer.
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "fn") {
         return st.closureTy
@@ -4181,6 +4185,32 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
         val rc: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, rcPtr, anon())
         return LLVMBuildICmp(st.b, llvmIntEq(), rc, LLVMConstInt(st.i64ty, 1U64, 0I32), anon())
     }
+    // FFI String <-> C-string (@Std/Ffi extern(plewIntrinsic)).
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "cString") {
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: st.ptrty)
+        ptys.append(value: st.i64ty)
+        val fty: LLVMTypeRef = LLVMFunctionType(st.ptrty, arrayCPtr(ptys), 2U64, 0I32)
+        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_cString", nameId: 29U64, fnTy: fty)
+        val s: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: LLVMBuildExtractValue(st.b, s, 0U64, anon()))
+        av.append(value: LLVMBuildExtractValue(st.b, s, 1U64, anon()))
+        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U64, anon())
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "stringFromCString") {
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: st.ptrty)
+        val fty: LLVMTypeRef = LLVMFunctionType(st.strty, arrayCPtr(ptys), 1U64, 0I32)
+        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_stringFromCString", nameId: 30U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr))
+        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U64, anon())
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arrayCPtr") {
+        // an array's storage base as CPtr[T]: the data pointer (field 0).
+        return LLVMBuildExtractValue(st.b, genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), 0U64, anon())
+    }
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "stringFromBytes") {
         // a UTF-8 Array[U8] -> String: same {ptr,i64} layout, so rebuild the strty
         // aggregate from the array's data + count.
@@ -4288,8 +4318,84 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
             }
         }
     }
+    // an extern(c) foreign function (`moduleCreate(…)`): call by its RAW C name
+    // with an FFI-mapped signature (opaque handles / CPtr -> ptr, scalars as-is).
+    if cfi < c.funcs.count {
+        if c.funcs[cfi].isExtern {
+            val ef: Func = c.funcs[cfi]
+            mut val ptys: Array[LLVMTypeRef] = []
+            mut val pe: U64 = 0
+            while pe < ef.params.count {
+                ptys.append(value: ffiTyOf(c: inout c, st: inout st, tyStart: ef.params[pe].tyStart, tyLen: ef.params[pe].tyLen))
+                pe += 1
+            }
+            mut val rty: LLVMTypeRef = st.voidty
+            if ef.hasRet {
+                rty = ffiTyOf(c: inout c, st: inout st, tyStart: ef.retStart, tyLen: ef.retLen)
+            }
+            val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
+            // the C symbol is the raw function name (no mangling); cache by the
+            // function's interned nameId, OFFSET past the runtime cache's small ids
+            // (1-30) so a foreign symbol whose nameId is e.g. 5 doesn't alias
+            // plew_print_str.
+            val ckey: U64 = ef.nameId + 1000000000U64
+            mut val callee: LLVMValueRef = LLVMConstNull(st.ptrty)
+            mut val dfound: Bool = false
+            mut val di: U64 = 0
+            while di < st.declId.count {
+                if st.declId[di] == ckey {
+                    callee = st.declFn[di]
+                    dfound = true
+                    di = st.declId.count
+                } else {
+                    di += 1
+                }
+            }
+            if dfound {
+            } else {
+                mut val nm: Array[U8] = []
+                mut val k: U64 = 0
+                while k < nameLen {
+                    nm.append(value: c.bytes[nameStart + k])
+                    k += 1
+                }
+                nm.append(value: 0)
+                callee = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
+                st.declId.append(value: ckey)
+                st.declFn.append(value: callee)
+                st.declTy.append(value: fty)
+            }
+            mut val av: Array[LLVMValueRef] = []
+            mut val ai: U64 = 0
+            while ai < args.count {
+                av.append(value: genLlvmExpr(c: inout c, st: inout st, id: args[ai].expr))
+                ai += 1
+            }
+            val rv: LLVMValueRef = LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), av.count, anon())
+            if ef.hasRet {
+                return rv
+            }
+            return LLVMConstInt(st.i64ty, 0U64, 0I32)
+        }
+    }
     compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: this call is not yet supported (intrinsic or plain user function only)")
     return LLVMConstInt(st.i64ty, 0U64, 0I32)
+}
+
+// The LLVM type of an FFI parameter/return type span: a fixed-width integer /
+// String / Bool maps to its scalar type; any other (an opaque `type` handle, a
+// `CPtr[T]`) is an opaque pointer (spec/15).
+fn ffiTyOf(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> LLVMTypeRef {
+    if isPrimIntName(c: inout c, start: tyStart, len: tyLen) {
+        return llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen)
+    }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "String") {
+        return st.strty
+    }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Bool") {
+        return st.i1ty
+    }
+    return st.ptrty
 }
 
 // Emit a method call `recv.m(args)`: resolve the method on the receiver's struct,
@@ -7410,6 +7516,10 @@ fn emitLlvmRuntime() {
     // read all of stdin into a String ({ i8* data, i64 len }), matching the C runtime.
     write(s: "typedef struct { char* d; long long n; } PlewStrR;\n")
     write(s: "PlewStrR plew_readStdin(void){ size_t cap=4096,len=0; char* buf=(char*)malloc(cap); int ch; while((ch=getchar())!=EOF){ if(len+1>=cap){cap*=2;buf=(char*)realloc(buf,cap);} buf[len++]=(char)ch; } PlewStrR s; s.d=buf; s.n=(long long)len; return s; }\n")
+    // FFI String <-> C-string (spec/15): cString materializes a NUL-terminated copy
+    // (owned by C until freed); stringFromCString copies a NUL-terminated C string.
+    write(s: "unsigned char* plew_cString(char* d, long long n){ unsigned char* b=(unsigned char*)malloc((size_t)n+1); if(n) memcpy(b,d,(size_t)n); b[n]=0; return b; }\n")
+    write(s: "PlewStrR plew_stringFromCString(unsigned char* p){ PlewStrR s; if(!p){ s.d=(char*)\"\"; s.n=0; return s; } size_t n=strlen((const char*)p); char* b=(char*)malloc(n+1); memcpy(b,p,n); b[n]=0; s.d=b; s.n=(long long)n; return s; }\n")
     // Array storage floor (a [cap][rc][data...] buffer; ARC/CoW not yet modeled —
     // copies share, no free; documented gap). alloc/cap/grow are element-size
     // generic; per-element load/store is inlined in IR via typed GEP.
