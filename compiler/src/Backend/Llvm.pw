@@ -455,6 +455,15 @@ fn fieldWords(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> U64
     return 1U64
 }
 
+// The payload-word count of an enum field, honoring boxing: a boxed (recursive)
+// field is a single heap pointer (1 word); otherwise its type's natural size.
+fn fieldWordsF(c: inout Comp, st: inout LlvmCtx, f: FieldDef) -> U64 {
+    if fieldIsBoxed(c: inout c, f: f) {
+        return 1U64
+    }
+    return fieldWords(c: inout c, st: inout st, tyStart: f.tyStart, tyLen: f.tyLen)
+}
+
 // Whether all variant fields of an enum are primitive (scalar/String/Bool/
 // registered-struct, no array) — registerable here.
 fn enumAllPrimitive(c: inout Comp, st: inout LlvmCtx, eid: U64) -> Bool {
@@ -464,23 +473,30 @@ fn enumAllPrimitive(c: inout Comp, st: inout LlvmCtx, eid: U64) -> Bool {
         val fs: Array[FieldDef] = e.variants[vi].fields
         mut val fj: U64 = 0
         while fj < fs.count {
-            if fs[fj].tyIsArray {
-                return false
-            }
-            val si: U64 = structIndexByName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen)
-            if si < c.structs.count {
-                if c.structs[si].isExtern {
-                } else {
-                    if structRegSlot(c: inout c, st: inout st, start: fs[fj].tyStart, len: fs[fj].tyLen) < st.structIdxs.count {
+            // a boxed (recursive) field is stored as a heap pointer (1 word), so it
+            // is always representable regardless of the pointee type — skip the
+            // primitive checks for it.
+            if fieldIsBoxed(c: inout c, f: fs[fj]) {
+                fj += 1
+            } else {
+                if fs[fj].tyIsArray {
+                    return false
+                }
+                val si: U64 = structIndexByName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen)
+                if si < c.structs.count {
+                    if c.structs[si].isExtern {
                     } else {
-                        return false
+                        if structRegSlot(c: inout c, st: inout st, start: fs[fj].tyStart, len: fs[fj].tyLen) < st.structIdxs.count {
+                        } else {
+                            return false
+                        }
                     }
                 }
+                if isEnumName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen) {
+                    return false
+                }
+                fj += 1
             }
-            if isEnumName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen) {
-                return false
-            }
-            fj += 1
         }
         vi += 1
     }
@@ -503,7 +519,7 @@ fn registerEnums(c: inout Comp, st: inout LlvmCtx) {
                     mut val w: U64 = 0
                     mut val fj: U64 = 0
                     while fj < fs.count {
-                        w = w + fieldWords(c: inout c, st: inout st, tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
+                        w = w + fieldWordsF(c: inout c, st: inout st, f: fs[fj])
                         fj += 1
                     }
                     if w > maxWords {
@@ -534,7 +550,12 @@ fn variantPayloadTy(c: inout Comp, st: inout LlvmCtx, eid: U64, vi: U64) -> LLVM
     mut val elems: Array[LLVMTypeRef] = []
     mut val i: U64 = 0
     while i < fs.count {
-        elems.append(value: llvmScalarTy(c: inout c, st: inout st, tyStart: fs[i].tyStart, tyLen: fs[i].tyLen))
+        // a boxed (recursive) field is a heap pointer; otherwise its scalar type.
+        if fieldIsBoxed(c: inout c, f: fs[i]) {
+            elems.append(value: st.ptrty)
+        } else {
+            elems.append(value: llvmScalarTy(c: inout c, st: inout st, tyStart: fs[i].tyStart, tyLen: fs[i].tyLen))
+        }
         i += 1
     }
     return LLVMStructTypeInContext(st.ctx, arrayCPtr(elems), elems.count, 0I32)
@@ -600,8 +621,19 @@ fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, 
                     valExpr = fields[fj].value
                 }
             }
-            val fv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valExpr), tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
-            agg = LLVMBuildInsertValue(st.b, agg, fv, fj, anon())
+            // a boxed (recursive) field: build the payload value, heap-allocate a
+            // cell, store the value, and put the cell pointer in the payload. (No
+            // refcount/free yet — leaky, but observably correct, like Ref.)
+            if fieldIsBoxed(c: inout c, f: fs[fj]) {
+                val boxedVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: valExpr)
+                val boxedTy: LLVMTypeRef = LLVMTypeOf(boxedVal)
+                val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(boxedTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
+                LLVMBuildStore(st.b, boxedVal, cell)
+                agg = LLVMBuildInsertValue(st.b, agg, cell, fj, anon())
+            } else {
+                val fv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valExpr), tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
+                agg = LLVMBuildInsertValue(st.b, agg, fv, fj, anon())
+            }
             fj += 1
         }
         LLVMBuildStore(st.b, agg, LLVMBuildStructGEP2(st.b, ety, slot, 1U64, anon()))
@@ -1617,7 +1649,7 @@ fn enumMaxWords(c: inout Comp, st: inout LlvmCtx, eid: U64) -> U64 {
         mut val w: U64 = 0
         mut val fj: U64 = 0
         while fj < fs.count {
-            w = w + fieldWords(c: inout c, st: inout st, tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
+            w = w + fieldWordsF(c: inout c, st: inout st, f: fs[fj])
             fj += 1
         }
         if w > maxW { maxW = w }
@@ -4342,11 +4374,23 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
             }
         }
         if fidx < fs.count {
-            val fv: LLVMValueRef = LLVMBuildExtractValue(st.b, payload, fidx, anon())
-            val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: fs[fidx].tyStart, tyLen: fs[fidx].tyLen)
+            val fd: FieldDef = fs[fidx]
+            val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: fd.tyStart, tyLen: fd.tyLen)
+            // a boxed (recursive) payload field holds a heap pointer; load the boxed
+            // value back. A non-boxed field is the value directly.
+            mut val fv: LLVMValueRef = LLVMBuildExtractValue(st.b, payload, fidx, anon())
+            if fieldIsBoxed(c: inout c, f: fd) {
+                fv = LLVMBuildLoad2(st.b, pty, fv, anon())
+            }
             val slot: LLVMValueRef = LLVMBuildAlloca(st.b, pty, anon())
             LLVMBuildStore(st.b, fv, slot)
-            pushLocal(st: inout st, nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: kindFromTySpan(c: inout c, tyStart: fs[fidx].tyStart, tyLen: fs[fidx].tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: fs[fidx].tyStart, len: fs[fidx].tyLen), isArr: false, elemTy: st.i64ty, elemKind: 0U64)
+            // an enum-typed bind carries a bare enum TypeRef so a nested match on it
+            // (the recursive case) recovers the enum (typeOf can't see this local).
+            mut val tref: U64 = 0
+            if enumRegSlot(c: inout c, st: inout st, start: fd.tyStart, len: fd.tyLen) < st.enumIdxs.count {
+                tref = simpleTypeRef(c: inout c, nameStart: fd.tyStart, nameLen: fd.tyLen)
+            }
+            pushLocalR(st: inout st, nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: kindFromTySpan(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: fd.tyStart, len: fd.tyLen), isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: tref)
         }
         bi += 1
     }
