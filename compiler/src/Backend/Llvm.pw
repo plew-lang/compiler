@@ -4181,6 +4181,15 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
         val rc: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, rcPtr, anon())
         return LLVMBuildICmp(st.b, llvmIntEq(), rc, LLVMConstInt(st.i64ty, 1U64, 0I32), anon())
     }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "stringFromBytes") {
+        // a UTF-8 Array[U8] -> String: same {ptr,i64} layout, so rebuild the strty
+        // aggregate from the array's data + count.
+        val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
+        mut val s: LLVMValueRef = LLVMGetUndef(st.strty)
+        s = LLVMBuildInsertValue(st.b, s, LLVMBuildExtractValue(st.b, arr, 0U64, anon()), 0U64, anon())
+        s = LLVMBuildInsertValue(st.b, s, LLVMBuildExtractValue(st.b, arr, 1U64, anon()), 1U64, anon())
+        return s
+    }
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readStdin") {
         // read all of stdin into a String (strty {i8*,i64}) via the runtime.
         mut val rtys: Array[LLVMTypeRef] = []
@@ -4224,7 +4233,16 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
     // beyond a plain match arrive in later increments.
     val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
     if cfi < c.funcs.count {
-        val slot: U64 = userFnSlot(st: inout st, idx: cfi)
+        mut val slot: U64 = userFnSlot(st: inout st, idx: cfi)
+        // a std free function reached from an emitted body (digitByteI from
+        // I64.format) is declared+emitted lazily.
+        if slot < st.fnIdx.count {
+        } else {
+            if isGenericFreeFn(c: inout c, fi: cfi) {
+            } else {
+                slot = ensureFreeFnDeclared(c: inout c, st: inout st, fi: cfi)
+            }
+        }
         if slot < st.fnIdx.count {
             val cf: Func = c.funcs[cfi]
             mut val av2: Array[LLVMValueRef] = []
@@ -4277,6 +4295,33 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
 // Emit a method call `recv.m(args)`: resolve the method on the receiver's struct,
 // pass self first (a pointer for `inout fn`, else the struct value), then the
 // coerced arguments, and call the cached LLVMValueRef.
+// The primitive lang-item type-name of a method receiver that isn't a registered
+// struct (String, or a suffixed integer literal like `42I64`), for dispatching
+// `(42I64).format(...)` / `s.isEmpty()`. nameLen 0 if not such a receiver.
+fn primLangItemRecvName(c: inout Comp, st: inout LlvmCtx, recv: U64) -> Bind {
+    match c.exprs[recv] {
+        Expr.Int(value: _, offset: _, isBool: _, val tyStart, val tyLen, isNeg: _) => {
+            if tyLen > 0U64 {
+                if isPrimIntName(c: inout c, start: tyStart, len: tyLen) {
+                    return <Bind nameStart=tyStart nameLen=tyLen fieldStart=tyStart fieldLen=tyLen />
+                }
+            }
+        }
+        Expr.Cast(operand: _, val tyStart, val tyLen, ty: _) => {
+            // `(self as I64).format(...)`: the cast target's primitive type.
+            if isPrimIntName(c: inout c, start: tyStart, len: tyLen) {
+                return <Bind nameStart=tyStart nameLen=tyLen fieldStart=tyStart fieldLen=tyLen />
+            }
+        }
+        _ => {}
+    }
+    if valueKind(c: inout c, st: inout st, id: recv) == 1U64 {
+        return kwSpan(c: inout c, kw: "String", kwLen: 6U64)
+    }
+    val z: Bind = <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+    return z
+}
+
 fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
     // associated-function call `Type.name(args)` (the receiver is a type name, not
     // a value): dispatch to the assoc fn (no self argument).
@@ -4321,12 +4366,12 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
     if adapterRef != 0U64 {
         return genLlvmAdapterWrap(c: inout c, st: inout st, recv: recv, args: args, adapterRef: adapterRef)
     }
-    // a method on a String receiver (`s.isEmpty()`): String is an extern lang-item
-    // (its value is strty), not a registered struct, so dispatch to its std method
-    // and lazily emit the body (which reads `self.bytes`).
-    if valueKind(c: inout c, st: inout st, id: recv) == 1U64 {
-        val strB: Bind = kwSpan(c: inout c, kw: "String", kwLen: 6U64)
-        val smfi: U64 = findMethod(c: inout c, recvStart: strB.nameStart, recvLen: strB.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+    // a method on a primitive lang-item receiver (`s.isEmpty()` on String,
+    // `(42I64).format(...)` on I64): these are extern lang-items (not registered
+    // structs), so dispatch to their std method and lazily emit the body.
+    val primRecv: Bind = primLangItemRecvName(c: inout c, st: inout st, recv: recv)
+    if primRecv.nameLen != 0U64 {
+        val smfi: U64 = findMethod(c: inout c, recvStart: primRecv.nameStart, recvLen: primRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
         if smfi < c.funcs.count {
             val sslot: U64 = ensureProvidedDeclared(c: inout c, st: inout st, fi: smfi)
             if sslot < st.fnIdx.count {
@@ -4961,17 +5006,55 @@ fn ensureProvidedDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
     } else {
         return st.fnIdx.count
     }
-    // a registered struct receiver, or the String lang-item (an extern struct whose
-    // value type is strty) — both have a well-defined self LLVM type.
+    // a registered struct receiver, or a primitive lang-item (String / a fixed-width
+    // integer) — all have a well-defined self LLVM type.
     if structRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.structIdxs.count {
     } else {
         if rangeEquals(bytes: c.bytes, start: f.recvStart, len: f.recvLen, kw: "String") {
         } else {
-            return st.fnIdx.count
+            if isPrimIntName(c: inout c, start: f.recvStart, len: f.recvLen) {
+            } else {
+                return st.fnIdx.count
+            }
         }
     }
     mut val ptys: Array[LLVMTypeRef] = []
     ptys.append(value: selfParamTy(c: inout c, st: inout st, f: f))
+    mut val pi: U64 = 0
+    while pi < f.params.count {
+        ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: f.params[pi]))
+        pi += 1
+    }
+    val fty: LLVMTypeRef = LLVMFunctionType(llvmFnRetTy(c: inout c, st: inout st, f: f), arrayCPtr(ptys), ptys.count, 0I32)
+    mut val nm: Array[U8] = []
+    appendBytes(into: inout nm, from: "pf".bytes)
+    appendU64Dec(into: inout nm, n: fi)
+    nm.append(value: 0)
+    val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
+    st.fnIdx.append(value: fi)
+    st.fnVal.append(value: fv)
+    st.fnTy.append(value: fty)
+    st.provEmit.append(value: fi)
+    return st.fnIdx.count - 1U64
+}
+
+// Declare a non-generic free function on demand and queue its body — a std free
+// function (digitByteI, called by I64.format) reached from an emitted body but
+// gated out of the eager pass (entry-module only). Reachability-driven, so an
+// uncalled std fn with unsupported constructs is never emitted. Returns the slot
+// or st.fnIdx.count.
+fn ensureFreeFnDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
+    val existing: U64 = userFnSlot(st: inout st, idx: fi)
+    if existing < st.fnIdx.count {
+        return existing
+    }
+    val f: Func = c.funcs[fi]
+    if f.typeParams.count > 0U64 { return st.fnIdx.count }
+    if f.hasRecv { return st.fnIdx.count }
+    if f.isExtern { return st.fnIdx.count }
+    if f.isAssoc { return st.fnIdx.count }
+    if nameIsMain(c: inout c, f: f) { return st.fnIdx.count }
+    mut val ptys: Array[LLVMTypeRef] = []
     mut val pi: U64 = 0
     while pi < f.params.count {
         ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: f.params[pi]))
