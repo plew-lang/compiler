@@ -228,6 +228,20 @@ fn anon() -> CPtr[U8] {
 // (the C backend's `long long` default scalar). Width/signedness refinement and
 // non-scalar types (String/struct/array) come in later increments.
 fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> LLVMTypeRef {
+    // generic substitution: a type-parameter name (T) in scope resolves to its
+    // concrete argument (the monomorphization env curTypeParams -> curTypeArgs,
+    // set while emitting a generic instance). No-op outside a generic context.
+    if c.curTypeParams.count > 0U64 {
+        val qid: U64 = intern(c: inout c, start: tyStart, len: tyLen)
+        mut val ti: U64 = 0
+        while ti < c.curTypeParams.count {
+            if c.curTypeParams[ti].nameId == qid {
+                val at: TypeRef = c.types[c.curTypeArgs[ti]]
+                return llvmScalarTy(c: inout c, st: inout st, tyStart: at.nameStart, tyLen: at.nameLen)
+            }
+            ti += 1
+        }
+    }
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "String") {
         return st.strty
     }
