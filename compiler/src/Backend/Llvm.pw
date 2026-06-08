@@ -5035,7 +5035,9 @@ fn llvmInferFnArgs(c: inout Comp, st: inout LlvmCtx, f: Func, args: Array[Arg]) 
                 if p.tyNameId == tp.nameId {
                     if pi < args.count {
                         if found == 0U64 {
-                            found = argArrayElemRef(c: inout c, argExpr: args[pi].expr)
+                            // recover the array arg's element ref via LLVM-side tracking
+                            // (locElemTypeRef); c.locals is unpopulated in this backend.
+                            found = arrayExprElemRef(c: inout c, st: inout st, arrayExpr: args[pi].expr)
                         }
                     }
                 }
