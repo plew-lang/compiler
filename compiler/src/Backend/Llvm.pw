@@ -279,6 +279,10 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Bool") {
         return st.i1ty
     }
+    // a `Ref[T]` is a pointer to a heap cell holding the pointee (opaque ptr).
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Ref") {
+        return st.ptrty
+    }
     // Width-accurate integers: I8/U8 -> i8, I16/U16 -> i16, I32/U32 -> i32, else
     // i64 (signedness is tracked separately as a kind, not in the LLVM type).
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "I8") { return st.i8ty }
@@ -1501,6 +1505,13 @@ fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, v
     if isEnum {
         return genLlvmMakeEnum(c: inout c, st: inout st, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, ty: gty, fields: fields)
     }
+    // `<Ref[T] value=e />`: allocate a heap cell holding the pointee, store e, and
+    // yield the cell pointer (the Ref value). Refcount/release is hidden cost,
+    // deferred (no deinit in these cases yet) — the pointer aliases on copy so
+    // shared mutation through `->` is visible.
+    if rangeEquals(bytes: c.bytes, start: typeStart, len: typeLen, kw: "Ref") {
+        return genLlvmMakeRef(c: inout c, st: inout st, ty: gty, fields: fields)
+    }
     // a generic struct instance (Box[I32]): build under its substitution env.
     if isGenericInst(c: inout c, ref: gty) {
         val gslot: U64 = genStructSlot(c: inout c, st: inout st, ref: gty)
@@ -1523,6 +1534,70 @@ fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, v
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     return buildStructValue(c: inout c, st: inout st, sd: c.structs[st.structIdxs[reg]], sty: st.structTys[reg], fields: fields, errOffset: typeStart)
+}
+
+// The LLVM type of a `Ref[T]`'s pointee T (from the instance's first type arg).
+fn refPointeeTy(c: inout Comp, st: inout LlvmCtx, refTy: U64) -> LLVMTypeRef {
+    if isRefInst(c: inout c, ref: refTy) {
+        return llvmTypeOfRef(c: inout c, st: inout st, ref: c.types[refTy].args[0])
+    }
+    return st.i64ty
+}
+
+// The Ref instance TypeRef of an expression that evaluates to a `Ref[T]` (a local
+// carries it on locTypeRef), or 0 if it is not a Ref-typed expression.
+fn exprRefTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
+    val r: U64 = exprTypeRef(c: inout c, st: inout st, id: id)
+    if isRefInst(c: inout c, ref: r) {
+        return r
+    }
+    return 0U64
+}
+
+// The struct index of a `Ref[T]` base's pointee T (for `->field` resolution), or
+// c.structs.count if the base isn't a Ref to a registered struct.
+fn refPointeeStructIdx(c: inout Comp, st: inout LlvmCtx, base: U64) -> U64 {
+    val r: U64 = exprRefTypeRef(c: inout c, st: inout st, id: base)
+    if r != 0U64 {
+        val t: TypeRef = c.types[r]
+        if t.args.count > 0U64 {
+            val pt: TypeRef = c.types[t.args[0]]
+            return localStructIdxFor(c: inout c, st: inout st, start: pt.nameStart, len: pt.nameLen)
+        }
+    }
+    return c.structs.count
+}
+
+// Load a `Ref[T]` base's pointee struct VALUE (`*cell`) — the basis for `->field`.
+fn loadRefPointee(c: inout Comp, st: inout LlvmCtx, base: U64) -> LLVMValueRef {
+    val r: U64 = exprRefTypeRef(c: inout c, st: inout st, id: base)
+    val pty: LLVMTypeRef = refPointeeTy(c: inout c, st: inout st, refTy: r)
+    val cellPtr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: base)
+    return LLVMBuildLoad2(st.b, pty, cellPtr, anon())
+}
+
+// Build a `Ref[T]` value: malloc a cell of sizeof(T), store the `value` field's
+// pointee into it, and return the cell pointer.
+fn genLlvmMakeRef(c: inout Comp, st: inout LlvmCtx, ty: U64, fields: Array[MakeField]) -> LLVMValueRef {
+    val pty: LLVMTypeRef = refPointeeTy(c: inout c, st: inout st, refTy: ty)
+    val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(pty), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
+    // the pointee value (the `value` field).
+    mut val valExpr: U64 = 0
+    mut val mi: U64 = 0
+    while mi < fields.count {
+        if rangeEquals(bytes: c.bytes, start: fields[mi].nameStart, len: fields[mi].nameLen, kw: "value") {
+            valExpr = fields[mi].value
+            mi = fields.count
+        } else {
+            mi += 1
+        }
+    }
+    mut val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: valExpr)
+    if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
+        v = coerceInt(st: inout st, v: v, target: pty, unsigned: false)
+    }
+    LLVMBuildStore(st.b, v, cell)
+    return cell
 }
 
 // Build a struct value of LLVM type `sty` from def `sd`: each declared field
@@ -1704,6 +1779,20 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                 }
             }
             compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: field access only on a registered struct value (so far)")
+            return LLVMConstInt(st.i64ty, 0U64, 0I32)
+        }
+        Expr.Arrow(val base, val nameStart, val nameLen) => {
+            // `r->field`: load the pointee struct from the cell and extract `field`
+            // (an array field yields the {ptr,i64} value, whose buffer is shared, so
+            // `r->arr[i] = v` mutates through any alias).
+            val psidx: U64 = refPointeeStructIdx(c: inout c, st: inout st, base: base)
+            if psidx < c.structs.count {
+                val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
+                if fidx < c.structs[psidx].fields.count {
+                    return LLVMBuildExtractValue(st.b, loadRefPointee(c: inout c, st: inout st, base: base), fidx, anon())
+                }
+            }
+            compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: `->` only on a Ref to a registered struct (so far)")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
@@ -2027,6 +2116,15 @@ fn exprIsArray(c: inout Comp, st: inout LlvmCtx, id: U64) -> Bool {
                 }
             }
         }
+        Expr.Arrow(val base, val nameStart, val nameLen) => {
+            val psidx: U64 = refPointeeStructIdx(c: inout c, st: inout st, base: base)
+            if psidx < c.structs.count {
+                val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
+                if fidx < c.structs[psidx].fields.count {
+                    return c.structs[psidx].fields[fidx].tyIsArray
+                }
+            }
+        }
         Expr.Array(elems: _) => { return true }
         _ => {}
     }
@@ -2051,6 +2149,15 @@ fn arrElemTyOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
                 if fidx < c.structs[sidx].fields.count {
                     return llvmScalarTy(c: inout c, st: inout st, tyStart: c.structs[sidx].fields[fidx].tyStart, tyLen: c.structs[sidx].fields[fidx].tyLen)
+                }
+            }
+        }
+        Expr.Arrow(val base, val nameStart, val nameLen) => {
+            val psidx: U64 = refPointeeStructIdx(c: inout c, st: inout st, base: base)
+            if psidx < c.structs.count {
+                val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
+                if fidx < c.structs[psidx].fields.count {
+                    return llvmScalarTy(c: inout c, st: inout st, tyStart: c.structs[psidx].fields[fidx].tyStart, tyLen: c.structs[psidx].fields[fidx].tyLen)
                 }
             }
         }
@@ -3346,6 +3453,12 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                         tref = ty
                     }
                 }
+            }
+            // a `Ref[T]` local: track the instance so `->` resolves the pointee
+            // struct (Ref isn't a registered generic struct/enum, so isGenericInst
+            // is false for it).
+            if isRefInst(c: inout c, ref: ty) {
+                tref = ty
             }
             val slot: LLVMValueRef = LLVMBuildAlloca(st.b, lty, anon())
             LLVMBuildStore(st.b, v, slot)
