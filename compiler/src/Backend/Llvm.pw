@@ -710,6 +710,27 @@ fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, 
     return LLVMBuildLoad2(st.b, ety, slot, anon())
 }
 
+// Build an enum value of LLVM type `ety` for def `eid`, variant `vi`, from
+// already-computed LLVM payload values (vs. buildEnumValue which evaluates expr
+// ids). Used by the `?.` / `try` desugar where the payload is an extracted SSA
+// value. The payload value types must match the variant's payload struct.
+fn buildEnumFromValues(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, vi: U64, payloadVals: Array[LLVMValueRef]) -> LLVMValueRef {
+    val slot: LLVMValueRef = LLVMBuildAlloca(st.b, ety, anon())
+    LLVMBuildStore(st.b, LLVMConstNull(ety), slot)
+    LLVMBuildStore(st.b, LLVMConstInt(st.i64ty, vi, 0I32), LLVMBuildStructGEP2(st.b, ety, slot, 0U64, anon()))
+    if payloadVals.count > 0U64 {
+        val payloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: eid, vi: vi)
+        mut val agg: LLVMValueRef = LLVMGetUndef(payloadTy)
+        mut val j: U64 = 0
+        while j < payloadVals.count {
+            agg = LLVMBuildInsertValue(st.b, agg, payloadVals[j], j, anon())
+            j += 1
+        }
+        LLVMBuildStore(st.b, agg, LLVMBuildStructGEP2(st.b, ety, slot, 1U64, anon()))
+    }
+    return LLVMBuildLoad2(st.b, ety, slot, anon())
+}
+
 // ---- generic struct instances ----
 
 // Register each concrete generic-struct instantiation (from c.genInsts) as a named
@@ -838,9 +859,52 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 }
             }
         }
+        Expr.OptChain(val base, val memberStart, val memberLen) => {
+            // `base?.member : Optional[U]` — so a chained `a?.b?.c` types its inner.
+            return optChainResultRefLL(c: inout c, st: inout st, base: base, memberStart: memberStart, memberLen: memberLen)
+        }
         _ => {}
     }
     return 0U64
+}
+
+// The `Optional[U]` result-type ref of `base?.member`, resolved through the
+// LLVM-side type tracker (exprTypeRef) rather than the typed-AST cache (typeOf,
+// unpopulated in this backend). Returns 0 if base isn't a concrete Optional whose
+// element struct has the named field.
+fn optChainResultRefLL(c: inout Comp, st: inout LlvmCtx, base: U64, memberStart: U64, memberLen: U64) -> U64 {
+    val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
+    if baseRef == 0U64 { return 0U64 }
+    if baseRef < c.types.count {
+    } else {
+        return 0U64
+    }
+    val bt: TypeRef = c.types[baseRef]
+    if rangeEquals(bytes: c.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Optional") {
+    } else {
+        return 0U64
+    }
+    if bt.args.count < 1U64 { return 0U64 }
+    val tName: TypeRef = c.types[bt.args[0]]
+    val tSidx: U64 = structIndexByName(c: inout c, start: tName.nameStart, len: tName.nameLen)
+    if tSidx < c.structs.count {
+    } else {
+        return 0U64
+    }
+    val fidx: U64 = structFieldIndex(c: inout c, sidx: tSidx, start: memberStart, len: memberLen)
+    if fidx < c.structs[tSidx].fields.count {
+    } else {
+        return 0U64
+    }
+    val fd: FieldDef = c.structs[tSidx].fields[fidx]
+    mut val uRef: U64 = fd.ty
+    if uRef == 0U64 {
+        val noArgs: Array[U64] = []
+        uRef = c.pushType(t: <TypeRef nameStart=fd.tyStart nameLen=fd.tyLen args=noArgs />)
+    }
+    mut val rArgs: Array[U64] = []
+    rArgs.append(value: uRef)
+    return c.pushType(t: <TypeRef nameStart=bt.nameStart nameLen=bt.nameLen args=rArgs />)
 }
 
 // If `ref` is a generic enum instance, set the substitution env to it and return
@@ -2374,6 +2438,12 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
         Expr.MatchExpr(val scrut, val arms) => {
             return genLlvmMatchExpr(c: inout c, st: inout st, scrut: scrut, arms: arms)
         }
+        Expr.OptChain(val base, val memberStart, val memberLen) => {
+            return genLlvmOptChain(c: inout c, st: inout st, base: base, memberStart: memberStart, memberLen: memberLen)
+        }
+        Expr.Try(val expr) => {
+            return genLlvmTry(c: inout c, st: inout st, expr: expr)
+        }
         Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
             // `x as T` (spec/12: lossless): an int-width conversion (sext if the
             // source is signed, zext if unsigned, or same width). Non-int / From
@@ -2582,6 +2652,163 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
         c.curTypeArgs = savedVA
     }
     return phi
+}
+
+// `base?.member` (spec/12): read the Optional `base`; `Some(v)` yields
+// `Some(v.member)`, `None` yields `None` (short-circuit). Result is `Optional[U]`
+// where U is the member field type. Couples to @Std/Core Optional. The base and
+// result Optional instances must both be registered generic enums.
+fn genLlvmOptChain(c: inout Comp, st: inout LlvmCtx, base: U64, memberStart: U64, memberLen: U64) -> LLVMValueRef {
+    // resolve the base Optional[T] instance via the LLVM-side type tracker (the
+    // typed-AST cache typeOf relies on isn't populated in this backend).
+    val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
+    val bge: U64 = genEnumSlot(c: inout c, st: inout st, ref: baseRef)
+    if bge < st.genEnumRefs.count {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: `?.` base must be a registered Optional instance")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val beid: U64 = st.genEnumDefs[bge]
+    val bety: LLVMTypeRef = st.genEnumTys[bge]
+    val ed: EnumDef = c.enums[beid]
+    val someB: Bind = kwSpan(c: inout c, kw: "Some", kwLen: 4U64)
+    val noneB: Bind = kwSpan(c: inout c, kw: "None", kwLen: 4U64)
+    val someVi: U64 = variantIndex(c: inout c, enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: someB.nameStart, variantLen: someB.nameLen)
+    val noneVi: U64 = variantIndex(c: inout c, enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: noneB.nameStart, variantLen: noneB.nameLen)
+    // the inner element struct (Optional's arg0) and the member field index.
+    val tRef: U64 = c.types[baseRef].args[0]
+    val tName: TypeRef = c.types[tRef]
+    val tSidx: U64 = structIndexByName(c: inout c, start: tName.nameStart, len: tName.nameLen)
+    if tSidx < c.structs.count {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: `?.` element must be a registered struct")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val fidx: U64 = structFieldIndex(c: inout c, sidx: tSidx, start: memberStart, len: memberLen)
+    if fidx < c.structs[tSidx].fields.count {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: `?.` element has no such field")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    // result Optional[U] where U is the member field's type: build the ref and find
+    // its registered instance (structural match in genEnumSlot).
+    val memberFd: FieldDef = c.structs[tSidx].fields[fidx]
+    mut val uRef: U64 = memberFd.ty
+    if uRef == 0U64 {
+        val noArgs: Array[U64] = []
+        uRef = c.pushType(t: <TypeRef nameStart=memberFd.tyStart nameLen=memberFd.tyLen args=noArgs />)
+    }
+    mut val rArgs: Array[U64] = []
+    rArgs.append(value: uRef)
+    val rr: U64 = c.pushType(t: <TypeRef nameStart=ed.nameStart nameLen=ed.nameLen args=rArgs />)
+    val rge: U64 = genEnumSlot(c: inout c, st: inout st, ref: rr)
+    if rge < st.genEnumRefs.count {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: `?.` result Optional instance is not registered")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val reid: U64 = st.genEnumDefs[rge]
+    val rety: LLVMTypeRef = st.genEnumTys[rge]
+    val sv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: base)
+    val sslot: LLVMValueRef = LLVMBuildAlloca(st.b, bety, anon())
+    LLVMBuildStore(st.b, sv, sslot)
+    val tag: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, LLVMBuildStructGEP2(st.b, bety, sslot, 0U64, anon()), anon())
+    val isSome: LLVMValueRef = LLVMBuildICmp(st.b, llvmIntEq(), tag, LLVMConstInt(st.i64ty, someVi, 0I32), anon())
+    val resSlot: LLVMValueRef = LLVMBuildAlloca(st.b, rety, anon())
+    val someBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "oc.some"))
+    val noneBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "oc.none"))
+    val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "oc.end"))
+    LLVMBuildCondBr(st.b, isSome, someBB, noneBB)
+    // Some: extract the inner value (under base env), read its member, rebuild Some.
+    LLVMPositionBuilderAtEnd(st.b, someBB)
+    val savedP: Array[Bind] = c.curTypeParams
+    val savedA: Array[U64] = c.curTypeArgs
+    val didB: Bool = setEnumEnv(c: inout c, st: inout st, ref: baseRef)
+    val basePayloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: beid, vi: someVi)
+    if didB { c.curTypeParams = savedP  c.curTypeArgs = savedA }
+    val payload: LLVMValueRef = LLVMBuildLoad2(st.b, basePayloadTy, LLVMBuildStructGEP2(st.b, bety, sslot, 1U64, anon()), anon())
+    val innerVal: LLVMValueRef = LLVMBuildExtractValue(st.b, payload, 0U64, anon())
+    val memberVal: LLVMValueRef = LLVMBuildExtractValue(st.b, innerVal, fidx, anon())
+    val didR: Bool = setEnumEnv(c: inout c, st: inout st, ref: rr)
+    mut val someArgs: Array[LLVMValueRef] = []
+    someArgs.append(value: memberVal)
+    val someResult: LLVMValueRef = buildEnumFromValues(c: inout c, st: inout st, eid: reid, ety: rety, vi: someVi, payloadVals: someArgs)
+    if didR { c.curTypeParams = savedP  c.curTypeArgs = savedA }
+    LLVMBuildStore(st.b, someResult, resSlot)
+    LLVMBuildBr(st.b, contBB)
+    // None: rebuild None.
+    LLVMPositionBuilderAtEnd(st.b, noneBB)
+    mut val noneArgs: Array[LLVMValueRef] = []
+    val noneResult: LLVMValueRef = buildEnumFromValues(c: inout c, st: inout st, eid: reid, ety: rety, vi: noneVi, payloadVals: noneArgs)
+    LLVMBuildStore(st.b, noneResult, resSlot)
+    LLVMBuildBr(st.b, contBB)
+    LLVMPositionBuilderAtEnd(st.b, contBB)
+    st.terminated = false
+    return LLVMBuildLoad2(st.b, rety, resSlot, anon())
+}
+
+// `try expr` (spec/13): evaluate the Result `expr`; on `Err(e)` early-return the
+// enclosing function's own Result with that error (first cut: matching error
+// types — no `From` conversion yet); on `Ok(v)` yield `v` and continue. Couples
+// to @Std/Core Result (Ok / Err). Only valid in a fn returning a Result.
+fn genLlvmTry(c: inout Comp, st: inout LlvmCtx, expr: U64) -> LLVMValueRef {
+    mut val exprRef: U64 = exprResultRef(c: inout c, st: inout st, id: expr)
+    if exprRef == 0U64 {
+        exprRef = exprTypeRef(c: inout c, st: inout st, id: expr)
+    }
+    val ege: U64 = genEnumSlot(c: inout c, st: inout st, ref: exprRef)
+    val rge: U64 = genEnumSlot(c: inout c, st: inout st, ref: st.curRetRef)
+    if ege < st.genEnumRefs.count {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "LLVM backend: `try` needs a registered Result instance")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    if rge < st.genEnumRefs.count {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "LLVM backend: `try` is only valid in a function returning a registered Result")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val eeid: U64 = st.genEnumDefs[ege]
+    val eety: LLVMTypeRef = st.genEnumTys[ege]
+    val reid: U64 = st.genEnumDefs[rge]
+    val rety: LLVMTypeRef = st.genEnumTys[rge]
+    val ed: EnumDef = c.enums[eeid]
+    val okB: Bind = kwSpan(c: inout c, kw: "Ok", kwLen: 2U64)
+    val errB: Bind = kwSpan(c: inout c, kw: "Err", kwLen: 3U64)
+    val okVi: U64 = variantIndex(c: inout c, enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: okB.nameStart, variantLen: okB.nameLen)
+    val errVi: U64 = variantIndex(c: inout c, enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: errB.nameStart, variantLen: errB.nameLen)
+    val ev: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: expr)
+    val eslot: LLVMValueRef = LLVMBuildAlloca(st.b, eety, anon())
+    LLVMBuildStore(st.b, ev, eslot)
+    val tag: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, LLVMBuildStructGEP2(st.b, eety, eslot, 0U64, anon()), anon())
+    val isErr: LLVMValueRef = LLVMBuildICmp(st.b, llvmIntEq(), tag, LLVMConstInt(st.i64ty, errVi, 0I32), anon())
+    val errBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "try.err"))
+    val okBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "try.ok"))
+    LLVMBuildCondBr(st.b, isErr, errBB, okBB)
+    val savedP: Array[Bind] = c.curTypeParams
+    val savedA: Array[U64] = c.curTypeArgs
+    // Err: extract the error (source env), rebuild the function's Result Err, return.
+    LLVMPositionBuilderAtEnd(st.b, errBB)
+    val didE: Bool = setEnumEnv(c: inout c, st: inout st, ref: exprRef)
+    val errPayloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: eeid, vi: errVi)
+    val errPayload: LLVMValueRef = LLVMBuildLoad2(st.b, errPayloadTy, LLVMBuildStructGEP2(st.b, eety, eslot, 1U64, anon()), anon())
+    val errVal: LLVMValueRef = LLVMBuildExtractValue(st.b, errPayload, 0U64, anon())
+    if didE { c.curTypeParams = savedP  c.curTypeArgs = savedA }
+    val didR: Bool = setEnumEnv(c: inout c, st: inout st, ref: st.curRetRef)
+    mut val errArgs: Array[LLVMValueRef] = []
+    errArgs.append(value: errVal)
+    val retResult: LLVMValueRef = buildEnumFromValues(c: inout c, st: inout st, eid: reid, ety: rety, vi: errVi, payloadVals: errArgs)
+    if didR { c.curTypeParams = savedP  c.curTypeArgs = savedA }
+    LLVMBuildRet(st.b, retResult)
+    // Ok: extract and yield the value; control continues at okBB.
+    LLVMPositionBuilderAtEnd(st.b, okBB)
+    st.terminated = false
+    val didO: Bool = setEnumEnv(c: inout c, st: inout st, ref: exprRef)
+    val okPayloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: eeid, vi: okVi)
+    val okPayload: LLVMValueRef = LLVMBuildLoad2(st.b, okPayloadTy, LLVMBuildStructGEP2(st.b, eety, eslot, 1U64, anon()), anon())
+    val okVal: LLVMValueRef = LLVMBuildExtractValue(st.b, okPayload, 0U64, anon())
+    if didO { c.curTypeParams = savedP  c.curTypeArgs = savedA }
+    return okVal
 }
 
 // ---- arrays ----
