@@ -975,15 +975,22 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
                 if fidx < c.structs[sidx].fields.count {
                     val fd: FieldDef = c.structs[sidx].fields[fidx]
-                    // ground the field type through the active env first: a field of a
-                    // type param (`inner: I` inside a monomorphized adapter) grounds to
-                    // its concrete instance (`MapIter[Counter,…]`), so a chained
-                    // `self.inner.next()` routes through the generic-receiver path.
+                    // ground the field type under the BASE's instance env (so `bb.v`
+                    // with bb: Box[Box[I32]] yields Box[I32]) AND any active env (a
+                    // monomorphized adapter's `inner: I` -> MapIter[Counter,…]).
+                    val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
+                    val savedP: Array[Bind] = c.curTypeParams
+                    val savedA: Array[U64] = c.curTypeArgs
+                    val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: baseRef)
                     mut val g: U64 = fd.ty
                     if fd.ty != 0U64 {
                         if c.curTypeParams.count > 0U64 {
                             g = groundTypeRef(c: inout c, ref: fd.ty)
                         }
+                    }
+                    if didSet {
+                        c.curTypeParams = savedP
+                        c.curTypeArgs = savedA
                     }
                     if g != 0U64 {
                         if isGenericInst(c: inout c, ref: g) {
@@ -1183,19 +1190,42 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                     val fld: FieldDef = c.structs[bsi].fields[fidx]
                     if fld.tyIsArray {
                     } else {
-                        // ground a generic field type through the active env (inside a
-                        // monomorphized method, `inner: I` resolves to its concrete
-                        // type) before resolving the struct index.
-                        mut val tStart: U64 = fld.tyStart
-                        mut val tLen: U64 = fld.tyLen
+                        // ground a generic field type under the BASE's instance env
+                        // (so `bb.v` with bb: Box[Box[I32]] resolves v -> Box[I32]),
+                        // as well as any active env (a monomorphized method's `inner: I`).
+                        val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
+                        val savedP: Array[Bind] = c.curTypeParams
+                        val savedA: Array[U64] = c.curTypeArgs
+                        val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: baseRef)
+                        mut val g: U64 = fld.ty
                         if fld.ty != 0U64 {
                             if c.curTypeParams.count > 0U64 {
-                                val gref: U64 = groundTypeRef(c: inout c, ref: fld.ty)
-                                tStart = c.types[gref].nameStart
-                                tLen = c.types[gref].nameLen
+                                g = groundTypeRef(c: inout c, ref: fld.ty)
                             }
                         }
-                        return localStructIdxFor(c: inout c, st: inout st, start: tStart, len: tLen)
+                        mut val result: U64 = c.structs.count
+                        if g != 0U64 {
+                            if isGenericInst(c: inout c, ref: g) {
+                                val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: g)
+                                if gs < st.genStructRefs.count {
+                                    result = st.genStructDefs[gs]
+                                }
+                            }
+                        }
+                        if result == c.structs.count {
+                            mut val tStart: U64 = fld.tyStart
+                            mut val tLen: U64 = fld.tyLen
+                            if g != 0U64 {
+                                tStart = c.types[g].nameStart
+                                tLen = c.types[g].nameLen
+                            }
+                            result = localStructIdxFor(c: inout c, st: inout st, start: tStart, len: tLen)
+                        }
+                        if didSet {
+                            c.curTypeParams = savedP
+                            c.curTypeArgs = savedA
+                        }
+                        return result
                     }
                 }
             }
