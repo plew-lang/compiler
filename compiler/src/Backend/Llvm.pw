@@ -1986,6 +1986,26 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "eprint") {
         return emitStrSink(c: inout c, st: inout st, rtName: "plew_eprint_raw", rtId: 3U64, argExpr: args[0].expr)
     }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "assert") {
+        // assert(cond): branch to a panic block when the condition is false.
+        val cond: LLVMValueRef = genLlvmCond(c: inout c, st: inout st, id: args[0].expr)
+        val okBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "assert.ok"))
+        val failBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "assert.fail"))
+        LLVMBuildCondBr(st.b, cond, okBB, failBB)
+        LLVMPositionBuilderAtEnd(st.b, failBB)
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: st.ptrty)
+        ptys.append(value: st.i64ty)
+        val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(ptys), 2U64, 0I32)
+        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_panic_raw", nameId: 4U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: LLVMBuildGlobalStringPtr(st.b, cstr(s: "assertion failed"), anon()))
+        av.append(value: LLVMConstInt(st.i64ty, 16U64, 0I32))
+        LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U64, anon())
+        LLVMBuildUnreachable(st.b)
+        LLVMPositionBuilderAtEnd(st.b, okBB)
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "exit") {
         // void plew_exit(i64): truncate-free (the code is already i64), then call.
         mut val ptys: Array[LLVMTypeRef] = []
