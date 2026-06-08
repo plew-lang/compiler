@@ -400,6 +400,7 @@ extern(c) {
 - **無印が読み取り専用**＝危険な方（可変）を長い名前で明示（`mut val` で可変を明示するのと同じ流儀）。
 - `T` は数値・`repr(c)` struct・不透明ハンドル・別のポインタ（`LLVMValueRef *Args` → `CPtr[LLVMValueRef]`）いずれも可。
 - 表層アプリコードは `CPtr` を見ない。触るのは `extern` ブロックと薄いグルー層だけ（Plew の「生ポインタ無し」は**表層**の約束で、床には `RawBuffer` 同様に在ってよい）。
+- **生ポインタ/ハンドルは「null を取り得る」値**（raw pointer なので当然）。非 null を装う別型は持たず、**取り出しが `Optional`** になる（下記 NULL）。
 - `Array[T]` の連続記憶を渡すときは床経由で基底ポインタを一時的に借りる（寿命は呼び出し中だけ・詳細は点3/4）。
 
 ### 共有 struct `repr(c) struct`
@@ -431,20 +432,28 @@ extern(c) {
 }
 ```
 
-`inout LLVMMCJITCompilerOptions` を `Options*` に lower（`&tmp` 渡し＋呼出後コピーバック）＝Plew の場所モデルそのまま。`CPtr[Foo]` を直に握る必要があるのは「ポインタを保持する／配列にする」場合だけで、そのときは `CPtr[Foo].load()`（struct 丸ごとコピーアウト）／`CMutPtr[Foo].store(value:)`（書き戻し）。ポインタ越しのフィールド単位 lvalue（`ptr->x`）は当面持たない（場所モデルを生ポインタへ拡張する話＝必要時 additive）。
+`inout LLVMMCJITCompilerOptions` を `Options*` に lower（`&tmp` 渡し＋呼出後コピーバック）＝Plew の場所モデルそのまま。`CPtr[Foo]` を直に握る必要があるのは「ポインタを保持する／配列にする」場合だけで、そのときは `CPtr[Foo].load() -> Optional[Foo]`（null→`None`＋struct コピーアウト・下記 NULL）／`CMutPtr[Foo].store(value:)`（書き戻し）。ポインタ越しのフィールド単位 lvalue（`ptr->x`）は当面持たない（場所モデルを生ポインタへ拡張する話＝必要時 additive）。
 
-### NULL は境界で `Optional` に写す
+### NULL（生ポインタは可謬・取り出しが `Optional`）
 
-C-API は失敗時に NULL を返す。Plew に null は無いので、**NULL は境界でだけ存在し `Optional` に写す**（null を有効なハンドルとして言語内へ流入させない＝"hidden meaning は不可"）。
+C-API は失敗時に NULL を返す。`CPtr` 導入後は**「境界で NULL↔None に写す」専用機構は不要**：生ポインタ/ハンドルは**素直に「null を取り得る」値**とし、**raw から安全な値を取り出す操作が `Optional`** になる（null は取り出し点で一度だけ顕在化）。署名に `Optional` を書く境界変換も `isNull()` も持たない。
+
+- **raw→raw の素通し**（extern 戻りを別 extern へそのまま渡す・グルー層）は**チェック不要**。null 込みで C へ転送できる（C の領分）。
+- **null に触る操作は「raw→`Optional`」一つだけ**：`CPtr[T]`/ハンドルの **`.toOptional() -> Optional[Self]`**（null→`None`・非 null→`Some`）。Bool を返す `isNull()` のように null を持ったまま残さない＝null は変換で消える。
+- **データの取り出し**：`CPtr[T].load() -> Optional[T]`（= `.toOptional()` ＋中身コピー・null 参照外しを取り出し点で型が塞ぐ）。既知非 null のホットパス用に `loadUnchecked() -> T`（escape hatch）。
+- **ハンドルを安全型に包む**（pointee 無し＝load しない）：`.toOptional()` で弾いてから包む。
 
 ```plew
 extern(c) {
-    // 署名に Optional と明示して初めて NULL→None・非 NULL→Some に写る。
-    fn LLVMParseBitcodeInContext2(ctx: LLVMContextRef, buf: MemoryBufferRef) -> Optional[LLVMModuleRef]
+    fn LLVMParseIRInContext(ctx: LLVMContextRef, buf: MemoryBufferRef) -> LLVMModuleRef  // 失敗時 null
 }
+// raw ハンドル → null を toOptional で弾き、Some だけ安全型へ昇格。
+val mod: Optional[Module] = LLVMParseIRInContext(ctx: ctx, buf: buf)
+    .toOptional()
+    .map { (raw: LLVMModuleRef) in Module.adopt(raw~: raw) }   // adopt は非可謬 factory
 ```
 
-署名に `Optional[T]` と**明示**したときだけ境界変換が起きる（黙って null を None 化しない・出どころは唱えた通り）。`CPtr[T]`/不透明ハンドルどちらも同じ規約。
+**非 null 不変条件は「safe な皮（`unique` Wrapper）」が持つ**（bare ハンドルは持たない）＝危険は raw 床に、保証は安全層に、という Plew の床/皮分離と一貫。
 
 ### 安全な皮は Plew 側で被せる
 
