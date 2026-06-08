@@ -729,6 +729,19 @@ fn genEnumSlot(c: inout Comp, st: inout LlvmCtx, ref: U64) -> U64 {
 // The c.structs index for a local/param/return of type (start,len) if that type
 // is a REGISTERED struct, else c.structs.count (not a struct value).
 fn localStructIdxFor(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 {
+    // substitute a type parameter via the env (a generic-fn body's `x: T` with
+    // T = A resolves to A's struct, so `x.get()` dispatches to A.get()).
+    if c.curTypeParams.count > 0U64 {
+        val qid: U64 = intern(c: inout c, start: start, len: len)
+        mut val ti: U64 = 0
+        while ti < c.curTypeParams.count {
+            if c.curTypeParams[ti].nameId == qid {
+                val at: TypeRef = c.types[c.curTypeArgs[ti]]
+                return localStructIdxFor(c: inout c, st: inout st, start: at.nameStart, len: at.nameLen)
+            }
+            ti += 1
+        }
+    }
     if structRegSlot(c: inout c, st: inout st, start: start, len: len) < st.structIdxs.count {
         return structIndexByName(c: inout c, start: start, len: len)
     }
