@@ -808,6 +808,28 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 }
             }
         }
+        Expr.Call(val nameStart, val nameLen, val args) => {
+            // a call result used as a struct (`firstOf(...).get()`): resolve the
+            // callee's return struct, grounding a generic return under the inferred
+            // type arguments.
+            val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            if cfi < c.funcs.count {
+                val cf: Func = c.funcs[cfi]
+                if cf.hasRet {
+                    if isGenericFreeFn(c: inout c, fi: cfi) {
+                        val savedP: Array[Bind] = c.curTypeParams
+                        val savedA: Array[U64] = c.curTypeArgs
+                        c.curTypeParams = cf.typeParams
+                        c.curTypeArgs = llvmInferFnArgs(c: inout c, st: inout st, f: cf, args: args)
+                        val r: U64 = localStructIdxFor(c: inout c, st: inout st, start: cf.retStart, len: cf.retLen)
+                        c.curTypeParams = savedP
+                        c.curTypeArgs = savedA
+                        return r
+                    }
+                    return localStructIdxFor(c: inout c, st: inout st, start: cf.retStart, len: cf.retLen)
+                }
+            }
+        }
         _ => {}
     }
     return c.structs.count
@@ -2080,7 +2102,7 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
         // a generic free-function call: infer its concrete type args, find the
         // instance, build args under the instance env, and call it.
         if isGenericFreeFn(c: inout c, fi: cfi) {
-            val inferred: Array[U64] = inferFnArgs(c: inout c, f: c.funcs[cfi], args: args)
+            val inferred: Array[U64] = llvmInferFnArgs(c: inout c, st: inout st, f: c.funcs[cfi], args: args)
             val gslot: U64 = genFnSlotFor(c: inout c, fnIdx: cfi, args: inferred, st: inout st)
             if gslot < st.genFnK.count {
                 val cf: Func = c.funcs[cfi]
@@ -2462,6 +2484,67 @@ fn emitGenFns(c: inout Comp, st: inout LlvmCtx) {
         c.curTypeArgs = savedA
         slot += 1
     }
+}
+
+// The TypeRef of a call argument, using the LLVM backend's own local tracking
+// (the front-end `typeOf` can't see locals — the LLVM backend doesn't populate
+// c.locals). A generic-instance local carries its ref; a struct value maps to a
+// bare TypeRef by its struct name; a scalar/String comes from the typed-AST cache
+// (which works for literals/expressions). 0 when no type can be recovered.
+fn llvmArgTypeRef(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> U64 {
+    val tr: U64 = exprTypeRef(c: inout c, st: inout st, id: argExpr)
+    if tr != 0U64 {
+        return tr
+    }
+    val si: U64 = exprStructIdx(c: inout c, st: inout st, id: argExpr)
+    if si < c.structs.count {
+        return findOrAddTypeRef(c: inout c, nameStart: c.structs[si].nameStart, nameLen: c.structs[si].nameLen)
+    }
+    val t: TypeInfo = typeOf(c: inout c, id: argExpr)
+    if t.kind == 0 {
+        return findOrAddTypeRef(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    }
+    if t.kind == 1 {
+        return findOrAddTypeRef(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    }
+    return 0U64
+}
+
+// Infer a generic free function's type arguments from a call's arguments, mirroring
+// the front-end `inferFnArgs` but recovering each argument's type via the LLVM
+// backend's local tracking (so a struct local arg resolves, which front-end typeOf
+// can't for an unpopulated c.locals).
+fn llvmInferFnArgs(c: inout Comp, st: inout LlvmCtx, f: Func, args: Array[Arg]) -> Array[U64] {
+    mut val out: Array[U64] = []
+    mut val ti: U64 = 0
+    while ti < f.typeParams.count {
+        val tp: Bind = f.typeParams[ti]
+        mut val found: U64 = 0
+        mut val pi: U64 = 0
+        while pi < f.params.count {
+            val p: Param = f.params[pi]
+            if p.tyIsArray {
+                if p.tyNameId == tp.nameId {
+                    if pi < args.count {
+                        if found == 0U64 {
+                            found = argArrayElemRef(c: inout c, argExpr: args[pi].expr)
+                        }
+                    }
+                }
+            } else {
+                if pi < args.count {
+                    if found == 0U64 {
+                        val argRef: U64 = llvmArgTypeRef(c: inout c, st: inout st, argExpr: args[pi].expr)
+                        found = unifyTypeParam(c: inout c, paramRef: p.ty, argRef: argRef, tpStart: tp.nameStart, tpLen: tp.nameLen)
+                    }
+                }
+            }
+            pi += 1
+        }
+        out.append(value: found)
+        ti += 1
+    }
+    return out
 }
 
 // Find the registered generic-fn instance slot for (fnIdx, args), or count.
