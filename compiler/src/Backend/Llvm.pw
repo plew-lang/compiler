@@ -4419,6 +4419,20 @@ fn primLangItemRecvName(c: inout Comp, st: inout LlvmCtx, recv: U64) -> Bind {
                 return <Bind nameStart=tyStart nameLen=tyLen fieldStart=tyStart fieldLen=tyLen />
             }
         }
+        Expr.Field(val base, val nameStart, val nameLen) => {
+            // a primitive-typed struct field (`self.a` where a: U64): its field type
+            // name, for dispatching a method on the primitive (`self.a.absorb[S](…)`).
+            val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+            if bsi < c.structs.count {
+                val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
+                if fidx < c.structs[bsi].fields.count {
+                    val fd: FieldDef = c.structs[bsi].fields[fidx]
+                    if isPrimIntName(c: inout c, start: fd.tyStart, len: fd.tyLen) {
+                        return <Bind nameStart=fd.tyStart nameLen=fd.tyLen fieldStart=fd.tyStart fieldLen=fd.tyLen />
+                    }
+                }
+            }
+        }
         _ => {}
     }
     if valueKind(c: inout c, st: inout st, id: recv) == 1U64 {
@@ -4485,6 +4499,13 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
     if primRecv.nameLen != 0U64 {
         val smfi: U64 = findMethod(c: inout c, recvStart: primRecv.nameStart, recvLen: primRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
         if smfi < c.funcs.count {
+            // a method with its own type params on a primitive (`(self.a:U64).absorb[S](…)`).
+            if c.funcs[smfi].typeParams.count > 0U64 {
+                val mtv: LLVMValueRef = genMethodOwnTypeParamCall(c: inout c, st: inout st, recv: recv, mfi: smfi, recvStart: primRecv.nameStart, recvLen: primRecv.nameLen, args: args)
+                if LLVMIsNull(mtv) == 0I32 {
+                    return mtv
+                }
+            }
             val sslot: U64 = ensureProvidedDeclared(c: inout c, st: inout st, fi: smfi)
             if sslot < st.fnIdx.count {
                 val smf: Func = c.funcs[smfi]
@@ -4596,6 +4617,15 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: method not found / not yet supported")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
+    // a method with its OWN type params (`absorb[S](sink: inout S) where S: Sink`):
+    // infer them from the args and monomorphize on (method, method-type-args),
+    // keyed by a pseudo instance ref (receiver name + the inferred method args).
+    if c.funcs[mfi].typeParams.count > 0U64 {
+        val mtv: LLVMValueRef = genMethodOwnTypeParamCall(c: inout c, st: inout st, recv: recv, mfi: mfi, recvStart: sd.nameStart, recvLen: sd.nameLen, args: args)
+        if LLVMIsNull(mtv) == 0I32 {
+            return mtv
+        }
+    }
     mut val slot: U64 = userFnSlot(st: inout st, idx: mfi)
     // a provided trait method is declared+queued lazily the first time it is called.
     if slot < st.fnIdx.count {
@@ -4644,6 +4674,31 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
 // value is built in the caller's context; the call arguments are built under the
 // receiver's substitution env (so a `fallback: T` arg coerces to the instance's
 // concrete type).
+// Dispatch a call to a method with its OWN type params (`absorb[S]…`): infer the
+// method type args from the call, monomorphize keyed by a pseudo instance ref
+// (receiver name + the inferred args), and call. Returns a null sentinel if the
+// args can't be inferred / the instance can't be declared.
+fn genMethodOwnTypeParamCall(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64, recvStart: U64, recvLen: U64, args: Array[Arg]) -> LLVMValueRef {
+    val mf: Func = c.funcs[mfi]
+    val margs: Array[U64] = llvmInferFnArgs(c: inout c, st: inout st, f: mf, args: args)
+    mut val mi: U64 = 0
+    while mi < margs.count {
+        if margs[mi] == 0U64 {
+            return LLVMConstNull(st.ptrty)
+        }
+        mi += 1
+    }
+    // a pseudo instance ref: the receiver type name + the method type args, so the
+    // body emits with curTypeParams = mf.typeParams -> curTypeArgs = margs while the
+    // self type still resolves from the receiver name.
+    val pinst: U64 = c.pushType(t: <TypeRef nameStart=recvStart nameLen=recvLen args=margs />)
+    val gslot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: mfi, instRef: pinst)
+    if gslot < st.genMethK.count {
+        return genGenMethodCall(c: inout c, st: inout st, recv: recv, mfi: mfi, slot: gslot, instRef: pinst, args: args)
+    }
+    return LLVMConstNull(st.ptrty)
+}
+
 fn genGenMethodCall(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64, slot: U64, instRef: U64, args: Array[Arg]) -> LLVMValueRef {
     val mf: Func = c.funcs[mfi]
     mut val av: Array[LLVMValueRef] = []
@@ -6101,7 +6156,9 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
             if gs < st.genStructRefs.count {
                 recvSidx = st.genStructDefs[gs]
             } else {
-                recvSidx = c.structs.count
+                // a method-own-type-param pseudo instance (`Pair[Bag]` where Pair is
+                // NOT generic): keep the receiver-name's struct so `self.a` resolves.
+                recvSidx = localStructIdxFor(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen)
             }
         }
         // an `Array[T]` receiver (a user method `impl[T] Array[T]`): self is the
