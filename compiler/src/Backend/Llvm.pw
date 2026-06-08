@@ -4429,6 +4429,22 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "set") {
             return genLlvmArraySet(c: inout c, st: inout st, recv: recv, indexExpr: args[0].expr, valueExpr: args[1].expr)
         }
+        // a USER method on Array (`xs.first()` for `impl[T] Array[T]`): monomorphize
+        // it for Array[elem] (the element ref drives the instance).
+        val arrB: Bind = kwSpan(c: inout c, kw: "Array", kwLen: 5U64)
+        val amfi: U64 = findMethod(c: inout c, recvStart: arrB.nameStart, recvLen: arrB.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        if amfi < c.funcs.count {
+            val elemRef: U64 = arrayExprElemRef(c: inout c, st: inout st, arrayExpr: recv)
+            if elemRef != 0U64 {
+                mut val aargs: Array[U64] = []
+                aargs.append(value: elemRef)
+                val arrInst: U64 = c.pushType(t: <TypeRef nameStart=arrB.nameStart nameLen=arrB.nameLen args=aargs />)
+                val gslot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: amfi, instRef: arrInst)
+                if gslot < st.genMethK.count {
+                    return genGenMethodCall(c: inout c, st: inout st, recv: recv, mfi: amfi, slot: gslot, instRef: arrInst, args: args)
+                }
+            }
+        }
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: this array method is not yet supported (append / get / set)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -5982,13 +5998,26 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
                 recvSidx = c.structs.count
             }
         }
+        // an `Array[T]` receiver (a user method `impl[T] Array[T]`): self is the
+        // {ptr,i64} array value, bound as an array so `self.get`/`self.count` resolve.
+        mut val selfIsArr: Bool = false
+        mut val selfElemTy: LLVMTypeRef = st.i64ty
+        if st.curRecvInstRef != 0U64 {
+            if rangeEquals(bytes: c.bytes, start: c.types[st.curRecvInstRef].nameStart, len: c.types[st.curRecvInstRef].nameLen, kw: "Array") {
+                recvTy = st.arrayTy
+                selfIsArr = true
+                if c.types[st.curRecvInstRef].args.count > 0U64 {
+                    selfElemTy = llvmTypeOfRef(c: inout c, st: inout st, ref: c.types[st.curRecvInstRef].args[0])
+                }
+            }
+        }
         mut val selfPtr: LLVMValueRef = LLVMGetParam(fv, 0U64)
         if f.selfInout {
         } else {
             selfPtr = LLVMBuildAlloca(st.b, recvTy, anon())
             LLVMBuildStore(st.b, LLVMGetParam(fv, 0U64), selfPtr)
         }
-        pushLocalR(st: inout st, nameStart: st.selfStart, nameLen: st.selfLen, ptr: selfPtr, ty: recvTy, kind: kindFromTySpan(c: inout c, tyStart: f.recvStart, tyLen: f.recvLen), structIdx: recvSidx, isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: recvRef)
+        pushLocalR(st: inout st, nameStart: st.selfStart, nameLen: st.selfLen, ptr: selfPtr, ty: recvTy, kind: kindFromTySpan(c: inout c, tyStart: f.recvStart, tyLen: f.recvLen), structIdx: recvSidx, isArr: selfIsArr, elemTy: selfElemTy, elemKind: 0U64, typeRef: recvRef)
         // a `move fn` self is owned (deinit'd in the callee); `fn`/`inout fn`/
         // `borrow fn` self is a borrow the caller owns.
         setLocalOwned(st: inout st, owned: f.selfMove)
