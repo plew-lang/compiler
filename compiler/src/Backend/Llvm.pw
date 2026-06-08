@@ -5222,31 +5222,33 @@ fn genLlvmForIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U
     }
     val isd: StructDef = c.structs[isidx]
     val noArgs: Array[Arg] = []
-    // iterable.iterator() -> Iter value
+    val iterableVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: iter)
+    // acquire the iterator: an Iterable provides `iterator()`; an Iterator IS its own
+    // iterator (it has `next()` directly). Resolve the iterator value + its struct.
+    mut val iterVal: LLVMValueRef = iterableVal
+    mut val iterStructStart: U64 = isd.nameStart
+    mut val iterStructLen: U64 = isd.nameLen
     val itB: Bind = kwSpan(c: inout c, kw: "iterator", kwLen: 8U64)
     val itfi: U64 = findMethod(c: inout c, recvStart: isd.nameStart, recvLen: isd.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
     if itfi < c.funcs.count {
-    } else {
-        compileErrorAt(line: 0, msg: "LLVM backend: Iterable for-loop needs an `iterator` method")
-        return
+        val itSlotF: U64 = userFnSlot(st: inout st, idx: itfi)
+        if itSlotF < st.fnIdx.count {
+        } else {
+            compileErrorAt(line: 0, msg: "LLVM backend: this Iterable's iterator method is not emittable yet")
+            return
+        }
+        mut val itArgs: Array[LLVMValueRef] = []
+        itArgs.append(value: iterableVal)
+        iterVal = LLVMBuildCall2(st.b, st.fnTy[itSlotF], st.fnVal[itSlotF], arrayCPtr(itArgs), 1U64, anon())
+        iterStructStart = c.funcs[itfi].retStart
+        iterStructLen = c.funcs[itfi].retLen
     }
-    val itSlotF: U64 = userFnSlot(st: inout st, idx: itfi)
-    if itSlotF < st.fnIdx.count {
-    } else {
-        compileErrorAt(line: 0, msg: "LLVM backend: this Iterable's iterator method is not emittable yet")
-        return
-    }
-    val itf: Func = c.funcs[itfi]
-    val iterableVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: iter)
-    mut val itArgs: Array[LLVMValueRef] = []
-    itArgs.append(value: iterableVal)
-    val iterVal: LLVMValueRef = LLVMBuildCall2(st.b, st.fnTy[itSlotF], st.fnVal[itSlotF], arrayCPtr(itArgs), 1U64, anon())
     val iterTy: LLVMTypeRef = LLVMTypeOf(iterVal)
     val iterSlot: LLVMValueRef = LLVMBuildAlloca(st.b, iterTy, anon())
     LLVMBuildStore(st.b, iterVal, iterSlot)
     // next() on the Iter struct -> Optional[Item]
     val nextB: Bind = kwSpan(c: inout c, kw: "next", kwLen: 4U64)
-    val nfi: U64 = findMethod(c: inout c, recvStart: itf.retStart, recvLen: itf.retLen, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
+    val nfi: U64 = findMethod(c: inout c, recvStart: iterStructStart, recvLen: iterStructLen, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
     if nfi < c.funcs.count {
     } else {
         compileErrorAt(line: 0, msg: "LLVM backend: Iterable for-loop needs a `next` method on the iterator")
