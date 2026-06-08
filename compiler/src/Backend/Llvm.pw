@@ -99,6 +99,7 @@ extern(c) {
     fn LLVMBuildShl(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildAShr(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildICmp(b~: LLVMBuilderRef, pred~: U32, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildSelect(b~: LLVMBuilderRef, cond~: LLVMValueRef, thenV~: LLVMValueRef, elseV~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildZExt(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildSExt(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildTrunc(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
@@ -1222,6 +1223,122 @@ fn emitStructEq(c: inout Comp, st: inout LlvmCtx, a: LLVMValueRef, b: LLVMValueR
     return acc
 }
 
+// Compare two scalar / nested-struct field VALUES, yielding an i32 ordering
+// (-1 / 0 / 1) — the Ord witness lowered without a runtime call. String fields
+// are deferred (structOrdSupported gates them out).
+fn cmpFieldOrd(c: inout Comp, st: inout LlvmCtx, a: LLVMValueRef, b: LLVMValueRef, tyStart: U64, tyLen: U64) -> LLVMValueRef {
+    val sreg: U64 = structRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen)
+    if sreg < st.structIdxs.count {
+        return emitStructCmp(c: inout c, st: inout st, a: a, b: b, sidx: st.structIdxs[sreg])
+    }
+    val uns: Bool = isUnsignedName(c: inout c, start: tyStart, len: tyLen)
+    mut val gtPred: U32 = llvmIntSgt()
+    mut val ltPred: U32 = llvmIntSlt()
+    if uns {
+        gtPred = llvmIntUgt()
+        ltPred = llvmIntUlt()
+    }
+    val gt: LLVMValueRef = LLVMBuildICmp(st.b, gtPred, a, b, anon())
+    val lt: LLVMValueRef = LLVMBuildICmp(st.b, ltPred, a, b, anon())
+    // i32 -1 as the 32-bit all-ones pattern (avoids an underflowing literal).
+    val negOne: LLVMValueRef = LLVMConstInt(st.i32ty, 4294967295U64, 0I32)
+    val zero: LLVMValueRef = LLVMConstInt(st.i32ty, 0U64, 0I32)
+    val one: LLVMValueRef = LLVMConstInt(st.i32ty, 1U64, 0I32)
+    val lo: LLVMValueRef = LLVMBuildSelect(st.b, lt, negOne, zero, anon())
+    return LLVMBuildSelect(st.b, gt, one, lo, anon())
+}
+
+// Lexicographic comparison of two struct VALUES -> i32 ordering (-1/0/1): the
+// first (lowest-index) field whose comparison is nonzero decides. Built as a
+// select chain folded from the last field back to the first.
+fn emitStructCmp(c: inout Comp, st: inout LlvmCtx, a: LLVMValueRef, b: LLVMValueRef, sidx: U64) -> LLVMValueRef {
+    val sd: StructDef = c.structs[sidx]
+    mut val acc: LLVMValueRef = LLVMConstInt(st.i32ty, 0U64, 0I32)
+    mut val i: U64 = sd.fields.count
+    while i > 0U64 {
+        i -= 1
+        val fl: LLVMValueRef = LLVMBuildExtractValue(st.b, a, i, anon())
+        val fr: LLVMValueRef = LLVMBuildExtractValue(st.b, b, i, anon())
+        val ci: LLVMValueRef = cmpFieldOrd(c: inout c, st: inout st, a: fl, b: fr, tyStart: sd.fields[i].tyStart, tyLen: sd.fields[i].tyLen)
+        val isZero: LLVMValueRef = LLVMBuildICmp(st.b, llvmIntEq(), ci, LLVMConstInt(st.i32ty, 0U64, 0I32), anon())
+        acc = LLVMBuildSelect(st.b, isZero, acc, ci, anon())
+    }
+    return acc
+}
+
+// Whether a struct's fields are all orderable here (scalar or nested orderable
+// struct — String/array/enum fields deferred).
+fn structOrdSupported(c: inout Comp, st: inout LlvmCtx, sidx: U64) -> Bool {
+    val sd: StructDef = c.structs[sidx]
+    mut val i: U64 = 0
+    while i < sd.fields.count {
+        if sd.fields[i].tyIsArray {
+            return false
+        }
+        if rangeEquals(bytes: c.bytes, start: sd.fields[i].tyStart, len: sd.fields[i].tyLen, kw: "String") {
+            return false
+        }
+        if isEnumName(c: inout c, start: sd.fields[i].tyStart, len: sd.fields[i].tyLen) {
+            return false
+        }
+        val sreg: U64 = structRegSlot(c: inout c, st: inout st, start: sd.fields[i].tyStart, len: sd.fields[i].tyLen)
+        if sreg < st.structIdxs.count {
+            if structOrdSupported(c: inout c, st: inout st, sidx: st.structIdxs[sreg]) {
+            } else {
+                return false
+            }
+        }
+        i += 1
+    }
+    return true
+}
+
+// Apply an ordering operator (`< <= > >=`) to a struct comparison: build the i32
+// ordering, then compare it against 0 (signed).
+fn emitStructOrdOp(c: inout Comp, st: inout LlvmCtx, op: I64, a: LLVMValueRef, b: LLVMValueRef, sidx: U64) -> LLVMValueRef {
+    val ord: LLVMValueRef = emitStructCmp(c: inout c, st: inout st, a: a, b: b, sidx: sidx)
+    val zero: LLVMValueRef = LLVMConstInt(st.i32ty, 0U64, 0I32)
+    mut val pred: U32 = llvmIntSlt()
+    if op == opLe() { pred = llvmIntSle() }
+    if op == opGt() { pred = llvmIntSgt() }
+    if op == opGe() { pred = llvmIntSge() }
+    return LLVMBuildICmp(st.b, pred, ord, zero, anon())
+}
+
+// The c.enums index of an expression's enum type, or c.enums.count. A JSX enum
+// construction (`<Kind.LParen />`) carries the enum name directly; otherwise the
+// typed-AST cache supplies a named type (kind 2). (Opaque extern LLVMTypeRefs
+// can't be `==`-compared in Plew, so detection is via the AST, not the value type.)
+fn exprEnumIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
+    match c.exprs[id] {
+        Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, fields: _) => {
+            if isEnum {
+                return enumIdxByName(c: inout c, start: typeStart, len: typeLen)
+            }
+        }
+        _ => {}
+    }
+    val t: TypeInfo = typeOf(c: inout c, id: id)
+    if t.kind == 2 {
+        return enumIdxByName(c: inout c, start: t.nameStart, len: t.nameLen)
+    }
+    return c.enums.count
+}
+
+// Whether every variant of an enum is payload-less (so `==` is a tag comparison;
+// payload-carrying enums need a per-variant switch, deferred).
+fn enumPayloadless(c: inout Comp, eid: U64) -> Bool {
+    val ed: EnumDef = c.enums[eid]
+    mut val i: U64 = 0
+    while i < ed.variants.count {
+        if ed.variants[i].fields.count > 0U64 {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
 // Whether a struct's fields are all comparable here (no array/enum field).
 fn structEqSupported(c: inout Comp, st: inout LlvmCtx, sidx: U64) -> Bool {
     val sd: StructDef = c.structs[sidx]
@@ -1425,6 +1542,33 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                             return LLVMBuildNot(st.b, eqv, anon())
                         }
                         return eqv
+                    }
+                }
+                // enum ==/!= : a payload-less enum compares by tag (field 0). A
+                // payload-carrying enum needs a per-variant switch (deferred).
+                mut val eidE: U64 = exprEnumIdx(c: inout c, st: inout st, id: lhs)
+                if eidE >= c.enums.count {
+                    eidE = exprEnumIdx(c: inout c, st: inout st, id: rhs)
+                }
+                if eidE < c.enums.count {
+                    if enumPayloadless(c: inout c, eid: eidE) {
+                        val tagL: LLVMValueRef = LLVMBuildExtractValue(st.b, l, 0U64, anon())
+                        val tagR: LLVMValueRef = LLVMBuildExtractValue(st.b, r, 0U64, anon())
+                        mut val pred: U32 = llvmIntEq()
+                        if op == opNe() {
+                            pred = llvmIntNe()
+                        }
+                        return LLVMBuildICmp(st.b, pred, tagL, tagR, anon())
+                    }
+                }
+            }
+            // struct ordering (`< <= > >=`): lexicographic field compare (the Ord
+            // witness) -> an i32 ordering compared against 0.
+            if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
+                val sidxO: U64 = exprStructIdx(c: inout c, st: inout st, id: lhs)
+                if sidxO < c.structs.count {
+                    if structOrdSupported(c: inout c, st: inout st, sidx: sidxO) {
+                        return emitStructOrdOp(c: inout c, st: inout st, op: op, a: l, b: r, sidx: sidxO)
                     }
                 }
             }
@@ -2140,7 +2284,8 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
     // method instance emitted by declareGenMethods.
     val recvRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
     if recvRef != 0U64 {
-        if isGenericInst(c: inout c, ref: recvRef) {
+        val rtnm: TypeRef = c.types[recvRef]
+        if isGenericInst(c: inout c, ref: recvRef) && !rangeEquals(bytes: c.bytes, start: rtnm.nameStart, len: rtnm.nameLen, kw: "Array") {
             val grt: TypeRef = c.types[recvRef]
             val gmfi: U64 = findMethod(c: inout c, recvStart: grt.nameStart, recvLen: grt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
             if gmfi < c.funcs.count {
