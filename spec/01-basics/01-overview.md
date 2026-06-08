@@ -17,7 +17,7 @@ Plew は、複雑な状態を持つクライアントと、それを支える AP
 export, pub, get, type, val, mut, async, spawn, await, loop, break, continue,
 give, return, panic, where, enum, struct, newtype, assoc, extension, impl, via, trait, fn,
 factory, borrow, inout, move, unique, local, deinit, guard, while, for, in, if, else,
-match, as, self, Self, extern, import, part, with, try, true, false
+match, as, self, Self, extern, repr, import, part, with, try, true, false
 ```
 
 `true` / `false` は真偽値リテラルです。`borrow`/`inout`/`move`（アクセスモード）・`unique`/`local`（型マーカー）・`deinit`・generics の `allowUnique`/`noLocal` は [値・変数・所有権](03-values.md) を参照。`mut` は記憶域可変性（`mut val`）専用です。

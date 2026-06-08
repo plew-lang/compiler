@@ -332,18 +332,149 @@ import @Std/Testing with { expect, expectEq, expectNe, expectApprox }
 - **`expectError` は無い**。特定エラー値は `expectEq(expected: <Result.Error … />, actual: r)`、ペイロード無視の「エラーか」は `expect(r.isError)`、中身検査は [`match`](../03-expressions/11-control-flow.md#パターンマッチング) ── Plew は `==` を持つ値型エラーなので Zig の `expectError` 相当は畳まれる。
 - **バリアントの「ケースのみ判定」は関数にできない**（Plew に第一級のバリアントタグは無く、ケース判別は常に `match` の領域）。Result／Optional は `isOk`/`isError`/`isSome`/`isNone` で bool 化でき `expect(…)` に乗る。パターンを取る `expectMatches` は将来 additive。
 
-## 外部コード統合
+## 外部コード統合（`extern(c)` FFI）
+
+> **状態 = 設計叩き台（点1＝不透明ハンドル型・ポインタ・共有 struct・ABI 記法を確定方向で記述／点2 数値対応・点3 文字列境界・点4 所有権規約は別途）。** Plew の C-API バックエンド（libLLVM-C 等を叩く）の土台。ABI は当面 `c` のみ（`system`/WASM/`javascript` は後続）。
+>
+> **スコープ＝外部を「使う側」のみ（Plew が C を呼ぶ）。** Plew 関数を C へ「使わせる側」（export＝Plew→C 公開）は**未定**で本節に含めない（既存 `export` キーワードとの整合・呼出規約・マングリングを別途詰める必要があり、現状の LLVM 利用には不要なため）。
+
+`extern(c)` 境界は **Plew の保証が切れる継ぎ目**です。境界の内側（値意味論・CoW・ARC・実質 race-free）はあくまで Plew が管理するメモリについての約束で、**外部 C 世界の確保・解放・別名・スレッド安全は Plew は一切引き受けません**（"hidden cost は可・hidden meaning は不可" の原則上、ここは唱えた通り＝**生で危険なものは生で危険**と見えるべき領域）。だから FFI は**床**として最小・正直に定義し、安全性は Plew 側で `unique`＋`deinit` を被せて作ります（`Array` が `RawBuffer` の上に・`String` が `bytes` の上に立つのと同じ構図）。
+
+### ABI 選択子はクォートなしの bareword（`extern(c)`）
+
+ABI は**コンパイラが定義する閉じた集合**（ユーザーが新 ABI を定義することはできない＝intrinsic 床と同じコンパイラ原始要素）なので、**文字列ではなく bareword** で書きます（import パスを直書きするのと同じ「本質的に文字列でない箇所はクォートなし」方針）。可読性のため**パレンで括る**：`extern(c)` / `repr(c)`。
+
+- 未知の ABI（`extern(florble)` 等）は **Plew 層で即 `unknown ABI` エラー**（曖昧はエラー・補完はする/忖度はしない）。文字列にしても集合は閉じる（Rust も `extern "florble"` はエラー）ので、bareword で失うものはない。
+- ABI 名にハイフンが要る場合（C の `C-unwind` 等）は camelCase で表す（`cUnwind`）。Plew の文脈キーワード（`inout`/`noLocal`/`defaultExtension`）と同じ綴り方針。
+- コアライブラリの intrinsic 床も同じ記法＝**`extern(plewIntrinsic) { … }`**（旧 `extern "plew-intrinsic"` の bareword 化）。
+
+### 役割（方向・レイアウト）× ABI の 2 軸
+
+FFI は **役割キーワード × ABI 選択子**で表す。`extern` は「外部に実体がある（本体なし）」**だけ**を意味し、ローカル定義には使わない（"意味は唱えた通り"＝キーワードが定義場所を正直に告げる）。
+
+| 役割 | 綴り | 定義場所 | 用途 |
+|---|---|---|---|
+| **import 関数／不透明型** | `extern(c) { fn … ; type … }` | **C 側**（本体なし） | C を呼ぶ・C の不透明型を受け取る |
+| **共有 struct** | `repr(c) struct Foo { … }` | **Plew 側**（レイアウト記述） | C と同一レイアウトの値型（C 関数へ渡す） |
+
+> Plew 関数を C へ**公開**する側（export＝Plew→C）はスコープ外（上記「状態」参照）。本節は **C を呼ぶ／C の型を受け取る側**だけを定める。
 
 ```plew
-extern "c" {
-    fn malloc(size: usize) -> *mut u8
-    fn free(ptr: *mut u8)
-}
+import @Std/Ffi with { CString }   // 文字列境界（点3）— 別途定義
 
-extern "javascript" {
-    fn consoleLog(message: String)
-    val window: JsWindow
+extern(c) {
+    // 不透明な外部型（C の `typedef struct … *LLVMModuleRef;` に 1:1）。
+    type LLVMContextRef
+    type LLVMModuleRef
+    type LLVMBuilderRef
+    type LLVMValueRef
+
+    fn LLVMContextCreate() -> LLVMContextRef
+    fn LLVMModuleCreateWithNameInContext(name: CString, ctx: LLVMContextRef) -> LLVMModuleRef
+    fn LLVMDisposeModule(m: LLVMModuleRef)
+    fn LLVMCreateBuilderInContext(ctx: LLVMContextRef) -> LLVMBuilderRef
+    fn LLVMBuildAdd(b: LLVMBuilderRef, lhs: LLVMValueRef, rhs: LLVMValueRef, name: CString) -> LLVMValueRef
 }
 ```
 
-> **FFI の型マッピングは未策定です。** 上の `usize` / `*mut u8` は C 側の型を模した説明用の表記で、Plew の型体系（PascalCase・生ポインタ無し）との対応 ── 数値型の対応、ポインタ／バッファの受け渡し、文字列の境界変換、外部由来の `NaN` 流入の扱いなど ── は実装フェーズで定めます。
+### 不透明な外部型 `type Name`
+
+`extern(c)` ブロック内の **`type Name`**（本体なし）は**不透明な外部型**を宣言します。C 側の「不透明 struct へのポインタの typedef」（`LLVMModuleRef` 等）に 1:1 対応します。
+
+- **不透明**：フィールドも factory もリテラルも無い。**Plew 側では構築・分解できず**、`extern` 関数の戻り値として受け取り、`extern` 関数へ渡すことだけができる。
+- **型として別物**：`LLVMModuleRef` と `LLVMValueRef` は別の名前型で、暗黙変換が無いので**取り違えはコンパイルエラー**（C の `void*` 一枚で素通りする緩さを型で塞ぐ）。
+- **コピー可能・word サイズ**：中身はポインタ 1 語でビットコピー複製（整数ディスクリプタ扱い）。**`borrow`/`move` は書けない**（コピー可能型の規則どおり・[03 値・所有権](../01-basics/03-values.md)）。`val a = m; val b = m` は**同じ外部オブジェクトへの別名**を生むが、それは外部世界の話で Plew の値意味論・ARC の対象外（別名は普通に起きる＝境界の正直さ）。
+- **deinit は走らない**：Plew は外部寿命を知らないので、ハンドルが捨てられても**自動解放しない**（生のままなら**リークも二重解放も起こり得る**＝承知で使う床）。
+- **C への射影は 1:1**：生成 C では Plew の型名をそのまま C 型名に使う。実体 `typedef` は include した C ヘッダ（`<llvm-c/Core.h>` 等）が供給。
+
+### C ポインタ `CPtr[T]` / `CMutPtr[T]` / `COpaque`
+
+中身を持つポインタ・配列・out 引数のための生ポインタ型。`RawBuffer`/`Ref` と同格の**コンパイラ組み込みプリミティブ**（属性魔法でなく型語彙）。C の `const` 有無を**読む権利／書く権利**として保つ（Plew の `borrow`/`inout`・shared/unique と同じ軸・bindgen で `.h` を 1:1 に写すため）。
+
+| C | Plew | 意味 |
+|---|---|---|
+| `const T*` | **`CPtr[T]`**（無印＝安全側） | 読み取り専用ポインタ |
+| `T*` | **`CMutPtr[T]`**（可変は明示） | 書き込み可能ポインタ |
+| `void*` | **`COpaque`** | 無タグ生ポインタ（`const void*` は当面分けない） |
+
+- **無印が読み取り専用**＝危険な方（可変）を長い名前で明示（`mut val` で可変を明示するのと同じ流儀）。
+- `T` は数値・`repr(c)` struct・不透明ハンドル・別のポインタ（`LLVMValueRef *Args` → `CPtr[LLVMValueRef]`）いずれも可。
+- 表層アプリコードは `CPtr` を見ない。触るのは `extern` ブロックと薄いグルー層だけ（Plew の「生ポインタ無し」は**表層**の約束で、床には `RawBuffer` 同様に在ってよい）。
+- `Array[T]` の連続記憶を渡すときは床経由で基底ポインタを一時的に借りる（寿命は呼び出し中だけ・詳細は点3/4）。
+
+### 共有 struct `repr(c) struct`
+
+C とレイアウトを共有する struct は **`repr(c)`**（`extern` ではない＝Plew 側で定義する・外部と詐称しない）。`repr(c)` は「この struct のメモリ表現は **C ABI**」を意味するコンパイラ指示（属性 `@[...]` でなくキーワード＝メタプロは純粋 codegen のまま温存）。
+
+```plew
+repr(c) struct LLVMMCJITCompilerOptions {
+    mut val OptLevel: U32 = 0
+    mut val NoFramePointerElim: LLVMBool = 0
+    mut val EnableFastISel: LLVMBool = 0
+    mut val MCJMM: LLVMMCJITMemoryManagerRef = ...   // 不透明ハンドルでも可
+}
+```
+
+- **意味**：C ABI レイアウト固定（宣言順・自然アラインメント・並べ替え/パッキング最適化を禁止）／POD（CoW・ARC 不介入）／フィールドは C 表現可能型のみ（プリミティブ・`CPtr`/`CMutPtr`/`COpaque`・不透明ハンドル・入れ子 `repr(c)`。`Array`/`String`/`Ref` は不可）。
+- **フィールドアクセス・JSX 構築・既定値は通常の Plew 機構そのまま**（新構文は struct ヘッダの `repr(c)` 1 つだけ）：`mut val o = <LLVMMCJITCompilerOptions OptLevel=2 />` の残りは既定 0、`o.OptLevel = 3` は通常の場所代入。
+- **`c` は C *言語*でなく C *ABI***（プラットフォーム標準の万能相互運用規約）。`repr(c)` の別レイアウトとして `repr(packed)`（詰め）等を後続 additive に足せる（property `stable` でなく contract で名付ける＝`packed` も「決定的」なので衝突しない）。
+- **向きを持たない**：`repr(c) struct` は C ABI レイアウトの値型というだけなので、`extern(c)` 関数へ渡す引数に使える。将来 export 側を定めれば同じ定義がそちらにも乗る（共有 struct は方向非依存）。
+
+ポインタ越しに渡す「`&opts`」は **`inout` で書ける**（`CPtr` を表に出さない）：
+
+```plew
+extern(c) {
+    // C: LLVMCreateMCJITCompilerForModule(…, struct LLVM…Options *Opts, size_t, char **Err)
+    fn LLVMCreateMCJITCompilerForModule(out: inout ExecutionEngineRef, m: LLVMModuleRef,
+                                        opts: inout LLVMMCJITCompilerOptions, sz: USize,
+                                        err: inout CMutPtr[U8]) -> LLVMBool
+}
+```
+
+`inout LLVMMCJITCompilerOptions` を `Options*` に lower（`&tmp` 渡し＋呼出後コピーバック）＝Plew の場所モデルそのまま。`CPtr[Foo]` を直に握る必要があるのは「ポインタを保持する／配列にする」場合だけで、そのときは `CPtr[Foo].load()`（struct 丸ごとコピーアウト）／`CMutPtr[Foo].store(value:)`（書き戻し）。ポインタ越しのフィールド単位 lvalue（`ptr->x`）は当面持たない（場所モデルを生ポインタへ拡張する話＝必要時 additive）。
+
+### NULL は境界で `Optional` に写す
+
+C-API は失敗時に NULL を返す。Plew に null は無いので、**NULL は境界でだけ存在し `Optional` に写す**（null を有効なハンドルとして言語内へ流入させない＝"hidden meaning は不可"）。
+
+```plew
+extern(c) {
+    // 署名に Optional と明示して初めて NULL→None・非 NULL→Some に写る。
+    fn LLVMParseBitcodeInContext2(ctx: LLVMContextRef, buf: MemoryBufferRef) -> Optional[LLVMModuleRef]
+}
+```
+
+署名に `Optional[T]` と**明示**したときだけ境界変換が起きる（黙って null を None 化しない・出どころは唱えた通り）。`CPtr[T]`/不透明ハンドルどちらも同じ規約。
+
+### 安全な皮は Plew 側で被せる
+
+生ハンドル/ポインタに RAII を付けるには、`unique` struct で包んで `deinit` に解放を書く ── 「外部資源を Plew の決定的破棄に乗せる」正典の形（[03](../01-basics/03-values.md) の `unique`/`deinit`）。
+
+```plew
+// 外部モジュールを所有する安全な値型。unique ＝コピー不可・move 専用なので
+// 二重解放は型で排除され、スコープを抜けると deinit が確実に Dispose する。
+unique struct Module {
+    val raw: LLVMModuleRef
+    deinit { LLVMDisposeModule(m: self.raw) }
+}
+pub impl Module {
+    assoc fn create(name: CString, ctx: LLVMContextRef) -> Module {
+        return <Module raw=LLVMModuleCreateWithNameInContext(name: name, ctx: ctx) />
+    }
+}
+```
+
+危険を `extern` ブロックと薄い皮に局所化すれば、利用側は通常の Plew 値として扱える。
+
+### 別途（点2/3/4）
+
+- **点2 数値型の対応**：`I32↔int32_t`・`U64↔uint64_t`・`F64↔double` 等。固定幅なのでほぼ機械的（`Int`/`USize`/`ISize` の C 対応・`LLVMBool`(=`int`) 等の typedef・外部由来 `NaN` 流入の扱いだけ要決定）。
+- **点3 文字列境界**：`String`（UTF-8・CoW・非 NUL 終端）↔ C `const char*`。借用して NUL 終端の一時バッファを作る `CString` 変換層（`@Std/Ffi`）。
+- **点4 所有権規約**：境界を越えた値は ARC 管理外。誰が `free` するか、`extern` 戻り値の寿命規則。上の `unique`＋`deinit` が既定の受け皿。
+
+### 未決
+
+- **ハンドルの等価**：ポインタ同一性で `Eq` を提供するか。当面は非提供で開始し additive 可。
+- **spawn/local**：生ハンドル/ポインタを `local`（`Ref` 同様 spawn 不可・保守的）とするか、コピー可能な 1 語として spawn 越境を許す（正直に危険・race-free 保証は境界で切れると明記）か。
+- **使わせる側（export＝Plew→C 公開）＝未定**：Plew 関数を C へ公開する綴り・マングル抑制・可視性（既存 `export` モジュール公開との整合）・呼出規約の既定。既存 `export` キーワードと紛らわしく要設計・libLLVM-C 利用には不要なので本節スコープ外。
+- **型エイリアス**（`type FooRef = CPtr[FooOpaque]`）と **`repr(packed)`/`callconv` 軸**：当面は不透明 `type` と `repr(c)` のみ、両者は後続 additive。
