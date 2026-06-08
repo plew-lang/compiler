@@ -300,71 +300,75 @@ fn structRegSlot(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 
     return st.structIdxs.count
 }
 
-// Whether all of a struct's fields are primitive (scalar/String/Bool — no array,
-// no nested struct/enum), i.e. the struct is registerable in this increment.
-fn structAllPrimitive(c: inout Comp, sidx: U64) -> Bool {
+// Whether a struct is registerable as a named LLVM value type in this increment:
+// non-generic, non-extern, non-unique, and every field is either an array (the
+// {ptr,i64} value type, element-agnostic), a primitive scalar/String/Bool, an
+// extern lang-item struct field (I64/String/Bool), or a *nested registerable*
+// struct (struct-of-struct). Enum fields and generic-instance fields are not yet
+// modeled. Value types cannot be cyclic by value, so the recursion terminates.
+fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
     val sd: StructDef = c.structs[sidx]
+    if sd.typeParams.count > 0 { return false }
+    if sd.isExtern { return false }
+    // unique structs carry move/deinit semantics not yet modeled here.
+    if sd.isUnique { return false }
     mut val i: U64 = 0
     while i < sd.fields.count {
         val f: FieldDef = sd.fields[i]
-        // an array field is the {ptr,i64} value type (supported); a real (non-extern)
-        // nested struct / enum field is not yet (an extern struct field is a
-        // primitive lang-item I64/String/Bool, which is fine).
         if f.tyIsArray {
         } else {
-            val fsi: U64 = structIndexByName(c: inout c, start: f.tyStart, len: f.tyLen)
-            if fsi < c.structs.count {
-                if c.structs[fsi].isExtern {
-                } else {
-                    return false
-                }
-            }
+            // enum field: not yet.
             if isEnumName(c: inout c, start: f.tyStart, len: f.tyLen) {
                 return false
             }
+            val fsi: U64 = structIndexByName(c: inout c, start: f.tyStart, len: f.tyLen)
+            if fsi < c.structs.count {
+                // an extern struct field is a primitive lang-item (ok); a real nested
+                // struct must itself be registerable (recursively).
+                if c.structs[fsi].isExtern {
+                } else {
+                    if structRegisterable(c: inout c, sidx: fsi) {
+                    } else {
+                        return false
+                    }
+                }
+            }
+            // else: a primitive scalar name (I8.. / unknown) -> treated as a scalar.
         }
         i += 1
     }
     return true
 }
 
-// Register every non-generic, non-extern, all-primitive-field struct as a named
-// LLVM struct type (fields in declared order). Nested-struct / array-field /
-// recursive structs are a later increment (their construction/access is rejected
-// until then). Called once before function emission.
+// Register every registerable struct as a named LLVM struct type. Two passes so a
+// nested-struct field resolves to the (already-created) named type of the field's
+// struct: pass 1 creates all the named types, pass 2 sets their bodies. Called once
+// before function emission. (Ref / unique / generic / enum-field structs stay
+// unregistered, so their construction/access is rejected, not miscompiled.)
 fn registerStructs(c: inout Comp, st: inout LlvmCtx) {
     mut val i: U64 = 0
     while i < c.structs.count {
-        val sd: StructDef = c.structs[i]
-        if sd.typeParams.count > 0 {
-        } else {
-            if sd.isExtern {
-            } else {
-                // unique structs carry move/deinit semantics not yet modeled here;
-                // leave them unregistered so their construction is rejected, not
-                // miscompiled.
-                if sd.isUnique {
-                } else {
-                if structAllPrimitive(c: inout c, sidx: i) {
-                    mut val nm: Array[U8] = []
-                    appendBytes(into: inout nm, from: "st".bytes)
-                    appendU64Dec(into: inout nm, n: i)
-                    nm.append(value: 0)
-                    val ty: LLVMTypeRef = LLVMStructCreateNamed(st.ctx, arrayCPtr(nm))
-                    mut val elems: Array[LLVMTypeRef] = []
-                    mut val fi: U64 = 0
-                    while fi < sd.fields.count {
-                        elems.append(value: llvmTypeFor(c: inout c, st: inout st, tyStart: sd.fields[fi].tyStart, tyLen: sd.fields[fi].tyLen, isArray: sd.fields[fi].tyIsArray))
-                        fi += 1
-                    }
-                    LLVMStructSetBody(ty, arrayCPtr(elems), sd.fields.count, 0I32)
-                    st.structIdxs.append(value: i)
-                    st.structTys.append(value: ty)
-                }
-                }
-            }
+        if structRegisterable(c: inout c, sidx: i) {
+            mut val nm: Array[U8] = []
+            appendBytes(into: inout nm, from: "st".bytes)
+            appendU64Dec(into: inout nm, n: i)
+            nm.append(value: 0)
+            st.structIdxs.append(value: i)
+            st.structTys.append(value: LLVMStructCreateNamed(st.ctx, arrayCPtr(nm)))
         }
         i += 1
+    }
+    mut val s: U64 = 0
+    while s < st.structIdxs.count {
+        val sd: StructDef = c.structs[st.structIdxs[s]]
+        mut val elems: Array[LLVMTypeRef] = []
+        mut val fi: U64 = 0
+        while fi < sd.fields.count {
+            elems.append(value: llvmTypeFor(c: inout c, st: inout st, tyStart: sd.fields[fi].tyStart, tyLen: sd.fields[fi].tyLen, isArray: sd.fields[fi].tyIsArray))
+            fi += 1
+        }
+        LLVMStructSetBody(st.structTys[s], arrayCPtr(elems), sd.fields.count, 0I32)
+        s += 1
     }
 }
 
@@ -775,6 +779,22 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             if isEnum {
             } else {
                 return localStructIdxFor(c: inout c, st: inout st, start: typeStart, len: typeLen)
+            }
+        }
+        Expr.Field(val base, val nameStart, val nameLen) => {
+            // a nested-struct field access (`ln.b`): the field's declared type is
+            // itself a (registered) struct, so its struct index drives further
+            // field access / method dispatch on the result.
+            val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+            if bsi < c.structs.count {
+                val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
+                if fidx < c.structs[bsi].fields.count {
+                    val fld: FieldDef = c.structs[bsi].fields[fidx]
+                    if fld.tyIsArray {
+                    } else {
+                        return localStructIdxFor(c: inout c, st: inout st, start: fld.tyStart, len: fld.tyLen)
+                    }
+                }
             }
         }
         _ => {}
