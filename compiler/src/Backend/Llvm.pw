@@ -871,6 +871,36 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
     return c.structs.count
 }
 
+// The result TypeRef of a call/method expression, grounding a generic return
+// under the inferred type arguments — so an un-annotated binding to a generic
+// constructor (`val r = makeBox()` with makeBox -> Box[I64]) recovers the
+// instance ref for field substitution. 0 when not a structured call result.
+fn exprResultRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
+    match c.exprs[id] {
+        Expr.Call(val nameStart, val nameLen, val args) => {
+            val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            if cfi < c.funcs.count {
+                val cf: Func = c.funcs[cfi]
+                if cf.hasRet {
+                    if isGenericFreeFn(c: inout c, fi: cfi) {
+                        val savedP: Array[Bind] = c.curTypeParams
+                        val savedA: Array[U64] = c.curTypeArgs
+                        c.curTypeParams = cf.typeParams
+                        c.curTypeArgs = llvmInferFnArgs(c: inout c, st: inout st, f: cf, args: args)
+                        val r: U64 = groundTypeRef(c: inout c, ref: cf.retTy)
+                        c.curTypeParams = savedP
+                        c.curTypeArgs = savedA
+                        return r
+                    }
+                    return cf.retTy
+                }
+            }
+        }
+        _ => {}
+    }
+    return 0U64
+}
+
 // The LLVM type for a declared type span, honoring array-ness: an array is the
 // {ptr,i64} value type; otherwise the scalar/String/struct/enum type.
 fn llvmTypeFor(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64, isArray: Bool) -> LLVMTypeRef {
@@ -3546,6 +3576,28 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             // is false for it).
             if isRefInst(c: inout c, ref: ty) {
                 tref = ty
+            }
+            // an un-annotated binding to a call returning a generic instance
+            // (`val r = makeBox()` -> Box[I64]): recover the instance ref + def so
+            // `r.v` substitutes T. (typeOf can't see this local; resolve from AST.)
+            if tref == 0U64 {
+                if tyLen == 0U64 {
+                    if isArr {
+                    } else {
+                        val rref: U64 = exprResultRef(c: inout c, st: inout st, id: init)
+                        if isGenericInst(c: inout c, ref: rref) {
+                            val gslot2: U64 = genStructSlot(c: inout c, st: inout st, ref: rref)
+                            if gslot2 < st.genStructRefs.count {
+                                sidx = st.genStructDefs[gslot2]
+                                tref = rref
+                            } else {
+                                if genEnumSlot(c: inout c, st: inout st, ref: rref) < st.genEnumRefs.count {
+                                    tref = rref
+                                }
+                            }
+                        }
+                    }
+                }
             }
             // a non-generic enum local: track a bare TypeRef so `==`/match recover
             // the enum (typeOf can't see locals — c.locals is unpopulated here).
