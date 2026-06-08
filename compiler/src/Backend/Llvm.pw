@@ -4090,6 +4090,26 @@ fn genGenMethodCall(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64, slot:
 
 // The address of an addressable place (a struct local), for `inout` self. Falls
 // back to a fresh alloca holding the value for a non-place receiver.
+// The LLVM struct type of a struct-valued expression `structExpr` (def `sidx`):
+// its generic instance type if it carries one, else the registered non-generic
+// type. LLVMConstNull(ptr) if neither (so the caller can fall back / error).
+fn structLlvmTyOfExpr(c: inout Comp, st: inout LlvmCtx, structExpr: U64, sidx: U64) -> LLVMTypeRef {
+    val ref: U64 = exprTypeRef(c: inout c, st: inout st, id: structExpr)
+    if ref != 0U64 {
+        if isGenericInst(c: inout c, ref: ref) {
+            val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: ref)
+            if gs < st.genStructRefs.count {
+                return st.genStructTys[gs]
+            }
+        }
+    }
+    val reg: U64 = structRegSlot(c: inout c, st: inout st, start: c.structs[sidx].nameStart, len: c.structs[sidx].nameLen)
+    if reg < st.structIdxs.count {
+        return st.structTys[reg]
+    }
+    return LLVMConstNull(st.ptrty)
+}
+
 fn placePtrOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
     match c.exprs[id] {
         Expr.Ident(val start, val len) => {
@@ -5654,7 +5674,34 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                             compileErrorAt(line: lineOf(c: inout c, offset: fnameStart), msg: "LLVM backend: field assignment only on a registered struct local (so far)")
                         }
                         _ => {
-                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "LLVM backend: nested place assignment not yet supported")
+                            // a general place base (`arr[i].field = v`, get-modify-set):
+                            // the base struct pointer via placePtrOf, then GEP the field.
+                            val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: fbase)
+                            mut val handled: Bool = false
+                            if bsi < c.structs.count {
+                                val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fnameStart, len: fnameLen)
+                                if fidx < c.structs[bsi].fields.count {
+                                    val baseTy: LLVMTypeRef = structLlvmTyOfExpr(c: inout c, st: inout st, structExpr: fbase, sidx: bsi)
+                                    if LLVMIsNull(baseTy) == 0I32 {
+                                        val fld: FieldDef = c.structs[bsi].fields[fidx]
+                                        val basePtr: LLVMValueRef = placePtrOf(c: inout c, st: inout st, id: fbase)
+                                        val gep: LLVMValueRef = LLVMBuildStructGEP2(st.b, baseTy, basePtr, fidx, anon())
+                                        val rv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                        if op == opAssign() {
+                                            LLVMBuildStore(st.b, rv, gep)
+                                        } else {
+                                            val ftype: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                            val cur: LLVMValueRef = LLVMBuildLoad2(st.b, ftype, gep, anon())
+                                            LLVMBuildStore(st.b, buildBinOp(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv), gep)
+                                        }
+                                        handled = true
+                                    }
+                                }
+                            }
+                            if handled {
+                            } else {
+                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "LLVM backend: nested place assignment not yet supported")
+                            }
                         }
                     }
                 }
