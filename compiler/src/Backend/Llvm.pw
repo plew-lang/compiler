@@ -1260,10 +1260,17 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
 // `arr.get(i:).field` dispatch.
 fn arrFieldElemStructIdx(c: inout Comp, st: inout LlvmCtx, arrayExpr: U64) -> U64 {
     match c.exprs[arrayExpr] {
-        // NOTE: an array-of-struct LOCAL (`store[i].field`) is intentionally NOT
-        // resolved here yet — enabling it surfaces the missing array CoW (an aliased
-        // `b = a; b[i] = x` mutates a's shared buffer), a latent miscompile. The
-        // element struct is tracked on locElemStructIdx ready for when CoW lands.
+        Expr.Ident(val start, val len) => {
+            // an array-of-struct local (`store : Array[Box]`): its tracked element
+            // struct (sentinel-large = element is not a struct). Safe now that array
+            // value-semantics CoW makes an aliased `b = a` independent.
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.nLocals {
+                if st.locElemStructIdx[li] < c.structs.count {
+                    return st.locElemStructIdx[li]
+                }
+            }
+        }
         Expr.Field(base: val fbase, nameStart: val fns, nameLen: val fnl) => {
             val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: fbase)
             if bsi < c.structs.count {
@@ -4107,6 +4114,21 @@ fn placePtrOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                     }
                 }
                 _ => {}
+            }
+        }
+        Expr.Index(val base, val index) => {
+            // an array element place `xs[i]` (get-modify-set: `xs[i].bump()` with an
+            // `inout` method): the element pointer into the owned buffer, so the
+            // callee mutates in place. (The buffer is owned — value-semantics CoW
+            // already split any alias — so direct mutation is observably correct.)
+            if exprIsArray(c: inout c, st: inout st, id: base) {
+                val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: base)
+                val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: base)
+                val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 0U64, anon())
+                val count: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 1U64, anon())
+                val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: index)
+                emitBoundsCheck(c: inout c, st: inout st, idx: idx, count: count)
+                return arrElemPtr(st: inout st, elemTy: elemTy, data: data, idx: idx)
             }
         }
         _ => {}
