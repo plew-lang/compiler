@@ -1910,7 +1910,9 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 }
                 _ => {}
             }
-            val et: LLVMTypeRef = exprArrElemTy(c: inout c, st: inout st, id: base)
+            // the env-aware element type (a generic array field `self.keys: Array[K]`
+            // with K -> String grounds to strty, so `self.keys[i] == key` is String ==).
+            val et: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: base)
             if LLVMGetTypeKind(et) == 10U32 { return 1U64 }
             if LLVMGetTypeKind(et) == 8U32 {
                 if LLVMGetIntTypeWidth(et) == 1U32 { return 2U64 }
@@ -3827,6 +3829,12 @@ fn genLlvmIndex(c: inout Comp, st: inout LlvmCtx, base: U64, index: U64) -> LLVM
     } else {
         val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
         if bsi < c.structs.count {
+            // a Dictionary subscript `d[k]` lowers to the panicking accessor
+            // `d.at(key: k)` (spec/02); a user Index type uses `index`.
+            if rangeEquals(bytes: c.bytes, start: c.structs[bsi].nameStart, len: c.structs[bsi].nameLen, kw: "Dictionary") {
+                val m: U64 = synthDictMethod(c: inout c, recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
+                return genLlvmExpr(c: inout c, st: inout st, id: m)
+            }
             if typeHasMethodNamed(c: inout c, typeStart: c.structs[bsi].nameStart, typeLen: c.structs[bsi].nameLen, name: "index") {
                 val m: U64 = synthDictMethod(c: inout c, recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
                 return genLlvmExpr(c: inout c, st: inout st, id: m)
@@ -6503,6 +6511,16 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                     } else {
                         val ibsi: U64 = exprStructIdx(c: inout c, st: inout st, id: ibase)
                         if ibsi < c.structs.count {
+                            // a Dictionary `d[k] = v` lowers to `d.insert(key:, value:)`.
+                            if rangeEquals(bytes: c.bytes, start: c.structs[ibsi].nameStart, len: c.structs[ibsi].nameLen, kw: "Dictionary") {
+                                if op == opAssign() {
+                                    val m: U64 = synthDictMethod(c: inout c, recv: ibase, name: "insert", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: value)
+                                    genLlvmExpr(c: inout c, st: inout st, id: m)
+                                    return
+                                }
+                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: ibase)), msg: "LLVM backend: compound assignment to a dictionary element is not supported")
+                                return
+                            }
                             if typeHasMethodNamed(c: inout c, typeStart: c.structs[ibsi].nameStart, typeLen: c.structs[ibsi].nameLen, name: "indexSet") {
                                 mut val rhsExpr: U64 = value
                                 if op == opAssign() {
