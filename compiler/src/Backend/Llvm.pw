@@ -254,6 +254,12 @@ struct LlvmCtx {
     pub mut val cloIdx: Array[U64]
     pub mut val cloVal: Array[LLVMValueRef]
     pub mut val cloTy: Array[LLVMTypeRef]
+    // function-value thunks, cached by c.funcs index: a bare function reference
+    // (`val g = twice`) becomes a closure {thunk, null}, where the thunk adapts the
+    // plain function to the env-first closure ABI by forwarding its arguments.
+    pub mut val thunkIdx: Array[U64]
+    pub mut val thunkVal: Array[LLVMValueRef]
+    pub mut val thunkTy: Array[LLVMTypeRef]
 }
 
 // A NUL-terminated C string from a Plew literal, for the many `const char*` name
@@ -2115,6 +2121,18 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
             if li < st.nLocals {
                 return LLVMBuildLoad2(st.b, st.locTy[li], st.locPtr[li], anon())
+            }
+            // a bare reference to a free function (`val g = twice`): the closure
+            // {thunk, env=null} value, where the thunk adapts it to the closure ABI.
+            val fvi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)
+            if fvi < c.funcs.count {
+                val ts: U64 = thunkSlot(st: inout st, fi: fvi)
+                if ts < st.thunkIdx.count {
+                    mut val cv: LLVMValueRef = LLVMGetUndef(st.closureTy)
+                    cv = LLVMBuildInsertValue(st.b, cv, st.thunkVal[ts], 0U64, anon())
+                    cv = LLVMBuildInsertValue(st.b, cv, LLVMConstNull(st.ptrty), 1U64, anon())
+                    return cv
+                }
             }
             compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "LLVM backend: unknown identifier (only locals supported so far)")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
@@ -4314,6 +4332,102 @@ fn emitClosures(c: inout Comp, st: inout LlvmCtx) {
     }
 }
 
+// ---- function-value thunks ----
+//
+// Index into st.thunk* for a function index, or st.thunkIdx.count.
+fn thunkSlot(st: inout LlvmCtx, fi: U64) -> U64 {
+    mut val i: U64 = 0
+    while i < st.thunkIdx.count {
+        if st.thunkIdx[i] == fi {
+            return i
+        }
+        i += 1
+    }
+    return st.thunkIdx.count
+}
+
+// Declare a thunk `__fnthunk<fi>(ptr env, params...)` for plain user function `fi`
+// (so a bare reference to it can be the {fn, env} value). Idempotent; only declares
+// for a function the backend actually emits (a plain user fn).
+fn declareThunk(c: inout Comp, st: inout LlvmCtx, fi: U64) {
+    if thunkSlot(st: inout st, fi: fi) < st.thunkIdx.count {
+        return
+    }
+    if isPlainUserFn(c: inout c, st: inout st, fi: fi) {
+    } else {
+        return
+    }
+    val f: Func = c.funcs[fi]
+    if f.hasRecv {
+        return
+    }
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: st.ptrty)
+    mut val pi: U64 = 0
+    while pi < f.params.count {
+        ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: f.params[pi]))
+        pi += 1
+    }
+    val fty: LLVMTypeRef = LLVMFunctionType(llvmFnRetTy(c: inout c, st: inout st, f: f), arrayCPtr(ptys), ptys.count, 0I32)
+    mut val nm: Array[U8] = []
+    appendBytes(into: inout nm, from: "__fnthunk".bytes)
+    appendU64Dec(into: inout nm, n: fi)
+    nm.append(value: 0)
+    val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
+    st.thunkIdx.append(value: fi)
+    st.thunkVal.append(value: fv)
+    st.thunkTy.append(value: fty)
+}
+
+// Declare a thunk for every bare identifier that names a plain free function (a
+// function-as-value use; over-approx is harmless — an unused thunk just sits).
+fn collectThunks(c: inout Comp, st: inout LlvmCtx) {
+    mut val i: U64 = 0
+    while i < c.exprs.count {
+        match c.exprs[i] {
+            Expr.Ident(val start, val len) => {
+                val fvi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)
+                if fvi < c.funcs.count {
+                    val f: Func = c.funcs[fvi]
+                    if f.hasRecv || f.isAssoc || f.typeParams.count > 0U64 {
+                    } else {
+                        declareThunk(c: inout c, st: inout st, fi: fvi)
+                    }
+                }
+            }
+            _ => {}
+        }
+        i += 1
+    }
+}
+
+// Emit each thunk body: forward the closure args (skipping env at 0) to the plain
+// function pf<fi>, returning its result.
+fn emitThunks(c: inout Comp, st: inout LlvmCtx) {
+    mut val s: U64 = 0
+    while s < st.thunkIdx.count {
+        val fi: U64 = st.thunkIdx[s]
+        val fv: LLVMValueRef = st.thunkVal[s]
+        val f: Func = c.funcs[fi]
+        val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "entry"))
+        LLVMPositionBuilderAtEnd(st.b, entry)
+        val callSlot: U64 = userFnSlot(st: inout st, idx: fi)
+        mut val av: Array[LLVMValueRef] = []
+        mut val pi: U64 = 0
+        while pi < f.params.count {
+            av.append(value: LLVMGetParam(fv, pi + 1U64))
+            pi += 1
+        }
+        val r: LLVMValueRef = LLVMBuildCall2(st.b, st.fnTy[callSlot], st.fnVal[callSlot], arrayCPtr(av), av.count, anon())
+        if f.hasRet {
+            LLVMBuildRet(st.b, r)
+        } else {
+            LLVMBuildRetVoid(st.b)
+        }
+        s += 1
+    }
+}
+
 fn genLlvmFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     val slot: U64 = userFnSlot(st: inout st, idx: fi)
     genLlvmFuncBody(c: inout c, st: inout st, fi: fi, fv: st.fnVal[slot])
@@ -5131,7 +5245,7 @@ fn emitLlvm(c: inout Comp) {
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[]
-        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] />
+        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] />
 
     // a "self" byte span (appended past the source) to bind method receivers.
     st.selfStart = c.bytes.count
@@ -5155,6 +5269,8 @@ fn emitLlvm(c: inout Comp) {
     // declare lambda-lifted closures (after the named types + functions they may
     // reference exist), so a closure literal can build its {fn, env} value.
     collectClosures(c: inout c, st: inout st)
+    // declare function-value thunks (a bare function reference -> {thunk, null}).
+    collectThunks(c: inout c, st: inout st)
 
     // pass 2: emit `main` and every plain user function's body.
     mut val fi: U64 = 0
@@ -5173,8 +5289,9 @@ fn emitLlvm(c: inout Comp) {
     // generic free-function + generic-method instance bodies.
     emitGenFns(c: inout c, st: inout st)
     emitGenMethods(c: inout c, st: inout st)
-    // lambda-lifted closure bodies.
+    // lambda-lifted closure bodies + function-value thunks.
     emitClosures(c: inout c, st: inout st)
+    emitThunks(c: inout c, st: inout st)
     if foundMain {
     } else {
         compileErrorAt(line: 0, msg: "LLVM backend: no `main` function found")
