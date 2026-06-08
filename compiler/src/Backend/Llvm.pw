@@ -310,6 +310,10 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
                     return llvmTypeOfRef(c: inout c, st: inout st, ref: argRef)
                 }
                 val at: TypeRef = c.types[argRef]
+                // an array argument (`T -> Array[I32]`) is the {ptr,i64} value type.
+                if rangeEquals(bytes: c.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
+                    return st.arrayTy
+                }
                 return llvmScalarTy(c: inout c, st: inout st, tyStart: at.nameStart, tyLen: at.nameLen)
             }
             ti += 1
@@ -491,12 +495,19 @@ fn fieldWords(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> U64
         while ti < c.curTypeParams.count {
             if c.curTypeParams[ti].nameId == qid {
                 val at: TypeRef = c.types[c.curTypeArgs[ti]]
+                // an array argument (`T -> Array[I32]`) is the {ptr,i64} value (2 words).
+                if rangeEquals(bytes: c.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
+                    return 2U64
+                }
                 return fieldWords(c: inout c, st: inout st, tyStart: at.nameStart, tyLen: at.nameLen)
             }
             ti += 1
         }
     }
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "String") {
+        return 2U64
+    }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Array") {
         return 2U64
     }
     val sreg: U64 = structRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen)
@@ -710,14 +721,56 @@ fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, 
                 LLVMBuildStore(st.b, boxedVal, cell)
                 agg = LLVMBuildInsertValue(st.b, agg, cell, fj, anon())
             } else {
-                val fv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valExpr), tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
-                agg = LLVMBuildInsertValue(st.b, agg, fv, fj, anon())
+                // a payload field of array type — declared `Array[E]` or a type param
+                // grounding to one (`v: T` with T -> Array[I32]): an array-literal
+                // value must be built with the field's concrete element type, not
+                // i64-defaulted.
+                val gfElem: U64 = arrayFieldElemRef(c: inout c, f: fs[fj])
+                if gfElem != 0U64 {
+                    match c.exprs[valExpr] {
+                        Expr.Array(val elems) => {
+                            agg = LLVMBuildInsertValue(st.b, agg, genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: llvmTypeOfRef(c: inout c, st: inout st, ref: gfElem)), fj, anon())
+                        }
+                        _ => {
+                            agg = LLVMBuildInsertValue(st.b, agg, genLlvmExpr(c: inout c, st: inout st, id: valExpr), fj, anon())
+                        }
+                    }
+                } else {
+                    val fv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valExpr), tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
+                    agg = LLVMBuildInsertValue(st.b, agg, fv, fj, anon())
+                }
             }
             fj += 1
         }
         LLVMBuildStore(st.b, agg, LLVMBuildStructGEP2(st.b, ety, slot, 1U64, anon()))
     }
     return LLVMBuildLoad2(st.b, ety, slot, anon())
+}
+
+// If field `f` is of array type — declared `Array[E]`, or a type param that
+// grounds (under the active env) to `Array[E]` — the element type ref E, else 0.
+fn arrayFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
+    if f.tyIsArray {
+        if f.ty != 0U64 {
+            val t: TypeRef = c.types[f.ty]
+            if t.args.count > 0U64 {
+                return t.args[0]
+            }
+        }
+        return 0U64
+    }
+    if f.ty != 0U64 {
+        if c.curTypeParams.count > 0U64 {
+            val g: U64 = groundTypeRef(c: inout c, ref: f.ty)
+            val gt: TypeRef = c.types[g]
+            if rangeEquals(bytes: c.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array") {
+                if gt.args.count > 0U64 {
+                    return gt.args[0]
+                }
+            }
+        }
+    }
+    return 0U64
 }
 
 // Build an enum value of LLVM type `ety` for def `eid`, variant `vi`, from
@@ -5573,7 +5626,21 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
         }
         if fidx < fs.count {
             val fd: FieldDef = fs[fidx]
-            val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: fd.tyStart, tyLen: fd.tyLen)
+            // an array-typed payload field (declared `Array[E]` or a type param that
+            // grounds to one): the bound local is the {ptr,i64} array value, tracked
+            // as an array so `v[i]` / `v.count` work in the arm body.
+            val elemRef: U64 = arrayFieldElemRef(c: inout c, f: fd)
+            mut val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: fd.tyStart, tyLen: fd.tyLen)
+            mut val isArrF: Bool = false
+            mut val elemTyF: LLVMTypeRef = st.i64ty
+            mut val elemKindF: U64 = 0U64
+            if elemRef != 0U64 {
+                pty = st.arrayTy
+                isArrF = true
+                elemTyF = llvmTypeOfRef(c: inout c, st: inout st, ref: elemRef)
+                val et: TypeRef = c.types[elemRef]
+                elemKindF = kindFromTySpan(c: inout c, tyStart: et.nameStart, tyLen: et.nameLen)
+            }
             // a boxed (recursive) payload field holds a heap pointer; load the boxed
             // value back. A non-boxed field is the value directly.
             mut val fv: LLVMValueRef = LLVMBuildExtractValue(st.b, payload, fidx, anon())
@@ -5588,7 +5655,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
             if enumRegSlot(c: inout c, st: inout st, start: fd.tyStart, len: fd.tyLen) < st.enumIdxs.count {
                 tref = simpleTypeRef(c: inout c, nameStart: fd.tyStart, nameLen: fd.tyLen)
             }
-            pushLocalR(st: inout st, nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: kindFromTySpan(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: fd.tyStart, len: fd.tyLen), isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: tref)
+            pushLocalR(st: inout st, nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: kindFromTySpan(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: fd.tyStart, len: fd.tyLen), isArr: isArrF, elemTy: elemTyF, elemKind: elemKindF, typeRef: tref)
         }
         bi += 1
     }
