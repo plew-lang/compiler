@@ -51,6 +51,9 @@ extern(c) {
     fn LLVMVoidTypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
     fn LLVMPointerTypeInContext(ctx~: LLVMContextRef, addrSpace~: U32) -> LLVMTypeRef
     fn LLVMStructTypeInContext(ctx~: LLVMContextRef, elemTypes~: CPtr[LLVMTypeRef], count~: U32, packed~: I32) -> LLVMTypeRef
+    fn LLVMStructCreateNamed(ctx~: LLVMContextRef, name~: CPtr[U8]) -> LLVMTypeRef
+    fn LLVMStructSetBody(structTy~: LLVMTypeRef, elemTypes~: CPtr[LLVMTypeRef], count~: U64, packed~: I32)
+    fn LLVMBuildStructGEP2(b~: LLVMBuilderRef, ty~: LLVMTypeRef, ptr~: LLVMValueRef, idx~: U64, name~: CPtr[U8]) -> LLVMValueRef
     // count is the C API's `unsigned`; declared U64 here because Plew has no
     // narrowing `as` yet (an Array.count is U64). Safe on LP64 (arm64/x86-64):
     // the callee reads the low 32 bits, and our counts are tiny. Revisit once
@@ -98,8 +101,8 @@ extern(c) {
 
     // Aggregates / globals (String = {ptr, i64}).
     fn LLVMGetUndef(ty~: LLVMTypeRef) -> LLVMValueRef
-    fn LLVMBuildInsertValue(b~: LLVMBuilderRef, agg~: LLVMValueRef, elt~: LLVMValueRef, index~: U32, name~: CPtr[U8]) -> LLVMValueRef
-    fn LLVMBuildExtractValue(b~: LLVMBuilderRef, agg~: LLVMValueRef, index~: U32, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildInsertValue(b~: LLVMBuilderRef, agg~: LLVMValueRef, elt~: LLVMValueRef, index~: U64, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildExtractValue(b~: LLVMBuilderRef, agg~: LLVMValueRef, index~: U64, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildGlobalStringPtr(b~: LLVMBuilderRef, str~: CPtr[U8], name~: CPtr[U8]) -> LLVMValueRef
 }
 
@@ -141,6 +144,9 @@ struct LlvmCtx {
     pub mut val curRetTy: LLVMTypeRef
     pub mut val curRetTyStart: U64
     pub mut val curRetTyLen: U64
+    // registered struct types (parallel: c.structs index -> named LLVM struct type).
+    pub mut val structIdxs: Array[U64]
+    pub mut val structTys: Array[LLVMTypeRef]
     // declared user functions, cached by c.funcs index (parallel arrays), so a call
     // resolves to the same LLVMValueRef without name mangling (the symbol name is a
     // synthetic unique `pf<idx>`; only `main`/runtime symbols have meaningful names).
@@ -161,6 +167,9 @@ struct LlvmCtx {
     // unsigned int), so String ==/!= and print pick the right lowering without
     // c.locals (which the LLVM backend doesn't populate, so typeOf can't see locals).
     pub mut val locKind: Array[U64]
+    // per-local owning struct index (c.structs.count = not a struct), so field
+    // access x.field can resolve the layout from a struct-typed local.
+    pub mut val locStructIdx: Array[U64]
     // declared runtime/intrinsic functions, cached by name id (parallel arrays).
     pub mut val declId: Array[U64]
     pub mut val declFn: Array[LLVMValueRef]
@@ -200,7 +209,138 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "U16") { return st.i16ty }
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "I32") { return st.i32ty }
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "U32") { return st.i32ty }
+    // a registered (all-primitive-field) user struct -> its named LLVM struct type.
+    val reg: U64 = structRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen)
+    if reg < st.structIdxs.count {
+        return st.structTys[reg]
+    }
     return st.i64ty
+}
+
+// Index into st.struct* for a registered struct named (start,len), or
+// st.structIdxs.count if the type is not a registered struct.
+fn structRegSlot(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 {
+    val sidx: U64 = structIndexByName(c: inout c, start: start, len: len)
+    if sidx < c.structs.count {
+        mut val i: U64 = 0
+        while i < st.structIdxs.count {
+            if st.structIdxs[i] == sidx {
+                return i
+            }
+            i += 1
+        }
+    }
+    return st.structIdxs.count
+}
+
+// Whether all of a struct's fields are primitive (scalar/String/Bool — no array,
+// no nested struct/enum), i.e. the struct is registerable in this increment.
+fn structAllPrimitive(c: inout Comp, sidx: U64) -> Bool {
+    val sd: StructDef = c.structs[sidx]
+    mut val i: U64 = 0
+    while i < sd.fields.count {
+        val f: FieldDef = sd.fields[i]
+        if f.tyIsArray {
+            return false
+        }
+        // a real (non-extern) nested struct field is not yet supported; an extern
+        // struct field is a primitive lang-item (I64/String/Bool/…), which is fine.
+        val fsi: U64 = structIndexByName(c: inout c, start: f.tyStart, len: f.tyLen)
+        if fsi < c.structs.count {
+            if c.structs[fsi].isExtern {
+            } else {
+                return false
+            }
+        }
+        if isEnumName(c: inout c, start: f.tyStart, len: f.tyLen) {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// Register every non-generic, non-extern, all-primitive-field struct as a named
+// LLVM struct type (fields in declared order). Nested-struct / array-field /
+// recursive structs are a later increment (their construction/access is rejected
+// until then). Called once before function emission.
+fn registerStructs(c: inout Comp, st: inout LlvmCtx) {
+    mut val i: U64 = 0
+    while i < c.structs.count {
+        val sd: StructDef = c.structs[i]
+        if sd.typeParams.count > 0 {
+        } else {
+            if sd.isExtern {
+            } else {
+                // unique structs carry move/deinit semantics not yet modeled here;
+                // leave them unregistered so their construction is rejected, not
+                // miscompiled.
+                if sd.isUnique {
+                } else {
+                if structAllPrimitive(c: inout c, sidx: i) {
+                    mut val nm: Array[U8] = []
+                    appendBytes(into: inout nm, from: "st".bytes)
+                    appendU64Dec(into: inout nm, n: i)
+                    nm.append(value: 0)
+                    val ty: LLVMTypeRef = LLVMStructCreateNamed(st.ctx, arrayCPtr(nm))
+                    mut val elems: Array[LLVMTypeRef] = []
+                    mut val fi: U64 = 0
+                    while fi < sd.fields.count {
+                        elems.append(value: llvmScalarTy(c: inout c, st: inout st, tyStart: sd.fields[fi].tyStart, tyLen: sd.fields[fi].tyLen))
+                        fi += 1
+                    }
+                    LLVMStructSetBody(ty, arrayCPtr(elems), sd.fields.count, 0I32)
+                    st.structIdxs.append(value: i)
+                    st.structTys.append(value: ty)
+                }
+                }
+            }
+        }
+        i += 1
+    }
+}
+
+// The c.structs index for a local/param/return of type (start,len) if that type
+// is a REGISTERED struct, else c.structs.count (not a struct value).
+fn localStructIdxFor(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 {
+    if structRegSlot(c: inout c, st: inout st, start: start, len: len) < st.structIdxs.count {
+        return structIndexByName(c: inout c, start: start, len: len)
+    }
+    return c.structs.count
+}
+
+// The declared index of field (start,len) in struct sidx, or sd.fields.count.
+fn structFieldIndex(c: inout Comp, sidx: U64, start: U64, len: U64) -> U64 {
+    val sd: StructDef = c.structs[sidx]
+    mut val i: U64 = 0
+    while i < sd.fields.count {
+        if spansEqual(c: inout c, aStart: sd.fields[i].nameStart, aLen: sd.fields[i].nameLen, bStart: start, bLen: len) {
+            return i
+        }
+        i += 1
+    }
+    return sd.fields.count
+}
+
+// The owning struct index of an expression (Ident local / Make), or
+// c.structs.count if it is not a (resolvable) struct value.
+fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
+    match c.exprs[id] {
+        Expr.Ident(val start, val len) => {
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.nLocals {
+                return st.locStructIdx[li]
+            }
+        }
+        Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, fields: _) => {
+            if isEnum {
+            } else {
+                return localStructIdxFor(c: inout c, st: inout st, start: typeStart, len: typeLen)
+            }
+        }
+        _ => {}
+    }
+    return c.structs.count
 }
 
 // Sign/zero-extend an integer value to i64 for the runtime boundary (print / exit
@@ -254,19 +394,21 @@ fn isUnsignedName(c: inout Comp, start: U64, len: U64) -> Bool {
 
 // ---- local environment ----
 
-fn pushLocal(st: inout LlvmCtx, nameStart: U64, nameLen: U64, ptr: LLVMValueRef, ty: LLVMTypeRef, kind: U64) {
+fn pushLocal(st: inout LlvmCtx, nameStart: U64, nameLen: U64, ptr: LLVMValueRef, ty: LLVMTypeRef, kind: U64, structIdx: U64) {
     if st.nLocals < st.locStart.count {
         st.locStart[st.nLocals] = nameStart
         st.locLen[st.nLocals] = nameLen
         st.locPtr[st.nLocals] = ptr
         st.locTy[st.nLocals] = ty
         st.locKind[st.nLocals] = kind
+        st.locStructIdx[st.nLocals] = structIdx
     } else {
         st.locStart.append(value: nameStart)
         st.locLen.append(value: nameLen)
         st.locPtr.append(value: ptr)
         st.locTy.append(value: ty)
         st.locKind.append(value: kind)
+        st.locStructIdx.append(value: structIdx)
     }
     st.nLocals = st.nLocals + 1
 }
@@ -308,6 +450,15 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 return 2U64
             }
             return valueKind(c: inout c, st: inout st, id: lhs)
+        }
+        Expr.Field(val base, val nameStart, val nameLen) => {
+            val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+            if sidx < c.structs.count {
+                val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
+                if fidx < c.structs[sidx].fields.count {
+                    return kindFromTySpan(c: inout c, tyStart: c.structs[sidx].fields[fidx].tyStart, tyLen: c.structs[sidx].fields[fidx].tyLen)
+                }
+            }
         }
         _ => {}
     }
@@ -392,8 +543,8 @@ fn genLlvmStr(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> LLVMVal
     val n: U64 = bytes.count - 1
     val ptr: LLVMValueRef = LLVMBuildGlobalStringPtr(st.b, arrayCPtr(bytes), anon())
     mut val agg: LLVMValueRef = LLVMGetUndef(st.strty)
-    agg = LLVMBuildInsertValue(st.b, agg, ptr, 0U32, anon())
-    agg = LLVMBuildInsertValue(st.b, agg, LLVMConstInt(st.i64ty, n, 0I32), 1U32, anon())
+    agg = LLVMBuildInsertValue(st.b, agg, ptr, 0U64, anon())
+    agg = LLVMBuildInsertValue(st.b, agg, LLVMConstInt(st.i64ty, n, 0I32), 1U64, anon())
     return agg
 }
 
@@ -402,8 +553,8 @@ fn genLlvmStr(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> LLVMVal
 // the struct by value, sidesteps the C struct-by-value ABI until it is modeled.
 fn emitStrSink(c: inout Comp, st: inout LlvmCtx, rtName: String, rtId: U64, argExpr: U64) -> LLVMValueRef {
     val sv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: argExpr)
-    val ptr: LLVMValueRef = LLVMBuildExtractValue(st.b, sv, 0U32, anon())
-    val len: LLVMValueRef = LLVMBuildExtractValue(st.b, sv, 1U32, anon())
+    val ptr: LLVMValueRef = LLVMBuildExtractValue(st.b, sv, 0U64, anon())
+    val len: LLVMValueRef = LLVMBuildExtractValue(st.b, sv, 1U64, anon())
     mut val ptys: Array[LLVMTypeRef] = []
     ptys.append(value: st.ptrty)
     ptys.append(value: st.i64ty)
@@ -433,6 +584,10 @@ fn emitI64Sink(c: inout Comp, st: inout LlvmCtx, rtName: String, rtId: U64, v: L
 // String types — observably identical. A user type implementing Format is not yet
 // supported here (rejected loudly).
 fn emitPrint(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> LLVMValueRef {
+    if exprStructIdx(c: inout c, st: inout st, id: argExpr) < c.structs.count {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: argExpr)), msg: "LLVM backend: print of a struct (Format witness) not yet supported")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
     val k: U64 = valueKind(c: inout c, st: inout st, id: argExpr)
     if k == 1U64 {
         return emitStrSink(c: inout c, st: inout st, rtName: "plew_print_str", rtId: 5U64, argExpr: argExpr)
@@ -453,10 +608,10 @@ fn emitPrint(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> LLVMValueRef {
 fn emitStrEq(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -> LLVMValueRef {
     val a: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: lhs)
     val b: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: rhs)
-    val pa: LLVMValueRef = LLVMBuildExtractValue(st.b, a, 0U32, anon())
-    val la: LLVMValueRef = LLVMBuildExtractValue(st.b, a, 1U32, anon())
-    val pb: LLVMValueRef = LLVMBuildExtractValue(st.b, b, 0U32, anon())
-    val lb: LLVMValueRef = LLVMBuildExtractValue(st.b, b, 1U32, anon())
+    val pa: LLVMValueRef = LLVMBuildExtractValue(st.b, a, 0U64, anon())
+    val la: LLVMValueRef = LLVMBuildExtractValue(st.b, a, 1U64, anon())
+    val pb: LLVMValueRef = LLVMBuildExtractValue(st.b, b, 0U64, anon())
+    val lb: LLVMValueRef = LLVMBuildExtractValue(st.b, b, 1U64, anon())
     mut val ptys: Array[LLVMTypeRef] = []
     ptys.append(value: st.ptrty)
     ptys.append(value: st.i64ty)
@@ -506,6 +661,55 @@ fn buildBinOp(c: inout Comp, st: inout LlvmCtx, op: I64, l: LLVMValueRef, r: LLV
     return l
 }
 
+// Construct a registered struct value from a JSX `<Type field=expr ... />`: build
+// each declared field (matched by name, or its default) in order via insertvalue.
+fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, isEnum: Bool, fields: Array[MakeField]) -> LLVMValueRef {
+    if isEnum {
+        compileErrorAt(line: lineOf(c: inout c, offset: typeStart), msg: "LLVM backend: enum construction not yet supported")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val reg: U64 = structRegSlot(c: inout c, st: inout st, start: typeStart, len: typeLen)
+    if reg < st.structIdxs.count {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: typeStart), msg: "LLVM backend: construction of this type not yet supported (Ref / nested-struct / array-field structs are TODO)")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val sidx: U64 = st.structIdxs[reg]
+    val sty: LLVMTypeRef = st.structTys[reg]
+    val sd: StructDef = c.structs[sidx]
+    mut val agg: LLVMValueRef = LLVMGetUndef(sty)
+    mut val fi: U64 = 0
+    while fi < sd.fields.count {
+        val fld: FieldDef = sd.fields[fi]
+        // find the matching MakeField by name; else use the field's default.
+        mut val provided: Bool = false
+        mut val valExpr: U64 = 0
+        mut val mi: U64 = 0
+        while mi < fields.count {
+            if spansEqual(c: inout c, aStart: fields[mi].nameStart, aLen: fields[mi].nameLen, bStart: fld.nameStart, bLen: fld.nameLen) {
+                provided = true
+                valExpr = fields[mi].value
+                mi = fields.count
+            } else {
+                mi += 1
+            }
+        }
+        if provided {
+        } else {
+            if fld.hasDefault {
+                valExpr = fld.defaultVal
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: typeStart), msg: "LLVM backend: missing struct field in construction")
+                return agg
+            }
+        }
+        val fv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valExpr), tyStart: fld.tyStart, tyLen: fld.tyLen)
+        agg = LLVMBuildInsertValue(st.b, agg, fv, fi, anon())
+        fi += 1
+    }
+    return agg
+}
+
 // ---- expression emission ----
 //
 // Emit `id` and return its LLVM value. v1 handles integer literals, locals (a
@@ -548,12 +752,33 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                     return emitStrEq(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
                 }
             }
+            // a struct/enum operand routes through an Eq/Ord witness in the C
+            // backend; that dispatch is not yet modeled here — reject loudly rather
+            // than emit an invalid icmp on an aggregate.
+            if exprStructIdx(c: inout c, st: inout st, id: lhs) < c.structs.count {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "LLVM backend: struct comparison (Eq/Ord witness) not yet supported")
+                return LLVMConstInt(st.i1ty, 0U64, 0I32)
+            }
             val l: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: lhs)
             val r: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: rhs)
             return buildBinOp(c: inout c, st: inout st, op: op, l: l, r: r)
         }
         Expr.Str(val start, val len) => {
             return genLlvmStr(c: inout c, st: inout st, start: start, len: len)
+        }
+        Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, val fields) => {
+            return genLlvmMake(c: inout c, st: inout st, typeStart: typeStart, typeLen: typeLen, isEnum: isEnum, fields: fields)
+        }
+        Expr.Field(val base, val nameStart, val nameLen) => {
+            val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+            if sidx < c.structs.count {
+                val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
+                if fidx < c.structs[sidx].fields.count {
+                    return LLVMBuildExtractValue(st.b, genLlvmExpr(c: inout c, st: inout st, id: base), fidx, anon())
+                }
+            }
+            compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: field access only on a registered struct value (so far)")
+            return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
             return genLlvmCall(c: inout c, st: inout st, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -742,13 +967,14 @@ fn genLlvmFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     st.locPtr = []
     st.locTy = []
     st.locKind = []
+    st.locStructIdx = []
     mut val pi: U64 = 0
     while pi < f.params.count {
         val p: Param = f.params[pi]
         val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen)
         val slot2: LLVMValueRef = LLVMBuildAlloca(st.b, pty, anon())
         LLVMBuildStore(st.b, LLVMGetParam(fv, pi), slot2)
-        pushLocal(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty, kind: kindFromTySpan(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen))
+        pushLocal(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty, kind: kindFromTySpan(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen))
         pi += 1
     }
     genLlvmBlock(c: inout c, st: inout st, id: f.body)
@@ -783,9 +1009,14 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                 kind = kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen)
             }
             val lty: LLVMTypeRef = LLVMTypeOf(v)
+            // owning struct index: from the annotation if present, else the init.
+            mut val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: init)
+            if tyLen > 0U64 {
+                sidx = localStructIdxFor(c: inout c, st: inout st, start: tyStart, len: tyLen)
+            }
             val slot: LLVMValueRef = LLVMBuildAlloca(st.b, lty, anon())
             LLVMBuildStore(st.b, v, slot)
-            pushLocal(st: inout st, nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind)
+            pushLocal(st: inout st, nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind, structIdx: sidx)
         }
         Stmt.Assign(val op, val target, val value) => {
             match c.exprs[target] {
@@ -802,6 +1033,36 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                         }
                     } else {
                         compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "LLVM backend: assignment target must be a local (so far)")
+                    }
+                }
+                Expr.Field(base: val fbase, nameStart: val fnameStart, nameLen: val fnameLen) => {
+                    // place mutation `base.field = v`: GEP into the base local's
+                    // alloca + store (base must be an addressable struct local).
+                    match c.exprs[fbase] {
+                        Expr.Ident(start: val bs, len: val bl) => {
+                            val li: U64 = findLocal(c: inout c, st: inout st, start: bs, len: bl)
+                            val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: fbase)
+                            if li < st.nLocals && sidx < c.structs.count {
+                                val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: fnameStart, len: fnameLen)
+                                if fidx < c.structs[sidx].fields.count {
+                                    val fld: FieldDef = c.structs[sidx].fields[fidx]
+                                    val gep: LLVMValueRef = LLVMBuildStructGEP2(st.b, st.locTy[li], st.locPtr[li], fidx, anon())
+                                    val rv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                    if op == opAssign() {
+                                        LLVMBuildStore(st.b, rv, gep)
+                                    } else {
+                                        val ftype: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                        val cur: LLVMValueRef = LLVMBuildLoad2(st.b, ftype, gep, anon())
+                                        LLVMBuildStore(st.b, buildBinOp(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv), gep)
+                                    }
+                                    return
+                                }
+                            }
+                            compileErrorAt(line: lineOf(c: inout c, offset: fnameStart), msg: "LLVM backend: field assignment only on a registered struct local (so far)")
+                        }
+                        _ => {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "LLVM backend: nested place assignment not yet supported")
+                        }
                     }
                 }
                 _ => {
@@ -924,9 +1185,12 @@ fn emitLlvm(c: inout Comp) {
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
-        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 nLocals=0
+        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 structIdxs=[] structTys=[] nLocals=0
         fnIdx=[] fnVal=[] fnTy=[]
-        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] declId=[] declFn=[] declTy=[] />
+        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] declId=[] declFn=[] declTy=[] />
+
+    // register user struct types (named LLVM structs) before anything references them.
+    registerStructs(c: inout c, st: inout st)
 
     // pass 1: declare all plain user functions (so calls resolve before bodies).
     declareUserFns(c: inout c, st: inout st)
@@ -973,6 +1237,7 @@ fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     st.locPtr = []
     st.locTy = []
     st.locKind = []
+    st.locStructIdx = []
     genLlvmBlock(c: inout c, st: inout st, id: c.funcs[fi].body)
     if st.terminated {
     } else {
