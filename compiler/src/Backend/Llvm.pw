@@ -3371,6 +3371,13 @@ fn exprIsArray(c: inout Comp, st: inout LlvmCtx, id: U64) -> Bool {
                 return rangeEquals(bytes: c.bytes, start: c.types[r].nameStart, len: c.types[r].nameLen, kw: "Array")
             }
         }
+        Expr.Call(val nameStart, val nameLen, val args) => {
+            // an array-returning call (`val a = mk()`): tracked as an array.
+            val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            if cfi < c.funcs.count {
+                return c.funcs[cfi].retIsArray
+            }
+        }
         _ => {}
     }
     return false
@@ -3424,6 +3431,16 @@ fn arrElemTyOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
                     if t.args.count > 0U64 {
                         return llvmTypeOfRef(c: inout c, st: inout st, ref: t.args[0])
                     }
+                }
+            }
+        }
+        Expr.Call(val nameStart, val nameLen, val args) => {
+            // an array-returning call's element type (`val a = mk()` -> element of
+            // mk's Array return).
+            val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            if cfi < c.funcs.count {
+                if c.funcs[cfi].retIsArray {
+                    return llvmScalarTy(c: inout c, st: inout st, tyStart: c.funcs[cfi].retStart, tyLen: c.funcs[cfi].retLen)
                 }
             }
         }
@@ -6133,10 +6150,29 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                     // un-suffixed generic construction (`return <Optional.Some …/>`)
                     // infers its type args. Consumed by the construction.
                     st.expectedTy = st.curRetRef
-                    mut val rv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
+                    mut val rv: LLVMValueRef = LLVMConstInt(st.i64ty, 0U64, 0I32)
+                    mut val retLit: Bool = false
+                    // an array-literal return (`return [10,20,30]` for `-> Array[I32]`)
+                    // builds with the declared element type, not i64-defaulted.
+                    if st.curRetTyLen > 0U64 {
+                        match c.exprs[value] {
+                            Expr.Array(val elems) => {
+                                rv = genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: llvmScalarTy(c: inout c, st: inout st, tyStart: st.curRetTyStart, tyLen: st.curRetTyLen))
+                                retLit = true
+                            }
+                            _ => {}
+                        }
+                    }
+                    if retLit {
+                    } else {
+                        rv = genLlvmExpr(c: inout c, st: inout st, id: value)
+                    }
                     st.expectedTy = 0U64
                     if st.curRetTyLen > 0U64 {
-                        rv = coerceIntTo(c: inout c, st: inout st, v: rv, tyStart: st.curRetTyStart, tyLen: st.curRetTyLen)
+                        if retLit {
+                        } else {
+                            rv = coerceIntTo(c: inout c, st: inout st, v: rv, tyStart: st.curRetTyStart, tyLen: st.curRetTyLen)
+                        }
                     }
                     // value semantics: returning an array/struct place gives the caller
                     // an independent value (`return b.xs` then caller's `r[0]=…`).
