@@ -3030,13 +3030,11 @@ fn closureLlvmFnTy(c: inout Comp, st: inout LlvmCtx, fnRef: U64) -> LLVMTypeRef 
     return LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
 }
 
-// Emit an indirect closure call: load the {fn, env} value from local `li`, extract
-// the function pointer + environment, and call fn(env, coerced-args...).
-fn genLlvmClosureCall(c: inout Comp, st: inout LlvmCtx, li: U64, args: Array[Arg]) -> LLVMValueRef {
-    val cloVal: LLVMValueRef = LLVMBuildLoad2(st.b, st.closureTy, st.locPtr[li], anon())
+// Emit an indirect call of a closure VALUE (the {fn, env} aggregate) of type fnRef:
+// extract the function pointer + environment, then call fn(env, coerced-args...).
+fn emitClosureCallValue(c: inout Comp, st: inout LlvmCtx, cloVal: LLVMValueRef, fnRef: U64, args: Array[Arg]) -> LLVMValueRef {
     val fnPtr: LLVMValueRef = LLVMBuildExtractValue(st.b, cloVal, 0U64, anon())
     val env: LLVMValueRef = LLVMBuildExtractValue(st.b, cloVal, 1U64, anon())
-    val fnRef: U64 = st.locTypeRef[li]
     val fty: LLVMTypeRef = closureLlvmFnTy(c: inout c, st: inout st, fnRef: fnRef)
     val ft: TypeRef = c.types[fnRef]
     mut val av: Array[LLVMValueRef] = []
@@ -3055,6 +3053,12 @@ fn genLlvmClosureCall(c: inout Comp, st: inout LlvmCtx, li: U64, args: Array[Arg
         i += 1
     }
     return LLVMBuildCall2(st.b, fty, fnPtr, arrayCPtr(av), av.count, anon())
+}
+
+// Emit an indirect closure call where the callee is closure-typed local `li`.
+fn genLlvmClosureCall(c: inout Comp, st: inout LlvmCtx, li: U64, args: Array[Arg]) -> LLVMValueRef {
+    val cloVal: LLVMValueRef = LLVMBuildLoad2(st.b, st.closureTy, st.locPtr[li], anon())
+    return emitClosureCallValue(c: inout c, st: inout st, cloVal: cloVal, fnRef: st.locTypeRef[li], args: args)
 }
 
 fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
@@ -3262,6 +3266,18 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
     val mfi: U64 = findMethod(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
     if mfi < c.funcs.count {
     } else {
+        // `self.f(n: x)` where `f` is a closure-typed field (the iterator-adapter
+        // pattern — a struct holds a mapping/predicate closure): load the field value
+        // and call it indirectly. The field type grounds through any generic env.
+        val ffi: U64 = structFieldIndex(c: inout c, sidx: rsidx, start: nameStart, len: nameLen)
+        if ffi < sd.fields.count {
+            val grounded: U64 = groundTypeRef(c: inout c, ref: sd.fields[ffi].ty)
+            if isFnType(c: inout c, ref: grounded) {
+                val recvVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: recv)
+                val cloVal: LLVMValueRef = LLVMBuildExtractValue(st.b, recvVal, ffi, anon())
+                return emitClosureCallValue(c: inout c, st: inout st, cloVal: cloVal, fnRef: grounded, args: args)
+            }
+        }
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: method not found / not yet supported")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
