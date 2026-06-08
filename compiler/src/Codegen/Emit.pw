@@ -494,6 +494,11 @@ fn genCElem(c: inout Comp, start: U64, len: U64) {
         write(s: "PlewString")
         return
     }
+    // COpaque (spec/15 FFI) is the untyped raw C pointer `void*`.
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "COpaque") {
+        write(s: "void*")
+        return
+    }
     if isPrimType(c: inout c, start: start, len: len) {
         // remaining prim = Bool
         write(s: "long long")

@@ -48,7 +48,14 @@ for pw in tests/run/*.pw; do
     if ! "$PLEWC" "$pw" > "$c" 2>"$TMP/err"; then
         echo "FAIL  $name  (plewc errored)"; fail=$((fail + 1)); continue
     fi
-    if ! clang $CC_FLAGS "$c" -o "$bin" 2>"$TMP/err"; then
+    # Optional companion C source (tests/run/<name>.c): linked alongside the
+    # generated C. Used by `extern(c)` FFI tests to provide the foreign symbols
+    # (a libLLVM-C-shaped stub) without a system library — see ffi_extern_c.
+    extra_c=""
+    if [ -f "tests/run/$name.c" ]; then
+        extra_c="tests/run/$name.c"
+    fi
+    if ! clang $CC_FLAGS "$c" $extra_c -o "$bin" 2>"$TMP/err"; then
         echo "FAIL  $name  (clang rejected generated C)"; fail=$((fail + 1)); continue
     fi
     if [ -f "tests/run/$name.in" ]; then

@@ -1300,6 +1300,11 @@ fn freeFnSelectorCollides(c: inout Comp, f: Func) -> Bool {
 
 fn writeFnSelector(c: inout Comp, f: Func) {
     writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
+    if f.isCExtern {
+        // `extern(c)` foreign fn: the C symbol is the RAW name (no selector mangling,
+        // no module discriminator) — it must match the linked library's symbol.
+        return
+    }
     val params: Array[Param] = f.params
     mut val i: U64 = 0
     while i < params.count {

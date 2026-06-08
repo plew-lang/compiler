@@ -20,6 +20,11 @@
 
 **演算子の残り（小・additive）**：一般 Chain トレイトディスパッチ（現 Optional 具体）・`Pow`〔float 実装後〕・複合添字 `a[k] += v`（ユーザー型 get-modify-set）・`Output != Self`。
 
+**➡ アクティブ＝バックエンド LLVM 化（libLLVM-C を叩く）。FFI 設計確定（spec/15「外部コード統合」・design-decisions「外部コード統合」）＋最小サブセット実装・検証済。**
+- **FFI 設計（使う側のみ・spec/15）**：`extern(c)` import／`repr(c) struct` 共有レイアウト／`CPtr[T]`(read)/`CMutPtr[T]`(write)/`COpaque`(void\*)／不透明ハンドル `extern(c) { type Name }`／NULL は生ポインタの性質＝取り出しが `Optional`（`.toOptional()`/`load()`・境界写し機構は廃止）／所有権は `unique`+`deinit`／ABI はクォートなし bareword（`extern(c)`・閉じた集合）／リンクは自己完結 C 出力＋手フラグ interim（manifest は M3）。使わせる側（export＝Plew→C）は未定（既存 `export` と要整合）。
+- **最小サブセット実装済（コンパイラ）**：`extern(c)`/`extern(plewIntrinsic)` の bareword パレン ABI パース（string `"plew-intrinsic"` も互換維持）＋`type Name` 不透明ハンドル（`typedef void* Name;` 自己 emit・`#include` 不要）＋C-extern は生名で呼び・プロトタイプ自己 emit（`isCExtern`＝`isExtern` の細別）＋`CPtr[T]`/`CMutPtr[T]`→`T*`・`COpaque`→`void*`＋文字列床 intrinsic `cString`/`stringFromCString`（プリアンブル `plew_cString`/`plew_stringFromCString`）。**検証**＝tests/run/ffi_extern_c（libLLVM-C 形スタブ `.c` をリンク＝test.sh が随伴 `.c` を自動リンク）。手元で実 libLLVM-C 形（`LLVMModuleCreateWithName`→`LLVMPrintModuleToString`）スタブが `; ModuleID = 'plew_hello'` を出力＝実 libLLVM はリンク先差し替えのみ（本機は libLLVM 未インストール）。
+- **次の段**：(a) 実 libLLVM-C で空モジュール→IR（`brew install llvm` 後）、(b) IR 構築の本丸＝arena/型付き AST→SSA/基本ブロック/CFG を libLLVM-C で組む新 emit フェーズ（フロント＋単相化は再利用）、(c) 残 FFI（`CPtr` 配列＝`LLVMValueRef *Args`・`repr(c) struct`・C-ABI 整数型 `CInt`/`CSize`・`@Std/Ffi` 化）。段取り（手書き bindings vs bindgen・C と LLVM 並行 vs 置換）は未確定。
+
 **➡ 次の本命候補（次の大物）**：
 1. **Iterator 拡充**＝終端（reduce/fold/count/sum/collect/any/all/first）＋遅延 adapter（take/zip/enumerate/skip・`MapIter`/`FilterIter` をテンプレに）。demand-driven 単相化が動くので確立パターンに沿うだけ。
 2. **並行 additive**＝`spawn`/`JoinHandle`/チャネル・spawn 境界の意味論強制（move/copy のみ越境・`Ref` は spawn 不可）・ランタイム C 生成・`local` 伝染解析。重い（言語仕様の決定が出る）。

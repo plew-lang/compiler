@@ -539,6 +539,12 @@ fn genExpr(c: inout Comp, id: U64) {
                 compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "unknown function (a typo, or a builtin used without its `import @Std/…`)")
             } else {
                 if c.funcs[cfi].isExtern {
+                    if c.funcs[cfi].isCExtern {
+                    // `extern(c)` foreign symbol: call by its RAW C name (no `plew_`
+                    // prefix, no overload mangling). The prototype is self-emitted;
+                    // the symbol is resolved at link time against the C library.
+                    writeSpan(c: inout c, start: c.funcs[cfi].nameStart, len: c.funcs[cfi].nameLen)
+                    } else {
                     // array intrinsics (`arrayPush`/`arrayGet`/…) lower to the
                     // per-element runtime `PlewArray_<E>_<op>` (whole call emitted).
                     if emitArrayIntrinsic(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args) {
@@ -554,6 +560,7 @@ fn genExpr(c: inout Comp, id: U64) {
                     // inout). No overload mangling — intrinsics are not overloaded.
                     write(s: "plew_")
                     writeSpan(c: inout c, start: c.funcs[cfi].nameStart, len: c.funcs[cfi].nameLen)
+                    }
                 } else {
                 // a generic free function call mangles with its inferred concrete
                 // type args (`f_x_Counter`) under a temporary env, matching the

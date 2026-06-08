@@ -88,6 +88,23 @@ fn isRefInst(c: inout Comp, ref: U64) -> Bool {
     return rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref")
 }
 
+// Is `ref` a `CPtr[T]` / `CMutPtr[T]` instantiation (spec/15 FFI)? Both lower to
+// the C raw pointer `T*` via emitConcreteCType; routed here in genCTypeOf so a
+// written `CPtr[U8]` annotation doesn't fall through to the name-echo fallback.
+fn isCPtrInst(c: inout Comp, ref: U64) -> Bool {
+    if ref >= c.types.count {
+        return false
+    }
+    val t: TypeRef = c.types[ref]
+    if t.args.count != 1 {
+        return false
+    }
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "CPtr") {
+        return true
+    }
+    return rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "CMutPtr")
+}
+
 // Is `ref` a `RawBuffer[T]` instantiation? `RawBuffer` is a blessed primitive
 // (the refcounted raw buffer that Array's storage is built on), lowered like
 // `Ref` to a C `T*` (with a {rc,cap} header before data) — not a user type.
@@ -536,6 +553,18 @@ fn emitConcreteCType(c: inout Comp, ref: U64) {
         write(s: "*")
         return
     }
+    // CPtr[T] / CMutPtr[T] (spec/15 FFI) is a raw C pointer to T -> `T*`. The
+    // const/mut distinction is advisory at the boundary; both lower to `T*`.
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "CPtr") {
+        emitConcreteCType(c: inout c, ref: t.args[0])
+        write(s: "*")
+        return
+    }
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "CMutPtr") {
+        emitConcreteCType(c: inout c, ref: t.args[0])
+        write(s: "*")
+        return
+    }
     // RawBuffer[T] is a refcounted raw buffer (the array floor) -> a C pointer to
     // T, with a {rc, cap} header stored before data[0] (spec/02 raw-memory floor).
     if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "RawBuffer") {
@@ -624,6 +653,10 @@ fn genCTypeOf(c: inout Comp, tyRef: U64, fallStart: U64, fallLen: U64, isArray: 
         return
     }
     if isRefInst(c: inout c, ref: tyRef) {
+        emitConcreteCType(c: inout c, ref: tyRef)
+        return
+    }
+    if isCPtrInst(c: inout c, ref: tyRef) {
         emitConcreteCType(c: inout c, ref: tyRef)
         return
     }

@@ -869,7 +869,7 @@ fn lowerImpl(c: inout Comp, im: ImplAst) {
 // name keeps its ORIGINAL offset (sig.nameSpan): an extern fn name feeds moduleOf
 // for cross-module calls; a trait req name is harmless to keep original. Mirrors
 // parseReqSig.
-fn lowerSigToFunc(c: inout Comp, sig: SigAst, isExtern: Bool) -> Func {
+fn lowerSigToFunc(c: inout Comp, sig: SigAst, isExtern: Bool, isCExtern: Bool) -> Func {
     val nameStart: U64 = sig.nameSpan.start
     val nameLen: U64 = sig.nameSpan.end - sig.nameSpan.start
     val typeParams: Array[Bind] = lowerTypeParamNames(c: inout c, names: sig.typeParams)
@@ -885,7 +885,7 @@ fn lowerSigToFunc(c: inout Comp, sig: SigAst, isExtern: Bool) -> Func {
         retIsArray = pt.isArray
         retRef = pt.ref
     }
-    return <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout c, start: nameStart, len: nameLen) typeParams=typeParams params=params hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern />
+    return <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout c, start: nameStart, len: nameLen) typeParams=typeParams params=params hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern isCExtern=isCExtern />
 }
 
 // Lower a `trait` declaration to a TraitDef (spec/08). Requirement signatures are
@@ -903,7 +903,7 @@ fn lowerTrait(c: inout Comp, t: TraitAst) {
     mut val reqs: Array[Func] = []
     mut val ri: U64 = 0
     while ri < t.reqs.count {
-        reqs.append(lowerSigToFunc(c: inout c, sig: t.reqs[ri], isExtern: false))
+        reqs.append(lowerSigToFunc(c: inout c, sig: t.reqs[ri], isExtern: false, isCExtern: false))
         ri += 1
     }
     mut val assocTypes: Array[Bind] = []
@@ -926,11 +926,11 @@ fn lowerTrait(c: inout Comp, t: TraitAst) {
 fn lowerExtern(c: inout Comp, e: ExternAst) {
     if e.abiOk {
     } else {
-        compileErrorAt(line: lineOf(c: inout c, offset: e.abiSpan.start), msg: "only `extern \"plew-intrinsic\"` blocks are supported for now")
+        compileErrorAt(line: lineOf(c: inout c, offset: e.abiSpan.start), msg: "unknown ABI — only `extern(plewIntrinsic)` (intrinsic floor) and `extern(c)` (foreign C) are supported")
     }
     mut val fi: U64 = 0
     while fi < e.fns.count {
-        c.funcs.append(lowerSigToFunc(c: inout c, sig: e.fns[fi], isExtern: true))
+        c.funcs.append(lowerSigToFunc(c: inout c, sig: e.fns[fi], isExtern: true, isCExtern: e.abiC))
         fi += 1
     }
     mut val si: U64 = 0
@@ -938,7 +938,7 @@ fn lowerExtern(c: inout Comp, e: ExternAst) {
         val nm: Bind = internBytes(c: inout c, s: e.structNames[si])
         val noTP: Array[Bind] = []
         val noFields: Array[FieldDef] = []
-        c.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) typeParams=noTP fields=noFields isUnique=false isExtern=true />)
+        c.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) typeParams=noTP fields=noFields isUnique=false isExtern=true isCExtern=e.abiC />)
         si += 1
     }
 }

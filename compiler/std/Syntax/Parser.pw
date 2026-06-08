@@ -1009,6 +1009,7 @@ export fn parseExternDecl(p: inout P) -> ExternAst {
     val abiSpan: Span = p.spanOf(t: externTok)
     p.advance()
     mut val abiOk: Bool = false
+    mut val abiC: Bool = false
     match p.curKind() {
         Kind.Str => {
             val t: Tok = p.curTok()
@@ -1018,6 +1019,25 @@ export fn parseExternDecl(p: inout P) -> ExternAst {
                 }
             }
             p.advance()
+        }
+        Kind.LParen => {
+            // bareword ABI selector `extern(c)` / `extern(plewIntrinsic)` (spec/15):
+            // ABI is a compiler-closed set, written without quotes (like import paths).
+            p.advance()
+            val t: Tok = p.curTok()
+            if rangeEquals(bytes: p.bytes, start: t.start, len: t.len, kw: "c") {
+                abiOk = true
+                abiC = true
+            } else {
+                if rangeEquals(bytes: p.bytes, start: t.start, len: t.len, kw: "plewIntrinsic") {
+                    abiOk = true
+                }
+            }
+            p.advance()
+            match p.curKind() {
+                Kind.RParen => { p.advance() }
+                _ => {}
+            }
         }
         _ => {}
     }
@@ -1047,10 +1067,23 @@ export fn parseExternDecl(p: inout P) -> ExternAst {
                 structSpans.append(p.spanOf(t: sTok))
                 p.advance()
             }
-            _ => { p.advance() }
+            _ => {
+                // `type Name` — opaque foreign type (spec/15 FFI: `extern(c) { type
+                // LLVMModuleRef }`). Captured like `struct Name` (a body-less opaque
+                // type). `type` is a contextual keyword (an Ident), not a token kind.
+                if curIs(p: inout p, kw: "type") {
+                    p.advance()
+                    val tTok: Tok = p.curTok()
+                    structNames.append(p.text(t: tTok))
+                    structSpans.append(p.spanOf(t: tTok))
+                    p.advance()
+                } else {
+                    p.advance()
+                }
+            }
         }
     }
-    return <ExternAst abiOk=abiOk abiSpan=abiSpan fns=fns structNames=structNames structSpans=structSpans span=<Span start=p.base + externTok.start end=p.prevEnd() /> />
+    return <ExternAst abiOk=abiOk abiC=abiC abiSpan=abiSpan fns=fns structNames=structNames structSpans=structSpans span=<Span start=p.base + externTok.start end=p.prevEnd() /> />
 }
 
 // `import <path> [with { name [as Q], ... }]` or `part <path>` (spec/15). The cursor

@@ -342,6 +342,11 @@ fn main() {
     write(s: "__attribute__((unused)) static long long plew_argCount(void) { return (long long)plew_argc; }\n")
     write(s: "__attribute__((unused)) static PlewString plew_argAt(long long i) { PlewString s; if (i < 0 || i >= plew_argc) { s.data = \"\"; s.len = 0; return s; } s.data = plew_argv[i]; s.len = (long long)strlen(plew_argv[i]); return s; }\n")
     write(s: "__attribute__((unused)) static PlewString plew_readFile(PlewString path) { FILE* f = fopen(path.data, \"rb\"); PlewString s; if (!f) { s.data = \"\"; s.len = 0; return s; } fseek(f, 0, SEEK_END); long sz = ftell(f); fseek(f, 0, SEEK_SET); char* buf = (char*)malloc((size_t)sz + 1); size_t n = fread(buf, 1, (size_t)sz, f); fclose(f); buf[n] = 0; s.data = buf; s.len = (long long)n; return s; }\n")
+    // FFI string boundary (spec/15 point 3): Plew String <-> C `const char*`.
+    // plew_cString materializes a NUL-terminated copy (owned by C until freed);
+    // plew_stringFromCString copies a NUL-terminated C string into a PlewString.
+    write(s: "__attribute__((unused)) static unsigned char* plew_cString(PlewString s) { unsigned char* b = (unsigned char*)malloc((size_t)s.len + 1); if (s.len) memcpy(b, s.data, (size_t)s.len); b[s.len] = 0; return b; }\n")
+    write(s: "__attribute__((unused)) static PlewString plew_stringFromCString(unsigned char* p) { PlewString s; if (!p) { s.data = \"\"; s.len = 0; return s; } size_t n = strlen((const char*)p); char* b = (char*)malloc(n + 1); memcpy(b, p, n); b[n] = 0; s.data = b; s.len = (long long)n; return s; }\n")
     // async runtime (event loop / promises / timers), emitted only when the
     // program has an `async fn` (so non-async output stays byte-identical).
     emitAsyncRuntime(c: inout c)
@@ -350,6 +355,14 @@ fn main() {
     while si < c.structs.count {
         val s: StructDef = c.structs[si]
         if s.typeParams.count > 0 || s.isExtern {
+            if s.isCExtern {
+                // `extern(c)` opaque handle (spec/15 FFI): self-emit `typedef void*
+                // <Name>;` so no foreign header `#include` is needed — `void*` is
+                // ABI-identical to the real `struct …Opaque *` pointer typedef.
+                write(s: "typedef void* ")
+                writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
+                write(s: ";\n")
+            }
         } else {
             write(s: "typedef struct ")
             writeSpan(c: inout c, start: s.nameStart, len: s.nameLen)
@@ -585,8 +598,16 @@ fn main() {
         if nameIsMain(c: inout c, f: f) {
         } else {
             if f.isExtern {
-                // `extern "plew-intrinsic"` fn: the runtime provides `plew_<name>`;
-                // emit no prototype/body (calls lower to it directly).
+                if f.isCExtern {
+                    // `extern(c)` foreign fn: self-emit a C prototype (no body — the
+                    // body lives in the linked C library). No header `#include` needed.
+                    clearSelfItemEnv(c: inout c)
+                    genSignature(c: inout c, f: f)
+                    write(s: ";\n")
+                } else {
+                    // `extern "plew-intrinsic"` fn: the runtime provides `plew_<name>`;
+                    // emit no prototype/body (calls lower to it directly).
+                }
             } else {
             if f.typeParams.count > 0 {
             } else {

@@ -200,6 +200,10 @@ export struct TraitAst {
 // intrinsic signatures; `structNames`/`structSpans` are opaque lang-item types.
 export struct ExternAst {
     pub val abiOk: Bool
+    // true iff the ABI is the C ABI (`extern(c)` — spec/15 FFI). Distinguishes a
+    // foreign-C block (raw symbol names, emitted prototypes) from the intrinsic
+    // floor (`extern(plewIntrinsic)` / legacy `"plew-intrinsic"`, runtime `plew_*`).
+    pub val abiC: Bool = false
     pub val abiSpan: Span
     pub val fns: Array[SigAst]
     pub val structNames: Array[String]
