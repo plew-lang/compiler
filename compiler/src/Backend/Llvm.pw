@@ -4339,7 +4339,13 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         }
         val afi: U64 = findAssoc(c: inout c, recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
         if afi < c.funcs.count {
-            val aslot: U64 = userFnSlot(st: inout st, idx: afi)
+            mut val aslot: U64 = userFnSlot(st: inout st, idx: afi)
+            // a trait/std provided assoc fn (`Greeter.banner()`) is declared+emitted
+            // lazily (no self param), like a free function.
+            if aslot < st.fnIdx.count {
+            } else {
+                aslot = ensureFreeFnDeclared(c: inout c, st: inout st, fi: afi)
+            }
             if aslot < st.fnIdx.count {
                 val af: Func = c.funcs[afi]
                 mut val aav: Array[LLVMValueRef] = []
@@ -5050,9 +5056,15 @@ fn ensureFreeFnDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
     }
     val f: Func = c.funcs[fi]
     if f.typeParams.count > 0U64 { return st.fnIdx.count }
-    if f.hasRecv { return st.fnIdx.count }
+    // an assoc fn (`Trait.banner()`) has a receiver type but no self param — emit it
+    // like a free function; a real method (self) is not handled here.
+    if f.hasRecv {
+        if f.isAssoc {
+        } else {
+            return st.fnIdx.count
+        }
+    }
     if f.isExtern { return st.fnIdx.count }
-    if f.isAssoc { return st.fnIdx.count }
     if nameIsMain(c: inout c, f: f) { return st.fnIdx.count }
     mut val ptys: Array[LLVMTypeRef] = []
     mut val pi: U64 = 0
