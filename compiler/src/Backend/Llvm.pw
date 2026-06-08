@@ -2283,6 +2283,17 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             // yield the enclosing value-position block's result (IfExpr reads it).
             st.giveValue = genLlvmExpr(c: inout c, st: inout st, id: value)
         }
+        Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, patStart: _, patLen: _, binds: _) => {
+            if isStruct {
+                compileErrorAt(line: 0, msg: "LLVM backend: struct-destructure for-loop not yet supported")
+            } else {
+                if isRange {
+                    genLlvmForRange(c: inout c, st: inout st, varStart: varStart, varLen: varLen, varTyStart: varTyStart, varTyLen: varTyLen, inclusive: inclusive, lo: iter, hi: rangeHi, body: body)
+                } else {
+                    genLlvmForArray(c: inout c, st: inout st, varStart: varStart, varLen: varLen, iter: iter, body: body)
+                }
+            }
+        }
         _ => {
             compileErrorAt(line: 0, msg: "LLVM backend: statement form not yet supported")
         }
@@ -2411,6 +2422,82 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
         }
         bi += 1
     }
+}
+
+// `for i in lo ..< hi { body }` (or `..= hi`): a counter loop. The loop variable
+// is bound to a fresh slot incremented each iteration; range elements are U64.
+fn genLlvmForRange(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64, varTyStart: U64, varTyLen: U64, inclusive: Bool, lo: U64, hi: U64, body: U64) {
+    val mark: U64 = st.nLocals
+    mut val vty: LLVMTypeRef = st.i64ty
+    if varTyLen > 0U64 {
+        vty = llvmScalarTy(c: inout c, st: inout st, tyStart: varTyStart, tyLen: varTyLen)
+    }
+    val loV: LLVMValueRef = coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: lo), target: vty, unsigned: true)
+    val hiV: LLVMValueRef = coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: hi), target: vty, unsigned: true)
+    val islot: LLVMValueRef = LLVMBuildAlloca(st.b, vty, anon())
+    LLVMBuildStore(st.b, loV, islot)
+    pushLocal(st: inout st, nameStart: varStart, nameLen: varLen, ptr: islot, ty: vty, kind: 3U64, structIdx: c.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64)
+    val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "for.cond"))
+    val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "for.body"))
+    val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "for.end"))
+    LLVMBuildBr(st.b, condBB)
+    LLVMPositionBuilderAtEnd(st.b, condBB)
+    val iv: LLVMValueRef = LLVMBuildLoad2(st.b, vty, islot, anon())
+    mut val pred: U32 = llvmIntUlt()
+    if inclusive {
+        pred = llvmIntUle()
+    }
+    LLVMBuildCondBr(st.b, LLVMBuildICmp(st.b, pred, iv, hiV, anon()), bodyBB, endBB)
+    LLVMPositionBuilderAtEnd(st.b, bodyBB)
+    st.terminated = false
+    genLlvmBlock(c: inout c, st: inout st, id: body)
+    if st.terminated {
+    } else {
+        val iv2: LLVMValueRef = LLVMBuildLoad2(st.b, vty, islot, anon())
+        LLVMBuildStore(st.b, LLVMBuildAdd(st.b, iv2, LLVMConstInt(vty, 1U64, 0I32), anon()), islot)
+        LLVMBuildBr(st.b, condBB)
+    }
+    LLVMPositionBuilderAtEnd(st.b, endBB)
+    st.terminated = false
+    st.nLocals = mark
+}
+
+// `for x in arr { body }`: walk an array by index, binding x to each element.
+fn genLlvmForArray(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64, iter: U64, body: U64) {
+    if exprIsArray(c: inout c, st: inout st, id: iter) {
+    } else {
+        compileErrorAt(line: 0, msg: "LLVM backend: for-loop over a non-array (Iterable) not yet supported")
+        return
+    }
+    val mark: U64 = st.nLocals
+    val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: iter)
+    val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: iter)
+    val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 0U64, anon())
+    val count: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 1U64, anon())
+    val idxslot: LLVMValueRef = LLVMBuildAlloca(st.b, st.i64ty, anon())
+    LLVMBuildStore(st.b, LLVMConstInt(st.i64ty, 0U64, 0I32), idxslot)
+    val vslot: LLVMValueRef = LLVMBuildAlloca(st.b, elemTy, anon())
+    pushLocal(st: inout st, nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: c.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64)
+    val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fora.cond"))
+    val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fora.body"))
+    val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fora.end"))
+    LLVMBuildBr(st.b, condBB)
+    LLVMPositionBuilderAtEnd(st.b, condBB)
+    val iv: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, idxslot, anon())
+    LLVMBuildCondBr(st.b, LLVMBuildICmp(st.b, llvmIntUlt(), iv, count, anon()), bodyBB, endBB)
+    LLVMPositionBuilderAtEnd(st.b, bodyBB)
+    st.terminated = false
+    LLVMBuildStore(st.b, LLVMBuildLoad2(st.b, elemTy, arrElemPtr(st: inout st, elemTy: elemTy, data: data, idx: iv), anon()), vslot)
+    genLlvmBlock(c: inout c, st: inout st, id: body)
+    if st.terminated {
+    } else {
+        val iv2: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, idxslot, anon())
+        LLVMBuildStore(st.b, LLVMBuildAdd(st.b, iv2, LLVMConstInt(st.i64ty, 1U64, 0I32), anon()), idxslot)
+        LLVMBuildBr(st.b, condBB)
+    }
+    LLVMPositionBuilderAtEnd(st.b, endBB)
+    st.terminated = false
+    st.nLocals = mark
 }
 
 fn genLlvmBlock(c: inout Comp, st: inout LlvmCtx, id: U64) {
