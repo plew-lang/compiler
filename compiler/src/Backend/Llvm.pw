@@ -191,6 +191,12 @@ struct LlvmCtx {
     // (so `self`'s LLVM type / struct-or-enum env resolve to the instance). 0 when
     // emitting a free function or a non-generic method.
     pub mut val curRecvInstRef: U64
+    // the expected type of the expression about to be emitted (a let annotation, a
+    // boxed field's pointee type, …) — used to infer a JSX generic-enum/struct
+    // construction whose own `ty` is the ungrounded head (`<Optional.Some v=42 />`
+    // with no `[I64]`). Consumed (cleared to 0) by the construction that uses it so
+    // it doesn't leak into sub-expressions. 0 when no expectation is in effect.
+    pub mut val expectedTy: U64
     // declared user functions, cached by c.funcs index (parallel arrays), so a call
     // resolves to the same LLVMValueRef without name mangling (the symbol name is a
     // synthetic unique `pf<idx>`; only `main`/runtime symbols have meaningful names).
@@ -335,27 +341,34 @@ fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
     mut val i: U64 = 0
     while i < sd.fields.count {
         val f: FieldDef = sd.fields[i]
-        if f.tyIsArray {
+        // a boxed (recursive) field is a heap pointer regardless of its pointee
+        // type — always representable, and it breaks the recursion cycle (we don't
+        // recurse into the pointee, so a mutually-recursive struct still terminates).
+        if fieldIsBoxed(c: inout c, f: f) {
+            i += 1
         } else {
-            // enum field: not yet.
-            if isEnumName(c: inout c, start: f.tyStart, len: f.tyLen) {
-                return false
-            }
-            val fsi: U64 = structIndexByName(c: inout c, start: f.tyStart, len: f.tyLen)
-            if fsi < c.structs.count {
-                // an extern struct field is a primitive lang-item (ok); a real nested
-                // struct must itself be registerable (recursively).
-                if c.structs[fsi].isExtern {
-                } else {
-                    if structRegisterable(c: inout c, sidx: fsi) {
+            if f.tyIsArray {
+            } else {
+                // enum field: not yet.
+                if isEnumName(c: inout c, start: f.tyStart, len: f.tyLen) {
+                    return false
+                }
+                val fsi: U64 = structIndexByName(c: inout c, start: f.tyStart, len: f.tyLen)
+                if fsi < c.structs.count {
+                    // an extern struct field is a primitive lang-item (ok); a real nested
+                    // struct must itself be registerable (recursively).
+                    if c.structs[fsi].isExtern {
                     } else {
-                        return false
+                        if structRegisterable(c: inout c, sidx: fsi) {
+                        } else {
+                            return false
+                        }
                     }
                 }
+                // else: a primitive scalar name (I8.. / unknown) -> treated as a scalar.
             }
-            // else: a primitive scalar name (I8.. / unknown) -> treated as a scalar.
+            i += 1
         }
-        i += 1
     }
     return true
 }
@@ -384,7 +397,12 @@ fn registerStructs(c: inout Comp, st: inout LlvmCtx) {
         mut val elems: Array[LLVMTypeRef] = []
         mut val fi: U64 = 0
         while fi < sd.fields.count {
-            elems.append(value: llvmTypeFor(c: inout c, st: inout st, tyStart: sd.fields[fi].tyStart, tyLen: sd.fields[fi].tyLen, isArray: sd.fields[fi].tyIsArray))
+            // a boxed (recursive) field is stored as a heap pointer.
+            if fieldIsBoxed(c: inout c, f: sd.fields[fi]) {
+                elems.append(value: st.ptrty)
+            } else {
+                elems.append(value: llvmTypeFor(c: inout c, st: inout st, tyStart: sd.fields[fi].tyStart, tyLen: sd.fields[fi].tyLen, isArray: sd.fields[fi].tyIsArray))
+            }
             fi += 1
         }
         LLVMStructSetBody(st.structTys[s], arrayCPtr(elems), sd.fields.count, 0I32)
@@ -447,7 +465,7 @@ fn fieldWords(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> U64
         mut val w: U64 = 0
         mut val i: U64 = 0
         while i < sd.fields.count {
-            w = w + fieldWords(c: inout c, st: inout st, tyStart: sd.fields[i].tyStart, tyLen: sd.fields[i].tyLen)
+            w = w + fieldWordsF(c: inout c, st: inout st, f: sd.fields[i])
             i += 1
         }
         return w
@@ -564,6 +582,23 @@ fn variantPayloadTy(c: inout Comp, st: inout LlvmCtx, eid: U64, vi: U64) -> LLVM
 // Construct an enum value `<E.V f=e ... />`: alloca {tag,payload}, store the tag
 // and (if any) the variant payload struct, then load the whole value.
 fn genLlvmMakeEnum(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, ty: U64, fields: Array[MakeField]) -> LLVMValueRef {
+    // a JSX construction without explicit type args (`<Optional.Some v=42 />`) has
+    // an ungrounded head `ty`; fall back to the expected type from context (a let
+    // annotation / boxed-field pointee) when it names this same generic enum. Consume
+    // it so it can't leak into the payload sub-expressions.
+    mut val ty: U64 = ty
+    if isGenericInst(c: inout c, ref: ty) {
+    } else {
+        if st.expectedTy != 0U64 {
+            if isGenericInst(c: inout c, ref: st.expectedTy) {
+                val et: TypeRef = c.types[st.expectedTy]
+                if spansEqual(c: inout c, aStart: et.nameStart, aLen: et.nameLen, bStart: typeStart, bLen: typeLen) {
+                    ty = st.expectedTy
+                }
+            }
+        }
+    }
+    st.expectedTy = 0U64
     // a generic enum instance (Optional[I64]): build under its substitution env.
     if isGenericInst(c: inout c, ref: ty) {
         val gslot: U64 = genEnumSlot(c: inout c, st: inout st, ref: ty)
@@ -625,6 +660,7 @@ fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, 
             // cell, store the value, and put the cell pointer in the payload. (No
             // refcount/free yet — leaky, but observably correct, like Ref.)
             if fieldIsBoxed(c: inout c, f: fs[fj]) {
+                st.expectedTy = fs[fj].ty
                 val boxedVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: valExpr)
                 val boxedTy: LLVMTypeRef = LLVMTypeOf(boxedVal)
                 val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(boxedTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
@@ -744,13 +780,29 @@ fn registerGenEnums(c: inout Comp, st: inout LlvmCtx) {
     }
 }
 
-// The tracked TypeRef of an expression (an Ident local's locTypeRef), or 0.
+// The tracked TypeRef of an expression (an Ident local's locTypeRef, or a struct
+// field whose declared type is a generic instance), or 0.
 fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
     match c.exprs[id] {
         Expr.Ident(val start, val len) => {
             val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
             if li < st.nLocals {
                 return st.locTypeRef[li]
+            }
+        }
+        Expr.Field(val base, val nameStart, val nameLen) => {
+            // a field of generic-instance type (`node.next : Optional[Node]`): yield
+            // the instance ref (grounded under any active env) so a match on the
+            // field read recovers the enum's substitution env.
+            val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+            if sidx < c.structs.count {
+                val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
+                if fidx < c.structs[sidx].fields.count {
+                    val fd: FieldDef = c.structs[sidx].fields[fidx]
+                    if isGenericInst(c: inout c, ref: fd.ty) {
+                        return groundTypeRef(c: inout c, ref: fd.ty)
+                    }
+                }
             }
         }
         _ => {}
@@ -2179,7 +2231,15 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             if sidx < c.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
                 if fidx < c.structs[sidx].fields.count {
-                    return LLVMBuildExtractValue(st.b, genLlvmExpr(c: inout c, st: inout st, id: base), fidx, anon())
+                    val fd: FieldDef = c.structs[sidx].fields[fidx]
+                    val raw: LLVMValueRef = LLVMBuildExtractValue(st.b, genLlvmExpr(c: inout c, st: inout st, id: base), fidx, anon())
+                    // a boxed (recursive) field holds a heap pointer; deref it to the
+                    // boxed value (its pointee type comes from the field's TypeRef so a
+                    // generic-instance field — Optional[Node] — resolves correctly).
+                    if fieldIsBoxed(c: inout c, f: fd) {
+                        return LLVMBuildLoad2(st.b, llvmTypeOfRef(c: inout c, st: inout st, ref: fd.ty), raw, anon())
+                    }
+                    return raw
                 }
             }
             compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: field access only on a registered struct value (so far)")
@@ -2672,6 +2732,18 @@ fn genFieldValue(c: inout Comp, st: inout LlvmCtx, valExpr: U64, fld: FieldDef) 
             _ => {}
         }
         return genLlvmExpr(c: inout c, st: inout st, id: valExpr)
+    }
+    // a boxed (recursive) struct field: build the value, heap-allocate a cell, store
+    // it, and put the cell pointer in the struct (leaky, like Ref — no free yet).
+    if fieldIsBoxed(c: inout c, f: fld) {
+        // the boxed value is in the field's (pointee) type context, so a nested
+        // un-suffixed JSX construction (`next=<Optional.Some … />`) infers its args.
+        st.expectedTy = fld.ty
+        val boxedVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: valExpr)
+        val boxedTy: LLVMTypeRef = LLVMTypeOf(boxedVal)
+        val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(boxedTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
+        LLVMBuildStore(st.b, boxedVal, cell)
+        return cell
     }
     return coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valExpr), tyStart: fld.tyStart, tyLen: fld.tyLen)
 }
@@ -3938,7 +4010,15 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             }
             if builtArr {
             } else {
+                // a let annotation provides the expected type so an un-suffixed JSX
+                // generic construction (`val o: Optional[I64] = <Optional.Some … />`)
+                // infers its type args. Consumed by the construction (cleared there).
+                if isArr {
+                } else {
+                    st.expectedTy = ty
+                }
                 v = genLlvmExpr(c: inout c, st: inout st, id: init)
+                st.expectedTy = 0U64
             }
             mut val kind: U64 = valueKind(c: inout c, st: inout st, id: init)
             if tyLen > 0U64 {
@@ -4604,7 +4684,7 @@ fn emitLlvm(c: inout Comp) {
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
-        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 nLocals=0
+        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[]
         locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] declId=[] declFn=[] declTy=[] reachAssoc=[] />
 
