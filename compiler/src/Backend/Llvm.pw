@@ -1005,12 +1005,23 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
         }
         Expr.Index(val base, index: _) => {
             // `arr[i]` : the array's element TypeRef (a Ref element `Array[Ref[Box]]`
-            // -> `ys[i]->v`, or a nested-array element), from the base array local.
+            // -> `ys[i]->v`, or a nested-array element).
             match c.exprs[base] {
                 Expr.Ident(start: val bs, len: val bl) => {
                     val bli: U64 = findLocal(c: inout c, st: inout st, start: bs, len: bl)
                     if bli < st.nLocals {
                         return st.locElemTypeRef[bli]
+                    }
+                }
+                Expr.Field(base: val fb, nameStart: val fns2, nameLen: val fnl2) => {
+                    // an array struct field's element (`hc.items[0]` for
+                    // items: Array[Ref[Cell]]): the field's grounded element ref.
+                    val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: fb)
+                    if bsi < c.structs.count {
+                        val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns2, len: fnl2)
+                        if fidx < c.structs[bsi].fields.count {
+                            return fieldArrayElemRefUnderBase(c: inout c, st: inout st, base: fb, fd: c.structs[bsi].fields[fidx])
+                        }
                     }
                 }
                 _ => {}
@@ -1345,6 +1356,15 @@ fn arrFieldElemStructIdx(c: inout Comp, st: inout LlvmCtx, arrayExpr: U64) -> U6
             if li < st.nLocals {
                 if st.locElemStructIdx[li] < c.structs.count {
                     return st.locElemStructIdx[li]
+                }
+                // a generic struct element (`Array[Box[I32]]`): via the element ref.
+                if st.locElemTypeRef[li] != 0U64 {
+                    if isGenericInst(c: inout c, ref: st.locElemTypeRef[li]) {
+                        val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: st.locElemTypeRef[li])
+                        if gs < st.genStructRefs.count {
+                            return st.genStructDefs[gs]
+                        }
+                    }
                 }
             }
         }
