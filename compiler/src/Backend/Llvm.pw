@@ -243,6 +243,9 @@ struct LlvmCtx {
     pub mut val locElemTy: Array[LLVMTypeRef]
     pub mut val locElemKind: Array[U64]
     pub mut val locTypeRef: Array[U64]
+    // per-array-local element struct index (c.structs.count = element is not a
+    // struct), so `arr[i].field` on an array-of-struct LOCAL resolves the element.
+    pub mut val locElemStructIdx: Array[U64]
     // declared runtime/intrinsic functions, cached by name id (parallel arrays).
     pub mut val declId: Array[U64]
     pub mut val declFn: Array[LLVMValueRef]
@@ -1257,6 +1260,10 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
 // `arr.get(i:).field` dispatch.
 fn arrFieldElemStructIdx(c: inout Comp, st: inout LlvmCtx, arrayExpr: U64) -> U64 {
     match c.exprs[arrayExpr] {
+        // NOTE: an array-of-struct LOCAL (`store[i].field`) is intentionally NOT
+        // resolved here yet — enabling it surfaces the missing array CoW (an aliased
+        // `b = a; b[i] = x` mutates a's shared buffer), a latent miscompile. The
+        // element struct is tracked on locElemStructIdx ready for when CoW lands.
         Expr.Field(base: val fbase, nameStart: val fns, nameLen: val fnl) => {
             val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: fbase)
             if bsi < c.structs.count {
@@ -1606,6 +1613,7 @@ fn pushLocalR(st: inout LlvmCtx, nameStart: U64, nameLen: U64, ptr: LLVMValueRef
         st.locElemTy[st.nLocals] = elemTy
         st.locElemKind[st.nLocals] = elemKind
         st.locTypeRef[st.nLocals] = typeRef
+        st.locElemStructIdx[st.nLocals] = 18446744073709551615U64
     } else {
         st.locStart.append(value: nameStart)
         st.locLen.append(value: nameLen)
@@ -1617,8 +1625,17 @@ fn pushLocalR(st: inout LlvmCtx, nameStart: U64, nameLen: U64, ptr: LLVMValueRef
         st.locElemTy.append(value: elemTy)
         st.locElemKind.append(value: elemKind)
         st.locTypeRef.append(value: typeRef)
+        st.locElemStructIdx.append(value: 18446744073709551615U64)
     }
     st.nLocals = st.nLocals + 1
+}
+
+// Set the just-pushed local's array element struct index (for an array-of-struct
+// local, so `arr[i].field` resolves the element). Call right after pushLocalR.
+fn setLocalElemStruct(st: inout LlvmCtx, esi: U64) {
+    if st.nLocals > 0U64 {
+        st.locElemStructIdx[st.nLocals - 1U64] = esi
+    }
 }
 
 // The Plew-type-kind tag (0 int/signed, 1 String, 2 Bool, 3 unsigned) of a type
@@ -5013,6 +5030,8 @@ fn emitClosures(c: inout Comp, st: inout LlvmCtx) {
                 st.locElemTy = []
                 st.locElemKind = []
                 st.locTypeRef = []
+    st.locElemStructIdx = []
+                st.locElemStructIdx = []
                 // bind captures from the env pointer (param 0): each capture loads
                 // from its env slot into a fresh local, so the body's identifier
                 // accesses resolve normally. (Immutable captures are by-value; a
@@ -5200,6 +5219,7 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
     st.locElemTy = []
     st.locElemKind = []
     st.locTypeRef = []
+    st.locElemStructIdx = []
     // method receiver: bind `self` as a local pointing at the struct storage —
     // an `inout fn`'s self IS the pointer param; a by-value self is stored into a
     // fresh alloca (so mutations stay local). Field access then GEPs locPtr
@@ -5383,6 +5403,16 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             val slot: LLVMValueRef = LLVMBuildAlloca(st.b, lty, anon())
             LLVMBuildStore(st.b, v, slot)
             pushLocalR(st: inout st, nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind, structIdx: sidx, isArr: isArr, elemTy: elemTy, elemKind: elemKind, typeRef: tref)
+            // an array-of-struct local (`store: Array[Box]`): track the element struct
+            // so `store[i].field` resolves the element (tyStart names the element type).
+            if isArr {
+                if tyLen > 0U64 {
+                    val esi: U64 = localStructIdxFor(c: inout c, st: inout st, start: tyStart, len: tyLen)
+                    if esi < c.structs.count {
+                        setLocalElemStruct(st: inout st, esi: esi)
+                    }
+                }
+            }
         }
         Stmt.Assign(val op, val target, val value) => {
             match c.exprs[target] {
@@ -6200,7 +6230,7 @@ fn emitLlvm(c: inout Comp) {
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[]
-        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] provEmit=[] genMethEmit=[] />
+        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemStructIdx=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] provEmit=[] genMethEmit=[] />
 
     // a "self" byte span (appended past the source) to bind method receivers.
     st.selfStart = c.bytes.count
@@ -6302,6 +6332,7 @@ fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     st.locElemTy = []
     st.locElemKind = []
     st.locTypeRef = []
+    st.locElemStructIdx = []
     genLlvmBlock(c: inout c, st: inout st, id: c.funcs[fi].body)
     if st.terminated {
     } else {
