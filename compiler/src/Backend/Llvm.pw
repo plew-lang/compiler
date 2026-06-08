@@ -2271,15 +2271,36 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
         }
         Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {
             // a closure literal is the {fn, env} fat pointer: the lambda-lifted
-            // function plus its environment (NULL for a non-capturing closure).
+            // function plus its environment. A capturing closure heap-allocates an env
+            // struct and copies each captured value (or the shared cell pointer for a
+            // `mut val` capture) into it; a non-capturing one has a NULL env.
             val slot: U64 = closureSlot(st: inout st, id: id)
             if slot < st.cloIdx.count {
+                mut val env: LLVMValueRef = LLVMConstNull(st.ptrty)
+                val caps: Array[CaptureEntry] = closureCaptures(c: inout c, cloId: id)
+                if caps.count > 0U64 {
+                    val envTy: LLVMTypeRef = closureEnvTy(c: inout c, st: inout st, caps: caps)
+                    env = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(envTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
+                    mut val ci: U64 = 0
+                    while ci < caps.count {
+                        val cap: CaptureEntry = caps[ci]
+                        val li: U64 = findLocal(c: inout c, st: inout st, start: cap.nameStart, len: cap.nameLen)
+                        if li < st.nLocals {
+                            // a boxed (mut) capture stores the cell pointer (the local
+                            // already IS that pointer); a by-value capture stores the
+                            // loaded value.
+                            mut val cv2: LLVMValueRef = LLVMBuildLoad2(st.b, st.locTy[li], st.locPtr[li], anon())
+                            LLVMBuildStore(st.b, cv2, LLVMBuildStructGEP2(st.b, envTy, env, ci, anon()))
+                        }
+                        ci += 1
+                    }
+                }
                 mut val cv: LLVMValueRef = LLVMGetUndef(st.closureTy)
                 cv = LLVMBuildInsertValue(st.b, cv, st.cloVal[slot], 0U64, anon())
-                cv = LLVMBuildInsertValue(st.b, cv, LLVMConstNull(st.ptrty), 1U64, anon())
+                cv = LLVMBuildInsertValue(st.b, cv, env, 1U64, anon())
                 return cv
             }
-            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "LLVM backend: closure not declared (capturing closures not yet supported)")
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "LLVM backend: closure not declared")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
         Expr.Arrow(val base, val nameStart, val nameLen) => {
@@ -3979,6 +4000,46 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
 
 // ---- closures (lambda-lifted function values) ----
 //
+// The captures of closure `cloId`, in declaration order (the env struct layout).
+fn closureCaptures(c: inout Comp, cloId: U64) -> Array[CaptureEntry] {
+    mut val out: Array[CaptureEntry] = []
+    mut val i: U64 = 0
+    while i < c.captures.count {
+        if c.captures[i].closureId == cloId {
+            out.append(value: c.captures[i])
+        }
+        i += 1
+    }
+    return out
+}
+
+// The LLVM type of a capture slot in the env struct: a `mut val` (boxed) capture is
+// a pointer to the shared cell; otherwise the captured value's own type.
+fn captureSlotTy(c: inout Comp, st: inout LlvmCtx, cap: CaptureEntry) -> LLVMTypeRef {
+    if cap.boxed {
+        return st.ptrty
+    }
+    if cap.isArray {
+        return st.arrayTy
+    }
+    if isGenericInst(c: inout c, ref: cap.ty) {
+        return llvmTypeOfRef(c: inout c, st: inout st, ref: cap.ty)
+    }
+    return llvmScalarTy(c: inout c, st: inout st, tyStart: cap.tyStart, tyLen: cap.tyLen)
+}
+
+// The env struct type for closure `cloId` (its captures in order). Caller guards on
+// caps.count > 0 before using it.
+fn closureEnvTy(c: inout Comp, st: inout LlvmCtx, caps: Array[CaptureEntry]) -> LLVMTypeRef {
+    mut val elems: Array[LLVMTypeRef] = []
+    mut val i: U64 = 0
+    while i < caps.count {
+        elems.append(value: captureSlotTy(c: inout c, st: inout st, cap: caps[i]))
+        i += 1
+    }
+    return LLVMStructTypeInContext(st.ctx, arrayCPtr(elems), elems.count, 0I32)
+}
+
 // Index into st.clo* for a Closure-expr arena id, or st.cloIdx.count.
 fn closureSlot(st: inout LlvmCtx, id: U64) -> U64 {
     mut val i: U64 = 0
@@ -3991,10 +4052,31 @@ fn closureSlot(st: inout LlvmCtx, id: U64) -> U64 {
     return st.cloIdx.count
 }
 
+// Whether the LLVM backend can lower closure `cloId` yet: a `mut val` (boxed,
+// shared-cell) capture isn't modeled, so such a closure is left undeclared and its
+// literal rejects loudly (a clean unsupported, not a miscompile).
+fn closureSupported(c: inout Comp, cloId: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.captures.count {
+        if c.captures[i].closureId == cloId {
+            if c.captures[i].boxed {
+                return false
+            }
+        }
+        i += 1
+    }
+    return true
+}
+
 // Declare a closure as `__closure<id>(ptr env, params...)` (env first per the
-// uniform closure ABI) and cache it. Idempotent (skips an already-declared id).
+// uniform closure ABI) and cache it. Idempotent (skips an already-declared id);
+// a closure with an unsupported (boxed) capture is left undeclared.
 fn declareClosure(c: inout Comp, st: inout LlvmCtx, id: U64) {
     if closureSlot(st: inout st, id: id) < st.cloIdx.count {
+        return
+    }
+    if closureSupported(c: inout c, cloId: id) {
+    } else {
         return
     }
     match c.exprs[id] {
@@ -4176,6 +4258,41 @@ fn emitClosures(c: inout Comp, st: inout LlvmCtx) {
                 st.locElemTy = []
                 st.locElemKind = []
                 st.locTypeRef = []
+                // bind captures from the env pointer (param 0): each capture loads
+                // from its env slot into a fresh local, so the body's identifier
+                // accesses resolve normally. (Immutable captures are by-value; a
+                // boxed `mut val` capture binds the cell pointer as a Ref-like local.)
+                val caps: Array[CaptureEntry] = closureCaptures(c: inout c, cloId: cid)
+                if caps.count > 0U64 {
+                    val envTy: LLVMTypeRef = closureEnvTy(c: inout c, st: inout st, caps: caps)
+                    val envPtr: LLVMValueRef = LLVMGetParam(fv, 0U64)
+                    mut val ci: U64 = 0
+                    while ci < caps.count {
+                        val cap: CaptureEntry = caps[ci]
+                        val slotTy: LLVMTypeRef = captureSlotTy(c: inout c, st: inout st, cap: cap)
+                        val cv: LLVMValueRef = LLVMBuildLoad2(st.b, slotTy, LLVMBuildStructGEP2(st.b, envTy, envPtr, ci, anon()), anon())
+                        val a: LLVMValueRef = LLVMBuildAlloca(st.b, slotTy, anon())
+                        LLVMBuildStore(st.b, cv, a)
+                        mut val cRef: U64 = 0
+                        if cap.boxed {
+                            cRef = cap.ty
+                        } else {
+                            if isGenericInst(c: inout c, ref: cap.ty) {
+                                cRef = cap.ty
+                            } else {
+                                if enumRegSlot(c: inout c, st: inout st, start: cap.tyStart, len: cap.tyLen) < st.enumIdxs.count {
+                                    cRef = simpleTypeRef(c: inout c, nameStart: cap.tyStart, nameLen: cap.tyLen)
+                                }
+                            }
+                        }
+                        mut val cElem: LLVMTypeRef = st.i64ty
+                        if cap.isArray {
+                            cElem = llvmScalarTy(c: inout c, st: inout st, tyStart: cap.tyStart, tyLen: cap.tyLen)
+                        }
+                        pushLocalR(st: inout st, nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: a, ty: slotTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: cap.tyStart, len: cap.tyLen), isArr: cap.isArray, elemTy: cElem, elemKind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), typeRef: cRef)
+                        ci += 1
+                    }
+                }
                 mut val pi: U64 = 0
                 while pi < params.count {
                     bindOneParam(c: inout c, st: inout st, p: params[pi], fv: fv, argIdx: pi + 1U64)
