@@ -6,10 +6,16 @@
 // binary (compiler/plewc-llvm) is built on demand by compiler/plewc.
 //
 // Bring-up strategy: construct the module with the real API (the transferable
-// 90% — SSA/basic-blocks/CFG), and for now emit it as text via
-// LLVMPrintModuleToString -> stdout, linked against the existing C runtime
-// preamble (PlewString/ARC/plew_* are ABI-identical). Swapping text output for
-// direct object emission later is a single API call.
+// 90% — SSA / basic-blocks / CFG), and for now emit it as text via
+// LLVMPrintModuleToString -> stdout, linked against a small C runtime emitted by
+// `plewc-llvm --runtime` (PlewString / plew_* are ABI-identical to the C backend).
+//
+// COVERAGE (v1): the user's `main`, integer locals (alloca/load/store), integer
+// arithmetic + comparisons (signed i64 — widths/unsigned/overflow-panic are TODO),
+// `if`/`while`, and intrinsic calls (`exit`, `print`). Not yet: user-defined
+// functions, structs/enums, arrays, generics, closures, async, ARC. Those grow
+// incrementally; until then a program using them is rejected loudly (no silent
+// miscompile — acceptance soundness).
 
 // ---- libLLVM-C bindings (raw FFI floor; positional, no labels) ----
 //
@@ -32,14 +38,15 @@ extern(c) {
     // Types.
     fn LLVMInt1TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
     fn LLVMInt8TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMInt16TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
     fn LLVMInt32TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
     fn LLVMInt64TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
     fn LLVMVoidTypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMPointerTypeInContext(ctx~: LLVMContextRef, addrSpace~: U32) -> LLVMTypeRef
     fn LLVMFunctionType(ret~: LLVMTypeRef, params~: CPtr[LLVMTypeRef], count~: U32, isVarArg~: I32) -> LLVMTypeRef
 
     // Functions / basic blocks / params.
     fn LLVMAddFunction(m~: LLVMModuleRef, name~: CPtr[U8], fnTy~: LLVMTypeRef) -> LLVMValueRef
-    fn LLVMGetNamedFunction(m~: LLVMModuleRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMGetParam(func~: LLVMValueRef, index~: U32) -> LLVMValueRef
     fn LLVMAppendBasicBlockInContext(ctx~: LLVMContextRef, func~: LLVMValueRef, name~: CPtr[U8]) -> LLVMBasicBlockRef
 
@@ -55,36 +62,410 @@ extern(c) {
     fn LLVMBuildAdd(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildSub(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildMul(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildSDiv(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildSRem(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildNeg(b~: LLVMBuilderRef, v~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildICmp(b~: LLVMBuilderRef, pred~: U32, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildZExt(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildTrunc(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildAlloca(b~: LLVMBuilderRef, ty~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildLoad2(b~: LLVMBuilderRef, ty~: LLVMTypeRef, ptr~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildStore(b~: LLVMBuilderRef, v~: LLVMValueRef, ptr~: LLVMValueRef) -> LLVMValueRef
+    fn LLVMBuildBr(b~: LLVMBuilderRef, dest~: LLVMBasicBlockRef) -> LLVMValueRef
+    fn LLVMBuildCondBr(b~: LLVMBuilderRef, cond~: LLVMValueRef, thenBB~: LLVMBasicBlockRef, elseBB~: LLVMBasicBlockRef) -> LLVMValueRef
 }
 
-// ---- small helpers ----
+// LLVMIntPredicate codes (from <llvm-c/Core.h>): integer compare predicates.
+fn llvmIntEq() -> U32 { return 32U32 }
+fn llvmIntNe() -> U32 { return 33U32 }
+fn llvmIntSlt() -> U32 { return 40U32 }
+fn llvmIntSle() -> U32 { return 41U32 }
+fn llvmIntSgt() -> U32 { return 38U32 }
+fn llvmIntSge() -> U32 { return 39U32 }
+
+// ---- backend state (threaded inout through the emitters) ----
+//
+// Holds the LLVM context/module/builder, cached primitive types, the current
+// function being emitted, and the local-variable environment (a stack of
+// name-span -> alloca pointer + element type; searched from the end so a
+// shadowing redeclaration wins). `terminated` tracks whether the current basic
+// block already has a terminator, so we never append after a ret/br.
+struct LlvmCtx {
+    pub val ctx: LLVMContextRef
+    pub val mod: LLVMModuleRef
+    pub mut val b: LLVMBuilderRef
+    pub val i1ty: LLVMTypeRef
+    pub val i8ty: LLVMTypeRef
+    pub val i32ty: LLVMTypeRef
+    pub val i64ty: LLVMTypeRef
+    pub val voidty: LLVMTypeRef
+    pub val ptrty: LLVMTypeRef
+    pub mut val curFn: LLVMValueRef
+    pub mut val terminated: Bool
+    // local environment (parallel arrays).
+    pub mut val locStart: Array[U64]
+    pub mut val locLen: Array[U64]
+    pub mut val locPtr: Array[LLVMValueRef]
+    pub mut val locTy: Array[LLVMTypeRef]
+    // declared runtime/intrinsic functions, cached by name id (parallel arrays).
+    pub mut val declId: Array[U64]
+    pub mut val declFn: Array[LLVMValueRef]
+    pub mut val declTy: Array[LLVMTypeRef]
+}
 
 // A NUL-terminated C string from a Plew literal, for the many `const char*` name
-// arguments LLVM builders take. (cString leaks a small buffer per call — fine for
-// a compiler pass that runs once and exits.)
+// arguments LLVM builders take (cString leaks a small per-call buffer — fine for
+// a one-shot compiler pass).
 fn cstr(s: String) -> CPtr[U8] {
     return cString(s)
 }
 
+// Empty instruction name (LLVM auto-numbers unnamed values).
+fn anon() -> CPtr[U8] {
+    return cString("")
+}
+
+// ---- type mapping ----
+//
+// Map a Plew scalar type name span to an LLVM integer type. v1 recognizes the
+// fixed-width integer lang-items and Bool; everything else falls back to i64
+// (the C backend's `long long` default scalar). Width/signedness refinement and
+// non-scalar types (String/struct/array) come in later increments.
+fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> LLVMTypeRef {
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Bool") {
+        return st.i1ty
+    }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "I8") {
+        return st.i8ty
+    }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "U8") {
+        return st.i8ty
+    }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "I16") {
+        return st.i32ty
+    }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "U16") {
+        return st.i32ty
+    }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "I32") {
+        return st.i32ty
+    }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "U32") {
+        return st.i32ty
+    }
+    return st.i64ty
+}
+
+// ---- local environment ----
+
+fn pushLocal(st: inout LlvmCtx, nameStart: U64, nameLen: U64, ptr: LLVMValueRef, ty: LLVMTypeRef) {
+    st.locStart.append(value: nameStart)
+    st.locLen.append(value: nameLen)
+    st.locPtr.append(value: ptr)
+    st.locTy.append(value: ty)
+}
+
+// Index of the local matching (start,len) by content, searched from the end so a
+// later (shadowing) declaration wins. Returns st.locStart.count if not found.
+fn findLocal(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 {
+    mut val i: U64 = st.locStart.count
+    while i > 0 {
+        i -= 1
+        if spansEqual(c: inout c, aStart: st.locStart[i], aLen: st.locLen[i], bStart: start, bLen: len) {
+            return i
+        }
+    }
+    return st.locStart.count
+}
+
+// ---- runtime-function declarations (cached) ----
+//
+// Look up a previously declared runtime/intrinsic function by name id, or declare
+// it (a body-less prototype resolved at link time against the emitted runtime.c).
+fn getOrDeclare(c: inout Comp, st: inout LlvmCtx, name: String, nameId: U64, fnTy: LLVMTypeRef) -> LLVMValueRef {
+    mut val i: U64 = 0
+    while i < st.declId.count {
+        if st.declId[i] == nameId {
+            return st.declFn[i]
+        }
+        i += 1
+    }
+    val f: LLVMValueRef = LLVMAddFunction(st.mod, cstr(s: name), fnTy)
+    st.declId.append(value: nameId)
+    st.declFn.append(value: f)
+    st.declTy.append(value: fnTy)
+    return f
+}
+
+// ---- arithmetic / comparison ----
+
+// Build an integer binary op as a single LLVM instruction. v1: signed semantics
+// for division/remainder/comparison (widths/unsigned/overflow-panic are TODO).
+// Comparisons yield i1; arithmetic yields the operand width.
+fn buildBinOp(c: inout Comp, st: inout LlvmCtx, op: I64, l: LLVMValueRef, r: LLVMValueRef) -> LLVMValueRef {
+    if op == opAdd() { return LLVMBuildAdd(st.b, l, r, anon()) }
+    if op == opSub() { return LLVMBuildSub(st.b, l, r, anon()) }
+    if op == opMul() { return LLVMBuildMul(st.b, l, r, anon()) }
+    if op == opDiv() { return LLVMBuildSDiv(st.b, l, r, anon()) }
+    if op == opRem() { return LLVMBuildSRem(st.b, l, r, anon()) }
+    if op == opEq() { return LLVMBuildICmp(st.b, llvmIntEq(), l, r, anon()) }
+    if op == opNe() { return LLVMBuildICmp(st.b, llvmIntNe(), l, r, anon()) }
+    if op == opLt() { return LLVMBuildICmp(st.b, llvmIntSlt(), l, r, anon()) }
+    if op == opLe() { return LLVMBuildICmp(st.b, llvmIntSle(), l, r, anon()) }
+    if op == opGt() { return LLVMBuildICmp(st.b, llvmIntSgt(), l, r, anon()) }
+    if op == opGe() { return LLVMBuildICmp(st.b, llvmIntSge(), l, r, anon()) }
+    // unsupported op (bitwise/shift land in a later increment): reject loudly.
+    compileErrorAt(line: 0, msg: "LLVM backend: operator not yet supported")
+    return l
+}
+
+// ---- expression emission ----
+//
+// Emit `id` and return its LLVM value. v1 handles integer literals, locals (a
+// load from the alloca), arithmetic/comparison binaries, and calls. Anything else
+// is rejected loudly (no silent miscompile) until its increment lands.
+fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
+    val e: Expr = c.exprs[id]
+    match e {
+        Expr.Int(val value, offset: _, val isBool, tyStart: _, tyLen: _, val isNeg) => {
+            mut val ty: LLVMTypeRef = st.i64ty
+            if isBool {
+                ty = st.i1ty
+            }
+            val k: LLVMValueRef = LLVMConstInt(ty, value, 0I32)
+            if isNeg {
+                return LLVMBuildNeg(st.b, k, anon())
+            }
+            return k
+        }
+        Expr.Ident(val start, val len) => {
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.locStart.count {
+                return LLVMBuildLoad2(st.b, st.locTy[li], st.locPtr[li], anon())
+            }
+            compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "LLVM backend: unknown identifier (only locals supported so far)")
+            return LLVMConstInt(st.i64ty, 0U64, 0I32)
+        }
+        Expr.Binary(val op, val lhs, val rhs) => {
+            val l: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: lhs)
+            val r: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: rhs)
+            return buildBinOp(c: inout c, st: inout st, op: op, l: l, r: r)
+        }
+        Expr.Call(val nameStart, val nameLen, val args) => {
+            return genLlvmCall(c: inout c, st: inout st, nameStart: nameStart, nameLen: nameLen, args: args)
+        }
+        Expr.Unary(val op, val operand) => {
+            if op == opSub() {
+                return LLVMBuildNeg(st.b, genLlvmExpr(c: inout c, st: inout st, id: operand), anon())
+            }
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "LLVM backend: unary operator not yet supported")
+            return LLVMConstInt(st.i64ty, 0U64, 0I32)
+        }
+        _ => {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "LLVM backend: expression form not yet supported")
+            return LLVMConstInt(st.i64ty, 0U64, 0I32)
+        }
+    }
+}
+
+// Emit a condition expression as an i1. A comparison binary already yields i1; any
+// other integer becomes `x != 0`.
+fn genLlvmCond(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
+    match c.exprs[id] {
+        Expr.Binary(val op, lhs: _, rhs: _) => {
+            if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
+                return genLlvmExpr(c: inout c, st: inout st, id: id)
+            }
+        }
+        _ => {}
+    }
+    val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: id)
+    return LLVMBuildICmp(st.b, llvmIntNe(), v, LLVMConstInt(st.i1ty, 0U64, 0I32), anon())
+}
+
+// ---- call emission ----
+//
+// Resolve the callee like the C backend (findFunc), then lower it. v1 supports the
+// `exit` intrinsic only; other callees are rejected loudly until their increment.
+fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "exit") {
+        // void plew_exit(i64): truncate-free (the code is already i64), then call.
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: st.i64ty)
+        val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(ptys), 1U32, 0I32)
+        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_exit", nameId: 1U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr))
+        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U32, anon())
+    }
+    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: this call is not yet supported (only `exit` so far)")
+    return LLVMConstInt(st.i64ty, 0U64, 0I32)
+}
+
+// ---- statement / block emission ----
+
+fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
+    if st.terminated {
+        return
+    }
+    val s: Stmt = c.stmts[id]
+    match s {
+        Stmt.Let(mutable: _, val nameStart, val nameLen, val tyStart, val tyLen, tyIsArray: _, ty: _, val init) => {
+            val lty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen)
+            val slot: LLVMValueRef = LLVMBuildAlloca(st.b, lty, anon())
+            val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: init)
+            LLVMBuildStore(st.b, v, slot)
+            pushLocal(st: inout st, nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty)
+        }
+        Stmt.Assign(val op, val target, val value) => {
+            match c.exprs[target] {
+                Expr.Ident(val start, val len) => {
+                    val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+                    if li < st.locStart.count {
+                        val rv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
+                        if op == opAssign() {
+                            LLVMBuildStore(st.b, rv, st.locPtr[li])
+                        } else {
+                            val cur: LLVMValueRef = LLVMBuildLoad2(st.b, st.locTy[li], st.locPtr[li], anon())
+                            val nv: LLVMValueRef = buildBinOp(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv)
+                            LLVMBuildStore(st.b, nv, st.locPtr[li])
+                        }
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "LLVM backend: assignment target must be a local (so far)")
+                    }
+                }
+                _ => {
+                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "LLVM backend: only simple `name = …` assignment is supported so far")
+                }
+            }
+        }
+        Stmt.ExprStmt(val expr) => {
+            val ignore: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: expr)
+        }
+        Stmt.Return(value: _, val hasValue) => {
+            // main returns () -> the C `int main` returns 0. (Non-main / value
+            // returns arrive with user functions, a later increment.)
+            LLVMBuildRet(st.b, LLVMConstInt(st.i32ty, 0U64, 0I32))
+            st.terminated = true
+        }
+        Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
+            val cv: LLVMValueRef = genLlvmCond(c: inout c, st: inout st, id: cond)
+            val thenBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "then"))
+            val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "endif"))
+            mut val elseBB: LLVMBasicBlockRef = contBB
+            if hasElse {
+                elseBB = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "else"))
+            }
+            LLVMBuildCondBr(st.b, cv, thenBB, elseBB)
+            // then
+            LLVMPositionBuilderAtEnd(st.b, thenBB)
+            st.terminated = false
+            genLlvmBlock(c: inout c, st: inout st, id: thenBlk)
+            if st.terminated {
+            } else {
+                LLVMBuildBr(st.b, contBB)
+            }
+            // else
+            if hasElse {
+                LLVMPositionBuilderAtEnd(st.b, elseBB)
+                st.terminated = false
+                genLlvmBlock(c: inout c, st: inout st, id: elseBlk)
+                if st.terminated {
+                } else {
+                    LLVMBuildBr(st.b, contBB)
+                }
+            }
+            LLVMPositionBuilderAtEnd(st.b, contBB)
+            st.terminated = false
+        }
+        Stmt.While(val cond, val body) => {
+            val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "while.cond"))
+            val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "while.body"))
+            val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "while.end"))
+            LLVMBuildBr(st.b, condBB)
+            LLVMPositionBuilderAtEnd(st.b, condBB)
+            val cv: LLVMValueRef = genLlvmCond(c: inout c, st: inout st, id: cond)
+            LLVMBuildCondBr(st.b, cv, bodyBB, endBB)
+            LLVMPositionBuilderAtEnd(st.b, bodyBB)
+            st.terminated = false
+            genLlvmBlock(c: inout c, st: inout st, id: body)
+            if st.terminated {
+            } else {
+                LLVMBuildBr(st.b, condBB)
+            }
+            LLVMPositionBuilderAtEnd(st.b, endBB)
+            st.terminated = false
+        }
+        _ => {
+            compileErrorAt(line: 0, msg: "LLVM backend: statement form not yet supported")
+        }
+    }
+}
+
+fn genLlvmBlock(c: inout Comp, st: inout LlvmCtx, id: U64) {
+    val blk: Block = c.blocks[id]
+    mut val i: U64 = 0
+    while i < blk.stmts.count {
+        if st.terminated {
+            return
+        }
+        genLlvmStmt(c: inout c, st: inout st, id: blk.stmts[i])
+        i += 1
+    }
+}
+
 // ---- the LLVM backend entry ----
 //
-// v0: ignore the program and emit `i32 @main() { ret i32 0 }` to validate the
-// whole pipeline (binary links libLLVM, builds a module, prints IR, clang accepts
-// it, it runs). The real arena walk grows from here.
+// Build the module from the analyzed arena and print its IR. v1 emits the user's
+// `main` only (other functions / types arrive in later increments).
 fn emitLlvm(c: inout Comp) {
     val ctx: LLVMContextRef = LLVMContextCreate()
     val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cstr(s: "plew"), ctx)
-    val i32ty: LLVMTypeRef = LLVMInt32TypeInContext(ctx)
+    mut val st: LlvmCtx = <LlvmCtx
+        ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx)
+        i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx)
+        i32ty=LLVMInt32TypeInContext(ctx) i64ty=LLVMInt64TypeInContext(ctx)
+        voidty=LLVMVoidTypeInContext(ctx) ptrty=LLVMPointerTypeInContext(ctx, 0U32)
+        curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
+        locStart=[] locLen=[] locPtr=[] locTy=[] declId=[] declFn=[] declTy=[] />
 
-    mut val noParams: Array[LLVMTypeRef] = []
-    val mainTy: LLVMTypeRef = LLVMFunctionType(i32ty, arrayCPtr(noParams), 0U32, 0I32)
-    val mainFn: LLVMValueRef = LLVMAddFunction(m, cstr(s: "main"), mainTy)
-    val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(ctx, mainFn, cstr(s: "entry"))
-    val b: LLVMBuilderRef = LLVMCreateBuilderInContext(ctx)
-    LLVMPositionBuilderAtEnd(b, entry)
-    LLVMBuildRet(b, LLVMConstInt(i32ty, 0U64, 0I32))
+    // find and emit the user's `main`.
+    mut val fi: U64 = 0
+    mut val foundMain: Bool = false
+    while fi < c.funcs.count {
+        if nameIsMain(c: inout c, f: c.funcs[fi]) {
+            genLlvmMain(c: inout c, st: inout st, fi: fi)
+            foundMain = true
+        }
+        fi += 1
+    }
+    if foundMain {
+    } else {
+        compileErrorAt(line: 0, msg: "LLVM backend: no `main` function found")
+    }
 
-    val ir: CPtr[U8] = LLVMPrintModuleToString(m)
+    val ir: CPtr[U8] = LLVMPrintModuleToString(st.mod)
     write(s: stringFromCString(ir))
     LLVMDisposeMessage(ir)
+}
+
+// Emit the user `main` as C `i32 @main()` returning 0 (Plew main returns ()).
+fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
+    mut val noParams: Array[LLVMTypeRef] = []
+    val mainTy: LLVMTypeRef = LLVMFunctionType(st.i32ty, arrayCPtr(noParams), 0U32, 0I32)
+    val mainFn: LLVMValueRef = LLVMAddFunction(st.mod, cstr(s: "main"), mainTy)
+    st.curFn = mainFn
+    val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, mainFn, cstr(s: "entry"))
+    LLVMPositionBuilderAtEnd(st.b, entry)
+    st.terminated = false
+    // fresh local scope.
+    st.locStart = []
+    st.locLen = []
+    st.locPtr = []
+    st.locTy = []
+    genLlvmBlock(c: inout c, st: inout st, id: c.funcs[fi].body)
+    if st.terminated {
+    } else {
+        LLVMBuildRet(st.b, LLVMConstInt(st.i32ty, 0U64, 0I32))
+    }
 }
