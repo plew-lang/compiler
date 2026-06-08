@@ -1641,7 +1641,12 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             return genLlvmIndex(c: inout c, st: inout st, base: base, index: index)
         }
         Expr.Field(val base, val nameStart, val nameLen) => {
-            // `arr.count` (and `.bytes` on String) — an array's count is field 1.
+            // `s.bytes` on a String: the String value IS the {ptr,i64} byte array
+            // (same layout), so the view is the value itself (no copy).
+            if isStringBytesField(c: inout c, st: inout st, base: base, nameStart: nameStart, nameLen: nameLen) {
+                return genLlvmExpr(c: inout c, st: inout st, id: base)
+            }
+            // `arr.count` — an array's count is field 1.
             if exprIsArray(c: inout c, st: inout st, id: base) {
                 if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "count") {
                     return LLVMBuildExtractValue(st.b, genLlvmExpr(c: inout c, st: inout st, id: base), 1U64, anon())
@@ -1932,6 +1937,11 @@ fn exprArrElemTy(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
                 }
             }
         }
+        Expr.Field(val base, val nameStart, val nameLen) => {
+            if isStringBytesField(c: inout c, st: inout st, base: base, nameStart: nameStart, nameLen: nameLen) {
+                return st.i8ty
+            }
+        }
         Expr.Array(val elems) => {
             if elems.count > 0U64 {
                 return exprLlvmType(c: inout c, st: inout st, id: elems[0])
@@ -1940,6 +1950,16 @@ fn exprArrElemTy(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
         _ => {}
     }
     return st.i64ty
+}
+
+// `s.bytes` on a String value: String is `{i8*, i64}`, layout-identical to
+// Array[U8] `{ptr, i64}`, so `.bytes` is the String value viewed as a U8 array
+// (O(1), no copy — spec/02). The view's element type is i8 (unsigned).
+fn isStringBytesField(c: inout Comp, st: inout LlvmCtx, base: U64, nameStart: U64, nameLen: U64) -> Bool {
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "bytes") {
+        return valueKind(c: inout c, st: inout st, id: base) == 1U64
+    }
+    return false
 }
 
 // Whether an expression is array-typed (for routing `.count`/`.append`/index).
@@ -1952,6 +1972,9 @@ fn exprIsArray(c: inout Comp, st: inout LlvmCtx, id: U64) -> Bool {
             }
         }
         Expr.Field(val base, val nameStart, val nameLen) => {
+            if isStringBytesField(c: inout c, st: inout st, base: base, nameStart: nameStart, nameLen: nameLen) {
+                return true
+            }
             val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
             if sidx < c.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
@@ -1976,6 +1999,9 @@ fn arrElemTyOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
             }
         }
         Expr.Field(val base, val nameStart, val nameLen) => {
+            if isStringBytesField(c: inout c, st: inout st, base: base, nameStart: nameStart, nameLen: nameLen) {
+                return st.i8ty
+            }
             val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
             if sidx < c.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
@@ -1987,6 +2013,26 @@ fn arrElemTyOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
         _ => {}
     }
     return st.i64ty
+}
+
+// The element kind (0 int/signed, 1 String, 2 Bool, 3 unsigned) of an array-valued
+// expression — for tracking an un-annotated array binding's element kind.
+fn arrElemKindOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
+    match c.exprs[id] {
+        Expr.Ident(val start, val len) => {
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.nLocals {
+                if st.locIsArr[li] { return st.locElemKind[li] }
+            }
+        }
+        Expr.Field(val base, val nameStart, val nameLen) => {
+            if isStringBytesField(c: inout c, st: inout st, base: base, nameStart: nameStart, nameLen: nameLen) {
+                return 3U64
+            }
+        }
+        _ => {}
+    }
+    return 0U64
 }
 
 // A pointer to the {ptr,i64} storage of an array place (an array local or an
@@ -3192,7 +3238,15 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                             elemKind = valueKind(c: inout c, st: inout st, id: elems[0])
                         }
                     }
-                    _ => {}
+                    _ => {
+                        // an un-annotated array-valued initializer (`val bs = s.bytes`):
+                        // track it as an array so `bs.count` / `bs[i]` resolve.
+                        if exprIsArray(c: inout c, st: inout st, id: init) {
+                            isArr = true
+                            elemTy = arrElemTyOf(c: inout c, st: inout st, id: init)
+                            elemKind = arrElemKindOf(c: inout c, st: inout st, id: init)
+                        }
+                    }
                 }
             }
             // an array literal initializer is built with the binding's element type
