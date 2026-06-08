@@ -2193,7 +2193,7 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
             val sslot0: LLVMValueRef = LLVMBuildAlloca(st.b, sty, anon())
             LLVMBuildStore(st.b, sv, sslot0)
             val mark0: U64 = st.nLocals
-            bindStructPattern(c: inout c, st: inout st, sidx: ssidx, arm: arms[0], scrutTy: sty, scrutSlot: sslot0)
+            bindStructPattern(c: inout c, st: inout st, sidx: ssidx, binds: arms[0].binds, scrutTy: sty, scrutSlot: sslot0)
             val rv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: arms[0].body)
             st.nLocals = mark0
             if didSetS {
@@ -4047,9 +4047,9 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             // yield the enclosing value-position block's result (IfExpr reads it).
             st.giveValue = genLlvmExpr(c: inout c, st: inout st, id: value)
         }
-        Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, patStart: _, patLen: _, binds: _) => {
+        Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
             if isStruct {
-                compileErrorAt(line: 0, msg: "LLVM backend: struct-destructure for-loop not yet supported")
+                genLlvmForArrayStruct(c: inout c, st: inout st, patStart: patStart, patLen: patLen, iter: iter, binds: binds, body: body)
             } else {
                 if isRange {
                     genLlvmForRange(c: inout c, st: inout st, varStart: varStart, varLen: varLen, varTyStart: varTyStart, varTyLen: varTyLen, inclusive: inclusive, lo: iter, hi: rangeHi, body: body)
@@ -4083,7 +4083,7 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
             val sslot0: LLVMValueRef = LLVMBuildAlloca(st.b, sty, anon())
             LLVMBuildStore(st.b, sv, sslot0)
             val mark0: U64 = st.nLocals
-            bindStructPattern(c: inout c, st: inout st, sidx: ssidx, arm: arms[0], scrutTy: sty, scrutSlot: sslot0)
+            bindStructPattern(c: inout c, st: inout st, sidx: ssidx, binds: arms[0].binds, scrutTy: sty, scrutSlot: sslot0)
             genLlvmBlock(c: inout c, st: inout st, id: arms[0].body)
             st.nLocals = mark0
             if didSetS {
@@ -4226,11 +4226,11 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
 // field from the stored scrutinee, honoring array / nested-struct / type-param
 // field types (under any generic env the caller set). Discards (`_`, empty name)
 // are skipped.
-fn bindStructPattern(c: inout Comp, st: inout LlvmCtx, sidx: U64, arm: MatchArm, scrutTy: LLVMTypeRef, scrutSlot: LLVMValueRef) {
+fn bindStructPattern(c: inout Comp, st: inout LlvmCtx, sidx: U64, binds: Array[Bind], scrutTy: LLVMTypeRef, scrutSlot: LLVMValueRef) {
     val fs: Array[FieldDef] = c.structs[sidx].fields
     mut val bi: U64 = 0
-    while bi < arm.binds.count {
-        val b: Bind = arm.binds[bi]
+    while bi < binds.count {
+        val b: Bind = binds[bi]
         if b.nameLen == 0U64 {
             bi += 1
         } else {
@@ -4329,6 +4329,55 @@ fn genLlvmForArray(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64,
     st.terminated = false
     LLVMBuildStore(st.b, LLVMBuildLoad2(st.b, elemTy, arrElemPtr(st: inout st, elemTy: elemTy, data: data, idx: iv), anon()), vslot)
     genLlvmBlock(c: inout c, st: inout st, id: body)
+    if st.terminated {
+    } else {
+        val iv2: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, idxslot, anon())
+        LLVMBuildStore(st.b, LLVMBuildAdd(st.b, iv2, LLVMConstInt(st.i64ty, 1U64, 0I32), anon()), idxslot)
+        LLVMBuildBr(st.b, condBB)
+    }
+    LLVMPositionBuilderAtEnd(st.b, endBB)
+    st.terminated = false
+    st.nLocals = mark
+}
+
+// `for S { val x } in arr { body }`: walk an array of structs, binding each
+// element's fields (per the struct pattern) directly each iteration, mirroring
+// the match struct pattern. The element struct is stored in a slot so its fields
+// can be GEP'd; field binds are popped at the end of every iteration.
+fn genLlvmForArrayStruct(c: inout Comp, st: inout LlvmCtx, patStart: U64, patLen: U64, iter: U64, binds: Array[Bind], body: U64) {
+    if exprIsArray(c: inout c, st: inout st, id: iter) {
+    } else {
+        compileErrorAt(line: 0, msg: "LLVM backend: struct-destructure for-loop over a non-array not yet supported")
+        return
+    }
+    val sidx: U64 = localStructIdxFor(c: inout c, st: inout st, start: patStart, len: patLen)
+    if sidx < c.structs.count {
+    } else {
+        compileErrorAt(line: 0, msg: "LLVM backend: struct-destructure for-loop needs a registered struct pattern")
+        return
+    }
+    val mark: U64 = st.nLocals
+    val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: iter)
+    val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: iter)
+    val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 0U64, anon())
+    val count: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 1U64, anon())
+    val idxslot: LLVMValueRef = LLVMBuildAlloca(st.b, st.i64ty, anon())
+    LLVMBuildStore(st.b, LLVMConstInt(st.i64ty, 0U64, 0I32), idxslot)
+    val eslot: LLVMValueRef = LLVMBuildAlloca(st.b, elemTy, anon())
+    val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fors.cond"))
+    val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fors.body"))
+    val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fors.end"))
+    LLVMBuildBr(st.b, condBB)
+    LLVMPositionBuilderAtEnd(st.b, condBB)
+    val iv: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, idxslot, anon())
+    LLVMBuildCondBr(st.b, LLVMBuildICmp(st.b, llvmIntUlt(), iv, count, anon()), bodyBB, endBB)
+    LLVMPositionBuilderAtEnd(st.b, bodyBB)
+    st.terminated = false
+    LLVMBuildStore(st.b, LLVMBuildLoad2(st.b, elemTy, arrElemPtr(st: inout st, elemTy: elemTy, data: data, idx: iv), anon()), eslot)
+    val bmark: U64 = st.nLocals
+    bindStructPattern(c: inout c, st: inout st, sidx: sidx, binds: binds, scrutTy: elemTy, scrutSlot: eslot)
+    genLlvmBlock(c: inout c, st: inout st, id: body)
+    st.nLocals = bmark
     if st.terminated {
     } else {
         val iv2: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, idxslot, anon())
