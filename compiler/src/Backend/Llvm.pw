@@ -68,6 +68,9 @@ extern(c) {
 
     // Constants / introspection.
     fn LLVMConstInt(ty~: LLVMTypeRef, n~: U64, signExtend~: I32) -> LLVMValueRef
+    fn LLVMConstNull(ty~: LLVMTypeRef) -> LLVMValueRef
+    fn LLVMSizeOf(ty~: LLVMTypeRef) -> LLVMValueRef
+    fn LLVMBuildGEP2(b~: LLVMBuilderRef, ty~: LLVMTypeRef, ptr~: LLVMValueRef, indices~: CPtr[LLVMValueRef], numIndices~: U64, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMTypeOf(v~: LLVMValueRef) -> LLVMTypeRef
     fn LLVMGetIntTypeWidth(ty~: LLVMTypeRef) -> U32
     fn LLVMGetTypeKind(ty~: LLVMTypeRef) -> U32
@@ -139,6 +142,8 @@ struct LlvmCtx {
     pub val ptrty: LLVMTypeRef
     // String value type: { i8* data, i64 len } (ABI-identical to C PlewString).
     pub val strty: LLVMTypeRef
+    // Array value type: { ptr data, i64 count } (element behind the pointer).
+    pub val arrayTy: LLVMTypeRef
     pub mut val curFn: LLVMValueRef
     pub mut val terminated: Bool
     // the function currently being emitted: is it `main` (returns i32 0), and its
@@ -186,6 +191,10 @@ struct LlvmCtx {
     // per-local owning struct index (c.structs.count = not a struct), so field
     // access x.field can resolve the layout from a struct-typed local.
     pub mut val locStructIdx: Array[U64]
+    // per-local array element type + is-array flag (for arr[i] / .append / .count).
+    pub mut val locIsArr: Array[Bool]
+    pub mut val locElemTy: Array[LLVMTypeRef]
+    pub mut val locElemKind: Array[U64]
     // declared runtime/intrinsic functions, cached by name id (parallel arrays).
     pub mut val declId: Array[U64]
     pub mut val declFn: Array[LLVMValueRef]
@@ -546,6 +555,15 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
     return c.structs.count
 }
 
+// The LLVM type for a declared type span, honoring array-ness: an array is the
+// {ptr,i64} value type; otherwise the scalar/String/struct/enum type.
+fn llvmTypeFor(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64, isArray: Bool) -> LLVMTypeRef {
+    if isArray {
+        return st.arrayTy
+    }
+    return llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen)
+}
+
 // Sign/zero-extend an integer value to i64 for the runtime boundary (print / exit
 // take i64). No-op if already i64; unsigned -> zext, signed -> sext.
 fn extendToI64(st: inout LlvmCtx, v: LLVMValueRef, unsigned: Bool) -> LLVMValueRef {
@@ -562,6 +580,15 @@ fn extendToI64(st: inout LlvmCtx, v: LLVMValueRef, unsigned: Bool) -> LLVMValueR
 // value reaching a typed sink (annotated let, call arg, return) matches the
 // expected width — e.g. an i64-defaulted literal `5` stored into an `I32` local.
 fn coerceInt(st: inout LlvmCtx, v: LLVMValueRef, target: LLVMTypeRef, unsigned: Bool) -> LLVMValueRef {
+    // only integers are width-coerced; arrays/structs/enums/String pass through.
+    if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
+    } else {
+        return v
+    }
+    if LLVMGetTypeKind(target) == 8U32 {
+    } else {
+        return v
+    }
     val vw: U32 = LLVMGetIntTypeWidth(LLVMTypeOf(v))
     val tw: U32 = LLVMGetIntTypeWidth(target)
     if vw == tw {
@@ -597,7 +624,7 @@ fn isUnsignedName(c: inout Comp, start: U64, len: U64) -> Bool {
 
 // ---- local environment ----
 
-fn pushLocal(st: inout LlvmCtx, nameStart: U64, nameLen: U64, ptr: LLVMValueRef, ty: LLVMTypeRef, kind: U64, structIdx: U64) {
+fn pushLocal(st: inout LlvmCtx, nameStart: U64, nameLen: U64, ptr: LLVMValueRef, ty: LLVMTypeRef, kind: U64, structIdx: U64, isArr: Bool, elemTy: LLVMTypeRef, elemKind: U64) {
     if st.nLocals < st.locStart.count {
         st.locStart[st.nLocals] = nameStart
         st.locLen[st.nLocals] = nameLen
@@ -605,6 +632,9 @@ fn pushLocal(st: inout LlvmCtx, nameStart: U64, nameLen: U64, ptr: LLVMValueRef,
         st.locTy[st.nLocals] = ty
         st.locKind[st.nLocals] = kind
         st.locStructIdx[st.nLocals] = structIdx
+        st.locIsArr[st.nLocals] = isArr
+        st.locElemTy[st.nLocals] = elemTy
+        st.locElemKind[st.nLocals] = elemKind
     } else {
         st.locStart.append(value: nameStart)
         st.locLen.append(value: nameLen)
@@ -612,6 +642,9 @@ fn pushLocal(st: inout LlvmCtx, nameStart: U64, nameLen: U64, ptr: LLVMValueRef,
         st.locTy.append(value: ty)
         st.locKind.append(value: kind)
         st.locStructIdx.append(value: structIdx)
+        st.locIsArr.append(value: isArr)
+        st.locElemTy.append(value: elemTy)
+        st.locElemKind.append(value: elemKind)
     }
     st.nLocals = st.nLocals + 1
 }
@@ -673,6 +706,27 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                     }
                 }
             }
+        }
+        Expr.Index(val base, index: _) => {
+            // element kind: from the array local's tracked element kind (so an
+            // Array[U16] element is unsigned), else inferred from the element type.
+            match c.exprs[base] {
+                Expr.Ident(start: val s2, len: val l2) => {
+                    val li2: U64 = findLocal(c: inout c, st: inout st, start: s2, len: l2)
+                    if li2 < st.nLocals {
+                        if st.locIsArr[li2] {
+                            return st.locElemKind[li2]
+                        }
+                    }
+                }
+                _ => {}
+            }
+            val et: LLVMTypeRef = exprArrElemTy(c: inout c, st: inout st, id: base)
+            if LLVMGetTypeKind(et) == 10U32 { return 1U64 }
+            if LLVMGetTypeKind(et) == 8U32 {
+                if LLVMGetIntTypeWidth(et) == 1U32 { return 2U64 }
+            }
+            return 0U64
         }
         _ => {}
     }
@@ -995,7 +1049,23 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
         Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
             return genLlvmMake(c: inout c, st: inout st, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fields: fields)
         }
+        Expr.Array(val elems) => {
+            mut val et: LLVMTypeRef = st.i64ty
+            if elems.count > 0U64 {
+                et = exprLlvmType(c: inout c, st: inout st, id: elems[0])
+            }
+            return genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: et)
+        }
+        Expr.Index(val base, val index) => {
+            return genLlvmIndex(c: inout c, st: inout st, base: base, index: index)
+        }
         Expr.Field(val base, val nameStart, val nameLen) => {
+            // `arr.count` (and `.bytes` on String) — an array's count is field 1.
+            if exprIsArray(c: inout c, st: inout st, id: base) {
+                if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "count") {
+                    return LLVMBuildExtractValue(st.b, genLlvmExpr(c: inout c, st: inout st, id: base), 1U64, anon())
+                }
+            }
             val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
             if sidx < c.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
@@ -1182,6 +1252,247 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
     return phi
 }
 
+// ---- arrays ----
+//
+// Recover an expression's LLVM type WITHOUT emitting (for element-type inference
+// and array detection). Covers the common forms; falls back to i64.
+fn exprLlvmType(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
+    match c.exprs[id] {
+        Expr.Int(value: _, offset: _, val isBool, tyStart: _, tyLen: _, isNeg: _) => {
+            if isBool { return st.i1ty }
+            val t: TypeInfo = typeOf(c: inout c, id: id)
+            if t.kind == 0 {
+                return llvmScalarTy(c: inout c, st: inout st, tyStart: t.nameStart, tyLen: t.nameLen)
+            }
+            return st.i64ty
+        }
+        Expr.Str(start: _, len: _) => { return st.strty }
+        Expr.Ident(val start, val len) => {
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.nLocals {
+                if st.locIsArr[li] {
+                    return st.arrayTy
+                }
+                return st.locTy[li]
+            }
+            return st.i64ty
+        }
+        Expr.Field(val base, val nameStart, val nameLen) => {
+            val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+            if sidx < c.structs.count {
+                val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
+                if fidx < c.structs[sidx].fields.count {
+                    return llvmScalarTy(c: inout c, st: inout st, tyStart: c.structs[sidx].fields[fidx].tyStart, tyLen: c.structs[sidx].fields[fidx].tyLen)
+                }
+            }
+            return st.i64ty
+        }
+        Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, fields: _) => {
+            return llvmScalarTy(c: inout c, st: inout st, tyStart: typeStart, tyLen: typeLen)
+        }
+        Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+            val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
+            if rsidx < c.structs.count {
+                val mfi: U64 = findMethod(c: inout c, recvStart: c.structs[rsidx].nameStart, recvLen: c.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                if mfi < c.funcs.count {
+                    return llvmFnRetTy(c: inout c, st: inout st, f: c.funcs[mfi])
+                }
+            }
+            return st.i64ty
+        }
+        Expr.Call(val nameStart, val nameLen, val args) => {
+            val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            if cfi < c.funcs.count {
+                return llvmFnRetTy(c: inout c, st: inout st, f: c.funcs[cfi])
+            }
+            return st.i64ty
+        }
+        Expr.Binary(val op, val lhs, rhs: _) => {
+            if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
+                return st.i1ty
+            }
+            return exprLlvmType(c: inout c, st: inout st, id: lhs)
+        }
+        Expr.Unary(val op, val operand) => {
+            if op == opNot() { return st.i1ty }
+            return exprLlvmType(c: inout c, st: inout st, id: operand)
+        }
+        Expr.Array(elems: _) => { return st.arrayTy }
+        _ => { return st.i64ty }
+    }
+}
+
+// The element LLVM type of an array-typed expression (Ident local / literal).
+fn exprArrElemTy(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
+    match c.exprs[id] {
+        Expr.Ident(val start, val len) => {
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.nLocals {
+                if st.locIsArr[li] {
+                    return st.locElemTy[li]
+                }
+            }
+        }
+        Expr.Array(val elems) => {
+            if elems.count > 0U64 {
+                return exprLlvmType(c: inout c, st: inout st, id: elems[0])
+            }
+        }
+        _ => {}
+    }
+    return st.i64ty
+}
+
+// Whether an expression is array-typed (for routing `.count`/`.append`/index).
+fn exprIsArray(c: inout Comp, st: inout LlvmCtx, id: U64) -> Bool {
+    match c.exprs[id] {
+        Expr.Ident(val start, val len) => {
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.nLocals {
+                return st.locIsArr[li]
+            }
+        }
+        Expr.Array(elems: _) => { return true }
+        _ => {}
+    }
+    return false
+}
+
+// Declare/cache `plew_rawbuf_alloc(i64 elemSize, i64 cap) -> ptr`.
+fn rawbufAlloc(c: inout Comp, st: inout LlvmCtx, elemSize: LLVMValueRef, cap: LLVMValueRef) -> LLVMValueRef {
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: st.i64ty)
+    ptys.append(value: st.i64ty)
+    val fty: LLVMTypeRef = LLVMFunctionType(st.ptrty, arrayCPtr(ptys), 2U64, 0I32)
+    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_rawbuf_alloc", nameId: 20U64, fnTy: fty)
+    mut val av: Array[LLVMValueRef] = []
+    av.append(value: elemSize)
+    av.append(value: cap)
+    return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U64, anon())
+}
+
+// Bounds-check `i` against `count` via the runtime (panics on out-of-range).
+fn emitBoundsCheck(c: inout Comp, st: inout LlvmCtx, idx: LLVMValueRef, count: LLVMValueRef) {
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: st.i64ty)
+    ptys.append(value: st.i64ty)
+    val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(ptys), 2U64, 0I32)
+    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_bounds", nameId: 21U64, fnTy: fty)
+    mut val av: Array[LLVMValueRef] = []
+    av.append(value: idx)
+    av.append(value: count)
+    LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U64, anon())
+}
+
+// GEP &data[i] for element type elemTy.
+fn arrElemPtr(st: inout LlvmCtx, elemTy: LLVMTypeRef, data: LLVMValueRef, idx: LLVMValueRef) -> LLVMValueRef {
+    mut val idxs: Array[LLVMValueRef] = []
+    idxs.append(value: idx)
+    return LLVMBuildGEP2(st.b, elemTy, data, arrayCPtr(idxs), 1U64, anon())
+}
+
+// Coerce an element value to the array's element type (int width only).
+fn coerceElem(st: inout LlvmCtx, v: LLVMValueRef, elemTy: LLVMTypeRef) -> LLVMValueRef {
+    if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
+        if LLVMGetTypeKind(elemTy) == 8U32 {
+            return coerceInt(st: inout st, v: v, target: elemTy, unsigned: false)
+        }
+    }
+    return v
+}
+
+// Build an array literal `[e0, e1, ...]` of element type `elemTy` (provided by the
+// caller from the annotation, or inferred from the first element) as a
+// `{ ptr data, i64 count }` value.
+fn genLlvmArrayLit(c: inout Comp, st: inout LlvmCtx, elems: Array[U64], elemTy: LLVMTypeRef) -> LLVMValueRef {
+    mut val agg: LLVMValueRef = LLVMGetUndef(st.arrayTy)
+    val n: U64 = elems.count
+    if n == 0U64 {
+        agg = LLVMBuildInsertValue(st.b, agg, LLVMConstNull(st.ptrty), 0U64, anon())
+        agg = LLVMBuildInsertValue(st.b, agg, LLVMConstInt(st.i64ty, 0U64, 0I32), 1U64, anon())
+        return agg
+    }
+    val data: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(elemTy), cap: LLVMConstInt(st.i64ty, n, 0I32))
+    mut val i: U64 = 0
+    while i < n {
+        val ev: LLVMValueRef = coerceElem(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: elems[i]), elemTy: elemTy)
+        LLVMBuildStore(st.b, ev, arrElemPtr(st: inout st, elemTy: elemTy, data: data, idx: LLVMConstInt(st.i64ty, i, 0I32)))
+        i += 1
+    }
+    agg = LLVMBuildInsertValue(st.b, agg, data, 0U64, anon())
+    agg = LLVMBuildInsertValue(st.b, agg, LLVMConstInt(st.i64ty, n, 0I32), 1U64, anon())
+    return agg
+}
+
+// `arr[i]` read: bounds-checked element load.
+fn genLlvmIndex(c: inout Comp, st: inout LlvmCtx, base: U64, index: U64) -> LLVMValueRef {
+    val elemTy: LLVMTypeRef = exprArrElemTy(c: inout c, st: inout st, id: base)
+    val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: base)
+    // the base must be an array {ptr,i64} aggregate; a non-aggregate here means a
+    // nested array (Array[Array[T]]) or unsupported element typing — reject loudly
+    // rather than extractvalue on a scalar (which crashes the LLVM builder).
+    if LLVMGetTypeKind(LLVMTypeOf(arr)) == 10U32 {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: nested arrays / this index form not yet supported")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 0U64, anon())
+    val count: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 1U64, anon())
+    val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: index)
+    emitBoundsCheck(c: inout c, st: inout st, idx: idx, count: count)
+    return LLVMBuildLoad2(st.b, elemTy, arrElemPtr(st: inout st, elemTy: elemTy, data: data, idx: idx), anon())
+}
+
+// `arr.append(v)` on an array local: grow the buffer if full, store v at `count`,
+// increment count (mutating the local's {data,count}). No CoW yet (shares buffer).
+fn genLlvmAppend(c: inout Comp, st: inout LlvmCtx, recv: U64, valueExpr: U64) -> LLVMValueRef {
+    val li: U64 = arrLocalIndex(c: inout c, st: inout st, id: recv)
+    if li < st.nLocals {
+    } else {
+        compileErrorAt(line: 0, msg: "LLVM backend: append only on an array local (so far)")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val elemTy: LLVMTypeRef = st.locElemTy[li]
+    val arrPtr: LLVMValueRef = st.locPtr[li]
+    val dataPtr: LLVMValueRef = LLVMBuildStructGEP2(st.b, st.arrayTy, arrPtr, 0U64, anon())
+    val countPtr: LLVMValueRef = LLVMBuildStructGEP2(st.b, st.arrayTy, arrPtr, 1U64, anon())
+    val data: LLVMValueRef = LLVMBuildLoad2(st.b, st.ptrty, dataPtr, anon())
+    val count: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, countPtr, anon())
+    // newdata = plew_arr_grow(data, elemSize, count)
+    mut val gtys: Array[LLVMTypeRef] = []
+    gtys.append(value: st.ptrty)
+    gtys.append(value: st.i64ty)
+    gtys.append(value: st.i64ty)
+    val gfty: LLVMTypeRef = LLVMFunctionType(st.ptrty, arrayCPtr(gtys), 3U64, 0I32)
+    val grow: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_arr_grow", nameId: 22U64, fnTy: gfty)
+    mut val gav: Array[LLVMValueRef] = []
+    gav.append(value: data)
+    gav.append(value: LLVMSizeOf(elemTy))
+    gav.append(value: count)
+    val newdata: LLVMValueRef = LLVMBuildCall2(st.b, gfty, grow, arrayCPtr(gav), 3U64, anon())
+    LLVMBuildStore(st.b, newdata, dataPtr)
+    val ev: LLVMValueRef = coerceElem(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valueExpr), elemTy: elemTy)
+    LLVMBuildStore(st.b, ev, arrElemPtr(st: inout st, elemTy: elemTy, data: newdata, idx: count))
+    LLVMBuildStore(st.b, LLVMBuildAdd(st.b, count, LLVMConstInt(st.i64ty, 1U64, 0I32), anon()), countPtr)
+    return LLVMConstInt(st.i64ty, 0U64, 0I32)
+}
+
+// The local index of an array-typed receiver Ident, or st.nLocals.
+fn arrLocalIndex(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
+    match c.exprs[id] {
+        Expr.Ident(val start, val len) => {
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.nLocals {
+                if st.locIsArr[li] {
+                    return li
+                }
+            }
+        }
+        _ => {}
+    }
+    return st.nLocals
+}
+
 // Emit a condition expression as an i1. A comparison binary already yields i1; any
 // other integer becomes `x != 0`.
 fn genLlvmCond(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
@@ -1233,13 +1544,13 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
             mut val ai: U64 = 0
             while ai < args.count {
                 // coerce each argument to the parameter's integer width.
-                av2.append(value: coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[ai].expr), tyStart: cf.params[ai].tyStart, tyLen: cf.params[ai].tyLen))
+                av2.append(value: genArgValue(c: inout c, st: inout st, argExpr: args[ai].expr, p: cf.params[ai]))
                 ai += 1
             }
             // fill omitted trailing params with their default expressions (spec/04).
             mut val di: U64 = args.count
             while di < cf.params.count {
-                av2.append(value: coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: cf.params[di].defaultExpr), tyStart: cf.params[di].tyStart, tyLen: cf.params[di].tyLen))
+                av2.append(value: genArgValue(c: inout c, st: inout st, argExpr: cf.params[di].defaultExpr, p: cf.params[di]))
                 di += 1
             }
             return LLVMBuildCall2(st.b, st.fnTy[slot], st.fnVal[slot], arrayCPtr(av2), av2.count, anon())
@@ -1253,6 +1564,14 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
 // pass self first (a pointer for `inout fn`, else the struct value), then the
 // coerced arguments, and call the cached LLVMValueRef.
 fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+    // array methods (append; others are TODO).
+    if exprIsArray(c: inout c, st: inout st, id: recv) {
+        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "append") {
+            return genLlvmAppend(c: inout c, st: inout st, recv: recv, valueExpr: args[0].expr)
+        }
+        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: this array method is not yet supported (append only)")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
     val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
     if rsidx < c.structs.count {
     } else {
@@ -1282,12 +1601,12 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
     }
     mut val ai: U64 = 0
     while ai < args.count {
-        av.append(value: coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[ai].expr), tyStart: mf.params[ai].tyStart, tyLen: mf.params[ai].tyLen))
+        av.append(value: genArgValue(c: inout c, st: inout st, argExpr: args[ai].expr, p: mf.params[ai]))
         ai += 1
     }
     mut val di: U64 = args.count
     while di < mf.params.count {
-        av.append(value: coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: mf.params[di].defaultExpr), tyStart: mf.params[di].tyStart, tyLen: mf.params[di].tyLen))
+        av.append(value: genArgValue(c: inout c, st: inout st, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
         di += 1
     }
     return LLVMBuildCall2(st.b, st.fnTy[slot], st.fnVal[slot], arrayCPtr(av), av.count, anon())
@@ -1309,6 +1628,22 @@ fn placePtrOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
     val slot: LLVMValueRef = LLVMBuildAlloca(st.b, LLVMTypeOf(v), anon())
     LLVMBuildStore(st.b, v, slot)
     return slot
+}
+
+// Emit a call argument for a parameter `p`: an array-literal arg is built with the
+// parameter's element type (so `[10,20]` for an `Array[I32]` param uses i32, not
+// i64-defaulted elements); a scalar arg is width-coerced to the parameter type.
+fn genArgValue(c: inout Comp, st: inout LlvmCtx, argExpr: U64, p: Param) -> LLVMValueRef {
+    if p.tyIsArray {
+        match c.exprs[argExpr] {
+            Expr.Array(val elems) => {
+                return genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen))
+            }
+            _ => {}
+        }
+        return genLlvmExpr(c: inout c, st: inout st, id: argExpr)
+    }
+    return coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: argExpr), tyStart: p.tyStart, tyLen: p.tyLen)
 }
 
 // Index into st.fn* for a cached user function (by c.funcs index), or st.fnIdx.count.
@@ -1397,7 +1732,7 @@ fn selfParamTy(c: inout Comp, st: inout LlvmCtx, f: Func) -> LLVMTypeRef {
 // The LLVM return type of a function (and whether it is void = Plew `()`).
 fn llvmFnRetTy(c: inout Comp, st: inout LlvmCtx, f: Func) -> LLVMTypeRef {
     if f.hasRet {
-        return llvmScalarTy(c: inout c, st: inout st, tyStart: f.retStart, tyLen: f.retLen)
+        return llvmTypeFor(c: inout c, st: inout st, tyStart: f.retStart, tyLen: f.retLen, isArray: f.retIsArray)
     }
     return st.voidty
 }
@@ -1415,7 +1750,7 @@ fn declareUserFns(c: inout Comp, st: inout LlvmCtx) {
             }
             mut val pi: U64 = 0
             while pi < f.params.count {
-                ptys.append(value: llvmScalarTy(c: inout c, st: inout st, tyStart: f.params[pi].tyStart, tyLen: f.params[pi].tyLen))
+                ptys.append(value: llvmTypeFor(c: inout c, st: inout st, tyStart: f.params[pi].tyStart, tyLen: f.params[pi].tyLen, isArray: f.params[pi].tyIsArray))
                 pi += 1
             }
             val rty: LLVMTypeRef = llvmFnRetTy(c: inout c, st: inout st, f: f)
@@ -1466,6 +1801,9 @@ fn genLlvmFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     st.locTy = []
     st.locKind = []
     st.locStructIdx = []
+    st.locIsArr = []
+    st.locElemTy = []
+    st.locElemKind = []
     // method receiver: bind `self` as a local pointing at the struct storage —
     // an `inout fn`'s self IS the pointer param; a by-value self is stored into a
     // fresh alloca (so mutations stay local). Field access then GEPs locPtr
@@ -1480,16 +1818,23 @@ fn genLlvmFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
             selfPtr = LLVMBuildAlloca(st.b, recvTy, anon())
             LLVMBuildStore(st.b, LLVMGetParam(fv, 0U64), selfPtr)
         }
-        pushLocal(st: inout st, nameStart: st.selfStart, nameLen: st.selfLen, ptr: selfPtr, ty: recvTy, kind: 0U64, structIdx: recvSidx)
+        pushLocal(st: inout st, nameStart: st.selfStart, nameLen: st.selfLen, ptr: selfPtr, ty: recvTy, kind: 0U64, structIdx: recvSidx, isArr: false, elemTy: st.i64ty, elemKind: 0U64)
         base = 1U64
     }
     mut val pi: U64 = 0
     while pi < f.params.count {
         val p: Param = f.params[pi]
-        val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen)
+        // an array param is the {ptr,i64} value; its element type comes from the
+        // declared element span (p.tyStart/tyLen name the element when tyIsArray).
+        mut val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen)
+        mut val pElem: LLVMTypeRef = st.i64ty
+        if p.tyIsArray {
+            pElem = pty
+            pty = st.arrayTy
+        }
         val slot2: LLVMValueRef = LLVMBuildAlloca(st.b, pty, anon())
         LLVMBuildStore(st.b, LLVMGetParam(fv, pi + base), slot2)
-        pushLocal(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty, kind: kindFromTySpan(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen))
+        pushLocal(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty, kind: kindFromTySpan(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen), isArr: p.tyIsArray, elemTy: pElem, elemKind: kindFromTySpan(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen))
         pi += 1
     }
     genLlvmBlock(c: inout c, st: inout st, id: f.body)
@@ -1513,25 +1858,60 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
     }
     val s: Stmt = c.stmts[id]
     match s {
-        Stmt.Let(mutable: _, val nameStart, val nameLen, val tyStart, val tyLen, tyIsArray: _, ty: _, val init) => {
-            // Compute the value first, coerce to the annotation's width if any (so
-            // `val a: I32 = 5` stores an i32, not an i64-defaulted literal), then
-            // alloca its LLVM type — robust for inferred lets (`val s = "..."`) too.
-            mut val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: init)
+        Stmt.Let(mutable: _, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, ty: _, val init) => {
+            // an array binding: element type from the annotation, else the literal's
+            // first element. Tracked so arr[i] / .append know the element layout.
+            mut val isArr: Bool = tyIsArray
+            mut val elemTy: LLVMTypeRef = st.i64ty
+            mut val elemKind: U64 = 0
+            if tyIsArray {
+                elemTy = llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen)
+                elemKind = kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen)
+            } else {
+                match c.exprs[init] {
+                    Expr.Array(val elems) => {
+                        isArr = true
+                        if elems.count > 0U64 {
+                            elemTy = exprLlvmType(c: inout c, st: inout st, id: elems[0])
+                            elemKind = valueKind(c: inout c, st: inout st, id: elems[0])
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            // an array literal initializer is built with the binding's element type
+            // (so `Array[U16] = [300, 1000]` uses i16 elements, not i64-defaulted).
+            mut val v: LLVMValueRef = LLVMConstInt(st.i64ty, 0U64, 0I32)
+            mut val builtArr: Bool = false
+            if isArr {
+                match c.exprs[init] {
+                    Expr.Array(val elems) => {
+                        v = genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: elemTy)
+                        builtArr = true
+                    }
+                    _ => {}
+                }
+            }
+            if builtArr {
+            } else {
+                v = genLlvmExpr(c: inout c, st: inout st, id: init)
+            }
             mut val kind: U64 = valueKind(c: inout c, st: inout st, id: init)
             if tyLen > 0U64 {
-                v = coerceIntTo(c: inout c, st: inout st, v: v, tyStart: tyStart, tyLen: tyLen)
-                kind = kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen)
+                if isArr {
+                } else {
+                    v = coerceIntTo(c: inout c, st: inout st, v: v, tyStart: tyStart, tyLen: tyLen)
+                    kind = kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen)
+                }
             }
             val lty: LLVMTypeRef = LLVMTypeOf(v)
-            // owning struct index: from the annotation if present, else the init.
             mut val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: init)
             if tyLen > 0U64 {
                 sidx = localStructIdxFor(c: inout c, st: inout st, start: tyStart, len: tyLen)
             }
             val slot: LLVMValueRef = LLVMBuildAlloca(st.b, lty, anon())
             LLVMBuildStore(st.b, v, slot)
-            pushLocal(st: inout st, nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind, structIdx: sidx)
+            pushLocal(st: inout st, nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind, structIdx: sidx, isArr: isArr, elemTy: elemTy, elemKind: elemKind)
         }
         Stmt.Assign(val op, val target, val value) => {
             match c.exprs[target] {
@@ -1553,6 +1933,24 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                         }
                     } else {
                         compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "LLVM backend: assignment target must be a local (so far)")
+                    }
+                }
+                Expr.Index(base: val ibase, index: val iindex) => {
+                    // place mutation `arr[i] = v` / `arr[i] OP= v`: bounds-checked
+                    // element pointer + store (the buffer is shared; no CoW yet).
+                    val elemTy: LLVMTypeRef = exprArrElemTy(c: inout c, st: inout st, id: ibase)
+                    val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: ibase)
+                    val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 0U64, anon())
+                    val count: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 1U64, anon())
+                    val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: iindex)
+                    emitBoundsCheck(c: inout c, st: inout st, idx: idx, count: count)
+                    val ep: LLVMValueRef = arrElemPtr(st: inout st, elemTy: elemTy, data: data, idx: idx)
+                    val rv: LLVMValueRef = coerceElem(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: value), elemTy: elemTy)
+                    if op == opAssign() {
+                        LLVMBuildStore(st.b, rv, ep)
+                    } else {
+                        val cur: LLVMValueRef = LLVMBuildLoad2(st.b, elemTy, ep, anon())
+                        LLVMBuildStore(st.b, buildBinOp(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv), ep)
                     }
                 }
                 Expr.Field(base: val fbase, nameStart: val fnameStart, nameLen: val fnameLen) => {
@@ -1794,7 +2192,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
             val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: fs[fidx].tyStart, tyLen: fs[fidx].tyLen)
             val slot: LLVMValueRef = LLVMBuildAlloca(st.b, pty, anon())
             LLVMBuildStore(st.b, fv, slot)
-            pushLocal(st: inout st, nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: kindFromTySpan(c: inout c, tyStart: fs[fidx].tyStart, tyLen: fs[fidx].tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: fs[fidx].tyStart, len: fs[fidx].tyLen))
+            pushLocal(st: inout st, nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: kindFromTySpan(c: inout c, tyStart: fs[fidx].tyStart, tyLen: fs[fidx].tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: fs[fidx].tyStart, len: fs[fidx].tyLen), isArr: false, elemTy: st.i64ty, elemKind: 0U64)
         }
         bi += 1
     }
@@ -1830,15 +2228,19 @@ fn emitLlvm(c: inout Comp) {
     strelems.append(value: ptrty)
     strelems.append(value: i64ty)
     val strty: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(strelems), 2U32, 0I32)
+    mut val arrelems: Array[LLVMTypeRef] = []
+    arrelems.append(value: ptrty)
+    arrelems.append(value: i64ty)
+    val arrayTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(arrelems), 2U32, 0I32)
     mut val st: LlvmCtx = <LlvmCtx
         ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx)
         i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx) i16ty=LLVMInt16TypeInContext(ctx)
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty
-        voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty
+        voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[]
-        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] declId=[] declFn=[] declTy=[] />
+        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] declId=[] declFn=[] declTy=[] />
 
     // a "self" byte span (appended past the source) to bind method receivers.
     st.selfStart = c.bytes.count
@@ -1895,6 +2297,9 @@ fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     st.locTy = []
     st.locKind = []
     st.locStructIdx = []
+    st.locIsArr = []
+    st.locElemTy = []
+    st.locElemKind = []
     genLlvmBlock(c: inout c, st: inout st, id: c.funcs[fi].body)
     if st.terminated {
     } else {
@@ -1909,7 +2314,7 @@ fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
 // only — no struct-by-value — so the IR can pass String as (i8* data, i64 len)
 // without modeling the C struct ABI. Grows as the backend covers more.
 fn emitLlvmRuntime() {
-    write(s: "#include <stdio.h>\n#include <stdlib.h>\n")
+    write(s: "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n")
     write(s: "void plew_exit(long long code){ exit((int)code); }\n")
     write(s: "void plew_write_raw(const char* d, long long n){ fwrite(d,1,(size_t)n,stdout); }\n")
     write(s: "void plew_eprint_raw(const char* d, long long n){ fwrite(d,1,(size_t)n,stderr); }\n")
@@ -1920,4 +2325,11 @@ fn emitLlvmRuntime() {
     write(s: "void plew_print_u64(unsigned long long v){ printf(\"%llu\\n\", v); }\n")
     write(s: "void plew_print_bool(long long v){ fputs(v?\"1\":\"0\",stdout); fputc('\\n',stdout); }\n")
     write(s: "long long plew_str_eq(const char* a, long long na, const char* b, long long nb){ if(na!=nb) return 0; for(long long i=0;i<na;i++) if(a[i]!=b[i]) return 0; return 1; }\n")
+    // Array storage floor (a [cap][rc][data...] buffer; ARC/CoW not yet modeled —
+    // copies share, no free; documented gap). alloc/cap/grow are element-size
+    // generic; per-element load/store is inlined in IR via typed GEP.
+    write(s: "void* plew_rawbuf_alloc(long long elemSize, long long cap){ long long* h=(long long*)malloc(2*sizeof(long long)+(size_t)(elemSize*cap)); h[0]=cap; h[1]=1; return (void*)(h+2); }\n")
+    write(s: "long long plew_rawbuf_cap(void* p){ return p?((long long*)p)[-2]:0; }\n")
+    write(s: "void* plew_arr_grow(void* data, long long elemSize, long long count){ long long cap=plew_rawbuf_cap(data); if(count<cap) return data; long long nc=cap<8?8:cap*2; void* nd=plew_rawbuf_alloc(elemSize,nc); if(count) memcpy(nd,data,(size_t)(elemSize*count)); return nd; }\n")
+    write(s: "void plew_bounds(long long i, long long n){ if(i<0||i>=n){ fputs(\"panic: index out of bounds\\n\",stderr); exit(1); } }\n")
 }
