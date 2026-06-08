@@ -153,6 +153,10 @@ struct LlvmCtx {
     pub val strty: LLVMTypeRef
     // Array value type: { ptr data, i64 count } (element behind the pointer).
     pub val arrayTy: LLVMTypeRef
+    // Closure / function-value type: { ptr fn, ptr env } — a lambda-lifted function
+    // pointer plus its captured-environment pointer (NULL for non-capturing). Every
+    // `fn(...) -> ...` value is this fat pointer; the callee ABI takes env first.
+    pub val closureTy: LLVMTypeRef
     pub mut val curFn: LLVMValueRef
     pub mut val terminated: Bool
     // the function currently being emitted: is it `main` (returns i32 0), and its
@@ -244,6 +248,12 @@ struct LlvmCtx {
     // emitted, so derive-generated but uncalled witnesses (the LLVM backend lowers
     // Eq/Ord natively, bypassing them) aren't emitted into failing bodies.
     pub mut val reachAssoc: Array[U64]
+    // lambda-lifted closures, cached by Closure-expr arena id (parallel arrays):
+    // the emitted `__closure<id>` LLVM function value and its function type (env
+    // pointer first param). A closure literal builds a {fn, env} value from these.
+    pub mut val cloIdx: Array[U64]
+    pub mut val cloVal: Array[LLVMValueRef]
+    pub mut val cloTy: Array[LLVMTypeRef]
 }
 
 // A NUL-terminated C string from a Plew literal, for the many `const char*` name
@@ -288,6 +298,10 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
     // a `Ref[T]` is a pointer to a heap cell holding the pointee (opaque ptr).
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Ref") {
         return st.ptrty
+    }
+    // a function-value type `fn(...) -> ...` is the {fn, env} closure fat pointer.
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "fn") {
+        return st.closureTy
     }
     // Width-accurate integers: I8/U8 -> i8, I16/U16 -> i16, I32/U32 -> i32, else
     // i64 (signedness is tracked separately as a kind, not in the LLVM type).
@@ -1036,6 +1050,16 @@ fn llvmTypeFor(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64, isArr
 // to its registered instance type; otherwise the head name (array refs are
 // handled by the isArray flag at declaration sites, not here).
 fn llvmTypeOfRef(c: inout Comp, st: inout LlvmCtx, ref: U64) -> LLVMTypeRef {
+    // `Array[T]` is the special {ptr,i64} value type, NOT a generic struct instance
+    // (the front-end models it as one, but the LLVM array machinery — literal /
+    // append / for / index — all use arrayTy). Mapping it here keeps a function
+    // param/return/field of array type consistent with that machinery.
+    if ref < c.types.count {
+        val at: TypeRef = c.types[ref]
+        if rangeEquals(bytes: c.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
+            return st.arrayTy
+        }
+    }
     if isGenericInst(c: inout c, ref: ref) {
         val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: ref)
         if gs < st.genStructRefs.count {
@@ -2245,6 +2269,19 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: field access only on a registered struct value (so far)")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
+        Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {
+            // a closure literal is the {fn, env} fat pointer: the lambda-lifted
+            // function plus its environment (NULL for a non-capturing closure).
+            val slot: U64 = closureSlot(st: inout st, id: id)
+            if slot < st.cloIdx.count {
+                mut val cv: LLVMValueRef = LLVMGetUndef(st.closureTy)
+                cv = LLVMBuildInsertValue(st.b, cv, st.cloVal[slot], 0U64, anon())
+                cv = LLVMBuildInsertValue(st.b, cv, LLVMConstNull(st.ptrty), 1U64, anon())
+                return cv
+            }
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "LLVM backend: closure not declared (capturing closures not yet supported)")
+            return LLVMConstInt(st.i64ty, 0U64, 0I32)
+        }
         Expr.Arrow(val base, val nameStart, val nameLen) => {
             // `r->field`: load the pointee struct from the cell and extract `field`
             // (an array field yields the {ptr,i64} value, whose buffer is shared, so
@@ -2930,7 +2967,66 @@ fn genLlvmCond(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
 //
 // Resolve the callee like the C backend (findFunc), then lower it. v1 supports the
 // `exit` intrinsic only; other callees are rejected loudly until their increment.
+// The LLVM function type of a `fn(...) -> R` TypeRef under the closure ABI: env
+// pointer first, then the declared params, returning R (void for a `()` return).
+// fn TypeRef args = [retTy, paramTy0, paramTy1, ...].
+fn closureLlvmFnTy(c: inout Comp, st: inout LlvmCtx, fnRef: U64) -> LLVMTypeRef {
+    val t: TypeRef = c.types[fnRef]
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: st.ptrty)
+    mut val i: U64 = 1
+    while i < t.args.count {
+        ptys.append(value: llvmTypeOfRef(c: inout c, st: inout st, ref: t.args[i]))
+        i += 1
+    }
+    mut val rty: LLVMTypeRef = st.voidty
+    if t.args.count > 0U64 {
+        val rt: TypeRef = c.types[t.args[0]]
+        // a `()` return (the unnamed unit record) is void; any named type is a value.
+        if rt.nameLen == 0U64 {
+        } else {
+            rty = llvmTypeOfRef(c: inout c, st: inout st, ref: t.args[0])
+        }
+    }
+    return LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
+}
+
+// Emit an indirect closure call: load the {fn, env} value from local `li`, extract
+// the function pointer + environment, and call fn(env, coerced-args...).
+fn genLlvmClosureCall(c: inout Comp, st: inout LlvmCtx, li: U64, args: Array[Arg]) -> LLVMValueRef {
+    val cloVal: LLVMValueRef = LLVMBuildLoad2(st.b, st.closureTy, st.locPtr[li], anon())
+    val fnPtr: LLVMValueRef = LLVMBuildExtractValue(st.b, cloVal, 0U64, anon())
+    val env: LLVMValueRef = LLVMBuildExtractValue(st.b, cloVal, 1U64, anon())
+    val fnRef: U64 = st.locTypeRef[li]
+    val fty: LLVMTypeRef = closureLlvmFnTy(c: inout c, st: inout st, fnRef: fnRef)
+    val ft: TypeRef = c.types[fnRef]
+    mut val av: Array[LLVMValueRef] = []
+    av.append(value: env)
+    mut val i: U64 = 0
+    while i < args.count {
+        mut val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[i].expr)
+        // coerce an int arg to the declared param width (fn args = [ret, p0, p1, …]).
+        if i + 1U64 < ft.args.count {
+            if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
+                val pt: TypeRef = c.types[ft.args[i + 1U64]]
+                v = coerceInt(st: inout st, v: v, target: llvmTypeOfRef(c: inout c, st: inout st, ref: ft.args[i + 1U64]), unsigned: isUnsignedName(c: inout c, start: pt.nameStart, len: pt.nameLen))
+            }
+        }
+        av.append(value: v)
+        i += 1
+    }
+    return LLVMBuildCall2(st.b, fty, fnPtr, arrayCPtr(av), av.count, anon())
+}
+
 fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+    // a call whose "name" is a closure-typed local (`g(n: 4)` where g: fn(...)) is
+    // an indirect call: load the {fn, env} value, then call fn(env, args).
+    val cli: U64 = findLocal(c: inout c, st: inout st, start: nameStart, len: nameLen)
+    if cli < st.nLocals {
+        if isFnType(c: inout c, ref: st.locTypeRef[cli]) {
+            return genLlvmClosureCall(c: inout c, st: inout st, li: cli, args: args)
+        }
+    }
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "print") {
         return emitPrint(c: inout c, st: inout st, argExpr: args[0].expr)
     }
@@ -3835,6 +3931,272 @@ fn typeArgsEq(c: inout Comp, a: Array[U64], b: Array[U64]) -> Bool {
     return true
 }
 
+// Bind one function/closure parameter (the LLVM arg at `argIdx`) as a local: an
+// array param is the {ptr,i64} value; a generic-instance / Ref / enum param tracks
+// its instance/enum ref; an `inout` param binds the caller pointer directly, else
+// the value is stored into a fresh alloca.
+fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, argIdx: U64) {
+    mut val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen)
+    mut val pElem: LLVMTypeRef = st.i64ty
+    mut val pSidx: U64 = localStructIdxFor(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen)
+    mut val pRef: U64 = 0
+    if p.tyIsArray {
+        pElem = pty
+        pty = st.arrayTy
+    } else {
+        if isGenericInst(c: inout c, ref: p.ty) {
+            pty = llvmTypeOfRef(c: inout c, st: inout st, ref: p.ty)
+            pRef = p.ty
+            val pgs: U64 = genStructSlot(c: inout c, st: inout st, ref: p.ty)
+            if pgs < st.genStructRefs.count {
+                pSidx = st.genStructDefs[pgs]
+            }
+        }
+        if isRefInst(c: inout c, ref: p.ty) {
+            pty = st.ptrty
+            pRef = p.ty
+        }
+        // a function-value param (`f: fn(n: I32) -> I32`): track the fn TypeRef so a
+        // call `f(n: x)` resolves the closure signature for the indirect call.
+        if isFnType(c: inout c, ref: p.ty) {
+            pRef = p.ty
+        }
+        if pRef == 0U64 {
+            if enumRegSlot(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen) < st.enumIdxs.count {
+                pRef = simpleTypeRef(c: inout c, nameStart: p.tyStart, nameLen: p.tyLen)
+            }
+        }
+    }
+    val pKind: U64 = kindFromTySpan(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen)
+    if p.isInout {
+        pushLocalR(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: LLVMGetParam(fv, argIdx), ty: pty, kind: pKind, structIdx: pSidx, isArr: p.tyIsArray, elemTy: pElem, elemKind: pKind, typeRef: pRef)
+    } else {
+        val slot2: LLVMValueRef = LLVMBuildAlloca(st.b, pty, anon())
+        LLVMBuildStore(st.b, LLVMGetParam(fv, argIdx), slot2)
+        pushLocalR(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty, kind: pKind, structIdx: pSidx, isArr: p.tyIsArray, elemTy: pElem, elemKind: pKind, typeRef: pRef)
+    }
+}
+
+// ---- closures (lambda-lifted function values) ----
+//
+// Index into st.clo* for a Closure-expr arena id, or st.cloIdx.count.
+fn closureSlot(st: inout LlvmCtx, id: U64) -> U64 {
+    mut val i: U64 = 0
+    while i < st.cloIdx.count {
+        if st.cloIdx[i] == id {
+            return i
+        }
+        i += 1
+    }
+    return st.cloIdx.count
+}
+
+// Declare a closure as `__closure<id>(ptr env, params...)` (env first per the
+// uniform closure ABI) and cache it. Idempotent (skips an already-declared id).
+fn declareClosure(c: inout Comp, st: inout LlvmCtx, id: U64) {
+    if closureSlot(st: inout st, id: id) < st.cloIdx.count {
+        return
+    }
+    match c.exprs[id] {
+        Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, body: _) => {
+            mut val ptys: Array[LLVMTypeRef] = []
+            ptys.append(value: st.ptrty)
+            mut val pi: U64 = 0
+            while pi < params.count {
+                ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: params[pi]))
+                pi += 1
+            }
+            mut val rty: LLVMTypeRef = st.voidty
+            if hasRet {
+                if isGenericInst(c: inout c, ref: retTy) {
+                    rty = llvmTypeOfRef(c: inout c, st: inout st, ref: retTy)
+                } else {
+                    rty = llvmTypeFor(c: inout c, st: inout st, tyStart: retStart, tyLen: retLen, isArray: retIsArray)
+                }
+            }
+            val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
+            mut val nm: Array[U8] = []
+            appendBytes(into: inout nm, from: "__closure".bytes)
+            appendU64Dec(into: inout nm, n: id)
+            nm.append(value: 0)
+            val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
+            st.cloIdx.append(value: id)
+            st.cloVal.append(value: fv)
+            st.cloTy.append(value: fty)
+        }
+        _ => {}
+    }
+}
+
+// Walk an expression / statement / block, declaring every Closure it contains
+// (and nested closures via the declared closure's own body scan, run later).
+fn scanExprClosures(c: inout Comp, st: inout LlvmCtx, id: U64) {
+    match c.exprs[id] {
+        Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {
+            declareClosure(c: inout c, st: inout st, id: id)
+        }
+        Expr.Unary(op: _, val operand) => { scanExprClosures(c: inout c, st: inout st, id: operand) }
+        Expr.Binary(op: _, val lhs, val rhs) => { scanExprClosures(c: inout c, st: inout st, id: lhs) scanExprClosures(c: inout c, st: inout st, id: rhs) }
+        Expr.Call(nameStart: _, nameLen: _, val args) => {
+            mut val i: U64 = 0
+            while i < args.count { scanExprClosures(c: inout c, st: inout st, id: args[i].expr) i += 1 }
+        }
+        Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
+            scanExprClosures(c: inout c, st: inout st, id: recv)
+            mut val i: U64 = 0
+            while i < args.count { scanExprClosures(c: inout c, st: inout st, id: args[i].expr) i += 1 }
+        }
+        Expr.Field(val base, nameStart: _, nameLen: _) => { scanExprClosures(c: inout c, st: inout st, id: base) }
+        Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+            mut val i: U64 = 0
+            while i < fields.count { scanExprClosures(c: inout c, st: inout st, id: fields[i].value) i += 1 }
+        }
+        Expr.Array(val elems) => {
+            mut val i: U64 = 0
+            while i < elems.count { scanExprClosures(c: inout c, st: inout st, id: elems[i]) i += 1 }
+        }
+        Expr.Index(val base, val index) => { scanExprClosures(c: inout c, st: inout st, id: base) scanExprClosures(c: inout c, st: inout st, id: index) }
+        Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { scanExprClosures(c: inout c, st: inout st, id: operand) }
+        Expr.MatchExpr(val scrut, val arms) => {
+            scanExprClosures(c: inout c, st: inout st, id: scrut)
+            mut val i: U64 = 0
+            while i < arms.count { scanExprClosures(c: inout c, st: inout st, id: arms[i].body) i += 1 }
+        }
+        Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
+            scanExprClosures(c: inout c, st: inout st, id: cond)
+            scanBlockClosures(c: inout c, st: inout st, id: thenBlk)
+            scanBlockClosures(c: inout c, st: inout st, id: elseBlk)
+        }
+        Expr.OptChain(val base, memberStart: _, memberLen: _) => { scanExprClosures(c: inout c, st: inout st, id: base) }
+        Expr.Try(val expr) => { scanExprClosures(c: inout c, st: inout st, id: expr) }
+        Expr.Arrow(val base, nameStart: _, nameLen: _) => { scanExprClosures(c: inout c, st: inout st, id: base) }
+        Expr.Move(val operand, isBorrow: _) => { scanExprClosures(c: inout c, st: inout st, id: operand) }
+        Expr.Await(val operand) => { scanExprClosures(c: inout c, st: inout st, id: operand) }
+        _ => {}
+    }
+}
+
+fn scanStmtClosures(c: inout Comp, st: inout LlvmCtx, id: U64) {
+    match c.stmts[id] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { scanExprClosures(c: inout c, st: inout st, id: init) }
+        Stmt.Assign(op: _, val target, val value) => { scanExprClosures(c: inout c, st: inout st, id: target) scanExprClosures(c: inout c, st: inout st, id: value) }
+        Stmt.ExprStmt(val expr) => { scanExprClosures(c: inout c, st: inout st, id: expr) }
+        Stmt.Return(val value, val hasValue) => { if hasValue { scanExprClosures(c: inout c, st: inout st, id: value) } }
+        Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
+            scanExprClosures(c: inout c, st: inout st, id: cond)
+            scanBlockClosures(c: inout c, st: inout st, id: thenBlk)
+            if hasElse { scanBlockClosures(c: inout c, st: inout st, id: elseBlk) }
+        }
+        Stmt.While(val cond, val body) => { scanExprClosures(c: inout c, st: inout st, id: cond) scanBlockClosures(c: inout c, st: inout st, id: body) }
+        Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, val iter, val rangeHi, val body, isStruct: _, patStart: _, patLen: _, binds: _) => {
+            scanExprClosures(c: inout c, st: inout st, id: iter)
+            scanExprClosures(c: inout c, st: inout st, id: rangeHi)
+            scanBlockClosures(c: inout c, st: inout st, id: body)
+        }
+        Stmt.Match(val scrut, val arms) => {
+            scanExprClosures(c: inout c, st: inout st, id: scrut)
+            mut val i: U64 = 0
+            while i < arms.count { scanBlockClosures(c: inout c, st: inout st, id: arms[i].body) i += 1 }
+        }
+        Stmt.Panic(val msg, offset: _) => { scanExprClosures(c: inout c, st: inout st, id: msg) }
+        Stmt.Give(val value) => { scanExprClosures(c: inout c, st: inout st, id: value) }
+        _ => {}
+    }
+}
+
+fn scanBlockClosures(c: inout Comp, st: inout LlvmCtx, id: U64) {
+    if id == 0U64 {
+        return
+    }
+    val blk: Block = c.blocks[id]
+    mut val i: U64 = 0
+    while i < blk.stmts.count {
+        scanStmtClosures(c: inout c, st: inout st, id: blk.stmts[i])
+        i += 1
+    }
+}
+
+// Declare every closure reachable from emitted code (main + plain user fns), then
+// fixpoint over declared closures' own bodies (nested closures). Run before bodies.
+fn collectClosures(c: inout Comp, st: inout LlvmCtx) {
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        if nameIsMain(c: inout c, f: c.funcs[fi]) || isPlainUserFn(c: inout c, st: inout st, fi: fi) {
+            scanBlockClosures(c: inout c, st: inout st, id: c.funcs[fi].body)
+        }
+        fi += 1
+    }
+    mut val seen: U64 = 0
+    while seen < st.cloIdx.count {
+        val cid: U64 = st.cloIdx[seen]
+        match c.exprs[cid] {
+            Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, val body) => {
+                scanBlockClosures(c: inout c, st: inout st, id: body)
+            }
+            _ => {}
+        }
+        seen += 1
+    }
+}
+
+// Emit each declared closure's body: env pointer is arg 0 (ignored for a
+// non-capturing closure), the closure params follow at 1.., then the body.
+fn emitClosures(c: inout Comp, st: inout LlvmCtx) {
+    mut val s: U64 = 0
+    while s < st.cloIdx.count {
+        val cid: U64 = st.cloIdx[s]
+        val fv: LLVMValueRef = st.cloVal[s]
+        match c.exprs[cid] {
+            Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
+                st.curFn = fv
+                st.curIsMain = false
+                st.curRetVoid = !hasRet
+                if hasRet {
+                    if isGenericInst(c: inout c, ref: retTy) {
+                        st.curRetTy = llvmTypeOfRef(c: inout c, st: inout st, ref: retTy)
+                    } else {
+                        st.curRetTy = llvmTypeFor(c: inout c, st: inout st, tyStart: retStart, tyLen: retLen, isArray: retIsArray)
+                    }
+                } else {
+                    st.curRetTy = st.voidty
+                }
+                st.curRetTyStart = retStart
+                st.curRetTyLen = retLen
+                val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "entry"))
+                LLVMPositionBuilderAtEnd(st.b, entry)
+                st.terminated = false
+                st.nLocals = 0
+                st.locStart = []
+                st.locLen = []
+                st.locPtr = []
+                st.locTy = []
+                st.locKind = []
+                st.locStructIdx = []
+                st.locIsArr = []
+                st.locElemTy = []
+                st.locElemKind = []
+                st.locTypeRef = []
+                mut val pi: U64 = 0
+                while pi < params.count {
+                    bindOneParam(c: inout c, st: inout st, p: params[pi], fv: fv, argIdx: pi + 1U64)
+                    pi += 1
+                }
+                genLlvmBlock(c: inout c, st: inout st, id: body)
+                if st.terminated {
+                } else {
+                    if st.curRetVoid {
+                        LLVMBuildRetVoid(st.b)
+                    } else {
+                        LLVMBuildUnreachable(st.b)
+                    }
+                }
+            }
+            _ => {}
+        }
+        s += 1
+    }
+}
+
 fn genLlvmFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     val slot: U64 = userFnSlot(st: inout st, idx: fi)
     genLlvmFuncBody(c: inout c, st: inout st, fi: fi, fv: st.fnVal[slot])
@@ -3899,50 +4261,7 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
     }
     mut val pi: U64 = 0
     while pi < f.params.count {
-        val p: Param = f.params[pi]
-        // an array param is the {ptr,i64} value; its element type comes from the
-        // declared element span (p.tyStart/tyLen name the element when tyIsArray).
-        mut val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen)
-        mut val pElem: LLVMTypeRef = st.i64ty
-        mut val pSidx: U64 = localStructIdxFor(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen)
-        mut val pRef: U64 = 0
-        if p.tyIsArray {
-            pElem = pty
-            pty = st.arrayTy
-        } else {
-            // a generic struct/enum instance param: instance type + tracked ref.
-            if isGenericInst(c: inout c, ref: p.ty) {
-                pty = llvmTypeOfRef(c: inout c, st: inout st, ref: p.ty)
-                pRef = p.ty
-                val pgs: U64 = genStructSlot(c: inout c, st: inout st, ref: p.ty)
-                if pgs < st.genStructRefs.count {
-                    pSidx = st.genStructDefs[pgs]
-                }
-            }
-            // a `Ref[T]` param: opaque ptr + track the instance so `->` resolves.
-            if isRefInst(c: inout c, ref: p.ty) {
-                pty = st.ptrty
-                pRef = p.ty
-            }
-            // a non-generic enum param: track a bare enum TypeRef so `==`/Ord/match
-            // recover the enum (typeOf can't see params — c.locals is unpopulated).
-            if pRef == 0U64 {
-                if enumRegSlot(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen) < st.enumIdxs.count {
-                    pRef = simpleTypeRef(c: inout c, nameStart: p.tyStart, nameLen: p.tyLen)
-                }
-            }
-        }
-        val pKind: U64 = kindFromTySpan(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen)
-        // an `inout` param IS a pointer to the caller's value: bind the pointer
-        // directly so field/element access GEPs through it (mutating in place),
-        // like an `inout fn` self. A by-value param is stored into a fresh alloca.
-        if p.isInout {
-            pushLocalR(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: LLVMGetParam(fv, pi + base), ty: pty, kind: pKind, structIdx: pSidx, isArr: p.tyIsArray, elemTy: pElem, elemKind: pKind, typeRef: pRef)
-        } else {
-            val slot2: LLVMValueRef = LLVMBuildAlloca(st.b, pty, anon())
-            LLVMBuildStore(st.b, LLVMGetParam(fv, pi + base), slot2)
-            pushLocalR(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty, kind: pKind, structIdx: pSidx, isArr: p.tyIsArray, elemTy: pElem, elemKind: pKind, typeRef: pRef)
-        }
+        bindOneParam(c: inout c, st: inout st, p: f.params[pi], fv: fv, argIdx: pi + base)
         pi += 1
     }
     genLlvmBlock(c: inout c, st: inout st, id: f.body)
@@ -4051,6 +4370,11 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             // struct (Ref isn't a registered generic struct/enum, so isGenericInst
             // is false for it).
             if isRefInst(c: inout c, ref: ty) {
+                tref = ty
+            }
+            // a function-value local (`val g: fn(n: I32) -> I32 = …`): track the fn
+            // TypeRef so a call `g(n: 4)` resolves the closure signature.
+            if isFnType(c: inout c, ref: ty) {
                 tref = ty
             }
             // an un-annotated binding to a call returning a generic instance
@@ -4678,15 +5002,19 @@ fn emitLlvm(c: inout Comp) {
     arrelems.append(value: ptrty)
     arrelems.append(value: i64ty)
     val arrayTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(arrelems), 2U32, 0I32)
+    mut val cloelems: Array[LLVMTypeRef] = []
+    cloelems.append(value: ptrty)
+    cloelems.append(value: ptrty)
+    val closureTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(cloelems), 2U32, 0I32)
     mut val st: LlvmCtx = <LlvmCtx
         ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx)
         i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx) i16ty=LLVMInt16TypeInContext(ctx)
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty
-        voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy
+        voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy closureTy=closureTy
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[]
-        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] declId=[] declFn=[] declTy=[] reachAssoc=[] />
+        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] />
 
     // a "self" byte span (appended past the source) to bind method receivers.
     st.selfStart = c.bytes.count
@@ -4707,6 +5035,9 @@ fn emitLlvm(c: inout Comp) {
     declareUserFns(c: inout c, st: inout st)
     declareGenFns(c: inout c, st: inout st)
     declareGenMethods(c: inout c, st: inout st)
+    // declare lambda-lifted closures (after the named types + functions they may
+    // reference exist), so a closure literal can build its {fn, env} value.
+    collectClosures(c: inout c, st: inout st)
 
     // pass 2: emit `main` and every plain user function's body.
     mut val fi: U64 = 0
@@ -4725,6 +5056,8 @@ fn emitLlvm(c: inout Comp) {
     // generic free-function + generic-method instance bodies.
     emitGenFns(c: inout c, st: inout st)
     emitGenMethods(c: inout c, st: inout st)
+    // lambda-lifted closure bodies.
+    emitClosures(c: inout c, st: inout st)
     if foundMain {
     } else {
         compileErrorAt(line: 0, msg: "LLVM backend: no `main` function found")
