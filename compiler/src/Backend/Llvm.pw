@@ -1124,9 +1124,17 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 return st.locStructIdx[li]
             }
         }
-        Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, fields: _) => {
+        Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, val ty, fields: _) => {
             if isEnum {
             } else {
+                // a generic struct construction (`<Holder[I64] … />`): point at the
+                // generic def so field access on the binding works.
+                if isGenericInst(c: inout c, ref: ty) {
+                    val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: ty)
+                    if gs < st.genStructRefs.count {
+                        return st.genStructDefs[gs]
+                    }
+                }
                 return localStructIdxFor(c: inout c, st: inout st, start: typeStart, len: typeLen)
             }
         }
@@ -1225,6 +1233,50 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 }
             }
         }
+        Expr.Index(val base, index: _) => {
+            // an array element used as a struct (`h.items[0].v`): resolve the array's
+            // element struct. For an array struct field (`h.items : Array[Box[T]]`),
+            // ground the element type under the base value's instance env.
+            match c.exprs[base] {
+                Expr.Field(base: val fbase, nameStart: val fns, nameLen: val fnl) => {
+                    val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: fbase)
+                    if bsi < c.structs.count {
+                        val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
+                        if fidx < c.structs[bsi].fields.count {
+                            val fd: FieldDef = c.structs[bsi].fields[fidx]
+                            if fd.tyIsArray {
+                                if fd.ty != 0U64 {
+                                    val ft: TypeRef = c.types[fd.ty]
+                                    if ft.args.count > 0U64 {
+                                        val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: fbase)
+                                        val savedP: Array[Bind] = c.curTypeParams
+                                        val savedA: Array[U64] = c.curTypeArgs
+                                        val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: baseRef)
+                                        val g: U64 = groundTypeRef(c: inout c, ref: ft.args[0])
+                                        val gt: TypeRef = c.types[g]
+                                        mut val r: U64 = c.structs.count
+                                        if isGenericInst(c: inout c, ref: g) {
+                                            val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: g)
+                                            if gs < st.genStructRefs.count {
+                                                r = st.genStructDefs[gs]
+                                            }
+                                        } else {
+                                            r = localStructIdxFor(c: inout c, st: inout st, start: gt.nameStart, len: gt.nameLen)
+                                        }
+                                        if didSet {
+                                            c.curTypeParams = savedP
+                                            c.curTypeArgs = savedA
+                                        }
+                                        return r
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
         _ => {}
     }
     return c.structs.count
@@ -1253,6 +1305,17 @@ fn exprResultRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                     }
                     return cf.retTy
                 }
+            }
+        }
+        Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, val isEnum, val ty, fields: _) => {
+            // a generic construction (`<Holder[I64] … />`) used un-annotated: its
+            // instance ref (grounded under any active env) so the binding tracks it.
+            mut val g: U64 = ty
+            if c.curTypeParams.count > 0U64 {
+                g = groundTypeRef(c: inout c, ref: ty)
+            }
+            if isGenericInst(c: inout c, ref: g) {
+                return g
             }
         }
         _ => {}
@@ -3111,6 +3174,12 @@ fn arrElemTyOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
             if sidx < c.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
                 if fidx < c.structs[sidx].fields.count {
+                    // an array field's element type, resolved under the base's instance
+                    // env (`Holder[I64].items : Array[Box[T]]` -> element Box[I64]).
+                    val et: LLVMTypeRef = arrayFieldElemLlvmTy(c: inout c, st: inout st, base: base, fld: c.structs[sidx].fields[fidx])
+                    if LLVMIsNull(et) == 0I32 {
+                        return et
+                    }
                     return llvmScalarTy(c: inout c, st: inout st, tyStart: c.structs[sidx].fields[fidx].tyStart, tyLen: c.structs[sidx].fields[fidx].tyLen)
                 }
             }
@@ -3127,6 +3196,31 @@ fn arrElemTyOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
         _ => {}
     }
     return st.i64ty
+}
+
+// The LLVM element type of an array-typed struct field `fld`, grounded under the
+// base value's generic instance env (so `Holder[I64].items : Array[Box[T]]` yields
+// the Box[I64] struct type). Returns LLVMConstNull(ptr) if not resolvable that way.
+fn arrayFieldElemLlvmTy(c: inout Comp, st: inout LlvmCtx, base: U64, fld: FieldDef) -> LLVMTypeRef {
+    if fld.tyIsArray {
+        if fld.ty != 0U64 {
+            val ft: TypeRef = c.types[fld.ty]
+            if ft.args.count > 0U64 {
+                val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
+                val savedP: Array[Bind] = c.curTypeParams
+                val savedA: Array[U64] = c.curTypeArgs
+                val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: baseRef)
+                val g: U64 = groundTypeRef(c: inout c, ref: ft.args[0])
+                val ty: LLVMTypeRef = llvmTypeOfRef(c: inout c, st: inout st, ref: g)
+                if didSet {
+                    c.curTypeParams = savedP
+                    c.curTypeArgs = savedA
+                }
+                return ty
+            }
+        }
+    }
+    return LLVMConstNull(st.ptrty)
 }
 
 // The element kind (0 int/signed, 1 String, 2 Bool, 3 unsigned) of an array-valued
@@ -3165,9 +3259,17 @@ fn arrStoragePtr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             if sidx < c.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
                 if fidx < c.structs[sidx].fields.count {
-                    val basePtr: LLVMValueRef = structPlacePtr(c: inout c, st: inout st, id: base)
-                    if LLVMIsNull(basePtr) == 0I32 {
-                        return LLVMBuildStructGEP2(st.b, st.structTys[structRegSlot(c: inout c, st: inout st, start: c.structs[sidx].nameStart, len: c.structs[sidx].nameLen)], basePtr, fidx, anon())
+                    // GEP into the base local's storage using ITS tracked LLVM type
+                    // (so a generic-struct field — Holder[I64].items — uses the gen
+                    // struct type, not a non-generic structTys lookup that overflows).
+                    match c.exprs[base] {
+                        Expr.Ident(start: val bs, len: val bl) => {
+                            val bli: U64 = findLocal(c: inout c, st: inout st, start: bs, len: bl)
+                            if bli < st.nLocals {
+                                return LLVMBuildStructGEP2(st.b, st.locTy[bli], st.locPtr[bli], fidx, anon())
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }
