@@ -880,6 +880,70 @@ fn emitPrint(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> LLVMValueRef {
     return emitI64Sink(c: inout c, st: inout st, rtName: "plew_print_i64", rtId: 8U64, v: v)
 }
 
+// Byte-compare two String VALUES (strty) -> i1 (true if equal).
+fn emitStrEqValues(c: inout Comp, st: inout LlvmCtx, a: LLVMValueRef, b: LLVMValueRef) -> LLVMValueRef {
+    val pa: LLVMValueRef = LLVMBuildExtractValue(st.b, a, 0U64, anon())
+    val la: LLVMValueRef = LLVMBuildExtractValue(st.b, a, 1U64, anon())
+    val pb: LLVMValueRef = LLVMBuildExtractValue(st.b, b, 0U64, anon())
+    val lb: LLVMValueRef = LLVMBuildExtractValue(st.b, b, 1U64, anon())
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: st.ptrty)
+    ptys.append(value: st.i64ty)
+    ptys.append(value: st.ptrty)
+    ptys.append(value: st.i64ty)
+    val fty: LLVMTypeRef = LLVMFunctionType(st.i64ty, arrayCPtr(ptys), 4U64, 0I32)
+    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_str_eq", nameId: 9U64, fnTy: fty)
+    mut val av: Array[LLVMValueRef] = []
+    av.append(value: pa)
+    av.append(value: la)
+    av.append(value: pb)
+    av.append(value: lb)
+    val r: LLVMValueRef = LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 4U64, anon())
+    return LLVMBuildICmp(st.b, llvmIntNe(), r, LLVMConstInt(st.i64ty, 0U64, 0I32), anon())
+}
+
+// Compare two field values of declared type (tyStart,tyLen) for equality -> i1.
+fn cmpFieldEq(c: inout Comp, st: inout LlvmCtx, a: LLVMValueRef, b: LLVMValueRef, tyStart: U64, tyLen: U64) -> LLVMValueRef {
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "String") {
+        return emitStrEqValues(c: inout c, st: inout st, a: a, b: b)
+    }
+    val sreg: U64 = structRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen)
+    if sreg < st.structIdxs.count {
+        return emitStructEq(c: inout c, st: inout st, a: a, b: b, sidx: st.structIdxs[sreg])
+    }
+    return LLVMBuildICmp(st.b, llvmIntEq(), a, b, anon())
+}
+
+// Structural equality of two struct VALUES -> i1 (AND of per-field comparisons).
+fn emitStructEq(c: inout Comp, st: inout LlvmCtx, a: LLVMValueRef, b: LLVMValueRef, sidx: U64) -> LLVMValueRef {
+    val sd: StructDef = c.structs[sidx]
+    mut val acc: LLVMValueRef = LLVMConstInt(st.i1ty, 1U64, 0I32)
+    mut val i: U64 = 0
+    while i < sd.fields.count {
+        val fl: LLVMValueRef = LLVMBuildExtractValue(st.b, a, i, anon())
+        val fr: LLVMValueRef = LLVMBuildExtractValue(st.b, b, i, anon())
+        acc = LLVMBuildAnd(st.b, acc, cmpFieldEq(c: inout c, st: inout st, a: fl, b: fr, tyStart: sd.fields[i].tyStart, tyLen: sd.fields[i].tyLen), anon())
+        i += 1
+    }
+    return acc
+}
+
+// Whether a struct's fields are all comparable here (no array/enum field).
+fn structEqSupported(c: inout Comp, st: inout LlvmCtx, sidx: U64) -> Bool {
+    val sd: StructDef = c.structs[sidx]
+    mut val i: U64 = 0
+    while i < sd.fields.count {
+        if sd.fields[i].tyIsArray {
+            return false
+        }
+        if isEnumName(c: inout c, start: sd.fields[i].tyStart, len: sd.fields[i].tyLen) {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
 // String ==/!= : decompose both operands to (ptr,len) and call a byte-compare
 // runtime, yielding an i1 (so it works in both condition and Bool-value contexts).
 fn emitStrEq(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -> LLVMValueRef {
@@ -1034,9 +1098,22 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             }
             mut val l: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: lhs)
             mut val r: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: rhs)
-            // a struct/enum (aggregate) operand routes through an Eq/Ord witness in
-            // the C backend; that dispatch is not yet modeled here — reject loudly
-            // rather than emit an invalid icmp/arith on an aggregate.
+            // struct ==/!= : structural (field-by-field) equality (the Eq witness).
+            if op == opEq() || op == opNe() {
+                val sidxE: U64 = exprStructIdx(c: inout c, st: inout st, id: lhs)
+                if sidxE < c.structs.count {
+                    if structEqSupported(c: inout c, st: inout st, sidx: sidxE) {
+                        val eqv: LLVMValueRef = emitStructEq(c: inout c, st: inout st, a: l, b: r, sidx: sidxE)
+                        if op == opNe() {
+                            return LLVMBuildNot(st.b, eqv, anon())
+                        }
+                        return eqv
+                    }
+                }
+            }
+            // any remaining struct/enum (aggregate) operand routes through an Eq/Ord
+            // witness in the C backend; not modeled here — reject loudly rather than
+            // emit an invalid icmp/arith on an aggregate.
             if LLVMGetTypeKind(LLVMTypeOf(l)) == 8U32 {
             } else {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "LLVM backend: struct/enum operator (Eq/Ord/Add/... witness) not yet supported")
@@ -1532,6 +1609,13 @@ fn genLlvmArrayLit(c: inout Comp, st: inout LlvmCtx, elems: Array[U64], elemTy: 
 
 // `arr[i]` read: bounds-checked element load.
 fn genLlvmIndex(c: inout Comp, st: inout LlvmCtx, base: U64, index: U64) -> LLVMValueRef {
+    // only a built-in Array is indexed here; a user `Index`-impl subscript
+    // (struct `g[i]`) routes through the Index witness, not yet modeled — reject.
+    if exprIsArray(c: inout c, st: inout st, id: base) {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: user Index subscript (struct `g[i]`) not yet supported")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
     val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: base)
     val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: base)
     // the base must be an array {ptr,i64} aggregate; a non-aggregate here means a
@@ -2063,6 +2147,12 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                 Expr.Index(base: val ibase, index: val iindex) => {
                     // place mutation `arr[i] = v` / `arr[i] OP= v`: bounds-checked
                     // element pointer + store (the buffer is shared; no CoW yet).
+                    // A user IndexSet-impl subscript is not yet modeled — reject.
+                    if exprIsArray(c: inout c, st: inout st, id: ibase) {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: ibase)), msg: "LLVM backend: user IndexSet subscript (struct `g[i]=v`) not yet supported")
+                        return
+                    }
                     val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: ibase)
                     val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: ibase)
                     val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 0U64, anon())
