@@ -4125,6 +4125,14 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "eprint") {
         return emitStrSink(c: inout c, st: inout st, rtName: "plew_eprint_raw", rtId: 3U64, argExpr: args[0].expr)
     }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readStdin") {
+        // read all of stdin into a String (strty {i8*,i64}) via the runtime.
+        mut val rtys: Array[LLVMTypeRef] = []
+        val rfty: LLVMTypeRef = LLVMFunctionType(st.strty, arrayCPtr(rtys), 0U64, 0I32)
+        val rcallee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_readStdin", nameId: 27U64, fnTy: rfty)
+        mut val rav: Array[LLVMValueRef] = []
+        return LLVMBuildCall2(st.b, rfty, rcallee, arrayCPtr(rav), 0U64, anon())
+    }
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "assert") {
         // assert(cond): branch to a panic block when the condition is false.
         val cond: LLVMValueRef = genLlvmCond(c: inout c, st: inout st, id: args[0].expr)
@@ -7212,6 +7220,9 @@ fn emitLlvmRuntime() {
     write(s: "void plew_print_u64(unsigned long long v){ printf(\"%llu\\n\", v); }\n")
     write(s: "void plew_print_bool(long long v){ fputs(v?\"1\":\"0\",stdout); fputc('\\n',stdout); }\n")
     write(s: "long long plew_str_eq(const char* a, long long na, const char* b, long long nb){ if(na!=nb) return 0; for(long long i=0;i<na;i++) if(a[i]!=b[i]) return 0; return 1; }\n")
+    // read all of stdin into a String ({ i8* data, i64 len }), matching the C runtime.
+    write(s: "typedef struct { char* d; long long n; } PlewStrR;\n")
+    write(s: "PlewStrR plew_readStdin(void){ size_t cap=4096,len=0; char* buf=(char*)malloc(cap); int ch; while((ch=getchar())!=EOF){ if(len+1>=cap){cap*=2;buf=(char*)realloc(buf,cap);} buf[len++]=(char)ch; } PlewStrR s; s.d=buf; s.n=(long long)len; return s; }\n")
     // Array storage floor (a [cap][rc][data...] buffer; ARC/CoW not yet modeled —
     // copies share, no free; documented gap). alloc/cap/grow are element-size
     // generic; per-element load/store is inlined in IR via typed GEP.
