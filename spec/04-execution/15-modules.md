@@ -370,10 +370,33 @@ extern(c) {
     type LLVMValueRef
 
     fn LLVMContextCreate() -> LLVMContextRef
-    fn LLVMModuleCreateWithNameInContext(name: CString, ctx: LLVMContextRef) -> LLVMModuleRef
-    fn LLVMDisposeModule(m: LLVMModuleRef)
-    fn LLVMCreateBuilderInContext(ctx: LLVMContextRef) -> LLVMBuilderRef
-    fn LLVMBuildAdd(b: LLVMBuilderRef, lhs: LLVMValueRef, rhs: LLVMValueRef, name: CString) -> LLVMValueRef
+    fn LLVMModuleCreateWithNameInContext(name~: CString, ctx~: LLVMContextRef) -> LLVMModuleRef
+    fn LLVMDisposeModule(m~: LLVMModuleRef)
+    fn LLVMCreateBuilderInContext(ctx~: LLVMContextRef) -> LLVMBuilderRef
+    fn LLVMBuildAdd(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CString) -> LLVMValueRef
+}
+```
+
+### `extern(c)` 関数はラベルなし（引数は `~:` 必須）
+
+**C 関数に引数ラベルは無い**ので、`extern(c)` 内の fn は**全引数ラベルなし**（呼び出しは positional）。ラベルは Plew 関数の*アイデンティティ*（セレクタ・型の一部）で、C シンボルにそれを付けるのは*捏造した出どころ*になる。Swift も C 関数を positional でインポートする。
+
+ただし**暗黙に剥がさない**：各引数を**明示的に `~:`（ラベル抑制）で書く**こと。素のラベル付き（`name: T`）は**コンパイルエラー**（黙ってラベルを落とさない＝唱えた通り）。
+
+```plew
+extern(c) {
+    fn LLVMBuildAdd(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CString) -> LLVMValueRef
+    // fn LLVMBuildAdd(b: LLVMBuilderRef, …)  ← エラー：`b~:` と書く
+}
+// 呼び出しは positional：
+val sum = LLVMBuildAdd(builder, x, y, cString("sum"))
+```
+
+可読性・引数取り違え防止のラベルが欲しければ、**Plew の `fn` ラッパに被せる**（生の `extern(c)` は C を正直に写す床／ラベルは安全な皮の層 ── 不透明ハンドル→`unique`、生ポインタ→`Optional` と同じ床/皮分離）：
+
+```plew
+fn buildAdd(builder: LLVMBuilderRef, lhs: LLVMValueRef, rhs: LLVMValueRef, name: CString) -> LLVMValueRef {
+    return LLVMBuildAdd(builder, lhs, rhs, name)
 }
 ```
 
@@ -426,9 +449,9 @@ repr(c) struct LLVMMCJITCompilerOptions {
 ```plew
 extern(c) {
     // C: LLVMCreateMCJITCompilerForModule(…, struct LLVM…Options *Opts, size_t, char **Err)
-    fn LLVMCreateMCJITCompilerForModule(out: inout ExecutionEngineRef, m: LLVMModuleRef,
-                                        opts: inout LLVMMCJITCompilerOptions, sz: USize,
-                                        err: inout CMutPtr[U8]) -> LLVMBool
+    fn LLVMCreateMCJITCompilerForModule(out~: inout ExecutionEngineRef, m~: LLVMModuleRef,
+                                        opts~: inout LLVMMCJITCompilerOptions, sz~: USize,
+                                        err~: inout CMutPtr[U8]) -> LLVMBool
 }
 ```
 
@@ -445,10 +468,10 @@ C-API は失敗時に NULL を返す。`CPtr` 導入後は**「境界で NULL↔
 
 ```plew
 extern(c) {
-    fn LLVMParseIRInContext(ctx: LLVMContextRef, buf: MemoryBufferRef) -> LLVMModuleRef  // 失敗時 null
+    fn LLVMParseIRInContext(ctx~: LLVMContextRef, buf~: MemoryBufferRef) -> LLVMModuleRef  // 失敗時 null
 }
 // raw ハンドル → null を toOptional で弾き、Some だけ安全型へ昇格。
-val mod: Optional[Module] = LLVMParseIRInContext(ctx: ctx, buf: buf)
+val mod: Optional[Module] = LLVMParseIRInContext(ctx, buf)
     .toOptional()
     .map { (raw: LLVMModuleRef) in Module.adopt(raw~: raw) }   // adopt は非可謬 factory
 ```
@@ -468,7 +491,7 @@ unique struct Module {
 }
 pub impl Module {
     assoc fn create(name: CString, ctx: LLVMContextRef) -> Module {
-        return <Module raw=LLVMModuleCreateWithNameInContext(name: name, ctx: ctx) />
+        return <Module raw=LLVMModuleCreateWithNameInContext(name, ctx) />
     }
 }
 ```
@@ -504,7 +527,7 @@ C 型 ↔ Plew 型は**2 階級**に分ける。
 
 ```plew
 val cname: CString = CString.from(text~: "my.module")
-val m = LLVMModuleCreateWithNameInContext(name: cname.ptr, ctx: ctx)  // 呼び出し中有効
+val m = LLVMModuleCreateWithNameInContext(cname.ptr, ctx)  // 呼び出し中有効
 // cname の deinit がスコープ末で解放
 ```
 

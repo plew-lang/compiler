@@ -20061,6 +20061,19 @@ void lowerExtern_c_Comp_e_ExternAst(Comp* c, ExternAst e) {
     }
     uint64_t fi = 0;
     while ((U64_compare_lhs_U64_rhs_U64(fi, (long long)((e.fns).count)).tag == 0)) {
+    if (e.abiC) {
+    SigAst sig = SigAst_share(Array_SigAst_get(e.fns, (long long)(fi)));
+    uint64_t pj = 0;
+    while ((U64_compare_lhs_U64_rhs_U64(pj, (long long)((sig.params).count)).tag == 0)) {
+    if (Array_ParamAst_get(sig.params, (long long)(pj)).noLabel) {
+    }
+    else {
+    compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), Array_ParamAst_get(sig.params, (long long)(pj)).span.start), (PlewString){"extern(c) function parameters take no label — write `<name>~:` (C functions have no argument labels; put labels on a Plew wrapper)", 132});
+    }
+    pj = U64_add_lhs_U64_rhs_U64(pj, 1);
+    }
+    SigAst_release(sig);
+    }
     Array_Func_append_value_T(&((*c).funcs), lowerSigToFunc_c_Comp_sig_SigAst_isExtern_Bool_isCExtern_Bool(&((*c)), Array_SigAst_get(e.fns, (long long)(fi)), 1, e.abiC));
     fi = U64_add_lhs_U64_rhs_U64(fi, 1);
     }

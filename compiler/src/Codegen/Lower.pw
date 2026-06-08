@@ -930,6 +930,22 @@ fn lowerExtern(c: inout Comp, e: ExternAst) {
     }
     mut val fi: U64 = 0
     while fi < e.fns.count {
+        // extern(c) functions take no argument labels (a C function has none — the
+        // label would be invented provenance). The author must mark each parameter
+        // label-suppressed `name~:` EXPLICITLY (spec/15): a labelled param is an
+        // error, not a silently-stripped label (no hidden meaning). Labels for
+        // readability/safety live in a Plew `fn` wrapper over the raw extern.
+        if e.abiC {
+            val sig: SigAst = e.fns[fi]
+            mut val pj: U64 = 0
+            while pj < sig.params.count {
+                if sig.params[pj].noLabel {
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: sig.params[pj].span.start), msg: "extern(c) function parameters take no label — write `<name>~:` (C functions have no argument labels; put labels on a Plew wrapper)")
+                }
+                pj += 1
+            }
+        }
         c.funcs.append(lowerSigToFunc(c: inout c, sig: e.fns[fi], isExtern: true, isCExtern: e.abiC))
         fi += 1
     }

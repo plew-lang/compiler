@@ -1,0 +1,11 @@
+// extern(c) functions take no argument labels (spec/15): a parameter must be
+// written label-suppressed `name~:`. A plain labelled param is rejected — the
+// label would be invented provenance (C functions have no labels), and Plew
+// requires the suppression to be EXPLICIT, not silently stripped.
+extern(c) {
+    fn myAdd(a: I32, b: I32) -> I32
+}
+
+fn main() {
+    val r: I32 = myAdd(3, 4)
+}
