@@ -201,6 +201,9 @@ struct LlvmCtx {
     // with no `[I64]`). Consumed (cleared to 0) by the construction that uses it so
     // it doesn't leak into sub-expressions. 0 when no expectation is in effect.
     pub mut val expectedTy: U64
+    // the current function/closure's return TypeRef (0 = void / none), so a `return
+    // <Optional.Some …/>` infers its type args from the declared return type.
+    pub mut val curRetRef: U64
     // declared user functions, cached by c.funcs index (parallel arrays), so a call
     // resolves to the same LLVMValueRef without name mangling (the symbol name is a
     // synthetic unique `pf<idx>`; only `main`/runtime symbols have meaningful names).
@@ -4281,6 +4284,7 @@ fn emitClosures(c: inout Comp, st: inout LlvmCtx) {
                 }
                 st.curRetTyStart = retStart
                 st.curRetTyLen = retLen
+                st.curRetRef = retTy
                 val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "entry"))
                 LLVMPositionBuilderAtEnd(st.b, entry)
                 st.terminated = false
@@ -4462,6 +4466,7 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
     st.curRetTy = llvmFnRetTy(c: inout c, st: inout st, f: f)
     st.curRetTyStart = f.retStart
     st.curRetTyLen = f.retLen
+    st.curRetRef = f.retTy
     val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "entry"))
     LLVMPositionBuilderAtEnd(st.b, entry)
     st.terminated = false
@@ -4798,7 +4803,12 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                 LLVMBuildRet(st.b, LLVMConstInt(st.i32ty, 0U64, 0I32))
             } else {
                 if hasValue {
+                    // the declared return type is the expected type, so a returned
+                    // un-suffixed generic construction (`return <Optional.Some …/>`)
+                    // infers its type args. Consumed by the construction.
+                    st.expectedTy = st.curRetRef
                     mut val rv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
+                    st.expectedTy = 0U64
                     if st.curRetTyLen > 0U64 {
                         rv = coerceIntTo(c: inout c, st: inout st, v: rv, tyStart: st.curRetTyStart, tyLen: st.curRetTyLen)
                     }
@@ -5262,7 +5272,7 @@ fn emitLlvm(c: inout Comp) {
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy closureTy=closureTy
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
-        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 nLocals=0
+        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[]
         locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] />
 
