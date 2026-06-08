@@ -764,6 +764,37 @@ fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, 
     return LLVMBuildLoad2(st.b, ety, slot, anon())
 }
 
+// The element type ref of an array-typed field `fd` of a base value `base` (a
+// struct expr), resolved under base's generic instance env — covers a field whose
+// type is a param grounding to `Array[E]` (`Box[Array[I32]].v`). 0 if not array.
+fn fieldArrayElemRefUnderBase(c: inout Comp, st: inout LlvmCtx, base: U64, fd: FieldDef) -> U64 {
+    if fd.ty == 0U64 {
+        return 0U64
+    }
+    // ground the field type under base's instance env (a direct `Array[Box[T]]`
+    // grounds to `Array[Box[I64]]`; a type-param field `v: T` to `Array[I32]`).
+    val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
+    val savedP: Array[Bind] = c.curTypeParams
+    val savedA: Array[U64] = c.curTypeArgs
+    val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: baseRef)
+    mut val g: U64 = fd.ty
+    if c.curTypeParams.count > 0U64 {
+        g = groundTypeRef(c: inout c, ref: fd.ty)
+    }
+    val gt: TypeRef = c.types[g]
+    mut val r: U64 = 0U64
+    if rangeEquals(bytes: c.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array") {
+        if gt.args.count > 0U64 {
+            r = gt.args[0]
+        }
+    }
+    if didSet {
+        c.curTypeParams = savedP
+        c.curTypeArgs = savedA
+    }
+    return r
+}
+
 // If field `f` is of array type — declared `Array[E]`, or a type param that
 // grounds (under the active env) to `Array[E]` — the element type ref E, else 0.
 fn arrayFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
@@ -3178,7 +3209,12 @@ fn exprIsArray(c: inout Comp, st: inout LlvmCtx, id: U64) -> Bool {
             if sidx < c.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
                 if fidx < c.structs[sidx].fields.count {
-                    return c.structs[sidx].fields[fidx].tyIsArray
+                    val fd: FieldDef = c.structs[sidx].fields[fidx]
+                    if fd.tyIsArray {
+                        return true
+                    }
+                    // a generic field grounding to an array (`Box[Array[I32]].v`).
+                    return fieldArrayElemRefUnderBase(c: inout c, st: inout st, base: base, fd: fd) != 0U64
                 }
             }
         }
@@ -3214,13 +3250,15 @@ fn arrElemTyOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
             if sidx < c.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
                 if fidx < c.structs[sidx].fields.count {
+                    val fd: FieldDef = c.structs[sidx].fields[fidx]
                     // an array field's element type, resolved under the base's instance
-                    // env (`Holder[I64].items : Array[Box[T]]` -> element Box[I64]).
-                    val et: LLVMTypeRef = arrayFieldElemLlvmTy(c: inout c, st: inout st, base: base, fld: c.structs[sidx].fields[fidx])
-                    if LLVMIsNull(et) == 0I32 {
-                        return et
+                    // env (`Holder[I64].items : Array[Box[T]]` -> Box[I64]; a generic
+                    // field `Box[Array[I32]].v` -> I32).
+                    val er: U64 = fieldArrayElemRefUnderBase(c: inout c, st: inout st, base: base, fd: fd)
+                    if er != 0U64 {
+                        return llvmTypeOfRef(c: inout c, st: inout st, ref: er)
                     }
-                    return llvmScalarTy(c: inout c, st: inout st, tyStart: c.structs[sidx].fields[fidx].tyStart, tyLen: c.structs[sidx].fields[fidx].tyLen)
+                    return llvmScalarTy(c: inout c, st: inout st, tyStart: fd.tyStart, tyLen: fd.tyLen)
                 }
             }
         }
@@ -3236,31 +3274,6 @@ fn arrElemTyOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
         _ => {}
     }
     return st.i64ty
-}
-
-// The LLVM element type of an array-typed struct field `fld`, grounded under the
-// base value's generic instance env (so `Holder[I64].items : Array[Box[T]]` yields
-// the Box[I64] struct type). Returns LLVMConstNull(ptr) if not resolvable that way.
-fn arrayFieldElemLlvmTy(c: inout Comp, st: inout LlvmCtx, base: U64, fld: FieldDef) -> LLVMTypeRef {
-    if fld.tyIsArray {
-        if fld.ty != 0U64 {
-            val ft: TypeRef = c.types[fld.ty]
-            if ft.args.count > 0U64 {
-                val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
-                val savedP: Array[Bind] = c.curTypeParams
-                val savedA: Array[U64] = c.curTypeArgs
-                val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: baseRef)
-                val g: U64 = groundTypeRef(c: inout c, ref: ft.args[0])
-                val ty: LLVMTypeRef = llvmTypeOfRef(c: inout c, st: inout st, ref: g)
-                if didSet {
-                    c.curTypeParams = savedP
-                    c.curTypeArgs = savedA
-                }
-                return ty
-            }
-        }
-    }
-    return LLVMConstNull(st.ptrty)
 }
 
 // The element kind (0 int/signed, 1 String, 2 Bool, 3 unsigned) of an array-valued
@@ -3430,9 +3443,12 @@ fn deepCopyStructValue(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, sidx: 
     mut val fi: U64 = 0
     while fi < sd.fields.count {
         val fd: FieldDef = sd.fields[fi]
-        if fd.tyIsArray {
+        // an array field (declared `Array[E]` or a type param grounding to one under
+        // the active env): deep-copy the buffer.
+        val er: U64 = arrayFieldElemRef(c: inout c, f: fd)
+        if er != 0U64 {
             val elem: LLVMValueRef = LLVMBuildExtractValue(st.b, agg, fi, anon())
-            val et: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: fd.tyStart, tyLen: fd.tyLen)
+            val et: LLVMTypeRef = llvmTypeOfRef(c: inout c, st: inout st, ref: er)
             agg = LLVMBuildInsertValue(st.b, agg, copyArrayValue(c: inout c, st: inout st, arrVal: elem, elemTy: et), fi, anon())
         } else {
             if fieldIsBoxed(c: inout c, f: fd) {
@@ -3476,7 +3492,18 @@ fn copyValueIfPlace(c: inout Comp, st: inout LlvmCtx, rv: LLVMValueRef, valueExp
     if structExprIsPlace(c: inout c, id: valueExpr) {
         val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: valueExpr)
         if sidx < c.structs.count {
-            return deepCopyStructValue(c: inout c, st: inout st, v: rv, sidx: sidx)
+            // set the value's generic instance env so a field of param type that
+            // grounds to an array (`Box[Array[I32]].v`) is deep-copied.
+            val ref: U64 = exprTypeRef(c: inout c, st: inout st, id: valueExpr)
+            val savedP: Array[Bind] = c.curTypeParams
+            val savedA: Array[U64] = c.curTypeArgs
+            val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: ref)
+            val copied: LLVMValueRef = deepCopyStructValue(c: inout c, st: inout st, v: rv, sidx: sidx)
+            if didSet {
+                c.curTypeParams = savedP
+                c.curTypeArgs = savedA
+            }
+            return copied
         }
     }
     return rv
@@ -5489,13 +5516,9 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                     }
                 } else {
                     // a struct value bound from a place deep-copies its array fields
-                    // (`val y = x` then `x.items[0]=…` leaves y.items unchanged).
-                    if structExprIsPlace(c: inout c, id: init) {
-                        val csi: U64 = exprStructIdx(c: inout c, st: inout st, id: init)
-                        if csi < c.structs.count {
-                            v = deepCopyStructValue(c: inout c, st: inout st, v: v, sidx: csi)
-                        }
-                    }
+                    // (`val y = x` then `x.items[0]=…` leaves y.items unchanged; a
+                    // generic field grounding to an array is handled under the env).
+                    v = copyValueIfPlace(c: inout c, st: inout st, rv: v, valueExpr: init)
                 }
             }
             mut val kind: U64 = valueKind(c: inout c, st: inout st, id: init)
