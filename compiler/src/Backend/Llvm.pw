@@ -1,0 +1,90 @@
+// Part of the LLVM-backend root (_llvm.pw). The second backend: walk the same
+// analyzed arena the C backend (emitC) does, but build a real LLVM module in
+// process through libLLVM-C (spec/15 FFI) instead of emitting C text. This part
+// is parted ONLY by _llvm.pw, so the C-backend binary (compiler/plewc) never
+// references libLLVM (its clang-only bootstrap is preserved); the libLLVM-linked
+// binary (compiler/plewc-llvm) is built on demand by compiler/plewc.
+//
+// Bring-up strategy: construct the module with the real API (the transferable
+// 90% — SSA/basic-blocks/CFG), and for now emit it as text via
+// LLVMPrintModuleToString -> stdout, linked against the existing C runtime
+// preamble (PlewString/ARC/plew_* are ABI-identical). Swapping text output for
+// direct object emission later is a single API call.
+
+// ---- libLLVM-C bindings (raw FFI floor; positional, no labels) ----
+//
+// Opaque handles are void* ABI-identical to the real LLVM `…Opaque *` typedefs,
+// so no <llvm-c/*.h> include is needed — the compiler self-emits the prototypes.
+extern(c) {
+    type LLVMContextRef
+    type LLVMModuleRef
+    type LLVMTypeRef
+    type LLVMValueRef
+    type LLVMBasicBlockRef
+    type LLVMBuilderRef
+
+    // Context / module.
+    fn LLVMContextCreate() -> LLVMContextRef
+    fn LLVMModuleCreateWithNameInContext(name~: CPtr[U8], ctx~: LLVMContextRef) -> LLVMModuleRef
+    fn LLVMPrintModuleToString(m~: LLVMModuleRef) -> CPtr[U8]
+    fn LLVMDisposeMessage(msg~: CPtr[U8])
+
+    // Types.
+    fn LLVMInt1TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMInt8TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMInt32TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMInt64TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMVoidTypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMFunctionType(ret~: LLVMTypeRef, params~: CPtr[LLVMTypeRef], count~: U32, isVarArg~: I32) -> LLVMTypeRef
+
+    // Functions / basic blocks / params.
+    fn LLVMAddFunction(m~: LLVMModuleRef, name~: CPtr[U8], fnTy~: LLVMTypeRef) -> LLVMValueRef
+    fn LLVMGetNamedFunction(m~: LLVMModuleRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMGetParam(func~: LLVMValueRef, index~: U32) -> LLVMValueRef
+    fn LLVMAppendBasicBlockInContext(ctx~: LLVMContextRef, func~: LLVMValueRef, name~: CPtr[U8]) -> LLVMBasicBlockRef
+
+    // Constants.
+    fn LLVMConstInt(ty~: LLVMTypeRef, n~: U64, signExtend~: I32) -> LLVMValueRef
+
+    // Builder + instructions.
+    fn LLVMCreateBuilderInContext(ctx~: LLVMContextRef) -> LLVMBuilderRef
+    fn LLVMPositionBuilderAtEnd(b~: LLVMBuilderRef, bb~: LLVMBasicBlockRef)
+    fn LLVMBuildRet(b~: LLVMBuilderRef, v~: LLVMValueRef) -> LLVMValueRef
+    fn LLVMBuildRetVoid(b~: LLVMBuilderRef) -> LLVMValueRef
+    fn LLVMBuildCall2(b~: LLVMBuilderRef, fnTy~: LLVMTypeRef, func~: LLVMValueRef, args~: CPtr[LLVMValueRef], numArgs~: U32, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildAdd(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildSub(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildMul(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+}
+
+// ---- small helpers ----
+
+// A NUL-terminated C string from a Plew literal, for the many `const char*` name
+// arguments LLVM builders take. (cString leaks a small buffer per call — fine for
+// a compiler pass that runs once and exits.)
+fn cstr(s: String) -> CPtr[U8] {
+    return cString(s)
+}
+
+// ---- the LLVM backend entry ----
+//
+// v0: ignore the program and emit `i32 @main() { ret i32 0 }` to validate the
+// whole pipeline (binary links libLLVM, builds a module, prints IR, clang accepts
+// it, it runs). The real arena walk grows from here.
+fn emitLlvm(c: inout Comp) {
+    val ctx: LLVMContextRef = LLVMContextCreate()
+    val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cstr(s: "plew"), ctx)
+    val i32ty: LLVMTypeRef = LLVMInt32TypeInContext(ctx)
+
+    mut val noParams: Array[LLVMTypeRef] = []
+    val mainTy: LLVMTypeRef = LLVMFunctionType(i32ty, arrayCPtr(noParams), 0U32, 0I32)
+    val mainFn: LLVMValueRef = LLVMAddFunction(m, cstr(s: "main"), mainTy)
+    val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(ctx, mainFn, cstr(s: "entry"))
+    val b: LLVMBuilderRef = LLVMCreateBuilderInContext(ctx)
+    LLVMPositionBuilderAtEnd(b, entry)
+    LLVMBuildRet(b, LLVMConstInt(i32ty, 0U64, 0I32))
+
+    val ir: CPtr[U8] = LLVMPrintModuleToString(m)
+    write(s: stringFromCString(ir))
+    LLVMDisposeMessage(ir)
+}
