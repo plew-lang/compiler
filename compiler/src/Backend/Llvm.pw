@@ -10,12 +10,16 @@
 // LLVMPrintModuleToString -> stdout, linked against a small C runtime emitted by
 // `plewc-llvm --runtime` (PlewString / plew_* are ABI-identical to the C backend).
 //
-// COVERAGE (v1): the user's `main`, integer locals (alloca/load/store), integer
-// arithmetic + comparisons (signed i64 — widths/unsigned/overflow-panic are TODO),
-// `if`/`while`, and intrinsic calls (`exit`, `print`). Not yet: user-defined
-// functions, structs/enums, arrays, generics, closures, async, ARC. Those grow
-// incrementally; until then a program using them is rejected loudly (no silent
-// miscompile — acceptance soundness).
+// COVERAGE: the entry module's `main` + plain free functions (params, returns,
+// recursion, default args, lexical scope/shadowing); integer locals + arithmetic
+// + comparisons (collapsed to signed i64 — widths/unsigned-ops/overflow-panic are
+// TODO); Bool; String (value `{ptr,i64}`, literals, ==/!=); `if`/`while`; and the
+// intrinsics exit / write / eprint / print / panic (print dispatches by the arg's
+// type-kind to a runtime formatter). A per-local type-kind tag (int/String/Bool/
+// uint) drives String-vs-int decisions without c.locals (unpopulated here).
+// NOT yet: structs/enums, arrays, generics, methods, closures, async, ARC,
+// multi-module user code (only module 0 is emitted). Anything unsupported is
+// rejected loudly (no silent miscompile — acceptance soundness).
 
 // ---- libLLVM-C bindings (raw FFI floor; positional, no labels) ----
 //
@@ -55,8 +59,9 @@ extern(c) {
     fn LLVMGetParam(func~: LLVMValueRef, index~: U64) -> LLVMValueRef
     fn LLVMAppendBasicBlockInContext(ctx~: LLVMContextRef, func~: LLVMValueRef, name~: CPtr[U8]) -> LLVMBasicBlockRef
 
-    // Constants.
+    // Constants / introspection.
     fn LLVMConstInt(ty~: LLVMTypeRef, n~: U64, signExtend~: I32) -> LLVMValueRef
+    fn LLVMTypeOf(v~: LLVMValueRef) -> LLVMTypeRef
 
     // Builder + instructions.
     fn LLVMCreateBuilderInContext(ctx~: LLVMContextRef) -> LLVMBuilderRef
@@ -128,11 +133,20 @@ struct LlvmCtx {
     pub mut val fnIdx: Array[U64]
     pub mut val fnVal: Array[LLVMValueRef]
     pub mut val fnTy: Array[LLVMTypeRef]
-    // local environment (parallel arrays).
+    // local environment (parallel arrays). `nLocals` is the logical count: blocks
+    // save it on entry and restore it on exit (lexical scope), so a shadowing
+    // binding inside a block leaves scope at the block's end and a later reference
+    // resolves to the outer binding. push overwrites the slot at `nLocals` (or
+    // appends), so the arrays may be longer than `nLocals` — only [0, nLocals) is live.
+    pub mut val nLocals: U64
     pub mut val locStart: Array[U64]
     pub mut val locLen: Array[U64]
     pub mut val locPtr: Array[LLVMValueRef]
     pub mut val locTy: Array[LLVMTypeRef]
+    // a small Plew-type-kind tag per local (0 int/signed, 1 String, 2 Bool, 3
+    // unsigned int), so String ==/!= and print pick the right lowering without
+    // c.locals (which the LLVM backend doesn't populate, so typeOf can't see locals).
+    pub mut val locKind: Array[U64]
     // declared runtime/intrinsic functions, cached by name id (parallel arrays).
     pub mut val declId: Array[U64]
     pub mut val declFn: Array[LLVMValueRef]
@@ -164,47 +178,93 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Bool") {
         return st.i1ty
     }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "I8") {
-        return st.i8ty
-    }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "U8") {
-        return st.i8ty
-    }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "I16") {
-        return st.i32ty
-    }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "U16") {
-        return st.i32ty
-    }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "I32") {
-        return st.i32ty
-    }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "U32") {
-        return st.i32ty
-    }
+    // All integer widths collapse to i64 for now (the C backend's `long long`
+    // default): keeps arithmetic single-width and correct for in-range values.
+    // Width-accurate types + sext/trunc on conversions, and per-width overflow
+    // semantics, arrive in a later increment.
     return st.i64ty
+}
+
+// Is this type name an unsigned integer (for choosing signed vs unsigned ops /
+// formatting)? Defaults to signed.
+fn isUnsignedName(c: inout Comp, start: U64, len: U64) -> Bool {
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U8") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U16") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U32") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U64") { return true }
+    return false
 }
 
 // ---- local environment ----
 
-fn pushLocal(st: inout LlvmCtx, nameStart: U64, nameLen: U64, ptr: LLVMValueRef, ty: LLVMTypeRef) {
-    st.locStart.append(value: nameStart)
-    st.locLen.append(value: nameLen)
-    st.locPtr.append(value: ptr)
-    st.locTy.append(value: ty)
+fn pushLocal(st: inout LlvmCtx, nameStart: U64, nameLen: U64, ptr: LLVMValueRef, ty: LLVMTypeRef, kind: U64) {
+    if st.nLocals < st.locStart.count {
+        st.locStart[st.nLocals] = nameStart
+        st.locLen[st.nLocals] = nameLen
+        st.locPtr[st.nLocals] = ptr
+        st.locTy[st.nLocals] = ty
+        st.locKind[st.nLocals] = kind
+    } else {
+        st.locStart.append(value: nameStart)
+        st.locLen.append(value: nameLen)
+        st.locPtr.append(value: ptr)
+        st.locTy.append(value: ty)
+        st.locKind.append(value: kind)
+    }
+    st.nLocals = st.nLocals + 1
 }
 
-// Index of the local matching (start,len) by content, searched from the end so a
-// later (shadowing) declaration wins. Returns st.locStart.count if not found.
+// The Plew-type-kind tag (0 int/signed, 1 String, 2 Bool, 3 unsigned) of a type
+// name span. Used to tag locals/params at declaration.
+fn kindFromTySpan(c: inout Comp, tyStart: U64, tyLen: U64) -> U64 {
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "String") { return 1U64 }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Bool") { return 2U64 }
+    if isUnsignedName(c: inout c, start: tyStart, len: tyLen) { return 3U64 }
+    return 0U64
+}
+
+// Recover the type-kind of an expression: locals from the env tag; literals from
+// their shape; everything else via the front-end's typeOf (which resolves call
+// returns etc. without needing c.locals).
+fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
+    match c.exprs[id] {
+        Expr.Str(start: _, len: _) => { return 1U64 }
+        Expr.Int(value: _, offset: _, val isBool, val tyStart, val tyLen, isNeg: _) => {
+            if isBool { return 2U64 }
+            if tyLen > 0U64 {
+                if isUnsignedName(c: inout c, start: tyStart, len: tyLen) { return 3U64 }
+            }
+            return 0U64
+        }
+        Expr.Ident(val start, val len) => {
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.nLocals {
+                return st.locKind[li]
+            }
+        }
+        _ => {}
+    }
+    // fallback: the typed-AST cache (works for call results, fields, …).
+    val t: TypeInfo = typeOf(c: inout c, id: id)
+    if t.kind == 1 { return 1U64 }
+    if t.kind == 0 {
+        if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Bool") { return 2U64 }
+        if isUnsignedName(c: inout c, start: t.nameStart, len: t.nameLen) { return 3U64 }
+    }
+    return 0U64
+}
+
+// Index of the live local matching (start,len) by content, searched from the most
+// recent so a shadowing declaration wins. Returns st.nLocals if not found.
 fn findLocal(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 {
-    mut val i: U64 = st.locStart.count
+    mut val i: U64 = st.nLocals
     while i > 0 {
         i -= 1
         if spansEqual(c: inout c, aStart: st.locStart[i], aLen: st.locLen[i], bStart: start, bLen: len) {
             return i
         }
     }
-    return st.locStart.count
+    return st.nLocals
 }
 
 // ---- runtime-function declarations (cached) ----
@@ -288,6 +348,68 @@ fn emitStrSink(c: inout Comp, st: inout LlvmCtx, rtName: String, rtId: U64, argE
     return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U64, anon())
 }
 
+// Call a 1-arg i64 runtime sink (`plew_print_i64` / `plew_print_u64` /
+// `plew_print_bool`) with an already-i64 value.
+fn emitI64Sink(c: inout Comp, st: inout LlvmCtx, rtName: String, rtId: U64, v: LLVMValueRef) -> LLVMValueRef {
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: st.i64ty)
+    val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(ptys), 1U64, 0I32)
+    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: rtName, nameId: rtId, fnTy: fty)
+    mut val av: Array[LLVMValueRef] = []
+    av.append(value: v)
+    return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U64, anon())
+}
+
+// `print(x)` (spec/02): lower by the argument's recovered type to a runtime
+// formatter that writes the textual form + a newline. This bypasses the Plew
+// Format trait machinery (generics + methods + arrays) for the built-in scalar /
+// String types — observably identical. A user type implementing Format is not yet
+// supported here (rejected loudly).
+fn emitPrint(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> LLVMValueRef {
+    val k: U64 = valueKind(c: inout c, st: inout st, id: argExpr)
+    if k == 1U64 {
+        return emitStrSink(c: inout c, st: inout st, rtName: "plew_print_str", rtId: 5U64, argExpr: argExpr)
+    }
+    if k == 2U64 {
+        val bv: LLVMValueRef = LLVMBuildZExt(st.b, genLlvmExpr(c: inout c, st: inout st, id: argExpr), st.i64ty, anon())
+        return emitI64Sink(c: inout c, st: inout st, rtName: "plew_print_bool", rtId: 6U64, v: bv)
+    }
+    val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: argExpr)
+    if k == 3U64 {
+        return emitI64Sink(c: inout c, st: inout st, rtName: "plew_print_u64", rtId: 7U64, v: v)
+    }
+    return emitI64Sink(c: inout c, st: inout st, rtName: "plew_print_i64", rtId: 8U64, v: v)
+}
+
+// String ==/!= : decompose both operands to (ptr,len) and call a byte-compare
+// runtime, yielding an i1 (so it works in both condition and Bool-value contexts).
+fn emitStrEq(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -> LLVMValueRef {
+    val a: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: lhs)
+    val b: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: rhs)
+    val pa: LLVMValueRef = LLVMBuildExtractValue(st.b, a, 0U32, anon())
+    val la: LLVMValueRef = LLVMBuildExtractValue(st.b, a, 1U32, anon())
+    val pb: LLVMValueRef = LLVMBuildExtractValue(st.b, b, 0U32, anon())
+    val lb: LLVMValueRef = LLVMBuildExtractValue(st.b, b, 1U32, anon())
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: st.ptrty)
+    ptys.append(value: st.i64ty)
+    ptys.append(value: st.ptrty)
+    ptys.append(value: st.i64ty)
+    val fty: LLVMTypeRef = LLVMFunctionType(st.i64ty, arrayCPtr(ptys), 4U64, 0I32)
+    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_str_eq", nameId: 9U64, fnTy: fty)
+    mut val av: Array[LLVMValueRef] = []
+    av.append(value: pa)
+    av.append(value: la)
+    av.append(value: pb)
+    av.append(value: lb)
+    val r: LLVMValueRef = LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 4U64, anon())
+    mut val pred: U32 = llvmIntNe()
+    if op == opNe() {
+        pred = llvmIntEq()
+    }
+    return LLVMBuildICmp(st.b, pred, r, LLVMConstInt(st.i64ty, 0U64, 0I32), anon())
+}
+
 // ---- arithmetic / comparison ----
 
 // Build an integer binary op as a single LLVM instruction. v1: signed semantics
@@ -331,13 +453,20 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
         }
         Expr.Ident(val start, val len) => {
             val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
-            if li < st.locStart.count {
+            if li < st.nLocals {
                 return LLVMBuildLoad2(st.b, st.locTy[li], st.locPtr[li], anon())
             }
             compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "LLVM backend: unknown identifier (only locals supported so far)")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
         Expr.Binary(val op, val lhs, val rhs) => {
+            // String ==/!= compares bytes via a runtime call (the operands are
+            // {ptr,i64} structs, not icmp-able).
+            if op == opEq() || op == opNe() {
+                if valueKind(c: inout c, st: inout st, id: lhs) == 1U64 {
+                    return emitStrEq(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
+                }
+            }
             val l: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: lhs)
             val r: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: rhs)
             return buildBinOp(c: inout c, st: inout st, op: op, l: l, r: r)
@@ -382,6 +511,9 @@ fn genLlvmCond(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
 // Resolve the callee like the C backend (findFunc), then lower it. v1 supports the
 // `exit` intrinsic only; other callees are rejected loudly until their increment.
 fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "print") {
+        return emitPrint(c: inout c, st: inout st, argExpr: args[0].expr)
+    }
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "write") {
         return emitStrSink(c: inout c, st: inout st, rtName: "plew_write_raw", rtId: 2U64, argExpr: args[0].expr)
     }
@@ -410,6 +542,13 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
             while ai < args.count {
                 av2.append(value: genLlvmExpr(c: inout c, st: inout st, id: args[ai].expr))
                 ai += 1
+            }
+            // fill omitted trailing params with their default expressions (spec/04).
+            val cf: Func = c.funcs[cfi]
+            mut val di: U64 = args.count
+            while di < cf.params.count {
+                av2.append(value: genLlvmExpr(c: inout c, st: inout st, id: cf.params[di].defaultExpr))
+                di += 1
             }
             return LLVMBuildCall2(st.b, st.fnTy[slot], st.fnVal[slot], arrayCPtr(av2), av2.count, anon())
         }
@@ -508,17 +647,19 @@ fn genLlvmFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     st.terminated = false
     // fresh local scope; bind each param into an alloca (so it reads/writes
     // uniformly with locals).
+    st.nLocals = 0
     st.locStart = []
     st.locLen = []
     st.locPtr = []
     st.locTy = []
+    st.locKind = []
     mut val pi: U64 = 0
     while pi < f.params.count {
         val p: Param = f.params[pi]
         val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen)
         val slot2: LLVMValueRef = LLVMBuildAlloca(st.b, pty, anon())
         LLVMBuildStore(st.b, LLVMGetParam(fv, pi), slot2)
-        pushLocal(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty)
+        pushLocal(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty, kind: kindFromTySpan(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen))
         pi += 1
     }
     genLlvmBlock(c: inout c, st: inout st, id: f.body)
@@ -543,17 +684,25 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
     val s: Stmt = c.stmts[id]
     match s {
         Stmt.Let(mutable: _, val nameStart, val nameLen, val tyStart, val tyLen, tyIsArray: _, ty: _, val init) => {
-            val lty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen)
-            val slot: LLVMValueRef = LLVMBuildAlloca(st.b, lty, anon())
+            // Compute the value first, then alloca its own LLVM type — robust for
+            // inferred lets (`val s = "..."`) with no annotation.
             val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: init)
+            val lty: LLVMTypeRef = LLVMTypeOf(v)
+            // kind: prefer the annotation (so `val x: U64 = lit` is unsigned), else
+            // infer from the initializer.
+            mut val kind: U64 = valueKind(c: inout c, st: inout st, id: init)
+            if tyLen > 0U64 {
+                kind = kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen)
+            }
+            val slot: LLVMValueRef = LLVMBuildAlloca(st.b, lty, anon())
             LLVMBuildStore(st.b, v, slot)
-            pushLocal(st: inout st, nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty)
+            pushLocal(st: inout st, nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind)
         }
         Stmt.Assign(val op, val target, val value) => {
             match c.exprs[target] {
                 Expr.Ident(val start, val len) => {
                     val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
-                    if li < st.locStart.count {
+                    if li < st.nLocals {
                         val rv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
                         if op == opAssign() {
                             LLVMBuildStore(st.b, rv, st.locPtr[li])
@@ -647,15 +796,19 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
 }
 
 fn genLlvmBlock(c: inout Comp, st: inout LlvmCtx, id: U64) {
+    // lexical scope: bindings declared in this block leave scope at its end.
+    val mark: U64 = st.nLocals
     val blk: Block = c.blocks[id]
     mut val i: U64 = 0
     while i < blk.stmts.count {
         if st.terminated {
+            st.nLocals = mark
             return
         }
         genLlvmStmt(c: inout c, st: inout st, id: blk.stmts[i])
         i += 1
     }
+    st.nLocals = mark
 }
 
 // ---- the LLVM backend entry ----
@@ -678,9 +831,9 @@ fn emitLlvm(c: inout Comp) {
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
-        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx)
+        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) nLocals=0
         fnIdx=[] fnVal=[] fnTy=[]
-        locStart=[] locLen=[] locPtr=[] locTy=[] declId=[] declFn=[] declTy=[] />
+        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] declId=[] declFn=[] declTy=[] />
 
     // pass 1: declare all plain user functions (so calls resolve before bodies).
     declareUserFns(c: inout c, st: inout st)
@@ -721,10 +874,12 @@ fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     LLVMPositionBuilderAtEnd(st.b, entry)
     st.terminated = false
     // fresh local scope.
+    st.nLocals = 0
     st.locStart = []
     st.locLen = []
     st.locPtr = []
     st.locTy = []
+    st.locKind = []
     genLlvmBlock(c: inout c, st: inout st, id: c.funcs[fi].body)
     if st.terminated {
     } else {
@@ -744,4 +899,10 @@ fn emitLlvmRuntime() {
     write(s: "void plew_write_raw(const char* d, long long n){ fwrite(d,1,(size_t)n,stdout); }\n")
     write(s: "void plew_eprint_raw(const char* d, long long n){ fwrite(d,1,(size_t)n,stderr); }\n")
     write(s: "__attribute__((noreturn)) void plew_panic_raw(const char* d, long long n){ fputs(\"panic: \",stderr); fwrite(d,1,(size_t)n,stderr); fputc('\\n',stderr); exit(1); }\n")
+    // print(x) formatters (textual form + newline), matching the Plew Format impls.
+    write(s: "void plew_print_str(const char* d, long long n){ fwrite(d,1,(size_t)n,stdout); fputc('\\n',stdout); }\n")
+    write(s: "void plew_print_i64(long long v){ printf(\"%lld\\n\", v); }\n")
+    write(s: "void plew_print_u64(unsigned long long v){ printf(\"%llu\\n\", v); }\n")
+    write(s: "void plew_print_bool(long long v){ fputs(v?\"1\":\"0\",stdout); fputc('\\n',stdout); }\n")
+    write(s: "long long plew_str_eq(const char* a, long long na, const char* b, long long nb){ if(na!=nb) return 0; for(long long i=0;i<na;i++) if(a[i]!=b[i]) return 0; return 1; }\n")
 }
