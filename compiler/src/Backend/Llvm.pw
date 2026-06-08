@@ -571,6 +571,10 @@ fn genLlvmMakeEnum(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U6
 fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, fields: Array[MakeField]) -> LLVMValueRef {
     val vi: U64 = variantIndex(c: inout c, enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
     val slot: LLVMValueRef = LLVMBuildAlloca(st.b, ety, anon())
+    // zero the whole cell first (tag + payload) so unused payload words are
+    // deterministic — a payload-less variant then has an all-zero payload, making
+    // tag+word structural `==` well-defined.
+    LLVMBuildStore(st.b, LLVMConstNull(ety), slot)
     LLVMBuildStore(st.b, LLVMConstInt(st.i64ty, vi, 0I32), LLVMBuildStructGEP2(st.b, ety, slot, 0U64, anon()))
     val fs: Array[FieldDef] = c.enums[eid].variants[vi].fields
     if fs.count > 0U64 {
@@ -1393,6 +1397,15 @@ fn exprEnumIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
         }
         _ => {}
     }
+    // an enum local carries a bare enum TypeRef on locTypeRef (typeOf can't see it).
+    val tr: U64 = exprTypeRef(c: inout c, st: inout st, id: id)
+    if tr != 0U64 {
+        val tt: TypeRef = c.types[tr]
+        val ei: U64 = enumIdxByName(c: inout c, start: tt.nameStart, len: tt.nameLen)
+        if ei < c.enums.count {
+            return ei
+        }
+    }
     val t: TypeInfo = typeOf(c: inout c, id: id)
     if t.kind == 2 {
         return enumIdxByName(c: inout c, start: t.nameStart, len: t.nameLen)
@@ -1412,6 +1425,66 @@ fn enumPayloadless(c: inout Comp, eid: U64) -> Bool {
         i += 1
     }
     return true
+}
+
+// The payload-word count of an enum (max over variants of summed field words) — the
+// length of the `[N x i64]` payload area.
+fn enumMaxWords(c: inout Comp, st: inout LlvmCtx, eid: U64) -> U64 {
+    val ed: EnumDef = c.enums[eid]
+    mut val maxW: U64 = 0
+    mut val vi: U64 = 0
+    while vi < ed.variants.count {
+        val fs: Array[FieldDef] = ed.variants[vi].fields
+        mut val w: U64 = 0
+        mut val fj: U64 = 0
+        while fj < fs.count {
+            w = w + fieldWords(c: inout c, st: inout st, tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
+            fj += 1
+        }
+        if w > maxW { maxW = w }
+        vi += 1
+    }
+    return maxW
+}
+
+// Whether a payload-carrying enum's `==` can use raw tag+word bit-equality: every
+// payload field is a scalar int/Bool (no String/struct/array, whose bytes don't
+// compare by identity). Bit-equality on a zero-initialized payload is then exact.
+fn enumEqWordable(c: inout Comp, st: inout LlvmCtx, eid: U64) -> Bool {
+    val ed: EnumDef = c.enums[eid]
+    mut val vi: U64 = 0
+    while vi < ed.variants.count {
+        val fs: Array[FieldDef] = ed.variants[vi].fields
+        mut val fj: U64 = 0
+        while fj < fs.count {
+            if fs[fj].tyIsArray { return false }
+            if rangeEquals(bytes: c.bytes, start: fs[fj].tyStart, len: fs[fj].tyLen, kw: "String") { return false }
+            if isEnumName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen) { return false }
+            if structRegSlot(c: inout c, st: inout st, start: fs[fj].tyStart, len: fs[fj].tyLen) < st.structIdxs.count { return false }
+            fj += 1
+        }
+        vi += 1
+    }
+    return true
+}
+
+// Structural `==` of two payload-carrying enum VALUES (gated by enumEqWordable):
+// tags equal AND every payload word equal (the payload is zero-initialized, so
+// inactive words are 0 and equal-valued same-variant values are bit-identical).
+fn emitEnumEqWords(c: inout Comp, st: inout LlvmCtx, l: LLVMValueRef, r: LLVMValueRef, eid: U64) -> LLVMValueRef {
+    mut val acc: LLVMValueRef = LLVMBuildICmp(st.b, llvmIntEq(), LLVMBuildExtractValue(st.b, l, 0U64, anon()), LLVMBuildExtractValue(st.b, r, 0U64, anon()), anon())
+    val maxW: U64 = enumMaxWords(c: inout c, st: inout st, eid: eid)
+    if maxW > 0U64 {
+        val plL: LLVMValueRef = LLVMBuildExtractValue(st.b, l, 1U64, anon())
+        val plR: LLVMValueRef = LLVMBuildExtractValue(st.b, r, 1U64, anon())
+        mut val i: U64 = 0
+        while i < maxW {
+            val wEq: LLVMValueRef = LLVMBuildICmp(st.b, llvmIntEq(), LLVMBuildExtractValue(st.b, plL, i, anon()), LLVMBuildExtractValue(st.b, plR, i, anon()), anon())
+            acc = LLVMBuildAnd(st.b, acc, wEq, anon())
+            i += 1
+        }
+    }
+    return acc
 }
 
 // Whether a struct's fields are all comparable here (no array/enum field).
@@ -1705,6 +1778,15 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                             pred = llvmIntNe()
                         }
                         return LLVMBuildICmp(st.b, pred, tagL, tagR, anon())
+                    }
+                    // a payload-carrying enum with all-scalar payloads: tag + word
+                    // bit-equality (correct on the zero-initialized payload).
+                    if enumEqWordable(c: inout c, st: inout st, eid: eidE) {
+                        val eqv: LLVMValueRef = emitEnumEqWords(c: inout c, st: inout st, l: l, r: r, eid: eidE)
+                        if op == opNe() {
+                            return LLVMBuildNot(st.b, eqv, anon())
+                        }
+                        return eqv
                     }
                 }
             }
@@ -3464,6 +3546,15 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             // is false for it).
             if isRefInst(c: inout c, ref: ty) {
                 tref = ty
+            }
+            // a non-generic enum local: track a bare TypeRef so `==`/match recover
+            // the enum (typeOf can't see locals — c.locals is unpopulated here).
+            if tref == 0U64 {
+                if tyLen > 0U64 {
+                    if enumRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen) < st.enumIdxs.count {
+                        tref = simpleTypeRef(c: inout c, nameStart: tyStart, nameLen: tyLen)
+                    }
+                }
             }
             val slot: LLVMValueRef = LLVMBuildAlloca(st.b, lty, anon())
             LLVMBuildStore(st.b, v, slot)
