@@ -21,9 +21,10 @@ PLEWC_LLVM=compiler/plewc-llvm
 RT=/tmp/plew_llvm_rt.c
 "$PLEWC_LLVM" --runtime > "$RT"
 
-# Known gaps the LLVM backend doesn't model yet (value-semantics CoW on arrays):
-# tracked separately so they don't mask real regressions. Remove as features land.
-KNOWN_GAP=" let_infer cow_struct value_semantics_more value_semantics_return value_semantics_struct "
+# Known gaps the LLVM backend doesn't model yet (tracked separately so they don't
+# mask real regressions). Remove as features land. (Eager value-semantics CoW for
+# arrays + struct-with-array now landed; let_infer needs a user Index subscript.)
+KNOWN_GAP=" "
 
 pass=0; skip=0; fail=0; gap=0
 failed=""

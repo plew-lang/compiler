@@ -3337,7 +3337,14 @@ fn genFieldValue(c: inout Comp, st: inout LlvmCtx, valExpr: U64, fld: FieldDef) 
             }
             _ => {}
         }
-        return genLlvmExpr(c: inout c, st: inout st, id: valExpr)
+        // value semantics: an array field initialized from a place (`<Holder items=a/>`)
+        // copies the buffer so later mutation of the source leaves the struct's
+        // field unchanged.
+        mut val av: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: valExpr)
+        if arrayExprIsPlace(c: inout c, id: valExpr) {
+            av = copyArrayValue(c: inout c, st: inout st, arrVal: av, elemTy: llvmScalarTy(c: inout c, st: inout st, tyStart: fld.tyStart, tyLen: fld.tyLen))
+        }
+        return av
     }
     // a boxed (recursive) struct field: build the value, heap-allocate a cell, store
     // it, and put the cell pointer in the struct (leaky, like Ref — no free yet).
@@ -3403,6 +3410,69 @@ fn arrayExprIsPlace(c: inout Comp, id: U64) -> Bool {
         Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
         _ => { return false }
     }
+}
+
+// Deep value-semantics copy of a struct value `v` of struct `sidx`: the aggregate
+// is already bit-copied (LLVM by-value), but each ARRAY field's buffer is shared,
+// so copy it (and recurse into nested-struct fields) — `val y = x` then
+// `x.items[0]=…` must leave y.items unchanged. Fields under a generic env resolve
+// via the active substitution. Non-array/non-struct fields pass through unchanged.
+fn deepCopyStructValue(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, sidx: U64) -> LLVMValueRef {
+    val sd: StructDef = c.structs[sidx]
+    mut val agg: LLVMValueRef = v
+    mut val fi: U64 = 0
+    while fi < sd.fields.count {
+        val fd: FieldDef = sd.fields[fi]
+        if fd.tyIsArray {
+            val elem: LLVMValueRef = LLVMBuildExtractValue(st.b, agg, fi, anon())
+            val et: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: fd.tyStart, tyLen: fd.tyLen)
+            agg = LLVMBuildInsertValue(st.b, agg, copyArrayValue(c: inout c, st: inout st, arrVal: elem, elemTy: et), fi, anon())
+        } else {
+            if fieldIsBoxed(c: inout c, f: fd) {
+                // a boxed (recursive) field is a shared heap pointer — leave it (deep
+                // copy of the cyclic graph is a later ARC refinement).
+            } else {
+                val nsi: U64 = localStructIdxFor(c: inout c, st: inout st, start: fd.tyStart, len: fd.tyLen)
+                if nsi < c.structs.count {
+                    val elem: LLVMValueRef = LLVMBuildExtractValue(st.b, agg, fi, anon())
+                    agg = LLVMBuildInsertValue(st.b, agg, deepCopyStructValue(c: inout c, st: inout st, v: elem, sidx: nsi), fi, anon())
+                }
+            }
+        }
+        fi += 1
+    }
+    return agg
+}
+
+// Whether a non-array expression is an existing struct PLACE (Ident/Field) whose
+// value-copy must deep-copy array fields.
+fn structExprIsPlace(c: inout Comp, id: U64) -> Bool {
+    match c.exprs[id] {
+        Expr.Ident(start: _, len: _) => { return true }
+        Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
+        _ => { return false }
+    }
+}
+
+// Value-semantics copy of `rv` (the already-emitted value of `valueExpr`) when
+// `valueExpr` is an existing array/struct PLACE being moved into a NEW owner
+// (return, assignment RHS, a struct/array field initializer). A literal / call /
+// append result already owns its buffer and is returned unchanged. Over-copying is
+// observably harmless (value semantics shares nothing); under-copying miscompiles.
+fn copyValueIfPlace(c: inout Comp, st: inout LlvmCtx, rv: LLVMValueRef, valueExpr: U64) -> LLVMValueRef {
+    if exprIsArray(c: inout c, st: inout st, id: valueExpr) {
+        if arrayExprIsPlace(c: inout c, id: valueExpr) {
+            return copyArrayValue(c: inout c, st: inout st, arrVal: rv, elemTy: arrElemTyOf(c: inout c, st: inout st, id: valueExpr))
+        }
+        return rv
+    }
+    if structExprIsPlace(c: inout c, id: valueExpr) {
+        val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: valueExpr)
+        if sidx < c.structs.count {
+            return deepCopyStructValue(c: inout c, st: inout st, v: rv, sidx: sidx)
+        }
+    }
+    return rv
 }
 
 // Bounds-check `i` against `count` via the runtime (panics on out-of-range).
@@ -5375,6 +5445,15 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                     if arrayExprIsPlace(c: inout c, id: init) {
                         v = copyArrayValue(c: inout c, st: inout st, arrVal: v, elemTy: elemTy)
                     }
+                } else {
+                    // a struct value bound from a place deep-copies its array fields
+                    // (`val y = x` then `x.items[0]=…` leaves y.items unchanged).
+                    if structExprIsPlace(c: inout c, id: init) {
+                        val csi: U64 = exprStructIdx(c: inout c, st: inout st, id: init)
+                        if csi < c.structs.count {
+                            v = deepCopyStructValue(c: inout c, st: inout st, v: v, sidx: csi)
+                        }
+                    }
                 }
             }
             mut val kind: U64 = valueKind(c: inout c, st: inout st, id: init)
@@ -5470,6 +5549,11 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                         // literal may default wider/narrower).
                         if LLVMGetTypeKind(LLVMTypeOf(rv)) == 8U32 {
                             rv = coerceInt(st: inout st, v: rv, target: st.locTy[li], unsigned: st.locKind[li] == 3U64)
+                        }
+                        // value semantics: a plain assignment from an array/struct place
+                        // (`b = a`) copies so the two bindings stay independent.
+                        if op == opAssign() {
+                            rv = copyValueIfPlace(c: inout c, st: inout st, rv: rv, valueExpr: value)
                         }
                         if op == opAssign() {
                             LLVMBuildStore(st.b, rv, st.locPtr[li])
@@ -5605,6 +5689,9 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                     if st.curRetTyLen > 0U64 {
                         rv = coerceIntTo(c: inout c, st: inout st, v: rv, tyStart: st.curRetTyStart, tyLen: st.curRetTyLen)
                     }
+                    // value semantics: returning an array/struct place gives the caller
+                    // an independent value (`return b.xs` then caller's `r[0]=…`).
+                    rv = copyValueIfPlace(c: inout c, st: inout st, rv: rv, valueExpr: value)
                     LLVMBuildRet(st.b, rv)
                 } else {
                     LLVMBuildRetVoid(st.b)
