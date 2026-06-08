@@ -263,6 +263,11 @@ struct LlvmCtx {
     pub mut val thunkIdx: Array[U64]
     pub mut val thunkVal: Array[LLVMValueRef]
     pub mut val thunkTy: Array[LLVMTypeRef]
+    // provided trait methods reached (called) during emission: declared lazily (so
+    // an uncalled std-trait adapter method — map/filter, whose body constructs an
+    // unsupported adapter — is never emitted), then their bodies drained after the
+    // main pass (a body may reach further provided methods — fixpoint).
+    pub mut val provEmit: Array[U64]
 }
 
 // A NUL-terminated C string from a Plew literal, for the many `const char*` name
@@ -3284,7 +3289,14 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: method not found / not yet supported")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
-    val slot: U64 = userFnSlot(st: inout st, idx: mfi)
+    mut val slot: U64 = userFnSlot(st: inout st, idx: mfi)
+    // a provided trait method is declared+queued lazily the first time it is called.
+    if slot < st.fnIdx.count {
+    } else {
+        if c.funcs[mfi].isProvided {
+            slot = ensureProvidedDeclared(c: inout c, st: inout st, fi: mfi)
+        }
+    }
     if slot < st.fnIdx.count {
     } else {
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: this method is not emittable yet (generic / provided / trait receiver)")
@@ -3576,10 +3588,12 @@ fn isPlainUserFn(c: inout Comp, st: inout LlvmCtx, fi: U64) -> Bool {
     val f: Func = c.funcs[fi]
     if nameIsMain(c: inout c, f: f) { return false }
     if f.isExtern { return false }
-    // a provided trait method is copied onto each conformer (recv = conformer) and
-    // emitted like an inherent method through the hasRecv path below — gated to a
-    // registered struct in the entry module, so std-trait provided methods (whose
-    // shared body lives in std) stay excluded. (No blanket isProvided reject.)
+    // a provided trait method is NOT emitted upfront: it is declared+emitted lazily
+    // the first time a call resolves to it (ensureProvidedDeclared), so an uncalled
+    // std-trait adapter method (map/filter, whose body builds an unsupported adapter)
+    // never gets emitted. The body offset can't tell std from entry reliably here, so
+    // reachability is the gate, not module membership.
+    if f.isProvided { return false }
     if f.typeParams.count > 0 { return false }
     if f.isAssoc {
         // an associated function (`Type.name(args)`, no self) is emitted like a
@@ -3720,6 +3734,59 @@ fn declareUserFns(c: inout Comp, st: inout LlvmCtx) {
             st.fnTy.append(value: fty)
         }
         fi += 1
+    }
+}
+
+// Lazily declare a (non-generic) provided trait method `fi` reached at a call site:
+// add its `pf<fi>` symbol with the self-first method signature and queue its body
+// for emission (provEmit). Returns the fnIdx slot, or st.fnIdx.count if it can't be
+// emitted (generic / non-struct receiver). Idempotent (returns the existing slot).
+fn ensureProvidedDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
+    val existing: U64 = userFnSlot(st: inout st, idx: fi)
+    if existing < st.fnIdx.count {
+        return existing
+    }
+    val f: Func = c.funcs[fi]
+    if f.typeParams.count > 0U64 {
+        return st.fnIdx.count
+    }
+    if f.hasRecv {
+    } else {
+        return st.fnIdx.count
+    }
+    if structRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.structIdxs.count {
+    } else {
+        return st.fnIdx.count
+    }
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: selfParamTy(c: inout c, st: inout st, f: f))
+    mut val pi: U64 = 0
+    while pi < f.params.count {
+        ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: f.params[pi]))
+        pi += 1
+    }
+    val fty: LLVMTypeRef = LLVMFunctionType(llvmFnRetTy(c: inout c, st: inout st, f: f), arrayCPtr(ptys), ptys.count, 0I32)
+    mut val nm: Array[U8] = []
+    appendBytes(into: inout nm, from: "pf".bytes)
+    appendU64Dec(into: inout nm, n: fi)
+    nm.append(value: 0)
+    val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
+    st.fnIdx.append(value: fi)
+    st.fnVal.append(value: fv)
+    st.fnTy.append(value: fty)
+    st.provEmit.append(value: fi)
+    return st.fnIdx.count - 1U64
+}
+
+// Emit the bodies of provided methods reached during the main pass; a body may
+// reach further provided methods (declared lazily as it emits), so loop until the
+// queue stops growing.
+fn emitProvidedMethods(c: inout Comp, st: inout LlvmCtx) {
+    mut val i: U64 = 0
+    while i < st.provEmit.count {
+        val fi: U64 = st.provEmit[i]
+        genLlvmFuncBody(c: inout c, st: inout st, fi: fi, fv: st.fnVal[userFnSlot(st: inout st, idx: fi)])
+        i += 1
     }
 }
 
@@ -5142,10 +5209,118 @@ fn genLlvmForRange(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64,
 }
 
 // `for x in arr { body }`: walk an array by index, binding x to each element.
+// `for x in iterable { body }` over a user Iterable (spec/11): desugar to the
+// iterator protocol — `it = iterable.iterator(); loop { match it.next() { Some(v)
+// => { x = v; body }, None => break } }`. The iterator is stored in a mutable slot
+// (next() is `inout`); each next() yields an Optional[Item] matched by tag.
+fn genLlvmForIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64, iter: U64, body: U64) {
+    val isidx: U64 = exprStructIdx(c: inout c, st: inout st, id: iter)
+    if isidx < c.structs.count {
+    } else {
+        compileErrorAt(line: 0, msg: "LLVM backend: for-loop over a non-array (Iterable) not yet supported")
+        return
+    }
+    val isd: StructDef = c.structs[isidx]
+    val noArgs: Array[Arg] = []
+    // iterable.iterator() -> Iter value
+    val itB: Bind = kwSpan(c: inout c, kw: "iterator", kwLen: 8U64)
+    val itfi: U64 = findMethod(c: inout c, recvStart: isd.nameStart, recvLen: isd.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
+    if itfi < c.funcs.count {
+    } else {
+        compileErrorAt(line: 0, msg: "LLVM backend: Iterable for-loop needs an `iterator` method")
+        return
+    }
+    val itSlotF: U64 = userFnSlot(st: inout st, idx: itfi)
+    if itSlotF < st.fnIdx.count {
+    } else {
+        compileErrorAt(line: 0, msg: "LLVM backend: this Iterable's iterator method is not emittable yet")
+        return
+    }
+    val itf: Func = c.funcs[itfi]
+    val iterableVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: iter)
+    mut val itArgs: Array[LLVMValueRef] = []
+    itArgs.append(value: iterableVal)
+    val iterVal: LLVMValueRef = LLVMBuildCall2(st.b, st.fnTy[itSlotF], st.fnVal[itSlotF], arrayCPtr(itArgs), 1U64, anon())
+    val iterTy: LLVMTypeRef = LLVMTypeOf(iterVal)
+    val iterSlot: LLVMValueRef = LLVMBuildAlloca(st.b, iterTy, anon())
+    LLVMBuildStore(st.b, iterVal, iterSlot)
+    // next() on the Iter struct -> Optional[Item]
+    val nextB: Bind = kwSpan(c: inout c, kw: "next", kwLen: 4U64)
+    val nfi: U64 = findMethod(c: inout c, recvStart: itf.retStart, recvLen: itf.retLen, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
+    if nfi < c.funcs.count {
+    } else {
+        compileErrorAt(line: 0, msg: "LLVM backend: Iterable for-loop needs a `next` method on the iterator")
+        return
+    }
+    val nSlotF: U64 = userFnSlot(st: inout st, idx: nfi)
+    if nSlotF < st.fnIdx.count {
+    } else {
+        compileErrorAt(line: 0, msg: "LLVM backend: this iterator's next method is not emittable yet")
+        return
+    }
+    val nf: Func = c.funcs[nfi]
+    val optRef: U64 = nf.retTy
+    // resolve the Optional enum (def + Some variant) under its instance env.
+    val savedP: Array[Bind] = c.curTypeParams
+    val savedA: Array[U64] = c.curTypeArgs
+    val didSet: Bool = setEnumEnv(c: inout c, st: inout st, ref: optRef)
+    val ge: U64 = genEnumSlot(c: inout c, st: inout st, ref: optRef)
+    if ge < st.genEnumRefs.count {
+    } else {
+        if didSet { c.curTypeParams = savedP  c.curTypeArgs = savedA }
+        compileErrorAt(line: 0, msg: "LLVM backend: iterator next must return a registered Optional instance")
+        return
+    }
+    val optEid: U64 = st.genEnumDefs[ge]
+    val optTy: LLVMTypeRef = st.genEnumTys[ge]
+    val ed: EnumDef = c.enums[optEid]
+    val someB: Bind = kwSpan(c: inout c, kw: "Some", kwLen: 4U64)
+    val someVi: U64 = variantIndex(c: inout c, enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: someB.nameStart, variantLen: someB.nameLen)
+    val payloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: optEid, vi: someVi)
+    // the bound element's declared type (the Some payload's single field).
+    val itemFs: Array[FieldDef] = ed.variants[someVi].fields
+    val mark: U64 = st.nLocals
+    val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fit.cond"))
+    val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fit.body"))
+    val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fit.end"))
+    LLVMBuildBr(st.b, condBB)
+    LLVMPositionBuilderAtEnd(st.b, condBB)
+    // it.next() — self is `inout` (the iterator slot pointer); yields Optional[Item].
+    mut val nArgs: Array[LLVMValueRef] = []
+    nArgs.append(value: iterSlot)
+    val opt: LLVMValueRef = LLVMBuildCall2(st.b, st.fnTy[nSlotF], st.fnVal[nSlotF], arrayCPtr(nArgs), 1U64, anon())
+    val optSlot: LLVMValueRef = LLVMBuildAlloca(st.b, optTy, anon())
+    LLVMBuildStore(st.b, opt, optSlot)
+    val tag: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, LLVMBuildStructGEP2(st.b, optTy, optSlot, 0U64, anon()), anon())
+    val isSome: LLVMValueRef = LLVMBuildICmp(st.b, llvmIntEq(), tag, LLVMConstInt(st.i64ty, someVi, 0I32), anon())
+    LLVMBuildCondBr(st.b, isSome, bodyBB, endBB)
+    LLVMPositionBuilderAtEnd(st.b, bodyBB)
+    st.terminated = false
+    // bind x = the Some payload's field 0.
+    val payload: LLVMValueRef = LLVMBuildLoad2(st.b, payloadTy, LLVMBuildStructGEP2(st.b, optTy, optSlot, 1U64, anon()), anon())
+    val xVal: LLVMValueRef = LLVMBuildExtractValue(st.b, payload, 0U64, anon())
+    val xTy: LLVMTypeRef = LLVMTypeOf(xVal)
+    val xSlot: LLVMValueRef = LLVMBuildAlloca(st.b, xTy, anon())
+    LLVMBuildStore(st.b, xVal, xSlot)
+    val xStart: U64 = itemFs[0].tyStart
+    val xLen: U64 = itemFs[0].tyLen
+    pushLocalR(st: inout st, nameStart: varStart, nameLen: varLen, ptr: xSlot, ty: xTy, kind: kindFromTySpan(c: inout c, tyStart: xStart, tyLen: xLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: xStart, len: xLen), isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: 0U64)
+    if didSet { c.curTypeParams = savedP  c.curTypeArgs = savedA }
+    genLlvmBlock(c: inout c, st: inout st, id: body)
+    st.nLocals = mark
+    if st.terminated {
+    } else {
+        LLVMBuildBr(st.b, condBB)
+    }
+    LLVMPositionBuilderAtEnd(st.b, endBB)
+    st.terminated = false
+    st.nLocals = mark
+}
+
 fn genLlvmForArray(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64, iter: U64, body: U64) {
     if exprIsArray(c: inout c, st: inout st, id: iter) {
     } else {
-        compileErrorAt(line: 0, msg: "LLVM backend: for-loop over a non-array (Iterable) not yet supported")
+        genLlvmForIterable(c: inout c, st: inout st, varStart: varStart, varLen: varLen, iter: iter, body: body)
         return
     }
     val mark: U64 = st.nLocals
@@ -5274,7 +5449,7 @@ fn emitLlvm(c: inout Comp) {
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[]
-        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] />
+        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] provEmit=[] />
 
     // a "self" byte span (appended past the source) to bind method receivers.
     st.selfStart = c.bytes.count
@@ -5321,6 +5496,8 @@ fn emitLlvm(c: inout Comp) {
     // lambda-lifted closure bodies + function-value thunks.
     emitClosures(c: inout c, st: inout st)
     emitThunks(c: inout c, st: inout st)
+    // provided trait methods reached during the passes above (declared lazily).
+    emitProvidedMethods(c: inout c, st: inout st)
     if foundMain {
     } else {
         compileErrorAt(line: 0, msg: "LLVM backend: no `main` function found")
