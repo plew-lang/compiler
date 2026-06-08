@@ -866,6 +866,28 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 }
             }
         }
+        Expr.Unary(val op, val operand) => {
+            // a unary operator result used as a struct (`(-m).cents`): the witness's
+            // return type drives further field access.
+            val uwfi: U64 = unaryWitnessFn(c: inout c, st: inout st, op: op, operand: operand)
+            if uwfi < c.funcs.count {
+                if c.funcs[uwfi].hasRet {
+                    return localStructIdxFor(c: inout c, st: inout st, start: c.funcs[uwfi].retStart, len: c.funcs[uwfi].retLen)
+                }
+            }
+        }
+        Expr.Binary(val op, val lhs, val rhs) => {
+            // a binary operator result used as a struct (`(a + b).x`): the witness's
+            // return type drives further field access.
+            if isBinTraitOp(op: op) {
+                val wfi: U64 = binWitnessFn(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
+                if wfi < c.funcs.count {
+                    if c.funcs[wfi].hasRet {
+                        return localStructIdxFor(c: inout c, st: inout st, start: c.funcs[wfi].retStart, len: c.funcs[wfi].retLen)
+                    }
+                }
+            }
+        }
         _ => {}
     }
     return c.structs.count
@@ -1018,6 +1040,117 @@ fn genPrimOpWitness(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64, 
     val l: LLVMValueRef = coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: ty, unsigned: uns)
     val r: LLVMValueRef = coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[1].expr), target: ty, unsigned: uns)
     return buildBinOpS(c: inout c, st: inout st, op: op, l: l, r: r, unsigned: uns)
+}
+
+// The c.funcs index of the binary operator-trait witness `T.<name>(lhs:, rhs:)`
+// for a struct/enum lhs operand (so `money + money` dispatches to the user's
+// `impl Money as Add`), or c.funcs.count when the lhs isn't a registered
+// aggregate (a primitive — the caller keeps the built-in op). Mirrors the C
+// backend's findBinTraitWitness, but recovers the rhs type via the LLVM env
+// (typeOf can't see locals here), so `a + b` (rhs Vec2) picks `Add[Vec2]` over
+// `Add[I64]` correctly.
+fn binWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -> U64 {
+    mut val ownStart: U64 = 0
+    mut val ownLen: U64 = 0
+    val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: lhs)
+    if sidx < c.structs.count {
+        ownStart = c.structs[sidx].nameStart
+        ownLen = c.structs[sidx].nameLen
+    } else {
+        val eid: U64 = exprEnumIdx(c: inout c, st: inout st, id: lhs)
+        if eid < c.enums.count {
+            ownStart = c.enums[eid].nameStart
+            ownLen = c.enums[eid].nameLen
+        } else {
+            return c.funcs.count
+        }
+    }
+    val qType: U64 = intern(c: inout c, start: ownStart, len: ownLen)
+    val name: String = binTraitMethodName(op: op)
+    // the rhs type id, recovered from the LLVM env: a known struct/enum has an
+    // exact name (-> exact overload); a primitive rhs is int-ish (-> int overload).
+    mut val rhsId: U64 = 0
+    mut val rhsKnown: Bool = false
+    val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: rhs)
+    if rsidx < c.structs.count {
+        rhsId = intern(c: inout c, start: c.structs[rsidx].nameStart, len: c.structs[rsidx].nameLen)
+        rhsKnown = true
+    } else {
+        val reid: U64 = exprEnumIdx(c: inout c, st: inout st, id: rhs)
+        if reid < c.enums.count {
+            rhsId = intern(c: inout c, start: c.enums[reid].nameStart, len: c.enums[reid].nameLen)
+            rhsKnown = true
+        }
+    }
+    mut val firstMatch: U64 = c.funcs.count
+    mut val intMatch: U64 = c.funcs.count
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.isAssoc {
+            if f.recvId == qType {
+                if rangeEquals(bytes: c.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
+                    if firstMatch == c.funcs.count {
+                        firstMatch = i
+                    }
+                    if f.params.count >= 2U64 {
+                        if rhsKnown {
+                            if f.params[1].tyNameId == rhsId {
+                                return i
+                            }
+                        }
+                        if intMatch == c.funcs.count {
+                            if isIntType(c: inout c, start: f.params[1].tyStart, len: f.params[1].tyLen) {
+                                intMatch = i
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        i += 1
+    }
+    if rhsKnown {
+    } else {
+        if intMatch < c.funcs.count {
+            return intMatch
+        }
+    }
+    return firstMatch
+}
+
+// The c.funcs index of the prefix-unary operator-trait witness `T.<name>(value:)`
+// for a struct/enum operand (`-money` -> `Money.neg(value:)`), or c.funcs.count
+// when the operand isn't a registered aggregate.
+fn unaryWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, operand: U64) -> U64 {
+    val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: operand)
+    if sidx < c.structs.count {
+        return findAssocByName(c: inout c, typeStart: c.structs[sidx].nameStart, typeLen: c.structs[sidx].nameLen, name: unaryMethodName(op: op))
+    }
+    val eid: U64 = exprEnumIdx(c: inout c, st: inout st, id: operand)
+    if eid < c.enums.count {
+        return findAssocByName(c: inout c, typeStart: c.enums[eid].nameStart, typeLen: c.enums[eid].nameLen, name: unaryMethodName(op: op))
+    }
+    return c.funcs.count
+}
+
+// Emit a call to a resolved operator-trait witness assoc fn (binary: lhs/rhs;
+// unary: just lhs). The witness must be emitted (collectReachableAssoc seeds all
+// operator witnesses); a missing slot is a loud not-yet-emittable error.
+fn emitWitnessCall(c: inout Comp, st: inout LlvmCtx, fi: U64, lhs: U64, rhs: U64, binary: Bool) -> LLVMValueRef {
+    val aslot: U64 = userFnSlot(st: inout st, idx: fi)
+    if aslot < st.fnIdx.count {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "LLVM backend: operator witness not emittable yet")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val af: Func = c.funcs[fi]
+    mut val av: Array[LLVMValueRef] = []
+    av.append(value: genArgValue(c: inout c, st: inout st, argExpr: lhs, p: af.params[0]))
+    if binary {
+        av.append(value: genArgValue(c: inout c, st: inout st, argExpr: rhs, p: af.params[1]))
+    }
+    return LLVMBuildCall2(st.b, st.fnTy[aslot], st.fnVal[aslot], arrayCPtr(av), av.count, anon())
 }
 
 // Is this type name an unsigned integer (for choosing signed vs unsigned ops /
@@ -1779,6 +1912,16 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                     return emitStrEq(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
                 }
             }
+            // struct/enum arithmetic / bitwise / shift: dispatch to the user's
+            // operator-trait witness assoc fn (`money + money` -> `Money.add`),
+            // mirroring the C backend's emitBinTraitCall. A primitive lhs has no
+            // aggregate witness (binWitnessFn -> none) and falls through.
+            if isBinTraitOp(op: op) {
+                val wfi: U64 = binWitnessFn(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
+                if wfi < c.funcs.count {
+                    return emitWitnessCall(c: inout c, st: inout st, fi: wfi, lhs: lhs, rhs: rhs, binary: true)
+                }
+            }
             mut val l: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: lhs)
             mut val r: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: rhs)
             // struct ==/!= : structural (field-by-field) equality (the Eq witness).
@@ -1934,6 +2077,13 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
         Expr.Unary(val op, val operand) => {
+            // a struct/enum operand dispatches to its unary operator-trait witness
+            // (`-money` -> `Money.neg(value:)`, `!switch` -> `Switch.not`). A
+            // primitive operand has no aggregate witness and keeps the LLVM op.
+            val uwfi: U64 = unaryWitnessFn(c: inout c, st: inout st, op: op, operand: operand)
+            if uwfi < c.funcs.count {
+                return emitWitnessCall(c: inout c, st: inout st, fi: uwfi, lhs: operand, rhs: operand, binary: false)
+            }
             if op == opSub() {
                 return LLVMBuildNeg(st.b, genLlvmExpr(c: inout c, st: inout st, id: operand), anon())
             }
@@ -2829,6 +2979,26 @@ fn markReachAssoc(st: inout LlvmCtx, fi: U64) -> Bool {
     return true
 }
 
+// Whether an assoc-fn name is an operator-trait witness (binary add/sub/mul/div/
+// rem/bitand/bitor/bitxor/shl/shr, unary neg/not/bitnot). Used to seed reachable
+// emission for operator desugar, which leaves no call node to scan.
+fn isOperatorWitnessName(c: inout Comp, start: U64, len: U64) -> Bool {
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "add") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "sub") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "mul") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "div") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "rem") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "bitand") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "bitor") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "bitxor") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "shl") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "shr") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "neg") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "not") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "bitnot") { return true }
+    return false
+}
+
 fn inReachAssoc(st: inout LlvmCtx, fi: U64) -> Bool {
     mut val i: U64 = 0
     while i < st.reachAssoc.count {
@@ -2941,6 +3111,15 @@ fn collectReachableAssoc(c: inout Comp, st: inout LlvmCtx) {
     mut val fi: U64 = 0
     while fi < c.funcs.count {
         if c.funcs[fi].isAssoc {
+            // an operator-trait witness (add/sub/.../neg/not/bitnot) is reached
+            // structurally, not by call-graph: operator desugar (`a + b`, `-x`)
+            // leaves no `Type.name(...)` call in the AST for the scan to see, and
+            // a value operand's type isn't known at scan time (c.locals is empty
+            // outside codegen). These names never collide with derive-generated
+            // Eq/Ord (eq/compare), so derived witnesses stay correctly excluded.
+            if isOperatorWitnessName(c: inout c, start: c.funcs[fi].nameStart, len: c.funcs[fi].nameLen) {
+                markReachAssoc(st: inout st, fi: fi)
+            }
         } else {
             scanBlockAssoc(c: inout c, st: inout st, id: c.funcs[fi].body)
         }
