@@ -53,6 +53,7 @@ extern(c) {
     fn LLVMStructTypeInContext(ctx~: LLVMContextRef, elemTypes~: CPtr[LLVMTypeRef], count~: U32, packed~: I32) -> LLVMTypeRef
     fn LLVMStructCreateNamed(ctx~: LLVMContextRef, name~: CPtr[U8]) -> LLVMTypeRef
     fn LLVMStructSetBody(structTy~: LLVMTypeRef, elemTypes~: CPtr[LLVMTypeRef], count~: U64, packed~: I32)
+    fn LLVMArrayType2(elemTy~: LLVMTypeRef, count~: U64) -> LLVMTypeRef
     fn LLVMBuildStructGEP2(b~: LLVMBuilderRef, ty~: LLVMTypeRef, ptr~: LLVMValueRef, idx~: U64, name~: CPtr[U8]) -> LLVMValueRef
     // count is the C API's `unsigned`; declared U64 here because Plew has no
     // narrowing `as` yet (an Array.count is U64). Safe on LP64 (arm64/x86-64):
@@ -69,10 +70,12 @@ extern(c) {
     fn LLVMConstInt(ty~: LLVMTypeRef, n~: U64, signExtend~: I32) -> LLVMValueRef
     fn LLVMTypeOf(v~: LLVMValueRef) -> LLVMTypeRef
     fn LLVMGetIntTypeWidth(ty~: LLVMTypeRef) -> U32
+    fn LLVMGetTypeKind(ty~: LLVMTypeRef) -> U32
 
     // Builder + instructions.
     fn LLVMCreateBuilderInContext(ctx~: LLVMContextRef) -> LLVMBuilderRef
     fn LLVMPositionBuilderAtEnd(b~: LLVMBuilderRef, bb~: LLVMBasicBlockRef)
+    fn LLVMGetInsertBlock(b~: LLVMBuilderRef) -> LLVMBasicBlockRef
     fn LLVMBuildRet(b~: LLVMBuilderRef, v~: LLVMValueRef) -> LLVMValueRef
     fn LLVMBuildRetVoid(b~: LLVMBuilderRef) -> LLVMValueRef
     fn LLVMBuildCall2(b~: LLVMBuilderRef, fnTy~: LLVMTypeRef, func~: LLVMValueRef, args~: CPtr[LLVMValueRef], numArgs~: U64, name~: CPtr[U8]) -> LLVMValueRef
@@ -147,6 +150,10 @@ struct LlvmCtx {
     // registered struct types (parallel: c.structs index -> named LLVM struct type).
     pub mut val structIdxs: Array[U64]
     pub mut val structTys: Array[LLVMTypeRef]
+    // registered enum types (parallel: c.enums index -> named LLVM type
+    // `{ i64 tag, [maxWords x i64] payload }`).
+    pub mut val enumIdxs: Array[U64]
+    pub mut val enumTys: Array[LLVMTypeRef]
     // a byte span whose content is "self" (appended to c.bytes), to bind the
     // method receiver as a local that the body's `self` identifiers resolve to.
     pub mut val selfStart: U64
@@ -217,6 +224,11 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
     val reg: U64 = structRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen)
     if reg < st.structIdxs.count {
         return st.structTys[reg]
+    }
+    // a registered enum -> its named tagged-union type.
+    val ereg: U64 = enumRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen)
+    if ereg < st.enumIdxs.count {
+        return st.enumTys[ereg]
     }
     return st.i64ty
 }
@@ -302,6 +314,188 @@ fn registerStructs(c: inout Comp, st: inout LlvmCtx) {
         }
         i += 1
     }
+}
+
+// ---- enums (tagged unions) ----
+
+// Index into st.enum* for a registered enum named (start,len), or st.enumIdxs.count.
+fn enumRegSlot(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 {
+    val eid: U64 = enumIdxByName(c: inout c, start: start, len: len)
+    if eid < c.enums.count {
+        mut val i: U64 = 0
+        while i < st.enumIdxs.count {
+            if st.enumIdxs[i] == eid {
+                return i
+            }
+            i += 1
+        }
+    }
+    return st.enumIdxs.count
+}
+
+// The c.enums index of the enum named (start,len), or c.enums.count.
+fn enumIdxByName(c: inout Comp, start: U64, len: U64) -> U64 {
+    val q: U64 = intern(c: inout c, start: start, len: len)
+    mut val i: U64 = 0
+    while i < c.enums.count {
+        if c.enums[i].nameId == q {
+            return i
+        }
+        i += 1
+    }
+    return c.enums.count
+}
+
+// How many i64 words a primitive field occupies in the enum payload area (String
+// is {ptr,i64} = 2; scalar/Bool = 1; a registered struct = sum of its fields).
+fn fieldWords(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> U64 {
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "String") {
+        return 2U64
+    }
+    val sreg: U64 = structRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen)
+    if sreg < st.structIdxs.count {
+        val sd: StructDef = c.structs[st.structIdxs[sreg]]
+        mut val w: U64 = 0
+        mut val i: U64 = 0
+        while i < sd.fields.count {
+            w = w + fieldWords(c: inout c, st: inout st, tyStart: sd.fields[i].tyStart, tyLen: sd.fields[i].tyLen)
+            i += 1
+        }
+        return w
+    }
+    return 1U64
+}
+
+// Whether all variant fields of an enum are primitive (scalar/String/Bool/
+// registered-struct, no array) — registerable here.
+fn enumAllPrimitive(c: inout Comp, st: inout LlvmCtx, eid: U64) -> Bool {
+    val e: EnumDef = c.enums[eid]
+    mut val vi: U64 = 0
+    while vi < e.variants.count {
+        val fs: Array[FieldDef] = e.variants[vi].fields
+        mut val fj: U64 = 0
+        while fj < fs.count {
+            if fs[fj].tyIsArray {
+                return false
+            }
+            val si: U64 = structIndexByName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen)
+            if si < c.structs.count {
+                if c.structs[si].isExtern {
+                } else {
+                    if structRegSlot(c: inout c, st: inout st, start: fs[fj].tyStart, len: fs[fj].tyLen) < st.structIdxs.count {
+                    } else {
+                        return false
+                    }
+                }
+            }
+            if isEnumName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen) {
+                return false
+            }
+            fj += 1
+        }
+        vi += 1
+    }
+    return true
+}
+
+// Register every non-generic, all-primitive-variant enum as a named LLVM type
+// `{ i64 tag, [maxWords x i64] payload }`. Called after registerStructs.
+fn registerEnums(c: inout Comp, st: inout LlvmCtx) {
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val e: EnumDef = c.enums[ei]
+        if e.typeParams.count > 0 {
+        } else {
+            if enumAllPrimitive(c: inout c, st: inout st, eid: ei) {
+                mut val maxWords: U64 = 0
+                mut val vi: U64 = 0
+                while vi < e.variants.count {
+                    val fs: Array[FieldDef] = e.variants[vi].fields
+                    mut val w: U64 = 0
+                    mut val fj: U64 = 0
+                    while fj < fs.count {
+                        w = w + fieldWords(c: inout c, st: inout st, tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
+                        fj += 1
+                    }
+                    if w > maxWords {
+                        maxWords = w
+                    }
+                    vi += 1
+                }
+                mut val nm: Array[U8] = []
+                appendBytes(into: inout nm, from: "en".bytes)
+                appendU64Dec(into: inout nm, n: ei)
+                nm.append(value: 0)
+                val ty: LLVMTypeRef = LLVMStructCreateNamed(st.ctx, arrayCPtr(nm))
+                mut val elems: Array[LLVMTypeRef] = []
+                elems.append(value: st.i64ty)
+                elems.append(value: LLVMArrayType2(st.i64ty, maxWords))
+                LLVMStructSetBody(ty, arrayCPtr(elems), 2U64, 0I32)
+                st.enumIdxs.append(value: ei)
+                st.enumTys.append(value: ty)
+            }
+        }
+        ei += 1
+    }
+}
+
+// The LLVM struct type of a variant's payload (its fields in declared order).
+fn variantPayloadTy(c: inout Comp, st: inout LlvmCtx, eid: U64, vi: U64) -> LLVMTypeRef {
+    val fs: Array[FieldDef] = c.enums[eid].variants[vi].fields
+    mut val elems: Array[LLVMTypeRef] = []
+    mut val i: U64 = 0
+    while i < fs.count {
+        elems.append(value: llvmScalarTy(c: inout c, st: inout st, tyStart: fs[i].tyStart, tyLen: fs[i].tyLen))
+        i += 1
+    }
+    return LLVMStructTypeInContext(st.ctx, arrayCPtr(elems), elems.count, 0I32)
+}
+
+// Construct an enum value `<E.V f=e ... />`: alloca {tag,payload}, store the tag
+// and (if any) the variant payload struct, then load the whole value.
+fn genLlvmMakeEnum(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, fields: Array[MakeField]) -> LLVMValueRef {
+    val reg: U64 = enumRegSlot(c: inout c, st: inout st, start: typeStart, len: typeLen)
+    if reg < st.enumIdxs.count {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: typeStart), msg: "LLVM backend: construction of this enum not yet supported (generic / array-field enums are TODO)")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val eid: U64 = st.enumIdxs[reg]
+    val ety: LLVMTypeRef = st.enumTys[reg]
+    val vi: U64 = variantIndex(c: inout c, enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
+    val slot: LLVMValueRef = LLVMBuildAlloca(st.b, ety, anon())
+    LLVMBuildStore(st.b, LLVMConstInt(st.i64ty, vi, 0I32), LLVMBuildStructGEP2(st.b, ety, slot, 0U64, anon()))
+    val fs: Array[FieldDef] = c.enums[eid].variants[vi].fields
+    if fs.count > 0U64 {
+        val payloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: eid, vi: vi)
+        mut val agg: LLVMValueRef = LLVMGetUndef(payloadTy)
+        mut val fj: U64 = 0
+        while fj < fs.count {
+            mut val valExpr: U64 = 0
+            mut val found: Bool = false
+            mut val mi: U64 = 0
+            while mi < fields.count {
+                if spansEqual(c: inout c, aStart: fields[mi].nameStart, aLen: fields[mi].nameLen, bStart: fs[fj].nameStart, bLen: fs[fj].nameLen) {
+                    valExpr = fields[mi].value
+                    found = true
+                    mi = fields.count
+                } else {
+                    mi += 1
+                }
+            }
+            if found {
+            } else {
+                if fj < fields.count {
+                    valExpr = fields[fj].value
+                }
+            }
+            val fv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valExpr), tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
+            agg = LLVMBuildInsertValue(st.b, agg, fv, fj, anon())
+            fj += 1
+        }
+        LLVMBuildStore(st.b, agg, LLVMBuildStructGEP2(st.b, ety, slot, 1U64, anon()))
+    }
+    return LLVMBuildLoad2(st.b, ety, slot, anon())
 }
 
 // The c.structs index for a local/param/return of type (start,len) if that type
@@ -678,10 +872,9 @@ fn buildBinOp(c: inout Comp, st: inout LlvmCtx, op: I64, l: LLVMValueRef, r: LLV
 
 // Construct a registered struct value from a JSX `<Type field=expr ... />`: build
 // each declared field (matched by name, or its default) in order via insertvalue.
-fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, isEnum: Bool, fields: Array[MakeField]) -> LLVMValueRef {
+fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fields: Array[MakeField]) -> LLVMValueRef {
     if isEnum {
-        compileErrorAt(line: lineOf(c: inout c, offset: typeStart), msg: "LLVM backend: enum construction not yet supported")
-        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+        return genLlvmMakeEnum(c: inout c, st: inout st, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, fields: fields)
     }
     val reg: U64 = structRegSlot(c: inout c, st: inout st, start: typeStart, len: typeLen)
     if reg < st.structIdxs.count {
@@ -767,22 +960,23 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                     return emitStrEq(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
                 }
             }
-            // a struct/enum operand routes through an Eq/Ord witness in the C
-            // backend; that dispatch is not yet modeled here — reject loudly rather
-            // than emit an invalid icmp on an aggregate.
-            if exprStructIdx(c: inout c, st: inout st, id: lhs) < c.structs.count {
-                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "LLVM backend: struct comparison (Eq/Ord witness) not yet supported")
-                return LLVMConstInt(st.i1ty, 0U64, 0I32)
-            }
             val l: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: lhs)
             val r: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: rhs)
+            // a struct/enum (aggregate) operand routes through an Eq/Ord witness in
+            // the C backend; that dispatch is not yet modeled here — reject loudly
+            // rather than emit an invalid icmp/arith on an aggregate.
+            if LLVMGetTypeKind(LLVMTypeOf(l)) == 8U32 {
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "LLVM backend: struct/enum operator (Eq/Ord/Add/... witness) not yet supported")
+                return LLVMConstInt(st.i1ty, 0U64, 0I32)
+            }
             return buildBinOp(c: inout c, st: inout st, op: op, l: l, r: r)
         }
         Expr.Str(val start, val len) => {
             return genLlvmStr(c: inout c, st: inout st, start: start, len: len)
         }
-        Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, val fields) => {
-            return genLlvmMake(c: inout c, st: inout st, typeStart: typeStart, typeLen: typeLen, isEnum: isEnum, fields: fields)
+        Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
+            return genLlvmMake(c: inout c, st: inout st, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fields: fields)
         }
         Expr.Field(val base, val nameStart, val nameLen) => {
             val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
@@ -1296,9 +1490,136 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             LLVMPositionBuilderAtEnd(st.b, endBB)
             st.terminated = false
         }
+        Stmt.Match(val scrut, val arms) => {
+            genLlvmMatch(c: inout c, st: inout st, scrut: scrut, arms: arms)
+        }
         _ => {
             compileErrorAt(line: 0, msg: "LLVM backend: statement form not yet supported")
         }
+    }
+}
+
+// Lower `match scrut { Pat => block, ... }` on a registered enum: store the
+// scrutinee, switch on its tag through a chain of compare/branch blocks, and in
+// each arm bind the variant's payload fields (extracted from the payload area)
+// before emitting its body. Exhaustiveness is guaranteed by the front-end; a
+// wildcard `_` arm is the catch-all.
+fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchArm]) {
+    val sv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: scrut)
+    val sty: LLVMTypeRef = LLVMTypeOf(sv)
+    // the enum: from the first non-wildcard, non-struct arm.
+    mut val eid: U64 = c.enums.count
+    mut val ai0: U64 = 0
+    while ai0 < arms.count {
+        if arms[ai0].isWildcard {
+        } else {
+            if arms[ai0].isStruct {
+            } else {
+                if eid == c.enums.count {
+                    eid = enumIdxByName(c: inout c, start: arms[ai0].enumStart, len: arms[ai0].enumLen)
+                }
+            }
+        }
+        ai0 += 1
+    }
+    if eid < c.enums.count {
+    } else {
+        compileErrorAt(line: 0, msg: "LLVM backend: match is only supported on a registered enum (so far)")
+        return
+    }
+    // store the scrutinee so payload fields can be read back as a variant struct.
+    val sslot: LLVMValueRef = LLVMBuildAlloca(st.b, sty, anon())
+    LLVMBuildStore(st.b, sv, sslot)
+    val tag: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, LLVMBuildStructGEP2(st.b, sty, sslot, 0U64, anon()), anon())
+    val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "match.end"))
+    // the tag-test chain lives in `checkBB`; each arm body lives in its own block.
+    // Re-position at checkBB before every compare so emitting an arm body (which
+    // moves the builder) doesn't append the next compare after a ret.
+    mut val checkBB: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
+    mut val lastWasWildcard: Bool = false
+    mut val anyFallthrough: Bool = false
+    mut val ai: U64 = 0
+    while ai < arms.count {
+        val arm: MatchArm = arms[ai]
+        val armBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "arm"))
+        LLVMPositionBuilderAtEnd(st.b, checkBB)
+        if arm.isWildcard {
+            LLVMBuildBr(st.b, armBB)
+            lastWasWildcard = true
+        } else {
+            val vi: U64 = variantIndex(c: inout c, enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
+            val nextBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "match.next"))
+            val eq: LLVMValueRef = LLVMBuildICmp(st.b, llvmIntEq(), tag, LLVMConstInt(st.i64ty, vi, 0I32), anon())
+            LLVMBuildCondBr(st.b, eq, armBB, nextBB)
+            checkBB = nextBB
+            lastWasWildcard = false
+        }
+        // emit the arm body in armBB, with payload binds in a fresh scope.
+        val savedBB: U64 = st.nLocals
+        LLVMPositionBuilderAtEnd(st.b, armBB)
+        st.terminated = false
+        if arm.isWildcard {
+        } else {
+            bindMatchPayload(c: inout c, st: inout st, eid: eid, arm: arm, scrutTy: sty, scrutSlot: sslot)
+        }
+        genLlvmBlock(c: inout c, st: inout st, id: arm.body)
+        st.nLocals = savedBB
+        if st.terminated {
+        } else {
+            LLVMBuildBr(st.b, contBB)
+            anyFallthrough = true
+        }
+        ai += 1
+    }
+    // close the dangling final check block (exhaustive, so unreachable) unless a
+    // wildcard already terminated it.
+    if lastWasWildcard {
+    } else {
+        LLVMPositionBuilderAtEnd(st.b, checkBB)
+        LLVMBuildUnreachable(st.b)
+    }
+    // the continuation is reachable only if some arm fell through.
+    LLVMPositionBuilderAtEnd(st.b, contBB)
+    if anyFallthrough {
+        st.terminated = false
+    } else {
+        LLVMBuildUnreachable(st.b)
+        st.terminated = true
+    }
+}
+
+// Bind a match arm's payload fields as locals: read the variant payload struct
+// back from the scrutinee's payload area and extractvalue each bound field.
+fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, scrutTy: LLVMTypeRef, scrutSlot: LLVMValueRef) {
+    if arm.binds.count == 0U64 {
+        return
+    }
+    val vi: U64 = variantIndex(c: inout c, enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
+    val payloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: eid, vi: vi)
+    val payload: LLVMValueRef = LLVMBuildLoad2(st.b, payloadTy, LLVMBuildStructGEP2(st.b, scrutTy, scrutSlot, 1U64, anon()), anon())
+    val fs: Array[FieldDef] = c.enums[eid].variants[vi].fields
+    mut val bi: U64 = 0
+    while bi < arm.binds.count {
+        val b: Bind = arm.binds[bi]
+        // resolve which variant field this bind reads (by field name = b.fieldStart).
+        mut val fidx: U64 = fs.count
+        mut val fj: U64 = 0
+        while fj < fs.count {
+            if spansEqual(c: inout c, aStart: fs[fj].nameStart, aLen: fs[fj].nameLen, bStart: b.fieldStart, bLen: b.fieldLen) {
+                fidx = fj
+                fj = fs.count
+            } else {
+                fj += 1
+            }
+        }
+        if fidx < fs.count {
+            val fv: LLVMValueRef = LLVMBuildExtractValue(st.b, payload, fidx, anon())
+            val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: fs[fidx].tyStart, tyLen: fs[fidx].tyLen)
+            val slot: LLVMValueRef = LLVMBuildAlloca(st.b, pty, anon())
+            LLVMBuildStore(st.b, fv, slot)
+            pushLocal(st: inout st, nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: kindFromTySpan(c: inout c, tyStart: fs[fidx].tyStart, tyLen: fs[fidx].tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: fs[fidx].tyStart, len: fs[fidx].tyLen))
+        }
+        bi += 1
     }
 }
 
@@ -1338,7 +1659,7 @@ fn emitLlvm(c: inout Comp) {
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
-        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 structIdxs=[] structTys=[] selfStart=0 selfLen=0 nLocals=0
+        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 structIdxs=[] structTys=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[]
         locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] declId=[] declFn=[] declTy=[] />
 
@@ -1347,8 +1668,9 @@ fn emitLlvm(c: inout Comp) {
     c.appendSrc(from: "self".bytes)
     st.selfLen = 4U64
 
-    // register user struct types (named LLVM structs) before anything references them.
+    // register user struct + enum types before anything references them.
     registerStructs(c: inout c, st: inout st)
+    registerEnums(c: inout c, st: inout st)
 
     // pass 1: declare all plain user functions (so calls resolve before bodies).
     declareUserFns(c: inout c, st: inout st)
