@@ -204,6 +204,10 @@ struct LlvmCtx {
     // the current function/closure's return TypeRef (0 = void / none), so a `return
     // <Optional.Some …/>` infers its type args from the declared return type.
     pub mut val curRetRef: U64
+    // the local index of the current function's FIRST body local (= param count
+    // incl. self), so scope-exit deinit drops skip params (borrows/inout self that
+    // the caller still owns and will deinit).
+    pub mut val curBodyMark: U64
     // declared user functions, cached by c.funcs index (parallel arrays), so a call
     // resolves to the same LLVMValueRef without name mangling (the symbol name is a
     // synthetic unique `pf<idx>`; only `main`/runtime symbols have meaningful names).
@@ -386,8 +390,8 @@ fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
     val sd: StructDef = c.structs[sidx]
     if sd.typeParams.count > 0 { return false }
     if sd.isExtern { return false }
-    // unique structs carry move/deinit semantics not yet modeled here.
-    if sd.isUnique { return false }
+    // unique structs are now registerable (same field layout); their deinit runs at
+    // scope-exit drop (emitted via the synthetic `deinit` method).
     mut val i: U64 = 0
     while i < sd.fields.count {
         val f: FieldDef = sd.fields[i]
@@ -2490,6 +2494,19 @@ fn loadRefPointee(c: inout Comp, st: inout LlvmCtx, base: U64) -> LLVMValueRef {
 // Build a `Ref[T]` value: malloc a cell of sizeof(T), store the `value` field's
 // pointee into it, and return the cell pointer.
 fn genLlvmMakeRef(c: inout Comp, st: inout LlvmCtx, ty: U64, fields: Array[MakeField]) -> LLVMValueRef {
+    // a `Ref[T]` whose pointee T has a deinit needs refcount-based release (the last
+    // Ref to drop runs the pointee's deinit once). That ARC isn't modeled yet —
+    // reject rather than leak the deinit. (Ref to a plain value type is supported.)
+    if c.types[ty].args.count > 0U64 {
+        val pt: TypeRef = c.types[c.types[ty].args[0]]
+        val psi: U64 = structIndexByName(c: inout c, start: pt.nameStart, len: pt.nameLen)
+        if psi < c.structs.count {
+            if structDeinitFi(c: inout c, sidx: psi) < c.funcs.count {
+                compileErrorAt(line: lineOf(c: inout c, offset: 0U64), msg: "LLVM backend: a `Ref` to a type with deinit needs refcount release (not yet supported)")
+                return LLVMConstInt(st.i64ty, 0U64, 0I32)
+            }
+        }
+    }
     val pty: LLVMTypeRef = refPointeeTy(c: inout c, st: inout st, refTy: ty)
     val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(pty), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
     // the pointee value (the `value` field).
@@ -4219,6 +4236,15 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     val mf: Func = c.funcs[mfi]
+    // a `move fn` consumes self (its deinit runs in the callee, the receiver is
+    // moved): the deinit-aware move tracking isn't modeled yet, so reject rather
+    // than mis-drop. (Plain deinit + inout/borrow are supported.)
+    if mf.selfMove {
+        if structDeinitFi(c: inout c, sidx: rsidx) < c.funcs.count {
+            compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: a `move fn` on a type with deinit is not yet supported (move tracking)")
+            return LLVMConstInt(st.i64ty, 0U64, 0I32)
+        }
+    }
     mut val av: Array[LLVMValueRef] = []
     // self: an `inout fn` needs the receiver's address (a place); else its value.
     if mf.selfInout {
@@ -4348,6 +4374,18 @@ fn genArgValue(c: inout Comp, st: inout LlvmCtx, argExpr: U64, p: Param) -> LLVM
     if p.isInout {
         // pass the caller's place address (the callee mutates in place).
         return placePtrOf(c: inout c, st: inout st, id: argExpr)
+    }
+    // a `move` parameter of a deinit-bearing (unique) type consumes the argument —
+    // the callee owns it and runs deinit, the caller must not. That move tracking
+    // isn't modeled yet, so reject rather than mis-drop.
+    if p.isMove {
+        val psi: U64 = structIndexByName(c: inout c, start: p.tyStart, len: p.tyLen)
+        if psi < c.structs.count {
+            if structDeinitFi(c: inout c, sidx: psi) < c.funcs.count {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: argExpr)), msg: "LLVM backend: a `move` parameter of a type with deinit is not yet supported (move tracking)")
+                return LLVMConstInt(st.i64ty, 0U64, 0I32)
+            }
+        }
     }
     if p.tyIsArray {
         match c.exprs[argExpr] {
@@ -5592,6 +5630,7 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
         bindOneParam(c: inout c, st: inout st, p: f.params[pi], fv: fv, argIdx: pi + base)
         pi += 1
     }
+    st.curBodyMark = st.nLocals
     genLlvmBlock(c: inout c, st: inout st, id: f.body)
     if st.terminated {
     } else {
@@ -5943,8 +5982,10 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             st.terminated = true
         }
         Stmt.Return(val value, val hasValue) => {
+            val sentinel: U64 = 18446744073709551615U64
             if st.curIsMain {
-                // Plew `main` returns () -> C `int main` returns 0.
+                // Plew `main` returns () -> C `int main` returns 0; drop live locals.
+                dropScope(c: inout c, st: inout st, fromMark: 0U64, excludeLi: sentinel)
                 LLVMBuildRet(st.b, LLVMConstInt(st.i32ty, 0U64, 0I32))
             } else {
                 if hasValue {
@@ -5960,8 +6001,22 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                     // value semantics: returning an array/struct place gives the caller
                     // an independent value (`return b.xs` then caller's `r[0]=…`).
                     rv = copyValueIfPlace(c: inout c, st: inout st, rv: rv, valueExpr: value)
+                    // scope-exit deinits for all live locals — but a returned local is
+                    // moved out to the caller, so exclude it.
+                    mut val excludeLi: U64 = sentinel
+                    match c.exprs[value] {
+                        Expr.Ident(start: val s, len: val l) => {
+                            val li: U64 = findLocal(c: inout c, st: inout st, start: s, len: l)
+                            if li < st.nLocals {
+                                excludeLi = li
+                            }
+                        }
+                        _ => {}
+                    }
+                    dropScope(c: inout c, st: inout st, fromMark: st.curBodyMark, excludeLi: excludeLi)
                     LLVMBuildRet(st.b, rv)
                 } else {
+                    dropScope(c: inout c, st: inout st, fromMark: st.curBodyMark, excludeLi: sentinel)
                     LLVMBuildRetVoid(st.b)
                 }
             }
@@ -6585,6 +6640,55 @@ fn genLlvmForArrayStruct(c: inout Comp, st: inout LlvmCtx, patStart: U64, patLen
     st.nLocals = mark
 }
 
+// The `deinit` method index of struct `sidx`, or c.funcs.count if it has none.
+fn structDeinitFi(c: inout Comp, sidx: U64) -> U64 {
+    val sd: StructDef = c.structs[sidx]
+    val b: Bind = kwSpan(c: inout c, kw: "deinit", kwLen: 6U64)
+    val noArgs: Array[Arg] = []
+    return findMethod(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: b.nameStart, nameLen: b.nameLen, args: noArgs)
+}
+
+// Run the `deinit` of local `li` if its type is a unique struct with one (spec/03:
+// a unique value's deinit fires when its last owner leaves scope). The deinit
+// method takes self by value, so the struct value is loaded and passed. A type
+// without a deinit is a no-op.
+fn emitDeinitCall(c: inout Comp, st: inout LlvmCtx, li: U64) {
+    val sidx: U64 = st.locStructIdx[li]
+    if sidx < c.structs.count {
+    } else {
+        return
+    }
+    val fi: U64 = structDeinitFi(c: inout c, sidx: sidx)
+    if fi < c.funcs.count {
+    } else {
+        return
+    }
+    val slot: U64 = userFnSlot(st: inout st, idx: fi)
+    if slot < st.fnIdx.count {
+    } else {
+        return
+    }
+    val selfVal: LLVMValueRef = LLVMBuildLoad2(st.b, st.locTy[li], st.locPtr[li], anon())
+    mut val av: Array[LLVMValueRef] = []
+    av.append(value: selfVal)
+    LLVMBuildCall2(st.b, st.fnTy[slot], st.fnVal[slot], arrayCPtr(av), 1U64, anon())
+}
+
+// Drop (deinit) the live locals in [fromMark, nLocals) in REVERSE declaration order
+// — spec/03's deterministic scope-exit destruction. `excludeLi` (or a large
+// sentinel) is skipped, so a unique value being moved out (e.g. returned) is not
+// also dropped here. Only deinit-bearing locals emit a call.
+fn dropScope(c: inout Comp, st: inout LlvmCtx, fromMark: U64, excludeLi: U64) {
+    mut val i: U64 = st.nLocals
+    while i > fromMark {
+        i -= 1U64
+        if i == excludeLi {
+        } else {
+            emitDeinitCall(c: inout c, st: inout st, li: i)
+        }
+    }
+}
+
 fn genLlvmBlock(c: inout Comp, st: inout LlvmCtx, id: U64) {
     // lexical scope: bindings declared in this block leave scope at its end.
     val mark: U64 = st.nLocals
@@ -6597,6 +6701,12 @@ fn genLlvmBlock(c: inout Comp, st: inout LlvmCtx, id: U64) {
         }
         genLlvmStmt(c: inout c, st: inout st, id: blk.stmts[i])
         i += 1
+    }
+    // fall-through exit: run scope-exit deinits for this block's locals (a return
+    // inside already dropped all live locals and set terminated).
+    if st.terminated {
+    } else {
+        dropScope(c: inout c, st: inout st, fromMark: mark, excludeLi: 18446744073709551615U64)
     }
     st.nLocals = mark
 }
@@ -6629,7 +6739,7 @@ fn emitLlvm(c: inout Comp) {
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy closureTy=closureTy
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
-        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 nLocals=0
+        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[]
         locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemStructIdx=[] locElemTypeRef=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] provEmit=[] genMethEmit=[] />
 
