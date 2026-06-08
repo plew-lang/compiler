@@ -2522,19 +2522,6 @@ fn loadRefPointee(c: inout Comp, st: inout LlvmCtx, base: U64) -> LLVMValueRef {
 // Build a `Ref[T]` value: malloc a cell of sizeof(T), store the `value` field's
 // pointee into it, and return the cell pointer.
 fn genLlvmMakeRef(c: inout Comp, st: inout LlvmCtx, ty: U64, fields: Array[MakeField]) -> LLVMValueRef {
-    // a `Ref[T]` whose pointee T has a deinit needs refcount-based release (the last
-    // Ref to drop runs the pointee's deinit once). That ARC isn't modeled yet —
-    // reject rather than leak the deinit. (Ref to a plain value type is supported.)
-    if c.types[ty].args.count > 0U64 {
-        val pt: TypeRef = c.types[c.types[ty].args[0]]
-        val psi: U64 = structIndexByName(c: inout c, start: pt.nameStart, len: pt.nameLen)
-        if psi < c.structs.count {
-            if structDeinitFi(c: inout c, sidx: psi) < c.funcs.count {
-                compileErrorAt(line: lineOf(c: inout c, offset: 0U64), msg: "LLVM backend: a `Ref` to a type with deinit needs refcount release (not yet supported)")
-                return LLVMConstInt(st.i64ty, 0U64, 0I32)
-            }
-        }
-    }
     val pty: LLVMTypeRef = refPointeeTy(c: inout c, st: inout st, refTy: ty)
     val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(pty), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
     // the pointee value (the `value` field).
@@ -3676,6 +3663,45 @@ fn copyValueIfPlace(c: inout Comp, st: inout LlvmCtx, rv: LLVMValueRef, valueExp
         }
     }
     return rv
+}
+
+// Increment a rawbuf cell's refcount (`Ref` share — `val r2 = r`).
+fn rawbufRetain(c: inout Comp, st: inout LlvmCtx, cell: LLVMValueRef) {
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: st.ptrty)
+    val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(ptys), 1U64, 0I32)
+    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_rawbuf_retain", nameId: 25U64, fnTy: fty)
+    mut val av: Array[LLVMValueRef] = []
+    av.append(value: cell)
+    LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U64, anon())
+}
+
+// Decrement a rawbuf cell's refcount and return the new count (i64).
+fn rawbufRelease(c: inout Comp, st: inout LlvmCtx, cell: LLVMValueRef) -> LLVMValueRef {
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: st.ptrty)
+    val fty: LLVMTypeRef = LLVMFunctionType(st.i64ty, arrayCPtr(ptys), 1U64, 0I32)
+    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_rawbuf_release", nameId: 26U64, fnTy: fty)
+    mut val av: Array[LLVMValueRef] = []
+    av.append(value: cell)
+    return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U64, anon())
+}
+
+// The pointee struct index of a `Ref[T]` instance ref if T is a registered struct
+// that needs a deinit, else c.structs.count.
+fn refDeinitPointeeSidx(c: inout Comp, st: inout LlvmCtx, refTy: U64) -> U64 {
+    if isRefInst(c: inout c, ref: refTy) {
+        if c.types[refTy].args.count > 0U64 {
+            val pt: TypeRef = c.types[c.types[refTy].args[0]]
+            val psi: U64 = structIndexByName(c: inout c, start: pt.nameStart, len: pt.nameLen)
+            if psi < c.structs.count {
+                if structNeedsDeinit(c: inout c, st: inout st, sidx: psi) {
+                    return psi
+                }
+            }
+        }
+    }
+    return c.structs.count
 }
 
 // Bounds-check `i` against `count` via the runtime (panics on out-of-range).
@@ -5859,6 +5885,13 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             val slot: LLVMValueRef = LLVMBuildAlloca(st.b, lty, anon())
             LLVMBuildStore(st.b, v, slot)
             pushLocalR(st: inout st, nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind, structIdx: sidx, isArr: isArr, elemTy: elemTy, elemKind: elemKind, typeRef: tref)
+            // sharing a Ref to a deinit-bearing pointee (`val r2 = r`): retain the
+            // shared cell so the pointee deinits only when the LAST owner drops.
+            if refDeinitPointeeSidx(c: inout c, st: inout st, refTy: tref) < c.structs.count {
+                if arrayExprIsPlace(c: inout c, id: init) {
+                    rawbufRetain(c: inout c, st: inout st, cell: v)
+                }
+            }
             // an array-of-struct local (`store: Array[Box]`): track the element struct
             // so `store[i].field` resolves the element (tyStart names the element type).
             if isArr {
@@ -6796,6 +6829,23 @@ fn emitDeinitCall(c: inout Comp, st: inout LlvmCtx, li: U64) {
     if st.locMoved[li] {
         return
     }
+    // a `Ref[T]` local with a deinit-bearing pointee: release the shared cell; when
+    // the last owner drops (refcount hits 0), destroy the pointee (spec/03).
+    val rpsi: U64 = refDeinitPointeeSidx(c: inout c, st: inout st, refTy: st.locTypeRef[li])
+    if rpsi < c.structs.count {
+        val cell: LLVMValueRef = LLVMBuildLoad2(st.b, st.ptrty, st.locPtr[li], anon())
+        val newcount: LLVMValueRef = rawbufRelease(c: inout c, st: inout st, cell: cell)
+        val isZero: LLVMValueRef = LLVMBuildICmp(st.b, llvmIntEq(), newcount, LLVMConstInt(st.i64ty, 0U64, 0I32), anon())
+        val deinitBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "refdrop.deinit"))
+        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "refdrop.cont"))
+        LLVMBuildCondBr(st.b, isZero, deinitBB, contBB)
+        LLVMPositionBuilderAtEnd(st.b, deinitBB)
+        val pty: LLVMTypeRef = refPointeeTy(c: inout c, st: inout st, refTy: st.locTypeRef[li])
+        emitDeinitValue(c: inout c, st: inout st, v: LLVMBuildLoad2(st.b, pty, cell, anon()), sidx: rpsi)
+        LLVMBuildBr(st.b, contBB)
+        LLVMPositionBuilderAtEnd(st.b, contBB)
+        return
+    }
     val sidx: U64 = st.locStructIdx[li]
     if sidx < c.structs.count {
     } else {
@@ -7014,5 +7064,7 @@ fn emitLlvmRuntime() {
     write(s: "long long plew_rawbuf_cap(void* p){ return p?((long long*)p)[-2]:0; }\n")
     write(s: "void* plew_arr_grow(void* data, long long elemSize, long long count){ long long cap=plew_rawbuf_cap(data); if(count<cap) return data; long long nc=cap<8?8:cap*2; void* nd=plew_rawbuf_alloc(elemSize,nc); if(count) memcpy(nd,data,(size_t)(elemSize*count)); return nd; }\n")
     write(s: "void* plew_arr_copy(void* data, long long elemSize, long long count){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count) memcpy(nd,data,(size_t)(elemSize*count)); return nd; }\n")
+    write(s: "void plew_rawbuf_retain(void* p){ if(p) ((long long*)p)[-1]++; }\n")
+    write(s: "long long plew_rawbuf_release(void* p){ if(!p) return 0; return --((long long*)p)[-1]; }\n")
     write(s: "void plew_bounds(long long i, long long n){ if(i<0||i>=n){ fputs(\"panic: index out of bounds\\n\",stderr); exit(1); } }\n")
 }
