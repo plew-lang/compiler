@@ -2115,11 +2115,18 @@ fn genLlvmArrayLit(c: inout Comp, st: inout LlvmCtx, elems: Array[U64], elemTy: 
 
 // `arr[i]` read: bounds-checked element load.
 fn genLlvmIndex(c: inout Comp, st: inout LlvmCtx, base: U64, index: U64) -> LLVMValueRef {
-    // only a built-in Array is indexed here; a user `Index`-impl subscript
-    // (struct `g[i]`) routes through the Index witness, not yet modeled — reject.
+    // only a built-in Array is indexed directly; a user `Index`-impl subscript
+    // (struct `g[i]`) desugars to `g.index(key: i)` via the Index witness (spec/12).
     if exprIsArray(c: inout c, st: inout st, id: base) {
     } else {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: user Index subscript (struct `g[i]`) not yet supported")
+        val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+        if bsi < c.structs.count {
+            if typeHasMethodNamed(c: inout c, typeStart: c.structs[bsi].nameStart, typeLen: c.structs[bsi].nameLen, name: "index") {
+                val m: U64 = synthDictMethod(c: inout c, recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
+                return genLlvmExpr(c: inout c, st: inout st, id: m)
+            }
+        }
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: user Index subscript needs an `index` method")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: base)
@@ -3261,10 +3268,26 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                 Expr.Index(base: val ibase, index: val iindex) => {
                     // place mutation `arr[i] = v` / `arr[i] OP= v`: bounds-checked
                     // element pointer + store (the buffer is shared; no CoW yet).
-                    // A user IndexSet-impl subscript is not yet modeled — reject.
+                    // A user IndexSet-impl subscript desugars `g[i] = v` to
+                    // `g.indexSet(key: i, value: v)` via the IndexSet witness (the
+                    // compound form `g[i] OP= v` desugars `v` to `g[i] OP v` first).
                     if exprIsArray(c: inout c, st: inout st, id: ibase) {
                     } else {
-                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: ibase)), msg: "LLVM backend: user IndexSet subscript (struct `g[i]=v`) not yet supported")
+                        val ibsi: U64 = exprStructIdx(c: inout c, st: inout st, id: ibase)
+                        if ibsi < c.structs.count {
+                            if typeHasMethodNamed(c: inout c, typeStart: c.structs[ibsi].nameStart, typeLen: c.structs[ibsi].nameLen, name: "indexSet") {
+                                mut val rhsExpr: U64 = value
+                                if op == opAssign() {
+                                } else {
+                                    val getExpr: U64 = c.pushExpr(e: <Expr.Index base=ibase index=iindex />)
+                                    rhsExpr = c.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=getExpr rhs=value />)
+                                }
+                                val m: U64 = synthDictMethod(c: inout c, recv: ibase, name: "indexSet", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: rhsExpr)
+                                genLlvmExpr(c: inout c, st: inout st, id: m)
+                                return
+                            }
+                        }
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: ibase)), msg: "LLVM backend: user IndexSet subscript needs an `indexSet` method")
                         return
                     }
                     val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: ibase)
