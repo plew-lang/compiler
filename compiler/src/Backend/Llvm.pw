@@ -147,6 +147,10 @@ struct LlvmCtx {
     // registered struct types (parallel: c.structs index -> named LLVM struct type).
     pub mut val structIdxs: Array[U64]
     pub mut val structTys: Array[LLVMTypeRef]
+    // a byte span whose content is "self" (appended to c.bytes), to bind the
+    // method receiver as a local that the body's `self` identifiers resolve to.
+    pub mut val selfStart: U64
+    pub mut val selfLen: U64
     // declared user functions, cached by c.funcs index (parallel arrays), so a call
     // resolves to the same LLVMValueRef without name mangling (the symbol name is a
     // synthetic unique `pf<idx>`; only `main`/runtime symbols have meaningful names).
@@ -457,6 +461,17 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
                 if fidx < c.structs[sidx].fields.count {
                     return kindFromTySpan(c: inout c, tyStart: c.structs[sidx].fields[fidx].tyStart, tyLen: c.structs[sidx].fields[fidx].tyLen)
+                }
+            }
+        }
+        Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+            val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
+            if rsidx < c.structs.count {
+                val mfi: U64 = findMethod(c: inout c, recvStart: c.structs[rsidx].nameStart, recvLen: c.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                if mfi < c.funcs.count {
+                    if c.funcs[mfi].hasRet {
+                        return kindFromTySpan(c: inout c, tyStart: c.funcs[mfi].retStart, tyLen: c.funcs[mfi].retLen)
+                    }
                 }
             }
         }
@@ -783,6 +798,9 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
         Expr.Call(val nameStart, val nameLen, val args) => {
             return genLlvmCall(c: inout c, st: inout st, nameStart: nameStart, nameLen: nameLen, args: args)
         }
+        Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+            return genLlvmMethod(c: inout c, st: inout st, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+        }
         Expr.Unary(val op, val operand) => {
             if op == opSub() {
                 return LLVMBuildNeg(st.b, genLlvmExpr(c: inout c, st: inout st, id: operand), anon())
@@ -869,6 +887,68 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
     return LLVMConstInt(st.i64ty, 0U64, 0I32)
 }
 
+// Emit a method call `recv.m(args)`: resolve the method on the receiver's struct,
+// pass self first (a pointer for `inout fn`, else the struct value), then the
+// coerced arguments, and call the cached LLVMValueRef.
+fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+    val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
+    if rsidx < c.structs.count {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: method call only on a registered struct value (so far)")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val sd: StructDef = c.structs[rsidx]
+    val mfi: U64 = findMethod(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+    if mfi < c.funcs.count {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: method not found / not yet supported")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val slot: U64 = userFnSlot(st: inout st, idx: mfi)
+    if slot < st.fnIdx.count {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: this method is not emittable yet (generic / provided / trait receiver)")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val mf: Func = c.funcs[mfi]
+    mut val av: Array[LLVMValueRef] = []
+    // self: an `inout fn` needs the receiver's address (a place); else its value.
+    if mf.selfInout {
+        av.append(value: placePtrOf(c: inout c, st: inout st, id: recv))
+    } else {
+        av.append(value: genLlvmExpr(c: inout c, st: inout st, id: recv))
+    }
+    mut val ai: U64 = 0
+    while ai < args.count {
+        av.append(value: coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[ai].expr), tyStart: mf.params[ai].tyStart, tyLen: mf.params[ai].tyLen))
+        ai += 1
+    }
+    mut val di: U64 = args.count
+    while di < mf.params.count {
+        av.append(value: coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: mf.params[di].defaultExpr), tyStart: mf.params[di].tyStart, tyLen: mf.params[di].tyLen))
+        di += 1
+    }
+    return LLVMBuildCall2(st.b, st.fnTy[slot], st.fnVal[slot], arrayCPtr(av), av.count, anon())
+}
+
+// The address of an addressable place (a struct local), for `inout` self. Falls
+// back to a fresh alloca holding the value for a non-place receiver.
+fn placePtrOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
+    match c.exprs[id] {
+        Expr.Ident(val start, val len) => {
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.nLocals {
+                return st.locPtr[li]
+            }
+        }
+        _ => {}
+    }
+    val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: id)
+    val slot: LLVMValueRef = LLVMBuildAlloca(st.b, LLVMTypeOf(v), anon())
+    LLVMBuildStore(st.b, v, slot)
+    return slot
+}
+
 // Index into st.fn* for a cached user function (by c.funcs index), or st.fnIdx.count.
 fn userFnSlot(st: inout LlvmCtx, idx: U64) -> U64 {
     mut val i: U64 = 0
@@ -888,15 +968,68 @@ fn userFnSlot(st: inout LlvmCtx, idx: U64) -> U64 {
 // only the user's own module keeps bring-up tractable. (Proper call-graph
 // reachability, which will pull in exactly the reached std functions, replaces
 // this once arrays/methods/generics land.)
-fn isPlainUserFn(c: inout Comp, f: Func) -> Bool {
+fn isPlainUserFn(c: inout Comp, st: inout LlvmCtx, f: Func) -> Bool {
     if nameIsMain(c: inout c, f: f) { return false }
     if f.isExtern { return false }
-    if f.hasRecv { return false }
     if f.isAssoc { return false }
     if f.isProvided { return false }
     if f.typeParams.count > 0 { return false }
-    if moduleOf(c: inout c, offset: f.nameStart) != 0U64 { return false }
-    return true
+    if f.hasRecv {
+        // a method: emit it iff its receiver is a registered struct AND it is
+        // defined in the entry module. (A method name is re-interned so moduleOf on
+        // it is unreliable; use the body's first statement, whose exprs keep their
+        // original source offsets, to recover the defining module — this keeps std
+        // struct methods, full of not-yet-supported constructs, from being emitted.)
+        if isTraitName(c: inout c, start: f.recvStart, len: f.recvLen) { return false }
+        if structRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.structIdxs.count {
+        } else {
+            return false
+        }
+        return methodInEntryModule(c: inout c, f: f)
+    }
+    // a free function: entry module only (see registerStructs note on reachability).
+    return moduleOf(c: inout c, offset: f.nameStart) == 0U64
+}
+
+// The source offset of a statement's principal expression (which carries an
+// original-source offset, unlike re-interned decl names), for recovering the
+// defining module. Falls back to 0 (= module 0) for offsetless statements.
+fn stmtPrincipalOffset(c: inout Comp, sid: U64) -> U64 {
+    match c.stmts[sid] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return exprOffset(c: inout c, id: init) }
+        Stmt.Assign(op: _, val target, value: _) => { return exprOffset(c: inout c, id: target) }
+        Stmt.ExprStmt(val expr) => { return exprOffset(c: inout c, id: expr) }
+        Stmt.Return(val value, val hasValue) => { if hasValue { return exprOffset(c: inout c, id: value) } return 0U64 }
+        Stmt.If(val cond, thenBlk: _, elseBlk: _, hasElse: _) => { return exprOffset(c: inout c, id: cond) }
+        Stmt.While(val cond, body: _) => { return exprOffset(c: inout c, id: cond) }
+        Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, val iter, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => { return exprOffset(c: inout c, id: iter) }
+        Stmt.Match(val scrut, arms: _) => { return exprOffset(c: inout c, id: scrut) }
+        Stmt.Panic(msg: _, val offset) => { return offset }
+        Stmt.Give(val value) => { return exprOffset(c: inout c, id: value) }
+        _ => { return 0U64 }
+    }
+}
+
+// Whether a method is defined in the entry module (id 0), via the body's first
+// statement's principal-expr offset.
+fn methodInEntryModule(c: inout Comp, f: Func) -> Bool {
+    if f.body == 0U64 {
+        return false
+    }
+    val blk: Block = c.blocks[f.body]
+    if blk.stmts.count == 0U64 {
+        return false
+    }
+    return moduleOf(c: inout c, offset: stmtPrincipalOffset(c: inout c, sid: blk.stmts[0])) == 0U64
+}
+
+// The LLVM type of a method's `self` parameter: a pointer for `inout fn` (mutates
+// the caller's value), else the receiver struct by value.
+fn selfParamTy(c: inout Comp, st: inout LlvmCtx, f: Func) -> LLVMTypeRef {
+    if f.selfInout {
+        return st.ptrty
+    }
+    return llvmScalarTy(c: inout c, st: inout st, tyStart: f.recvStart, tyLen: f.recvLen)
 }
 
 // The LLVM return type of a function (and whether it is void = Plew `()`).
@@ -913,15 +1046,18 @@ fn declareUserFns(c: inout Comp, st: inout LlvmCtx) {
     mut val fi: U64 = 0
     while fi < c.funcs.count {
         val f: Func = c.funcs[fi]
-        if isPlainUserFn(c: inout c, f: f) {
+        if isPlainUserFn(c: inout c, st: inout st, f: f) {
             mut val ptys: Array[LLVMTypeRef] = []
+            if f.hasRecv {
+                ptys.append(value: selfParamTy(c: inout c, st: inout st, f: f))
+            }
             mut val pi: U64 = 0
             while pi < f.params.count {
                 ptys.append(value: llvmScalarTy(c: inout c, st: inout st, tyStart: f.params[pi].tyStart, tyLen: f.params[pi].tyLen))
                 pi += 1
             }
             val rty: LLVMTypeRef = llvmFnRetTy(c: inout c, st: inout st, f: f)
-            val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), f.params.count, 0I32)
+            val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
             mut val nm: Array[U8] = []
             appendBytes(into: inout nm, from: "pf".bytes)
             appendU64Dec(into: inout nm, n: fi)
@@ -968,12 +1104,29 @@ fn genLlvmFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     st.locTy = []
     st.locKind = []
     st.locStructIdx = []
+    // method receiver: bind `self` as a local pointing at the struct storage —
+    // an `inout fn`'s self IS the pointer param; a by-value self is stored into a
+    // fresh alloca (so mutations stay local). Field access then GEPs locPtr
+    // uniformly. Params follow self at index 1.
+    mut val base: U64 = 0
+    if f.hasRecv {
+        val recvTy: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: f.recvStart, tyLen: f.recvLen)
+        val recvSidx: U64 = localStructIdxFor(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen)
+        mut val selfPtr: LLVMValueRef = LLVMGetParam(fv, 0U64)
+        if f.selfInout {
+        } else {
+            selfPtr = LLVMBuildAlloca(st.b, recvTy, anon())
+            LLVMBuildStore(st.b, LLVMGetParam(fv, 0U64), selfPtr)
+        }
+        pushLocal(st: inout st, nameStart: st.selfStart, nameLen: st.selfLen, ptr: selfPtr, ty: recvTy, kind: 0U64, structIdx: recvSidx)
+        base = 1U64
+    }
     mut val pi: U64 = 0
     while pi < f.params.count {
         val p: Param = f.params[pi]
         val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen)
         val slot2: LLVMValueRef = LLVMBuildAlloca(st.b, pty, anon())
-        LLVMBuildStore(st.b, LLVMGetParam(fv, pi), slot2)
+        LLVMBuildStore(st.b, LLVMGetParam(fv, pi + base), slot2)
         pushLocal(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty, kind: kindFromTySpan(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen))
         pi += 1
     }
@@ -1185,9 +1338,14 @@ fn emitLlvm(c: inout Comp) {
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
-        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 structIdxs=[] structTys=[] nLocals=0
+        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 structIdxs=[] structTys=[] selfStart=0 selfLen=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[]
         locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] declId=[] declFn=[] declTy=[] />
+
+    // a "self" byte span (appended past the source) to bind method receivers.
+    st.selfStart = c.bytes.count
+    c.appendSrc(from: "self".bytes)
+    st.selfLen = 4U64
 
     // register user struct types (named LLVM structs) before anything references them.
     registerStructs(c: inout c, st: inout st)
@@ -1203,7 +1361,7 @@ fn emitLlvm(c: inout Comp) {
             genLlvmMain(c: inout c, st: inout st, fi: fi)
             foundMain = true
         } else {
-            if isPlainUserFn(c: inout c, f: c.funcs[fi]) {
+            if isPlainUserFn(c: inout c, st: inout st, f: c.funcs[fi]) {
                 genLlvmFunc(c: inout c, st: inout st, fi: fi)
             }
         }
