@@ -346,6 +346,10 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Ref") {
         return st.ptrty
     }
+    // a `RawBuffer[T]` is the raw data pointer (the rawbuf floor; opaque ptr).
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "RawBuffer") {
+        return st.ptrty
+    }
     // a function-value type `fn(...) -> ...` is the {fn, env} closure fat pointer.
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "fn") {
         return st.closureTy
@@ -3707,6 +3711,18 @@ fn copyValueIfPlace(c: inout Comp, st: inout LlvmCtx, rv: LLVMValueRef, valueExp
     return rv
 }
 
+// The LLVM element type of a `RawBuffer[T]` argument expression (from its tracked
+// RawBuffer[T] type ref), or i64 if not resolvable.
+fn rawBufElemTy(c: inout Comp, st: inout LlvmCtx, bufExpr: U64) -> LLVMTypeRef {
+    val r: U64 = exprTypeRef(c: inout c, st: inout st, id: bufExpr)
+    if r != 0U64 {
+        if c.types[r].args.count > 0U64 {
+            return llvmTypeOfRef(c: inout c, st: inout st, ref: c.types[r].args[0])
+        }
+    }
+    return st.i64ty
+}
+
 // Increment a rawbuf cell's refcount (`Ref` share — `val r2 = r`).
 fn rawbufRetain(c: inout Comp, st: inout LlvmCtx, cell: LLVMValueRef) {
     mut val ptys: Array[LLVMTypeRef] = []
@@ -4124,6 +4140,46 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
     }
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "eprint") {
         return emitStrSink(c: inout c, st: inout st, rtName: "plew_eprint_raw", rtId: 3U64, argExpr: args[0].expr)
+    }
+    // RawBuffer floor intrinsics (extern "plew-intrinsic"): the buffer is the raw
+    // data pointer over the rawbuf runtime; element type from the arg's RawBuffer[T].
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawAlloc") {
+        // rawAlloc[T](cap, of) -> RawBuffer[T]: malloc cap*sizeof(T); `of`'s type is T.
+        val ofTy: LLVMTypeRef = LLVMTypeOf(genLlvmExpr(c: inout c, st: inout st, id: args[1].expr))
+        val cap: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
+        return rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(ofTy), cap: cap)
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawLoad") {
+        val et: LLVMTypeRef = rawBufElemTy(c: inout c, st: inout st, bufExpr: args[0].expr)
+        val data: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
+        val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[1].expr)
+        return LLVMBuildLoad2(st.b, et, arrElemPtr(st: inout st, elemTy: et, data: data, idx: idx), anon())
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawStore") {
+        val et: LLVMTypeRef = rawBufElemTy(c: inout c, st: inout st, bufExpr: args[0].expr)
+        val data: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
+        val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[1].expr)
+        val v: LLVMValueRef = coerceElem(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[2].expr), elemTy: et)
+        LLVMBuildStore(st.b, v, arrElemPtr(st: inout st, elemTy: et, data: data, idx: idx))
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawCap") {
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: st.ptrty)
+        val fty: LLVMTypeRef = LLVMFunctionType(st.i64ty, arrayCPtr(ptys), 1U64, 0I32)
+        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_rawbuf_cap", nameId: 28U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr))
+        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U64, anon())
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawIsUnique") {
+        // refcount == 1: the header word at data[-1] (data = header + 2).
+        val data: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
+        mut val idxs: Array[LLVMValueRef] = []
+        idxs.append(value: LLVMConstInt(st.i64ty, 18446744073709551615U64, 1I32))
+        val rcPtr: LLVMValueRef = LLVMBuildGEP2(st.b, st.i64ty, data, arrayCPtr(idxs), 1U64, anon())
+        val rc: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, rcPtr, anon())
+        return LLVMBuildICmp(st.b, llvmIntEq(), rc, LLVMConstInt(st.i64ty, 1U64, 0I32), anon())
     }
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readStdin") {
         // read all of stdin into a String (strty {i8*,i64}) via the runtime.
@@ -5981,6 +6037,13 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             // is false for it).
             if isRefInst(c: inout c, ref: ty) {
                 tref = ty
+            }
+            // a `RawBuffer[T]` local: track its type so the raw* intrinsics recover
+            // the element type T (the buffer is just a data pointer).
+            if ty != 0U64 {
+                if rangeEquals(bytes: c.bytes, start: c.types[ty].nameStart, len: c.types[ty].nameLen, kw: "RawBuffer") {
+                    tref = ty
+                }
             }
             // a function-value local (`val g: fn(n: I32) -> I32 = …`): track the fn
             // TypeRef so a call `g(n: 4)` resolves the closure signature.
