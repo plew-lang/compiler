@@ -1005,7 +1005,7 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
         }
         Expr.Index(val base, index: _) => {
             // `arr[i]` : the array's element TypeRef (a Ref element `Array[Ref[Box]]`
-            // -> `ys[i]->v`, or a nested-array element).
+            // -> `ys[i]->v`, a generic element, or a nested-array element).
             match c.exprs[base] {
                 Expr.Ident(start: val bs, len: val bl) => {
                     val bli: U64 = findLocal(c: inout c, st: inout st, start: bs, len: bl)
@@ -1024,7 +1024,19 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                         }
                     }
                 }
-                _ => {}
+                _ => {
+                    // a nested index (`t[0][0]`): unwrap one Array level from the base
+                    // array's element type ref.
+                    val br: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
+                    if br != 0U64 {
+                        val bt: TypeRef = c.types[br]
+                        if rangeEquals(bytes: c.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Array") {
+                            if bt.args.count > 0U64 {
+                                return bt.args[0]
+                            }
+                        }
+                    }
+                }
             }
         }
         Expr.OptChain(val base, val memberStart, val memberLen) => {
@@ -3303,6 +3315,14 @@ fn exprIsArray(c: inout Comp, st: inout LlvmCtx, id: U64) -> Bool {
             }
         }
         Expr.Array(elems: _) => { return true }
+        Expr.Index(base: _, index: _) => {
+            // a nested-array element (`m[i]` where m: Array[Array[I32]]): its element
+            // type ref is itself an Array.
+            val r: U64 = exprTypeRef(c: inout c, st: inout st, id: id)
+            if r != 0U64 {
+                return rangeEquals(bytes: c.bytes, start: c.types[r].nameStart, len: c.types[r].nameLen, kw: "Array")
+            }
+        }
         _ => {}
     }
     return false
@@ -3343,6 +3363,19 @@ fn arrElemTyOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
                 if fidx < c.structs[psidx].fields.count {
                     return llvmScalarTy(c: inout c, st: inout st, tyStart: c.structs[psidx].fields[fidx].tyStart, tyLen: c.structs[psidx].fields[fidx].tyLen)
+                }
+            }
+        }
+        Expr.Index(base: _, index: _) => {
+            // a nested-array element's element type (`m[i]` -> the inner element of
+            // m[i], e.g. i32 for m: Array[Array[I32]]): unwrap the element ref.
+            val r: U64 = exprTypeRef(c: inout c, st: inout st, id: id)
+            if r != 0U64 {
+                val t: TypeRef = c.types[r]
+                if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+                    if t.args.count > 0U64 {
+                        return llvmTypeOfRef(c: inout c, st: inout st, ref: t.args[0])
+                    }
                 }
             }
         }
@@ -3672,6 +3705,30 @@ fn genLlvmIndex(c: inout Comp, st: inout LlvmCtx, base: U64, index: U64) -> LLVM
 
 // `arr.append(v)` on an array local: grow the buffer if full, store v at `count`,
 // increment count (mutating the local's {data,count}). No CoW yet (shares buffer).
+// The element TypeRef of an array-valued expression (an array local's
+// locElemTypeRef, or a struct field's grounded element ref), or 0.
+fn arrayExprElemRef(c: inout Comp, st: inout LlvmCtx, arrayExpr: U64) -> U64 {
+    match c.exprs[arrayExpr] {
+        Expr.Ident(val start, val len) => {
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.nLocals {
+                return st.locElemTypeRef[li]
+            }
+        }
+        Expr.Field(base: val fb, nameStart: val fns, nameLen: val fnl) => {
+            val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: fb)
+            if bsi < c.structs.count {
+                val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
+                if fidx < c.structs[bsi].fields.count {
+                    return fieldArrayElemRefUnderBase(c: inout c, st: inout st, base: fb, fd: c.structs[bsi].fields[fidx])
+                }
+            }
+        }
+        _ => {}
+    }
+    return 0U64
+}
+
 fn genLlvmAppend(c: inout Comp, st: inout LlvmCtx, recv: U64, valueExpr: U64) -> LLVMValueRef {
     val arrPtr: LLVMValueRef = arrStoragePtr(c: inout c, st: inout st, id: recv)
     if LLVMIsNull(arrPtr) == 0I32 {
@@ -3697,7 +3754,30 @@ fn genLlvmAppend(c: inout Comp, st: inout LlvmCtx, recv: U64, valueExpr: U64) ->
     gav.append(value: count)
     val newdata: LLVMValueRef = LLVMBuildCall2(st.b, gfty, grow, arrayCPtr(gav), 3U64, anon())
     LLVMBuildStore(st.b, newdata, dataPtr)
-    val ev: LLVMValueRef = coerceElem(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valueExpr), elemTy: elemTy)
+    // build the appended value. An array-LITERAL appended to a nested array
+    // (`m.append([1,2,3])` for m: Array[Array[I32]]) must use the inner element
+    // type, not i64-defaulted — recover it from the receiver's element ref.
+    mut val ev: LLVMValueRef = LLVMConstInt(st.i64ty, 0U64, 0I32)
+    mut val builtLit: Bool = false
+    match c.exprs[valueExpr] {
+        Expr.Array(val elems) => {
+            val recvElemRef: U64 = arrayExprElemRef(c: inout c, st: inout st, arrayExpr: recv)
+            if recvElemRef != 0U64 {
+                val ret: TypeRef = c.types[recvElemRef]
+                if rangeEquals(bytes: c.bytes, start: ret.nameStart, len: ret.nameLen, kw: "Array") {
+                    if ret.args.count > 0U64 {
+                        ev = genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: llvmTypeOfRef(c: inout c, st: inout st, ref: ret.args[0]))
+                        builtLit = true
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    if builtLit {
+    } else {
+        ev = coerceElem(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valueExpr), elemTy: elemTy)
+    }
     LLVMBuildStore(st.b, ev, arrElemPtr(st: inout st, elemTy: elemTy, data: newdata, idx: count))
     LLVMBuildStore(st.b, LLVMBuildAdd(st.b, count, LLVMConstInt(st.i64ty, 1U64, 0I32), anon()), countPtr)
     return LLVMConstInt(st.i64ty, 0U64, 0I32)
