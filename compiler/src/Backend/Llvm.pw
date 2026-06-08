@@ -5000,6 +5000,22 @@ fn emitGenFns(c: inout Comp, st: inout LlvmCtx) {
 // bare TypeRef by its struct name; a scalar/String comes from the typed-AST cache
 // (which works for literals/expressions). 0 when no type can be recovered.
 fn llvmArgTypeRef(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> U64 {
+    // a closure-literal argument (`f: fn(x: I64) -> B`): build its fn TypeRef
+    // (args = [ret, p0, …]) so a type param in the return/param position infers.
+    match c.exprs[argExpr] {
+        Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, val retTy, body: _) => {
+            val fnB: Bind = kwSpan(c: inout c, kw: "fn", kwLen: 2U64)
+            mut val fargs: Array[U64] = []
+            fargs.append(value: retTy)
+            mut val pj: U64 = 0
+            while pj < params.count {
+                fargs.append(value: params[pj].ty)
+                pj += 1
+            }
+            return c.pushType(t: <TypeRef nameStart=fnB.nameStart nameLen=fnB.nameLen args=fargs />)
+        }
+        _ => {}
+    }
     val tr: U64 = exprTypeRef(c: inout c, st: inout st, id: argExpr)
     if tr != 0U64 {
         return tr
