@@ -69,6 +69,7 @@ extern(c) {
     // Constants / introspection.
     fn LLVMConstInt(ty~: LLVMTypeRef, n~: U64, signExtend~: I32) -> LLVMValueRef
     fn LLVMConstNull(ty~: LLVMTypeRef) -> LLVMValueRef
+    fn LLVMIsNull(v~: LLVMValueRef) -> I32
     fn LLVMSizeOf(ty~: LLVMTypeRef) -> LLVMValueRef
     fn LLVMBuildGEP2(b~: LLVMBuilderRef, ty~: LLVMTypeRef, ptr~: LLVMValueRef, indices~: CPtr[LLVMValueRef], numIndices~: U64, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMTypeOf(v~: LLVMValueRef) -> LLVMTypeRef
@@ -270,20 +271,21 @@ fn structAllPrimitive(c: inout Comp, sidx: U64) -> Bool {
     mut val i: U64 = 0
     while i < sd.fields.count {
         val f: FieldDef = sd.fields[i]
+        // an array field is the {ptr,i64} value type (supported); a real (non-extern)
+        // nested struct / enum field is not yet (an extern struct field is a
+        // primitive lang-item I64/String/Bool, which is fine).
         if f.tyIsArray {
-            return false
-        }
-        // a real (non-extern) nested struct field is not yet supported; an extern
-        // struct field is a primitive lang-item (I64/String/Bool/…), which is fine.
-        val fsi: U64 = structIndexByName(c: inout c, start: f.tyStart, len: f.tyLen)
-        if fsi < c.structs.count {
-            if c.structs[fsi].isExtern {
-            } else {
+        } else {
+            val fsi: U64 = structIndexByName(c: inout c, start: f.tyStart, len: f.tyLen)
+            if fsi < c.structs.count {
+                if c.structs[fsi].isExtern {
+                } else {
+                    return false
+                }
+            }
+            if isEnumName(c: inout c, start: f.tyStart, len: f.tyLen) {
                 return false
             }
-        }
-        if isEnumName(c: inout c, start: f.tyStart, len: f.tyLen) {
-            return false
         }
         i += 1
     }
@@ -316,7 +318,7 @@ fn registerStructs(c: inout Comp, st: inout LlvmCtx) {
                     mut val elems: Array[LLVMTypeRef] = []
                     mut val fi: U64 = 0
                     while fi < sd.fields.count {
-                        elems.append(value: llvmScalarTy(c: inout c, st: inout st, tyStart: sd.fields[fi].tyStart, tyLen: sd.fields[fi].tyLen))
+                        elems.append(value: llvmTypeFor(c: inout c, st: inout st, tyStart: sd.fields[fi].tyStart, tyLen: sd.fields[fi].tyLen, isArray: sd.fields[fi].tyIsArray))
                         fi += 1
                     }
                     LLVMStructSetBody(ty, arrayCPtr(elems), sd.fields.count, 0I32)
@@ -970,7 +972,7 @@ fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, v
                 return agg
             }
         }
-        val fv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valExpr), tyStart: fld.tyStart, tyLen: fld.tyLen)
+        val fv: LLVMValueRef = genFieldValue(c: inout c, st: inout st, valExpr: valExpr, fld: fld)
         agg = LLVMBuildInsertValue(st.b, agg, fv, fi, anon())
         fi += 1
     }
@@ -1352,10 +1354,100 @@ fn exprIsArray(c: inout Comp, st: inout LlvmCtx, id: U64) -> Bool {
                 return st.locIsArr[li]
             }
         }
+        Expr.Field(val base, val nameStart, val nameLen) => {
+            val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+            if sidx < c.structs.count {
+                val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
+                if fidx < c.structs[sidx].fields.count {
+                    return c.structs[sidx].fields[fidx].tyIsArray
+                }
+            }
+        }
         Expr.Array(elems: _) => { return true }
         _ => {}
     }
     return false
+}
+
+// The element type of an array-typed receiver (Ident local / struct field).
+fn arrElemTyOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
+    match c.exprs[id] {
+        Expr.Ident(val start, val len) => {
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.nLocals {
+                if st.locIsArr[li] { return st.locElemTy[li] }
+            }
+        }
+        Expr.Field(val base, val nameStart, val nameLen) => {
+            val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+            if sidx < c.structs.count {
+                val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
+                if fidx < c.structs[sidx].fields.count {
+                    return llvmScalarTy(c: inout c, st: inout st, tyStart: c.structs[sidx].fields[fidx].tyStart, tyLen: c.structs[sidx].fields[fidx].tyLen)
+                }
+            }
+        }
+        _ => {}
+    }
+    return st.i64ty
+}
+
+// A pointer to the {ptr,i64} storage of an array place (an array local or an
+// array struct field of a struct local), so `.append` can grow it in place.
+// Returns LLVMConstNull(ptr) if not an addressable array place.
+fn arrStoragePtr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
+    match c.exprs[id] {
+        Expr.Ident(val start, val len) => {
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.nLocals {
+                if st.locIsArr[li] { return st.locPtr[li] }
+            }
+        }
+        Expr.Field(val base, val nameStart, val nameLen) => {
+            val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+            if sidx < c.structs.count {
+                val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
+                if fidx < c.structs[sidx].fields.count {
+                    val basePtr: LLVMValueRef = structPlacePtr(c: inout c, st: inout st, id: base)
+                    if LLVMIsNull(basePtr) == 0I32 {
+                        return LLVMBuildStructGEP2(st.b, st.structTys[structRegSlot(c: inout c, st: inout st, start: c.structs[sidx].nameStart, len: c.structs[sidx].nameLen)], basePtr, fidx, anon())
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    return LLVMConstNull(st.ptrty)
+}
+
+// A pointer to a struct place's storage (an addressable struct local), or
+// LLVMConstNull(ptr).
+fn structPlacePtr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
+    match c.exprs[id] {
+        Expr.Ident(val start, val len) => {
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.nLocals {
+                return st.locPtr[li]
+            }
+        }
+        _ => {}
+    }
+    return LLVMConstNull(st.ptrty)
+}
+
+// Build a struct/enum field value, honoring an array field's element type (so an
+// array-literal field uses the field's element type, not i64-defaulted).
+fn genFieldValue(c: inout Comp, st: inout LlvmCtx, valExpr: U64, fld: FieldDef) -> LLVMValueRef {
+    if fld.tyIsArray {
+        match c.exprs[valExpr] {
+            Expr.Array(val elems) => {
+                return genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: llvmScalarTy(c: inout c, st: inout st, tyStart: fld.tyStart, tyLen: fld.tyLen))
+            }
+            _ => {}
+        }
+        return genLlvmExpr(c: inout c, st: inout st, id: valExpr)
+    }
+    return coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valExpr), tyStart: fld.tyStart, tyLen: fld.tyLen)
 }
 
 // Declare/cache `plew_rawbuf_alloc(i64 elemSize, i64 cap) -> ptr`.
@@ -1426,7 +1518,7 @@ fn genLlvmArrayLit(c: inout Comp, st: inout LlvmCtx, elems: Array[U64], elemTy: 
 
 // `arr[i]` read: bounds-checked element load.
 fn genLlvmIndex(c: inout Comp, st: inout LlvmCtx, base: U64, index: U64) -> LLVMValueRef {
-    val elemTy: LLVMTypeRef = exprArrElemTy(c: inout c, st: inout st, id: base)
+    val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: base)
     val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: base)
     // the base must be an array {ptr,i64} aggregate; a non-aggregate here means a
     // nested array (Array[Array[T]]) or unsupported element typing — reject loudly
@@ -1446,14 +1538,13 @@ fn genLlvmIndex(c: inout Comp, st: inout LlvmCtx, base: U64, index: U64) -> LLVM
 // `arr.append(v)` on an array local: grow the buffer if full, store v at `count`,
 // increment count (mutating the local's {data,count}). No CoW yet (shares buffer).
 fn genLlvmAppend(c: inout Comp, st: inout LlvmCtx, recv: U64, valueExpr: U64) -> LLVMValueRef {
-    val li: U64 = arrLocalIndex(c: inout c, st: inout st, id: recv)
-    if li < st.nLocals {
+    val arrPtr: LLVMValueRef = arrStoragePtr(c: inout c, st: inout st, id: recv)
+    if LLVMIsNull(arrPtr) == 0I32 {
     } else {
-        compileErrorAt(line: 0, msg: "LLVM backend: append only on an array local (so far)")
+        compileErrorAt(line: 0, msg: "LLVM backend: append only on an array local / struct field (so far)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
-    val elemTy: LLVMTypeRef = st.locElemTy[li]
-    val arrPtr: LLVMValueRef = st.locPtr[li]
+    val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: recv)
     val dataPtr: LLVMValueRef = LLVMBuildStructGEP2(st.b, st.arrayTy, arrPtr, 0U64, anon())
     val countPtr: LLVMValueRef = LLVMBuildStructGEP2(st.b, st.arrayTy, arrPtr, 1U64, anon())
     val data: LLVMValueRef = LLVMBuildLoad2(st.b, st.ptrty, dataPtr, anon())
@@ -1634,6 +1725,10 @@ fn placePtrOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
 // parameter's element type (so `[10,20]` for an `Array[I32]` param uses i32, not
 // i64-defaulted elements); a scalar arg is width-coerced to the parameter type.
 fn genArgValue(c: inout Comp, st: inout LlvmCtx, argExpr: U64, p: Param) -> LLVMValueRef {
+    if p.isInout {
+        // pass the caller's place address (the callee mutates in place).
+        return placePtrOf(c: inout c, st: inout st, id: argExpr)
+    }
     if p.tyIsArray {
         match c.exprs[argExpr] {
             Expr.Array(val elems) => {
@@ -1720,6 +1815,15 @@ fn methodInEntryModule(c: inout Comp, f: Func) -> Bool {
     return moduleOf(c: inout c, offset: stmtPrincipalOffset(c: inout c, sid: blk.stmts[0])) == 0U64
 }
 
+// The LLVM type of a parameter: a pointer for an `inout` parameter (it receives
+// the caller's address and mutates in place), else the value type (array-aware).
+fn paramLlvmTy(c: inout Comp, st: inout LlvmCtx, p: Param) -> LLVMTypeRef {
+    if p.isInout {
+        return st.ptrty
+    }
+    return llvmTypeFor(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+}
+
 // The LLVM type of a method's `self` parameter: a pointer for `inout fn` (mutates
 // the caller's value), else the receiver struct by value.
 fn selfParamTy(c: inout Comp, st: inout LlvmCtx, f: Func) -> LLVMTypeRef {
@@ -1750,7 +1854,7 @@ fn declareUserFns(c: inout Comp, st: inout LlvmCtx) {
             }
             mut val pi: U64 = 0
             while pi < f.params.count {
-                ptys.append(value: llvmTypeFor(c: inout c, st: inout st, tyStart: f.params[pi].tyStart, tyLen: f.params[pi].tyLen, isArray: f.params[pi].tyIsArray))
+                ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: f.params[pi]))
                 pi += 1
             }
             val rty: LLVMTypeRef = llvmFnRetTy(c: inout c, st: inout st, f: f)
@@ -1832,9 +1936,16 @@ fn genLlvmFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
             pElem = pty
             pty = st.arrayTy
         }
-        val slot2: LLVMValueRef = LLVMBuildAlloca(st.b, pty, anon())
-        LLVMBuildStore(st.b, LLVMGetParam(fv, pi + base), slot2)
-        pushLocal(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty, kind: kindFromTySpan(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen), isArr: p.tyIsArray, elemTy: pElem, elemKind: kindFromTySpan(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen))
+        // an `inout` param IS a pointer to the caller's value: bind the pointer
+        // directly so field/element access GEPs through it (mutating in place),
+        // like an `inout fn` self. A by-value param is stored into a fresh alloca.
+        if p.isInout {
+            pushLocal(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: LLVMGetParam(fv, pi + base), ty: pty, kind: kindFromTySpan(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen), isArr: p.tyIsArray, elemTy: pElem, elemKind: kindFromTySpan(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen))
+        } else {
+            val slot2: LLVMValueRef = LLVMBuildAlloca(st.b, pty, anon())
+            LLVMBuildStore(st.b, LLVMGetParam(fv, pi + base), slot2)
+            pushLocal(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty, kind: kindFromTySpan(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen), isArr: p.tyIsArray, elemTy: pElem, elemKind: kindFromTySpan(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen))
+        }
         pi += 1
     }
     genLlvmBlock(c: inout c, st: inout st, id: f.body)
@@ -1938,7 +2049,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                 Expr.Index(base: val ibase, index: val iindex) => {
                     // place mutation `arr[i] = v` / `arr[i] OP= v`: bounds-checked
                     // element pointer + store (the buffer is shared; no CoW yet).
-                    val elemTy: LLVMTypeRef = exprArrElemTy(c: inout c, st: inout st, id: ibase)
+                    val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: ibase)
                     val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: ibase)
                     val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 0U64, anon())
                     val count: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 1U64, anon())
