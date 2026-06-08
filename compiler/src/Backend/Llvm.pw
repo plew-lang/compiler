@@ -88,6 +88,9 @@ extern(c) {
     fn LLVMBuildMul(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildSDiv(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildSRem(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildUDiv(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildURem(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildLShr(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildNeg(b~: LLVMBuilderRef, v~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildNot(b~: LLVMBuilderRef, v~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildAnd(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
@@ -122,6 +125,10 @@ fn llvmIntSlt() -> U32 { return 40U32 }
 fn llvmIntSle() -> U32 { return 41U32 }
 fn llvmIntSgt() -> U32 { return 38U32 }
 fn llvmIntSge() -> U32 { return 39U32 }
+fn llvmIntUlt() -> U32 { return 36U32 }
+fn llvmIntUle() -> U32 { return 37U32 }
+fn llvmIntUgt() -> U32 { return 34U32 }
+fn llvmIntUge() -> U32 { return 35U32 }
 
 // ---- backend state (threaded inout through the emitters) ----
 //
@@ -908,24 +915,28 @@ fn emitStrEq(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -> L
 // for division/remainder/comparison (widths/unsigned/overflow-panic are TODO).
 // Comparisons yield i1; arithmetic yields the operand width.
 fn buildBinOp(c: inout Comp, st: inout LlvmCtx, op: I64, l: LLVMValueRef, r: LLVMValueRef) -> LLVMValueRef {
+    return buildBinOpS(c: inout c, st: inout st, op: op, l: l, r: r, unsigned: false)
+}
+
+// Build an integer binary op, choosing unsigned vs signed forms (div/rem/cmp/shr)
+// by the operand signedness.
+fn buildBinOpS(c: inout Comp, st: inout LlvmCtx, op: I64, l: LLVMValueRef, r: LLVMValueRef, unsigned: Bool) -> LLVMValueRef {
     if op == opAdd() { return LLVMBuildAdd(st.b, l, r, anon()) }
     if op == opSub() { return LLVMBuildSub(st.b, l, r, anon()) }
     if op == opMul() { return LLVMBuildMul(st.b, l, r, anon()) }
-    if op == opDiv() { return LLVMBuildSDiv(st.b, l, r, anon()) }
-    if op == opRem() { return LLVMBuildSRem(st.b, l, r, anon()) }
+    if op == opDiv() { if unsigned { return LLVMBuildUDiv(st.b, l, r, anon()) } return LLVMBuildSDiv(st.b, l, r, anon()) }
+    if op == opRem() { if unsigned { return LLVMBuildURem(st.b, l, r, anon()) } return LLVMBuildSRem(st.b, l, r, anon()) }
     if op == opBitAnd() { return LLVMBuildAnd(st.b, l, r, anon()) }
     if op == opBitOr() { return LLVMBuildOr(st.b, l, r, anon()) }
     if op == opBitXor() { return LLVMBuildXor(st.b, l, r, anon()) }
     if op == opShl() { return LLVMBuildShl(st.b, l, r, anon()) }
-    // >> is arithmetic (signed) here; unsigned types collapse to i64 so a logical
-    // shift on an unsigned value is a TODO (alongside width/signedness accuracy).
-    if op == opShr() { return LLVMBuildAShr(st.b, l, r, anon()) }
+    if op == opShr() { if unsigned { return LLVMBuildLShr(st.b, l, r, anon()) } return LLVMBuildAShr(st.b, l, r, anon()) }
     if op == opEq() { return LLVMBuildICmp(st.b, llvmIntEq(), l, r, anon()) }
     if op == opNe() { return LLVMBuildICmp(st.b, llvmIntNe(), l, r, anon()) }
-    if op == opLt() { return LLVMBuildICmp(st.b, llvmIntSlt(), l, r, anon()) }
-    if op == opLe() { return LLVMBuildICmp(st.b, llvmIntSle(), l, r, anon()) }
-    if op == opGt() { return LLVMBuildICmp(st.b, llvmIntSgt(), l, r, anon()) }
-    if op == opGe() { return LLVMBuildICmp(st.b, llvmIntSge(), l, r, anon()) }
+    if op == opLt() { if unsigned { return LLVMBuildICmp(st.b, llvmIntUlt(), l, r, anon()) } return LLVMBuildICmp(st.b, llvmIntSlt(), l, r, anon()) }
+    if op == opLe() { if unsigned { return LLVMBuildICmp(st.b, llvmIntUle(), l, r, anon()) } return LLVMBuildICmp(st.b, llvmIntSle(), l, r, anon()) }
+    if op == opGt() { if unsigned { return LLVMBuildICmp(st.b, llvmIntUgt(), l, r, anon()) } return LLVMBuildICmp(st.b, llvmIntSgt(), l, r, anon()) }
+    if op == opGe() { if unsigned { return LLVMBuildICmp(st.b, llvmIntUge(), l, r, anon()) } return LLVMBuildICmp(st.b, llvmIntSge(), l, r, anon()) }
     // unsupported op (bitwise/shift land in a later increment): reject loudly.
     compileErrorAt(line: 0, msg: "LLVM backend: operator not yet supported")
     return l
@@ -1043,7 +1054,10 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                     r = coerceInt(st: inout st, v: r, target: LLVMTypeOf(l), unsigned: valueKind(c: inout c, st: inout st, id: rhs) == 3U64)
                 }
             }
-            return buildBinOp(c: inout c, st: inout st, op: op, l: l, r: r)
+            mut val uns: Bool = false
+            if valueKind(c: inout c, st: inout st, id: lhs) == 3U64 { uns = true }
+            if valueKind(c: inout c, st: inout st, id: rhs) == 3U64 { uns = true }
+            return buildBinOpS(c: inout c, st: inout st, op: op, l: l, r: r, unsigned: uns)
         }
         Expr.Str(val start, val len) => {
             return genLlvmStr(c: inout c, st: inout st, start: start, len: len)
