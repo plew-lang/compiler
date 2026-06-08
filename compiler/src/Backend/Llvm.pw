@@ -246,6 +246,9 @@ struct LlvmCtx {
     // per-array-local element struct index (c.structs.count = element is not a
     // struct), so `arr[i].field` on an array-of-struct LOCAL resolves the element.
     pub mut val locElemStructIdx: Array[U64]
+    // per-array-local element TypeRef (0 = none), so `arr[i]` recovers the element's
+    // instance — a Ref (`Array[Ref[Box]]` -> `ys[0]->v`) or a nested array.
+    pub mut val locElemTypeRef: Array[U64]
     // declared runtime/intrinsic functions, cached by name id (parallel arrays).
     pub mut val declId: Array[U64]
     pub mut val declFn: Array[LLVMValueRef]
@@ -1000,6 +1003,19 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 }
             }
         }
+        Expr.Index(val base, index: _) => {
+            // `arr[i]` : the array's element TypeRef (a Ref element `Array[Ref[Box]]`
+            // -> `ys[i]->v`, or a nested-array element), from the base array local.
+            match c.exprs[base] {
+                Expr.Ident(start: val bs, len: val bl) => {
+                    val bli: U64 = findLocal(c: inout c, st: inout st, start: bs, len: bl)
+                    if bli < st.nLocals {
+                        return st.locElemTypeRef[bli]
+                    }
+                }
+                _ => {}
+            }
+        }
         Expr.OptChain(val base, val memberStart, val memberLen) => {
             // `base?.member : Optional[U]` — so a chained `a?.b?.c` types its inner.
             return optChainResultRefLL(c: inout c, st: inout st, base: base, memberStart: memberStart, memberLen: memberLen)
@@ -1682,6 +1698,7 @@ fn pushLocalR(st: inout LlvmCtx, nameStart: U64, nameLen: U64, ptr: LLVMValueRef
         st.locElemKind[st.nLocals] = elemKind
         st.locTypeRef[st.nLocals] = typeRef
         st.locElemStructIdx[st.nLocals] = 18446744073709551615U64
+        st.locElemTypeRef[st.nLocals] = 0U64
     } else {
         st.locStart.append(value: nameStart)
         st.locLen.append(value: nameLen)
@@ -1694,6 +1711,7 @@ fn pushLocalR(st: inout LlvmCtx, nameStart: U64, nameLen: U64, ptr: LLVMValueRef
         st.locElemKind.append(value: elemKind)
         st.locTypeRef.append(value: typeRef)
         st.locElemStructIdx.append(value: 18446744073709551615U64)
+        st.locElemTypeRef.append(value: 0U64)
     }
     st.nLocals = st.nLocals + 1
 }
@@ -1703,6 +1721,13 @@ fn pushLocalR(st: inout LlvmCtx, nameStart: U64, nameLen: U64, ptr: LLVMValueRef
 fn setLocalElemStruct(st: inout LlvmCtx, esi: U64) {
     if st.nLocals > 0U64 {
         st.locElemStructIdx[st.nLocals - 1U64] = esi
+    }
+}
+
+// Set the just-pushed array local's element TypeRef (a Ref / nested-array element).
+fn setLocalElemTypeRef(st: inout LlvmCtx, ref: U64) {
+    if st.nLocals > 0U64 {
+        st.locElemTypeRef[st.nLocals - 1U64] = ref
     }
 }
 
@@ -5238,7 +5263,10 @@ fn emitClosures(c: inout Comp, st: inout LlvmCtx) {
                 st.locElemKind = []
                 st.locTypeRef = []
     st.locElemStructIdx = []
+    st.locElemTypeRef = []
                 st.locElemStructIdx = []
+    st.locElemTypeRef = []
+                st.locElemTypeRef = []
                 // bind captures from the env pointer (param 0): each capture loads
                 // from its env slot into a fresh local, so the body's identifier
                 // accesses resolve normally. (Immutable captures are by-value; a
@@ -5427,6 +5455,7 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
     st.locElemKind = []
     st.locTypeRef = []
     st.locElemStructIdx = []
+    st.locElemTypeRef = []
     // method receiver: bind `self` as a local pointing at the struct storage —
     // an `inout fn`'s self IS the pointer param; a by-value self is stored into a
     // fresh alloca (so mutations stay local). Field access then GEPs locPtr
@@ -5492,6 +5521,13 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             mut val elemKind: U64 = 0
             if tyIsArray {
                 elemTy = llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen)
+                // a compound element (`Array[Ref[Box]]`, `Array[Box[I32]]`) has a
+                // mangled tyStart llvmScalarTy can't resolve — use the element ref.
+                if ty != 0U64 {
+                    if c.types[ty].args.count > 0U64 {
+                        elemTy = llvmTypeOfRef(c: inout c, st: inout st, ref: c.types[ty].args[0])
+                    }
+                }
                 elemKind = kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen)
             } else {
                 match c.exprs[init] {
@@ -5630,6 +5666,16 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                     val esi: U64 = localStructIdxFor(c: inout c, st: inout st, start: tyStart, len: tyLen)
                     if esi < c.structs.count {
                         setLocalElemStruct(st: inout st, esi: esi)
+                    }
+                }
+                // track the element's TypeRef so `ys[i]` recovers a Ref / nested-array
+                // element. `ty` is the Array[E] ref, so the element is its first arg.
+                if tyIsArray {
+                    if ty != 0U64 {
+                        val at: TypeRef = c.types[ty]
+                        if at.args.count > 0U64 {
+                            setLocalElemTypeRef(st: inout st, ref: at.args[0])
+                        }
                     }
                 }
             }
@@ -6485,7 +6531,7 @@ fn emitLlvm(c: inout Comp) {
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[]
-        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemStructIdx=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] provEmit=[] genMethEmit=[] />
+        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemStructIdx=[] locElemTypeRef=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] provEmit=[] genMethEmit=[] />
 
     // a "self" byte span (appended past the source) to bind method receivers.
     st.selfStart = c.bytes.count
@@ -6588,6 +6634,7 @@ fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     st.locElemKind = []
     st.locTypeRef = []
     st.locElemStructIdx = []
+    st.locElemTypeRef = []
     genLlvmBlock(c: inout c, st: inout st, id: c.funcs[fi].body)
     if st.terminated {
     } else {
