@@ -334,7 +334,7 @@ import @Std/Testing with { expect, expectEq, expectNe, expectApprox }
 
 ## 外部コード統合（`extern(c)` FFI）
 
-> **状態 = 設計叩き台（点1＝不透明ハンドル型・ポインタ・共有 struct・ABI 記法を確定方向で記述／点2 数値対応・点3 文字列境界・点4 所有権規約は別途）。** Plew の C-API バックエンド（libLLVM-C 等を叩く）の土台。ABI は当面 `c` のみ（`system`/WASM/`javascript` は後続）。
+> **状態 = 設計叩き台（点1 不透明ハンドル/ポインタ/共有 struct/ABI 記法・点2 数値対応・点3 文字列境界・点4 所有権規約・リンクまで一通り確定方向で記述／残るは下記「未決」）。** Plew の C-API バックエンド（libLLVM-C 等を叩く）の土台。ABI は当面 `c` のみ（`system`/WASM/`javascript` は後続）。
 >
 > **スコープ＝外部を「使う側」のみ（Plew が C を呼ぶ）。** Plew 関数を C へ「使わせる側」（export＝Plew→C 公開）は**未定**で本節に含めない（既存 `export` キーワードとの整合・呼出規約・マングリングを別途詰める必要があり、現状の LLVM 利用には不要なため）。
 
@@ -466,14 +466,68 @@ pub impl Module {
 
 危険を `extern` ブロックと薄い皮に局所化すれば、利用側は通常の Plew 値として扱える。
 
-### 別途（点2/3/4）
+### 点2: 数値型の対応
 
-- **点2 数値型の対応**：`I32↔int32_t`・`U64↔uint64_t`・`F64↔double` 等。固定幅なのでほぼ機械的（`Int`/`USize`/`ISize` の C 対応・`LLVMBool`(=`int`) 等の typedef・外部由来 `NaN` 流入の扱いだけ要決定）。
-- **点3 文字列境界**：`String`（UTF-8・CoW・非 NUL 終端）↔ C `const char*`。借用して NUL 終端の一時バッファを作る `CString` 変換層（`@Std/Ffi`）。
-- **点4 所有権規約**：境界を越えた値は ARC 管理外。誰が `free` するか、`extern` 戻り値の寿命規則。上の `unique`＋`deinit` が既定の受け皿。
+C 型 ↔ Plew 型は**2 階級**に分ける。
+
+**(a) 固定幅 C 型 ↔ Plew 固定幅型（1:1・機械的）**：
+
+| C | Plew | | C | Plew |
+|---|---|---|---|---|
+| `int8_t`/`uint8_t` | `I8`/`U8` | | `int64_t`/`uint64_t` | `I64`/`U64` |
+| `int16_t`/`uint16_t` | `I16`/`U16` | | `float` | `F32` |
+| `int32_t`/`uint32_t` | `I32`/`U32` | | `double` | `F64` |
+| `_Bool`(C99) | `Bool` | | | |
+
+**(b) プラットフォーム幅 C 型 → `@Std/Ffi` 専用型（別型・明示変換）**：`int`/`long`/`size_t` 等は**ターゲットで幅が変わる**。Plew は自前型の `全ターゲット同一意味論`（`I32` は常に 32bit）を守りたいので、これらは**境界専用の C-ABI 整数型**として持つ（Rust の `c_int`/`c_long`・Zig の `c_int`/`usize` と同じ）：
+
+- `CInt`/`CUInt`（`int`/`unsigned`）・`CLong`/`CULong`（`long`）・`CShort`/`CUShort`・`CChar`（`char`・符号はプラットフォーム依存）・`CSize`（`size_t`）・`CPtrDiff`（`ptrdiff_t`）。
+- **`USize`/`ISize`** ＝ポインタ幅（`size_t`/`intptr_t` 相当・既に FFI 着手時 additive と予告済み）。
+- これらは**別の名前型**（暗黙変換なし）で、Plew 固定幅型との往来は**明示**：同幅以上は `as`（無損失・幅はターゲット既知）、狭めは `TryFrom`（可謬）。`全ターゲット同一意味論` は自前型側で保たれ、可変幅は C 境界だけに閉じる。
+- **`LLVMBool`**（`typedef int LLVMBool`）は `CInt`＝幅が `Bool`（1byte）と違うので **Plew `Bool` ではない**。境界では `x != 0` で判定（typedef エイリアスは後続）。
+- **外部由来 `NaN`**：C から返る `F64` が `NaN` でも特別扱いしない ── Plew の「`NaN` は比較で panic・算術は IEEE」がそのまま適用（foreign な `NaN` も単なる `NaN`）。
+
+### 点3: 文字列境界
+
+`String`（UTF-8・CoW・長さ前置・**非 NUL 終端**・不変）と C 文字列（`const char*`・NUL 終端・任意バイト）の往来。
+
+**送る（Plew→C）**：NUL 終端バッファが要る。**`CString`＝所有する `unique` 値**（Plew String の UTF-8 コピー＋NUL を heap に持ち、`.ptr: CPtr[U8]` で渡す・`deinit` で解放）。寿命は **`CString` 値が生きている間**（レキシカルに明示）＝既存の `unique`/`deinit` だけで成立し新しい寿命機構は不要。
+
+```plew
+val cname: CString = CString.from(text~: "my.module")
+val m = LLVMModuleCreateWithNameInContext(name: cname.ptr, ctx: ctx)  // 呼び出し中有効
+// cname の deinit がスコープ末で解放
+```
+
+呼んで捨てるだけの定番には scoped 糖衣 `text.withCString { (p: CPtr[U8]) -> R in … }`（クロージャ内だけ有効＝寿命が構造的に閉じる）。
+
+**受け取る（C→Plew）**：`String.fromCString(ptr: CPtr[U8]) -> Result[String, Utf8Error]` ── NUL まで strlen＋コピー＋**UTF-8 検証**（C バイトは妥当 UTF-8 と限らない＝可謬）。検証せず生バイトが要れば `bytesFromCString(ptr:) -> Array[U8]`。`CString`/変換は `@Std/Ffi` が所有。
+
+### 点4: 所有権・寿命規約
+
+境界を越えた値は **ARC 管理外**（Plew は foreign ポインタ/ハンドルを refcount しない）。**誰が `free` するかは C-API の契約**でコンパイラは推論できないので、**束縛の作者が型で encode** する：
+
+- **C が「解放すべきポインタ」を返す** → `unique`＋`deinit` で disposer を呼ぶ（**Message パターン**：`LLVMPrintModuleToString` → `char*` を `LLVMDisposeMessage` で解放）。
+- **C が借用/静的ポインタを返す** → 必要分をコピーアウト（`String.fromCString`）して解放しない。
+- **所有を受け取る C へ渡す**（稀）→ `move` し、自分では解放しない。
+
+**借用ポインタの寿命**（`CString.ptr`・`Array` バッファ基底など）は**所有 Plew 値が生きていて未変更の間だけ**有効。所有者の寿命を越えて C が保持する呼び出しに渡す＝dangling＝UB（Plew は寿命を静的に防げない＝unsafe 境界の責任）。**`CMutPtr` を Plew データへ向ける**のは **unique/`inout` 由来のときだけ**（共有 CoW から出すと書き込みが共有コピーを壊す＝const/mut が borrow/inout に対応する理由）。
+
+### 外部 C ライブラリのリンク
+
+- **Plew は自己完結 C を吐く**：`extern(c) { type/fn }`・`repr(c) struct` から **C のプロトタイプ/typedef/struct を Plew 自身が生成**する（宣言の正本は Plew 側＝bindgen が `.h` から写した extern 宣言をそのまま C へ再 emit）。ゆえに**外部ヘッダの `#include` は不要**で、必要なのは**リンクだけ**（Plew の extern 宣言と実体の ABI 一致は FFI 本来の前提＝宣言＝プロトタイプ）。
+- **リンク＝ビルド/マニフェスト関心（ソース構文でない）**：`extern(c)` ブロックは純粋な宣言に保ち、リンクするライブラリと探索は**パッケージマニフェスト**でネイティブ依存として宣言（`pkg-config`/`llvm-config` で `-I`/`-L`/`-l` を解決）。`plewc` がビルドを駆動するとき clang にフラグを渡す。
+- **当面（pipe-to-clang）**：現行ワークフローのまま手でフラグを渡す ──
+  ```sh
+  plewc app.pw | clang -x c - $(llvm-config --ldflags --libs core) -o app && ./app
+  ```
+  リンクは「clang に渡すフラグ」に過ぎず、`#include` 不要なので追加の include パスも基本不要。
+- **C++ シムが要る場合**（libLLVM-C で足りず C++ API を使う時・rustc の `llvm-wrapper` と同型）：`extern "C"` を露出する `.cpp` を 1 枚書き、clang++ で別途コンパイルして libLLVM/libc++ とリンク。**Plew 側の言語機能は `extern(c)` のまま**（C++ には触れない）。シム source とコンパイル/リンク指定はマニフェストに列挙（後続）。
 
 ### 未決
 
+- **リンクのマニフェスト・スキーマ**：ネイティブ依存のキー（`link`/`pkg-config`/探索コマンド）・C++ シムのビルド統合。**パッケージ管理（M3）と地続き**ゆえそこで確定。
+- **プラットフォーム幅型の変換規則**：`as`（無損失）と `TryFrom`（可謬）の閾値の厳密化・`CSize`↔`USize`↔`U64` の関係。
 - **ハンドルの等価**：ポインタ同一性で `Eq` を提供するか。当面は非提供で開始し additive 可。
 - **spawn/local**：生ハンドル/ポインタを `local`（`Ref` 同様 spawn 不可・保守的）とするか、コピー可能な 1 語として spawn 越境を許す（正直に危険・race-free 保証は境界で切れると明記）か。
 - **使わせる側（export＝Plew→C 公開）＝未定**：Plew 関数を C へ公開する綴り・マングル抑制・可視性（既存 `export` モジュール公開との整合）・呼出規約の既定。既存 `export` キーワードと紛らわしく要設計・libLLVM-C 利用には不要なので本節スコープ外。
