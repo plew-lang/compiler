@@ -2835,6 +2835,23 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: this array method is not yet supported (append only)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
+    // wrapping arithmetic on a primitive integer receiver: two's-complement wrap
+    // is LLVM's default add/sub/mul (no overflow check), so `x.wrappingAdd(by: y)`
+    // is a plain op at the receiver's width. (Checked `+`/`-`/`*` aren't modeled
+    // here yet either, so the distinction is currently a no-op — but routing the
+    // method keeps the call accepted and correct on wraparound.)
+    mut val wop: I64 = -1I64
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "wrappingAdd") { wop = opAdd() }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "wrappingSub") { wop = opSub() }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "wrappingMul") { wop = opMul() }
+    if wop != -1I64 {
+        val rv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: recv)
+        if LLVMGetTypeKind(LLVMTypeOf(rv)) == 8U32 {
+            val uns: Bool = valueKind(c: inout c, st: inout st, id: recv) == 3U64
+            val bv: LLVMValueRef = coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: LLVMTypeOf(rv), unsigned: uns)
+            return buildBinOpS(c: inout c, st: inout st, op: wop, l: rv, r: bv, unsigned: uns)
+        }
+    }
     val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
     if rsidx < c.structs.count {
     } else {
