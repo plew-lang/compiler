@@ -4413,6 +4413,20 @@ fn primLangItemRecvName(c: inout Comp, st: inout LlvmCtx, recv: U64) -> Bind {
                 }
             }
         }
+        Expr.Ident(val start, val len) => {
+            // a primitive-int local/param (`v: U64`): its tracked type name (locTypeRef),
+            // so `v.hash[H](…)` dispatches on the primitive.
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.nLocals {
+                val tr: U64 = st.locTypeRef[li]
+                if tr != 0U64 {
+                    val t: TypeRef = c.types[tr]
+                    if isPrimIntName(c: inout c, start: t.nameStart, len: t.nameLen) {
+                        return <Bind nameStart=t.nameStart nameLen=t.nameLen fieldStart=t.nameStart fieldLen=t.nameLen />
+                    }
+                }
+            }
+        }
         Expr.Cast(operand: _, val tyStart, val tyLen, ty: _) => {
             // `(self as I64).format(...)`: the cast target's primitive type.
             if isPrimIntName(c: inout c, start: tyStart, len: tyLen) {
@@ -4627,12 +4641,11 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         }
     }
     mut val slot: U64 = userFnSlot(st: inout st, idx: mfi)
-    // a provided trait method is declared+queued lazily the first time it is called.
+    // a provided trait method OR a non-entry-module std method (SipHasher.writeU64,
+    // reached via a generic Hasher) is declared+emitted lazily on first call.
     if slot < st.fnIdx.count {
     } else {
-        if c.funcs[mfi].isProvided {
-            slot = ensureProvidedDeclared(c: inout c, st: inout st, fi: mfi)
-        }
+        slot = ensureProvidedDeclared(c: inout c, st: inout st, fi: mfi)
     }
     if slot < st.fnIdx.count {
     } else {
@@ -5624,7 +5637,37 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
             }
         }
     }
-    val pKind: U64 = kindFromTySpan(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen)
+    // a primitive-int param (including a generic `v: K` with K -> U64): track its
+    // (grounded) type name so a method on the primitive (`v.hash[H](…)`) dispatches.
+    if pRef == 0U64 {
+        if p.tyIsArray {
+        } else {
+            mut val gs2: U64 = p.tyStart
+            mut val gl2: U64 = p.tyLen
+            if p.ty != 0U64 {
+                if c.curTypeParams.count > 0U64 {
+                    val pg2: U64 = groundTypeRef(c: inout c, ref: p.ty)
+                    gs2 = c.types[pg2].nameStart
+                    gl2 = c.types[pg2].nameLen
+                }
+            }
+            if isPrimIntName(c: inout c, start: gs2, len: gl2) {
+                pRef = simpleTypeRef(c: inout c, nameStart: gs2, nameLen: gl2)
+            }
+        }
+    }
+    // ground a generic param type for its kind (a `key: K` with K -> String must be
+    // kind 1 so a String method dispatches; K -> U64 unsigned, etc.).
+    mut val pKindStart: U64 = p.tyStart
+    mut val pKindLen: U64 = p.tyLen
+    if p.ty != 0U64 {
+        if c.curTypeParams.count > 0U64 {
+            val pg: U64 = groundTypeRef(c: inout c, ref: p.ty)
+            pKindStart = c.types[pg].nameStart
+            pKindLen = c.types[pg].nameLen
+        }
+    }
+    val pKind: U64 = kindFromTySpan(c: inout c, tyStart: pKindStart, tyLen: pKindLen)
     if p.isInout {
         pushLocalR(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: LLVMGetParam(fv, argIdx), ty: pty, kind: pKind, structIdx: pSidx, isArr: p.tyIsArray, elemTy: pElem, elemKind: pKind, typeRef: pRef)
     } else {
