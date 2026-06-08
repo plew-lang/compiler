@@ -34,6 +34,14 @@ part ./Backend/Llvm
 part ./Loader
 
 fn main() {
+    // `plewc-llvm --runtime` emits the companion C runtime the generated IR links
+    // against (no front-end needed — the runtime is program-independent so far).
+    if argCount() > 1 {
+        if argAt(1) == "--runtime" {
+            emitLlvmRuntime()
+            return
+        }
+    }
     mut val c: Comp = runFrontend()
     emitLlvm(c: inout c)
 }
