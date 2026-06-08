@@ -1867,6 +1867,27 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 }
             }
         }
+        Expr.Call(val nameStart, val nameLen, val args) => {
+            // a closure-typed local call (`tail()` where tail: fn() -> String): the
+            // fn return type's kind (fn args = [ret, p0, …]).
+            val cli: U64 = findLocal(c: inout c, st: inout st, start: nameStart, len: nameLen)
+            if cli < st.nLocals {
+                if isFnType(c: inout c, ref: st.locTypeRef[cli]) {
+                    val ft: TypeRef = c.types[st.locTypeRef[cli]]
+                    if ft.args.count > 0U64 {
+                        val rt: TypeRef = c.types[ft.args[0]]
+                        return kindFromTySpan(c: inout c, tyStart: rt.nameStart, tyLen: rt.nameLen)
+                    }
+                }
+            }
+            // a regular function call: the callee's return-type kind.
+            val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            if cfi < c.funcs.count {
+                if c.funcs[cfi].hasRet {
+                    return kindFromTySpan(c: inout c, tyStart: c.funcs[cfi].retStart, tyLen: c.funcs[cfi].retLen)
+                }
+            }
+        }
         Expr.Index(val base, index: _) => {
             // element kind: from the array local's tracked element kind (so an
             // Array[U16] element is unsigned), else inferred from the element type.
@@ -2790,11 +2811,15 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                         val cap: CaptureEntry = caps[ci]
                         val li: U64 = findLocal(c: inout c, st: inout st, start: cap.nameStart, len: cap.nameLen)
                         if li < st.nLocals {
-                            // a boxed (mut) capture stores the cell pointer (the local
-                            // already IS that pointer); a by-value capture stores the
+                            // a boxed (mut) capture stores the shared cell POINTER
+                            // (locPtr is the heap cell); a by-value capture stores the
                             // loaded value.
-                            mut val cv2: LLVMValueRef = LLVMBuildLoad2(st.b, st.locTy[li], st.locPtr[li], anon())
-                            LLVMBuildStore(st.b, cv2, LLVMBuildStructGEP2(st.b, envTy, env, ci, anon()))
+                            if cap.boxed {
+                                LLVMBuildStore(st.b, st.locPtr[li], LLVMBuildStructGEP2(st.b, envTy, env, ci, anon()))
+                            } else {
+                                val cv2: LLVMValueRef = LLVMBuildLoad2(st.b, st.locTy[li], st.locPtr[li], anon())
+                                LLVMBuildStore(st.b, cv2, LLVMBuildStructGEP2(st.b, envTy, env, ci, anon()))
+                            }
                         }
                         ci += 1
                     }
@@ -5270,12 +5295,9 @@ fn closureCaptures(c: inout Comp, cloId: U64) -> Array[CaptureEntry] {
     return out
 }
 
-// The LLVM type of a capture slot in the env struct: a `mut val` (boxed) capture is
-// a pointer to the shared cell; otherwise the captured value's own type.
-fn captureSlotTy(c: inout Comp, st: inout LlvmCtx, cap: CaptureEntry) -> LLVMTypeRef {
-    if cap.boxed {
-        return st.ptrty
-    }
+// The captured variable's own VALUE type (ignoring boxing) — the type stored in
+// the shared cell for a boxed capture, or in the env slot for a by-value one.
+fn captureValueTy(c: inout Comp, st: inout LlvmCtx, cap: CaptureEntry) -> LLVMTypeRef {
     if cap.isArray {
         return st.arrayTy
     }
@@ -5283,6 +5305,31 @@ fn captureSlotTy(c: inout Comp, st: inout LlvmCtx, cap: CaptureEntry) -> LLVMTyp
         return llvmTypeOfRef(c: inout c, st: inout st, ref: cap.ty)
     }
     return llvmScalarTy(c: inout c, st: inout st, tyStart: cap.tyStart, tyLen: cap.tyLen)
+}
+
+// The LLVM type of a capture slot in the env struct: a `mut val` (boxed) capture is
+// a pointer to the shared cell; otherwise the captured value's own type.
+fn captureSlotTy(c: inout Comp, st: inout LlvmCtx, cap: CaptureEntry) -> LLVMTypeRef {
+    if cap.boxed {
+        return st.ptrty
+    }
+    return captureValueTy(c: inout c, st: inout st, cap: cap)
+}
+
+// Whether the local named (start,len) is captured by some closure as a boxed
+// (`mut val`, shared-cell) capture — so its storage must be a heap cell that
+// outlives the declaring scope (Swift-style reference capture).
+fn localIsBoxedCapture(c: inout Comp, start: U64, len: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.captures.count {
+        if c.captures[i].boxed {
+            if spansEqual(c: inout c, aStart: c.captures[i].nameStart, aLen: c.captures[i].nameLen, bStart: start, bLen: len) {
+                return true
+            }
+        }
+        i += 1
+    }
+    return false
 }
 
 // The env struct type for closure `cloId` (its captures in order). Caller guards on
@@ -5316,8 +5363,15 @@ fn closureSupported(c: inout Comp, cloId: U64) -> Bool {
     mut val i: U64 = 0
     while i < c.captures.count {
         if c.captures[i].closureId == cloId {
+            // a boxed (mut) capture is supported for a scalar/Bool cell; a boxed
+            // array/struct/generic-instance cell isn't modeled yet.
             if c.captures[i].boxed {
-                return false
+                if c.captures[i].isArray {
+                    return false
+                }
+                if isGenericInst(c: inout c, ref: c.captures[i].ty) {
+                    return false
+                }
             }
         }
         i += 1
@@ -5542,6 +5596,14 @@ fn emitClosures(c: inout Comp, st: inout LlvmCtx) {
                         val cap: CaptureEntry = caps[ci]
                         val slotTy: LLVMTypeRef = captureSlotTy(c: inout c, st: inout st, cap: cap)
                         val cv: LLVMValueRef = LLVMBuildLoad2(st.b, slotTy, LLVMBuildStructGEP2(st.b, envTy, envPtr, ci, anon()), anon())
+                        // a boxed (mut) capture: `cv` is the shared cell POINTER — bind
+                        // the local directly to it (ty = the value type), so reads/writes
+                        // in the body go through the same cell as the enclosing scope.
+                        if cap.boxed {
+                            val valTy: LLVMTypeRef = captureValueTy(c: inout c, st: inout st, cap: cap)
+                            pushLocalR(st: inout st, nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: cv, ty: valTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: c.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: 0U64)
+                            ci += 1
+                        } else {
                         val a: LLVMValueRef = LLVMBuildAlloca(st.b, slotTy, anon())
                         LLVMBuildStore(st.b, cv, a)
                         mut val cRef: U64 = 0
@@ -5562,6 +5624,7 @@ fn emitClosures(c: inout Comp, st: inout LlvmCtx) {
                         }
                         pushLocalR(st: inout st, nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: a, ty: slotTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: cap.tyStart, len: cap.tyLen), isArr: cap.isArray, elemTy: cElem, elemKind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), typeRef: cRef)
                         ci += 1
+                        }
                     }
                 }
                 mut val pi: U64 = 0
@@ -5929,7 +5992,15 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                     }
                 }
             }
-            val slot: LLVMValueRef = LLVMBuildAlloca(st.b, lty, anon())
+            // a `mut val` captured by a closure (Swift-style reference capture) is
+            // stored in a heap cell that outlives this scope; locPtr IS that cell, so
+            // reads/writes and the closure share it. Otherwise a plain stack alloca.
+            mut val slot: LLVMValueRef = LLVMConstNull(st.ptrty)
+            if localIsBoxedCapture(c: inout c, start: nameStart, len: nameLen) {
+                slot = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(lty), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
+            } else {
+                slot = LLVMBuildAlloca(st.b, lty, anon())
+            }
             LLVMBuildStore(st.b, v, slot)
             pushLocalR(st: inout st, nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind, structIdx: sidx, isArr: isArr, elemTy: elemTy, elemKind: elemKind, typeRef: tref)
             // sharing a Ref to a deinit-bearing pointee (`val r2 = r`): retain the
