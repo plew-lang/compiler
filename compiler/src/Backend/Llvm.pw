@@ -742,6 +742,22 @@ fn setEnumEnv(c: inout Comp, st: inout LlvmCtx, ref: U64) -> Bool {
     return false
 }
 
+// If `ref` is a generic struct instance, set the substitution env to it (so a
+// destructured field of type `T` grounds to the instance's concrete arg). Returns
+// whether it set the env (caller restores). Mirrors setEnumEnv for structs.
+fn setStructEnv(c: inout Comp, st: inout LlvmCtx, ref: U64) -> Bool {
+    if ref == 0U64 {
+        return false
+    }
+    val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: ref)
+    if gs < st.genStructRefs.count {
+        c.curTypeParams = c.structs[st.genStructDefs[gs]].typeParams
+        c.curTypeArgs = c.types[ref].args
+        return true
+    }
+    return false
+}
+
 // Index into st.genEnum* for the registered instance structurally equal to `ref`.
 fn genEnumSlot(c: inout Comp, st: inout LlvmCtx, ref: U64) -> U64 {
     mut val i: U64 = 0
@@ -2166,6 +2182,27 @@ fn genLlvmIfExpr(c: inout Comp, st: inout LlvmCtx, cond: U64, thenBlk: U64, else
 fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchArm]) -> LLVMValueRef {
     val sv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: scrut)
     val sty: LLVMTypeRef = LLVMTypeOf(sv)
+    // a value-position struct destructuring match (irrefutable, one arm): bind the
+    // scrutinee's fields (under any generic env), then evaluate the arm expression.
+    if arms.count > 0U64 {
+        if arms[0].isStruct {
+            val ssidx: U64 = exprStructIdx(c: inout c, st: inout st, id: scrut)
+            val savedSP: Array[Bind] = c.curTypeParams
+            val savedSA: Array[U64] = c.curTypeArgs
+            val didSetS: Bool = setStructEnv(c: inout c, st: inout st, ref: exprTypeRef(c: inout c, st: inout st, id: scrut))
+            val sslot0: LLVMValueRef = LLVMBuildAlloca(st.b, sty, anon())
+            LLVMBuildStore(st.b, sv, sslot0)
+            val mark0: U64 = st.nLocals
+            bindStructPattern(c: inout c, st: inout st, sidx: ssidx, arm: arms[0], scrutTy: sty, scrutSlot: sslot0)
+            val rv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: arms[0].body)
+            st.nLocals = mark0
+            if didSetS {
+                c.curTypeParams = savedSP
+                c.curTypeArgs = savedSA
+            }
+            return rv
+        }
+    }
     // generic enum scrutinee: set the substitution env so payload types resolve.
     val savedVP: Array[Bind] = c.curTypeParams
     val savedVA: Array[U64] = c.curTypeArgs
@@ -4035,6 +4072,27 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
 fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchArm]) {
     val sv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: scrut)
     val sty: LLVMTypeRef = LLVMTypeOf(sv)
+    // a struct destructuring match `match s { S { val x } => … }` is irrefutable
+    // (one arm, no tag): store the scrutinee, bind its fields, emit the body.
+    if arms.count > 0U64 {
+        if arms[0].isStruct {
+            val ssidx: U64 = exprStructIdx(c: inout c, st: inout st, id: scrut)
+            val savedSP: Array[Bind] = c.curTypeParams
+            val savedSA: Array[U64] = c.curTypeArgs
+            val didSetS: Bool = setStructEnv(c: inout c, st: inout st, ref: exprTypeRef(c: inout c, st: inout st, id: scrut))
+            val sslot0: LLVMValueRef = LLVMBuildAlloca(st.b, sty, anon())
+            LLVMBuildStore(st.b, sv, sslot0)
+            val mark0: U64 = st.nLocals
+            bindStructPattern(c: inout c, st: inout st, sidx: ssidx, arm: arms[0], scrutTy: sty, scrutSlot: sslot0)
+            genLlvmBlock(c: inout c, st: inout st, id: arms[0].body)
+            st.nLocals = mark0
+            if didSetS {
+                c.curTypeParams = savedSP
+                c.curTypeArgs = savedSA
+            }
+            return
+        }
+    }
     // generic enum scrutinee: set the substitution env so payload types resolve.
     val savedMP: Array[Bind] = c.curTypeParams
     val savedMA: Array[U64] = c.curTypeArgs
@@ -4160,6 +4218,49 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
             pushLocal(st: inout st, nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: kindFromTySpan(c: inout c, tyStart: fs[fidx].tyStart, tyLen: fs[fidx].tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: fs[fidx].tyStart, len: fs[fidx].tyLen), isArr: false, elemTy: st.i64ty, elemKind: 0U64)
         }
         bi += 1
+    }
+}
+
+// Bind the fields of a struct destructuring pattern `S { val x, field: val y,
+// field2: _ }` (irrefutable — a struct has one shape). Each named bind reads its
+// field from the stored scrutinee, honoring array / nested-struct / type-param
+// field types (under any generic env the caller set). Discards (`_`, empty name)
+// are skipped.
+fn bindStructPattern(c: inout Comp, st: inout LlvmCtx, sidx: U64, arm: MatchArm, scrutTy: LLVMTypeRef, scrutSlot: LLVMValueRef) {
+    val fs: Array[FieldDef] = c.structs[sidx].fields
+    mut val bi: U64 = 0
+    while bi < arm.binds.count {
+        val b: Bind = arm.binds[bi]
+        if b.nameLen == 0U64 {
+            bi += 1
+        } else {
+            // resolve which field this bind reads (by field name = b.fieldStart).
+            mut val fidx: U64 = fs.count
+            mut val fj: U64 = 0
+            while fj < fs.count {
+                if spansEqual(c: inout c, aStart: fs[fj].nameStart, aLen: fs[fj].nameLen, bStart: b.fieldStart, bLen: b.fieldLen) {
+                    fidx = fj
+                    fj = fs.count
+                } else {
+                    fj += 1
+                }
+            }
+            if fidx < fs.count {
+                val fld: FieldDef = fs[fidx]
+                val fty: LLVMTypeRef = llvmTypeFor(c: inout c, st: inout st, tyStart: fld.tyStart, tyLen: fld.tyLen, isArray: fld.tyIsArray)
+                val fv: LLVMValueRef = LLVMBuildLoad2(st.b, fty, LLVMBuildStructGEP2(st.b, scrutTy, scrutSlot, fidx, anon()), anon())
+                val slot: LLVMValueRef = LLVMBuildAlloca(st.b, fty, anon())
+                LLVMBuildStore(st.b, fv, slot)
+                mut val elemTy: LLVMTypeRef = st.i64ty
+                mut val elemKind: U64 = 0
+                if fld.tyIsArray {
+                    elemTy = llvmScalarTy(c: inout c, st: inout st, tyStart: fld.tyStart, tyLen: fld.tyLen)
+                    elemKind = kindFromTySpan(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen)
+                }
+                pushLocal(st: inout st, nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: fty, kind: kindFromTySpan(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: fld.tyStart, len: fld.tyLen), isArr: fld.tyIsArray, elemTy: elemTy, elemKind: elemKind)
+            }
+            bi += 1
+        }
     }
 }
 
