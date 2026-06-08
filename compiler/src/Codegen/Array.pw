@@ -43,6 +43,15 @@ fn emitArrayIntrinsic(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[A
         write(s: ").count)")
         return true
     }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arrayCPtr") {
+        // raw base pointer of the array's storage as `CPtr[T]` (spec/15 FFI): the
+        // RawBuffer's C value is `T*` at data[0], so `(a).data` IS the CPtr. Valid
+        // only while `a` is alive and unmodified (borrowed — unsafe boundary).
+        write(s: "((")
+        genExpr(c: inout c, id: args[0].expr)
+        write(s: ").data)")
+        return true
+    }
     return false
 }
 

@@ -1,0 +1,60 @@
+// Llvm — hand-written Plew bindings for the LLVM-C API (a focused IR-construction
+// subset), driven through Plew's `extern(c)` FFI (spec/15 "外部コード統合").
+//
+// These are the raw, unsafe floor: opaque handles (`type LLVMModuleRef`) are
+// `void*` ABI-identical to the real `LLVMOpaqueModule *`; all functions are
+// positional (C has no argument labels — every parameter is `name~:`). A safer,
+// labelled Plew API would wrap these (the raw-floor / safe-skin split).
+//
+// Build & run (the compiler self-emits prototypes, so no libLLVM header is
+// needed — only linking; see examples/llvm/README.md):
+//   compiler/plewc examples/llvm/BuildAdd.pw > out.c
+//   clang out.c $(llvm-config --ldflags --libs core) \
+//         -Wl,-rpath,$(llvm-config --libdir) -o out && ./out
+//
+// Verified against Homebrew LLVM 22 (libLLVM-C). 1:1 with <llvm-c/Core.h>; a
+// future `bindgen` could generate this whole file from the header.
+
+export extern(c) {
+    // Opaque handles (LLVM-C `typedef struct …Opaque *…Ref`).
+    type LLVMContextRef
+    type LLVMModuleRef
+    type LLVMTypeRef
+    type LLVMValueRef
+    type LLVMBasicBlockRef
+    type LLVMBuilderRef
+
+    // Context / module.
+    fn LLVMContextCreate() -> LLVMContextRef
+    fn LLVMContextDispose(ctx~: LLVMContextRef)
+    fn LLVMModuleCreateWithNameInContext(name~: CPtr[U8], ctx~: LLVMContextRef) -> LLVMModuleRef
+    fn LLVMDisposeModule(m~: LLVMModuleRef)
+    fn LLVMPrintModuleToString(m~: LLVMModuleRef) -> CPtr[U8]
+
+    // Types. `LLVMFunctionType(ret, ParamTypes*, ParamCount, IsVarArg)` — the
+    // param-type array is a `CPtr[LLVMTypeRef]` (use `@Std/Ffi.arrayCPtr`).
+    fn LLVMInt1TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMInt32TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMInt64TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMVoidTypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMFunctionType(ret~: LLVMTypeRef, params~: CPtr[LLVMTypeRef], count~: U32, isVarArg~: I32) -> LLVMTypeRef
+
+    // Functions / basic blocks / params.
+    fn LLVMAddFunction(m~: LLVMModuleRef, name~: CPtr[U8], fnTy~: LLVMTypeRef) -> LLVMValueRef
+    fn LLVMGetParam(func~: LLVMValueRef, index~: U32) -> LLVMValueRef
+    fn LLVMAppendBasicBlockInContext(ctx~: LLVMContextRef, func~: LLVMValueRef, name~: CPtr[U8]) -> LLVMBasicBlockRef
+
+    // Constants.
+    fn LLVMConstInt(ty~: LLVMTypeRef, n~: U64, signExtend~: I32) -> LLVMValueRef
+
+    // Builder + a few instructions.
+    fn LLVMCreateBuilderInContext(ctx~: LLVMContextRef) -> LLVMBuilderRef
+    fn LLVMDisposeBuilder(b~: LLVMBuilderRef)
+    fn LLVMPositionBuilderAtEnd(b~: LLVMBuilderRef, bb~: LLVMBasicBlockRef)
+    fn LLVMBuildAdd(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildMul(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildRet(b~: LLVMBuilderRef, v~: LLVMValueRef) -> LLVMValueRef
+
+    // Free a string returned by LLVM (`LLVMPrintModuleToString`, error messages).
+    fn LLVMDisposeMessage(msg~: CPtr[U8])
+}

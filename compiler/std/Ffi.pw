@@ -1,0 +1,25 @@
+// @Std/Ffi — the C-FFI boundary floor (spec/15 "外部コード統合"). The thin,
+// unsafe seam that `extern(c)` bindings sit on: String <-> C-string conversion
+// and raw-buffer access for passing contiguous arrays to C. Plew's guarantees
+// (value semantics / CoW / ARC) stop here — these are the raw floor; build safe
+// `unique` wrappers on top (the raw-floor / safe-skin split, spec/15 points 1-4).
+//
+// Names match the spec's vocabulary; the runtime bodies are compiler-provided
+// (`plew_cString` / `plew_stringFromCString` in the preamble; `arrayCPtr` lowers
+// inline to the buffer base). All take positional args (FFI is positional).
+
+export extern(plewIntrinsic) {
+    // Plew `String` -> a freshly heap-allocated NUL-terminated C string
+    // (`const char*` == `CPtr[U8]`). The buffer is owned by C until freed
+    // (spec/15 point 3). For a call-and-forget argument this leaks a small buffer.
+    fn cString(text~: String) -> CPtr[U8]
+
+    // Copy a NUL-terminated C string into a Plew `String` (bytes assumed valid
+    // UTF-8). spec/15 point 3 — the eventual fallible form returns Result.
+    fn stringFromCString(ptr~: CPtr[U8]) -> String
+
+    // Borrow an array's storage base as `CPtr[T]` — for passing a contiguous
+    // handle/scalar array to C (e.g. `LLVMTypeRef *Params, unsigned ParamCount`).
+    // Valid ONLY while the array is alive and unmodified (unsafe borrow, point 4).
+    fn arrayCPtr[T](a~: Array[T]) -> CPtr[T]
+}

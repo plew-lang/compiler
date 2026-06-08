@@ -1,17 +1,13 @@
 // extern(c) FFI (spec/15): opaque foreign handle (`type ModuleRef`) + raw C
-// pointers (`CPtr[U8]`) + String<->C-string conversion, calling a foreign C
-// library — here a self-contained companion stub (ffi_extern_c.c) shaped like
-// libLLVM-C, so the test needs no system library. Proves the minimal FFI subset
-// the LLVM backend stands on.
+// pointers (`CPtr[U8]`) + String<->C-string conversion via @Std/Ffi, calling a
+// foreign C library — here a self-contained companion stub (ffi_extern_c.c)
+// shaped like libLLVM-C, so the test needs no system library. Proves the minimal
+// FFI subset the LLVM backend stands on.
 //
 // extern(c) functions take NO argument labels (C has none): every parameter is
 // written label-suppressed `name~:` (explicit, spec/15) and called positionally.
 import @Std/Io with { print }
-
-extern(plewIntrinsic) {
-    fn cString(text~: String) -> CPtr[U8]
-    fn stringFromCString(ptr: CPtr[U8]) -> String
-}
+import @Std/Ffi with { cString, stringFromCString }
 
 extern(c) {
     type ModuleRef
@@ -22,6 +18,6 @@ extern(c) {
 
 fn main() {
     val m: ModuleRef = moduleCreate(cString("plew_hello"))
-    print(stringFromCString(ptr: moduleName(m)))
+    print(stringFromCString(moduleName(m)))
     moduleDispose(m)
 }

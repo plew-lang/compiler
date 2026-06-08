@@ -1,0 +1,38 @@
+// BuildAdd — construct a real LLVM function `i32 add(i32, i32)` and print its IR,
+// driving libLLVM-C entirely from Plew via the `./Llvm` bindings + `@Std/Ffi`.
+// This is the "first light" of the LLVM backend path: Plew code building real
+// LLVM IR through the C API (spec/15 FFI). See examples/llvm/README.md to build.
+
+import @Std/Io with { print }
+import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
+import ./Llvm with {
+    LLVMContextRef, LLVMModuleRef, LLVMTypeRef, LLVMValueRef, LLVMBasicBlockRef, LLVMBuilderRef,
+    LLVMContextCreate, LLVMModuleCreateWithNameInContext, LLVMInt32TypeInContext, LLVMFunctionType,
+    LLVMAddFunction, LLVMGetParam, LLVMAppendBasicBlockInContext, LLVMCreateBuilderInContext,
+    LLVMPositionBuilderAtEnd, LLVMBuildAdd, LLVMBuildRet, LLVMPrintModuleToString, LLVMDisposeMessage,
+}
+
+fn main() {
+    val ctx: LLVMContextRef = LLVMContextCreate()
+    val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cString("plew"), ctx)
+    val i32ty: LLVMTypeRef = LLVMInt32TypeInContext(ctx)
+
+    // i32 (i32, i32) — the parameter-type array crosses the boundary as a
+    // CPtr[LLVMTypeRef] borrowed from a Plew Array (arrayCPtr).
+    mut val params: Array[LLVMTypeRef] = []
+    params.append(value: i32ty)
+    params.append(value: i32ty)
+    val fnty: LLVMTypeRef = LLVMFunctionType(i32ty, arrayCPtr(params), 2U32, 0I32)
+
+    val func: LLVMValueRef = LLVMAddFunction(m, cString("add"), fnty)
+    val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(ctx, func, cString("entry"))
+    val b: LLVMBuilderRef = LLVMCreateBuilderInContext(ctx)
+    LLVMPositionBuilderAtEnd(b, entry)
+
+    val sum: LLVMValueRef = LLVMBuildAdd(b, LLVMGetParam(func, 0U32), LLVMGetParam(func, 1U32), cString("sum"))
+    LLVMBuildRet(b, sum)
+
+    val ir: CPtr[U8] = LLVMPrintModuleToString(m)
+    print(stringFromCString(ir))
+    LLVMDisposeMessage(ir)
+}
