@@ -6,3 +6,6 @@ book/
 /compiler/plewc0
 /compiler/plewc.c
 /compiler/plewc.check.c
+
+# scratch dir for local experiments (gen-harness builds, self-host checks, etc.)
+/tmp/

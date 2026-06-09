@@ -8094,7 +8094,20 @@ fn emitLlvm(c: inout Comp) {
     mut val fi: U64 = 0
     mut val foundMain: Bool = false
     while fi < c.funcs.count {
-        if nameIsMain(c: inout c, f: c.funcs[fi]) {
+        // gen mode (spec/16): the program is the synthesized harness main at
+        // `genMainIdx`; the user's own `main` is dead (it calls macro-generated
+        // functions that don't exist in this build), so it is neither the entry
+        // main nor a plain fn. Treat only genMainIdx as main here.
+        mut val isMainFn: Bool = nameIsMain(c: inout c, f: c.funcs[fi])
+        if c.genMode {
+            if isMainFn {
+                if fi == c.genMainIdx {
+                } else {
+                    isMainFn = false
+                }
+            }
+        }
+        if isMainFn {
             // an `async fn main` is lowered with the rest of the async fns (entry +
             // resume + drain the event loop); a plain main is the synchronous shape.
             if isAsyncFn(c: inout c, fi: fi) {
@@ -8103,8 +8116,12 @@ fn emitLlvm(c: inout Comp) {
             }
             foundMain = true
         } else {
-            if isPlainUserFn(c: inout c, st: inout st, fi: fi) {
-                genLlvmFunc(c: inout c, st: inout st, fi: fi)
+            if c.genMode && nameIsMain(c: inout c, f: c.funcs[fi]) {
+                // the dead user main: skip entirely.
+            } else {
+                if isPlainUserFn(c: inout c, st: inout st, fi: fi) {
+                    genLlvmFunc(c: inout c, st: inout st, fi: fi)
+                }
             }
         }
         fi += 1
