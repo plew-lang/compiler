@@ -1,0 +1,446 @@
+// ---- acceptance verification pass (spec/15 — acceptance soundness) ----
+//
+// Many per-expression / per-statement acceptance checks (member visibility,
+// literal range, unique-copy / unique-arg modes, make-field existence, `as`
+// narrowing, assignment mutability, match exhaustiveness) historically rode the
+// C backend's emission walk (genStmt / genExpr in Stmt.pw / Expr.pw). The LLVM
+// backend has its own emitter and does not call them, so spec-invalid code that
+// those checks reject was silently ACCEPTED by the LLVM backend.
+//
+// This pass re-runs those checks as a standalone, backend-independent traversal
+// of every function body, invoked by runFrontend before code generation — so
+// BOTH backends are acceptance-sound (and when the C backend is removed, this is
+// the sole home of the checks). It is additive: the C emitter keeps its inline
+// copies (redundant with this pass), so it cannot regress. It reuses the existing
+// check functions (checkLitCtx / checkLitSpan / checkUniquePlaceCopy / the
+// visibility + matchExhaustive helpers) and only adds the traversal + the two
+// inline checks (assign mutability, `as` narrowing) the emitter had not factored
+// out.
+
+// Verify every non-extern, non-template function body.
+fn verifyProgram(c: inout Comp) {
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        val f: Func = c.funcs[fi]
+        if f.isExtern {
+        } else {
+            if f.typeParams.count > 0U64 {
+                // a generic template: its concrete instances are checked during the
+                // C emitter's instance emission (with the substitution env); this
+                // backend-independent pass covers non-generic bodies (where the
+                // reject-test surface lives) without a substitution env.
+            } else {
+            if methodRecvIsTrait(c: inout c, f: f) {
+                // a trait provided-method template — checked per conforming type
+                // (its concrete copies are ordinary funcs and get verified).
+            } else {
+            if f.isAsync {
+                // async bodies return the Promise's inner type (`return n` resolves
+                // Promise[I64] with I64), so the return-context check needs the
+                // unwrapped type; the C emitter handles this inline. Until that is
+                // mirrored here, async bodies are checked by the C emitter only.
+            } else {
+                verifyFunc(c: inout c, f: f)
+            }
+            }
+            }
+        }
+        fi += 1
+    }
+}
+
+// Establish the same body context genFunc does — return type (for `return e`
+// range checks), receiver/self env (so `self`-based field/method access
+// resolves), and the parameter locals — then walk the body building the local
+// symbol table so mutability / visibility / unique checks see real bindings.
+fn verifyFunc(c: inout Comp, f: Func) {
+    if f.hasRet {
+        c.curRetVoid = false
+        c.curRetStart = f.retStart
+        c.curRetLen = f.retLen
+        c.curRetIsArray = f.retIsArray
+        c.curRetTy = f.retTy
+    } else {
+        c.curRetVoid = true
+        c.curRetStart = 0
+        c.curRetLen = 0
+        c.curRetIsArray = false
+        c.curRetTy = 0
+    }
+    c.curHasRecv = f.hasRecv
+    c.curRecvStart = f.recvStart
+    c.curRecvLen = f.recvLen
+    c.curSelfInout = f.selfInout
+    c.curSelfMove = f.selfMove
+    if f.hasRecv {
+        setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0)
+    } else {
+        clearSelfItemEnv(c: inout c)
+    }
+    c.curBranchBase = 0
+    c.locals = []
+    mut val pi: U64 = 0
+    while pi < f.params.count {
+        val p: Param = f.params[pi]
+        addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: p.isMove)
+        pi += 1
+    }
+    verifyBlock(c: inout c, blockId: f.body)
+}
+
+// Verify a block in its own lexical scope: bindings introduced inside are popped
+// on exit (so a sibling/enclosing scope cannot resolve them), mirroring genBlock.
+fn verifyBlock(c: inout Comp, blockId: U64) {
+    val mark: U64 = scopeMark(c: inout c)
+    val b: Block = c.blocks[blockId]
+    mut val i: U64 = 0
+    while i < b.stmts.count {
+        verifyStmt(c: inout c, stmtId: b.stmts[i])
+        i += 1
+    }
+    popLocals(c: inout c, mark: mark)
+}
+
+fn verifyStmt(c: inout Comp, stmtId: U64) {
+    match c.stmts[stmtId] {
+        Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+            // literal range against the annotation (or context-free if none).
+            if tyLen > 0U64 {
+                checkLitSpan(c: inout c, id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray)
+            } else {
+                checkLitCtx(c: inout c, id: init, eKind: 0, eBits: 0, eSgn: false)
+            }
+            // a bare unique place on the rhs is a forbidden copy (`val g = f`).
+            checkUniquePlaceCopy(c: inout c, exprId: init, inoutOk: false)
+            verifyExpr(c: inout c, id: init)
+            // register the binding (after the init, so it can't see itself) with its
+            // effective type and mutability, so later places resolve / check.
+            val le: LetEff = inferLetType(c: inout c, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
+        }
+        Stmt.Assign(val op, val target, val value) => {
+            verifyAssign(c: inout c, op: op, target: target, value: value)
+        }
+        Stmt.ExprStmt(val expr) => {
+            checkLitCtx(c: inout c, id: expr, eKind: 0, eBits: 0, eSgn: false)
+            verifyExpr(c: inout c, id: expr)
+        }
+        Stmt.Return(val value, val hasValue) => {
+            if hasValue {
+                checkLitSpan(c: inout c, id: value, tyStart: c.curRetStart, tyLen: c.curRetLen, isArray: c.curRetIsArray)
+                verifyExpr(c: inout c, id: value)
+            }
+        }
+        Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
+            checkLitCtx(c: inout c, id: cond, eKind: 0, eBits: 0, eSgn: false)
+            verifyExpr(c: inout c, id: cond)
+            verifyBlock(c: inout c, blockId: thenBlk)
+            if hasElse {
+                verifyBlock(c: inout c, blockId: elseBlk)
+            }
+        }
+        Stmt.While(val cond, val body) => {
+            checkLitCtx(c: inout c, id: cond, eKind: 0, eBits: 0, eSgn: false)
+            verifyExpr(c: inout c, id: cond)
+            verifyBlock(c: inout c, blockId: body)
+        }
+        Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
+            verifyExpr(c: inout c, id: iter)
+            if isRange {
+                verifyExpr(c: inout c, id: rangeHi)
+            }
+            // scope the loop binding(s) to the body, mirroring genStmt's For.
+            val forMark: U64 = scopeMark(c: inout c)
+            if isRange {
+                // loop var type: the annotation, else the range bound's own type.
+                mut val ltS: U64 = varTyStart
+                mut val ltL: U64 = varTyLen
+                if ltL == 0U64 {
+                    val bt2: TypeInfo = typeOf(c: inout c, id: rangeHi)
+                    if bt2.kind == 0 {
+                        ltS = bt2.nameStart
+                        ltL = bt2.nameLen
+                    }
+                }
+                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: ltS, tyLen: ltL, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+            } else {
+                val et: TypeInfo = typeOf(c: inout c, id: iter)
+                if et.kind == 3 {
+                    if isStruct {
+                        // the destructure pattern type must name the element struct.
+                        if intern(c: inout c, start: patStart, len: patLen) == intern(c: inout c, start: et.nameStart, len: et.nameLen) {
+                        } else {
+                            compileErrorAt(line: lineOf(c: inout c, offset: patStart), msg: "for-loop destructure pattern type does not match the element type")
+                        }
+                        mut val bi: U64 = 0
+                        while bi < binds.count {
+                            val bd: Bind = binds[bi]
+                            val ft: TypeInfo = forBindFieldType(c: inout c, et: et, bd: bd)
+                            addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
+                            bi += 1
+                        }
+                    } else {
+                        // single binding to the element type (`for val b in bs` -> U8).
+                        addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                    }
+                }
+            }
+            verifyBlock(c: inout c, blockId: body)
+            popLocals(c: inout c, mark: forMark)
+        }
+        Stmt.Match(val scrut, val arms) => {
+            verifyExpr(c: inout c, id: scrut)
+            if matchExhaustive(c: inout c, arms: arms) {
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
+            }
+            mut val ai: U64 = 0
+            while ai < arms.count {
+                val armMark: U64 = scopeMark(c: inout c)
+                verifyAddArmBinds(c: inout c, a: arms[ai])
+                verifyBlock(c: inout c, blockId: arms[ai].body)
+                popLocals(c: inout c, mark: armMark)
+                ai += 1
+            }
+        }
+        Stmt.Panic(val msg, offset: _) => {
+            verifyExpr(c: inout c, id: msg)
+        }
+        Stmt.Give(val value) => {
+            verifyExpr(c: inout c, id: value)
+        }
+        Stmt.Break => {}
+        Stmt.Continue => {}
+    }
+}
+
+// Assignment target mutability + field-write visibility (spec/03, /05), mirroring
+// the inline checks in genStmt's Assign arm; then verify both sides.
+fn verifyAssign(c: inout Comp, op: I64, target: U64, value: U64) {
+    match c.exprs[target] {
+        Expr.Index(val base, val index) => {
+            if placeIsMutable(c: inout c, id: base) {
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "cannot assign to an element of an immutable binding; declare it with `mut val`")
+            }
+            verifyExpr(c: inout c, id: base)
+            verifyExpr(c: inout c, id: index)
+        }
+        Expr.Field(base: val fbase, val nameStart, val nameLen) => {
+            // the whole place must be mutable (binding + field both `mut val`).
+            if placeIsMutable(c: inout c, id: target) {
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "cannot assign to an immutable place; the binding and field must be declared `mut val`")
+            }
+            // field-write visibility on the base's owner type.
+            val bt: TypeInfo = typeOf(c: inout c, id: fbase)
+            if bt.kind == 2 {
+                checkFieldWriteVis(c: inout c, ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+            }
+            verifyExpr(c: inout c, id: fbase)
+        }
+        Expr.Ident(val start, val len) => {
+            if placeIsMutable(c: inout c, id: target) {
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "cannot assign to an immutable binding; declare it with `mut val`")
+            }
+        }
+        Expr.Arrow(val base, nameStart: _, nameLen: _) => {
+            // a Ref pointee is always mutable through `->`.
+            verifyExpr(c: inout c, id: base)
+        }
+        _ => {}
+    }
+    checkUniquePlaceCopy(c: inout c, exprId: value, inoutOk: false)
+    verifyExpr(c: inout c, id: value)
+}
+
+// Recursively verify an expression: member visibility (field read / method call),
+// `as` narrowing, nested match exhaustiveness, and descent into sub-expressions.
+// The literal-range / call-arg / make-field / unique-arg checks are driven by
+// checkLitCtx at the statement level (it walks the same tree), so this walk adds
+// only the checks checkLitCtx does not perform.
+fn verifyExpr(c: inout Comp, id: U64) {
+    match c.exprs[id] {
+        Expr.Field(val base, val nameStart, val nameLen) => {
+            verifyFieldReadVis(c: inout c, base: base, nameStart: nameStart, nameLen: nameLen)
+            verifyExpr(c: inout c, id: base)
+        }
+        Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+            verifyMethodVis(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+            verifyExpr(c: inout c, id: recv)
+            verifyArgs(c: inout c, args: args)
+        }
+        Expr.Call(nameStart: _, nameLen: _, val args) => {
+            verifyArgs(c: inout c, args: args)
+        }
+        Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+            mut val i: U64 = 0
+            while i < fields.count {
+                verifyExpr(c: inout c, id: fields[i].value)
+                i += 1
+            }
+        }
+        Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
+            verifyCastLossless(c: inout c, operand: operand, tyStart: tyStart, tyLen: tyLen)
+            verifyExpr(c: inout c, id: operand)
+        }
+        Expr.Binary(op: _, val lhs, val rhs) => {
+            verifyExpr(c: inout c, id: lhs)
+            verifyExpr(c: inout c, id: rhs)
+        }
+        Expr.Unary(op: _, val operand) => {
+            verifyExpr(c: inout c, id: operand)
+        }
+        Expr.Index(val base, val index) => {
+            verifyExpr(c: inout c, id: base)
+            verifyExpr(c: inout c, id: index)
+        }
+        Expr.Array(val elems) => {
+            mut val i: U64 = 0
+            while i < elems.count {
+                verifyExpr(c: inout c, id: elems[i])
+                i += 1
+            }
+        }
+        Expr.Arrow(val base, nameStart: _, nameLen: _) => {
+            verifyExpr(c: inout c, id: base)
+        }
+        Expr.OptChain(val base, memberStart: _, memberLen: _) => {
+            verifyExpr(c: inout c, id: base)
+        }
+        Expr.Try(val expr) => {
+            verifyExpr(c: inout c, id: expr)
+        }
+        Expr.MatchExpr(val scrut, val arms) => {
+            verifyExpr(c: inout c, id: scrut)
+            if matchExhaustive(c: inout c, arms: arms) {
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
+            }
+            mut val ai: U64 = 0
+            while ai < arms.count {
+                val armMark: U64 = scopeMark(c: inout c)
+                verifyAddArmBinds(c: inout c, a: arms[ai])
+                verifyExpr(c: inout c, id: arms[ai].body)
+                popLocals(c: inout c, mark: armMark)
+                ai += 1
+            }
+        }
+        Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
+            verifyExpr(c: inout c, id: cond)
+            verifyBlock(c: inout c, blockId: thenBlk)
+            verifyBlock(c: inout c, blockId: elseBlk)
+        }
+        _ => {}
+    }
+}
+
+// Add a match arm's payload binds to the current scope with their field types so
+// the arm body resolves them (mirrors the C emitter's per-arm bindings). Enum
+// arms resolve via the variant; struct-destructure arms (`S { val x }`) via the
+// struct named by enumStart.
+fn verifyAddArmBinds(c: inout Comp, a: MatchArm) {
+    if a.isWildcard {
+        return
+    }
+    mut val bi: U64 = 0
+    if a.isStruct {
+        while bi < a.binds.count {
+            val bd: Bind = a.binds[bi]
+            val ft: TypeInfo = fieldType(c: inout c, structStart: a.enumStart, structLen: a.enumLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+            addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
+            bi += 1
+        }
+    } else {
+        while bi < a.binds.count {
+            val bd: Bind = a.binds[bi]
+            addBindLocalCn(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen, cnum: 0)
+            bi += 1
+        }
+    }
+}
+
+// verify each call/method argument's expression (the arg-mode checks themselves
+// run via checkLitCtx -> checkCallArgs -> checkUniqueArgModes).
+fn verifyArgs(c: inout Comp, args: Array[Arg]) {
+    mut val i: U64 = 0
+    while i < args.count {
+        verifyExpr(c: inout c, id: args[i].expr)
+        i += 1
+    }
+}
+
+// field-read visibility, mirroring genExpr's Field arm (Expr.pw): a struct base
+// checks the field against its owner; an array base against `Array`. Also rejects
+// using a method as a value.
+fn verifyFieldReadVis(c: inout Comp, base: U64, nameStart: U64, nameLen: U64) {
+    val bt: TypeInfo = typeOf(c: inout c, id: base)
+    if bt.kind == 2 {
+        if fieldVis(c: inout c, structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) == 3U64 {
+            if typeHasMethodNamed(c: inout c, recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen) {
+                compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "a method cannot be used as a value; call it, or wrap it in a closure (e.g. `fn() { obj.method() }`)")
+            }
+        }
+        checkFieldReadVis(c: inout c, ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+    } else {
+        if bt.kind == 3 {
+            val arrName: Bind = kwSpan(c: inout c, kw: "Array", kwLen: 5)
+            checkFieldReadVis(c: inout c, ownerStart: arrName.nameStart, ownerLen: arrName.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+        }
+    }
+}
+
+// method-call visibility, mirroring genExpr's Method arm (Expr.pw).
+fn verifyMethodVis(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    val rt: TypeInfo = typeOf(c: inout c, id: recv)
+    if rt.kind == 2 {
+        // resolve the method on the receiver type to get its Func (checkMethodVis
+        // inspects the impl block's visibility); skip if unresolved (a separate
+        // "no such method" diagnostic covers that).
+        val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        if mi < c.funcs.count {
+            checkMethodVis(c: inout c, ownerStart: rt.nameStart, ownerLen: rt.nameLen, mf: c.funcs[mi], offset: nameStart)
+            // an `inout fn` method mutates the receiver, so its place must be mutable.
+            if c.funcs[mi].selfInout {
+                if placeIsMutable(c: inout c, id: recv) {
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
+                }
+            }
+        }
+    }
+    // a mutating built-in array method (`append`) on an immutable array binding.
+    if rt.kind == 3 {
+        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "append") {
+            if placeIsMutable(c: inout c, id: recv) {
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
+            }
+        }
+    }
+}
+
+// `as` lossless check, mirroring genExpr's Cast arm (Expr.pw): a narrowing or
+// signedness-changing integer `as` must go through a fallible TryFrom.
+fn verifyCastLossless(c: inout Comp, operand: U64, tyStart: U64, tyLen: U64) {
+    if isIntType(c: inout c, start: tyStart, len: tyLen) {
+        match c.exprs[operand] {
+            Expr.Int(val value, val offset, isBool: _, tyStart: _, tyLen: _, val isNeg) => {
+                if litFitsType(c: inout c, value: value, neg: isNeg, dstStart: tyStart, dstLen: tyLen) {
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal is out of range for the target type of `as`")
+                }
+            }
+            _ => {
+                val st: TypeInfo = typeOf(c: inout c, id: operand)
+                if isIntType(c: inout c, start: st.nameStart, len: st.nameLen) {
+                    if losslessInt(c: inout c, srcStart: st.nameStart, srcLen: st.nameLen, dstStart: tyStart, dstLen: tyLen) {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "`as` would lose information (narrowing or signedness change); use a fallible TryFrom conversion")
+                    }
+                }
+            }
+        }
+    }
+}

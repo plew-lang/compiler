@@ -80,7 +80,51 @@ for pw in tests/panic/*.pw; do
     fi
 done
 
+# --- reject/ : spec-invalid code the FRONT-END must reject. The shared frontend
+#     (incl. the backend-independent acceptance pass verifyProgram) rejects these
+#     so plewc-llvm matches the C backend. The remaining REJECT_GAP cases are
+#     acceptance checks still coupled to the C emitter's emission-time type/move
+#     recovery (operator-witness availability, move analysis, unknown-function
+#     resolution); they are tracked separately (rgap), not as failures, until
+#     those checks are factored into the shared pass. Remove as they land. ---
+REJECT_GAP=" arith_no_core eq_without_conformance struct_eq payload_enum_eq import_less_print eprint_not_imported exit_not_imported give_unique unique_cond_move unique_field_move lit_ambiguous_range "
+rpass=0; rgap=0
+for pw in tests/reject/*.pw; do
+    [ -f "$pw" ] || continue
+    name=$(basename "$pw" .pw)
+    if "$PLEWC_LLVM" "$pw" > /dev/null 2>/dev/null; then
+        case "$REJECT_GAP" in
+            *" $name "*) rgap=$((rgap + 1));;
+            *) fail=$((fail + 1)); failed="$failed reject/$name(accepted)";;
+        esac
+    else
+        rpass=$((rpass + 1))
+    fi
+done
+
+# --- part/ : multi-file modules (each subdir's Main.pw stitches siblings via
+#     `part`). Compile the root through the LLVM backend, run, compare to Main.out. ---
+qpass=0
+for main in tests/part/*/Main.pw tests/part/Main.pw; do
+    [ -f "$main" ] || continue
+    dir=$(dirname "$main")
+    name=$(basename "$dir")
+    ll="/tmp/llt_part_$name.ll"; bin="/tmp/llt_part_$name"
+    if ! "$PLEWC_LLVM" "$main" > "$ll" 2>/tmp/llt_err; then
+        skip=$((skip + 1)); continue
+    fi
+    if ! clang -w "$ll" "$RT" $("$LC" --ldflags) -o "$bin" 2>/dev/null; then
+        fail=$((fail + 1)); failed="$failed part/$name(link)"; continue
+    fi
+    got=$("$bin" 2>/dev/null) || true
+    if [ "$got" = "$(cat "$dir/Main.out")" ]; then
+        qpass=$((qpass + 1))
+    else
+        fail=$((fail + 1)); failed="$failed part/$name"
+    fi
+done
+
 echo "----"
-echo "llvm-backend: pass=$pass  panic=$ppass  skip(unsupported)=$skip  cow-gap=$gap  fail=$fail"
+echo "llvm-backend: pass=$pass  panic=$ppass  reject=$rpass  part=$qpass  reject-gap=$rgap  skip(unsupported)=$skip  cow-gap=$gap  fail=$fail"
 [ -n "$failed" ] && echo "failing:$failed"
 [ "$fail" -eq 0 ]

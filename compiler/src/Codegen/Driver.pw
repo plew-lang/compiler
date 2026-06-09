@@ -259,6 +259,12 @@ fn runFrontend() -> Comp {
     // typed-AST cache (Phase B): one type slot per expression node, filled lazily
     // by `typeOf` during non-generic emission. Built now — expr ids are stable.
     buildExprTyTable(c: inout c)
+    // backend-independent acceptance pass (spec/15): re-run the per-expr/stmt
+    // checks the C backend historically did inline during emission (building the
+    // local symbol table as it walks), so the LLVM backend — and any future build
+    // — is acceptance-sound, not just the C emitter. Runs AFTER the typed-AST cache
+    // so the operator-witness / visibility checks see recovered expression types.
+    verifyProgram(c: inout c)
     return c
 }
 

@@ -29,6 +29,7 @@ part ./Codegen/Mono
 part ./Codegen/Array
 part ./Codegen/Async
 part ./Codegen/Gen
+part ./Codegen/Verify
 part ./Codegen/Lower
 part ./Codegen/Driver
 part ./Backend/Llvm
