@@ -1,20 +1,18 @@
-// The self-hosted Plew compiler: hand-written lexer + recursive-descent parser
-// -> arena AST (index handles) -> C transpilation. It compiles itself to a
-// fixpoint (see bootstrap.sh). This is the module root; the compiler is split
-// across part files (Ast / Parser / Codegen) plus the module loader (Loader),
-// stitched in below; only the driver (`main`) stays here. The lexer is no longer
-// a part — it lives in @Std/Syntax (shared with metaprogramming) and is imported.
+// The module root of the self-hosted Plew compiler. It `part`s the
+// backend-agnostic front-end (Ast / Parser / all Codegen analysis / Loader /
+// Driver) plus the LLVM emitter (Backend/Llvm); `main` runs `runFrontend()`
+// then `emitLlvm()`. The compiler links libLLVM (the emitter calls libLLVM-C)
+// and emits textual LLVM IR, which clang lowers to an object/executable.
 //
-// I/O is not ambient in Plew (spec: `print` et al. live in @Std, must be
-// imported). These imports are also what the compiler now *enforces* on every
-// program it compiles, including this source.
+// Bootstrap from the checked-in IR seed: see bootstrap.sh. Fast in-place dev
+// rebuild (current compiler/plewc recompiles this source): see dev-rebuild.sh.
+//   compiler/plewc compiler/src/_.pw > out.ll
+//   clang out.ll <runtime> $(llvm-config --ldflags --libs core) -o compiler/plewc
 
 import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileBytes, eprint, fileExists }
 import @Std/Process with { argCount, argAt, exit }
-// The lexer AND the body parser are shared with metaprogramming: the compiler
-// frontend and @Std/Syntax's `parseItem` lex+parse through the same code (spec/16 —
-// one syntactic layer, no drift). The compiler drives the shared body parser (P /
-// parseBlockAst) over its own tokens and lowers the value tree into its arena.
+import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
+import @Std/Core with { stringFromBytes }
 import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
 
 part ./Ast
@@ -33,18 +31,18 @@ part ./Codegen/Gen
 part ./Codegen/Verify
 part ./Codegen/Lower
 part ./Codegen/Driver
+part ./Backend/Llvm
 part ./Loader
 
-// ---- driver ----
-//
-// Reads a Plew program from a file argument (following `part` directives) or
-// from stdin, parses it into an arena AST, and writes a C translation to stdout.
-// The actual work is in Codegen/Driver (shared with the LLVM root _llvm.pw):
-// `runFrontend` does the backend-agnostic parse/check/monomorphize and returns
-// the arena; `emitC` writes the C translation. This root references only the C
-// backend, so `compiler/plewc` links no libLLVM (clang-only bootstrap preserved).
-
 fn main() {
+    // `plewc --runtime` emits the companion C runtime the generated IR links
+    // against (no front-end needed — the runtime is program-independent so far).
+    if argCount() > 1 {
+        if argAt(1) == "--runtime" {
+            emitLlvmRuntime()
+            return
+        }
+    }
     mut val c: Comp = runFrontend()
-    emitC(c: inout c)
+    emitLlvm(c: inout c)
 }

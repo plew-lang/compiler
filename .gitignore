@@ -1,18 +1,13 @@
 # mdBook output
 book/
 
-# compiler build outputs (bootstrap.sh emits these; the seed + src are tracked)
-/compiler/plewc
+# bootstrap intermediates (bootstrap.sh emits these; the .seed.ll /
+# .seed.runtime.c + src are tracked). compiler/plewc itself is tracked.
 /compiler/plewc0
-/compiler/plewc.c
-/compiler/plewc.check.c
-# LLVM bootstrap intermediates (bootstrap-llvm.sh emits these; the .seed.ll /
-# .seed.runtime.c + src are tracked). compiler/plewc-llvm itself is tracked.
-/compiler/plewc-llvm0
-/compiler/plewc-llvm.ll
-/compiler/plewc-llvm.runtime.c
-/compiler/plewc-llvm.check.ll
-/compiler/plewc-llvm.check.runtime.c
+/compiler/plewc.ll
+/compiler/plewc.runtime.c
+/compiler/plewc.check.ll
+/compiler/plewc.check.runtime.c
 
 # scratch dir for local experiments (gen-harness builds, self-host checks, etc.)
 /tmp/
