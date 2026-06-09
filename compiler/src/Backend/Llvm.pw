@@ -423,6 +423,16 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
     if ereg < st.enumIdxs.count {
         return st.enumTys[ereg]
     }
+    // an extern(c) opaque foreign-C handle type (`type LLVMTypeRef`) — the C
+    // backend's `typedef void* <Name>` — is an opaque pointer. The LLVM root
+    // (`_llvm.pw`) passes these (LLVMValueRef/LLVMTypeRef/…) pervasively, so the
+    // backend must lower them to `ptr` to self-compile.
+    val cxi: U64 = structIndexByName(c: inout c, start: tyStart, len: tyLen)
+    if cxi < c.structs.count {
+        if c.structs[cxi].isCExtern {
+            return st.ptrty
+        }
+    }
     return st.i64ty
 }
 
