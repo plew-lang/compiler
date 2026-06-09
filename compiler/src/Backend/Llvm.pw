@@ -652,7 +652,38 @@ fn fieldWords(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> U64
         }
         return w
     }
+    // an inline (non-boxed) enum field is the full tagged union `{ i64 tag,
+    // [maxWords] payload }` = 1 + its own payload words — NOT 1 (the old default,
+    // which undersized any enum/struct-with-enum payload field and overflowed the
+    // enclosing enum's payload area, corrupting adjacent fields). Non-boxed value
+    // cycles are a front-end error, so the recursion terminates (boxed = 1).
+    val ereg: U64 = enumIdxByName(c: inout c, start: tyStart, len: tyLen)
+    if ereg < c.enums.count {
+        return 1U64 + enumPayloadWords(c: inout c, st: inout st, eid: ereg)
+    }
     return 1U64
+}
+
+// The max payload-word count over an enum's variants (the size of its `[N x i64]`
+// payload area). Shared by registerEnums and fieldWords (an inline enum field).
+fn enumPayloadWords(c: inout Comp, st: inout LlvmCtx, eid: U64) -> U64 {
+    val e: EnumDef = c.enums[eid]
+    mut val maxW: U64 = 0
+    mut val vi: U64 = 0
+    while vi < e.variants.count {
+        val fs: Array[FieldDef] = e.variants[vi].fields
+        mut val w: U64 = 0
+        mut val fj: U64 = 0
+        while fj < fs.count {
+            w = w + fieldWordsF(c: inout c, st: inout st, f: fs[fj])
+            fj += 1
+        }
+        if w > maxW {
+            maxW = w
+        }
+        vi += 1
+    }
+    return maxW
 }
 
 // The payload-word count of an enum field, honoring boxing: a boxed (recursive)
@@ -684,21 +715,7 @@ fn registerEnums(c: inout Comp, st: inout LlvmCtx) {
         if e.typeParams.count > 0 {
         } else {
             if enumAllPrimitive(c: inout c, st: inout st, eid: ei) {
-                mut val maxWords: U64 = 0
-                mut val vi: U64 = 0
-                while vi < e.variants.count {
-                    val fs: Array[FieldDef] = e.variants[vi].fields
-                    mut val w: U64 = 0
-                    mut val fj: U64 = 0
-                    while fj < fs.count {
-                        w = w + fieldWordsF(c: inout c, st: inout st, f: fs[fj])
-                        fj += 1
-                    }
-                    if w > maxWords {
-                        maxWords = w
-                    }
-                    vi += 1
-                }
+                val maxWords: U64 = enumPayloadWords(c: inout c, st: inout st, eid: ei)
                 mut val nm: Array[U8] = []
                 appendBytes(into: inout nm, from: "en".bytes)
                 appendU64Dec(into: inout nm, n: ei)
