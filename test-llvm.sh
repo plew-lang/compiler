@@ -55,7 +55,32 @@ for f in tests/run/*.pw; do
     fi
 done
 
+# --- panic/ : valid code that compiles and links but must ABORT at runtime with
+#     the expected panic text (overflow / div-by-zero / OOB / assert). The LLVM
+#     backend's checked-arithmetic floor (plew_<w><Op>) is held to the same loud
+#     behaviour as the C backend. A program the backend can't lower yet is a SKIP. ---
+ppass=0
+for pw in tests/panic/*.pw; do
+    [ -f "$pw" ] || continue
+    name=$(basename "$pw" .pw)
+    want=$(cat "tests/panic/$name.panic")
+    ll="/tmp/llt_panic_$name.ll"; bin="/tmp/llt_panic_$name"
+    if ! "$PLEWC_LLVM" "$pw" > "$ll" 2>/tmp/llt_err; then
+        skip=$((skip + 1)); continue
+    fi
+    if ! clang -w "$ll" "$RT" $("$LC" --ldflags) -o "$bin" 2>/dev/null; then
+        fail=$((fail + 1)); failed="$failed panic/$name(link)"; continue
+    fi
+    code=0
+    "$bin" >/dev/null 2>/tmp/llt_perr || code=$?
+    if [ "$code" -ne 0 ] && grep -qF "$want" /tmp/llt_perr; then
+        ppass=$((ppass + 1))
+    else
+        fail=$((fail + 1)); failed="$failed panic/$name"
+    fi
+done
+
 echo "----"
-echo "llvm-backend: pass=$pass  skip(unsupported)=$skip  cow-gap=$gap  fail=$fail"
+echo "llvm-backend: pass=$pass  panic=$ppass  skip(unsupported)=$skip  cow-gap=$gap  fail=$fail"
 [ -n "$failed" ] && echo "failing:$failed"
 [ "$fail" -eq 0 ]

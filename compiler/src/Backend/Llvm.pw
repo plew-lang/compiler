@@ -13,7 +13,9 @@
 // COVERAGE: the entry module's `main` + plain free functions (params, returns,
 // recursion, default args, lexical scope/shadowing); width-accurate integers
 // (i8/i16/i32/i64 with sext/zext/trunc coercion at typed sinks — literal width
-// from the suffix or the checker's exprIntCtx; overflow-panic still TODO); the
+// from the suffix or the checker's exprIntCtx; add/sub/mul/div/rem/neg are
+// overflow- and div-by-zero-checked via the `plew_<w><Op>` runtime floor, loud
+// like the C backend — wrapping is opt-in via wrapping* methods); the
 // full operator set (arithmetic / bitwise / shift / unary / comparison; >> is
 // arithmetic, a logical-shift-on-unsigned TODO); Bool; String (value `{ptr,i64}`,
 // literals, ==/!=); `if`/`while`; and the intrinsics exit / write / eprint /
@@ -1687,7 +1689,7 @@ fn genPrimOpWitness(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64, 
     val uns: Bool = isUnsignedName(c: inout c, start: tyStart, len: tyLen)
     // unary: neg / bitnot (one `value` arg).
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "neg") {
-        return LLVMBuildNeg(st.b, coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: ty, unsigned: uns), anon())
+        return buildNegChecked(c: inout c, st: inout st, v: coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: ty, unsigned: uns))
     }
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "bitnot") {
         return LLVMBuildNot(st.b, coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: ty, unsigned: uns), anon())
@@ -1709,7 +1711,7 @@ fn genPrimOpWitness(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64, 
     }
     val l: LLVMValueRef = coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: ty, unsigned: uns)
     val r: LLVMValueRef = coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[1].expr), target: ty, unsigned: uns)
-    return buildBinOpS(c: inout c, st: inout st, op: op, l: l, r: r, unsigned: uns)
+    return buildBinOpChecked(c: inout c, st: inout st, op: op, l: l, r: r, unsigned: uns)
 }
 
 // The c.funcs index of the binary operator-trait witness `T.<name>(lhs:, rhs:)`
@@ -2598,15 +2600,11 @@ fn emitStrEq(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -> L
 
 // ---- arithmetic / comparison ----
 
-// Build an integer binary op as a single LLVM instruction. v1: signed semantics
-// for division/remainder/comparison (widths/unsigned/overflow-panic are TODO).
-// Comparisons yield i1; arithmetic yields the operand width.
-fn buildBinOp(c: inout Comp, st: inout LlvmCtx, op: I64, l: LLVMValueRef, r: LLVMValueRef) -> LLVMValueRef {
-    return buildBinOpS(c: inout c, st: inout st, op: op, l: l, r: r, unsigned: false)
-}
-
-// Build an integer binary op, choosing unsigned vs signed forms (div/rem/cmp/shr)
-// by the operand signedness.
+// Build an integer binary op as a single (raw, unchecked) LLVM instruction,
+// choosing unsigned vs signed forms (div/rem/cmp/shr) by the operand signedness.
+// Comparisons yield i1; arithmetic yields the operand width. This is the WRAPPING
+// floor — the wrapping* methods call it directly; the normal operator/compound
+// paths go through buildBinOpChecked (overflow / div-by-zero panic).
 fn buildBinOpS(c: inout Comp, st: inout LlvmCtx, op: I64, l: LLVMValueRef, r: LLVMValueRef, unsigned: Bool) -> LLVMValueRef {
     if op == opAdd() { return LLVMBuildAdd(st.b, l, r, anon()) }
     if op == opSub() { return LLVMBuildSub(st.b, l, r, anon()) }
@@ -2627,6 +2625,123 @@ fn buildBinOpS(c: inout Comp, st: inout LlvmCtx, op: I64, l: LLVMValueRef, r: LL
     // unsupported op (bitwise/shift land in a later increment): reject loudly.
     compileErrorAt(line: 0, msg: "LLVM backend: operator not yet supported")
     return l
+}
+
+// ---- checked arithmetic (overflow / divide-by-zero panic) ----
+//
+// add/sub/mul/div/rem route through the runtime `plew_<w><Op>` helpers (which
+// panic on overflow / div-by-zero), matching the C backend's checked floor
+// (spec/12: overflow and 0-division always panic; wrapping is opt-in). Bitwise,
+// shift, and comparison ops have no overflow and stay raw (buildBinOpS). The
+// wrapping* methods deliberately keep calling buildBinOpS (no check).
+
+// Width bucket 0..3 for an 8/16/32/64-bit integer type.
+fn llvmWidthIdx(w: U32) -> U64 {
+    if w <= 8U32 { return 0U64 }
+    if w <= 16U32 { return 1U64 }
+    if w <= 32U32 { return 2U64 }
+    return 3U64
+}
+
+// The i8/i16/i32/i64 LLVM type for a width bucket.
+fn llvmIntTyOfIdx(st: inout LlvmCtx, wi: U64) -> LLVMTypeRef {
+    if wi == 0U64 { return st.i8ty }
+    if wi == 1U64 { return st.i16ty }
+    if wi == 2U64 { return st.i32ty }
+    return st.i64ty
+}
+
+// "Add"/"Sub"/"Mul"/"Div"/"Rem" bytes for an op (callers guard to these ops).
+fn checkedOpName(op: I64) -> Array[U8] {
+    if op == opAdd() { return "Add".bytes }
+    if op == opSub() { return "Sub".bytes }
+    if op == opMul() { return "Mul".bytes }
+    if op == opDiv() { return "Div".bytes }
+    return "Rem".bytes
+}
+
+// 0..4 op index for a checked binary op (Add/Sub/Mul/Div/Rem), for nameId.
+fn checkedOpIdx(op: I64) -> U64 {
+    if op == opAdd() { return 0U64 }
+    if op == opSub() { return 1U64 }
+    if op == opMul() { return 2U64 }
+    if op == opDiv() { return 3U64 }
+    return 4U64
+}
+
+// "i8".."u64" prefix bytes (signedness + width) for a `plew_<prefix><Op>` symbol.
+fn checkedPrefixBytes(unsigned: Bool, wi: U64) -> Array[U8] {
+    mut val b: Array[U8] = []
+    if unsigned { b.append(value: 117) } else { b.append(value: 105) }
+    if wi == 0U64 {
+        b.append(value: 56)
+        return b
+    }
+    if wi == 1U64 {
+        b.append(value: 49)
+        b.append(value: 54)
+        return b
+    }
+    if wi == 2U64 {
+        b.append(value: 51)
+        b.append(value: 50)
+        return b
+    }
+    b.append(value: 54)
+    b.append(value: 52)
+    return b
+}
+
+// The runtime symbol name for a checked binary op: `plew_<prefix><Op>`.
+fn checkedFnName(op: I64, unsigned: Bool, wi: U64) -> String {
+    mut val b: Array[U8] = "plew_".bytes
+    appendBytes(into: inout b, from: checkedPrefixBytes(unsigned: unsigned, wi: wi))
+    appendBytes(into: inout b, from: checkedOpName(op: op))
+    return stringFromBytes(b)
+}
+
+// A stable, collision-free getOrDeclare id for a checked helper (base 9000;
+// op*8 + sign*? + width keeps the 48 binop slots distinct; Neg uses 9100+wi).
+fn checkedNameId(op: I64, unsigned: Bool, wi: U64) -> U64 {
+    mut val sgn: U64 = 0U64
+    if unsigned { sgn = 4U64 }
+    return 9000U64 + checkedOpIdx(op: op) * 8U64 + sgn + wi
+}
+
+// add/sub/mul/div/rem -> a call to the checked runtime helper; any other op (and
+// the wrapping* methods, which call buildBinOpS directly) -> the raw builder.
+fn buildBinOpChecked(c: inout Comp, st: inout LlvmCtx, op: I64, l: LLVMValueRef, r: LLVMValueRef, unsigned: Bool) -> LLVMValueRef {
+    if op == opAdd() || op == opSub() || op == opMul() || op == opDiv() || op == opRem() {
+        val wi: U64 = llvmWidthIdx(w: LLVMGetIntTypeWidth(LLVMTypeOf(l)))
+        val ity: LLVMTypeRef = llvmIntTyOfIdx(st: inout st, wi: wi)
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: ity)
+        ptys.append(value: ity)
+        val fty: LLVMTypeRef = LLVMFunctionType(ity, arrayCPtr(ptys), 2U64, 0I32)
+        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: checkedFnName(op: op, unsigned: unsigned, wi: wi), nameId: checkedNameId(op: op, unsigned: unsigned, wi: wi), fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: l)
+        av.append(value: r)
+        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U64, anon())
+    }
+    return buildBinOpS(c: inout c, st: inout st, op: op, l: l, r: r, unsigned: unsigned)
+}
+
+// Checked signed negation (`-x`): a call to `plew_<iN>Neg`, which panics on
+// INT_MIN. Neg is signed-only (spec/12), so the helper prefix is always signed.
+fn buildNegChecked(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef) -> LLVMValueRef {
+    val wi: U64 = llvmWidthIdx(w: LLVMGetIntTypeWidth(LLVMTypeOf(v)))
+    val ity: LLVMTypeRef = llvmIntTyOfIdx(st: inout st, wi: wi)
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: ity)
+    val fty: LLVMTypeRef = LLVMFunctionType(ity, arrayCPtr(ptys), 1U64, 0I32)
+    mut val nm: Array[U8] = "plew_".bytes
+    appendBytes(into: inout nm, from: checkedPrefixBytes(unsigned: false, wi: wi))
+    appendBytes(into: inout nm, from: "Neg".bytes)
+    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: stringFromBytes(nm), nameId: 9100U64 + wi, fnTy: fty)
+    mut val av: Array[LLVMValueRef] = []
+    av.append(value: v)
+    return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U64, anon())
 }
 
 // Construct a registered struct value from a JSX `<Type field=expr ... />`: build
@@ -2926,7 +3041,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             mut val uns: Bool = false
             if valueKind(c: inout c, st: inout st, id: lhs) == 3U64 { uns = true }
             if valueKind(c: inout c, st: inout st, id: rhs) == 3U64 { uns = true }
-            return buildBinOpS(c: inout c, st: inout st, op: op, l: l, r: r, unsigned: uns)
+            return buildBinOpChecked(c: inout c, st: inout st, op: op, l: l, r: r, unsigned: uns)
         }
         Expr.Str(val start, val len) => {
             return genLlvmStr(c: inout c, st: inout st, start: start, len: len)
@@ -3083,7 +3198,13 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                 return emitWitnessCall(c: inout c, st: inout st, fi: uwfi, lhs: operand, rhs: operand, binary: false)
             }
             if op == opSub() {
-                return LLVMBuildNeg(st.b, genLlvmExpr(c: inout c, st: inout st, id: operand), anon())
+                val ov: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: operand)
+                // a signed-integer negation is overflow-checked (`-INT_MIN` panics);
+                // float negation keeps the raw op.
+                if LLVMGetTypeKind(LLVMTypeOf(ov)) == 8U32 {
+                    return buildNegChecked(c: inout c, st: inout st, v: ov)
+                }
+                return LLVMBuildNeg(st.b, ov, anon())
             }
             // `!` (Bool) and `~` (BitNot) are both LLVM `xor x, -1` (i1: flips the
             // single bit; iN: flips all bits).
@@ -4530,8 +4651,16 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
         val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(ptys), 2U64, 0I32)
         val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_panic_raw", nameId: 4U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: LLVMBuildGlobalStringPtr(st.b, cstr(s: "assertion failed"), anon()))
-        av.append(value: LLVMConstInt(st.i64ty, 16U64, 0I32))
+        // assert(cond, message: msg): use the caller's message String when given
+        // (its {ptr,len} aggregate), else the default "assertion failed".
+        if args.count > 1U64 {
+            val msg: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[1].expr)
+            av.append(value: LLVMBuildExtractValue(st.b, msg, 0U64, anon()))
+            av.append(value: LLVMBuildExtractValue(st.b, msg, 1U64, anon()))
+        } else {
+            av.append(value: LLVMBuildGlobalStringPtr(st.b, cstr(s: "assertion failed"), anon()))
+            av.append(value: LLVMConstInt(st.i64ty, 16U64, 0I32))
+        }
         LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U64, anon())
         LLVMBuildUnreachable(st.b)
         LLVMPositionBuilderAtEnd(st.b, okBB)
@@ -6812,7 +6941,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                             LLVMBuildStore(st.b, rv, st.locPtr[li])
                         } else {
                             val cur: LLVMValueRef = LLVMBuildLoad2(st.b, st.locTy[li], st.locPtr[li], anon())
-                            val nv: LLVMValueRef = buildBinOp(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv)
+                            val nv: LLVMValueRef = buildBinOpChecked(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: valueKind(c: inout c, st: inout st, id: target) == 3U64)
                             LLVMBuildStore(st.b, nv, st.locPtr[li])
                         }
                     } else {
@@ -6866,7 +6995,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                         LLVMBuildStore(st.b, rv, ep)
                     } else {
                         val cur: LLVMValueRef = LLVMBuildLoad2(st.b, elemTy, ep, anon())
-                        LLVMBuildStore(st.b, buildBinOp(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv), ep)
+                        LLVMBuildStore(st.b, buildBinOpChecked(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: valueKind(c: inout c, st: inout st, id: target) == 3U64), ep)
                     }
                 }
                 Expr.Field(base: val fbase, nameStart: val fnameStart, nameLen: val fnameLen) => {
@@ -6903,7 +7032,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                                     } else {
                                         val ftype: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: fld.tyStart, tyLen: fld.tyLen)
                                         val cur: LLVMValueRef = LLVMBuildLoad2(st.b, ftype, gep, anon())
-                                        LLVMBuildStore(st.b, buildBinOp(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv), gep)
+                                        LLVMBuildStore(st.b, buildBinOpChecked(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: isUnsignedName(c: inout c, start: fld.tyStart, len: fld.tyLen)), gep)
                                     }
                                     return
                                 }
@@ -6929,7 +7058,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                                         } else {
                                             val ftype: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: fld.tyStart, tyLen: fld.tyLen)
                                             val cur: LLVMValueRef = LLVMBuildLoad2(st.b, ftype, gep, anon())
-                                            LLVMBuildStore(st.b, buildBinOp(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv), gep)
+                                            LLVMBuildStore(st.b, buildBinOpChecked(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: isUnsignedName(c: inout c, start: fld.tyStart, len: fld.tyLen)), gep)
                                         }
                                         handled = true
                                     }
@@ -6960,7 +7089,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                             } else {
                                 val ftype: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: fld.tyStart, tyLen: fld.tyLen)
                                 val cur: LLVMValueRef = LLVMBuildLoad2(st.b, ftype, gep, anon())
-                                LLVMBuildStore(st.b, buildBinOp(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv), gep)
+                                LLVMBuildStore(st.b, buildBinOpChecked(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: isUnsignedName(c: inout c, start: fld.tyStart, len: fld.tyLen)), gep)
                             }
                             return
                         }
@@ -8593,8 +8722,86 @@ fn emitAsyncFns(c: inout Comp, st: inout LlvmCtx) {
 // against (the `plew_*` symbols the emitter declares). Scalar/pointer signatures
 // only — no struct-by-value — so the IR can pass String as (i8* data, i64 len)
 // without modeling the C struct ABI. Grows as the backend covers more.
+// One overflow-checked binary (`Add`/`Sub`/`Mul`) for width-prefix `p`/C-type
+// `ct`, using the clang builtin `bi` (mirrors the C backend's wNumChecked but with
+// external linkage and plew_panic_raw).
+fn wOvf(p: String, ct: String, name: String, bi: String) {
+    write(s: ct)
+    write(s: " plew_")
+    write(s: p)
+    write(s: name)
+    write(s: "(")
+    write(s: ct)
+    write(s: " a, ")
+    write(s: ct)
+    write(s: " b){ ")
+    write(s: ct)
+    write(s: " r; if(")
+    write(s: bi)
+    write(s: "(a,b,&r)) plew_panic_raw(\"integer overflow\",16); return r; }\n")
+}
+
+// The checked integer helpers for one width-prefix `p` / C-type `ct` (signed min
+// `mn`, `sgn` = signed). Add/Sub/Mul overflow-panic, Div/Rem div-by-zero-panic
+// (+ signed INT_MIN/-1 overflow), and signed widths also get a checked Neg.
+fn wLlvmChecked(p: String, ct: String, mn: String, sgn: Bool) {
+    wOvf(p: p, ct: ct, name: "Add", bi: "__builtin_add_overflow")
+    wOvf(p: p, ct: ct, name: "Sub", bi: "__builtin_sub_overflow")
+    wOvf(p: p, ct: ct, name: "Mul", bi: "__builtin_mul_overflow")
+    write(s: ct)
+    write(s: " plew_")
+    write(s: p)
+    write(s: "Div(")
+    write(s: ct)
+    write(s: " a, ")
+    write(s: ct)
+    write(s: " b){ if(b==0) plew_panic_raw(\"division by zero\",16); ")
+    if sgn {
+        write(s: "if(b==-1 && a==")
+        write(s: mn)
+        write(s: ") plew_panic_raw(\"integer overflow\",16); ")
+    }
+    write(s: "return a/b; }\n")
+    write(s: ct)
+    write(s: " plew_")
+    write(s: p)
+    write(s: "Rem(")
+    write(s: ct)
+    write(s: " a, ")
+    write(s: ct)
+    write(s: " b){ if(b==0) plew_panic_raw(\"remainder by zero\",17); ")
+    if sgn {
+        write(s: "if(b==-1) return 0; ")
+    }
+    write(s: "return a%b; }\n")
+    if sgn {
+        write(s: ct)
+        write(s: " plew_")
+        write(s: p)
+        write(s: "Neg(")
+        write(s: ct)
+        write(s: " a){ ")
+        write(s: ct)
+        write(s: " r; if(__builtin_sub_overflow((")
+        write(s: ct)
+        write(s: ")0,a,&r)) plew_panic_raw(\"integer overflow\",16); return r; }\n")
+    }
+}
+
+// All width-prefixed checked integer helpers (i8..i64 signed, u8..u64 unsigned).
+fn emitLlvmIntChecked() {
+    wLlvmChecked(p: "i8", ct: "int8_t", mn: "INT8_MIN", sgn: true)
+    wLlvmChecked(p: "i16", ct: "int16_t", mn: "INT16_MIN", sgn: true)
+    wLlvmChecked(p: "i32", ct: "int32_t", mn: "INT32_MIN", sgn: true)
+    wLlvmChecked(p: "i64", ct: "int64_t", mn: "INT64_MIN", sgn: true)
+    wLlvmChecked(p: "u8", ct: "unsigned char", mn: "", sgn: false)
+    wLlvmChecked(p: "u16", ct: "uint16_t", mn: "", sgn: false)
+    wLlvmChecked(p: "u32", ct: "uint32_t", mn: "", sgn: false)
+    wLlvmChecked(p: "u64", ct: "uint64_t", mn: "", sgn: false)
+}
+
 fn emitLlvmRuntime() {
-    write(s: "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n")
+    write(s: "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdint.h>\n")
     write(s: "void plew_exit(long long code){ exit((int)code); }\n")
     write(s: "void plew_write_raw(const char* d, long long n){ fwrite(d,1,(size_t)n,stdout); }\n")
     write(s: "void plew_eprint_raw(const char* d, long long n){ fwrite(d,1,(size_t)n,stderr); }\n")
@@ -8622,6 +8829,10 @@ fn emitLlvmRuntime() {
     write(s: "void plew_rawbuf_retain(void* p){ if(p) ((long long*)p)[-1]++; }\n")
     write(s: "long long plew_rawbuf_release(void* p){ if(!p) return 0; return --((long long*)p)[-1]; }\n")
     write(s: "void plew_bounds(long long i, long long n){ if(i<0||i>=n){ fputs(\"panic: index out of bounds\\n\",stderr); exit(1); } }\n")
+    // checked integer arithmetic floor (overflow / divide-by-zero panic, spec/12):
+    // the witness/compound paths call `plew_<w><Op>` instead of a raw IR op, so the
+    // LLVM backend matches the C backend's loud overflow/div-zero behaviour.
+    emitLlvmIntChecked()
     // ---- process args + file I/O (the path-taking intrinsics take (ptr,i64), so
     // no struct-by-value ABI is assumed; readers return PlewStrR {ptr,i64}). ----
     write(s: "static int plew_argc = 0; static char** plew_argv = 0;\n")
