@@ -1,21 +1,16 @@
-// Part of the LLVM-backend root (_llvm.pw). The second backend: walk the same
-// analyzed arena the C backend (emitC) does, but build a real LLVM module in
-// process through libLLVM-C (spec/15 FFI) instead of emitting C text. This part
-// is parted ONLY by _llvm.pw, so the C-backend binary (compiler/plewc) never
-// references libLLVM (its clang-only bootstrap is preserved); the libLLVM-linked
-// binary (compiler/plewc-llvm) is built on demand by compiler/plewc.
-//
-// Bring-up strategy: construct the module with the real API (the transferable
-// 90% — SSA / basic-blocks / CFG), and for now emit it as text via
-// LLVMPrintModuleToString -> stdout, linked against a small C runtime emitted by
-// `plewc-llvm --runtime` (PlewString / plew_* are ABI-identical to the C backend).
+// Part of the Plew compiler module (root: _.pw). The code-emission backend: walk
+// the analyzed arena `runFrontend()` produces and build a real LLVM module in
+// process through libLLVM-C (spec/15 FFI). The compiler links libLLVM (only this
+// part references it) and emits the module as text via LLVMPrintModuleToString ->
+// stdout, linked against a small C runtime emitted by `plewc --runtime`
+// (PlewString / plew_* are the ABI the generated IR targets).
 //
 // COVERAGE: the entry module's `main` + plain free functions (params, returns,
 // recursion, default args, lexical scope/shadowing); width-accurate integers
 // (i8/i16/i32/i64 with sext/zext/trunc coercion at typed sinks — literal width
 // from the suffix or the checker's exprIntCtx; add/sub/mul/div/rem/neg are
 // overflow- and div-by-zero-checked via the `plew_<w><Op>` runtime floor, loud
-// like the C backend — wrapping is opt-in via wrapping* methods); the
+// (wrapping is opt-in via wrapping* methods); the
 // full operator set (arithmetic / bitwise / shift / unary / comparison; >> is
 // arithmetic, a logical-shift-on-unsigned TODO); Bool; String (value `{ptr,i64}`,
 // literals, ==/!=); `if`/`while`; and the intrinsics exit / write / eprint /
@@ -355,7 +350,7 @@ fn anon() -> CPtr[U8] {
 //
 // Map a Plew scalar type name span to an LLVM integer type. v1 recognizes the
 // fixed-width integer lang-items and Bool; everything else falls back to i64
-// (the C backend's `long long` default scalar). Width/signedness refinement and
+// (the default scalar). Width/signedness refinement and
 // non-scalar types (String/struct/array) come in later increments.
 fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> LLVMTypeRef {
     // generic substitution: a type-parameter name (T) in scope resolves to its
@@ -3647,32 +3642,6 @@ fn exprLlvmType(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
     }
 }
 
-// The element LLVM type of an array-typed expression (Ident local / literal).
-fn exprArrElemTy(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
-    match c.exprs[id] {
-        Expr.Ident(val start, val len) => {
-            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
-            if li < st.nLocals {
-                if st.locIsArr[li] {
-                    return st.locElemTy[li]
-                }
-            }
-        }
-        Expr.Field(val base, val nameStart, val nameLen) => {
-            if isStringBytesField(c: inout c, st: inout st, base: base, nameStart: nameStart, nameLen: nameLen) {
-                return st.i8ty
-            }
-        }
-        Expr.Array(val elems) => {
-            if elems.count > 0U64 {
-                return exprLlvmType(c: inout c, st: inout st, id: elems[0])
-            }
-        }
-        _ => {}
-    }
-    return st.i64ty
-}
-
 // `s.bytes` on a String value: String is `{i8*, i64}`, layout-identical to
 // Array[U8] `{ptr, i64}`, so `.bytes` is the String value viewed as a U8 array
 // (O(1), no copy — spec/02). The view's element type is i8 (unsigned).
@@ -3854,21 +3823,6 @@ fn arrStoragePtr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                         _ => {}
                     }
                 }
-            }
-        }
-        _ => {}
-    }
-    return LLVMConstNull(st.ptrty)
-}
-
-// A pointer to a struct place's storage (an addressable struct local), or
-// LLVMConstNull(ptr).
-fn structPlacePtr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
-    match c.exprs[id] {
-        Expr.Ident(val start, val len) => {
-            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
-            if li < st.nLocals {
-                return st.locPtr[li]
             }
         }
         _ => {}
@@ -4274,22 +4228,6 @@ fn genLlvmArraySet(c: inout Comp, st: inout LlvmCtx, recv: U64, indexExpr: U64, 
     val rv: LLVMValueRef = coerceElem(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valueExpr), elemTy: elemTy)
     LLVMBuildStore(st.b, rv, ep)
     return LLVMConstInt(st.i64ty, 0U64, 0I32)
-}
-
-// The local index of an array-typed receiver Ident, or st.nLocals.
-fn arrLocalIndex(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
-    match c.exprs[id] {
-        Expr.Ident(val start, val len) => {
-            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
-            if li < st.nLocals {
-                if st.locIsArr[li] {
-                    return li
-                }
-            }
-        }
-        _ => {}
-    }
-    return st.nLocals
 }
 
 // Emit a condition expression as an i1. A comparison binary already yields i1; any
@@ -6004,16 +5942,6 @@ fn ensureGenMethodDeclared(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: 
     val slot: U64 = st.genMethK.count - 1U64
     st.genMethEmit.append(value: slot)
     return slot
-}
-
-// Drain the lazily-declared generic-method queue: emit each queued body (which may
-// reach further lazy generic methods, appending to the queue — so loop on count).
-fn emitQueuedGenMethods(c: inout Comp, st: inout LlvmCtx) {
-    mut val i: U64 = 0
-    while i < st.genMethEmit.count {
-        emitOneGenMethod(c: inout c, st: inout st, slot: st.genMethEmit[i])
-        i += 1
-    }
 }
 
 // Element-wise structural equality of two type-argument lists.
@@ -8238,17 +8166,6 @@ fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
 
 fn isAsyncFn(c: inout Comp, fi: U64) -> Bool {
     return c.funcs[fi].isAsync
-}
-
-fn programHasAsync(c: inout Comp) -> Bool {
-    mut val i: U64 = 0
-    while i < c.funcs.count {
-        if c.funcs[i].isAsync {
-            return true
-        }
-        i += 1
-    }
-    return false
 }
 
 // The LLVM type of an async frame field (a param or a hoisted local): a `Promise`

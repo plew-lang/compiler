@@ -779,7 +779,6 @@ fn checkMakeFields(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U6
     }
 }
 
-
 // Acceptance soundness: a variant/struct match pattern binds fields BY NAME, and
 // codegen emits `_m.data.<Variant>.<field>` (or `scrut.<field>` for a struct), so a
 // pattern that names a field the variant/struct does not have would produce broken
@@ -873,33 +872,6 @@ fn checkMatchBinds(c: inout Comp) {
         }
         xi += 1
     }
-}
-
-// Whether `witnessed` (a conformance's satisfied requirement names) contains the
-// requirement named (start,len). T1 matches on name only (overloaded
-// requirements with the same name and differing signatures are a later concern).
-// Whether two parameter lists have the same selector: equal arity and, position
-// by position, equal labels and type heads. Distinguishes same-name overloaded
-// requirements (e.g. `write(data: Bytes)` vs `write(data: String)`).
-fn paramSelectorEq(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
-    if a.count != b.count {
-        return false
-    }
-    mut val i: U64 = 0
-    while i < a.count {
-        val pa: Param = a[i]
-        val pb: Param = b[i]
-        if pa.nameId == pb.nameId {
-        } else {
-            return false
-        }
-        if pa.tyNameId == pb.tyNameId {
-        } else {
-            return false
-        }
-        i += 1
-    }
-    return true
 }
 
 // The concrete type span that the conforming type `(recvStart,recvLen)` binds for

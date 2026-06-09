@@ -2,20 +2,17 @@
 //
 // Many per-expression / per-statement acceptance checks (member visibility,
 // literal range, unique-copy / unique-arg modes, make-field existence, `as`
-// narrowing, assignment mutability, match exhaustiveness) historically rode the
-// C backend's emission walk (genStmt / genExpr in Stmt.pw / Expr.pw). The LLVM
-// backend has its own emitter and does not call them, so spec-invalid code that
-// those checks reject was silently ACCEPTED by the LLVM backend.
+// narrowing, assignment mutability, match exhaustiveness) were historically run
+// inline during a backend's emission walk. With emission now done by the LLVM
+// backend (which doesn't re-run them), this standalone pass is the sole home of
+// those checks — without it, spec-invalid code would be silently ACCEPTED.
 //
-// This pass re-runs those checks as a standalone, backend-independent traversal
-// of every function body, invoked by runFrontend before code generation — so
-// BOTH backends are acceptance-sound (and when the C backend is removed, this is
-// the sole home of the checks). It is additive: the C emitter keeps its inline
-// copies (redundant with this pass), so it cannot regress. It reuses the existing
-// check functions (checkLitCtx / checkLitSpan / checkUniquePlaceCopy / the
-// visibility + matchExhaustive helpers) and only adds the traversal + the two
-// inline checks (assign mutability, `as` narrowing) the emitter had not factored
-// out.
+// It runs as a backend-independent traversal of every function body, invoked by
+// runFrontend before code generation, so the compiler is acceptance-sound
+// independent of how emission works. It reuses the existing check functions
+// (checkLitCtx / checkLitSpan / checkUniquePlaceCopy / the visibility +
+// matchExhaustive helpers) and adds the traversal plus the two checks (assign
+// mutability, `as` narrowing) that had only ever existed inline in emission.
 
 // Verify every non-extern, non-template function body.
 fn verifyProgram(c: inout Comp) {

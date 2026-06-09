@@ -32,35 +32,6 @@ fn opBitAndAssign() -> I64 { return kindCode(k: <Kind.AmpEq />) }
 fn opBitOrAssign() -> I64 { return kindCode(k: <Kind.PipeEq />) }
 fn opBitXorAssign() -> I64 { return kindCode(k: <Kind.CaretEq />) }
 fn opShlAssign() -> I64 { return kindCode(k: <Kind.ShlEq />) }
-fn opShrAssign() -> I64 { return kindCode(k: <Kind.ShrEq />) }
-
-fn binOpStr(op: I64) -> String {
-    if op == opAdd() { return " + " }
-    if op == opSub() { return " - " }
-    if op == opMul() { return " * " }
-    if op == opDiv() { return " / " }
-    if op == opRem() { return " % " }
-    if op == opEq() { return " == " }
-    if op == opNe() { return " != " }
-    if op == opLt() { return " < " }
-    if op == opLe() { return " <= " }
-    if op == opGt() { return " > " }
-    if op == opGe() { return " >= " }
-    if op == opAnd() { return " && " }
-    if op == opOr() { return " || " }
-    if op == opBitAnd() { return " & " }
-    if op == opBitOr() { return " | " }
-    if op == opBitXor() { return " ^ " }
-    if op == opShl() { return " << " }
-    if op == opShr() { return " >> " }
-    return " ? "
-}
-
-fn unaryOpStr(op: I64) -> String {
-    if op == opSub() { return "-" }
-    if op == opBitNot() { return "~" }
-    return "!"
-}
 
 // Wrapping arithmetic (spec/02): integer `* + -` panic on overflow; the
 // `wrapping*` methods opt into two's-complement wraparound instead (the only
@@ -72,30 +43,6 @@ fn isWrappingMethod(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "wrappingAdd") { return true }
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "wrappingSub") { return true }
     return false
-}
-
-fn wrappingOpStr(c: inout Comp, nameStart: U64, nameLen: U64) -> String {
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "wrappingMul") { return " * " }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "wrappingSub") { return " - " }
-    return " + "
-}
-
-// Decoded byte length of a string literal (span includes both quotes). Escapes
-// like \n / \" / \\ count as one byte; plewc.pw uses only C-compatible escapes,
-// so the content is emitted verbatim and just the length is computed here.
-fn strDecodedLen(c: inout Comp, start: U64, len: U64) -> I64 {
-    mut val n: I64 = 0
-    mut val j: U64 = start + 1
-    val end: U64 = start + len - 1
-    while j < end {
-        if c.bytes[j] == 92 {
-            j += 2
-        } else {
-            j += 1
-        }
-        n += 1
-    }
-    return n
 }
 
 // The integer result type of an arithmetic binary (operands share a type, so
@@ -117,17 +64,6 @@ fn arithIntType(c: inout Comp, lhs: U64, rhs: U64) -> TypeInfo {
     return scalarInfo()
 }
 
-// Emit a bounds-checked array element read: `PlewArray_<E>_get(base, (idx))`.
-fn genArrayGet(c: inout Comp, base: U64, index: U64, elemStart: U64, elemLen: U64) {
-    wPA(c: inout c, elemStart: elemStart, elemLen: elemLen)
-    write(s: "_get(")
-    genExpr(c: inout c, id: base)
-    write(s: ", (long long)(")
-    genExpr(c: inout c, id: index)
-    write(s: "))")
-}
-
-
 // The binary opcode underlying a compound-assign op (`+=` -> `+`, `&=` -> `&`),
 // so `target OP= value` can desugar to `target = target OP value` and route the
 // `OP` through the operator-trait witness dispatch (spec/12). 0 is never returned
@@ -143,50 +79,5 @@ fn compoundBinOp(op: I64) -> I64 {
     if op == opBitXorAssign() { return opBitXor() }
     if op == opShlAssign() { return opShl() }
     return opShr()
-}
-
-fn assignOpStr(op: I64) -> String {
-    if op == opAssign() { return " = " }
-    if op == opAddAssign() { return " += " }
-    if op == opSubAssign() { return " -= " }
-    if op == opMulAssign() { return " *= " }
-    if op == opDivAssign() { return " /= " }
-    if op == opRemAssign() { return " %= " }
-    if op == opBitAndAssign() { return " &= " }
-    if op == opBitOrAssign() { return " |= " }
-    if op == opBitXorAssign() { return " ^= " }
-    if op == opShlAssign() { return " <<= " }
-    return " >>= "
-}
-
-// Whether a compound-assign op is `/=` (70) or `%=` (71), whose expansion must
-// go through the checked plew_div/plew_mod (spec: division by zero panics).
-fn isCompoundDiv(op: I64) -> Bool {
-    if op == opDivAssign() { return true }
-    if op == opRemAssign() { return true }
-    return false
-}
-
-// The checked-division C function (with its open paren) for `/=`/`%=`; "" for
-// any other op (so callers can prefix unconditionally).
-fn compoundDivFn(op: I64) -> String {
-    if op == opDivAssign() { return "plew_div(" }
-    if op == opRemAssign() { return "plew_mod(" }
-    return ""
-}
-
-// The binary operator underlying a compound assignment (`+=` -> ` + `), used to
-// expand `a[i] OP= v` into `set(a, i, get(a, i) OP v)`.
-fn assignToBinStr(op: I64) -> String {
-    if op == opAddAssign() { return " + " }
-    if op == opSubAssign() { return " - " }
-    if op == opMulAssign() { return " * " }
-    if op == opDivAssign() { return " / " }
-    if op == opRemAssign() { return " % " }
-    if op == opBitAndAssign() { return " & " }
-    if op == opBitOrAssign() { return " | " }
-    if op == opBitXorAssign() { return " ^ " }
-    if op == opShlAssign() { return " << " }
-    return " >> "
 }
 

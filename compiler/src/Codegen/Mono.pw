@@ -88,23 +88,6 @@ fn isRefInst(c: inout Comp, ref: U64) -> Bool {
     return rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref")
 }
 
-// Is `ref` a `CPtr[T]` / `CMutPtr[T]` instantiation (spec/15 FFI)? Both lower to
-// the C raw pointer `T*` via emitConcreteCType; routed here in genCTypeOf so a
-// written `CPtr[U8]` annotation doesn't fall through to the name-echo fallback.
-fn isCPtrInst(c: inout Comp, ref: U64) -> Bool {
-    if ref >= c.types.count {
-        return false
-    }
-    val t: TypeRef = c.types[ref]
-    if t.args.count != 1 {
-        return false
-    }
-    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "CPtr") {
-        return true
-    }
-    return rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "CMutPtr")
-}
-
 // Is `ref` a `RawBuffer[T]` instantiation? `RawBuffer` is a blessed primitive
 // (the refcounted raw buffer that Array's storage is built on), lowered like
 // `Ref` to a C `T*` (with a {rc,cap} header before data) — not a user type.
@@ -117,17 +100,6 @@ fn isRawBufInst(c: inout Comp, ref: U64) -> Bool {
         return false
     }
     return rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "RawBuffer")
-}
-
-// Is `ref` a `Promise[T]` instantiation? `Promise` is a blessed lang item (the
-// result of an `async fn`), lowered to a runtime `PlewPromise*` — not a user
-// struct/enum, and not monomorphized (its value slot is type-erased for now).
-fn isPromiseInst(c: inout Comp, ref: U64) -> Bool {
-    if ref >= c.types.count {
-        return false
-    }
-    val t: TypeRef = c.types[ref]
-    return rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Promise")
 }
 
 // ── Recursive-value-type boxing (spec/03) ────────────────────────────────────
@@ -339,36 +311,6 @@ fn findFieldDef(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, 
     return noField()
 }
 
-// Emit a boxed field's construction value: heap-allocate a refcounted cell of the
-// field's declared (pointee) type, store the value into it, and yield the pointer.
-// The cell carries an ARC header (plew_arc_alloc, rc=1) so copies retain and the
-// last owner frees it. The value is plain-copied into the cell; value semantics
-// hold because reads deref-copy and writes repoint (a shared cell is immutable).
-fn genBoxCell(c: inout Comp, fd: FieldDef, valueId: U64) {
-    val t: U64 = c.tmp
-    c.tmp = c.tmp + 1
-    write(s: "({ ")
-    genCTypeOf(c: inout c, tyRef: fd.ty, fallStart: fd.tyStart, fallLen: fd.tyLen, isArray: false)
-    write(s: "* __box")
-    writeU64(n: t)
-    write(s: " = (")
-    genCTypeOf(c: inout c, tyRef: fd.ty, fallStart: fd.tyStart, fallLen: fd.tyLen, isArray: false)
-    write(s: "*)plew_arc_alloc(sizeof(")
-    genCTypeOf(c: inout c, tyRef: fd.ty, fallStart: fd.tyStart, fallLen: fd.tyLen, isArray: false)
-    write(s: ")); *__box")
-    writeU64(n: t)
-    write(s: " = (")
-    // the cell value is in the field's (pointee) type context: set curRetTy to the
-    // field's instantiation so a nested `<Optional.Some …/>` infers `Optional_Node`.
-    val savedRet: U64 = c.curRetTy
-    c.curRetTy = fd.ty
-    genCopyValue(c: inout c, exprId: valueId, tyRef: fd.ty, fallStart: fd.tyStart, fallLen: fd.tyLen, isArray: false)
-    c.curRetTy = savedRet
-    write(s: "); __box")
-    writeU64(n: t)
-    write(s: "; })")
-}
-
 // Pre-pass: record every concrete struct/enum field that closes a containment
 // cycle back onto its owner. Only concrete (non-generic) owners are boxed; a
 // generic type's recursion is broken at the concrete user field that points into
@@ -452,21 +394,6 @@ fn typeRefEq(c: inout Comp, a: U64, b: U64) -> Bool {
     return true
 }
 
-// Write the mangled C name for a TypeRef: head name with each type argument
-// appended as `_<arg-mangle>` (recursively). `Box[I32]` -> `Box_I32`, a bare
-// `I32` -> `I32`, `Box[Box[I32]]` -> `Box_Box_I32`. Type parameters are resolved
-// under the active body env (so `Box[T]` with T=I32 mangles to `Box_I32`).
-fn emitMangle(c: inout Comp, ref: U64) {
-    val t: TypeRef = c.types[resolveTy(c: inout c, tyRef: ref)]
-    writeSpan(c: inout c, start: t.nameStart, len: t.nameLen)
-    mut val i: U64 = 0
-    while i < t.args.count {
-        write(s: "_")
-        emitMangle(c: inout c, ref: t.args[i])
-        i += 1
-    }
-}
-
 // Append the mangled name of `ref` (the same text emitMangle would write) to the
 // end of c.bytes, so a compound array element type (`Ref[I32]`, `Array[I32]`,
 // `Box[I32]`) gets a unique source-span name (`Ref_I32`) the existing name-span
@@ -539,70 +466,6 @@ fn isCompoundType(c: inout Comp, ref: U64) -> Bool {
     return c.types[r].args.count > 0
 }
 
-// Emit the C type for a concrete TypeRef (type parameters resolved via the env).
-fn emitConcreteCType(c: inout Comp, ref: U64) {
-    val r: U64 = resolveTy(c: inout c, tyRef: ref)
-    val t: TypeRef = c.types[r]
-    if t.args.count == 0 {
-        genCElem(c: inout c, start: t.nameStart, len: t.nameLen)
-        return
-    }
-    // Ref[T] is a shared mutable heap box -> a C pointer to T.
-    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref") {
-        emitConcreteCType(c: inout c, ref: t.args[0])
-        write(s: "*")
-        return
-    }
-    // CPtr[T] / CMutPtr[T] (spec/15 FFI) is a raw C pointer to T -> `T*`. The
-    // const/mut distinction is advisory at the boundary; both lower to `T*`.
-    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "CPtr") {
-        emitConcreteCType(c: inout c, ref: t.args[0])
-        write(s: "*")
-        return
-    }
-    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "CMutPtr") {
-        emitConcreteCType(c: inout c, ref: t.args[0])
-        write(s: "*")
-        return
-    }
-    // RawBuffer[T] is a refcounted raw buffer (the array floor) -> a C pointer to
-    // T, with a {rc, cap} header stored before data[0] (spec/02 raw-memory floor).
-    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "RawBuffer") {
-        emitConcreteCType(c: inout c, ref: t.args[0])
-        write(s: "*")
-        return
-    }
-    // Promise[T] (async result) -> the runtime PlewPromise* (value type-erased).
-    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Promise") {
-        write(s: "PlewPromise*")
-        return
-    }
-    // a function type -> the uniform fat-closure struct (fn ptr + env + rc).
-    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "fn") {
-        write(s: "PlewClosure")
-        return
-    }
-    // generic struct instantiation -> mangled C struct name.
-    emitMangle(c: inout c, ref: r)
-}
-
-// Emit the C type for a generic struct's field, substituting any type parameter
-// (`params[i]`) with the instantiation's concrete argument (`args[i]`). G2a:
-// a field type is either a bare type parameter or a fully-concrete type.
-fn emitFieldCType(c: inout Comp, ref: U64, params: Array[Bind], args: Array[U64]) {
-    val t: TypeRef = c.types[ref]
-    mut val pi: U64 = 0
-    while pi < params.count {
-        val p: Bind = params[pi]
-        if t.nameId == p.nameId {
-            emitConcreteCType(c: inout c, ref: args[pi])
-            return
-        }
-        pi += 1
-    }
-    emitConcreteCType(c: inout c, ref: ref)
-}
-
 // Resolve a TypeRef under the active body-substitution env: a bare type
 // parameter (`T`) maps to its concrete argument; everything else is unchanged.
 // (Nested substitution like `Optional[T]` is deferred.)
@@ -634,45 +497,6 @@ fn resolveTy(c: inout Comp, tyRef: U64) -> U64 {
         }
     }
     return tyRef
-}
-
-// Use-site C type emission: a type parameter resolves via the body env, a
-// generic instantiation lowers to its mangled name; else the legacy path.
-fn genCTypeOf(c: inout Comp, tyRef: U64, fallStart: U64, fallLen: U64, isArray: Bool) {
-    if isArray {
-        genCTypeRef(c: inout c, start: fallStart, len: fallLen, isArray: true)
-        return
-    }
-    val rt: U64 = resolveTy(c: inout c, tyRef: tyRef)
-    if rt != tyRef {
-        emitConcreteCType(c: inout c, ref: rt)
-        return
-    }
-    if isGenericInst(c: inout c, ref: tyRef) {
-        emitConcreteCType(c: inout c, ref: tyRef)
-        return
-    }
-    if isRefInst(c: inout c, ref: tyRef) {
-        emitConcreteCType(c: inout c, ref: tyRef)
-        return
-    }
-    if isCPtrInst(c: inout c, ref: tyRef) {
-        emitConcreteCType(c: inout c, ref: tyRef)
-        return
-    }
-    if isRawBufInst(c: inout c, ref: tyRef) {
-        emitConcreteCType(c: inout c, ref: tyRef)
-        return
-    }
-    if isPromiseInst(c: inout c, ref: tyRef) {
-        emitConcreteCType(c: inout c, ref: tyRef)
-        return
-    }
-    if isFnType(c: inout c, ref: tyRef) {
-        emitConcreteCType(c: inout c, ref: tyRef)
-        return
-    }
-    genCTypeRef(c: inout c, start: fallStart, len: fallLen, isArray: false)
 }
 
 // Is (start,len) the name of a generic type parameter of some struct/enum/fn?
@@ -1367,99 +1191,9 @@ fn genericEnumFieldTypeInfo(c: inout Comp, instRef: U64, variantStart: U64, vari
     return scalarInfo()
 }
 
-// Emit the C type of a match-bound field for a generic enum instantiation,
-// substituting the type parameter (mirrors genBindType with substitution).
-fn genBindTypeInst(c: inout Comp, instRef: U64, variantStart: U64, variantLen: U64, bindStart: U64, bindLen: U64) {
-    val ti: TypeInfo = genericEnumFieldTypeInfo(c: inout c, instRef: instRef, variantStart: variantStart, variantLen: variantLen, fieldStart: bindStart, fieldLen: bindLen)
-    genTypeInfoCType(c: inout c, ti: ti)
-}
-
 // Function types no longer get a per-signature C typedef: every function value
 // is the uniform `PlewClosure` struct (defined in the preamble). The concrete
 // signature is recovered at each call site to cast `PlewClosure.fn`.
-
-// `typedef struct Box_I32 Box_I32;` for one instantiation.
-fn emitMonoForward(c: inout Comp, instRef: U64) {
-    write(s: "typedef struct ")
-    emitMangle(c: inout c, ref: instRef)
-    write(s: " ")
-    emitMangle(c: inout c, ref: instRef)
-    write(s: ";\n")
-}
-
-// `struct Box_I32 { <field ctype> field; ... };` with type params substituted.
-fn emitMonoStruct(c: inout Comp, instRef: U64) {
-    val t: TypeRef = c.types[instRef]
-    val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
-    if si >= c.structs.count {
-        return
-    }
-    val s: StructDef = c.structs[si]
-    // env so an array field element type parameter (`Array[T]`) resolves to the
-    // instantiation's concrete argument inside emitFieldCType -> emitMangle.
-    val savedP: Array[Bind] = c.curTypeParams
-    val savedA: Array[U64] = c.curTypeArgs
-    c.curTypeParams = s.typeParams
-    c.curTypeArgs = t.args
-    write(s: "struct ")
-    emitMangle(c: inout c, ref: instRef)
-    write(s: " {\n")
-    val fields: Array[FieldDef] = s.fields
-    mut val i: U64 = 0
-    while i < fields.count {
-        val f: FieldDef = fields[i]
-        write(s: "    ")
-        emitFieldCType(c: inout c, ref: f.ty, params: s.typeParams, args: t.args)
-        write(s: " ")
-        writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-        write(s: ";\n")
-        i += 1
-    }
-    write(s: "};\n")
-    c.curTypeParams = savedP
-    c.curTypeArgs = savedA
-}
-
-// `struct Optional_I32 { long long tag; union { ... } data; };` — a generic
-// enum instantiation, mirroring genEnumDef with type params substituted.
-fn emitMonoEnum(c: inout Comp, instRef: U64) {
-    val t: TypeRef = c.types[instRef]
-    val ei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
-    if ei >= c.enums.count {
-        return
-    }
-    val e: EnumDef = c.enums[ei]
-    write(s: "struct ")
-    emitMangle(c: inout c, ref: instRef)
-    write(s: " {\n    long long tag;\n    union {\n")
-    val vars: Array[Variant] = e.variants
-    mut val vi: U64 = 0
-    while vi < vars.count {
-        val v: Variant = vars[vi]
-        write(s: "        struct {")
-        val fs: Array[FieldDef] = v.fields
-        if fs.count == 0 {
-            write(s: " char _u; ")
-        } else {
-            mut val fi: U64 = 0
-            while fi < fs.count {
-                val f: FieldDef = fs[fi]
-                write(s: " ")
-                emitFieldCType(c: inout c, ref: f.ty, params: e.typeParams, args: t.args)
-                write(s: " ")
-                writeSpan(c: inout c, start: f.nameStart, len: f.nameLen)
-                write(s: ";")
-                fi += 1
-            }
-            write(s: " ")
-        }
-        write(s: "} ")
-        writeSpan(c: inout c, start: v.nameStart, len: v.nameLen)
-        write(s: ";\n")
-        vi += 1
-    }
-    write(s: "    } data;\n};\n")
-}
 
 // Does generic method `f` belong to the receiver instantiation `instRef`?
 // (A method on `impl[T] Box[T]`: hasRecv, head name matches, and every type
@@ -1480,171 +1214,6 @@ fn methodMatchesInst(c: inout Comp, f: Func, instRef: U64) -> Bool {
     }
     return f.typeParams.count == inst.args.count
 }
-
-// Emit a generic method specialized for receiver instantiation `instRef`,
-// with the body-substitution env active (type params -> the receiver's args).
-// `proto` emits just the signature + `;`; otherwise the full definition.
-fn emitMonoMethod(c: inout Comp, fi: U64, instRef: U64, proto: Bool) {
-    val f: Func = c.funcs[fi]
-    val inst: TypeRef = c.types[instRef]
-    c.curRecvInstRef = instRef
-    c.curTypeParams = f.typeParams
-    c.curTypeArgs = inst.args
-    if proto {
-        // a provided method's signature may mention `Self`/`Item`; set the env so
-        // the prototype matches the body (genFunc sets it from curRecvInstRef).
-        setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: instRef)
-        genSignature(c: inout c, f: f)
-        write(s: ";\n")
-        clearSelfItemEnv(c: inout c)
-    } else {
-        genFunc(c: inout c, fi: fi)
-    }
-    val noParams: Array[Bind] = []
-    val noArgs: Array[U64] = []
-    c.curRecvInstRef = 0
-    c.curTypeParams = noParams
-    c.curTypeArgs = noArgs
-}
-
-// Build an `Array[E]` TypeRef (appended to c.types) for an array-element entry,
-// to drive the receiver-instance mangle (`Array_<E>`) and self-type (`PlewArray_<E>`)
-// when emitting Array methods. A compound element carries its ref (ae.fieldStart);
-// a simple one synthesizes a scalar TypeRef from its head name. Returns c.types.count
-// if no "Array" name span exists (no Array type named here -> nothing to emit).
-fn arrayInstRef(c: inout Comp, ae: Bind) -> U64 {
-    val arrName: Bind = kwSpan(c: inout c, kw: "Array", kwLen: 5)
-    if arrName.nameLen == 0 {
-        return c.types.count
-    }
-    mut val elemRef: U64 = ae.fieldStart
-    if elemRef == 0 {
-        val noArgs: Array[U64] = []
-        elemRef = c.pushType(t: <TypeRef nameStart=ae.nameStart nameLen=ae.nameLen args=noArgs />)
-    }
-    val args: Array[U64] = [elemRef]
-    return c.pushType(t: <TypeRef nameStart=arrName.nameStart nameLen=arrName.nameLen args=args />)
-}
-
-// Is `ref` a registered (already-discovered) generic instantiation? A non-generic
-// ref needs no registration (always true). Drives demand-driven provided-method
-// emission below.
-fn isRegisteredGenInst(c: inout Comp, ref: U64) -> Bool {
-    if isGenericInst(c: inout c, ref: ref) {
-    } else {
-        return true
-    }
-    mut val i: U64 = 0
-    while i < c.genInsts.count {
-        if typeRefEq(c: inout c, a: c.genInsts[i], b: ref) {
-            return true
-        }
-        i += 1
-    }
-    return false
-}
-
-// Should a provided method `mf` (copied onto a conformer) be emitted for this
-// receiver? Only if its adapter return type — `FilterIter[Self, …]` grounded under
-// the receiver (recvInstRef, 0 if non-generic) — is a registered (reachable)
-// instantiation. This makes provided self-returning combinators demand-driven (the
-// ideal: monomorphize only what a call site reaches): `filter` returns
-// `FilterIter[Self,…]`, an unbounded family (`FilterIter[FilterIter[…]]`) never
-// instantiated unless chained, so unreachable copies are skipped (no cascade).
-fn providedRetReachable(c: inout Comp, mf: Func, recvInstRef: U64) -> Bool {
-    if mf.hasRet {
-    } else {
-        return true
-    }
-    val savedP: Array[Bind] = c.curTypeParams
-    val savedA: Array[U64] = c.curTypeArgs
-    if recvInstRef != 0 {
-        c.curTypeParams = mf.typeParams
-        c.curTypeArgs = c.types[recvInstRef].args
-    }
-    setSelfItemEnv(c: inout c, recvStart: mf.recvStart, recvLen: mf.recvLen, recvInstRef: recvInstRef)
-    val gret: U64 = groundTypeRef(c: inout c, ref: mf.retTy)
-    clearSelfItemEnv(c: inout c)
-    c.curTypeParams = savedP
-    c.curTypeArgs = savedA
-    return isRegisteredGenInst(c: inout c, ref: gret)
-}
-
-// Emit prototypes/bodies for generic methods whose receiver is the builtin Array,
-// one per array element type (c.arrayElems). They flow through the same path as
-// user generic methods (emitMonoMethod), but Array is not a genInst (its storage
-// is the PlewArray runtime, not a mono struct), so they are emitted here — keyed
-// on element types rather than struct/enum instantiations.
-fn emitArrayMethods(c: inout Comp, proto: Bool) {
-    mut val ei: U64 = 0
-    while ei < c.arrayElems.count {
-        // skip a type-parameter element (`Array[T]` in the impl/method signatures
-        // registers `T` as an element): it is not a concrete type, and binding the
-        // method's T to the element "T" would be a self-referential env (infinite
-        // recursion in genCElem). A non-ground compound element (`Pair[K,V]` from a
-        // generic struct's `Array[Pair[K,V]]` field) is likewise a template — only
-        // its ground instantiations get method instances. Only concrete element
-        // types get a method instance.
-        mut val skipElem: Bool = isTypeParamName(c: inout c, start: c.arrayElems[ei].nameStart, len: c.arrayElems[ei].nameLen)
-        if c.arrayElems[ei].fieldStart != 0 {
-            if tyRefIsGround(c: inout c, ref: c.arrayElems[ei].fieldStart) {
-            } else {
-                skipElem = true
-            }
-        }
-        if skipElem {
-            ei += 1
-        } else {
-        val inst: U64 = arrayInstRef(c: inout c, ae: c.arrayElems[ei])
-        if inst < c.types.count {
-            mut val mfi: U64 = 0
-            while mfi < c.funcs.count {
-                if methodMatchesInst(c: inout c, f: c.funcs[mfi], instRef: inst) {
-                    emitMonoMethod(c: inout c, fi: mfi, instRef: inst, proto: proto)
-                }
-                mfi += 1
-            }
-        }
-        ei += 1
-        }
-    }
-}
-
-// Emit prototypes (proto=true) or bodies (proto=false) for every generic
-// method, one per receiver instantiation in c.genInsts.
-fn emitMonoMethods(c: inout Comp, proto: Bool) {
-    mut val gi: U64 = 0
-    while gi < c.genInsts.count {
-        // `Array[E]` is a genInst for its C struct typedef only; its methods stay on
-        // the array-special pass (emitArrayMethods, keyed on arrayElems) so they
-        // are not emitted twice. Skip Array instantiations here.
-        val gt: TypeRef = c.types[c.genInsts[gi]]
-        if rangeEquals(bytes: c.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array") {
-            gi += 1
-        } else {
-            mut val mfi: U64 = 0
-            while mfi < c.funcs.count {
-                if methodMatchesInst(c: inout c, f: c.funcs[mfi], instRef: c.genInsts[gi]) {
-                    // demand-driven: skip a provided combinator whose adapter return is
-                    // unreachable for this receiver (avoids the self-returning cascade).
-                    mut val emit: Bool = true
-                    if c.funcs[mfi].isProvided {
-                        if providedRetReachable(c: inout c, mf: c.funcs[mfi], recvInstRef: c.genInsts[gi]) {
-                        } else {
-                            emit = false
-                        }
-                    }
-                    if emit {
-                        emitMonoMethod(c: inout c, fi: mfi, instRef: c.genInsts[gi], proto: proto)
-                    }
-                }
-                mfi += 1
-            }
-            gi += 1
-        }
-    }
-}
-
 
 // ---- generic free function monomorphization (call-site instantiation) ----
 //
@@ -2002,21 +1571,6 @@ fn recvParamCount(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
         return c.enums[gei].typeParams.count
     }
     return 0
-}
-
-// Append `_<argMangle>` for the method-own type args (typeArgs[startIdx..]), to
-// uniquely name a generic method instance: its own type params are encoded by
-// neither the receiver mangle (which covers typeArgs[0..startIdx]) nor the
-// selector. Emitted identically at the definition (genSignature) and the call
-// site so they agree. startIdx = the receiver's param count (0 for a non-generic
-// receiver, where every type arg is method-own).
-fn writeMethodInstSuffixFrom(c: inout Comp, typeArgs: Array[U64], startIdx: U64) {
-    mut val i: U64 = startIdx
-    while i < typeArgs.count {
-        write(s: "_")
-        emitMangle(c: inout c, ref: typeArgs[i])
-        i += 1
-    }
 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -2485,44 +2039,3 @@ fn collectFnInsts(c: inout Comp) {
     c.curCaptureMark = 0
 }
 
-// Emit one generic free function instance (prototype or body) under its
-// type-parameter env (type params -> the instance's concrete args). The mangled
-// name comes from writeFnSelector, which resolves the type-param params to the
-// concrete args while the env is active — matching the call site.
-fn emitMonoFn(c: inout Comp, instIdx: U64, proto: Bool) {
-    val fin: FnInst = c.fnInsts[instIdx]
-    val f: Func = c.funcs[fin.fnIdx]
-    c.curTypeParams = f.typeParams
-    c.curTypeArgs = fin.args
-    // a method instance on a generic receiver carries its receiver instantiation,
-    // so the receiver mangles `Recv_inst_…` and `self` types as the instance.
-    c.curRecvInstRef = fin.recvInstRef
-    if proto {
-        // a generic *method* instance (`Counter.map[B]`): set the Self/Item env so
-        // its prototype's adapter return (`MapIter[Self,…,B]`) grounds like the body
-        // does (genFunc sets it). genFunc handles the body's env itself.
-        if f.hasRecv {
-            setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: fin.recvInstRef)
-        }
-        genSignature(c: inout c, f: f)
-        write(s: ";\n")
-        clearSelfItemEnv(c: inout c)
-    } else {
-        genFunc(c: inout c, fi: fin.fnIdx)
-    }
-    val noParams: Array[Bind] = []
-    val noArgs: Array[U64] = []
-    c.curRecvInstRef = 0
-    c.curTypeParams = noParams
-    c.curTypeArgs = noArgs
-}
-
-// Emit prototypes (proto=true) or bodies (proto=false) for every generic free
-// function instance.
-fn emitMonoFns(c: inout Comp, proto: Bool) {
-    mut val i: U64 = 0
-    while i < c.fnInsts.count {
-        emitMonoFn(c: inout c, instIdx: i, proto: proto)
-        i += 1
-    }
-}
