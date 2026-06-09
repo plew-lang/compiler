@@ -9,12 +9,12 @@
 - **入力＝AST（span 付き）／出力＝String** の非対称はエラーの出どころと一致：入力エラー（マクロが対象を拒否）は AST ノードの span（原本座標）でユーザー元ソースを指す／出力エラー（生成コードが通らない）は `<Foo>.gen.pw` の普通のコンパイルエラー。だから**出力に `quote` のような埋め込み構文は作らず**、普通の Plew 文字列＋既存補間 `"{…}"` で組む。
 - **ディレクティブ引数＝マクロ struct のフィールド**：`@[Name(a: 32)]` ＝ `Name { a: 32 }` を構築して `.derive(input)`（`derive` はメソッド・self ＝設定）。
 
-**`Derive` トレイト＝要求＋提供の 2 メソッド**（構文ライブラリ `@Std/Syntax` が提供）：
+**derive インターフェース＝設定の有無で 2 つ**（`@Std/Syntax` が提供・trait と derive の同名衝突を原理的に消す決定＝[design-decisions.md](design-decisions.md)「trait と derive の同名」）：設定なし `@[X]`＝`Derive`（要求 `assoc fn derive(input: TopItemAst) -> String`・`Self` 非依存ゆえトレイトも no-field struct も実装可）／設定あり `@[X(args)]`＝`ParameterizedDerive`（要求 `fn derive`・`self`＝設定 struct）。どちらも提供 `deriveFromSource`（String→AST 変換＋委譲）を持つ：
 ```plew
-trait Derive { fn derive(input: TopItemAst) -> String }           // 要求：ユーザー実装（match で種別分岐）
+trait Derive { assoc fn derive(input: TopItemAst) -> String }     // 設定なし：@[X]・bare で型/トレイト名を名指す
 impl Derive {                                                     // 提供（blanket）：変換＋委譲
-  fn deriveFromSource(source~: String, start: U64, end: U64) -> String {
-    return self.derive(input: parseItem(source: source, start: start, end: end))
+  assoc fn deriveFromSource(source~: String, start: U64, end: U64) -> String {
+    return derive(input: parseItem(source: source, start: start, end: end))
   }
 }
 ```
@@ -76,8 +76,8 @@ spec/16 は **入力＝TokenStream（span 付き）＋ヘルパで TokenStream�
   - **A＝M1 の理想完成（本体フロントエンドの共有パーサ統合）＝✅達成**：旧理想形の「残」だった ①本体フロントエンドを共有パーサへ ②式・文・パターン木 を完遂し、**コンパイラの宣言/トップレベルパーサ（旧 `parseProgram`/`parseStruct/Enum/Func/Impl/Trait/Extern/Import/Export/Directive`）と式/文/型パーサを全退役**。コンパイラは共有 `parseProgramAst` で木を得て `Codegen/Lower.pw` で arena へ lower するだけ＝真の 1 AST（重複パーサなし）。**ローディングもパース駆動**（木の import/part ノードで探索・ハンドロール pre-scan 退役）。詳細は [worklog.md](worklog.md)「現在地」。
   - **マクロ入力型＝`TopItemAst`＝✅確定・実装済**：`derive(input: TopItemAst)`＝注釈対象のトップレベル項を `match input { TopItemAst.Decl(d)/Impl(im)/Trait(t) … }` で種別分岐。`parseItem` は `TopItemAst` を返す。**注釈対象は struct/enum/fn に加え impl/trait も可**（`lowerFuncDecl`/`lowerImpl`/`lowerTrait` も `drainDerives` で directive を attach＝gen harness が item ソースを slice）。gen テスト＝traitreqs（trait の reqs）/implmethods（impl の members）。**注意**：variant パターンは **punning**＝`TopItemAst.Decl(val input)` は「`input` という名のフィールドを束縛」の意（`Decl` のフィールドは `d`）。payload を別名に束縛するなら `Decl(d: val x)`、punning なら `Decl(val d)`。**存在しないフィールド名を書くと loud reject**（`checkMatchBinds`＝受理の健全性・以前は silent broken C だったバグを修正・reject `match_unknown_field`）。
   - **残（マクロ機能の additive）**：authoring 層（ハイライト対応テンプレート/quote）は future・additive（コアは String 出力のまま）。**arena→`DeclAst` 変換のショートカットは採らない**（1 AST 原則）。
-- **M2＝コアライブラリのマクロを dogfood**：`Eq`/`Hash` をこの機構で書く。現行のコンパイラ特権合成（`synthStructEq` 等）から段階移行（特権版を残したまま並行→検証→差し替え）。`Hash` が出れば `Dictionary`（`[k:v]`）に接続。
-- **M3＝パッケージ管理導入後に切り出し**：`@Std/Syntax`（lexer+parser+AST）を独立した**外部共有パッケージ**へ昇格。コンパイラもマクロツールも同一パッケージ版に依存する構成へ。
+- **M2＝コアライブラリのマクロを dogfood＝✅達成**：Eq/Ord トレイト＋`@[Eq]`/`@[Ord]` derive・Hash/Hasher＋SipHash-1-3＋`@[Hash]` dogfood・**`Dictionary[K,V]` lang item**（`[k:v]` リテラル・添字・メソッド）まで land 済。組み込み Eq/Ord/Hash は当面コンパイラ特権合成と並行（dogfood が deriver 経由）。
+- **M3＝パッケージ管理導入後に切り出し（未着手）**：`@Std/Syntax`（lexer+parser+AST）を独立した**外部共有パッケージ**へ昇格。コンパイラもマクロツールも同一パッケージ版に依存する構成へ。
 
 > 当初の理想順は「ライブラリ切り出し → その上に機構」だったが、入れ物（パッケージ管理）が無いので**機構を in-tree（`@Std/Syntax`）で先に作り、外部切り出しは最後**に倒した。各段階で実利（コンパイラが綺麗になる／Dictionary が進む）が出る。**Phase C（名前 interning・宣言名）→ Phase D（型 interning・型 span/型パラメータ照合を整数比較へ）まで済**（経緯は worklog）。**重い D'（legacy 型 triple `(start,len,isArray)+ref` の構造的 ref 一本化／パーサの codegen 仕事）はこの後**＝Phase D は id を載せて照合を整数化した段で、triple そのものの構造的撤去は別。
 

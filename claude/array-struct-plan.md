@@ -87,10 +87,12 @@ before the flip without the old compiler double-emitting its methods.
   context-free `val xs = []` stays an error (annotation required, Swift-like). It
   remains independently useful → deferred as a separate additive.
 
-## Remaining gap (next harvest)
+## Harvest (realized)
 
-The element-aware deep copy/release lives in an **array-specific** runtime
-(`Array_E_copy/share/release/unique`). Future `RawBuffer`-backed collections
-(`Dictionary`, `Set`) need the same — so the next collection work is generalizing it
-into a reusable "value semantics for a `RawBuffer` of N `T`s" mechanism the compiler
-emits for any such struct, not just Array.
+`Dictionary[K,V]` (a `RawBuffer`-backed lang item built on parallel `Array`s)
+landed on top of this floor and inherits its value semantics — confirming the
+seam generalizes. The element-aware deep copy/release still lives in an
+**array-specific** runtime (`Array_E_copy/share/release/unique`); a further
+`RawBuffer`-of-N-`T`s generalization (a reusable "value semantics for any such
+struct" mechanism) remains a possible future tidy-up if more such collections
+(`Set`) arrive, but is not blocking.

@@ -11,13 +11,13 @@ Plew コンパイラの実装方針。**🎉 セルフホスト達成済み**＝
 
 ## 技術スタック
 
-正典コンパイラ（`compiler/src/_.pw`・Plew 製）は **手書き lexer + 再帰下降パーサ → C トランスパイル → clang** ＝下表の stage0 と同じ骨格を Plew で実装している（LLVM/WASM は後述の通り後回し）。下表は**使い捨て stage0（Rust・退役済み）**の技術選定で、骨格と「なぜ Rust だったか」の経緯。
+正典コンパイラ（`compiler/src/`・Plew 製）は **手書きレクサ + 再帰下降パーサ（共有 `@Std/Syntax`）→ 2 バックエンド**＝C トランスパイル → clang（`compiler/plewc`）と LLVM（libLLVM-C → `compiler/plewc-llvm`）。**LLVM バックエンドは C と完全機能同等＝達成済**（self-host 含む・tag `llvm-c-parity`・WASM は LLVM 経由で後続）。下表は**使い捨て stage0（Rust・退役済み）**の技術選定で、骨格と「なぜ Rust だったか」の経緯。
 
 | 役割 | stage0 の採用 | 備考 |
 | --- | --- | --- |
 | 実装言語 | **Rust**（退役済み・`git checkout stage0-final -- bootstrap` で復旧可） | lib + bin。`tests/` から内部を叩け TDD 容易。役割は stage1 を立ち上げることだけ |
 | 字句・構文解析 | **手書き**（lexer + 再帰下降パーサ） | ANTLR は不採用。速度と挙動の完全な制御のため（stage1 も同じ） |
-| コード生成 | **C へトランスパイル → `clang`** | LLVM/WASM は **self-host 達成後に Plew 側で**追加（stage1 も C 出力を継続） |
+| コード生成 | **C へトランスパイル → `clang`** | LLVM バックエンドは self-host 後に Plew 側で追加済（C と同等）・WASM は LLVM 経由で後続 |
 | ランタイム | **C**（基本型・I/O・配列） | 生成 C に preamble として埋め込み（stage1 は自前で出力） |
 
 ### 技術選定の経緯（なぜ巻き戻したか）
@@ -27,7 +27,7 @@ Plew コンパイラの実装方針。**🎉 セルフホスト達成済み**＝
 - **Rust を選ぶ**：①網羅 `match`＋強い型で AST/型検査の巨大な分岐がバグりにくく、`cargo test` で TDD しやすい（＝間接的な開発速度）。②所有権・トレイトが Plew の `unique`/`borrow`/`move`・trait 体系に近く、**stage1 を Plew で書き直すとき設計がほぼそのまま移植できる**（最重要の「セルフホストの脚」を加速）。③コンパイラエラーが親切で、人手を介さず自走で自己修正しやすい。
   - **却下案**：OCaml（ADT＋パターンマッチは最速だが Plew への移植性・ツール・自走補正で劣る）。Go（ADT/網羅が弱く AST コードが冗長）。TypeScript（反復は速いが型健全性・移植性が弱い）。
   - **既知の摩擦と対策**：Rust は素朴なポインタ相互参照（型グラフ・親参照）で借用検査と戦う。これは **arena ＋ index（`NodeId(u32)` 等の整数ハンドルで参照）**で回避する（rustc/rust-analyzer の定石。キャッシュ効率・安定 ID という副産物つき）。この方式は Plew の arena 設計にも移植できる。
-- **C トランスパイルを選ぶ**：LLVM-IR は SSA・phi・明示型・手動メモリ操作で、テキスト手書きか C++ バインディング格闘になる。C は局所変数・制御構文・struct・関数呼び出しがそのまま使え最適化は clang 任せ、ARC ランタイムも C ヘッダ1枚。多くの言語が C 経由でブートストラップした実績。最終形の LLVM/WASM は self-host 後に Plew で書く（「仕組みは問わない」＝C は隠れた機構）。
+- **stage0 は C トランスパイルを選んだ**：LLVM-IR は SSA・phi・明示型・手動メモリ操作で、テキスト手書きか C++ バインディング格闘になる。C は局所変数・制御構文・struct・関数呼び出しがそのまま使え最適化は clang 任せ、ARC ランタイムも C ヘッダ1枚。多くの言語が C 経由でブートストラップした実績（「仕組みは問わない」＝C は隠れた機構）。self-host 後、LLVM バックエンドを Plew 側で **libLLVM-C（安定 C API）経由・in-process** で追加し C と同等に到達（textual `.ll` 先行は不採用＝SSA 構築ロジックが共通ゆえ作り捨てになる・経緯は [design-decisions.md](design-decisions.md)「LLVM バックエンド」）。C はオラクル/種として併存。
 
 ## ブートストラップ戦略（達成済み・経緯）
 
@@ -49,27 +49,26 @@ AST（arena 確保・index 参照）
   │   1. 名前解決（モジュール / import / スコープ）
   │   2. 型推論・型検査（ジェネリクス、where 句）※ 実装済
   │   3. trait/impl 解決（step 1＋Eq/Ord＋derive）※ 実装済 / 拡張解決（#Extension）※ 未実装
-  │   4. 並行性検査（spawn キャプチャ）※ 未実装（イベントループ段）
+  │   4. 受理健全性検査（emission 非依存パス `verifyProgram`）※ 実装済
+  │   5. 並行性検査（spawn キャプチャ）※ async/await 段は実装済 / spawn 段は未実装
   ▼
-型付き AST
-  │  C コード生成（+ ARC ランタイム C をリンク）
+型付き AST（共有 `runFrontend`）
+  │  ├─ C コード生成 → clang        （compiler/plewc）
+  │  └─ LLVM IR 生成（libLLVM-C）→ clang  （compiler/plewc-llvm）
   ▼
-C ソース
-  │  clang
-  ▼
-ネイティブバイナリ（mac）
+ネイティブバイナリ（mac）＝両 backend 同一観測挙動
 ```
 
 ### 各フェーズの実装メモ（意味論＝言語非依存の契約）
 
-以下は「コンパイラがどう振る舞うべきか」の意味論メモ。一部は実装済（型検査・trait step 1・ARC・クロージャ）、一部は未実装（拡張解決・並行性・async）で、これから実装するときの索引として残す。
+以下は「コンパイラがどう振る舞うべきか」の意味論メモ。多くは実装済（型検査・trait step 1・ARC・クロージャ・async/await・受理健全性検査・両 backend）、残る未実装は拡張解決（#Extension）・並行 spawn で、これから実装するときの索引として残す。
 
 - **フロントエンド（実体＝A 後）**: 上図の「Token 列→手書き Parser→arena AST」は、実装では**共有 `@Std/Syntax` パーサが値ツリー（`TopItemAst`/`DeclAst`/`ExprAst`…・String 名・原本座標 span）を返し、`Codegen/Lower.pw` が arena（index 参照ノード）へ lower** する 2 段（コンパイラもマクロも同一パーサ＝[metaprogramming-architecture.md](metaprogramming-architecture.md)）。ローディングもパース駆動＝ファイルを parse して木の `import`/`part` ノードを辿る（事前スキャンなし）。`@[...]` ディレクティブは木の `Directive` ノードで、ユーザー定義メタプロはビルドと独立した別コマンド（`plew gen`）で別ファイル `<Foo>.gen.pw` へコード生成→ローダが auto-part。→ [design-decisions.md](design-decisions.md) / [spec/16](../spec/04-execution/16-metaprogramming.md)。
 - **拡張解決（最重要）**: メソッド/演算子のバインドは「呼び出し位置の `#Extension` 指定」だけで決定論的に決め、import スコープに依存させない。無名（デフォルト）`impl` はそのまま発動、`extension Name { impl … }` は `#Name` 明示時のみ。一意に定まらなければエラー。→ [language-semantics.md](language-semantics.md)。
 - **並行性検査**: `spawn { … }` のキャプチャはコピー可能のみ、`unique` を渡すなら `spawn fn` の `move` 引数。**借用は async/spawn 境界を越えず、`Ref`/`local` 型は spawn を越えられない**（推移的に `Ref`-free＝`local` でないことを検査）→ スレッド間に共有可変が無く実質 race-free（Mutex 不要）。戻りは `join() -> Promise[T]` ハンドル。
   - **codegen の責務（CoW × spawn）**: CoW 値は内部バッファを**非 atomic** refcount で共有するので、**spawn 境界を越えるコピー可能値には eager な実体化（ディープコピー）を挿入**（async 境界では遅延のまま）。これで非 atomic count を 2 スレッドから触られず全面 atomic ARC を避ける → [spec/14](../spec/04-execution/14-concurrency.md#cow-値は-spawn-境界で実体化するeager-copy)。
   - **クロージャ変換（capture）**: 通常の閉包は外側変数を**参照キャプチャ**（`mut val` は可変・共有・永続）。**脱出する閉包のキャプチャ変数はヒープへ昇格（box 化）**。`mut val` 参照キャプチャした閉包は共有可変ストレージを持つ＝`local` 扱いで spawn 不可。→ [spec/04 環境のキャプチャ](../spec/01-basics/04-functions.md#環境のキャプチャ)。
-- **async/await ローワリング（方式 B＝stackless ステートマシン・確定・未実装）**: `async fn` を**状態機械**に変換する（Node/V8・Rust・C# と同じ・colored async）。`await` をまたいで生きる local だけを**ヒープのフレーム構造体のフィールド**へ昇格し（またがない local は通常の C スタック変数のまま）、`await p` は `state=N`／フレーム退避／PENDING return、resume は `switch(state)` で再突入。`async fn f()` はフレームを確保し `Promise[T]` を返す。**スタックフル（方式 A＝コルーチン/ucontext）は却下**：観測挙動は colored 前提で A/B 同一だが、Node を範とすると終着点は B（軽量大量タスク・WASM 直行）で、A は async fn ローワリング〔難所〕を作り直す中継ぎになる。native-C 先行（意味論を固める）→ WASM（Asyncify/JSPI）。**なぜ B**＝[design-decisions.md](design-decisions.md)「async fn のローワリング」。
+- **async/await ローワリング（方式 B＝stackless ステートマシン・実装済・C/LLVM 両 backend）**: `async fn` を**状態機械**に変換する（Node/V8・Rust・C# と同じ・colored async）。`await` をまたいで生きる local だけを**ヒープのフレーム構造体のフィールド**へ昇格し（またがない local は通常の C スタック変数のまま）、`await p` は `state=N`／フレーム退避／PENDING return、resume は `switch(state)` で再突入。`async fn f()` はフレームを確保し `Promise[T]` を返す。**スタックフル（方式 A＝コルーチン/ucontext）は却下**：観測挙動は colored 前提で A/B 同一だが、Node を範とすると終着点は B（軽量大量タスク・WASM 直行）で、A は async fn ローワリング〔難所〕を作り直す中継ぎになる。native-C 先行（意味論を固める）→ WASM（Asyncify/JSPI）。**なぜ B**＝[design-decisions.md](design-decisions.md)「async fn のローワリング」。
 - **ARC**: 循環は `WeakRef`。自動回収は **Ref グラフ限定のサイクルコレクタ**（Bacon–Rajan・per-thread・idle）を additive に足す方向で確定。検出時は loud 報告＋メモリ回収＋**循環メンバの deinit は走らせない**（deinit の有無で分けない＝panic と対称の契約外脱出）→ [design-decisions「循環回収」](design-decisions.md)。
 - **再帰的な値型の自動箱化（codegen）**: 自己参照 `struct`/`enum`（木・連結リスト・AST）は**コンパイラが再帰を検出し必要なフィールドを CoW ヒープセルで自動箱化**しレイアウトを有限化（`indirect` 等の修飾語なし）。値意味論の再帰型は循環を作れないので `WeakRef` 不要 → [spec/05 再帰的な値型](../spec/02-type-system/05-structs-enums.md#再帰的な値型)。
 - **トップレベル/`assoc val` 初期化（runtime）**: 起動時 **eager**（`main` 前に全完了）。各値は **memoize サンク**で force-on-read で依存順を自動算出（静的依存解析なし）。**循環は起動時 panic**（async はデッドロック検出）。→ [spec/15 トップレベル初期化](../spec/04-execution/15-modules.md#トップレベル初期化と実行順序)。
