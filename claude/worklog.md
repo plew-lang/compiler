@@ -6,17 +6,17 @@
 
 🎉 **セルフホスト達成・stage0（Rust）退役済み。** 正典コンパイラ＝Plew パッケージ `compiler/src/`（root `_.pw` が `part` で全パートを綴じる 1 モジュール）。自分自身を不動点までコンパイル。構文解析は完全に共有 `@Std/Syntax` の責務（コンパイラとマクロが唯一の共有パーサを通る＝真の 1 AST）。`compiler/src/` 本体は共有パーサで parse→`Codegen/Lower.pw` で arena へ lower するだけ（ローディングもパース駆動）。
 
-🎉🎉 **LLVM バックエンドが C バックエンドと完全機能同等（tag `llvm-c-parity`）。** C はオラクル/種として併存。
-- **2 バイナリ**：`compiler/plewc`（C backend・`_.pw`・libLLVM 非参照＝clang のみのブートストラップ維持）と `compiler/plewc-llvm`（LLVM backend・`_llvm.pw`＝同じフロントエンド part 群＋`Backend/Llvm`・libLLVM をリンクするのはこれのみ）。共有フロントエンドは `Codegen/Driver.pw`（`runFrontend() -> Comp`）。`_.pw` main＝`runFrontend()+emitC()`、`_llvm.pw` main＝`runFrontend()+emitLlvm()`。
-- **受理健全性は共有パス `Codegen/Verify.pw`**（`verifyProgram`）：emission 非依存で全 non-generic・non-async 関数を walk し受理検査を実行＝両 backend（C emitter 非経由でも）が spec 不正を弾く。
-- **LLVM self-host**：`bootstrap-llvm.sh`（C の `bootstrap.sh` の LLVM 版・IR 種 `compiler/plewc-llvm.seed.ll`＋`.seed.runtime.c`→clang＋libLLVM→不動点）。種ビルド binary は全スイートを C-built と同一通過＋同一 IR。
-- **グリーン**：`./test.sh`（C・292＋不動点）／`./test-llvm.sh`（LLVM・run168/panic11/reject97/part4/fail=0）／`./test-gen-llvm.sh`（gen10/reject1）／`./bootstrap-llvm.sh`（不動点）。
+🎉🎉 **LLVM 単一 backend（C backend 退役・削除済み）。** かつて LLVM が C と完全機能同等に達した点が tag `llvm-c-parity`。その後 C backend を退役し、LLVM 一本化した（C 訳・C 生成コードは git 履歴／同タグに保存）。
+- **バイナリ 1 本**：`compiler/plewc`（root `_.pw`＝フロントエンド part 群＋`Backend/Llvm`・libLLVM-C をリンク）。`main`＝`runFrontend()`（共有フロントエンド `Codegen/Driver.pw`・`Comp` を返す）→ `emitLlvm()`。
+- **受理健全性は emission 非依存の共有パス `Codegen/Verify.pw`**（`verifyProgram`）：全 non-generic・non-async 関数を walk し受理検査を実行＝C emitter なしでも spec 不正を弾く（旧 C emitter の inline 検査を factor out した唯一の置き場）。
+- **self-host**：`./bootstrap.sh`（IR 種 `compiler/plewc.seed.ll`＋`.seed.runtime.c`→clang＋libLLVM→plewc0→自己コンパイル→IR 不動点）。`--reseed` で IR 種更新（→ 種＋追跡バイナリ `compiler/plewc` を commit）。
+- **グリーン**：`./test.sh`（run168/panic11/reject97/part4/fail=0＋不動点）／`./test-gen.sh`（gen10/reject1）。
+- **C backend 削除の段取り**（参考）：①C build 面の削除＋正典名リネーム（`_llvm.pw`→`_.pw`・`plewc-llvm`→`plewc`・`bootstrap-llvm.sh`→`bootstrap.sh`・種 `.ll`）②共有 Codegen に残る dead な C 生成関数（`emitC` 起点の到達不能クラスタ・genExpr/genStmt/genDecl/C ARC・mono・async・numeric runtime emitter 等 180 fn ~7250 行）をラベル考慮の到達可能性解析で剥がす（LLVM self-compile が undefined 参照で誤削除を loud に弾く＝安全網）。
 
-完了した大物（詳細は git・記述的タグ）：async/await 段階 1-3（stackless SM・C/LLVM 両 backend）・コアライブラリ境界（`@Std` の `extern "plew-intrinsic"`）・Array＝`RawBuffer` 床の Plew struct（[array-struct-plan.md](array-struct-plan.md)）・可視性完全強制・Iterator/Iterable＋lazy map/filter・再帰値型 auto-boxing＋ARC・renovate Phase A-D（ARC 1 本化・Op enum・型付き AST キャッシュ・名前/型 interning）・メタプロ M0/M1/M2（マクロが実宣言を読んで生成・Eq/Ord/Hash derive・Dictionary[K,V] lang item）・フロントエンド統合（全パース→共有 @Std/Syntax）・演算子トレイト配線（算術/ビット/単項/比較を witness 脱糖・built-in 算術完全削除・`??`→`unwrapOr`・Index/IndexSet・Chain `?.`）。
+完了した大物（詳細は git・記述的タグ）：async/await 段階 1-3（stackless SM・LLVM）・コアライブラリ境界（`@Std` の `extern "plew-intrinsic"`）・Array＝`RawBuffer` 床の Plew struct（[array-struct-plan.md](array-struct-plan.md)）・可視性完全強制・Iterator/Iterable＋lazy map/filter・再帰値型 auto-boxing＋ARC・renovate Phase A-D（ARC 1 本化・Op enum・型付き AST キャッシュ・名前/型 interning）・メタプロ M0/M1/M2（マクロが実宣言を読んで生成・Eq/Ord/Hash derive・Dictionary[K,V] lang item）・フロントエンド統合（全パース→共有 @Std/Syntax）・演算子トレイト配線（算術/ビット/単項/比較を witness 脱糖・built-in 算術完全削除・`??`→`unwrapOr`・Index/IndexSet・Chain `?.`）・**C backend 退役→LLVM 一本化**。
 
 ## 次の候補（open・additive／要判断）
 
-- **C の実削除→LLVM 一本化**（ユーザー判断待ち）。前提（メタプロ移植・受理健全性の共有パス化・LLVM self-host）は達成済。残＝emitC/`_.pw` 削除・`bootstrap.sh`/`test.sh` を LLVM 版へ寄せる。**libLLVM がビルド必須依存になる**（IR 種は libLLVM 版に結合・大改版で要 reseed）のが対価。
 - **Iterator 拡充**：終端（reduce/fold/count/sum/collect/any/all/first）＋遅延 adapter（take/zip/enumerate/skip・`MapIter`/`FilterIter` をテンプレに）。demand-driven 単相化が動くので確立パターン沿い。
 - **並行 additive**：`spawn`/`JoinHandle`/チャネル・spawn 境界の意味論強制（move/copy のみ越境・`Ref` は spawn 不可）・`local` 伝染解析（言語仕様の決定が出る・重い）。
 - **`any P` 存在型**：動的ディスパッチ（vtable 相当・メンバ単位診断・異種混在）。重い・別軸。
@@ -60,11 +60,11 @@
 - **aggregate（struct/enum/array）に icmp/extractvalue を非 aggregate へ誤適用すると LLVM builder が SEGV**＝必ず `LLVMGetTypeKind==10/exprIsArray` でガード。LLVMValueRef の null sentinel は kind 不可＝`LLVMIsNull` を使う。
 - **array は `{ptr,i64}`** で element-size generic runtime（typed GEP・`LLVMSizeOf`）。配列リテラルは elemTy をリテラルからでなく**束縛/param の annotation から**取る（i64 デフォルト混入を防ぐ）。inout param/self は alloca せず**ポインタ param を locPtr 直結**。
 - **メソッド emission をエントリモジュール限定にしないと std メソッド本体（未対応構文だらけ）を引き込んで死ぬ**（call-graph 到達可能性で必要な std だけ遅延 emit＝`ensureProvidedDeclared`/`ensureGenMethodDeclared`/`ensureFreeFnDeclared`）。primitive lang-item（I64/String 等）は extern struct として c.structs に居るので nested-struct 判定で extern を除外。
-- **⚠ alloca は全て entry ブロックへ**（`beginFnBody`＝`entry`→`br body0`、`entryAlloca`＝entry の terminator 直前へ挿入して builder 復帰）。builder 位置で alloca を吐くと loop body 内で反復ごとに stack が積もり大入力 SEGV（C backend/clang は entry へ hoist する）。
+- **⚠ alloca は全て entry ブロックへ**（`beginFnBody`＝`entry`→`br body0`、`entryAlloca`＝entry の terminator 直前へ挿入して builder 復帰）。builder 位置で alloca を吐くと loop body 内で反復ごとに stack が積もり大入力 SEGV（clang は entry へ hoist するので C から来ると起きない罠）。
 - **⚠ inline enum payload のサイズ**：`fieldWords` は enum 型フィールドを `1 + enumPayloadWords(eid)` words と数える（`{i64 tag,[maxWords] payload}`）。1 word と過小だと大 variant 構築で隣接破壊（heap 状態依存の miscompile）。
-- **checked 算術床**：add/sub/mul/div/rem/neg は生 IR op でなく runtime helper `plew_<w><Op>`（i8-i64 符号別・本体は C backend の `emitIntRuntime` と同一・external linkage）経由＝overflow/0除算 panic を C と観測同一に。`buildBinOpS` は wrapping 床として温存（`wrapping*` 専用）。
-- **`extern(c)` 不透明ハンドル型**（`type LLVMTypeRef`＝`StructDef.isCExtern`）は `llvmScalarTy` でも `ptr` に落とす（i64 既定だと `LLVMTypeRef` を返す user 関数が `define i64`＋`ret ptr` で invalid IR・`_llvm.pw` 自身の self-compile で露呈）。
-- **gen モード（`plew gen`）**：LLVM の fn emission ループで `c.genMode` 時は `genMainIdx`（合成 harness main）だけを main 扱いし、ユーザー自身の dead main（マクロ生成関数を呼ぶ）を完全スキップ（C backend の Driver と対称）。
+- **checked 算術床**：add/sub/mul/div/rem/neg は生 IR op でなく runtime helper `plew_<w><Op>`（i8-i64 符号別・本体は `__builtin_*_overflow`＋div-zero/INT_MIN ガード〔旧 C backend の `emitIntRuntime` と同形〕・external linkage）経由＝overflow/0除算で loud panic。`buildBinOpS` は wrapping 床として温存（`wrapping*` 専用）。
+- **`extern(c)` 不透明ハンドル型**（`type LLVMTypeRef`＝`StructDef.isCExtern`）は `llvmScalarTy` でも `ptr` に落とす（i64 既定だと `LLVMTypeRef` を返す user 関数が `define i64`＋`ret ptr` で invalid IR・コンパイラ自身（`_.pw`）の self-compile で露呈）。
+- **gen モード（`plew gen`）**：fn emission ループで `c.genMode` 時は `genMainIdx`（合成 harness main）だけを main 扱いし、ユーザー自身の dead main（マクロ生成関数を呼ぶ）を完全スキップ。
 - **検証配置の罠**：種ビルド binary は **std の 1 つ上**に置く（`computeStdRoot`＝binary dir＋`std/`）。
 
 ### 受理検査の共有パス（`Codegen/Verify.pw`）
@@ -73,14 +73,13 @@
 - **演算子witness 検査は `hasCompareWitness`/`hasBinTraitWitness` ガードを先に**（`binTraitNeedsTrait` はスカラ算術に常に true＝「witness 必須」の意・単独で呼ぶと valid 算術を誤 reject）。
 - **match-arm bind は scrut の型で generic grounding**（`genericFieldTypeInfo`/`genericEnumFieldTypeInfo`・`Box[I32]{val v}` の v を I32 にする）。
 - **move 解析は分岐入口で `c.curBranchBase=scopeMark()`**（conditional-move 検出＝`localIndexByName < curBranchBase`）。
-- **verify は型回復後（`buildExprTyTable` の後＝runFrontend 末尾）で呼ぶ**（演算子/visibility が型を要する）。**async fn は除外**（`return n` が Promise 中身型を返す＝C emitter が inline 検査）。
+- **verify は型回復後（`buildExprTyTable` の後＝runFrontend 末尾）で呼ぶ**（演算子/visibility が型を要する）。**async fn は除外**（`return n` が Promise 中身型を返す＝verify の `retStart` 文脈と不整合になるため）。
 
 ## ビルド・テスト・機能追加手順
 
-- **C backend ビルド**：`./bootstrap.sh`＝C 種 `compiler/plewc.seed.c`→clang→`plewc0`→`_.pw` 自己コンパイル→不動点 cmp（Rust 不要）。`./bootstrap.sh --reseed` で種更新（→ `compiler/plewc.seed.c` を commit）。編集中の高速反復は `./dev-rebuild.sh`（`compiler/plewc` をその場上書き）。**⚠ dev-rebuild は前回ビルドの plewc を使う**ので、miscompile を疑うときや verify の誤 reject で自己再ビルド不能なときは `./bootstrap.sh`（種から clean）で切り分け。
-- **LLVM backend ビルド**：`./build-llvm.sh`（plewc が `_llvm.pw` を C 経由でビルド→clang＋llvm-config フラグ）。C 種なしの自己ブートストラップは `./bootstrap-llvm.sh`（IR 種→clang＋libLLVM→不動点・要 `--reseed` で IR 種更新）。
-- **テスト**：`./test.sh`（C・run/part/reject/panic/gen/genreject＋不動点・メモリは `ASAN=1`〔macOS の ASan は leak 非対応〕）／`./test-llvm.sh`（LLVM・run/panic/reject/part＋未対応は loud reject で SKIP 計上）／`./test-gen-llvm.sh`（LLVM のメタプロ gen/genreject）。
-- **メタプロ生成**：`./plew-gen.sh <file.pw>`＝`plewc --gen <file> | clang | run > <file>.gen.pw`（`@[...]` 付きファイルに derive を走らせ生成 part を吐く・コミットする・通常ビルドが auto-part）。
+- **ビルド（self-host）**：`./bootstrap.sh`＝IR 種 `compiler/plewc.seed.ll`＋`compiler/plewc.seed.runtime.c`→clang＋libLLVM→`plewc0`→`_.pw` 自己コンパイル→IR 不動点 cmp（Rust 不要）。`./bootstrap.sh --reseed` で種更新（→ 種 `.ll`/`.runtime.c`＋追跡バイナリ `compiler/plewc` を commit）。編集中の高速反復は `./dev-rebuild.sh`（現 `compiler/plewc` が src を再コンパイルして自分をその場上書き）。**⚠ dev-rebuild は前回ビルドの plewc を使う**ので、miscompile を疑うときや verify の誤 reject で自己再ビルド不能なときは `./bootstrap.sh`（種から clean）で切り分け。**libLLVM がビルド必須依存**（IR 種は libLLVM の版に結合＝大改版で要 `--reseed`）。
+- **テスト**：`./test.sh`（run/panic/reject/part＋不動点・メモリは `ASAN=1`〔macOS の ASan は leak 非対応〕）／`./test-gen.sh`（メタプロ gen/genreject）。reject は loud reject の SKIP マスクなし＝run/panic/part での reject も失敗扱い（単一 backend ゆえ skip 無し）。
+- **メタプロ生成**：`./plew-gen.sh <file.pw>`＝`plewc --gen <file>`→clang＋libLLVM→run > `<file>.gen.pw`（`@[...]` 付きファイルに derive を走らせ生成 part を吐く・コミットする・通常ビルドが auto-part）。
 - **機能追加＝ADD→reseed→USE**：新機能を plewc.pw の**ソースで使う**には ①`compiler/src/`（または `compiler/std/`）に足す→②`--reseed` で種更新→③ソースで使う。「ソースが使う機能は常にひとつ前のコンパイラがサポート済み」を守れば不動点は壊れない。**codegen 出力変化・AST フィールド追加・新 preamble 行は reseed 2 回**、**codegen 出力を変えない検査追加は reseed 1 回**。
 - **AST フィールド追加のコツ**：`val isPub: Bool = false` とデフォルトを付けると既存の構築点が省略でそのまま通る。**arena Expr/AST バリアント追加**は exhaustive な `match` 全箇所（共有 `@Std/Syntax` の `ExprAst`/`StmtAst` は `Codegen/Lower.pw` の `lowerExpr`/`lowerStmt` が唯一の exhaustive match）にケース追加が要り、AST enum へのバリアント追加は codegen 出力変化＝reseed 2 回。
 - **⚠ コンパイラは `@Std/Io`→`@Std/Core`／`@Std/Syntax`／`Prelude` を import** するので、これらも「コンパイラ自身がコンパイルするソース」。種がまだ受理しない構文を std で使うと bootstrap が即壊れる＝機能を先に種へ焼く。表現スワップ等の大変更は seam（intrinsic 境界）で担保（→ [array-struct-plan.md](array-struct-plan.md)）。

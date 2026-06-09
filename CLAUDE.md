@@ -14,9 +14,9 @@
 
 **ターゲット**は「**複雑な状態を持つクライアントアプリ**」を主軸に、モノレポでサーバ（Node 的・ステートレスで scale out 前提）も同一言語で書きモデル層を共有する**フルスタックのアプリケーション言語**（一次ビーチヘッド＝**WASM ウェブ**・自前ランタイム保持）。Rust の no-hidden-cost は日常に重すぎるので採らず（hidden cost は許容）、性能は二の次。シングルプロセス・シングルスレッド + イベントループ（JavaScript ライク）＋ ARC（参照カウント）を採用し、既定は値意味論（CoW）で、資源など必要なときだけ opt-in の最小所有権（`unique`/`borrow`/`inout`/`move`・`Ref`/`WeakRef`）を使う。
 
-構文解析は**手書きレクサ + 再帰下降パーサ**だが、いまはコンパイラ本体ではなく**共有 `@Std/Syntax` パッケージ**にあり、コンパイラとマクロが唯一の共有パーサを通る（真の 1 AST）。コード生成は **2 バックエンド**：**C へトランスパイル → clang**（`compiler/plewc`・正典/種・libLLVM 非参照）と **LLVM（libLLVM-C を叩く）**（`compiler/plewc-llvm`）。旧 C#/.NET ＋ ANTLR4 ＋ LLVMSharp は技術選定ごと破棄。ブートストラップは使い捨ての **stage0（Rust 製）**で始めたが、self-host 達成後に**退役・削除**し、いまは **C 種からの自己ブートストラップ**（Rust 不要）。**第一目標＝「Plew でコンパイラが書ける状態」→ 即セルフホスティング＝✅達成済**。**LLVM バックエンドは C バックエンドと完全機能同等（self-host 含む・tag `llvm-c-parity`）＝✅達成済**で、C はオラクル/種として併存（捨てない）。性能より拠り所（意味は唱えた通り・難しい魔法は隠す）を優先。経緯は [claude/architecture.md](claude/architecture.md)。
+構文解析は**手書きレクサ + 再帰下降パーサ**だが、いまはコンパイラ本体ではなく**共有 `@Std/Syntax` パッケージ**にあり、コンパイラとマクロが唯一の共有パーサを通る（真の 1 AST）。コード生成は **LLVM 一本**：libLLVM-C を叩いて in-process で IR を組み、テキスト IR を吐く（`compiler/plewc`）。旧 C#/.NET ＋ ANTLR4 ＋ LLVMSharp は技術選定ごと破棄。ブートストラップは使い捨ての **stage0（Rust 製）**で始めたが、self-host 達成後に**退役・削除**し、いまは **LLVM IR 種からの自己ブートストラップ**（Rust 不要）。**第一目標＝「Plew でコンパイラが書ける状態」→ 即セルフホスティング＝✅達成済**。かつて C トランスパイル backend を正典/オラクルとして併走させていたが、**LLVM backend が C と完全機能同等（self-host 含む）に達した時点（tag `llvm-c-parity`）で C backend は退役・削除**（C 訳・C 生成コードは git 履歴／同タグに保存）＝いまは LLVM 単一 backend。性能より拠り所（意味は唱えた通り・難しい魔法は隠す）を優先。経緯は [claude/architecture.md](claude/architecture.md)。
 
-> **現状＝🎉 セルフホスト達成・stage0 退役済み・LLVM バックエンドが C と完全同等。** 正典のコンパイラは **Plew 製の `compiler/src/_.pw`**＝自分自身をコンパイルして不動点に達する。ブートストラップは **C 種 `compiler/plewc.seed.c`**（C 訳・チェックイン）から＝`./bootstrap.sh` で clang→plewc0→自己コンパイル→不動点検証（Rust/cargo 不要・stage0 は削除済＝`git checkout stage0-final -- bootstrap` で復旧可）。**今後の言語機能はすべて Plew で additive に足す**。
+> **現状＝🎉 セルフホスト達成・stage0 退役済み・C backend 退役済み（LLVM 単一 backend）。** 正典のコンパイラは **Plew 製の `compiler/src/_.pw`**（LLVM backend root）＝自分自身をコンパイルして不動点に達する。ブートストラップは **LLVM IR 種 `compiler/plewc.seed.ll`**（＋`compiler/plewc.seed.runtime.c`・チェックイン）から＝`./bootstrap.sh` で clang＋libLLVM→plewc0→自己コンパイル→IR 不動点検証（Rust/cargo 不要・stage0 は削除済＝`git checkout stage0-final -- bootstrap` で復旧可）。**今後の言語機能はすべて Plew で additive に足す**。
 >
 > **言語/コンパイラの到達点（詳細は [claude/worklog.md](claude/worklog.md)「完了した大物」・残ギャップは [claude/provisional.md](claude/provisional.md)）**：受理の健全性（import なしの `print` を拒否する等・hidden meaning を潰す）・イベントループ（async/await 段階 1-3＝stackless SM）・コアライブラリ境界（`extern "plew-intrinsic"`＋生メモリ床 `RawBuffer`＋ambient プレリュード）で `print`/Format・String/Array メソッドを純 Plew 化・**`Array` は `RawBuffer` 床の上の Plew struct**（[array-struct-plan.md](array-struct-plan.md)）・可視性完全強制（`export`/`pub impl`/`pub`/`pub(get)`）・Iterator/Iterable＋lazy map/filter・再帰値型 auto-boxing＋ARC・renovate Phase A-D（ARC 1 本化・Op enum・型付き AST キャッシュ・名前/型 interning）・演算子トレイト配線（算術/ビット/単項/比較を witness 脱糖・built-in 算術完全削除・`??`→`unwrapOr`・Index/IndexSet・Chain `?.`）。
 >
@@ -24,7 +24,7 @@
 >
 > **メタプログラミング M0/M1/M2＝達成**：マクロが対象宣言の実構造（名前/フィールド/型/可視性/enum バリアント/fn シグネチャ＋本体）を読んで生成・`@[Name(label: expr)]` ディレクティブ引数も読める・**マクロ入力型 `TopItemAst`**（struct/enum/fn に加え impl/trait も対象）。dogfood＝Eq/Ord＋`@[Eq]`/`@[Ord]` derive・Hash/Hasher＋SipHash-1-3＋`@[Hash]`・**`Dictionary[K,V]` lang item**（struct+メソッド+添字 `dict[k]`/`dict[k]=v`＋リテラル `[k:v]`/`[:]`）。
 >
-> **🎉🎉 LLVM バックエンドが C バックエンドと完全機能同等（tag `llvm-c-parity`）。** 2 バイナリ＝`compiler/plewc`（C・正典/種）と `compiler/plewc-llvm`（LLVM・libLLVM-C をリンク）が共有フロントエンド `Codegen/Driver.pw`（`runFrontend`）を通る。**受理健全性は共有パス `Codegen/Verify.pw`**（`verifyProgram`＝emission 非依存で全関数を walk し検査＝両 backend が spec 不正を弾く）。**LLVM self-host** は `bootstrap-llvm.sh`（IR 種→clang＋libLLVM→不動点）。テスト＝`./test.sh`（C・292＋不動点）／`./test-llvm.sh`（LLVM・run/panic/reject/part）／`./test-gen-llvm.sh`（LLVM のメタプロ）。**C 実削除→LLVM 一本化はユーザー判断待ち**（C はオラクル/種として併存）。
+> **🎉🎉 LLVM 単一 backend（C backend 退役済み・かつての完全同等点は tag `llvm-c-parity`）。** バイナリは 1 本＝`compiler/plewc`（LLVM・libLLVM-C をリンク）。`main`＝共有フロントエンド `Codegen/Driver.pw`（`runFrontend`）→ `Backend/Llvm.pw`（`emitLlvm`）。**受理健全性は emission 非依存の共有パス `Codegen/Verify.pw`**（`verifyProgram`＝全 non-generic/non-async 関数を walk し spec 不正を弾く＝旧 C emitter の inline 検査の唯一の置き場）。**self-host** は `./bootstrap.sh`（IR 種 `plewc.seed.ll`→clang＋libLLVM→IR 不動点）。テスト＝`./test.sh`（run/panic/reject/part＋不動点）／`./test-gen.sh`（メタプロ gen/genreject）。C emitter コードは tag `llvm-c-parity` 直前まで併走後に削除（受理検査が共有パスへ factor out 済なので C なしでも spec 不正を弾ける）。
 
 ## ドキュメント
 
@@ -50,14 +50,11 @@
 ## リポジトリ構成
 
 ```
-bootstrap.sh          C 種からコンパイラをビルド＋不動点検証（Rust 不要・clang のみ）
-bootstrap-llvm.sh     IR 種から LLVM コンパイラをビルド＋不動点検証（clang＋libLLVM）
-build-llvm.sh         plewc が `_llvm.pw` を C 経由でビルド→`compiler/plewc-llvm`
-dev-rebuild.sh        編集後の高速 in-place 再ビルド（`compiler/plewc` を上書き・不動点/種なし）
-test.sh               C backend テストスイート（run/part/reject/panic/gen/genreject＋不動点・Rust 非依存）
-test-llvm.sh          LLVM backend テスト（run/panic/reject/part・未対応は loud reject で SKIP）
-test-gen-llvm.sh      LLVM backend のメタプロ（gen/genreject）テスト
-plew-gen.sh           メタプロ生成（`plewc --gen <file> | clang | run > <file>.gen.pw`・spec/16）
+bootstrap.sh          LLVM IR 種からコンパイラをビルド＋IR 不動点検証（clang＋libLLVM・Rust 不要）
+dev-rebuild.sh        編集後の高速 in-place 再ビルド（現 `compiler/plewc` が src を再コンパイル→上書き・不動点/種なし）
+test.sh               テストスイート（run/panic/reject/part＋不動点）
+test-gen.sh           メタプロ（gen/genreject）テスト
+plew-gen.sh           メタプロ生成（`plewc --gen <file>`→clang＋libLLVM→run > `<file>.gen.pw`・spec/16）
 tmp/                  ローカル実験の scratch（gitignore・cleanup はスクリプト内包）
 tests/
   run/<name>.pw,.out  コンパイル&実行→stdout 照合（任意の .in を stdin に）
@@ -65,19 +62,17 @@ tests/
   panic/<name>.pw     コンパイル&リンク成功・実行は非ゼロ＋`.panic` stderr 部分一致（overflow/0除算等）
   gen/<name>/App.pw   メタプロ（マクロ＋`@[...]`）→ gen→auto-part→実行→App.out 照合
 compiler/             ★ 正典のコンパイラ＝Plew パッケージ（今後の機能はここに Plew で）
-  src/                ★ フロントエンド part 群＋2 root（`_.pw`＝C backend／`_llvm.pw`＝LLVM backend）
-    _.pw              C backend root＝import＋part マニフェスト＋`main`（`runFrontend()+emitC()`）
-    _llvm.pw          LLVM backend root＝同じフロントエンド part 群＋`Backend/Llvm`・`main`（`runFrontend()+emitLlvm()`）
+  src/                ★ フロントエンド part 群＋root `_.pw`（LLVM backend）
+    _.pw              root＝import＋part マニフェスト＋`main`（`runFrontend()+emitLlvm()`・libLLVM をリンク）
     Loader.pw         モジュールローダ＝パース駆動（各ファイルを parse→木の import/part ノードを辿る・dedup・パス解決）
                       （レクサ・パーサは src になく `@Std/Syntax` に移設＝本体も共有経路で parse・メタプロと共有）
     Ast.pw            arena ノード型（Expr/Stmt 等）＋Comp 状態＋arena ヘルパ
     Parser/Decl.pw    コンパイラ frontend driver＝module-tag helper（markImport/recordExport）＋derive 合成（synth*）。宣言パーサは持たない（共有 @Std/Syntax へ）
-    Codegen/          共有値ツリー→arena lower＋C 生成＋軽量型復元＋受理健全性検査＝Emit/Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array/Async/Gen/Lower/Driver/Verify（Lower＝共有 AST→arena・Driver＝共有 `runFrontend`＋`emitC`・Verify＝emission 非依存の受理検査パス `verifyProgram`・Gen＝`plewc --gen` の harness 合成）
-    Backend/Llvm.pw   LLVM IR エミッタ（`_llvm.pw` のみが part＝`compiler/plewc` は libLLVM 非参照）
+    Codegen/          共有フロントエンド＝AST→arena lower＋名前/型解決＋軽量型復元＋受理健全性検査＋mono 探索＝Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array/Emit/Gen/Lower/Driver/Verify（Lower＝共有 AST→arena・Driver＝`runFrontend`・Verify＝emission 非依存の受理検査パス `verifyProgram`・Emit＝共有 codegen ユーティリティ〔interning/span/型述語/行追跡〕・Gen＝`plewc --gen` の harness 合成。※ C 生成関数〔genExpr/genStmt/…〕は C backend 退役時に削除）
+    Backend/Llvm.pw   LLVM IR エミッタ（`emitLlvm`・libLLVM-C を呼ぶ＝`compiler/plewc` が libLLVM をリンクする唯一の part）
   std/                言語標準ライブラリ＝Core/Io/Process/Async/Ffi/Syntax＋Prelude（全プログラム自動ロード／Syntax＝メタプロ＆コンパイラ共有の構文層 `@Std/Syntax`＝`Syntax/`〔Lexer/Ast/Trees/Parser/ParseBody/Build〕）
-  plewc.seed.c        C backend ブートストラップ種＝コンパイラの C 訳（チェックイン・clang だけで起動）
-  plewc-llvm.seed.ll  LLVM backend ブートストラップ種＝`_llvm.pw` の IR（＋`.seed.runtime.c`）
-  (plewc / plewc-llvm / plewc.c / *.ll   ビルド生成物・gitignore)
+  plewc.seed.ll       ブートストラップ種＝`_.pw` の LLVM IR（＋`plewc.seed.runtime.c`＝随伴ランタイム・チェックイン）
+  (plewc / plewc0 / plewc.ll / plewc.runtime.c   ビルド生成物・gitignore。plewc バイナリ自体は追跡)
 examples/             実証用 Plew プログラム（hello.pw＋self-host 途上の小コンパイラ群）
   lexer.pw/parser.pw/emit.pw/calc.pw  self-host の足場（履歴的・トークナイザ/式パーサ/式→C）
 SPEC.md               言語仕様の目次（インデックス）
@@ -90,18 +85,15 @@ claude/*.md           本ガイドからリンクする実装ドキュメント
 ## ビルド / 実行
 
 ```sh
-./bootstrap.sh            # C 種→clang→plewc0→自己コンパイル→不動点検証
-./bootstrap.sh --reseed   # ソースを変えて種が古くなったら種を再生成（→ plewc.seed.c を commit）
-./test.sh                 # C backend テストスイート（run/part/reject/panic/gen＋不動点）
-compiler/plewc foo.pw | clang -x c - -o foo && ./foo            # C backend で .pw を実行
-./build-llvm.sh           # LLVM backend をビルド（→ compiler/plewc-llvm）
-./test-llvm.sh            # LLVM backend テスト  （./test-gen-llvm.sh＝メタプロ）
-compiler/plewc-llvm foo.pw | clang -x ir - $(llvm-config --ldflags) -o foo  # LLVM backend で実行
+./bootstrap.sh            # IR 種→clang＋libLLVM→plewc0→自己コンパイル→IR 不動点検証
+./bootstrap.sh --reseed   # ソースを変えて種が古くなったら種を再生成（→ plewc.seed.ll/.runtime.c＋plewc を commit）
+./test.sh                 # テストスイート（run/panic/reject/part＋不動点）  ./test-gen.sh＝メタプロ
+compiler/plewc foo.pw > foo.ll && clang foo.ll $(compiler/plewc --runtime > rt.c; echo rt.c) $(llvm-config --ldflags) -o foo && ./foo  # .pw を実行
 ```
 
-clang は生成 C/IR のコンパイルに使う（Apple clang で可・LLVM backend は別途 Homebrew LLVM の libLLVM-C）。**今後の言語機能追加は `compiler/src/` に Plew で**書く。新機能を plewc.pw 自身で使うときは「codegen に足す → `./bootstrap.sh --reseed` で種更新 → ソースで使う」（ADD→reseed→USE）。
+clang は生成 IR のコンパイル/リンクに使う（Apple clang で可・別途 Homebrew LLVM の libLLVM-C が必要）。**今後の言語機能追加は `compiler/src/` に Plew で**書く。新機能を plewc 自身で使うときは「codegen に足す → `./bootstrap.sh --reseed` で種更新 → ソースで使う」（ADD→reseed→USE）。
 
-> **⚠️ 検証用バイナリは編集の度に 1 本へ揃える**。`compiler/src/*.pw` を編集したら C backend は `./dev-rebuild.sh`（`compiler/plewc` をその場上書き）、LLVM backend は `./build-llvm.sh`（`compiler/plewc-llvm`）で再ビルドし、検証は必ずその再ビルド済みバイナリで行う。**`/tmp/plewcN` のような別ビルドを残さない**（古いバイナリで誤テストする取り違えの元）。verify の誤 reject で C backend が自己再ビルド不能になったら `./bootstrap.sh`（種から clean）で切り分け。確定後に `./bootstrap.sh --reseed`＋`./bootstrap.sh`（不動点）＋`./test.sh`＋`./test-llvm.sh`。
+> **⚠️ 検証用バイナリは編集の度に 1 本へ揃える**。`compiler/src/*.pw` を編集したら `./dev-rebuild.sh`（現 `compiler/plewc` が src を再コンパイルして自分をその場上書き）で再ビルドし、検証は必ずその再ビルド済み `compiler/plewc` で行う。**`/tmp/plewcN` のような別ビルドを残さない**（古いバイナリで誤テストする取り違えの元）。verify の誤 reject で自己再ビルド不能になったら `./bootstrap.sh`（種から clean）で切り分け。確定後に `./bootstrap.sh --reseed`＋`./bootstrap.sh`（不動点）＋`./test.sh`＋`./test-gen.sh`。
 
 仕様書（`spec/`）は **mdBook** で閲覧する。設定は `book.toml`（`src = "spec"`）、目次は `spec/SUMMARY.md`、ランディングは `spec/README.md`。`mdbook serve --open` でライブリロード閲覧、`mdbook build` で `book/`（gitignore 済）へ出力。章の追加・改番時は `SUMMARY.md` も更新する。
 
