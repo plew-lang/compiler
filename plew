@@ -1,0 +1,59 @@
+#!/bin/sh
+# plew — compile a single Plew source file to a native binary in one shot
+# (and optionally run it). Works on a .pw file anywhere: `plewc` resolves @Std
+# from the compiler binary's own directory (compiler/std), not from the source,
+# so the source location is irrelevant. The compiled program links only libc —
+# libLLVM is the compiler's concern, not the program's — so no llvm-config flags
+# are needed at link time.
+#
+#   plew <file.pw> [-o <out>]    compile to a binary (default: ./<basename>)
+#   plew run <file.pw> [args...]  compile to a temp binary and run it
+#
+# Override the C compiler with $CC (default: clang).
+
+set -e
+
+# Resolve this script's real directory even when invoked via a PATH symlink,
+# so we always find the sibling compiler/plewc (whose dir holds std/).
+self=$0
+while [ -h "$self" ]; do
+    link=$(readlink "$self")
+    case "$link" in /*) self=$link ;; *) self=$(dirname "$self")/$link ;; esac
+done
+ROOT=$(cd "$(dirname "$self")" && pwd)
+PLEWC="$ROOT/compiler/plewc"
+CC=${CC:-clang}
+
+[ -x "$PLEWC" ] || { echo "plew: $PLEWC not found — run ./bootstrap.sh first" >&2; exit 1; }
+
+usage() { echo "usage: plew <file.pw> [-o <out>]   |   plew run <file.pw> [args...]" >&2; exit 1; }
+
+mode=build
+if [ "$1" = "run" ]; then mode=run; shift; fi
+[ -n "$1" ] || usage
+src=$1; shift
+
+case "$src" in *.pw) ;; *) echo "plew: not a .pw file: $src" >&2; exit 1 ;; esac
+[ -f "$src" ] || { echo "plew: no such file: $src" >&2; exit 1; }
+
+out=""
+if [ "$mode" = build ]; then
+    if [ "$1" = "-o" ]; then out=$2; shift 2; fi
+    [ -n "$out" ] || out=$(basename "${src%.pw}")
+fi
+
+tmp="${TMPDIR:-/tmp}/plew-$$"
+mkdir -p "$tmp"
+trap 'rm -rf "$tmp"' EXIT
+
+"$PLEWC" "$src" > "$tmp/out.ll"
+"$PLEWC" --runtime > "$tmp/rt.c"
+
+if [ "$mode" = run ]; then
+    bin="$tmp/a.out"
+    "$CC" -w "$tmp/out.ll" "$tmp/rt.c" -o "$bin"
+    "$bin" "$@"
+else
+    "$CC" -w "$tmp/out.ll" "$tmp/rt.c" -o "$out"
+    echo "plew: $src -> $out"
+fi
