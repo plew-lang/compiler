@@ -134,15 +134,23 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
         Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
             checkLitCtx(c: inout c, id: cond, eKind: 0, eBits: 0, eSgn: false)
             verifyExpr(c: inout c, id: cond)
+            // locals already in scope are "outside" this branch (a `move` of one
+            // inside would be conditional) — mark the boundary for the move guard.
+            val savedBB: U64 = c.curBranchBase
+            c.curBranchBase = scopeMark(c: inout c)
             verifyBlock(c: inout c, blockId: thenBlk)
             if hasElse {
                 verifyBlock(c: inout c, blockId: elseBlk)
             }
+            c.curBranchBase = savedBB
         }
         Stmt.While(val cond, val body) => {
             checkLitCtx(c: inout c, id: cond, eKind: 0, eBits: 0, eSgn: false)
             verifyExpr(c: inout c, id: cond)
+            val savedBB: U64 = c.curBranchBase
+            c.curBranchBase = scopeMark(c: inout c)
             verifyBlock(c: inout c, blockId: body)
+            c.curBranchBase = savedBB
         }
         Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
             verifyExpr(c: inout c, id: iter)
@@ -160,6 +168,8 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             }
             // scope the loop binding(s) to the body, mirroring genStmt's For.
             val forMark: U64 = scopeMark(c: inout c)
+            val savedForBB: U64 = c.curBranchBase
+            c.curBranchBase = forMark
             if isRange {
                 // loop var type: the annotation, else the range bound's own type.
                 mut val ltS: U64 = varTyStart
@@ -195,6 +205,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                 }
             }
             verifyBlock(c: inout c, blockId: body)
+            c.curBranchBase = savedForBB
             popLocals(c: inout c, mark: forMark)
         }
         Stmt.Match(val scrut, val arms) => {
@@ -206,8 +217,11 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             mut val ai: U64 = 0
             while ai < arms.count {
                 val armMark: U64 = scopeMark(c: inout c)
+                val savedArmBB: U64 = c.curBranchBase
+                c.curBranchBase = armMark
                 verifyAddArmBinds(c: inout c, a: arms[ai], scrut: scrut)
                 verifyBlock(c: inout c, blockId: arms[ai].body)
+                c.curBranchBase = savedArmBB
                 popLocals(c: inout c, mark: armMark)
                 ai += 1
             }
@@ -216,6 +230,14 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             verifyExpr(c: inout c, id: msg)
         }
         Stmt.Give(val value) => {
+            // a value-position if/match yielding a unique value isn't supported yet
+            // (per-path move/drop handling); mirrors genStmt's Give guard.
+            val gvt: TypeInfo = typeOf(c: inout c, id: value)
+            if gvt.kind == 2 {
+                if typeIsUnique(c: inout c, start: gvt.nameStart, len: gvt.nameLen) {
+                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "a value-position if/match cannot yield a unique value yet; use a statement form")
+                }
+            }
             verifyExpr(c: inout c, id: value)
         }
         Stmt.Break => {}
@@ -341,6 +363,29 @@ fn verifyExpr(c: inout Comp, id: U64) {
             verifyExpr(c: inout c, id: cond)
             verifyBlock(c: inout c, blockId: thenBlk)
             verifyBlock(c: inout c, blockId: elseBlk)
+        }
+        Expr.Move(val operand, val isBorrow) => {
+            // `move`/`borrow` of a place (mirrors genExpr's Move arm). `move` is
+            // restricted to a bare local (field/element partial moves aren't tracked
+            // yet) that is not `self` and not declared outside the enclosing branch
+            // (a conditional move would skip the source's deinit on other paths).
+            if isBorrow {
+            } else {
+                match c.exprs[operand] {
+                    Expr.Ident(val start, val len) => {
+                        if isSelfRef(c: inout c, start: start, len: len) {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "moving `self` is not yet supported")
+                        }
+                        if localIndexByName(c: inout c, start: start, len: len) < c.curBranchBase {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "cannot `move` a variable declared outside the enclosing conditional/loop (the move would be conditional); move it unconditionally")
+                        }
+                    }
+                    _ => {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "`move` is only supported from a local variable (field/element moves are not yet supported)")
+                    }
+                }
+            }
+            verifyExpr(c: inout c, id: operand)
         }
         _ => {}
     }

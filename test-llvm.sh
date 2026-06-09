@@ -87,7 +87,7 @@ done
 #     recovery (operator-witness availability, move analysis, unknown-function
 #     resolution); they are tracked separately (rgap), not as failures, until
 #     those checks are factored into the shared pass. Remove as they land. ---
-REJECT_GAP=" give_unique unique_cond_move unique_field_move "
+REJECT_GAP=" "
 rpass=0; rgap=0
 for pw in tests/reject/*.pw; do
     [ -f "$pw" ] || continue
