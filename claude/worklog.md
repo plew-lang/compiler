@@ -15,14 +15,9 @@
 
 完了した大物（詳細は git・記述的タグ）：async/await 段階 1-3（stackless SM・LLVM）・コアライブラリ境界（`@Std` の `extern "plew-intrinsic"`）・Array＝`RawBuffer` 床の Plew struct（[array-struct-plan.md](array-struct-plan.md)）・可視性完全強制・Iterator/Iterable＋lazy map/filter・再帰値型 auto-boxing＋ARC・renovate Phase A-D（ARC 1 本化・Op enum・型付き AST キャッシュ・名前/型 interning）・メタプロ M0/M1/M2（マクロが実宣言を読んで生成・Eq/Ord/Hash derive・Dictionary[K,V] lang item）・フロントエンド統合（全パース→共有 @Std/Syntax）・演算子トレイト配線（算術/ビット/単項/比較を witness 脱糖・built-in 算術完全削除・`??`→`unwrapOr`・Index/IndexSet・Chain `?.`）・**C backend 退役→LLVM 一本化**。
 
-## 既知バグ（要修正・診断/受理健全性）
+## 既知バグ（要修正）
 
-- **🐞 import なしプログラムが「arithmetic operator needs Add/Sub/...」で誤 reject＋特殊関数の import gate が事故依存**。連鎖した複数の既存バグ（C-parity 期の verifyProgram 由来・調査済）：
-  1. **プレリュードが自己完結でない**：`std/Prelude.pw` は全プログラムに auto-load されるが、その `rotlU64`/`SipHasher` の U64 算術が要る `Sub[U64]`/`Add[U64]` witness は `@Std/Core/Num.pw` にあり Core は import 時しか load されない。`verifyProgram` は未使用のプレリュード関数まで walk するので、Core を import しない最小プログラム（`fn main(){}` すら）が witness 不在で落ちる。`@Std/Io` を import すると Core が芋づるで load され通る（だから普通のテストは緑）。
-  2. **`print`/`eprint`/`exit` は Backend/Llvm が名前で特殊化**（`plew_print_str` 等）して import 無しでも emit する。だから「print は import 必須」という受理規則は (1) の誤エラーが masking していただけ＝**真の import gate が無い**（`checkUseVisibility` は load 済み関数しか gate しない）。reject テスト `import_less_print`/`eprint_not_imported`/`exit_not_imported` は (1) のおかげで通っていた。
-  3. 未解決の bare-name 呼びは verify でなく **LLVM backend の emit エラー**（"this call is not yet supported"）が最後の砦。
-  - **正しい直し方（要・腰を据えた実装）**：(A) プレリュード式の演算子 witness 検査を verify で抑制（`moduleSkipsVerify` で prelude byte 範囲を判定・helper は試作済だが method の `nameStart` は合成で source offset でない＝`exprOffset(lhs)` 等の実 source offset で判定する）＋(B) **特殊 I/O 関数の真の import gate を verify レベルで実装**（`print` 等を import 無しで使ったら明示エラー）。(A) 単体だと (2) が露呈して print 無 import が silent accept＝受理健全性の退行になるので **A と B は同時に**。あるいは別案＝`@Std/Core` の演算子 witness を ambient 化（[provisional.md] の Optional/Result ambient 化と同じ `assert` 巻き込み/重複定義の課題）＝言語仕様判断。
-  - 当面の回避：ユーザーは `import @Std/Io with { print }` を書く（spec 通り・正しい）。
+- **🐞 import なしプログラムが「arithmetic operator needs Add/Sub/...」で誤 reject＋intercept される I/O 組込の import gate が無い**（受理健全性の穴・調査済）。詳細・直し方は [provisional.md](provisional.md)「可視性・モジュール・import」の該当項（prelude が自己完結でなく verify が未使用 prelude 関数の witness で落ちる／`print` 等は LLVM backend が呼び名 intercept で import を問わず emit）。当面の回避＝`import @Std/Io with { print }`。
 
 ## 次の候補（open・additive／要判断）
 
