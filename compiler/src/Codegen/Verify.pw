@@ -148,6 +148,15 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             verifyExpr(c: inout c, id: iter)
             if isRange {
                 verifyExpr(c: inout c, id: rangeHi)
+                // a range bound annotated by the loop var (`for val i: I32 in …`)
+                // types both bounds; otherwise each must determine its own type, so a
+                // bare literal range (`0..<5`) is ambiguous and rejected.
+                if varTyLen != 0U64 {
+                    checkLitSpan(c: inout c, id: iter, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
+                    checkLitSpan(c: inout c, id: rangeHi, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
+                } else {
+                    checkArithNoCtx(c: inout c, lhs: iter, rhs: rangeHi)
+                }
             }
             // scope the loop binding(s) to the body, mirroring genStmt's For.
             val forMark: U64 = scopeMark(c: inout c)
@@ -197,7 +206,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             mut val ai: U64 = 0
             while ai < arms.count {
                 val armMark: U64 = scopeMark(c: inout c)
-                verifyAddArmBinds(c: inout c, a: arms[ai])
+                verifyAddArmBinds(c: inout c, a: arms[ai], scrut: scrut)
                 verifyBlock(c: inout c, blockId: arms[ai].body)
                 popLocals(c: inout c, mark: armMark)
                 ai += 1
@@ -285,9 +294,10 @@ fn verifyExpr(c: inout Comp, id: U64) {
             verifyCastLossless(c: inout c, operand: operand, tyStart: tyStart, tyLen: tyLen)
             verifyExpr(c: inout c, id: operand)
         }
-        Expr.Binary(op: _, val lhs, val rhs) => {
+        Expr.Binary(val op, val lhs, val rhs) => {
             verifyExpr(c: inout c, id: lhs)
             verifyExpr(c: inout c, id: rhs)
+            verifyBinaryOp(c: inout c, op: op, lhs: lhs, rhs: rhs)
         }
         Expr.Unary(op: _, val operand) => {
             verifyExpr(c: inout c, id: operand)
@@ -321,7 +331,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             mut val ai: U64 = 0
             while ai < arms.count {
                 val armMark: U64 = scopeMark(c: inout c)
-                verifyAddArmBinds(c: inout c, a: arms[ai])
+                verifyAddArmBinds(c: inout c, a: arms[ai], scrut: scrut)
                 verifyExpr(c: inout c, id: arms[ai].body)
                 popLocals(c: inout c, mark: armMark)
                 ai += 1
@@ -337,25 +347,38 @@ fn verifyExpr(c: inout Comp, id: U64) {
 }
 
 // Add a match arm's payload binds to the current scope with their field types so
-// the arm body resolves them (mirrors the C emitter's per-arm bindings). Enum
-// arms resolve via the variant; struct-destructure arms (`S { val x }`) via the
-// struct named by enumStart.
-fn verifyAddArmBinds(c: inout Comp, a: MatchArm) {
+// the arm body resolves them (mirrors the C emitter's per-arm bindings, incl.
+// grounding a generic instance's field types under the scrutinee's type args —
+// `Box[I32] { val v }` binds v: I32, not the template T). Enum arms resolve via
+// the variant; struct-destructure arms (`S { val x }`) via the struct.
+fn verifyAddArmBinds(c: inout Comp, a: MatchArm, scrut: U64) {
     if a.isWildcard {
         return
     }
+    val st: TypeInfo = typeOf(c: inout c, id: scrut)
+    val generic: Bool = isGenericInst(c: inout c, ref: st.ref)
     mut val bi: U64 = 0
     if a.isStruct {
         while bi < a.binds.count {
             val bd: Bind = a.binds[bi]
-            val ft: TypeInfo = fieldType(c: inout c, structStart: a.enumStart, structLen: a.enumLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+            mut val ft: TypeInfo = scalarInfo()
+            if generic {
+                ft = genericFieldTypeInfo(c: inout c, instRef: st.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+            } else {
+                ft = fieldType(c: inout c, structStart: a.enumStart, structLen: a.enumLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+            }
             addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
             bi += 1
         }
     } else {
         while bi < a.binds.count {
             val bd: Bind = a.binds[bi]
-            addBindLocalCn(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen, cnum: 0)
+            if generic {
+                val bti: TypeInfo = genericEnumFieldTypeInfo(c: inout c, instRef: st.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false)
+            } else {
+                addBindLocalCn(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen, cnum: 0)
+            }
             bi += 1
         }
     }
@@ -418,6 +441,54 @@ fn verifyMethodVis(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
             }
         }
+    }
+}
+
+// Binary operator-witness availability, mirroring genExpr's Binary arm exactly:
+// String/compare-witness/enum-eq are fine; a struct/array comparison without
+// Eq/Ord errors; an arithmetic op resolves a witness or errors. The hasXWitness
+// guards run first so a valid op (whose operand type resolves to a witness) is
+// accepted — only genuinely unwitnessed ops fall through to the error arms.
+fn verifyBinaryOp(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
+    if isStringEq(c: inout c, op: op, lhs: lhs) {
+        return
+    }
+    if hasCompareWitness(c: inout c, op: op, lhs: lhs) {
+        return
+    }
+    if isEnumEq(c: inout c, op: op, lhs: lhs) {
+        verifyEnumEqPayload(c: inout c, lhs: lhs, rhs: rhs)
+        return
+    }
+    if compareNeedsTrait(c: inout c, op: op, lhs: lhs) {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "comparison needs Eq/Ord; not available for a struct or array")
+        return
+    }
+    if hasBinTraitWitness(c: inout c, op: op, lhs: lhs, rhs: rhs) {
+        return
+    }
+    if binTraitNeedsTrait(c: inout c, op: op, lhs: lhs, rhs: rhs) {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type")
+    }
+}
+
+// enum `==`/`!=` needs structural Eq for payload variants; only all-nullary enums
+// compare by tag (mirrors emitEnumTagCmp's guard).
+fn verifyEnumEqPayload(c: inout Comp, lhs: U64, rhs: U64) {
+    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
+    mut val enStart: U64 = 0
+    mut val enLen: U64 = 0
+    if lt.kind == 2 {
+        enStart = lt.nameStart
+        enLen = lt.nameLen
+    } else {
+        val rt: TypeInfo = typeOf(c: inout c, id: rhs)
+        enStart = rt.nameStart
+        enLen = rt.nameLen
+    }
+    if isAllNullary(c: inout c, start: enStart, len: enLen) {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "enum == needs structural Eq for payload variants (only all-nullary enums compare by tag)")
     }
 }
 

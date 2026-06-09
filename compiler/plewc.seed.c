@@ -2231,10 +2231,12 @@ void verifyBlock_c_Comp_blockId_U64(Comp* c, uint64_t blockId);
 void verifyStmt_c_Comp_stmtId_U64(Comp* c, uint64_t stmtId);
 void verifyAssign_c_Comp_op_I64_target_U64_value_U64(Comp* c, int64_t op, uint64_t target, uint64_t value);
 void verifyExpr_c_Comp_id_U64(Comp* c, uint64_t id);
-void verifyAddArmBinds_c_Comp_a_MatchArm(Comp* c, MatchArm a);
+void verifyAddArmBinds_c_Comp_a_MatchArm_scrut_U64(Comp* c, MatchArm a, uint64_t scrut);
 void verifyArgs_c_Comp_args_AArg(Comp* c, Array_Arg args);
 void verifyFieldReadVis_c_Comp_base_U64_nameStart_U64_nameLen_U64(Comp* c, uint64_t base, uint64_t nameStart, uint64_t nameLen);
 void verifyMethodVis_c_Comp_recv_U64_nameStart_U64_nameLen_U64_args_AArg(Comp* c, uint64_t recv, uint64_t nameStart, uint64_t nameLen, Array_Arg args);
+void verifyBinaryOp_c_Comp_op_I64_lhs_U64_rhs_U64(Comp* c, int64_t op, uint64_t lhs, uint64_t rhs);
+void verifyEnumEqPayload_c_Comp_lhs_U64_rhs_U64(Comp* c, uint64_t lhs, uint64_t rhs);
 void verifyCastLossless_c_Comp_operand_U64_tyStart_U64_tyLen_U64(Comp* c, uint64_t operand, uint64_t tyStart, uint64_t tyLen);
 uint64_t spanLen_s_Span(Span s);
 void recordArrayElem_c_Comp_ty_PType(Comp* c, PType ty);
@@ -18572,6 +18574,13 @@ void verifyStmt_c_Comp_stmtId_U64(Comp* c, uint64_t stmtId) {
     verifyExpr_c_Comp_id_U64(&((*c)), iter);
     if (isRange) {
     verifyExpr_c_Comp_id_U64(&((*c)), rangeHi);
+    if ((!U64_eq_lhs_U64_rhs_U64(varTyLen, 0))) {
+    checkLitSpan_c_Comp_id_U64_tyStart_U64_tyLen_U64_isArray_Bool(&((*c)), iter, varTyStart, varTyLen, 0);
+    checkLitSpan_c_Comp_id_U64_tyStart_U64_tyLen_U64_isArray_Bool(&((*c)), rangeHi, varTyStart, varTyLen, 0);
+    }
+    else {
+    checkArithNoCtx_c_Comp_lhs_U64_rhs_U64(&((*c)), iter, rangeHi);
+    }
     }
     uint64_t forMark = scopeMark_c_Comp(&((*c)));
     if (isRange) {
@@ -18625,7 +18634,7 @@ void verifyStmt_c_Comp_stmtId_U64(Comp* c, uint64_t stmtId) {
     uint64_t ai = 0;
     while ((U64_compare_lhs_U64_rhs_U64(ai, (long long)((arms).count)).tag == 0)) {
     uint64_t armMark = scopeMark_c_Comp(&((*c)));
-    verifyAddArmBinds_c_Comp_a_MatchArm(&((*c)), Array_MatchArm_get(arms, (long long)(ai)));
+    verifyAddArmBinds_c_Comp_a_MatchArm_scrut_U64(&((*c)), Array_MatchArm_get(arms, (long long)(ai)), scrut);
     verifyBlock_c_Comp_blockId_U64(&((*c)), Array_MatchArm_get(arms, (long long)(ai)).body);
     popLocals_c_Comp_mark_U64(&((*c)), armMark);
     ai = U64_add_lhs_U64_rhs_U64(ai, 1);
@@ -18755,12 +18764,15 @@ void verifyExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     verifyExpr_c_Comp_id_U64(&((*c)), operand);
     }
     else if (_m1062.tag == 3) {
+        int64_t op = _m1062.data.Binary.op;
+        (void)op;
         uint64_t lhs = _m1062.data.Binary.lhs;
         (void)lhs;
         uint64_t rhs = _m1062.data.Binary.rhs;
         (void)rhs;
     verifyExpr_c_Comp_id_U64(&((*c)), lhs);
     verifyExpr_c_Comp_id_U64(&((*c)), rhs);
+    verifyBinaryOp_c_Comp_op_I64_lhs_U64_rhs_U64(&((*c)), op, lhs, rhs);
     }
     else if (_m1062.tag == 2) {
         uint64_t operand = _m1062.data.Unary.operand;
@@ -18813,7 +18825,7 @@ void verifyExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     uint64_t ai = 0;
     while ((U64_compare_lhs_U64_rhs_U64(ai, (long long)((arms).count)).tag == 0)) {
     uint64_t armMark = scopeMark_c_Comp(&((*c)));
-    verifyAddArmBinds_c_Comp_a_MatchArm(&((*c)), Array_MatchArm_get(arms, (long long)(ai)));
+    verifyAddArmBinds_c_Comp_a_MatchArm_scrut_U64(&((*c)), Array_MatchArm_get(arms, (long long)(ai)), scrut);
     verifyExpr_c_Comp_id_U64(&((*c)), Array_MatchArm_get(arms, (long long)(ai)).body);
     popLocals_c_Comp_mark_U64(&((*c)), armMark);
     ai = U64_add_lhs_U64_rhs_U64(ai, 1);
@@ -18834,15 +18846,23 @@ void verifyExpr_c_Comp_id_U64(Comp* c, uint64_t id) {
     }
     }
 }
-void verifyAddArmBinds_c_Comp_a_MatchArm(Comp* c, MatchArm a) {
+void verifyAddArmBinds_c_Comp_a_MatchArm_scrut_U64(Comp* c, MatchArm a, uint64_t scrut) {
     if (a.isWildcard) {
     return;
     }
+    TypeInfo st = typeOf_c_Comp_id_U64(&((*c)), scrut);
+    long long generic = isGenericInst_c_Comp_ref_U64(&((*c)), st.ref);
     uint64_t bi = 0;
     if (a.isStruct) {
     while ((U64_compare_lhs_U64_rhs_U64(bi, (long long)((a.binds).count)).tag == 0)) {
     Bind bd = Array_Bind_get(a.binds, (long long)(bi));
-    TypeInfo ft = fieldType_c_Comp_structStart_U64_structLen_U64_fieldStart_U64_fieldLen_U64(&((*c)), a.enumStart, a.enumLen, bd.fieldStart, bd.fieldLen);
+    TypeInfo ft = scalarInfo();
+    if (generic) {
+    ft = genericFieldTypeInfo_c_Comp_instRef_U64_fieldStart_U64_fieldLen_U64(&((*c)), st.ref, bd.fieldStart, bd.fieldLen);
+    }
+    else {
+    ft = fieldType_c_Comp_structStart_U64_structLen_U64_fieldStart_U64_fieldLen_U64(&((*c)), a.enumStart, a.enumLen, bd.fieldStart, bd.fieldLen);
+    }
     addLocal_c_Comp_nameStart_U64_nameLen_U64_tyStart_U64_tyLen_U64_isArray_Bool_ty_U64_isInout_Bool_isMut_Bool_owned_Bool(&((*c)), bd.nameStart, bd.nameLen, ft.nameStart, ft.nameLen, I64_eq_lhs_I64_rhs_I64(ft.kind, 3), ft.ref, 0, 0, 0);
     bi = U64_add_lhs_U64_rhs_U64(bi, 1);
     }
@@ -18850,7 +18870,13 @@ void verifyAddArmBinds_c_Comp_a_MatchArm(Comp* c, MatchArm a) {
     else {
     while ((U64_compare_lhs_U64_rhs_U64(bi, (long long)((a.binds).count)).tag == 0)) {
     Bind bd = Array_Bind_get(a.binds, (long long)(bi));
+    if (generic) {
+    TypeInfo bti = genericEnumFieldTypeInfo_c_Comp_instRef_U64_variantStart_U64_variantLen_U64_fieldStart_U64_fieldLen_U64(&((*c)), st.ref, a.variantStart, a.variantLen, bd.fieldStart, bd.fieldLen);
+    addLocal_c_Comp_nameStart_U64_nameLen_U64_tyStart_U64_tyLen_U64_isArray_Bool_ty_U64_isInout_Bool_isMut_Bool_owned_Bool(&((*c)), bd.nameStart, bd.nameLen, bti.nameStart, bti.nameLen, I64_eq_lhs_I64_rhs_I64(bti.kind, 3), 0, 0, 0, 0);
+    }
+    else {
     addBindLocalCn_c_Comp_enumStart_U64_enumLen_U64_variantStart_U64_variantLen_U64_fieldStart_U64_fieldLen_U64_bindStart_U64_bindLen_U64_cnum_U64(&((*c)), a.enumStart, a.enumLen, a.variantStart, a.variantLen, bd.fieldStart, bd.fieldLen, bd.nameStart, bd.nameLen, 0);
+    }
     bi = U64_add_lhs_U64_rhs_U64(bi, 1);
     }
     }
@@ -18902,6 +18928,47 @@ void verifyMethodVis_c_Comp_recv_U64_nameStart_U64_nameLen_U64_args_AArg(Comp* c
     compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), exprOffset_c_Comp_id_U64(&((*c)), recv)), (PlewString){"cannot call an `inout fn` method on an immutable binding; declare it with `mut val`", 83});
     }
     }
+    }
+}
+void verifyBinaryOp_c_Comp_op_I64_lhs_U64_rhs_U64(Comp* c, int64_t op, uint64_t lhs, uint64_t rhs) {
+    if (isStringEq_c_Comp_op_I64_lhs_U64(&((*c)), op, lhs)) {
+    return;
+    }
+    if (hasCompareWitness_c_Comp_op_I64_lhs_U64(&((*c)), op, lhs)) {
+    return;
+    }
+    if (isEnumEq_c_Comp_op_I64_lhs_U64(&((*c)), op, lhs)) {
+    verifyEnumEqPayload_c_Comp_lhs_U64_rhs_U64(&((*c)), lhs, rhs);
+    return;
+    }
+    if (compareNeedsTrait_c_Comp_op_I64_lhs_U64(&((*c)), op, lhs)) {
+    compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), exprOffset_c_Comp_id_U64(&((*c)), lhs)), (PlewString){"comparison needs Eq/Ord; not available for a struct or array", 60});
+    return;
+    }
+    if (hasBinTraitWitness_c_Comp_op_I64_lhs_U64_rhs_U64(&((*c)), op, lhs, rhs)) {
+    return;
+    }
+    if (binTraitNeedsTrait_c_Comp_op_I64_lhs_U64_rhs_U64(&((*c)), op, lhs, rhs)) {
+    compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), exprOffset_c_Comp_id_U64(&((*c)), lhs)), (PlewString){"arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type", 76});
+    }
+}
+void verifyEnumEqPayload_c_Comp_lhs_U64_rhs_U64(Comp* c, uint64_t lhs, uint64_t rhs) {
+    TypeInfo lt = typeOf_c_Comp_id_U64(&((*c)), lhs);
+    uint64_t enStart = 0;
+    uint64_t enLen = 0;
+    if (I64_eq_lhs_I64_rhs_I64(lt.kind, 2)) {
+    enStart = lt.nameStart;
+    enLen = lt.nameLen;
+    }
+    else {
+    TypeInfo rt = typeOf_c_Comp_id_U64(&((*c)), rhs);
+    enStart = rt.nameStart;
+    enLen = rt.nameLen;
+    }
+    if (isAllNullary_c_Comp_start_U64_len_U64(&((*c)), enStart, enLen)) {
+    }
+    else {
+    compileErrorAt_line_I64_msg_String(lineOf_c_Comp_offset_U64(&((*c)), exprOffset_c_Comp_id_U64(&((*c)), lhs)), (PlewString){"enum == needs structural Eq for payload variants (only all-nullary enums compare by tag)", 88});
     }
 }
 void verifyCastLossless_c_Comp_operand_U64_tyStart_U64_tyLen_U64(Comp* c, uint64_t operand, uint64_t tyStart, uint64_t tyLen) {
