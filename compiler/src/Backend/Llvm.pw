@@ -106,6 +106,9 @@ extern(c) {
     fn LLVMBuildSExt(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildTrunc(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildAlloca(b~: LLVMBuilderRef, ty~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMGetEntryBasicBlock(fn~: LLVMValueRef) -> LLVMBasicBlockRef
+    fn LLVMGetBasicBlockTerminator(bb~: LLVMBasicBlockRef) -> LLVMValueRef
+    fn LLVMPositionBuilderBefore(b~: LLVMBuilderRef, instr~: LLVMValueRef)
     fn LLVMBuildLoad2(b~: LLVMBuilderRef, ty~: LLVMTypeRef, ptr~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildStore(b~: LLVMBuilderRef, v~: LLVMValueRef, ptr~: LLVMValueRef) -> LLVMValueRef
     fn LLVMBuildBr(b~: LLVMBuilderRef, dest~: LLVMBasicBlockRef) -> LLVMValueRef
@@ -805,7 +808,7 @@ fn genLlvmMakeEnum(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U6
 // variant payload struct (under the active substitution env).
 fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, fields: Array[MakeField]) -> LLVMValueRef {
     val vi: U64 = variantIndex(c: inout c, enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
-    val slot: LLVMValueRef = LLVMBuildAlloca(st.b, ety, anon())
+    val slot: LLVMValueRef = entryAlloca(st: inout st, ty: ety)
     // zero the whole cell first (tag + payload) so unused payload words are
     // deterministic — a payload-less variant then has an all-zero payload, making
     // tag+word structural `==` well-defined.
@@ -947,7 +950,7 @@ fn arrayFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
 // ids). Used by the `?.` / `try` desugar where the payload is an extracted SSA
 // value. The payload value types must match the variant's payload struct.
 fn buildEnumFromValues(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, vi: U64, payloadVals: Array[LLVMValueRef]) -> LLVMValueRef {
-    val slot: LLVMValueRef = LLVMBuildAlloca(st.b, ety, anon())
+    val slot: LLVMValueRef = entryAlloca(st: inout st, ty: ety)
     LLVMBuildStore(st.b, LLVMConstNull(ety), slot)
     LLVMBuildStore(st.b, LLVMConstInt(st.i64ty, vi, 0I32), LLVMBuildStructGEP2(st.b, ety, slot, 0U64, anon()))
     if payloadVals.count > 0U64 {
@@ -1872,6 +1875,34 @@ fn pushLocalR(st: inout LlvmCtx, nameStart: U64, nameLen: U64, ptr: LLVMValueRef
 
 // Set the just-pushed local's array element struct index (for an array-of-struct
 // local, so `arr[i].field` resolves the element). Call right after pushLocalR.
+// Set up a function/closure body's blocks: an `entry` block holding ALL the
+// function's allocas, ending in `br body0`, then `body0` where straight-line code
+// begins. `entryAlloca` inserts before entry's `br`, so an alloca emitted inside a
+// loop body lands in entry (allocated once) instead of accumulating stack per
+// iteration — which overflowed the 8 MB stack on large inputs. Positions the
+// builder at `body0`; the caller binds params + emits the body from there.
+fn beginFnBody(st: inout LlvmCtx, fv: LLVMValueRef) {
+    val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "entry"))
+    val body0: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "body0"))
+    LLVMPositionBuilderAtEnd(st.b, entry)
+    LLVMBuildBr(st.b, body0)
+    LLVMPositionBuilderAtEnd(st.b, body0)
+    st.terminated = false
+}
+
+// Allocate in the current function's entry block (before its terminator), then
+// restore the builder. The entry block always has a terminator here (beginFnBody's
+// `br`, or the async resume switch), so no null check is needed.
+fn entryAlloca(st: inout LlvmCtx, ty: LLVMTypeRef) -> LLVMValueRef {
+    val cur: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
+    val entry: LLVMBasicBlockRef = LLVMGetEntryBasicBlock(st.curFn)
+    val term: LLVMValueRef = LLVMGetBasicBlockTerminator(entry)
+    LLVMPositionBuilderBefore(st.b, term)
+    val a: LLVMValueRef = LLVMBuildAlloca(st.b, ty, anon())
+    LLVMPositionBuilderAtEnd(st.b, cur)
+    return a
+}
+
 // Push a loop's (break, continue) target blocks (overwrite-in-place; loopDepth is
 // the live count). Break/Continue branch to the top of this stack.
 fn pushLoop(st: inout LlvmCtx, breakBB: LLVMBasicBlockRef, contBB: LLVMBasicBlockRef) {
@@ -2480,9 +2511,9 @@ fn emitVariantPayloadCmp(c: inout Comp, st: inout LlvmCtx, eid: U64, vi: U64, pA
 // active one is selected by tag (the inactive loads read the same zero-initialized
 // area harmlessly — no side effects). sty is the enum's LLVM struct type.
 fn emitEnumCmp(c: inout Comp, st: inout LlvmCtx, a: LLVMValueRef, b: LLVMValueRef, eid: U64, sty: LLVMTypeRef) -> LLVMValueRef {
-    val aslot: LLVMValueRef = LLVMBuildAlloca(st.b, sty, anon())
+    val aslot: LLVMValueRef = entryAlloca(st: inout st, ty: sty)
     LLVMBuildStore(st.b, a, aslot)
-    val bslot: LLVMValueRef = LLVMBuildAlloca(st.b, sty, anon())
+    val bslot: LLVMValueRef = entryAlloca(st: inout st, ty: sty)
     LLVMBuildStore(st.b, b, bslot)
     val tagA: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, LLVMBuildStructGEP2(st.b, sty, aslot, 0U64, anon()), anon())
     val tagB: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, LLVMBuildStructGEP2(st.b, sty, bslot, 0U64, anon()), anon())
@@ -2940,18 +2971,6 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                     return raw
                 }
             }
-            eprint(text: "[field] .")
-            eprint(text: dbgSpan(c: inout c, start: nameStart, len: nameLen))
-            eprint(text: " on base=")
-            eprint(text: exprFormName(c: inout c, id: base))
-            match c.exprs[base] {
-                Expr.Index(base: val ib, index: _) => {
-                    eprint(text: " arr=")
-                    eprint(text: exprFormName(c: inout c, id: ib))
-                }
-                _ => {}
-            }
-            eprint(text: "\n")
             compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: field access only on a registered struct value (so far)")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
@@ -3084,14 +3103,8 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
     }
 }
 
-// (diagnostic) A U64 as a decimal String.
-fn dbgU64(n: U64) -> String {
-    mut val bytes: Array[U8] = []
-    appendU64Dec(into: inout bytes, n: n)
-    return stringFromBytes(bytes)
-}
-
-// (diagnostic) A source span as a String (for tracing self-host gaps).
+// (diagnostic) A source span as a String — for the "unsupported" error messages
+// (exprFormName) that name the offending identifier/field/call.
 fn dbgSpan(c: inout Comp, start: U64, len: U64) -> String {
     mut val nm: Array[U8] = []
     mut val j: U64 = start
@@ -3179,7 +3192,7 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
             val savedSP: Array[Bind] = c.curTypeParams
             val savedSA: Array[U64] = c.curTypeArgs
             val didSetS: Bool = setStructEnv(c: inout c, st: inout st, ref: exprTypeRef(c: inout c, st: inout st, id: scrut))
-            val sslot0: LLVMValueRef = LLVMBuildAlloca(st.b, sty, anon())
+            val sslot0: LLVMValueRef = entryAlloca(st: inout st, ty: sty)
             LLVMBuildStore(st.b, sv, sslot0)
             val mark0: U64 = st.nLocals
             bindStructPattern(c: inout c, st: inout st, sidx: ssidx, binds: arms[0].binds, scrutTy: sty, scrutSlot: sslot0)
@@ -3217,7 +3230,7 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
         compileErrorAt(line: 0, msg: "LLVM backend: value-match is only supported on a registered enum (so far)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
-    val sslot: LLVMValueRef = LLVMBuildAlloca(st.b, sty, anon())
+    val sslot: LLVMValueRef = entryAlloca(st: inout st, ty: sty)
     LLVMBuildStore(st.b, sv, sslot)
     val tag: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, LLVMBuildStructGEP2(st.b, sty, sslot, 0U64, anon()), anon())
     val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "vmatch.end"))
@@ -3332,11 +3345,11 @@ fn genLlvmOptChain(c: inout Comp, st: inout LlvmCtx, base: U64, memberStart: U64
     val reid: U64 = st.genEnumDefs[rge]
     val rety: LLVMTypeRef = st.genEnumTys[rge]
     val sv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: base)
-    val sslot: LLVMValueRef = LLVMBuildAlloca(st.b, bety, anon())
+    val sslot: LLVMValueRef = entryAlloca(st: inout st, ty: bety)
     LLVMBuildStore(st.b, sv, sslot)
     val tag: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, LLVMBuildStructGEP2(st.b, bety, sslot, 0U64, anon()), anon())
     val isSome: LLVMValueRef = LLVMBuildICmp(st.b, llvmIntEq(), tag, LLVMConstInt(st.i64ty, someVi, 0I32), anon())
-    val resSlot: LLVMValueRef = LLVMBuildAlloca(st.b, rety, anon())
+    val resSlot: LLVMValueRef = entryAlloca(st: inout st, ty: rety)
     val someBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "oc.some"))
     val noneBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "oc.none"))
     val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "oc.end"))
@@ -3400,7 +3413,7 @@ fn genLlvmTry(c: inout Comp, st: inout LlvmCtx, expr: U64) -> LLVMValueRef {
     val okVi: U64 = variantIndex(c: inout c, enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: okB.nameStart, variantLen: okB.nameLen)
     val errVi: U64 = variantIndex(c: inout c, enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: errB.nameStart, variantLen: errB.nameLen)
     val ev: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: expr)
-    val eslot: LLVMValueRef = LLVMBuildAlloca(st.b, eety, anon())
+    val eslot: LLVMValueRef = entryAlloca(st: inout st, ty: eety)
     LLVMBuildStore(st.b, ev, eslot)
     val tag: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, LLVMBuildStructGEP2(st.b, eety, eslot, 0U64, anon()), anon())
     val isErr: LLVMValueRef = LLVMBuildICmp(st.b, llvmIntEq(), tag, LLVMConstInt(st.i64ty, errVi, 0I32), anon())
@@ -5081,7 +5094,7 @@ fn placePtrOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
         _ => {}
     }
     val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: id)
-    val slot: LLVMValueRef = LLVMBuildAlloca(st.b, LLVMTypeOf(v), anon())
+    val slot: LLVMValueRef = entryAlloca(st: inout st, ty: LLVMTypeOf(v))
     LLVMBuildStore(st.b, v, slot)
     return slot
 }
@@ -5950,7 +5963,7 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     if p.isInout {
         pushLocalR(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: LLVMGetParam(fv, argIdx), ty: pty, kind: pKind, structIdx: pSidx, isArr: p.tyIsArray, elemTy: pElem, elemKind: pKind, typeRef: pRef)
     } else {
-        val slot2: LLVMValueRef = LLVMBuildAlloca(st.b, pty, anon())
+        val slot2: LLVMValueRef = entryAlloca(st: inout st, ty: pty)
         LLVMBuildStore(st.b, LLVMGetParam(fv, argIdx), slot2)
         pushLocalR(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty, kind: pKind, structIdx: pSidx, isArr: p.tyIsArray, elemTy: pElem, elemKind: pKind, typeRef: pRef)
     }
@@ -6248,9 +6261,7 @@ fn emitClosures(c: inout Comp, st: inout LlvmCtx) {
                 st.curRetTyStart = retStart
                 st.curRetTyLen = retLen
                 st.curRetRef = retTy
-                val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "entry"))
-                LLVMPositionBuilderAtEnd(st.b, entry)
-                st.terminated = false
+                beginFnBody(st: inout st, fv: fv)
                 st.nLocals = 0
                 st.locStart = []
                 st.locLen = []
@@ -6296,7 +6307,7 @@ fn emitClosures(c: inout Comp, st: inout LlvmCtx) {
                             pushLocalR(st: inout st, nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: cv, ty: valTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: c.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: 0U64)
                             ci += 1
                         } else {
-                        val a: LLVMValueRef = LLVMBuildAlloca(st.b, slotTy, anon())
+                        val a: LLVMValueRef = entryAlloca(st: inout st, ty: slotTy)
                         LLVMBuildStore(st.b, cv, a)
                         mut val cRef: U64 = 0
                         if cap.boxed {
@@ -6455,9 +6466,7 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
     // body: `Optional[T]` -> `Optional[I64]`) so return-context enum construction
     // can infer the concrete instance.
     st.curRetRef = groundTypeRef(c: inout c, ref: f.retTy)
-    val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "entry"))
-    LLVMPositionBuilderAtEnd(st.b, entry)
-    st.terminated = false
+    beginFnBody(st: inout st, fv: fv)
     // fresh local scope; bind each param into an alloca (so it reads/writes
     // uniformly with locals).
     st.nLocals = 0
@@ -6515,7 +6524,7 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
         mut val selfPtr: LLVMValueRef = LLVMGetParam(fv, 0U64)
         if f.selfInout {
         } else {
-            selfPtr = LLVMBuildAlloca(st.b, recvTy, anon())
+            selfPtr = entryAlloca(st: inout st, ty: recvTy)
             LLVMBuildStore(st.b, LLVMGetParam(fv, 0U64), selfPtr)
         }
         pushLocalR(st: inout st, nameStart: st.selfStart, nameLen: st.selfLen, ptr: selfPtr, ty: recvTy, kind: kindFromTySpan(c: inout c, tyStart: f.recvStart, tyLen: f.recvLen), structIdx: recvSidx, isArr: selfIsArr, elemTy: selfElemTy, elemKind: 0U64, typeRef: recvRef)
@@ -6734,7 +6743,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                 if localIsBoxedCapture(c: inout c, start: nameStart, len: nameLen) {
                     slot = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(lty), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
                 } else {
-                    slot = LLVMBuildAlloca(st.b, lty, anon())
+                    slot = entryAlloca(st: inout st, ty: lty)
                 }
             }
             LLVMBuildStore(st.b, v, slot)
@@ -7156,7 +7165,7 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
             val savedSP: Array[Bind] = c.curTypeParams
             val savedSA: Array[U64] = c.curTypeArgs
             val didSetS: Bool = setStructEnv(c: inout c, st: inout st, ref: exprTypeRef(c: inout c, st: inout st, id: scrut))
-            val sslot0: LLVMValueRef = LLVMBuildAlloca(st.b, sty, anon())
+            val sslot0: LLVMValueRef = entryAlloca(st: inout st, ty: sty)
             LLVMBuildStore(st.b, sv, sslot0)
             val mark0: U64 = st.nLocals
             bindStructPattern(c: inout c, st: inout st, sidx: ssidx, binds: arms[0].binds, scrutTy: sty, scrutSlot: sslot0)
@@ -7197,7 +7206,7 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
         return
     }
     // store the scrutinee so payload fields can be read back as a variant struct.
-    val sslot: LLVMValueRef = LLVMBuildAlloca(st.b, sty, anon())
+    val sslot: LLVMValueRef = entryAlloca(st: inout st, ty: sty)
     LLVMBuildStore(st.b, sv, sslot)
     val tag: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, LLVMBuildStructGEP2(st.b, sty, sslot, 0U64, anon()), anon())
     val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "match.end"))
@@ -7318,7 +7327,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
                 slot = asyncFrameSlot(c: inout c, st: inout st, idx: st.asyncFieldNext)
                 st.asyncFieldNext = st.asyncFieldNext + 1
             } else {
-                slot = LLVMBuildAlloca(st.b, pty, anon())
+                slot = entryAlloca(st: inout st, ty: pty)
             }
             LLVMBuildStore(st.b, fv, slot)
             // an enum-typed bind carries a bare enum TypeRef so a nested match on it
@@ -7374,7 +7383,7 @@ fn bindStructPattern(c: inout Comp, st: inout LlvmCtx, sidx: U64, binds: Array[B
                 val fld: FieldDef = fs[fidx]
                 val fty: LLVMTypeRef = llvmTypeFor(c: inout c, st: inout st, tyStart: fld.tyStart, tyLen: fld.tyLen, isArray: fld.tyIsArray)
                 val fv: LLVMValueRef = LLVMBuildLoad2(st.b, fty, LLVMBuildStructGEP2(st.b, scrutTy, scrutSlot, fidx, anon()), anon())
-                val slot: LLVMValueRef = LLVMBuildAlloca(st.b, fty, anon())
+                val slot: LLVMValueRef = entryAlloca(st: inout st, ty: fty)
                 LLVMBuildStore(st.b, fv, slot)
                 mut val elemTy: LLVMTypeRef = st.i64ty
                 mut val elemKind: U64 = 0
@@ -7399,7 +7408,7 @@ fn genLlvmForRange(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64,
     }
     val loV: LLVMValueRef = coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: lo), target: vty, unsigned: true)
     val hiV: LLVMValueRef = coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: hi), target: vty, unsigned: true)
-    val islot: LLVMValueRef = LLVMBuildAlloca(st.b, vty, anon())
+    val islot: LLVMValueRef = entryAlloca(st: inout st, ty: vty)
     LLVMBuildStore(st.b, loV, islot)
     pushLocal(st: inout st, nameStart: varStart, nameLen: varLen, ptr: islot, ty: vty, kind: 3U64, structIdx: c.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64)
     val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "for.cond"))
@@ -7560,7 +7569,7 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
 // `optRef` Optional[Item] — bind x to the Some payload + run body, else break.
 fn emitIterNextLoop(c: inout Comp, st: inout LlvmCtx, iterVal: LLVMValueRef, optRef: U64, nextTy: LLVMTypeRef, nextVal: LLVMValueRef, varStart: U64, varLen: U64, body: U64) {
     val iterTy: LLVMTypeRef = LLVMTypeOf(iterVal)
-    val iterSlot: LLVMValueRef = LLVMBuildAlloca(st.b, iterTy, anon())
+    val iterSlot: LLVMValueRef = entryAlloca(st: inout st, ty: iterTy)
     LLVMBuildStore(st.b, iterVal, iterSlot)
     // resolve the Optional enum (def + Some variant) under its instance env.
     val savedP: Array[Bind] = c.curTypeParams
@@ -7591,7 +7600,7 @@ fn emitIterNextLoop(c: inout Comp, st: inout LlvmCtx, iterVal: LLVMValueRef, opt
     mut val nArgs: Array[LLVMValueRef] = []
     nArgs.append(value: iterSlot)
     val opt: LLVMValueRef = LLVMBuildCall2(st.b, nextTy, nextVal, arrayCPtr(nArgs), 1U64, anon())
-    val optSlot: LLVMValueRef = LLVMBuildAlloca(st.b, optTy, anon())
+    val optSlot: LLVMValueRef = entryAlloca(st: inout st, ty: optTy)
     LLVMBuildStore(st.b, opt, optSlot)
     val tag: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, LLVMBuildStructGEP2(st.b, optTy, optSlot, 0U64, anon()), anon())
     val isSome: LLVMValueRef = LLVMBuildICmp(st.b, llvmIntEq(), tag, LLVMConstInt(st.i64ty, someVi, 0I32), anon())
@@ -7602,7 +7611,7 @@ fn emitIterNextLoop(c: inout Comp, st: inout LlvmCtx, iterVal: LLVMValueRef, opt
     val payload: LLVMValueRef = LLVMBuildLoad2(st.b, payloadTy, LLVMBuildStructGEP2(st.b, optTy, optSlot, 1U64, anon()), anon())
     val xVal: LLVMValueRef = LLVMBuildExtractValue(st.b, payload, 0U64, anon())
     val xTy: LLVMTypeRef = LLVMTypeOf(xVal)
-    val xSlot: LLVMValueRef = LLVMBuildAlloca(st.b, xTy, anon())
+    val xSlot: LLVMValueRef = entryAlloca(st: inout st, ty: xTy)
     LLVMBuildStore(st.b, xVal, xSlot)
     mut val xStart: U64 = itemFs[0].tyStart
     mut val xLen: U64 = itemFs[0].tyLen
@@ -7642,9 +7651,9 @@ fn genLlvmForArray(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64,
     val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: iter)
     val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 0U64, anon())
     val count: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 1U64, anon())
-    val idxslot: LLVMValueRef = LLVMBuildAlloca(st.b, st.i64ty, anon())
+    val idxslot: LLVMValueRef = entryAlloca(st: inout st, ty: st.i64ty)
     LLVMBuildStore(st.b, LLVMConstInt(st.i64ty, 0U64, 0I32), idxslot)
-    val vslot: LLVMValueRef = LLVMBuildAlloca(st.b, elemTy, anon())
+    val vslot: LLVMValueRef = entryAlloca(st: inout st, ty: elemTy)
     pushLocal(st: inout st, nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: c.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64)
     val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fora.cond"))
     val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fora.body"))
@@ -7694,9 +7703,9 @@ fn genLlvmForArrayStruct(c: inout Comp, st: inout LlvmCtx, patStart: U64, patLen
     val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: iter)
     val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 0U64, anon())
     val count: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 1U64, anon())
-    val idxslot: LLVMValueRef = LLVMBuildAlloca(st.b, st.i64ty, anon())
+    val idxslot: LLVMValueRef = entryAlloca(st: inout st, ty: st.i64ty)
     LLVMBuildStore(st.b, LLVMConstInt(st.i64ty, 0U64, 0I32), idxslot)
-    val eslot: LLVMValueRef = LLVMBuildAlloca(st.b, elemTy, anon())
+    val eslot: LLVMValueRef = entryAlloca(st: inout st, ty: elemTy)
     val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fors.cond"))
     val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fors.body"))
     val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fors.end"))
@@ -8024,9 +8033,7 @@ fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     st.curFn = mainFn
     st.curIsMain = true
     st.curRetVoid = false
-    val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, mainFn, cstr(s: "entry"))
-    LLVMPositionBuilderAtEnd(st.b, entry)
-    st.terminated = false
+    beginFnBody(st: inout st, fv: mainFn)
     // plew_set_args(argc, argv).
     mut val saTys: Array[LLVMTypeRef] = []
     saTys.append(value: st.i32ty)
