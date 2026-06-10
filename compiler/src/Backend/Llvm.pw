@@ -1811,6 +1811,16 @@ fn arrFieldElemStructIdx(c: inout Comp, st: inout LlvmCtx, arrayExpr: U64) -> U6
 // instance ref for field substitution. 0 when not a structured call result.
 fn exprResultRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
     match c.exprs[id] {
+        Expr.Ident(val start, val len) => {
+            // a binding from another local (`mut val it = self` in a provided Iterator
+            // terminal's body): propagate the source local's tracked instance TypeRef so
+            // `it` is a MapIter/FilterIter/… and a later `it.next()` routes through the
+            // generic-receiver dispatch (else it's untracked and the call is not emitted).
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.nLocals {
+                return st.locTypeRef[li]
+            }
+        }
         Expr.Call(val nameStart, val nameLen, val args) => {
             val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
             if cfi < c.funcs.count {

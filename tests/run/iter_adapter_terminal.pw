@@ -1,0 +1,31 @@
+import @Std/Io with { print }
+
+// Provided Iterator terminals (count / any / all) called on a lazy ADAPTER receiver
+// (a MapIter / FilterIter generic instance from .map(f) / .filter(p) on a user
+// Iterator). The terminal's body `mut val it = self; it.next()` now propagates self's
+// adapter-instance TypeRef to `it` (exprResultRef Ident arm) so the nested it.next()
+// routes through generic-receiver dispatch. (fold[B]'s method-own type param is a
+// separate remaining gap — not exercised here.)
+struct Counter { pub mut val n: I64  pub val limit: I64 }
+pub impl Counter as Iterator {
+    type Item = I64
+    inout fn next() -> Optional[I64] {
+        if self.n < self.limit {
+            val v: I64 = self.n
+            self.n = self.n + 1
+            return <Optional.Some v=v />
+        }
+        return <Optional.None />
+    }
+}
+
+fn main() {
+    mut val a: Counter = <Counter n=0 limit=4 />
+    print(a.map(f: fn(x: I64) -> I64 { return x * 10 }).count())     // 4
+    mut val b: Counter = <Counter n=0 limit=5 />
+    print(b.filter(p: fn(x: I64) -> Bool { return x > 1 }).count())  // 3 (2,3,4)
+    mut val c: Counter = <Counter n=0 limit=5 />
+    if c.map(f: fn(x: I64) -> I64 { return x + 1 }).any(p: fn(x: I64) -> Bool { return x > 4 }) { print(1I64) } else { print(0I64) }  // 1 (5>4)
+    mut val d: Counter = <Counter n=0 limit=5 />
+    if d.map(f: fn(x: I64) -> I64 { return x + 1 }).all(p: fn(x: I64) -> Bool { return x > 0 }) { print(1I64) } else { print(0I64) }  // 1
+}
