@@ -444,6 +444,13 @@ struct AssocBinding {
     pub val ty: U64
 }
 
+// A `defaultExtension #Ext` declaration (spec/09): the extension's methods on
+// `typeId` join that type's bare resolution surface (findMethod admits them).
+struct DefaultExt {
+    pub val typeId: U64
+    pub val extId: U64
+}
+
 struct Conform {
     pub val typeStart: U64
     pub val typeLen: U64
@@ -602,6 +609,9 @@ struct Comp {
     pub mut val traits: Array[TraitDef]
     pub mut val conforms: Array[Conform]
     pub mut val methodAliases: Array[MethodAlias]
+    // `defaultExtension #Ext` (spec/09): (type id, extension id) pairs declaring
+    // that the extension's methods join the type's bare resolution surface.
+    pub mut val defaultExts: Array[DefaultExt]
     // `@[...]` derive requests recorded on type declarations, plus the scratch
     // list of derive names parsed for the *next* type declaration.
     pub mut val derives: Array[DeriveReq]

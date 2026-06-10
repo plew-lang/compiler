@@ -192,6 +192,21 @@ fn firstMethodRetType(c: inout Comp, typeStart: U64, typeLen: U64, name: String)
     return scalarInfo()
 }
 
+// Whether type `typeId` declared `defaultExtension #Ext` for extension `extId`
+// (spec/09): its methods then join the type's bare resolution surface.
+fn isDefaultExt(c: inout Comp, typeId: U64, extId: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.defaultExts.count {
+        if c.defaultExts[i].typeId == typeId {
+            if c.defaultExts[i].extId == extId {
+                return true
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
 fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     mut val firstLabel: U64 = c.funcs.count
     mut val typeMatch: U64 = c.funcs.count
@@ -203,8 +218,10 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
         val f: Func = c.funcs[i]
         if f.hasRecv {
             // an extension method does not join bare resolution (spec/09): it is
-            // reachable only through a `value#Ext.m()` view (findExtMethod).
-            if f.extId != 0U64 {
+            // reachable only through a `value#Ext.m()` view (findExtMethod) — unless
+            // the receiver type declared it as a `defaultExtension`, which admits the
+            // extension's methods to the type's bare surface.
+            if f.extId != 0U64 && !isDefaultExt(c: inout c, typeId: qRecvId, extId: f.extId) {
             } else {
             if f.nameId == qNameId {
                 if f.recvId == qRecvId {

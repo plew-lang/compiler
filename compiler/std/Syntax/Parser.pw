@@ -363,6 +363,7 @@ export fn parseStructDecl(p: inout P, isUnique: Bool) -> DeclAst {
     mut val fields: Array[FieldAst] = []
     mut val hasDeinit: Bool = false
     mut val deinitBody: BlockAst = emptyBlock()
+    mut val defaultExts: Array[String] = []
     while true {
         p.skipNewlines()
         match p.curKind() {
@@ -384,11 +385,29 @@ export fn parseStructDecl(p: inout P, isUnique: Bool) -> DeclAst {
                 hasDeinit = true
             }
             _ => {
-                fields.append(parseStructField(p: inout p))
+                if curIs(p: inout p, kw: "defaultExtension") {
+                    // `defaultExtension #A #B` (spec/09): name the extensions whose
+                    // methods join this type's bare surface. Chained `#A#B` or
+                    // space-separated; collect each `#Name`.
+                    p.advance()
+                    mut val moreExt: Bool = true
+                    while moreExt {
+                        match p.curKind() {
+                            Kind.Hash => {
+                                p.advance()
+                                defaultExts.append(p.text(t: p.curTok()))
+                                p.advance()
+                            }
+                            _ => { moreExt = false }
+                        }
+                    }
+                } else {
+                    fields.append(parseStructField(p: inout p))
+                }
             }
         }
     }
-    return <DeclAst kind=<DeclKind.Struct /> name=name nameSpan=nameSpan typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=isUnique fields=fields hasDeinit=hasDeinit deinitBody=deinitBody variants=[] params=[] hasRet=false ret=emptyTypeAst() isAsync=false whereParams=[] whereTraits=[] body=emptyBlock() />
+    return <DeclAst kind=<DeclKind.Struct /> name=name nameSpan=nameSpan typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=isUnique fields=fields hasDeinit=hasDeinit deinitBody=deinitBody variants=[] params=[] hasRet=false ret=emptyTypeAst() isAsync=false whereParams=[] whereTraits=[] body=emptyBlock() defaultExts=defaultExts />
 }
 
 // An enum variant payload field `name: Type` (no modifiers). The cursor is at the

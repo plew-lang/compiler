@@ -121,6 +121,9 @@ export struct DeclAst {
     // fn body (`kind == Func`): the parsed `{ ... }` block (empty for struct/enum
     // and for a body-less signature). Lets a macro read/transform a function body.
     pub val body: BlockAst
+    // `defaultExtension #A #B` declared in a struct/enum body (spec/09): the names
+    // of extensions whose methods join this type's bare surface. Empty otherwise.
+    pub val defaultExts: Array[String] = []
 }
 
 // An empty type expression (placeholder for a missing/absent type position).
