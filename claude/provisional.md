@@ -82,7 +82,7 @@
 - **未対応**：`pow`/`**`（`Pow[Exp]`・float 後）・`?.`（Chain）の一般トレイト化〔現 Optional 具体〕・複合添字 `a[k]+=v`・`as` 以外の数値変換・`Output != Self`。
 - **優先順位**：`as`<シフト等は未実装段あり・実装済の相対順序は spec 13 段と一致（`?? 廃止済`）。比較/レンジの非結合は未強制。spec/12。
 - **`as`**：**数値↔数値の C キャストのみ**（無損失検査済＝source 幅を `TypeInfo` で復元し narrowing は reject・式幅も伝播）。残：`From`/`TryFrom`（`as` の全域変換脱糖・`try` の From 変換＝現状 `try` はソース/関数戻りの **エラー型一致 `E==E'` を要求**・違うと C 型不一致）・`?.`（オプショナルチェーン）は未実装。spec/12,13。
-- **`try` は `@Std/Core` の Result の tag/field レイアウトをハードコード前提**（Ok=tag0/`value`・Err=tag1/`error`）。lang-item ゆえ妥当だが、ユーザーが別形の Result を定義しても `try` はこの形を仮定。見直し：lang-item を spec で固定 or コンパイラが Core のシンボルを参照（ambient 化〔上記 import 節〕とセットで整理）。
+- **`try` は `@Std/Core` の Result の tag/field レイアウトをハードコード前提**（Ok=tag0/`value`・Err=tag1/`error`）。lang-item ゆえ妥当だが、ユーザーが別形の Result を定義しても `try` はこの形を仮定。見直し：lang-item を spec で固定 or コンパイラが Core のシンボルを参照（ambient 化〔上記 import 節〕とセットで整理）。✅ **`try` のオペランドが Result でない（特に `Optional`）と clean reject**（`verifyExpr` の Try 分岐＝operand の typeOf が Result 以外の登録 enum なら loud reject＝以前は Optional が「登録済み enum」ゆえ Result 判定を通過し backend で Ok/Err variant を out-of-bounds 参照して **segfault** していた・spec/13 は try=Result のみ・Optional は `unwrapOr`/`?.`/`match`・test reject try_on_optional）。**残バグ（別・既存）**＝**無注釈の `<Result.Ok value=… />` 構築**（型引数省略・return-context 推論）が `try` 文脈や一部で segfault し得る（明示型引数 `<Result[T,E].Ok …/>` は無事）＝return-context 推論の robustness 課題・別件。
 
 ## 可視性・モジュール・import
 

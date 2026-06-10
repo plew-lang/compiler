@@ -368,6 +368,24 @@ fn verifyExpr(c: inout Comp, id: U64) {
         }
         Expr.Try(val expr) => {
             verifyExpr(c: inout c, id: expr)
+            // `try` works only on a Result (spec/13). The operand being some OTHER
+            // registered enum (notably `Optional`) used to crash the backend (it
+            // assumed Ok/Err variants and indexed out of bounds). An Optional uses
+            // `unwrapOr` / `?.` / `match` instead.
+            val tti: TypeInfo = typeOf(c: inout c, id: expr)
+            if tti.nameLen > 0U64 {
+                mut val isEnum: Bool = enumIdxByName(c: inout c, start: tti.nameStart, len: tti.nameLen) < c.enums.count
+                if isEnum {
+                } else {
+                    isEnum = genericEnumIndex(c: inout c, nameStart: tti.nameStart, nameLen: tti.nameLen) < c.enums.count
+                }
+                if isEnum {
+                    if rangeEquals(bytes: c.bytes, start: tti.nameStart, len: tti.nameLen, kw: "Result") {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "`try` works only on a Result; for an Optional use `unwrapOr` / `?.` / `match` (spec/13)")
+                    }
+                }
+            }
         }
         Expr.MatchExpr(val scrut, val arms) => {
             verifyExpr(c: inout c, id: scrut)

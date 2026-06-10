@@ -1,0 +1,15 @@
+// `try` works only on a Result (spec/13); an Optional operand used to crash the
+// backend (it assumed Ok/Err variants). For an Optional use unwrapOr / ?. / match.
+import @Std/Io with { print }
+struct E { pub val code: I64 }
+fn f() -> Result[I64, E] {
+    val o: Optional[I64] = <Optional.Some v=5I64 />
+    val x = try o
+    return <Result.Ok value=x />
+}
+fn main() {
+    match f() {
+        Result.Ok(val value) => { print(value) }
+        Result.Err(val error) => { print(error.code) }
+    }
+}
