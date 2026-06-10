@@ -1,0 +1,23 @@
+import @Std/Io with { print }
+
+// `where T: Trait[Args]` (spec/08): a where-clause trait bound may carry the
+// trait's type arguments (`Into[I64]`, `Seq[I64]`). The bound pipeline records
+// the trait by name (conformance matches by name + arity), so the args are
+// parsed and currently discarded — they don't yet disambiguate multiple
+// conformances — but the clause parses and dispatches the trait's members.
+trait Into[U] { fn into() -> U }
+trait Tag { fn tag() -> I64 }
+
+struct S { val n: I64 }
+pub impl S as Into[I64] { fn into() -> I64 { return self.n } }
+pub impl S as Tag { fn tag() -> I64 { return 100I64 } }
+
+// a parametric bound and a plain bound on the same type parameter
+fn run[T](x: T) -> I64 where T: Into[I64], T: Tag {
+    return x.into() + x.tag()
+}
+
+fn main() {
+    val s: S = <S n=42 />
+    print(run(x: s))   // 42 + 100 = 142
+}

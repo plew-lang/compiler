@@ -581,6 +581,35 @@ fn parseWhereNames(p: inout P, params: inout Array[String], traits: inout Array[
                             Kind.Ident => {
                                 val tName: String = p.text(t: p.curTok())
                                 p.advance()
+                                // optional trait type arguments `[I64]` / `[Item = Foo]`
+                                // (spec/08): the bound pipeline records a trait by name
+                                // only (conformance matches by name + arity), so the args
+                                // are consumed and currently discarded — they do not yet
+                                // disambiguate multiple conformances. Skip a balanced `[...]`.
+                                match p.curKind() {
+                                    Kind.LBracket => {
+                                        mut val depth: U64 = 0
+                                        mut val skipping: Bool = true
+                                        while skipping {
+                                            match p.curKind() {
+                                                Kind.LBracket => {
+                                                    depth += 1U64
+                                                    p.advance()
+                                                }
+                                                Kind.RBracket => {
+                                                    depth -= 1U64
+                                                    p.advance()
+                                                    if depth == 0U64 {
+                                                        skipping = false
+                                                    }
+                                                }
+                                                Kind.Eof => { skipping = false }
+                                                _ => { p.advance() }
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
                                 params.append(pName)
                                 traits.append(tName)
                             }
