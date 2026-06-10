@@ -425,6 +425,13 @@ export fn parseStructDecl(p: inout P, isUnique: Bool) -> DeclAst {
                 hasDeinit = true
             }
             _ => {
+                // struct fields are newline-separated (spec/05); a `;` would be
+                // parsed as an empty-named phantom field, so reject it loudly (like a
+                // comma) instead of silently widening the struct.
+                if p.text(t: p.curTok()) == ";" {
+                    p.fail(off: p.base + p.curTok().start, msg: "struct fields are separated by newlines, not `;`")
+                    p.advance()
+                } else {
                 if curIs(p: inout p, kw: "defaultExtension") {
                     // `defaultExtension #A #B` (spec/09): name the extensions whose
                     // methods join this type's bare surface. Chained `#A#B` or
@@ -443,6 +450,7 @@ export fn parseStructDecl(p: inout P, isUnique: Bool) -> DeclAst {
                     }
                 } else {
                     fields.append(parseStructField(p: inout p))
+                }
                 }
             }
         }

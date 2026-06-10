@@ -1,0 +1,6 @@
+// Struct fields are newline-separated (spec/05); a `;` is not a separator and must
+// be rejected loudly (it previously created an empty-named phantom field).
+struct Pt { pub val x: I64; pub val y: I64 }
+fn main() {
+    val p: Pt = <Pt x=1 y=2 />
+}
