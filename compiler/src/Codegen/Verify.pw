@@ -452,6 +452,65 @@ fn verifyArgs(c: inout Comp, args: Array[Arg]) {
         verifyExpr(c: inout c, id: args[i].expr)
         i += 1
     }
+    // overlapping `inout` (spec/03): two or more `inout` arguments of ONE call that
+    // name the SAME place are forbidden — last-write-wins would be a silent bug. This
+    // is the syntactic case ① (identical place expressions); distinct-provability for
+    // subscripts (case ②/③) is a separate lint/runtime concern.
+    mut val a: U64 = 0
+    while a < args.count {
+        if args[a].isInout {
+            mut val b: U64 = a + 1U64
+            while b < args.count {
+                if args[b].isInout {
+                    if exprSyntaxEq(c: inout c, a: args[a].expr, b: args[b].expr) {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: args[b].expr)), msg: "two `inout` arguments refer to the same place in one call; overlapping `inout` is forbidden (last-write-wins would be a silent bug)")
+                    }
+                }
+                b += 1U64
+            }
+        }
+        a += 1U64
+    }
+}
+
+// Conservative syntactic equality of two place/value expressions, for the
+// overlapping-`inout` check (spec/03 case ①): identical variable, field/arrow chain,
+// or subscript with identical base and index. Anything else (calls, etc.) compares
+// unequal — the check only fires on definite syntactic identity.
+fn exprSyntaxEq(c: inout Comp, a: U64, b: U64) -> Bool {
+    match c.exprs[a] {
+        Expr.Ident(start: val s1, len: val l1) => {
+            match c.exprs[b] {
+                Expr.Ident(start: val s2, len: val l2) => { return spansEqual(c: inout c, aStart: s1, aLen: l1, bStart: s2, bLen: l2) }
+                _ => { return false }
+            }
+        }
+        Expr.Int(value: val v1, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: val neg1) => {
+            match c.exprs[b] {
+                Expr.Int(value: val v2, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: val neg2) => { return v1 == v2 && neg1 == neg2 }
+                _ => { return false }
+            }
+        }
+        Expr.Field(base: val base1, nameStart: val n1s, nameLen: val n1l) => {
+            match c.exprs[b] {
+                Expr.Field(base: val base2, nameStart: val n2s, nameLen: val n2l) => { return spansEqual(c: inout c, aStart: n1s, aLen: n1l, bStart: n2s, bLen: n2l) && exprSyntaxEq(c: inout c, a: base1, b: base2) }
+                _ => { return false }
+            }
+        }
+        Expr.Arrow(base: val base1, nameStart: val n1s, nameLen: val n1l) => {
+            match c.exprs[b] {
+                Expr.Arrow(base: val base2, nameStart: val n2s, nameLen: val n2l) => { return spansEqual(c: inout c, aStart: n1s, aLen: n1l, bStart: n2s, bLen: n2l) && exprSyntaxEq(c: inout c, a: base1, b: base2) }
+                _ => { return false }
+            }
+        }
+        Expr.Index(base: val base1, index: val idx1) => {
+            match c.exprs[b] {
+                Expr.Index(base: val base2, index: val idx2) => { return exprSyntaxEq(c: inout c, a: base1, b: base2) && exprSyntaxEq(c: inout c, a: idx1, b: idx2) }
+                _ => { return false }
+            }
+        }
+        _ => { return false }
+    }
 }
 
 // field-read visibility, mirroring genExpr's Field arm (Expr.pw): a struct base

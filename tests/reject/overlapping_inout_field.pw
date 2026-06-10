@@ -1,0 +1,9 @@
+// Overlapping `inout` on the same struct field (spec/03 case ①).
+import @Std/Io with { print }
+struct Pair { pub mut val a: I64  pub mut val b: I64 }
+fn swap(x: inout I64, y: inout I64) { val t = x  x = y  y = t }
+fn main() {
+    mut val p: Pair = <Pair a=1 b=2 />
+    swap(x: inout p.a, y: inout p.a)
+    print(p.a)
+}

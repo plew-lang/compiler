@@ -1,0 +1,10 @@
+// Overlapping `inout` (spec/03): two `inout` arguments of one call naming the same
+// place are forbidden — last-write-wins would be a silent bug. Case ① (syntactically
+// identical place).
+import @Std/Io with { print }
+fn swap(a: inout I64, b: inout I64) { val t = a  a = b  b = t }
+fn main() {
+    mut val x: I64 = 1I64
+    swap(a: inout x, b: inout x)
+    print(x)
+}
