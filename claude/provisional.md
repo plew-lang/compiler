@@ -23,7 +23,7 @@
 - **`local` 型**（spawn を越えられない・`Ref` 持ちは必須）→ 無し。spawn/async 実装時に。spec/03,14。
 - **`inout`** → 実装済（C ポインタ）。**単純変数・合成可変性（`base.field`・`a[i]`・`.append`/`inout fn` 受信側）の代入可変性検査あり**。残：**重なり inout 検査なし**（spec は同一場所への複数 inout を禁止・lint＋限定 panic）。spec/03。
 - **place 越しの get-modify-set 脱糖**（`arr[i].field=x` 等） → **部分実装**：`arr[i].field = x`（`tryArrayElemFieldAssign`＝get-modify-set 脱糖）は動く。残：compound 要素は loud-reject・`arr[i].inoutMethod()`（inout メソッド経由）未対応。**Arrow place 代入の右辺リテラル型付け**（`r->v = 42`/`ys[0]->v = 42`）は**実装済**（pointee フィールド型が文脈として渡る・test run/arrow_store_literal）。spec/03。
-- **重なる `inout`（1 呼び出しで複数の inout 位置が同じ場所）** → ✅ **ケース①（構文同一）を loud reject 済**（`verifyArgs`＋`exprSyntaxEq`＝Ident/Field/Arrow/Index/Int リテラルの構文的同一を比較・`swap(a: inout x, b: inout x)`／`inout p.a, inout p.a` を弾く＝以前は silent last-write-wins の hidden-meaning 穴・test reject overlapping_inout{,_field}）。**残**＝(a) **self×arg の重なり**（`x.inoutMethod(a: inout x)`＝self は args に無いので未検査）・(b) **ケース②③**（添字 distinct 証明＝`arr[i], arr[j]` の lint＋限定ランタイム panic）は spec 通り将来。spec/03。
+- **重なる `inout`（1 呼び出しで複数の inout 位置が同じ場所）** → ✅ **ケース①（構文同一）を loud reject 済**（`exprSyntaxEq`＝Ident/Field/Arrow/Index/Int リテラルの構文的同一を比較）。**arg×arg**＝`verifyArgs`（`swap(a: inout x, b: inout x)`／`inout p.a, inout p.a`）・**self×arg**＝`verifyMethodVis`（`inout fn` self と inout 引数が同一場所＝`n.merge(other: inout n)`）の両方を弾く＝以前は silent last-write-wins の hidden-meaning 穴。test reject overlapping_inout{,_field,_self}。**残**＝**ケース②③＝部分/添字重なり**（`a.merge(inout a.field)` の receiver-vs-field-of-receiver・`arr[i], arr[j]` の distinct 証明）は構文同一でないので未検査＝spec 通り lint＋限定ランタイム panic は将来。spec/03。
 
 ## 数値モデル
 

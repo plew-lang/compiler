@@ -549,6 +549,18 @@ fn verifyMethodVis(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
                 } else {
                     compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
                 }
+                // overlapping `inout` (spec/03 case ①): an `inout fn` self IS an inout
+                // position, so an `inout` argument naming the same place as the receiver
+                // overlaps — last-write-wins would be a silent bug.
+                mut val k: U64 = 0
+                while k < args.count {
+                    if args[k].isInout {
+                        if exprSyntaxEq(c: inout c, a: recv, b: args[k].expr) {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: args[k].expr)), msg: "the receiver of an `inout fn` and an `inout` argument refer to the same place; overlapping `inout` is forbidden (last-write-wins would be a silent bug)")
+                        }
+                    }
+                    k += 1U64
+                }
             }
         }
     }
