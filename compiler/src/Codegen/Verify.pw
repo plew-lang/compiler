@@ -293,6 +293,30 @@ fn verifyAssign(c: inout Comp, op: I64, target: U64, value: U64) {
     }
     checkUniquePlaceCopy(c: inout c, exprId: value, inoutOk: false)
     verifyExpr(c: inout c, id: value)
+    // a clear category mismatch between the place and the value (e.g. assigning a
+    // String to an integer variable) reinterprets the bits and yields garbage — a
+    // hidden-meaning bug. Reject the unambiguous numeric<->String case. (kind 0/3 =
+    // signed/unsigned int, 1 = String; kind 2 lumps Bool/struct/enum and is left for
+    // the existing per-type checks.)
+    val atk: U64 = typeOf(c: inout c, id: target).kind
+    val avk: U64 = typeOf(c: inout c, id: value).kind
+    if assignNumStrMismatch(atk: atk, avk: avk) {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "type mismatch in assignment: a String and a numeric type are not interchangeable")
+    }
+}
+
+// True when one of (target kind, value kind) is a numeric integer (0 signed / 3
+// unsigned) and the other is a String (1) — a definite, garbage-producing mismatch.
+fn assignNumStrMismatch(atk: U64, avk: U64) -> Bool {
+    val aNum: Bool = atk == 0U64 || atk == 3U64
+    val vNum: Bool = avk == 0U64 || avk == 3U64
+    if aNum && avk == 1U64 {
+        return true
+    }
+    if atk == 1U64 && vNum {
+        return true
+    }
+    return false
 }
 
 // Recursively verify an expression: member visibility (field read / method call),

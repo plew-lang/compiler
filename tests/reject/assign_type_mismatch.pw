@@ -1,0 +1,8 @@
+// Assigning a String to an integer variable (or vice versa) reinterprets the bits and
+// silently produced garbage — a hidden-meaning bug. Now a loud reject.
+import @Std/Io with { print }
+fn main() {
+    mut val x: I64 = 5I64
+    x = "str"
+    print(x)
+}
