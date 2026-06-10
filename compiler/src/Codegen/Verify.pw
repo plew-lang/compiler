@@ -368,6 +368,23 @@ fn verifyExpr(c: inout Comp, id: U64) {
         }
         Expr.Try(val expr) => {
             verifyExpr(c: inout c, id: expr)
+            // `try` is only valid in a function that RETURNS a Result (spec/13): it
+            // early-returns the enclosing function's Result on `Err`. In a void /
+            // non-Result function this used to crash the backend (it indexed the
+            // return type's variant table, which isn't a Result). Reject cleanly.
+            mut val retIsResult: Bool = false
+            if c.curRetVoid {
+            } else {
+                if c.curRetLen > 0U64 {
+                    if rangeEquals(bytes: c.bytes, start: c.curRetStart, len: c.curRetLen, kw: "Result") {
+                        retIsResult = true
+                    }
+                }
+            }
+            if retIsResult {
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "`try` is only valid in a function that returns a Result (spec/13)")
+            }
             // `try` works only on a Result (spec/13). The operand being some OTHER
             // registered enum (notably `Optional`) used to crash the backend (it
             // assumed Ok/Err variants and indexed out of bounds). An Optional uses

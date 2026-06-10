@@ -1,0 +1,9 @@
+// `try` is only valid in a function that returns a Result (spec/13): it early-returns
+// the enclosing function's Result on Err. In a void main this used to crash the backend.
+import @Std/Io with { print }
+struct E { pub val c: I64 }
+fn g() -> Result[I64, E] { return <Result[I64, E].Ok value=1I64 /> }
+fn main() {
+    val x: I64 = try g()
+    print(x)
+}
