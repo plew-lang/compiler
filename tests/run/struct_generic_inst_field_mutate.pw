@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+// Assigning a generic-instance field by value (`b.a = <Optional.Some v=99 />`):
+// the un-suffixed RHS construction infers the field's instance type args.
+struct Box2 {
+    pub mut val a: Optional[I64]
+}
+
+fn main() {
+    val xs: Array[Box2] = [<Box2 a=<Optional.Some v=1I64 /> />, <Box2 a=<Optional.None /> />]
+    match xs[0].a { Optional.Some(v: val v) => { print(v) } Optional.None => { print(0I64) } }
+    match xs[1].a { Optional.Some(v: val v) => { print(v) } Optional.None => { print(-1I64) } }
+    mut val b: Box2 = <Box2 a=<Optional.Some v=7I64 /> />
+    b.a = <Optional.Some v=99I64 />
+    match b.a { Optional.Some(v: val v) => { print(v) } Optional.None => { print(0I64) } }
+    b.a = <Optional.None />
+    match b.a { Optional.Some(v: val v) => { print(v) } Optional.None => { print(-2I64) } }
+}

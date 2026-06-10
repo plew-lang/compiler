@@ -1867,6 +1867,30 @@ fn llvmTypeFor(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64, isArr
     return llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen)
 }
 
+// If field `fld` is a (non-array) generic-instance type by value, its grounded
+// instance TypeRef (under the active env), else 0. Used at assignment sites to set
+// st.expectedTy so an un-suffixed RHS construction (`b.a = <Optional.Some v=9 />`)
+// infers the instance's type args, mirroring genFieldValue at construction.
+fn fieldGenInstRef(c: inout Comp, fld: FieldDef) -> U64 {
+    if fld.tyIsArray {
+        return 0U64
+    }
+    if fld.ty == 0U64 {
+        return 0U64
+    }
+    mut val g: U64 = fld.ty
+    if c.curTypeParams.count > 0U64 {
+        g = groundTypeRef(c: inout c, ref: fld.ty)
+    }
+    if isGenericInst(c: inout c, ref: g) {
+        if rangeEquals(bytes: c.bytes, start: c.types[g].nameStart, len: c.types[g].nameLen, kw: "Array") {
+            return 0U64
+        }
+        return g
+    }
+    return 0U64
+}
+
 // The LLVM type of a struct field, honoring an existential `any P` field (the fat
 // pointer) which the span-keyed llvmTypeFor can't see; else the span-based type.
 fn fieldLlvmTy(c: inout Comp, st: inout LlvmCtx, fd: FieldDef) -> LLVMTypeRef {
@@ -8678,6 +8702,14 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                                             LLVMBuildStore(st.b, cell, gep)
                                             return
                                         }
+                                        val gfr: U64 = fieldGenInstRef(c: inout c, fld: fld)
+                                        if gfr != 0U64 {
+                                            st.expectedTy = gfr
+                                            val gv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
+                                            st.expectedTy = 0U64
+                                            LLVMBuildStore(st.b, gv, gep)
+                                            return
+                                        }
                                     }
                                     val rv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
                                     if op == opAssign() {
@@ -8705,6 +8737,14 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                                         val fld: FieldDef = c.structs[bsi].fields[fidx]
                                         val basePtr: LLVMValueRef = placePtrOf(c: inout c, st: inout st, id: fbase)
                                         val gep: LLVMValueRef = LLVMBuildStructGEP2(st.b, baseTy, basePtr, fidx, anon())
+                                        val gfr2: U64 = fieldGenInstRef(c: inout c, fld: fld)
+                                        if op == opAssign() && gfr2 != 0U64 {
+                                            st.expectedTy = gfr2
+                                            val gv2: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
+                                            st.expectedTy = 0U64
+                                            LLVMBuildStore(st.b, gv2, gep)
+                                            return
+                                        }
                                         val rv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
                                         if op == opAssign() {
                                             LLVMBuildStore(st.b, rv, gep)
@@ -8736,6 +8776,14 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                             val pty: LLVMTypeRef = refPointeeTy(c: inout c, st: inout st, refTy: exprRefTypeRef(c: inout c, st: inout st, id: abase))
                             val cellPtr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: abase)
                             val gep: LLVMValueRef = LLVMBuildStructGEP2(st.b, pty, cellPtr, fidx, anon())
+                            val gfr3: U64 = fieldGenInstRef(c: inout c, fld: fld)
+                            if op == opAssign() && gfr3 != 0U64 {
+                                st.expectedTy = gfr3
+                                val gv3: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
+                                st.expectedTy = 0U64
+                                LLVMBuildStore(st.b, gv3, gep)
+                                return
+                            }
                             val rv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
                             if op == opAssign() {
                                 LLVMBuildStore(st.b, rv, gep)
