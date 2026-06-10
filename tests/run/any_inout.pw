@@ -1,0 +1,16 @@
+import @Std/Io with { print }
+
+// A mutating (`inout fn`) method dispatched through `any P` (spec/08): `Self`
+// appears only in the receiver, so the member is callable. The existential's data
+// pointer is passed by pointer to the witness, which mutates the boxed value in
+// place — the box is shared via the fat pointer, so the mutation persists.
+trait Counter { inout fn bump() -> I64 }
+struct C { mut val n: I64 }
+pub impl C as Counter { inout fn bump() -> I64 { self.n += 1I64  return self.n } }
+
+fn main() {
+    mut val c: any Counter = <C n=0 />
+    print(c.bump())   // 1
+    print(c.bump())   // 2
+    print(c.bump())   // 3
+}

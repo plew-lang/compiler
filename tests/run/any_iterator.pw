@@ -1,0 +1,31 @@
+import @Std/Io with { print }
+
+// An existential iterator (spec/08): a trait with an associated type bound at the
+// `any` (`any Iter[Item=I64]`) plus an `inout fn next()` (mutating self, returning
+// `Optional[Item]`). Combines associated-type binding with inout-self dispatch — the
+// boxed iterator's state advances across calls and the grounded `Optional[I64]`
+// result is matched.
+trait Iter2 { type Item  inout fn next() -> Optional[Item] }
+struct Range2 { mut val cur: I64  val end: I64 }
+pub impl Range2 as Iter2 {
+    type Item = I64
+    inout fn next() -> Optional[I64] {
+        if self.cur < self.end {
+            val r: I64 = self.cur
+            self.cur += 1I64
+            return <Optional.Some v=r />
+        }
+        return <Optional.None />
+    }
+}
+
+fn main() {
+    mut val it: any Iter2[Item=I64] = <Range2 cur=0 end=3 />
+    mut val go: Bool = true
+    while go {
+        match it.next() {
+            Optional.Some(val v) => { print(v) }
+            Optional.None => { go = false }
+        }
+    }
+}

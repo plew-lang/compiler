@@ -195,6 +195,10 @@ export struct SigAst {
     pub val hasRet: Bool
     pub val ret: TypeAst
     pub val isAssoc: Bool
+    // `inout fn` requirement (spec/08): the method mutates `self`. Conformance still
+    // matches by selector, not self-mode, but the existential dispatch needs it to
+    // pass the boxed self by pointer (a mutating method on `any P` — `inout next()`).
+    pub val selfInout: Bool = false
 }
 
 // A `trait Name [: Super + ...] { requirements }` declaration (spec/08). The body

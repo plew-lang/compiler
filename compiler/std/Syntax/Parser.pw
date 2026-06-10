@@ -982,7 +982,7 @@ export fn parseImplDecl(p: inout P, isPub: Bool, extName: String = "") -> ImplAs
 // A body-less function signature `name[T,...](params) [-> ret]` (a trait requirement
 // or extern declaration). The leading `fn`/`assoc fn`/`inout fn` is already consumed
 // (the cursor is at the name); `isAssoc` records the form. Mirrors parseReqSig.
-fn parseSigAst(p: inout P, isAssoc: Bool) -> SigAst {
+fn parseSigAst(p: inout P, isAssoc: Bool, selfInout: Bool = false) -> SigAst {
     val nameTok: Tok = p.curTok()
     val name: String = p.text(t: nameTok)
     val nameSpan: Span = p.spanOf(t: nameTok)
@@ -999,7 +999,7 @@ fn parseSigAst(p: inout P, isAssoc: Bool) -> SigAst {
         }
         _ => {}
     }
-    return <SigAst name=name nameSpan=nameSpan typeParams=typeParams params=params hasRet=hasRet ret=ret isAssoc=isAssoc />
+    return <SigAst name=name nameSpan=nameSpan typeParams=typeParams params=params hasRet=hasRet ret=ret isAssoc=isAssoc selfInout=selfInout />
 }
 
 // A `trait Name [: Super + ...] { fn req ... ; type Item }` declaration (spec/08).
@@ -1060,7 +1060,7 @@ export fn parseTraitDecl(p: inout P) -> TraitAst {
                     Kind.KwFn => { p.advance() }
                     _ => {}
                 }
-                reqs.append(parseSigAst(p: inout p, isAssoc: false))
+                reqs.append(parseSigAst(p: inout p, isAssoc: false, selfInout: true))
             }
             _ => {
                 if curIs(p: inout p, kw: "assoc") {

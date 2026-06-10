@@ -1210,7 +1210,17 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 return c.pushType(t: <TypeRef nameStart=c.structs[si].nameStart nameLen=c.structs[si].nameLen args=noArgs viewExtId=vid />)
             }
         }
-        Expr.Method(val recv, val nameStart, val nameLen, args: _) => {
+        Expr.Method(val recv, val nameStart, val nameLen, args: val margs) => {
+            // an `any P` receiver: the requirement's return TypeRef, grounded under
+            // the existential's bindings (so a `match it.next()` on `any Iter[Item=I64]`
+            // recovers `Optional[I64]`).
+            val atIdx: U64 = anyRecvTraitIdx(c: inout c, st: inout st, recv: recv)
+            if atIdx < c.traits.count {
+                val rr: U64 = anyMethodRetRef(c: inout c, anyRef: exprTypeRef(c: inout c, st: inout st, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: margs)
+                if rr != 0U64 {
+                    return rr
+                }
+            }
             // `xs.map(f)` / `xs.filter(p)` : the lazy adapter instance it produces,
             // so a `for v in xs.map(f).filter(p)` (and the chain) types its iterand.
             return adapterCallResultInst(c: inout c, st: inout st, recv: recv, nameStart: nameStart, nameLen: nameLen)
@@ -7279,9 +7289,16 @@ fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, trait
     val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
     val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "entry"))
     LLVMPositionBuilderAtEnd(st.b, entry)
-    val selfVal: LLVMValueRef = LLVMBuildLoad2(st.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
+    // self: an `inout fn` witness takes self by pointer (mutates the boxed value in
+    // place — the box is shared via the fat pointer's data field, so the mutation
+    // persists); a by-value self is loaded from the box.
+    mut val selfArg: LLVMValueRef = LLVMGetParam(fv, 0U64)
+    if req.selfInout {
+    } else {
+        selfArg = LLVMBuildLoad2(st.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
+    }
     mut val av: Array[LLVMValueRef] = []
-    av.append(value: selfVal)
+    av.append(value: selfArg)
     mut val ai: U64 = 0
     while ai < req.params.count {
         av.append(value: LLVMGetParam(fv, ai + 1U64))
