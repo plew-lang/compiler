@@ -1,0 +1,33 @@
+import @Std/Io with { print }
+
+// Blanket trait impls (spec/08): `impl[T] T as Show where T: Named` makes every
+// type conforming to Named also conform to Show with the given provided body.
+// The method is copied onto each qualifying concrete type and the conferred
+// conformance is recorded, so it works both as a direct call and through a
+// `where U: Show` bound.
+trait Named { fn nm() -> I64 }
+trait Show { fn show() -> I64 }
+
+struct A { val a: I64 }
+struct B { val b: I64 }
+struct Q { val q: I64 }
+
+pub impl A as Named { fn nm() -> I64 { return self.a } }
+pub impl B as Named { fn nm() -> I64 { return self.b * 10I64 } }
+// Q deliberately does NOT conform to Named, so it does not get `show`.
+pub impl Q { fn raw() -> I64 { return self.q } }
+
+pub impl[T] T as Show where T: Named { fn show() -> I64 { return self.nm() + 1I64 } }
+
+// the blanket-conferred conformance also satisfies a `where U: Show` bound.
+fn doubled[U](x: U) -> I64 where U: Show { return x.show() * 2I64 }
+
+fn main() {
+    val a: A = <A a=4 />
+    val b: B = <B b=2 />
+    val q: Q = <Q q=9 />
+    print(a.show())      // 4 + 1 = 5      (direct, blanket on A)
+    print(b.show())      // 20 + 1 = 21    (direct, blanket on B)
+    print(doubled(x: a)) // (4+1)*2 = 10   (through a where U: Show bound)
+    print(q.raw())       // 9              (Q has no `show`, only its own method)
+}

@@ -194,6 +194,11 @@ fn runFrontend() -> Comp {
     buildKwCache(c: inout c)
     // derive (#5): synthesize `@[Eq]`/`@[Ord]` witnesses before any analysis.
     synthesizeDerives(c: inout c)
+    // blanket trait impls (spec/08): `impl[T] T as Show where T: Named` makes
+    // every Named type conform to Show; copy the methods onto each qualifying
+    // concrete type (before provided methods, so the trait's own provided
+    // methods also reach the newly-conforming types).
+    instantiateBlanketImpls(c: inout c)
     // trait provided methods (spec/08): copy each `impl Trait { }` provided
     // method onto every conforming type, so they ride normal method resolution.
     instantiateProvidedMethods(c: inout c)

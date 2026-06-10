@@ -86,6 +86,165 @@ fn providedCopyTypeParams(c: inout Comp, recvStart: U64, recvLen: U64, ownParams
     return out
 }
 
+// Whether a conformance's subject is a type *parameter* of the impl — i.e. a
+// blanket impl `impl[T] T as Trait where T: Bound` — rather than a concrete
+// type. Detected structurally: some method of the conformance has the subject
+// name both as its receiver and as one of its own type params.
+fn isBlanketConform(c: inout Comp, cf: Conform) -> Bool {
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.hasRecv {
+            if f.recvId == cf.typeId {
+                mut val tp: U64 = 0
+                while tp < f.typeParams.count {
+                    if f.typeParams[tp].nameId == cf.typeId {
+                        return true
+                    }
+                    tp += 1
+                }
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// Whether a conformance of `typeId` to `traitId` is already recorded (avoid
+// registering a duplicate blanket-derived Conform).
+fn conformExists(c: inout Comp, typeId: U64, traitId: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.conforms.count {
+        if c.conforms[i].typeId == typeId {
+            if c.conforms[i].traitId == traitId {
+                return true
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// Whether concrete type (typeStart,typeLen) satisfies every `where` bound of the
+// blanket impl whose subject type-param id is `paramId` (the bounds are folded
+// into each blanket method's funcBounds: paramNameId == paramId). A blanket with
+// no bound is skipped by the caller (too broad), so an empty bound set here means
+// the type vacuously qualifies only when the caller already gated on `hasBound`.
+fn typeSatisfiesBlanketBounds(c: inout Comp, typeStart: U64, typeLen: U64, paramId: U64) -> Bool {
+    mut val bi: U64 = 0
+    while bi < c.funcBounds.count {
+        val fb: FuncBound = c.funcBounds[bi]
+        if fb.paramNameId == paramId {
+            // only this blanket's bounds: the bound's function must be one of the
+            // blanket's methods (receiver == the subject param).
+            if fb.fnIdx < c.funcs.count {
+                if c.funcs[fb.fnIdx].recvId == paramId {
+                    if typeConformsTo(c: inout c, typeStart: typeStart, typeLen: typeLen, traitStart: fb.traitStart, traitLen: fb.traitLen) {
+                    } else {
+                        return false
+                    }
+                }
+            }
+        }
+        bi += 1
+    }
+    return true
+}
+
+// Whether the blanket impl with subject param `paramId` has at least one `where`
+// bound (we only apply bounded blankets; an unbounded `impl[T] T as Trait` would
+// match every type and is left unapplied for now).
+fn blanketHasBound(c: inout Comp, paramId: U64) -> Bool {
+    mut val bi: U64 = 0
+    while bi < c.funcBounds.count {
+        val fb: FuncBound = c.funcBounds[bi]
+        if fb.paramNameId == paramId {
+            if fb.fnIdx < c.funcs.count {
+                if c.funcs[fb.fnIdx].recvId == paramId {
+                    return true
+                }
+            }
+        }
+        bi += 1
+    }
+    return false
+}
+
+// Blanket trait impls (spec/08): `impl[T] T as Show where T: Named { fn show… }`
+// makes every type conforming to Named also conform to Show with the given body.
+// For each blanket conformance and each concrete type that satisfies the blanket's
+// bounds, copy the blanket's methods onto that type (receiver = the concrete type,
+// the subject param dropped) and record the derived conformance — so they ride the
+// ordinary provided-method emission path. Runs before instantiateProvidedMethods
+// so any further provided methods of the blanket's trait also reach the new types.
+fn instantiateBlanketImpls(c: inout Comp) {
+    val nConforms: U64 = c.conforms.count
+    mut val ci: U64 = 0
+    while ci < nConforms {
+        val cf: Conform = c.conforms[ci]
+        if isBlanketConform(c: inout c, cf: cf) {
+            if blanketHasBound(c: inout c, paramId: cf.typeId) {
+                // candidate concrete types: the subjects of every non-blanket
+                // conformance (a type that conforms to anything is a concrete type
+                // we can extend). Gate each on satisfying the blanket's bounds.
+                mut val cj: U64 = 0
+                while cj < nConforms {
+                    val cand: Conform = c.conforms[cj]
+                    if isBlanketConform(c: inout c, cf: cand) {
+                    } else {
+                        if conformExists(c: inout c, typeId: cand.typeId, traitId: cf.traitId) {
+                        } else {
+                            if typeSatisfiesBlanketBounds(c: inout c, typeStart: cand.typeStart, typeLen: cand.typeLen, paramId: cf.typeId) {
+                                applyBlanketTo(c: inout c, blanket: cf, recvStart: cand.typeStart, recvLen: cand.typeLen)
+                            }
+                        }
+                    }
+                    cj += 1
+                }
+            }
+        }
+        ci += 1
+    }
+}
+
+// Copy every method of blanket conformance `blanket` onto the concrete type
+// (recvStart,recvLen), dropping the blanket's subject type param (now bound to
+// the concrete receiver), and record the derived conformance.
+fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64) {
+    val recvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
+    val nFuncs: U64 = c.funcs.count
+    mut val fi: U64 = 0
+    while fi < nFuncs {
+        val f: Func = c.funcs[fi]
+        if f.hasRecv {
+            if f.recvId == blanket.typeId {
+                // skip if the concrete type already has a method of this name
+                // (an inherent or already-copied method wins).
+                if methodInRange(c: inout c, lo: 0, hi: c.funcs.count, recvStart: recvStart, recvLen: recvLen, nameStart: f.nameStart, nameLen: f.nameLen) {
+                } else {
+                    // drop the subject param from the method's type params; the
+                    // remaining (method-own) params are kept.
+                    mut val copiedTP: Array[Bind] = []
+                    mut val tp: U64 = 0
+                    while tp < f.typeParams.count {
+                        if f.typeParams[tp].nameId == blanket.typeId {
+                        } else {
+                            copiedTP.append(f.typeParams[tp])
+                        }
+                        tp += 1
+                    }
+                    c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true />)
+                }
+            }
+        }
+        fi += 1
+    }
+    if conformExists(c: inout c, typeId: recvId, traitId: blanket.traitId) {
+    } else {
+        c.conforms.append(<Conform typeStart=recvStart typeLen=recvLen typeId=recvId traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed />)
+    }
+}
+
 fn instantiateProvidedMethods(c: inout Comp) {
     val nFuncs: U64 = c.funcs.count
     mut val ci: U64 = 0
