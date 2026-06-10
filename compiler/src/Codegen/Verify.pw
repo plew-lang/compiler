@@ -54,6 +54,60 @@ fn verifyProgram(c: inout Comp) {
         }
         fi += 1
     }
+    checkDeclShapes(c: inout c)
+}
+
+// Declaration-shape soundness for entry-module struct/enum types: a duplicate field
+// name (`struct A { val x  val x }`) or duplicate variant payload field would make a
+// construction / pattern ambiguous (and silently pick one) — a hidden-meaning bug.
+// Only the entry module (module 0) is the user's code; std/prelude is trusted.
+fn checkDeclShapes(c: inout Comp) {
+    mut val si: U64 = 0
+    while si < c.structs.count {
+        val sd: StructDef = c.structs[si]
+        if sd.isExtern {
+        } else {
+            if moduleOf(c: inout c, offset: sd.nameStart) == 0U64 {
+                checkDupFields(c: inout c, fs: sd.fields, ctx: "struct")
+            }
+        }
+        si += 1
+    }
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val ed: EnumDef = c.enums[ei]
+        if moduleOf(c: inout c, offset: ed.nameStart) == 0U64 {
+            // duplicate variant names, and duplicate fields within each variant.
+            mut val vi: U64 = 0
+            while vi < ed.variants.count {
+                mut val vj: U64 = vi + 1U64
+                while vj < ed.variants.count {
+                    if spansEqual(c: inout c, aStart: ed.variants[vi].nameStart, aLen: ed.variants[vi].nameLen, bStart: ed.variants[vj].nameStart, bLen: ed.variants[vj].nameLen) {
+                        compileErrorAt(line: lineOf(c: inout c, offset: ed.variants[vj].nameStart), msg: "duplicate enum variant name (each variant must be distinct)")
+                    }
+                    vj += 1
+                }
+                checkDupFields(c: inout c, fs: ed.variants[vi].fields, ctx: "variant")
+                vi += 1
+            }
+        }
+        ei += 1
+    }
+}
+
+// Reject a duplicate field name within one field list (struct body / variant payload).
+fn checkDupFields(c: inout Comp, fs: Array[FieldDef], ctx: String) {
+    mut val i: U64 = 0
+    while i < fs.count {
+        mut val j: U64 = i + 1U64
+        while j < fs.count {
+            if spansEqual(c: inout c, aStart: fs[i].nameStart, aLen: fs[i].nameLen, bStart: fs[j].nameStart, bLen: fs[j].nameLen) {
+                compileErrorAt(line: lineOf(c: inout c, offset: fs[j].nameStart), msg: "duplicate field name (each field in a struct body / variant payload must be distinct)")
+            }
+            j += 1
+        }
+        i += 1
+    }
 }
 
 // Establish the same body context genFunc does — return type (for `return e`

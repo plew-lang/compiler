@@ -1,0 +1,3 @@
+// A variant payload with two fields of the same name — reject.
+enum E { V(x: I64, x: I64) }
+fn main() { val e: E = <E.V x=1 /> }

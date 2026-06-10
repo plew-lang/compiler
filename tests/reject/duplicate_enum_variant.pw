@@ -1,0 +1,3 @@
+// Two enum variants of the same name — reject (each variant must be distinct).
+enum E { A A B }
+fn main() { val e: E = <E.B /> }

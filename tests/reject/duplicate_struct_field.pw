@@ -1,0 +1,6 @@
+// A struct with two fields of the same name makes construction/access ambiguous — reject.
+struct A {
+    pub val x: I64
+    pub val x: I64
+}
+fn main() { val a: A = <A x=1 /> }
