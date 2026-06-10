@@ -35,10 +35,8 @@
 
 **進め方**＝provisional.md を上から走査し、3 大機能・spec-future を除いて各剥離を 1 つずつ green 増分で潰す→各区切りで commit＋push＋本ログ更新。完了の目安＝provisional.md が（3 大機能・spec-future を除いて）すべて `✅` になり、spec 由来の reject/run テストが網羅される。
 
-**ツール要件（ゴールの一部）**＝**任意のパスに配置したコンパイラバイナリ単体で `plew build ./Main.pw` と `plew gen ./Main.pw` が動く**こと。
-- **現状**：`plew`（build）はパス非依存済（symlink 解決で隣の `compiler/plewc` を見つけ・std はバイナリ位置解決・生成物は libc のみ）だが**サブコマンドは `plew <file>`／`plew run`＝`build` 動詞が無い**。`plew gen` は別スクリプト `plew-gen.sh` で **`cd $(dirname $0)`＝リポジトリルート前提＋`llvm-config` 依存**ゆえ任意パスのバイナリ単体では動かない。
-- **やること**：①`plew` に `build`/`gen` サブコマンドを統一（`plew build ./Main.pw`／`plew gen ./Main.pw`・既存の bare `plew <file>`/`run` は維持してよい）②`gen` を**パス非依存化**（`cd repo` を捨て build と同じ symlink 解決で plewc を見つける）＋**`llvm-config` 依存を外す**（gen harness も libc のみリンクで済むか確認＝build と同じ床に揃える）。`@[...]` 付きファイルの auto-part・`<Foo>.gen.pw` 出力規約は不変。
-- **設計の分岐（未決）**：「バイナリ単体」を ⓐ relocatable な薄い driver スクリプト＋`compiler/plewc`＋clang で満たすか、ⓑ `plewc` 自身が `build`/`gen` を解釈し clang を内部 spawn する真の単一バイナリにするか（さらに進めれば LLVM 直接オブジェクト出力で clang 不要）。着手時に確認。
+**ツール要件（ゴールの一部）**＝**任意のパスに配置したコンパイラバイナリ単体で `plew build ./Main.pw` と `plew gen ./Main.pw` が動く** → ✅ **達成（ⓐ＝relocatable driver で）**。`plew` を統一 CLI 化＝`build`/`run`/`gen` サブコマンド＋bare `plew <file>`（後方互換）。**`plew gen` をパス非依存化**＝`cd repo` を捨て build と同じ symlink 解決で隣の `compiler/plewc` を見つける・**`llvm-config` 依存を撤去**（gen harness も libc のみでリンク可と実機確認＝build と同床）。`plew-gen.sh` は `plew gen` への薄い委譲 wrapper に縮約（名前は後方互換で維持）。`@[...]` auto-part・`<Foo>.gen.pw` 出力規約は不変。test-gen green 維持（自前 harness ゆえ無影響）。
+- **設計の分岐（残・任意の将来 upgrade）**：今は ⓐ＝薄い `plew` driver スクリプト＋`compiler/plewc`＋clang（symlink で同梱物を解決＝任意パスで動く）。**ⓑ＝`plewc` 自身が `build`/`gen` を解釈し clang を内部 spawn する真の単一バイナリ**（さらに LLVM 直接オブジェクト出力で clang 不要）は additive な将来 upgrade（ⓐ を壊さず上に積める）。「バイナリ単体」を厳密に 1 ファイルにしたい場合のみ ⓑ＝**ユーザー確認待ち**（要件は ⓐ で機能的に満たす）。
 
 ## 既知バグ（要修正）
 

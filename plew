@@ -1,13 +1,15 @@
 #!/bin/sh
-# plew — compile a single Plew source file to a native binary in one shot
-# (and optionally run it). Works on a .pw file anywhere: `plewc` resolves @Std
-# from the compiler binary's own directory (compiler/std), not from the source,
-# so the source location is irrelevant. The compiled program links only libc —
-# libLLVM is the compiler's concern, not the program's — so no llvm-config flags
-# are needed at link time.
+# plew — the Plew CLI. Compile a .pw file to a native binary, run it, or run the
+# derive-macro generator — all from a single relocatable binary: `plewc` resolves
+# @Std from the compiler binary's own directory (compiler/std), not from the
+# source, so the source location is irrelevant. Compiled programs and the gen
+# harness link only libc (libLLVM is the compiler's concern, not the program's),
+# so no llvm-config flags are needed and the tool works from any path.
 #
-#   plew <file.pw> [-o <out>]    compile to a binary (default: ./<basename>)
-#   plew run <file.pw> [args...]  compile to a temp binary and run it
+#   plew <file.pw> [-o <out>]        compile to a binary (default: ./<basename>)
+#   plew build <file.pw> [-o <out>]  same as above (explicit verb)
+#   plew run <file.pw> [args...]     compile to a temp binary and run it
+#   plew gen <file.pw> [<file.pw>…]  run @[…] derive macros -> <file>.gen.pw (spec/16)
 #
 # Override the C compiler with $CC (default: clang).
 
@@ -26,13 +28,51 @@ CC=${CC:-clang}
 
 [ -x "$PLEWC" ] || { echo "plew: $PLEWC not found — run ./bootstrap.sh first" >&2; exit 1; }
 
-usage() { echo "usage: plew <file.pw> [-o <out>]   |   plew run <file.pw> [args...]" >&2; exit 1; }
+usage() {
+    echo "usage: plew <file.pw> [-o <out>]   |   plew build <file.pw> [-o <out>]" >&2
+    echo "       plew run <file.pw> [args...] |   plew gen <file.pw> [<file.pw>…]" >&2
+    exit 1
+}
 
+# Subcommand dispatch. A leading verb (build/run/gen) selects the mode; a bare
+# first argument that is a .pw file defaults to build (back-compat).
 mode=build
-if [ "$1" = "run" ]; then mode=run; shift; fi
-[ -n "$1" ] || usage
-src=$1; shift
+case "$1" in
+    run)   mode=run;   shift ;;
+    build) mode=build; shift ;;
+    gen)   mode=gen;   shift ;;
+esac
 
+[ -n "$1" ] || usage
+
+tmp="${TMPDIR:-/tmp}/plew-$$"
+mkdir -p "$tmp"
+trap 'rm -rf "$tmp"' EXIT
+
+# ── gen: run derive macros (spec/16). Version-agnostic String→String step —
+# `plewc --gen` emits the harness IR, clang builds it (libc only), running it
+# prints the generated source to <file>.gen.pw (committed; the normal build
+# auto-parts it whenever a file carries `@[…]`). ──
+if [ "$mode" = gen ]; then
+    "$PLEWC" --runtime > "$tmp/runtime.c"
+    for pw in "$@"; do
+        case "$pw" in
+            *.gen.pw) echo "plew gen: skipping generated file $pw" >&2; continue ;;
+            *.pw) ;;
+            *) echo "plew gen: not a .pw file: $pw" >&2; exit 1 ;;
+        esac
+        [ -f "$pw" ] || { echo "plew gen: no such file: $pw" >&2; exit 1; }
+        out="${pw%.pw}.gen.pw"
+        "$PLEWC" --gen "$pw" > "$tmp/harness.ll"
+        "$CC" -w "$tmp/harness.ll" "$tmp/runtime.c" -o "$tmp/harness"
+        "$tmp/harness" > "$out"
+        echo "plew gen: $pw -> $out"
+    done
+    exit 0
+fi
+
+# ── build / run: compile a single .pw to a native binary (libc only). ──
+src=$1; shift
 case "$src" in *.pw) ;; *) echo "plew: not a .pw file: $src" >&2; exit 1 ;; esac
 [ -f "$src" ] || { echo "plew: no such file: $src" >&2; exit 1; }
 
@@ -41,10 +81,6 @@ if [ "$mode" = build ]; then
     if [ "$1" = "-o" ]; then out=$2; shift 2; fi
     [ -n "$out" ] || out=$(basename "${src%.pw}")
 fi
-
-tmp="${TMPDIR:-/tmp}/plew-$$"
-mkdir -p "$tmp"
-trap 'rm -rf "$tmp"' EXIT
 
 "$PLEWC" "$src" > "$tmp/out.ll"
 "$PLEWC" --runtime > "$tmp/rt.c"

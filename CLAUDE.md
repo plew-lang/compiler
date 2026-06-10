@@ -54,8 +54,8 @@ bootstrap.sh          LLVM IR 種からコンパイラをビルド＋IR 不動�
 dev-rebuild.sh        編集後の高速 in-place 再ビルド（現 `compiler/plewc` が src を再コンパイル→上書き・不動点/種なし）
 test.sh               テストスイート（run/panic/reject/part＋不動点）
 test-gen.sh           メタプロ（gen/genreject）テスト
-plew                  単一 `.pw`→ネイティブバイナリ一発（`plew f.pw [-o out]`／`plew run f.pw`・任意ディレクトリの .pw 可＝std はバイナリ位置解決・生成物は libc のみで llvm-config 不要・PATH に symlink 可）
-plew-gen.sh           メタプロ生成（`plewc --gen <file>`→clang＋libLLVM→run > `<file>.gen.pw`・spec/16）
+plew                  統一 CLI＝`plew build f.pw [-o out]`／`plew run f.pw`／`plew gen f.pw`（＋bare `plew f.pw`＝build 後方互換）。任意パスで動く＝std はバイナリ位置解決・生成物も gen harness も libc のみ（llvm-config 不要）・symlink 解決で隣の compiler/plewc を見つける・PATH に symlink 可
+plew-gen.sh           `plew gen` への薄い委譲 wrapper（後方互換・メタプロ生成 `<file>.gen.pw`・spec/16）
 tmp/                  ローカル実験の scratch（gitignore・cleanup はスクリプト内包）
 tests/
   run/<name>.pw,.out  コンパイル&実行→stdout 照合（任意の .in を stdin に）
