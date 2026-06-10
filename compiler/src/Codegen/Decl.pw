@@ -256,23 +256,20 @@ fn instantiateProvidedMethods(c: inout Comp) {
             if f.hasRecv {
                 if f.recvId == cf.traitId {
                     // shadowing/collision (spec/08): an inherent method of the same
-                    // name on the type wins (skip the provided copy); a provided
-                    // method already copied from another trait collides — the bare
-                    // call would be ambiguous, so error (use-site `#`-disambiguation
-                    // is not yet supported).
+                    // name on the type wins (skip the provided copy). Two conformed
+                    // traits providing the same name both copy here, each tagged with
+                    // its source trait (srcTraitId) — they coexist; bare `a.foo()` is
+                    // then a use-site ambiguity (findMethod), while `a#P.foo()` selects
+                    // the source trait (findExtMethod). spec/08,09.
                     if methodInRange(c: inout c, lo: 0, hi: nFuncs, recvStart: cf.typeStart, recvLen: cf.typeLen, nameStart: f.nameStart, nameLen: f.nameLen) {
                     } else {
-                        if methodInRange(c: inout c, lo: nFuncs, hi: c.funcs.count, recvStart: cf.typeStart, recvLen: cf.typeLen, nameStart: f.nameStart, nameLen: f.nameLen) {
-                            compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "two conformed traits provide a method of the same name; the bare call is ambiguous (`#`-disambiguation not yet supported)")
-                        } else {
-                            // a provided method copied onto a *generic* conformer inherits
-                            // the conformer's type params (prepended), so methodMatchesInst
-                            // emits it per receiver instantiation (`MapIter[Counter,…]`) like
-                            // an inherent method. Onto a non-generic conformer this is a
-                            // no-op (the conformer has no params).
-                            val copiedTP: Array[Bind] = providedCopyTypeParams(c: inout c, recvStart: cf.typeStart, recvLen: cf.typeLen, ownParams: f.typeParams)
-                            c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout c, start: cf.typeStart, len: cf.typeLen) typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true />)
-                        }
+                        // a provided method copied onto a *generic* conformer inherits
+                        // the conformer's type params (prepended), so methodMatchesInst
+                        // emits it per receiver instantiation (`MapIter[Counter,…]`) like
+                        // an inherent method. Onto a non-generic conformer this is a
+                        // no-op (the conformer has no params).
+                        val copiedTP: Array[Bind] = providedCopyTypeParams(c: inout c, recvStart: cf.typeStart, recvLen: cf.typeLen, ownParams: f.typeParams)
+                        c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout c, start: cf.typeStart, len: cf.typeLen) typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=cf.traitId />)
                     }
                 }
             }

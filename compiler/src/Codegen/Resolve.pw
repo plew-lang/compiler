@@ -246,6 +246,20 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
         i += 1
     }
     if typeMatch != c.funcs.count {
+        // two provided-method copies from DIFFERENT source traits matching the same
+        // bare selector: the bare call is ambiguous (spec/08) — select the source
+        // with `a#P.foo()`. (Only this case errors here; ordinary arg-type overloads
+        // are disambiguated by the args, and identical-trait copies are the same
+        // method.)
+        if typeMatch2 != c.funcs.count {
+            if c.funcs[typeMatch].srcTraitId != 0U64 {
+                if c.funcs[typeMatch2].srcTraitId != 0U64 {
+                    if c.funcs[typeMatch].srcTraitId != c.funcs[typeMatch2].srcTraitId {
+                        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "ambiguous bare call: two conformed traits provide this method; select the source with `a#P.method()`")
+                    }
+                }
+            }
+        }
         checkOverloadAmbiguity(c: inout c, a: typeMatch, b: typeMatch2, args: args)
         return typeMatch
     }
@@ -267,20 +281,21 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
     return c.funcs.count
 }
 
-// Index of the extension method named (nameStart,nameLen) on type
-// (recvStart,recvLen) provided by extension (srcStart,srcLen) — i.e. a method
-// whose extId matches the named extension (spec/09 `value#Ext.m()`). Resolves
-// overloads by labels + arg types like findMethod. c.funcs.count if none.
+// Index of the method named (nameStart,nameLen) on type (recvStart,recvLen)
+// selected by the source `#X` (srcStart,srcLen) — where X is either an extension
+// (Func.extId) or a trait (Func.srcTraitId of a provided-method copy). Covers both
+// `value#Ext.m()` (spec/09) and `a#P.foo()` provided-method disambiguation
+// (spec/08). Resolves overloads by labels + arg types. c.funcs.count if none.
 fn findExtMethod(c: inout Comp, recvStart: U64, recvLen: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     val qRecvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
-    val qExtId: U64 = intern(c: inout c, start: srcStart, len: srcLen)
+    val qSrcId: U64 = intern(c: inout c, start: srcStart, len: srcLen)
     mut val firstLabel: U64 = c.funcs.count
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
         if f.hasRecv {
-            if f.extId == qExtId {
+            if f.extId == qSrcId || f.srcTraitId == qSrcId {
                 if f.nameId == qNameId {
                     if f.recvId == qRecvId {
                         if paramsLabelsOk(c: inout c, params: f.params, args: args) {

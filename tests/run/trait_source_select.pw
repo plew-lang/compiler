@@ -1,0 +1,23 @@
+import @Std/Io with { print }
+
+// Method-source selection `a#P.foo()` (spec/08,09): when a type conforms to two
+// traits that provide the same-name method, the bare call is ambiguous (see
+// reject/provided_method_collision); `#P` / `#Q` select which trait's provided
+// method to use. The provided-method copies are tagged with their source trait
+// (Func.srcTraitId) and resolved through findExtMethod, the same `#X` path as
+// extension views.
+trait Celsius {}
+pub impl Celsius { fn temp() -> I64 { return 100I64 } }
+
+trait Fahrenheit {}
+pub impl Fahrenheit { fn temp() -> I64 { return 212I64 } }
+
+struct Reading { val raw: I64 }
+pub impl Reading as Celsius {}
+pub impl Reading as Fahrenheit {}
+
+fn main() {
+    val r: Reading = <Reading raw=0 />
+    print(r#Celsius.temp())      // 100
+    print(r#Fahrenheit.temp())   // 212
+}

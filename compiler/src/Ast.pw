@@ -590,6 +590,10 @@ struct Func {
     // An extension method is tagged with its extension so it is excluded from bare
     // resolution and reachable only through a `value#Ext.m()` view (findExtMethod).
     pub val extId: U64 = 0
+    // for a provided-method copy (instantiateProvidedMethods): the interned id of
+    // the trait it came from, so `a#P.foo()` can select the source trait when two
+    // conformed traits provide the same-name method (spec/08,09). 0 otherwise.
+    pub val srcTraitId: U64 = 0
 }
 
 struct Comp {
