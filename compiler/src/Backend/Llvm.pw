@@ -1171,9 +1171,13 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // `base?.member : Optional[U]` — so a chained `a?.b?.c` types its inner.
             return optChainResultRefLL(c: inout c, st: inout st, base: base, memberStart: memberStart, memberLen: memberLen)
         }
-        Expr.ExtView(val recv, val srcStart, val srcLen) => {
-            // `recv#Ext` : recv's type refined with the extension view (viewExtId).
-            val vid: U64 = intern(c: inout c, start: srcStart, len: srcLen)
+        Expr.ExtView(val recv, val srcStart, val srcLen, val strip) => {
+            // `recv#Ext` : recv's type refined with the extension view (viewExtId);
+            // `recv#!Ext` (strip) removes the view (the result type is plain).
+            mut val vid: U64 = intern(c: inout c, start: srcStart, len: srcLen)
+            if strip {
+                vid = 0U64
+            }
             val br: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
             if br != 0U64 {
                 val bt: TypeRef = c.types[br]
@@ -4875,12 +4879,46 @@ fn primLangItemRecvName(c: inout Comp, st: inout LlvmCtx, recv: U64) -> Bind {
     return z
 }
 
+// The stack of extension-view ids active on an expression's value (spec/09),
+// outermost first: nested `v#A#B` re-view nodes contribute B then A; a `#!Ext`
+// strip ends the chain (views below it are dropped); the unwrapped base value's
+// own type view (a `Type#Ext` param/binding) is appended last. Empty = no view.
+fn collectViewChain(c: inout Comp, st: inout LlvmCtx, id: U64) -> Array[U64] {
+    mut val out: Array[U64] = []
+    mut val cur: U64 = id
+    mut val go: Bool = true
+    while go {
+        match c.exprs[cur] {
+            Expr.ExtView(recv: val r, srcStart: val ss, srcLen: val sl, strip: val strp) => {
+                if strp {
+                    go = false
+                } else {
+                    out.append(value: intern(c: inout c, start: ss, len: sl))
+                    cur = r
+                }
+            }
+            _ => { go = false }
+        }
+    }
+    val r: U64 = exprTypeRef(c: inout c, st: inout st, id: cur)
+    if r != 0U64 {
+        if c.types[r].viewExtId != 0U64 {
+            out.append(value: c.types[r].viewExtId)
+        }
+    }
+    return out
+}
+
 // The extension-view id active on an expression's value (spec/09): a direct
 // `v#Ext` re-view node carries it; otherwise it comes from the value's static
 // type (a param/binding typed `Type#Ext`). 0 = no view.
 fn exprViewExtId(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
     match c.exprs[id] {
-        Expr.ExtView(recv: _, val srcStart, val srcLen) => {
+        Expr.ExtView(recv: _, val srcStart, val srcLen, val strip) => {
+            // `#!Ext` strips the view → plain (bare) resolution; `#Ext` selects it.
+            if strip {
+                return 0U64
+            }
             return intern(c: inout c, start: srcStart, len: srcLen)
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
@@ -4915,7 +4953,32 @@ fn genLlvmExtMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, srcStart: U64, 
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     val sd: StructDef = c.structs[rsidx]
-    val mfi: U64 = findExtMethod(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+    // resolve across this call's own `#Src` plus the receiver's view chain (so
+    // `p#A#B.a()` — parsed as ExtMethod(src=B) on recv `p#A` — also sees A). The
+    // name must resolve in exactly one view (same-name in two is ambiguous).
+    mut val views: Array[U64] = []
+    views.append(value: intern(c: inout c, start: srcStart, len: srcLen))
+    val recvChain: Array[U64] = collectViewChain(c: inout c, st: inout st, id: recv)
+    mut val rci: U64 = 0
+    while rci < recvChain.count {
+        views.append(value: recvChain[rci])
+        rci += 1
+    }
+    mut val mfi: U64 = c.funcs.count
+    mut val vi: U64 = 0
+    while vi < views.count {
+        val cand: U64 = findExtMethodById(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, srcId: views[vi], nameStart: nameStart, nameLen: nameLen, args: args)
+        if cand < c.funcs.count {
+            if mfi < c.funcs.count {
+                if mfi != cand {
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "stacked extension views provide the same method; the call is ambiguous (drop one view)")
+                }
+            } else {
+                mfi = cand
+            }
+        }
+        vi += 1
+    }
     if mfi < c.funcs.count {
     } else {
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "no such extension method on this type (is the extension name right, and a `pub impl`?)")
@@ -5108,13 +5171,26 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     val sd: StructDef = c.structs[rsidx]
-    // a `Type#Ext`-viewed receiver (a value re-view `v#Ext`, or a param/binding
-    // typed `Type#Ext`) resolves the extension's method first (spec/09); the
-    // extension shadows a same-name bare method under the view.
-    val viewId: U64 = exprViewExtId(c: inout c, st: inout st, id: recv)
+    // a viewed receiver (a value re-view `v#Ext`, a stacked `v#A#B`, or a
+    // param/binding typed `Type#Ext`) resolves the extension's method first
+    // (spec/09); the extension shadows a same-name bare method under the view. With
+    // stacked views, the name must resolve in exactly one (same-name in two stacked
+    // views is ambiguous).
+    val viewChain: Array[U64] = collectViewChain(c: inout c, st: inout st, id: recv)
     mut val mfi: U64 = c.funcs.count
-    if viewId != 0U64 {
-        mfi = findExtMethodById(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, srcId: viewId, nameStart: nameStart, nameLen: nameLen, args: args)
+    mut val vci: U64 = 0
+    while vci < viewChain.count {
+        val cand: U64 = findExtMethodById(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, srcId: viewChain[vci], nameStart: nameStart, nameLen: nameLen, args: args)
+        if cand < c.funcs.count {
+            if mfi < c.funcs.count {
+                if mfi != cand {
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "stacked extension views provide the same method; the call is ambiguous (drop one view, or select with `value#Ext.method()`)")
+                }
+            } else {
+                mfi = cand
+            }
+        }
+        vci += 1
     }
     if mfi < c.funcs.count {
     } else {
@@ -6767,6 +6843,16 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
         } else {
             selfPtr = entryAlloca(st: inout st, ty: recvTy)
             LLVMBuildStore(st.b, LLVMGetParam(fv, 0U64), selfPtr)
+        }
+        // an extension method's self is viewed as `Recv#Ext` (spec/09): a bare
+        // `self.m()` in the body resolves through the same extension (so it is
+        // recursion, not a call to a shadowed bare method); reach the shadowed
+        // method with `self#!Ext.m()`.
+        if f.extId != 0U64 {
+            if recvRef == 0U64 {
+                mut val selfViewArgs: Array[U64] = []
+                recvRef = c.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=selfViewArgs viewExtId=f.extId />)
+            }
         }
         pushLocalR(st: inout st, nameStart: st.selfStart, nameLen: st.selfLen, ptr: selfPtr, ty: recvTy, kind: kindFromTySpan(c: inout c, tyStart: f.recvStart, tyLen: f.recvLen), structIdx: recvSidx, isArr: selfIsArr, elemTy: selfElemTy, elemKind: 0U64, typeRef: recvRef)
         // a `move fn` self is owned (deinit'd in the callee); `fn`/`inout fn`/

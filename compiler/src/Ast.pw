@@ -182,10 +182,11 @@ enum Expr {
     // method tagged with that extension on the receiver's type (it does not join
     // bare resolution). Distinct from Method so bare matches are unaffected.
     ExtMethod(recv: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg])
-    // `recv#Ext` (spec/09): a zero-cost value re-view. Evaluates `recv` unchanged;
-    // its type gains the `#Ext` view (viewExtId) so a following bare `.method()`
-    // resolves through the extension. `src` names the extension.
-    ExtView(recv: U64, srcStart: U64, srcLen: U64)
+    // `recv#Ext` / `recv#!Ext` (spec/09): a zero-cost value re-view. Evaluates
+    // `recv` unchanged. `strip=false` gives its type the `#Ext` view (viewExtId);
+    // `strip=true` removes the view (`#!Ext` super form) so a following bare
+    // `.method()` resolves the shadowed bare method. `src` names the extension.
+    ExtView(recv: U64, srcStart: U64, srcLen: U64, strip: Bool)
     Cast(operand: U64, tyStart: U64, tyLen: U64, ty: U64)
     // value-position `match scrut { Pat => expr, ... }`: like Stmt.Match but each
     // arm yields an expression (MatchArm.body is an Expr index, not a Block).

@@ -1,0 +1,6 @@
+import @Std/Io with { print }
+// Two stacked extension views provide the same method name -> ambiguous (spec/09).
+struct P { val n: I64 }
+extension A { pub impl P { fn m() -> I64 { return 1I64 } } }
+extension B { pub impl P { fn m() -> I64 { return 2I64 } } }
+fn main() { val p: P = <P n=4 /> print(p#A#B.m()) }

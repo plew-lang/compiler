@@ -505,12 +505,20 @@ fn parsePostfixAst(p: inout P) -> ExprAst {
                 e = <ExprAst.OptChain base=e member=nm span=<Span start=sStart end=p.prevEnd() /> />
             }
             Kind.Hash => {
-                // `recv#Src...` (spec/09): an extension (or trait) view selector.
-                // `recv#Src.method(args)` is a direct view method call (ExtMethod);
-                // a bare `recv#Src` (or `recv#Src.field`) is a value re-view
-                // (ExtView) that the postfix loop continues on (so `.field` / a
-                // later `.m()` see the viewed value).
+                // `recv#Src...` / `recv#!Src...` (spec/09): an extension (or trait)
+                // view selector. `recv#Src.method(args)` is a direct view method
+                // call (ExtMethod); a bare `recv#Src` / `recv#!Src` (or `.field`) is
+                // a value re-view (ExtView) the postfix loop continues on. `#!Src`
+                // strips the view (the "super" form — a later `.m()` resolves bare).
                 p.advance()
+                mut val strip: Bool = false
+                match p.curKind() {
+                    Kind.Bang => {
+                        strip = true
+                        p.advance()
+                    }
+                    _ => {}
+                }
                 val srcTok: Tok = p.curTok()
                 val src: String = p.text(t: srcTok)
                 p.advance()
@@ -526,15 +534,20 @@ fn parsePostfixAst(p: inout P) -> ExprAst {
                     _ => {}
                 }
                 if isMethodForm {
-                    p.advance()
-                    val nameTok: Tok = p.curTok()
-                    val nm: String = p.text(t: nameTok)
-                    p.advance()
-                    p.advance()
-                    val args: Array[ArgAst] = parseCallArgsAst(p: inout p)
-                    e = <ExprAst.ExtMethod recv=e src=src name=nm args=args span=<Span start=sStart end=p.prevEnd() /> />
+                    if strip {
+                        // `#!Src.m(...)`: strip the view, then a bare method call.
+                        e = <ExprAst.ExtView recv=e src=src strip=true span=<Span start=sStart end=p.prevEnd() /> />
+                    } else {
+                        p.advance()
+                        val nameTok: Tok = p.curTok()
+                        val nm: String = p.text(t: nameTok)
+                        p.advance()
+                        p.advance()
+                        val args: Array[ArgAst] = parseCallArgsAst(p: inout p)
+                        e = <ExprAst.ExtMethod recv=e src=src name=nm args=args span=<Span start=sStart end=p.prevEnd() /> />
+                    }
                 } else {
-                    e = <ExprAst.ExtView recv=e src=src span=<Span start=sStart end=p.prevEnd() /> />
+                    e = <ExprAst.ExtView recv=e src=src strip=strip span=<Span start=sStart end=p.prevEnd() /> />
                 }
             }
             Kind.LBracket => {

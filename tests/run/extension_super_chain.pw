@@ -1,0 +1,28 @@
+import @Std/Io with { print }
+
+// Extension method self-view, `#!Ext` super, and stacked `#A#B` views (spec/09).
+struct P { val n: I64 }
+
+// the type's own greet (the "original")
+pub impl P { fn greet() -> I64 { return 10I64 } }
+
+extension Ext {
+    pub impl P {
+        // self is viewed as P#Ext, so `self.helper()` resolves the extension's
+        // helper (a sibling ext method), and `self#!Ext.greet()` reaches the
+        // shadowed original greet (the "super" call).
+        fn greet() -> I64 { return self#!Ext.greet() + self.helper() }
+        fn helper() -> I64 { return self.n + 1I64 }
+    }
+}
+
+extension A { pub impl P { fn a() -> I64 { return self.n + 7I64 } } }
+extension B { pub impl P { fn b() -> I64 { return self.n * 5I64 } } }
+
+fn main() {
+    val p: P = <P n=4 />
+    print(p.greet())        // 10  (bare: the original)
+    print(p#Ext.greet())    // self#!Ext.greet()=10 + helper()=5 => 15
+    print(p#A#B.a())        // 11  (stacked view A provides a)
+    print(p#A#B.b())        // 20  (stacked view B provides b)
+}

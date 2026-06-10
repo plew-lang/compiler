@@ -320,10 +320,10 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
             val nm: Bind = internBytes(c: inout c, s: name)
             result = c.pushExpr(e: <Expr.ExtMethod recv=r srcStart=srcN.nameStart srcLen=srcN.nameLen nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
         }
-        ExprAst.ExtView(val recv, val src, val span) => {
+        ExprAst.ExtView(val recv, val src, val strip, val span) => {
             val r: U64 = lowerExpr(c: inout c, e: recv)
             val srcN: Bind = internBytes(c: inout c, s: src)
-            result = c.pushExpr(e: <Expr.ExtView recv=r srcStart=srcN.nameStart srcLen=srcN.nameLen />)
+            result = c.pushExpr(e: <Expr.ExtView recv=r srcStart=srcN.nameStart srcLen=srcN.nameLen strip=strip />)
         }
         ExprAst.Index(val base, val index, val span) => {
             val b: U64 = lowerExpr(c: inout c, e: base)

@@ -69,10 +69,11 @@ export enum ExprAst {
     // `recv#Ext.name(args)` (spec/09): a method call through an extension view.
     // `src` is the extension (or trait) name selecting the method source.
     ExtMethod(recv: ExprAst, src: String, name: String, args: Array[ArgAst], span: Span)
-    // `recv#Ext` (spec/09): a zero-cost value re-view selecting extension `src`.
-    // The value is unchanged; its static type gains the `#Ext` view, so a bare
-    // `.method()` afterwards resolves through the extension.
-    ExtView(recv: ExprAst, src: String, span: Span)
+    // `recv#Ext` / `recv#!Ext` (spec/09): a zero-cost value re-view. `strip=false`
+    // selects extension `src` (the static type gains the `#Ext` view); `strip=true`
+    // removes it (`#!Ext`, the "super" form — a following `.method()` resolves the
+    // shadowed bare method). The value is unchanged either way.
+    ExtView(recv: ExprAst, src: String, strip: Bool, span: Span)
     Index(base: ExprAst, index: ExprAst, span: Span)
     Make(typeName: String, typeArgs: Array[TypeAst], variant: String, isEnum: Bool, fields: Array[MakeFieldAst], span: Span)
     ArrayLit(elems: Array[ExprAst], span: Span)
