@@ -96,7 +96,8 @@
 ## 構築・factory
 
 - **JSX `<Type f=e/>`／`<E.V f=e/>`** → 対応。
-- **`factory`／`optional`・`result factory`／フィールドデフォルト値／memberwise vs `pub factory`** → 未実装。全フィールドを名前付きで必須指定。
+- **フィールドデフォルト値 `val x: T = expr`** → ✅ **実装済**（memberwise factory の既定引数糖衣・spec/05 #04）。`<Type f=e/>` で当該フィールドを省略するとデフォルト式が評価される（全フィールド省略＝`<Type />` も可・式デフォルト/`String`/`Bool` 可・テスト未追加だが tmp で確認）。デフォルト式は定義側モジュールスコープで評価＝module-level 名は参照可・**他フィールド/self 参照は不可**（spec 通り＝該当名が module スコープに無ければ loud error＝backend「unknown identifier」・診断は粗いが silent でない）。**未実装**＝`factory`（明示ファクトリ宣言）・`optional`・`result factory`（可謬構築）。
+- **`factory`／`optional`・`result factory`／memberwise vs `pub factory`** → 未実装。
 - **ファクトリ公開ゲート（spec/05「既定 factory（memberwise）」）→ 未実装。** spec は外部からの `<Type f=e/>` 構築に**2 ゲート**を課す：**(a) 公開ゲート**＝既定 memberwise factory は private で、外部構築には `pub impl Type { factory }` の明示宣言が要る／**(b) フィールドゲート**＝公開しても設定できるのは `pub` フィールドのみ。**現状は (b) のみ実装**（非 private フィールドは構築検査 `checkFieldReadVis`／`Resolve.pw` で外部構築可・private は拒否）で、**(a) は丸ごと未実装**＝`pub impl Type { factory }` 無しでも pub フィールドだけで外部構築できてしまう（spec 違反）。`pub impl A { factory }` の `factory` 行は**パースは通るが意味的に無視**（Ident として読み捨て・per-struct の「公開ファクトリ有無」は記録しない）。
   - **メタプロへの影響（spec 通りに連動すべき・現状は (b) のみ）**：spec/16 はディレクティブ引数構築もファクトリ可視性に従うと定める。ゆえに `@[Name(a: …)]` は本来ゲート (a)＋(b) の両方＝`Name` が `pub impl Name { factory }` を宣言しかつ引数フィールドが pub であること、を要求すべき。**現状は (b) のみ強制**（`checkDirectiveArgsPublic`／`Codegen/Gen.pw`＝引数フィールドが private なら gen エラー）で、(a)（公開ファクトリ宣言の有無）は未チェック＝一般の構築ギャップと同じ緩さ。ゲート (a) を一般実装する際に、このマクロ側チェックも `pub impl { factory }` 必須へ拡張する。
 
