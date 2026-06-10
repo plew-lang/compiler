@@ -301,19 +301,39 @@ fn verifyAssign(c: inout Comp, op: I64, target: U64, value: U64) {
     val atk: U64 = typeOf(c: inout c, id: target).kind
     val avk: U64 = typeOf(c: inout c, id: value).kind
     if assignNumStrMismatch(atk: atk, avk: avk) {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "type mismatch in assignment: a String and a numeric type are not interchangeable")
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "type mismatch in assignment: incompatible categories (a numeric type, a String, and a struct/enum value are not interchangeable)")
     }
 }
 
-// True when one of (target kind, value kind) is a numeric integer (0 signed / 3
-// unsigned) and the other is a String (1) — a definite, garbage-producing mismatch.
+// True when (target kind, value kind) are a definite, garbage-producing category
+// mismatch. kinds: 0 signed int, 3 unsigned int (both "numeric"), 1 String, 2 a named
+// type (struct / enum / Bool). A numeric or String place can never hold a named-type
+// value (or vice versa), nor a String<->numeric — all reinterpret the bits. (Two
+// DIFFERENT named types — struct A vs struct B — need a name compare and are handled
+// separately / left for fuller type-checking, to avoid false-rejecting same-type
+// generic instances whose recovered names can vary.)
 fn assignNumStrMismatch(atk: U64, avk: U64) -> Bool {
     val aNum: Bool = atk == 0U64 || atk == 3U64
     val vNum: Bool = avk == 0U64 || avk == 3U64
+    // numeric <-> String
     if aNum && avk == 1U64 {
         return true
     }
     if atk == 1U64 && vNum {
+        return true
+    }
+    // numeric <-> named (struct/enum/Bool), e.g. `intVar = true` / `intVar = aStruct`
+    if aNum && avk == 2U64 {
+        return true
+    }
+    if atk == 2U64 && vNum {
+        return true
+    }
+    // String <-> named
+    if atk == 1U64 && avk == 2U64 {
+        return true
+    }
+    if atk == 2U64 && avk == 1U64 {
         return true
     }
     return false

@@ -320,7 +320,7 @@ source_filename = "plew"
 @251 = private unnamed_addr constant [79 x i8] c"cannot assign to an element of an immutable binding; declare it with `mut val`\00", align 1
 @252 = private unnamed_addr constant [86 x i8] c"cannot assign to an immutable place; the binding and field must be declared `mut val`\00", align 1
 @253 = private unnamed_addr constant [65 x i8] c"cannot assign to an immutable binding; declare it with `mut val`\00", align 1
-@254 = private unnamed_addr constant [81 x i8] c"type mismatch in assignment: a String and a numeric type are not interchangeable\00", align 1
+@254 = private unnamed_addr constant [129 x i8] c"type mismatch in assignment: incompatible categories (a numeric type, a String, and a struct/enum value are not interchangeable)\00", align 1
 @255 = private unnamed_addr constant [88 x i8] c"variant construction is missing a payload field; every field of the variant must be set\00", align 1
 @256 = private unnamed_addr constant [53 x i8] c"wrong number of type arguments for this generic type\00", align 1
 @257 = private unnamed_addr constant [68 x i8] c"duplicate field in construction; each field may be set at most once\00", align 1
@@ -38798,7 +38798,7 @@ then16:                                           ; preds = %match.end
   %97 = load i64, ptr %6, align 4
   %98 = call i64 @pf90(ptr %0, i64 %97)
   %99 = call i64 @pf89(ptr %0, i64 %98)
-  call void @pf75(i64 %99, { ptr, i64 } { ptr @254, i64 80 })
+  call void @pf75(i64 %99, { ptr, i64 } { ptr @254, i64 128 })
   br label %endif17
 
 endif17:                                          ; preds = %then16, %match.end
@@ -38876,6 +38876,78 @@ then7:                                            ; preds = %sc.cont6
   ret i1 true
 
 endif8:                                           ; preds = %sc.cont6
+  %28 = load i1, ptr %4, align 1
+  %29 = icmp ne i1 %28, false
+  br i1 %29, label %sc.rhs9, label %sc.cont10
+
+sc.rhs9:                                          ; preds = %endif8
+  %30 = load i64, ptr %3, align 4
+  %31 = icmp eq i64 %30, 2
+  br label %sc.cont10
+
+sc.cont10:                                        ; preds = %sc.rhs9, %endif8
+  %32 = phi i1 [ false, %endif8 ], [ %31, %sc.rhs9 ]
+  %33 = icmp ne i1 %32, false
+  br i1 %33, label %then11, label %endif12
+
+then11:                                           ; preds = %sc.cont10
+  ret i1 true
+
+endif12:                                          ; preds = %sc.cont10
+  %34 = load i64, ptr %2, align 4
+  %35 = icmp eq i64 %34, 2
+  br i1 %35, label %sc.rhs13, label %sc.cont14
+
+sc.rhs13:                                         ; preds = %endif12
+  %36 = load i1, ptr %5, align 1
+  %37 = icmp ne i1 %36, false
+  br label %sc.cont14
+
+sc.cont14:                                        ; preds = %sc.rhs13, %endif12
+  %38 = phi i1 [ false, %endif12 ], [ %37, %sc.rhs13 ]
+  %39 = icmp ne i1 %38, false
+  br i1 %39, label %then15, label %endif16
+
+then15:                                           ; preds = %sc.cont14
+  ret i1 true
+
+endif16:                                          ; preds = %sc.cont14
+  %40 = load i64, ptr %2, align 4
+  %41 = icmp eq i64 %40, 1
+  br i1 %41, label %sc.rhs17, label %sc.cont18
+
+sc.rhs17:                                         ; preds = %endif16
+  %42 = load i64, ptr %3, align 4
+  %43 = icmp eq i64 %42, 2
+  br label %sc.cont18
+
+sc.cont18:                                        ; preds = %sc.rhs17, %endif16
+  %44 = phi i1 [ false, %endif16 ], [ %43, %sc.rhs17 ]
+  %45 = icmp ne i1 %44, false
+  br i1 %45, label %then19, label %endif20
+
+then19:                                           ; preds = %sc.cont18
+  ret i1 true
+
+endif20:                                          ; preds = %sc.cont18
+  %46 = load i64, ptr %2, align 4
+  %47 = icmp eq i64 %46, 2
+  br i1 %47, label %sc.rhs21, label %sc.cont22
+
+sc.rhs21:                                         ; preds = %endif20
+  %48 = load i64, ptr %3, align 4
+  %49 = icmp eq i64 %48, 1
+  br label %sc.cont22
+
+sc.cont22:                                        ; preds = %sc.rhs21, %endif20
+  %50 = phi i1 [ false, %endif20 ], [ %49, %sc.rhs21 ]
+  %51 = icmp ne i1 %50, false
+  br i1 %51, label %then23, label %endif24
+
+then23:                                           ; preds = %sc.cont22
+  ret i1 true
+
+endif24:                                          ; preds = %sc.cont22
   ret i1 false
 }
 

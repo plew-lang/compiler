@@ -1,0 +1,9 @@
+// Assigning a struct/enum value to a numeric (or String) variable reinterprets the
+// bits — a hidden-meaning bug. Now a loud reject (category mismatch).
+import @Std/Io with { print }
+struct A { pub val x: I64 }
+fn main() {
+    mut val n: I64 = 0I64
+    n = <A x=5 />
+    print(n)
+}
