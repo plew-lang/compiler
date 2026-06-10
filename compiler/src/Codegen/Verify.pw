@@ -345,7 +345,32 @@ fn verifyExpr(c: inout Comp, id: U64) {
         Expr.Call(nameStart: _, nameLen: _, val args) => {
             verifyArgs(c: inout c, args: args)
         }
-        Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, isEnum: _, val ty, val fields) => {
+        Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
+            // enum variant construction (`<E.A x=1 />`) must specify EVERY payload
+            // field — a variant payload has no default values, so a missing field was
+            // silently constructed with garbage (spec/05). (Struct construction is
+            // covered by the backend missing-field check plus field defaults.)
+            if isEnum {
+                mut val cei: U64 = enumIdxByName(c: inout c, start: typeStart, len: typeLen)
+                if cei < c.enums.count {
+                } else {
+                    cei = genericEnumIndex(c: inout c, nameStart: typeStart, nameLen: typeLen)
+                }
+                if cei < c.enums.count {
+                    val cvi: U64 = variantIndex(c: inout c, enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
+                    if cvi < c.enums[cei].variants.count {
+                        val cfs: Array[FieldDef] = c.enums[cei].variants[cvi].fields
+                        mut val cfi: U64 = 0
+                        while cfi < cfs.count {
+                            if makeFieldsCoverField(c: inout c, fields: fields, fieldStart: cfs[cfi].nameStart, fieldLen: cfs[cfi].nameLen) {
+                            } else {
+                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "variant construction is missing a payload field; every field of the variant must be set")
+                            }
+                            cfi += 1U64
+                        }
+                    }
+                }
+            }
             // generic arity: a generic type's construction must supply exactly as many
             // type arguments as the type has parameters (`<Box[I64, I64] …/>` for a
             // `Box[T]` was silently accepted, dropping the extra) — spec/06.
@@ -518,6 +543,18 @@ fn armDiagOffset(a: MatchArm) -> U64 {
         }
     }
     return a.enumStart
+}
+
+// Whether any construction field matches the given field name (start,len).
+fn makeFieldsCoverField(c: inout Comp, fields: Array[MakeField], fieldStart: U64, fieldLen: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < fields.count {
+        if spansEqual(c: inout c, aStart: fields[i].nameStart, aLen: fields[i].nameLen, bStart: fieldStart, bLen: fieldLen) {
+            return true
+        }
+        i += 1U64
+    }
+    return false
 }
 
 fn bindsCoverField(c: inout Comp, binds: Array[Bind], fieldStart: U64, fieldLen: U64) -> Bool {

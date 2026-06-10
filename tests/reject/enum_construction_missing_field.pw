@@ -1,0 +1,8 @@
+// An enum variant construction must specify every payload field (spec/05) — a variant
+// payload has no defaults, so a missing field was silently built with garbage.
+import @Std/Io with { print }
+enum E { A(x: I64, y: I64) }
+fn main() {
+    val e: E = <E.A x=1I64 />
+    match e { E.A(val x, val y) => { print(x + y) } }
+}
