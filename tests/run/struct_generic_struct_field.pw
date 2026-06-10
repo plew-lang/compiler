@@ -1,0 +1,23 @@
+import @Std/Io with { print }
+
+// A struct holding a generic-STRUCT instance by value (`Box[I64]`, vs the enum cases):
+// nested field access `h.b.value` reads through the inline instance, and a struct with
+// such a field round-trips through a function return.
+struct Box[T] {
+    pub val value: T
+}
+
+struct Holder {
+    pub val b: Box[I64]
+    pub val tag: I64
+}
+
+fn make() -> Holder {
+    return <Holder b=<Box value=55I64 /> tag=1I64 />
+}
+
+fn main() {
+    val h: Holder = make()
+    print(h.b.value)
+    print(h.tag)
+}
