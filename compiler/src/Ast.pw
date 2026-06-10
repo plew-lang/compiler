@@ -42,6 +42,11 @@ struct TypeRef {
     // extension's methods resolve on a value of this type. Part of type identity
     // (an invariant refinement), so `Person` and `Person#Ext` are distinct types.
     pub val viewExtId: U64 = 0
+    // `any P` (spec/08): this TypeRef is the existential over trait `name`, not the
+    // trait used as a plain (non-value) name. The runtime value is a fat pointer
+    // `{ data, vtable }`; part of type identity. nameStart/nameLen/nameId name the
+    // trait `P`.
+    pub val isAny: Bool = false
 }
 
 // A variable binding in scope during codegen (param, let, or match bind), used
@@ -878,7 +883,7 @@ pub impl Comp {
     inout fn pushType(t: TypeRef) -> U64 {
         val id: U64 = self.types.count
         val nid: U64 = intern(c: inout self, start: t.nameStart, len: t.nameLen)
-        self.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId />)
+        self.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId isAny=t.isAny />)
         return id
     }
 }

@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+// Existential `any P` (spec/08): a value of any concrete type conforming to P,
+// type-erased behind a fat pointer with dynamic dispatch. The simplest case — a
+// scalar binding and a dynamically dispatched method.
+trait Drawable { fn draw() -> I64 }
+
+struct Circle { val r: I64 }
+struct Square { val s: I64 }
+pub impl Circle as Drawable { fn draw() -> I64 { return self.r * 2I64 } }
+pub impl Square as Drawable { fn draw() -> I64 { return self.s + 100I64 } }
+
+fn main() {
+    val c: Circle = <Circle r=5 />
+    val d: any Drawable = c
+    print(d.draw())          // 10
+    val sq: Square = <Square s=3 />
+    val d2: any Drawable = sq
+    print(d2.draw())         // 103
+}

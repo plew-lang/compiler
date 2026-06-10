@@ -67,7 +67,7 @@ fn lowerType(c: inout Comp, t: TypeAst) -> PType {
         val evN: Bind = internBytes(c: inout c, s: t.extView)
         viewExtId = intern(c: inout c, start: evN.nameStart, len: evN.nameLen)
     }
-    val ref: U64 = c.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId />)
+    val ref: U64 = c.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId isAny=t.isAny />)
     mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
     if t.args.count > 0 {
         if rangeEquals(bytes: c.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {

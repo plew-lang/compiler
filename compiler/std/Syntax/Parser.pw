@@ -160,6 +160,17 @@ fn skipLeading(p: inout P) {
 // calling convention), mirroring the compiler's parseTypeTok. The current token is
 // the type head.
 fn parseType(p: inout P) -> TypeAst {
+    // an existential `any P` (spec/08): the lowercase `any` (never a type name —
+    // types are PascalCase) followed by a trait type. Parse the trait type and tag
+    // it `isAny`. Unambiguous because `any` cannot head a real type.
+    if curIs(p: inout p, kw: "any") {
+        if p.peekKind(off: 1) == <Kind.Ident /> {
+            val anyStart: U64 = p.base + p.curTok().start
+            p.advance()
+            val inner: TypeAst = parseType(p: inout p)
+            return <TypeAst name=inner.name args=inner.args span=<Span start=anyStart end=p.prevEnd() /> extView=inner.extView isAny=true />
+        }
+    }
     val head: Tok = p.curTok()
     val name: String = p.text(t: head)
     val sStart: U64 = p.base + head.start

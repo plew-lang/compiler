@@ -31,6 +31,11 @@ export struct TypeAst {
     // plain type. A zero-cost view (same runtime layout) that selects which
     // extension's methods/witnesses resolve; treated as an invariant type detail.
     pub val extView: String = ""
+    // `any P` (spec/08): an existential — a type-erased value of any concrete type
+    // conforming to trait `name`. false for a plain type. Runtime layout is a fat
+    // pointer `{ data, vtable }` (vs the plain type's own layout), so this is part
+    // of type identity, not a zero-cost view.
+    pub val isAny: Bool = false
 }
 
 // A struct field / enum-variant payload field. For a variant payload field,

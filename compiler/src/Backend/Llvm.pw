@@ -121,6 +121,10 @@ extern(c) {
     fn LLVMBuildInsertValue(b~: LLVMBuilderRef, agg~: LLVMValueRef, elt~: LLVMValueRef, index~: U64, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildExtractValue(b~: LLVMBuilderRef, agg~: LLVMValueRef, index~: U64, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildGlobalStringPtr(b~: LLVMBuilderRef, str~: CPtr[U8], name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMAddGlobal(m~: LLVMModuleRef, ty~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMSetInitializer(global~: LLVMValueRef, val~: LLVMValueRef)
+    fn LLVMSetGlobalConstant(global~: LLVMValueRef, isConstant~: I32)
+    fn LLVMConstArray2(elemTy~: LLVMTypeRef, vals~: CPtr[LLVMValueRef], count~: U64) -> LLVMValueRef
 }
 
 // LLVMIntPredicate codes (from <llvm-c/Core.h>): integer compare predicates.
@@ -161,6 +165,15 @@ struct LlvmCtx {
     // pointer plus its captured-environment pointer (NULL for non-capturing). Every
     // `fn(...) -> ...` value is this fat pointer; the callee ABI takes env first.
     pub val closureTy: LLVMTypeRef
+    // Existential `any P` value type (spec/08): { ptr data, ptr vtable } — a fat
+    // pointer. `data` points at an ARC-boxed copy of the erased concrete value;
+    // `vtable` at the static per-(concrete-type, trait) thunk table (slot 0 = drop,
+    // slot 1.. = the trait's requirement methods in declaration order).
+    pub val anyTy: LLVMTypeRef
+    // built vtables, cached by (concrete typeId, traitId) -> the LLVM global value.
+    pub mut val anyVtType: Array[U64]
+    pub mut val anyVtTrait: Array[U64]
+    pub mut val anyVtVal: Array[LLVMValueRef]
     pub mut val curFn: LLVMValueRef
     pub mut val terminated: Bool
     // the function currently being emitted: is it `main` (returns i32 0), and its
@@ -1624,7 +1637,44 @@ fn llvmTypeFor(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64, isArr
 // The LLVM type of a structured TypeRef: a generic struct/enum instance resolves
 // to its registered instance type; otherwise the head name (array refs are
 // handled by the isArray flag at declaration sites, not here).
+// Is TypeRef `ref` an existential `any P` (spec/08)? Its runtime value is the fat
+// pointer st.anyTy, regardless of the trait it names.
+fn refIsAny(c: inout Comp, ref: U64) -> Bool {
+    if ref < c.types.count {
+        return c.types[ref].isAny
+    }
+    return false
+}
+
+// If expression `recv` has an existential `any P` type, the trait def index of P;
+// else c.traits.count. (Resolved later than refIsAny so the forward reference to
+// findTraitIdxByName is fine — the module is one compilation unit.)
+fn anyRecvTraitIdx(c: inout Comp, st: inout LlvmCtx, recv: U64) -> U64 {
+    val r: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
+    if refIsAny(c: inout c, ref: r) {
+        return findTraitIdxByName(c: inout c, start: c.types[r].nameStart, len: c.types[r].nameLen)
+    }
+    return c.traits.count
+}
+
+// The requirement of trait `traitIdx` matching method (name,args), or a sentinel
+// Func with hasRet=false / retLen=0 when none — so callers reading its return span
+// get a no-result. Used by the type-recovery functions to type an `any P` method
+// call as the requirement's declared return.
+fn anyMethodReq(c: inout Comp, traitIdx: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Func {
+    val slot: U64 = anyMethodSlot(c: inout c, traitIdx: traitIdx, nameStart: nameStart, nameLen: nameLen, args: args)
+    if slot != 0U64 {
+        return c.traits[traitIdx].reqs[slot - 1U64]
+    }
+    return <Func nameStart=0 nameLen=0 typeParams=[] params=[] hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />
+}
+
 fn llvmTypeOfRef(c: inout Comp, st: inout LlvmCtx, ref: U64) -> LLVMTypeRef {
+    // an existential `any P`: the fat pointer { data, vtable }, not the named
+    // trait's (nonexistent) own layout.
+    if refIsAny(c: inout c, ref: ref) {
+        return st.anyTy
+    }
     // `Array[T]` is the special {ptr,i64} value type, NOT a generic struct instance
     // (the front-end models it as one, but the LLVM array machinery — literal /
     // append / for / index — all use arrayTy). Mapping it here keeps a function
@@ -2029,6 +2079,14 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             }
         }
         Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+            // an `any P` receiver: the result kind is the requirement's return.
+            val atIdx: U64 = anyRecvTraitIdx(c: inout c, st: inout st, recv: recv)
+            if atIdx < c.traits.count {
+                val rq: Func = anyMethodReq(c: inout c, traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
+                if rq.hasRet {
+                    return kindFromTySpan(c: inout c, tyStart: rq.retStart, tyLen: rq.retLen)
+                }
+            }
             val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
             if rsidx < c.structs.count {
                 val mfi: U64 = findMethod(c: inout c, recvStart: c.structs[rsidx].nameStart, recvLen: c.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -3655,6 +3713,14 @@ fn exprLlvmType(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
             return llvmScalarTy(c: inout c, st: inout st, tyStart: typeStart, tyLen: typeLen)
         }
         Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+            // an `any P` receiver: the result LLVM type is the requirement's return.
+            val atIdx: U64 = anyRecvTraitIdx(c: inout c, st: inout st, recv: recv)
+            if atIdx < c.traits.count {
+                val rq: Func = anyMethodReq(c: inout c, traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
+                if rq.hasRet {
+                    return llvmFnRetTy(c: inout c, st: inout st, f: rq)
+                }
+            }
             val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
             if rsidx < c.structs.count {
                 val mfi: U64 = findMethod(c: inout c, recvStart: c.structs[rsidx].nameStart, recvLen: c.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -4133,7 +4199,7 @@ fn coerceElem(st: inout LlvmCtx, v: LLVMValueRef, elemTy: LLVMTypeRef) -> LLVMVa
 // Build an array literal `[e0, e1, ...]` of element type `elemTy` (provided by the
 // caller from the annotation, or inferred from the first element) as a
 // `{ ptr data, i64 count }` value.
-fn genLlvmArrayLit(c: inout Comp, st: inout LlvmCtx, elems: Array[U64], elemTy: LLVMTypeRef) -> LLVMValueRef {
+fn genLlvmArrayLit(c: inout Comp, st: inout LlvmCtx, elems: Array[U64], elemTy: LLVMTypeRef, elemRef: U64 = 0) -> LLVMValueRef {
     mut val agg: LLVMValueRef = LLVMGetUndef(st.arrayTy)
     val n: U64 = elems.count
     if n == 0U64 {
@@ -4141,10 +4207,23 @@ fn genLlvmArrayLit(c: inout Comp, st: inout LlvmCtx, elems: Array[U64], elemTy: 
         agg = LLVMBuildInsertValue(st.b, agg, LLVMConstInt(st.i64ty, 0U64, 0I32), 1U64, anon())
         return agg
     }
+    // an `Array[any P]` literal (spec/08): each concrete element is boxed into the
+    // existential fat pointer so heterogeneous concrete types share one element slot.
+    val elemIsAny: Bool = refIsAny(c: inout c, ref: elemRef)
     val data: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(elemTy), cap: LLVMConstInt(st.i64ty, n, 0I32))
     mut val i: U64 = 0
     while i < n {
-        val ev: LLVMValueRef = coerceElem(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: elems[i]), elemTy: elemTy)
+        mut val ev: LLVMValueRef = LLVMConstNull(st.ptrty)
+        if elemIsAny {
+            mut val eb: Bool = false
+            ev = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: elemRef, valueExpr: elems[i], outBoxed: inout eb)
+            if eb {
+            } else {
+                ev = genLlvmExpr(c: inout c, st: inout st, id: elems[i])
+            }
+        } else {
+            ev = coerceElem(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: elems[i]), elemTy: elemTy)
+        }
         LLVMBuildStore(st.b, ev, arrElemPtr(st: inout st, elemTy: elemTy, data: data, idx: LLVMConstInt(st.i64ty, i, 0I32)))
         i += 1
     }
@@ -5099,6 +5178,12 @@ fn genLlvmExtMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, srcStart: U64, 
 }
 
 fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+    // an existential `any P` receiver (spec/08): dynamic dispatch through the value's
+    // vtable. The receiver's TypeRef carries isAny.
+    val anyRecvRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
+    if refIsAny(c: inout c, ref: anyRecvRef) {
+        return genLlvmAnyDispatch(c: inout c, st: inout st, recv: recv, anyRef: anyRecvRef, nameStart: nameStart, nameLen: nameLen, args: args)
+    }
     // associated-function call `Type.name(args)` (the receiver is a type name, not
     // a value): dispatch to the assoc fn (no self argument).
     val arn: Bind = assocRecvName(c: inout c, recv: recv)
@@ -5511,10 +5596,23 @@ fn genArgValue(c: inout Comp, st: inout LlvmCtx, argExpr: U64, p: Param) -> LLVM
             _ => {}
         }
     }
+    // an `any P` parameter (spec/08): box a concrete conforming argument into the
+    // existential fat pointer.
+    mut val argBoxed: Bool = false
+    val argAny: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: p.ty, valueExpr: argExpr, outBoxed: inout argBoxed)
+    if argBoxed {
+        return argAny
+    }
     if p.tyIsArray {
         match c.exprs[argExpr] {
             Expr.Array(val elems) => {
-                return genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen))
+                mut val argElemRef: U64 = 0
+                if p.ty != 0U64 {
+                    if c.types[p.ty].args.count > 0U64 {
+                        argElemRef = c.types[p.ty].args[0]
+                    }
+                }
+                return genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen), elemRef: argElemRef)
             }
             _ => {}
         }
@@ -5811,6 +5909,10 @@ fn paramLlvmTy(c: inout Comp, st: inout LlvmCtx, p: Param) -> LLVMTypeRef {
     if p.isInout {
         return st.ptrty
     }
+    // an existential `any P` param: the fat pointer (spec/08).
+    if refIsAny(c: inout c, ref: p.ty) {
+        return st.anyTy
+    }
     // ground a generic-instance param type (`Box[T]`) through the active env.
     mut val pt: U64 = p.ty
     if c.curTypeParams.count > 0U64 {
@@ -5834,6 +5936,10 @@ fn selfParamTy(c: inout Comp, st: inout LlvmCtx, f: Func) -> LLVMTypeRef {
 // The LLVM return type of a function (and whether it is void = Plew `()`).
 fn llvmFnRetTy(c: inout Comp, st: inout LlvmCtx, f: Func) -> LLVMTypeRef {
     if f.hasRet {
+        // an existential `any P` return: the fat pointer (spec/08).
+        if refIsAny(c: inout c, ref: f.retTy) {
+            return st.anyTy
+        }
         // ground a generic-instance return (`Box[T]`) through the active env so it
         // resolves to the registered concrete instance (`Box[I32]`).
         mut val rt: U64 = f.retTy
@@ -6298,6 +6404,14 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     // TypeRef so a bare `x.m()` in the body resolves the extension (spec/09).
     if p.ty != 0U64 {
         if c.types[p.ty].viewExtId != 0U64 {
+            pRef = p.ty
+        }
+    }
+    // an existential `any P` param (spec/08): its LLVM type is the fat pointer and
+    // its TypeRef is tracked so a bare `x.m()` in the body dispatches dynamically.
+    if p.ty != 0U64 {
+        if refIsAny(c: inout c, ref: p.ty) {
+            pty = st.anyTy
             pRef = p.ty
         }
     }
@@ -6854,6 +6968,309 @@ fn emitThunks(c: inout Comp, st: inout LlvmCtx) {
     }
 }
 
+// ---- existential `any P` (spec/08): vtable, boxing, dynamic dispatch ----
+//
+// An `any P` value is the fat pointer st.anyTy = { ptr data, ptr vtable }. `data`
+// points at an ARC-boxed copy of the erased concrete value (a rawbuf cell, so it is
+// refcountable later); `vtable` at a static per-(concrete-struct, trait) global of
+// function pointers: slot 0 reserved for a drop thunk (null in this increment —
+// boxes leak at the same rigor as arrays/strings today), slots 1.. = a thunk per
+// trait requirement in declaration order. Each thunk has the ERASED requirement
+// signature `(ptr self_data, <req params>) -> <req ret>` and forwards to the
+// concrete witness pf<wfi> after loading the boxed self.
+
+// Trait def index for the trait named (start,len), or c.traits.count if none.
+fn findTraitIdxByName(c: inout Comp, start: U64, len: U64) -> U64 {
+    val qId: U64 = intern(c: inout c, start: start, len: len)
+    mut val ti: U64 = 0
+    while ti < c.traits.count {
+        if c.traits[ti].nameId == qId {
+            return ti
+        }
+        ti += 1
+    }
+    return c.traits.count
+}
+
+// Do two parameter lists have identical labels positionally (a conformance witness
+// reproduces the requirement's labels)?
+fn paramLabelsEqual(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
+    if a.count != b.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.count {
+        if a[i].nameId == b[i].nameId {
+        } else {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// The witness method on concrete struct `sidx` for trait requirement `req` (matched
+// by name + param labels). c.funcs.count if none.
+fn findWitnessFor(c: inout Comp, sidx: U64, req: Func) -> U64 {
+    val sd: StructDef = c.structs[sidx]
+    val recvId: U64 = intern(c: inout c, start: sd.nameStart, len: sd.nameLen)
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.hasRecv && f.extId == 0U64 && !f.isAssoc {
+            if f.nameId == req.nameId && f.recvId == recvId {
+                if paramLabelsEqual(c: inout c, a: f.params, b: req.params) {
+                    return i
+                }
+            }
+        }
+        i += 1
+    }
+    return c.funcs.count
+}
+
+// Does requirement `req` mention `Self` in a non-receiver input or in its return
+// (so it is NOT callable through `any` in this increment — spec/08 allows only
+// self-output-only members, and even those are deferred when they RETURN Self)?
+fn reqUsesSelfOutsideRecv(c: inout Comp, req: Func) -> Bool {
+    if req.hasRet {
+        if rangeEquals(bytes: c.bytes, start: req.retStart, len: req.retLen, kw: "Self") {
+            return true
+        }
+    }
+    mut val i: U64 = 0
+    while i < req.params.count {
+        if rangeEquals(bytes: c.bytes, start: req.params[i].tyStart, len: req.params[i].tyLen, kw: "Self") {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Build the thunk for requirement `idx` (`req`) on concrete struct `sidx`. Returns
+// its function pointer, or a null ptr when the requirement can't be dispatched
+// through `any` in this increment (assoc, inout/move self, or Self outside the
+// receiver). Saves/restores the builder position around the thunk body.
+fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, req: Func, idx: U64) -> LLVMValueRef {
+    // a trait requirement Func carries no `self` param (hasRecv=false; self is
+    // implicit) — a method requirement is `!isAssoc`. An assoc-fn requirement has no
+    // receiver to carry the witness, so it is not dispatchable through `any`.
+    if req.isAssoc {
+        return LLVMConstNull(st.ptrty)
+    }
+    if reqUsesSelfOutsideRecv(c: inout c, req: req) {
+        return LLVMConstNull(st.ptrty)
+    }
+    val wfi: U64 = findWitnessFor(c: inout c, sidx: sidx, req: req)
+    if wfi < c.funcs.count {
+    } else {
+        return LLVMConstNull(st.ptrty)
+    }
+    val wslot: U64 = userFnSlot(st: inout st, idx: wfi)
+    if wslot < st.fnIdx.count {
+    } else {
+        return LLVMConstNull(st.ptrty)
+    }
+    val sd: StructDef = c.structs[sidx]
+    val regSlot: U64 = structRegSlot(c: inout c, st: inout st, start: sd.nameStart, len: sd.nameLen)
+    if regSlot < st.structIdxs.count {
+    } else {
+        return LLVMConstNull(st.ptrty)
+    }
+    val concreteTy: LLVMTypeRef = st.structTys[regSlot]
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: st.ptrty)
+    mut val pi: U64 = 0
+    while pi < req.params.count {
+        ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: req.params[pi]))
+        pi += 1
+    }
+    val rty: LLVMTypeRef = llvmFnRetTy(c: inout c, st: inout st, f: req)
+    val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
+    mut val nm: Array[U8] = []
+    appendBytes(into: inout nm, from: "pfvt".bytes)
+    appendU64Dec(into: inout nm, n: sidx)
+    appendBytes(into: inout nm, from: "_".bytes)
+    appendU64Dec(into: inout nm, n: idx)
+    nm.append(value: 0)
+    val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
+    val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
+    val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "entry"))
+    LLVMPositionBuilderAtEnd(st.b, entry)
+    val selfVal: LLVMValueRef = LLVMBuildLoad2(st.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
+    mut val av: Array[LLVMValueRef] = []
+    av.append(value: selfVal)
+    mut val ai: U64 = 0
+    while ai < req.params.count {
+        av.append(value: LLVMGetParam(fv, ai + 1U64))
+        ai += 1
+    }
+    val r: LLVMValueRef = LLVMBuildCall2(st.b, st.fnTy[wslot], st.fnVal[wslot], arrayCPtr(av), av.count, anon())
+    if req.hasRet {
+        LLVMBuildRet(st.b, r)
+    } else {
+        LLVMBuildRetVoid(st.b)
+    }
+    LLVMPositionBuilderAtEnd(st.b, savedBB)
+    return fv
+}
+
+// Build (or fetch cached) the vtable global for (concrete struct `sidx`, trait
+// `traitIdx`): an array of ptr slots — slot 0 = drop (null for now), slot 1.. = a
+// thunk per requirement in declaration order. Returns the global's pointer value.
+fn ensureAnyVtable(c: inout Comp, st: inout LlvmCtx, sidx: U64, traitIdx: U64) -> LLVMValueRef {
+    mut val ci: U64 = 0
+    while ci < st.anyVtType.count {
+        if st.anyVtType[ci] == sidx && st.anyVtTrait[ci] == traitIdx {
+            return st.anyVtVal[ci]
+        }
+        ci += 1
+    }
+    val t: TraitDef = c.traits[traitIdx]
+    mut val slots: Array[LLVMValueRef] = []
+    slots.append(value: LLVMConstNull(st.ptrty))
+    mut val ri: U64 = 0
+    while ri < t.reqs.count {
+        slots.append(value: buildAnyThunk(c: inout c, st: inout st, sidx: sidx, req: t.reqs[ri], idx: ri))
+        ri += 1
+    }
+    val arrTy: LLVMTypeRef = LLVMArrayType2(st.ptrty, slots.count)
+    val init: LLVMValueRef = LLVMConstArray2(st.ptrty, arrayCPtr(slots), slots.count)
+    mut val nm: Array[U8] = []
+    appendBytes(into: inout nm, from: "pfvtbl".bytes)
+    appendU64Dec(into: inout nm, n: sidx)
+    appendBytes(into: inout nm, from: "_".bytes)
+    appendU64Dec(into: inout nm, n: traitIdx)
+    nm.append(value: 0)
+    val g: LLVMValueRef = LLVMAddGlobal(st.mod, arrTy, arrayCPtr(nm))
+    LLVMSetInitializer(g, init)
+    LLVMSetGlobalConstant(g, 1I32)
+    st.anyVtType.append(value: sidx)
+    st.anyVtTrait.append(value: traitIdx)
+    st.anyVtVal.append(value: g)
+    return g
+}
+
+// The slot index (into the vtable) of trait `traitIdx`'s requirement matching method
+// (nameStart,nameLen) with the call's argument labels, or 0 (the reserved drop slot
+// = "not found"). Slot = 1 + requirement-declaration-index.
+fn anyMethodSlot(c: inout Comp, traitIdx: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
+    val t: TraitDef = c.traits[traitIdx]
+    mut val ri: U64 = 0
+    while ri < t.reqs.count {
+        if t.reqs[ri].nameId == qNameId {
+            if paramsLabelsOk(c: inout c, params: t.reqs[ri].params, args: args) {
+                return ri + 1U64
+            }
+        }
+        ri += 1
+    }
+    return 0U64
+}
+
+// Box concrete value `v` of struct `sidx` into a fresh ARC cell and wrap it with the
+// (sidx, traitIdx) vtable, producing an `any P` fat-pointer value.
+fn boxIntoAny(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, sidx: U64, traitIdx: U64) -> LLVMValueRef {
+    val sd: StructDef = c.structs[sidx]
+    val regSlot: U64 = structRegSlot(c: inout c, st: inout st, start: sd.nameStart, len: sd.nameLen)
+    val concreteTy: LLVMTypeRef = st.structTys[regSlot]
+    val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
+    LLVMBuildStore(st.b, v, cell)
+    val vt: LLVMValueRef = ensureAnyVtable(c: inout c, st: inout st, sidx: sidx, traitIdx: traitIdx)
+    mut val agg: LLVMValueRef = LLVMGetUndef(st.anyTy)
+    agg = LLVMBuildInsertValue(st.b, agg, cell, 0U64, anon())
+    agg = LLVMBuildInsertValue(st.b, agg, vt, 1U64, anon())
+    return agg
+}
+
+// If target TypeRef `targetRef` is an existential `any P` and `valueExpr` is a
+// concrete struct conforming to P, emit `valueExpr`, box it, and return the `any P`
+// fat pointer. Returns a null sentinel (LLVMConstNull check via outBoxed) when no
+// coercion applies. `outBoxed` is set true iff a coercion happened.
+fn coerceToAnyIfNeeded(c: inout Comp, st: inout LlvmCtx, targetRef: U64, valueExpr: U64, outBoxed: inout Bool) -> LLVMValueRef {
+    outBoxed = false
+    if refIsAny(c: inout c, ref: targetRef) {
+    } else {
+        return LLVMConstNull(st.ptrty)
+    }
+    // already an `any` value (e.g. passing an `any P` local to an `any P` param):
+    // no re-boxing.
+    val srcRef: U64 = exprTypeRef(c: inout c, st: inout st, id: valueExpr)
+    if refIsAny(c: inout c, ref: srcRef) {
+        return LLVMConstNull(st.ptrty)
+    }
+    val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: valueExpr)
+    if sidx < c.structs.count {
+    } else {
+        return LLVMConstNull(st.ptrty)
+    }
+    val tr: TypeRef = c.types[targetRef]
+    val traitIdx: U64 = findTraitIdxByName(c: inout c, start: tr.nameStart, len: tr.nameLen)
+    if traitIdx < c.traits.count {
+    } else {
+        return LLVMConstNull(st.ptrty)
+    }
+    val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: valueExpr)
+    outBoxed = true
+    return boxIntoAny(c: inout c, st: inout st, v: v, sidx: sidx, traitIdx: traitIdx)
+}
+
+// Dynamic dispatch of `recv.name(args)` where `recv` is an existential `any P`
+// (anyRef names the trait). Loads the data + vtable from the fat pointer, indexes
+// the requirement's vtable slot, and calls the thunk with (data, args). Self-input
+// requirements have no vtable slot (anyMethodSlot returns 0) and are rejected.
+fn genLlvmAnyDispatch(c: inout Comp, st: inout LlvmCtx, recv: U64, anyRef: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+    val tr: TypeRef = c.types[anyRef]
+    val traitIdx: U64 = findTraitIdxByName(c: inout c, start: tr.nameStart, len: tr.nameLen)
+    if traitIdx < c.traits.count {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: `any` over an unknown trait")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val slot: U64 = anyMethodSlot(c: inout c, traitIdx: traitIdx, nameStart: nameStart, nameLen: nameLen, args: args)
+    if slot != 0U64 {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "this member is not callable through `any P`: it takes `Self` in a non-receiver position, is an associated function, or is not a requirement of the trait (spec/08)")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val req: Func = c.traits[traitIdx].reqs[slot - 1U64]
+    // spec/08: a member with `Self` in a non-receiver input position (or returning
+    // `Self`) is not callable through `any` — the erased concretes need not match.
+    // Diagnosed at the call line (the type `any P` itself stays valid).
+    if reqUsesSelfOutsideRecv(c: inout c, req: req) {
+        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "this member is not callable through `any P`: `Self` appears in a non-receiver input or the return — two `any P` values need not share a concrete type (spec/08)")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val fat: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: recv)
+    val dataPtr: LLVMValueRef = LLVMBuildExtractValue(st.b, fat, 0U64, anon())
+    val vtPtr: LLVMValueRef = LLVMBuildExtractValue(st.b, fat, 1U64, anon())
+    // &vtable[slot] via flat ptr-element GEP (element type ptr), then load the fn ptr.
+    mut val gepIdx: Array[LLVMValueRef] = []
+    gepIdx.append(value: LLVMConstInt(st.i64ty, slot, 0I32))
+    val slotPtr: LLVMValueRef = LLVMBuildGEP2(st.b, st.ptrty, vtPtr, arrayCPtr(gepIdx), 1U64, anon())
+    val fnPtr: LLVMValueRef = LLVMBuildLoad2(st.b, st.ptrty, slotPtr, anon())
+    // reconstruct the erased thunk signature: (ptr self, <req params>) -> <req ret>.
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: st.ptrty)
+    mut val pi: U64 = 0
+    while pi < req.params.count {
+        ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: req.params[pi]))
+        pi += 1
+    }
+    val rty: LLVMTypeRef = llvmFnRetTy(c: inout c, st: inout st, f: req)
+    val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
+    mut val av: Array[LLVMValueRef] = []
+    av.append(value: dataPtr)
+    mut val ai: U64 = 0
+    while ai < args.count {
+        av.append(value: genArgValue(c: inout c, st: inout st, argExpr: args[ai].expr, p: req.params[ai]))
+        ai += 1
+    }
+    return LLVMBuildCall2(st.b, fty, fnPtr, arrayCPtr(av), av.count, anon())
+}
+
 fn genLlvmFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     val slot: U64 = userFnSlot(st: inout st, idx: fi)
     genLlvmFuncBody(c: inout c, st: inout st, fi: fi, fv: st.fnVal[slot])
@@ -7050,10 +7467,33 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             if isArr {
                 match c.exprs[init] {
                     Expr.Array(val elems) => {
-                        v = genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: elemTy)
+                        mut val litElemRef: U64 = 0
+                        if ty != 0U64 {
+                            if c.types[ty].args.count > 0U64 {
+                                litElemRef = c.types[ty].args[0]
+                            }
+                        }
+                        v = genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: elemTy, elemRef: litElemRef)
                         builtArr = true
                     }
                     _ => {}
+                }
+            }
+            // a scalar `any P` binding (spec/08): box the concrete initializer into
+            // the existential fat pointer.
+            if isArr {
+            } else {
+                if ty != 0U64 {
+                    if refIsAny(c: inout c, ref: ty) {
+                        mut val lb: Bool = false
+                        v = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: ty, valueExpr: init, outBoxed: inout lb)
+                        if lb {
+                        } else {
+                            // initializer is already an `any P` value (`val s2 = s`).
+                            v = genLlvmExpr(c: inout c, st: inout st, id: init)
+                        }
+                        builtArr = true
+                    }
                 }
             }
             if builtArr {
@@ -7154,6 +7594,15 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                 if tyLen > 0U64 {
                     if enumRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen) < st.enumIdxs.count {
                         tref = simpleTypeRef(c: inout c, nameStart: tyStart, nameLen: tyLen)
+                    }
+                }
+            }
+            // an existential `any P` binding: track its TypeRef so a bare `v.m()`
+            // dispatches dynamically (exprTypeRef sees isAny).
+            if tref == 0U64 {
+                if ty != 0U64 {
+                    if refIsAny(c: inout c, ref: ty) {
+                        tref = ty
                     }
                 }
             }
@@ -7463,6 +7912,26 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                         if c.types[st.curRetRef].viewExtId != exprViewExtId(c: inout c, st: inout st, id: value) {
                             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "extension view mismatch: the returned value's `#Ext` view must match the declared return type — apply or drop the view explicitly")
                         }
+                    }
+                    // an existential `any P` return (spec/08): box a concrete
+                    // conforming value into the fat pointer.
+                    if refIsAny(c: inout c, ref: st.curRetRef) {
+                        mut val rb: Bool = false
+                        mut val rav: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: st.curRetRef, valueExpr: value, outBoxed: inout rb)
+                        if rb {
+                        } else {
+                            // already an `any P` value.
+                            rav = genLlvmExpr(c: inout c, st: inout st, id: value)
+                        }
+                        mut val exLi: U64 = sentinel
+                        match c.exprs[value] {
+                            Expr.Ident(start: val vs, len: val vl) => { exLi = findLocal(c: inout c, st: inout st, start: vs, len: vl) }
+                            _ => {}
+                        }
+                        dropScope(c: inout c, st: inout st, fromMark: 0U64, excludeLi: exLi)
+                        LLVMBuildRet(st.b, rav)
+                        st.terminated = true
+                        return
                     }
                     // the declared return type is the expected type, so a returned
                     // un-suffixed generic construction (`return <Optional.Some …/>`)
@@ -8112,7 +8581,14 @@ fn genLlvmForArray(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64,
     val idxslot: LLVMValueRef = entryAlloca(st: inout st, ty: st.i64ty)
     LLVMBuildStore(st.b, LLVMConstInt(st.i64ty, 0U64, 0I32), idxslot)
     val vslot: LLVMValueRef = entryAlloca(st: inout st, ty: elemTy)
-    pushLocal(st: inout st, nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: c.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64)
+    // an `Array[any P]` element: track the loop var's existential TypeRef so a bare
+    // `s.m()` in the body dispatches dynamically (spec/08).
+    val forElemRef: U64 = arrayExprElemRef(c: inout c, st: inout st, arrayExpr: iter)
+    if refIsAny(c: inout c, ref: forElemRef) {
+        pushLocalR(st: inout st, nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: c.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: forElemRef)
+    } else {
+        pushLocal(st: inout st, nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: c.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64)
+    }
     val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fora.cond"))
     val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fora.body"))
     val stepBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fora.step"))
@@ -8362,6 +8838,11 @@ fn emitLlvm(c: inout Comp) {
     cloelems.append(value: ptrty)
     cloelems.append(value: ptrty)
     val closureTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(cloelems), 2U32, 0I32)
+    // any P = { ptr data, ptr vtable } (fat pointer for existentials).
+    mut val anyelems: Array[LLVMTypeRef] = []
+    anyelems.append(value: ptrty)
+    anyelems.append(value: ptrty)
+    val anyTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(anyelems), 2U32, 0I32)
     // PlewPromise = { i32 done, i64 value, ptr k, ptr kframe } (ABI-identical to
     // the C runtime). Awaited values are type-erased through `value` (i64).
     mut val promelems: Array[LLVMTypeRef] = []
@@ -8374,7 +8855,7 @@ fn emitLlvm(c: inout Comp) {
         ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx)
         i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx) i16ty=LLVMInt16TypeInContext(ctx)
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty
-        voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy closureTy=closureTy
+        voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy closureTy=closureTy anyTy=anyTy anyVtType=[] anyVtTrait=[] anyVtVal=[]
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[]

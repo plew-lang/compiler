@@ -1,0 +1,24 @@
+import @Std/Io with { print }
+
+// `any P` as a first-class type in parameter and return position (spec/08): a
+// concrete conforming argument is boxed at the call, and a concrete returned value
+// is boxed at the return — both type-erased to the existential.
+trait Drawable { fn draw() -> I64 }
+struct Circle { val r: I64 }
+struct Square { val s: I64 }
+pub impl Circle as Drawable { fn draw() -> I64 { return self.r * 2I64 } }
+pub impl Square as Drawable { fn draw() -> I64 { return self.s + 100I64 } }
+
+fn render(d: any Drawable) -> I64 { return d.draw() }
+
+fn pick(which: I64) -> any Drawable {
+    if which == 0I64 { return <Circle r=7 /> }
+    return <Square s=1 />
+}
+
+fn main() {
+    val c: Circle = <Circle r=5 />
+    print(render(d: c))              // 10
+    print(render(d: pick(which: 0I64)))   // 14
+    print(render(d: pick(which: 1I64)))   // 101
+}

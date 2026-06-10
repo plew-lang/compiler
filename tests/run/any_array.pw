@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+// `Array[any P]` (spec/08): heterogeneous concrete types in one collection, each
+// boxed into the existential, iterated and dynamically dispatched — the React-tree
+// shape the spec motivates.
+trait Drawable { fn draw() -> String }
+
+struct Circle { val r: I64 }
+struct Label { val text: String }
+pub impl Circle as Drawable { fn draw() -> String { return "circle" } }
+pub impl Label as Drawable { fn draw() -> String { return self.text } }
+
+fn main() {
+    val c: Circle = <Circle r=5 />
+    val l: Label = <Label text="hello" />
+    val shapes: Array[any Drawable] = [c, l]
+    for val s in shapes {
+        print(s.draw())      // circle, hello
+    }
+}

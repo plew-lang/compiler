@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+
+// spec/08: `any P` exposes ONLY trait P's interface — there is no downcast back to
+// the concrete type. Calling a method that is not a requirement of P is rejected
+// (here `area`, which exists on Circle but is not part of Drawable).
+trait Drawable { fn draw() -> I64 }
+struct Circle { val r: I64 }
+pub impl Circle as Drawable { fn draw() -> I64 { return self.r } }
+pub impl Circle { fn area() -> I64 { return self.r * self.r } }
+
+fn main() {
+    val d: any Drawable = <Circle r=4 />
+    print(d.area())   // ERROR: area is not a Drawable requirement
+}
