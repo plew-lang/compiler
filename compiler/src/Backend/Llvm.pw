@@ -7550,7 +7550,10 @@ fn coerceToAnyIfNeeded(c: inout Comp, st: inout LlvmCtx, targetRef: U64, valueEx
     } else {
         return LLVMConstNull(st.ptrty)
     }
-    val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: valueExpr)
+    // value semantics: boxing a concrete PLACE (`val a: any P = h`) deep-copies its
+    // array/struct fields into the box, matching a plain struct copy — so a later
+    // mutation of the source leaves the existential's boxed value unchanged.
+    val v: LLVMValueRef = copyValueIfPlace(c: inout c, st: inout st, rv: genLlvmExpr(c: inout c, st: inout st, id: valueExpr), valueExpr: valueExpr)
     outBoxed = true
     return boxIntoAny(c: inout c, st: inout st, v: v, sidx: sidx, anyRef: targetRef, traitIdx: traitIdx)
 }

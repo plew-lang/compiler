@@ -1,0 +1,16 @@
+import @Std/Io with { print }
+
+// Boxing a concrete PLACE into `any P` deep-copies its array/struct fields (value
+// semantics, spec/08) — matching a plain struct copy — so mutating the source after
+// the box does not affect the existential's boxed value.
+trait Show { fn first() -> I64 }
+struct Holder { pub mut val items: Array[I64] }
+pub impl Holder as Show { fn first() -> I64 { return self.items[0] } }
+
+fn main() {
+    mut val h: Holder = <Holder items=[1, 2, 3] />
+    val a: any Show = h     // box (deep-copies items)
+    h.items[0] = 99         // mutate the original
+    print(a.first())        // 1 (independent box), not 99
+    print(h.first())        // 99 (original mutated)
+}

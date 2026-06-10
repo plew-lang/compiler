@@ -84627,20 +84627,22 @@ then6:                                            ; preds = %endif4
 endif7:                                           ; preds = %then6
   %53 = load i64, ptr %6, align 4
   %54 = call ptr @pf600(ptr %0, ptr %1, i64 %53)
-  store ptr %54, ptr %11, align 8
+  %55 = load i64, ptr %6, align 4
+  %56 = call ptr @pf620(ptr %0, ptr %1, ptr %54, i64 %55)
+  store ptr %56, ptr %11, align 8
   store i1 true, ptr %4, align 1
-  %55 = load ptr, ptr %11, align 8
-  %56 = load i64, ptr %8, align 4
-  %57 = load i64, ptr %5, align 4
-  %58 = load i64, ptr %10, align 4
-  %59 = call ptr @pf716(ptr %0, ptr %1, ptr %55, i64 %56, i64 %57, i64 %58)
-  ret ptr %59
+  %57 = load ptr, ptr %11, align 8
+  %58 = load i64, ptr %8, align 4
+  %59 = load i64, ptr %5, align 4
+  %60 = load i64, ptr %10, align 4
+  %61 = call ptr @pf716(ptr %0, ptr %1, ptr %57, i64 %58, i64 %59, i64 %60)
+  ret ptr %61
 
 else8:                                            ; preds = %endif4
-  %60 = load %st47, ptr %1, align 8
-  %61 = extractvalue %st47 %60, 9
-  %62 = call ptr @LLVMConstNull(ptr %61)
-  ret ptr %62
+  %62 = load %st47, ptr %1, align 8
+  %63 = extractvalue %st47 %62, 9
+  %64 = call ptr @LLVMConstNull(ptr %63)
+  ret ptr %64
 }
 
 define ptr @pf718(ptr %0, ptr %1, i64 %2, i64 %3, i64 %4, i64 %5, { ptr, i64 } %6) {
