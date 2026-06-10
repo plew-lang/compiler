@@ -1,0 +1,26 @@
+import @Std/Io with { print }
+
+// `Array[any P]` flowing through function boundaries (spec/08): built and returned
+// from one function (elements boxed at the return literal), then passed to another
+// (the array's existential element type tracked across the call) and iterated.
+trait Drawable { fn draw() -> I64 }
+struct Circle { val r: I64 }
+struct Square { val s: I64 }
+pub impl Circle as Drawable { fn draw() -> I64 { return self.r * 2I64 } }
+pub impl Square as Drawable { fn draw() -> I64 { return self.s + 100I64 } }
+
+fn make() -> Array[any Drawable] {
+    val c: Circle = <Circle r=5 />
+    val sq: Square = <Square s=3 />
+    return [c, sq]
+}
+
+fn total(shapes: Array[any Drawable]) -> I64 {
+    mut val sum: I64 = 0I64
+    for val s in shapes { sum += s.draw() }
+    return sum
+}
+
+fn main() {
+    print(total(shapes: make()))     // 10 + 103 = 113
+}

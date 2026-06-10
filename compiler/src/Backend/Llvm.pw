@@ -6437,6 +6437,14 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     }
     if p.tyIsArray {
         pElem = pty
+        // an `Array[any P]` param: its element is the existential fat pointer.
+        if p.ty != 0U64 {
+            if c.types[p.ty].args.count > 0U64 {
+                if refIsAny(c: inout c, ref: c.types[p.ty].args[0]) {
+                    pElem = st.anyTy
+                }
+            }
+        }
         pty = st.arrayTy
     } else {
         if isGenericInst(c: inout c, ref: p.ty) {
@@ -7976,7 +7984,18 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                     if st.curRetTyLen > 0U64 {
                         match c.exprs[value] {
                             Expr.Array(val elems) => {
-                                rv = genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: llvmScalarTy(c: inout c, st: inout st, tyStart: st.curRetTyStart, tyLen: st.curRetTyLen))
+                                // an `Array[any P]` return literal: box each element.
+                                mut val retElemRef: U64 = 0
+                                mut val retElemTy: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: st.curRetTyStart, tyLen: st.curRetTyLen)
+                                if st.curRetRef != 0U64 {
+                                    if c.types[st.curRetRef].args.count > 0U64 {
+                                        retElemRef = c.types[st.curRetRef].args[0]
+                                        if refIsAny(c: inout c, ref: retElemRef) {
+                                            retElemTy = st.anyTy
+                                        }
+                                    }
+                                }
+                                rv = genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: retElemTy, elemRef: retElemRef)
                                 retLit = true
                             }
                             _ => {}
