@@ -21988,7 +21988,7 @@ body0:                                            ; preds = %entry
   store i64 0, ptr %1, align 4
   br label %while.cond
 
-while.cond:                                       ; preds = %endif8, %body0
+while.cond:                                       ; preds = %endif10, %body0
   %4 = load i64, ptr %1, align 4
   %5 = load %st37, ptr %0, align 8
   %6 = extractvalue %st37 %5, 4
@@ -22061,9 +22061,10 @@ then3:                                            ; preds = %endif
   br i1 %43, label %then5, label %endif6
 
 endif4:                                           ; preds = %endif6, %endif
-  %44 = load i1, ptr %3, align 1
-  %45 = icmp ne i1 %44, false
-  br i1 %45, label %then7, label %endif8
+  %44 = load %st36, ptr %2, align 8
+  %45 = extractvalue %st36 %44, 23
+  %46 = icmp ne i64 %45, 0
+  br i1 %46, label %then7, label %endif8
 
 then5:                                            ; preds = %then3
   store i1 false, ptr %3, align 1
@@ -22073,16 +22074,25 @@ endif6:                                           ; preds = %then5, %then3
   br label %endif4
 
 then7:                                            ; preds = %endif4
-  %46 = load %st36, ptr %2, align 8
-  %47 = extractvalue %st36 %46, 0
-  %48 = call i64 @pf85(ptr %0, i64 %47)
-  call void @pf71(i64 %48, { ptr, i64 } { ptr @144, i64 114 })
+  store i1 false, ptr %3, align 1
   br label %endif8
 
 endif8:                                           ; preds = %then7, %endif4
-  %49 = load i64, ptr %1, align 4
-  %50 = call i64 @plew_u64Add(i64 %49, i64 1)
-  store i64 %50, ptr %1, align 4
+  %47 = load i1, ptr %3, align 1
+  %48 = icmp ne i1 %47, false
+  br i1 %48, label %then9, label %endif10
+
+then9:                                            ; preds = %endif8
+  %49 = load %st36, ptr %2, align 8
+  %50 = extractvalue %st36 %49, 0
+  %51 = call i64 @pf85(ptr %0, i64 %50)
+  call void @pf71(i64 %51, { ptr, i64 } { ptr @144, i64 114 })
+  br label %endif10
+
+endif10:                                          ; preds = %then9, %endif8
+  %52 = load i64, ptr %1, align 4
+  %53 = call i64 @plew_u64Add(i64 %52, i64 1)
+  store i64 %53, ptr %1, align 4
   br label %while.cond
 }
 
@@ -26053,14 +26063,16 @@ else:                                             ; preds = %then4
   %140 = extractvalue %st36 %139, 21
   %141 = insertvalue %st36 %138, i1 %140, 21
   %142 = insertvalue %st36 %141, i1 true, 22
-  %143 = insertvalue %st36 %142, i64 0, 23
-  %144 = load %st31, ptr %3, align 8
-  %145 = extractvalue %st31 %144, 5
-  %146 = insertvalue %st36 %143, i64 %145, 24
-  %147 = getelementptr %st36, ptr %67, i64 %66
-  store %st36 %146, ptr %147, align 8
-  %148 = add i64 %66, 1
-  store i64 %148, ptr %64, align 4
+  %143 = load %st36, ptr %5, align 8
+  %144 = extractvalue %st36 %143, 23
+  %145 = insertvalue %st36 %142, i64 %144, 23
+  %146 = load %st31, ptr %3, align 8
+  %147 = extractvalue %st31 %146, 5
+  %148 = insertvalue %st36 %145, i64 %147, 24
+  %149 = getelementptr %st36, ptr %67, i64 %66
+  store %st36 %148, ptr %149, align 8
+  %150 = add i64 %66, 1
+  store i64 %150, ptr %64, align 4
   br label %endif7
 }
 

@@ -269,7 +269,10 @@ fn instantiateProvidedMethods(c: inout Comp) {
                         // an inherent method. Onto a non-generic conformer this is a
                         // no-op (the conformer has no params).
                         val copiedTP: Array[Bind] = providedCopyTypeParams(c: inout c, recvStart: cf.typeStart, recvLen: cf.typeLen, ownParams: f.typeParams)
-                        c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout c, start: cf.typeStart, len: cf.typeLen) typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=cf.traitId />)
+                        // preserve extId: a trait-subject extension method (spec/09
+                        // `extension Ext { impl Trait { … } }`) stays view-gated on the
+                        // conformer, reached via `value#Ext.m()` not a bare call.
+                        c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout c, start: cf.typeStart, len: cf.typeLen) typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=cf.traitId extId=f.extId />)
                     }
                 }
             }

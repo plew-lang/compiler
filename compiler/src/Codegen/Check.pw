@@ -1693,6 +1693,12 @@ fn checkImplOnBuiltin(c: inout Comp) {
                 onBuiltin = false
             }
         }
+        // an extension method (`extension Ext { impl I64 { … } }`) legitimately adds
+        // behaviour to a built-in via the `#Ext` view (spec/09) — not bare — so it is
+        // exempt from the inherent-method-on-builtin rejection.
+        if f.extId != 0U64 {
+            onBuiltin = false
+        }
         if onBuiltin {
             compileErrorAt(line: lineOf(c: inout c, offset: f.nameStart), msg: "cannot define methods on a built-in type you do not own (use a trait conformance via core, or an extension `#Ext`)")
         }

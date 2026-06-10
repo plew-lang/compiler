@@ -1,0 +1,26 @@
+import @Std/Io with { print }
+
+// Trait-subject extensions (spec/09): an extension may add provided methods to a
+// trait (`impl Trait`, third-party `itertools`-style) or add an inter-trait
+// conformance (`impl B as A`). Both are reached through the extension view.
+trait Greet { fn name() -> I64 }
+trait Show { fn show() -> I64 }
+
+struct P { val n: I64 }
+pub impl P as Greet { fn name() -> I64 { return self.n } }
+
+// third-party provided method on the trait
+extension Extra {
+    pub impl Greet { fn shout() -> I64 { return self.name() * 10I64 } }
+}
+
+// inter-trait conformance: every Greet type also conforms to Show via this view
+extension AsShow {
+    pub impl Greet as Show { fn show() -> I64 { return self.name() + 1I64 } }
+}
+
+fn main() {
+    val p: P = <P n=4 />
+    print(p#Extra.shout())   // 40  (trait provided method via the view)
+    print(p#AsShow.show())   // 5   (inter-trait conformance via the view)
+}
