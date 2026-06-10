@@ -1,0 +1,17 @@
+import @Std/Io with { print }
+
+// `any P` is a value type (spec/08): copying an existential (`mut val b = a`) makes
+// an independent value — its boxed concrete is duplicated (the vtable's copy thunk),
+// so mutating one through an `inout` method does not affect the other.
+trait Counter { inout fn bump() -> I64 }
+struct C { mut val n: I64 }
+pub impl C as Counter { inout fn bump() -> I64 { self.n += 1I64  return self.n } }
+
+fn main() {
+    mut val a: any Counter = <C n=0 />
+    print(a.bump())        // 1
+    mut val b: any Counter = a   // value-semantics copy (independent)
+    print(b.bump())        // 2  (b: 1 -> 2)
+    print(a.bump())        // 2  (a still at 1 -> 2, NOT 3)
+    print(b.bump())        // 3  (b: 2 -> 3)
+}

@@ -4135,11 +4135,15 @@ fn genFieldValue(c: inout Comp, st: inout LlvmCtx, valExpr: U64, fld: FieldDef) 
         }
         return av
     }
-    // an existential `any P` field (spec/08): box a concrete conforming initializer.
+    // an existential `any P` field (spec/08): box a concrete conforming initializer,
+    // or value-semantics-copy an existing `any` place.
     mut val fldBoxed: Bool = false
     val fldAny: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: fld.ty, valueExpr: valExpr, outBoxed: inout fldBoxed)
     if fldBoxed {
         return fldAny
+    }
+    if refIsAny(c: inout c, ref: fld.ty) {
+        return copyAnyIfPlace(c: inout c, st: inout st, rv: genLlvmExpr(c: inout c, st: inout st, id: valExpr), valueExpr: valExpr)
     }
     // a boxed (recursive) struct field: build the value, heap-allocate a cell, store
     // it, and put the cell pointer in the struct (leaky, like Ref — no free yet).
@@ -5766,11 +5770,14 @@ fn genArgValue(c: inout Comp, st: inout LlvmCtx, argExpr: U64, p: Param) -> LLVM
         }
     }
     // an `any P` parameter (spec/08): box a concrete conforming argument into the
-    // existential fat pointer.
+    // existential fat pointer, or value-semantics-copy an existing `any` place.
     mut val argBoxed: Bool = false
     val argAny: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: p.ty, valueExpr: argExpr, outBoxed: inout argBoxed)
     if argBoxed {
         return argAny
+    }
+    if refIsAny(c: inout c, ref: p.ty) {
+        return copyAnyIfPlace(c: inout c, st: inout st, rv: genLlvmExpr(c: inout c, st: inout st, id: argExpr), valueExpr: argExpr)
     }
     if p.tyIsArray {
         match c.exprs[argExpr] {
@@ -7361,9 +7368,83 @@ fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, trait
     return fv
 }
 
+// Build the copy thunk for concrete struct `sidx` (vtable slot 0): `copy(ptr src)
+// -> ptr` allocates a fresh box, deep-copies the boxed concrete value into it (value
+// semantics — array/String fields are copied so the two existentials are
+// independent), and returns the new box pointer. Used to give `any P` value
+// semantics on copy (a `mut val b = a` must not alias a's boxed value).
+fn buildAnyCopyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64) -> LLVMValueRef {
+    val sd: StructDef = c.structs[sidx]
+    val regSlot: U64 = structRegSlot(c: inout c, st: inout st, start: sd.nameStart, len: sd.nameLen)
+    if regSlot < st.structIdxs.count {
+    } else {
+        return LLVMConstNull(st.ptrty)
+    }
+    val concreteTy: LLVMTypeRef = st.structTys[regSlot]
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: st.ptrty)
+    val fty: LLVMTypeRef = LLVMFunctionType(st.ptrty, arrayCPtr(ptys), 1U64, 0I32)
+    mut val nm: Array[U8] = []
+    appendBytes(into: inout nm, from: "pfvtcopy".bytes)
+    appendU64Dec(into: inout nm, n: sidx)
+    nm.append(value: 0)
+    val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
+    val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
+    val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "entry"))
+    LLVMPositionBuilderAtEnd(st.b, entry)
+    val srcVal: LLVMValueRef = LLVMBuildLoad2(st.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
+    val copied: LLVMValueRef = deepCopyStructValue(c: inout c, st: inout st, v: srcVal, sidx: sidx)
+    val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
+    LLVMBuildStore(st.b, copied, cell)
+    LLVMBuildRet(st.b, cell)
+    LLVMPositionBuilderAtEnd(st.b, savedBB)
+    return fv
+}
+
+// Value-semantics copy of an `any P` fat-pointer value: invoke its vtable's copy
+// thunk (slot 0) to duplicate the boxed concrete, returning a fresh `{ newdata,
+// vtable }`. So `mut val b = a` (and other place->owner copies) yields an
+// independent existential whose later mutation doesn't affect the source.
+fn copyAnyValue(c: inout Comp, st: inout LlvmCtx, fat: LLVMValueRef) -> LLVMValueRef {
+    val dataPtr: LLVMValueRef = LLVMBuildExtractValue(st.b, fat, 0U64, anon())
+    val vtPtr: LLVMValueRef = LLVMBuildExtractValue(st.b, fat, 1U64, anon())
+    val copyFn: LLVMValueRef = LLVMBuildLoad2(st.b, st.ptrty, vtPtr, anon())
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: st.ptrty)
+    val fty: LLVMTypeRef = LLVMFunctionType(st.ptrty, arrayCPtr(ptys), 1U64, 0I32)
+    mut val av: Array[LLVMValueRef] = []
+    av.append(value: dataPtr)
+    val newData: LLVMValueRef = LLVMBuildCall2(st.b, fty, copyFn, arrayCPtr(av), 1U64, anon())
+    mut val agg: LLVMValueRef = LLVMGetUndef(st.anyTy)
+    agg = LLVMBuildInsertValue(st.b, agg, newData, 0U64, anon())
+    agg = LLVMBuildInsertValue(st.b, agg, vtPtr, 1U64, anon())
+    return agg
+}
+
+// Whether `id` is an `any P` PLACE (an Ident or Field) whose copy into a new owner
+// must duplicate the boxed value (value semantics).
+fn anyExprIsPlace(c: inout Comp, id: U64) -> Bool {
+    match c.exprs[id] {
+        Expr.Ident(start: _, len: _) => { return true }
+        Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
+        _ => { return false }
+    }
+}
+
+// If `valueExpr` is an existing `any P` place being copied into a new owner, return
+// a value-semantics copy of its already-emitted value `rv`; else `rv` unchanged.
+fn copyAnyIfPlace(c: inout Comp, st: inout LlvmCtx, rv: LLVMValueRef, valueExpr: U64) -> LLVMValueRef {
+    if refIsAny(c: inout c, ref: exprTypeRef(c: inout c, st: inout st, id: valueExpr)) {
+        if anyExprIsPlace(c: inout c, id: valueExpr) {
+            return copyAnyValue(c: inout c, st: inout st, fat: rv)
+        }
+    }
+    return rv
+}
+
 // Build (or fetch cached) the vtable global for (concrete struct `sidx`, trait
-// `traitIdx`): an array of ptr slots — slot 0 = drop (null for now), slot 1.. = a
-// thunk per requirement in declaration order. Returns the global's pointer value.
+// `traitIdx`): an array of ptr slots — slot 0 = copy thunk (value semantics), slot
+// 1.. = a thunk per requirement in declaration order. Returns the global pointer.
 fn ensureAnyVtable(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, traitIdx: U64) -> LLVMValueRef {
     // distinct existential bindings (`any Add[I32,…]` vs `any Add[I64,…]`) need
     // distinct vtables; the key folds the bound concretes (0 for the no-binding case).
@@ -7399,7 +7480,7 @@ fn ensureAnyVtable(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, tra
     st.anyVtBindKey.append(value: bindKey)
     st.anyVtVal.append(value: g)
     mut val slots: Array[LLVMValueRef] = []
-    slots.append(value: LLVMConstNull(st.ptrty))
+    slots.append(value: buildAnyCopyThunk(c: inout c, st: inout st, sidx: sidx))
     mut val ri: U64 = 0
     while ri < t.reqs.count {
         slots.append(value: buildAnyThunk(c: inout c, st: inout st, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx, req: t.reqs[ri], idx: ri))
@@ -7776,8 +7857,9 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                         v = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: ty, valueExpr: init, outBoxed: inout lb)
                         if lb {
                         } else {
-                            // initializer is already an `any P` value (`val s2 = s`).
-                            v = genLlvmExpr(c: inout c, st: inout st, id: init)
+                            // initializer is already an `any P` value (`val s2 = s`):
+                            // value semantics — copy the box if it is a place.
+                            v = copyAnyIfPlace(c: inout c, st: inout st, rv: genLlvmExpr(c: inout c, st: inout st, id: init), valueExpr: init)
                         }
                         builtArr = true
                     }
@@ -7975,7 +8057,8 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                             mut val arv: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: st.locTypeRef[li], valueExpr: value, outBoxed: inout ab)
                             if ab {
                             } else {
-                                arv = genLlvmExpr(c: inout c, st: inout st, id: value)
+                                // any -> any: value-semantics copy of a place.
+                                arv = copyAnyIfPlace(c: inout c, st: inout st, rv: genLlvmExpr(c: inout c, st: inout st, id: value), valueExpr: value)
                             }
                             LLVMBuildStore(st.b, arv, st.locPtr[li])
                             return
@@ -8219,8 +8302,8 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                         mut val rav: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: st.curRetRef, valueExpr: value, outBoxed: inout rb)
                         if rb {
                         } else {
-                            // already an `any P` value.
-                            rav = genLlvmExpr(c: inout c, st: inout st, id: value)
+                            // already an `any P` value: value-semantics copy of a place.
+                            rav = copyAnyIfPlace(c: inout c, st: inout st, rv: genLlvmExpr(c: inout c, st: inout st, id: value), valueExpr: value)
                         }
                         mut val exLi: U64 = sentinel
                         match c.exprs[value] {
