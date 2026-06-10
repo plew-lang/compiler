@@ -963,7 +963,15 @@ fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvSta
             return false
         }
         val subId: U64 = substReqParamHeadId(c: inout c, recvStart: recvStart, recvLen: recvLen, tps: tps, targs: targs, prStart: pr.tyStart, prLen: pr.tyLen)
-        if pw.tyNameId == subId {
+        // the WITNESS side may also write `Self` (`fn eqTo(other: Self)` inside
+        // `impl P as MyEq`): substitute its Self -> the conforming type too, so the
+        // requirement's substituted Self (=recv) matches it. A concrete witness type
+        // (`other: P`) keeps its own head id (pw.tyNameId).
+        mut val wId: U64 = pw.tyNameId
+        if rangeEquals(bytes: c.bytes, start: pw.tyStart, len: pw.tyLen, kw: "Self") {
+            wId = intern(c: inout c, start: recvStart, len: recvLen)
+        }
+        if wId == subId {
         } else {
             return false
         }

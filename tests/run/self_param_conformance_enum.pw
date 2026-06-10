@@ -1,0 +1,31 @@
+import @Std/Io with { print }
+
+// `Self`-typed param on an ENUM receiver: the backend grounds the `Self` param to the
+// enum so a `match other` in the body recovers the enum's variants.
+trait Same {
+    fn sameAs(other: Self) -> Bool
+}
+
+enum Color {
+    Red
+    Green
+    Blue
+}
+
+pub impl Color as Same {
+    fn sameAs(other: Self) -> Bool {
+        match self {
+            Color.Red => { match other { Color.Red => { return true } Color.Green => { return false } Color.Blue => { return false } } }
+            Color.Green => { match other { Color.Red => { return false } Color.Green => { return true } Color.Blue => { return false } } }
+            Color.Blue => { match other { Color.Red => { return false } Color.Green => { return false } Color.Blue => { return true } } }
+        }
+    }
+}
+
+fn main() {
+    val a: Color = <Color.Red />
+    val b: Color = <Color.Red />
+    val c: Color = <Color.Blue />
+    if a.sameAs(other: b) { print(1I64) } else { print(0I64) }
+    if a.sameAs(other: c) { print(1I64) } else { print(0I64) }
+}

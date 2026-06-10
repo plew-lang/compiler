@@ -7086,9 +7086,24 @@ fn typeArgsEq(c: inout Comp, a: Array[U64], b: Array[U64]) -> Bool {
 // its instance/enum ref; an `inout` param binds the caller pointer directly, else
 // the value is stored into a fresh alloca.
 fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, argIdx: U64) {
-    mut val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen)
+    // a `Self`-typed param (`fn eqTo(other: Self)` inside `impl P as MyEq`): ground
+    // the head-name span through the active env (curSelfRef resolves `Self` -> the
+    // receiver type) so the struct/enum-index + scalar-type lookups see `P`, not the
+    // literal `Self` (which is not a registered type — field access would then fail).
+    // The `p.ty`-based predicates below stay on the raw ref (groundTypeRef does not
+    // preserve isAny/viewExtId, and Self carries neither, so this is span-only).
+    mut val pgStart: U64 = p.tyStart
+    mut val pgLen: U64 = p.tyLen
+    if p.ty != 0U64 {
+        if rangeEquals(bytes: c.bytes, start: p.tyStart, len: p.tyLen, kw: "Self") {
+            val pgr: U64 = groundTypeRef(c: inout c, ref: p.ty)
+            pgStart = c.types[pgr].nameStart
+            pgLen = c.types[pgr].nameLen
+        }
+    }
+    mut val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: pgStart, tyLen: pgLen)
     mut val pElem: LLVMTypeRef = st.i64ty
-    mut val pSidx: U64 = localStructIdxFor(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen)
+    mut val pSidx: U64 = localStructIdxFor(c: inout c, st: inout st, start: pgStart, len: pgLen)
     mut val pRef: U64 = 0
     // a `Type#Ext`-viewed param (a plain struct otherwise): track its viewed
     // TypeRef so a bare `x.m()` in the body resolves the extension (spec/09).
@@ -7135,8 +7150,9 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
             pRef = p.ty
         }
         if pRef == 0U64 {
-            if enumRegSlot(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen) < st.enumIdxs.count {
-                pRef = simpleTypeRef(c: inout c, nameStart: p.tyStart, nameLen: p.tyLen)
+            // grounded span so a `Self` param on an enum receiver tracks the enum.
+            if enumRegSlot(c: inout c, st: inout st, start: pgStart, len: pgLen) < st.enumIdxs.count {
+                pRef = simpleTypeRef(c: inout c, nameStart: pgStart, nameLen: pgLen)
             }
         }
     }
@@ -7160,9 +7176,10 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
         }
     }
     // ground a generic param type for its kind (a `key: K` with K -> String must be
-    // kind 1 so a String method dispatches; K -> U64 unsigned, etc.).
-    mut val pKindStart: U64 = p.tyStart
-    mut val pKindLen: U64 = p.tyLen
+    // kind 1 so a String method dispatches; K -> U64 unsigned, etc.). Start from the
+    // Self-grounded span so a `Self` param gets the receiver type's kind.
+    mut val pKindStart: U64 = pgStart
+    mut val pKindLen: U64 = pgLen
     if p.ty != 0U64 {
         if c.curTypeParams.count > 0U64 {
             val pg: U64 = groundTypeRef(c: inout c, ref: p.ty)

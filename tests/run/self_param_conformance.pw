@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+// A trait requirement with a `Self`-typed input param (`fn eqTo(other: Self)`),
+// witnessed by a hand-written method that also writes `Self`: the conformance
+// completeness check substitutes Self on BOTH sides, and the backend resolves the
+// `Self` param to the receiver type so `other.x` field access works.
+trait MyEq {
+    fn eqTo(other: Self) -> Bool
+}
+
+struct P {
+    pub val x: I64
+}
+
+pub impl P as MyEq {
+    fn eqTo(other: Self) -> Bool {
+        return self.x == other.x
+    }
+}
+
+fn main() {
+    val a: P = <P x=3 />
+    val b: P = <P x=3 />
+    val c: P = <P x=9 />
+    if a.eqTo(other: b) { print(1I64) } else { print(0I64) }
+    if a.eqTo(other: c) { print(1I64) } else { print(0I64) }
+}
