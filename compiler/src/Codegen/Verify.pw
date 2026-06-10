@@ -325,6 +325,15 @@ fn verifyExpr(c: inout Comp, id: U64) {
             mut val i: U64 = 0
             while i < fields.count {
                 verifyExpr(c: inout c, id: fields[i].value)
+                // a field specified twice in one construction (`<P x=1 x=2 />`) is a
+                // silent last-wins bug otherwise — reject the duplicate (spec/05).
+                mut val j: U64 = 0
+                while j < i {
+                    if spansEqual(c: inout c, aStart: fields[j].nameStart, aLen: fields[j].nameLen, bStart: fields[i].nameStart, bLen: fields[i].nameLen) {
+                        compileErrorAt(line: lineOf(c: inout c, offset: fields[i].offset), msg: "duplicate field in construction; each field may be set at most once")
+                    }
+                    j += 1U64
+                }
                 i += 1
             }
         }
