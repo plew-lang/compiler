@@ -364,6 +364,32 @@ export fn lex(lx: inout Lexer) {
                     }
                 }
             }
+            // optional exponent `[eE][+-]?digits` — makes the number a float even
+            // without a fractional part (`1e10`, `2E8`, `1.5e-3`). The `e` is consumed
+            // only when (optional sign and) a digit follow.
+            if j < lx.bytes.count {
+                if lx.bytes[j] == 101U8 || lx.bytes[j] == 69U8 {
+                    mut val k: U64 = j + 1U64
+                    if k < lx.bytes.count {
+                        if lx.bytes[k] == 43U8 || lx.bytes[k] == 45U8 {
+                            k += 1U64
+                        }
+                    }
+                    if k < lx.bytes.count {
+                        if isDigit(b: lx.bytes[k]) {
+                            isFloat = true
+                            j = k + 1U64
+                            while j < lx.bytes.count {
+                                if isDigit(b: lx.bytes[j]) {
+                                    j += 1
+                                } else {
+                                    break
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             if isFloat {
                 lx.emit(k: <Kind.Float />, start: start, len: j - start)
             } else {

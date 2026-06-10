@@ -1,0 +1,10 @@
+import @Std/Io with { print }
+
+// Exponent float literals (spec/02): `[eE][+-]?digits`, with or without a fractional
+// part. `1..5` keeps the dot for the range (the exponent rule only joins `e`+digit).
+fn main() {
+    print(1.5e2)      // 150
+    print(1e3)        // 1000
+    print(2.5e-1)     // 0.25
+    print(3E2)        // 300
+}
