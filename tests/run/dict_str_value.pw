@@ -1,13 +1,18 @@
 import @Std/Io with { print }
 
-// A String-VALUED dictionary's `getOr` (spec/02): the generic method's `-> V`
-// return is grounded under the receiver instance's env, so V=String is recognized
-// as a String result (not defaulted to int and miscompiled at the use site).
+// A String-VALUED dictionary across all accessors (spec/02): the generic `-> V`
+// (= String) return / payload is grounded under the receiver-instance env, so a
+// String value is recognized as such instead of being defaulted to int and
+// miscompiled (`sext {ptr,i64} to i64`) at the use site.
 fn main() {
     mut val m: Dictionary[String, String] = [:]
     m.insert(key: "host", value: "localhost")
     m.insert(key: "port", value: "8080")
-    print(m.getOr(key: "host", fallback: "none"))   // localhost
-    print(m.getOr(key: "port", fallback: "none"))    // 8080
+    print(m.getOr(key: "host", fallback: "none"))    // localhost — getOr
     print(m.getOr(key: "missing", fallback: "none")) // none
+    print(m["port"])                                 // 8080 — dict[k] (at)
+    match m.get(key: "host") {                        // get -> Optional[String] + bind
+        Optional.Some(val v) => { print(v) }          // localhost
+        Optional.None => { print("?") }
+    }
 }

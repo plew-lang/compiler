@@ -2402,7 +2402,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 }
             }
         }
-        Expr.Index(val base, index: _) => {
+        Expr.Index(val base, val index) => {
             // element kind: from the array local's tracked element kind (so an
             // Array[U16] element is unsigned), else inferred from the element type.
             match c.exprs[base] {
@@ -2415,6 +2415,21 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                     }
                 }
                 _ => {}
+            }
+            // a user-Index subscript (`dict[k]` -> `dict.at(key: k)`, a user type's
+            // `g[i]` -> `g.index(key: i)`): recover the kind through the same synthesized
+            // method call genLlvmIndex emits, so a String/Bool value isn't defaulted to
+            // int (which would miscompile the {ptr,i64} at the use site).
+            val ibsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+            if ibsi < c.structs.count {
+                if rangeEquals(bytes: c.bytes, start: c.structs[ibsi].nameStart, len: c.structs[ibsi].nameLen, kw: "Dictionary") {
+                    val m: U64 = synthDictMethod(c: inout c, recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
+                    return valueKind(c: inout c, st: inout st, id: m)
+                }
+                if typeHasMethodNamed(c: inout c, typeStart: c.structs[ibsi].nameStart, typeLen: c.structs[ibsi].nameLen, name: "index") {
+                    val m: U64 = synthDictMethod(c: inout c, recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
+                    return valueKind(c: inout c, st: inout st, id: m)
+                }
             }
             // the env-aware element type (a generic array field `self.keys: Array[K]`
             // with K -> String grounds to strty, so `self.keys[i] == key` is String ==).
@@ -8835,7 +8850,20 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
             if enumRegSlot(c: inout c, st: inout st, start: fd.tyStart, len: fd.tyLen) < st.enumIdxs.count {
                 tref = simpleTypeRef(c: inout c, nameStart: fd.tyStart, nameLen: fd.tyLen)
             }
-            pushLocalR(st: inout st, nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: kindFromTySpan(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: fd.tyStart, len: fd.tyLen), isArr: isArrF, elemTy: elemTyF, elemKind: elemKindF, typeRef: tref)
+            // a type-parameter payload field (`Optional.Some(v: T)`): ground T under
+            // the active enum-instance env (set by the caller around bindMatchPayload)
+            // so a String/Bool payload is recognized as kind 1/2, not defaulted to int
+            // (which would miscompile the bound {ptr,i64} value at the arm's use site).
+            mut val bindKind: U64 = kindFromTySpan(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
+            if fd.ty != 0U64 {
+                if c.curTypeParams.count > 0U64 {
+                    val gft: U64 = groundTypeRef(c: inout c, ref: fd.ty)
+                    if gft != 0U64 {
+                        bindKind = kindFromTySpan(c: inout c, tyStart: c.types[gft].nameStart, tyLen: c.types[gft].nameLen)
+                    }
+                }
+            }
+            pushLocalR(st: inout st, nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: bindKind, structIdx: localStructIdxFor(c: inout c, st: inout st, start: fd.tyStart, len: fd.tyLen), isArr: isArrF, elemTy: elemTyF, elemKind: elemKindF, typeRef: tref)
             // an array-of-struct payload bind (`Expr.Call(.., val args)` with
             // args: Array[Arg]): track the element struct + ref so `args[i].field`
             // and nested-array/Ref elements resolve in the arm body.
