@@ -1,0 +1,28 @@
+import @Std/Io with { print }
+
+// `@Std/Core` is ambient (spec/15): operators, comparison, the lang-item types
+// Optional / Result, and `for` over a range all work with NO `import @Std/Core`.
+// (Only `import @Std/Io with { print }` here — print is not ambient.)
+fn main() {
+    val x: I64 = 2I64 + 3I64 * 4I64        // operators ambient
+    print(x)                                // 14
+    print(x - 4I64)                         // 10
+
+    val o: Optional[I64] = <Optional.Some v=7I64 />   // Optional ambient (field `v`)
+    match o {
+        Optional.Some(val v) => { print(v) }   // 7
+        Optional.None => { print(0I64) }
+    }
+
+    val r: Result[I64, I64] = <Result.Ok value=5I64 />  // Result ambient (field `value`)
+    match r {
+        Result.Ok(val value) => { print(value) }   // 5
+        Result.Err(val error) => { print(error) }
+    }
+
+    mut val sum: I64 = 0I64
+    for val i in 0I64..<5I64 {               // for / range ambient
+        sum = sum + i
+    }
+    print(sum)                               // 10
+}

@@ -1978,6 +1978,9 @@ fn isAmbientInterceptedName(c: inout Comp, start: U64, len: U64) -> Bool {
     if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "fileExists") { return true }
     if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "sleep") { return true }
     if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "exit") { return true }
+    // `assert` is a @Std/Core function (not a lang item): now that Core is ambient
+    // (force-loaded), it resolves, but spec keeps it import-required, so gate it here.
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "assert") { return true }
     return false
 }
 

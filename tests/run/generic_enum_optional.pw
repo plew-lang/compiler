@@ -1,19 +1,21 @@
 import @Std/Io with { print }
 
-enum Optional[T] {
+// A user-defined generic enum (named to NOT shadow the ambient lang-item `Optional`,
+// which is now auto-loaded and not redefinable).
+enum Maybe[T] {
     Some(v: T)
     None
 }
 
 fn main() {
-    val a: Optional[I32] = <Optional[I32].Some v=42 />
-    val b: Optional[I32] = <Optional[I32].None />
+    val a: Maybe[I32] = <Maybe[I32].Some v=42 />
+    val b: Maybe[I32] = <Maybe[I32].None />
     match a {
-        Optional.Some(val v) => { print(v) }
-        Optional.None => { print(0I64) }
+        Maybe.Some(val v) => { print(v) }
+        Maybe.None => { print(0I64) }
     }
     match b {
-        Optional.Some(val v) => { print(v) }
-        Optional.None => { print(99I64) }
+        Maybe.Some(val v) => { print(v) }
+        Maybe.None => { print(99I64) }
     }
 }
