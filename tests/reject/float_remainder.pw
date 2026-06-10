@@ -1,0 +1,5 @@
+// `%` (remainder) is integer-only; not defined for floats (spec/12).
+import @Std/Io with { print }
+fn main() {
+    print(5.0 % 2.0)
+}

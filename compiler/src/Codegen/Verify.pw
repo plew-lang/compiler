@@ -814,7 +814,34 @@ fn verifyMethodVis(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
 // Eq/Ord errors; an arithmetic op resolves a witness or errors. The hasXWitness
 // guards run first so a valid op (whose operand type resolves to a witness) is
 // accepted — only genuinely unwitnessed ops fall through to the error arms.
+// Whether expression `id` is a float (F32/F64): a float literal, or a value whose
+// recovered type names a float type.
+fn exprIsFloat(c: inout Comp, id: U64) -> Bool {
+    match c.exprs[id] {
+        Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { return true }
+        _ => {}
+    }
+    val ti: TypeInfo = typeOf(c: inout c, id: id)
+    if ti.kind == 2 {
+        if rangeEquals(bytes: c.bytes, start: ti.nameStart, len: ti.nameLen, kw: "F64") {
+            return true
+        }
+        if rangeEquals(bytes: c.bytes, start: ti.nameStart, len: ti.nameLen, kw: "F32") {
+            return true
+        }
+    }
+    return false
+}
+
 fn verifyBinaryOp(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
+    // float arithmetic / comparison is accepted directly (the backend emits the IEEE
+    // op); `%`/`Rem` is integer-only, so reject it on a float (spec/12).
+    if exprIsFloat(c: inout c, id: lhs) || exprIsFloat(c: inout c, id: rhs) {
+        if op == opRem() {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "`%` (remainder) is integer-only; not defined for floats (spec/12)")
+        }
+        return
+    }
     if isStringEq(c: inout c, op: op, lhs: lhs) {
         return
     }

@@ -1,0 +1,12 @@
+import @Std/Io with { print }
+
+// Float arithmetic + comparison (spec/02,12): the backend emits the IEEE op
+// (fadd/fsub/fmul/fdiv, ordered fcmp). `%` (remainder) is integer-only.
+fn main() {
+    print(1.5 + 2.5)      // 4
+    print(10.0 - 3.5)     // 6.5
+    print(2.0 * 3.5)      // 7
+    print(7.0 / 2.0)      // 3.5
+    print(if 1.5 < 2.5 { give 1I64 } else { give 0I64 })   // 1
+    print(if 3.0 > 5.0 { give 1I64 } else { give 0I64 })   // 0
+}
