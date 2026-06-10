@@ -1,0 +1,8 @@
+// A closure-literal argument must have the same number of parameters as the expected
+// function type (spec/04) — a wrong arity reinterprets the call ABI and produced
+// garbage. Here `apply` wants `fn(x: I64) -> I64` but is given a 2-param closure.
+import @Std/Io with { print }
+fn apply(f: fn(x: I64) -> I64) -> I64 { return f(x: 5I64) }
+fn main() {
+    print(apply(f: fn(x: I64, y: I64) -> I64 { return x + y }))
+}
