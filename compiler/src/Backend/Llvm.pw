@@ -109,6 +109,7 @@ extern(c) {
     fn LLVMBuildSelect(b~: LLVMBuilderRef, cond~: LLVMValueRef, thenV~: LLVMValueRef, elseV~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildZExt(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildSIToFP(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildUIToFP(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildSExt(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildTrunc(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildAlloca(b~: LLVMBuilderRef, ty~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
@@ -2392,6 +2393,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
     match c.exprs[id] {
         Expr.Str(start: _, len: _) => { return 1U64 }
         Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { return 4U64 }
+        Expr.Cast(operand: _, val tyStart, val tyLen, ty: _) => { return kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen) }
         Expr.Int(value: _, offset: _, val isBool, val tyStart, val tyLen, isNeg: _) => {
             if isBool { return 2U64 }
             if tyLen > 0U64 {
@@ -3674,6 +3676,18 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // source is signed, zext if unsigned, or same width). Non-int / From
             // conversions are not yet modeled.
             val ov: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: operand)
+            // `n as F64` / `n as F32`: int -> float (sitofp / uitofp, IEEE-rounded —
+            // spec/12 total conversion), or a float -> float widen (both are double =
+            // no-op). (float -> int is lossy and is a fallible TryFrom, not `as`.)
+            if isFloatType(c: inout c, start: tyStart, len: tyLen) {
+                if LLVMGetTypeKind(LLVMTypeOf(ov)) == 8U32 {
+                    if valueKind(c: inout c, st: inout st, id: operand) == 3U64 {
+                        return LLVMBuildUIToFP(st.b, ov, st.f64ty, anon())
+                    }
+                    return LLVMBuildSIToFP(st.b, ov, st.f64ty, anon())
+                }
+                return ov
+            }
             if LLVMGetTypeKind(LLVMTypeOf(ov)) == 8U32 {
                 if kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen) == 1U64 {
                 } else {

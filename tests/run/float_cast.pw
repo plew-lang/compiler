@@ -1,0 +1,13 @@
+import @Std/Io with { print }
+
+// `as` int -> float (spec/12): a total, IEEE-rounded conversion (sitofp / uitofp).
+// (float -> int is lossy and is a fallible TryFrom, not `as`.)
+fn main() {
+    val n: I64 = 5I64
+    print(n as F64)            // 5
+    print((n as F64) / 2.0)    // 2.5
+    val u: U64 = 10U64
+    print((u as F64) + 0.5)    // 10.5
+    val x: F64 = 7 as F64      // 7  (literal int -> float)
+    print(x)
+}
