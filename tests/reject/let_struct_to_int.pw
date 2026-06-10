@@ -1,0 +1,5 @@
+// A struct value bound to a numeric annotation — reject (category mismatch).
+struct A { pub val x: I64 }
+fn main() {
+    val n: I64 = <A x=1 />
+}

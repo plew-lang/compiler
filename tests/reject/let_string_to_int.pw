@@ -1,0 +1,4 @@
+// A String initializer bound to an `I64` annotation reinterprets the bits — reject.
+fn main() {
+    val x: I64 = "hello"
+}

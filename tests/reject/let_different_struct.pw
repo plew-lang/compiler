@@ -1,0 +1,6 @@
+// A `B` value bound to an `A` annotation — different named types, reject.
+struct A { pub val x: I64 }
+struct B { pub val y: I64 }
+fn main() {
+    val a: A = <B y=1 />
+}
