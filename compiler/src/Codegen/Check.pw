@@ -1008,11 +1008,10 @@ fn resolveTraitDef(c: inout Comp, cf: Conform) -> U64 {
 
 // Existential formation (spec/08): `any P` requires P's type arguments and
 // associated types to all be bound (`any Iterator[Item=I32]`, `any Add[I32,
-// Output=I32]`), so the only thing still erased is `Self`. The binding syntax
-// (`[Item=…]`) and the substitution into vtable thunks are a later increment, so
-// for now `any` is supported only over a trait with no type parameters and no
-// associated types; a parameterized/associated trait is loud-rejected here rather
-// than silently dispatching with an unbound parameter.
+// Output=I32]`), so the only thing still erased is `Self`. A positional binding
+// fills a type parameter in order; a named binding `Name=Type` fills a type
+// parameter or associated type by name. An unbound parameter / associated type is a
+// loud formation error.
 fn checkAnyFormation(c: inout Comp) {
     mut val ti: U64 = 0
     while ti < c.types.count {
@@ -1021,8 +1020,40 @@ fn checkAnyFormation(c: inout Comp) {
             val tri: U64 = findTraitIdxByName(c: inout c, start: t.nameStart, len: t.nameLen)
             if tri < c.traits.count {
                 val tr: TraitDef = c.traits[tri]
-                if tr.typeParams.count > 0U64 || tr.assocTypes.count > 0U64 {
-                    compileErrorAt(line: lineOf(c: inout c, offset: t.nameStart), msg: "`any` over a trait with type arguments or associated types is not yet supported (spec/08 requires all bound; the binding + thunk substitution is a later increment)")
+                // count positional bindings (argLabels entry 0 / absent).
+                mut val positional: U64 = 0
+                mut val ai: U64 = 0
+                while ai < t.args.count {
+                    mut val lbl: U64 = 0
+                    if ai < t.argLabels.count {
+                        lbl = t.argLabels[ai]
+                    }
+                    if lbl == 0U64 {
+                        positional += 1U64
+                    }
+                    ai += 1
+                }
+                // each type parameter is bound positionally or by name.
+                mut val tpi: U64 = 0
+                mut val posNeed: U64 = 0
+                while tpi < tr.typeParams.count {
+                    if anyHasNamedBinding(c: inout c, t: t, nameId: tr.typeParams[tpi].nameId) {
+                    } else {
+                        posNeed += 1U64
+                    }
+                    tpi += 1
+                }
+                if positional < posNeed {
+                    compileErrorAt(line: lineOf(c: inout c, offset: t.nameStart), msg: "`any P` leaves a type parameter unbound — bind all of the trait's type arguments (spec/08)")
+                }
+                // each associated type must be bound by name.
+                mut val asi: U64 = 0
+                while asi < tr.assocTypes.count {
+                    if anyHasNamedBinding(c: inout c, t: t, nameId: tr.assocTypes[asi].nameId) {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: t.nameStart), msg: "`any P` leaves an associated type unbound — bind it as `any P[Item=Type]` (spec/08)")
+                    }
+                    asi += 1
                 }
             } else {
                 compileErrorAt(line: lineOf(c: inout c, offset: t.nameStart), msg: "`any P` names an unknown trait — `any` exists only over a trait (spec/08)")
@@ -1030,6 +1061,21 @@ fn checkAnyFormation(c: inout Comp) {
         }
         ti += 1
     }
+}
+
+// Does existential TypeRef `t` carry a named binding `Name=Type` whose name is the
+// interned `nameId`?
+fn anyHasNamedBinding(c: inout Comp, t: TypeRef, nameId: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < t.args.count {
+        if i < t.argLabels.count {
+            if t.argLabels[i] == nameId && nameId != 0U64 {
+                return true
+            }
+        }
+        i += 1
+    }
+    return false
 }
 
 fn checkConformances(c: inout Comp) {

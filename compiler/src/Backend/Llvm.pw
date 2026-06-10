@@ -170,9 +170,12 @@ struct LlvmCtx {
     // `vtable` at the static per-(concrete-type, trait) thunk table (slot 0 = drop,
     // slot 1.. = the trait's requirement methods in declaration order).
     pub val anyTy: LLVMTypeRef
-    // built vtables, cached by (concrete typeId, traitId) -> the LLVM global value.
+    // built vtables, cached by (concrete struct idx, traitId, binding key) -> the LLVM
+    // global value. The binding key distinguishes existentials whose associated-type /
+    // type-parameter bindings differ (`any Add[I32,…]` vs `any Add[I64,…]`).
     pub mut val anyVtType: Array[U64]
     pub mut val anyVtTrait: Array[U64]
+    pub mut val anyVtBindKey: Array[U64]
     pub mut val anyVtVal: Array[LLVMValueRef]
     pub mut val curFn: LLVMValueRef
     pub mut val terminated: Bool
@@ -1683,6 +1686,135 @@ fn anyMethodReq(c: inout Comp, traitIdx: U64, nameStart: U64, nameLen: U64, args
     return <Func nameStart=0 nameLen=0 typeParams=[] params=[] hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />
 }
 
+// Build the substitution env for an `any P[bindings]` existential (spec/08,12): map
+// each of trait `traitIdx`'s type parameters and associated types to its binding
+// from the any TypeRef. Positional any-args (argLabels entry 0) fill the type
+// parameters in order; named any-args bind a parameter or associated type by name.
+// Fills the parallel (names, args) lists used as c.curTypeParams/curTypeArgs so
+// requirement signatures naming `Rhs`/`Item`/`Output` ground to concrete types.
+// Returns false if any parameter / associated type is left unbound.
+fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Array[Bind], outArgs: inout Array[U64]) -> Bool {
+    val t: TraitDef = c.traits[traitIdx]
+    val ar: TypeRef = c.types[anyRef]
+    // positional binding refs (argLabels entry 0), in source order.
+    mut val positional: Array[U64] = []
+    mut val ai: U64 = 0
+    while ai < ar.args.count {
+        mut val lbl: U64 = 0
+        if ai < ar.argLabels.count {
+            lbl = ar.argLabels[ai]
+        }
+        if lbl == 0U64 {
+            positional.append(value: ar.args[ai])
+        }
+        ai += 1
+    }
+    mut val posIdx: U64 = 0
+    // type parameters: a named binding wins, else the next positional.
+    mut val tpi: U64 = 0
+    while tpi < t.typeParams.count {
+        val tp: Bind = t.typeParams[tpi]
+        mut val ref: U64 = 0
+        mut val found: Bool = false
+        mut val bi: U64 = 0
+        while bi < ar.args.count {
+            if bi < ar.argLabels.count {
+                if ar.argLabels[bi] == tp.nameId && tp.nameId != 0U64 {
+                    ref = ar.args[bi]
+                    found = true
+                }
+            }
+            bi += 1
+        }
+        if found {
+        } else {
+            if posIdx < positional.count {
+                ref = positional[posIdx]
+                posIdx += 1
+                found = true
+            }
+        }
+        if found {
+        } else {
+            return false
+        }
+        outParams.append(value: tp)
+        outArgs.append(value: ref)
+        tpi += 1
+    }
+    // associated types: named binding only.
+    mut val asi: U64 = 0
+    while asi < t.assocTypes.count {
+        val at: Bind = t.assocTypes[asi]
+        mut val ref2: U64 = 0
+        mut val found2: Bool = false
+        mut val bj: U64 = 0
+        while bj < ar.args.count {
+            if bj < ar.argLabels.count {
+                if ar.argLabels[bj] == at.nameId && at.nameId != 0U64 {
+                    ref2 = ar.args[bj]
+                    found2 = true
+                }
+            }
+            bj += 1
+        }
+        if found2 {
+        } else {
+            return false
+        }
+        outParams.append(value: at)
+        outArgs.append(value: ref2)
+        asi += 1
+    }
+    return true
+}
+
+// A cache key distinguishing existential vtables whose concrete bindings differ
+// (`any Add[I32,…]` vs `any Add[I64,…]`): a fold over the bound type refs' head name
+// ids. 0 when there are no bindings (the canonical case, keyed only by sidx+trait).
+fn anyBindKey(c: inout Comp, args: Array[U64]) -> U64 {
+    mut val k: U64 = 0
+    mut val i: U64 = 0
+    while i < args.count {
+        mut val nid: U64 = 0
+        if args[i] < c.types.count {
+            nid = c.types[args[i]].nameId
+        }
+        k = k * 1000003U64 + nid + 1U64
+        i += 1
+    }
+    return k
+}
+
+// The grounded return TypeRef of trait `traitIdx`'s requirement matching
+// (name,args) on an `any P` value (anyRef carries the bindings), or 0 for a void /
+// unmatched requirement. Used by type recovery so an `any` method returning an
+// associated / type-parameter type (`Output`, `Optional[Item]`) recovers concretely.
+fn anyMethodRetRef(c: inout Comp, anyRef: U64, traitIdx: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    val req: Func = anyMethodReq(c: inout c, traitIdx: traitIdx, nameStart: nameStart, nameLen: nameLen, args: args)
+    if req.hasRet {
+    } else {
+        return 0U64
+    }
+    if req.retTy == 0U64 {
+        return 0U64
+    }
+    mut val params: Array[Bind] = []
+    mut val argz: Array[U64] = []
+    if anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout params, outArgs: inout argz) {
+    } else {
+        return req.retTy
+    }
+    val savedP: Array[Bind] = c.curTypeParams
+    val savedA: Array[U64] = c.curTypeArgs
+    c.curTypeParams = params
+    c.curTypeArgs = argz
+    val g: U64 = groundTypeRef(c: inout c, ref: req.retTy)
+    c.curTypeParams = savedP
+    c.curTypeArgs = savedA
+    return g
+}
+
 fn llvmTypeOfRef(c: inout Comp, st: inout LlvmCtx, ref: U64) -> LLVMTypeRef {
     // an existential `any P`: the fat pointer { data, vtable }, not the named
     // trait's (nonexistent) own layout.
@@ -2093,12 +2225,13 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             }
         }
         Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-            // an `any P` receiver: the result kind is the requirement's return.
+            // an `any P` receiver: the result kind is the requirement's return,
+            // grounded under the existential's bindings (`Out`/`Item` -> concrete).
             val atIdx: U64 = anyRecvTraitIdx(c: inout c, st: inout st, recv: recv)
             if atIdx < c.traits.count {
-                val rq: Func = anyMethodReq(c: inout c, traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
-                if rq.hasRet {
-                    return kindFromTySpan(c: inout c, tyStart: rq.retStart, tyLen: rq.retLen)
+                val rr: U64 = anyMethodRetRef(c: inout c, anyRef: exprTypeRef(c: inout c, st: inout st, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
+                if rr != 0U64 {
+                    return kindFromTySpan(c: inout c, tyStart: c.types[rr].nameStart, tyLen: c.types[rr].nameLen)
                 }
             }
             val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
@@ -3727,12 +3860,13 @@ fn exprLlvmType(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
             return llvmScalarTy(c: inout c, st: inout st, tyStart: typeStart, tyLen: typeLen)
         }
         Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-            // an `any P` receiver: the result LLVM type is the requirement's return.
+            // an `any P` receiver: the result LLVM type is the requirement's return,
+            // grounded under the existential's bindings.
             val atIdx: U64 = anyRecvTraitIdx(c: inout c, st: inout st, recv: recv)
             if atIdx < c.traits.count {
-                val rq: Func = anyMethodReq(c: inout c, traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
-                if rq.hasRet {
-                    return llvmFnRetTy(c: inout c, st: inout st, f: rq)
+                val rr: U64 = anyMethodRetRef(c: inout c, anyRef: exprTypeRef(c: inout c, st: inout st, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
+                if rr != 0U64 {
+                    return llvmTypeOfRef(c: inout c, st: inout st, ref: rr)
                 }
             }
             val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
@@ -7080,7 +7214,7 @@ fn reqUsesSelfOutsideRecv(c: inout Comp, req: Func) -> Bool {
 // its function pointer, or a null ptr when the requirement can't be dispatched
 // through `any` in this increment (assoc, inout/move self, or Self outside the
 // receiver). Saves/restores the builder position around the thunk body.
-fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, req: Func, idx: U64) -> LLVMValueRef {
+fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, traitIdx: U64, req: Func, idx: U64) -> LLVMValueRef {
     // a trait requirement Func carries no `self` param (hasRecv=false; self is
     // implicit) — a method requirement is `!isAssoc`. An assoc-fn requirement has no
     // receiver to carry the witness, so it is not dispatchable through `any`.
@@ -7107,6 +7241,19 @@ fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, req: Func, idx: U6
         return LLVMConstNull(st.ptrty)
     }
     val concreteTy: LLVMTypeRef = st.structTys[regSlot]
+    // the erased thunk signature uses the requirement's types with the trait's type
+    // parameters / associated types substituted by the existential's bindings
+    // (`Rhs`/`Output`/`Item` -> the bound concrete), set as the active env so
+    // paramLlvmTy / llvmFnRetTy ground them.
+    mut val envParams: Array[Bind] = []
+    mut val envArgs: Array[U64] = []
+    val haveEnv: Bool = anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout envParams, outArgs: inout envArgs)
+    val savedEP: Array[Bind] = c.curTypeParams
+    val savedEA: Array[U64] = c.curTypeArgs
+    if haveEnv {
+        c.curTypeParams = envParams
+        c.curTypeArgs = envArgs
+    }
     mut val ptys: Array[LLVMTypeRef] = []
     ptys.append(value: st.ptrty)
     mut val pi: U64 = 0
@@ -7115,12 +7262,18 @@ fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, req: Func, idx: U6
         pi += 1
     }
     val rty: LLVMTypeRef = llvmFnRetTy(c: inout c, st: inout st, f: req)
+    if haveEnv {
+        c.curTypeParams = savedEP
+        c.curTypeArgs = savedEA
+    }
     val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
     mut val nm: Array[U8] = []
     appendBytes(into: inout nm, from: "pfvt".bytes)
     appendU64Dec(into: inout nm, n: sidx)
     appendBytes(into: inout nm, from: "_".bytes)
     appendU64Dec(into: inout nm, n: idx)
+    appendBytes(into: inout nm, from: "_".bytes)
+    appendU64Dec(into: inout nm, n: anyBindKey(c: inout c, args: envArgs))
     nm.append(value: 0)
     val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
     val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
@@ -7147,10 +7300,16 @@ fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, req: Func, idx: U6
 // Build (or fetch cached) the vtable global for (concrete struct `sidx`, trait
 // `traitIdx`): an array of ptr slots — slot 0 = drop (null for now), slot 1.. = a
 // thunk per requirement in declaration order. Returns the global's pointer value.
-fn ensureAnyVtable(c: inout Comp, st: inout LlvmCtx, sidx: U64, traitIdx: U64) -> LLVMValueRef {
+fn ensureAnyVtable(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, traitIdx: U64) -> LLVMValueRef {
+    // distinct existential bindings (`any Add[I32,…]` vs `any Add[I64,…]`) need
+    // distinct vtables; the key folds the bound concretes (0 for the no-binding case).
+    mut val envP: Array[Bind] = []
+    mut val envA: Array[U64] = []
+    anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout envP, outArgs: inout envA)
+    val bindKey: U64 = anyBindKey(c: inout c, args: envA)
     mut val ci: U64 = 0
     while ci < st.anyVtType.count {
-        if st.anyVtType[ci] == sidx && st.anyVtTrait[ci] == traitIdx {
+        if st.anyVtType[ci] == sidx && st.anyVtTrait[ci] == traitIdx && st.anyVtBindKey[ci] == bindKey {
             return st.anyVtVal[ci]
         }
         ci += 1
@@ -7160,7 +7319,7 @@ fn ensureAnyVtable(c: inout Comp, st: inout LlvmCtx, sidx: U64, traitIdx: U64) -
     slots.append(value: LLVMConstNull(st.ptrty))
     mut val ri: U64 = 0
     while ri < t.reqs.count {
-        slots.append(value: buildAnyThunk(c: inout c, st: inout st, sidx: sidx, req: t.reqs[ri], idx: ri))
+        slots.append(value: buildAnyThunk(c: inout c, st: inout st, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx, req: t.reqs[ri], idx: ri))
         ri += 1
     }
     val arrTy: LLVMTypeRef = LLVMArrayType2(st.ptrty, slots.count)
@@ -7170,12 +7329,15 @@ fn ensureAnyVtable(c: inout Comp, st: inout LlvmCtx, sidx: U64, traitIdx: U64) -
     appendU64Dec(into: inout nm, n: sidx)
     appendBytes(into: inout nm, from: "_".bytes)
     appendU64Dec(into: inout nm, n: traitIdx)
+    appendBytes(into: inout nm, from: "_".bytes)
+    appendU64Dec(into: inout nm, n: bindKey)
     nm.append(value: 0)
     val g: LLVMValueRef = LLVMAddGlobal(st.mod, arrTy, arrayCPtr(nm))
     LLVMSetInitializer(g, init)
     LLVMSetGlobalConstant(g, 1I32)
     st.anyVtType.append(value: sidx)
     st.anyVtTrait.append(value: traitIdx)
+    st.anyVtBindKey.append(value: bindKey)
     st.anyVtVal.append(value: g)
     return g
 }
@@ -7200,13 +7362,13 @@ fn anyMethodSlot(c: inout Comp, traitIdx: U64, nameStart: U64, nameLen: U64, arg
 
 // Box concrete value `v` of struct `sidx` into a fresh ARC cell and wrap it with the
 // (sidx, traitIdx) vtable, producing an `any P` fat-pointer value.
-fn boxIntoAny(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, sidx: U64, traitIdx: U64) -> LLVMValueRef {
+fn boxIntoAny(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, sidx: U64, anyRef: U64, traitIdx: U64) -> LLVMValueRef {
     val sd: StructDef = c.structs[sidx]
     val regSlot: U64 = structRegSlot(c: inout c, st: inout st, start: sd.nameStart, len: sd.nameLen)
     val concreteTy: LLVMTypeRef = st.structTys[regSlot]
     val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
     LLVMBuildStore(st.b, v, cell)
-    val vt: LLVMValueRef = ensureAnyVtable(c: inout c, st: inout st, sidx: sidx, traitIdx: traitIdx)
+    val vt: LLVMValueRef = ensureAnyVtable(c: inout c, st: inout st, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx)
     mut val agg: LLVMValueRef = LLVMGetUndef(st.anyTy)
     agg = LLVMBuildInsertValue(st.b, agg, cell, 0U64, anon())
     agg = LLVMBuildInsertValue(st.b, agg, vt, 1U64, anon())
@@ -7242,7 +7404,7 @@ fn coerceToAnyIfNeeded(c: inout Comp, st: inout LlvmCtx, targetRef: U64, valueEx
     }
     val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: valueExpr)
     outBoxed = true
-    return boxIntoAny(c: inout c, st: inout st, v: v, sidx: sidx, traitIdx: traitIdx)
+    return boxIntoAny(c: inout c, st: inout st, v: v, sidx: sidx, anyRef: targetRef, traitIdx: traitIdx)
 }
 
 // Dynamic dispatch of `recv.name(args)` where `recv` is an existential `any P`
@@ -7279,7 +7441,18 @@ fn genLlvmAnyDispatch(c: inout Comp, st: inout LlvmCtx, recv: U64, anyRef: U64, 
     gepIdx.append(value: LLVMConstInt(st.i64ty, slot, 0I32))
     val slotPtr: LLVMValueRef = LLVMBuildGEP2(st.b, st.ptrty, vtPtr, arrayCPtr(gepIdx), 1U64, anon())
     val fnPtr: LLVMValueRef = LLVMBuildLoad2(st.b, st.ptrty, slotPtr, anon())
-    // reconstruct the erased thunk signature: (ptr self, <req params>) -> <req ret>.
+    // reconstruct the erased thunk signature: (ptr self, <req params>) -> <req ret>,
+    // grounding the requirement's `Rhs`/`Item`/`Output` under the existential's
+    // bindings (matching the thunk built in buildAnyThunk).
+    mut val envParams: Array[Bind] = []
+    mut val envArgs: Array[U64] = []
+    val haveEnv: Bool = anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout envParams, outArgs: inout envArgs)
+    val savedEP: Array[Bind] = c.curTypeParams
+    val savedEA: Array[U64] = c.curTypeArgs
+    if haveEnv {
+        c.curTypeParams = envParams
+        c.curTypeArgs = envArgs
+    }
     mut val ptys: Array[LLVMTypeRef] = []
     ptys.append(value: st.ptrty)
     mut val pi: U64 = 0
@@ -7288,6 +7461,10 @@ fn genLlvmAnyDispatch(c: inout Comp, st: inout LlvmCtx, recv: U64, anyRef: U64, 
         pi += 1
     }
     val rty: LLVMTypeRef = llvmFnRetTy(c: inout c, st: inout st, f: req)
+    if haveEnv {
+        c.curTypeParams = savedEP
+        c.curTypeArgs = savedEA
+    }
     val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
     mut val av: Array[LLVMValueRef] = []
     av.append(value: dataPtr)
@@ -8906,7 +9083,7 @@ fn emitLlvm(c: inout Comp) {
         ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx)
         i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx) i16ty=LLVMInt16TypeInContext(ctx)
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty
-        voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy closureTy=closureTy anyTy=anyTy anyVtType=[] anyVtTrait=[] anyVtVal=[]
+        voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy closureTy=closureTy anyTy=anyTy anyVtType=[] anyVtTrait=[] anyVtBindKey=[] anyVtVal=[]
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[]

@@ -47,6 +47,11 @@ struct TypeRef {
     // `{ data, vtable }`; part of type identity. nameStart/nameLen/nameId name the
     // trait `P`.
     pub val isAny: Bool = false
+    // binding labels parallel to `args` (interned name ids; 0 = positional): a named
+    // associated-type / type-parameter binding `Name=Type` in `any P[Item=I32]`
+    // (spec/08,12). Empty for ordinary generic args. Resolved against the trait's
+    // type params + associated types when building the existential's dispatch thunks.
+    pub val argLabels: Array[U64] = []
 }
 
 // A variable binding in scope during codegen (param, let, or match bind), used
@@ -883,7 +888,7 @@ pub impl Comp {
     inout fn pushType(t: TypeRef) -> U64 {
         val id: U64 = self.types.count
         val nid: U64 = intern(c: inout self, start: t.nameStart, len: t.nameLen)
-        self.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId isAny=t.isAny />)
+        self.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels />)
         return id
     }
 }

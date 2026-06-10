@@ -67,7 +67,20 @@ fn lowerType(c: inout Comp, t: TypeAst) -> PType {
         val evN: Bind = internBytes(c: inout c, s: t.extView)
         viewExtId = intern(c: inout c, start: evN.nameStart, len: evN.nameLen)
     }
-    val ref: U64 = c.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId isAny=t.isAny />)
+    // intern any named binding labels (`Item`/`Output` in `any P[Item=I32]`) parallel
+    // to args; 0 for a positional argument.
+    mut val argLabels: Array[U64] = []
+    mut val li: U64 = 0
+    while li < t.argLabels.count {
+        if t.argLabels[li].bytes.count > 0 {
+            val lblN: Bind = internBytes(c: inout c, s: t.argLabels[li])
+            argLabels.append(intern(c: inout c, start: lblN.nameStart, len: lblN.nameLen))
+        } else {
+            argLabels.append(0U64)
+        }
+        li += 1
+    }
+    val ref: U64 = c.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId isAny=t.isAny argLabels=argLabels />)
     mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
     if t.args.count > 0 {
         if rangeEquals(bytes: c.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {

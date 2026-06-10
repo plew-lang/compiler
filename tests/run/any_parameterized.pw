@@ -1,0 +1,33 @@
+import @Std/Io with { print }
+
+// `any P` over a parameterized / associated-type trait (spec/08): the type
+// arguments and associated types are bound at the existential (`any Producer[I32]`,
+// `any Source[Item=I64]`, `any Adder[I64]`), so the requirement signatures resolve
+// to concrete types in the dispatch thunks while `Self` stays erased — heterogeneous
+// concretes still share the existential.
+trait Producer[Out] { fn produce() -> Out }
+struct IntGen { val v: I32 }
+struct Doubler { val v: I32 }
+pub impl IntGen as Producer[I32] { fn produce() -> I32 { return self.v } }
+pub impl Doubler as Producer[I32] { fn produce() -> I32 { return self.v + self.v } }
+
+trait Source { type Item  fn first() -> Item }
+struct S64 { val v: I64 }
+pub impl S64 as Source { type Item = I64  fn first() -> I64 { return self.v } }
+
+trait Adder[Rhs] { fn combine(rhs: Rhs) -> I64 }
+struct Acc { val base: I64 }
+pub impl Acc as Adder[I64] { fn combine(rhs: I64) -> I64 { return self.base + rhs } }
+
+fn main() {
+    val p: any Producer[I32] = <IntGen v=21 />
+    print(p.produce())                       // 21
+    val ps: Array[any Producer[I32]] = [<IntGen v=5 />, <Doubler v=5 />]
+    for val q in ps { print(q.produce()) }   // 5, 10
+
+    val s: any Source[Item=I64] = <S64 v=99 />
+    print(s.first())                         // 99
+
+    val a: any Adder[I64] = <Acc base=100 />
+    print(a.combine(rhs: 23I64))             // 123
+}

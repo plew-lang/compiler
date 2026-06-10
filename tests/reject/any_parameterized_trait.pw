@@ -1,10 +1,8 @@
 import @Std/Io with { print }
 
-// spec/08: forming `any P` requires all of P's type arguments (and associated
-// types) to be bound, so the only erased thing is `Self`. Binding them in the
-// `any` (`any Conv[I64]`) plus substituting them into the dispatch thunks is a
-// later increment, so an existential over a parameterized trait is rejected for
-// now (rather than silently dispatching with an unbound parameter).
+// spec/08: forming `any P` requires all of P's type arguments to be bound (the only
+// thing still erased is `Self`). `any Conv[I64]` would be valid; the bare `any Conv`
+// here leaves the type parameter T unbound and is rejected at formation.
 trait Conv[T] { fn to() -> I64 }
 struct C { val v: I64 }
 pub impl C as Conv[I64] { fn to() -> I64 { return self.v } }

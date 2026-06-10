@@ -36,6 +36,12 @@ export struct TypeAst {
     // pointer `{ data, vtable }` (vs the plain type's own layout), so this is part
     // of type identity, not a zero-cost view.
     pub val isAny: Bool = false
+    // binding labels parallel to `args` (spec/08 existential formation / spec/12
+    // associated-type binding): for `any Add[I32, Output=I32]`, args=[I32, I32] and
+    // argLabels=["", "Output"] — "" marks a positional type argument, a non-empty
+    // label marks a named associated-type / type-parameter binding `Name=Type`.
+    // Empty (or all "") for an ordinary generic type like `Array[I32]`.
+    pub val argLabels: Array[String] = []
 }
 
 // A struct field / enum-variant payload field. For a variant payload field,

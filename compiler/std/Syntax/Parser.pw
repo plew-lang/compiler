@@ -168,7 +168,7 @@ fn parseType(p: inout P) -> TypeAst {
             val anyStart: U64 = p.base + p.curTok().start
             p.advance()
             val inner: TypeAst = parseType(p: inout p)
-            return <TypeAst name=inner.name args=inner.args span=<Span start=anyStart end=p.prevEnd() /> extView=inner.extView isAny=true />
+            return <TypeAst name=inner.name args=inner.args span=<Span start=anyStart end=p.prevEnd() /> extView=inner.extView isAny=true argLabels=inner.argLabels />
         }
     }
     val head: Tok = p.curTok()
@@ -229,6 +229,10 @@ fn parseType(p: inout P) -> TypeAst {
         _ => {}
     }
     mut val args: Array[TypeAst] = []
+    // binding labels parallel to args: a named associated-type / type-parameter
+    // binding `Name=Type` (spec/08,12 — used by `any P[Item=I32]`) records its name;
+    // an ordinary positional type argument records "".
+    mut val argLabels: Array[String] = []
     match p.curKind() {
         Kind.LBracket => {
             p.advance()
@@ -241,7 +245,21 @@ fn parseType(p: inout P) -> TypeAst {
                     Kind.Eof => { break }
                     Kind.Comma => { p.advance() }
                     _ => {
+                        // a named binding `Name = Type` (an Ident immediately followed
+                        // by `=`): record the label and parse the bound type.
+                        mut val lbl: String = ""
+                        match p.curKind() {
+                            Kind.Ident => {
+                                if p.peekKind(off: 1) == <Kind.Eq /> {
+                                    lbl = p.text(t: p.curTok())
+                                    p.advance()
+                                    p.advance()
+                                }
+                            }
+                            _ => {}
+                        }
                         args.append(parseType(p: inout p))
+                        argLabels.append(lbl)
                     }
                 }
             }
@@ -259,7 +277,7 @@ fn parseType(p: inout P) -> TypeAst {
         }
         _ => {}
     }
-    return <TypeAst name=name args=args span=<Span start=sStart end=p.prevEnd() /> extView=extView />
+    return <TypeAst name=name args=args span=<Span start=sStart end=p.prevEnd() /> extView=extView argLabels=argLabels />
 }
 
 // An optional generic parameter list `[T, U]` -> the parameter names. Capability

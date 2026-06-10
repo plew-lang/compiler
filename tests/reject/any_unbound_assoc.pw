@@ -1,0 +1,13 @@
+import @Std/Io with { print }
+
+// spec/08: an existential over a trait with an associated type must bind it
+// (`any Source[Item=I64]`); the bare `any Source` leaves Item unbound and is
+// rejected at formation.
+trait Source { type Item  fn first() -> Item }
+struct S64 { val v: I64 }
+pub impl S64 as Source { type Item = I64  fn first() -> I64 { return self.v } }
+
+fn main() {
+    val s: any Source = <S64 v=99 />   // ERROR: associated type Item unbound
+    print(s.first())
+}
