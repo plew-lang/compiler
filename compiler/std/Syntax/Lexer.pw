@@ -312,6 +312,28 @@ export fn lex(lx: inout Lexer) {
                 }
                 continue
             }
+            // block comment `/* … */`, nestable (`/* a /* b */ c */`).
+            if lx.at(off: 1) == '*' {
+                lx.pos += 2
+                mut val depth: U64 = 1
+                while lx.pos < lx.bytes.count {
+                    if depth == 0U64 {
+                        break
+                    }
+                    if lx.at(off: 0) == '/' && lx.at(off: 1) == '*' {
+                        depth += 1
+                        lx.pos += 2
+                    } else {
+                        if lx.at(off: 0) == '*' && lx.at(off: 1) == '/' {
+                            depth -= 1
+                            lx.pos += 2
+                        } else {
+                            lx.pos += 1
+                        }
+                    }
+                }
+                continue
+            }
         }
         if isDigit(b: b) {
             val start: U64 = lx.pos

@@ -1,0 +1,10 @@
+import @Std/Io with { print }
+
+/* A block comment (spec/01 lexical): spans lines, can be inline, and nests so a
+   commented-out region containing `/* … */` stays balanced. */
+fn main() {
+    val x: I64 = 5I64 /* inline */ + 3I64
+    /* nested /* inner */ outer still a comment */
+    print(x)        // 8
+    print(40I64 /* hi */ + 2I64)   // 42
+}
