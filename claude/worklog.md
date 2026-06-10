@@ -20,7 +20,7 @@
 **並行 spawn・循環回収・パッケージ管理（M3）の 3 つを意図的に後回しにし、それ以外で Plew が完全に仕様通り動く状態を目指す。** 残作業の地図は [provisional.md](provisional.md)（＝現コンパイラが spec から意図的に剥離している箇所のカタログ）＝**この 3 つ以外の剥離をすべて潰す**のがゴール。
 
 **スコープ内（潰す）**＝以下＋provisional.md の各テーマ節で `✅` でない項目：
-1. **🔴 enum/primitive のメソッドディスパッチ**（最優先＝最大のブロッカー）：backend が「only on registered struct value」で enum/primitive の inherent メソッドを受けない＝enum/primitive の inherent メソッド・`#Ext` レシーバ・enum `defaultExtension` を一斉にブロック中。**enum 側は実装済**（`isPlainUserFn` が enum メソッド受容・本体 self 束縛で enum recvRef 設定〔match 復元〕・`genLlvmMethod` に enum dispatch〔by-value／inout は placePtrOf〕・tests run/{enum_method,enum_method_inout}）。**残り＝primitive レシーバ**（`(42I64).foo()` のユーザー定義 inherent メソッド・現状 primitive は trait-only 経路のみ）と、enum/primitive を `#Ext` レシーバ・enum `defaultExtension` に乗せる後追い。
+1. **🔴 enum/primitive のメソッドディスパッチ＝✅ 完了**（最大ブロッカー解消）：enum の inherent メソッド（`isPlainUserFn` が enum 受容・本体 self 束縛で enum recvRef〔match 復元〕・`genLlvmMethod` に enum dispatch〔by-value／inout=placePtrOf〕）・enum トレイト準拠メソッド・enum/primitive の `#Ext` 拡張メソッド（`genLlvmExtMethod` を struct→enum→primitive の受信型解決に一般化）・enum `defaultExtension`（enum 本体パーサ＋lowering で `defaultExts` 登録）。primitive local の tref も let で設定（`x#Ext.m()` 解決）。注：`pub impl I64 {}` 等の built-in 型 inherent メソッドは spec が正しく禁止（`#Ext`/トレイト準拠を使う）＝バグでない。tests run/{enum_method,enum_method_inout,enum_extension,primitive_extension,enum_trait}。
 2. **既知バグ（下記）**＝import なしプログラムの誤 reject／I/O import gate（受理健全性の穴）。
 3. **Self 入力 param の準拠**＝`fn eqTo(other: Self)` 手書き準拠が完全性検査で誤 reject（derive は無事）。
 4. **Iterator 拡充**＝終端（reduce/fold/count/sum/collect/any/all/first）＋ adapter（take/zip/enumerate/skip）。

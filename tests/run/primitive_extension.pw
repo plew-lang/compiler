@@ -1,0 +1,17 @@
+import @Std/Io with { print }
+
+// An extension on a primitive receiver (spec/09): you cannot write an inherent
+// `impl I64` (you don't own the type), but `#Ext` adds methods, callable through
+// the view on a primitive value.
+extension Doubler {
+    pub impl I64 {
+        fn double() -> I64 { return self * 2I64 }
+        fn plus(n: I64) -> I64 { return self + n }
+    }
+}
+
+fn main() {
+    val x: I64 = 21I64
+    print(x#Doubler.double())     // 42
+    print(x#Doubler.plus(n: 8I64))// 29
+}

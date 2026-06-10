@@ -5282,13 +5282,30 @@ fn exprViewExtId(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
 // extension + selector) and emit a direct call (self = recv), like an inherent
 // method. First cut: the receiver must be a registered struct value.
 fn genLlvmExtMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+    // the receiver's type name (the extension subject): a registered struct, a
+    // registered enum, or a primitive lang-item (spec/09 — `x#Ext.m()` on any of them).
+    mut val recvNameStart: U64 = 0
+    mut val recvNameLen: U64 = 0
     val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
     if rsidx < c.structs.count {
+        recvNameStart = c.structs[rsidx].nameStart
+        recvNameLen = c.structs[rsidx].nameLen
     } else {
-        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: extension method call only on a registered struct value (so far)")
-        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+        val erecvRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
+        if erecvRef != 0U64 && enumRegSlot(c: inout c, st: inout st, start: c.types[erecvRef].nameStart, len: c.types[erecvRef].nameLen) < st.enumIdxs.count {
+            recvNameStart = c.types[erecvRef].nameStart
+            recvNameLen = c.types[erecvRef].nameLen
+        } else {
+            val pb: Bind = primLangItemRecvName(c: inout c, st: inout st, recv: recv)
+            if pb.nameLen != 0U64 {
+                recvNameStart = pb.nameStart
+                recvNameLen = pb.nameLen
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: extension method call only on a struct / enum / primitive value (so far)")
+                return LLVMConstInt(st.i64ty, 0U64, 0I32)
+            }
+        }
     }
-    val sd: StructDef = c.structs[rsidx]
     // resolve across this call's own `#Src` plus the receiver's view chain (so
     // `p#A#B.a()` — parsed as ExtMethod(src=B) on recv `p#A` — also sees A). The
     // name must resolve in exactly one view (same-name in two is ambiguous).
@@ -5303,7 +5320,7 @@ fn genLlvmExtMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, srcStart: U64, 
     mut val mfi: U64 = c.funcs.count
     mut val vi: U64 = 0
     while vi < views.count {
-        val cand: U64 = findExtMethodById(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, srcId: views[vi], nameStart: nameStart, nameLen: nameLen, args: args)
+        val cand: U64 = findExtMethodById(c: inout c, recvStart: recvNameStart, recvLen: recvNameLen, srcId: views[vi], nameStart: nameStart, nameLen: nameLen, args: args)
         if cand < c.funcs.count {
             if mfi < c.funcs.count {
                 if mfi != cand {
@@ -8016,6 +8033,15 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             if tref == 0U64 {
                 if tyLen > 0U64 {
                     if enumRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen) < st.enumIdxs.count {
+                        tref = simpleTypeRef(c: inout c, nameStart: tyStart, nameLen: tyLen)
+                    }
+                }
+            }
+            // a primitive-int local (`val x: I64 = …`): track its type name so a
+            // method on the primitive (`x#Ext.m()` / `x.hash[H](…)`) dispatches.
+            if tref == 0U64 {
+                if tyLen > 0U64 {
+                    if isPrimIntName(c: inout c, start: tyStart, len: tyLen) {
                         tref = simpleTypeRef(c: inout c, nameStart: tyStart, nameLen: tyLen)
                     }
                 }

@@ -482,6 +482,7 @@ export fn parseEnumDecl(p: inout P) -> DeclAst {
         _ => {}
     }
     mut val variants: Array[VariantAst] = []
+    mut val defaultExts: Array[String] = []
     while true {
         p.skipNewlines()
         match p.curKind() {
@@ -491,6 +492,23 @@ export fn parseEnumDecl(p: inout P) -> DeclAst {
             }
             Kind.Eof => { break }
             Kind.Ident => {
+                // `defaultExtension #A #B` in the enum body (spec/09): name the
+                // extensions whose methods join this enum's bare surface (same as for
+                // a struct). Handled before the variant-name path (it is an Ident too).
+                if curIs(p: inout p, kw: "defaultExtension") {
+                    p.advance()
+                    mut val moreExt: Bool = true
+                    while moreExt {
+                        match p.curKind() {
+                            Kind.Hash => {
+                                p.advance()
+                                defaultExts.append(p.text(t: p.curTok()))
+                                p.advance()
+                            }
+                            _ => { moreExt = false }
+                        }
+                    }
+                } else {
                 val vTok: Tok = p.curTok()
                 val vName: String = p.text(t: vTok)
                 val vStart: U64 = p.base + vTok.start
@@ -526,11 +544,12 @@ export fn parseEnumDecl(p: inout P) -> DeclAst {
                     _ => {}
                 }
                 variants.append(<VariantAst name=vName fields=vfields span=<Span start=vStart end=p.prevEnd() /> />)
+                }
             }
             _ => { p.advance() }
         }
     }
-    return <DeclAst kind=<DeclKind.Enum /> name=name nameSpan=nameSpan typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=false fields=[] hasDeinit=false deinitBody=emptyBlock() variants=variants params=[] hasRet=false ret=emptyTypeAst() isAsync=false whereParams=[] whereTraits=[] body=emptyBlock() />
+    return <DeclAst kind=<DeclKind.Enum /> name=name nameSpan=nameSpan typeParams=typeParams span=<Span start=sStart end=p.prevEnd() /> isUnique=false fields=[] hasDeinit=false deinitBody=emptyBlock() variants=variants params=[] hasRet=false ret=emptyTypeAst() isAsync=false whereParams=[] whereTraits=[] body=emptyBlock() defaultExts=defaultExts />
 }
 
 // A function parameter `name[~]: [inout|move|borrow] Type [= expr]`. The cursor is

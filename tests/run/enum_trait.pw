@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+
+// A trait conformance providing a method on an enum (spec/08): the witness method
+// dispatches on the enum value like any inherent method.
+trait Describe { fn describe() -> I64 }
+enum Color { Red  Green }
+pub impl Color as Describe {
+    fn describe() -> I64 {
+        match self {
+            Color.Red => { return 10I64 }
+            Color.Green => { return 20I64 }
+        }
+    }
+}
+
+fn main() {
+    val c: Color = <Color.Green />
+    print(c.describe())   // 20
+}
