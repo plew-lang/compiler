@@ -35,6 +35,11 @@
 
 **進め方**＝provisional.md を上から走査し、3 大機能・spec-future を除いて各剥離を 1 つずつ green 増分で潰す→各区切りで commit＋push＋本ログ更新。完了の目安＝provisional.md が（3 大機能・spec-future を除いて）すべて `✅` になり、spec 由来の reject/run テストが網羅される。
 
+**ツール要件（ゴールの一部）**＝**任意のパスに配置したコンパイラバイナリ単体で `plew build ./Main.pw` と `plew gen ./Main.pw` が動く**こと。
+- **現状**：`plew`（build）はパス非依存済（symlink 解決で隣の `compiler/plewc` を見つけ・std はバイナリ位置解決・生成物は libc のみ）だが**サブコマンドは `plew <file>`／`plew run`＝`build` 動詞が無い**。`plew gen` は別スクリプト `plew-gen.sh` で **`cd $(dirname $0)`＝リポジトリルート前提＋`llvm-config` 依存**ゆえ任意パスのバイナリ単体では動かない。
+- **やること**：①`plew` に `build`/`gen` サブコマンドを統一（`plew build ./Main.pw`／`plew gen ./Main.pw`・既存の bare `plew <file>`/`run` は維持してよい）②`gen` を**パス非依存化**（`cd repo` を捨て build と同じ symlink 解決で plewc を見つける）＋**`llvm-config` 依存を外す**（gen harness も libc のみリンクで済むか確認＝build と同じ床に揃える）。`@[...]` 付きファイルの auto-part・`<Foo>.gen.pw` 出力規約は不変。
+- **設計の分岐（未決）**：「バイナリ単体」を ⓐ relocatable な薄い driver スクリプト＋`compiler/plewc`＋clang で満たすか、ⓑ `plewc` 自身が `build`/`gen` を解釈し clang を内部 spawn する真の単一バイナリにするか（さらに進めれば LLVM 直接オブジェクト出力で clang 不要）。着手時に確認。
+
 ## 既知バグ（要修正）
 
 - **🐞 import なしプログラムが「arithmetic operator needs Add/Sub/...」で誤 reject＋intercept される I/O 組込の import gate が無い**（受理健全性の穴・調査済）。詳細・直し方は [provisional.md](provisional.md)「可視性・モジュール・import」の該当項（prelude が自己完結でなく verify が未使用 prelude 関数の witness で落ちる／`print` 等は LLVM backend が呼び名 intercept で import を問わず emit）。当面の回避＝`import @Std/Io with { print }`。
