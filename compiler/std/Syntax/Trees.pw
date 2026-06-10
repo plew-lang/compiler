@@ -59,6 +59,7 @@ export struct BlockAst {
 // An expression. `op` fields carry the operator's lexer kind code (kindCode).
 export enum ExprAst {
     IntLit(value: U64, isBool: Bool, tySuffix: String, span: Span)
+    FloatLit(text: String, tySuffix: String, span: Span)
     StrLit(raw: String, span: Span)
     Ident(name: String, span: Span)
     Unary(op: I64, operand: ExprAst, span: Span)

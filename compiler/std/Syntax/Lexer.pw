@@ -9,6 +9,7 @@ export enum Kind {
     Eof
     Newline
     Int
+    Float
     Str
     Char
     Ident
@@ -345,7 +346,29 @@ export fn lex(lx: inout Lexer) {
                     break
                 }
             }
-            lx.emit(k: <Kind.Int />, start: start, len: j - start)
+            mut val isFloat: Bool = false
+            if j < lx.bytes.count {
+                if lx.bytes[j] == 46U8 {
+                    if j + 1U64 < lx.bytes.count {
+                        if isDigit(b: lx.bytes[j + 1U64]) {
+                            isFloat = true
+                            j += 1U64
+                            while j < lx.bytes.count {
+                                if isDigit(b: lx.bytes[j]) {
+                                    j += 1
+                                } else {
+                                    break
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if isFloat {
+                lx.emit(k: <Kind.Float />, start: start, len: j - start)
+            } else {
+                lx.emit(k: <Kind.Int />, start: start, len: j - start)
+            }
             continue
         }
         if isAlpha(b: b) {
@@ -611,6 +634,7 @@ export fn kindCode(k: Kind) -> I64 {
         Kind.Eof => 0
         Kind.Newline => 1
         Kind.Int => 2
+        Kind.Float => 87
         Kind.Str => 3
         Kind.Char => 5
         Kind.Ident => 4

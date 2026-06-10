@@ -1,0 +1,10 @@
+import @Std/Io with { print }
+
+// Floating-point literals (spec/02): a number with a fractional part lexes as a
+// Float token, lowers to an IEEE double constant, and prints via plew_print_f64.
+fn main() {
+    print(3.14)
+    print(0.5)
+    print(42.0)
+    print(100.25)
+}

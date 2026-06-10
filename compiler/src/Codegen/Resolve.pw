@@ -1212,6 +1212,15 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             return scalarInfo()
         }
+        Expr.Float(start: _, len: _, val tyStart, val tyLen) => {
+            // a float literal is F64 (or its explicit F32/F64 suffix). Reported as a
+            // named type (kind 2) so it isn't confused with the int/String categories.
+            if tyLen != 0 {
+                return <TypeInfo kind=2 nameStart=tyStart nameLen=tyLen ref=0 />
+            }
+            val fb: Bind = kwSpan(c: inout c, kw: "F64", kwLen: 3)
+            return <TypeInfo kind=2 nameStart=fb.nameStart nameLen=fb.nameLen ref=0 />
+        }
         Expr.Str(val start, val len) => {
             // carry the "String" name span so tyRefOfInfo can recover a String
             // TypeRef — a generic call `print("hi")` then infers T = String (without

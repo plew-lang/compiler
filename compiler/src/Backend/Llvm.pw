@@ -45,6 +45,8 @@ extern(c) {
     fn LLVMInt16TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
     fn LLVMInt32TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
     fn LLVMInt64TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMDoubleTypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMConstRealOfStringAndSize(ty~: LLVMTypeRef, text~: CPtr[U8], len~: U64) -> LLVMValueRef
     fn LLVMVoidTypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
     fn LLVMPointerTypeInContext(ctx~: LLVMContextRef, addrSpace~: U32) -> LLVMTypeRef
     fn LLVMStructTypeInContext(ctx~: LLVMContextRef, elemTypes~: CPtr[LLVMTypeRef], count~: U32, packed~: I32) -> LLVMTypeRef
@@ -155,6 +157,10 @@ struct LlvmCtx {
     pub val i16ty: LLVMTypeRef
     pub val i32ty: LLVMTypeRef
     pub val i64ty: LLVMTypeRef
+    // the IEEE-754 double type for float (F64/F32) literals and arithmetic. F32 is
+    // represented as double for now (observably fine for the float floor; a true 32-bit
+    // float is additive).
+    pub val f64ty: LLVMTypeRef
     pub val voidty: LLVMTypeRef
     pub val ptrty: LLVMTypeRef
     // String value type: { i8* data, i64 len } (ABI-identical to C PlewString).
@@ -369,6 +375,18 @@ struct LlvmCtx {
 // A NUL-terminated C string from a Plew literal, for the many `const char*` name
 // arguments LLVM builders take (cString leaks a small per-call buffer — fine for
 // a one-shot compiler pass).
+// A C pointer to the float literal's digit text (a copy of c.bytes[start..start+len]
+// as a NUL-terminated string; LLVMConstRealOfStringAndSize takes the explicit len).
+fn floatTextCPtr(c: inout Comp, start: U64, len: U64) -> CPtr[U8] {
+    mut val bs: Array[U8] = []
+    mut val i: U64 = 0
+    while i < len {
+        bs.append(value: c.bytes[start + i])
+        i += 1U64
+    }
+    return cstr(s: stringFromBytes(bs))
+}
+
 fn cstr(s: String) -> CPtr[U8] {
     return cString(s)
 }
@@ -415,6 +433,13 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
     }
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Bool") {
         return st.i1ty
+    }
+    // float types F32 / F64 lower to the IEEE double (F32 as double for now).
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "F64") {
+        return st.f64ty
+    }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "F32") {
+        return st.f64ty
     }
     // a `Ref[T]` is a pointer to a heap cell holding the pointee (opaque ptr).
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Ref") {
@@ -2276,6 +2301,7 @@ fn markLocalMoved(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) {
 fn kindFromTySpan(c: inout Comp, tyStart: U64, tyLen: U64) -> U64 {
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "String") { return 1U64 }
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Bool") { return 2U64 }
+    if isFloatType(c: inout c, start: tyStart, len: tyLen) { return 4U64 }
     if isUnsignedName(c: inout c, start: tyStart, len: tyLen) { return 3U64 }
     return 0U64
 }
@@ -2309,6 +2335,7 @@ fn methodReturnKind(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64) -> U6
 fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
     match c.exprs[id] {
         Expr.Str(start: _, len: _) => { return 1U64 }
+        Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { return 4U64 }
         Expr.Int(value: _, offset: _, val isBool, val tyStart, val tyLen, isNeg: _) => {
             if isBool { return 2U64 }
             if tyLen > 0U64 {
@@ -2603,6 +2630,17 @@ fn emitPrint(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> LLVMValueRef {
     if k == 2U64 {
         val bv: LLVMValueRef = LLVMBuildZExt(st.b, genLlvmExpr(c: inout c, st: inout st, id: argExpr), st.i64ty, anon())
         return emitI64Sink(c: inout c, st: inout st, rtName: "plew_print_bool", rtId: 6U64, v: bv)
+    }
+    if k == 4U64 {
+        // a float: pass the double straight to plew_print_f64.
+        val fv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: argExpr)
+        mut val ftys: Array[LLVMTypeRef] = []
+        ftys.append(value: st.f64ty)
+        val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(ftys), 1U64, 0I32)
+        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_print_f64", nameId: 9130U64, fnTy: fty)
+        mut val fav: Array[LLVMValueRef] = []
+        fav.append(value: fv)
+        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(fav), 1U64, anon())
     }
     val v: LLVMValueRef = extendToI64(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: argExpr), unsigned: k == 3U64)
     if k == 3U64 {
@@ -3295,6 +3333,11 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                 return LLVMBuildNeg(st.b, k, anon())
             }
             return k
+        }
+        Expr.Float(val start, val len, tyStart: _, tyLen: _) => {
+            // a float literal: parse the digit text (c.bytes[start..start+len]) straight
+            // to an IEEE double constant. F32 uses double for now (see f64ty).
+            return LLVMConstRealOfStringAndSize(st.f64ty, floatTextCPtr(c: inout c, start: start, len: len), len)
         }
         Expr.Ident(val start, val len) => {
             val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
@@ -9554,7 +9597,7 @@ fn emitLlvm(c: inout Comp) {
     mut val st: LlvmCtx = <LlvmCtx
         ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx)
         i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx) i16ty=LLVMInt16TypeInContext(ctx)
-        i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty
+        i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty f64ty=LLVMDoubleTypeInContext(ctx)
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy closureTy=closureTy anyTy=anyTy anyVtType=[] anyVtTrait=[] anyVtBindKey=[] anyVtVal=[]
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
@@ -10439,6 +10482,7 @@ fn emitLlvmRuntime() {
     // print(x) formatters (textual form + newline), matching the Plew Format impls.
     write(s: "void plew_print_str(const char* d, long long n){ fwrite(d,1,(size_t)n,stdout); fputc('\\n',stdout); }\n")
     write(s: "void plew_print_i64(long long v){ printf(\"%lld\\n\", v); }\n")
+    write(s: "void plew_print_f64(double v){ printf(\"%g\\n\", v); }\n")
     write(s: "void plew_print_u64(unsigned long long v){ printf(\"%llu\\n\", v); }\n")
     write(s: "void plew_print_bool(long long v){ fputs(v?\"1\":\"0\",stdout); fputc('\\n',stdout); }\n")
     write(s: "long long plew_str_eq(const char* a, long long na, const char* b, long long nb){ if(na!=nb) return 0; for(long long i=0;i<na;i++) if(a[i]!=b[i]) return 0; return 1; }\n")

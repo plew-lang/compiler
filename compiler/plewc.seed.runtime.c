@@ -8,6 +8,7 @@ void plew_eprint_raw(const char* d, long long n){ fwrite(d,1,(size_t)n,stderr); 
 __attribute__((noreturn)) void plew_panic_raw(const char* d, long long n){ fputs("panic: ",stderr); fwrite(d,1,(size_t)n,stderr); fputc('\n',stderr); exit(1); }
 void plew_print_str(const char* d, long long n){ fwrite(d,1,(size_t)n,stdout); fputc('\n',stdout); }
 void plew_print_i64(long long v){ printf("%lld\n", v); }
+void plew_print_f64(double v){ printf("%g\n", v); }
 void plew_print_u64(unsigned long long v){ printf("%llu\n", v); }
 void plew_print_bool(long long v){ fputs(v?"1":"0",stdout); fputc('\n',stdout); }
 long long plew_str_eq(const char* a, long long na, const char* b, long long nb){ if(na!=nb) return 0; for(long long i=0;i<na;i++) if(a[i]!=b[i]) return 0; return 1; }

@@ -177,6 +177,7 @@ enum Expr {
     // the literal -128, not Neg(128) — spec/02): `value` is the magnitude, codegen
     // emits the leading `-`, and the range check uses the negative sign.
     Int(value: U64, offset: U64, isBool: Bool, tyStart: U64, tyLen: U64, isNeg: Bool)
+    Float(start: U64, len: U64, tyStart: U64, tyLen: U64)
     Ident(start: U64, len: U64)
     Unary(op: I64, operand: U64)
     Binary(op: I64, lhs: U64, rhs: U64)

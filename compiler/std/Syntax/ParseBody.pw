@@ -50,6 +50,12 @@ fn isAssignOpAst(k: Kind) -> Bool {
     }
 }
 
+fn isFloatTypeAst(p: inout P, t: Tok) -> Bool {
+    if rangeEquals(bytes: p.bytes, start: t.start, len: t.len, kw: "F32") { return true }
+    if rangeEquals(bytes: p.bytes, start: t.start, len: t.len, kw: "F64") { return true }
+    return false
+}
+
 fn isIntTypeAst(p: inout P, t: Tok) -> Bool {
     if rangeEquals(bytes: p.bytes, start: t.start, len: t.len, kw: "I8") { return true }
     if rangeEquals(bytes: p.bytes, start: t.start, len: t.len, kw: "I16") { return true }
@@ -255,6 +261,25 @@ fn parsePrimaryAst(p: inout P) -> ExprAst {
                 _ => {}
             }
             return <ExprAst.IntLit value=v isBool=false tySuffix=suffix span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        Kind.Float => {
+            val t: Tok = p.curTok()
+            val txt: String = p.text(t: t)
+            p.advance()
+            mut val suffix: String = ""
+            match p.curKind() {
+                Kind.Ident => {
+                    val st: Tok = p.curTok()
+                    if st.start == t.start + t.len {
+                        if isFloatTypeAst(p: inout p, t: st) {
+                            suffix = p.text(t: st)
+                            p.advance()
+                        }
+                    }
+                }
+                _ => {}
+            }
+            return <ExprAst.FloatLit text=txt tySuffix=suffix span=<Span start=sStart end=p.prevEnd() /> />
         }
         Kind.Char => {
             val t: Tok = p.curTok()

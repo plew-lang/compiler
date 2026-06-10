@@ -265,6 +265,17 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
             }
             result = c.pushExpr(e: <Expr.Int value=value offset=span.start isBool=isBool tyStart=sStart tyLen=sLen isNeg=false />)
         }
+        ExprAst.FloatLit(val text, val tySuffix, val span) => {
+            val tb: Bind = internBytes(c: inout c, s: text)
+            mut val sStart: U64 = 0
+            mut val sLen: U64 = 0
+            if tySuffix.bytes.count > 0 {
+                val sf: Bind = internBytes(c: inout c, s: tySuffix)
+                sStart = sf.nameStart
+                sLen = sf.nameLen
+            }
+            result = c.pushExpr(e: <Expr.Float start=tb.nameStart len=tb.nameLen tyStart=sStart tyLen=sLen />)
+        }
         ExprAst.StrLit(val raw, val span) => {
             result = c.pushExpr(e: <Expr.Str start=span.start len=spanLen(s: span) />)
         }

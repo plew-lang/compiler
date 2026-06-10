@@ -62,6 +62,15 @@ fn isPrimType(c: inout Comp, start: U64, len: U64) -> Bool {
     if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U32") { return true }
     if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U64") { return true }
     if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Bool") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "F32") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "F64") { return true }
+    return false
+}
+
+// Whether a type-name span names a float type (F32 / F64).
+fn isFloatType(c: inout Comp, start: U64, len: U64) -> Bool {
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "F32") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "F64") { return true }
     return false
 }
 
