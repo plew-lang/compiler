@@ -15,6 +15,26 @@
 
 完了した大物（詳細は git・記述的タグ）：async/await 段階 1-3（stackless SM・LLVM）・コアライブラリ境界（`@Std` の `extern "plew-intrinsic"`）・Array＝`RawBuffer` 床の Plew struct（[array-struct-plan.md](array-struct-plan.md)）・可視性完全強制・Iterator/Iterable＋lazy map/filter・再帰値型 auto-boxing＋ARC・renovate Phase A-D（ARC 1 本化・Op enum・型付き AST キャッシュ・名前/型 interning）・メタプロ M0/M1/M2（マクロが実宣言を読んで生成・Eq/Ord/Hash derive・Dictionary[K,V] lang item）・フロントエンド統合（全パース→共有 @Std/Syntax）・演算子トレイト配線（算術/ビット/単項/比較を witness 脱糖・built-in 算術完全削除・`??`→`unwrapOr`・Index/IndexSet・Chain `?.`）・**C backend 退役→LLVM 一本化**・**ユーザー定義トレイトのディスパッチ拡充**（継承 `trait Sub: Super` bound 越し・`where T: Trait[Args]`・blanket impl `impl[T] T as Trait`）・**拡張システム `#Ext`（spec/09）を struct レシーバで完備**（値/型ビュー `value#Ext`/`Type#Ext`・`defaultExtension`・`#P` 源選択・self-view/`#!Ext` super/スタック `#A#B`・明示ビュー強制4面〔call/let/return/代入〕・view-aware オーバーロード `f(a:P)`/`f(a:P#Ext)`・トレイト主語 `impl Trait`/`impl B as A`・外部型コヒーレンス）・**`any P` 存在型（spec/08）完成**（fat pointer `{data,vtable}`＋per-(具体型,トレイト) thunk vtable・動的ディスパッチ・全 value 位置＋`Array[any P]` 異種混在＋for-over-any-iter・トレイト型引数/関連型束縛 `any Add[I32,Output=I32]`/`any Iterator[Item=I32]`・Self 返り再消去・inout self・Self 入力 reject・形成全束縛検査・コピー値意味論〔copy thunk〕）。
 
+## 🎯 次のゴール＝「3 大機能を除く spec 完全準拠」
+
+**並行 spawn・循環回収・パッケージ管理（M3）の 3 つを意図的に後回しにし、それ以外で Plew が完全に仕様通り動く状態を目指す。** 残作業の地図は [provisional.md](provisional.md)（＝現コンパイラが spec から意図的に剥離している箇所のカタログ）＝**この 3 つ以外の剥離をすべて潰す**のがゴール。
+
+**スコープ内（潰す）**＝以下＋provisional.md の各テーマ節で `✅` でない項目：
+1. **🔴 enum/primitive のメソッドディスパッチ**（最優先＝最大のブロッカー）：backend が「only on registered struct value」で enum/primitive の inherent メソッドを受けない＝enum/primitive の inherent メソッド・`#Ext` レシーバ・enum `defaultExtension` を一斉にブロック中。これを外すと連鎖的に複数機能が乗る。
+2. **既知バグ（下記）**＝import なしプログラムの誤 reject／I/O import gate（受理健全性の穴）。
+3. **Self 入力 param の準拠**＝`fn eqTo(other: Self)` 手書き準拠が完全性検査で誤 reject（derive は無事）。
+4. **Iterator 拡充**＝終端（reduce/fold/count/sum/collect/any/all/first）＋ adapter（take/zip/enumerate/skip）。
+5. **RNG/`Random`**＝`Dictionary` のランダムシード含む。
+6. **backend 全体の ARC drop**＝array/String/any box の scope-exit 解放（hidden cost の leak 解消）。
+7. **トレイト/拡張の残小物**＝トレイト引数 aware の多重 conformance 区別・コンテナ不変性 `Array[P]`≠`Array[P#Ext]`・型レベル chained `Type#A#B`。
+8. **FFI/数値の spec 項**＝provisional.md の未 `✅` 項（値意味論/CoW の残・整数幅・レンジ・ラベル等で剥離が残る箇所）。
+
+**スコープ外（このゴールに含めない）**：
+- **3 大機能**＝spawn（spec/14）・循環回収（design-decisions）・パッケージ管理（M3）。
+- **spec 自身が additive/将来送りにしている項**＝固定長配列 `[E; N]`・const generics・`Slice`・部分文字列・`USize`/`ISize`（これらは「現 spec からの剥離」ではなく spec が将来に回しているので準拠対象外）。
+
+**進め方**＝provisional.md を上から走査し、3 大機能・spec-future を除いて各剥離を 1 つずつ green 増分で潰す→各区切りで commit＋push＋本ログ更新。完了の目安＝provisional.md が（3 大機能・spec-future を除いて）すべて `✅` になり、spec 由来の reject/run テストが網羅される。
+
 ## 既知バグ（要修正）
 
 - **🐞 import なしプログラムが「arithmetic operator needs Add/Sub/...」で誤 reject＋intercept される I/O 組込の import gate が無い**（受理健全性の穴・調査済）。詳細・直し方は [provisional.md](provisional.md)「可視性・モジュール・import」の該当項（prelude が自己完結でなく verify が未使用 prelude 関数の witness で落ちる／`print` 等は LLVM backend が呼び名 intercept で import を問わず emit）。当面の回避＝`import @Std/Io with { print }`。
