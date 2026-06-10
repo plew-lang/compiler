@@ -5095,6 +5095,17 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
         s = LLVMBuildInsertValue(st.b, s, LLVMBuildExtractValue(st.b, arr, 1U64, anon()), 1U64, anon())
         return s
     }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "floatToString") {
+        // a double -> String via the runtime (snprintf %g into a malloc'd buffer).
+        val fv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
+        mut val ftys: Array[LLVMTypeRef] = []
+        ftys.append(value: st.f64ty)
+        val ffty: LLVMTypeRef = LLVMFunctionType(st.strty, arrayCPtr(ftys), 1U64, 0I32)
+        val fcallee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_f64_to_str", nameId: 9140U64, fnTy: ffty)
+        mut val fav: Array[LLVMValueRef] = []
+        fav.append(value: fv)
+        return LLVMBuildCall2(st.b, ffty, fcallee, arrayCPtr(fav), 1U64, anon())
+    }
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "readStdin") {
         // read all of stdin into a String (strty {i8*,i64}) via the runtime.
         mut val rtys: Array[LLVMTypeRef] = []
@@ -10532,6 +10543,7 @@ fn emitLlvmRuntime() {
     write(s: "long long plew_str_eq(const char* a, long long na, const char* b, long long nb){ if(na!=nb) return 0; for(long long i=0;i<na;i++) if(a[i]!=b[i]) return 0; return 1; }\n")
     // read all of stdin into a String ({ i8* data, i64 len }), matching the C runtime.
     write(s: "typedef struct { char* d; long long n; } PlewStrR;\n")
+    write(s: "PlewStrR plew_f64_to_str(double v){ char* buf=(char*)malloc(32); int n=snprintf(buf,32,\"%g\",v); PlewStrR s; s.d=buf; s.n=(long long)n; return s; }\n")
     write(s: "PlewStrR plew_readStdin(void){ size_t cap=4096,len=0; char* buf=(char*)malloc(cap); int ch; while((ch=getchar())!=EOF){ if(len+1>=cap){cap*=2;buf=(char*)realloc(buf,cap);} buf[len++]=(char)ch; } PlewStrR s; s.d=buf; s.n=(long long)len; return s; }\n")
     // FFI String <-> C-string (spec/15): cString materializes a NUL-terminated copy
     // (owned by C until freed); stringFromCString copies a NUL-terminated C string.

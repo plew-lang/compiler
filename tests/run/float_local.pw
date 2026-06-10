@@ -1,0 +1,15 @@
+import @Std/Io with { print }
+
+// F64 locals + Format (spec/02): a float binds to a local, participates in
+// arithmetic, and prints (via `impl F64 as Format` -> floatToString -> "%g").
+fn main() {
+    val a: F64 = 1.5
+    val b: F64 = 2.5
+    print(a)          // 1.5
+    print(b)          // 2.5
+    print(a + b)      // 4
+    print(a * b)      // 3.75
+    mut val c: F64 = 0.0
+    c = a + b
+    print(c)          // 4
+}

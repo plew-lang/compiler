@@ -821,8 +821,10 @@ fn exprIsFloat(c: inout Comp, id: U64) -> Bool {
         Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { return true }
         _ => {}
     }
+    // a value whose recovered type names a float type — by NAME regardless of kind
+    // (F64 is in isPrimType so typeOf gives kind 0 for a local, but kind 2 for a literal).
     val ti: TypeInfo = typeOf(c: inout c, id: id)
-    if ti.kind == 2 {
+    if ti.nameLen > 0U64 {
         if rangeEquals(bytes: c.bytes, start: ti.nameStart, len: ti.nameLen, kw: "F64") {
             return true
         }

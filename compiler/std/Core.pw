@@ -238,6 +238,7 @@ export fn assert(cond~: Bool, message: String = "assertion failed") {
 extern "plew-intrinsic" {
     struct I8   struct I16  struct I32  struct I64
     struct U8   struct U16  struct U32  struct U64
+    struct F32  struct F64
     struct Bool struct String
 }
 
@@ -280,6 +281,8 @@ export trait IndexSet[Key] { type Value   inout fn indexSet(key: Key, value: Val
 // @Std/Syntax's parser can turn token byte-ranges into name Strings.
 export extern "plew-intrinsic" {
     fn stringFromBytes(b~: Array[U8]) -> String
+    // a float -> its decimal text (the backend lowers it to snprintf "%g").
+    fn floatToString(value~: F64) -> String
 }
 
 // String methods, written in pure Plew over the exposed `bytes` view (spec/02:
@@ -401,6 +404,9 @@ pub impl U16 as Format {
 }
 pub impl U32 as Format {
     fn format(format: String) -> String { return (self as U64).format(format: format) }
+}
+pub impl F64 as Format {
+    fn format(format: String) -> String { return floatToString(value: self) }
 }
 pub impl Bool as Format {
     // Bool prints as 1/0 (matching the integer lowering), not true/false.
