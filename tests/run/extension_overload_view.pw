@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+// View-aware overload resolution (spec/09): `f(a: P)` and `f(a: P#Ext)` are
+// distinct overloads that coexist and select on the argument's view. (Front-end
+// type resolution can't see a local's struct type, so the backend refines the
+// label-only match by the arguments' views.)
+struct P { val n: I64 }
+pub impl P { fn raw() -> I64 { return self.n } }
+extension Ext { pub impl P { fn tag() -> I64 { return self.n * 100I64 } } }
+
+fn describe(a: P) -> I64 { return a.raw() }        // plain
+fn describe(a: P#Ext) -> I64 { return a.tag() }    // viewed: uses the extension
+
+fn main() {
+    val p: P = <P n=7 />
+    print(describe(a: p))        // 7    (plain overload)
+    print(describe(a: p#Ext))    // 700  (viewed overload)
+    val v = p#Ext
+    print(describe(a: v))        // 700  (a viewed binding selects the viewed overload)
+}

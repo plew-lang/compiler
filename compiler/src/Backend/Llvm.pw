@@ -4683,8 +4683,10 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
     }
     // a user-defined free function: resolve like the C backend, then call the
     // cached LLVMValueRef (declared in pass 1). Generic / extern / overload cases
-    // beyond a plain match arrive in later increments.
-    val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+    // beyond a plain match arrive in later increments. Overloads differing only by
+    // a parameter's `#Ext` view (`f(a: P)` vs `f(a: P#Ext)`) are refined by the
+    // arguments' actual views (spec/09) — resolution is otherwise view-blind.
+    val cfi: U64 = findFuncViewAware(c: inout c, st: inout st, nameStart: nameStart, nameLen: nameLen, args: args)
     if cfi < c.funcs.count {
         mut val slot: U64 = userFnSlot(st: inout st, idx: cfi)
         // a std free function reached from an emitted body (digitByteI from
@@ -4907,6 +4909,88 @@ fn collectViewChain(c: inout Comp, st: inout LlvmCtx, id: U64) -> Array[U64] {
         }
     }
     return out
+}
+
+// Whether function `fi`'s parameter views match the call's argument views — each
+// param's declared viewExtId equals the corresponding argument's actual view
+// (spec/09). Used to pick the right overload among `f(a:P)` / `f(a:P#Ext)`.
+fn funcViewsMatch(c: inout Comp, st: inout LlvmCtx, fi: U64, args: Array[Arg]) -> Bool {
+    val f: Func = c.funcs[fi]
+    mut val i: U64 = 0
+    while i < args.count {
+        if i < f.params.count {
+            mut val pv: U64 = 0
+            if f.params[i].ty != 0U64 {
+                pv = c.types[f.params[i].ty].viewExtId
+            }
+            if pv != exprViewExtId(c: inout c, st: inout st, id: args[i].expr) {
+                return false
+            }
+        }
+        i += 1
+    }
+    return true
+}
+
+// Resolve a free-function call, refining a view-blind match by parameter views so
+// `f(a: P)` and `f(a: P#Ext)` coexist and select on the arguments' views (spec/09).
+// Falls back to the view-blind result if no view-matching overload exists (the
+// view-mismatch enforcement at genArgValue then reports it).
+fn findFuncViewAware(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    val base: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+    if base < c.funcs.count {
+    } else {
+        return base
+    }
+    if funcViewsMatch(c: inout c, st: inout st, fi: base, args: args) {
+        return base
+    }
+    // the front-end type check (paramsTypesMatch) can't see a local argument's
+    // struct type (it falls back to a label-only match — so base is first-by-label).
+    // Among same-name, same-label, same-param-type-head candidates, pick the one
+    // whose views match the arguments (the backend can recover views). This is what
+    // makes `f(a: P)` / `f(a: P#Ext)` select on the call's views.
+    val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.hasRecv {
+        } else {
+            if f.isAssoc {
+            } else {
+                if f.nameId == qName {
+                    if paramsLabelsOk(c: inout c, params: f.params, args: args) {
+                        if sameParamTypeHeads(c: inout c, a: c.funcs[base].params, b: f.params) {
+                            if funcViewsMatch(c: inout c, st: inout st, fi: i, args: args) {
+                                return i
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        i += 1
+    }
+    return base
+}
+
+// Whether two parameter lists have the same type-name heads (ignoring views) —
+// i.e. they are the same overload signature differing only by a `#Ext` view.
+fn sameParamTypeHeads(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
+    if a.count != b.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.count {
+        if a[i].tyNameId != b[i].tyNameId {
+            return false
+        }
+        if a[i].tyIsArray != b[i].tyIsArray {
+            return false
+        }
+        i += 1
+    }
+    return true
 }
 
 // The extension-view id active on an expression's value (spec/09): a direct
