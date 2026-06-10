@@ -291,6 +291,29 @@ fn findExtMethod(c: inout Comp, recvStart: U64, recvLen: U64, srcStart: U64, src
     return findExtMethodById(c: inout c, recvStart: recvStart, recvLen: recvLen, srcId: qSrcId, nameStart: nameStart, nameLen: nameLen, args: args)
 }
 
+// Whether some extension provides a method named (nameStart,nameLen) on type
+// (recvStart,recvLen) — used to give a helpful diagnostic when a bare call hits a
+// method that exists only as an extension method (spec/09).
+fn extMethodNameExists(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
+    val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
+    val qRecvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.hasRecv {
+            if f.extId != 0U64 {
+                if f.recvId == qRecvId {
+                    if f.nameId == qNameId {
+                        return true
+                    }
+                }
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
 // As findExtMethod, but the source `#X` is already interned (e.g. a type's
 // viewExtId from a `Type#Ext`-typed value). Matches Func.extId or srcTraitId.
 fn findExtMethodById(c: inout Comp, recvStart: U64, recvLen: U64, srcId: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {

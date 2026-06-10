@@ -1,0 +1,9 @@
+import @Std/Io with { print }
+// Assignment must not implicitly change a value's extension view (spec/09).
+struct P { val n: I64 }
+extension Ext { pub impl P { fn greet() -> I64 { return self.n } } }
+fn main() {
+    mut val v: P#Ext = <P n=4 />#Ext
+    v = <P n=9 />          // a plain value assigned to a P#Ext binding
+    print(v.greet())
+}

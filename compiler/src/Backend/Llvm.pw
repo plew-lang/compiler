@@ -5210,6 +5210,12 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
                 return emitClosureCallValue(c: inout c, st: inout st, cloVal: cloVal, fnRef: grounded, args: args)
             }
         }
+        // a bare call to a method that exists only as an extension method (spec/09):
+        // extension methods don't join bare resolution — point the user at the view.
+        if extMethodNameExists(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen) {
+            compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "this method is only provided by an extension — call it through the view (`value#Ext.method()`) or declare `defaultExtension #Ext` on the type")
+            return LLVMConstInt(st.i64ty, 0U64, 0I32)
+        }
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: method not found / not yet supported")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -7133,6 +7139,11 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             }
         }
         Stmt.Assign(val op, val target, val value) => {
+            // extension-view invariance (spec/09): an assignment must not implicitly
+            // change a value's view — the target's and value's views must match.
+            if exprViewExtId(c: inout c, st: inout st, id: target) != exprViewExtId(c: inout c, st: inout st, id: value) {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "extension view mismatch: assignment must not implicitly apply or drop a `#Ext` view — adjust it explicitly (`value#Ext` / `value#!Ext`)")
+            }
             match c.exprs[target] {
                 Expr.Ident(val start, val len) => {
                     val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
