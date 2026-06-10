@@ -23,6 +23,9 @@ extension Ext {
 // a parameter typed P#Ext: bare calls inside resolve through Ext.
 fn viaParam(x: P#Ext) -> I64 { return x.greet() + x.tripled() }
 
+// a function returning a viewed type; the view flows through the return.
+fn asView(p: P) -> P#Ext { return p#Ext }
+
 fn main() {
     val p: P = <P n=4 />
     print(p.greet())            // 99  (bare: the type's own method)
@@ -30,4 +33,7 @@ fn main() {
     val v = p#Ext               // v: P#Ext
     print(v.greet())            // 5   (bare on a viewed binding)
     print(viaParam(x: p#Ext))   // (4+1) + (4*3) = 17
+    print(viaParam(x: asView(p: p)))   // a viewed return passed to a viewed param: 17
+    val w: P#Ext = asView(p: p)        // annotated viewed binding from a viewed return
+    print(w.greet())            // 5
 }

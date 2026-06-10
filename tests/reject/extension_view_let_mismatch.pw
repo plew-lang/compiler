@@ -1,0 +1,10 @@
+import @Std/Io with { print }
+// An annotated `val v: P#Ext = p` requires the initializer to already carry the
+// view (spec/09): a plain value cannot be implicitly viewed.
+struct P { val n: I64 }
+extension Ext { pub impl P { fn greet() -> I64 { return self.n } } }
+fn main() {
+    val p: P = <P n=4 />
+    val v: P#Ext = p
+    print(v.greet())
+}

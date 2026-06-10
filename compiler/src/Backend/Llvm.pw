@@ -4883,6 +4883,16 @@ fn exprViewExtId(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
         Expr.ExtView(recv: _, val srcStart, val srcLen) => {
             return intern(c: inout c, start: srcStart, len: srcLen)
         }
+        Expr.Call(val nameStart, val nameLen, val args) => {
+            // a call to a `-> Type#Ext` function yields a viewed value.
+            val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            if fi < c.funcs.count {
+                if c.funcs[fi].retTy != 0U64 {
+                    return c.types[c.funcs[fi].retTy].viewExtId
+                }
+            }
+            return 0U64
+        }
         _ => {}
     }
     val r: U64 = exprTypeRef(c: inout c, st: inout st, id: id)
@@ -6797,6 +6807,16 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
     val s: Stmt = c.stmts[id]
     match s {
         Stmt.Let(mutable: _, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+            // extension-view invariance (spec/09): an explicit annotation `val v:
+            // P#Ext = init` requires the initializer's view to match — no implicit
+            // application/drop of a view.
+            if ty != 0U64 {
+                if tyLen > 0U64 {
+                    if c.types[ty].viewExtId != exprViewExtId(c: inout c, st: inout st, id: init) {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: init)), msg: "extension view mismatch: the binding's `#Ext` view must match its initializer — apply or drop the view explicitly (`value#Ext` / `value#!Ext`)")
+                    }
+                }
+            }
             // inside an async fn, a binding whose initializer is `await e` suspends,
             // then stores the type-erased awaited value into the binding's frame
             // field. (A normal binding falls through to the shared handler, which
@@ -6961,8 +6981,17 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                     }
                 }
             }
-            // a `Type#Ext`-viewed binding (`val v = p#Ext`): track the viewed TypeRef
-            // (carrying viewExtId) so a bare `v.m()` resolves the extension (spec/09).
+            // a `Type#Ext`-viewed binding: track the viewed TypeRef (carrying
+            // viewExtId) so a bare `v.m()` resolves the extension (spec/09). The view
+            // comes from an explicit annotation (`val v: P#Ext = …`) or, for an
+            // un-annotated binding, the initializer's own view (`val v = p#Ext`).
+            if tref == 0U64 {
+                if ty != 0U64 {
+                    if c.types[ty].viewExtId != 0U64 {
+                        tref = ty
+                    }
+                }
+            }
             if tref == 0U64 {
                 val ir: U64 = exprTypeRef(c: inout c, st: inout st, id: init)
                 if ir != 0U64 {
@@ -7247,6 +7276,13 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                 LLVMBuildRet(st.b, LLVMConstInt(st.i32ty, 0U64, 0I32))
             } else {
                 if hasValue {
+                    // extension-view invariance (spec/09): a returned value's view
+                    // must match the declared return type's view.
+                    if st.curRetRef != 0U64 {
+                        if c.types[st.curRetRef].viewExtId != exprViewExtId(c: inout c, st: inout st, id: value) {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "extension view mismatch: the returned value's `#Ext` view must match the declared return type — apply or drop the view explicitly")
+                        }
+                    }
                     // the declared return type is the expected type, so a returned
                     // un-suffixed generic construction (`return <Optional.Some …/>`)
                     // infers its type args. Consumed by the construction.
