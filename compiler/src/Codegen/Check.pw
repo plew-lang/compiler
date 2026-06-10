@@ -1940,12 +1940,45 @@ fn checkUseVisibility(c: inout Comp) {
                             compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "use of a function from another module without importing it (add `import … with { … }`)")
                         }
                     }
+                } else {
+                    // an `@Std` intrinsic the LLVM backend intercepts by raw name
+                    // (print / write / exit / …) is NOT ambient (spec/15: only lang
+                    // items are): it must be imported. The backend would otherwise
+                    // emit it regardless of import (and the front-end leaves an
+                    // unresolved call alone), so gate it here. OK if the using module
+                    // imported it or defines its own same-named function.
+                    if isAmbientInterceptedName(c: inout c, start: nameStart, len: nameLen) {
+                        val useMod2: U64 = moduleOf(c: inout c, offset: nameStart)
+                        if isImportedInto(c: inout c, mod: useMod2, nameStart: nameStart, nameLen: nameLen) {
+                        } else {
+                            compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "this @Std function is not ambient — import it (e.g. `import @Std/Io with { print }`); only lang items are usable without import (spec/15)")
+                        }
+                    }
                 }
                 i += 1
             }
             _ => { i += 1 }
         }
     }
+}
+
+// Is (start,len) the name of an `@Std` function the LLVM backend intercepts by raw
+// name (so it would emit without an import)? These need a real import gate (spec/15):
+// the user-facing I/O / process / async intrinsics. (The RawBuffer/String/FFI floor
+// intrinsics are resolved through their loaded `extern` decls, so they fall under
+// the ordinary import check above and are not listed here.)
+fn isAmbientInterceptedName(c: inout Comp, start: U64, len: U64) -> Bool {
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "print") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "eprint") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "write") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "writeByte") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "readStdin") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "readFile") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "readFileBytes") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "fileExists") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "sleep") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "exit") { return true }
+    return false
 }
 
 // Missing-return check (spec/11, loud-failure principle): Plew does not implicitly

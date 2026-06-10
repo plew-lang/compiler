@@ -19,6 +19,16 @@ fn verifyProgram(c: inout Comp) {
     mut val fi: U64 = 0
     while fi < c.funcs.count {
         val f: Func = c.funcs[fi]
+        // acceptance soundness is about the USER's code: verify only entry-module
+        // (module 0) bodies. The auto-loaded prelude / std (`@Std/*`) is trusted and
+        // validated separately (test suite + self-compile); walking it here falsely
+        // rejected a no-import program because a prelude body's operator witness
+        // (`Add[U64]` in SipHasher) lives in Core, loaded only on import.
+        if f.isExtern || methodInEntryModule(c: inout c, f: f) {
+        } else {
+            fi += 1
+            continue
+        }
         if f.isExtern {
         } else {
             if f.typeParams.count > 0U64 {

@@ -1,0 +1,8 @@
+// A program that imports nothing compiles (acceptance soundness): the auto-loaded
+// prelude / std is trusted and not re-verified, so a minimal `main` using only
+// lang-item types and literals is not falsely rejected by a prelude body's operator
+// witness (which lives in Core, loaded only on import).
+fn main() {
+    val x: I64 = 5I64
+    val ok: Bool = true
+}

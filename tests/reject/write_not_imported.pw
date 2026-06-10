@@ -1,0 +1,6 @@
+// `write` is an @Std/Io intrinsic the backend intercepts by raw name; it is not
+// ambient and must be imported (spec/15 — only lang items are ambient). Using it
+// without the import is rejected.
+fn main() {
+    write(s: "hi")
+}
