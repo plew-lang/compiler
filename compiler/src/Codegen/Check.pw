@@ -1252,9 +1252,66 @@ fn isTypeParamOf(c: inout Comp, fnIdx: U64, start: U64, len: U64) -> Bool {
     return false
 }
 
+// Whether a trait (by interned name id) — or, transitively, one of its
+// supertraits (spec/08: `trait Sub: Super` means conforming to Sub guarantees
+// conforming to Super, so Super's members are callable through a `T: Sub` bound)
+// — provides a member named `qName` whose labels match `args`, as a requirement
+// (TraitDef.reqs) or a provided method (a fn with recv = the trait). `depth`
+// guards against a malformed cyclic inheritance chain.
+fn traitProvidesMember(c: inout Comp, traitNameId: U64, qName: U64, args: Array[Arg], depth: U64) -> Bool {
+    if depth > 64U64 {
+        return false
+    }
+    mut val ti: U64 = 0
+    while ti < c.traits.count {
+        val t: TraitDef = c.traits[ti]
+        if t.nameId == traitNameId {
+            // requirement of this trait
+            mut val ri: U64 = 0
+            while ri < t.reqs.count {
+                val r: Func = t.reqs[ri]
+                if r.nameId == qName {
+                    if paramsLabelsOk(c: inout c, params: r.params, args: args) {
+                        return true
+                    }
+                }
+                ri += 1
+            }
+            // recurse into supertraits (`trait Sub: Super + ...`)
+            mut val sti: U64 = 0
+            while sti < t.supertraits.count {
+                val sup: Bind = t.supertraits[sti]
+                val supId: U64 = intern(c: inout c, start: sup.nameStart, len: sup.nameLen)
+                if traitProvidesMember(c: inout c, traitNameId: supId, qName: qName, args: args, depth: depth + 1U64) {
+                    return true
+                }
+                sti += 1
+            }
+        }
+        ti += 1
+    }
+    // provided method of this trait (a method with recv = the trait)
+    mut val gi: U64 = 0
+    while gi < c.funcs.count {
+        val g: Func = c.funcs[gi]
+        if g.hasRecv {
+            if g.recvId == traitNameId {
+                if g.nameId == qName {
+                    if paramsLabelsOk(c: inout c, params: g.params, args: args) {
+                        return true
+                    }
+                }
+            }
+        }
+        gi += 1
+    }
+    return false
+}
+
 // Whether some `where`-bound trait of type parameter (tpStart,tpLen) on function
 // `fnIdx` provides a member named (nameStart,nameLen) whose labels match `args`
-// — as a requirement (TraitDef.reqs) or a provided method (recv = the trait).
+// — as a requirement (TraitDef.reqs) or a provided method (recv = the trait),
+// including members inherited from the bound trait's supertraits.
 fn boundProvidesMethod(c: inout Comp, fnIdx: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
     val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     val qTp: U64 = intern(c: inout c, start: tpStart, len: tpLen)
@@ -1264,38 +1321,8 @@ fn boundProvidesMethod(c: inout Comp, fnIdx: U64, tpStart: U64, tpLen: U64, name
         if fb.fnIdx == fnIdx {
             if fb.paramNameId == qTp {
                 val qTrait: U64 = intern(c: inout c, start: fb.traitStart, len: fb.traitLen)
-                // requirement of the bound trait
-                mut val ti: U64 = 0
-                while ti < c.traits.count {
-                    val t: TraitDef = c.traits[ti]
-                    if t.nameId == qTrait {
-                        mut val ri: U64 = 0
-                        while ri < t.reqs.count {
-                            val r: Func = t.reqs[ri]
-                            if r.nameId == qName {
-                                if paramsLabelsOk(c: inout c, params: r.params, args: args) {
-                                    return true
-                                }
-                            }
-                            ri += 1
-                        }
-                    }
-                    ti += 1
-                }
-                // provided method of the bound trait (a method with recv = trait)
-                mut val gi: U64 = 0
-                while gi < c.funcs.count {
-                    val g: Func = c.funcs[gi]
-                    if g.hasRecv {
-                        if g.recvId == qTrait {
-                            if g.nameId == qName {
-                                if paramsLabelsOk(c: inout c, params: g.params, args: args) {
-                                    return true
-                                }
-                            }
-                        }
-                    }
-                    gi += 1
+                if traitProvidesMember(c: inout c, traitNameId: qTrait, qName: qName, args: args, depth: 0U64) {
+                    return true
                 }
             }
         }

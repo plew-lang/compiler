@@ -1,0 +1,30 @@
+import @Std/Io with { print }
+
+// Trait inheritance through a `where` bound (spec/08 "トレイトの継承"): a
+// `where T: Sub` bound makes the supertrait chain's members callable on T,
+// traversed transitively. Both requirements and provided methods inherit.
+// (Direct calls on a concrete conformer already worked — trait_supertrait.pw;
+// this covers the bound-dispatch path that resolves through supertraits.)
+trait Super { fn base() -> I64 }
+
+// a provided method on the supertrait — reachable through a `T: Sub` bound too.
+pub impl Super { fn twice() -> I64 { return self.base() * 2I64 } }
+
+trait Mid: Super { fn mid() -> I64 }
+trait Sub: Mid { fn extra() -> I64 }
+
+struct S { val n: I64 }
+pub impl S as Super { fn base() -> I64 { return self.n } }
+pub impl S as Mid { fn mid() -> I64 { return 100I64 } }
+pub impl S as Sub { fn extra() -> I64 { return 7I64 } }
+
+// T: Sub — base() comes from Super (2 levels up), mid() from Mid, extra() from
+// Sub, and twice() is Super's provided method, all via the single Sub bound.
+fn total[T](x: T) -> I64 where T: Sub {
+    return x.base() + x.mid() + x.extra() + x.twice()
+}
+
+fn main() {
+    val s: S = <S n=10 />
+    print(total(x: s))   // 10 + 100 + 7 + 20 = 137
+}
