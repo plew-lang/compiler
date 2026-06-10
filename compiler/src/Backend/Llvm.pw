@@ -8598,7 +8598,15 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                             LLVMBuildStore(st.b, arv, st.locPtr[li])
                             return
                         }
+                        // a generic-instance local (`r: Result[I64, String]`): pass its
+                        // tracked TypeRef as the expected type so an un-suffixed RHS
+                        // construction (`r = <Result.Err error="x" />`) infers the
+                        // instance's type args (genLlvmMakeEnum / genLlvmMake consume it).
+                        if isGenericInst(c: inout c, ref: st.locTypeRef[li]) {
+                            st.expectedTy = st.locTypeRef[li]
+                        }
                         mut val rv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
+                        st.expectedTy = 0U64
                         // coerce the value to the local's width (a context-less
                         // literal may default wider/narrower).
                         if LLVMGetTypeKind(LLVMTypeOf(rv)) == 8U32 {

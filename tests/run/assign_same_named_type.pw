@@ -1,0 +1,22 @@
+import @Std/Io with { print }
+
+// Reassigning the SAME named type (struct A, and same generic enums Optional/Result)
+// must NOT be false-rejected by the named-type assignment check — same head name =>
+// same id. Also exercises generic-enum RHS construction inferring its type args from
+// the local's tracked instance type.
+struct A { pub val x: I64 }
+fn mkA() -> A { return <A x=5 /> }
+
+fn main() {
+    mut val a: A = <A x=1 />
+    a = <A x=2 />
+    a = mkA()
+    print(a.x)
+    mut val o: Optional[I64] = <Optional.Some v=1I64 />
+    o = <Optional.None />
+    o = <Optional.Some v=9I64 />
+    match o { Optional.Some(v: val n) => { print(n) } Optional.None => { print(-1I64) } }
+    mut val r: Result[I64, String] = <Result.Ok value=1I64 />
+    r = <Result.Err error="bad" />
+    match r { Result.Ok(value: val v) => { print(v) } Result.Err(error: val e) => { print(e) } }
+}

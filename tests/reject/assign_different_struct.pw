@@ -1,0 +1,9 @@
+// Assigning a value of a DIFFERENT named type (struct B) to an `A` binding
+// reinterprets the bits — a hidden-meaning bug. Must be rejected (spec/03 value
+// semantics: a place holds values of its own type only).
+struct A { pub val x: I64 }
+struct B { pub val y: I64 }
+fn main() {
+    mut val a: A = <A x=1 />
+    a = <B y=2 />
+}

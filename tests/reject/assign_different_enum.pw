@@ -1,0 +1,7 @@
+// Assigning a value of a different enum (E2) to an `E1` binding must be rejected.
+enum E1 { A B }
+enum E2 { C D }
+fn main() {
+    mut val e: E1 = <E1.A />
+    e = <E2.C />
+}
