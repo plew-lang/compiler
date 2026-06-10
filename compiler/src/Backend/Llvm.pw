@@ -2271,6 +2271,29 @@ fn kindFromTySpan(c: inout Comp, tyStart: U64, tyLen: U64) -> U64 {
 // Recover the type-kind of an expression: locals from the env tag; literals from
 // their shape; everything else via the front-end's typeOf (which resolves call
 // returns etc. without needing c.locals).
+// The value-kind (0 int / 1 String / 2 Bool / 3 unsigned) of method `mfi`'s return
+// when called on `recv`: ground a type-parameter return under the receiver instance's
+// env (so `dict[K,V].getOr -> V` resolves V to the concrete value type) before
+// reading the kind, falling back to the declared return span when no env applies.
+fn methodReturnKind(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64) -> U64 {
+    val mf: Func = c.funcs[mfi]
+    if mf.retTy != 0U64 {
+        val rRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
+        val savedP: Array[Bind] = c.curTypeParams
+        val savedA: Array[U64] = c.curTypeArgs
+        val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: rRef)
+        val g: U64 = groundTypeRef(c: inout c, ref: mf.retTy)
+        if didSet {
+            c.curTypeParams = savedP
+            c.curTypeArgs = savedA
+        }
+        if g != 0U64 {
+            return kindFromTySpan(c: inout c, tyStart: c.types[g].nameStart, tyLen: c.types[g].nameLen)
+        }
+    }
+    return kindFromTySpan(c: inout c, tyStart: mf.retStart, tyLen: mf.retLen)
+}
+
 fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
     match c.exprs[id] {
         Expr.Str(start: _, len: _) => { return 1U64 }
@@ -2321,7 +2344,11 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 val mfi: U64 = findMethod(c: inout c, recvStart: c.structs[rsidx].nameStart, recvLen: c.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mfi < c.funcs.count {
                     if c.funcs[mfi].hasRet {
-                        return kindFromTySpan(c: inout c, tyStart: c.funcs[mfi].retStart, tyLen: c.funcs[mfi].retLen)
+                        // ground a type-parameter return under the receiver's instance
+                        // env (a generic struct local resolves to its def here, so
+                        // `dict.getOr -> V` must substitute V to the concrete value
+                        // type instead of defaulting `V` to int).
+                        return methodReturnKind(c: inout c, st: inout st, recv: recv, mfi: mfi)
                     }
                 }
             }
@@ -2335,7 +2362,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 val gmfi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if gmfi < c.funcs.count {
                     if c.funcs[gmfi].hasRet {
-                        return kindFromTySpan(c: inout c, tyStart: c.funcs[gmfi].retStart, tyLen: c.funcs[gmfi].retLen)
+                        return methodReturnKind(c: inout c, st: inout st, recv: recv, mfi: gmfi)
                     }
                 }
             }

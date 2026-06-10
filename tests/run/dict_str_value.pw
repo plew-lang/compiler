@@ -1,0 +1,13 @@
+import @Std/Io with { print }
+
+// A String-VALUED dictionary's `getOr` (spec/02): the generic method's `-> V`
+// return is grounded under the receiver instance's env, so V=String is recognized
+// as a String result (not defaulted to int and miscompiled at the use site).
+fn main() {
+    mut val m: Dictionary[String, String] = [:]
+    m.insert(key: "host", value: "localhost")
+    m.insert(key: "port", value: "8080")
+    print(m.getOr(key: "host", fallback: "none"))   // localhost
+    print(m.getOr(key: "port", fallback: "none"))    // 8080
+    print(m.getOr(key: "missing", fallback: "none")) // none
+}
