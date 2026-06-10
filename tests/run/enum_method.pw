@@ -1,0 +1,24 @@
+import @Std/Io with { print }
+
+// Inherent methods on an enum (spec/05,07): the receiver is an enum value, dispatched
+// like a struct method (self by value). A method can match on self, access a
+// variant's payload, and call another method on self.
+enum Shape { Circle(r: I64)  Rect(w: I64, h: I64) }
+pub impl Shape {
+    fn area() -> I64 {
+        match self {
+            Shape.Circle(val r) => { return r * r * 3I64 }
+            Shape.Rect(val w, val h) => { return w * h }
+        }
+    }
+    fn doubled() -> I64 { return self.area() * 2I64 }
+}
+
+fn main() {
+    val a: Shape = <Shape.Circle r=2 />
+    val b: Shape = <Shape.Rect w=3 h=4 />
+    print(a.area())      // 12
+    print(b.area())      // 12
+    print(a.doubled())   // 24
+    print(b.doubled())   // 24
+}

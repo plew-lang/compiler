@@ -1,0 +1,28 @@
+import @Std/Io with { print }
+
+// An `inout fn` method on an enum mutates self in place (spec/03,05): `flip`
+// reassigns self, and the change persists in the caller's binding.
+enum Toggle { Off  On }
+pub impl Toggle {
+    inout fn flip() {
+        match self {
+            Toggle.Off => { self = <Toggle.On /> }
+            Toggle.On => { self = <Toggle.Off /> }
+        }
+    }
+    fn isOn() -> Bool {
+        match self {
+            Toggle.On => { return true }
+            Toggle.Off => { return false }
+        }
+    }
+}
+
+fn main() {
+    mut val t: Toggle = <Toggle.Off />
+    print(t.isOn())   // false -> 0
+    t.flip()
+    print(t.isOn())   // true -> 1
+    t.flip()
+    print(t.isOn())   // false -> 0
+}

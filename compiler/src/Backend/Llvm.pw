@@ -5509,6 +5509,44 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
     val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
     if rsidx < c.structs.count {
     } else {
+        // an enum-receiver method (`c.code()` on an enum value): dispatch like a
+        // struct method (self by value, or a pointer for `inout fn`).
+        val erecvRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
+        if erecvRef != 0U64 {
+            val et: TypeRef = c.types[erecvRef]
+            if enumRegSlot(c: inout c, st: inout st, start: et.nameStart, len: et.nameLen) < st.enumIdxs.count {
+                val emfi: U64 = findMethod(c: inout c, recvStart: et.nameStart, recvLen: et.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                if emfi < c.funcs.count {
+                    mut val eslot: U64 = userFnSlot(st: inout st, idx: emfi)
+                    if eslot < st.fnIdx.count {
+                    } else {
+                        eslot = ensureProvidedDeclared(c: inout c, st: inout st, fi: emfi)
+                    }
+                    if eslot < st.fnIdx.count {
+                        val emf: Func = c.funcs[emfi]
+                        mut val eav: Array[LLVMValueRef] = []
+                        if emf.selfInout {
+                            eav.append(value: placePtrOf(c: inout c, st: inout st, id: recv))
+                        } else {
+                            eav.append(value: genLlvmExpr(c: inout c, st: inout st, id: recv))
+                        }
+                        mut val eai: U64 = 0
+                        while eai < args.count {
+                            eav.append(value: genArgValue(c: inout c, st: inout st, argExpr: args[eai].expr, p: emf.params[eai]))
+                            eai += 1
+                        }
+                        mut val edi: U64 = args.count
+                        while edi < emf.params.count {
+                            eav.append(value: genArgValue(c: inout c, st: inout st, argExpr: emf.params[edi].defaultExpr, p: emf.params[edi]))
+                            edi += 1
+                        }
+                        return LLVMBuildCall2(st.b, st.fnTy[eslot], st.fnVal[eslot], arrayCPtr(eav), eav.count, anon())
+                    }
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: this enum method is not emittable yet (generic / provided)")
+                    return LLVMConstInt(st.i64ty, 0U64, 0I32)
+                }
+            }
+        }
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: method call only on a registered struct value (so far)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -6031,7 +6069,7 @@ fn isPlainUserFn(c: inout Comp, st: inout LlvmCtx, fi: U64) -> Bool {
         return false
     }
     if f.hasRecv {
-        // a method: emit it iff its receiver is a registered struct AND it is
+        // a method: emit it iff its receiver is a registered struct OR enum AND it is
         // defined in the entry module. (A method name is re-interned so moduleOf on
         // it is unreliable; use the body's first statement, whose exprs keep their
         // original source offsets, to recover the defining module — this keeps std
@@ -6039,7 +6077,10 @@ fn isPlainUserFn(c: inout Comp, st: inout LlvmCtx, fi: U64) -> Bool {
         if isTraitName(c: inout c, start: f.recvStart, len: f.recvLen) { return false }
         if structRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.structIdxs.count {
         } else {
-            return false
+            if enumRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.enumIdxs.count {
+            } else {
+                return false
+            }
         }
         return methodInEntryModule(c: inout c, f: f)
     }
@@ -7710,6 +7751,16 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
                 selfIsArr = true
                 if c.types[st.curRecvInstRef].args.count > 0U64 {
                     selfElemTy = llvmTypeOfRef(c: inout c, st: inout st, ref: c.types[st.curRecvInstRef].args[0])
+                }
+            }
+        }
+        // an enum receiver (`impl Color { fn code() … }`): track its TypeRef so a
+        // bare `match self` / `self == …` in the body recovers the enum.
+        if recvRef == 0U64 {
+            if recvSidx < c.structs.count {
+            } else {
+                if enumRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.enumIdxs.count {
+                    recvRef = simpleTypeRef(c: inout c, nameStart: f.recvStart, nameLen: f.recvLen)
                 }
             }
         }
