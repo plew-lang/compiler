@@ -2043,6 +2043,9 @@ fn genLlvmFloatBinop(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U
     if op == opSub() { return LLVMBuildFSub(st.b, l, r, anon()) }
     if op == opMul() { return LLVMBuildFMul(st.b, l, r, anon()) }
     if op == opDiv() { return LLVMBuildFDiv(st.b, l, r, anon()) }
+    // comparison: NaN compares must panic (spec/02) — a runtime check panics if either
+    // operand is NaN, then the ordered fcmp produces the boolean.
+    emitF64NanCheck(c: inout c, st: inout st, l: l, r: r)
     // ordered comparison predicates (LLVMRealOEQ=1 OGT=2 OGE=3 OLT=4 OLE=5 ONE=6).
     if op == opEq() { return LLVMBuildFCmp(st.b, 1U32, l, r, anon()) }
     if op == opNe() { return LLVMBuildFCmp(st.b, 6U32, l, r, anon()) }
@@ -2051,6 +2054,20 @@ fn genLlvmFloatBinop(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U
     if op == opGt() { return LLVMBuildFCmp(st.b, 2U32, l, r, anon()) }
     if op == opGe() { return LLVMBuildFCmp(st.b, 3U32, l, r, anon()) }
     return l
+}
+
+// Emit a runtime NaN-compare guard (spec/02): panics if either double operand is NaN
+// before an ordered comparison runs (so NaN compares are loud, not silently false).
+fn emitF64NanCheck(c: inout Comp, st: inout LlvmCtx, l: LLVMValueRef, r: LLVMValueRef) {
+    mut val tys: Array[LLVMTypeRef] = []
+    tys.append(value: st.f64ty)
+    tys.append(value: st.f64ty)
+    val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(tys), 2U64, 0I32)
+    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_f64_nan_check", nameId: 9150U64, fnTy: fty)
+    mut val av: Array[LLVMValueRef] = []
+    av.append(value: l)
+    av.append(value: r)
+    LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U64, anon())
 }
 
 // Emit `id` as a double: a float value is already double; an integer value (e.g. a
@@ -10544,6 +10561,7 @@ fn emitLlvmRuntime() {
     // read all of stdin into a String ({ i8* data, i64 len }), matching the C runtime.
     write(s: "typedef struct { char* d; long long n; } PlewStrR;\n")
     write(s: "PlewStrR plew_f64_to_str(double v){ char* buf=(char*)malloc(32); int n=snprintf(buf,32,\"%g\",v); PlewStrR s; s.d=buf; s.n=(long long)n; return s; }\n")
+    write(s: "void plew_f64_nan_check(double a, double b){ if(a!=a || b!=b) plew_panic_raw(\"NaN comparison\",14); }\n")
     write(s: "PlewStrR plew_readStdin(void){ size_t cap=4096,len=0; char* buf=(char*)malloc(cap); int ch; while((ch=getchar())!=EOF){ if(len+1>=cap){cap*=2;buf=(char*)realloc(buf,cap);} buf[len++]=(char)ch; } PlewStrR s; s.d=buf; s.n=(long long)len; return s; }\n")
     // FFI String <-> C-string (spec/15): cString materializes a NUL-terminated copy
     // (owned by C until freed); stringFromCString copies a NUL-terminated C string.

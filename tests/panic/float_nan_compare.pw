@@ -1,0 +1,7 @@
+// NaN comparison panics (spec/02): a NaN (here 0.0/0.0) compared with < / == / etc.
+// is loud, not silently false.
+import @Std/Io with { print }
+fn main() {
+    val nan: F64 = 0.0 / 0.0
+    if nan < 1.0 { print(1I64) } else { print(0I64) }
+}
