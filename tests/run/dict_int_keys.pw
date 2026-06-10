@@ -1,0 +1,21 @@
+import @Std/Io with { print }
+
+// `Dictionary` keyed by unsigned integer types narrower than 64 bits (spec/02):
+// U8 / U16 / U32 hash through `writeU64` after a lossless `as U64` widen.
+fn main() {
+    mut val a: Dictionary[U8, I64] = [:]
+    a.insert(key: 200U8, value: 7I64)
+    a.insert(key: 13U8, value: 3I64)
+    print(a.getOr(key: 200U8, fallback: 0I64))     // 7
+    print(a.getOr(key: 13U8, fallback: 0I64))      // 3
+    print(a.getOr(key: 99U8, fallback: -1I64))     // -1
+
+    mut val b: Dictionary[U16, I64] = [:]
+    b.insert(key: 1000U16, value: 11I64)
+    print(b.getOr(key: 1000U16, fallback: 0I64))   // 11
+
+    val c: Dictionary[U32, I64] = [10U32: 100I64, 20U32: 200I64]
+    print(c.getOr(key: 20U32, fallback: 0I64))     // 200
+    print(c.contains(key: 10U32))                  // true
+    print(c.contains(key: 30U32))                  // false
+}

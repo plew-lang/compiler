@@ -115,13 +115,31 @@ pub impl SipHasher as Hasher {
 }
 
 // Primitive + String conformances (the leaves a derived struct/enum hash bottoms
-// out at). Signed integers await a bit-reinterpret (`as` is lossless-only) — added
-// when needed; U64 + String cover dictionary's first keys (indices, interned names).
+// out at). Unsigned integers narrower than 64 bits widen losslessly to U64 via `as`,
+// so they hash through `writeU64`. Signed integers await a bit-reinterpret (`as` is
+// lossless-only, so a negative value can't be retagged to U64) — added when needed.
 pub impl U64 as Hash {
     fn hash[H](hasher: inout H) where H: Hasher {
         hasher.writeU64(n: self)
     }
 }
+pub impl U32 as Hash {
+    fn hash[H](hasher: inout H) where H: Hasher {
+        hasher.writeU64(n: self as U64)
+    }
+}
+pub impl U16 as Hash {
+    fn hash[H](hasher: inout H) where H: Hasher {
+        hasher.writeU64(n: self as U64)
+    }
+}
+pub impl U8 as Hash {
+    fn hash[H](hasher: inout H) where H: Hasher {
+        hasher.writeU64(n: self as U64)
+    }
+}
+// `Bool` Hash awaits Bool primitive method dispatch (the backend dispatches trait
+// methods only on integer-primitive / struct / enum receivers so far, not Bool).
 pub impl String as Hash {
     fn hash[H](hasher: inout H) where H: Hasher {
         val bs: Array[U8] = self.bytes
