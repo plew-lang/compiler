@@ -408,6 +408,10 @@ pub impl U32 as Format {
 pub impl F64 as Format {
     fn format(format: String) -> String { return floatToString(value: self) }
 }
+pub impl F32 as Format {
+    // F32 is represented as double for now, so widening to F64 is a no-op.
+    fn format(format: String) -> String { return floatToString(value: self as F64) }
+}
 pub impl Bool as Format {
     // Bool prints as 1/0 (matching the integer lowering), not true/false.
     fn format(format: String) -> String {
