@@ -202,6 +202,10 @@ fn runFrontend() -> Comp {
     // trait provided methods (spec/08): copy each `impl Trait { }` provided
     // method onto every conforming type, so they ride normal method resolution.
     instantiateProvidedMethods(c: inout c)
+    // defaultExtension collisions (spec/09): a default extension's method must not
+    // share a selector with the type's own / provided / another default extension's
+    // method (they would both join bare resolution). Loud at the declaration.
+    checkDefaultExtCollisions(c: inout c)
     // recursive value types (spec/03): mark fields that close a containment cycle
     // onto their owner; codegen stores them behind a heap pointer so the C type is
     // finite (hidden indirection; value semantics kept by deref-read/repoint-write).

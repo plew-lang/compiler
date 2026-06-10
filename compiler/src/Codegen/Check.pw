@@ -1665,6 +1665,82 @@ fn methodWitnessesAConformance(c: inout Comp, recvStart: U64, recvLen: U64, mSta
     return false
 }
 
+// Whether two methods share a selector (same name + same parameter labels in
+// order) — the spec/09 collision criterion (differing param types are overloads).
+fn sameSelector(c: inout Comp, a: Func, b: Func) -> Bool {
+    if a.nameId != b.nameId {
+        return false
+    }
+    if a.params.count != b.params.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.params.count {
+        if a.params[i].noLabel != b.params[i].noLabel {
+            return false
+        }
+        if a.params[i].noLabel {
+        } else {
+            if a.params[i].nameId != b.params[i].nameId {
+                return false
+            }
+        }
+        i += 1
+    }
+    return true
+}
+
+// defaultExtension collisions (spec/09): a method a type put on its bare surface
+// via `defaultExtension #Ext` must not share a selector with the type's own /
+// provided / another default extension's method (both would join bare resolution
+// ambiguously). Reported at the type — loud, not a silent shadow.
+fn checkDefaultExtCollisions(c: inout Comp) {
+    mut val di: U64 = 0
+    while di < c.defaultExts.count {
+        val de: DefaultExt = c.defaultExts[di]
+        mut val fi: U64 = 0
+        while fi < c.funcs.count {
+            val f: Func = c.funcs[fi]
+            if f.hasRecv {
+                if f.recvId == de.typeId {
+                    if f.extId == de.extId {
+                        // this is a default-ext method on the type; check against
+                        // every other bare-callable method on the same type (own,
+                        // provided, or another default extension).
+                        mut val gi: U64 = 0
+                        while gi < c.funcs.count {
+                            if gi == fi {
+                            } else {
+                                val g: Func = c.funcs[gi]
+                                if g.hasRecv {
+                                    if g.recvId == de.typeId {
+                                        mut val gBare: Bool = false
+                                        if g.extId == 0U64 {
+                                            gBare = true
+                                        } else {
+                                            if isDefaultExt(c: inout c, typeId: de.typeId, extId: g.extId) {
+                                                gBare = true
+                                            }
+                                        }
+                                        if gBare {
+                                            if sameSelector(c: inout c, a: f, b: g) {
+                                                compileErrorAt(line: lineOf(c: inout c, offset: f.nameStart), msg: "defaultExtension method collides with another bare-callable method of the same selector on this type (don't make it default, or rename — spec/09)")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            gi += 1
+                        }
+                    }
+                }
+            }
+            fi += 1
+        }
+        di += 1
+    }
+}
+
 fn checkImplOnBuiltin(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.funcs.count {
