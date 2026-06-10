@@ -2034,6 +2034,15 @@ fn isPrimIntName(c: inout Comp, start: U64, len: U64) -> Bool {
 // `lhs`/`rhs`, unary `value`; the result is the receiver primitive's type and
 // signedness. Returns a null sentinel for an unrecognized method (the caller then
 // falls back to the normal assoc path).
+// IEEE float binary op from two double VALUES (for compound assign `x += 2.5`).
+fn buildF64BinOp(st: inout LlvmCtx, op: I64, l: LLVMValueRef, r: LLVMValueRef) -> LLVMValueRef {
+    if op == opAdd() { return LLVMBuildFAdd(st.b, l, r, anon()) }
+    if op == opSub() { return LLVMBuildFSub(st.b, l, r, anon()) }
+    if op == opMul() { return LLVMBuildFMul(st.b, l, r, anon()) }
+    if op == opDiv() { return LLVMBuildFDiv(st.b, l, r, anon()) }
+    return l
+}
+
 // IEEE float binary op (spec/02,12): arithmetic -> fadd/fsub/fmul/fdiv; comparison ->
 // ordered fcmp -> i1. Both operands are coerced to double. (NaN-compare panic and
 // integer `%` rejection are handled at the verify layer / are follow-ups.)
@@ -8429,7 +8438,13 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                             LLVMBuildStore(st.b, rv, st.locPtr[li])
                         } else {
                             val cur: LLVMValueRef = LLVMBuildLoad2(st.b, st.locTy[li], st.locPtr[li], anon())
-                            val nv: LLVMValueRef = buildBinOpChecked(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: valueKind(c: inout c, st: inout st, id: target) == 3U64)
+                            mut val nv: LLVMValueRef = LLVMConstNull(st.ptrty)
+                            if valueKind(c: inout c, st: inout st, id: target) == 4U64 {
+                                // a float local: the compound op is an IEEE float op.
+                                nv = buildF64BinOp(st: inout st, op: compoundBinOp(op: op), l: cur, r: rv)
+                            } else {
+                                nv = buildBinOpChecked(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: valueKind(c: inout c, st: inout st, id: target) == 3U64)
+                            }
                             LLVMBuildStore(st.b, nv, st.locPtr[li])
                         }
                     } else {

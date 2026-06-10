@@ -1,0 +1,16 @@
+import @Std/Io with { print }
+
+// Float compound assignment (spec/12 — pure desugar `x OP= v` => `x = x OP v`, here
+// with IEEE float ops). Also a regression guard: the assignment category check must
+// not false-reject a float `+=` (F64 is kind 0 as a target but kind 2 as a value).
+fn main() {
+    mut val x: F64 = 10.0
+    x += 2.5
+    print(x)        // 12.5
+    x -= 0.5
+    print(x)        // 12
+    x *= 2.0
+    print(x)        // 24
+    x /= 3.0
+    print(x)        // 8
+}

@@ -298,10 +298,17 @@ fn verifyAssign(c: inout Comp, op: I64, target: U64, value: U64) {
     // hidden-meaning bug. Reject the unambiguous numeric<->String case. (kind 0/3 =
     // signed/unsigned int, 1 = String; kind 2 lumps Bool/struct/enum and is left for
     // the existing per-type checks.)
-    val atk: U64 = typeOf(c: inout c, id: target).kind
-    val avk: U64 = typeOf(c: inout c, id: value).kind
-    if assignNumStrMismatch(atk: atk, avk: avk) {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "type mismatch in assignment: incompatible categories (a numeric type, a String, and a struct/enum value are not interchangeable)")
+    // a float on either side is exempt: F64 is in isPrimType so typeOf reports kind 0
+    // for a float local but kind 2 (named "F64") for a float literal / arithmetic
+    // result, which the category check would mis-read as a numeric<->named mismatch
+    // (`x += 2.5` for `x: F64`). Float<->non-float assignment is a separate concern.
+    if exprIsFloat(c: inout c, id: target) || exprIsFloat(c: inout c, id: value) {
+    } else {
+        val atk: U64 = typeOf(c: inout c, id: target).kind
+        val avk: U64 = typeOf(c: inout c, id: value).kind
+        if assignNumStrMismatch(atk: atk, avk: avk) {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "type mismatch in assignment: incompatible categories (a numeric type, a String, and a struct/enum value are not interchangeable)")
+        }
     }
 }
 
