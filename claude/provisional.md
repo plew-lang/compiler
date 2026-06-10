@@ -41,7 +41,7 @@
 ## 配列・辞書・集合・タプル
 
 - `Array[T]`：✅ **値意味論＋CoW＋解放を実装**（上述メモリ節）。添字 `U64`・範囲外 panic は spec 通り。**複合要素型も実装済**＝`Array[Ref[T]]`/`Array[Box[T]]`/`Array[Array[T]]`（ネスト）＋配列リテラル要素 append＋`Array[T]` の generic struct/関数での単相化（複合要素にマングル名 span を与え C 型/ARC は要素 ref から復元）。**残る小・hidden-cost ARC 残留（no UAF）**：fresh-temp append（`xs.append(<Ref…/>)`）が box を 1 つ leak（temp 所有権が transfer でなく retain）・heap 持ち Ref pointee の深い release（`Array[Ref[StructWithHeap]]` の pointee の配列/Ref フィールドが leak）・ネスト配列 `Array[Array[T]]` の inner-array 要素 ARC（ビットコピー＝leak）。`[E; N]`/const generics/`Slice`/部分文字列は **spec 自体が当面保留**。
-- **`Dictionary[K,V]`（lang item・`[k:v]`/`[:]` リテラル）** → ✅ **実装済**（struct+メソッド+添字+リテラル・Hash/SipHash-1-3 dogfood・[worklog.md](worklog.md)「Dictionary」）。残＝マップごとのランダムシード（RNG 後・固定キー実装済）・`get->Optional[V]`。**`Set[E]`** → **未実装**（リテラル無し＝非 lang item・import 要）。
+- **`Dictionary[K,V]`（lang item・`[k:v]`/`[:]` リテラル）** → ✅ **実装済**（struct+メソッド+添字+リテラル・Hash/SipHash-1-3 dogfood・[worklog.md](worklog.md)「Dictionary」）。安全引き **`get(key:) -> Optional[V]`** ＝✅ 実装済（ambient Core で Optional が常時可になったので解禁・`Some(v)`/`None`・`dict[k]` は欠落 panic ＝棲み分け・test run/dict_get）。残＝マップごとのランダムシード（RNG 後・固定キー実装済）。**`Set[E]`** → **未実装**（リテラル無し＝非 lang item・import 要）。
 - **ラベル付き無名レコード `(x: I32, y: I32)`** → 未実装（struct のみ）。
 
 ## 型システム：ジェネリクス・トレイト・拡張

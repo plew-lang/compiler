@@ -153,8 +153,8 @@ pub impl String as Hash {
 // index map (slot -> entry index + 1; 0 = empty) for O(1) lookup. Keys need
 // `Hash` (to place) and `Eq` (to resolve collisions). Algorithm = linear
 // probing, growing at load 0.75. Seed is fixed for now (see worklog RNG TODO).
-// `get(key:) -> Optional[V]` awaits Optional being ambient; `getOr`/`contains`/
-// the missing-key-panicking `at` (what `dict[k]` lowers to) cover it for now.
+// `get(key:) -> Optional[V]` is the safe lookup; `getOr`/`contains`/the
+// missing-key-panicking `at` (what `dict[k]` lowers to) round out the surface.
 struct Dictionary[K, V] {
     mut val keys: Array[K]
     mut val vals: Array[V]
@@ -252,6 +252,15 @@ pub impl[K, V] Dictionary[K, V] {
     // Whether `key` is present.
     fn contains(key: K) -> Bool where K: Hash, K: Eq {
         return self.find(key: key) != 0U64
+    }
+    // The value for `key` as `Some(v)`, or `None` if absent (spec/02 — the safe,
+    // non-panicking lookup; `dict[key]` panics on a missing key, `get` does not).
+    fn get(key: K) -> Optional[V] where K: Hash, K: Eq {
+        val b: U64 = self.find(key: key)
+        if b == 0U64 {
+            return <Optional.None />
+        }
+        return <Optional.Some v=self.vals[b - 1U64] />
     }
     // The value for `key`, or `fallback` if absent (non-panicking lookup).
     fn getOr(key: K, fallback: V) -> V where K: Hash, K: Eq {
