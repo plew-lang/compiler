@@ -1702,6 +1702,14 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
             }
             registerCallInst(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
         }
+        Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+            scanExprInsts(c: inout c, exprId: recv)
+            mut val i: U64 = 0
+            while i < args.count {
+                scanExprInsts(c: inout c, exprId: args[i].expr)
+                i += 1
+            }
+        }
         Expr.Method(val recv, val nameStart, val nameLen, val args) => {
             scanExprInsts(c: inout c, exprId: recv)
             mut val i: U64 = 0

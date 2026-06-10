@@ -504,6 +504,30 @@ fn parsePostfixAst(p: inout P) -> ExprAst {
                 p.advance()
                 e = <ExprAst.OptChain base=e member=nm span=<Span start=sStart end=p.prevEnd() /> />
             }
+            Kind.Hash => {
+                // `recv#Src.method(args)` (spec/09): a method call through an
+                // extension (or trait) view. Only the method-call form is supported
+                // so far — `#Src.field` / `#!Src` (strip) come later.
+                p.advance()
+                val srcTok: Tok = p.curTok()
+                val src: String = p.text(t: srcTok)
+                p.advance()
+                match p.curKind() {
+                    Kind.Dot => { p.advance() }
+                    _ => { p.fail(off: p.base + p.curTok().start, msg: "expected `.method(...)` after an extension view `value#Ext`") }
+                }
+                val nameTok: Tok = p.curTok()
+                val nm: String = p.text(t: nameTok)
+                p.advance()
+                match p.curKind() {
+                    Kind.LParen => {
+                        p.advance()
+                        val args: Array[ArgAst] = parseCallArgsAst(p: inout p)
+                        e = <ExprAst.ExtMethod recv=e src=src name=nm args=args span=<Span start=sStart end=p.prevEnd() /> />
+                    }
+                    _ => { p.fail(off: p.base + p.curTok().start, msg: "extension view supports only a method call `value#Ext.m(...)` so far") }
+                }
+            }
             Kind.LBracket => {
                 p.advance()
                 val idx: ExprAst = parseExprAst(p: inout p)

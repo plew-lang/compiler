@@ -84,6 +84,7 @@ export enum Kind {
     DotDotLt
     DotDotEq
     OptChain
+    Hash
     Unknown
 }
 
@@ -530,6 +531,10 @@ export fn lex(lx: inout Lexer) {
             lx.emit(k: <Kind.Tilde />, start: lx.pos, len: 1)
             continue
         }
+        if b == '#' {
+            lx.emit(k: <Kind.Hash />, start: lx.pos, len: 1)
+            continue
+        }
         if b == '?' {
             if b2 == '.' {
                 lx.emit(k: <Kind.OptChain />, start: lx.pos, len: 2)
@@ -659,6 +664,7 @@ export fn kindCode(k: Kind) -> I64 {
         Kind.ShlEq => 83
         Kind.ShrEq => 84
         Kind.OptChain => 85
+        Kind.Hash => 86
         Kind.Unknown => 99
     }
 }

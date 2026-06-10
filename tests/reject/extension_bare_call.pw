@@ -1,0 +1,4 @@
+import @Std/Io with { print }
+struct P { val n: I64 }
+extension Ext { impl P { fn greet() -> I64 { return self.n } } }
+fn main() { val p = <P n=4 /> print(p.greet()) }

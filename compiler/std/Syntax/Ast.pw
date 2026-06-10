@@ -228,6 +228,10 @@ export struct ImplAst {
     pub val isPub: Bool
     pub val members: Array[MemberAst]
     pub val span: Span
+    // the enclosing `extension Name { ... }` (spec/09), "" for a bare impl. An
+    // extension impl's members do not join bare resolution; they are reached only
+    // through a call-site `value#Name.member` view.
+    pub val extName: String = ""
 }
 
 // An `import <path> [with { name [as Q], ... }]` statement (spec/15). `pathSpan` is

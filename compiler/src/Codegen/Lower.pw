@@ -308,6 +308,13 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
             val nm: Bind = internBytes(c: inout c, s: name)
             result = c.pushExpr(e: <Expr.Method recv=r nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
         }
+        ExprAst.ExtMethod(val recv, val src, val name, val args, val span) => {
+            val r: U64 = lowerExpr(c: inout c, e: recv)
+            val a: Array[Arg] = lowerArgs(c: inout c, args: args)
+            val srcN: Bind = internBytes(c: inout c, s: src)
+            val nm: Bind = internBytes(c: inout c, s: name)
+            result = c.pushExpr(e: <Expr.ExtMethod recv=r srcStart=srcN.nameStart srcLen=srcN.nameLen nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
+        }
         ExprAst.Index(val base, val index, val span) => {
             val b: U64 = lowerExpr(c: inout c, e: base)
             val idx: U64 = lowerExpr(c: inout c, e: index)
@@ -809,7 +816,14 @@ fn lowerMethodMember(c: inout Comp, im: ImplAst, m: MemberAst, recvN: Bind, impl
     val body: U64 = lowerBlock(c: inout c, b: m.body)
     c.lowerRetTy = savedRet
     val fnIdx: U64 = c.funcs.count
-    c.funcs.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) typeParams=typeParams params=params hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub />)
+    // an extension method (spec/09) is tagged with its extension's name id so it is
+    // excluded from bare resolution (reachable only via `value#Ext.m()`).
+    mut val extId: U64 = 0
+    if im.extName.bytes.count > 0 {
+        val extN: Bind = internBytes(c: inout c, s: im.extName)
+        extId = intern(c: inout c, start: extN.nameStart, len: extN.nameLen)
+    }
+    c.funcs.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) typeParams=typeParams params=params hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId />)
     appendFuncBounds(c: inout c, fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits)
     appendFuncBounds(c: inout c, fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits)
 }

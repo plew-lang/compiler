@@ -786,7 +786,7 @@ fn parseMethodAfterFn(p: inout P, kind: MemberKind, selfInout: Bool, selfMove: B
 // An `[pub] impl[T] Recv [as Trait] [where ...] { members }` block (spec/07,08).
 // The cursor is at the `impl` ident (the leading `pub`, if any, is already consumed
 // and passed as `isPub`). Mirrors the compiler's parseImpl.
-export fn parseImplDecl(p: inout P, isPub: Bool) -> ImplAst {
+export fn parseImplDecl(p: inout P, isPub: Bool, extName: String = "") -> ImplAst {
     val sStart: U64 = p.base + p.curTok().start
     p.advance()
     val implParams: Array[String] = parseTypeParamNames(p: inout p)
@@ -917,7 +917,7 @@ export fn parseImplDecl(p: inout P, isPub: Bool) -> ImplAst {
             }
         }
     }
-    return <ImplAst recvType=recvType implParams=implParams isTraitImpl=isTraitImpl traitName=traitName traitArgs=traitArgs whereParams=whereParams whereTraits=whereTraits isPub=isPub members=members span=<Span start=sStart end=p.prevEnd() /> />
+    return <ImplAst recvType=recvType implParams=implParams isTraitImpl=isTraitImpl traitName=traitName traitArgs=traitArgs whereParams=whereParams whereTraits=whereTraits isPub=isPub members=members span=<Span start=sStart end=p.prevEnd() /> extName=extName />
 }
 
 // A body-less function signature `name[T,...](params) [-> ret]` (a trait requirement
@@ -1337,6 +1337,48 @@ fn parseExportAst(p: inout P) -> TopItemAst {
     }
 }
 
+// Parse an `extension Name { impl ... impl ... }` block (spec/09): a named
+// bundle of impl blocks. Each impl is emitted as an ordinary TopItemAst.Impl
+// tagged with the extension name (so its members reach resolution only through a
+// call-site `value#Name.member` view). The extension itself carries no other
+// state — it is purely a label on its impls.
+fn parseExtensionInto(p: inout P, items: inout Array[TopItemAst]) {
+    p.advance()
+    val name: String = p.text(t: p.curTok())
+    p.advance()
+    match p.curKind() {
+        Kind.LBrace => { p.advance() }
+        _ => { p.fail(off: p.base + p.curTok().start, msg: "expected `{` after `extension Name`") }
+    }
+    mut val cont: Bool = true
+    while cont {
+        p.skipNewlines()
+        match p.curKind() {
+            Kind.RBrace => {
+                p.advance()
+                cont = false
+            }
+            Kind.Eof => { cont = false }
+            _ => {
+                if curIs(p: inout p, kw: "impl") {
+                    items.append(<TopItemAst.Impl im=parseImplDecl(p: inout p, isPub: false, extName: name) />)
+                } else {
+                    if curIs(p: inout p, kw: "pub") {
+                        p.advance()
+                        if curIs(p: inout p, kw: "impl") {
+                            items.append(<TopItemAst.Impl im=parseImplDecl(p: inout p, isPub: true, extName: name) />)
+                        } else {
+                            p.advance()
+                        }
+                    } else {
+                        p.advance()
+                    }
+                }
+            }
+        }
+    }
+}
+
 // Parse a whole program (a file's tokens) into a flat list of top-level items
 // (spec/15). The compiler frontend drives this over its own token stream (base=0)
 // and lowers each item (Codegen/Lower.pw), following `Import` items to load further
@@ -1377,7 +1419,11 @@ export fn parseProgramAst(p: inout P) -> Array[TopItemAst] {
                                     if curIs(p: inout p, kw: "trait") {
                                         items.append(<TopItemAst.Trait t=parseTraitDecl(p: inout p) />)
                                     } else {
-                                        p.advance()
+                                        if curIs(p: inout p, kw: "extension") {
+                                            parseExtensionInto(p: inout p, items: inout items)
+                                        } else {
+                                            p.advance()
+                                        }
                                     }
                                 }
                             }

@@ -202,6 +202,10 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
         if f.hasRecv {
+            // an extension method does not join bare resolution (spec/09): it is
+            // reachable only through a `value#Ext.m()` view (findExtMethod).
+            if f.extId != 0U64 {
+            } else {
             if f.nameId == qNameId {
                 if f.recvId == qRecvId {
                     if paramsLabelsOk(c: inout c, params: f.params, args: args) {
@@ -219,6 +223,7 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
                         }
                     }
                 }
+            }
             }
         }
         i += 1
@@ -243,6 +248,39 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
         ai += 1
     }
     return c.funcs.count
+}
+
+// Index of the extension method named (nameStart,nameLen) on type
+// (recvStart,recvLen) provided by extension (srcStart,srcLen) — i.e. a method
+// whose extId matches the named extension (spec/09 `value#Ext.m()`). Resolves
+// overloads by labels + arg types like findMethod. c.funcs.count if none.
+fn findExtMethod(c: inout Comp, recvStart: U64, recvLen: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
+    val qRecvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
+    val qExtId: U64 = intern(c: inout c, start: srcStart, len: srcLen)
+    mut val firstLabel: U64 = c.funcs.count
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.hasRecv {
+            if f.extId == qExtId {
+                if f.nameId == qNameId {
+                    if f.recvId == qRecvId {
+                        if paramsLabelsOk(c: inout c, params: f.params, args: args) {
+                            if firstLabel == c.funcs.count {
+                                firstLabel = i
+                            }
+                            if paramsTypesMatch(c: inout c, params: f.params, args: args) {
+                                return i
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        i += 1
+    }
+    return firstLabel
 }
 
 // Index of the assoc fn named (nameStart,nameLen) on type (recvStart,recvLen),
@@ -1391,6 +1429,20 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // `index` method's return (the Index trait's `Output`).
             if bt.kind == 2 {
                 return firstMethodRetType(c: inout c, typeStart: bt.nameStart, typeLen: bt.nameLen, name: "index")
+            }
+            return scalarInfo()
+        }
+        Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
+            // `recv#Ext.name(args)` (spec/09): return type from the extension method.
+            val rt: TypeInfo = exprType(c: inout c, id: recv)
+            if rt.kind == 2 {
+                val mfi: U64 = findExtMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                if mfi < c.funcs.count {
+                    val mf: Func = c.funcs[mfi]
+                    if mf.hasRet {
+                        return typeInfoOfName(c: inout c, start: mf.retStart, len: mf.retLen, isArray: mf.retIsArray)
+                    }
+                }
             }
             return scalarInfo()
         }

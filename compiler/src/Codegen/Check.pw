@@ -1380,6 +1380,14 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                 i += 1
             }
         }
+        Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+            checkBoundsExpr(c: inout c, exprId: recv)
+            mut val i: U64 = 0
+            while i < args.count {
+                checkBoundsExpr(c: inout c, exprId: args[i].expr)
+                i += 1
+            }
+        }
         Expr.Method(val recv, val nameStart, val nameLen, val args) => {
             checkBoundsExpr(c: inout c, exprId: recv)
             mut val i: U64 = 0

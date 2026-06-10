@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+// Extensions (spec/09): an `extension Name { impl Type { ... } }` block adds
+// methods to a type that are NOT visible to bare resolution (`p.greet()` is an
+// error) and are reached only through a call-site `value#Name.method()` view.
+// Different extensions may define the same method name; `#Name` disambiguates.
+struct P { val n: I64 }
+
+extension Greeting {
+    impl P {
+        fn greet() -> I64 { return self.n + 1I64 }
+    }
+}
+
+extension Formal {
+    impl P {
+        fn greet() -> I64 { return self.n * 10I64 }   // same name, different #Ext
+        fn scaled(by: I64) -> I64 { return self.n * by }
+    }
+}
+
+fn main() {
+    val p: P = <P n=4 />
+    print(p#Greeting.greet())       // 5   (Greeting view)
+    print(p#Formal.greet())         // 40  (Formal view shadows the name)
+    print(p#Formal.scaled(by: 3I64)) // 12  (extension method with an argument)
+}

@@ -299,6 +299,10 @@ fn verifyExpr(c: inout Comp, id: U64) {
             verifyExpr(c: inout c, id: recv)
             verifyArgs(c: inout c, args: args)
         }
+        Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+            verifyExpr(c: inout c, id: recv)
+            verifyArgs(c: inout c, args: args)
+        }
         Expr.Call(nameStart: _, nameLen: _, val args) => {
             verifyArgs(c: inout c, args: args)
         }

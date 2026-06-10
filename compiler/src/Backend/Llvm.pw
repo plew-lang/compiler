@@ -2031,6 +2031,17 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 }
             }
         }
+        Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
+            val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
+            if rsidx < c.structs.count {
+                val mfi: U64 = findExtMethod(c: inout c, recvStart: c.structs[rsidx].nameStart, recvLen: c.structs[rsidx].nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                if mfi < c.funcs.count {
+                    if c.funcs[mfi].hasRet {
+                        return kindFromTySpan(c: inout c, tyStart: c.funcs[mfi].retStart, tyLen: c.funcs[mfi].retLen)
+                    }
+                }
+            }
+        }
         Expr.Call(val nameStart, val nameLen, val args) => {
             // a closure-typed local call (`tail()` where tail: fn() -> String): the
             // fn return type's kind (fn args = [ret, p0, …]).
@@ -3152,6 +3163,9 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
         Expr.Method(val recv, val nameStart, val nameLen, val args) => {
             return genLlvmMethod(c: inout c, st: inout st, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
         }
+        Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
+            return genLlvmExtMethod(c: inout c, st: inout st, recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        }
         Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
             return genLlvmIfExpr(c: inout c, st: inout st, cond: cond, thenBlk: thenBlk, elseBlk: elseBlk)
         }
@@ -3614,6 +3628,16 @@ fn exprLlvmType(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
             val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
             if rsidx < c.structs.count {
                 val mfi: U64 = findMethod(c: inout c, recvStart: c.structs[rsidx].nameStart, recvLen: c.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                if mfi < c.funcs.count {
+                    return llvmFnRetTy(c: inout c, st: inout st, f: c.funcs[mfi])
+                }
+            }
+            return st.i64ty
+        }
+        Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
+            val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
+            if rsidx < c.structs.count {
+                val mfi: U64 = findExtMethod(c: inout c, recvStart: c.structs[rsidx].nameStart, recvLen: c.structs[rsidx].nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mfi < c.funcs.count {
                     return llvmFnRetTy(c: inout c, st: inout st, f: c.funcs[mfi])
                 }
@@ -4822,6 +4846,55 @@ fn primLangItemRecvName(c: inout Comp, st: inout LlvmCtx, recv: U64) -> Bind {
     return z
 }
 
+// `recv#Ext.name(args)` (spec/09): a method call through an extension view. The
+// extension method is tagged with its extension's id (Func.extId) and excluded
+// from bare resolution, so we look it up with findExtMethod (receiver type +
+// extension + selector) and emit a direct call (self = recv), like an inherent
+// method. First cut: the receiver must be a registered struct value.
+fn genLlvmExtMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+    val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
+    if rsidx < c.structs.count {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: extension method call only on a registered struct value (so far)")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val sd: StructDef = c.structs[rsidx]
+    val mfi: U64 = findExtMethod(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+    if mfi < c.funcs.count {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "no such extension method on this type (is the extension name right, and a `pub impl`?)")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    mut val slot: U64 = userFnSlot(st: inout st, idx: mfi)
+    if slot < st.fnIdx.count {
+    } else {
+        slot = ensureProvidedDeclared(c: inout c, st: inout st, fi: mfi)
+    }
+    if slot < st.fnIdx.count {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: this extension method is not emittable yet (generic / provided)")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val mf: Func = c.funcs[mfi]
+    mut val av: Array[LLVMValueRef] = []
+    if mf.selfInout {
+        av.append(value: placePtrOf(c: inout c, st: inout st, id: recv))
+    } else {
+        av.append(value: genLlvmExpr(c: inout c, st: inout st, id: recv))
+    }
+    mut val ai: U64 = 0
+    while ai < args.count {
+        av.append(value: genArgValue(c: inout c, st: inout st, argExpr: args[ai].expr, p: mf.params[ai]))
+        ai += 1
+    }
+    mut val di: U64 = args.count
+    while di < mf.params.count {
+        av.append(value: genArgValue(c: inout c, st: inout st, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
+        di += 1
+    }
+    return LLVMBuildCall2(st.b, st.fnTy[slot], st.fnVal[slot], arrayCPtr(av), av.count, anon())
+}
+
 fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
     // associated-function call `Type.name(args)` (the receiver is a type name, not
     // a value): dispatch to the assoc fn (no self argument).
@@ -5301,6 +5374,11 @@ fn scanExprAssoc(c: inout Comp, st: inout LlvmCtx, id: U64) {
             } else {
                 scanExprAssoc(c: inout c, st: inout st, id: recv)
             }
+            mut val i: U64 = 0
+            while i < args.count { scanExprAssoc(c: inout c, st: inout st, id: args[i].expr) i += 1 }
+        }
+        Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+            scanExprAssoc(c: inout c, st: inout st, id: recv)
             mut val i: U64 = 0
             while i < args.count { scanExprAssoc(c: inout c, st: inout st, id: args[i].expr) i += 1 }
         }
@@ -6207,6 +6285,11 @@ fn scanExprClosures(c: inout Comp, st: inout LlvmCtx, id: U64) {
             while i < args.count { scanExprClosures(c: inout c, st: inout st, id: args[i].expr) i += 1 }
         }
         Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
+            scanExprClosures(c: inout c, st: inout st, id: recv)
+            mut val i: U64 = 0
+            while i < args.count { scanExprClosures(c: inout c, st: inout st, id: args[i].expr) i += 1 }
+        }
+        Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
             scanExprClosures(c: inout c, st: inout st, id: recv)
             mut val i: U64 = 0
             while i < args.count { scanExprClosures(c: inout c, st: inout st, id: args[i].expr) i += 1 }
