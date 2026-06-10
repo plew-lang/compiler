@@ -132,6 +132,55 @@ pub impl Iterator {
     fn filter(p: fn(x: Item) -> Bool) -> FilterIter[Self, fn(x: Item) -> Bool, Item] {
         return <FilterIter[Self, fn(x: Item) -> Bool, Item] inner=self p=p />
     }
+    // Terminal combinators (spec/08): they consume the iterator (drive `next()` to
+    // exhaustion) rather than building an adapter. `self` is copied into a mutable
+    // local so the protocol's `inout next()` can advance it.
+    fn count() -> U64 {
+        mut val it = self
+        mut val n: U64 = 0U64
+        mut val go: Bool = true
+        while go {
+            match it.next() {
+                Optional.Some(val v) => { n = n + 1U64 }
+                Optional.None => { go = false }
+            }
+        }
+        return n
+    }
+    fn fold[B](init: B, combine: fn(acc: B, x: Item) -> B) -> B {
+        mut val it = self
+        mut val acc: B = init
+        mut val go: Bool = true
+        while go {
+            match it.next() {
+                Optional.Some(val v) => { acc = combine(acc: acc, x: v) }
+                Optional.None => { go = false }
+            }
+        }
+        return acc
+    }
+    fn any(p: fn(x: Item) -> Bool) -> Bool {
+        mut val it = self
+        mut val go: Bool = true
+        while go {
+            match it.next() {
+                Optional.Some(val v) => { if p(x: v) { return true } }
+                Optional.None => { go = false }
+            }
+        }
+        return false
+    }
+    fn all(p: fn(x: Item) -> Bool) -> Bool {
+        mut val it = self
+        mut val go: Bool = true
+        while go {
+            match it.next() {
+                Optional.Some(val v) => { if p(x: v) { } else { return false } }
+                Optional.None => { go = false }
+            }
+        }
+        return true
+    }
 }
 
 // The result of a fallible operation: `Ok` holds a `T`, `Err` holds an `E`.

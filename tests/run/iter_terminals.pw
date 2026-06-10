@@ -1,0 +1,26 @@
+import @Std/Io with { print }
+
+// Terminal Iterator combinators (spec/08): count / fold / any / all consume an
+// iterator by driving `next()` to exhaustion. Shown on a direct (concrete)
+// iterator; chaining a terminal onto a lazy map/filter adapter is a separate
+// provided-method-on-generic-receiver gap (see provisional).
+struct UpTo { pub mut val cur: U64  pub val n: U64 }
+pub impl UpTo as Iterator {
+    type Item = U64
+    inout fn next() -> Optional[U64] {
+        if self.cur < self.n {
+            self.cur = self.cur + 1U64
+            return <Optional.Some v=self.cur />
+        }
+        return <Optional.None />
+    }
+}
+
+fn main() {
+    print(<UpTo cur=0 n=5 />.count())                                                         // 5
+    print(<UpTo cur=0 n=5 />.fold(init: 0U64, combine: fn(acc: U64, x: U64) -> U64 { return acc + x }))  // 15
+    print(<UpTo cur=0 n=5 />.any(p: fn(x: U64) -> Bool { return x == 3U64 }))                 // 1
+    print(<UpTo cur=0 n=5 />.any(p: fn(x: U64) -> Bool { return x == 9U64 }))                 // 0
+    print(<UpTo cur=0 n=5 />.all(p: fn(x: U64) -> Bool { return x > 0U64 }))                  // 1
+    print(<UpTo cur=0 n=5 />.all(p: fn(x: U64) -> Bool { return x > 2U64 }))                  // 0
+}
