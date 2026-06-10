@@ -1,0 +1,11 @@
+import @Std/Io with { print }
+// A plain value cannot be passed where a `#Ext` view is required (spec/09):
+// `A` and `A#Ext` are distinct types with no implicit cast. Must apply the view
+// explicitly at the call (`useIt(x: p#Ext)`).
+struct P { val n: I64 }
+extension Ext { pub impl P { fn greet() -> I64 { return self.n + 1I64 } } }
+fn useIt(x: P#Ext) -> I64 { return x.greet() }
+fn main() {
+    val p: P = <P n=4 />
+    print(useIt(x: p))
+}

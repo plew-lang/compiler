@@ -5310,6 +5310,17 @@ fn placePtrOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
 // parameter's element type (so `[10,20]` for an `Array[I32]` param uses i32, not
 // i64-defaulted elements); a scalar arg is width-coerced to the parameter type.
 fn genArgValue(c: inout Comp, st: inout LlvmCtx, argExpr: U64, p: Param) -> LLVMValueRef {
+    // extension-view invariance (spec/09): `A` and `A#Ext` are distinct types with
+    // no implicit cast either way, so an argument's view must match the parameter's
+    // declared view exactly — the view is applied/dropped explicitly at the call
+    // (`value#Ext` / `value#!Ext`). Plain code (no views) has both sides 0.
+    mut val pView: U64 = 0
+    if p.ty != 0U64 {
+        pView = c.types[p.ty].viewExtId
+    }
+    if pView != exprViewExtId(c: inout c, st: inout st, id: argExpr) {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: argExpr)), msg: "extension view mismatch: a plain type and its `#Ext` view are distinct — apply or drop the view explicitly at the call (`value#Ext` / `value#!Ext`)")
+    }
     if p.isInout {
         // pass the caller's place address (the callee mutates in place).
         return placePtrOf(c: inout c, st: inout st, id: argExpr)
