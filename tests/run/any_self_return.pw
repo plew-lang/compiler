@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+
+// Self-return re-erasure through `any P` (spec/08): a `-> Self` member IS callable
+// through the existential — the output `Self` is re-erased back to `any P` (the
+// thunk re-boxes the witness's concrete result into the same existential), so
+// `a.dup()` on `any Dup` yields another `any Dup`.
+trait Dup { fn dup() -> Self  fn val() -> I64 }
+struct N { val n: I64 }
+struct M { val m: I64 }
+pub impl N as Dup { fn dup() -> Self { return self }  fn val() -> I64 { return self.n } }
+pub impl M as Dup { fn dup() -> Self { return self }  fn val() -> I64 { return self.m * 10I64 } }
+
+fn main() {
+    val a: any Dup = <N n=7 />
+    val b: any Dup = a.dup()
+    print(b.val())          // 7
+    val c: any Dup = <M m=3 />
+    print(c.dup().val())    // 30
+}

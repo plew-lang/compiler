@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+
+// A method returning bare `Self` resolves to the receiver type (`fn dup() -> Self`
+// on N returns N). The Self type env is set while emitting a non-generic method so
+// `-> Self` / a `Self` param / `return self` ground.
+trait Dup { fn dup() -> Self }
+struct N { pub val n: I64 }
+pub impl N as Dup { fn dup() -> Self { return self } }
+
+fn main() {
+    val a: N = <N n=5 />
+    val b: N = a.dup()
+    print(b.n)        // 5
+}

@@ -1806,6 +1806,11 @@ fn anyMethodRetRef(c: inout Comp, anyRef: U64, traitIdx: U64, nameStart: U64, na
     } else {
         return 0U64
     }
+    // a `-> Self` requirement re-erases to the existential itself (`fn dup() -> Self`
+    // on `any P` returns `any P`).
+    if reqReturnsSelf(c: inout c, req: req) {
+        return anyRef
+    }
     if req.retTy == 0U64 {
         return 0U64
     }
@@ -6073,6 +6078,13 @@ fn paramLlvmTy(c: inout Comp, st: inout LlvmCtx, p: Param) -> LLVMTypeRef {
     if p.isInout {
         return st.ptrty
     }
+    // a `Self`-typed param resolves to the receiver type (Self env set during method
+    // emission).
+    if c.curSelfRef != 0U64 {
+        if rangeEquals(bytes: c.bytes, start: p.tyStart, len: p.tyLen, kw: "Self") {
+            return llvmTypeOfRef(c: inout c, st: inout st, ref: c.curSelfRef)
+        }
+    }
     // an existential `any P` param: the fat pointer (spec/08).
     if refIsAny(c: inout c, ref: p.ty) {
         return st.anyTy
@@ -6100,6 +6112,13 @@ fn selfParamTy(c: inout Comp, st: inout LlvmCtx, f: Func) -> LLVMTypeRef {
 // The LLVM return type of a function (and whether it is void = Plew `()`).
 fn llvmFnRetTy(c: inout Comp, st: inout LlvmCtx, f: Func) -> LLVMTypeRef {
     if f.hasRet {
+        // a `-> Self` return resolves to the receiver type (the Self env is set while
+        // emitting a method): `fn dup() -> Self` on N returns N.
+        if c.curSelfRef != 0U64 {
+            if rangeEquals(bytes: c.bytes, start: f.retStart, len: f.retLen, kw: "Self") {
+                return llvmTypeOfRef(c: inout c, st: inout st, ref: c.curSelfRef)
+            }
+        }
         // an existential `any P` return: the fat pointer (spec/08).
         if refIsAny(c: inout c, ref: f.retTy) {
             return st.anyTy
@@ -6125,6 +6144,12 @@ fn declareUserFns(c: inout Comp, st: inout LlvmCtx) {
     while fi < c.funcs.count {
         val f: Func = c.funcs[fi]
         if isPlainUserFn(c: inout c, st: inout st, fi: fi) {
+            // a plain method's `Self` (in `-> Self` / a `Self` param) resolves to the
+            // receiver type; set the Self env so the signature types ground.
+            val didSelf: Bool = f.hasRecv
+            if didSelf {
+                setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
+            }
             mut val ptys: Array[LLVMTypeRef] = []
             if f.hasRecv {
                 ptys.append(value: selfParamTy(c: inout c, st: inout st, f: f))
@@ -6135,6 +6160,9 @@ fn declareUserFns(c: inout Comp, st: inout LlvmCtx) {
                 pi += 1
             }
             val rty: LLVMTypeRef = llvmFnRetTy(c: inout c, st: inout st, f: f)
+            if didSelf {
+                clearSelfItemEnv(c: inout c)
+            }
             val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
             mut val nm: Array[U8] = []
             appendBytes(into: inout nm, from: "pf".bytes)
@@ -7201,21 +7229,27 @@ fn findWitnessFor(c: inout Comp, sidx: U64, req: Func) -> U64 {
     return c.funcs.count
 }
 
-// Does requirement `req` mention `Self` in a non-receiver input or in its return
-// (so it is NOT callable through `any` in this increment — spec/08 allows only
-// self-output-only members, and even those are deferred when they RETURN Self)?
-fn reqUsesSelfOutsideRecv(c: inout Comp, req: Func) -> Bool {
-    if req.hasRet {
-        if rangeEquals(bytes: c.bytes, start: req.retStart, len: req.retLen, kw: "Self") {
-            return true
-        }
-    }
+// Does requirement `req` mention `Self` in a non-receiver INPUT position (a param)?
+// Such a member is NOT callable through `any` (spec/08: two `any P` values need not
+// share a concrete type, so a `Self` argument cannot be supplied).
+fn reqUsesSelfInInput(c: inout Comp, req: Func) -> Bool {
     mut val i: U64 = 0
     while i < req.params.count {
         if rangeEquals(bytes: c.bytes, start: req.params[i].tyStart, len: req.params[i].tyLen, kw: "Self") {
             return true
         }
         i += 1
+    }
+    return false
+}
+
+// Does requirement `req` return bare `Self`? Such a member IS callable through `any`
+// (spec/08): the output `Self` is re-erased to `any P` — the thunk re-boxes the
+// witness's concrete result into the existential. (A `Self` nested in a generic
+// return like `Optional[Self]` is not handled yet.)
+fn reqReturnsSelf(c: inout Comp, req: Func) -> Bool {
+    if req.hasRet {
+        return rangeEquals(bytes: c.bytes, start: req.retStart, len: req.retLen, kw: "Self")
     }
     return false
 }
@@ -7231,9 +7265,12 @@ fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, trait
     if req.isAssoc {
         return LLVMConstNull(st.ptrty)
     }
-    if reqUsesSelfOutsideRecv(c: inout c, req: req) {
+    if reqUsesSelfInInput(c: inout c, req: req) {
         return LLVMConstNull(st.ptrty)
     }
+    // a `-> Self` requirement: the thunk re-erases the witness's concrete result back
+    // into the existential (the slot's signature returns the fat pointer).
+    val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)
     val wfi: U64 = findWitnessFor(c: inout c, sidx: sidx, req: req)
     if wfi < c.funcs.count {
     } else {
@@ -7271,10 +7308,14 @@ fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, trait
         ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: req.params[pi]))
         pi += 1
     }
-    val rty: LLVMTypeRef = llvmFnRetTy(c: inout c, st: inout st, f: req)
+    mut val rty: LLVMTypeRef = llvmFnRetTy(c: inout c, st: inout st, f: req)
     if haveEnv {
         c.curTypeParams = savedEP
         c.curTypeArgs = savedEA
+    }
+    // a `-> Self` thunk returns the existential fat pointer (the re-erased result).
+    if retsSelf {
+        rty = st.anyTy
     }
     val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
     mut val nm: Array[U8] = []
@@ -7306,7 +7347,13 @@ fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, trait
     }
     val r: LLVMValueRef = LLVMBuildCall2(st.b, st.fnTy[wslot], st.fnVal[wslot], arrayCPtr(av), av.count, anon())
     if req.hasRet {
-        LLVMBuildRet(st.b, r)
+        if retsSelf {
+            // re-erase: box the witness's concrete result (the same concrete type as
+            // the boxed self) back into `any P` with this existential's vtable.
+            LLVMBuildRet(st.b, boxIntoAny(c: inout c, st: inout st, v: r, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx))
+        } else {
+            LLVMBuildRet(st.b, r)
+        }
     } else {
         LLVMBuildRetVoid(st.b)
     }
@@ -7332,15 +7379,11 @@ fn ensureAnyVtable(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, tra
         ci += 1
     }
     val t: TraitDef = c.traits[traitIdx]
-    mut val slots: Array[LLVMValueRef] = []
-    slots.append(value: LLVMConstNull(st.ptrty))
-    mut val ri: U64 = 0
-    while ri < t.reqs.count {
-        slots.append(value: buildAnyThunk(c: inout c, st: inout st, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx, req: t.reqs[ri], idx: ri))
-        ri += 1
-    }
-    val arrTy: LLVMTypeRef = LLVMArrayType2(st.ptrty, slots.count)
-    val init: LLVMValueRef = LLVMConstArray2(st.ptrty, arrayCPtr(slots), slots.count)
+    // pre-create the global (with its final array type) and CACHE it before building
+    // thunks, so a `-> Self` re-erasure thunk that re-boxes into this same existential
+    // resolves to this vtable instead of recursing into ensureAnyVtable forever.
+    val slotCount: U64 = 1U64 + t.reqs.count
+    val arrTy: LLVMTypeRef = LLVMArrayType2(st.ptrty, slotCount)
     mut val nm: Array[U8] = []
     appendBytes(into: inout nm, from: "pfvtbl".bytes)
     appendU64Dec(into: inout nm, n: sidx)
@@ -7350,12 +7393,19 @@ fn ensureAnyVtable(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, tra
     appendU64Dec(into: inout nm, n: bindKey)
     nm.append(value: 0)
     val g: LLVMValueRef = LLVMAddGlobal(st.mod, arrTy, arrayCPtr(nm))
-    LLVMSetInitializer(g, init)
     LLVMSetGlobalConstant(g, 1I32)
     st.anyVtType.append(value: sidx)
     st.anyVtTrait.append(value: traitIdx)
     st.anyVtBindKey.append(value: bindKey)
     st.anyVtVal.append(value: g)
+    mut val slots: Array[LLVMValueRef] = []
+    slots.append(value: LLVMConstNull(st.ptrty))
+    mut val ri: U64 = 0
+    while ri < t.reqs.count {
+        slots.append(value: buildAnyThunk(c: inout c, st: inout st, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx, req: t.reqs[ri], idx: ri))
+        ri += 1
+    }
+    LLVMSetInitializer(g, LLVMConstArray2(st.ptrty, arrayCPtr(slots), slots.count))
     return g
 }
 
@@ -7443,13 +7493,14 @@ fn genLlvmAnyDispatch(c: inout Comp, st: inout LlvmCtx, recv: U64, anyRef: U64, 
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     val req: Func = c.traits[traitIdx].reqs[slot - 1U64]
-    // spec/08: a member with `Self` in a non-receiver input position (or returning
-    // `Self`) is not callable through `any` — the erased concretes need not match.
-    // Diagnosed at the call line (the type `any P` itself stays valid).
-    if reqUsesSelfOutsideRecv(c: inout c, req: req) {
-        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "this member is not callable through `any P`: `Self` appears in a non-receiver input or the return — two `any P` values need not share a concrete type (spec/08)")
+    // spec/08: a member with `Self` in a non-receiver INPUT position is not callable
+    // through `any` (the erased concretes need not match, so a `Self` argument cannot
+    // be supplied). A `-> Self` return IS callable — it is re-erased to `any P`.
+    if reqUsesSelfInInput(c: inout c, req: req) {
+        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "this member is not callable through `any P`: `Self` appears in a non-receiver input — two `any P` values need not share a concrete type (spec/08)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
+    val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)
     val fat: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: recv)
     val dataPtr: LLVMValueRef = LLVMBuildExtractValue(st.b, fat, 0U64, anon())
     val vtPtr: LLVMValueRef = LLVMBuildExtractValue(st.b, fat, 1U64, anon())
@@ -7477,10 +7528,14 @@ fn genLlvmAnyDispatch(c: inout Comp, st: inout LlvmCtx, recv: U64, anyRef: U64, 
         ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: req.params[pi]))
         pi += 1
     }
-    val rty: LLVMTypeRef = llvmFnRetTy(c: inout c, st: inout st, f: req)
+    mut val rty: LLVMTypeRef = llvmFnRetTy(c: inout c, st: inout st, f: req)
     if haveEnv {
         c.curTypeParams = savedEP
         c.curTypeArgs = savedEA
+    }
+    // a `-> Self` requirement's thunk returns the re-erased existential fat pointer.
+    if retsSelf {
+        rty = st.anyTy
     }
     val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
     mut val av: Array[LLVMValueRef] = []
@@ -7505,6 +7560,13 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
     st.curFn = fv
     st.curIsMain = false
     st.curRetVoid = !f.hasRet
+    // a plain method's `Self` resolves to the receiver type, so `-> Self` / a `Self`
+    // param / `return self` ground (the generic-method path sets this via its
+    // instantiation elsewhere; here it covers a non-generic method on a plain type).
+    val didSelf: Bool = f.hasRecv && st.curRecvInstRef == 0U64 && c.curSelfRef == 0U64
+    if didSelf {
+        setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
+    }
     st.curRetTy = llvmFnRetTy(c: inout c, st: inout st, f: f)
     st.curRetTyStart = f.retStart
     st.curRetTyLen = f.retLen
@@ -7610,6 +7672,9 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
         } else {
             LLVMBuildUnreachable(st.b)
         }
+    }
+    if didSelf {
+        clearSelfItemEnv(c: inout c)
     }
 }
 
