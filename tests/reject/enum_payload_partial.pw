@@ -1,0 +1,9 @@
+// A variant payload destructure that binds any field must bind or discard EVERY
+// field (spec/05,11) — `E.Pair(val a)` silently dropped `b` before. (A bare tag
+// match `E.V =>` with no payload binding is still allowed.)
+import @Std/Io with { print }
+enum E { Pair(a: I64, b: I64) Z }
+fn main() {
+    val e: E = <E.Pair a=1 b=2 />
+    match e { E.Pair(val a) => { print(a) } E.Z => { print(0I64) } }
+}

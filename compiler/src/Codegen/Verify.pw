@@ -315,7 +315,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             verifyExpr(c: inout c, id: recv)
             verifyArgs(c: inout c, args: args)
         }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
             verifyExpr(c: inout c, id: recv)
         }
         Expr.Call(nameStart: _, nameLen: _, val args) => {
@@ -443,23 +443,43 @@ fn bindsCoverField(c: inout Comp, binds: Array[Bind], fieldStart: U64, fieldLen:
 // (`Box[I32] { … }`) resolve fields via the generic def.
 fn checkDestructureComplete(c: inout Comp, a: MatchArm) {
     if a.isStruct {
-    } else {
+        mut val si: U64 = structIndexByName(c: inout c, start: a.enumStart, len: a.enumLen)
+        if si < c.structs.count {
+        } else {
+            si = genericStructIndex(c: inout c, nameStart: a.enumStart, nameLen: a.enumLen)
+        }
+        if si < c.structs.count {
+            val sd: StructDef = c.structs[si]
+            mut val fi: U64 = 0
+            while fi < sd.fields.count {
+                if bindsCoverField(c: inout c, binds: a.binds, fieldStart: sd.fields[fi].nameStart, fieldLen: sd.fields[fi].nameLen) {
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: a.enumStart), msg: "struct destructure must bind or discard every field (a field is missing — bind it or use `field: _`; `..` is not allowed)")
+                }
+                fi += 1
+            }
+        }
         return
     }
-    mut val si: U64 = structIndexByName(c: inout c, start: a.enumStart, len: a.enumLen)
-    if si < c.structs.count {
-    } else {
-        si = genericStructIndex(c: inout c, nameStart: a.enumStart, nameLen: a.enumLen)
+    // an enum payload destructure `E.V(val a, b: _)`: when the arm binds ANY payload
+    // field it must cover EVERY field of the variant (bind or discard) — spec/05,11. A
+    // bare tag match `E.V =>` (no binds) matches only the tag and is left alone.
+    if a.binds.count == 0U64 {
+        return
     }
-    if si < c.structs.count {
-        val sd: StructDef = c.structs[si]
-        mut val fi: U64 = 0
-        while fi < sd.fields.count {
-            if bindsCoverField(c: inout c, binds: a.binds, fieldStart: sd.fields[fi].nameStart, fieldLen: sd.fields[fi].nameLen) {
-            } else {
-                compileErrorAt(line: lineOf(c: inout c, offset: a.enumStart), msg: "struct destructure must bind or discard every field (a field is missing — bind it or use `field: _`; `..` is not allowed)")
+    val ei: U64 = enumIdxByName(c: inout c, start: a.enumStart, len: a.enumLen)
+    if ei < c.enums.count {
+        val vi: U64 = variantIndex(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen)
+        if vi < c.enums[ei].variants.count {
+            val fs: Array[FieldDef] = c.enums[ei].variants[vi].fields
+            mut val fi: U64 = 0
+            while fi < fs.count {
+                if bindsCoverField(c: inout c, binds: a.binds, fieldStart: fs[fi].nameStart, fieldLen: fs[fi].nameLen) {
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: a.binds[0].offset), msg: "variant payload destructure must bind or discard every field (a field is missing — bind it or use `field: _`); or match only the tag with a bare `E.V =>`")
+                }
+                fi += 1
             }
-            fi += 1
         }
     }
 }

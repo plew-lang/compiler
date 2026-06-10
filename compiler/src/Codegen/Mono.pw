@@ -1715,7 +1715,7 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
                 i += 1
             }
         }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
             scanExprInsts(c: inout c, exprId: recv)
         }
         Expr.Method(val recv, val nameStart, val nameLen, val args) => {

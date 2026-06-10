@@ -1514,7 +1514,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             return scalarInfo()
         }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
             // a value re-view has the same value/type as recv (the view only steers
             // method resolution, handled at the dispatch site).
             return exprType(c: inout c, id: recv)

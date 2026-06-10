@@ -1544,7 +1544,7 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 }
             }
         }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
             // a value re-view has recv's struct (the view is zero-cost).
             return exprStructIdx(c: inout c, st: inout st, id: recv)
         }
@@ -2390,7 +2390,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 }
             }
         }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
             return valueKind(c: inout c, st: inout st, id: recv)
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
@@ -3532,7 +3532,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
         Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
             return genLlvmExtMethod(c: inout c, st: inout st, recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
         }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
             // a value re-view is zero-cost: the value is unchanged (the view only
             // affects static method resolution, handled at the dispatch site).
             return genLlvmExpr(c: inout c, st: inout st, id: recv)
@@ -4024,7 +4024,7 @@ fn exprLlvmType(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
             }
             return st.i64ty
         }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
             return exprLlvmType(c: inout c, st: inout st, id: recv)
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
@@ -6076,7 +6076,7 @@ fn scanExprAssoc(c: inout Comp, st: inout LlvmCtx, id: U64) {
             mut val i: U64 = 0
             while i < args.count { scanExprAssoc(c: inout c, st: inout st, id: args[i].expr) i += 1 }
         }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
             scanExprAssoc(c: inout c, st: inout st, id: recv)
         }
         Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { scanExprAssoc(c: inout c, st: inout st, id: operand) }
@@ -7048,7 +7048,7 @@ fn scanExprClosures(c: inout Comp, st: inout LlvmCtx, id: U64) {
             mut val i: U64 = 0
             while i < args.count { scanExprClosures(c: inout c, st: inout st, id: args[i].expr) i += 1 }
         }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
             scanExprClosures(c: inout c, st: inout st, id: recv)
         }
         Expr.Field(val base, nameStart: _, nameLen: _) => { scanExprClosures(c: inout c, st: inout st, id: base) }

@@ -1,0 +1,22 @@
+import @Std/Io with { print }
+
+// Variant payload destructure forms (spec/05,11): full bind, `field: _` discard,
+// and a bare tag match (no payload binding) all accepted.
+enum E { Pair(a: I64, b: I64) Z }
+
+fn main() {
+    val e: E = <E.Pair a=10 b=20 />
+    match e {
+        E.Pair(val a, val b) => { print(a + b) }   // 30 — full
+        E.Z => { print(0I64) }
+    }
+    match e {
+        E.Pair(val a, b: _) => { print(a) }        // 10 — discard b
+        E.Z => { print(0I64) }
+    }
+    val o: Optional[I64] = <Optional.Some v=7I64 />
+    match o {
+        Optional.Some => { print(99I64) }          // 99 — bare tag, payload ignored
+        Optional.None => { print(0I64) }
+    }
+}

@@ -326,7 +326,7 @@ fn exprOffset(c: inout Comp, id: U64) -> U64 {
         Expr.Call(val nameStart, val nameLen, val args) => { return nameStart }
         Expr.Method(val recv, val nameStart, val nameLen, val args) => { return nameStart }
         Expr.ExtMethod(val recv, srcStart: _, srcLen: _, val nameStart, nameLen: _, args: _) => { return nameStart }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _) => { return exprOffset(c: inout c, id: recv) }
+        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => { return exprOffset(c: inout c, id: recv) }
         Expr.Field(val base, val nameStart, val nameLen) => { return exprOffset(c: inout c, id: base) }
         Expr.Index(val base, val index) => { return exprOffset(c: inout c, id: base) }
         Expr.Binary(val op, val lhs, val rhs) => { return exprOffset(c: inout c, id: lhs) }
