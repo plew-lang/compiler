@@ -1006,6 +1006,32 @@ fn resolveTraitDef(c: inout Comp, cf: Conform) -> U64 {
     return firstCandidate
 }
 
+// Existential formation (spec/08): `any P` requires P's type arguments and
+// associated types to all be bound (`any Iterator[Item=I32]`, `any Add[I32,
+// Output=I32]`), so the only thing still erased is `Self`. The binding syntax
+// (`[Item=…]`) and the substitution into vtable thunks are a later increment, so
+// for now `any` is supported only over a trait with no type parameters and no
+// associated types; a parameterized/associated trait is loud-rejected here rather
+// than silently dispatching with an unbound parameter.
+fn checkAnyFormation(c: inout Comp) {
+    mut val ti: U64 = 0
+    while ti < c.types.count {
+        val t: TypeRef = c.types[ti]
+        if t.isAny {
+            val tri: U64 = findTraitIdxByName(c: inout c, start: t.nameStart, len: t.nameLen)
+            if tri < c.traits.count {
+                val tr: TraitDef = c.traits[tri]
+                if tr.typeParams.count > 0U64 || tr.assocTypes.count > 0U64 {
+                    compileErrorAt(line: lineOf(c: inout c, offset: t.nameStart), msg: "`any` over a trait with type arguments or associated types is not yet supported (spec/08 requires all bound; the binding + thunk substitution is a later increment)")
+                }
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: t.nameStart), msg: "`any P` names an unknown trait — `any` exists only over a trait (spec/08)")
+            }
+        }
+        ti += 1
+    }
+}
+
 fn checkConformances(c: inout Comp) {
     mut val ci: U64 = 0
     while ci < c.conforms.count {

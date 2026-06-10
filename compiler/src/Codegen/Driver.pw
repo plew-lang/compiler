@@ -226,6 +226,9 @@ fn runFrontend() -> Comp {
     // trait conformance is explicit and complete (spec/08): every requirement of
     // each `impl Type as Trait` must be witnessed (a body method or a `via` alias).
     checkConformances(c: inout c)
+    // existential formation (spec/08): `any P` is supported only over a trait with
+    // no type args / associated types in this increment (else loud-reject).
+    checkAnyFormation(c: inout c)
     // additional spec-fidelity checks (trait/generics audit): reject a generic vs
     // another same-selector overload, methods on built-in types, and `move fn` on
     // a copyable receiver.
