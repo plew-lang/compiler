@@ -1,0 +1,25 @@
+import @Std/Io with { print }
+
+// `any P` as a struct field (spec/08 lists fields among the valid positions): the
+// concrete value is boxed into the existential on construction, and a read +
+// dynamic dispatch goes through the field's fat pointer. Reassigning a `mut val`
+// existential local re-boxes the new concrete.
+trait Drawable { fn draw() -> I64 }
+struct Circle { val r: I64 }
+struct Square { val s: I64 }
+pub impl Circle as Drawable { fn draw() -> I64 { return self.r * 2I64 } }
+pub impl Square as Drawable { fn draw() -> I64 { return self.s + 100I64 } }
+
+struct Wrapper { pub val inner: any Drawable }
+
+fn main() {
+    val c: Circle = <Circle r=6 />
+    val w: Wrapper = <Wrapper inner=c />
+    print(w.inner.draw())        // 12
+
+    val sq: Square = <Square s=3 />
+    mut val d: any Drawable = c
+    print(d.draw())              // 12
+    d = sq
+    print(d.draw())              // 103
+}

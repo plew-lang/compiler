@@ -599,7 +599,7 @@ fn registerStructBodies(c: inout Comp, st: inout LlvmCtx) {
             if fieldIsBoxed(c: inout c, f: sd.fields[fi]) {
                 elems.append(value: st.ptrty)
             } else {
-                elems.append(value: llvmTypeFor(c: inout c, st: inout st, tyStart: sd.fields[fi].tyStart, tyLen: sd.fields[fi].tyLen, isArray: sd.fields[fi].tyIsArray))
+                elems.append(value: fieldLlvmTy(c: inout c, st: inout st, fd: sd.fields[fi]))
             }
             fi += 1
         }
@@ -1027,7 +1027,7 @@ fn registerGenStructs(c: inout Comp, st: inout LlvmCtx) {
         mut val elems: Array[LLVMTypeRef] = []
         mut val fi: U64 = 0
         while fi < sd.fields.count {
-            elems.append(value: llvmTypeFor(c: inout c, st: inout st, tyStart: sd.fields[fi].tyStart, tyLen: sd.fields[fi].tyLen, isArray: sd.fields[fi].tyIsArray))
+            elems.append(value: fieldLlvmTy(c: inout c, st: inout st, fd: sd.fields[fi]))
             fi += 1
         }
         LLVMStructSetBody(st.genStructTys[s], arrayCPtr(elems), sd.fields.count, 0I32)
@@ -1138,6 +1138,11 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                     }
                     if g != 0U64 {
                         if isGenericInst(c: inout c, ref: g) {
+                            return g
+                        }
+                        // an existential `any P` field: yield its TypeRef so a bare
+                        // `base.field.m()` dispatches dynamically (spec/08).
+                        if refIsAny(c: inout c, ref: g) {
                             return g
                         }
                     }
@@ -1632,6 +1637,15 @@ fn llvmTypeFor(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64, isArr
         return st.arrayTy
     }
     return llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen)
+}
+
+// The LLVM type of a struct field, honoring an existential `any P` field (the fat
+// pointer) which the span-keyed llvmTypeFor can't see; else the span-based type.
+fn fieldLlvmTy(c: inout Comp, st: inout LlvmCtx, fd: FieldDef) -> LLVMTypeRef {
+    if refIsAny(c: inout c, ref: fd.ty) {
+        return st.anyTy
+    }
+    return llvmTypeFor(c: inout c, st: inout st, tyStart: fd.tyStart, tyLen: fd.tyLen, isArray: fd.tyIsArray)
 }
 
 // The LLVM type of a structured TypeRef: a generic struct/enum instance resolves
@@ -3704,7 +3718,7 @@ fn exprLlvmType(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
             if sidx < c.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
                 if fidx < c.structs[sidx].fields.count {
-                    return llvmScalarTy(c: inout c, st: inout st, tyStart: c.structs[sidx].fields[fidx].tyStart, tyLen: c.structs[sidx].fields[fidx].tyLen)
+                    return fieldLlvmTy(c: inout c, st: inout st, fd: c.structs[sidx].fields[fidx])
                 }
             }
             return st.i64ty
@@ -3971,6 +3985,12 @@ fn genFieldValue(c: inout Comp, st: inout LlvmCtx, valExpr: U64, fld: FieldDef) 
             av = copyArrayValue(c: inout c, st: inout st, arrVal: av, elemTy: llvmScalarTy(c: inout c, st: inout st, tyStart: fld.tyStart, tyLen: fld.tyLen))
         }
         return av
+    }
+    // an existential `any P` field (spec/08): box a concrete conforming initializer.
+    mut val fldBoxed: Bool = false
+    val fldAny: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: fld.ty, valueExpr: valExpr, outBoxed: inout fldBoxed)
+    if fldBoxed {
+        return fldAny
     }
     // a boxed (recursive) struct field: build the value, heap-allocate a cell, store
     // it, and put the cell pointer in the struct (leaky, like Ref — no free yet).
@@ -7681,6 +7701,18 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                 Expr.Ident(val start, val len) => {
                     val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
                     if li < st.nLocals {
+                        // an existential `any P` local: box a concrete conforming RHS
+                        // into the fat pointer before the store (spec/08).
+                        if refIsAny(c: inout c, ref: st.locTypeRef[li]) {
+                            mut val ab: Bool = false
+                            mut val arv: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: st.locTypeRef[li], valueExpr: value, outBoxed: inout ab)
+                            if ab {
+                            } else {
+                                arv = genLlvmExpr(c: inout c, st: inout st, id: value)
+                            }
+                            LLVMBuildStore(st.b, arv, st.locPtr[li])
+                            return
+                        }
                         mut val rv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
                         // coerce the value to the local's width (a context-less
                         // literal may default wider/narrower).
