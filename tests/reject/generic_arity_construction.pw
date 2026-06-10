@@ -1,0 +1,9 @@
+// A generic type's construction must supply exactly as many type arguments as the
+// type has parameters (spec/06): `<Box[I64, I64] …/>` for a `Box[T]` was silently
+// accepted (the extra arg dropped) — now a loud reject.
+import @Std/Io with { print }
+struct Box[T] { pub val v: T }
+fn main() {
+    val b: Box[I64, I64] = <Box[I64, I64] v=1I64 />
+    print(b.v)
+}

@@ -321,7 +321,31 @@ fn verifyExpr(c: inout Comp, id: U64) {
         Expr.Call(nameStart: _, nameLen: _, val args) => {
             verifyArgs(c: inout c, args: args)
         }
-        Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+        Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, isEnum: _, val ty, val fields) => {
+            // generic arity: a generic type's construction must supply exactly as many
+            // type arguments as the type has parameters (`<Box[I64, I64] …/>` for a
+            // `Box[T]` was silently accepted, dropping the extra) — spec/06.
+            if ty != 0U64 {
+                val tr: TypeRef = c.types[ty]
+                if tr.args.count > 0U64 {
+                    mut val tpCount: U64 = c.structs.count + c.enums.count + 1U64
+                    val gsi: U64 = genericStructIndex(c: inout c, nameStart: typeStart, nameLen: typeLen)
+                    if gsi < c.structs.count {
+                        tpCount = c.structs[gsi].typeParams.count
+                    } else {
+                        val gei: U64 = genericEnumIndex(c: inout c, nameStart: typeStart, nameLen: typeLen)
+                        if gei < c.enums.count {
+                            tpCount = c.enums[gei].typeParams.count
+                        }
+                    }
+                    if tpCount <= c.structs.count + c.enums.count {
+                        if tr.args.count == tpCount {
+                        } else {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "wrong number of type arguments for this generic type")
+                        }
+                    }
+                }
+            }
             mut val i: U64 = 0
             while i < fields.count {
                 verifyExpr(c: inout c, id: fields[i].value)
