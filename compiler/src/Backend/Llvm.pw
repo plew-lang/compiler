@@ -1705,6 +1705,18 @@ fn exprResultRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 return g
             }
         }
+        Expr.Method(val recv, val nameStart, val nameLen, args: val margs) => {
+            // a binding to a method call that yields a generic instance (`val it =
+            // xs.map(f)` -> a MapIter adapter; `val o = d.get(k)` -> Optional[V]): the
+            // lazy-adapter instance, else the grounded generic return — so `it`'s type
+            // is tracked and a later `it.count()` / `it.next()` dispatches. Mirrors the
+            // exprTypeRef Method arm (the let-binding tref recovery routes through here).
+            val adp: U64 = adapterCallResultInst(c: inout c, st: inout st, recv: recv, nameStart: nameStart, nameLen: nameLen)
+            if adp != 0U64 {
+                return adp
+            }
+            return methodResultRef(c: inout c, st: inout st, recv: recv, nameStart: nameStart, nameLen: nameLen, margs: margs)
+        }
         _ => {}
     }
     return 0U64

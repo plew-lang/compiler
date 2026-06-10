@@ -1,0 +1,16 @@
+import @Std/Io with { print }
+
+// Binding an un-annotated method-call result whose type is a generic instance
+// (`val o = d.get(k)` -> Optional[V]) tracks the instance type, so a later
+// `match`/method on the binding resolves. (exprResultRef recovers a method call's
+// grounded generic return, mirroring the inline-receiver path.)
+fn main() {
+    val d: Dictionary[String, I64] = ["a": 1I64, "b": 2I64]
+    val o = d.get(key: "b")
+    match o {
+        Optional.Some(val v) => { print(v) }   // 2
+        Optional.None => { print(0I64) }
+    }
+    val miss = d.get(key: "z")
+    print(miss.unwrapOr(fallback: 99I64))      // 99
+}
