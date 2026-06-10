@@ -299,4 +299,9 @@ export enum TopItemAst {
     Export(inner: TopItemAst)
     ReExport(pathSpan: Span)
     Directive(dir: DirectiveAst)
+    // a module-level variable (spec/15): `val x = e` / `mut val x = e`. The payload
+    // is the same `StmtAst.Let` the local-binding parser produces (name / optional
+    // type / initializer); the frontend lowers it to a `Comp.globals` entry and the
+    // backend emits an LLVM global initialized once before `main` runs.
+    GlobalVal(s: StmtAst)
 }

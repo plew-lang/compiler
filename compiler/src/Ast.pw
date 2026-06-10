@@ -616,6 +616,18 @@ struct Func {
     pub val srcTraitId: U64 = 0
 }
 
+// A module-level variable (spec/15): `val x = e` / `mut val x = e`. `letStmt` is
+// the arena `Stmt.Let` the shared parser produced (name / optional type /
+// initializer); the backend emits an LLVM global, runs every global's init once in
+// `plew_init_globals` before `main`, and seeds each global as a local at every
+// function-body entry so reads/writes resolve through the normal local machinery.
+struct Global {
+    pub val nameStart: U64
+    pub val nameLen: U64
+    pub val letStmt: U64
+    pub val mutable: Bool
+}
+
 struct Comp {
     // source bytes. `mut val` so the derive synthesizer can append synthetic
     // identifier names ("eq", "lhs", ...) and reference them by span — existing
@@ -627,6 +639,8 @@ struct Comp {
     pub mut val funcs: Array[Func]
     pub mut val structs: Array[StructDef]
     pub mut val enums: Array[EnumDef]
+    // module-level variables (spec/15), in lowering order (= initialization order).
+    pub mut val globals: Array[Global] = []
     // trait declarations, recorded conformances, and `via` method aliases
     // (spec/08). `traits`/`conforms` drive the conformance-completeness check;
     // `methodAliases` redirect a requirement name to its real witness method.

@@ -1413,6 +1413,11 @@ fn parseExportAst(p: inout P) -> TopItemAst {
         Kind.KwStruct => { return <TopItemAst.Export inner=<TopItemAst.Decl d=parseDecl(p: inout p) /> /> }
         Kind.KwUnique => { return <TopItemAst.Export inner=<TopItemAst.Decl d=parseDecl(p: inout p) /> /> }
         Kind.KwEnum => { return <TopItemAst.Export inner=<TopItemAst.Decl d=parseDecl(p: inout p) /> /> }
+        Kind.KwVal => { return <TopItemAst.Export inner=<TopItemAst.GlobalVal s=parseLetAst(p: inout p, mutable: false) /> /> }
+        Kind.KwMut => {
+            p.advance()
+            return <TopItemAst.Export inner=<TopItemAst.GlobalVal s=parseLetAst(p: inout p, mutable: true) /> />
+        }
         Kind.Ident => {
             if curIs(p: inout p, kw: "trait") {
                 return <TopItemAst.Export inner=<TopItemAst.Trait t=parseTraitDecl(p: inout p) /> />
@@ -1481,6 +1486,11 @@ export fn parseProgramAst(p: inout P) -> Array[TopItemAst] {
             Kind.KwUnique => { items.append(<TopItemAst.Decl d=parseDecl(p: inout p) />) }
             Kind.KwEnum => { items.append(<TopItemAst.Decl d=parseDecl(p: inout p) />) }
             Kind.KwExtern => { items.append(<TopItemAst.Extern e=parseExternDecl(p: inout p) />) }
+            Kind.KwVal => { items.append(<TopItemAst.GlobalVal s=parseLetAst(p: inout p, mutable: false) />) }
+            Kind.KwMut => {
+                p.advance()
+                items.append(<TopItemAst.GlobalVal s=parseLetAst(p: inout p, mutable: true) />)
+            }
             Kind.Ident => {
                 if curIs(p: inout p, kw: "import") {
                     items.append(<TopItemAst.Import imp=parseImportAst(p: inout p, isImport: true) />)

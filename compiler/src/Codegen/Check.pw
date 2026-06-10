@@ -1621,6 +1621,7 @@ fn checkGenericBodies(c: inout Comp) {
             val noParams: Array[Bind] = []
             val noArgs: Array[U64] = []
             c.locals = []
+            seedGlobalLocals(c: inout c)
             c.curHasRecv = f.hasRecv
             c.curRecvStart = f.recvStart
             c.curRecvLen = f.recvLen

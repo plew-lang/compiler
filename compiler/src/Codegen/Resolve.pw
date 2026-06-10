@@ -749,6 +749,26 @@ fn addLocalCn(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: 
     c.locals.append(<Local nameStart=nameStart nameLen=nameLen nameId=intern(c: inout c, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout c, start: tyStart, len: tyLen) isArray=isArray ty=ty isInout=isInout isMut=isMut owned=owned moved=false cnum=cnum />)
 }
 
+// Seed every module-level variable (spec/15) into the locals stack at the base of a
+// function-body walk, so the front-end (typeOf / operator-witness / visibility /
+// monomorphization) resolves a bare global reference like any local. Called after the
+// `c.locals = []` reset and BEFORE params, so a same-named param/local shadows the
+// global (resolution scans most-recent-first). `owned=false` keeps the scope-exit drop
+// machinery from treating a global as a body-local to deinit.
+fn seedGlobalLocals(c: inout Comp) {
+    mut val gi: U64 = 0
+    while gi < c.globals.count {
+        match c.stmts[c.globals[gi].letStmt] {
+            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+                val le: LetEff = inferLetType(c: inout c, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: false)
+            }
+            _ => {}
+        }
+        gi += 1
+    }
+}
+
 // --- scope frames (the ARC drop backbone) ---
 //
 // Locals live in a flat stack (`c.locals`). A lexical block owns the bindings

@@ -1656,7 +1656,12 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
             if c.curInClosure {
                 val li: U64 = localIndexByName(c: inout c, start: start, len: len)
                 if li < c.curCaptureMark {
-                    recordCapture(c: inout c, closureId: c.curClosureId, localIdx: li)
+                    // a module-level variable (spec/15) seeded at the locals base
+                    // (index < globals.count) is globally accessible — not a capture.
+                    if li < c.globals.count {
+                    } else {
+                        recordCapture(c: inout c, closureId: c.curClosureId, localIdx: li)
+                    }
                 }
             }
         }
@@ -1936,6 +1941,7 @@ fn scanGenInstMethodBodies(c: inout Comp) {
                     } else {
                         if mf.body != 0 {
                             c.locals = []
+                            seedGlobalLocals(c: inout c)
                             c.curHasRecv = true
                             c.curRecvStart = mf.recvStart
                             c.curRecvLen = mf.recvLen
@@ -1980,6 +1986,7 @@ fn collectFnInsts(c: inout Comp) {
             val noParams: Array[Bind] = []
             val noArgs: Array[U64] = []
             c.locals = []
+            seedGlobalLocals(c: inout c)
             c.curHasRecv = f.hasRecv
             c.curRecvStart = f.recvStart
             c.curRecvLen = f.recvLen
@@ -2011,6 +2018,7 @@ fn collectFnInsts(c: inout Comp) {
         val fin: FnInst = c.fnInsts[si]
         val gf: Func = c.funcs[fin.fnIdx]
         c.locals = []
+        seedGlobalLocals(c: inout c)
         // a generic *method* instance carries a receiver: set the self env (and the
         // receiver instantiation for a generic receiver) so `self`/`self.field`
         // resolve while scanning its body — without this, a derived `hash[H]` that

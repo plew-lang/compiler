@@ -86,6 +86,7 @@ fn verifyFunc(c: inout Comp, f: Func) {
     }
     c.curBranchBase = 0
     c.locals = []
+    seedGlobalLocals(c: inout c)
     mut val pi: U64 = 0
     while pi < f.params.count {
         val p: Param = f.params[pi]

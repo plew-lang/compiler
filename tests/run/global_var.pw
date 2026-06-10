@@ -1,0 +1,40 @@
+import @Std/Io with { print }
+
+// Module-level variables (spec/15): a `val` constant and a `mut val` mutable, both
+// readable everywhere and (for `mut val`) writable across functions. A later global's
+// initializer can reference an earlier one; initialization runs once before `main`.
+val base: I64 = 100I64
+val derived = base + 5I64
+mut val counter = 0I64
+val nums: Array[I64] = [1I64, 2I64, 3I64]
+
+struct Point { pub val x: I64  pub val y: I64 }
+val origin: Point = <Point x=7 y=8 />
+mut val cursor: Point = <Point x=0 y=0 />
+
+fn bump() { counter = counter + 1I64 }
+
+fn sumNums() -> I64 {
+    mut val s = 0I64
+    for val n in nums { s = s + n }
+    return s
+}
+
+fn advance() { cursor = <Point x=cursor.x + 1I64 y=cursor.y + 10I64 /> }
+
+fn main() {
+    print(base)                       // 100
+    print(derived)                    // 105
+    bump()
+    bump()
+    counter = counter + 10I64
+    print(counter)                    // 12
+    print(sumNums())                  // 6
+    print(origin.x + origin.y)        // 15
+    advance()
+    advance()
+    print(cursor.x + cursor.y)        // 22
+    // a same-named local shadows the global (spec: most-recent binding wins).
+    val base = 9I64
+    print(base)                       // 9
+}

@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+import ./Consts with { tableSize, appName }
+
+fn main() {
+    print(appName)         // plew
+    print(tableSize)       // 256
+    print(tableSize * 2I64) // 512
+}

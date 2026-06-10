@@ -1,0 +1,5 @@
+// A module-level variable (spec/15) must be initialized — like any binding, an
+// uninitialized declaration is rejected (no implicit zero / undefined state).
+import @Std/Io with { print }
+val x: I64
+fn main() { print(x) }

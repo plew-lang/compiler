@@ -1,0 +1,3 @@
+// A module-level variable (spec/15) exported across a module boundary.
+export val tableSize: I64 = 256I64
+export val appName: String = "plew"

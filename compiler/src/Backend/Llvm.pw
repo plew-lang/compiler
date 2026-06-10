@@ -280,6 +280,22 @@ struct LlvmCtx {
     // arg / `move fn` receiver / `move x`), so it is NOT deinit'd here.
     pub mut val locOwned: Array[Bool]
     pub mut val locMoved: Array[Bool]
+    // module-level variables (spec/15), parallel arrays indexed by `Comp.globals`
+    // position. `genLlvmInitGlobals` builds the LLVM global `gvalRef[i]` and records
+    // the binding's recovered local metadata (so `seedGlobals` can re-register each
+    // global as a local at every body entry, routing reads/writes/type-recovery
+    // through the normal local machinery). The init values are stored once, in
+    // declaration order, by `plew_init_globals`.
+    pub mut val gvalRef: Array[LLVMValueRef] = []
+    pub mut val gvalLty: Array[LLVMTypeRef] = []
+    pub mut val gvalKind: Array[U64] = []
+    pub mut val gvalSidx: Array[U64] = []
+    pub mut val gvalIsArr: Array[Bool] = []
+    pub mut val gvalElemTy: Array[LLVMTypeRef] = []
+    pub mut val gvalElemKind: Array[U64] = []
+    pub mut val gvalTref: Array[U64] = []
+    pub mut val gvalElemStructIdx: Array[U64] = []
+    pub mut val gvalElemTypeRef: Array[U64] = []
     // declared runtime/intrinsic functions, cached by name id (parallel arrays).
     pub mut val declId: Array[U64]
     pub mut val declFn: Array[LLVMValueRef]
@@ -7072,6 +7088,8 @@ fn emitClosures(c: inout Comp, st: inout LlvmCtx) {
     st.locMoved = []
                 st.locOwned = []
                 st.locMoved = []
+                // module-level variables (spec/15) are visible inside closures too.
+                seedGlobals(c: inout c, st: inout st)
                 // bind captures from the env pointer (param 0): each capture loads
                 // from its env slot into a fresh local, so the body's identifier
                 // accesses resolve normally. (Immutable captures are by-value; a
@@ -7734,6 +7752,9 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
     st.locElemTypeRef = []
     st.locOwned = []
     st.locMoved = []
+    // module-level variables (spec/15) are visible everywhere: seed them as locals
+    // (before self/params, so a same-named local shadows the global).
+    seedGlobals(c: inout c, st: inout st)
     // method receiver: bind `self` as a local pointing at the struct storage —
     // an `inout fn`'s self IS the pointer param; a by-value self is stored into a
     // fresh alloca (so mutations stay local). Field access then GEPs locPtr
@@ -9461,6 +9482,12 @@ fn emitLlvm(c: inout Comp) {
     // declare function-value thunks (a bare function reference -> {thunk, null}).
     collectThunks(c: inout c, st: inout st)
 
+    // module-level variables (spec/15): emit `plew_init_globals` (one body that runs
+    // every global's initializer once) and record each global's metadata, BEFORE any
+    // function body so `seedGlobals` can re-bind them at every body entry. Done after
+    // pass-1 declarations so an initializer may call a user function.
+    genLlvmInitGlobals(c: inout c, st: inout st)
+
     // pass 2: emit `main` and every plain user function's body.
     mut val fi: U64 = 0
     mut val foundMain: Bool = false
@@ -9537,6 +9564,91 @@ fn emitLlvm(c: inout Comp) {
     LLVMDisposeMessage(ir)
 }
 
+// Emit `void @plew_init_globals()` (spec/15): one body that runs each module-level
+// variable's initializer in lowering (= declaration) order and stores the result into
+// its LLVM global. Each initializer is the same `Stmt.Let` a local binding produces,
+// so we emit it through the normal statement path (which pushes a fully-typed local +
+// alloca), then copy that local's recovered value into a fresh LLVM global and record
+// its metadata in `gval*` so `seedGlobals` can re-bind it at every body entry. A later
+// global's initializer can reference an earlier one (resolved as the alloca-local just
+// pushed). Globals are program-lifetime, so they are never deinit'd (no scope-exit
+// drop here — the same leak level as a top-level array/String value).
+fn genLlvmInitGlobals(c: inout Comp, st: inout LlvmCtx) {
+    if c.globals.count == 0U64 {
+        return
+    }
+    mut val noParams: Array[LLVMTypeRef] = []
+    val fnTy: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(noParams), 0U64, 0I32)
+    val fv: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_init_globals", nameId: 9120U64, fnTy: fnTy)
+    st.curFn = fv
+    st.curIsMain = false
+    st.curRetVoid = true
+    st.curAsync = false
+    beginFnBody(st: inout st, fv: fv)
+    st.nLocals = 0
+    st.locStart = []
+    st.locLen = []
+    st.locPtr = []
+    st.locTy = []
+    st.locKind = []
+    st.locStructIdx = []
+    st.locIsArr = []
+    st.locElemTy = []
+    st.locElemKind = []
+    st.locTypeRef = []
+    st.locElemStructIdx = []
+    st.locElemTypeRef = []
+    st.locOwned = []
+    st.locMoved = []
+    mut val gi: U64 = 0
+    while gi < c.globals.count {
+        genLlvmStmt(c: inout c, st: inout st, id: c.globals[gi].letStmt)
+        val li: U64 = st.nLocals - 1U64
+        val lty: LLVMTypeRef = st.locTy[li]
+        val gv: LLVMValueRef = LLVMAddGlobal(st.mod, lty, cstr(s: globalSymbol(idx: gi)))
+        LLVMSetInitializer(gv, LLVMConstNull(lty))
+        val cur: LLVMValueRef = LLVMBuildLoad2(st.b, lty, st.locPtr[li], anon())
+        LLVMBuildStore(st.b, cur, gv)
+        st.gvalRef.append(value: gv)
+        st.gvalLty.append(value: lty)
+        st.gvalKind.append(value: st.locKind[li])
+        st.gvalSidx.append(value: st.locStructIdx[li])
+        st.gvalIsArr.append(value: st.locIsArr[li])
+        st.gvalElemTy.append(value: st.locElemTy[li])
+        st.gvalElemKind.append(value: st.locElemKind[li])
+        st.gvalTref.append(value: st.locTypeRef[li])
+        st.gvalElemStructIdx.append(value: st.locElemStructIdx[li])
+        st.gvalElemTypeRef.append(value: st.locElemTypeRef[li])
+        gi += 1
+    }
+    LLVMBuildRetVoid(st.b)
+}
+
+// A unique, stable LLVM symbol for the module-level variable at lowering index `idx`
+// ("plew.g.<idx>"), so a same-named user local never collides with the global symbol.
+fn globalSymbol(idx: U64) -> String {
+    mut val s: Array[U8] = []
+    appendBytes(into: inout s, from: "plew.g.".bytes)
+    appendU64Dec(into: inout s, n: idx)
+    return stringFromBytes(s)
+}
+
+// Re-register every module-level variable as a local pointing at its LLVM global, so
+// reads (`x`), writes (`x = …` for a `mut val` global), and all type-recovery
+// (`x.field`, `x[i]`, method dispatch) resolve through the normal local machinery
+// (findLocal). Called at the start of each function/closure/async body AFTER the local
+// reset and BEFORE params/captures — so a same-named param or local shadows the global
+// (findLocal returns the most-recently pushed match).
+fn seedGlobals(c: inout Comp, st: inout LlvmCtx) {
+    mut val gi: U64 = 0
+    while gi < st.gvalRef.count {
+        pushLocalR(st: inout st, nameStart: c.globals[gi].nameStart, nameLen: c.globals[gi].nameLen, ptr: st.gvalRef[gi], ty: st.gvalLty[gi], kind: st.gvalKind[gi], structIdx: st.gvalSidx[gi], isArr: st.gvalIsArr[gi], elemTy: st.gvalElemTy[gi], elemKind: st.gvalElemKind[gi], typeRef: st.gvalTref[gi])
+        setLocalElemStruct(st: inout st, esi: st.gvalElemStructIdx[gi])
+        setLocalElemTypeRef(st: inout st, ref: st.gvalElemTypeRef[gi])
+        gi += 1
+    }
+}
+
 // Emit the user `main` as C `i32 @main()` returning 0 (Plew main returns ()).
 fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     // `i32 main(i32 argc, ptr argv)` so the program can read its command-line args
@@ -9561,6 +9673,8 @@ fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     saArgs.append(value: LLVMGetParam(mainFn, 0U64))
     saArgs.append(value: LLVMGetParam(mainFn, 1U64))
     LLVMBuildCall2(st.b, saTy, saFn, arrayCPtr(saArgs), 2U64, anon())
+    // initialize module-level variables (spec/15) before the body runs.
+    callInitGlobals(c: inout c, st: inout st)
     // fresh local scope.
     st.nLocals = 0
     st.locStart = []
@@ -9577,11 +9691,24 @@ fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     st.locElemTypeRef = []
     st.locOwned = []
     st.locMoved = []
+    seedGlobals(c: inout c, st: inout st)
     genLlvmBlock(c: inout c, st: inout st, id: c.funcs[fi].body)
     if st.terminated {
     } else {
         LLVMBuildRet(st.b, LLVMConstInt(st.i32ty, 0U64, 0I32))
     }
+}
+
+// Emit a call to `plew_init_globals` (a no-op when there are no module-level vars).
+fn callInitGlobals(c: inout Comp, st: inout LlvmCtx) {
+    if c.globals.count == 0U64 {
+        return
+    }
+    mut val noParams: Array[LLVMTypeRef] = []
+    val igTy: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(noParams), 0U64, 0I32)
+    val igFn: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_init_globals", nameId: 9120U64, fnTy: igTy)
+    mut val noArgs: Array[LLVMValueRef] = []
+    LLVMBuildCall2(st.b, igTy, igFn, arrayCPtr(noArgs), 0U64, anon())
 }
 
 // ---- async lowering (spec/14): stackless state machine ----
@@ -10000,6 +10127,11 @@ fn genLlvmAsyncFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     val entryBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, entryFn, cstr(s: "entry"))
     LLVMPositionBuilderAtEnd(st.b, entryBB)
     st.terminated = false
+    // an `async fn main`: initialize module-level variables (spec/15) before the
+    // first resume runs (so an init referencing a global, or main reading one, sees it).
+    if isMain {
+        callInitGlobals(c: inout c, st: inout st)
+    }
     val frame: LLVMValueRef = asyncFrameAlloc(c: inout c, st: inout st, frameTy: frameTy)
     // __f->__state = 0
     LLVMBuildStore(st.b, LLVMConstInt(st.i32ty, 0U64, 0I32), LLVMBuildStructGEP2(st.b, frameTy, frame, 0U64, anon()))
@@ -10067,6 +10199,9 @@ fn genLlvmAsyncFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     st.locElemTypeRef = []
     st.locOwned = []
     st.locMoved = []
+    // module-level variables (spec/15): seed them as locals (pointing at the true
+    // LLVM globals, not frame slots) before async params bind to frame fields.
+    seedGlobals(c: inout c, st: inout st)
     mut val qi: U64 = 0
     while qi < f.params.count {
         bindAsyncParam(c: inout c, st: inout st, p: f.params[qi], fieldIdx: 3U64 + qi)

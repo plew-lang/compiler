@@ -1085,6 +1085,13 @@ fn lowerExportItem(c: inout Comp, inner: TopItemAst) {
             lowerTrait(c: inout c, t: t)
             recordExport(c: inout c, nameStart: c.traits[tB].nameStart, nameLen: c.traits[tB].nameLen)
         }
+        TopItemAst.GlobalVal(val s) => {
+            val gB: U64 = c.globals.count
+            lowerGlobalVal(c: inout c, s: s)
+            if c.globals.count > gB {
+                recordExport(c: inout c, nameStart: c.globals[gB].nameStart, nameLen: c.globals[gB].nameLen)
+            }
+        }
         _ => { lowerTopItem(c: inout c, item: inner) }
     }
 }
@@ -1103,6 +1110,21 @@ fn lowerTopItem(c: inout Comp, item: TopItemAst) {
         TopItemAst.Export(val inner) => { lowerExportItem(c: inout c, inner: inner) }
         TopItemAst.ReExport(val pathSpan) => {}
         TopItemAst.Directive(val dir) => { lowerDirective(c: inout c, dir: dir) }
+        TopItemAst.GlobalVal(val s) => { lowerGlobalVal(c: inout c, s: s) }
+    }
+}
+
+// Lower a module-level variable (spec/15). The shared parser hands us the same
+// `StmtAst.Let` a local binding produces; we lower it to an arena `Stmt.Let` (so the
+// initializer / type are arena nodes) and record a `Comp.globals` entry keyed by the
+// binding's name. The backend emits the LLVM global and its one-time init.
+fn lowerGlobalVal(c: inout Comp, s: StmtAst) {
+    val stid: U64 = lowerStmt(c: inout c, s: s)
+    match c.stmts[stid] {
+        Stmt.Let(val mutable, val nameStart, val nameLen, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => {
+            c.globals.append(<Global nameStart=nameStart nameLen=nameLen letStmt=stid mutable=mutable />)
+        }
+        _ => {}
     }
 }
 
