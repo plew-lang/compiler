@@ -1,7 +1,8 @@
 import @Std/Io with { print }
 
 // `Dictionary.get(key:) -> Optional[V]` (spec/02): the safe, non-panicking lookup
-// (vs `dict[key]` which panics on a missing key). Returns `Some(v)` / `None`.
+// (vs `dict[key]` which panics on a missing key). Returns `Some(v)` / `None`, and
+// chains fluently (`.unwrapOr(...)`) since the call result's instance type is tracked.
 fn main() {
     val d: Dictionary[String, I64] = ["a": 1I64, "b": 2I64]
     match d.get(key: "b") {
@@ -12,9 +13,6 @@ fn main() {
         Optional.Some(val v) => { print(v) }
         Optional.None => { print(0I64) }          // 0
     }
-    // bind the Optional, then unwrapOr (Optional is ambient).
-    val hit: Optional[I64] = d.get(key: "a")
-    print(hit.unwrapOr(fallback: 99I64))          // 1
-    val miss: Optional[I64] = d.get(key: "z")
-    print(miss.unwrapOr(fallback: 99I64))         // 99
+    print(d.get(key: "a").unwrapOr(fallback: 99I64))   // 1
+    print(d.get(key: "z").unwrapOr(fallback: 99I64))   // 99
 }

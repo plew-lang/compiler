@@ -1239,9 +1239,60 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             }
             // `xs.map(f)` / `xs.filter(p)` : the lazy adapter instance it produces,
             // so a `for v in xs.map(f).filter(p)` (and the chain) types its iterand.
-            return adapterCallResultInst(c: inout c, st: inout st, recv: recv, nameStart: nameStart, nameLen: nameLen)
+            val adp: U64 = adapterCallResultInst(c: inout c, st: inout st, recv: recv, nameStart: nameStart, nameLen: nameLen)
+            if adp != 0U64 {
+                return adp
+            }
+            // a general method whose return is a generic instance (`d.get(k) ->
+            // Optional[V]`): ground it under the receiver's env so a chained call on
+            // the result (`d.get(k).unwrapOr(...)`) recovers the instance to dispatch.
+            return methodResultRef(c: inout c, st: inout st, recv: recv, nameStart: nameStart, nameLen: nameLen, margs: margs)
         }
         _ => {}
+    }
+    return 0U64
+}
+
+// The grounded result TypeRef of a non-adapter method call `recv.m(args)`: find the
+// method on the receiver's (possibly generic) type and ground its declared return
+// type under the receiver instance's env, yielding the generic instance the result
+// is (e.g. `Optional[I64]` for `dict[String,I64].get(k)`). 0 when the receiver type
+// or method can't be resolved or the return isn't a generic instance — so a plain
+// (non-generic) return leaves the caller's behavior unchanged.
+fn methodResultRef(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, nameLen: U64, margs: Array[Arg]) -> U64 {
+    val recvRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
+    mut val headStart: U64 = 0
+    mut val headLen: U64 = 0
+    if recvRef != 0U64 {
+        headStart = c.types[recvRef].nameStart
+        headLen = c.types[recvRef].nameLen
+    } else {
+        val si: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
+        if si < c.structs.count {
+            headStart = c.structs[si].nameStart
+            headLen = c.structs[si].nameLen
+        } else {
+            return 0U64
+        }
+    }
+    val mfi: U64 = findMethod(c: inout c, recvStart: headStart, recvLen: headLen, nameStart: nameStart, nameLen: nameLen, args: margs)
+    if mfi < c.funcs.count {
+        val mf: Func = c.funcs[mfi]
+        if mf.hasRet {
+            if mf.retTy != 0U64 {
+                val savedP: Array[Bind] = c.curTypeParams
+                val savedA: Array[U64] = c.curTypeArgs
+                val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: recvRef)
+                val g: U64 = groundTypeRef(c: inout c, ref: mf.retTy)
+                if didSet {
+                    c.curTypeParams = savedP
+                    c.curTypeArgs = savedA
+                }
+                if isGenericInst(c: inout c, ref: g) {
+                    return g
+                }
+            }
+        }
     }
     return 0U64
 }
