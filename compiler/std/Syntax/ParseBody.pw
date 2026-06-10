@@ -700,6 +700,11 @@ fn parsePatternAst(p: inout P) -> PatternAst {
                                 binds.append(<BindAst field=fname name=nm span=<Span start=bStart end=p.prevEnd() /> />)
                             }
                             _ => {
+                                // `field: _` discard — record it (empty bind name) so the
+                                // completeness check sees the field as covered without
+                                // creating a local for it (struct/variant destructure must
+                                // bind OR discard every field — spec/05,11).
+                                binds.append(<BindAst field=fname name="" span=<Span start=bStart end=p.prevEnd() /> />)
                                 p.advance()
                             }
                         }

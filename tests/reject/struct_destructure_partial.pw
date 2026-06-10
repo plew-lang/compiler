@@ -1,0 +1,9 @@
+// A struct-destructure pattern must bind OR discard every field (spec/05,11): `..`
+// is not allowed. Omitting `y` silently dropped it before — now a loud error (so
+// adding a field makes existing patterns fail, catching silent take-misses).
+import @Std/Io with { print }
+struct P { pub val x: I64  pub val y: I64 }
+fn main() {
+    val p: P = <P x=1 y=2 />
+    match p { P { val x } => { print(x) } }
+}

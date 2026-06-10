@@ -227,6 +227,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                 val armMark: U64 = scopeMark(c: inout c)
                 val savedArmBB: U64 = c.curBranchBase
                 c.curBranchBase = armMark
+                checkDestructureComplete(c: inout c, a: arms[ai])
                 verifyAddArmBinds(c: inout c, a: arms[ai], scrut: scrut)
                 verifyBlock(c: inout c, blockId: arms[ai].body)
                 c.curBranchBase = savedArmBB
@@ -368,6 +369,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             mut val ai: U64 = 0
             while ai < arms.count {
                 val armMark: U64 = scopeMark(c: inout c)
+                checkDestructureComplete(c: inout c, a: arms[ai])
                 verifyAddArmBinds(c: inout c, a: arms[ai], scrut: scrut)
                 verifyExpr(c: inout c, id: arms[ai].body)
                 popLocals(c: inout c, mark: armMark)
@@ -411,6 +413,48 @@ fn verifyExpr(c: inout Comp, id: U64) {
 // grounding a generic instance's field types under the scrutinee's type args —
 // `Box[I32] { val v }` binds v: I32, not the template T). Enum arms resolve via
 // the variant; struct-destructure arms (`S { val x }`) via the struct.
+// Whether any of `binds` matches the struct field (start,len) by FIELD name (a real
+// bind or a `field: _` discard — both cover the field; content comparison unifies the
+// re-interned struct-field name with the pattern's original field span).
+fn bindsCoverField(c: inout Comp, binds: Array[Bind], fieldStart: U64, fieldLen: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < binds.count {
+        if spansEqual(c: inout c, aStart: binds[i].fieldStart, aLen: binds[i].fieldLen, bStart: fieldStart, bLen: fieldLen) {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// A struct-destructure pattern `S { … }` must bind OR discard (`field: _`) EVERY
+// field — `..` is not allowed (spec/05,11). Omitting a field silently dropped it
+// before; now a missing field is a loud error, so adding a field to a struct makes
+// existing patterns fail (catching silent take-misses). Generic-struct patterns
+// (`Box[I32] { … }`) resolve fields via the generic def.
+fn checkDestructureComplete(c: inout Comp, a: MatchArm) {
+    if a.isStruct {
+    } else {
+        return
+    }
+    mut val si: U64 = structIndexByName(c: inout c, start: a.enumStart, len: a.enumLen)
+    if si < c.structs.count {
+    } else {
+        si = genericStructIndex(c: inout c, nameStart: a.enumStart, nameLen: a.enumLen)
+    }
+    if si < c.structs.count {
+        val sd: StructDef = c.structs[si]
+        mut val fi: U64 = 0
+        while fi < sd.fields.count {
+            if bindsCoverField(c: inout c, binds: a.binds, fieldStart: sd.fields[fi].nameStart, fieldLen: sd.fields[fi].nameLen) {
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: a.enumStart), msg: "struct destructure must bind or discard every field (a field is missing — bind it or use `field: _`; `..` is not allowed)")
+            }
+            fi += 1
+        }
+    }
+}
+
 fn verifyAddArmBinds(c: inout Comp, a: MatchArm, scrut: U64) {
     if a.isWildcard {
         return
