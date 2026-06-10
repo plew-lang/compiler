@@ -128,7 +128,7 @@
 - **【silent 逸脱・小】曖昧な無サフィックス整数リテラルが先頭オーバーロードを選ぶ**（`k(a:I32)`/`k(a:U64)` に `k(a:5)`・呼出位置の曖昧検出が要る）・**`val f = obj.method`（メソッド値化）を受理**（scope 復元の型回復が要る・現状 clang 止まり）。
 - **【bug・既知】ユーザー struct/enum 名が lang-item の型パラメータ名と衝突すると壊れる**：`struct V {…}` は `Dictionary[K,V]` の型パラメータ `V` と名前衝突し、`isTypeParamName`/typedef 出力で template 扱いされ struct 定義を吐かず `Array_V` 未定義で clang 落ち（`K`/`V`/`T` 等）。`Vec`/`W` 等は無事。根治＝型パラメータ判定をスコープ化（グローバル名照合をやめる）。回避＝単一大文字で lang-item と被る名を避ける。
 - **【済】`@[Ord]` on enum＋`@[Ord]` が `@[Eq]` を含意**（`Ord: Eq`）＝実装済（上記「Eq/Ord」節）。
-- **既知 deferred**：明示型引数 `f[I32](x)`・`Self` 入力要求の witness 置換（hand-written method＝`fn eqTo(other: Self)` 準拠が完全性検査で誤 reject／derive は無事・`any P` 経由でも Self 入力は元々非呼出ゆえ影響なし）。**関連型 `type Item`＝基本実装済**（残＝generic 抽象 `T::Item` 解決）。〔`any P` 存在型／`#Ext`／`a#P.foo()` 源選択／トレイト型引数 `Add[Rhs]`／継承 `Sub: Super`／blanket は実装済＝上の各節〕
+- **既知 deferred**：明示型引数 `f[I32](x)`。**`Self` 入力要求の witness 置換＝✅解消**（hand-written method＝`fn eqTo(other: Self)` 準拠＝struct/enum 両受信者で動作・完全性検査が witness 側 Self も conforming 型へ置換〔`paramSelectorEqSubst`〕・backend が Self param span を curSelfRef で ground〔`bindOneParam`・field アクセス/match 解決〕・test run/self_param_conformance{,_enum}）。**関連型 `type Item`＝基本実装済**（残＝generic 抽象 `T::Item` 解決）。〔`any P` 存在型／`#Ext`／`a#P.foo()` 源選択／トレイト型引数 `Add[Rhs]`／継承 `Sub: Super`／blanket は実装済＝上の各節〕
 
 ---
 
