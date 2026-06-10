@@ -1,0 +1,26 @@
+import @Std/Io with { print }
+
+// An enum variant carrying a generic-instance payload by value (`Leaf(v: Optional[I64])`):
+// the inline instance is sized into the payload area and a nested match recovers it.
+enum Tree {
+    Leaf(v: Optional[I64])
+    Branch(l: I64, r: I64)
+}
+
+fn describe(t: Tree) -> I64 {
+    match t {
+        Tree.Leaf(v: val o) => {
+            match o {
+                Optional.Some(v: val n) => { return n }
+                Optional.None => { return -1I64 }
+            }
+        }
+        Tree.Branch(l: val l, r: val r) => { return l + r }
+    }
+}
+
+fn main() {
+    print(describe(t: <Tree.Leaf v=<Optional.Some v=42I64 /> />))
+    print(describe(t: <Tree.Leaf v=<Optional.None /> />))
+    print(describe(t: <Tree.Branch l=10I64 r=5I64 />))
+}

@@ -534,6 +534,12 @@ fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
             i += 1
         } else {
             if f.tyIsArray {
+            } else if isGenericInst(c: inout c, ref: f.ty) {
+                // a generic-instance field (`o: Optional[I64]`, `b: Box[I32]`): its
+                // concrete instance is registered as a named tagged-union / struct type
+                // (every reached instance in c.genInsts is registered), so the field is
+                // representable by value. The named type is created before any body is
+                // set, so referencing it here is order-independent.
             } else {
                 // an enum-typed field (`kind: Kind`): the enum's tagged-union value by
                 // value — OK if the enum is itself representable (pure predicate, so
@@ -584,6 +590,10 @@ fn enumRepresentable(c: inout Comp, eid: U64) -> Bool {
                 fj += 1
             } else {
                 if fs[fj].tyIsArray {
+                    fj += 1
+                } else if isGenericInst(c: inout c, ref: fs[fj].ty) {
+                    // a generic-instance variant payload (`A(o: Optional[I64])`): its
+                    // concrete instance is a registered named type (see structRegisterable).
                     fj += 1
                 } else {
                     val peid: U64 = enumIdxByName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen)
@@ -772,7 +782,76 @@ fn fieldWordsF(c: inout Comp, st: inout LlvmCtx, f: FieldDef) -> U64 {
     if f.tyIsArray {
         return 2U64
     }
+    // a generic-instance payload field (`A(o: Optional[I64])`): size the instance
+    // under its own substitution env (the head-name path drops the args and would
+    // size `Optional[String]`'s String arg as 1 word instead of 2).
+    if f.ty != 0U64 {
+        mut val g: U64 = f.ty
+        if c.curTypeParams.count > 0U64 {
+            g = groundTypeRef(c: inout c, ref: f.ty)
+        }
+        if isGenericInst(c: inout c, ref: g) {
+            // Array[E] is the {ptr,i64} value type, not an inline instance.
+            if rangeEquals(bytes: c.bytes, start: c.types[g].nameStart, len: c.types[g].nameLen, kw: "Array") {
+                return 2U64
+            }
+            return genInstWords(c: inout c, st: inout st, ref: g)
+        }
+    }
     return fieldWords(c: inout c, st: inout st, tyStart: f.tyStart, tyLen: f.tyLen)
+}
+
+// The inline word size of a concrete generic instance `ref` (a generic-struct or
+// generic-enum instantiation), under its own type-parameter substitution env. A
+// generic struct is the sum of its fields; a generic enum is `1 (tag) + maxWords`
+// over its variants — mirroring registerGenEnums' sizing so an inline gen-instance
+// member is sized identically to its standalone named type.
+fn genInstWords(c: inout Comp, st: inout LlvmCtx, ref: U64) -> U64 {
+    val t: TypeRef = c.types[ref]
+    val gsi: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if gsi < c.structs.count {
+        val sd: StructDef = c.structs[gsi]
+        val savedP: Array[Bind] = c.curTypeParams
+        val savedA: Array[U64] = c.curTypeArgs
+        c.curTypeParams = sd.typeParams
+        c.curTypeArgs = t.args
+        mut val w: U64 = 0
+        mut val i: U64 = 0
+        while i < sd.fields.count {
+            w = w + fieldWordsF(c: inout c, st: inout st, f: sd.fields[i])
+            i += 1
+        }
+        c.curTypeParams = savedP
+        c.curTypeArgs = savedA
+        return w
+    }
+    val gei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if gei < c.enums.count {
+        val e: EnumDef = c.enums[gei]
+        val savedP: Array[Bind] = c.curTypeParams
+        val savedA: Array[U64] = c.curTypeArgs
+        c.curTypeParams = e.typeParams
+        c.curTypeArgs = t.args
+        mut val maxW: U64 = 0
+        mut val vi: U64 = 0
+        while vi < e.variants.count {
+            val fs: Array[FieldDef] = e.variants[vi].fields
+            mut val w: U64 = 0
+            mut val fj: U64 = 0
+            while fj < fs.count {
+                w = w + fieldWordsF(c: inout c, st: inout st, f: fs[fj])
+                fj += 1
+            }
+            if w > maxW {
+                maxW = w
+            }
+            vi += 1
+        }
+        c.curTypeParams = savedP
+        c.curTypeArgs = savedA
+        return 1U64 + maxW
+    }
+    return 1U64
 }
 
 // Whether an enum is registerable as a named tagged-union here — the pure
@@ -814,16 +893,14 @@ fn variantPayloadTy(c: inout Comp, st: inout LlvmCtx, eid: U64, vi: U64) -> LLVM
     mut val elems: Array[LLVMTypeRef] = []
     mut val i: U64 = 0
     while i < fs.count {
-        // a boxed (recursive) field is a heap pointer; an array field is the {ptr,i64}
-        // value type; otherwise its scalar type.
+        // a boxed (recursive) field is a heap pointer; otherwise fieldLlvmTy resolves
+        // the array ({ptr,i64}), existential (fat ptr), generic-instance (its named
+        // tagged-union / struct type), or scalar type — matching the value built in
+        // buildEnumValue, so insertvalue types agree.
         if fieldIsBoxed(c: inout c, f: fs[i]) {
             elems.append(value: st.ptrty)
         } else {
-            if arrayFieldElemRef(c: inout c, f: fs[i]) != 0U64 {
-                elems.append(value: st.arrayTy)
-            } else {
-                elems.append(value: llvmScalarTy(c: inout c, st: inout st, tyStart: fs[i].tyStart, tyLen: fs[i].tyLen))
-            }
+            elems.append(value: fieldLlvmTy(c: inout c, st: inout st, fd: fs[i]))
         }
         i += 1
     }
@@ -949,8 +1026,23 @@ fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, 
                         }
                     }
                 } else {
-                    val fv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valExpr), tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
-                    agg = LLVMBuildInsertValue(st.b, agg, fv, fj, anon())
+                    // a (non-boxed) generic-instance payload field by value
+                    // (`Leaf(v: Optional[I64])`): ground its declared type and pass it
+                    // as the expected type so an un-suffixed nested JSX construction
+                    // (`v=<Optional.Some v=42 />`) infers the instance's type args.
+                    mut val gpf: U64 = fs[fj].ty
+                    if gpf != 0U64 {
+                        if c.curTypeParams.count > 0U64 {
+                            gpf = groundTypeRef(c: inout c, ref: fs[fj].ty)
+                        }
+                    }
+                    if gpf != 0U64 && isGenericInst(c: inout c, ref: gpf) {
+                        st.expectedTy = gpf
+                        agg = LLVMBuildInsertValue(st.b, agg, genLlvmExpr(c: inout c, st: inout st, id: valExpr), fj, anon())
+                    } else {
+                        val fv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valExpr), tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
+                        agg = LLVMBuildInsertValue(st.b, agg, fv, fj, anon())
+                    }
                 }
             }
             fj += 1
@@ -1042,11 +1134,17 @@ fn buildEnumFromValues(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMType
 
 // Register each concrete generic-struct instantiation (from c.genInsts) as a named
 // LLVM type with its type parameters substituted (env curTypeParams->curTypeArgs).
-fn registerGenStructs(c: inout Comp, st: inout LlvmCtx) {
-    // Pass A: create every instance's NAMED struct type (opaque, body unset) and
-    // record its def. Two passes so a field of generic-instance type (an adapter
-    // wrapping another adapter: FilterIter's inner = MapIter[…]) resolves to the
-    // already-created named type regardless of registration order.
+// Split into a NAMES pass and a BODIES pass (called separately by the backend init)
+// so EVERY named type — plain structs/enums AND all generic instances — exists
+// before any body is set; a body may then reference a generic-instance member type
+// (`struct Pair { a: Optional[I64] }`) regardless of registration order, since
+// LLVMStructSetBody only records element-type *references* (sizes resolve later, at
+// emission, by which point all bodies are set).
+fn registerGenStructNames(c: inout Comp, st: inout LlvmCtx) {
+    // create every instance's NAMED struct type (opaque, body unset) and record its
+    // def. Bodies are set later (registerGenStructBodies) so a field of generic-
+    // instance type (an adapter wrapping another: FilterIter's inner = MapIter[…], or
+    // an explicit `Optional[I64]` member) resolves to the already-created named type.
     mut val k: U64 = 0
     while k < c.genInsts.count {
         val ref: U64 = c.genInsts[k]
@@ -1065,9 +1163,12 @@ fn registerGenStructs(c: inout Comp, st: inout LlvmCtx) {
         }
         k += 1
     }
-    // Pass B: set each instance's body (field types under its substitution env; a
-    // generic-instance field now resolves via llvmTypeFor -> llvmScalarTy ->
-    // llvmTypeOfRef to the named type created in pass A).
+}
+
+// Set each generic-struct instance's body (field types under its substitution env; a
+// generic-instance field now resolves via fieldLlvmTy -> llvmTypeOfRef to the named
+// type created in registerGenStructNames). Run after ALL names (plain + generic).
+fn registerGenStructBodies(c: inout Comp, st: inout LlvmCtx) {
     mut val s: U64 = 0
     while s < st.genStructRefs.count {
         val ref: U64 = st.genStructRefs[s]
@@ -1124,7 +1225,9 @@ fn registerGenEnums(c: inout Comp, st: inout LlvmCtx) {
                     mut val w: U64 = 0
                     mut val fj: U64 = 0
                     while fj < fs.count {
-                        w = w + fieldWords(c: inout c, st: inout st, tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
+                        // fieldWordsF (not fieldWords) so a boxed / array / nested
+                        // generic-instance payload field is sized correctly under the env.
+                        w = w + fieldWordsF(c: inout c, st: inout st, f: fs[fj])
                         fj += 1
                     }
                     if w > maxWords {
@@ -1770,7 +1873,24 @@ fn fieldLlvmTy(c: inout Comp, st: inout LlvmCtx, fd: FieldDef) -> LLVMTypeRef {
     if refIsAny(c: inout c, ref: fd.ty) {
         return st.anyTy
     }
-    return llvmTypeFor(c: inout c, st: inout st, tyStart: fd.tyStart, tyLen: fd.tyLen, isArray: fd.tyIsArray)
+    // an array field is the {ptr,i64} value type (element-agnostic).
+    if fd.tyIsArray {
+        return st.arrayTy
+    }
+    // a generic-instance field (`o: Optional[I64]`, `inner: Box[T]`): resolve via the
+    // full TypeRef — the head-name-only path (llvmTypeFor) drops the args and would
+    // miss the registered instance. Ground through the active env first (a generic
+    // struct body's field type may name a type param bound to a concrete instance).
+    if fd.ty != 0U64 {
+        mut val g: U64 = fd.ty
+        if c.curTypeParams.count > 0U64 {
+            g = groundTypeRef(c: inout c, ref: fd.ty)
+        }
+        if isGenericInst(c: inout c, ref: g) {
+            return llvmTypeOfRef(c: inout c, st: inout st, ref: g)
+        }
+    }
+    return llvmTypeFor(c: inout c, st: inout st, tyStart: fd.tyStart, tyLen: fd.tyLen, isArray: false)
 }
 
 // The LLVM type of a structured TypeRef: a generic struct/enum instance resolves
@@ -3244,6 +3364,22 @@ fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, v
     if isEnum {
         return genLlvmMakeEnum(c: inout c, st: inout st, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, ty: gty, fields: fields)
     }
+    // an un-suffixed generic-struct construction (`inner=<Box value=e />`) has an
+    // ungrounded head `gty`; fall back to the expected type from context (the field's
+    // declared instance type set by genFieldValue) when it names this same generic
+    // struct. Consume it so it can't leak into the field sub-expressions.
+    if isGenericInst(c: inout c, ref: gty) {
+    } else {
+        if st.expectedTy != 0U64 {
+            if isGenericInst(c: inout c, ref: st.expectedTy) {
+                val et: TypeRef = c.types[st.expectedTy]
+                if spansEqual(c: inout c, aStart: et.nameStart, aLen: et.nameLen, bStart: typeStart, bLen: typeLen) {
+                    gty = st.expectedTy
+                }
+            }
+        }
+    }
+    st.expectedTy = 0U64
     // `<Ref[T] value=e />`: allocate a heap cell holding the pointee, store e, and
     // yield the cell pointer (the Ref value). Refcount/release is hidden cost,
     // deferred (no deinit in these cases yet) — the pointer aliases on copy so
@@ -4404,6 +4540,20 @@ fn genFieldValue(c: inout Comp, st: inout LlvmCtx, valExpr: U64, fld: FieldDef) 
         val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(boxedTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
         LLVMBuildStore(st.b, boxedVal, cell)
         return cell
+    }
+    // a (non-boxed) generic-instance field by value (`a: Optional[I64]`,
+    // `inner: Box[I32]`): ground the field's declared type and pass it as the expected
+    // type so an un-suffixed nested JSX construction (`a=<Optional.Some v=7 />`) infers
+    // the instance's type args (genLlvmMakeEnum / genLlvmMake consume st.expectedTy).
+    if fld.ty != 0U64 {
+        mut val g: U64 = fld.ty
+        if c.curTypeParams.count > 0U64 {
+            g = groundTypeRef(c: inout c, ref: fld.ty)
+        }
+        if isGenericInst(c: inout c, ref: g) {
+            st.expectedTy = g
+            return genLlvmExpr(c: inout c, st: inout st, id: valExpr)
+        }
     }
     return coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valExpr), tyStart: fld.tyStart, tyLen: fld.tyLen)
 }
@@ -8984,6 +9134,26 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
                 val et: TypeRef = c.types[elemRef]
                 elemKindF = kindFromTySpan(c: inout c, tyStart: et.nameStart, tyLen: et.nameLen)
             }
+            // a generic-instance payload field (`Leaf(v: Optional[I64])`,
+            // `Some(v: Box[I32])`): the stored value is the instance's named tagged-
+            // union / struct type, not the head-name scalar. Resolve it (grounded under
+            // the active env) so the alloca + extractvalue + a nested match agree.
+            mut val genFieldRef: U64 = 0
+            if elemRef == 0U64 {
+                if fd.ty != 0U64 {
+                    mut val gfp: U64 = fd.ty
+                    if c.curTypeParams.count > 0U64 {
+                        gfp = groundTypeRef(c: inout c, ref: fd.ty)
+                    }
+                    if isGenericInst(c: inout c, ref: gfp) {
+                        if rangeEquals(bytes: c.bytes, start: c.types[gfp].nameStart, len: c.types[gfp].nameLen, kw: "Array") {
+                        } else {
+                            genFieldRef = gfp
+                            pty = llvmTypeOfRef(c: inout c, st: inout st, ref: gfp)
+                        }
+                    }
+                }
+            }
             // a boxed (recursive) payload field holds a heap pointer; load the boxed
             // value back. A non-boxed field is the value directly.
             mut val fv: LLVMValueRef = LLVMBuildExtractValue(st.b, payload, fidx, anon())
@@ -9005,6 +9175,11 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
             mut val tref: U64 = 0
             if enumRegSlot(c: inout c, st: inout st, start: fd.tyStart, len: fd.tyLen) < st.enumIdxs.count {
                 tref = simpleTypeRef(c: inout c, nameStart: fd.tyStart, nameLen: fd.tyLen)
+            }
+            // a generic-instance payload bind carries the full instance TypeRef so a
+            // nested match / field access on it recovers the substitution env.
+            if genFieldRef != 0U64 {
+                tref = genFieldRef
             }
             // a type-parameter payload field (`Optional.Some(v: T)`): ground T under
             // the active enum-instance env (set by the caller around bindMatchPayload)
@@ -9715,16 +9890,20 @@ fn emitLlvm(c: inout Comp) {
     c.appendSrc(from: "self".bytes)
     st.selfLen = 4U64
 
-    // register user struct + enum types, then generic struct instances. Names
-    // first (structs + enums), then bodies — so a struct field of enum type (or a
-    // nested struct, in either declaration order) resolves to an existing named
-    // type. Enums are self-contained ({i64 tag, [maxWords] payload}); only struct
-    // bodies cross-reference, so they are set last.
+    // register user struct + enum types, then generic struct/enum instances. ALL
+    // NAMES first (plain structs, plain enums, generic-struct instances, generic-enum
+    // instances), THEN all cross-referencing bodies — so a struct/enum body may hold a
+    // member of generic-instance type (`struct Pair { a: Optional[I64] }`) regardless
+    // of declaration order. (Plain enums and generic-enum instances are self-contained
+    // `{ i64 tag, [maxWords] payload }`, sized by the front-end, so their bodies are
+    // set with their names; only struct + generic-struct bodies cross-reference named
+    // types, so those are deferred to the body passes.)
     registerStructNames(c: inout c, st: inout st)
     registerEnums(c: inout c, st: inout st)
-    registerStructBodies(c: inout c, st: inout st)
-    registerGenStructs(c: inout c, st: inout st)
+    registerGenStructNames(c: inout c, st: inout st)
     registerGenEnums(c: inout c, st: inout st)
+    registerStructBodies(c: inout c, st: inout st)
+    registerGenStructBodies(c: inout c, st: inout st)
 
     // determine which assoc fns are actually reached (called) before declaring.
     collectReachableAssoc(c: inout c, st: inout st)

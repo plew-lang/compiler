@@ -1,0 +1,26 @@
+import @Std/Io with { print }
+
+// A struct holding generic-instance members by value (`Optional[I64]`, `Optional[String]`):
+// the named tagged-union type is sized + laid out inline, constructed without explicit
+// type args (inferred from the field's declared type), and read back via match.
+struct Pair {
+    pub val a: Optional[I64]
+    pub val b: Optional[String]
+}
+
+fn main() {
+    val p: Pair = <Pair a=<Optional.Some v=7I64 /> b=<Optional.Some v="hi" /> />
+    match p.a {
+        Optional.Some(v: val v) => { print(v) }
+        Optional.None => { print(0I64) }
+    }
+    match p.b {
+        Optional.Some(v: val s) => { print(s) }
+        Optional.None => { print("none") }
+    }
+    val q: Pair = <Pair a=<Optional.None /> b=<Optional.None /> />
+    match q.a {
+        Optional.Some(v: val v) => { print(v) }
+        Optional.None => { print(-1I64) }
+    }
+}
