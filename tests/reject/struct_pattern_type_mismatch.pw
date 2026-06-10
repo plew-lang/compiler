@@ -1,0 +1,8 @@
+// A struct destructure requires a scrutinee of that struct type (spec/11). Matching a
+// non-struct (or unknown-struct) scrutinee with a struct pattern used to CRASH the
+// compiler (out-of-bounds field lookup) — now a clean reject.
+import @Std/Io with { print }
+fn main() {
+    val x: I64 = 5I64
+    match x { P { val a } => { print(a) } }
+}

@@ -460,6 +460,18 @@ fn verifyExpr(c: inout Comp, id: U64) {
 // Whether any of `binds` matches the struct field (start,len) by FIELD name (a real
 // bind or a `field: _` discard — both cover the field; content comparison unifies the
 // re-interned struct-field name with the pattern's original field span).
+// A reliable source offset for a match-arm diagnostic: a bind's original-source
+// offset (set by lowerBinds) if present, else the (possibly re-interned) pattern
+// type-name offset as a fallback.
+fn armDiagOffset(a: MatchArm) -> U64 {
+    if a.binds.count > 0U64 {
+        if a.binds[0].offset > 0U64 {
+            return a.binds[0].offset
+        }
+    }
+    return a.enumStart
+}
+
 fn bindsCoverField(c: inout Comp, binds: Array[Bind], fieldStart: U64, fieldLen: U64) -> Bool {
     mut val i: U64 = 0
     while i < binds.count {
@@ -527,6 +539,15 @@ fn verifyAddArmBinds(c: inout Comp, a: MatchArm, scrut: U64) {
     val generic: Bool = isGenericInst(c: inout c, ref: st.ref)
     mut val bi: U64 = 0
     if a.isStruct {
+        // a struct destructure requires a scrutinee OF that struct type (spec/11). A
+        // mismatched / non-struct scrutinee (`match anI64 { P { … } }`, or an unknown
+        // `P`) used to crash the field lookup (out-of-bounds) — reject cleanly.
+        if st.nameLen > 0U64 {
+            if spansEqual(c: inout c, aStart: st.nameStart, aLen: st.nameLen, bStart: a.enumStart, bLen: a.enumLen) {
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: armDiagOffset(a: a)), msg: "struct destructure pattern type does not match the scrutinee type")
+            }
+        }
         while bi < a.binds.count {
             val bd: Bind = a.binds[bi]
             mut val ft: TypeInfo = scalarInfo()
