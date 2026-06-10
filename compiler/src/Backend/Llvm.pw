@@ -1171,6 +1171,20 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // `base?.member : Optional[U]` — so a chained `a?.b?.c` types its inner.
             return optChainResultRefLL(c: inout c, st: inout st, base: base, memberStart: memberStart, memberLen: memberLen)
         }
+        Expr.ExtView(val recv, val srcStart, val srcLen) => {
+            // `recv#Ext` : recv's type refined with the extension view (viewExtId).
+            val vid: U64 = intern(c: inout c, start: srcStart, len: srcLen)
+            val br: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
+            if br != 0U64 {
+                val bt: TypeRef = c.types[br]
+                return c.pushType(t: <TypeRef nameStart=bt.nameStart nameLen=bt.nameLen args=bt.args viewExtId=vid />)
+            }
+            val si: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
+            if si < c.structs.count {
+                mut val noArgs: Array[U64] = []
+                return c.pushType(t: <TypeRef nameStart=c.structs[si].nameStart nameLen=c.structs[si].nameLen args=noArgs viewExtId=vid />)
+            }
+        }
         Expr.Method(val recv, val nameStart, val nameLen, args: _) => {
             // `xs.map(f)` / `xs.filter(p)` : the lazy adapter instance it produces,
             // so a `for v in xs.map(f).filter(p)` (and the chain) types its iterand.
@@ -1427,6 +1441,10 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                     }
                 }
             }
+        }
+        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+            // a value re-view has recv's struct (the view is zero-cost).
+            return exprStructIdx(c: inout c, st: inout st, id: recv)
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
             // a call result used as a struct (`firstOf(...).get()`): resolve the
@@ -2041,6 +2059,9 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                     }
                 }
             }
+        }
+        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+            return valueKind(c: inout c, st: inout st, id: recv)
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
             // a closure-typed local call (`tail()` where tail: fn() -> String): the
@@ -3166,6 +3187,11 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
         Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
             return genLlvmExtMethod(c: inout c, st: inout st, recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
         }
+        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+            // a value re-view is zero-cost: the value is unchanged (the view only
+            // affects static method resolution, handled at the dispatch site).
+            return genLlvmExpr(c: inout c, st: inout st, id: recv)
+        }
         Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
             return genLlvmIfExpr(c: inout c, st: inout st, cond: cond, thenBlk: thenBlk, elseBlk: elseBlk)
         }
@@ -3643,6 +3669,9 @@ fn exprLlvmType(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
                 }
             }
             return st.i64ty
+        }
+        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+            return exprLlvmType(c: inout c, st: inout st, id: recv)
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
             val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -4846,6 +4875,23 @@ fn primLangItemRecvName(c: inout Comp, st: inout LlvmCtx, recv: U64) -> Bind {
     return z
 }
 
+// The extension-view id active on an expression's value (spec/09): a direct
+// `v#Ext` re-view node carries it; otherwise it comes from the value's static
+// type (a param/binding typed `Type#Ext`). 0 = no view.
+fn exprViewExtId(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
+    match c.exprs[id] {
+        Expr.ExtView(recv: _, val srcStart, val srcLen) => {
+            return intern(c: inout c, start: srcStart, len: srcLen)
+        }
+        _ => {}
+    }
+    val r: U64 = exprTypeRef(c: inout c, st: inout st, id: id)
+    if r != 0U64 {
+        return c.types[r].viewExtId
+    }
+    return 0U64
+}
+
 // `recv#Ext.name(args)` (spec/09): a method call through an extension view. The
 // extension method is tagged with its extension's id (Func.extId) and excluded
 // from bare resolution, so we look it up with findExtMethod (receiver type +
@@ -5052,7 +5098,18 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     val sd: StructDef = c.structs[rsidx]
-    val mfi: U64 = findMethod(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+    // a `Type#Ext`-viewed receiver (a value re-view `v#Ext`, or a param/binding
+    // typed `Type#Ext`) resolves the extension's method first (spec/09); the
+    // extension shadows a same-name bare method under the view.
+    val viewId: U64 = exprViewExtId(c: inout c, st: inout st, id: recv)
+    mut val mfi: U64 = c.funcs.count
+    if viewId != 0U64 {
+        mfi = findExtMethodById(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, srcId: viewId, nameStart: nameStart, nameLen: nameLen, args: args)
+    }
+    if mfi < c.funcs.count {
+    } else {
+        mfi = findMethod(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+    }
     if mfi < c.funcs.count {
     } else {
         // `self.f(n: x)` where `f` is a closure-typed field (the iterator-adapter
@@ -5381,6 +5438,9 @@ fn scanExprAssoc(c: inout Comp, st: inout LlvmCtx, id: U64) {
             scanExprAssoc(c: inout c, st: inout st, id: recv)
             mut val i: U64 = 0
             while i < args.count { scanExprAssoc(c: inout c, st: inout st, id: args[i].expr) i += 1 }
+        }
+        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+            scanExprAssoc(c: inout c, st: inout st, id: recv)
         }
         Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { scanExprAssoc(c: inout c, st: inout st, id: operand) }
         Expr.MatchExpr(val scrut, val arms) => {
@@ -6047,6 +6107,13 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     mut val pElem: LLVMTypeRef = st.i64ty
     mut val pSidx: U64 = localStructIdxFor(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen)
     mut val pRef: U64 = 0
+    // a `Type#Ext`-viewed param (a plain struct otherwise): track its viewed
+    // TypeRef so a bare `x.m()` in the body resolves the extension (spec/09).
+    if p.ty != 0U64 {
+        if c.types[p.ty].viewExtId != 0U64 {
+            pRef = p.ty
+        }
+    }
     if p.tyIsArray {
         pElem = pty
         pty = st.arrayTy
@@ -6293,6 +6360,9 @@ fn scanExprClosures(c: inout Comp, st: inout LlvmCtx, id: U64) {
             scanExprClosures(c: inout c, st: inout st, id: recv)
             mut val i: U64 = 0
             while i < args.count { scanExprClosures(c: inout c, st: inout st, id: args[i].expr) i += 1 }
+        }
+        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+            scanExprClosures(c: inout c, st: inout st, id: recv)
         }
         Expr.Field(val base, nameStart: _, nameLen: _) => { scanExprClosures(c: inout c, st: inout st, id: base) }
         Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
@@ -6877,6 +6947,16 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                 if tyLen > 0U64 {
                     if enumRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen) < st.enumIdxs.count {
                         tref = simpleTypeRef(c: inout c, nameStart: tyStart, nameLen: tyLen)
+                    }
+                }
+            }
+            // a `Type#Ext`-viewed binding (`val v = p#Ext`): track the viewed TypeRef
+            // (carrying viewExtId) so a bare `v.m()` resolves the extension (spec/09).
+            if tref == 0U64 {
+                val ir: U64 = exprTypeRef(c: inout c, st: inout st, id: init)
+                if ir != 0U64 {
+                    if c.types[ir].viewExtId != 0U64 {
+                        tref = ir
                     }
                 }
             }

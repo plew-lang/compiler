@@ -303,6 +303,9 @@ fn verifyExpr(c: inout Comp, id: U64) {
             verifyExpr(c: inout c, id: recv)
             verifyArgs(c: inout c, args: args)
         }
+        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+            verifyExpr(c: inout c, id: recv)
+        }
         Expr.Call(nameStart: _, nameLen: _, val args) => {
             verifyArgs(c: inout c, args: args)
         }

@@ -62,7 +62,12 @@ fn lowerType(c: inout Comp, t: TypeAst) -> PType {
         args.append(ap.ref)
         i += 1
     }
-    val ref: U64 = c.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args />)
+    mut val viewExtId: U64 = 0
+    if t.extView.bytes.count > 0 {
+        val evN: Bind = internBytes(c: inout c, s: t.extView)
+        viewExtId = intern(c: inout c, start: evN.nameStart, len: evN.nameLen)
+    }
+    val ref: U64 = c.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId />)
     mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
     if t.args.count > 0 {
         if rangeEquals(bytes: c.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {
@@ -314,6 +319,11 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
             val srcN: Bind = internBytes(c: inout c, s: src)
             val nm: Bind = internBytes(c: inout c, s: name)
             result = c.pushExpr(e: <Expr.ExtMethod recv=r srcStart=srcN.nameStart srcLen=srcN.nameLen nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
+        }
+        ExprAst.ExtView(val recv, val src, val span) => {
+            val r: U64 = lowerExpr(c: inout c, e: recv)
+            val srcN: Bind = internBytes(c: inout c, s: src)
+            result = c.pushExpr(e: <Expr.ExtView recv=r srcStart=srcN.nameStart srcLen=srcN.nameLen />)
         }
         ExprAst.Index(val base, val index, val span) => {
             val b: U64 = lowerExpr(c: inout c, e: base)

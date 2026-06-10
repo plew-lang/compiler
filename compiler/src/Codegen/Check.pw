@@ -1388,6 +1388,9 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                 i += 1
             }
         }
+        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+            checkBoundsExpr(c: inout c, exprId: recv)
+        }
         Expr.Method(val recv, val nameStart, val nameLen, val args) => {
             checkBoundsExpr(c: inout c, exprId: recv)
             mut val i: U64 = 0

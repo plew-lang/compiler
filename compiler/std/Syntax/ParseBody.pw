@@ -505,27 +505,36 @@ fn parsePostfixAst(p: inout P) -> ExprAst {
                 e = <ExprAst.OptChain base=e member=nm span=<Span start=sStart end=p.prevEnd() /> />
             }
             Kind.Hash => {
-                // `recv#Src.method(args)` (spec/09): a method call through an
-                // extension (or trait) view. Only the method-call form is supported
-                // so far — `#Src.field` / `#!Src` (strip) come later.
+                // `recv#Src...` (spec/09): an extension (or trait) view selector.
+                // `recv#Src.method(args)` is a direct view method call (ExtMethod);
+                // a bare `recv#Src` (or `recv#Src.field`) is a value re-view
+                // (ExtView) that the postfix loop continues on (so `.field` / a
+                // later `.m()` see the viewed value).
                 p.advance()
                 val srcTok: Tok = p.curTok()
                 val src: String = p.text(t: srcTok)
                 p.advance()
+                mut val isMethodForm: Bool = false
                 match p.curKind() {
-                    Kind.Dot => { p.advance() }
-                    _ => { p.fail(off: p.base + p.curTok().start, msg: "expected `.method(...)` after an extension view `value#Ext`") }
-                }
-                val nameTok: Tok = p.curTok()
-                val nm: String = p.text(t: nameTok)
-                p.advance()
-                match p.curKind() {
-                    Kind.LParen => {
-                        p.advance()
-                        val args: Array[ArgAst] = parseCallArgsAst(p: inout p)
-                        e = <ExprAst.ExtMethod recv=e src=src name=nm args=args span=<Span start=sStart end=p.prevEnd() /> />
+                    Kind.Dot => {
+                        if p.peekKind(off: 1) == <Kind.Ident /> {
+                            if p.peekKind(off: 2) == <Kind.LParen /> {
+                                isMethodForm = true
+                            }
+                        }
                     }
-                    _ => { p.fail(off: p.base + p.curTok().start, msg: "extension view supports only a method call `value#Ext.m(...)` so far") }
+                    _ => {}
+                }
+                if isMethodForm {
+                    p.advance()
+                    val nameTok: Tok = p.curTok()
+                    val nm: String = p.text(t: nameTok)
+                    p.advance()
+                    p.advance()
+                    val args: Array[ArgAst] = parseCallArgsAst(p: inout p)
+                    e = <ExprAst.ExtMethod recv=e src=src name=nm args=args span=<Span start=sStart end=p.prevEnd() /> />
+                } else {
+                    e = <ExprAst.ExtView recv=e src=src span=<Span start=sStart end=p.prevEnd() /> />
                 }
             }
             Kind.LBracket => {

@@ -27,6 +27,10 @@ export struct TypeAst {
     pub val name: String
     pub val args: Array[TypeAst]
     pub val span: Span
+    // `Person#Ext` (spec/09): an extension-view refinement of the type. "" for a
+    // plain type. A zero-cost view (same runtime layout) that selects which
+    // extension's methods/witnesses resolve; treated as an invariant type detail.
+    pub val extView: String = ""
 }
 
 // A struct field / enum-variant payload field. For a variant payload field,

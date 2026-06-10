@@ -37,6 +37,11 @@ struct TypeRef {
     // unify too. 0 only for the index-0 dummy sentinel.
     pub val nameId: U64 = 0
     pub val args: Array[U64]
+    // `Person#Ext` (spec/09): the interned id of the extension view refining this
+    // type, 0 for a plain type. A zero-cost view (same layout); it selects which
+    // extension's methods resolve on a value of this type. Part of type identity
+    // (an invariant refinement), so `Person` and `Person#Ext` are distinct types.
+    pub val viewExtId: U64 = 0
 }
 
 // A variable binding in scope during codegen (param, let, or match bind), used
@@ -177,6 +182,10 @@ enum Expr {
     // method tagged with that extension on the receiver's type (it does not join
     // bare resolution). Distinct from Method so bare matches are unaffected.
     ExtMethod(recv: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg])
+    // `recv#Ext` (spec/09): a zero-cost value re-view. Evaluates `recv` unchanged;
+    // its type gains the `#Ext` view (viewExtId) so a following bare `.method()`
+    // resolves through the extension. `src` names the extension.
+    ExtView(recv: U64, srcStart: U64, srcLen: U64)
     Cast(operand: U64, tyStart: U64, tyLen: U64, ty: U64)
     // value-position `match scrut { Pat => expr, ... }`: like Stmt.Match but each
     // arm yields an expression (MatchArm.body is an Expr index, not a Block).
@@ -868,7 +877,7 @@ pub impl Comp {
     inout fn pushType(t: TypeRef) -> U64 {
         val id: U64 = self.types.count
         val nid: U64 = intern(c: inout self, start: t.nameStart, len: t.nameLen)
-        self.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args />)
+        self.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId />)
         return id
     }
 }

@@ -237,7 +237,18 @@ fn parseType(p: inout P) -> TypeAst {
         }
         _ => {}
     }
-    return <TypeAst name=name args=args span=<Span start=sStart end=p.prevEnd() /> />
+    // an extension-view refinement `Person#Ext` (spec/09): the head type plus a
+    // selected extension. Only a single `#Name` for now (chained `#A#B` later).
+    mut val extView: String = ""
+    match p.curKind() {
+        Kind.Hash => {
+            p.advance()
+            extView = p.text(t: p.curTok())
+            p.advance()
+        }
+        _ => {}
+    }
+    return <TypeAst name=name args=args span=<Span start=sStart end=p.prevEnd() /> extView=extView />
 }
 
 // An optional generic parameter list `[T, U]` -> the parameter names. Capability

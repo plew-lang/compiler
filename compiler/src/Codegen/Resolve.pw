@@ -287,9 +287,16 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
 // `value#Ext.m()` (spec/09) and `a#P.foo()` provided-method disambiguation
 // (spec/08). Resolves overloads by labels + arg types. c.funcs.count if none.
 fn findExtMethod(c: inout Comp, recvStart: U64, recvLen: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    val qSrcId: U64 = intern(c: inout c, start: srcStart, len: srcLen)
+    return findExtMethodById(c: inout c, recvStart: recvStart, recvLen: recvLen, srcId: qSrcId, nameStart: nameStart, nameLen: nameLen, args: args)
+}
+
+// As findExtMethod, but the source `#X` is already interned (e.g. a type's
+// viewExtId from a `Type#Ext`-typed value). Matches Func.extId or srcTraitId.
+fn findExtMethodById(c: inout Comp, recvStart: U64, recvLen: U64, srcId: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     val qRecvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
-    val qSrcId: U64 = intern(c: inout c, start: srcStart, len: srcLen)
+    val qSrcId: U64 = srcId
     mut val firstLabel: U64 = c.funcs.count
     mut val i: U64 = 0
     while i < c.funcs.count {
@@ -1463,6 +1470,11 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 return firstMethodRetType(c: inout c, typeStart: bt.nameStart, typeLen: bt.nameLen, name: "index")
             }
             return scalarInfo()
+        }
+        Expr.ExtView(val recv, srcStart: _, srcLen: _) => {
+            // a value re-view has the same value/type as recv (the view only steers
+            // method resolution, handled at the dispatch site).
+            return exprType(c: inout c, id: recv)
         }
         Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
             // `recv#Ext.name(args)` (spec/09): return type from the extension method.

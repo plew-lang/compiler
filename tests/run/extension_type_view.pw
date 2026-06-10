@@ -1,0 +1,33 @@
+import @Std/Io with { print }
+
+// Type-level extension views (spec/09): `Person#Ext` is a zero-cost view usable
+// in a parameter/binding type. A value re-view `v#Ext` carries the view into its
+// static type, so a bare `.method()` on a `#Ext`-typed value resolves through the
+// extension (which shadows a same-name bare method under the view).
+struct P {
+    val n: I64
+}
+
+// the type's own greet (bare resolution)
+pub impl P {
+    fn greet() -> I64 { return 99I64 }
+}
+
+extension Ext {
+    pub impl P {
+        fn greet() -> I64 { return self.n + 1I64 }   // shadows under the #Ext view
+        fn tripled() -> I64 { return self.n * 3I64 }
+    }
+}
+
+// a parameter typed P#Ext: bare calls inside resolve through Ext.
+fn viaParam(x: P#Ext) -> I64 { return x.greet() + x.tripled() }
+
+fn main() {
+    val p: P = <P n=4 />
+    print(p.greet())            // 99  (bare: the type's own method)
+    print(p#Ext.greet())        // 5   (explicit view)
+    val v = p#Ext               // v: P#Ext
+    print(v.greet())            // 5   (bare on a viewed binding)
+    print(viaParam(x: p#Ext))   // (4+1) + (4*3) = 17
+}
