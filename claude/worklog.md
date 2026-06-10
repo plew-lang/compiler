@@ -21,7 +21,7 @@
 
 **スコープ内（潰す）**＝以下＋provisional.md の各テーマ節で `✅` でない項目：
 1. **🔴 enum/primitive のメソッドディスパッチ＝✅ 完了**（最大ブロッカー解消）：enum の inherent メソッド（`isPlainUserFn` が enum 受容・本体 self 束縛で enum recvRef〔match 復元〕・`genLlvmMethod` に enum dispatch〔by-value／inout=placePtrOf〕）・enum トレイト準拠メソッド・enum/primitive の `#Ext` 拡張メソッド（`genLlvmExtMethod` を struct→enum→primitive の受信型解決に一般化）・enum `defaultExtension`（enum 本体パーサ＋lowering で `defaultExts` 登録）。primitive local の tref も let で設定（`x#Ext.m()` 解決）。注：`pub impl I64 {}` 等の built-in 型 inherent メソッドは spec が正しく禁止（`#Ext`/トレイト準拠を使う）＝バグでない。tests run/{enum_method,enum_method_inout,enum_extension,primitive_extension,enum_trait}。
-2. **既知バグ（下記）**＝import なしプログラムの誤 reject／I/O import gate（受理健全性の穴）。
+2. **import gate（受理健全性）＝✅ 完了**：import なしの arithmetic/comparison/`&&`/array/for/Optional/match/struct は ambient Core で受理（test run/no_import_main・ambient_core）。`print`/`eprint`/`write`/`exit`/`assert` 等の非 ambient `@Std` 関数は import なしで loud reject（test reject/import_less_print・{eprint,write,exit,assert}_not_imported・print_bare_literal）。当初の「arithmetic operator needs Add/Sub 誤 reject」「print 名 intercept で import 無視」は解消済。
 3. **Self 入力 param の準拠＝✅ 完了**（`fn eqTo(other: Self)` 手書き準拠が struct/enum 両受信者で動作・`paramSelectorEqSubst` で witness 側 Self も置換・`bindOneParam` で Self param span を ground・test run/self_param_conformance{,_enum}）。
 4. **Iterator 拡充**＝終端（reduce/fold/count/sum/collect/any/all/first）＋ adapter（take/zip/enumerate/skip）。
 5. **RNG/`Random`**＝`Dictionary` のランダムシード含む。
@@ -40,7 +40,7 @@
 
 ## 既知バグ（要修正）
 
-- **🐞 import なしプログラムが「arithmetic operator needs Add/Sub/...」で誤 reject＋intercept される I/O 組込の import gate が無い**（受理健全性の穴・調査済）。詳細・直し方は [provisional.md](provisional.md)「可視性・モジュール・import」の該当項（prelude が自己完結でなく verify が未使用 prelude 関数の witness で落ちる／`print` 等は LLVM backend が呼び名 intercept で import を問わず emit）。当面の回避＝`import @Std/Io with { print }`。
+- （現在オープンなし。import gate の誤 reject／intercept は解消済＝上の「スコープ内」#2 を参照。）
 
 ## 次の候補（open・additive／要判断）
 
