@@ -28,7 +28,7 @@
 ## 文字列
 
 - `String`＝不変・UTF-8 妥当・`==` バイト等価な CoW 値型 → **現状：`{ptr,len}`・不変・byte-`==`**（不変と byte-eq は spec 通り）。残：**UTF-8 妥当性チェックなし**・**連結なし**・**`scalars`/`graphemes`/`Ord`/substring/`Slice` なし**・解放なし〔leak〕。`.bytes`（`Array[U8]` O(1) ビュー）は spec 通り。spec/02。
-- **文字列リテラルのエスケープ**：`strDecodeBytes`/`escByte` が `\n`/`\t`/`\r`/`\0`＋`\\`/`\"`/`\'` を decode 済。**未対応＝`\u{XXXX}` Unicode エスケープ**（`café`＝`\u{e9}`・絵文字＝`\u{1F600}`）＝UTF-8 エンコードに U64→U8 truncation が要る。2026-06-11 試行＝`truncU8` を compiler 内 `extern "plew-intrinsic"`＋genLlvmCall intercept にしたが ADD→reseed→USE chicken-and-egg＋compiler 自身の extern 呼びが intercept を経ず `_truncU8` undefined→revert。**直すには**＝(a) `truncU8` を runtime `plew_*` 関数にして実シンボル化、または (b) compiler の extern intrinsic 呼びが name-intercept を通るか配線。spec/02。
+- ✅ **文字列リテラルのエスケープ**：`strDecodeBytes`/`escByte` が `\n`/`\t`/`\r`/`\0`＋`\\`/`\"`/`\'` を decode 済。✅ **`\u{XXXX}` Unicode エスケープ**（`café`＝`\u{e9}`・絵文字＝`\u{1F600}`）＝`appendUtf8`/`hexDigitVal` が UTF-8 1-4 byte に encode・U64→U8 truncation は `truncU8` intrinsic〔Core の `extern "plew-intrinsic"`＋genLlvmCall intercept で `coerceInt`→i8・bitCastU64 と同形〕。chicken-and-egg は ADD（intercept のみ）→reseed→USE→reseed の2段 reseed で解消（intercept を先に seed へ焼く）。test run unicode_escape。spec/02。
 
 ## 配列・辞書・集合・タプル
 

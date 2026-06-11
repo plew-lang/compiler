@@ -370,6 +370,10 @@ export extern "plew-intrinsic" {
     fn stringFromBytes(b~: Array[U8]) -> String
     // a float -> its decimal text (the backend lowers it to snprintf "%g").
     fn floatToString(value~: F64) -> String
+    // Truncate a U64 to its low 8 bits as U8 (`as U8` is lossless-only and rejects
+    // wider values). Used to assemble UTF-8 bytes from a code point during string
+    // literal `\u{...}` decoding, where each computed byte is known to fit in U8.
+    fn truncU8(n: U64) -> U8
 }
 
 // String methods, written in pure Plew over the exposed `bytes` view (spec/02:

@@ -1,0 +1,9 @@
+import @Std/Io with { print }
+
+fn main() {
+    print("caf\u{e9}")
+    print("na\u{ef}ve")
+    print("\u{1F600} smile")
+    print("A\u{42}C")
+    print("\u{2764} heart")
+}
