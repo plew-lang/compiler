@@ -1,0 +1,9 @@
+// A user type whose name collides with a generic's own type-PARAMETER name
+// (`struct V` used as the value type of `Dictionary[K, V]`): type-parameter
+// identity is name-based, so the two are indistinguishable. Rejected loudly
+// (spec: 曖昧はエラー) — previously this stack-overflowed the compiler.
+struct V { val n: I64 }
+
+fn main() {
+    val d: Dictionary[String, V] = [:]
+}

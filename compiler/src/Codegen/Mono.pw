@@ -772,6 +772,54 @@ fn clearSelfItemEnv(c: inout Comp) {
     c.curItemRef = 0
 }
 
+// A generic instantiation whose type ARGUMENT names a type whose head collides with
+// one of the generic's own type-PARAMETER names (`Dictionary[String, V]` where the
+// user also declares `struct V` — V is both Dictionary's value param and a concrete
+// type). Type-parameter identity is name-based, so the two are indistinguishable and
+// substitution/grounding cannot terminate (it would otherwise stack-overflow). Detect
+// it so the front-end can reject loudly (spec: 曖昧はエラー) instead of crashing.
+fn instArgCollidesParamName(c: inout Comp, instRef: U64) -> Bool {
+    val t: TypeRef = c.types[instRef]
+    if t.args.count == 0U64 {
+        return false
+    }
+    mut val params: Array[Bind] = []
+    val gsi: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    if gsi < c.structs.count {
+        params = c.structs[gsi].typeParams
+    } else {
+        val gei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+        if gei < c.enums.count {
+            params = c.enums[gei].typeParams
+        } else {
+            return false
+        }
+    }
+    mut val ai: U64 = 0
+    while ai < t.args.count {
+        val arg: TypeRef = c.types[t.args[ai]]
+        // a bare argument (no args of its own) whose head names a declared concrete
+        // struct/enum AND coincides with one of this generic's parameter names.
+        val argId: U64 = arg.nameId
+        if argId != 0U64 {
+            if isTypeParamName(c: inout c, start: arg.nameStart, len: arg.nameLen) {
+                // arg is itself a parameter name (a template position) — not a concrete
+                // collision; skip.
+            } else {
+                mut val pi: U64 = 0
+                while pi < params.count {
+                    if params[pi].nameId == argId {
+                        return true
+                    }
+                    pi += 1
+                }
+            }
+        }
+        ai += 1
+    }
+    return false
+}
+
 fn scanType(c: inout Comp, ref: U64) {
     if ref >= c.types.count {
         return
@@ -819,6 +867,9 @@ fn scanType(c: inout Comp, ref: U64) {
                     return
                 }
                 j += 1
+            }
+            if instArgCollidesParamName(c: inout c, instRef: ref) {
+                compileErrorAt(line: lineOf(c: inout c, offset: c.types[ref].nameStart), msg: "a type argument's name collides with this generic's type-parameter name (e.g. `struct V` used as the value of `Dictionary[K, V]`); rename the type")
             }
             c.genInsts.append(ref)
             // scan the generic struct's fields under this instantiation's env so an
