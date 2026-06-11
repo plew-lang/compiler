@@ -29,6 +29,8 @@
 
 ### A. soundness（spec-invalid を accept する穴＝最優先）
 
+- **🔴 generic/trait-template の本体が未検証（最大の残 soundness 穴）**＝`verifyProgram` が **generic 関数/メソッド本体・trait provided-method 本体**を skip（退役済 C emitter に委譲する設計だったが C emitter は削除済＝今や誰も検査しない）。concrete な型エラー（`fn f[T](x: T)->I64 { val y: I64 = true …}`／`fn f[T](...)->I64 { return "s" }`／provided method 本体）が全て素通し＝**async と同類だが型パラメータがあるため難しい**。`tcCheckValue` は `knownNamedTypeId`→0 で T を lenient に通すが、**他の verify 検査（category/`checkLitSpan`）は型パラメータ非対応**ゆえ単純に template を verify すると `T` 値が concrete 位置へ流れる正当な generic コードを誤 reject（コンパイラ自身が generic 多用＝self-host 破壊リスク大）。**正しい直し方＝(a) 単相化インスタンスを substitution env 付きで verify、または (b) 全 verify 検査を型パラメータ-aware〔T を abstract 扱い〕にする**＝大きめ・要設計。async（concrete subset）は ✅ 済。
+
 - **ファクトリ公開ゲート (a)（spec/05）**＝全 pub フィールドでも cross-module 構築は `pub impl Type { factory }` 明示要。`factory` 宣言機能と一括（現状は (b) フィールドゲート＝非 pub を弾く・のみで、全 pub 型は許容＝spec (a) より緩い）。
 - **generic-receiver method の value 引数 grounding**＝`w.set(5I64)` on `W[String]` が silent miscompile（`substTypeInfo`/`mf.typeParams` が impl param `T` を ground し切らず素通し）。2 回試行とも失敗＝(1) method-own param を含めると `fold[B]` 等を誤 reject、(2) **owner struct/enum の typeParams で ground**（`ownerTypeParamsForRef`）してもコンパイラ自身の source を誤 reject〔`expected=I64 got=U64 from=Field:ref`〕＋ tmp/w.pw では grounding が走らず（recv=W の genericRecv は true だが substitution が String を返さず素通し）＝**name-based 同一性の interning 衝突／index 整合がここでも噛む＝下の「横断＝型パラメータ判定のスコープ化」を先に直さないと安全に潰せない**。共有のクラッシュ事例〔dict 添字キー〕は別経路で reject 済。
 - **重なる inout ②③**（部分/添字重なり＝`a.merge(inout a.field)`・`arr[i],arr[j]` の distinct 証明）＝spec 通り lint＋限定ランタイム panic（将来・ケース①構文同一は実装済）。
