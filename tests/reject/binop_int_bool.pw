@@ -1,0 +1,5 @@
+// spec/12: a primitive int has only same-type operator witnesses (`impl I64 as
+// Add[I64]`), so adding a Bool to an I64 has no witness — no implicit conversion.
+fn main() {
+    val x: I64 = 1I64 + true
+}

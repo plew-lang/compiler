@@ -232,17 +232,17 @@ fn tcCheckBinop(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
     if l >= c.types.count || r >= c.types.count {
         return
     }
-    // both operands a PRIMITIVE numeric (int or float): they must be the same type — a
-    // primitive's witnesses are all same-type (`impl I32 as Add[I32]`, `Ord` on Self),
-    // so a mixed pair (`3I32 + 5I64`, `aI64 < bF64`) has no witness and is a
-    // no-implicit-conversion error. typesCompatible carries the F32/F64 leniency and the
-    // int↔float rejection; a user-type operand (Add[Rhs] may differ) is excluded here.
+    // a PRIMITIVE numeric LHS forces the RHS to be the SAME type — a primitive's
+    // operator witnesses are all same-type (`impl I32 as Add[I32]`, `Ord` on Self,
+    // `Shl[I32]`), and `a OP b` always dispatches on the LHS type. So the RHS must
+    // match `l` whether it is another primitive (`3I32 + 5I64`), a non-numeric
+    // primitive (`1I64 + true`), or any other type — there is no `Add[Bool]` /
+    // `Add[Money]` on a primitive int. typesCompatible carries the F32/F64 leniency
+    // and the int↔float rejection. A non-numeric LHS (a user type whose `Add[Rhs]`
+    // may legitimately differ) is excluded here — its witness is checked elsewhere.
     val lNum: Bool = isIntType(c: inout c, start: c.types[l].nameStart, len: c.types[l].nameLen) || isFloatType(c: inout c, start: c.types[l].nameStart, len: c.types[l].nameLen)
-    val rNum: Bool = isIntType(c: inout c, start: c.types[r].nameStart, len: c.types[r].nameLen) || isFloatType(c: inout c, start: c.types[r].nameStart, len: c.types[r].nameLen)
     if lNum {
-        if rNum {
-            tcCheckValue(c: inout c, expectedRef: l, valueExpr: rhs, pos: "binop")
-        }
+        tcCheckValue(c: inout c, expectedRef: l, valueExpr: rhs, pos: "binop")
     }
 }
 
