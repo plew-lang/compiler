@@ -1,0 +1,15 @@
+// A record literal as a METHOD argument (spec/02): the literal `(x:3, y:4)` takes
+// its type from the method parameter's declared record type (method-arg context).
+import @Std/Io with { print }
+
+struct Box { pub val v: I64 }
+pub impl Box {
+    fn dist(p: (x: I64, y: I64)) -> I64 { return p.x + p.y }
+    fn shift(by: (dx: I64, dy: I64)) -> I64 { return self.v + by.dx + by.dy }
+}
+
+fn main() {
+    val b: Box = <Box v=100I64 />
+    print(b.dist(p: (x: 3I64, y: 4I64)))
+    print(b.shift(by: (dx: 10I64, dy: 1I64)))
+}

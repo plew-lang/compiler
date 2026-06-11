@@ -269,6 +269,49 @@ fn callArgType(c: inout Comp, fnName: String, argLabel: String) -> U64 {
     return 0U64
 }
 
+// Like callArgType but for a METHOD call `recv.name(label: …)`: the receiver type is
+// not known at lowering, so resolve by method name + label across ALL methods. Only
+// when exactly one non-generic method is named `methodName` (so the label maps to a
+// single param type unambiguously) is the type adopted — otherwise 0 (context-free,
+// no guess). Gives a record/dict/`()` literal method-argument its context type.
+fn methodArgType(c: inout Comp, methodName: String, argLabel: String) -> U64 {
+    if methodName.bytes.count == 0U64 {
+        return 0U64
+    }
+    if argLabel.bytes.count == 0U64 {
+        return 0U64
+    }
+    val mnB: Bind = internBytes(c: inout c, s: methodName)
+    val mnId: U64 = intern(c: inout c, start: mnB.nameStart, len: mnB.nameLen)
+    val lb: Bind = internBytes(c: inout c, s: argLabel)
+    val lid: U64 = intern(c: inout c, start: lb.nameStart, len: lb.nameLen)
+    mut val matchCount: U64 = 0
+    mut val resultTy: U64 = 0
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        val f: Func = c.funcs[fi]
+        if f.hasRecv {
+            if f.nameId == mnId {
+                if f.typeParams.count == 0U64 {
+                    matchCount += 1
+                    mut val pi: U64 = 0
+                    while pi < f.params.count {
+                        if intern(c: inout c, start: f.params[pi].nameStart, len: f.params[pi].nameLen) == lid {
+                            resultTy = f.params[pi].ty
+                        }
+                        pi += 1
+                    }
+                }
+            }
+        }
+        fi += 1
+    }
+    if matchCount == 1U64 {
+        return resultTy
+    }
+    return 0U64
+}
+
 fn lowerArgs(c: inout Comp, args: Array[ArgAst], fnName: String) -> Array[Arg] {
     mut val out: Array[Arg] = []
     mut val i: U64 = 0
@@ -278,6 +321,34 @@ fn lowerArgs(c: inout Comp, args: Array[ArgAst], fnName: String) -> Array[Arg] {
         // / record / `()` whose type is only known from the parameter). Defensive: 0
         // falls back to context-free lowering (overloaded / generic / method calls).
         val actx: U64 = callArgType(c: inout c, fnName: fnName, argLabel: a.label)
+        mut val e: U64 = 0
+        if actx != 0U64 {
+            e = lowerExprWithCtx(c: inout c, e: a.value, ctxRef: actx)
+        } else {
+            e = lowerExpr(c: inout c, e: a.value)
+        }
+        mut val labelStart: U64 = 0
+        mut val labelLen: U64 = 0
+        if a.hasLabel {
+            val lb: Bind = internBytes(c: inout c, s: a.label)
+            labelStart = lb.nameStart
+            labelLen = lb.nameLen
+        }
+        out.append(<Arg expr=e isInout=a.isInout labelStart=labelStart labelLen=labelLen hasLabel=a.hasLabel />)
+        i += 1
+    }
+    return out
+}
+
+// Lower a method call's arguments, flowing each resolved parameter type (via
+// methodArgType) to a context-typed argument literal. Mirrors lowerArgs but resolves
+// by method name instead of free-fn name.
+fn lowerMethodArgs(c: inout Comp, args: Array[ArgAst], methodName: String) -> Array[Arg] {
+    mut val out: Array[Arg] = []
+    mut val i: U64 = 0
+    while i < args.count {
+        val a: ArgAst = args[i]
+        val actx: U64 = methodArgType(c: inout c, methodName: methodName, argLabel: a.label)
         mut val e: U64 = 0
         if actx != 0U64 {
             e = lowerExprWithCtx(c: inout c, e: a.value, ctxRef: actx)
@@ -595,7 +666,7 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
         }
         ExprAst.Method(val recv, val name, val args, val span) => {
             val r: U64 = lowerExpr(c: inout c, e: recv)
-            val a: Array[Arg] = lowerArgs(c: inout c, args: args, fnName: "")
+            val a: Array[Arg] = lowerMethodArgs(c: inout c, args: args, methodName: name)
             val nm: Bind = internBytes(c: inout c, s: name)
             result = c.pushExpr(e: <Expr.Method recv=r nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
         }
