@@ -380,6 +380,11 @@ struct StructDef {
     // emits a `typedef void* <Name>;` (the real layout lives in the C library; we
     // self-emit the declaration so no foreign header `#include` is needed).
     pub val isCExtern: Bool = false
+    // original source offset of the declaration (the decl span's start), kept for
+    // `moduleOf` so the construction-visibility gate (spec/05) can attribute the
+    // type to its DEFINING module. The struct's nameStart is re-interned (synthetic,
+    // module 0), so it cannot serve this purpose. 0 for synthetic/record structs.
+    pub val defOffset: U64 = 0
 }
 
 struct Variant {

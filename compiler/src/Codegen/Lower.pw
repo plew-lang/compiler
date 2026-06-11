@@ -388,11 +388,13 @@ fn synthEmptyDict(c: inout Comp, ctxRef: U64) -> U64 {
     val emptyBuckets: U64 = c.pushExpr(e: <Expr.Array elems=noElems />)
     val zero: U64 = c.pushExpr(e: <Expr.Int value=0 offset=0 isBool=false tyStart=0 tyLen=0 isNeg=false />)
     mut val fields: Array[MakeField] = []
-    fields.append(<MakeField nameStart=kN.nameStart nameLen=kN.nameLen value=emptyKeys />)
-    fields.append(<MakeField nameStart=vN.nameStart nameLen=vN.nameLen value=emptyVals />)
-    fields.append(<MakeField nameStart=hN.nameStart nameLen=hN.nameLen value=emptyHashes />)
-    fields.append(<MakeField nameStart=bN.nameStart nameLen=bN.nameLen value=emptyBuckets />)
-    fields.append(<MakeField nameStart=cN.nameStart nameLen=cN.nameLen value=zero />)
+    // offset = the interned (unloaded) name span: marks these as synthesized so the
+    // construction-visibility gate skips them (a dict's fields are module-private).
+    fields.append(<MakeField nameStart=kN.nameStart nameLen=kN.nameLen value=emptyKeys offset=kN.nameStart />)
+    fields.append(<MakeField nameStart=vN.nameStart nameLen=vN.nameLen value=emptyVals offset=vN.nameStart />)
+    fields.append(<MakeField nameStart=hN.nameStart nameLen=hN.nameLen value=emptyHashes offset=hN.nameStart />)
+    fields.append(<MakeField nameStart=bN.nameStart nameLen=bN.nameLen value=emptyBuckets offset=bN.nameStart />)
+    fields.append(<MakeField nameStart=cN.nameStart nameLen=cN.nameLen value=zero offset=cN.nameStart />)
     return c.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fields />)
 }
 
@@ -1051,7 +1053,7 @@ fn lowerStructDecl(c: inout Comp, d: DeclAst) {
         c.funcs.append(<Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout c, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nm.nameStart recvLen=nm.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
         c.deinits.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen fieldStart=nm.nameStart fieldLen=nm.nameLen />)
     }
-    c.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams fields=fields isUnique=d.isUnique isExtern=false />)
+    c.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams fields=fields isUnique=d.isUnique isExtern=false defOffset=d.span.start />)
     // `defaultExtension #Ext` (spec/09): record (type, extension) so the extension's
     // methods join this type's bare resolution surface (findMethod).
     val tid: U64 = intern(c: inout c, start: nm.nameStart, len: nm.nameLen)

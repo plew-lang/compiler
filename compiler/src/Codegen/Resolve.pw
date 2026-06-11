@@ -17,6 +17,26 @@ fn moduleOf(c: inout Comp, offset: U64) -> U64 {
     return 0
 }
 
+// Whether `offset` falls inside some loaded file's source range (a real, user- or
+// std-written span). Distinguishes genuine source from compiler-synthesized spans
+// (interned bytes appended into the gaps between module ranges, e.g. the
+// `keys`/`vals`/`count` field names a dictionary literal builds): those land
+// outside every range. The construction-visibility gate (spec/05) uses this to skip
+// synthesized constructions while still checking user-written `<Type field=…/>`.
+fn offsetIsLoaded(c: inout Comp, offset: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.moduleRanges.count {
+        val r: Bind = c.moduleRanges[i]
+        if offset >= r.nameStart {
+            if offset < r.nameStart + r.nameLen {
+                return true
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
 // The effective declared type of a `val`/`mut val` binding: the written
 // annotation, or — when omitted (`val x = expr`) — inferred from the initializer.
 // (start,len,arr) is the head/array view; ty the structured TypeRef. Shared by
@@ -1053,6 +1073,64 @@ fn checkMethodVis(c: inout Comp, ownerStart: U64, ownerLen: U64, mf: Func, offse
         } else {
             compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "method is private (callable only in its type's anonymous impl; put it in a `pub impl`)")
         }
+    }
+}
+
+// Construction visibility — the field gate of spec/05. The default memberwise
+// factory builds a value field-by-field; a field set from OUTSIDE the type's
+// defining module must be `pub` (vis 2). A private (vis 0) or `pub(get)` (vis 1)
+// field is writable only inside its own module, so naming it in a cross-module
+// `<Type field=…/>` is an encapsulation violation — reject it. Same-module
+// construction is unrestricted (the memberwise factory is module-private but freely
+// usable within the module). enum payloads, records (all-pub synthetic structs),
+// and extern lang-items are not gated; compiler-synthesized field names (a
+// dictionary literal's `keys`/`vals`/…, which are not real source) are skipped via
+// offsetIsLoaded so desugarings keep working. (The public-FACTORY gate — requiring
+// `pub impl Type { factory }` even for all-pub fields — lands with `factory`.)
+fn checkConstructVis(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool, fields: Array[MakeField]) {
+    if isEnum {
+        return
+    }
+    if typeLen == 0U64 {
+        return
+    }
+    // a record's canonical name begins '(' — its fields are structurally public.
+    if c.bytes[typeStart] == '(' {
+        return
+    }
+    mut val sidx: U64 = structIndexByName(c: inout c, start: typeStart, len: typeLen)
+    if sidx < c.structs.count {
+    } else {
+        sidx = genericStructIndex(c: inout c, nameStart: typeStart, nameLen: typeLen)
+    }
+    if sidx < c.structs.count {
+    } else {
+        return
+    }
+    val sd: StructDef = c.structs[sidx]
+    if sd.isExtern {
+        return
+    }
+    val defMod: U64 = moduleOf(c: inout c, offset: sd.defOffset)
+    mut val i: U64 = 0
+    while i < fields.count {
+        val v: U64 = fieldVis(c: inout c, structStart: typeStart, structLen: typeLen, fieldStart: fields[i].nameStart, fieldLen: fields[i].nameLen)
+        if v == 0U64 || v == 1U64 {
+            // gate by the field's ORIGINAL source offset (nameStart is re-interned and
+            // does not map to a module); synthesized constructions carry an unloaded
+            // offset (the dict literal's `keys`/… use the interned span) and are skipped.
+            if offsetIsLoaded(c: inout c, offset: fields[i].offset) {
+                if moduleOf(c: inout c, offset: fields[i].offset) == defMod {
+                } else {
+                    if v == 0U64 {
+                        compileErrorAt(line: lineOf(c: inout c, offset: fields[i].offset), msg: "cannot set a private field when constructing from another module (the field is not `pub`)")
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: fields[i].offset), msg: "cannot set a `pub(get)` field when constructing from another module (it is read-only outside its module)")
+                    }
+                }
+            }
+        }
+        i += 1U64
     }
 }
 

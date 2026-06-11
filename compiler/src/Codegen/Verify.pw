@@ -895,6 +895,8 @@ fn verifyExpr(c: inout Comp, id: U64) {
                     }
                 }
             }
+            // field gate (spec/05): a non-`pub` field cannot be set from another module.
+            checkConstructVis(c: inout c, typeStart: typeStart, typeLen: typeLen, isEnum: isEnum, fields: fields)
             mut val i: U64 = 0
             while i < fields.count {
                 verifyExpr(c: inout c, id: fields[i].value)
