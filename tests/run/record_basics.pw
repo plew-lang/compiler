@@ -1,0 +1,45 @@
+import @Std/Io with { print }
+
+// Labelled anonymous records (spec/02): a structural, nameless record `(x: I64, y: I64)`
+// — type, literal, and `.field` access. Identity is the field-name+type set (order
+// independent), so two records with the same fields are the same type; they lower to a
+// synthetic struct keyed by their canonical (sorted) fields.
+
+// Multi-value return (the primary use), and a record-typed parameter.
+fn divMod(a: I64, b: I64) -> (quotient: I64, remainder: I64) {
+    return (quotient: a / b, remainder: a % b)
+}
+fn sumXY(p: (x: I64, y: I64)) -> I64 {
+    return p.x + p.y
+}
+// Two functions returning the SAME record type (structural identity).
+fn origin() -> (x: I64, y: I64) { return (x: 0, y: 0) }
+fn unit() -> (x: I64, y: I64) { return (x: 1, y: 1) }
+
+// A record as a struct field (nested record access).
+struct Segment { pub val from: (x: I64, y: I64)  pub val to: (x: I64, y: I64) }
+
+fn main() {
+    val r: (quotient: I64, remainder: I64) = divMod(a: 17, b: 5)
+    print(r.quotient)                 // 3
+    print(r.remainder)                // 2
+    // field order independence: literal written y-first for an x-first type
+    val p: (x: I64, y: I64) = (y: 40, x: 30)
+    print(p.x)                        // 30
+    print(p.y)                        // 40
+    // structural identity: both functions' results flow into the same param type
+    print(sumXY(p: origin()))         // 0
+    print(sumXY(p: unit()))           // 2
+    // a String field alongside an integer field
+    val s: (text: String, count: I64) = (text: "hi", count: 7)
+    print(s.text)                     // hi
+    print(s.count)                    // 7
+    // value-semantics copy of a record
+    val c: (x: I64, y: I64) = p
+    print(c.x)                        // 30
+    // record as a struct field, nested access
+    val endp: (x: I64, y: I64) = (x: 3, y: 4)
+    val seg: Segment = <Segment from=origin() to=endp />
+    print(seg.from.x)                 // 0
+    print(seg.to.y)                   // 4
+}

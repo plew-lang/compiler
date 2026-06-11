@@ -79,6 +79,10 @@ export enum ExprAst {
     Make(typeName: String, typeArgs: Array[TypeAst], variant: String, isEnum: Bool, fields: Array[MakeFieldAst], span: Span)
     ArrayLit(elems: Array[ExprAst], span: Span)
     DictLit(keys: Array[ExprAst], vals: Array[ExprAst], span: Span)
+    // a labelled anonymous record literal `(x: 1, y: 2)` (spec/02). `fields` reuses
+    // MakeFieldAst (label + value). The field types come from each value (or the
+    // context type); it lowers to a synthetic struct construction.
+    RecordLit(fields: Array[MakeFieldAst], span: Span)
     Cast(operand: ExprAst, ty: TypeAst, span: Span)
     MatchExpr(scrut: ExprAst, arms: Array[MatchArmAst], span: Span)
     IfExpr(cond: ExprAst, thenBlk: BlockAst, elseBlk: BlockAst, span: Span)

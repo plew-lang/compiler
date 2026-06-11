@@ -364,7 +364,52 @@ fn parsePrimaryAst(p: inout P) -> ExprAst {
             }
         }
         Kind.LParen => {
+            val recStart: U64 = p.base + p.curTok().start
             p.advance()
+            // unit `()` — the empty anonymous record (spec/02).
+            match p.curKind() {
+                Kind.RParen => {
+                    p.advance()
+                    mut val noFields: Array[MakeFieldAst] = []
+                    return <ExprAst.RecordLit fields=noFields span=<Span start=recStart end=p.prevEnd() /> />
+                }
+                _ => {}
+            }
+            // a labelled anonymous record literal `(x: 1, y: 2)`: distinguished from a
+            // parenthesized expression by a leading `label:` (an ident then a colon).
+            mut val isRecord: Bool = false
+            match p.curKind() {
+                Kind.Ident => {
+                    if p.peekKind(off: 1) == <Kind.Colon /> {
+                        isRecord = true
+                    }
+                }
+                _ => {}
+            }
+            if isRecord {
+                mut val fields: Array[MakeFieldAst] = []
+                while true {
+                    match p.curKind() {
+                        Kind.RParen => { p.advance()  break }
+                        Kind.Eof => { break }
+                        Kind.Comma => { p.advance() }
+                        _ => {
+                            val labelTok: Tok = p.curTok()
+                            val label: String = p.text(t: labelTok)
+                            val fStart: U64 = p.base + labelTok.start
+                            p.advance()
+                            match p.curKind() {
+                                Kind.Colon => { p.advance() }
+                                _ => { p.fail(off: p.base + p.curTok().start, msg: "an anonymous record field needs a `label: value`") }
+                            }
+                            val fv: ExprAst = parseExprAst(p: inout p)
+                            fields.append(value: <MakeFieldAst name=label value=fv span=<Span start=fStart end=p.prevEnd() /> />)
+                        }
+                    }
+                }
+                return <ExprAst.RecordLit fields=fields span=<Span start=recStart end=p.prevEnd() /> />
+            }
+            // otherwise a parenthesized (grouping) expression.
             val inner: ExprAst = parseExprAst(p: inout p)
             match p.curKind() {
                 Kind.RParen => { p.advance() }

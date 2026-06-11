@@ -171,6 +171,37 @@ fn parseType(p: inout P) -> TypeAst {
             return <TypeAst name=inner.name args=inner.args span=<Span start=anyStart end=p.prevEnd() /> extView=inner.extView isAny=true argLabels=inner.argLabels />
         }
     }
+    // a labelled anonymous record type `(x: I32, y: I32)` / unit `()` (spec/02): a
+    // structural record. Fields are `label: Type` pairs; `name` stays empty and the
+    // field names/types ride in argLabels/args (isRecord marks it).
+    match p.curKind() {
+        Kind.LParen => {
+            val recStart: U64 = p.base + p.curTok().start
+            p.advance()
+            mut val fieldTypes: Array[TypeAst] = []
+            mut val fieldNames: Array[String] = []
+            while true {
+                match p.curKind() {
+                    Kind.RParen => { p.advance()  break }
+                    Kind.Eof => { break }
+                    Kind.Comma => { p.advance() }
+                    _ => {
+                        val labelTok: Tok = p.curTok()
+                        val label: String = p.text(t: labelTok)
+                        p.advance()
+                        match p.curKind() {
+                            Kind.Colon => { p.advance() }
+                            _ => { p.fail(off: p.base + p.curTok().start, msg: "an anonymous record field needs a `label: Type` (every field is labelled)") }
+                        }
+                        fieldNames.append(value: label)
+                        fieldTypes.append(value: parseType(p: inout p))
+                    }
+                }
+            }
+            return <TypeAst name="" args=fieldTypes span=<Span start=recStart end=p.prevEnd() /> argLabels=fieldNames isRecord=true />
+        }
+        _ => {}
+    }
     val head: Tok = p.curTok()
     val name: String = p.text(t: head)
     val sStart: U64 = p.base + head.start

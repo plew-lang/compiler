@@ -42,6 +42,11 @@ export struct TypeAst {
     // label marks a named associated-type / type-parameter binding `Name=Type`.
     // Empty (or all "") for an ordinary generic type like `Array[I32]`.
     pub val argLabels: Array[String] = []
+    // a labelled anonymous record type `(x: I32, y: I32)` (spec/02): a structural,
+    // nameless record. `args` holds the field types and `argLabels` the field names
+    // (parallel). `name` is empty. The type lowers to a synthetic struct keyed by its
+    // sorted (name, type) set, so two records with the same fields are the same type.
+    pub val isRecord: Bool = false
 }
 
 // A struct field / enum-variant payload field. For a variant payload field,
