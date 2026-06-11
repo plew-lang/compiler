@@ -181,6 +181,30 @@ pub impl Iterator {
         }
         return true
     }
+    // The first element, or `None` for an empty iterator.
+    fn first() -> Optional[Item] {
+        mut val it = self
+        return it.next()
+    }
+    // Combine the elements left-to-right with no seed, using the first element as the
+    // initial accumulator. `None` for an empty iterator (nothing to reduce).
+    fn reduce(combine: fn(acc: Item, x: Item) -> Item) -> Optional[Item] {
+        mut val it = self
+        match it.next() {
+            Optional.Some(val v) => {
+                mut val acc: Item = v
+                mut val go: Bool = true
+                while go {
+                    match it.next() {
+                        Optional.Some(val v) => { acc = combine(acc: acc, x: v) }
+                        Optional.None => { go = false }
+                    }
+                }
+                return <Optional.Some v=acc />
+            }
+            Optional.None => { return <Optional.None /> }
+        }
+    }
 }
 
 // The result of a fallible operation: `Ok` holds a `T`, `Err` holds an `E`.

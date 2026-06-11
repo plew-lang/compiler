@@ -1,0 +1,37 @@
+import @Std/Io with { print }
+
+// `first()` and `reduce()` — provided Iterator terminals whose RETURN type names the
+// associated `Item` (`-> Optional[Item]`). Both work on a bare user Iterator and on a
+// lazy adapter receiver (MapIter from `.map`). The signature grounds `Item` to the
+// receiver's concrete item via the Self/Item env (llvmFnRetTy + ensureProvidedDeclared),
+// so the `pf`/`gm` function returns `Optional[I64]`, matching the body's construction.
+struct Counter { pub mut val n: I64  pub val limit: I64 }
+pub impl Counter as Iterator {
+    type Item = I64
+    inout fn next() -> Optional[I64] {
+        if self.n < self.limit {
+            val v: I64 = self.n
+            self.n = self.n + 1
+            return <Optional.Some v=v />
+        }
+        return <Optional.None />
+    }
+}
+
+fn main() {
+    // first() on a bare iterator
+    mut val a: Counter = <Counter n=3 limit=9 />
+    match a.first() { Optional.Some(val v) => { print(v) }  Optional.None => { print(-1I64) } }   // 3
+    // first() on a map adapter
+    mut val b: Counter = <Counter n=0 limit=4 />
+    match b.map(f: fn(x: I64) -> I64 { return x * 100 }).first() { Optional.Some(val v) => { print(v) }  Optional.None => { print(-1I64) } }   // 0
+    // reduce() on a bare iterator (sum of 0..5)
+    mut val c: Counter = <Counter n=0 limit=5 />
+    match c.reduce(combine: fn(acc: I64, x: I64) -> I64 { return acc + x }) { Optional.Some(val v) => { print(v) }  Optional.None => { print(-1I64) } }   // 10
+    // reduce() on a map adapter (max of 10,20,30)
+    mut val d: Counter = <Counter n=1 limit=4 />
+    match d.map(f: fn(x: I64) -> I64 { return x * 10 }).reduce(combine: fn(acc: I64, x: I64) -> I64 { if acc > x { return acc } return x }) { Optional.Some(val v) => { print(v) }  Optional.None => { print(-1I64) } }   // 30
+    // reduce() over an empty iterator -> None
+    mut val e: Counter = <Counter n=0 limit=0 />
+    match e.reduce(combine: fn(acc: I64, x: I64) -> I64 { return acc + x }) { Optional.Some(val v) => { print(v) }  Optional.None => { print(-1I64) } }   // -1
+}

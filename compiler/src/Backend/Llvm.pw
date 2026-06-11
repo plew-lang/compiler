@@ -6204,7 +6204,7 @@ fn genGenMethodCall(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64, slot:
     // coerces against the receiver's real item type (see emitOneGenMethod).
     val sGs: U64 = c.curSelfRef
     val sGi: U64 = c.curItemRef
-    if st.genMethOwn[slot].count > 0U64 {
+    if mf.isProvided {
         setSelfItemEnv(c: inout c, recvStart: c.types[instRef].nameStart, recvLen: c.types[instRef].nameLen, recvInstRef: instRef)
     }
     mut val ai: U64 = 0
@@ -6689,9 +6689,12 @@ fn llvmFnRetTy(c: inout Comp, st: inout LlvmCtx, f: Func) -> LLVMTypeRef {
             return st.anyTy
         }
         // ground a generic-instance return (`Box[T]`) through the active env so it
-        // resolves to the registered concrete instance (`Box[I32]`).
+        // resolves to the registered concrete instance (`Box[I32]`). Also ground when
+        // only a Self/Item env is active (a non-generic method on a conforming type:
+        // `first() -> Optional[Item]` on Counter grounds Item -> I64 via curItemRef,
+        // even though Counter has no type params).
         mut val rt: U64 = f.retTy
-        if c.curTypeParams.count > 0U64 {
+        if c.curTypeParams.count > 0U64 || c.curItemRef != 0U64 || c.curSelfRef != 0U64 {
             rt = groundTypeRef(c: inout c, ref: rt)
         }
         if isGenericInst(c: inout c, ref: rt) {
@@ -6771,6 +6774,14 @@ fn ensureProvidedDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
             }
         }
     }
+    // bind `Self`/`Item` to the concrete receiver while computing the signature, so a
+    // provided terminal whose return type names `Item` (`first()`/`reduce() ->
+    // Optional[Item]`) declares the grounded type (`Optional[I64]`) — matching the body,
+    // which genLlvmFuncBody grounds the same way. Without this the declared return is the
+    // ungrounded `Optional[Item]` and the call site emits invalid GEP indices.
+    val savedPS: U64 = c.curSelfRef
+    val savedPI: U64 = c.curItemRef
+    setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
     mut val ptys: Array[LLVMTypeRef] = []
     ptys.append(value: selfParamTy(c: inout c, st: inout st, f: f))
     mut val pi: U64 = 0
@@ -6779,6 +6790,8 @@ fn ensureProvidedDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
         pi += 1
     }
     val fty: LLVMTypeRef = LLVMFunctionType(llvmFnRetTy(c: inout c, st: inout st, f: f), arrayCPtr(ptys), ptys.count, 0I32)
+    c.curSelfRef = savedPS
+    c.curItemRef = savedPI
     mut val nm: Array[U8] = []
     appendBytes(into: inout nm, from: "pf".bytes)
     appendU64Dec(into: inout nm, n: fi)
@@ -7061,12 +7074,13 @@ fn declareOneGenMethod(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64,
     // methods); pairs 1:1 with mf.typeParams = [receiver params..., own params...].
     c.curTypeArgs = concatArgs(add: c.types[instRef].args, base: ownArgs)
     st.curRecvInstRef = instRef
-    // bind Self/Item to the receiver instance for an own-param provided method, so a
-    // param/return type naming `Item` (`combine: fn(acc: B, x: Item) -> B`) resolves to
-    // the receiver's real item, independent of the B/B name collision (see emitOneGenMethod).
+    // bind Self/Item to the receiver instance for a provided method, so a param/return
+    // type naming `Item` resolves to the receiver's real item: a terminal returning
+    // `Optional[Item]` (`first`/`reduce`) grounds its signature, and an own-param
+    // terminal (`fold[B]`) sees the right item independent of the B/B collision.
     val sDs: U64 = c.curSelfRef
     val sDi: U64 = c.curItemRef
-    if ownArgs.count > 0U64 {
+    if mf.isProvided {
         setSelfItemEnv(c: inout c, recvStart: c.types[instRef].nameStart, recvLen: c.types[instRef].nameLen, recvInstRef: instRef)
     }
     mut val ptys: Array[LLVMTypeRef] = []
@@ -7120,7 +7134,7 @@ fn emitOneGenMethod(c: inout Comp, st: inout LlvmCtx, slot: U64) {
     // name collision (only when own args are present, leaving ordinary methods untouched).
     val s4: U64 = c.curSelfRef
     val si4: U64 = c.curItemRef
-    if st.genMethOwn[slot].count > 0U64 {
+    if mf.isProvided {
         setSelfItemEnv(c: inout c, recvStart: c.types[instRef].nameStart, recvLen: c.types[instRef].nameLen, recvInstRef: instRef)
     }
     genLlvmFuncBody(c: inout c, st: inout st, fi: mfi, fv: st.genMethVal[slot])
