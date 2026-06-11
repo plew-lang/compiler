@@ -1,0 +1,6 @@
+// spec/14: an async fn's body returns the declared inner type, so returning a
+// String from `async fn -> I64` is a type error (async bodies are now verified).
+async fn f() -> I64 {
+    return "s"
+}
+fn main() { }

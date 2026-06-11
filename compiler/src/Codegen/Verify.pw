@@ -41,14 +41,12 @@ fn verifyProgram(c: inout Comp) {
                 // a trait provided-method template — checked per conforming type
                 // (its concrete copies are ordinary funcs and get verified).
             } else {
-            if f.isAsync {
-                // async bodies return the Promise's inner type (`return n` resolves
-                // Promise[I64] with I64), so the return-context check needs the
-                // unwrapped type; the C emitter handles this inline. Until that is
-                // mirrored here, async bodies are checked by the C emitter only.
-            } else {
+                // async bodies are checked too: an `async fn f() -> I64` body's
+                // `return n` yields the DECLARED type I64 (the Promise[I64] wrapping is
+                // implicit), so the return-context check uses f.retStart as-is. `await`
+                // expressions infer as unknown (0) and are left to the conservative
+                // pass-through. (The retired C emitter used to be the only check here.)
                 verifyFunc(c: inout c, f: f)
-            }
             }
             }
         }
@@ -333,10 +331,36 @@ fn checkDupFields(c: inout Comp, fs: Array[FieldDef], ctx: String) {
 fn verifyFunc(c: inout Comp, f: Func) {
     if f.hasRet {
         c.curRetVoid = false
-        c.curRetStart = f.retStart
-        c.curRetLen = f.retLen
-        c.curRetIsArray = f.retIsArray
-        c.curRetTy = f.retTy
+        mut val rStart: U64 = f.retStart
+        mut val rLen: U64 = f.retLen
+        mut val rTy: U64 = f.retTy
+        mut val rArr: Bool = f.retIsArray
+        // an async fn's body returns the Promise's INNER type (`return n` yields I64
+        // even for `-> Promise[I64]`; the implicit `-> I64` form is already the inner
+        // type). Unwrap an explicitly-written Promise[T] to T so the return check uses
+        // T. (tcCheckValue handles a literal/array return against the inner ref.)
+        if f.isAsync {
+            if rangeEquals(bytes: c.bytes, start: rStart, len: rLen, kw: "Promise") {
+                if rTy != 0U64 {
+                    if rTy < c.types.count {
+                        val pt: TypeRef = c.types[rTy]
+                        if pt.args.count >= 1U64 {
+                            val innerRef: U64 = pt.args[0]
+                            rTy = innerRef
+                            rArr = false
+                            if innerRef < c.types.count {
+                                rStart = c.types[innerRef].nameStart
+                                rLen = c.types[innerRef].nameLen
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        c.curRetStart = rStart
+        c.curRetLen = rLen
+        c.curRetIsArray = rArr
+        c.curRetTy = rTy
     } else {
         c.curRetVoid = true
         c.curRetStart = 0

@@ -83,7 +83,7 @@
 ## 共有可変・並行性・メタプログラミング
 
 - ✅ **`Ref[T]`（共有可変）**（rc 箱・`<Ref[T] value=e/>`・`r->field`・retain 共有・`Ref[unique]` の deinit 発火）。残：`WeakRef`＋`upgrade()`・**循環回収**〔スコープ外〕・bare `<Ref value=e/>` 型推論〔明示 `[T]` 必須〕。spec/03,14。
-- ✅ **`async`/`await`/`Promise`/`sleep`／イベントループ 段階 1・2・3a**（方式 B＝stackless ステートマシン・frame hoist＋goto 再入・仮想時計タイマ・`async fn main`・if/while/match 内 await）。**残 tail（additive・クリーンに reject）**：await-in-`for`・struct-destructure match・式中 await・async メソッド・generic async・String/struct を値に持つ `Promise`・frame/`__self`/`PlewPromise` の ARC〔leak・小〕。spec/14。
+- ✅ **`async`/`await`/`Promise`/`sleep`／イベントループ 段階 1・2・3a**（方式 B＝stackless ステートマシン・frame hoist＋goto 再入・仮想時計タイマ・`async fn main`・if/while/match 内 await）。✅ **async 本体も受理健全性検査**（以前は退役済 C emitter 依存で verify が async を skip＝全 soundness 検査が抜けていた→`verifyFunc` が async も walk・返り値は Promise[T]→T を unwrap〔`-> Promise[I64]` でも `return n`=I64〕・test reject async_return_type）。**残 tail（additive・クリーンに reject）**：await-in-`for`・struct-destructure match・式中 await・async メソッド・generic async・String/struct を値に持つ `Promise`・frame/`__self`/`PlewPromise` の ARC〔leak・小〕。spec/14。
 - **`spawn`/`JoinHandle`/チャネル** → **未実装**〔スコープ外・async 安定後・実スレッド pthread・境界で CoW eager 実体化・`Ref` 不可〕。spec/14。
 - ✅ **メタプログラミング M1＋A＋M2**（`plewc --gen`＋共有 `@Std/Syntax`＋auto-part・マクロ入力 `TopItemAst`〔impl/trait も〕・`@[Eq]`/`@[Ord]`/`@[Hash]` derive・Dictionary lang item）。**剥離**＝ディレクティブ引数のファクトリ可視性 (a) は未〔上記 factory ゲート連動〕。M3 で `@Std/Syntax` 外部化〔スコープ外〕。spec/16。
 
