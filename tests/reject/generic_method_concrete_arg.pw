@@ -1,0 +1,8 @@
+// spec/07: a concrete (non-generic) parameter of a method on a generic receiver
+// still type-checks its argument — `withExtra(n: I64)` rejects a Bool.
+struct Box[T] { pub val v: T }
+pub impl[T] Box[T] { fn withExtra(n: I64) -> I64 { return n } }
+fn main() {
+    val b: Box[String] = <Box[String] v="x" />
+    val r: I64 = b.withExtra(n: true)
+}
