@@ -778,6 +778,33 @@ fn clearSelfItemEnv(c: inout Comp) {
 // type). Type-parameter identity is name-based, so the two are indistinguishable and
 // substitution/grounding cannot terminate (it would otherwise stack-overflow). Detect
 // it so the front-end can reject loudly (spec: 曖昧はエラー) instead of crashing.
+// Does struct `sidx` have a field whose type head names a NON-extern generic struct
+// (a recursion vector — the field's monomorphization re-enters instance scanning)?
+// Distinguishes Dictionary (fields `Array[K]`/`Array[V]`, Array being a real generic
+// struct) from a generic floored on an extern intrinsic (Array over RawBuffer).
+fn structHasGenericStructField(c: inout Comp, sidx: U64) -> Bool {
+    val sd: StructDef = c.structs[sidx]
+    mut val fi: U64 = 0
+    while fi < sd.fields.count {
+        val f: FieldDef = sd.fields[fi]
+        // use the field's structured TypeRef head (its span may include type args).
+        if f.ty != 0U64 {
+            if f.ty < c.types.count {
+                val ftr: TypeRef = c.types[f.ty]
+                val fsi: U64 = genericStructIndex(c: inout c, nameStart: ftr.nameStart, nameLen: ftr.nameLen)
+                if fsi < c.structs.count {
+                    if c.structs[fsi].isExtern {
+                    } else {
+                        return true
+                    }
+                }
+            }
+        }
+        fi += 1U64
+    }
+    return false
+}
+
 fn instArgCollidesParamName(c: inout Comp, instRef: U64) -> Bool {
     val t: TypeRef = c.types[instRef]
     if t.args.count == 0U64 {
@@ -787,13 +814,19 @@ fn instArgCollidesParamName(c: inout Comp, instRef: U64) -> Bool {
     val gsi: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
     if gsi < c.structs.count {
         params = c.structs[gsi].typeParams
-    } else {
-        val gei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
-        if gei < c.enums.count {
-            params = c.enums[gei].typeParams
+        // only a generic whose own fields recurse through ANOTHER non-extern generic
+        // struct (e.g. Dictionary's `Array[V]` fields) can loop on the name collision;
+        // a generic floored on an extern intrinsic (Array over RawBuffer) terminates
+        // and must NOT be rejected. Require such a recursion-vector field.
+        if structHasGenericStructField(c: inout c, sidx: gsi) {
         } else {
             return false
         }
+    } else {
+        // enums carry their parameter directly in variant payloads (Optional/Result) and
+        // do not nest another generic struct over the same param, so they terminate — not
+        // flagged here (their construction is handled without this recursion).
+        return false
     }
     mut val ai: U64 = 0
     while ai < t.args.count {
