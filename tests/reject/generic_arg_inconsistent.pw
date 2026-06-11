@@ -1,0 +1,9 @@
+// A generic call must bind each type parameter consistently (spec/06): two
+// arguments at positions both declared `T` must have the same type. `f[T](a: T,
+// b: T)` called with an I64 and an F64 would monomorphize T=I64 yet pass an F64
+// for `b` — reinterpreting its bits (a silent miscompile) — so it is rejected.
+fn second[T](a: T, b: T) -> T { return b }
+
+fn main() {
+    val x: F64 = second(a: 1I64, b: 2.0)
+}

@@ -577,6 +577,45 @@ fn checkUniqueArgModes(c: inout Comp, args: Array[Arg]) {
 }
 
 // user function) keep their args lenient at I64 (placeholder I/O shims).
+// A generic call must bind each type parameter CONSISTENTLY: two arguments at
+// positions both declared as the bare parameter `T` must have the same type (`f[T](a:
+// T, b: T)` called `f(a: 1I64, b: 2.0)` would monomorphize T=I64 yet pass an F64 for
+// `b`, reinterpreting its bits — a silent miscompile). Nested positions (`Array[T]`)
+// are deferred (the bare-`T` cases are the miscompile risk).
+fn tcCheckGenericArgConsistency(c: inout Comp, f: Func, args: Array[Arg]) {
+    if f.typeParams.count == 0U64 {
+        return
+    }
+    mut val tpi: U64 = 0
+    while tpi < f.typeParams.count {
+        val tpId: U64 = f.typeParams[tpi].nameId
+        mut val firstRef: U64 = 0
+        mut val ai: U64 = 0
+        while ai < args.count {
+            if ai < f.params.count {
+                val p: Param = f.params[ai]
+                if p.tyLen > 0U64 {
+                    if intern(c: inout c, start: p.tyStart, len: p.tyLen) == tpId {
+                        val ar: U64 = inferType(c: inout c, id: args[ai].expr)
+                        if ar != 0U64 {
+                            if firstRef == 0U64 {
+                                firstRef = ar
+                            } else {
+                                if typesCompatible(c: inout c, expected: firstRef, inferred: ar) {
+                                } else {
+                                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: args[ai].expr)), msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            ai += 1U64
+        }
+        tpi += 1U64
+    }
+}
+
 fn checkCallArgs(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) {
     checkUniqueArgModes(c: inout c, args: args)
     val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -589,6 +628,7 @@ fn checkCallArgs(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) 
         return
     }
     val f: Func = c.funcs[fi]
+    tcCheckGenericArgConsistency(c: inout c, f: f, args: args)
     val ps: Array[Param] = f.params
     mut val i: U64 = 0
     while i < args.count {
