@@ -66,6 +66,24 @@ fn typesCompatible(c: inout Comp, expected: U64, inferred: U64) -> Bool {
     val te: TypeRef = c.types[exp]
     val tin: TypeRef = c.types[inferred]
     if te.isAny || tin.isAny {
+        // a CONCRETE value coercing INTO `any P` must conform to P (spec/08) — else its
+        // existential box has no vtable entry and a member call null-dereferences at
+        // runtime. Check the conformance table when the source is a known concrete
+        // struct/enum; a generic param (id 0, conforms via its `where` bound) or an
+        // existing `any` source is left to the conservative pass-through.
+        if te.isAny {
+            if tin.isAny {
+            } else {
+                val srcId: U64 = knownNamedTypeId(c: inout c, start: tin.nameStart, len: tin.nameLen)
+                if srcId != 0U64 {
+                    val traitId: U64 = intern(c: inout c, start: te.nameStart, len: te.nameLen)
+                    if conformExists(c: inout c, typeId: srcId, traitId: traitId) {
+                    } else {
+                        return false
+                    }
+                }
+            }
+        }
         return true
     }
     // float-to-float is exempt: F32 is currently lowered as F64 (true F32 deferred), so

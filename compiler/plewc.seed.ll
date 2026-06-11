@@ -46088,290 +46088,346 @@ entry:
   %5 = alloca i64, align 8
   %6 = alloca %st17, align 8
   %7 = alloca %st17, align 8
-  %8 = alloca i1, align 1
-  %9 = alloca i1, align 1
-  %10 = alloca i64, align 8
-  %11 = alloca i64, align 8
+  %8 = alloca i64, align 8
+  %9 = alloca i64, align 8
+  %10 = alloca i1, align 1
+  %11 = alloca i1, align 1
   %12 = alloca i64, align 8
+  %13 = alloca i64, align 8
+  %14 = alloca i64, align 8
   br label %body0
 
 body0:                                            ; preds = %entry
   store i64 %1, ptr %3, align 4
   store i64 %2, ptr %4, align 4
-  %13 = load i64, ptr %3, align 4
-  %14 = icmp eq i64 %13, 0
-  br i1 %14, label %sc.cont, label %sc.rhs
+  %15 = load i64, ptr %3, align 4
+  %16 = icmp eq i64 %15, 0
+  br i1 %16, label %sc.cont, label %sc.rhs
 
 sc.rhs:                                           ; preds = %body0
-  %15 = load i64, ptr %4, align 4
-  %16 = icmp eq i64 %15, 0
+  %17 = load i64, ptr %4, align 4
+  %18 = icmp eq i64 %17, 0
   br label %sc.cont
 
 sc.cont:                                          ; preds = %sc.rhs, %body0
-  %17 = phi i1 [ true, %body0 ], [ %16, %sc.rhs ]
-  %18 = icmp ne i1 %17, false
-  br i1 %18, label %then, label %endif
+  %19 = phi i1 [ true, %body0 ], [ %18, %sc.rhs ]
+  %20 = icmp ne i1 %19, false
+  br i1 %20, label %then, label %endif
 
 then:                                             ; preds = %sc.cont
   ret i1 true
 
 endif:                                            ; preds = %sc.cont
-  %19 = load i64, ptr %3, align 4
-  %20 = load %st43, ptr %0, align 8
-  %21 = extractvalue %st43 %20, 37
-  %22 = extractvalue { ptr, i64 } %21, 1
-  %23 = icmp uge i64 %19, %22
-  br i1 %23, label %sc.cont2, label %sc.rhs1
+  %21 = load i64, ptr %3, align 4
+  %22 = load %st43, ptr %0, align 8
+  %23 = extractvalue %st43 %22, 37
+  %24 = extractvalue { ptr, i64 } %23, 1
+  %25 = icmp uge i64 %21, %24
+  br i1 %25, label %sc.cont2, label %sc.rhs1
 
 sc.rhs1:                                          ; preds = %endif
-  %24 = load i64, ptr %4, align 4
-  %25 = load %st43, ptr %0, align 8
-  %26 = extractvalue %st43 %25, 37
-  %27 = extractvalue { ptr, i64 } %26, 1
-  %28 = icmp uge i64 %24, %27
+  %26 = load i64, ptr %4, align 4
+  %27 = load %st43, ptr %0, align 8
+  %28 = extractvalue %st43 %27, 37
+  %29 = extractvalue { ptr, i64 } %28, 1
+  %30 = icmp uge i64 %26, %29
   br label %sc.cont2
 
 sc.cont2:                                         ; preds = %sc.rhs1, %endif
-  %29 = phi i1 [ true, %endif ], [ %28, %sc.rhs1 ]
-  %30 = icmp ne i1 %29, false
-  br i1 %30, label %then3, label %endif4
+  %31 = phi i1 [ true, %endif ], [ %30, %sc.rhs1 ]
+  %32 = icmp ne i1 %31, false
+  br i1 %32, label %then3, label %endif4
 
 then3:                                            ; preds = %sc.cont2
   ret i1 true
 
 endif4:                                           ; preds = %sc.cont2
-  %31 = load i64, ptr %3, align 4
-  %32 = call i64 @pf340(ptr %0, i64 %31)
-  store i64 %32, ptr %5, align 4
-  %33 = load i64, ptr %5, align 4
-  %34 = load %st43, ptr %0, align 8
-  %35 = extractvalue %st43 %34, 37
-  %36 = extractvalue { ptr, i64 } %35, 1
-  %37 = icmp uge i64 %33, %36
-  br i1 %37, label %then5, label %endif6
+  %33 = load i64, ptr %3, align 4
+  %34 = call i64 @pf340(ptr %0, i64 %33)
+  store i64 %34, ptr %5, align 4
+  %35 = load i64, ptr %5, align 4
+  %36 = load %st43, ptr %0, align 8
+  %37 = extractvalue %st43 %36, 37
+  %38 = extractvalue { ptr, i64 } %37, 1
+  %39 = icmp uge i64 %35, %38
+  br i1 %39, label %then5, label %endif6
 
 then5:                                            ; preds = %endif4
   ret i1 true
 
 endif6:                                           ; preds = %endif4
-  %38 = load %st43, ptr %0, align 8
-  %39 = extractvalue %st43 %38, 37
-  %40 = extractvalue { ptr, i64 } %39, 0
-  %41 = extractvalue { ptr, i64 } %39, 1
-  %42 = load i64, ptr %5, align 4
-  call void @plew_bounds(i64 %42, i64 %41)
-  %43 = getelementptr %st17, ptr %40, i64 %42
-  %44 = load %st17, ptr %43, align 8
-  store %st17 %44, ptr %6, align 8
-  %45 = load %st43, ptr %0, align 8
-  %46 = extractvalue %st43 %45, 37
-  %47 = extractvalue { ptr, i64 } %46, 0
-  %48 = extractvalue { ptr, i64 } %46, 1
-  %49 = load i64, ptr %4, align 4
-  call void @plew_bounds(i64 %49, i64 %48)
-  %50 = getelementptr %st17, ptr %47, i64 %49
-  %51 = load %st17, ptr %50, align 8
-  store %st17 %51, ptr %7, align 8
-  %52 = load %st17, ptr %6, align 8
-  %53 = extractvalue %st17 %52, 5
-  %54 = icmp ne i1 %53, false
-  br i1 %54, label %sc.cont8, label %sc.rhs7
+  %40 = load %st43, ptr %0, align 8
+  %41 = extractvalue %st43 %40, 37
+  %42 = extractvalue { ptr, i64 } %41, 0
+  %43 = extractvalue { ptr, i64 } %41, 1
+  %44 = load i64, ptr %5, align 4
+  call void @plew_bounds(i64 %44, i64 %43)
+  %45 = getelementptr %st17, ptr %42, i64 %44
+  %46 = load %st17, ptr %45, align 8
+  store %st17 %46, ptr %6, align 8
+  %47 = load %st43, ptr %0, align 8
+  %48 = extractvalue %st43 %47, 37
+  %49 = extractvalue { ptr, i64 } %48, 0
+  %50 = extractvalue { ptr, i64 } %48, 1
+  %51 = load i64, ptr %4, align 4
+  call void @plew_bounds(i64 %51, i64 %50)
+  %52 = getelementptr %st17, ptr %49, i64 %51
+  %53 = load %st17, ptr %52, align 8
+  store %st17 %53, ptr %7, align 8
+  %54 = load %st17, ptr %6, align 8
+  %55 = extractvalue %st17 %54, 5
+  %56 = icmp ne i1 %55, false
+  br i1 %56, label %sc.cont8, label %sc.rhs7
 
 sc.rhs7:                                          ; preds = %endif6
-  %55 = load %st17, ptr %7, align 8
-  %56 = extractvalue %st17 %55, 5
-  %57 = icmp ne i1 %56, false
+  %57 = load %st17, ptr %7, align 8
+  %58 = extractvalue %st17 %57, 5
+  %59 = icmp ne i1 %58, false
   br label %sc.cont8
 
 sc.cont8:                                         ; preds = %sc.rhs7, %endif6
-  %58 = phi i1 [ true, %endif6 ], [ %57, %sc.rhs7 ]
-  %59 = icmp ne i1 %58, false
-  br i1 %59, label %then9, label %endif10
+  %60 = phi i1 [ true, %endif6 ], [ %59, %sc.rhs7 ]
+  %61 = icmp ne i1 %60, false
+  br i1 %61, label %then9, label %endif10
 
 then9:                                            ; preds = %sc.cont8
-  ret i1 true
+  %62 = load %st17, ptr %6, align 8
+  %63 = extractvalue %st17 %62, 5
+  %64 = icmp ne i1 %63, false
+  br i1 %64, label %then11, label %endif12
 
 endif10:                                          ; preds = %sc.cont8
-  %60 = load %st17, ptr %6, align 8
-  %61 = extractvalue %st17 %60, 0
-  %62 = load %st17, ptr %6, align 8
-  %63 = extractvalue %st17 %62, 1
-  %64 = call i1 @pf87(ptr %0, i64 %61, i64 %63)
-  store i1 %64, ptr %8, align 1
-  %65 = load %st17, ptr %7, align 8
+  %65 = load %st17, ptr %6, align 8
   %66 = extractvalue %st17 %65, 0
-  %67 = load %st17, ptr %7, align 8
+  %67 = load %st17, ptr %6, align 8
   %68 = extractvalue %st17 %67, 1
   %69 = call i1 @pf87(ptr %0, i64 %66, i64 %68)
-  store i1 %69, ptr %9, align 1
-  %70 = load i1, ptr %8, align 1
-  %71 = icmp ne i1 %70, false
-  br i1 %71, label %sc.rhs11, label %sc.cont12
+  store i1 %69, ptr %10, align 1
+  %70 = load %st17, ptr %7, align 8
+  %71 = extractvalue %st17 %70, 0
+  %72 = load %st17, ptr %7, align 8
+  %73 = extractvalue %st17 %72, 1
+  %74 = call i1 @pf87(ptr %0, i64 %71, i64 %73)
+  store i1 %74, ptr %11, align 1
+  %75 = load i1, ptr %10, align 1
+  %76 = icmp ne i1 %75, false
+  br i1 %76, label %sc.rhs20, label %sc.cont21
 
-sc.rhs11:                                         ; preds = %endif10
-  %72 = load i1, ptr %9, align 1
-  %73 = icmp ne i1 %72, false
-  br label %sc.cont12
-
-sc.cont12:                                        ; preds = %sc.rhs11, %endif10
-  %74 = phi i1 [ false, %endif10 ], [ %73, %sc.rhs11 ]
-  %75 = icmp ne i1 %74, false
-  br i1 %75, label %then13, label %endif14
-
-then13:                                           ; preds = %sc.cont12
-  ret i1 true
-
-endif14:                                          ; preds = %sc.cont12
-  %76 = load i1, ptr %8, align 1
-  %77 = icmp ne i1 %76, false
-  br i1 %77, label %sc.cont16, label %sc.rhs15
-
-sc.rhs15:                                         ; preds = %endif14
-  %78 = load i1, ptr %9, align 1
+then11:                                           ; preds = %then9
+  %77 = load %st17, ptr %7, align 8
+  %78 = extractvalue %st17 %77, 5
   %79 = icmp ne i1 %78, false
-  br label %sc.cont16
+  br i1 %79, label %then13, label %else
 
-sc.cont16:                                        ; preds = %sc.rhs15, %endif14
-  %80 = phi i1 [ true, %endif14 ], [ %79, %sc.rhs15 ]
-  %81 = icmp ne i1 %80, false
-  br i1 %81, label %then17, label %endif18
+endif12:                                          ; preds = %endif14, %then9
+  ret i1 true
 
-then17:                                           ; preds = %sc.cont16
-  %82 = load i1, ptr %8, align 1
-  %83 = icmp ne i1 %82, false
-  br i1 %83, label %then19, label %else
+then13:                                           ; preds = %then11
+  br label %endif14
 
-endif18:                                          ; preds = %sc.cont16
-  %84 = load %st17, ptr %6, align 8
-  %85 = extractvalue %st17 %84, 0
-  %86 = load %st17, ptr %6, align 8
-  %87 = extractvalue %st17 %86, 1
-  %88 = call i64 @pf397(ptr %0, i64 %85, i64 %87)
-  store i64 %88, ptr %10, align 4
-  %89 = load %st17, ptr %7, align 8
-  %90 = extractvalue %st17 %89, 0
-  %91 = load %st17, ptr %7, align 8
-  %92 = extractvalue %st17 %91, 1
-  %93 = call i64 @pf397(ptr %0, i64 %90, i64 %92)
-  store i64 %93, ptr %11, align 4
-  %94 = load i64, ptr %10, align 4
-  %95 = icmp eq i64 %94, 0
-  br i1 %95, label %sc.cont26, label %sc.rhs25
+endif14:                                          ; preds = %endif16, %then13
+  br label %endif12
 
-then19:                                           ; preds = %then17
-  %96 = load %st17, ptr %7, align 8
-  %97 = extractvalue %st17 %96, 0
-  %98 = load %st17, ptr %7, align 8
-  %99 = extractvalue %st17 %98, 1
-  %100 = call i64 @pf397(ptr %0, i64 %97, i64 %99)
-  %101 = icmp eq i64 %100, 0
-  br i1 %101, label %then21, label %endif22
+else:                                             ; preds = %then11
+  %80 = load %st17, ptr %7, align 8
+  %81 = extractvalue %st17 %80, 0
+  %82 = load %st17, ptr %7, align 8
+  %83 = extractvalue %st17 %82, 1
+  %84 = call i64 @pf397(ptr %0, i64 %81, i64 %83)
+  store i64 %84, ptr %8, align 4
+  %85 = load i64, ptr %8, align 4
+  %86 = icmp ne i64 %85, 0
+  br i1 %86, label %then15, label %endif16
 
-endif20:                                          ; preds = %endif24, %endif22
+then15:                                           ; preds = %else
+  %87 = load %st17, ptr %6, align 8
+  %88 = extractvalue %st17 %87, 0
+  %89 = load %st17, ptr %6, align 8
+  %90 = extractvalue %st17 %89, 1
+  %91 = call i64 @pf101(ptr %0, i64 %88, i64 %90)
+  store i64 %91, ptr %9, align 4
+  %92 = load i64, ptr %8, align 4
+  %93 = load i64, ptr %9, align 4
+  %94 = call i1 @pf301(ptr %0, i64 %92, i64 %93)
+  %95 = icmp ne i1 %94, false
+  br i1 %95, label %then17, label %else19
+
+endif16:                                          ; preds = %endif18, %else
+  br label %endif14
+
+then17:                                           ; preds = %then15
+  br label %endif18
+
+endif18:                                          ; preds = %then17
+  br label %endif16
+
+else19:                                           ; preds = %then15
   ret i1 false
 
-else:                                             ; preds = %then17
-  %102 = load %st17, ptr %6, align 8
-  %103 = extractvalue %st17 %102, 0
-  %104 = load %st17, ptr %6, align 8
-  %105 = extractvalue %st17 %104, 1
-  %106 = call i64 @pf397(ptr %0, i64 %103, i64 %105)
-  %107 = icmp eq i64 %106, 0
-  br i1 %107, label %then23, label %endif24
+sc.rhs20:                                         ; preds = %endif10
+  %96 = load i1, ptr %11, align 1
+  %97 = icmp ne i1 %96, false
+  br label %sc.cont21
 
-then21:                                           ; preds = %then19
+sc.cont21:                                        ; preds = %sc.rhs20, %endif10
+  %98 = phi i1 [ false, %endif10 ], [ %97, %sc.rhs20 ]
+  %99 = icmp ne i1 %98, false
+  br i1 %99, label %then22, label %endif23
+
+then22:                                           ; preds = %sc.cont21
   ret i1 true
 
-endif22:                                          ; preds = %then19
-  br label %endif20
+endif23:                                          ; preds = %sc.cont21
+  %100 = load i1, ptr %10, align 1
+  %101 = icmp ne i1 %100, false
+  br i1 %101, label %sc.cont25, label %sc.rhs24
 
-then23:                                           ; preds = %else
-  ret i1 true
+sc.rhs24:                                         ; preds = %endif23
+  %102 = load i1, ptr %11, align 1
+  %103 = icmp ne i1 %102, false
+  br label %sc.cont25
 
-endif24:                                          ; preds = %else
-  br label %endif20
+sc.cont25:                                        ; preds = %sc.rhs24, %endif23
+  %104 = phi i1 [ true, %endif23 ], [ %103, %sc.rhs24 ]
+  %105 = icmp ne i1 %104, false
+  br i1 %105, label %then26, label %endif27
 
-sc.rhs25:                                         ; preds = %endif18
-  %108 = load i64, ptr %11, align 4
-  %109 = icmp eq i64 %108, 0
-  br label %sc.cont26
+then26:                                           ; preds = %sc.cont25
+  %106 = load i1, ptr %10, align 1
+  %107 = icmp ne i1 %106, false
+  br i1 %107, label %then28, label %else30
 
-sc.cont26:                                        ; preds = %sc.rhs25, %endif18
-  %110 = phi i1 [ true, %endif18 ], [ %109, %sc.rhs25 ]
-  %111 = icmp ne i1 %110, false
-  br i1 %111, label %then27, label %endif28
+endif27:                                          ; preds = %sc.cont25
+  %108 = load %st17, ptr %6, align 8
+  %109 = extractvalue %st17 %108, 0
+  %110 = load %st17, ptr %6, align 8
+  %111 = extractvalue %st17 %110, 1
+  %112 = call i64 @pf397(ptr %0, i64 %109, i64 %111)
+  store i64 %112, ptr %12, align 4
+  %113 = load %st17, ptr %7, align 8
+  %114 = extractvalue %st17 %113, 0
+  %115 = load %st17, ptr %7, align 8
+  %116 = extractvalue %st17 %115, 1
+  %117 = call i64 @pf397(ptr %0, i64 %114, i64 %116)
+  store i64 %117, ptr %13, align 4
+  %118 = load i64, ptr %12, align 4
+  %119 = icmp eq i64 %118, 0
+  br i1 %119, label %sc.cont36, label %sc.rhs35
 
-then27:                                           ; preds = %sc.cont26
-  ret i1 true
+then28:                                           ; preds = %then26
+  %120 = load %st17, ptr %7, align 8
+  %121 = extractvalue %st17 %120, 0
+  %122 = load %st17, ptr %7, align 8
+  %123 = extractvalue %st17 %122, 1
+  %124 = call i64 @pf397(ptr %0, i64 %121, i64 %123)
+  %125 = icmp eq i64 %124, 0
+  br i1 %125, label %then31, label %endif32
 
-endif28:                                          ; preds = %sc.cont26
-  %112 = load i64, ptr %10, align 4
-  %113 = load i64, ptr %11, align 4
-  %114 = icmp ne i64 %112, %113
-  br i1 %114, label %then29, label %endif30
-
-then29:                                           ; preds = %endif28
+endif29:                                          ; preds = %endif34, %endif32
   ret i1 false
 
-endif30:                                          ; preds = %endif28
-  %115 = load %st17, ptr %6, align 8
-  %116 = extractvalue %st17 %115, 3
-  %117 = extractvalue { ptr, i64 } %116, 1
-  %118 = load %st17, ptr %7, align 8
-  %119 = extractvalue %st17 %118, 3
-  %120 = extractvalue { ptr, i64 } %119, 1
-  %121 = icmp eq i64 %117, %120
-  br i1 %121, label %then31, label %endif32
+else30:                                           ; preds = %then26
+  %126 = load %st17, ptr %6, align 8
+  %127 = extractvalue %st17 %126, 0
+  %128 = load %st17, ptr %6, align 8
+  %129 = extractvalue %st17 %128, 1
+  %130 = call i64 @pf397(ptr %0, i64 %127, i64 %129)
+  %131 = icmp eq i64 %130, 0
+  br i1 %131, label %then33, label %endif34
 
-then31:                                           ; preds = %endif30
-  store i64 0, ptr %12, align 4
+then31:                                           ; preds = %then28
+  ret i1 true
+
+endif32:                                          ; preds = %then28
+  br label %endif29
+
+then33:                                           ; preds = %else30
+  ret i1 true
+
+endif34:                                          ; preds = %else30
+  br label %endif29
+
+sc.rhs35:                                         ; preds = %endif27
+  %132 = load i64, ptr %13, align 4
+  %133 = icmp eq i64 %132, 0
+  br label %sc.cont36
+
+sc.cont36:                                        ; preds = %sc.rhs35, %endif27
+  %134 = phi i1 [ true, %endif27 ], [ %133, %sc.rhs35 ]
+  %135 = icmp ne i1 %134, false
+  br i1 %135, label %then37, label %endif38
+
+then37:                                           ; preds = %sc.cont36
+  ret i1 true
+
+endif38:                                          ; preds = %sc.cont36
+  %136 = load i64, ptr %12, align 4
+  %137 = load i64, ptr %13, align 4
+  %138 = icmp ne i64 %136, %137
+  br i1 %138, label %then39, label %endif40
+
+then39:                                           ; preds = %endif38
+  ret i1 false
+
+endif40:                                          ; preds = %endif38
+  %139 = load %st17, ptr %6, align 8
+  %140 = extractvalue %st17 %139, 3
+  %141 = extractvalue { ptr, i64 } %140, 1
+  %142 = load %st17, ptr %7, align 8
+  %143 = extractvalue %st17 %142, 3
+  %144 = extractvalue { ptr, i64 } %143, 1
+  %145 = icmp eq i64 %141, %144
+  br i1 %145, label %then41, label %endif42
+
+then41:                                           ; preds = %endif40
+  store i64 0, ptr %14, align 4
   br label %while.cond
 
-endif32:                                          ; preds = %while.end, %endif30
+endif42:                                          ; preds = %while.end, %endif40
   ret i1 true
 
-while.cond:                                       ; preds = %endif34, %then31
-  %122 = load i64, ptr %12, align 4
-  %123 = load %st17, ptr %6, align 8
-  %124 = extractvalue %st17 %123, 3
-  %125 = extractvalue { ptr, i64 } %124, 1
-  %126 = icmp ult i64 %122, %125
-  br i1 %126, label %while.body, label %while.end
+while.cond:                                       ; preds = %endif44, %then41
+  %146 = load i64, ptr %14, align 4
+  %147 = load %st17, ptr %6, align 8
+  %148 = extractvalue %st17 %147, 3
+  %149 = extractvalue { ptr, i64 } %148, 1
+  %150 = icmp ult i64 %146, %149
+  br i1 %150, label %while.body, label %while.end
 
 while.body:                                       ; preds = %while.cond
-  %127 = load %st17, ptr %6, align 8
-  %128 = extractvalue %st17 %127, 3
-  %129 = extractvalue { ptr, i64 } %128, 0
-  %130 = extractvalue { ptr, i64 } %128, 1
-  %131 = load i64, ptr %12, align 4
-  call void @plew_bounds(i64 %131, i64 %130)
-  %132 = getelementptr i64, ptr %129, i64 %131
-  %133 = load i64, ptr %132, align 4
-  %134 = load %st17, ptr %7, align 8
-  %135 = extractvalue %st17 %134, 3
-  %136 = extractvalue { ptr, i64 } %135, 0
-  %137 = extractvalue { ptr, i64 } %135, 1
-  %138 = load i64, ptr %12, align 4
-  call void @plew_bounds(i64 %138, i64 %137)
-  %139 = getelementptr i64, ptr %136, i64 %138
-  %140 = load i64, ptr %139, align 4
-  %141 = call i1 @pf416(ptr %0, i64 %133, i64 %140)
-  %142 = icmp ne i1 %141, false
-  br i1 %142, label %then33, label %else35
+  %151 = load %st17, ptr %6, align 8
+  %152 = extractvalue %st17 %151, 3
+  %153 = extractvalue { ptr, i64 } %152, 0
+  %154 = extractvalue { ptr, i64 } %152, 1
+  %155 = load i64, ptr %14, align 4
+  call void @plew_bounds(i64 %155, i64 %154)
+  %156 = getelementptr i64, ptr %153, i64 %155
+  %157 = load i64, ptr %156, align 4
+  %158 = load %st17, ptr %7, align 8
+  %159 = extractvalue %st17 %158, 3
+  %160 = extractvalue { ptr, i64 } %159, 0
+  %161 = extractvalue { ptr, i64 } %159, 1
+  %162 = load i64, ptr %14, align 4
+  call void @plew_bounds(i64 %162, i64 %161)
+  %163 = getelementptr i64, ptr %160, i64 %162
+  %164 = load i64, ptr %163, align 4
+  %165 = call i1 @pf416(ptr %0, i64 %157, i64 %164)
+  %166 = icmp ne i1 %165, false
+  br i1 %166, label %then43, label %else45
 
 while.end:                                        ; preds = %while.cond
-  br label %endif32
+  br label %endif42
 
-then33:                                           ; preds = %while.body
-  br label %endif34
+then43:                                           ; preds = %while.body
+  br label %endif44
 
-endif34:                                          ; preds = %then33
-  %143 = load i64, ptr %12, align 4
-  %144 = call i64 @plew_u64Add(i64 %143, i64 1)
-  store i64 %144, ptr %12, align 4
+endif44:                                          ; preds = %then43
+  %167 = load i64, ptr %14, align 4
+  %168 = call i64 @plew_u64Add(i64 %167, i64 1)
+  store i64 %168, ptr %14, align 4
   br label %while.cond
 
-else35:                                           ; preds = %while.body
+else45:                                           ; preds = %while.body
   ret i1 false
 }
 

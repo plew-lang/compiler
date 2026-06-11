@@ -1,0 +1,9 @@
+// Coercing a concrete value into an existential `any P` requires the type to conform
+// to P (spec/08) — otherwise its box has no vtable entry and a member call
+// null-dereferences at runtime. `Sq` has no `impl Sq as Sh`, so this is rejected.
+trait Sh { fn area() -> I64 }
+struct Sq { pub val s: I64 }
+
+fn main() {
+    val xs: Array[any Sh] = [<Sq s=4I64 />]
+}
