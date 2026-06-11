@@ -31,7 +31,7 @@
 
 - ✅ **構築フィールドゲート (b)（spec/05）**＝cross-module で非 `pub` フィールド設定を loud reject（`checkConstructVis`＋`StructDef.defOffset`＋`offsetIsLoaded`・dict literal 等の synthesize 構築は除外）。**残＝公開ゲート (a)**（全 pub でも外部構築は `pub impl factory` 要）は `factory` 宣言機能と一括。
 - ✅ **lang-item 型の再定義を loud reject**（`isLangItemTypeName`＋`checkLangItemRedef`・`StructDef`/`EnumDef.defOffset` で entry-module 判定・extern intrinsic は skip・test reject redefine_langitem）。
-- **曖昧な無サフィックス整数リテラルが先頭オーバーロードを選ぶ**（`k(a:I32)`/`k(a:U64)` に `k(a:5)`＝呼出位置の曖昧検出が要る・hidden meaning）。
+- ✅ **曖昧な無サフィックス整数リテラルのオーバーロードを loud reject**（`checkOverloadAmbiguity`/`overloadsAmbiguous`・free-fn＋method 両経路・test reject overload_ambiguous_literal）＝既存実装で網羅済。
 - **重なる inout のケース②③**（部分/添字重なり＝`a.merge(inout a.field)`・`arr[i],arr[j]` の distinct 証明）＝spec 通り lint＋限定ランタイム panic（ケース①構文同一は実装済）。
 
 ### B. hidden meaning の小逸脱（spec-valid を reject／silent 逸脱）

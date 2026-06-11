@@ -64,7 +64,7 @@
 - **未対応**：`pow`/`**`〔`Pow[Exp]`・float 後〕・`?.` の一般トレイト化〔現 Optional 具体〕・**`as` 以外の数値変換 `From`/`TryFrom`**〔縮小/パース・`try` の異エラー型 From 変換＝現状 `try` は `E==E'` 一致要求〕・`Output != Self`。
 - ✅ **`as`**＝数値↔数値の C キャスト〔無損失検査済・narrowing reject〕。
 - ✅ **`try`**＝Result 早期 return〔Ok=tag0/`value`・Err=tag1/`error` レイアウト前提・非 Result〔特に Optional〕operand は loud reject〕。**残バグ**＝無注釈 `<Result.Ok value=…/>` 構築〔return-context 推論〕が一部 segfault し得る〔明示型引数は無事〕。spec/12,13。
-- **【silent 逸脱・小】曖昧な無サフィックス整数リテラルが先頭オーバーロードを選ぶ**（`k(a:I32)`/`k(a:U64)` に `k(a:5)`＝呼出位置の曖昧検出が要る）・**`val f = obj.method`（メソッド値化）を受理**〔scope 復元の型回復・clang 止まり〕。
+- ✅ **曖昧な無サフィックス整数リテラルのオーバーロードを loud reject**（`checkOverloadAmbiguity`/`overloadsAmbiguous`・free-fn＋method・test reject overload_ambiguous_literal）。**残・小**＝**`val f = obj.method`（メソッド値化）を受理**〔scope 復元の型回復・clang 止まり〕。
 - **【bug・既知】ユーザー struct/enum 名が lang-item 型パラメータ名と衝突すると壊れる**（`struct V {…}` が `Dictionary[K,V]` の `V` と衝突・`isTypeParamName` のグローバル名照合・根治＝型パラメータ判定をスコープ化・回避＝単一大文字名を避ける）。
 
 ## 可視性・モジュール・import
