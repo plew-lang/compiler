@@ -499,6 +499,13 @@ fn checkFieldDefaults(c: inout Comp) {
             val f: FieldDef = s.fields[j]
             if f.hasDefault {
                 checkLitSpan(c: inout c, id: f.defaultVal, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray)
+                // checkLitSpan accepts a `true`/`false` (and other category-mismatched
+                // values) regardless of the field type, so a default of the wrong type
+                // (`val a: I64 = true`) slips through — full type-check against T.
+                if f.tyIsArray {
+                } else {
+                    tcCheckValue(c: inout c, expectedRef: f.ty, valueExpr: f.defaultVal, pos: "field default")
+                }
             }
             j += 1
         }
@@ -587,6 +594,30 @@ fn checkAllParamModes(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.funcs.count {
         checkParamModes(c: inout c, params: c.funcs[i].params)
+        i += 1
+    }
+}
+
+// A default argument `name: T = expr` (spec/04) is memberwise/default-arg sugar, so
+// the default must fit T exactly as an explicit argument would — `fn f(x: I64 =
+// true)` is a category error (checkLitSpan accepts a bool literal regardless of T,
+// so the full type-check catches it). Skipped for array params (separate machinery).
+fn checkParamDefaults(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val ps: Array[Param] = c.funcs[i].params
+        mut val j: U64 = 0
+        while j < ps.count {
+            val p: Param = ps[j]
+            if p.hasDefault {
+                checkLitSpan(c: inout c, id: p.defaultExpr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+                if p.tyIsArray {
+                } else {
+                    tcCheckValue(c: inout c, expectedRef: p.ty, valueExpr: p.defaultExpr, pos: "default arg")
+                }
+            }
+            j += 1
+        }
         i += 1
     }
 }

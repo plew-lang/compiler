@@ -1,0 +1,4 @@
+// spec/05: a field default `val a: T = expr` is memberwise-factory default-arg
+// sugar, so it must fit T — `I64 = true` is a category error.
+struct S { pub val a: I64 = true }
+fn main() { val s: S = <S /> }

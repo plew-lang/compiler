@@ -238,6 +238,7 @@ fn runFrontend() -> Comp {
     // `unique`; parameter access modes must match copyability. Both exit on error.
     checkFieldContagion(c: inout c)
     checkFieldDefaults(c: inout c)
+    checkParamDefaults(c: inout c)
     checkAllParamModes(c: inout c)
     checkArrayElemsNotUnique(c: inout c)
     // match pattern soundness (spec/11): a variant/struct pattern must name real

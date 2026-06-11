@@ -1,0 +1,4 @@
+// spec/04: a default argument must fit the parameter type — `x: I64 = true` is a
+// category error (no implicit Bool->I64).
+fn f(x: I64 = true) -> I64 { return x }
+fn main() { val r: I64 = f() }
