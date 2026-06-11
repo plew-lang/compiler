@@ -629,6 +629,18 @@ struct Global {
     pub val mutable: Bool
 }
 
+// A `newtype Name = Underlying` (spec/10): a distinct type sharing the underlying's
+// representation. `nameId` is the interned newtype name; (underStart, underLen) /
+// underRef name the underlying type (its head span and full TypeRef).
+struct NewtypeDef {
+    pub val nameStart: U64
+    pub val nameLen: U64
+    pub val nameId: U64
+    pub val underStart: U64
+    pub val underLen: U64
+    pub val underRef: U64
+}
+
 struct Comp {
     // source bytes. `mut val` so the derive synthesizer can append synthetic
     // identifier names ("eq", "lhs", ...) and reference them by span — existing
@@ -642,6 +654,10 @@ struct Comp {
     pub mut val enums: Array[EnumDef]
     // module-level variables (spec/15), in lowering order (= initialization order).
     pub mut val globals: Array[Global] = []
+    // `newtype Name = Underlying` declarations (spec/10): a distinct type with the
+    // underlying's representation and methods. Codegen resolves a newtype name to its
+    // underlying; `as` between them is a no-op re-tag.
+    pub mut val newtypes: Array[NewtypeDef] = []
     // trait declarations, recorded conformances, and `via` method aliases
     // (spec/08). `traits`/`conforms` drive the conformance-completeness check;
     // `methodAliases` redirect a requirement name to its real witness method.

@@ -603,6 +603,15 @@ fn knownNamedTypeId(c: inout Comp, start: U64, len: U64) -> U64 {
         }
         ei += 1
     }
+    // a `newtype` (spec/10) is a distinct named type: give it its own id so the type
+    // checker keeps it apart from its underlying (`val x: I64 = meter` needs `as`).
+    mut val ni: U64 = 0
+    while ni < c.newtypes.count {
+        if c.newtypes[ni].nameId == q {
+            return q
+        }
+        ni += 1
+    }
     return 0U64
 }
 

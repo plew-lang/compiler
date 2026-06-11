@@ -311,6 +311,21 @@ fn parseType(p: inout P) -> TypeAst {
     return <TypeAst name=name args=args span=<Span start=sStart end=p.prevEnd() /> extView=extView argLabels=argLabels />
 }
 
+// Parse a `newtype Name = Underlying` declaration (spec/10). The contextual `newtype`
+// has already been confirmed by the caller; consume it, the name, `=`, and the type.
+fn parseNewtypeAst(p: inout P, isPub: Bool) -> TopItemAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    val name: String = p.text(t: p.curTok())
+    p.advance()
+    match p.curKind() {
+        Kind.Eq => { p.advance() }
+        _ => { p.fail(off: p.base + p.curTok().start, msg: "a newtype declaration is `newtype Name = Underlying`") }
+    }
+    val ty: TypeAst = parseType(p: inout p)
+    return <TopItemAst.NewType name=name ty=ty isPub=isPub span=<Span start=sStart end=p.prevEnd() /> />
+}
+
 // An optional generic parameter list `[T, U]` -> the parameter names. Capability
 // markers (noLocal/allowUnique) precede the name and are dropped (the name is the
 // last ident of an entry), mirroring parseTypeParams.
@@ -1549,7 +1564,11 @@ export fn parseProgramAst(p: inout P) -> Array[TopItemAst] {
                                         if curIs(p: inout p, kw: "extension") {
                                             parseExtensionInto(p: inout p, items: inout items)
                                         } else {
-                                            p.advance()
+                                            if curIs(p: inout p, kw: "newtype") {
+                                                items.append(parseNewtypeAst(p: inout p, isPub: false))
+                                            } else {
+                                                p.advance()
+                                            }
                                         }
                                     }
                                 }

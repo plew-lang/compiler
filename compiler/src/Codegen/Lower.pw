@@ -1309,7 +1309,17 @@ fn lowerTopItem(c: inout Comp, item: TopItemAst) {
         TopItemAst.ReExport(val pathSpan) => {}
         TopItemAst.Directive(val dir) => { lowerDirective(c: inout c, dir: dir) }
         TopItemAst.GlobalVal(val s) => { lowerGlobalVal(c: inout c, s: s) }
+        TopItemAst.NewType(val name, val ty, val isPub, val span) => { lowerNewtype(c: inout c, name: name, ty: ty) }
     }
+}
+
+// Lower a `newtype Name = Underlying` (spec/10): record the distinct name and its
+// underlying type. Codegen resolves the name to the underlying for representation and
+// method dispatch; the type checker keeps them distinct.
+fn lowerNewtype(c: inout Comp, name: String, ty: TypeAst) {
+    val nm: Bind = internBytes(c: inout c, s: name)
+    val under: PType = lowerType(c: inout c, t: ty)
+    c.newtypes.append(value: <NewtypeDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) underStart=under.start underLen=under.len underRef=under.ref />)
 }
 
 // Lower a module-level variable (spec/15). The shared parser hands us the same

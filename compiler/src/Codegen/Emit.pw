@@ -283,6 +283,39 @@ fn internGrow(c: inout Comp) {
 
 // Intern a name span to its stable 1-based id (equal content ⇒ equal id; 0 is
 // never returned, so a `nameId` field's default 0 is a pure "unfilled" sentinel).
+// If (start, len) names a `newtype` (spec/10), its underlying type's TypeRef; else 0.
+// Codegen resolves a newtype to its underlying for representation / method dispatch.
+fn newtypeUnderRef(c: inout Comp, start: U64, len: U64) -> U64 {
+    if c.newtypes.count == 0U64 {
+        return 0U64
+    }
+    val nid: U64 = intern(c: inout c, start: start, len: len)
+    mut val i: U64 = 0
+    while i < c.newtypes.count {
+        if c.newtypes[i].nameId == nid {
+            return c.newtypes[i].underRef
+        }
+        i += 1
+    }
+    return 0U64
+}
+
+// The underlying type's head-name span for a `newtype` named (start, len), or the
+// input span unchanged when it is not a newtype.
+fn newtypeUnderName(c: inout Comp, start: U64, len: U64) -> Bind {
+    if c.newtypes.count != 0U64 {
+        val nid: U64 = intern(c: inout c, start: start, len: len)
+        mut val i: U64 = 0
+        while i < c.newtypes.count {
+            if c.newtypes[i].nameId == nid {
+                return <Bind nameStart=c.newtypes[i].underStart nameLen=c.newtypes[i].underLen fieldStart=0 fieldLen=0 />
+            }
+            i += 1
+        }
+    }
+    return <Bind nameStart=start nameLen=len fieldStart=0 fieldLen=0 />
+}
+
 fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
     if c.internBuckets.count == 0 {
         internGrow(c: inout c)

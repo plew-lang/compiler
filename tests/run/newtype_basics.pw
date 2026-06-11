@@ -1,0 +1,17 @@
+import @Std/Io with { print }
+
+// newtype (spec/10): a distinct named type with the underlying's representation. The
+// `as` between a newtype and its underlying is a zero-cost re-tag (both directions).
+newtype Meter = I64
+newtype UserId = I64
+
+fn main() {
+    val d: Meter = 5 as Meter
+    val raw: I64 = d as I64
+    print(raw)                        // 5
+    val e: Meter = 12 as Meter
+    print((d as I64) + (e as I64))    // 17 (operate via the underlying for now)
+    // distinct newtypes round-trip independently
+    val u: UserId = 99 as UserId
+    print(u as I64)                   // 99
+}

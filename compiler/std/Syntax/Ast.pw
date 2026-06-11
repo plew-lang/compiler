@@ -309,4 +309,8 @@ export enum TopItemAst {
     // type / initializer); the frontend lowers it to a `Comp.globals` entry and the
     // backend emits an LLVM global initialized once before `main` runs.
     GlobalVal(s: StmtAst)
+    // a named type (spec/10): `newtype Meter = F64`. `name` is the distinct type; `ty`
+    // is the underlying. Same representation as the underlying (a zero-cost `as`
+    // re-tag), but a distinct type identity that inherits the underlying's methods.
+    NewType(name: String, ty: TypeAst, isPub: Bool, span: Span)
 }

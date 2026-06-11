@@ -1,0 +1,7 @@
+// A newtype is distinct from its underlying (spec/10): assigning one to the other
+// without an `as` re-tag is a type error (no implicit conversion, spec/12).
+newtype Meter = I64
+fn main() {
+    val d: Meter = 5 as Meter
+    val x: I64 = d
+}
