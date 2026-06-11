@@ -1,0 +1,2 @@
+// Unary `~` (BitNot) requires an integer operand (spec/12).
+fn main() { val b: Bool = true  val n: Bool = ~b }

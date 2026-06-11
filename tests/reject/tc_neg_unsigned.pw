@@ -1,0 +1,3 @@
+// Unary `-` (Neg) is for signed integers / floats only (spec/12) — no Neg witness for
+// an unsigned integer. (A user type may implement Neg, so this fires for primitives.)
+fn main() { val x: U64 = 5U64  val y: U64 = -x }

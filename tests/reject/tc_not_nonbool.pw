@@ -1,0 +1,2 @@
+// Unary `!` (Not) requires a Bool operand (spec/12).
+fn main() { val x: I32 = 5I32  val b: Bool = !x }

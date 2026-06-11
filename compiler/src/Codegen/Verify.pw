@@ -923,8 +923,9 @@ fn verifyExpr(c: inout Comp, id: U64) {
             verifyBinaryOp(c: inout c, op: op, lhs: lhs, rhs: rhs)
             tcCheckBinop(c: inout c, op: op, lhs: lhs, rhs: rhs)
         }
-        Expr.Unary(op: _, val operand) => {
+        Expr.Unary(val op, val operand) => {
             verifyExpr(c: inout c, id: operand)
+            tcCheckUnary(c: inout c, op: op, operand: operand)
         }
         Expr.Index(val base, val index) => {
             verifyExpr(c: inout c, id: base)

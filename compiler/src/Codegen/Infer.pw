@@ -149,6 +149,11 @@ fn tcCheckBinop(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
     if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
         handled = true
     }
+    // bitwise/shift: a primitive's witnesses are all same-type (`impl I8 as Shl[I8]`,
+    // not `Shl[U64]`), so mixed primitive operands have no witness — same as arith.
+    if op == opBitAnd() || op == opBitOr() || op == opBitXor() || op == opShl() || op == opShr() {
+        handled = true
+    }
     if handled {
     } else {
         return
@@ -164,6 +169,77 @@ fn tcCheckBinop(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
     if isIntType(c: inout c, start: c.types[l].nameStart, len: c.types[l].nameLen) {
         if isIntType(c: inout c, start: c.types[r].nameStart, len: c.types[r].nameLen) {
             tcCheckValue(c: inout c, expectedRef: l, valueExpr: rhs, pos: "binop")
+        }
+    }
+}
+
+// Whether a TypeRef is an unsigned primitive integer (U8..U64).
+fn tcIsUnsignedInt(c: inout Comp, ref: U64) -> Bool {
+    if ref == 0U64 || ref >= c.types.count {
+        return false
+    }
+    val t: TypeRef = c.types[ref]
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "U8") { return true }
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "U16") { return true }
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "U32") { return true }
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "U64") { return true }
+    return false
+}
+
+// Log (under --tc-log) or reject a unary-operator-applicability error.
+fn tcUnaryReject(c: inout Comp, operand: U64, msg: String) {
+    if c.tcLog {
+        eprint(text: "TC unary ")
+        eprint(text: msg)
+        eprint(text: " got=")
+        eprint(text: tcRefName(c: inout c, ref: inferType(c: inout c, id: operand)))
+        eprint(text: " line=")
+        eprintInt(n: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)))
+        eprint(text: "\n")
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: msg)
+    }
+}
+
+// Operator-applicability for the unary operators (spec/12), PRIMITIVE operands only —
+// a user type may implement Neg/Not/BitNot, so a non-primitive operand is never judged:
+//   `-` (Neg): signed integers / floats only (no Neg witness for unsigned or Bool);
+//   `!` (Not): Bool only; `~` (BitNot): integers only.
+fn tcCheckUnary(c: inout Comp, op: I64, operand: U64) {
+    val t: U64 = inferType(c: inout c, id: operand)
+    if t == 0U64 || t >= c.types.count {
+        return
+    }
+    val tn: TypeRef = c.types[t]
+    val isInt: Bool = isIntType(c: inout c, start: tn.nameStart, len: tn.nameLen)
+    val isBool: Bool = rangeEquals(bytes: c.bytes, start: tn.nameStart, len: tn.nameLen, kw: "Bool")
+    val isFloat: Bool = isFloatType(c: inout c, start: tn.nameStart, len: tn.nameLen)
+    // only judge a primitive operand (int / Bool / float); skip user types.
+    if isInt || isBool || isFloat {
+    } else {
+        return
+    }
+    if op == opSub() {
+        if isFloat {
+        } else {
+            if isInt && !tcIsUnsignedInt(c: inout c, ref: t) {
+            } else {
+                tcUnaryReject(c: inout c, operand: operand, msg: "unary `-` (Neg) is for signed integers / floats only (spec/12)")
+            }
+        }
+    } else {
+        if op == opNot() {
+            if isBool {
+            } else {
+                tcUnaryReject(c: inout c, operand: operand, msg: "unary `!` (Not) requires a Bool operand (spec/12)")
+            }
+        } else {
+            if op == opBitNot() {
+                if isInt {
+                } else {
+                    tcUnaryReject(c: inout c, operand: operand, msg: "unary `~` (BitNot) requires an integer operand (spec/12)")
+                }
+            }
         }
     }
 }

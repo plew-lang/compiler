@@ -1,0 +1,3 @@
+// A shift on two different primitive integer types — primitives only have same-type
+// shift witnesses (impl I32 as Shl[I32], not Shl[U64]) — reject.
+fn main() { val x: I32 = 8I32  val y: I32 = x << 1I64 }
