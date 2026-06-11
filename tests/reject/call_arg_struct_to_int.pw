@@ -1,0 +1,4 @@
+// Passing a struct value to an I64 parameter — reject.
+struct B { pub val y: I64 }
+fn f(n: I64) -> I64 { return n }
+fn main() { val x: I64 = f(n: <B y=1 />) }

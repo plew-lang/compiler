@@ -1,0 +1,3 @@
+// Passing a String to a non-overloaded function's I64 parameter — reject.
+fn f(n: I64) -> I64 { return n }
+fn main() { val x: I64 = f(n: "str") }

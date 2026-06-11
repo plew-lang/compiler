@@ -1,0 +1,4 @@
+// Passing a String to a struct parameter — reject.
+struct A { pub val x: I64 }
+fn f(a: A) -> I64 { return a.x }
+fn main() { val a: A = <A x=1 />  val y: I64 = f(a: "str") }

@@ -606,6 +606,66 @@ fn knownNamedTypeId(c: inout Comp, start: U64, len: U64) -> U64 {
     return 0U64
 }
 
+// Category-check a free-function call's arguments against the callee's parameter
+// types (`f(n: "s")` for `n: I64`). Conservative to dodge overload ambiguity: only
+// when the name resolves to EXACTLY ONE non-generic free function (no overloads, no
+// generic candidate) and the call passes one argument per parameter. Each argument is
+// matched to its parameter by label (or by position when unlabelled), then checked
+// with the same reliable-value discipline as bindings.
+fn checkCallArgCategories(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    val q: U64 = intern(c: inout c, start: nameStart, len: nameLen)
+    mut val theFi: U64 = c.funcs.count
+    mut val count: U64 = 0
+    mut val anyGen: Bool = false
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        val f: Func = c.funcs[fi]
+        if f.nameId == q && !f.hasRecv && !f.isExtern {
+            if f.typeParams.count > 0U64 {
+                anyGen = true
+            } else {
+                count += 1U64
+                theFi = fi
+            }
+        }
+        fi += 1
+    }
+    if anyGen || count != 1U64 {
+        return
+    }
+    val cf: Func = c.funcs[theFi]
+    if args.count != cf.params.count {
+        return
+    }
+    mut val ai: U64 = 0
+    while ai < args.count {
+        // resolve the parameter this argument fills: by label if given, else position.
+        mut val pIdx: U64 = ai
+        if args[ai].hasLabel {
+            val lq: U64 = intern(c: inout c, start: args[ai].labelStart, len: args[ai].labelLen)
+            mut val pj: U64 = 0
+            mut val found: Bool = false
+            while pj < cf.params.count {
+                if cf.params[pj].nameId == lq {
+                    pIdx = pj
+                    found = true
+                    pj = cf.params.count
+                } else {
+                    pj += 1
+                }
+            }
+            if found {
+            } else {
+                pIdx = cf.params.count
+            }
+        }
+        if pIdx < cf.params.count {
+            checkValueCategory(c: inout c, valueId: args[ai].expr, declStart: cf.params[pIdx].tyStart, declLen: cf.params[pIdx].tyLen, declIsArray: cf.params[pIdx].tyIsArray, ctx: "argument")
+        }
+        ai += 1
+    }
+}
+
 // Reject match arms that pattern-match variants of a DIFFERENT enum than the
 // scrutinee (`match e: E { F.C => … }`): the arms would test tags of an unrelated
 // enum. Only fires when the scrutinee reliably recovers to a known enum and an arm
@@ -728,8 +788,9 @@ fn verifyExpr(c: inout Comp, id: U64) {
         Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
             verifyExpr(c: inout c, id: recv)
         }
-        Expr.Call(nameStart: _, nameLen: _, val args) => {
+        Expr.Call(val nameStart, val nameLen, val args) => {
             verifyArgs(c: inout c, args: args)
+            checkCallArgCategories(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
             // enum variant construction (`<E.A x=1 />`) must specify EVERY payload

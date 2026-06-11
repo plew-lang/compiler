@@ -1,0 +1,4 @@
+import @Std/Io with { print }
+fn f(n: I64) -> I64 { return n }
+fn f(n: String) -> I64 { return 7I64 }
+fn main() { print(f(n: 5I64))  print(f(n: "x")) }
