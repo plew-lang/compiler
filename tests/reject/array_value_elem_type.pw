@@ -1,0 +1,6 @@
+// spec/02: an Array[I64] binding requires an Array[I64] value — assigning a
+// String's bytes (Array[U8]) reinterprets U8 elements as I64 (no conversion).
+fn main() {
+    val s: String = "abc"
+    val b: Array[I64] = s.bytes
+}

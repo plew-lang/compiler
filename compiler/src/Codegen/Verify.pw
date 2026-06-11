@@ -490,7 +490,32 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                                 ek += 1
                             }
                         }
-                        _ => {}
+                        _ => {
+                            // a NON-literal array value (`val b: Array[I64] = s.bytes`):
+                            // inferType reports arrays as kind 0 (deferred), so tcCheckValue
+                            // above can't compare element types. Compare the init's element
+                            // type to the declared one directly, but only when BOTH are
+                            // concrete primitives (a struct/generic element is left to the
+                            // existing machinery — conservative).
+                            if ty != 0U64 {
+                                if c.types[ty].args.count > 0U64 {
+                                    val de: TypeRef = c.types[c.types[ty].args[0]]
+                                    val it: TypeInfo = typeOf(c: inout c, id: init)
+                                    if it.kind == 3 {
+                                        if it.nameLen > 0U64 {
+                                            if isPrimType(c: inout c, start: de.nameStart, len: de.nameLen) {
+                                                if isPrimType(c: inout c, start: it.nameStart, len: it.nameLen) {
+                                                    if spansEqual(c: inout c, aStart: de.nameStart, aLen: de.nameLen, bStart: it.nameStart, bLen: it.nameLen) {
+                                                    } else {
+                                                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: init)), msg: "array element type does not match the declared element type (Plew has no implicit conversion — spec/12)")
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
