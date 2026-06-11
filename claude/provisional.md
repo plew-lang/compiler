@@ -71,7 +71,7 @@
 
 - ✅ **可視性 `export`/`import with`/`pub impl`/`pub`/`pub(get)` 完全強制**（`moduleOf`＋`checkImports`／`checkUseVisibility`＋メンバ可視性）。**残・未実装**＝名前空間 import（`Io.print` 形・今は `with { }` 選択のみ）／`as` リネームの実束縛／`_.pw` ディレクトリ解決／パス正当性厳密検査〔今は「ロード済み export 集合に在るか」近似〕。spec/15。
 - ✅ **`part`／`import` パスルート**（`part ./Name`/`./Sub/Name`・`@Std/X` は binary 横 `std/X.pw`・`with { }` 選択）。残：`_.pw` ディレクトリ・ネスト part・forest/循環検査・名前空間 import。配布時の bare 名起動の stdRoot は別途。spec/15。
-- ✅ **ambient `@Std/Core`**（演算子 witness/`Optional`/`Result`/`for`/range が import 不要＝起動時 force-load・`assert` は import gate 維持）。残〔小〕＝lang-item 型の**再定義を loud reject**〔現状 silent tolerate〕。
+- ✅ **ambient `@Std/Core`**（演算子 witness/`Optional`/`Result`/`for`/range が import 不要＝起動時 force-load・`assert` は import gate 維持）。✅ lang-item 型の**再定義を loud reject**〔`checkLangItemRedef`＋`defOffset`・test reject redefine_langitem〕。
 - ✅ **トップレベル変数**（`val`/`mut val`＋`export`・`plew_init_globals`・各本体エントリで `seedGlobals`）。残〔小〕＝前方参照〔後発 global を先行 global の初期化子が読むと zero〕・`assoc val`（static）未実装。
 - **エントリ `fn main`**：`int main(int argc, char** argv)` に固定脱糖（spec の戻り `()|Result` とは別）。
 
