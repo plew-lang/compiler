@@ -713,8 +713,17 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
                         // instantiation so a literal arg gets the concrete context.
                         val pti: TypeInfo = substTypeInfo(c: inout c, instRef: rt.ref, params: mf.typeParams, tyRef: p.ty)
                         checkLitTi(c: inout c, id: args[i].expr, ti: pti)
+                        // full type-compatibility against the GROUNDED param type — a
+                        // typed value whose type disagrees with the (instantiated)
+                        // parameter (`dict[5I64]=v` on `Dictionary[String,_]` would hash
+                        // an I64 as a String and crash). checkLitTi only range-checks a
+                        // literal against its own suffix.
+                        if pti.ref != 0U64 {
+                            tcCheckValue(c: inout c, expectedRef: pti.ref, valueExpr: args[i].expr, pos: "arg")
+                        }
                     } else {
                         checkLitSpan(c: inout c, id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+                        tcCheckValue(c: inout c, expectedRef: p.ty, valueExpr: args[i].expr, pos: "arg")
                     }
                 } else {
                     checkLitCtx(c: inout c, id: args[i].expr, eKind: 0, eBits: 0, eSgn: false)

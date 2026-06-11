@@ -1,0 +1,10 @@
+// A method VALUE argument must match the parameter type (spec/12): passing an
+// Optional where an I64 parameter is expected reinterprets the bits.
+struct Box { pub val n: I64 }
+pub impl Box { fn add(x: I64) -> I64 { return self.n + x } }
+
+fn main() {
+    val b: Box = <Box n=1I64 />
+    val o: Optional[I64] = <Optional.None />
+    val y: I64 = b.add(x: o)
+}
