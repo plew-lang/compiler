@@ -5251,6 +5251,16 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
         mut val av: Array[LLVMValueRef] = []
         return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 0U64, anon())
     }
+    // (Prelude internal) __dictSeed() -> U64: the per-process dictionary hash seed —
+    // a lazily-initialized random value (stable for the process), so SipHash is keyed
+    // unpredictably across runs (DoS resistance) while staying consistent within a run.
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "__dictSeed") {
+        mut val ptys: Array[LLVMTypeRef] = []
+        val fty: LLVMTypeRef = LLVMFunctionType(st.i64ty, arrayCPtr(ptys), 0U64, 0I32)
+        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_dict_seed", nameId: 53U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 0U64, anon())
+    }
     // @Std/Io readFile(path: String) -> String and readFileBytes(path: Array[U8])
     // -> String / fileExists(path: Array[U8]) -> Bool: the path argument is a
     // {ptr,i64} value (String or Array[U8], same layout), passed as two args.
@@ -10998,6 +11008,7 @@ fn emitLlvmRuntime() {
     write(s: "PlewStrR plew_argAt(long long i){ PlewStrR s; if(i<0||i>=plew_argc){ s.d=(char*)\"\"; s.n=0; return s; } s.d=plew_argv[i]; s.n=(long long)strlen(plew_argv[i]); return s; }\n")
     write(s: "void plew_writeByte(unsigned char b){ putchar((int)b); }\n")
     write(s: "unsigned long long plew_random_u64(void){ unsigned long long x=0; FILE* f=fopen(\"/dev/urandom\",\"rb\"); if(f){ size_t r=fread(&x,sizeof(x),1,f); fclose(f); if(r==1) return x; } return ((unsigned long long)(uintptr_t)&x * 0x9E3779B97F4A7C15ULL) | 1ULL; }\n")
+    write(s: "unsigned long long plew_dict_seed(void){ static unsigned long long s=0; static int init=0; if(!init){ s=plew_random_u64(); init=1; } return s; }\n")
     write(s: "static PlewStrR plew_readPath(const char* path){ FILE* f=fopen(path,\"rb\"); PlewStrR s; if(!f){ s.d=(char*)\"\"; s.n=0; return s; } fseek(f,0,SEEK_END); long sz=ftell(f); fseek(f,0,SEEK_SET); char* buf=(char*)malloc((size_t)sz+1); size_t n=fread(buf,1,(size_t)sz,f); fclose(f); buf[n]=0; s.d=buf; s.n=(long long)n; return s; }\n")
     write(s: "PlewStrR plew_readFile(char* d, long long n){ char* p=(char*)malloc((size_t)n+1); if(n) memcpy(p,d,(size_t)n); p[n]=0; PlewStrR r=plew_readPath(p); free(p); return r; }\n")
     write(s: "PlewStrR plew_readFileBytes(char* d, long long n){ return plew_readFile(d,n); }\n")

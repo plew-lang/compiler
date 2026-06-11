@@ -23,6 +23,11 @@ extern "plew-intrinsic" {
     fn arrayGet[T](a: Array[T], i: U64) -> T
     fn arraySet[T](a: inout Array[T], i: U64, v: T)
     fn arrayLen[T](a: Array[T]) -> U64
+    // The per-process dictionary hash seed: a random value chosen once per run (lazily,
+    // from the OS), stable thereafter. Keys SipHash so a map's layout is unpredictable
+    // across runs (DoS resistance) yet consistent within a run. Internal to the dict
+    // lang item (`entropyU64` in @Std/Random is the user-facing entropy source).
+    fn __dictSeed() -> U64
 }
 
 // Methods on the builtin Array, in pure Plew over the floor above. Monomorphized
@@ -76,8 +81,13 @@ struct SipHasher {
     mut val v3: U64
 }
 pub impl SipHasher {
+    // Keyed init: the standard SipHash base constants XOR the per-process random key
+    // (`k0 = k1 = __dictSeed()`), so the digest stream differs per run. A zero seed
+    // (the lazy init never ran) reproduces the unkeyed standard constants — the prior
+    // deterministic behavior, a safe fallback.
     assoc fn new() -> SipHasher {
-        return <SipHasher v0=8317987319222330741U64 v1=7237128888997146477U64 v2=7816392313619706465U64 v3=8387220255154660723U64 />
+        val k: U64 = __dictSeed()
+        return <SipHasher v0=(8317987319222330741U64 ^ k) v1=(7237128888997146477U64 ^ k) v2=(7816392313619706465U64 ^ k) v3=(8387220255154660723U64 ^ k) />
     }
     inout fn round() {
         self.v0 = self.v0.wrappingAdd(by: self.v1)
