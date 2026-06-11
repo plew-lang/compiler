@@ -405,6 +405,24 @@ fn exprIsUnit(c: inout Comp, id: U64) -> Bool {
     }
 }
 
+// A dictionary subscript `d[k]` / `d[k]=v` must use a key of the dictionary's key
+// type K (spec/02) — `d[5I64]` on a `Dictionary[String, _]` would hash an I64 as a
+// String and CRASH at runtime. Check the index against K (the instance's first type
+// argument). Arrays (U64 index) and other bases are left to their own checks.
+fn checkIndexKeyType(c: inout Comp, base: U64, index: U64) {
+    val bt: TypeInfo = typeOf(c: inout c, id: base)
+    if bt.ref != 0U64 {
+        if bt.ref < c.types.count {
+            val t: TypeRef = c.types[bt.ref]
+            if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Dictionary") {
+                if t.args.count >= 1U64 {
+                    tcCheckValue(c: inout c, expectedRef: t.args[0], valueExpr: index, pos: "dict key")
+                }
+            }
+        }
+    }
+}
+
 fn verifyStmt(c: inout Comp, stmtId: U64) {
     match c.stmts[stmtId] {
         Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
@@ -614,6 +632,7 @@ fn verifyAssign(c: inout Comp, op: I64, target: U64, value: U64) {
             }
             verifyExpr(c: inout c, id: base)
             verifyExpr(c: inout c, id: index)
+            checkIndexKeyType(c: inout c, base: base, index: index)
         }
         Expr.Field(base: val fbase, val nameStart, val nameLen) => {
             // the whole place must be mutable (binding + field both `mut val`).
@@ -1055,6 +1074,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             verifyExpr(c: inout c, id: base)
             verifyExpr(c: inout c, id: index)
             tcCheckArrayIndex(c: inout c, base: base, index: index)
+            checkIndexKeyType(c: inout c, base: base, index: index)
         }
         Expr.Array(val elems) => {
             mut val i: U64 = 0

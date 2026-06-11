@@ -1,0 +1,7 @@
+// A dictionary subscript must use the dictionary's key type (spec/02): `d[5I64]` on
+// a `Dictionary[String, _]` would hash an I64 as a String and crash at runtime, so
+// it is a compile-time type error.
+fn main() {
+    mut val d: Dictionary[String, I64] = [:]
+    d[5I64] = 7I64
+}
