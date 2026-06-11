@@ -72,12 +72,59 @@ fn isIntTypeAst(p: inout P, t: Tok) -> Bool {
 fn tokenU64Ast(p: inout P, t: Tok) -> U64 {
     mut val v: U64 = 0
     mut val j: U64 = 0
+    mut val base: U64 = 10
+    // a base prefix `0x` / `0o` / `0b` (spec/02): select the radix and skip it.
+    if t.len >= 2U64 {
+        if p.bytes[t.start] == '0' {
+            val c1: U8 = p.bytes[t.start + 1U64]
+            if c1 == 'x' { base = 16  j = 2 }
+            if c1 == 'X' { base = 16  j = 2 }
+            if c1 == 'o' { base = 8  j = 2 }
+            if c1 == 'O' { base = 8  j = 2 }
+            if c1 == 'b' { base = 2  j = 2 }
+            if c1 == 'B' { base = 2  j = 2 }
+        }
+    }
     while j < t.len {
-        val d: U64 = (p.bytes[t.start + j] as U64) - 48
-        v = v * 10 + d
+        val ch: U8 = p.bytes[t.start + j]
+        if ch == '_' {
+            // a digit separator (`1_000`, `0xFF_FF`): ignored in the value.
+        } else {
+            v = v * base + hexDigitValueAst(b: ch)
+        }
         j += 1
     }
     return v
+}
+
+// `s` with every `_` byte removed (a float literal's digit separators).
+fn stripUnderscoresAst(s: String) -> String {
+    mut val out: Array[U8] = []
+    mut val i: U64 = 0
+    while i < s.bytes.count {
+        if s.bytes[i] == '_' {
+        } else {
+            out.append(value: s.bytes[i])
+        }
+        i += 1
+    }
+    return stringFromBytes(b: out)
+}
+
+// The numeric value of a base-16 digit byte (`0`-`9` / `a`-`f` / `A`-`F`); also
+// covers the base-2/8/10 digit subsets. Assumes the lexer validated the digit.
+fn hexDigitValueAst(b: U8) -> U64 {
+    if b >= 'a' {
+        if b <= 'f' {
+            return (b as U64) - 97U64 + 10U64
+        }
+    }
+    if b >= 'A' {
+        if b <= 'F' {
+            return (b as U64) - 65U64 + 10U64
+        }
+    }
+    return (b as U64) - 48U64
 }
 
 // Decode a character literal token `'…'` (span includes both quotes) to its
@@ -264,7 +311,9 @@ fn parsePrimaryAst(p: inout P) -> ExprAst {
         }
         Kind.Float => {
             val t: Tok = p.curTok()
-            val txt: String = p.text(t: t)
+            // strip `_` digit separators (`1_000.5`) before the text reaches the float
+            // parser (LLVMConstRealOfStringAndSize), which does not accept them.
+            val txt: String = stripUnderscoresAst(s: p.text(t: t))
             p.advance()
             mut val suffix: String = ""
             match p.curKind() {

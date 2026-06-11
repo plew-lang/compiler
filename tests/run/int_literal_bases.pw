@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+// Integer literal bases (spec/02): hexadecimal `0x` (upper/lowercase digits and X),
+// octal `0o`, binary `0b`, plus `_` digit separators in any literal (including floats).
+fn main() {
+    print(0xFFU64)              // 255
+    print(0xFF_FFU64)          // 65535 (hex + separators)
+    print(0xdeadU64)           // 57005 (lowercase hex digits)
+    print(0XABU64)             // 171 (uppercase X prefix)
+    print(0o17U64)             // 15 (octal)
+    print(0b1010U64)           // 10 (binary)
+    print(1_000_000U64)        // 1000000 (decimal separators)
+    print(0xFFU64 & 0x0FU64)   // 15 (used in a bit-op)
+    val a: I64 = -0xFFI64       // -255 (negative literal fold)
+    print(a)
+    print(255U64 == 0xFFU64)   // 1 (same value, different base)
+    print(1_000.5)             // 1000.5 (float with separator)
+}

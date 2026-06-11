@@ -151,6 +151,27 @@ fn isDigit(b: U8) -> Bool {
     return false
 }
 
+// A digit of the given base (2 / 8 / 10 / 16) — for lexing `0b` / `0o` / `0x`
+// literals (spec/02). Hex accepts a-f / A-F; the lower bases accept their digit range.
+fn isBaseDigit(b: U8, base: I64) -> Bool {
+    if base == 16 {
+        if isDigit(b: b) { return true }
+        if b >= 'a' { if b <= 'f' { return true } }
+        if b >= 'A' { if b <= 'F' { return true } }
+        return false
+    }
+    if base == 8 {
+        if b >= '0' { if b <= '7' { return true } }
+        return false
+    }
+    if base == 2 {
+        if b == '0' { return true }
+        if b == '1' { return true }
+        return false
+    }
+    return isDigit(b: b)
+}
+
 fn isAlpha(b: U8) -> Bool {
     if b == '_' {
         return true
@@ -339,8 +360,35 @@ export fn lex(lx: inout Lexer) {
         if isDigit(b: b) {
             val start: U64 = lx.pos
             mut val j: U64 = lx.pos
+            // base-prefixed integer literal: `0x…` (hex) / `0o…` (octal) / `0b…`
+            // (binary), with `_` digit separators (spec/02). Always an integer.
+            if b == '0' {
+                if j + 1U64 < lx.bytes.count {
+                    val p1: U8 = lx.bytes[j + 1U64]
+                    mut val base: I64 = 0
+                    if p1 == 'x' { base = 16 }
+                    if p1 == 'X' { base = 16 }
+                    if p1 == 'o' { base = 8 }
+                    if p1 == 'O' { base = 8 }
+                    if p1 == 'b' { base = 2 }
+                    if p1 == 'B' { base = 2 }
+                    if base != 0 {
+                        j += 2U64
+                        while j < lx.bytes.count {
+                            if isBaseDigit(b: lx.bytes[j], base: base) || lx.bytes[j] == '_' {
+                                j += 1
+                            } else {
+                                break
+                            }
+                        }
+                        lx.emit(k: <Kind.Int />, start: start, len: j - start)
+                        continue
+                    }
+                }
+            }
+            // decimal integer part (allow `_` digit separators)
             while j < lx.bytes.count {
-                if isDigit(b: lx.bytes[j]) {
+                if isDigit(b: lx.bytes[j]) || lx.bytes[j] == '_' {
                     j += 1
                 } else {
                     break
@@ -354,7 +402,7 @@ export fn lex(lx: inout Lexer) {
                             isFloat = true
                             j += 1U64
                             while j < lx.bytes.count {
-                                if isDigit(b: lx.bytes[j]) {
+                                if isDigit(b: lx.bytes[j]) || lx.bytes[j] == '_' {
                                     j += 1
                                 } else {
                                     break
@@ -380,7 +428,7 @@ export fn lex(lx: inout Lexer) {
                             isFloat = true
                             j = k + 1U64
                             while j < lx.bytes.count {
-                                if isDigit(b: lx.bytes[j]) {
+                                if isDigit(b: lx.bytes[j]) || lx.bytes[j] == '_' {
                                     j += 1
                                 } else {
                                     break
