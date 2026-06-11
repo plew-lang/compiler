@@ -1,0 +1,23 @@
+import @Std/Io with { print }
+
+// A String accumulator (a non-scalar own type param) folded over a lazy adapter is not
+// yet emittable (the item-B / accumulator-B name collision is only observably harmless
+// when both share the i64/double representation). It must loud-reject, never crash.
+struct Counter { pub mut val n: I64  pub val limit: I64 }
+pub impl Counter as Iterator {
+    type Item = I64
+    inout fn next() -> Optional[I64] {
+        if self.n < self.limit {
+            val v: I64 = self.n
+            self.n = self.n + 1
+            return <Optional.Some v=v />
+        }
+        return <Optional.None />
+    }
+}
+
+fn main() {
+    mut val b: Counter = <Counter n=0 limit=3 />
+    val s: String = b.map(f: fn(x: I64) -> I64 { return x }).fold(init: "z", combine: fn(acc: String, x: I64) -> String { return acc })
+    print(s)
+}

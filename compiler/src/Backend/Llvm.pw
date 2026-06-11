@@ -259,6 +259,12 @@ struct LlvmCtx {
     pub mut val genMethInst: Array[U64]
     pub mut val genMethVal: Array[LLVMValueRef]
     pub mut val genMethTy: Array[LLVMTypeRef]
+    // method-own type arguments for each gen-method slot (parallel to genMethK):
+    // a provided terminal with its own type params (`fold[B]` copied onto a generic
+    // receiver) instantiates per (mfi, instRef, ownArgs), since the same receiver
+    // instance folds into different accumulator types. Empty for ordinary methods
+    // whose type params are fully grounded by the receiver instance.
+    pub mut val genMethOwn: Array[Array[U64]]
     // local environment (parallel arrays). `nLocals` is the logical count: blocks
     // save it on entry and restore it on exit (lexical scope), so a shadowing
     // binding inside a block leaves scope at the block's end and a later reference
@@ -5908,7 +5914,11 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
             val grt: TypeRef = c.types[recvRef]
             val gmfi: U64 = findMethod(c: inout c, recvStart: grt.nameStart, recvLen: grt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
             if gmfi < c.funcs.count {
-                val gslot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: gmfi, instRef: recvRef)
+                // a provided terminal with method-own type params (`fold[B]` on a lazy
+                // adapter receiver): infer the own args from the call so the slot is
+                // keyed by them and the body's env grounds the own param.
+                val gOwn: Array[U64] = methodOwnArgs(c: inout c, mfi: gmfi, instRef: recvRef, args: args)
+                val gslot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: gmfi, instRef: recvRef, ownArgs: gOwn)
                 if gslot < st.genMethK.count {
                     return genGenMethodCall(c: inout c, st: inout st, recv: recv, mfi: gmfi, slot: gslot, instRef: recvRef, args: args)
                 }
@@ -5940,7 +5950,7 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
                 mut val aargs: Array[U64] = []
                 aargs.append(value: elemRef)
                 val arrInst: U64 = c.pushType(t: <TypeRef nameStart=arrB.nameStart nameLen=arrB.nameLen args=aargs />)
-                val gslot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: amfi, instRef: arrInst)
+                val gslot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: amfi, instRef: arrInst, ownArgs: [])
                 if gslot < st.genMethK.count {
                     return genGenMethodCall(c: inout c, st: inout st, recv: recv, mfi: amfi, slot: gslot, instRef: arrInst, args: args)
                 }
@@ -6133,11 +6143,49 @@ fn genMethodOwnTypeParamCall(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U
     // body emits with curTypeParams = mf.typeParams -> curTypeArgs = margs while the
     // self type still resolves from the receiver name.
     val pinst: U64 = c.pushType(t: <TypeRef nameStart=recvStart nameLen=recvLen args=margs />)
-    val gslot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: mfi, instRef: pinst)
+    val gslot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: mfi, instRef: pinst, ownArgs: [])
     if gslot < st.genMethK.count {
         return genGenMethodCall(c: inout c, st: inout st, recv: recv, mfi: mfi, slot: gslot, instRef: pinst, args: args)
     }
     return LLVMConstNull(st.ptrty)
+}
+
+// The method-own type arguments of a call — those of the method's type params that
+// the receiver instance does NOT ground. Empty for an ordinary method (all its type
+// params are the receiver's). For a provided terminal copied onto a generic receiver
+// (`fold[B]` on `MapIter[I, F, B]`: own param B), infer the full arg list from the
+// call (inferFnArgs) and return the entries beyond the receiver's arg count.
+fn methodOwnArgs(c: inout Comp, mfi: U64, instRef: U64, args: Array[Arg]) -> Array[U64] {
+    val mf: Func = c.funcs[mfi]
+    val rcount: U64 = c.types[instRef].args.count
+    if mf.typeParams.count <= rcount {
+        return []
+    }
+    val inferred: Array[U64] = inferFnArgs(c: inout c, f: mf, args: args)
+    mut val out: Array[U64] = []
+    mut val i: U64 = rcount
+    while i < inferred.count {
+        // a failed inference (0) or out-of-range ref would seed the env with the index-0
+        // dummy type and crash emission; bail to an empty list so the caller leaves the
+        // method undeclared and reports the honest "not emittable yet" instead.
+        if inferred[i] == 0U64 || inferred[i] >= c.types.count {
+            return []
+        }
+        // only a primitive (int / float) own argument is supported for now: a scalar
+        // accumulator shares the item's i64/double representation, so the receiver-`B`
+        // (item) / own-`B` (accumulator) name collision is observably harmless. A
+        // String / struct / array accumulator (a different LLVM representation) is not
+        // yet emitted correctly through the collided env, so bail to the loud reject
+        // rather than miscompile.
+        val owt: TypeRef = c.types[inferred[i]]
+        if isIntType(c: inout c, start: owt.nameStart, len: owt.nameLen) || isFloatType(c: inout c, start: owt.nameStart, len: owt.nameLen) {
+        } else {
+            return []
+        }
+        out.append(value: inferred[i])
+        i += 1
+    }
+    return out
 }
 
 fn genGenMethodCall(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64, slot: U64, instRef: U64, args: Array[Arg]) -> LLVMValueRef {
@@ -6151,7 +6199,14 @@ fn genGenMethodCall(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64, slot:
     val savedP: Array[Bind] = c.curTypeParams
     val savedA: Array[U64] = c.curTypeArgs
     c.curTypeParams = mf.typeParams
-    c.curTypeArgs = c.types[instRef].args
+    c.curTypeArgs = concatArgs(add: c.types[instRef].args, base: st.genMethOwn[slot])
+    // bind Self/Item for an own-param provided call so an argument typed by `Item`
+    // coerces against the receiver's real item type (see emitOneGenMethod).
+    val sGs: U64 = c.curSelfRef
+    val sGi: U64 = c.curItemRef
+    if st.genMethOwn[slot].count > 0U64 {
+        setSelfItemEnv(c: inout c, recvStart: c.types[instRef].nameStart, recvLen: c.types[instRef].nameLen, recvInstRef: instRef)
+    }
     mut val ai: U64 = 0
     while ai < args.count {
         av.append(value: genArgValue(c: inout c, st: inout st, argExpr: args[ai].expr, p: mf.params[ai]))
@@ -6162,6 +6217,8 @@ fn genGenMethodCall(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64, slot:
         av.append(value: genArgValue(c: inout c, st: inout st, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
         di += 1
     }
+    c.curSelfRef = sGs
+    c.curItemRef = sGi
     c.curTypeParams = savedP
     c.curTypeArgs = savedA
     return LLVMBuildCall2(st.b, st.genMethTy[slot], st.genMethVal[slot], arrayCPtr(av), av.count, anon())
@@ -6946,12 +7003,17 @@ fn genFnSlotFor(c: inout Comp, fnIdx: U64, args: Array[U64], st: inout LlvmCtx) 
 // non-provided methods (std combinators / provided Iterator methods are deferred).
 
 // The st.genMeth* slot for (mfi, instRef), or st.genMethK.count if not registered.
-fn genMethSlotFor(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64) -> U64 {
+fn genMethSlotFor(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64, ownArgs: Array[U64]) -> U64 {
     mut val i: U64 = 0
     while i < st.genMethK.count {
         if st.genMethK[i] == mfi {
             if typeRefEq(c: inout c, a: st.genMethInst[i], b: instRef) {
-                return i
+                // a method-own-param terminal (`fold[B]`) is keyed by its own args too,
+                // so the same receiver instance folding into different accumulators maps
+                // to distinct slots.
+                if typeArgsEq(c: inout c, a: st.genMethOwn[i], b: ownArgs) {
+                    return i
+                }
             }
         }
         i += 1
@@ -6976,8 +7038,8 @@ fn declareGenMethods(c: inout Comp, st: inout LlvmCtx) {
                     if mf.isProvided {
                     } else {
                         if methodInEntryModule(c: inout c, f: mf) {
-                            if genMethSlotFor(c: inout c, st: inout st, mfi: mfi, instRef: instRef) == st.genMethK.count {
-                                declareOneGenMethod(c: inout c, st: inout st, mfi: mfi, instRef: instRef)
+                            if genMethSlotFor(c: inout c, st: inout st, mfi: mfi, instRef: instRef, ownArgs: []) == st.genMethK.count {
+                                declareOneGenMethod(c: inout c, st: inout st, mfi: mfi, instRef: instRef, ownArgs: [])
                             }
                         }
                     }
@@ -6989,14 +7051,24 @@ fn declareGenMethods(c: inout Comp, st: inout LlvmCtx) {
     }
 }
 
-fn declareOneGenMethod(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64) {
+fn declareOneGenMethod(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64, ownArgs: Array[U64]) {
     val mf: Func = c.funcs[mfi]
     val savedP: Array[Bind] = c.curTypeParams
     val savedA: Array[U64] = c.curTypeArgs
     val savedR: U64 = st.curRecvInstRef
     c.curTypeParams = mf.typeParams
-    c.curTypeArgs = c.types[instRef].args
+    // env = receiver instance args ++ method-own args (the latter empty for ordinary
+    // methods); pairs 1:1 with mf.typeParams = [receiver params..., own params...].
+    c.curTypeArgs = concatArgs(add: c.types[instRef].args, base: ownArgs)
     st.curRecvInstRef = instRef
+    // bind Self/Item to the receiver instance for an own-param provided method, so a
+    // param/return type naming `Item` (`combine: fn(acc: B, x: Item) -> B`) resolves to
+    // the receiver's real item, independent of the B/B name collision (see emitOneGenMethod).
+    val sDs: U64 = c.curSelfRef
+    val sDi: U64 = c.curItemRef
+    if ownArgs.count > 0U64 {
+        setSelfItemEnv(c: inout c, recvStart: c.types[instRef].nameStart, recvLen: c.types[instRef].nameLen, recvInstRef: instRef)
+    }
     mut val ptys: Array[LLVMTypeRef] = []
     if mf.selfInout {
         ptys.append(value: st.ptrty)
@@ -7020,6 +7092,9 @@ fn declareOneGenMethod(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64)
     st.genMethInst.append(value: instRef)
     st.genMethVal.append(value: fv)
     st.genMethTy.append(value: fty)
+    st.genMethOwn.append(value: ownArgs)
+    c.curSelfRef = sDs
+    c.curItemRef = sDi
     c.curTypeParams = savedP
     c.curTypeArgs = savedA
     st.curRecvInstRef = savedR
@@ -7035,9 +7110,22 @@ fn emitOneGenMethod(c: inout Comp, st: inout LlvmCtx, slot: U64) {
     val savedA: Array[U64] = c.curTypeArgs
     val savedR: U64 = st.curRecvInstRef
     c.curTypeParams = mf.typeParams
-    c.curTypeArgs = c.types[instRef].args
+    c.curTypeArgs = concatArgs(add: c.types[instRef].args, base: st.genMethOwn[slot])
     st.curRecvInstRef = instRef
+    // a provided method with method-own type params (`fold[B]` on a generic receiver):
+    // its body refers to the element by the associated `Item`, while the env carries
+    // two same-named params (the receiver's `B` = item, the method-own `B` = accumulator)
+    // that last-match resolution collapses to the accumulator. Bind `Self`/`Item` to the
+    // receiver instance so the element type resolves to the real item, independent of the
+    // name collision (only when own args are present, leaving ordinary methods untouched).
+    val s4: U64 = c.curSelfRef
+    val si4: U64 = c.curItemRef
+    if st.genMethOwn[slot].count > 0U64 {
+        setSelfItemEnv(c: inout c, recvStart: c.types[instRef].nameStart, recvLen: c.types[instRef].nameLen, recvInstRef: instRef)
+    }
     genLlvmFuncBody(c: inout c, st: inout st, fi: mfi, fv: st.genMethVal[slot])
+    c.curSelfRef = s4
+    c.curItemRef = si4
     c.curTypeParams = savedP
     c.curTypeArgs = savedA
     st.curRecvInstRef = savedR
@@ -7057,19 +7145,20 @@ fn emitGenMethods(c: inout Comp, st: inout LlvmCtx) {
 // for the post-pass drain. Returns the genMeth* slot, or genMethK.count if it
 // can't be declared (the method has its own type params beyond the receiver
 // instance's — provided map[B]/filter is handled separately). Idempotent.
-fn ensureGenMethodDeclared(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64) -> U64 {
-    val existing: U64 = genMethSlotFor(c: inout c, st: inout st, mfi: mfi, instRef: instRef)
+fn ensureGenMethodDeclared(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64, ownArgs: Array[U64]) -> U64 {
+    val existing: U64 = genMethSlotFor(c: inout c, st: inout st, mfi: mfi, instRef: instRef, ownArgs: ownArgs)
     if existing < st.genMethK.count {
         return existing
     }
-    // the method's type params must pair 1:1 with the instance's type args (the
-    // instance fully grounds the method's env); a mismatch means method-own params.
+    // the method's type params must pair 1:1 with the instance's args plus the
+    // method-own args inferred at the call (`fold[B]`: receiver [I,F,B] + own [B]).
+    // A still-mismatched count means own params we couldn't infer — leave undeclared.
     val mf: Func = c.funcs[mfi]
-    if mf.typeParams.count == c.types[instRef].args.count {
+    if mf.typeParams.count == c.types[instRef].args.count + ownArgs.count {
     } else {
         return st.genMethK.count
     }
-    declareOneGenMethod(c: inout c, st: inout st, mfi: mfi, instRef: instRef)
+    declareOneGenMethod(c: inout c, st: inout st, mfi: mfi, instRef: instRef, ownArgs: ownArgs)
     val slot: U64 = st.genMethK.count - 1U64
     st.genMethEmit.append(value: slot)
     return slot
@@ -9468,7 +9557,7 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
     val itfi: U64 = findMethod(c: inout c, recvStart: gt.nameStart, recvLen: gt.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
     if itfi < c.funcs.count {
         // an Iterable: call iterator() and switch the instance ref to the iterator's.
-        val itSlot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: itfi, instRef: recvRef)
+        val itSlot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: itfi, instRef: recvRef, ownArgs: [])
         if itSlot < st.genMethK.count {
         } else {
             compileErrorAt(line: 0, msg: "LLVM backend: this generic Iterable's iterator method is not emittable yet")
@@ -9495,7 +9584,7 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
         compileErrorAt(line: 0, msg: "LLVM backend: generic Iterable for-loop needs a `next` method on the iterator")
         return
     }
-    val nSlot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: nfi, instRef: iterInstRef)
+    val nSlot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: nfi, instRef: iterInstRef, ownArgs: [])
     if nSlot < st.genMethK.count {
     } else {
         compileErrorAt(line: 0, msg: "LLVM backend: this generic iterator's next method is not emittable yet")
@@ -9960,7 +10049,7 @@ fn emitLlvm(c: inout Comp) {
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy closureTy=closureTy anyTy=anyTy anyVtType=[] anyVtTrait=[] anyVtBindKey=[] anyVtVal=[]
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
-        fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[]
+        fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[] genMethOwn=[]
         locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemStructIdx=[] locElemTypeRef=[] locOwned=[] locMoved=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] provEmit=[] genMethEmit=[]
         promiseTy=promiseTy curAsync=false
         curFrameBase=LLVMConstNull(ptrty) curFrameTy=i64ty

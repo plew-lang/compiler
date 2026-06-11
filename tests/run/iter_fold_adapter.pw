@@ -1,0 +1,38 @@
+import @Std/Io with { print }
+
+// `fold[B]` (a provided Iterator terminal with a method-OWN type param B, the
+// accumulator) called on lazy ADAPTER receivers (MapIter / FilterIter from .map /
+// .filter on a user Iterator). The receiver instance `MapIter[Counter, fn, I64]`
+// grounds the iterator's params [I, F, B] (B = item type), and the method-own B (the
+// accumulator) is inferred from the call and appended to the env — resolved by
+// last-match so the accumulator B shadows the item B (Codegen/Infer + Mono.resolveTy).
+struct Counter { pub mut val n: I64  pub val limit: I64 }
+pub impl Counter as Iterator {
+    type Item = I64
+    inout fn next() -> Optional[I64] {
+        if self.n < self.limit {
+            val v: I64 = self.n
+            self.n = self.n + 1
+            return <Optional.Some v=v />
+        }
+        return <Optional.None />
+    }
+}
+
+fn main() {
+    // map().fold — accumulator I64 (sum of x*10 for 0..4 = 0+10+20+30)
+    mut val a: Counter = <Counter n=0 limit=4 />
+    print(a.map(f: fn(x: I64) -> I64 { return x * 10 }).fold(init: 0I64, combine: fn(acc: I64, x: I64) -> I64 { return acc + x }))   // 60
+    // map().fold — accumulator U64 distinct from the I64 item type (counts elements)
+    mut val b: Counter = <Counter n=0 limit=4 />
+    print(b.map(f: fn(x: I64) -> I64 { return x * 10 }).fold(init: 0U64, combine: fn(acc: U64, x: I64) -> U64 { return acc + 1U64 }))   // 4
+    // filter().fold — sum of evens in 0..4 (0 + 2)
+    mut val c: Counter = <Counter n=0 limit=4 />
+    print(c.filter(p: fn(x: I64) -> Bool { return x % 2 == 0 }).fold(init: 0I64, combine: fn(acc: I64, x: I64) -> I64 { return acc + x }))   // 2
+    // chained map().map().fold — (1*2+1)+(2*2+1)+(3*2+1) = 3+5+7
+    mut val d: Counter = <Counter n=1 limit=4 />
+    print(d.map(f: fn(x: I64) -> I64 { return x * 2 }).map(f: fn(x: I64) -> I64 { return x + 1 }).fold(init: 0I64, combine: fn(acc: I64, x: I64) -> I64 { return acc + x }))   // 15
+    // bare-iterator fold (regression: no adapter, fold's own B grounds Counter directly)
+    mut val e: Counter = <Counter n=0 limit=5 />
+    print(e.fold(init: 100I64, combine: fn(acc: I64, x: I64) -> I64 { return acc + x }))   // 110
+}

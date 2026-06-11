@@ -487,13 +487,21 @@ fn resolveTy(c: inout Comp, tyRef: U64) -> U64 {
                 return c.curItemRef
             }
         }
-        mut val i: U64 = 0
-        while i < c.curTypeParams.count {
+        // last-match (iterate high → low): a method-own type param is appended to the
+        // env AFTER the receiver's own params (providedCopyTypeParams), so when names
+        // collide (`fold[B]` copied onto `MapIter[I, F, B]` — both named `B`) the inner
+        // method-own `B` (the accumulator) must shadow the conformer's `B` (the item).
+        // With all-distinct names first-match and last-match agree, so this only changes
+        // the collision case, resolving it the way lexical shadowing requires.
+        mut val i: U64 = c.curTypeParams.count
+        while i > 0U64 {
+            i -= 1
             val p: Bind = c.curTypeParams[i]
             if t.nameId == p.nameId {
-                return c.curTypeArgs[i]
+                if i < c.curTypeArgs.count {
+                    return c.curTypeArgs[i]
+                }
             }
-            i += 1
         }
     }
     return tyRef
@@ -1313,6 +1321,15 @@ fn unifyTypeParam(c: inout Comp, paramRef: U64, argRef: U64, tpStart: U64, tpLen
 fn tyRefOfInfo(c: inout Comp, ti: TypeInfo) -> U64 {
     if ti.ref != 0 {
         return ti.ref
+    }
+    // a String value (kind 1) carries no name span in TypeInfo, but as a type argument
+    // it must infer to `String` (a string-literal accumulator `fold(init: "z", …)`), not
+    // unknown — else the inferred own arg is 0 and the env gets the index-0 dummy ref.
+    if ti.kind == 1 {
+        val ss: Bind = stringTypeSpan(c: inout c)
+        if ss.nameLen != 0 {
+            return simpleTypeRef(c: inout c, nameStart: ss.nameStart, nameLen: ss.nameLen)
+        }
     }
     if ti.nameLen == 0 {
         return 0
