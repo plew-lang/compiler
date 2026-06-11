@@ -1,0 +1,5 @@
+// spec/02,11: a range iterates via Step, which is integer-only — a float range
+// (`0.0..<5.0`) has no Step witness and cannot be a for-loop iterable.
+fn main() {
+    for val x: F64 in 0.0..<5.0 { }
+}

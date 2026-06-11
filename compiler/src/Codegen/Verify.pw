@@ -619,6 +619,18 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             verifyExpr(c: inout c, id: iter)
             if isRange {
                 verifyExpr(c: inout c, id: rangeHi)
+                // a range is iterated via `Step`, which is integer-only (spec/02,11):
+                // `for x in 0.0..<5.0` has no Step witness. Reject a float-typed range
+                // (by the loop-var annotation or either bound).
+                mut val rangeIsFloat: Bool = exprIsFloat(c: inout c, id: iter) || exprIsFloat(c: inout c, id: rangeHi)
+                if varTyLen != 0U64 {
+                    if isFloatType(c: inout c, start: varTyStart, len: varTyLen) {
+                        rangeIsFloat = true
+                    }
+                }
+                if rangeIsFloat {
+                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: iter)), msg: "a range is iterated via Step, which is integer-only — a float range cannot be a for-loop iterable (spec/02,11)")
+                }
                 // a range bound annotated by the loop var (`for val i: I32 in …`)
                 // types both bounds; otherwise each must determine its own type, so a
                 // bare literal range (`0..<5`) is ambiguous and rejected.
