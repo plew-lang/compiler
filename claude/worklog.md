@@ -41,7 +41,7 @@
 - **newtype 非 int underlying のメソッド/フィールド継承**（`userId.bytes`〔UserId=String〕＝codegen 専用解決点の個別配線・`typeOf` 両用問題ゆえ blanket 不可）＋ unique/deinit/factory 継承・`export newtype`。int underlying は完備。
 - **一般 Chain トレイト `?.`**（現 Optional 具体）・**`Pow`/`**`**（float 後）・**`Output != Self`**。
 - **無型 int generic-enum payload** `<Optional.Some v=5 />`（check-side literal-context・lowering 採用は std 破壊で revert・回避 `v=5I64`）。
-- **Iterator 残**＝`sum`（Zero/数値タワー待ち）・`enumerate`（(index,item)・無名レコード活用）・`zip`（2 イテレータ）。
+- **Iterator 残**＝`sum`（Zero/数値タワー待ち）・`enumerate`／`zip` は backend ブロッカー：**`enumerate`**（Item＝合成レコード `(index:U64,value:E)`＝型パラメータ E をフィールドに持つレコードの**monomorphized iterator 文脈での構築/フィールドアクセス**が未対応＝`<…value=v/>` で「construction of this type not yet supported」・`pair.index` で「field access only on a registered struct」＝generic-record 登録が要る backend 仕事〔小 std add では済まない〕）・**`zip`**（第2要素型＝`J::Item`＝型パラメータの抽象関連型が必要＝`generic 抽象 T::Item` 未対応ゆえ表現不能）。
 - **module/import 残**＝名前空間 import（`Io.print`）・`as` リネームの実束縛・`_.pw` ディレクトリ解決・パス正当性厳密検査。
 - **トレイト/拡張小物**＝トレイト引数 aware の多重 conformance 区別・コンテナ不変性 `Array[P]`≠`Array[P#Ext]`・型レベル chained `Type#A#B`。
 - **その他小**＝`assoc val`（static・parser 未）・generic assoc-fn emission（`Box.make(x:7)`/`Set[E].empty()`＝mono 必要・backend 大）・式位置 `panic`（文位置は✅）・`guard` 文（parser 未）・match ガード/ネストパターン・Bool dict キー（低価値）・global 前方参照。
