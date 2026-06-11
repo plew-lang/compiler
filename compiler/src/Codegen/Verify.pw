@@ -561,6 +561,9 @@ fn verifyAssign(c: inout Comp, op: I64, target: U64, value: U64) {
     }
     checkUniquePlaceCopy(c: inout c, exprId: value, inoutOk: false)
     verifyExpr(c: inout c, id: value)
+    if op == opAssign() {
+        tcCheckValue(c: inout c, expectedRef: inferType(c: inout c, id: target), valueExpr: value, pos: "assign")
+    }
     // a clear category mismatch between the place and the value (e.g. assigning a
     // String to an integer variable) reinterprets the bits and yields garbage — a
     // hidden-meaning bug. Reject the unambiguous numeric<->String case. (kind 0/3 =
@@ -922,6 +925,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
                                 mut val mfk: U64 = 0
                                 while mfk < fields.count {
                                     if spansEqual(c: inout c, aStart: fields[mfk].nameStart, aLen: fields[mfk].nameLen, bStart: cfs[cfi].nameStart, bLen: cfs[cfi].nameLen) {
+                                        tcCheckValue(c: inout c, expectedRef: cfs[cfi].ty, valueExpr: fields[mfk].value, pos: tcFieldPos(c: inout c, prefix: "payload:", nameStart: cfs[cfi].nameStart, nameLen: cfs[cfi].nameLen))
                                         checkValueCategory(c: inout c, valueId: fields[mfk].value, declStart: cfs[cfi].tyStart, declLen: cfs[cfi].tyLen, declIsArray: cfs[cfi].tyIsArray, ctx: "field")
                                         mfk = fields.count
                                     } else {
@@ -982,6 +986,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
                     mut val fk: U64 = 0
                     while fk < cfs.count {
                         if spansEqual(c: inout c, aStart: cfs[fk].nameStart, aLen: cfs[fk].nameLen, bStart: fields[i].nameStart, bLen: fields[i].nameLen) {
+                            tcCheckValue(c: inout c, expectedRef: cfs[fk].ty, valueExpr: fields[i].value, pos: "field")
                             checkValueCategory(c: inout c, valueId: fields[i].value, declStart: cfs[fk].tyStart, declLen: cfs[fk].tyLen, declIsArray: cfs[fk].tyIsArray, ctx: "field")
                             fk = cfs.count
                         } else {

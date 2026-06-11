@@ -53,6 +53,12 @@ fn typesCompatible(c: inout Comp, expected: U64, inferred: U64) -> Bool {
     if te.isAny || tin.isAny {
         return true
     }
+    // floats are exempt: F32 is currently lowered as F64 (true F32 is deferred/additive),
+    // so an F64 value flowing into an F32 position is not a real mismatch yet. Likewise a
+    // float literal is recovered as F64 but a float local may report otherwise.
+    if isFloatType(c: inout c, start: te.nameStart, len: te.nameLen) || isFloatType(c: inout c, start: tin.nameStart, len: tin.nameLen) {
+        return true
+    }
     val eId: U64 = knownNamedTypeId(c: inout c, start: te.nameStart, len: te.nameLen)
     val iId: U64 = knownNamedTypeId(c: inout c, start: tin.nameStart, len: tin.nameLen)
     if eId == 0U64 || iId == 0U64 {
@@ -103,6 +109,19 @@ fn tcCheckValue(c: inout Comp, expectedRef: U64, valueExpr: U64, pos: String) {
     }
 }
 
+// A diagnostic position label "<prefix><fieldName>" (so a payload/field mismatch
+// names the field). Temporary (development scaffold).
+fn tcFieldPos(c: inout Comp, prefix: String, nameStart: U64, nameLen: U64) -> String {
+    mut val bs: Array[U8] = []
+    appendBytes(into: inout bs, from: prefix.bytes)
+    mut val i: U64 = 0
+    while i < nameLen {
+        bs.append(value: c.bytes[nameStart + i])
+        i += 1
+    }
+    return stringFromBytes(b: bs)
+}
+
 // The expression form (for diagnostics), so a TC mismatch can be located.
 fn tcExprKind(c: inout Comp, id: U64) -> String {
     match c.exprs[id] {
@@ -120,7 +139,16 @@ fn tcExprKind(c: inout Comp, id: U64) -> String {
         }
         Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => { return "Make" }
         Expr.MatchExpr(scrut: _, arms: _) => { return "MatchExpr" }
-        Expr.Ident(start: _, len: _) => { return "Ident" }
+        Expr.Ident(val start, val len) => {
+            mut val bs: Array[U8] = []
+            appendBytes(into: inout bs, from: "Ident:".bytes)
+            mut val i: U64 = 0
+            while i < len {
+                bs.append(value: c.bytes[start + i])
+                i += 1
+            }
+            return stringFromBytes(b: bs)
+        }
         Expr.Index(base: _, index: _) => { return "Index" }
         Expr.Binary(op: _, lhs: _, rhs: _) => { return "Binary" }
         Expr.Cast(operand: _, tyStart: _, tyLen: _, ty: _) => { return "Cast" }

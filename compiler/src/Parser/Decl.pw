@@ -132,8 +132,9 @@ fn enumIndexByName(c: inout Comp, start: U64, len: U64) -> U64 {
     return c.enums.count
 }
 
-// A `true`/`false` Bool literal expression.
-fn synthBool(c: inout Comp, v: I64) -> U64 {
+// A `true`/`false` Bool literal expression. `v` is the literal magnitude (0/1),
+// matching `Expr.Int.value` (U64).
+fn synthBool(c: inout Comp, v: U64) -> U64 {
     return c.pushExpr(e: <Expr.Int value=v offset=0 isBool=true tyStart=0 tyLen=0 isNeg=false />)
 }
 
