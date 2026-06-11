@@ -1,0 +1,6 @@
+// spec/12: String has no Neg/Not/BitNot witness (it is a primitive, not a user
+// type that could implement them), so `-s` is an operator-applicability error.
+fn main() {
+    val s: String = "a"
+    val x: String = -s
+}

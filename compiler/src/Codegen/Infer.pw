@@ -354,8 +354,11 @@ fn tcCheckUnary(c: inout Comp, op: I64, operand: U64) {
     val isInt: Bool = isIntType(c: inout c, start: tn.nameStart, len: tn.nameLen)
     val isBool: Bool = rangeEquals(bytes: c.bytes, start: tn.nameStart, len: tn.nameLen, kw: "Bool")
     val isFloat: Bool = isFloatType(c: inout c, start: tn.nameStart, len: tn.nameLen)
-    // only judge a primitive operand (int / Bool / float); skip user types.
-    if isInt || isBool || isFloat {
+    // String is a primitive with NO Neg/Not/BitNot witness, so judge it too (`-s`
+    // falls to each branch's reject). only judge a primitive operand (int / Bool /
+    // float / String); skip user types (which may implement Neg/Not/BitNot).
+    val isString: Bool = rangeEquals(bytes: c.bytes, start: tn.nameStart, len: tn.nameLen, kw: "String")
+    if isInt || isBool || isFloat || isString {
     } else {
         return
     }
