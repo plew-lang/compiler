@@ -470,6 +470,8 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             // (separate machinery) and floats (typeOf wobbles float literal vs local).
             if tyLen > 0U64 {
                 tcCheckValue(c: inout c, expectedRef: ty, valueExpr: init, pos: "let")
+                // a function value bound into a fn-typed binding must match the signature.
+                checkFnValueSig(c: inout c, declTy: ty, init: init)
                 // an array binding's literal elements (`Array[I64] = ["a", "b"]`):
                 // category-check each element against the declared element type (tyStart
                 // names the element for an array annotation).
@@ -548,6 +550,8 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                 // reliable-value discipline as bindings; curRetLen 0 = `()` return.
                 if c.curRetLen > 0U64 {
                     tcCheckValue(c: inout c, expectedRef: c.curRetTy, valueExpr: value, pos: "return")
+                    // a returned function value must match the declared fn return type.
+                    checkFnValueSig(c: inout c, declTy: c.curRetTy, init: value)
                 }
                 verifyExpr(c: inout c, id: value)
             }

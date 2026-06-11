@@ -715,6 +715,57 @@ fn checkArgInoutMode(c: inout Comp, p: Param, arg: Arg) {
     }
 }
 
+// Compare a function value's signature (`params` + `retTy`) against an expected fn
+// type `ft` (args = [return, param0, …]): each param type and the return type must be
+// compatible. typesCompatible rejects only definite mismatches, so an unknown/generic
+// param is lenient.
+fn checkFnSigAgainst(c: inout Comp, ft: TypeRef, params: Array[Param], retTy: U64, offset: U64) {
+    // return type: ft.args[0].
+    if ft.args.count >= 1U64 {
+        if retTy != 0U64 {
+            if typesCompatible(c: inout c, expected: ft.args[0], inferred: retTy) {
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "function value's return type does not match the expected function type (spec/04)")
+            }
+        }
+    }
+    mut val k: U64 = 0
+    while k < params.count {
+        if k + 1U64 < ft.args.count {
+            if params[k].ty != 0U64 {
+                if typesCompatible(c: inout c, expected: ft.args[k + 1U64], inferred: params[k].ty) {
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "function value's parameter type does not match the expected function type (spec/04)")
+                }
+            }
+        }
+        k += 1
+    }
+}
+
+// When binding/returning a function VALUE into a fn-typed position, the value's
+// signature must match (`val f: fn(x: String)->String = twice` where twice is
+// fn(I64)->I64). The value is a closure literal or a bare function reference.
+fn checkFnValueSig(c: inout Comp, declTy: U64, init: U64) {
+    if isFnType(c: inout c, ref: declTy) {
+    } else {
+        return
+    }
+    val ft: TypeRef = c.types[declTy]
+    match c.exprs[init] {
+        Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, val retTy, body: _) => {
+            checkFnSigAgainst(c: inout c, ft: ft, params: params, retTy: retTy, offset: exprOffset(c: inout c, id: init))
+        }
+        Expr.Ident(start: val s, len: val l) => {
+            val fi: U64 = firstFuncByName(c: inout c, nameStart: s, nameLen: l)
+            if fi < c.funcs.count {
+                checkFnSigAgainst(c: inout c, ft: ft, params: c.funcs[fi].params, retTy: c.funcs[fi].retTy, offset: exprOffset(c: inout c, id: init))
+            }
+        }
+        _ => {}
+    }
+}
+
 // The structured (Comp.types) type of a local named (nameStart,nameLen), or 0.
 fn localTypeRefByName(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
     val q: U64 = intern(c: inout c, start: nameStart, len: nameLen)

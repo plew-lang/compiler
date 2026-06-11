@@ -1,0 +1,6 @@
+// spec/04: a function value bound into a fn-typed binding must match the
+// signature — `twice` (fn(I64)->I64) does not fit `fn(x: String)->String`.
+fn twice(x: I64) -> I64 { return x * 2I64 }
+fn main() {
+    val f: fn(x: String) -> String = twice
+}

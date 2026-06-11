@@ -1,0 +1,4 @@
+// spec/04: a closure literal's signature must match the fn-typed binding.
+fn main() {
+    val f: fn(x: String) -> String = fn(x: I64) -> I64 { return x }
+}

@@ -47,7 +47,7 @@
 
 ## 関数・呼び出し
 
-- ✅ **引数ラベル必須・宣言順・オーバーロード**（セレクタ＝名前＋ラベル＋型頭で C マングル・arity/label/type 解決・`~:` 抑制・デフォルト引数〔末尾省略〕）。残：**関数型同一性へのラベル反映**・**関数値の署名不一致が未検出（soundness 穴）**〔`val f: fn(x: String)->String = twice`〔twice=fn(I64)->I64〕を accept→garbage 呼び・`inferType`/`typeOf` が fn-value の型を kind 0 に潰すため照合不能・以前の fn-value 型検査試行は false-reject で revert＝fn 型の TypeRef 復元が要る〕・✅ **関数値呼び出しの引数型検査**〔`val f: fn(x: I64)->I64 = …; f(x: true)`＝callee が local の fn 型ゆえ findFunc が外し未検査だった→fn 型の args〔[return,param0,…]〕に対し照合・test reject fn_value_call_arg〕・オーバーロードした関数値〔first-by-name〕・デフォルト引数の中間省略/配列・struct デフォルト・I/O ビルトイン非検査。spec/04,07。
+- ✅ **引数ラベル必須・宣言順・オーバーロード**（セレクタ＝名前＋ラベル＋型頭で C マングル・arity/label/type 解決・`~:` 抑制・デフォルト引数〔末尾省略〕）。残：**関数型同一性へのラベル反映**・✅ **関数値の署名一致検査**〔`val f: fn(x: String)->String = twice`〔twice=fn(I64)->I64〕／closure literal／`return` 位置＝`checkFnValueSig` が closure/関数参照の params・retTy を期待 fn 型 args〔[return,param0,…]〕と `typesCompatible` 照合・test reject fn_value_sig_binding/closure_sig_binding〕・✅ **関数値呼び出しの引数型検査**〔`val f: fn(x: I64)->I64 = …; f(x: true)`＝callee が local の fn 型ゆえ findFunc が外し未検査だった→fn 型の args〔[return,param0,…]〕に対し照合・test reject fn_value_call_arg〕・オーバーロードした関数値〔first-by-name〕・デフォルト引数の中間省略/配列・struct デフォルト・I/O ビルトイン非検査。spec/04,07。
 - ✅ **インヘレントメソッド**（`fn`/`inout fn`/`move fn`/`borrow fn` self・引数型オーバーロード）。残：一時値レシーバへの `inout`。spec/07。
 - ✅ **クロージャ／関数値**（fat closure `PlewClosure{fn,env,rc,drop}`・不変値キャプチャ＋スカラー `mut val` 参照キャプチャ〔箱化＝`makeCounter`〕・leak 解消〔0 leaks/UAF 無し〕）。**残（loud reject）**：`mut val` 非スカラー参照キャプチャ・`unique`/generic/enum/関数値キャプチャ・ネスト closure・val capture への代入。残 hidden cost：引数直渡し一時 capturing 閉包・Ref キャプチャ pointee。spec/04。
 
