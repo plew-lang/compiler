@@ -175,6 +175,25 @@ fn tcCheckValue(c: inout Comp, expectedRef: U64, valueExpr: U64, pos: String) {
                 ai += 1
             }
         }
+        Expr.Array(val elems) => {
+            // an array literal in a typed position (`Array[I64] = [1I64, true]`,
+            // nested `Array[Array[I64]] = [[1I64], [true]]`): each element must match
+            // the expected element type. Recurses, so arbitrary nesting is covered —
+            // inferType doesn't precisely type a literal's element, so this is the
+            // element check. (Only when the expected type is a known `Array[E]`.)
+            if expectedRef < c.types.count {
+                val et: TypeRef = c.types[expectedRef]
+                if rangeEquals(bytes: c.bytes, start: et.nameStart, len: et.nameLen, kw: "Array") {
+                    if et.args.count > 0U64 {
+                        mut val ei: U64 = 0
+                        while ei < elems.count {
+                            tcCheckValue(c: inout c, expectedRef: et.args[0], valueExpr: elems[ei], pos: "element")
+                            ei += 1
+                        }
+                    }
+                }
+            }
+        }
         _ => {}
     }
     val inferred: U64 = inferType(c: inout c, id: valueExpr)

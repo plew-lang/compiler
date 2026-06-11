@@ -1,0 +1,5 @@
+// spec/02: every element of an Array[Array[I64]] must be an Array[I64], so a Bool
+// in an inner literal (`[true]`) has no conversion — the element check recurses.
+fn main() {
+    val a: Array[Array[I64]] = [[1I64], [true]]
+}
