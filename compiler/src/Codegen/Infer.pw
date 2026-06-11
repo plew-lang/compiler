@@ -193,21 +193,30 @@ fn tcCheckCompoundAssign(c: inout Comp, op: I64, target: U64, value: U64) {
     }
 }
 
-// An array subscript `arr[i]` indexes with a `U64` (spec/02). When the base is an
-// array, check the index expression against U64 (a user `Index[K]` type uses its own
-// key type, so this fires only for the array case).
+// A subscript `base[i]`: an array indexes with a `U64` (spec/02); a `Dictionary[K, V]`
+// indexes with its key type `K` (the `dict[k]` -> `.at(key: k)` desugar is a generic
+// method, which the arg check skips, so the key type is checked here directly).
 fn tcCheckArrayIndex(c: inout Comp, base: U64, index: U64) {
     val bt: TypeInfo = typeOf(c: inout c, id: base)
     if bt.kind == 3 {
-    } else {
+        val u64: Bind = kwSpan(c: inout c, kw: "U64", kwLen: 3U64)
+        if u64.nameLen == 0U64 {
+            return
+        }
+        tcCheckValue(c: inout c, expectedRef: simpleTypeRef(c: inout c, nameStart: u64.nameStart, nameLen: u64.nameLen), valueExpr: index, pos: "index")
         return
     }
-    val u64: Bind = kwSpan(c: inout c, kw: "U64", kwLen: 3U64)
-    if u64.nameLen == 0U64 {
-        return
+    val br: U64 = inferType(c: inout c, id: base)
+    if br != 0U64 {
+        if br < c.types.count {
+            val bref: TypeRef = c.types[br]
+            if rangeEquals(bytes: c.bytes, start: bref.nameStart, len: bref.nameLen, kw: "Dictionary") {
+                if bref.args.count >= 1U64 {
+                    tcCheckValue(c: inout c, expectedRef: bref.args[0], valueExpr: index, pos: "dictkey")
+                }
+            }
+        }
     }
-    val u64Ref: U64 = simpleTypeRef(c: inout c, nameStart: u64.nameStart, nameLen: u64.nameLen)
-    tcCheckValue(c: inout c, expectedRef: u64Ref, valueExpr: index, pos: "index")
 }
 
 // If `valueExpr` is a construction (`<T … />`) of the same generic head as the

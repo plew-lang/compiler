@@ -1,0 +1,8 @@
+// A Dictionary[String, I64] indexes with its key type String; using an I64 key is a
+// type mismatch. The dict[k] -> .at(key: k) desugar is a generic method (skipped by
+// the arg check), so the TypeRef checker checks the key type at the subscript directly.
+fn main() {
+    val d: Dictionary[String, I64] = ["a": 1I64]
+    val k: I64 = 5I64
+    val v: I64 = d[k]
+}
