@@ -1016,7 +1016,14 @@ fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, 
             // cell, store the value, and put the cell pointer in the payload. (No
             // refcount/free yet — leaky, but observably correct, like Ref.)
             if fieldIsBoxed(c: inout c, f: fs[fj]) {
-                st.expectedTy = fs[fj].ty
+                // ground the boxed field type under the env so a recursive GENERIC enum
+                // payload (`Node(l: Tree[T], r: Tree[T])` in `Tree[I64]`) grounds to the
+                // registered concrete instance instead of the ungrounded template.
+                mut val bg: U64 = fs[fj].ty
+                if c.curTypeParams.count > 0U64 {
+                    bg = groundTypeRef(c: inout c, ref: fs[fj].ty)
+                }
+                st.expectedTy = bg
                 val boxedVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: valExpr)
                 val boxedTy: LLVMTypeRef = LLVMTypeOf(boxedVal)
                 val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(boxedTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
@@ -4580,7 +4587,14 @@ fn genFieldValue(c: inout Comp, st: inout LlvmCtx, valExpr: U64, fld: FieldDef) 
     if fieldIsBoxed(c: inout c, f: fld) {
         // the boxed value is in the field's (pointee) type context, so a nested
         // un-suffixed JSX construction (`next=<Optional.Some … />`) infers its args.
-        st.expectedTy = fld.ty
+        // GROUND the field type under the active instance env first, so a recursive
+        // GENERIC field (`next: Optional[N[T]]` in `N[I64]`) grounds to the registered
+        // concrete instance (`Optional[N[I64]]`) instead of the ungrounded template.
+        mut val bg: U64 = fld.ty
+        if c.curTypeParams.count > 0U64 {
+            bg = groundTypeRef(c: inout c, ref: fld.ty)
+        }
+        st.expectedTy = bg
         val boxedVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: valExpr)
         val boxedTy: LLVMTypeRef = LLVMTypeOf(boxedVal)
         val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(boxedTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
