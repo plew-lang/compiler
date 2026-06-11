@@ -4,7 +4,7 @@
 
 - **2 つのゴール**：①**受理の健全性（accepted ⟹ spec-valid）**＝受理するコードは spec でも valid（逆向きの不完全性＝spec valid だが reject は許容）。直すべきは「spec は reject するのに今 accept」＝hidden meaning だけ。②**ソース spec-validity**＝`compiler/src/*.pw` 自体が純 spec-valid（コンパイラは自分を受理＝①が完全なら②も自動）。enforce は plewc.pw 自身にも適用（import 必須・全呼びラベル付き等・ADD→reseed→USE で不動点維持）。
 - **hidden meaning（観測挙動が spec から逸れる）と hidden cost（裏でコストだけ）は別物**＝前者（値意味論・overflow panic・ラベル等）は必ず埋める／後者（ARC/CoW を leak で代用等）は正しく実装するが leak 状態でも観測挙動は正しい。
-- ✅ **受理健全性の共有パス `Codegen/Verify.pw`（`verifyProgram`）＋型チェッカ `Codegen/Infer.pw`（TypeRef ベース）**＝emission 非依存で spec 不正を弾く。型チェッカは `inferType`（精密型 or 0=不明・untyped int は 0）＋`typesCompatible`（保守的・確定的不一致のみ reject）＝Bool↔整数・別 named 型・引数/return 型不一致・混合幅算術/比較・generic 引数違い（`Optional[I64]≠Optional[String]`）を解消。**残（型チェッカ前提でない増分）**：overloaded/generic 呼びの引数・codegen を tc の型へ移行〔任意・大〕。
+- ✅ **受理健全性の共有パス `Codegen/Verify.pw`（`verifyProgram`）＋型チェッカ `Codegen/Infer.pw`（TypeRef ベース）**＝emission 非依存で spec 不正を弾く。型チェッカは `inferType`（精密型 or 0=不明・untyped int は 0）＋`typesCompatible`（保守的・確定的不一致のみ reject）＝Bool↔整数・別 named 型・引数/return 型不一致・混合幅算術/比較・generic 引数違い（`Optional[I64]≠Optional[String]`）・✅ **int↔float 暗黙変換**（both-float のみ免除）・✅ **mixed int/float 比較**（`tcCheckBinop` 全 primitive-numeric ペア）・✅ **`any P` 非準拠 coercion**（`conformExists`・以前 runtime crash）・✅ **generic 呼びの bare-`T` 引数一貫性**（`tcCheckGenericArgConsistency`・free-fn＋method・以前 silent miscompile）を解消。**残（型チェッカ前提でない増分）**：overloaded 呼びの引数・generic 引数の nested `Array[T]` 位置・codegen を tc の型へ移行〔任意・大〕。
 
 ## メモリ・所有権
 
