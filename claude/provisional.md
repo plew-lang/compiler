@@ -63,9 +63,9 @@
 - ✅ **対応**：算術 `+ - * / %`・比較 `== != < <= > >=`・論理 `&& ||`・ビット/シフト `& | ^ << >> ~`・単項 `! - ~`・代入＋複合〔ビット系含む〕・`Optional.unwrapOr`〔旧 `??`〕・添字 `[]`/`[]=`〔Index/IndexSet〕・Chain `?.`〔Optional 具体〕。
 - **未対応**：`pow`/`**`〔`Pow[Exp]`・float 後〕・`?.` の一般トレイト化〔現 Optional 具体〕・**`as` 以外の数値変換 `From`/`TryFrom`**〔縮小/パース・`try` の異エラー型 From 変換＝現状 `try` は `E==E'` 一致要求〕・`Output != Self`。
 - ✅ **`as`**＝数値↔数値の C キャスト〔無損失検査済・narrowing reject〕。
-- ✅ **`try`**＝Result 早期 return〔Ok=tag0/`value`・Err=tag1/`error` レイアウト前提・非 Result〔特に Optional〕operand は loud reject〕。**残バグ**＝無注釈 `<Result.Ok value=…/>` 構築〔return-context 推論〕が一部 segfault し得る〔明示型引数は無事〕。spec/12,13。
+- ✅ **`try`**＝Result 早期 return〔Ok=tag0/`value`・Err=tag1/`error` レイアウト前提・非 Result〔特に Optional〕operand は loud reject〕。無注釈 `<Result.Ok value=…/>` 構築は return/call-arg context で**動作確認済**〔`genArgValue`→`st.expectedTy`〕。spec/12,13。
 - ✅ **曖昧な無サフィックス整数リテラルのオーバーロードを loud reject**（`checkOverloadAmbiguity`/`overloadsAmbiguous`・free-fn＋method・test reject overload_ambiguous_literal）。✅ **`val f = obj.method`（メソッド値化）を loud reject**（`verifyFieldReadVis`＋`typeHasMethodNamed`・annotated/inferred 両 local）。
-- **【bug・既知】ユーザー struct/enum 名が lang-item 型パラメータ名と衝突すると壊れる**（`struct V {…}` が `Dictionary[K,V]` の `V` と衝突・`isTypeParamName` のグローバル名照合・根治＝型パラメータ判定をスコープ化・回避＝単一大文字名を避ける）。
+- ✅ **【bug】ユーザー struct/enum 名が lang-item 型パラメータ名と衝突＝クラッシュ→loud reject 化**（`struct V {…}` × `Dictionary[K,V]`・`instArgCollidesParamName`・test reject typeparam_name_collision）。根治（name-based でない型パラメータ同一性＝スコープ化）は将来・回避＝リネーム。
 
 ## 可視性・モジュール・import
 
@@ -93,4 +93,4 @@
 
 ---
 
-**再訪の優先度**：観測挙動を歪める大物はほぼ解消済（整数幅・match・ラベル・無損失 `as`・値意味論・CoW＋refcount 解放・generics・トレイト・`Optional`/`Result`/`try`・`unique`＋`deinit`・クロージャ・演算子トレイト全配線・async/await・無名レコード・newtype〔int〕・受理健全性の共有パス・**構築フィールドゲート (b)**・LLVM 単一 backend）。**残る soundness 穴**＝lang-item 再定義 reject・曖昧リテラル/method 値化・lang-item 型パラメータ名衝突 bug・重なる inout ②③・ファクトリ公開ゲート (a)〔factory 機能依存〕。残る hidden meaning＝newtype 非 int 継承・From/TryFrom・一般 Chain・Iterator〔sum/enumerate/zip〕・名前空間 import・`\u{}`。残る hidden cost＝backend ARC drop。詳細順序は [worklog.md](worklog.md)「🗺️ ロードマップ」。
+**再訪の優先度**：観測挙動を歪める大物はほぼ解消済（整数幅・match・ラベル・無損失 `as`・値意味論・CoW＋refcount 解放・generics・トレイト・`Optional`/`Result`/`try`・`unique`＋`deinit`・クロージャ・演算子トレイト全配線・async/await・無名レコード・newtype〔int〕・受理健全性の共有パス・**構築フィールドゲート (b)**・LLVM 単一 backend）。**残る soundness 穴**＝重なる inout ②③・ファクトリ公開ゲート (a)〔factory 機能依存〕・無型 int generic-enum payload〔check-side〕。〔✅ 解消＝構築フィールドゲート (b)・lang-item 再定義 reject・曖昧リテラル/method 値化・型パラメータ名衝突クラッシュ→reject〕。残る hidden meaning＝newtype 非 int 継承・From/TryFrom・一般 Chain・Iterator〔sum/enumerate/zip〕・名前空間 import・`\u{}`・generic assoc fn〔Set〕。残る hidden cost＝backend ARC drop。詳細順序は [worklog.md](worklog.md)「🗺️ ロードマップ」。

@@ -47,7 +47,7 @@
 - **トレイト/拡張の残小物**＝トレイト引数 aware の多重 conformance 区別・コンテナ不変性 `Array[P]`≠`Array[P#Ext]`・型レベル chained `Type#A#B`。
 - **module/import 残**＝名前空間 import（`Io.print`）・`as` リネームの実束縛・`_.pw` ディレクトリ解決・パス正当性厳密検査。
 - **Iterator 残**＝`sum`（Zero/数値タワー待ち）・`enumerate`（(index,item) ＝無名レコード活用で可になった・要実装）・`zip`（2 イテレータ）。
-- **【bug】ユーザー struct/enum 名が lang-item 型パラメータ名（`K`/`V`/`T`）と衝突すると壊れる**（`isTypeParamName` のグローバル名照合・根治＝型パラメータ判定をスコープ化・回避＝単一大文字名を避ける）。
+- ✅ **【bug】ユーザー struct/enum 名が lang-item 型パラメータ名と衝突＝クラッシュ→clean reject 化**（`instArgCollidesParamName`・test reject typeparam_name_collision）。根治（スコープ化した型パラメータ同一性）は将来・回避＝リネーム。
 - **その他小（残）**＝`assoc val`（static・parser 未）・generic assoc-fn emission（`Box.make(x:7)`/`Set[E].empty()`＝mono 必要・backend 大）・式位置 `panic`（文位置は✅）・guard 文（parser 未）・match ガード/ネストパターン・namespace import `Io.print`（parser+解決）。〔✅ 済＝place 越し compound `arr[i].field OP= x`・`arr[i].inoutMethod()`・struct-in-struct 構築〕
 
 ### C. hidden cost（leak・観測挙動は正しい・最後）
@@ -62,8 +62,8 @@
 
 ## 既知バグ（要修正・上の B/A に再掲ありの実害バグ）
 
-- lang-item 型パラメータ名衝突（`K`/`V`/`T`）→ B 参照。
-- 無注釈 `<Result.Ok value=… />` 構築が return-context 推論の robustness 課題で一部 segfault し得る（明示型引数は無事・provisional §演算子 `try` 末尾）。
+- ✅ lang-item 型パラメータ名衝突（`struct V` × `Dictionary[K,V]`）＝**クラッシュ→clean reject 化**（`instArgCollidesParamName`・test reject typeparam_name_collision）。根治（name-based でない型パラメータ同一性）は将来。回避＝該当型をリネーム。
+- 無注釈 `<Result.Ok value=… />` 構築の return/call-arg context＝**動作確認済**（genArgValue が `st.expectedTy` を流す・generic_enum_ctor_arg／手元検証）。残懸念があれば再現を残す。
 
 ## 再利用資産・罠（git で拾いにくい知見）
 
