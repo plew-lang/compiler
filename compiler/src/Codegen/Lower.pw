@@ -244,12 +244,72 @@ fn lowerArgs(c: inout Comp, args: Array[ArgAst]) -> Array[Arg] {
     return out
 }
 
-fn lowerMakeFields(c: inout Comp, fields: Array[MakeFieldAst]) -> Array[MakeField] {
+// The declared TypeRef of field `fieldName` on the type being constructed (a struct,
+// or an enum variant's payload), or 0 when the owner / field can't be resolved. The
+// owner type's declaration is lowered before any body that constructs it (source
+// order), so its field types are registered TypeRefs here. Used to give a
+// construction-field literal (`<Box m=[:] />`, `<Shape.Point at=(x:1,y:2) />`) its
+// context type so an otherwise un-inferable dict / record / unit literal resolves.
+fn makeFieldType(c: inout Comp, typeName: String, variant: String, isEnum: Bool, fieldName: String) -> U64 {
+    val tn: Bind = internBytes(c: inout c, s: typeName)
+    val tid: U64 = intern(c: inout c, start: tn.nameStart, len: tn.nameLen)
+    val fn2: Bind = internBytes(c: inout c, s: fieldName)
+    val fid: U64 = intern(c: inout c, start: fn2.nameStart, len: fn2.nameLen)
+    if isEnum {
+        val vn: Bind = internBytes(c: inout c, s: variant)
+        val vid: U64 = intern(c: inout c, start: vn.nameStart, len: vn.nameLen)
+        mut val ei: U64 = 0
+        while ei < c.enums.count {
+            if c.enums[ei].nameId == tid {
+                mut val vi: U64 = 0
+                while vi < c.enums[ei].variants.count {
+                    if intern(c: inout c, start: c.enums[ei].variants[vi].nameStart, len: c.enums[ei].variants[vi].nameLen) == vid {
+                        mut val fj: U64 = 0
+                        while fj < c.enums[ei].variants[vi].fields.count {
+                            if intern(c: inout c, start: c.enums[ei].variants[vi].fields[fj].nameStart, len: c.enums[ei].variants[vi].fields[fj].nameLen) == fid {
+                                return c.enums[ei].variants[vi].fields[fj].ty
+                            }
+                            fj += 1
+                        }
+                    }
+                    vi += 1
+                }
+            }
+            ei += 1
+        }
+        return 0U64
+    }
+    mut val si: U64 = 0
+    while si < c.structs.count {
+        if c.structs[si].nameId == tid {
+            mut val fk: U64 = 0
+            while fk < c.structs[si].fields.count {
+                if intern(c: inout c, start: c.structs[si].fields[fk].nameStart, len: c.structs[si].fields[fk].nameLen) == fid {
+                    return c.structs[si].fields[fk].ty
+                }
+                fk += 1
+            }
+        }
+        si += 1
+    }
+    return 0U64
+}
+
+fn lowerMakeFields(c: inout Comp, fields: Array[MakeFieldAst], typeName: String, variant: String, isEnum: Bool) -> Array[MakeField] {
     mut val out: Array[MakeField] = []
     mut val i: U64 = 0
     while i < fields.count {
         val f: MakeFieldAst = fields[i]
-        val v: U64 = lowerExpr(c: inout c, e: f.value)
+        // flow the field's declared type to its value so a context-typed literal in a
+        // construction field infers (a dict / record / `()` whose type is only known
+        // from the field). Defensive: 0 falls back to context-free lowering.
+        val fctx: U64 = makeFieldType(c: inout c, typeName: typeName, variant: variant, isEnum: isEnum, fieldName: f.name)
+        mut val v: U64 = 0
+        if fctx != 0U64 {
+            v = lowerExprWithCtx(c: inout c, e: f.value, ctxRef: fctx)
+        } else {
+            v = lowerExpr(c: inout c, e: f.value)
+        }
         val nm: Bind = internBytes(c: inout c, s: f.name)
         out.append(<MakeField nameStart=nm.nameStart nameLen=nm.nameLen value=v offset=f.span.start />)
         i += 1
@@ -362,7 +422,7 @@ fn lowerExprWithCtx(c: inout Comp, e: ExprAst, ctxRef: U64) -> U64 {
                 if c.bytes[ct.nameStart] == '(' {
                     match e {
                         ExprAst.RecordLit(val fields, val span) => {
-                            val fs: Array[MakeField] = lowerMakeFields(c: inout c, fields: fields)
+                            val fs: Array[MakeField] = lowerMakeFields(c: inout c, fields: fields, typeName: "", variant: "", isEnum: false)
                             return c.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fs />)
                         }
                         _ => {}
@@ -377,7 +437,7 @@ fn lowerExprWithCtx(c: inout Comp, e: ExprAst, ctxRef: U64) -> U64 {
                             if typeArgs.count == 0 {
                                 val tn: Bind = internBytes(c: inout c, s: typeName)
                                 if intern(c: inout c, start: tn.nameStart, len: tn.nameLen) == ct.nameId {
-                                    val fs: Array[MakeField] = lowerMakeFields(c: inout c, fields: fields)
+                                    val fs: Array[MakeField] = lowerMakeFields(c: inout c, fields: fields, typeName: typeName, variant: "", isEnum: false)
                                     return c.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fs />)
                                 }
                             }
@@ -515,7 +575,7 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
                 vStart = vb.nameStart
                 vLen = vb.nameLen
             }
-            val fs: Array[MakeField] = lowerMakeFields(c: inout c, fields: fields)
+            val fs: Array[MakeField] = lowerMakeFields(c: inout c, fields: fields, typeName: typeName, variant: variant, isEnum: isEnum)
             result = c.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=vStart variantLen=vLen isEnum=isEnum ty=tyRef fields=fs />)
         }
         ExprAst.ArrayLit(val elems, val span) => {
@@ -538,7 +598,7 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
             // types at codegen (the synthetic record struct keyed by those types). ty=0
             // / no type name: the backend resolves the record struct from the values
             // (or st.expectedTy if a construction site set one).
-            val fs: Array[MakeField] = lowerMakeFields(c: inout c, fields: fields)
+            val fs: Array[MakeField] = lowerMakeFields(c: inout c, fields: fields, typeName: "", variant: "", isEnum: false)
             result = c.pushExpr(e: <Expr.Make typeStart=0 typeLen=0 variantStart=0 variantLen=0 isEnum=false ty=0 fields=fs />)
         }
         ExprAst.Cast(val operand, val ty, val span) => {
@@ -1240,7 +1300,7 @@ fn lowerDirective(c: inout Comp, dir: DirectiveAst) {
     mut val i: U64 = 0
     while i < dir.reqs.count {
         val r: DeriveReqAst = dir.reqs[i]
-        val args: Array[MakeField] = lowerMakeFields(c: inout c, fields: r.args)
+        val args: Array[MakeField] = lowerMakeFields(c: inout c, fields: r.args, typeName: "", variant: "", isEnum: false)
         c.pendingDerives.append(<DeriveReq typeStart=0 typeLen=0 isEnum=false nameStart=r.nameSpan.start nameLen=r.nameSpan.end - r.nameSpan.start declStart=0 declEnd=0 args=args />)
         i += 1
     }

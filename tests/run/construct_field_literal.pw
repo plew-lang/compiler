@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+// A context-typed collection / record literal in a CONSTRUCTION field now infers its
+// type from the field's declared type (the owner type is registered before any body
+// constructs it, so its field types are available during lowering). Covers dict / record
+// literals (and `()` unit) as JSX field values, which carry no type of their own.
+struct Seg { pub val from: (x: I64, y: I64)  pub val to: (x: I64, y: I64) }
+struct Bag { pub mut val m: Dictionary[U64, Bool] }
+enum Shape { Point(at: (x: I64, y: I64))  Empty }
+
+fn main() {
+    // a record literal as a struct field
+    val s: Seg = <Seg from=(x: 1, y: 2) to=(x: 3, y: 4) />
+    print(s.from.x)        // 1
+    print(s.to.y)          // 4
+    // an empty dict literal as a struct field
+    mut val b: Bag = <Bag m=[:] />
+    b.m[7U64] = true
+    b.m[8U64] = true
+    print(b.m.count)       // 2
+    // a record literal as an enum variant payload
+    val sh: Shape = <Shape.Point at=(x: 5, y: 6) />
+    match sh {
+        Shape.Point(val at) => { print(at.x)  print(at.y) }   // 5 6
+        Shape.Empty => { print(0I64) }
+    }
+}
