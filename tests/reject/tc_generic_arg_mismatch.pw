@@ -1,0 +1,7 @@
+// Same generic head, different type argument (Optional[I64] vs Optional[String]) —
+// reject. The TypeRef checker compares generic arguments (the head-name checks can't).
+fn main() {
+    mut val a: Optional[I64] = <Optional.Some v=1I64 />
+    val b: Optional[String] = <Optional.Some v="x" />
+    a = b
+}

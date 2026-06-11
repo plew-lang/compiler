@@ -1,0 +1,7 @@
+// The TypeRef type checker distinguishes Bool from the integer types (the kind-based
+// recovery folded Bool into kind 0). Assigning a Bool to an I32 binding — reject.
+fn main() {
+    val i: I32 = 1I32
+    val b: Bool = i < 2I32
+    val n: I32 = b
+}

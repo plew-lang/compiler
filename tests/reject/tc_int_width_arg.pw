@@ -1,0 +1,7 @@
+// An I64 value passed to a U64 parameter (no implicit conversion, spec/12) — reject.
+// Caught by the TypeRef checker via the single-candidate argument resolution.
+fn f(n: U64) -> U64 { return n }
+fn main() {
+    val x: I64 = 3I64
+    val y: U64 = f(n: x)
+}
