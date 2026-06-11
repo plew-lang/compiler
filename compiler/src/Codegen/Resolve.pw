@@ -1415,6 +1415,15 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                             k += 1
                         }
                     }
+                    // an `any P` local: keep the structured ref so its method calls can
+                    // resolve through the trait P (the name-only form loses isAny).
+                    if lo.ty != 0U64 {
+                        if lo.ty < c.types.count {
+                            if c.types[lo.ty].isAny {
+                                return <TypeInfo kind=2 nameStart=c.types[lo.ty].nameStart nameLen=c.types[lo.ty].nameLen ref=lo.ty />
+                            }
+                        }
+                    }
                     return typeInfoOfName(c: inout c, start: lo.tyStart, len: lo.tyLen, isArray: lo.isArray)
                 }
             }
@@ -1693,6 +1702,42 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 }
             }
             if rt.kind == 2 {
+                // a method call on an `any P` existential: the receiver names the trait
+                // P, so findMethod (which resolves methods on a TYPE) misses it. Recover
+                // the result from P's requirement method's return type, but only for a
+                // CONCRETE primitive/String return (Self / associated / generic returns
+                // stay unknown — conservative, and avoids disturbing existential codegen).
+                if rt.ref != 0U64 {
+                    if rt.ref < c.types.count {
+                        if c.types[rt.ref].isAny {
+                            val qTrait: U64 = intern(c: inout c, start: rt.nameStart, len: rt.nameLen)
+                            val qMethod: U64 = intern(c: inout c, start: nameStart, len: nameLen)
+                            mut val ti: U64 = 0
+                            while ti < c.traits.count {
+                                if c.traits[ti].nameId == qTrait {
+                                    val reqs: Array[Func] = c.traits[ti].reqs
+                                    mut val ri: U64 = 0
+                                    while ri < reqs.count {
+                                        if reqs[ri].nameId == qMethod {
+                                            if reqs[ri].hasRet {
+                                                if reqs[ri].retIsArray {
+                                                } else {
+                                                    if isPrimType(c: inout c, start: reqs[ri].retStart, len: reqs[ri].retLen) || rangeEquals(bytes: c.bytes, start: reqs[ri].retStart, len: reqs[ri].retLen, kw: "String") {
+                                                        return typeInfoOfName(c: inout c, start: reqs[ri].retStart, len: reqs[ri].retLen, isArray: false)
+                                                    }
+                                                }
+                                            }
+                                            return scalarInfo()
+                                        }
+                                        ri += 1
+                                    }
+                                }
+                                ti += 1
+                            }
+                            return scalarInfo()
+                        }
+                    }
+                }
                 val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mi == c.funcs.count {
                     return scalarInfo()

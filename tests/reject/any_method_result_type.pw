@@ -1,0 +1,9 @@
+// spec/08: a method call on an `any P` yields the requirement's return type —
+// `size()` returns U64, so binding it to a String is a type error.
+trait Sized { fn size() -> U64 }
+struct S { pub val a: I64 }
+pub impl S as Sized { fn size() -> U64 { return 8U64 } }
+fn main() {
+    val x: any Sized = <S a=1I64 />
+    val n: String = x.size()
+}
