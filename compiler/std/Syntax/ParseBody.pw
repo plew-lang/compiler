@@ -1071,6 +1071,74 @@ fn parseForAst(p: inout P) -> StmtAst {
     mut val varTy: TypeAst = emptyTypeAst()
     mut val hasVarTy: Bool = false
     mut val isPattern: Bool = false
+    // a record-destructuring loop pattern `for (val x, val y) in xs` (spec/02,11):
+    // desugar to `for val __fe in xs { (val x, val y) = __fe; <body> }`, reusing the
+    // statement-level record destructuring. Detected by `(` then `val` / `ident : val`.
+    mut val isRecordPat: Bool = false
+    match p.curKind() {
+        Kind.LParen => {
+            if p.peekKind(off: 1) == <Kind.KwVal /> {
+                isRecordPat = true
+            }
+            if p.peekKind(off: 1) == <Kind.Ident /> {
+                if p.peekKind(off: 2) == <Kind.Colon /> {
+                    if p.peekKind(off: 3) == <Kind.KwVal /> {
+                        isRecordPat = true
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    if isRecordPat {
+        p.advance()
+        mut val recBinds: Array[BindAst] = []
+        while true {
+            match p.curKind() {
+                Kind.RParen => { p.advance()  break }
+                Kind.Eof => { break }
+                Kind.Comma => { p.advance() }
+                _ => {
+                    mut val field: String = ""
+                    val bStart: U64 = p.base + p.curTok().start
+                    match p.curKind() {
+                        Kind.Ident => {
+                            field = p.text(t: p.curTok())
+                            p.advance()
+                            match p.curKind() {
+                                Kind.Colon => { p.advance() }
+                                _ => { p.fail(off: p.base + p.curTok().start, msg: "a record loop-pattern field is `label: val name` or punned `val name`") }
+                            }
+                        }
+                        _ => {}
+                    }
+                    match p.curKind() {
+                        Kind.KwVal => { p.advance() }
+                        _ => { p.fail(off: p.base + p.curTok().start, msg: "a record loop pattern needs `val name`") }
+                    }
+                    val nameTok: Tok = p.curTok()
+                    val nm: String = p.text(t: nameTok)
+                    p.advance()
+                    if field.bytes.count == 0U64 {
+                        field = nm
+                    }
+                    recBinds.append(value: <BindAst field=field name=nm span=<Span start=bStart end=p.prevEnd() /> />)
+                }
+            }
+        }
+        match p.curKind() {
+            Kind.KwIn => { p.advance() }
+            _ => {}
+        }
+        val rlo: ExprAst = parseExprAst(p: inout p)
+        p.skipNewlines()
+        val rbody: BlockAst = parseBlockAst(p: inout p)
+        // a record loop pattern: marked `patType="__rec__"` with the field binds. The
+        // frontend lowering binds a fresh element local and prepends a field-by-field
+        // destructuring to the body (arena-level, so the synthetic names are interned —
+        // an AST-level synthetic `Ident` would re-read the source by span and break).
+        return <StmtAst.For varName="" varTy=emptyTypeAst() hasVarTy=false isRange=false inclusive=false iter=rlo rangeHi=emptyExpr() body=rbody isStruct=false patType="__rec__" binds=recBinds span=<Span start=sStart end=p.prevEnd() /> />
+    }
     match p.curKind() {
         Kind.Ident => {
             if p.peekKind(off: 1) == <Kind.LBrace /> {

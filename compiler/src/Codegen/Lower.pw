@@ -805,6 +805,34 @@ fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
             result = c.pushStmt(s: <Stmt.While cond=cnd body=bd />)
         }
         StmtAst.For(val varName, val varTy, val hasVarTy, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patType, val binds, val span) => {
+            // a record loop pattern `for (val x, val y) in xs` (patType="__rec__"): bind a
+            // fresh element local `__fe` and prepend `val x = __fe.field` per bind to the
+            // body (arena-level interned names, since an AST synthetic `Ident` reads the
+            // source by span). The element's struct is tracked by the for-over-array path.
+            if patType == "__rec__" {
+                val fe: Bind = internBytes(c: inout c, s: "__fe")
+                val lo2: U64 = lowerExpr(c: inout c, e: iter)
+                val inner: U64 = lowerBlock(c: inout c, b: body)
+                mut val bstmts: Array[U64] = []
+                mut val bi: U64 = 0
+                while bi < binds.count {
+                    val fldName: Bind = internBytes(c: inout c, s: binds[bi].field)
+                    val nameB: Bind = internBytes(c: inout c, s: binds[bi].name)
+                    val recv: U64 = c.pushExpr(e: <Expr.Ident start=fe.nameStart len=fe.nameLen />)
+                    val fld: U64 = c.pushExpr(e: <Expr.Field base=recv nameStart=fldName.nameStart nameLen=fldName.nameLen />)
+                    bstmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=nameB.nameStart nameLen=nameB.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=fld />))
+                    bi += 1
+                }
+                mut val ob: U64 = 0
+                while ob < c.blocks[inner].stmts.count {
+                    bstmts.append(value: c.blocks[inner].stmts[ob])
+                    ob += 1
+                }
+                val bd2: U64 = c.blocks.count
+                c.blocks.append(value: <Block stmts=bstmts />)
+                result = c.pushStmt(s: <Stmt.For varStart=fe.nameStart varLen=fe.nameLen varTyStart=0 varTyLen=0 isRange=false inclusive=false iter=lo2 rangeHi=0 body=bd2 isStruct=false patStart=0 patLen=0 binds=[] />)
+                return result
+            }
             mut val vStart: U64 = 0
             mut val vLen: U64 = 0
             if varName.bytes.count > 0 {
