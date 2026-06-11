@@ -1,0 +1,3 @@
+// Comparing two different primitive integer types (I32 < I64) — Eq/Ord are same-type
+// (no Rhs), so there is no witness for mixed operands. Caught by the TypeRef checker.
+fn main() { val b: Bool = 3I32 < 5I64 }
