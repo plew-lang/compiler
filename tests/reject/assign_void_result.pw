@@ -1,0 +1,6 @@
+// spec/04: a function with no return type yields (), so binding its "result" to a
+// typed variable is a type error.
+fn doNothing() { }
+fn main() {
+    val x: I64 = doNothing()
+}

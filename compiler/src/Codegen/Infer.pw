@@ -139,8 +139,41 @@ fn typesCompatible(c: inout Comp, expected: U64, inferred: U64) -> Bool {
 // mismatch it rejects (spec/12: no implicit conversion) — unless `--tc-log` is set,
 // where it instead prints a `TC` diagnostic and continues, so a NEW check position can
 // be developed/triaged against self-compile before it goes live.
+// Whether `id` is a call to a user function/method that returns no value (`()`),
+// so its "result" can't be used where a value is expected (spec/04).
+fn exprIsVoidCall(c: inout Comp, id: U64) -> Bool {
+    match c.exprs[id] {
+        Expr.Call(val nameStart, val nameLen, val args) => {
+            val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            if fi < c.funcs.count {
+                return !c.funcs[fi].hasRet
+            }
+        }
+        Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+            val rt: TypeInfo = exprType(c: inout c, id: recv)
+            if rt.kind == 2 {
+                val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                if mi != c.funcs.count {
+                    return !c.funcs[mi].hasRet
+                }
+            }
+        }
+        _ => {}
+    }
+    return false
+}
+
 fn tcCheckValue(c: inout Comp, expectedRef: U64, valueExpr: U64, pos: String) {
     if expectedRef == 0U64 {
+        return
+    }
+    // a void function's result is `()` — using it where a typed value is expected
+    // (`val x: I64 = doNothing()`) is a type error (spec/04).
+    if exprIsVoidCall(c: inout c, id: valueExpr) {
+        if c.tcLog {
+        } else {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueExpr)), msg: "cannot use the result of a function that returns no value (spec/04)")
+        }
         return
     }
     // a generic construction in a typed position (`val o: Optional[I64] = <Optional.Some
