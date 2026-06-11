@@ -109,6 +109,64 @@ fn tcCheckValue(c: inout Comp, expectedRef: U64, valueExpr: U64, pos: String) {
     }
 }
 
+// Check a free-function call's arguments against the resolved callee's parameter
+// types. Resolution reuses findFunc (by labels + arg types). Skips generic callees
+// (their param types carry type variables — handled later via grounding) and any
+// call where the arity does not match 1:1 (omitted defaults). Args are in declaration
+// order (spec/04), so argument i fills parameter i.
+fn tcCheckCallArgs(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    if c.tcLog {
+    } else {
+        return
+    }
+    val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+    if fi >= c.funcs.count {
+        return
+    }
+    val f: Func = c.funcs[fi]
+    if f.typeParams.count > 0U64 {
+        return
+    }
+    if args.count != f.params.count {
+        return
+    }
+    mut val i: U64 = 0
+    while i < args.count {
+        tcCheckValue(c: inout c, expectedRef: f.params[i].ty, valueExpr: args[i].expr, pos: tcFieldPos(c: inout c, prefix: "arg@", nameStart: nameStart, nameLen: nameLen))
+        i += 1
+    }
+}
+
+// Check a method call's arguments against the resolved method's parameter types. The
+// receiver type is recovered via typeOf; the method via findMethod. Skips generic
+// methods and arity mismatches (like the free-function check).
+fn tcCheckMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    if c.tcLog {
+    } else {
+        return
+    }
+    val rt: TypeInfo = typeOf(c: inout c, id: recv)
+    if rt.kind != 2 {
+        return
+    }
+    val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+    if mi >= c.funcs.count {
+        return
+    }
+    val mf: Func = c.funcs[mi]
+    if mf.typeParams.count > 0U64 {
+        return
+    }
+    if args.count != mf.params.count {
+        return
+    }
+    mut val i: U64 = 0
+    while i < args.count {
+        tcCheckValue(c: inout c, expectedRef: mf.params[i].ty, valueExpr: args[i].expr, pos: "marg")
+        i += 1
+    }
+}
+
 // A diagnostic position label "<prefix><fieldName>" (so a payload/field mismatch
 // names the field). Temporary (development scaffold).
 fn tcFieldPos(c: inout Comp, prefix: String, nameStart: U64, nameLen: U64) -> String {

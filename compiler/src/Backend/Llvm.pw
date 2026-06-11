@@ -49,7 +49,7 @@ extern(c) {
     fn LLVMConstRealOfStringAndSize(ty~: LLVMTypeRef, text~: CPtr[U8], len~: U64) -> LLVMValueRef
     fn LLVMVoidTypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
     fn LLVMPointerTypeInContext(ctx~: LLVMContextRef, addrSpace~: U32) -> LLVMTypeRef
-    fn LLVMStructTypeInContext(ctx~: LLVMContextRef, elemTypes~: CPtr[LLVMTypeRef], count~: U32, packed~: I32) -> LLVMTypeRef
+    fn LLVMStructTypeInContext(ctx~: LLVMContextRef, elemTypes~: CPtr[LLVMTypeRef], count~: U64, packed~: I32) -> LLVMTypeRef
     fn LLVMStructCreateNamed(ctx~: LLVMContextRef, name~: CPtr[U8]) -> LLVMTypeRef
     fn LLVMStructSetBody(structTy~: LLVMTypeRef, elemTypes~: CPtr[LLVMTypeRef], count~: U64, packed~: I32)
     fn LLVMCountStructElementTypes(structTy~: LLVMTypeRef) -> U32
@@ -9931,20 +9931,20 @@ fn emitLlvm(c: inout Comp) {
     mut val strelems: Array[LLVMTypeRef] = []
     strelems.append(value: ptrty)
     strelems.append(value: i64ty)
-    val strty: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(strelems), 2U32, 0I32)
+    val strty: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(strelems), 2U64, 0I32)
     mut val arrelems: Array[LLVMTypeRef] = []
     arrelems.append(value: ptrty)
     arrelems.append(value: i64ty)
-    val arrayTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(arrelems), 2U32, 0I32)
+    val arrayTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(arrelems), 2U64, 0I32)
     mut val cloelems: Array[LLVMTypeRef] = []
     cloelems.append(value: ptrty)
     cloelems.append(value: ptrty)
-    val closureTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(cloelems), 2U32, 0I32)
+    val closureTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(cloelems), 2U64, 0I32)
     // any P = { ptr data, ptr vtable } (fat pointer for existentials).
     mut val anyelems: Array[LLVMTypeRef] = []
     anyelems.append(value: ptrty)
     anyelems.append(value: ptrty)
-    val anyTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(anyelems), 2U32, 0I32)
+    val anyTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(anyelems), 2U64, 0I32)
     // PlewPromise = { i32 done, i64 value, ptr k, ptr kframe } (ABI-identical to
     // the C runtime). Awaited values are type-erased through `value` (i64).
     mut val promelems: Array[LLVMTypeRef] = []
@@ -9952,7 +9952,7 @@ fn emitLlvm(c: inout Comp) {
     promelems.append(value: i64ty)
     promelems.append(value: ptrty)
     promelems.append(value: ptrty)
-    val promiseTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(promelems), 4U32, 0I32)
+    val promiseTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(promelems), 4U64, 0I32)
     mut val st: LlvmCtx = <LlvmCtx
         ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx)
         i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx) i16ty=LLVMInt16TypeInContext(ctx)

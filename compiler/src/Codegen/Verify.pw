@@ -824,28 +824,28 @@ fn checkValueCategory(c: inout Comp, valueId: U64, declStart: U64, declLen: U64,
 // DIFFERENT named types — struct A vs struct B — need a name compare and are handled
 // separately / left for fuller type-checking, to avoid false-rejecting same-type
 // generic instances whose recovered names can vary.)
-fn assignNumStrMismatch(atk: U64, avk: U64) -> Bool {
-    val aNum: Bool = atk == 0U64 || atk == 3U64
-    val vNum: Bool = avk == 0U64 || avk == 3U64
+fn assignNumStrMismatch(atk: I64, avk: I64) -> Bool {
+    val aNum: Bool = atk == 0 || atk == 3
+    val vNum: Bool = avk == 0 || avk == 3
     // numeric <-> String
-    if aNum && avk == 1U64 {
+    if aNum && avk == 1 {
         return true
     }
-    if atk == 1U64 && vNum {
+    if atk == 1 && vNum {
         return true
     }
     // numeric <-> named (struct/enum/Bool), e.g. `intVar = true` / `intVar = aStruct`
-    if aNum && avk == 2U64 {
+    if aNum && avk == 2 {
         return true
     }
-    if atk == 2U64 && vNum {
+    if atk == 2 && vNum {
         return true
     }
     // String <-> named
-    if atk == 1U64 && avk == 2U64 {
+    if atk == 1 && avk == 2 {
         return true
     }
-    if atk == 2U64 && avk == 1U64 {
+    if atk == 2 && avk == 1 {
         return true
     }
     return false
@@ -867,6 +867,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             verifyExpr(c: inout c, id: recv)
             verifyArgs(c: inout c, args: args)
             checkMethodArgCategories(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+            tcCheckMethodArgs(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
             verifyExpr(c: inout c, id: recv)
@@ -878,6 +879,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
         Expr.Call(val nameStart, val nameLen, val args) => {
             verifyArgs(c: inout c, args: args)
             checkCallArgCategories(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            tcCheckCallArgs(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
             // enum variant construction (`<E.A x=1 />`) must specify EVERY payload
