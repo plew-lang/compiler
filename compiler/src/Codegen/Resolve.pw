@@ -1446,6 +1446,13 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     return binResultTypeInfo(c: inout c, lhs: lhs, rhs: rhs)
                 }
             }
+            // comparisons (50-55) and logical `&&`/`||` (61,62) produce Bool — report
+            // it precisely so a `val x: I64 = a == b` mismatch is caught (was scalarInfo,
+            // i.e. type-less, which the checker treated as unknown/compatible).
+            val bb: Bind = kwSpan(c: inout c, kw: "Bool", kwLen: 4U64)
+            if bb.nameLen != 0U64 {
+                return <TypeInfo kind=2 nameStart=bb.nameStart nameLen=bb.nameLen ref=0 />
+            }
             return scalarInfo()
         }
         Expr.Call(val nameStart, val nameLen, val args) => {

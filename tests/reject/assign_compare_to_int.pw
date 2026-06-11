@@ -1,0 +1,5 @@
+// spec/12: a comparison produces a Bool, so binding its result to an I64 is a
+// category error (no implicit Bool->I64).
+fn main() {
+    val x: I64 = 1I64 == 2I64
+}
