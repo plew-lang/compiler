@@ -1184,8 +1184,75 @@ fn parseStmtAst(p: inout P) -> StmtAst {
             }
             return parseExprOrAssignAst(p: inout p)
         }
+        Kind.LParen => {
+            // record destructuring `(val x, val y) = e` / `(a: val x) = e` (spec/02,03):
+            // a `(` whose first element binds (`val` punned, or `label : val`). Anything
+            // else starting with `(` is a parenthesized expression statement.
+            mut val isDestructure: Bool = false
+            if p.peekKind(off: 1) == <Kind.KwVal /> {
+                isDestructure = true
+            }
+            if p.peekKind(off: 1) == <Kind.Ident /> {
+                if p.peekKind(off: 2) == <Kind.Colon /> {
+                    if p.peekKind(off: 3) == <Kind.KwVal /> {
+                        isDestructure = true
+                    }
+                }
+            }
+            if isDestructure {
+                return parseDestructureAst(p: inout p)
+            }
+            return parseExprOrAssignAst(p: inout p)
+        }
         _ => { return parseExprOrAssignAst(p: inout p) }
     }
+}
+
+// Parse a record-destructuring statement `(val x, val y) = e` / `(a: val x, …) = e`.
+fn parseDestructureAst(p: inout P) -> StmtAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    mut val binds: Array[BindAst] = []
+    while true {
+        match p.curKind() {
+            Kind.RParen => { p.advance()  break }
+            Kind.Eof => { break }
+            Kind.Comma => { p.advance() }
+            _ => {
+                mut val field: String = ""
+                val bStart: U64 = p.base + p.curTok().start
+                // explicit `label: val name`, or punned `val name`.
+                match p.curKind() {
+                    Kind.Ident => {
+                        field = p.text(t: p.curTok())
+                        p.advance()
+                        match p.curKind() {
+                            Kind.Colon => { p.advance() }
+                            _ => { p.fail(off: p.base + p.curTok().start, msg: "a record-destructuring field is `label: val name` or punned `val name`") }
+                        }
+                    }
+                    _ => {}
+                }
+                match p.curKind() {
+                    Kind.KwVal => { p.advance() }
+                    _ => { p.fail(off: p.base + p.curTok().start, msg: "a record-destructuring binding needs `val name`") }
+                }
+                val nameTok: Tok = p.curTok()
+                val name: String = p.text(t: nameTok)
+                p.advance()
+                if field.bytes.count == 0U64 {
+                    field = name
+                }
+                binds.append(value: <BindAst field=field name=name span=<Span start=bStart end=p.prevEnd() /> />)
+            }
+        }
+    }
+    match p.curKind() {
+        Kind.Eq => { p.advance() }
+        _ => { p.fail(off: p.base + p.curTok().start, msg: "record destructuring must be initialized: `(val x, val y) = expr`") }
+    }
+    val init: ExprAst = parseExprAst(p: inout p)
+    return <StmtAst.Destructure binds=binds init=init span=<Span start=sStart end=p.prevEnd() /> />
 }
 
 // Parse `{ stmt* }` into a BlockAst. Current token should be `{`. Exported for the

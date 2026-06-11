@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+// Record destructuring `(val x, val y) = e` (spec/02,03): bind each field of a record
+// value. Punned `(val x)` binds field x to x; explicit `(a: val n)` binds field a to n.
+// Desugars to a temp binding plus one `val` per field.
+fn divMod(a: I64, b: I64) -> (quotient: I64, remainder: I64) {
+    return (quotient: a / b, remainder: a % b)
+}
+fn main() {
+    val p: (x: I64, y: I64) = (x: 3, y: 4)
+    (val x, val y) = p
+    print(x)            // 3
+    print(y)            // 4
+    // destructure a function result directly
+    (val quotient, val remainder) = divMod(a: 17, b: 5)
+    print(quotient)     // 3
+    print(remainder)    // 2
+    // explicit `field: val name` (rename)
+    (x: val ex, y: val why) = p
+    print(ex)           // 3
+    print(why)          // 4
+    // a String field destructured
+    val s: (text: String, count: I64) = (text: "hi", count: 9)
+    (val text, val count) = s
+    print(text)         // hi
+    print(count)        // 9
+}

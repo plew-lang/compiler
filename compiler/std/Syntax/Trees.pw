@@ -108,6 +108,10 @@ export enum StmtAst {
     Give(value: ExprAst, span: Span)
     Break(span: Span)
     Continue(span: Span)
+    // a record-destructuring binding `(val x, val y) = expr` (spec/02,03): each bind is
+    // a field of the record value `init`. Punning `(val x)` is field=name=x; explicit
+    // `(a: val x)` is field=a name=x. Lowers to a temp binding plus one `val` per field.
+    Destructure(binds: Array[BindAst], init: ExprAst, span: Span)
 }
 
 // A placeholder expression (an absent value position, e.g. `return` with no value).

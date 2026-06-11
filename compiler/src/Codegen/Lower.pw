@@ -790,15 +790,49 @@ fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
         }
         StmtAst.Break(val span) => { result = c.pushStmt(s: <Stmt.Break />) }
         StmtAst.Continue(val span) => { result = c.pushStmt(s: <Stmt.Continue />) }
+        StmtAst.Destructure(val binds, val init, val span) => {
+            // normally expanded by lowerBlock into several statements; reached only if a
+            // destructuring appears outside a statement list — lower the initializer as a
+            // plain expression statement so the value is still evaluated.
+            result = c.pushStmt(s: <Stmt.ExprStmt expr=lowerExpr(c: inout c, e: init) />)
+        }
     }
     return result
+}
+
+// Lower a record-destructuring `(val x, val y) = init` into a temp binding plus one
+// `val` per field, appended to `stmts`: `val __dtmp = init; val x = __dtmp.x; …`. The
+// temp's struct is recovered from the initializer (records track their struct like any
+// value), so no annotation is needed; `__dtmp` is reused (later destructures shadow it,
+// harmlessly — each temp is consumed by the field reads that immediately follow).
+fn lowerDestructureInto(c: inout Comp, binds: Array[BindAst], init: ExprAst, stmts: inout Array[U64]) {
+    val tmp: Bind = internBytes(c: inout c, s: "__dtmp")
+    val iv: U64 = lowerExpr(c: inout c, e: init)
+    stmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=iv />))
+    mut val bi: U64 = 0
+    while bi < binds.count {
+        val fldName: Bind = internBytes(c: inout c, s: binds[bi].field)
+        val nameB: Bind = internBytes(c: inout c, s: binds[bi].name)
+        val recv: U64 = c.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
+        val fld: U64 = c.pushExpr(e: <Expr.Field base=recv nameStart=fldName.nameStart nameLen=fldName.nameLen />)
+        stmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=nameB.nameStart nameLen=nameB.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=fld />))
+        bi += 1
+    }
 }
 
 fn lowerBlock(c: inout Comp, b: BlockAst) -> U64 {
     mut val stmts: Array[U64] = []
     mut val i: U64 = 0
     while i < b.stmts.count {
-        stmts.append(lowerStmt(c: inout c, s: b.stmts[i]))
+        // a destructuring statement expands to several arena statements (temp + fields).
+        match b.stmts[i] {
+            StmtAst.Destructure(val binds, val init, val span) => {
+                lowerDestructureInto(c: inout c, binds: binds, init: init, stmts: inout stmts)
+            }
+            _ => {
+                stmts.append(lowerStmt(c: inout c, s: b.stmts[i]))
+            }
+        }
         i += 1
     }
     val id: U64 = c.blocks.count
