@@ -63,7 +63,7 @@
 - ✅ **対応**：算術 `+ - * / %`・比較 `== != < <= > >=`・論理 `&& ||`・ビット/シフト `& | ^ << >> ~`・単項 `! - ~`・代入＋複合〔ビット系含む〕・`Optional.unwrapOr`〔旧 `??`〕・添字 `[]`/`[]=`〔Index/IndexSet〕・Chain `?.`〔Optional 具体〕。
 - **未対応**：`pow`/`**`〔`Pow[Exp]`・float 後〕・`?.` の一般トレイト化〔現 Optional 具体〕・**`as` 以外の数値変換 `From`/`TryFrom`**〔縮小/パース・`try` の異エラー型 From 変換＝現状 `try` は `E==E'` 一致要求〕・`Output != Self`。
 - ✅ **`as`**＝数値↔数値の C キャスト〔無損失検査済・narrowing reject〕。✅ **単項演算子の適用可能性**（`!`=Bool/`-`=signed int・float/`~`=int・✅ **String への `-`/`!`/`~` を reject**〔String は Neg/Not/BitNot witness を持たない primitive ゆえ judged set に追加・test reject unary_neg_string〕）。
-- ✅ **`try`**＝Result 早期 return〔Ok=tag0/`value`・Err=tag1/`error` レイアウト前提・非 Result〔特に Optional〕operand は loud reject〕。無注釈 `<Result.Ok value=…/>` 構築は return/call-arg context で**動作確認済**〔`genArgValue`→`st.expectedTy`〕。spec/12,13。
+- ✅ **`try`**＝Result 早期 return〔Ok=tag0/`value`・Err=tag1/`error` レイアウト前提・非 Result〔特に Optional〕operand は loud reject・✅ **error 型一致検査**〔`try g()`〔Result[_,String]〕を `-> Result[_,I64]` 関数で使うと String error を I64 と誤読＝operand と関数の Err 型〔args[1]〕を `typesCompatible` で照合・From error 変換は未実装ゆえ E==E' 必須・test reject try_error_type〕〕。無注釈 `<Result.Ok value=…/>` 構築は return/call-arg context で**動作確認済**〔`genArgValue`→`st.expectedTy`〕。spec/12,13。
 - ✅ **曖昧な無サフィックス整数リテラルのオーバーロードを loud reject**（`checkOverloadAmbiguity`/`overloadsAmbiguous`・free-fn＋method・test reject overload_ambiguous_literal）。✅ **`val f = obj.method`（メソッド値化）を loud reject**（`verifyFieldReadVis`＋`typeHasMethodNamed`・annotated/inferred 両 local）。
 - ✅ **【bug】ユーザー struct/enum 名が lang-item 型パラメータ名と衝突＝クラッシュ→loud reject 化**（`struct V {…}` × `Dictionary[K,V]`・`instArgCollidesParamName`・test reject typeparam_name_collision）。根治（name-based でない型パラメータ同一性＝スコープ化）は将来・回避＝リネーム。
 

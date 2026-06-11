@@ -1,0 +1,9 @@
+// spec/13: `try` propagates the Err unchanged (no error conversion yet), so the
+// operand's error type must match the enclosing function's — a Result[_, String]
+// `try` in a `-> Result[_, I64]` function would reinterpret the error.
+fn g() -> Result[I64, String] { return <Result.Err error="boom" /> }
+fn f() -> Result[I64, I64] {
+    val x: I64 = try g()
+    return <Result.Ok value=x />
+}
+fn main() { }
