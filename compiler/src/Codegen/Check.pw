@@ -742,6 +742,26 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
     checkUniqueArgModes(c: inout c, args: args)
     checkLitCtx(c: inout c, id: recv, eKind: 0, eBits: 0, eSgn: false)
     val rt: TypeInfo = exprType(c: inout c, id: recv)
+    // `dict.insert(key:, value:)` on a Dictionary[K, V] (also how a `[k: v]` literal
+    // lowers): the generic-receiver arg grounding is incomplete, so check key->K and
+    // value->V directly here (mirrors checkIndexKeyType for subscripts). spec/02.
+    if rt.kind == 2 {
+        if rt.ref != 0U64 {
+            if rt.ref < c.types.count {
+                val drt: TypeRef = c.types[rt.ref]
+                if rangeEquals(bytes: c.bytes, start: drt.nameStart, len: drt.nameLen, kw: "Dictionary") {
+                    if drt.args.count >= 2U64 {
+                        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "insert") {
+                            if args.count >= 2U64 {
+                                tcCheckValue(c: inout c, expectedRef: drt.args[0], valueExpr: args[0].expr, pos: "dict key")
+                                tcCheckValue(c: inout c, expectedRef: drt.args[1], valueExpr: args[1].expr, pos: "dict value")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     if rt.kind == 2 {
         val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
         if mi != c.funcs.count {

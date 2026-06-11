@@ -1,0 +1,5 @@
+// spec/02: each entry of a `[k: v]` literal must match the annotated
+// Dictionary[K, V] — a wrong-typed value (`"b": true` into a V=I64) has no conversion.
+fn main() {
+    val d: Dictionary[String, I64] = ["a": 1I64, "b": true]
+}
