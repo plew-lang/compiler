@@ -42,4 +42,11 @@ fn main() {
     val seg: Segment = <Segment from=origin() to=endp />
     print(seg.from.x)                 // 0
     print(seg.to.y)                   // 4
+    // punning: `(a, b)` is `(a: a, b: b)` (idents only); grouping still works
+    val a1: I64 = 11
+    val b1: I64 = 22
+    val pn: (a1: I64, b1: I64) = (a1, b1)
+    print(pn.a1)                      // 11
+    print(pn.b1)                      // 22
+    print((3I64 + 4I64) * 2I64)       // 14 (parenthesized grouping, not a record)
 }

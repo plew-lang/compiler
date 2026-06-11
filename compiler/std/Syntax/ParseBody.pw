@@ -375,12 +375,17 @@ fn parsePrimaryAst(p: inout P) -> ExprAst {
                 }
                 _ => {}
             }
-            // a labelled anonymous record literal `(x: 1, y: 2)`: distinguished from a
-            // parenthesized expression by a leading `label:` (an ident then a colon).
+            // a labelled / punned anonymous record literal `(x: 1, y: 2)` / `(x, y)`:
+            // distinguished from a parenthesized expression by a leading `ident :`
+            // (labelled) or `ident ,` (punned — `(x)` alone is grouping; `(x,)` /
+            // `(x, y)` are records). Punning makes `(x, y)` into `(x: x, y: y)`.
             mut val isRecord: Bool = false
             match p.curKind() {
                 Kind.Ident => {
                     if p.peekKind(off: 1) == <Kind.Colon /> {
+                        isRecord = true
+                    }
+                    if p.peekKind(off: 1) == <Kind.Comma /> {
                         isRecord = true
                     }
                 }
@@ -399,11 +404,19 @@ fn parsePrimaryAst(p: inout P) -> ExprAst {
                             val fStart: U64 = p.base + labelTok.start
                             p.advance()
                             match p.curKind() {
-                                Kind.Colon => { p.advance() }
-                                _ => { p.fail(off: p.base + p.curTok().start, msg: "an anonymous record field needs a `label: value`") }
+                                Kind.Colon => {
+                                    // explicit `label: value`.
+                                    p.advance()
+                                    val fv: ExprAst = parseExprAst(p: inout p)
+                                    fields.append(value: <MakeFieldAst name=label value=fv span=<Span start=fStart end=p.prevEnd() /> />)
+                                }
+                                _ => {
+                                    // punning `(x, …)`: the identifier is both the field
+                                    // name and the value (`x` => `x: x`).
+                                    val pv: ExprAst = <ExprAst.Ident name=label span=<Span start=fStart end=p.prevEnd() /> />
+                                    fields.append(value: <MakeFieldAst name=label value=pv span=<Span start=fStart end=p.prevEnd() /> />)
+                                }
                             }
-                            val fv: ExprAst = parseExprAst(p: inout p)
-                            fields.append(value: <MakeFieldAst name=label value=fv span=<Span start=fStart end=p.prevEnd() /> />)
                         }
                     }
                 }
