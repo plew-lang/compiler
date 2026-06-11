@@ -897,6 +897,29 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
             return
         }
     }
+    // an assoc fn call `Type.make(...)`: the recv is a TYPE NAME (not a value), so the
+    // instance-method lookups above miss it. Resolve the assoc fn and check its args
+    // (the value `S.make(n: true)` would otherwise reinterpret a Bool as I64).
+    match c.exprs[recv] {
+        Expr.Ident(start: val rStart, len: val rLen) => {
+            val ai: U64 = findAssoc(c: inout c, recvStart: rStart, recvLen: rLen, nameStart: nameStart, nameLen: nameLen, args: args)
+            if ai < c.funcs.count {
+                val aps: Array[Param] = c.funcs[ai].params
+                mut val k: U64 = 0
+                while k < args.count {
+                    if k < aps.count {
+                        val ap: Param = aps[k]
+                        checkArgInoutMode(c: inout c, p: ap, arg: args[k])
+                        checkLitSpan(c: inout c, id: args[k].expr, tyStart: ap.tyStart, tyLen: ap.tyLen, isArray: ap.tyIsArray)
+                        tcCheckValue(c: inout c, expectedRef: ap.ty, valueExpr: args[k].expr, pos: "arg")
+                    }
+                    k += 1
+                }
+                return
+            }
+        }
+        _ => {}
+    }
     mut val i: U64 = 0
     while i < args.count {
         checkLitCtx(c: inout c, id: args[i].expr, eKind: 1, eBits: 64, eSgn: true)

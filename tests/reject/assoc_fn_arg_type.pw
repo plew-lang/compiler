@@ -1,0 +1,7 @@
+// spec/07: an assoc fn `Type.make(...)` arg must match the parameter type — a Bool
+// where I64 is expected has no conversion.
+struct S { pub val a: I64 }
+pub impl S { assoc fn make(n: I64) -> S { return <S a=n /> } }
+fn main() {
+    val s: S = S.make(n: true)
+}
