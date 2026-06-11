@@ -1343,14 +1343,14 @@ fn verifyBinaryOp(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
     if isStringEq(c: inout c, op: op, lhs: lhs) {
         return
     }
-    if hasCompareWitness(c: inout c, op: op, lhs: lhs) {
+    if hasCompareWitness(c: inout c, op: op, lhs: lhs, rhs: rhs) {
         return
     }
     if isEnumEq(c: inout c, op: op, lhs: lhs) {
         verifyEnumEqPayload(c: inout c, lhs: lhs, rhs: rhs)
         return
     }
-    if compareNeedsTrait(c: inout c, op: op, lhs: lhs) {
+    if compareNeedsTrait(c: inout c, op: op, lhs: lhs, rhs: rhs) {
         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "comparison needs Eq/Ord; not available for a struct or array")
         return
     }

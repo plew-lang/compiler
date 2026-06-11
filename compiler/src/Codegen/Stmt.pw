@@ -84,14 +84,34 @@ fn isEnumEq(c: inout Comp, op: I64, lhs: U64) -> Bool {
 // all-nullary enum `==`; applied to a struct or array there is no Eq/Ord, so it
 // must be a compile error rather than broken C. (Reached only after the
 // String-eq and enum-eq paths have been ruled out.)
-fn compareNeedsTrait(c: inout Comp, op: I64, lhs: U64) -> Bool {
+// The comparison operand type for witness lookup. A `newtype` inherits its underlying's
+// `Eq`/`Ord` with `Self` substituted, so a comparison of two values of the SAME newtype
+// resolves to the underlying's witness; a newtype compared with anything else stays the
+// newtype (no witness) and is rejected (sound, like the arithmetic path).
+fn cmpOperandType(c: inout Comp, lhs: U64, rhs: U64) -> TypeInfo {
+    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
+    if lt.kind == 2 {
+        val under: Bind = newtypeUnderName(c: inout c, start: lt.nameStart, len: lt.nameLen)
+        if under.nameStart != lt.nameStart || under.nameLen != lt.nameLen {
+            val rt: TypeInfo = typeOf(c: inout c, id: rhs)
+            if rt.kind == 2 {
+                if spansEqual(c: inout c, aStart: lt.nameStart, aLen: lt.nameLen, bStart: rt.nameStart, bLen: rt.nameLen) {
+                    return typeInfoOfName(c: inout c, start: under.nameStart, len: under.nameLen, isArray: false)
+                }
+            }
+        }
+    }
+    return lt
+}
+
+fn compareNeedsTrait(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
     if op < 50 {
         return false
     }
     if op > 55 {
         return false
     }
-    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
+    val lt: TypeInfo = cmpOperandType(c: inout c, lhs: lhs, rhs: rhs)
     if lt.kind == 3 {
         return true
     }
@@ -130,8 +150,8 @@ fn findAssocByName(c: inout Comp, typeStart: U64, typeLen: U64, name: String) ->
 // witness — primitives are not special-cased (O6): `I32 < I32` routes through Core's
 // `impl I32 as Ord` to the `i32Lt` intrinsic. An untyped literal / String / enum has
 // no Eq/Ord here and keeps its own lowering (the dispatch handles those first).
-fn hasCompareWitness(c: inout Comp, op: I64, lhs: U64) -> Bool {
-    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
+fn hasCompareWitness(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
+    val lt: TypeInfo = cmpOperandType(c: inout c, lhs: lhs, rhs: rhs)
     if lt.kind == 2 || lt.kind == 0 {
         if lt.nameLen == 0 {
             return false

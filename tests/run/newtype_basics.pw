@@ -18,4 +18,7 @@ fn main() {
     val sum: Meter = d + e
     print(sum as I64)                 // 17
     print((d * e) as I64)             // 60
+    // comparison inheritance: Meter vs Meter via the underlying Ord/Eq
+    if e > d { print(1I64) } else { print(0I64) }    // 1 (12 > 5)
+    if d == d { print(1I64) } else { print(0I64) }   // 1
 }
