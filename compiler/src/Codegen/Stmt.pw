@@ -261,6 +261,21 @@ fn findBinTraitWitness(c: inout Comp, typeStart: U64, typeLen: U64, name: String
 fn binWitnessType(c: inout Comp, lhs: U64, rhs: U64) -> TypeInfo {
     val lt: TypeInfo = typeOf(c: inout c, id: lhs)
     if lt.kind == 2 {
+        // a `newtype` operand (spec/10) inherits its underlying's operators with Self
+        // substituted: `Meter` has `Add[Meter]` (from the underlying's `Add[Self]`), so
+        // `Meter + Meter` resolves the witness to the underlying (`I64`'s `Add`). But
+        // `Meter + I64` is NOT valid (no `Add[I64]` on `Meter`), so only resolve when
+        // BOTH operands are the SAME newtype — otherwise leave `lt` as the newtype so the
+        // witness lookup fails and the mix is rejected (sound).
+        val under: Bind = newtypeUnderName(c: inout c, start: lt.nameStart, len: lt.nameLen)
+        if under.nameStart != lt.nameStart || under.nameLen != lt.nameLen {
+            val rt: TypeInfo = typeOf(c: inout c, id: rhs)
+            if rt.kind == 2 {
+                if spansEqual(c: inout c, aStart: lt.nameStart, aLen: lt.nameLen, bStart: rt.nameStart, bLen: rt.nameLen) {
+                    return typeInfoOfName(c: inout c, start: under.nameStart, len: under.nameLen, isArray: false)
+                }
+            }
+        }
         return lt
     }
     if lt.kind == 0 {

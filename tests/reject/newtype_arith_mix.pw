@@ -1,0 +1,7 @@
+// A newtype inherits `Add[Self]`, so `Meter + Meter` is valid but `Meter + I64` is not
+// (no `Add[I64]` on the newtype) — the operands must share the type (spec/10,12).
+newtype Meter = I64
+fn main() {
+    val d: Meter = 5 as Meter
+    val r: Meter = d + 3I64
+}

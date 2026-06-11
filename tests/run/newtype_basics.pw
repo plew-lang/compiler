@@ -14,4 +14,8 @@ fn main() {
     // distinct newtypes round-trip independently
     val u: UserId = 99 as UserId
     print(u as I64)                   // 99
+    // operator inheritance: Meter + Meter is Meter (the underlying's Add[Self])
+    val sum: Meter = d + e
+    print(sum as I64)                 // 17
+    print((d * e) as I64)             // 60
 }

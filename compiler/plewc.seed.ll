@@ -26130,47 +26130,112 @@ entry:
   %3 = alloca i64, align 8
   %4 = alloca i64, align 8
   %5 = alloca %st20, align 8
+  %6 = alloca %st22, align 8
+  %7 = alloca %st20, align 8
   br label %body0
 
 body0:                                            ; preds = %entry
   store i64 %1, ptr %3, align 4
   store i64 %2, ptr %4, align 4
-  %6 = load i64, ptr %3, align 4
-  %7 = call %st20 @pf155(ptr %0, i64 %6)
-  store %st20 %7, ptr %5, align 4
-  %8 = load %st20, ptr %5, align 4
-  %9 = extractvalue %st20 %8, 0
-  %10 = icmp eq i64 %9, 2
-  br i1 %10, label %then, label %endif
+  %8 = load i64, ptr %3, align 4
+  %9 = call %st20 @pf155(ptr %0, i64 %8)
+  store %st20 %9, ptr %5, align 4
+  %10 = load %st20, ptr %5, align 4
+  %11 = extractvalue %st20 %10, 0
+  %12 = icmp eq i64 %11, 2
+  br i1 %12, label %then, label %endif
 
 then:                                             ; preds = %body0
-  %11 = load %st20, ptr %5, align 4
-  ret %st20 %11
-
-endif:                                            ; preds = %body0
-  %12 = load %st20, ptr %5, align 4
-  %13 = extractvalue %st20 %12, 0
-  %14 = icmp eq i64 %13, 0
-  br i1 %14, label %then1, label %endif2
-
-then1:                                            ; preds = %endif
+  %13 = load %st20, ptr %5, align 4
+  %14 = extractvalue %st20 %13, 1
   %15 = load %st20, ptr %5, align 4
   %16 = extractvalue %st20 %15, 2
-  %17 = icmp ugt i64 %16, 0
-  br i1 %17, label %then3, label %endif4
+  %17 = call %st22 @pf100(ptr %0, i64 %14, i64 %16)
+  store %st22 %17, ptr %6, align 4
+  %18 = load %st22, ptr %6, align 4
+  %19 = extractvalue %st22 %18, 0
+  %20 = load %st20, ptr %5, align 4
+  %21 = extractvalue %st20 %20, 1
+  %22 = icmp ne i64 %19, %21
+  br i1 %22, label %sc.cont, label %sc.rhs
 
-endif2:                                           ; preds = %endif4, %endif
-  %18 = load i64, ptr %3, align 4
-  %19 = load i64, ptr %4, align 4
-  %20 = call %st20 @pf192(ptr %0, i64 %18, i64 %19)
-  ret %st20 %20
+endif:                                            ; preds = %body0
+  %23 = load %st20, ptr %5, align 4
+  %24 = extractvalue %st20 %23, 0
+  %25 = icmp eq i64 %24, 0
+  br i1 %25, label %then7, label %endif8
+
+sc.rhs:                                           ; preds = %then
+  %26 = load %st22, ptr %6, align 4
+  %27 = extractvalue %st22 %26, 1
+  %28 = load %st20, ptr %5, align 4
+  %29 = extractvalue %st20 %28, 2
+  %30 = icmp ne i64 %27, %29
+  br label %sc.cont
+
+sc.cont:                                          ; preds = %sc.rhs, %then
+  %31 = phi i1 [ true, %then ], [ %30, %sc.rhs ]
+  %32 = icmp ne i1 %31, false
+  br i1 %32, label %then1, label %endif2
+
+then1:                                            ; preds = %sc.cont
+  %33 = load i64, ptr %4, align 4
+  %34 = call %st20 @pf155(ptr %0, i64 %33)
+  store %st20 %34, ptr %7, align 4
+  %35 = load %st20, ptr %7, align 4
+  %36 = extractvalue %st20 %35, 0
+  %37 = icmp eq i64 %36, 2
+  br i1 %37, label %then3, label %endif4
+
+endif2:                                           ; preds = %endif4, %sc.cont
+  %38 = load %st20, ptr %5, align 4
+  ret %st20 %38
 
 then3:                                            ; preds = %then1
-  %21 = load %st20, ptr %5, align 4
-  ret %st20 %21
+  %39 = load %st20, ptr %5, align 4
+  %40 = extractvalue %st20 %39, 1
+  %41 = load %st20, ptr %5, align 4
+  %42 = extractvalue %st20 %41, 2
+  %43 = load %st20, ptr %7, align 4
+  %44 = extractvalue %st20 %43, 1
+  %45 = load %st20, ptr %7, align 4
+  %46 = extractvalue %st20 %45, 2
+  %47 = call i1 @pf96(ptr %0, i64 %40, i64 %42, i64 %44, i64 %46)
+  %48 = icmp ne i1 %47, false
+  br i1 %48, label %then5, label %endif6
 
-endif4:                                           ; preds = %then1
+endif4:                                           ; preds = %endif6, %then1
   br label %endif2
+
+then5:                                            ; preds = %then3
+  %49 = load %st22, ptr %6, align 4
+  %50 = extractvalue %st22 %49, 0
+  %51 = load %st22, ptr %6, align 4
+  %52 = extractvalue %st22 %51, 1
+  %53 = call %st20 @pf131(ptr %0, i64 %50, i64 %52, i1 false)
+  ret %st20 %53
+
+endif6:                                           ; preds = %then3
+  br label %endif4
+
+then7:                                            ; preds = %endif
+  %54 = load %st20, ptr %5, align 4
+  %55 = extractvalue %st20 %54, 2
+  %56 = icmp ugt i64 %55, 0
+  br i1 %56, label %then9, label %endif10
+
+endif8:                                           ; preds = %endif10, %endif
+  %57 = load i64, ptr %3, align 4
+  %58 = load i64, ptr %4, align 4
+  %59 = call %st20 @pf192(ptr %0, i64 %57, i64 %58)
+  ret %st20 %59
+
+then9:                                            ; preds = %then7
+  %60 = load %st20, ptr %5, align 4
+  ret %st20 %60
+
+endif10:                                          ; preds = %then7
+  br label %endif8
 }
 
 define i1 @pf286(ptr %0, i64 %1, i64 %2, i64 %3) {
