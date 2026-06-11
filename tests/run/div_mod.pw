@@ -23,6 +23,6 @@ fn main() {
     mut val xs: Array[I64] = [20, 23]
     xs[0] /= 6
     xs[1] %= 6
-    print(xs[0I64])             // 3I64
-    print(xs[1I64])             // 5I64
+    print(xs[0])             // 3I64
+    print(xs[1])             // 5I64
 }

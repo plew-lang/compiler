@@ -572,6 +572,8 @@ fn verifyAssign(c: inout Comp, op: I64, target: U64, value: U64) {
     // precision and Bool/width/sign distinctions).
     if op == opAssign() {
         tcCheckValue(c: inout c, expectedRef: inferType(c: inout c, id: target), valueExpr: value, pos: "assign")
+    } else {
+        tcCheckCompoundAssign(c: inout c, op: op, target: target, value: value)
     }
 }
 
@@ -927,6 +929,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
         Expr.Index(val base, val index) => {
             verifyExpr(c: inout c, id: base)
             verifyExpr(c: inout c, id: index)
+            tcCheckArrayIndex(c: inout c, base: base, index: index)
         }
         Expr.Array(val elems) => {
             mut val i: U64 = 0

@@ -1,0 +1,6 @@
+// A compound arithmetic assignment desugars to x = x OP y, so a primitive needs
+// matching operands: x: I64; x += 5I32 has no Add[I32] on I64 — reject.
+fn main() {
+    mut val x: I64 = 0I64
+    x += 5I32
+}

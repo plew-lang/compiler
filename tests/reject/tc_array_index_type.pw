@@ -1,0 +1,8 @@
+// An array subscript indexes with a U64 (spec/02). Using an I32 index is a type
+// mismatch caught by the TypeRef checker (untyped literals adapt, so this needs a
+// typed I32).
+fn main() {
+    val xs: Array[I64] = [1I64, 2I64]
+    val i: I32 = 0I32
+    val y: I64 = xs[i]
+}

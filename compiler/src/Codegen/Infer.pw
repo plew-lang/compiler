@@ -168,6 +168,48 @@ fn tcCheckBinop(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
     }
 }
 
+// Whether a TypeRef is a primitive integer type.
+fn tcIsPrimInt(c: inout Comp, ref: U64) -> Bool {
+    if ref == 0U64 || ref >= c.types.count {
+        return false
+    }
+    return isIntType(c: inout c, start: c.types[ref].nameStart, len: c.types[ref].nameLen)
+}
+
+// A compound-arith assignment `x OP= y` desugars to `x = x OP y` (spec/12), so for a
+// primitive its operands must share a type (`x: I64; x += 5I32` has no Add[I32] on
+// I64). Gated on the op being arithmetic (`+= -= *= /= %=`) and BOTH sides primitive
+// ints (a user type uses Add[Rhs]; shift/bitwise compounds are Rhs-parameterized).
+fn tcCheckCompoundAssign(c: inout Comp, op: I64, target: U64, value: U64) {
+    if op == opAddAssign() || op == opSubAssign() || op == opMulAssign() || op == opDivAssign() || op == opRemAssign() {
+    } else {
+        return
+    }
+    val l: U64 = inferType(c: inout c, id: target)
+    if tcIsPrimInt(c: inout c, ref: l) {
+        if tcIsPrimInt(c: inout c, ref: inferType(c: inout c, id: value)) {
+            tcCheckValue(c: inout c, expectedRef: l, valueExpr: value, pos: "compound")
+        }
+    }
+}
+
+// An array subscript `arr[i]` indexes with a `U64` (spec/02). When the base is an
+// array, check the index expression against U64 (a user `Index[K]` type uses its own
+// key type, so this fires only for the array case).
+fn tcCheckArrayIndex(c: inout Comp, base: U64, index: U64) {
+    val bt: TypeInfo = typeOf(c: inout c, id: base)
+    if bt.kind == 3 {
+    } else {
+        return
+    }
+    val u64: Bind = kwSpan(c: inout c, kw: "U64", kwLen: 3U64)
+    if u64.nameLen == 0U64 {
+        return
+    }
+    val u64Ref: U64 = simpleTypeRef(c: inout c, nameStart: u64.nameStart, nameLen: u64.nameLen)
+    tcCheckValue(c: inout c, expectedRef: u64Ref, valueExpr: index, pos: "index")
+}
+
 // If `valueExpr` is a construction (`<T … />`) of the same generic head as the
 // expected instance `expectedRef`, check each provided field's value against the
 // field's declared type grounded under the expected instance's type arguments. Covers
