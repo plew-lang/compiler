@@ -814,6 +814,44 @@ fn checkMatchArmsEnum(c: inout Comp, scrut: U64, arms: Array[MatchArm]) {
 // only the checks checkLitCtx does not perform.
 fn verifyExpr(c: inout Comp, id: U64) {
     match c.exprs[id] {
+        Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
+            // verify the closure BODY with the closure's own return type as context —
+            // else `return e` inside a closure escapes the return-type check entirely
+            // (the body was previously never walked). Captured outer locals stay visible
+            // (the closure's params are pushed on top of the current scope).
+            val sRV: Bool = c.curRetVoid
+            val sRS: U64 = c.curRetStart
+            val sRL: U64 = c.curRetLen
+            val sRA: Bool = c.curRetIsArray
+            val sRT: U64 = c.curRetTy
+            if hasRet {
+                c.curRetVoid = false
+                c.curRetStart = retStart
+                c.curRetLen = retLen
+                c.curRetIsArray = retIsArray
+                c.curRetTy = retTy
+            } else {
+                c.curRetVoid = true
+                c.curRetStart = 0
+                c.curRetLen = 0
+                c.curRetIsArray = false
+                c.curRetTy = 0
+            }
+            val cmark: U64 = scopeMark(c: inout c)
+            mut val cpi: U64 = 0
+            while cpi < params.count {
+                val cp: Param = params[cpi]
+                addLocal(c: inout c, nameStart: cp.nameStart, nameLen: cp.nameLen, tyStart: cp.tyStart, tyLen: cp.tyLen, isArray: cp.tyIsArray, ty: cp.ty, isInout: cp.isInout, isMut: false, owned: cp.isMove)
+                cpi += 1U64
+            }
+            verifyBlock(c: inout c, blockId: body)
+            popLocals(c: inout c, mark: cmark)
+            c.curRetVoid = sRV
+            c.curRetStart = sRS
+            c.curRetLen = sRL
+            c.curRetIsArray = sRA
+            c.curRetTy = sRT
+        }
         Expr.Field(val base, val nameStart, val nameLen) => {
             verifyFieldReadVis(c: inout c, base: base, nameStart: nameStart, nameLen: nameLen)
             verifyExpr(c: inout c, id: base)

@@ -1,0 +1,8 @@
+// A closure body's `return` must match the closure's declared return type (spec/04):
+// returning a String from a `-> I64` closure would reinterpret the value's bits. The
+// closure body is verified with its own return type as context.
+fn apply(f: fn(x: I64) -> I64) -> I64 { return f(x: 1I64) }
+
+fn main() {
+    val y: I64 = apply(f: fn(x: I64) -> I64 { return "oops" })
+}
