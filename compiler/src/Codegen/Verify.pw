@@ -937,6 +937,27 @@ fn checkCallArgCategories(c: inout Comp, nameStart: U64, nameLen: U64, args: Arr
 // enum. Only fires when the scrutinee reliably recovers to a known enum and an arm
 // names a different known enum (a wildcard / struct-destructure / unrecovered arm is
 // skipped — conservative, like the other typeOf-based checks).
+// Whether enum (enumStart,enumLen) declares a variant named (variantStart,variantLen).
+fn variantExists(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64) -> Bool {
+    val qEnum: U64 = intern(c: inout c, start: enumStart, len: enumLen)
+    val qVar: U64 = intern(c: inout c, start: variantStart, len: variantLen)
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        if c.enums[ei].nameId == qEnum {
+            val vars: Array[Variant] = c.enums[ei].variants
+            mut val vi: U64 = 0
+            while vi < vars.count {
+                if vars[vi].nameId == qVar {
+                    return true
+                }
+                vi += 1
+            }
+        }
+        ei += 1
+    }
+    return false
+}
+
 fn checkMatchArmsEnum(c: inout Comp, scrut: U64, arms: Array[MatchArm]) {
     val st0: TypeInfo = typeOf(c: inout c, id: scrut)
     if st0.kind != 2 {
@@ -954,6 +975,16 @@ fn checkMatchArmsEnum(c: inout Comp, scrut: U64, arms: Array[MatchArm]) {
             val aId: U64 = knownNamedTypeId(c: inout c, start: a.enumStart, len: a.enumLen)
             if aId != 0U64 && aId != sId {
                 compileErrorAt(line: lineOf(c: inout c, offset: a.enumStart), msg: "this match arm pattern is a variant of a different enum than the value being matched")
+            } else {
+                // the named variant must exist on the enum (`Optional.Other` is not a
+                // variant of Optional) — else the arm is unreachable and the match's
+                // exhaustiveness count is wrong.
+                if a.variantLen > 0U64 {
+                    if variantExists(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen) {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: a.variantStart), msg: "unknown variant: this enum has no such variant")
+                    }
+                }
             }
         }
         ai += 1

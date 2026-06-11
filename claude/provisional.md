@@ -53,7 +53,7 @@
 
 ## 制御フロー・match
 
-- ✅ **`match` 網羅性検査**（`_` or 全 variant・rename/discard/or パターン・全フィールド束縛必須・フィールド名実在検査・値位置 `match`/`if`〔`give`〕）。残：束縛名一致だが型食い違いは C エラー fallback・**ガード・ネストパターン無し**・到達不能アーム警告無し。spec/11。
+- ✅ **`match` 網羅性検査**（`_` or 全 variant・rename/discard/or パターン・全フィールド束縛必須・フィールド名実在検査・**variant 名実在検査**〔`Optional.Other` 等の未知 variant arm を reject＝`variantExists`・以前は enum 一致のみで variant 存在は未検査・test reject match_unknown_variant〕・値位置 `match`/`if`〔`give`〕）。残：束縛名一致だが型食い違いは C エラー fallback・**ガード・ネストパターン無し**・到達不能アーム警告無し。spec/11。
 - ✅ **構築/分解の全フィールド明示必須**（struct パターン・enum payload・`<S wrongfield=…/>` 実在検査・`for (val x, val y) in xs` の record 分解）。spec/05,11。
 - **`for (val k, val v) in dict`** → dict 反復子待ち〔別機能〕。**`guard` 文** → 無し（`KwGuard`/`Stmt.Guard` 無・条件チェーン束縛は `if`/`while`/`guard` 横断の別 feature）。spec/11。
 - ✅ **`panic`（発散文）**。残：**式位置の `panic`**（statement-match の arm `=> panic` は✅〔`parseArmBodyAst`→`parseStmtAst`〕／**value-match の arm `val x = match … { _ => panic }` は未**）。2026-06-12 試行＝parser は `parseExprArmBodyAst` で `panic`/brace block を受理できたが、**backend value-match は arm body を単一 give-expr 前提**（`lowerMatchArms` の isExpr 枝が `arm.body.stmts[0]` を Give と仮定し panic arm を `emptyExpr` に落とす＝silent miscompile・IR は arm を丸ごと drop）＝**直すには value-match arm を block-bodied 化〔IfExpr 値ブロックと同形〕＋ emitter が diverging arm を検出して PHI から除外**（`st.terminated` チェック）が要る＝backend rework。parser だけ入れると silent miscompile ゆえ revert。if-else 値ブロック `if c { give } else { panic }` は✅。

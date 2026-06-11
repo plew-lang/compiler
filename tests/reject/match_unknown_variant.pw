@@ -1,0 +1,10 @@
+// spec/11: a match arm must name a real variant of the scrutinee's enum —
+// `Optional.Other` is not a variant of Optional.
+fn main() {
+    val o: Optional[I64] = <Optional.Some v=5I64 />
+    match o {
+        Optional.Some(val v) => { }
+        Optional.None => { }
+        Optional.Other => { }
+    }
+}
