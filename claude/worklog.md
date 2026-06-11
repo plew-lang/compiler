@@ -23,50 +23,44 @@
 
 **ツール要件（達成済）**＝任意パスのバイナリ単体で `plew build`/`plew gen` が動く（ⓐ＝relocatable driver＋`compiler/plewc`＋clang・symlink 解決）。真の単一バイナリ ⓑ（plewc が clang を内部 spawn・LLVM 直接オブジェクト出力）は additive な将来 upgrade（要ユーザー確認）。
 
-## 🗺️ ロードマップ（残作業を soundness 優先で）
+## 🗺️ ロードマップ（残作業のみ・soundness 優先）
 
-進め方＝provisional.md を走査し、3 大機能・spec-future を除いて各剥離を 1 つずつ green 増分で潰す→各区切りで commit＋push＋本ログ更新。**soundness（受理健全性＝spec-invalid を accept しない）を最優先**、次に hidden meaning の小逸脱、最後に hidden cost（leak）。
+進め方＝[provisional.md](provisional.md)（残作業の正典カタログ・`✅` でない項が残作業）を走査し各剥離を green 増分で潰す→区切りごとに commit＋push＋本ログ更新。優先＝**soundness（spec-invalid を accept しない）** ＞ **hidden meaning（spec-valid を reject／silent 逸脱）** ＞ **hidden cost（leak）**。完了済みは上の capability 索引＋ provisional の `✅`。**以下は残のみ。**
 
 ### A. soundness（spec-invalid を accept する穴＝最優先）
 
-- ✅ **構築フィールドゲート (b)（spec/05）**＝cross-module で非 `pub` フィールド設定を loud reject（`checkConstructVis`＋`StructDef.defOffset`＋`offsetIsLoaded`・dict literal 等の synthesize 構築は除外）。**残＝公開ゲート (a)**（全 pub でも外部構築は `pub impl factory` 要）は `factory` 宣言機能と一括。
-- ✅ **lang-item 型の再定義を loud reject**（`isLangItemTypeName`＋`checkLangItemRedef`・`StructDef`/`EnumDef.defOffset` で entry-module 判定・extern intrinsic は skip・test reject redefine_langitem）。
-- ✅ **曖昧な無サフィックス整数リテラルのオーバーロードを loud reject**（`checkOverloadAmbiguity`/`overloadsAmbiguous`・free-fn＋method 両経路・test reject overload_ambiguous_literal）＝既存実装で網羅済。
-- ✅ **int↔float 暗黙変換を loud reject**（`typesCompatible` の float 免除を both-float に絞り＝`val x:F64=nI64`/`I64=3.5`/`f(F64)` with I64 arg を reject・以前は silent miscompile・test reject float_int_no_implicit/float_literal_to_int）。
-- ✅ **mixed int/float 比較を loud reject**（`tcCheckBinop` を全 primitive-numeric ペアに拡張＝`aI64 < bF64`・以前は silent mix・test reject compare_int_float）。
-- ✅ **型パラメータ名衝突クラッシュ→clean reject**（`instArgCollidesParamName`・struct/enum・test reject typeparam_name_collision）。
-- **重なる inout のケース②③**（部分/添字重なり＝`a.merge(inout a.field)`・`arr[i],arr[j]` の distinct 証明）＝spec 通り lint＋限定ランタイム panic（ケース①構文同一は実装済）。〔受理健全性は int/float/幅/sign/struct/Optional 引数・代入・比較・配列要素・dict 値・if 枝・return・move/unique/可視性/overflow/missing-return/網羅性すべて reject 確認済〕
+- **ファクトリ公開ゲート (a)（spec/05）**＝全 pub フィールドでも cross-module 構築は `pub impl Type { factory }` 明示要。`factory` 宣言機能と一括（現状は (b) フィールドゲート＝非 pub を弾く・のみで、全 pub 型は許容＝spec (a) より緩い）。
+- **generic-receiver method の value 引数 grounding**＝`w.set(5I64)` on `W[String]` が silent miscompile（`substTypeInfo`/`mf.typeParams` が impl param `T` を ground し切らず素通し・試行は `fold[B]` 等 method-own type-param を持つ iterator を誤 reject→revert＝**method-own param を除外した grounding が要る**）。共有のクラッシュ事例〔dict 添字キー〕は別経路で reject 済。
+- **重なる inout ②③**（部分/添字重なり＝`a.merge(inout a.field)`・`arr[i],arr[j]` の distinct 証明）＝spec 通り lint＋限定ランタイム panic（将来・ケース①構文同一は実装済）。
 
-### B. hidden meaning の小逸脱（spec-valid を reject／silent 逸脱）
+> 受理健全性は広く確認済（int/float/幅/sign/struct/Optional・引数/代入/比較/return/配列要素/dict キー/if-while 条件 Bool/closure 戻り型/void 値 return/move/unique/可視性/overflow/missing-return/網羅性をすべて reject）。
 
-- **newtype メソッド/フィールド継承＋非 int underlying**（`userId.bytes`〔UserId=String〕）＝broad な codegen 解決が要る（`localStructIdxFor`/`kindFromTySpan`/`exprStructIdx`/非 int `as` を newtype→underlying 解決・ただし `typeOf` は型チェッカ distinction と両用ゆえ blanket 解決不可＝codegen 専用解決点を個別配線）。int underlying は完備。newtype の残＝unique/deinit/factory 継承・`export newtype`。
-- **`as` 以外の数値変換 `From`/`TryFrom`**（縮小・パース・`as` の全域変換脱糖・`try` の異エラー型 From 変換）・**float→int `as`**・**mixed `1.5 + 2`**（無型 int リテラル推論）。
+### B. hidden meaning（spec-valid を reject／silent 逸脱）
+
+- **`From`/`TryFrom`**（数値縮小・パース・`as` の全域変換脱糖・`try` の異エラー型 From 変換）・**float→int `as`**・**mixed `1.5+2` / `F64=5`**（無型 int リテラルの float context＝checker〔`checkLitTi` に float eKind〕＋backend〔int literal を double で emit〕の multi-site・回避 `5.0`）。
+- **newtype 非 int underlying のメソッド/フィールド継承**（`userId.bytes`〔UserId=String〕＝codegen 専用解決点の個別配線・`typeOf` 両用問題ゆえ blanket 不可）＋ unique/deinit/factory 継承・`export newtype`。int underlying は完備。
 - **一般 Chain トレイト `?.`**（現 Optional 具体）・**`Pow`/`**`**（float 後）・**`Output != Self`**。
-- ✅ **method への record literal context**（`methodArgType`・test method_record_arg）・✅ **nested record literal**（record branch が canonical 名を `lowerMakeFields` へ・test nested_record_literal）。
-- ✅ **generic-enum/struct 構築の call/method 引数 context**（`<Optional.Some v=5I64 />` を直接 arg 渡し＝`genArgValue` が generic-inst param の型を `st.expectedTy` にセット→backend の既存 fallback が ground・**backend-only ゆえ provider body を壊さない**・test generic_enum_ctor_arg）。**残＝無型 int payload** `v=5`（check-side literal-context・lowering 採用は std 破壊で revert 済・回避 `v=5I64`）。
-- **`\u{XXXX}` Unicode エスケープ**＝U64→U8 truncation primitive が要る（`truncU8` を runtime `plew_*` シンボル化か、compiler の extern intrinsic 呼びが genLlvmCall intercept を通るか確認・provisional §文字列）。
-- **Bool dict キー**＝Bool primitive メソッドディスパッチ（backend 未対応・低価値）。〔✅ method 値化 `val f = obj.method` は loud reject 済〕
-- ✅ **recursive generic value type 完全**（`Node[T]{next:Optional[Node[T]]}`・`Tree[T]`・**相互再帰** `Ping[T]`↔`Pong[T]`・struct↔enum・N-way＝構築/match/field access end-to-end・test recursive_generic）＋ ✅ **generic struct の非 int param フィールド**（`L[String].v` を print＝`valueKind` の Field を base env で ground）。
-- **トレイト/拡張の残小物**＝トレイト引数 aware の多重 conformance 区別・コンテナ不変性 `Array[P]`≠`Array[P#Ext]`・型レベル chained `Type#A#B`。
+- **無型 int generic-enum payload** `<Optional.Some v=5 />`（check-side literal-context・lowering 採用は std 破壊で revert・回避 `v=5I64`）。
+- **`\u{XXXX}` Unicode エスケープ**（U64→U8 truncation primitive が要る＝`truncU8` を runtime `plew_*` シンボル化／provisional §文字列）。
+- **Iterator 残**＝`sum`（Zero/数値タワー待ち）・`enumerate`（(index,item)・無名レコード活用）・`zip`（2 イテレータ）。
 - **module/import 残**＝名前空間 import（`Io.print`）・`as` リネームの実束縛・`_.pw` ディレクトリ解決・パス正当性厳密検査。
-- **Iterator 残**＝`sum`（Zero/数値タワー待ち）・`enumerate`（(index,item) ＝無名レコード活用で可になった・要実装）・`zip`（2 イテレータ）。
-- ✅ **【bug】ユーザー struct/enum 名が lang-item 型パラメータ名と衝突＝クラッシュ→clean reject 化**（`instArgCollidesParamName`・test reject typeparam_name_collision）。根治（スコープ化した型パラメータ同一性）は将来・回避＝リネーム。
-- **その他小（残）**＝`assoc val`（static・parser 未）・generic assoc-fn emission（`Box.make(x:7)`/`Set[E].empty()`＝mono 必要・backend 大）・式位置 `panic`（文位置は✅）・guard 文（parser 未）・match ガード/ネストパターン・namespace import `Io.print`（parser+解決）。〔✅ 済＝place 越し compound `arr[i].field OP= x`・`arr[i].inoutMethod()`・struct-in-struct 構築〕
+- **トレイト/拡張小物**＝トレイト引数 aware の多重 conformance 区別・コンテナ不変性 `Array[P]`≠`Array[P#Ext]`・型レベル chained `Type#A#B`。
+- **その他小**＝`assoc val`（static・parser 未）・generic assoc-fn emission（`Box.make(x:7)`/`Set[E].empty()`＝mono 必要・backend 大）・式位置 `panic`（文位置は✅）・`guard` 文（parser 未）・match ガード/ネストパターン・Bool dict キー（低価値）・global 前方参照。
 
 ### C. hidden cost（leak・観測挙動は正しい・最後）
 
 - **backend 全体の ARC drop**＝array/String/any box・closure 一時・Ref pointee 深い release・mono struct/enum の share/release を scope-exit で。観測挙動不変ゆえテストしにくい＝`leaks`/ASan で検証。
 
-### スコープ外（3 大機能・別途）
+### 横断＝根治 refactor（複数項の根）
 
-- **`spawn`/`JoinHandle`/チャネル**＝async 安定後・実スレッド pthread・境界で CoW eager 実体化・`Ref` 不可・spawn 境界の意味論強制・`local` 伝染解析（重い・言語仕様判断あり）。
-- **循環回収**＝Ref グラフ限定サイクルコレクタ（Bacon–Rajan trial deletion・設計は design-decisions 済）。
-- **M3 パッケージ管理**＝導入後に `@Std/Syntax` を in-tree→外部共有パッケージへ昇格。
+- **型パラメータ判定のスコープ化**＝`isTypeParamName` のグローバル名照合が根。これを直すと (i) 単一大文字 struct 名が std メソッド型パラメータ（`fold[B]` の `B`/`F`/`E`/`P`/`I`/`T`/`U`/`K`/`V`）と衝突して generic 引数に使えない問題、(ii) 型パラメータ名衝突〔現状 crash→reject で回避〕、(iii) 上の generic-receiver method grounding の取りこぼし、が一括で解消。name-based でなく**スコープ付き param 同一性**へ。
 
-## 既知バグ（要修正・上の B/A に再掲ありの実害バグ）
+### スコープ外（3 大機能・spec-future）
 
-- ✅ lang-item 型パラメータ名衝突（`struct V` × `Dictionary[K,V]`）＝**クラッシュ→clean reject 化**（`instArgCollidesParamName`・test reject typeparam_name_collision）。根治（name-based でない型パラメータ同一性）は将来。回避＝該当型をリネーム。
-- 無注釈 `<Result.Ok value=… />` 構築の return/call-arg context＝**動作確認済**（genArgValue が `st.expectedTy` を流す・generic_enum_ctor_arg／手元検証）。残懸念があれば再現を残す。
+- **`spawn`/`JoinHandle`/チャネル**（async 安定後・実スレッド pthread・境界で CoW eager 実体化・`Ref` 不可・`local` 伝染解析・言語仕様判断あり・spec/14）。
+- **循環回収**（Ref グラフ限定サイクルコレクタ・Bacon–Rajan trial deletion・設計は design-decisions 済）。
+- **M3 パッケージ管理**（導入後に `@Std/Syntax` を in-tree→外部共有パッケージへ昇格）。
+- **spec 自身が将来送り**＝固定長配列 `[E; N]`・const generics・`Slice`・部分文字列・`USize`/`ISize`。
 
 ## 再利用資産・罠（git で拾いにくい知見）
 
