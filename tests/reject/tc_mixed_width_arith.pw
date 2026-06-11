@@ -1,0 +1,4 @@
+// Arithmetic on two different primitive integer types (I32 + I64) — Plew has no
+// implicit conversion (spec/12). Caught by the TypeRef checker's binop-operand check
+// (gated on both operands being primitive ints, since user types use Add[Rhs]).
+fn main() { val z: I64 = 3I32 + 5I64 }

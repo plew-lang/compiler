@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+fn main() {
+    val a: I32 = 3I32
+    val b: I32 = 5I32
+    print((a + b) as I64)
+    val u: U64 = 10U64
+    print(u + 5U64)
+}
