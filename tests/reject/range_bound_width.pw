@@ -1,0 +1,5 @@
+// spec/02: a range's bounds share one element type, so mixing widths
+// (`0I64..<5I32`) is a no-implicit-conversion error.
+fn main() {
+    for val i: I64 in 0I64..<5I32 { }
+}

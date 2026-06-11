@@ -23,7 +23,7 @@
 
 ## レンジ
 
-- **`a..<b`/`a..=b` は第一級の値**（`HalfOpenRange`/`ClosedRange`・`Step` で反復）→ **現状：`for` ヘッドでしか書けない**（その場で C for ループに脱糖・レンジ型/値/`Step`/素の `..` は無い）。ループ変数型注釈は実装済（`for val i: I32 in 0..<5`）。spec/02,11。
+- **`a..<b`/`a..=b` は第一級の値**（`HalfOpenRange`/`ClosedRange`・`Step` で反復）→ **現状：`for` ヘッドでしか書けない**（その場で C for ループに脱糖・レンジ型/値/`Step`/素の `..` は無い）。ループ変数型注釈は実装済（`for val i: I32 in 0..<5`）。✅ **両端の型一致**（`0I64..<5I32`＝幅混在を reject＝`checkLitSpan` は suffixed literal を自身の suffix でしか検査しないため `tcCheckValue` を var 型・両端に追加・test reject range_bound_width）。spec/02,11。
 
 ## 文字列
 
@@ -47,7 +47,7 @@
 
 ## 関数・呼び出し
 
-- ✅ **引数ラベル必須・宣言順・オーバーロード**（セレクタ＝名前＋ラベル＋型頭で C マングル・arity/label/type 解決・`~:` 抑制・デフォルト引数〔末尾省略〕）。残：**関数型同一性へのラベル反映**・オーバーロードした関数値〔first-by-name〕・デフォルト引数の中間省略/配列・struct デフォルト・I/O ビルトイン非検査。spec/04,07。
+- ✅ **引数ラベル必須・宣言順・オーバーロード**（セレクタ＝名前＋ラベル＋型頭で C マングル・arity/label/type 解決・`~:` 抑制・デフォルト引数〔末尾省略〕）。残：**関数型同一性へのラベル反映**・**関数値の署名不一致が未検出（soundness 穴）**〔`val f: fn(x: String)->String = twice`〔twice=fn(I64)->I64〕を accept→garbage 呼び・`inferType`/`typeOf` が fn-value の型を kind 0 に潰すため照合不能・以前の fn-value 型検査試行は false-reject で revert＝fn 型の TypeRef 復元が要る〕・オーバーロードした関数値〔first-by-name〕・デフォルト引数の中間省略/配列・struct デフォルト・I/O ビルトイン非検査。spec/04,07。
 - ✅ **インヘレントメソッド**（`fn`/`inout fn`/`move fn`/`borrow fn` self・引数型オーバーロード）。残：一時値レシーバへの `inout`。spec/07。
 - ✅ **クロージャ／関数値**（fat closure `PlewClosure{fn,env,rc,drop}`・不変値キャプチャ＋スカラー `mut val` 参照キャプチャ〔箱化＝`makeCounter`〕・leak 解消〔0 leaks/UAF 無し〕）。**残（loud reject）**：`mut val` 非スカラー参照キャプチャ・`unique`/generic/enum/関数値キャプチャ・ネスト closure・val capture への代入。残 hidden cost：引数直渡し一時 capturing 閉包・Ref キャプチャ pointee。spec/04。
 

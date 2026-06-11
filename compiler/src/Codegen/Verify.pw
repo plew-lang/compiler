@@ -536,8 +536,16 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                 if varTyLen != 0U64 {
                     checkLitSpan(c: inout c, id: iter, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
                     checkLitSpan(c: inout c, id: rangeHi, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
+                    // checkLitSpan only range-checks a SUFFIXED literal against its own
+                    // suffix, so a mismatched width (`for val i: I64 in 0I64..<5I32`)
+                    // slips through — check each bound's type against the loop var type.
+                    val vref: U64 = simpleTypeRef(c: inout c, nameStart: varTyStart, nameLen: varTyLen)
+                    tcCheckValue(c: inout c, expectedRef: vref, valueExpr: iter, pos: "range bound")
+                    tcCheckValue(c: inout c, expectedRef: vref, valueExpr: rangeHi, pos: "range bound")
                 } else {
                     checkArithNoCtx(c: inout c, lhs: iter, rhs: rangeHi)
+                    // both bounds must share a type (`0I64..<5I32` is a width mismatch).
+                    tcCheckValue(c: inout c, expectedRef: inferType(c: inout c, id: iter), valueExpr: rangeHi, pos: "range bound")
                 }
             }
             // scope the loop binding(s) to the body, mirroring genStmt's For.
