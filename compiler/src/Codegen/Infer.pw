@@ -68,11 +68,31 @@ fn typesCompatible(c: inout Comp, expected: U64, inferred: U64) -> Bool {
     if te.isAny || tin.isAny {
         return true
     }
-    // floats are exempt: F32 is currently lowered as F64 (true F32 is deferred/additive),
-    // so an F64 value flowing into an F32 position is not a real mismatch yet. Likewise a
-    // float literal is recovered as F64 but a float local may report otherwise.
-    if isFloatType(c: inout c, start: te.nameStart, len: te.nameLen) || isFloatType(c: inout c, start: tin.nameStart, len: tin.nameLen) {
+    // float-to-float is exempt: F32 is currently lowered as F64 (true F32 deferred), so
+    // an F64 value flowing into an F32 position is not a real mismatch yet, and a float
+    // literal recovered as F64 may meet a float local reporting otherwise. But a float
+    // paired with a NON-float (`val x: F64 = nI64`) IS a real mismatch — no implicit
+    // int↔float conversion (spec/12) — so only exempt when BOTH sides are float. (An
+    // untyped int LITERAL flowing into a float context is polymorphic and passes via the
+    // unknown-id path below, not here.)
+    val eFloat: Bool = isFloatType(c: inout c, start: te.nameStart, len: te.nameLen)
+    val iFloat: Bool = isFloatType(c: inout c, start: tin.nameStart, len: tin.nameLen)
+    if eFloat && iFloat {
         return true
+    }
+    if eFloat || iFloat {
+        // one side float, the other not: a mismatch UNLESS the non-float side is an
+        // untyped/unknown type (a bare int literal — polymorphic, handled below).
+        if eFloat {
+            if knownNamedTypeId(c: inout c, start: tin.nameStart, len: tin.nameLen) == 0U64 {
+                return true
+            }
+        } else {
+            if knownNamedTypeId(c: inout c, start: te.nameStart, len: te.nameLen) == 0U64 {
+                return true
+            }
+        }
+        return false
     }
     val eId: U64 = knownNamedTypeId(c: inout c, start: te.nameStart, len: te.nameLen)
     val iId: U64 = knownNamedTypeId(c: inout c, start: tin.nameStart, len: tin.nameLen)

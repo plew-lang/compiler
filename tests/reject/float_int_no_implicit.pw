@@ -1,0 +1,7 @@
+// No implicit int↔float conversion (spec/12): assigning a typed integer value to a
+// float binding (or vice versa) without an explicit `as` is a type error — it would
+// otherwise reinterpret the bits and silently miscompile.
+fn main() {
+    val n: I64 = 5I64
+    val x: F64 = n
+}

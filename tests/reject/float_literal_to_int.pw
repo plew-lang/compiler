@@ -1,0 +1,5 @@
+// No implicit float→int conversion (spec/12): a float literal cannot initialize an
+// integer binding (use `as` with the explicit narrowing semantics instead).
+fn main() {
+    val x: I64 = 3.5
+}
