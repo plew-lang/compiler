@@ -1,0 +1,5 @@
+// Returning a struct A from a function declared `-> B` — reject (different named type).
+struct A { pub val x: I64 }
+struct B { pub val y: I64 }
+fn f() -> B { return <A x=1 /> }
+fn main() { val b: B = f() }

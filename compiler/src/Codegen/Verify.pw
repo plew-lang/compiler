@@ -395,6 +395,12 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
         Stmt.Return(val value, val hasValue) => {
             if hasValue {
                 checkLitSpan(c: inout c, id: value, tyStart: c.curRetStart, tyLen: c.curRetLen, isArray: c.curRetIsArray)
+                // a returned value whose category disagrees with the declared return
+                // type (`return "s"` / `return <A…/>` from `-> I64`). Same shared,
+                // reliable-value discipline as bindings; curRetLen 0 = `()` return.
+                if c.curRetLen > 0U64 {
+                    checkValueCategory(c: inout c, valueId: value, declStart: c.curRetStart, declLen: c.curRetLen, declIsArray: c.curRetIsArray, ctx: "return")
+                }
                 verifyExpr(c: inout c, id: value)
             }
         }
@@ -591,9 +597,18 @@ fn verifyAssign(c: inout Comp, op: I64, target: U64, value: U64) {
 // Two same-type generic instances recover to the same head name -> same id, so an
 // id comparison never false-rejects them; a 0 result means "don't know" and is
 // treated as compatible (conservative — only definite mismatches are rejected).
+// `extern(c)` opaque handle types (`type LLVMTypeRef`) also yield 0: they are FFI
+// escape-hatch types, all lowered to `void*`, and treated as interchangeable at this
+// boundary (the spec's value-semantics / no-conversion rules govern Plew types, not
+// opaque C handles — and the compiler's own LLVM bindings rely on this, e.g. using an
+// LLVMValueRef null as an LLVMTypeRef "none" sentinel).
 fn knownNamedTypeId(c: inout Comp, start: U64, len: U64) -> U64 {
     val q: U64 = intern(c: inout c, start: start, len: len)
-    if structIndexByName(c: inout c, start: start, len: len) < c.structs.count {
+    val si: U64 = structIndexByName(c: inout c, start: start, len: len)
+    if si < c.structs.count {
+        if c.structs[si].isCExtern {
+            return 0U64
+        }
         return q
     }
     mut val ei: U64 = 0

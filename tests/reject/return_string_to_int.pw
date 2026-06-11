@@ -1,0 +1,3 @@
+// Returning a String from a function declared `-> I64` reinterprets the bits — reject.
+fn f() -> I64 { return "str" }
+fn main() { val x: I64 = f() }
