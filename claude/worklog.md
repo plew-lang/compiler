@@ -48,7 +48,7 @@
 - **module/import 残**＝名前空間 import（`Io.print`）・`as` リネームの実束縛・`_.pw` ディレクトリ解決・パス正当性厳密検査。
 - **Iterator 残**＝`sum`（Zero/数値タワー待ち）・`enumerate`（(index,item) ＝無名レコード活用で可になった・要実装）・`zip`（2 イテレータ）。
 - **【bug】ユーザー struct/enum 名が lang-item 型パラメータ名（`K`/`V`/`T`）と衝突すると壊れる**（`isTypeParamName` のグローバル名照合・根治＝型パラメータ判定をスコープ化・回避＝単一大文字名を避ける）。
-- **その他小**＝place 越し compound 要素 `arr[i].field OP= x`・`arr[i].inoutMethod()`・`assoc val`（static）・assoc-fn 呼出位置の型推論（`Box.make(x:7)`）・式位置 `panic`・guard 文・match ガード/ネストパターン。
+- **その他小（残）**＝`assoc val`（static・parser 未）・generic assoc-fn emission（`Box.make(x:7)`/`Set[E].empty()`＝mono 必要・backend 大）・式位置 `panic`（文位置は✅）・guard 文（parser 未）・match ガード/ネストパターン・namespace import `Io.print`（parser+解決）。〔✅ 済＝place 越し compound `arr[i].field OP= x`・`arr[i].inoutMethod()`・struct-in-struct 構築〕
 
 ### C. hidden cost（leak・観測挙動は正しい・最後）
 

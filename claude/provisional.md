@@ -13,7 +13,7 @@
 - **`local` 型**（spawn を越えられない）→ 無し。spawn 段で。spec/03,14。
 - ✅ **`inout`＋合成可変性検査**（単純変数・`base.field`・`a[i]`・`.append`/`inout fn`）。spec/03。
 - **重なる `inout`**（1 呼びで複数 inout が同じ場所）→ ✅ **ケース①構文同一を loud reject**（arg×arg/self×arg・`exprSyntaxEq`・test overlapping_inout*）。**残＝ケース②③＝部分/添字重なり**（`a.merge(inout a.field)`・`arr[i],arr[j]` の distinct 証明）＝spec 通り lint＋限定ランタイム panic は将来。spec/03。
-- ✅ **place 越し get-modify-set 脱糖**（`arr[i].field = x`＝`tryArrayElemFieldAssign`・Arrow place 代入の右辺リテラル型付け）。**残**：compound 要素 `arr[i].field OP= x` は loud reject・`arr[i].inoutMethod()` 未対応。spec/03。
+- ✅ **place 越し get-modify-set 脱糖**（`arr[i].field = x`＝`tryArrayElemFieldAssign`・Arrow place 代入の右辺リテラル型付け・✅ compound 要素 `arr[i].field OP= x`・✅ `arr[i].inoutMethod()`）。spec/03。
 
 ## 数値モデル
 
