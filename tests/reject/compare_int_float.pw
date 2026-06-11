@@ -1,0 +1,8 @@
+// Comparison is `Ord` on the SAME type (spec/12) — a primitive only has same-type
+// witnesses, so comparing an integer with a float (`aI64 < bF64`) has no witness and
+// is a no-implicit-conversion error (it would otherwise silently mix the operands).
+fn main() {
+    val a: I64 = 3I64
+    val b: F64 = 2.0
+    val c: Bool = a < b
+}
