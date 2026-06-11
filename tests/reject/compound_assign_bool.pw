@@ -1,0 +1,6 @@
+// spec/12: `x += y` desugars to `x = x + y`; a primitive int target has no
+// Add[Bool] witness, so `x: I64; x += true` is a no-implicit-conversion error.
+fn main() {
+    mut val x: I64 = 1I64
+    x += true
+}

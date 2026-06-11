@@ -807,6 +807,14 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
                     checkLitArray(c: inout c, id: args[i].expr, elemStart: innerStart, elemLen: innerLen)
                 } else {
                     checkLitSpan(c: inout c, id: args[i].expr, tyStart: rt.nameStart, tyLen: rt.nameLen, isArray: false)
+                    // a primitive-element array: the appended value's type must match the
+                    // element type (`Array[I64].append(true)` — checkLitSpan range-checks a
+                    // literal but a `true`/typed value of the wrong type slips through). Only
+                    // primitives are checked (their simpleTypeRef is reliable; a struct/
+                    // generic element name may be mangled and is left to other checks).
+                    if isIntType(c: inout c, start: rt.nameStart, len: rt.nameLen) || isFloatType(c: inout c, start: rt.nameStart, len: rt.nameLen) || rangeEquals(bytes: c.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Bool") || rangeEquals(bytes: c.bytes, start: rt.nameStart, len: rt.nameLen, kw: "String") {
+                        tcCheckValue(c: inout c, expectedRef: simpleTypeRef(c: inout c, nameStart: rt.nameStart, nameLen: rt.nameLen), valueExpr: args[i].expr, pos: "append")
+                    }
                 }
                 i += 1
             }

@@ -350,10 +350,14 @@ fn tcCheckCompoundAssign(c: inout Comp, op: I64, target: U64, value: U64) {
         return
     }
     val l: U64 = inferType(c: inout c, id: target)
-    if tcIsPrimInt(c: inout c, ref: l) {
-        if tcIsPrimInt(c: inout c, ref: inferType(c: inout c, id: value)) {
-            tcCheckValue(c: inout c, expectedRef: l, valueExpr: value, pos: "compound")
-        }
+    if l == 0U64 || l >= c.types.count {
+        return
+    }
+    // a primitive numeric target forces the value to match (same as the binop it
+    // desugars to: `x: I64; x += true` / `x += "a"` has no `Add[Bool]`/`Add[String]`
+    // on I64). A user-type target uses `Add[Rhs]` and is checked by its own witness.
+    if isIntType(c: inout c, start: c.types[l].nameStart, len: c.types[l].nameLen) || isFloatType(c: inout c, start: c.types[l].nameStart, len: c.types[l].nameLen) {
+        tcCheckValue(c: inout c, expectedRef: l, valueExpr: value, pos: "compound")
     }
 }
 

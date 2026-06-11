@@ -1,0 +1,4 @@
+// spec/12: `as` cannot produce a Bool from a numeric value (Bool is not numeric).
+fn main() {
+    val x: Bool = 1I64 as Bool
+}

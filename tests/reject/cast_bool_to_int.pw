@@ -1,0 +1,5 @@
+// spec/12: `as` is the lossless numeric/newtype conversion; Bool is not numeric,
+// so `true as I64` has no conversion.
+fn main() {
+    val x: I64 = true as I64
+}

@@ -1519,7 +1519,38 @@ fn verifyEnumEqPayload(c: inout Comp, lhs: U64, rhs: U64) {
 
 // `as` lossless check, mirroring genExpr's Cast arm (Expr.pw): a narrowing or
 // signedness-changing integer `as` must go through a fallible TryFrom.
+// Whether the cast operand is a Bool (a `true`/`false` literal or a Bool-typed value).
+fn castOperandIsBool(c: inout Comp, operand: U64) -> Bool {
+    match c.exprs[operand] {
+        Expr.Int(value: _, offset: _, val isBool, tyStart: _, tyLen: _, isNeg: _) => {
+            if isBool { return true }
+        }
+        _ => {}
+    }
+    val st: TypeInfo = typeOf(c: inout c, id: operand)
+    if st.nameLen > 0U64 {
+        return rangeEquals(bytes: c.bytes, start: st.nameStart, len: st.nameLen, kw: "Bool")
+    }
+    return false
+}
+
 fn verifyCastLossless(c: inout Comp, operand: U64, tyStart: U64, tyLen: U64) {
+    // Bool is not a numeric type, so `as` (the lossless numeric / newtype-retag
+    // conversion, spec/12) can't bridge Bool and a numeric type in either direction
+    // (`true as I64`, `1I64 as Bool`) — use match / a comparison instead.
+    val targetBool: Bool = rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Bool")
+    val targetNum: Bool = isIntType(c: inout c, start: tyStart, len: tyLen) || isFloatType(c: inout c, start: tyStart, len: tyLen)
+    if castOperandIsBool(c: inout c, operand: operand) {
+        if targetNum {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "`as` cannot cast a Bool to a numeric type (Bool is not numeric; spec/12)")
+            return
+        }
+    } else {
+        if targetBool {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "`as` cannot cast to Bool (Bool is not numeric; spec/12)")
+            return
+        }
+    }
     if isIntType(c: inout c, start: tyStart, len: tyLen) {
         match c.exprs[operand] {
             Expr.Int(val value, val offset, isBool: _, tyStart: _, tyLen: _, val isNeg) => {
