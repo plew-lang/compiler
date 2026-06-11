@@ -662,6 +662,11 @@ struct Comp {
     // a normal build (which instead auto-parts the already-generated `.gen.pw`).
     pub mut val genMode: Bool = false
     pub mut val genMainIdx: U64 = 0
+    // type-checker log mode (`plewc --tc-log <file>`): the new TypeRef-based type
+    // checker (Codegen/Infer.pw) prints every type mismatch it finds instead of
+    // rejecting, so its coverage can be developed/triaged against self-compile
+    // without breaking the build. Off in a normal build (no behavior change yet).
+    pub mut val tcLog: Bool = false
     // The declared return type (a TypeRef ref, 0 = none) of the function/closure
     // currently being lowered, so a `return <Gen … />` generic constructor infers
     // its type arguments from the return type (Bug11). Saved/restored per body.

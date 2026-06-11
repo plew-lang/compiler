@@ -1,0 +1,144 @@
+// The TypeRef-based type checker (approach B). A clean type layer over the existing,
+// already-debugged resolution (overload / trait / generic). It represents a type as a
+// `Comp.types` index (a TypeRef carrying head name + generic args), with 0 meaning
+// "unknown" — distinct from any concrete type, so the int/Bool/unknown conflation of
+// the kind-based TypeInfo is gone. Developed in LOG mode (`plewc --tc-log`): it prints
+// every mismatch it finds instead of rejecting, so coverage can be grown and triaged
+// against self-compile without breaking the build. Once accurate it flips to rejecting
+// and subsumes the ad-hoc category checks.
+
+// The precise type of an expression as a TypeRef index, or 0 (unknown) when the type
+// cannot be recovered. Built over the existing recovery (`typeOf`): a structured type
+// keeps its ref (generic instances `Optional[I64]` compare with their args); a named /
+// primitive / String / Bool yields a simple TypeRef by name (so Bool != I32); an
+// untyped literal or unrecovered form is honestly unknown (0), never defaulted to int.
+fn inferType(c: inout Comp, id: U64) -> U64 {
+    val ti: TypeInfo = typeOf(c: inout c, id: id)
+    if ti.ref != 0U64 {
+        return ti.ref
+    }
+    if ti.nameLen == 0U64 {
+        return 0U64
+    }
+    // arrays (kind 3): conservative for now — their element comparison is deferred.
+    if ti.kind == 3 {
+        return 0U64
+    }
+    return simpleTypeRef(c: inout c, nameStart: ti.nameStart, nameLen: ti.nameLen)
+}
+
+// Whether a value of type `inferred` is acceptable where `expected` is required.
+// Conservative: returns true (compatible / don't-judge) unless it finds a DEFINITE
+// mismatch, so it never false-rejects on an unrecovered or not-yet-modeled form.
+// Definite mismatches: two different known head types (Bool vs I32, String vs A, A vs
+// B, Optional vs Result), or the same generic head with an incompatible type argument
+// (Optional[I64] vs Optional[String]). Exemptions: unknown (0) on either side; an
+// existential `any P` target (a concrete value coerces into it); `extern(c)` opaque
+// FFI handles (all void*, knownNamedTypeId yields 0 for them).
+fn typesCompatible(c: inout Comp, expected: U64, inferred: U64) -> Bool {
+    if expected == 0U64 || inferred == 0U64 {
+        return true
+    }
+    if expected >= c.types.count || inferred >= c.types.count {
+        return true
+    }
+    // ground the expected type through any active generic env (a `-> T` return / `T`
+    // param resolves to the concrete instantiation argument); inferred is grounded.
+    val exp: U64 = groundTypeRef(c: inout c, ref: expected)
+    if exp >= c.types.count {
+        return true
+    }
+    val te: TypeRef = c.types[exp]
+    val tin: TypeRef = c.types[inferred]
+    if te.isAny || tin.isAny {
+        return true
+    }
+    val eId: U64 = knownNamedTypeId(c: inout c, start: te.nameStart, len: te.nameLen)
+    val iId: U64 = knownNamedTypeId(c: inout c, start: tin.nameStart, len: tin.nameLen)
+    if eId == 0U64 || iId == 0U64 {
+        return true
+    }
+    if eId != iId {
+        return false
+    }
+    // same head: a generic head must agree on its type arguments.
+    if te.args.count == tin.args.count {
+        mut val i: U64 = 0
+        while i < te.args.count {
+            if typesCompatible(c: inout c, expected: te.args[i], inferred: tin.args[i]) {
+            } else {
+                return false
+            }
+            i += 1
+        }
+    }
+    return true
+}
+
+// Check that `valueExpr`'s inferred type is compatible with `expectedRef` at a typed
+// position (a binding annotation, a return, a call argument, …). In log mode prints a
+// `TC` diagnostic line; it never rejects yet (development scaffold).
+fn tcCheckValue(c: inout Comp, expectedRef: U64, valueExpr: U64, pos: String) {
+    if c.tcLog {
+    } else {
+        return
+    }
+    if expectedRef == 0U64 {
+        return
+    }
+    val inferred: U64 = inferType(c: inout c, id: valueExpr)
+    if typesCompatible(c: inout c, expected: expectedRef, inferred: inferred) {
+    } else {
+        eprint(text: "TC ")
+        eprint(text: pos)
+        eprint(text: " expected=")
+        eprint(text: tcRefName(c: inout c, ref: groundTypeRef(c: inout c, ref: expectedRef)))
+        eprint(text: " got=")
+        eprint(text: tcRefName(c: inout c, ref: inferred))
+        eprint(text: " from=")
+        eprint(text: tcExprKind(c: inout c, id: valueExpr))
+        eprint(text: " line=")
+        eprintInt(n: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueExpr)))
+        eprint(text: "\n")
+    }
+}
+
+// The expression form (for diagnostics), so a TC mismatch can be located.
+fn tcExprKind(c: inout Comp, id: U64) -> String {
+    match c.exprs[id] {
+        Expr.Call(nameStart: _, nameLen: _, args: _) => { return "Call" }
+        Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => { return "Method" }
+        Expr.Field(base: _, val nameStart, val nameLen) => {
+            mut val bs: Array[U8] = []
+            appendBytes(into: inout bs, from: "Field:".bytes)
+            mut val i: U64 = 0
+            while i < nameLen {
+                bs.append(value: c.bytes[nameStart + i])
+                i += 1
+            }
+            return stringFromBytes(b: bs)
+        }
+        Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => { return "Make" }
+        Expr.MatchExpr(scrut: _, arms: _) => { return "MatchExpr" }
+        Expr.Ident(start: _, len: _) => { return "Ident" }
+        Expr.Index(base: _, index: _) => { return "Index" }
+        Expr.Binary(op: _, lhs: _, rhs: _) => { return "Binary" }
+        Expr.Cast(operand: _, tyStart: _, tyLen: _, ty: _) => { return "Cast" }
+        _ => { return "other" }
+    }
+}
+
+// The head-name text of a TypeRef (for diagnostics), or "?" for the unknown ref 0.
+fn tcRefName(c: inout Comp, ref: U64) -> String {
+    if ref == 0U64 || ref >= c.types.count {
+        return "?"
+    }
+    val t: TypeRef = c.types[ref]
+    mut val bs: Array[U8] = []
+    mut val i: U64 = 0
+    while i < t.nameLen {
+        bs.append(value: c.bytes[t.nameStart + i])
+        i += 1
+    }
+    return stringFromBytes(b: bs)
+}

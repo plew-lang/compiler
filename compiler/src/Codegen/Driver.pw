@@ -11,10 +11,17 @@ fn runFrontend() -> Comp {
     // gen mode (spec/16): `plewc --gen <file>` synthesizes a derive-runner harness
     // instead of compiling the user program. The entry path then sits at argv[2].
     mut val genMode: Bool = false
+    mut val tcLog: Bool = false
     mut val entryArgIdx: I64 = 1
     if argCount() > 1 {
         if argAt(1) == "--gen" {
             genMode = true
+            entryArgIdx = 2
+        }
+        // `plewc --tc-log <file>`: run the new TypeRef-based type checker in
+        // log-only mode (print mismatches, reject nothing) for development/triage.
+        if argAt(1) == "--tc-log" {
+            tcLog = true
             entryArgIdx = 2
         }
     }
@@ -37,6 +44,7 @@ fn runFrontend() -> Comp {
     // — wrongly skipped by the body-walks that gate on `body != 0`.
     c.blocks.append(<Block stmts=[] />)
     c.genMode = genMode
+    c.tcLog = tcLog
     mut val nextModuleId: U64 = 1
     if argCount() > entryArgIdx {
         // Module loader: a recursive, deduplicated worklist over local includes.
