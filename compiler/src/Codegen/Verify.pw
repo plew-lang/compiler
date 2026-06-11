@@ -1041,6 +1041,22 @@ fn verifyExpr(c: inout Comp, id: U64) {
                 cpi += 1U64
             }
             verifyBlock(c: inout c, blockId: body)
+            // a closure with a declared NON-unit return type must return on every path,
+            // like a function (`fn()->I64 { }` is missing its return; `fn()->() { }` is
+            // void and exempt). spec/04.
+            if hasRet {
+                mut val retIsUnit: Bool = retLen == 0U64
+                if rangeEquals(bytes: c.bytes, start: retStart, len: retLen, kw: "()") {
+                    retIsUnit = true
+                }
+                if retIsUnit {
+                } else {
+                    if blockDiverges(c: inout c, blkId: body) {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "this closure has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (spec/04)")
+                    }
+                }
+            }
             popLocals(c: inout c, mark: cmark)
             c.curRetVoid = sRV
             c.curRetStart = sRS

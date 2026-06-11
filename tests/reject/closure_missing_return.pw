@@ -1,0 +1,5 @@
+// spec/04: a closure with a non-unit return type must return on every path —
+// `fn()->I64 { }` reaches the end without returning.
+fn main() {
+    val f: fn() -> I64 = fn() -> I64 { }
+}
