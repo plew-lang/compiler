@@ -1,0 +1,7 @@
+// spec/08: a witness must satisfy the requirement's resolved signature — with
+// `type Item = I64`, `fn first()->Item` requires an I64 return, so `->String` is
+// a mismatch.
+trait Container { type Item  fn first() -> Item }
+struct IntBox { pub val v: I64 }
+pub impl IntBox as Container { type Item = I64  fn first() -> String { return "x" } }
+fn main() { }

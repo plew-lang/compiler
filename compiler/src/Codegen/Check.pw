@@ -1313,7 +1313,7 @@ fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvSta
 // must then return the same primitive (`size()->I64` does NOT satisfy it). A Self /
 // type-param / associated-type / named / array requirement return is left to the
 // existing machinery (conservative — never false-reject a valid conformance).
-fn reqReturnMismatch(c: inout Comp, w: Func, r: Func) -> Bool {
+fn reqReturnMismatch(c: inout Comp, w: Func, r: Func, recvStart: U64, recvLen: U64) -> Bool {
     if r.hasRet {
     } else {
         return false
@@ -1321,7 +1321,11 @@ fn reqReturnMismatch(c: inout Comp, w: Func, r: Func) -> Bool {
     if r.retIsArray {
         return false
     }
-    if isPrimType(c: inout c, start: r.retStart, len: r.retLen) {
+    // resolve an associated-type requirement return (`fn first()->Item` with
+    // `type Item = I64`) through the conformance's binding, so the witness's concrete
+    // return is compared to the bound concrete type.
+    val rr: Bind = assocBindingSpan(c: inout c, recvStart: recvStart, recvLen: recvLen, nameStart: r.retStart, nameLen: r.retLen)
+    if isPrimType(c: inout c, start: rr.nameStart, len: rr.nameLen) {
     } else {
         return false
     }
@@ -1333,7 +1337,7 @@ fn reqReturnMismatch(c: inout Comp, w: Func, r: Func) -> Bool {
     if w.retIsArray {
         return true
     }
-    if spansEqual(c: inout c, aStart: r.retStart, aLen: r.retLen, bStart: w.retStart, bLen: w.retLen) {
+    if spansEqual(c: inout c, aStart: rr.nameStart, aLen: rr.nameLen, bStart: w.retStart, bLen: w.retLen) {
         return false
     }
     return true
@@ -1345,7 +1349,7 @@ fn witnessedHas(c: inout Comp, witnessed: Array[Func], r: Func, recvStart: U64, 
         val w: Func = witnessed[i]
         if w.nameId == r.nameId {
             if paramSelectorEqSubst(c: inout c, w: w.params, r: r.params, recvStart: recvStart, recvLen: recvLen, tps: tps, targs: targs) {
-                if reqReturnMismatch(c: inout c, w: w, r: r) {
+                if reqReturnMismatch(c: inout c, w: w, r: r, recvStart: recvStart, recvLen: recvLen) {
                 } else {
                     return true
                 }

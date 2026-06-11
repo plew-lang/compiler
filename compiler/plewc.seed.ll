@@ -21698,28 +21698,33 @@ else7:                                            ; preds = %endif4
   ret i1 false
 }
 
-define i1 @pf242(ptr %0, %st40 %1, %st40 %2) {
+define i1 @pf242(ptr %0, %st40 %1, %st40 %2, i64 %3, i64 %4) {
 entry:
-  %3 = alloca %st40, align 8
-  %4 = alloca %st40, align 8
+  %5 = alloca %st40, align 8
+  %6 = alloca %st40, align 8
+  %7 = alloca i64, align 8
+  %8 = alloca i64, align 8
+  %9 = alloca %st22, align 8
   br label %body0
 
 body0:                                            ; preds = %entry
-  store %st40 %1, ptr %3, align 8
-  store %st40 %2, ptr %4, align 8
-  %5 = load %st40, ptr %4, align 8
-  %6 = extractvalue %st40 %5, 6
-  %7 = icmp ne i1 %6, false
-  br i1 %7, label %then, label %else
+  store %st40 %1, ptr %5, align 8
+  store %st40 %2, ptr %6, align 8
+  store i64 %3, ptr %7, align 4
+  store i64 %4, ptr %8, align 4
+  %10 = load %st40, ptr %6, align 8
+  %11 = extractvalue %st40 %10, 6
+  %12 = icmp ne i1 %11, false
+  br i1 %12, label %then, label %else
 
 then:                                             ; preds = %body0
   br label %endif
 
 endif:                                            ; preds = %then
-  %8 = load %st40, ptr %4, align 8
-  %9 = extractvalue %st40 %8, 9
-  %10 = icmp ne i1 %9, false
-  br i1 %10, label %then1, label %endif2
+  %13 = load %st40, ptr %6, align 8
+  %14 = extractvalue %st40 %13, 9
+  %15 = icmp ne i1 %14, false
+  br i1 %15, label %then1, label %endif2
 
 else:                                             ; preds = %body0
   ret i1 false
@@ -21728,22 +21733,30 @@ then1:                                            ; preds = %endif
   ret i1 false
 
 endif2:                                           ; preds = %endif
-  %11 = load %st40, ptr %4, align 8
-  %12 = extractvalue %st40 %11, 7
-  %13 = load %st40, ptr %4, align 8
-  %14 = extractvalue %st40 %13, 8
-  %15 = call i1 @pf87(ptr %0, i64 %12, i64 %14)
-  %16 = icmp ne i1 %15, false
-  br i1 %16, label %then3, label %else5
+  %16 = load i64, ptr %7, align 4
+  %17 = load i64, ptr %8, align 4
+  %18 = load %st40, ptr %6, align 8
+  %19 = extractvalue %st40 %18, 7
+  %20 = load %st40, ptr %6, align 8
+  %21 = extractvalue %st40 %20, 8
+  %22 = call %st22 @pf239(ptr %0, i64 %16, i64 %17, i64 %19, i64 %21)
+  store %st22 %22, ptr %9, align 4
+  %23 = load %st22, ptr %9, align 4
+  %24 = extractvalue %st22 %23, 0
+  %25 = load %st22, ptr %9, align 4
+  %26 = extractvalue %st22 %25, 1
+  %27 = call i1 @pf87(ptr %0, i64 %24, i64 %26)
+  %28 = icmp ne i1 %27, false
+  br i1 %28, label %then3, label %else5
 
 then3:                                            ; preds = %endif2
   br label %endif4
 
 endif4:                                           ; preds = %then3
-  %17 = load %st40, ptr %3, align 8
-  %18 = extractvalue %st40 %17, 6
-  %19 = icmp ne i1 %18, false
-  br i1 %19, label %then6, label %else8
+  %29 = load %st40, ptr %5, align 8
+  %30 = extractvalue %st40 %29, 6
+  %31 = icmp ne i1 %30, false
+  br i1 %31, label %then6, label %else8
 
 else5:                                            ; preds = %endif2
   ret i1 false
@@ -21752,10 +21765,10 @@ then6:                                            ; preds = %endif4
   br label %endif7
 
 endif7:                                           ; preds = %then6
-  %20 = load %st40, ptr %3, align 8
-  %21 = extractvalue %st40 %20, 9
-  %22 = icmp ne i1 %21, false
-  br i1 %22, label %then9, label %endif10
+  %32 = load %st40, ptr %5, align 8
+  %33 = extractvalue %st40 %32, 9
+  %34 = icmp ne i1 %33, false
+  br i1 %34, label %then9, label %endif10
 
 else8:                                            ; preds = %endif4
   ret i1 true
@@ -21764,17 +21777,17 @@ then9:                                            ; preds = %endif7
   ret i1 true
 
 endif10:                                          ; preds = %endif7
-  %23 = load %st40, ptr %4, align 8
-  %24 = extractvalue %st40 %23, 7
-  %25 = load %st40, ptr %4, align 8
-  %26 = extractvalue %st40 %25, 8
-  %27 = load %st40, ptr %3, align 8
-  %28 = extractvalue %st40 %27, 7
-  %29 = load %st40, ptr %3, align 8
-  %30 = extractvalue %st40 %29, 8
-  %31 = call i1 @pf97(ptr %0, i64 %24, i64 %26, i64 %28, i64 %30)
-  %32 = icmp ne i1 %31, false
-  br i1 %32, label %then11, label %endif12
+  %35 = load %st22, ptr %9, align 4
+  %36 = extractvalue %st22 %35, 0
+  %37 = load %st22, ptr %9, align 4
+  %38 = extractvalue %st22 %37, 1
+  %39 = load %st40, ptr %5, align 8
+  %40 = extractvalue %st40 %39, 7
+  %41 = load %st40, ptr %5, align 8
+  %42 = extractvalue %st40 %41, 8
+  %43 = call i1 @pf97(ptr %0, i64 %36, i64 %38, i64 %40, i64 %42)
+  %44 = icmp ne i1 %43, false
+  br i1 %44, label %then11, label %endif12
 
 then11:                                           ; preds = %endif10
   ret i1 false
@@ -21853,9 +21866,11 @@ endif:                                            ; preds = %endif2, %while.body
 then1:                                            ; preds = %then
   %42 = load %st40, ptr %14, align 8
   %43 = load %st40, ptr %8, align 8
-  %44 = call i1 @pf242(ptr %0, %st40 %42, %st40 %43)
-  %45 = icmp ne i1 %44, false
-  br i1 %45, label %then3, label %else
+  %44 = load i64, ptr %9, align 4
+  %45 = load i64, ptr %10, align 4
+  %46 = call i1 @pf242(ptr %0, %st40 %42, %st40 %43, i64 %44, i64 %45)
+  %47 = icmp ne i1 %46, false
+  br i1 %47, label %then3, label %else
 
 endif2:                                           ; preds = %endif4, %then
   br label %endif
