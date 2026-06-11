@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+// Compound assignment to a dictionary element `d[k] OP= v` (spec/12): desugars to
+// `d[k] = d[k] OP v` (the missing-key read panics like a bare `d[k]`), then re-inserts.
+fn main() {
+    mut val d: Dictionary[U64, I64] = [:]
+    d[3U64] = 100I64
+    d[3U64] += 7I64
+    print(d[3U64])     // 107
+    d[3U64] -= 2I64
+    print(d[3U64])     // 105
+    d[3U64] *= 2I64
+    print(d[3U64])     // 210
+    // a second key, independent
+    d[5U64] = 1I64
+    d[5U64] += 4I64
+    print(d[5U64])     // 5
+    print(d[3U64])     // 210 (unchanged)
+    print(d.count)     // 2
+}

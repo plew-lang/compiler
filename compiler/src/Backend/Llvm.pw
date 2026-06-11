@@ -8813,12 +8813,17 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                         if ibsi < c.structs.count {
                             // a Dictionary `d[k] = v` lowers to `d.insert(key:, value:)`.
                             if rangeEquals(bytes: c.bytes, start: c.structs[ibsi].nameStart, len: c.structs[ibsi].nameLen, kw: "Dictionary") {
+                                // `d[k] = v` -> d.insert(key: k, value: v). A compound
+                                // `d[k] OP= v` first builds the new value `d[k] OP v` (the
+                                // missing-key read panics, like a bare `d[k]`), then inserts.
+                                mut val insVal: U64 = value
                                 if op == opAssign() {
-                                    val m: U64 = synthDictMethod(c: inout c, recv: ibase, name: "insert", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: value)
-                                    genLlvmExpr(c: inout c, st: inout st, id: m)
-                                    return
+                                } else {
+                                    val getExpr: U64 = c.pushExpr(e: <Expr.Index base=ibase index=iindex />)
+                                    insVal = c.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=getExpr rhs=value />)
                                 }
-                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: ibase)), msg: "LLVM backend: compound assignment to a dictionary element is not supported")
+                                val m: U64 = synthDictMethod(c: inout c, recv: ibase, name: "insert", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: insVal)
+                                genLlvmExpr(c: inout c, st: inout st, id: m)
                                 return
                             }
                             if typeHasMethodNamed(c: inout c, typeStart: c.structs[ibsi].nameStart, typeLen: c.structs[ibsi].nameLen, name: "indexSet") {
