@@ -40,7 +40,7 @@
 - **`as` 以外の数値変換 `From`/`TryFrom`**（縮小・パース・`as` の全域変換脱糖・`try` の異エラー型 From 変換）・**float→int `as`**・**mixed `1.5 + 2`**（無型 int リテラル推論）。
 - **一般 Chain トレイト `?.`**（現 Optional 具体）・**`Pow`/`**`**（float 後）・**`Output != Self`**。
 - ✅ **method への record literal context**（`methodArgType`・test method_record_arg）・✅ **nested record literal**（record branch が canonical 名を `lowerMakeFields` へ・test nested_record_literal）。
-- **generic-enum の無型 int 構築** `<Optional.Some v=42 />`（2 回試行＝lowering 採用も check-side guard も std enum 構築を壊す/効かず revert・回避＝`v=42I64` か変数・provided method 破壊リスク高く据置）。
+- ✅ **generic-enum/struct 構築の call/method 引数 context**（`<Optional.Some v=5I64 />` を直接 arg 渡し＝`genArgValue` が generic-inst param の型を `st.expectedTy` にセット→backend の既存 fallback が ground・**backend-only ゆえ provider body を壊さない**・test generic_enum_ctor_arg）。**残＝無型 int payload** `v=5`（check-side literal-context・lowering 採用は std 破壊で revert 済・回避 `v=5I64`）。
 - **`\u{XXXX}` Unicode エスケープ**＝U64→U8 truncation primitive が要る（`truncU8` を runtime `plew_*` シンボル化か、compiler の extern intrinsic 呼びが genLlvmCall intercept を通るか確認・provisional §文字列）。
 - **Bool dict キー**＝Bool primitive メソッドディスパッチ（backend 未対応・低価値）。
 - **method への record literal context**（`obj.method((x:1,y:2))`＝receiver 型解決が要る・free fn は実装済）・**nested record literal**（record-of-records の inner literal context）・**`val f = obj.method`（メソッド値化）**（scope 復元の型回復・spec で禁止だが clean reject でない）。
