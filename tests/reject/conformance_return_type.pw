@@ -1,0 +1,7 @@
+// spec/08: a conformance must witness each requirement with a MATCHING signature,
+// including the return type — `fn size()->I64` does not satisfy a `size()->U64`
+// requirement.
+trait Sized { fn size() -> U64 }
+struct S { pub val a: I64 }
+pub impl S as Sized { fn size() -> I64 { return 8I64 } }
+fn main() { }

@@ -1207,13 +1207,47 @@ fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvSta
 // (name + params). Distinguishes overloaded requirements by signature. Requirement
 // param types are substituted through the conforming type's Self / trait-type-arg /
 // associated-type bindings (`tps`/`targs` = the trait's type params + the conformance's args).
+// Whether witness `w`'s return type clashes with requirement `r`'s — judged ONLY
+// when the requirement returns a CONCRETE primitive (`size()->U64`): the witness
+// must then return the same primitive (`size()->I64` does NOT satisfy it). A Self /
+// type-param / associated-type / named / array requirement return is left to the
+// existing machinery (conservative — never false-reject a valid conformance).
+fn reqReturnMismatch(c: inout Comp, w: Func, r: Func) -> Bool {
+    if r.hasRet {
+    } else {
+        return false
+    }
+    if r.retIsArray {
+        return false
+    }
+    if isPrimType(c: inout c, start: r.retStart, len: r.retLen) {
+    } else {
+        return false
+    }
+    // requirement returns a concrete primitive: the witness must return it exactly.
+    if w.hasRet {
+    } else {
+        return true
+    }
+    if w.retIsArray {
+        return true
+    }
+    if spansEqual(c: inout c, aStart: r.retStart, aLen: r.retLen, bStart: w.retStart, bLen: w.retLen) {
+        return false
+    }
+    return true
+}
+
 fn witnessedHas(c: inout Comp, witnessed: Array[Func], r: Func, recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64]) -> Bool {
     mut val i: U64 = 0
     while i < witnessed.count {
         val w: Func = witnessed[i]
         if w.nameId == r.nameId {
             if paramSelectorEqSubst(c: inout c, w: w.params, r: r.params, recvStart: recvStart, recvLen: recvLen, tps: tps, targs: targs) {
-                return true
+                if reqReturnMismatch(c: inout c, w: w, r: r) {
+                } else {
+                    return true
+                }
             }
         }
         i += 1
