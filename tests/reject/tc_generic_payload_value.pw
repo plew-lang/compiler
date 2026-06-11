@@ -1,0 +1,7 @@
+// A generic construction whose payload value mismatches the type argument:
+// <Optional.Some v="x" /> in an Optional[I64] position puts a String in the I64 slot.
+// The construction itself is un-annotated; the TypeRef checker grounds the payload
+// field type (T -> I64) under the EXPECTED instance and checks the value — reject.
+fn main() {
+    val o: Optional[I64] = <Optional.Some v="x" />
+}
