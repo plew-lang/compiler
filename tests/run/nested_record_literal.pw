@@ -1,0 +1,15 @@
+// A record-of-records literal (spec/02): the inner `(x:, y:)` literal takes its
+// type from the OUTER record field's declared type — nested construction context.
+import @Std/Io with { print }
+
+struct Holder { pub val p: (a: (x: I64, y: I64), b: I64) }
+
+fn main() {
+    val p: (a: (x: I64, y: I64), b: I64) = (a: (x: 10I64, y: 20I64), b: 30I64)
+    print(p.a.x)
+    print(p.a.y)
+    print(p.b)
+    // nested record as a struct field value
+    val h: Holder = <Holder p=(a: (x: 1I64, y: 2I64), b: 3I64) />
+    print(h.p.a.y)
+}

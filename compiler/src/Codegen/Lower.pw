@@ -477,7 +477,12 @@ fn lowerExprWithCtx(c: inout Comp, e: ExprAst, ctxRef: U64) -> U64 {
                 if c.bytes[ct.nameStart] == '(' {
                     match e {
                         ExprAst.RecordLit(val fields, val span) => {
-                            val fs: Array[MakeField] = lowerMakeFields(c: inout c, fields: fields, typeName: "", variant: "", isEnum: false)
+                            // pass the record struct's canonical name so makeFieldType can
+                            // resolve each field's declared type — gives a NESTED record/dict
+                            // literal field (`(a: (x:1,y:2), …)`) its own context (else the
+                            // inner literal lowers context-free and the backend can't build it).
+                            val recName: String = stringFromBytes(b: extractSpan(buf: c.bytes, start: ct.nameStart, len: ct.nameLen))
+                            val fs: Array[MakeField] = lowerMakeFields(c: inout c, fields: fields, typeName: recName, variant: "", isEnum: false)
                             return c.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fs />)
                         }
                         _ => {}
