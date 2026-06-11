@@ -1,0 +1,8 @@
+// A closure argument's return type must match the expected function type (spec/04):
+// passing a `fn(x:I64)->F64` where `fn(x:I64)->I64` is wanted would read back the
+// wrong-typed result.
+fn apply(f: fn(x: I64) -> I64) -> I64 { return f(x: 1I64) }
+
+fn main() {
+    val y: I64 = apply(f: fn(x: I64) -> F64 { return 1.0 })
+}

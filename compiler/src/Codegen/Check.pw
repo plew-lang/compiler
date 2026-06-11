@@ -636,6 +636,12 @@ fn checkCallArgs(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) 
             val p: Param = ps[i]
             checkLitSpan(c: inout c, id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
             checkClosureArgArity(c: inout c, argExpr: args[i].expr, p: p)
+            // full type-compatibility (not just literal context): a non-literal VALUE
+            // argument whose type disagrees with the parameter (a closure with the wrong
+            // return type for a `fn(...)->R` param, etc.) — checkLitSpan only sees
+            // literals. tcCheckValue rejects only DEFINITE mismatches (unknown/generic
+            // types pass through).
+            tcCheckValue(c: inout c, expectedRef: p.ty, valueExpr: args[i].expr, pos: "arg")
         } else {
             checkLitCtx(c: inout c, id: args[i].expr, eKind: 0, eBits: 0, eSgn: false)
         }
@@ -657,12 +663,27 @@ fn checkClosureArgArity(c: inout Comp, argExpr: U64, p: Param) {
         return
     }
     match c.exprs[argExpr] {
-        Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {
+        Expr.Closure(val params, val hasRet, retStart: _, retLen: _, retIsArray: _, val retTy, body: _) => {
             val want: U64 = c.types[p.ty].args.count
             if want > 0U64 {
                 if params.count == want - 1U64 {
                 } else {
                     compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: argExpr)), msg: "closure has the wrong number of parameters for the expected function type")
+                }
+                // the closure's declared return type must match the expected function
+                // type's return (`fn(...)->R` args = [R, param0, …]) — else the caller
+                // reads back the wrong-typed result (`fn(x:I64)->F64` where `->I64` is
+                // wanted reinterprets the bits). spec/04 (a function type's identity).
+                if hasRet {
+                    if retTy != 0U64 {
+                        val expRet: U64 = c.types[p.ty].args[0]
+                        if expRet != 0U64 {
+                            if typesCompatible(c: inout c, expected: expRet, inferred: retTy) {
+                            } else {
+                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: argExpr)), msg: "closure return type does not match the expected function type")
+                            }
+                        }
+                    }
                 }
             }
         }

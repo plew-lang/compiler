@@ -1,0 +1,9 @@
+// A non-literal VALUE argument must match the parameter type (spec/12): a float
+// local passed where an integer parameter is expected reinterprets the bits.
+// (checkLitSpan only catches literal arguments; tcCheckValue covers value args.)
+fn f(x: I64) -> I64 { return x }
+
+fn main() {
+    val a: F64 = 3.0
+    val y: I64 = f(x: a)
+}
