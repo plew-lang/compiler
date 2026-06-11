@@ -379,6 +379,18 @@ fn verifyBlock(c: inout Comp, blockId: U64) {
     popLocals(c: inout c, mark: mark)
 }
 
+// A condition (`if`/`while`) must be Bool (spec/11) — `while 5I64 { }` is a type
+// error, not a truthiness coercion. Rejects only a DEFINITE non-Bool (tcCheckValue),
+// so an unrecovered/complex Bool expression passes.
+fn checkCondBool(c: inout Comp, cond: U64) {
+    val bs: Bind = kwSpan(c: inout c, kw: "Bool", kwLen: 4U64)
+    if bs.nameLen == 0U64 {
+        return
+    }
+    val boolRef: U64 = simpleTypeRef(c: inout c, nameStart: bs.nameStart, nameLen: bs.nameLen)
+    tcCheckValue(c: inout c, expectedRef: boolRef, valueExpr: cond, pos: "condition")
+}
+
 fn verifyStmt(c: inout Comp, stmtId: U64) {
     match c.stmts[stmtId] {
         Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
@@ -452,6 +464,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
         }
         Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
             checkLitCtx(c: inout c, id: cond, eKind: 0, eBits: 0, eSgn: false)
+            checkCondBool(c: inout c, cond: cond)
             verifyExpr(c: inout c, id: cond)
             // locals already in scope are "outside" this branch (a `move` of one
             // inside would be conditional) — mark the boundary for the move guard.
@@ -465,6 +478,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
         }
         Stmt.While(val cond, val body) => {
             checkLitCtx(c: inout c, id: cond, eKind: 0, eBits: 0, eSgn: false)
+            checkCondBool(c: inout c, cond: cond)
             verifyExpr(c: inout c, id: cond)
             val savedBB: U64 = c.curBranchBase
             c.curBranchBase = scopeMark(c: inout c)

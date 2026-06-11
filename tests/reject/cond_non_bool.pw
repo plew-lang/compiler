@@ -1,0 +1,6 @@
+// An `if`/`while` condition must be Bool (spec/11) — a non-Bool condition is a type
+// error, not a truthiness coercion.
+fn main() {
+    while 5I64 {
+    }
+}
