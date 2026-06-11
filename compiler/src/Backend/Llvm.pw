@@ -2612,7 +2612,27 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             if sidx < c.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
                 if fidx < c.structs[sidx].fields.count {
-                    return kindFromTySpan(c: inout c, tyStart: c.structs[sidx].fields[fidx].tyStart, tyLen: c.structs[sidx].fields[fidx].tyLen)
+                    val ffd: FieldDef = c.structs[sidx].fields[fidx]
+                    // ground a type-parameter field under the BASE's instance env (a
+                    // generic struct's `v: T` on `L[String]` must resolve T -> String, not
+                    // default to int) — so e.g. `print(a.v)` dispatches to the String sink.
+                    if ffd.ty != 0U64 {
+                        val fBaseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
+                        val savedFP: Array[Bind] = c.curTypeParams
+                        val savedFA: Array[U64] = c.curTypeArgs
+                        val didSetF: Bool = setStructEnv(c: inout c, st: inout st, ref: fBaseRef)
+                        mut val fg: U64 = ffd.ty
+                        if c.curTypeParams.count > 0U64 {
+                            fg = groundTypeRef(c: inout c, ref: ffd.ty)
+                        }
+                        val fk: U64 = kindFromTySpan(c: inout c, tyStart: c.types[fg].nameStart, tyLen: c.types[fg].nameLen)
+                        if didSetF {
+                            c.curTypeParams = savedFP
+                            c.curTypeArgs = savedFA
+                        }
+                        return fk
+                    }
+                    return kindFromTySpan(c: inout c, tyStart: ffd.tyStart, tyLen: ffd.tyLen)
                 }
             }
         }
