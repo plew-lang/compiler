@@ -9835,7 +9835,31 @@ fn genLlvmForArray(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64,
     if refIsAny(c: inout c, ref: forElemRef) {
         pushLocalR(st: inout st, nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: c.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: forElemRef)
     } else {
-        pushLocal(st: inout st, nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: c.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64)
+        // a struct / record element (`for val e in arrayOfStructs { e.field }`): track
+        // the element's struct index and TypeRef so a field access / method call on the
+        // loop var resolves (a generic-instance element keeps its instance ref).
+        mut val elemSidx: U64 = c.structs.count
+        if forElemRef != 0U64 {
+            if forElemRef < c.types.count {
+                if isGenericInst(c: inout c, ref: forElemRef) {
+                    val egs: U64 = genStructSlot(c: inout c, st: inout st, ref: forElemRef)
+                    if egs < st.genStructRefs.count {
+                        elemSidx = st.genStructDefs[egs]
+                    }
+                } else {
+                    // only a backend-registered struct (not a primitive / String): gate on
+                    // structRegSlot so an `Array[I32]` element stays a plain scalar.
+                    if structRegSlot(c: inout c, st: inout st, start: c.types[forElemRef].nameStart, len: c.types[forElemRef].nameLen) < st.structIdxs.count {
+                        elemSidx = structIndexByName(c: inout c, start: c.types[forElemRef].nameStart, len: c.types[forElemRef].nameLen)
+                    }
+                }
+            }
+        }
+        if elemSidx < c.structs.count {
+            pushLocalR(st: inout st, nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: elemSidx, isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: forElemRef)
+        } else {
+            pushLocal(st: inout st, nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: c.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64)
+        }
     }
     val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fora.cond"))
     val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fora.body"))
