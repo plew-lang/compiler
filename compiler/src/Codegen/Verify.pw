@@ -371,9 +371,18 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                 if tyIsArray {
                     match c.exprs[init] {
                         Expr.Array(val elems) => {
+                            // the declared element type as a TypeRef: the annotation's
+                            // arg (`Array[I64]` -> I64) if structured, else by name.
+                            mut val elemRef: U64 = 0
+                            if ty != 0U64 {
+                                if c.types[ty].args.count > 0U64 {
+                                    elemRef = c.types[ty].args[0]
+                                }
+                            }
                             mut val ek: U64 = 0
                             while ek < elems.count {
                                 checkValueCategory(c: inout c, valueId: elems[ek], declStart: tyStart, declLen: tyLen, declIsArray: false, ctx: "element")
+                                tcCheckValue(c: inout c, expectedRef: elemRef, valueExpr: elems[ek], pos: "element")
                                 ek += 1
                             }
                         }

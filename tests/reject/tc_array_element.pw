@@ -1,0 +1,3 @@
+// An Array[I64] literal with a String element — caught by the TypeRef checker at the
+// array-element position (precise: the declared element type vs each element's type).
+fn main() { val xs: Array[I64] = [1I64, "x"] }
