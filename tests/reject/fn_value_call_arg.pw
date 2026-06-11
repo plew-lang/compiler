@@ -1,0 +1,6 @@
+// spec/04: calling a function value checks each argument against the fn type's
+// parameter types — `f(x: true)` for `fn(x: I64)->I64` is a type error.
+fn main() {
+    val f: fn(x: I64) -> I64 = fn(x: I64) -> I64 { return x }
+    val r: I64 = f(x: true)
+}

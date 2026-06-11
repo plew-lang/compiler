@@ -715,10 +715,40 @@ fn checkArgInoutMode(c: inout Comp, p: Param, arg: Arg) {
     }
 }
 
+// The structured (Comp.types) type of a local named (nameStart,nameLen), or 0.
+fn localTypeRefByName(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
+    val q: U64 = intern(c: inout c, start: nameStart, len: nameLen)
+    mut val i: U64 = c.locals.count
+    while i > 0U64 {
+        i -= 1
+        if c.locals[i].nameId == q {
+            return c.locals[i].ty
+        }
+    }
+    return 0U64
+}
+
 fn checkCallArgs(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) {
     checkUniqueArgModes(c: inout c, args: args)
     val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
     if fi == c.funcs.count {
+        // calling a function VALUE (`val f: fn(x: I64)->I64 = …; f(x: true)`): the name
+        // is a local, not a declared function, so check each arg against the fn type's
+        // parameter types (the TypeRef stores args as [return, param0, param1, …]).
+        val lty: U64 = localTypeRefByName(c: inout c, nameStart: nameStart, nameLen: nameLen)
+        if lty != 0U64 {
+            if isFnType(c: inout c, ref: lty) {
+                val ft: TypeRef = c.types[lty]
+                mut val k: U64 = 0
+                while k < args.count {
+                    if k + 1U64 < ft.args.count {
+                        tcCheckValue(c: inout c, expectedRef: ft.args[k + 1U64], valueExpr: args[k].expr, pos: "fn-value arg")
+                    }
+                    k += 1
+                }
+                return
+            }
+        }
         mut val i: U64 = 0
         while i < args.count {
             checkLitCtx(c: inout c, id: args[i].expr, eKind: 1, eBits: 64, eSgn: true)
