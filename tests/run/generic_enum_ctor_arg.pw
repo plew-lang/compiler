@@ -1,0 +1,29 @@
+// A generic-enum construction passed DIRECTLY as a call argument (no intermediate
+// binding): the parameter's concrete instance (`Optional[I64]`) flows to the
+// construction so its head grounds from context (spec/02,06).
+import @Std/Io with { print }
+
+fn take(o: Optional[I64]) -> I64 {
+    match o {
+        Optional.Some(val v) => { return v }
+        Optional.None => { return -1I64 }
+    }
+}
+
+struct Box { pub val base: I64 }
+pub impl Box {
+    fn pick(o: Optional[I64]) -> I64 {
+        match o {
+            Optional.Some(val v) => { return self.base + v }
+            Optional.None => { return self.base }
+        }
+    }
+}
+
+fn main() {
+    print(take(o: <Optional.Some v=42I64 />))
+    print(take(o: <Optional.None />))
+    val b: Box = <Box base=100I64 />
+    print(b.pick(o: <Optional.Some v=5I64 />))
+    print(b.pick(o: <Optional.None />))
+}

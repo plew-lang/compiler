@@ -6387,7 +6387,19 @@ fn genArgValue(c: inout Comp, st: inout LlvmCtx, argExpr: U64, p: Param) -> LLVM
         }
         return genLlvmExpr(c: inout c, st: inout st, id: argExpr)
     }
-    return coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: argExpr), tyStart: p.tyStart, tyLen: p.tyLen)
+    // a generic-instance parameter (`o: Optional[I64]`, `b: Box[I32]`): flow the
+    // expected concrete instance to the argument so a JSX construction without
+    // explicit type args (`<Optional.Some v=5 />`) grounds its head from context
+    // (genLlvmMake/genLlvmMakeEnum consume st.expectedTy). Reset after so an
+    // unconsumed value (a non-construction arg) cannot leak into a later one.
+    if p.ty != 0U64 {
+        if isGenericInst(c: inout c, ref: p.ty) {
+            st.expectedTy = p.ty
+        }
+    }
+    val argV: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: argExpr)
+    st.expectedTy = 0U64
+    return coerceIntTo(c: inout c, st: inout st, v: argV, tyStart: p.tyStart, tyLen: p.tyLen)
 }
 
 // Index into st.fn* for a cached user function (by c.funcs index), or st.fnIdx.count.
