@@ -1,0 +1,7 @@
+// spec/03: `inout` writes through the place, so the argument must be a mutable
+// binding — passing an immutable `val` is a mutability error.
+fn inc(x: inout I64) { x = x + 1I64 }
+fn main() {
+    val n: I64 = 5I64
+    inc(x: inout n)
+}

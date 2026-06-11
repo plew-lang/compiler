@@ -699,6 +699,12 @@ fn tcCheckGenericArgConsistency(c: inout Comp, f: Func, args: Array[Arg]) {
 fn checkArgInoutMode(c: inout Comp, p: Param, arg: Arg) {
     if p.isInout {
         if arg.isInout {
+            // `inout` writes through the place, so it must be mutable (spec/03:
+            // `inc(x: inout n)` needs `mut val n`, not `val n`).
+            if placeIsMutable(c: inout c, id: arg.expr) {
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: arg.expr)), msg: "an `inout` argument must be a mutable place; declare it `mut val` (spec/03)")
+            }
         } else {
             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: arg.expr)), msg: "this parameter is `inout`; pass the argument with `inout` (spec/03)")
         }
