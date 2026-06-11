@@ -1,0 +1,6 @@
+// spec/02: Dictionary[K, V] key methods take a K — `d.get(key: 5I64)` on a
+// Dictionary[String, _] would hash an I64 as a String.
+fn main() {
+    val d: Dictionary[String, I64] = ["a": 1I64]
+    val x: Optional[I64] = d.get(key: 5I64)
+}

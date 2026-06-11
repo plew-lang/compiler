@@ -806,11 +806,22 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
                 val drt: TypeRef = c.types[rt.ref]
                 if rangeEquals(bytes: c.bytes, start: drt.nameStart, len: drt.nameLen, kw: "Dictionary") {
                     if drt.args.count >= 2U64 {
-                        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "insert") {
-                            if args.count >= 2U64 {
-                                tcCheckValue(c: inout c, expectedRef: drt.args[0], valueExpr: args[0].expr, pos: "dict key")
-                                tcCheckValue(c: inout c, expectedRef: drt.args[1], valueExpr: args[1].expr, pos: "dict value")
+                        // the generic-receiver arg grounding is incomplete, so check the
+                        // Dictionary's key/value args directly by LABEL: a `key` arg must
+                        // be K, a `value`/`fallback` arg must be V. Covers insert / get /
+                        // getOr / contains / at / remove (`d.get(key: 5I64)` on a
+                        // Dictionary[String,_]). spec/02.
+                        mut val dai: U64 = 0
+                        while dai < args.count {
+                            if args[dai].hasLabel {
+                                if rangeEquals(bytes: c.bytes, start: args[dai].labelStart, len: args[dai].labelLen, kw: "key") {
+                                    tcCheckValue(c: inout c, expectedRef: drt.args[0], valueExpr: args[dai].expr, pos: "dict key")
+                                }
+                                if rangeEquals(bytes: c.bytes, start: args[dai].labelStart, len: args[dai].labelLen, kw: "value") || rangeEquals(bytes: c.bytes, start: args[dai].labelStart, len: args[dai].labelLen, kw: "fallback") {
+                                    tcCheckValue(c: inout c, expectedRef: drt.args[1], valueExpr: args[dai].expr, pos: "dict value")
+                                }
                             }
+                            dai += 1
                         }
                     }
                 }
