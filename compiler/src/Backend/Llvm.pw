@@ -1199,7 +1199,15 @@ fn registerGenStructBodies(c: inout Comp, st: inout LlvmCtx) {
         mut val elems: Array[LLVMTypeRef] = []
         mut val fi: U64 = 0
         while fi < sd.fields.count {
-            elems.append(value: fieldLlvmTy(c: inout c, st: inout st, fd: sd.fields[fi]))
+            // a boxed (recursive) field is a heap pointer — matching the non-generic
+            // registerStructBodies and the value built in genFieldValue. Required for a
+            // recursive GENERIC value type (`N[I64]` with `next: Optional[N[I64]]`), else
+            // the inline layout disagrees with the boxed (ptr) construction value.
+            if fieldIsBoxed(c: inout c, f: sd.fields[fi]) {
+                elems.append(value: st.ptrty)
+            } else {
+                elems.append(value: fieldLlvmTy(c: inout c, st: inout st, fd: sd.fields[fi]))
+            }
             fi += 1
         }
         LLVMStructSetBody(st.genStructTys[s], arrayCPtr(elems), sd.fields.count, 0I32)
@@ -3764,10 +3772,26 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                     val fd: FieldDef = c.structs[sidx].fields[fidx]
                     val raw: LLVMValueRef = LLVMBuildExtractValue(st.b, genLlvmExpr(c: inout c, st: inout st, id: base), fidx, anon())
                     // a boxed (recursive) field holds a heap pointer; deref it to the
-                    // boxed value (its pointee type comes from the field's TypeRef so a
-                    // generic-instance field — Optional[Node] — resolves correctly).
+                    // boxed value. Ground the field's pointee type under the BASE's
+                    // instance env first, so a recursive GENERIC field (`next:
+                    // Optional[N[T]]` on a base of type `N[I64]`) loads the concrete
+                    // `Optional[N[I64]]` layout, not the ungrounded template (which would
+                    // default to i64 and load the wrong type).
                     if fieldIsBoxed(c: inout c, f: fd) {
-                        return LLVMBuildLoad2(st.b, llvmTypeOfRef(c: inout c, st: inout st, ref: fd.ty), raw, anon())
+                        val bRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
+                        val savedBP: Array[Bind] = c.curTypeParams
+                        val savedBA: Array[U64] = c.curTypeArgs
+                        val didSetB: Bool = setStructEnv(c: inout c, st: inout st, ref: bRef)
+                        mut val pg: U64 = fd.ty
+                        if c.curTypeParams.count > 0U64 {
+                            pg = groundTypeRef(c: inout c, ref: fd.ty)
+                        }
+                        val pteTy: LLVMTypeRef = llvmTypeOfRef(c: inout c, st: inout st, ref: pg)
+                        if didSetB {
+                            c.curTypeParams = savedBP
+                            c.curTypeArgs = savedBA
+                        }
+                        return LLVMBuildLoad2(st.b, pteTy, raw, anon())
                     }
                     return raw
                 }
@@ -9449,7 +9473,20 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
                     }
                 }
             }
-            pushLocalR(st: inout st, nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: bindKind, structIdx: localStructIdxFor(c: inout c, st: inout st, start: fd.tyStart, len: fd.tyLen), isArr: isArrF, elemTy: elemTyF, elemKind: elemKindF, typeRef: tref)
+            // a generic-instance payload bind (`Some(v: N[I64])` of a recursive generic):
+            // its struct index is the generic struct DEF (via genStructSlot), not a
+            // lookup by the un-grounded param name `fd.tyStart` (`T`), so field access
+            // `v.field` in the arm body resolves.
+            mut val bindStructIdx: U64 = localStructIdxFor(c: inout c, st: inout st, start: fd.tyStart, len: fd.tyLen)
+            if genFieldRef != 0U64 {
+                if isGenericInst(c: inout c, ref: genFieldRef) {
+                    val gbs: U64 = genStructSlot(c: inout c, st: inout st, ref: genFieldRef)
+                    if gbs < st.genStructRefs.count {
+                        bindStructIdx = st.genStructDefs[gbs]
+                    }
+                }
+            }
+            pushLocalR(st: inout st, nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: bindKind, structIdx: bindStructIdx, isArr: isArrF, elemTy: elemTyF, elemKind: elemKindF, typeRef: tref)
             // an array-of-struct payload bind (`Expr.Call(.., val args)` with
             // args: Array[Arg]): track the element struct + ref so `args[i].field`
             // and nested-array/Ref elements resolve in the arm body.

@@ -1,0 +1,38 @@
+// A recursive GENERIC value type (spec/03): a generic struct/enum whose field
+// cycles back through itself (a generic linked list / tree). The cyclic field is
+// auto-boxed (heap pointer) per instance; construction, match, and field access
+// all resolve the concrete instantiation. CoW value semantics throughout.
+import @Std/Io with { print }
+
+struct Node[T] {
+    pub val value: T
+    pub val next: Optional[Node[T]]
+}
+
+enum Tree[T] {
+    Leaf(v: T)
+    Branch(l: Tree[T], r: Tree[T])
+}
+
+fn sumList(n: Node[I64]) -> I64 {
+    match n.next {
+        Optional.Some(v: val tail) => { return n.value + sumList(n: tail) }
+        Optional.None => { return n.value }
+    }
+}
+
+fn sumTree(t: Tree[I64]) -> I64 {
+    match t {
+        Tree.Leaf(val v) => { return v }
+        Tree.Branch(val l, val r) => { return sumTree(t: l) + sumTree(t: r) }
+    }
+}
+
+fn main() {
+    val c: Node[I64] = <Node[I64] value=3I64 next=<Optional.None /> />
+    val b: Node[I64] = <Node[I64] value=2I64 next=<Optional.Some v=c /> />
+    val a: Node[I64] = <Node[I64] value=1I64 next=<Optional.Some v=b /> />
+    print(sumList(n: a))
+    val t: Tree[I64] = <Tree.Branch l=<Tree.Leaf v=10I64 /> r=<Tree.Branch l=<Tree.Leaf v=20I64 /> r=<Tree.Leaf v=30I64 /> /> />
+    print(sumTree(t: t))
+}
