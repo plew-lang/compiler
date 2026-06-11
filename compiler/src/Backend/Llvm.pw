@@ -5085,6 +5085,12 @@ fn adapterCallResultInst(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart:
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "filter") {
         return findAdapterInst(c: inout c, st: inout st, recv: recv, headKw: "FilterIter")
     }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "take") {
+        return findAdapterInst(c: inout c, st: inout st, recv: recv, headKw: "TakeIter")
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "skip") {
+        return findAdapterInst(c: inout c, st: inout st, recv: recv, headKw: "SkipIter")
+    }
     return 0U64
 }
 

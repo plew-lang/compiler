@@ -1,0 +1,39 @@
+import @Std/Io with { print }
+
+// Lazy Iterator adapters `take(count:)` (a prefix) and `skip(count:)` (drop a prefix).
+// Each builds a one-field-plus-count adapter struct (TakeIter / SkipIter) wired through
+// the same generic adapter-construction path as map/filter (adapterCallResultInst), so
+// they chain with each other and with terminals.
+struct Counter { pub mut val n: I64  pub val limit: I64 }
+pub impl Counter as Iterator {
+    type Item = I64
+    inout fn next() -> Optional[I64] {
+        if self.n < self.limit {
+            val v: I64 = self.n
+            self.n = self.n + 1
+            return <Optional.Some v=v />
+        }
+        return <Optional.None />
+    }
+}
+
+fn main() {
+    // take(3) of 0..10
+    mut val a: Counter = <Counter n=0 limit=10 />
+    for val x in a.take(count: 3U64) { print(x) }            // 0 1 2
+    // skip(7) of 0..10
+    mut val b: Counter = <Counter n=0 limit=10 />
+    for val x in b.skip(count: 7U64) { print(x) }            // 7 8 9
+    // skip(2).take(3) of 0..10 -> 2 3 4
+    mut val c: Counter = <Counter n=0 limit=10 />
+    for val x in c.skip(count: 2U64).take(count: 3U64) { print(x) }   // 2 3 4
+    // take(4).count()
+    mut val d: Counter = <Counter n=0 limit=10 />
+    print(d.take(count: 4U64).count())                       // 4
+    // take(100) past the end -> only what exists
+    mut val e: Counter = <Counter n=0 limit=3 />
+    print(e.take(count: 100U64).count())                     // 3
+    // map then take: square the first 2 of 1..5
+    mut val f: Counter = <Counter n=1 limit=5 />
+    for val x in f.map(f: fn(x: I64) -> I64 { return x * x }).take(count: 2U64) { print(x) }   // 1 4
+}

@@ -122,6 +122,48 @@ pub impl[I, P, E] FilterIter[I, P, E] as Iterator where I: Iterator {
     }
 }
 
+// TakeIter yields at most the first `remaining` elements of the inner iterator, then
+// stops. The element type passes through unchanged (`E = Item`).
+export struct TakeIter[I, E] {
+    pub mut val inner: I
+    pub mut val remaining: U64
+}
+pub impl[I, E] TakeIter[I, E] as Iterator where I: Iterator {
+    type Item = E
+    inout fn next() -> Optional[E] {
+        if self.remaining == 0U64 {
+            return <Optional.None />
+        }
+        self.remaining = self.remaining - 1U64
+        return self.inner.next()
+    }
+}
+
+// SkipIter discards the first `pending` elements on the first pull, then yields the
+// rest of the inner iterator unchanged (`E = Item`).
+export struct SkipIter[I, E] {
+    pub mut val inner: I
+    pub mut val pending: U64
+}
+pub impl[I, E] SkipIter[I, E] as Iterator where I: Iterator {
+    type Item = E
+    inout fn next() -> Optional[E] {
+        mut val go: Bool = true
+        while go {
+            if self.pending == 0U64 {
+                go = false
+            } else {
+                self.pending = self.pending - 1U64
+                match self.inner.next() {
+                    Optional.Some(val v) => { }
+                    Optional.None => { return <Optional.None /> }
+                }
+            }
+        }
+        return self.inner.next()
+    }
+}
+
 // Provided Iterator combinators (spec/08: a bare `impl Trait` on the trait's own
 // module). Lazy: they only build an adapter; work happens when the result is
 // iterated. `map`'s output type `B` is inferred from the closure argument.
@@ -131,6 +173,14 @@ pub impl Iterator {
     }
     fn filter(p: fn(x: Item) -> Bool) -> FilterIter[Self, fn(x: Item) -> Bool, Item] {
         return <FilterIter[Self, fn(x: Item) -> Bool, Item] inner=self p=p />
+    }
+    // Yield at most the first `count` elements (a prefix), then stop.
+    fn take(count: U64) -> TakeIter[Self, Item] {
+        return <TakeIter[Self, Item] inner=self remaining=count />
+    }
+    // Skip the first `count` elements, then yield the rest.
+    fn skip(count: U64) -> SkipIter[Self, Item] {
+        return <SkipIter[Self, Item] inner=self pending=count />
     }
     // Terminal combinators (spec/08): they consume the iterator (drive `next()` to
     // exhaustion) rather than building an adapter. `self` is copied into a mutable
