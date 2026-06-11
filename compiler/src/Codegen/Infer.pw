@@ -478,6 +478,21 @@ fn tcCheckMakeFields(c: inout Comp, expectedRef: U64, makeId: U64) {
             } else {
                 return
             }
+            // Ref[T] / WeakRef[T] are lang items (not registered generic structs), so
+            // the struct lookup below misses them. Their `value` field is T — check it
+            // (`<Ref[I64] value=true/>` would otherwise box a Bool as an I64).
+            if rangeEquals(bytes: c.bytes, start: et.nameStart, len: et.nameLen, kw: "Ref") || rangeEquals(bytes: c.bytes, start: et.nameStart, len: et.nameLen, kw: "WeakRef") {
+                if et.args.count >= 1U64 {
+                    mut val rfi: U64 = 0
+                    while rfi < fields.count {
+                        if rangeEquals(bytes: c.bytes, start: fields[rfi].nameStart, len: fields[rfi].nameLen, kw: "value") {
+                            tcCheckValue(c: inout c, expectedRef: et.args[0], valueExpr: fields[rfi].value, pos: "ref value")
+                        }
+                        rfi += 1
+                    }
+                }
+                return
+            }
             if isEnum {
                 val ei: U64 = genericEnumIndex(c: inout c, nameStart: et.nameStart, nameLen: et.nameLen)
                 if ei >= c.enums.count {
