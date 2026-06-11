@@ -18,7 +18,7 @@
 ## 数値モデル
 
 - ✅ **幅つき整数 `I8..U64`**（厳密幅 stdint・U8=`unsigned char`〔.bytes 共有〕・**overflow/0除算 panic**〔intrinsic 床〕・リテラル文脈型付け＋厳密 no-default＋U64 magnitude モデル・幅不明な式の算術は loud error・`wrapping*` メソッドは additive 予定）。
-- ✅ **浮動小数 `F32/F64`（実用上完成）**＝リテラル/local/関数引数戻り/`Array[F64]`/struct フィールド/算術〔fadd 等〕/比較〔ordered fcmp＋**NaN panic**〕/print〔Format〕/int→float `as`。**残**：**float→int `as`**〔TryFrom〕・**真の F32**〔当面 double〕・**mixed `1.5 + 2`**〔無型 int リテラル推論〕・`%` は整数限定で reject〔spec 通り〕。spec/02,12。
+- ✅ **浮動小数 `F32/F64`（実用上完成）**＝リテラル/local/関数引数戻り/`Array[F64]`/struct フィールド/算術〔fadd 等〕/比較〔ordered fcmp＋**NaN panic**〕/print〔Format〕/int→float `as`・✅ **int↔float 暗黙変換を loud reject**〔`val x:F64=nI64`・`I64=3.5`＝以前 silent miscompile・`typesCompatible` の float 免除を both-float に絞った・test reject float_int_no_implicit/float_literal_to_int〕。**残**：**float→int `as`**〔TryFrom〕・**真の F32**〔当面 double〕・**mixed `1.5 + 2` / `F64 = 5`**〔無型 int リテラルの float context＝checker〔checkLitTi に float eKind〕＋backend〔int literal を double で emit〕の multi-site・回避＝`5.0`〕・`%` は整数限定で reject〔spec 通り〕。spec/02,12。
 - ✅ **整数リテラル基数＋桁区切り**（`0x`/`0o`/`0b`＋`_`・float `_` も・test int_literal_bases）。spec/02。
 
 ## レンジ
