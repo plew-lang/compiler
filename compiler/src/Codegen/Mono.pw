@@ -182,7 +182,15 @@ fn nameReachesOwner(c: inout Comp, nStart: U64, nLen: U64, args: Array[U64], tSt
         }
         return false
     }
-    val si: U64 = structIndexByName(c: inout c, start: nStart, len: nLen)
+    // a struct head, generic OR not: scan its fields for a path back to the owner.
+    // genericStructIndex is tried too (structIndexByName skips generics) — else a
+    // MUTUALLY recursive GENERIC value type (`Foo[T]` ↔ `Bar[T]`) misses the cycle
+    // through the generic partner's fields, fails to box, and overflows at sizing.
+    mut val si: U64 = structIndexByName(c: inout c, start: nStart, len: nLen)
+    if si < c.structs.count {
+    } else {
+        si = genericStructIndex(c: inout c, nameStart: nStart, nameLen: nLen)
+    }
     if si < c.structs.count {
         val key: U64 = c.structs[si].nameStart
         if containsU64(xs: visited, v: key) {

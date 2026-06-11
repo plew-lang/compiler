@@ -14,6 +14,18 @@ enum Tree[T] {
     Branch(l: Tree[T], r: Tree[T])
 }
 
+// MUTUAL recursion between two generic value types (Ping[T] <-> Pong[T]): the
+// cyclic fields are boxed via the type-graph reachability that follows the generic
+// partner's fields.
+struct Ping[T] {
+    pub val v: T
+    pub val pong: Optional[Pong[T]]
+}
+struct Pong[T] {
+    pub val w: T
+    pub val ping: Optional[Ping[T]]
+}
+
 fn sumList(n: Node[I64]) -> I64 {
     match n.next {
         Optional.Some(v: val tail) => { return n.value + sumList(n: tail) }
@@ -35,4 +47,11 @@ fn main() {
     print(sumList(n: a))
     val t: Tree[I64] = <Tree.Branch l=<Tree.Leaf v=10I64 /> r=<Tree.Branch l=<Tree.Leaf v=20I64 /> r=<Tree.Leaf v=30I64 /> /> />
     print(sumTree(t: t))
+    val pong: Pong[I64] = <Pong[I64] w=7I64 ping=<Optional.None /> />
+    val ping: Ping[I64] = <Ping[I64] v=5I64 pong=<Optional.Some v=pong /> />
+    print(ping.v)
+    match ping.pong {
+        Optional.Some(v: val pg) => { print(pg.w) }
+        Optional.None => { print(0I64) }
+    }
 }
