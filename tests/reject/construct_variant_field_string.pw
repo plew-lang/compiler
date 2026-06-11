@@ -1,0 +1,3 @@
+// A non-generic enum variant payload field of type I64 set to a String — reject.
+enum E { V(a: I64) }
+fn main() { val e: E = <E.V a="str" /> }

@@ -717,11 +717,28 @@ fn verifyExpr(c: inout Comp, id: U64) {
                     val cvi: U64 = variantIndex(c: inout c, enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
                     if cvi < c.enums[cei].variants.count {
                         val cfs: Array[FieldDef] = c.enums[cei].variants[cvi].fields
+                        // for a NON-generic enum, also category-check each provided
+                        // payload value against the field's declared type (`<E.V a="s"/>`
+                        // for `a: I64`). Generic enums (payload types need env grounding)
+                        // are deferred.
+                        val enumIsGen: Bool = c.enums[cei].typeParams.count > 0U64
                         mut val cfi: U64 = 0
                         while cfi < cfs.count {
                             if makeFieldsCoverField(c: inout c, fields: fields, fieldStart: cfs[cfi].nameStart, fieldLen: cfs[cfi].nameLen) {
                             } else {
                                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "variant construction is missing a payload field; every field of the variant must be set")
+                            }
+                            if enumIsGen {
+                            } else {
+                                mut val mfk: U64 = 0
+                                while mfk < fields.count {
+                                    if spansEqual(c: inout c, aStart: fields[mfk].nameStart, aLen: fields[mfk].nameLen, bStart: cfs[cfi].nameStart, bLen: cfs[cfi].nameLen) {
+                                        checkValueCategory(c: inout c, valueId: fields[mfk].value, declStart: cfs[cfi].tyStart, declLen: cfs[cfi].tyLen, declIsArray: cfs[cfi].tyIsArray, ctx: "field")
+                                        mfk = fields.count
+                                    } else {
+                                        mfk += 1U64
+                                    }
+                                }
                             }
                             cfi += 1U64
                         }
