@@ -39,7 +39,8 @@
 - **newtype メソッド/フィールド継承＋非 int underlying**（`userId.bytes`〔UserId=String〕）＝broad な codegen 解決が要る（`localStructIdxFor`/`kindFromTySpan`/`exprStructIdx`/非 int `as` を newtype→underlying 解決・ただし `typeOf` は型チェッカ distinction と両用ゆえ blanket 解決不可＝codegen 専用解決点を個別配線）。int underlying は完備。newtype の残＝unique/deinit/factory 継承・`export newtype`。
 - **`as` 以外の数値変換 `From`/`TryFrom`**（縮小・パース・`as` の全域変換脱糖・`try` の異エラー型 From 変換）・**float→int `as`**・**mixed `1.5 + 2`**（無型 int リテラル推論）。
 - **一般 Chain トレイト `?.`**（現 Optional 具体）・**`Pow`/`**`**（float 後）・**`Output != Self`**。
-- **generic-enum の無型 int 構築** `<Optional.Some v=42 />`（generic owner で field 型が param ゆえ grounding されず・変数経由で回避可・enum-context adopt は provided method を壊すので慎重な gating 要）。
+- ✅ **method への record literal context**（`methodArgType`・test method_record_arg）・✅ **nested record literal**（record branch が canonical 名を `lowerMakeFields` へ・test nested_record_literal）。
+- **generic-enum の無型 int 構築** `<Optional.Some v=42 />`（2 回試行＝lowering 採用も check-side guard も std enum 構築を壊す/効かず revert・回避＝`v=42I64` か変数・provided method 破壊リスク高く据置）。
 - **`\u{XXXX}` Unicode エスケープ**＝U64→U8 truncation primitive が要る（`truncU8` を runtime `plew_*` シンボル化か、compiler の extern intrinsic 呼びが genLlvmCall intercept を通るか確認・provisional §文字列）。
 - **Bool dict キー**＝Bool primitive メソッドディスパッチ（backend 未対応・低価値）。
 - **method への record literal context**（`obj.method((x:1,y:2))`＝receiver 型解決が要る・free fn は実装済）・**nested record literal**（record-of-records の inner literal context）・**`val f = obj.method`（メソッド値化）**（scope 復元の型回復・spec で禁止だが clean reject でない）。
