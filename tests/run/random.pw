@@ -1,0 +1,30 @@
+import @Std/Io with { print }
+import @Std/Random with { Random }
+
+// @Std/Random — a xorshift64 PRNG. With a fixed seed the stream is reproducible
+// (deterministic exact values); `fromEntropy()` is unpredictable so it is only
+// range-checked here. (spec/15: Random is import-required, not ambient.)
+fn main() {
+    mut val r: Random = Random.withSeed(42U64)
+    val a: U64 = r.nextU64()
+    val b: U64 = r.nextU64()
+    print(a)                       // 45454805674
+    print(b)                       // 11532217803599905471
+    // same seed reproduces the same first value
+    mut val s: Random = Random.withSeed(42U64)
+    print(s.nextU64() == a)        // 1
+    // a different seed gives a different stream
+    mut val t: Random = Random.withSeed(43U64)
+    print(t.nextU64() == a)        // 0
+    // inRange stays within [lower, upper)
+    mut val q: Random = Random.withSeed(7U64)
+    val d: U64 = q.inRange(lower: 0U64, upper: 6U64)
+    if d < 6U64 { print(1I64) } else { print(0I64) }   // 1
+    // a zero seed is replaced (xorshift cannot start from zero) — still produces output
+    mut val z: Random = Random.withSeed(0U64)
+    if z.nextU64() == 0U64 { print(0I64) } else { print(1I64) }   // 1
+    // entropy-seeded generator runs and stays in range
+    mut val e: Random = Random.fromEntropy()
+    val f: U64 = e.inRange(lower: 100U64, upper: 200U64)
+    if f >= 100U64 { if f < 200U64 { print(1I64) } else { print(0I64) } } else { print(0I64) }   // 1
+}

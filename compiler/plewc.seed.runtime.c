@@ -74,6 +74,7 @@ void plew_set_args(int argc, char** argv){ plew_argc = argc; plew_argv = argv; }
 long long plew_argCount(void){ return (long long)plew_argc; }
 PlewStrR plew_argAt(long long i){ PlewStrR s; if(i<0||i>=plew_argc){ s.d=(char*)""; s.n=0; return s; } s.d=plew_argv[i]; s.n=(long long)strlen(plew_argv[i]); return s; }
 void plew_writeByte(unsigned char b){ putchar((int)b); }
+unsigned long long plew_random_u64(void){ unsigned long long x=0; FILE* f=fopen("/dev/urandom","rb"); if(f){ size_t r=fread(&x,sizeof(x),1,f); fclose(f); if(r==1) return x; } return ((unsigned long long)(uintptr_t)&x * 0x9E3779B97F4A7C15ULL) | 1ULL; }
 static PlewStrR plew_readPath(const char* path){ FILE* f=fopen(path,"rb"); PlewStrR s; if(!f){ s.d=(char*)""; s.n=0; return s; } fseek(f,0,SEEK_END); long sz=ftell(f); fseek(f,0,SEEK_SET); char* buf=(char*)malloc((size_t)sz+1); size_t n=fread(buf,1,(size_t)sz,f); fclose(f); buf[n]=0; s.d=buf; s.n=(long long)n; return s; }
 PlewStrR plew_readFile(char* d, long long n){ char* p=(char*)malloc((size_t)n+1); if(n) memcpy(p,d,(size_t)n); p[n]=0; PlewStrR r=plew_readPath(p); free(p); return r; }
 PlewStrR plew_readFileBytes(char* d, long long n){ return plew_readFile(d,n); }

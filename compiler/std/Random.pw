@@ -1,0 +1,55 @@
+// @Std/Random — pseudo-random number generation (spec/15: import-required, not a
+// lang item / ambient). A small in-language PRNG (xorshift64) seeded either from the
+// OS entropy source (`Random.fromEntropy()`) for an unpredictable stream, or from an
+// explicit value (`Random.withSeed(s)`) for a reproducible one.
+
+// The entropy source is the one runtime intrinsic: a fresh 64-bit value from the OS
+// (`/dev/urandom`). Everything else is pure Plew on top of it.
+export extern "plew-intrinsic" {
+    // A fresh 64-bit value from the operating system's entropy source.
+    fn entropyU64() -> U64
+}
+
+// A xorshift64 generator. The state is never zero (xorshift cannot leave the zero
+// state), so the constructors replace a zero seed with a fixed nonzero constant.
+export struct Random {
+    pub mut val state: U64
+}
+
+pub impl Random {
+    // A generator seeded from OS entropy — an unpredictable stream (different each run).
+    assoc fn fromEntropy() -> Random {
+        mut val s: U64 = entropyU64()
+        if s == 0U64 {
+            s = 0x9E3779B97F4A7C15U64
+        }
+        return <Random state=s />
+    }
+    // A generator with an explicit seed — reproducible (same seed, same stream). A
+    // zero seed is replaced (xorshift cannot start from zero).
+    assoc fn withSeed(seed~: U64) -> Random {
+        mut val s: U64 = seed
+        if s == 0U64 {
+            s = 0x9E3779B97F4A7C15U64
+        }
+        return <Random state=s />
+    }
+    // The next 64-bit value, advancing the generator (xorshift64).
+    inout fn nextU64() -> U64 {
+        mut val x: U64 = self.state
+        x = x ^ (x << 13U64)
+        x = x ^ (x >> 7U64)
+        x = x ^ (x << 17U64)
+        self.state = x
+        return x
+    }
+    // A value in the half-open range `[lower, upper)`. The caller ensures
+    // `lower < upper` (an empty range would divide by zero — a loud panic).
+    inout fn inRange(lower: U64, upper: U64) -> U64 {
+        return lower + (self.nextU64() % (upper - lower))
+    }
+    // A fair coin flip.
+    inout fn nextBool() -> Bool {
+        return (self.nextU64() % 2U64) == 1U64
+    }
+}
