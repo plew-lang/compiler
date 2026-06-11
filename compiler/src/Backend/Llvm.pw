@@ -5251,6 +5251,13 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
         mut val av: Array[LLVMValueRef] = []
         return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 0U64, anon())
     }
+    // (Prelude internal) bitCastU64(n: I64) -> U64: reinterpret a signed integer's
+    // two's-complement bit pattern as U64 (for hashing signed keys — `as U64` is
+    // lossless-only and rejects negatives). A no-op at the LLVM level: I64 and U64 are
+    // both i64, so the argument value passes through unchanged.
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "bitCastU64") {
+        return extendToI64(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), unsigned: false)
+    }
     // (Prelude internal) __dictSeed() -> U64: the per-process dictionary hash seed —
     // a lazily-initialized random value (stable for the process), so SipHash is keyed
     // unpredictably across runs (DoS resistance) while staying consistent within a run.

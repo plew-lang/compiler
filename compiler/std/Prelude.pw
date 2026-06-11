@@ -28,6 +28,10 @@ extern "plew-intrinsic" {
     // across runs (DoS resistance) yet consistent within a run. Internal to the dict
     // lang item (`entropyU64` in @Std/Random is the user-facing entropy source).
     fn __dictSeed() -> U64
+    // Reinterpret a signed integer's two's-complement bits as U64 (for hashing signed
+    // keys: `as U64` is lossless-only and rejects negatives). A no-op at the machine
+    // level — I64 and U64 share a representation.
+    fn bitCastU64(n: I64) -> U64
 }
 
 // Methods on the builtin Array, in pure Plew over the floor above. Monomorphized
@@ -146,6 +150,30 @@ pub impl U16 as Hash {
 pub impl U8 as Hash {
     fn hash[H](hasher: inout H) where H: Hasher {
         hasher.writeU64(n: self as U64)
+    }
+}
+// Signed integer keys hash their two's-complement bit pattern: sign-extend to I64
+// (lossless), then reinterpret as U64 (`bitCastU64`) — `as U64` is lossless-only and
+// would reject negatives. Distinct values keep distinct bit patterns, so the hash
+// stays collision-free over the key space.
+pub impl I64 as Hash {
+    fn hash[H](hasher: inout H) where H: Hasher {
+        hasher.writeU64(n: bitCastU64(n: self))
+    }
+}
+pub impl I32 as Hash {
+    fn hash[H](hasher: inout H) where H: Hasher {
+        hasher.writeU64(n: bitCastU64(n: self as I64))
+    }
+}
+pub impl I16 as Hash {
+    fn hash[H](hasher: inout H) where H: Hasher {
+        hasher.writeU64(n: bitCastU64(n: self as I64))
+    }
+}
+pub impl I8 as Hash {
+    fn hash[H](hasher: inout H) where H: Hasher {
+        hasher.writeU64(n: bitCastU64(n: self as I64))
     }
 }
 // `Bool` Hash awaits Bool primitive method dispatch (the backend dispatches trait

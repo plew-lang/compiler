@@ -1,0 +1,25 @@
+import @Std/Io with { print }
+
+// Signed-integer dictionary keys (provisional gap (b)): a negative key hashes its
+// two's-complement bits (`bitCastU64`) instead of `as U64` (which is lossless-only and
+// rejects negatives). Lookups, including negative keys, resolve correctly.
+fn main() {
+    mut val d: Dictionary[I64, String] = [:]
+    d[-5I64] = "neg"
+    d[0I64] = "zero"
+    d[42I64] = "pos"
+    print(d[-5I64])    // neg
+    print(d[0I64])     // zero
+    print(d[42I64])    // pos
+    print(d.count)     // 3
+    // update through a negative key
+    d[-5I64] = "neg2"
+    print(d[-5I64])    // neg2
+    print(d.count)     // 3 (update, not insert)
+    // I32 keys (sign-extended before the bit reinterpret)
+    mut val e: Dictionary[I32, I64] = [:]
+    e[-1I32] = 100I64
+    e[7I32] = 200I64
+    print(e[-1I32])    // 100
+    print(e[7I32])     // 200
+}
