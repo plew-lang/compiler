@@ -1,0 +1,5 @@
+// spec/12: Eq/Ord are same-type relations (no Rhs), so comparing a String to an
+// I64 has no witness — no implicit conversion.
+fn main() {
+    val x: Bool = "a" == 1I64
+}

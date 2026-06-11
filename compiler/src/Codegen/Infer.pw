@@ -204,15 +204,24 @@ fn tcCheckValue(c: inout Comp, expectedRef: U64, valueExpr: U64, pos: String) {
 // but a primitive only has same-type witnesses (`impl I32 as Add[I32]`), so two
 // different primitive int operands (`3I32 + 5I64`) are a no-implicit-conversion error.
 fn tcCheckBinop(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
-    // arithmetic (Add/Sub/Mul/Div/Rem) and comparison (Eq/Ne/Lt/Le/Gt/Ge). Comparison
-    // is `Eq`/`Ord` on the SAME type (no Rhs), so its primitive operands must match too
-    // (`aI32 < bI64` has no witness). Shifts/bitwise (Shl[Rhs]) are Rhs-parameterized
-    // and excluded.
-    mut val handled: Bool = false
-    if op == opAdd() || op == opSub() || op == opMul() || op == opDiv() || op == opRem() {
-        handled = true
+    // `&&` / `||` are short-circuit control flow (spec/12), not a trait op: both
+    // operands must be Bool (`1I64 && true` has no truthiness coercion).
+    if op == opAnd() || op == opOr() {
+        val bs: Bind = kwSpan(c: inout c, kw: "Bool", kwLen: 4U64)
+        if bs.nameLen != 0U64 {
+            val boolRef: U64 = simpleTypeRef(c: inout c, nameStart: bs.nameStart, nameLen: bs.nameLen)
+            tcCheckValue(c: inout c, expectedRef: boolRef, valueExpr: lhs, pos: "logical")
+            tcCheckValue(c: inout c, expectedRef: boolRef, valueExpr: rhs, pos: "logical")
+        }
+        return
     }
+    // arithmetic (Add/Sub/Mul/Div/Rem) and comparison (Eq/Ne/Lt/Le/Gt/Ge).
+    mut val isCompare: Bool = false
     if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
+        isCompare = true
+    }
+    mut val handled: Bool = isCompare
+    if op == opAdd() || op == opSub() || op == opMul() || op == opDiv() || op == opRem() {
         handled = true
     }
     // bitwise/shift: a primitive's witnesses are all same-type (`impl I8 as Shl[I8]`,
@@ -230,6 +239,12 @@ fn tcCheckBinop(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
         return
     }
     if l >= c.types.count || r >= c.types.count {
+        return
+    }
+    // comparison is `Eq`/`Ord` on the SAME type (no Rhs), so the operands must match
+    // for EVERY type (`"a" == 1I64`, `aI32 < bI64`) — not just primitives.
+    if isCompare {
+        tcCheckValue(c: inout c, expectedRef: l, valueExpr: rhs, pos: "compare")
         return
     }
     // a PRIMITIVE numeric LHS forces the RHS to be the SAME type — a primitive's

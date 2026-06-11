@@ -1,0 +1,5 @@
+// spec/12: `&&`/`||` are short-circuit control flow on Bool, not a trait op — a
+// non-Bool operand has no truthiness coercion.
+fn main() {
+    val x: Bool = 1I64 && true
+}
