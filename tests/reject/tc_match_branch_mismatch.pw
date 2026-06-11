@@ -1,0 +1,6 @@
+// A value-position match (bind-less arms): one arm gives a String where the binding
+// wants I64 — reject.
+enum C { Red Green }
+fn main() {
+    val x: I64 = match <C.Red /> { C.Red => 1I64  C.Green => "s" }
+}

@@ -1,0 +1,6 @@
+// A value-position if: each branch's give value must match the expected type. The else
+// branch gives a String where the binding wants I64 — reject (even though the then
+// branch matches).
+fn main() {
+    val x: I64 = if true { give 1I64 } else { give "s" }
+}

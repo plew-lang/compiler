@@ -111,6 +111,34 @@ fn tcCheckValue(c: inout Comp, expectedRef: U64, valueExpr: U64, pos: String) {
     // generic-payload case the head-name checks can't see (the un-annotated construction
     // carries no type args itself; they come from the expected type).
     tcCheckMakeFields(c: inout c, expectedRef: expectedRef, makeId: valueExpr)
+    // a value-position if/match (`val x: I64 = if c { give A } else { give B }`): each
+    // branch's give value must match the expected type — so a divergent branch (`give
+    // "s"` where I64 is wanted) is caught even when another branch matches.
+    match c.exprs[valueExpr] {
+        Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
+            val tv: U64 = tcBlockGiveValue(c: inout c, blockId: thenBlk)
+            if tv != 0U64 {
+                tcCheckValue(c: inout c, expectedRef: expectedRef, valueExpr: tv, pos: "if-branch")
+            }
+            val ev: U64 = tcBlockGiveValue(c: inout c, blockId: elseBlk)
+            if ev != 0U64 {
+                tcCheckValue(c: inout c, expectedRef: expectedRef, valueExpr: ev, pos: "if-branch")
+            }
+        }
+        Expr.MatchExpr(scrut: _, val arms) => {
+            mut val ai: U64 = 0
+            while ai < arms.count {
+                // skip an arm that binds payload fields: its binds are not in scope at
+                // this (the match-expr) position and may shadow an outer name, so
+                // inferType on the arm body would resolve the shadowed name wrongly.
+                if arms[ai].binds.count == 0U64 {
+                    tcCheckValue(c: inout c, expectedRef: expectedRef, valueExpr: arms[ai].body, pos: "match-branch")
+                }
+                ai += 1
+            }
+        }
+        _ => {}
+    }
     val inferred: U64 = inferType(c: inout c, id: valueExpr)
     if typesCompatible(c: inout c, expected: expectedRef, inferred: inferred) {
         return
@@ -292,6 +320,22 @@ fn tcCheckArrayIndex(c: inout Comp, base: U64, index: U64) {
                 }
             }
         }
+    }
+}
+
+// The give value of a block that ends in `give <expr>` (a value-position if branch),
+// or 0 if the block has no trailing give.
+fn tcBlockGiveValue(c: inout Comp, blockId: U64) -> U64 {
+    if blockId == 0U64 || blockId >= c.blocks.count {
+        return 0U64
+    }
+    val stmts: Array[U64] = c.blocks[blockId].stmts
+    if stmts.count == 0U64 {
+        return 0U64
+    }
+    match c.stmts[stmts[stmts.count - 1U64]] {
+        Stmt.Give(val value) => { return value }
+        _ => { return 0U64 }
     }
 }
 
