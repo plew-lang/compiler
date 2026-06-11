@@ -1228,7 +1228,9 @@ fn intCtxKw(code: U64) -> String {
     if code == 5 { return "U8" }
     if code == 6 { return "U16" }
     if code == 7 { return "U32" }
-    return "U64"
+    if code == 8 { return "U64" }
+    if code == 9 { return "F64" }
+    return "F32"
 }
 
 // The TypeInfo for `id`'s recorded int context (scalarInfo if none) — the fallback

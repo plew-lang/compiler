@@ -3654,6 +3654,16 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                 // suffix and the checker-recorded context width exprIntCtx).
                 val t: TypeInfo = typeOf(c: inout c, id: id)
                 if t.kind == 0 {
+                    if isFloatType(c: inout c, start: t.nameStart, len: t.nameLen) {
+                        // a polymorphic int literal in a float context (`val x: F64 = 5`):
+                        // emit it as a double (uitofp of the magnitude, then negate).
+                        val iv: LLVMValueRef = LLVMConstInt(st.i64ty, value, 0I32)
+                        mut val fv: LLVMValueRef = LLVMBuildUIToFP(st.b, iv, st.f64ty, anon())
+                        if isNeg {
+                            fv = LLVMBuildFNeg(st.b, fv, anon())
+                        }
+                        return fv
+                    }
                     ty = llvmScalarTy(c: inout c, st: inout st, tyStart: t.nameStart, tyLen: t.nameLen)
                 }
             }

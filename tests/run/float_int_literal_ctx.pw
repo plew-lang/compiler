@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+
+// A polymorphic integer literal in a float context types as that float (spec/02,12):
+// no implicit conversion — the literal simply IS a float here.
+fn takesF(x: F64) { print(x) }
+
+fn main() {
+    val a: F64 = 5
+    val b: F64 = 1.5 + 2
+    val c: F64 = -3
+    print(a)
+    print(b)
+    print(c)
+    print(1.5 + 2)
+    takesF(x: 7)
+    val arr: Array[F64] = [1, 2.5, 3]
+    print(arr[0])
+    print(arr[2])
+}

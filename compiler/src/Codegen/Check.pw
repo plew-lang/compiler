@@ -85,6 +85,24 @@ fn tiIsInt(c: inout Comp, ti: TypeInfo) -> Bool {
     return false
 }
 
+// Whether a recovered TypeInfo names a float type (F32/F64).
+fn tiIsFloat(c: inout Comp, ti: TypeInfo) -> Bool {
+    if ti.kind == 0 {
+        if ti.nameLen != 0 {
+            return isFloatType(c: inout c, start: ti.nameStart, len: ti.nameLen)
+        }
+    }
+    return false
+}
+
+// Encode a float context as an exprIntCtx code (9 = F64, 10 = F32) so the backend
+// emits an otherwise-untyped integer literal as a double constant in float context.
+fn floatCtxCode(bits: U64) -> U64 {
+    if bits == 32 { return 10 }
+    return 9
+}
+
+
 // Range-check the literals reachable from `id` against an expected integer type
 // described as (eKind, eBits, eSgn): eKind 0 = no context type (spec: a literal
 // with no type is a compile error), 1 = integer of (eBits, eSgn), 2 = a non-
@@ -138,6 +156,11 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
             c.exprIntCtx[id] = intCtxCode(bits: eBits, sgn: eSgn)
         }
     }
+    if eKind == 2 {
+        if id < c.exprIntCtx.count {
+            c.exprIntCtx[id] = floatCtxCode(bits: eBits)
+        }
+    }
     val e: Expr = c.exprs[id]
     match e {
         Expr.Int(val value, val offset, val isBool, val tyStart, val tyLen, val isNeg) => {
@@ -177,10 +200,16 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
                     checkLitCtx(c: inout c, id: lhs, eKind: eKind, eBits: eBits, eSgn: eSgn)
                     checkLitCtx(c: inout c, id: rhs, eKind: eKind, eBits: eBits, eSgn: eSgn)
                 } else {
-                    if checkBinTraitRhs(c: inout c, op: op, lhs: lhs, rhs: rhs) {
-                        checkLitCtx(c: inout c, id: lhs, eKind: 0, eBits: 0, eSgn: false)
+                    if eKind == 2 {
+                        // float context flows into both operands (`val x: F64 = 1.5 + 2`).
+                        checkLitCtx(c: inout c, id: lhs, eKind: 2, eBits: eBits, eSgn: false)
+                        checkLitCtx(c: inout c, id: rhs, eKind: 2, eBits: eBits, eSgn: false)
                     } else {
-                        checkArithNoCtx(c: inout c, lhs: lhs, rhs: rhs)
+                        if checkBinTraitRhs(c: inout c, op: op, lhs: lhs, rhs: rhs) {
+                            checkLitCtx(c: inout c, id: lhs, eKind: 0, eBits: 0, eSgn: false)
+                        } else {
+                            checkArithNoCtx(c: inout c, lhs: lhs, rhs: rhs)
+                        }
                     }
                 }
             } else {
@@ -331,6 +360,13 @@ fn exprIntTy(c: inout Comp, id: U64) -> IntTy {
 // (Plew: both operands share a type). If neither operand has a known integer
 // type, the operands carry no context, so a literal there is ambiguous (error).
 fn checkArithNoCtx(c: inout Comp, lhs: U64, rhs: U64) {
+    // a float-typed sibling makes the whole arith float (`1.5 + 2`); the untyped
+    // literal types as a float there (spec/02,12).
+    if exprIsFloat(c: inout c, id: lhs) || exprIsFloat(c: inout c, id: rhs) {
+        checkLitCtx(c: inout c, id: lhs, eKind: 2, eBits: 64, eSgn: false)
+        checkLitCtx(c: inout c, id: rhs, eKind: 2, eBits: 64, eSgn: false)
+        return
+    }
     val lt: IntTy = exprIntTy(c: inout c, id: lhs)
     if lt.known {
         checkLitCtx(c: inout c, id: lhs, eKind: 1, eBits: lt.bits, eSgn: lt.sgn)
@@ -351,6 +387,15 @@ fn checkArithNoCtx(c: inout Comp, lhs: U64, rhs: U64) {
 fn checkLitTi(c: inout Comp, id: U64, ti: TypeInfo) {
     if tiIsInt(c: inout c, ti: ti) {
         checkLitCtx(c: inout c, id: id, eKind: 1, eBits: intBits(c: inout c, start: ti.nameStart, len: ti.nameLen), eSgn: intSigned(c: inout c, start: ti.nameStart, len: ti.nameLen))
+        return
+    }
+    if tiIsFloat(c: inout c, ti: ti) {
+        // spec/02,12: a polymorphic int literal in a float context types as that
+        // float (`val x: F64 = 5`, `1.5 + 2`) — no implicit conversion, the literal
+        // simply IS a float here. Record the float context for the backend.
+        mut val fbits: U64 = 64
+        if rangeEquals(bytes: c.bytes, start: ti.nameStart, len: ti.nameLen, kw: "F32") { fbits = 32 }
+        checkLitCtx(c: inout c, id: id, eKind: 2, eBits: fbits, eSgn: false)
         return
     }
     checkLitCtx(c: inout c, id: id, eKind: 0, eBits: 0, eSgn: false)
