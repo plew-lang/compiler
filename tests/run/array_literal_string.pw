@@ -1,0 +1,7 @@
+import @Std/Io with { print }
+// A legitimate Array[String] literal must still pass.
+fn main() {
+    val xs: Array[String] = ["a", "b"]
+    print(xs[0])
+    print(xs[1])
+}

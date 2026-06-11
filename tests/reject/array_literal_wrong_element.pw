@@ -1,0 +1,2 @@
+// An Array[I64] binding initialized with String-literal elements — reject.
+fn main() { val xs: Array[I64] = ["a", "b"] }

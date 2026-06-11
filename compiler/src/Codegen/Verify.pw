@@ -364,6 +364,21 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             // (separate machinery) and floats (typeOf wobbles float literal vs local).
             if tyLen > 0U64 {
                 checkValueCategory(c: inout c, valueId: init, declStart: tyStart, declLen: tyLen, declIsArray: tyIsArray, ctx: "binding")
+                // an array binding's literal elements (`Array[I64] = ["a", "b"]`):
+                // category-check each element against the declared element type (tyStart
+                // names the element for an array annotation).
+                if tyIsArray {
+                    match c.exprs[init] {
+                        Expr.Array(val elems) => {
+                            mut val ek: U64 = 0
+                            while ek < elems.count {
+                                checkValueCategory(c: inout c, valueId: elems[ek], declStart: tyStart, declLen: tyLen, declIsArray: false, ctx: "element")
+                                ek += 1
+                            }
+                        }
+                        _ => {}
+                    }
+                }
             }
             // register the binding (after the init, so it can't see itself) with its
             // effective type and mutability, so later places resolve / check.
