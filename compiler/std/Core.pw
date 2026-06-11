@@ -236,6 +236,19 @@ pub impl Iterator {
         mut val it = self
         return it.next()
     }
+    // Collect every element into an `Array[Item]`, in iteration order.
+    fn collect() -> Array[Item] {
+        mut val it = self
+        mut val out: Array[Item] = []
+        mut val go: Bool = true
+        while go {
+            match it.next() {
+                Optional.Some(val v) => { out.append(value: v) }
+                Optional.None => { go = false }
+            }
+        }
+        return out
+    }
     // Combine the elements left-to-right with no seed, using the first element as the
     // initial accumulator. `None` for an empty iterator (nothing to reduce).
     fn reduce(combine: fn(acc: Item, x: Item) -> Item) -> Optional[Item] {

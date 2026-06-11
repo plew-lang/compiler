@@ -1,0 +1,29 @@
+import @Std/Io with { print }
+
+// `collect()` — a provided Iterator terminal returning `Array[Item]` (the return-type
+// grounding extends to arrays: `Array[Item]` declares as `Array[I64]`). Works on a bare
+// iterator and at the end of an adapter chain.
+struct Counter { pub mut val n: I64  pub val limit: I64 }
+pub impl Counter as Iterator {
+    type Item = I64
+    inout fn next() -> Optional[I64] {
+        if self.n < self.limit {
+            val v: I64 = self.n
+            self.n = self.n + 1
+            return <Optional.Some v=v />
+        }
+        return <Optional.None />
+    }
+}
+
+fn main() {
+    mut val a: Counter = <Counter n=0 limit=4 />
+    val xs: Array[I64] = a.collect()
+    print(xs.count)   // 4
+    print(xs[2])      // 2
+    mut val b: Counter = <Counter n=1 limit=100 />
+    val ys: Array[I64] = b.map(f: fn(x: I64) -> I64 { return x * 10 }).take(count: 3U64).collect()
+    print(ys.count)   // 3
+    print(ys[0])      // 10
+    print(ys[2])      // 30
+}
