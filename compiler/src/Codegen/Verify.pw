@@ -606,6 +606,72 @@ fn knownNamedTypeId(c: inout Comp, start: U64, len: U64) -> U64 {
     return 0U64
 }
 
+// Category-check a method call's arguments against the method's parameter types
+// (`a.add(n: "s")` for `n: I64`). Conservative like the free-function check: the
+// receiver must reliably recover to a known struct/enum, and the name must resolve to
+// EXACTLY ONE non-generic INHERENT method on it (no overloads, no generic / provided /
+// extension candidate, which could change the binding). Args map to params 1:1.
+fn checkMethodArgCategories(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    val rt: TypeInfo = typeOf(c: inout c, id: recv)
+    if rt.kind != 2U64 {
+        return
+    }
+    val rId: U64 = knownNamedTypeId(c: inout c, start: rt.nameStart, len: rt.nameLen)
+    if rId == 0U64 {
+        return
+    }
+    val nq: U64 = intern(c: inout c, start: nameStart, len: nameLen)
+    mut val theFi: U64 = c.funcs.count
+    mut val count: U64 = 0
+    mut val anyOther: Bool = false
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        val f: Func = c.funcs[fi]
+        if f.hasRecv && f.nameId == nq && f.recvId == rId {
+            if f.typeParams.count > 0U64 || f.isProvided || f.extId != 0U64 {
+                anyOther = true
+            } else {
+                count += 1U64
+                theFi = fi
+            }
+        }
+        fi += 1
+    }
+    if anyOther || count != 1U64 {
+        return
+    }
+    val cf: Func = c.funcs[theFi]
+    if args.count != cf.params.count {
+        return
+    }
+    mut val ai: U64 = 0
+    while ai < args.count {
+        mut val pIdx: U64 = ai
+        if args[ai].hasLabel {
+            val lq: U64 = intern(c: inout c, start: args[ai].labelStart, len: args[ai].labelLen)
+            mut val pj: U64 = 0
+            mut val found: Bool = false
+            while pj < cf.params.count {
+                if cf.params[pj].nameId == lq {
+                    pIdx = pj
+                    found = true
+                    pj = cf.params.count
+                } else {
+                    pj += 1
+                }
+            }
+            if found {
+            } else {
+                pIdx = cf.params.count
+            }
+        }
+        if pIdx < cf.params.count {
+            checkValueCategory(c: inout c, valueId: args[ai].expr, declStart: cf.params[pIdx].tyStart, declLen: cf.params[pIdx].tyLen, declIsArray: cf.params[pIdx].tyIsArray, ctx: "argument")
+        }
+        ai += 1
+    }
+}
+
 // Category-check a free-function call's arguments against the callee's parameter
 // types (`f(n: "s")` for `n: I64`). Conservative to dodge overload ambiguity: only
 // when the name resolves to EXACTLY ONE non-generic free function (no overloads, no
@@ -780,6 +846,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             verifyMethodVis(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
             verifyExpr(c: inout c, id: recv)
             verifyArgs(c: inout c, args: args)
+            checkMethodArgCategories(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
             verifyExpr(c: inout c, id: recv)

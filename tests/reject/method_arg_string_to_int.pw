@@ -1,0 +1,4 @@
+// Passing a String to a non-overloaded inherent method's I64 parameter — reject.
+struct A { pub val x: I64 }
+pub impl A { fn add(n: I64) -> I64 { return self.x + n } }
+fn main() { val a: A = <A x=1 />  val y: I64 = a.add(n: "str") }
