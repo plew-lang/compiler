@@ -1,0 +1,4 @@
+// A non-generic struct field of type I64 set to a struct value — reject.
+struct A { pub val x: I64 }
+struct B { pub val y: I64 }
+fn main() { val a: A = <A x=<B y=1 /> /> }

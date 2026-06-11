@@ -363,32 +363,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             // first attempt — fn_value / dict / rawAlloc false-rejected). Skip arrays
             // (separate machinery) and floats (typeOf wobbles float literal vs local).
             if tyLen > 0U64 {
-                if tyIsArray {
-                } else if exprIsFloat(c: inout c, id: init) || isFloatType(c: inout c, start: tyStart, len: tyLen) {
-                } else {
-                    val annK: U64 = typeInfoOfName(c: inout c, start: tyStart, len: tyLen, isArray: false).kind
-                    val it0: TypeInfo = typeOf(c: inout c, id: init)
-                    val annId: U64 = knownNamedTypeId(c: inout c, start: tyStart, len: tyLen)
-                    if it0.kind == 1U64 {
-                        // a String initializer: reject a numeric or known-named annotation.
-                        if annK == 0U64 || annK == 3U64 || (annK == 2U64 && annId != 0U64) {
-                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: init)), msg: "type mismatch in binding: a String initializer does not match the declared type")
-                        }
-                    } else if it0.kind == 2U64 {
-                        // a known struct/enum initializer: reject a numeric / String
-                        // annotation, or a DIFFERENT known named type.
-                        val vid: U64 = knownNamedTypeId(c: inout c, start: it0.nameStart, len: it0.nameLen)
-                        if vid != 0U64 {
-                            if annK == 0U64 || annK == 1U64 || annK == 3U64 {
-                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: init)), msg: "type mismatch in binding: a struct/enum initializer does not match the declared numeric/String type")
-                            } else {
-                                if annId != 0U64 && annId != vid {
-                                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: init)), msg: "type mismatch in binding: the initializer is a different named type (struct/enum) than the declared type")
-                                }
-                            }
-                        }
-                    }
-                }
+                checkValueCategory(c: inout c, valueId: init, declStart: tyStart, declLen: tyLen, declIsArray: tyIsArray, ctx: "binding")
             }
             // register the binding (after the init, so it can't see itself) with its
             // effective type and mutability, so later places resolve / check.
@@ -615,6 +590,43 @@ fn knownNamedTypeId(c: inout Comp, start: U64, len: U64) -> U64 {
     return 0U64
 }
 
+// Reject a value whose category clearly disagrees with a declared type (a binding's
+// annotation, or a non-generic struct field's declared type). Only fires when the
+// VALUE is RELIABLY typed — a String, or a value of a known struct/enum — and the
+// declared type is a numeric / String / different-named type. A value typeOf reports
+// as numeric (kind 0) is never trusted (kind 0 doubles as the unrecovered default for
+// fn-value refs / dict literals / calls). Skips arrays and floats. `ctx` tunes the
+// message ("binding" / "field").
+fn checkValueCategory(c: inout Comp, valueId: U64, declStart: U64, declLen: U64, declIsArray: Bool, ctx: String) {
+    if declIsArray {
+        return
+    }
+    if exprIsFloat(c: inout c, id: valueId) || isFloatType(c: inout c, start: declStart, len: declLen) {
+        return
+    }
+    val annK: U64 = typeInfoOfName(c: inout c, start: declStart, len: declLen, isArray: false).kind
+    val it0: TypeInfo = typeOf(c: inout c, id: valueId)
+    val annId: U64 = knownNamedTypeId(c: inout c, start: declStart, len: declLen)
+    if it0.kind == 1U64 {
+        if annK == 0U64 || annK == 3U64 || (annK == 2U64 && annId != 0U64) {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueId)), msg: "type mismatch: a String value does not match the declared type here")
+        }
+    } else {
+        if it0.kind == 2U64 {
+            val vid: U64 = knownNamedTypeId(c: inout c, start: it0.nameStart, len: it0.nameLen)
+            if vid != 0U64 {
+                if annK == 0U64 || annK == 1U64 || annK == 3U64 {
+                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueId)), msg: "type mismatch: a struct/enum value does not match the declared numeric/String type here")
+                } else {
+                    if annId != 0U64 && annId != vid {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueId)), msg: "type mismatch: the value is a different named type (struct/enum) than the declared type")
+                    }
+                }
+            }
+        }
+    }
+}
+
 // True when (target kind, value kind) are a definite, garbage-producing category
 // mismatch. kinds: 0 signed int, 3 unsigned int (both "numeric"), 1 String, 2 a named
 // type (struct / enum / Bool). A numeric or String place can never hold a named-type
@@ -740,9 +752,37 @@ fn verifyExpr(c: inout Comp, id: U64) {
                     }
                 }
             }
+            // a NON-GENERIC struct's field value whose category disagrees with the
+            // field's declared type (`<A x="s" />` for `x: I64`) reinterprets the bits
+            // — reject (same reliable-value discipline as the let-annotation check).
+            // Generic structs / enums (field types need env grounding) are deferred.
+            mut val nonGenSidx: U64 = c.structs.count
+            if isEnum {
+            } else {
+                if ty == 0U64 || c.types[ty].args.count == 0U64 {
+                    val sidxC: U64 = structIndexByName(c: inout c, start: typeStart, len: typeLen)
+                    if sidxC < c.structs.count {
+                        if c.structs[sidxC].typeParams.count == 0U64 && !c.structs[sidxC].isExtern {
+                            nonGenSidx = sidxC
+                        }
+                    }
+                }
+            }
             mut val i: U64 = 0
             while i < fields.count {
                 verifyExpr(c: inout c, id: fields[i].value)
+                if nonGenSidx < c.structs.count {
+                    val cfs: Array[FieldDef] = c.structs[nonGenSidx].fields
+                    mut val fk: U64 = 0
+                    while fk < cfs.count {
+                        if spansEqual(c: inout c, aStart: cfs[fk].nameStart, aLen: cfs[fk].nameLen, bStart: fields[i].nameStart, bLen: fields[i].nameLen) {
+                            checkValueCategory(c: inout c, valueId: fields[i].value, declStart: cfs[fk].tyStart, declLen: cfs[fk].tyLen, declIsArray: cfs[fk].tyIsArray, ctx: "field")
+                            fk = cfs.count
+                        } else {
+                            fk += 1U64
+                        }
+                    }
+                }
                 // a field specified twice in one construction (`<P x=1 x=2 />`) is a
                 // silent last-wins bug otherwise — reject the duplicate (spec/05).
                 mut val j: U64 = 0

@@ -1,0 +1,3 @@
+// A non-generic struct field of type I64 set to a String value reinterprets the bits.
+struct A { pub val x: I64 }
+fn main() { val a: A = <A x="str" /> }
