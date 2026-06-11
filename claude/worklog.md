@@ -30,7 +30,7 @@
 ### A. soundness（spec-invalid を accept する穴＝最優先）
 
 - **ファクトリ公開ゲート (a)（spec/05）**＝全 pub フィールドでも cross-module 構築は `pub impl Type { factory }` 明示要。`factory` 宣言機能と一括（現状は (b) フィールドゲート＝非 pub を弾く・のみで、全 pub 型は許容＝spec (a) より緩い）。
-- **generic-receiver method の value 引数 grounding**＝`w.set(5I64)` on `W[String]` が silent miscompile（`substTypeInfo`/`mf.typeParams` が impl param `T` を ground し切らず素通し・試行は `fold[B]` 等 method-own type-param を持つ iterator を誤 reject→revert＝**method-own param を除外した grounding が要る**）。共有のクラッシュ事例〔dict 添字キー〕は別経路で reject 済。
+- **generic-receiver method の value 引数 grounding**＝`w.set(5I64)` on `W[String]` が silent miscompile（`substTypeInfo`/`mf.typeParams` が impl param `T` を ground し切らず素通し）。2 回試行とも失敗＝(1) method-own param を含めると `fold[B]` 等を誤 reject、(2) **owner struct/enum の typeParams で ground**（`ownerTypeParamsForRef`）してもコンパイラ自身の source を誤 reject〔`expected=I64 got=U64 from=Field:ref`〕＋ tmp/w.pw では grounding が走らず（recv=W の genericRecv は true だが substitution が String を返さず素通し）＝**name-based 同一性の interning 衝突／index 整合がここでも噛む＝下の「横断＝型パラメータ判定のスコープ化」を先に直さないと安全に潰せない**。共有のクラッシュ事例〔dict 添字キー〕は別経路で reject 済。
 - **重なる inout ②③**（部分/添字重なり＝`a.merge(inout a.field)`・`arr[i],arr[j]` の distinct 証明）＝spec 通り lint＋限定ランタイム panic（将来・ケース①構文同一は実装済）。
 
 > 受理健全性は広く確認済（int/float/幅/sign/struct/Optional・引数/代入/比較/return/配列要素/dict キー/if-while 条件 Bool/closure 戻り型/void 値 return/move/unique/可視性/overflow/missing-return/網羅性をすべて reject）。
