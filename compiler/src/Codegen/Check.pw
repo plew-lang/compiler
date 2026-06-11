@@ -680,6 +680,7 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
         val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
         if mi != c.funcs.count {
             val mf: Func = c.funcs[mi]
+            tcCheckGenericArgConsistency(c: inout c, f: mf, args: args)
             val ps: Array[Param] = mf.params
             val genericRecv: Bool = isGenericInst(c: inout c, ref: rt.ref)
             mut val i: U64 = 0
