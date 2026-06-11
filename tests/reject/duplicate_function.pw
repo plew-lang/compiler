@@ -1,0 +1,5 @@
+// Two free functions with an identical selector (name + labels + param types) — the
+// overload set can't disambiguate them. Reject.
+fn f(a: I64) -> I64 { return a }
+fn f(a: I64) -> I64 { return a + 1 }
+fn main() { val x: I64 = f(a: 1) }

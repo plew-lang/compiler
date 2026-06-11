@@ -1,0 +1,7 @@
+// Two methods on the same type with an identical selector — reject.
+struct A { pub val x: I64 }
+pub impl A {
+    fn get(n: I64) -> I64 { return n }
+    fn get(n: I64) -> I64 { return n + 1 }
+}
+fn main() { val a: A = <A x=1 /> }

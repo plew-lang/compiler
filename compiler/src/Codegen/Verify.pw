@@ -62,6 +62,14 @@ fn verifyProgram(c: inout Comp) {
 // construction / pattern ambiguous (and silently pick one) — a hidden-meaning bug.
 // Only the entry module (module 0) is the user's code; std/prelude is trusted.
 fn checkDeclShapes(c: inout Comp) {
+    // the `--gen` harness (spec/16) is a synthesized, trusted artifact that may
+    // duplicate derive scaffolding by construction; the actual generated source is
+    // decl-shape-checked when the final program is compiled normally (non-gen).
+    if c.genMode {
+        return
+    }
+    checkDupTypeNames(c: inout c)
+    checkDupFns(c: inout c)
     mut val si: U64 = 0
     while si < c.structs.count {
         val sd: StructDef = c.structs[si]
@@ -93,6 +101,141 @@ fn checkDeclShapes(c: inout Comp) {
         }
         ei += 1
     }
+}
+
+// Reject two entry-module type definitions sharing a name (`struct A {} struct A {}`,
+// `struct A {} enum A {}`): the second silently shadows the first in name resolution.
+// Names are collected from both structs and enums; only module 0 (the user's code) is
+// checked, so defining a type that coincides with a std type is a separate concern.
+fn checkDupTypeNames(c: inout Comp) {
+    mut val names: Array[U64] = []
+    mut val offs: Array[U64] = []
+    mut val si: U64 = 0
+    while si < c.structs.count {
+        val sd: StructDef = c.structs[si]
+        if sd.isExtern {
+        } else {
+            if moduleOf(c: inout c, offset: sd.nameStart) == 0U64 {
+                names.append(value: intern(c: inout c, start: sd.nameStart, len: sd.nameLen))
+                offs.append(value: sd.nameStart)
+            }
+        }
+        si += 1
+    }
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val ed: EnumDef = c.enums[ei]
+        if moduleOf(c: inout c, offset: ed.nameStart) == 0U64 {
+            names.append(value: intern(c: inout c, start: ed.nameStart, len: ed.nameLen))
+            offs.append(value: ed.nameStart)
+        }
+        ei += 1
+    }
+    mut val i: U64 = 0
+    while i < names.count {
+        mut val j: U64 = i + 1U64
+        while j < names.count {
+            if names[i] == names[j] {
+                compileErrorAt(line: lineOf(c: inout c, offset: offs[j]), msg: "duplicate type name (a struct/enum with this name is already declared in this module)")
+            }
+            j += 1
+        }
+        i += 1
+    }
+}
+
+// The extension-view id of a parameter's declared type (0 = plain), for distinguishing
+// a view-aware overload `f(a: P)` vs `f(a: P#Ext)` from a true duplicate.
+fn paramViewId(c: inout Comp, p: Param) -> U64 {
+    if p.ty < c.types.count {
+        return c.types[p.ty].viewExtId
+    }
+    return 0U64
+}
+
+// Two functions/methods are EXACT duplicates when they share name + receiver and every
+// parameter agrees on label + declared type head + array-ness + extension view. Such a
+// pair is ambiguous (overload resolution silently picks one) — a hidden-meaning bug. A
+// distinct param type / label / view makes a legitimate overload, so those don't match.
+fn isExactDupFn(c: inout Comp, a: Func, b: Func) -> Bool {
+    if a.nameId != b.nameId {
+        return false
+    }
+    if a.recvId != b.recvId {
+        return false
+    }
+    if a.extId != b.extId {
+        return false
+    }
+    if a.params.count != b.params.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.params.count {
+        val pa: Param = a.params[i]
+        val pb: Param = b.params[i]
+        if pa.noLabel != pb.noLabel {
+            return false
+        }
+        if pa.noLabel {
+        } else {
+            if pa.nameId != pb.nameId {
+                return false
+            }
+        }
+        if pa.tyNameId != pb.tyNameId {
+            return false
+        }
+        if pa.tyIsArray != pb.tyIsArray {
+            return false
+        }
+        if paramViewId(c: inout c, p: pa) != paramViewId(c: inout c, p: pb) {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// Reject two entry-module function/method declarations with an identical selector
+// (name + receiver + per-param label/type/view). Conservative: skip generic templates
+// (their instances differ), provided-method copies (synthesized per conformer), and
+// any decl with a default arg (omission generates extra selectors — out of scope here).
+fn checkDupFns(c: inout Comp) {
+    mut val cand: Array[U64] = []
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        val f: Func = c.funcs[fi]
+        if f.typeParams.count == 0U64 && !f.isProvided && !f.isExtern && !fnHasDefault(c: inout c, f: f) {
+            if moduleOf(c: inout c, offset: f.nameStart) == 0U64 {
+                cand.append(value: fi)
+            }
+        }
+        fi += 1
+    }
+    mut val i: U64 = 0
+    while i < cand.count {
+        mut val j: U64 = i + 1U64
+        while j < cand.count {
+            if isExactDupFn(c: inout c, a: c.funcs[cand[i]], b: c.funcs[cand[j]]) {
+                compileErrorAt(line: lineOf(c: inout c, offset: c.funcs[cand[j]].nameStart), msg: "duplicate function: another declaration has the same name, labels, and parameter types (overloads must differ in a label or a parameter type)")
+            }
+            j += 1
+        }
+        i += 1
+    }
+}
+
+// Whether any parameter of `f` carries a default argument.
+fn fnHasDefault(c: inout Comp, f: Func) -> Bool {
+    mut val i: U64 = 0
+    while i < f.params.count {
+        if f.params[i].hasDefault {
+            return true
+        }
+        i += 1
+    }
+    return false
 }
 
 // Reject a duplicate field name within one field list (struct body / variant payload).

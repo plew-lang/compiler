@@ -1,0 +1,9 @@
+import @Std/Io with { print }
+// Legitimate overloads differing only in a parameter TYPE must NOT be flagged as
+// duplicates (same name + label, different type head).
+fn f(a: I64) -> I64 { return a }
+fn f(a: String) -> I64 { return 99I64 }
+fn main() {
+    print(f(a: 1I64))
+    print(f(a: "x"))
+}

@@ -1,0 +1,4 @@
+// Two type definitions sharing a name — the second silently shadows the first. Reject.
+struct A { pub val x: I64 }
+struct A { pub val y: I64 }
+fn main() { val a: A = <A x=1 /> }
