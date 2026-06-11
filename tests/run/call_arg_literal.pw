@@ -1,0 +1,11 @@
+import @Std/Io with { print }
+
+// A context-typed literal as a free-function argument infers its type from the resolved
+// parameter's declared type (record / dict / `()` literals carry no type of their own).
+// Resolved unambiguously by name + label for a non-generic free function.
+fn dist(p: (x: I64, y: I64)) -> I64 { return p.x + p.y }
+fn size(d: Dictionary[U64, Bool]) -> U64 { return d.count }
+fn main() {
+    print(dist(p: (x: 3, y: 4)))     // 7 (record literal arg)
+    print(size(d: [:]))              // 0 (empty dict literal arg)
+}

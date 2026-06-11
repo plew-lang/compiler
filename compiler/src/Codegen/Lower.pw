@@ -225,12 +225,65 @@ fn lowerType(c: inout Comp, t: TypeAst) -> PType {
 }
 
 // Lower a call/construction argument list.
-fn lowerArgs(c: inout Comp, args: Array[ArgAst]) -> Array[Arg] {
+// The declared TypeRef of the parameter labelled `argLabel` of the free function
+// `fnName`, or 0 when it can't be resolved unambiguously (no such function, an
+// overloaded / generic / method candidate, or no matching label). The callee is
+// declared before any body that calls it (source order), so its param types are
+// registered TypeRefs here. Used to give a call-argument literal its context type.
+fn callArgType(c: inout Comp, fnName: String, argLabel: String) -> U64 {
+    if fnName.bytes.count == 0U64 {
+        return 0U64
+    }
+    if argLabel.bytes.count == 0U64 {
+        return 0U64
+    }
+    val fnB: Bind = internBytes(c: inout c, s: fnName)
+    val fnId: U64 = intern(c: inout c, start: fnB.nameStart, len: fnB.nameLen)
+    val lb: Bind = internBytes(c: inout c, s: argLabel)
+    val lid: U64 = intern(c: inout c, start: lb.nameStart, len: lb.nameLen)
+    mut val matchCount: U64 = 0
+    mut val resultTy: U64 = 0
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        val f: Func = c.funcs[fi]
+        if f.nameId == fnId {
+            if f.hasRecv {
+            } else {
+                if f.typeParams.count == 0U64 {
+                    matchCount += 1
+                    mut val pi: U64 = 0
+                    while pi < f.params.count {
+                        if intern(c: inout c, start: f.params[pi].nameStart, len: f.params[pi].nameLen) == lid {
+                            resultTy = f.params[pi].ty
+                        }
+                        pi += 1
+                    }
+                }
+            }
+        }
+        fi += 1
+    }
+    if matchCount == 1U64 {
+        return resultTy
+    }
+    return 0U64
+}
+
+fn lowerArgs(c: inout Comp, args: Array[ArgAst], fnName: String) -> Array[Arg] {
     mut val out: Array[Arg] = []
     mut val i: U64 = 0
     while i < args.count {
         val a: ArgAst = args[i]
-        val e: U64 = lowerExpr(c: inout c, e: a.value)
+        // flow the resolved parameter's type to a context-typed argument literal (a dict
+        // / record / `()` whose type is only known from the parameter). Defensive: 0
+        // falls back to context-free lowering (overloaded / generic / method calls).
+        val actx: U64 = callArgType(c: inout c, fnName: fnName, argLabel: a.label)
+        mut val e: U64 = 0
+        if actx != 0U64 {
+            e = lowerExprWithCtx(c: inout c, e: a.value, ctxRef: actx)
+        } else {
+            e = lowerExpr(c: inout c, e: a.value)
+        }
         mut val labelStart: U64 = 0
         mut val labelLen: U64 = 0
         if a.hasLabel {
@@ -525,7 +578,7 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
         }
         ExprAst.Call(val name, val args, val span) => {
             // ORIGINAL offset (name is at the call's span start) — feeds moduleOf.
-            val a: Array[Arg] = lowerArgs(c: inout c, args: args)
+            val a: Array[Arg] = lowerArgs(c: inout c, args: args, fnName: name)
             result = c.pushExpr(e: <Expr.Call nameStart=span.start nameLen=name.bytes.count args=a />)
         }
         ExprAst.Field(val base, val name, val span) => {
@@ -535,13 +588,13 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
         }
         ExprAst.Method(val recv, val name, val args, val span) => {
             val r: U64 = lowerExpr(c: inout c, e: recv)
-            val a: Array[Arg] = lowerArgs(c: inout c, args: args)
+            val a: Array[Arg] = lowerArgs(c: inout c, args: args, fnName: "")
             val nm: Bind = internBytes(c: inout c, s: name)
             result = c.pushExpr(e: <Expr.Method recv=r nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
         }
         ExprAst.ExtMethod(val recv, val src, val name, val args, val span) => {
             val r: U64 = lowerExpr(c: inout c, e: recv)
-            val a: Array[Arg] = lowerArgs(c: inout c, args: args)
+            val a: Array[Arg] = lowerArgs(c: inout c, args: args, fnName: "")
             val srcN: Bind = internBytes(c: inout c, s: src)
             val nm: Bind = internBytes(c: inout c, s: name)
             result = c.pushExpr(e: <Expr.ExtMethod recv=r srcStart=srcN.nameStart srcLen=srcN.nameLen nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
