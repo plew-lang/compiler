@@ -1,0 +1,6 @@
+// spec/06: a generic type annotation must supply the right number of type
+// arguments — Box[T] takes one, so `Box[I64, String]` is invalid.
+struct Box[T] { pub val v: T }
+fn main() {
+    val b: Box[I64, String] = <Box[I64] v=1I64 />
+}
