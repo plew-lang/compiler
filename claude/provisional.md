@@ -41,7 +41,7 @@
 ## 文字列
 
 - `String`＝不変・UTF-8 妥当・`==` バイト等価な **CoW 値型** → **現状：`{const char* data; long long len}`・不変・byte-`==`**（不変と byte-eq は spec 通り・不変ゆえ共有で観測的に正しい）。残：**UTF-8 妥当性チェックなし**・**連結なし**・**`scalars`/`graphemes`/`Ord`/substring/`Slice` なし**・解放なし（leak）。`.bytes`（`Array[U8]`・O(1) 共有ビュー）は spec 通り。spec/02。
-- **文字列リテラルのエスケープ**：内容を C へ **verbatim 透過**（`\n`/`\"`/`\\`/`\t` 等 C と共通のものだけ動く）。Plew 固有エスケープは未対応。
+- **文字列リテラルのエスケープ**：`strDecodeBytes`/`escByte` が `\n`/`\t`/`\r`/`\0`＋`\\`/`\"`/`\'`（次バイトそのもの）を decode 済。**未対応＝`\u{XXXX}` Unicode エスケープ**（spec/02・`café`＝`\u{e9}`・絵文字＝`\u{1F600}`）＝UTF-8 バイト列へのエンコードが要る。**2026-06-11 試行**＝`appendUtf8`（UTF-8 1-4 バイト）＋`\u{}` parse を書いたが U64→U8 truncation が必要で `as U8` は無損失のみゆえ拒否。`truncU8` を **compiler 内 `extern "plew-intrinsic"`＋genLlvmCall intercept（LLVMBuildTrunc）**にしたが、**ADD→reseed→USE の chicken-and-egg＋seed 生成時に intercept が効かず `_truncU8` undefined**（compiler 自身の extern-declared 関数呼びが genLlvmCall の name-intercept を経ない疑い＝bitCastU64 は std から呼ばれ動くが compiler 自身からの呼びは別経路の可能性）→ revert。**直すには**＝(a) truncU8 を runtime `plew_*` 関数にして実シンボル化（intercept でなくリンク）、または (b) compiler の extern intrinsic 呼び経路が name-intercept を通るか確認・配線。`\u{}` は nice-to-have ゆえ focused 別作業。
 
 ## 配列・辞書・集合・タプル
 
