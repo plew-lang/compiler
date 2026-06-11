@@ -1085,7 +1085,7 @@ fn lowerEnumDecl(c: inout Comp, d: DeclAst) {
         variants.append(<Variant nameStart=vn.nameStart nameLen=vn.nameLen nameId=intern(c: inout c, start: vn.nameStart, len: vn.nameLen) fields=vfields />)
         i += 1
     }
-    c.enums.append(<EnumDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams variants=variants />)
+    c.enums.append(<EnumDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams variants=variants defOffset=d.span.start />)
     // `defaultExtension #Ext` in the enum body (spec/09): record (type, extension) so
     // the extension's methods join this enum's bare resolution surface (findMethod).
     val tid: U64 = intern(c: inout c, start: nm.nameStart, len: nm.nameLen)

@@ -17,6 +17,38 @@ fn moduleOf(c: inout Comp, offset: U64) -> U64 {
     return 0
 }
 
+// Whether (start,len) names a lang-item type (spec/15): the ambient types the
+// language/std owns (numeric, Bool, String, the containers, Optional/Result, ranges,
+// Ref/WeakRef, the concurrency handles). Used to reject a user REDEFINITION of one
+// (`enum Optional { … }`) — these names are reserved by the language.
+fn isLangItemTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I8") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I16") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I32") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I64") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U8") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U16") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U32") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U64") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "F32") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "F64") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Bool") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "String") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Array") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Dictionary") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Optional") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Result") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Ordering") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "HalfOpenRange") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "ClosedRange") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Promise") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "JoinHandle") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Ref") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "WeakRef") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "RawBuffer") { return true }
+    return false
+}
+
 // Whether `offset` falls inside some loaded file's source range (a real, user- or
 // std-written span). Distinguishes genuine source from compiler-synthesized spans
 // (interned bytes appended into the gaps between module ranges, e.g. the

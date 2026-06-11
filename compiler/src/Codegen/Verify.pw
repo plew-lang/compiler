@@ -68,6 +68,7 @@ fn checkDeclShapes(c: inout Comp) {
     if c.genMode {
         return
     }
+    checkLangItemRedef(c: inout c)
     checkDupTypeNames(c: inout c)
     checkDupFns(c: inout c)
     checkDupParamLabels(c: inout c)
@@ -108,6 +109,43 @@ fn checkDeclShapes(c: inout Comp) {
 // `struct A {} enum A {}`): the second silently shadows the first in name resolution.
 // Names are collected from both structs and enums; only module 0 (the user's code) is
 // checked, so defining a type that coincides with a std type is a separate concern.
+// Reject a user (entry-module) type definition that redefines a lang-item type
+// (`struct String { … }`, `enum Optional { … }`): these names are reserved by the
+// language (spec/15 — they are ambient). The std definitions live in their own
+// modules (id ≠ 0), so only entry-module redefinitions are flagged. Without this the
+// user's def silently shadows the lang item in name resolution.
+fn checkLangItemRedef(c: inout Comp) {
+    mut val si: U64 = 0
+    while si < c.structs.count {
+        val sd: StructDef = c.structs[si]
+        // extern structs ARE the canonical lang-item declarations (String/Bool/numeric
+        // intrinsics in Core, defOffset 0) — skip them; only a non-extern user redef hits.
+        if sd.isExtern {
+        } else {
+            if offsetIsLoaded(c: inout c, offset: sd.defOffset) {
+                if moduleOf(c: inout c, offset: sd.defOffset) == 0U64 {
+                    if isLangItemTypeName(c: inout c, start: sd.nameStart, len: sd.nameLen) {
+                        compileErrorAt(line: lineOf(c: inout c, offset: sd.defOffset), msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)")
+                    }
+                }
+            }
+        }
+        si += 1U64
+    }
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val ed: EnumDef = c.enums[ei]
+        if offsetIsLoaded(c: inout c, offset: ed.defOffset) {
+            if moduleOf(c: inout c, offset: ed.defOffset) == 0U64 {
+                if isLangItemTypeName(c: inout c, start: ed.nameStart, len: ed.nameLen) {
+                    compileErrorAt(line: lineOf(c: inout c, offset: ed.defOffset), msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)")
+                }
+            }
+        }
+        ei += 1U64
+    }
+}
+
 fn checkDupTypeNames(c: inout Comp) {
     mut val names: Array[U64] = []
     mut val offs: Array[U64] = []

@@ -29,7 +29,7 @@
 
 ### A. soundness（spec-invalid を accept する穴＝最優先）
 
-- **ファクトリ公開ゲート（spec/05）**＝`<A x=1 />` で private フィールド（無 `pub`）を **cross-module 構築サイトで設定できてしまう**（encapsulation 違反）。要：**モジュール境界 aware の構築 vis**（同一モジュール OK・cross-module のみ private 拒否）。`[k:v]`/`[:]`/std struct 構築が同一モジュール private フィールド構築へ脱糖するので素朴な `inAnonImplOf` 流用は過剰＝危険。`factory`/`optional`/`result factory` 宣言と一括の focused 作業（provisional §構築・factory）。メタプロ側 (a) ゲートもこれに連動。
+- ✅ **構築フィールドゲート (b)（spec/05）**＝cross-module で非 `pub` フィールド設定を loud reject（`checkConstructVis`＋`StructDef.defOffset`＋`offsetIsLoaded`・dict literal 等の synthesize 構築は除外）。**残＝公開ゲート (a)**（全 pub でも外部構築は `pub impl factory` 要）は `factory` 宣言機能と一括。
 - **lang-item 型の再定義を loud reject**（現状 silent tolerate・小）。
 - **曖昧な無サフィックス整数リテラルが先頭オーバーロードを選ぶ**（`k(a:I32)`/`k(a:U64)` に `k(a:5)`＝呼出位置の曖昧検出が要る・hidden meaning）。
 - **重なる inout のケース②③**（部分/添字重なり＝`a.merge(inout a.field)`・`arr[i],arr[j]` の distinct 証明）＝spec 通り lint＋限定ランタイム panic（ケース①構文同一は実装済）。

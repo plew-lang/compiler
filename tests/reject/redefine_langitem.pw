@@ -1,0 +1,9 @@
+// Lang-item redefinition (spec/15): the built-in ambient types are reserved —
+// a user definition that reuses one of their names (`enum Optional`, `struct
+// String`, …) is rejected (it would otherwise silently shadow the lang item).
+enum Optional[T] {
+    None
+    Some(value: T)
+}
+
+fn main() {}

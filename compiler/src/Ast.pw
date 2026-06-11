@@ -553,6 +553,9 @@ struct EnumDef {
     // generic type parameters `[T, U]` (see StructDef.typeParams).
     pub val typeParams: Array[Bind]
     pub val variants: Array[Variant]
+    // original source offset of the declaration (see StructDef.defOffset): kept for
+    // `moduleOf` (the lang-item redefinition check), since nameStart is re-interned.
+    pub val defOffset: U64 = 0
 }
 
 struct Func {

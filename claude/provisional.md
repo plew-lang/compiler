@@ -78,7 +78,7 @@
 ## 構築・factory
 
 - ✅ **JSX `<Type f=e/>`／`<E.V f=e/>`＋フィールドデフォルト値 `val x: T = expr`**。**未実装**＝`factory`（明示宣言）・`optional`・`result factory`（可謬構築）。
-- **🔴 ファクトリ公開ゲート（spec/05）→ 未実装＝soundness 穴**。spec は外部構築に 2 ゲート：**(a) 公開ゲート**＝既定 memberwise factory は private・外部構築は `pub impl Type { factory }` 明示要・**(b) フィールドゲート**＝設定できるのは `pub` フィールドのみ。**現状は (a)(b) とも未強制**＝`<A x=1 />` で private フィールドを cross-module 構築サイトで設定できてしまう（spec 違反）。**(b) を素朴に足すと危険**＝`[k:v]`/`[:]`/std struct 構築が同一モジュール private フィールド構築へ脱糖し全滅し得る／`inAnonImplOf` は同一モジュール構築も弾く過剰さ＝**モジュール境界 aware の構築 vis**（同一モジュール OK・cross-module のみ private 拒否）が要る。factory 機能と一括の focused 作業。メタプロ側＝ディレクティブ引数構築は (b) のみ強制済〔`checkDirectiveArgsPublic`〕・(a) はこのゲート一般実装時に拡張。
+- ✅ **(b) フィールドゲート（spec/05）**＝cross-module 構築で非 `pub` フィールド（vis 0/1）を設定すると loud reject（`checkConstructVis`・同一モジュール構築は無制限・enum payload/record〔全 pub 合成 struct〕/extern lang-item/synthesize された dict literal フィールドは除外）。実装鍵＝**`StructDef.defOffset`**〔decl span start＝再インターンされた nameStart は module 0 ゆえ defining module 特定不可・これで `moduleOf` が正しい源モジュールを引く〕＋**`offsetIsLoaded`**〔real source span か合成 span かを判別＝dict の `keys`/… を skip〕＋`MakeField.offset`〔real source offset・nameStart でなくこちらで gate〕。test reject construct_private_field_crossmodule。**残＝(a) 公開ゲート**（既定 memberwise factory は private・全 pub フィールドでも外部構築は `pub impl Type { factory }` 明示要）＝`factory` 宣言機能と一括（factory 未実装ゆえ現状は全 pub フィールド型の cross-module 構築は許容＝spec (a) より緩い・factory 着手時に拡張）。メタプロ側ディレクティブ引数構築は (b) 強制済〔`checkDirectiveArgsPublic`〕。
 
 ## 共有可変・並行性・メタプログラミング
 
@@ -93,4 +93,4 @@
 
 ---
 
-**再訪の優先度**：観測挙動を歪める大物はほぼ解消済（整数幅・match・ラベル・無損失 `as`・値意味論・CoW＋refcount 解放・generics・トレイト・`Optional`/`Result`/`try`・`unique`＋`deinit`・クロージャ・演算子トレイト全配線・async/await・無名レコード・newtype〔int〕・受理健全性の共有パス・LLVM 単一 backend）。**残る soundness 穴＝🔴 ファクトリ公開ゲート（最優先）**・曖昧リテラル/method 値化・lang-item 型パラメータ名衝突 bug。残る hidden meaning＝newtype 非 int 継承・From/TryFrom・一般 Chain・Iterator〔sum/enumerate/zip〕・名前空間 import・`\u{}`。残る hidden cost＝backend ARC drop。詳細順序は [worklog.md](worklog.md)「🗺️ ロードマップ」。
+**再訪の優先度**：観測挙動を歪める大物はほぼ解消済（整数幅・match・ラベル・無損失 `as`・値意味論・CoW＋refcount 解放・generics・トレイト・`Optional`/`Result`/`try`・`unique`＋`deinit`・クロージャ・演算子トレイト全配線・async/await・無名レコード・newtype〔int〕・受理健全性の共有パス・**構築フィールドゲート (b)**・LLVM 単一 backend）。**残る soundness 穴**＝lang-item 再定義 reject・曖昧リテラル/method 値化・lang-item 型パラメータ名衝突 bug・重なる inout ②③・ファクトリ公開ゲート (a)〔factory 機能依存〕。残る hidden meaning＝newtype 非 int 継承・From/TryFrom・一般 Chain・Iterator〔sum/enumerate/zip〕・名前空間 import・`\u{}`。残る hidden cost＝backend ARC drop。詳細順序は [worklog.md](worklog.md)「🗺️ ロードマップ」。
