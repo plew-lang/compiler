@@ -1,0 +1,7 @@
+// A function with no declared return type returns `()` (spec/04) — `return 5I64`
+// from it is a type error (the value would be silently dropped).
+fn f() {
+    return 5I64
+}
+
+fn main() {}

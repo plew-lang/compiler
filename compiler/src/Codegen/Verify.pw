@@ -391,6 +391,20 @@ fn checkCondBool(c: inout Comp, cond: U64) {
     tcCheckValue(c: inout c, expectedRef: boolRef, valueExpr: cond, pos: "condition")
 }
 
+// Whether `id` is the unit value `()` — an anonymous record construction (no head
+// name) with no fields. (A non-empty record `(x: 1)` also has no head name but has
+// fields.)
+fn exprIsUnit(c: inout Comp, id: U64) -> Bool {
+    match c.exprs[id] {
+        Expr.Make(typeStart: _, val typeLen, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+            return typeLen == 0U64 && fields.count == 0U64
+        }
+        _ => {
+            return false
+        }
+    }
+}
+
 fn verifyStmt(c: inout Comp, stmtId: U64) {
     match c.stmts[stmtId] {
         Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
@@ -452,6 +466,15 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
         }
         Stmt.Return(val value, val hasValue) => {
             if hasValue {
+                // a function with no declared return type (`fn f() { … }`) returns `()` —
+                // `return 5I64` from it is a type error (the value is silently dropped),
+                // unless the value is itself the unit `()` (a bare-record construction).
+                if c.curRetVoid {
+                    if exprIsUnit(c: inout c, id: value) {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "a function with no return type cannot return a value (spec/04)")
+                    }
+                }
                 checkLitSpan(c: inout c, id: value, tyStart: c.curRetStart, tyLen: c.curRetLen, isArray: c.curRetIsArray)
                 // a returned value whose category disagrees with the declared return
                 // type (`return "s"` / `return <A…/>` from `-> I64`). Same shared,
