@@ -70,6 +70,7 @@ fn checkDeclShapes(c: inout Comp) {
     }
     checkDupTypeNames(c: inout c)
     checkDupFns(c: inout c)
+    checkDupParamLabels(c: inout c)
     mut val si: U64 = 0
     while si < c.structs.count {
         val sd: StructDef = c.structs[si]
@@ -223,6 +224,40 @@ fn checkDupFns(c: inout Comp) {
             j += 1
         }
         i += 1
+    }
+}
+
+// Reject two labelled parameters of one entry-module function sharing a label
+// (`fn f(a: I64, a: I64)`): the call `f(a: …, a: …)` can't bind them unambiguously,
+// and the second silently shadows the first in the body. Label-suppressed (`~:`)
+// params carry no label and are exempt.
+fn checkDupParamLabels(c: inout Comp) {
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        val f: Func = c.funcs[fi]
+        if f.isExtern || f.isProvided {
+        } else {
+            if moduleOf(c: inout c, offset: f.nameStart) == 0U64 {
+                mut val i: U64 = 0
+                while i < f.params.count {
+                    if f.params[i].noLabel {
+                    } else {
+                        mut val j: U64 = i + 1U64
+                        while j < f.params.count {
+                            if f.params[j].noLabel {
+                            } else {
+                                if f.params[i].nameId == f.params[j].nameId {
+                                    compileErrorAt(line: lineOf(c: inout c, offset: f.params[j].nameStart), msg: "duplicate parameter label (each labelled parameter must have a distinct name)")
+                                }
+                            }
+                            j += 1
+                        }
+                    }
+                    i += 1
+                }
+            }
+        }
+        fi += 1
     }
 }
 
@@ -652,6 +687,21 @@ fn verifyExpr(c: inout Comp, id: U64) {
                     cei = genericEnumIndex(c: inout c, nameStart: typeStart, nameLen: typeLen)
                 }
                 if cei < c.enums.count {
+                    // a construction naming a variant the enum does not declare
+                    // (`<E.Z />`) would silently build variant 0 (variantIndex returns 0
+                    // for an unknown name) — a garbage tag. Reject it (spec/05).
+                    mut val vfound: Bool = false
+                    mut val vk: U64 = 0
+                    while vk < c.enums[cei].variants.count {
+                        if spansEqual(c: inout c, aStart: c.enums[cei].variants[vk].nameStart, aLen: c.enums[cei].variants[vk].nameLen, bStart: variantStart, bLen: variantLen) {
+                            vfound = true
+                        }
+                        vk += 1
+                    }
+                    if vfound {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "unknown enum variant in construction (this enum has no such variant)")
+                    }
                     val cvi: U64 = variantIndex(c: inout c, enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
                     if cvi < c.enums[cei].variants.count {
                         val cfs: Array[FieldDef] = c.enums[cei].variants[cvi].fields

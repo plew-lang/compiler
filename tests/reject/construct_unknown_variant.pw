@@ -1,0 +1,4 @@
+// Constructing a variant the enum does not declare (`<E.Z />`) would silently build
+// variant 0 (a garbage tag) — reject.
+enum E { A B }
+fn main() { val e: E = <E.Z /> }
