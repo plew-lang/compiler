@@ -364,7 +364,6 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             // (separate machinery) and floats (typeOf wobbles float literal vs local).
             if tyLen > 0U64 {
                 tcCheckValue(c: inout c, expectedRef: ty, valueExpr: init, pos: "let")
-                checkValueCategory(c: inout c, valueId: init, declStart: tyStart, declLen: tyLen, declIsArray: tyIsArray, ctx: "binding")
                 // an array binding's literal elements (`Array[I64] = ["a", "b"]`):
                 // category-check each element against the declared element type (tyStart
                 // names the element for an array annotation).
@@ -381,7 +380,6 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                             }
                             mut val ek: U64 = 0
                             while ek < elems.count {
-                                checkValueCategory(c: inout c, valueId: elems[ek], declStart: tyStart, declLen: tyLen, declIsArray: false, ctx: "element")
                                 tcCheckValue(c: inout c, expectedRef: elemRef, valueExpr: elems[ek], pos: "element")
                                 ek += 1
                             }
@@ -410,7 +408,6 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                 // reliable-value discipline as bindings; curRetLen 0 = `()` return.
                 if c.curRetLen > 0U64 {
                     tcCheckValue(c: inout c, expectedRef: c.curRetTy, valueExpr: value, pos: "return")
-                    checkValueCategory(c: inout c, valueId: value, declStart: c.curRetStart, declLen: c.curRetLen, declIsArray: c.curRetIsArray, ctx: "return")
                 }
                 verifyExpr(c: inout c, id: value)
             }
@@ -570,39 +567,11 @@ fn verifyAssign(c: inout Comp, op: I64, target: U64, value: U64) {
     }
     checkUniquePlaceCopy(c: inout c, exprId: value, inoutOk: false)
     verifyExpr(c: inout c, id: value)
+    // the assigned value's type must match the place's type (the TypeRef checker
+    // subsumes the old numeric/String/named-id category checks here, with generic-arg
+    // precision and Bool/width/sign distinctions).
     if op == opAssign() {
         tcCheckValue(c: inout c, expectedRef: inferType(c: inout c, id: target), valueExpr: value, pos: "assign")
-    }
-    // a clear category mismatch between the place and the value (e.g. assigning a
-    // String to an integer variable) reinterprets the bits and yields garbage — a
-    // hidden-meaning bug. Reject the unambiguous numeric<->String case. (kind 0/3 =
-    // signed/unsigned int, 1 = String; kind 2 lumps Bool/struct/enum and is left for
-    // the existing per-type checks.)
-    // a float on either side is exempt: F64 is in isPrimType so typeOf reports kind 0
-    // for a float local but kind 2 (named "F64") for a float literal / arithmetic
-    // result, which the category check would mis-read as a numeric<->named mismatch
-    // (`x += 2.5` for `x: F64`). Float<->non-float assignment is a separate concern.
-    if exprIsFloat(c: inout c, id: target) || exprIsFloat(c: inout c, id: value) {
-    } else {
-        val tt: TypeInfo = typeOf(c: inout c, id: target)
-        val vt: TypeInfo = typeOf(c: inout c, id: value)
-        if assignNumStrMismatch(atk: tt.kind, avk: vt.kind) {
-            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "type mismatch in assignment: incompatible categories (a numeric type, a String, and a struct/enum value are not interchangeable)")
-        } else {
-            // two DIFFERENT named types (struct A vs struct B, or struct vs enum):
-            // the bits are a different layout — a hidden-meaning bug. Reject only when
-            // BOTH sides recover to a KNOWN struct/enum and their head-name ids differ
-            // (same-head generic instances like two `Optional[…]` share the id, so this
-            // never false-rejects them; an unrecovered/primitive name yields 0 and is
-            // skipped, avoiding the typeOf-wobble false-rejects that sank earlier tries).
-            if tt.kind == 2 && vt.kind == 2 {
-                val tid: U64 = knownNamedTypeId(c: inout c, start: tt.nameStart, len: tt.nameLen)
-                val vid: U64 = knownNamedTypeId(c: inout c, start: vt.nameStart, len: vt.nameLen)
-                if tid != 0U64 && vid != 0U64 && tid != vid {
-                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "type mismatch in assignment: a value of a different named type (struct/enum) cannot be assigned here")
-                }
-            }
-        }
     }
 }
 
@@ -695,7 +664,6 @@ fn checkMethodArgCategories(c: inout Comp, recv: U64, nameStart: U64, nameLen: U
             }
         }
         if pIdx < cf.params.count {
-            checkValueCategory(c: inout c, valueId: args[ai].expr, declStart: cf.params[pIdx].tyStart, declLen: cf.params[pIdx].tyLen, declIsArray: cf.params[pIdx].tyIsArray, ctx: "argument")
             tcCheckValue(c: inout c, expectedRef: cf.params[pIdx].ty, valueExpr: args[ai].expr, pos: "arg")
         }
         ai += 1
@@ -756,7 +724,6 @@ fn checkCallArgCategories(c: inout Comp, nameStart: U64, nameLen: U64, args: Arr
             }
         }
         if pIdx < cf.params.count {
-            checkValueCategory(c: inout c, valueId: args[ai].expr, declStart: cf.params[pIdx].tyStart, declLen: cf.params[pIdx].tyLen, declIsArray: cf.params[pIdx].tyIsArray, ctx: "argument")
             tcCheckValue(c: inout c, expectedRef: cf.params[pIdx].ty, valueExpr: args[ai].expr, pos: "arg")
         }
         ai += 1
@@ -789,77 +756,6 @@ fn checkMatchArmsEnum(c: inout Comp, scrut: U64, arms: Array[MatchArm]) {
         }
         ai += 1
     }
-}
-
-// Reject a value whose category clearly disagrees with a declared type (a binding's
-// annotation, or a non-generic struct field's declared type). Only fires when the
-// VALUE is RELIABLY typed — a String, or a value of a known struct/enum — and the
-// declared type is a numeric / String / different-named type. A value typeOf reports
-// as numeric (kind 0) is never trusted (kind 0 doubles as the unrecovered default for
-// fn-value refs / dict literals / calls). Skips arrays and floats. `ctx` tunes the
-// message ("binding" / "field").
-fn checkValueCategory(c: inout Comp, valueId: U64, declStart: U64, declLen: U64, declIsArray: Bool, ctx: String) {
-    if declIsArray {
-        return
-    }
-    if exprIsFloat(c: inout c, id: valueId) || isFloatType(c: inout c, start: declStart, len: declLen) {
-        return
-    }
-    val annK: I64 = typeInfoOfName(c: inout c, start: declStart, len: declLen, isArray: false).kind
-    val it0: TypeInfo = typeOf(c: inout c, id: valueId)
-    val annId: U64 = knownNamedTypeId(c: inout c, start: declStart, len: declLen)
-    if it0.kind == 1 {
-        if annK == 0 || annK == 3 || (annK == 2 && annId != 0U64) {
-            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueId)), msg: "type mismatch: a String value does not match the declared type here")
-        }
-    } else {
-        if it0.kind == 2 {
-            val vid: U64 = knownNamedTypeId(c: inout c, start: it0.nameStart, len: it0.nameLen)
-            if vid != 0U64 {
-                if annK == 0 || annK == 1 || annK == 3 {
-                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueId)), msg: "type mismatch: a struct/enum value does not match the declared numeric/String type here")
-                } else {
-                    if annId != 0U64 && annId != vid {
-                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueId)), msg: "type mismatch: the value is a different named type (struct/enum) than the declared type")
-                    }
-                }
-            }
-        }
-    }
-}
-
-// True when (target kind, value kind) are a definite, garbage-producing category
-// mismatch. kinds: 0 signed int, 3 unsigned int (both "numeric"), 1 String, 2 a named
-// type (struct / enum / Bool). A numeric or String place can never hold a named-type
-// value (or vice versa), nor a String<->numeric — all reinterpret the bits. (Two
-// DIFFERENT named types — struct A vs struct B — need a name compare and are handled
-// separately / left for fuller type-checking, to avoid false-rejecting same-type
-// generic instances whose recovered names can vary.)
-fn assignNumStrMismatch(atk: I64, avk: I64) -> Bool {
-    val aNum: Bool = atk == 0 || atk == 3
-    val vNum: Bool = avk == 0 || avk == 3
-    // numeric <-> String
-    if aNum && avk == 1 {
-        return true
-    }
-    if atk == 1 && vNum {
-        return true
-    }
-    // numeric <-> named (struct/enum/Bool), e.g. `intVar = true` / `intVar = aStruct`
-    if aNum && avk == 2 {
-        return true
-    }
-    if atk == 2 && vNum {
-        return true
-    }
-    // String <-> named
-    if atk == 1 && avk == 2 {
-        return true
-    }
-    if atk == 2 && avk == 1 {
-        return true
-    }
-    return false
 }
 
 // Recursively verify an expression: member visibility (field read / method call),
@@ -937,7 +833,6 @@ fn verifyExpr(c: inout Comp, id: U64) {
                                 while mfk < fields.count {
                                     if spansEqual(c: inout c, aStart: fields[mfk].nameStart, aLen: fields[mfk].nameLen, bStart: cfs[cfi].nameStart, bLen: cfs[cfi].nameLen) {
                                         tcCheckValue(c: inout c, expectedRef: cfs[cfi].ty, valueExpr: fields[mfk].value, pos: tcFieldPos(c: inout c, prefix: "payload:", nameStart: cfs[cfi].nameStart, nameLen: cfs[cfi].nameLen))
-                                        checkValueCategory(c: inout c, valueId: fields[mfk].value, declStart: cfs[cfi].tyStart, declLen: cfs[cfi].tyLen, declIsArray: cfs[cfi].tyIsArray, ctx: "field")
                                         mfk = fields.count
                                     } else {
                                         mfk += 1U64
@@ -998,7 +893,6 @@ fn verifyExpr(c: inout Comp, id: U64) {
                     while fk < cfs.count {
                         if spansEqual(c: inout c, aStart: cfs[fk].nameStart, aLen: cfs[fk].nameLen, bStart: fields[i].nameStart, bLen: fields[i].nameLen) {
                             tcCheckValue(c: inout c, expectedRef: cfs[fk].ty, valueExpr: fields[i].value, pos: "field")
-                            checkValueCategory(c: inout c, valueId: fields[i].value, declStart: cfs[fk].tyStart, declLen: cfs[fk].tyLen, declIsArray: cfs[fk].tyIsArray, ctx: "field")
                             fk = cfs.count
                         } else {
                             fk += 1U64
