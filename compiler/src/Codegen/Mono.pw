@@ -316,42 +316,46 @@ fn findFieldDef(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, 
 // generic type's recursion is broken at the concrete user field that points into
 // it (so Optional/Result instantiations stay inline and keep their fixed layout).
 fn markBoxedFields(c: inout Comp) {
+    // GENERIC templates are included (no `typeParams.count == 0` guard): a recursive
+    // GENERIC value type (`struct N[T] { next: Optional[N[T]] }`) must box its cyclic
+    // field too, else monomorphizing `N[I64]` builds an infinite struct layout and the
+    // compiler stack-overflows. Boxing is keyed by the field's name span, so the
+    // template's boxed field is inherited by every instance (fieldIsBoxed reads
+    // nameStart). fieldReachesOwner follows the type graph by name, so it detects the
+    // cycle through `Optional[N[T]]` (a non-recursive `Box[T]` field `v: T` does not
+    // reach its owner and stays unboxed).
     mut val si: U64 = 0
     while si < c.structs.count {
         val s: StructDef = c.structs[si]
-        if s.typeParams.count == 0 {
-            val fields: Array[FieldDef] = s.fields
-            mut val fi: U64 = 0
-            while fi < fields.count {
-                val f: FieldDef = fields[fi]
-                mut val visited: Array[U64] = []
-                if fieldReachesOwner(c: inout c, f: f, tStart: s.nameStart, tLen: s.nameLen, visited: inout visited) {
-                    c.boxedFields.append(f.nameStart)
-                }
-                fi += 1
+        val fields: Array[FieldDef] = s.fields
+        mut val fi: U64 = 0
+        while fi < fields.count {
+            val f: FieldDef = fields[fi]
+            mut val visited: Array[U64] = []
+            if fieldReachesOwner(c: inout c, f: f, tStart: s.nameStart, tLen: s.nameLen, visited: inout visited) {
+                c.boxedFields.append(f.nameStart)
             }
+            fi += 1
         }
         si += 1
     }
     mut val ei: U64 = 0
     while ei < c.enums.count {
         val e: EnumDef = c.enums[ei]
-        if e.typeParams.count == 0 {
-            val vars: Array[Variant] = e.variants
-            mut val vi: U64 = 0
-            while vi < vars.count {
-                val vf: Array[FieldDef] = vars[vi].fields
-                mut val fj: U64 = 0
-                while fj < vf.count {
-                    val f: FieldDef = vf[fj]
-                    mut val visited: Array[U64] = []
-                    if fieldReachesOwner(c: inout c, f: f, tStart: e.nameStart, tLen: e.nameLen, visited: inout visited) {
-                        c.boxedFields.append(f.nameStart)
-                    }
-                    fj += 1
+        val vars: Array[Variant] = e.variants
+        mut val vi: U64 = 0
+        while vi < vars.count {
+            val vf: Array[FieldDef] = vars[vi].fields
+            mut val fj: U64 = 0
+            while fj < vf.count {
+                val f: FieldDef = vf[fj]
+                mut val visited: Array[U64] = []
+                if fieldReachesOwner(c: inout c, f: f, tStart: e.nameStart, tLen: e.nameLen, visited: inout visited) {
+                    c.boxedFields.append(f.nameStart)
                 }
-                vi += 1
+                fj += 1
             }
+            vi += 1
         }
         ei += 1
     }
