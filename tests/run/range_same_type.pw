@@ -1,0 +1,6 @@
+import @Std/Io with { print }
+fn main() {
+    mut val s: I32 = 0I32
+    for val i in 0I32..<4I32 { s = s + i }
+    print(s as I64)
+}
