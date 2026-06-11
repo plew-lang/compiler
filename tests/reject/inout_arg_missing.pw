@@ -1,0 +1,7 @@
+// spec/03: access is always explicit — an `inout` parameter requires `inout` at
+// the call site, else the mutation would happen without the marker.
+fn inc(x: inout I64) { x = x + 1I64 }
+fn main() {
+    mut val n: I64 = 5I64
+    inc(x: n)
+}

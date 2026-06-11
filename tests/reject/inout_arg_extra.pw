@@ -1,0 +1,6 @@
+// spec/03: a non-`inout` parameter rejects `inout` at the call site.
+fn f(x: I64) -> I64 { return x }
+fn main() {
+    mut val n: I64 = 5I64
+    val r: I64 = f(x: inout n)
+}

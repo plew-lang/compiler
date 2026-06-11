@@ -692,6 +692,23 @@ fn tcCheckGenericArgConsistency(c: inout Comp, f: Func, args: Array[Arg]) {
     }
 }
 
+// The `inout` keyword at the call site must match the parameter's mode (spec/03,04:
+// access is always explicit — `inc(x: inout n)`, never a silent by-reference). An
+// `inout` parameter requires `inout` on the argument (else the mutation would happen
+// without the marker); a non-`inout` parameter rejects `inout` on the argument.
+fn checkArgInoutMode(c: inout Comp, p: Param, arg: Arg) {
+    if p.isInout {
+        if arg.isInout {
+        } else {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: arg.expr)), msg: "this parameter is `inout`; pass the argument with `inout` (spec/03)")
+        }
+    } else {
+        if arg.isInout {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: arg.expr)), msg: "this parameter is not `inout`; remove `inout` from the argument (spec/03)")
+        }
+    }
+}
+
 fn checkCallArgs(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) {
     checkUniqueArgModes(c: inout c, args: args)
     val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -710,6 +727,7 @@ fn checkCallArgs(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) 
     while i < args.count {
         if i < ps.count {
             val p: Param = ps[i]
+            checkArgInoutMode(c: inout c, p: p, arg: args[i])
             checkLitSpan(c: inout c, id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
             checkClosureArgArity(c: inout c, argExpr: args[i].expr, p: p)
             // full type-compatibility (not just literal context): a non-literal VALUE
@@ -804,6 +822,7 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
             while i < args.count {
                 if i < ps.count {
                     val p: Param = ps[i]
+                    checkArgInoutMode(c: inout c, p: p, arg: args[i])
                     if genericRecv {
                         // resolve the param's type under the receiver's
                         // instantiation so a literal arg gets the concrete context.
