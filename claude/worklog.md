@@ -34,7 +34,7 @@
 - **重なる inout ②③**（部分/添字重なり＝`a.merge(inout a.field)`・`arr[i],arr[j]` の distinct 証明）＝spec 通り lint＋限定ランタイム panic（将来・ケース①構文同一は実装済）。
 - **use-after-move 未検出**＝`take(move u); take(move u)` を accept（move 後の再使用が reject されない・backend は moved-out local を deinit 除外するだけで front-end の線形追跡なし）。**flow-sensitive linear move 解析が要る**＝conditional/partial move 含め未実装・naive 追跡はコンパイラ自身の多用する `move` を誤 reject する危険（bare-copy/伝染/`move fn` self は実装済）。spec/03。
 
-> 受理健全性は広く確認済（int/float/幅/sign/struct/Optional・引数/代入/比較/return/配列要素/dict キー/if-while 条件 Bool/closure 戻り型/void 値 return/move/unique/可視性/overflow/missing-return/網羅性をすべて reject）。
+> 受理健全性は広く確認済（int/float/幅/sign/struct/Optional/enum payload・引数/代入/複合代入/比較/論理/return/配列要素〔ネスト含む〕/dict literal+insert K/V/append 要素/range 両端/field & default arg/if-while 条件 Bool/closure 戻り型/void 値使用/`as` の Bool↔numeric/単項 String/move/unique/可視性/overflow/missing-return/網羅性をすべて reject）。**残る既知の soundness 穴**＝use-after-move〔flow 解析要〕・fn-value 署名不一致〔fn 型 TypeRef 復元要〕・generic 型注釈の arity〔`Box[I64,String]` annot・低 harm〕・generic-receiver method の value 引数 grounding〔横断 refactor 連動〕。
 
 ### B. hidden meaning（spec-valid を reject／silent 逸脱）
 

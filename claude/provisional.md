@@ -77,7 +77,7 @@
 
 ## 構築・factory
 
-- ✅ **JSX `<Type f=e/>`／`<E.V f=e/>`＋フィールドデフォルト値 `val x: T = expr`**。✅ **フィールド/引数デフォルト値の型一致**（`val a: I64 = true`／`fn f(x: I64 = true)`＝`checkLitSpan` は bool リテラル等を素通しするため `tcCheckValue` を `f.ty`/`p.ty` に対し追加・新 pass `checkParamDefaults`・test reject field_default_type/default_arg_type）。**未実装**＝`factory`（明示宣言）・`optional`・`result factory`（可謬構築）。
+- ✅ **JSX `<Type f=e/>`／`<E.V f=e/>`＋フィールドデフォルト値 `val x: T = expr`**。✅ **フィールド/引数デフォルト値の型一致**（`val a: I64 = true`／`fn f(x: I64 = true)`＝`checkLitSpan` は bool リテラル等を素通しするため `tcCheckValue` を `f.ty`/`p.ty` に対し追加・新 pass `checkParamDefaults`・test reject field_default_type/default_arg_type）。**残（minor）**＝デフォルト値が**他フィールド/self を参照**〔`val b: I64 = a`・spec/04「他フィールド/self 参照不可」〕＝構築時に backend で「unknown identifier」と落ちるが decl 時のクリーン reject でない・未構築なら無検出〔低 harm・clean reject には default expr の識別子解決 walk が要る〕。**未実装**＝`factory`（明示宣言）・`optional`・`result factory`（可謬構築）。
 - ✅ **(b) フィールドゲート（spec/05）**＝cross-module 構築で非 `pub` フィールド（vis 0/1）を設定すると loud reject（`checkConstructVis`・同一モジュール構築は無制限・enum payload/record〔全 pub 合成 struct〕/extern lang-item/synthesize された dict literal フィールドは除外）。実装鍵＝**`StructDef.defOffset`**〔decl span start＝再インターンされた nameStart は module 0 ゆえ defining module 特定不可・これで `moduleOf` が正しい源モジュールを引く〕＋**`offsetIsLoaded`**〔real source span か合成 span かを判別＝dict の `keys`/… を skip〕＋`MakeField.offset`〔real source offset・nameStart でなくこちらで gate〕。test reject construct_private_field_crossmodule。**残＝(a) 公開ゲート**（既定 memberwise factory は private・全 pub フィールドでも外部構築は `pub impl Type { factory }` 明示要）＝`factory` 宣言機能と一括（factory 未実装ゆえ現状は全 pub フィールド型の cross-module 構築は許容＝spec (a) より緩い・factory 着手時に拡張）。メタプロ側ディレクティブ引数構築は (b) 強制済〔`checkDirectiveArgsPublic`〕。
 
 ## 共有可変・並行性・メタプログラミング
