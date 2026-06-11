@@ -2588,6 +2588,13 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             if isBool { return 2U64 }
             if tyLen > 0U64 {
                 if isUnsignedName(c: inout c, start: tyStart, len: tyLen) { return 3U64 }
+                return 0U64
+            }
+            // an untyped literal in a float context (recorded in exprIntCtx) is a
+            // float literal — `val x: F64 = 10 / 4` routes through the float binop.
+            val t: TypeInfo = typeOf(c: inout c, id: id)
+            if t.kind == 0 {
+                if isFloatType(c: inout c, start: t.nameStart, len: t.nameLen) { return 4U64 }
             }
             return 0U64
         }

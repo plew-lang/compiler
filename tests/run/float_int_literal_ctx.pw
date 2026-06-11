@@ -16,4 +16,9 @@ fn main() {
     val arr: Array[F64] = [1, 2.5, 3]
     print(arr[0])
     print(arr[2])
+    // both operands untyped, operator in float context
+    val d: F64 = 10 / 4
+    val e: F64 = 2 * 3
+    print(d)
+    print(e)
 }

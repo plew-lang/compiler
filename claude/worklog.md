@@ -37,7 +37,7 @@
 
 ### B. hidden meaning（spec-valid を reject／silent 逸脱）
 
-- **`From`/`TryFrom`**（数値縮小・パース・`as` の全域変換脱糖・`try` の異エラー型 From 変換）・**float→int `as`**。〔✅ **mixed `1.5+2` / `F64=5` / `-3` / `Array[F64]` / call-arg は実装済**＝`floatCtxCode`〔9=F64/10=F32〕を exprIntCtx へ・残サブケースは両オペランド無型の演算子 `10/4` のみ〕。
+- **`From`/`TryFrom`**（数値縮小・パース・`as` の全域変換脱糖・`try` の異エラー型 From 変換）・**float→int `as`**。〔✅ **mixed float context は完了**＝`1.5+2` / `F64=5` / `-3` / `Array[F64]` / call-arg / 両オペランド無型 `10/4`〕。
 - **newtype 非 int underlying のメソッド/フィールド継承**（`userId.bytes`〔UserId=String〕＝codegen 専用解決点の個別配線・`typeOf` 両用問題ゆえ blanket 不可）＋ unique/deinit/factory 継承・`export newtype`。int underlying は完備。
 - **一般 Chain トレイト `?.`**（現 Optional 具体）・**`Pow`/`**`**（float 後）・**`Output != Self`**。
 - **無型 int generic-enum payload** `<Optional.Some v=5 />`（check-side literal-context・lowering 採用は std 破壊で revert・回避 `v=5I64`）。
