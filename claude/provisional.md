@@ -9,7 +9,7 @@
 ## メモリ・所有権
 
 - ✅ **値意味論＋CoW＋ARC 解放**（非アトミック refcount・`Array[T]` は `RawBuffer` 床の Plew struct・束縛は O(1) 共有＋retain・変異点で複製・scope/早期 exit で再帰解放・ASan clean）。残：`WeakRef`・**循環回収**〔スコープ外〕・mono struct/enum の share/release〔mono 局所 leak・安全〕。spec/03。
-- ✅ **`unique`/`borrow`/`move`/`deinit`＋健全性ハードニング**（決定的破棄・線形 move 追跡・use-after-move/bare コピー/伝染を loud reject・`Ref[unique]` の最後の解放で deinit・`mut val` unique 再代入・`move fn` self）。残（loud reject か N/A）：部分 move/return・条件付き move/消費〔flow 解析 TODO〕。spec/03。
+- ✅ **`unique`/`borrow`/`move`/`deinit`＋健全性ハードニング**（決定的破棄・bare コピー/伝染を loud reject・`Ref[unique]` の最後の解放で deinit・`mut val` unique 再代入・`move fn` self）。**残（soundness 穴）＝use-after-move 未検出**〔`take(move u); take(move u)` を accept＝`u` を move 後に再使用しても reject されない・backend は moved-out local を deinit から除外するだけで front-end の線形追跡なし・heap 持ち unique では意味的に不正〔現状クラッシュはしないが二重 move〕・**flow-sensitive な linear move 解析が要る**＝conditional/partial move も含め未実装・naive な追跡はコンパイラ自身の多用する `move` を誤 reject する危険〕。残（N/A）：部分 move/return・条件付き move/消費。spec/03。
 - **`local` 型**（spawn を越えられない）→ 無し。spawn 段で。spec/03,14。
 - ✅ **`inout`＋合成可変性検査**（単純変数・`base.field`・`a[i]`・`.append`/`inout fn`）。spec/03。
 - **重なる `inout`**（1 呼びで複数 inout が同じ場所）→ ✅ **ケース①構文同一を loud reject**（arg×arg/self×arg・`exprSyntaxEq`・test overlapping_inout*）。**残＝ケース②③＝部分/添字重なり**（`a.merge(inout a.field)`・`arr[i],arr[j]` の distinct 証明）＝spec 通り lint＋限定ランタイム panic は将来。spec/03。
