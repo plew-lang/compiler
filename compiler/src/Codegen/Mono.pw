@@ -207,7 +207,14 @@ fn nameReachesOwner(c: inout Comp, nStart: U64, nLen: U64, args: Array[U64], tSt
         }
         return false
     }
-    val ei: U64 = concreteEnumIndex(c: inout c, nStart: nStart, nLen: nLen)
+    // an enum head, generic OR not (genericEnumIndex too — concreteEnumIndex skips
+    // generics — so a mutually recursive generic ENUM `E1[T]` ↔ `E2[T]` boxes its
+    // cyclic variant payload instead of overflowing at sizing, mirroring the struct case).
+    mut val ei: U64 = concreteEnumIndex(c: inout c, nStart: nStart, nLen: nLen)
+    if ei < c.enums.count {
+    } else {
+        ei = genericEnumIndex(c: inout c, nameStart: nStart, nameLen: nLen)
+    }
     if ei < c.enums.count {
         val key: U64 = c.enums[ei].nameStart
         if containsU64(xs: visited, v: key) {
