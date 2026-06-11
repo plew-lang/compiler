@@ -1,0 +1,7 @@
+// Expression-position match with arms from a different enum — reject.
+enum E { A B }
+enum F { C D }
+fn main() {
+    val e: E = <E.A />
+    val n: I64 = match e { F.C => 1I64  F.D => 2I64 }
+}

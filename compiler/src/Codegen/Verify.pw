@@ -462,6 +462,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
         }
         Stmt.Match(val scrut, val arms) => {
             verifyExpr(c: inout c, id: scrut)
+            checkMatchArmsEnum(c: inout c, scrut: scrut, arms: arms)
             if matchExhaustive(c: inout c, arms: arms) {
             } else {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
@@ -588,6 +589,34 @@ fn knownNamedTypeId(c: inout Comp, start: U64, len: U64) -> U64 {
         ei += 1
     }
     return 0U64
+}
+
+// Reject match arms that pattern-match variants of a DIFFERENT enum than the
+// scrutinee (`match e: E { F.C => … }`): the arms would test tags of an unrelated
+// enum. Only fires when the scrutinee reliably recovers to a known enum and an arm
+// names a different known enum (a wildcard / struct-destructure / unrecovered arm is
+// skipped — conservative, like the other typeOf-based checks).
+fn checkMatchArmsEnum(c: inout Comp, scrut: U64, arms: Array[MatchArm]) {
+    val st0: TypeInfo = typeOf(c: inout c, id: scrut)
+    if st0.kind != 2U64 {
+        return
+    }
+    val sId: U64 = knownNamedTypeId(c: inout c, start: st0.nameStart, len: st0.nameLen)
+    if sId == 0U64 {
+        return
+    }
+    mut val ai: U64 = 0
+    while ai < arms.count {
+        val a: MatchArm = arms[ai]
+        if a.isWildcard || a.isStruct || a.enumLen == 0U64 {
+        } else {
+            val aId: U64 = knownNamedTypeId(c: inout c, start: a.enumStart, len: a.enumLen)
+            if aId != 0U64 && aId != sId {
+                compileErrorAt(line: lineOf(c: inout c, offset: a.enumStart), msg: "this match arm pattern is a variant of a different enum than the value being matched")
+            }
+        }
+        ai += 1
+    }
 }
 
 // Reject a value whose category clearly disagrees with a declared type (a binding's
@@ -881,6 +910,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
         }
         Expr.MatchExpr(val scrut, val arms) => {
             verifyExpr(c: inout c, id: scrut)
+            checkMatchArmsEnum(c: inout c, scrut: scrut, arms: arms)
             if matchExhaustive(c: inout c, arms: arms) {
             } else {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")

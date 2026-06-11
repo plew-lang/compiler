@@ -1,0 +1,7 @@
+// match arms patterning a different enum (F) than the scrutinee (E) — reject.
+enum E { A B }
+enum F { C D }
+fn main() {
+    val e: E = <E.A />
+    match e { F.C => {} F.D => {} }
+}
