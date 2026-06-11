@@ -167,6 +167,10 @@ fn tcCheckValue(c: inout Comp, expectedRef: U64, valueExpr: U64, pos: String) {
     if expectedRef == 0U64 {
         return
     }
+    // a function VALUE (closure literal / function reference) flowing into a fn-typed
+    // position must match the signature, everywhere tcCheckValue runs (binding, return,
+    // arg, struct field, array element). isFnType-gated, so a no-op otherwise.
+    checkFnValueSig(c: inout c, declTy: expectedRef, init: valueExpr)
     // a void function's result is `()` — using it where a typed value is expected
     // (`val x: I64 = doNothing()`) is a type error (spec/04).
     if exprIsVoidCall(c: inout c, id: valueExpr) {
