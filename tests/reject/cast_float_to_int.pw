@@ -1,0 +1,3 @@
+// spec/12: `as` is a lossless/total conversion — a float -> int cast truncates the
+// fractional part (lossy), so it is rejected (use a fallible TryFrom conversion).
+fn main() { mut val f: F64 = 3.7  val x: I64 = f as I64 }

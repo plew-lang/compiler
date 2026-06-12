@@ -1893,6 +1893,12 @@ fn verifyCastLossless(c: inout Comp, operand: U64, tyStart: U64, tyLen: U64) {
         }
     }
     if isIntType(c: inout c, start: tyStart, len: tyLen) {
+        // a float -> int `as` truncates the fractional part = lossy, so it is not a
+        // valid `as` conversion (spec/12: `as` is lossless/total only). Use TryFrom.
+        if exprIsFloat(c: inout c, id: operand) {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "`as` cannot convert a float to an integer (it would truncate the fractional part); use a fallible TryFrom conversion (spec/12)")
+            return
+        }
         match c.exprs[operand] {
             Expr.Int(val value, val offset, isBool: _, tyStart: _, tyLen: _, val isNeg) => {
                 if litFitsType(c: inout c, value: value, neg: isNeg, dstStart: tyStart, dstLen: tyLen) {
