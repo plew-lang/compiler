@@ -670,6 +670,20 @@ fn rewriteFactoryConstruction(c: inout Comp) {
                         }
                         c.exprs[i] = <Expr.Method recv=recv nameStart=variantStart nameLen=variantLen args=args />
                     }
+                } else {
+                    // `<T from=x/>` From form (spec/12): a single `from=…` field routes
+                    // to T's `from` factory. Scoped to the `from` label so memberwise
+                    // constructions are untouched.
+                    if fields.count == 1U64 {
+                        if spansEqual(c: inout c, aStart: fields[0].nameStart, aLen: fields[0].nameLen, bStart: fromN.nameStart, bLen: fromN.nameLen) {
+                            if typeHasAssocFn(c: inout c, typeStart: typeStart, typeLen: typeLen, nameStart: fromN.nameStart, nameLen: fromN.nameLen) {
+                                val recv: U64 = c.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
+                                mut val fargs: Array[Arg] = []
+                                fargs.append(value: <Arg expr=fields[0].value isInout=false labelStart=fromN.nameStart labelLen=fromN.nameLen hasLabel=true />)
+                                c.exprs[i] = <Expr.Method recv=recv nameStart=fromN.nameStart nameLen=fromN.nameLen args=fargs />
+                            }
+                        }
+                    }
                 }
             }
             Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {

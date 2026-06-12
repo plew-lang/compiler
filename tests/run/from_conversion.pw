@@ -16,6 +16,9 @@ fn main() {
     val f: Fahrenheit = <Fahrenheit f=212 />
     val c: Celsius = f as Celsius
     print(c.c)
+    // the `<T from=x/>` JSX form routes the same way.
+    val c2: Celsius = <Celsius from=f />
+    print(c2.c)
     val small: I32 = 5I32
     val big: I64 = small as I64
     print(big)
