@@ -1,0 +1,8 @@
+// spec/06: assigning a type-parameter value to a concrete place (`n = x` where
+// n: I64, x: T) is a type error at the definition.
+fn f[T](x: T) -> I64 {
+    mut val n: I64 = 0I64
+    n = x
+    return n
+}
+fn main() { }

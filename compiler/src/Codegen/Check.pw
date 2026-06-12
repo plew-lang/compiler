@@ -2021,6 +2021,26 @@ fn checkGenericTypeMatch(c: inout Comp, expectedRef: U64, valueExpr: U64) {
     } else {
         return
     }
+    // an array literal in an `Array[E]` position: recurse element-wise (inferType
+    // reports an array literal as unknown, so check each element against E).
+    if expectedRef < c.types.count {
+        if rangeEquals(bytes: c.bytes, start: c.types[expectedRef].nameStart, len: c.types[expectedRef].nameLen, kw: "Array") {
+            if c.types[expectedRef].args.count > 0U64 {
+                match c.exprs[valueExpr] {
+                    Expr.Array(val elems) => {
+                        val elemRef: U64 = c.types[expectedRef].args[0]
+                        mut val ei: U64 = 0
+                        while ei < elems.count {
+                            checkGenericTypeMatch(c: inout c, expectedRef: elemRef, valueExpr: elems[ei])
+                            ei += 1
+                        }
+                        return
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
     val inferred: U64 = inferType(c: inout c, id: valueExpr)
     if typesCompatible(c: inout c, expected: expectedRef, inferred: inferred) {
     } else {
@@ -2033,16 +2053,17 @@ fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
         Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
             checkBoundsExpr(c: inout c, exprId: init)
             if tyLen > 0U64 {
-                if tyIsArray {
-                } else {
-                    checkGenericTypeMatch(c: inout c, expectedRef: ty, valueExpr: init)
-                }
+                // checkGenericTypeMatch recurses into an array literal against Array[E].
+                checkGenericTypeMatch(c: inout c, expectedRef: ty, valueExpr: init)
             }
             addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
         }
         Stmt.Assign(val op, val target, val value) => {
             checkBoundsExpr(c: inout c, exprId: target)
             checkBoundsExpr(c: inout c, exprId: value)
+            // the assigned value must match the place's type (`x = a` / `x += a` where
+            // x: I64 and a: T is a type error). The place type is inferType(target).
+            checkGenericTypeMatch(c: inout c, expectedRef: inferType(c: inout c, id: target), valueExpr: value)
         }
         Stmt.ExprStmt(val expr) => { checkBoundsExpr(c: inout c, exprId: expr) }
         Stmt.Return(val value, val hasValue) => {

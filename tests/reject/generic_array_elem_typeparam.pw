@@ -1,0 +1,4 @@
+// spec/06: an Array[I64] literal element must be I64 — `[x]` with x: T is a type
+// error at the definition (checked everywhere via the array-literal recursion).
+fn f[T](x: T) -> Array[I64] { return [x] }
+fn main() { }
