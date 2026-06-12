@@ -1,0 +1,27 @@
+// Valid generic code under the Rust-style abstract checker (spec/06): type
+// parameters used only via their bounds / as themselves are accepted, while the
+// checker rejects the invalid shapes (see tests/reject/generic_*).
+import @Std/Io with { print }
+import @Std/Core with { Add, Eq }
+
+// identity / pass-through: T is used only as itself.
+fn id[T](x: T) -> T {
+    val y: T = x
+    return y
+}
+
+// bound-justified operator: `where T: Add[T]` makes `a + b` legal.
+fn sum[T](a: T, b: T) -> T where T: Add[T] {
+    return a + b
+}
+
+// bound-justified comparison: `where T: Eq` makes `a == b` legal.
+fn same[T](a: T, b: T) -> Bool where T: Eq {
+    return a == b
+}
+
+fn main() {
+    print(id(x: 7I64))
+    print(sum(a: 3I64, b: 4I64))
+    if same(a: 5I64, b: 5I64) { print(1I64) } else { print(0I64) }
+}
