@@ -219,6 +219,9 @@ fn runFrontend() -> Comp {
     // assoc-val reads (spec/05): rewrite `Type.NAME` (a Field on a type that owns an
     // `assoc fn NAME`) into a zero-arg assoc-fn call, before any analysis sees it.
     rewriteAssocValReads(c: inout c)
+    // named factory calls (spec/05): rewrite `<Type.name attrs/>` to an assoc-fn call
+    // when `name` is a named factory (not an enum variant).
+    rewriteFactoryConstruction(c: inout c)
     // import name aliases (spec/15): rewrite `alias(args)` to the real imported name
     // for each `with { real as alias }`, before visibility/resolution analysis.
     rewriteImportAliases(c: inout c)

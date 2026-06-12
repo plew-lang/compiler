@@ -648,6 +648,35 @@ fn orderGlobalsByDependency(c: inout Comp) {
     c.globals = reordered
 }
 
+// Post-load rewrite (spec/05): a named factory call `<Type.name attrs/>` parses as a
+// Make node (isEnum, variant=name). When `name` is NOT an enum variant but a named
+// factory (an assoc fn on Type), rewrite it to the assoc-fn call `Type.name(labels:
+// values)` so it rides the existing assoc-fn machinery. Enum-variant constructions
+// (`<Optional.Some v=…/>`) are untouched (Some has no assoc fn).
+fn rewriteFactoryConstruction(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.exprs.count {
+        match c.exprs[i] {
+            Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
+                if isEnum {
+                    if typeHasAssocFn(c: inout c, typeStart: typeStart, typeLen: typeLen, nameStart: variantStart, nameLen: variantLen) {
+                        val recv: U64 = c.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
+                        mut val args: Array[Arg] = []
+                        mut val fi: U64 = 0
+                        while fi < fields.count {
+                            args.append(value: <Arg expr=fields[fi].value isInout=false labelStart=fields[fi].nameStart labelLen=fields[fi].nameLen hasLabel=true />)
+                            fi += 1
+                        }
+                        c.exprs[i] = <Expr.Method recv=recv nameStart=variantStart nameLen=variantLen args=args />
+                    }
+                }
+            }
+            _ => {}
+        }
+        i += 1
+    }
+}
+
 // Post-load rewrite (spec/15): a `with { real as alias }` import lets the using
 // module call `real` under the local name `alias`. Rewrite each free-function call
 // `alias(args)` whose module imported that alias into a call to `real`, so it rides

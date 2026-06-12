@@ -1066,13 +1066,27 @@ export fn parseImplDecl(p: inout P, isPub: Bool, extName: String = "") -> ImplAs
             }
             _ => {
                 if curIs(p: inout p, kw: "factory") {
-                    // `factory` (spec/05): publishes the default memberwise factory. The
-                    // bare form (no params/body) is the only form supported here; its
-                    // span is recorded so the gate can report at the declaration.
+                    // `factory` (spec/05): a bare `factory` publishes the default
+                    // memberwise factory (the span feeds the publication gate). A
+                    // `factory name(params) { … }` is a custom NAMED factory, lowered as
+                    // an AssocFn returning Self and invoked via `<Type.name …/>`.
                     val fTok: Tok = p.curTok()
                     val fSpan: Span = p.spanOf(t: fTok)
                     p.advance()
-                    members.append(<MemberAst kind=<MemberKind.Factory /> name="factory" nameSpan=fSpan typeParams=[] params=[] hasRet=false ret=emptyTypeAst() whereParams=[] whereTraits=[] isAsync=false selfInout=false selfMove=false isVia=false viaName="" body=emptyBlock() assocTy=emptyTypeAst() />)
+                    match p.curKind() {
+                        Kind.Ident => {
+                            val nameTok: Tok = p.curTok()
+                            val fname: String = p.text(t: nameTok)
+                            val fnameSpan: Span = p.spanOf(t: nameTok)
+                            p.advance()
+                            val fparams: Array[ParamAst] = parseParamAsts(p: inout p)
+                            val fbody: BlockAst = parseBlockAst(p: inout p)
+                            members.append(<MemberAst kind=<MemberKind.AssocFn /> name=fname nameSpan=fnameSpan typeParams=[] params=fparams hasRet=false ret=emptyTypeAst() whereParams=[] whereTraits=[] isAsync=false selfInout=false selfMove=false isVia=false viaName="" body=fbody assocTy=emptyTypeAst() isFactory=true />)
+                        }
+                        _ => {
+                            members.append(<MemberAst kind=<MemberKind.Factory /> name="factory" nameSpan=fSpan typeParams=[] params=[] hasRet=false ret=emptyTypeAst() whereParams=[] whereTraits=[] isAsync=false selfInout=false selfMove=false isVia=false viaName="" body=emptyBlock() assocTy=emptyTypeAst() />)
+                        }
+                    }
                 } else {
                 if curIs(p: inout p, kw: "assoc") {
                     p.advance()

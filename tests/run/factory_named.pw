@@ -1,0 +1,23 @@
+// custom named factory (spec/05): `factory name(params) { return … }` returns the
+// impl's type (implicit Self), invoked via `<Type.name attrs/>`. Lowered as an
+// assoc fn; the memberwise `<Type field=…/>` construction is unaffected.
+import @Std/Io with { print }
+
+struct Celsius { pub val degrees: I64 }
+pub impl Celsius {
+    factory fromTens(tens: I64) {
+        return <Celsius degrees=tens * 10 />
+    }
+    factory zero() {
+        return <Celsius degrees=0 />
+    }
+}
+
+fn main() {
+    val a: Celsius = <Celsius.fromTens tens=3 />
+    print(a.degrees)
+    val z: Celsius = <Celsius.zero />
+    print(z.degrees)
+    val b: Celsius = <Celsius degrees=42 />
+    print(b.degrees)
+}

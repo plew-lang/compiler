@@ -189,6 +189,9 @@ export struct MemberAst {
     pub val body: BlockAst
     // AssocType's bound type `type Item = <assocTy>`.
     pub val assocTy: TypeAst
+    // a custom `factory [name](params) { … }` (spec/05): lowered as an AssocFn whose
+    // return type is the impl's type (the implicit `Self`). Invoked via `<Type.name …/>`.
+    pub val isFactory: Bool = false
 }
 
 // A body-less function signature: a trait requirement (`fn req(...) -> T`) or an

@@ -1683,6 +1683,17 @@ fn lowerMethodMember(c: inout Comp, im: ImplAst, m: MemberAst, recvN: Bind, impl
         retIsArray = pt.isArray
         retRef = pt.ref
     }
+    // a custom factory (spec/05) returns the impl's type (the implicit `Self`); the
+    // body's `return <Type …/>` then grounds against it.
+    mut val effHasRet: Bool = m.hasRet
+    if m.isFactory {
+        val ft: PType = lowerType(c: inout c, t: im.recvType)
+        retStart = ft.start
+        retLen = ft.len
+        retIsArray = ft.isArray
+        retRef = ft.ref
+        effHasRet = true
+    }
     // a trait-impl member witnesses a requirement (body or via). The witnessed sig
     // is a pure requirement signature (body 0, no recv/self/assoc/async).
     if im.isTraitImpl {
@@ -1706,7 +1717,7 @@ fn lowerMethodMember(c: inout Comp, im: ImplAst, m: MemberAst, recvN: Bind, impl
         val extN: Bind = internBytes(c: inout c, s: im.extName)
         extId = intern(c: inout c, start: extN.nameStart, len: extN.nameLen)
     }
-    c.funcs.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) typeParams=typeParams params=params hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count />)
+    c.funcs.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count />)
     appendFuncBounds(c: inout c, fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits)
     appendFuncBounds(c: inout c, fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits)
 }
