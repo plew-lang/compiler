@@ -33,13 +33,18 @@ export struct BindAst {
 }
 
 // A match pattern (everything before `=>`): wildcard `_`, an enum variant
-// `E.V(binds)`, or a struct destructure `S { binds }`.
+// `E.V(binds)`, a struct destructure `S { binds }`, or a bare literal `0`/`"x"`/
+// `true`/`-1` (isLiteral; `lit` is the literal expression — spec/11). A literal
+// match desugars in lowering to a temp-bound `==` if/else chain, so the arena
+// never sees a literal pattern.
 export struct PatternAst {
     pub val isWildcard: Bool
     pub val isStruct: Bool
     pub val typeName: String
     pub val variant: String
     pub val binds: Array[BindAst]
+    pub val isLiteral: Bool = false
+    pub val lit: ExprAst = emptyExpr()
     pub val span: Span
 }
 

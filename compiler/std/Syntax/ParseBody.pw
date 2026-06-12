@@ -755,6 +755,35 @@ export fn parseExprAst(p: inout P) -> ExprAst {
 
 // ---- patterns ----
 
+// True if the current token begins a bare literal pattern (`0`/`"x"`/`true`/
+// `false`/`'c'`/`-1`). Such an arm desugars to a `==` test in lowering (spec/11).
+fn patternStartsLiteral(p: inout P) -> Bool {
+    match p.curKind() {
+        Kind.Int => { return true }
+        Kind.Str => { return true }
+        Kind.Char => { return true }
+        Kind.KwTrue => { return true }
+        Kind.KwFalse => { return true }
+        Kind.Minus => { return true }
+        _ => { return false }
+    }
+}
+
+// Parse a literal pattern's value: an optional leading `-` then an int, or a
+// string / bool / char literal. Restricted (not a full expression) so a pattern
+// can only be a literal, never an arbitrary computation.
+fn parsePatternLiteralAst(p: inout P) -> ExprAst {
+    val sStart: U64 = p.base + p.curTok().start
+    match p.curKind() {
+        Kind.Minus => {
+            p.advance()
+            val o: ExprAst = parsePrimaryAst(p: inout p)
+            return <ExprAst.Unary op=57 operand=o span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        _ => { return parsePrimaryAst(p: inout p) }
+    }
+}
+
 fn parsePatternAst(p: inout P) -> PatternAst {
     val sStart: U64 = p.base + p.curTok().start
     val firstTok: Tok = p.curTok()
@@ -763,6 +792,10 @@ fn parsePatternAst(p: inout P) -> PatternAst {
     mut val typeName: String = ""
     mut val variant: String = ""
     mut val binds: Array[BindAst] = []
+    if patternStartsLiteral(p: inout p) {
+        val lit: ExprAst = parsePatternLiteralAst(p: inout p)
+        return <PatternAst isWildcard=false isStruct=false typeName="" variant="" binds=binds isLiteral=true lit=lit span=<Span start=sStart end=p.prevEnd() /> />
+    }
     if rangeEquals(bytes: p.bytes, start: firstTok.start, len: firstTok.len, kw: "_") {
         isWildcard = true
         p.advance()

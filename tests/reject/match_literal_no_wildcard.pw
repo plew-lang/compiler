@@ -1,0 +1,9 @@
+// a literal int match without a wildcard is not exhaustive (spec/11) — reject.
+import @Std/Io with { print }
+fn main() {
+    val n: I64 = 3
+    match n {
+        0 => { print("z") }
+        1 => { print("o") }
+    }
+}

@@ -1,0 +1,55 @@
+// literal match patterns (spec/11): bare int / string / bool / negative literals
+// in both expression and statement position, desugared to an `==` if/else chain.
+import @Std/Io with { print }
+
+fn name(n: I64) -> String {
+    return match n {
+        0 => "zero"
+        1 => "one"
+        -1 => "neg one"
+        _ => "other"
+    }
+}
+
+fn classify(s: String) -> I64 {
+    return match s {
+        "yo" => 1
+        "hi" => 2
+        _ => 0
+    }
+}
+
+// non-Ident scrutinee exercises the single-eval temp-wrapper path.
+fn bump(n: I64) -> I64 { return n + 1 }
+
+fn main() {
+    print(name(n: 0))
+    print(name(n: 1))
+    print(name(n: -1))
+    print(name(n: 5))
+    print(classify(s: "hi"))
+    print(classify(s: "yo"))
+    print(classify(s: "nope"))
+
+    val k: I64 = 2
+    match k {
+        2 => { print("two") }
+        3 => { print("three") }
+        _ => { print("other-k") }
+    }
+
+    // a Bool match is exhaustive with true+false (no wildcard needed).
+    val b: Bool = false
+    match b {
+        true => { print("T") }
+        false => { print("F") }
+    }
+
+    // expression match nested in a larger expression.
+    val r: I64 = match k { 2 => 20 _ => 99 } + 1
+    print(r)
+
+    // non-Ident scrutinee in value position.
+    val w: String = match bump(n: 1) { 2 => "got-two" _ => "no" }
+    print(w)
+}
