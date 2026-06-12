@@ -1702,6 +1702,38 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 }
             }
             if rt.kind == 2 {
+                // a method call on `self` (Self) in a trait provided-method body being
+                // abstract-checked: resolve the result from the trait requirement's
+                // declared return type (concrete primitive/String only, so a `Self`/
+                // associated return stays unknown). Active only when curCheckFn is the
+                // provided method (else isSelfTypeInProvided is false).
+                if isSelfTypeInProvided(c: inout c, start: rt.nameStart, len: rt.nameLen) {
+                    val sTrait: U64 = intern(c: inout c, start: rt.nameStart, len: rt.nameLen)
+                    val sMethod: U64 = intern(c: inout c, start: nameStart, len: nameLen)
+                    mut val sti: U64 = 0
+                    while sti < c.traits.count {
+                        if c.traits[sti].nameId == sTrait {
+                            val sreqs: Array[Func] = c.traits[sti].reqs
+                            mut val sri: U64 = 0
+                            while sri < sreqs.count {
+                                if sreqs[sri].nameId == sMethod {
+                                    if sreqs[sri].hasRet {
+                                        if sreqs[sri].retIsArray {
+                                        } else {
+                                            if isPrimType(c: inout c, start: sreqs[sri].retStart, len: sreqs[sri].retLen) || rangeEquals(bytes: c.bytes, start: sreqs[sri].retStart, len: sreqs[sri].retLen, kw: "String") {
+                                                return typeInfoOfName(c: inout c, start: sreqs[sri].retStart, len: sreqs[sri].retLen, isArray: false)
+                                            }
+                                        }
+                                    }
+                                    return scalarInfo()
+                                }
+                                sri += 1
+                            }
+                        }
+                        sti += 1
+                    }
+                    return scalarInfo()
+                }
                 // a method call on an `any P` existential: the receiver names the trait
                 // P, so findMethod (which resolves methods on a TYPE) misses it. Recover
                 // the result from P's requirement method's return type, but only for a

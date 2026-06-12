@@ -154,6 +154,25 @@ fn typesCompatible(c: inout Comp, expected: U64, inferred: U64) -> Bool {
         }
         return true
     }
+    // the abstract Self of a trait provided-method body is likewise opaque: Self vs a
+    // CONCRETE type -> incompatible (`return self` from `-> I64`), Self vs Self -> ok.
+    val eSelf: Bool = isSelfTypeInProvided(c: inout c, start: te.nameStart, len: te.nameLen)
+    val iSelf: Bool = isSelfTypeInProvided(c: inout c, start: tin.nameStart, len: tin.nameLen)
+    if eSelf {
+        if iSelf {
+            return true
+        }
+        if isConcreteTypeName(c: inout c, start: tin.nameStart, len: tin.nameLen) {
+            return false
+        }
+        return true
+    }
+    if iSelf {
+        if isConcreteTypeName(c: inout c, start: te.nameStart, len: te.nameLen) {
+            return false
+        }
+        return true
+    }
     val eId: U64 = knownNamedTypeId(c: inout c, start: te.nameStart, len: te.nameLen)
     val iId: U64 = knownNamedTypeId(c: inout c, start: tin.nameStart, len: tin.nameLen)
     if eId == 0U64 || iId == 0U64 {

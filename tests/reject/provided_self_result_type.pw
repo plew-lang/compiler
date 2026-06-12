@@ -1,0 +1,5 @@
+// spec/08: a provided-method's `self.req()` has the requirement's return type —
+// `self.name()` is String, so returning it from `-> I64` is a type error.
+trait Greet { fn name() -> String }
+pub impl Greet { fn bad() -> I64 { return self.name() } }
+fn main() { }
