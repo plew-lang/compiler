@@ -1,0 +1,24 @@
+// A record literal passed as a GENERIC method argument (spec/02): `unwrapOr(fallback: T)`
+// has `T` = the Optional/Result element, grounded to a labelled record at the call. The
+// literal `(x: 9, y: 8)` must take its type from the grounded parameter, not from a local
+// annotation — the call site supplies the receiver's instance env so the record-typed
+// param resolves. Both the fallback-consuming (None/Err) and value (Some/Ok) paths.
+import @Std/Io with { print }
+
+fn main() {
+    // None: the record-literal fallback is consumed and grounded at the call.
+    val none: Optional[(x: I64, y: I64)] = <Optional.None />
+    val a: (x: I64, y: I64) = none.unwrapOr(fallback: (x: 9I64, y: 8I64))
+    print(a.x)   // 9
+    print(a.y)   // 8
+    // Some: the carried value wins; the fallback literal is still grounded (typed) but unused.
+    val some: Optional[(x: I64, y: I64)] = <Optional.Some v=(x: 1I64, y: 2I64) />
+    val b: (x: I64, y: I64) = some.unwrapOr(fallback: (x: 9I64, y: 8I64))
+    print(b.x)   // 1
+    print(b.y)   // 2
+    // Result.Err returns the record-literal fallback arg as well.
+    val err: Result[(x: I64, y: I64), I64] = <Result.Err error=5I64 />
+    val c: (x: I64, y: I64) = err.unwrapOr(fallback: (x: 7I64, y: 6I64))
+    print(c.x)   // 7
+    print(c.y)   // 6
+}
