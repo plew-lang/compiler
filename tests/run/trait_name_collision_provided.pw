@@ -1,0 +1,25 @@
+import @Std/Io with { print }
+
+// Regression (spec/08): a user trait that shares a NAME with an ambient Core
+// operator trait but differs in ARITY may carry a PROVIDED method. Here `Sub` (0
+// type args, requirement `extra`) collides by name with Core's subtraction
+// `Sub[Rhs]` (1 type arg). The provided method `useOwn` must be copied ONLY onto
+// types that conform to the user's `Sub` — not onto every integer (which conform
+// to Core's `Sub[Rhs]`). instantiateProvidedMethods matches by name AND arity, so
+// the provided copy lands on `S` alone and Core's subtraction keeps working.
+trait Greet { fn greetName() -> String }
+trait Sub: Greet { fn extra() -> I64 }
+
+pub impl Sub {
+    fn useOwn() -> I64 { return self.extra() }
+}
+
+struct S { pub val n: I64 }
+pub impl S as Greet { fn greetName() -> String { return "s" } }
+pub impl S as Sub { fn extra() -> I64 { return self.n } }
+
+fn main() {
+    val s: S = <S n=9I64 />
+    print(s.useOwn())     // 9   (user Sub's provided method over S's witness)
+    print(10I64 - 3I64)   // 7   (Core's subtraction Sub[Rhs] still works)
+}

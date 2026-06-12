@@ -254,7 +254,11 @@ fn instantiateProvidedMethods(c: inout Comp) {
         while fi < nFuncs {
             val f: Func = c.funcs[fi]
             if f.hasRecv {
-                if f.recvId == cf.traitId {
+                // match the conformance to the right same-name trait by arity (spec/08:
+                // trait names share a flat namespace — a user `trait Sub` vs Core's
+                // operator `Sub[Rhs]`). Without the arity gate a provided method on the
+                // 0-ary `Sub` would copy onto every type conforming to `Sub[Rhs]`.
+                if f.recvId == cf.traitId && f.provTraitArity == cf.traitArgs.count {
                     // shadowing/collision (spec/08): an inherent method of the same
                     // name on the type wins (skip the provided copy). Two conformed
                     // traits providing the same name both copy here, each tagged with

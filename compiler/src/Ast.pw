@@ -623,6 +623,13 @@ struct Func {
     // the trait it came from, so `a#P.foo()` can select the source trait when two
     // conformed traits provide the same-name method (spec/08,09). 0 otherwise.
     pub val srcTraitId: U64 = 0
+    // for a provided-method TEMPLATE (a bare `impl Trait { }` member): the type-arg
+    // arity of the trait subject (`impl Sub` = 0, `impl Mul[Rhs]` = 1). Trait names
+    // share one flat namespace (spec/08: a user `trait Sub` may co-exist with Core's
+    // operator `Sub[Rhs]`), so instantiateProvidedMethods matches a conformance to
+    // the right same-name trait by arity — without this, a provided method on the
+    // 0-ary `Sub` would be copied onto every integer (conforming to Core `Sub[Rhs]`).
+    pub val provTraitArity: U64 = 0
 }
 
 // A module-level variable (spec/15): `val x = e` / `mut val x = e`. `letStmt` is

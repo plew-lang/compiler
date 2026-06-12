@@ -1,0 +1,32 @@
+// spec/08: a provided method on a sub-trait (`trait Polite: Greet`) is copied onto
+// each conforming type and resolves `self.req()` against that type's witnesses.
+// Locks in that a legitimate (non-colliding) sub-trait provided method compiles
+// and runs (the apparent "coherence bug" was a trait-name collision with Core).
+import @Std/Io with { print }
+
+trait Greet {
+    fn greetName() -> String
+}
+
+trait Polite: Greet {
+    fn extra() -> I64
+}
+
+pub impl Polite {
+    fn useOwn() -> I64 {
+        return self.extra()
+    }
+}
+
+struct S { pub val n: I64 }
+pub impl S as Greet {
+    fn greetName() -> String { return "s" }
+}
+pub impl S as Polite {
+    fn extra() -> I64 { return self.n }
+}
+
+fn main() {
+    val s: S = <S n=7I64 />
+    print(s.useOwn())
+}
