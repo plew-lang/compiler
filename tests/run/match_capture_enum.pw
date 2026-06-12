@@ -1,0 +1,26 @@
+// capture binding `val rest =>` in a statement-position enum-dispatch match
+// (spec/11): binds the whole scrutinee, usable alongside variant arms.
+import @Std/Io with { print, write }
+
+enum Color { Red Green Blue }
+
+fn rank(c: Color) -> I64 {
+    return match c {
+        Color.Red => 1
+        Color.Green => 2
+        Color.Blue => 3
+    }
+}
+
+fn describe(c: Color) {
+    match c {
+        Color.Red => { write(s: "red\n") }
+        val rest => { print(rank(c: rest)) }
+    }
+}
+
+fn main() {
+    describe(c: <Color.Red />)
+    describe(c: <Color.Green />)
+    describe(c: <Color.Blue />)
+}

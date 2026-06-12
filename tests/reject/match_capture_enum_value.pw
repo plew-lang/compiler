@@ -1,0 +1,10 @@
+// a capture binding in a VALUE-position enum-dispatch match is not supported yet
+// (statement position works; use `_` here).
+enum E { A B }
+fn f(e: E) -> I64 {
+    return match e {
+        E.A => 1
+        val rest => 2
+    }
+}
+fn main() { val x: I64 = f(e: <E.A />) }

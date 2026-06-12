@@ -901,7 +901,11 @@ fn lowerMatchArms(c: inout Comp, arms: Array[MatchArmAst], isExpr: Bool) -> Arra
     while i < arms.count {
         val arm: MatchArmAst = arms[i]
         if arm.pattern.captureName.bytes.count > 0 {
-            compileErrorAt(line: lineOf(c: inout c, offset: arm.pattern.span.start), msg: "a capture binding `val x` in a match that dispatches on enum variants is not supported yet; use `_` or a scalar/literal match")
+            // statement-position enum captures are desugared before lowerMatchArms (the
+            // arm body already binds the name); only value-position is still unsupported.
+            if isExpr {
+                compileErrorAt(line: lineOf(c: inout c, offset: arm.pattern.span.start), msg: "a capture binding `val x` in a value-position enum match is not supported yet; use `_` or a statement match")
+            }
         }
         val pi: PatInfo = lowerPatternInfo(c: inout c, p: arm.pattern)
         val body: U64 = lowerBlock(c: inout c, b: arm.body)
@@ -1227,6 +1231,46 @@ fn lowerScalarMatchExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst],
     return c.pushExpr(e: <Expr.IfExpr cond=trueCond thenBlk=thenWrap elseBlk=elseWrap />)
 }
 
+// Desugar a statement-position enum-dispatch match that has a capture arm
+// (`match e { E.A => …  val rest => … }`, spec/11) into a single-eval scrutinee
+// binding `val __scap = e` plus the same match over `__scap`, where each capture
+// arm's lowered body is prefixed (at the arena level) with `val <name> = __scap`.
+// The arm is a wildcard, so the enum emitter handles it unchanged; the prepended
+// binding makes the captured scrutinee available under the chosen name.
+fn lowerEnumMatchCaptureInto(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst], span: Span, stmts: inout Array[U64]) {
+    val tmp: Bind = internBytes(c: inout c, s: "__scap")
+    val sv: U64 = lowerExpr(c: inout c, e: scrut)
+    stmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
+    mut val ma: Array[MatchArm] = []
+    mut val i: U64 = 0
+    while i < arms.count {
+        val arm: MatchArmAst = arms[i]
+        val pi: PatInfo = lowerPatternInfo(c: inout c, p: arm.pattern)
+        mut val bodyIdx: U64 = lowerBlock(c: inout c, b: arm.body)
+        if arm.pattern.captureName.bytes.count > 0 {
+            val capN: Bind = internBytes(c: inout c, s: arm.pattern.captureName)
+            val scapId: U64 = c.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
+            val capLet: U64 = c.pushStmt(s: <Stmt.Let mutable=false nameStart=capN.nameStart nameLen=capN.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=scapId />)
+            mut val ns: Array[U64] = []
+            ns.append(value: capLet)
+            mut val k: U64 = 0
+            while k < c.blocks[bodyIdx].stmts.count {
+                ns.append(value: c.blocks[bodyIdx].stmts[k])
+                k += 1
+            }
+            bodyIdx = blockOfStmts(c: inout c, stmts: ns)
+        }
+        mut val guardId: U64 = 0
+        if arm.hasGuard {
+            guardId = lowerExpr(c: inout c, e: arm.guard)
+        }
+        ma.append(value: <MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=bodyIdx isStruct=pi.isStruct isDiverge=false hasGuard=arm.hasGuard guard=guardId />)
+        i += 1
+    }
+    val scrutId: U64 = c.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
+    stmts.append(value: c.pushStmt(s: <Stmt.Match scrut=scrutId arms=ma />))
+}
+
 fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
     mut val result: U64 = 0
     match s {
@@ -1391,7 +1435,11 @@ fn lowerBlock(c: inout Comp, b: BlockAst) -> U64 {
             }
             StmtAst.Match(val scrut, val arms, val span) => {
                 if matchHasEnumOrStruct(arms: arms) {
-                    stmts.append(lowerStmt(c: inout c, s: b.stmts[i]))
+                    if matchHasCapture(arms: arms) {
+                        lowerEnumMatchCaptureInto(c: inout c, scrut: scrut, arms: arms, span: span, stmts: inout stmts)
+                    } else {
+                        stmts.append(lowerStmt(c: inout c, s: b.stmts[i]))
+                    }
                 } else {
                     lowerScalarMatchStmtInto(c: inout c, scrut: scrut, arms: arms, span: span, stmts: inout stmts)
                 }

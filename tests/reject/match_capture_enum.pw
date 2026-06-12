@@ -1,9 +1,0 @@
-// a capture binding in an enum-dispatch match is not supported yet (use `_`).
-enum E { A B }
-fn main() {
-    val e: E = <E.A />
-    match e {
-        E.A => {}
-        val rest => {}
-    }
-}
