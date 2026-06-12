@@ -5463,6 +5463,18 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "truncU8") {
         return coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: st.i8ty, unsigned: true)
     }
+    // (Prelude internal) truncI8/I16/I32(n: I64) -> IX: narrow a RANGE-CHECKED signed
+    // integer (`as` is lossless-only and rejects narrowing). The fallible `convert`
+    // factories (spec/12 TryFrom) call these only after proving the value fits.
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "truncI8") {
+        return coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: st.i8ty, unsigned: false)
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "truncI16") {
+        return coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: st.i16ty, unsigned: false)
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "truncI32") {
+        return coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: st.i32ty, unsigned: false)
+    }
     // (Prelude internal) __dictSeed() -> U64: the per-process dictionary hash seed —
     // a lazily-initialized random value (stable for the process), so SipHash is keyed
     // unpredictably across runs (DoS resistance) while staying consistent within a run.

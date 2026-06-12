@@ -1250,6 +1250,39 @@ export fn parseTraitDecl(p: inout P) -> TraitAst {
                 reqs.append(parseSigAst(p: inout p, isAssoc: false, selfInout: true))
             }
             _ => {
+                if curIs(p: inout p, kw: "factory") || curIs(p: inout p, kw: "optional") || curIs(p: inout p, kw: "result") {
+                    // a factory requirement `[optional | result[E]] factory name(params)`
+                    // (spec/05,12 — e.g. `TryFrom`'s `result[Error] factory convert(from:)`,
+                    // `Chain`'s `factory fromValue/empty`). Recorded as an assoc-fn
+                    // requirement by its SELECTOR (name + labels); the fallible wrapper
+                    // (optional/result[E]) and the implicit `Self` return are the impl's
+                    // concern. Witnessing matches by selector and the requirement return is
+                    // left implicit (reqReturnMismatch is lenient for the Result/Optional/
+                    // Self shape), so a conforming `impl I8 as TryFrom[I64]` factory satisfies
+                    // it and the built-in-impl gate exempts the witnessing factory.
+                    if curIs(p: inout p, kw: "optional") {
+                        p.advance()
+                    } else {
+                        if curIs(p: inout p, kw: "result") {
+                            p.advance()
+                            match p.curKind() {
+                                Kind.LBracket => {
+                                    p.advance()
+                                    val ignErr: TypeAst = parseType(p: inout p)
+                                    match p.curKind() {
+                                        Kind.RBracket => { p.advance() }
+                                        _ => {}
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    if curIs(p: inout p, kw: "factory") {
+                        p.advance()
+                    }
+                    reqs.append(parseSigAst(p: inout p, isAssoc: true))
+                } else {
                 if curIs(p: inout p, kw: "assoc") {
                     p.advance()
                     match p.curKind() {
@@ -1270,6 +1303,7 @@ export fn parseTraitDecl(p: inout P) -> TraitAst {
                     } else {
                         p.advance()
                     }
+                }
                 }
             }
         }

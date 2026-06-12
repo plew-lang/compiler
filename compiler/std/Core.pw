@@ -374,6 +374,12 @@ export extern "plew-intrinsic" {
     // wider values). Used to assemble UTF-8 bytes from a code point during string
     // literal `\u{...}` decoding, where each computed byte is known to fit in U8.
     fn truncU8(n: U64) -> U8
+    // Truncate a (range-checked) integer to a narrower signed width. `as` is
+    // lossless-only and rejects narrowing, so the fallible `convert` factories
+    // (spec/12 TryFrom) reach for these after proving the value is in range.
+    fn truncI8(n: I64) -> I8
+    fn truncI16(n: I64) -> I16
+    fn truncI32(n: I64) -> I32
 }
 
 // String methods, written in pure Plew over the exposed `bytes` view (spec/02:
@@ -520,5 +526,61 @@ pub impl String as Format {
     // fails the `where T: Format` bound on `print` (spec/02).
     fn format(format: String) -> String {
         return self
+    }
+}
+
+// The error of a fallible numeric conversion (spec/12 TryFrom): carries the
+// out-of-range source value that could not be represented in the narrower target.
+export struct RangeError {
+    pub val value: I64
+}
+
+// Failure-possible conversion (spec/12): `convert` is a fallible factory yielding
+// `Result[Self, Error]`. `as` (From) is total; `TryFrom` covers narrowing/parsing
+// where some inputs can't be represented. `Error` is an associated type the impl
+// picks. Used here for primitive integer narrowing.
+export trait TryFrom[Source] {
+    type Error
+    result[Error] factory convert(from: Source)
+}
+
+// Fallible narrowing conversions (spec/12): `<I8.convert from=big/>` yields
+// `Result[I8, RangeError]`. `as` is infallible/total only (rejects narrowing), so a
+// value that may not fit is a named `convert` factory that range-checks first and
+// truncates only once proven in range (`truncI8`).
+pub impl I8 as TryFrom[I64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I64) {
+        if from < -128I64 {
+            return <Result[I8, RangeError].Err error=<RangeError value=from /> />
+        }
+        if from > 127I64 {
+            return <Result[I8, RangeError].Err error=<RangeError value=from /> />
+        }
+        return <Result[I8, RangeError].Ok value=truncI8(n: from) />
+    }
+}
+pub impl I16 as TryFrom[I64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I64) {
+        if from < -32768I64 {
+            return <Result[I16, RangeError].Err error=<RangeError value=from /> />
+        }
+        if from > 32767I64 {
+            return <Result[I16, RangeError].Err error=<RangeError value=from /> />
+        }
+        return <Result[I16, RangeError].Ok value=truncI16(n: from) />
+    }
+}
+pub impl I32 as TryFrom[I64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I64) {
+        if from < -2147483648I64 {
+            return <Result[I32, RangeError].Err error=<RangeError value=from /> />
+        }
+        if from > 2147483647I64 {
+            return <Result[I32, RangeError].Err error=<RangeError value=from /> />
+        }
+        return <Result[I32, RangeError].Ok value=truncI32(n: from) />
     }
 }

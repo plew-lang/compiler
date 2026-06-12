@@ -1,0 +1,33 @@
+// Primitive integer narrowing via `TryFrom` (spec/12): `as` is total/infallible only
+// and rejects narrowing, so a value that may not fit is converted with the fallible
+// `<IX.convert from=wide/>` factory, yielding `Result[IX, RangeError]`. This exercises
+// the factory-as-trait-requirement wiring (`trait TryFrom { result[Error] factory
+// convert(from:) }` witnessed by `impl I8 as TryFrom[I64]`).
+import @Std/Io with { print }
+import @Std/Core with { RangeError }
+
+fn main() {
+    // I64 -> I8: in range, then out of range.
+    val a: Result[I8, RangeError] = <I8.convert from=100I64 />
+    print(a.unwrapOr(fallback: 0I8))     // 100
+    val b: Result[I8, RangeError] = <I8.convert from=200I64 />
+    print(b.isErr())                     // 1
+    // I64 -> I16.
+    val c: Result[I16, RangeError] = <I16.convert from=30000I64 />
+    print(c.unwrapOr(fallback: 0I16))    // 30000
+    val d: Result[I16, RangeError] = <I16.convert from=40000I64 />
+    print(d.isErr())                     // 1
+    // I64 -> I32.
+    val e: Result[I32, RangeError] = <I32.convert from=2000000000I64 />
+    print(e.unwrapOr(fallback: 0I32))    // 2000000000
+    val f: Result[I32, RangeError] = <I32.convert from=3000000000I64 />
+    print(f.isErr())                     // 1
+    // a negative below the floor is also rejected.
+    val g: Result[I8, RangeError] = <I8.convert from=0I64 - 200I64 />
+    print(g.isErr())                     // 1
+    // the error carries the offending value.
+    match b {
+        Result.Ok(value: val v) => { print(v) }
+        Result.Err(error: val err) => { print(err.value) }   // 200
+    }
+}
