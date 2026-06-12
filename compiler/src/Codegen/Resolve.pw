@@ -648,6 +648,40 @@ fn orderGlobalsByDependency(c: inout Comp) {
     c.globals = reordered
 }
 
+// Post-load rewrite (spec/15): a `with { real as alias }` import lets the using
+// module call `real` under the local name `alias`. Rewrite each free-function call
+// `alias(args)` whose module imported that alias into a call to `real`, so it rides
+// the normal name resolution and import-visibility checks. (Function-call uses only;
+// type/value aliases are additive.)
+fn rewriteImportAliases(c: inout Comp) {
+    if c.importAliases.count == 0U64 {
+        return
+    }
+    mut val i: U64 = 0
+    while i < c.exprs.count {
+        match c.exprs[i] {
+            Expr.Call(val nameStart, val nameLen, val args) => {
+                mut val ai: U64 = 0
+                while ai < c.importAliases.count {
+                    val al: Bind = c.importAliases[ai]
+                    if spansEqual(c: inout c, aStart: al.nameStart, aLen: al.nameLen, bStart: nameStart, bLen: nameLen) {
+                        if moduleOf(c: inout c, offset: al.nameStart) == moduleOf(c: inout c, offset: nameStart) {
+                            c.exprs[i] = <Expr.Call nameStart=al.fieldStart nameLen=al.fieldLen args=args />
+                            ai = c.importAliases.count
+                        } else {
+                            ai += 1
+                        }
+                    } else {
+                        ai += 1
+                    }
+                }
+            }
+            _ => {}
+        }
+        i += 1
+    }
+}
+
 // If `recv` is a bare identifier naming a type (not a local value), return that
 // type's name span as an assoc-fn receiver; else signal "not an assoc call" by
 // returning len 0. Used by call codegen/type recovery to route `Type.name(args)`.

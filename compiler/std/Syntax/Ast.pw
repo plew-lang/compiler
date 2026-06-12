@@ -277,6 +277,9 @@ export struct ImportAst {
     // a path-level alias `import <path> as F` (spec/15): binds the namespace to `F`
     // instead of the last path segment. Empty span when absent.
     pub val aliasSpan: Span = <Span start=0 end=0 />
+    // per-name aliases for `with { Bar as Q }` (spec/15), parallel to `names`. An
+    // empty span means the name is imported under its own name.
+    pub val nameAliasSpans: Array[Span] = []
     pub val span: Span
 }
 

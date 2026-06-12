@@ -1,0 +1,9 @@
+// `import … with { real as alias }` (spec/15): the using module calls the imported
+// function under the local alias. Export/visibility checks apply to the real name.
+import @Std/Io with { print as out, write as emit }
+
+fn main() {
+    val n: I64 = 7
+    out(n)
+    emit(s: "aliased\n")
+}

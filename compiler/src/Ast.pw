@@ -685,6 +685,11 @@ struct Comp {
     // segment (`Io`) as a namespace, so `Io.print(args)` resolves to `print` from that
     // module. Each Bind holds the segment's name span (nameStart/nameLen).
     pub mut val namespaces: Array[Bind] = []
+    // `import … with { real as alias }` name aliases (spec/15). Each Bind: the alias
+    // span (nameStart/nameLen) and the real imported name span (fieldStart/fieldLen).
+    // The owning module is moduleOf(nameStart). A call/use of the alias is rewritten
+    // to the real name (function-call uses; type/value aliases are additive).
+    pub mut val importAliases: Array[Bind] = []
     // module-level variables (spec/15), in lowering order (= initialization order).
     pub mut val globals: Array[Global] = []
     // `newtype Name = Underlying` declarations (spec/10): a distinct type with the

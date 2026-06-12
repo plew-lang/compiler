@@ -1831,6 +1831,13 @@ fn lowerImport(c: inout Comp, imp: ImportAst) {
     while i < imp.names.count {
         val nspan: Span = imp.nameSpans[i]
         markImport(c: inout c, segStart: imp.segSpan.start, segLen: imp.segSpan.end - imp.segSpan.start, nameStart: nspan.start, nameLen: nspan.end - nspan.start)
+        // `real as alias`: record the local alias -> real-name mapping (spec/15).
+        if i < imp.nameAliasSpans.count {
+            val al: Span = imp.nameAliasSpans[i]
+            if al.end > al.start {
+                c.importAliases.append(value: <Bind nameStart=al.start nameLen=al.end - al.start fieldStart=nspan.start fieldLen=nspan.end - nspan.start />)
+            }
+        }
         i += 1
     }
 }

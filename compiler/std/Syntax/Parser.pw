@@ -1384,6 +1384,7 @@ fn parseImportAst(p: inout P, isImport: Bool) -> ImportAst {
     }
     mut val names: Array[String] = []
     mut val nameSpans: Array[Span] = []
+    mut val nameAliasSpans: Array[Span] = []
     match p.curKind() {
         Kind.LBrace => {
             p.advance()
@@ -1401,17 +1402,22 @@ fn parseImportAst(p: inout P, isImport: Bool) -> ImportAst {
                         names.append(p.text(t: t))
                         nameSpans.append(p.spanOf(t: t))
                         p.advance()
-                        // `name as Q`: consume the alias (the original name is recorded).
+                        // `name as Q`: bind the local alias `Q` to the imported `name`.
+                        mut val alias: Span = <Span start=0 end=0 />
                         match p.curKind() {
                             Kind.KwAs => {
                                 p.advance()
                                 match p.curKind() {
-                                    Kind.Ident => { p.advance() }
+                                    Kind.Ident => {
+                                        alias = p.spanOf(t: p.curTok())
+                                        p.advance()
+                                    }
                                     _ => {}
                                 }
                             }
                             _ => {}
                         }
+                        nameAliasSpans.append(alias)
                     }
                     _ => { p.advance() }
                 }
@@ -1419,7 +1425,7 @@ fn parseImportAst(p: inout P, isImport: Bool) -> ImportAst {
         }
         _ => {}
     }
-    return <ImportAst pathSpan=<Span start=pathStart end=pathEndAbs /> segSpan=<Span start=segStartAbs end=segStartAbs + segLen /> isImport=isImport names=names nameSpans=nameSpans aliasSpan=aliasSpan span=<Span start=startOff end=p.prevEnd() /> />
+    return <ImportAst pathSpan=<Span start=pathStart end=pathEndAbs /> segSpan=<Span start=segStartAbs end=segStartAbs + segLen /> isImport=isImport names=names nameSpans=nameSpans aliasSpan=aliasSpan nameAliasSpans=nameAliasSpans span=<Span start=startOff end=p.prevEnd() /> />
 }
 
 // Optional directive arguments `(label: expr, ...)` after a derive name (spec/16).
