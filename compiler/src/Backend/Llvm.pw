@@ -2588,6 +2588,13 @@ fn markLocalMoved(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) {
 // The Plew-type-kind tag (0 int/signed, 1 String, 2 Bool, 3 unsigned) of a type
 // name span. Used to tag locals/params at declaration.
 fn kindFromTySpan(c: inout Comp, tyStart: U64, tyLen: U64) -> U64 {
+    // a `newtype` (spec/10) shares its underlying type's representation AND value-kind
+    // (a `newtype UserId = String` formats/dispatches as a String): resolve to the
+    // underlying first so a newtype local/cast carries the right kind (1=String, …).
+    val ntu: Bind = newtypeUnderName(c: inout c, start: tyStart, len: tyLen)
+    if ntu.nameStart != tyStart || ntu.nameLen != tyLen {
+        return kindFromTySpan(c: inout c, tyStart: ntu.nameStart, tyLen: ntu.nameLen)
+    }
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "String") { return 1U64 }
     if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Bool") { return 2U64 }
     if isFloatType(c: inout c, start: tyStart, len: tyLen) { return 4U64 }
@@ -2727,6 +2734,20 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 if gmfi < c.funcs.count {
                     if c.funcs[gmfi].hasRet {
                         return methodReturnKind(c: inout c, st: inout st, recv: recv, mfi: gmfi)
+                    }
+                }
+            }
+            // a method on a primitive lang-item receiver (`s.isEmpty() -> Bool`, or an
+            // inherited String method on a `newtype UserId = String`): resolve on the
+            // underlying lang-item, mirroring genLlvmMethod's primRecv dispatch, so the
+            // return kind isn't defaulted to int. The front-end's typeOf can't see a
+            // newtype's inherited methods, so the fallback below would mis-kind it.
+            val primRecvK: Bind = primLangItemRecvName(c: inout c, st: inout st, recv: recv)
+            if primRecvK.nameLen != 0U64 {
+                val pmfi: U64 = findMethod(c: inout c, recvStart: primRecvK.nameStart, recvLen: primRecvK.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                if pmfi < c.funcs.count {
+                    if c.funcs[pmfi].hasRet {
+                        return kindFromTySpan(c: inout c, tyStart: c.funcs[pmfi].retStart, tyLen: c.funcs[pmfi].retLen)
                     }
                 }
             }
@@ -4086,6 +4107,22 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                 if kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen) == 1U64 {
                 } else {
                     return coerceInt(st: inout st, v: ov, target: llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen), unsigned: valueKind(c: inout c, st: inout st, id: operand) == 3U64)
+                }
+            }
+            // a `newtype` re-tag (spec/10) over a NON-int underlying (`"a" as UserId`
+            // wrap / `u as String` unwrap, UserId = String): the newtype shares its
+            // underlying's representation, so the conversion is a no-op — return the
+            // operand value unchanged. (int-underlying newtypes go through the int path
+            // above.) The front-end (Verify) already gated legality, so reaching here
+            // with a non-int/non-float operand means a representation-preserving re-tag:
+            // either the TARGET is a newtype (wrap) or the OPERAND's type is (unwrap).
+            if newtypeUnderRef(c: inout c, start: tyStart, len: tyLen) != 0U64 {
+                return ov
+            }
+            val opRef: U64 = exprTypeRef(c: inout c, st: inout st, id: operand)
+            if opRef != 0U64 {
+                if newtypeUnderRef(c: inout c, start: c.types[opRef].nameStart, len: c.types[opRef].nameLen) != 0U64 {
+                    return ov
                 }
             }
             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "LLVM backend: this `as` conversion is not yet supported (int-width only)")
@@ -9006,6 +9043,16 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             if tref == 0U64 {
                 if tyLen > 0U64 {
                     if isPrimIntName(c: inout c, start: tyStart, len: tyLen) {
+                        tref = simpleTypeRef(c: inout c, nameStart: tyStart, nameLen: tyLen)
+                    }
+                }
+            }
+            // a `newtype` local (`val u: UserId = …`, spec/10): track the newtype's own
+            // TypeRef (not the underlying) so `exprTypeRef(u)` reports UserId — needed
+            // for an unwrap re-tag `u as String` to recognise the operand is a newtype.
+            if tref == 0U64 {
+                if tyLen > 0U64 {
+                    if newtypeUnderRef(c: inout c, start: tyStart, len: tyLen) != 0U64 {
                         tref = simpleTypeRef(c: inout c, nameStart: tyStart, nameLen: tyLen)
                     }
                 }

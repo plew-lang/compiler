@@ -1,0 +1,8 @@
+// A newtype is a DISTINCT type (spec/10): no implicit conversion to its underlying.
+// Assigning a `UserId` where a `String` is required must be rejected — the re-tag
+// `u as String` is required (Plew has no implicit conversion, spec/12).
+newtype UserId = String
+fn main() {
+    val u: UserId = "alice" as UserId
+    val s: String = u
+}
