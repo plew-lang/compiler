@@ -1646,6 +1646,11 @@ fn parseExportAst(p: inout P) -> TopItemAst {
             if curIs(p: inout p, kw: "trait") {
                 return <TopItemAst.Export inner=<TopItemAst.Trait t=parseTraitDecl(p: inout p) /> />
             }
+            // `export newtype Name = Underlying` (spec/10,15): `newtype` is a contextual
+            // keyword (an Ident), so it lands here rather than in a `Kind.Kw…` arm.
+            if curIs(p: inout p, kw: "newtype") {
+                return <TopItemAst.Export inner=parseNewtypeAst(p: inout p, isPub: false) />
+            }
             return <TopItemAst.ReExport pathSpan=<Span start=startOff end=startOff /> />
         }
         _ => { return <TopItemAst.ReExport pathSpan=<Span start=startOff end=startOff /> /> }

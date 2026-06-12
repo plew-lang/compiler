@@ -2016,6 +2016,15 @@ fn lowerExportItem(c: inout Comp, inner: TopItemAst) {
                 recordExport(c: inout c, nameStart: c.globals[gB].nameStart, nameLen: c.globals[gB].nameLen)
             }
         }
+        TopItemAst.NewType(val name, val ty, isPub: _, span: _) => {
+            // `export newtype Name = Underlying` (spec/10,15): lower the distinct type,
+            // then record its name as exported so other modules can import it.
+            val ntB: U64 = c.newtypes.count
+            lowerNewtype(c: inout c, name: name, ty: ty)
+            if c.newtypes.count > ntB {
+                recordExport(c: inout c, nameStart: c.newtypes[ntB].nameStart, nameLen: c.newtypes[ntB].nameLen)
+            }
+        }
         _ => { lowerTopItem(c: inout c, item: inner) }
     }
 }

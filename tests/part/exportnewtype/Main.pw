@@ -1,0 +1,11 @@
+// A `newtype` exported from a submodule, then imported and used across the module
+// boundary — including its inherited String members (`.bytes`) and the `as` re-tag.
+import @Std/Io with { print }
+import /Models/User with { UserId, makeUser }
+
+fn main() {
+    val u: UserId = makeUser("alice")
+    print(u as String)       // alice  (unwrap re-tag)
+    print(u.bytes.count)     // 5      (inherited String field)
+    print(u.isEmpty())       // 0      (inherited String method)
+}
