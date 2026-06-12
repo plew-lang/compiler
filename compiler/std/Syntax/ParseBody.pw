@@ -1192,9 +1192,60 @@ fn parseIfStmtAst(p: inout P) -> StmtAst {
     }
 }
 
+// Value-position `if`-let `if PATTERN = expr [&& cond] { give a } else { give b }`
+// (spec/11): desugars to a value-position `match` over `expr`. `else` is mandatory in
+// value position (both branches must yield).
+fn parseIfLetExpr(p: inout P, sStart: U64) -> ExprAst {
+    val pat: PatternAst = parsePatternAst(p: inout p)
+    match p.curKind() {
+        Kind.Eq => { p.advance() }
+        _ => {}
+    }
+    val scrut: ExprAst = parseBinAst(p: inout p, minPrec: 3)
+    mut val trailing: Array[ExprAst] = []
+    while true {
+        match p.curKind() {
+            Kind.AmpAmp => {
+                p.advance()
+                trailing.append(parseBinAst(p: inout p, minPrec: 3))
+            }
+            _ => { break }
+        }
+    }
+    val thenBlk: BlockAst = parseBlockAst(p: inout p)
+    p.skipNewlines()
+    match p.curKind() {
+        Kind.KwElse => { p.advance() }
+        _ => {}
+    }
+    val elseBlk: BlockAst = parseBlockAst(p: inout p)
+    val span: Span = <Span start=sStart end=p.prevEnd() />
+    mut val innerThen: BlockAst = thenBlk
+    if trailing.count > 0 {
+        mut val combined: ExprAst = trailing[0]
+        mut val ti: U64 = 1
+        while ti < trailing.count {
+            combined = <ExprAst.Binary op=kindCode(k: <Kind.AmpAmp />) lhs=combined rhs=trailing[ti] span=span />
+            ti += 1
+        }
+        // an inner value-position if: `give (if cond { … } else { … })`.
+        val inner: ExprAst = <ExprAst.IfExpr cond=combined thenBlk=thenBlk elseBlk=elseBlk span=span />
+        mut val one: Array[StmtAst] = []
+        one.append(<StmtAst.Give value=inner span=span />)
+        innerThen = <BlockAst stmts=one />
+    }
+    mut val arms: Array[MatchArmAst] = []
+    arms.append(<MatchArmAst pattern=pat body=innerThen span=span />)
+    arms.append(<MatchArmAst pattern=<PatternAst isWildcard=true isStruct=false typeName="" variant="" binds=[] span=span /> body=elseBlk span=span />)
+    return <ExprAst.MatchExpr scrut=scrut arms=arms span=span />
+}
+
 fn parseIfExprAst(p: inout P) -> ExprAst {
     val sStart: U64 = p.base + p.curTok().start
     p.advance()
+    if detectRefutableBinding(p: inout p) {
+        return parseIfLetExpr(p: inout p, sStart: sStart)
+    }
     val cond: ExprAst = parseExprAst(p: inout p)
     val thenBlk: BlockAst = parseBlockAst(p: inout p)
     p.skipNewlines()

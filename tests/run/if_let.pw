@@ -18,6 +18,16 @@ fn label(o: Optional[I64]) -> String {
     }
 }
 
+// expression position: `val x = if PATTERN = expr { give … } else { give … }`.
+fn pick(o: Optional[I64]) -> I64 {
+    val r: I64 = if Optional.Some(val v) = o {
+        give v * 2
+    } else {
+        give -1I64
+    }
+    return r + 1
+}
+
 fn main() {
     print(doubled(o: <Optional.Some v=5I64 />))
     print(doubled(o: <Optional.None />))
@@ -28,4 +38,6 @@ fn main() {
     write(s: "\n")
     write(s: label(o: <Optional.None />))
     write(s: "\n")
+    print(pick(o: <Optional.Some v=5I64 />))
+    print(pick(o: <Optional.None />))
 }
