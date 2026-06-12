@@ -1,0 +1,9 @@
+// spec/06: passing a type-parameter value to a concrete-receiver method's
+// concrete-typed parameter is a type error (`c.add(by: x)` where x: T, by: I64).
+struct Counter { pub mut val n: I64 }
+pub impl Counter { inout fn add(by: I64) { self.n = self.n + by } }
+fn f[T](x: T) {
+    mut val c: Counter = <Counter n=0I64 />
+    c.add(by: x)
+}
+fn main() { }

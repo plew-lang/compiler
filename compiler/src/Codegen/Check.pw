@@ -1943,6 +1943,28 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                     } else {
                         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
                     }
+                } else {
+                    // a CONCRETE-receiver method: a `T` value passed to a concrete-typed
+                    // parameter is a type error (`s.set(x: a)` where a: T, x: I64). A
+                    // generic-receiver method's grounded param types are handled by the
+                    // backend; here we check the non-generic-receiver case.
+                    if isGenericInst(c: inout c, ref: rt.ref) {
+                    } else {
+                        val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                        if mi != c.funcs.count {
+                            val mps: Array[Param] = c.funcs[mi].params
+                            mut val mk: U64 = 0
+                            while mk < args.count {
+                                if mk < mps.count {
+                                    if mps[mk].tyIsArray {
+                                    } else {
+                                        checkGenericTypeMatch(c: inout c, expectedRef: mps[mk].ty, valueExpr: args[mk].expr)
+                                    }
+                                }
+                                mk += 1
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -2020,6 +2042,30 @@ fn checkGenericTypeMatch(c: inout Comp, expectedRef: U64, valueExpr: U64) {
     if methodInEntryModule(c: inout c, f: c.funcs[c.curCheckFn]) {
     } else {
         return
+    }
+    // a value-position if/match: each branch's `give` value must match the expected
+    // type (`val x: I64 = if c { give a } else { give b }` with a: T).
+    match c.exprs[valueExpr] {
+        Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
+            val tv: U64 = tcBlockGiveValue(c: inout c, blockId: thenBlk)
+            if tv != 0U64 {
+                checkGenericTypeMatch(c: inout c, expectedRef: expectedRef, valueExpr: tv)
+            }
+            val ev: U64 = tcBlockGiveValue(c: inout c, blockId: elseBlk)
+            if ev != 0U64 {
+                checkGenericTypeMatch(c: inout c, expectedRef: expectedRef, valueExpr: ev)
+            }
+        }
+        Expr.MatchExpr(scrut: _, val arms) => {
+            mut val ai: U64 = 0
+            while ai < arms.count {
+                if arms[ai].binds.count == 0U64 {
+                    checkGenericTypeMatch(c: inout c, expectedRef: expectedRef, valueExpr: arms[ai].body)
+                }
+                ai += 1
+            }
+        }
+        _ => {}
     }
     // an array literal in an `Array[E]` position: recurse element-wise (inferType
     // reports an array literal as unknown, so check each element against E).

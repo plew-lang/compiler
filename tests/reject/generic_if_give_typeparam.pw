@@ -1,0 +1,7 @@
+// spec/06: a value-position if's give value must match the expected type — giving
+// a `T` value where I64 is required is a type error at the definition.
+fn f[T](c: Bool, x: T) -> I64 {
+    val y: I64 = if c { give x } else { give 0I64 }
+    return y
+}
+fn main() { }
