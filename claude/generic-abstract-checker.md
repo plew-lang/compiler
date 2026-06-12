@@ -37,10 +37,11 @@ per-instance（インスタンスを置換 env で検査）は **instantiate さ
 
 > ⚠ コンパイラ自身が generic を多用。`typesCompatible` を型パラメータに strict 化すると自分の source を誤 reject → 自己再ビルド不能になり得る。各段で `./dev-rebuild.sh`→ダメなら `./bootstrap.sh`（種から）で切り分け。strict 化は**スコープ付き**（`curCheckFn` の型パラメータに限る）で、非 generic / per-instance の lenient 挙動を壊さないこと。
 
-- **P1（低リスク・着手中）＝演算子の bound 要求**：`checkBoundsExpr` の Binary/Unary を拡張し、型パラメータ値への算術/ビット/シフト/単項に対応する trait bound（`Add`/`Sub`/`Mul`/`Div`/`Rem`/`BitAnd`/`BitOr`/`BitXor`/`Shl`/`Shr`/`Neg`/`Not`/`BitNot`/`Pow`）を要求。`typesCompatible` に触れない＝安全。
-- **P2＝strict 型パラメータ同一性**：`typesCompatible`（or その呼び口）を、`curCheckFn` の型パラメータについて strict 化（`T`vs concrete／`T`vs 別パラメータ＝mismatch、`T`vs`T`＝OK）。これで `return a`(T)→`-> I64` や `val y:I64=a` を reject。**最難関・self-host リスク大**。スコープを厳密に（generic 本体検査中のみ）。
-- **P3＝concrete full-check の合流**：generic 本体に対し literal-context/return/missing-return 等の既存検査を、型パラメータ-aware に走らせる。P2 の strict 化が入れば `typesCompatible` ベースの検査はそのまま正しく効くので、`checkBoundsBlock` と `verifyFunc` の検査を 1 本に寄せるか、checkBoundsBlock を full-check 化する。
+- ✅ **P1＝演算子の bound 要求（done）**：`checkBoundsExpr` の Binary/Unary を拡張。型パラメータ値への算術/ビット/シフト（`Add`/`Sub`/`Mul`/`Div`/`Rem`/`BitAnd`/`BitOr`/`BitXor`/`Shl`/`Shr`）・単項（`Neg`/`Not`/`BitNot`）は対応 bound 必須（`binOpTraitName`/`unOpTraitName`＋`boundHasTraitNamed`）。`typesCompatible` 不触＝安全。test reject generic_op_no_bound/generic_unary_no_bound。残＝`Pow`（float 後）・`&&`/`||`（Bool 要求＝trait でない・別途）。
+- ✅ **P2＝strict 型パラメータ同一性（done）**：`typesCompatible` に `curCheckFn` の型パラメータ strict 判定を追加（`T`vs`T`＝spansEqual・`T`vs concrete/別パラメータ＝false）。`checkGenericTypeMatch` が `return`・注釈付き `val` を判定（`inferType`＋`typesCompatible`）。`return a`(T)→`->I64`・`val y:I64=a`・`return b:U`→`->T` を定義地点で reject。**entry-module gate**＝std/prelude は trusted で除外（`Array.get` の `return arrayGet(self,i)` で inferType が要素 `T` でなく `Array` を返す既知の癖を踏むため・`verifyProgram` と同じ gate）。test reject generic_return_typeparam/generic_assign_typeparam/generic_return_other_param。
+- **P3＝concrete full-check の合流＋追加位置（次）**：`checkGenericTypeMatch` は今 return/let のみ。call 引数・複合代入・配列要素・record/make フィールド・if/match-give へ拡張。literal-context（`val y: T = 5` は T が数値 bound を持たねば reject 等）・missing-return も generic 本体へ。`checkBoundsBlock` を full-check 化するか、`verifyFunc` を generic 本体に entry-module 限定で走らせ `curCheckFn` を立てる方向。
 - **P4＝field access on T を reject／関連型 `T::Item`**（additive）。
+- **既知の inferType 癖（要追跡）**＝abstract context で `arrayGet(self,i)` 等の要素型回復が `Array`（head 名）を返す。entry-module gate で回避中だが、user が同型の array-element 回復を書くと false-positive の余地→将来 inferType の element 回復を abstract-aware に直すのが根治。
 
 ## テスト方針
 
