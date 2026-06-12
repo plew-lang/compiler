@@ -1,0 +1,9 @@
+// `match` arms have no guards (spec/11): an `if` condition on an arm is rejected.
+enum Shape { Circle(r: I64) Rect(w: I64 h: I64) }
+fn f(s: Shape) -> I64 {
+    return match s {
+        Shape.Circle(val r) if r > 10 => 1
+        _ => 0
+    }
+}
+fn main() { val x: I64 = f(s: <Shape.Circle r=5 />) }

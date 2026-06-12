@@ -51,22 +51,14 @@ export struct PatternAst {
     pub val span: Span
 }
 
-// One match arm: a pattern, an optional guard (`Pat if cond => …`, spec/11), and a
-// body block (a single-`give` block in expression position). A guarded arm only
-// matches when the pattern matches AND the guard is true; a guard makes the arm not
-// count toward exhaustiveness.
+// One match arm: a pattern and a body block (a single-`give` block in expression
+// position). `match` arms have NO guards (spec/11): refinement is done by binding
+// then a nested `match`, or a preceding `if`/`guard` condition chain — this keeps
+// exhaustiveness purely structural.
 export struct MatchArmAst {
     pub val pattern: PatternAst
-    pub val hasGuard: Bool = false
-    pub val guard: ExprAst = emptyExpr()
     pub val body: BlockAst
     pub val span: Span
-}
-
-// The optional guard of a match arm (`if <cond>`), returned by parseArmGuardAst.
-export struct ArmGuardAst {
-    pub val hasGuard: Bool
-    pub val guard: ExprAst
 }
 
 // A `{ ... }` block: a sequence of statements.

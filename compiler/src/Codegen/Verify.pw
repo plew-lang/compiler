@@ -811,9 +811,6 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                 c.curBranchBase = armMark
                 checkDestructureComplete(c: inout c, a: arms[ai])
                 verifyAddArmBinds(c: inout c, a: arms[ai], scrut: scrut)
-                if arms[ai].hasGuard {
-                    verifyExpr(c: inout c, id: arms[ai].guard)
-                }
                 verifyBlock(c: inout c, blockId: arms[ai].body)
                 c.curBranchBase = savedArmBB
                 popLocals(c: inout c, mark: armMark)
@@ -1453,9 +1450,6 @@ fn verifyExpr(c: inout Comp, id: U64) {
                 val armMark: U64 = scopeMark(c: inout c)
                 checkDestructureComplete(c: inout c, a: arms[ai])
                 verifyAddArmBinds(c: inout c, a: arms[ai], scrut: scrut)
-                if arms[ai].hasGuard {
-                    verifyExpr(c: inout c, id: arms[ai].guard)
-                }
                 verifyBlock(c: inout c, blockId: arms[ai].body)
                 popLocals(c: inout c, mark: armMark)
                 ai += 1

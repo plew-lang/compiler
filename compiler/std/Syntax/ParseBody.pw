@@ -897,8 +897,9 @@ fn parsePatternAst(p: inout P) -> PatternAst {
     return <PatternAst isWildcard=isWildcard isStruct=isStruct typeName=typeName variant=variant binds=binds span=<Span start=sStart end=p.prevEnd() /> />
 }
 
-// Parse an arm's `Pat ( | Pat )*` (NOT the guard or `=>`). Returns one PatternAst
-// per alternative (the caller shares the body and guard across them).
+// Parse an arm's `Pat ( | Pat )*` and consume the `=>`. Returns one PatternAst per
+// alternative (the caller shares the body across them). `match` arms have no guards
+// (spec/11), so an `if` here is a clean error pointing at the alternatives.
 fn parseArmPatternsAst(p: inout P) -> Array[PatternAst] {
     mut val pats: Array[PatternAst] = []
     pats.append(parsePatternAst(p: inout p))
@@ -912,19 +913,9 @@ fn parseArmPatternsAst(p: inout P) -> Array[PatternAst] {
             _ => { break }
         }
     }
-    return pats
-}
-
-// Parse an arm's optional guard `if <cond>` and consume the `=>` (spec/11). The
-// guard binds the arm's pattern bindings, so it is parsed after the patterns.
-fn parseArmGuardAst(p: inout P) -> ArmGuardAst {
-    mut val hasGuard: Bool = false
-    mut val guard: ExprAst = emptyExpr()
     match p.curKind() {
         Kind.KwIf => {
-            p.advance()
-            guard = parseExprAst(p: inout p)
-            hasGuard = true
+            p.fail(off: p.base + p.curTok().start, msg: "`match` arms have no guards (spec/11): refine with a nested `match`, or a preceding `if`/`guard` condition chain")
         }
         _ => {}
     }
@@ -932,7 +923,7 @@ fn parseArmGuardAst(p: inout P) -> ArmGuardAst {
         Kind.FatArrow => { p.advance() }
         _ => {}
     }
-    return <ArmGuardAst hasGuard=hasGuard guard=guard />
+    return pats
 }
 
 // A statement-position match-arm body: a `{ }` block or a single bare statement
@@ -969,12 +960,11 @@ fn parseMatchStmtAst(p: inout P) -> StmtAst {
             _ => {
                 val armStart: U64 = p.base + p.curTok().start
                 val pats: Array[PatternAst] = parseArmPatternsAst(p: inout p)
-                val g: ArmGuardAst = parseArmGuardAst(p: inout p)
                 p.skipNewlines()
                 val body: BlockAst = parseArmBodyAst(p: inout p)
                 mut val pi: U64 = 0
                 while pi < pats.count {
-                    arms.append(<MatchArmAst pattern=pats[pi] hasGuard=g.hasGuard guard=g.guard body=body span=<Span start=armStart end=p.prevEnd() /> />)
+                    arms.append(<MatchArmAst pattern=pats[pi] body=body span=<Span start=armStart end=p.prevEnd() /> />)
                     pi += 1
                 }
             }
@@ -1036,11 +1026,10 @@ fn parseMatchExprAst(p: inout P) -> ExprAst {
             _ => {
                 val armStart: U64 = p.base + p.curTok().start
                 val pats: Array[PatternAst] = parseArmPatternsAst(p: inout p)
-                val g: ArmGuardAst = parseArmGuardAst(p: inout p)
                 val body: BlockAst = parseExprArmBodyAst(p: inout p, armStart: armStart)
                 mut val pi: U64 = 0
                 while pi < pats.count {
-                    arms.append(<MatchArmAst pattern=pats[pi] hasGuard=g.hasGuard guard=g.guard body=body span=<Span start=armStart end=p.prevEnd() /> />)
+                    arms.append(<MatchArmAst pattern=pats[pi] body=body span=<Span start=armStart end=p.prevEnd() /> />)
                     pi += 1
                 }
                 match p.curKind() {
