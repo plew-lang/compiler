@@ -1,0 +1,7 @@
+// spec/06,12: concrete operand checks apply inside a generic body too — `1I64 + true`
+// has no Add[Bool] witness, a type error at the definition.
+fn f[T](x: T) -> I64 {
+    val y: I64 = 1I64 + true
+    return y
+}
+fn main() { }

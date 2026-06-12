@@ -1869,6 +1869,14 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
         Expr.Binary(val op, val lhs, val rhs) => {
             checkBoundsExpr(c: inout c, exprId: lhs)
             checkBoundsExpr(c: inout c, exprId: rhs)
+            // concrete operand checks in a generic body (`1I64 + true`, `aT == 5I64`):
+            // the same binop type-check verifyProgram runs on non-generic bodies, but
+            // only for the USER's (entry-module) generic templates (std is trusted).
+            if c.curCheckFn < c.funcs.count {
+                if methodInEntryModule(c: inout c, f: c.funcs[c.curCheckFn]) {
+                    tcCheckBinop(c: inout c, op: op, lhs: lhs, rhs: rhs)
+                }
+            }
             val lt: TypeInfo = exprType(c: inout c, id: lhs)
             if lt.kind == 2 {
                 if isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: lt.nameStart, len: lt.nameLen) {
