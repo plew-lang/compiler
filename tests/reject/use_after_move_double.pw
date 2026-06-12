@@ -1,0 +1,10 @@
+// spec/03: `move` transfers ownership away, so the source local is dead — moving or
+// using it again is a use-after-move error.
+import @Std/Io with { print }
+unique struct File { val fd: I64  deinit { print(self.fd) } }
+fn take(f: move File) { }
+fn main() {
+    mut val u: File = <File fd=1I64 />
+    take(f: move u)
+    take(f: move u)
+}

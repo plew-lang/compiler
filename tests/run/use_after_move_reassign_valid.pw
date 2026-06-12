@@ -1,0 +1,11 @@
+// spec/03: a moved local is live again after a fresh value is bound to it.
+import @Std/Io with { print }
+unique struct File { val fd: I64  deinit { print(self.fd) } }
+fn take(f: move File) { }
+fn main() {
+    mut val u: File = <File fd=1I64 />
+    take(f: move u)
+    u = <File fd=2I64 />
+    take(f: move u)
+    print(0I64)
+}

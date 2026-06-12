@@ -863,6 +863,11 @@ struct Comp {
     // around a `while`/`for` body. `break`/`continue` at depth 0 is rejected by the
     // emission-independent acceptance pass (verifyProgram), not just the backend.
     pub mut val verifyLoopDepth: U64 = 0
+    // verify-time use-after-move tracking (spec/03): the c.locals indices of locals
+    // whose value has been `move`d away. Reading or re-`move`ing such a local is a
+    // use-after-move error; reassigning it clears the mark. Cleaned to a scope's
+    // high-water mark on block exit (so a popped index isn't reused as a false mark).
+    pub mut val verifyMovedIdx: Array[U64] = []
     // locals high-water mark at entry to the innermost conditional/loop body. An
     // explicit `move` of a local with a smaller index (declared outside the branch)
     // would be a conditional move — unsound without flow analysis (the persisted

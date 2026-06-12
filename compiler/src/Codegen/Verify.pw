@@ -417,6 +417,7 @@ fn verifyFunc(c: inout Comp, f: Func) {
     }
     c.curBranchBase = 0
     c.locals = []
+    c.verifyMovedIdx = []
     seedGlobalLocals(c: inout c)
     checkGenericArity(c: inout c, ref: f.retTy, offset: f.nameStart)
     mut val pi: U64 = 0
@@ -431,6 +432,57 @@ fn verifyFunc(c: inout Comp, f: Func) {
 
 // Verify a block in its own lexical scope: bindings introduced inside are popped
 // on exit (so a sibling/enclosing scope cannot resolve them), mirroring genBlock.
+// --- use-after-move tracking (spec/03) ---
+fn verifyMarkMoved(c: inout Comp, idx: U64) {
+    mut val i: U64 = 0
+    while i < c.verifyMovedIdx.count {
+        if c.verifyMovedIdx[i] == idx {
+            return
+        }
+        i += 1
+    }
+    c.verifyMovedIdx.append(idx)
+}
+
+fn verifyIsMoved(c: inout Comp, idx: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.verifyMovedIdx.count {
+        if c.verifyMovedIdx[i] == idx {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Clear the moved mark on `idx` (a reassignment reinitializes the local).
+fn verifyUnmarkMoved(c: inout Comp, idx: U64) {
+    mut val kept: Array[U64] = []
+    mut val i: U64 = 0
+    while i < c.verifyMovedIdx.count {
+        if c.verifyMovedIdx[i] == idx {
+        } else {
+            kept.append(c.verifyMovedIdx[i])
+        }
+        i += 1
+    }
+    c.verifyMovedIdx = kept
+}
+
+// Drop moved marks for locals at or above `mark` (their scope has ended, and the
+// index will be reused by a sibling scope — a stale mark would false-flag it).
+fn verifyDropMovedAbove(c: inout Comp, mark: U64) {
+    mut val kept: Array[U64] = []
+    mut val i: U64 = 0
+    while i < c.verifyMovedIdx.count {
+        if c.verifyMovedIdx[i] < mark {
+            kept.append(c.verifyMovedIdx[i])
+        }
+        i += 1
+    }
+    c.verifyMovedIdx = kept
+}
+
 fn verifyBlock(c: inout Comp, blockId: U64) {
     val mark: U64 = scopeMark(c: inout c)
     val b: Block = c.blocks[blockId]
@@ -440,6 +492,7 @@ fn verifyBlock(c: inout Comp, blockId: U64) {
         i += 1
     }
     popLocals(c: inout c, mark: mark)
+    verifyDropMovedAbove(c: inout c, mark: mark)
 }
 
 // A condition (`if`/`while`) must be Bool (spec/11) — `while 5I64 { }` is a type
@@ -831,6 +884,17 @@ fn verifyAssign(c: inout Comp, op: I64, target: U64, value: U64) {
     }
     checkUniquePlaceCopy(c: inout c, exprId: value, inoutOk: false)
     verifyExpr(c: inout c, id: value)
+    // a plain reassignment `u = e` reinitializes `u`, so it is live again — clear any
+    // use-after-move mark (the value was verified above, so a moved read in `e` is
+    // already reported). spec/03.
+    if op == opAssign() {
+        match c.exprs[target] {
+            Expr.Ident(val start, val len) => {
+                verifyUnmarkMoved(c: inout c, idx: localIndexByName(c: inout c, start: start, len: len))
+            }
+            _ => {}
+        }
+    }
     // the assigned value's type must match the place's type (the TypeRef checker
     // subsumes the old numeric/String/named-id category checks here, with generic-arg
     // precision and Bool/width/sign distinctions).
@@ -1396,6 +1460,14 @@ fn verifyExpr(c: inout Comp, id: U64) {
             verifyBlock(c: inout c, blockId: thenBlk)
             verifyBlock(c: inout c, blockId: elseBlk)
         }
+        Expr.Ident(val start, val len) => {
+            // use-after-move (spec/03): reading a local whose value was `move`d away.
+            if c.verifyMovedIdx.count > 0U64 {
+                if verifyIsMoved(c: inout c, idx: localIndexByName(c: inout c, start: start, len: len)) {
+                    compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)")
+                }
+            }
+        }
         Expr.Move(val operand, val isBorrow) => {
             // `move`/`borrow` of a place (mirrors genExpr's Move arm). `move` is
             // restricted to a bare local (field/element partial moves aren't tracked
@@ -1417,7 +1489,19 @@ fn verifyExpr(c: inout Comp, id: U64) {
                     }
                 }
             }
+            // verify the operand FIRST (a second `move u` / a read after move resolves
+            // through the Ident arm below and reports the use-after-move), THEN record
+            // the move so later uses are caught. spec/03.
             verifyExpr(c: inout c, id: operand)
+            if isBorrow {
+            } else {
+                match c.exprs[operand] {
+                    Expr.Ident(val start, val len) => {
+                        verifyMarkMoved(c: inout c, idx: localIndexByName(c: inout c, start: start, len: len))
+                    }
+                    _ => {}
+                }
+            }
         }
         _ => {}
     }
