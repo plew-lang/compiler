@@ -1,0 +1,25 @@
+// A `newtype` over a STRUCT shares the struct's representation and inherits its
+// members and trait conformances (spec/10). Covered end-to-end (type-check AND
+// backend dispatch): inherited field access (`w.v`), inherited inherent + trait
+// method (`w.mark()`), and the inherited conformance satisfying a `where T: Special`
+// bound (`needs(x: w)`). Resolved by localStructIdxFor routing a newtype-over-struct
+// to the underlying struct's index, so the struct dispatch path applies.
+import @Std/Io with { print }
+
+trait Special { fn mark() -> I64 }
+struct Plain { pub val v: I64 }
+pub impl Plain as Special { fn mark() -> I64 { return self.v * 10 } }
+
+fn needs[T](x: T) -> I64 where T: Special { return x.mark() }
+
+newtype Wrapped = Plain
+
+fn main() {
+    val w: Wrapped = <Plain v=5 /> as Wrapped
+    print(w.v)             // 5   (inherited field)
+    print(w.mark())        // 50  (inherited method, called directly)
+    print(needs(x: w))     // 50  (inherited conformance via the where-bound)
+    // the unwrap re-tag recovers the underlying struct value.
+    val p: Plain = w as Plain
+    print(p.v)             // 5
+}

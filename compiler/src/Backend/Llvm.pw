@@ -1580,6 +1580,15 @@ fn genEnumSlot(c: inout Comp, st: inout LlvmCtx, ref: U64) -> U64 {
 // The c.structs index for a local/param/return of type (start,len) if that type
 // is a REGISTERED struct, else c.structs.count (not a struct value).
 fn localStructIdxFor(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 {
+    // a `newtype` over a struct shares the struct's representation and inherits its
+    // members/conformances (spec/10), so resolve it to the underlying struct's index
+    // — then field access / method dispatch on the newtype go through the struct path
+    // (e.g. `w.mark()` for `newtype Wrapped = Plain`). Mirrors kindFromTySpan's
+    // newtype→underlying resolution for String/primitive underlyings.
+    val ntu: Bind = newtypeUnderName(c: inout c, start: start, len: len)
+    if ntu.nameStart != start || ntu.nameLen != len {
+        return localStructIdxFor(c: inout c, st: inout st, start: ntu.nameStart, len: ntu.nameLen)
+    }
     // substitute a type parameter via the env (a generic-fn body's `x: T` with
     // T = A resolves to A's struct, so `x.get()` dispatches to A.get()).
     if c.curTypeParams.count > 0U64 {
