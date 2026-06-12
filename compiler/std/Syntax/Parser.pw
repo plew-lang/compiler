@@ -1107,6 +1107,19 @@ export fn parseImplDecl(p: inout P, isPub: Bool, extName: String = "") -> ImplAs
                             val fbody: BlockAst = parseBlockAst(p: inout p)
                             members.append(<MemberAst kind=<MemberKind.AssocFn /> name=fname nameSpan=fnameSpan typeParams=[] params=fparams hasRet=false ret=emptyTypeAst() whereParams=[] whereTraits=[] isAsync=false selfInout=false selfMove=false isVia=false viaName="" body=fbody assocTy=emptyTypeAst() isFactory=true factoryKind=facKind factoryErr=facErr />)
                         }
+                        Kind.LParen => {
+                            // anonymous factory `factory(label: T) { … }` (spec/05) — the
+                            // `From` shape `factory(from: x)` → invoked via `<T from=x/>` /
+                            // `x as T`. Named by its (single) parameter label so the
+                            // construction can route by field label.
+                            val fparams: Array[ParamAst] = parseParamAsts(p: inout p)
+                            val fbody: BlockAst = parseBlockAst(p: inout p)
+                            mut val anonName: String = ""
+                            if fparams.count > 0 {
+                                anonName = fparams[0].name
+                            }
+                            members.append(<MemberAst kind=<MemberKind.AssocFn /> name=anonName nameSpan=fSpan typeParams=[] params=fparams hasRet=false ret=emptyTypeAst() whereParams=[] whereTraits=[] isAsync=false selfInout=false selfMove=false isVia=false viaName="" body=fbody assocTy=emptyTypeAst() isFactory=true factoryKind=facKind factoryErr=facErr />)
+                        }
                         _ => {
                             members.append(<MemberAst kind=<MemberKind.Factory /> name="factory" nameSpan=fSpan typeParams=[] params=[] hasRet=false ret=emptyTypeAst() whereParams=[] whereTraits=[] isAsync=false selfInout=false selfMove=false isVia=false viaName="" body=emptyBlock() assocTy=emptyTypeAst() />)
                         }

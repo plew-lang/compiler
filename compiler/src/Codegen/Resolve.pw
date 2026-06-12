@@ -654,6 +654,7 @@ fn orderGlobalsByDependency(c: inout Comp) {
 // values)` so it rides the existing assoc-fn machinery. Enum-variant constructions
 // (`<Optional.Some v=…/>`) are untouched (Some has no assoc fn).
 fn rewriteFactoryConstruction(c: inout Comp) {
+    val fromN: Bind = internBytes(c: inout c, s: "from")
     mut val i: U64 = 0
     while i < c.exprs.count {
         match c.exprs[i] {
@@ -669,6 +670,17 @@ fn rewriteFactoryConstruction(c: inout Comp) {
                         }
                         c.exprs[i] = <Expr.Method recv=recv nameStart=variantStart nameLen=variantLen args=args />
                     }
+                }
+            }
+            Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
+                // `x as T` ⟺ `<T from=x/>` (spec/12): when `T` owns a `from` factory
+                // (an anonymous `factory(from: …)`), route the cast to it. Numeric casts
+                // are untouched (primitives have no `from` factory).
+                if typeHasAssocFn(c: inout c, typeStart: tyStart, typeLen: tyLen, nameStart: fromN.nameStart, nameLen: fromN.nameLen) {
+                    val recv: U64 = c.pushExpr(e: <Expr.Ident start=tyStart len=tyLen />)
+                    mut val cargs: Array[Arg] = []
+                    cargs.append(value: <Arg expr=operand isInout=false labelStart=fromN.nameStart labelLen=fromN.nameLen hasLabel=true />)
+                    c.exprs[i] = <Expr.Method recv=recv nameStart=fromN.nameStart nameLen=fromN.nameLen args=cargs />
                 }
             }
             _ => {}
