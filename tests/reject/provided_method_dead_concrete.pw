@@ -1,0 +1,6 @@
+// spec/06,08: a trait provided-method body is checked at the definition even with
+// no conforming type (a "dead" provided method) — `return "s"` from `-> I64` is a
+// type error.
+trait Greet { fn name() -> String }
+pub impl Greet { fn bad() -> I64 { return "s" } }
+fn main() { }

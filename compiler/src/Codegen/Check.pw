@@ -2226,7 +2226,21 @@ fn checkGenericBodies(c: inout Comp) {
         // block). Generic externs like `arrayPush[T]` would otherwise have block 0
         // (some unrelated function's body) walked under their own bound-less type
         // params, mis-flagging method calls inside it.
-        if f.typeParams.count > 0 && !f.isExtern {
+        // walk generic templates (any module — bound checks), and ENTRY-MODULE trait
+        // provided-method templates (`pub impl Trait { fn m() {...} }` — Self abstract):
+        // a dead provided method (no conforming type, so no concrete copy is verified)
+        // would otherwise escape all checks. std's provided methods (iterator
+        // combinators) are trusted and not walked here.
+        mut val shouldCheck: Bool = false
+        if f.typeParams.count > 0 {
+            shouldCheck = true
+        }
+        if methodRecvIsTrait(c: inout c, f: f) {
+            if methodInEntryModule(c: inout c, f: f) {
+                shouldCheck = true
+            }
+        }
+        if shouldCheck && !f.isExtern {
             val noParams: Array[Bind] = []
             val noArgs: Array[U64] = []
             c.locals = []
