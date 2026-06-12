@@ -1098,6 +1098,33 @@ fn detectRefutableBinding(p: inout P) -> Bool {
     return isBind
 }
 
+// Whether the condition is a chain `clause (&& clause)*` containing a refutable
+// binding in ANY clause — not just the first (spec/11: `flag && val x = opt`). Drives
+// the if/while dispatch to the cond-chain desugar; a pure-Bool condition (no binding)
+// returns false and keeps the plain-expression path (which also handles `||`). A
+// speculative scan: `&&`-split the chain, restore on exit.
+fn condChainHasBinding(p: inout P) -> Bool {
+    val savedPos: U64 = p.pos
+    val savedErr: Bool = p.hasErr
+    mut val found: Bool = false
+    while true {
+        if detectRefutableBinding(p: inout p) {
+            found = true
+            break
+        }
+        // not this clause — skip the Bool expression (stops before `&&`/`||`) and only
+        // continue across a top-level `&&` (bindings are `&&`-joined; `||` ends the scan).
+        parseBinAst(p: inout p, minPrec: 3)
+        match p.curKind() {
+            Kind.AmpAmp => { p.advance() }
+            _ => { break }
+        }
+    }
+    p.pos = savedPos
+    p.hasErr = savedErr
+    return found
+}
+
 // Parse `else { … }` / `else if …` after an if/if-let body. Returns the else block
 // (an empty block when there is no `else`).
 fn parseElseBlockAst(p: inout P) -> BlockAst {
@@ -1211,7 +1238,7 @@ fn parseIfLetStmt(p: inout P, sStart: U64) -> StmtAst {
 fn parseIfStmtAst(p: inout P) -> StmtAst {
     val sStart: U64 = p.base + p.curTok().start
     p.advance()
-    if detectRefutableBinding(p: inout p) {
+    if condChainHasBinding(p: inout p) {
         return parseIfLetStmt(p: inout p, sStart: sStart)
     }
     val cond: ExprAst = parseExprAst(p: inout p)
@@ -1257,7 +1284,7 @@ fn parseIfLetExpr(p: inout P, sStart: U64) -> ExprAst {
 fn parseIfExprAst(p: inout P) -> ExprAst {
     val sStart: U64 = p.base + p.curTok().start
     p.advance()
-    if detectRefutableBinding(p: inout p) {
+    if condChainHasBinding(p: inout p) {
         return parseIfLetExpr(p: inout p, sStart: sStart)
     }
     val cond: ExprAst = parseExprAst(p: inout p)
@@ -1284,7 +1311,7 @@ fn parseIfExprAst(p: inout P) -> ExprAst {
 fn parseWhileAst(p: inout P) -> StmtAst {
     val sStart: U64 = p.base + p.curTok().start
     p.advance()
-    if detectRefutableBinding(p: inout p) {
+    if condChainHasBinding(p: inout p) {
         return parseWhileLetStmt(p: inout p, sStart: sStart)
     }
     val cond: ExprAst = parseExprAst(p: inout p)
@@ -1603,7 +1630,7 @@ fn parseStmtsUntilBrace(p: inout P) -> Array[StmtAst] {
 fn parseGuardStmt(p: inout P) -> StmtAst {
     val sStart: U64 = p.base + p.curTok().start
     p.advance()
-    if detectRefutableBinding(p: inout p) {
+    if condChainHasBinding(p: inout p) {
         val clauses: Array[CondClause] = parseCondChain(p: inout p)
         val elseBody: BlockAst = parseBlockAst(p: inout p)
         p.skipNewlines()

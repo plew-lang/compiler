@@ -1,0 +1,29 @@
+// Condition chain with a Bool clause BEFORE a refutable binding (spec/11): a binding
+// may appear in any `&&`-joined clause, not only the first. `flag && Some(v) = o`
+// short-circuits on `flag`, then matches `o`. Desugars to `if flag { match o { … } }`.
+import @Std/Io with { print }
+
+fn f(flag: Bool, o: Optional[I64]) -> I64 {
+    if flag && Optional.Some(v: val x) = o {
+        return x
+    }
+    return -1I64
+}
+
+// two Bool clauses then a binding, and a trailing Bool clause after the binding.
+fn g(a: Bool, b: Bool, o: Optional[I64]) -> I64 {
+    if a && b && Optional.Some(v: val x) = o && x > 0I64 {
+        return x * 10I64
+    }
+    return -1I64
+}
+
+fn main() {
+    print(f(flag: true, o: <Optional.Some v=7I64 />))    // 7
+    print(f(flag: false, o: <Optional.Some v=7I64 />))   // -1 (short-circuit)
+    print(f(flag: true, o: <Optional.None />))           // -1 (no match)
+    print(g(a: true, b: true, o: <Optional.Some v=5I64 />))   // 50
+    print(g(a: true, b: false, o: <Optional.Some v=5I64 />))  // -1
+    val neg: I64 = 0I64 - 2I64
+    print(g(a: true, b: true, o: <Optional.Some v=neg />))    // -1 (trailing Bool fails)
+}
