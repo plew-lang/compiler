@@ -1,0 +1,21 @@
+// module-level variables init before main in dependency order (spec/15): a forward
+// reference in an initializer reads the already-initialized value, not zero.
+import @Std/Io with { print }
+
+val total: I64 = base + bonus
+val base: I64 = 10
+val bonus: I64 = base * 2
+
+// a longer chain declared in reverse order.
+val third: I64 = second + 1
+val second: I64 = first + 1
+val first: I64 = 5
+
+fn main() {
+    print(total)
+    print(base)
+    print(bonus)
+    print(third)
+    print(second)
+    print(first)
+}

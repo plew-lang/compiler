@@ -1,0 +1,5 @@
+// module-level variables whose initializers depend on each other cyclically (spec/15).
+import @Std/Io with { print }
+val a: I64 = b + 1
+val b: I64 = a + 1
+fn main() { print(a) }

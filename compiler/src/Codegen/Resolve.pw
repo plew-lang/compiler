@@ -515,6 +515,139 @@ fn rewriteAssocValReads(c: inout Comp) {
     }
 }
 
+// ---- module-level variable initialization order (spec/15) ----
+// Top-level globals init once before `main`. A global's initializer may read another
+// global; since they init in declaration order, a forward reference would read zero.
+// orderGlobalsByDependency topologically sorts the globals (dependencies first) so a
+// forward reference reads the already-initialized value. A cycle is a hard error.
+
+fn globalInitExpr(c: inout Comp, g: Global) -> U64 {
+    match c.stmts[g.letStmt] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return init }
+        _ => { return 0 }
+    }
+}
+
+fn u64ArrayHas(a: Array[U64], v: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < a.count {
+        if a[i] == v {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Collect the indices (into c.globals) of every global the expression `id` reads,
+// appended (deduped) to `into`. Covers the expression forms a global initializer can
+// take; rarer block-bearing forms (match/if/closure) contribute nothing — at worst a
+// forward reference there stays declaration-ordered, never misordered.
+fn collectGlobalDeps(c: inout Comp, id: U64, into: inout Array[U64]) {
+    if id >= c.exprs.count {
+        return
+    }
+    match c.exprs[id] {
+        Expr.Ident(val start, val len) => {
+            mut val gi: U64 = 0
+            while gi < c.globals.count {
+                if spansEqual(c: inout c, aStart: c.globals[gi].nameStart, aLen: c.globals[gi].nameLen, bStart: start, bLen: len) {
+                    if u64ArrayHas(a: into, v: gi) {
+                    } else {
+                        into.append(value: gi)
+                    }
+                }
+                gi += 1
+            }
+        }
+        Expr.Unary(op: _, val operand) => { collectGlobalDeps(c: inout c, id: operand, into: inout into) }
+        Expr.Binary(op: _, val lhs, val rhs) => {
+            collectGlobalDeps(c: inout c, id: lhs, into: inout into)
+            collectGlobalDeps(c: inout c, id: rhs, into: inout into)
+        }
+        Expr.Call(nameStart: _, nameLen: _, val args) => {
+            mut val i: U64 = 0
+            while i < args.count { collectGlobalDeps(c: inout c, id: args[i].expr, into: inout into) i += 1 }
+        }
+        Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
+            collectGlobalDeps(c: inout c, id: recv, into: inout into)
+            mut val i: U64 = 0
+            while i < args.count { collectGlobalDeps(c: inout c, id: args[i].expr, into: inout into) i += 1 }
+        }
+        Expr.Field(val base, nameStart: _, nameLen: _) => { collectGlobalDeps(c: inout c, id: base, into: inout into) }
+        Expr.Index(val base, val index) => {
+            collectGlobalDeps(c: inout c, id: base, into: inout into)
+            collectGlobalDeps(c: inout c, id: index, into: inout into)
+        }
+        Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+            mut val i: U64 = 0
+            while i < fields.count { collectGlobalDeps(c: inout c, id: fields[i].value, into: inout into) i += 1 }
+        }
+        Expr.Array(val elems) => {
+            mut val i: U64 = 0
+            while i < elems.count { collectGlobalDeps(c: inout c, id: elems[i], into: inout into) i += 1 }
+        }
+        Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { collectGlobalDeps(c: inout c, id: operand, into: inout into) }
+        Expr.OptChain(val base, memberStart: _, memberLen: _) => { collectGlobalDeps(c: inout c, id: base, into: inout into) }
+        Expr.Try(val expr) => { collectGlobalDeps(c: inout c, id: expr, into: inout into) }
+        Expr.Arrow(val base, nameStart: _, nameLen: _) => { collectGlobalDeps(c: inout c, id: base, into: inout into) }
+        Expr.Move(val operand, isBorrow: _) => { collectGlobalDeps(c: inout c, id: operand, into: inout into) }
+        Expr.Await(val operand) => { collectGlobalDeps(c: inout c, id: operand, into: inout into) }
+        _ => {}
+    }
+}
+
+// DFS post-order over the global dependency graph. `state[i]`: 0=unvisited,
+// 1=on-stack (a back-edge to it is a cycle), 2=done. Appends i after its deps. Deps
+// are recomputed here (rather than stored in a nested array, which self-host's array
+// codegen does not handle for `Array[Array[U64]]`).
+fn globalDfs(c: inout Comp, i: U64, state: inout Array[U64], order: inout Array[U64]) {
+    if state[i] == 2U64 {
+        return
+    }
+    if state[i] == 1U64 {
+        compileErrorAt(line: lineOf(c: inout c, offset: c.globals[i].nameStart), msg: "module-level variables form an initialization cycle (a global's initializer depends on itself transitively — spec/15)")
+        return
+    }
+    state[i] = 1U64
+    mut val d: Array[U64] = []
+    collectGlobalDeps(c: inout c, id: globalInitExpr(c: inout c, g: c.globals[i]), into: inout d)
+    mut val k: U64 = 0
+    while k < d.count {
+        globalDfs(c: inout c, i: d[k], state: inout state, order: inout order)
+        k += 1
+    }
+    state[i] = 2U64
+    order.append(value: i)
+}
+
+fn orderGlobalsByDependency(c: inout Comp) {
+    val n: U64 = c.globals.count
+    if n <= 1U64 {
+        return
+    }
+    mut val state: Array[U64] = []
+    mut val j: U64 = 0
+    while j < n {
+        state.append(value: 0U64)
+        j += 1
+    }
+    mut val order: Array[U64] = []
+    mut val s: U64 = 0
+    while s < n {
+        globalDfs(c: inout c, i: s, state: inout state, order: inout order)
+        s += 1
+    }
+    // rebuild c.globals in dependency order (deps before dependents).
+    mut val reordered: Array[Global] = []
+    mut val o: U64 = 0
+    while o < order.count {
+        reordered.append(value: c.globals[order[o]])
+        o += 1
+    }
+    c.globals = reordered
+}
+
 // If `recv` is a bare identifier naming a type (not a local value), return that
 // type's name span as an assoc-fn receiver; else signal "not an assoc call" by
 // returning len 0. Used by call codegen/type recovery to route `Type.name(args)`.

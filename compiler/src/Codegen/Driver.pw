@@ -219,6 +219,9 @@ fn runFrontend() -> Comp {
     // assoc-val reads (spec/05): rewrite `Type.NAME` (a Field on a type that owns an
     // `assoc fn NAME`) into a zero-arg assoc-fn call, before any analysis sees it.
     rewriteAssocValReads(c: inout c)
+    // module-level variable init order (spec/15): topologically sort globals so a
+    // forward reference in an initializer reads the already-initialized value.
+    orderGlobalsByDependency(c: inout c)
     // derive (#5): synthesize `@[Eq]`/`@[Ord]` witnesses before any analysis.
     synthesizeDerives(c: inout c)
     // blanket trait impls (spec/08): `impl[T] T as Show where T: Named` makes
