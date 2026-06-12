@@ -1,0 +1,9 @@
+// Uniqueness propagates through a newtype (spec/10): a `newtype` over a `unique`
+// type is move-only, so a bare copy (`val b = a`) must be rejected just as for the
+// underlying — otherwise single-ownership could be dodged via the newtype.
+unique struct File { val fd: I32 }
+newtype RoFile = File
+fn main() {
+    val a: RoFile = <File fd=3 /> as RoFile
+    val b: RoFile = a
+}

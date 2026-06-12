@@ -1,0 +1,19 @@
+// A `newtype` over a `unique` type is itself unique and inherits its `deinit`
+// (spec/10: uniqueness MUST propagate — else the newtype could be copied to dodge
+// single-ownership and break resource safety). The newtype is move-only, and the
+// underlying's `deinit` runs exactly once when the last owner drops (here at the
+// end of `sink`, then again for a separately-scoped value).
+import @Std/Io with { write }
+
+unique struct File { val fd: I32  deinit { write(s: "closed\n") } }
+newtype RoFile = File
+
+fn sink(f: move RoFile) { write(s: "got\n") }
+
+fn main() {
+    val a: RoFile = <File fd=3 /> as RoFile
+    sink(f: move a)        // moved into sink; File.deinit runs at sink's end
+    write(s: "between\n")
+    val b: RoFile = <File fd=4 /> as RoFile
+    write(s: "before-drop\n")
+}                          // b dropped here; File.deinit runs again

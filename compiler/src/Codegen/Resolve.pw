@@ -1223,7 +1223,17 @@ fn isSelfRef(c: inout Comp, start: U64, len: U64) -> Bool {
 
 // Whether the type named (start,len) is a `unique struct` (spec/03).
 fn typeIsUnique(c: inout Comp, start: U64, len: U64) -> Bool {
-    val si: U64 = structIndexByName(c: inout c, start: start, len: len)
+    // a newtype over a unique type is itself unique (spec/10: uniqueness propagates —
+    // else the newtype could be copied to dodge the underlying's single-ownership and
+    // break resource safety). Resolve to the underlying before the struct lookup.
+    val ntu: Bind = newtypeUnderName(c: inout c, start: start, len: len)
+    mut val rStart: U64 = start
+    mut val rLen: U64 = len
+    if ntu.nameStart != start || ntu.nameLen != len {
+        rStart = ntu.nameStart
+        rLen = ntu.nameLen
+    }
+    val si: U64 = structIndexByName(c: inout c, start: rStart, len: rLen)
     if si >= c.structs.count {
         return false
     }

@@ -12591,37 +12591,76 @@ define i1 @pf169(ptr %0, i64 %1, i64 %2) {
 entry:
   %3 = alloca i64, align 8
   %4 = alloca i64, align 8
-  %5 = alloca i64, align 8
+  %5 = alloca %st26, align 8
+  %6 = alloca i64, align 8
+  %7 = alloca i64, align 8
+  %8 = alloca i64, align 8
   br label %body0
 
 body0:                                            ; preds = %entry
   store i64 %1, ptr %3, align 4
   store i64 %2, ptr %4, align 4
-  %6 = load i64, ptr %3, align 4
-  %7 = load i64, ptr %4, align 4
-  %8 = call i64 @pf360(ptr %0, i64 %6, i64 %7)
-  store i64 %8, ptr %5, align 4
-  %9 = load i64, ptr %5, align 4
-  %10 = load %st47, ptr %0, align 8
-  %11 = extractvalue %st47 %10, 5
-  %12 = extractvalue { ptr, i64 } %11, 1
-  %13 = icmp uge i64 %9, %12
-  br i1 %13, label %then, label %endif
+  %9 = load i64, ptr %3, align 4
+  %10 = load i64, ptr %4, align 4
+  %11 = call %st26 @pf116(ptr %0, i64 %9, i64 %10)
+  store %st26 %11, ptr %5, align 4
+  %12 = load i64, ptr %3, align 4
+  store i64 %12, ptr %6, align 4
+  %13 = load i64, ptr %4, align 4
+  store i64 %13, ptr %7, align 4
+  %14 = load %st26, ptr %5, align 4
+  %15 = extractvalue %st26 %14, 0
+  %16 = load i64, ptr %3, align 4
+  %17 = icmp ne i64 %15, %16
+  br i1 %17, label %sc.cont, label %sc.rhs
 
-then:                                             ; preds = %body0
+sc.rhs:                                           ; preds = %body0
+  %18 = load %st26, ptr %5, align 4
+  %19 = extractvalue %st26 %18, 1
+  %20 = load i64, ptr %4, align 4
+  %21 = icmp ne i64 %19, %20
+  br label %sc.cont
+
+sc.cont:                                          ; preds = %sc.rhs, %body0
+  %22 = phi i1 [ true, %body0 ], [ %21, %sc.rhs ]
+  %23 = icmp ne i1 %22, false
+  br i1 %23, label %then, label %endif
+
+then:                                             ; preds = %sc.cont
+  %24 = load %st26, ptr %5, align 4
+  %25 = extractvalue %st26 %24, 0
+  store i64 %25, ptr %6, align 4
+  %26 = load %st26, ptr %5, align 4
+  %27 = extractvalue %st26 %26, 1
+  store i64 %27, ptr %7, align 4
+  br label %endif
+
+endif:                                            ; preds = %then, %sc.cont
+  %28 = load i64, ptr %6, align 4
+  %29 = load i64, ptr %7, align 4
+  %30 = call i64 @pf360(ptr %0, i64 %28, i64 %29)
+  store i64 %30, ptr %8, align 4
+  %31 = load i64, ptr %8, align 4
+  %32 = load %st47, ptr %0, align 8
+  %33 = extractvalue %st47 %32, 5
+  %34 = extractvalue { ptr, i64 } %33, 1
+  %35 = icmp uge i64 %31, %34
+  br i1 %35, label %then1, label %endif2
+
+then1:                                            ; preds = %endif
   ret i1 false
 
-endif:                                            ; preds = %body0
-  %14 = load %st47, ptr %0, align 8
-  %15 = extractvalue %st47 %14, 5
-  %16 = extractvalue { ptr, i64 } %15, 0
-  %17 = extractvalue { ptr, i64 } %15, 1
-  %18 = load i64, ptr %5, align 4
-  call void @plew_bounds(i64 %18, i64 %17)
-  %19 = getelementptr %st33, ptr %16, i64 %18
-  %20 = load %st33, ptr %19, align 8
-  %21 = extractvalue %st33 %20, 5
-  ret i1 %21
+endif2:                                           ; preds = %endif
+  %36 = load %st47, ptr %0, align 8
+  %37 = extractvalue %st47 %36, 5
+  %38 = extractvalue { ptr, i64 } %37, 0
+  %39 = extractvalue { ptr, i64 } %37, 1
+  %40 = load i64, ptr %8, align 4
+  call void @plew_bounds(i64 %40, i64 %39)
+  %41 = getelementptr %st33, ptr %38, i64 %40
+  %42 = load %st33, ptr %41, align 8
+  %43 = extractvalue %st33 %42, 5
+  ret i1 %43
 }
 
 define i64 @pf170(ptr %0, i64 %1, i64 %2) {
