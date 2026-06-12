@@ -1540,6 +1540,83 @@ fn parseDestructureAst(p: inout P) -> StmtAst {
 
 // Parse `{ stmt* }` into a BlockAst. Current token should be `{`. Exported for the
 // frontend lowering and for macros that read a body.
+// Parse the remaining statements of a block up to (but NOT consuming) the closing
+// `}` — the "continuation" a `guard` wraps. A nested `guard` consumes the rest itself.
+fn parseStmtsUntilBrace(p: inout P) -> Array[StmtAst] {
+    mut val stmts: Array[StmtAst] = []
+    while true {
+        p.skipNewlines()
+        match p.curKind() {
+            Kind.RBrace => { break }
+            Kind.Eof => { break }
+            _ => {
+                if curIs(p: inout p, kw: "guard") {
+                    stmts.append(parseGuardStmt(p: inout p))
+                    break
+                }
+                stmts.append(parseStmtAst(p: inout p))
+            }
+        }
+    }
+    return stmts
+}
+
+// Parse a `guard` statement (spec/11): `guard <cond-chain> { elseBody } <rest>`. The
+// elseBody runs when the condition FAILS (and conventionally diverges); the `<rest>`
+// of the enclosing block runs (with any bindings in scope) only on success. Desugars
+// by wrapping the rest in the success branch — so bindings naturally escape to it:
+//   guard cond { e } rest       -> if cond { rest } else { e }
+//   guard P = expr { e } rest   -> match expr { P => { rest }  _ => { e } }
+// (Trailing `&& cond` clauses gate the success branch.)
+fn parseGuardStmt(p: inout P) -> StmtAst {
+    val sStart: U64 = p.base + p.curTok().start
+    p.advance()
+    if detectRefutableBinding(p: inout p) {
+        val pat: PatternAst = parsePatternAst(p: inout p)
+        match p.curKind() {
+            Kind.Eq => { p.advance() }
+            _ => {}
+        }
+        val scrut: ExprAst = parseBinAst(p: inout p, minPrec: 3)
+        mut val trailing: Array[ExprAst] = []
+        while true {
+            match p.curKind() {
+                Kind.AmpAmp => {
+                    p.advance()
+                    trailing.append(parseBinAst(p: inout p, minPrec: 3))
+                }
+                _ => { break }
+            }
+        }
+        val elseBody: BlockAst = parseBlockAst(p: inout p)
+        p.skipNewlines()
+        val cont: Array[StmtAst] = parseStmtsUntilBrace(p: inout p)
+        val span: Span = <Span start=sStart end=p.prevEnd() />
+        mut val successBlk: BlockAst = <BlockAst stmts=cont />
+        if trailing.count > 0 {
+            mut val combined: ExprAst = trailing[0]
+            mut val ti: U64 = 1
+            while ti < trailing.count {
+                combined = <ExprAst.Binary op=kindCode(k: <Kind.AmpAmp />) lhs=combined rhs=trailing[ti] span=span />
+                ti += 1
+            }
+            mut val one: Array[StmtAst] = []
+            one.append(<StmtAst.If cond=combined thenBlk=<BlockAst stmts=cont /> elseBlk=elseBody hasElse=true span=span />)
+            successBlk = <BlockAst stmts=one />
+        }
+        mut val arms: Array[MatchArmAst] = []
+        arms.append(<MatchArmAst pattern=pat body=successBlk span=span />)
+        arms.append(<MatchArmAst pattern=<PatternAst isWildcard=true isStruct=false typeName="" variant="" binds=[] span=span /> body=elseBody span=span />)
+        return <StmtAst.Match scrut=scrut arms=arms span=span />
+    }
+    val cond: ExprAst = parseExprAst(p: inout p)
+    val elseBody: BlockAst = parseBlockAst(p: inout p)
+    p.skipNewlines()
+    val cont: Array[StmtAst] = parseStmtsUntilBrace(p: inout p)
+    val span: Span = <Span start=sStart end=p.prevEnd() />
+    return <StmtAst.If cond=cond thenBlk=<BlockAst stmts=cont /> elseBlk=elseBody hasElse=true span=span />
+}
+
 export fn parseBlockAst(p: inout P) -> BlockAst {
     match p.curKind() {
         Kind.LBrace => { p.advance() }
@@ -1555,7 +1632,11 @@ export fn parseBlockAst(p: inout P) -> BlockAst {
             }
             Kind.Eof => { break }
             _ => {
-                stmts.append(parseStmtAst(p: inout p))
+                if curIs(p: inout p, kw: "guard") {
+                    stmts.append(parseGuardStmt(p: inout p))
+                } else {
+                    stmts.append(parseStmtAst(p: inout p))
+                }
             }
         }
     }

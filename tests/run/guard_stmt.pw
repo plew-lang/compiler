@@ -1,0 +1,41 @@
+// `guard` statement (spec/11): runs the body when the condition FAILS (early exit);
+// on success, control continues with any bindings in scope (binding-escape).
+import @Std/Io with { print, write }
+
+fn checkPos(n: I64) -> String {
+    guard n > 0 {
+        return "non-positive"
+    }
+    return "positive"
+}
+
+// the binding `v` from a successful guard escapes to the rest of the function.
+fn unwrapOr(o: Optional[I64], dflt: I64) -> I64 {
+    guard Optional.Some(val v) = o {
+        return dflt
+    }
+    return v * 10
+}
+
+// a guard with a trailing `&& cond` clause.
+fn bigPos(o: Optional[I64]) -> String {
+    guard Optional.Some(val v) = o && v > 100 {
+        return "small-or-none"
+    }
+    return "big"
+}
+
+fn main() {
+    write(s: checkPos(n: 5))
+    write(s: "\n")
+    write(s: checkPos(n: -1))
+    write(s: "\n")
+    print(unwrapOr(o: <Optional.Some v=3I64 />, dflt: -1I64))
+    print(unwrapOr(o: <Optional.None />, dflt: -1I64))
+    write(s: bigPos(o: <Optional.Some v=200I64 />))
+    write(s: "\n")
+    write(s: bigPos(o: <Optional.Some v=5I64 />))
+    write(s: "\n")
+    write(s: bigPos(o: <Optional.None />))
+    write(s: "\n")
+}
