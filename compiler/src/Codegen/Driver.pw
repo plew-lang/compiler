@@ -275,6 +275,7 @@ fn runFrontend() -> Comp {
     checkOverloadCollisions(c: inout c)
     checkDuplicateTraitReqs(c: inout c)
     checkImplOnBuiltin(c: inout c)
+    checkImplOnNewtype(c: inout c)
     checkMoveFnReceivers(c: inout c)
     // module visibility (spec/15): a name brought in by `import … with { }` must be
     // part of its module's public surface (`export`). Importing from the wrong

@@ -1,0 +1,12 @@
+// A `newtype` inherits ALL of the underlying type's implementations automatically
+// (methods, trait conformances, operators, factories — synthesized by the compiler).
+// The user CANNOT write their own `impl` on it (spec/10); to add behaviour, wrap in
+// a struct. A `pub impl UserId { ... }` must therefore be rejected.
+newtype UserId = String
+pub impl UserId {
+    fn len() -> U64 { return self.bytes.count }
+}
+fn main() {
+    val u: UserId = "alice" as UserId
+    print(u.len())
+}

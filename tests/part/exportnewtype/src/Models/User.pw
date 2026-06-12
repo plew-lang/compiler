@@ -3,4 +3,5 @@
 // `export` (it lands in the Ident arm, not a `Kind.Kw…` arm).
 export newtype UserId = String
 
+// a factory over the underlying (the inherited `as` re-tag wraps the String).
 export fn makeUser(name~: String) -> UserId { return name as UserId }
