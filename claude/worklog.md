@@ -47,7 +47,8 @@
 - **`assoc val`**（static 定数・`Type.NAME`）＝中（parser＋MemberKind＋global 化＋`Type.member` 解決）。**generic assoc-fn emission**（`Box.make(x:7)`/`Set[E].empty()`＝mono 必要）＝backend 大。
 - ~~**式位置 `panic`/`return`**~~＝✅済（value-match arm `=> panic`/`=> return`・value-match arm を block-bodied 化＝`MatchArm.body` は常に Block index・`isDiverge` で diverge 判定・`genLlvmMatchExpr`/`genLlvmIfExpr` が PHI から除外。derive 合成 match も give-block 化）。
 - ~~**match ガード**~~＝✅済（`Pat if cond =>`・enum パターンは emitter が bind 後 guard 評価／scalar〔wildcard/literal〕は if-else 脱糖・guarded arm は網羅性に非カウント・guard expr は全 walker で walk）。
-- **一般 Chain トレイト `?.`**（現 Optional 具体）・**`Pow`/`**`**（float 後）・**`Output != Self`**・**`guard` 文**（条件チェーン束縛・parser 未＝match ガードとは別物）・**match capture-binding `val x =>`/ネストパターン**・**global 前方参照**・Bool dict キー（低価値）＝各小〜中。
+- ~~**match capture-binding `val x =>`**~~＝✅済（named wildcard・スカラ/リテラル match で if-else 脱糖が capture 名を `__mtmp` に束縛・guard 併用可・enum-dispatch の capture は未対応で loud reject）。
+- **一般 Chain トレイト `?.`**（現 Optional 具体）・**`Pow`/`**`**（float 後）・**`Output != Self`**・**`guard` 文**（条件チェーン束縛・parser 未＝match ガードとは別物）・**enum-dispatch の match capture／ネストパターン**・**global 前方参照**・Bool dict キー（低価値）＝各小〜中。
 - **トレイト/拡張小物**＝トレイト引数 aware の多重 conformance 区別・コンテナ不変性 `Array[P]`≠`Array[P#Ext]`・型レベル chained `Type#A#B`。
 
 ### C. hidden cost（leak・観測挙動は正しい・最後）
