@@ -157,6 +157,8 @@ export enum MemberKind {
     AssocFn     // `assoc fn` — namespaced on the type, no self
     Deinit      // `deinit { ... }` — synthetic Type_deinit method
     AssocType   // `type Item = Concrete` — conformance's associated-type binding
+    Factory     // `factory` — publishes the default memberwise factory (spec/05): in
+                // a `pub impl T { }` it makes `<T …/>` constructible from other modules
 }
 
 // A member of an `impl` block. A tagged record (`kind` selects the shape; the

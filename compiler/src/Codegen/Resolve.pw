@@ -1164,6 +1164,37 @@ fn checkConstructVis(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool, 
         }
         i += 1U64
     }
+    // factory publication gate (spec/05): even with all fields `pub`, the default
+    // memberwise factory is module-private — constructing `<T …/>` from ANOTHER module
+    // requires `T` to declare a public factory (`pub impl T { factory }`). Find a
+    // representative construction-site offset (a loaded field) to locate its module.
+    mut val ci: U64 = 0
+    while ci < fields.count {
+        if offsetIsLoaded(c: inout c, offset: fields[ci].offset) {
+            if moduleOf(c: inout c, offset: fields[ci].offset) == defMod {
+            } else {
+                if structHasPubFactory(c: inout c, nameId: sd.nameId) {
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: fields[ci].offset), msg: "constructing this type from another module requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is module-private (spec/05)")
+                }
+            }
+            ci = fields.count
+        } else {
+            ci += 1U64
+        }
+    }
+}
+
+// Whether struct name id `nameId` declared a public `factory` (spec/05).
+fn structHasPubFactory(c: inout Comp, nameId: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.pubFactories.count {
+        if c.pubFactories[i] == nameId {
+            return true
+        }
+        i += 1U64
+    }
+    return false
 }
 
 // Whether an assignment target is a mutable *place* (spec: composite mutability).

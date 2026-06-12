@@ -31,6 +31,9 @@ export struct P {
 }
 
 pub impl P {
+    // public memberwise factory (spec/05): the compiler frontend and macros construct
+    // `<P …/>` from their own modules to drive parsing.
+    factory
     // Record a syntax error (first one wins) at original-coordinate offset `off`.
     inout fn fail(off: U64, msg: String) {
         if self.hasErr {
@@ -1033,6 +1036,15 @@ export fn parseImplDecl(p: inout P, isPub: Bool, extName: String = "") -> ImplAs
                 members.append(<MemberAst kind=<MemberKind.Deinit /> name="" nameSpan=<Span start=dStart end=dStart /> typeParams=[] params=[] hasRet=false ret=emptyTypeAst() whereParams=[] whereTraits=[] isAsync=false selfInout=false selfMove=false isVia=false viaName="" body=dbody assocTy=emptyTypeAst() />)
             }
             _ => {
+                if curIs(p: inout p, kw: "factory") {
+                    // `factory` (spec/05): publishes the default memberwise factory. The
+                    // bare form (no params/body) is the only form supported here; its
+                    // span is recorded so the gate can report at the declaration.
+                    val fTok: Tok = p.curTok()
+                    val fSpan: Span = p.spanOf(t: fTok)
+                    p.advance()
+                    members.append(<MemberAst kind=<MemberKind.Factory /> name="factory" nameSpan=fSpan typeParams=[] params=[] hasRet=false ret=emptyTypeAst() whereParams=[] whereTraits=[] isAsync=false selfInout=false selfMove=false isVia=false viaName="" body=emptyBlock() assocTy=emptyTypeAst() />)
+                } else {
                 if curIs(p: inout p, kw: "assoc") {
                     p.advance()
                     match p.curKind() {
@@ -1056,6 +1068,7 @@ export fn parseImplDecl(p: inout P, isPub: Bool, extName: String = "") -> ImplAs
                     } else {
                         p.advance()
                     }
+                }
                 }
             }
         }

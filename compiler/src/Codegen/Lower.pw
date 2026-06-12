@@ -1330,6 +1330,13 @@ fn lowerImpl(c: inout Comp, im: ImplAst) {
                 val atN: Bind = internBytes(c: inout c, s: m.name)
                 c.assocBindings.append(<AssocBinding recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) nameStart=atN.nameStart nameLen=atN.nameLen nameId=intern(c: inout c, start: atN.nameStart, len: atN.nameLen) tyStart=pt.start tyLen=pt.len tyIsArray=pt.isArray ty=pt.ref />)
             }
+            MemberKind.Factory => {
+                // `factory` in a `pub impl T` publishes T's default memberwise factory
+                // (spec/05) — record T's name id so cross-module `<T …/>` is allowed.
+                if im.isPub {
+                    c.pubFactories.append(intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen))
+                }
+            }
         }
         mi += 1
     }

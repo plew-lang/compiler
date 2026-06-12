@@ -879,6 +879,10 @@ struct Comp {
     // synthetic Func named `deinit` (hasRecv) in c.funcs; this list lets codegen
     // ask "does type T have a deinit?" so scope-exit drops fire it.
     pub mut val deinits: Array[Bind]
+    // interned name ids of structs that declared a public `factory` (spec/05:
+    // `pub impl T { factory }`). Only these may be constructed `<T …/>` from another
+    // module; the default memberwise factory is otherwise module-private.
+    pub mut val pubFactories: Array[U64] = []
     // async lowering state (spec/14). curAsync: emitting an `async fn` body, so a
     // top-level binding lowers to a frame-struct field and a local reference to
     // `__f->name`. asyncState: the next `await` suspension index (a `switch`
