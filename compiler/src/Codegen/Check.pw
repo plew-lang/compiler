@@ -1955,6 +1955,17 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
             mut val i: U64 = 0
             while i < fields.count {
                 checkBoundsExpr(c: inout c, exprId: fields[i].value)
+                // a `T` value placed into a CONCRETE-typed field (`<S a=valueT/>` where
+                // S.a: I64) is a type error at the definition. The field type comes from
+                // the (concrete) owner decl; a generic owner's type-param field is lenient.
+                val ft: TypeInfo = makeFieldType(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: fields[i].nameStart, fieldLen: fields[i].nameLen)
+                if ft.nameLen > 0U64 {
+                    mut val fref: U64 = ft.ref
+                    if fref == 0U64 {
+                        fref = simpleTypeRef(c: inout c, nameStart: ft.nameStart, nameLen: ft.nameLen)
+                    }
+                    checkGenericTypeMatch(c: inout c, expectedRef: fref, valueExpr: fields[i].value)
+                }
                 i += 1
             }
         }

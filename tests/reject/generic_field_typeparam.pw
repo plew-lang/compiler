@@ -1,0 +1,5 @@
+// spec/06: placing a type-parameter value into a CONCRETE-typed field is a type
+// error at the definition — `<S a=x/>` where x: T and S.a: I64.
+struct S { pub val a: I64 }
+fn f[T](x: T) -> S { return <S a=x /> }
+fn main() { }
