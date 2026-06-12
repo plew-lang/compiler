@@ -39,18 +39,21 @@
 
 > いずれも parser や backend codegen に跨る中〜大の機能追加。各々 ADD→reseed→USE で 1 機能ずつ focused に。価値/規模の目安を付す。
 
-**✅ 2026-06-12 に完了した B 項（match クラスタ＋assoc val＋global 順序＋import クラスタ）**：
-- ~~literal match パターン~~・~~式位置 `panic`/`return`（value-match diverge arm）~~・~~match ガード `Pat if cond`~~・~~match capture-binding `val x =>`~~＝✅（match は実質完成。残＝enum-dispatch の capture〔scalar は済〕・ネストパターン・到達不能アーム警告）。詳細は provisional「制御フロー・match」。
+**✅ 2026-06-12 に完了した B 項（match クラスタ＋assoc val＋global 順序＋import クラスタ＋Output!=Self＝1 セッション 12 機能）**：
+- **match クラスタ完成**＝~~literal pattern~~・~~式位置 `panic`/`return`（value-match diverge arm）~~・~~ガード `Pat if cond`~~・~~capture-binding `val x =>`〔scalar／enum-dispatch の statement・value 両位置とも〕~~＝✅。残＝**ネストパターン**・到達不能アーム警告のみ。詳細は provisional「制御フロー・match」。
 - ~~`assoc val`（static 定数 `Type.NAME`）~~＝✅（zero-arg assoc fn 脱糖）。残＝generic assoc-fn emission〔`Box[T].make`〕。
 - ~~global 前方参照~~＝✅（依存順トポロジカルソート・循環 reject）。
 - ~~名前空間 import `Io.print`~~・~~path alias `import … as F`~~・~~name alias `with { real as alias }`~~＝✅（import クラスタ完成）。残＝type/value の import alias・`_.pw` ディレクトリ解決・パス正当性厳密検査。
+- ~~**`Output != Self`**（operator trait の `type Output = X` を結果型に）~~＝✅（`AssocBinding.traitId` で trait 別解決・`operatorOutputType`）。
 
 **残りの B 項（大物＝専用 focused session 推奨）**：
 - **factory 機構の残**＝**custom `factory(params) { body }`＋fallible `optional factory`/`result[E] factory`**（→ Optional[Self]/Result[Self,E]）。〔bare `factory` publish＋公開ゲート (a)〔`structHasPubFactory`〕は✅済〕。**これが `From`/`TryFrom` の前提**。
 - **`From`/`TryFrom`**＝大（数値縮小・パース・`as` の全域変換脱糖・`try` の異エラー型 From 変換）。**factory 機構の残が前提**。〔✅ mixed float context・✅ float→int `as` の clean reject は済〕。
 - **newtype 非 int underlying のメソッド/フィールド継承**（`userId.bytes`〔UserId=String〕）＝中・risk（`typeOf` が型チェッカ distinction と codegen 解決の両用ゆえ blanket 不可・codegen 専用解決点の個別配線・過去に field access で revert）＋ unique/deinit/factory 継承・`export newtype`。int underlying は完備。
 - **Iterator 残**＝`sum`（Zero/数値タワー待ち＝大）・`enumerate`／`zip` は **backend ブロッカー**：`enumerate`（Item＝合成レコード `(index:U64,value:E)`＝型パラメータ E をフィールドに持つレコードの monomorphized iterator 文脈での構築/フィールドアクセスが未対応＝generic-record 登録が要る backend 仕事）・`zip`（第2要素型＝`J::Item`＝generic 抽象 `T::Item` 未対応ゆえ表現不能）。
-- **一般 Chain トレイト `?.`**（現 Optional 具体）・**`Pow`/`**`**（float 後）・**`guard` 文**（条件チェーン束縛・parser 未＝match ガードとは別物）・**ネストパターン**・Bool dict キー（低価値）＝各小〜中。
+- **一般 Chain トレイト `?.`**（現 Optional 具体）・**`Pow`/`**`**（float 後・**invocation 形が spec 要確認**＝assoc `pow(base:,exp:)` か method か）・**`guard` 文**（条件チェーン束縛・parser 未＝match ガードとは別物・binding-escape の Swift 流か要確認）・**match ネストパターン**（`Some(Point{x,y})`＝再帰 destructure・emitter 仕事）・Bool dict キー（低価値）＝各小〜中。
+
+> **次セッションの推奨着手順**＝① **factory 機構の残**（custom/fallible factory）→ ② **From/TryFrom**（①が前提）が最大価値。並行で **Iterator backend**（enumerate/zip/sum）か **newtype 非 int**（risk 高）。小物（Chain/Pow/guard/nested）は spec 確認や backend 仕事を含むので個別に。
 - **トレイト/拡張小物**＝トレイト引数 aware の多重 conformance 区別・コンテナ不変性 `Array[P]`≠`Array[P#Ext]`・型レベル chained `Type#A#B`。
 
 ### C. hidden cost（leak・観測挙動は正しい・最後）
