@@ -192,6 +192,11 @@ export struct MemberAst {
     // a custom `factory [name](params) { … }` (spec/05): lowered as an AssocFn whose
     // return type is the impl's type (the implicit `Self`). Invoked via `<Type.name …/>`.
     pub val isFactory: Bool = false
+    // a fallible factory's wrapper (spec/05): 0 = plain (`-> Self`), 1 = `optional`
+    // (`-> Optional[Self]`), 2 = `result[E]` (`-> Result[Self, E]`). factoryErr is the
+    // error type `E` for kind 2.
+    pub val factoryKind: U64 = 0
+    pub val factoryErr: TypeAst = emptyTypeAst()
 }
 
 // A body-less function signature: a trait requirement (`fn req(...) -> T`) or an

@@ -1684,15 +1684,38 @@ fn lowerMethodMember(c: inout Comp, im: ImplAst, m: MemberAst, recvN: Bind, impl
         retRef = pt.ref
     }
     // a custom factory (spec/05) returns the impl's type (the implicit `Self`); the
-    // body's `return <Type …/>` then grounds against it.
+    // body's `return <Type …/>` then grounds against it. A fallible factory wraps that
+    // in `Optional[Self]` (`optional`) or `Result[Self, E]` (`result[E]`).
     mut val effHasRet: Bool = m.hasRet
     if m.isFactory {
         val ft: PType = lowerType(c: inout c, t: im.recvType)
-        retStart = ft.start
-        retLen = ft.len
-        retIsArray = ft.isArray
-        retRef = ft.ref
         effHasRet = true
+        if m.factoryKind == 1U64 {
+            val optN: Bind = internBytes(c: inout c, s: "Optional")
+            mut val oargs: Array[U64] = []
+            oargs.append(value: ft.ref)
+            retRef = c.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=oargs />)
+            retStart = optN.nameStart
+            retLen = optN.nameLen
+            retIsArray = false
+        } else {
+            if m.factoryKind == 2U64 {
+                val resN: Bind = internBytes(c: inout c, s: "Result")
+                val et: PType = lowerType(c: inout c, t: m.factoryErr)
+                mut val rargs: Array[U64] = []
+                rargs.append(value: ft.ref)
+                rargs.append(value: et.ref)
+                retRef = c.pushType(t: <TypeRef nameStart=resN.nameStart nameLen=resN.nameLen args=rargs />)
+                retStart = resN.nameStart
+                retLen = resN.nameLen
+                retIsArray = false
+            } else {
+                retStart = ft.start
+                retLen = ft.len
+                retIsArray = ft.isArray
+                retRef = ft.ref
+            }
+        }
     }
     // a trait-impl member witnesses a requirement (body or via). The witnessed sig
     // is a pure requirement signature (body 0, no recv/self/assoc/async).

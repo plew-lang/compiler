@@ -1065,11 +1065,35 @@ export fn parseImplDecl(p: inout P, isPub: Bool, extName: String = "") -> ImplAs
                 members.append(<MemberAst kind=<MemberKind.Deinit /> name="" nameSpan=<Span start=dStart end=dStart /> typeParams=[] params=[] hasRet=false ret=emptyTypeAst() whereParams=[] whereTraits=[] isAsync=false selfInout=false selfMove=false isVia=false viaName="" body=dbody assocTy=emptyTypeAst() />)
             }
             _ => {
-                if curIs(p: inout p, kw: "factory") {
+                if curIs(p: inout p, kw: "factory") || curIs(p: inout p, kw: "optional") || curIs(p: inout p, kw: "result") {
                     // `factory` (spec/05): a bare `factory` publishes the default
                     // memberwise factory (the span feeds the publication gate). A
                     // `factory name(params) { … }` is a custom NAMED factory, lowered as
-                    // an AssocFn returning Self and invoked via `<Type.name …/>`.
+                    // an AssocFn returning Self and invoked via `<Type.name …/>`. A
+                    // leading `optional` / `result[E]` makes it fallible (→ Optional[Self]
+                    // / Result[Self, E]).
+                    mut val facKind: U64 = 0
+                    mut val facErr: TypeAst = emptyTypeAst()
+                    if curIs(p: inout p, kw: "optional") {
+                        p.advance()
+                        facKind = 1U64
+                    } else {
+                        if curIs(p: inout p, kw: "result") {
+                            p.advance()
+                            match p.curKind() {
+                                Kind.LBracket => {
+                                    p.advance()
+                                    facErr = parseType(p: inout p)
+                                    match p.curKind() {
+                                        Kind.RBracket => { p.advance() }
+                                        _ => {}
+                                    }
+                                }
+                                _ => {}
+                            }
+                            facKind = 2U64
+                        }
+                    }
                     val fTok: Tok = p.curTok()
                     val fSpan: Span = p.spanOf(t: fTok)
                     p.advance()
@@ -1081,7 +1105,7 @@ export fn parseImplDecl(p: inout P, isPub: Bool, extName: String = "") -> ImplAs
                             p.advance()
                             val fparams: Array[ParamAst] = parseParamAsts(p: inout p)
                             val fbody: BlockAst = parseBlockAst(p: inout p)
-                            members.append(<MemberAst kind=<MemberKind.AssocFn /> name=fname nameSpan=fnameSpan typeParams=[] params=fparams hasRet=false ret=emptyTypeAst() whereParams=[] whereTraits=[] isAsync=false selfInout=false selfMove=false isVia=false viaName="" body=fbody assocTy=emptyTypeAst() isFactory=true />)
+                            members.append(<MemberAst kind=<MemberKind.AssocFn /> name=fname nameSpan=fnameSpan typeParams=[] params=fparams hasRet=false ret=emptyTypeAst() whereParams=[] whereTraits=[] isAsync=false selfInout=false selfMove=false isVia=false viaName="" body=fbody assocTy=emptyTypeAst() isFactory=true factoryKind=facKind factoryErr=facErr />)
                         }
                         _ => {
                             members.append(<MemberAst kind=<MemberKind.Factory /> name="factory" nameSpan=fSpan typeParams=[] params=[] hasRet=false ret=emptyTypeAst() whereParams=[] whereTraits=[] isAsync=false selfInout=false selfMove=false isVia=false viaName="" body=emptyBlock() assocTy=emptyTypeAst() />)

@@ -1,0 +1,47 @@
+// fallible factories (spec/05): `optional factory` returns Optional[Self], `result[E]
+// factory` returns Result[Self, E]. The return type is synthesized (not written); the
+// body returns the wrapped value. Invoked via `<Type.name attrs/>`.
+import @Std/Io with { print, write }
+
+struct Pct { pub val v: I64 }
+pub impl Pct {
+    optional factory make(n: I64) {
+        if n < 0 { return <Optional.None /> }
+        if n > 100 { return <Optional.None /> }
+        return <Optional.Some v=<Pct v=n /> />
+    }
+}
+
+enum AgeErr { TooSmall TooBig }
+struct Age { pub val years: I64 }
+pub impl Age {
+    result[AgeErr] factory of(n: I64) {
+        if n < 0 { return <Result.Err error=<AgeErr.TooSmall /> /> }
+        if n > 150 { return <Result.Err error=<AgeErr.TooBig /> /> }
+        return <Result.Ok value=<Age years=n /> />
+    }
+}
+
+fn reportPct(o: Optional[Pct]) {
+    if Optional.Some(v: val p) = o { print(p.v) } else { write(s: "invalid\n") }
+}
+
+fn showAge(r: Result[Age, AgeErr]) {
+    match r {
+        Result.Ok(val value) => { print(value.years) }
+        Result.Err(val error) => {
+            match error {
+                AgeErr.TooSmall => { write(s: "too small\n") }
+                AgeErr.TooBig => { write(s: "too big\n") }
+            }
+        }
+    }
+}
+
+fn main() {
+    reportPct(o: <Pct.make n=50 />)
+    reportPct(o: <Pct.make n=150 />)
+    showAge(r: <Age.of n=30 />)
+    showAge(r: <Age.of n=-1 />)
+    showAge(r: <Age.of n=200 />)
+}
