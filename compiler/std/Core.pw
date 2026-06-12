@@ -164,10 +164,37 @@ pub impl[I, E] SkipIter[I, E] as Iterator where I: Iterator {
     }
 }
 
+// EnumerateIter pairs each element with its 0-based index, yielding the labelled
+// record `(index: U64, value: E)`. `E` is the inner element type.
+export struct EnumerateIter[I, E] {
+    pub mut val inner: I
+    // the running index; defaults to 0 so the inline adapter build (which only fills
+    // `inner` + call args) starts the count correctly without an explicit field.
+    pub mut val n: U64 = 0U64
+}
+pub impl[I, E] EnumerateIter[I, E] as Iterator where I: Iterator {
+    type Item = (index: U64, value: E)
+    inout fn next() -> Optional[(index: U64, value: E)] {
+        match self.inner.next() {
+            Optional.Some(val v) => {
+                val i: U64 = self.n
+                self.n = self.n + 1U64
+                return <Optional.Some v=(index: i, value: v) />
+            }
+            Optional.None => { return <Optional.None /> }
+        }
+    }
+}
+
 // Provided Iterator combinators (spec/08: a bare `impl Trait` on the trait's own
 // module). Lazy: they only build an adapter; work happens when the result is
 // iterated. `map`'s output type `B` is inferred from the closure argument.
 pub impl Iterator {
+    // Pair each element with its index: `for p in xs.enumerate()` gives records
+    // `(index: U64, value: E)`.
+    fn enumerate() -> EnumerateIter[Self, Item] {
+        return <EnumerateIter[Self, Item] inner=self n=0U64 />
+    }
     fn map[B](f: fn(x: Item) -> B) -> MapIter[Self, fn(x: Item) -> B, B] {
         return <MapIter[Self, fn(x: Item) -> B, B] inner=self f=f />
     }
