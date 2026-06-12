@@ -26,4 +26,9 @@ fn main() {
         sum = sum + (p.index as I64) + p.value
     }
     print(sum)   // (0+10)+(1+20)+(2+30) = 63
+    // the record-destructure form, by FIELD LABEL (records are labelled, not positional).
+    for (index: val i, value: val v) in <Counter n=0 />.enumerate() {
+        print(i)
+        print(v)
+    }
 }
