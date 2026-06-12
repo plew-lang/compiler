@@ -1812,11 +1812,18 @@ fn lowerDecl(c: inout Comp, d: DeclAst) {
 // path itself is consumed by the loader to find files; nothing else is recorded.
 fn lowerImport(c: inout Comp, imp: ImportAst) {
     // a `with`-less import (`import @Std/Io`) binds the last path segment as a
-    // namespace; `Io.print(args)` then resolves to `print` from that module (spec/15).
+    // namespace; `Io.print(args)` then resolves to `print` from that module. A path
+    // alias `import @Std/Io as IO` binds `IO` instead (spec/15).
     if imp.isImport {
         if imp.names.count == 0 {
-            if imp.segSpan.end > imp.segSpan.start {
-                c.namespaces.append(value: <Bind nameStart=imp.segSpan.start nameLen=imp.segSpan.end - imp.segSpan.start fieldStart=0 fieldLen=0 />)
+            mut val nsStart: U64 = imp.segSpan.start
+            mut val nsEnd: U64 = imp.segSpan.end
+            if imp.aliasSpan.end > imp.aliasSpan.start {
+                nsStart = imp.aliasSpan.start
+                nsEnd = imp.aliasSpan.end
+            }
+            if nsEnd > nsStart {
+                c.namespaces.append(value: <Bind nameStart=nsStart nameLen=nsEnd - nsStart fieldStart=0 fieldLen=0 />)
             }
         }
     }

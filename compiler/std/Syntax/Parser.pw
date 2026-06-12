@@ -1358,6 +1358,30 @@ fn parseImportAst(p: inout P, isImport: Bool) -> ImportAst {
         }
     }
     val pathEndAbs: U64 = p.base + pathEndSlice
+    // a path-level alias `import <path> as F` (spec/15): rename the namespace to F.
+    mut val aliasSpan: Span = <Span start=0 end=0 />
+    match p.curKind() {
+        Kind.KwAs => {
+            p.advance()
+            match p.curKind() {
+                Kind.Ident => {
+                    aliasSpan = p.spanOf(t: p.curTok())
+                    p.advance()
+                }
+                _ => {}
+            }
+            // `as F with { … }` is allowed; fall through to the `with` scan below.
+            match p.curKind() {
+                Kind.Ident => {
+                    if curIs(p: inout p, kw: "with") {
+                        p.advance()
+                    }
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
     mut val names: Array[String] = []
     mut val nameSpans: Array[Span] = []
     match p.curKind() {
@@ -1395,7 +1419,7 @@ fn parseImportAst(p: inout P, isImport: Bool) -> ImportAst {
         }
         _ => {}
     }
-    return <ImportAst pathSpan=<Span start=pathStart end=pathEndAbs /> segSpan=<Span start=segStartAbs end=segStartAbs + segLen /> isImport=isImport names=names nameSpans=nameSpans span=<Span start=startOff end=p.prevEnd() /> />
+    return <ImportAst pathSpan=<Span start=pathStart end=pathEndAbs /> segSpan=<Span start=segStartAbs end=segStartAbs + segLen /> isImport=isImport names=names nameSpans=nameSpans aliasSpan=aliasSpan span=<Span start=startOff end=p.prevEnd() /> />
 }
 
 // Optional directive arguments `(label: expr, ...)` after a derive name (spec/16).

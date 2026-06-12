@@ -1,0 +1,10 @@
+// path-level import alias (spec/15): `import @Std/Io as IO` binds the namespace `IO`
+// (instead of the last path segment `Io`), so `IO.print(...)` resolves the module's
+// exported functions.
+import @Std/Io as IO
+
+fn main() {
+    val n: I64 = 5
+    IO.print(n)
+    IO.write(s: "aliased\n")
+}

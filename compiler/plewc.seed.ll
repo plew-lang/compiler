@@ -57,7 +57,7 @@ source_filename = "plew"
 %st64 = type { { ptr, i64 }, %st57, { ptr, i64 }, { ptr, i64 }, i1, %st58, i1, i1 }
 %st65 = type { { ptr, i64 }, %st57, { ptr, i64 }, { ptr, i64 }, { ptr, i64 }, { ptr, i64 }, %st57 }
 %st66 = type { i1, i1, %st57, { ptr, i64 }, { ptr, i64 }, { ptr, i64 }, %st57 }
-%st68 = type { %st57, %st57, i1, { ptr, i64 }, { ptr, i64 }, %st57 }
+%st68 = type { %st57, %st57, i1, { ptr, i64 }, { ptr, i64 }, %st57, %st57 }
 %st70 = type { { ptr, i64 } }
 %st69 = type { { ptr, i64 }, %st57, { ptr, i64 } }
 %en8 = type { i64, [67 x i64] }
@@ -1154,99 +1154,100 @@ source_filename = "plew"
 @1083 = private unnamed_addr constant [60 x i8] c"expected '=' \E2\80\94 a variable declaration must be initialized\00", align 1
 @1084 = private unnamed_addr constant [5 x i8] c"with\00", align 1
 @1085 = private unnamed_addr constant [5 x i8] c"with\00", align 1
-@1086 = private unnamed_addr constant [6 x i8] c"trait\00", align 1
-@1087 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1086 = private unnamed_addr constant [5 x i8] c"with\00", align 1
+@1087 = private unnamed_addr constant [6 x i8] c"trait\00", align 1
 @1088 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1089 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
-@1090 = private unnamed_addr constant [8 x i8] c"factory\00", align 1
+@1090 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1091 = private unnamed_addr constant [8 x i8] c"factory\00", align 1
-@1092 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
-@1093 = private unnamed_addr constant [6 x i8] c"assoc\00", align 1
-@1094 = private unnamed_addr constant [5 x i8] c"type\00", align 1
-@1095 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
-@1096 = private unnamed_addr constant [6 x i8] c"assoc\00", align 1
-@1097 = private unnamed_addr constant [5 x i8] c"type\00", align 1
-@1098 = private unnamed_addr constant [36 x i8] c"expected `{` after `extension Name`\00", align 1
-@1099 = private unnamed_addr constant [5 x i8] c"impl\00", align 1
-@1100 = private unnamed_addr constant [4 x i8] c"pub\00", align 1
-@1101 = private unnamed_addr constant [5 x i8] c"impl\00", align 1
-@1102 = private unnamed_addr constant [53 x i8] c"a newtype declaration is `newtype Name = Underlying`\00", align 1
-@1103 = private unnamed_addr constant [52 x i8] c"struct fields are separated by newlines, not commas\00", align 1
-@1104 = private unnamed_addr constant [2 x i8] c";\00", align 1
-@1105 = private unnamed_addr constant [49 x i8] c"struct fields are separated by newlines, not `;`\00", align 1
-@1106 = private unnamed_addr constant [17 x i8] c"defaultExtension\00", align 1
+@1092 = private unnamed_addr constant [8 x i8] c"factory\00", align 1
+@1093 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1094 = private unnamed_addr constant [6 x i8] c"assoc\00", align 1
+@1095 = private unnamed_addr constant [5 x i8] c"type\00", align 1
+@1096 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1097 = private unnamed_addr constant [6 x i8] c"assoc\00", align 1
+@1098 = private unnamed_addr constant [5 x i8] c"type\00", align 1
+@1099 = private unnamed_addr constant [36 x i8] c"expected `{` after `extension Name`\00", align 1
+@1100 = private unnamed_addr constant [5 x i8] c"impl\00", align 1
+@1101 = private unnamed_addr constant [4 x i8] c"pub\00", align 1
+@1102 = private unnamed_addr constant [5 x i8] c"impl\00", align 1
+@1103 = private unnamed_addr constant [53 x i8] c"a newtype declaration is `newtype Name = Underlying`\00", align 1
+@1104 = private unnamed_addr constant [52 x i8] c"struct fields are separated by newlines, not commas\00", align 1
+@1105 = private unnamed_addr constant [2 x i8] c";\00", align 1
+@1106 = private unnamed_addr constant [49 x i8] c"struct fields are separated by newlines, not `;`\00", align 1
 @1107 = private unnamed_addr constant [17 x i8] c"defaultExtension\00", align 1
-@1108 = private unnamed_addr constant [66 x i8] c"enum variant payloads use parentheses, e.g. `Foo(x: I32, y: I32)`\00", align 1
-@1109 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1108 = private unnamed_addr constant [17 x i8] c"defaultExtension\00", align 1
+@1109 = private unnamed_addr constant [66 x i8] c"enum variant payloads use parentheses, e.g. `Foo(x: I32, y: I32)`\00", align 1
 @1110 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
-@1111 = private unnamed_addr constant [4 x i8] c"any\00", align 1
-@1112 = private unnamed_addr constant [74 x i8] c"an anonymous record field needs a `label: Type` (every field is labelled)\00", align 1
-@1113 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1111 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1112 = private unnamed_addr constant [4 x i8] c"any\00", align 1
+@1113 = private unnamed_addr constant [74 x i8] c"an anonymous record field needs a `label: Type` (every field is labelled)\00", align 1
 @1114 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1115 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1116 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1117 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1118 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1119 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
-@1120 = private unnamed_addr constant [72 x i8] c"inline trait constraint is not allowed in `[...]`; use a `where` clause\00", align 1
-@1121 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
-@1122 = private unnamed_addr constant [6 x i8] c"where\00", align 1
-@1123 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
-@1124 = private unnamed_addr constant [4 x i8] c"via\00", align 1
-@1125 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
-@1126 = private unnamed_addr constant [4 x i8] c"pub\00", align 1
-@1127 = private unnamed_addr constant [4 x i8] c"get\00", align 1
-@1128 = private unnamed_addr constant [86 x i8] c"comparison operators are non-associative; add parentheses (e.g. `(a < b) && (b < c)`)\00", align 1
-@1129 = private unnamed_addr constant [6 x i8] c"panic\00", align 1
-@1130 = private unnamed_addr constant [4 x i8] c"try\00", align 1
-@1131 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1120 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1121 = private unnamed_addr constant [72 x i8] c"inline trait constraint is not allowed in `[...]`; use a `where` clause\00", align 1
+@1122 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1123 = private unnamed_addr constant [6 x i8] c"where\00", align 1
+@1124 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1125 = private unnamed_addr constant [4 x i8] c"via\00", align 1
+@1126 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1127 = private unnamed_addr constant [4 x i8] c"pub\00", align 1
+@1128 = private unnamed_addr constant [4 x i8] c"get\00", align 1
+@1129 = private unnamed_addr constant [86 x i8] c"comparison operators are non-associative; add parentheses (e.g. `(a < b) && (b < c)`)\00", align 1
+@1130 = private unnamed_addr constant [6 x i8] c"panic\00", align 1
+@1131 = private unnamed_addr constant [4 x i8] c"try\00", align 1
 @1132 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1133 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
-@1134 = private unnamed_addr constant [70 x i8] c"a record loop-pattern field is `label: val name` or punned `val name`\00", align 1
-@1135 = private unnamed_addr constant [39 x i8] c"a record loop pattern needs `val name`\00", align 1
-@1136 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
-@1137 = private unnamed_addr constant [8 x i8] c"__rec__\00", align 1
-@1138 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
-@1139 = private unnamed_addr constant [71 x i8] c"a record-destructuring field is `label: val name` or punned `val name`\00", align 1
-@1140 = private unnamed_addr constant [48 x i8] c"a record-destructuring binding needs `val name`\00", align 1
-@1141 = private unnamed_addr constant [66 x i8] c"record destructuring must be initialized: `(val x, val y) = expr`\00", align 1
-@1142 = private unnamed_addr constant [31 x i8] c"expected ']' to close an index\00", align 1
-@1143 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1134 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1135 = private unnamed_addr constant [70 x i8] c"a record loop-pattern field is `label: val name` or punned `val name`\00", align 1
+@1136 = private unnamed_addr constant [39 x i8] c"a record loop pattern needs `val name`\00", align 1
+@1137 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1138 = private unnamed_addr constant [8 x i8] c"__rec__\00", align 1
+@1139 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1140 = private unnamed_addr constant [71 x i8] c"a record-destructuring field is `label: val name` or punned `val name`\00", align 1
+@1141 = private unnamed_addr constant [48 x i8] c"a record-destructuring binding needs `val name`\00", align 1
+@1142 = private unnamed_addr constant [66 x i8] c"record destructuring must be initialized: `(val x, val y) = expr`\00", align 1
+@1143 = private unnamed_addr constant [31 x i8] c"expected ']' to close an index\00", align 1
 @1144 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1145 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1146 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1147 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1148 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1149 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
-@1150 = private unnamed_addr constant [2 x i8] c"_\00", align 1
-@1151 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1150 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1151 = private unnamed_addr constant [2 x i8] c"_\00", align 1
 @1152 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1153 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1154 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1155 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1156 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @1157 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
-@1158 = private unnamed_addr constant [49 x i8] c"expected ')' to close a parenthesized expression\00", align 1
-@1159 = private unnamed_addr constant [2 x i8] c";\00", align 1
-@1160 = private unnamed_addr constant [77 x i8] c"`;` is not a statement separator in Plew; put each statement on its own line\00", align 1
-@1161 = private unnamed_addr constant [23 x i8] c"expected an expression\00", align 1
-@1162 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1158 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1159 = private unnamed_addr constant [49 x i8] c"expected ')' to close a parenthesized expression\00", align 1
+@1160 = private unnamed_addr constant [2 x i8] c";\00", align 1
+@1161 = private unnamed_addr constant [77 x i8] c"`;` is not a statement separator in Plew; put each statement on its own line\00", align 1
+@1162 = private unnamed_addr constant [23 x i8] c"expected an expression\00", align 1
 @1163 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
-@1164 = private unnamed_addr constant [3 x i8] c"I8\00", align 1
-@1165 = private unnamed_addr constant [4 x i8] c"I16\00", align 1
-@1166 = private unnamed_addr constant [4 x i8] c"I32\00", align 1
-@1167 = private unnamed_addr constant [4 x i8] c"I64\00", align 1
-@1168 = private unnamed_addr constant [3 x i8] c"U8\00", align 1
-@1169 = private unnamed_addr constant [4 x i8] c"U16\00", align 1
-@1170 = private unnamed_addr constant [4 x i8] c"U32\00", align 1
-@1171 = private unnamed_addr constant [4 x i8] c"U64\00", align 1
-@1172 = private unnamed_addr constant [4 x i8] c"F32\00", align 1
-@1173 = private unnamed_addr constant [4 x i8] c"F64\00", align 1
-@1174 = private unnamed_addr constant [24 x i8] c"empty character literal\00", align 1
-@1175 = private unnamed_addr constant [42 x i8] c"character literal must be a single scalar\00", align 1
-@1176 = private unnamed_addr constant [63 x i8] c"multi-scalar character literal (Grapheme) is not yet supported\00", align 1
-@1177 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
-@1178 = private unnamed_addr constant [6 x i8] c"panic\00", align 1
+@1164 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1165 = private unnamed_addr constant [3 x i8] c"I8\00", align 1
+@1166 = private unnamed_addr constant [4 x i8] c"I16\00", align 1
+@1167 = private unnamed_addr constant [4 x i8] c"I32\00", align 1
+@1168 = private unnamed_addr constant [4 x i8] c"I64\00", align 1
+@1169 = private unnamed_addr constant [3 x i8] c"U8\00", align 1
+@1170 = private unnamed_addr constant [4 x i8] c"U16\00", align 1
+@1171 = private unnamed_addr constant [4 x i8] c"U32\00", align 1
+@1172 = private unnamed_addr constant [4 x i8] c"U64\00", align 1
+@1173 = private unnamed_addr constant [4 x i8] c"F32\00", align 1
+@1174 = private unnamed_addr constant [4 x i8] c"F64\00", align 1
+@1175 = private unnamed_addr constant [24 x i8] c"empty character literal\00", align 1
+@1176 = private unnamed_addr constant [42 x i8] c"character literal must be a single scalar\00", align 1
+@1177 = private unnamed_addr constant [63 x i8] c"multi-scalar character literal (Grapheme) is not yet supported\00", align 1
+@1178 = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@1179 = private unnamed_addr constant [6 x i8] c"panic\00", align 1
 
 define void @pf59(ptr %0, { ptr, i64 } %1) {
 entry:
@@ -68498,112 +68499,133 @@ define void @pf524(ptr %0, %st68 %1) {
 entry:
   %2 = alloca %st68, align 8
   %3 = alloca i64, align 8
-  %4 = alloca %st57, align 8
+  %4 = alloca i64, align 8
+  %5 = alloca i64, align 8
+  %6 = alloca %st57, align 8
   br label %body0
 
 body0:                                            ; preds = %entry
   store %st68 %1, ptr %2, align 8
-  %5 = load %st68, ptr %2, align 8
-  %6 = extractvalue %st68 %5, 2
-  %7 = icmp ne i1 %6, false
-  br i1 %7, label %then, label %endif
+  %7 = load %st68, ptr %2, align 8
+  %8 = extractvalue %st68 %7, 2
+  %9 = icmp ne i1 %8, false
+  br i1 %9, label %then, label %endif
 
 then:                                             ; preds = %body0
-  %8 = load %st68, ptr %2, align 8
-  %9 = extractvalue %st68 %8, 3
-  %10 = extractvalue { ptr, i64 } %9, 1
-  %11 = icmp eq i64 %10, 0
-  br i1 %11, label %then1, label %endif2
+  %10 = load %st68, ptr %2, align 8
+  %11 = extractvalue %st68 %10, 3
+  %12 = extractvalue { ptr, i64 } %11, 1
+  %13 = icmp eq i64 %12, 0
+  br i1 %13, label %then1, label %endif2
 
 endif:                                            ; preds = %endif2, %body0
-  store i64 0, ptr %3, align 4
+  store i64 0, ptr %5, align 4
   br label %while.cond
 
 then1:                                            ; preds = %then
-  %12 = load %st68, ptr %2, align 8
-  %13 = extractvalue %st68 %12, 1
-  %14 = extractvalue %st57 %13, 1
-  %15 = load %st68, ptr %2, align 8
-  %16 = extractvalue %st68 %15, 1
-  %17 = extractvalue %st57 %16, 0
-  %18 = icmp ugt i64 %14, %17
-  br i1 %18, label %then3, label %endif4
+  %14 = load %st68, ptr %2, align 8
+  %15 = extractvalue %st68 %14, 1
+  %16 = extractvalue %st57 %15, 0
+  store i64 %16, ptr %3, align 4
+  %17 = load %st68, ptr %2, align 8
+  %18 = extractvalue %st68 %17, 1
+  %19 = extractvalue %st57 %18, 1
+  store i64 %19, ptr %4, align 4
+  %20 = load %st68, ptr %2, align 8
+  %21 = extractvalue %st68 %20, 5
+  %22 = extractvalue %st57 %21, 1
+  %23 = load %st68, ptr %2, align 8
+  %24 = extractvalue %st68 %23, 5
+  %25 = extractvalue %st57 %24, 0
+  %26 = icmp ugt i64 %22, %25
+  br i1 %26, label %then3, label %endif4
 
-endif2:                                           ; preds = %endif4, %then
+endif2:                                           ; preds = %endif6, %then
   br label %endif
 
 then3:                                            ; preds = %then1
-  %19 = getelementptr inbounds nuw %st43, ptr %0, i32 0, i32 7
-  %20 = getelementptr inbounds nuw { ptr, i64 }, ptr %19, i32 0, i32 0
-  %21 = getelementptr inbounds nuw { ptr, i64 }, ptr %19, i32 0, i32 1
-  %22 = load ptr, ptr %20, align 8
-  %23 = load i64, ptr %21, align 4
-  %24 = call ptr @plew_arr_grow(ptr %22, i64 ptrtoint (ptr getelementptr (%st22, ptr null, i32 1) to i64), i64 %23)
-  store ptr %24, ptr %20, align 8
-  %25 = load %st68, ptr %2, align 8
-  %26 = extractvalue %st68 %25, 1
-  %27 = extractvalue %st57 %26, 0
-  %28 = insertvalue %st22 undef, i64 %27, 0
-  %29 = load %st68, ptr %2, align 8
-  %30 = extractvalue %st68 %29, 1
-  %31 = extractvalue %st57 %30, 1
-  %32 = load %st68, ptr %2, align 8
-  %33 = extractvalue %st68 %32, 1
-  %34 = extractvalue %st57 %33, 0
-  %35 = call i64 @plew_u64Sub(i64 %31, i64 %34)
-  %36 = insertvalue %st22 %28, i64 %35, 1
-  %37 = insertvalue %st22 %36, i64 0, 2
-  %38 = insertvalue %st22 %37, i64 0, 3
-  %39 = insertvalue %st22 %38, i64 0, 4
-  %40 = insertvalue %st22 %39, i64 0, 5
-  %41 = getelementptr %st22, ptr %24, i64 %23
-  store %st22 %40, ptr %41, align 4
-  %42 = add i64 %23, 1
-  store i64 %42, ptr %21, align 4
+  %27 = load %st68, ptr %2, align 8
+  %28 = extractvalue %st68 %27, 5
+  %29 = extractvalue %st57 %28, 0
+  store i64 %29, ptr %3, align 4
+  %30 = load %st68, ptr %2, align 8
+  %31 = extractvalue %st68 %30, 5
+  %32 = extractvalue %st57 %31, 1
+  store i64 %32, ptr %4, align 4
   br label %endif4
 
 endif4:                                           ; preds = %then3, %then1
+  %33 = load i64, ptr %4, align 4
+  %34 = load i64, ptr %3, align 4
+  %35 = icmp ugt i64 %33, %34
+  br i1 %35, label %then5, label %endif6
+
+then5:                                            ; preds = %endif4
+  %36 = getelementptr inbounds nuw %st43, ptr %0, i32 0, i32 7
+  %37 = getelementptr inbounds nuw { ptr, i64 }, ptr %36, i32 0, i32 0
+  %38 = getelementptr inbounds nuw { ptr, i64 }, ptr %36, i32 0, i32 1
+  %39 = load ptr, ptr %37, align 8
+  %40 = load i64, ptr %38, align 4
+  %41 = call ptr @plew_arr_grow(ptr %39, i64 ptrtoint (ptr getelementptr (%st22, ptr null, i32 1) to i64), i64 %40)
+  store ptr %41, ptr %37, align 8
+  %42 = load i64, ptr %3, align 4
+  %43 = insertvalue %st22 undef, i64 %42, 0
+  %44 = load i64, ptr %4, align 4
+  %45 = load i64, ptr %3, align 4
+  %46 = call i64 @plew_u64Sub(i64 %44, i64 %45)
+  %47 = insertvalue %st22 %43, i64 %46, 1
+  %48 = insertvalue %st22 %47, i64 0, 2
+  %49 = insertvalue %st22 %48, i64 0, 3
+  %50 = insertvalue %st22 %49, i64 0, 4
+  %51 = insertvalue %st22 %50, i64 0, 5
+  %52 = getelementptr %st22, ptr %41, i64 %40
+  store %st22 %51, ptr %52, align 4
+  %53 = add i64 %40, 1
+  store i64 %53, ptr %38, align 4
+  br label %endif6
+
+endif6:                                           ; preds = %then5, %endif4
   br label %endif2
 
 while.cond:                                       ; preds = %while.body, %endif
-  %43 = load i64, ptr %3, align 4
-  %44 = load %st68, ptr %2, align 8
-  %45 = extractvalue %st68 %44, 3
-  %46 = extractvalue { ptr, i64 } %45, 1
-  %47 = icmp ult i64 %43, %46
-  br i1 %47, label %while.body, label %while.end
+  %54 = load i64, ptr %5, align 4
+  %55 = load %st68, ptr %2, align 8
+  %56 = extractvalue %st68 %55, 3
+  %57 = extractvalue { ptr, i64 } %56, 1
+  %58 = icmp ult i64 %54, %57
+  br i1 %58, label %while.body, label %while.end
 
 while.body:                                       ; preds = %while.cond
-  %48 = load %st68, ptr %2, align 8
-  %49 = extractvalue %st68 %48, 4
-  %50 = extractvalue { ptr, i64 } %49, 0
-  %51 = extractvalue { ptr, i64 } %49, 1
-  %52 = load i64, ptr %3, align 4
-  call void @plew_bounds(i64 %52, i64 %51)
-  %53 = getelementptr %st57, ptr %50, i64 %52
-  %54 = load %st57, ptr %53, align 4
-  store %st57 %54, ptr %4, align 4
-  %55 = load %st68, ptr %2, align 8
-  %56 = extractvalue %st68 %55, 1
-  %57 = extractvalue %st57 %56, 0
-  %58 = load %st68, ptr %2, align 8
-  %59 = extractvalue %st68 %58, 1
-  %60 = extractvalue %st57 %59, 1
-  %61 = load %st68, ptr %2, align 8
-  %62 = extractvalue %st68 %61, 1
-  %63 = extractvalue %st57 %62, 0
-  %64 = call i64 @plew_u64Sub(i64 %60, i64 %63)
-  %65 = load %st57, ptr %4, align 4
-  %66 = extractvalue %st57 %65, 0
-  %67 = load %st57, ptr %4, align 4
-  %68 = extractvalue %st57 %67, 1
-  %69 = load %st57, ptr %4, align 4
-  %70 = extractvalue %st57 %69, 0
-  %71 = call i64 @plew_u64Sub(i64 %68, i64 %70)
-  call void @pf82(ptr %0, i64 %57, i64 %64, i64 %66, i64 %71)
-  %72 = load i64, ptr %3, align 4
-  %73 = call i64 @plew_u64Add(i64 %72, i64 1)
-  store i64 %73, ptr %3, align 4
+  %59 = load %st68, ptr %2, align 8
+  %60 = extractvalue %st68 %59, 4
+  %61 = extractvalue { ptr, i64 } %60, 0
+  %62 = extractvalue { ptr, i64 } %60, 1
+  %63 = load i64, ptr %5, align 4
+  call void @plew_bounds(i64 %63, i64 %62)
+  %64 = getelementptr %st57, ptr %61, i64 %63
+  %65 = load %st57, ptr %64, align 4
+  store %st57 %65, ptr %6, align 4
+  %66 = load %st68, ptr %2, align 8
+  %67 = extractvalue %st68 %66, 1
+  %68 = extractvalue %st57 %67, 0
+  %69 = load %st68, ptr %2, align 8
+  %70 = extractvalue %st68 %69, 1
+  %71 = extractvalue %st57 %70, 1
+  %72 = load %st68, ptr %2, align 8
+  %73 = extractvalue %st68 %72, 1
+  %74 = extractvalue %st57 %73, 0
+  %75 = call i64 @plew_u64Sub(i64 %71, i64 %74)
+  %76 = load %st57, ptr %6, align 4
+  %77 = extractvalue %st57 %76, 0
+  %78 = load %st57, ptr %6, align 4
+  %79 = extractvalue %st57 %78, 1
+  %80 = load %st57, ptr %6, align 4
+  %81 = extractvalue %st57 %80, 0
+  %82 = call i64 @plew_u64Sub(i64 %79, i64 %81)
+  call void @pf82(ptr %0, i64 %68, i64 %75, i64 %77, i64 %82)
+  %83 = load i64, ptr %5, align 4
+  %84 = call i64 @plew_u64Add(i64 %83, i64 1)
+  store i64 %84, ptr %5, align 4
   br label %while.cond
 
 while.end:                                        ; preds = %while.cond
@@ -131328,38 +131350,42 @@ entry:
   %10 = alloca %st55, align 8
   %11 = alloca %en5, align 8
   %12 = alloca i64, align 8
-  %13 = alloca { ptr, i64 }, align 8
-  %14 = alloca { ptr, i64 }, align 8
+  %13 = alloca %st57, align 8
+  %14 = alloca %en5, align 8
   %15 = alloca %en5, align 8
   %16 = alloca %en5, align 8
-  %17 = alloca %st55, align 8
-  %18 = alloca %en5, align 8
+  %17 = alloca { ptr, i64 }, align 8
+  %18 = alloca { ptr, i64 }, align 8
   %19 = alloca %en5, align 8
+  %20 = alloca %en5, align 8
+  %21 = alloca %st55, align 8
+  %22 = alloca %en5, align 8
+  %23 = alloca %en5, align 8
   br label %body0
 
 body0:                                            ; preds = %entry
   store i1 %1, ptr %2, align 1
-  %20 = load %st78, ptr %0, align 8
-  %21 = extractvalue %st78 %20, 3
-  %22 = load %st78, ptr %0, align 8
-  %23 = call %st55 @pf1168(%st78 %22)
-  %24 = extractvalue %st55 %23, 1
-  %25 = call i64 @plew_u64Add(i64 %21, i64 %24)
-  store i64 %25, ptr %3, align 4
-  call void @pf1171(ptr %0)
+  %24 = load %st78, ptr %0, align 8
+  %25 = extractvalue %st78 %24, 3
   %26 = load %st78, ptr %0, align 8
-  %27 = extractvalue %st78 %26, 3
-  %28 = load %st78, ptr %0, align 8
-  %29 = call %st55 @pf1168(%st78 %28)
-  %30 = extractvalue %st55 %29, 1
-  %31 = call i64 @plew_u64Add(i64 %27, i64 %30)
-  store i64 %31, ptr %4, align 4
+  %27 = call %st55 @pf1168(%st78 %26)
+  %28 = extractvalue %st55 %27, 1
+  %29 = call i64 @plew_u64Add(i64 %25, i64 %28)
+  store i64 %29, ptr %3, align 4
+  call void @pf1171(ptr %0)
+  %30 = load %st78, ptr %0, align 8
+  %31 = extractvalue %st78 %30, 3
   %32 = load %st78, ptr %0, align 8
   %33 = call %st55 @pf1168(%st78 %32)
   %34 = extractvalue %st55 %33, 1
-  store i64 %34, ptr %5, align 4
-  %35 = load i64, ptr %4, align 4
-  store i64 %35, ptr %6, align 4
+  %35 = call i64 @plew_u64Add(i64 %31, i64 %34)
+  store i64 %35, ptr %4, align 4
+  %36 = load %st78, ptr %0, align 8
+  %37 = call %st55 @pf1168(%st78 %36)
+  %38 = extractvalue %st55 %37, 1
+  store i64 %38, ptr %5, align 4
+  %39 = load i64, ptr %4, align 4
+  store i64 %39, ptr %6, align 4
   store i64 0, ptr %7, align 4
   store i1 true, ptr %8, align 1
   br label %while.cond
@@ -131368,29 +131394,28 @@ while.cond:                                       ; preds = %match.end, %body0
   br i1 true, label %while.body, label %while.end
 
 while.body:                                       ; preds = %while.cond
-  %36 = load %st78, ptr %0, align 8
-  %37 = call %en5 @pf1169(%st78 %36)
-  store %en5 %37, ptr %9, align 4
-  %38 = getelementptr inbounds nuw %en5, ptr %9, i32 0, i32 0
-  %39 = load i64, ptr %38, align 4
-  %40 = icmp eq i64 %39, 1
-  br i1 %40, label %arm, label %match.next
+  %40 = load %st78, ptr %0, align 8
+  %41 = call %en5 @pf1169(%st78 %40)
+  store %en5 %41, ptr %9, align 4
+  %42 = getelementptr inbounds nuw %en5, ptr %9, i32 0, i32 0
+  %43 = load i64, ptr %42, align 4
+  %44 = icmp eq i64 %43, 1
+  br i1 %44, label %arm, label %match.next
 
 while.end:                                        ; preds = %else10, %then, %arm3, %arm1, %arm, %while.cond
-  %41 = load %st78, ptr %0, align 8
-  %42 = extractvalue %st78 %41, 3
-  %43 = load i64, ptr %5, align 4
-  %44 = call i64 @plew_u64Add(i64 %42, i64 %43)
-  store i64 %44, ptr %12, align 4
-  store { ptr, i64 } zeroinitializer, ptr %13, align 8
-  store { ptr, i64 } zeroinitializer, ptr %14, align 8
   %45 = load %st78, ptr %0, align 8
-  %46 = call %en5 @pf1169(%st78 %45)
-  store %en5 %46, ptr %15, align 4
-  %47 = getelementptr inbounds nuw %en5, ptr %15, i32 0, i32 0
-  %48 = load i64, ptr %47, align 4
-  %49 = icmp eq i64 %48, 37
-  br i1 %49, label %arm16, label %match.next17
+  %46 = extractvalue %st78 %45, 3
+  %47 = load i64, ptr %5, align 4
+  %48 = call i64 @plew_u64Add(i64 %46, i64 %47)
+  store i64 %48, ptr %12, align 4
+  store %st57 zeroinitializer, ptr %13, align 4
+  %49 = load %st78, ptr %0, align 8
+  %50 = call %en5 @pf1169(%st78 %49)
+  store %en5 %50, ptr %14, align 4
+  %51 = getelementptr inbounds nuw %en5, ptr %14, i32 0, i32 0
+  %52 = load i64, ptr %51, align 4
+  %53 = icmp eq i64 %52, 22
+  br i1 %53, label %arm16, label %match.next17
 
 match.end:                                        ; preds = %match.end11
   br label %while.cond
@@ -131399,15 +131424,15 @@ arm:                                              ; preds = %while.body
   br label %while.end
 
 match.next:                                       ; preds = %while.body
-  %50 = icmp eq i64 %39, 0
-  br i1 %50, label %arm1, label %match.next2
+  %54 = icmp eq i64 %43, 0
+  br i1 %54, label %arm1, label %match.next2
 
 arm1:                                             ; preds = %match.next
   br label %while.end
 
 match.next2:                                      ; preds = %match.next
-  %51 = icmp eq i64 %39, 37
-  br i1 %51, label %arm3, label %match.next4
+  %55 = icmp eq i64 %43, 37
+  br i1 %55, label %arm3, label %match.next4
 
 arm3:                                             ; preds = %match.next2
   br label %while.end
@@ -131416,47 +131441,47 @@ match.next4:                                      ; preds = %match.next2
   br label %arm5
 
 arm5:                                             ; preds = %match.next4
-  %52 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1084, i64 4 })
-  %53 = icmp ne i1 %52, false
-  br i1 %53, label %then, label %endif
+  %56 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1084, i64 4 })
+  %57 = icmp ne i1 %56, false
+  br i1 %57, label %then, label %endif
 
 then:                                             ; preds = %arm5
   call void @pf1171(ptr %0)
   br label %while.end
 
 endif:                                            ; preds = %arm5
-  %54 = load %st78, ptr %0, align 8
-  %55 = call %st55 @pf1168(%st78 %54)
-  store %st55 %55, ptr %10, align 4
-  %56 = load i1, ptr %8, align 1
-  %57 = icmp ne i1 %56, false
-  br i1 %57, label %then6, label %else
+  %58 = load %st78, ptr %0, align 8
+  %59 = call %st55 @pf1168(%st78 %58)
+  store %st55 %59, ptr %10, align 4
+  %60 = load i1, ptr %8, align 1
+  %61 = icmp ne i1 %60, false
+  br i1 %61, label %then6, label %else
 
 then6:                                            ; preds = %endif
   br label %endif7
 
 endif7:                                           ; preds = %endif9, %then6
   store i1 false, ptr %8, align 1
-  %58 = load %st55, ptr %10, align 4
-  %59 = extractvalue %st55 %58, 1
-  %60 = load %st55, ptr %10, align 4
-  %61 = extractvalue %st55 %60, 2
-  %62 = call i64 @plew_u64Add(i64 %59, i64 %61)
-  store i64 %62, ptr %5, align 4
-  %63 = load %st55, ptr %10, align 4
-  %64 = extractvalue %st55 %63, 0
-  store %en5 %64, ptr %11, align 4
-  %65 = getelementptr inbounds nuw %en5, ptr %11, i32 0, i32 0
-  %66 = load i64, ptr %65, align 4
-  %67 = icmp eq i64 %66, 6
-  br i1 %67, label %arm12, label %match.next13
+  %62 = load %st55, ptr %10, align 4
+  %63 = extractvalue %st55 %62, 1
+  %64 = load %st55, ptr %10, align 4
+  %65 = extractvalue %st55 %64, 2
+  %66 = call i64 @plew_u64Add(i64 %63, i64 %65)
+  store i64 %66, ptr %5, align 4
+  %67 = load %st55, ptr %10, align 4
+  %68 = extractvalue %st55 %67, 0
+  store %en5 %68, ptr %11, align 4
+  %69 = getelementptr inbounds nuw %en5, ptr %11, i32 0, i32 0
+  %70 = load i64, ptr %69, align 4
+  %71 = icmp eq i64 %70, 6
+  br i1 %71, label %arm12, label %match.next13
 
 else:                                             ; preds = %endif
-  %68 = load %st55, ptr %10, align 4
-  %69 = extractvalue %st55 %68, 1
-  %70 = load i64, ptr %5, align 4
-  %71 = icmp eq i64 %69, %70
-  br i1 %71, label %then8, label %else10
+  %72 = load %st55, ptr %10, align 4
+  %73 = extractvalue %st55 %72, 1
+  %74 = load i64, ptr %5, align 4
+  %75 = icmp eq i64 %73, %74
+  br i1 %75, label %then8, label %else10
 
 then8:                                            ; preds = %else
   br label %endif9
@@ -131472,15 +131497,15 @@ match.end11:                                      ; preds = %arm14, %arm12
   br label %match.end
 
 arm12:                                            ; preds = %endif7
-  %72 = load %st78, ptr %0, align 8
-  %73 = extractvalue %st78 %72, 3
-  %74 = load %st55, ptr %10, align 4
-  %75 = extractvalue %st55 %74, 1
-  %76 = call i64 @plew_u64Add(i64 %73, i64 %75)
-  store i64 %76, ptr %6, align 4
-  %77 = load %st55, ptr %10, align 4
-  %78 = extractvalue %st55 %77, 2
-  store i64 %78, ptr %7, align 4
+  %76 = load %st78, ptr %0, align 8
+  %77 = extractvalue %st78 %76, 3
+  %78 = load %st55, ptr %10, align 4
+  %79 = extractvalue %st55 %78, 1
+  %80 = call i64 @plew_u64Add(i64 %77, i64 %79)
+  store i64 %80, ptr %6, align 4
+  %81 = load %st55, ptr %10, align 4
+  %82 = extractvalue %st55 %81, 2
+  store i64 %82, ptr %7, align 4
   br label %match.end11
 
 match.next13:                                     ; preds = %endif7
@@ -131489,172 +131514,246 @@ match.next13:                                     ; preds = %endif7
 arm14:                                            ; preds = %match.next13
   br label %match.end11
 
-match.end15:                                      ; preds = %arm39, %while.end20
-  %79 = load i64, ptr %4, align 4
-  %80 = insertvalue %st57 undef, i64 %79, 0
-  %81 = load i64, ptr %12, align 4
-  %82 = insertvalue %st57 %80, i64 %81, 1
-  %83 = insertvalue %st68 undef, %st57 %82, 0
-  %84 = load i64, ptr %6, align 4
-  %85 = insertvalue %st57 undef, i64 %84, 0
-  %86 = load i64, ptr %6, align 4
-  %87 = load i64, ptr %7, align 4
-  %88 = call i64 @plew_u64Add(i64 %86, i64 %87)
-  %89 = insertvalue %st57 %85, i64 %88, 1
-  %90 = insertvalue %st68 %83, %st57 %89, 1
-  %91 = load i1, ptr %2, align 1
-  %92 = insertvalue %st68 %90, i1 %91, 2
-  %93 = load { ptr, i64 }, ptr %13, align 8
-  %94 = extractvalue { ptr, i64 } %93, 0
-  %95 = extractvalue { ptr, i64 } %93, 1
-  %96 = call ptr @plew_arr_copy(ptr %94, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %95)
-  %97 = insertvalue { ptr, i64 } undef, ptr %96, 0
-  %98 = insertvalue { ptr, i64 } %97, i64 %95, 1
-  %99 = insertvalue %st68 %92, { ptr, i64 } %98, 3
-  %100 = load { ptr, i64 }, ptr %14, align 8
-  %101 = extractvalue { ptr, i64 } %100, 0
-  %102 = extractvalue { ptr, i64 } %100, 1
-  %103 = call ptr @plew_arr_copy(ptr %101, i64 ptrtoint (ptr getelementptr (%st57, ptr null, i32 1) to i64), i64 %102)
-  %104 = insertvalue { ptr, i64 } undef, ptr %103, 0
-  %105 = insertvalue { ptr, i64 } %104, i64 %102, 1
-  %106 = insertvalue %st68 %99, { ptr, i64 } %105, 4
-  %107 = load i64, ptr %3, align 4
-  %108 = insertvalue %st57 undef, i64 %107, 0
-  %109 = load %st78, ptr %0, align 8
-  %110 = call i64 @pf1175(%st78 %109)
-  %111 = insertvalue %st57 %108, i64 %110, 1
-  %112 = insertvalue %st68 %106, %st57 %111, 5
-  ret %st68 %112
+match.end15:                                      ; preds = %arm28, %match.end22
+  store { ptr, i64 } zeroinitializer, ptr %17, align 8
+  store { ptr, i64 } zeroinitializer, ptr %18, align 8
+  %83 = load %st78, ptr %0, align 8
+  %84 = call %en5 @pf1169(%st78 %83)
+  store %en5 %84, ptr %19, align 4
+  %85 = getelementptr inbounds nuw %en5, ptr %19, i32 0, i32 0
+  %86 = load i64, ptr %85, align 4
+  %87 = icmp eq i64 %86, 37
+  br i1 %87, label %arm30, label %match.next31
 
 arm16:                                            ; preds = %while.end
   call void @pf1171(ptr %0)
-  br label %while.cond18
+  %88 = load %st78, ptr %0, align 8
+  %89 = call %en5 @pf1169(%st78 %88)
+  store %en5 %89, ptr %15, align 4
+  %90 = getelementptr inbounds nuw %en5, ptr %15, i32 0, i32 0
+  %91 = load i64, ptr %90, align 4
+  %92 = icmp eq i64 %91, 6
+  br i1 %92, label %arm19, label %match.next20
 
 match.next17:                                     ; preds = %while.end
-  br label %arm39
+  br label %arm28
 
-while.cond18:                                     ; preds = %match.end21, %arm16
-  br i1 true, label %while.body19, label %while.end20
+match.end18:                                      ; preds = %arm21, %arm19
+  %93 = load %st78, ptr %0, align 8
+  %94 = call %en5 @pf1169(%st78 %93)
+  store %en5 %94, ptr %16, align 4
+  %95 = getelementptr inbounds nuw %en5, ptr %16, i32 0, i32 0
+  %96 = load i64, ptr %95, align 4
+  %97 = icmp eq i64 %96, 6
+  br i1 %97, label %arm23, label %match.next24
 
-while.body19:                                     ; preds = %while.cond18
+arm19:                                            ; preds = %arm16
+  %98 = load %st78, ptr %0, align 8
+  %99 = load %st78, ptr %0, align 8
+  %100 = call %st55 @pf1168(%st78 %99)
+  %101 = call %st57 @pf1174(%st78 %98, %st55 %100)
+  store %st57 %101, ptr %13, align 4
+  call void @pf1171(ptr %0)
+  br label %match.end18
+
+match.next20:                                     ; preds = %arm16
+  br label %arm21
+
+arm21:                                            ; preds = %match.next20
+  br label %match.end18
+
+match.end22:                                      ; preds = %arm27, %endif26
+  br label %match.end15
+
+arm23:                                            ; preds = %match.end18
+  %102 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1085, i64 4 })
+  %103 = icmp ne i1 %102, false
+  br i1 %103, label %then25, label %endif26
+
+match.next24:                                     ; preds = %match.end18
+  br label %arm27
+
+then25:                                           ; preds = %arm23
+  call void @pf1171(ptr %0)
+  br label %endif26
+
+endif26:                                          ; preds = %then25, %arm23
+  br label %match.end22
+
+arm27:                                            ; preds = %match.next24
+  br label %match.end22
+
+arm28:                                            ; preds = %match.next17
+  br label %match.end15
+
+match.end29:                                      ; preds = %arm53, %while.end34
+  %104 = load i64, ptr %4, align 4
+  %105 = insertvalue %st57 undef, i64 %104, 0
+  %106 = load i64, ptr %12, align 4
+  %107 = insertvalue %st57 %105, i64 %106, 1
+  %108 = insertvalue %st68 undef, %st57 %107, 0
+  %109 = load i64, ptr %6, align 4
+  %110 = insertvalue %st57 undef, i64 %109, 0
+  %111 = load i64, ptr %6, align 4
+  %112 = load i64, ptr %7, align 4
+  %113 = call i64 @plew_u64Add(i64 %111, i64 %112)
+  %114 = insertvalue %st57 %110, i64 %113, 1
+  %115 = insertvalue %st68 %108, %st57 %114, 1
+  %116 = load i1, ptr %2, align 1
+  %117 = insertvalue %st68 %115, i1 %116, 2
+  %118 = load { ptr, i64 }, ptr %17, align 8
+  %119 = extractvalue { ptr, i64 } %118, 0
+  %120 = extractvalue { ptr, i64 } %118, 1
+  %121 = call ptr @plew_arr_copy(ptr %119, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %120)
+  %122 = insertvalue { ptr, i64 } undef, ptr %121, 0
+  %123 = insertvalue { ptr, i64 } %122, i64 %120, 1
+  %124 = insertvalue %st68 %117, { ptr, i64 } %123, 3
+  %125 = load { ptr, i64 }, ptr %18, align 8
+  %126 = extractvalue { ptr, i64 } %125, 0
+  %127 = extractvalue { ptr, i64 } %125, 1
+  %128 = call ptr @plew_arr_copy(ptr %126, i64 ptrtoint (ptr getelementptr (%st57, ptr null, i32 1) to i64), i64 %127)
+  %129 = insertvalue { ptr, i64 } undef, ptr %128, 0
+  %130 = insertvalue { ptr, i64 } %129, i64 %127, 1
+  %131 = insertvalue %st68 %124, { ptr, i64 } %130, 4
+  %132 = load %st57, ptr %13, align 4
+  %133 = insertvalue %st68 %131, %st57 %132, 5
+  %134 = load i64, ptr %3, align 4
+  %135 = insertvalue %st57 undef, i64 %134, 0
+  %136 = load %st78, ptr %0, align 8
+  %137 = call i64 @pf1175(%st78 %136)
+  %138 = insertvalue %st57 %135, i64 %137, 1
+  %139 = insertvalue %st68 %133, %st57 %138, 6
+  ret %st68 %139
+
+arm30:                                            ; preds = %match.end15
+  call void @pf1171(ptr %0)
+  br label %while.cond32
+
+match.next31:                                     ; preds = %match.end15
+  br label %arm53
+
+while.cond32:                                     ; preds = %match.end35, %arm30
+  br i1 true, label %while.body33, label %while.end34
+
+while.body33:                                     ; preds = %while.cond32
   call void @pf1172(ptr %0)
-  %113 = load %st78, ptr %0, align 8
-  %114 = call %en5 @pf1169(%st78 %113)
-  store %en5 %114, ptr %16, align 4
-  %115 = getelementptr inbounds nuw %en5, ptr %16, i32 0, i32 0
-  %116 = load i64, ptr %115, align 4
-  %117 = icmp eq i64 %116, 38
-  br i1 %117, label %arm22, label %match.next23
+  %140 = load %st78, ptr %0, align 8
+  %141 = call %en5 @pf1169(%st78 %140)
+  store %en5 %141, ptr %20, align 4
+  %142 = getelementptr inbounds nuw %en5, ptr %20, i32 0, i32 0
+  %143 = load i64, ptr %142, align 4
+  %144 = icmp eq i64 %143, 38
+  br i1 %144, label %arm36, label %match.next37
 
-while.end20:                                      ; preds = %arm24, %arm22, %while.cond18
-  br label %match.end15
+while.end34:                                      ; preds = %arm38, %arm36, %while.cond32
+  br label %match.end29
 
-match.end21:                                      ; preds = %arm38, %match.end30, %arm26
-  br label %while.cond18
+match.end35:                                      ; preds = %arm52, %match.end44, %arm40
+  br label %while.cond32
 
-arm22:                                            ; preds = %while.body19
+arm36:                                            ; preds = %while.body33
   call void @pf1171(ptr %0)
-  br label %while.end20
+  br label %while.end34
 
-match.next23:                                     ; preds = %while.body19
-  %118 = icmp eq i64 %116, 0
-  br i1 %118, label %arm24, label %match.next25
+match.next37:                                     ; preds = %while.body33
+  %145 = icmp eq i64 %143, 0
+  br i1 %145, label %arm38, label %match.next39
 
-arm24:                                            ; preds = %match.next23
-  br label %while.end20
+arm38:                                            ; preds = %match.next37
+  br label %while.end34
 
-match.next25:                                     ; preds = %match.next23
-  %119 = icmp eq i64 %116, 39
-  br i1 %119, label %arm26, label %match.next27
+match.next39:                                     ; preds = %match.next37
+  %146 = icmp eq i64 %143, 39
+  br i1 %146, label %arm40, label %match.next41
 
-arm26:                                            ; preds = %match.next25
+arm40:                                            ; preds = %match.next39
   call void @pf1171(ptr %0)
-  br label %match.end21
+  br label %match.end35
 
-match.next27:                                     ; preds = %match.next25
-  %120 = icmp eq i64 %116, 6
-  br i1 %120, label %arm28, label %match.next29
+match.next41:                                     ; preds = %match.next39
+  %147 = icmp eq i64 %143, 6
+  br i1 %147, label %arm42, label %match.next43
 
-arm28:                                            ; preds = %match.next27
-  %121 = load %st78, ptr %0, align 8
-  %122 = call %st55 @pf1168(%st78 %121)
-  store %st55 %122, ptr %17, align 4
-  %123 = getelementptr inbounds nuw { ptr, i64 }, ptr %13, i32 0, i32 0
-  %124 = getelementptr inbounds nuw { ptr, i64 }, ptr %13, i32 0, i32 1
-  %125 = load ptr, ptr %123, align 8
-  %126 = load i64, ptr %124, align 4
-  %127 = call ptr @plew_arr_grow(ptr %125, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %126)
-  store ptr %127, ptr %123, align 8
-  %128 = load %st78, ptr %0, align 8
-  %129 = load %st55, ptr %17, align 4
-  %130 = call { ptr, i64 } @pf1173(%st78 %128, %st55 %129)
-  %131 = getelementptr { ptr, i64 }, ptr %127, i64 %126
-  store { ptr, i64 } %130, ptr %131, align 8
-  %132 = add i64 %126, 1
-  store i64 %132, ptr %124, align 4
-  %133 = getelementptr inbounds nuw { ptr, i64 }, ptr %14, i32 0, i32 0
-  %134 = getelementptr inbounds nuw { ptr, i64 }, ptr %14, i32 0, i32 1
-  %135 = load ptr, ptr %133, align 8
-  %136 = load i64, ptr %134, align 4
-  %137 = call ptr @plew_arr_grow(ptr %135, i64 ptrtoint (ptr getelementptr (%st57, ptr null, i32 1) to i64), i64 %136)
-  store ptr %137, ptr %133, align 8
-  %138 = load %st78, ptr %0, align 8
-  %139 = load %st55, ptr %17, align 4
-  %140 = call %st57 @pf1174(%st78 %138, %st55 %139)
-  %141 = getelementptr %st57, ptr %137, i64 %136
-  store %st57 %140, ptr %141, align 4
-  %142 = add i64 %136, 1
-  store i64 %142, ptr %134, align 4
-  call void @pf1171(ptr %0)
-  %143 = load %st78, ptr %0, align 8
-  %144 = call %en5 @pf1169(%st78 %143)
-  store %en5 %144, ptr %18, align 4
-  %145 = getelementptr inbounds nuw %en5, ptr %18, i32 0, i32 0
-  %146 = load i64, ptr %145, align 4
-  %147 = icmp eq i64 %146, 22
-  br i1 %147, label %arm31, label %match.next32
-
-match.next29:                                     ; preds = %match.next27
-  br label %arm38
-
-match.end30:                                      ; preds = %arm37, %match.end33
-  br label %match.end21
-
-arm31:                                            ; preds = %arm28
-  call void @pf1171(ptr %0)
+arm42:                                            ; preds = %match.next41
   %148 = load %st78, ptr %0, align 8
-  %149 = call %en5 @pf1169(%st78 %148)
-  store %en5 %149, ptr %19, align 4
-  %150 = getelementptr inbounds nuw %en5, ptr %19, i32 0, i32 0
-  %151 = load i64, ptr %150, align 4
-  %152 = icmp eq i64 %151, 6
-  br i1 %152, label %arm34, label %match.next35
-
-match.next32:                                     ; preds = %arm28
-  br label %arm37
-
-match.end33:                                      ; preds = %arm36, %arm34
-  br label %match.end30
-
-arm34:                                            ; preds = %arm31
+  %149 = call %st55 @pf1168(%st78 %148)
+  store %st55 %149, ptr %21, align 4
+  %150 = getelementptr inbounds nuw { ptr, i64 }, ptr %17, i32 0, i32 0
+  %151 = getelementptr inbounds nuw { ptr, i64 }, ptr %17, i32 0, i32 1
+  %152 = load ptr, ptr %150, align 8
+  %153 = load i64, ptr %151, align 4
+  %154 = call ptr @plew_arr_grow(ptr %152, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %153)
+  store ptr %154, ptr %150, align 8
+  %155 = load %st78, ptr %0, align 8
+  %156 = load %st55, ptr %21, align 4
+  %157 = call { ptr, i64 } @pf1173(%st78 %155, %st55 %156)
+  %158 = getelementptr { ptr, i64 }, ptr %154, i64 %153
+  store { ptr, i64 } %157, ptr %158, align 8
+  %159 = add i64 %153, 1
+  store i64 %159, ptr %151, align 4
+  %160 = getelementptr inbounds nuw { ptr, i64 }, ptr %18, i32 0, i32 0
+  %161 = getelementptr inbounds nuw { ptr, i64 }, ptr %18, i32 0, i32 1
+  %162 = load ptr, ptr %160, align 8
+  %163 = load i64, ptr %161, align 4
+  %164 = call ptr @plew_arr_grow(ptr %162, i64 ptrtoint (ptr getelementptr (%st57, ptr null, i32 1) to i64), i64 %163)
+  store ptr %164, ptr %160, align 8
+  %165 = load %st78, ptr %0, align 8
+  %166 = load %st55, ptr %21, align 4
+  %167 = call %st57 @pf1174(%st78 %165, %st55 %166)
+  %168 = getelementptr %st57, ptr %164, i64 %163
+  store %st57 %167, ptr %168, align 4
+  %169 = add i64 %163, 1
+  store i64 %169, ptr %161, align 4
   call void @pf1171(ptr %0)
-  br label %match.end33
+  %170 = load %st78, ptr %0, align 8
+  %171 = call %en5 @pf1169(%st78 %170)
+  store %en5 %171, ptr %22, align 4
+  %172 = getelementptr inbounds nuw %en5, ptr %22, i32 0, i32 0
+  %173 = load i64, ptr %172, align 4
+  %174 = icmp eq i64 %173, 22
+  br i1 %174, label %arm45, label %match.next46
 
-match.next35:                                     ; preds = %arm31
-  br label %arm36
+match.next43:                                     ; preds = %match.next41
+  br label %arm52
 
-arm36:                                            ; preds = %match.next35
-  br label %match.end33
+match.end44:                                      ; preds = %arm51, %match.end47
+  br label %match.end35
 
-arm37:                                            ; preds = %match.next32
-  br label %match.end30
-
-arm38:                                            ; preds = %match.next29
+arm45:                                            ; preds = %arm42
   call void @pf1171(ptr %0)
-  br label %match.end21
+  %175 = load %st78, ptr %0, align 8
+  %176 = call %en5 @pf1169(%st78 %175)
+  store %en5 %176, ptr %23, align 4
+  %177 = getelementptr inbounds nuw %en5, ptr %23, i32 0, i32 0
+  %178 = load i64, ptr %177, align 4
+  %179 = icmp eq i64 %178, 6
+  br i1 %179, label %arm48, label %match.next49
 
-arm39:                                            ; preds = %match.next17
-  br label %match.end15
+match.next46:                                     ; preds = %arm42
+  br label %arm51
+
+match.end47:                                      ; preds = %arm50, %arm48
+  br label %match.end44
+
+arm48:                                            ; preds = %arm45
+  call void @pf1171(ptr %0)
+  br label %match.end47
+
+match.next49:                                     ; preds = %arm45
+  br label %arm50
+
+arm50:                                            ; preds = %match.next49
+  br label %match.end47
+
+arm51:                                            ; preds = %match.next46
+  br label %match.end44
+
+arm52:                                            ; preds = %match.next43
+  call void @pf1171(ptr %0)
+  br label %match.end35
+
+arm53:                                            ; preds = %match.next31
+  br label %match.end29
 }
 
 define %en8 @pf1202(ptr %0) {
@@ -131800,7 +131899,7 @@ match.next8:                                      ; preds = %match.next6
   br label %arm9
 
 arm9:                                             ; preds = %match.next8
-  %74 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1085, i64 4 })
+  %74 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1086, i64 4 })
   %75 = icmp ne i1 %74, false
   br i1 %75, label %then10, label %else
 
@@ -132089,7 +132188,7 @@ match.next41:                                     ; preds = %match.next39
   br i1 %189, label %arm42, label %match.next43
 
 arm42:                                            ; preds = %match.next41
-  %190 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1086, i64 5 })
+  %190 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1087, i64 5 })
   %191 = icmp ne i1 %190, false
   br i1 %191, label %then44, label %endif45
 
@@ -132207,7 +132306,7 @@ body0:                                            ; preds = %entry
   %52 = call %st58 @pf1179(ptr %0)
   store %st58 %52, ptr %7, align 8
   store i1 false, ptr %8, align 1
-  store { ptr, i64 } { ptr @1087, i64 0 }, ptr %9, align 8
+  store { ptr, i64 } { ptr @1088, i64 0 }, ptr %9, align 8
   store { ptr, i64 } zeroinitializer, ptr %10, align 8
   %53 = load %st78, ptr %0, align 8
   %54 = call %en5 @pf1169(%st78 %53)
@@ -132654,7 +132753,7 @@ arm56:                                            ; preds = %match.next51
   store i64 2, ptr %238, align 4
   %239 = load %en7, ptr %32, align 4
   %240 = insertvalue %st63 undef, %en7 %239, 0
-  %241 = insertvalue %st63 %240, { ptr, i64 } { ptr @1088, i64 0 }, 1
+  %241 = insertvalue %st63 %240, { ptr, i64 } { ptr @1089, i64 0 }, 1
   %242 = load i64, ptr %30, align 4
   %243 = insertvalue %st57 undef, i64 %242, 0
   %244 = load i64, ptr %30, align 4
@@ -132671,7 +132770,7 @@ arm56:                                            ; preds = %match.next51
   %255 = insertvalue %st63 %254, i1 false, 10
   %256 = insertvalue %st63 %255, i1 false, 11
   %257 = insertvalue %st63 %256, i1 false, 12
-  %258 = insertvalue %st63 %257, { ptr, i64 } { ptr @1089, i64 0 }, 13
+  %258 = insertvalue %st63 %257, { ptr, i64 } { ptr @1090, i64 0 }, 13
   %259 = load %st77, ptr %31, align 8
   %260 = insertvalue %st63 %258, %st77 %259, 14
   %261 = call %st58 @pf1164()
@@ -132686,7 +132785,7 @@ match.next57:                                     ; preds = %match.next51
   br label %arm58
 
 arm58:                                            ; preds = %match.next57
-  %265 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1090, i64 7 })
+  %265 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1091, i64 7 })
   %266 = icmp ne i1 %265, false
   br i1 %266, label %then, label %else
 
@@ -132710,7 +132809,7 @@ then:                                             ; preds = %arm58
   store i64 4, ptr %277, align 4
   %278 = load %en7, ptr %35, align 4
   %279 = insertvalue %st63 undef, %en7 %278, 0
-  %280 = insertvalue %st63 %279, { ptr, i64 } { ptr @1091, i64 7 }, 1
+  %280 = insertvalue %st63 %279, { ptr, i64 } { ptr @1092, i64 7 }, 1
   %281 = load %st57, ptr %34, align 4
   %282 = insertvalue %st63 %280, %st57 %281, 2
   %283 = insertvalue %st63 %282, { ptr, i64 } zeroinitializer, 3
@@ -132724,7 +132823,7 @@ then:                                             ; preds = %arm58
   %291 = insertvalue %st63 %290, i1 false, 10
   %292 = insertvalue %st63 %291, i1 false, 11
   %293 = insertvalue %st63 %292, i1 false, 12
-  %294 = insertvalue %st63 %293, { ptr, i64 } { ptr @1092, i64 0 }, 13
+  %294 = insertvalue %st63 %293, { ptr, i64 } { ptr @1093, i64 0 }, 13
   %295 = call %st77 @pf1166()
   %296 = insertvalue %st63 %294, %st77 %295, 14
   %297 = call %st58 @pf1164()
@@ -132739,7 +132838,7 @@ endif:                                            ; preds = %endif60, %then
   br label %match.end21
 
 else:                                             ; preds = %arm58
-  %301 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1093, i64 5 })
+  %301 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1094, i64 5 })
   %302 = icmp ne i1 %301, false
   br i1 %302, label %then59, label %else61
 
@@ -132757,7 +132856,7 @@ endif60:                                          ; preds = %endif71, %match.end
   br label %endif
 
 else61:                                           ; preds = %else
-  %308 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1094, i64 4 })
+  %308 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1095, i64 4 })
   %309 = icmp ne i1 %308, false
   br i1 %309, label %then70, label %else72
 
@@ -132876,7 +132975,7 @@ match.end73:                                      ; preds = %arm76, %arm74
   %367 = insertvalue %st63 %366, i1 false, 10
   %368 = insertvalue %st63 %367, i1 false, 11
   %369 = insertvalue %st63 %368, i1 false, 12
-  %370 = insertvalue %st63 %369, { ptr, i64 } { ptr @1095, i64 0 }, 13
+  %370 = insertvalue %st63 %369, { ptr, i64 } { ptr @1096, i64 0 }, 13
   %371 = call %st77 @pf1166()
   %372 = insertvalue %st63 %370, %st77 %371, 14
   %373 = load %st58, ptr %43, align 8
@@ -133179,7 +133278,7 @@ arm29:                                            ; preds = %match.next28
   br label %match.end26
 
 arm30:                                            ; preds = %match.next25
-  %133 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1096, i64 5 })
+  %133 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1097, i64 5 })
   %134 = icmp ne i1 %133, false
   br i1 %134, label %then, label %else
 
@@ -133197,7 +133296,7 @@ endif:                                            ; preds = %endif36, %match.end
   br label %match.end17
 
 else:                                             ; preds = %arm30
-  %140 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1097, i64 4 })
+  %140 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1098, i64 4 })
   %141 = icmp ne i1 %140, false
   br i1 %141, label %then35, label %else37
 
@@ -133314,7 +133413,7 @@ arm1:                                             ; preds = %match.next
   %20 = call %st55 @pf1168(%st78 %19)
   %21 = extractvalue %st55 %20, 1
   %22 = call i64 @plew_u64Add(i64 %18, i64 %21)
-  call void @pf1167(ptr %0, i64 %22, { ptr, i64 } { ptr @1098, i64 35 })
+  call void @pf1167(ptr %0, i64 %22, { ptr, i64 } { ptr @1099, i64 35 })
   br label %match.end
 
 while.cond:                                       ; preds = %match.end2, %match.end
@@ -133355,7 +133454,7 @@ match.next6:                                      ; preds = %match.next4
   br label %arm7
 
 arm7:                                             ; preds = %match.next6
-  %31 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1099, i64 4 })
+  %31 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1100, i64 4 })
   %32 = icmp ne i1 %31, false
   br i1 %32, label %then, label %else
 
@@ -133385,13 +133484,13 @@ endif:                                            ; preds = %endif9, %then
   br label %match.end2
 
 else:                                             ; preds = %arm7
-  %46 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1100, i64 3 })
+  %46 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1101, i64 3 })
   %47 = icmp ne i1 %46, false
   br i1 %47, label %then8, label %else10
 
 then8:                                            ; preds = %else
   call void @pf1171(ptr %0)
-  %48 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1101, i64 4 })
+  %48 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1102, i64 4 })
   %49 = icmp ne i1 %48, false
   br i1 %49, label %then11, label %else13
 
@@ -133503,7 +133602,7 @@ arm1:                                             ; preds = %match.next
   %42 = call %st55 @pf1168(%st78 %41)
   %43 = extractvalue %st55 %42, 1
   %44 = call i64 @plew_u64Add(i64 %40, i64 %43)
-  call void @pf1167(ptr %0, i64 %44, { ptr, i64 } { ptr @1102, i64 52 })
+  call void @pf1167(ptr %0, i64 %44, { ptr, i64 } { ptr @1103, i64 52 })
   br label %match.end
 }
 
@@ -133841,7 +133940,7 @@ arm7:                                             ; preds = %match.next6
   %98 = call %st55 @pf1168(%st78 %97)
   %99 = extractvalue %st55 %98, 1
   %100 = call i64 @plew_u64Add(i64 %96, i64 %99)
-  call void @pf1167(ptr %0, i64 %100, { ptr, i64 } { ptr @1103, i64 51 })
+  call void @pf1167(ptr %0, i64 %100, { ptr, i64 } { ptr @1104, i64 51 })
   call void @pf1171(ptr %0)
   br label %match.end2
 
@@ -133867,7 +133966,7 @@ arm11:                                            ; preds = %match.next10
   %106 = call { ptr, i64 } @pf1173(%st78 %103, %st55 %105)
   %107 = extractvalue { ptr, i64 } %106, 0
   %108 = extractvalue { ptr, i64 } %106, 1
-  %109 = call i64 @plew_str_eq(ptr %107, i64 %108, ptr @1104, i64 1)
+  %109 = call i64 @plew_str_eq(ptr %107, i64 %108, ptr @1105, i64 1)
   %110 = icmp ne i64 %109, 0
   br i1 %110, label %then, label %else
 
@@ -133878,7 +133977,7 @@ then:                                             ; preds = %arm11
   %114 = call %st55 @pf1168(%st78 %113)
   %115 = extractvalue %st55 %114, 1
   %116 = call i64 @plew_u64Add(i64 %112, i64 %115)
-  call void @pf1167(ptr %0, i64 %116, { ptr, i64 } { ptr @1105, i64 48 })
+  call void @pf1167(ptr %0, i64 %116, { ptr, i64 } { ptr @1106, i64 48 })
   call void @pf1171(ptr %0)
   br label %endif
 
@@ -133886,7 +133985,7 @@ endif:                                            ; preds = %endif13, %then
   br label %match.end2
 
 else:                                             ; preds = %arm11
-  %117 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1106, i64 16 })
+  %117 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1107, i64 16 })
   %118 = icmp ne i1 %117, false
   br i1 %118, label %then12, label %else14
 
@@ -134113,7 +134212,7 @@ match.next6:                                      ; preds = %match.next4
   br i1 %94, label %arm7, label %match.next8
 
 arm7:                                             ; preds = %match.next6
-  %95 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1107, i64 16 })
+  %95 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1108, i64 16 })
   %96 = icmp ne i1 %95, false
   br i1 %96, label %then, label %else
 
@@ -134233,7 +134332,7 @@ arm17:                                            ; preds = %else
   %155 = call %st55 @pf1168(%st78 %154)
   %156 = extractvalue %st55 %155, 1
   %157 = call i64 @plew_u64Add(i64 %153, i64 %156)
-  call void @pf1167(ptr %0, i64 %157, { ptr, i64 } { ptr @1108, i64 65 })
+  call void @pf1167(ptr %0, i64 %157, { ptr, i64 } { ptr @1109, i64 65 })
   br label %match.end16
 
 match.next18:                                     ; preds = %else
@@ -134478,7 +134577,7 @@ entry:
   br label %body0
 
 body0:                                            ; preds = %entry
-  ret %st58 { { ptr, i64 } { ptr @1109, i64 0 }, { ptr, i64 } zeroinitializer, %st57 zeroinitializer, { ptr, i64 } { ptr @1110, i64 0 }, i1 false, { ptr, i64 } zeroinitializer, i1 false }
+  ret %st58 { { ptr, i64 } { ptr @1110, i64 0 }, { ptr, i64 } zeroinitializer, %st57 zeroinitializer, { ptr, i64 } { ptr @1111, i64 0 }, i1 false, { ptr, i64 } zeroinitializer, i1 false }
 }
 
 define %st64 @pf1196(ptr %0, i1 %1, i1 %2) {
@@ -134651,7 +134750,7 @@ entry:
   br label %body0
 
 body0:                                            ; preds = %entry
-  %38 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1111, i64 3 })
+  %38 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1112, i64 3 })
   %39 = icmp ne i1 %38, false
   br i1 %39, label %then, label %endif
 
@@ -134780,14 +134879,14 @@ while.end:                                        ; preds = %arm6, %arm4, %while
   %118 = call ptr @plew_arr_copy(ptr %116, i64 ptrtoint (ptr getelementptr (%st58, ptr null, i32 1) to i64), i64 %117)
   %119 = insertvalue { ptr, i64 } undef, ptr %118, 0
   %120 = insertvalue { ptr, i64 } %119, i64 %117, 1
-  %121 = insertvalue %st58 { { ptr, i64 } { ptr @1113, i64 0 }, { ptr, i64 } undef, %st57 undef, { ptr, i64 } undef, i1 undef, { ptr, i64 } undef, i1 undef }, { ptr, i64 } %120, 1
+  %121 = insertvalue %st58 { { ptr, i64 } { ptr @1114, i64 0 }, { ptr, i64 } undef, %st57 undef, { ptr, i64 } undef, i1 undef, { ptr, i64 } undef, i1 undef }, { ptr, i64 } %120, 1
   %122 = load i64, ptr %5, align 4
   %123 = insertvalue %st57 undef, i64 %122, 0
   %124 = load %st78, ptr %0, align 8
   %125 = call i64 @pf1175(%st78 %124)
   %126 = insertvalue %st57 %123, i64 %125, 1
   %127 = insertvalue %st58 %121, %st57 %126, 2
-  %128 = insertvalue %st58 %127, { ptr, i64 } { ptr @1114, i64 0 }, 3
+  %128 = insertvalue %st58 %127, { ptr, i64 } { ptr @1115, i64 0 }, 3
   %129 = insertvalue %st58 %128, i1 false, 4
   %130 = load { ptr, i64 }, ptr %7, align 8
   %131 = extractvalue { ptr, i64 } %130, 0
@@ -134880,7 +134979,7 @@ arm14:                                            ; preds = %match.next13
   %169 = call %st55 @pf1168(%st78 %168)
   %170 = extractvalue %st55 %169, 1
   %171 = call i64 @plew_u64Add(i64 %167, i64 %170)
-  call void @pf1167(ptr %0, i64 %171, { ptr, i64 } { ptr @1112, i64 73 })
+  call void @pf1167(ptr %0, i64 %171, { ptr, i64 } { ptr @1113, i64 73 })
   br label %match.end11
 
 arm15:                                            ; preds = %match.next
@@ -134973,7 +135072,7 @@ match.next32:                                     ; preds = %match.next30
   br label %arm33
 
 arm33:                                            ; preds = %match.next32
-  store { ptr, i64 } { ptr @1115, i64 0 }, ptr %20, align 8
+  store { ptr, i64 } { ptr @1116, i64 0 }, ptr %20, align 8
   %195 = load %st78, ptr %0, align 8
   %196 = call %en5 @pf1169(%st78 %195)
   store %en5 %196, ptr %21, align 4
@@ -135078,7 +135177,7 @@ match.end44:                                      ; preds = %arm47, %arm45
   %244 = call ptr @plew_arr_grow(ptr %242, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %243)
   store ptr %244, ptr %240, align 8
   %245 = getelementptr { ptr, i64 }, ptr %244, i64 %243
-  store { ptr, i64 } { ptr @1116, i64 0 }, ptr %245, align 8
+  store { ptr, i64 } { ptr @1117, i64 0 }, ptr %245, align 8
   %246 = add i64 %243, 1
   store i64 %246, ptr %241, align 4
   store i64 0, ptr %28, align 4
@@ -135159,7 +135258,7 @@ while.end50:                                      ; preds = %while.cond48
   %292 = call i64 @pf1175(%st78 %291)
   %293 = insertvalue %st57 %290, i64 %292, 1
   %294 = insertvalue %st58 %288, %st57 %293, 2
-  %295 = insertvalue %st58 %294, { ptr, i64 } { ptr @1117, i64 0 }, 3
+  %295 = insertvalue %st58 %294, { ptr, i64 } { ptr @1118, i64 0 }, 3
   %296 = insertvalue %st58 %295, i1 false, 4
   %297 = load { ptr, i64 }, ptr %27, align 8
   %298 = extractvalue { ptr, i64 } %297, 0
@@ -135175,7 +135274,7 @@ arm51:                                            ; preds = %match.next18
   br label %match.end16
 
 match.end52:                                      ; preds = %arm72, %while.end57
-  store { ptr, i64 } { ptr @1119, i64 0 }, ptr %36, align 8
+  store { ptr, i64 } { ptr @1120, i64 0 }, ptr %36, align 8
   %305 = load %st78, ptr %0, align 8
   %306 = call %en5 @pf1169(%st78 %305)
   store %en5 %306, ptr %37, align 4
@@ -135232,7 +135331,7 @@ match.next64:                                     ; preds = %match.next62
   br label %arm65
 
 arm65:                                            ; preds = %match.next64
-  store { ptr, i64 } { ptr @1118, i64 0 }, ptr %33, align 8
+  store { ptr, i64 } { ptr @1119, i64 0 }, ptr %33, align 8
   %317 = load %st78, ptr %0, align 8
   %318 = call %en5 @pf1169(%st78 %317)
   store %en5 %318, ptr %34, align 4
@@ -135472,7 +135571,7 @@ arm8:                                             ; preds = %match.next7
   %28 = call %st55 @pf1168(%st78 %27)
   %29 = extractvalue %st55 %28, 1
   %30 = call i64 @plew_u64Add(i64 %26, i64 %29)
-  call void @pf1167(ptr %0, i64 %30, { ptr, i64 } { ptr @1120, i64 71 })
+  call void @pf1167(ptr %0, i64 %30, { ptr, i64 } { ptr @1121, i64 71 })
   call void @pf1171(ptr %0)
   br label %match.end1
 
@@ -135481,7 +135580,7 @@ match.next9:                                      ; preds = %match.next7
   br i1 %31, label %arm10, label %match.next11
 
 arm10:                                            ; preds = %match.next9
-  store { ptr, i64 } { ptr @1121, i64 0 }, ptr %4, align 8
+  store { ptr, i64 } { ptr @1122, i64 0 }, ptr %4, align 8
   br label %while.cond12
 
 match.next11:                                     ; preds = %match.next9
@@ -135557,7 +135656,7 @@ entry:
   br label %body0
 
 body0:                                            ; preds = %entry
-  %16 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1122, i64 5 })
+  %16 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1123, i64 5 })
   %17 = icmp ne i1 %16, false
   br i1 %17, label %then, label %endif
 
@@ -135864,8 +135963,8 @@ match.end:                                        ; preds = %arm1, %arm
   store { ptr, i64 } zeroinitializer, ptr %18, align 8
   call void @pf1188(ptr %0, ptr %17, ptr %18)
   store i1 false, ptr %19, align 1
-  store { ptr, i64 } { ptr @1123, i64 0 }, ptr %20, align 8
-  %38 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1124, i64 3 })
+  store { ptr, i64 } { ptr @1124, i64 0 }, ptr %20, align 8
+  %38 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1125, i64 3 })
   %39 = icmp ne i1 %38, false
   br i1 %39, label %then, label %endif
 
@@ -136175,7 +136274,7 @@ match.end2:                                       ; preds = %arm5, %arm3
   %81 = insertvalue %st63 %80, i1 false, 10
   %82 = insertvalue %st63 %81, i1 false, 11
   %83 = insertvalue %st63 %82, i1 false, 12
-  %84 = insertvalue %st63 %83, { ptr, i64 } { ptr @1125, i64 0 }, 13
+  %84 = insertvalue %st63 %83, { ptr, i64 } { ptr @1126, i64 0 }, 13
   %85 = load %st77, ptr %11, align 8
   %86 = insertvalue %st63 %84, %st77 %85, 14
   %87 = call %st58 @pf1164()
@@ -136370,7 +136469,7 @@ body0:                                            ; preds = %entry
   %21 = call i64 @plew_u64Add(i64 %17, i64 %20)
   store i64 %21, ptr %1, align 4
   store i64 0, ptr %2, align 4
-  %22 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1126, i64 3 })
+  %22 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1127, i64 3 })
   %23 = icmp ne i1 %22, false
   br i1 %23, label %then, label %endif
 
@@ -136400,7 +136499,7 @@ match.end:                                        ; preds = %arm11, %match.end7
 
 arm:                                              ; preds = %then
   call void @pf1171(ptr %0)
-  %34 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1127, i64 3 })
+  %34 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1128, i64 3 })
   %35 = icmp ne i1 %34, false
   br i1 %35, label %then1, label %endif2
 
@@ -136829,7 +136928,7 @@ then5:                                            ; preds = %then3
   %58 = call %st55 @pf1168(%st78 %57)
   %59 = extractvalue %st55 %58, 1
   %60 = call i64 @plew_u64Add(i64 %56, i64 %59)
-  call void @pf1167(ptr %0, i64 %60, { ptr, i64 } { ptr @1128, i64 85 })
+  call void @pf1167(ptr %0, i64 %60, { ptr, i64 } { ptr @1129, i64 85 })
   br label %endif6
 
 endif6:                                           ; preds = %then5, %then3
@@ -136974,7 +137073,7 @@ match.next18:                                     ; preds = %match.next16
   br i1 %56, label %arm19, label %match.next20
 
 arm19:                                            ; preds = %match.next18
-  %57 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1129, i64 5 })
+  %57 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1130, i64 5 })
   %58 = icmp ne i1 %57, false
   br i1 %58, label %then, label %endif
 
@@ -137287,7 +137386,7 @@ body0:                                            ; preds = %entry
   %21 = extractvalue %st55 %20, 1
   %22 = call i64 @plew_u64Add(i64 %18, i64 %21)
   store i64 %22, ptr %1, align 4
-  %23 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1130, i64 3 })
+  %23 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1131, i64 3 })
   %24 = icmp ne i1 %23, false
   br i1 %24, label %then, label %endif
 
@@ -137877,9 +137976,9 @@ body0:                                            ; preds = %entry
   store i64 %46, ptr %1, align 4
   call void @pf1171(ptr %0)
   store i1 false, ptr %2, align 1
-  store { ptr, i64 } { ptr @1131, i64 0 }, ptr %3, align 8
+  store { ptr, i64 } { ptr @1132, i64 0 }, ptr %3, align 8
   store { ptr, i64 } zeroinitializer, ptr %4, align 8
-  store { ptr, i64 } { ptr @1132, i64 0 }, ptr %5, align 8
+  store { ptr, i64 } { ptr @1133, i64 0 }, ptr %5, align 8
   %47 = call %st58 @pf1164()
   store %st58 %47, ptr %6, align 8
   store i1 false, ptr %7, align 1
@@ -138030,7 +138129,7 @@ match.next16:                                     ; preds = %match.next14
   br label %arm17
 
 arm17:                                            ; preds = %match.next16
-  store { ptr, i64 } { ptr @1133, i64 0 }, ptr %17, align 8
+  store { ptr, i64 } { ptr @1134, i64 0 }, ptr %17, align 8
   %100 = load %st78, ptr %0, align 8
   %101 = extractvalue %st78 %100, 3
   %102 = load %st78, ptr %0, align 8
@@ -138090,7 +138189,7 @@ arm24:                                            ; preds = %match.next23
   %128 = call %st55 @pf1168(%st78 %127)
   %129 = extractvalue %st55 %128, 1
   %130 = call i64 @plew_u64Add(i64 %126, i64 %129)
-  call void @pf1167(ptr %0, i64 %130, { ptr, i64 } { ptr @1134, i64 69 })
+  call void @pf1167(ptr %0, i64 %130, { ptr, i64 } { ptr @1135, i64 69 })
   br label %match.end21
 
 arm25:                                            ; preds = %match.next20
@@ -138124,7 +138223,7 @@ arm29:                                            ; preds = %match.next28
   %142 = call %st55 @pf1168(%st78 %141)
   %143 = extractvalue %st55 %142, 1
   %144 = call i64 @plew_u64Add(i64 %140, i64 %143)
-  call void @pf1167(ptr %0, i64 %144, { ptr, i64 } { ptr @1135, i64 38 })
+  call void @pf1167(ptr %0, i64 %144, { ptr, i64 } { ptr @1136, i64 38 })
   br label %match.end26
 
 then30:                                           ; preds = %match.end26
@@ -138165,7 +138264,7 @@ match.end32:                                      ; preds = %arm35, %arm33
   %165 = getelementptr inbounds nuw %en10, ptr %27, i32 0, i32 0
   store i64 6, ptr %165, align 4
   %166 = call %st58 @pf1164()
-  %167 = insertvalue { { ptr, i64 }, %st58, i1, i1, i1, %en9, %en9, %st77, i1, { ptr, i64 }, { ptr, i64 }, %st57 } { { ptr, i64 } { ptr @1136, i64 0 }, %st58 zeroinitializer, i1 false, i1 false, i1 false, %en9 zeroinitializer, %en9 zeroinitializer, %st77 zeroinitializer, i1 false, { ptr, i64 } zeroinitializer, { ptr, i64 } zeroinitializer, %st57 zeroinitializer }, %st58 %166, 1
+  %167 = insertvalue { { ptr, i64 }, %st58, i1, i1, i1, %en9, %en9, %st77, i1, { ptr, i64 }, { ptr, i64 }, %st57 } { { ptr, i64 } { ptr @1137, i64 0 }, %st58 zeroinitializer, i1 false, i1 false, i1 false, %en9 zeroinitializer, %en9 zeroinitializer, %st77 zeroinitializer, i1 false, { ptr, i64 } zeroinitializer, { ptr, i64 } zeroinitializer, %st57 zeroinitializer }, %st58 %166, 1
   %168 = insertvalue { { ptr, i64 }, %st58, i1, i1, i1, %en9, %en9, %st77, i1, { ptr, i64 }, { ptr, i64 }, %st57 } %167, i1 false, 2
   %169 = insertvalue { { ptr, i64 }, %st58, i1, i1, i1, %en9, %en9, %st77, i1, { ptr, i64 }, { ptr, i64 }, %st57 } %168, i1 false, 3
   %170 = insertvalue { { ptr, i64 }, %st58, i1, i1, i1, %en9, %en9, %st77, i1, { ptr, i64 }, { ptr, i64 }, %st57 } %169, i1 false, 4
@@ -138176,7 +138275,7 @@ match.end32:                                      ; preds = %arm35, %arm33
   %175 = load %st77, ptr %26, align 8
   %176 = insertvalue { { ptr, i64 }, %st58, i1, i1, i1, %en9, %en9, %st77, i1, { ptr, i64 }, { ptr, i64 }, %st57 } %174, %st77 %175, 7
   %177 = insertvalue { { ptr, i64 }, %st58, i1, i1, i1, %en9, %en9, %st77, i1, { ptr, i64 }, { ptr, i64 }, %st57 } %176, i1 false, 8
-  %178 = insertvalue { { ptr, i64 }, %st58, i1, i1, i1, %en9, %en9, %st77, i1, { ptr, i64 }, { ptr, i64 }, %st57 } %177, { ptr, i64 } { ptr @1137, i64 7 }, 9
+  %178 = insertvalue { { ptr, i64 }, %st58, i1, i1, i1, %en9, %en9, %st77, i1, { ptr, i64 }, { ptr, i64 }, %st57 } %177, { ptr, i64 } { ptr @1138, i64 7 }, 9
   %179 = load { ptr, i64 }, ptr %15, align 8
   %180 = insertvalue { { ptr, i64 }, %st58, i1, i1, i1, %en9, %en9, %st77, i1, { ptr, i64 }, { ptr, i64 }, %st57 } %178, { ptr, i64 } %179, 10
   %181 = load i64, ptr %1, align 4
@@ -138901,7 +139000,7 @@ match.next4:                                      ; preds = %match.next2
   br label %arm5
 
 arm5:                                             ; preds = %match.next4
-  store { ptr, i64 } { ptr @1138, i64 0 }, ptr %4, align 8
+  store { ptr, i64 } { ptr @1139, i64 0 }, ptr %4, align 8
   %32 = load %st78, ptr %0, align 8
   %33 = extractvalue %st78 %32, 3
   %34 = load %st78, ptr %0, align 8
@@ -138961,7 +139060,7 @@ arm12:                                            ; preds = %match.next11
   %60 = call %st55 @pf1168(%st78 %59)
   %61 = extractvalue %st55 %60, 1
   %62 = call i64 @plew_u64Add(i64 %58, i64 %61)
-  call void @pf1167(ptr %0, i64 %62, { ptr, i64 } { ptr @1139, i64 70 })
+  call void @pf1167(ptr %0, i64 %62, { ptr, i64 } { ptr @1140, i64 70 })
   br label %match.end9
 
 arm13:                                            ; preds = %match.next8
@@ -138995,7 +139094,7 @@ arm17:                                            ; preds = %match.next16
   %74 = call %st55 @pf1168(%st78 %73)
   %75 = extractvalue %st55 %74, 1
   %76 = call i64 @plew_u64Add(i64 %72, i64 %75)
-  call void @pf1167(ptr %0, i64 %76, { ptr, i64 } { ptr @1140, i64 47 })
+  call void @pf1167(ptr %0, i64 %76, { ptr, i64 } { ptr @1141, i64 47 })
   br label %match.end14
 
 then:                                             ; preds = %match.end14
@@ -139061,7 +139160,7 @@ arm21:                                            ; preds = %match.next20
   %112 = call %st55 @pf1168(%st78 %111)
   %113 = extractvalue %st55 %112, 1
   %114 = call i64 @plew_u64Add(i64 %110, i64 %113)
-  call void @pf1167(ptr %0, i64 %114, { ptr, i64 } { ptr @1141, i64 65 })
+  call void @pf1167(ptr %0, i64 %114, { ptr, i64 } { ptr @1142, i64 65 })
   br label %match.end18
 }
 
@@ -139492,7 +139591,7 @@ arm29:                                            ; preds = %match.next28
   %231 = call %st55 @pf1168(%st78 %230)
   %232 = extractvalue %st55 %231, 1
   %233 = call i64 @plew_u64Add(i64 %229, i64 %232)
-  call void @pf1167(ptr %0, i64 %233, { ptr, i64 } { ptr @1142, i64 30 })
+  call void @pf1167(ptr %0, i64 %233, { ptr, i64 } { ptr @1143, i64 30 })
   br label %match.end26
 
 arm30:                                            ; preds = %match.next25
@@ -139655,8 +139754,8 @@ body0:                                            ; preds = %entry
   store %st55 %34, ptr %2, align 4
   store i1 false, ptr %3, align 1
   store i1 false, ptr %4, align 1
-  store { ptr, i64 } { ptr @1143, i64 0 }, ptr %5, align 8
-  store { ptr, i64 } { ptr @1144, i64 0 }, ptr %6, align 8
+  store { ptr, i64 } { ptr @1144, i64 0 }, ptr %5, align 8
+  store { ptr, i64 } { ptr @1145, i64 0 }, ptr %6, align 8
   store { ptr, i64 } zeroinitializer, ptr %7, align 8
   %35 = call i1 @pf1220(ptr %0)
   %36 = icmp ne i1 %35, false
@@ -139671,11 +139770,11 @@ then:                                             ; preds = %body0
   %41 = call ptr @plew_arr_copy(ptr %39, i64 ptrtoint (ptr getelementptr (%st73, ptr null, i32 1) to i64), i64 %40)
   %42 = insertvalue { ptr, i64 } undef, ptr %41, 0
   %43 = insertvalue { ptr, i64 } %42, i64 %40, 1
-  %44 = insertvalue %st74 { i1 false, i1 false, { ptr, i64 } { ptr @1145, i64 0 }, { ptr, i64 } { ptr @1146, i64 0 }, { ptr, i64 } undef, i1 undef, %en9 undef, { ptr, i64 } undef, %st57 undef }, { ptr, i64 } %43, 4
+  %44 = insertvalue %st74 { i1 false, i1 false, { ptr, i64 } { ptr @1146, i64 0 }, { ptr, i64 } { ptr @1147, i64 0 }, { ptr, i64 } undef, i1 undef, %en9 undef, { ptr, i64 } undef, %st57 undef }, { ptr, i64 } %43, 4
   %45 = insertvalue %st74 %44, i1 true, 5
   %46 = load %en9, ptr %8, align 4
   %47 = insertvalue %st74 %45, %en9 %46, 6
-  %48 = insertvalue %st74 %47, { ptr, i64 } { ptr @1147, i64 0 }, 7
+  %48 = insertvalue %st74 %47, { ptr, i64 } { ptr @1148, i64 0 }, 7
   %49 = load i64, ptr %1, align 4
   %50 = insertvalue %st57 undef, i64 %49, 0
   %51 = load %st78, ptr %0, align 8
@@ -139700,7 +139799,7 @@ match.end:                                        ; preds = %arm1
   %63 = extractvalue %st55 %62, 1
   %64 = load %st55, ptr %2, align 4
   %65 = extractvalue %st55 %64, 2
-  %66 = call i1 @pf1160({ ptr, i64 } %61, i64 %63, i64 %65, { ptr, i64 } { ptr @1150, i64 1 })
+  %66 = call i1 @pf1160({ ptr, i64 } %61, i64 %63, i64 %65, { ptr, i64 } { ptr @1151, i64 1 })
   %67 = icmp ne i1 %66, false
   br i1 %67, label %then2, label %else
 
@@ -139720,7 +139819,7 @@ arm:                                              ; preds = %endif
   %76 = call ptr @plew_arr_copy(ptr %74, i64 ptrtoint (ptr getelementptr (%st73, ptr null, i32 1) to i64), i64 %75)
   %77 = insertvalue { ptr, i64 } undef, ptr %76, 0
   %78 = insertvalue { ptr, i64 } %77, i64 %75, 1
-  %79 = insertvalue %st74 { i1 true, i1 false, { ptr, i64 } { ptr @1148, i64 0 }, { ptr, i64 } { ptr @1149, i64 0 }, { ptr, i64 } undef, i1 undef, %en9 undef, { ptr, i64 } undef, %st57 undef }, { ptr, i64 } %78, 4
+  %79 = insertvalue %st74 { i1 true, i1 false, { ptr, i64 } { ptr @1149, i64 0 }, { ptr, i64 } { ptr @1150, i64 0 }, { ptr, i64 } undef, i1 undef, %en9 undef, { ptr, i64 } undef, %st57 undef }, { ptr, i64 } %78, 4
   %80 = insertvalue %st74 %79, i1 false, 5
   %81 = call %en9 @pf1165()
   %82 = insertvalue %st74 %80, %en9 %81, 6
@@ -139764,7 +139863,7 @@ endif3:                                           ; preds = %endif15, %then2
   %106 = insertvalue %st74 %105, i1 false, 5
   %107 = call %en9 @pf1165()
   %108 = insertvalue %st74 %106, %en9 %107, 6
-  %109 = insertvalue %st74 %108, { ptr, i64 } { ptr @1152, i64 0 }, 7
+  %109 = insertvalue %st74 %108, { ptr, i64 } { ptr @1153, i64 0 }, 7
   %110 = load i64, ptr %1, align 4
   %111 = insertvalue %st57 undef, i64 %110, 0
   %112 = load %st78, ptr %0, align 8
@@ -140044,7 +140143,7 @@ arm38:                                            ; preds = %match.next37
   store ptr %227, ptr %223, align 8
   %228 = load { ptr, i64 }, ptr %21, align 8
   %229 = insertvalue %st73 undef, { ptr, i64 } %228, 0
-  %230 = insertvalue %st73 %229, { ptr, i64 } { ptr @1151, i64 0 }, 1
+  %230 = insertvalue %st73 %229, { ptr, i64 } { ptr @1152, i64 0 }, 1
   %231 = load i64, ptr %22, align 4
   %232 = insertvalue %st57 undef, i64 %231, 0
   %233 = load %st78, ptr %0, align 8
@@ -140454,7 +140553,7 @@ arm:                                              ; preds = %body0
   %86 = load %st55, ptr %3, align 4
   %87 = call i64 @pf1209(ptr %0, %st55 %86)
   store i64 %87, ptr %4, align 4
-  store { ptr, i64 } { ptr @1153, i64 0 }, ptr %5, align 8
+  store { ptr, i64 } { ptr @1154, i64 0 }, ptr %5, align 8
   %88 = load %st78, ptr %0, align 8
   %89 = call %en5 @pf1169(%st78 %88)
   store %en5 %89, ptr %6, align 4
@@ -140537,7 +140636,7 @@ arm7:                                             ; preds = %match.next
   %129 = call { ptr, i64 } @pf1210({ ptr, i64 } %128)
   store { ptr, i64 } %129, ptr %10, align 8
   call void @pf1171(ptr %0)
-  store { ptr, i64 } { ptr @1154, i64 0 }, ptr %11, align 8
+  store { ptr, i64 } { ptr @1155, i64 0 }, ptr %11, align 8
   %130 = load %st78, ptr %0, align 8
   %131 = call %en5 @pf1169(%st78 %130)
   store %en5 %131, ptr %12, align 4
@@ -140621,7 +140720,7 @@ arm17:                                            ; preds = %match.next8
   %169 = call i64 @pf1212(ptr %0, %st55 %168)
   %170 = insertvalue { i64, i1, { ptr, i64 }, %st57 } zeroinitializer, i64 %169, 0
   %171 = insertvalue { i64, i1, { ptr, i64 }, %st57 } %170, i1 false, 1
-  %172 = insertvalue { i64, i1, { ptr, i64 }, %st57 } %171, { ptr, i64 } { ptr @1155, i64 0 }, 2
+  %172 = insertvalue { i64, i1, { ptr, i64 }, %st57 } %171, { ptr, i64 } { ptr @1156, i64 0 }, 2
   %173 = load i64, ptr %1, align 4
   %174 = insertvalue %st57 undef, i64 %173, 0
   %175 = load %st78, ptr %0, align 8
@@ -140647,7 +140746,7 @@ arm19:                                            ; preds = %match.next18
   %185 = load %st78, ptr %0, align 8
   %186 = call i64 @pf1175(%st78 %185)
   %187 = insertvalue %st57 %184, i64 %186, 1
-  %188 = insertvalue { i64, i1, { ptr, i64 }, %st57 } { i64 1, i1 true, { ptr, i64 } { ptr @1156, i64 0 }, %st57 zeroinitializer }, %st57 %187, 3
+  %188 = insertvalue { i64, i1, { ptr, i64 }, %st57 } { i64 1, i1 true, { ptr, i64 } { ptr @1157, i64 0 }, %st57 zeroinitializer }, %st57 %187, 3
   %189 = getelementptr inbounds nuw %en9, ptr %17, i32 0, i32 1
   store { i64, i1, { ptr, i64 }, %st57 } %188, ptr %189, align 8
   %190 = load %en9, ptr %17, align 4
@@ -140667,7 +140766,7 @@ arm21:                                            ; preds = %match.next20
   %195 = load %st78, ptr %0, align 8
   %196 = call i64 @pf1175(%st78 %195)
   %197 = insertvalue %st57 %194, i64 %196, 1
-  %198 = insertvalue { i64, i1, { ptr, i64 }, %st57 } { i64 0, i1 true, { ptr, i64 } { ptr @1157, i64 0 }, %st57 zeroinitializer }, %st57 %197, 3
+  %198 = insertvalue { i64, i1, { ptr, i64 }, %st57 } { i64 0, i1 true, { ptr, i64 } { ptr @1158, i64 0 }, %st57 zeroinitializer }, %st57 %197, 3
   %199 = getelementptr inbounds nuw %en9, ptr %18, i32 0, i32 1
   store { i64, i1, { ptr, i64 }, %st57 } %198, ptr %199, align 8
   %200 = load %en9, ptr %18, align 4
@@ -141053,7 +141152,7 @@ arm62:                                            ; preds = %match.next61
   %388 = call %st55 @pf1168(%st78 %387)
   %389 = extractvalue %st55 %388, 1
   %390 = call i64 @plew_u64Add(i64 %386, i64 %389)
-  call void @pf1167(ptr %0, i64 %390, { ptr, i64 } { ptr @1158, i64 48 })
+  call void @pf1167(ptr %0, i64 %390, { ptr, i64 } { ptr @1159, i64 48 })
   br label %match.end59
 
 arm63:                                            ; preds = %match.next32
@@ -141508,13 +141607,13 @@ arm129:                                           ; preds = %match.next76
   %569 = call { ptr, i64 } @pf1173(%st78 %567, %st55 %568)
   %570 = extractvalue { ptr, i64 } %569, 0
   %571 = extractvalue { ptr, i64 } %569, 1
-  %572 = call i64 @plew_str_eq(ptr %570, i64 %571, ptr @1159, i64 1)
+  %572 = call i64 @plew_str_eq(ptr %570, i64 %571, ptr @1160, i64 1)
   %573 = icmp ne i64 %572, 0
   br i1 %573, label %then130, label %else
 
 then130:                                          ; preds = %arm129
   %574 = load i64, ptr %1, align 4
-  call void @pf1167(ptr %0, i64 %574, { ptr, i64 } { ptr @1160, i64 76 })
+  call void @pf1167(ptr %0, i64 %574, { ptr, i64 } { ptr @1161, i64 76 })
   br label %endif131
 
 endif131:                                         ; preds = %else, %then130
@@ -141527,7 +141626,7 @@ endif131:                                         ; preds = %else, %then130
   %578 = load %st78, ptr %0, align 8
   %579 = call i64 @pf1175(%st78 %578)
   %580 = insertvalue %st57 %577, i64 %579, 1
-  %581 = insertvalue { i64, i1, { ptr, i64 }, %st57 } { i64 0, i1 false, { ptr, i64 } { ptr @1162, i64 0 }, %st57 zeroinitializer }, %st57 %580, 3
+  %581 = insertvalue { i64, i1, { ptr, i64 }, %st57 } { i64 0, i1 false, { ptr, i64 } { ptr @1163, i64 0 }, %st57 zeroinitializer }, %st57 %580, 3
   %582 = getelementptr inbounds nuw %en9, ptr %72, i32 0, i32 1
   store { i64, i1, { ptr, i64 }, %st57 } %581, ptr %582, align 8
   %583 = load %en9, ptr %72, align 4
@@ -141535,7 +141634,7 @@ endif131:                                         ; preds = %else, %then130
 
 else:                                             ; preds = %arm129
   %584 = load i64, ptr %1, align 4
-  call void @pf1167(ptr %0, i64 %584, { ptr, i64 } { ptr @1161, i64 22 })
+  call void @pf1167(ptr %0, i64 %584, { ptr, i64 } { ptr @1162, i64 22 })
   br label %endif131
 }
 
@@ -141605,7 +141704,7 @@ arm3:                                             ; preds = %match.next2
   %28 = extractvalue %st55 %27, 1
   %29 = call i64 @plew_u64Add(i64 %25, i64 %28)
   store i64 %29, ptr %3, align 4
-  store { ptr, i64 } { ptr @1163, i64 0 }, ptr %4, align 8
+  store { ptr, i64 } { ptr @1164, i64 0 }, ptr %4, align 8
   store i1 false, ptr %5, align 1
   %30 = load %st78, ptr %0, align 8
   %31 = call %en5 @pf1169(%st78 %30)
@@ -142018,7 +142117,7 @@ body0:                                            ; preds = %entry
   %6 = extractvalue %st55 %5, 1
   %7 = load %st55, ptr %2, align 4
   %8 = extractvalue %st55 %7, 2
-  %9 = call i1 @pf1160({ ptr, i64 } %4, i64 %6, i64 %8, { ptr, i64 } { ptr @1164, i64 2 })
+  %9 = call i1 @pf1160({ ptr, i64 } %4, i64 %6, i64 %8, { ptr, i64 } { ptr @1165, i64 2 })
   %10 = icmp ne i1 %9, false
   br i1 %10, label %then, label %endif
 
@@ -142032,7 +142131,7 @@ endif:                                            ; preds = %body0
   %14 = extractvalue %st55 %13, 1
   %15 = load %st55, ptr %2, align 4
   %16 = extractvalue %st55 %15, 2
-  %17 = call i1 @pf1160({ ptr, i64 } %12, i64 %14, i64 %16, { ptr, i64 } { ptr @1165, i64 3 })
+  %17 = call i1 @pf1160({ ptr, i64 } %12, i64 %14, i64 %16, { ptr, i64 } { ptr @1166, i64 3 })
   %18 = icmp ne i1 %17, false
   br i1 %18, label %then1, label %endif2
 
@@ -142046,7 +142145,7 @@ endif2:                                           ; preds = %endif
   %22 = extractvalue %st55 %21, 1
   %23 = load %st55, ptr %2, align 4
   %24 = extractvalue %st55 %23, 2
-  %25 = call i1 @pf1160({ ptr, i64 } %20, i64 %22, i64 %24, { ptr, i64 } { ptr @1166, i64 3 })
+  %25 = call i1 @pf1160({ ptr, i64 } %20, i64 %22, i64 %24, { ptr, i64 } { ptr @1167, i64 3 })
   %26 = icmp ne i1 %25, false
   br i1 %26, label %then3, label %endif4
 
@@ -142060,7 +142159,7 @@ endif4:                                           ; preds = %endif2
   %30 = extractvalue %st55 %29, 1
   %31 = load %st55, ptr %2, align 4
   %32 = extractvalue %st55 %31, 2
-  %33 = call i1 @pf1160({ ptr, i64 } %28, i64 %30, i64 %32, { ptr, i64 } { ptr @1167, i64 3 })
+  %33 = call i1 @pf1160({ ptr, i64 } %28, i64 %30, i64 %32, { ptr, i64 } { ptr @1168, i64 3 })
   %34 = icmp ne i1 %33, false
   br i1 %34, label %then5, label %endif6
 
@@ -142074,7 +142173,7 @@ endif6:                                           ; preds = %endif4
   %38 = extractvalue %st55 %37, 1
   %39 = load %st55, ptr %2, align 4
   %40 = extractvalue %st55 %39, 2
-  %41 = call i1 @pf1160({ ptr, i64 } %36, i64 %38, i64 %40, { ptr, i64 } { ptr @1168, i64 2 })
+  %41 = call i1 @pf1160({ ptr, i64 } %36, i64 %38, i64 %40, { ptr, i64 } { ptr @1169, i64 2 })
   %42 = icmp ne i1 %41, false
   br i1 %42, label %then7, label %endif8
 
@@ -142088,7 +142187,7 @@ endif8:                                           ; preds = %endif6
   %46 = extractvalue %st55 %45, 1
   %47 = load %st55, ptr %2, align 4
   %48 = extractvalue %st55 %47, 2
-  %49 = call i1 @pf1160({ ptr, i64 } %44, i64 %46, i64 %48, { ptr, i64 } { ptr @1169, i64 3 })
+  %49 = call i1 @pf1160({ ptr, i64 } %44, i64 %46, i64 %48, { ptr, i64 } { ptr @1170, i64 3 })
   %50 = icmp ne i1 %49, false
   br i1 %50, label %then9, label %endif10
 
@@ -142102,7 +142201,7 @@ endif10:                                          ; preds = %endif8
   %54 = extractvalue %st55 %53, 1
   %55 = load %st55, ptr %2, align 4
   %56 = extractvalue %st55 %55, 2
-  %57 = call i1 @pf1160({ ptr, i64 } %52, i64 %54, i64 %56, { ptr, i64 } { ptr @1170, i64 3 })
+  %57 = call i1 @pf1160({ ptr, i64 } %52, i64 %54, i64 %56, { ptr, i64 } { ptr @1171, i64 3 })
   %58 = icmp ne i1 %57, false
   br i1 %58, label %then11, label %endif12
 
@@ -142116,7 +142215,7 @@ endif12:                                          ; preds = %endif10
   %62 = extractvalue %st55 %61, 1
   %63 = load %st55, ptr %2, align 4
   %64 = extractvalue %st55 %63, 2
-  %65 = call i1 @pf1160({ ptr, i64 } %60, i64 %62, i64 %64, { ptr, i64 } { ptr @1171, i64 3 })
+  %65 = call i1 @pf1160({ ptr, i64 } %60, i64 %62, i64 %64, { ptr, i64 } { ptr @1172, i64 3 })
   %66 = icmp ne i1 %65, false
   br i1 %66, label %then13, label %endif14
 
@@ -142209,7 +142308,7 @@ body0:                                            ; preds = %entry
   %6 = extractvalue %st55 %5, 1
   %7 = load %st55, ptr %2, align 4
   %8 = extractvalue %st55 %7, 2
-  %9 = call i1 @pf1160({ ptr, i64 } %4, i64 %6, i64 %8, { ptr, i64 } { ptr @1172, i64 3 })
+  %9 = call i1 @pf1160({ ptr, i64 } %4, i64 %6, i64 %8, { ptr, i64 } { ptr @1173, i64 3 })
   %10 = icmp ne i1 %9, false
   br i1 %10, label %then, label %endif
 
@@ -142223,7 +142322,7 @@ endif:                                            ; preds = %body0
   %14 = extractvalue %st55 %13, 1
   %15 = load %st55, ptr %2, align 4
   %16 = extractvalue %st55 %15, 2
-  %17 = call i1 @pf1160({ ptr, i64 } %12, i64 %14, i64 %16, { ptr, i64 } { ptr @1173, i64 3 })
+  %17 = call i1 @pf1160({ ptr, i64 } %12, i64 %14, i64 %16, { ptr, i64 } { ptr @1174, i64 3 })
   %18 = icmp ne i1 %17, false
   br i1 %18, label %then1, label %endif2
 
@@ -142258,7 +142357,7 @@ then:                                             ; preds = %body0
   %14 = load %st55, ptr %2, align 4
   %15 = extractvalue %st55 %14, 1
   %16 = call i64 @plew_u64Add(i64 %13, i64 %15)
-  call void @pf1167(ptr %0, i64 %16, { ptr, i64 } { ptr @1174, i64 23 })
+  call void @pf1167(ptr %0, i64 %16, { ptr, i64 } { ptr @1175, i64 23 })
   ret i64 0
 
 endif:                                            ; preds = %body0
@@ -142303,7 +142402,7 @@ then3:                                            ; preds = %then1
   %40 = load %st55, ptr %2, align 4
   %41 = extractvalue %st55 %40, 1
   %42 = call i64 @plew_u64Add(i64 %39, i64 %41)
-  call void @pf1167(ptr %0, i64 %42, { ptr, i64 } { ptr @1175, i64 41 })
+  call void @pf1167(ptr %0, i64 %42, { ptr, i64 } { ptr @1176, i64 41 })
   br label %endif4
 
 endif4:                                           ; preds = %then3, %then1
@@ -142496,7 +142595,7 @@ then21:                                           ; preds = %endif14
   %159 = load %st55, ptr %2, align 4
   %160 = extractvalue %st55 %159, 1
   %161 = call i64 @plew_u64Add(i64 %158, i64 %160)
-  call void @pf1167(ptr %0, i64 %161, { ptr, i64 } { ptr @1176, i64 62 })
+  call void @pf1167(ptr %0, i64 %161, { ptr, i64 } { ptr @1177, i64 62 })
   br label %endif22
 
 endif22:                                          ; preds = %then21, %endif14
@@ -142548,7 +142647,7 @@ body0:                                            ; preds = %entry
   br i1 %30, label %arm, label %match.next
 
 match.end:                                        ; preds = %arm9, %while.end
-  store { ptr, i64 } { ptr @1177, i64 0 }, ptr %6, align 8
+  store { ptr, i64 } { ptr @1178, i64 0 }, ptr %6, align 8
   store i1 false, ptr %7, align 1
   %31 = load %st78, ptr %0, align 8
   %32 = call %en5 @pf1169(%st78 %31)
@@ -143222,7 +143321,7 @@ match.next2:                                      ; preds = %match.next
   br i1 %34, label %arm3, label %match.next4
 
 arm3:                                             ; preds = %match.next2
-  %35 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1178, i64 5 })
+  %35 = call i1 @pf1176(ptr %0, { ptr, i64 } { ptr @1179, i64 5 })
   %36 = icmp ne i1 %35, false
   br i1 %36, label %then, label %endif
 
