@@ -571,7 +571,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             checkLitCtx(c: inout c, id: expr, eKind: 0, eBits: 0, eSgn: false)
             verifyExpr(c: inout c, id: expr)
         }
-        Stmt.Return(val value, val hasValue) => {
+        Stmt.Return(val value, val hasValue, val offset) => {
             if hasValue {
                 // a function with no declared return type (`fn f() { … }`) returns `()` —
                 // `return 5I64` from it is a type error (the value is silently dropped),
@@ -590,6 +590,18 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                     tcCheckValue(c: inout c, expectedRef: c.curRetTy, valueExpr: value, pos: "return")
                 }
                 verifyExpr(c: inout c, id: value)
+            } else {
+                // a bare `return` in a value-returning function leaves the result
+                // uninitialized (spec/04: a non-`()` function must return a value on
+                // every path). Valid only when the return type is `()` / absent.
+                mut val retIsUnit: Bool = c.curRetVoid || c.curRetLen == 0U64
+                if rangeEquals(bytes: c.bytes, start: c.curRetStart, len: c.curRetLen, kw: "()") {
+                    retIsUnit = true
+                }
+                if retIsUnit {
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "a bare `return` cannot appear in a function that returns a value — return a value (spec/04)")
+                }
             }
         }
         Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {

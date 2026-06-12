@@ -2367,7 +2367,7 @@ fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
             checkGenericTypeMatch(c: inout c, expectedRef: inferType(c: inout c, id: target), valueExpr: value)
         }
         Stmt.ExprStmt(val expr) => { checkBoundsExpr(c: inout c, exprId: expr) }
-        Stmt.Return(val value, val hasValue) => {
+        Stmt.Return(val value, val hasValue, offset: _) => {
             if hasValue {
                 checkBoundsExpr(c: inout c, exprId: value)
                 if c.curCheckFn < c.funcs.count {
@@ -2514,6 +2514,54 @@ fn sameLabels(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
 // labels) — spec/07 forbids a generic-vs-concrete (or generic-vs-generic) clash
 // even if it could otherwise resolve. Free functions only (methods overload per
 // receiver type). Synthesized members are methods/assoc fns and so skipped.
+// Whether two parameter lists have the same types in order (same arity + each
+// param's type span / array-ness equal). With same labels this means the two
+// signatures have the same selector AND types — an exact duplicate, not an
+// overload (overloads must differ in a label or a parameter type).
+fn paramTypesEqual(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
+    if a.count != b.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.count {
+        if a[i].tyIsArray != b[i].tyIsArray {
+            return false
+        }
+        if intern(c: inout c, start: a[i].tyStart, len: a[i].tyLen) != intern(c: inout c, start: b[i].tyStart, len: b[i].tyLen) {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// A trait's requirements must not contain an exact duplicate (spec/08: a
+// requirement is a method signature; two with the same name, labels, and parameter
+// types are the same selector with no way to tell them apart). Overloaded
+// requirements differing in a label or a parameter type are allowed.
+fn checkDuplicateTraitReqs(c: inout Comp) {
+    mut val ti: U64 = 0
+    while ti < c.traits.count {
+        val reqs: Array[Func] = c.traits[ti].reqs
+        mut val a: U64 = 0
+        while a < reqs.count {
+            mut val b: U64 = a + 1U64
+            while b < reqs.count {
+                if reqs[a].nameId == reqs[b].nameId {
+                    if sameLabels(c: inout c, a: reqs[a].params, b: reqs[b].params) {
+                        if paramTypesEqual(c: inout c, a: reqs[a].params, b: reqs[b].params) {
+                            compileErrorAt(line: lineOf(c: inout c, offset: reqs[b].nameStart), msg: "duplicate trait requirement: another requirement has the same name, labels, and parameter types (spec/08)")
+                        }
+                    }
+                }
+                b += 1U64
+            }
+            a += 1U64
+        }
+        ti += 1U64
+    }
+}
+
 fn checkOverloadCollisions(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.funcs.count {
@@ -2901,7 +2949,7 @@ fn stmtHasLoopBreak(c: inout Comp, stmtId: U64) -> Bool {
 
 fn stmtDiverges(c: inout Comp, stmtId: U64) -> Bool {
     match c.stmts[stmtId] {
-        Stmt.Return(val value, val hasValue) => { return true }
+        Stmt.Return(val value, val hasValue, offset: _) => { return true }
         Stmt.Panic(val msg, val offset) => { return true }
         Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
             if hasElse {

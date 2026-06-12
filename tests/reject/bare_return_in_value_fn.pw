@@ -1,0 +1,4 @@
+// spec/04: a non-`()` function must return a value on every path — a bare `return`
+// would leave the result uninitialized, so it is rejected at the front-end.
+fn f() -> I64 { return }
+fn main() { val r: I64 = f() }

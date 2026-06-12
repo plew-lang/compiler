@@ -272,7 +272,9 @@ enum Stmt {
     Let(mutable: Bool, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64)
     Assign(op: I64, target: U64, value: U64)
     ExprStmt(expr: U64)
-    Return(value: U64, hasValue: Bool)
+    // `offset` = the `return` keyword's source offset (for the bare-return-in-a
+    // value-returning-function diagnostic). 0 for synthesized returns.
+    Return(value: U64, hasValue: Bool, offset: U64)
     If(cond: U64, thenBlk: U64, elseBlk: U64, hasElse: Bool)
     While(cond: U64, body: U64)
     // `for val name in iter { body }`. isRange: iter is `lo ..(< | =) hi`

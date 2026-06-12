@@ -1925,7 +1925,7 @@ fn scanStmtInsts(c: inout Comp, stmtId: U64) {
             scanExprInsts(c: inout c, exprId: value)
         }
         Stmt.ExprStmt(val expr) => { scanExprInsts(c: inout c, exprId: expr) }
-        Stmt.Return(val value, val hasValue) => {
+        Stmt.Return(val value, val hasValue, offset: _) => {
             if hasValue {
                 scanExprInsts(c: inout c, exprId: value)
             }

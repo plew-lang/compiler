@@ -1,0 +1,23 @@
+import @Std/Io with { print }
+// spec/04,08: a bare `return` early-exits a void function; trait requirements may
+// overload on parameter type.
+trait Show {
+    fn show(x: I64) -> I64
+    fn show(x: Bool) -> I64
+}
+struct S { pub val n: I64 }
+pub impl S as Show {
+    fn show(x: I64) -> I64 { return self.n + x }
+    fn show(x: Bool) -> I64 { return self.n }
+}
+fn early(x: I64) {
+    if x > 0I64 { return }
+    print(99I64)
+}
+fn main() {
+    val s: S = <S n=10I64 />
+    print(s.show(x: 5I64))     // 15
+    print(s.show(x: true))     // 10
+    early(x: 1I64)             // (prints nothing — early return)
+    early(x: -1I64)            // 99
+}

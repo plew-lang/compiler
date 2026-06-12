@@ -6660,7 +6660,7 @@ fn scanStmtAssoc(c: inout Comp, st: inout LlvmCtx, id: U64) {
         Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { scanExprAssoc(c: inout c, st: inout st, id: init) }
         Stmt.Assign(op: _, val target, val value) => { scanExprAssoc(c: inout c, st: inout st, id: target) scanExprAssoc(c: inout c, st: inout st, id: value) }
         Stmt.ExprStmt(val expr) => { scanExprAssoc(c: inout c, st: inout st, id: expr) }
-        Stmt.Return(val value, val hasValue) => { if hasValue { scanExprAssoc(c: inout c, st: inout st, id: value) } }
+        Stmt.Return(val value, val hasValue, offset: _) => { if hasValue { scanExprAssoc(c: inout c, st: inout st, id: value) } }
         Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
             scanExprAssoc(c: inout c, st: inout st, id: cond)
             scanBlockAssoc(c: inout c, st: inout st, id: thenBlk)
@@ -6789,7 +6789,7 @@ fn stmtPrincipalOffset(c: inout Comp, sid: U64) -> U64 {
         Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return exprOffset(c: inout c, id: init) }
         Stmt.Assign(op: _, val target, value: _) => { return exprOffset(c: inout c, id: target) }
         Stmt.ExprStmt(val expr) => { return exprOffset(c: inout c, id: expr) }
-        Stmt.Return(val value, val hasValue) => { if hasValue { return exprOffset(c: inout c, id: value) } return 0U64 }
+        Stmt.Return(val value, val hasValue, offset: _) => { if hasValue { return exprOffset(c: inout c, id: value) } return 0U64 }
         Stmt.If(val cond, thenBlk: _, elseBlk: _, hasElse: _) => { return exprOffset(c: inout c, id: cond) }
         Stmt.While(val cond, body: _) => { return exprOffset(c: inout c, id: cond) }
         Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, val iter, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => { return exprOffset(c: inout c, id: iter) }
@@ -7704,7 +7704,7 @@ fn scanStmtClosures(c: inout Comp, st: inout LlvmCtx, id: U64) {
         Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { scanExprClosures(c: inout c, st: inout st, id: init) }
         Stmt.Assign(op: _, val target, val value) => { scanExprClosures(c: inout c, st: inout st, id: target) scanExprClosures(c: inout c, st: inout st, id: value) }
         Stmt.ExprStmt(val expr) => { scanExprClosures(c: inout c, st: inout st, id: expr) }
-        Stmt.Return(val value, val hasValue) => { if hasValue { scanExprClosures(c: inout c, st: inout st, id: value) } }
+        Stmt.Return(val value, val hasValue, offset: _) => { if hasValue { scanExprClosures(c: inout c, st: inout st, id: value) } }
         Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
             scanExprClosures(c: inout c, st: inout st, id: cond)
             scanBlockClosures(c: inout c, st: inout st, id: thenBlk)
@@ -9141,7 +9141,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             LLVMBuildUnreachable(st.b)
             st.terminated = true
         }
-        Stmt.Return(val value, val hasValue) => {
+        Stmt.Return(val value, val hasValue, offset: _) => {
             // inside an async fn, `return` resolves `__self` (a `return await e`
             // first suspends), frees the frame, and returns from the resume fn.
             if st.curAsync {

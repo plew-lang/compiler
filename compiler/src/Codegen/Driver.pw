@@ -261,6 +261,7 @@ fn runFrontend() -> Comp {
     // another same-selector overload, methods on built-in types, and `move fn` on
     // a copyable receiver.
     checkOverloadCollisions(c: inout c)
+    checkDuplicateTraitReqs(c: inout c)
     checkImplOnBuiltin(c: inout c)
     checkMoveFnReceivers(c: inout c)
     // module visibility (spec/15): a name brought in by `import … with { }` must be

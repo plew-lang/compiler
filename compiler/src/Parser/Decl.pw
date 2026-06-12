@@ -77,7 +77,7 @@ fn synthStructEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind,
     if first {
         acc = c.pushExpr(e: <Expr.Int value=1 offset=0 isBool=true tyStart=0 tyLen=0 isNeg=false />)
     }
-    val ret: U64 = c.pushStmt(s: <Stmt.Return value=acc hasValue=true />)
+    val ret: U64 = c.pushStmt(s: <Stmt.Return value=acc hasValue=true offset=0U64 />)
     mut val stmts: Array[U64] = []
     stmts.append(ret)
     val blkId: U64 = c.blocks.count
@@ -198,7 +198,7 @@ fn synthEnumEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind, b
         vi += 1
     }
     val outerMatch: U64 = c.pushExpr(e: <Expr.MatchExpr scrut=lhsId arms=outerArms />)
-    val ret: U64 = c.pushStmt(s: <Stmt.Return value=outerMatch hasValue=true />)
+    val ret: U64 = c.pushStmt(s: <Stmt.Return value=outerMatch hasValue=true offset=0U64 />)
     mut val stmts: Array[U64] = []
     stmts.append(ret)
     val blkId: U64 = c.blocks.count
@@ -217,7 +217,7 @@ fn synthOrdering(c: inout Comp, ordN: Bind, variantN: Bind) -> U64 {
 
 // A `{ return <expr> }` block (one statement), returning its block index.
 fn synthReturnBlock(c: inout Comp, value: U64) -> U64 {
-    val ret: U64 = c.pushStmt(s: <Stmt.Return value=value hasValue=true />)
+    val ret: U64 = c.pushStmt(s: <Stmt.Return value=value hasValue=true offset=0U64 />)
     mut val stmts: Array[U64] = []
     stmts.append(ret)
     val blkId: U64 = c.blocks.count
@@ -257,7 +257,7 @@ fn synthStructOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bin
         stmts.append(c.pushStmt(s: <Stmt.If cond=gt thenBlk=grBlk elseBlk=0 hasElse=false />))
         fi += 1
     }
-    stmts.append(c.pushStmt(s: <Stmt.Return value=synthOrdering(c: inout c, ordN: ordN, variantN: equalN) hasValue=true />))
+    stmts.append(c.pushStmt(s: <Stmt.Return value=synthOrdering(c: inout c, ordN: ordN, variantN: equalN) hasValue=true offset=0U64 />))
     val blkId: U64 = c.blocks.count
     c.blocks.append(<Block stmts=stmts />)
     val noTP: Array[Bind] = []
@@ -366,7 +366,7 @@ fn synthEnumOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bind,
         oi += 1
     }
     val outerMatch: U64 = c.pushExpr(e: <Expr.MatchExpr scrut=lhsId arms=outerArms />)
-    val ret: U64 = c.pushStmt(s: <Stmt.Return value=outerMatch hasValue=true />)
+    val ret: U64 = c.pushStmt(s: <Stmt.Return value=outerMatch hasValue=true offset=0U64 />)
     mut val stmts: Array[U64] = []
     stmts.append(ret)
     val blkId: U64 = c.blocks.count

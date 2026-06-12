@@ -1,0 +1,4 @@
+// spec/08: a trait cannot declare two requirements with the same name, labels, and
+// parameter types (same selector, indistinguishable). Overloads must differ.
+trait T { fn m() -> I64  fn m() -> I64 }
+fn main() { }
