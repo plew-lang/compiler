@@ -1820,24 +1820,75 @@ fn boundHasTraitNamed(c: inout Comp, fnIdx: U64, tpStart: U64, tpLen: U64, trait
     return false
 }
 
+// The operator-trait a binary arithmetic/bitwise/shift op desugars to (spec/12),
+// for the type-parameter bound check (`a + b` on a `T` value needs `where T: Add`).
+// Comparison (Eq/Ord) and `&&`/`||` (Bool control flow) are handled separately; ""
+// means "not an operator-trait binary".
+fn binOpTraitName(c: inout Comp, op: I64) -> String {
+    if op == opAdd() { return "Add" }
+    if op == opSub() { return "Sub" }
+    if op == opMul() { return "Mul" }
+    if op == opDiv() { return "Div" }
+    if op == opRem() { return "Rem" }
+    if op == opBitAnd() { return "BitAnd" }
+    if op == opBitOr() { return "BitOr" }
+    if op == opBitXor() { return "BitXor" }
+    if op == opShl() { return "Shl" }
+    if op == opShr() { return "Shr" }
+    return ""
+}
+
+// The operator-trait a unary op desugars to (spec/12): `-`=Neg, `!`=Not, `~`=BitNot.
+fn unOpTraitName(c: inout Comp, op: I64) -> String {
+    if op == opSub() { return "Neg" }
+    if op == opNot() { return "Not" }
+    if op == opBitNot() { return "BitNot" }
+    return ""
+}
+
 fn checkBoundsExpr(c: inout Comp, exprId: U64) {
     match c.exprs[exprId] {
-        Expr.Unary(val op, val operand) => { checkBoundsExpr(c: inout c, exprId: operand) }
+        Expr.Unary(val op, val operand) => {
+            checkBoundsExpr(c: inout c, exprId: operand)
+            // a unary operator on a type-parameter value needs the matching bound
+            // (`-x` -> `where T: Neg`, `!x` -> `: Not`, `~x` -> `: BitNot`). spec/12.
+            val ut: TypeInfo = exprType(c: inout c, id: operand)
+            if ut.kind == 2 {
+                if isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: ut.nameStart, len: ut.nameLen) {
+                    val need: String = unOpTraitName(c: inout c, op: op)
+                    if need.bytes.count == 0U64 {
+                    } else {
+                        if boundHasTraitNamed(c: inout c, fnIdx: c.curCheckFn, tpStart: ut.nameStart, tpLen: ut.nameLen, traitName: need) {
+                        } else {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "this unary operator on a type parameter needs the matching bound (add `where T: Neg` / `: Not` / `: BitNot`) (spec/12)")
+                        }
+                    }
+                }
+            }
+        }
         Expr.Binary(val op, val lhs, val rhs) => {
             checkBoundsExpr(c: inout c, exprId: lhs)
             checkBoundsExpr(c: inout c, exprId: rhs)
-            if op >= 50 {
-                if op <= 55 {
-                    val lt: TypeInfo = exprType(c: inout c, id: lhs)
-                    if lt.kind == 2 {
-                        if isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: lt.nameStart, len: lt.nameLen) {
-                            mut val need: String = "Ord"
+            val lt: TypeInfo = exprType(c: inout c, id: lhs)
+            if lt.kind == 2 {
+                if isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: lt.nameStart, len: lt.nameLen) {
+                    mut val need: String = ""
+                    if op >= 50 {
+                        if op <= 55 {
+                            need = "Ord"
                             if op == opEq() { need = "Eq" }
                             if op == opNe() { need = "Eq" }
-                            if boundHasTraitNamed(c: inout c, fnIdx: c.curCheckFn, tpStart: lt.nameStart, tpLen: lt.nameLen, traitName: need) {
-                            } else {
-                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "comparison on a type parameter needs an Eq/Ord bound (add `where T: Eq` / `: Ord`)")
-                            }
+                        }
+                    }
+                    // arithmetic / bitwise / shift desugar to their operator trait.
+                    if need.bytes.count == 0U64 {
+                        need = binOpTraitName(c: inout c, op: op)
+                    }
+                    if need.bytes.count == 0U64 {
+                    } else {
+                        if boundHasTraitNamed(c: inout c, fnIdx: c.curCheckFn, tpStart: lt.nameStart, tpLen: lt.nameLen, traitName: need) {
+                        } else {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "this operator on a type parameter needs the matching bound (e.g. `where T: Add` for `+`, `: Eq`/`: Ord` for comparison) (spec/12)")
                         }
                     }
                 }

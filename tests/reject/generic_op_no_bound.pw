@@ -1,0 +1,4 @@
+// spec/06,12: an operator on a type-parameter value needs the matching bound —
+// `a + b` on a `T` value has no `Add` capability without `where T: Add`.
+fn f[T](a: T, b: T) -> T { return a + b }
+fn main() { }
