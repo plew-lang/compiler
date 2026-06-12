@@ -1074,7 +1074,19 @@ fn lowerTypeParamNames(c: inout Comp, names: Array[String]) -> Array[Bind] {
     mut val out: Array[Bind] = []
     mut val i: U64 = 0
     while i < names.count {
-        out.append(internBytes(c: inout c, s: names[i]))
+        val b: Bind = internBytes(c: inout c, s: names[i])
+        // a generic's own bracket list must have distinct names (spec/06): `f[T, T]`
+        // is ambiguous. Checked per RAW list (not the merged impl++method list, where
+        // an impl param and a method param may legitimately share a name = shadowing).
+        val bId: U64 = intern(c: inout c, start: b.nameStart, len: b.nameLen)
+        mut val k: U64 = 0
+        while k < out.count {
+            if intern(c: inout c, start: out[k].nameStart, len: out[k].nameLen) == bId {
+                compileErrorAt(line: lineOf(c: inout c, offset: b.nameStart), msg: "duplicate type-parameter name (each `[T]` in a generic must be distinct — spec/06)")
+            }
+            k += 1
+        }
+        out.append(b)
         i += 1
     }
     return out

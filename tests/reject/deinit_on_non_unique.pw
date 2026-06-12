@@ -1,0 +1,5 @@
+// spec/03: only a `unique` type may carry `deinit` — a copyable type would run it
+// on every CoW copy (double-free), so this `deinit` on a copyable struct is rejected.
+struct S { pub val n: I64 }
+pub impl S { deinit { } }
+fn main() { val s: S = <S n=1I64 /> }

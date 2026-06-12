@@ -1,0 +1,3 @@
+// spec/06: a struct's type-parameter names must be distinct.
+struct S[T, T] { pub val a: T }
+fn main() { }

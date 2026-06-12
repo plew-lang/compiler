@@ -237,6 +237,9 @@ fn runFrontend() -> Comp {
     // ownership validity (spec/03): a struct owning a unique value must be
     // `unique`; parameter access modes must match copyability. Both exit on error.
     checkFieldContagion(c: inout c)
+    // `deinit` only on a unique type (spec/03). (Distinct generic type-param names are
+    // checked per-bracket in lowerTypeParamNames, before impl++method lists merge.)
+    checkDeinitOnlyOnUnique(c: inout c)
     checkFieldDefaults(c: inout c)
     checkParamDefaults(c: inout c)
     checkAllParamModes(c: inout c)
