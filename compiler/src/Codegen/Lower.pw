@@ -758,9 +758,13 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
         }
         ExprAst.MatchExpr(val scrut, val arms, val span) => {
             if matchHasEnumOrStruct(arms: arms) {
-                val s: U64 = lowerExpr(c: inout c, e: scrut)
-                val ma: Array[MatchArm] = lowerMatchArms(c: inout c, arms: arms, isExpr: true)
-                result = c.pushExpr(e: <Expr.MatchExpr scrut=s arms=ma />)
+                if matchHasCapture(arms: arms) {
+                    result = lowerEnumMatchCaptureExpr(c: inout c, scrut: scrut, arms: arms, span: span)
+                } else {
+                    val s: U64 = lowerExpr(c: inout c, e: scrut)
+                    val ma: Array[MatchArm] = lowerMatchArms(c: inout c, arms: arms, isExpr: true)
+                    result = c.pushExpr(e: <Expr.MatchExpr scrut=s arms=ma />)
+                }
             } else {
                 result = lowerScalarMatchExpr(c: inout c, scrut: scrut, arms: arms, span: span)
             }
@@ -900,12 +904,10 @@ fn lowerMatchArms(c: inout Comp, arms: Array[MatchArmAst], isExpr: Bool) -> Arra
     mut val i: U64 = 0
     while i < arms.count {
         val arm: MatchArmAst = arms[i]
+        // capture arms are desugared by lowerEnumMatchCapture{Into,Expr} before reaching
+        // here (the arm body binds the name), so any capture left is a desugar gap.
         if arm.pattern.captureName.bytes.count > 0 {
-            // statement-position enum captures are desugared before lowerMatchArms (the
-            // arm body already binds the name); only value-position is still unsupported.
-            if isExpr {
-                compileErrorAt(line: lineOf(c: inout c, offset: arm.pattern.span.start), msg: "a capture binding `val x` in a value-position enum match is not supported yet; use `_` or a statement match")
-            }
+            compileErrorAt(line: lineOf(c: inout c, offset: arm.pattern.span.start), msg: "internal: enum-match capture binding was not desugared")
         }
         val pi: PatInfo = lowerPatternInfo(c: inout c, p: arm.pattern)
         val body: U64 = lowerBlock(c: inout c, b: arm.body)
@@ -1241,15 +1243,28 @@ fn lowerEnumMatchCaptureInto(c: inout Comp, scrut: ExprAst, arms: Array[MatchArm
     val tmp: Bind = internBytes(c: inout c, s: "__scap")
     val sv: U64 = lowerExpr(c: inout c, e: scrut)
     stmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
+    val ma: Array[MatchArm] = lowerCaptureArms(c: inout c, arms: arms, isExpr: false, scapStart: tmp.nameStart, scapLen: tmp.nameLen)
+    val scrutId: U64 = c.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
+    stmts.append(value: c.pushStmt(s: <Stmt.Match scrut=scrutId arms=ma />))
+}
+
+// Lower enum-dispatch arms with capture support: each arm's lowered body block gets
+// `val <name> = __scap` prepended for a capture arm. `scapStart`/`scapLen` name the
+// already-bound scrutinee temp. Shared by the statement and expression capture paths.
+fn lowerCaptureArms(c: inout Comp, arms: Array[MatchArmAst], isExpr: Bool, scapStart: U64, scapLen: U64) -> Array[MatchArm] {
     mut val ma: Array[MatchArm] = []
     mut val i: U64 = 0
     while i < arms.count {
         val arm: MatchArmAst = arms[i]
         val pi: PatInfo = lowerPatternInfo(c: inout c, p: arm.pattern)
         mut val bodyIdx: U64 = lowerBlock(c: inout c, b: arm.body)
+        mut val diverge: Bool = false
+        if isExpr {
+            diverge = armBlockDiverges(b: arm.body)
+        }
         if arm.pattern.captureName.bytes.count > 0 {
             val capN: Bind = internBytes(c: inout c, s: arm.pattern.captureName)
-            val scapId: U64 = c.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
+            val scapId: U64 = c.pushExpr(e: <Expr.Ident start=scapStart len=scapLen />)
             val capLet: U64 = c.pushStmt(s: <Stmt.Let mutable=false nameStart=capN.nameStart nameLen=capN.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=scapId />)
             mut val ns: Array[U64] = []
             ns.append(value: capLet)
@@ -1264,11 +1279,33 @@ fn lowerEnumMatchCaptureInto(c: inout Comp, scrut: ExprAst, arms: Array[MatchArm
         if arm.hasGuard {
             guardId = lowerExpr(c: inout c, e: arm.guard)
         }
-        ma.append(value: <MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=bodyIdx isStruct=pi.isStruct isDiverge=false hasGuard=arm.hasGuard guard=guardId />)
+        ma.append(value: <MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=bodyIdx isStruct=pi.isStruct isDiverge=diverge hasGuard=arm.hasGuard guard=guardId />)
         i += 1
     }
+    return ma
+}
+
+// Desugar a value-position enum-dispatch match with a capture arm into a give-block
+// wrapper: `if true { val __scap = scrut; give (match __scap { … }) } else { panic }`.
+// The dead `else` diverges (panic), so genLlvmIfExpr excludes it from the result PHI
+// — no dummy value is needed. Capture arms bind `val <name> = __scap` (spec/11).
+fn lowerEnumMatchCaptureExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst], span: Span) -> U64 {
+    val tmp: Bind = internBytes(c: inout c, s: "__scap")
+    val sv: U64 = lowerExpr(c: inout c, e: scrut)
+    val ma: Array[MatchArm] = lowerCaptureArms(c: inout c, arms: arms, isExpr: true, scapStart: tmp.nameStart, scapLen: tmp.nameLen)
     val scrutId: U64 = c.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
-    stmts.append(value: c.pushStmt(s: <Stmt.Match scrut=scrutId arms=ma />))
+    val matchExpr: U64 = c.pushExpr(e: <Expr.MatchExpr scrut=scrutId arms=ma />)
+    mut val thenStmts: Array[U64] = []
+    thenStmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
+    thenStmts.append(value: c.pushStmt(s: <Stmt.Give value=matchExpr />))
+    val thenWrap: U64 = blockOfStmts(c: inout c, stmts: thenStmts)
+    val msg: Bind = internBytes(c: inout c, s: "unreachable capture-match wrapper else")
+    val msgE: U64 = c.pushExpr(e: <Expr.Str start=msg.nameStart len=msg.nameLen />)
+    mut val elseStmts: Array[U64] = []
+    elseStmts.append(value: c.pushStmt(s: <Stmt.Panic msg=msgE offset=span.start />))
+    val elseWrap: U64 = blockOfStmts(c: inout c, stmts: elseStmts)
+    val trueCond: U64 = c.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />)
+    return c.pushExpr(e: <Expr.IfExpr cond=trueCond thenBlk=thenWrap elseBlk=elseWrap />)
 }
 
 fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
