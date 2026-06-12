@@ -1,0 +1,2 @@
+fn f(x: inout I64) { x = x + 1I64 }
+fn main() { f(x: inout 5I64) }

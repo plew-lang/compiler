@@ -486,6 +486,29 @@ fn checkIndexKeyType(c: inout Comp, base: U64, index: U64) {
     }
 }
 
+// Whether `value` is RELIABLY a non-array (so passing it where an array type is
+// expected is a definite mismatch — `val a: Array[I64] = 5I64` / `return 5I64` from
+// `-> Array[I64]`, which would reinterpret a scalar's bits as an array). A scalar /
+// String literal and a value of known String/struct/enum type are reliable; an array
+// literal is an array; a deferred kind-0 value (fn-value, dict, call) is left lenient.
+fn valueIsReliablyNonArray(c: inout Comp, value: U64) -> Bool {
+    match c.exprs[value] {
+        Expr.Array(elems: _) => { return false }
+        Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { return true }
+        Expr.Str(start: _, len: _) => { return true }
+        _ => {
+            val it: TypeInfo = typeOf(c: inout c, id: value)
+            if it.kind == 1 {
+                return true
+            }
+            if it.kind == 2 {
+                return true
+            }
+            return false
+        }
+    }
+}
+
 fn verifyStmt(c: inout Comp, stmtId: U64) {
     match c.stmts[stmtId] {
         Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
@@ -508,6 +531,13 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             // first attempt — fn_value / dict / rawAlloc false-rejected). Skip arrays
             // (separate machinery) and floats (typeOf wobbles float literal vs local).
             checkGenericArity(c: inout c, ref: ty, offset: nameStart)
+            // declared an array but initialized with a non-array (`val a: Array[I64] =
+            // 5I64`) reinterprets the scalar bits as an array — a definite mismatch.
+            if tyIsArray {
+                if valueIsReliablyNonArray(c: inout c, value: init) {
+                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: init)), msg: "this binding is declared as an array, but the value is not an array (Plew has no implicit conversion — spec/12)")
+                }
+            }
             if tyLen > 0U64 {
                 tcCheckValue(c: inout c, expectedRef: ty, valueExpr: init, pos: "let")
                 // an array binding's literal elements (`Array[I64] = ["a", "b"]`):
@@ -583,6 +613,13 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                     }
                 }
                 checkLitSpan(c: inout c, id: value, tyStart: c.curRetStart, tyLen: c.curRetLen, isArray: c.curRetIsArray)
+                // returning a non-array where the declared return type IS an array
+                // (`return 5I64` from `-> Array[I64]`) reinterprets the scalar bits.
+                if c.curRetIsArray {
+                    if valueIsReliablyNonArray(c: inout c, value: value) {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "this function returns an array, but the returned value is not an array (Plew has no implicit conversion — spec/12)")
+                    }
+                }
                 // a returned value whose category disagrees with the declared return
                 // type (`return "s"` / `return <A…/>` from `-> I64`). Same shared,
                 // reliable-value discipline as bindings; curRetLen 0 = `()` return.

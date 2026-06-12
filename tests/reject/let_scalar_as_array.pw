@@ -1,0 +1,2 @@
+// spec/12: an array-typed binding cannot be initialized with a scalar value.
+fn main() { val a: Array[I64] = 5I64 }

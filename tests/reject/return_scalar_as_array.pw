@@ -1,0 +1,4 @@
+// spec/12: a function declared to return an array cannot return a scalar — the bits
+// would be reinterpreted as an array (no implicit conversion).
+fn f() -> Array[I64] { return 5I64 }
+fn main() { val a: Array[I64] = f() }

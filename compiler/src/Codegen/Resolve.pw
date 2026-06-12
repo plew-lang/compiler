@@ -1171,6 +1171,22 @@ fn checkConstructVis(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool, 
 // field declared `mut val` and its base to be a mutable place; an index follows
 // its array binding. Unresolved cases default to mutable (the C compile still
 // catches genuinely undeclared names).
+// Whether `id` denotes a PLACE (an assignable/addressable location) rather than a
+// temporary value (spec/03). Only a place can be passed `inout`: a local binding, a
+// field/subscript of a place, or a `Ref` pointee (`->`). A literal, call result,
+// arithmetic expression, etc. is a value, not a place — `inout 5` / `inout f()` is
+// rejected. (placeIsMutable defaults non-place forms to mutable for leniency, so the
+// inout check needs this stricter predicate first.)
+fn exprIsPlace(c: inout Comp, id: U64) -> Bool {
+    match c.exprs[id] {
+        Expr.Ident(start: _, len: _) => { return true }
+        Expr.Field(val base, nameStart: _, nameLen: _) => { return exprIsPlace(c: inout c, id: base) }
+        Expr.Index(val base, index: _) => { return exprIsPlace(c: inout c, id: base) }
+        Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return true }
+        _ => { return false }
+    }
+}
+
 fn placeIsMutable(c: inout Comp, id: U64) -> Bool {
     val e: Expr = c.exprs[id]
     match e {
