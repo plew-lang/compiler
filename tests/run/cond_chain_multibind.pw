@@ -1,0 +1,27 @@
+// multi-binding condition chain (spec/11): `&&` joins several refutable bindings (and
+// Bool clauses); all must succeed, and earlier bindings scope to later clauses.
+import @Std/Io with { print }
+
+fn sumBoth(a: Optional[I64], b: Optional[I64]) -> I64 {
+    if Optional.Some(v: val x) = a && Optional.Some(v: val y) = b {
+        return x + y
+    }
+    return -1I64
+}
+
+// a binding followed by a Bool clause that reads the binding.
+fn pickBig(a: Optional[I64], b: Optional[I64]) -> I64 {
+    if Optional.Some(v: val x) = a && x > 0 && Optional.Some(v: val y) = b {
+        return x + y
+    }
+    return 0I64
+}
+
+fn main() {
+    print(sumBoth(a: <Optional.Some v=3I64 />, b: <Optional.Some v=4I64 />))
+    print(sumBoth(a: <Optional.Some v=3I64 />, b: <Optional.None />))
+    print(sumBoth(a: <Optional.None />, b: <Optional.Some v=4I64 />))
+    print(pickBig(a: <Optional.Some v=2I64 />, b: <Optional.Some v=5I64 />))
+    val zero: I64 = 0
+    print(pickBig(a: <Optional.Some v=zero />, b: <Optional.Some v=5I64 />))
+}

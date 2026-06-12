@@ -1118,47 +1118,94 @@ fn parseElseBlockAst(p: inout P) -> BlockAst {
     return emptyBlock()
 }
 
-// Parse an `if`-let statement `if PATTERN = expr [&& cond …] { then } [else { els }]`
-// (spec/11 condition chain, the `if let` form). Desugars to a `match` over `expr`: the
-// binding pattern's arm runs `then` (with the bindings in scope), the wildcard arm runs
-// `els`. A trailing `&& cond` Bool chain wraps `then` in `if cond { then } else { els }`.
-fn parseIfLetStmt(p: inout P, sStart: U64) -> StmtAst {
-    val pat: PatternAst = parsePatternAst(p: inout p)
-    match p.curKind() {
-        Kind.Eq => { p.advance() }
-        _ => {}
+// One clause of a condition chain (spec/11): a refutable binding `PATTERN = expr`, or
+// a Bool expression.
+struct CondClause {
+    pub val isBinding: Bool
+    pub val pattern: PatternAst
+    pub val expr: ExprAst
+}
+
+// Parse one chain clause: a refutable binding `PATTERN = expr`, or a Bool expression
+// (parsed up to the next top-level `&&`; `||` must be parenthesized — spec/11).
+fn parseCondClause(p: inout P) -> CondClause {
+    val dummy: Span = <Span start=0 end=0 />
+    if detectRefutableBinding(p: inout p) {
+        val pat: PatternAst = parsePatternAst(p: inout p)
+        match p.curKind() {
+            Kind.Eq => { p.advance() }
+            _ => {}
+        }
+        return <CondClause isBinding=true pattern=pat expr=parseBinAst(p: inout p, minPrec: 3) />
     }
-    val scrut: ExprAst = parseBinAst(p: inout p, minPrec: 3)
-    mut val trailing: Array[ExprAst] = []
+    return <CondClause isBinding=false pattern=<PatternAst isWildcard=true isStruct=false typeName="" variant="" binds=[] span=dummy /> expr=parseBinAst(p: inout p, minPrec: 3) />
+}
+
+// Parse a condition chain `clause (&& clause)*` (the first clause is a binding — the
+// caller dispatched plain-Bool conditions already).
+fn parseCondChain(p: inout P) -> Array[CondClause] {
+    mut val clauses: Array[CondClause] = []
+    clauses.append(parseCondClause(p: inout p))
     while true {
         match p.curKind() {
             Kind.AmpAmp => {
                 p.advance()
-                trailing.append(parseBinAst(p: inout p, minPrec: 3))
+                clauses.append(parseCondClause(p: inout p))
             }
             _ => { break }
         }
     }
+    return clauses
+}
+
+// Build the statement form of a condition chain: each binding clause becomes a `match`
+// (pattern arm runs the inner chain, wildcard arm runs `elseBlk`), each Bool clause an
+// `if … else elseBlk`. The innermost (after the last clause) runs `thenBlk`.
+fn buildCondChainStmt(clauses: Array[CondClause], idx: U64, thenBlk: BlockAst, elseBlk: BlockAst, span: Span) -> StmtAst {
+    val clause: CondClause = clauses[idx]
+    mut val inner: BlockAst = thenBlk
+    if idx + 1U64 < clauses.count {
+        mut val one: Array[StmtAst] = []
+        one.append(buildCondChainStmt(clauses: clauses, idx: idx + 1U64, thenBlk: thenBlk, elseBlk: elseBlk, span: span))
+        inner = <BlockAst stmts=one />
+    }
+    if clause.isBinding {
+        mut val arms: Array[MatchArmAst] = []
+        arms.append(<MatchArmAst pattern=clause.pattern body=inner span=span />)
+        arms.append(<MatchArmAst pattern=<PatternAst isWildcard=true isStruct=false typeName="" variant="" binds=[] span=span /> body=elseBlk span=span />)
+        return <StmtAst.Match scrut=clause.expr arms=arms span=span />
+    }
+    return <StmtAst.If cond=clause.expr thenBlk=inner elseBlk=elseBlk hasElse=true span=span />
+}
+
+// Build the value (expression) form of a condition chain: binding clauses become a
+// value `match`, Bool clauses a value `if`. `thenBlk`/`elseBlk` end in `give`.
+fn buildCondChainExpr(clauses: Array[CondClause], idx: U64, thenBlk: BlockAst, elseBlk: BlockAst, span: Span) -> ExprAst {
+    val clause: CondClause = clauses[idx]
+    mut val inner: BlockAst = thenBlk
+    if idx + 1U64 < clauses.count {
+        val innerExpr: ExprAst = buildCondChainExpr(clauses: clauses, idx: idx + 1U64, thenBlk: thenBlk, elseBlk: elseBlk, span: span)
+        mut val one: Array[StmtAst] = []
+        one.append(<StmtAst.Give value=innerExpr span=span />)
+        inner = <BlockAst stmts=one />
+    }
+    if clause.isBinding {
+        mut val arms: Array[MatchArmAst] = []
+        arms.append(<MatchArmAst pattern=clause.pattern body=inner span=span />)
+        arms.append(<MatchArmAst pattern=<PatternAst isWildcard=true isStruct=false typeName="" variant="" binds=[] span=span /> body=elseBlk span=span />)
+        return <ExprAst.MatchExpr scrut=clause.expr arms=arms span=span />
+    }
+    return <ExprAst.IfExpr cond=clause.expr thenBlk=inner elseBlk=elseBlk span=span />
+}
+
+// Parse an `if`-let statement `if <cond-chain> { then } [else { els }]` (spec/11). The
+// chain `&&`-joins refutable bindings and Bool clauses; bindings scope to `then`.
+fn parseIfLetStmt(p: inout P, sStart: U64) -> StmtAst {
+    val clauses: Array[CondClause] = parseCondChain(p: inout p)
     val thenBlk: BlockAst = parseBlockAst(p: inout p)
     p.skipNewlines()
     val elseBlk: BlockAst = parseElseBlockAst(p: inout p)
-    val span: Span = <Span start=sStart end=p.prevEnd() />
-    mut val innerThen: BlockAst = thenBlk
-    if trailing.count > 0 {
-        mut val combined: ExprAst = trailing[0]
-        mut val ti: U64 = 1
-        while ti < trailing.count {
-            combined = <ExprAst.Binary op=kindCode(k: <Kind.AmpAmp />) lhs=combined rhs=trailing[ti] span=span />
-            ti += 1
-        }
-        mut val one: Array[StmtAst] = []
-        one.append(<StmtAst.If cond=combined thenBlk=thenBlk elseBlk=elseBlk hasElse=true span=span />)
-        innerThen = <BlockAst stmts=one />
-    }
-    mut val arms: Array[MatchArmAst] = []
-    arms.append(<MatchArmAst pattern=pat body=innerThen span=span />)
-    arms.append(<MatchArmAst pattern=<PatternAst isWildcard=true isStruct=false typeName="" variant="" binds=[] span=span /> body=elseBlk span=span />)
-    return <StmtAst.Match scrut=scrut arms=arms span=span />
+    return buildCondChainStmt(clauses: clauses, idx: 0U64, thenBlk: thenBlk, elseBlk: elseBlk, span: <Span start=sStart end=p.prevEnd() />)
 }
 
 fn parseIfStmtAst(p: inout P) -> StmtAst {
@@ -1196,22 +1243,7 @@ fn parseIfStmtAst(p: inout P) -> StmtAst {
 // (spec/11): desugars to a value-position `match` over `expr`. `else` is mandatory in
 // value position (both branches must yield).
 fn parseIfLetExpr(p: inout P, sStart: U64) -> ExprAst {
-    val pat: PatternAst = parsePatternAst(p: inout p)
-    match p.curKind() {
-        Kind.Eq => { p.advance() }
-        _ => {}
-    }
-    val scrut: ExprAst = parseBinAst(p: inout p, minPrec: 3)
-    mut val trailing: Array[ExprAst] = []
-    while true {
-        match p.curKind() {
-            Kind.AmpAmp => {
-                p.advance()
-                trailing.append(parseBinAst(p: inout p, minPrec: 3))
-            }
-            _ => { break }
-        }
-    }
+    val clauses: Array[CondClause] = parseCondChain(p: inout p)
     val thenBlk: BlockAst = parseBlockAst(p: inout p)
     p.skipNewlines()
     match p.curKind() {
@@ -1219,25 +1251,7 @@ fn parseIfLetExpr(p: inout P, sStart: U64) -> ExprAst {
         _ => {}
     }
     val elseBlk: BlockAst = parseBlockAst(p: inout p)
-    val span: Span = <Span start=sStart end=p.prevEnd() />
-    mut val innerThen: BlockAst = thenBlk
-    if trailing.count > 0 {
-        mut val combined: ExprAst = trailing[0]
-        mut val ti: U64 = 1
-        while ti < trailing.count {
-            combined = <ExprAst.Binary op=kindCode(k: <Kind.AmpAmp />) lhs=combined rhs=trailing[ti] span=span />
-            ti += 1
-        }
-        // an inner value-position if: `give (if cond { … } else { … })`.
-        val inner: ExprAst = <ExprAst.IfExpr cond=combined thenBlk=thenBlk elseBlk=elseBlk span=span />
-        mut val one: Array[StmtAst] = []
-        one.append(<StmtAst.Give value=inner span=span />)
-        innerThen = <BlockAst stmts=one />
-    }
-    mut val arms: Array[MatchArmAst] = []
-    arms.append(<MatchArmAst pattern=pat body=innerThen span=span />)
-    arms.append(<MatchArmAst pattern=<PatternAst isWildcard=true isStruct=false typeName="" variant="" binds=[] span=span /> body=elseBlk span=span />)
-    return <ExprAst.MatchExpr scrut=scrut arms=arms span=span />
+    return buildCondChainExpr(clauses: clauses, idx: 0U64, thenBlk: thenBlk, elseBlk: elseBlk, span: <Span start=sStart end=p.prevEnd() />)
 }
 
 fn parseIfExprAst(p: inout P) -> ExprAst {
@@ -1278,51 +1292,18 @@ fn parseWhileAst(p: inout P) -> StmtAst {
     return <StmtAst.While cond=cond body=body span=<Span start=sStart end=p.prevEnd() /> />
 }
 
-// Parse a `while`-let statement `while PATTERN = expr [&& cond …] { body }` (spec/11
-// `while let`). Desugars to `while true { match expr { PATTERN => { [if cond] body }
-// _ => { break } } }`: each iteration re-evaluates `expr`; a failed match (or a false
-// trailing condition) breaks the loop.
+// Parse a `while`-let statement `while <cond-chain> { body }` (spec/11 `while let`).
+// Desugars to `while true { <chain over body / break> }`: each iteration re-evaluates
+// the chain; a failed binding (or false Bool clause) breaks the loop.
 fn parseWhileLetStmt(p: inout P, sStart: U64) -> StmtAst {
-    val pat: PatternAst = parsePatternAst(p: inout p)
-    match p.curKind() {
-        Kind.Eq => { p.advance() }
-        _ => {}
-    }
-    val scrut: ExprAst = parseBinAst(p: inout p, minPrec: 3)
-    mut val trailing: Array[ExprAst] = []
-    while true {
-        match p.curKind() {
-            Kind.AmpAmp => {
-                p.advance()
-                trailing.append(parseBinAst(p: inout p, minPrec: 3))
-            }
-            _ => { break }
-        }
-    }
+    val clauses: Array[CondClause] = parseCondChain(p: inout p)
     val body: BlockAst = parseBlockAst(p: inout p)
     val span: Span = <Span start=sStart end=p.prevEnd() />
-    // the `_` arm breaks the loop.
     mut val breakStmts: Array[StmtAst] = []
     breakStmts.append(<StmtAst.Break span=span />)
     val breakBlk: BlockAst = <BlockAst stmts=breakStmts />
-    // the matched arm: run body, but a false trailing condition also breaks.
-    mut val matchedBody: BlockAst = body
-    if trailing.count > 0 {
-        mut val combined: ExprAst = trailing[0]
-        mut val ti: U64 = 1
-        while ti < trailing.count {
-            combined = <ExprAst.Binary op=kindCode(k: <Kind.AmpAmp />) lhs=combined rhs=trailing[ti] span=span />
-            ti += 1
-        }
-        mut val one: Array[StmtAst] = []
-        one.append(<StmtAst.If cond=combined thenBlk=body elseBlk=breakBlk hasElse=true span=span />)
-        matchedBody = <BlockAst stmts=one />
-    }
-    mut val arms: Array[MatchArmAst] = []
-    arms.append(<MatchArmAst pattern=pat body=matchedBody span=span />)
-    arms.append(<MatchArmAst pattern=<PatternAst isWildcard=true isStruct=false typeName="" variant="" binds=[] span=span /> body=breakBlk span=span />)
     mut val loopStmts: Array[StmtAst] = []
-    loopStmts.append(<StmtAst.Match scrut=scrut arms=arms span=span />)
+    loopStmts.append(buildCondChainStmt(clauses: clauses, idx: 0U64, thenBlk: body, elseBlk: breakBlk, span: span))
     val trueLit: ExprAst = <ExprAst.IntLit value=1 isBool=true tySuffix="" span=span />
     return <StmtAst.While cond=trueLit body=<BlockAst stmts=loopStmts /> span=span />
 }
@@ -1623,42 +1604,13 @@ fn parseGuardStmt(p: inout P) -> StmtAst {
     val sStart: U64 = p.base + p.curTok().start
     p.advance()
     if detectRefutableBinding(p: inout p) {
-        val pat: PatternAst = parsePatternAst(p: inout p)
-        match p.curKind() {
-            Kind.Eq => { p.advance() }
-            _ => {}
-        }
-        val scrut: ExprAst = parseBinAst(p: inout p, minPrec: 3)
-        mut val trailing: Array[ExprAst] = []
-        while true {
-            match p.curKind() {
-                Kind.AmpAmp => {
-                    p.advance()
-                    trailing.append(parseBinAst(p: inout p, minPrec: 3))
-                }
-                _ => { break }
-            }
-        }
+        val clauses: Array[CondClause] = parseCondChain(p: inout p)
         val elseBody: BlockAst = parseBlockAst(p: inout p)
         p.skipNewlines()
         val cont: Array[StmtAst] = parseStmtsUntilBrace(p: inout p)
         val span: Span = <Span start=sStart end=p.prevEnd() />
-        mut val successBlk: BlockAst = <BlockAst stmts=cont />
-        if trailing.count > 0 {
-            mut val combined: ExprAst = trailing[0]
-            mut val ti: U64 = 1
-            while ti < trailing.count {
-                combined = <ExprAst.Binary op=kindCode(k: <Kind.AmpAmp />) lhs=combined rhs=trailing[ti] span=span />
-                ti += 1
-            }
-            mut val one: Array[StmtAst] = []
-            one.append(<StmtAst.If cond=combined thenBlk=<BlockAst stmts=cont /> elseBlk=elseBody hasElse=true span=span />)
-            successBlk = <BlockAst stmts=one />
-        }
-        mut val arms: Array[MatchArmAst] = []
-        arms.append(<MatchArmAst pattern=pat body=successBlk span=span />)
-        arms.append(<MatchArmAst pattern=<PatternAst isWildcard=true isStruct=false typeName="" variant="" binds=[] span=span /> body=elseBody span=span />)
-        return <StmtAst.Match scrut=scrut arms=arms span=span />
+        // the continuation is the success branch (bindings escape into it).
+        return buildCondChainStmt(clauses: clauses, idx: 0U64, thenBlk: <BlockAst stmts=cont />, elseBlk: elseBody, span: span)
     }
     val cond: ExprAst = parseExprAst(p: inout p)
     val elseBody: BlockAst = parseBlockAst(p: inout p)
