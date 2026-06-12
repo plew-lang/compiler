@@ -1024,6 +1024,26 @@ fn checkClosureArgArity(c: inout Comp, argExpr: U64, p: Param) {
             val want: U64 = c.types[p.ty].args.count
             if want > 0U64 {
                 if params.count == want - 1U64 {
+                    // each closure-literal parameter label must equal the expected
+                    // function type's label (spec/04: labels are part of a function
+                    // type's identity — no relabel coercion, to prevent a silent
+                    // argument swap). argLabels parallels args ([return, p0, p1, …]),
+                    // so the label for closure param j is argLabels[j+1]; 0 = an
+                    // unlabeled (`~:`) position, which the closure must also leave bare.
+                    val expLabels: Array[U64] = c.types[p.ty].argLabels
+                    mut val pj: U64 = 0
+                    while pj < params.count {
+                        if pj + 1U64 < expLabels.count {
+                            val expLbl: U64 = expLabels[pj + 1U64]
+                            if expLbl != 0U64 {
+                                if params[pj].nameId == expLbl {
+                                } else {
+                                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: argExpr)), msg: "closure parameter label does not match the expected function type (spec/04: a function type's labels are part of its identity — rename the closure's parameter to match)")
+                                }
+                            }
+                        }
+                        pj += 1U64
+                    }
                 } else {
                     compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: argExpr)), msg: "closure has the wrong number of parameters for the expected function type")
                 }

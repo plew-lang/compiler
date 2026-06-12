@@ -209,6 +209,9 @@ fn parseType(p: inout P) -> TypeAst {
     match head.kind {
         Kind.KwFn => {
             mut val fparams: Array[TypeAst] = []
+            // parameter labels (spec/04: labels are part of a function type's identity);
+            // "" for an unlabeled position. Captured parallel to fparams.
+            mut val flabels: Array[String] = []
             match p.curKind() {
                 Kind.LParen => { p.advance() }
                 _ => {}
@@ -223,9 +226,11 @@ fn parseType(p: inout P) -> TypeAst {
                     Kind.Comma => { p.advance() }
                     _ => {
                         // optional `label:` (or `label~:`) before the type.
+                        mut val lbl: String = ""
                         match p.curKind() {
                             Kind.Ident => {
                                 if p.peekKind(off: 1) == <Kind.Colon /> {
+                                    lbl = p.text(t: p.curTok())
                                     p.advance()
                                     p.advance()
                                 }
@@ -236,6 +241,7 @@ fn parseType(p: inout P) -> TypeAst {
                             Kind.KwInout => { p.advance() }
                             _ => {}
                         }
+                        flabels.append(lbl)
                         fparams.append(parseType(p: inout p))
                     }
                 }
@@ -250,12 +256,17 @@ fn parseType(p: inout P) -> TypeAst {
             }
             mut val fargs: Array[TypeAst] = []
             fargs.append(fret)
+            // argLabels parallel to fargs: slot 0 is the return type (no label, ""),
+            // slots 1.. carry each parameter's label.
+            mut val fargLabels: Array[String] = []
+            fargLabels.append("")
             mut val fk: U64 = 0
             while fk < fparams.count {
                 fargs.append(fparams[fk])
+                fargLabels.append(flabels[fk])
                 fk += 1
             }
-            return <TypeAst name=name args=fargs span=<Span start=sStart end=p.prevEnd() /> />
+            return <TypeAst name=name args=fargs argLabels=fargLabels span=<Span start=sStart end=p.prevEnd() /> />
         }
         _ => {}
     }

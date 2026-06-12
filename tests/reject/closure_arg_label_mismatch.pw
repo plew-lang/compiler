@@ -1,0 +1,5 @@
+// spec/04: a function type's parameter labels are part of its identity — a closure
+// literal's parameter names must match the expected type's labels exactly (no
+// relabel coercion, to prevent a silent argument swap). Here `y` != expected `x`.
+fn apply(f: fn(x: I64) -> I64) -> I64 { return f(x: 5I64) }
+fn main() { val r: I64 = apply(f: fn(y: I64) -> I64 { return y }) }

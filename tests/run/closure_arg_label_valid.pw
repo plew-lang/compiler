@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+// spec/04: a closure whose parameter labels match the expected function type is fine.
+fn apply(f: fn(x: I64) -> I64) -> I64 { return f(x: 5I64) }
+fn comb(f: fn(a: I64, b: I64) -> I64) -> I64 { return f(a: 2I64, b: 3I64) }
+fn main() {
+    print(apply(f: fn(x: I64) -> I64 { return x + 1I64 }))   // 6
+    print(comb(f: fn(a: I64, b: I64) -> I64 { return a * b }))  // 6
+}

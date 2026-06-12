@@ -1,0 +1,3 @@
+// spec/04: every label must match — here the second (`c` vs expected `b`) differs.
+fn comb(f: fn(a: I64, b: I64) -> I64) -> I64 { return f(a: 2I64, b: 3I64) }
+fn main() { val r: I64 = comb(f: fn(a: I64, c: I64) -> I64 { return a }) }
