@@ -1968,7 +1968,18 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                 }
             }
         }
-        Expr.Field(val base, val nameStart, val nameLen) => { checkBoundsExpr(c: inout c, exprId: base) }
+        Expr.Field(val base, val nameStart, val nameLen) => {
+            checkBoundsExpr(c: inout c, exprId: base)
+            // a field access on a type-parameter value is invalid: `T` is opaque and
+            // traits declare methods, not fields, so a bound cannot grant a field
+            // (spec/06). `.count`/`.bytes` etc. on a `T` value have no meaning.
+            val bt: TypeInfo = exprType(c: inout c, id: base)
+            if bt.kind == 2 {
+                if isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: bt.nameStart, len: bt.nameLen) {
+                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "field access on a type parameter: `T` is opaque (traits declare methods, not fields) — no bound can provide a field (spec/06)")
+                }
+            }
+        }
         Expr.Index(val base, val index) => {
             checkBoundsExpr(c: inout c, exprId: base)
             checkBoundsExpr(c: inout c, exprId: index)

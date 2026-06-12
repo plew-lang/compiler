@@ -1,0 +1,4 @@
+// spec/06: a field access on a type-parameter value is invalid — `T` is opaque
+// and traits declare methods, not fields, so no bound can grant `x.field`.
+fn f[T](x: T) -> I64 { return x.field }
+fn main() { }
