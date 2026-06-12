@@ -2247,8 +2247,8 @@ fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
         }
         Stmt.Panic(val msg, val offset) => { checkBoundsExpr(c: inout c, exprId: msg) }
         Stmt.Give(val value) => { checkBoundsExpr(c: inout c, exprId: value) }
-        Stmt.Break => {}
-        Stmt.Continue => {}
+        Stmt.Break(offset: _) => {}
+        Stmt.Continue(offset: _) => {}
     }
 }
 
@@ -2699,7 +2699,7 @@ fn blockHasLoopBreak(c: inout Comp, blkId: U64) -> Bool {
 
 fn stmtHasLoopBreak(c: inout Comp, stmtId: U64) -> Bool {
     match c.stmts[stmtId] {
-        Stmt.Break => { return true }
+        Stmt.Break(offset: _) => { return true }
         Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
             if blockHasLoopBreak(c: inout c, blkId: thenBlk) {
                 return true

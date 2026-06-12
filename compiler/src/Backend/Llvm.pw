@@ -9296,7 +9296,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             LLVMPositionBuilderAtEnd(st.b, endBB)
             st.terminated = false
         }
-        Stmt.Break => {
+        Stmt.Break(offset: _) => {
             if st.loopDepth > 0U64 {
                 LLVMBuildBr(st.b, st.loopBreakBB[st.loopDepth - 1U64])
                 st.terminated = true
@@ -9304,7 +9304,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                 compileErrorAt(line: 0, msg: "LLVM backend: `break` outside a loop")
             }
         }
-        Stmt.Continue => {
+        Stmt.Continue(offset: _) => {
             if st.loopDepth > 0U64 {
                 LLVMBuildBr(st.b, st.loopContBB[st.loopDepth - 1U64])
                 st.terminated = true

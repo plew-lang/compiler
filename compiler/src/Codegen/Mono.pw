@@ -1988,8 +1988,8 @@ fn scanStmtInsts(c: inout Comp, stmtId: U64) {
         }
         Stmt.Panic(val msg, val offset) => { scanExprInsts(c: inout c, exprId: msg) }
         Stmt.Give(val value) => { scanExprInsts(c: inout c, exprId: value) }
-        Stmt.Break => {}
-        Stmt.Continue => {}
+        Stmt.Break(offset: _) => {}
+        Stmt.Continue(offset: _) => {}
     }
 }
 

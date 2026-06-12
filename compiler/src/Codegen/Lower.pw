@@ -1007,8 +1007,8 @@ fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
             val v: U64 = lowerExpr(c: inout c, e: value)
             result = c.pushStmt(s: <Stmt.Give value=v />)
         }
-        StmtAst.Break(val span) => { result = c.pushStmt(s: <Stmt.Break />) }
-        StmtAst.Continue(val span) => { result = c.pushStmt(s: <Stmt.Continue />) }
+        StmtAst.Break(val span) => { result = c.pushStmt(s: <Stmt.Break offset=span.start />) }
+        StmtAst.Continue(val span) => { result = c.pushStmt(s: <Stmt.Continue offset=span.start />) }
         StmtAst.Destructure(val binds, val init, val span) => {
             // normally expanded by lowerBlock into several statements; reached only if a
             // destructuring appears outside a statement list — lower the initializer as a

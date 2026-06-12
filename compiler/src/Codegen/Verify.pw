@@ -612,7 +612,9 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             verifyExpr(c: inout c, id: cond)
             val savedBB: U64 = c.curBranchBase
             c.curBranchBase = scopeMark(c: inout c)
+            c.verifyLoopDepth = c.verifyLoopDepth + 1U64
             verifyBlock(c: inout c, blockId: body)
+            c.verifyLoopDepth = c.verifyLoopDepth - 1U64
             c.curBranchBase = savedBB
         }
         Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
@@ -687,7 +689,9 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                     }
                 }
             }
+            c.verifyLoopDepth = c.verifyLoopDepth + 1U64
             verifyBlock(c: inout c, blockId: body)
+            c.verifyLoopDepth = c.verifyLoopDepth - 1U64
             c.curBranchBase = savedForBB
             popLocals(c: inout c, mark: forMark)
         }
@@ -725,8 +729,16 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             }
             verifyExpr(c: inout c, id: value)
         }
-        Stmt.Break => {}
-        Stmt.Continue => {}
+        Stmt.Break(val offset) => {
+            if c.verifyLoopDepth == 0U64 {
+                compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "`break` outside a loop (spec/11)")
+            }
+        }
+        Stmt.Continue(val offset) => {
+            if c.verifyLoopDepth == 0U64 {
+                compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "`continue` outside a loop (spec/11)")
+            }
+        }
     }
 }
 
@@ -1040,7 +1052,12 @@ fn verifyExpr(c: inout Comp, id: U64) {
                 addLocal(c: inout c, nameStart: cp.nameStart, nameLen: cp.nameLen, tyStart: cp.tyStart, tyLen: cp.tyLen, isArray: cp.tyIsArray, ty: cp.ty, isInout: cp.isInout, isMut: false, owned: cp.isMove)
                 cpi += 1U64
             }
+            // a closure is a function boundary: `break`/`continue` inside it do not
+            // target an enclosing loop, so reset the loop depth across its body.
+            val sLoopDepth: U64 = c.verifyLoopDepth
+            c.verifyLoopDepth = 0U64
             verifyBlock(c: inout c, blockId: body)
+            c.verifyLoopDepth = sLoopDepth
             // a closure with a declared NON-unit return type must return on every path,
             // like a function (`fn()->I64 { }` is missing its return; `fn()->() { }` is
             // void and exempt). spec/04.

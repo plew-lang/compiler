@@ -290,8 +290,9 @@ enum Stmt {
     // `if`/`match` used in value position). Codegen assigns it to the active
     // result temp.
     Give(value: U64)
-    Break
-    Continue
+    // `offset` = the keyword's source offset (for the outside-a-loop diagnostic).
+    Break(offset: U64)
+    Continue(offset: U64)
 }
 
 struct Block {
@@ -856,6 +857,10 @@ struct Comp {
     // release the owned locals pushed since (the iteration's scopes); saved and
     // restored across nested loops. 0 when not inside a loop.
     pub mut val curLoopMark: U64
+    // verify-time loop nesting depth (spec/11): 0 outside any loop, incremented
+    // around a `while`/`for` body. `break`/`continue` at depth 0 is rejected by the
+    // emission-independent acceptance pass (verifyProgram), not just the backend.
+    pub mut val verifyLoopDepth: U64 = 0
     // locals high-water mark at entry to the innermost conditional/loop body. An
     // explicit `move` of a local with a smaller index (declared outside the branch)
     // would be a conditional move — unsound without flow analysis (the persisted

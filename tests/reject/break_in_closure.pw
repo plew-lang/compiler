@@ -1,0 +1,7 @@
+// spec/11: a closure is a function boundary — `break` inside it does not target an
+// enclosing loop, so this `break` (inside a closure inside a for-loop) is rejected.
+fn main() {
+    for val i in 0U64..<3U64 {
+        val f: fn() -> () = fn() { break }
+    }
+}
