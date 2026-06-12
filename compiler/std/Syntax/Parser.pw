@@ -887,6 +887,35 @@ export fn parseDecl(p: inout P) -> DeclAst {
     }
 }
 
+// Parse `assoc val NAME: T = expr` (cursor at `val`) and synthesize a zero-arg
+// `assoc fn NAME() -> T { return expr }` MemberAst (spec/05). The constant rides the
+// existing assoc-fn path; `Type.NAME` resolves to a call.
+fn parseAssocValMember(p: inout P) -> MemberAst {
+    val vStart: U64 = p.base + p.curTok().start
+    p.advance()
+    val nameTok: Tok = p.curTok()
+    val name: String = p.text(t: nameTok)
+    val nameSpan: Span = p.spanOf(t: nameTok)
+    p.advance()
+    mut val ty: TypeAst = emptyTypeAst()
+    match p.curKind() {
+        Kind.Colon => {
+            p.advance()
+            ty = parseType(p: inout p)
+        }
+        _ => {}
+    }
+    match p.curKind() {
+        Kind.Eq => { p.advance() }
+        _ => {}
+    }
+    val init: ExprAst = parseExprAst(p: inout p)
+    mut val stmts: Array[StmtAst] = []
+    stmts.append(<StmtAst.Return value=init hasValue=true span=<Span start=vStart end=p.prevEnd() /> />)
+    val body: BlockAst = <BlockAst stmts=stmts />
+    return <MemberAst kind=<MemberKind.AssocFn /> name=name nameSpan=nameSpan typeParams=[] params=[] hasRet=true ret=ty whereParams=[] whereTraits=[] isAsync=false selfInout=false selfMove=false isVia=false viaName="" body=body assocTy=emptyTypeAst() />
+}
+
 // Parse a method/assoc-fn member after its mode keyword(s) and `fn` are consumed
 // (cursor at the method name): `name[T,...](params) [-> Ret] [where ...]
 // (via real | { body })`. `kind`/`selfInout`/`selfMove`/`isAsync` come from the
@@ -1048,10 +1077,20 @@ export fn parseImplDecl(p: inout P, isPub: Bool, extName: String = "") -> ImplAs
                 if curIs(p: inout p, kw: "assoc") {
                     p.advance()
                     match p.curKind() {
-                        Kind.KwFn => { p.advance() }
-                        _ => {}
+                        Kind.KwVal => {
+                            // `assoc val NAME: T = expr` (spec/05): a per-type constant.
+                            // Desugar to a zero-arg `assoc fn NAME() -> T { return expr }`
+                            // so it rides the existing assoc-fn machinery (`Type.NAME`).
+                            members.append(parseAssocValMember(p: inout p))
+                        }
+                        _ => {
+                            match p.curKind() {
+                                Kind.KwFn => { p.advance() }
+                                _ => {}
+                            }
+                            members.append(parseMethodAfterFn(p: inout p, kind: <MemberKind.AssocFn />, selfInout: false, selfMove: false, isAsync: false))
+                        }
                     }
-                    members.append(parseMethodAfterFn(p: inout p, kind: <MemberKind.AssocFn />, selfInout: false, selfMove: false, isAsync: false))
                 } else {
                     if curIs(p: inout p, kw: "type") {
                         p.advance()

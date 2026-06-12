@@ -1,0 +1,25 @@
+// assoc val (spec/05): a per-type constant `Type.NAME`, desugared to a zero-arg
+// `assoc fn`. Read as `Type.NAME` (no parens), usable in expressions.
+import @Std/Io with { print }
+
+struct Circle { pub val r: I64 }
+pub impl Circle {
+    assoc val unitRadius: I64 = 1
+    assoc val name: String = "circle"
+    assoc fn make(r~: I64) -> Circle { return <Circle r=r /> }
+}
+
+enum Color { Red Green Blue }
+impl Color {
+    assoc val count: I64 = 3
+}
+
+fn main() {
+    print(Circle.unitRadius)
+    print(Circle.name)
+    print(Color.count)
+    val c: Circle = Circle.make(5)
+    print(c.r)
+    // assoc vals compose in expressions like any value.
+    print(Circle.unitRadius + Color.count)
+}
