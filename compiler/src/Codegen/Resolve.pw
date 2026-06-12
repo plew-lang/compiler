@@ -1280,7 +1280,18 @@ fn optChainResultRef(c: inout Comp, base: U64, memberStart: U64, memberLen: U64)
 }
 
 fn fieldType(c: inout Comp, structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
-    val qStruct: U64 = intern(c: inout c, start: structStart, len: structLen)
+    mut val qStruct: U64 = intern(c: inout c, start: structStart, len: structLen)
+    // a newtype inherits the underlying struct's fields (spec/10): resolve to the
+    // underlying so `<Brand code=… />` / `brand.code` finds Rgb's `code` (Brand = Rgb).
+    mut val ntI: U64 = 0
+    while ntI < c.newtypes.count {
+        if c.newtypes[ntI].nameId == qStruct {
+            qStruct = intern(c: inout c, start: c.newtypes[ntI].underStart, len: c.newtypes[ntI].underLen)
+            ntI = c.newtypes.count
+        } else {
+            ntI += 1
+        }
+    }
     val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
     mut val si: U64 = 0
     while si < c.structs.count {

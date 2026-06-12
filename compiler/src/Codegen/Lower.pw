@@ -376,7 +376,19 @@ fn lowerMethodArgs(c: inout Comp, args: Array[ArgAst], methodName: String) -> Ar
 // context type so an otherwise un-inferable dict / record / unit literal resolves.
 fn makeFieldType(c: inout Comp, typeName: String, variant: String, isEnum: Bool, fieldName: String) -> U64 {
     val tn: Bind = internBytes(c: inout c, s: typeName)
-    val tid: U64 = intern(c: inout c, start: tn.nameStart, len: tn.nameLen)
+    mut val tid: U64 = intern(c: inout c, start: tn.nameStart, len: tn.nameLen)
+    // a newtype inherits the underlying struct's factory/fields (spec/10): resolve the
+    // construction type name to the underlying struct so `<Brand code=255 />` finds the
+    // `code` field's type for the literal's context (Brand = Rgb).
+    mut val ntI: U64 = 0
+    while ntI < c.newtypes.count {
+        if c.newtypes[ntI].nameId == tid {
+            tid = intern(c: inout c, start: c.newtypes[ntI].underStart, len: c.newtypes[ntI].underLen)
+            ntI = c.newtypes.count
+        } else {
+            ntI += 1
+        }
+    }
     val fn2: Bind = internBytes(c: inout c, s: fieldName)
     val fid: U64 = intern(c: inout c, start: fn2.nameStart, len: fn2.nameLen)
     if isEnum {

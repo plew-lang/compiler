@@ -3649,7 +3649,17 @@ fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, v
             return v
         }
     }
-    val reg: U64 = structRegSlot(c: inout c, st: inout st, start: typeStart, len: typeLen)
+    // a newtype over a struct inherits its factory (spec/10): `<Brand code=… />`
+    // builds the underlying Rgb struct (identical representation). Resolve the
+    // construction name to the underlying before the registered-struct lookup.
+    mut val rtStart: U64 = typeStart
+    mut val rtLen: U64 = typeLen
+    val ntn: Bind = newtypeUnderName(c: inout c, start: typeStart, len: typeLen)
+    if ntn.nameStart != typeStart || ntn.nameLen != typeLen {
+        rtStart = ntn.nameStart
+        rtLen = ntn.nameLen
+    }
+    val reg: U64 = structRegSlot(c: inout c, st: inout st, start: rtStart, len: rtLen)
     if reg < st.structIdxs.count {
     } else {
         compileErrorAt(line: lineOf(c: inout c, offset: typeStart), msg: "LLVM backend: construction of this type not yet supported (Ref / nested-struct structs are TODO)")

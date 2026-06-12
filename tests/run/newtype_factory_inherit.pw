@@ -1,0 +1,24 @@
+// A `newtype` inherits the underlying struct's (default memberwise) factory
+// (spec/10: "factory は暗黙的に Self を返すため newtype は元の型の factory も継承").
+// So `<Brand code=255 />` constructs directly through the inherited factory — the
+// literal gets its type from the underlying's field (`code: I32`), the backend builds
+// the underlying struct's value (identical representation), and the result is a Brand.
+import @Std/Io with { print }
+
+struct Rgb { pub val code: I32  pub val alpha: I32 }
+pub impl Rgb { factory }
+
+newtype Brand = Rgb
+
+fn main() {
+    // direct construction via the inherited factory (no explicit `as`).
+    val b: Brand = <Brand code=255 alpha=128 />
+    print(b.code)             // 255  (inherited field access on the constructed Brand)
+    print(b.alpha)            // 128
+    // the unwrap re-tag recovers the underlying struct.
+    val r: Rgb = b as Rgb
+    print(r.code)             // 255
+    // the equivalent construct-then-retag form is unchanged.
+    val b2: Brand = <Rgb code=7 alpha=9 /> as Brand
+    print(b2.code)            // 7
+}
