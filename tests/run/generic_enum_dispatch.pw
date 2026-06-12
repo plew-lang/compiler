@@ -30,4 +30,7 @@ fn main() {
     print(useTrait(x: c))   // 20 (generic-param-grounded-to-enum trait dispatch)
     val b: Color = <Color.Blue />
     print(useTrait(x: b))   // 30
+    // an INLINE enum literal arg: `T` infers from the construction (llvmArgTypeRef
+    // now types a Make node) rather than failing the dispatch.
+    print(useTrait(x: <Color.Red />))   // 10
 }

@@ -7198,6 +7198,17 @@ fn llvmArgTypeRef(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> U64 {
             }
             return c.pushType(t: <TypeRef nameStart=fnB.nameStart nameLen=fnB.nameLen args=fargs />)
         }
+        Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, isEnum: _, val ty, fields: _) => {
+            // an inline construction argument (`f(x: <Color.Blue/>)` / `<Point x=1/>`):
+            // its type is the constructed type, so a generic call infers `T` from it
+            // (exprTypeRef has no Make case — a Make arg would otherwise infer to 0 and
+            // miss the registered instance). Prefer the annotated ref (carries generic
+            // args), else the bare type name.
+            if ty != 0U64 {
+                return ty
+            }
+            return findOrAddTypeRef(c: inout c, nameStart: typeStart, nameLen: typeLen)
+        }
         _ => {}
     }
     val tr: U64 = exprTypeRef(c: inout c, st: inout st, id: argExpr)
