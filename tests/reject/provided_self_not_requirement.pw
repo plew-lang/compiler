@@ -1,0 +1,6 @@
+// spec/08: in a trait provided-method, `self` (Self) can only use the trait's
+// requirements / provided methods / supertrait members — `self.notAReq()` is
+// undefined on Self.
+trait Greet { fn name() -> String }
+pub impl Greet { fn bad() -> String { return self.notAReq() } }
+fn main() { }

@@ -1705,6 +1705,23 @@ fn checkMethodBounds(c: inout Comp) {
 // (escaping C++-template ergonomics). Associated types are deferred, so chained
 // calls whose receiver type is a type parameter's result degrade to unchecked.
 
+// Whether (start,len) names the abstract Self type of the trait provided-method
+// currently being checked (`c.curCheckFn`) — i.e. it is a `self`-typed value in a
+// `pub impl Trait { fn ... }` body, where Self's only members are the trait's
+// requirements (and provided methods / supertraits). Returns the trait's name id
+// via the receiver, so the capability check uses traitProvidesMember.
+fn isSelfTypeInProvided(c: inout Comp, start: U64, len: U64) -> Bool {
+    if c.curCheckFn >= c.funcs.count {
+        return false
+    }
+    val f: Func = c.funcs[c.curCheckFn]
+    if methodRecvIsTrait(c: inout c, f: f) {
+    } else {
+        return false
+    }
+    return spansEqual(c: inout c, aStart: start, aLen: len, bStart: f.recvStart, bLen: f.recvLen)
+}
+
 // Whether (start,len) is a type parameter of function `fnIdx`.
 fn isTypeParamOf(c: inout Comp, fnIdx: U64, start: U64, len: U64) -> Bool {
     if fnIdx >= c.funcs.count {
@@ -1952,6 +1969,17 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
                     }
                 } else {
+                    if isSelfTypeInProvided(c: inout c, start: rt.nameStart, len: rt.nameLen) {
+                        // a method call on `self` (Self) in a trait provided-method: Self's
+                        // members are only the trait's requirements / provided methods /
+                        // supertrait members (spec/08). Anything else is undefined on Self.
+                        val qm: U64 = intern(c: inout c, start: nameStart, len: nameLen)
+                        val selfTraitId: U64 = intern(c: inout c, start: c.funcs[c.curCheckFn].recvStart, len: c.funcs[c.curCheckFn].recvLen)
+                        if traitProvidesMember(c: inout c, traitNameId: selfTraitId, qName: qm, args: args, depth: 0U64) {
+                        } else {
+                            compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "method not provided by this trait: a provided method's `self` (Self) can only use the trait's requirements / provided methods / supertrait members (spec/08)")
+                        }
+                    } else {
                     // a CONCRETE-receiver method: a `T` value passed to a concrete-typed
                     // parameter is a type error (`s.set(x: a)` where a: T, x: I64). A
                     // generic-receiver method's grounded param types are handled by the
@@ -1972,6 +2000,7 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                                 mk += 1
                             }
                         }
+                    }
                     }
                 }
             }
