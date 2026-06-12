@@ -1872,6 +1872,16 @@ fn typeConformsTo(c: inout Comp, typeStart: U64, typeLen: U64, traitStart: U64, 
         }
         i += 1
     }
+    // a `newtype` inherits the underlying type's trait conformances automatically
+    // (spec/10), so `UserId = String` satisfies `where T: Format` because String
+    // does — `print(u)` type-checks and dispatches to the underlying's witness.
+    mut val ni: U64 = 0
+    while ni < c.newtypes.count {
+        if c.newtypes[ni].nameId == qType {
+            return typeConformsTo(c: inout c, typeStart: c.newtypes[ni].underStart, typeLen: c.newtypes[ni].underLen, traitStart: traitStart, traitLen: traitLen)
+        }
+        ni += 1
+    }
     return false
 }
 

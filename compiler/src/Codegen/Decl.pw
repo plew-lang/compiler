@@ -122,6 +122,18 @@ fn conformExists(c: inout Comp, typeId: U64, traitId: U64) -> Bool {
         }
         i += 1
     }
+    // a `newtype` inherits the underlying type's trait conformances automatically
+    // (spec/10: methods, conformances, operators, factories). So `UserId = String`
+    // satisfies `where T: Format` because String does — `print(u)` type-checks and
+    // dispatches to String's witness (the newtype shares String's representation).
+    mut val ni: U64 = 0
+    while ni < c.newtypes.count {
+        if c.newtypes[ni].nameId == typeId {
+            val underId: U64 = intern(c: inout c, start: c.newtypes[ni].underStart, len: c.newtypes[ni].underLen)
+            return conformExists(c: inout c, typeId: underId, traitId: traitId)
+        }
+        ni += 1
+    }
     return false
 }
 

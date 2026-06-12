@@ -1,0 +1,11 @@
+// Conformance inheritance is not a free pass: a `newtype` satisfies `where T: Trait`
+// ONLY when its underlying actually conforms (spec/10). Here `Plain` does not conform
+// to `Special`, so neither does `Wrapped` — the bound must be rejected.
+trait Special { fn mark() -> I64 }
+fn needs[T](x: T) -> I64 where T: Special { return x.mark() }
+struct Plain { pub val v: I64 }
+newtype Wrapped = Plain
+fn main() {
+    val w: Wrapped = <Plain v=1 /> as Wrapped
+    val r: I64 = needs(x: w)
+}
