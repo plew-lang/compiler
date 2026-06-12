@@ -36,4 +36,8 @@ fn main() {
         Result.Ok(value: val rec) => { print(rec.value) }   // 2
         Result.Err(error: val e) => { print(e) }
     }
+    // chained field access on an enum-method-result record (`o.unwrapOr(...).index`):
+    // the method result resolves to the record struct through the receiver's env.
+    val dflt: (index: U64, value: I64) = (index: 0U64, value: 0I64)
+    print(o.unwrapOr(fallback: dflt).index)    // 9
 }

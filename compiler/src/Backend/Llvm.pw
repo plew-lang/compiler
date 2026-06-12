@@ -1715,6 +1715,37 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                             return localStructIdxFor(c: inout c, st: inout st, start: c.funcs[mfi].retStart, len: c.funcs[mfi].retLen)
                         }
                     }
+                } else {
+                    // an enum-receiver method result (`Optional[(…)].unwrapOr() -> the
+                    // record payload`): exprStructIdx doesn't see enums, so resolve via the
+                    // receiver's instance ref and ground the method's return under it.
+                    val mrRef: U64 = exprTypeRef(c: inout c, st: inout st, id: mrecv)
+                    if mrRef != 0U64 {
+                        val rt: TypeRef = c.types[mrRef]
+                        val emfi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
+                        if emfi < c.funcs.count {
+                            if c.funcs[emfi].hasRet {
+                                if c.funcs[emfi].retTy != 0U64 {
+                                    val savedP: Array[Bind] = c.curTypeParams
+                                    val savedA: Array[U64] = c.curTypeArgs
+                                    mut val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: mrRef)
+                                    if didSet {
+                                    } else {
+                                        didSet = setEnumEnv(c: inout c, st: inout st, ref: mrRef)
+                                    }
+                                    val g: U64 = groundTypeRef(c: inout c, ref: c.funcs[emfi].retTy)
+                                    if didSet {
+                                        c.curTypeParams = savedP
+                                        c.curTypeArgs = savedA
+                                    }
+                                    if g != 0U64 {
+                                        val gt: TypeRef = c.types[g]
+                                        return localStructIdxFor(c: inout c, st: inout st, start: gt.nameStart, len: gt.nameLen)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
