@@ -879,9 +879,18 @@ fn parsePatternAst(p: inout P) -> PatternAst {
                                 // `field: _` discard — record it (empty bind name) so the
                                 // completeness check sees the field as covered without
                                 // creating a local for it (struct/variant destructure must
-                                // bind OR discard every field — spec/05,11).
-                                binds.append(<BindAst field=fname name="" span=<Span start=bStart end=p.prevEnd() /> />)
-                                p.advance()
+                                // bind OR discard every field — spec/05,11). Anything other
+                                // than `_` here (a nested pattern `field: Point(...)`) is a
+                                // clean error: Plew patterns are single-level — bind the
+                                // field then `match` on the binding (spec/11).
+                                val dTok: Tok = p.curTok()
+                                if rangeEquals(bytes: p.bytes, start: dTok.start, len: dTok.len, kw: "_") {
+                                    binds.append(<BindAst field=fname name="" span=<Span start=bStart end=p.prevEnd() /> />)
+                                    p.advance()
+                                } else {
+                                    p.fail(off: p.base + dTok.start, msg: "a pattern field binds with `val name` or discards with `_`; patterns are single-level — to match a nested structure, bind the field then `match` on the binding (spec/11)")
+                                    p.advance()
+                                }
                             }
                         }
                         match p.curKind() {

@@ -1,0 +1,16 @@
+// spec/11: Plew patterns are single-level — a destructure field binds with `val name`
+// or discards with `_`, never a nested sub-pattern. Refinement is done by binding the
+// field then `match`-ing on the binding (this keeps exhaustiveness purely structural).
+// `Shape.Dot(p: Point(x: val px, y: val py))` opens `p` into a nested pattern — rejected.
+import @Std/Io with { print }
+
+struct Point { pub val x: I64  pub val y: I64 }
+enum Shape { Dot(p: Point)  Empty }
+
+fn main() {
+    val s: Shape = <Shape.Dot p=<Point x=3 y=4 /> />
+    match s {
+        Shape.Dot(p: Point(x: val px, y: val py)) => { print(px + py) }
+        Shape.Empty => { print(0) }
+    }
+}
