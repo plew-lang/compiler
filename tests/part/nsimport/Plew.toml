@@ -1,0 +1,2 @@
+# Package manifest: its location marks the package root; `/` resolves from src/.
+name = "nsimport"

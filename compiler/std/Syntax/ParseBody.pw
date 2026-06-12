@@ -620,7 +620,7 @@ fn parsePostfixAst(p: inout P) -> ExprAst {
                     Kind.LParen => {
                         p.advance()
                         val args: Array[ArgAst] = parseCallArgsAst(p: inout p)
-                        e = <ExprAst.Method recv=e name=nm args=args span=<Span start=sStart end=p.prevEnd() /> />
+                        e = <ExprAst.Method recv=e name=nm nameSpan=p.spanOf(t: nameTok) args=args span=<Span start=sStart end=p.prevEnd() /> />
                     }
                     _ => {
                         e = <ExprAst.Field base=e name=nm span=<Span start=sStart end=p.prevEnd() /> />

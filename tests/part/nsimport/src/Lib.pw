@@ -1,0 +1,2 @@
+export fn twice(n~: I64) -> I64 { return n + n }
+export fn greeting() -> String { return "hi from Lib" }

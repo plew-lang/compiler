@@ -664,11 +664,30 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
             val nm: Bind = internBytes(c: inout c, s: name)
             result = c.pushExpr(e: <Expr.Field base=b nameStart=nm.nameStart nameLen=nm.nameLen />)
         }
-        ExprAst.Method(val recv, val name, val args, val span) => {
-            val r: U64 = lowerExpr(c: inout c, e: recv)
-            val a: Array[Arg] = lowerMethodArgs(c: inout c, args: args, methodName: name)
-            val nm: Bind = internBytes(c: inout c, s: name)
-            result = c.pushExpr(e: <Expr.Method recv=r nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
+        ExprAst.Method(val recv, val name, val nameSpan, val args, val span) => {
+            // a namespace call `Io.print(args)` (spec/15): the receiver is a namespace
+            // bound by a `with`-less import. Lower to a bare free-function call using the
+            // method name's ORIGINAL offset (feeds moduleOf) and record the import (so
+            // the same export/visibility checks as `import … with { print }` apply).
+            mut val isNsCall: Bool = false
+            match recv {
+                ExprAst.Ident(name: val rname, span: _) => {
+                    if isNamespaceName(c: inout c, name: rname) {
+                        isNsCall = true
+                    }
+                }
+                _ => {}
+            }
+            if isNsCall {
+                val a: Array[Arg] = lowerArgs(c: inout c, args: args, fnName: name)
+                markImport(c: inout c, segStart: nameSpan.start, segLen: name.bytes.count, nameStart: nameSpan.start, nameLen: name.bytes.count)
+                result = c.pushExpr(e: <Expr.Call nameStart=nameSpan.start nameLen=name.bytes.count args=a />)
+            } else {
+                val r: U64 = lowerExpr(c: inout c, e: recv)
+                val a: Array[Arg] = lowerMethodArgs(c: inout c, args: args, methodName: name)
+                val nm: Bind = internBytes(c: inout c, s: name)
+                result = c.pushExpr(e: <Expr.Method recv=r nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
+            }
         }
         ExprAst.ExtMethod(val recv, val src, val name, val args, val span) => {
             val r: U64 = lowerExpr(c: inout c, e: recv)
@@ -1792,12 +1811,34 @@ fn lowerDecl(c: inout Comp, d: DeclAst) {
 // in c.imports (its ORIGINAL offset feeds moduleOf for the importing module). The
 // path itself is consumed by the loader to find files; nothing else is recorded.
 fn lowerImport(c: inout Comp, imp: ImportAst) {
+    // a `with`-less import (`import @Std/Io`) binds the last path segment as a
+    // namespace; `Io.print(args)` then resolves to `print` from that module (spec/15).
+    if imp.isImport {
+        if imp.names.count == 0 {
+            if imp.segSpan.end > imp.segSpan.start {
+                c.namespaces.append(value: <Bind nameStart=imp.segSpan.start nameLen=imp.segSpan.end - imp.segSpan.start fieldStart=0 fieldLen=0 />)
+            }
+        }
+    }
     mut val i: U64 = 0
     while i < imp.names.count {
         val nspan: Span = imp.nameSpans[i]
         markImport(c: inout c, segStart: imp.segSpan.start, segLen: imp.segSpan.end - imp.segSpan.start, nameStart: nspan.start, nameLen: nspan.end - nspan.start)
         i += 1
     }
+}
+
+// True if `name` (a bare identifier) was bound as a namespace by a `with`-less import.
+fn isNamespaceName(c: inout Comp, name: String) -> Bool {
+    val nb: Bind = internBytes(c: inout c, s: name)
+    mut val i: U64 = 0
+    while i < c.namespaces.count {
+        if spansEqual(c: inout c, aStart: c.namespaces[i].nameStart, aLen: c.namespaces[i].nameLen, bStart: nb.nameStart, bLen: nb.nameLen) {
+            return true
+        }
+        i += 1
+    }
+    return false
 }
 
 // Lower a `@[...]` directive (spec/16): each derive request becomes a pendingDerive

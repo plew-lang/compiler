@@ -1,0 +1,9 @@
+// namespace import of a std module (spec/15): `import @Std/Io` binds `Io`, and
+// `Io.print(...)` / `Io.write(...)` resolve to the exported functions.
+import @Std/Io
+
+fn main() {
+    val n: I64 = 99
+    Io.print(n)
+    Io.write(s: "done\n")
+}

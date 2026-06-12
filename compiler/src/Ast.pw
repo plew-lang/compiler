@@ -681,6 +681,10 @@ struct Comp {
     pub mut val funcs: Array[Func]
     pub mut val structs: Array[StructDef]
     pub mut val enums: Array[EnumDef]
+    // namespace imports (spec/15): a `import @Std/Io` (no `with`) binds the last path
+    // segment (`Io`) as a namespace, so `Io.print(args)` resolves to `print` from that
+    // module. Each Bind holds the segment's name span (nameStart/nameLen).
+    pub mut val namespaces: Array[Bind] = []
     // module-level variables (spec/15), in lowering order (= initialization order).
     pub mut val globals: Array[Global] = []
     // `newtype Name = Underlying` declarations (spec/10): a distinct type with the
