@@ -1,0 +1,4 @@
+// spec/06: in a generic body a type parameter is a distinct opaque type — returning
+// a `T` value from a `-> I64` function is a type error at the definition (T is not I64).
+fn f[T](a: T) -> I64 { return a }
+fn main() { }

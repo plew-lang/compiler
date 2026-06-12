@@ -1974,10 +1974,42 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
     }
 }
 
+// In a generic body, the value's type must match `expectedRef` under the abstract
+// rules (typesCompatible is strict on `curCheckFn`'s type parameters): a `T` value
+// flowing into a concrete (or different-parameter) position is rejected at the
+// DEFINITION (`return a` from `-> I64`, `val y: I64 = a`). spec/06.
+fn checkGenericTypeMatch(c: inout Comp, expectedRef: U64, valueExpr: U64) {
+    if expectedRef == 0U64 {
+        return
+    }
+    if c.curCheckFn >= c.funcs.count {
+        return
+    }
+    // only the USER's (entry-module) generic bodies are judged; std/prelude is
+    // trusted and validated separately (its array-element inferType quirks — e.g.
+    // `Array.get` reporting the result as `Array` not the element `T` — would
+    // false-positive here). Mirrors verifyProgram's entry-module gate.
+    if methodInEntryModule(c: inout c, f: c.funcs[c.curCheckFn]) {
+    } else {
+        return
+    }
+    val inferred: U64 = inferType(c: inout c, id: valueExpr)
+    if typesCompatible(c: inout c, expected: expectedRef, inferred: inferred) {
+    } else {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueExpr)), msg: "type mismatch in a generic body: a type parameter is a distinct opaque type, not the type required here (spec/06)")
+    }
+}
+
 fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
     match c.stmts[stmtId] {
         Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
             checkBoundsExpr(c: inout c, exprId: init)
+            if tyLen > 0U64 {
+                if tyIsArray {
+                } else {
+                    checkGenericTypeMatch(c: inout c, expectedRef: ty, valueExpr: init)
+                }
+            }
             addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
         }
         Stmt.Assign(val op, val target, val value) => {
@@ -1988,6 +2020,9 @@ fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
         Stmt.Return(val value, val hasValue) => {
             if hasValue {
                 checkBoundsExpr(c: inout c, exprId: value)
+                if c.curCheckFn < c.funcs.count {
+                    checkGenericTypeMatch(c: inout c, expectedRef: c.funcs[c.curCheckFn].retTy, valueExpr: value)
+                }
             }
         }
         Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {

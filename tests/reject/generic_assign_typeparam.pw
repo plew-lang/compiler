@@ -1,0 +1,6 @@
+// spec/06: `val y: I64 = a` where a: T is a type error — T is not I64.
+fn f[T](a: T) -> I64 {
+    val y: I64 = a
+    return y
+}
+fn main() { }

@@ -112,6 +112,22 @@ fn typesCompatible(c: inout Comp, expected: U64, inferred: U64) -> Bool {
         }
         return false
     }
+    // generic-body abstract check (spec/06): a type parameter of the function being
+    // checked (`c.curCheckFn`) is an opaque DISTINCT type — compatible only with the
+    // SAME type parameter, never with a concrete type or a different parameter. Active
+    // only while checking a generic template body (curCheckFn valid); elsewhere
+    // isTypeParamOf is false, so non-generic / per-instance checks stay lenient.
+    val eTp: Bool = isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: te.nameStart, len: te.nameLen)
+    val iTp: Bool = isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: tin.nameStart, len: tin.nameLen)
+    if eTp {
+        if iTp {
+            return spansEqual(c: inout c, aStart: te.nameStart, aLen: te.nameLen, bStart: tin.nameStart, bLen: tin.nameLen)
+        }
+        return false
+    }
+    if iTp {
+        return false
+    }
     val eId: U64 = knownNamedTypeId(c: inout c, start: te.nameStart, len: te.nameLen)
     val iId: U64 = knownNamedTypeId(c: inout c, start: tin.nameStart, len: tin.nameLen)
     if eId == 0U64 || iId == 0U64 {

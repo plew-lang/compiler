@@ -1,0 +1,4 @@
+// spec/06: returning a value of a DIFFERENT type parameter (`U`) where `T` is
+// required is a type error — T and U are distinct opaque types.
+fn f[T, U](a: T, b: U) -> T { return b }
+fn main() { }
