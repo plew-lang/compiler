@@ -1620,10 +1620,51 @@ fn parseStmtsUntilBrace(p: inout P) -> Array[StmtAst] {
     return stmts
 }
 
+// Whether a block unconditionally diverges (its last statement transfers control out:
+// return / panic / break / continue, or an if/match all of whose branches diverge).
+// Used to enforce that a `guard` else block diverges (spec/11). A structural, AST-level
+// check (the guard's "marker" is lost once it desugars to if/match).
+fn blockDivergesAst(b: BlockAst) -> Bool {
+    if b.stmts.count == 0U64 {
+        return false
+    }
+    return stmtDivergesAst(s: b.stmts[b.stmts.count - 1U64])
+}
+
+fn stmtDivergesAst(s: StmtAst) -> Bool {
+    match s {
+        StmtAst.Return(value: _, hasValue: _, span: _) => { return true }
+        StmtAst.Panic(msg: _, span: _) => { return true }
+        StmtAst.Break(span: _) => { return true }
+        StmtAst.Continue(span: _) => { return true }
+        StmtAst.If(cond: _, val thenBlk, val elseBlk, val hasElse, span: _) => {
+            if hasElse {
+                if blockDivergesAst(b: thenBlk) {
+                    return blockDivergesAst(b: elseBlk)
+                }
+            }
+            return false
+        }
+        StmtAst.Match(scrut: _, val arms, span: _) => {
+            mut val i: U64 = 0
+            while i < arms.count {
+                if blockDivergesAst(b: arms[i].body) {
+                } else {
+                    return false
+                }
+                i += 1
+            }
+            return arms.count > 0U64
+        }
+        _ => { return false }
+    }
+}
+
 // Parse a `guard` statement (spec/11): `guard <cond-chain> { elseBody } <rest>`. The
-// elseBody runs when the condition FAILS (and conventionally diverges); the `<rest>`
-// of the enclosing block runs (with any bindings in scope) only on success. Desugars
-// by wrapping the rest in the success branch — so bindings naturally escape to it:
+// elseBody runs when the condition FAILS and MUST diverge (return / break / continue /
+// panic — spec/11); the `<rest>` of the enclosing block runs (with any bindings in
+// scope) only on success. Desugars by wrapping the rest in the success branch — so
+// bindings naturally escape to it:
 //   guard cond { e } rest       -> if cond { rest } else { e }
 //   guard P = expr { e } rest   -> match expr { P => { rest }  _ => { e } }
 // (Trailing `&& cond` clauses gate the success branch.)
@@ -1632,7 +1673,9 @@ fn parseGuardStmt(p: inout P) -> StmtAst {
     p.advance()
     if condChainHasBinding(p: inout p) {
         val clauses: Array[CondClause] = parseCondChain(p: inout p)
+        val elseOff: U64 = p.base + p.curTok().start
         val elseBody: BlockAst = parseBlockAst(p: inout p)
+        checkGuardElseDiverges(p: inout p, elseBody: elseBody, off: elseOff)
         p.skipNewlines()
         val cont: Array[StmtAst] = parseStmtsUntilBrace(p: inout p)
         val span: Span = <Span start=sStart end=p.prevEnd() />
@@ -1640,11 +1683,21 @@ fn parseGuardStmt(p: inout P) -> StmtAst {
         return buildCondChainStmt(clauses: clauses, idx: 0U64, thenBlk: <BlockAst stmts=cont />, elseBlk: elseBody, span: span)
     }
     val cond: ExprAst = parseExprAst(p: inout p)
+    val elseOff: U64 = p.base + p.curTok().start
     val elseBody: BlockAst = parseBlockAst(p: inout p)
+    checkGuardElseDiverges(p: inout p, elseBody: elseBody, off: elseOff)
     p.skipNewlines()
     val cont: Array[StmtAst] = parseStmtsUntilBrace(p: inout p)
     val span: Span = <Span start=sStart end=p.prevEnd() />
     return <StmtAst.If cond=cond thenBlk=<BlockAst stmts=cont /> elseBlk=elseBody hasElse=true span=span />
+}
+
+// Loud error if a `guard` else block can fall through (spec/11: it must diverge).
+fn checkGuardElseDiverges(p: inout P, elseBody: BlockAst, off: U64) {
+    if blockDivergesAst(b: elseBody) {
+    } else {
+        p.fail(off: off, msg: "`guard` else block must diverge (end in return / break / continue / panic) — spec/11")
+    }
 }
 
 export fn parseBlockAst(p: inout P) -> BlockAst {
