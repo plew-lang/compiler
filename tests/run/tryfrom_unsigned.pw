@@ -1,0 +1,20 @@
+// Unsigned integer narrowing via TryFrom (spec/12): `<U8.convert from=wide/>` ->
+// `Result[U8, RangeError]` for U8/U16/U32 from U64. Unsigned has no floor check, only
+// the upper bound. Exercises the `truncU16`/`truncU32` narrowing intrinsics.
+import @Std/Io with { print }
+import @Std/Core with { RangeError }
+
+fn main() {
+    val a: Result[U8, RangeError] = <U8.convert from=200U64 />
+    print(a.unwrapOr(fallback: 0U8))       // 200 (in range, printed unsigned)
+    val b: Result[U8, RangeError] = <U8.convert from=300U64 />
+    print(b.isErr())                        // 1
+    val c: Result[U16, RangeError] = <U16.convert from=60000U64 />
+    print(c.unwrapOr(fallback: 0U16))      // 60000
+    val d: Result[U16, RangeError] = <U16.convert from=70000U64 />
+    print(d.isErr())                        // 1
+    val e: Result[U32, RangeError] = <U32.convert from=4000000000U64 />
+    print(e.unwrapOr(fallback: 0U32))      // 4000000000
+    val f: Result[U32, RangeError] = <U32.convert from=5000000000U64 />
+    print(f.isErr())                        // 1
+}

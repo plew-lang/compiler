@@ -380,6 +380,8 @@ export extern "plew-intrinsic" {
     fn truncI8(n: I64) -> I8
     fn truncI16(n: I64) -> I16
     fn truncI32(n: I64) -> I32
+    fn truncU16(n: U64) -> U16
+    fn truncU32(n: U64) -> U32
 }
 
 // String methods, written in pure Plew over the exposed `bytes` view (spec/02:
@@ -582,6 +584,37 @@ pub impl I32 as TryFrom[I64] {
             return <Result[I32, RangeError].Err error=<RangeError value=from /> />
         }
         return <Result[I32, RangeError].Ok value=truncI32(n: from) />
+    }
+}
+// Unsigned narrowing from U64 (spec/12): no floor check (unsigned), only the upper
+// bound. `RangeError.value` is signed; the offending magnitude fits when it overflows
+// the narrower type but here it can exceed I64.max only for values above 2^63 — those
+// still report (the field wraps via the same two's-complement bits).
+pub impl U8 as TryFrom[U64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: U64) {
+        if from > 255U64 {
+            return <Result[U8, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        return <Result[U8, RangeError].Ok value=truncU8(n: from) />
+    }
+}
+pub impl U16 as TryFrom[U64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: U64) {
+        if from > 65535U64 {
+            return <Result[U16, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        return <Result[U16, RangeError].Ok value=truncU16(n: from) />
+    }
+}
+pub impl U32 as TryFrom[U64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: U64) {
+        if from > 4294967295U64 {
+            return <Result[U32, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        return <Result[U32, RangeError].Ok value=truncU32(n: from) />
     }
 }
 

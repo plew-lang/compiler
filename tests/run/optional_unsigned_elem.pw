@@ -1,0 +1,15 @@
+// An unsigned element carried through a generic `Optional`/`Result` keeps its
+// unsigned-ness (spec/02): `Optional[U8].unwrapOr -> U8` must print 200, not -56.
+// Previously the enum receiver's type env was not set when recovering the method's
+// return kind, so `T` stayed abstract and defaulted to a signed print.
+import @Std/Io with { print }
+import @Std/Core
+
+fn main() {
+    val o: Optional[U8] = <Optional[U8].Some v=200U8 />
+    print(o.unwrapOr(fallback: 0U8))     // 200
+    val r: Result[U16, I64] = <Result[U16, I64].Ok value=60000U16 />
+    print(r.unwrapOr(fallback: 0U16))    // 60000
+    val n: Optional[U32] = <Optional[U32].None />
+    print(n.unwrapOr(fallback: 4000000000U32))   // 4000000000
+}

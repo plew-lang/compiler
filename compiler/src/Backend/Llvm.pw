@@ -2566,7 +2566,15 @@ fn methodReturnKind(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64) -> U6
         val rRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
         val savedP: Array[Bind] = c.curTypeParams
         val savedA: Array[U64] = c.curTypeArgs
-        val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: rRef)
+        // ground the return's type param under the receiver's instance env. The receiver
+        // may be a generic STRUCT or a generic ENUM (`Optional[U8].unwrapOr -> T`): the
+        // enum case is what carries an unsigned element through, so without it `T` stays
+        // abstract and the kind defaults to signed (a U8 result printed as -56).
+        mut val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: rRef)
+        if didSet {
+        } else {
+            didSet = setEnumEnv(c: inout c, st: inout st, ref: rRef)
+        }
         val g: U64 = groundTypeRef(c: inout c, ref: mf.retTy)
         if didSet {
             c.curTypeParams = savedP
@@ -5470,6 +5478,14 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
     // string literal `\u{...}` decoding.
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "truncU8") {
         return coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: st.i8ty, unsigned: true)
+    }
+    // (Prelude internal) truncU16/U32(n: U64) -> UX: narrow a range-checked unsigned
+    // integer (low bits; trunc is signedness-agnostic, but the result type is unsigned).
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "truncU16") {
+        return coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: st.i16ty, unsigned: true)
+    }
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "truncU32") {
+        return coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: st.i32ty, unsigned: true)
     }
     // (Prelude internal) truncI8/I16/I32(n: I64) -> IX: narrow a RANGE-CHECKED signed
     // integer (`as` is lossless-only and rejects narrowing). The fallible `convert`
