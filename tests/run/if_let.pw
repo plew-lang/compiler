@@ -1,0 +1,31 @@
+// `if`-let: a refutable binding in an `if`/`while` condition (spec/11 condition
+// chain). `if PATTERN = expr { … }` binds on a successful match; a trailing `&& cond`
+// adds a Bool clause. Desugars to a `match` (the binding scopes to the then-block).
+import @Std/Io with { print, write }
+
+fn doubled(o: Optional[I64]) -> I64 {
+    if Optional.Some(val v) = o {
+        return v * 2
+    }
+    return -1I64
+}
+
+fn label(o: Optional[I64]) -> String {
+    if Optional.Some(val v) = o && v > 0 {
+        return "positive"
+    } else {
+        return "other"
+    }
+}
+
+fn main() {
+    print(doubled(o: <Optional.Some v=5I64 />))
+    print(doubled(o: <Optional.None />))
+    write(s: label(o: <Optional.Some v=4I64 />))
+    write(s: "\n")
+    val neg: I64 = 0 - 3
+    write(s: label(o: <Optional.Some v=neg />))
+    write(s: "\n")
+    write(s: label(o: <Optional.None />))
+    write(s: "\n")
+}

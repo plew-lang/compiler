@@ -1,0 +1,24 @@
+// `while`-let: a refutable binding in a `while` condition (spec/11). Loops while the
+// match succeeds, binding each iteration; a failed match ends the loop.
+import @Std/Io with { print }
+
+struct Counter { pub mut val n: I64 }
+
+fn step(c: inout Counter, limit: I64) -> Optional[I64] {
+    if c.n < limit {
+        val cur: I64 = c.n
+        c.n = c.n + 1
+        return <Optional.Some v=cur />
+    }
+    return <Optional.None />
+}
+
+fn main() {
+    mut val c: Counter = <Counter n=0I64 />
+    mut val sum: I64 = 0
+    while Optional.Some(val v) = step(c: inout c, limit: 4I64) {
+        sum = sum + v
+        print(v)
+    }
+    print(sum)
+}

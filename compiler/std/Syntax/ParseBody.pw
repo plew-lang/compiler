@@ -1081,9 +1081,92 @@ fn parseReturnAst(p: inout P) -> StmtAst {
     }
 }
 
+// True if the if/while/guard condition is a refutable binding `PATTERN = expr` (vs a
+// Bool expression — spec/11 condition chain). Backtracks: tries to parse a pattern and
+// checks for a single `=` (not `==`); restores the cursor and error state.
+fn detectRefutableBinding(p: inout P) -> Bool {
+    val savedPos: U64 = p.pos
+    val savedErr: Bool = p.hasErr
+    parsePatternAst(p: inout p)
+    mut val isBind: Bool = false
+    match p.curKind() {
+        Kind.Eq => { isBind = true }
+        _ => {}
+    }
+    p.pos = savedPos
+    p.hasErr = savedErr
+    return isBind
+}
+
+// Parse `else { … }` / `else if …` after an if/if-let body. Returns the else block
+// (an empty block when there is no `else`).
+fn parseElseBlockAst(p: inout P) -> BlockAst {
+    match p.curKind() {
+        Kind.KwElse => {
+            p.advance()
+            match p.curKind() {
+                Kind.KwIf => {
+                    mut val one: Array[StmtAst] = []
+                    one.append(parseIfStmtAst(p: inout p))
+                    return <BlockAst stmts=one />
+                }
+                _ => { return parseBlockAst(p: inout p) }
+            }
+        }
+        _ => {}
+    }
+    return emptyBlock()
+}
+
+// Parse an `if`-let statement `if PATTERN = expr [&& cond …] { then } [else { els }]`
+// (spec/11 condition chain, the `if let` form). Desugars to a `match` over `expr`: the
+// binding pattern's arm runs `then` (with the bindings in scope), the wildcard arm runs
+// `els`. A trailing `&& cond` Bool chain wraps `then` in `if cond { then } else { els }`.
+fn parseIfLetStmt(p: inout P, sStart: U64) -> StmtAst {
+    val pat: PatternAst = parsePatternAst(p: inout p)
+    match p.curKind() {
+        Kind.Eq => { p.advance() }
+        _ => {}
+    }
+    val scrut: ExprAst = parseBinAst(p: inout p, minPrec: 3)
+    mut val trailing: Array[ExprAst] = []
+    while true {
+        match p.curKind() {
+            Kind.AmpAmp => {
+                p.advance()
+                trailing.append(parseBinAst(p: inout p, minPrec: 3))
+            }
+            _ => { break }
+        }
+    }
+    val thenBlk: BlockAst = parseBlockAst(p: inout p)
+    p.skipNewlines()
+    val elseBlk: BlockAst = parseElseBlockAst(p: inout p)
+    val span: Span = <Span start=sStart end=p.prevEnd() />
+    mut val innerThen: BlockAst = thenBlk
+    if trailing.count > 0 {
+        mut val combined: ExprAst = trailing[0]
+        mut val ti: U64 = 1
+        while ti < trailing.count {
+            combined = <ExprAst.Binary op=kindCode(k: <Kind.AmpAmp />) lhs=combined rhs=trailing[ti] span=span />
+            ti += 1
+        }
+        mut val one: Array[StmtAst] = []
+        one.append(<StmtAst.If cond=combined thenBlk=thenBlk elseBlk=elseBlk hasElse=true span=span />)
+        innerThen = <BlockAst stmts=one />
+    }
+    mut val arms: Array[MatchArmAst] = []
+    arms.append(<MatchArmAst pattern=pat body=innerThen span=span />)
+    arms.append(<MatchArmAst pattern=<PatternAst isWildcard=true isStruct=false typeName="" variant="" binds=[] span=span /> body=elseBlk span=span />)
+    return <StmtAst.Match scrut=scrut arms=arms span=span />
+}
+
 fn parseIfStmtAst(p: inout P) -> StmtAst {
     val sStart: U64 = p.base + p.curTok().start
     p.advance()
+    if detectRefutableBinding(p: inout p) {
+        return parseIfLetStmt(p: inout p, sStart: sStart)
+    }
     val cond: ExprAst = parseExprAst(p: inout p)
     val thenBlk: BlockAst = parseBlockAst(p: inout p)
     p.skipNewlines()
@@ -1136,9 +1219,61 @@ fn parseIfExprAst(p: inout P) -> ExprAst {
 fn parseWhileAst(p: inout P) -> StmtAst {
     val sStart: U64 = p.base + p.curTok().start
     p.advance()
+    if detectRefutableBinding(p: inout p) {
+        return parseWhileLetStmt(p: inout p, sStart: sStart)
+    }
     val cond: ExprAst = parseExprAst(p: inout p)
     val body: BlockAst = parseBlockAst(p: inout p)
     return <StmtAst.While cond=cond body=body span=<Span start=sStart end=p.prevEnd() /> />
+}
+
+// Parse a `while`-let statement `while PATTERN = expr [&& cond …] { body }` (spec/11
+// `while let`). Desugars to `while true { match expr { PATTERN => { [if cond] body }
+// _ => { break } } }`: each iteration re-evaluates `expr`; a failed match (or a false
+// trailing condition) breaks the loop.
+fn parseWhileLetStmt(p: inout P, sStart: U64) -> StmtAst {
+    val pat: PatternAst = parsePatternAst(p: inout p)
+    match p.curKind() {
+        Kind.Eq => { p.advance() }
+        _ => {}
+    }
+    val scrut: ExprAst = parseBinAst(p: inout p, minPrec: 3)
+    mut val trailing: Array[ExprAst] = []
+    while true {
+        match p.curKind() {
+            Kind.AmpAmp => {
+                p.advance()
+                trailing.append(parseBinAst(p: inout p, minPrec: 3))
+            }
+            _ => { break }
+        }
+    }
+    val body: BlockAst = parseBlockAst(p: inout p)
+    val span: Span = <Span start=sStart end=p.prevEnd() />
+    // the `_` arm breaks the loop.
+    mut val breakStmts: Array[StmtAst] = []
+    breakStmts.append(<StmtAst.Break span=span />)
+    val breakBlk: BlockAst = <BlockAst stmts=breakStmts />
+    // the matched arm: run body, but a false trailing condition also breaks.
+    mut val matchedBody: BlockAst = body
+    if trailing.count > 0 {
+        mut val combined: ExprAst = trailing[0]
+        mut val ti: U64 = 1
+        while ti < trailing.count {
+            combined = <ExprAst.Binary op=kindCode(k: <Kind.AmpAmp />) lhs=combined rhs=trailing[ti] span=span />
+            ti += 1
+        }
+        mut val one: Array[StmtAst] = []
+        one.append(<StmtAst.If cond=combined thenBlk=body elseBlk=breakBlk hasElse=true span=span />)
+        matchedBody = <BlockAst stmts=one />
+    }
+    mut val arms: Array[MatchArmAst] = []
+    arms.append(<MatchArmAst pattern=pat body=matchedBody span=span />)
+    arms.append(<MatchArmAst pattern=<PatternAst isWildcard=true isStruct=false typeName="" variant="" binds=[] span=span /> body=breakBlk span=span />)
+    mut val loopStmts: Array[StmtAst] = []
+    loopStmts.append(<StmtAst.Match scrut=scrut arms=arms span=span />)
+    val trueLit: ExprAst = <ExprAst.IntLit value=1 isBool=true tySuffix="" span=span />
+    return <StmtAst.While cond=trueLit body=<BlockAst stmts=loopStmts /> span=span />
 }
 
 fn parseForAst(p: inout P) -> StmtAst {
