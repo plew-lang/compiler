@@ -39,16 +39,17 @@
 
 > いずれも parser や backend codegen に跨る中〜大の機能追加。各々 ADD→reseed→USE で 1 機能ずつ focused に。価値/規模の目安を付す。
 
-- ~~**literal match パターン**~~＝✅済（int/string/bool/負リテラル・式/文位置とも）。**lowering 脱糖で実装**（`Lower.pw`＝literal-pattern match を `val __mtmp = scrut`＋`==` if/else 連鎖へ・既存 witness `==`/if codegen 再利用＝backend match emitter は無改変）。`PatternAst.isLiteral`/`lit: ExprAst`＋parser〔Int/Str/Char/Bool/`-`Int を pattern 先頭で検出〕。**式位置**＝Ident scrut は inline（single-eval 自明）・非 Ident は give-block wrapper で temp 束縛。**網羅性**＝wildcard 必須・ただし Bool は `true`+`false` で wildcard なし可（最終 arm を else に）。arena は literal pattern を一切見ない（脱糖済）ゆえ Verify/Check 無改変。残＝match ガード/ネストパターン（下記参照）。
-- **`From`/`TryFrom`**＝大（数値縮小・パース・`as` の全域変換脱糖・`try` の異エラー型 From 変換）。`factory` 機構は実装済ゆえ構築要求は表現可能に。〔✅ mixed float context・✅ float→int `as` の clean reject は済〕。
-- ~~**名前空間 import `Io.print`**~~＝✅済（`with`-less import が末尾セグメントを namespace 束縛・`Namespace.fn()` を lower で bare Call 脱糖＋`markImport` で export/visibility 検査・`ExprAst.Method.nameSpan` で元 offset 保持）。残＝`import … as Q` リネーム実束縛・`_.pw` ディレクトリ解決・パス正当性厳密検査。
+**✅ 2026-06-12 に完了した B 項（match クラスタ＋assoc val＋global 順序＋import クラスタ）**：
+- ~~literal match パターン~~・~~式位置 `panic`/`return`（value-match diverge arm）~~・~~match ガード `Pat if cond`~~・~~match capture-binding `val x =>`~~＝✅（match は実質完成。残＝enum-dispatch の capture〔scalar は済〕・ネストパターン・到達不能アーム警告）。詳細は provisional「制御フロー・match」。
+- ~~`assoc val`（static 定数 `Type.NAME`）~~＝✅（zero-arg assoc fn 脱糖）。残＝generic assoc-fn emission〔`Box[T].make`〕。
+- ~~global 前方参照~~＝✅（依存順トポロジカルソート・循環 reject）。
+- ~~名前空間 import `Io.print`~~・~~path alias `import … as F`~~・~~name alias `with { real as alias }`~~＝✅（import クラスタ完成）。残＝type/value の import alias・`_.pw` ディレクトリ解決・パス正当性厳密検査。
+
+**残りの B 項（大物＝専用 focused session 推奨）**：
+- **factory 機構の残**＝**custom `factory(params) { body }`＋fallible `optional factory`/`result[E] factory`**（→ Optional[Self]/Result[Self,E]）。〔bare `factory` publish＋公開ゲート (a)〔`structHasPubFactory`〕は✅済〕。**これが `From`/`TryFrom` の前提**。
+- **`From`/`TryFrom`**＝大（数値縮小・パース・`as` の全域変換脱糖・`try` の異エラー型 From 変換）。**factory 機構の残が前提**。〔✅ mixed float context・✅ float→int `as` の clean reject は済〕。
 - **newtype 非 int underlying のメソッド/フィールド継承**（`userId.bytes`〔UserId=String〕）＝中・risk（`typeOf` が型チェッカ distinction と codegen 解決の両用ゆえ blanket 不可・codegen 専用解決点の個別配線・過去に field access で revert）＋ unique/deinit/factory 継承・`export newtype`。int underlying は完備。
 - **Iterator 残**＝`sum`（Zero/数値タワー待ち＝大）・`enumerate`／`zip` は **backend ブロッカー**：`enumerate`（Item＝合成レコード `(index:U64,value:E)`＝型パラメータ E をフィールドに持つレコードの monomorphized iterator 文脈での構築/フィールドアクセスが未対応＝generic-record 登録が要る backend 仕事）・`zip`（第2要素型＝`J::Item`＝generic 抽象 `T::Item` 未対応ゆえ表現不能）。
-- ~~**`assoc val`**（static 定数・`Type.NAME`）~~＝✅済（ゼロ引数 `assoc fn` への脱糖＝parser が `assoc val NAME: T = expr`→`assoc fn NAME(){return expr}`・post-load pass `rewriteAssocValReads` が `Type.NAME` Field→zero-arg Method 書き換え・既存 assoc-fn 機構を再利用・アクセス毎 init 再評価〔純粋 const〕）。残＝**generic assoc-fn emission**（`Box.make(x:7)`/`Set[E].empty()`＝mono 必要）＝backend 大。
-- ~~**式位置 `panic`/`return`**~~＝✅済（value-match arm `=> panic`/`=> return`・value-match arm を block-bodied 化＝`MatchArm.body` は常に Block index・`isDiverge` で diverge 判定・`genLlvmMatchExpr`/`genLlvmIfExpr` が PHI から除外。derive 合成 match も give-block 化）。
-- ~~**match ガード**~~＝✅済（`Pat if cond =>`・enum パターンは emitter が bind 後 guard 評価／scalar〔wildcard/literal〕は if-else 脱糖・guarded arm は網羅性に非カウント・guard expr は全 walker で walk）。
-- ~~**match capture-binding `val x =>`**~~＝✅済（named wildcard・スカラ/リテラル match で if-else 脱糖が capture 名を `__mtmp` に束縛・guard 併用可・enum-dispatch の capture は未対応で loud reject）。
-- ~~**global 前方参照**~~＝✅済（依存順トポロジカルソート `orderGlobalsByDependency`・循環は loud reject）。
 - **一般 Chain トレイト `?.`**（現 Optional 具体）・**`Pow`/`**`**（float 後）・**`Output != Self`**・**`guard` 文**（条件チェーン束縛・parser 未＝match ガードとは別物）・**enum-dispatch の match capture／ネストパターン**・Bool dict キー（低価値）＝各小〜中。
 - **トレイト/拡張小物**＝トレイト引数 aware の多重 conformance 区別・コンテナ不変性 `Array[P]`≠`Array[P#Ext]`・型レベル chained `Type#A#B`。
 
