@@ -3728,10 +3728,18 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                 return genLlvmFloatBinop(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
             }
             // String ==/!= compares bytes via a runtime call (the operands are
-            // {ptr,i64} structs, not icmp-able).
+            // {ptr,i64} structs, not icmp-able). A 2-field struct (`Pair{a:I64,b:I64}`)
+            // shares String's `{ptr,i64}` LLVM layout, so valueKind can read it as a
+            // String — only take the byte-compare path when lhs is NOT a registered
+            // struct (else it is a struct Eq, handled by the witness path below). This
+            // surfaces with a grounded generic-`K` struct key (`self.keys[idx] == key`
+            // in a monomorphized `Dictionary[Pair].find`), which otherwise reinterprets
+            // the struct's fields as a {ptr,len} String and dereferences garbage.
             if op == opEq() || op == opNe() {
                 if valueKind(c: inout c, st: inout st, id: lhs) == 1U64 {
-                    return emitStrEq(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
+                    if exprStructIdx(c: inout c, st: inout st, id: lhs) >= c.structs.count {
+                        return emitStrEq(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
+                    }
                 }
             }
             // struct/enum arithmetic / bitwise / shift: dispatch to the user's
