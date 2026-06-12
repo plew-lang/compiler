@@ -1,0 +1,7 @@
+// spec/12: grounded to I64, a U32-suffixed argument is a width mismatch.
+struct Box[T] { pub val v: T }
+pub impl[T] Box[T] { fn echo(x: T) -> T { return x } }
+fn main() {
+    val b: Box[I64] = <Box v=1I64 />
+    val r: I64 = b.echo(x: 5I32)
+}

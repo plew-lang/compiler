@@ -1075,6 +1075,23 @@ fn checkClosureArgArity(c: inout Comp, argExpr: U64, p: Param) {
 
 // Check method-call args against the method's params; array `.append(x)` checks
 // `x` against the element type. Other builtins keep args lenient at I64.
+// The number of type parameters the RECEIVER instance grounds — its own struct /
+// enum type-param count. mf.typeParams for a method on (or provided onto) such a
+// receiver is [those receiver params] ++ [the method's own `[...]` params]; only the
+// prefix is grounded by the instance's type args, so this marks where the method-own
+// (abstract) tail begins. Falls back to the receiver type info if not a known generic.
+fn recvOwnParamCount(c: inout Comp, rt: TypeInfo) -> U64 {
+    val si: U64 = genericStructIndex(c: inout c, nameStart: rt.nameStart, nameLen: rt.nameLen)
+    if si < c.structs.count {
+        return c.structs[si].typeParams.count
+    }
+    val ei: U64 = genericEnumIndex(c: inout c, nameStart: rt.nameStart, nameLen: rt.nameLen)
+    if ei < c.enums.count {
+        return c.enums[ei].typeParams.count
+    }
+    return 0U64
+}
+
 fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
     checkUniqueArgModes(c: inout c, args: args)
     checkLitCtx(c: inout c, id: recv, eKind: 0, eBits: 0, eSgn: false)
@@ -1137,11 +1154,39 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
                             checkLitTi(c: inout c, id: args[i].expr, ti: pti)
                             // full type-compatibility against the GROUNDED param type — a
                             // typed value whose type disagrees with the (instantiated)
-                            // parameter (`dict[5I64]=v` on `Dictionary[String,_]` would hash
-                            // an I64 as a String and crash). checkLitTi only range-checks a
-                            // literal against its own suffix.
-                            if pti.ref != 0U64 {
-                                tcCheckValue(c: inout c, expectedRef: pti.ref, valueExpr: args[i].expr, pos: "arg")
+                            // parameter (`w.combine(x: 5I64)` on `W[String]` stores an I64
+                            // where a String is expected). checkLitTi only range-checks a
+                            // literal against its own suffix. A grounded String/primitive
+                            // carries no TypeRef ref (kind 1 / kind 0 are name-only), so
+                            // synthesize one from the grounded name. BUT a param whose head
+                            // is a METHOD-OWN type param (the tail of mf.typeParams beyond the
+                            // receiver's own params — e.g. `fold[B]`'s accumulator `B`, which
+                            // may even share a NAME with a conformer param) is NOT grounded by
+                            // the receiver instance: it is abstract here, so keep it lenient
+                            // (else `fold(init: 0U64, …)` on `MapIter[…,B=I64]` false-rejects).
+                            mut val headMethodOwn: Bool = false
+                            if p.ty != 0U64 {
+                                val nConf: U64 = recvOwnParamCount(c: inout c, rt: rt)
+                                val headId: U64 = c.types[p.ty].nameId
+                                mut val mk: U64 = nConf
+                                while mk < mf.typeParams.count {
+                                    if mf.typeParams[mk].nameId == headId {
+                                        headMethodOwn = true
+                                    }
+                                    mk += 1U64
+                                }
+                            }
+                            if headMethodOwn {
+                            } else {
+                                mut val pref: U64 = pti.ref
+                                if pref == 0U64 {
+                                    if pti.nameLen > 0U64 {
+                                        pref = simpleTypeRef(c: inout c, nameStart: pti.nameStart, nameLen: pti.nameLen)
+                                    }
+                                }
+                                if pref != 0U64 {
+                                    tcCheckValue(c: inout c, expectedRef: pref, valueExpr: args[i].expr, pos: "arg")
+                                }
                             }
                         }
                     } else {

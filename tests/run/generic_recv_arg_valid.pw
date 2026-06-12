@@ -1,0 +1,10 @@
+import @Std/Io with { print }
+// spec/06: a matching argument to a grounded generic-receiver method is fine.
+struct Box[T] { pub val v: T }
+pub impl[T] Box[T] { fn echo(x: T) -> T { return x } }
+fn main() {
+    val bi: Box[I64] = <Box v=1I64 />
+    val bs: Box[String] = <Box v="a" />
+    print(bi.echo(x: 7I64))
+    print(bs.echo(x: "yo"))
+}

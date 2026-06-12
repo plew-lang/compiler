@@ -1,0 +1,9 @@
+// spec/12: a generic-receiver method's parameter typed with the receiver's own type
+// parameter is grounded to the concrete instance type — `W[String].combine(x: 5I64)`
+// passes an I64 where a String is expected (the receiver grounds T = String).
+struct W[T] { pub val v: T }
+pub impl[T] W[T] { fn combine(x: T) -> T { return x } }
+fn main() {
+    val w: W[String] = <W v="hi" />
+    val r: String = w.combine(x: 5I64)
+}
