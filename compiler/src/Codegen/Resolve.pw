@@ -405,7 +405,10 @@ fn findAssoc(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLe
     mut val typeMatch: U64 = c.funcs.count
     mut val typeMatch2: U64 = c.funcs.count
     val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-    val qRecvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
+    // a newtype inherits the underlying's assoc fns/factories (spec/10): resolve the
+    // receiver name to the underlying so `Brand.checked(…)` finds Rgb's `checked`.
+    val rnu: Bind = newtypeUnderName(c: inout c, start: recvStart, len: recvLen)
+    val qRecvId: U64 = intern(c: inout c, start: rnu.nameStart, len: rnu.nameLen)
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
@@ -445,6 +448,15 @@ fn isTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
         return true
     }
     val qId: U64 = intern(c: inout c, start: start, len: len)
+    // a newtype name is a type name too (it can be an assoc-fn/factory receiver
+    // through its inherited assoc fns — `Brand.gray(…)`, spec/10).
+    mut val nti: U64 = 0
+    while nti < c.newtypes.count {
+        if c.newtypes[nti].nameId == qId {
+            return true
+        }
+        nti += 1
+    }
     mut val ei: U64 = 0
     while ei < c.enums.count {
         if c.enums[ei].nameId == qId {
@@ -470,7 +482,10 @@ fn isTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
 // True if type `typeStart`/`typeLen` declares an `assoc fn` named `nameStart`/
 // `nameLen` (an `assoc val` desugars to a zero-arg assoc fn — spec/05).
 fn typeHasAssocFn(c: inout Comp, typeStart: U64, typeLen: U64, nameStart: U64, nameLen: U64) -> Bool {
-    val tId: U64 = intern(c: inout c, start: typeStart, len: typeLen)
+    // a newtype inherits the underlying type's factories/assoc fns (spec/10): resolve
+    // to the underlying so `<Brand.checked …/>` finds Rgb's `checked` factory.
+    val tnu: Bind = newtypeUnderName(c: inout c, start: typeStart, len: typeLen)
+    val tId: U64 = intern(c: inout c, start: tnu.nameStart, len: tnu.nameLen)
     val nId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = 0
     while i < c.funcs.count {
@@ -2116,6 +2131,20 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 }
                 val af: Func = c.funcs[afi]
                 if af.hasRet {
+                    // a factory / Self-returning assoc fn inherited through a newtype
+                    // receiver (spec/10): the result Self is the SYNTACTIC receiver
+                    // (`Brand`), not the underlying the fn is declared on (`Rgb`). When
+                    // the declared return names the fn's own receiver type (a Self
+                    // return) and the call receiver differs (a newtype), substitute it.
+                    if af.retIsArray {
+                    } else {
+                        if spansEqual(c: inout c, aStart: af.retStart, aLen: af.retLen, bStart: af.recvStart, bLen: af.recvLen) {
+                            if spansEqual(c: inout c, aStart: arn.nameStart, aLen: arn.nameLen, bStart: af.recvStart, bLen: af.recvLen) {
+                            } else {
+                                return typeInfoOfName(c: inout c, start: arn.nameStart, len: arn.nameLen, isArray: false)
+                            }
+                        }
+                    }
                     return typeInfoOfName(c: inout c, start: af.retStart, len: af.retLen, isArray: af.retIsArray)
                 }
                 return scalarInfo()

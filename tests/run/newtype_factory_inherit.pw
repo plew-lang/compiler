@@ -1,24 +1,37 @@
-// A `newtype` inherits the underlying struct's (default memberwise) factory
-// (spec/10: "factory は暗黙的に Self を返すため newtype は元の型の factory も継承").
-// So `<Brand code=255 />` constructs directly through the inherited factory — the
-// literal gets its type from the underlying's field (`code: I32`), the backend builds
-// the underlying struct's value (identical representation), and the result is a Brand.
+// A `newtype` inherits the underlying struct's factories (spec/10: "newtype は元の型の
+// factory も継承"), with `Self` substituted to the newtype. Covered: the default
+// memberwise factory (`<Brand code=… />`), a named factory (`<Brand.gray level=… />`),
+// and a named FALLIBLE factory returning `Result[Self, E]` (→ Result[Brand, E]). All
+// construct directly (no explicit `as`); the result is a Brand.
 import @Std/Io with { print }
 
 struct Rgb { pub val code: I32  pub val alpha: I32 }
-pub impl Rgb { factory }
+pub impl Rgb {
+    factory
+    factory gray(level: I32) { return <Rgb code=level alpha=255I32 /> }
+    result[I32] factory checked(code: I32) {
+        if code < 0I32 { return <Result.Err error=1I32 /> }
+        return <Result.Ok value=<Rgb code=code alpha=255I32 /> />
+    }
+}
 
 newtype Brand = Rgb
 
 fn main() {
-    // direct construction via the inherited factory (no explicit `as`).
+    // default (memberwise) factory.
     val b: Brand = <Brand code=255 alpha=128 />
-    print(b.code)             // 255  (inherited field access on the constructed Brand)
+    print(b.code)             // 255
     print(b.alpha)            // 128
+    // named factory (Self -> Brand).
+    val g: Brand = <Brand.gray level=64 />
+    print(g.code)             // 64
+    // named fallible factory: Result[Self, I32] -> Result[Brand, I32].
+    val r: Result[Brand, I32] = <Brand.checked code=50 />
+    match r {
+        Result.Ok(value: val v) => { print(v.code) }    // 50
+        Result.Err(error: val e) => { print(e) }
+    }
     // the unwrap re-tag recovers the underlying struct.
-    val r: Rgb = b as Rgb
-    print(r.code)             // 255
-    // the equivalent construct-then-retag form is unchanged.
-    val b2: Brand = <Rgb code=7 alpha=9 /> as Brand
-    print(b2.code)            // 7
+    val raw: Rgb = b as Rgb
+    print(raw.code)           // 255
 }

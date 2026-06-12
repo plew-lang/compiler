@@ -1,0 +1,15 @@
+// An inherited factory substitutes Self to the NEWTYPE (spec/10), so its result is a
+// `Brand`, a distinct type from the underlying `Rgb`. Assigning that result to an
+// `Rgb` without an explicit `as` must be rejected (no implicit conversion, spec/12) —
+// the inheritance does not silently erase the brand.
+import @Std/Io with { print }
+struct Rgb { pub val code: I32 }
+pub impl Rgb {
+    factory
+    factory gray(level: I32) { return <Rgb code=level /> }
+}
+newtype Brand = Rgb
+fn main() {
+    val x: Rgb = <Brand.gray level=5 />
+    print(x.code)
+}
