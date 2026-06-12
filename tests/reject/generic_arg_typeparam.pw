@@ -1,0 +1,5 @@
+// spec/06: passing a type-parameter value to a CONCRETE-typed parameter is a type
+// error at the definition — `takeInt(x: a)` where a: T and takeInt wants I64.
+fn takeInt(x: I64) -> I64 { return x }
+fn f[T](a: T) -> I64 { return takeInt(x: a) }
+fn main() { }

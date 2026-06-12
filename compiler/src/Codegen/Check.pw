@@ -1900,6 +1900,23 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                 checkBoundsExpr(c: inout c, exprId: args[i].expr)
                 i += 1
             }
+            // a `T` value passed to a CONCRETE-typed parameter (`f(x: a)` where `a: T`
+            // and `f`'s `x: I64`) is a type error at the definition. The callee's own
+            // type parameter (`f[U](x: U)`) is lenient (typesCompatible — they unify).
+            val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            if fi < c.funcs.count {
+                val ps: Array[Param] = c.funcs[fi].params
+                mut val k: U64 = 0
+                while k < args.count {
+                    if k < ps.count {
+                        if ps[k].tyIsArray {
+                        } else {
+                            checkGenericTypeMatch(c: inout c, expectedRef: ps[k].ty, valueExpr: args[k].expr)
+                        }
+                    }
+                    k += 1
+                }
+            }
         }
         Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
             checkBoundsExpr(c: inout c, exprId: recv)

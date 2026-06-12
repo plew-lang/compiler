@@ -50,6 +50,23 @@ fn inferType(c: inout Comp, id: U64) -> U64 {
 // (Optional[I64] vs Optional[String]). Exemptions: unknown (0) on either side; an
 // existential `any P` target (a concrete value coerces into it); `extern(c)` opaque
 // FFI handles (all void*, knownNamedTypeId yields 0 for them).
+// Whether (start,len) names a CONCRETE type (a recognized primitive / String / Bool
+// or a known struct/enum/newtype) — as opposed to an opaque type-parameter name. Used
+// by the generic-body abstract check to tell `T` vs `I64` (reject) from `T` vs another
+// generic's parameter `U` (lenient — they unify at instantiation).
+fn isConcreteTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
+    if isPrimType(c: inout c, start: start, len: len) {
+        return true
+    }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "String") {
+        return true
+    }
+    if knownNamedTypeId(c: inout c, start: start, len: len) != 0U64 {
+        return true
+    }
+    return false
+}
+
 fn typesCompatible(c: inout Comp, expected: U64, inferred: U64) -> Bool {
     if expected == 0U64 || inferred == 0U64 {
         return true
@@ -113,20 +130,29 @@ fn typesCompatible(c: inout Comp, expected: U64, inferred: U64) -> Bool {
         return false
     }
     // generic-body abstract check (spec/06): a type parameter of the function being
-    // checked (`c.curCheckFn`) is an opaque DISTINCT type — compatible only with the
-    // SAME type parameter, never with a concrete type or a different parameter. Active
-    // only while checking a generic template body (curCheckFn valid); elsewhere
-    // isTypeParamOf is false, so non-generic / per-instance checks stay lenient.
+    // checked (`c.curCheckFn`) is an opaque DISTINCT type — incompatible with a
+    // CONCRETE type or a DIFFERENT parameter of the same function, but lenient against
+    // an unknown / another generic's type parameter (which unifies at instantiation,
+    // e.g. passing this fn's `T` to `f[U](x: U)`). Active only while checking a generic
+    // template body (curCheckFn valid); elsewhere isTypeParamOf is false.
     val eTp: Bool = isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: te.nameStart, len: te.nameLen)
     val iTp: Bool = isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: tin.nameStart, len: tin.nameLen)
     if eTp {
         if iTp {
+            // both are this function's parameters: compatible iff the SAME one.
             return spansEqual(c: inout c, aStart: te.nameStart, aLen: te.nameLen, bStart: tin.nameStart, bLen: tin.nameLen)
         }
-        return false
+        // T vs a CONCRETE type -> incompatible; T vs unknown / another param -> lenient.
+        if isConcreteTypeName(c: inout c, start: tin.nameStart, len: tin.nameLen) {
+            return false
+        }
+        return true
     }
     if iTp {
-        return false
+        if isConcreteTypeName(c: inout c, start: te.nameStart, len: te.nameLen) {
+            return false
+        }
+        return true
     }
     val eId: U64 = knownNamedTypeId(c: inout c, start: te.nameStart, len: te.nameLen)
     val iId: U64 = knownNamedTypeId(c: inout c, start: tin.nameStart, len: tin.nameLen)
