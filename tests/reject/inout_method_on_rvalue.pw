@@ -1,0 +1,6 @@
+// spec/03: an `inout fn` mutates its receiver, so the receiver must be a place
+// (a `mut val` variable/field), not a freshly constructed temporary whose mutation
+// would be immediately discarded.
+struct S { pub mut val n: I64 }
+pub impl S { inout fn bump() { self.n = self.n + 1I64 } }
+fn main() { <S n=0I64 />.bump() }

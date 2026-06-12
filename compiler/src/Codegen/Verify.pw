@@ -1655,8 +1655,14 @@ fn verifyMethodVis(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
         val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
         if mi < c.funcs.count {
             checkMethodVis(c: inout c, ownerStart: rt.nameStart, ownerLen: rt.nameLen, mf: c.funcs[mi], offset: nameStart)
-            // an `inout fn` method mutates the receiver, so its place must be mutable.
+            // an `inout fn` method mutates the receiver, so it must be a mutable PLACE
+            // — not an rvalue temporary (`<S…/>.bump()` / `mk().bump()` would mutate a
+            // value that is immediately discarded — spec/03).
             if c.funcs[mi].selfInout {
+                if exprIsPlace(c: inout c, id: recv) {
+                } else {
+                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call an `inout fn` method on a temporary value; the receiver must be a place (a variable or field) declared `mut val` (spec/03)")
+                }
                 if placeIsMutable(c: inout c, id: recv) {
                 } else {
                     compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
@@ -1676,9 +1682,13 @@ fn verifyMethodVis(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
             }
         }
     }
-    // a mutating built-in array method (`append`) on an immutable array binding.
+    // a mutating built-in array method (`append`) on an immutable / non-place array.
     if rt.kind == 3 {
         if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "append") {
+            if exprIsPlace(c: inout c, id: recv) {
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot `append` to a temporary array; the receiver must be a place declared `mut val` (spec/03)")
+            }
             if placeIsMutable(c: inout c, id: recv) {
             } else {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")

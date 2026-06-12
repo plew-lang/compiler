@@ -1,1 +1,1 @@
-plewc: error: line 2: this binding is declared as an array, but the value is not an array (Plew has no implicit conversion — spec/12)
+plewc: error: line 7: cannot call an `inout fn` method on a temporary value; the receiver must be a place (a variable or field) declared `mut val` (spec/03)
