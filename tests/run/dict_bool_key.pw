@@ -1,0 +1,21 @@
+// `Dictionary[Bool, V]` (spec/02): Bool is a valid key — it implements `Hash`/`Eq`.
+// This exercises the backend's Bool primitive-method dispatch (a generic `key: K`
+// param grounded to Bool now tracks its type so `key.hash[H](…)` / `key == k` resolve,
+// like an integer key). Bool hashes as 1 (true) / 0 (false).
+import @Std/Io with { print }
+
+fn main() {
+    mut val d: Dictionary[Bool, I64] = [true: 10I64, false: 20I64]
+    print(d[true])              // 10
+    print(d[false])             // 20
+    d[true] = 11I64             // update
+    print(d[true])              // 11
+    print(d.count)              // 2
+    // safe lookup via `get` -> Optional.
+    val g: Optional[I64] = d.get(key: false)
+    print(g.unwrapOr(fallback: -1I64))   // 20
+    // a fresh single-key dict.
+    mut val flags: Dictionary[Bool, String] = [:]
+    flags[true] = "on"
+    print(flags[true].bytes.count)       // 2  ("on")
+}

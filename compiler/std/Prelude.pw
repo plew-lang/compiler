@@ -176,8 +176,17 @@ pub impl I8 as Hash {
         hasher.writeU64(n: bitCastU64(n: self as I64))
     }
 }
-// `Bool` Hash awaits Bool primitive method dispatch (the backend dispatches trait
-// methods only on integer-primitive / struct / enum receivers so far, not Bool).
+// `Bool` hashes as 1 (true) / 0 (false). No cast — `as` rejects Bool↔numeric — so the
+// two cases write the constant directly.
+pub impl Bool as Hash {
+    fn hash[H](hasher: inout H) where H: Hasher {
+        if self {
+            hasher.writeU64(n: 1U64)
+        } else {
+            hasher.writeU64(n: 0U64)
+        }
+    }
+}
 pub impl String as Hash {
     fn hash[H](hasher: inout H) where H: Hasher {
         val bs: Array[U8] = self.bytes

@@ -5815,6 +5815,16 @@ fn primLangItemRecvName(c: inout Comp, st: inout LlvmCtx, recv: U64) -> Bind {
     if valueKind(c: inout c, st: inout st, id: recv) == 1U64 {
         return kwSpan(c: inout c, kw: "String", kwLen: 6U64)
     }
+    // a Bool receiver (`b.hash[H](…)`, `flag.eq(…)`): the backend models Bool method
+    // dispatch like a primitive lang-item. Recover the type from the grounded env
+    // (`exprTypeRef` applies the instance args, so a generic `K` param bound to Bool
+    // resolves here). Bool's only resolvable structured form is its own name.
+    val rt: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
+    if rt != 0U64 {
+        if rangeEquals(bytes: c.bytes, start: c.types[rt].nameStart, len: c.types[rt].nameLen, kw: "Bool") {
+            return kwSpan(c: inout c, kw: "Bool", kwLen: 4U64)
+        }
+    }
     val z: Bind = <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
     return z
 }
@@ -7524,7 +7534,7 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
             }
         }
     }
-    // a primitive-int param (including a generic `v: K` with K -> U64): track its
+    // a primitive param (an int, or a generic `v: K` with K -> U64 / Bool): track its
     // (grounded) type name so a method on the primitive (`v.hash[H](…)`) dispatches.
     if pRef == 0U64 {
         if p.tyIsArray {
@@ -7539,6 +7549,9 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
                 }
             }
             if isPrimIntName(c: inout c, start: gs2, len: gl2) {
+                pRef = simpleTypeRef(c: inout c, nameStart: gs2, nameLen: gl2)
+            }
+            if rangeEquals(bytes: c.bytes, start: gs2, len: gl2, kw: "Bool") {
                 pRef = simpleTypeRef(c: inout c, nameStart: gs2, nameLen: gl2)
             }
         }
