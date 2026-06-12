@@ -1,0 +1,10 @@
+import @Std/Io with { print }
+// spec/04,05: defaults referencing module-level globals (not siblings/self) are fine.
+val base: I64 = 100I64
+struct P { pub val a: I64 = 7I64  pub val b: I64 = base }
+fn f(x: I64 = 5I64, y: I64 = base) -> I64 { return x + y }
+fn main() {
+    val p: P = <P />
+    print(p.a + p.b)       // 7 + 100 = 107
+    print(f())             // 5 + 100 = 105
+}

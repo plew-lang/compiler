@@ -1,0 +1,4 @@
+// spec/04: a parameter default is self-contained — it cannot reference another
+// parameter. Caught at declaration even though f is never called.
+fn f(a: I64 = 1I64, b: I64 = a) -> I64 { return a + b }
+fn main() { }

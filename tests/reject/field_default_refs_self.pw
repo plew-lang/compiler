@@ -1,0 +1,3 @@
+// spec/05: a field default cannot reference `self` (no instance exists yet).
+struct P { pub val a: I64 = self.a }
+fn main() { }

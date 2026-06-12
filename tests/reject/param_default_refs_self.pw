@@ -1,0 +1,4 @@
+// spec/04: a parameter default cannot reference `self`.
+struct S { pub val n: I64 }
+pub impl S { fn g(x: I64 = self.n) -> I64 { return x } }
+fn main() { }

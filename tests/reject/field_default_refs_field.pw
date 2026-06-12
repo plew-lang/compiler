@@ -1,0 +1,4 @@
+// spec/05: a field default is evaluated without the instance, so it cannot
+// reference another field. Caught at declaration even though P is never built.
+struct P { pub val a: I64 = 1I64  pub val b: I64 = a }
+fn main() { }
