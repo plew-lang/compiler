@@ -1,0 +1,33 @@
+// A trait method dispatched on a generic param grounded to an ENUM (spec/06,08):
+// `useTrait[T](x: T) where T: Describe` called with a `Color` value. The backend
+// now tracks an enum-grounded generic param's type (like an int/Bool one), so
+// `x.describe()` resolves through enum-receiver dispatch instead of being rejected.
+import @Std/Io with { print }
+
+enum Color { Red  Green  Blue }
+
+pub impl Color {
+    fn code() -> I64 {
+        match self {
+            Color.Red => { return 1I64 }
+            Color.Green => { return 2I64 }
+            Color.Blue => { return 3I64 }
+        }
+    }
+}
+
+trait Describe { fn describe() -> I64 }
+pub impl Color as Describe {
+    fn describe() -> I64 { return self.code() * 10I64 }
+}
+
+fn useTrait[T](x: T) -> I64 where T: Describe { return x.describe() }
+
+fn main() {
+    val c: Color = <Color.Green />
+    print(c.code())         // 2  (direct enum method)
+    print(c.describe())     // 20 (direct trait method)
+    print(useTrait(x: c))   // 20 (generic-param-grounded-to-enum trait dispatch)
+    val b: Color = <Color.Blue />
+    print(useTrait(x: b))   // 30
+}

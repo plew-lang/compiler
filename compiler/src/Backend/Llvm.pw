@@ -7536,6 +7536,10 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     }
     // a primitive param (an int, or a generic `v: K` with K -> U64 / Bool): track its
     // (grounded) type name so a method on the primitive (`v.hash[H](…)`) dispatches.
+    // An enum-grounded generic param (`x: T` with T -> Color) is tracked the same way,
+    // so a trait method on it (`x.describe()` in `fn f[T](x:T) where T: Describe`)
+    // resolves through the enum-receiver dispatch — the pre-ground enum check above
+    // only sees the Self-grounded span, missing a `T`-named param.
     if pRef == 0U64 {
         if p.tyIsArray {
         } else {
@@ -7553,6 +7557,11 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
             }
             if rangeEquals(bytes: c.bytes, start: gs2, len: gl2, kw: "Bool") {
                 pRef = simpleTypeRef(c: inout c, nameStart: gs2, nameLen: gl2)
+            }
+            if pRef == 0U64 {
+                if enumRegSlot(c: inout c, st: inout st, start: gs2, len: gl2) < st.enumIdxs.count {
+                    pRef = simpleTypeRef(c: inout c, nameStart: gs2, nameLen: gl2)
+                }
             }
         }
     }
