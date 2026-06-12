@@ -1,0 +1,4 @@
+// spec/12: `x[i]` on a type-parameter value needs `where T: Index` — the subscript
+// desugars to the Index trait, which a bare T does not provide.
+fn f[T](x: T) -> I64 { return x[0U64] }
+fn main() { }

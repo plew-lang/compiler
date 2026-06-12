@@ -1983,6 +1983,17 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
         Expr.Index(val base, val index) => {
             checkBoundsExpr(c: inout c, exprId: base)
             checkBoundsExpr(c: inout c, exprId: index)
+            // `x[i]` on a type-parameter value needs `where T: Index` (spec/12: the
+            // subscript desugars to the Index trait).
+            val ibt: TypeInfo = exprType(c: inout c, id: base)
+            if ibt.kind == 2 {
+                if isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: ibt.nameStart, len: ibt.nameLen) {
+                    if boundHasTraitNamed(c: inout c, fnIdx: c.curCheckFn, tpStart: ibt.nameStart, tpLen: ibt.nameLen, traitName: "Index") {
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "subscript `[]` on a type parameter needs a `where T: Index` bound (spec/12)")
+                    }
+                }
+            }
         }
         Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
             mut val i: U64 = 0
