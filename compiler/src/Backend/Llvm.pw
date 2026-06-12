@@ -4093,33 +4093,53 @@ fn genLlvmIfExpr(c: inout Comp, st: inout LlvmCtx, cond: U64, thenBlk: U64, else
     val elseBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "vif.else"))
     val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "vif.end"))
     LLVMBuildCondBr(st.b, cv, thenBB, elseBB)
+    // each branch is a block ending in `give` (value) or diverging (`panic`/`return`).
+    // A diverging branch already terminated its block, so it contributes neither a
+    // value nor an edge into the continuation.
+    mut val phiVals: Array[LLVMValueRef] = []
+    mut val phiBlocks: Array[LLVMBasicBlockRef] = []
     LLVMPositionBuilderAtEnd(st.b, thenBB)
     st.terminated = false
     val markT: U64 = st.nLocals
     genLlvmBlock(c: inout c, st: inout st, id: thenBlk)
-    st.nLocals = markT
+    val thenDiv: Bool = st.terminated
     val thenVal: LLVMValueRef = st.giveValue
     val thenEnd: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
-    LLVMBuildBr(st.b, contBB)
+    st.nLocals = markT
+    if thenDiv {
+    } else {
+        phiVals.append(value: thenVal)
+        phiBlocks.append(value: thenEnd)
+        LLVMBuildBr(st.b, contBB)
+    }
     LLVMPositionBuilderAtEnd(st.b, elseBB)
     st.terminated = false
     val markE: U64 = st.nLocals
     genLlvmBlock(c: inout c, st: inout st, id: elseBlk)
-    st.nLocals = markE
-    val elseVal: LLVMValueRef = st.giveValue
+    val elseDiv: Bool = st.terminated
+    mut val elseVal: LLVMValueRef = st.giveValue
     val elseEnd: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
-    LLVMBuildBr(st.b, contBB)
+    st.nLocals = markE
+    if elseDiv {
+    } else {
+        // unify the else branch's width to a value branch (context-less literals).
+        if phiVals.count > 0U64 {
+            elseVal = coerceInt(st: inout st, v: elseVal, target: LLVMTypeOf(phiVals[0]), unsigned: false)
+        }
+        phiVals.append(value: elseVal)
+        phiBlocks.append(value: elseEnd)
+        LLVMBuildBr(st.b, contBB)
+    }
     LLVMPositionBuilderAtEnd(st.b, contBB)
     st.terminated = false
-    val phi: LLVMValueRef = LLVMBuildPhi(st.b, LLVMTypeOf(thenVal), anon())
-    mut val vals: Array[LLVMValueRef] = []
-    vals.append(value: thenVal)
-    // unify the else branch's width to the then branch (context-less literals).
-    vals.append(value: coerceInt(st: inout st, v: elseVal, target: LLVMTypeOf(thenVal), unsigned: false))
-    mut val blocks: Array[LLVMBasicBlockRef] = []
-    blocks.append(value: thenEnd)
-    blocks.append(value: elseEnd)
-    LLVMAddIncoming(phi, arrayCPtr(vals), arrayCPtr(blocks), 2U64)
+    if phiVals.count == 0U64 {
+        // both branches diverge: the continuation is unreachable.
+        LLVMBuildUnreachable(st.b)
+        st.terminated = true
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    val phi: LLVMValueRef = LLVMBuildPhi(st.b, LLVMTypeOf(phiVals[0]), anon())
+    LLVMAddIncoming(phi, arrayCPtr(phiVals), arrayCPtr(phiBlocks), phiVals.count)
     return phi
 }
 
@@ -4140,7 +4160,9 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
             LLVMBuildStore(st.b, sv, sslot0)
             val mark0: U64 = st.nLocals
             bindStructPattern(c: inout c, st: inout st, sidx: ssidx, binds: arms[0].binds, scrutTy: sty, scrutSlot: sslot0)
-            val rv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: arms[0].body)
+            st.terminated = false
+            genLlvmBlock(c: inout c, st: inout st, id: arms[0].body)
+            val rv: LLVMValueRef = st.giveValue
             st.nLocals = mark0
             if didSetS {
                 c.curTypeParams = savedSP
@@ -4209,16 +4231,25 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
                 c.curTypeArgs = savedVA
             }
         }
-        mut val armVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: arm.body)
-        st.nLocals = saved
-        // unify integer arm values to the first arm's width (a context-less literal
-        // may default wider/narrower) so the PHI is single-typed.
-        if phiVals.count > 0U64 {
-            armVal = coerceInt(st: inout st, v: armVal, target: LLVMTypeOf(phiVals[0]), unsigned: false)
+        // each arm body is a block ending in `give` (value) or in `panic`/`return`
+        // (diverging). genLlvmBlock sets st.giveValue / st.terminated.
+        genLlvmBlock(c: inout c, st: inout st, id: arm.body)
+        val armDiverged: Bool = st.terminated
+        if armDiverged {
+            // a diverging arm (`=> panic`/`=> return`) already terminated its block;
+            // it contributes no value and no edge into the continuation.
+        } else {
+            mut val armVal: LLVMValueRef = st.giveValue
+            // unify integer arm values to the first arm's width (a context-less literal
+            // may default wider/narrower) so the PHI is single-typed.
+            if phiVals.count > 0U64 {
+                armVal = coerceInt(st: inout st, v: armVal, target: LLVMTypeOf(phiVals[0]), unsigned: false)
+            }
+            phiVals.append(value: armVal)
+            phiBlocks.append(value: LLVMGetInsertBlock(st.b))
+            LLVMBuildBr(st.b, contBB)
         }
-        phiVals.append(value: armVal)
-        phiBlocks.append(value: LLVMGetInsertBlock(st.b))
-        LLVMBuildBr(st.b, contBB)
+        st.nLocals = saved
         ai += 1
     }
     if lastWasWildcard {
@@ -4228,6 +4259,12 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
     }
     LLVMPositionBuilderAtEnd(st.b, contBB)
     st.terminated = false
+    // all arms diverged: the continuation is unreachable (the match never yields).
+    if phiVals.count == 0U64 {
+        LLVMBuildUnreachable(st.b)
+        st.terminated = true
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
     val phi: LLVMValueRef = LLVMBuildPhi(st.b, LLVMTypeOf(phiVals[0]), anon())
     LLVMAddIncoming(phi, arrayCPtr(phiVals), arrayCPtr(phiBlocks), phiVals.count)
     return phi
@@ -6649,7 +6686,7 @@ fn scanExprAssoc(c: inout Comp, st: inout LlvmCtx, id: U64) {
         Expr.MatchExpr(val scrut, val arms) => {
             scanExprAssoc(c: inout c, st: inout st, id: scrut)
             mut val i: U64 = 0
-            while i < arms.count { scanExprAssoc(c: inout c, st: inout st, id: arms[i].body) i += 1 }
+            while i < arms.count { scanBlockAssoc(c: inout c, st: inout st, id: arms[i].body) i += 1 }
         }
         Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
             scanExprAssoc(c: inout c, st: inout st, id: cond)
@@ -7694,7 +7731,7 @@ fn scanExprClosures(c: inout Comp, st: inout LlvmCtx, id: U64) {
         Expr.MatchExpr(val scrut, val arms) => {
             scanExprClosures(c: inout c, st: inout st, id: scrut)
             mut val i: U64 = 0
-            while i < arms.count { scanExprClosures(c: inout c, st: inout st, id: arms[i].body) i += 1 }
+            while i < arms.count { scanBlockClosures(c: inout c, st: inout st, id: arms[i].body) i += 1 }
         }
         Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
             scanExprClosures(c: inout c, st: inout st, id: cond)

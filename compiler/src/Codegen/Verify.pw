@@ -1450,7 +1450,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
                 val armMark: U64 = scopeMark(c: inout c)
                 checkDestructureComplete(c: inout c, a: arms[ai])
                 verifyAddArmBinds(c: inout c, a: arms[ai], scrut: scrut)
-                verifyExpr(c: inout c, id: arms[ai].body)
+                verifyBlock(c: inout c, blockId: arms[ai].body)
                 popLocals(c: inout c, mark: armMark)
                 ai += 1
             }

@@ -1,0 +1,11 @@
+// a diverging value-match arm aborts at runtime when its branch is taken.
+enum Opt { Some(v: I64) None }
+fn unwrap(o: Opt) -> I64 {
+    return match o {
+        Opt.Some(val v) => v
+        Opt.None => panic "unwrap on None"
+    }
+}
+fn main() {
+    val x: I64 = unwrap(o: <Opt.None />)
+}

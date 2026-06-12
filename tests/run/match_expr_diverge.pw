@@ -1,0 +1,46 @@
+// value-position match arms may diverge with `panic` / `return` instead of giving
+// a value (spec/11): such arms are excluded from the result, the others yield it.
+import @Std/Io with { print }
+
+enum Opt { Some(v: I64) None }
+
+// `=> panic` arm: the idiomatic "unwrap or abort".
+fn unwrap(o: Opt) -> I64 {
+    return match o {
+        Opt.Some(val v) => v
+        Opt.None => panic "unwrap on None"
+    }
+}
+
+// `=> return` arm: early-return from the enclosing function.
+fn orDefault(o: Opt) -> I64 {
+    val v: I64 = match o {
+        Opt.Some(val v) => v
+        Opt.None => return -1
+    }
+    return v + 100
+}
+
+// a brace give-block value arm (lets before the give) alongside a diverging arm.
+fn doubled(o: Opt) -> I64 {
+    return match o {
+        Opt.Some(val v) => { val d: I64 = v * 2  give d }
+        Opt.None => panic "none"
+    }
+}
+
+// a literal value-match with a diverging wildcard.
+fn onlyZero(n: I64) -> String {
+    return match n {
+        0 => "zero"
+        _ => panic "nonzero"
+    }
+}
+
+fn main() {
+    print(unwrap(o: <Opt.Some v=7 />))
+    print(orDefault(o: <Opt.Some v=5 />))
+    print(orDefault(o: <Opt.None />))
+    print(doubled(o: <Opt.Some v=4 />))
+    print(onlyZero(n: 0))
+}

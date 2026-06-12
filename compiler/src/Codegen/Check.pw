@@ -265,7 +265,14 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
             checkLitCtx(c: inout c, id: scrut, eKind: 0, eBits: 0, eSgn: false)
             mut val i: U64 = 0
             while i < arms.count {
-                checkLitCtx(c: inout c, id: arms[i].body, eKind: eKind, eBits: eBits, eSgn: eSgn)
+                // context flows to each value arm's `give` value; diverging arms have none.
+                if arms[i].isDiverge {
+                } else {
+                    val g: U64 = blockGiveExpr(c: inout c, blkId: arms[i].body)
+                    if g < c.exprs.count {
+                        checkLitCtx(c: inout c, id: g, eKind: eKind, eBits: eBits, eSgn: eSgn)
+                    }
+                }
                 i += 1
             }
         }
@@ -2340,7 +2347,7 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                 val a: MatchArm = arms[ai]
                 val mark: U64 = scopeMark(c: inout c)
                 scanAddArmBinds(c: inout c, a: a, scrutTi: exprType(c: inout c, id: scrut))
-                checkBoundsExpr(c: inout c, exprId: a.body)
+                checkBoundsBlock(c: inout c, blkId: a.body)
                 popLocals(c: inout c, mark: mark)
                 ai += 1
             }
@@ -2405,8 +2412,14 @@ fn checkGenericTypeMatch(c: inout Comp, expectedRef: U64, valueExpr: U64) {
         Expr.MatchExpr(scrut: _, val arms) => {
             mut val ai: U64 = 0
             while ai < arms.count {
-                if arms[ai].binds.count == 0U64 {
-                    checkGenericTypeMatch(c: inout c, expectedRef: expectedRef, valueExpr: arms[ai].body)
+                if arms[ai].isDiverge {
+                } else {
+                    if arms[ai].binds.count == 0U64 {
+                        val g: U64 = blockGiveExpr(c: inout c, blkId: arms[ai].body)
+                        if g < c.exprs.count {
+                            checkGenericTypeMatch(c: inout c, expectedRef: expectedRef, valueExpr: g)
+                        }
+                    }
                 }
                 ai += 1
             }

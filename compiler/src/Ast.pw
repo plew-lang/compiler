@@ -249,11 +249,17 @@ struct MatchArm {
     pub val variantStart: U64
     pub val variantLen: U64
     pub val binds: Array[Bind]
-    // body is a Block index for Stmt.Match, or an Expr index for Expr.MatchExpr.
+    // body is always a Block index (for both Stmt.Match and Expr.MatchExpr). A
+    // value-match arm's block ends in `give <expr>` (the arm value); a diverging
+    // arm's block ends in `panic`/`return` and is excluded from the result PHI.
     pub val body: U64
     // a struct destructuring pattern `S { val x }` (irrefutable, no tag): bind
     // fields directly from the scrutinee. enumStart names the struct type.
     pub val isStruct: Bool
+    // (value-match only) the arm diverges (`=> panic …` / `=> return …`) and so
+    // yields no value. Backend excludes it from the result PHI. Always false for
+    // statement-match arms (their value is unused).
+    pub val isDiverge: Bool = false
 }
 
 // The pattern part of a match arm (everything before `=>`), shared by statement

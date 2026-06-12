@@ -955,6 +955,38 @@ fn parseMatchStmtAst(p: inout P) -> StmtAst {
     return <StmtAst.Match scrut=scrut arms=arms span=<Span start=sStart end=p.prevEnd() /> />
 }
 
+// A value-position match-arm body. A bare expression `=> e` becomes a one-`give`
+// block; a diverging arm `=> panic …` / `=> return …` becomes a one-statement
+// block (no give); a `{ }` block is taken as-is (it ends in `give` or diverges).
+// The lowering distinguishes value vs diverging arms by the terminal statement.
+fn parseExprArmBodyAst(p: inout P, armStart: U64) -> BlockAst {
+    match p.curKind() {
+        Kind.LBrace => { return parseBlockAst(p: inout p) }
+        Kind.KwReturn => {
+            mut val one: Array[StmtAst] = []
+            one.append(parseStmtAst(p: inout p))
+            return <BlockAst stmts=one />
+        }
+        Kind.Ident => {
+            if curIs(p: inout p, kw: "panic") {
+                mut val one: Array[StmtAst] = []
+                one.append(parsePanicAst(p: inout p))
+                return <BlockAst stmts=one />
+            }
+            val e: ExprAst = parseExprAst(p: inout p)
+            mut val g: Array[StmtAst] = []
+            g.append(<StmtAst.Give value=e span=<Span start=armStart end=p.prevEnd() /> />)
+            return <BlockAst stmts=g />
+        }
+        _ => {
+            val e: ExprAst = parseExprAst(p: inout p)
+            mut val g: Array[StmtAst] = []
+            g.append(<StmtAst.Give value=e span=<Span start=armStart end=p.prevEnd() /> />)
+            return <BlockAst stmts=g />
+        }
+    }
+}
+
 fn parseMatchExprAst(p: inout P) -> ExprAst {
     val sStart: U64 = p.base + p.curTok().start
     p.advance()
@@ -976,10 +1008,7 @@ fn parseMatchExprAst(p: inout P) -> ExprAst {
             _ => {
                 val armStart: U64 = p.base + p.curTok().start
                 val pats: Array[PatternAst] = parseArmPatternsAst(p: inout p)
-                val bodyExpr: ExprAst = parseExprAst(p: inout p)
-                mut val one: Array[StmtAst] = []
-                one.append(<StmtAst.Give value=bodyExpr span=<Span start=armStart end=p.prevEnd() /> />)
-                val body: BlockAst = <BlockAst stmts=one />
+                val body: BlockAst = parseExprArmBodyAst(p: inout p, armStart: armStart)
                 mut val pi: U64 = 0
                 while pi < pats.count {
                     arms.append(<MatchArmAst pattern=pats[pi] body=body span=<Span start=armStart end=p.prevEnd() /> />)

@@ -1926,8 +1926,17 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             return typeInfoOfName(c: inout c, start: tyStart, len: tyLen, isArray: false)
         }
         Expr.MatchExpr(val scrut, val arms) => {
-            if arms.count > 0 {
-                return exprType(c: inout c, id: arms[0].body)
+            // the result type is the give value of the first non-diverging arm.
+            mut val mai: U64 = 0
+            while mai < arms.count {
+                if arms[mai].isDiverge {
+                } else {
+                    val mg: U64 = blockGiveExpr(c: inout c, blkId: arms[mai].body)
+                    if mg < c.exprs.count {
+                        return exprType(c: inout c, id: mg)
+                    }
+                }
+                mai += 1
             }
             return scalarInfo()
         }

@@ -23,6 +23,17 @@ fn drainDerives(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool, declS
 }
 
 // Append a string's bytes to c.bytes and return its (start,len) span — for
+// Wrap a value Expr index into a one-`give` Block index — the body shape every
+// value-match arm now uses (MatchArm.body is a Block index). Derived `@[Eq]`/
+// `@[Ord]` matches build their arm values directly, so they wrap them here.
+fn synthGiveBlock(c: inout Comp, valueExpr: U64) -> U64 {
+    mut val ss: Array[U64] = []
+    ss.append(value: c.pushStmt(s: <Stmt.Give value=valueExpr />))
+    val id: U64 = c.blocks.count
+    c.blocks.append(<Block stmts=ss />)
+    return id
+}
+
 // synthetic identifier names referenced by derived code (#5: `@[Eq]`/`@[Ord]`).
 fn internBytes(c: inout Comp, s: String) -> Bind {
     val start: U64 = c.bytes.count
@@ -190,11 +201,11 @@ fn synthEnumEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind, b
         }
         // inner match on rhs: this variant -> payload, anything else -> false.
         mut val innerArms: Array[MatchArm] = []
-        innerArms.append(<MatchArm isWildcard=false enumStart=d.typeStart enumLen=d.typeLen variantStart=v.nameStart variantLen=v.nameLen binds=rhsBinds body=payload isStruct=false />)
+        innerArms.append(<MatchArm isWildcard=false enumStart=d.typeStart enumLen=d.typeLen variantStart=v.nameStart variantLen=v.nameLen binds=rhsBinds body=synthGiveBlock(c: inout c, valueExpr: payload) isStruct=false />)
         val noBinds: Array[Bind] = []
-        innerArms.append(<MatchArm isWildcard=true enumStart=0 enumLen=0 variantStart=0 variantLen=0 binds=noBinds body=synthBool(c: inout c, v: 0) isStruct=false />)
+        innerArms.append(<MatchArm isWildcard=true enumStart=0 enumLen=0 variantStart=0 variantLen=0 binds=noBinds body=synthGiveBlock(c: inout c, valueExpr: synthBool(c: inout c, v: 0)) isStruct=false />)
         val innerMatch: U64 = c.pushExpr(e: <Expr.MatchExpr scrut=rhsId arms=innerArms />)
-        outerArms.append(<MatchArm isWildcard=false enumStart=d.typeStart enumLen=d.typeLen variantStart=v.nameStart variantLen=v.nameLen binds=lhsBinds body=innerMatch isStruct=false />)
+        outerArms.append(<MatchArm isWildcard=false enumStart=d.typeStart enumLen=d.typeLen variantStart=v.nameStart variantLen=v.nameLen binds=lhsBinds body=synthGiveBlock(c: inout c, valueExpr: innerMatch) isStruct=false />)
         vi += 1
     }
     val outerMatch: U64 = c.pushExpr(e: <Expr.MatchExpr scrut=lhsId arms=outerArms />)
@@ -358,11 +369,11 @@ fn synthEnumOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bind,
                     body = synthOrdChainExpr(c: inout c, lhsNames: lhsNames, rhsNames: rhsNames, ordN: ordN, lessN: lessN, greaterN: greaterN, equalN: equalN)
                 }
             }
-            innerArms.append(<MatchArm isWildcard=false enumStart=d.typeStart enumLen=d.typeLen variantStart=rv.nameStart variantLen=rv.nameLen binds=rhsBinds body=body isStruct=false />)
+            innerArms.append(<MatchArm isWildcard=false enumStart=d.typeStart enumLen=d.typeLen variantStart=rv.nameStart variantLen=rv.nameLen binds=rhsBinds body=synthGiveBlock(c: inout c, valueExpr: body) isStruct=false />)
             oj += 1
         }
         val innerMatch: U64 = c.pushExpr(e: <Expr.MatchExpr scrut=rhsId arms=innerArms />)
-        outerArms.append(<MatchArm isWildcard=false enumStart=d.typeStart enumLen=d.typeLen variantStart=lv.nameStart variantLen=lv.nameLen binds=lhsBinds body=innerMatch isStruct=false />)
+        outerArms.append(<MatchArm isWildcard=false enumStart=d.typeStart enumLen=d.typeLen variantStart=lv.nameStart variantLen=lv.nameLen binds=lhsBinds body=synthGiveBlock(c: inout c, valueExpr: innerMatch) isStruct=false />)
         oi += 1
     }
     val outerMatch: U64 = c.pushExpr(e: <Expr.MatchExpr scrut=lhsId arms=outerArms />)

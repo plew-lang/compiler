@@ -861,30 +861,33 @@ fn lowerPatternInfo(c: inout Comp, p: PatternAst) -> PatInfo {
     return <PatInfo isWildcard=false enumStart=en.nameStart enumLen=en.nameLen variantStart=vStart variantLen=vLen binds=binds isStruct=p.isStruct />
 }
 
-// Lower match arms. For an expression-position match (isExpr), each arm's body is a
-// synthesized one-`give` block; its arena `body` is the give value's Expr index.
-// For a statement-position match, the arena `body` is the block index.
+// True if a value-match arm block diverges (`=> panic …` / `=> return …`) rather
+// than giving a value — its terminal statement is not a `give`.
+fn armBlockDiverges(b: BlockAst) -> Bool {
+    if b.stmts.count == 0 {
+        return false
+    }
+    match b.stmts[b.stmts.count - 1] {
+        StmtAst.Give(value: _, span: _) => { return false }
+        _ => { return true }
+    }
+}
+
+// Lower match arms. Each arm's `body` is a Block index (both statement and
+// expression position). A value-match arm's block ends in `give`; a diverging arm
+// (`=> panic`/`=> return`) is flagged so the backend excludes it from the PHI.
 fn lowerMatchArms(c: inout Comp, arms: Array[MatchArmAst], isExpr: Bool) -> Array[MatchArm] {
     mut val out: Array[MatchArm] = []
     mut val i: U64 = 0
     while i < arms.count {
         val arm: MatchArmAst = arms[i]
         val pi: PatInfo = lowerPatternInfo(c: inout c, p: arm.pattern)
-        mut val body: U64 = 0
+        val body: U64 = lowerBlock(c: inout c, b: arm.body)
+        mut val diverge: Bool = false
         if isExpr {
-            // the give-block's single statement is `give <expr>`; lower that expr.
-            mut val gv: ExprAst = emptyExpr()
-            if arm.body.stmts.count > 0 {
-                match arm.body.stmts[0] {
-                    StmtAst.Give(val value, val span) => { gv = value }
-                    _ => {}
-                }
-            }
-            body = lowerExpr(c: inout c, e: gv)
-        } else {
-            body = lowerBlock(c: inout c, b: arm.body)
+            diverge = armBlockDiverges(b: arm.body)
         }
-        out.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body isStruct=pi.isStruct />)
+        out.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body isStruct=pi.isStruct isDiverge=diverge />)
         i += 1
     }
     return out
@@ -1076,39 +1079,63 @@ fn lowerLiteralMatchExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst]
             haveElse = true
         }
     }
-    mut val wildGive: ExprAst = emptyExpr()
     if haveElse {
-        wildGive = armGiveExprAst(arm: arms[elseIdx])
     } else {
         compileErrorAt(line: lineOf(c: inout c, offset: span.start), msg: "a literal `match` must end with a wildcard `_` arm (literal patterns are not exhaustive — spec/11)")
     }
-    mut val curElseExpr: U64 = lowerExpr(c: inout c, e: wildGive)
+    // a value-giving arm's give AST, re-lowered for the dead `else` of the non-Ident
+    // wrapper (any value arm has the match's result type).
+    mut val valueGive: ExprAst = emptyExpr()
+    mut val mi: U64 = 0
+    while mi < arms.count {
+        if armBlockDiverges(b: arms[mi].body) {
+        } else {
+            valueGive = armGiveExprAst(arm: arms[mi])
+        }
+        mi += 1
+    }
+    // build the if/else chain over real arm blocks (each gives or diverges). The else
+    // chain begins as the else arm's block; each cond arm wraps the running chain.
+    mut val curElseBlk: U64 = 0
+    if haveElse {
+        curElseBlk = lowerBlock(c: inout c, b: arms[elseIdx].body)
+    } else {
+        mut val es: Array[U64] = []
+        es.append(value: c.pushStmt(s: <Stmt.Give value=c.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 isNeg=false />) />))
+        curElseBlk = blockOfStmts(c: inout c, stmts: es)
+    }
+    mut val headExpr: U64 = 0
+    mut val haveHead: Bool = false
     mut val k: U64 = arms.count
     while k > 0 {
         k -= 1
         if k != elseIdx {
             if arms[k].pattern.isLiteral {
-                val thenGive: U64 = lowerExpr(c: inout c, e: armGiveExprAst(arm: arms[k]))
+                val thenBlk: U64 = lowerBlock(c: inout c, b: arms[k].body)
                 val cond: U64 = lowerLitEq(c: inout c, lhsStart: lhsStart, lhsLen: lhsLen, lit: arms[k].pattern.lit)
-                val tb: U64 = blockOfGive(c: inout c, giveExpr: thenGive)
-                val eb: U64 = blockOfGive(c: inout c, giveExpr: curElseExpr)
-                curElseExpr = c.pushExpr(e: <Expr.IfExpr cond=cond thenBlk=tb elseBlk=eb />)
+                val ifx: U64 = c.pushExpr(e: <Expr.IfExpr cond=cond thenBlk=thenBlk elseBlk=curElseBlk />)
+                headExpr = ifx
+                haveHead = true
+                curElseBlk = blockOfGive(c: inout c, giveExpr: ifx)
             }
         }
     }
+    if haveHead {
+    } else {
+        headExpr = lowerExpr(c: inout c, e: valueGive)
+    }
     if scrutIsIdent {
-        return curElseExpr
+        return headExpr
     }
     // non-Ident scrutinee: bind it once in a `give`-block wrapper. The `else` branch
-    // is dead (cond is literal `true`) but must yield a same-typed value: re-lower the
-    // wildcard give into a fresh subtree (mutually exclusive with the reachable one, so
-    // no double-move).
+    // is dead (cond is literal `true`) but must yield a same-typed value: re-lower a
+    // value arm's give (mutually exclusive with the reachable head, so no double-move).
     val sv: U64 = lowerExpr(c: inout c, e: scrut)
     mut val thenStmts: Array[U64] = []
     thenStmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
-    thenStmts.append(value: c.pushStmt(s: <Stmt.Give value=curElseExpr />))
+    thenStmts.append(value: c.pushStmt(s: <Stmt.Give value=headExpr />))
     val thenWrap: U64 = blockOfStmts(c: inout c, stmts: thenStmts)
-    val deadGive: U64 = lowerExpr(c: inout c, e: wildGive)
+    val deadGive: U64 = lowerExpr(c: inout c, e: valueGive)
     val elseWrap: U64 = blockOfGive(c: inout c, giveExpr: deadGive)
     val trueCond: U64 = c.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />)
     return c.pushExpr(e: <Expr.IfExpr cond=trueCond thenBlk=thenWrap elseBlk=elseWrap />)

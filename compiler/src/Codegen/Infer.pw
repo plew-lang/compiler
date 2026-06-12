@@ -267,8 +267,15 @@ fn tcCheckValue(c: inout Comp, expectedRef: U64, valueExpr: U64, pos: String) {
                 // skip an arm that binds payload fields: its binds are not in scope at
                 // this (the match-expr) position and may shadow an outer name, so
                 // inferType on the arm body would resolve the shadowed name wrongly.
-                if arms[ai].binds.count == 0U64 {
-                    tcCheckValue(c: inout c, expectedRef: expectedRef, valueExpr: arms[ai].body, pos: "match-branch")
+                // a diverging arm (`=> panic`) yields no value to check.
+                if arms[ai].isDiverge {
+                } else {
+                    if arms[ai].binds.count == 0U64 {
+                        val g: U64 = blockGiveExpr(c: inout c, blkId: arms[ai].body)
+                        if g < c.exprs.count {
+                            tcCheckValue(c: inout c, expectedRef: expectedRef, valueExpr: g, pos: "match-branch")
+                        }
+                    }
                 }
                 ai += 1
             }
