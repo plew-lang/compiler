@@ -796,6 +796,17 @@ fn parsePatternAst(p: inout P) -> PatternAst {
         val lit: ExprAst = parsePatternLiteralAst(p: inout p)
         return <PatternAst isWildcard=false isStruct=false typeName="" variant="" binds=binds isLiteral=true lit=lit span=<Span start=sStart end=p.prevEnd() /> />
     }
+    // a capture binding `val x`: a named wildcard binding the scrutinee to `x` (spec/11).
+    match p.curKind() {
+        Kind.KwVal => {
+            p.advance()
+            val nameTok: Tok = p.curTok()
+            val cn: String = p.text(t: nameTok)
+            p.advance()
+            return <PatternAst isWildcard=true isStruct=false typeName="" variant="" binds=binds captureName=cn span=<Span start=sStart end=p.prevEnd() /> />
+        }
+        _ => {}
+    }
     if rangeEquals(bytes: p.bytes, start: firstTok.start, len: firstTok.len, kw: "_") {
         isWildcard = true
         p.advance()

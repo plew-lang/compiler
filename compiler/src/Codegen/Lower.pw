@@ -881,6 +881,9 @@ fn lowerMatchArms(c: inout Comp, arms: Array[MatchArmAst], isExpr: Bool) -> Arra
     mut val i: U64 = 0
     while i < arms.count {
         val arm: MatchArmAst = arms[i]
+        if arm.pattern.captureName.bytes.count > 0 {
+            compileErrorAt(line: lineOf(c: inout c, offset: arm.pattern.span.start), msg: "a capture binding `val x` in a match that dispatches on enum variants is not supported yet; use `_` or a scalar/literal match")
+        }
         val pi: PatInfo = lowerPatternInfo(c: inout c, p: arm.pattern)
         val body: U64 = lowerBlock(c: inout c, b: arm.body)
         mut val diverge: Bool = false
@@ -1017,6 +1020,33 @@ fn lowerLitEq(c: inout Comp, lhsStart: U64, lhsLen: U64, lit: ExprAst) -> U64 {
     return c.pushExpr(e: <Expr.Binary op=opEq() lhs=lhs rhs=rhs />)
 }
 
+fn matchHasCapture(arms: Array[MatchArmAst]) -> Bool {
+    mut val i: U64 = 0
+    while i < arms.count {
+        if arms[i].pattern.captureName.bytes.count > 0 {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Bind each capture pattern's name to the scrutinee value (held in the local named
+// `srcStart`/`srcLen`), appended to `stmts`. All captures alias the same scrutinee
+// value, so binding them up front makes them visible to every arm's guard and body.
+fn bindScalarCapturesInto(c: inout Comp, arms: Array[MatchArmAst], srcStart: U64, srcLen: U64, stmts: inout Array[U64]) {
+    mut val i: U64 = 0
+    while i < arms.count {
+        val cn: String = arms[i].pattern.captureName
+        if cn.bytes.count > 0 {
+            val cap: Bind = internBytes(c: inout c, s: cn)
+            val recv: U64 = c.pushExpr(e: <Expr.Ident start=srcStart len=srcLen />)
+            stmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=cap.nameStart nameLen=cap.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=recv />))
+        }
+        i += 1
+    }
+}
+
 // Find the terminal `else` arm of a scalar match: the first UNGUARDED wildcard, or
 // (for an exhaustive Bool match) the last arm. Returns arms.count if none.
 fn scalarMatchElseIdx(c: inout Comp, arms: Array[MatchArmAst]) -> U64 {
@@ -1044,6 +1074,7 @@ fn lowerScalarMatchStmtInto(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmA
     val tmp: Bind = internBytes(c: inout c, s: "__mtmp")
     val sv: U64 = lowerExpr(c: inout c, e: scrut)
     stmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
+    bindScalarCapturesInto(c: inout c, arms: arms, srcStart: tmp.nameStart, srcLen: tmp.nameLen, stmts: inout stmts)
     val elseIdx: U64 = scalarMatchElseIdx(c: inout c, arms: arms)
     mut val elseBlkId: U64 = 0
     if elseIdx < arms.count {
@@ -1099,6 +1130,11 @@ fn lowerScalarMatchExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst],
             scrutIsIdent = true
         }
         _ => {}
+    }
+    // capture bindings need an enclosing block to bind their names, so force the
+    // __mtmp wrapper (not the inline-Ident shortcut) when any arm captures.
+    if matchHasCapture(arms: arms) {
+        scrutIsIdent = false
     }
     mut val tmp: Bind = internBytes(c: inout c, s: "__mtmp")
     if scrutIsIdent {
@@ -1163,6 +1199,7 @@ fn lowerScalarMatchExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst],
     val sv: U64 = lowerExpr(c: inout c, e: scrut)
     mut val thenStmts: Array[U64] = []
     thenStmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
+    bindScalarCapturesInto(c: inout c, arms: arms, srcStart: tmp.nameStart, srcLen: tmp.nameLen, stmts: inout thenStmts)
     thenStmts.append(value: c.pushStmt(s: <Stmt.Give value=headExpr />))
     val thenWrap: U64 = blockOfStmts(c: inout c, stmts: thenStmts)
     val deadGive: U64 = lowerExpr(c: inout c, e: valueGive)

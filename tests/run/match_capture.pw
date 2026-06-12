@@ -1,0 +1,34 @@
+// capture-binding patterns `val x =>` (spec/11): a named wildcard that binds the
+// whole scrutinee, usable with a guard (`val x if cond`). Supported on scalar /
+// literal matches (the if/else desugar); enum-dispatch matches still use `_`.
+import @Std/Io with { print }
+
+fn sign(n: I64) -> String {
+    return match n {
+        0 => "zero"
+        val x if x > 0 => "pos"
+        val x => "neg"
+    }
+}
+
+fn classify(n: I64) {
+    match n {
+        val x if x == 42 => { print("answer") }
+        val x if x < 0 => { print("negative") }
+        val x => { print("ordinary") }
+    }
+}
+
+fn bump(n: I64) -> I64 { return n + 1 }
+
+fn main() {
+    print(sign(n: 0))
+    print(sign(n: 9))
+    print(sign(n: -4))
+    classify(n: 42)
+    classify(n: -1)
+    classify(n: 7)
+    // a non-Ident scrutinee with a capture (the wrapper path).
+    val r: String = match bump(n: 41) { val x if x > 40 => "big" val x => "small" }
+    print(r)
+}

@@ -45,6 +45,9 @@ export struct PatternAst {
     pub val binds: Array[BindAst]
     pub val isLiteral: Bool = false
     pub val lit: ExprAst = emptyExpr()
+    // a capture binding `val x` — a named wildcard that binds the whole scrutinee to
+    // `captureName` (spec/11). isWildcard is also true; captureName is "" for a plain `_`.
+    pub val captureName: String = ""
     pub val span: Span
 }
 
