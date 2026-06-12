@@ -1,0 +1,3 @@
+import @Std/Io with { print }
+// spec/02: a UTF-16 surrogate (U+D800..U+DFFF) is not a valid Unicode scalar.
+fn main() { print("\u{D800}") }

@@ -28,7 +28,7 @@
 ## 文字列
 
 - `String`＝不変・UTF-8 妥当・`==` バイト等価な CoW 値型 → **現状：`{ptr,len}`・不変・byte-`==`**（不変と byte-eq は spec 通り）。残：**UTF-8 妥当性チェックなし**・**連結なし**・**`scalars`/`graphemes`/`Ord`/substring/`Slice` なし**・解放なし〔leak〕。`.bytes`（`Array[U8]` O(1) ビュー）は spec 通り。spec/02。
-- ✅ **文字列リテラルのエスケープ**：`strDecodeBytes`/`escByte` が `\n`/`\t`/`\r`/`\0`＋`\\`/`\"`/`\'` を decode 済。✅ **`\u{XXXX}` Unicode エスケープ**（`café`＝`\u{e9}`・絵文字＝`\u{1F600}`）＝`appendUtf8`/`hexDigitVal` が UTF-8 1-4 byte に encode・U64→U8 truncation は `truncU8` intrinsic〔Core の `extern "plew-intrinsic"`＋genLlvmCall intercept で `coerceInt`→i8・bitCastU64 と同形〕。chicken-and-egg は ADD（intercept のみ）→reseed→USE→reseed の2段 reseed で解消（intercept を先に seed へ焼く）。test run unicode_escape。spec/02。
+- ✅ **文字列リテラルのエスケープ**：`strDecodeBytes`/`escByte` が `\n`/`\t`/`\r`/`\0`＋`\\`/`\"`/`\'` を decode 済。✅ **`\u{XXXX}` Unicode エスケープ**（`café`＝`\u{e9}`・絵文字＝`\u{1F600}`）＝`appendUtf8`/`hexDigitVal` が UTF-8 1-4 byte に encode・U64→U8 truncation は `truncU8` intrinsic〔Core の `extern "plew-intrinsic"`＋genLlvmCall intercept で `coerceInt`→i8・bitCastU64 と同形〕。✅ **無効コードポイント reject**〔`strDecodeBytes` が U+10FFFF 超／サロゲート U+D800..U+DFFF を loud-reject＝String の UTF-8 妥当不変条件・test reject unicode_escape_out_of_range/unicode_escape_surrogate〕。chicken-and-egg は ADD（intercept のみ）→reseed→USE→reseed の2段 reseed で解消（intercept を先に seed へ焼く）。test run unicode_escape。spec/02。
 
 ## 配列・辞書・集合・タプル
 
@@ -93,4 +93,4 @@
 
 ---
 
-**再訪の優先度**：観測挙動を歪める大物はほぼ解消済（整数幅・match・ラベル・無損失 `as`・値意味論・CoW＋refcount 解放・generics・トレイト・`Optional`/`Result`/`try`・`unique`＋`deinit`・クロージャ・演算子トレイト全配線・async/await・無名レコード・newtype〔int〕・受理健全性の共有パス＋型チェッカ soundness ハードニング・**構築フィールドゲート (b)**・**再帰 generic 値型完全**・LLVM 単一 backend）。**残る soundness 穴**＝ファクトリ公開ゲート (a)〔factory 機能依存〕・generic-receiver method の value 引数 grounding・重なる inout ②③。残る hidden meaning＝newtype 非 int 継承・From/TryFrom・float→int `as`・mixed `1.5+2`/無型 int generic-enum payload・一般 Chain・Iterator〔sum/enumerate/zip〕・名前空間 import・`\u{}`・generic assoc fn〔Set〕。残る hidden cost＝backend ARC drop。**横断＝型パラメータ判定のスコープ化**（複数項の根）。詳細順序は [worklog.md](worklog.md)「🗺️ ロードマップ」。
+**再訪の優先度**：観測挙動を歪める大物はほぼ解消済（整数幅・match・ラベル・無損失 `as`・値意味論・CoW＋refcount 解放・generics・トレイト・`Optional`/`Result`/`try`・`unique`＋`deinit`・クロージャ・演算子トレイト全配線・async/await・無名レコード・newtype〔int〕・受理健全性の共有パス＋型チェッカ soundness ハードニング・**構築フィールドゲート (b)**・**再帰 generic 値型完全**・LLVM 単一 backend）。**残る soundness 穴**＝ファクトリ公開ゲート (a)〔factory 機能依存〕・generic-receiver method の value 引数 grounding・重なる inout ②③。残る hidden meaning＝newtype 非 int 継承・From/TryFrom・float→int `as`・mixed `1.5+2`/無型 int generic-enum payload・一般 Chain・Iterator〔sum/enumerate/zip〕・名前空間 import・generic assoc fn〔Set〕。残る hidden cost＝backend ARC drop。**横断＝型パラメータ判定のスコープ化**（複数項の根）。詳細順序は [worklog.md](worklog.md)「🗺️ ロードマップ」。
