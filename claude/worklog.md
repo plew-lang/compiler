@@ -15,6 +15,8 @@
 
 ## 🎯 ゴール＝「3 大機能を除く spec 完全準拠」
 
+> **2026-06-12 マイルストン：Section A（soundness・受理健全性）完了。** spec-invalid を accept する穴は全て塞いだ（generic 本体 abstract 検査・provided-method arity・default 自己完結・deinit on unique・重複 type-param/trait-req・bare return・closure ラベル/fn 型ラベル・inout place・array↔scalar・use-after-move・generic-receiver grounding・factory 公開ゲート・unicode escape・float→int as・…）。残るは Section B（hidden meaning＝spec-valid を reject／silent 逸脱）と C（hidden cost＝leak）で、**いずれも parser/backend codegen に跨る中〜大の機能追加**（From/TryFrom・literal match パターン〔`match x { 0 => … }`〕・名前空間 import〔`Io.print`〕・newtype 非 int 継承・Iterator sum/enumerate/zip・assoc val・global 前方参照 等）＝各々 focused な実装が要る。残スコープは下記 B/C と provisional.md。
+
 **並行 spawn・循環回収・パッケージ管理（M3）の 3 つを意図的に後回しにし、それ以外で Plew が完全に仕様通り動く状態を目指す。** 残作業の正典地図は [provisional.md](provisional.md)（＝現コンパイラが spec から意図的に剥離している箇所のカタログ・`✅` でない項が残作業）＝**この 3 つ以外の剥離をすべて潰す**のがゴール。完了の目安＝provisional.md が（3 大機能・spec-future を除いて）すべて `✅` になり、spec 由来の reject/run テストが網羅される。
 
 **スコープ外（このゴールに含めない）**：
