@@ -56,7 +56,7 @@ test.sh               テストスイート（run/panic/reject/part＋不動点�
 test-gen.sh           メタプロ（gen/genreject）テスト
 plew                  統一 CLI＝`plew build f.pw [-o out]`／`plew run f.pw`／`plew gen f.pw`（＋bare `plew f.pw`＝build 後方互換）。任意パスで動く＝std はバイナリ位置解決・生成物も gen harness も libc のみ（llvm-config 不要）・symlink 解決で隣の compiler/plewc を見つける・PATH に symlink 可
 plew-gen.sh           `plew gen` への薄い委譲 wrapper（後方互換・メタプロ生成 `<file>.gen.pw`・spec/16）
-tmp/                  ローカル実験の scratch（gitignore・cleanup はスクリプト内包）
+tmp/                  ローカル実験の scratch（gitignore・cleanup はスクリプト内包）。コマンドに**直接 `rm` を書かない**（毎回確認プロンプトが出る）＝削除はスクリプトに内包して呼ぶ
 tests/
   run/<name>.pw,.out  コンパイル&実行→stdout 照合（任意の .in を stdin に）
   reject/<name>.pw    spec-invalid＝コンパイル失敗すべきケース（受理の健全性）
@@ -133,7 +133,7 @@ clang は生成 IR のコンパイル/リンクに使う（Apple clang で可・
 
 - **現フェーズ＝セルフホスト達成後の機能追加＋コンパイラ renovate**（仕様策定はほぼ完了・stage0〔Rust〕退役済み・async 1-3／コアライブラリ Plew 化／Array struct 化／可視性強制／Iterator＋lazy／再帰値型＋ARC／renovate Phase A・B・C・D〔C＝名前 interning・D＝型 interning〕／メタプロ M0・M1〔マクロが実宣言を読んで生成・tag `metaprogramming-m1`〕／**A フロントエンド統合〔構文解析を完全に `@Std/Syntax` へ・パース駆動ローディング〕**／マクロ入力型 `TopItemAst`〔impl/trait もマクロ対象〕／Eq/Ord＋Hash dogfood／`Dictionary[K,V]` lang item〔struct+メソッド+添字+リテラル `[k:v]`/`[:]`〕／**演算子トレイト配線 O1-O8〔算術/ビット/単項/比較すべてユーザー型＋プリミティブで witness 脱糖・`impl I32 as Add[I32]`/`as Ord` 床 intrinsic 経由・コンパイラ自身も witness 経由・真の負リテラル畳み込み・同名トレイト構造的解決・**built-in 算術完全削除**〔全演算が Core witness 経由・context 側 `typeOf` 完成 `exprIntCtx`・width-less/no-Core は loud error〕・**`??` 演算子廃止**〔Rust 同様あえて持たず・`Optional.unwrapOr(fallback:)` の eager 値/lazy クロージャのオーバーロードへ〕・**Index/IndexSet**〔ユーザー型添字〕・**Chain `?.`**〔Optional 具体〕〕**は済〔残は小・additive＝一般 Chain トレイト・Pow〔float 後〕・複合添字 `a[k]+=v`〕）。**次の本命候補＝Iterator 拡充・並行 spawn・`any P` 存在型・循環回収**（worklog「演算子が一段落した後の候補」）。現在地・次の一歩は [claude/worklog.md](claude/worklog.md)。理想は**人手を介さず自走で**進めること。
 - **判断を仰ぐときは「選択肢＋トレードオフ＋推奨（理由）」を簡潔に**。ユーザーは納得すれば即決する。決定の含意を最後まで追い、他所に生じる矛盾・抜け（呼び出し側の整合、既存規則との衝突）を**先回りで指摘**する。
-- **実装の順序・段取りは全面委任**（どの機能から作るか・増分の切り方・何を先に作るかは一切確認不要で自走してよい）。一方で**言語表面の設計判断や後戻りが重い分岐**（spec に未記載の構文・意味論の決定など）は引き続き確認する＝「順序」は仰がない／「言語仕様の決定」は仰ぐ。**明白に不要なファイルは容赦なく消してよい**。迷ったら突き進まず仰ぐ。
+- **実装の順序・段取りは全面委任**（どの機能から作るか・増分の切り方・何を先に作るかは一切確認不要で自走してよい）。一方で**言語表面の設計判断や後戻りが重い分岐**（spec に未記載の構文・意味論の決定など）は引き続き確認する＝「順序」は仰がない／「言語仕様の決定」は仰ぐ。**大物アーキ判断（バックエンド方式・バイナリ構成・ブートストラップ戦略など）も後戻りが重いので自走せず一旦止まって確認**する。**明白に不要なファイルは容赦なく消してよい**。迷ったら突き進まず仰ぐ。
 - **リファクタは随時・委任**：保守性が落ちないよう、機能追加のついでに古い実装を整理してよい（言語機能が増える前に書かれた回りくどい箇所が多い＝後付け機能で素直に書き直せる）。観測挙動（生成 C・テスト・不動点）を変えない純リファクタは確認不要で進める。意味論を変える整理だけ仰ぐ。
 - **コンパイラの分割は part だけでなくモジュール分割も可**：現状は `compiler/src/` を root `_.pw` ＋ `part` で 1 モジュールに綴じているが、独立性が高い塊（将来のバックエンド・ランタイム生成など）は別パッケージ／別モジュール（`import`）に切り出してよい。判断材料は結合度（part＝密結合で同一 arena/Comp を共有する塊・module＝境界を `import` で明示できる塊）。**過度な細分化は避け**、まずは part 内の整理を優先（分割は便益が明確なときだけ）。
 - **作業ログをこまめに更新**：compact がいつ走るか分からないので、[claude/worklog.md](claude/worklog.md) に「今やっていること・次にやること」を残す。**メモはすべて repo 内（`CLAUDE.md`／`claude/`）に置き、外部 memory は使わない**。
