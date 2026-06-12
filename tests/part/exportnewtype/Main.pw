@@ -1,5 +1,8 @@
 // A `newtype` exported from a submodule, then imported and used across the module
-// boundary — including its inherited String members (`.bytes`) and the `as` re-tag.
+// boundary — including its inherited String members (`.bytes`/`.isEmpty()`) and the
+// `as` re-tag. (User-defined methods on a newtype receiver are covered by the
+// entry-module run test newtype_methods.pw; method bodies emit per the entry-module
+// gate, same as struct/enum methods.)
 import @Std/Io with { print }
 import /Models/User with { UserId, makeUser }
 

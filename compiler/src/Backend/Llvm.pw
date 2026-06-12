@@ -1465,6 +1465,14 @@ fn methodResultRef(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, 
                 if isGenericInst(c: inout c, ref: g) {
                     return g
                 }
+                // a `newtype` return (`fn plus() -> Meter`, spec/10): yield its ref so a
+                // chained call on the result (`a.plus(b).raw()`) recovers the newtype to
+                // dispatch its (and its underlying's) methods.
+                if g != 0U64 {
+                    if newtypeUnderRef(c: inout c, start: c.types[g].nameStart, len: c.types[g].nameLen) != 0U64 {
+                        return g
+                    }
+                }
             }
         }
     }
@@ -6365,12 +6373,14 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
     val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
     if rsidx < c.structs.count {
     } else {
-        // an enum-receiver method (`c.code()` on an enum value): dispatch like a
-        // struct method (self by value, or a pointer for `inout fn`).
+        // an enum-receiver method (`c.code()` on an enum value), or a user method on
+        // a `newtype` receiver (`u.len()` on `pub impl UserId{…}`, spec/10): both
+        // dispatch like a struct method — self by value (the newtype shares its
+        // underlying's representation), or a pointer for `inout fn`.
         val erecvRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
         if erecvRef != 0U64 {
             val et: TypeRef = c.types[erecvRef]
-            if enumRegSlot(c: inout c, st: inout st, start: et.nameStart, len: et.nameLen) < st.enumIdxs.count {
+            if enumRegSlot(c: inout c, st: inout st, start: et.nameStart, len: et.nameLen) < st.enumIdxs.count || newtypeUnderRef(c: inout c, start: et.nameStart, len: et.nameLen) != 0U64 {
                 val emfi: U64 = findMethod(c: inout c, recvStart: et.nameStart, recvLen: et.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if emfi < c.funcs.count {
                     mut val eslot: U64 = userFnSlot(st: inout st, idx: emfi)
@@ -7000,7 +7010,13 @@ fn isPlainUserFn(c: inout Comp, st: inout LlvmCtx, fi: U64) -> Bool {
         } else {
             if enumRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.enumIdxs.count {
             } else {
-                return false
+                // a user method on a `newtype` receiver (`pub impl UserId{fn len()}`,
+                // spec/10): emit it like a struct/enum method — self is the newtype's
+                // underlying value (genLlvmMethod's newtype branch dispatches the call).
+                if newtypeUnderRef(c: inout c, start: f.recvStart, len: f.recvLen) != 0U64 {
+                } else {
+                    return false
+                }
             }
         }
         return methodInEntryModule(c: inout c, f: f)

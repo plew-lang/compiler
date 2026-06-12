@@ -1,0 +1,34 @@
+// User-defined methods on a `newtype` receiver (spec/10): a newtype can carry its
+// own inherent methods (`pub impl UserId { ... }`). Self is the newtype's underlying
+// value, so the body may use inherited members (`self.bytes`, `self.isEmpty()`) and
+// the receiver dispatches both directly (`u.len()`) and chained on a newtype-returning
+// method result (`a.plus(b).raw()`). Covers both String- and int-underlying newtypes.
+import @Std/Io with { print }
+
+newtype Tag = String
+pub impl Tag {
+    fn len() -> U64 { return self.bytes.count }             // inherited field in body
+    fn empty() -> Bool { return self.isEmpty() }            // inherited method in body
+    fn echo(suffix: String) -> U64 { return self.bytes.count + suffix.bytes.count }
+}
+
+newtype Meter = I64
+pub impl Meter {
+    fn plus(other: Meter) -> Meter { return self + other }  // returns the newtype
+    fn raw() -> I64 { return self as I64 }                  // unwrap re-tag in body
+}
+
+fn main() {
+    val t: Tag = "alice" as Tag
+    print(t.len())                  // 5
+    print(t.empty())                // 0  (not empty)
+    print(t.echo(suffix: "bc"))     // 7
+    val e: Tag = "" as Tag
+    print(e.empty())                // 1  (empty)
+
+    val a: Meter = 3 as Meter
+    val b: Meter = 4 as Meter
+    print(a.plus(other: b).raw())   // 7  (method chained on a newtype-returning result)
+    val c: Meter = a.plus(other: b)
+    print(c.raw())                  // 7  (via a local)
+}
