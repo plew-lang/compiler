@@ -624,11 +624,16 @@ fn armCovers(c: inout Comp, arms: Array[MatchArm], variantStart: U64, variantLen
     mut val i: U64 = 0
     while i < arms.count {
         val a: MatchArm = arms[i]
-        if a.isWildcard {
-            return true
-        }
-        if spansEqual(c: inout c, aStart: a.variantStart, aLen: a.variantLen, bStart: variantStart, bLen: variantLen) {
-            return true
+        // a guarded arm only matches when its guard holds, so it never guarantees
+        // coverage of a variant (exhaustiveness must not rely on it).
+        if a.hasGuard {
+        } else {
+            if a.isWildcard {
+                return true
+            }
+            if spansEqual(c: inout c, aStart: a.variantStart, aLen: a.variantLen, bStart: variantStart, bLen: variantLen) {
+                return true
+            }
         }
         i += 1
     }
@@ -646,11 +651,16 @@ fn matchExhaustive(c: inout Comp, arms: Array[MatchArm]) -> Bool {
     while i < arms.count {
         val a: MatchArm = arms[i]
         if a.isWildcard {
-            return true
+            if a.hasGuard {
+            } else {
+                return true
+            }
         }
         if enumLen == 0 {
-            enumStart = a.enumStart
-            enumLen = a.enumLen
+            if a.enumLen > 0 {
+                enumStart = a.enumStart
+                enumLen = a.enumLen
+            }
         }
         i += 1
     }

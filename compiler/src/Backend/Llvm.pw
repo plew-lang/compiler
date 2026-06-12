@@ -4209,12 +4209,21 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
         val arm: MatchArm = arms[ai]
         val armBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "varm"))
         LLVMPositionBuilderAtEnd(st.b, checkBB)
+        // nextBB: where to go when this arm does not match (tag mismatch / guard false).
+        mut val nextBB: LLVMBasicBlockRef = armBB
         if arm.isWildcard {
-            LLVMBuildBr(st.b, armBB)
-            lastWasWildcard = true
+            if arm.hasGuard {
+                nextBB = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "vmatch.next"))
+                LLVMBuildBr(st.b, armBB)
+                checkBB = nextBB
+                lastWasWildcard = false
+            } else {
+                LLVMBuildBr(st.b, armBB)
+                lastWasWildcard = true
+            }
         } else {
             val vi: U64 = variantIndex(c: inout c, enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
-            val nextBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "vmatch.next"))
+            nextBB = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "vmatch.next"))
             LLVMBuildCondBr(st.b, LLVMBuildICmp(st.b, llvmIntEq(), tag, LLVMConstInt(st.i64ty, vi, 0I32), anon()), armBB, nextBB)
             checkBB = nextBB
             lastWasWildcard = false
@@ -4230,6 +4239,12 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
                 c.curTypeParams = savedVP
                 c.curTypeArgs = savedVA
             }
+        }
+        if arm.hasGuard {
+            val gv: LLVMValueRef = genLlvmCond(c: inout c, st: inout st, id: arm.guard)
+            val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "varm.body"))
+            LLVMBuildCondBr(st.b, gv, bodyBB, nextBB)
+            LLVMPositionBuilderAtEnd(st.b, bodyBB)
         }
         // each arm body is a block ending in `give` (value) or in `panic`/`return`
         // (diverging). genLlvmBlock sets st.giveValue / st.terminated.
@@ -6686,7 +6701,11 @@ fn scanExprAssoc(c: inout Comp, st: inout LlvmCtx, id: U64) {
         Expr.MatchExpr(val scrut, val arms) => {
             scanExprAssoc(c: inout c, st: inout st, id: scrut)
             mut val i: U64 = 0
-            while i < arms.count { scanBlockAssoc(c: inout c, st: inout st, id: arms[i].body) i += 1 }
+            while i < arms.count {
+                if arms[i].hasGuard { scanExprAssoc(c: inout c, st: inout st, id: arms[i].guard) }
+                scanBlockAssoc(c: inout c, st: inout st, id: arms[i].body)
+                i += 1
+            }
         }
         Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
             scanExprAssoc(c: inout c, st: inout st, id: cond)
@@ -6723,7 +6742,11 @@ fn scanStmtAssoc(c: inout Comp, st: inout LlvmCtx, id: U64) {
         Stmt.Match(val scrut, val arms) => {
             scanExprAssoc(c: inout c, st: inout st, id: scrut)
             mut val i: U64 = 0
-            while i < arms.count { scanBlockAssoc(c: inout c, st: inout st, id: arms[i].body) i += 1 }
+            while i < arms.count {
+                if arms[i].hasGuard { scanExprAssoc(c: inout c, st: inout st, id: arms[i].guard) }
+                scanBlockAssoc(c: inout c, st: inout st, id: arms[i].body)
+                i += 1
+            }
         }
         Stmt.Panic(val msg, offset: _) => { scanExprAssoc(c: inout c, st: inout st, id: msg) }
         Stmt.Give(val value) => { scanExprAssoc(c: inout c, st: inout st, id: value) }
@@ -7731,7 +7754,11 @@ fn scanExprClosures(c: inout Comp, st: inout LlvmCtx, id: U64) {
         Expr.MatchExpr(val scrut, val arms) => {
             scanExprClosures(c: inout c, st: inout st, id: scrut)
             mut val i: U64 = 0
-            while i < arms.count { scanBlockClosures(c: inout c, st: inout st, id: arms[i].body) i += 1 }
+            while i < arms.count {
+                if arms[i].hasGuard { scanExprClosures(c: inout c, st: inout st, id: arms[i].guard) }
+                scanBlockClosures(c: inout c, st: inout st, id: arms[i].body)
+                i += 1
+            }
         }
         Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
             scanExprClosures(c: inout c, st: inout st, id: cond)
@@ -7767,7 +7794,11 @@ fn scanStmtClosures(c: inout Comp, st: inout LlvmCtx, id: U64) {
         Stmt.Match(val scrut, val arms) => {
             scanExprClosures(c: inout c, st: inout st, id: scrut)
             mut val i: U64 = 0
-            while i < arms.count { scanBlockClosures(c: inout c, st: inout st, id: arms[i].body) i += 1 }
+            while i < arms.count {
+                if arms[i].hasGuard { scanExprClosures(c: inout c, st: inout st, id: arms[i].guard) }
+                scanBlockClosures(c: inout c, st: inout st, id: arms[i].body)
+                i += 1
+            }
         }
         Stmt.Panic(val msg, offset: _) => { scanExprClosures(c: inout c, st: inout st, id: msg) }
         Stmt.Give(val value) => { scanExprClosures(c: inout c, st: inout st, id: value) }
@@ -9456,12 +9487,22 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
         val arm: MatchArm = arms[ai]
         val armBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "arm"))
         LLVMPositionBuilderAtEnd(st.b, checkBB)
+        // `nextBB` is where control goes when this arm does not match (tag mismatch
+        // or guard false). A guarded arm always needs one, even a guarded wildcard.
+        mut val nextBB: LLVMBasicBlockRef = armBB
         if arm.isWildcard {
-            LLVMBuildBr(st.b, armBB)
-            lastWasWildcard = true
+            if arm.hasGuard {
+                nextBB = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "match.next"))
+                LLVMBuildBr(st.b, armBB)
+                checkBB = nextBB
+                lastWasWildcard = false
+            } else {
+                LLVMBuildBr(st.b, armBB)
+                lastWasWildcard = true
+            }
         } else {
             val vi: U64 = variantIndex(c: inout c, enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
-            val nextBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "match.next"))
+            nextBB = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "match.next"))
             val eq: LLVMValueRef = LLVMBuildICmp(st.b, llvmIntEq(), tag, LLVMConstInt(st.i64ty, vi, 0I32), anon())
             LLVMBuildCondBr(st.b, eq, armBB, nextBB)
             checkBB = nextBB
@@ -9481,6 +9522,14 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
                 c.curTypeParams = savedMP
                 c.curTypeArgs = savedMA
             }
+        }
+        // a guard `Pat if cond`: with payload binds in scope, evaluate the guard and
+        // fall through to nextBB when it is false.
+        if arm.hasGuard {
+            val gv: LLVMValueRef = genLlvmCond(c: inout c, st: inout st, id: arm.guard)
+            val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "arm.body"))
+            LLVMBuildCondBr(st.b, gv, bodyBB, nextBB)
+            LLVMPositionBuilderAtEnd(st.b, bodyBB)
         }
         genLlvmBlock(c: inout c, st: inout st, id: arm.body)
         st.nLocals = savedBB

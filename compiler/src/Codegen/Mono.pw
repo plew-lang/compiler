@@ -1873,6 +1873,9 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
                 val a: MatchArm = arms[ai]
                 val mark: U64 = scopeMark(c: inout c)
                 scanAddArmBinds(c: inout c, a: a, scrutTi: typeOf(c: inout c, id: scrut))
+                if a.hasGuard {
+                    scanExprInsts(c: inout c, exprId: a.guard)
+                }
                 scanBlockInsts(c: inout c, blkId: a.body)
                 popLocals(c: inout c, mark: mark)
                 ai += 1
@@ -1981,6 +1984,9 @@ fn scanStmtInsts(c: inout Comp, stmtId: U64) {
                 val a: MatchArm = arms[ai]
                 val mark: U64 = scopeMark(c: inout c)
                 scanAddArmBinds(c: inout c, a: a, scrutTi: typeOf(c: inout c, id: scrut))
+                if a.hasGuard {
+                    scanExprInsts(c: inout c, exprId: a.guard)
+                }
                 scanBlockInsts(c: inout c, blkId: a.body)
                 popLocals(c: inout c, mark: mark)
                 ai += 1

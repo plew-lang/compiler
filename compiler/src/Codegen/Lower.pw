@@ -738,12 +738,12 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
             result = c.pushExpr(e: <Expr.Cast operand=o tyStart=pt.start tyLen=pt.len ty=pt.ref />)
         }
         ExprAst.MatchExpr(val scrut, val arms, val span) => {
-            if armHasLiteralPattern(arms: arms) {
-                result = lowerLiteralMatchExpr(c: inout c, scrut: scrut, arms: arms, span: span)
-            } else {
+            if matchHasEnumOrStruct(arms: arms) {
                 val s: U64 = lowerExpr(c: inout c, e: scrut)
                 val ma: Array[MatchArm] = lowerMatchArms(c: inout c, arms: arms, isExpr: true)
                 result = c.pushExpr(e: <Expr.MatchExpr scrut=s arms=ma />)
+            } else {
+                result = lowerScalarMatchExpr(c: inout c, scrut: scrut, arms: arms, span: span)
             }
         }
         ExprAst.IfExpr(val cond, val thenBlk, val elseBlk, val span) => {
@@ -887,28 +887,66 @@ fn lowerMatchArms(c: inout Comp, arms: Array[MatchArmAst], isExpr: Bool) -> Arra
         if isExpr {
             diverge = armBlockDiverges(b: arm.body)
         }
-        out.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body isStruct=pi.isStruct isDiverge=diverge />)
+        mut val guardId: U64 = 0
+        if arm.hasGuard {
+            guardId = lowerExpr(c: inout c, e: arm.guard)
+        }
+        out.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body isStruct=pi.isStruct isDiverge=diverge hasGuard=arm.hasGuard guard=guardId />)
         i += 1
     }
     return out
 }
 
-// ---- literal-pattern match desugar (spec/11) ----
-// A `match` whose arms are bare literals (`0`/`"x"`/`true`/`-1`) plus a wildcard
-// is not an enum match: it desugars here into a single-eval scrutinee binding plus
-// an `==` if/else chain, reusing the operator-witness `==` and the existing
-// if-codegen. The arena's Stmt.Match / Expr.MatchExpr never see a literal pattern,
-// so the backend match emitter (enum-tag only) stays untouched.
+// ---- scalar / guard match desugar (spec/11) ----
+// A `match` that does NOT dispatch on enum variants or struct destructuring — its
+// arms are only bare literals (`0`/`"x"`/`true`/`-1`) and wildcards, any of which may
+// carry a guard `if cond` — is not an enum match: it desugars here into a single-eval
+// scrutinee binding plus an `==`/guard if/else chain, reusing the operator-witness
+// `==`, `&&`, and the existing if-codegen. The arena's Stmt.Match / Expr.MatchExpr
+// never see a literal/guarded-scalar pattern, so the backend enum-tag match emitter
+// stays untouched. (Guards on enum patterns ARE handled by the enum emitter.)
 
-fn armHasLiteralPattern(arms: Array[MatchArmAst]) -> Bool {
+// True if any arm dispatches on an enum variant or a struct pattern (so the match
+// must go through the enum emitter, not the scalar desugar).
+fn matchHasEnumOrStruct(arms: Array[MatchArmAst]) -> Bool {
     mut val i: U64 = 0
     while i < arms.count {
-        if arms[i].pattern.isLiteral {
-            return true
+        val p: PatternAst = arms[i].pattern
+        if p.isWildcard {
+        } else {
+            if p.isLiteral {
+            } else {
+                return true
+            }
         }
         i += 1
     }
     return false
+}
+
+// One scalar-match arm's `if` condition. An unguarded wildcard has none (it is the
+// terminal `else`).
+struct ScalarCond {
+    pub val hasCond: Bool
+    pub val cond: U64
+}
+
+// Build a scalar-match arm's condition: `__mtmp == lit` for a literal (AND the guard
+// if present), or just the guard for a guarded wildcard. An unguarded wildcard yields
+// hasCond=false.
+fn lowerScalarArmCond(c: inout Comp, lhsStart: U64, lhsLen: U64, arm: MatchArmAst) -> ScalarCond {
+    if arm.pattern.isLiteral {
+        mut val cond: U64 = lowerLitEq(c: inout c, lhsStart: lhsStart, lhsLen: lhsLen, lit: arm.pattern.lit)
+        if arm.hasGuard {
+            val g: U64 = lowerExpr(c: inout c, e: arm.guard)
+            cond = c.pushExpr(e: <Expr.Binary op=opAnd() lhs=cond rhs=g />)
+        }
+        return <ScalarCond hasCond=true cond=cond />
+    }
+    if arm.hasGuard {
+        return <ScalarCond hasCond=true cond=lowerExpr(c: inout c, e: arm.guard) />
+    }
+    return <ScalarCond hasCond=false cond=0 />
 }
 
 // True if the arms are exactly the two boolean literals `true` and `false` (a
@@ -920,6 +958,9 @@ fn litArmsAreBoolExhaustive(arms: Array[MatchArmAst]) -> Bool {
     mut val i: U64 = 0
     while i < arms.count {
         val p: PatternAst = arms[i].pattern
+        if arms[i].hasGuard {
+            return false
+        }
         if p.isWildcard {
             return false
         }
@@ -976,37 +1017,41 @@ fn lowerLitEq(c: inout Comp, lhsStart: U64, lhsLen: U64, lit: ExprAst) -> U64 {
     return c.pushExpr(e: <Expr.Binary op=opEq() lhs=lhs rhs=rhs />)
 }
 
-// Desugar a statement-position literal match into `val __mtmp = scrut` + an if/else
-// chain, appended to `stmts`. Requires a wildcard `_` arm (literal matches are not
-// structurally exhaustive — spec/11).
-fn lowerLiteralMatchStmtInto(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst], span: Span, stmts: inout Array[U64]) {
-    val tmp: Bind = internBytes(c: inout c, s: "__mtmp")
-    val sv: U64 = lowerExpr(c: inout c, e: scrut)
-    stmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
-    // Pick the `else` source arm: a wildcard, or (for an exhaustive Bool match) the
-    // last arm. Every other literal arm becomes an `==` test.
-    mut val elseIdx: U64 = arms.count
-    mut val haveElse: Bool = false
+// Find the terminal `else` arm of a scalar match: the first UNGUARDED wildcard, or
+// (for an exhaustive Bool match) the last arm. Returns arms.count if none.
+fn scalarMatchElseIdx(c: inout Comp, arms: Array[MatchArmAst]) -> U64 {
     mut val i: U64 = 0
     while i < arms.count {
         if arms[i].pattern.isWildcard {
-            elseIdx = i
-            haveElse = true
+            if arms[i].hasGuard {
+            } else {
+                return i
+            }
         }
         i += 1
     }
-    if haveElse {
-    } else {
-        if litArmsAreBoolExhaustive(arms: arms) {
-            elseIdx = arms.count - 1U64
-            haveElse = true
-        }
+    if litArmsAreBoolExhaustive(arms: arms) {
+        return arms.count - 1U64
     }
+    return arms.count
+}
+
+// Desugar a statement-position scalar/guard match into `val __mtmp = scrut` + an
+// if/else chain, appended to `stmts`. An unguarded wildcard (or an exhaustive Bool
+// match) supplies the terminal `else`; without one a no-op else is used (a statement
+// match need not yield a value).
+fn lowerScalarMatchStmtInto(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst], span: Span, stmts: inout Array[U64]) {
+    val tmp: Bind = internBytes(c: inout c, s: "__mtmp")
+    val sv: U64 = lowerExpr(c: inout c, e: scrut)
+    stmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
+    val elseIdx: U64 = scalarMatchElseIdx(c: inout c, arms: arms)
     mut val elseBlkId: U64 = 0
-    if haveElse {
+    if elseIdx < arms.count {
         elseBlkId = lowerBlock(c: inout c, b: arms[elseIdx].body)
     } else {
-        compileErrorAt(line: lineOf(c: inout c, offset: span.start), msg: "a literal `match` must end with a wildcard `_` arm (literal patterns are not exhaustive — spec/11)")
+        // no terminal else: a literal/guard match can't be structurally exhaustive
+        // without an unguarded `_` (spec/11 requires exhaustiveness).
+        compileErrorAt(line: lineOf(c: inout c, offset: span.start), msg: "this `match` must end with a wildcard `_` arm (literal/guard patterns are not exhaustive — spec/11)")
         mut val es: Array[U64] = []
         elseBlkId = blockOfStmts(c: inout c, stmts: es)
     }
@@ -1016,10 +1061,10 @@ fn lowerLiteralMatchStmtInto(c: inout Comp, scrut: ExprAst, arms: Array[MatchArm
     while k > 0 {
         k -= 1
         if k != elseIdx {
-            if arms[k].pattern.isLiteral {
+            val sc: ScalarCond = lowerScalarArmCond(c: inout c, lhsStart: tmp.nameStart, lhsLen: tmp.nameLen, arm: arms[k])
+            if sc.hasCond {
                 val thenBlkId: U64 = lowerBlock(c: inout c, b: arms[k].body)
-                val cond: U64 = lowerLitEq(c: inout c, lhsStart: tmp.nameStart, lhsLen: tmp.nameLen, lit: arms[k].pattern.lit)
-                val ifStmt: U64 = c.pushStmt(s: <Stmt.If cond=cond thenBlk=thenBlkId elseBlk=elseBlkId hasElse=true />)
+                val ifStmt: U64 = c.pushStmt(s: <Stmt.If cond=sc.cond thenBlk=thenBlkId elseBlk=elseBlkId hasElse=true />)
                 mut val wrap: Array[U64] = []
                 wrap.append(value: ifStmt)
                 elseBlkId = blockOfStmts(c: inout c, stmts: wrap)
@@ -1031,19 +1076,18 @@ fn lowerLiteralMatchStmtInto(c: inout Comp, scrut: ExprAst, arms: Array[MatchArm
     if haveHead {
         stmts.append(value: headStmt)
     } else {
-        // no `==` arms (unreachable: armHasLiteralPattern guarantees ≥1 literal arm,
-        // and a Bool-exhaustive match keeps n-1 ≥ 1 of them as a test). Run the else
-        // body unconditionally via `if true { else } else {}`.
+        // no conditional arms (only an unguarded wildcard, `match x { _ => body }`):
+        // run the else body unconditionally via `if true { else } else {}`.
         mut val empty: Array[U64] = []
         val emptyBlk: U64 = blockOfStmts(c: inout c, stmts: empty)
         stmts.append(value: c.pushStmt(s: <Stmt.If cond=c.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />) thenBlk=elseBlkId elseBlk=emptyBlk hasElse=true />))
     }
 }
 
-// Desugar an expression-position literal match into a value. A simple `Ident`
+// Desugar an expression-position scalar/guard match into a value. A simple `Ident`
 // scrutinee is inlined into each `==` (single-eval is free); any other scrutinee
 // is bound once in a `give`-block wrapper. Returns the arena Expr index.
-fn lowerLiteralMatchExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst], span: Span) -> U64 {
+fn lowerScalarMatchExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst], span: Span) -> U64 {
     mut val scrutIsIdent: Bool = false
     mut val lhsStart: U64 = 0
     mut val lhsLen: U64 = 0
@@ -1062,26 +1106,11 @@ fn lowerLiteralMatchExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst]
         lhsStart = tmp.nameStart
         lhsLen = tmp.nameLen
     }
-    mut val elseIdx: U64 = arms.count
-    mut val haveElse: Bool = false
-    mut val i: U64 = 0
-    while i < arms.count {
-        if arms[i].pattern.isWildcard {
-            elseIdx = i
-            haveElse = true
-        }
-        i += 1
-    }
+    val elseIdx: U64 = scalarMatchElseIdx(c: inout c, arms: arms)
+    val haveElse: Bool = elseIdx < arms.count
     if haveElse {
     } else {
-        if litArmsAreBoolExhaustive(arms: arms) {
-            elseIdx = arms.count - 1U64
-            haveElse = true
-        }
-    }
-    if haveElse {
-    } else {
-        compileErrorAt(line: lineOf(c: inout c, offset: span.start), msg: "a literal `match` must end with a wildcard `_` arm (literal patterns are not exhaustive — spec/11)")
+        compileErrorAt(line: lineOf(c: inout c, offset: span.start), msg: "a value `match` must end with a wildcard `_` arm (scalar/guard patterns are not exhaustive — spec/11)")
     }
     // a value-giving arm's give AST, re-lowered for the dead `else` of the non-Ident
     // wrapper (any value arm has the match's result type).
@@ -1110,9 +1139,10 @@ fn lowerLiteralMatchExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst]
     while k > 0 {
         k -= 1
         if k != elseIdx {
-            if arms[k].pattern.isLiteral {
+            val sc: ScalarCond = lowerScalarArmCond(c: inout c, lhsStart: lhsStart, lhsLen: lhsLen, arm: arms[k])
+            if sc.hasCond {
                 val thenBlk: U64 = lowerBlock(c: inout c, b: arms[k].body)
-                val cond: U64 = lowerLitEq(c: inout c, lhsStart: lhsStart, lhsLen: lhsLen, lit: arms[k].pattern.lit)
+                val cond: U64 = sc.cond
                 val ifx: U64 = c.pushExpr(e: <Expr.IfExpr cond=cond thenBlk=thenBlk elseBlk=curElseBlk />)
                 headExpr = ifx
                 haveHead = true
@@ -1304,10 +1334,10 @@ fn lowerBlock(c: inout Comp, b: BlockAst) -> U64 {
                 lowerDestructureInto(c: inout c, binds: binds, init: init, stmts: inout stmts)
             }
             StmtAst.Match(val scrut, val arms, val span) => {
-                if armHasLiteralPattern(arms: arms) {
-                    lowerLiteralMatchStmtInto(c: inout c, scrut: scrut, arms: arms, span: span, stmts: inout stmts)
-                } else {
+                if matchHasEnumOrStruct(arms: arms) {
                     stmts.append(lowerStmt(c: inout c, s: b.stmts[i]))
+                } else {
+                    lowerScalarMatchStmtInto(c: inout c, scrut: scrut, arms: arms, span: span, stmts: inout stmts)
                 }
             }
             _ => {

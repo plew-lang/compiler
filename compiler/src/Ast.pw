@@ -260,6 +260,11 @@ struct MatchArm {
     // yields no value. Backend excludes it from the result PHI. Always false for
     // statement-match arms (their value is unused).
     pub val isDiverge: Bool = false
+    // an arm guard `Pat if <cond> => …` (spec/11): the arm matches only when the
+    // pattern matches AND `guard` (an Expr index) is true; otherwise control falls
+    // through to the next arm. A guarded arm does not count toward exhaustiveness.
+    pub val hasGuard: Bool = false
+    pub val guard: U64 = 0
 }
 
 // The pattern part of a match arm (everything before `=>`), shared by statement

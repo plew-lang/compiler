@@ -1,0 +1,46 @@
+// match arm guards `Pat if cond => …` (spec/11): an arm matches only when both the
+// pattern and the guard hold; a guard makes the arm not count toward exhaustiveness.
+import @Std/Io with { print }
+
+enum Shape { Circle(r: I64) Rect(w: I64 h: I64) }
+
+// guards on enum-variant patterns (the enum-tag emitter path).
+fn cls(s: Shape) -> String {
+    return match s {
+        Shape.Circle(val r) if r > 10 => "big circle"
+        Shape.Circle(val r) => "small circle"
+        Shape.Rect(val w, val h) if w == h => "square"
+        Shape.Rect(val w, val h) => "rect"
+    }
+}
+
+// guards on wildcards over a scalar scrutinee (the if/else desugar path).
+fn sign(n: I64) -> String {
+    return match n {
+        _ if n > 0 => "pos"
+        _ if n < 0 => "neg"
+        _ => "zero"
+    }
+}
+
+// a guard combined with a literal pattern.
+fn parity(n: I64) -> String {
+    return match n {
+        0 => "zero"
+        _ if n == n / 2 * 2 => "even"
+        _ => "odd"
+    }
+}
+
+fn main() {
+    print(cls(s: <Shape.Circle r=20 />))
+    print(cls(s: <Shape.Circle r=3 />))
+    print(cls(s: <Shape.Rect w=4 h=4 />))
+    print(cls(s: <Shape.Rect w=4 h=5 />))
+    print(sign(n: 5))
+    print(sign(n: -2))
+    print(sign(n: 0))
+    print(parity(n: 0))
+    print(parity(n: 6))
+    print(parity(n: 7))
+}

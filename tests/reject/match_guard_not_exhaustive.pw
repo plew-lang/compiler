@@ -1,0 +1,9 @@
+// a guarded-wildcard match with no unguarded `_` is not exhaustive (spec/11).
+import @Std/Io with { print }
+fn main() {
+    val n: I64 = 3
+    match n {
+        _ if n > 0 => { print("pos") }
+        _ if n < 0 => { print("neg") }
+    }
+}
