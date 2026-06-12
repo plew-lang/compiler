@@ -1,0 +1,38 @@
+// `try` error conversion (spec/13): when the function's error type E differs from
+// the operand's E', `try` converts E' -> E through E's `from` factory (an anonymous
+// `factory(from:)`). Mirrors `x as E`; here the aggregate `AppErr` absorbs `IoErr`.
+import @Std/Core
+import @Std/Io with { print }
+
+struct IoErr { pub val code: I32 }
+struct AppErr { pub val code: I32 }
+
+pub impl AppErr {
+    factory(from: IoErr) {
+        return <AppErr code=from.code + 100 />
+    }
+}
+
+fn readByte(ok: Bool) -> Result[I32, IoErr] {
+    if ok {
+        return <Result[I32, IoErr].Ok value=7 />
+    }
+    return <Result[I32, IoErr].Err error=<IoErr code=5 /> />
+}
+
+// `try readByte` propagates an IoErr Err as AppErr — converted via AppErr.from.
+fn process(ok: Bool) -> Result[I32, AppErr] {
+    val b: I32 = try readByte(ok: ok)
+    return <Result[I32, AppErr].Ok value=b * 2 />
+}
+
+fn main() {
+    val good: Result[I32, AppErr] = process(ok: true)
+    print(good.unwrapOr(fallback: -1))   // 14
+    val bad: Result[I32, AppErr] = process(ok: false)
+    print(bad.isErr())                   // 1
+    match bad {
+        Result.Ok(value: val v) => { print(v) }
+        Result.Err(error: val e) => { print(e.code) }   // 105
+    }
+}

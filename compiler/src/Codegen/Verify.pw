@@ -1427,7 +1427,12 @@ fn verifyExpr(c: inout Comp, id: U64) {
                                         if fnR.args.count >= 2U64 {
                                             if typesCompatible(c: inout c, expected: fnR.args[1], inferred: opR.args[1]) {
                                             } else {
-                                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "`try` error type does not match the function's Result error type (spec/13: no error conversion yet — the error types must match)")
+                                                // E != E' is allowed when E owns a `from` factory:
+                                                // `try` then converts E' -> E via E.from (spec/13).
+                                                if typeRefHasFromFactory(c: inout c, errRef: fnR.args[1]) {
+                                                } else {
+                                                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "`try` error type does not match the function's Result error type, and the function's error type has no `from` factory to convert it (spec/13)")
+                                                }
                                             }
                                         }
                                     }

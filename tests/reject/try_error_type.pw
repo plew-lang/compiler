@@ -1,6 +1,6 @@
-// spec/13: `try` propagates the Err unchanged (no error conversion yet), so the
-// operand's error type must match the enclosing function's — a Result[_, String]
-// `try` in a `-> Result[_, I64]` function would reinterpret the error.
+// spec/13: `try` converts E' -> E only when E owns a `from` factory. Here E = I64
+// (a primitive, no `from` factory) so a Result[_, String] `try` in a `-> Result[_,
+// I64]` function is rejected — there is no conversion from String to I64.
 fn g() -> Result[I64, String] { return <Result.Err error="boom" /> }
 fn f() -> Result[I64, I64] {
     val x: I64 = try g()

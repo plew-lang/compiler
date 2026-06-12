@@ -486,6 +486,69 @@ fn typeHasAssocFn(c: inout Comp, typeStart: U64, typeLen: U64, nameStart: U64, n
     return false
 }
 
+// Whether the type named by `errRef` (a TypeRef index) owns a `from` factory — an
+// anonymous `factory(from:)` registered as an assoc fn named "from". Drives `try`
+// error conversion (spec/13): when the enclosing function's error type E differs
+// from the operand's E', E's `from` factory converts E' -> E (mirrors `x as E`).
+fn typeRefHasFromFactory(c: inout Comp, errRef: U64) -> Bool {
+    if errRef < c.types.count {
+    } else {
+        return false
+    }
+    val eNameId: U64 = c.types[errRef].nameId
+    if eNameId == 0U64 {
+        return false
+    }
+    val fromN: Bind = internBytes(c: inout c, s: "from")
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        if c.funcs[i].isAssoc {
+            if c.funcs[i].recvId == eNameId {
+                if c.funcs[i].nameId == fromN.nameId {
+                    return true
+                }
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// The func index of `from` factory on the type named by `errRef`, or c.funcs.count.
+fn typeRefFromFactoryIdx(c: inout Comp, errRef: U64) -> U64 {
+    if errRef < c.types.count {
+    } else {
+        return c.funcs.count
+    }
+    val eNameId: U64 = c.types[errRef].nameId
+    if eNameId == 0U64 {
+        return c.funcs.count
+    }
+    val fromN: Bind = internBytes(c: inout c, s: "from")
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        if c.funcs[i].isAssoc {
+            if c.funcs[i].recvId == eNameId {
+                if c.funcs[i].nameId == fromN.nameId {
+                    return i
+                }
+            }
+        }
+        i += 1
+    }
+    return c.funcs.count
+}
+
+// The Err type arg (index 1) of a Result type ref, or 0 if not a 2-arg Result ref.
+fn resultErrArgRef(c: inout Comp, ref: U64) -> U64 {
+    if ref < c.types.count {
+        if c.types[ref].args.count >= 2U64 {
+            return c.types[ref].args[1]
+        }
+    }
+    return 0U64
+}
+
 // Post-load rewrite (spec/05): turn an `assoc val` read `Type.NAME` — which parses
 // as `Field(Ident(Type), NAME)` — into a zero-arg assoc-fn call `Method(Type, NAME,
 // [])`, so it rides the existing assoc-fn machinery. Only rewrites when `Type` names
