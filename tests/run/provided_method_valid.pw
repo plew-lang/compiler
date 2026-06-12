@@ -1,0 +1,28 @@
+// A valid trait provided-method (spec/08): the body uses `self` only through the
+// trait's requirements, with matching types — accepted by the abstract checker,
+// and exercised via a conforming type.
+import @Std/Io with { print }
+
+trait Named {
+    fn first() -> I64
+    fn second() -> I64
+}
+
+// provided method: uses self's requirements, returns their (I64) results combined.
+pub impl Named {
+    fn total() -> I64 {
+        return self.first()
+    }
+}
+
+struct Pair { pub val a: I64  pub val b: I64 }
+pub impl Pair as Named {
+    fn first() -> I64 { return self.a }
+    fn second() -> I64 { return self.b }
+}
+
+fn main() {
+    val p: Pair = <Pair a=3I64 b=4I64 />
+    print(p.total())
+    print(p.second())
+}
