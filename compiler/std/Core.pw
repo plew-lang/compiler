@@ -584,3 +584,64 @@ pub impl I32 as TryFrom[I64] {
         return <Result[I32, RangeError].Ok value=truncI32(n: from) />
     }
 }
+
+// The error of a failed string-to-number parse (spec/12 TryFrom): carries the input
+// that could not be parsed (empty, a non-digit, a lone sign, or out of range).
+export struct ParseError {
+    pub val input: String
+}
+
+// Parse a decimal string to `I64` (spec/12 TryFrom): `<I64.convert from="-42"/>`
+// yields `Result[I64, ParseError]`. Accumulates in NEGATIVE space (so `I64.min`, whose
+// magnitude exceeds `I64.max`, is representable) and rejects overflow BEFORE it would
+// panic — the checked `*`/`-` never see an out-of-range intermediate. An empty string,
+// a lone sign, or a non-`0..9` byte is a parse error.
+pub impl I64 as TryFrom[String] {
+    type Error = ParseError
+    result[ParseError] factory convert(from: String) {
+        val bs: Array[U8] = from.bytes
+        if bs.count == 0U64 {
+            return <Result[I64, ParseError].Err error=<ParseError input=from /> />
+        }
+        mut val i: U64 = 0
+        mut val neg: Bool = false
+        if bs[0] == 45U8 {
+            neg = true
+            i = 1U64
+        } else {
+            if bs[0] == 43U8 {
+                i = 1U64
+            }
+        }
+        if i >= bs.count {
+            return <Result[I64, ParseError].Err error=<ParseError input=from /> />
+        }
+        mut val acc: I64 = 0I64
+        while i < bs.count {
+            val b: U8 = bs[i]
+            if b < 48U8 {
+                return <Result[I64, ParseError].Err error=<ParseError input=from /> />
+            }
+            if b > 57U8 {
+                return <Result[I64, ParseError].Err error=<ParseError input=from /> />
+            }
+            val d: I64 = (b - 48U8) as I64
+            // acc is <= 0; going more negative as acc*10 - d. Overflow (below I64.min)
+            // when acc < (min + d) / 10 — checked before the multiply so `*` never panics.
+            if acc < (-9223372036854775808I64 + d) / 10I64 {
+                return <Result[I64, ParseError].Err error=<ParseError input=from /> />
+            }
+            acc = acc * 10I64 - d
+            i = i + 1U64
+        }
+        if neg {
+            return <Result[I64, ParseError].Ok value=acc />
+        }
+        // a positive value is the negation of the accumulator; only I64.min can't be
+        // negated (its positive is out of range).
+        if acc == -9223372036854775808I64 {
+            return <Result[I64, ParseError].Err error=<ParseError input=from /> />
+        }
+        return <Result[I64, ParseError].Ok value=0I64 - acc />
+    }
+}
