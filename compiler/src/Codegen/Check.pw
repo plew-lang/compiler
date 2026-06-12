@@ -401,6 +401,27 @@ fn checkLitTi(c: inout Comp, id: U64, ti: TypeInfo) {
     checkLitCtx(c: inout c, id: id, eKind: 0, eBits: 0, eSgn: false)
 }
 
+// Like checkLitSpan, but when the expected type is a generic enum/struct INSTANCE
+// (ref carries its type args) and the value is a construction, ground the make
+// fields from that instance's args — so `<Optional.Some v=5 />` at `Optional[I64]`
+// types its payload `5` as I64 (the head-name span alone drops the args). spec/02.
+fn checkLitSpanCtx(c: inout Comp, id: U64, tyStart: U64, tyLen: U64, isArray: Bool, ctxRef: U64) {
+    if ctxRef != 0U64 {
+        if !isArray {
+            match c.exprs[id] {
+                Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
+                    if isGenericEnumInst(c: inout c, ref: ctxRef) || isGenericInst(c: inout c, ref: ctxRef) {
+                        checkMakeFields(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ctxRef, fields: fields)
+                        return
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    checkLitSpan(c: inout c, id: id, tyStart: tyStart, tyLen: tyLen, isArray: isArray)
+}
+
 // checkLitCtx against a written type span (annotation / param / field).
 fn checkLitSpan(c: inout Comp, id: U64, tyStart: U64, tyLen: U64, isArray: Bool) {
     if isArray {

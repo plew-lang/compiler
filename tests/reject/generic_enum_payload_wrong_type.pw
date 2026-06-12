@@ -1,0 +1,2 @@
+// spec/12: the payload literal must still match the grounded type — `true` is not I64.
+fn main() { val o: Optional[I64] = <Optional.Some v=true /> }

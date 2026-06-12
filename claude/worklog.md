@@ -46,7 +46,7 @@
 - **`From`/`TryFrom`**（数値縮小・パース・`as` の全域変換脱糖・`try` の異エラー型 From 変換）・**float→int `as`**。〔✅ **mixed float context は完了**＝`1.5+2` / `F64=5` / `-3` / `Array[F64]` / call-arg / 両オペランド無型 `10/4`〕。
 - **newtype 非 int underlying のメソッド/フィールド継承**（`userId.bytes`〔UserId=String〕＝codegen 専用解決点の個別配線・`typeOf` 両用問題ゆえ blanket 不可）＋ unique/deinit/factory 継承・`export newtype`。int underlying は完備。
 - **一般 Chain トレイト `?.`**（現 Optional 具体）・**`Pow`/`**`**（float 後）・**`Output != Self`**。
-- **無型 int generic-enum payload** `<Optional.Some v=5 />`（check-side literal-context・lowering 採用は std 破壊で revert・回避 `v=5I64`）。
+- ✅ **無型 int generic-enum/struct payload**（`<Optional.Some v=5 />` at `Optional[I64]` / `<Box v=5 />` at `Box[I64]`・check-side で解決＝`checkLitSpanCtx`〔declared ref `ctxRef` が generic enum/struct inst なら Make フィールドを `checkMakeFields(ty: ctxRef)` で context grounding・head-name span が args を落とす問題を回避〕・let/return 両位置・lowering 不触ゆえ std 破壊なし・test run generic_enum_payload_context・reject generic_enum_payload_wrong_type）。
 - **Iterator 残**＝`sum`（Zero/数値タワー待ち）・`enumerate`／`zip` は backend ブロッカー：**`enumerate`**（Item＝合成レコード `(index:U64,value:E)`＝型パラメータ E をフィールドに持つレコードの**monomorphized iterator 文脈での構築/フィールドアクセス**が未対応＝`<…value=v/>` で「construction of this type not yet supported」・`pair.index` で「field access only on a registered struct」＝generic-record 登録が要る backend 仕事〔小 std add では済まない〕）・**`zip`**（第2要素型＝`J::Item`＝型パラメータの抽象関連型が必要＝`generic 抽象 T::Item` 未対応ゆえ表現不能）。
 - **module/import 残**＝名前空間 import（`Io.print`）・`as` リネームの実束縛・`_.pw` ディレクトリ解決・パス正当性厳密検査。
 - **トレイト/拡張小物**＝トレイト引数 aware の多重 conformance 区別・コンテナ不変性 `Array[P]`≠`Array[P#Ext]`・型レベル chained `Type#A#B`。

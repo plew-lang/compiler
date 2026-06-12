@@ -1,0 +1,15 @@
+import @Std/Io with { print }
+// spec/02: an untyped integer literal in a generic enum/struct construction types
+// from the declared instance's type argument — `<Optional.Some v=5 />` at
+// `Optional[I64]` types `5` as I64 (no `5I64` suffix needed). Covers let, return,
+// and a generic struct field.
+struct Box[T] { pub val v: T }
+fn wrap() -> Optional[I64] { return <Optional.Some v=7 /> }
+fn main() {
+    val o: Optional[I64] = <Optional.Some v=5 />
+    match o { Optional.Some(v: val n) => { print(n) } Optional.None => {} }   // 5
+    val w: Optional[I64] = wrap()
+    match w { Optional.Some(v: val n) => { print(n) } Optional.None => {} }   // 7
+    val b: Box[I64] = <Box v=9 />
+    print(b.v)                                                                // 9
+}

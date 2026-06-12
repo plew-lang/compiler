@@ -567,7 +567,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
         Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
             // literal range against the annotation (or context-free if none).
             if tyLen > 0U64 {
-                checkLitSpan(c: inout c, id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray)
+                checkLitSpanCtx(c: inout c, id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ctxRef: ty)
             } else {
                 checkLitCtx(c: inout c, id: init, eKind: 0, eBits: 0, eSgn: false)
             }
@@ -665,7 +665,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "a function with no return type cannot return a value (spec/04)")
                     }
                 }
-                checkLitSpan(c: inout c, id: value, tyStart: c.curRetStart, tyLen: c.curRetLen, isArray: c.curRetIsArray)
+                checkLitSpanCtx(c: inout c, id: value, tyStart: c.curRetStart, tyLen: c.curRetLen, isArray: c.curRetIsArray, ctxRef: c.curRetTy)
                 // returning a non-array where the declared return type IS an array
                 // (`return 5I64` from `-> Array[I64]`) reinterprets the scalar bits.
                 if c.curRetIsArray {
