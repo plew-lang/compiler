@@ -1,0 +1,7 @@
+// spec/06: an untyped numeric literal cannot flow into a type parameter — `val y: T
+// = 5` is invalid (T is opaque, with no numeric bound that would accept a literal).
+fn f[T](x: T) -> T {
+    val y: T = 5
+    return x
+}
+fn main() { }
