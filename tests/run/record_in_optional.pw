@@ -1,0 +1,39 @@
+// A labelled-record value carried through a generic `Optional`/`Result` (spec/02),
+// including a GENERIC record `(index:U64, value:E)` produced by a generic method and
+// grounded at the call (E -> I64). Two fixes: the type-checker re-canonicalizes a
+// record struct's field types under the instance env (groundRecordStruct), and the
+// backend resolves a context-less record literal used as an enum payload via the
+// expected payload type.
+import @Std/Io with { print }
+
+struct Wrap[E] {
+    pub val v: E
+}
+pub impl[E] Wrap[E] {
+    // returns a GENERIC record: the field `value` is the type parameter E.
+    fn paired(n: U64) -> Optional[(index: U64, value: E)] {
+        return <Optional.Some v=(index: n, value: self.v) />
+    }
+}
+
+fn main() {
+    // concrete record as an Optional payload.
+    val c: Optional[(index: U64, value: I64)] = <Optional.Some v=(index: 5U64, value: 7I64) />
+    match c {
+        Optional.Some(v: val rec) => { print(rec.index)  print(rec.value) }   // 5, 7
+        Optional.None => { print(0I64) }
+    }
+    // generic record from a generic method, grounded to I64 at the call.
+    val w: Wrap[I64] = <Wrap v=42I64 />
+    val o: Optional[(index: U64, value: I64)] = w.paired(n: 9U64)
+    match o {
+        Optional.Some(v: val rec) => { print(rec.index)  print(rec.value) }   // 9, 42
+        Optional.None => { print(0I64) }
+    }
+    // a Result of a record (construction + match destructure).
+    val r: Result[(index: U64, value: I64), I64] = <Result.Ok value=(index: 1U64, value: 2I64) />
+    match r {
+        Result.Ok(value: val rec) => { print(rec.value) }   // 2
+        Result.Err(error: val e) => { print(e) }
+    }
+}

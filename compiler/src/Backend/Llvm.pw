@@ -1055,7 +1055,18 @@ fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, 
                             gpf = groundTypeRef(c: inout c, ref: fs[fj].ty)
                         }
                     }
-                    if gpf != 0U64 && isGenericInst(c: inout c, ref: gpf) {
+                    // a record-typed payload (`v: (index:U64,value:I64)`, or a type param
+                    // grounding to one): set the expected type so a context-less record
+                    // literal value resolves its struct (records have a `(`-prefixed name).
+                    mut val gpfIsRecord: Bool = false
+                    if gpf != 0U64 {
+                        if c.types[gpf].nameLen > 0U64 {
+                            if c.bytes[c.types[gpf].nameStart] == 40U8 {
+                                gpfIsRecord = true
+                            }
+                        }
+                    }
+                    if gpf != 0U64 && (isGenericInst(c: inout c, ref: gpf) || gpfIsRecord) {
                         st.expectedTy = gpf
                         agg = LLVMBuildInsertValue(st.b, agg, genLlvmExpr(c: inout c, st: inout st, id: valExpr), fj, anon())
                     } else {
@@ -3512,6 +3523,27 @@ fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, v
     mut val gty: U64 = ty
     if c.curTypeParams.count > 0U64 {
         gty = groundTypeRef(c: inout c, ref: ty)
+    }
+    // a context-less record literal `(a:1, b:2)` lowers to a Make with NO type name
+    // (Lower.pw): resolve its record struct from the construction context — the
+    // enclosing field/payload builder sets `st.expectedTy` to the field's declared
+    // record type (a `(`-prefixed canonical name). Without this, a record used as an
+    // enum payload (`<Optional.Some v=(index:1, value:2)/>`) can't be built.
+    if typeLen == 0U64 {
+        if st.expectedTy != 0U64 {
+            if st.expectedTy < c.types.count {
+                val et: TypeRef = c.types[st.expectedTy]
+                if et.nameLen > 0U64 {
+                    if c.bytes[et.nameStart] == 40U8 {
+                        val rreg: U64 = structRegSlot(c: inout c, st: inout st, start: et.nameStart, len: et.nameLen)
+                        if rreg < st.structIdxs.count {
+                            st.expectedTy = 0U64
+                            return buildStructValue(c: inout c, st: inout st, sd: c.structs[st.structIdxs[rreg]], sty: st.structTys[rreg], fields: fields, errOffset: et.nameStart)
+                        }
+                    }
+                }
+            }
+        }
     }
     if isEnum {
         return genLlvmMakeEnum(c: inout c, st: inout st, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, ty: gty, fields: fields)

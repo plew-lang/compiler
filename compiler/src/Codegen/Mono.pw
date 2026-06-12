@@ -684,12 +684,110 @@ fn registerArrayElemRef(c: inout Comp, elemRef: U64) {
 // it is already ground or a param has no binding. Used so a generic struct's
 // non-ground field type (`Array[T]` inside `Box[I64]`) registers its grounded
 // instantiation (`Array[I64]`), whose C typedef would otherwise never be emitted.
+// The record-field key for a (grounded) TypeRef, matching `recordTypeKey`'s output for
+// the equivalent PType: the head-name span, then `[arg-heads]` for a generic instance.
+// Used to rebuild a record struct's canonical name from grounded field types.
+fn recordTypeKeyFromRef(c: inout Comp, ref: U64) -> Array[U8] {
+    mut val out: Array[U8] = []
+    if ref >= c.types.count {
+        return out
+    }
+    val tr: TypeRef = c.types[ref]
+    mut val i: U64 = 0
+    while i < tr.nameLen {
+        out.append(value: c.bytes[tr.nameStart + i])
+        i += 1
+    }
+    if tr.args.count > 0U64 {
+        appendBytes(into: inout out, from: "[".bytes)
+        mut val a: U64 = 0
+        while a < tr.args.count {
+            if a > 0U64 {
+                appendBytes(into: inout out, from: ",".bytes)
+            }
+            val ar: TypeRef = c.types[tr.args[a]]
+            mut val k: U64 = 0
+            while k < ar.nameLen {
+                out.append(value: c.bytes[ar.nameStart + k])
+                k += 1
+            }
+            a += 1
+        }
+        appendBytes(into: inout out, from: "]".bytes)
+    }
+    return out
+}
+
+// Ground a record struct's FIELD types under the active env and resolve to the
+// concrete record (spec/02). A record `(index:U64,value:E)` lowers to a canonical
+// struct whose name bakes in the field types — so `groundTypeRef` (which substitutes
+// type ARGS) never grounds `E`. Here, when `ref` names a record struct (`(`-prefixed)
+// and some field grounds to a different type, rebuild the canonical name from the
+// grounded fields and return the matching registered struct's ref. Returns `ref`
+// unchanged for a non-record, an all-concrete record, or an unregistered grounded one.
+fn groundRecordStruct(c: inout Comp, ref: U64) -> U64 {
+    val t: TypeRef = c.types[ref]
+    if t.nameLen == 0U64 {
+        return ref
+    }
+    if c.bytes[t.nameStart] != 40U8 {
+        return ref
+    }
+    val si: U64 = structIndexByName(c: inout c, start: t.nameStart, len: t.nameLen)
+    if si >= c.structs.count {
+        return ref
+    }
+    val sd: StructDef = c.structs[si]
+    mut val cn: Array[U8] = []
+    appendBytes(into: inout cn, from: "(".bytes)
+    mut val changed: Bool = false
+    mut val j: U64 = 0
+    while j < sd.fields.count {
+        if j > 0U64 {
+            appendBytes(into: inout cn, from: ",".bytes)
+        }
+        val fd: FieldDef = sd.fields[j]
+        mut val k: U64 = 0
+        while k < fd.nameLen {
+            cn.append(value: c.bytes[fd.nameStart + k])
+            k += 1
+        }
+        appendBytes(into: inout cn, from: ":".bytes)
+        val g: U64 = groundTypeRef(c: inout c, ref: fd.ty)
+        if g != fd.ty {
+            changed = true
+        }
+        appendBytes(into: inout cn, from: recordTypeKeyFromRef(c: inout c, ref: g))
+        j += 1
+    }
+    appendBytes(into: inout cn, from: ")".bytes)
+    if changed {
+    } else {
+        return ref
+    }
+    val nm: Bind = internBytes(c: inout c, s: stringFromBytes(b: cn))
+    val nid: U64 = intern(c: inout c, start: nm.nameStart, len: nm.nameLen)
+    mut val gi: U64 = 0
+    while gi < c.structs.count {
+        if c.structs[gi].nameId == nid {
+            mut val noArgs: Array[U64] = []
+            return c.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=noArgs />)
+        }
+        gi += 1
+    }
+    return ref
+}
+
 fn groundTypeRef(c: inout Comp, ref: U64) -> U64 {
     if ref >= c.types.count {
         return ref
     }
     val t: TypeRef = c.types[ref]
     if t.args.count == 0 {
+        val rg: U64 = groundRecordStruct(c: inout c, ref: ref)
+        if rg != ref {
+            return rg
+        }
         return resolveTy(c: inout c, tyRef: ref)
     }
     mut val newArgs: Array[U64] = []
