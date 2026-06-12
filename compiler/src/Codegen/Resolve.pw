@@ -1564,15 +1564,48 @@ fn typeOf(c: inout Comp, id: U64) -> TypeInfo {
 // return whichever side carries one (a struct/String/array result, a typed scalar,
 // else the other operand). Lets a chained `0 - big - 1` recover I32 from `big`
 // rather than from the untyped `0`.
-fn binResultTypeInfo(c: inout Comp, lhs: U64, rhs: U64) -> TypeInfo {
-    val lt: TypeInfo = exprType(c: inout c, id: lhs)
-    if lt.kind != 0 {
+// The result type of a binary operator `a OP b` (spec/12). For an arithmetic/bitwise
+// operator whose left operand's type declares `type Output = X` on the matching
+// operator trait (`Output != Self`, e.g. `Point - Point -> Vector`), return X;
+// otherwise the operands' shared type.
+fn operatorOutputType(c: inout Comp, lt: TypeInfo, op: I64) -> TypeInfo {
+    if isBinTraitOp(op: op) {
+    } else {
         return lt
+    }
+    if lt.nameLen == 0U64 {
+        return lt
+    }
+    val trN: Bind = internBytes(c: inout c, s: binTraitName(op: op))
+    mut val i: U64 = 0
+    while i < c.assocBindings.count {
+        val ab: AssocBinding = c.assocBindings[i]
+        if ab.traitId == trN.nameId {
+            if spansEqual(c: inout c, aStart: ab.recvStart, aLen: ab.recvLen, bStart: lt.nameStart, bLen: lt.nameLen) {
+                if rangeEquals(bytes: c.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Output") {
+                    if ab.ty < c.types.count {
+                        if ab.ty != 0U64 {
+                            return typeInfoOfRef(c: inout c, ref: ab.ty)
+                        }
+                    }
+                    return typeInfoOfName(c: inout c, start: ab.tyStart, len: ab.tyLen, isArray: ab.tyIsArray)
+                }
+            }
+        }
+        i += 1
+    }
+    return lt
+}
+
+fn binResultTypeInfo(c: inout Comp, lhs: U64, rhs: U64, op: I64) -> TypeInfo {
+    mut val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    if lt.kind != 0 {
+        return operatorOutputType(c: inout c, lt: lt, op: op)
     }
     if lt.nameLen > 0 {
-        return lt
+        return operatorOutputType(c: inout c, lt: lt, op: op)
     }
-    return exprType(c: inout c, id: rhs)
+    return operatorOutputType(c: inout c, lt: exprType(c: inout c, id: rhs), op: op)
 }
 
 // Recover an expression's type. Only the cases plewc.pw exercises on the base
@@ -1719,12 +1752,12 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // instead of reporting it as type-less. Comparisons fall to scalar Bool.
             if op >= 56 {
                 if op <= 60 {
-                    return binResultTypeInfo(c: inout c, lhs: lhs, rhs: rhs)
+                    return binResultTypeInfo(c: inout c, lhs: lhs, rhs: rhs, op: op)
                 }
             }
             if op >= 74 {
                 if op <= 78 {
-                    return binResultTypeInfo(c: inout c, lhs: lhs, rhs: rhs)
+                    return binResultTypeInfo(c: inout c, lhs: lhs, rhs: rhs, op: op)
                 }
             }
             // comparisons (50-55) and logical `&&`/`||` (61,62) produce Bool — report

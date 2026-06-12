@@ -1676,7 +1676,12 @@ fn lowerImpl(c: inout Comp, im: ImplAst) {
             MemberKind.AssocType => {
                 val pt: PType = lowerType(c: inout c, t: m.assocTy)
                 val atN: Bind = internBytes(c: inout c, s: m.name)
-                c.assocBindings.append(<AssocBinding recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) nameStart=atN.nameStart nameLen=atN.nameLen nameId=intern(c: inout c, start: atN.nameStart, len: atN.nameLen) tyStart=pt.start tyLen=pt.len tyIsArray=pt.isArray ty=pt.ref />)
+                mut val trId: U64 = 0
+                if im.traitName.bytes.count > 0 {
+                    val trN: Bind = internBytes(c: inout c, s: im.traitName)
+                    trId = trN.nameId
+                }
+                c.assocBindings.append(<AssocBinding recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) nameStart=atN.nameStart nameLen=atN.nameLen nameId=intern(c: inout c, start: atN.nameStart, len: atN.nameLen) traitId=trId tyStart=pt.start tyLen=pt.len tyIsArray=pt.isArray ty=pt.ref />)
             }
             MemberKind.Factory => {
                 // `factory` in a `pub impl T` publishes T's default memberwise factory

@@ -1,0 +1,32 @@
+// operator trait Output != Self (spec/12): an operator's result type is the impl's
+// `type Output` binding, not Self — e.g. `Point - Point` yields a `Vector`.
+import @Std/Io with { print }
+
+struct Point { pub val x: I64  pub val y: I64 }
+struct Vector { pub val dx: I64  pub val dy: I64 }
+
+impl Point as Sub[Point] {
+    type Output = Vector
+    assoc fn sub(lhs: Point, rhs: Point) -> Vector {
+        return <Vector dx=lhs.x - rhs.x dy=lhs.y - rhs.y />
+    }
+}
+
+// Self-output operators on the same type still work (Output = Vector here too).
+impl Vector as Add[Vector] {
+    type Output = Vector
+    assoc fn add(lhs: Vector, rhs: Vector) -> Vector {
+        return <Vector dx=lhs.dx + rhs.dx dy=lhs.dy + rhs.dy />
+    }
+}
+
+fn main() {
+    val a: Point = <Point x=10 y=8 />
+    val b: Point = <Point x=3 y=2 />
+    val v: Vector = a - b
+    print(v.dx)
+    print(v.dy)
+    val w: Vector = v + v
+    print(w.dx)
+    print(w.dy)
+}

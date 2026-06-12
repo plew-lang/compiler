@@ -477,6 +477,9 @@ struct AssocBinding {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64 = 0
+    // the trait whose associated type this binds (e.g. `Sub`), so a type with several
+    // operator conformances can bind `Output` differently per trait. 0 if none.
+    pub val traitId: U64 = 0
     // bound concrete type (head span + structured ref + array flag).
     pub val tyStart: U64
     pub val tyLen: U64
