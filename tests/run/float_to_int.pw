@@ -1,0 +1,30 @@
+// Float-to-integer conversion via `TryFrom[F64]` (spec/12): `as` is total/infallible
+// only and rejects float→int (lossy), so the fallible `<IX.convert from=f/>` factory
+// truncates toward zero and yields `Result[IX, RangeError]`. Err only on NaN, ±inf, or
+// a magnitude outside the target's range. Truncation is the conventional C/Rust rule.
+import @Std/Io with { print }
+import @Std/Core with { RangeError }
+
+fn main() {
+    // truncation toward zero (not floor): 3.7 -> 3, -3.7 -> -3.
+    val a: Result[I64, RangeError] = <I64.convert from=3.7 />
+    print(a.unwrapOr(fallback: 0I64))     // 3
+    val b: Result[I64, RangeError] = <I64.convert from=-3.7 />
+    print(b.unwrapOr(fallback: 0I64))     // -3
+    // narrow target truncates then range-checks.
+    val c: Result[I32, RangeError] = <I32.convert from=100.9 />
+    print(c.unwrapOr(fallback: 0I32))     // 100
+    val cn: Result[I32, RangeError] = <I32.convert from=-100.9 />
+    print(cn.unwrapOr(fallback: 0I32))    // -100
+    // out of range -> Err.
+    val d: Result[I8, RangeError] = <I8.convert from=1000.0 />
+    print(d.isErr())                      // 1
+    val dn: Result[I8, RangeError] = <I8.convert from=-1000.0 />
+    print(dn.isErr())                     // 1
+    // exact-integer float converts cleanly.
+    val e: Result[I32, RangeError] = <I32.convert from=2.0 />
+    print(e.unwrapOr(fallback: 0I32))     // 2
+    // a value in [127, 128) truncates into range for I8.
+    val f: Result[I8, RangeError] = <I8.convert from=127.9 />
+    print(f.unwrapOr(fallback: 0I8))      // 127
+}

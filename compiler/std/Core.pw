@@ -409,6 +409,13 @@ export extern "plew-intrinsic" {
     fn truncI32(n: I64) -> I32
     fn truncU16(n: U64) -> U16
     fn truncU32(n: U64) -> U32
+    // Is this float a NaN? A direct intrinsic because `==`/`!=` on floats PANIC on a
+    // NaN operand (spec/02), so the fallible float->int `convert` (spec/12) must test
+    // NaN with this BEFORE any ordered comparison.
+    fn isNanF64(f: F64) -> Bool
+    // Truncate a float toward zero to I64 (`fptosi`). UB outside [-2^63, 2^63), so the
+    // `convert` factory range-checks first and calls this only once the value fits.
+    fn f64ToI64(f: F64) -> I64
 }
 
 // String methods, written in pure Plew over the exposed `bytes` view (spec/02:
@@ -661,6 +668,95 @@ pub impl U32 as TryFrom[U64] {
             return <Result[U32, RangeError].Err error=<RangeError value=0I64 /> />
         }
         return <Result[U32, RangeError].Ok value=truncU32(n: from) />
+    }
+}
+
+// Fallible float->int conversions (spec/12: `F64->I32` is a TryFrom example). `as`
+// rejects float->int (it would truncate the fraction), so the lossy conversion is the
+// named `convert`: it TRUNCATES TOWARD ZERO (3.7 -> 3, -3.7 -> -3 — the universal
+// convention) and fails ONLY when the result is out of the target's range or the
+// input is NaN/±inf. NaN is tested first (float `==`/`<` panic on NaN, spec/02). The
+// narrow targets truncate within I64 first (safe `f64ToI64`), then integer-range-check.
+pub impl I64 as TryFrom[F64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: F64) {
+        if isNanF64(f: from) {
+            return <Result[I64, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        // outside [-2^63, 2^63) (±inf included): not representable in I64.
+        if from < -9223372036854775808.0 {
+            return <Result[I64, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        if from >= 9223372036854775808.0 {
+            return <Result[I64, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        return <Result[I64, RangeError].Ok value=f64ToI64(f: from) />
+    }
+}
+pub impl I32 as TryFrom[F64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: F64) {
+        if isNanF64(f: from) {
+            return <Result[I32, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        if from < -9223372036854775808.0 {
+            return <Result[I32, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        if from >= 9223372036854775808.0 {
+            return <Result[I32, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        val n: I64 = f64ToI64(f: from)
+        if n < -2147483648I64 {
+            return <Result[I32, RangeError].Err error=<RangeError value=n /> />
+        }
+        if n > 2147483647I64 {
+            return <Result[I32, RangeError].Err error=<RangeError value=n /> />
+        }
+        return <Result[I32, RangeError].Ok value=truncI32(n: n) />
+    }
+}
+pub impl I16 as TryFrom[F64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: F64) {
+        if isNanF64(f: from) {
+            return <Result[I16, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        if from < -9223372036854775808.0 {
+            return <Result[I16, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        if from >= 9223372036854775808.0 {
+            return <Result[I16, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        val n: I64 = f64ToI64(f: from)
+        if n < -32768I64 {
+            return <Result[I16, RangeError].Err error=<RangeError value=n /> />
+        }
+        if n > 32767I64 {
+            return <Result[I16, RangeError].Err error=<RangeError value=n /> />
+        }
+        return <Result[I16, RangeError].Ok value=truncI16(n: n) />
+    }
+}
+pub impl I8 as TryFrom[F64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: F64) {
+        if isNanF64(f: from) {
+            return <Result[I8, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        if from < -9223372036854775808.0 {
+            return <Result[I8, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        if from >= 9223372036854775808.0 {
+            return <Result[I8, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        val n: I64 = f64ToI64(f: from)
+        if n < -128I64 {
+            return <Result[I8, RangeError].Err error=<RangeError value=n /> />
+        }
+        if n > 127I64 {
+            return <Result[I8, RangeError].Err error=<RangeError value=n /> />
+        }
+        return <Result[I8, RangeError].Ok value=truncI8(n: n) />
     }
 }
 

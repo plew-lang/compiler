@@ -110,6 +110,7 @@ extern(c) {
     fn LLVMBuildZExt(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildSIToFP(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildUIToFP(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildFPToSI(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildSExt(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildTrunc(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildAlloca(b~: LLVMBuilderRef, ty~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
@@ -4178,7 +4179,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                 if LLVMGetTypeKind(LLVMTypeOf(ov)) == 8U32 {
                     return buildNegChecked(c: inout c, st: inout st, v: ov)
                 }
-                return LLVMBuildNeg(st.b, ov, anon())
+                return LLVMBuildFNeg(st.b, ov, anon())
             }
             // `!` (Bool) and `~` (BitNot) are both LLVM `xor x, -1` (i1: flips the
             // single bit; iN: flips all bits).
@@ -5636,6 +5637,19 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
     }
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "truncI32") {
         return coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: st.i32ty, unsigned: false)
+    }
+    // (Core internal) isNanF64(f: F64) -> Bool: `fcmp uno f, f` (unordered = true iff
+    // NaN). A direct intrinsic because Plew's `==`/`!=` on floats PANIC on a NaN
+    // operand (spec/02), so the fallible float->int `convert` (spec/12 TryFrom) must
+    // test NaN with this BEFORE any ordered comparison.
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "isNanF64") {
+        return LLVMBuildFCmp(st.b, 8U32, genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), anon())
+    }
+    // (Core internal) f64ToI64(f: F64) -> I64: truncate toward zero (`fptosi`). Called
+    // only after the `convert` factory proves the value is finite and in [-2^63, 2^63)
+    // (out of that range, fptosi is UB) — so this is the in-range raw conversion.
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "f64ToI64") {
+        return LLVMBuildFPToSI(st.b, genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), st.i64ty, anon())
     }
     // (Prelude internal) __dictSeed() -> U64: the per-process dictionary hash seed —
     // a lazily-initialized random value (stable for the process), so SipHash is keyed
