@@ -19,8 +19,7 @@ fn inferType(c: inout Comp, id: U64) -> U64 {
     // `5I64` keeps its suffix type; `true`/`false` fall through to Bool).
     match c.exprs[id] {
         Expr.Int(value: _, offset: _, val isBool, tyStart: _, val tyLen, isNeg: _) => {
-            if isBool {
-            } else {
+            if !(isBool) {
                 if tyLen == 0U64 {
                     return 0U64
                 }
@@ -89,13 +88,11 @@ fn typesCompatible(c: inout Comp, expected: U64, inferred: U64) -> Bool {
         // struct/enum; a generic param (id 0, conforms via its `where` bound) or an
         // existing `any` source is left to the conservative pass-through.
         if te.isAny {
-            if tin.isAny {
-            } else {
+            if !(tin.isAny) {
                 val srcId: U64 = knownNamedTypeId(c: inout c, start: tin.nameStart, len: tin.nameLen)
                 if srcId != 0U64 {
                     val traitId: U64 = intern(c: inout c, start: te.nameStart, len: te.nameLen)
-                    if conformExists(c: inout c, typeId: srcId, traitId: traitId) {
-                    } else {
+                    if !(conformExists(c: inout c, typeId: srcId, traitId: traitId)) {
                         return false
                     }
                 }
@@ -185,8 +182,7 @@ fn typesCompatible(c: inout Comp, expected: U64, inferred: U64) -> Bool {
     if te.args.count == tin.args.count {
         mut val i: U64 = 0
         while i < te.args.count {
-            if typesCompatible(c: inout c, expected: te.args[i], inferred: tin.args[i]) {
-            } else {
+            if !(typesCompatible(c: inout c, expected: te.args[i], inferred: tin.args[i])) {
                 return false
             }
             i += 1
@@ -235,8 +231,7 @@ fn tcCheckValue(c: inout Comp, expectedRef: U64, valueExpr: U64, pos: String) {
     // a void function's result is `()` — using it where a typed value is expected
     // (`val x: I64 = doNothing()`) is a type error (spec/04).
     if exprIsVoidCall(c: inout c, id: valueExpr) {
-        if c.tcLog {
-        } else {
+        if !(c.tcLog) {
             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueExpr)), msg: "cannot use the result of a function that returns no value (spec/04)")
         }
         return
@@ -268,8 +263,7 @@ fn tcCheckValue(c: inout Comp, expectedRef: U64, valueExpr: U64, pos: String) {
                 // this (the match-expr) position and may shadow an outer name, so
                 // inferType on the arm body would resolve the shadowed name wrongly.
                 // a diverging arm (`=> panic`) yields no value to check.
-                if arms[ai].isDiverge {
-                } else {
+                if !(arms[ai].isDiverge) {
                     if arms[ai].binds.count == 0U64 {
                         val g: U64 = blockGiveExpr(c: inout c, blkId: arms[ai].body)
                         if g < c.exprs.count {
@@ -353,8 +347,7 @@ fn tcCheckBinop(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
     if op == opBitAnd() || op == opBitOr() || op == opBitXor() || op == opShl() || op == opShr() {
         handled = true
     }
-    if handled {
-    } else {
+    if !(handled) {
         return
     }
     val l: U64 = inferType(c: inout c, id: lhs)
@@ -430,28 +423,23 @@ fn tcCheckUnary(c: inout Comp, op: I64, operand: U64) {
     // falls to each branch's reject). only judge a primitive operand (int / Bool /
     // float / String); skip user types (which may implement Neg/Not/BitNot).
     val isString: Bool = rangeEquals(bytes: c.bytes, start: tn.nameStart, len: tn.nameLen, kw: "String")
-    if isInt || isBool || isFloat || isString {
-    } else {
+    if !(isInt || isBool || isFloat || isString) {
         return
     }
     if op == opSub() {
-        if isFloat {
-        } else {
-            if isInt && !tcIsUnsignedInt(c: inout c, ref: t) {
-            } else {
+        if !(isFloat) {
+            if !(isInt && !tcIsUnsignedInt(c: inout c, ref: t)) {
                 tcUnaryReject(c: inout c, operand: operand, msg: "unary `-` (Neg) is for signed integers / floats only (spec/12)")
             }
         }
     } else {
         if op == opNot() {
-            if isBool {
-            } else {
+            if !(isBool) {
                 tcUnaryReject(c: inout c, operand: operand, msg: "unary `!` (Not) requires a Bool operand (spec/12)")
             }
         } else {
             if op == opBitNot() {
-                if isInt {
-                } else {
+                if !(isInt) {
                     tcUnaryReject(c: inout c, operand: operand, msg: "unary `~` (BitNot) requires an integer operand (spec/12)")
                 }
             }
@@ -472,8 +460,7 @@ fn tcIsPrimInt(c: inout Comp, ref: U64) -> Bool {
 // I64). Gated on the op being arithmetic (`+= -= *= /= %=`) and BOTH sides primitive
 // ints (a user type uses Add[Rhs]; shift/bitwise compounds are Rhs-parameterized).
 fn tcCheckCompoundAssign(c: inout Comp, op: I64, target: U64, value: U64) {
-    if op == opAddAssign() || op == opSubAssign() || op == opMulAssign() || op == opDivAssign() || op == opRemAssign() {
-    } else {
+    if !(op == opAddAssign() || op == opSubAssign() || op == opMulAssign() || op == opDivAssign() || op == opRemAssign()) {
         return
     }
     val l: U64 = inferType(c: inout c, id: target)
@@ -546,8 +533,7 @@ fn tcCheckMakeFields(c: inout Comp, expectedRef: U64, makeId: U64) {
     }
     match c.exprs[makeId] {
         Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
-            if intern(c: inout c, start: typeStart, len: typeLen) == et.nameId {
-            } else {
+            if intern(c: inout c, start: typeStart, len: typeLen) != et.nameId {
                 return
             }
             // Ref[T] / WeakRef[T] are lang items (not registered generic structs), so

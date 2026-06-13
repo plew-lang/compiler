@@ -102,8 +102,7 @@ fn stripUnderscoresAst(s: String) -> String {
     mut val out: Array[U8] = []
     mut val i: U64 = 0
     while i < s.bytes.count {
-        if s.bytes[i] == '_' {
-        } else {
+        if s.bytes[i] != '_' {
             out.append(value: s.bytes[i])
         }
         i += 1
@@ -1657,8 +1656,7 @@ fn stmtDivergesAst(s: StmtAst) -> Bool {
         StmtAst.Match(scrut: _, val arms, span: _) => {
             mut val i: U64 = 0
             while i < arms.count {
-                if blockDivergesAst(b: arms[i].body) {
-                } else {
+                if !(blockDivergesAst(b: arms[i].body)) {
                     return false
                 }
                 i += 1
@@ -1703,8 +1701,7 @@ fn parseGuardStmt(p: inout P) -> StmtAst {
 
 // Loud error if a `guard` else block can fall through (spec/11: it must diverge).
 fn checkGuardElseDiverges(p: inout P, elseBody: BlockAst, off: U64) {
-    if blockDivergesAst(b: elseBody) {
-    } else {
+    if !(blockDivergesAst(b: elseBody)) {
         p.fail(off: off, msg: "`guard` else block must diverge (end in return / break / continue / panic) — spec/11")
     }
 }

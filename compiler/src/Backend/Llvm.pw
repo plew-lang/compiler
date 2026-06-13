@@ -560,8 +560,7 @@ fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
                 // front-end error, so the mutual recursion terminates).
                 val feid: U64 = enumIdxByName(c: inout c, start: f.tyStart, len: f.tyLen)
                 if feid < c.enums.count {
-                    if enumRepresentable(c: inout c, eid: feid) {
-                    } else {
+                    if !(enumRepresentable(c: inout c, eid: feid)) {
                         return false
                     }
                 } else {
@@ -569,10 +568,8 @@ fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
                     if fsi < c.structs.count {
                         // an extern struct field is a primitive lang-item (ok); a real
                         // nested struct must itself be registerable (recursively).
-                        if c.structs[fsi].isExtern {
-                        } else {
-                            if structRegisterable(c: inout c, sidx: fsi) {
-                            } else {
+                        if !(c.structs[fsi].isExtern) {
+                            if !(structRegisterable(c: inout c, sidx: fsi)) {
                                 return false
                             }
                         }
@@ -611,17 +608,14 @@ fn enumRepresentable(c: inout Comp, eid: U64) -> Bool {
                 } else {
                     val peid: U64 = enumIdxByName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen)
                     if peid < c.enums.count {
-                        if enumRepresentable(c: inout c, eid: peid) {
-                        } else {
+                        if !(enumRepresentable(c: inout c, eid: peid)) {
                             return false
                         }
                     } else {
                         val si: U64 = structIndexByName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen)
                         if si < c.structs.count {
-                            if c.structs[si].isExtern {
-                            } else {
-                                if structRegisterable(c: inout c, sidx: si) {
-                                } else {
+                            if !(c.structs[si].isExtern) {
+                                if !(structRegisterable(c: inout c, sidx: si)) {
                                     return false
                                 }
                             }
@@ -881,8 +875,7 @@ fn registerEnums(c: inout Comp, st: inout LlvmCtx) {
     mut val ei: U64 = 0
     while ei < c.enums.count {
         val e: EnumDef = c.enums[ei]
-        if e.typeParams.count > 0 {
-        } else {
+        if e.typeParams.count <= 0 {
             if enumAllPrimitive(c: inout c, st: inout st, eid: ei) {
                 val maxWords: U64 = enumPayloadWords(c: inout c, st: inout st, eid: ei)
                 mut val nm: Array[U8] = []
@@ -930,8 +923,7 @@ fn genLlvmMakeEnum(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U6
     // annotation / boxed-field pointee) when it names this same generic enum. Consume
     // it so it can't leak into the payload sub-expressions.
     mut val ty: U64 = ty
-    if isGenericInst(c: inout c, ref: ty) {
-    } else {
+    if !(isGenericInst(c: inout c, ref: ty)) {
         if st.expectedTy != 0U64 {
             if isGenericInst(c: inout c, ref: st.expectedTy) {
                 val et: TypeRef = c.types[st.expectedTy]
@@ -960,8 +952,7 @@ fn genLlvmMakeEnum(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U6
         }
     }
     val reg: U64 = enumRegSlot(c: inout c, st: inout st, start: typeStart, len: typeLen)
-    if reg < st.enumIdxs.count {
-    } else {
+    if reg >= st.enumIdxs.count {
         compileErrorAt(line: lineOf(c: inout c, offset: typeStart), msg: "LLVM backend: construction of this enum not yet supported (generic / array-field enums are TODO)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -1003,15 +994,13 @@ fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, 
             // an omitted field: use its declared default if any, else leave it zero
             // (the C designated initializer does the same). NO positional fallback —
             // enum payloads are constructed by name (spec/05).
-            if found {
-            } else {
+            if !(found) {
                 if fs[fj].hasDefault {
                     valExpr = fs[fj].defaultVal
                     found = true
                 }
             }
-            if found {
-            } else {
+            if !(found) {
                 fj += 1
                 continue
             }
@@ -1491,25 +1480,21 @@ fn methodResultRef(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, 
 fn optChainResultRefLL(c: inout Comp, st: inout LlvmCtx, base: U64, memberStart: U64, memberLen: U64) -> U64 {
     val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
     if baseRef == 0U64 { return 0U64 }
-    if baseRef < c.types.count {
-    } else {
+    if baseRef >= c.types.count {
         return 0U64
     }
     val bt: TypeRef = c.types[baseRef]
-    if rangeEquals(bytes: c.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Optional") {
-    } else {
+    if !(rangeEquals(bytes: c.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Optional")) {
         return 0U64
     }
     if bt.args.count < 1U64 { return 0U64 }
     val tName: TypeRef = c.types[bt.args[0]]
     val tSidx: U64 = structIndexByName(c: inout c, start: tName.nameStart, len: tName.nameLen)
-    if tSidx < c.structs.count {
-    } else {
+    if tSidx >= c.structs.count {
         return 0U64
     }
     val fidx: U64 = structFieldIndex(c: inout c, sidx: tSidx, start: memberStart, len: memberLen)
-    if fidx < c.structs[tSidx].fields.count {
-    } else {
+    if fidx >= c.structs[tSidx].fields.count {
         return 0U64
     }
     val fd: FieldDef = c.structs[tSidx].fields[fidx]
@@ -1645,8 +1630,7 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             }
         }
         Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, val ty, fields: _) => {
-            if isEnum {
-            } else {
+            if !(isEnum) {
                 // a generic struct construction (`<Holder[I64] … />`): point at the
                 // generic def so field access on the binding works.
                 if isGenericInst(c: inout c, ref: ty) {
@@ -1667,8 +1651,7 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
                 if fidx < c.structs[bsi].fields.count {
                     val fld: FieldDef = c.structs[bsi].fields[fidx]
-                    if fld.tyIsArray {
-                    } else {
+                    if !(fld.tyIsArray) {
                         // ground a generic field type under the BASE's instance env
                         // (so `bb.v` with bb: Box[Box[I32]] resolves v -> Box[I32]),
                         // as well as any active env (a monomorphized method's `inner: I`).
@@ -1751,8 +1734,7 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                                     val savedP: Array[Bind] = c.curTypeParams
                                     val savedA: Array[U64] = c.curTypeArgs
                                     mut val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: mrRef)
-                                    if didSet {
-                                    } else {
+                                    if !(didSet) {
                                         didSet = setEnumEnv(c: inout c, st: inout st, ref: mrRef)
                                     }
                                     val g: U64 = groundTypeRef(c: inout c, ref: c.funcs[emfi].retTy)
@@ -2093,16 +2075,14 @@ fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Arr
             }
             bi += 1
         }
-        if found {
-        } else {
+        if !(found) {
             if posIdx < positional.count {
                 ref = positional[posIdx]
                 posIdx += 1
                 found = true
             }
         }
-        if found {
-        } else {
+        if !(found) {
             return false
         }
         outParams.append(value: tp)
@@ -2125,8 +2105,7 @@ fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Arr
             }
             bj += 1
         }
-        if found2 {
-        } else {
+        if !(found2) {
             return false
         }
         outParams.append(value: at)
@@ -2159,8 +2138,7 @@ fn anyBindKey(c: inout Comp, args: Array[U64]) -> U64 {
 // associated / type-parameter type (`Output`, `Optional[Item]`) recovers concretely.
 fn anyMethodRetRef(c: inout Comp, anyRef: U64, traitIdx: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     val req: Func = anyMethodReq(c: inout c, traitIdx: traitIdx, nameStart: nameStart, nameLen: nameLen, args: args)
-    if req.hasRet {
-    } else {
+    if !(req.hasRet) {
         return 0U64
     }
     // a `-> Self` requirement re-erases to the existential itself (`fn dup() -> Self`
@@ -2173,8 +2151,7 @@ fn anyMethodRetRef(c: inout Comp, anyRef: U64, traitIdx: U64, nameStart: U64, na
     }
     mut val params: Array[Bind] = []
     mut val argz: Array[U64] = []
-    if anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout params, outArgs: inout argz) {
-    } else {
+    if !(anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout params, outArgs: inout argz)) {
         return req.retTy
     }
     val savedP: Array[Bind] = c.curTypeParams
@@ -2234,12 +2211,10 @@ fn extendToI64(st: inout LlvmCtx, v: LLVMValueRef, unsigned: Bool) -> LLVMValueR
 // expected width — e.g. an i64-defaulted literal `5` stored into an `I32` local.
 fn coerceInt(st: inout LlvmCtx, v: LLVMValueRef, target: LLVMTypeRef, unsigned: Bool) -> LLVMValueRef {
     // only integers are width-coerced; arrays/structs/enums/String pass through.
-    if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
-    } else {
+    if LLVMGetTypeKind(LLVMTypeOf(v)) != 8U32 {
         return v
     }
-    if LLVMGetTypeKind(target) == 8U32 {
-    } else {
+    if LLVMGetTypeKind(target) != 8U32 {
         return v
     }
     val vw: U32 = LLVMGetIntTypeWidth(LLVMTypeOf(v))
@@ -2444,8 +2419,7 @@ fn binWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -
         }
         i += 1
     }
-    if rhsKnown {
-    } else {
+    if !(rhsKnown) {
         if intMatch < c.funcs.count {
             return intMatch
         }
@@ -2473,15 +2447,13 @@ fn unaryWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, operand: U64) -> U6
 // operator witnesses); a missing slot is a loud not-yet-emittable error.
 fn emitWitnessCall(c: inout Comp, st: inout LlvmCtx, fi: U64, lhs: U64, rhs: U64, binary: Bool) -> LLVMValueRef {
     mut val aslot: U64 = userFnSlot(st: inout st, idx: fi)
-    if aslot < st.fnIdx.count {
-    } else {
+    if aslot >= st.fnIdx.count {
         // a witness on a lang-item the upfront pass doesn't emit (`String.add` for
         // `"a" + "b"` — String isn't a registered struct, so isPlainUserFn skips it):
         // declare it lazily like a provided method and queue its body for emission.
         aslot = ensureFreeFnDeclared(c: inout c, st: inout st, fi: fi)
     }
-    if aslot < st.fnIdx.count {
-    } else {
+    if aslot >= st.fnIdx.count {
         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "LLVM backend: operator witness not emittable yet")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -2658,8 +2630,7 @@ fn methodReturnKind(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64) -> U6
         // enum case is what carries an unsigned element through, so without it `T` stays
         // abstract and the kind defaults to signed (a U8 result printed as -56).
         mut val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: rRef)
-        if didSet {
-        } else {
+        if !(didSet) {
             didSet = setEnumEnv(c: inout c, st: inout st, ref: rRef)
         }
         val g: U64 = groundTypeRef(c: inout c, ref: mf.retTy)
@@ -3197,8 +3168,7 @@ fn structOrdSupported(c: inout Comp, st: inout LlvmCtx, sidx: U64) -> Bool {
         }
         val sreg: U64 = structRegSlot(c: inout c, st: inout st, start: sd.fields[i].tyStart, len: sd.fields[i].tyLen)
         if sreg < st.structIdxs.count {
-            if structOrdSupported(c: inout c, st: inout st, sidx: st.structIdxs[sreg]) {
-            } else {
+            if !(structOrdSupported(c: inout c, st: inout st, sidx: st.structIdxs[sreg])) {
                 return false
             }
         }
@@ -3337,8 +3307,7 @@ fn enumOrdSupported(c: inout Comp, st: inout LlvmCtx, eid: U64) -> Bool {
             if isEnumName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen) { return false }
             val sreg: U64 = structRegSlot(c: inout c, st: inout st, start: fs[fj].tyStart, len: fs[fj].tyLen)
             if sreg < st.structIdxs.count {
-                if structOrdSupported(c: inout c, st: inout st, sidx: st.structIdxs[sreg]) {
-                } else {
+                if !(structOrdSupported(c: inout c, st: inout st, sidx: st.structIdxs[sreg])) {
                     return false
                 }
             }
@@ -3642,8 +3611,7 @@ fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, v
     // ungrounded head `gty`; fall back to the expected type from context (the field's
     // declared instance type set by genFieldValue) when it names this same generic
     // struct. Consume it so it can't leak into the field sub-expressions.
-    if isGenericInst(c: inout c, ref: gty) {
-    } else {
+    if !(isGenericInst(c: inout c, ref: gty)) {
         if st.expectedTy != 0U64 {
             if isGenericInst(c: inout c, ref: st.expectedTy) {
                 val et: TypeRef = c.types[st.expectedTy]
@@ -3689,8 +3657,7 @@ fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, v
         rtLen = ntn.nameLen
     }
     val reg: U64 = structRegSlot(c: inout c, st: inout st, start: rtStart, len: rtLen)
-    if reg < st.structIdxs.count {
-    } else {
+    if reg >= st.structIdxs.count {
         compileErrorAt(line: lineOf(c: inout c, offset: typeStart), msg: "LLVM backend: construction of this type not yet supported (Ref / nested-struct structs are TODO)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -3780,8 +3747,7 @@ fn buildStructValue(c: inout Comp, st: inout LlvmCtx, sd: StructDef, sty: LLVMTy
                 mi += 1
             }
         }
-        if provided {
-        } else {
+        if !(provided) {
             if fld.hasDefault {
                 valExpr = fld.defaultVal
             } else {
@@ -3956,8 +3922,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // any remaining struct/enum (aggregate) operand routes through an Eq/Ord
             // witness in the C backend; not modeled here — reject loudly rather than
             // emit an invalid icmp/arith on an aggregate.
-            if LLVMGetTypeKind(LLVMTypeOf(l)) == 8U32 {
-            } else {
+            if LLVMGetTypeKind(LLVMTypeOf(l)) != 8U32 {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "LLVM backend: struct/enum operator (Eq/Ord/Add/... witness) not yet supported")
                 return LLVMConstInt(st.i1ty, 0U64, 0I32)
             }
@@ -4123,8 +4088,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // marks the source local moved (so its deinit is not run here — the new
             // owner runs it). `borrow` leaves the source owned (a non-consuming read).
             val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: operand)
-            if isBorrow {
-            } else {
+            if !(isBorrow) {
                 match c.exprs[operand] {
                     Expr.Ident(start: val s, len: val l) => {
                         markLocalMoved(c: inout c, st: inout st, start: s, len: l)
@@ -4152,8 +4116,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                 return ov
             }
             if LLVMGetTypeKind(LLVMTypeOf(ov)) == 8U32 {
-                if kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen) == 1U64 {
-                } else {
+                if kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen) != 1U64 {
                     return coerceInt(st: inout st, v: ov, target: llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen), unsigned: valueKind(c: inout c, st: inout st, id: operand) == 3U64)
                 }
             }
@@ -4270,8 +4233,7 @@ fn genLlvmIfExpr(c: inout Comp, st: inout LlvmCtx, cond: U64, thenBlk: U64, else
     val thenVal: LLVMValueRef = st.giveValue
     val thenEnd: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
     st.nLocals = markT
-    if thenDiv {
-    } else {
+    if !(thenDiv) {
         phiVals.append(value: thenVal)
         phiBlocks.append(value: thenEnd)
         LLVMBuildBr(st.b, contBB)
@@ -4284,8 +4246,7 @@ fn genLlvmIfExpr(c: inout Comp, st: inout LlvmCtx, cond: U64, thenBlk: U64, else
     mut val elseVal: LLVMValueRef = st.giveValue
     val elseEnd: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
     st.nLocals = markE
-    if elseDiv {
-    } else {
+    if !(elseDiv) {
         // unify the else branch's width to a value branch (context-less literals).
         if phiVals.count > 0U64 {
             elseVal = coerceInt(st: inout st, v: elseVal, target: LLVMTypeOf(phiVals[0]), unsigned: false)
@@ -4344,10 +4305,8 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
     mut val eid: U64 = c.enums.count
     mut val ai0: U64 = 0
     while ai0 < arms.count {
-        if arms[ai0].isWildcard {
-        } else {
-            if arms[ai0].isStruct {
-            } else {
+        if !(arms[ai0].isWildcard) {
+            if !(arms[ai0].isStruct) {
                 if eid == c.enums.count {
                     eid = enumIdxByName(c: inout c, start: arms[ai0].enumStart, len: arms[ai0].enumLen)
                 }
@@ -4355,8 +4314,7 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
         }
         ai0 += 1
     }
-    if eid < c.enums.count {
-    } else {
+    if eid >= c.enums.count {
         compileErrorAt(line: 0, msg: "LLVM backend: value-match is only supported on a registered enum (so far)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -4386,8 +4344,7 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
         val saved: U64 = st.nLocals
         LLVMPositionBuilderAtEnd(st.b, armBB)
         st.terminated = false
-        if arm.isWildcard {
-        } else {
+        if !(arm.isWildcard) {
             val didB: Bool = setEnumEnv(c: inout c, st: inout st, ref: scrutRef)
             bindMatchPayload(c: inout c, st: inout st, eid: eid, arm: arm, scrutTy: sty, scrutSlot: sslot)
             if didB {
@@ -4416,8 +4373,7 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
         st.nLocals = saved
         ai += 1
     }
-    if lastWasWildcard {
-    } else {
+    if !(lastWasWildcard) {
         LLVMPositionBuilderAtEnd(st.b, checkBB)
         LLVMBuildUnreachable(st.b)
     }
@@ -4443,8 +4399,7 @@ fn genLlvmOptChain(c: inout Comp, st: inout LlvmCtx, base: U64, memberStart: U64
     // typed-AST cache typeOf relies on isn't populated in this backend).
     val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
     val bge: U64 = genEnumSlot(c: inout c, st: inout st, ref: baseRef)
-    if bge < st.genEnumRefs.count {
-    } else {
+    if bge >= st.genEnumRefs.count {
         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: `?.` base must be a registered Optional instance")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -4459,14 +4414,12 @@ fn genLlvmOptChain(c: inout Comp, st: inout LlvmCtx, base: U64, memberStart: U64
     val tRef: U64 = c.types[baseRef].args[0]
     val tName: TypeRef = c.types[tRef]
     val tSidx: U64 = structIndexByName(c: inout c, start: tName.nameStart, len: tName.nameLen)
-    if tSidx < c.structs.count {
-    } else {
+    if tSidx >= c.structs.count {
         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: `?.` element must be a registered struct")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     val fidx: U64 = structFieldIndex(c: inout c, sidx: tSidx, start: memberStart, len: memberLen)
-    if fidx < c.structs[tSidx].fields.count {
-    } else {
+    if fidx >= c.structs[tSidx].fields.count {
         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: `?.` element has no such field")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -4482,8 +4435,7 @@ fn genLlvmOptChain(c: inout Comp, st: inout LlvmCtx, base: U64, memberStart: U64
     rArgs.append(value: uRef)
     val rr: U64 = c.pushType(t: <TypeRef nameStart=ed.nameStart nameLen=ed.nameLen args=rArgs />)
     val rge: U64 = genEnumSlot(c: inout c, st: inout st, ref: rr)
-    if rge < st.genEnumRefs.count {
-    } else {
+    if rge >= st.genEnumRefs.count {
         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: `?.` result Optional instance is not registered")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -4538,13 +4490,11 @@ fn genLlvmTry(c: inout Comp, st: inout LlvmCtx, expr: U64) -> LLVMValueRef {
     }
     val ege: U64 = genEnumSlot(c: inout c, st: inout st, ref: exprRef)
     val rge: U64 = genEnumSlot(c: inout c, st: inout st, ref: st.curRetRef)
-    if ege < st.genEnumRefs.count {
-    } else {
+    if ege >= st.genEnumRefs.count {
         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "LLVM backend: `try` needs a registered Result instance")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
-    if rge < st.genEnumRefs.count {
-    } else {
+    if rge >= st.genEnumRefs.count {
         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "LLVM backend: `try` is only valid in a function returning a registered Result")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -4581,13 +4531,11 @@ fn genLlvmTry(c: inout Comp, st: inout LlvmCtx, expr: U64) -> LLVMValueRef {
     val fnErrRef: U64 = resultErrArgRef(c: inout c, ref: st.curRetRef)
     if opErrRef != 0U64 {
         if fnErrRef != 0U64 {
-            if c.types[opErrRef].nameId == c.types[fnErrRef].nameId {
-            } else {
+            if c.types[opErrRef].nameId != c.types[fnErrRef].nameId {
                 val ffi: U64 = typeRefFromFactoryIdx(c: inout c, errRef: fnErrRef)
                 if ffi < c.funcs.count {
                     mut val fslot: U64 = userFnSlot(st: inout st, idx: ffi)
-                    if fslot < st.fnIdx.count {
-                    } else {
+                    if fslot >= st.fnIdx.count {
                         fslot = ensureFreeFnDeclared(c: inout c, st: inout st, fi: ffi)
                     }
                     if fslot < st.fnIdx.count {
@@ -5191,8 +5139,7 @@ fn genLlvmArrayLit(c: inout Comp, st: inout LlvmCtx, elems: Array[U64], elemTy: 
         if elemIsAny {
             mut val eb: Bool = false
             ev = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: elemRef, valueExpr: elems[i], outBoxed: inout eb)
-            if eb {
-            } else {
+            if !(eb) {
                 ev = genLlvmExpr(c: inout c, st: inout st, id: elems[i])
             }
         } else {
@@ -5210,8 +5157,7 @@ fn genLlvmArrayLit(c: inout Comp, st: inout LlvmCtx, elems: Array[U64], elemTy: 
 fn genLlvmIndex(c: inout Comp, st: inout LlvmCtx, base: U64, index: U64) -> LLVMValueRef {
     // only a built-in Array is indexed directly; a user `Index`-impl subscript
     // (struct `g[i]`) desugars to `g.index(key: i)` via the Index witness (spec/12).
-    if exprIsArray(c: inout c, st: inout st, id: base) {
-    } else {
+    if !(exprIsArray(c: inout c, st: inout st, id: base)) {
         val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
         if bsi < c.structs.count {
             // a Dictionary subscript `d[k]` lowers to the panicking accessor
@@ -5233,8 +5179,7 @@ fn genLlvmIndex(c: inout Comp, st: inout LlvmCtx, base: U64, index: U64) -> LLVM
     // the base must be an array {ptr,i64} aggregate; a non-aggregate here means a
     // nested array (Array[Array[T]]) or unsupported element typing — reject loudly
     // rather than extractvalue on a scalar (which crashes the LLVM builder).
-    if LLVMGetTypeKind(LLVMTypeOf(arr)) == 10U32 {
-    } else {
+    if LLVMGetTypeKind(LLVMTypeOf(arr)) != 10U32 {
         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: nested arrays / this index form not yet supported")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -5273,8 +5218,7 @@ fn arrayExprElemRef(c: inout Comp, st: inout LlvmCtx, arrayExpr: U64) -> U64 {
 
 fn genLlvmAppend(c: inout Comp, st: inout LlvmCtx, recv: U64, valueExpr: U64) -> LLVMValueRef {
     val arrPtr: LLVMValueRef = arrStoragePtr(c: inout c, st: inout st, id: recv)
-    if LLVMIsNull(arrPtr) == 0I32 {
-    } else {
+    if LLVMIsNull(arrPtr) != 0I32 {
         compileErrorAt(line: 0, msg: "LLVM backend: append only on an array local / struct field (so far)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -5316,8 +5260,7 @@ fn genLlvmAppend(c: inout Comp, st: inout LlvmCtx, recv: U64, valueExpr: U64) ->
         }
         _ => {}
     }
-    if builtLit {
-    } else {
+    if !(builtLit) {
         ev = coerceElem(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valueExpr), elemTy: elemTy)
     }
     LLVMBuildStore(st.b, ev, arrElemPtr(st: inout st, elemTy: elemTy, data: newdata, idx: count))
@@ -5366,8 +5309,7 @@ fn genLlvmShortCircuit(c: inout Comp, st: inout LlvmCtx, isAnd: Bool, lhs: U64, 
     val phi: LLVMValueRef = LLVMBuildPhi(st.b, st.i1ty, anon())
     // the short-circuit constant on the lhs edge: && -> false, || -> true.
     mut val scConst: LLVMValueRef = LLVMConstInt(st.i1ty, 0U64, 0I32)
-    if isAnd {
-    } else {
+    if !(isAnd) {
         scConst = LLVMConstInt(st.i1ty, 1U64, 0I32)
     }
     mut val vals: Array[LLVMValueRef] = []
@@ -5466,8 +5408,7 @@ fn adapterCallResultInst(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart:
 // `<MapIter inner=self f=f />` with `self` = the receiver.
 fn genLlvmAdapterWrap(c: inout Comp, st: inout LlvmCtx, recv: U64, args: Array[Arg], adapterRef: U64) -> LLVMValueRef {
     val gslot: U64 = genStructSlot(c: inout c, st: inout st, ref: adapterRef)
-    if gslot < st.genStructRefs.count {
-    } else {
+    if gslot >= st.genStructRefs.count {
         compileErrorAt(line: 0, msg: "LLVM backend: iterator adapter struct is not registered")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -5512,8 +5453,7 @@ fn closureLlvmFnTy(c: inout Comp, st: inout LlvmCtx, fnRef: U64) -> LLVMTypeRef 
     if t.args.count > 0U64 {
         val rt: TypeRef = c.types[t.args[0]]
         // a `()` return (the unnamed unit record) is void; any named type is a value.
-        if rt.nameLen == 0U64 {
-        } else {
+        if rt.nameLen != 0U64 {
             rty = llvmTypeOfRef(c: inout c, st: inout st, ref: t.args[0])
         }
     }
@@ -5568,8 +5508,7 @@ fn genPowCall(c: inout Comp, st: inout LlvmCtx, base: U64, args: Array[Arg]) -> 
         return LLVMConstNull(st.ptrty)
     }
     mut val aslot: U64 = userFnSlot(st: inout st, idx: afi)
-    if aslot < st.fnIdx.count {
-    } else {
+    if aslot >= st.fnIdx.count {
         aslot = ensureFreeFnDeclared(c: inout c, st: inout st, fi: afi)
     }
     if aslot >= st.fnIdx.count {
@@ -5882,10 +5821,8 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
         mut val slot: U64 = userFnSlot(st: inout st, idx: cfi)
         // a std free function reached from an emitted body (digitByteI from
         // I64.format) is declared+emitted lazily.
-        if slot < st.fnIdx.count {
-        } else {
-            if isGenericFreeFn(c: inout c, fi: cfi) {
-            } else {
+        if slot >= st.fnIdx.count {
+            if !(isGenericFreeFn(c: inout c, fi: cfi)) {
                 slot = ensureFreeFnDeclared(c: inout c, st: inout st, fi: cfi)
             }
         }
@@ -5967,8 +5904,7 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
                     di += 1
                 }
             }
-            if dfound {
-            } else {
+            if !(dfound) {
                 mut val nm: Array[U8] = []
                 mut val k: U64 = 0
                 while k < nameLen {
@@ -6139,8 +6075,7 @@ fn funcViewsMatch(c: inout Comp, st: inout LlvmCtx, fi: U64, args: Array[Arg]) -
 // view-mismatch enforcement at genArgValue then reports it).
 fn findFuncViewAware(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     val base: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
-    if base < c.funcs.count {
-    } else {
+    if base >= c.funcs.count {
         return base
     }
     if funcViewsMatch(c: inout c, st: inout st, fi: base, args: args) {
@@ -6155,10 +6090,8 @@ fn findFuncViewAware(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: 
     mut val i: U64 = 0
     while i < c.funcs.count {
         val f: Func = c.funcs[i]
-        if f.hasRecv {
-        } else {
-            if f.isAssoc {
-            } else {
+        if !(f.hasRecv) {
+            if !(f.isAssoc) {
                 if f.nameId == qName {
                     if paramsLabelsOk(c: inout c, params: f.params, args: args) {
                         if sameParamTypeHeads(c: inout c, a: c.funcs[base].params, b: f.params) {
@@ -6281,18 +6214,15 @@ fn genLlvmExtMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, srcStart: U64, 
         }
         vi += 1
     }
-    if mfi < c.funcs.count {
-    } else {
+    if mfi >= c.funcs.count {
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "no such extension method on this type (is the extension name right, and a `pub impl`?)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     mut val slot: U64 = userFnSlot(st: inout st, idx: mfi)
-    if slot < st.fnIdx.count {
-    } else {
+    if slot >= st.fnIdx.count {
         slot = ensureProvidedDeclared(c: inout c, st: inout st, fi: mfi)
     }
-    if slot < st.fnIdx.count {
-    } else {
+    if slot >= st.fnIdx.count {
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: this extension method is not emittable yet (generic / provided)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -6371,8 +6301,7 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
             mut val aslot: U64 = userFnSlot(st: inout st, idx: afi)
             // a trait/std provided assoc fn (`Greeter.banner()`) is declared+emitted
             // lazily (no self param), like a free function.
-            if aslot < st.fnIdx.count {
-            } else {
+            if aslot >= st.fnIdx.count {
                 aslot = ensureFreeFnDeclared(c: inout c, st: inout st, fi: afi)
             }
             if aslot < st.fnIdx.count {
@@ -6506,8 +6435,7 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         }
     }
     val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
-    if rsidx < c.structs.count {
-    } else {
+    if rsidx >= c.structs.count {
         // an enum-receiver method (`c.code()` on an enum value): dispatch like a
         // struct method (self by value, or a pointer for `inout fn`).
         val erecvRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
@@ -6517,8 +6445,7 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
                 val emfi: U64 = findMethod(c: inout c, recvStart: et.nameStart, recvLen: et.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if emfi < c.funcs.count {
                     mut val eslot: U64 = userFnSlot(st: inout st, idx: emfi)
-                    if eslot < st.fnIdx.count {
-                    } else {
+                    if eslot >= st.fnIdx.count {
                         eslot = ensureProvidedDeclared(c: inout c, st: inout st, fi: emfi)
                     }
                     if eslot < st.fnIdx.count {
@@ -6571,12 +6498,10 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         }
         vci += 1
     }
-    if mfi < c.funcs.count {
-    } else {
+    if mfi >= c.funcs.count {
         mfi = findMethod(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
     }
-    if mfi < c.funcs.count {
-    } else {
+    if mfi >= c.funcs.count {
         // `self.f(n: x)` where `f` is a closure-typed field (the iterator-adapter
         // pattern — a struct holds a mapping/predicate closure): load the field value
         // and call it indirectly. The field type grounds through any generic env.
@@ -6610,12 +6535,10 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
     mut val slot: U64 = userFnSlot(st: inout st, idx: mfi)
     // a provided trait method OR a non-entry-module std method (SipHasher.writeU64,
     // reached via a generic Hasher) is declared+emitted lazily on first call.
-    if slot < st.fnIdx.count {
-    } else {
+    if slot >= st.fnIdx.count {
         slot = ensureProvidedDeclared(c: inout c, st: inout st, fi: mfi)
     }
-    if slot < st.fnIdx.count {
-    } else {
+    if slot >= st.fnIdx.count {
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: this method is not emittable yet (generic / provided / trait receiver)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -6707,8 +6630,7 @@ fn methodOwnArgs(c: inout Comp, mfi: U64, instRef: U64, args: Array[Arg]) -> Arr
         // yet emitted correctly through the collided env, so bail to the loud reject
         // rather than miscompile.
         val owt: TypeRef = c.types[inferred[i]]
-        if isIntType(c: inout c, start: owt.nameStart, len: owt.nameLen) || isFloatType(c: inout c, start: owt.nameStart, len: owt.nameLen) {
-        } else {
+        if !(isIntType(c: inout c, start: owt.nameStart, len: owt.nameLen) || isFloatType(c: inout c, start: owt.nameStart, len: owt.nameLen)) {
             return []
         }
         out.append(value: inferred[i])
@@ -7119,8 +7041,7 @@ fn isPlainUserFn(c: inout Comp, st: inout LlvmCtx, fi: U64) -> Bool {
         // actually reached (called) — so derive-generated but uncalled witnesses
         // (Eq/Ord lowered natively here) aren't emitted into failing bodies.
         // Trait assoc fns and generic ones are deferred.
-        if inReachAssoc(st: inout st, fi: fi) {
-        } else {
+        if !(inReachAssoc(st: inout st, fi: fi)) {
             return false
         }
         if isTraitName(c: inout c, start: f.recvStart, len: f.recvLen) { return false }
@@ -7139,10 +7060,8 @@ fn isPlainUserFn(c: inout Comp, st: inout LlvmCtx, fi: U64) -> Bool {
         // original source offsets, to recover the defining module — this keeps std
         // struct methods, full of not-yet-supported constructs, from being emitted.)
         if isTraitName(c: inout c, start: f.recvStart, len: f.recvLen) { return false }
-        if structRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.structIdxs.count {
-        } else {
-            if enumRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.enumIdxs.count {
-            } else {
+        if structRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) >= st.structIdxs.count {
+            if enumRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) >= st.enumIdxs.count {
                 return false
             }
         }
@@ -7305,18 +7224,14 @@ fn ensureProvidedDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
     if f.typeParams.count > 0U64 {
         return st.fnIdx.count
     }
-    if f.hasRecv {
-    } else {
+    if !(f.hasRecv) {
         return st.fnIdx.count
     }
     // a registered struct receiver, or a primitive lang-item (String / a fixed-width
     // integer) — all have a well-defined self LLVM type.
-    if structRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.structIdxs.count {
-    } else {
-        if rangeEquals(bytes: c.bytes, start: f.recvStart, len: f.recvLen, kw: "String") {
-        } else {
-            if isPrimIntName(c: inout c, start: f.recvStart, len: f.recvLen) {
-            } else {
+    if structRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) >= st.structIdxs.count {
+        if !(rangeEquals(bytes: c.bytes, start: f.recvStart, len: f.recvLen, kw: "String")) {
+            if !(isPrimIntName(c: inout c, start: f.recvStart, len: f.recvLen)) {
                 return st.fnIdx.count
             }
         }
@@ -7366,8 +7281,7 @@ fn ensureFreeFnDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
     // an assoc fn (`Trait.banner()`) has a receiver type but no self param — emit it
     // like a free function; a real method (self) is not handled here.
     if f.hasRecv {
-        if f.isAssoc {
-        } else {
+        if !(f.isAssoc) {
             return st.fnIdx.count
         }
     }
@@ -7600,14 +7514,12 @@ fn declareGenMethods(c: inout Comp, st: inout LlvmCtx) {
         val instRef: U64 = c.genInsts[gi]
         val gt: TypeRef = c.types[instRef]
         // Array instances keep their methods on the array-special path; skip here.
-        if rangeEquals(bytes: c.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array") {
-        } else {
+        if !(rangeEquals(bytes: c.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array")) {
             mut val mfi: U64 = 0
             while mfi < c.funcs.count {
                 val mf: Func = c.funcs[mfi]
                 if methodMatchesInst(c: inout c, f: mf, instRef: instRef) {
-                    if mf.isProvided {
-                    } else {
+                    if !(mf.isProvided) {
                         if methodInEntryModule(c: inout c, f: mf) {
                             if genMethSlotFor(c: inout c, st: inout st, mfi: mfi, instRef: instRef, ownArgs: []) == st.genMethK.count {
                                 declareOneGenMethod(c: inout c, st: inout st, mfi: mfi, instRef: instRef, ownArgs: [])
@@ -7726,8 +7638,7 @@ fn ensureGenMethodDeclared(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: 
     // method-own args inferred at the call (`fold[B]`: receiver [I,F,B] + own [B]).
     // A still-mismatched count means own params we couldn't infer — leave undeclared.
     val mf: Func = c.funcs[mfi]
-    if mf.typeParams.count == c.types[instRef].args.count + ownArgs.count {
-    } else {
+    if mf.typeParams.count != c.types[instRef].args.count + ownArgs.count {
         return st.genMethK.count
     }
     declareOneGenMethod(c: inout c, st: inout st, mfi: mfi, instRef: instRef, ownArgs: ownArgs)
@@ -7743,8 +7654,7 @@ fn typeArgsEq(c: inout Comp, a: Array[U64], b: Array[U64]) -> Bool {
     }
     mut val i: U64 = 0
     while i < a.count {
-        if typeRefEq(c: inout c, a: a[i], b: b[i]) {
-        } else {
+        if !(typeRefEq(c: inout c, a: a[i], b: b[i])) {
             return false
         }
         i += 1
@@ -7834,8 +7744,7 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     // resolves through the enum-receiver dispatch — the pre-ground enum check above
     // only sees the Self-grounded span, missing a `T`-named param.
     if pRef == 0U64 {
-        if p.tyIsArray {
-        } else {
+        if !(p.tyIsArray) {
             mut val gs2: U64 = p.tyStart
             mut val gl2: U64 = p.tyLen
             if p.ty != 0U64 {
@@ -8002,8 +7911,7 @@ fn declareClosure(c: inout Comp, st: inout LlvmCtx, id: U64) {
     if closureSlot(st: inout st, id: id) < st.cloIdx.count {
         return
     }
-    if closureSupported(c: inout c, cloId: id) {
-    } else {
+    if !(closureSupported(c: inout c, cloId: id)) {
         return
     }
     match c.exprs[id] {
@@ -8263,8 +8171,7 @@ fn emitClosures(c: inout Comp, st: inout LlvmCtx) {
                     pi += 1
                 }
                 genLlvmBlock(c: inout c, st: inout st, id: body)
-                if st.terminated {
-                } else {
+                if !(st.terminated) {
                     if st.curRetVoid {
                         LLVMBuildRetVoid(st.b)
                     } else {
@@ -8299,8 +8206,7 @@ fn declareThunk(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     if thunkSlot(st: inout st, fi: fi) < st.thunkIdx.count {
         return
     }
-    if isPlainUserFn(c: inout c, st: inout st, fi: fi) {
-    } else {
+    if !(isPlainUserFn(c: inout c, st: inout st, fi: fi)) {
         return
     }
     val f: Func = c.funcs[fi]
@@ -8335,8 +8241,7 @@ fn collectThunks(c: inout Comp, st: inout LlvmCtx) {
                 val fvi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)
                 if fvi < c.funcs.count {
                     val f: Func = c.funcs[fvi]
-                    if f.hasRecv || f.isAssoc || f.typeParams.count > 0U64 {
-                    } else {
+                    if !(f.hasRecv || f.isAssoc || f.typeParams.count > 0U64) {
                         declareThunk(c: inout c, st: inout st, fi: fvi)
                     }
                 }
@@ -8406,8 +8311,7 @@ fn paramLabelsEqual(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
     }
     mut val i: U64 = 0
     while i < a.count {
-        if a[i].nameId == b[i].nameId {
-        } else {
+        if a[i].nameId != b[i].nameId {
             return false
         }
         i += 1
@@ -8478,19 +8382,16 @@ fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, trait
     // into the existential (the slot's signature returns the fat pointer).
     val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)
     val wfi: U64 = findWitnessFor(c: inout c, sidx: sidx, req: req)
-    if wfi < c.funcs.count {
-    } else {
+    if wfi >= c.funcs.count {
         return LLVMConstNull(st.ptrty)
     }
     val wslot: U64 = userFnSlot(st: inout st, idx: wfi)
-    if wslot < st.fnIdx.count {
-    } else {
+    if wslot >= st.fnIdx.count {
         return LLVMConstNull(st.ptrty)
     }
     val sd: StructDef = c.structs[sidx]
     val regSlot: U64 = structRegSlot(c: inout c, st: inout st, start: sd.nameStart, len: sd.nameLen)
-    if regSlot < st.structIdxs.count {
-    } else {
+    if regSlot >= st.structIdxs.count {
         return LLVMConstNull(st.ptrty)
     }
     val concreteTy: LLVMTypeRef = st.structTys[regSlot]
@@ -8540,8 +8441,7 @@ fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, trait
     // place — the box is shared via the fat pointer's data field, so the mutation
     // persists); a by-value self is loaded from the box.
     mut val selfArg: LLVMValueRef = LLVMGetParam(fv, 0U64)
-    if req.selfInout {
-    } else {
+    if !(req.selfInout) {
         selfArg = LLVMBuildLoad2(st.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
     }
     mut val av: Array[LLVMValueRef] = []
@@ -8575,8 +8475,7 @@ fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, trait
 fn buildAnyCopyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64) -> LLVMValueRef {
     val sd: StructDef = c.structs[sidx]
     val regSlot: U64 = structRegSlot(c: inout c, st: inout st, start: sd.nameStart, len: sd.nameLen)
-    if regSlot < st.structIdxs.count {
-    } else {
+    if regSlot >= st.structIdxs.count {
         return LLVMConstNull(st.ptrty)
     }
     val concreteTy: LLVMTypeRef = st.structTys[regSlot]
@@ -8728,8 +8627,7 @@ fn boxIntoAny(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, sidx: U64, anyR
 // coercion applies. `outBoxed` is set true iff a coercion happened.
 fn coerceToAnyIfNeeded(c: inout Comp, st: inout LlvmCtx, targetRef: U64, valueExpr: U64, outBoxed: inout Bool) -> LLVMValueRef {
     outBoxed = false
-    if refIsAny(c: inout c, ref: targetRef) {
-    } else {
+    if !(refIsAny(c: inout c, ref: targetRef)) {
         return LLVMConstNull(st.ptrty)
     }
     // already an `any` value (e.g. passing an `any P` local to an `any P` param):
@@ -8739,14 +8637,12 @@ fn coerceToAnyIfNeeded(c: inout Comp, st: inout LlvmCtx, targetRef: U64, valueEx
         return LLVMConstNull(st.ptrty)
     }
     val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: valueExpr)
-    if sidx < c.structs.count {
-    } else {
+    if sidx >= c.structs.count {
         return LLVMConstNull(st.ptrty)
     }
     val tr: TypeRef = c.types[targetRef]
     val traitIdx: U64 = findTraitIdxByName(c: inout c, start: tr.nameStart, len: tr.nameLen)
-    if traitIdx < c.traits.count {
-    } else {
+    if traitIdx >= c.traits.count {
         return LLVMConstNull(st.ptrty)
     }
     // value semantics: boxing a concrete PLACE (`val a: any P = h`) deep-copies its
@@ -8764,14 +8660,12 @@ fn coerceToAnyIfNeeded(c: inout Comp, st: inout LlvmCtx, targetRef: U64, valueEx
 fn genLlvmAnyDispatch(c: inout Comp, st: inout LlvmCtx, recv: U64, anyRef: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
     val tr: TypeRef = c.types[anyRef]
     val traitIdx: U64 = findTraitIdxByName(c: inout c, start: tr.nameStart, len: tr.nameLen)
-    if traitIdx < c.traits.count {
-    } else {
+    if traitIdx >= c.traits.count {
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: `any` over an unknown trait")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     val slot: U64 = anyMethodSlot(c: inout c, traitIdx: traitIdx, nameStart: nameStart, nameLen: nameLen, args: args)
-    if slot != 0U64 {
-    } else {
+    if slot == 0U64 {
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "this member is not callable through `any P`: it takes `Self` in a non-receiver position, is an associated function, or is not a requirement of the trait (spec/08)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -8918,16 +8812,14 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
         // an enum receiver (`impl Color { fn code() … }`): track its TypeRef so a
         // bare `match self` / `self == …` in the body recovers the enum.
         if recvRef == 0U64 {
-            if recvSidx < c.structs.count {
-            } else {
+            if recvSidx >= c.structs.count {
                 if enumRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.enumIdxs.count {
                     recvRef = simpleTypeRef(c: inout c, nameStart: f.recvStart, nameLen: f.recvLen)
                 }
             }
         }
         mut val selfPtr: LLVMValueRef = LLVMGetParam(fv, 0U64)
-        if f.selfInout {
-        } else {
+        if !(f.selfInout) {
             selfPtr = entryAlloca(st: inout st, ty: recvTy)
             LLVMBuildStore(st.b, LLVMGetParam(fv, 0U64), selfPtr)
         }
@@ -8956,8 +8848,7 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
     }
     st.curBodyMark = st.nLocals
     genLlvmBlock(c: inout c, st: inout st, id: f.body)
-    if st.terminated {
-    } else {
+    if !(st.terminated) {
         // fall-through: the body block dropped its body locals; now drop owned
         // params (a `move` param / `move fn` self the callee deinits).
         dropScope(c: inout c, st: inout st, fromMark: 0U64, excludeLi: 18446744073709551615U64)
@@ -9064,14 +8955,12 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             }
             // a scalar `any P` binding (spec/08): box the concrete initializer into
             // the existential fat pointer.
-            if isArr {
-            } else {
+            if !(isArr) {
                 if ty != 0U64 {
                     if refIsAny(c: inout c, ref: ty) {
                         mut val lb: Bool = false
                         v = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: ty, valueExpr: init, outBoxed: inout lb)
-                        if lb {
-                        } else {
+                        if !(lb) {
                             // initializer is already an `any P` value (`val s2 = s`):
                             // value semantics — copy the box if it is a place.
                             v = copyAnyIfPlace(c: inout c, st: inout st, rv: genLlvmExpr(c: inout c, st: inout st, id: init), valueExpr: init)
@@ -9080,13 +8969,11 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                     }
                 }
             }
-            if builtArr {
-            } else {
+            if !(builtArr) {
                 // a let annotation provides the expected type so an un-suffixed JSX
                 // generic construction (`val o: Optional[I64] = <Optional.Some … />`)
                 // infers its type args. Consumed by the construction (cleared there).
-                if isArr {
-                } else {
+                if !(isArr) {
                     st.expectedTy = ty
                 }
                 v = genLlvmExpr(c: inout c, st: inout st, id: init)
@@ -9107,8 +8994,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             }
             mut val kind: U64 = valueKind(c: inout c, st: inout st, id: init)
             if tyLen > 0U64 {
-                if isArr {
-                } else {
+                if !(isArr) {
                     v = coerceIntTo(c: inout c, st: inout st, v: v, tyStart: tyStart, tyLen: tyLen)
                     kind = kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen)
                 }
@@ -9155,8 +9041,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             // `r.v` substitutes T. (typeOf can't see this local; resolve from AST.)
             if tref == 0U64 {
                 if tyLen == 0U64 {
-                    if isArr {
-                    } else {
+                    if !(isArr) {
                         val rref: U64 = exprResultRef(c: inout c, st: inout st, id: init)
                         if isGenericInst(c: inout c, ref: rref) {
                             val gslot2: U64 = genStructSlot(c: inout c, st: inout st, ref: rref)
@@ -9289,8 +9174,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                         if refIsAny(c: inout c, ref: st.locTypeRef[li]) {
                             mut val ab: Bool = false
                             mut val arv: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: st.locTypeRef[li], valueExpr: value, outBoxed: inout ab)
-                            if ab {
-                            } else {
+                            if !(ab) {
                                 // any -> any: value-semantics copy of a place.
                                 arv = copyAnyIfPlace(c: inout c, st: inout st, rv: genLlvmExpr(c: inout c, st: inout st, id: value), valueExpr: value)
                             }
@@ -9321,8 +9205,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                             // first (spec/03) — load and destroy the old, unless the
                             // local was moved out (no live value) or not owned.
                             if st.locOwned[li] {
-                                if st.locMoved[li] {
-                                } else {
+                                if !(st.locMoved[li]) {
                                     val osi: U64 = st.locStructIdx[li]
                                     if osi < c.structs.count {
                                         if structNeedsDeinit(c: inout c, st: inout st, sidx: osi) {
@@ -9355,8 +9238,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                     // A user IndexSet-impl subscript desugars `g[i] = v` to
                     // `g.indexSet(key: i, value: v)` via the IndexSet witness (the
                     // compound form `g[i] OP= v` desugars `v` to `g[i] OP v` first).
-                    if exprIsArray(c: inout c, st: inout st, id: ibase) {
-                    } else {
+                    if !(exprIsArray(c: inout c, st: inout st, id: ibase)) {
                         val ibsi: U64 = exprStructIdx(c: inout c, st: inout st, id: ibase)
                         if ibsi < c.structs.count {
                             // a Dictionary `d[k] = v` lowers to `d.insert(key:, value:)`.
@@ -9365,8 +9247,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                                 // `d[k] OP= v` first builds the new value `d[k] OP v` (the
                                 // missing-key read panics, like a bare `d[k]`), then inserts.
                                 mut val insVal: U64 = value
-                                if op == opAssign() {
-                                } else {
+                                if op != opAssign() {
                                     val getExpr: U64 = c.pushExpr(e: <Expr.Index base=ibase index=iindex />)
                                     insVal = c.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=getExpr rhs=value />)
                                 }
@@ -9376,8 +9257,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                             }
                             if typeHasMethodNamed(c: inout c, typeStart: c.structs[ibsi].nameStart, typeLen: c.structs[ibsi].nameLen, name: "indexSet") {
                                 mut val rhsExpr: U64 = value
-                                if op == opAssign() {
-                                } else {
+                                if op != opAssign() {
                                     val getExpr: U64 = c.pushExpr(e: <Expr.Index base=ibase index=iindex />)
                                     rhsExpr = c.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=getExpr rhs=value />)
                                 }
@@ -9486,8 +9366,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                                     }
                                 }
                             }
-                            if handled {
-                            } else {
+                            if !(handled) {
                                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "LLVM backend: nested place assignment not yet supported")
                             }
                         }
@@ -9577,8 +9456,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                     if refIsAny(c: inout c, ref: st.curRetRef) {
                         mut val rb: Bool = false
                         mut val rav: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: st.curRetRef, valueExpr: value, outBoxed: inout rb)
-                        if rb {
-                        } else {
+                        if !(rb) {
                             // already an `any P` value: value-semantics copy of a place.
                             rav = copyAnyIfPlace(c: inout c, st: inout st, rv: genLlvmExpr(c: inout c, st: inout st, id: value), valueExpr: value)
                         }
@@ -9620,14 +9498,12 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                             _ => {}
                         }
                     }
-                    if retLit {
-                    } else {
+                    if !(retLit) {
                         rv = genLlvmExpr(c: inout c, st: inout st, id: value)
                     }
                     st.expectedTy = 0U64
                     if st.curRetTyLen > 0U64 {
-                        if retLit {
-                        } else {
+                        if !(retLit) {
                             rv = coerceIntTo(c: inout c, st: inout st, v: rv, tyStart: st.curRetTyStart, tyLen: st.curRetTyLen)
                         }
                     }
@@ -9668,8 +9544,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             LLVMPositionBuilderAtEnd(st.b, thenBB)
             st.terminated = false
             genLlvmBlock(c: inout c, st: inout st, id: thenBlk)
-            if st.terminated {
-            } else {
+            if !(st.terminated) {
                 LLVMBuildBr(st.b, contBB)
             }
             // else
@@ -9677,8 +9552,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                 LLVMPositionBuilderAtEnd(st.b, elseBB)
                 st.terminated = false
                 genLlvmBlock(c: inout c, st: inout st, id: elseBlk)
-                if st.terminated {
-                } else {
+                if !(st.terminated) {
                     LLVMBuildBr(st.b, contBB)
                 }
             }
@@ -9699,8 +9573,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             pushLoop(st: inout st, breakBB: endBB, contBB: condBB)
             genLlvmBlock(c: inout c, st: inout st, id: body)
             popLoop(st: inout st)
-            if st.terminated {
-            } else {
+            if !(st.terminated) {
                 LLVMBuildBr(st.b, condBB)
             }
             LLVMPositionBuilderAtEnd(st.b, endBB)
@@ -9786,10 +9659,8 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
     mut val eid: U64 = c.enums.count
     mut val ai0: U64 = 0
     while ai0 < arms.count {
-        if arms[ai0].isWildcard {
-        } else {
-            if arms[ai0].isStruct {
-            } else {
+        if !(arms[ai0].isWildcard) {
+            if !(arms[ai0].isStruct) {
                 if eid == c.enums.count {
                     eid = enumIdxByName(c: inout c, start: arms[ai0].enumStart, len: arms[ai0].enumLen)
                 }
@@ -9797,8 +9668,7 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
         }
         ai0 += 1
     }
-    if eid < c.enums.count {
-    } else {
+    if eid >= c.enums.count {
         compileErrorAt(line: 0, msg: "LLVM backend: match is only supported on a registered enum (so far)")
         return
     }
@@ -9833,8 +9703,7 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
         val savedBB: U64 = st.nLocals
         LLVMPositionBuilderAtEnd(st.b, armBB)
         st.terminated = false
-        if arm.isWildcard {
-        } else {
+        if !(arm.isWildcard) {
             // bind the payload under the enum env, then restore the outer env so the
             // arm body grounds against the enclosing method/function, not the enum.
             val didB: Bool = setEnumEnv(c: inout c, st: inout st, ref: scrutRef)
@@ -9846,8 +9715,7 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
         }
         genLlvmBlock(c: inout c, st: inout st, id: arm.body)
         st.nLocals = savedBB
-        if st.terminated {
-        } else {
+        if !(st.terminated) {
             LLVMBuildBr(st.b, contBB)
             anyFallthrough = true
         }
@@ -9855,8 +9723,7 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
     }
     // close the dangling final check block (exhaustive, so unreachable) unless a
     // wildcard already terminated it.
-    if lastWasWildcard {
-    } else {
+    if !(lastWasWildcard) {
         LLVMPositionBuilderAtEnd(st.b, checkBB)
         LLVMBuildUnreachable(st.b)
     }
@@ -9923,8 +9790,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
                         gfp = groundTypeRef(c: inout c, ref: fd.ty)
                     }
                     if isGenericInst(c: inout c, ref: gfp) {
-                        if rangeEquals(bytes: c.bytes, start: c.types[gfp].nameStart, len: c.types[gfp].nameLen, kw: "Array") {
-                        } else {
+                        if !(rangeEquals(bytes: c.bytes, start: c.types[gfp].nameStart, len: c.types[gfp].nameLen, kw: "Array")) {
                             genFieldRef = gfp
                             pty = llvmTypeOfRef(c: inout c, st: inout st, ref: gfp)
                         }
@@ -10077,8 +9943,7 @@ fn genLlvmForRange(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64,
     pushLoop(st: inout st, breakBB: endBB, contBB: stepBB)
     genLlvmBlock(c: inout c, st: inout st, id: body)
     popLoop(st: inout st)
-    if st.terminated {
-    } else {
+    if !(st.terminated) {
         LLVMBuildBr(st.b, stepBB)
     }
     // step: increment the counter and re-test.
@@ -10115,8 +9980,7 @@ fn genLlvmForIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U
         }
     }
     val isidx: U64 = exprStructIdx(c: inout c, st: inout st, id: iter)
-    if isidx < c.structs.count {
-    } else {
+    if isidx >= c.structs.count {
         compileErrorAt(line: 0, msg: "LLVM backend: for-loop over a non-array (Iterable) not yet supported")
         return
     }
@@ -10132,8 +9996,7 @@ fn genLlvmForIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U
     val itfi: U64 = findMethod(c: inout c, recvStart: isd.nameStart, recvLen: isd.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
     if itfi < c.funcs.count {
         val itSlotF: U64 = userFnSlot(st: inout st, idx: itfi)
-        if itSlotF < st.fnIdx.count {
-        } else {
+        if itSlotF >= st.fnIdx.count {
             compileErrorAt(line: 0, msg: "LLVM backend: this Iterable's iterator method is not emittable yet")
             return
         }
@@ -10146,14 +10009,12 @@ fn genLlvmForIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U
     // next() on the Iter struct -> Optional[Item]
     val nextB: Bind = kwSpan(c: inout c, kw: "next", kwLen: 4U64)
     val nfi: U64 = findMethod(c: inout c, recvStart: iterStructStart, recvLen: iterStructLen, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
-    if nfi < c.funcs.count {
-    } else {
+    if nfi >= c.funcs.count {
         compileErrorAt(line: 0, msg: "LLVM backend: Iterable for-loop needs a `next` method on the iterator")
         return
     }
     val nSlotF: U64 = userFnSlot(st: inout st, idx: nfi)
-    if nSlotF < st.fnIdx.count {
-    } else {
+    if nSlotF >= st.fnIdx.count {
         compileErrorAt(line: 0, msg: "LLVM backend: this iterator's next method is not emittable yet")
         return
     }
@@ -10176,8 +10037,7 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
     if itfi < c.funcs.count {
         // an Iterable: call iterator() and switch the instance ref to the iterator's.
         val itSlot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: itfi, instRef: recvRef, ownArgs: [])
-        if itSlot < st.genMethK.count {
-        } else {
+        if itSlot >= st.genMethK.count {
             compileErrorAt(line: 0, msg: "LLVM backend: this generic Iterable's iterator method is not emittable yet")
             return
         }
@@ -10197,14 +10057,12 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
     val it: TypeRef = c.types[iterInstRef]
     val nextB: Bind = kwSpan(c: inout c, kw: "next", kwLen: 4U64)
     val nfi: U64 = findMethod(c: inout c, recvStart: it.nameStart, recvLen: it.nameLen, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
-    if nfi < c.funcs.count {
-    } else {
+    if nfi >= c.funcs.count {
         compileErrorAt(line: 0, msg: "LLVM backend: generic Iterable for-loop needs a `next` method on the iterator")
         return
     }
     val nSlot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: nfi, instRef: iterInstRef, ownArgs: [])
-    if nSlot < st.genMethK.count {
-    } else {
+    if nSlot >= st.genMethK.count {
         compileErrorAt(line: 0, msg: "LLVM backend: this generic iterator's next method is not emittable yet")
         return
     }
@@ -10231,8 +10089,7 @@ fn emitIterNextLoop(c: inout Comp, st: inout LlvmCtx, iterVal: LLVMValueRef, opt
     val savedA: Array[U64] = c.curTypeArgs
     val didSet: Bool = setEnumEnv(c: inout c, st: inout st, ref: optRef)
     val ge: U64 = genEnumSlot(c: inout c, st: inout st, ref: optRef)
-    if ge < st.genEnumRefs.count {
-    } else {
+    if ge >= st.genEnumRefs.count {
         if didSet { c.curTypeParams = savedP  c.curTypeArgs = savedA }
         compileErrorAt(line: 0, msg: "LLVM backend: iterator next must return a registered Optional instance")
         return
@@ -10286,8 +10143,7 @@ fn emitIterNextLoop(c: inout Comp, st: inout LlvmCtx, iterVal: LLVMValueRef, opt
     genLlvmBlock(c: inout c, st: inout st, id: body)
     popLoop(st: inout st)
     st.nLocals = mark
-    if st.terminated {
-    } else {
+    if !(st.terminated) {
         LLVMBuildBr(st.b, condBB)
     }
     LLVMPositionBuilderAtEnd(st.b, endBB)
@@ -10300,8 +10156,7 @@ fn emitIterNextLoop(c: inout Comp, st: inout LlvmCtx, iterVal: LLVMValueRef, opt
 // advances in place), binding `x` to each `Some` payload until `None`.
 fn genLlvmForAnyIter(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64, iter: U64, anyRef: U64, body: U64) {
     val traitIdx: U64 = findTraitIdxByName(c: inout c, start: c.types[anyRef].nameStart, len: c.types[anyRef].nameLen)
-    if traitIdx < c.traits.count {
-    } else {
+    if traitIdx >= c.traits.count {
         compileErrorAt(line: 0, msg: "LLVM backend: for-loop over `any` needs a trait with a `next` method")
         return
     }
@@ -10309,8 +10164,7 @@ fn genLlvmForAnyIter(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U6
     val noArgs: Array[Arg] = []
     // the grounded Optional[Item] the existential's next() returns.
     val optRef: U64 = anyMethodRetRef(c: inout c, anyRef: anyRef, traitIdx: traitIdx, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
-    if optRef != 0U64 {
-    } else {
+    if optRef == 0U64 {
         compileErrorAt(line: 0, msg: "LLVM backend: this `any` iterator has no `next() -> Optional[Item]` requirement")
         return
     }
@@ -10318,8 +10172,7 @@ fn genLlvmForAnyIter(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U6
     val savedA: Array[U64] = c.curTypeArgs
     val didSet: Bool = setEnumEnv(c: inout c, st: inout st, ref: optRef)
     val ge: U64 = genEnumSlot(c: inout c, st: inout st, ref: optRef)
-    if ge < st.genEnumRefs.count {
-    } else {
+    if ge >= st.genEnumRefs.count {
         if didSet { c.curTypeParams = savedP  c.curTypeArgs = savedA }
         compileErrorAt(line: 0, msg: "LLVM backend: `any` iterator next must return a registered Optional instance")
         return
@@ -10367,8 +10220,7 @@ fn genLlvmForAnyIter(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U6
     genLlvmBlock(c: inout c, st: inout st, id: body)
     popLoop(st: inout st)
     st.nLocals = mark
-    if st.terminated {
-    } else {
+    if !(st.terminated) {
         LLVMBuildBr(st.b, condBB)
     }
     LLVMPositionBuilderAtEnd(st.b, endBB)
@@ -10377,8 +10229,7 @@ fn genLlvmForAnyIter(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U6
 }
 
 fn genLlvmForArray(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64, iter: U64, body: U64) {
-    if exprIsArray(c: inout c, st: inout st, id: iter) {
-    } else {
+    if !(exprIsArray(c: inout c, st: inout st, id: iter)) {
         genLlvmForIterable(c: inout c, st: inout st, varStart: varStart, varLen: varLen, iter: iter, body: body)
         return
     }
@@ -10436,8 +10287,7 @@ fn genLlvmForArray(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64,
     pushLoop(st: inout st, breakBB: endBB, contBB: stepBB)
     genLlvmBlock(c: inout c, st: inout st, id: body)
     popLoop(st: inout st)
-    if st.terminated {
-    } else {
+    if !(st.terminated) {
         LLVMBuildBr(st.b, stepBB)
     }
     LLVMPositionBuilderAtEnd(st.b, stepBB)
@@ -10454,14 +10304,12 @@ fn genLlvmForArray(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64,
 // the match struct pattern. The element struct is stored in a slot so its fields
 // can be GEP'd; field binds are popped at the end of every iteration.
 fn genLlvmForArrayStruct(c: inout Comp, st: inout LlvmCtx, patStart: U64, patLen: U64, iter: U64, binds: Array[Bind], body: U64) {
-    if exprIsArray(c: inout c, st: inout st, id: iter) {
-    } else {
+    if !(exprIsArray(c: inout c, st: inout st, id: iter)) {
         compileErrorAt(line: 0, msg: "LLVM backend: struct-destructure for-loop over a non-array not yet supported")
         return
     }
     val sidx: U64 = localStructIdxFor(c: inout c, st: inout st, start: patStart, len: patLen)
-    if sidx < c.structs.count {
-    } else {
+    if sidx >= c.structs.count {
         compileErrorAt(line: 0, msg: "LLVM backend: struct-destructure for-loop needs a registered struct pattern")
         return
     }
@@ -10490,8 +10338,7 @@ fn genLlvmForArrayStruct(c: inout Comp, st: inout LlvmCtx, patStart: U64, patLen
     genLlvmBlock(c: inout c, st: inout st, id: body)
     popLoop(st: inout st)
     st.nLocals = bmark
-    if st.terminated {
-    } else {
+    if !(st.terminated) {
         LLVMBuildBr(st.b, stepBB)
     }
     LLVMPositionBuilderAtEnd(st.b, stepBB)
@@ -10521,12 +10368,10 @@ fn structNeedsDeinit(c: inout Comp, st: inout LlvmCtx, sidx: U64) -> Bool {
     mut val i: U64 = 0
     while i < sd.fields.count {
         val fd: FieldDef = sd.fields[i]
-        if fd.tyIsArray {
-        } else {
+        if !(fd.tyIsArray) {
             val fsi: U64 = structIndexByName(c: inout c, start: fd.tyStart, len: fd.tyLen)
             if fsi < c.structs.count {
-                if c.structs[fsi].isExtern {
-                } else {
+                if !(c.structs[fsi].isExtern) {
                     if structNeedsDeinit(c: inout c, st: inout st, sidx: fsi) {
                         return true
                     }
@@ -10554,12 +10399,10 @@ fn emitDeinitValue(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, sidx: U64)
     mut val i: U64 = 0
     while i < sd.fields.count {
         val fd: FieldDef = sd.fields[i]
-        if fd.tyIsArray {
-        } else {
+        if !(fd.tyIsArray) {
             val fsi: U64 = structIndexByName(c: inout c, start: fd.tyStart, len: fd.tyLen)
             if fsi < c.structs.count {
-                if c.structs[fsi].isExtern {
-                } else {
+                if !(c.structs[fsi].isExtern) {
                     if structNeedsDeinit(c: inout c, st: inout st, sidx: fsi) {
                         emitDeinitValue(c: inout c, st: inout st, v: LLVMBuildExtractValue(st.b, v, i, anon()), sidx: fsi)
                     }
@@ -10575,8 +10418,7 @@ fn emitDeinitValue(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, sidx: U64)
 // value is loaded and destroyed recursively.
 fn emitDeinitCall(c: inout Comp, st: inout LlvmCtx, li: U64) {
     // skip a borrow/inout param (not owned here) or a value already moved out.
-    if st.locOwned[li] {
-    } else {
+    if !(st.locOwned[li]) {
         return
     }
     if st.locMoved[li] {
@@ -10600,12 +10442,10 @@ fn emitDeinitCall(c: inout Comp, st: inout LlvmCtx, li: U64) {
         return
     }
     val sidx: U64 = st.locStructIdx[li]
-    if sidx < c.structs.count {
-    } else {
+    if sidx >= c.structs.count {
         return
     }
-    if structNeedsDeinit(c: inout c, st: inout st, sidx: sidx) {
-    } else {
+    if !(structNeedsDeinit(c: inout c, st: inout st, sidx: sidx)) {
         return
     }
     val selfVal: LLVMValueRef = LLVMBuildLoad2(st.b, st.locTy[li], st.locPtr[li], anon())
@@ -10620,8 +10460,7 @@ fn dropScope(c: inout Comp, st: inout LlvmCtx, fromMark: U64, excludeLi: U64) {
     mut val i: U64 = st.nLocals
     while i > fromMark {
         i -= 1U64
-        if i == excludeLi {
-        } else {
+        if i != excludeLi {
             emitDeinitCall(c: inout c, st: inout st, li: i)
         }
     }
@@ -10642,8 +10481,7 @@ fn genLlvmBlock(c: inout Comp, st: inout LlvmCtx, id: U64) {
     }
     // fall-through exit: run scope-exit deinits for this block's locals (a return
     // inside already dropped all live locals and set terminated).
-    if st.terminated {
-    } else {
+    if !(st.terminated) {
         dropScope(c: inout c, st: inout st, fromMark: mark, excludeLi: 18446744073709551615U64)
     }
     st.nLocals = mark
@@ -10754,8 +10592,7 @@ fn emitLlvm(c: inout Comp) {
         mut val isMainFn: Bool = nameIsMain(c: inout c, f: c.funcs[fi])
         if c.genMode {
             if isMainFn {
-                if fi == c.genMainIdx {
-                } else {
+                if fi != c.genMainIdx {
                     isMainFn = false
                 }
             }
@@ -10763,8 +10600,7 @@ fn emitLlvm(c: inout Comp) {
         if isMainFn {
             // an `async fn main` is lowered with the rest of the async fns (entry +
             // resume + drain the event loop); a plain main is the synchronous shape.
-            if isAsyncFn(c: inout c, fi: fi) {
-            } else {
+            if !(isAsyncFn(c: inout c, fi: fi)) {
                 genLlvmMain(c: inout c, st: inout st, fi: fi)
             }
             foundMain = true
@@ -10809,8 +10645,7 @@ fn emitLlvm(c: inout Comp) {
             }
         }
     }
-    if foundMain {
-    } else {
+    if !(foundMain) {
         compileErrorAt(line: 0, msg: "LLVM backend: no `main` function found")
     }
 
@@ -10948,8 +10783,7 @@ fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     st.locMoved = []
     seedGlobals(c: inout c, st: inout st)
     genLlvmBlock(c: inout c, st: inout st, id: c.funcs[fi].body)
-    if st.terminated {
-    } else {
+    if !(st.terminated) {
         LLVMBuildRet(st.b, LLVMConstInt(st.i32ty, 0U64, 0I32))
     }
 }
@@ -11038,10 +10872,8 @@ fn collectAsyncFieldTys(c: inout Comp, st: inout LlvmCtx, blockId: U64, tys: ino
                 mut val ai: U64 = 0
                 while ai < arms.count {
                     val a: MatchArm = arms[ai]
-                    if a.isWildcard {
-                    } else {
-                        if a.isStruct {
-                        } else {
+                    if !(a.isWildcard) {
+                        if !(a.isStruct) {
                             collectAsyncMatchBindTys(c: inout c, st: inout st, arm: a, tys: inout tys)
                         }
                     }
@@ -11060,8 +10892,7 @@ fn collectAsyncFieldTys(c: inout Comp, st: inout LlvmCtx, blockId: U64, tys: ino
 // else the field's scalar type), in bind order.
 fn collectAsyncMatchBindTys(c: inout Comp, st: inout LlvmCtx, arm: MatchArm, tys: inout Array[LLVMTypeRef]) {
     val eid: U64 = enumIdxByName(c: inout c, start: arm.enumStart, len: arm.enumLen)
-    if eid < c.enums.count {
-    } else {
+    if eid >= c.enums.count {
         return
     }
     val vi: U64 = variantIndex(c: inout c, enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
@@ -11150,8 +10981,7 @@ fn declareAsyncFns(c: inout Comp, st: inout LlvmCtx) {
             st.asyncFrameTy.append(value: frameTy)
             st.asyncResumeFn.append(value: resumeFn)
             // entry symbol (non-main): params -> ptr (Promise).
-            if nameIsMain(c: inout c, f: c.funcs[fi]) {
-            } else {
+            if !(nameIsMain(c: inout c, f: c.funcs[fi])) {
                 mut val ptys: Array[LLVMTypeRef] = []
                 mut val pi: U64 = 0
                 while pi < c.funcs[fi].params.count {
@@ -11361,8 +11191,7 @@ fn bindAsyncParam(c: inout Comp, st: inout LlvmCtx, p: Param, fieldIdx: U64) {
 // Emit one async fn's entry + resume bodies.
 fn genLlvmAsyncFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     val slot: U64 = asyncSlotOf(st: inout st, fi: fi)
-    if slot < st.asyncFnIdx.count {
-    } else {
+    if slot >= st.asyncFnIdx.count {
         return
     }
     val f: Func = c.funcs[fi]
@@ -11465,8 +11294,7 @@ fn genLlvmAsyncFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     st.asyncFieldNext = 3U64 + f.params.count
     genLlvmBlock(c: inout c, st: inout st, id: f.body)
     // fall-through end: a value-less async resolves with 0.
-    if st.terminated {
-    } else {
+    if !(st.terminated) {
         asyncResolveAndReturn(c: inout c, st: inout st, value: LLVMConstInt(st.i64ty, 0U64, 0I32))
     }
     st.curAsync = false

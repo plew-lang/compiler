@@ -13,10 +13,8 @@ fn isPlaceExpr(c: inout Comp, id: U64) -> Bool {
 // Whether `lhs OP rhs` is a String `==` / `!=` (which lowers to PlewString_eq
 // rather than a C struct comparison).
 fn isStringEq(c: inout Comp, op: I64, lhs: U64) -> Bool {
-    if op == opEq() {
-    } else {
-        if op == opNe() {
-        } else {
+    if op != opEq() {
+        if op != opNe() {
             return false
         }
     }
@@ -65,10 +63,8 @@ fn isAllNullary(c: inout Comp, start: U64, len: U64) -> Bool {
 // (variant) comparison, NOT a payload-aware structural Eq. For all-nullary
 // enums this coincides with structural equality; full Eq comes with @[Eq].
 fn isEnumEq(c: inout Comp, op: I64, lhs: U64) -> Bool {
-    if op == opEq() {
-    } else {
-        if op == opNe() {
-        } else {
+    if op != opEq() {
+        if op != opNe() {
             return false
         }
     }
@@ -323,8 +319,7 @@ fn binWitnessType(c: inout Comp, lhs: U64, rhs: U64) -> TypeInfo {
 // (O6). A genuinely typeless operand (untyped literal / String / array) keeps the
 // built-in arithmetic (the fallback in the dispatch).
 fn hasBinTraitWitness(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
-    if isBinTraitOp(op: op) {
-    } else {
+    if !(isBinTraitOp(op: op)) {
         return false
     }
     val lt: TypeInfo = binWitnessType(c: inout c, lhs: lhs, rhs: rhs)

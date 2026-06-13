@@ -151,8 +151,7 @@ fn typeSatisfiesBlanketBounds(c: inout Comp, typeStart: U64, typeLen: U64, param
             // blanket's methods (receiver == the subject param).
             if fb.fnIdx < c.funcs.count {
                 if c.funcs[fb.fnIdx].recvId == paramId {
-                    if typeConformsTo(c: inout c, typeStart: typeStart, typeLen: typeLen, traitStart: fb.traitStart, traitLen: fb.traitLen) {
-                    } else {
+                    if !(typeConformsTo(c: inout c, typeStart: typeStart, typeLen: typeLen, traitStart: fb.traitStart, traitLen: fb.traitLen)) {
                         return false
                     }
                 }
@@ -202,10 +201,8 @@ fn instantiateBlanketImpls(c: inout Comp) {
                 mut val cj: U64 = 0
                 while cj < nConforms {
                     val cand: Conform = c.conforms[cj]
-                    if isBlanketConform(c: inout c, cf: cand) {
-                    } else {
-                        if conformExists(c: inout c, typeId: cand.typeId, traitId: cf.traitId) {
-                        } else {
+                    if !(isBlanketConform(c: inout c, cf: cand)) {
+                        if !(conformExists(c: inout c, typeId: cand.typeId, traitId: cf.traitId)) {
                             if typeSatisfiesBlanketBounds(c: inout c, typeStart: cand.typeStart, typeLen: cand.typeLen, paramId: cf.typeId) {
                                 applyBlanketTo(c: inout c, blanket: cf, recvStart: cand.typeStart, recvLen: cand.typeLen)
                             }
@@ -232,15 +229,13 @@ fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64)
             if f.recvId == blanket.typeId {
                 // skip if the concrete type already has a method of this name
                 // (an inherent or already-copied method wins).
-                if methodInRange(c: inout c, lo: 0, hi: c.funcs.count, recvStart: recvStart, recvLen: recvLen, nameStart: f.nameStart, nameLen: f.nameLen) {
-                } else {
+                if !(methodInRange(c: inout c, lo: 0, hi: c.funcs.count, recvStart: recvStart, recvLen: recvLen, nameStart: f.nameStart, nameLen: f.nameLen)) {
                     // drop the subject param from the method's type params; the
                     // remaining (method-own) params are kept.
                     mut val copiedTP: Array[Bind] = []
                     mut val tp: U64 = 0
                     while tp < f.typeParams.count {
-                        if f.typeParams[tp].nameId == blanket.typeId {
-                        } else {
+                        if f.typeParams[tp].nameId != blanket.typeId {
                             copiedTP.append(f.typeParams[tp])
                         }
                         tp += 1
@@ -251,8 +246,7 @@ fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64)
         }
         fi += 1
     }
-    if conformExists(c: inout c, typeId: recvId, traitId: blanket.traitId) {
-    } else {
+    if !(conformExists(c: inout c, typeId: recvId, traitId: blanket.traitId)) {
         c.conforms.append(<Conform typeStart=recvStart typeLen=recvLen typeId=recvId traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed />)
     }
 }
@@ -277,8 +271,7 @@ fn instantiateProvidedMethods(c: inout Comp) {
                     // its source trait (srcTraitId) — they coexist; bare `a.foo()` is
                     // then a use-site ambiguity (findMethod), while `a#P.foo()` selects
                     // the source trait (findExtMethod). spec/08,09.
-                    if methodInRange(c: inout c, lo: 0, hi: nFuncs, recvStart: cf.typeStart, recvLen: cf.typeLen, nameStart: f.nameStart, nameLen: f.nameLen) {
-                    } else {
+                    if !(methodInRange(c: inout c, lo: 0, hi: nFuncs, recvStart: cf.typeStart, recvLen: cf.typeLen, nameStart: f.nameStart, nameLen: f.nameLen)) {
                         // a provided method copied onto a *generic* conformer inherits
                         // the conformer's type params (prepended), so methodMatchesInst
                         // emits it per receiver instantiation (`MapIter[Counter,…]`) like
@@ -362,10 +355,8 @@ fn collectFnThunks(c: inout Comp) {
                 val fvi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)
                 if fvi < c.funcs.count {
                     val f: Func = c.funcs[fvi]
-                    if f.hasRecv {
-                    } else {
-                        if f.isAssoc {
-                        } else {
+                    if !(f.hasRecv) {
+                        if !(f.isAssoc) {
                             if f.typeParams.count > 0 {
                                 // a generic free fn has no bare symbol (it is emitted
                                 // per instantiation) — not supported as a value yet.

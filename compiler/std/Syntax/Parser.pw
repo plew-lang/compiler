@@ -36,8 +36,7 @@ pub impl P {
     factory
     // Record a syntax error (first one wins) at original-coordinate offset `off`.
     inout fn fail(off: U64, msg: String) {
-        if self.hasErr {
-        } else {
+        if !(self.hasErr) {
             self.hasErr = true
             self.errOff = off
             self.errMsg = msg
@@ -950,8 +949,7 @@ fn parseMethodAfterFn(p: inout P, kind: MemberKind, selfInout: Bool, selfMove: B
         isVia = true
     }
     mut val body: BlockAst = emptyBlock()
-    if isVia {
-    } else {
+    if !(isVia) {
         p.skipNewlines()
         body = parseBlockAst(p: inout p)
     }
@@ -1422,10 +1420,8 @@ fn parseImportAst(p: inout P, isImport: Bool) -> ImportAst {
                     break
                 }
                 val t: Tok = p.curTok()
-                if firstPath {
-                } else {
-                    if t.start == pathEndSlice {
-                    } else {
+                if !(firstPath) {
+                    if t.start != pathEndSlice {
                         break
                     }
                 }

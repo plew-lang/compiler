@@ -339,8 +339,7 @@ pub impl[T, E] Result[T, E] {
 // label-suppressed (`cond~:`, positional); the diagnostic message is an
 // optional labelled argument with a default.
 export fn assert(cond~: Bool, message: String = "assertion failed") {
-    if cond {
-    } else {
+    if !(cond) {
         panic message
     }
 }

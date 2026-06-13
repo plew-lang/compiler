@@ -55,8 +55,7 @@ fn runFrontend() -> Comp {
         // Loud-fail on a missing entry file: without this readFileBytes returns an
         // empty string and the compiler silently emits an empty program (exit 0),
         // which hides a typo'd path. (Acceptance soundness: never silently accept.)
-        if fileExists(path: entryBytes) {
-        } else {
+        if !(fileExists(path: entryBytes)) {
             eprint(text: "plewc: error: cannot open source file: ")
             eprint(text: rootPath)
             eprint(text: "\n")
@@ -110,8 +109,7 @@ fn runFrontend() -> Comp {
             appendBytes(into: inout synPath, from: stdRoot)
             appendBytes(into: inout synPath, from: "Syntax.pw".bytes)
             if fileExists(path: synPath) {
-                if pathSeen(buf: pathBuf, loaded: loaded, path: synPath) {
-                } else {
+                if !(pathSeen(buf: pathBuf, loaded: loaded, path: synPath)) {
                     val sys: U64 = pathBuf.count
                     appendBytes(into: inout pathBuf, from: synPath)
                     loaded.append(<Bind nameStart=sys nameLen=synPath.count fieldStart=nextModuleId fieldLen=synPath.count />)
@@ -144,10 +142,8 @@ fn runFrontend() -> Comp {
                 match items[ii] {
                     TopItemAst.Import(val imp) => {
                         val childPath: Array[U8] = resolveImport(src: c.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, importer: path, baseLen: baseLen, srcRoot: srcRoot, srcRootLen: srcRoot.count, stdRoot: stdRoot, stdRootLen: stdRoot.count)
-                        if childPath.count == 0 {
-                        } else {
-                            if pathSeen(buf: pathBuf, loaded: loaded, path: childPath) {
-                            } else {
+                        if childPath.count != 0 {
+                            if !(pathSeen(buf: pathBuf, loaded: loaded, path: childPath)) {
                                 // a `part` (isImport=false) joins this module; an
                                 // `import` (true) starts a fresh module.
                                 mut val childModule: U64 = moduleId
@@ -169,15 +165,12 @@ fn runFrontend() -> Comp {
             // auto-part (spec/16): a file annotated with `@[...]` pulls in its
             // generated sibling `<file>.gen.pw` as a part of the same module (when it
             // exists); suppressed in gen mode, which is producing that sibling.
-            if genMode {
-            } else {
+            if !(genMode) {
                 if sawDirective {
                     val genPath: Array[U8] = genSiblingPath(path: path)
-                    if genPath.count == 0 {
-                    } else {
+                    if genPath.count != 0 {
                         if fileExists(path: genPath) {
-                            if pathSeen(buf: pathBuf, loaded: loaded, path: genPath) {
-                            } else {
+                            if !(pathSeen(buf: pathBuf, loaded: loaded, path: genPath)) {
                                 val gs: U64 = pathBuf.count
                                 appendBytes(into: inout pathBuf, from: genPath)
                                 loaded.append(<Bind nameStart=gs nameLen=genPath.count fieldStart=moduleId fieldLen=genPath.count />)

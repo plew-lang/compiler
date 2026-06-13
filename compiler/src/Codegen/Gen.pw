@@ -113,8 +113,7 @@ fn synthGenMain(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.derives.count {
         val d: DeriveReq = c.derives[i]
-        if isBuiltinDerive(c: inout c, start: d.nameStart, len: d.nameLen) {
-        } else {
+        if !(isBuiltinDerive(c: inout c, start: d.nameStart, len: d.nameLen)) {
             // directive arguments must set publicly-settable fields (enforce the
             // construction rule the post-checks pass skipped for this synthetic Make).
             checkDirectiveArgsPublic(c: inout c, d: d)

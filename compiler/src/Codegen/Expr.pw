@@ -5,12 +5,10 @@
 // Whether a TypeInfo is a `Dictionary[K,V]` instantiation (so its subscript
 // `dict[k]` / `dict[k] = v` desugars to `.at` / `.insert` — spec/02).
 fn isDictionaryType(c: inout Comp, ti: TypeInfo) -> Bool {
-    if ti.kind == 2 {
-    } else {
+    if ti.kind != 2 {
         return false
     }
-    if rangeEquals(bytes: c.bytes, start: ti.nameStart, len: ti.nameLen, kw: "Dictionary") {
-    } else {
+    if !(rangeEquals(bytes: c.bytes, start: ti.nameStart, len: ti.nameLen, kw: "Dictionary")) {
         return false
     }
     return isGenericInst(c: inout c, ref: ti.ref)

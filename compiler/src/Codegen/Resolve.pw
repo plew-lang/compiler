@@ -89,8 +89,7 @@ fn inferLetType(c: inout Comp, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U6
     mut val effArr: Bool = tyIsArray
     mut val effTy: U64 = ty
     if tyLen == 0 {
-        if tyIsArray {
-        } else {
+        if !(tyIsArray) {
             val ti: TypeInfo = exprType(c: inout c, id: init)
             effStart = ti.nameStart
             effLen = ti.nameLen
@@ -143,8 +142,7 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U6
         // (`isAssoc`, e.g. an operator witness `add`): both require `Type.` (or
         // `recv.`) qualification. Skipping them keeps a free fn / local closure
         // named `add` from colliding with Core's `Add.add` (spec/07).
-        if f.hasRecv || f.isAssoc {
-        } else {
+        if !(f.hasRecv || f.isAssoc) {
             if f.nameId == qId {
                 if paramsLabelsOk(c: inout c, params: f.params, args: args) {
                     val same: Bool = moduleOf(c: inout c, offset: f.nameStart) == useMod
@@ -207,8 +205,7 @@ fn firstFuncByName(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
         val f: Func = c.funcs[i]
         // skip methods and associated fns: a bare name only names a free fn (see
         // findFunc — operator witnesses like `add` are assoc, not free).
-        if f.hasRecv || f.isAssoc {
-        } else {
+        if !(f.hasRecv || f.isAssoc) {
             if f.nameId == qId {
                 return i
             }
@@ -273,8 +270,7 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
             // reachable only through a `value#Ext.m()` view (findExtMethod) — unless
             // the receiver type declared it as a `defaultExtension`, which admits the
             // extension's methods to the type's bare surface.
-            if f.extId != 0U64 && !isDefaultExt(c: inout c, typeId: qRecvId, extId: f.extId) {
-            } else {
+            if !(f.extId != 0U64 && !isDefaultExt(c: inout c, typeId: qRecvId, extId: f.extId)) {
             if f.nameId == qNameId {
                 if f.recvId == qRecvId {
                     if paramsLabelsOk(c: inout c, params: f.params, args: args) {
@@ -508,8 +504,7 @@ fn typeHasAssocFn(c: inout Comp, typeStart: U64, typeLen: U64, nameStart: U64, n
 // error conversion (spec/13): when the enclosing function's error type E differs
 // from the operand's E', E's `from` factory converts E' -> E (mirrors `x as E`).
 fn typeRefHasFromFactory(c: inout Comp, errRef: U64) -> Bool {
-    if errRef < c.types.count {
-    } else {
+    if errRef >= c.types.count {
         return false
     }
     val eNameId: U64 = c.types[errRef].nameId
@@ -533,8 +528,7 @@ fn typeRefHasFromFactory(c: inout Comp, errRef: U64) -> Bool {
 
 // The func index of `from` factory on the type named by `errRef`, or c.funcs.count.
 fn typeRefFromFactoryIdx(c: inout Comp, errRef: U64) -> U64 {
-    if errRef < c.types.count {
-    } else {
+    if errRef >= c.types.count {
         return c.funcs.count
     }
     val eNameId: U64 = c.types[errRef].nameId
@@ -632,8 +626,7 @@ fn collectGlobalDeps(c: inout Comp, id: U64, into: inout Array[U64]) {
             mut val gi: U64 = 0
             while gi < c.globals.count {
                 if spansEqual(c: inout c, aStart: c.globals[gi].nameStart, aLen: c.globals[gi].nameLen, bStart: start, bLen: len) {
-                    if u64ArrayHas(a: into, v: gi) {
-                    } else {
+                    if !(u64ArrayHas(a: into, v: gi)) {
                         into.append(value: gi)
                     }
                 }
@@ -874,8 +867,7 @@ fn paramsLabelsOk(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bool
     // omission). Without that, the arity mismatch is an error.
     mut val r: U64 = args.count
     while r < params.count {
-        if params[r].hasDefault {
-        } else {
+        if !(params[r].hasDefault) {
             return false
         }
         r += 1
@@ -891,8 +883,7 @@ fn paramsLabelsOk(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bool
             }
         } else {
             if a.hasLabel {
-                if intern(c: inout c, start: a.labelStart, len: a.labelLen) == p.nameId {
-                } else {
+                if intern(c: inout c, start: a.labelStart, len: a.labelLen) != p.nameId {
                     return false
                 }
             } else {
@@ -935,8 +926,7 @@ fn paramsTypesMatch(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bo
     mut val i: U64 = 0
     while i < args.count {
         if i < params.count {
-            if argMatchesParam(c: inout c, argExpr: args[i].expr, p: params[i]) {
-            } else {
+            if !(argMatchesParam(c: inout c, argExpr: args[i].expr, p: params[i])) {
                 return false
             }
         }
@@ -967,8 +957,7 @@ fn overloadsAmbiguous(c: inout Comp, fa: Func, fb: Func, args: Array[Arg]) -> Bo
         if argIsUntypedIntLit(c: inout c, argExpr: args[i].expr) {
             if i < fa.params.count {
                 if i < fb.params.count {
-                    if fa.params[i].tyNameId == fb.params[i].tyNameId {
-                    } else {
+                    if fa.params[i].tyNameId != fb.params[i].tyNameId {
                         return true
                     }
                 }
@@ -1044,8 +1033,7 @@ fn matchExhaustive(c: inout Comp, arms: Array[MatchArm]) -> Bool {
             mut val vi: U64 = 0
             while vi < vars.count {
                 val v: Variant = vars[vi]
-                if armCovers(c: inout c, arms: arms, variantStart: v.nameStart, variantLen: v.nameLen) {
-                } else {
+                if !(armCovers(c: inout c, arms: arms, variantStart: v.nameStart, variantLen: v.nameLen)) {
                     return false
                 }
                 vi += 1
@@ -1312,17 +1300,14 @@ fn localIndexByName(c: inout Comp, start: U64, len: U64) -> U64 {
 // a generic element/field would need env substitution (deferred).
 fn optChainResultRef(c: inout Comp, base: U64, memberStart: U64, memberLen: U64) -> U64 {
     val bt: TypeInfo = typeOf(c: inout c, id: base)
-    if bt.kind == 2 {
-    } else {
+    if bt.kind != 2 {
         return 0
     }
-    if bt.ref < c.types.count {
-    } else {
+    if bt.ref >= c.types.count {
         return 0
     }
     val ot: TypeRef = c.types[bt.ref]
-    if rangeEquals(bytes: c.bytes, start: ot.nameStart, len: ot.nameLen, kw: "Optional") {
-    } else {
+    if !(rangeEquals(bytes: c.bytes, start: ot.nameStart, len: ot.nameLen, kw: "Optional")) {
         return 0
     }
     if ot.args.count < 1 {
@@ -1369,8 +1354,7 @@ fn fieldType(c: inout Comp, structStart: U64, structLen: U64, fieldStart: U64, f
                     // a generic-instantiation field type (`Optional[Node]`) carries its
                     // structured ref, so a match/dispatch on the field recovers the
                     // mangled C name (`Optional_Node`) and substitutes payload types.
-                    if f.tyIsArray {
-                    } else {
+                    if !(f.tyIsArray) {
                         if isGenericInst(c: inout c, ref: f.ty) {
                             return <TypeInfo kind=2 nameStart=f.tyStart nameLen=f.tyLen ref=f.ty />
                         }
@@ -1477,8 +1461,7 @@ fn inAnonImplOf(c: inout Comp, ownerStart: U64, ownerLen: U64) -> Bool {
 fn checkFieldReadVis(c: inout Comp, ownerStart: U64, ownerLen: U64, fieldStart: U64, fieldLen: U64, offset: U64) {
     val v: U64 = fieldVis(c: inout c, structStart: ownerStart, structLen: ownerLen, fieldStart: fieldStart, fieldLen: fieldLen)
     if v == 0U64 {
-        if inAnonImplOf(c: inout c, ownerStart: ownerStart, ownerLen: ownerLen) {
-        } else {
+        if !(inAnonImplOf(c: inout c, ownerStart: ownerStart, ownerLen: ownerLen)) {
             compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "field is private (visible only in its type's anonymous impl)")
         }
     }
@@ -1490,14 +1473,12 @@ fn checkFieldReadVis(c: inout Comp, ownerStart: U64, ownerLen: U64, fieldStart: 
 fn checkFieldWriteVis(c: inout Comp, ownerStart: U64, ownerLen: U64, fieldStart: U64, fieldLen: U64, offset: U64) {
     val v: U64 = fieldVis(c: inout c, structStart: ownerStart, structLen: ownerLen, fieldStart: fieldStart, fieldLen: fieldLen)
     if v == 0U64 {
-        if inAnonImplOf(c: inout c, ownerStart: ownerStart, ownerLen: ownerLen) {
-        } else {
+        if !(inAnonImplOf(c: inout c, ownerStart: ownerStart, ownerLen: ownerLen)) {
             compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "field is private (writable only in its type's anonymous impl)")
         }
     } else {
         if v == 1U64 {
-            if inAnonImplOf(c: inout c, ownerStart: ownerStart, ownerLen: ownerLen) {
-            } else {
+            if !(inAnonImplOf(c: inout c, ownerStart: ownerStart, ownerLen: ownerLen)) {
                 compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "field is `pub(get)` — readable but writable only in its type's anonymous impl")
             }
         }
@@ -1509,10 +1490,8 @@ fn checkFieldWriteVis(c: inout Comp, ownerStart: U64, ownerLen: U64, fieldStart:
 // methods are callable wherever the type is. `ownerStart/Len` names the receiver
 // type head (so generic receivers match by name).
 fn checkMethodVis(c: inout Comp, ownerStart: U64, ownerLen: U64, mf: Func, offset: U64) {
-    if mf.isPub {
-    } else {
-        if inAnonImplOf(c: inout c, ownerStart: ownerStart, ownerLen: ownerLen) {
-        } else {
+    if !(mf.isPub) {
+        if !(inAnonImplOf(c: inout c, ownerStart: ownerStart, ownerLen: ownerLen)) {
             compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "method is private (callable only in its type's anonymous impl; put it in a `pub impl`)")
         }
     }
@@ -1541,12 +1520,10 @@ fn checkConstructVis(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool, 
         return
     }
     mut val sidx: U64 = structIndexByName(c: inout c, start: typeStart, len: typeLen)
-    if sidx < c.structs.count {
-    } else {
+    if sidx >= c.structs.count {
         sidx = genericStructIndex(c: inout c, nameStart: typeStart, nameLen: typeLen)
     }
-    if sidx < c.structs.count {
-    } else {
+    if sidx >= c.structs.count {
         return
     }
     val sd: StructDef = c.structs[sidx]
@@ -1562,8 +1539,7 @@ fn checkConstructVis(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool, 
             // does not map to a module); synthesized constructions carry an unloaded
             // offset (the dict literal's `keys`/… use the interned span) and are skipped.
             if offsetIsLoaded(c: inout c, offset: fields[i].offset) {
-                if moduleOf(c: inout c, offset: fields[i].offset) == defMod {
-                } else {
+                if moduleOf(c: inout c, offset: fields[i].offset) != defMod {
                     if v == 0U64 {
                         compileErrorAt(line: lineOf(c: inout c, offset: fields[i].offset), msg: "cannot set a private field when constructing from another module (the field is not `pub`)")
                     } else {
@@ -1581,10 +1557,8 @@ fn checkConstructVis(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool, 
     mut val ci: U64 = 0
     while ci < fields.count {
         if offsetIsLoaded(c: inout c, offset: fields[ci].offset) {
-            if moduleOf(c: inout c, offset: fields[ci].offset) == defMod {
-            } else {
-                if structHasPubFactory(c: inout c, nameId: sd.nameId) {
-                } else {
+            if moduleOf(c: inout c, offset: fields[ci].offset) != defMod {
+                if !(structHasPubFactory(c: inout c, nameId: sd.nameId)) {
                     compileErrorAt(line: lineOf(c: inout c, offset: fields[ci].offset), msg: "constructing this type from another module requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is module-private (spec/05)")
                 }
             }
@@ -1754,8 +1728,7 @@ fn typeOf(c: inout Comp, id: U64) -> TypeInfo {
 // operator trait (`Output != Self`, e.g. `Point - Point -> Vector`), return X;
 // otherwise the operands' shared type.
 fn operatorOutputType(c: inout Comp, lt: TypeInfo, op: I64) -> TypeInfo {
-    if isBinTraitOp(op: op) {
-    } else {
+    if !(isBinTraitOp(op: op)) {
         return lt
     }
     if lt.nameLen == 0U64 {
@@ -1894,8 +1867,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     // resolve a type-parameter-typed local under the active
                     // monomorphization env (so `x: T` reports as the concrete type
                     // for method dispatch inside a generic instance body).
-                    if lo.isArray {
-                    } else {
+                    if !(lo.isArray) {
                         mut val k: U64 = 0
                         while k < c.curTypeParams.count {
                             val tp: Bind = c.curTypeParams[k]
@@ -2010,8 +1982,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     // a generic free function returning a bare type parameter:
                     // substitute it with the inferred concrete type argument.
                     if isGenericFreeFn(c: inout c, fi: fi) {
-                        if f.retIsArray {
-                        } else {
+                        if !(f.retIsArray) {
                             val inferred: Array[U64] = inferFnArgs(c: inout c, f: f, args: args)
                             val qRet: U64 = intern(c: inout c, start: f.retStart, len: f.retLen)
 
@@ -2031,8 +2002,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     }
                     // an `Array[E]` return stays kind 3 (handled below); only a true
                     // kind-2 instantiation (`Box[I32]`, an enum) reports as a genInst.
-                    if f.retIsArray {
-                    } else {
+                    if !(f.retIsArray) {
                         if isGenericInst(c: inout c, ref: f.retTy) {
                             val rtr: TypeRef = c.types[f.retTy]
                             return <TypeInfo kind=2 nameStart=rtr.nameStart nameLen=rtr.nameLen ref=f.retTy />
@@ -2175,11 +2145,9 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     // (`Brand`), not the underlying the fn is declared on (`Rgb`). When
                     // the declared return names the fn's own receiver type (a Self
                     // return) and the call receiver differs (a newtype), substitute it.
-                    if af.retIsArray {
-                    } else {
+                    if !(af.retIsArray) {
                         if spansEqual(c: inout c, aStart: af.retStart, aLen: af.retLen, bStart: af.recvStart, bLen: af.recvLen) {
-                            if spansEqual(c: inout c, aStart: arn.nameStart, aLen: arn.nameLen, bStart: af.recvStart, bLen: af.recvLen) {
-                            } else {
+                            if !(spansEqual(c: inout c, aStart: arn.nameStart, aLen: arn.nameLen, bStart: af.recvStart, bLen: af.recvLen)) {
                                 return typeInfoOfName(c: inout c, start: arn.nameStart, len: arn.nameLen, isArray: false)
                             }
                         }
@@ -2222,8 +2190,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                             while sri < sreqs.count {
                                 if sreqs[sri].nameId == sMethod {
                                     if sreqs[sri].hasRet {
-                                        if sreqs[sri].retIsArray {
-                                        } else {
+                                        if !(sreqs[sri].retIsArray) {
                                             if isPrimType(c: inout c, start: sreqs[sri].retStart, len: sreqs[sri].retLen) || rangeEquals(bytes: c.bytes, start: sreqs[sri].retStart, len: sreqs[sri].retLen, kw: "String") {
                                                 return typeInfoOfName(c: inout c, start: sreqs[sri].retStart, len: sreqs[sri].retLen, isArray: false)
                                             }
@@ -2256,8 +2223,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                                     while ri < reqs.count {
                                         if reqs[ri].nameId == qMethod {
                                             if reqs[ri].hasRet {
-                                                if reqs[ri].retIsArray {
-                                                } else {
+                                                if !(reqs[ri].retIsArray) {
                                                     if isPrimType(c: inout c, start: reqs[ri].retStart, len: reqs[ri].retLen) || rangeEquals(bytes: c.bytes, start: reqs[ri].retStart, len: reqs[ri].retLen, kw: "String") {
                                                         return typeInfoOfName(c: inout c, start: reqs[ri].retStart, len: reqs[ri].retLen, isArray: false)
                                                     }
@@ -2386,8 +2352,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // the result type is the give value of the first non-diverging arm.
             mut val mai: U64 = 0
             while mai < arms.count {
-                if arms[mai].isDiverge {
-                } else {
+                if !(arms[mai].isDiverge) {
                     val mg: U64 = blockGiveExpr(c: inout c, blkId: arms[mai].body)
                     if mg < c.exprs.count {
                         return exprType(c: inout c, id: mg)

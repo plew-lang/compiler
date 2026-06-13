@@ -114,15 +114,13 @@ fn checkLitLeaf(c: inout Comp, value: U64, neg: Bool, offset: U64, isBool: Bool,
     }
     if tyLen != 0 {
         // explicit type suffix: range-check against it (never ambiguous).
-        if litFitsType(c: inout c, value: value, neg: neg, dstStart: tyStart, dstLen: tyLen) {
-        } else {
+        if !(litFitsType(c: inout c, value: value, neg: neg, dstStart: tyStart, dstLen: tyLen)) {
             compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal is out of range for its type")
         }
         return
     }
     if eKind == 1 {
-        if litFitsBits(value: value, neg: neg, bits: eBits, sgn: eSgn) {
-        } else {
+        if !(litFitsBits(value: value, neg: neg, bits: eBits, sgn: eSgn)) {
             compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal is out of range for its type")
         }
         return
@@ -192,8 +190,7 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
                 if eKind == 1 {
                     val cf: ConstInt = foldConst(c: inout c, id: id)
                     if cf.isConst {
-                        if litFitsBits(value: cf.value, neg: cf.neg, bits: eBits, sgn: eSgn) {
-                        } else {
+                        if !(litFitsBits(value: cf.value, neg: cf.neg, bits: eBits, sgn: eSgn)) {
                             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "constant expression is out of range for its type")
                         }
                     }
@@ -266,8 +263,7 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
             mut val i: U64 = 0
             while i < arms.count {
                 // context flows to each value arm's `give` value; diverging arms have none.
-                if arms[i].isDiverge {
-                } else {
+                if !(arms[i].isDiverge) {
                     val g: U64 = blockGiveExpr(c: inout c, blkId: arms[i].body)
                     if g < c.exprs.count {
                         checkLitCtx(c: inout c, id: g, eKind: eKind, eBits: eBits, eSgn: eSgn)
@@ -475,8 +471,7 @@ fn typeIsTransitivelyUnique(c: inout Comp, start: U64, len: U64) -> Bool {
             // contents don't transmit unique contagion, and skipping it breaks the
             // cycle that would otherwise make this walk diverge.
         } else {
-            if f.tyIsArray {
-            } else {
+            if !(f.tyIsArray) {
                 if typeIsTransitivelyUnique(c: inout c, start: f.tyStart, len: f.tyLen) {
                     return true
                 }
@@ -495,13 +490,11 @@ fn checkFieldContagion(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.structs.count {
         val s: StructDef = c.structs[i]
-        if s.isUnique {
-        } else {
+        if !(s.isUnique) {
             mut val j: U64 = 0
             while j < s.fields.count {
                 val f: FieldDef = s.fields[j]
-                if f.tyIsArray {
-                } else {
+                if !(f.tyIsArray) {
                     if typeIsTransitivelyUnique(c: inout c, start: f.tyStart, len: f.tyLen) {
                         compileErrorAt(line: lineOf(c: inout c, offset: f.nameStart), msg: "a struct with a unique field must be declared `unique`")
                     }
@@ -661,8 +654,7 @@ fn checkDeinitOnlyOnUnique(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.deinits.count {
         val d: Bind = c.deinits[i]
-        if typeIsUnique(c: inout c, start: d.nameStart, len: d.nameLen) {
-        } else {
+        if !(typeIsUnique(c: inout c, start: d.nameStart, len: d.nameLen)) {
             val si: U64 = structIndexByName(c: inout c, start: d.nameStart, len: d.nameLen)
             mut val off: U64 = d.nameStart
             if si < c.structs.count {
@@ -696,8 +688,7 @@ fn checkFieldDefaults(c: inout Comp) {
                 // checkLitSpan accepts a `true`/`false` (and other category-mismatched
                 // values) regardless of the field type, so a default of the wrong type
                 // (`val a: I64 = true`) slips through — full type-check against T.
-                if f.tyIsArray {
-                } else {
+                if !(f.tyIsArray) {
                     tcCheckValue(c: inout c, expectedRef: f.ty, valueExpr: f.defaultVal, pos: "field default")
                 }
             }
@@ -716,12 +707,10 @@ fn checkParamModes(c: inout Comp, params: Array[Param]) {
     mut val i: U64 = 0
     while i < params.count {
         val p: Param = params[i]
-        if p.tyIsArray {
-        } else {
+        if !(p.tyIsArray) {
             if typeIsUnique(c: inout c, start: p.tyStart, len: p.tyLen) {
                 val hasMode: Bool = p.isMove || p.isBorrow || p.isInout
-                if hasMode {
-                } else {
+                if !(hasMode) {
                     compileErrorAt(line: lineOf(c: inout c, offset: p.nameStart), msg: "a unique-type parameter requires a mode (`move`, `borrow`, or `inout`)")
                 }
             } else {
@@ -763,10 +752,8 @@ fn checkGenericUniqueArgs(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.types.count {
         val t: TypeRef = c.types[i]
-        if t.args.count == 0 {
-        } else {
-            if isRefInst(c: inout c, ref: i) {
-            } else {
+        if t.args.count != 0 {
+            if !(isRefInst(c: inout c, ref: i)) {
                 mut val j: U64 = 0
                 while j < t.args.count {
                     val ai: TypeInfo = typeInfoOfRef(c: inout c, ref: t.args[j])
@@ -815,8 +802,7 @@ fn checkParamDefaults(c: inout Comp) {
             if p.hasDefault {
                 checkDefaultSelfContained(c: inout c, exprId: p.defaultExpr, forbidden: forbidden, offset: p.nameStart, what: "a parameter default cannot reference another parameter or `self`; it is evaluated without them (spec/04)")
                 checkLitSpan(c: inout c, id: p.defaultExpr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
-                if p.tyIsArray {
-                } else {
+                if !(p.tyIsArray) {
                     tcCheckValue(c: inout c, expectedRef: p.ty, valueExpr: p.defaultExpr, pos: "default arg")
                 }
             }
@@ -881,8 +867,7 @@ fn tcCheckGenericArgConsistency(c: inout Comp, f: Func, args: Array[Arg]) {
                             if firstRef == 0U64 {
                                 firstRef = ar
                             } else {
-                                if typesCompatible(c: inout c, expected: firstRef, inferred: ar) {
-                                } else {
+                                if !(typesCompatible(c: inout c, expected: firstRef, inferred: ar)) {
                                     compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: args[ai].expr)), msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types")
                                 }
                             }
@@ -906,12 +891,10 @@ fn checkArgInoutMode(c: inout Comp, p: Param, arg: Arg) {
             // `inout` writes through the place, so the argument must (a) BE a place —
             // a local/field/subscript/Ref-pointee, not a literal or call result — and
             // (b) be mutable (spec/03: `inc(x: inout n)` needs `mut val n`).
-            if exprIsPlace(c: inout c, id: arg.expr) {
-            } else {
+            if !(exprIsPlace(c: inout c, id: arg.expr)) {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: arg.expr)), msg: "an `inout` argument must be a place (a variable or field), not a literal or temporary value (spec/03)")
             }
-            if placeIsMutable(c: inout c, id: arg.expr) {
-            } else {
+            if !(placeIsMutable(c: inout c, id: arg.expr)) {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: arg.expr)), msg: "an `inout` argument must be a mutable place; declare it `mut val` (spec/03)")
             }
         } else {
@@ -932,8 +915,7 @@ fn checkFnSigAgainst(c: inout Comp, ft: TypeRef, params: Array[Param], retTy: U6
     // return type: ft.args[0].
     if ft.args.count >= 1U64 {
         if retTy != 0U64 {
-            if typesCompatible(c: inout c, expected: ft.args[0], inferred: retTy) {
-            } else {
+            if !(typesCompatible(c: inout c, expected: ft.args[0], inferred: retTy)) {
                 compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "function value's return type does not match the expected function type (spec/04)")
             }
         }
@@ -942,8 +924,7 @@ fn checkFnSigAgainst(c: inout Comp, ft: TypeRef, params: Array[Param], retTy: U6
     while k < params.count {
         if k + 1U64 < ft.args.count {
             if params[k].ty != 0U64 {
-                if typesCompatible(c: inout c, expected: ft.args[k + 1U64], inferred: params[k].ty) {
-                } else {
+                if !(typesCompatible(c: inout c, expected: ft.args[k + 1U64], inferred: params[k].ty)) {
                     compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "function value's parameter type does not match the expected function type (spec/04)")
                 }
             }
@@ -956,8 +937,7 @@ fn checkFnSigAgainst(c: inout Comp, ft: TypeRef, params: Array[Param], retTy: U6
 // signature must match (`val f: fn(x: String)->String = twice` where twice is
 // fn(I64)->I64). The value is a closure literal or a bare function reference.
 fn checkFnValueSig(c: inout Comp, declTy: U64, init: U64) {
-    if isFnType(c: inout c, ref: declTy) {
-    } else {
+    if !(isFnType(c: inout c, ref: declTy)) {
         return
     }
     val ft: TypeRef = c.types[declTy]
@@ -1048,8 +1028,7 @@ fn checkClosureArgArity(c: inout Comp, argExpr: U64, p: Param) {
     if p.ty == 0U64 {
         return
     }
-    if isFnType(c: inout c, ref: p.ty) {
-    } else {
+    if !(isFnType(c: inout c, ref: p.ty)) {
         return
     }
     match c.exprs[argExpr] {
@@ -1069,8 +1048,7 @@ fn checkClosureArgArity(c: inout Comp, argExpr: U64, p: Param) {
                         if pj + 1U64 < expLabels.count {
                             val expLbl: U64 = expLabels[pj + 1U64]
                             if expLbl != 0U64 {
-                                if params[pj].nameId == expLbl {
-                                } else {
+                                if params[pj].nameId != expLbl {
                                     compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: argExpr)), msg: "closure parameter label does not match the expected function type (spec/04: a function type's labels are part of its identity — rename the closure's parameter to match)")
                                 }
                             }
@@ -1088,8 +1066,7 @@ fn checkClosureArgArity(c: inout Comp, argExpr: U64, p: Param) {
                     if retTy != 0U64 {
                         val expRet: U64 = c.types[p.ty].args[0]
                         if expRet != 0U64 {
-                            if typesCompatible(c: inout c, expected: expRet, inferred: retTy) {
-                            } else {
+                            if !(typesCompatible(c: inout c, expected: expRet, inferred: retTy)) {
                                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: argExpr)), msg: "closure return type does not match the expected function type")
                             }
                         }
@@ -1204,8 +1181,7 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
                                     mk += 1U64
                                 }
                             }
-                            if headMethodOwn {
-                            } else {
+                            if !(headMethodOwn) {
                                 mut val pref: U64 = pti.ref
                                 if pref == 0U64 {
                                     if pti.nameLen > 0U64 {
@@ -1423,8 +1399,7 @@ fn checkBindsInFields(c: inout Comp, binds: Array[Bind], fields: Array[FieldDef]
             }
             fj += 1
         }
-        if found {
-        } else {
+        if !(found) {
             // bd.offset is the field name's original source offset (bd.fieldStart is
             // re-interned and maps to a bogus line); fall back to fieldStart if 0.
             mut val off: U64 = bd.offset
@@ -1578,8 +1553,7 @@ fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvSta
     while i < w.count {
         val pw: Param = w[i]
         val pr: Param = r[i]
-        if pw.nameId == pr.nameId {
-        } else {
+        if pw.nameId != pr.nameId {
             return false
         }
         // a requirement param that substitutes to an `Array[Elem]` (e.g. `convert(from:
@@ -1608,8 +1582,7 @@ fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvSta
         if rangeEquals(bytes: c.bytes, start: pw.tyStart, len: pw.tyLen, kw: "Self") {
             wId = intern(c: inout c, start: recvStart, len: recvLen)
         }
-        if wId == subId {
-        } else {
+        if wId != subId {
             return false
         }
         i += 1
@@ -1628,8 +1601,7 @@ fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvSta
 // type-param / associated-type / named / array requirement return is left to the
 // existing machinery (conservative — never false-reject a valid conformance).
 fn reqReturnMismatch(c: inout Comp, w: Func, r: Func, recvStart: U64, recvLen: U64) -> Bool {
-    if r.hasRet {
-    } else {
+    if !(r.hasRet) {
         return false
     }
     if r.retIsArray {
@@ -1639,13 +1611,11 @@ fn reqReturnMismatch(c: inout Comp, w: Func, r: Func, recvStart: U64, recvLen: U
     // `type Item = I64`) through the conformance's binding, so the witness's concrete
     // return is compared to the bound concrete type.
     val rr: Bind = assocBindingSpan(c: inout c, recvStart: recvStart, recvLen: recvLen, nameStart: r.retStart, nameLen: r.retLen)
-    if isPrimType(c: inout c, start: rr.nameStart, len: rr.nameLen) {
-    } else {
+    if !(isPrimType(c: inout c, start: rr.nameStart, len: rr.nameLen)) {
         return false
     }
     // requirement returns a concrete primitive: the witness must return it exactly.
-    if w.hasRet {
-    } else {
+    if !(w.hasRet) {
         return true
     }
     if w.retIsArray {
@@ -1663,8 +1633,7 @@ fn witnessedHas(c: inout Comp, witnessed: Array[Func], r: Func, recvStart: U64, 
         val w: Func = witnessed[i]
         if w.nameId == r.nameId {
             if paramSelectorEqSubst(c: inout c, w: w.params, r: r.params, recvStart: recvStart, recvLen: recvLen, tps: tps, targs: targs) {
-                if reqReturnMismatch(c: inout c, w: w, r: r, recvStart: recvStart, recvLen: recvLen) {
-                } else {
+                if !(reqReturnMismatch(c: inout c, w: w, r: r, recvStart: recvStart, recvLen: recvLen)) {
                     return true
                 }
             }
@@ -1682,8 +1651,7 @@ fn confWitnessesAll(c: inout Comp, cf: Conform, t: TraitDef) -> Bool {
     mut val ri: U64 = 0
     while ri < t.reqs.count {
         val r: Func = t.reqs[ri]
-        if witnessedHas(c: inout c, witnessed: cf.witnessed, r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: cf.traitArgs) {
-        } else {
+        if !(witnessedHas(c: inout c, witnessed: cf.witnessed, r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: cf.traitArgs)) {
             return false
         }
         ri += 1
@@ -1749,8 +1717,7 @@ fn checkAnyFormation(c: inout Comp) {
                 mut val tpi: U64 = 0
                 mut val posNeed: U64 = 0
                 while tpi < tr.typeParams.count {
-                    if anyHasNamedBinding(c: inout c, t: t, nameId: tr.typeParams[tpi].nameId) {
-                    } else {
+                    if !(anyHasNamedBinding(c: inout c, t: t, nameId: tr.typeParams[tpi].nameId)) {
                         posNeed += 1U64
                     }
                     tpi += 1
@@ -1761,8 +1728,7 @@ fn checkAnyFormation(c: inout Comp) {
                 // each associated type must be bound by name.
                 mut val asi: U64 = 0
                 while asi < tr.assocTypes.count {
-                    if anyHasNamedBinding(c: inout c, t: t, nameId: tr.assocTypes[asi].nameId) {
-                    } else {
+                    if !(anyHasNamedBinding(c: inout c, t: t, nameId: tr.assocTypes[asi].nameId)) {
                         compileErrorAt(line: lineOf(c: inout c, offset: t.nameStart), msg: "`any P` leaves an associated type unbound — bind it as `any P[Item=Type]` (spec/08)")
                     }
                     asi += 1
@@ -1811,8 +1777,7 @@ fn checkConformances(c: inout Comp) {
             mut val ri: U64 = 0
             while ri < t.reqs.count {
                 val r: Func = t.reqs[ri]
-                if witnessedHas(c: inout c, witnessed: cf.witnessed, r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: cf.traitArgs) {
-                } else {
+                if !(witnessedHas(c: inout c, witnessed: cf.witnessed, r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: cf.traitArgs)) {
                     compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)")
                 }
                 ri += 1
@@ -1822,8 +1787,7 @@ fn checkConformances(c: inout Comp) {
             mut val sti: U64 = 0
             while sti < t.supertraits.count {
                 val sup: Bind = t.supertraits[sti]
-                if typeConformsTo(c: inout c, typeStart: cf.typeStart, typeLen: cf.typeLen, traitStart: sup.nameStart, traitLen: sup.nameLen) {
-                } else {
+                if !(typeConformsTo(c: inout c, typeStart: cf.typeStart, typeLen: cf.typeLen, traitStart: sup.nameStart, traitLen: sup.nameLen)) {
                     compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "supertrait not satisfied: this type must also conform to the trait's supertrait")
                 }
                 sti += 1
@@ -1871,8 +1835,7 @@ fn checkViaTargets(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.methodAliases.count {
         val al: MethodAlias = c.methodAliases[i]
-        if typeHasMember(c: inout c, recvStart: al.recvStart, recvLen: al.recvLen, nameStart: al.realStart, nameLen: al.realLen) {
-        } else {
+        if !(typeHasMember(c: inout c, recvStart: al.recvStart, recvLen: al.recvLen, nameStart: al.realStart, nameLen: al.realLen)) {
             compileErrorAt(line: lineOf(c: inout c, offset: al.aliasStart), msg: "`via` target is not a member of this type")
         }
         i += 1
@@ -1961,8 +1924,7 @@ fn checkFnBounds(c: inout Comp) {
                     if tp.nameId == fb.paramNameId {
                         if pi < fin.args.count {
                             val at: TypeRef = c.types[fin.args[pi]]
-                            if typeConformsTo(c: inout c, typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen) {
-                            } else {
+                            if !(typeConformsTo(c: inout c, typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen)) {
                                 compileErrorAt(line: lineOf(c: inout c, offset: fb.paramStart), msg: "type argument does not conform to the trait required by `where`")
                             }
                         }
@@ -2002,8 +1964,7 @@ fn checkMethodBounds(c: inout Comp) {
                             if tp.nameId == fb.paramNameId {
                                 if pi < inst.args.count {
                                     val at: TypeRef = c.types[inst.args[pi]]
-                                    if typeConformsTo(c: inout c, typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen) {
-                                    } else {
+                                    if !(typeConformsTo(c: inout c, typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen)) {
                                         compileErrorAt(line: lineOf(c: inout c, offset: fb.paramStart), msg: "receiver type argument does not conform to the trait required by the method's `where`")
                                     }
                                 }
@@ -2039,8 +2000,7 @@ fn isSelfTypeInProvided(c: inout Comp, start: U64, len: U64) -> Bool {
         return false
     }
     val f: Func = c.funcs[c.curCheckFn]
-    if methodRecvIsTrait(c: inout c, f: f) {
-    } else {
+    if !(methodRecvIsTrait(c: inout c, f: f)) {
         return false
     }
     return spansEqual(c: inout c, aStart: start, aLen: len, bStart: f.recvStart, bLen: f.recvLen)
@@ -2197,10 +2157,8 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
             if ut.kind == 2 {
                 if isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: ut.nameStart, len: ut.nameLen) {
                     val need: String = unOpTraitName(c: inout c, op: op)
-                    if need.bytes.count == 0U64 {
-                    } else {
-                        if boundHasTraitNamed(c: inout c, fnIdx: c.curCheckFn, tpStart: ut.nameStart, tpLen: ut.nameLen, traitName: need) {
-                        } else {
+                    if need.bytes.count != 0U64 {
+                        if !(boundHasTraitNamed(c: inout c, fnIdx: c.curCheckFn, tpStart: ut.nameStart, tpLen: ut.nameLen, traitName: need)) {
                             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "this unary operator on a type parameter needs the matching bound (add `where T: Neg` / `: Not` / `: BitNot`) (spec/12)")
                         }
                     }
@@ -2233,10 +2191,8 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                     if need.bytes.count == 0U64 {
                         need = binOpTraitName(c: inout c, op: op)
                     }
-                    if need.bytes.count == 0U64 {
-                    } else {
-                        if boundHasTraitNamed(c: inout c, fnIdx: c.curCheckFn, tpStart: lt.nameStart, tpLen: lt.nameLen, traitName: need) {
-                        } else {
+                    if need.bytes.count != 0U64 {
+                        if !(boundHasTraitNamed(c: inout c, fnIdx: c.curCheckFn, tpStart: lt.nameStart, tpLen: lt.nameLen, traitName: need)) {
                             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "this operator on a type parameter needs the matching bound (e.g. `where T: Add` for `+`, `: Eq`/`: Ord` for comparison) (spec/12)")
                         }
                     }
@@ -2258,8 +2214,7 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                 mut val k: U64 = 0
                 while k < args.count {
                     if k < ps.count {
-                        if ps[k].tyIsArray {
-                        } else {
+                        if !(ps[k].tyIsArray) {
                             checkGenericTypeMatch(c: inout c, expectedRef: ps[k].ty, valueExpr: args[k].expr)
                         }
                     }
@@ -2288,8 +2243,7 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
             val rt: TypeInfo = exprType(c: inout c, id: recv)
             if rt.kind == 2 {
                 if isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: rt.nameStart, len: rt.nameLen) {
-                    if boundProvidesMethod(c: inout c, fnIdx: c.curCheckFn, tpStart: rt.nameStart, tpLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args) {
-                    } else {
+                    if !(boundProvidesMethod(c: inout c, fnIdx: c.curCheckFn, tpStart: rt.nameStart, tpLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)) {
                         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
                     }
                 } else {
@@ -2299,8 +2253,7 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                         // supertrait members (spec/08). Anything else is undefined on Self.
                         val qm: U64 = intern(c: inout c, start: nameStart, len: nameLen)
                         val selfTraitId: U64 = intern(c: inout c, start: c.funcs[c.curCheckFn].recvStart, len: c.funcs[c.curCheckFn].recvLen)
-                        if traitProvidesMember(c: inout c, traitNameId: selfTraitId, qName: qm, args: args, depth: 0U64) {
-                        } else {
+                        if !(traitProvidesMember(c: inout c, traitNameId: selfTraitId, qName: qm, args: args, depth: 0U64)) {
                             compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "method not provided by this trait: a provided method's `self` (Self) can only use the trait's requirements / provided methods / supertrait members (spec/08)")
                         }
                     } else {
@@ -2308,16 +2261,14 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                     // parameter is a type error (`s.set(x: a)` where a: T, x: I64). A
                     // generic-receiver method's grounded param types are handled by the
                     // backend; here we check the non-generic-receiver case.
-                    if isGenericInst(c: inout c, ref: rt.ref) {
-                    } else {
+                    if !(isGenericInst(c: inout c, ref: rt.ref)) {
                         val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                         if mi != c.funcs.count {
                             val mps: Array[Param] = c.funcs[mi].params
                             mut val mk: U64 = 0
                             while mk < args.count {
                                 if mk < mps.count {
-                                    if mps[mk].tyIsArray {
-                                    } else {
+                                    if !(mps[mk].tyIsArray) {
                                         checkGenericTypeMatch(c: inout c, expectedRef: mps[mk].ty, valueExpr: args[mk].expr)
                                     }
                                 }
@@ -2349,8 +2300,7 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
             val ibt: TypeInfo = exprType(c: inout c, id: base)
             if ibt.kind == 2 {
                 if isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: ibt.nameStart, len: ibt.nameLen) {
-                    if boundHasTraitNamed(c: inout c, fnIdx: c.curCheckFn, tpStart: ibt.nameStart, tpLen: ibt.nameLen, traitName: "Index") {
-                    } else {
+                    if !(boundHasTraitNamed(c: inout c, fnIdx: c.curCheckFn, tpStart: ibt.nameStart, tpLen: ibt.nameLen, traitName: "Index")) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "subscript `[]` on a type parameter needs a `where T: Index` bound (spec/12)")
                     }
                 }
@@ -2422,8 +2372,7 @@ fn checkGenericTypeMatch(c: inout Comp, expectedRef: U64, valueExpr: U64) {
     // trusted and validated separately (its array-element inferType quirks — e.g.
     // `Array.get` reporting the result as `Array` not the element `T` — would
     // false-positive here). Mirrors verifyProgram's entry-module gate.
-    if methodInEntryModule(c: inout c, f: c.funcs[c.curCheckFn]) {
-    } else {
+    if !(methodInEntryModule(c: inout c, f: c.funcs[c.curCheckFn])) {
         return
     }
     // an untyped numeric literal cannot flow into a type parameter / Self: `val y: T = 5`
@@ -2432,8 +2381,7 @@ fn checkGenericTypeMatch(c: inout Comp, expectedRef: U64, valueExpr: U64) {
         if isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: c.types[expectedRef].nameStart, len: c.types[expectedRef].nameLen) || isSelfTypeInProvided(c: inout c, start: c.types[expectedRef].nameStart, len: c.types[expectedRef].nameLen) {
             match c.exprs[valueExpr] {
                 Expr.Int(value: _, offset: _, val isBool, tyStart: _, val tyLen, isNeg: _) => {
-                    if isBool {
-                    } else {
+                    if !(isBool) {
                         if tyLen == 0U64 {
                             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueExpr)), msg: "cannot assign a literal to a type parameter: it is an opaque type with no numeric bound (spec/06)")
                         }
@@ -2462,8 +2410,7 @@ fn checkGenericTypeMatch(c: inout Comp, expectedRef: U64, valueExpr: U64) {
         Expr.MatchExpr(scrut: _, val arms) => {
             mut val ai: U64 = 0
             while ai < arms.count {
-                if arms[ai].isDiverge {
-                } else {
+                if !(arms[ai].isDiverge) {
                     if arms[ai].binds.count == 0U64 {
                         val g: U64 = blockGiveExpr(c: inout c, blkId: arms[ai].body)
                         if g < c.exprs.count {
@@ -2497,8 +2444,7 @@ fn checkGenericTypeMatch(c: inout Comp, expectedRef: U64, valueExpr: U64) {
         }
     }
     val inferred: U64 = inferType(c: inout c, id: valueExpr)
-    if typesCompatible(c: inout c, expected: expectedRef, inferred: inferred) {
-    } else {
+    if !(typesCompatible(c: inout c, expected: expectedRef, inferred: inferred)) {
         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueExpr)), msg: "type mismatch in a generic body: a type parameter is a distinct opaque type, not the type required here (spec/06)")
     }
 }
@@ -2655,8 +2601,7 @@ fn sameLabels(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
     }
     mut val i: U64 = 0
     while i < a.count {
-        if a[i].nameId == b[i].nameId {
-        } else {
+        if a[i].nameId != b[i].nameId {
             return false
         }
         i += 1
@@ -2720,17 +2665,13 @@ fn checkOverloadCollisions(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.funcs.count {
         val fi: Func = c.funcs[i]
-        if fi.hasRecv {
-        } else {
-            if fi.isAssoc {
-            } else {
+        if !(fi.hasRecv) {
+            if !(fi.isAssoc) {
                 mut val j: U64 = i + 1
                 while j < c.funcs.count {
                     val fj: Func = c.funcs[j]
-                    if fj.hasRecv {
-                    } else {
-                        if fj.isAssoc {
-                        } else {
+                    if !(fj.hasRecv) {
+                        if !(fj.isAssoc) {
                             if fi.nameId == fj.nameId {
                                 if sameLabels(c: inout c, a: fi.params, b: fj.params) {
                                     if fi.typeParams.count > 0 {
@@ -2802,8 +2743,7 @@ fn sameSelector(c: inout Comp, a: Func, b: Func) -> Bool {
         if a.params[i].noLabel != b.params[i].noLabel {
             return false
         }
-        if a.params[i].noLabel {
-        } else {
+        if !(a.params[i].noLabel) {
             if a.params[i].nameId != b.params[i].nameId {
                 return false
             }
@@ -2832,8 +2772,7 @@ fn checkDefaultExtCollisions(c: inout Comp) {
                         // provided, or another default extension).
                         mut val gi: U64 = 0
                         while gi < c.funcs.count {
-                            if gi == fi {
-                            } else {
+                            if gi != fi {
                                 val g: Func = c.funcs[gi]
                                 if g.hasRecv {
                                     if g.recvId == de.typeId {
@@ -2934,8 +2873,7 @@ fn checkMoveFnReceivers(c: inout Comp) {
         val f: Func = c.funcs[i]
         if f.hasRecv {
             if f.selfMove {
-                if typeIsUnique(c: inout c, start: f.recvStart, len: f.recvLen) {
-                } else {
+                if !(typeIsUnique(c: inout c, start: f.recvStart, len: f.recvLen)) {
                     compileErrorAt(line: lineOf(c: inout c, offset: f.nameStart), msg: "`move fn` (consuming self) is only allowed on a unique type")
                 }
             }
@@ -2966,8 +2904,7 @@ fn checkImports(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.imports.count {
         val im: Bind = c.imports[i]
-        if isExportedName(c: inout c, nameStart: im.nameStart, nameLen: im.nameLen) {
-        } else {
+        if !(isExportedName(c: inout c, nameStart: im.nameStart, nameLen: im.nameLen)) {
             compileErrorAt(line: lineOf(c: inout c, offset: im.nameStart), msg: "imported name is not exported (mark it `export` in its module, or import it from the right module)")
         }
         i += 1
@@ -3004,10 +2941,8 @@ fn checkUseVisibility(c: inout Comp) {
                 if fi < c.funcs.count {
                     val useMod: U64 = moduleOf(c: inout c, offset: nameStart)
                     val defMod: U64 = moduleOf(c: inout c, offset: c.funcs[fi].nameStart)
-                    if useMod == defMod {
-                    } else {
-                        if isImportedInto(c: inout c, mod: useMod, nameStart: nameStart, nameLen: nameLen) {
-                        } else {
+                    if useMod != defMod {
+                        if !(isImportedInto(c: inout c, mod: useMod, nameStart: nameStart, nameLen: nameLen)) {
                             compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "use of a function from another module without importing it (add `import … with { … }`)")
                         }
                     }
@@ -3020,8 +2955,7 @@ fn checkUseVisibility(c: inout Comp) {
                     // imported it or defines its own same-named function.
                     if isAmbientInterceptedName(c: inout c, start: nameStart, len: nameLen) {
                         val useMod2: U64 = moduleOf(c: inout c, offset: nameStart)
-                        if isImportedInto(c: inout c, mod: useMod2, nameStart: nameStart, nameLen: nameLen) {
-                        } else {
+                        if !(isImportedInto(c: inout c, mod: useMod2, nameStart: nameStart, nameLen: nameLen)) {
                             compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "this @Std function is not ambient — import it (e.g. `import @Std/Io with { print }`); only lang items are usable without import (spec/15)")
                         }
                     }
@@ -3141,8 +3075,7 @@ fn stmtDiverges(c: inout Comp, stmtId: U64) -> Bool {
             }
             mut val i: U64 = 0
             while i < arms.count {
-                if blockDiverges(c: inout c, blkId: arms[i].body) {
-                } else {
+                if !(blockDiverges(c: inout c, blkId: arms[i].body)) {
                     return false
                 }
                 i += 1
@@ -3182,16 +3115,11 @@ fn checkReturns(c: inout Comp) {
         // exempt: `()`-returning (hasRet false), `main` (returns int), extern (no
         // body), provided/abstract (body 0), and async (state-machine return).
         if f.hasRet {
-            if f.isExtern {
-            } else {
-                if f.isAsync {
-                } else {
-                    if f.body == 0 {
-                    } else {
-                        if nameIsMain(c: inout c, f: f) {
-                        } else {
-                            if blockDiverges(c: inout c, blkId: f.body) {
-                            } else {
+            if !(f.isExtern) {
+                if !(f.isAsync) {
+                    if f.body != 0 {
+                        if !(nameIsMain(c: inout c, f: f)) {
+                            if !(blockDiverges(c: inout c, blkId: f.body)) {
                                 compileErrorAt(line: lineOf(c: inout c, offset: f.nameStart), msg: "this function has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (Plew does not implicitly return the last expression)")
                             }
                         }

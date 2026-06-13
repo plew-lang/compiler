@@ -140,8 +140,7 @@ fn litFitsType(c: inout Comp, value: U64, neg: Bool, dstStart: U64, dstLen: U64)
 fn litFitsBits(value: U64, neg: Bool, bits: U64, sgn: Bool) -> Bool {
     if neg {
         // a negative literal needs a signed target; magnitude <= 2^(bits-1).
-        if sgn {
-        } else {
+        if !(sgn) {
             return false
         }
         if bits == 8 { return value <= 128 }

@@ -445,8 +445,7 @@ fn synthesizeDerives(c: inout Comp) {
                 // `Ord: Eq` (spec/08): deriving Ord implies Eq, so also synthesize the
                 // Eq witness unless the user already wrote an explicit `@[Eq]` for it
                 // (which would otherwise duplicate the witness/conformance).
-                if hasEqDeriveFor(c: inout c, d: d) {
-                } else {
+                if !(hasEqDeriveFor(c: inout c, d: d)) {
                     if d.isEnum {
                         synthEnumEq(c: inout c, d: d, eqN: eqN, lhsN: lhsN, rhsN: rhsN, boolN: boolN, eqTrait: eqTrait)
                     } else {

@@ -187,8 +187,7 @@ fn nameReachesOwner(c: inout Comp, nStart: U64, nLen: U64, args: Array[U64], tSt
     // MUTUALLY recursive GENERIC value type (`Foo[T]` ↔ `Bar[T]`) misses the cycle
     // through the generic partner's fields, fails to box, and overflows at sizing.
     mut val si: U64 = structIndexByName(c: inout c, start: nStart, len: nLen)
-    if si < c.structs.count {
-    } else {
+    if si >= c.structs.count {
         si = genericStructIndex(c: inout c, nameStart: nStart, nameLen: nLen)
     }
     if si < c.structs.count {
@@ -211,8 +210,7 @@ fn nameReachesOwner(c: inout Comp, nStart: U64, nLen: U64, args: Array[U64], tSt
     // generics — so a mutually recursive generic ENUM `E1[T]` ↔ `E2[T]` boxes its
     // cyclic variant payload instead of overflowing at sizing, mirroring the struct case).
     mut val ei: U64 = concreteEnumIndex(c: inout c, nStart: nStart, nLen: nLen)
-    if ei < c.enums.count {
-    } else {
+    if ei >= c.enums.count {
         ei = genericEnumIndex(c: inout c, nameStart: nStart, nameLen: nLen)
     }
     if ei < c.enums.count {
@@ -395,8 +393,7 @@ fn typeRefEq(c: inout Comp, a: U64, b: U64) -> Bool {
     }
     val ta: TypeRef = c.types[a]
     val tb: TypeRef = c.types[b]
-    if ta.nameId == tb.nameId {
-    } else {
+    if ta.nameId != tb.nameId {
         return false
     }
     if ta.args.count != tb.args.count {
@@ -404,8 +401,7 @@ fn typeRefEq(c: inout Comp, a: U64, b: U64) -> Bool {
     }
     mut val i: U64 = 0
     while i < ta.args.count {
-        if typeRefEq(c: inout c, a: ta.args[i], b: tb.args[i]) {
-        } else {
+        if !(typeRefEq(c: inout c, a: ta.args[i], b: tb.args[i])) {
             return false
         }
         i += 1
@@ -457,8 +453,7 @@ fn sameMangle(c: inout Comp, refA: U64, refB: U64) -> Bool {
     }
     val a: TypeRef = c.types[ra]
     val b: TypeRef = c.types[rb]
-    if a.nameId == b.nameId {
-    } else {
+    if a.nameId != b.nameId {
         return false
     }
     if a.args.count != b.args.count {
@@ -466,8 +461,7 @@ fn sameMangle(c: inout Comp, refA: U64, refB: U64) -> Bool {
     }
     mut val i: U64 = 0
     while i < a.args.count {
-        if sameMangle(c: inout c, refA: a.args[i], refB: b.args[i]) {
-        } else {
+        if !(sameMangle(c: inout c, refA: a.args[i], refB: b.args[i])) {
             return false
         }
         i += 1
@@ -610,8 +604,7 @@ fn tyRefIsGround(c: inout Comp, ref: U64) -> Bool {
     }
     mut val i: U64 = 0
     while i < t.args.count {
-        if tyRefIsGround(c: inout c, ref: t.args[i]) {
-        } else {
+        if !(tyRefIsGround(c: inout c, ref: t.args[i])) {
             return false
         }
         i += 1
@@ -761,8 +754,7 @@ fn groundRecordStruct(c: inout Comp, ref: U64) -> U64 {
         j += 1
     }
     appendBytes(into: inout cn, from: ")".bytes)
-    if changed {
-    } else {
+    if !(changed) {
         return ref
     }
     val nm: Bind = internBytes(c: inout c, s: stringFromBytesUnchecked(b: cn))
@@ -795,8 +787,7 @@ fn groundTypeRef(c: inout Comp, ref: U64) -> U64 {
     mut val i: U64 = 0
     while i < t.args.count {
         val g: U64 = groundTypeRef(c: inout c, ref: t.args[i])
-        if g == t.args[i] {
-        } else {
+        if g != t.args[i] {
             changed = true
         }
         newArgs.append(g)
@@ -814,8 +805,7 @@ fn groundTypeRef(c: inout Comp, ref: U64) -> U64 {
 // iterator()/next() return types through the concrete iterand (`Box[I64]` ->
 // `BoxIter[I64]`, then `BoxIter[I64]`'s `next` -> `Optional[I64]`).
 fn groundUnderInst(c: inout Comp, instRef: U64, tyRef: U64) -> U64 {
-    if isGenericInst(c: inout c, ref: instRef) {
-    } else {
+    if !(isGenericInst(c: inout c, ref: instRef)) {
         return tyRef
     }
     val inst: TypeRef = c.types[instRef]
@@ -824,8 +814,7 @@ fn groundUnderInst(c: inout Comp, instRef: U64, tyRef: U64) -> U64 {
         return tyRef
     }
     val sd: StructDef = c.structs[si]
-    if sd.typeParams.count == inst.args.count {
-    } else {
+    if sd.typeParams.count != inst.args.count {
         return tyRef
     }
     val savedP: Array[Bind] = c.curTypeParams
@@ -928,8 +917,7 @@ fn instArgCollidesParamName(c: inout Comp, instRef: U64) -> Bool {
         // parameter — a template position, resolved by the active env, not a collision).
         val argId: U64 = arg.nameId
         if argId != 0U64 {
-            if isTypeParamName(c: inout c, start: arg.nameStart, len: arg.nameLen) {
-            } else {
+            if !(isTypeParamName(c: inout c, start: arg.nameStart, len: arg.nameLen)) {
                 mut val pi: U64 = 0
                 while pi < params.count {
                     if params[pi].nameId == argId {
@@ -1004,8 +992,7 @@ fn scanType(c: inout Comp, ref: U64) {
             }
             fj += 1
         }
-        if seen {
-        } else {
+        if !(seen) {
             c.fnTypes.append(ref)
         }
     }
@@ -1070,8 +1057,7 @@ fn scanGenInstFields(c: inout Comp, instRef: U64) {
                             // skip copied provided methods (`map[B] -> MapIter[Self,…]`):
                             // their instances come from call sites, and expanding one here
                             // under Self=this inst would recurse forever (MapIter[MapIter[…]]).
-                            if mf.isProvided {
-                            } else {
+                            if !(mf.isProvided) {
                             if mf.recvId == qInst {
                                 // a non-generic method may still mention `Self`/`Item`
                                 // (`fn iterator() -> Self`); resolve them to this inst.
@@ -1109,8 +1095,7 @@ fn collectGenInsts(c: inout Comp) {
         val f: Func = c.funcs[fi]
         // skip generic templates: their param/return types contain type
         // parameters (not concrete), resolved per instantiation instead.
-        if f.typeParams.count > 0 {
-        } else {
+        if f.typeParams.count <= 0 {
         // skip a provided-method template (receiver = a trait): it is not a real
         // method (it is copied onto each conformer), and scanning its signature
         // would resolve `Self` to the trait name and register a bogus instantiation
@@ -1128,8 +1113,7 @@ fn collectGenInsts(c: inout Comp) {
                 skipProvidedTemplate = true
             }
         }
-        if skipProvidedTemplate {
-        } else {
+        if !(skipProvidedTemplate) {
             // a provided method copied onto a concrete conformer (`filter` on
             // Counter) may mention `Self`/`Item` in its signature; resolve them to
             // the receiver so its adapter instantiation (`FilterIter[Counter,…,I64]`)
@@ -1240,8 +1224,7 @@ fn iterableItemInfo(c: inout Comp, et: TypeInfo) -> TypeInfo {
     mut val itRef: U64 = et.ref
     mut val nrStart: U64 = et.nameStart
     mut val nrLen: U64 = et.nameLen
-    if imi == c.funcs.count {
-    } else {
+    if imi != c.funcs.count {
         val imf: Func = c.funcs[imi]
         itRef = groundUnderInst(c: inout c, instRef: et.ref, tyRef: imf.retTy)
         nrStart = imf.retStart
@@ -1415,16 +1398,14 @@ fn genericEnumFieldTypeInfo(c: inout Comp, instRef: U64, variantStart: U64, vari
 // parameter is bound by the receiver's args — first cut excludes methods with
 // their own extra type parameters.)
 fn methodMatchesInst(c: inout Comp, f: Func, instRef: U64) -> Bool {
-    if f.hasRecv {
-    } else {
+    if !(f.hasRecv) {
         return false
     }
     if f.typeParams.count == 0 {
         return false
     }
     val inst: TypeRef = c.types[instRef]
-    if f.recvId == intern(c: inout c, start: inst.nameStart, len: inst.nameLen) {
-    } else {
+    if f.recvId != intern(c: inout c, start: inst.nameStart, len: inst.nameLen) {
         return false
     }
     return f.typeParams.count == inst.args.count
@@ -1624,8 +1605,7 @@ fn fnArgsAllGround(c: inout Comp, args: Array[U64]) -> Bool {
         if args[i] == 0 {
             return false
         }
-        if tyRefIsGround(c: inout c, ref: args[i]) {
-        } else {
+        if !(tyRefIsGround(c: inout c, ref: args[i])) {
             return false
         }
         i += 1
@@ -1643,8 +1623,7 @@ fn fnInstExists(c: inout Comp, fnIdx: U64, args: Array[U64]) -> Bool {
                 mut val same: Bool = true
                 mut val j: U64 = 0
                 while j < args.count {
-                    if typeRefEq(c: inout c, a: fin.args[j], b: args[j]) {
-                    } else {
+                    if !(typeRefEq(c: inout c, a: fin.args[j], b: args[j])) {
                         same = false
                     }
                     j += 1
@@ -1675,8 +1654,7 @@ fn registerCallInst(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg
         if isGenericFreeFn(c: inout c, fi: fi) {
             val inferred: Array[U64] = inferFnArgs(c: inout c, f: c.funcs[fi], args: args)
             if fnArgsAllGround(c: inout c, args: inferred) {
-                if fnInstExists(c: inout c, fnIdx: fi, args: inferred) {
-                } else {
+                if !(fnInstExists(c: inout c, fnIdx: fi, args: inferred)) {
                     c.fnInsts.append(<FnInst fnIdx=fi args=inferred />)
                 }
             }
@@ -1704,8 +1682,7 @@ fn registerAssocInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, arg
     if isGenericFreeFn(c: inout c, fi: afi) {
         val inferred: Array[U64] = inferFnArgs(c: inout c, f: c.funcs[afi], args: args)
         if fnArgsAllGround(c: inout c, args: inferred) {
-            if fnInstExists(c: inout c, fnIdx: afi, args: inferred) {
-            } else {
+            if !(fnInstExists(c: inout c, fnIdx: afi, args: inferred)) {
                 c.fnInsts.append(<FnInst fnIdx=afi args=inferred />)
             }
         }
@@ -1756,8 +1733,7 @@ fn registerMethodInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, ar
     if genericRecv {
         rcount = recvParamCount(c: inout c, nameStart: rt.nameStart, nameLen: rt.nameLen)
         recvInst = rt.ref
-        if mf.typeParams.count > rcount {
-        } else {
+        if mf.typeParams.count <= rcount {
             return
         }
     }
@@ -1788,8 +1764,7 @@ fn registerMethodInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, ar
         }
     }
     if fnArgsAllGround(c: inout c, args: fullArgs) {
-        if fnInstExists(c: inout c, fnIdx: mi, args: fullArgs) {
-        } else {
+        if !(fnInstExists(c: inout c, fnIdx: mi, args: fullArgs)) {
             c.fnInsts.append(<FnInst fnIdx=mi args=fullArgs recvInstRef=recvInst />)
         }
         // register the grounded return adapter (`MapIter[…,I64]`) + its transitive
@@ -1891,8 +1866,7 @@ fn recordCapture(c: inout Comp, closureId: U64, localIdx: U64) {
             }
         }
     } else {
-        if captureSupported(c: inout c, lo: lo) {
-        } else {
+        if !(captureSupported(c: inout c, lo: lo)) {
             compileErrorAt(line: lineOf(c: inout c, offset: lo.nameStart), msg: "capturing this value (unique / generic / enum / function) in a closure is not yet supported")
         }
     }
@@ -1909,8 +1883,7 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
                 if li < c.curCaptureMark {
                     // a module-level variable (spec/15) seeded at the locals base
                     // (index < globals.count) is globally accessible — not a capture.
-                    if li < c.globals.count {
-                    } else {
+                    if li >= c.globals.count {
                         recordCapture(c: inout c, closureId: c.curClosureId, localIdx: li)
                     }
                 }
@@ -2014,8 +1987,7 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
             scanExprInsts(c: inout c, exprId: base)
             // register the Optional[U] result so its C struct is emitted.
             val rr: U64 = optChainResultRef(c: inout c, base: base, memberStart: memberStart, memberLen: memberLen)
-            if rr == 0 {
-            } else {
+            if rr != 0 {
                 scanType(c: inout c, ref: rr)
             }
         }
@@ -2191,8 +2163,7 @@ fn scanGenInstMethodBodies(c: inout Comp) {
                 val mf: Func = c.funcs[mfi]
                 if methodMatchesInst(c: inout c, f: mf, instRef: instRef) {
                     // provided combinators (`map[B]`) instantiate from call sites, not here.
-                    if mf.isProvided {
-                    } else {
+                    if !(mf.isProvided) {
                         if mf.body != 0 {
                             c.locals = []
                             seedGlobalLocals(c: inout c)
@@ -2235,8 +2206,7 @@ fn collectFnInsts(c: inout Comp) {
         val f: Func = c.funcs[fi]
         // skip generic templates (their instances come from call sites) and extern
         // fns (body == 0 is a sentinel; walking block 0 would scan an unrelated body).
-        if f.typeParams.count > 0 || f.isExtern {
-        } else {
+        if !(f.typeParams.count > 0 || f.isExtern) {
             val noParams: Array[Bind] = []
             val noArgs: Array[U64] = []
             c.locals = []

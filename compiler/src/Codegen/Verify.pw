@@ -24,13 +24,11 @@ fn verifyProgram(c: inout Comp) {
         // validated separately (test suite + self-compile); walking it here falsely
         // rejected a no-import program because a prelude body's operator witness
         // (`Add[U64]` in SipHasher) lives in Core, loaded only on import.
-        if f.isExtern || methodInEntryModule(c: inout c, f: f) {
-        } else {
+        if !(f.isExtern || methodInEntryModule(c: inout c, f: f)) {
             fi += 1
             continue
         }
-        if f.isExtern {
-        } else {
+        if !(f.isExtern) {
             if f.typeParams.count > 0U64 {
                 // a generic template: its concrete instances are checked during the
                 // C emitter's instance emission (with the substitution env); this
@@ -73,8 +71,7 @@ fn checkDeclShapes(c: inout Comp) {
     mut val si: U64 = 0
     while si < c.structs.count {
         val sd: StructDef = c.structs[si]
-        if sd.isExtern {
-        } else {
+        if !(sd.isExtern) {
             if moduleOf(c: inout c, offset: sd.nameStart) == 0U64 {
                 checkDupFields(c: inout c, fs: sd.fields, ctx: "struct")
             }
@@ -118,8 +115,7 @@ fn checkLangItemRedef(c: inout Comp) {
         val sd: StructDef = c.structs[si]
         // extern structs ARE the canonical lang-item declarations (String/Bool/numeric
         // intrinsics in Core, defOffset 0) — skip them; only a non-extern user redef hits.
-        if sd.isExtern {
-        } else {
+        if !(sd.isExtern) {
             if offsetIsLoaded(c: inout c, offset: sd.defOffset) {
                 if moduleOf(c: inout c, offset: sd.defOffset) == 0U64 {
                     if isLangItemTypeName(c: inout c, start: sd.nameStart, len: sd.nameLen) {
@@ -150,8 +146,7 @@ fn checkDupTypeNames(c: inout Comp) {
     mut val si: U64 = 0
     while si < c.structs.count {
         val sd: StructDef = c.structs[si]
-        if sd.isExtern {
-        } else {
+        if !(sd.isExtern) {
             if moduleOf(c: inout c, offset: sd.nameStart) == 0U64 {
                 names.append(value: intern(c: inout c, start: sd.nameStart, len: sd.nameLen))
                 offs.append(value: sd.nameStart)
@@ -214,8 +209,7 @@ fn isExactDupFn(c: inout Comp, a: Func, b: Func) -> Bool {
         if pa.noLabel != pb.noLabel {
             return false
         }
-        if pa.noLabel {
-        } else {
+        if !(pa.noLabel) {
             if pa.nameId != pb.nameId {
                 return false
             }
@@ -271,17 +265,14 @@ fn checkDupParamLabels(c: inout Comp) {
     mut val fi: U64 = 0
     while fi < c.funcs.count {
         val f: Func = c.funcs[fi]
-        if f.isExtern || f.isProvided {
-        } else {
+        if !(f.isExtern || f.isProvided) {
             if moduleOf(c: inout c, offset: f.nameStart) == 0U64 {
                 mut val i: U64 = 0
                 while i < f.params.count {
-                    if f.params[i].noLabel {
-                    } else {
+                    if !(f.params[i].noLabel) {
                         mut val j: U64 = i + 1U64
                         while j < f.params.count {
-                            if f.params[j].noLabel {
-                            } else {
+                            if !(f.params[j].noLabel) {
                                 if f.params[i].nameId == f.params[j].nameId {
                                     compileErrorAt(line: lineOf(c: inout c, offset: f.params[j].nameStart), msg: "duplicate parameter label (each labelled parameter must have a distinct name)")
                                 }
@@ -344,15 +335,13 @@ fn checkGenericArity(c: inout Comp, ref: U64, offset: U64) {
     if t.args.count > 0U64 {
         val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
         if si < c.structs.count {
-            if t.args.count == c.structs[si].typeParams.count {
-            } else {
+            if t.args.count != c.structs[si].typeParams.count {
                 compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "wrong number of type arguments for this generic type (spec/06)")
             }
         } else {
             val ei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
             if ei < c.enums.count {
-                if t.args.count == c.enums[ei].typeParams.count {
-                } else {
+                if t.args.count != c.enums[ei].typeParams.count {
                     compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "wrong number of type arguments for this generic type (spec/06)")
                 }
             }
@@ -460,8 +449,7 @@ fn verifyUnmarkMoved(c: inout Comp, idx: U64) {
     mut val kept: Array[U64] = []
     mut val i: U64 = 0
     while i < c.verifyMovedIdx.count {
-        if c.verifyMovedIdx[i] == idx {
-        } else {
+        if c.verifyMovedIdx[i] != idx {
             kept.append(c.verifyMovedIdx[i])
         }
         i += 1
@@ -628,8 +616,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                                         if it.nameLen > 0U64 {
                                             if isPrimType(c: inout c, start: de.nameStart, len: de.nameLen) {
                                                 if isPrimType(c: inout c, start: it.nameStart, len: it.nameLen) {
-                                                    if spansEqual(c: inout c, aStart: de.nameStart, aLen: de.nameLen, bStart: it.nameStart, bLen: it.nameLen) {
-                                                    } else {
+                                                    if !(spansEqual(c: inout c, aStart: de.nameStart, aLen: de.nameLen, bStart: it.nameStart, bLen: it.nameLen)) {
                                                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: init)), msg: "array element type does not match the declared element type (Plew has no implicit conversion — spec/12)")
                                                     }
                                                 }
@@ -660,8 +647,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                 // `return 5I64` from it is a type error (the value is silently dropped),
                 // unless the value is itself the unit `()` (a bare-record construction).
                 if c.curRetVoid {
-                    if exprIsUnit(c: inout c, id: value) {
-                    } else {
+                    if !(exprIsUnit(c: inout c, id: value)) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "a function with no return type cannot return a value (spec/04)")
                     }
                 }
@@ -688,8 +674,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                 if rangeEquals(bytes: c.bytes, start: c.curRetStart, len: c.curRetLen, kw: "()") {
                     retIsUnit = true
                 }
-                if retIsUnit {
-                } else {
+                if !(retIsUnit) {
                     compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "a bare `return` cannot appear in a function that returns a value — return a value (spec/04)")
                 }
             }
@@ -774,8 +759,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                 if et.kind == 3 {
                     if isStruct {
                         // the destructure pattern type must name the element struct.
-                        if intern(c: inout c, start: patStart, len: patLen) == intern(c: inout c, start: et.nameStart, len: et.nameLen) {
-                        } else {
+                        if intern(c: inout c, start: patStart, len: patLen) != intern(c: inout c, start: et.nameStart, len: et.nameLen) {
                             compileErrorAt(line: lineOf(c: inout c, offset: patStart), msg: "for-loop destructure pattern type does not match the element type")
                         }
                         mut val bi: U64 = 0
@@ -800,8 +784,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
         Stmt.Match(val scrut, val arms) => {
             verifyExpr(c: inout c, id: scrut)
             checkMatchArmsEnum(c: inout c, scrut: scrut, arms: arms)
-            if matchExhaustive(c: inout c, arms: arms) {
-            } else {
+            if !(matchExhaustive(c: inout c, arms: arms)) {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
             }
             mut val ai: U64 = 0
@@ -849,8 +832,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
 fn verifyAssign(c: inout Comp, op: I64, target: U64, value: U64) {
     match c.exprs[target] {
         Expr.Index(val base, val index) => {
-            if placeIsMutable(c: inout c, id: base) {
-            } else {
+            if !(placeIsMutable(c: inout c, id: base)) {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "cannot assign to an element of an immutable binding; declare it with `mut val`")
             }
             verifyExpr(c: inout c, id: base)
@@ -859,8 +841,7 @@ fn verifyAssign(c: inout Comp, op: I64, target: U64, value: U64) {
         }
         Expr.Field(base: val fbase, val nameStart, val nameLen) => {
             // the whole place must be mutable (binding + field both `mut val`).
-            if placeIsMutable(c: inout c, id: target) {
-            } else {
+            if !(placeIsMutable(c: inout c, id: target)) {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "cannot assign to an immutable place; the binding and field must be declared `mut val`")
             }
             // field-write visibility on the base's owner type.
@@ -871,8 +852,7 @@ fn verifyAssign(c: inout Comp, op: I64, target: U64, value: U64) {
             verifyExpr(c: inout c, id: fbase)
         }
         Expr.Ident(val start, val len) => {
-            if placeIsMutable(c: inout c, id: target) {
-            } else {
+            if !(placeIsMutable(c: inout c, id: target)) {
                 compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "cannot assign to an immutable binding; declare it with `mut val`")
             }
         }
@@ -1001,8 +981,7 @@ fn checkMethodArgCategories(c: inout Comp, recv: U64, nameStart: U64, nameLen: U
                     pj += 1
                 }
             }
-            if found {
-            } else {
+            if !(found) {
                 pIdx = cf.params.count
             }
         }
@@ -1061,8 +1040,7 @@ fn checkCallArgCategories(c: inout Comp, nameStart: U64, nameLen: U64, args: Arr
                     pj += 1
                 }
             }
-            if found {
-            } else {
+            if !(found) {
                 pIdx = cf.params.count
             }
         }
@@ -1114,8 +1092,7 @@ fn checkMatchArmsEnum(c: inout Comp, scrut: U64, arms: Array[MatchArm]) {
     mut val ai: U64 = 0
     while ai < arms.count {
         val a: MatchArm = arms[ai]
-        if a.isWildcard || a.isStruct || a.enumLen == 0U64 {
-        } else {
+        if !(a.isWildcard || a.isStruct || a.enumLen == 0U64) {
             val aId: U64 = knownNamedTypeId(c: inout c, start: a.enumStart, len: a.enumLen)
             if aId != 0U64 && aId != sId {
                 compileErrorAt(line: lineOf(c: inout c, offset: a.enumStart), msg: "this match arm pattern is a variant of a different enum than the value being matched")
@@ -1124,8 +1101,7 @@ fn checkMatchArmsEnum(c: inout Comp, scrut: U64, arms: Array[MatchArm]) {
                 // variant of Optional) — else the arm is unreachable and the match's
                 // exhaustiveness count is wrong.
                 if a.variantLen > 0U64 {
-                    if variantExists(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen) {
-                    } else {
+                    if !(variantExists(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen)) {
                         compileErrorAt(line: lineOf(c: inout c, offset: a.variantStart), msg: "unknown variant: this enum has no such variant")
                     }
                 }
@@ -1186,10 +1162,8 @@ fn verifyExpr(c: inout Comp, id: U64) {
                 if rangeEquals(bytes: c.bytes, start: retStart, len: retLen, kw: "()") {
                     retIsUnit = true
                 }
-                if retIsUnit {
-                } else {
-                    if blockDiverges(c: inout c, blkId: body) {
-                    } else {
+                if !(retIsUnit) {
+                    if !(blockDiverges(c: inout c, blkId: body)) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "this closure has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (spec/04)")
                     }
                 }
@@ -1229,8 +1203,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             // covered by the backend missing-field check plus field defaults.)
             if isEnum {
                 mut val cei: U64 = enumIdxByName(c: inout c, start: typeStart, len: typeLen)
-                if cei < c.enums.count {
-                } else {
+                if cei >= c.enums.count {
                     cei = genericEnumIndex(c: inout c, nameStart: typeStart, nameLen: typeLen)
                 }
                 if cei < c.enums.count {
@@ -1245,8 +1218,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
                         }
                         vk += 1
                     }
-                    if vfound {
-                    } else {
+                    if !(vfound) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "unknown enum variant in construction (this enum has no such variant)")
                     }
                     val cvi: U64 = variantIndex(c: inout c, enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
@@ -1259,12 +1231,10 @@ fn verifyExpr(c: inout Comp, id: U64) {
                         val enumIsGen: Bool = c.enums[cei].typeParams.count > 0U64
                         mut val cfi: U64 = 0
                         while cfi < cfs.count {
-                            if makeFieldsCoverField(c: inout c, fields: fields, fieldStart: cfs[cfi].nameStart, fieldLen: cfs[cfi].nameLen) {
-                            } else {
+                            if !(makeFieldsCoverField(c: inout c, fields: fields, fieldStart: cfs[cfi].nameStart, fieldLen: cfs[cfi].nameLen)) {
                                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "variant construction is missing a payload field; every field of the variant must be set")
                             }
-                            if enumIsGen {
-                            } else {
+                            if !(enumIsGen) {
                                 mut val mfk: U64 = 0
                                 while mfk < fields.count {
                                     if spansEqual(c: inout c, aStart: fields[mfk].nameStart, aLen: fields[mfk].nameLen, bStart: cfs[cfi].nameStart, bLen: cfs[cfi].nameLen) {
@@ -1297,8 +1267,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
                         }
                     }
                     if tpCount <= c.structs.count + c.enums.count {
-                        if tr.args.count == tpCount {
-                        } else {
+                        if tr.args.count != tpCount {
                             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "wrong number of type arguments for this generic type")
                         }
                     }
@@ -1309,8 +1278,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             // — reject (same reliable-value discipline as the let-annotation check).
             // Generic structs / enums (field types need env grounding) are deferred.
             mut val nonGenSidx: U64 = c.structs.count
-            if isEnum {
-            } else {
+            if !(isEnum) {
                 if ty == 0U64 || c.types[ty].args.count == 0U64 {
                     val sidxC: U64 = structIndexByName(c: inout c, start: typeStart, len: typeLen)
                     if sidxC < c.structs.count {
@@ -1389,16 +1357,14 @@ fn verifyExpr(c: inout Comp, id: U64) {
             // non-Result function this used to crash the backend (it indexed the
             // return type's variant table, which isn't a Result). Reject cleanly.
             mut val retIsResult: Bool = false
-            if c.curRetVoid {
-            } else {
+            if !(c.curRetVoid) {
                 if c.curRetLen > 0U64 {
                     if rangeEquals(bytes: c.bytes, start: c.curRetStart, len: c.curRetLen, kw: "Result") {
                         retIsResult = true
                     }
                 }
             }
-            if retIsResult {
-            } else {
+            if !(retIsResult) {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "`try` is only valid in a function that returns a Result (spec/13)")
             }
             // `try` works only on a Result (spec/13). The operand being some OTHER
@@ -1408,13 +1374,11 @@ fn verifyExpr(c: inout Comp, id: U64) {
             val tti: TypeInfo = typeOf(c: inout c, id: expr)
             if tti.nameLen > 0U64 {
                 mut val isEnum: Bool = enumIdxByName(c: inout c, start: tti.nameStart, len: tti.nameLen) < c.enums.count
-                if isEnum {
-                } else {
+                if !(isEnum) {
                     isEnum = genericEnumIndex(c: inout c, nameStart: tti.nameStart, nameLen: tti.nameLen) < c.enums.count
                 }
                 if isEnum {
-                    if rangeEquals(bytes: c.bytes, start: tti.nameStart, len: tti.nameLen, kw: "Result") {
-                    } else {
+                    if !(rangeEquals(bytes: c.bytes, start: tti.nameStart, len: tti.nameLen, kw: "Result")) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "`try` works only on a Result; for an Optional use `unwrapOr` / `?.` / `match` (spec/13)")
                     }
                 }
@@ -1432,12 +1396,10 @@ fn verifyExpr(c: inout Comp, id: U64) {
                                     val fnR: TypeRef = c.types[c.curRetTy]
                                     if opR.args.count >= 2U64 {
                                         if fnR.args.count >= 2U64 {
-                                            if typesCompatible(c: inout c, expected: fnR.args[1], inferred: opR.args[1]) {
-                                            } else {
+                                            if !(typesCompatible(c: inout c, expected: fnR.args[1], inferred: opR.args[1])) {
                                                 // E != E' is allowed when E owns a `from` factory:
                                                 // `try` then converts E' -> E via E.from (spec/13).
-                                                if typeRefHasFromFactory(c: inout c, errRef: fnR.args[1]) {
-                                                } else {
+                                                if !(typeRefHasFromFactory(c: inout c, errRef: fnR.args[1])) {
                                                     compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "`try` error type does not match the function's Result error type, and the function's error type has no `from` factory to convert it (spec/13)")
                                                 }
                                             }
@@ -1453,8 +1415,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
         Expr.MatchExpr(val scrut, val arms) => {
             verifyExpr(c: inout c, id: scrut)
             checkMatchArmsEnum(c: inout c, scrut: scrut, arms: arms)
-            if matchExhaustive(c: inout c, arms: arms) {
-            } else {
+            if !(matchExhaustive(c: inout c, arms: arms)) {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
             }
             mut val ai: U64 = 0
@@ -1485,8 +1446,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             // restricted to a bare local (field/element partial moves aren't tracked
             // yet) that is not `self` and not declared outside the enclosing branch
             // (a conditional move would skip the source's deinit on other paths).
-            if isBorrow {
-            } else {
+            if !(isBorrow) {
                 match c.exprs[operand] {
                     Expr.Ident(val start, val len) => {
                         if isSelfRef(c: inout c, start: start, len: len) {
@@ -1505,8 +1465,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             // through the Ident arm below and reports the use-after-move), THEN record
             // the move so later uses are caught. spec/03.
             verifyExpr(c: inout c, id: operand)
-            if isBorrow {
-            } else {
+            if !(isBorrow) {
                 match c.exprs[operand] {
                     Expr.Ident(val start, val len) => {
                         verifyMarkMoved(c: inout c, idx: localIndexByName(c: inout c, start: start, len: len))
@@ -1570,16 +1529,14 @@ fn bindsCoverField(c: inout Comp, binds: Array[Bind], fieldStart: U64, fieldLen:
 fn checkDestructureComplete(c: inout Comp, a: MatchArm) {
     if a.isStruct {
         mut val si: U64 = structIndexByName(c: inout c, start: a.enumStart, len: a.enumLen)
-        if si < c.structs.count {
-        } else {
+        if si >= c.structs.count {
             si = genericStructIndex(c: inout c, nameStart: a.enumStart, nameLen: a.enumLen)
         }
         if si < c.structs.count {
             val sd: StructDef = c.structs[si]
             mut val fi: U64 = 0
             while fi < sd.fields.count {
-                if bindsCoverField(c: inout c, binds: a.binds, fieldStart: sd.fields[fi].nameStart, fieldLen: sd.fields[fi].nameLen) {
-                } else {
+                if !(bindsCoverField(c: inout c, binds: a.binds, fieldStart: sd.fields[fi].nameStart, fieldLen: sd.fields[fi].nameLen)) {
                     compileErrorAt(line: lineOf(c: inout c, offset: a.enumStart), msg: "struct destructure must bind or discard every field (a field is missing — bind it or use `field: _`; `..` is not allowed)")
                 }
                 fi += 1
@@ -1600,8 +1557,7 @@ fn checkDestructureComplete(c: inout Comp, a: MatchArm) {
             val fs: Array[FieldDef] = c.enums[ei].variants[vi].fields
             mut val fi: U64 = 0
             while fi < fs.count {
-                if bindsCoverField(c: inout c, binds: a.binds, fieldStart: fs[fi].nameStart, fieldLen: fs[fi].nameLen) {
-                } else {
+                if !(bindsCoverField(c: inout c, binds: a.binds, fieldStart: fs[fi].nameStart, fieldLen: fs[fi].nameLen)) {
                     compileErrorAt(line: lineOf(c: inout c, offset: a.binds[0].offset), msg: "variant payload destructure must bind or discard every field (a field is missing — bind it or use `field: _`); or match only the tag with a bare `E.V =>`")
                 }
                 fi += 1
@@ -1622,8 +1578,7 @@ fn verifyAddArmBinds(c: inout Comp, a: MatchArm, scrut: U64) {
         // mismatched / non-struct scrutinee (`match anI64 { P { … } }`, or an unknown
         // `P`) used to crash the field lookup (out-of-bounds) — reject cleanly.
         if st.nameLen > 0U64 {
-            if spansEqual(c: inout c, aStart: st.nameStart, aLen: st.nameLen, bStart: a.enumStart, bLen: a.enumLen) {
-            } else {
+            if !(spansEqual(c: inout c, aStart: st.nameStart, aLen: st.nameLen, bStart: a.enumStart, bLen: a.enumLen)) {
                 compileErrorAt(line: lineOf(c: inout c, offset: armDiagOffset(a: a)), msg: "struct destructure pattern type does not match the scrutinee type")
             }
         }
@@ -1755,12 +1710,10 @@ fn verifyMethodVis(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
             // — not an rvalue temporary (`<S…/>.bump()` / `mk().bump()` would mutate a
             // value that is immediately discarded — spec/03).
             if c.funcs[mi].selfInout {
-                if exprIsPlace(c: inout c, id: recv) {
-                } else {
+                if !(exprIsPlace(c: inout c, id: recv)) {
                     compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call an `inout fn` method on a temporary value; the receiver must be a place (a variable or field) declared `mut val` (spec/03)")
                 }
-                if placeIsMutable(c: inout c, id: recv) {
-                } else {
+                if !(placeIsMutable(c: inout c, id: recv)) {
                     compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
                 }
                 // overlapping `inout` (spec/03 case ①): an `inout fn` self IS an inout
@@ -1781,12 +1734,10 @@ fn verifyMethodVis(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
     // a mutating built-in array method (`append`) on an immutable / non-place array.
     if rt.kind == 3 {
         if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "append") {
-            if exprIsPlace(c: inout c, id: recv) {
-            } else {
+            if !(exprIsPlace(c: inout c, id: recv)) {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot `append` to a temporary array; the receiver must be a place declared `mut val` (spec/03)")
             }
-            if placeIsMutable(c: inout c, id: recv) {
-            } else {
+            if !(placeIsMutable(c: inout c, id: recv)) {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
             }
         }
@@ -1864,8 +1815,7 @@ fn verifyEnumEqPayload(c: inout Comp, lhs: U64, rhs: U64) {
         enStart = rt.nameStart
         enLen = rt.nameLen
     }
-    if isAllNullary(c: inout c, start: enStart, len: enLen) {
-    } else {
+    if !(isAllNullary(c: inout c, start: enStart, len: enLen)) {
         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "enum == needs structural Eq for payload variants (only all-nullary enums compare by tag)")
     }
 }
@@ -1913,16 +1863,14 @@ fn verifyCastLossless(c: inout Comp, operand: U64, tyStart: U64, tyLen: U64) {
         }
         match c.exprs[operand] {
             Expr.Int(val value, val offset, isBool: _, tyStart: _, tyLen: _, val isNeg) => {
-                if litFitsType(c: inout c, value: value, neg: isNeg, dstStart: tyStart, dstLen: tyLen) {
-                } else {
+                if !(litFitsType(c: inout c, value: value, neg: isNeg, dstStart: tyStart, dstLen: tyLen)) {
                     compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal is out of range for the target type of `as`")
                 }
             }
             _ => {
                 val st: TypeInfo = typeOf(c: inout c, id: operand)
                 if isIntType(c: inout c, start: st.nameStart, len: st.nameLen) {
-                    if losslessInt(c: inout c, srcStart: st.nameStart, srcLen: st.nameLen, dstStart: tyStart, dstLen: tyLen) {
-                    } else {
+                    if !(losslessInt(c: inout c, srcStart: st.nameStart, srcLen: st.nameLen, dstStart: tyStart, dstLen: tyLen)) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "`as` would lose information (narrowing or signedness change); use a fallible TryFrom conversion")
                     }
                 }

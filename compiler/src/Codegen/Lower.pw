@@ -247,8 +247,7 @@ fn callArgType(c: inout Comp, fnName: String, argLabel: String) -> U64 {
     while fi < c.funcs.count {
         val f: Func = c.funcs[fi]
         if f.nameId == fnId {
-            if f.hasRecv {
-            } else {
+            if !(f.hasRecv) {
                 if f.typeParams.count == 0U64 {
                     matchCount += 1
                     mut val pi: U64 = 0
@@ -504,8 +503,7 @@ fn lowerDictLit(c: inout Comp, keys: Array[ExprAst], vals: Array[ExprAst], ctxRe
             }
         }
     }
-    if ok {
-    } else {
+    if !(ok) {
         compileErrorAt(line: lineOf(c: inout c, offset: span.start), msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)")
         return c.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 isNeg=false />)
     }
@@ -575,8 +573,7 @@ fn lowerExprWithCtx(c: inout Comp, e: ExprAst, ctxRef: U64) -> U64 {
             if ct.args.count > 0 {
                 match e {
                     ExprAst.Make(val typeName, val typeArgs, val variant, val isEnum, val fields, val span) => {
-                        if isEnum {
-                        } else {
+                        if !(isEnum) {
                             if typeArgs.count == 0 {
                                 val tn: Bind = internBytes(c: inout c, s: typeName)
                                 if intern(c: inout c, start: tn.nameStart, len: tn.nameLen) == ct.nameId {
@@ -639,8 +636,7 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
             if op == opSub() {
                 match operand {
                     ExprAst.IntLit(val value, val isBool, val tySuffix, span: val litSpan) => {
-                        if isBool {
-                        } else {
+                        if !(isBool) {
                             mut val sStart: U64 = 0
                             mut val sLen: U64 = 0
                             if tySuffix.bytes.count > 0 {
@@ -655,8 +651,7 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
                     _ => {}
                 }
             }
-            if folded {
-            } else {
+            if !(folded) {
                 val o: U64 = lowerExpr(c: inout c, e: operand)
                 result = c.pushExpr(e: <Expr.Unary op=op operand=o />)
             }
@@ -947,10 +942,8 @@ fn matchHasEnumOrStruct(arms: Array[MatchArmAst]) -> Bool {
     mut val i: U64 = 0
     while i < arms.count {
         val p: PatternAst = arms[i].pattern
-        if p.isWildcard {
-        } else {
-            if p.isLiteral {
-            } else {
+        if !(p.isWildcard) {
+            if !(p.isLiteral) {
                 return true
             }
         }
@@ -1154,15 +1147,13 @@ fn lowerScalarMatchExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst],
         scrutIsIdent = false
     }
     mut val tmp: Bind = internBytes(c: inout c, s: "__mtmp")
-    if scrutIsIdent {
-    } else {
+    if !(scrutIsIdent) {
         lhsStart = tmp.nameStart
         lhsLen = tmp.nameLen
     }
     val elseIdx: U64 = scalarMatchElseIdx(c: inout c, arms: arms)
     val haveElse: Bool = elseIdx < arms.count
-    if haveElse {
-    } else {
+    if !(haveElse) {
         compileErrorAt(line: lineOf(c: inout c, offset: span.start), msg: "a value `match` must end with a wildcard `_` arm (literal patterns are not exhaustive — spec/11)")
     }
     // a value-giving arm's give AST, re-lowered for the dead `else` of the non-Ident
@@ -1170,8 +1161,7 @@ fn lowerScalarMatchExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst],
     mut val valueGive: ExprAst = emptyExpr()
     mut val mi: U64 = 0
     while mi < arms.count {
-        if armBlockDiverges(b: arms[mi].body) {
-        } else {
+        if !(armBlockDiverges(b: arms[mi].body)) {
             valueGive = armGiveExprAst(arm: arms[mi])
         }
         mi += 1
@@ -1203,8 +1193,7 @@ fn lowerScalarMatchExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst],
             }
         }
     }
-    if haveHead {
-    } else {
+    if !(haveHead) {
         headExpr = lowerExpr(c: inout c, e: valueGive)
     }
     if scrutIsIdent {
@@ -1879,8 +1868,7 @@ fn lowerTrait(c: inout Comp, t: TraitAst) {
 // are appended before structs; within each array order is source order, which is
 // all that matters (the arrays are independent). Reports a non-intrinsic ABI.
 fn lowerExtern(c: inout Comp, e: ExternAst) {
-    if e.abiOk {
-    } else {
+    if !(e.abiOk) {
         compileErrorAt(line: lineOf(c: inout c, offset: e.abiSpan.start), msg: "unknown ABI — only `extern(plewIntrinsic)` (intrinsic floor) and `extern(c)` (foreign C) are supported")
     }
     mut val fi: U64 = 0
@@ -1894,8 +1882,7 @@ fn lowerExtern(c: inout Comp, e: ExternAst) {
             val sig: SigAst = e.fns[fi]
             mut val pj: U64 = 0
             while pj < sig.params.count {
-                if sig.params[pj].noLabel {
-                } else {
+                if !(sig.params[pj].noLabel) {
                     compileErrorAt(line: lineOf(c: inout c, offset: sig.params[pj].span.start), msg: "extern(c) function parameters take no label — write `<name>~:` (C functions have no argument labels; put labels on a Plew wrapper)")
                 }
                 pj += 1
