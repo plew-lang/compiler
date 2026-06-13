@@ -1,6 +1,6 @@
 # コンパイラ アーキテクチャ
 
-Plew コンパイラの実装方針。**🎉 セルフホスト達成済み**＝正典コンパイラは Plew 製のパッケージ `compiler/src/`（root `_.pw` が `part` で全パート〔Loader/Ast/`Parser/Decl`/`Codegen/`〕を綴じ込む 1 モジュール・part はサブディレクトリ可・自分を不動点までコンパイル）。**構文解析（レクサ・式/文/宣言/トップレベルパーサ）は共有 `@Std/Syntax` に統合済**（コンパイラもマクロも同一パーサ＝真の 1 AST＝A フロントエンド統合・[metaprogramming-architecture.md](metaprogramming-architecture.md)）＝本体は共有経路で parse→`Codegen/Lower.pw` で arena へ lower→C→clang。本書はパイプライン設計と、**そこへ至るブートストラップの経緯**（使い捨て Rust stage0→退役）を残す。現在地・次の一歩は [worklog.md](worklog.md)。
+Plew コンパイラの実装方針。**🎉 セルフホスト達成済み**＝正典コンパイラは Plew 製のパッケージ `compiler/src/`（root `_.pw` が `part` で全パート〔Loader/Ast/`Parser/Decl`/`Codegen/`〕を綴じ込む 1 モジュール・part はサブディレクトリ可・自分を不動点までコンパイル）。**構文解析（レクサ・式/文/宣言/トップレベルパーサ）は共有 `@Std/Syntax` に統合済**（コンパイラもマクロも同一パーサ＝真の 1 AST＝A フロントエンド統合・[metaprogramming-architecture.md](metaprogramming-architecture.md)）＝本体は共有経路で parse→`Codegen/Lower.pw` で arena へ lower→`Backend/Llvm.pw` で LLVM IR→clang。本書はパイプライン設計と、**そこへ至るブートストラップの経緯**（使い捨て Rust stage0→退役）を残す。現在地・次の一歩は [worklog.md](worklog.md)。
 
 ## ゴールと第一目標
 
@@ -87,7 +87,7 @@ AST（arena 確保・index 参照）
 
 ## ビルド／開発ワークフロー
 
-- **ビルド**：`./bootstrap.sh`（C 種→clang→自己コンパイル→不動点検証・Rust 不要）。**テスト**：`./test.sh`（`.pw` ゴールデン＋reject＋不動点）。**コンパイラ実行**：`compiler/plewc foo.pw | clang -x c -`。手順詳細は [worklog.md](worklog.md)（ADD→reseed→USE）。
+- **ビルド**：`./bootstrap.sh`（LLVM IR 種→clang＋libLLVM→自己コンパイル→IR 不動点検証・Rust 不要）。**テスト**：`./test.sh`（`.pw` ゴールデン＋reject＋不動点）。**コンパイラ実行**：`compiler/plewc foo.pw > foo.ll && clang foo.ll <runtime> $(llvm-config --ldflags) -o foo`（または統一 CLI `plew run foo.pw`）。手順詳細は [worklog.md](worklog.md)（ADD→reseed→USE）。
 - **テスト先行**：機能は `tests/run`（ゴールデン）／`tests/reject`（受理の健全性）で守る。
 - `grammer/Plew.g4` は破棄済み（手書きパーサ）。正典は `SPEC.md`／`spec/*.md`。
 

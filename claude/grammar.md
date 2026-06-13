@@ -66,4 +66,4 @@
 
 ## サンプル（`examples/`）について
 
-現行構文の有効なサンプルは `examples/hello.pw`（正典コンパイラで C 化→clang→実行できる最小プログラム）。旧 `examples/main.pw` は `sync val`/`b.lock()` を使う**現行モデルでは無効**な旧設計（Plew は `Mutex`/`sync val` を持たず spawn は値の送信のみ）だったため削除済み。新しいサンプルは現行モデル（spec）に従うこと。
+現行構文の有効なサンプルは `examples/hello.pw`（正典コンパイラで LLVM IR 化→clang→実行できる最小プログラム・`plew run examples/hello.pw`）。旧 `examples/main.pw` は `sync val`/`b.lock()` を使う**現行モデルでは無効**な旧設計（Plew は `Mutex`/`sync val` を持たず spawn は値の送信のみ）だったため削除済み。新しいサンプルは現行モデル（spec）に従うこと。

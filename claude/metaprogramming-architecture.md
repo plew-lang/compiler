@@ -69,7 +69,7 @@ spec/16 は **入力＝TokenStream（span 付き）＋ヘルパで TokenStream�
 
 ## 実装の段取り（パッケージ管理より前に動かす）
 
-- **M0＝配管を端から端まで（自明マクロ）＝✅実装済**（tag `metaprogramming-m0`）。実装は当初案（plewc が別ハーネス `.pw` を合成→再 import）より一段クリーンに倒した：**`plewc --gen <file>` は通常コンパイルの変種**。対象ファイルの全モジュール木（part/import 込み）を普通にロード・パースし（マクロ struct と instantiate 済み `deriveFromSource` がそのまま scope に入る）、**ユーザー自身の `main` を抑制し、代わりに各 `@[Name]` について `write(s: <Name/>.deriveFromSource(...))` する harness `main` を合成**して C を出す。シェルランナー `plew-gen.sh` が `plewc --gen <file> | clang | run > <Foo>.gen.pw`（bootstrap/test と同じ orchestration・**新 intrinsic 不要**）。別ハーネスファイルの import 解決が要らず、同一モジュール derive も import 越し derive もローダが木を綴じるので一様に動く。実装の要点・罠は [worklog.md](worklog.md) 末尾「再利用資産・罠」の gen 項。
+- **M0＝配管を端から端まで（自明マクロ）＝✅実装済**（tag `metaprogramming-m0`）。実装は当初案（plewc が別ハーネス `.pw` を合成→再 import）より一段クリーンに倒した：**`plewc --gen <file>` は通常コンパイルの変種**。対象ファイルの全モジュール木（part/import 込み）を普通にロード・パースし（マクロ struct と instantiate 済み `deriveFromSource` がそのまま scope に入る）、**ユーザー自身の `main` を抑制し、代わりに各 `@[Name]` について `write(s: <Name/>.deriveFromSource(...))` する harness `main` を合成**して LLVM IR を出す。シェルランナー `plew-gen.sh` が `plewc --gen <file>`→clang→run > `<Foo>.gen.pw`（bootstrap/test と同じ orchestration・**新 intrinsic 不要**）。別ハーネスファイルの import 解決が要らず、同一モジュール derive も import 越し derive もローダが木を綴じるので一様に動く。実装の要点・罠は [worklog.md](worklog.md) 末尾「再利用資産・罠」の gen 項。
   - source の渡し方：M0 は `source: ""` 固定（`parseItem` stub）。**M1 で実ソースを渡す＝✅**：`source` ＝対象項の実テキスト（エスケープして string literal 埋め込み）、`start` ＝原本オフセット（span の base）、`end` ＝informational。`parseItem` は `source` を丸ごとレックスし base=start で原本座標 span を返す。
   - `@Std/Io` を gen モードで強制ロード（harness の `write` 用）。auto-part 抑制・user `main` skip は gen モードフラグ（`Comp.genMode`）で分岐。
 - **M1＝構文層を共有コアへ切り出し＝✅実装済**（tag `metaprogramming-m1`）。**マクロが対象宣言の実構造を読んで生成できる**：`@Std/Syntax` に共有レクサ（`Syntax/Lexer.pw`・コンパイラ本体も import＝レクサ 1 本）＋クリーン値ツリー AST（`Syntax/Ast.pw`＝Span/TypeAst/FieldAst/VariantAst/ParamAst/DeclAst〔タグ付き struct・DeclKind〕＋`Syntax/Trees.pw`＝ExprAst/StmtAst/PatternAst/BlockAst）＋宣言パーサ（`Syntax/Parser.pw`＝`parseItem`・struct/enum/fn〔本体込み〕＋型式）＋本体パーサ（`Syntax/ParseBody.pw`＝式・文・パターン）＋出力ビルダ（`Syntax/Build.pw`＝`Src`）。`parseItem` 本物化＝ハーネスが対象項の実ソースをエスケープ埋め込み（`internSourceLiteral`）＋原本オフセット（`DeriveReq.declStart/declEnd`）を base に渡す。**ディレクティブ引数 `@[Name(label: expr)]`** も実装（`DeriveReqAst`・synthGenMain が `<Name label=expr/>` 構築）。gen テスト＝fieldnames/directiveargs/enumvariants/deriveshow（最後は `pub impl T as Show` 生成＝実用 derive）。
@@ -87,7 +87,7 @@ spec/16 は **入力＝TokenStream（span 付き）＋ヘルパで TokenStream�
 - `plew gen` の 1 ファイル分の処理：
   1. ソースをロード（`part`/`import` 解決）し、`@[Name(args)]` 付き対象項を集める。**gen 中は `.gen.pw` の auto-part 取り込みを抑制**（これから作るので）。
   2. 各 `(対象項, Name(args))` について、`Name { args }` を構築し**提供メソッド `.deriveFromSource(source, start, end)`** を呼ぶ `main` を合成（＝String→AST 変換＋ユーザー `derive` 委譲は `@Std/Syntax` 内で起きる）。`source` の渡し方（stdin/原本ファイル/リテラル）は最も楽な形で。プロセス境界は**テキスト**（ランナーは AST/TokenStream 型に触れない＝版非依存）。
-  3. それをコンパイル（.pw→C→bin）し、サブプロセス実行。複数 derive は出力を連結。
+  3. それをコンパイル（.pw→LLVM IR→bin）し、サブプロセス実行。複数 derive は出力を連結。
   4. `<Foo>.pw` 由来の生成片を `<Foo>.gen.pw` に書き出す（既存があれば上書き＝生成物は決定的）。
 - ローダ側（ビルド時）：`<Foo>.pw` に `@[...]` を見たら `<Foo>.gen.pw` を同モジュールの part として自動ロード（無ければ「`plew gen` を走らせよ」と loud に失敗）。
 - マクロが入力を拒否する場合は AST ノードの span（**原本座標**）で**対象項の元位置**を指す（出力エラーは別＝`.gen.pw` の再コンパイルが指す）。
