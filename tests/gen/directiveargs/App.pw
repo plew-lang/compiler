@@ -1,6 +1,6 @@
 import @Std/Io with { write }
 import @Std/Syntax with { ParameterizedDerive, TopItemAst, DeclAst }
-import @Std/Core with { stringFromBytes }
+import @Std/Core with { stringFromBytesUnchecked }
 
 // A parameterized derive: `@[Tagged(prefix: "hello", times: 3)]`. The directive
 // args become fields the macro reads via self. They must be `pub` — a macro that
@@ -24,7 +24,7 @@ pub impl Tagged as ParameterizedDerive {
                 }
                 pushStr(into: inout out, s: d.name)
                 pushStr(into: inout out, s: "\"\n}\n")
-                return stringFromBytes(out)
+                return stringFromBytesUnchecked(out)
             }
             _ => { return "" }
         }

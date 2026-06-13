@@ -13,9 +13,9 @@
 // `DeclAst` etc.) and the declaration parser (`part ./Syntax/Parser`, `parseItem`)
 // turn an item's source slice into the real declaration structure.
 
-// `stringFromBytes` (build a String from a byte slice) is used by the parser to
+// `stringFromBytesUnchecked` (build a String from a byte slice) is used by the parser to
 // turn token byte-ranges into name Strings.
-import @Std/Core with { stringFromBytes }
+import @Std/Core with { stringFromBytesUnchecked }
 
 part ./Syntax/Lexer
 part ./Syntax/Ast

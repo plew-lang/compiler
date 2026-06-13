@@ -472,11 +472,14 @@ export trait Ord: Eq { assoc fn compare(lhs: Self, rhs: Self) -> Ordering }
 export trait Index[Key]    { type Output  fn index(key: Key) -> Output }
 export trait IndexSet[Key] { type Value   inout fn indexSet(key: Key, value: Value) }
 
-// Build a String from a byte array (the bytes must be valid UTF-8; decimal
-// digits always are). Runtime-provided: `plew_stringFromBytes`. Exported so
-// @Std/Syntax's parser can turn token byte-ranges into name Strings.
+// Build a String from a byte array WITHOUT validating UTF-8 — the unchecked floor (the
+// bytes must already be valid UTF-8; decimal digits and interned source spans always
+// are). The validated public constructor is `<String.convert from=bytes/>`
+// (`String as TryFrom[Array[U8]]`, below). Lowered inline to the {ptr,i64} reinterpret.
+// Exported so @Std/Syntax's parser and the compiler can turn known-valid byte ranges
+// into Strings without paying re-validation; user code should prefer the checked form.
 export extern "plew-intrinsic" {
-    fn stringFromBytes(b~: Array[U8]) -> String
+    fn stringFromBytesUnchecked(b~: Array[U8]) -> String
     // a float -> its decimal text (the backend lowers it to snprintf "%g").
     fn floatToString(value~: F64) -> String
     // Truncate a U64 to its low 8 bits as U8 (`as U8` is lossless-only and rejects
@@ -574,7 +577,7 @@ pub impl I64 as Format {
             i = i - 1
             out.append(digits[i])
         }
-        return stringFromBytes(out)
+        return stringFromBytesUnchecked(out)
     }
 }
 
@@ -596,7 +599,7 @@ pub impl U64 as Format {
             i = i - 1
             out.append(digits[i])
         }
-        return stringFromBytes(out)
+        return stringFromBytesUnchecked(out)
     }
 }
 
@@ -662,7 +665,7 @@ pub impl String as Add[String] {
             out.append(value: rb[i])
             i = i + 1U64
         }
-        return stringFromBytes(out)
+        return stringFromBytesUnchecked(out)
     }
 }
 
@@ -839,6 +842,86 @@ pub impl I8 as TryFrom[F64] {
             return <Result[I8, RangeError].Err error=<RangeError value=n /> />
         }
         return <Result[I8, RangeError].Ok value=truncI8(n: n) />
+    }
+}
+
+// The error of a failed UTF-8 validation (spec/02: a String is UTF-8-valid by
+// construction). `index` is the byte offset of the first ill-formed byte.
+export struct Utf8Error {
+    pub val index: U64
+}
+
+// Whether byte `b` is a UTF-8 continuation byte (0x80..=0xBF).
+fn utf8IsCont(b: U8) -> Bool {
+    return b >= 0x80U8 && b <= 0xBFU8
+}
+
+// The byte offset of the first ill-formed byte in `bytes` under the Unicode
+// well-formed-UTF-8 table (rejects overlong forms, surrogates U+D800..U+DFFF, and
+// code points > U+10FFFF), or `bytes.count` when the whole sequence is valid.
+fn utf8FirstInvalid(bytes: Array[U8]) -> U64 {
+    val n: U64 = bytes.count
+    mut val i: U64 = 0
+    while i < n {
+        val b0: U8 = bytes[i]
+        if b0 <= 0x7FU8 {
+            i = i + 1U64
+        } else {
+            if b0 >= 0xC2U8 && b0 <= 0xDFU8 {
+                // 2-byte sequence.
+                if i + 1U64 >= n { return i }
+                if utf8IsCont(b: bytes[i + 1U64]) { } else { return i }
+                i = i + 2U64
+            } else {
+                if b0 >= 0xE0U8 && b0 <= 0xEFU8 {
+                    // 3-byte sequence; the first continuation's range is tightened for
+                    // E0 (no overlong) and ED (no surrogates).
+                    if i + 2U64 >= n { return i }
+                    val b1: U8 = bytes[i + 1U64]
+                    mut val lo1: U8 = 0x80U8
+                    mut val hi1: U8 = 0xBFU8
+                    if b0 == 0xE0U8 { lo1 = 0xA0U8 }
+                    if b0 == 0xEDU8 { hi1 = 0x9FU8 }
+                    if b1 >= lo1 && b1 <= hi1 { } else { return i }
+                    if utf8IsCont(b: bytes[i + 2U64]) { } else { return i }
+                    i = i + 3U64
+                } else {
+                    if b0 >= 0xF0U8 && b0 <= 0xF4U8 {
+                        // 4-byte sequence; the first continuation's range is tightened for
+                        // F0 (no overlong) and F4 (cap at U+10FFFF).
+                        if i + 3U64 >= n { return i }
+                        val b1: U8 = bytes[i + 1U64]
+                        mut val lo1: U8 = 0x80U8
+                        mut val hi1: U8 = 0xBFU8
+                        if b0 == 0xF0U8 { lo1 = 0x90U8 }
+                        if b0 == 0xF4U8 { hi1 = 0x8FU8 }
+                        if b1 >= lo1 && b1 <= hi1 { } else { return i }
+                        if utf8IsCont(b: bytes[i + 2U64]) { } else { return i }
+                        if utf8IsCont(b: bytes[i + 3U64]) { } else { return i }
+                        i = i + 4U64
+                    } else {
+                        // a stray continuation byte, an overlong lead (C0/C1), or an
+                        // out-of-range lead (F5..FF).
+                        return i
+                    }
+                }
+            }
+        }
+    }
+    return n
+}
+
+// Validated `Array[U8]` -> `String` (spec/02,12): `<String.convert from=bytes/>` yields
+// `Result[String, Utf8Error]`. This is the safe public constructor; the unchecked floor
+// `stringFromBytesUnchecked` is the escape hatch for already-known-valid bytes.
+pub impl String as TryFrom[Array[U8]] {
+    type Error = Utf8Error
+    result[Utf8Error] factory convert(from: Array[U8]) {
+        val bad: U64 = utf8FirstInvalid(bytes: from)
+        if bad == from.count {
+            return <Result[String, Utf8Error].Ok value=stringFromBytesUnchecked(from) />
+        }
+        return <Result[String, Utf8Error].Err error=<Utf8Error index=bad /> />
     }
 }
 

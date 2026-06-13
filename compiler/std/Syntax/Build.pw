@@ -1,7 +1,7 @@
 // @Std/Syntax source builder (spec/16). The output-side companion to the input
 // `DeclAst`: a derive macro reads the declaration, accumulates generated Plew
 // source into a `Src`, and `finish()`es it to the `String` it returns. Saves every
-// macro from hand-rolling `Array[U8]` + `stringFromBytes`.
+// macro from hand-rolling `Array[U8]` + `stringFromBytesUnchecked`.
 
 // A growable buffer of generated source bytes.
 export struct Src {
@@ -46,7 +46,7 @@ pub impl Src {
     }
     // The accumulated source as a String.
     fn finish() -> String {
-        return stringFromBytes(self.bytes)
+        return stringFromBytesUnchecked(self.bytes)
     }
 }
 

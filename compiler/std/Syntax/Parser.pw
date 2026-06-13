@@ -81,7 +81,7 @@ pub impl P {
             out.append(self.bytes[t.start + i])
             i += 1
         }
-        return stringFromBytes(out)
+        return stringFromBytesUnchecked(out)
     }
     // Original-coordinate span of token `t`.
     fn spanOf(t: Tok) -> Span {

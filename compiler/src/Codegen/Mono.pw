@@ -765,7 +765,7 @@ fn groundRecordStruct(c: inout Comp, ref: U64) -> U64 {
     } else {
         return ref
     }
-    val nm: Bind = internBytes(c: inout c, s: stringFromBytes(b: cn))
+    val nm: Bind = internBytes(c: inout c, s: stringFromBytesUnchecked(b: cn))
     val nid: U64 = intern(c: inout c, start: nm.nameStart, len: nm.nameLen)
     mut val gi: U64 = 0
     while gi < c.structs.count {

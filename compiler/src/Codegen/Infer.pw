@@ -626,7 +626,7 @@ fn tcFieldPos(c: inout Comp, prefix: String, nameStart: U64, nameLen: U64) -> St
         bs.append(value: c.bytes[nameStart + i])
         i += 1
     }
-    return stringFromBytes(b: bs)
+    return stringFromBytesUnchecked(b: bs)
 }
 
 // The expression form (for diagnostics), so a TC mismatch can be located.
@@ -642,7 +642,7 @@ fn tcExprKind(c: inout Comp, id: U64) -> String {
                 bs.append(value: c.bytes[nameStart + i])
                 i += 1
             }
-            return stringFromBytes(b: bs)
+            return stringFromBytesUnchecked(b: bs)
         }
         Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => { return "Make" }
         Expr.MatchExpr(scrut: _, arms: _) => { return "MatchExpr" }
@@ -654,7 +654,7 @@ fn tcExprKind(c: inout Comp, id: U64) -> String {
                 bs.append(value: c.bytes[start + i])
                 i += 1
             }
-            return stringFromBytes(b: bs)
+            return stringFromBytesUnchecked(b: bs)
         }
         Expr.Index(base: _, index: _) => { return "Index" }
         Expr.Binary(op: _, lhs: _, rhs: _) => { return "Binary" }
@@ -667,7 +667,7 @@ fn tcExprKind(c: inout Comp, id: U64) -> String {
                 bs.append(value: c.bytes[tyStart + i])
                 i += 1
             }
-            return stringFromBytes(b: bs)
+            return stringFromBytesUnchecked(b: bs)
         }
         Expr.Unary(op: _, operand: _) => { return "Unary" }
         _ => { return "other" }
@@ -686,5 +686,5 @@ fn tcRefName(c: inout Comp, ref: U64) -> String {
         bs.append(value: c.bytes[t.nameStart + i])
         i += 1
     }
-    return stringFromBytes(b: bs)
+    return stringFromBytesUnchecked(b: bs)
 }

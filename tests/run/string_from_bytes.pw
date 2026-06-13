@@ -1,0 +1,37 @@
+// Validated `Array[U8]` -> `String` (spec/02,12): `<String.convert from=bytes/>` yields
+// `Result[String, Utf8Error]`, enforcing the spec's "a String is UTF-8 valid" invariant.
+// The unchecked floor `stringFromBytesUnchecked` is the escape hatch for known-valid
+// bytes. Exercises the well-formed-UTF-8 table: ASCII, 2/3/4-byte sequences, and the
+// rejections (lone continuation, truncation, overlong, surrogate, out-of-range lead).
+import @Std/Io with { print }
+import @Std/Core with { TryFrom, Utf8Error }
+
+fn ok(bytes: Array[U8]) -> Bool {
+    val r: Result[String, Utf8Error] = <String.convert from=bytes />
+    return r.isOk()
+}
+
+fn main() {
+    // valid sequences.
+    val hi: Result[String, Utf8Error] = <String.convert from=[72U8, 105U8] />
+    match hi {
+        Result.Ok(value: val s) => { print(s) }                 // Hi
+        Result.Err(error: val e) => { print(e.index) }
+    }
+    print(ok(bytes: [0xC3U8, 0xA9U8]))                  // 1: é (2-byte)
+    print(ok(bytes: [0xE2U8, 0x82U8, 0xACU8]))          // 1: € (3-byte)
+    print(ok(bytes: [0xF0U8, 0x9FU8, 0x98U8, 0x80U8]))  // 1: 😀 (4-byte)
+    print(ok(bytes: []))                                 // 1: empty
+    // ill-formed sequences.
+    print(ok(bytes: [0x80U8]))                          // 0: lone continuation
+    print(ok(bytes: [0xC3U8]))                          // 0: truncated 2-byte
+    print(ok(bytes: [0xC0U8, 0x80U8]))                  // 0: overlong
+    print(ok(bytes: [0xEDU8, 0xA0U8, 0x80U8]))          // 0: surrogate U+D800
+    print(ok(bytes: [0xF5U8, 0x80U8, 0x80U8, 0x80U8]))  // 0: lead > U+10FFFF
+    // the error carries the offset of the first bad byte.
+    val bad: Result[String, Utf8Error] = <String.convert from=[72U8, 0x80U8] />
+    match bad {
+        Result.Ok(value: val s) => { print(s) }
+        Result.Err(error: val e) => { print(e.index) }          // 1
+    }
+}

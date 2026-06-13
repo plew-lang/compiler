@@ -5,7 +5,7 @@
 // not a stub.
 import @Std/Io with { write }
 import @Std/Syntax with { Derive, TopItemAst, DeclAst }
-import @Std/Core with { stringFromBytes }
+import @Std/Core with { stringFromBytesUnchecked }
 
 struct FieldList { }
 
@@ -22,7 +22,7 @@ pub impl FieldList as Derive {
                     i += 1
                 }
                 pushStr(into: inout out, s: "\"\n}\n")
-                return stringFromBytes(out)
+                return stringFromBytesUnchecked(out)
             }
             _ => { return "" }
         }

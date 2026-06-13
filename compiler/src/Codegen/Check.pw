@@ -1543,6 +1543,28 @@ fn substReqParamHeadId(c: inout Comp, recvStart: U64, recvLen: U64, tps: Array[B
     return sub.nameId
 }
 
+// If requirement param type (prStart,prLen) is a trait type parameter bound to an
+// `Array[Elem]` trait argument (`impl X as P[Array[U8]]`), return that `Array[Elem]`
+// TypeRef ref (so the caller can compare the witness's array element); else 0.
+fn substReqParamArrayElemRef(c: inout Comp, tps: Array[Bind], targs: Array[U64], prStart: U64, prLen: U64) -> U64 {
+    val prId: U64 = intern(c: inout c, start: prStart, len: prLen)
+    mut val k: U64 = 0
+    while k < tps.count {
+        if tps[k].nameId == prId {
+            if k < targs.count {
+                val tr: TypeRef = c.types[targs[k]]
+                if rangeEquals(bytes: c.bytes, start: tr.nameStart, len: tr.nameLen, kw: "Array") {
+                    if tr.args.count > 0U64 {
+                        return targs[k]
+                    }
+                }
+            }
+        }
+        k += 1
+    }
+    return 0U64
+}
+
 // Like paramSelectorEq, but substitutes the requirement side's `Self` / trait type
 // parameters / associated types with the conforming type's bindings before comparing
 // (so `add(lhs: Self, rhs: Rhs)` with `impl Money as Add[Money]` matches a witness
@@ -1560,6 +1582,23 @@ fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvSta
         } else {
             return false
         }
+        // a requirement param that substitutes to an `Array[Elem]` (e.g. `convert(from:
+        // Source)` with `impl String as TryFrom[Array[U8]]`): the witness side writes it
+        // as an array param (`from: Array[U8]`, head id = the ELEMENT), so compare arrayness
+        // + element rather than the bare head ("Array" vs "U8" would never match).
+        val arrTarg: U64 = substReqParamArrayElemRef(c: inout c, tps: tps, targs: targs, prStart: pr.tyStart, prLen: pr.tyLen)
+        if arrTarg != 0U64 {
+            if pw.tyIsArray {
+                val elemRef: U64 = c.types[arrTarg].args[0]
+                if pw.tyNameId == c.types[elemRef].nameId {
+                    i += 1
+                } else {
+                    return false
+                }
+            } else {
+                return false
+            }
+        } else {
         val subId: U64 = substReqParamHeadId(c: inout c, recvStart: recvStart, recvLen: recvLen, tps: tps, targs: targs, prStart: pr.tyStart, prLen: pr.tyLen)
         // the WITNESS side may also write `Self` (`fn eqTo(other: Self)` inside
         // `impl P as MyEq`): substitute its Self -> the conforming type too, so the
@@ -1574,6 +1613,7 @@ fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvSta
             return false
         }
         i += 1
+        }
     }
     return true
 }

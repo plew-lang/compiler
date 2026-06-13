@@ -108,7 +108,7 @@ fn stripUnderscoresAst(s: String) -> String {
         }
         i += 1
     }
-    return stringFromBytes(b: out)
+    return stringFromBytesUnchecked(b: out)
 }
 
 // The numeric value of a base-16 digit byte (`0`-`9` / `a`-`f` / `A`-`F`); also

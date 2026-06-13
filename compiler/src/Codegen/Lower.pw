@@ -142,7 +142,7 @@ fn ensureRecordStruct(c: inout Comp, fieldNames: Array[String], fieldTys: Array[
         j += 1
     }
     appendBytes(into: inout cn, from: ")".bytes)
-    val nm: Bind = internBytes(c: inout c, s: stringFromBytes(b: cn))
+    val nm: Bind = internBytes(c: inout c, s: stringFromBytesUnchecked(b: cn))
     val nid: U64 = intern(c: inout c, start: nm.nameStart, len: nm.nameLen)
     // already registered?
     mut val si: U64 = 0
@@ -564,7 +564,7 @@ fn lowerExprWithCtx(c: inout Comp, e: ExprAst, ctxRef: U64) -> U64 {
                             // resolve each field's declared type — gives a NESTED record/dict
                             // literal field (`(a: (x:1,y:2), …)`) its own context (else the
                             // inner literal lowers context-free and the backend can't build it).
-                            val recName: String = stringFromBytes(b: extractSpan(buf: c.bytes, start: ct.nameStart, len: ct.nameLen))
+                            val recName: String = stringFromBytesUnchecked(b: extractSpan(buf: c.bytes, start: ct.nameStart, len: ct.nameLen))
                             val fs: Array[MakeField] = lowerMakeFields(c: inout c, fields: fields, typeName: recName, variant: "", isEnum: false)
                             return c.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fs />)
                         }
