@@ -1,0 +1,40 @@
+// A generic associated function (`Box[T].make(v: T)`, spec/05/07): an assoc fn has no
+// self, so it is monomorphized per call-site type args (inferred from the arguments)
+// through the same machinery as a generic free function. Covers a single type param, a
+// multi-param factory, repeated instances, and a nested assoc call (`Box.dup` ->
+// `Pair.of`), which exercises transitive instance collection.
+import @Std/Io with { print }
+
+struct Pair[A, B] {
+    pub val a: A
+    pub val b: B
+}
+pub impl[A, B] Pair[A, B] {
+    factory
+    assoc fn of(a: A, b: B) -> Pair[A, B] { return <Pair a=a b=b /> }
+}
+
+struct Box[T] {
+    pub val v: T
+}
+pub impl[T] Box[T] {
+    factory
+    assoc fn make(v: T) -> Box[T] { return <Box v=v /> }
+    assoc fn dup(v: T) -> Pair[T, T] { return Pair.of(a: v, b: v) }
+}
+
+fn main() {
+    val p: Pair[I64, Bool] = Pair.of(a: 7I64, b: true)
+    print(p.a)                       // 7
+    val b1: Box[I64] = Box.make(v: 5I64)
+    val b2: Box[I64] = Box.make(v: 9I64)
+    print(b1.v)                      // 5
+    print(b2.v)                      // 9
+    // a different instance of the same factory.
+    val bs: Box[String] = Box.make(v: "hi")
+    print(bs.v)                      // hi
+    // a nested assoc call builds another factory's instance.
+    val d: Pair[I64, I64] = Box.dup(v: 3I64)
+    print(d.a)                       // 3
+    print(d.b)                       // 3
+}

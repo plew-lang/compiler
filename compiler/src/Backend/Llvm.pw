@@ -6276,6 +6276,35 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         }
         val afi: U64 = findAssoc(c: inout c, recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
         if afi < c.funcs.count {
+            // a generic assoc fn (`Box[T].make(v: T)`): it has no self, so it rides the
+            // generic free-function machinery (declareGenFns/emitGenFns). Infer the type
+            // args from the call, find the monomorphized instance, and call it under the
+            // type-param env (mono's registerAssocInst registered the FnInst).
+            if isGenericFreeFn(c: inout c, fi: afi) {
+                val ginf: Array[U64] = llvmInferFnArgs(c: inout c, st: inout st, f: c.funcs[afi], args: args)
+                val agslot: U64 = genFnSlotFor(c: inout c, fnIdx: afi, args: ginf, st: inout st)
+                if agslot < st.genFnK.count {
+                    val gaf: Func = c.funcs[afi]
+                    val gsavedP: Array[Bind] = c.curTypeParams
+                    val gsavedA: Array[U64] = c.curTypeArgs
+                    c.curTypeParams = gaf.typeParams
+                    c.curTypeArgs = ginf
+                    mut val gav: Array[LLVMValueRef] = []
+                    mut val gai: U64 = 0
+                    while gai < args.count {
+                        gav.append(value: genArgValue(c: inout c, st: inout st, argExpr: args[gai].expr, p: gaf.params[gai]))
+                        gai += 1
+                    }
+                    mut val gdi: U64 = args.count
+                    while gdi < gaf.params.count {
+                        gav.append(value: genArgValue(c: inout c, st: inout st, argExpr: gaf.params[gdi].defaultExpr, p: gaf.params[gdi]))
+                        gdi += 1
+                    }
+                    c.curTypeParams = gsavedP
+                    c.curTypeArgs = gsavedA
+                    return LLVMBuildCall2(st.b, st.genFnTy[agslot], st.genFnVal[agslot], arrayCPtr(gav), gav.count, anon())
+                }
+            }
             mut val aslot: U64 = userFnSlot(st: inout st, idx: afi)
             // a trait/std provided assoc fn (`Greeter.banner()`) is declared+emitted
             // lazily (no self param), like a free function.

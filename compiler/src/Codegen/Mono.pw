@@ -1685,6 +1685,33 @@ fn registerCallInst(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg
     }
 }
 
+// Register an associated-function call `Type.make(args)` (the receiver is a type name,
+// not a value) as a generic free-function instance. An assoc fn has no self, so it
+// rides the FnInst/genFn machinery (declareGenFns/emitGenFns) exactly like a generic
+// free function; the type args infer from the call (`make(v: T)` with `v: I64` -> T=I64).
+fn registerAssocInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    val arn: Bind = assocRecvName(c: inout c, recv: recv)
+    if arn.nameLen == 0U64 {
+        return
+    }
+    val afi: U64 = findAssoc(c: inout c, recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+    if afi >= c.funcs.count {
+        return
+    }
+    if c.funcs[afi].isExtern {
+        return
+    }
+    if isGenericFreeFn(c: inout c, fi: afi) {
+        val inferred: Array[U64] = inferFnArgs(c: inout c, f: c.funcs[afi], args: args)
+        if fnArgsAllGround(c: inout c, args: inferred) {
+            if fnInstExists(c: inout c, fnIdx: afi, args: inferred) {
+            } else {
+                c.fnInsts.append(<FnInst fnIdx=afi args=inferred />)
+            }
+        }
+    }
+}
+
 // Register a generic method call on a non-generic receiver (`counter.map[B](f)`)
 // as an instance to emit, type args inferred from the call (Self/Item resolved so
 // `fn(x: Item) -> B` yields B). Methods on a generic receiver are emitted per
@@ -1950,6 +1977,9 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
                 i += 1
             }
             registerMethodInst(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+            // an assoc-fn call `Type.make(args)` (type-name receiver): register its
+            // monomorphized instance through the free-fn machinery (no self).
+            registerAssocInst(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
             // register the call's result type: a combinator on a generic receiver
             // (`mapIter.filter(p)`) yields a new adapter instantiation
             // (`FilterIter[MapIter[…],…]`) that no field/signature scan reaches, so
