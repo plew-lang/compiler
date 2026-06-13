@@ -298,6 +298,16 @@ fn binWitnessType(c: inout Comp, lhs: U64, rhs: U64) -> TypeInfo {
         }
         return lt
     }
+    // a String operand (kind 1 carries no name span): name it "String" so an
+    // arithmetic operator resolves its conformance — `String as Add[String]` makes
+    // `"a" + "b"` desugar to `String.add(lhs:, rhs:)` (spec/02,12). Other arithmetic
+    // ops have no String witness, so `"a" - "b"` still errors (sound).
+    if lt.kind == 1 {
+        val ss: Bind = stringTypeSpan(c: inout c)
+        if ss.nameLen != 0U64 {
+            return typeInfoOfName(c: inout c, start: ss.nameStart, len: ss.nameLen, isArray: false)
+        }
+    }
     if lt.kind == 0 {
         if lt.nameLen > 0 {
             return lt

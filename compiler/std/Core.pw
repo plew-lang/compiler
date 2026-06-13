@@ -558,6 +558,25 @@ pub impl String as Format {
     }
 }
 
+// String concatenation (spec/02,12): `"a" + "b"` produces a NEW String over the
+// joined bytes. Plew's String is a CoW value type with no owned/borrowed split, so
+// `String + String -> String` is symmetric (unlike Rust's `String + &str`). The
+// builder remains the efficient path for repeated `s = s + …` (avoids O(n²)); this
+// is the convenient binary form. Built in pure Plew over the `bytes` view.
+pub impl String as Add[String] {
+    type Output = String
+    assoc fn add(lhs: String, rhs: String) -> String {
+        mut val out: Array[U8] = lhs.bytes
+        val rb: Array[U8] = rhs.bytes
+        mut val i: U64 = 0
+        while i < rb.count {
+            out.append(value: rb[i])
+            i = i + 1U64
+        }
+        return stringFromBytes(out)
+    }
+}
+
 // The error of a fallible numeric conversion (spec/12 TryFrom): carries the
 // out-of-range source value that could not be represented in the narrower target.
 export struct RangeError {

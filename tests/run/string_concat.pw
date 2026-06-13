@@ -1,0 +1,24 @@
+// String concatenation via `+` (spec/02,12): `"a" + "b"` produces a NEW String over
+// the joined bytes through `impl String as Add[String]`. Plew's String is a CoW value
+// type with no owned/borrowed split, so `String + String -> String` is symmetric
+// (unlike Rust's `String + &str`). Covered: literals, variables, chaining, function
+// results, a method on the result, and the `s = s + …` accumulation form.
+import @Std/Io with { print }
+
+fn greet(name: String) -> String { return "Hello, " + name + "!" }
+
+fn main() {
+    val a: String = "foo"
+    val b: String = "bar"
+    print(a + b)                    // foobar
+    print(a + b + a)                // foobarfoo  (left-associative chain)
+    print("x" + "y")                // xy         (two literals)
+    print(greet(name: "Plew"))      // Hello, Plew!
+    print((a + b).bytes.count)      // 6          (a method on the concat result)
+    print((a + b).isEmpty())        // 0
+    print(("" + "").isEmpty())      // 1          (empty + empty stays empty)
+    mut val s: String = ""
+    s = s + "a"
+    s = s + "bc"
+    print(s)                        // abc        (accumulation)
+}

@@ -2374,7 +2374,16 @@ fn binWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -
             ownStart = c.enums[eid].nameStart
             ownLen = c.enums[eid].nameLen
         } else {
-            return c.funcs.count
+            // a String operand under an arithmetic op resolves the String lang-item's
+            // witness (`String.add` for `"a" + "b"`, spec/02,12). String isn't a
+            // registered struct/enum, so detect it by value-kind.
+            if valueKind(c: inout c, st: inout st, id: lhs) == 1U64 {
+                val ss: Bind = kwSpan(c: inout c, kw: "String", kwLen: 6U64)
+                ownStart = ss.nameStart
+                ownLen = ss.nameLen
+            } else {
+                return c.funcs.count
+            }
         }
     }
     val qType: U64 = intern(c: inout c, start: ownStart, len: ownLen)
@@ -2450,7 +2459,14 @@ fn unaryWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, operand: U64) -> U6
 // unary: just lhs). The witness must be emitted (collectReachableAssoc seeds all
 // operator witnesses); a missing slot is a loud not-yet-emittable error.
 fn emitWitnessCall(c: inout Comp, st: inout LlvmCtx, fi: U64, lhs: U64, rhs: U64, binary: Bool) -> LLVMValueRef {
-    val aslot: U64 = userFnSlot(st: inout st, idx: fi)
+    mut val aslot: U64 = userFnSlot(st: inout st, idx: fi)
+    if aslot < st.fnIdx.count {
+    } else {
+        // a witness on a lang-item the upfront pass doesn't emit (`String.add` for
+        // `"a" + "b"` — String isn't a registered struct, so isPlainUserFn skips it):
+        // declare it lazily like a provided method and queue its body for emission.
+        aslot = ensureFreeFnDeclared(c: inout c, st: inout st, fi: fi)
+    }
     if aslot < st.fnIdx.count {
     } else {
         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "LLVM backend: operator witness not emittable yet")
