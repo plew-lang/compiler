@@ -5670,6 +5670,12 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "bitCastU64") {
         return extendToI64(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), unsigned: false)
     }
+    // (Core internal) bitCastI64(n: U64) -> I64: the inverse reinterpret of bitCastU64
+    // (a non-negative U64's bit pattern as I64, after a range check). Also a no-op at
+    // the LLVM level (U64 and I64 are both i64), so the argument passes through.
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "bitCastI64") {
+        return extendToI64(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), unsigned: true)
+    }
     // (Prelude internal) truncU8(n: U64) -> U8: keep the low 8 bits (`as U8` is
     // lossless-only and rejects wider values). Used to assemble UTF-8 bytes during
     // string literal `\u{...}` decoding.

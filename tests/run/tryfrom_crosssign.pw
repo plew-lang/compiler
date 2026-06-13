@@ -1,0 +1,24 @@
+// Cross-sign integer conversion via TryFrom (spec/12): `as` is lossless-only and rejects
+// a sign change, so `<I64.convert from=u/>` / `<U64.convert from=n/>` range-check then
+// reinterpret the identical bit pattern. A U64 above I64.max, or a negative I64, fails.
+import @Std/Io with { print }
+import @Std/Core with { RangeError }
+
+fn main() {
+    // U64 -> I64.
+    val a: Result[I64, RangeError] = <I64.convert from=42U64 />
+    print(a.unwrapOr(fallback: -1I64))                 // 42
+    val b: Result[I64, RangeError] = <I64.convert from=18446744073709551615U64 />
+    print(b.isErr())                                    // 1
+    // exactly I64.max fits.
+    val c: Result[I64, RangeError] = <I64.convert from=9223372036854775807U64 />
+    print(c.unwrapOr(fallback: -1I64))                 // 9223372036854775807
+    // I64 -> U64.
+    val d: Result[U64, RangeError] = <U64.convert from=100I64 />
+    print(d.unwrapOr(fallback: 0U64))                  // 100
+    val e: Result[U64, RangeError] = <U64.convert from=0I64 - 5I64 />
+    print(e.isErr())                                    // 1
+    // zero round-trips both ways.
+    val f: Result[U64, RangeError] = <U64.convert from=0I64 />
+    print(f.unwrapOr(fallback: 9U64))                  // 0
+}

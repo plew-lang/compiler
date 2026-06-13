@@ -494,6 +494,12 @@ export extern "plew-intrinsic" {
     fn truncI32(n: I64) -> I32
     fn truncU16(n: U64) -> U16
     fn truncU32(n: U64) -> U32
+    // Reinterpret an integer's bit pattern across signedness (no-op at the machine
+    // level; both are i64). `as` is lossless-only and rejects a sign change, so the
+    // cross-sign `convert` factories reach for these after a range check. `bitCastU64`
+    // (I64->U64) mirrors Prelude's same-named intrinsic; `bitCastI64` is the inverse.
+    fn bitCastI64(n: U64) -> I64
+    fn bitCastU64(n: I64) -> U64
     // Is this float a NaN? A direct intrinsic because `==`/`!=` on floats PANIC on a
     // NaN operand (spec/02), so the fallible float->int `convert` (spec/12) must test
     // NaN with this BEFORE any ordered comparison.
@@ -753,6 +759,29 @@ pub impl U32 as TryFrom[U64] {
             return <Result[U32, RangeError].Err error=<RangeError value=0I64 /> />
         }
         return <Result[U32, RangeError].Ok value=truncU32(n: from) />
+    }
+}
+
+// Cross-sign conversions between the two wide types (spec/12): `as` is lossless-only and
+// rejects a sign change, so `<I64.convert from=u/>` / `<U64.convert from=n/>` range-check
+// then reinterpret the (identical) bit pattern. A U64 above I64.max, or a negative I64,
+// does not fit the other's range.
+pub impl I64 as TryFrom[U64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: U64) {
+        if from > 9223372036854775807U64 {
+            return <Result[I64, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        return <Result[I64, RangeError].Ok value=bitCastI64(n: from) />
+    }
+}
+pub impl U64 as TryFrom[I64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I64) {
+        if from < 0I64 {
+            return <Result[U64, RangeError].Err error=<RangeError value=from /> />
+        }
+        return <Result[U64, RangeError].Ok value=bitCastU64(n: from) />
     }
 }
 
