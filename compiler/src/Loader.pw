@@ -61,6 +61,36 @@ fn stripParents(path: Array[U8], baseLen: U64, n: U64) -> U64 {
 // (`@…` intrinsic/external, or `/…` with no package root). `/Seg` → srcRoot +
 // Seg + ".pw"; `./Name` → importerDir + Name + ".pw"; `../Name` → parent(s) of
 // importerDir + Name + ".pw". The trailing-`/` subpath stays (subdirectories).
+// Turn a module base path (no extension) into the file to load: `<base>.pw` if it
+// exists, else the directory module `<base>/_.pw` (spec/15 — `_` is a directory's root
+// module, so `import /Models` resolves to `src/Models.pw` OR `src/Models/_.pw`). When
+// neither exists, returns the `.pw` form so the loader reports the missing file. When
+// `base` already ends with `/` (the bare-`/` root import = `src/`), the directory form
+// is `<base>_.pw` (no doubled slash).
+fn finishModulePath(base: Array[U8]) -> Array[U8] {
+    mut val withPw: Array[U8] = []
+    appendBytes(into: inout withPw, from: base)
+    appendBytes(into: inout withPw, from: ".pw".bytes)
+    if fileExists(path: withPw) {
+        return withPw
+    }
+    mut val under: Array[U8] = []
+    appendBytes(into: inout under, from: base)
+    if base.count > 0 {
+        if base[base.count - 1] == 47 {
+            appendBytes(into: inout under, from: "_.pw".bytes)
+        } else {
+            appendBytes(into: inout under, from: "/_.pw".bytes)
+        }
+    } else {
+        appendBytes(into: inout under, from: "/_.pw".bytes)
+    }
+    if fileExists(path: under) {
+        return under
+    }
+    return withPw
+}
+
 fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[U8], baseLen: U64, srcRoot: Array[U8], srcRootLen: U64, stdRoot: Array[U8], stdRootLen: U64) -> Array[U8] {
     mut val out: Array[U8] = []
     if pLen == 0 {
@@ -90,8 +120,7 @@ fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[U8], ba
         }
         appendBytes(into: inout out, from: srcRoot)
         appendBytes(into: inout out, from: extractSpan(buf: src, start: pStart + 1, len: end - (pStart + 1)))
-        appendBytes(into: inout out, from: ".pw".bytes)
-        return out
+        return finishModulePath(base: out)
     }
     // relative ('.')
     mut val rest: U64 = pStart
@@ -128,8 +157,7 @@ fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[U8], ba
     val dirLen: U64 = stripParents(path: importer, baseLen: baseLen, n: parents)
     appendBytes(into: inout out, from: extractSpan(buf: importer, start: 0, len: dirLen))
     appendBytes(into: inout out, from: extractSpan(buf: src, start: rest, len: end - rest))
-    appendBytes(into: inout out, from: ".pw".bytes)
-    return out
+    return finishModulePath(base: out)
 }
 
 // Append every byte of `from` onto `into`.

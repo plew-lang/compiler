@@ -1,0 +1,10 @@
+// `import /Models` resolves the directory module `src/Models/_.pw` (spec/15): a
+// directory is imported through its `_` root module, with no `src/Models.pw` present.
+import @Std/Io with { print }
+import /Models with { User, label }
+
+fn main() {
+    val u: User = <User id=7I64 />
+    print(u.id)        // 7
+    print(label())     // dir
+}

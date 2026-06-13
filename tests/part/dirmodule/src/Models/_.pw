@@ -1,0 +1,7 @@
+// A directory module: `import /Models` resolves to `src/Models/_.pw` (spec/15 —
+// `_` is a directory's root module), not just `src/Models.pw`.
+export struct User {
+    pub val id: I64
+}
+pub impl User { factory }
+export fn label() -> String { return "dir" }
