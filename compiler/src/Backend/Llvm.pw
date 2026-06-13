@@ -6253,6 +6253,30 @@ fn genLlvmExtMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, srcStart: U64, 
         vi += 1
     }
     if mfi >= c.funcs.count {
+        // Redundant-but-valid `value#P.foo()`: P is a trait the receiver directly
+        // conforms to and P declares `foo` as a requirement, so the method exists on
+        // the bare surface as P's witness (srcTraitId==0, untagged) — `#P` here is a
+        // redundant provenance assertion, valid for direct conformance too (spec/09:209;
+        // `#` is *required* only at ambiguity, spec/09:192). Fall back to bare resolution
+        // once we have confirmed the view is a real P-conformance and P owns the name.
+        val mNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
+        mut val vk: U64 = 0
+        while vk < views.count {
+            if mfi >= c.funcs.count {
+                if traitProvidesReqName(c: inout c, traitNameId: views[vk], methodNameId: mNameId) {
+                    val recvId: U64 = intern(c: inout c, start: recvNameStart, len: recvNameLen)
+                    if conformExists(c: inout c, typeId: recvId, traitId: views[vk]) {
+                        val bare: U64 = findMethod(c: inout c, recvStart: recvNameStart, recvLen: recvNameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                        if bare < c.funcs.count {
+                            mfi = bare
+                        }
+                    }
+                }
+            }
+            vk += 1
+        }
+    }
+    if mfi >= c.funcs.count {
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "no such extension method on this type (is the extension name right, and a `pub impl`?)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }

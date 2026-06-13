@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+// Single-path (unambiguous) `#P` view selection is redundant but valid: `#` is
+// trait-relative and resolves for direct conformance too (spec/09:209). It is only
+// *required* at ambiguity (spec/09:192). Here S conforms to P directly and reaches
+// R through the single path impl P as R, so neither `#` is needed — but writing it
+// must still resolve, not error.
+trait P { fn p() -> I64 }
+trait R { fn r() -> I64 }
+struct S { val v: I64 }
+pub impl S as P { fn p() -> I64 { return self.v } }
+pub impl P as R { fn r() -> I64 { return self.p() + 1I64 } }
+
+fn main() {
+    val s: S = <S v=10 />
+    print(s.p())      // bare: 10
+    print(s#P.p())    // redundant #P on P's own requirement (direct witness): 10
+    print(s.r())      // bare: 11
+    print(s#P.r())    // redundant #P on R reached via the single P path: 11
+}
