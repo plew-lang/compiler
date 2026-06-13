@@ -1688,6 +1688,21 @@ fn exprIntCtxTypeInfo(c: inout Comp, id: U64) -> TypeInfo {
 // because a provided trait method shares one body AST across conforming types
 // (its node types vary with Self); generic bodies vary per instantiation. Those
 // re-derive every time.
+// The recorded result TypeRef of a desugared non-Optional `?.` at `exprId` (a Chain
+// rewrite, set by registerChainResultInsts), or 0 if this node isn't one. Lets typeOf
+// / exprTypeRef recover a Chain stage's type without re-deriving it from the rewritten
+// match's internal bindings (needed for a nested `a?.x?.y`).
+fn chainResultRef(c: inout Comp, exprId: U64) -> U64 {
+    mut val i: U64 = 0
+    while i < c.chainResults.count {
+        if c.chainResults[i].nameStart == exprId {
+            return c.chainResults[i].fieldStart
+        }
+        i += 1
+    }
+    return 0
+}
+
 fn typeOf(c: inout Comp, id: U64) -> TypeInfo {
     mut val t: TypeInfo = scalarInfo()
     if id < c.exprTyKind.count {
@@ -2349,6 +2364,12 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             return typeInfoOfName(c: inout c, start: tyStart, len: tyLen, isArray: false)
         }
         Expr.MatchExpr(val scrut, val arms) => {
+            // a desugared non-Optional `?.` records its result type (its arm's give value
+            // references a bound `__chainVal` not in scope from here, so re-deriving fails).
+            val cr: U64 = chainResultRef(c: inout c, exprId: id)
+            if cr != 0 {
+                return typeInfoOfRef(c: inout c, ref: cr)
+            }
             // the result type is the give value of the first non-diverging arm.
             mut val mai: U64 = 0
             while mai < arms.count {

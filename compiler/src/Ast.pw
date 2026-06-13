@@ -688,6 +688,13 @@ struct Comp {
     // The owning module is moduleOf(nameStart). A call/use of the alias is rewritten
     // to the real name (function-call uses; type/value aliases are additive).
     pub mut val importAliases: Array[Bind] = []
+    // result type of each desugared non-Optional `?.` (spec/12): the `Chain` rewrite
+    // replaces an `Expr.OptChain` with a `MatchExpr` whose type can't be re-derived
+    // from outside (its arm's bound `__chainVal` isn't in scope), so the rewrite records
+    // `nameStart = exprId`, `fieldStart = result TypeRef` here. typeOf / exprTypeRef
+    // consult it so a nested chain (`a?.x?.y`) types its inner stage. Empty in the
+    // common case (no user-Chain `?.`).
+    pub mut val chainResults: Array[Bind] = []
     // module-level variables (spec/15), in lowering order (= initialization order).
     pub mut val globals: Array[Global] = []
     // `newtype Name = Underlying` declarations (spec/10): a distinct type with the

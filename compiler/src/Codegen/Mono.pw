@@ -1934,7 +1934,7 @@ fn rewriteOptChainToChainMatch(c: inout Comp, exprId: U64, base: U64, memberStar
 // inference: the result type `Head[U]` (so its struct/enum + methods are emitted)
 // and the `empty()` factory's monomorphized instance keyed by [U] (empty takes no
 // argument, so its type param can only come from the result type's context).
-fn registerChainResultInsts(c: inout Comp, baseRef: U64, memberStart: U64, memberLen: U64, headStart: U64, headLen: U64) {
+fn registerChainResultInsts(c: inout Comp, exprId: U64, baseRef: U64, memberStart: U64, memberLen: U64, headStart: U64, headLen: U64) {
     if baseRef >= c.types.count {
         return
     }
@@ -1953,6 +1953,9 @@ fn registerChainResultInsts(c: inout Comp, baseRef: U64, memberStart: U64, membe
     oArgs.append(value: uRef)
     val oRef: U64 = c.pushType(t: <TypeRef nameStart=headStart nameLen=headLen args=oArgs />)
     scanType(c: inout c, ref: oRef)
+    // record this chain stage's result type `Head[U]` so typeOf/exprTypeRef on the
+    // rewritten MatchExpr recover it (a nested `a?.x?.y` types its inner stage).
+    c.chainResults.append(value: <Bind nameStart=exprId nameLen=0 fieldStart=oRef fieldLen=0 />)
     // the chain() result `Optional[V]` (V = the receiver's chain Value = its first
     // type arg): register the concrete instance so the desugar's `match base.chain()`
     // sets the enum env and types the Some-payload bind (the front-end method-result
@@ -2142,7 +2145,7 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
                         // so register them explicitly: U = member's type on the chain
                         // Value (the receiver's first type arg, by the v1 assumption
                         // that `type Value` is the first type parameter).
-                        registerChainResultInsts(c: inout c, baseRef: bt.ref, memberStart: memberStart, memberLen: memberLen, headStart: bt.nameStart, headLen: bt.nameLen)
+                        registerChainResultInsts(c: inout c, exprId: exprId, baseRef: bt.ref, memberStart: memberStart, memberLen: memberLen, headStart: bt.nameStart, headLen: bt.nameLen)
                         return
                     }
                 }

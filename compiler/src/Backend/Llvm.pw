@@ -1298,6 +1298,13 @@ fn registerGenEnums(c: inout Comp, st: inout LlvmCtx) {
 // The tracked TypeRef of an expression (an Ident local's locTypeRef, or a struct
 // field whose declared type is a generic instance), or 0.
 fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
+    // a desugared non-Optional `?.` (a Chain rewrite) records its result `Head[U]`; use
+    // it so a method call on the result (`(a?.x).chain()` in a nested `a?.x?.y`) resolves
+    // its receiver type. Checked first since the node is a generic MatchExpr.
+    val cr: U64 = chainResultRef(c: inout c, exprId: id)
+    if cr != 0U64 {
+        return cr
+    }
     match c.exprs[id] {
         Expr.Ident(val start, val len) => {
             val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
@@ -4090,7 +4097,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             return genLlvmIfExpr(c: inout c, st: inout st, cond: cond, thenBlk: thenBlk, elseBlk: elseBlk)
         }
         Expr.MatchExpr(val scrut, val arms) => {
-            return genLlvmMatchExpr(c: inout c, st: inout st, scrut: scrut, arms: arms)
+            return genLlvmMatchExpr(c: inout c, st: inout st, scrut: scrut, arms: arms, exprId: id)
         }
         Expr.OptChain(val base, val memberStart, val memberLen) => {
             return genLlvmOptChain(c: inout c, st: inout st, base: base, memberStart: memberStart, memberLen: memberLen)
@@ -4285,13 +4292,21 @@ fn genLlvmIfExpr(c: inout Comp, st: inout LlvmCtx, cond: U64, thenBlk: U64, else
 
 // Value-position `match scrut { Pat => exprValue, ... }`: each arm body is an
 // expression; a PHI over the arm blocks merges their values.
-fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchArm]) -> LLVMValueRef {
+fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchArm], exprId: U64) -> LLVMValueRef {
     // the match's expected result type (from the enclosing let/return/arg) propagates
     // to each arm's give-value so a context-only construction in an arm grounds — e.g.
     // the Chain desugar's `None => give <Head.empty/>`, whose no-arg factory's type
     // param can only come from the expected `Head[U]`. Captured before `scrut` emission
     // consumes st.expectedTy; re-applied at each arm body.
-    val matchExpectedTy: U64 = st.expectedTy
+    mut val matchExpectedTy: U64 = st.expectedTy
+    // a desugared `?.` (Chain rewrite) carries its OWN recorded result `Head[U]`; this
+    // overrides any inherited expectation, which for a nested chain's inner stage (in the
+    // outer's scrutinee position) would be the OUTER result and ground the arms' factories
+    // to the wrong instance.
+    val crET: U64 = chainResultRef(c: inout c, exprId: exprId)
+    if crET != 0U64 {
+        matchExpectedTy = crET
+    }
     val sv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: scrut)
     val sty: LLVMTypeRef = LLVMTypeOf(sv)
     // a value-position struct destructuring match (irrefutable, one arm): bind the
