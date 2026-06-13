@@ -559,6 +559,9 @@ export extern "plew-intrinsic" {
     // Truncate a float toward zero to I64 (`fptosi`). UB outside [-2^63, 2^63), so the
     // `convert` factory range-checks first and calls this only once the value fits.
     fn f64ToI64(f: F64) -> I64
+    // Truncate a NON-NEGATIVE float toward zero to U64 (`fptoui`). UB outside [0, 2^64),
+    // so the `convert` factory checks `>= 0.0` and `< 2^64` first (spec/12 float->unsigned).
+    fn f64ToU64(f: F64) -> U64
 }
 
 // String methods, written in pure Plew over the exposed `bytes` view (spec/02:
@@ -964,6 +967,71 @@ pub impl I8 as TryFrom[F64] {
             return <Result[I8, RangeError].Err error=<RangeError value=n /> />
         }
         return <Result[I8, RangeError].Ok value=truncI8(n: n) />
+    }
+}
+// Fallible float->UNSIGNED conversions (spec/12): same truncate-toward-zero semantics
+// as float->signed, but a NEGATIVE float never fits an unsigned target (checked after
+// NaN). The wide target uses `f64ToU64` (`fptoui`, UB outside [0, 2^64) — so the upper
+// bound is checked first); narrow targets bound-check against their own max (which is
+// < 2^64, so `f64ToU64` is in range) and truncate.
+pub impl U64 as TryFrom[F64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: F64) {
+        if isNanF64(f: from) {
+            return <Result[U64, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        if from < 0.0 {
+            return <Result[U64, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        if from >= 18446744073709551616.0 {
+            return <Result[U64, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        return <Result[U64, RangeError].Ok value=f64ToU64(f: from) />
+    }
+}
+pub impl U32 as TryFrom[F64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: F64) {
+        if isNanF64(f: from) {
+            return <Result[U32, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        if from < 0.0 {
+            return <Result[U32, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        if from >= 4294967296.0 {
+            return <Result[U32, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        return <Result[U32, RangeError].Ok value=truncU32(n: f64ToU64(f: from)) />
+    }
+}
+pub impl U16 as TryFrom[F64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: F64) {
+        if isNanF64(f: from) {
+            return <Result[U16, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        if from < 0.0 {
+            return <Result[U16, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        if from >= 65536.0 {
+            return <Result[U16, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        return <Result[U16, RangeError].Ok value=truncU16(n: f64ToU64(f: from)) />
+    }
+}
+pub impl U8 as TryFrom[F64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: F64) {
+        if isNanF64(f: from) {
+            return <Result[U8, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        if from < 0.0 {
+            return <Result[U8, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        if from >= 256.0 {
+            return <Result[U8, RangeError].Err error=<RangeError value=0I64 /> />
+        }
+        return <Result[U8, RangeError].Ok value=truncU8(n: f64ToU64(f: from)) />
     }
 }
 

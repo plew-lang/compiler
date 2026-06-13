@@ -111,6 +111,7 @@ extern(c) {
     fn LLVMBuildSIToFP(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildUIToFP(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildFPToSI(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildFPToUI(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildSExt(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildTrunc(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildAlloca(b~: LLVMBuilderRef, ty~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
@@ -5691,6 +5692,12 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
     // (out of that range, fptosi is UB) — so this is the in-range raw conversion.
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "f64ToI64") {
         return LLVMBuildFPToSI(st.b, genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), st.i64ty, anon())
+    }
+    // (Core internal) f64ToU64(f: F64) -> U64: truncate toward zero (`fptoui`). Called
+    // only after the `convert` factory proves the value is finite and in [0, 2^64) —
+    // out of that range fptoui is UB — so this is the in-range raw conversion.
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "f64ToU64") {
+        return LLVMBuildFPToUI(st.b, genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), st.i64ty, anon())
     }
     // (Prelude internal) __dictSeed() -> U64: the per-process dictionary hash seed —
     // a lazily-initialized random value (stable for the process), so SipHash is keyed
