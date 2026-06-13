@@ -447,7 +447,9 @@ fn isTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
     if structIndexByName(c: inout c, start: start, len: len) < c.structs.count {
         return true
     }
-    val qId: U64 = intern(c: inout c, start: start, len: len)
+    // an import alias (`with { Real as Alias }`) names the same type as `Real`.
+    val ar: Bind = aliasReal(c: inout c, start: start, len: len)
+    val qId: U64 = intern(c: inout c, start: ar.nameStart, len: ar.nameLen)
     // a newtype name is a type name too (it can be an assoc-fn/factory receiver
     // through its inherited assoc fns — `Brand.gray(…)`, spec/10).
     mut val nti: U64 = 0
@@ -476,7 +478,7 @@ fn isTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
         }
         ti += 1
     }
-    return genericStructIndex(c: inout c, nameStart: start, nameLen: len) < c.structs.count
+    return genericStructIndex(c: inout c, nameStart: ar.nameStart, nameLen: ar.nameLen) < c.structs.count
 }
 
 // True if type `typeStart`/`typeLen` declares an `assoc fn` named `nameStart`/
@@ -815,6 +817,30 @@ fn rewriteImportAliases(c: inout Comp) {
     }
 }
 
+// Resolve a module-local import alias to the real imported name (spec/15:
+// `import M with { Real as Alias }`). A use of `Alias` in a TYPE position (annotation,
+// construction head, assoc-fn receiver) resolves to `Real` for downstream struct/type
+// lookup — the call-expression alias rewrite (`rewriteImportAliases`) handles value
+// uses, this handles type uses. No-op when there are no aliases or the span does not
+// name a local alias (returns the input span unchanged). The alias is module-scoped:
+// only a use in the same module as the `with` clause resolves.
+fn aliasReal(c: inout Comp, start: U64, len: U64) -> Bind {
+    if c.importAliases.count == 0U64 {
+        return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
+    }
+    mut val ai: U64 = 0
+    while ai < c.importAliases.count {
+        val al: Bind = c.importAliases[ai]
+        if spansEqual(c: inout c, aStart: al.nameStart, aLen: al.nameLen, bStart: start, bLen: len) {
+            if moduleOf(c: inout c, offset: al.nameStart) == moduleOf(c: inout c, offset: start) {
+                return <Bind nameStart=al.fieldStart nameLen=al.fieldLen fieldStart=al.fieldStart fieldLen=al.fieldLen />
+            }
+        }
+        ai += 1
+    }
+    return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
+}
+
 // If `recv` is a bare identifier naming a type (not a local value), return that
 // type's name span as an assoc-fn receiver; else signal "not an assoc call" by
 // returning len 0. Used by call codegen/type recovery to route `Type.name(args)`.
@@ -828,7 +854,9 @@ fn assocRecvName(c: inout Comp, recv: U64) -> Bind {
                 return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
             }
             if isTypeName(c: inout c, start: start, len: len) {
-                return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
+                // resolve an import alias (`with { Real as Alias }`) so `Alias.fn(args)`
+                // dispatches to the assoc fn declared on the real type (spec/15).
+                return aliasReal(c: inout c, start: start, len: len)
             }
             return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
         }
@@ -1031,7 +1059,10 @@ fn matchExhaustive(c: inout Comp, arms: Array[MatchArm]) -> Bool {
 
 // Tag index of `Enum.Variant` (the variant's position in its enum declaration).
 fn variantIndex(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64) -> U64 {
-    val qEnum: U64 = intern(c: inout c, start: enumStart, len: enumLen)
+    // an import alias (`with { Real as Alias }`) names the same enum as `Real`, so its
+    // variants share the real enum's tag indices (spec/15).
+    val arE: Bind = aliasReal(c: inout c, start: enumStart, len: enumLen)
+    val qEnum: U64 = intern(c: inout c, start: arE.nameStart, len: arE.nameLen)
     val qVar: U64 = intern(c: inout c, start: variantStart, len: variantLen)
     mut val ei: U64 = 0
     while ei < c.enums.count {
@@ -1125,21 +1156,26 @@ fn stringTypeSpan(c: inout Comp) -> Bind {
 }
 
 fn typeInfoOfName(c: inout Comp, start: U64, len: U64, isArray: Bool) -> TypeInfo {
+    // resolve an import alias (`with { Real as Alias }`) to the real name so the carried
+    // type identity is canonical for downstream struct/field lookup (spec/15).
+    val ar: Bind = aliasReal(c: inout c, start: start, len: len)
+    val rs: U64 = ar.nameStart
+    val rl: U64 = ar.nameLen
     if isArray {
-        return <TypeInfo kind=3 nameStart=start nameLen=len ref=0 />
+        return <TypeInfo kind=3 nameStart=rs nameLen=rl ref=0 />
     }
-    if len == 0 {
+    if rl == 0 {
         return scalarInfo()
     }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "String") {
-        return <TypeInfo kind=1 nameStart=start nameLen=len ref=0 />
+    if rangeEquals(bytes: c.bytes, start: rs, len: rl, kw: "String") {
+        return <TypeInfo kind=1 nameStart=rs nameLen=rl ref=0 />
     }
-    if isPrimType(c: inout c, start: start, len: len) {
+    if isPrimType(c: inout c, start: rs, len: rl) {
         // kind=0 (scalar) but carry the type name so the width is recoverable
         // (e.g. for the lossless-`as` check). The C type stays 64-bit for now.
-        return <TypeInfo kind=0 nameStart=start nameLen=len ref=0 />
+        return <TypeInfo kind=0 nameStart=rs nameLen=rl ref=0 />
     }
-    return <TypeInfo kind=2 nameStart=start nameLen=len ref=0 />
+    return <TypeInfo kind=2 nameStart=rs nameLen=rl ref=0 />
 }
 
 fn addLocal(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool) {
@@ -1305,7 +1341,10 @@ fn optChainResultRef(c: inout Comp, base: U64, memberStart: U64, memberLen: U64)
 }
 
 fn fieldType(c: inout Comp, structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
-    mut val qStruct: U64 = intern(c: inout c, start: structStart, len: structLen)
+    // resolve an import alias (`with { Real as Alias }`) so a field access on a value
+    // typed by its alias finds the real struct's fields (spec/15).
+    val arS: Bind = aliasReal(c: inout c, start: structStart, len: structLen)
+    mut val qStruct: U64 = intern(c: inout c, start: arS.nameStart, len: arS.nameLen)
     // a newtype inherits the underlying struct's fields (spec/10): resolve to the
     // underlying so `<Brand code=… />` / `brand.code` finds Rgb's `code` (Brand = Rgb).
     mut val ntI: U64 = 0

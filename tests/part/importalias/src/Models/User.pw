@@ -1,0 +1,12 @@
+// A module whose exports are imported under aliases by Main (spec/15:
+// `import M with { Real as Alias }`). The alias must resolve to the real type for
+// construction, field access, assoc-fn dispatch, enum match, and value calls.
+export struct User {
+    pub val id: I64
+}
+pub impl User {
+    factory
+    assoc fn make(id: I64) -> User { return <User id=id /> }
+}
+export enum Color { Red, Green, Blue }
+export fn greet() -> String { return "hi" }

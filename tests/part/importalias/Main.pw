@@ -1,0 +1,22 @@
+// `with { Real as Alias }` renames imported items (spec/15). A use of the alias in a
+// type position (annotation, construction head, assoc-fn receiver, enum match arm) or
+// a value position (function call) resolves to the real imported name.
+import @Std/Io with { print }
+import /Models/User with { User as Account, Color as Hue, greet as hello }
+
+fn main() {
+    // struct alias: construction (default factory) + assoc-fn via alias + field access.
+    val a: Account = <Account id=5I64 />
+    print(a.id)                       // 5
+    val b: Account = Account.make(id: 9I64)
+    print(b.id)                       // 9
+    // value alias: a renamed function.
+    print(hello())                    // hi
+    // enum alias: construction + match arms written with the alias name.
+    val c: Hue = <Hue.Green />
+    match c {
+        Hue.Red => { print("r") }
+        Hue.Green => { print("g") }   // g
+        Hue.Blue => { print("b") }
+    }
+}

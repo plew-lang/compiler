@@ -702,7 +702,9 @@ fn enumRegSlot(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 {
 
 // The c.enums index of the enum named (start,len), or c.enums.count.
 fn enumIdxByName(c: inout Comp, start: U64, len: U64) -> U64 {
-    val q: U64 = intern(c: inout c, start: start, len: len)
+    // an import alias (`with { Real as Alias }`) names the same enum as `Real` (spec/15).
+    val ar: Bind = aliasReal(c: inout c, start: start, len: len)
+    val q: U64 = intern(c: inout c, start: ar.nameStart, len: ar.nameLen)
     mut val i: U64 = 0
     while i < c.enums.count {
         if c.enums[i].nameId == q {
