@@ -396,6 +396,12 @@ fn typeRefEq(c: inout Comp, a: U64, b: U64) -> Bool {
     if ta.nameId != tb.nameId {
         return false
     }
+    // a `#`-view is part of type identity (spec/09): `S`, `S#P`, `S#Q` are distinct
+    // types, so two generic instantiations differing only by the view argument are
+    // distinct instances (`useR[S#P]` vs `useR[S#Q]` get separate bodies/dispatch).
+    if ta.viewExtId != tb.viewExtId {
+        return false
+    }
     if ta.args.count != tb.args.count {
         return false
     }
@@ -1557,6 +1563,30 @@ fn argArrayElemRef(c: inout Comp, argExpr: U64) -> U64 {
     return 0
 }
 
+// If `argExpr` is a `#`-view (`s#P` / `x#Ext`, an ExtView), return `baseRef` refined
+// with that view's id (TypeRef.viewExtId) so a type parameter inferred from it binds
+// to `S#P` rather than plain `S` — letting the view satisfy a `where _: A` bound and
+// steer dispatch in the callee body (spec/09 view-aware monomorphization). A strip
+// view (`s#!Ext`) or a non-view argument returns baseRef unchanged.
+fn argViewRef(c: inout Comp, argExpr: U64, baseRef: U64) -> U64 {
+    if baseRef == 0 {
+        return 0
+    }
+    match c.exprs[argExpr] {
+        Expr.ExtView(recv: _, val srcStart, val srcLen, val strip) => {
+            if strip {
+                return baseRef
+            }
+            val vid: U64 = intern(c: inout c, start: srcStart, len: srcLen)
+            val bt: TypeRef = c.types[baseRef]
+            return c.pushType(t: <TypeRef nameStart=bt.nameStart nameLen=bt.nameLen args=bt.args viewExtId=vid />)
+        }
+        _ => {
+            return baseRef
+        }
+    }
+}
+
 fn inferFnArgs(c: inout Comp, f: Func, args: Array[Arg]) -> Array[U64] {
     mut val out: Array[U64] = []
     mut val ti: U64 = 0
@@ -1582,7 +1612,7 @@ fn inferFnArgs(c: inout Comp, f: Func, args: Array[Arg]) -> Array[U64] {
                 if pi < args.count {
                     if found == 0 {
                         val at: TypeInfo = typeOf(c: inout c, id: args[pi].expr)
-                        val argRef: U64 = tyRefOfInfo(c: inout c, ti: at)
+                        val argRef: U64 = argViewRef(c: inout c, argExpr: args[pi].expr, baseRef: tyRefOfInfo(c: inout c, ti: at))
                         found = unifyTypeParam(c: inout c, paramRef: p.ty, argRef: argRef, tpStart: tp.nameStart, tpLen: tp.nameLen)
                     }
                 }

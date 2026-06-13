@@ -1924,7 +1924,14 @@ fn checkFnBounds(c: inout Comp) {
                     if tp.nameId == fb.paramNameId {
                         if pi < fin.args.count {
                             val at: TypeRef = c.types[fin.args[pi]]
-                            if !(typeConformsTo(c: inout c, typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen)) {
+                            // a `#`-viewed type argument (`f(a: s#P)` / `g(x#Ext)`,
+                            // spec/09) satisfies the bound via the conformance path the
+                            // view selects, even when the bare type does not conform.
+                            mut val ok: Bool = typeConformsTo(c: inout c, typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen)
+                            if !ok && at.viewExtId != 0U64 {
+                                ok = viewConformsTo(c: inout c, typeStart: at.nameStart, typeLen: at.nameLen, viewId: at.viewExtId, traitStart: fb.traitStart, traitLen: fb.traitLen)
+                            }
+                            if !ok {
                                 compileErrorAt(line: lineOf(c: inout c, offset: fb.paramStart), msg: "type argument does not conform to the trait required by `where`")
                             }
                         }

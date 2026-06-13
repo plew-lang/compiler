@@ -23,11 +23,16 @@ pub impl W as Only { fn o() -> I64 { return self.w } }
 pub impl Only as Derived { fn d() -> I64 { return self.o() * 3I64 } }
 
 fn useDerived[X](x: X) -> I64 where X: Derived { return x.d() }
+fn useR[X](x: X) -> I64 where X: R { return x.r() }
 
 fn main() {
     val s: S = <S v=10 />
     print(s#P.r())          // via P: 10 + 1   = 11
     print(s#Q.r())          // via Q: 20 + 100 = 120
+    // a multi-path view also satisfies a `where _: R` bound (spec/09 view-aware
+    // monomorphization): the chosen path flows into the callee, where `x.r()` resolves.
+    print(useR(x: s#P))     // via P through the bound = 11
+    print(useR(x: s#Q))     // via Q through the bound = 120
 
     val t: W = <W w=5 />
     print(t.d())            // single path, bare = 15

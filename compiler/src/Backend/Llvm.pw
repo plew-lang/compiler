@@ -6563,6 +6563,13 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
             compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "this method is only provided by an extension — call it through the view (`value#Ext.method()`) or declare `defaultExtension #Ext` on the type")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
+        // a multi-path inter-trait conformance (spec/09): the type reaches the target
+        // trait through more than one subject trait, so it does not conform bare —
+        // the method is reachable only by selecting a path with `value#P`.
+        if viewOnlyMethodExists(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen) {
+            compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "ambiguous inter-trait conformance: this type reaches the trait providing this method through more than one subject trait — select a conformance path with `value#P.method()` (spec/09)")
+            return LLVMConstInt(st.i64ty, 0U64, 0I32)
+        }
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: method not found / not yet supported")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -6792,17 +6799,48 @@ fn placePtrOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
 // Emit a call argument for a parameter `p`: an array-literal arg is built with the
 // parameter's element type (so `[10,20]` for an `Array[I32]` param uses i32, not
 // i64-defaulted elements); a scalar arg is width-coerced to the parameter type.
+// Whether (start,len) names a concrete value type (struct / enum / newtype /
+// primitive) — as opposed to a bare generic type parameter. A generic parameter
+// absorbs a `#`-view argument via inference (`T` binds to `S#P`), so the view-
+// invariance check below must not fire on it.
+fn tyNameConcrete(c: inout Comp, start: U64, len: U64) -> Bool {
+    if isPrimType(c: inout c, start: start, len: len) {
+        return true
+    }
+    if structIndexByName(c: inout c, start: start, len: len) < c.structs.count {
+        return true
+    }
+    if isEnumName(c: inout c, start: start, len: len) {
+        return true
+    }
+    val qid: U64 = intern(c: inout c, start: start, len: len)
+    mut val nti: U64 = 0
+    while nti < c.newtypes.count {
+        if c.newtypes[nti].nameId == qid {
+            return true
+        }
+        nti += 1
+    }
+    return false
+}
+
 fn genArgValue(c: inout Comp, st: inout LlvmCtx, argExpr: U64, p: Param) -> LLVMValueRef {
     // extension-view invariance (spec/09): `A` and `A#Ext` are distinct types with
     // no implicit cast either way, so an argument's view must match the parameter's
     // declared view exactly — the view is applied/dropped explicitly at the call
-    // (`value#Ext` / `value#!Ext`). Plain code (no views) has both sides 0.
+    // (`value#Ext` / `value#!Ext`). Plain code (no views) has both sides 0. A generic
+    // type-parameter param absorbs the view (it binds to `S#P` via inference), so the
+    // check applies only to a concrete param type.
     mut val pView: U64 = 0
+    mut val pConcrete: Bool = true
     if p.ty != 0U64 {
         pView = c.types[p.ty].viewExtId
+        pConcrete = tyNameConcrete(c: inout c, start: c.types[p.ty].nameStart, len: c.types[p.ty].nameLen)
     }
-    if pView != exprViewExtId(c: inout c, st: inout st, id: argExpr) {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: argExpr)), msg: "extension view mismatch: a plain type and its `#Ext` view are distinct — apply or drop the view explicitly at the call (`value#Ext` / `value#!Ext`)")
+    if pConcrete {
+        if pView != exprViewExtId(c: inout c, st: inout st, id: argExpr) {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: argExpr)), msg: "extension view mismatch: a plain type and its `#Ext` view are distinct — apply or drop the view explicitly at the call (`value#Ext` / `value#!Ext`)")
+        }
     }
     if p.isInout {
         // pass the caller's place address (the callee mutates in place).
@@ -7771,6 +7809,25 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     if p.ty != 0U64 {
         if c.types[p.ty].viewExtId != 0U64 {
             pRef = p.ty
+        }
+    }
+    // a generic type-parameter param whose substituted argument carries a view
+    // (`T -> S#P`, from a `#`-viewed call argument `f(a: s#P)` / `g(x#Ext)`): track
+    // the grounded viewed ref so a bare `x.m()` in the body resolves via the view
+    // (spec/09 view-aware monomorphization). resolveTy returns the env's arg ref
+    // verbatim, so its viewExtId survives grounding.
+    if pRef == 0U64 {
+        if p.ty != 0U64 {
+            if c.curTypeParams.count > 0U64 {
+                val pgv: U64 = groundTypeRef(c: inout c, ref: p.ty)
+                if pgv != p.ty {
+                    if pgv < c.types.count {
+                        if c.types[pgv].viewExtId != 0U64 {
+                            pRef = pgv
+                        }
+                    }
+                }
+            }
         }
     }
     // an existential `any P` param (spec/08): its LLVM type is the fat pointer and

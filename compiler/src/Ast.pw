@@ -647,6 +647,12 @@ struct Func {
     // the right same-name trait by arity — without this, a provided method on the
     // 0-ary `Sub` would be copied onto every integer (conforming to Core `Sub[Rhs]`).
     pub val provTraitArity: U64 = 0
+    // a multi-path inter-trait conformance witness (`impl P as R` / `impl Q as R`
+    // both reaching R, copied onto a type conforming to P and Q): the type does NOT
+    // conform to R bare (spec/09), so this copy is excluded from bare resolution (like
+    // an extension method) and reachable only through the conformance-path view
+    // `value#P` (findExtMethodById, via srcTraitId). Default false = bare-callable.
+    pub val viewOnly: Bool = false
 }
 
 // A module-level variable (spec/15): `val x = e` / `mut val x = e`. `letStmt` is

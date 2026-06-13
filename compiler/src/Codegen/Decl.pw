@@ -162,6 +162,50 @@ fn subjectPathCount(c: inout Comp, tId: U64, aTraitId: U64) -> U64 {
     return count
 }
 
+// Whether the view `typeName#viewId` conforms to `targetTrait` (spec/09): a value
+// re-viewed with `#X` satisfies `where _: A` when X is a trait-subject conformance
+// path `impl B as A` reaching the trait — either a bare inter-trait conform whose
+// subject trait B is the view (viewId == B), or an extension conform tagged extId ==
+// viewId — and the underlying type conforms to that subject trait B. This is how a
+// multi-path `s#P` (which does not conform bare) and an extension `x#Ext` (view-
+// gated) satisfy a generic bound (`f(a: s#P)` / `g(x#Ext)`, spec/09:269).
+fn viewConformsTo(c: inout Comp, typeStart: U64, typeLen: U64, viewId: U64, traitStart: U64, traitLen: U64) -> Bool {
+    if viewId == 0U64 {
+        return false
+    }
+    val typeId: U64 = intern(c: inout c, start: typeStart, len: typeLen)
+    val targetId: U64 = intern(c: inout c, start: traitStart, len: traitLen)
+    mut val i: U64 = 0
+    while i < c.conforms.count {
+        val cf: Conform = c.conforms[i]
+        if cf.traitId == targetId {
+            // cf must be a trait-subject conform (`impl B as A`) reachable via viewId:
+            // a bare inter-trait conform whose subject trait is the view, or an
+            // extension conform whose extId is the view.
+            if isTraitName(c: inout c, start: cf.typeStart, len: cf.typeLen) {
+                mut val viaView: Bool = false
+                if cf.extId == 0U64 {
+                    if cf.typeId == viewId {
+                        viaView = true
+                    }
+                } else {
+                    if cf.extId == viewId {
+                        viaView = true
+                    }
+                }
+                if viaView {
+                    // does the underlying type conform to the subject trait B?
+                    if conformExists(c: inout c, typeId: typeId, traitId: cf.typeId) {
+                        return true
+                    }
+                }
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
 // Inter-trait conformance (spec/08,09): `impl B as A { fn … }` makes every type
 // conforming to the subject trait `B` also conform to `A`, witnessing A's
 // requirements in B's vocabulary. For each such conform and each concrete type T
@@ -237,7 +281,7 @@ fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64,
                         }
                         tp += 1
                     }
-                    c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=blanket.typeId />)
+                    c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=blanket.typeId viewOnly=!recordConform />)
                 }
             }
         }

@@ -271,6 +271,10 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
             // the receiver type declared it as a `defaultExtension`, which admits the
             // extension's methods to the type's bare surface.
             if !(f.extId != 0U64 && !isDefaultExt(c: inout c, typeId: qRecvId, extId: f.extId)) {
+            // a multi-path inter-trait conformance witness (spec/09) does not join
+            // bare resolution — the type does not conform to the target trait bare;
+            // it is reachable only through the path view `value#P` (findExtMethodById).
+            if !(f.viewOnly) {
             if f.nameId == qNameId {
                 if f.recvId == qRecvId {
                     if paramsLabelsOk(c: inout c, params: f.params, args: args) {
@@ -288,6 +292,7 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
                         }
                     }
                 }
+            }
             }
             }
         }
@@ -350,6 +355,30 @@ fn extMethodNameExists(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U
         val f: Func = c.funcs[i]
         if f.hasRecv {
             if f.extId != 0U64 {
+                if f.recvId == qRecvId {
+                    if f.nameId == qNameId {
+                        return true
+                    }
+                }
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// Whether a method named (nameStart,nameLen) on type (recvStart,recvLen) exists only
+// as a multi-path inter-trait conformance witness (Func.viewOnly) — used to give a
+// helpful diagnostic when a bare call fails because the type reaches the trait
+// through more than one subject trait and must pick a path with `value#P` (spec/09).
+fn viewOnlyMethodExists(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
+    val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
+    val qRecvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.hasRecv {
+            if f.viewOnly {
                 if f.recvId == qRecvId {
                     if f.nameId == qNameId {
                         return true
