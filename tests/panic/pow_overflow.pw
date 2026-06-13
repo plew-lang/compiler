@@ -1,0 +1,7 @@
+// `pow` computes by repeated checked multiplication, so an overflowing result panics
+// (spec/02: integer overflow is always loud), like `*`. 10^5 = 100000 overflows I8.
+import @Std/Io with { print }
+import @Std/Core with { Pow }
+fn main() {
+    print(pow(base: 10I8, exp: 5U64))
+}

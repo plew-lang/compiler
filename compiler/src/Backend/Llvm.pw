@@ -1425,6 +1425,16 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // the result (`d.get(k).unwrapOr(...)`) recovers the instance to dispatch.
             return methodResultRef(c: inout c, st: inout st, recv: recv, nameStart: nameStart, nameLen: nameLen, margs: margs)
         }
+        Expr.Call(val nameStart, val nameLen, val args) => {
+            // `pow(base: x, exp: n)` (spec/12) yields the base argument's type (the
+            // `Pow` Output is the base type for the integer conformances), so a print /
+            // assignment recovers the right width and signedness.
+            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "pow") {
+                if args.count == 2U64 {
+                    return llvmArgTypeRef(c: inout c, st: inout st, argExpr: args[0].expr)
+                }
+            }
+        }
         _ => {}
     }
     return 0U64
@@ -5541,6 +5551,40 @@ fn genLlvmClosureCall(c: inout Comp, st: inout LlvmCtx, li: U64, args: Array[Arg
     return emitClosureCallValue(c: inout c, st: inout st, cloVal: cloVal, fnRef: st.locTypeRef[li], args: args)
 }
 
+// Emit a bare `pow(base:, exp:)` call (spec/12) by dispatching on the base argument's
+// type to its `Pow[Exp]` conformance's `pow` assoc fn. Returns a null value when the
+// base type has no matching `pow` (the caller then falls through to normal resolution).
+fn genPowCall(c: inout Comp, st: inout LlvmCtx, base: U64, args: Array[Arg]) -> LLVMValueRef {
+    // llvmArgTypeRef (not exprTypeRef) so a suffixed literal base (`pow(base: 10I64,…)`)
+    // recovers its type via typeOf, not just a typed local.
+    val br: U64 = llvmArgTypeRef(c: inout c, st: inout st, argExpr: base)
+    if br == 0U64 {
+        return LLVMConstNull(st.ptrty)
+    }
+    val bt: TypeRef = c.types[br]
+    val powN: Bind = kwSpan(c: inout c, kw: "pow", kwLen: 3U64)
+    val afi: U64 = findAssoc(c: inout c, recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: powN.nameStart, nameLen: powN.nameLen, args: args)
+    if afi >= c.funcs.count {
+        return LLVMConstNull(st.ptrty)
+    }
+    mut val aslot: U64 = userFnSlot(st: inout st, idx: afi)
+    if aslot < st.fnIdx.count {
+    } else {
+        aslot = ensureFreeFnDeclared(c: inout c, st: inout st, fi: afi)
+    }
+    if aslot >= st.fnIdx.count {
+        return LLVMConstNull(st.ptrty)
+    }
+    val af: Func = c.funcs[afi]
+    mut val av: Array[LLVMValueRef] = []
+    mut val ai: U64 = 0
+    while ai < args.count {
+        av.append(value: genArgValue(c: inout c, st: inout st, argExpr: args[ai].expr, p: af.params[ai]))
+        ai += 1
+    }
+    return LLVMBuildCall2(st.b, st.fnTy[aslot], st.fnVal[aslot], arrayCPtr(av), av.count, anon())
+}
+
 fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
     // a call whose "name" is a closure-typed local (`g(n: 4)` where g: fn(...)) is
     // an indirect call: load the {fn, env} value, then call fn(env, args).
@@ -5552,6 +5596,18 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
     }
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "print") {
         return emitPrint(c: inout c, st: inout st, argExpr: args[0].expr)
+    }
+    // `pow(base: x, exp: n)` (spec/12): the named exponentiation operation dispatches on
+    // the base argument's `Pow[Exp]` conformance (no `**` operator). Route the bare call
+    // to the base type's `pow` assoc fn; fall through if it does not resolve (so a
+    // user-defined free `pow` with other labels still works).
+    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "pow") {
+        if args.count == 2U64 {
+            val pv: LLVMValueRef = genPowCall(c: inout c, st: inout st, base: args[0].expr, args: args)
+            if LLVMIsNull(pv) == 0I32 {
+                return pv
+            }
+        }
     }
     // `sleep(ms: I64) -> Promise[I64]` (@Std/Async intrinsic): a timer promise,
     // `plew_sleep(i64) -> PlewPromise*` (await suspends until it fires).

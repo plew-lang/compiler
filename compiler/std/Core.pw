@@ -376,6 +376,88 @@ export trait Neg    { type Output  assoc fn neg(value: Self) -> Output }
 export trait Not    { type Output  assoc fn not(value: Self) -> Output }
 export trait BitNot { type Output  assoc fn bitnot(value: Self) -> Output }
 
+// Exponentiation (spec/12): `**` is not adopted; `pow(base: x, exp: n)` is the named
+// arithmetic operation, backed by the `Pow[Exp]` trait (same shape as `Add[Rhs]`, with
+// multiple conformances per base for different exponent types). The bare call dispatches
+// on the base argument's type. The integer conformances take a non-negative `U64`
+// exponent (a negative exponent on an integer is not representable) and compute by
+// repeated checked multiplication — overflow panics like `*` (spec/02). Float pow
+// (`F64 as Pow[F64]`, via a transcendental intrinsic) is additive and not yet provided.
+export trait Pow[Exp] { type Output  assoc fn pow(base: Self, exp: Exp) -> Output }
+
+impl I8 as Pow[U64] {
+    type Output = I8
+    assoc fn pow(base: I8, exp: U64) -> I8 {
+        mut val result: I8 = 1I8
+        mut val i: U64 = 0
+        while i < exp { result = result * base  i += 1 }
+        return result
+    }
+}
+impl I16 as Pow[U64] {
+    type Output = I16
+    assoc fn pow(base: I16, exp: U64) -> I16 {
+        mut val result: I16 = 1I16
+        mut val i: U64 = 0
+        while i < exp { result = result * base  i += 1 }
+        return result
+    }
+}
+impl I32 as Pow[U64] {
+    type Output = I32
+    assoc fn pow(base: I32, exp: U64) -> I32 {
+        mut val result: I32 = 1I32
+        mut val i: U64 = 0
+        while i < exp { result = result * base  i += 1 }
+        return result
+    }
+}
+impl I64 as Pow[U64] {
+    type Output = I64
+    assoc fn pow(base: I64, exp: U64) -> I64 {
+        mut val result: I64 = 1I64
+        mut val i: U64 = 0
+        while i < exp { result = result * base  i += 1 }
+        return result
+    }
+}
+impl U8 as Pow[U64] {
+    type Output = U8
+    assoc fn pow(base: U8, exp: U64) -> U8 {
+        mut val result: U8 = 1U8
+        mut val i: U64 = 0
+        while i < exp { result = result * base  i += 1 }
+        return result
+    }
+}
+impl U16 as Pow[U64] {
+    type Output = U16
+    assoc fn pow(base: U16, exp: U64) -> U16 {
+        mut val result: U16 = 1U16
+        mut val i: U64 = 0
+        while i < exp { result = result * base  i += 1 }
+        return result
+    }
+}
+impl U32 as Pow[U64] {
+    type Output = U32
+    assoc fn pow(base: U32, exp: U64) -> U32 {
+        mut val result: U32 = 1U32
+        mut val i: U64 = 0
+        while i < exp { result = result * base  i += 1 }
+        return result
+    }
+}
+impl U64 as Pow[U64] {
+    type Output = U64
+    assoc fn pow(base: U64, exp: U64) -> U64 {
+        mut val result: U64 = 1U64
+        mut val i: U64 = 0
+        while i < exp { result = result * base  i += 1 }
+        return result
+    }
+}
+
 // Equality and ordering (spec/12): `==`/`!=` desugar to `Eq.eq`, and `< <= > >=`
 // to a tag test on `Ord.compare`'s three-way `Ordering`. Same-type relations, so
 // no type argument. The primitive conformances are generated into ./Core/Num.

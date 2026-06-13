@@ -1,0 +1,33 @@
+// `pow(base: x, exp: n)` (spec/12): exponentiation is the named operation `pow` backed
+// by the `Pow[Exp]` trait (no `**` operator). The bare call dispatches on the base
+// argument's type. The integer conformances take a non-negative `U64` exponent and
+// compute by repeated checked multiplication; a user type may provide its own `Pow`.
+import @Std/Io with { print }
+import @Std/Core with { Pow }
+
+struct Sq { pub val n: I64 }
+pub impl Sq { factory }
+impl Sq as Pow[U64] {
+    type Output = I64
+    assoc fn pow(base: Sq, exp: U64) -> I64 {
+        mut val r: I64 = 1I64
+        mut val i: U64 = 0
+        while i < exp { r = r * base.n  i += 1 }
+        return r
+    }
+}
+
+fn main() {
+    val x: I64 = 2I64
+    print(pow(base: x, exp: 2U64))        // 4 (the spec example)
+    print(pow(base: 10I64, exp: 3U64))    // 1000 (literal base)
+    print(pow(base: 7I64, exp: 0U64))     // 1 (exp 0)
+    print(U32.pow(base: 5U32, exp: 3U64)) // 125 (type-qualified assoc form)
+    val big: U64 = pow(base: 2U64, exp: 40U64)
+    print(big)                             // 1099511627776 (unsigned width preserved)
+    val n: I64 = pow(base: 5I64, exp: 2U64)
+    print(n)                               // 25 (assigned to a typed local)
+    // a user type's own Pow conformance.
+    val s: Sq = <Sq n=3I64 />
+    print(pow(base: s, exp: 4U64))        // 81
+}
