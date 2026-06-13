@@ -216,38 +216,52 @@ fn viewConformsTo(c: inout Comp, typeStart: U64, typeLen: U64, viewId: U64, trai
 // 頭なし Self の blanket は禁止 — see Verify.checkBlanketHeadless); the legal subject
 // is the trait B itself, which anchors the conformance and keeps bare-method
 // surfaces enumerable.
+//
+// CHAINS (spec/09): conformance is transitive — `impl C as B` + `impl B as A` makes
+// every C-conformer also conform to A (S: C → B → A). This is computed as a FIXPOINT:
+// each pass scans the LIVE conform list (so a conformance conferred this pass, e.g.
+// `S as B`, becomes a candidate for the next hop `impl B as A`), repeating until no
+// new conformance is recorded. The set of (type, trait) pairs is finite and only
+// grows, so it terminates. applyBlanketTo is idempotent (conformExists / methodInRange
+// guards), so re-scanning already-conferred pairs is a no-op.
 fn instantiateTraitSubjectConforms(c: inout Comp) {
     // snapshot before any conferral: the dup guard and source-method scan must see
     // only originals, so sibling conferred copies coexist (multi-path ambiguity).
     val guardHi: U64 = c.funcs.count
-    val nConforms: U64 = c.conforms.count
-    mut val ci: U64 = 0
-    while ci < nConforms {
-        val cf: Conform = c.conforms[ci]
-        // a trait-subject conform: subject (typeStart,typeLen) names a trait B.
-        // Skip extension conforms (`extension Ext { impl B as A }`, extId != 0):
-        // those stay view-gated (`value#Ext`), handled by the extension machinery —
-        // only an owner-module bare `impl B as A` auto-confers onto the bare surface.
-        if cf.extId == 0U64 && isTraitName(c: inout c, start: cf.typeStart, len: cf.typeLen) {
-            // candidate concrete types: those conforming to the subject trait B.
-            mut val cj: U64 = 0
-            while cj < nConforms {
-                val cand: Conform = c.conforms[cj]
-                if cand.traitId == cf.typeId {
-                    if !(isTraitName(c: inout c, start: cand.typeStart, len: cand.typeLen)) {
-                        // single path → record the conformance (rides the bare
-                        // surface like an ordinary provided method); multi-path (S
-                        // reaches A via P→A and Q→A) → copy the witness tagged for `#`
-                        // but do NOT record bare conformance: bare `s.m()` / `where
-                        // _: A` is then ambiguous and the path is picked with `s#P`.
-                        val single: Bool = subjectPathCount(c: inout c, tId: cand.typeId, aTraitId: cf.traitId) <= 1U64
-                        applyBlanketTo(c: inout c, blanket: cf, recvStart: cand.typeStart, recvLen: cand.typeLen, guardHi: guardHi, recordConform: single)
+    mut val changed: Bool = true
+    while changed {
+        val before: U64 = c.conforms.count
+        // re-read the live count each pass: a conformance conferred earlier this pass
+        // is a valid candidate for a later hop (transitivity).
+        mut val ci: U64 = 0
+        while ci < c.conforms.count {
+            val cf: Conform = c.conforms[ci]
+            // a trait-subject conform: subject (typeStart,typeLen) names a trait B.
+            // Skip extension conforms (`extension Ext { impl B as A }`, extId != 0):
+            // those stay view-gated (`value#Ext`), handled by the extension machinery —
+            // only an owner-module bare `impl B as A` auto-confers onto the bare surface.
+            if cf.extId == 0U64 && isTraitName(c: inout c, start: cf.typeStart, len: cf.typeLen) {
+                // candidate concrete types: those conforming to the subject trait B.
+                mut val cj: U64 = 0
+                while cj < c.conforms.count {
+                    val cand: Conform = c.conforms[cj]
+                    if cand.traitId == cf.typeId {
+                        if !(isTraitName(c: inout c, start: cand.typeStart, len: cand.typeLen)) {
+                            // single path → record the conformance (rides the bare
+                            // surface like an ordinary provided method); multi-path (S
+                            // reaches A via P→A and Q→A) → copy the witness tagged for `#`
+                            // but do NOT record bare conformance: bare `s.m()` / `where
+                            // _: A` is then ambiguous and the path is picked with `s#P`.
+                            val single: Bool = subjectPathCount(c: inout c, tId: cand.typeId, aTraitId: cf.traitId) <= 1U64
+                            applyBlanketTo(c: inout c, blanket: cf, recvStart: cand.typeStart, recvLen: cand.typeLen, guardHi: guardHi, recordConform: single)
+                        }
                     }
+                    cj += 1
                 }
-                cj += 1
             }
+            ci += 1
         }
-        ci += 1
+        changed = c.conforms.count > before
     }
 }
 
@@ -260,6 +274,28 @@ fn instantiateTraitSubjectConforms(c: inout Comp) {
 // a findMethod ambiguity (resolved with `value#P.m()`). When recordConform, also
 // record the conferred conformance so it rides bare resolution / `where T: A`
 // (only the single-path case does this; a multi-path type does not conform bare).
+// Whether a conferred copy of method (nameId) on receiver (recvId) tagged with this
+// source path (srcTraitId) already exists — so the fixpoint can re-scan an already-
+// conferred (impl, type) pair idempotently without copying the witness twice. Keyed
+// on srcTraitId so distinct multi-paths (same name, different subject) still coexist.
+fn conferredCopyExists(c: inout Comp, recvId: U64, nameId: U64, srcTraitId: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if f.hasRecv {
+            if f.recvId == recvId {
+                if f.nameId == nameId {
+                    if f.srcTraitId == srcTraitId {
+                        return true
+                    }
+                }
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
 fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64, guardHi: U64, recordConform: Bool) {
     val recvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     mut val fi: U64 = 0
@@ -269,8 +305,9 @@ fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64,
             if f.recvId == blanket.typeId {
                 // skip if the type already has an inherent method of this name
                 // (inherent wins); sibling conferred copies (appended ≥ guardHi) do
-                // not block, so multiple paths' methods coexist.
-                if !(methodInRange(c: inout c, lo: 0, hi: guardHi, recvStart: recvStart, recvLen: recvLen, nameStart: f.nameStart, nameLen: f.nameLen)) {
+                // not block, so multiple paths' methods coexist. Also skip if this
+                // exact path was already conferred (idempotent fixpoint re-scan).
+                if !(methodInRange(c: inout c, lo: 0, hi: guardHi, recvStart: recvStart, recvLen: recvLen, nameStart: f.nameStart, nameLen: f.nameLen)) && !(conferredCopyExists(c: inout c, recvId: recvId, nameId: f.nameId, srcTraitId: blanket.typeId)) {
                     // drop the subject param from the method's type params (none for a
                     // trait subject), keep the method-own params.
                     mut val copiedTP: Array[Bind] = []

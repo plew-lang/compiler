@@ -1,0 +1,25 @@
+import @Std/Io with { print }
+
+// Transitive (chained) inter-trait conformance (spec/09): conformance composes —
+// `impl C as B` + `impl B as A` makes every C-conformer also conform to A. The
+// conferral runs as a fixpoint, so the conferred `S as B` becomes a candidate for
+// the next hop `impl B as A`. Both a direct call and a `where _: A` bound see the
+// transitive conformance (no asymmetry).
+trait C { fn c() -> I64 }
+trait B { fn b() -> I64 }
+trait A { fn a() -> I64 }
+
+struct S { val v: I64 }
+pub impl S as C { fn c() -> I64 { return self.v } }
+pub impl C as B { fn b() -> I64 { return self.c() + 1I64 } }
+pub impl B as A { fn a() -> I64 { return self.b() + 10I64 } }
+
+fn useA[T](x: T) -> I64 where T: A { return x.a() }
+
+fn main() {
+    val s: S = <S v=100 />
+    print(s.c())          // direct C          = 100
+    print(s.b())          // via C->B          = 101
+    print(s.a())          // via C->B->A        = 111
+    print(useA(x: s))     // transitive through a `where _: A` bound = 111
+}
