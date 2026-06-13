@@ -1,0 +1,31 @@
+import @Std/Io with { print }
+
+// A `#X` view tag (extension OR trait) is purely additive: it makes X's methods
+// visible and lets them shadow a same-name base method, but it never *hides* the
+// receiver's base surface — inherent methods, conformance-provided methods, and
+// methods reached through other conformances all stay callable through the view
+// (spec/09). Trait views (`#P`) and extension views (`#A`) work the same way and
+// stack into a view chain (`s#A`, `sa#P`, `sp#A`).
+struct S {}
+pub impl S { fn s() -> I64 { return 1I64 } }
+extension A { pub impl S { fn a() -> I64 { return 2I64 } } }
+trait P {}
+pub impl P { fn p() -> I64 { return 3I64 } }
+pub impl S as P {}
+
+fn main() {
+    val s = <S />
+    print(s.s())      // inherent: 1
+    print(s#A.a())    // extension A: 2
+    print(s.p())      // P-provided, bare: 3
+    print(s#P.p())    // P-provided via #P: 3
+    print(s#A.p())    // #A is additive — p (from P) still visible: 3
+
+    val sa = s#A      // sa: S#A
+    print(sa.a())     // 2
+    print(sa#P.a())   // stack #P; a (from A in the chain) still visible: 2
+
+    val sp = s#P      // sp: S#P
+    print(sp.p())     // 3
+    print(sp#A.p())   // stack #A; p (from P in the chain) still visible: 3
+}

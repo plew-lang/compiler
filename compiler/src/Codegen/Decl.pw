@@ -141,29 +141,6 @@ fn conformExists(c: inout Comp, typeId: U64, traitId: U64) -> Bool {
     return false
 }
 
-// Whether the trait named `traitNameId` declares a requirement (or provided
-// method) named `methodNameId`. Used so a redundant-but-valid `value#P.foo()`
-// (single, unambiguous conformance) can resolve to the receiver's direct witness
-// of P's requirement `foo` (spec/09:209 — `#P` is trait-relative and works for
-// direct conformance too; it is *required* only at ambiguity, spec/09:192).
-fn traitProvidesReqName(c: inout Comp, traitNameId: U64, methodNameId: U64) -> Bool {
-    mut val ti: U64 = 0
-    while ti < c.traits.count {
-        if c.traits[ti].nameId == traitNameId {
-            val reqs: Array[Func] = c.traits[ti].reqs
-            mut val ri: U64 = 0
-            while ri < reqs.count {
-                if reqs[ri].nameId == methodNameId {
-                    return true
-                }
-                ri += 1
-            }
-        }
-        ti += 1
-    }
-    return false
-}
-
 // Number of distinct subject traits `B` such that an inter-trait conformance
 // `impl B as A` (A = aTraitId) exists and the concrete type `tId` conforms to `B`.
 // Used to detect an ambiguous inter-trait conformance (a type reaching the same
