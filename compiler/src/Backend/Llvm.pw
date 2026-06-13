@@ -923,6 +923,16 @@ fn genLlvmMakeEnum(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U6
     // annotation / boxed-field pointee) when it names this same generic enum. Consume
     // it so it can't leak into the payload sub-expressions.
     mut val ty: U64 = ty
+    // inside a generic fn/method body, an explicit-arg construction (`<Optional[T].Some
+    // …/>` in a body where T=Box) names the syntactic `Optional[T]`; ground its args
+    // through the active env so it resolves to the registered concrete instance
+    // (mirrors genLlvmMake for structs). Without this, genEnumSlot looks up the
+    // ungrounded `Optional[T]` template and fails.
+    if isGenericInst(c: inout c, ref: ty) {
+        if c.curTypeParams.count > 0U64 {
+            ty = groundTypeRef(c: inout c, ref: ty)
+        }
+    }
     if !(isGenericInst(c: inout c, ref: ty)) {
         if st.expectedTy != 0U64 {
             if isGenericInst(c: inout c, ref: st.expectedTy) {
@@ -1458,7 +1468,12 @@ fn methodResultRef(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, 
             if mf.retTy != 0U64 {
                 val savedP: Array[Bind] = c.curTypeParams
                 val savedA: Array[U64] = c.curTypeArgs
-                val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: recvRef)
+                // the receiver may be a struct OR an enum (`Loaded[Box].chain()` — an
+                // enum Chain conformer): set whichever env grounds its type params.
+                mut val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: recvRef)
+                if !(didSet) {
+                    didSet = setEnumEnv(c: inout c, st: inout st, ref: recvRef)
+                }
                 val g: U64 = groundTypeRef(c: inout c, ref: mf.retTy)
                 if didSet {
                     c.curTypeParams = savedP
@@ -4271,6 +4286,12 @@ fn genLlvmIfExpr(c: inout Comp, st: inout LlvmCtx, cond: U64, thenBlk: U64, else
 // Value-position `match scrut { Pat => exprValue, ... }`: each arm body is an
 // expression; a PHI over the arm blocks merges their values.
 fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchArm]) -> LLVMValueRef {
+    // the match's expected result type (from the enclosing let/return/arg) propagates
+    // to each arm's give-value so a context-only construction in an arm grounds — e.g.
+    // the Chain desugar's `None => give <Head.empty/>`, whose no-arg factory's type
+    // param can only come from the expected `Head[U]`. Captured before `scrut` emission
+    // consumes st.expectedTy; re-applied at each arm body.
+    val matchExpectedTy: U64 = st.expectedTy
     val sv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: scrut)
     val sty: LLVMTypeRef = LLVMTypeOf(sv)
     // a value-position struct destructuring match (irrefutable, one arm): bind the
@@ -4286,6 +4307,7 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
             val mark0: U64 = st.nLocals
             bindStructPattern(c: inout c, st: inout st, sidx: ssidx, binds: arms[0].binds, scrutTy: sty, scrutSlot: sslot0)
             st.terminated = false
+            st.expectedTy = matchExpectedTy
             genLlvmBlock(c: inout c, st: inout st, id: arms[0].body)
             val rv: LLVMValueRef = st.giveValue
             st.nLocals = mark0
@@ -4354,6 +4376,7 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
         }
         // each arm body is a block ending in `give` (value) or in `panic`/`return`
         // (diverging). genLlvmBlock sets st.giveValue / st.terminated.
+        st.expectedTy = matchExpectedTy
         genLlvmBlock(c: inout c, st: inout st, id: arm.body)
         val armDiverged: Bool = st.terminated
         if armDiverged {
@@ -6274,7 +6297,12 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
             // args from the call, find the monomorphized instance, and call it under the
             // type-param env (mono's registerAssocInst registered the FnInst).
             if isGenericFreeFn(c: inout c, fi: afi) {
-                val ginf: Array[U64] = llvmInferFnArgs(c: inout c, st: inout st, f: c.funcs[afi], args: args)
+                mut val ginf: Array[U64] = llvmInferFnArgs(c: inout c, st: inout st, f: c.funcs[afi], args: args)
+                // a factory whose type params aren't fully determined by its arguments
+                // (`Head.empty()` has none) grounds the unfound params from the expected
+                // type: a factory returns `Self = Head[typeParams]`, so when the context
+                // wants a same-head generic instance, its type args ARE the params.
+                groundAssocFromExpected(c: inout c, st: inout st, recvStart: arn.nameStart, recvLen: arn.nameLen, fi: afi, inferred: inout ginf)
                 val agslot: U64 = genFnSlotFor(c: inout c, fnIdx: afi, args: ginf, st: inout st)
                 if agslot < st.genFnK.count {
                     val gaf: Func = c.funcs[afi]
@@ -7462,6 +7490,43 @@ fn llvmInferFnArgs(c: inout Comp, st: inout LlvmCtx, f: Func, args: Array[Arg]) 
         ti += 1
     }
     return out
+}
+
+// Fill a generic factory's type params left unfound by argument inference (a no-arg
+// factory like `Head.empty()`) from the expected type. A factory returns `Self =
+// Head[typeParams]`, so when the call's context wants a same-head generic instance
+// (`st.expectedTy = Head[U]`), its type args line up with the params positionally.
+// Only touches unfound (0) slots; an arg-inferred param wins.
+fn groundAssocFromExpected(c: inout Comp, st: inout LlvmCtx, recvStart: U64, recvLen: U64, fi: U64, inferred: inout Array[U64]) {
+    if st.expectedTy == 0U64 {
+        return
+    }
+    if !(isGenericInst(c: inout c, ref: st.expectedTy)) {
+        return
+    }
+    val et: TypeRef = c.types[st.expectedTy]
+    if !(spansEqual(c: inout c, aStart: et.nameStart, aLen: et.nameLen, bStart: recvStart, bLen: recvLen)) {
+        return
+    }
+    if et.args.count != inferred.count {
+        return
+    }
+    mut val i: U64 = 0
+    while i < inferred.count {
+        // unfound (0) OR a width-less recovery (a nameless ref, e.g. an integer field
+        // whose width the structural pass couldn't name): the expected type's arg is
+        // the authoritative ground for this param, so override.
+        mut val needsGround: Bool = inferred[i] == 0U64
+        if !(needsGround) {
+            if c.types[inferred[i]].nameLen == 0U64 {
+                needsGround = true
+            }
+        }
+        if needsGround {
+            inferred[i] = et.args[i]
+        }
+        i += 1
+    }
 }
 
 // Find the registered generic-fn instance slot for (fnIdx, args), or count.

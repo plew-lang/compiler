@@ -1873,6 +1873,147 @@ fn recordCapture(c: inout Comp, closureId: U64, localIdx: U64) {
     c.captures.append(<CaptureEntry closureId=closureId nameStart=lo.nameStart nameLen=lo.nameLen tyStart=lo.tyStart tyLen=lo.tyLen isArray=lo.isArray ty=lo.ty boxed=boxed />)
 }
 
+// Optional chaining over a NON-Optional `Chain` type (spec/12): rewrite the
+// `base?.member` node in place into the trait desugar so the rest of the pipeline
+// (instance discovery, verify, backend) sees only ordinary nodes — `?.` is not
+// special-cased to `Optional` (the backend keeps an inlined fast path for the
+// Optional identity case, an observable-equivalent optimization). With `base: R`
+// (head `Rh`, `R: Chain`):
+//
+//   match base.chain() {                              // chain() -> Optional[Value]
+//       Optional.Some(v: val __chainVal) => <Rh.fromValue value=__chainVal.member />
+//       Optional.None                     => <Rh.empty />
+//   }
+//
+// `Rh.fromValue`/`Rh.empty` are assoc-fn (factory) calls; their type args are
+// inferred from the member value (so the result is `Rh[U]`, U = member's type).
+// Runs inside the scope-aware Mono walk because typeOf(base) needs the local env.
+fn rewriteOptChainToChainMatch(c: inout Comp, exprId: U64, base: U64, memberStart: U64, memberLen: U64, headStart: U64, headLen: U64) {
+    val chainN: Bind = internBytes(c: inout c, s: "chain")
+    val fromValueN: Bind = internBytes(c: inout c, s: "fromValue")
+    val emptyN: Bind = internBytes(c: inout c, s: "empty")
+    val optN: Bind = internBytes(c: inout c, s: "Optional")
+    val someN: Bind = internBytes(c: inout c, s: "Some")
+    val noneN: Bind = internBytes(c: inout c, s: "None")
+    val vFieldN: Bind = internBytes(c: inout c, s: "v")
+    val cvN: Bind = internBytes(c: inout c, s: "__chainVal")
+    val valueN: Bind = internBytes(c: inout c, s: "value")
+    // scrutinee: base.chain()
+    val noArgs: Array[Arg] = []
+    val scrut: U64 = c.pushExpr(e: <Expr.Method recv=base nameStart=chainN.nameStart nameLen=chainN.nameLen args=noArgs />)
+    // Some(v: val __chainVal) => <Head.fromValue value=__chainVal.member />
+    val fromRecv: U64 = c.pushExpr(e: <Expr.Ident start=headStart len=headLen />)
+    val cvRef: U64 = c.pushExpr(e: <Expr.Ident start=cvN.nameStart len=cvN.nameLen />)
+    val memberField: U64 = c.pushExpr(e: <Expr.Field base=cvRef nameStart=memberStart nameLen=memberLen />)
+    mut val fromArgs: Array[Arg] = []
+    fromArgs.append(value: <Arg expr=memberField isInout=false labelStart=valueN.nameStart labelLen=valueN.nameLen hasLabel=true />)
+    val fromCall: U64 = c.pushExpr(e: <Expr.Method recv=fromRecv nameStart=fromValueN.nameStart nameLen=fromValueN.nameLen args=fromArgs />)
+    mut val someStmts: Array[U64] = []
+    someStmts.append(value: c.pushStmt(s: <Stmt.Give value=fromCall />))
+    val someBlk: U64 = c.blocks.count
+    c.blocks.append(value: <Block stmts=someStmts />)
+    mut val someBinds: Array[Bind] = []
+    someBinds.append(value: <Bind nameStart=cvN.nameStart nameLen=cvN.nameLen nameId=cvN.nameId fieldStart=vFieldN.nameStart fieldLen=vFieldN.nameLen offset=memberStart />)
+    val someArm: MatchArm = <MatchArm isWildcard=false enumStart=optN.nameStart enumLen=optN.nameLen variantStart=someN.nameStart variantLen=someN.nameLen binds=someBinds body=someBlk isStruct=false isDiverge=false />
+    // None => <Head.empty />
+    val emptyRecv: U64 = c.pushExpr(e: <Expr.Ident start=headStart len=headLen />)
+    val emptyCall: U64 = c.pushExpr(e: <Expr.Method recv=emptyRecv nameStart=emptyN.nameStart nameLen=emptyN.nameLen args=noArgs />)
+    mut val noneStmts: Array[U64] = []
+    noneStmts.append(value: c.pushStmt(s: <Stmt.Give value=emptyCall />))
+    val noneBlk: U64 = c.blocks.count
+    c.blocks.append(value: <Block stmts=noneStmts />)
+    val noBinds: Array[Bind] = []
+    val noneArm: MatchArm = <MatchArm isWildcard=false enumStart=optN.nameStart enumLen=optN.nameLen variantStart=noneN.nameStart variantLen=noneN.nameLen binds=noBinds body=noneBlk isStruct=false isDiverge=false />
+    mut val arms: Array[MatchArm] = []
+    arms.append(value: someArm)
+    arms.append(value: noneArm)
+    c.exprs[exprId] = <Expr.MatchExpr scrut=scrut arms=arms />
+}
+
+// Register the instances the Chain desugar needs that aren't reachable by argument
+// inference: the result type `Head[U]` (so its struct/enum + methods are emitted)
+// and the `empty()` factory's monomorphized instance keyed by [U] (empty takes no
+// argument, so its type param can only come from the result type's context).
+fn registerChainResultInsts(c: inout Comp, baseRef: U64, memberStart: U64, memberLen: U64, headStart: U64, headLen: U64) {
+    if baseRef >= c.types.count {
+        return
+    }
+    if c.types[baseRef].args.count < 1 {
+        return
+    }
+    val vRef: U64 = c.types[baseRef].args[0]
+    val vInfo: TypeInfo = typeInfoOfRef(c: inout c, ref: vRef)
+    val uInfo: TypeInfo = fieldType(c: inout c, structStart: vInfo.nameStart, structLen: vInfo.nameLen, fieldStart: memberStart, fieldLen: memberLen)
+    mut val uRef: U64 = uInfo.ref
+    if uRef == 0 {
+        val noTArgs: Array[U64] = []
+        uRef = c.pushType(t: <TypeRef nameStart=uInfo.nameStart nameLen=uInfo.nameLen args=noTArgs />)
+    }
+    mut val oArgs: Array[U64] = []
+    oArgs.append(value: uRef)
+    val oRef: U64 = c.pushType(t: <TypeRef nameStart=headStart nameLen=headLen args=oArgs />)
+    scanType(c: inout c, ref: oRef)
+    // the chain() result `Optional[V]` (V = the receiver's chain Value = its first
+    // type arg): register the concrete instance so the desugar's `match base.chain()`
+    // sets the enum env and types the Some-payload bind (the front-end method-result
+    // typeOf can recover only the ungrounded `Optional[T]` template otherwise).
+    val optN: Bind = internBytes(c: inout c, s: "Optional")
+    mut val optArgs: Array[U64] = []
+    optArgs.append(value: vRef)
+    val optVRef: U64 = c.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=optArgs />)
+    scanType(c: inout c, ref: optVRef)
+    // registering the result `Head[U]` pulls in its own `chain()`, whose body builds
+    // `Optional[U]`; register that too (U may differ from V — `Head[U]` vs receiver
+    // `Head[V]`).
+    mut val optUArgs: Array[U64] = []
+    optUArgs.append(value: uRef)
+    val optURef: U64 = c.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=optUArgs />)
+    scanType(c: inout c, ref: optURef)
+    // both factories monomorphize to `Head[U]`: `empty()` has no argument, and the
+    // `fromValue(value:)` argument is the synthesized `__chainVal.member` whose type
+    // the argument-inference path can't recover (a fresh match-bound place), so
+    // register both instances explicitly keyed by [U].
+    registerChainFactoryInst(c: inout c, headStart: headStart, headLen: headLen, name: "empty", uRef: uRef)
+    registerChainFactoryInst(c: inout c, headStart: headStart, headLen: headLen, name: "fromValue", uRef: uRef)
+}
+
+// Register `Head.<name>` (a Chain factory) monomorphized at [uRef].
+fn registerChainFactoryInst(c: inout Comp, headStart: U64, headLen: U64, name: String, uRef: U64) {
+    val fi: U64 = findAssocByName(c: inout c, recvStart: headStart, recvLen: headLen, name: name)
+    if fi >= c.funcs.count {
+        return
+    }
+    if !(isGenericFreeFn(c: inout c, fi: fi)) {
+        return
+    }
+    mut val fArgs: Array[U64] = []
+    fArgs.append(value: uRef)
+    if !(fnInstExists(c: inout c, fnIdx: fi, args: fArgs)) {
+        c.fnInsts.append(<FnInst fnIdx=fi args=fArgs />)
+    }
+}
+
+// The c.funcs index of an assoc fn `Head.name` (no self), by name only — used to
+// register a Chain factory instance whose type args can't be inferred from the call.
+fn findAssocByName(c: inout Comp, recvStart: U64, recvLen: U64, name: String) -> U64 {
+    val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
+    val nm: Bind = internBytes(c: inout c, s: name)
+    val qName: U64 = intern(c: inout c, start: nm.nameStart, len: nm.nameLen)
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if !(f.hasRecv) {
+            if f.recvId == qRecv {
+                if f.nameId == qName {
+                    return i
+                }
+            }
+        }
+        i += 1
+    }
+    return c.funcs.count
+}
+
 fn scanExprInsts(c: inout Comp, exprId: U64) {
     match c.exprs[exprId] {
         Expr.Ident(val start, val len) => {
@@ -1985,6 +2126,27 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
         Expr.Cast(val operand, val tyStart, val tyLen, val ty) => { scanExprInsts(c: inout c, exprId: operand) }
         Expr.OptChain(val base, val memberStart, val memberLen) => {
             scanExprInsts(c: inout c, exprId: base)
+            // a non-Optional `Chain` receiver: rewrite to the trait desugar (a match
+            // over `base.chain()` with `fromValue`/`empty`) and scan the new tree so
+            // its method/assoc instances are discovered. Optional keeps the backend
+            // fast path (an observable-equivalent inlining, not a special case).
+            val bt: TypeInfo = typeOf(c: inout c, id: base)
+            if bt.kind == 2 {
+                if !(rangeEquals(bytes: c.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Optional")) {
+                    val chN: Bind = internBytes(c: inout c, s: "chain")
+                    if typeHasMethodNamed(c: inout c, recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: chN.nameStart, nameLen: chN.nameLen) {
+                        rewriteOptChainToChainMatch(c: inout c, exprId: exprId, base: base, memberStart: memberStart, memberLen: memberLen, headStart: bt.nameStart, headLen: bt.nameLen)
+                        scanExprInsts(c: inout c, exprId: exprId)
+                        // the result `Head[U]` and the no-arg `empty()` factory's
+                        // instance can't be inferred from arguments (empty has none),
+                        // so register them explicitly: U = member's type on the chain
+                        // Value (the receiver's first type arg, by the v1 assumption
+                        // that `type Value` is the first type parameter).
+                        registerChainResultInsts(c: inout c, baseRef: bt.ref, memberStart: memberStart, memberLen: memberLen, headStart: bt.nameStart, headLen: bt.nameLen)
+                        return
+                    }
+                }
+            }
             // register the Optional[U] result so its C struct is emitted.
             val rr: U64 = optChainResultRef(c: inout c, base: base, memberStart: memberStart, memberLen: memberLen)
             if rr != 0 {

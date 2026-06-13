@@ -375,6 +375,39 @@ export trait Neg    { type Output  assoc fn neg(value: Self) -> Output }
 export trait Not    { type Output  assoc fn not(value: Self) -> Output }
 export trait BitNot { type Output  assoc fn bitnot(value: Self) -> Output }
 
+// Optional chaining (spec/12): `receiver?.member` is sugar for member access on a
+// type that branches into "has a value" / "is empty". `?.` is NOT special-cased to
+// `Optional` — it desugars over the `Chain` trait, so any conforming type works:
+//
+//   match receiver.chain() {
+//       Optional.Some(value: val v) => <O.fromValue value=v.member />
+//       Optional.None                  => <O.empty />
+//   }
+//
+// where `O` is the receiver's own constructor re-applied to the member's type. The
+// short-circuit lives in the receiver (an empty receiver skips the member access);
+// the deferral is the compiler's `match` desugar, so the trait members themselves are
+// eager — that is why `?.` is a trait (unlike `??`, whose deferred operand is
+// user-supplied). `chain()`'s empty case carries no value, so error-bearing types
+// (`Result`) are excluded — use `try` (spec/13) for those.
+export trait Chain {
+    type Value
+    fn chain() -> Optional[Value]
+    factory fromValue(value: Value)
+    factory empty()
+}
+
+// Optional's own conformance is the identity: it already is the value-or-empty shape,
+// so `chain()` returns self and the factories rebuild Some/None. (The backend inlines
+// this identity case rather than emitting the trait calls — an observable-equivalent
+// optimization, not a special case in the language.)
+pub impl[T] Optional[T] as Chain {
+    type Value = T
+    fn chain() -> Optional[T] { return self }
+    factory fromValue(value: T) { return <Optional.Some v=value /> }
+    factory empty() { return <Optional.None /> }
+}
+
 // Exponentiation (spec/12): `**` is not adopted; `pow(base: x, exp: n)` is the named
 // arithmetic operation, backed by the `Pow[Exp]` trait (same shape as `Add[Rhs]`, with
 // multiple conformances per base for different exponent types). The bare call dispatches

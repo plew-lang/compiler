@@ -1,0 +1,40 @@
+import @Std/Io with { print }
+import @Std/Core
+
+// `?.` is not special-cased to Optional — it desugars over the `Chain` trait
+// (spec/12), so any conforming value-or-empty type supports optional chaining.
+// `Loaded[T]` models "loaded / not yet loaded"; its Chain conformance lets `lo?.n`
+// read a member when loaded and short-circuit to NotLoaded otherwise.
+
+struct Box { pub val n: I32 }
+
+enum Loaded[T] {
+    NotLoaded
+    Loaded(v: T)
+}
+
+pub impl[T] Loaded[T] as Chain {
+    type Value = T
+    fn chain() -> Optional[T] {
+        match self {
+            Loaded.Loaded(val v) => { return <Optional[T].Some v=v /> }
+            Loaded.NotLoaded => { return <Optional[T].None /> }
+        }
+    }
+    factory fromValue(value: T) { return <Loaded[T].Loaded v=value /> }
+    factory empty() { return <Loaded[T].NotLoaded /> }
+}
+
+fn show(r: Loaded[I32]) {
+    match r {
+        Loaded.Loaded(val v) => { print(v) }
+        Loaded.NotLoaded => { print(-1I32) }
+    }
+}
+
+fn main() {
+    val a: Loaded[Box] = <Loaded[Box].Loaded v=<Box n=42 /> />
+    val none: Loaded[Box] = <Loaded[Box].NotLoaded />
+    show(r: a?.n)        // 42  (loaded -> member)
+    show(r: none?.n)     // -1  (not loaded -> short-circuit)
+}
