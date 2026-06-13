@@ -244,7 +244,13 @@ export struct ExternAst {
     pub val abiSpan: Span
     pub val fns: Array[SigAst]
     pub val structNames: Array[String]
+    // per-struct source span covering `struct Name` (the whole item), so a `@[...]`
+    // derive on an extern struct can feed `parseItem` the item's source (spec/16).
     pub val structSpans: Array[Span]
+    // per-struct `@[...]` directive (parallel to structNames; empty `reqs` = none).
+    // Lets a derive macro target an opaque lang-item / FFI type declared in an extern
+    // block (spec/15,16) — e.g. `@[IntTryFrom(...)] struct I8`.
+    pub val structDirectives: Array[DirectiveAst]
     pub val span: Span
 }
 

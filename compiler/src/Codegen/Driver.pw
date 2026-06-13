@@ -158,6 +158,19 @@ fn runFrontend() -> Comp {
                         }
                     }
                     TopItemAst.Directive(val dir) => { sawDirective = true }
+                    TopItemAst.Extern(val e) => {
+                        // a `@[...]` derive on an opaque extern lang-item (spec/15,16:
+                        // e.g. `@[IntTryFrom] struct I8`) lives inside the extern block,
+                        // not at top level — scan its per-struct directives too so the
+                        // generated sibling is auto-parted.
+                        mut val di: U64 = 0
+                        while di < e.structDirectives.count {
+                            if e.structDirectives[di].reqs.count > 0U64 {
+                                sawDirective = true
+                            }
+                            di += 1
+                        }
+                    }
                     _ => {}
                 }
                 ii += 1

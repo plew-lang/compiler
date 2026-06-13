@@ -348,9 +348,29 @@ export fn assert(cond~: Bool, message: String = "assertion failed") {
 // Opaque intrinsic types (representation is the compiler's int*_t / PlewString
 // mapping); declaring them here makes Core their owner, so Core may coherently
 // `impl` traits for them (spec/07,09 type-ownership).
+// The integer primitives carry `@[IntTryFrom(sources: [...])]` listing the sub-64-bit
+// SOURCE types from which a narrowing TryFrom into that target is fallible (spec/12).
+// The decision of WHICH sources are fallible lives here at the declaration site; the
+// `@[IntTryFrom]` derive (in @Std/Syntax) is a dumb renderer that emits one delegating
+// `impl T as TryFrom[S]` per listed source (→ Core.gen.pw). The two wide sources (I64,
+// U64) and the float sources are the hand-written bases below; I64 as a TARGET has no
+// fallible sub-64-bit source (everything widens into it), so it carries none.
 extern "plew-intrinsic" {
-    struct I8   struct I16  struct I32  struct I64
-    struct U8   struct U16  struct U32  struct U64
+    @[IntTryFrom(sources: ["I16", "I32", "U8", "U16", "U32"])]
+    struct I8
+    @[IntTryFrom(sources: ["I32", "U16", "U32"])]
+    struct I16
+    @[IntTryFrom(sources: ["U32"])]
+    struct I32
+    struct I64
+    @[IntTryFrom(sources: ["I8", "I16", "I32", "U16", "U32"])]
+    struct U8
+    @[IntTryFrom(sources: ["I8", "I16", "I32", "U32"])]
+    struct U16
+    @[IntTryFrom(sources: ["I8", "I16", "I32"])]
+    struct U32
+    @[IntTryFrom(sources: ["I8", "I16", "I32"])]
+    struct U64
     struct F32  struct F64
     struct Bool struct String
 }
@@ -791,6 +811,47 @@ pub impl U32 as TryFrom[U64] {
             return <Result[U32, RangeError].Err error=<RangeError value=0I64 /> />
         }
         return <Result[U32, RangeError].Ok value=truncU32(n: from) />
+    }
+}
+
+// Unsigned narrowing from the wide SIGNED I64 (spec/12): the per-target base that the
+// generated narrower-source witnesses (`@[IntTryFrom]` -> Core.gen.pw) delegate to after
+// widening their source `from as I64`. A signed wide value must be non-negative AND within
+// the unsigned target's upper bound; then reinterpret-and-truncate via the U64 floor.
+pub impl U8 as TryFrom[I64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I64) {
+        if from < 0I64 {
+            return <Result[U8, RangeError].Err error=<RangeError value=from /> />
+        }
+        if from > 255I64 {
+            return <Result[U8, RangeError].Err error=<RangeError value=from /> />
+        }
+        return <Result[U8, RangeError].Ok value=truncU8(n: bitCastU64(n: from)) />
+    }
+}
+pub impl U16 as TryFrom[I64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I64) {
+        if from < 0I64 {
+            return <Result[U16, RangeError].Err error=<RangeError value=from /> />
+        }
+        if from > 65535I64 {
+            return <Result[U16, RangeError].Err error=<RangeError value=from /> />
+        }
+        return <Result[U16, RangeError].Ok value=truncU16(n: bitCastU64(n: from)) />
+    }
+}
+pub impl U32 as TryFrom[I64] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I64) {
+        if from < 0I64 {
+            return <Result[U32, RangeError].Err error=<RangeError value=from /> />
+        }
+        if from > 4294967295I64 {
+            return <Result[U32, RangeError].Err error=<RangeError value=from /> />
+        }
+        return <Result[U32, RangeError].Ok value=truncU32(n: bitCastU64(n: from)) />
     }
 }
 

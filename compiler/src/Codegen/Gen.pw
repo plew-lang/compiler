@@ -113,6 +113,15 @@ fn synthGenMain(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.derives.count {
         val d: DeriveReq = c.derives[i]
+        // only generate from the ENTRY file's annotations (module 0), not those of its
+        // dependencies (spec/16: `plew gen <file>` processes <file>, not the libraries it
+        // imports). This matters now that std files carry `@[...]` (e.g. Core's primitive
+        // `@[IntTryFrom]`): force-loading @Std/Core alongside an entry that IS Core would
+        // otherwise collect the same annotations twice.
+        if moduleOf(c: inout c, offset: d.declStart) != 0U64 {
+            i += 1
+            continue
+        }
         if !(isBuiltinDerive(c: inout c, start: d.nameStart, len: d.nameLen)) {
             // directive arguments must set publicly-settable fields (enforce the
             // construction rule the post-checks pass skipped for this synthetic Make).

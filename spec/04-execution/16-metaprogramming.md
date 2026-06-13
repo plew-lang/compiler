@@ -62,7 +62,7 @@ pub impl Builder as ParameterizedDerive {
 struct Config { }
 ```
 
-注釈は struct / enum / fn だけでなく **`impl` ブロック・`trait`** にも付けられる（`@[Name] impl T { … }`・`@[Name] trait U { … }`）＝そのとき `input` は `TopItemAst.Impl` / `TopItemAst.Trait`。
+注釈は struct / enum / fn だけでなく **`impl` ブロック・`trait`** にも付けられる（`@[Name] impl T { … }`・`@[Name] trait U { … }`）＝そのとき `input` は `TopItemAst.Impl` / `TopItemAst.Trait`。**`extern` ブロック内の不透明 lang-item / FFI 型**（`extern(plewIntrinsic) { @[Name] struct I8 }`・`extern(c) { @[Name] type … }`）にも付けられ、`input` は本体なし `struct` の `TopItemAst.Decl`（`d.name` ＝その型名）。これでコア床のプリミティブ型に derive で実装を生やせる（例＝`@[IntTryFrom(sources: […])] struct I8` が整数 narrowing `TryFrom` witness 群を生成）。derive マクロ自身は `@Std/Syntax`（→`@Std/Core`）に依存するので、その出力をコア床に取り込む循環は **生成物（`X.gen.pw`）をコミットする**ことで断つ（出荷物は生成された `impl` のみで構文ライブラリに依存しない）。なお derive がコア床の循環を踏むのは**生成物がツールチェーン自身のコンパイルに必要なとき**だけで（算術 witness はコアが内部使用するので循環＝独立したスタンドアロン生成器が要る）、`TryFrom` narrowing のようにコア／構文ライブラリが内部使用しないものは `@[...]` derive で生成できる。
 
 **なぜこの 2 分割か（trait と derive の同名衝突の解消）。** Plew は **型とトレイトが同一名前空間**なので、Rust 流に「`trait Hash` ＋ derive 用 `struct Hash`」を共存させられない（Rust はマクロ名前空間と型名前空間が別なので可能だが、Plew には無い）。そこで **derive を必ず構造体にする前提を外し、トレイト derive はトレイト自身が `assoc fn derive` を持つ**ことで `struct Hash` を不要にした＝`Hash` は 1 エンティティ（トレイト）のまま衝突しない。`All`/`Builder` のような**トレイトを持たない** derive だけが構造体（対応するトレイトが無いので衝突もしない）。**却下案**：(A) Rust 流の別名前空間＝Plew に無く、Core 内でモジュールを分けて名前空間で逃がすのは不自然。(C) trait と derive を別名（`@[DeriveEq]` 等）＝同名前空間なら筋は通るが、共通ケース（設定なし derive が大半）に恒久的な命名負担が乗り「`Eq` の derive は何という名前か」が毎回問われ混乱する。**採用**＝設定なしを無印 `Derive`（assoc）に置くことで共通ケースに修飾子が要らず、命名問題そのものが消える。→ [claude/design-decisions.md](../../claude/design-decisions.md)「trait と derive の同名」。
 

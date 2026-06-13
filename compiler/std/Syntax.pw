@@ -75,3 +75,43 @@ pub impl Hash as Derive {
         }
     }
 }
+
+// `@[IntTryFrom(sources: [...])]` — generate primitive integer narrowing TryFrom
+// witnesses (spec/12). A pure, branch-free renderer: it knows nothing about which
+// (target, source) pairs are fallible — the annotated declaration is the TARGET and
+// the directive arg lists the SOURCE types (the fallibility decision lives at the
+// declaration site, not here). For each source S it emits the SAME body, delegating
+// to the target's own `TryFrom[I64]` witness after a lossless widen `from as I64`
+// (every sub-64-bit integer widens losslessly to I64). The per-target range/truncate
+// knowledge stays in the hand-written `impl T as TryFrom[I64]` bases in Core — O(8),
+// not the O(56) pair matrix. Used by the standalone-equivalent dogfood path: Core
+// annotates its primitive decls and commits the generated `Core.gen.pw`.
+export struct IntTryFrom {
+    pub val sources: Array[String]
+}
+pub impl IntTryFrom { factory }
+pub impl IntTryFrom as ParameterizedDerive {
+    fn derive(input: TopItemAst) -> String {
+        match input {
+            TopItemAst.Decl(val d) => {
+                mut val s: Src = newSrc()
+                mut val i: U64 = 0
+                while i < self.sources.count {
+                    val src: String = self.sources[i]
+                    s.put("pub impl ")
+                    s.put(d.name)
+                    s.put(" as TryFrom[")
+                    s.put(src)
+                    s.put("] {\n    type Error = RangeError\n    result[RangeError] factory convert(from: ")
+                    s.put(src)
+                    s.put(") {\n        return <")
+                    s.put(d.name)
+                    s.put(".convert from=(from as I64) />\n    }\n}\n")
+                    i += 1
+                }
+                return s.finish()
+            }
+            _ => { return "" }
+        }
+    }
+}

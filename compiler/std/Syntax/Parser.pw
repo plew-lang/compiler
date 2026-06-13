@@ -1355,6 +1355,10 @@ export fn parseExternDecl(p: inout P) -> ExternAst {
     mut val fns: Array[SigAst] = []
     mut val structNames: Array[String] = []
     mut val structSpans: Array[Span] = []
+    mut val structDirectives: Array[DirectiveAst] = []
+    // a `@[...]` directive seen since the last item — attached to the next struct/type
+    // (spec/16: a derive on an opaque extern lang-item, e.g. `@[IntTryFrom] struct I8`).
+    mut val pendingDir: DirectiveAst = <DirectiveAst reqs=[] />
     while true {
         p.skipNewlines()
         match p.curKind() {
@@ -1366,12 +1370,16 @@ export fn parseExternDecl(p: inout P) -> ExternAst {
             Kind.KwFn => {
                 p.advance()
                 fns.append(parseSigAst(p: inout p, isAssoc: false))
+                pendingDir = <DirectiveAst reqs=[] />
             }
             Kind.KwStruct => {
+                val kwSpan: Span = p.spanOf(t: p.curTok())
                 p.advance()
                 val sTok: Tok = p.curTok()
                 structNames.append(p.text(t: sTok))
-                structSpans.append(p.spanOf(t: sTok))
+                structSpans.append(<Span start=kwSpan.start end=p.spanOf(t: sTok).end />)
+                structDirectives.append(pendingDir)
+                pendingDir = <DirectiveAst reqs=[] />
                 p.advance()
             }
             _ => {
@@ -1379,18 +1387,27 @@ export fn parseExternDecl(p: inout P) -> ExternAst {
                 // LLVMModuleRef }`). Captured like `struct Name` (a body-less opaque
                 // type). `type` is a contextual keyword (an Ident), not a token kind.
                 if curIs(p: inout p, kw: "type") {
+                    val kwSpan: Span = p.spanOf(t: p.curTok())
                     p.advance()
                     val tTok: Tok = p.curTok()
                     structNames.append(p.text(t: tTok))
-                    structSpans.append(p.spanOf(t: tTok))
+                    structSpans.append(<Span start=kwSpan.start end=p.spanOf(t: tTok).end />)
+                    structDirectives.append(pendingDir)
+                    pendingDir = <DirectiveAst reqs=[] />
                     p.advance()
                 } else {
-                    p.advance()
+                    // a `@[...]` directive (the `@` token followed by `[`) annotating the
+                    // next struct/type — parse and stash it; otherwise skip one token.
+                    if p.peekKind(off: 1) == <Kind.LBracket /> {
+                        pendingDir = parseDirectiveAst(p: inout p)
+                    } else {
+                        p.advance()
+                    }
                 }
             }
         }
     }
-    return <ExternAst abiOk=abiOk abiC=abiC abiSpan=abiSpan fns=fns structNames=structNames structSpans=structSpans span=<Span start=p.base + externTok.start end=p.prevEnd() /> />
+    return <ExternAst abiOk=abiOk abiC=abiC abiSpan=abiSpan fns=fns structNames=structNames structSpans=structSpans structDirectives=structDirectives span=<Span start=p.base + externTok.start end=p.prevEnd() /> />
 }
 
 // `import <path> [with { name [as Q], ... }]` or `part <path>` (spec/15). The cursor

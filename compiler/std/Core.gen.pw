@@ -1,0 +1,144 @@
+pub impl I8 as TryFrom[I16] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I16) {
+        return <I8.convert from=(from as I64) />
+    }
+}
+pub impl I8 as TryFrom[I32] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I32) {
+        return <I8.convert from=(from as I64) />
+    }
+}
+pub impl I8 as TryFrom[U8] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: U8) {
+        return <I8.convert from=(from as I64) />
+    }
+}
+pub impl I8 as TryFrom[U16] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: U16) {
+        return <I8.convert from=(from as I64) />
+    }
+}
+pub impl I8 as TryFrom[U32] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: U32) {
+        return <I8.convert from=(from as I64) />
+    }
+}
+pub impl I16 as TryFrom[I32] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I32) {
+        return <I16.convert from=(from as I64) />
+    }
+}
+pub impl I16 as TryFrom[U16] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: U16) {
+        return <I16.convert from=(from as I64) />
+    }
+}
+pub impl I16 as TryFrom[U32] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: U32) {
+        return <I16.convert from=(from as I64) />
+    }
+}
+pub impl I32 as TryFrom[U32] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: U32) {
+        return <I32.convert from=(from as I64) />
+    }
+}
+pub impl U8 as TryFrom[I8] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I8) {
+        return <U8.convert from=(from as I64) />
+    }
+}
+pub impl U8 as TryFrom[I16] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I16) {
+        return <U8.convert from=(from as I64) />
+    }
+}
+pub impl U8 as TryFrom[I32] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I32) {
+        return <U8.convert from=(from as I64) />
+    }
+}
+pub impl U8 as TryFrom[U16] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: U16) {
+        return <U8.convert from=(from as I64) />
+    }
+}
+pub impl U8 as TryFrom[U32] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: U32) {
+        return <U8.convert from=(from as I64) />
+    }
+}
+pub impl U16 as TryFrom[I8] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I8) {
+        return <U16.convert from=(from as I64) />
+    }
+}
+pub impl U16 as TryFrom[I16] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I16) {
+        return <U16.convert from=(from as I64) />
+    }
+}
+pub impl U16 as TryFrom[I32] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I32) {
+        return <U16.convert from=(from as I64) />
+    }
+}
+pub impl U16 as TryFrom[U32] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: U32) {
+        return <U16.convert from=(from as I64) />
+    }
+}
+pub impl U32 as TryFrom[I8] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I8) {
+        return <U32.convert from=(from as I64) />
+    }
+}
+pub impl U32 as TryFrom[I16] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I16) {
+        return <U32.convert from=(from as I64) />
+    }
+}
+pub impl U32 as TryFrom[I32] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I32) {
+        return <U32.convert from=(from as I64) />
+    }
+}
+pub impl U64 as TryFrom[I8] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I8) {
+        return <U64.convert from=(from as I64) />
+    }
+}
+pub impl U64 as TryFrom[I16] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I16) {
+        return <U64.convert from=(from as I64) />
+    }
+}
+pub impl U64 as TryFrom[I32] {
+    type Error = RangeError
+    result[RangeError] factory convert(from: I32) {
+        return <U64.convert from=(from as I64) />
+    }
+}
