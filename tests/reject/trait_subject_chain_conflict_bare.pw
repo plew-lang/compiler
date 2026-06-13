@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+// Bare `s.a()` must be rejected: `a` reaches its dependency `b` through both
+// C and D (multi-path intermediate), so no single conformance path is implied.
+// Must select with `s#C.a()` / `s#D.a()` (see trait_subject_chain_conflict run test).
+trait C { fn cv() -> I64 }
+trait D { fn dv() -> I64 }
+trait B { fn b() -> I64 }
+trait A { fn a() -> I64 }
+struct S { val v: I64 }
+pub impl S as C { fn cv() -> I64 { return self.v } }
+pub impl S as D { fn dv() -> I64 { return self.v * 100I64 } }
+pub impl C as B { fn b() -> I64 { return self.cv() + 1I64 } }
+pub impl D as B { fn b() -> I64 { return self.dv() + 2I64 } }
+pub impl B as A { fn a() -> I64 { return self.b() + 10I64 } }
+
+fn main() {
+    val s: S = <S v=5 />
+    print(s.a())   // REJECT: a unreachable bare (b multi-path)
+}

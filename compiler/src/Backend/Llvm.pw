@@ -8970,6 +8970,15 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
                 recvRef = c.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=selfViewArgs viewExtId=f.extId />)
             }
         }
+        // a view-rooted conferred witness (spec/09 chain conflict, `s#C.a()`): self is
+        // viewed as `Recv#root`, so an internal `self.m()` to a multi-path intermediate
+        // resolves through the SAME root C (findExtMethodById via the view chain).
+        if f.selfViewId != 0U64 {
+            if recvRef == 0U64 {
+                mut val selfRootArgs: Array[U64] = []
+                recvRef = c.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=selfRootArgs viewExtId=f.selfViewId />)
+            }
+        }
         pushLocalR(st: inout st, nameStart: st.selfStart, nameLen: st.selfLen, ptr: selfPtr, ty: recvTy, kind: kindFromTySpan(c: inout c, tyStart: f.recvStart, tyLen: f.recvLen), structIdx: recvSidx, isArr: selfIsArr, elemTy: selfElemTy, elemKind: 0U64, typeRef: recvRef)
         // a `move fn` self is owned (deinit'd in the callee); `fn`/`inout fn`/
         // `borrow fn` self is a borrow the caller owns.

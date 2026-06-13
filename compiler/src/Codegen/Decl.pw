@@ -110,14 +110,18 @@ fn isBlanketConform(c: inout Comp, cf: Conform) -> Bool {
     return false
 }
 
-// Whether a conformance of `typeId` to `traitId` is already recorded (avoid
-// registering a duplicate blanket-derived Conform).
+// Whether a BARE conformance of `typeId` to `traitId` is recorded. A view-rooted
+// conform (viewRootId != 0, spec/09 chain conflict) does NOT count: the type only
+// conforms through a `value#root` view, not bare — so a bare `where _: traitId` is
+// ambiguous and must pick a path. (Also used to avoid registering a duplicate.)
 fn conformExists(c: inout Comp, typeId: U64, traitId: U64) -> Bool {
     mut val i: U64 = 0
     while i < c.conforms.count {
         if c.conforms[i].typeId == typeId {
             if c.conforms[i].traitId == traitId {
-                return true
+                if c.conforms[i].viewRootId == 0U64 {
+                    return true
+                }
             }
         }
         i += 1
@@ -247,13 +251,20 @@ fn instantiateTraitSubjectConforms(c: inout Comp) {
                     val cand: Conform = c.conforms[cj]
                     if cand.traitId == cf.typeId {
                         if !(isTraitName(c: inout c, start: cand.typeStart, len: cand.typeLen)) {
-                            // single path → record the conformance (rides the bare
-                            // surface like an ordinary provided method); multi-path (S
-                            // reaches A via P→A and Q→A) → copy the witness tagged for `#`
-                            // but do NOT record bare conformance: bare `s.m()` / `where
-                            // _: A` is then ambiguous and the path is picked with `s#P`.
-                            val single: Bool = subjectPathCount(c: inout c, tId: cand.typeId, aTraitId: cf.traitId) <= 1U64
-                            applyBlanketTo(c: inout c, blanket: cf, recvStart: cand.typeStart, recvLen: cand.typeLen, guardHi: guardHi, recordConform: single)
+                            // the view-root under which we confer A on T via this impl
+                            // (spec/09 chain conflict). If the candidate conformance to B
+                            // is already view-rooted (T reaches B only via #root), the
+                            // chain stays rooted there — propagate it. Otherwise (T
+                            // bare-conforms to B) a NEW root is born iff A is reached by T
+                            // through more than one subject trait (multi-path): the root
+                            // is THIS impl's subject. A single bare path → root 0 (bare).
+                            mut val vr: U64 = cand.viewRootId
+                            if vr == 0U64 {
+                                if subjectPathCount(c: inout c, tId: cand.typeId, aTraitId: cf.traitId) > 1U64 {
+                                    vr = cf.typeId
+                                }
+                            }
+                            applyBlanketTo(c: inout c, blanket: cf, recvStart: cand.typeStart, recvLen: cand.typeLen, guardHi: guardHi, viewRoot: vr)
                         }
                     }
                     cj += 1
@@ -296,8 +307,43 @@ fn conferredCopyExists(c: inout Comp, recvId: U64, nameId: U64, srcTraitId: U64)
     return false
 }
 
-fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64, guardHi: U64, recordConform: Bool) {
+// Whether a conform of (typeId -> traitId) with this exact view-root is already
+// recorded — the per-path guard for the fixpoint (a view-rooted multi-path records a
+// separate conform per root, so the plain conformExists/bare guard would wrongly
+// block the 2nd path).
+fn conformWithRootExists(c: inout Comp, typeId: U64, traitId: U64, viewRootId: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.conforms.count {
+        if c.conforms[i].typeId == typeId {
+            if c.conforms[i].traitId == traitId {
+                if c.conforms[i].viewRootId == viewRootId {
+                    return true
+                }
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// Confer trait-subject conformance `blanket` (`impl B as A`) onto concrete type
+// (recvStart,recvLen) under view-root `viewRoot` (0 = a bare, single-path conferral;
+// non-0 = a chain-conflict path rooted at that trait — spec/09). Copy A's witness
+// methods (recvId == B) onto the type and record the conferred conformance. A
+// view-rooted conferral is reachable only via `value#root`: its methods are tagged
+// srcTraitId = root (so `#root` selects them) + selfViewId = root (so internal
+// `self.m()` in the witness body resolves through the SAME root) + viewOnly (excluded
+// from bare resolution); its conform carries viewRootId = root (excluded from bare
+// `where _: A`). A bare conferral (root 0) tags srcTraitId = the direct subject B and
+// rides the bare surface like an ordinary provided method. The dup guard scans only
+// originals [0,guardHi) so sibling paths coexist; conferredCopyExists (keyed on the
+// source tag) makes the fixpoint re-scan idempotent.
+fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64, guardHi: U64, viewRoot: U64) {
     val recvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
+    mut val srcTag: U64 = blanket.typeId
+    if viewRoot != 0U64 {
+        srcTag = viewRoot
+    }
     mut val fi: U64 = 0
     while fi < guardHi {
         val f: Func = c.funcs[fi]
@@ -307,7 +353,7 @@ fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64,
                 // (inherent wins); sibling conferred copies (appended ≥ guardHi) do
                 // not block, so multiple paths' methods coexist. Also skip if this
                 // exact path was already conferred (idempotent fixpoint re-scan).
-                if !(methodInRange(c: inout c, lo: 0, hi: guardHi, recvStart: recvStart, recvLen: recvLen, nameStart: f.nameStart, nameLen: f.nameLen)) && !(conferredCopyExists(c: inout c, recvId: recvId, nameId: f.nameId, srcTraitId: blanket.typeId)) {
+                if !(methodInRange(c: inout c, lo: 0, hi: guardHi, recvStart: recvStart, recvLen: recvLen, nameStart: f.nameStart, nameLen: f.nameLen)) && !(conferredCopyExists(c: inout c, recvId: recvId, nameId: f.nameId, srcTraitId: srcTag)) {
                     // drop the subject param from the method's type params (none for a
                     // trait subject), keep the method-own params.
                     mut val copiedTP: Array[Bind] = []
@@ -318,16 +364,14 @@ fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64,
                         }
                         tp += 1
                     }
-                    c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=blanket.typeId viewOnly=!recordConform />)
+                    c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=srcTag viewOnly=(viewRoot != 0U64) selfViewId=viewRoot />)
                 }
             }
         }
         fi += 1
     }
-    if recordConform {
-        if !(conformExists(c: inout c, typeId: recvId, traitId: blanket.traitId)) {
-            c.conforms.append(<Conform typeStart=recvStart typeLen=recvLen typeId=recvId traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed />)
-        }
+    if !(conformWithRootExists(c: inout c, typeId: recvId, traitId: blanket.traitId, viewRootId: viewRoot)) {
+        c.conforms.append(<Conform typeStart=recvStart typeLen=recvLen typeId=recvId traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed viewRootId=viewRoot />)
     }
 }
 
@@ -336,6 +380,14 @@ fn instantiateProvidedMethods(c: inout Comp) {
     mut val ci: U64 = 0
     while ci < c.conforms.count {
         val cf: Conform = c.conforms[ci]
+        // a view-rooted conform (spec/09 chain conflict) is reached only via
+        // `value#root`; its trait's provided methods must not land on the bare
+        // surface. The witness methods are already conferred (applyBlanketTo, tagged
+        // for the view); skip the bare provided-method copy here.
+        if cf.viewRootId != 0U64 {
+            ci += 1
+            continue
+        }
         mut val fi: U64 = 0
         while fi < nFuncs {
             val f: Func = c.funcs[fi]

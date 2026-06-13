@@ -509,6 +509,12 @@ struct Conform {
     // conferral stays view-gated (`value#Ext`) and is NOT auto-conferred onto the
     // bare surface. 0 = a bare conform (owner module) which does auto-confer.
     pub val extId: U64 = 0
+    // the view-root under which a conferred (derived) inter-trait conformance holds
+    // (spec/09 chain conflict): when a type reaches this trait through more than one
+    // subject-trait path, each path is recorded as a SEPARATE conform tagged with its
+    // root trait (the divergent subject). Such a conform does NOT make the type
+    // conform bare (it is reached only via `value#root`); 0 = a bare conformance.
+    pub val viewRootId: U64 = 0
     // signatures of the members this impl witnessed (body method or `via` line),
     // so the completeness check matches requirements by selector (name + param
     // types), distinguishing same-name overloaded requirements.
@@ -653,6 +659,12 @@ struct Func {
     // an extension method) and reachable only through the conformance-path view
     // `value#P` (findExtMethodById, via srcTraitId). Default false = bare-callable.
     pub val viewOnly: Bool = false
+    // the conformance-path view-root under which this witness was conferred (spec/09
+    // chain conflict): for a chained multi-path witness reached via `s#C`, self is
+    // bound with viewExtId = selfViewId in the body so internal `self.m()` calls
+    // resolve through the SAME root C (e.g. an intermediate multi-path method). 0 =
+    // no rooted self view (bare or single-path). Equals srcTraitId for the witness.
+    pub val selfViewId: U64 = 0
 }
 
 // A module-level variable (spec/15): `val x = e` / `mut val x = e`. `letStmt` is

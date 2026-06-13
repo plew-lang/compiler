@@ -1,0 +1,26 @@
+import @Std/Io with { print }
+
+// Chain × conflict (case 2b): an INTERMEDIATE method in the conformance chain
+// is multi-path. `a` (via B) calls `self.b()`, but `b` is reachable via both C
+// and D, so a bare `s.a()` is fundamentally ambiguous. The only way to use `a`
+// is to narrow the divergent trait with `#`: `s#C.a()` / `s#D.a()`.
+trait C { fn cv() -> I64 }
+trait D { fn dv() -> I64 }
+trait B { fn b() -> I64 }
+trait A { fn a() -> I64 }
+struct S { val v: I64 }
+pub impl S as C { fn cv() -> I64 { return self.v } }
+pub impl S as D { fn dv() -> I64 { return self.v * 100I64 } }
+pub impl C as B { fn b() -> I64 { return self.cv() + 1I64 } }   // b via C
+pub impl D as B { fn b() -> I64 { return self.dv() + 2I64 } }   // b via D  (b is multi-path)
+pub impl B as A { fn a() -> I64 { return self.b() + 10I64 } }   // a via B (calls self.b())
+
+fn useA[T](x: T) -> I64 where T: A { return x.a() }
+
+fn main() {
+    val s: S = <S v=5 />
+    print(s#C.a())          // a -> b via C: 5+1+10 = 16
+    print(s#D.a())          // a -> b via D: 500+2+10 = 512
+    print(useA(x: s#C))     // through a generic bound: 16
+    print(useA(x: s#D))     // through a generic bound: 512
+}
