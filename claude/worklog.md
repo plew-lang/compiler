@@ -35,9 +35,11 @@
 
 残る soundness は spec が将来送りの 1 件のみ：**重なる inout ②③**（部分/添字重なり＝`a.merge(inout a.field)`・`arr[i],arr[j]` の distinct 証明）＝spec 通り lint＋限定ランタイム panic（ケース①構文同一は実装済）。
 
-### B. hidden meaning（spec-valid を reject／silent 逸脱）＝**現在の主戦場**
+### B. hidden meaning（spec-valid を reject／silent 逸脱）＝**実質的に完了**
 
 > いずれも parser や backend codegen に跨る中〜大の機能追加。各々 ADD→reseed→USE で 1 機能ずつ focused に。価値/規模の目安を付す。
+>
+> **2026-06-13：Section B の hidden-meaning 穴は概ね閉じた**（ユーザー確認済）。本日完了＝**float→int TryFrom**〔切り捨て〕・**type/value import alias**〔`with { Real as Alias }`〕・**dir module 解決**〔`/Models`→`_.pw`〕・**generic assoc-fn emission**〔`Box[T].make`〕・**`pow`/`Pow[Exp]`**・**String UTF-8 検証**〔`<String.convert from=bytes/>`＋unchecked rename〕・**cross-sign TryFrom**〔I64↔U64〕。**残は additive/見送り**＝**sum/zip**〔ユーザー判断で見送り＝additive・numeric tower〔Zero atom〕設計は未決のまま保留・なお associated-type bound `Iterator[Item=T]`＋`T.zero()` は動くと確認済〕・**一般 Chain トレイト**〔`empty()` factory が値なし生成を要し Optional 様の sum 型しか実装できず実用価値が低いと判明＝意図的に skip〕・**narrower-source/float→unsigned TryFrom**〔boilerplate〕・**import パス正当性厳密検査**〔reject-hardening・hidden-meaning でない〕。**次の主戦場は C（hidden cost＝leak／循環回収）** か、**コスメ refactor（TaskCreate #47＝empty-then-else `if c {} else {b}`→`if !c {b}` の数百箇所・IR 不動点で安全だが大量）**。
 
 **✅ 2026-06-12 に完了した B 項（match クラスタ＋assoc val＋global 順序＋import クラスタ＋Output!=Self＝1 セッション 12 機能）**：
 - **match クラスタ**＝~~literal pattern~~・~~式位置 `panic`/`return`（value-match diverge arm）~~・~~capture-binding `val x =>`〔scalar／enum-dispatch の statement・value 両位置とも〕~~＝✅。**arm ガードは spec/11 が意図的に持たない**＝一度実装したが revert し parser で loud reject（絞り込みは束縛＋ネスト match か前段 `if`/`guard`）。残＝**ネストパターン**・**`guard` 文/条件チェーン**〔下記・本来 spec にある絞り込み機構〕・到達不能アーム警告。
