@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+// Inter-trait conformance path ambiguity (spec/09): S reaches R through two subject
+// traits (P→R and Q→R, with S: P and S: Q), so a bare `s.r()` is ambiguous and must
+// be disambiguated with `s#P.r()` / `s#Q.r()`. The bare call here is rejected.
+trait P { fn p() -> I64 }
+trait Q { fn q() -> I64 }
+trait R { fn r() -> I64 }
+struct S { val v: I64 }
+pub impl S as P { fn p() -> I64 { return self.v } }
+pub impl S as Q { fn q() -> I64 { return self.v * 2I64 } }
+pub impl P as R { fn r() -> I64 { return self.p() + 1I64 } }
+pub impl Q as R { fn r() -> I64 { return self.q() + 100I64 } }
+
+fn main() {
+    val s: S = <S v=10 />
+    print(s.r())   // REJECT: ambiguous — reaches R via P and via Q
+}

@@ -1,0 +1,35 @@
+import @Std/Io with { print }
+
+// Inter-trait conformance path selection with `#` (spec/09): when a type reaches a
+// trait through more than one subject trait, the bare call is ambiguous and the
+// path is picked with `value#P` (mirrors provided-method `a#P.foo()`). A single
+// path rides the bare surface (direct call and `where _: A` bound) with no `#`.
+trait P { fn p() -> I64 }
+trait Q { fn q() -> I64 }
+trait R { fn r() -> I64 }
+trait Only { fn o() -> I64 }
+trait Derived { fn d() -> I64 }
+
+struct S { val v: I64 }
+pub impl S as P { fn p() -> I64 { return self.v } }
+pub impl S as Q { fn q() -> I64 { return self.v * 2I64 } }
+// two paths to R: via P and via Q → bare S.r() is ambiguous, pick with S#P / S#Q.
+pub impl P as R { fn r() -> I64 { return self.p() + 1I64 } }
+pub impl Q as R { fn r() -> I64 { return self.q() + 100I64 } }
+
+struct W { val w: I64 }
+pub impl W as Only { fn o() -> I64 { return self.w } }
+// single path to Derived: rides the bare surface (no `#` needed).
+pub impl Only as Derived { fn d() -> I64 { return self.o() * 3I64 } }
+
+fn useDerived[X](x: X) -> I64 where X: Derived { return x.d() }
+
+fn main() {
+    val s: S = <S v=10 />
+    print(s#P.r())          // via P: 10 + 1   = 11
+    print(s#Q.r())          // via Q: 20 + 100 = 120
+
+    val t: W = <W w=5 />
+    print(t.d())            // single path, bare = 15
+    print(useDerived(x: t)) // single path via bound = 15
+}

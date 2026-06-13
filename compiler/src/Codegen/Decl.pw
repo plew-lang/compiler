@@ -173,6 +173,9 @@ fn subjectPathCount(c: inout Comp, tId: U64, aTraitId: U64) -> U64 {
 // is the trait B itself, which anchors the conformance and keeps bare-method
 // surfaces enumerable.
 fn instantiateTraitSubjectConforms(c: inout Comp) {
+    // snapshot before any conferral: the dup guard and source-method scan must see
+    // only originals, so sibling conferred copies coexist (multi-path ambiguity).
+    val guardHi: U64 = c.funcs.count
     val nConforms: U64 = c.conforms.count
     mut val ci: U64 = 0
     while ci < nConforms {
@@ -188,16 +191,13 @@ fn instantiateTraitSubjectConforms(c: inout Comp) {
                 val cand: Conform = c.conforms[cj]
                 if cand.traitId == cf.typeId {
                     if !(isTraitName(c: inout c, start: cand.typeStart, len: cand.typeLen)) {
-                        // S reaches A through two different subject traits (P→A and
-                        // Q→A, with S: P and S: Q) → ambiguous (spec/09). Until the
-                        // `#`-path selector is wired, reject rather than silently pick
-                        // one witness (a hidden-meaning bug).
-                        if subjectPathCount(c: inout c, tId: cand.typeId, aTraitId: cf.traitId) > 1U64 {
-                            compileErrorAt(line: lineOf(c: inout c, offset: cand.typeStart), msg: "ambiguous inter-trait conformance: this type conforms to the target trait through more than one subject trait (`impl B as A`). Selecting a conformance path with `#` is not yet supported (spec/09)")
-                        }
-                        if !(conformExists(c: inout c, typeId: cand.typeId, traitId: cf.traitId)) {
-                            applyBlanketTo(c: inout c, blanket: cf, recvStart: cand.typeStart, recvLen: cand.typeLen)
-                        }
+                        // single path → record the conformance (rides the bare
+                        // surface like an ordinary provided method); multi-path (S
+                        // reaches A via P→A and Q→A) → copy the witness tagged for `#`
+                        // but do NOT record bare conformance: bare `s.m()` / `where
+                        // _: A` is then ambiguous and the path is picked with `s#P`.
+                        val single: Bool = subjectPathCount(c: inout c, tId: cand.typeId, aTraitId: cf.traitId) <= 1U64
+                        applyBlanketTo(c: inout c, blanket: cf, recvStart: cand.typeStart, recvLen: cand.typeLen, guardHi: guardHi, recordConform: single)
                     }
                 }
                 cj += 1
@@ -207,22 +207,28 @@ fn instantiateTraitSubjectConforms(c: inout Comp) {
     }
 }
 
-// Copy every method of blanket conformance `blanket` onto the concrete type
-// (recvStart,recvLen), dropping the blanket's subject type param (now bound to
-// the concrete receiver), and record the derived conformance.
-fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64) {
+// Confer trait-subject conformance `blanket` (`impl B as A`, blanket.typeId = the
+// subject trait B) onto concrete type (recvStart,recvLen) that conforms to B: copy
+// A's witness methods (recvId == B) onto the type, tagged with srcTraitId = B so
+// `value#B.m()` selects this conformance path (spec/09). The dup guard scans only
+// originals [0,guardHi) — sibling paths (`impl P as A`, `impl Q as A`) coexist
+// rather than the first shadowing the second, so a multi-path bare call surfaces as
+// a findMethod ambiguity (resolved with `value#P.m()`). When recordConform, also
+// record the conferred conformance so it rides bare resolution / `where T: A`
+// (only the single-path case does this; a multi-path type does not conform bare).
+fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64, guardHi: U64, recordConform: Bool) {
     val recvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
-    val nFuncs: U64 = c.funcs.count
     mut val fi: U64 = 0
-    while fi < nFuncs {
+    while fi < guardHi {
         val f: Func = c.funcs[fi]
         if f.hasRecv {
             if f.recvId == blanket.typeId {
-                // skip if the concrete type already has a method of this name
-                // (an inherent or already-copied method wins).
-                if !(methodInRange(c: inout c, lo: 0, hi: c.funcs.count, recvStart: recvStart, recvLen: recvLen, nameStart: f.nameStart, nameLen: f.nameLen)) {
-                    // drop the subject param from the method's type params; the
-                    // remaining (method-own) params are kept.
+                // skip if the type already has an inherent method of this name
+                // (inherent wins); sibling conferred copies (appended ≥ guardHi) do
+                // not block, so multiple paths' methods coexist.
+                if !(methodInRange(c: inout c, lo: 0, hi: guardHi, recvStart: recvStart, recvLen: recvLen, nameStart: f.nameStart, nameLen: f.nameLen)) {
+                    // drop the subject param from the method's type params (none for a
+                    // trait subject), keep the method-own params.
                     mut val copiedTP: Array[Bind] = []
                     mut val tp: U64 = 0
                     while tp < f.typeParams.count {
@@ -231,14 +237,16 @@ fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64)
                         }
                         tp += 1
                     }
-                    c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true />)
+                    c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=blanket.typeId />)
                 }
             }
         }
         fi += 1
     }
-    if !(conformExists(c: inout c, typeId: recvId, traitId: blanket.traitId)) {
-        c.conforms.append(<Conform typeStart=recvStart typeLen=recvLen typeId=recvId traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed />)
+    if recordConform {
+        if !(conformExists(c: inout c, typeId: recvId, traitId: blanket.traitId)) {
+            c.conforms.append(<Conform typeStart=recvStart typeLen=recvLen typeId=recvId traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed />)
+        }
     }
 }
 
