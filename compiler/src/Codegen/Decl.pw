@@ -137,79 +137,70 @@ fn conformExists(c: inout Comp, typeId: U64, traitId: U64) -> Bool {
     return false
 }
 
-// Whether concrete type (typeStart,typeLen) satisfies every `where` bound of the
-// blanket impl whose subject type-param id is `paramId` (the bounds are folded
-// into each blanket method's funcBounds: paramNameId == paramId). A blanket with
-// no bound is skipped by the caller (too broad), so an empty bound set here means
-// the type vacuously qualifies only when the caller already gated on `hasBound`.
-fn typeSatisfiesBlanketBounds(c: inout Comp, typeStart: U64, typeLen: U64, paramId: U64) -> Bool {
-    mut val bi: U64 = 0
-    while bi < c.funcBounds.count {
-        val fb: FuncBound = c.funcBounds[bi]
-        if fb.paramNameId == paramId {
-            // only this blanket's bounds: the bound's function must be one of the
-            // blanket's methods (receiver == the subject param).
-            if fb.fnIdx < c.funcs.count {
-                if c.funcs[fb.fnIdx].recvId == paramId {
-                    if !(typeConformsTo(c: inout c, typeStart: typeStart, typeLen: typeLen, traitStart: fb.traitStart, traitLen: fb.traitLen)) {
-                        return false
+// Number of distinct subject traits `B` such that an inter-trait conformance
+// `impl B as A` (A = aTraitId) exists and the concrete type `tId` conforms to `B`.
+// Used to detect an ambiguous inter-trait conformance (a type reaching the same
+// trait through two different subject traits). Counts only original (non-derived,
+// trait-subject) conforms, so it is stable as conferred conforms are appended.
+fn subjectPathCount(c: inout Comp, tId: U64, aTraitId: U64) -> U64 {
+    mut val count: U64 = 0
+    mut val i: U64 = 0
+    while i < c.conforms.count {
+        val cf: Conform = c.conforms[i]
+        if !(cf.derived) && cf.extId == 0U64 {
+            if cf.traitId == aTraitId {
+                if isTraitName(c: inout c, start: cf.typeStart, len: cf.typeLen) {
+                    // cf is `impl B as A`; does tId conform to the subject trait B?
+                    if conformExists(c: inout c, typeId: tId, traitId: cf.typeId) {
+                        count += 1
                     }
                 }
             }
         }
-        bi += 1
+        i += 1
     }
-    return true
+    return count
 }
 
-// Whether the blanket impl with subject param `paramId` has at least one `where`
-// bound (we only apply bounded blankets; an unbounded `impl[T] T as Trait` would
-// match every type and is left unapplied for now).
-fn blanketHasBound(c: inout Comp, paramId: U64) -> Bool {
-    mut val bi: U64 = 0
-    while bi < c.funcBounds.count {
-        val fb: FuncBound = c.funcBounds[bi]
-        if fb.paramNameId == paramId {
-            if fb.fnIdx < c.funcs.count {
-                if c.funcs[fb.fnIdx].recvId == paramId {
-                    return true
-                }
-            }
-        }
-        bi += 1
-    }
-    return false
-}
-
-// Blanket trait impls (spec/08): `impl[T] T as Show where T: Named { fn show… }`
-// makes every type conforming to Named also conform to Show with the given body.
-// For each blanket conformance and each concrete type that satisfies the blanket's
-// bounds, copy the blanket's methods onto that type (receiver = the concrete type,
-// the subject param dropped) and record the derived conformance — so they ride the
-// ordinary provided-method emission path. Runs before instantiateProvidedMethods
-// so any further provided methods of the blanket's trait also reach the new types.
-fn instantiateBlanketImpls(c: inout Comp) {
+// Inter-trait conformance (spec/08,09): `impl B as A { fn … }` makes every type
+// conforming to the subject trait `B` also conform to `A`, witnessing A's
+// requirements in B's vocabulary. For each such conform and each concrete type T
+// that conforms to B, copy the impl's methods onto T (receiver = T) and record the
+// conferred conformance — so they ride the ordinary provided-method emission path.
+// Runs before instantiateProvidedMethods so A's own provided methods also reach the
+// new types. The headless form `impl[T] T as A where T: B` is rejected (spec/09:
+// 頭なし Self の blanket は禁止 — see Verify.checkBlanketHeadless); the legal subject
+// is the trait B itself, which anchors the conformance and keeps bare-method
+// surfaces enumerable.
+fn instantiateTraitSubjectConforms(c: inout Comp) {
     val nConforms: U64 = c.conforms.count
     mut val ci: U64 = 0
     while ci < nConforms {
         val cf: Conform = c.conforms[ci]
-        if isBlanketConform(c: inout c, cf: cf) {
-            if blanketHasBound(c: inout c, paramId: cf.typeId) {
-                // candidate concrete types: the subjects of every non-blanket
-                // conformance (a type that conforms to anything is a concrete type
-                // we can extend). Gate each on satisfying the blanket's bounds.
-                mut val cj: U64 = 0
-                while cj < nConforms {
-                    val cand: Conform = c.conforms[cj]
-                    if !(isBlanketConform(c: inout c, cf: cand)) {
+        // a trait-subject conform: subject (typeStart,typeLen) names a trait B.
+        // Skip extension conforms (`extension Ext { impl B as A }`, extId != 0):
+        // those stay view-gated (`value#Ext`), handled by the extension machinery —
+        // only an owner-module bare `impl B as A` auto-confers onto the bare surface.
+        if cf.extId == 0U64 && isTraitName(c: inout c, start: cf.typeStart, len: cf.typeLen) {
+            // candidate concrete types: those conforming to the subject trait B.
+            mut val cj: U64 = 0
+            while cj < nConforms {
+                val cand: Conform = c.conforms[cj]
+                if cand.traitId == cf.typeId {
+                    if !(isTraitName(c: inout c, start: cand.typeStart, len: cand.typeLen)) {
+                        // S reaches A through two different subject traits (P→A and
+                        // Q→A, with S: P and S: Q) → ambiguous (spec/09). Until the
+                        // `#`-path selector is wired, reject rather than silently pick
+                        // one witness (a hidden-meaning bug).
+                        if subjectPathCount(c: inout c, tId: cand.typeId, aTraitId: cf.traitId) > 1U64 {
+                            compileErrorAt(line: lineOf(c: inout c, offset: cand.typeStart), msg: "ambiguous inter-trait conformance: this type conforms to the target trait through more than one subject trait (`impl B as A`). Selecting a conformance path with `#` is not yet supported (spec/09)")
+                        }
                         if !(conformExists(c: inout c, typeId: cand.typeId, traitId: cf.traitId)) {
-                            if typeSatisfiesBlanketBounds(c: inout c, typeStart: cand.typeStart, typeLen: cand.typeLen, paramId: cf.typeId) {
-                                applyBlanketTo(c: inout c, blanket: cf, recvStart: cand.typeStart, recvLen: cand.typeLen)
-                            }
+                            applyBlanketTo(c: inout c, blanket: cf, recvStart: cand.typeStart, recvLen: cand.typeLen)
                         }
                     }
-                    cj += 1
                 }
+                cj += 1
             }
         }
         ci += 1

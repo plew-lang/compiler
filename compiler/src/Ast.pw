@@ -504,6 +504,11 @@ struct Conform {
     // synthesized by `@[Eq]`/`@[Ord]` derive: exempt from the unknown-trait and
     // completeness checks (the witness is compiler-generated and complete).
     pub val derived: Bool
+    // for a trait-subject inter-trait conformance `impl B as A` written inside a
+    // named `extension Ext { … }` (spec/09): the extension's name id, so the
+    // conferral stays view-gated (`value#Ext`) and is NOT auto-conferred onto the
+    // bare surface. 0 = a bare conform (owner module) which does auto-confer.
+    pub val extId: U64 = 0
     // signatures of the members this impl witnessed (body method or `via` line),
     // so the completeness check matches requirements by selector (name + param
     // types), distinguishing same-name overloaded requirements.

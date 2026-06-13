@@ -1802,7 +1802,12 @@ fn lowerImpl(c: inout Comp, im: ImplAst) {
             traitArgs.append(pt.ref)
             ti += 1
         }
-        c.conforms.append(<Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout c, start: traitN.nameStart, len: traitN.nameLen) traitArgs=traitArgs derived=false witnessed=witnessed />)
+        mut val cfExtId: U64 = 0
+        if im.extName.bytes.count > 0 {
+            val cfExtN: Bind = internBytes(c: inout c, s: im.extName)
+            cfExtId = intern(c: inout c, start: cfExtN.nameStart, len: cfExtN.nameLen)
+        }
+        c.conforms.append(<Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout c, start: traitN.nameStart, len: traitN.nameLen) traitArgs=traitArgs derived=false witnessed=witnessed extId=cfExtId />)
     }
     // attach pending `@[...]` directives to this impl block (a macro on an impl);
     // declStart/declEnd = the impl block's source span for the gen harness slice.

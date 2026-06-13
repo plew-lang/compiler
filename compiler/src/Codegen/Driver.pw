@@ -223,11 +223,12 @@ fn runFrontend() -> Comp {
     orderGlobalsByDependency(c: inout c)
     // derive (#5): synthesize `@[Eq]`/`@[Ord]` witnesses before any analysis.
     synthesizeDerives(c: inout c)
-    // blanket trait impls (spec/08): `impl[T] T as Show where T: Named` makes
-    // every Named type conform to Show; copy the methods onto each qualifying
-    // concrete type (before provided methods, so the trait's own provided
-    // methods also reach the newly-conforming types).
-    instantiateBlanketImpls(c: inout c)
+    // inter-trait conformance (spec/08,09): `impl B as A` makes every type
+    // conforming to subject trait B also conform to A; copy the methods onto each
+    // conforming concrete type (before provided methods, so A's own provided
+    // methods also reach the newly-conforming types). The headless form
+    // `impl[T] T as A where T: B` is rejected separately (Verify.checkBlanketHeadless).
+    instantiateTraitSubjectConforms(c: inout c)
     // trait provided methods (spec/08): copy each `impl Trait { }` provided
     // method onto every conforming type, so they ride normal method resolution.
     instantiateProvidedMethods(c: inout c)

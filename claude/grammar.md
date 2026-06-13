@@ -31,7 +31,7 @@
 | モジュール/`part`/`_.pw`（[15](../spec/04-execution/15-modules.md)） | `part`・ディレクトリ `_.pw`・エントリ `src/_.pw` | 仕様先行（`import` のみ） |
 | 再エクスポート（[15](../spec/04-execution/15-modules.md)） | `export <path> with {…}` / `with *` | 仕様先行 |
 | トレイト準拠 `via`（[08](../spec/02-type-system/08-traits.md)） | 各要求を `via 完全シグネチャ` で束ねる | 仕様先行（`impl as` のみ） |
-| 提供メソッド（ベア `impl Trait`）・トレイト主語 impl・`defaultExtension`（[08](../spec/02-type-system/08-traits.md), [09](../spec/02-type-system/09-extensions.md)） | ベア `impl Trait`＝提供メソッド（トレイト所有モジュール）／拡張内 `impl Trait`・`impl B as A`／型本体の `defaultExtension #Ext`（型のみ）／曖昧化 `a#P.foo()` | 仕様先行（`trait_body` は本体なし要求のみ＝一致／残りは未反映） |
+| 提供メソッド（ベア `impl Trait`）・トレイト主語 impl・`defaultExtension`（[08](../spec/02-type-system/08-traits.md), [09](../spec/02-type-system/09-extensions.md)） | ベア `impl Trait`＝提供メソッド／ベア `impl B as A`＝トレイト間準拠（ともに A/B 所有モジュール）／拡張内 `impl Trait`・`impl B as A`（第三者・`#Ext`）／型本体の `defaultExtension #Ext`（型のみ）／曖昧化 `a#P.foo()`（提供メソッド・準拠経路 共通） | 仕様先行（`trait_body` は本体なし要求のみ＝一致／残りは未反映） |
 | 存在型 `any P`（[08](../spec/02-type-system/08-traits.md)） | `type_use` の `any` プレフィクス | 仕様先行（存在型・動的ディスパッチは意味論/codegen 層） |
 | トレイト継承 supertrait（[08](../spec/02-type-system/08-traits.md)） | `trait Sub: A + B` | 仕様先行（supertrait 句なし） |
 | 関連型の宣言（[08](../spec/02-type-system/08-traits.md)） | `type Item`（ベア可）/ `type Item: 制約` | 仕様先行（束縛必須・ベア不可） |

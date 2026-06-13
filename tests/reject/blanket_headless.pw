@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+
+// spec/09: 頭なし Self の blanket は禁止 — `impl[T] T as Trait where T: Bound`
+// (subject is a bare type parameter, not a type constructor) is rejected. Type
+// ownership can't anchor the conformance and a type's bare-method surface stops
+// being locally enumerable. The legal expression is `impl B as A` (trait subject).
+trait Named { fn nm() -> I64 }
+trait Show { fn show() -> I64 }
+
+struct A { val a: I64 }
+pub impl A as Named { fn nm() -> I64 { return self.a } }
+
+// REJECT: headless-Self blanket conformance.
+pub impl[T] T as Show where T: Named { fn show() -> I64 { return self.nm() + 1I64 } }
+
+fn main() {
+    val a: A = <A a=4 />
+    print(a.show())
+}

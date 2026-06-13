@@ -65,6 +65,7 @@ fn checkDeclShapes(c: inout Comp) {
         return
     }
     checkLangItemRedef(c: inout c)
+    checkBlanketHeadless(c: inout c)
     checkDupTypeNames(c: inout c)
     checkDupFns(c: inout c)
     checkDupParamLabels(c: inout c)
@@ -109,6 +110,29 @@ fn checkDeclShapes(c: inout Comp) {
 // language (spec/15 — they are ambient). The std definitions live in their own
 // modules (id ≠ 0), so only entry-module redefinitions are flagged. Without this the
 // user's def silently shadows the lang item in name resolution.
+// Reject a headless-Self blanket conformance `impl[T] T as Trait where T: Bound`
+// (spec/09: 頭なし Self の blanket は禁止). When the impl subject is a bare type
+// parameter (no type constructor), type ownership can't anchor the conformance and
+// a type's bare-method surface stops being locally enumerable. The spec's legal way
+// to express "every conformer of B also conforms to A" is `impl B as A` (trait
+// subject, extension-only). Only entry-module (module 0) impls are the user's code;
+// std is trusted (and uses no headless blankets — every std `impl[..]` has a type
+// constructor head like `Optional[T]` / `MapIter[I,F,B]`).
+fn checkBlanketHeadless(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.conforms.count {
+        val cf: Conform = c.conforms[i]
+        if !(cf.derived) {
+            if moduleOf(c: inout c, offset: cf.typeStart) == 0U64 {
+                if isBlanketConform(c: inout c, cf: cf) {
+                    compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "a blanket impl over a bare type parameter (`impl[T] T as Trait where T: Bound`) is not allowed: the subject must be a concrete type or a trait. To make every conformer of one trait conform to another, use `impl B as A` (subject = the trait, spec/09)")
+                }
+            }
+        }
+        i += 1U64
+    }
+}
+
 fn checkLangItemRedef(c: inout Comp) {
     mut val si: U64 = 0
     while si < c.structs.count {

@@ -48,7 +48,7 @@ AST（arena 確保・index 参照）
   │  セマンティック解析
   │   1. 名前解決（モジュール / import / スコープ）
   │   2. 型推論・型検査（ジェネリクス、where 句）※ 実装済
-  │   3. trait/impl 解決（継承・where bound・blanket・Eq/Ord・derive）／拡張解決（`#Ext` view・源選択・defaultExtension）※ ともに実装済（struct レシーバ）
+  │   3. trait/impl 解決（継承・where bound・トレイト間準拠 `impl B as A`・Eq/Ord・derive）／拡張解決（`#Ext` view・源選択・defaultExtension）※ ともに実装済（struct レシーバ）
   │   4. 受理健全性検査（emission 非依存パス `verifyProgram`）※ 実装済
   │   5. 並行性検査（spawn キャプチャ）※ async/await 段は実装済 / spawn 段は未実装
   ▼
