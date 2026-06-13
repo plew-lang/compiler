@@ -141,6 +141,50 @@ fn conformExists(c: inout Comp, typeId: U64, traitId: U64) -> Bool {
     return false
 }
 
+// Whether `nameStart`/`nameLen` names an extension (some method is tagged with
+// it via Func.extId). Used to classify a `#X` view as extension vs trait so the
+// view-validity check (spec/09) can give the right diagnostic.
+fn isExtName(c: inout Comp, start: U64, len: U64) -> Bool {
+    val qId: U64 = intern(c: inout c, start: start, len: len)
+    if qId == 0U64 {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        if c.funcs[i].extId == qId {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Whether the extension named `extStart`/`extLen` has an `impl` for the type named
+// `typeStart`/`typeLen` (some extension method tagged extId == ext, recvId == type).
+// A `value#Ext` view is only valid when the extension actually applies (spec/09).
+fn extAppliesToType(c: inout Comp, extStart: U64, extLen: U64, typeStart: U64, typeLen: U64) -> Bool {
+    val qExt: U64 = intern(c: inout c, start: extStart, len: extLen)
+    val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        if c.funcs[i].extId == qExt {
+            if c.funcs[i].recvId == qType {
+                return true
+            }
+        }
+        i += 1
+    }
+    // a newtype inherits the underlying type's extensions (spec/10).
+    mut val ni: U64 = 0
+    while ni < c.newtypes.count {
+        if c.newtypes[ni].nameId == qType {
+            return extAppliesToType(c: inout c, extStart: extStart, extLen: extLen, typeStart: c.newtypes[ni].underStart, typeLen: c.newtypes[ni].underLen)
+        }
+        ni += 1
+    }
+    return false
+}
+
 // Number of distinct subject traits `B` such that an inter-trait conformance
 // `impl B as A` (A = aTraitId) exists and the concrete type `tId` conforms to `B`.
 // Used to detect an ambiguous inter-trait conformance (a type reaching the same

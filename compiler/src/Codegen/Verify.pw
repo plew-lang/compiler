@@ -53,6 +53,41 @@ fn verifyProgram(c: inout Comp) {
     checkDeclShapes(c: inout c)
 }
 
+// A `value#X` view is valid only when X actually applies to the receiver's type
+// (spec/09). The two view kinds are asymmetric: an extension view `#A` is purely
+// *additive* (it opts in A's methods — which are otherwise off the bare surface — so
+// it never conflicts by default), and so requires the extension to declare an `impl`
+// for this type; a trait view `#P` *adds nothing* (a conformance already puts P's
+// methods on the bare surface) and exists only to *narrow* an ambiguity, so it
+// requires the type to already CONFORM to P — a trait view never confers a
+// conformance. Selecting a non-conforming trait, a non-applicable extension, or an
+// unknown name would silently fall through to the bare surface (hidden meaning), so
+// it is rejected. Skips the `#!Ext` strip form and receivers whose type is unknown
+// here (conservative). Verify only walks non-generic entry-module bodies, so the
+// receiver type is concrete (no type-parameter receivers to special-case).
+fn checkViewValid(c: inout Comp, recv: U64, srcStart: U64, srcLen: U64, strip: Bool) {
+    if strip {
+        return
+    }
+    val rt: TypeInfo = exprType(c: inout c, id: recv)
+    if rt.nameLen == 0U64 {
+        return
+    }
+    if isTraitName(c: inout c, start: srcStart, len: srcLen) {
+        if !(typeConformsTo(c: inout c, typeStart: rt.nameStart, typeLen: rt.nameLen, traitStart: srcStart, traitLen: srcLen)) {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)")
+        }
+        return
+    }
+    if isExtName(c: inout c, start: srcStart, len: srcLen) {
+        if !(extAppliesToType(c: inout c, extStart: srcStart, extLen: srcLen, typeStart: rt.nameStart, typeLen: rt.nameLen)) {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot view this value through that extension (`value#Ext`): the extension declares no `impl` for this type (spec/09)")
+        }
+        return
+    }
+    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)")
+}
+
 // Declaration-shape soundness for entry-module struct/enum types: a duplicate field
 // name (`struct A { val x  val x }`) or duplicate variant payload field would make a
 // construction / pattern ambiguous (and silently pick one) — a hidden-meaning bug.
@@ -1209,11 +1244,13 @@ fn verifyExpr(c: inout Comp, id: U64) {
             verifyArgs(c: inout c, args: args)
             checkMethodArgCategories(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
         }
-        Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+        Expr.ExtMethod(val recv, val srcStart, val srcLen, nameStart: _, nameLen: _, val args) => {
+            checkViewValid(c: inout c, recv: recv, srcStart: srcStart, srcLen: srcLen, strip: false)
             verifyExpr(c: inout c, id: recv)
             verifyArgs(c: inout c, args: args)
         }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
+        Expr.ExtView(val recv, val srcStart, val srcLen, val strip) => {
+            checkViewValid(c: inout c, recv: recv, srcStart: srcStart, srcLen: srcLen, strip: strip)
             verifyExpr(c: inout c, id: recv)
         }
         Expr.Call(val nameStart, val nameLen, val args) => {

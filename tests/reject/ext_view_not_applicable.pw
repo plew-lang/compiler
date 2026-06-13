@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+
+// An extension view `#F` is valid only when the extension actually has an `impl`
+// for the receiver's type. F only extends `Other`, so `s#F` on an S is rejected
+// (spec/09).
+struct S { val v: I64 }
+pub impl S { fn s() -> I64 { return self.v } }
+struct Other {}
+extension F { pub impl Other { fn f() -> I64 { return 0I64 } } }
+
+fn main() {
+    val s: S = <S v=1 />
+    print(s#F.s())   // REJECT: extension F has no impl for S
+}
