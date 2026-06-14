@@ -124,7 +124,12 @@ fn structLlvmTyOfExpr(c: inout Comp, st: inout LlvmCtx, structExpr: U64, sidx: U
     return LLVMConstNull(st.ptrty)
 }
 
-fn placePtrOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
+// Pointer to an addressable PLACE expression (lvalue), or a null constant if `id`
+// is not a place. Recurses through nested field/element access so a deep place
+// like `c.arena.items` (a field of a field) yields a real pointer into the
+// original storage — what `inout`, array `.append`, `.set`, and index-assign all
+// need to write through (a non-recursive one-level scheme would copy instead).
+fn placePtrStrict(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
     match c.exprs[id] {
         Expr.Ident(val start, val len) => {
             val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
@@ -133,9 +138,8 @@ fn placePtrOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             }
         }
         Expr.Field(val base, val nameStart, val nameLen) => {
-            // a field place `self.inner` (the adapter pattern: `self.inner.next()`
-            // with `inout` next): GEP into the base's storage so the callee mutates
-            // in place, not a copy. The base must be an addressable struct local.
+            // fast path: the base is an addressable local. Use ITS tracked LLVM type
+            // (so a generic-struct local's field GEPs with the right instance type).
             match c.exprs[base] {
                 Expr.Ident(start: val bs, len: val bl) => {
                     val bli: U64 = findLocal(c: inout c, st: inout st, start: bs, len: bl)
@@ -149,12 +153,29 @@ fn placePtrOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                 }
                 _ => {}
             }
+            // recursive path: the base is itself a place (nested field / element).
+            // Pointer to the base, then GEP the field using the base struct's own
+            // named LLVM type (the non-generic case — generic nested places fall
+            // through to a null result, as before).
+            val basePtr: LLVMValueRef = placePtrStrict(c: inout c, st: inout st, id: base)
+            if LLVMIsNull(basePtr) == 0I32 {
+                val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+                if bsi < c.structs.count {
+                    val sd: StructDef = c.structs[bsi]
+                    val reg: U64 = structRegSlot(c: inout c, st: inout st, start: sd.nameStart, len: sd.nameLen)
+                    if reg < st.structIdxs.count {
+                        val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
+                        if fidx < c.structs[bsi].fields.count {
+                            return LLVMBuildStructGEP2(st.b, st.structTys[reg], basePtr, fidx, anon())
+                        }
+                    }
+                }
+            }
         }
         Expr.Index(val base, val index) => {
-            // an array element place `xs[i]` (get-modify-set: `xs[i].bump()` with an
-            // `inout` method): the element pointer into the owned buffer, so the
-            // callee mutates in place. (The buffer is owned — value-semantics CoW
-            // already split any alias — so direct mutation is observably correct.)
+            // an array element place `xs[i]`: the element pointer into the owned
+            // buffer (the buffer is owned — value-semantics CoW already split any
+            // alias — so writing through it is observably correct).
             if exprIsArray(c: inout c, st: inout st, id: base) {
                 val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: base)
                 val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: base)
@@ -167,6 +188,16 @@ fn placePtrOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
         }
         _ => {}
     }
+    return LLVMConstNull(st.ptrty)
+}
+
+fn placePtrOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
+    val p: LLVMValueRef = placePtrStrict(c: inout c, st: inout st, id: id)
+    if LLVMIsNull(p) == 0I32 {
+        return p
+    }
+    // not a place (a fresh value): materialize into a temp slot so a callee taking
+    // `inout`/`borrow` still gets a pointer (it mutates the copy, harmlessly).
     val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: id)
     val slot: LLVMValueRef = entryAlloca(st: inout st, ty: LLVMTypeOf(v))
     LLVMBuildStore(st.b, v, slot)

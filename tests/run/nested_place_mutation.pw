@@ -1,0 +1,53 @@
+import @Std/Io with { print }
+
+// Mutating a place reached through NESTED struct fields (`c.arena.items`, a field
+// of a field) — append / set / index-assign / compound-assign / inout-arg, plus a
+// nested scalar field-assign. The backend computes the place pointer recursively,
+// so each mutation writes through to the original storage, not a copy (spec/03
+// value semantics: an owned buffer is mutated in situ).
+struct Arena {
+    pub mut val items: Array[I64]
+    pub mut val n: I64
+}
+pub impl Arena { factory }
+
+struct Comp {
+    pub mut val arena: Arena
+}
+pub impl Comp { factory }
+
+fn pushItem(c: inout Comp, v: I64) { c.arena.items.append(v) }
+fn setFirst(c: inout Comp, v: I64) { c.arena.items.set(i: 0U64, value: v) }
+fn setIdx(c: inout Comp, i: U64, v: I64) { c.arena.items[i] = v }
+fn addIdx(c: inout Comp, i: U64, v: I64) { c.arena.items[i] += v }
+fn setN(c: inout Comp, v: I64) { c.arena.n = v }
+
+// pass a nested-field array as an `inout` argument (mutated in place by the callee)
+fn bumpAll(items: inout Array[I64]) {
+    mut val i: U64 = 0
+    while i < items.count {
+        items.set(i: i, value: items[i] + 100I64)
+        i += 1
+    }
+}
+fn bumpVia(c: inout Comp) { bumpAll(items: inout c.arena.items) }
+
+fn main() {
+    mut val c: Comp = <Comp arena=<Arena items=[] n=0I64 /> />
+    pushItem(c: inout c, v: 1I64)
+    pushItem(c: inout c, v: 2I64)
+    pushItem(c: inout c, v: 3I64)
+    print(c.arena.items.count)   // 3
+    setFirst(c: inout c, v: 10I64)
+    print(c.arena.items[0])      // 10
+    setIdx(c: inout c, i: 1U64, v: 20I64)
+    print(c.arena.items[1])      // 20
+    addIdx(c: inout c, i: 2U64, v: 5I64)
+    print(c.arena.items[2])      // 8
+    bumpVia(c: inout c)
+    print(c.arena.items[0])      // 110
+    print(c.arena.items[1])      // 120
+    print(c.arena.items[2])      // 108
+    setN(c: inout c, v: 42I64)
+    print(c.arena.n)             // 42
+}
