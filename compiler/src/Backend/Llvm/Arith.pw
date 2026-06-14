@@ -153,7 +153,7 @@ fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, v
     // the syntactic `Box[T]`; ground its type args through the active env so it
     // resolves to the registered concrete instance (`Box[I32]`).
     mut val gty: U64 = ty
-    if c.curTypeParams.count > 0U64 {
+    if c.cur.typeParams.count > 0U64 {
         gty = groundTypeRef(c: inout c, ref: ty)
     }
     // a context-less record literal `(a:1, b:2)` lowers to a Make with NO type name
@@ -207,15 +207,15 @@ fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, v
         val gslot: U64 = genStructSlot(c: inout c, st: inout st, ref: gty)
         if gslot < st.genStructRefs.count {
             val sd: StructDef = c.arena.structs[st.genStructDefs[gslot]]
-            val savedP: Array[Bind] = c.curTypeParams
-            val savedA: Array[U64] = c.curTypeArgs
+            val savedP: Array[Bind] = c.cur.typeParams
+            val savedA: Array[U64] = c.cur.typeArgs
             // MERGE (see genLlvmMakeEnum) so a field sub-expression referencing the
             // enclosing method's type params still grounds.
-            c.curTypeParams = concatParams(add: sd.typeParams, base: savedP)
-            c.curTypeArgs = concatArgs(add: c.arena.types[gty].args, base: savedA)
+            c.cur.typeParams = concatParams(add: sd.typeParams, base: savedP)
+            c.cur.typeArgs = concatArgs(add: c.arena.types[gty].args, base: savedA)
             val v: LLVMValueRef = buildStructValue(c: inout c, st: inout st, sd: sd, sty: st.genStructTys[gslot], fields: fields, errOffset: typeStart)
-            c.curTypeParams = savedP
-            c.curTypeArgs = savedA
+            c.cur.typeParams = savedP
+            c.cur.typeArgs = savedA
             return v
         }
     }

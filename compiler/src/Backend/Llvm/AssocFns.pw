@@ -172,7 +172,7 @@ fn collectReachableAssoc(c: inout Comp, st: inout LlvmCtx) {
             // an operator-trait witness (add/sub/.../neg/not/bitnot) is reached
             // structurally, not by call-graph: operator desugar (`a + b`, `-x`)
             // leaves no `Type.name(...)` call in the AST for the scan to see, and
-            // a value operand's type isn't known at scan time (c.locals is empty
+            // a value operand's type isn't known at scan time (c.cur.locals is empty
             // outside codegen). These names never collide with derive-generated
             // Eq/Ord (eq/compare), so derived witnesses stay correctly excluded.
             if isOperatorWitnessName(c: inout c, start: c.arena.funcs[fi].nameStart, len: c.arena.funcs[fi].nameLen) {
@@ -284,9 +284,9 @@ fn paramLlvmTy(c: inout Comp, st: inout LlvmCtx, p: Param) -> LLVMTypeRef {
     }
     // a `Self`-typed param resolves to the receiver type (Self env set during method
     // emission).
-    if c.curSelfRef != 0U64 {
+    if c.cur.selfRef != 0U64 {
         if rangeEquals(bytes: c.arena.bytes, start: p.tyStart, len: p.tyLen, kw: "Self") {
-            return llvmTypeOfRef(c: inout c, st: inout st, ref: c.curSelfRef)
+            return llvmTypeOfRef(c: inout c, st: inout st, ref: c.cur.selfRef)
         }
     }
     // an existential `any P` param: the fat pointer (spec/08).
@@ -295,7 +295,7 @@ fn paramLlvmTy(c: inout Comp, st: inout LlvmCtx, p: Param) -> LLVMTypeRef {
     }
     // ground a generic-instance param type (`Box[T]`) through the active env.
     mut val pt: U64 = p.ty
-    if c.curTypeParams.count > 0U64 {
+    if c.cur.typeParams.count > 0U64 {
         pt = groundTypeRef(c: inout c, ref: pt)
     }
     if isGenericInst(c: inout c, ref: pt) {
@@ -318,9 +318,9 @@ fn llvmFnRetTy(c: inout Comp, st: inout LlvmCtx, f: Func) -> LLVMTypeRef {
     if f.hasRet {
         // a `-> Self` return resolves to the receiver type (the Self env is set while
         // emitting a method): `fn dup() -> Self` on N returns N.
-        if c.curSelfRef != 0U64 {
+        if c.cur.selfRef != 0U64 {
             if rangeEquals(bytes: c.arena.bytes, start: f.retStart, len: f.retLen, kw: "Self") {
-                return llvmTypeOfRef(c: inout c, st: inout st, ref: c.curSelfRef)
+                return llvmTypeOfRef(c: inout c, st: inout st, ref: c.cur.selfRef)
             }
         }
         // an existential `any P` return: the fat pointer (spec/08).
@@ -333,7 +333,7 @@ fn llvmFnRetTy(c: inout Comp, st: inout LlvmCtx, f: Func) -> LLVMTypeRef {
         // `first() -> Optional[Item]` on Counter grounds Item -> I64 via curItemRef,
         // even though Counter has no type params).
         mut val rt: U64 = f.retTy
-        if c.curTypeParams.count > 0U64 || c.curItemRef != 0U64 || c.curSelfRef != 0U64 {
+        if c.cur.typeParams.count > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
             rt = groundTypeRef(c: inout c, ref: rt)
         }
         if isGenericInst(c: inout c, ref: rt) {

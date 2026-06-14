@@ -13,8 +13,8 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
     if arms.count > 0U64 {
         if arms[0].isStruct {
             val ssidx: U64 = exprStructIdx(c: inout c, st: inout st, id: scrut)
-            val savedSP: Array[Bind] = c.curTypeParams
-            val savedSA: Array[U64] = c.curTypeArgs
+            val savedSP: Array[Bind] = c.cur.typeParams
+            val savedSA: Array[U64] = c.cur.typeArgs
             val didSetS: Bool = setStructEnv(c: inout c, st: inout st, ref: exprTypeRef(c: inout c, st: inout st, id: scrut))
             val sslot0: LLVMValueRef = entryAlloca(st: inout st, ty: sty)
             LLVMBuildStore(st.b, sv, sslot0)
@@ -23,8 +23,8 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
             genLlvmBlock(c: inout c, st: inout st, id: arms[0].body)
             st.nLocals = mark0
             if didSetS {
-                c.curTypeParams = savedSP
-                c.curTypeArgs = savedSA
+                c.cur.typeParams = savedSP
+                c.cur.typeArgs = savedSA
             }
             return
         }
@@ -34,8 +34,8 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
     // the outer (e.g. monomorphized-method) env so a body's `self.f` / `self.inner`
     // still grounds. Saved here so each arm can set/restore around its bind.
     val scrutRef: U64 = exprTypeRef(c: inout c, st: inout st, id: scrut)
-    val savedMP: Array[Bind] = c.curTypeParams
-    val savedMA: Array[U64] = c.curTypeArgs
+    val savedMP: Array[Bind] = c.cur.typeParams
+    val savedMA: Array[U64] = c.cur.typeArgs
     // the enum: from the first non-wildcard, non-struct arm.
     mut val eid: U64 = c.arena.enums.count
     mut val ai0: U64 = 0
@@ -90,8 +90,8 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
             val didB: Bool = setEnumEnv(c: inout c, st: inout st, ref: scrutRef)
             bindMatchPayload(c: inout c, st: inout st, eid: eid, arm: arm, scrutTy: sty, scrutSlot: sslot)
             if didB {
-                c.curTypeParams = savedMP
-                c.curTypeArgs = savedMA
+                c.cur.typeParams = savedMP
+                c.cur.typeArgs = savedMA
             }
         }
         genLlvmBlock(c: inout c, st: inout st, id: arm.body)
@@ -167,7 +167,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
             if elemRef == 0U64 {
                 if fd.ty != 0U64 {
                     mut val gfp: U64 = fd.ty
-                    if c.curTypeParams.count > 0U64 {
+                    if c.cur.typeParams.count > 0U64 {
                         gfp = groundTypeRef(c: inout c, ref: fd.ty)
                     }
                     if isGenericInst(c: inout c, ref: gfp) {
@@ -211,7 +211,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
             // (which would miscompile the bound {ptr,i64} value at the arm's use site).
             mut val bindKind: U64 = kindFromTySpan(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
             if fd.ty != 0U64 {
-                if c.curTypeParams.count > 0U64 {
+                if c.cur.typeParams.count > 0U64 {
                     val gft: U64 = groundTypeRef(c: inout c, ref: fd.ty)
                     if gft != 0U64 {
                         bindKind = kindFromTySpan(c: inout c, tyStart: c.arena.types[gft].nameStart, tyLen: c.arena.types[gft].nameLen)

@@ -249,7 +249,7 @@ fn assocRecvName(c: inout Comp, recv: U64) -> Bind {
             if isSelfRef(c: inout c, start: start, len: len) {
                 return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
             }
-            if localIndexByName(c: inout c, start: start, len: len) < c.locals.count {
+            if localIndexByName(c: inout c, start: start, len: len) < c.cur.locals.count {
                 return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
             }
             if isTypeName(c: inout c, start: start, len: len) {

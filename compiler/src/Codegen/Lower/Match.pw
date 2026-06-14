@@ -418,7 +418,7 @@ fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
         StmtAst.Return(val value, val hasValue, val span) => {
             mut val v: U64 = 0
             if hasValue {
-                v = lowerExprWithCtx(c: inout c, e: value, ctxRef: c.lowerRetTy)
+                v = lowerExprWithCtx(c: inout c, e: value, ctxRef: c.cur.lowerRetTy)
             }
             result = c.pushStmt(s: <Stmt.Return value=v hasValue=hasValue offset=span.start />)
         }

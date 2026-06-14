@@ -68,10 +68,10 @@ fn groundedArrayFieldInfo(c: inout Comp, params: Array[Bind], instArgs: Array[U6
     if at.args.count == 0 {
         return typeInfoOfRef(c: inout c, ref: arrayTyRef)
     }
-    val savedP: Array[Bind] = c.curTypeParams
-    val savedA: Array[U64] = c.curTypeArgs
-    c.curTypeParams = params
-    c.curTypeArgs = instArgs
+    val savedP: Array[Bind] = c.cur.typeParams
+    val savedA: Array[U64] = c.cur.typeArgs
+    c.cur.typeParams = params
+    c.cur.typeArgs = instArgs
     val grounded: U64 = groundTypeRef(c: inout c, ref: at.args[0])
     mut val ti: TypeInfo = scalarInfo()
     if isCompoundType(c: inout c, ref: grounded) {
@@ -81,8 +81,8 @@ fn groundedArrayFieldInfo(c: inout Comp, params: Array[Bind], instArgs: Array[U6
         val gt: TypeRef = c.arena.types[grounded]
         ti = <TypeInfo kind=3 nameStart=gt.nameStart nameLen=gt.nameLen ref=0 />
     }
-    c.curTypeParams = savedP
-    c.curTypeArgs = savedA
+    c.cur.typeParams = savedP
+    c.cur.typeArgs = savedA
     return ti
 }
 

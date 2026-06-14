@@ -139,10 +139,10 @@ fn lowerFuncDecl(c: inout Comp, d: DeclAst) {
         retIsArray = pt.isArray
         retRef = pt.ref
     }
-    val savedRet: U64 = c.lowerRetTy
-    c.lowerRetTy = retRef
+    val savedRet: U64 = c.cur.lowerRetTy
+    c.cur.lowerRetTy = retRef
     val body: U64 = lowerBlock(c: inout c, b: d.body)
-    c.lowerRetTy = savedRet
+    c.cur.lowerRetTy = savedRet
     val fnIdx: U64 = c.arena.funcs.count
     c.arena.funcs.append(<Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout c, start: nameStart, len: nameLen) typeParams=typeParams params=params hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExtern=false />)
     mut val wi: U64 = 0

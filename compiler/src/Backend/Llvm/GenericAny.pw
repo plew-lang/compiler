@@ -39,7 +39,7 @@ fn anyMethodReq(c: inout Comp, traitIdx: U64, nameStart: U64, nameLen: U64, args
 // each of trait `traitIdx`'s type parameters and associated types to its binding
 // from the any TypeRef. Positional any-args (argLabels entry 0) fill the type
 // parameters in order; named any-args bind a parameter or associated type by name.
-// Fills the parallel (names, args) lists used as c.curTypeParams/curTypeArgs so
+// Fills the parallel (names, args) lists used as c.cur.typeParams/curTypeArgs so
 // requirement signatures naming `Rhs`/`Item`/`Output` ground to concrete types.
 // Returns false if any parameter / associated type is left unbound.
 fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Array[Bind], outArgs: inout Array[U64]) -> Bool {
@@ -154,13 +154,13 @@ fn anyMethodRetRef(c: inout Comp, anyRef: U64, traitIdx: U64, nameStart: U64, na
     if !(anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout params, outArgs: inout argz)) {
         return req.retTy
     }
-    val savedP: Array[Bind] = c.curTypeParams
-    val savedA: Array[U64] = c.curTypeArgs
-    c.curTypeParams = params
-    c.curTypeArgs = argz
+    val savedP: Array[Bind] = c.cur.typeParams
+    val savedA: Array[U64] = c.cur.typeArgs
+    c.cur.typeParams = params
+    c.cur.typeArgs = argz
     val g: U64 = groundTypeRef(c: inout c, ref: req.retTy)
-    c.curTypeParams = savedP
-    c.curTypeArgs = savedA
+    c.cur.typeParams = savedP
+    c.cur.typeArgs = savedA
     return g
 }
 

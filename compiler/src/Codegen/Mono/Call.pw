@@ -42,7 +42,7 @@ fn captureSupported(c: inout Comp, lo: Local) -> Bool {
 // instantiation / enum / function value) are rejected loudly (no silent meaning
 // loss; mutable reference capture is additive later).
 fn recordCapture(c: inout Comp, closureId: U64, localIdx: U64) {
-    val lo: Local = c.locals[localIdx]
+    val lo: Local = c.cur.locals[localIdx]
     mut val i: U64 = 0
     while i < c.monoWork.captures.count {
         val e: CaptureEntry = c.monoWork.captures[i]
@@ -224,13 +224,13 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
         Expr.Ident(val start, val len) => {
             // capture detection: inside a closure, an identifier that resolves to
             // a local below the closure's entry mark is an enclosing capture.
-            if c.curInClosure {
+            if c.cur.inClosure {
                 val li: U64 = localIndexByName(c: inout c, start: start, len: len)
-                if li < c.curCaptureMark {
+                if li < c.cur.captureMark {
                     // a module-level variable (spec/15) seeded at the locals base
                     // (index < globals.count) is globally accessible — not a capture.
                     if li >= c.arena.globals.count {
-                        recordCapture(c: inout c, closureId: c.curClosureId, localIdx: li)
+                        recordCapture(c: inout c, closureId: c.cur.closureId, localIdx: li)
                     }
                 }
             }
@@ -239,19 +239,19 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
             // a closure literal lexically inside another closure body: the inner
             // env construction would have to reach the outer env, which is not
             // wired yet — reject loudly rather than miscompile.
-            if c.curInClosure {
+            if c.cur.inClosure {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: exprId)), msg: "nested closures are not yet supported")
             }
             // walk the body with the closure's own scope so enclosing references
             // become captures. Save/restore the capture context (single-level;
             // nested closures keep their own mark).
-            val savedId: U64 = c.curClosureId
-            val savedIn: Bool = c.curInClosure
-            val savedMark: U64 = c.curCaptureMark
+            val savedId: U64 = c.cur.closureId
+            val savedIn: Bool = c.cur.inClosure
+            val savedMark: U64 = c.cur.captureMark
             val enclMark: U64 = scopeMark(c: inout c)
-            c.curClosureId = exprId
-            c.curInClosure = true
-            c.curCaptureMark = enclMark
+            c.cur.closureId = exprId
+            c.cur.inClosure = true
+            c.cur.captureMark = enclMark
             mut val pi: U64 = 0
             while pi < params.count {
                 val p: Param = params[pi]
@@ -260,9 +260,9 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
             }
             scanBlockInsts(c: inout c, blkId: body)
             popLocals(c: inout c, mark: enclMark)
-            c.curClosureId = savedId
-            c.curInClosure = savedIn
-            c.curCaptureMark = savedMark
+            c.cur.closureId = savedId
+            c.cur.inClosure = savedIn
+            c.cur.captureMark = savedMark
         }
         Expr.Unary(val op, val operand) => { scanExprInsts(c: inout c, exprId: operand) }
         Expr.Binary(val op, val lhs, val rhs) => {
@@ -532,15 +532,15 @@ fn scanGenInstMethodBodies(c: inout Comp) {
                     // provided combinators (`map[B]`) instantiate from call sites, not here.
                     if !(mf.isProvided) {
                         if mf.body != 0 {
-                            c.locals = []
+                            c.cur.locals = []
                             seedGlobalLocals(c: inout c)
-                            c.curHasRecv = true
-                            c.curRecvStart = mf.recvStart
-                            c.curRecvLen = mf.recvLen
-                            c.curSelfInout = mf.selfInout
-                            c.curRecvInstRef = instRef
-                            c.curTypeParams = mf.typeParams
-                            c.curTypeArgs = inst.args
+                            c.cur.hasRecv = true
+                            c.cur.recvStart = mf.recvStart
+                            c.cur.recvLen = mf.recvLen
+                            c.cur.selfInout = mf.selfInout
+                            c.cur.recvInstRef = instRef
+                            c.cur.typeParams = mf.typeParams
+                            c.cur.typeArgs = inst.args
                             setSelfItemEnv(c: inout c, recvStart: mf.recvStart, recvLen: mf.recvLen, recvInstRef: instRef)
                             mut val pi: U64 = 0
                             while pi < mf.params.count {
@@ -560,10 +560,10 @@ fn scanGenInstMethodBodies(c: inout Comp) {
     }
     val noP: Array[Bind] = []
     val noA: Array[U64] = []
-    c.locals = []
-    c.curHasRecv = false
-    c.curRecvInstRef = 0
-    c.curTypeParams = noP
-    c.curTypeArgs = noA
+    c.cur.locals = []
+    c.cur.hasRecv = false
+    c.cur.recvInstRef = 0
+    c.cur.typeParams = noP
+    c.cur.typeArgs = noA
 }
 

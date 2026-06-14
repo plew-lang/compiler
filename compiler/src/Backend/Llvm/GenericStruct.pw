@@ -43,10 +43,10 @@ fn registerGenStructBodies(c: inout Comp, st: inout LlvmCtx) {
     while s < st.genStructRefs.count {
         val ref: U64 = st.genStructRefs[s]
         val sd: StructDef = c.arena.structs[st.genStructDefs[s]]
-        val savedP: Array[Bind] = c.curTypeParams
-        val savedA: Array[U64] = c.curTypeArgs
-        c.curTypeParams = sd.typeParams
-        c.curTypeArgs = c.arena.types[ref].args
+        val savedP: Array[Bind] = c.cur.typeParams
+        val savedA: Array[U64] = c.cur.typeArgs
+        c.cur.typeParams = sd.typeParams
+        c.cur.typeArgs = c.arena.types[ref].args
         mut val elems: Array[LLVMTypeRef] = []
         mut val fi: U64 = 0
         while fi < sd.fields.count {
@@ -62,8 +62,8 @@ fn registerGenStructBodies(c: inout Comp, st: inout LlvmCtx) {
             fi += 1
         }
         LLVMStructSetBody(st.genStructTys[s], arrayCPtr(elems), sd.fields.count, 0I32)
-        c.curTypeParams = savedP
-        c.curTypeArgs = savedA
+        c.cur.typeParams = savedP
+        c.cur.typeArgs = savedA
         s += 1
     }
 }
@@ -92,10 +92,10 @@ fn registerGenEnums(c: inout Comp, st: inout LlvmCtx) {
             val defIdx: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
             if defIdx < c.arena.enums.count {
                 val e: EnumDef = c.arena.enums[defIdx]
-                val savedP: Array[Bind] = c.curTypeParams
-                val savedA: Array[U64] = c.curTypeArgs
-                c.curTypeParams = e.typeParams
-                c.curTypeArgs = t.args
+                val savedP: Array[Bind] = c.cur.typeParams
+                val savedA: Array[U64] = c.cur.typeArgs
+                c.cur.typeParams = e.typeParams
+                c.cur.typeArgs = t.args
                 mut val maxWords: U64 = 0
                 mut val vi: U64 = 0
                 while vi < e.variants.count {
@@ -122,8 +122,8 @@ fn registerGenEnums(c: inout Comp, st: inout LlvmCtx) {
                 elems.append(value: st.i64ty)
                 elems.append(value: LLVMArrayType2(st.i64ty, maxWords))
                 LLVMStructSetBody(ty, arrayCPtr(elems), 2U64, 0I32)
-                c.curTypeParams = savedP
-                c.curTypeArgs = savedA
+                c.cur.typeParams = savedP
+                c.cur.typeArgs = savedA
                 st.genEnumRefs.append(value: ref)
                 st.genEnumTys.append(value: ty)
                 st.genEnumDefs.append(value: defIdx)
@@ -163,18 +163,18 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                     // with bb: Box[Box[I32]] yields Box[I32]) AND any active env (a
                     // monomorphized adapter's `inner: I` -> MapIter[Counter,…]).
                     val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
-                    val savedP: Array[Bind] = c.curTypeParams
-                    val savedA: Array[U64] = c.curTypeArgs
+                    val savedP: Array[Bind] = c.cur.typeParams
+                    val savedA: Array[U64] = c.cur.typeArgs
                     val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: baseRef)
                     mut val g: U64 = fd.ty
                     if fd.ty != 0U64 {
-                        if c.curTypeParams.count > 0U64 {
+                        if c.cur.typeParams.count > 0U64 {
                             g = groundTypeRef(c: inout c, ref: fd.ty)
                         }
                     }
                     if didSet {
-                        c.curTypeParams = savedP
-                        c.curTypeArgs = savedA
+                        c.cur.typeParams = savedP
+                        c.cur.typeArgs = savedA
                     }
                     if g != 0U64 {
                         if isGenericInst(c: inout c, ref: g) {
@@ -311,8 +311,8 @@ fn methodResultRef(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, 
         val mf: Func = c.arena.funcs[mfi]
         if mf.hasRet {
             if mf.retTy != 0U64 {
-                val savedP: Array[Bind] = c.curTypeParams
-                val savedA: Array[U64] = c.curTypeArgs
+                val savedP: Array[Bind] = c.cur.typeParams
+                val savedA: Array[U64] = c.cur.typeArgs
                 // the receiver may be a struct OR an enum (`Loaded[Box].chain()` — an
                 // enum Chain conformer): set whichever env grounds its type params.
                 mut val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: recvRef)
@@ -321,8 +321,8 @@ fn methodResultRef(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, 
                 }
                 val g: U64 = groundTypeRef(c: inout c, ref: mf.retTy)
                 if didSet {
-                    c.curTypeParams = savedP
-                    c.curTypeArgs = savedA
+                    c.cur.typeParams = savedP
+                    c.cur.typeArgs = savedA
                 }
                 if isGenericInst(c: inout c, ref: g) {
                     return g
@@ -400,8 +400,8 @@ fn setEnumEnv(c: inout Comp, st: inout LlvmCtx, ref: U64) -> Bool {
     }
     val ge: U64 = genEnumSlot(c: inout c, st: inout st, ref: ref)
     if ge < st.genEnumRefs.count {
-        c.curTypeParams = c.arena.enums[st.genEnumDefs[ge]].typeParams
-        c.curTypeArgs = c.arena.types[ref].args
+        c.cur.typeParams = c.arena.enums[st.genEnumDefs[ge]].typeParams
+        c.cur.typeArgs = c.arena.types[ref].args
         return true
     }
     return false
@@ -416,8 +416,8 @@ fn setStructEnv(c: inout Comp, st: inout LlvmCtx, ref: U64) -> Bool {
     }
     val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: ref)
     if gs < st.genStructRefs.count {
-        c.curTypeParams = c.arena.structs[st.genStructDefs[gs]].typeParams
-        c.curTypeArgs = c.arena.types[ref].args
+        c.cur.typeParams = c.arena.structs[st.genStructDefs[gs]].typeParams
+        c.cur.typeArgs = c.arena.types[ref].args
         return true
     }
     return false

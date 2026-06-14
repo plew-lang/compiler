@@ -3,7 +3,7 @@
 
 fn verifyFunc(c: inout Comp, f: Func) {
     if f.hasRet {
-        c.curRetVoid = false
+        c.cur.retVoid = false
         mut val rStart: U64 = f.retStart
         mut val rLen: U64 = f.retLen
         mut val rTy: U64 = f.retTy
@@ -30,30 +30,30 @@ fn verifyFunc(c: inout Comp, f: Func) {
                 }
             }
         }
-        c.curRetStart = rStart
-        c.curRetLen = rLen
-        c.curRetIsArray = rArr
-        c.curRetTy = rTy
+        c.cur.retStart = rStart
+        c.cur.retLen = rLen
+        c.cur.retIsArray = rArr
+        c.cur.retTy = rTy
     } else {
-        c.curRetVoid = true
-        c.curRetStart = 0
-        c.curRetLen = 0
-        c.curRetIsArray = false
-        c.curRetTy = 0
+        c.cur.retVoid = true
+        c.cur.retStart = 0
+        c.cur.retLen = 0
+        c.cur.retIsArray = false
+        c.cur.retTy = 0
     }
-    c.curHasRecv = f.hasRecv
-    c.curRecvStart = f.recvStart
-    c.curRecvLen = f.recvLen
-    c.curSelfInout = f.selfInout
-    c.curSelfMove = f.selfMove
+    c.cur.hasRecv = f.hasRecv
+    c.cur.recvStart = f.recvStart
+    c.cur.recvLen = f.recvLen
+    c.cur.selfInout = f.selfInout
+    c.cur.selfMove = f.selfMove
     if f.hasRecv {
         setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0)
     } else {
         clearSelfItemEnv(c: inout c)
     }
-    c.curBranchBase = 0
-    c.locals = []
-    c.verifyMovedIdx = []
+    c.cur.branchBase = 0
+    c.cur.locals = []
+    c.cur.verifyMovedIdx = []
     seedGlobalLocals(c: inout c)
     checkGenericArity(c: inout c, ref: f.retTy, offset: f.nameStart)
     mut val pi: U64 = 0
@@ -71,19 +71,19 @@ fn verifyFunc(c: inout Comp, f: Func) {
 // --- use-after-move tracking (spec/03) ---
 fn verifyMarkMoved(c: inout Comp, idx: U64) {
     mut val i: U64 = 0
-    while i < c.verifyMovedIdx.count {
-        if c.verifyMovedIdx[i] == idx {
+    while i < c.cur.verifyMovedIdx.count {
+        if c.cur.verifyMovedIdx[i] == idx {
             return
         }
         i += 1
     }
-    c.verifyMovedIdx.append(idx)
+    c.cur.verifyMovedIdx.append(idx)
 }
 
 fn verifyIsMoved(c: inout Comp, idx: U64) -> Bool {
     mut val i: U64 = 0
-    while i < c.verifyMovedIdx.count {
-        if c.verifyMovedIdx[i] == idx {
+    while i < c.cur.verifyMovedIdx.count {
+        if c.cur.verifyMovedIdx[i] == idx {
             return true
         }
         i += 1
@@ -95,13 +95,13 @@ fn verifyIsMoved(c: inout Comp, idx: U64) -> Bool {
 fn verifyUnmarkMoved(c: inout Comp, idx: U64) {
     mut val kept: Array[U64] = []
     mut val i: U64 = 0
-    while i < c.verifyMovedIdx.count {
-        if c.verifyMovedIdx[i] != idx {
-            kept.append(c.verifyMovedIdx[i])
+    while i < c.cur.verifyMovedIdx.count {
+        if c.cur.verifyMovedIdx[i] != idx {
+            kept.append(c.cur.verifyMovedIdx[i])
         }
         i += 1
     }
-    c.verifyMovedIdx = kept
+    c.cur.verifyMovedIdx = kept
 }
 
 // Drop moved marks for locals at or above `mark` (their scope has ended, and the
@@ -109,13 +109,13 @@ fn verifyUnmarkMoved(c: inout Comp, idx: U64) {
 fn verifyDropMovedAbove(c: inout Comp, mark: U64) {
     mut val kept: Array[U64] = []
     mut val i: U64 = 0
-    while i < c.verifyMovedIdx.count {
-        if c.verifyMovedIdx[i] < mark {
-            kept.append(c.verifyMovedIdx[i])
+    while i < c.cur.verifyMovedIdx.count {
+        if c.cur.verifyMovedIdx[i] < mark {
+            kept.append(c.cur.verifyMovedIdx[i])
         }
         i += 1
     }
-    c.verifyMovedIdx = kept
+    c.cur.verifyMovedIdx = kept
 }
 
 fn verifyBlock(c: inout Comp, blockId: U64) {

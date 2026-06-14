@@ -16,15 +16,15 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
     // generic substitution: a type-parameter name (T) in scope resolves to its
     // concrete argument (the monomorphization env curTypeParams -> curTypeArgs,
     // set while emitting a generic instance). No-op outside a generic context.
-    if c.curTypeParams.count > 0U64 {
+    if c.cur.typeParams.count > 0U64 {
         val qid: U64 = intern(c: inout c, start: tyStart, len: tyLen)
         mut val ti: U64 = 0
-        while ti < c.curTypeParams.count {
-            if c.curTypeParams[ti].nameId == qid {
+        while ti < c.cur.typeParams.count {
+            if c.cur.typeParams[ti].nameId == qid {
                 // a type param bound to a generic instance (`I -> MapIter[Counter,…]`)
                 // must resolve to that registered instance type — recursing on the
                 // bare name would drop the args and miss it.
-                val argRef: U64 = c.curTypeArgs[ti]
+                val argRef: U64 = c.cur.typeArgs[ti]
                 if isGenericInst(c: inout c, ref: argRef) {
                     return llvmTypeOfRef(c: inout c, st: inout st, ref: argRef)
                 }

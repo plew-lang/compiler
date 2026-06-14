@@ -147,11 +147,11 @@ fn checkFnValueSig(c: inout Comp, declTy: U64, init: U64) {
 // The structured (Comp.arena.types) type of a local named (nameStart,nameLen), or 0.
 fn localTypeRefByName(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
     val q: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-    mut val i: U64 = c.locals.count
+    mut val i: U64 = c.cur.locals.count
     while i > 0U64 {
         i -= 1
-        if c.locals[i].nameId == q {
-            return c.locals[i].ty
+        if c.cur.locals[i].nameId == q {
+            return c.cur.locals[i].ty
         }
     }
     return 0U64

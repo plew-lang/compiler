@@ -16,7 +16,7 @@
 // literals, ==/!=); `if`/`while`; and the intrinsics exit / write / eprint /
 // print / panic (print dispatches by the arg's type-kind to a runtime formatter).
 // A per-local type-kind tag (int/String/Bool/uint) drives String-vs-int and
-// signed-vs-unsigned decisions without c.locals (which the backend doesn't
+// signed-vs-unsigned decisions without c.cur.locals (which the backend doesn't
 // populate). NOT yet: structs/enums, arrays, generics, methods, closures, async,
 // ARC, multi-module user code (only module 0 is emitted). Anything unsupported is
 // rejected loudly (no silent miscompile — acceptance soundness).

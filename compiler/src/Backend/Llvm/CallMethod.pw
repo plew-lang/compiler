@@ -136,10 +136,10 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
                 val agslot: U64 = genFnSlotFor(c: inout c, fnIdx: afi, args: ginf, st: inout st)
                 if agslot < st.genFnK.count {
                     val gaf: Func = c.arena.funcs[afi]
-                    val gsavedP: Array[Bind] = c.curTypeParams
-                    val gsavedA: Array[U64] = c.curTypeArgs
-                    c.curTypeParams = gaf.typeParams
-                    c.curTypeArgs = ginf
+                    val gsavedP: Array[Bind] = c.cur.typeParams
+                    val gsavedA: Array[U64] = c.cur.typeArgs
+                    c.cur.typeParams = gaf.typeParams
+                    c.cur.typeArgs = ginf
                     mut val gav: Array[LLVMValueRef] = []
                     mut val gai: U64 = 0
                     while gai < args.count {
@@ -151,8 +151,8 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
                         gav.append(value: genArgValue(c: inout c, st: inout st, argExpr: gaf.params[gdi].defaultExpr, p: gaf.params[gdi]))
                         gdi += 1
                     }
-                    c.curTypeParams = gsavedP
-                    c.curTypeArgs = gsavedA
+                    c.cur.typeParams = gsavedP
+                    c.cur.typeArgs = gsavedA
                     return LLVMBuildCall2(st.b, st.genFnTy[agslot], st.genFnVal[agslot], arrayCPtr(gav), gav.count, anon())
                 }
             }

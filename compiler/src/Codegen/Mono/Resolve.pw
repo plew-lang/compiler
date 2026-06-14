@@ -123,14 +123,14 @@ fn resolveTy(c: inout Comp, tyRef: U64) -> U64 {
     if t.args.count == 0 {
         // `Self`/`Item` as types (provided methods on a trait): resolve to the
         // receiver type and its associated `Item` binding (set per method).
-        if c.curSelfRef != 0 {
+        if c.cur.selfRef != 0 {
             if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
-                return c.curSelfRef
+                return c.cur.selfRef
             }
         }
-        if c.curItemRef != 0 {
+        if c.cur.itemRef != 0 {
             if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") {
-                return c.curItemRef
+                return c.cur.itemRef
             }
         }
         // last-match (iterate high → low): a method-own type param is appended to the
@@ -139,13 +139,13 @@ fn resolveTy(c: inout Comp, tyRef: U64) -> U64 {
         // method-own `B` (the accumulator) must shadow the conformer's `B` (the item).
         // With all-distinct names first-match and last-match agree, so this only changes
         // the collision case, resolving it the way lexical shadowing requires.
-        mut val i: U64 = c.curTypeParams.count
+        mut val i: U64 = c.cur.typeParams.count
         while i > 0U64 {
             i -= 1
-            val p: Bind = c.curTypeParams[i]
+            val p: Bind = c.cur.typeParams[i]
             if t.nameId == p.nameId {
-                if i < c.curTypeArgs.count {
-                    return c.curTypeArgs[i]
+                if i < c.cur.typeArgs.count {
+                    return c.cur.typeArgs[i]
                 }
             }
         }

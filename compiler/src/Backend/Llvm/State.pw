@@ -128,7 +128,7 @@ struct LlvmCtx {
     pub mut val locTy: Array[LLVMTypeRef]
     // a small Plew-type-kind tag per local (0 int/signed, 1 String, 2 Bool, 3
     // unsigned int), so String ==/!= and print pick the right lowering without
-    // c.locals (which the LLVM backend doesn't populate, so typeOf can't see locals).
+    // c.cur.locals (which the LLVM backend doesn't populate, so typeOf can't see locals).
     pub mut val locKind: Array[U64]
     // per-local owning struct index (c.arena.structs.count = not a struct), so field
     // access x.field can resolve the layout from a struct-typed local.

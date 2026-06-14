@@ -14,12 +14,12 @@
 // the scratch list for the next declaration.
 fn drainDerives(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool, declStart: U64, declEnd: U64) {
     mut val i: U64 = 0
-    while i < c.pendingDerives.count {
-        val d: DeriveReq = c.pendingDerives[i]
+    while i < c.parseScratch.pendingDerives.count {
+        val d: DeriveReq = c.parseScratch.pendingDerives[i]
         c.decls.derives.append(<DeriveReq typeStart=typeStart typeLen=typeLen isEnum=isEnum nameStart=d.nameStart nameLen=d.nameLen declStart=declStart declEnd=declEnd args=d.args />)
         i += 1
     }
-    c.pendingDerives = []
+    c.parseScratch.pendingDerives = []
 }
 
 // Append a string's bytes to c.arena.bytes and return its (start,len) span — for

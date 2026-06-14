@@ -80,8 +80,8 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
     if arms.count > 0U64 {
         if arms[0].isStruct {
             val ssidx: U64 = exprStructIdx(c: inout c, st: inout st, id: scrut)
-            val savedSP: Array[Bind] = c.curTypeParams
-            val savedSA: Array[U64] = c.curTypeArgs
+            val savedSP: Array[Bind] = c.cur.typeParams
+            val savedSA: Array[U64] = c.cur.typeArgs
             val didSetS: Bool = setStructEnv(c: inout c, st: inout st, ref: exprTypeRef(c: inout c, st: inout st, id: scrut))
             val sslot0: LLVMValueRef = entryAlloca(st: inout st, ty: sty)
             LLVMBuildStore(st.b, sv, sslot0)
@@ -93,8 +93,8 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
             val rv: LLVMValueRef = st.giveValue
             st.nLocals = mark0
             if didSetS {
-                c.curTypeParams = savedSP
-                c.curTypeArgs = savedSA
+                c.cur.typeParams = savedSP
+                c.cur.typeArgs = savedSA
             }
             return rv
         }
@@ -103,8 +103,8 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
     // ONLY around bindMatchPayload, never for the arm bodies (which keep the outer
     // env so a body's `self.f` grounds against the enclosing method).
     val scrutRef: U64 = exprTypeRef(c: inout c, st: inout st, id: scrut)
-    val savedVP: Array[Bind] = c.curTypeParams
-    val savedVA: Array[U64] = c.curTypeArgs
+    val savedVP: Array[Bind] = c.cur.typeParams
+    val savedVA: Array[U64] = c.cur.typeArgs
     mut val eid: U64 = c.arena.enums.count
     mut val ai0: U64 = 0
     while ai0 < arms.count {
@@ -151,8 +151,8 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
             val didB: Bool = setEnumEnv(c: inout c, st: inout st, ref: scrutRef)
             bindMatchPayload(c: inout c, st: inout st, eid: eid, arm: arm, scrutTy: sty, scrutSlot: sslot)
             if didB {
-                c.curTypeParams = savedVP
-                c.curTypeArgs = savedVA
+                c.cur.typeParams = savedVP
+                c.cur.typeArgs = savedVA
             }
         }
         // each arm body is a block ending in `give` (value) or in `panic`/`return`
@@ -257,11 +257,11 @@ fn genLlvmOptChain(c: inout Comp, st: inout LlvmCtx, base: U64, memberStart: U64
     LLVMBuildCondBr(st.b, isSome, someBB, noneBB)
     // Some: extract the inner value (under base env), read its member, rebuild Some.
     LLVMPositionBuilderAtEnd(st.b, someBB)
-    val savedP: Array[Bind] = c.curTypeParams
-    val savedA: Array[U64] = c.curTypeArgs
+    val savedP: Array[Bind] = c.cur.typeParams
+    val savedA: Array[U64] = c.cur.typeArgs
     val didB: Bool = setEnumEnv(c: inout c, st: inout st, ref: baseRef)
     val basePayloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: beid, vi: someVi)
-    if didB { c.curTypeParams = savedP  c.curTypeArgs = savedA }
+    if didB { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
     val payload: LLVMValueRef = LLVMBuildLoad2(st.b, basePayloadTy, LLVMBuildStructGEP2(st.b, bety, sslot, 1U64, anon()), anon())
     val innerVal: LLVMValueRef = LLVMBuildExtractValue(st.b, payload, 0U64, anon())
     val memberVal: LLVMValueRef = LLVMBuildExtractValue(st.b, innerVal, fidx, anon())
@@ -269,7 +269,7 @@ fn genLlvmOptChain(c: inout Comp, st: inout LlvmCtx, base: U64, memberStart: U64
     mut val someArgs: Array[LLVMValueRef] = []
     someArgs.append(value: memberVal)
     val someResult: LLVMValueRef = buildEnumFromValues(c: inout c, st: inout st, eid: reid, ety: rety, vi: someVi, payloadVals: someArgs)
-    if didR { c.curTypeParams = savedP  c.curTypeArgs = savedA }
+    if didR { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
     LLVMBuildStore(st.b, someResult, resSlot)
     LLVMBuildBr(st.b, contBB)
     // None: rebuild None.
@@ -319,15 +319,15 @@ fn genLlvmTry(c: inout Comp, st: inout LlvmCtx, expr: U64) -> LLVMValueRef {
     val errBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "try.err"))
     val okBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "try.ok"))
     LLVMBuildCondBr(st.b, isErr, errBB, okBB)
-    val savedP: Array[Bind] = c.curTypeParams
-    val savedA: Array[U64] = c.curTypeArgs
+    val savedP: Array[Bind] = c.cur.typeParams
+    val savedA: Array[U64] = c.cur.typeArgs
     // Err: extract the error (source env), rebuild the function's Result Err, return.
     LLVMPositionBuilderAtEnd(st.b, errBB)
     val didE: Bool = setEnumEnv(c: inout c, st: inout st, ref: exprRef)
     val errPayloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: eeid, vi: errVi)
     val errPayload: LLVMValueRef = LLVMBuildLoad2(st.b, errPayloadTy, LLVMBuildStructGEP2(st.b, eety, eslot, 1U64, anon()), anon())
     val errVal: LLVMValueRef = LLVMBuildExtractValue(st.b, errPayload, 0U64, anon())
-    if didE { c.curTypeParams = savedP  c.curTypeArgs = savedA }
+    if didE { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
     // error conversion (spec/13): when the function's error type E differs from the
     // operand's E', convert E' -> E through E's `from` factory before rewrapping.
     mut val convErrVal: LLVMValueRef = errVal
@@ -355,7 +355,7 @@ fn genLlvmTry(c: inout Comp, st: inout LlvmCtx, expr: U64) -> LLVMValueRef {
     mut val errArgs: Array[LLVMValueRef] = []
     errArgs.append(value: convErrVal)
     val retResult: LLVMValueRef = buildEnumFromValues(c: inout c, st: inout st, eid: reid, ety: rety, vi: errVi, payloadVals: errArgs)
-    if didR { c.curTypeParams = savedP  c.curTypeArgs = savedA }
+    if didR { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
     LLVMBuildRet(st.b, retResult)
     // Ok: extract and yield the value; control continues at okBB.
     LLVMPositionBuilderAtEnd(st.b, okBB)
@@ -364,7 +364,7 @@ fn genLlvmTry(c: inout Comp, st: inout LlvmCtx, expr: U64) -> LLVMValueRef {
     val okPayloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: eeid, vi: okVi)
     val okPayload: LLVMValueRef = LLVMBuildLoad2(st.b, okPayloadTy, LLVMBuildStructGEP2(st.b, eety, eslot, 1U64, anon()), anon())
     val okVal: LLVMValueRef = LLVMBuildExtractValue(st.b, okPayload, 0U64, anon())
-    if didO { c.curTypeParams = savedP  c.curTypeArgs = savedA }
+    if didO { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
     return okVal
 }
 

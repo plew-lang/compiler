@@ -9,15 +9,15 @@ fn collectFnInsts(c: inout Comp) {
         if !(f.typeParams.count > 0 || f.isExtern) {
             val noParams: Array[Bind] = []
             val noArgs: Array[U64] = []
-            c.locals = []
+            c.cur.locals = []
             seedGlobalLocals(c: inout c)
-            c.curHasRecv = f.hasRecv
-            c.curRecvStart = f.recvStart
-            c.curRecvLen = f.recvLen
-            c.curSelfInout = f.selfInout
-            c.curRecvInstRef = 0
-            c.curTypeParams = noParams
-            c.curTypeArgs = noArgs
+            c.cur.hasRecv = f.hasRecv
+            c.cur.recvStart = f.recvStart
+            c.cur.recvLen = f.recvLen
+            c.cur.selfInout = f.selfInout
+            c.cur.recvInstRef = 0
+            c.cur.typeParams = noParams
+            c.cur.typeArgs = noArgs
             mut val pi: U64 = 0
             while pi < f.params.count {
                 val p: Param = f.params[pi]
@@ -41,7 +41,7 @@ fn collectFnInsts(c: inout Comp) {
     while si < c.monoWork.fnInsts.count {
         val fin: FnInst = c.monoWork.fnInsts[si]
         val gf: Func = c.arena.funcs[fin.fnIdx]
-        c.locals = []
+        c.cur.locals = []
         seedGlobalLocals(c: inout c)
         // a generic *method* instance carries a receiver: set the self env (and the
         // receiver instantiation for a generic receiver) so `self`/`self.field`
@@ -49,16 +49,16 @@ fn collectFnInsts(c: inout Comp) {
         // calls `self.field.hash(...)` can't type `self.field`, so the field's own
         // (transitive) generic-method instance is never discovered. A free function
         // has hasRecv=false, so this is a no-op for it (env stays cleared).
-        c.curHasRecv = gf.hasRecv
-        c.curRecvStart = gf.recvStart
-        c.curRecvLen = gf.recvLen
-        c.curSelfInout = gf.selfInout
-        c.curRecvInstRef = fin.recvInstRef
+        c.cur.hasRecv = gf.hasRecv
+        c.cur.recvStart = gf.recvStart
+        c.cur.recvLen = gf.recvLen
+        c.cur.selfInout = gf.selfInout
+        c.cur.recvInstRef = fin.recvInstRef
         if gf.hasRecv {
             setSelfItemEnv(c: inout c, recvStart: gf.recvStart, recvLen: gf.recvLen, recvInstRef: fin.recvInstRef)
         }
-        c.curTypeParams = gf.typeParams
-        c.curTypeArgs = fin.args
+        c.cur.typeParams = gf.typeParams
+        c.cur.typeArgs = fin.args
         mut val gpi: U64 = 0
         while gpi < gf.params.count {
             val gp: Param = gf.params[gpi]
@@ -73,12 +73,12 @@ fn collectFnInsts(c: inout Comp) {
     }
     val noP: Array[Bind] = []
     val noA: Array[U64] = []
-    c.locals = []
-    c.curHasRecv = false
-    c.curTypeParams = noP
-    c.curTypeArgs = noA
-    c.curInClosure = false
-    c.curClosureId = 0
-    c.curCaptureMark = 0
+    c.cur.locals = []
+    c.cur.hasRecv = false
+    c.cur.typeParams = noP
+    c.cur.typeArgs = noA
+    c.cur.inClosure = false
+    c.cur.closureId = 0
+    c.cur.captureMark = 0
 }
 

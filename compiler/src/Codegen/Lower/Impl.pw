@@ -78,10 +78,10 @@ fn lowerMethodMember(c: inout Comp, im: ImplAst, m: MemberAst, recvN: Bind, impl
         }
         witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) typeParams=typeParams params=params hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
     }
-    val savedRet: U64 = c.lowerRetTy
-    c.lowerRetTy = retRef
+    val savedRet: U64 = c.cur.lowerRetTy
+    c.cur.lowerRetTy = retRef
     val body: U64 = lowerBlock(c: inout c, b: m.body)
-    c.lowerRetTy = savedRet
+    c.cur.lowerRetTy = savedRet
     val fnIdx: U64 = c.arena.funcs.count
     // an extension method (spec/09) is tagged with its extension's name id so it is
     // excluded from bare resolution (reachable only via `value#Ext.m()`).

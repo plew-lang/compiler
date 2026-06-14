@@ -57,20 +57,20 @@ fn declareGenMethods(c: inout Comp, st: inout LlvmCtx) {
 
 fn declareOneGenMethod(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64, ownArgs: Array[U64]) {
     val mf: Func = c.arena.funcs[mfi]
-    val savedP: Array[Bind] = c.curTypeParams
-    val savedA: Array[U64] = c.curTypeArgs
+    val savedP: Array[Bind] = c.cur.typeParams
+    val savedA: Array[U64] = c.cur.typeArgs
     val savedR: U64 = st.curRecvInstRef
-    c.curTypeParams = mf.typeParams
+    c.cur.typeParams = mf.typeParams
     // env = receiver instance args ++ method-own args (the latter empty for ordinary
     // methods); pairs 1:1 with mf.typeParams = [receiver params..., own params...].
-    c.curTypeArgs = concatArgs(add: c.arena.types[instRef].args, base: ownArgs)
+    c.cur.typeArgs = concatArgs(add: c.arena.types[instRef].args, base: ownArgs)
     st.curRecvInstRef = instRef
     // bind Self/Item to the receiver instance for a provided method, so a param/return
     // type naming `Item` resolves to the receiver's real item: a terminal returning
     // `Optional[Item]` (`first`/`reduce`) grounds its signature, and an own-param
     // terminal (`fold[B]`) sees the right item independent of the B/B collision.
-    val sDs: U64 = c.curSelfRef
-    val sDi: U64 = c.curItemRef
+    val sDs: U64 = c.cur.selfRef
+    val sDi: U64 = c.cur.itemRef
     if mf.isProvided {
         setSelfItemEnv(c: inout c, recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
     }
@@ -98,10 +98,10 @@ fn declareOneGenMethod(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64,
     st.genMethVal.append(value: fv)
     st.genMethTy.append(value: fty)
     st.genMethOwn.append(value: ownArgs)
-    c.curSelfRef = sDs
-    c.curItemRef = sDi
-    c.curTypeParams = savedP
-    c.curTypeArgs = savedA
+    c.cur.selfRef = sDs
+    c.cur.itemRef = sDi
+    c.cur.typeParams = savedP
+    c.cur.typeArgs = savedA
     st.curRecvInstRef = savedR
 }
 
@@ -111,11 +111,11 @@ fn emitOneGenMethod(c: inout Comp, st: inout LlvmCtx, slot: U64) {
     val mfi: U64 = st.genMethK[slot]
     val instRef: U64 = st.genMethInst[slot]
     val mf: Func = c.arena.funcs[mfi]
-    val savedP: Array[Bind] = c.curTypeParams
-    val savedA: Array[U64] = c.curTypeArgs
+    val savedP: Array[Bind] = c.cur.typeParams
+    val savedA: Array[U64] = c.cur.typeArgs
     val savedR: U64 = st.curRecvInstRef
-    c.curTypeParams = mf.typeParams
-    c.curTypeArgs = concatArgs(add: c.arena.types[instRef].args, base: st.genMethOwn[slot])
+    c.cur.typeParams = mf.typeParams
+    c.cur.typeArgs = concatArgs(add: c.arena.types[instRef].args, base: st.genMethOwn[slot])
     st.curRecvInstRef = instRef
     // a provided method with method-own type params (`fold[B]` on a generic receiver):
     // its body refers to the element by the associated `Item`, while the env carries
@@ -123,16 +123,16 @@ fn emitOneGenMethod(c: inout Comp, st: inout LlvmCtx, slot: U64) {
     // that last-match resolution collapses to the accumulator. Bind `Self`/`Item` to the
     // receiver instance so the element type resolves to the real item, independent of the
     // name collision (only when own args are present, leaving ordinary methods untouched).
-    val s4: U64 = c.curSelfRef
-    val si4: U64 = c.curItemRef
+    val s4: U64 = c.cur.selfRef
+    val si4: U64 = c.cur.itemRef
     if mf.isProvided {
         setSelfItemEnv(c: inout c, recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
     }
     genLlvmFuncBody(c: inout c, st: inout st, fi: mfi, fv: st.genMethVal[slot])
-    c.curSelfRef = s4
-    c.curItemRef = si4
-    c.curTypeParams = savedP
-    c.curTypeArgs = savedA
+    c.cur.selfRef = s4
+    c.cur.itemRef = si4
+    c.cur.typeParams = savedP
+    c.cur.typeArgs = savedA
     st.curRecvInstRef = savedR
 }
 
@@ -221,7 +221,7 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     // verbatim, so its viewExtId survives grounding.
     if pRef == 0U64 {
         if p.ty != 0U64 {
-            if c.curTypeParams.count > 0U64 {
+            if c.cur.typeParams.count > 0U64 {
                 val pgv: U64 = groundTypeRef(c: inout c, ref: p.ty)
                 if pgv != p.ty {
                     if pgv < c.arena.types.count {
@@ -288,7 +288,7 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
             mut val gs2: U64 = p.tyStart
             mut val gl2: U64 = p.tyLen
             if p.ty != 0U64 {
-                if c.curTypeParams.count > 0U64 {
+                if c.cur.typeParams.count > 0U64 {
                     val pg2: U64 = groundTypeRef(c: inout c, ref: p.ty)
                     gs2 = c.arena.types[pg2].nameStart
                     gl2 = c.arena.types[pg2].nameLen
@@ -313,7 +313,7 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     mut val pKindStart: U64 = pgStart
     mut val pKindLen: U64 = pgLen
     if p.ty != 0U64 {
-        if c.curTypeParams.count > 0U64 {
+        if c.cur.typeParams.count > 0U64 {
             val pg: U64 = groundTypeRef(c: inout c, ref: p.ty)
             pKindStart = c.arena.types[pg].nameStart
             pKindLen = c.arena.types[pg].nameLen

@@ -88,13 +88,13 @@ fn genLlvmAdapterWrap(c: inout Comp, st: inout LlvmCtx, recv: U64, args: Array[A
         }
         i += 1
     }
-    val savedP: Array[Bind] = c.curTypeParams
-    val savedA: Array[U64] = c.curTypeArgs
-    c.curTypeParams = sd.typeParams
-    c.curTypeArgs = c.arena.types[adapterRef].args
+    val savedP: Array[Bind] = c.cur.typeParams
+    val savedA: Array[U64] = c.cur.typeArgs
+    c.cur.typeParams = sd.typeParams
+    c.cur.typeArgs = c.arena.types[adapterRef].args
     val v: LLVMValueRef = buildStructValue(c: inout c, st: inout st, sd: sd, sty: st.genStructTys[gslot], fields: fields, errOffset: exprOffset(c: inout c, id: recv))
-    c.curTypeParams = savedP
-    c.curTypeArgs = savedA
+    c.cur.typeParams = savedP
+    c.cur.typeArgs = savedA
     return v
 }
 

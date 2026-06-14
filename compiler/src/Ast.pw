@@ -814,6 +814,69 @@ struct Interner {
 }
 pub impl Interner { factory }
 
+// Parse-time scratch, reset at each `impl`/decl boundary (not live across passes).
+// `pendingDerives`: derive names parsed for the *next* type decl (folded into
+// decls.derives). `witnessed`: requirement names witnessed by the trait impl
+// being parsed (folded into the Conform at the impl's close). `whereTraits`: the
+// trait spans from parseWhereClause (parallel to its returned param spans).
+// `implBoundParams`/`implBoundTraits`: the impl-level `where T: Trait` bounds of
+// the impl being parsed (each member fn folds these into decls.funcBounds).
+struct ParseScratch {
+    pub mut val pendingDerives: Array[DeriveReq] = []
+    pub mut val witnessed: Array[Func] = []
+    pub mut val whereTraits: Array[Bind] = []
+    pub mut val implBoundParams: Array[Bind] = []
+    pub mut val implBoundTraits: Array[Bind] = []
+}
+pub impl ParseScratch { factory }
+
+// The per-body cursor: transient state for the function/closure body currently
+// being lowered / checked / emitted, saved & restored around each body (NOT live
+// across bodies). `locals` are the variables in scope; `tmp`/`giveTmp` are
+// fresh-name counters; `ret*` is the declared return type; `hasRecv`/`recv*`/
+// `self*`/`item*` are the method receiver + resolved Self/Item; `typeParams`/
+// `typeArgs` are the generic substitution env; `closureId`/`inClosure`/
+// `captureMark` track closure-body emission; `verifyLoopDepth`/`verifyMovedIdx`/
+// `branchBase` are the verify-pass loop/move bookkeeping; `inAsync`/`asyncState`/
+// `asyncFn`/`asyncVarSeq` drive async state-machine lowering; `lowerRetTy` is the
+// lowering-time return type (generic-constructor inference); `checkFn` is the
+// function index the eager generic checker is on.
+struct Cursor {
+    pub mut val locals: Array[Local] = []
+    pub mut val tmp: U64 = 0
+    pub mut val giveTmp: U64 = 0
+    pub mut val loopMark: U64 = 0
+    pub mut val isMain: Bool = false
+    pub mut val retVoid: Bool = false
+    pub mut val retStart: U64 = 0
+    pub mut val retLen: U64 = 0
+    pub mut val retIsArray: Bool = false
+    pub mut val retTy: U64 = 0
+    pub mut val hasRecv: Bool = false
+    pub mut val recvStart: U64 = 0
+    pub mut val recvLen: U64 = 0
+    pub mut val selfInout: Bool = false
+    pub mut val selfMove: Bool = false
+    pub mut val recvInstRef: U64 = 0
+    pub mut val selfRef: U64 = 0
+    pub mut val itemRef: U64 = 0
+    pub mut val typeParams: Array[Bind] = []
+    pub mut val typeArgs: Array[U64] = []
+    pub mut val closureId: U64 = 0
+    pub mut val inClosure: Bool = false
+    pub mut val captureMark: U64 = 0
+    pub mut val verifyLoopDepth: U64 = 0
+    pub mut val verifyMovedIdx: Array[U64] = []
+    pub mut val branchBase: U64 = 0
+    pub mut val inAsync: Bool = false
+    pub mut val asyncState: U64 = 0
+    pub mut val asyncFn: U64 = 0
+    pub mut val asyncVarSeq: U64 = 0
+    pub mut val lowerRetTy: U64 = 0
+    pub mut val checkFn: U64 = 0
+}
+pub impl Cursor { factory }
+
 struct Comp {
     // the shared IR arena: source bytes + every node table (see `Arena`). The
     // single owner of the program's data that all passes read; `c.arena.exprs`,
@@ -824,9 +887,10 @@ struct Comp {
     // derive requests, where-bounds, deinits, assoc bindings, pub factories, and
     // the import-name / chain-result / keyword-span caches.
     pub mut val decls: Decls = <Decls />
-    // scratch: derive names parsed for the *next* type declaration (folded into
-    // decls.derives at that declaration).
-    pub mut val pendingDerives: Array[DeriveReq]
+    // parse-time scratch, reset at each impl/decl boundary (see `ParseScratch`).
+    pub mut val parseScratch: ParseScratch = <ParseScratch />
+    // the per-body codegen / lowering / verify cursor (see `Cursor`).
+    pub mut val cur: Cursor = <Cursor />
     // gen mode (spec/16 `plew gen`): set when invoked as `plewc --gen <file>`.
     // The driver then suppresses the user's own `main` and the auto-part of
     // `<Foo>.gen.pw`, and emits a synthesized harness `main` (`genMainIdx`) that
@@ -839,28 +903,6 @@ struct Comp {
     // rejecting, so its coverage can be developed/triaged against self-compile
     // without breaking the build. Off in a normal build (no behavior change yet).
     pub mut val tcLog: Bool = false
-    // The declared return type (a TypeRef ref, 0 = none) of the function/closure
-    // currently being lowered, so a `return <Gen … />` generic constructor infers
-    // its type arguments from the return type (Bug11). Saved/restored per body.
-    pub mut val lowerRetTy: U64 = 0
-    // the function index currently being checked by the eager generic
-    // type-checker (#9), so method/operator bound checks can look up its type
-    // parameters and `where` bounds. c.arena.funcs.count when not checking.
-    pub mut val curCheckFn: U64
-    // scratch: requirement names witnessed by the trait impl currently being
-    // parsed (body method or `via` alias). Reset at each `impl Type as Trait`
-    // entry; folded into the Conform record at the impl's close.
-    pub mut val curWitnessed: Array[Func]
-    // scratch: the trait spans parsed by parseWhereClause, parallel to its
-    // returned param spans (a second return value without a tuple type).
-    pub mut val curWhereTraits: Array[Bind]
-    // scratch: the impl-level `where T: Trait` bounds of the impl currently being
-    // parsed (`impl[I] Wrap[I] where I: Iterator { ... }`), parallel param/trait
-    // spans. Each member fn folds these into c.decls.funcBounds for its own index, so a
-    // method body can call the bound trait's methods on the type parameter. Reset
-    // to [] at the impl's close (so top-level fns and later impls don't inherit).
-    pub mut val curImplBoundParams: Array[Bind] = []
-    pub mut val curImplBoundTraits: Array[Bind] = []
     // name interning (Phase C): a content-keyed table mapping each name span to a
     // stable 1-based id, so name equality is an integer compare (see `Interner`).
     pub mut val interner: Interner = <Interner />
@@ -872,95 +914,6 @@ struct Comp {
     // element types, and recursive-field boxing. Collected after parsing, used
     // by codegen.
     pub mut val monoWork: MonoWork = <MonoWork />
-    // the closure arena id currently being emitted (so an Ident that names one of
-    // its captures lowers to an env access). Guarded by curInClosure.
-    pub mut val curClosureId: U64
-    pub mut val curInClosure: Bool
-    // during capture collection: the locals high-water mark at the active
-    // closure's entry. An identifier resolving below it is an enclosing local
-    // (a capture); at or above it is a closure param / body-local.
-    pub mut val curCaptureMark: U64
-    // variables in scope during codegen (params / lets / match binds), for type
-    // recovery (monomorphization + `.bytes` dispatch).
-    pub mut val locals: Array[Local]
-    // fresh-temp counter for match scrutinee bindings (`_m0`, `_m1`, ...)
-    pub mut val tmp: U64
-    // set per-function during codegen so `return` lowers correctly
-    pub mut val curIsMain: Bool
-    pub mut val curRetVoid: Bool
-    // the current function's return type span (for literal range-checking a
-    // `return <expr>` against the declared return type). Valid when !curRetVoid.
-    pub mut val curRetStart: U64
-    pub mut val curRetLen: U64
-    pub mut val curRetIsArray: Bool
-    // the current function's structured return type (TypeRef index), so `try`
-    // can rebuild the function's Result error variant. 0 outside a function.
-    pub mut val curRetTy: U64
-    // set per-function during codegen for the implicit method receiver: whether
-    // the current function is a method, and if so its receiver type span and
-    // whether self is `inout` (so a bare `self` lowers to `(*self)`).
-    pub mut val curHasRecv: Bool
-    pub mut val curRecvStart: U64
-    pub mut val curRecvLen: U64
-    pub mut val curSelfInout: Bool
-    // the current method is a `move fn` (consumes self): self is deinit'd at every
-    // exit of the body (set per-function during codegen).
-    pub mut val curSelfMove: Bool
-    // generic body substitution env: when emitting a monomorphized generic
-    // function/method body, curTypeParams[i] (a type-param name) maps to the
-    // concrete TypeRef curTypeArgs[i]. Empty outside a generic instantiation.
-    pub mut val curTypeParams: Array[Bind]
-    pub mut val curTypeArgs: Array[U64]
-    // the receiver's concrete instantiation TypeRef when emitting a generic
-    // method (so the mangled C name and `self`'s type resolve). 0 otherwise.
-    pub mut val curRecvInstRef: U64
-    // `Self` (the receiver type) and the associated `Item` resolved as *types*,
-    // when processing a method whose signature/body mention them (a provided
-    // method on Iterator: `map[B](f: fn(x: Item)->B) -> MapIter[Self, …, B]`).
-    // TypeRef indices; 0 = not set. resolveTy maps a bare `Self`/`Item` ref to
-    // these. Set per method (codegen/scan/check) from the receiver and its
-    // `type Item` binding; reset to 0 outside a method that needs them.
-    pub mut val curSelfRef: U64 = 0
-    pub mut val curItemRef: U64 = 0
-    // result temp id of the innermost value-position block (`if`/`match` expr)
-    // currently being lowered, so a `give` statement knows which `__r<n>` to
-    // assign — stored as `id + 1` so 0 means "not inside a block-expression" (a
-    // bare `give` is then a no-op). The +1 encoding keeps it U64 (no signed
-    // sentinel) under the lossless-`as` discipline.
-    pub mut val curGiveTmp: U64
-    // locals high-water mark at the current loop body's entry. break/continue
-    // release the owned locals pushed since (the iteration's scopes); saved and
-    // restored across nested loops. 0 when not inside a loop.
-    pub mut val curLoopMark: U64
-    // verify-time loop nesting depth (spec/11): 0 outside any loop, incremented
-    // around a `while`/`for` body. `break`/`continue` at depth 0 is rejected by the
-    // emission-independent acceptance pass (verifyProgram), not just the backend.
-    pub mut val verifyLoopDepth: U64 = 0
-    // verify-time use-after-move tracking (spec/03): the c.locals indices of locals
-    // whose value has been `move`d away. Reading or re-`move`ing such a local is a
-    // use-after-move error; reassigning it clears the mark. Cleaned to a scope's
-    // high-water mark on block exit (so a popped index isn't reused as a false mark).
-    pub mut val verifyMovedIdx: Array[U64] = []
-    // locals high-water mark at entry to the innermost conditional/loop body. An
-    // explicit `move` of a local with a smaller index (declared outside the branch)
-    // would be a conditional move — unsound without flow analysis (the persisted
-    // moved flag would skip the value's deinit on the not-taken path) — so it is
-    // rejected. 0 at function top level (straight-line moves always allowed).
-    pub mut val curBranchBase: U64
-    // async lowering state (spec/14). curAsync: emitting an `async fn` body, so a
-    // top-level binding lowers to a frame-struct field and a local reference to
-    // `__f->name`. asyncState: the next `await` suspension index (a `switch`
-    // resume case). curAsyncFn: the func index being lowered (so an await knows
-    // its frame type and resume-function name). Reset around each function.
-    pub mut val curAsync: Bool
-    pub mut val asyncState: U64
-    pub mut val curAsyncFn: U64
-    // monotonic per-async-fn binding counter: every binding (Let / match bind) in
-    // an async body gets a unique C-name suffix (`name_s<n>`) so the flat frame
-    // struct has no collisions across sibling branches / match arms (where source
-    // names legitimately repeat). The frame-field collection and the resume-body
-    // codegen walk the body in the same DFS order, so they assign matching suffixes.
-    pub mut val asyncVarSeq: U64
     // module identity + cross-module visibility tables (spec/15): see `Modules`.
     pub mut val modules: Modules = <Modules />
 }

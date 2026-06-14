@@ -40,27 +40,27 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
         }
         Expr.Ident(val start, val len) => {
             if isSelfRef(c: inout c, start: start, len: len) {
-                if c.curRecvInstRef != 0 {
-                    val rt: TypeRef = c.arena.types[c.curRecvInstRef]
+                if c.cur.recvInstRef != 0 {
+                    val rt: TypeRef = c.arena.types[c.cur.recvInstRef]
                     // self inside an `impl Array[T]` method types as an array (kind 3,
                     // element name) so the array/raw intrinsics dispatch on it.
                     if rangeEquals(bytes: c.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Array") {
                         if rt.args.count == 1 {
                             val en: Bind = arrayElemNameForRef(c: inout c, elemRef: rt.args[0])
-                            return <TypeInfo kind=3 nameStart=en.nameStart nameLen=en.nameLen ref=c.curRecvInstRef />
+                            return <TypeInfo kind=3 nameStart=en.nameStart nameLen=en.nameLen ref=c.cur.recvInstRef />
                         }
                     }
-                    return <TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=c.curRecvInstRef />
+                    return <TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=c.cur.recvInstRef />
                 }
-                return typeInfoOfName(c: inout c, start: c.curRecvStart, len: c.curRecvLen, isArray: false)
+                return typeInfoOfName(c: inout c, start: c.cur.recvStart, len: c.cur.recvLen, isArray: false)
             }
             // inside a closure body a captured name is not a local; recover its
             // type from the capture entry (so field/index dispatch on it works).
-            if c.curInClosure {
+            if c.cur.inClosure {
                 mut val ci: U64 = 0
                 while ci < c.monoWork.captures.count {
                     val ce: CaptureEntry = c.monoWork.captures[ci]
-                    if ce.closureId == c.curClosureId {
+                    if ce.closureId == c.cur.closureId {
                         if spansEqual(c: inout c, aStart: ce.nameStart, aLen: ce.nameLen, bStart: start, bLen: len) {
                             if isRefInst(c: inout c, ref: ce.ty) {
                                 val rt2: TypeRef = c.arena.types[ce.ty]
@@ -73,10 +73,10 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 }
             }
             val qLocal: U64 = intern(c: inout c, start: start, len: len)
-            mut val i: U64 = c.locals.count
+            mut val i: U64 = c.cur.locals.count
             while i > 0 {
                 i -= 1
-                val lo: Local = c.locals[i]
+                val lo: Local = c.cur.locals[i]
                 if lo.nameId == qLocal {
                     // an array local stays kind 3 (element by name) even though
                     // `Array[E]` is now a genInst struct — all the array-special
@@ -104,10 +104,10 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     // for method dispatch inside a generic instance body).
                     if !(lo.isArray) {
                         mut val k: U64 = 0
-                        while k < c.curTypeParams.count {
-                            val tp: Bind = c.curTypeParams[k]
+                        while k < c.cur.typeParams.count {
+                            val tp: Bind = c.cur.typeParams[k]
                             if lo.tyNameId == tp.nameId {
-                                return typeInfoOfRef(c: inout c, ref: c.curTypeArgs[k])
+                                return typeInfoOfRef(c: inout c, ref: c.cur.typeArgs[k])
                             }
                             k += 1
                         }
@@ -252,8 +252,8 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // generic call like `print(closure(x))` can't recover the arg type and
             // misses its instantiation (and `val r = closure(x)` mis-infers r).
             val lvi: U64 = localIndexByName(c: inout c, start: nameStart, len: nameLen)
-            if lvi < c.locals.count {
-                val lty: U64 = c.locals[lvi].ty
+            if lvi < c.cur.locals.count {
+                val lty: U64 = c.cur.locals[lvi].ty
                 if isFnType(c: inout c, ref: lty) {
                     val ftr: TypeRef = c.arena.types[lty]
                     if ftr.args.count > 0 {
@@ -496,8 +496,8 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                             // inst and its element (else the chain's loop var types as the
                             // literal `Item`/`B`).
                             setSelfItemEnv(c: inout c, recvStart: gt.nameStart, recvLen: gt.nameLen, recvInstRef: rt.ref)
-                            val gSavedP: Array[Bind] = c.curTypeParams
-                            val gSavedA: Array[U64] = c.curTypeArgs
+                            val gSavedP: Array[Bind] = c.cur.typeParams
+                            val gSavedA: Array[U64] = c.cur.typeArgs
                             val rcount: U64 = c.arena.structs[gsi].typeParams.count
                             mut val gfa: Array[U64] = []
                             mut val gri: U64 = 0
@@ -515,11 +515,11 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                                     goi += 1
                                 }
                             }
-                            c.curTypeParams = mf.typeParams
-                            c.curTypeArgs = gfa
+                            c.cur.typeParams = mf.typeParams
+                            c.cur.typeArgs = gfa
                             val gr: U64 = groundTypeRef(c: inout c, ref: mf.retTy)
-                            c.curTypeParams = gSavedP
-                            c.curTypeArgs = gSavedA
+                            c.cur.typeParams = gSavedP
+                            c.cur.typeArgs = gSavedA
                             clearSelfItemEnv(c: inout c)
                             return typeInfoOfRef(c: inout c, ref: gr)
                         }
@@ -539,15 +539,15 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                         // a generic method (`Counter.map[B]`): bind its method-own type
                         // params from the call (B from the closure arg) so the return
                         // `MapIter[Self,…,B]` grounds to `MapIter[Counter,…,I64]`.
-                        val savedTP: Array[Bind] = c.curTypeParams
-                        val savedTA: Array[U64] = c.curTypeArgs
+                        val savedTP: Array[Bind] = c.cur.typeParams
+                        val savedTA: Array[U64] = c.cur.typeArgs
                         if mf.typeParams.count > 0 {
-                            c.curTypeParams = mf.typeParams
-                            c.curTypeArgs = inferFnArgs(c: inout c, f: mf, args: args)
+                            c.cur.typeParams = mf.typeParams
+                            c.cur.typeArgs = inferFnArgs(c: inout c, f: mf, args: args)
                         }
                         val gr2: U64 = groundTypeRef(c: inout c, ref: mf.retTy)
-                        c.curTypeParams = savedTP
-                        c.curTypeArgs = savedTA
+                        c.cur.typeParams = savedTP
+                        c.cur.typeArgs = savedTA
                         clearSelfItemEnv(c: inout c)
                         return typeInfoOfRef(c: inout c, ref: gr2)
                     }

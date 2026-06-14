@@ -74,14 +74,14 @@ fn genGenMethodCall(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64, slot:
     } else {
         av.append(value: genLlvmExpr(c: inout c, st: inout st, id: recv))
     }
-    val savedP: Array[Bind] = c.curTypeParams
-    val savedA: Array[U64] = c.curTypeArgs
-    c.curTypeParams = mf.typeParams
-    c.curTypeArgs = concatArgs(add: c.arena.types[instRef].args, base: st.genMethOwn[slot])
+    val savedP: Array[Bind] = c.cur.typeParams
+    val savedA: Array[U64] = c.cur.typeArgs
+    c.cur.typeParams = mf.typeParams
+    c.cur.typeArgs = concatArgs(add: c.arena.types[instRef].args, base: st.genMethOwn[slot])
     // bind Self/Item for an own-param provided call so an argument typed by `Item`
     // coerces against the receiver's real item type (see emitOneGenMethod).
-    val sGs: U64 = c.curSelfRef
-    val sGi: U64 = c.curItemRef
+    val sGs: U64 = c.cur.selfRef
+    val sGi: U64 = c.cur.itemRef
     if mf.isProvided {
         setSelfItemEnv(c: inout c, recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
     }
@@ -95,10 +95,10 @@ fn genGenMethodCall(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64, slot:
         av.append(value: genArgValue(c: inout c, st: inout st, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
         di += 1
     }
-    c.curSelfRef = sGs
-    c.curItemRef = sGi
-    c.curTypeParams = savedP
-    c.curTypeArgs = savedA
+    c.cur.selfRef = sGs
+    c.cur.itemRef = sGi
+    c.cur.typeParams = savedP
+    c.cur.typeArgs = savedA
     return LLVMBuildCall2(st.b, st.genMethTy[slot], st.genMethVal[slot], arrayCPtr(av), av.count, anon())
 }
 

@@ -97,15 +97,15 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                 // a function with no declared return type (`fn f() { … }`) returns `()` —
                 // `return 5I64` from it is a type error (the value is silently dropped),
                 // unless the value is itself the unit `()` (a bare-record construction).
-                if c.curRetVoid {
+                if c.cur.retVoid {
                     if !(exprIsUnit(c: inout c, id: value)) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "a function with no return type cannot return a value (spec/04)")
                     }
                 }
-                checkLitSpanCtx(c: inout c, id: value, tyStart: c.curRetStart, tyLen: c.curRetLen, isArray: c.curRetIsArray, ctxRef: c.curRetTy)
+                checkLitSpanCtx(c: inout c, id: value, tyStart: c.cur.retStart, tyLen: c.cur.retLen, isArray: c.cur.retIsArray, ctxRef: c.cur.retTy)
                 // returning a non-array where the declared return type IS an array
                 // (`return 5I64` from `-> Array[I64]`) reinterprets the scalar bits.
-                if c.curRetIsArray {
+                if c.cur.retIsArray {
                     if valueIsReliablyNonArray(c: inout c, value: value) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "this function returns an array, but the returned value is not an array (Plew has no implicit conversion — spec/12)")
                     }
@@ -113,16 +113,16 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                 // a returned value whose category disagrees with the declared return
                 // type (`return "s"` / `return <A…/>` from `-> I64`). Same shared,
                 // reliable-value discipline as bindings; curRetLen 0 = `()` return.
-                if c.curRetLen > 0U64 {
-                    tcCheckValue(c: inout c, expectedRef: c.curRetTy, valueExpr: value, pos: "return")
+                if c.cur.retLen > 0U64 {
+                    tcCheckValue(c: inout c, expectedRef: c.cur.retTy, valueExpr: value, pos: "return")
                 }
                 verifyExpr(c: inout c, id: value)
             } else {
                 // a bare `return` in a value-returning function leaves the result
                 // uninitialized (spec/04: a non-`()` function must return a value on
                 // every path). Valid only when the return type is `()` / absent.
-                mut val retIsUnit: Bool = c.curRetVoid || c.curRetLen == 0U64
-                if rangeEquals(bytes: c.arena.bytes, start: c.curRetStart, len: c.curRetLen, kw: "()") {
+                mut val retIsUnit: Bool = c.cur.retVoid || c.cur.retLen == 0U64
+                if rangeEquals(bytes: c.arena.bytes, start: c.cur.retStart, len: c.cur.retLen, kw: "()") {
                     retIsUnit = true
                 }
                 if !(retIsUnit) {
@@ -136,24 +136,24 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             verifyExpr(c: inout c, id: cond)
             // locals already in scope are "outside" this branch (a `move` of one
             // inside would be conditional) — mark the boundary for the move guard.
-            val savedBB: U64 = c.curBranchBase
-            c.curBranchBase = scopeMark(c: inout c)
+            val savedBB: U64 = c.cur.branchBase
+            c.cur.branchBase = scopeMark(c: inout c)
             verifyBlock(c: inout c, blockId: thenBlk)
             if hasElse {
                 verifyBlock(c: inout c, blockId: elseBlk)
             }
-            c.curBranchBase = savedBB
+            c.cur.branchBase = savedBB
         }
         Stmt.While(val cond, val body) => {
             checkLitCtx(c: inout c, id: cond, eKind: 0, eBits: 0, eSgn: false)
             checkCondBool(c: inout c, cond: cond)
             verifyExpr(c: inout c, id: cond)
-            val savedBB: U64 = c.curBranchBase
-            c.curBranchBase = scopeMark(c: inout c)
-            c.verifyLoopDepth = c.verifyLoopDepth + 1U64
+            val savedBB: U64 = c.cur.branchBase
+            c.cur.branchBase = scopeMark(c: inout c)
+            c.cur.verifyLoopDepth = c.cur.verifyLoopDepth + 1U64
             verifyBlock(c: inout c, blockId: body)
-            c.verifyLoopDepth = c.verifyLoopDepth - 1U64
-            c.curBranchBase = savedBB
+            c.cur.verifyLoopDepth = c.cur.verifyLoopDepth - 1U64
+            c.cur.branchBase = savedBB
         }
         Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
             verifyExpr(c: inout c, id: iter)
@@ -191,8 +191,8 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             }
             // scope the loop binding(s) to the body, mirroring genStmt's For.
             val forMark: U64 = scopeMark(c: inout c)
-            val savedForBB: U64 = c.curBranchBase
-            c.curBranchBase = forMark
+            val savedForBB: U64 = c.cur.branchBase
+            c.cur.branchBase = forMark
             if isRange {
                 // loop var type: the annotation, else the range bound's own type.
                 mut val ltS: U64 = varTyStart
@@ -226,10 +226,10 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                     }
                 }
             }
-            c.verifyLoopDepth = c.verifyLoopDepth + 1U64
+            c.cur.verifyLoopDepth = c.cur.verifyLoopDepth + 1U64
             verifyBlock(c: inout c, blockId: body)
-            c.verifyLoopDepth = c.verifyLoopDepth - 1U64
-            c.curBranchBase = savedForBB
+            c.cur.verifyLoopDepth = c.cur.verifyLoopDepth - 1U64
+            c.cur.branchBase = savedForBB
             popLocals(c: inout c, mark: forMark)
         }
         Stmt.Match(val scrut, val arms) => {
@@ -241,12 +241,12 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             mut val ai: U64 = 0
             while ai < arms.count {
                 val armMark: U64 = scopeMark(c: inout c)
-                val savedArmBB: U64 = c.curBranchBase
-                c.curBranchBase = armMark
+                val savedArmBB: U64 = c.cur.branchBase
+                c.cur.branchBase = armMark
                 checkDestructureComplete(c: inout c, a: arms[ai])
                 verifyAddArmBinds(c: inout c, a: arms[ai], scrut: scrut)
                 verifyBlock(c: inout c, blockId: arms[ai].body)
-                c.curBranchBase = savedArmBB
+                c.cur.branchBase = savedArmBB
                 popLocals(c: inout c, mark: armMark)
                 ai += 1
             }
@@ -266,12 +266,12 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
             verifyExpr(c: inout c, id: value)
         }
         Stmt.Break(val offset) => {
-            if c.verifyLoopDepth == 0U64 {
+            if c.cur.verifyLoopDepth == 0U64 {
                 compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "`break` outside a loop (spec/11)")
             }
         }
         Stmt.Continue(val offset) => {
-            if c.verifyLoopDepth == 0U64 {
+            if c.cur.verifyLoopDepth == 0U64 {
                 compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "`continue` outside a loop (spec/11)")
             }
         }

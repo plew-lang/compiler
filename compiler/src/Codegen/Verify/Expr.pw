@@ -14,23 +14,23 @@ fn verifyExpr(c: inout Comp, id: U64) {
             // else `return e` inside a closure escapes the return-type check entirely
             // (the body was previously never walked). Captured outer locals stay visible
             // (the closure's params are pushed on top of the current scope).
-            val sRV: Bool = c.curRetVoid
-            val sRS: U64 = c.curRetStart
-            val sRL: U64 = c.curRetLen
-            val sRA: Bool = c.curRetIsArray
-            val sRT: U64 = c.curRetTy
+            val sRV: Bool = c.cur.retVoid
+            val sRS: U64 = c.cur.retStart
+            val sRL: U64 = c.cur.retLen
+            val sRA: Bool = c.cur.retIsArray
+            val sRT: U64 = c.cur.retTy
             if hasRet {
-                c.curRetVoid = false
-                c.curRetStart = retStart
-                c.curRetLen = retLen
-                c.curRetIsArray = retIsArray
-                c.curRetTy = retTy
+                c.cur.retVoid = false
+                c.cur.retStart = retStart
+                c.cur.retLen = retLen
+                c.cur.retIsArray = retIsArray
+                c.cur.retTy = retTy
             } else {
-                c.curRetVoid = true
-                c.curRetStart = 0
-                c.curRetLen = 0
-                c.curRetIsArray = false
-                c.curRetTy = 0
+                c.cur.retVoid = true
+                c.cur.retStart = 0
+                c.cur.retLen = 0
+                c.cur.retIsArray = false
+                c.cur.retTy = 0
             }
             val cmark: U64 = scopeMark(c: inout c)
             mut val cpi: U64 = 0
@@ -41,10 +41,10 @@ fn verifyExpr(c: inout Comp, id: U64) {
             }
             // a closure is a function boundary: `break`/`continue` inside it do not
             // target an enclosing loop, so reset the loop depth across its body.
-            val sLoopDepth: U64 = c.verifyLoopDepth
-            c.verifyLoopDepth = 0U64
+            val sLoopDepth: U64 = c.cur.verifyLoopDepth
+            c.cur.verifyLoopDepth = 0U64
             verifyBlock(c: inout c, blockId: body)
-            c.verifyLoopDepth = sLoopDepth
+            c.cur.verifyLoopDepth = sLoopDepth
             // a closure with a declared NON-unit return type must return on every path,
             // like a function (`fn()->I64 { }` is missing its return; `fn()->() { }` is
             // void and exempt). spec/04.
@@ -60,11 +60,11 @@ fn verifyExpr(c: inout Comp, id: U64) {
                 }
             }
             popLocals(c: inout c, mark: cmark)
-            c.curRetVoid = sRV
-            c.curRetStart = sRS
-            c.curRetLen = sRL
-            c.curRetIsArray = sRA
-            c.curRetTy = sRT
+            c.cur.retVoid = sRV
+            c.cur.retStart = sRS
+            c.cur.retLen = sRL
+            c.cur.retIsArray = sRA
+            c.cur.retTy = sRT
         }
         Expr.Field(val base, val nameStart, val nameLen) => {
             verifyFieldReadVis(c: inout c, base: base, nameStart: nameStart, nameLen: nameLen)
@@ -250,9 +250,9 @@ fn verifyExpr(c: inout Comp, id: U64) {
             // non-Result function this used to crash the backend (it indexed the
             // return type's variant table, which isn't a Result). Reject cleanly.
             mut val retIsResult: Bool = false
-            if !(c.curRetVoid) {
-                if c.curRetLen > 0U64 {
-                    if rangeEquals(bytes: c.arena.bytes, start: c.curRetStart, len: c.curRetLen, kw: "Result") {
+            if !(c.cur.retVoid) {
+                if c.cur.retLen > 0U64 {
+                    if rangeEquals(bytes: c.arena.bytes, start: c.cur.retStart, len: c.cur.retLen, kw: "Result") {
                         retIsResult = true
                     }
                 }
@@ -283,10 +283,10 @@ fn verifyExpr(c: inout Comp, id: U64) {
                 if retIsResult {
                     if tti.ref != 0U64 {
                         if tti.ref < c.arena.types.count {
-                            if c.curRetTy != 0U64 {
-                                if c.curRetTy < c.arena.types.count {
+                            if c.cur.retTy != 0U64 {
+                                if c.cur.retTy < c.arena.types.count {
                                     val opR: TypeRef = c.arena.types[tti.ref]
-                                    val fnR: TypeRef = c.arena.types[c.curRetTy]
+                                    val fnR: TypeRef = c.arena.types[c.cur.retTy]
                                     if opR.args.count >= 2U64 {
                                         if fnR.args.count >= 2U64 {
                                             if !(typesCompatible(c: inout c, expected: fnR.args[1], inferred: opR.args[1])) {
@@ -328,7 +328,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
         }
         Expr.Ident(val start, val len) => {
             // use-after-move (spec/03): reading a local whose value was `move`d away.
-            if c.verifyMovedIdx.count > 0U64 {
+            if c.cur.verifyMovedIdx.count > 0U64 {
                 if verifyIsMoved(c: inout c, idx: localIndexByName(c: inout c, start: start, len: len)) {
                     compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)")
                 }
@@ -345,7 +345,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
                         if isSelfRef(c: inout c, start: start, len: len) {
                             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "moving `self` is not yet supported")
                         }
-                        if localIndexByName(c: inout c, start: start, len: len) < c.curBranchBase {
+                        if localIndexByName(c: inout c, start: start, len: len) < c.cur.branchBase {
                             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "cannot `move` a variable declared outside the enclosing conditional/loop (the move would be conditional); move it unconditionally")
                         }
                     }

@@ -14,12 +14,12 @@ fn localStructIdxFor(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> 
     }
     // substitute a type parameter via the env (a generic-fn body's `x: T` with
     // T = A resolves to A's struct, so `x.get()` dispatches to A.get()).
-    if c.curTypeParams.count > 0U64 {
+    if c.cur.typeParams.count > 0U64 {
         val qid: U64 = intern(c: inout c, start: start, len: len)
         mut val ti: U64 = 0
-        while ti < c.curTypeParams.count {
-            if c.curTypeParams[ti].nameId == qid {
-                val at: TypeRef = c.arena.types[c.curTypeArgs[ti]]
+        while ti < c.cur.typeParams.count {
+            if c.cur.typeParams[ti].nameId == qid {
+                val at: TypeRef = c.arena.types[c.cur.typeArgs[ti]]
                 return localStructIdxFor(c: inout c, st: inout st, start: at.nameStart, len: at.nameLen)
             }
             ti += 1
@@ -81,12 +81,12 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                         // (so `bb.v` with bb: Box[Box[I32]] resolves v -> Box[I32]),
                         // as well as any active env (a monomorphized method's `inner: I`).
                         val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
-                        val savedP: Array[Bind] = c.curTypeParams
-                        val savedA: Array[U64] = c.curTypeArgs
+                        val savedP: Array[Bind] = c.cur.typeParams
+                        val savedA: Array[U64] = c.cur.typeArgs
                         val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: baseRef)
                         mut val g: U64 = fld.ty
                         if fld.ty != 0U64 {
-                            if c.curTypeParams.count > 0U64 {
+                            if c.cur.typeParams.count > 0U64 {
                                 g = groundTypeRef(c: inout c, ref: fld.ty)
                             }
                         }
@@ -109,8 +109,8 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                             result = localStructIdxFor(c: inout c, st: inout st, start: tStart, len: tLen)
                         }
                         if didSet {
-                            c.curTypeParams = savedP
-                            c.curTypeArgs = savedA
+                            c.cur.typeParams = savedP
+                            c.cur.typeArgs = savedA
                         }
                         return result
                     }
@@ -156,16 +156,16 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                         if emfi < c.arena.funcs.count {
                             if c.arena.funcs[emfi].hasRet {
                                 if c.arena.funcs[emfi].retTy != 0U64 {
-                                    val savedP: Array[Bind] = c.curTypeParams
-                                    val savedA: Array[U64] = c.curTypeArgs
+                                    val savedP: Array[Bind] = c.cur.typeParams
+                                    val savedA: Array[U64] = c.cur.typeArgs
                                     mut val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: mrRef)
                                     if !(didSet) {
                                         didSet = setEnumEnv(c: inout c, st: inout st, ref: mrRef)
                                     }
                                     val g: U64 = groundTypeRef(c: inout c, ref: c.arena.funcs[emfi].retTy)
                                     if didSet {
-                                        c.curTypeParams = savedP
-                                        c.curTypeArgs = savedA
+                                        c.cur.typeParams = savedP
+                                        c.cur.typeArgs = savedA
                                     }
                                     if g != 0U64 {
                                         val gt: TypeRef = c.arena.types[g]
@@ -191,13 +191,13 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 val cf: Func = c.arena.funcs[cfi]
                 if cf.hasRet {
                     if isGenericFreeFn(c: inout c, fi: cfi) {
-                        val savedP: Array[Bind] = c.curTypeParams
-                        val savedA: Array[U64] = c.curTypeArgs
-                        c.curTypeParams = cf.typeParams
-                        c.curTypeArgs = llvmInferFnArgs(c: inout c, st: inout st, f: cf, args: args)
+                        val savedP: Array[Bind] = c.cur.typeParams
+                        val savedA: Array[U64] = c.cur.typeArgs
+                        c.cur.typeParams = cf.typeParams
+                        c.cur.typeArgs = llvmInferFnArgs(c: inout c, st: inout st, f: cf, args: args)
                         val r: U64 = localStructIdxFor(c: inout c, st: inout st, start: cf.retStart, len: cf.retLen)
-                        c.curTypeParams = savedP
-                        c.curTypeArgs = savedA
+                        c.cur.typeParams = savedP
+                        c.cur.typeArgs = savedA
                         return r
                     }
                     return localStructIdxFor(c: inout c, st: inout st, start: cf.retStart, len: cf.retLen)
@@ -273,8 +273,8 @@ fn arrFieldElemStructIdx(c: inout Comp, st: inout LlvmCtx, arrayExpr: U64) -> U6
                             val ft: TypeRef = c.arena.types[fd.ty]
                             if ft.args.count > 0U64 {
                                 val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: fbase)
-                                val savedP: Array[Bind] = c.curTypeParams
-                                val savedA: Array[U64] = c.curTypeArgs
+                                val savedP: Array[Bind] = c.cur.typeParams
+                                val savedA: Array[U64] = c.cur.typeArgs
                                 val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: baseRef)
                                 val g: U64 = groundTypeRef(c: inout c, ref: ft.args[0])
                                 val gt: TypeRef = c.arena.types[g]
@@ -288,8 +288,8 @@ fn arrFieldElemStructIdx(c: inout Comp, st: inout LlvmCtx, arrayExpr: U64) -> U6
                                     r = localStructIdxFor(c: inout c, st: inout st, start: gt.nameStart, len: gt.nameLen)
                                 }
                                 if didSet {
-                                    c.curTypeParams = savedP
-                                    c.curTypeArgs = savedA
+                                    c.cur.typeParams = savedP
+                                    c.cur.typeArgs = savedA
                                 }
                                 return r
                             }
@@ -325,13 +325,13 @@ fn exprResultRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 val cf: Func = c.arena.funcs[cfi]
                 if cf.hasRet {
                     if isGenericFreeFn(c: inout c, fi: cfi) {
-                        val savedP: Array[Bind] = c.curTypeParams
-                        val savedA: Array[U64] = c.curTypeArgs
-                        c.curTypeParams = cf.typeParams
-                        c.curTypeArgs = llvmInferFnArgs(c: inout c, st: inout st, f: cf, args: args)
+                        val savedP: Array[Bind] = c.cur.typeParams
+                        val savedA: Array[U64] = c.cur.typeArgs
+                        c.cur.typeParams = cf.typeParams
+                        c.cur.typeArgs = llvmInferFnArgs(c: inout c, st: inout st, f: cf, args: args)
                         val r: U64 = groundTypeRef(c: inout c, ref: cf.retTy)
-                        c.curTypeParams = savedP
-                        c.curTypeArgs = savedA
+                        c.cur.typeParams = savedP
+                        c.cur.typeArgs = savedA
                         return r
                     }
                     return cf.retTy
@@ -342,7 +342,7 @@ fn exprResultRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // a generic construction (`<Holder[I64] … />`) used un-annotated: its
             // instance ref (grounded under any active env) so the binding tracks it.
             mut val g: U64 = ty
-            if c.curTypeParams.count > 0U64 {
+            if c.cur.typeParams.count > 0U64 {
                 g = groundTypeRef(c: inout c, ref: ty)
             }
             if isGenericInst(c: inout c, ref: g) {
@@ -387,7 +387,7 @@ fn fieldGenInstRef(c: inout Comp, fld: FieldDef) -> U64 {
         return 0U64
     }
     mut val g: U64 = fld.ty
-    if c.curTypeParams.count > 0U64 {
+    if c.cur.typeParams.count > 0U64 {
         g = groundTypeRef(c: inout c, ref: fld.ty)
     }
     if isGenericInst(c: inout c, ref: g) {
@@ -415,7 +415,7 @@ fn fieldLlvmTy(c: inout Comp, st: inout LlvmCtx, fd: FieldDef) -> LLVMTypeRef {
     // struct body's field type may name a type param bound to a concrete instance).
     if fd.ty != 0U64 {
         mut val g: U64 = fd.ty
-        if c.curTypeParams.count > 0U64 {
+        if c.cur.typeParams.count > 0U64 {
             g = groundTypeRef(c: inout c, ref: fd.ty)
         }
         if isGenericInst(c: inout c, ref: g) {

@@ -206,13 +206,13 @@ fn groundUnderInst(c: inout Comp, instRef: U64, tyRef: U64) -> U64 {
     if sd.typeParams.count != inst.args.count {
         return tyRef
     }
-    val savedP: Array[Bind] = c.curTypeParams
-    val savedA: Array[U64] = c.curTypeArgs
-    c.curTypeParams = sd.typeParams
-    c.curTypeArgs = inst.args
+    val savedP: Array[Bind] = c.cur.typeParams
+    val savedA: Array[U64] = c.cur.typeArgs
+    c.cur.typeParams = sd.typeParams
+    c.cur.typeArgs = inst.args
     val g: U64 = groundTypeRef(c: inout c, ref: tyRef)
-    c.curTypeParams = savedP
-    c.curTypeArgs = savedA
+    c.cur.typeParams = savedP
+    c.cur.typeArgs = savedA
     return g
 }
 
@@ -246,25 +246,25 @@ fn assocItemRef(c: inout Comp, recvStart: U64, recvLen: U64) -> U64 {
 // receiver's Item resolves to the concrete element. Pair with clearSelfItemEnv.
 fn setSelfItemEnv(c: inout Comp, recvStart: U64, recvLen: U64, recvInstRef: U64) {
     if recvInstRef != 0 {
-        c.curSelfRef = recvInstRef
+        c.cur.selfRef = recvInstRef
     } else {
-        c.curSelfRef = simpleTypeRef(c: inout c, nameStart: recvStart, nameLen: recvLen)
+        c.cur.selfRef = simpleTypeRef(c: inout c, nameStart: recvStart, nameLen: recvLen)
     }
     val itemR0: U64 = assocItemRef(c: inout c, recvStart: recvStart, recvLen: recvLen)
     if itemR0 == 0 {
-        c.curItemRef = 0
+        c.cur.itemRef = 0
     } else {
         if recvInstRef != 0 {
-            c.curItemRef = groundUnderInst(c: inout c, instRef: recvInstRef, tyRef: itemR0)
+            c.cur.itemRef = groundUnderInst(c: inout c, instRef: recvInstRef, tyRef: itemR0)
         } else {
-            c.curItemRef = itemR0
+            c.cur.itemRef = itemR0
         }
     }
 }
 
 fn clearSelfItemEnv(c: inout Comp) {
-    c.curSelfRef = 0
-    c.curItemRef = 0
+    c.cur.selfRef = 0
+    c.cur.itemRef = 0
 }
 
 // A generic instantiation whose type ARGUMENT names a type whose head collides with
@@ -424,10 +424,10 @@ fn scanGenInstFields(c: inout Comp, instRef: U64) {
         if sd.nameId == qInst {
             if sd.typeParams.count == inst.args.count {
                 if sd.typeParams.count > 0 {
-                    val savedP: Array[Bind] = c.curTypeParams
-                    val savedA: Array[U64] = c.curTypeArgs
-                    c.curTypeParams = sd.typeParams
-                    c.curTypeArgs = inst.args
+                    val savedP: Array[Bind] = c.cur.typeParams
+                    val savedA: Array[U64] = c.cur.typeArgs
+                    c.cur.typeParams = sd.typeParams
+                    c.cur.typeArgs = inst.args
                     val fs: Array[FieldDef] = sd.fields
                     mut val k: U64 = 0
                     while k < fs.count {
@@ -466,8 +466,8 @@ fn scanGenInstFields(c: inout Comp, instRef: U64) {
                         }
                         mfi += 1
                     }
-                    c.curTypeParams = savedP
-                    c.curTypeArgs = savedA
+                    c.cur.typeParams = savedP
+                    c.cur.typeArgs = savedA
                 }
             }
         }

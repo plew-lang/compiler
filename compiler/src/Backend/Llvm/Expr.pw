@@ -224,17 +224,17 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                     // default to i64 and load the wrong type).
                     if fieldIsBoxed(c: inout c, f: fd) {
                         val bRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
-                        val savedBP: Array[Bind] = c.curTypeParams
-                        val savedBA: Array[U64] = c.curTypeArgs
+                        val savedBP: Array[Bind] = c.cur.typeParams
+                        val savedBA: Array[U64] = c.cur.typeArgs
                         val didSetB: Bool = setStructEnv(c: inout c, st: inout st, ref: bRef)
                         mut val pg: U64 = fd.ty
-                        if c.curTypeParams.count > 0U64 {
+                        if c.cur.typeParams.count > 0U64 {
                             pg = groundTypeRef(c: inout c, ref: fd.ty)
                         }
                         val pteTy: LLVMTypeRef = llvmTypeOfRef(c: inout c, st: inout st, ref: pg)
                         if didSetB {
-                            c.curTypeParams = savedBP
-                            c.curTypeArgs = savedBA
+                            c.cur.typeParams = savedBP
+                            c.cur.typeArgs = savedBA
                         }
                         return LLVMBuildLoad2(st.b, pteTy, raw, anon())
                     }

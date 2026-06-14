@@ -303,7 +303,7 @@ fn genFieldValue(c: inout Comp, st: inout LlvmCtx, valExpr: U64, fld: FieldDef) 
         // GENERIC field (`next: Optional[N[T]]` in `N[I64]`) grounds to the registered
         // concrete instance (`Optional[N[I64]]`) instead of the ungrounded template.
         mut val bg: U64 = fld.ty
-        if c.curTypeParams.count > 0U64 {
+        if c.cur.typeParams.count > 0U64 {
             bg = groundTypeRef(c: inout c, ref: fld.ty)
         }
         st.expectedTy = bg
@@ -319,7 +319,7 @@ fn genFieldValue(c: inout Comp, st: inout LlvmCtx, valExpr: U64, fld: FieldDef) 
     // the instance's type args (genLlvmMakeEnum / genLlvmMake consume st.expectedTy).
     if fld.ty != 0U64 {
         mut val g: U64 = fld.ty
-        if c.curTypeParams.count > 0U64 {
+        if c.cur.typeParams.count > 0U64 {
             g = groundTypeRef(c: inout c, ref: fld.ty)
         }
         if isGenericInst(c: inout c, ref: g) {
@@ -444,13 +444,13 @@ fn copyValueIfPlace(c: inout Comp, st: inout LlvmCtx, rv: LLVMValueRef, valueExp
             // set the value's generic instance env so a field of param type that
             // grounds to an array (`Box[Array[I32]].v`) is deep-copied.
             val ref: U64 = exprTypeRef(c: inout c, st: inout st, id: valueExpr)
-            val savedP: Array[Bind] = c.curTypeParams
-            val savedA: Array[U64] = c.curTypeArgs
+            val savedP: Array[Bind] = c.cur.typeParams
+            val savedA: Array[U64] = c.cur.typeArgs
             val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: ref)
             val copied: LLVMValueRef = deepCopyStructValue(c: inout c, st: inout st, v: rv, sidx: sidx)
             if didSet {
-                c.curTypeParams = savedP
-                c.curTypeArgs = savedA
+                c.cur.typeParams = savedP
+                c.cur.typeArgs = savedA
             }
             return copied
         }

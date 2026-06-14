@@ -115,7 +115,7 @@ fn lowerDirective(c: inout Comp, dir: DirectiveAst) {
     while i < dir.reqs.count {
         val r: DeriveReqAst = dir.reqs[i]
         val args: Array[MakeField] = lowerMakeFields(c: inout c, fields: r.args, typeName: "", variant: "", isEnum: false)
-        c.pendingDerives.append(<DeriveReq typeStart=0 typeLen=0 isEnum=false nameStart=r.nameSpan.start nameLen=r.nameSpan.end - r.nameSpan.start declStart=0 declEnd=0 args=args />)
+        c.parseScratch.pendingDerives.append(<DeriveReq typeStart=0 typeLen=0 isEnum=false nameStart=r.nameSpan.start nameLen=r.nameSpan.end - r.nameSpan.start declStart=0 declEnd=0 args=args />)
         i += 1
     }
 }

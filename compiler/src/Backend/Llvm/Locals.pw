@@ -138,7 +138,7 @@ fn kindFromTySpan(c: inout Comp, tyStart: U64, tyLen: U64) -> U64 {
 
 // Recover the type-kind of an expression: locals from the env tag; literals from
 // their shape; everything else via the front-end's typeOf (which resolves call
-// returns etc. without needing c.locals).
+// returns etc. without needing c.cur.locals).
 // The value-kind (0 int / 1 String / 2 Bool / 3 unsigned) of method `mfi`'s return
 // when called on `recv`: ground a type-parameter return under the receiver instance's
 // env (so `dict[K,V].getOr -> V` resolves V to the concrete value type) before
@@ -147,8 +147,8 @@ fn methodReturnKind(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64) -> U6
     val mf: Func = c.arena.funcs[mfi]
     if mf.retTy != 0U64 {
         val rRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
-        val savedP: Array[Bind] = c.curTypeParams
-        val savedA: Array[U64] = c.curTypeArgs
+        val savedP: Array[Bind] = c.cur.typeParams
+        val savedA: Array[U64] = c.cur.typeArgs
         // ground the return's type param under the receiver's instance env. The receiver
         // may be a generic STRUCT or a generic ENUM (`Optional[U8].unwrapOr -> T`): the
         // enum case is what carries an unsigned element through, so without it `T` stays
@@ -159,8 +159,8 @@ fn methodReturnKind(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64) -> U6
         }
         val g: U64 = groundTypeRef(c: inout c, ref: mf.retTy)
         if didSet {
-            c.curTypeParams = savedP
-            c.curTypeArgs = savedA
+            c.cur.typeParams = savedP
+            c.cur.typeArgs = savedA
         }
         if g != 0U64 {
             return kindFromTySpan(c: inout c, tyStart: c.arena.types[g].nameStart, tyLen: c.arena.types[g].nameLen)
@@ -215,17 +215,17 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                     // default to int) — so e.g. `print(a.v)` dispatches to the String sink.
                     if ffd.ty != 0U64 {
                         val fBaseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
-                        val savedFP: Array[Bind] = c.curTypeParams
-                        val savedFA: Array[U64] = c.curTypeArgs
+                        val savedFP: Array[Bind] = c.cur.typeParams
+                        val savedFA: Array[U64] = c.cur.typeArgs
                         val didSetF: Bool = setStructEnv(c: inout c, st: inout st, ref: fBaseRef)
                         mut val fg: U64 = ffd.ty
-                        if c.curTypeParams.count > 0U64 {
+                        if c.cur.typeParams.count > 0U64 {
                             fg = groundTypeRef(c: inout c, ref: ffd.ty)
                         }
                         val fk: U64 = kindFromTySpan(c: inout c, tyStart: c.arena.types[fg].nameStart, tyLen: c.arena.types[fg].nameLen)
                         if didSetF {
-                            c.curTypeParams = savedFP
-                            c.curTypeArgs = savedFA
+                            c.cur.typeParams = savedFP
+                            c.cur.typeArgs = savedFA
                         }
                         return fk
                     }

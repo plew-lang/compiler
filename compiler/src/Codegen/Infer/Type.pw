@@ -116,13 +116,13 @@ fn typesCompatible(c: inout Comp, expected: U64, inferred: U64) -> Bool {
         return false
     }
     // generic-body abstract check (spec/06): a type parameter of the function being
-    // checked (`c.curCheckFn`) is an opaque DISTINCT type — incompatible with a
+    // checked (`c.cur.checkFn`) is an opaque DISTINCT type — incompatible with a
     // CONCRETE type or a DIFFERENT parameter of the same function, but lenient against
     // an unknown / another generic's type parameter (which unifies at instantiation,
     // e.g. passing this fn's `T` to `f[U](x: U)`). Active only while checking a generic
     // template body (curCheckFn valid); elsewhere isTypeParamOf is false.
-    val eTp: Bool = isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: te.nameStart, len: te.nameLen)
-    val iTp: Bool = isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: tin.nameStart, len: tin.nameLen)
+    val eTp: Bool = isTypeParamOf(c: inout c, fnIdx: c.cur.checkFn, start: te.nameStart, len: te.nameLen)
+    val iTp: Bool = isTypeParamOf(c: inout c, fnIdx: c.cur.checkFn, start: tin.nameStart, len: tin.nameLen)
     if eTp {
         if iTp {
             // both are this function's parameters: compatible iff the SAME one.

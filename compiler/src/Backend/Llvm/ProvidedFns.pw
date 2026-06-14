@@ -30,8 +30,8 @@ fn ensureProvidedDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
     // Optional[Item]`) declares the grounded type (`Optional[I64]`) — matching the body,
     // which genLlvmFuncBody grounds the same way. Without this the declared return is the
     // ungrounded `Optional[Item]` and the call site emits invalid GEP indices.
-    val savedPS: U64 = c.curSelfRef
-    val savedPI: U64 = c.curItemRef
+    val savedPS: U64 = c.cur.selfRef
+    val savedPI: U64 = c.cur.itemRef
     setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
     mut val ptys: Array[LLVMTypeRef] = []
     ptys.append(value: selfParamTy(c: inout c, st: inout st, f: f))
@@ -41,8 +41,8 @@ fn ensureProvidedDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
         pi += 1
     }
     val fty: LLVMTypeRef = LLVMFunctionType(llvmFnRetTy(c: inout c, st: inout st, f: f), arrayCPtr(ptys), ptys.count, 0I32)
-    c.curSelfRef = savedPS
-    c.curItemRef = savedPI
+    c.cur.selfRef = savedPS
+    c.cur.itemRef = savedPI
     mut val nm: Array[U8] = []
     appendBytes(into: inout nm, from: "pf".bytes)
     appendU64Dec(into: inout nm, n: fi)
@@ -119,10 +119,10 @@ fn declareGenFns(c: inout Comp, st: inout LlvmCtx) {
         if fin.recvInstRef == 0U64 && moduleOf(c: inout c, offset: c.arena.funcs[fin.fnIdx].nameStart) == 0U64 {
             if isGenericFreeFn(c: inout c, fi: fin.fnIdx) {
                 val f: Func = c.arena.funcs[fin.fnIdx]
-                val savedP: Array[Bind] = c.curTypeParams
-                val savedA: Array[U64] = c.curTypeArgs
-                c.curTypeParams = f.typeParams
-                c.curTypeArgs = fin.args
+                val savedP: Array[Bind] = c.cur.typeParams
+                val savedA: Array[U64] = c.cur.typeArgs
+                c.cur.typeParams = f.typeParams
+                c.cur.typeArgs = fin.args
                 mut val ptys: Array[LLVMTypeRef] = []
                 mut val pi: U64 = 0
                 while pi < f.params.count {
@@ -135,8 +135,8 @@ fn declareGenFns(c: inout Comp, st: inout LlvmCtx) {
                 appendU64Dec(into: inout nm, n: k)
                 nm.append(value: 0)
                 val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
-                c.curTypeParams = savedP
-                c.curTypeArgs = savedA
+                c.cur.typeParams = savedP
+                c.cur.typeArgs = savedA
                 st.genFnK.append(value: k)
                 st.genFnVal.append(value: fv)
                 st.genFnTy.append(value: fty)
@@ -152,20 +152,20 @@ fn emitGenFns(c: inout Comp, st: inout LlvmCtx) {
     while slot < st.genFnK.count {
         val fin: FnInst = c.monoWork.fnInsts[st.genFnK[slot]]
         val f: Func = c.arena.funcs[fin.fnIdx]
-        val savedP: Array[Bind] = c.curTypeParams
-        val savedA: Array[U64] = c.curTypeArgs
-        c.curTypeParams = f.typeParams
-        c.curTypeArgs = fin.args
+        val savedP: Array[Bind] = c.cur.typeParams
+        val savedA: Array[U64] = c.cur.typeArgs
+        c.cur.typeParams = f.typeParams
+        c.cur.typeArgs = fin.args
         genLlvmFuncBody(c: inout c, st: inout st, fi: fin.fnIdx, fv: st.genFnVal[slot])
-        c.curTypeParams = savedP
-        c.curTypeArgs = savedA
+        c.cur.typeParams = savedP
+        c.cur.typeArgs = savedA
         slot += 1
     }
 }
 
 // The TypeRef of a call argument, using the LLVM backend's own local tracking
 // (the front-end `typeOf` can't see locals — the LLVM backend doesn't populate
-// c.locals). A generic-instance local carries its ref; a struct value maps to a
+// c.cur.locals). A generic-instance local carries its ref; a struct value maps to a
 // bare TypeRef by its struct name; a scalar/String comes from the typed-AST cache
 // (which works for literals/expressions). 0 when no type can be recovered.
 fn llvmArgTypeRef(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> U64 {
@@ -217,7 +217,7 @@ fn llvmArgTypeRef(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> U64 {
 // Infer a generic free function's type arguments from a call's arguments, mirroring
 // the front-end `inferFnArgs` but recovering each argument's type via the LLVM
 // backend's local tracking (so a struct local arg resolves, which front-end typeOf
-// can't for an unpopulated c.locals).
+// can't for an unpopulated c.cur.locals).
 fn llvmInferFnArgs(c: inout Comp, st: inout LlvmCtx, f: Func, args: Array[Arg]) -> Array[U64] {
     mut val out: Array[U64] = []
     mut val ti: U64 = 0
@@ -232,7 +232,7 @@ fn llvmInferFnArgs(c: inout Comp, st: inout LlvmCtx, f: Func, args: Array[Arg]) 
                     if pi < args.count {
                         if found == 0U64 {
                             // recover the array arg's element ref via LLVM-side tracking
-                            // (locElemTypeRef); c.locals is unpopulated in this backend.
+                            // (locElemTypeRef); c.cur.locals is unpopulated in this backend.
                             found = arrayExprElemRef(c: inout c, st: inout st, arrayExpr: args[pi].expr)
                         }
                     }

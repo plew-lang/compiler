@@ -131,13 +131,13 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
         }
         iterVal = genGenMethodCall(c: inout c, st: inout st, recv: iter, mfi: itfi, slot: itSlot, instRef: recvRef, args: noArgs)
         val itf: Func = c.arena.funcs[itfi]
-        val sP: Array[Bind] = c.curTypeParams
-        val sA: Array[U64] = c.curTypeArgs
-        c.curTypeParams = itf.typeParams
-        c.curTypeArgs = gt.args
+        val sP: Array[Bind] = c.cur.typeParams
+        val sA: Array[U64] = c.cur.typeArgs
+        c.cur.typeParams = itf.typeParams
+        c.cur.typeArgs = gt.args
         iterInstRef = groundTypeRef(c: inout c, ref: itf.retTy)
-        c.curTypeParams = sP
-        c.curTypeArgs = sA
+        c.cur.typeParams = sP
+        c.cur.typeArgs = sA
     } else {
         // the value IS its own Iterator (it has next() directly).
         iterVal = genLlvmExpr(c: inout c, st: inout st, id: iter)
@@ -155,13 +155,13 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
         return
     }
     val nf: Func = c.arena.funcs[nfi]
-    val sP2: Array[Bind] = c.curTypeParams
-    val sA2: Array[U64] = c.curTypeArgs
-    c.curTypeParams = nf.typeParams
-    c.curTypeArgs = it.args
+    val sP2: Array[Bind] = c.cur.typeParams
+    val sA2: Array[U64] = c.cur.typeArgs
+    c.cur.typeParams = nf.typeParams
+    c.cur.typeArgs = it.args
     val optRef: U64 = groundTypeRef(c: inout c, ref: nf.retTy)
-    c.curTypeParams = sP2
-    c.curTypeArgs = sA2
+    c.cur.typeParams = sP2
+    c.cur.typeArgs = sA2
     emitIterNextLoop(c: inout c, st: inout st, iterVal: iterVal, optRef: optRef, nextTy: st.genMethTy[nSlot], nextVal: st.genMethVal[nSlot], varStart: varStart, varLen: varLen, body: body)
 }
 
@@ -173,12 +173,12 @@ fn emitIterNextLoop(c: inout Comp, st: inout LlvmCtx, iterVal: LLVMValueRef, opt
     val iterSlot: LLVMValueRef = entryAlloca(st: inout st, ty: iterTy)
     LLVMBuildStore(st.b, iterVal, iterSlot)
     // resolve the Optional enum (def + Some variant) under its instance env.
-    val savedP: Array[Bind] = c.curTypeParams
-    val savedA: Array[U64] = c.curTypeArgs
+    val savedP: Array[Bind] = c.cur.typeParams
+    val savedA: Array[U64] = c.cur.typeArgs
     val didSet: Bool = setEnumEnv(c: inout c, st: inout st, ref: optRef)
     val ge: U64 = genEnumSlot(c: inout c, st: inout st, ref: optRef)
     if ge >= st.genEnumRefs.count {
-        if didSet { c.curTypeParams = savedP  c.curTypeArgs = savedA }
+        if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
         compileErrorAt(line: 0, msg: "LLVM backend: iterator next must return a registered Optional instance")
         return
     }
@@ -218,14 +218,14 @@ fn emitIterNextLoop(c: inout Comp, st: inout LlvmCtx, iterVal: LLVMValueRef, opt
     // ground the element type through the active enum env so its kind is concrete
     // (a `map`-to-Bool element is i1 -> kind 2, zero-extended on print, not -1).
     if itemFs[0].ty != 0U64 {
-        if c.curTypeParams.count > 0U64 {
+        if c.cur.typeParams.count > 0U64 {
             val gx: U64 = groundTypeRef(c: inout c, ref: itemFs[0].ty)
             xStart = c.arena.types[gx].nameStart
             xLen = c.arena.types[gx].nameLen
         }
     }
     pushLocalR(st: inout st, nameStart: varStart, nameLen: varLen, ptr: xSlot, ty: xTy, kind: kindFromTySpan(c: inout c, tyStart: xStart, tyLen: xLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: xStart, len: xLen), isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: 0U64)
-    if didSet { c.curTypeParams = savedP  c.curTypeArgs = savedA }
+    if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
     // `continue` -> condBB (next() again), `break` -> endBB.
     pushLoop(st: inout st, breakBB: endBB, contBB: condBB)
     genLlvmBlock(c: inout c, st: inout st, id: body)
@@ -256,12 +256,12 @@ fn genLlvmForAnyIter(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U6
         compileErrorAt(line: 0, msg: "LLVM backend: this `any` iterator has no `next() -> Optional[Item]` requirement")
         return
     }
-    val savedP: Array[Bind] = c.curTypeParams
-    val savedA: Array[U64] = c.curTypeArgs
+    val savedP: Array[Bind] = c.cur.typeParams
+    val savedA: Array[U64] = c.cur.typeArgs
     val didSet: Bool = setEnumEnv(c: inout c, st: inout st, ref: optRef)
     val ge: U64 = genEnumSlot(c: inout c, st: inout st, ref: optRef)
     if ge >= st.genEnumRefs.count {
-        if didSet { c.curTypeParams = savedP  c.curTypeArgs = savedA }
+        if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
         compileErrorAt(line: 0, msg: "LLVM backend: `any` iterator next must return a registered Optional instance")
         return
     }
@@ -296,14 +296,14 @@ fn genLlvmForAnyIter(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U6
     mut val xStart: U64 = itemFs[0].tyStart
     mut val xLen: U64 = itemFs[0].tyLen
     if itemFs[0].ty != 0U64 {
-        if c.curTypeParams.count > 0U64 {
+        if c.cur.typeParams.count > 0U64 {
             val gx: U64 = groundTypeRef(c: inout c, ref: itemFs[0].ty)
             xStart = c.arena.types[gx].nameStart
             xLen = c.arena.types[gx].nameLen
         }
     }
     pushLocalR(st: inout st, nameStart: varStart, nameLen: varLen, ptr: xSlot, ty: xTy, kind: kindFromTySpan(c: inout c, tyStart: xStart, tyLen: xLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: xStart, len: xLen), isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: 0U64)
-    if didSet { c.curTypeParams = savedP  c.curTypeArgs = savedA }
+    if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
     pushLoop(st: inout st, breakBB: endBB, contBB: condBB)
     genLlvmBlock(c: inout c, st: inout st, id: body)
     popLoop(st: inout st)

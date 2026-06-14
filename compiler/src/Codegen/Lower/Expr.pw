@@ -269,10 +269,10 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
                 rIsArray = pt.isArray
                 rTy = pt.ref
             }
-            val savedRet: U64 = c.lowerRetTy
-            c.lowerRetTy = rTy
+            val savedRet: U64 = c.cur.lowerRetTy
+            c.cur.lowerRetTy = rTy
             val bd: U64 = lowerBlock(c: inout c, b: body)
-            c.lowerRetTy = savedRet
+            c.cur.lowerRetTy = savedRet
             result = c.pushExpr(e: <Expr.Closure params=ps hasRet=hasRet retStart=rStart retLen=rLen retIsArray=rIsArray retTy=rTy body=bd />)
         }
         ExprAst.Move(val operand, val isBorrow, val span) => {
