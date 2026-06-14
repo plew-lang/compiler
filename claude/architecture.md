@@ -85,10 +85,46 @@ AST（arena 確保・index 参照）
 - **意味論は全て正しい（綺麗な所）**：ARC scope-drop・async stackless SM・checked 算術・RawBuffer 床・需要駆動単相化＋combinator 到達性ゲート・再帰 boxing 解析・パターン/優先順位パース。
 - **renovation が届かない唯一＝ソース連結モジュールモデル**（Loader＋`*Start/*Len` span 規約）。分割/incremental compile はここを触らないと不可だが Loader に隔離・分割が要るまで後回し。
 
+## リポジトリ構成
+
+```
+bootstrap.sh          LLVM IR 種からコンパイラをビルド＋IR 不動点検証（clang＋libLLVM・Rust 不要）
+dev-rebuild.sh        編集後の高速 in-place 再ビルド（現 `compiler/plewc` が src を再コンパイル→上書き・不動点/種なし）
+test.sh               テストスイート（run/panic/reject/part＋不動点）
+test-gen.sh           メタプロ（gen/genreject）テスト
+plew                  統一 CLI＝`plew build f.pw [-o out]`／`plew run f.pw`／`plew gen f.pw`（＋bare `plew f.pw`＝build 後方互換）。任意パスで動く＝std はバイナリ位置解決・生成物も gen harness も libc のみ（llvm-config 不要）・symlink 解決で隣の compiler/plewc を見つける・PATH に symlink 可
+plew-gen.sh           `plew gen` への薄い委譲 wrapper（後方互換・メタプロ生成 `<file>.gen.pw`・spec/16）
+tmp/                  ローカル実験の scratch（gitignore・cleanup はスクリプト内包）。コマンドに**直接 `rm` を書かない**（毎回確認プロンプトが出る）＝削除はスクリプトに内包して呼ぶ
+tests/
+  run/<name>.pw,.out  コンパイル&実行→stdout 照合（任意の .in を stdin に）
+  reject/<name>.pw    spec-invalid＝コンパイル失敗すべきケース（受理の健全性）
+  panic/<name>.pw     コンパイル&リンク成功・実行は非ゼロ＋`.panic` stderr 部分一致（overflow/0除算等）
+  gen/<name>/App.pw   メタプロ（マクロ＋`@[...]`）→ gen→auto-part→実行→App.out 照合
+compiler/             ★ 正典のコンパイラ＝Plew パッケージ（今後の機能はここに Plew で）
+  src/                ★ フロントエンド part 群＋root `_.pw`（LLVM backend）
+    _.pw              root＝import＋part マニフェスト＋`main`（`runFrontend()+emitLlvm()`・libLLVM をリンク）
+    Loader.pw         モジュールローダ＝パース駆動（各ファイルを parse→木の import/part ノードを辿る・dedup・パス解決）
+                      （レクサ・パーサは src になく `@Std/Syntax` に移設＝本体も共有経路で parse・メタプロと共有）
+    Ast.pw            arena ノード型（Expr/Stmt 等）＋Comp 状態＋arena ヘルパ
+    Parser/Decl.pw    コンパイラ frontend driver＝module-tag helper（markImport/recordExport）＋derive 合成（synth*）。宣言パーサは持たない（共有 @Std/Syntax へ）
+    Codegen/          共有フロントエンド＝AST→arena lower＋名前/型解決＋軽量型復元＋受理健全性検査＋mono 探索＝Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array/Emit/Gen/Lower/Driver/Verify/Infer（Lower＝共有 AST→arena・Driver＝`runFrontend`・Verify＝emission 非依存の受理検査パス `verifyProgram`・Infer＝TypeRef ベース型チェッカ・Emit＝共有 codegen ユーティリティ〔interning/span/型述語/行追跡〕・Gen＝`plewc --gen` の harness 合成）
+    Backend/Llvm.pw   LLVM IR エミッタ（`emitLlvm`・libLLVM-C を呼ぶ＝`compiler/plewc` が libLLVM をリンクする唯一の part）
+  std/                言語標準ライブラリ＝Core/Io/Process/Async/Ffi/Syntax＋Prelude（全プログラム自動ロード／Syntax＝メタプロ＆コンパイラ共有の構文層 `@Std/Syntax`＝`Syntax/`〔Lexer/Ast/Trees/Parser/ParseBody/Build〕）
+  plewc.seed.ll       ブートストラップ種＝`_.pw` の LLVM IR（＋`plewc.seed.runtime.c`＝随伴ランタイム・チェックイン）
+  (plewc / plewc0 / plewc.ll / plewc.runtime.c   ビルド生成物・gitignore。plewc バイナリ自体は追跡)
+examples/             実証用 Plew プログラム（hello.pw＋self-host 途上の小コンパイラ群）
+SPEC.md               言語仕様の目次（インデックス）
+spec/<部>/NN-*.md     4 部サブディレクトリに分割した言語仕様本体
+claude/*.md           本ガイドからリンクする実装ドキュメント
+```
+
+> **stage0（Rust 製・使い捨て）は self-host 達成後に退役・削除済み**（種ベースのブートストラップへ移行・Rust/cargo 不要）。Rust stage0 が要るときは `git checkout stage0-final -- bootstrap` で復旧（タグ `stage0-final`）。コンパイラの構造リファクタ計画（root `_.pw` の巨大 part 羅列・`Comp` god-object の解体）は [compiler-refactor.md](compiler-refactor.md)。
+
 ## ビルド／開発ワークフロー
 
-- **ビルド**：`./bootstrap.sh`（LLVM IR 種→clang＋libLLVM→自己コンパイル→IR 不動点検証・Rust 不要）。**テスト**：`./test.sh`（`.pw` ゴールデン＋reject＋不動点）。**コンパイラ実行**：`compiler/plewc foo.pw > foo.ll && clang foo.ll <runtime> $(llvm-config --ldflags) -o foo`（または統一 CLI `plew run foo.pw`）。手順詳細は [worklog.md](worklog.md)（ADD→reseed→USE）。
+- **ビルド**：`./bootstrap.sh`（LLVM IR 種→clang＋libLLVM→自己コンパイル→IR 不動点検証・Rust 不要）。`--reseed` で種更新（→ 種＋追跡バイナリ `compiler/plewc` を commit）。編集中の高速反復は `./dev-rebuild.sh`。**テスト**：`./test.sh`（run/panic/reject/part＋不動点）／`./test-gen.sh`（メタプロ）。**コンパイラ実行**：`compiler/plewc foo.pw > foo.ll && clang foo.ll <runtime> $(llvm-config --ldflags) -o foo`（または統一 CLI `plew run foo.pw`）。手順詳細・罠は [worklog.md](worklog.md)「ビルド・テスト・機能追加手順」（ADD→reseed→USE・dev-rebuild の取り違え注意）。
 - **テスト先行**：機能は `tests/run`（ゴールデン）／`tests/reject`（受理の健全性）で守る。
+- **仕様書（`spec/`）は mdBook で閲覧**：設定 `book.toml`（`src = "spec"`）・目次 `spec/SUMMARY.md`・`mdbook serve --open` でライブリロード・`mdbook build`→`book/`（gitignore）。章の追加・改番時は `SUMMARY.md` も更新。
 - `grammer/Plew.g4` は破棄済み（手書きパーサ）。正典は `SPEC.md`／`spec/*.md`。
 
 > commit/push のタイミング・タグ命名・worklog 更新・「迷ったら仰ぐ／不要ファイルは消してよい」などの**プロセス方針は `CLAUDE.md`「作業の進め方・ユーザーについて」が住所**（ここでは再掲しない）。実装の現在地・次の一歩は [worklog.md](worklog.md)。
