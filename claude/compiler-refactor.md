@@ -2,6 +2,8 @@
 
 正典コンパイラ `compiler/src/` を「現実装の理想像」までリファクタする計画。**なぜ・到達点・マイルストーン・未検証リスク**を残す（進捗の「やった」は git）。現在地は [worklog.md](worklog.md)。
 
+> **現在地（tag）**：M0（cross-module 変異 probe）・M1（巨大ファイル全分割＝最大 756 行）・M2＋M3（`Comp` god-struct を 83→**11 フィールド**＝ `arena`/`interner`/`typeCache`/`monoWork`/`modules`/`decls`/`parseScratch`/`cur`＋mode flags 3 に集約）まで完了（tag `refactor-m0`〜`m3`）。前提として backend にネスト place 変異（`placePtrStrict`）を追加済。**残るは M4（モジュール昇格）のみ** ── part 木を `import` 境界の独立モジュール（Backend/・Ir/）へ。M0 で前提（cross-module `inout` 変異）は検証済だが大物ゆえ着手前に確認。
+
 ## 診断（何が問題か）
 
 `compiler/src/_.pw` は root が ~18 個の `part` を羅列して 1 つの巨大モジュールを組む形。だが **`part` の羅列は症状**で、原因は2つ：
