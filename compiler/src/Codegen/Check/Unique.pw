@@ -1,0 +1,366 @@
+// Part of compile-time checks (root: _.pw): unique-field contagion and
+// parameter-mode checks.
+
+// Check call args against the callee's parameter types. Builtins (not found as a
+// Whether a type transitively owns a unique value: it is unique, or it is a
+// struct one of whose (non-array) fields is transitively unique. By-value structs
+// are acyclic, so this terminates. (Array-of-unique is unsupported in v1, so
+// array fields are not followed here.)
+fn typeIsTransitivelyUnique(c: inout Comp, start: U64, len: U64) -> Bool {
+    if typeIsUnique(c: inout c, start: start, len: len) {
+        return true
+    }
+    val si: U64 = structIndexByName(c: inout c, start: start, len: len)
+    if si >= c.structs.count {
+        return false
+    }
+    val s: StructDef = c.structs[si]
+    mut val i: U64 = 0
+    while i < s.fields.count {
+        val f: FieldDef = s.fields[i]
+        if fieldIsBoxed(c: inout c, f: f) {
+            // a boxed (recursive) field is behind indirection (like an array); its
+            // contents don't transmit unique contagion, and skipping it breaks the
+            // cycle that would otherwise make this walk diverge.
+        } else {
+            if !(f.tyIsArray) {
+                if typeIsTransitivelyUnique(c: inout c, start: f.tyStart, len: f.tyLen) {
+                    return true
+                }
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// Field contagion (spec/03): a struct that owns a unique value (directly or
+// transitively) must itself be declared `unique` — the decision is forced rather
+// than inferred, so adding a unique field can't silently make a copyable type
+// unsound (copies would multi-run deinit).
+fn checkFieldContagion(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.structs.count {
+        val s: StructDef = c.structs[i]
+        if !(s.isUnique) {
+            mut val j: U64 = 0
+            while j < s.fields.count {
+                val f: FieldDef = s.fields[j]
+                if !(f.tyIsArray) {
+                    if typeIsTransitivelyUnique(c: inout c, start: f.tyStart, len: f.tyLen) {
+                        compileErrorAt(line: lineOf(c: inout c, offset: f.nameStart), msg: "a struct with a unique field must be declared `unique`")
+                    }
+                }
+                j += 1
+            }
+        }
+        i += 1
+    }
+}
+
+// Range-check each struct field's default-value literal against the field's
+// declared type (spec/05: `val x: T = expr` is memberwise-factory default-arg
+// sugar, so the default must fit T exactly as an explicit construction would —
+// `val n: I8 = 300` is rejected here, not silently truncated at codegen). Enum
+// variant fields take no default, so only struct fields are visited.
+// Whether interned id `id` is in `set`.
+fn idInSet(set: Array[U64], id: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < set.count {
+        if set[i] == id {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Does expression `exprId` reference any name whose interned id is in `forbidden`?
+// Used to enforce default-expression self-containment (spec/04, /05): a field /
+// parameter default must not reference another field, another parameter, or `self`
+// (those are not in scope when the default is evaluated). `forbidden` holds the
+// interned ids of the sibling field / parameter names plus `self`. A bare
+// identifier that hits the set is the violation; call/method/type/field-selector
+// NAMES are not references to siblings (a free function or member name), so only
+// argument / receiver / operand sub-expressions are walked. (Block-bearing forms —
+// a `give`-block if/match in a default — are exotic and not yet deep-walked.)
+fn exprMentionsAny(c: inout Comp, exprId: U64, forbidden: Array[U64]) -> Bool {
+    match c.exprs[exprId] {
+        Expr.Ident(val start, val len) => {
+            return idInSet(set: forbidden, id: intern(c: inout c, start: start, len: len))
+        }
+        Expr.Field(val base, nameStart: _, nameLen: _) => {
+            return exprMentionsAny(c: inout c, exprId: base, forbidden: forbidden)
+        }
+        Expr.Index(val base, val index) => {
+            if exprMentionsAny(c: inout c, exprId: base, forbidden: forbidden) {
+                return true
+            }
+            return exprMentionsAny(c: inout c, exprId: index, forbidden: forbidden)
+        }
+        Expr.Binary(op: _, val lhs, val rhs) => {
+            if exprMentionsAny(c: inout c, exprId: lhs, forbidden: forbidden) {
+                return true
+            }
+            return exprMentionsAny(c: inout c, exprId: rhs, forbidden: forbidden)
+        }
+        Expr.Unary(op: _, val operand) => {
+            return exprMentionsAny(c: inout c, exprId: operand, forbidden: forbidden)
+        }
+        Expr.Call(nameStart: _, nameLen: _, val args) => {
+            mut val i: U64 = 0
+            while i < args.count {
+                if exprMentionsAny(c: inout c, exprId: args[i].expr, forbidden: forbidden) {
+                    return true
+                }
+                i += 1
+            }
+            return false
+        }
+        Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
+            if exprMentionsAny(c: inout c, exprId: recv, forbidden: forbidden) {
+                return true
+            }
+            mut val i: U64 = 0
+            while i < args.count {
+                if exprMentionsAny(c: inout c, exprId: args[i].expr, forbidden: forbidden) {
+                    return true
+                }
+                i += 1
+            }
+            return false
+        }
+        Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+            if exprMentionsAny(c: inout c, exprId: recv, forbidden: forbidden) {
+                return true
+            }
+            mut val i: U64 = 0
+            while i < args.count {
+                if exprMentionsAny(c: inout c, exprId: args[i].expr, forbidden: forbidden) {
+                    return true
+                }
+                i += 1
+            }
+            return false
+        }
+        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
+            return exprMentionsAny(c: inout c, exprId: recv, forbidden: forbidden)
+        }
+        Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+            mut val i: U64 = 0
+            while i < fields.count {
+                if exprMentionsAny(c: inout c, exprId: fields[i].value, forbidden: forbidden) {
+                    return true
+                }
+                i += 1
+            }
+            return false
+        }
+        Expr.Array(val elems) => {
+            mut val i: U64 = 0
+            while i < elems.count {
+                if exprMentionsAny(c: inout c, exprId: elems[i], forbidden: forbidden) {
+                    return true
+                }
+                i += 1
+            }
+            return false
+        }
+        Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => {
+            return exprMentionsAny(c: inout c, exprId: operand, forbidden: forbidden)
+        }
+        Expr.OptChain(val base, memberStart: _, memberLen: _) => {
+            return exprMentionsAny(c: inout c, exprId: base, forbidden: forbidden)
+        }
+        Expr.Try(val expr) => {
+            return exprMentionsAny(c: inout c, exprId: expr, forbidden: forbidden)
+        }
+        Expr.Arrow(val base, nameStart: _, nameLen: _) => {
+            return exprMentionsAny(c: inout c, exprId: base, forbidden: forbidden)
+        }
+        Expr.Move(val operand, isBorrow: _) => {
+            return exprMentionsAny(c: inout c, exprId: operand, forbidden: forbidden)
+        }
+        _ => {
+            return false
+        }
+    }
+}
+
+// Enforce default-expression self-containment (spec/04, /05). The default is
+// evaluated in the defining module's scope WITHOUT the instance / other arguments,
+// so it must not reference a sibling field, another parameter, or `self`. Without
+// this the reference only fails at a construction / call site, so a type/function
+// that is never used would silently keep a spec-invalid default (`val b: I64 = a`).
+fn checkDefaultSelfContained(c: inout Comp, exprId: U64, forbidden: Array[U64], offset: U64, what: String) {
+    if exprMentionsAny(c: inout c, exprId: exprId, forbidden: forbidden) {
+        compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: what)
+    }
+}
+
+// `deinit` is only valid on a `unique` type (spec/03: a copyable type would run
+// deinit on every CoW copy = double-free, like Swift structs having no deinit).
+// Each user `deinit { }` registers a c.deinits entry (the type name); reject any
+// whose type is not a unique struct. Reported at the struct's declaration.
+fn checkDeinitOnlyOnUnique(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.deinits.count {
+        val d: Bind = c.deinits[i]
+        if !(typeIsUnique(c: inout c, start: d.nameStart, len: d.nameLen)) {
+            val si: U64 = structIndexByName(c: inout c, start: d.nameStart, len: d.nameLen)
+            mut val off: U64 = d.nameStart
+            if si < c.structs.count {
+                off = c.structs[si].defOffset
+            }
+            compileErrorAt(line: lineOf(c: inout c, offset: off), msg: "`deinit` is only allowed on a `unique` type (a copyable type would run it on every copy — spec/03)")
+        }
+        i += 1
+    }
+}
+
+fn checkFieldDefaults(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.structs.count {
+        val s: StructDef = c.structs[i]
+        // sibling field names + `self` — a field default may reference none of them.
+        mut val forbidden: Array[U64] = []
+        mut val fk: U64 = 0
+        while fk < s.fields.count {
+            forbidden.append(intern(c: inout c, start: s.fields[fk].nameStart, len: s.fields[fk].nameLen))
+            fk += 1
+        }
+        val selfBind: Bind = internBytes(c: inout c, s: "self")
+        forbidden.append(intern(c: inout c, start: selfBind.nameStart, len: selfBind.nameLen))
+        mut val j: U64 = 0
+        while j < s.fields.count {
+            val f: FieldDef = s.fields[j]
+            if f.hasDefault {
+                checkDefaultSelfContained(c: inout c, exprId: f.defaultVal, forbidden: forbidden, offset: f.nameStart, what: "a field default cannot reference another field or `self`; it is evaluated without the instance (spec/05)")
+                checkLitSpan(c: inout c, id: f.defaultVal, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray)
+                // checkLitSpan accepts a `true`/`false` (and other category-mismatched
+                // values) regardless of the field type, so a default of the wrong type
+                // (`val a: I64 = true`) slips through — full type-check against T.
+                if !(f.tyIsArray) {
+                    tcCheckValue(c: inout c, expectedRef: f.ty, valueExpr: f.defaultVal, pos: "field default")
+                }
+            }
+            j += 1
+        }
+        i += 1
+    }
+}
+
+// Access-mode validity on parameters (spec/03): a unique-type parameter needs a
+// mode (`move`/`borrow`/`inout`); a copyable-type parameter rejects `move` (a
+// footgun: disables a value that could just be copied) and `borrow` (redundant
+// with by-value). `inout` is valid for both. Array params are containers
+// (copyable in v1) and not mode-checked here.
+fn checkParamModes(c: inout Comp, params: Array[Param]) {
+    mut val i: U64 = 0
+    while i < params.count {
+        val p: Param = params[i]
+        if !(p.tyIsArray) {
+            if typeIsUnique(c: inout c, start: p.tyStart, len: p.tyLen) {
+                val hasMode: Bool = p.isMove || p.isBorrow || p.isInout
+                if !(hasMode) {
+                    compileErrorAt(line: lineOf(c: inout c, offset: p.nameStart), msg: "a unique-type parameter requires a mode (`move`, `borrow`, or `inout`)")
+                }
+            } else {
+                if p.isMove {
+                    compileErrorAt(line: lineOf(c: inout c, offset: p.nameStart), msg: "`move` is not allowed on a copyable type; pass by value or use `inout`")
+                }
+                if p.isBorrow {
+                    compileErrorAt(line: lineOf(c: inout c, offset: p.nameStart), msg: "`borrow` is redundant on a copyable type; pass by value")
+                }
+            }
+        }
+        i += 1
+    }
+}
+
+// Reject `Array[unique]` (spec/03): unique values cannot be stored in a generic
+// container directly — wrap them in `Ref[T]`. Without this a unique array element
+// is silently never deinit'd (CoW shares the buffer; the elements leak). Checks
+// every distinct array element type collected during parsing. `Array[Ref[File]]`
+// passes (the element head is `Ref`, not the unique type).
+fn checkArrayElemsNotUnique(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.arrayElems.count {
+        val ae: Bind = c.arrayElems[i]
+        if typeIsUnique(c: inout c, start: ae.nameStart, len: ae.nameLen) {
+            compileErrorAt(line: lineOf(c: inout c, offset: ae.nameStart), msg: "a unique type cannot be stored in an Array; wrap it in Ref[T]")
+        }
+        i += 1
+    }
+}
+
+// Reject a unique type as a generic type argument (spec/03): v1 generics are
+// copyable-only, so `Box[File]`/`Optional[File]`/`Result[File, E]` would copy (and
+// silently fail to deinit) the unique value. The sanctioned container is `Ref[T]`
+// (which itself wraps the unique), so Ref instantiations are exempt. Scans the
+// whole TypeRef arena (not just genInsts) so lang-item enums like Optional/Result
+// are covered too; generic templates carry type-param args (not unique) and pass.
+fn checkGenericUniqueArgs(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.types.count {
+        val t: TypeRef = c.types[i]
+        if t.args.count != 0 {
+            if !(isRefInst(c: inout c, ref: i)) {
+                mut val j: U64 = 0
+                while j < t.args.count {
+                    val ai: TypeInfo = typeInfoOfRef(c: inout c, ref: t.args[j])
+                    if ai.kind == 2 {
+                        if typeIsUnique(c: inout c, start: ai.nameStart, len: ai.nameLen) {
+                            compileErrorAt(line: lineOf(c: inout c, offset: ai.nameStart), msg: "a unique type cannot be a generic type argument; wrap it in Ref[T]")
+                        }
+                    }
+                    j += 1
+                }
+            }
+        }
+        i += 1
+    }
+}
+
+// Run param-mode validity over every function/method declaration.
+fn checkAllParamModes(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        checkParamModes(c: inout c, params: c.funcs[i].params)
+        i += 1
+    }
+}
+
+// A default argument `name: T = expr` (spec/04) is memberwise/default-arg sugar, so
+// the default must fit T exactly as an explicit argument would — `fn f(x: I64 =
+// true)` is a category error (checkLitSpan accepts a bool literal regardless of T,
+// so the full type-check catches it). Skipped for array params (separate machinery).
+fn checkParamDefaults(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val ps: Array[Param] = c.funcs[i].params
+        // sibling parameter names + `self` — a parameter default may reference none.
+        mut val forbidden: Array[U64] = []
+        mut val pk: U64 = 0
+        while pk < ps.count {
+            forbidden.append(intern(c: inout c, start: ps[pk].nameStart, len: ps[pk].nameLen))
+            pk += 1
+        }
+        val selfBind: Bind = internBytes(c: inout c, s: "self")
+        forbidden.append(intern(c: inout c, start: selfBind.nameStart, len: selfBind.nameLen))
+        mut val j: U64 = 0
+        while j < ps.count {
+            val p: Param = ps[j]
+            if p.hasDefault {
+                checkDefaultSelfContained(c: inout c, exprId: p.defaultExpr, forbidden: forbidden, offset: p.nameStart, what: "a parameter default cannot reference another parameter or `self`; it is evaluated without them (spec/04)")
+                checkLitSpan(c: inout c, id: p.defaultExpr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+                if !(p.tyIsArray) {
+                    tcCheckValue(c: inout c, expectedRef: p.ty, valueExpr: p.defaultExpr, pos: "default arg")
+                }
+            }
+            j += 1
+        }
+        i += 1
+    }
+}
+

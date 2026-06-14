@@ -1,0 +1,66 @@
+// Part of compile-time checks (root: _.pw): match-pattern binding
+// validation.
+
+// Validate one match arm's pattern field names against the actual variant/struct
+// fields. Skips wildcard arms and arms whose enum/struct/variant is not found (a
+// separate concern — e.g. a match on a type parameter).
+fn checkArmBinds(c: inout Comp, a: MatchArm) {
+    if a.isWildcard {
+        return
+    }
+    if a.isStruct {
+        val si: U64 = structIndexByName(c: inout c, start: a.enumStart, len: a.enumLen)
+        if si < c.structs.count {
+            checkBindsInFields(c: inout c, binds: a.binds, fields: c.structs[si].fields)
+        }
+        return
+    }
+    val ei: U64 = enumIndexByName(c: inout c, start: a.enumStart, len: a.enumLen)
+    if ei >= c.enums.count {
+        return
+    }
+    val variants: Array[Variant] = c.enums[ei].variants
+    val qVar: U64 = intern(c: inout c, start: a.variantStart, len: a.variantLen)
+    mut val vi: U64 = 0
+    while vi < variants.count {
+        if variants[vi].nameId == qVar {
+            checkBindsInFields(c: inout c, binds: a.binds, fields: variants[vi].fields)
+            return
+        }
+        vi += 1
+    }
+}
+
+// Validate every match pattern (statement and expression position) names real
+// fields. Run before codegen so a bad pattern is a clean Plew error.
+fn checkMatchBinds(c: inout Comp) {
+    mut val si: U64 = 0
+    while si < c.stmts.count {
+        match c.stmts[si] {
+            Stmt.Match(val scrut, val arms) => {
+                mut val ai: U64 = 0
+                while ai < arms.count {
+                    checkArmBinds(c: inout c, a: arms[ai])
+                    ai += 1
+                }
+            }
+            _ => {}
+        }
+        si += 1
+    }
+    mut val xi: U64 = 0
+    while xi < c.exprs.count {
+        match c.exprs[xi] {
+            Expr.MatchExpr(val scrut, val arms) => {
+                mut val ai: U64 = 0
+                while ai < arms.count {
+                    checkArmBinds(c: inout c, a: arms[ai])
+                    ai += 1
+                }
+            }
+            _ => {}
+        }
+        xi += 1
+    }
+}
+

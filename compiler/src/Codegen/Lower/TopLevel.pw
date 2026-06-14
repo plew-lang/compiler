@@ -1,0 +1,221 @@
+// Part of the lowering pass (root: _.pw): top-level item dispatch
+// (extern / decl / import / directive / newtype / global).
+
+// Lower an `extern "plew-intrinsic"` block (spec/15): each fn -> a Func(isExtern),
+// each opaque struct -> a body-less StructDef(isExtern). Mirrors parseExtern. fns
+// are appended before structs; within each array order is source order, which is
+// all that matters (the arrays are independent). Reports a non-intrinsic ABI.
+fn lowerExtern(c: inout Comp, e: ExternAst) {
+    if !(e.abiOk) {
+        compileErrorAt(line: lineOf(c: inout c, offset: e.abiSpan.start), msg: "unknown ABI — only `extern(plewIntrinsic)` (intrinsic floor) and `extern(c)` (foreign C) are supported")
+    }
+    mut val fi: U64 = 0
+    while fi < e.fns.count {
+        // extern(c) functions take no argument labels (a C function has none — the
+        // label would be invented provenance). The author must mark each parameter
+        // label-suppressed `name~:` EXPLICITLY (spec/15): a labelled param is an
+        // error, not a silently-stripped label (no hidden meaning). Labels for
+        // readability/safety live in a Plew `fn` wrapper over the raw extern.
+        if e.abiC {
+            val sig: SigAst = e.fns[fi]
+            mut val pj: U64 = 0
+            while pj < sig.params.count {
+                if !(sig.params[pj].noLabel) {
+                    compileErrorAt(line: lineOf(c: inout c, offset: sig.params[pj].span.start), msg: "extern(c) function parameters take no label — write `<name>~:` (C functions have no argument labels; put labels on a Plew wrapper)")
+                }
+                pj += 1
+            }
+        }
+        c.funcs.append(lowerSigToFunc(c: inout c, sig: e.fns[fi], isExtern: true, isCExtern: e.abiC))
+        fi += 1
+    }
+    mut val si: U64 = 0
+    while si < e.structNames.count {
+        val nm: Bind = internBytes(c: inout c, s: e.structNames[si])
+        val noTP: Array[Bind] = []
+        val noFields: Array[FieldDef] = []
+        c.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) typeParams=noTP fields=noFields isUnique=false isExtern=true isCExtern=e.abiC />)
+        // a `@[...]` derive on this opaque extern type (spec/16): lower its directive to
+        // pending derives and drain them onto this type, with the `struct Name` span as
+        // the item source so the harness `parseItem` recovers a `Decl` (name = the type).
+        if si < e.structDirectives.count {
+            val dir: DirectiveAst = e.structDirectives[si]
+            if dir.reqs.count > 0U64 {
+                lowerDirective(c: inout c, dir: dir)
+                val sp: Span = e.structSpans[si]
+                drainDerives(c: inout c, typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: false, declStart: sp.start, declEnd: sp.end)
+            }
+        }
+        si += 1
+    }
+}
+
+// Lower a nominal declaration by kind (struct / enum / free function).
+fn lowerDecl(c: inout Comp, d: DeclAst) {
+    match d.kind {
+        DeclKind.Struct => { lowerStructDecl(c: inout c, d: d) }
+        DeclKind.Enum => { lowerEnumDecl(c: inout c, d: d) }
+        DeclKind.Func => { lowerFuncDecl(c: inout c, d: d) }
+    }
+}
+
+// Lower an `import … with { names }` statement (spec/15): record each imported name
+// in c.imports (its ORIGINAL offset feeds moduleOf for the importing module). The
+// path itself is consumed by the loader to find files; nothing else is recorded.
+fn lowerImport(c: inout Comp, imp: ImportAst) {
+    // a `with`-less import (`import @Std/Io`) binds the last path segment as a
+    // namespace; `Io.print(args)` then resolves to `print` from that module. A path
+    // alias `import @Std/Io as IO` binds `IO` instead (spec/15).
+    if imp.isImport {
+        if imp.names.count == 0 {
+            mut val nsStart: U64 = imp.segSpan.start
+            mut val nsEnd: U64 = imp.segSpan.end
+            if imp.aliasSpan.end > imp.aliasSpan.start {
+                nsStart = imp.aliasSpan.start
+                nsEnd = imp.aliasSpan.end
+            }
+            if nsEnd > nsStart {
+                c.namespaces.append(value: <Bind nameStart=nsStart nameLen=nsEnd - nsStart fieldStart=0 fieldLen=0 />)
+            }
+        }
+    }
+    mut val i: U64 = 0
+    while i < imp.names.count {
+        val nspan: Span = imp.nameSpans[i]
+        markImport(c: inout c, segStart: imp.segSpan.start, segLen: imp.segSpan.end - imp.segSpan.start, nameStart: nspan.start, nameLen: nspan.end - nspan.start)
+        // `real as alias`: record the local alias -> real-name mapping (spec/15).
+        if i < imp.nameAliasSpans.count {
+            val al: Span = imp.nameAliasSpans[i]
+            if al.end > al.start {
+                c.importAliases.append(value: <Bind nameStart=al.start nameLen=al.end - al.start fieldStart=nspan.start fieldLen=nspan.end - nspan.start />)
+            }
+        }
+        i += 1
+    }
+}
+
+// True if `name` (a bare identifier) was bound as a namespace by a `with`-less import.
+fn isNamespaceName(c: inout Comp, name: String) -> Bool {
+    val nb: Bind = internBytes(c: inout c, s: name)
+    mut val i: U64 = 0
+    while i < c.namespaces.count {
+        if spansEqual(c: inout c, aStart: c.namespaces[i].nameStart, aLen: c.namespaces[i].nameLen, bStart: nb.nameStart, bLen: nb.nameLen) {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Lower a `@[...]` directive (spec/16): each derive request becomes a pendingDerive
+// (applied to the next type declaration via drainDerives). The directive name keeps
+// its ORIGINAL offset (text-matched downstream); args lower to MakeField.
+fn lowerDirective(c: inout Comp, dir: DirectiveAst) {
+    mut val i: U64 = 0
+    while i < dir.reqs.count {
+        val r: DeriveReqAst = dir.reqs[i]
+        val args: Array[MakeField] = lowerMakeFields(c: inout c, fields: r.args, typeName: "", variant: "", isEnum: false)
+        c.pendingDerives.append(<DeriveReq typeStart=0 typeLen=0 isEnum=false nameStart=r.nameSpan.start nameLen=r.nameSpan.end - r.nameSpan.start declStart=0 declEnd=0 args=args />)
+        i += 1
+    }
+}
+
+// Lower an `export <inner>` item: lower the inner declaration, then record its
+// name(s) as exported (spec/15). Mirrors parseExport's per-kind recording: a struct/
+// enum/fn/trait records the one decl; an `export extern { }` block records every fn
+// and opaque struct it adds.
+fn lowerExportItem(c: inout Comp, inner: TopItemAst) {
+    match inner {
+        TopItemAst.Extern(val e) => {
+            val xfB: U64 = c.funcs.count
+            val xsB: U64 = c.structs.count
+            lowerExtern(c: inout c, e: e)
+            mut val xi: U64 = xfB
+            while xi < c.funcs.count {
+                recordExport(c: inout c, nameStart: c.funcs[xi].nameStart, nameLen: c.funcs[xi].nameLen)
+                xi += 1
+            }
+            mut val xj: U64 = xsB
+            while xj < c.structs.count {
+                recordExport(c: inout c, nameStart: c.structs[xj].nameStart, nameLen: c.structs[xj].nameLen)
+                xj += 1
+            }
+        }
+        TopItemAst.Decl(val d) => {
+            val sB: U64 = c.structs.count
+            val eB: U64 = c.enums.count
+            val fB: U64 = c.funcs.count
+            lowerDecl(c: inout c, d: d)
+            match d.kind {
+                DeclKind.Struct => { recordExport(c: inout c, nameStart: c.structs[sB].nameStart, nameLen: c.structs[sB].nameLen) }
+                DeclKind.Enum => { recordExport(c: inout c, nameStart: c.enums[eB].nameStart, nameLen: c.enums[eB].nameLen) }
+                DeclKind.Func => { recordExport(c: inout c, nameStart: c.funcs[fB].nameStart, nameLen: c.funcs[fB].nameLen) }
+            }
+        }
+        TopItemAst.Trait(val t) => {
+            val tB: U64 = c.traits.count
+            lowerTrait(c: inout c, t: t)
+            recordExport(c: inout c, nameStart: c.traits[tB].nameStart, nameLen: c.traits[tB].nameLen)
+        }
+        TopItemAst.GlobalVal(val s) => {
+            val gB: U64 = c.globals.count
+            lowerGlobalVal(c: inout c, s: s)
+            if c.globals.count > gB {
+                recordExport(c: inout c, nameStart: c.globals[gB].nameStart, nameLen: c.globals[gB].nameLen)
+            }
+        }
+        TopItemAst.NewType(val name, val ty, isPub: _, span: _) => {
+            // `export newtype Name = Underlying` (spec/10,15): lower the distinct type,
+            // then record its name as exported so other modules can import it.
+            val ntB: U64 = c.newtypes.count
+            lowerNewtype(c: inout c, name: name, ty: ty)
+            if c.newtypes.count > ntB {
+                recordExport(c: inout c, nameStart: c.newtypes[ntB].nameStart, nameLen: c.newtypes[ntB].nameLen)
+            }
+        }
+        _ => { lowerTopItem(c: inout c, item: inner) }
+    }
+}
+
+// Lower one top-level item (spec/15): dispatch each parsed `TopItemAst` to its arena
+// / Comp-state lowering. This is the single frontend lowering entry; the compiler's
+// `parseProgram` parses a file with the shared `parseProgramAst` and lowers each item
+// through here.
+fn lowerTopItem(c: inout Comp, item: TopItemAst) {
+    match item {
+        TopItemAst.Decl(val d) => { lowerDecl(c: inout c, d: d) }
+        TopItemAst.Impl(val im) => { lowerImpl(c: inout c, im: im) }
+        TopItemAst.Trait(val t) => { lowerTrait(c: inout c, t: t) }
+        TopItemAst.Extern(val e) => { lowerExtern(c: inout c, e: e) }
+        TopItemAst.Import(val imp) => { lowerImport(c: inout c, imp: imp) }
+        TopItemAst.Export(val inner) => { lowerExportItem(c: inout c, inner: inner) }
+        TopItemAst.ReExport(val pathSpan) => {}
+        TopItemAst.Directive(val dir) => { lowerDirective(c: inout c, dir: dir) }
+        TopItemAst.GlobalVal(val s) => { lowerGlobalVal(c: inout c, s: s) }
+        TopItemAst.NewType(val name, val ty, val isPub, val span) => { lowerNewtype(c: inout c, name: name, ty: ty) }
+    }
+}
+
+// Lower a `newtype Name = Underlying` (spec/10): record the distinct name and its
+// underlying type. Codegen resolves the name to the underlying for representation and
+// method dispatch; the type checker keeps them distinct.
+fn lowerNewtype(c: inout Comp, name: String, ty: TypeAst) {
+    val nm: Bind = internBytes(c: inout c, s: name)
+    val under: PType = lowerType(c: inout c, t: ty)
+    c.newtypes.append(value: <NewtypeDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) underStart=under.start underLen=under.len underRef=under.ref />)
+}
+
+// Lower a module-level variable (spec/15). The shared parser hands us the same
+// `StmtAst.Let` a local binding produces; we lower it to an arena `Stmt.Let` (so the
+// initializer / type are arena nodes) and record a `Comp.globals` entry keyed by the
+// binding's name. The backend emits the LLVM global and its one-time init.
+fn lowerGlobalVal(c: inout Comp, s: StmtAst) {
+    val stid: U64 = lowerStmt(c: inout c, s: s)
+    match c.stmts[stid] {
+        Stmt.Let(val mutable, val nameStart, val nameLen, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => {
+            c.globals.append(<Global nameStart=nameStart nameLen=nameLen letStmt=stid mutable=mutable />)
+        }
+        _ => {}
+    }
+}
+

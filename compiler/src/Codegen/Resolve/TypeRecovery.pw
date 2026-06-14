@@ -1,0 +1,312 @@
+// Part of name/type resolution (root: _.pw): overload matching, match
+// exhaustiveness, scalar info, and the keyword-span cache.
+
+// Check call args against a parameter list: arg count matches and every arg
+// carries its parameter's label in declaration order (spec: labels required).
+fn paramsLabelsOk(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bool {
+    if args.count > params.count {
+        return false
+    }
+    // any params beyond the provided args must have a default (trailing-default
+    // omission). Without that, the arity mismatch is an error.
+    mut val r: U64 = args.count
+    while r < params.count {
+        if !(params[r].hasDefault) {
+            return false
+        }
+        r += 1
+    }
+    mut val i: U64 = 0
+    while i < args.count {
+        val a: Arg = args[i]
+        val p: Param = params[i]
+        if p.noLabel {
+            // label-suppressed param: the argument must be positional (no label).
+            if a.hasLabel {
+                return false
+            }
+        } else {
+            if a.hasLabel {
+                if intern(c: inout c, start: a.labelStart, len: a.labelLen) != p.nameId {
+                    return false
+                }
+            } else {
+                return false
+            }
+        }
+        i += 1
+    }
+    return true
+}
+
+// Whether an argument's recovered type matches a parameter's declared type head
+// (used to discriminate same-label overloads — spec: overload by argument type).
+// An untyped integer literal (no suffix) matches any integer-typed parameter.
+fn argMatchesParam(c: inout Comp, argExpr: U64, p: Param) -> Bool {
+    val ti: TypeInfo = exprType(c: inout c, id: argExpr)
+    if p.tyIsArray {
+        if ti.kind == 3 {
+            return intern(c: inout c, start: ti.nameStart, len: ti.nameLen) == p.tyNameId
+        }
+        return false
+    }
+    if ti.kind == 1 {
+        return rangeEquals(bytes: c.bytes, start: p.tyStart, len: p.tyLen, kw: "String")
+    }
+    if ti.kind == 2 {
+        return intern(c: inout c, start: ti.nameStart, len: ti.nameLen) == p.tyNameId
+    }
+    // ti.kind == 0: a scalar / integer. A suffixed/typed value carries its name;
+    // an untyped literal (no name) adapts to any integer parameter.
+    if ti.nameLen != 0 {
+        return intern(c: inout c, start: ti.nameStart, len: ti.nameLen) == p.tyNameId
+    }
+    return isIntType(c: inout c, start: p.tyStart, len: p.tyLen)
+}
+
+// Whether every argument's type matches its parameter's declared type. Provided
+// (non-defaulted) args only; trailing defaulted params are not type-checked here.
+fn paramsTypesMatch(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bool {
+    mut val i: U64 = 0
+    while i < args.count {
+        if i < params.count {
+            if !(argMatchesParam(c: inout c, argExpr: args[i].expr, p: params[i])) {
+                return false
+            }
+        }
+        i += 1
+    }
+    return true
+}
+
+// An argument that is an unsuffixed integer literal carries no type name, so it
+// adapts to any integer parameter (argMatchesParam's last clause). Such an
+// argument is the only source of "one call matches two overloads": a typed value
+// matches exactly one parameter type.
+fn argIsUntypedIntLit(c: inout Comp, argExpr: U64) -> Bool {
+    val ti: TypeInfo = exprType(c: inout c, id: argExpr)
+    if ti.kind == 0 {
+        return ti.nameLen == 0
+    }
+    return false
+}
+
+// Two type-matching overloads are genuinely ambiguous for this call iff some
+// untyped integer-literal argument maps to differing parameter types between
+// them. (Overloads that agree on every provided arg type but differ only via
+// defaulted/omitted params are a separate concern, not flagged here.)
+fn overloadsAmbiguous(c: inout Comp, fa: Func, fb: Func, args: Array[Arg]) -> Bool {
+    mut val i: U64 = 0
+    while i < args.count {
+        if argIsUntypedIntLit(c: inout c, argExpr: args[i].expr) {
+            if i < fa.params.count {
+                if i < fb.params.count {
+                    if fa.params[i].tyNameId != fb.params[i].tyNameId {
+                        return true
+                    }
+                }
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// Loudly reject (exits) when the two type-matching overloads `a`/`b` are
+// ambiguous for this call — picking the first silently would invent meaning
+// (spec: 補完はする／忖度はしない／曖昧はエラー).
+fn checkOverloadAmbiguity(c: inout Comp, a: U64, b: U64, args: Array[Arg]) {
+    if b != c.funcs.count {
+        if overloadsAmbiguous(c: inout c, fa: c.funcs[a], fb: c.funcs[b], args: args) {
+            mut val off: U64 = 0
+            if args.count > 0 {
+                off = exprOffset(c: inout c, id: args[0].expr)
+            }
+            compileErrorAt(line: lineOf(c: inout c, offset: off), msg: "ambiguous call: an unsuffixed integer literal matches more than one overload; add a type suffix (e.g. `5I32`)")
+        }
+    }
+}
+
+// Does some arm cover the variant (variantStart,variantLen)? A wildcard arm
+// covers everything.
+fn armCovers(c: inout Comp, arms: Array[MatchArm], variantStart: U64, variantLen: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < arms.count {
+        val a: MatchArm = arms[i]
+        if a.isWildcard {
+            return true
+        }
+        if spansEqual(c: inout c, aStart: a.variantStart, aLen: a.variantLen, bStart: variantStart, bLen: variantLen) {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Acceptance soundness: spec requires match to be exhaustive (Rust-style). A
+// match is exhaustive iff it has a `_` wildcard, or every variant of the
+// scrutinee's enum is covered by some arm. (This compiler's match is always
+// over an enum, and has no `val x` catch-all arm, so those are the only cases.)
+fn matchExhaustive(c: inout Comp, arms: Array[MatchArm]) -> Bool {
+    mut val enumStart: U64 = 0
+    mut val enumLen: U64 = 0
+    mut val i: U64 = 0
+    while i < arms.count {
+        val a: MatchArm = arms[i]
+        if a.isWildcard {
+            return true
+        }
+        if enumLen == 0 {
+            if a.enumLen > 0 {
+                enumStart = a.enumStart
+                enumLen = a.enumLen
+            }
+        }
+        i += 1
+    }
+    if enumLen == 0 {
+        return true
+    }
+    val qEnum: U64 = intern(c: inout c, start: enumStart, len: enumLen)
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val e: EnumDef = c.enums[ei]
+        if e.nameId == qEnum {
+            val vars: Array[Variant] = e.variants
+            mut val vi: U64 = 0
+            while vi < vars.count {
+                val v: Variant = vars[vi]
+                if !(armCovers(c: inout c, arms: arms, variantStart: v.nameStart, variantLen: v.nameLen)) {
+                    return false
+                }
+                vi += 1
+            }
+            return true
+        }
+        ei += 1
+    }
+    return true
+}
+
+// Tag index of `Enum.Variant` (the variant's position in its enum declaration).
+fn variantIndex(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64) -> U64 {
+    // an import alias (`with { Real as Alias }`) names the same enum as `Real`, so its
+    // variants share the real enum's tag indices (spec/15).
+    val arE: Bind = aliasReal(c: inout c, start: enumStart, len: enumLen)
+    val qEnum: U64 = intern(c: inout c, start: arE.nameStart, len: arE.nameLen)
+    val qVar: U64 = intern(c: inout c, start: variantStart, len: variantLen)
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val e: EnumDef = c.enums[ei]
+        if e.nameId == qEnum {
+            val vars: Array[Variant] = e.variants
+            mut val vi: U64 = 0
+            while vi < vars.count {
+                val v: Variant = vars[vi]
+                if v.nameId == qVar {
+                    return vi
+                }
+                vi += 1
+            }
+        }
+        ei += 1
+    }
+    return 0
+}
+
+// ---- lightweight type recovery (for monomorphization + .bytes dispatch) ----
+
+fn scalarInfo() -> TypeInfo {
+    return <TypeInfo kind=0 nameStart=0 nameLen=0 ref=0 />
+}
+
+// A source span whose bytes read `kw` (length `kwLen`). The type system recovers
+// a named type from a (start,len) span; some values have a known type with no
+// source span to point at (a string literal's `String`, `.bytes`'s `U8`). Reuse
+// any occurrence of `kw` in the source as a label span (the match is purely the
+// bytes; a comment/string occurrence works too). nameLen=0 if `kw` never appears.
+// Append `kw`'s bytes to `c.bytes` and record their span in `c.kwCache`, so a
+// built-in name with no guaranteed source occurrence has a stable, addressable
+// span without scanning (or planting a comment in) the source.
+fn addKwSpan(c: inout Comp, kw: String) {
+    val start: U64 = c.bytes.count
+    val b: Array[U8] = kw.bytes
+    mut val i: U64 = 0
+    while i < b.count {
+        c.bytes.append(b[i])
+        i += 1
+    }
+    c.kwCache.append(<Bind nameStart=start nameLen=b.count fieldStart=start fieldLen=b.count />)
+}
+
+// Build the built-in-name span cache once (before any kwSpan use). Covers exactly
+// the names kwSpan is asked for. Appended after the lexed source, so token offsets
+// are unaffected.
+fn buildKwCache(c: inout Comp) {
+    addKwSpan(c: inout c, kw: "String")
+    addKwSpan(c: inout c, kw: "U8")
+    addKwSpan(c: inout c, kw: "U64")
+    addKwSpan(c: inout c, kw: "Bool")
+    addKwSpan(c: inout c, kw: "Array")
+    addKwSpan(c: inout c, kw: "fn")
+    addKwSpan(c: inout c, kw: "iterator")
+    addKwSpan(c: inout c, kw: "next")
+}
+
+// Return a stable source span naming `kw`. O(1) lookup in the prebuilt cache; any
+// name not pre-cached falls back to a source scan (a len-0 Bind if absent, which
+// callers treat as "no span").
+fn kwSpan(c: inout Comp, kw: String, kwLen: U64) -> Bind {
+    mut val ci: U64 = 0
+    while ci < c.kwCache.count {
+        val e: Bind = c.kwCache[ci]
+        if rangeEquals(bytes: c.bytes, start: e.nameStart, len: e.nameLen, kw: kw) {
+            return e
+        }
+        ci += 1
+    }
+    val n: U64 = c.bytes.count
+    if n < kwLen {
+        return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+    }
+    mut val i: U64 = 0
+    val last: U64 = n - kwLen
+    while i <= last {
+        if rangeEquals(bytes: c.bytes, start: i, len: kwLen, kw: kw) {
+            return <Bind nameStart=i nameLen=kwLen fieldStart=i fieldLen=kwLen />
+        }
+        i += 1
+    }
+    return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+}
+
+// String literals are monomorphic (always `String`), so `val s = "hi"` infers
+// `String`; recover a "String" span to name PlewString (else require annotation).
+fn stringTypeSpan(c: inout Comp) -> Bind {
+    return kwSpan(c: inout c, kw: "String", kwLen: 6)
+}
+
+fn typeInfoOfName(c: inout Comp, start: U64, len: U64, isArray: Bool) -> TypeInfo {
+    // resolve an import alias (`with { Real as Alias }`) to the real name so the carried
+    // type identity is canonical for downstream struct/field lookup (spec/15).
+    val ar: Bind = aliasReal(c: inout c, start: start, len: len)
+    val rs: U64 = ar.nameStart
+    val rl: U64 = ar.nameLen
+    if isArray {
+        return <TypeInfo kind=3 nameStart=rs nameLen=rl ref=0 />
+    }
+    if rl == 0 {
+        return scalarInfo()
+    }
+    if rangeEquals(bytes: c.bytes, start: rs, len: rl, kw: "String") {
+        return <TypeInfo kind=1 nameStart=rs nameLen=rl ref=0 />
+    }
+    if isPrimType(c: inout c, start: rs, len: rl) {
+        // kind=0 (scalar) but carry the type name so the width is recoverable
+        // (e.g. for the lossless-`as` check). The C type stays 64-bit for now.
+        return <TypeInfo kind=0 nameStart=rs nameLen=rl ref=0 />
+    }
+    return <TypeInfo kind=2 nameStart=rs nameLen=rl ref=0 />
+}
+

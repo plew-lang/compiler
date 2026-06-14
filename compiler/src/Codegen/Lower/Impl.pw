@@ -1,0 +1,219 @@
+// Part of the lowering pass (root: _.pw): impl-member, impl, and trait
+// lowering.
+
+// Lower a method / assoc-fn member of an impl block. Mirrors parseFuncCommon for
+// the impl-member case: a witnessed requirement signature (for a trait impl, body-
+// less, before the body), then either a `via` alias (no body/func) or the real
+// method appended to c.funcs with its `where`-bounds (method-own then impl-level).
+// `recvN` is the (re-interned) receiver type name; `implParamBinds` the impl's `[T]`.
+fn lowerMethodMember(c: inout Comp, im: ImplAst, m: MemberAst, recvN: Bind, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) {
+    val nameN: Bind = internBytes(c: inout c, s: m.name)
+    // typeParams = impl's `[T]` (in scope for every member) ++ the method's own.
+    mut val typeParams: Array[Bind] = []
+    mut val ipi: U64 = 0
+    while ipi < implParamBinds.count {
+        typeParams.append(implParamBinds[ipi])
+        ipi += 1
+    }
+    val ownParams: Array[Bind] = lowerTypeParamNames(c: inout c, names: m.typeParams)
+    mut val opi: U64 = 0
+    while opi < ownParams.count {
+        typeParams.append(ownParams[opi])
+        opi += 1
+    }
+    val params: Array[Param] = lowerParams(c: inout c, params: m.params)
+    mut val retStart: U64 = 0
+    mut val retLen: U64 = 0
+    mut val retIsArray: Bool = false
+    mut val retRef: U64 = 0
+    if m.hasRet {
+        val pt: PType = lowerType(c: inout c, t: m.ret)
+        retStart = pt.start
+        retLen = pt.len
+        retIsArray = pt.isArray
+        retRef = pt.ref
+    }
+    // a custom factory (spec/05) returns the impl's type (the implicit `Self`); the
+    // body's `return <Type …/>` then grounds against it. A fallible factory wraps that
+    // in `Optional[Self]` (`optional`) or `Result[Self, E]` (`result[E]`).
+    mut val effHasRet: Bool = m.hasRet
+    if m.isFactory {
+        val ft: PType = lowerType(c: inout c, t: im.recvType)
+        effHasRet = true
+        if m.factoryKind == 1U64 {
+            val optN: Bind = internBytes(c: inout c, s: "Optional")
+            mut val oargs: Array[U64] = []
+            oargs.append(value: ft.ref)
+            retRef = c.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=oargs />)
+            retStart = optN.nameStart
+            retLen = optN.nameLen
+            retIsArray = false
+        } else {
+            if m.factoryKind == 2U64 {
+                val resN: Bind = internBytes(c: inout c, s: "Result")
+                val et: PType = lowerType(c: inout c, t: m.factoryErr)
+                mut val rargs: Array[U64] = []
+                rargs.append(value: ft.ref)
+                rargs.append(value: et.ref)
+                retRef = c.pushType(t: <TypeRef nameStart=resN.nameStart nameLen=resN.nameLen args=rargs />)
+                retStart = resN.nameStart
+                retLen = resN.nameLen
+                retIsArray = false
+            } else {
+                retStart = ft.start
+                retLen = ft.len
+                retIsArray = ft.isArray
+                retRef = ft.ref
+            }
+        }
+    }
+    // a trait-impl member witnesses a requirement (body or via). The witnessed sig
+    // is a pure requirement signature (body 0, no recv/self/assoc/async).
+    if im.isTraitImpl {
+        if m.isVia {
+            val realN: Bind = internBytes(c: inout c, s: m.viaName)
+            c.methodAliases.append(<MethodAlias recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) aliasStart=nameN.nameStart aliasLen=nameN.nameLen aliasId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) realStart=realN.nameStart realLen=realN.nameLen realId=intern(c: inout c, start: realN.nameStart, len: realN.nameLen) />)
+            witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) typeParams=typeParams params=params hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+            return
+        }
+        witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) typeParams=typeParams params=params hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    }
+    val savedRet: U64 = c.lowerRetTy
+    c.lowerRetTy = retRef
+    val body: U64 = lowerBlock(c: inout c, b: m.body)
+    c.lowerRetTy = savedRet
+    val fnIdx: U64 = c.funcs.count
+    // an extension method (spec/09) is tagged with its extension's name id so it is
+    // excluded from bare resolution (reachable only via `value#Ext.m()`).
+    mut val extId: U64 = 0
+    if im.extName.bytes.count > 0 {
+        val extN: Bind = internBytes(c: inout c, s: im.extName)
+        extId = intern(c: inout c, start: extN.nameStart, len: extN.nameLen)
+    }
+    c.funcs.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count />)
+    appendFuncBounds(c: inout c, fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits)
+    appendFuncBounds(c: inout c, fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits)
+}
+
+// Lower an `impl` block (spec/07,08): each member becomes a method / assoc-fn Func
+// (with receiver), a synthetic deinit, or an associated-type binding; a trait impl
+// also records a Conform with the witnessed requirement signatures. Mirrors
+// parseImpl. All impl names are re-interned (none feed moduleOf — methods resolve by
+// receiver+selector, conformances by text), keeping the emitted C byte-identical.
+fn lowerImpl(c: inout Comp, im: ImplAst) {
+    val recvN: Bind = internBytes(c: inout c, s: im.recvType.name)
+    val implParamBinds: Array[Bind] = lowerTypeParamNames(c: inout c, names: im.implParams)
+    mut val witnessed: Array[Func] = []
+    mut val mi: U64 = 0
+    while mi < im.members.count {
+        val m: MemberAst = im.members[mi]
+        match m.kind {
+            MemberKind.Method => {
+                lowerMethodMember(c: inout c, im: im, m: m, recvN: recvN, implParamBinds: implParamBinds, hasRecv: true, isAssoc: false, witnessed: inout witnessed)
+            }
+            MemberKind.AssocFn => {
+                lowerMethodMember(c: inout c, im: im, m: m, recvN: recvN, implParamBinds: implParamBinds, hasRecv: false, isAssoc: true, witnessed: inout witnessed)
+            }
+            MemberKind.Deinit => {
+                val deinitN: Bind = internBytes(c: inout c, s: "deinit")
+                val body: U64 = lowerBlock(c: inout c, b: m.body)
+                val noParams: Array[Param] = []
+                val noTypeParams: Array[Bind] = []
+                c.funcs.append(<Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout c, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+                c.deinits.append(<Bind nameStart=recvN.nameStart nameLen=recvN.nameLen fieldStart=recvN.nameStart fieldLen=recvN.nameLen />)
+            }
+            MemberKind.AssocType => {
+                val pt: PType = lowerType(c: inout c, t: m.assocTy)
+                val atN: Bind = internBytes(c: inout c, s: m.name)
+                mut val trId: U64 = 0
+                if im.traitName.bytes.count > 0 {
+                    val trN: Bind = internBytes(c: inout c, s: im.traitName)
+                    trId = trN.nameId
+                }
+                c.assocBindings.append(<AssocBinding recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) nameStart=atN.nameStart nameLen=atN.nameLen nameId=intern(c: inout c, start: atN.nameStart, len: atN.nameLen) traitId=trId tyStart=pt.start tyLen=pt.len tyIsArray=pt.isArray ty=pt.ref />)
+            }
+            MemberKind.Factory => {
+                // `factory` in a `pub impl T` publishes T's default memberwise factory
+                // (spec/05) — record T's name id so cross-module `<T …/>` is allowed.
+                if im.isPub {
+                    c.pubFactories.append(intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen))
+                }
+            }
+        }
+        mi += 1
+    }
+    if im.isTraitImpl {
+        val traitN: Bind = internBytes(c: inout c, s: im.traitName)
+        mut val traitArgs: Array[U64] = []
+        mut val ti: U64 = 0
+        while ti < im.traitArgs.count {
+            val pt: PType = lowerType(c: inout c, t: im.traitArgs[ti])
+            traitArgs.append(pt.ref)
+            ti += 1
+        }
+        mut val cfExtId: U64 = 0
+        if im.extName.bytes.count > 0 {
+            val cfExtN: Bind = internBytes(c: inout c, s: im.extName)
+            cfExtId = intern(c: inout c, start: cfExtN.nameStart, len: cfExtN.nameLen)
+        }
+        c.conforms.append(<Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout c, start: traitN.nameStart, len: traitN.nameLen) traitArgs=traitArgs derived=false witnessed=witnessed extId=cfExtId />)
+    }
+    // attach pending `@[...]` directives to this impl block (a macro on an impl);
+    // declStart/declEnd = the impl block's source span for the gen harness slice.
+    drainDerives(c: inout c, typeStart: recvN.nameStart, typeLen: recvN.nameLen, isEnum: false, declStart: im.span.start, declEnd: im.span.end)
+}
+
+// Lower a body-less signature (trait requirement / extern decl) to a Func. The
+// name keeps its ORIGINAL offset (sig.nameSpan): an extern fn name feeds moduleOf
+// for cross-module calls; a trait req name is harmless to keep original. Mirrors
+// parseReqSig.
+fn lowerSigToFunc(c: inout Comp, sig: SigAst, isExtern: Bool, isCExtern: Bool) -> Func {
+    val nameStart: U64 = sig.nameSpan.start
+    val nameLen: U64 = sig.nameSpan.end - sig.nameSpan.start
+    val typeParams: Array[Bind] = lowerTypeParamNames(c: inout c, names: sig.typeParams)
+    val params: Array[Param] = lowerParams(c: inout c, params: sig.params)
+    mut val retStart: U64 = 0
+    mut val retLen: U64 = 0
+    mut val retIsArray: Bool = false
+    mut val retRef: U64 = 0
+    if sig.hasRet {
+        val pt: PType = lowerType(c: inout c, t: sig.ret)
+        retStart = pt.start
+        retLen = pt.len
+        retIsArray = pt.isArray
+        retRef = pt.ref
+    }
+    return <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout c, start: nameStart, len: nameLen) typeParams=typeParams params=params hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern isCExtern=isCExtern />
+}
+
+// Lower a `trait` declaration to a TraitDef (spec/08). Requirement signatures are
+// body-less Funcs; supertrait/assoc-type names are re-interned (text-matched
+// downstream). Mirrors parseTrait.
+fn lowerTrait(c: inout Comp, t: TraitAst) {
+    val nameStart: U64 = t.nameSpan.start
+    val nameLen: U64 = t.nameSpan.end - t.nameSpan.start
+    mut val supertraits: Array[Bind] = []
+    mut val si: U64 = 0
+    while si < t.supertraits.count {
+        supertraits.append(internBytes(c: inout c, s: t.supertraits[si]))
+        si += 1
+    }
+    mut val reqs: Array[Func] = []
+    mut val ri: U64 = 0
+    while ri < t.reqs.count {
+        reqs.append(lowerSigToFunc(c: inout c, sig: t.reqs[ri], isExtern: false, isCExtern: false))
+        ri += 1
+    }
+    mut val assocTypes: Array[Bind] = []
+    mut val ai: U64 = 0
+    while ai < t.assocTypes.count {
+        assocTypes.append(internBytes(c: inout c, s: t.assocTypes[ai]))
+        ai += 1
+    }
+    val typeParams: Array[Bind] = lowerTypeParamNames(c: inout c, names: t.typeParams)
+    c.traits.append(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout c, start: nameStart, len: nameLen) typeParams=typeParams supertraits=supertraits reqs=reqs assocTypes=assocTypes />)
+    // attach pending `@[...]` directives to this trait (a macro on a trait);
+    // declStart/declEnd = the trait's source span for the gen harness slice.
+    drainDerives(c: inout c, typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: t.span.start, declEnd: t.span.end)
+}
+

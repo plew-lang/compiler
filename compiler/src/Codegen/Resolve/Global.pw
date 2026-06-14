@@ -1,0 +1,265 @@
+// Part of name/type resolution (root: _.pw): global-init dependency
+// ordering and import-alias / factory-construction rewriting.
+
+fn globalInitExpr(c: inout Comp, g: Global) -> U64 {
+    match c.stmts[g.letStmt] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return init }
+        _ => { return 0 }
+    }
+}
+
+fn u64ArrayHas(a: Array[U64], v: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < a.count {
+        if a[i] == v {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Collect the indices (into c.globals) of every global the expression `id` reads,
+// appended (deduped) to `into`. Covers the expression forms a global initializer can
+// take; rarer block-bearing forms (match/if/closure) contribute nothing — at worst a
+// forward reference there stays declaration-ordered, never misordered.
+fn collectGlobalDeps(c: inout Comp, id: U64, into: inout Array[U64]) {
+    if id >= c.exprs.count {
+        return
+    }
+    match c.exprs[id] {
+        Expr.Ident(val start, val len) => {
+            mut val gi: U64 = 0
+            while gi < c.globals.count {
+                if spansEqual(c: inout c, aStart: c.globals[gi].nameStart, aLen: c.globals[gi].nameLen, bStart: start, bLen: len) {
+                    if !(u64ArrayHas(a: into, v: gi)) {
+                        into.append(value: gi)
+                    }
+                }
+                gi += 1
+            }
+        }
+        Expr.Unary(op: _, val operand) => { collectGlobalDeps(c: inout c, id: operand, into: inout into) }
+        Expr.Binary(op: _, val lhs, val rhs) => {
+            collectGlobalDeps(c: inout c, id: lhs, into: inout into)
+            collectGlobalDeps(c: inout c, id: rhs, into: inout into)
+        }
+        Expr.Call(nameStart: _, nameLen: _, val args) => {
+            mut val i: U64 = 0
+            while i < args.count { collectGlobalDeps(c: inout c, id: args[i].expr, into: inout into) i += 1 }
+        }
+        Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
+            collectGlobalDeps(c: inout c, id: recv, into: inout into)
+            mut val i: U64 = 0
+            while i < args.count { collectGlobalDeps(c: inout c, id: args[i].expr, into: inout into) i += 1 }
+        }
+        Expr.Field(val base, nameStart: _, nameLen: _) => { collectGlobalDeps(c: inout c, id: base, into: inout into) }
+        Expr.Index(val base, val index) => {
+            collectGlobalDeps(c: inout c, id: base, into: inout into)
+            collectGlobalDeps(c: inout c, id: index, into: inout into)
+        }
+        Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+            mut val i: U64 = 0
+            while i < fields.count { collectGlobalDeps(c: inout c, id: fields[i].value, into: inout into) i += 1 }
+        }
+        Expr.Array(val elems) => {
+            mut val i: U64 = 0
+            while i < elems.count { collectGlobalDeps(c: inout c, id: elems[i], into: inout into) i += 1 }
+        }
+        Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { collectGlobalDeps(c: inout c, id: operand, into: inout into) }
+        Expr.OptChain(val base, memberStart: _, memberLen: _) => { collectGlobalDeps(c: inout c, id: base, into: inout into) }
+        Expr.Try(val expr) => { collectGlobalDeps(c: inout c, id: expr, into: inout into) }
+        Expr.Arrow(val base, nameStart: _, nameLen: _) => { collectGlobalDeps(c: inout c, id: base, into: inout into) }
+        Expr.Move(val operand, isBorrow: _) => { collectGlobalDeps(c: inout c, id: operand, into: inout into) }
+        Expr.Await(val operand) => { collectGlobalDeps(c: inout c, id: operand, into: inout into) }
+        _ => {}
+    }
+}
+
+// DFS post-order over the global dependency graph. `state[i]`: 0=unvisited,
+// 1=on-stack (a back-edge to it is a cycle), 2=done. Appends i after its deps. Deps
+// are recomputed here (rather than stored in a nested array, which self-host's array
+// codegen does not handle for `Array[Array[U64]]`).
+fn globalDfs(c: inout Comp, i: U64, state: inout Array[U64], order: inout Array[U64]) {
+    if state[i] == 2U64 {
+        return
+    }
+    if state[i] == 1U64 {
+        compileErrorAt(line: lineOf(c: inout c, offset: c.globals[i].nameStart), msg: "module-level variables form an initialization cycle (a global's initializer depends on itself transitively — spec/15)")
+        return
+    }
+    state[i] = 1U64
+    mut val d: Array[U64] = []
+    collectGlobalDeps(c: inout c, id: globalInitExpr(c: inout c, g: c.globals[i]), into: inout d)
+    mut val k: U64 = 0
+    while k < d.count {
+        globalDfs(c: inout c, i: d[k], state: inout state, order: inout order)
+        k += 1
+    }
+    state[i] = 2U64
+    order.append(value: i)
+}
+
+fn orderGlobalsByDependency(c: inout Comp) {
+    val n: U64 = c.globals.count
+    if n <= 1U64 {
+        return
+    }
+    mut val state: Array[U64] = []
+    mut val j: U64 = 0
+    while j < n {
+        state.append(value: 0U64)
+        j += 1
+    }
+    mut val order: Array[U64] = []
+    mut val s: U64 = 0
+    while s < n {
+        globalDfs(c: inout c, i: s, state: inout state, order: inout order)
+        s += 1
+    }
+    // rebuild c.globals in dependency order (deps before dependents).
+    mut val reordered: Array[Global] = []
+    mut val o: U64 = 0
+    while o < order.count {
+        reordered.append(value: c.globals[order[o]])
+        o += 1
+    }
+    c.globals = reordered
+}
+
+// Post-load rewrite (spec/05): a named factory call `<Type.name attrs/>` parses as a
+// Make node (isEnum, variant=name). When `name` is NOT an enum variant but a named
+// factory (an assoc fn on Type), rewrite it to the assoc-fn call `Type.name(labels:
+// values)` so it rides the existing assoc-fn machinery. Enum-variant constructions
+// (`<Optional.Some v=…/>`) are untouched (Some has no assoc fn).
+fn rewriteFactoryConstruction(c: inout Comp) {
+    val fromN: Bind = internBytes(c: inout c, s: "from")
+    mut val i: U64 = 0
+    while i < c.exprs.count {
+        match c.exprs[i] {
+            Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
+                if isEnum {
+                    if typeHasAssocFn(c: inout c, typeStart: typeStart, typeLen: typeLen, nameStart: variantStart, nameLen: variantLen) {
+                        val recv: U64 = c.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
+                        mut val args: Array[Arg] = []
+                        mut val fi: U64 = 0
+                        while fi < fields.count {
+                            args.append(value: <Arg expr=fields[fi].value isInout=false labelStart=fields[fi].nameStart labelLen=fields[fi].nameLen hasLabel=true />)
+                            fi += 1
+                        }
+                        c.exprs[i] = <Expr.Method recv=recv nameStart=variantStart nameLen=variantLen args=args />
+                    }
+                } else {
+                    // `<T from=x/>` From form (spec/12): a single `from=…` field routes
+                    // to T's `from` factory. Scoped to the `from` label so memberwise
+                    // constructions are untouched.
+                    if fields.count == 1U64 {
+                        if spansEqual(c: inout c, aStart: fields[0].nameStart, aLen: fields[0].nameLen, bStart: fromN.nameStart, bLen: fromN.nameLen) {
+                            if typeHasAssocFn(c: inout c, typeStart: typeStart, typeLen: typeLen, nameStart: fromN.nameStart, nameLen: fromN.nameLen) {
+                                val recv: U64 = c.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
+                                mut val fargs: Array[Arg] = []
+                                fargs.append(value: <Arg expr=fields[0].value isInout=false labelStart=fromN.nameStart labelLen=fromN.nameLen hasLabel=true />)
+                                c.exprs[i] = <Expr.Method recv=recv nameStart=fromN.nameStart nameLen=fromN.nameLen args=fargs />
+                            }
+                        }
+                    }
+                }
+            }
+            Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
+                // `x as T` ⟺ `<T from=x/>` (spec/12): when `T` owns a `from` factory
+                // (an anonymous `factory(from: …)`), route the cast to it. Numeric casts
+                // are untouched (primitives have no `from` factory).
+                if typeHasAssocFn(c: inout c, typeStart: tyStart, typeLen: tyLen, nameStart: fromN.nameStart, nameLen: fromN.nameLen) {
+                    val recv: U64 = c.pushExpr(e: <Expr.Ident start=tyStart len=tyLen />)
+                    mut val cargs: Array[Arg] = []
+                    cargs.append(value: <Arg expr=operand isInout=false labelStart=fromN.nameStart labelLen=fromN.nameLen hasLabel=true />)
+                    c.exprs[i] = <Expr.Method recv=recv nameStart=fromN.nameStart nameLen=fromN.nameLen args=cargs />
+                }
+            }
+            _ => {}
+        }
+        i += 1
+    }
+}
+
+// Post-load rewrite (spec/15): a `with { real as alias }` import lets the using
+// module call `real` under the local name `alias`. Rewrite each free-function call
+// `alias(args)` whose module imported that alias into a call to `real`, so it rides
+// the normal name resolution and import-visibility checks. (Function-call uses only;
+// type/value aliases are additive.)
+fn rewriteImportAliases(c: inout Comp) {
+    if c.importAliases.count == 0U64 {
+        return
+    }
+    mut val i: U64 = 0
+    while i < c.exprs.count {
+        match c.exprs[i] {
+            Expr.Call(val nameStart, val nameLen, val args) => {
+                mut val ai: U64 = 0
+                while ai < c.importAliases.count {
+                    val al: Bind = c.importAliases[ai]
+                    if spansEqual(c: inout c, aStart: al.nameStart, aLen: al.nameLen, bStart: nameStart, bLen: nameLen) {
+                        if moduleOf(c: inout c, offset: al.nameStart) == moduleOf(c: inout c, offset: nameStart) {
+                            c.exprs[i] = <Expr.Call nameStart=al.fieldStart nameLen=al.fieldLen args=args />
+                            ai = c.importAliases.count
+                        } else {
+                            ai += 1
+                        }
+                    } else {
+                        ai += 1
+                    }
+                }
+            }
+            _ => {}
+        }
+        i += 1
+    }
+}
+
+// Resolve a module-local import alias to the real imported name (spec/15:
+// `import M with { Real as Alias }`). A use of `Alias` in a TYPE position (annotation,
+// construction head, assoc-fn receiver) resolves to `Real` for downstream struct/type
+// lookup — the call-expression alias rewrite (`rewriteImportAliases`) handles value
+// uses, this handles type uses. No-op when there are no aliases or the span does not
+// name a local alias (returns the input span unchanged). The alias is module-scoped:
+// only a use in the same module as the `with` clause resolves.
+fn aliasReal(c: inout Comp, start: U64, len: U64) -> Bind {
+    if c.importAliases.count == 0U64 {
+        return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
+    }
+    mut val ai: U64 = 0
+    while ai < c.importAliases.count {
+        val al: Bind = c.importAliases[ai]
+        if spansEqual(c: inout c, aStart: al.nameStart, aLen: al.nameLen, bStart: start, bLen: len) {
+            if moduleOf(c: inout c, offset: al.nameStart) == moduleOf(c: inout c, offset: start) {
+                return <Bind nameStart=al.fieldStart nameLen=al.fieldLen fieldStart=al.fieldStart fieldLen=al.fieldLen />
+            }
+        }
+        ai += 1
+    }
+    return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
+}
+
+// If `recv` is a bare identifier naming a type (not a local value), return that
+// type's name span as an assoc-fn receiver; else signal "not an assoc call" by
+// returning len 0. Used by call codegen/type recovery to route `Type.name(args)`.
+fn assocRecvName(c: inout Comp, recv: U64) -> Bind {
+    match c.exprs[recv] {
+        Expr.Ident(val start, val len) => {
+            if isSelfRef(c: inout c, start: start, len: len) {
+                return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+            }
+            if localIndexByName(c: inout c, start: start, len: len) < c.locals.count {
+                return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+            }
+            if isTypeName(c: inout c, start: start, len: len) {
+                // resolve an import alias (`with { Real as Alias }`) so `Alias.fn(args)`
+                // dispatches to the assoc fn declared on the real type (spec/15).
+                return aliasReal(c: inout c, start: start, len: len)
+            }
+            return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+        }
+        _ => { return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 /> }
+    }
+}
+

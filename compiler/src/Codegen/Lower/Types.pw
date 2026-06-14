@@ -1,0 +1,531 @@
+// Part of the lowering pass (root: _.pw): type lowering, record-struct
+// synthesis, and argument / field / dict-literal lowering.
+
+// Byte length of a span.
+fn spanLen(s: Span) -> U64 {
+    return s.end - s.start
+}
+
+// Register an Array element type name for later monomorphization (deduped by the
+// element name span, which is mangled for compound elements). fieldStart carries
+// the element's structured ref so genCElem / the runtime recover its C type and
+// ARC behaviour (0 = a simple named element — use the name path). Driven by
+// lowerType when it lowers an `Array[E]`.
+fn recordArrayElem(c: inout Comp, ty: PType) {
+    if ty.isArray {
+        mut val i: U64 = 0
+        while i < c.arrayElems.count {
+            val e: Bind = c.arrayElems[i]
+            if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: ty.start, bLen: ty.len) {
+                return
+            }
+            i += 1
+        }
+        mut val elemRef: U64 = 0
+        if ty.ref < c.types.count {
+            val at: TypeRef = c.types[ty.ref]
+            if at.args.count > 0 {
+                elemRef = at.args[0]
+            }
+        }
+        // a nested array element (`Array[Array[I32]]`) needs the inner
+        // `PlewArray_<inner>` registered (and emitted) first.
+        ensureArrayElemDeps(c: inout c, elemRef: elemRef)
+        c.arrayElems.append(<Bind nameStart=ty.start nameLen=ty.len fieldStart=elemRef fieldLen=0 />)
+    }
+}
+
+// Lower a type expression, reproducing parseTypeTok's arena seeding (head name +
+// recursively-lowered args, Array element span / compound mangling). Records the
+// array element for monomorphization. (Function types `fn(...)->R` are not modeled
+// by the shared TypeAst yet — they appear only in signatures, not bodies.)
+// A canonical key string for a lowered field type (for the structural record name):
+// the head name plus, for a generic instance, its argument head names — so
+// `(x: Optional[I64])` and `(x: Optional[String])` get distinct record types.
+fn recordTypeKey(c: inout Comp, pty: PType) -> Array[U8] {
+    mut val out: Array[U8] = []
+    mut val i: U64 = 0
+    while i < pty.len {
+        out.append(value: c.bytes[pty.start + i])
+        i += 1
+    }
+    if pty.ref < c.types.count {
+        val tr: TypeRef = c.types[pty.ref]
+        if tr.args.count > 0U64 {
+            appendBytes(into: inout out, from: "[".bytes)
+            mut val a: U64 = 0
+            while a < tr.args.count {
+                if a > 0U64 {
+                    appendBytes(into: inout out, from: ",".bytes)
+                }
+                val ar: TypeRef = c.types[tr.args[a]]
+                mut val k: U64 = 0
+                while k < ar.nameLen {
+                    out.append(value: c.bytes[ar.nameStart + k])
+                    k += 1
+                }
+                a += 1
+            }
+            appendBytes(into: inout out, from: "]".bytes)
+        }
+    }
+    return out
+}
+
+// Whether string `a` sorts after string `b` (byte-lexicographic) — for ordering a
+// record's fields by name into a canonical layout.
+fn stringGt(a: String, b: String) -> Bool {
+    mut val i: U64 = 0
+    while i < a.bytes.count {
+        if i >= b.bytes.count {
+            return true
+        }
+        if a.bytes[i] > b.bytes[i] {
+            return true
+        }
+        if a.bytes[i] < b.bytes[i] {
+            return false
+        }
+        i += 1
+    }
+    return false
+}
+
+// Register (or find) the synthetic struct for an anonymous record type with the given
+// field names and lowered field types (spec/02). The struct is keyed by a canonical
+// name built from the fields sorted by name, so two records with the same field
+// set are the same type (structural identity). Returns the struct's name Bind.
+fn ensureRecordStruct(c: inout Comp, fieldNames: Array[String], fieldTys: Array[PType]) -> Bind {
+    // sort field indices by name (insertion sort — field counts are tiny).
+    mut val order: Array[U64] = []
+    mut val i: U64 = 0
+    while i < fieldNames.count {
+        order.append(value: i)
+        i += 1
+    }
+    mut val a: U64 = 0
+    while a < order.count {
+        mut val b: U64 = a + 1U64
+        while b < order.count {
+            if stringGt(a: fieldNames[order[a]], b: fieldNames[order[b]]) {
+                val tmp: U64 = order[a]
+                order[a] = order[b]
+                order[b] = tmp
+            }
+            b += 1
+        }
+        a += 1
+    }
+    // canonical name `(n1:key1,n2:key2,...)` over the sorted fields.
+    mut val cn: Array[U8] = []
+    appendBytes(into: inout cn, from: "(".bytes)
+    mut val j: U64 = 0
+    while j < order.count {
+        if j > 0U64 {
+            appendBytes(into: inout cn, from: ",".bytes)
+        }
+        appendBytes(into: inout cn, from: fieldNames[order[j]].bytes)
+        appendBytes(into: inout cn, from: ":".bytes)
+        appendBytes(into: inout cn, from: recordTypeKey(c: inout c, pty: fieldTys[order[j]]))
+        j += 1
+    }
+    appendBytes(into: inout cn, from: ")".bytes)
+    val nm: Bind = internBytes(c: inout c, s: stringFromBytesUnchecked(b: cn))
+    val nid: U64 = intern(c: inout c, start: nm.nameStart, len: nm.nameLen)
+    // already registered?
+    mut val si: U64 = 0
+    while si < c.structs.count {
+        if c.structs[si].nameId == nid {
+            return nm
+        }
+        si += 1
+    }
+    // build the StructDef with fields in canonical (sorted) order.
+    mut val fields: Array[FieldDef] = []
+    mut val f: U64 = 0
+    while f < order.count {
+        val fn2: Bind = internBytes(c: inout c, s: fieldNames[order[f]])
+        val fty: PType = fieldTys[order[f]]
+        fields.append(value: <FieldDef nameStart=fn2.nameStart nameLen=fn2.nameLen nameId=intern(c: inout c, start: fn2.nameStart, len: fn2.nameLen) tyStart=fty.start tyLen=fty.len tyNameId=intern(c: inout c, start: fty.start, len: fty.len) tyIsArray=fty.isArray ty=fty.ref isMut=false hasDefault=false defaultVal=0 vis=2 />)
+        f += 1
+    }
+    val noTP: Array[Bind] = []
+    c.structs.append(value: <StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nid typeParams=noTP fields=fields isUnique=false isExtern=false />)
+    return nm
+}
+
+fn lowerType(c: inout Comp, t: TypeAst) -> PType {
+    // a labelled anonymous record type `(x: I32, y: I32)` (spec/02): lower to its
+    // synthetic structural struct and return a PType naming it.
+    if t.isRecord {
+        mut val fieldTys: Array[PType] = []
+        mut val fi: U64 = 0
+        while fi < t.args.count {
+            fieldTys.append(value: lowerType(c: inout c, t: t.args[fi]))
+            fi += 1
+        }
+        val rnm: Bind = ensureRecordStruct(c: inout c, fieldNames: t.argLabels, fieldTys: fieldTys)
+        val rref: U64 = c.pushType(t: <TypeRef nameStart=rnm.nameStart nameLen=rnm.nameLen args=[] />)
+        return <PType start=rnm.nameStart len=rnm.nameLen isArray=false ref=rref />
+    }
+    val nm: Bind = internBytes(c: inout c, s: t.name)
+    mut val args: Array[U64] = []
+    mut val argPtys: Array[PType] = []
+    mut val i: U64 = 0
+    while i < t.args.count {
+        val ap: PType = lowerType(c: inout c, t: t.args[i])
+        argPtys.append(ap)
+        args.append(ap.ref)
+        i += 1
+    }
+    mut val viewExtId: U64 = 0
+    if t.extView.bytes.count > 0 {
+        val evN: Bind = internBytes(c: inout c, s: t.extView)
+        viewExtId = intern(c: inout c, start: evN.nameStart, len: evN.nameLen)
+    }
+    // intern any named binding labels (`Item`/`Output` in `any P[Item=I32]`) parallel
+    // to args; 0 for a positional argument.
+    mut val argLabels: Array[U64] = []
+    mut val li: U64 = 0
+    while li < t.argLabels.count {
+        if t.argLabels[li].bytes.count > 0 {
+            val lblN: Bind = internBytes(c: inout c, s: t.argLabels[li])
+            argLabels.append(intern(c: inout c, start: lblN.nameStart, len: lblN.nameLen))
+        } else {
+            argLabels.append(0U64)
+        }
+        li += 1
+    }
+    val ref: U64 = c.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId isAny=t.isAny argLabels=argLabels />)
+    mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
+    if t.args.count > 0 {
+        if rangeEquals(bytes: c.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {
+            if isCompoundType(c: inout c, ref: args[0]) {
+                val mn: Bind = appendMangleSpan(c: inout c, ref: args[0])
+                result = <PType start=mn.nameStart len=mn.nameLen isArray=true ref=ref />
+            } else {
+                result = <PType start=argPtys[0].start len=argPtys[0].len isArray=true ref=ref />
+            }
+            recordArrayElem(c: inout c, ty: result)
+        }
+    }
+    return result
+}
+
+// Lower a call/construction argument list.
+// The declared TypeRef of the parameter labelled `argLabel` of the free function
+// `fnName`, or 0 when it can't be resolved unambiguously (no such function, an
+// overloaded / generic / method candidate, or no matching label). The callee is
+// declared before any body that calls it (source order), so its param types are
+// registered TypeRefs here. Used to give a call-argument literal its context type.
+fn callArgType(c: inout Comp, fnName: String, argLabel: String) -> U64 {
+    if fnName.bytes.count == 0U64 {
+        return 0U64
+    }
+    if argLabel.bytes.count == 0U64 {
+        return 0U64
+    }
+    val fnB: Bind = internBytes(c: inout c, s: fnName)
+    val fnId: U64 = intern(c: inout c, start: fnB.nameStart, len: fnB.nameLen)
+    val lb: Bind = internBytes(c: inout c, s: argLabel)
+    val lid: U64 = intern(c: inout c, start: lb.nameStart, len: lb.nameLen)
+    mut val matchCount: U64 = 0
+    mut val resultTy: U64 = 0
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        val f: Func = c.funcs[fi]
+        if f.nameId == fnId {
+            if !(f.hasRecv) {
+                if f.typeParams.count == 0U64 {
+                    matchCount += 1
+                    mut val pi: U64 = 0
+                    while pi < f.params.count {
+                        if intern(c: inout c, start: f.params[pi].nameStart, len: f.params[pi].nameLen) == lid {
+                            resultTy = f.params[pi].ty
+                        }
+                        pi += 1
+                    }
+                }
+            }
+        }
+        fi += 1
+    }
+    if matchCount == 1U64 {
+        return resultTy
+    }
+    return 0U64
+}
+
+// Like callArgType but for a METHOD call `recv.name(label: …)`: the receiver type is
+// not known at lowering, so resolve by method name + label across ALL methods. Only
+// when exactly one non-generic method is named `methodName` (so the label maps to a
+// single param type unambiguously) is the type adopted — otherwise 0 (context-free,
+// no guess). Gives a record/dict/`()` literal method-argument its context type.
+fn methodArgType(c: inout Comp, methodName: String, argLabel: String) -> U64 {
+    if methodName.bytes.count == 0U64 {
+        return 0U64
+    }
+    if argLabel.bytes.count == 0U64 {
+        return 0U64
+    }
+    val mnB: Bind = internBytes(c: inout c, s: methodName)
+    val mnId: U64 = intern(c: inout c, start: mnB.nameStart, len: mnB.nameLen)
+    val lb: Bind = internBytes(c: inout c, s: argLabel)
+    val lid: U64 = intern(c: inout c, start: lb.nameStart, len: lb.nameLen)
+    mut val matchCount: U64 = 0
+    mut val resultTy: U64 = 0
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        val f: Func = c.funcs[fi]
+        if f.hasRecv {
+            if f.nameId == mnId {
+                if f.typeParams.count == 0U64 {
+                    matchCount += 1
+                    mut val pi: U64 = 0
+                    while pi < f.params.count {
+                        if intern(c: inout c, start: f.params[pi].nameStart, len: f.params[pi].nameLen) == lid {
+                            resultTy = f.params[pi].ty
+                        }
+                        pi += 1
+                    }
+                }
+            }
+        }
+        fi += 1
+    }
+    if matchCount == 1U64 {
+        return resultTy
+    }
+    return 0U64
+}
+
+fn lowerArgs(c: inout Comp, args: Array[ArgAst], fnName: String) -> Array[Arg] {
+    mut val out: Array[Arg] = []
+    mut val i: U64 = 0
+    while i < args.count {
+        val a: ArgAst = args[i]
+        // flow the resolved parameter's type to a context-typed argument literal (a dict
+        // / record / `()` whose type is only known from the parameter). Defensive: 0
+        // falls back to context-free lowering (overloaded / generic / method calls).
+        val actx: U64 = callArgType(c: inout c, fnName: fnName, argLabel: a.label)
+        mut val e: U64 = 0
+        if actx != 0U64 {
+            e = lowerExprWithCtx(c: inout c, e: a.value, ctxRef: actx)
+        } else {
+            e = lowerExpr(c: inout c, e: a.value)
+        }
+        mut val labelStart: U64 = 0
+        mut val labelLen: U64 = 0
+        if a.hasLabel {
+            val lb: Bind = internBytes(c: inout c, s: a.label)
+            labelStart = lb.nameStart
+            labelLen = lb.nameLen
+        }
+        out.append(<Arg expr=e isInout=a.isInout labelStart=labelStart labelLen=labelLen hasLabel=a.hasLabel />)
+        i += 1
+    }
+    return out
+}
+
+// Lower a method call's arguments, flowing each resolved parameter type (via
+// methodArgType) to a context-typed argument literal. Mirrors lowerArgs but resolves
+// by method name instead of free-fn name.
+fn lowerMethodArgs(c: inout Comp, args: Array[ArgAst], methodName: String) -> Array[Arg] {
+    mut val out: Array[Arg] = []
+    mut val i: U64 = 0
+    while i < args.count {
+        val a: ArgAst = args[i]
+        val actx: U64 = methodArgType(c: inout c, methodName: methodName, argLabel: a.label)
+        mut val e: U64 = 0
+        if actx != 0U64 {
+            e = lowerExprWithCtx(c: inout c, e: a.value, ctxRef: actx)
+        } else {
+            e = lowerExpr(c: inout c, e: a.value)
+        }
+        mut val labelStart: U64 = 0
+        mut val labelLen: U64 = 0
+        if a.hasLabel {
+            val lb: Bind = internBytes(c: inout c, s: a.label)
+            labelStart = lb.nameStart
+            labelLen = lb.nameLen
+        }
+        out.append(<Arg expr=e isInout=a.isInout labelStart=labelStart labelLen=labelLen hasLabel=a.hasLabel />)
+        i += 1
+    }
+    return out
+}
+
+// The declared TypeRef of field `fieldName` on the type being constructed (a struct,
+// or an enum variant's payload), or 0 when the owner / field can't be resolved. The
+// owner type's declaration is lowered before any body that constructs it (source
+// order), so its field types are registered TypeRefs here. Used to give a
+// construction-field literal (`<Box m=[:] />`, `<Shape.Point at=(x:1,y:2) />`) its
+// context type so an otherwise un-inferable dict / record / unit literal resolves.
+fn makeFieldType(c: inout Comp, typeName: String, variant: String, isEnum: Bool, fieldName: String) -> U64 {
+    val tn: Bind = internBytes(c: inout c, s: typeName)
+    mut val tid: U64 = intern(c: inout c, start: tn.nameStart, len: tn.nameLen)
+    // a newtype inherits the underlying struct's factory/fields (spec/10): resolve the
+    // construction type name to the underlying struct so `<Brand code=255 />` finds the
+    // `code` field's type for the literal's context (Brand = Rgb).
+    mut val ntI: U64 = 0
+    while ntI < c.newtypes.count {
+        if c.newtypes[ntI].nameId == tid {
+            tid = intern(c: inout c, start: c.newtypes[ntI].underStart, len: c.newtypes[ntI].underLen)
+            ntI = c.newtypes.count
+        } else {
+            ntI += 1
+        }
+    }
+    val fn2: Bind = internBytes(c: inout c, s: fieldName)
+    val fid: U64 = intern(c: inout c, start: fn2.nameStart, len: fn2.nameLen)
+    if isEnum {
+        val vn: Bind = internBytes(c: inout c, s: variant)
+        val vid: U64 = intern(c: inout c, start: vn.nameStart, len: vn.nameLen)
+        mut val ei: U64 = 0
+        while ei < c.enums.count {
+            if c.enums[ei].nameId == tid {
+                mut val vi: U64 = 0
+                while vi < c.enums[ei].variants.count {
+                    if intern(c: inout c, start: c.enums[ei].variants[vi].nameStart, len: c.enums[ei].variants[vi].nameLen) == vid {
+                        mut val fj: U64 = 0
+                        while fj < c.enums[ei].variants[vi].fields.count {
+                            if intern(c: inout c, start: c.enums[ei].variants[vi].fields[fj].nameStart, len: c.enums[ei].variants[vi].fields[fj].nameLen) == fid {
+                                return c.enums[ei].variants[vi].fields[fj].ty
+                            }
+                            fj += 1
+                        }
+                    }
+                    vi += 1
+                }
+            }
+            ei += 1
+        }
+        return 0U64
+    }
+    mut val si: U64 = 0
+    while si < c.structs.count {
+        if c.structs[si].nameId == tid {
+            mut val fk: U64 = 0
+            while fk < c.structs[si].fields.count {
+                if intern(c: inout c, start: c.structs[si].fields[fk].nameStart, len: c.structs[si].fields[fk].nameLen) == fid {
+                    return c.structs[si].fields[fk].ty
+                }
+                fk += 1
+            }
+        }
+        si += 1
+    }
+    return 0U64
+}
+
+fn lowerMakeFields(c: inout Comp, fields: Array[MakeFieldAst], typeName: String, variant: String, isEnum: Bool) -> Array[MakeField] {
+    mut val out: Array[MakeField] = []
+    mut val i: U64 = 0
+    while i < fields.count {
+        val f: MakeFieldAst = fields[i]
+        // flow the field's declared type to its value so a context-typed literal in a
+        // construction field infers (a dict / record / `()` whose type is only known
+        // from the field). Defensive: 0 falls back to context-free lowering.
+        val fctx: U64 = makeFieldType(c: inout c, typeName: typeName, variant: variant, isEnum: isEnum, fieldName: f.name)
+        mut val v: U64 = 0
+        if fctx != 0U64 {
+            v = lowerExprWithCtx(c: inout c, e: f.value, ctxRef: fctx)
+        } else {
+            v = lowerExpr(c: inout c, e: f.value)
+        }
+        val nm: Bind = internBytes(c: inout c, s: f.name)
+        out.append(<MakeField nameStart=nm.nameStart nameLen=nm.nameLen value=v offset=f.span.start />)
+        i += 1
+    }
+    return out
+}
+
+// Build a fresh empty `<Dictionary keys=[] vals=[] hashes=[] buckets=[] count=0 />`
+// Make node typed as `ctxRef` (a `Dictionary[K, V]` TypeRef). The empty array
+// literals take their element type from the struct field at codegen, so no element
+// type is needed here.
+fn synthEmptyDict(c: inout Comp, ctxRef: U64) -> U64 {
+    val ct: TypeRef = c.types[ctxRef]
+    val kN: Bind = internBytes(c: inout c, s: "keys")
+    val vN: Bind = internBytes(c: inout c, s: "vals")
+    val hN: Bind = internBytes(c: inout c, s: "hashes")
+    val bN: Bind = internBytes(c: inout c, s: "buckets")
+    val cN: Bind = internBytes(c: inout c, s: "count")
+    val noElems: Array[U64] = []
+    val emptyKeys: U64 = c.pushExpr(e: <Expr.Array elems=noElems />)
+    val emptyVals: U64 = c.pushExpr(e: <Expr.Array elems=noElems />)
+    val emptyHashes: U64 = c.pushExpr(e: <Expr.Array elems=noElems />)
+    val emptyBuckets: U64 = c.pushExpr(e: <Expr.Array elems=noElems />)
+    val zero: U64 = c.pushExpr(e: <Expr.Int value=0 offset=0 isBool=false tyStart=0 tyLen=0 isNeg=false />)
+    mut val fields: Array[MakeField] = []
+    // offset = the interned (unloaded) name span: marks these as synthesized so the
+    // construction-visibility gate skips them (a dict's fields are module-private).
+    fields.append(<MakeField nameStart=kN.nameStart nameLen=kN.nameLen value=emptyKeys offset=kN.nameStart />)
+    fields.append(<MakeField nameStart=vN.nameStart nameLen=vN.nameLen value=emptyVals offset=vN.nameStart />)
+    fields.append(<MakeField nameStart=hN.nameStart nameLen=hN.nameLen value=emptyHashes offset=hN.nameStart />)
+    fields.append(<MakeField nameStart=bN.nameStart nameLen=bN.nameLen value=emptyBuckets offset=bN.nameStart />)
+    fields.append(<MakeField nameStart=cN.nameStart nameLen=cN.nameLen value=zero offset=cN.nameStart />)
+    return c.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fields />)
+}
+
+// Lower a dictionary literal `[k0: v0, ...]` / `[:]` (spec/02). The K/V types come
+// from the binding/return context (`ctxRef` must be a `Dictionary[K, V]` TypeRef):
+// there is no element-based inference, so the literal needs a context type (an
+// annotated `let`/`return`), just like an empty array does. Lowers to a
+// value-position block:
+//   if (1) { mut val __dl: Dictionary[K,V] = <empty>; __dl.insert(k, v); ...;
+//            give move __dl } else { give <empty> }
+// `give move __dl` transfers the freshly-built dictionary out with no deep copy —
+// the temp is marked moved so the block exit does not release it (the caller's
+// binding owns it). The else branch is dead (the cond is the constant `1`) but must
+// still yield a `Dictionary[K,V]` so the value-position block type-checks.
+fn lowerDictLit(c: inout Comp, keys: Array[ExprAst], vals: Array[ExprAst], ctxRef: U64, span: Span) -> U64 {
+    mut val ok: Bool = false
+    if ctxRef != 0 {
+        if ctxRef < c.types.count {
+            val ct: TypeRef = c.types[ctxRef]
+            if rangeEquals(bytes: c.bytes, start: ct.nameStart, len: ct.nameLen, kw: "Dictionary") {
+                if ct.args.count >= 2 {
+                    ok = true
+                }
+            }
+        }
+    }
+    if !(ok) {
+        compileErrorAt(line: lineOf(c: inout c, offset: span.start), msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)")
+        return c.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 isNeg=false />)
+    }
+    val ct: TypeRef = c.types[ctxRef]
+    val dlN: Bind = internBytes(c: inout c, s: "__dl")
+    mut val stmts: Array[U64] = []
+    val initMake: U64 = synthEmptyDict(c: inout c, ctxRef: ctxRef)
+    stmts.append(c.pushStmt(s: <Stmt.Let mutable=true nameStart=dlN.nameStart nameLen=dlN.nameLen tyStart=ct.nameStart tyLen=ct.nameLen tyIsArray=false ty=ctxRef init=initMake />))
+    val insN: Bind = internBytes(c: inout c, s: "insert")
+    val keyL: Bind = internBytes(c: inout c, s: "key")
+    val valL: Bind = internBytes(c: inout c, s: "value")
+    mut val i: U64 = 0
+    while i < keys.count {
+        val kId: U64 = lowerExpr(c: inout c, e: keys[i])
+        val vId: U64 = lowerExpr(c: inout c, e: vals[i])
+        val recv: U64 = c.pushExpr(e: <Expr.Ident start=dlN.nameStart len=dlN.nameLen />)
+        mut val args: Array[Arg] = []
+        args.append(<Arg expr=kId isInout=false labelStart=keyL.nameStart labelLen=keyL.nameLen hasLabel=true />)
+        args.append(<Arg expr=vId isInout=false labelStart=valL.nameStart labelLen=valL.nameLen hasLabel=true />)
+        val m: U64 = c.pushExpr(e: <Expr.Method recv=recv nameStart=insN.nameStart nameLen=insN.nameLen args=args />)
+        stmts.append(c.pushStmt(s: <Stmt.ExprStmt expr=m />))
+        i += 1
+    }
+    val giveRecv: U64 = c.pushExpr(e: <Expr.Ident start=dlN.nameStart len=dlN.nameLen />)
+    val mv: U64 = c.pushExpr(e: <Expr.Move operand=giveRecv isBorrow=false />)
+    stmts.append(c.pushStmt(s: <Stmt.Give value=mv />))
+    val thenBlk: U64 = c.blocks.count
+    c.blocks.append(<Block stmts=stmts />)
+    mut val elseStmts: Array[U64] = []
+    val elseDict: U64 = synthEmptyDict(c: inout c, ctxRef: ctxRef)
+    elseStmts.append(c.pushStmt(s: <Stmt.Give value=elseDict />))
+    val elseBlk: U64 = c.blocks.count
+    c.blocks.append(<Block stmts=elseStmts />)
+    val cond: U64 = c.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />)
+    return c.pushExpr(e: <Expr.IfExpr cond=cond thenBlk=thenBlk elseBlk=elseBlk />)
+}
+

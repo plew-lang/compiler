@@ -1,0 +1,119 @@
+// Part of compile-time checks (root: _.pw): import and use-site visibility
+// constraints.
+
+// Is `(nameStart,nameLen)` the name of an `export`ed declaration (spec/15)? Matched
+// by text against the recorded export name spans (across all loaded modules).
+fn isExportedName(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.exports.count {
+        val e: Bind = c.exports[i]
+        if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: nameStart, bLen: nameLen) {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Module visibility (spec/15): every name brought in by `import … with { }` must be
+// part of some loaded module's public surface (`export`). A use of a non-exported
+// name — or an import from the wrong module (whose own module then isn't loaded, so
+// the name is absent from the exported set) — is a compile error.
+fn checkImports(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.imports.count {
+        val im: Bind = c.imports[i]
+        if !(isExportedName(c: inout c, nameStart: im.nameStart, nameLen: im.nameLen)) {
+            compileErrorAt(line: lineOf(c: inout c, offset: im.nameStart), msg: "imported name is not exported (mark it `export` in its module, or import it from the right module)")
+        }
+        i += 1
+    }
+}
+
+// Was the name `(nameStart,nameLen)` imported into module `mod` via `import … with`?
+fn isImportedInto(c: inout Comp, mod: U64, nameStart: U64, nameLen: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.imports.count {
+        val im: Bind = c.imports[i]
+        if im.fieldStart == mod {
+            if spansEqual(c: inout c, aStart: im.nameStart, aLen: im.nameLen, bStart: nameStart, bLen: nameLen) {
+                return true
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// Use-site module visibility (spec/15): a free-function call whose callee is defined
+// in another module is valid only if that name was imported into the using module
+// (`import … with { }`) — relying on the flat namespace is not allowed. Same-module
+// calls (the whole compiler is one module = its `part` tree) and unresolved names
+// (locals/closures/builtins not in c.funcs) are left alone. Types stay ambient, so
+// only function calls are gated here; member/method visibility is a separate axis.
+fn checkUseVisibility(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.exprs.count {
+        match c.exprs[i] {
+            Expr.Call(val nameStart, val nameLen, val args) => {
+                val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+                if fi < c.funcs.count {
+                    val useMod: U64 = moduleOf(c: inout c, offset: nameStart)
+                    val defMod: U64 = moduleOf(c: inout c, offset: c.funcs[fi].nameStart)
+                    if useMod != defMod {
+                        if !(isImportedInto(c: inout c, mod: useMod, nameStart: nameStart, nameLen: nameLen)) {
+                            compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "use of a function from another module without importing it (add `import … with { … }`)")
+                        }
+                    }
+                } else {
+                    // an `@Std` intrinsic the LLVM backend intercepts by raw name
+                    // (print / write / exit / …) is NOT ambient (spec/15: only lang
+                    // items are): it must be imported. The backend would otherwise
+                    // emit it regardless of import (and the front-end leaves an
+                    // unresolved call alone), so gate it here. OK if the using module
+                    // imported it or defines its own same-named function.
+                    if isAmbientInterceptedName(c: inout c, start: nameStart, len: nameLen) {
+                        val useMod2: U64 = moduleOf(c: inout c, offset: nameStart)
+                        if !(isImportedInto(c: inout c, mod: useMod2, nameStart: nameStart, nameLen: nameLen)) {
+                            compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "this @Std function is not ambient — import it (e.g. `import @Std/Io with { print }`); only lang items are usable without import (spec/15)")
+                        }
+                    }
+                }
+                i += 1
+            }
+            _ => { i += 1 }
+        }
+    }
+}
+
+// Is (start,len) the name of an `@Std` function the LLVM backend intercepts by raw
+// name (so it would emit without an import)? These need a real import gate (spec/15):
+// the user-facing I/O / process / async intrinsics. (The RawBuffer/String/FFI floor
+// intrinsics are resolved through their loaded `extern` decls, so they fall under
+// the ordinary import check above and are not listed here.)
+fn isAmbientInterceptedName(c: inout Comp, start: U64, len: U64) -> Bool {
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "print") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "eprint") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "write") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "writeByte") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "readStdin") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "readFile") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "readFileBytes") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "fileExists") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "sleep") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "exit") { return true }
+    // `assert` is a @Std/Core function (not a lang item): now that Core is ambient
+    // (force-loaded), it resolves, but spec keeps it import-required, so gate it here.
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "assert") { return true }
+    return false
+}
+
+// Missing-return check (spec/11, loud-failure principle): Plew does not implicitly
+// return a function's tail expression, so a non-`()` function whose body can reach
+// the end without `return`/`panic`/divergence would silently return uninitialized
+// memory. Reject that loudly. A block "always diverges" if any of its statements
+// does (control then never falls through to the block's end); a statement diverges
+// if it is `return`/`panic`, an `if`/`else` whose both branches diverge, an
+// (exhaustive) `match` whose every arm diverges, or an unconditional infinite loop
+// (`while true { … }` with no `break` that exits it).
+

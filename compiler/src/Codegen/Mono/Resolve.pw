@@ -1,0 +1,247 @@
+// Part of monomorphization (root: _.pw): type-ref equality, name mangling,
+// and ground-type resolution.
+
+// Is `ref` a concrete generic *enum* instantiation specifically?
+fn isGenericEnumInst(c: inout Comp, ref: U64) -> Bool {
+    if ref >= c.types.count {
+        return false
+    }
+    val t: TypeRef = c.types[ref]
+    if t.args.count == 0 {
+        return false
+    }
+    return genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen) < c.enums.count
+}
+
+// Structural equality of two TypeRefs (head span + args, recursively).
+fn typeRefEq(c: inout Comp, a: U64, b: U64) -> Bool {
+    if a == b {
+        return true
+    }
+    val ta: TypeRef = c.types[a]
+    val tb: TypeRef = c.types[b]
+    if ta.nameId != tb.nameId {
+        return false
+    }
+    // a `#`-view is part of type identity (spec/09): `S`, `S#P`, `S#Q` are distinct
+    // types, so two generic instantiations differing only by the view argument are
+    // distinct instances (`useR[S#P]` vs `useR[S#Q]` get separate bodies/dispatch).
+    if ta.viewExtId != tb.viewExtId {
+        return false
+    }
+    if ta.args.count != tb.args.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < ta.args.count {
+        if !(typeRefEq(c: inout c, a: ta.args[i], b: tb.args[i])) {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// Append the mangled name of `ref` (the same text emitMangle would write) to the
+// end of c.bytes, so a compound array element type (`Ref[I32]`, `Array[I32]`,
+// `Box[I32]`) gets a unique source-span name (`Ref_I32`) the existing name-span
+// machinery can use. The bytes trail all real source, so they never shift a
+// diagnostic line; the lexer has already run, so appending is safe.
+fn appendMangle(c: inout Comp, ref: U64) {
+    val t: TypeRef = c.types[resolveTy(c: inout c, tyRef: ref)]
+    mut val j: U64 = 0
+    while j < t.nameLen {
+        c.bytes.append(c.bytes[t.nameStart + j])
+        j += 1
+    }
+    mut val i: U64 = 0
+    while i < t.args.count {
+        c.bytes.append(95)
+        appendMangle(c: inout c, ref: t.args[i])
+        i += 1
+    }
+}
+
+// A compound type's mangled name as a (start,len) span, with the element ref
+// stashed in fieldStart so genCElem / the array runtime can recover the C type
+// and ARC behaviour. Used for compound Array element types.
+fn appendMangleSpan(c: inout Comp, ref: U64) -> Bind {
+    val start: U64 = c.bytes.count
+    appendMangle(c: inout c, ref: ref)
+    val n: U64 = c.bytes.count
+    return <Bind nameStart=start nameLen=(n - start) fieldStart=ref fieldLen=0 />
+}
+
+// Do two type refs have the same mangled name (same head + same args,
+// recursively)? Type refs are not interned — the same type parsed twice gets
+// distinct indices — so identity must compare structure, not the index.
+fn sameMangle(c: inout Comp, refA: U64, refB: U64) -> Bool {
+    val ra: U64 = resolveTy(c: inout c, tyRef: refA)
+    val rb: U64 = resolveTy(c: inout c, tyRef: refB)
+    if ra >= c.types.count {
+        return false
+    }
+    if rb >= c.types.count {
+        return false
+    }
+    val a: TypeRef = c.types[ra]
+    val b: TypeRef = c.types[rb]
+    if a.nameId != b.nameId {
+        return false
+    }
+    if a.args.count != b.args.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.args.count {
+        if !(sameMangle(c: inout c, refA: a.args[i], refB: b.args[i])) {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// Is `ref` a compound type (a generic application / Ref / Array — has type
+// arguments), as opposed to a simple named type whose head name is enough?
+fn isCompoundType(c: inout Comp, ref: U64) -> Bool {
+    val r: U64 = resolveTy(c: inout c, tyRef: ref)
+    if r >= c.types.count {
+        return false
+    }
+    return c.types[r].args.count > 0
+}
+
+// Resolve a TypeRef under the active body-substitution env: a bare type
+// parameter (`T`) maps to its concrete argument; everything else is unchanged.
+// (Nested substitution like `Optional[T]` is deferred.)
+fn resolveTy(c: inout Comp, tyRef: U64) -> U64 {
+    if tyRef >= c.types.count {
+        return tyRef
+    }
+    val t: TypeRef = c.types[tyRef]
+    if t.args.count == 0 {
+        // `Self`/`Item` as types (provided methods on a trait): resolve to the
+        // receiver type and its associated `Item` binding (set per method).
+        if c.curSelfRef != 0 {
+            if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
+                return c.curSelfRef
+            }
+        }
+        if c.curItemRef != 0 {
+            if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") {
+                return c.curItemRef
+            }
+        }
+        // last-match (iterate high → low): a method-own type param is appended to the
+        // env AFTER the receiver's own params (providedCopyTypeParams), so when names
+        // collide (`fold[B]` copied onto `MapIter[I, F, B]` — both named `B`) the inner
+        // method-own `B` (the accumulator) must shadow the conformer's `B` (the item).
+        // With all-distinct names first-match and last-match agree, so this only changes
+        // the collision case, resolving it the way lexical shadowing requires.
+        mut val i: U64 = c.curTypeParams.count
+        while i > 0U64 {
+            i -= 1
+            val p: Bind = c.curTypeParams[i]
+            if t.nameId == p.nameId {
+                if i < c.curTypeArgs.count {
+                    return c.curTypeArgs[i]
+                }
+            }
+        }
+    }
+    return tyRef
+}
+
+// Is (start,len) the name of a generic type parameter of some struct/enum/fn?
+// (Used to tell a template type like `Box[T]` from a concrete `Box[I32]`.)
+fn isTypeParamName(c: inout Comp, start: U64, len: U64) -> Bool {
+    // a name that names a declared struct/enum is a concrete type, never a type
+    // parameter — even if some *other* generic's parameter shares the name (a user
+    // struct `B` vs `MapIter[I, F, B]`'s `B`). Concrete types win the global check;
+    // a template's own parameter is resolved by the active env before this matters.
+    val qId: U64 = intern(c: inout c, start: start, len: len)
+    mut val ni: U64 = 0
+    while ni < c.structs.count {
+        if c.structs[ni].typeParams.count == 0 {
+            if c.structs[ni].nameId == qId {
+                return false
+            }
+        }
+        ni += 1
+    }
+    mut val nj: U64 = 0
+    while nj < c.enums.count {
+        if c.enums[nj].typeParams.count == 0 {
+            if c.enums[nj].nameId == qId {
+                return false
+            }
+        }
+        nj += 1
+    }
+    mut val si: U64 = 0
+    while si < c.structs.count {
+        val tp: Array[Bind] = c.structs[si].typeParams
+        mut val k: U64 = 0
+        while k < tp.count {
+            if tp[k].nameId == qId {
+                return true
+            }
+            k += 1
+        }
+        si += 1
+    }
+    mut val ei: U64 = 0
+    while ei < c.enums.count {
+        val tp2: Array[Bind] = c.enums[ei].typeParams
+        mut val k2: U64 = 0
+        while k2 < tp2.count {
+            if tp2[k2].nameId == qId {
+                return true
+            }
+            k2 += 1
+        }
+        ei += 1
+    }
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        val tp3: Array[Bind] = c.funcs[fi].typeParams
+        mut val k3: U64 = 0
+        while k3 < tp3.count {
+            if tp3[k3].nameId == qId {
+                return true
+            }
+            k3 += 1
+        }
+        fi += 1
+    }
+    return false
+}
+
+// Is `ref` a fully-ground type (no type parameter anywhere in head or args)?
+fn tyRefIsGround(c: inout Comp, ref: U64) -> Bool {
+    if ref >= c.types.count {
+        return true
+    }
+    val t: TypeRef = c.types[ref]
+    if isTypeParamName(c: inout c, start: t.nameStart, len: t.nameLen) {
+        return false
+    }
+    // `Self` is a contextual keyword, not concrete without a method env; a flat
+    // scan (Make/Cast) reaching a provided body's `<FilterIter[Self,…]>` must not
+    // register it (the method-aware scan grounds the real instance). `Item` is NOT
+    // treated this way — it is a legal user type name; resolveTy only rewrites it
+    // when an Iterator method env is active (curItemRef set).
+    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < t.args.count {
+        if !(tyRefIsGround(c: inout c, ref: t.args[i])) {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+

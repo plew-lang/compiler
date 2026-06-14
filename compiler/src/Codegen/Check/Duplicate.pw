@@ -1,0 +1,213 @@
+// Part of compile-time checks (root: _.pw): trait-requirement and overload
+// collision detection.
+
+// Whether two parameter lists have the same label sequence (arity + labels) —
+// the "selector" minus types. Used to detect a generic/concrete overload clash.
+fn sameLabels(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
+    if a.count != b.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.count {
+        if a[i].nameId != b[i].nameId {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// Reject a generic and another overload that share the same selector (name +
+// labels) — spec/07 forbids a generic-vs-concrete (or generic-vs-generic) clash
+// even if it could otherwise resolve. Free functions only (methods overload per
+// receiver type). Synthesized members are methods/assoc fns and so skipped.
+// Whether two parameter lists have the same types in order (same arity + each
+// param's type span / array-ness equal). With same labels this means the two
+// signatures have the same selector AND types — an exact duplicate, not an
+// overload (overloads must differ in a label or a parameter type).
+fn paramTypesEqual(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
+    if a.count != b.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.count {
+        if a[i].tyIsArray != b[i].tyIsArray {
+            return false
+        }
+        if intern(c: inout c, start: a[i].tyStart, len: a[i].tyLen) != intern(c: inout c, start: b[i].tyStart, len: b[i].tyLen) {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// A trait's requirements must not contain an exact duplicate (spec/08: a
+// requirement is a method signature; two with the same name, labels, and parameter
+// types are the same selector with no way to tell them apart). Overloaded
+// requirements differing in a label or a parameter type are allowed.
+fn checkDuplicateTraitReqs(c: inout Comp) {
+    mut val ti: U64 = 0
+    while ti < c.traits.count {
+        val reqs: Array[Func] = c.traits[ti].reqs
+        mut val a: U64 = 0
+        while a < reqs.count {
+            mut val b: U64 = a + 1U64
+            while b < reqs.count {
+                if reqs[a].nameId == reqs[b].nameId {
+                    if sameLabels(c: inout c, a: reqs[a].params, b: reqs[b].params) {
+                        if paramTypesEqual(c: inout c, a: reqs[a].params, b: reqs[b].params) {
+                            compileErrorAt(line: lineOf(c: inout c, offset: reqs[b].nameStart), msg: "duplicate trait requirement: another requirement has the same name, labels, and parameter types (spec/08)")
+                        }
+                    }
+                }
+                b += 1U64
+            }
+            a += 1U64
+        }
+        ti += 1U64
+    }
+}
+
+fn checkOverloadCollisions(c: inout Comp) {
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val fi: Func = c.funcs[i]
+        if !(fi.hasRecv) {
+            if !(fi.isAssoc) {
+                mut val j: U64 = i + 1
+                while j < c.funcs.count {
+                    val fj: Func = c.funcs[j]
+                    if !(fj.hasRecv) {
+                        if !(fj.isAssoc) {
+                            if fi.nameId == fj.nameId {
+                                if sameLabels(c: inout c, a: fi.params, b: fj.params) {
+                                    if fi.typeParams.count > 0 {
+                                        compileErrorAt(line: lineOf(c: inout c, offset: fj.nameStart), msg: "a generic function shares its selector (name + labels) with another overload; spec forbids generic/concrete overload on the same selector")
+                                    } else {
+                                        if fj.typeParams.count > 0 {
+                                            compileErrorAt(line: lineOf(c: inout c, offset: fj.nameStart), msg: "a generic function shares its selector (name + labels) with another overload; spec forbids generic/concrete overload on the same selector")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    j += 1
+                }
+            }
+        }
+        i += 1
+    }
+}
+
+// Reject defining methods on a built-in type (spec/07: anonymous/inherent impl
+// only for a type your module defines; primitives/String are never user-defined,
+// so an `impl I32 { }` / `impl String { }` is always illegal). Trait additions to
+// built-ins go through `#Ext` (deferred).
+
+// Does the method/assoc named (mStart,mLen) on type (recvStart,recvLen) witness a
+// trait the type conforms to? (i.e. the type has an `impl T as Trait` and Trait
+// declares a requirement of this name.) Used to allow Core's `impl I32 as Format`
+// while still rejecting an inherent `impl I32 { fn foo }` on a primitive.
+fn methodWitnessesAConformance(c: inout Comp, recvStart: U64, recvLen: U64, mStart: U64, mLen: U64) -> Bool {
+    val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
+    val qM: U64 = intern(c: inout c, start: mStart, len: mLen)
+    mut val ci: U64 = 0
+    while ci < c.conforms.count {
+        val cf: Conform = c.conforms[ci]
+        if cf.typeId == qRecv {
+            mut val ti: U64 = 0
+            while ti < c.traits.count {
+                val tr: TraitDef = c.traits[ti]
+                if tr.nameId == cf.traitId {
+                    mut val ri: U64 = 0
+                    while ri < tr.reqs.count {
+                        if tr.reqs[ri].nameId == qM {
+                            return true
+                        }
+                        ri += 1
+                    }
+                }
+                ti += 1
+            }
+        }
+        ci += 1
+    }
+    return false
+}
+
+// Whether two methods share a selector (same name + same parameter labels in
+// order) — the spec/09 collision criterion (differing param types are overloads).
+fn sameSelector(c: inout Comp, a: Func, b: Func) -> Bool {
+    if a.nameId != b.nameId {
+        return false
+    }
+    if a.params.count != b.params.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.params.count {
+        if a.params[i].noLabel != b.params[i].noLabel {
+            return false
+        }
+        if !(a.params[i].noLabel) {
+            if a.params[i].nameId != b.params[i].nameId {
+                return false
+            }
+        }
+        i += 1
+    }
+    return true
+}
+
+// defaultExtension collisions (spec/09): a method a type put on its bare surface
+// via `defaultExtension #Ext` must not share a selector with the type's own /
+// provided / another default extension's method (both would join bare resolution
+// ambiguously). Reported at the type — loud, not a silent shadow.
+fn checkDefaultExtCollisions(c: inout Comp) {
+    mut val di: U64 = 0
+    while di < c.defaultExts.count {
+        val de: DefaultExt = c.defaultExts[di]
+        mut val fi: U64 = 0
+        while fi < c.funcs.count {
+            val f: Func = c.funcs[fi]
+            if f.hasRecv {
+                if f.recvId == de.typeId {
+                    if f.extId == de.extId {
+                        // this is a default-ext method on the type; check against
+                        // every other bare-callable method on the same type (own,
+                        // provided, or another default extension).
+                        mut val gi: U64 = 0
+                        while gi < c.funcs.count {
+                            if gi != fi {
+                                val g: Func = c.funcs[gi]
+                                if g.hasRecv {
+                                    if g.recvId == de.typeId {
+                                        mut val gBare: Bool = false
+                                        if g.extId == 0U64 {
+                                            gBare = true
+                                        } else {
+                                            if isDefaultExt(c: inout c, typeId: de.typeId, extId: g.extId) {
+                                                gBare = true
+                                            }
+                                        }
+                                        if gBare {
+                                            if sameSelector(c: inout c, a: f, b: g) {
+                                                compileErrorAt(line: lineOf(c: inout c, offset: f.nameStart), msg: "defaultExtension method collides with another bare-callable method of the same selector on this type (don't make it default, or rename — spec/09)")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            gi += 1
+                        }
+                    }
+                }
+            }
+            fi += 1
+        }
+        di += 1
+    }
+}
+

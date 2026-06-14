@@ -1,0 +1,50 @@
+// Part of name/type resolution (root: _.pw): binary / unary operator
+// output-type inference.
+
+// The result type of an arithmetic/bitwise binary: the operands share a type, so
+// return whichever side carries one (a struct/String/array result, a typed scalar,
+// else the other operand). Lets a chained `0 - big - 1` recover I32 from `big`
+// rather than from the untyped `0`.
+// The result type of a binary operator `a OP b` (spec/12). For an arithmetic/bitwise
+// operator whose left operand's type declares `type Output = X` on the matching
+// operator trait (`Output != Self`, e.g. `Point - Point -> Vector`), return X;
+// otherwise the operands' shared type.
+fn operatorOutputType(c: inout Comp, lt: TypeInfo, op: I64) -> TypeInfo {
+    if !(isBinTraitOp(op: op)) {
+        return lt
+    }
+    if lt.nameLen == 0U64 {
+        return lt
+    }
+    val trN: Bind = internBytes(c: inout c, s: binTraitName(op: op))
+    mut val i: U64 = 0
+    while i < c.assocBindings.count {
+        val ab: AssocBinding = c.assocBindings[i]
+        if ab.traitId == trN.nameId {
+            if spansEqual(c: inout c, aStart: ab.recvStart, aLen: ab.recvLen, bStart: lt.nameStart, bLen: lt.nameLen) {
+                if rangeEquals(bytes: c.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Output") {
+                    if ab.ty < c.types.count {
+                        if ab.ty != 0U64 {
+                            return typeInfoOfRef(c: inout c, ref: ab.ty)
+                        }
+                    }
+                    return typeInfoOfName(c: inout c, start: ab.tyStart, len: ab.tyLen, isArray: ab.tyIsArray)
+                }
+            }
+        }
+        i += 1
+    }
+    return lt
+}
+
+fn binResultTypeInfo(c: inout Comp, lhs: U64, rhs: U64, op: I64) -> TypeInfo {
+    mut val lt: TypeInfo = exprType(c: inout c, id: lhs)
+    if lt.kind != 0 {
+        return operatorOutputType(c: inout c, lt: lt, op: op)
+    }
+    if lt.nameLen > 0 {
+        return operatorOutputType(c: inout c, lt: lt, op: op)
+    }
+    return operatorOutputType(c: inout c, lt: exprType(c: inout c, id: rhs), op: op)
+}
+

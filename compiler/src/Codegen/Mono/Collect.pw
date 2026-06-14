@@ -1,0 +1,84 @@
+// Part of monomorphization (root: _.pw): the collection driver.
+
+fn collectFnInsts(c: inout Comp) {
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        val f: Func = c.funcs[fi]
+        // skip generic templates (their instances come from call sites) and extern
+        // fns (body == 0 is a sentinel; walking block 0 would scan an unrelated body).
+        if !(f.typeParams.count > 0 || f.isExtern) {
+            val noParams: Array[Bind] = []
+            val noArgs: Array[U64] = []
+            c.locals = []
+            seedGlobalLocals(c: inout c)
+            c.curHasRecv = f.hasRecv
+            c.curRecvStart = f.recvStart
+            c.curRecvLen = f.recvLen
+            c.curSelfInout = f.selfInout
+            c.curRecvInstRef = 0
+            c.curTypeParams = noParams
+            c.curTypeArgs = noArgs
+            mut val pi: U64 = 0
+            while pi < f.params.count {
+                val p: Param = f.params[pi]
+                addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
+                pi += 1
+            }
+            scanBlockInsts(c: inout c, blkId: f.body)
+        }
+        fi += 1
+    }
+    // generic-receiver method bodies: walk them under the receiver env so a nested
+    // generic call (`key.hash[H]` -> `String.hash[SipHasher]`) registers its instance
+    // before the transitive worklist below scans it.
+    scanGenInstMethodBodies(c: inout c)
+    // transitive instantiation: walk each generic free function instance's body
+    // with its type-parameter env active (so type-parameter-typed args resolve to
+    // concrete types), registering the instances it calls. The loop re-reads
+    // c.fnInsts.count each step, so newly appended instances are scanned too — a
+    // worklist that runs to fixpoint (a generic fn calling another generic fn).
+    mut val si: U64 = 0
+    while si < c.fnInsts.count {
+        val fin: FnInst = c.fnInsts[si]
+        val gf: Func = c.funcs[fin.fnIdx]
+        c.locals = []
+        seedGlobalLocals(c: inout c)
+        // a generic *method* instance carries a receiver: set the self env (and the
+        // receiver instantiation for a generic receiver) so `self`/`self.field`
+        // resolve while scanning its body — without this, a derived `hash[H]` that
+        // calls `self.field.hash(...)` can't type `self.field`, so the field's own
+        // (transitive) generic-method instance is never discovered. A free function
+        // has hasRecv=false, so this is a no-op for it (env stays cleared).
+        c.curHasRecv = gf.hasRecv
+        c.curRecvStart = gf.recvStart
+        c.curRecvLen = gf.recvLen
+        c.curSelfInout = gf.selfInout
+        c.curRecvInstRef = fin.recvInstRef
+        if gf.hasRecv {
+            setSelfItemEnv(c: inout c, recvStart: gf.recvStart, recvLen: gf.recvLen, recvInstRef: fin.recvInstRef)
+        }
+        c.curTypeParams = gf.typeParams
+        c.curTypeArgs = fin.args
+        mut val gpi: U64 = 0
+        while gpi < gf.params.count {
+            val gp: Param = gf.params[gpi]
+            addLocal(c: inout c, nameStart: gp.nameStart, nameLen: gp.nameLen, tyStart: gp.tyStart, tyLen: gp.tyLen, isArray: gp.tyIsArray, ty: gp.ty, isInout: gp.isInout, isMut: false, owned: false)
+            gpi += 1
+        }
+        scanBlockInsts(c: inout c, blkId: gf.body)
+        if gf.hasRecv {
+            clearSelfItemEnv(c: inout c)
+        }
+        si += 1
+    }
+    val noP: Array[Bind] = []
+    val noA: Array[U64] = []
+    c.locals = []
+    c.curHasRecv = false
+    c.curTypeParams = noP
+    c.curTypeArgs = noA
+    c.curInClosure = false
+    c.curClosureId = 0
+    c.curCaptureMark = 0
+}
+
