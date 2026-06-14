@@ -1,0 +1,18 @@
+// Cross-module shared-mutable state — module A: an exported struct with pub-mut
+// fields + pub factory, a nested-struct case, and a pub mutating method. Guards
+// that a DIFFERENT module can mutate these across an `inout` boundary (the path
+// the compiler's own module-split layout depends on).
+export struct Counter {
+    pub mut val n: I64
+}
+pub impl Counter {
+    factory
+    inout fn inc() {
+        self.n += 1
+    }
+}
+
+export struct Box {
+    pub mut val inner: Counter
+}
+pub impl Box { factory }

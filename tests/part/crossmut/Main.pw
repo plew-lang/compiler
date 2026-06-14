@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+import ./State with { Counter, Box }
+import ./Bump with { bump, bumpNested }
+
+fn main() {
+    // (1) pub field cross-module `inout` mutation
+    mut val c: Counter = <Counter n=10I64 />
+    bump(counter: inout c)
+    print(c.n)            // 11
+
+    // (3) pub mutating method called cross-module
+    c.inc()
+    print(c.n)            // 12
+
+    // (2) nested child-struct field mutation across the module boundary
+    mut val b: Box = <Box inner=<Counter n=100I64 /> />
+    bumpNested(box: inout b)
+    print(b.inner.n)      // 101
+}

@@ -1,0 +1,11 @@
+// Cross-module shared-mutable state — module B: takes module A's struct by
+// `inout` and mutates it in place (pub field, and a nested child field).
+import ./State with { Counter, Box }
+
+export fn bump(counter: inout Counter) {
+    counter.n += 1
+}
+
+export fn bumpNested(box: inout Box) {
+    box.inner.n += 1
+}
