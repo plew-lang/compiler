@@ -116,20 +116,39 @@ fn inferLetType(c: inout Comp, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U6
     return <LetEff start=effStart len=effLen arr=effArr ty=effTy />
 }
 
+// Scoped name resolution (spec/15): is the declaration named (candStart,candLen),
+// defined in some loaded module, visible from the use-site module `useMod`? A name is
+// in a module's scope iff it is declared in that same module, or imported into it from
+// a module that exports it. This single predicate is what makes resolution *scoped*:
+// instead of scanning the whole arena globally and then second-guessing with a
+// post-hoc import gate, lookups consider only in-scope candidates. (Lang-item types
+// are handled separately at type sites via `isLangItemTypeName` — they are always
+// ambient; this predicate covers user/std declarations.)
+fn nameVisibleFrom(c: inout Comp, useMod: U64, candStart: U64, candLen: U64) -> Bool {
+    if moduleOf(c: inout c, offset: candStart) == useMod {
+        return true
+    }
+    if isImportedInto(c: inout c, mod: useMod, nameStart: candStart, nameLen: candLen) {
+        if isExportedName(c: inout c, nameStart: candStart, nameLen: candLen) {
+            return true
+        }
+    }
+    return false
+}
+
 // Resolve a free-function call to its overload. Candidates share the name; among
 // them the one whose selector (labels + arg types) matches the call is chosen.
 // `args` carries the call's labels/types. Returns the func index, or
 // c.arena.funcs.count (a U64 sentinel, no signed index) if none matches.
 fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     // Among candidates whose labels match, prefer the one whose parameter types
-    // match the argument types (type-based overload). Fall back to the first
-    // label match when none type-matches (or there is a single candidate) — so a
-    // unique-name call resolves exactly as before. A free fn defined in the SAME
-    // module as the call wins over a same-named one in another module (spec/15:
-    // free-fn resolution is same-module first; another module's name is reachable
-    // only when imported) — without this, a private free fn in another loaded
-    // module could shadow the caller's own and trigger a spurious "use without
-    // importing" reject (and the wrong C symbol).
+    // match the argument types (type-based overload). Fall back to the first label
+    // match when none type-matches (or there is a single candidate). Resolution is
+    // SCOPED (spec/15): only candidates visible from the call's module are considered
+    // (`nameVisibleFrom` = same module, or imported+exported) — an out-of-scope
+    // same-named free fn in another module is not a candidate at all. Same-module
+    // candidates are additionally preferred so a module's own private fn wins over an
+    // imported one of the same name.
     val useMod: U64 = moduleOf(c: inout c, offset: nameStart)
     mut val firstLabel: U64 = c.arena.funcs.count
     mut val typeMatch: U64 = c.arena.funcs.count
@@ -149,8 +168,11 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U6
             if f.nameId == qId {
                 if paramsLabelsOk(c: inout c, params: f.params, args: args) {
                     val same: Bool = moduleOf(c: inout c, offset: f.nameStart) == useMod
-                    if firstLabel == c.arena.funcs.count {
-                        firstLabel = i
+                    val visible: Bool = same || nameVisibleFrom(c: inout c, useMod: useMod, candStart: f.nameStart, candLen: f.nameLen)
+                    if visible {
+                        if firstLabel == c.arena.funcs.count {
+                            firstLabel = i
+                        }
                     }
                     if same {
                         if firstLabelSame == c.arena.funcs.count {
@@ -158,11 +180,13 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U6
                         }
                     }
                     if paramsTypesMatch(c: inout c, params: f.params, args: args) {
-                        if typeMatch == c.arena.funcs.count {
-                            typeMatch = i
-                        } else {
-                            if typeMatch2 == c.arena.funcs.count {
-                                typeMatch2 = i
+                        if visible {
+                            if typeMatch == c.arena.funcs.count {
+                                typeMatch = i
+                            } else {
+                                if typeMatch2 == c.arena.funcs.count {
+                                    typeMatch2 = i
+                                }
                             }
                         }
                         if same {
@@ -188,8 +212,9 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U6
     if firstLabelSame != c.arena.funcs.count {
         return firstLabelSame
     }
-    // no same-module candidate: fall back to any module (cross-module use is still
-    // gated separately by checkUseVisibility, which requires an import).
+    // no same-module candidate: fall back to an in-scope imported one (the general
+    // accumulators only recorded `nameVisibleFrom` candidates, so an out-of-scope
+    // cross-module fn is never returned — it simply doesn't resolve here).
     if typeMatch != c.arena.funcs.count {
         checkOverloadAmbiguity(c: inout c, a: typeMatch, b: typeMatch2, args: args)
         return typeMatch
@@ -211,6 +236,29 @@ fn firstFuncByName(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
         if !(f.hasRecv || f.isAssoc) {
             if f.nameId == qId {
                 return i
+            }
+        }
+        i += 1
+    }
+    return c.arena.funcs.count
+}
+
+// Index of the first free function named (start,len) VISIBLE from `useMod` (scoped
+// resolution: same module, or imported from a module that exports it), or
+// c.arena.funcs.count if none. The use-site diagnostic uses this to tell "name not in
+// scope" (→ needs an import) apart from "name in scope but the overload/labels don't
+// match" (a different error, reported by overload resolution) — without it, a labelled
+// call to an in-scope fn whose label differs would be misreported as unimported.
+fn firstVisibleFuncByName(c: inout Comp, useMod: U64, nameStart: U64, nameLen: U64) -> U64 {
+    val qId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
+    mut val i: U64 = 0
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
+        if !(f.hasRecv || f.isAssoc) {
+            if f.nameId == qId {
+                if nameVisibleFrom(c: inout c, useMod: useMod, candStart: f.nameStart, candLen: f.nameLen) {
+                    return i
+                }
             }
         }
         i += 1
