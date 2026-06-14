@@ -51,7 +51,7 @@ fn emitLlvm(c: inout Comp) {
         curAsyncState=0 asyncFieldNext=0 asyncFnIdx=[] asyncFrameTy=[] asyncResumeFn=[] asyncSlotPtrs=[] loopBreakBB=[] loopContBB=[] loopDepth=0 />
 
     // a "self" byte span (appended past the source) to bind method receivers.
-    st.selfStart = c.bytes.count
+    st.selfStart = c.arena.bytes.count
     c.appendSrc(from: "self".bytes)
     st.selfLen = 4U64
 
@@ -97,12 +97,12 @@ fn emitLlvm(c: inout Comp) {
     // pass 2: emit `main` and every plain user function's body.
     mut val fi: U64 = 0
     mut val foundMain: Bool = false
-    while fi < c.funcs.count {
+    while fi < c.arena.funcs.count {
         // gen mode (spec/16): the program is the synthesized harness main at
         // `genMainIdx`; the user's own `main` is dead (it calls macro-generated
         // functions that don't exist in this build), so it is neither the entry
         // main nor a plain fn. Treat only genMainIdx as main here.
-        mut val isMainFn: Bool = nameIsMain(c: inout c, f: c.funcs[fi])
+        mut val isMainFn: Bool = nameIsMain(c: inout c, f: c.arena.funcs[fi])
         if c.genMode {
             if isMainFn {
                 if fi != c.genMainIdx {
@@ -118,7 +118,7 @@ fn emitLlvm(c: inout Comp) {
             }
             foundMain = true
         } else {
-            if c.genMode && nameIsMain(c: inout c, f: c.funcs[fi]) {
+            if c.genMode && nameIsMain(c: inout c, f: c.arena.funcs[fi]) {
                 // the dead user main: skip entirely.
             } else {
                 if isPlainUserFn(c: inout c, st: inout st, fi: fi) {
@@ -177,7 +177,7 @@ fn emitLlvm(c: inout Comp) {
 // pushed). Globals are program-lifetime, so they are never deinit'd (no scope-exit
 // drop here — the same leak level as a top-level array/String value).
 fn genLlvmInitGlobals(c: inout Comp, st: inout LlvmCtx) {
-    if c.globals.count == 0U64 {
+    if c.arena.globals.count == 0U64 {
         return
     }
     mut val noParams: Array[LLVMTypeRef] = []
@@ -204,8 +204,8 @@ fn genLlvmInitGlobals(c: inout Comp, st: inout LlvmCtx) {
     st.locOwned = []
     st.locMoved = []
     mut val gi: U64 = 0
-    while gi < c.globals.count {
-        genLlvmStmt(c: inout c, st: inout st, id: c.globals[gi].letStmt)
+    while gi < c.arena.globals.count {
+        genLlvmStmt(c: inout c, st: inout st, id: c.arena.globals[gi].letStmt)
         val li: U64 = st.nLocals - 1U64
         val lty: LLVMTypeRef = st.locTy[li]
         val gv: LLVMValueRef = LLVMAddGlobal(st.mod, lty, cstr(s: globalSymbol(idx: gi)))
@@ -245,7 +245,7 @@ fn globalSymbol(idx: U64) -> String {
 fn seedGlobals(c: inout Comp, st: inout LlvmCtx) {
     mut val gi: U64 = 0
     while gi < st.gvalRef.count {
-        pushLocalR(st: inout st, nameStart: c.globals[gi].nameStart, nameLen: c.globals[gi].nameLen, ptr: st.gvalRef[gi], ty: st.gvalLty[gi], kind: st.gvalKind[gi], structIdx: st.gvalSidx[gi], isArr: st.gvalIsArr[gi], elemTy: st.gvalElemTy[gi], elemKind: st.gvalElemKind[gi], typeRef: st.gvalTref[gi])
+        pushLocalR(st: inout st, nameStart: c.arena.globals[gi].nameStart, nameLen: c.arena.globals[gi].nameLen, ptr: st.gvalRef[gi], ty: st.gvalLty[gi], kind: st.gvalKind[gi], structIdx: st.gvalSidx[gi], isArr: st.gvalIsArr[gi], elemTy: st.gvalElemTy[gi], elemKind: st.gvalElemKind[gi], typeRef: st.gvalTref[gi])
         setLocalElemStruct(st: inout st, esi: st.gvalElemStructIdx[gi])
         setLocalElemTypeRef(st: inout st, ref: st.gvalElemTypeRef[gi])
         gi += 1
@@ -295,7 +295,7 @@ fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     st.locOwned = []
     st.locMoved = []
     seedGlobals(c: inout c, st: inout st)
-    genLlvmBlock(c: inout c, st: inout st, id: c.funcs[fi].body)
+    genLlvmBlock(c: inout c, st: inout st, id: c.arena.funcs[fi].body)
     if !(st.terminated) {
         LLVMBuildRet(st.b, LLVMConstInt(st.i32ty, 0U64, 0I32))
     }
@@ -303,7 +303,7 @@ fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
 
 // Emit a call to `plew_init_globals` (a no-op when there are no module-level vars).
 fn callInitGlobals(c: inout Comp, st: inout LlvmCtx) {
-    if c.globals.count == 0U64 {
+    if c.arena.globals.count == 0U64 {
         return
     }
     mut val noParams: Array[LLVMTypeRef] = []

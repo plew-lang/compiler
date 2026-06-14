@@ -10,16 +10,16 @@ fn checkArmBinds(c: inout Comp, a: MatchArm) {
     }
     if a.isStruct {
         val si: U64 = structIndexByName(c: inout c, start: a.enumStart, len: a.enumLen)
-        if si < c.structs.count {
-            checkBindsInFields(c: inout c, binds: a.binds, fields: c.structs[si].fields)
+        if si < c.arena.structs.count {
+            checkBindsInFields(c: inout c, binds: a.binds, fields: c.arena.structs[si].fields)
         }
         return
     }
     val ei: U64 = enumIndexByName(c: inout c, start: a.enumStart, len: a.enumLen)
-    if ei >= c.enums.count {
+    if ei >= c.arena.enums.count {
         return
     }
-    val variants: Array[Variant] = c.enums[ei].variants
+    val variants: Array[Variant] = c.arena.enums[ei].variants
     val qVar: U64 = intern(c: inout c, start: a.variantStart, len: a.variantLen)
     mut val vi: U64 = 0
     while vi < variants.count {
@@ -35,8 +35,8 @@ fn checkArmBinds(c: inout Comp, a: MatchArm) {
 // fields. Run before codegen so a bad pattern is a clean Plew error.
 fn checkMatchBinds(c: inout Comp) {
     mut val si: U64 = 0
-    while si < c.stmts.count {
-        match c.stmts[si] {
+    while si < c.arena.stmts.count {
+        match c.arena.stmts[si] {
             Stmt.Match(val scrut, val arms) => {
                 mut val ai: U64 = 0
                 while ai < arms.count {
@@ -49,8 +49,8 @@ fn checkMatchBinds(c: inout Comp) {
         si += 1
     }
     mut val xi: U64 = 0
-    while xi < c.exprs.count {
-        match c.exprs[xi] {
+    while xi < c.arena.exprs.count {
+        match c.arena.exprs[xi] {
             Expr.MatchExpr(val scrut, val arms) => {
                 mut val ai: U64 = 0
                 while ai < arms.count {

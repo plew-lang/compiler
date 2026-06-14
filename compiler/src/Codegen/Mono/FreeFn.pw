@@ -1,12 +1,12 @@
 // Part of monomorphization (root: _.pw): generic free-function inference and
 // instance registration.
 
-// Whether c.funcs[fi] is a generic free function (no receiver, has type params).
+// Whether c.arena.funcs[fi] is a generic free function (no receiver, has type params).
 fn isGenericFreeFn(c: inout Comp, fi: U64) -> Bool {
-    if fi >= c.funcs.count {
+    if fi >= c.arena.funcs.count {
         return false
     }
-    val f: Func = c.funcs[fi]
+    val f: Func = c.arena.funcs[fi]
     if f.hasRecv {
         return false
     }
@@ -18,8 +18,8 @@ fn isGenericFreeFn(c: inout Comp, fi: U64) -> Bool {
 fn findOrAddTypeRef(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
     val q: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = 0
-    while i < c.types.count {
-        val t: TypeRef = c.types[i]
+    while i < c.arena.types.count {
+        val t: TypeRef = c.arena.types[i]
         if t.args.count == 0 {
             if t.nameId == q {
                 return i
@@ -60,20 +60,20 @@ fn closureFnTypeRef(c: inout Comp, params: Array[Param], retTy: U64) -> U64 {
 // inference from "the parameter is the type variable" to "the variable appears
 // anywhere inside the parameter's type".
 fn unifyTypeParam(c: inout Comp, paramRef: U64, argRef: U64, tpStart: U64, tpLen: U64) -> U64 {
-    if paramRef >= c.types.count {
+    if paramRef >= c.arena.types.count {
         return 0
     }
-    val pt: TypeRef = c.types[paramRef]
+    val pt: TypeRef = c.arena.types[paramRef]
     if pt.args.count == 0 {
         if pt.nameId == intern(c: inout c, start: tpStart, len: tpLen) {
             return argRef
         }
         return 0
     }
-    if argRef >= c.types.count {
+    if argRef >= c.arena.types.count {
         return 0
     }
-    val at: TypeRef = c.types[argRef]
+    val at: TypeRef = c.arena.types[argRef]
     mut val i: U64 = 0
     while i < pt.args.count {
         if i < at.args.count {
@@ -118,14 +118,14 @@ fn tyRefOfInfo(c: inout Comp, ti: TypeInfo) -> U64 {
 // type parameter from an `Array[T]` parameter), or 0. Recovered from the arg's
 // binding type, since exprType does not carry an array's element ref.
 fn argArrayElemRef(c: inout Comp, argExpr: U64) -> U64 {
-    match c.exprs[argExpr] {
+    match c.arena.exprs[argExpr] {
         Expr.Ident(val start, val len) => {
             val li: U64 = localIndexByName(c: inout c, start: start, len: len)
             if li < c.locals.count {
                 val lo: Local = c.locals[li]
-                if lo.ty < c.types.count {
-                    val lt: TypeRef = c.types[lo.ty]
-                    if rangeEquals(bytes: c.bytes, start: lt.nameStart, len: lt.nameLen, kw: "Array") {
+                if lo.ty < c.arena.types.count {
+                    val lt: TypeRef = c.arena.types[lo.ty]
+                    if rangeEquals(bytes: c.arena.bytes, start: lt.nameStart, len: lt.nameLen, kw: "Array") {
                         if lt.args.count > 0 {
                             return lt.args[0]
                         }
@@ -147,13 +147,13 @@ fn argViewRef(c: inout Comp, argExpr: U64, baseRef: U64) -> U64 {
     if baseRef == 0 {
         return 0
     }
-    match c.exprs[argExpr] {
+    match c.arena.exprs[argExpr] {
         Expr.ExtView(recv: _, val srcStart, val srcLen, val strip) => {
             if strip {
                 return baseRef
             }
             val vid: U64 = intern(c: inout c, start: srcStart, len: srcLen)
-            val bt: TypeRef = c.types[baseRef]
+            val bt: TypeRef = c.arena.types[baseRef]
             return c.pushType(t: <TypeRef nameStart=bt.nameStart nameLen=bt.nameLen args=bt.args viewExtId=vid />)
         }
         _ => {
@@ -249,15 +249,15 @@ fn fnInstExists(c: inout Comp, fnIdx: U64, args: Array[U64]) -> Bool {
 // a flat scan of the expression arena.
 fn registerCallInst(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) {
     val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
-    if fi < c.funcs.count {
-        if c.funcs[fi].isExtern {
+    if fi < c.arena.funcs.count {
+        if c.arena.funcs[fi].isExtern {
             // a generic `extern "plew-intrinsic"` (e.g. `rawAlloc[T]`, `arrayPush[T]`):
             // lowered inline at the call site, so it has no monomorphized instance —
             // never register one (else a bogus prototype/body with an unmapped return
             // type leaks out).
         } else {
         if isGenericFreeFn(c: inout c, fi: fi) {
-            val inferred: Array[U64] = inferFnArgs(c: inout c, f: c.funcs[fi], args: args)
+            val inferred: Array[U64] = inferFnArgs(c: inout c, f: c.arena.funcs[fi], args: args)
             if fnArgsAllGround(c: inout c, args: inferred) {
                 if !(fnInstExists(c: inout c, fnIdx: fi, args: inferred)) {
                     c.monoWork.fnInsts.append(<FnInst fnIdx=fi args=inferred />)
@@ -278,14 +278,14 @@ fn registerAssocInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, arg
         return
     }
     val afi: U64 = findAssoc(c: inout c, recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-    if afi >= c.funcs.count {
+    if afi >= c.arena.funcs.count {
         return
     }
-    if c.funcs[afi].isExtern {
+    if c.arena.funcs[afi].isExtern {
         return
     }
     if isGenericFreeFn(c: inout c, fi: afi) {
-        val inferred: Array[U64] = inferFnArgs(c: inout c, f: c.funcs[afi], args: args)
+        val inferred: Array[U64] = inferFnArgs(c: inout c, f: c.arena.funcs[afi], args: args)
         if fnArgsAllGround(c: inout c, args: inferred) {
             if !(fnInstExists(c: inout c, fnIdx: afi, args: inferred)) {
                 c.monoWork.fnInsts.append(<FnInst fnIdx=afi args=inferred />)
@@ -322,10 +322,10 @@ fn registerMethodInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, ar
     }
     val genericRecv: Bool = isGenericInst(c: inout c, ref: rt.ref)
     val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-    if mi == c.funcs.count {
+    if mi == c.arena.funcs.count {
         return
     }
-    val mf: Func = c.funcs[mi]
+    val mf: Func = c.arena.funcs[mi]
     if mf.typeParams.count == 0 {
         return
     }
@@ -348,7 +348,7 @@ fn registerMethodInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, ar
     // slots (not inferrable from the call), the method-own args the rest.
     mut val fullArgs: Array[U64] = []
     if genericRecv {
-        val inst: TypeRef = c.types[recvInst]
+        val inst: TypeRef = c.arena.types[recvInst]
         mut val ri: U64 = 0
         while ri < rcount {
             if ri < inst.args.count {
@@ -394,12 +394,12 @@ fn registerMethodInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, ar
 // rest are the method's own (encoded in the mangle suffix).
 fn recvParamCount(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
     val gsi: U64 = genericStructIndex(c: inout c, nameStart: nameStart, nameLen: nameLen)
-    if gsi < c.structs.count {
-        return c.structs[gsi].typeParams.count
+    if gsi < c.arena.structs.count {
+        return c.arena.structs[gsi].typeParams.count
     }
     val gei: U64 = genericEnumIndex(c: inout c, nameStart: nameStart, nameLen: nameLen)
-    if gei < c.enums.count {
-        return c.enums[gei].typeParams.count
+    if gei < c.arena.enums.count {
+        return c.arena.enums[gei].typeParams.count
     }
     return 0
 }

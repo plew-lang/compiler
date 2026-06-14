@@ -14,7 +14,7 @@
 // links against it). The state machine is the only part lowered to IR.
 
 fn isAsyncFn(c: inout Comp, fi: U64) -> Bool {
-    return c.funcs[fi].isAsync
+    return c.arena.funcs[fi].isAsync
 }
 
 // The LLVM type of an async frame field (a param or a hoisted local): a `Promise`
@@ -25,7 +25,7 @@ fn asyncFieldTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64, ty: 
     if isArray {
         return st.arrayTy
     }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Promise") {
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Promise") {
         return st.ptrty
     }
     if isGenericInst(c: inout c, ref: ty) {
@@ -48,11 +48,11 @@ fn asyncParamTy(c: inout Comp, st: inout LlvmCtx, p: Param) -> LLVMTypeRef {
 // hands out frame fields — so field index N in the pre-pass is the N-th
 // `asyncFrameSlot` the body pass consumes. Recurses into if/while/match.
 fn collectAsyncFieldTys(c: inout Comp, st: inout LlvmCtx, blockId: U64, tys: inout Array[LLVMTypeRef]) {
-    val b: Block = c.blocks[blockId]
+    val b: Block = c.arena.blocks[blockId]
     val stmts: Array[U64] = b.stmts
     mut val i: U64 = 0
     while i < stmts.count {
-        match c.stmts[stmts[i]] {
+        match c.arena.stmts[stmts[i]] {
             Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
                 // an `await`-initialized binding holds the type-erased value coerced
                 // to its declared type; a normal binding holds its declared/inferred
@@ -92,11 +92,11 @@ fn collectAsyncFieldTys(c: inout Comp, st: inout LlvmCtx, blockId: U64, tys: ino
 // else the field's scalar type), in bind order.
 fn collectAsyncMatchBindTys(c: inout Comp, st: inout LlvmCtx, arm: MatchArm, tys: inout Array[LLVMTypeRef]) {
     val eid: U64 = enumIdxByName(c: inout c, start: arm.enumStart, len: arm.enumLen)
-    if eid >= c.enums.count {
+    if eid >= c.arena.enums.count {
         return
     }
     val vi: U64 = variantIndex(c: inout c, enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
-    val fs: Array[FieldDef] = c.enums[eid].variants[vi].fields
+    val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
     val binds: Array[Bind] = arm.binds
     mut val bi: U64 = 0
     while bi < binds.count {
@@ -132,7 +132,7 @@ fn collectAsyncMatchBindTys(c: inout Comp, st: inout LlvmCtx, arm: MatchArm, tys
 // Build (once) an async fn's named frame struct type `{ i32 state, ptr self,
 // ptr sub, <param fields...>, <hoisted-local fields...> }`.
 fn buildAsyncFrameTy(c: inout Comp, st: inout LlvmCtx, fi: U64) -> LLVMTypeRef {
-    val f: Func = c.funcs[fi]
+    val f: Func = c.arena.funcs[fi]
     mut val tys: Array[LLVMTypeRef] = []
     tys.append(value: st.i32ty)
     tys.append(value: st.ptrty)
@@ -158,13 +158,13 @@ fn buildAsyncFrameTy(c: inout Comp, st: inout LlvmCtx, fi: U64) -> LLVMTypeRef {
 // call). `main` keeps the C `i32 main()` shape (handled at emit).
 fn declareAsyncFns(c: inout Comp, st: inout LlvmCtx) {
     mut val fi: U64 = 0
-    while fi < c.funcs.count {
+    while fi < c.arena.funcs.count {
         if isAsyncFn(c: inout c, fi: fi) {
-            if c.funcs[fi].typeParams.count > 0U64 {
-                compileErrorAt(line: lineOf(c: inout c, offset: c.funcs[fi].nameStart), msg: "LLVM backend: generic `async fn` is not yet supported")
+            if c.arena.funcs[fi].typeParams.count > 0U64 {
+                compileErrorAt(line: lineOf(c: inout c, offset: c.arena.funcs[fi].nameStart), msg: "LLVM backend: generic `async fn` is not yet supported")
             }
-            if c.funcs[fi].hasRecv {
-                compileErrorAt(line: lineOf(c: inout c, offset: c.funcs[fi].nameStart), msg: "LLVM backend: `async fn` methods are not yet supported (only free `async fn`)")
+            if c.arena.funcs[fi].hasRecv {
+                compileErrorAt(line: lineOf(c: inout c, offset: c.arena.funcs[fi].nameStart), msg: "LLVM backend: `async fn` methods are not yet supported (only free `async fn`)")
             }
             val frameTy: LLVMTypeRef = buildAsyncFrameTy(c: inout c, st: inout st, fi: fi)
             // resume fn: void __af<fi>_resume(void*).
@@ -181,11 +181,11 @@ fn declareAsyncFns(c: inout Comp, st: inout LlvmCtx) {
             st.asyncFrameTy.append(value: frameTy)
             st.asyncResumeFn.append(value: resumeFn)
             // entry symbol (non-main): params -> ptr (Promise).
-            if !(nameIsMain(c: inout c, f: c.funcs[fi])) {
+            if !(nameIsMain(c: inout c, f: c.arena.funcs[fi])) {
                 mut val ptys: Array[LLVMTypeRef] = []
                 mut val pi: U64 = 0
-                while pi < c.funcs[fi].params.count {
-                    ptys.append(value: asyncParamTy(c: inout c, st: inout st, p: c.funcs[fi].params[pi]))
+                while pi < c.arena.funcs[fi].params.count {
+                    ptys.append(value: asyncParamTy(c: inout c, st: inout st, p: c.arena.funcs[fi].params[pi]))
                     pi += 1
                 }
                 val fty: LLVMTypeRef = LLVMFunctionType(st.ptrty, arrayCPtr(ptys), ptys.count, 0I32)
@@ -259,7 +259,7 @@ fn asyncSubValue(c: inout Comp, st: inout LlvmCtx) -> LLVMValueRef {
 }
 
 fn exprIsAwaitLL(c: inout Comp, id: U64) -> Bool {
-    match c.exprs[id] {
+    match c.arena.exprs[id] {
         Expr.Await(operand: _) => { return true }
         _ => { return false }
     }
@@ -279,7 +279,7 @@ fn genLlvmAsyncAwaitLet(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLe
     st.asyncFieldNext = st.asyncFieldNext + 1
     LLVMBuildStore(st.b, v, slot)
     mut val tref: U64 = 0
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Promise") {
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Promise") {
         tref = 0U64
     }
     pushLocalR(st: inout st, nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: tyStart, len: tyLen), isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: tref)
@@ -292,7 +292,7 @@ fn genLlvmAsyncReturn(c: inout Comp, st: inout LlvmCtx, value: U64, hasValue: Bo
     mut val rv: LLVMValueRef = LLVMConstInt(st.i64ty, 0U64, 0I32)
     if hasValue {
         if exprIsAwaitLL(c: inout c, id: value) {
-            match c.exprs[value] {
+            match c.arena.exprs[value] {
                 Expr.Await(val operand) => {
                     emitLlvmAsyncSuspend(c: inout c, st: inout st, operandId: operand)
                     rv = asyncSubValue(c: inout c, st: inout st)
@@ -394,7 +394,7 @@ fn genLlvmAsyncFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     if slot >= st.asyncFnIdx.count {
         return
     }
-    val f: Func = c.funcs[fi]
+    val f: Func = c.arena.funcs[fi]
     val frameTy: LLVMTypeRef = st.asyncFrameTy[slot]
     val resumeFn: LLVMValueRef = st.asyncResumeFn[slot]
     val isMain: Bool = nameIsMain(c: inout c, f: f)
@@ -503,7 +503,7 @@ fn genLlvmAsyncFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
 // Emit entry + resume bodies for every async fn (after declareAsyncFns).
 fn emitAsyncFns(c: inout Comp, st: inout LlvmCtx) {
     mut val fi: U64 = 0
-    while fi < c.funcs.count {
+    while fi < c.arena.funcs.count {
         if isAsyncFn(c: inout c, fi: fi) {
             genLlvmAsyncFunc(c: inout c, st: inout st, fi: fi)
         }

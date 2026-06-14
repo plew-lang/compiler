@@ -70,17 +70,17 @@ fn strDecodeBytes(c: inout Comp, start: U64, len: U64) -> Array[U8] {
     mut val j: U64 = start + 1
     val end: U64 = start + len - 1
     while j < end {
-        if c.bytes[j] == 92 {
-            if c.bytes[j + 1] == 117U8 {
+        if c.arena.bytes[j] == 92 {
+            if c.arena.bytes[j + 1] == 117U8 {
                 // \u{XXXX}: parse hex code point between braces, UTF-8 encode it.
                 mut val k: U64 = j + 2
-                if k < end && c.bytes[k] == 123U8 { k += 1 }
+                if k < end && c.arena.bytes[k] == 123U8 { k += 1 }
                 mut val cp: U64 = 0U64
-                while k < end && c.bytes[k] != 125U8 {
-                    cp = (cp << 4U64) | hexDigitVal(b: c.bytes[k])
+                while k < end && c.arena.bytes[k] != 125U8 {
+                    cp = (cp << 4U64) | hexDigitVal(b: c.arena.bytes[k])
                     k += 1
                 }
-                if k < end && c.bytes[k] == 125U8 { k += 1 }
+                if k < end && c.arena.bytes[k] == 125U8 { k += 1 }
                 // a `\u{...}` escape must name a valid Unicode SCALAR (spec/02: String
                 // is valid UTF-8): reject a value above U+10FFFF or in the surrogate
                 // range U+D800..U+DFFF, which would encode to invalid UTF-8 bytes.
@@ -95,11 +95,11 @@ fn strDecodeBytes(c: inout Comp, start: U64, len: U64) -> Array[U8] {
                 appendUtf8(out: inout out, cp: cp)
                 j = k
             } else {
-                out.append(value: escByte(nx: c.bytes[j + 1]))
+                out.append(value: escByte(nx: c.arena.bytes[j + 1]))
                 j += 2
             }
         } else {
-            out.append(value: c.bytes[j])
+            out.append(value: c.arena.bytes[j])
             j += 1
         }
     }
@@ -171,7 +171,7 @@ fn emitI64Sink(c: inout Comp, st: inout LlvmCtx, rtName: String, rtId: U64, v: L
 // String types — observably identical. A user type implementing Format is not yet
 // supported here (rejected loudly).
 fn emitPrint(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> LLVMValueRef {
-    if exprStructIdx(c: inout c, st: inout st, id: argExpr) < c.structs.count {
+    if exprStructIdx(c: inout c, st: inout st, id: argExpr) < c.arena.structs.count {
         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: argExpr)), msg: "LLVM backend: print of a struct (Format witness) not yet supported")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -225,7 +225,7 @@ fn emitStrEqValues(c: inout Comp, st: inout LlvmCtx, a: LLVMValueRef, b: LLVMVal
 
 // Compare two field values of declared type (tyStart,tyLen) for equality -> i1.
 fn cmpFieldEq(c: inout Comp, st: inout LlvmCtx, a: LLVMValueRef, b: LLVMValueRef, tyStart: U64, tyLen: U64) -> LLVMValueRef {
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "String") {
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "String") {
         return emitStrEqValues(c: inout c, st: inout st, a: a, b: b)
     }
     val sreg: U64 = structRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen)
@@ -237,7 +237,7 @@ fn cmpFieldEq(c: inout Comp, st: inout LlvmCtx, a: LLVMValueRef, b: LLVMValueRef
 
 // Structural equality of two struct VALUES -> i1 (AND of per-field comparisons).
 fn emitStructEq(c: inout Comp, st: inout LlvmCtx, a: LLVMValueRef, b: LLVMValueRef, sidx: U64) -> LLVMValueRef {
-    val sd: StructDef = c.structs[sidx]
+    val sd: StructDef = c.arena.structs[sidx]
     mut val acc: LLVMValueRef = LLVMConstInt(st.i1ty, 1U64, 0I32)
     mut val i: U64 = 0
     while i < sd.fields.count {
@@ -278,7 +278,7 @@ fn cmpFieldOrd(c: inout Comp, st: inout LlvmCtx, a: LLVMValueRef, b: LLVMValueRe
 // first (lowest-index) field whose comparison is nonzero decides. Built as a
 // select chain folded from the last field back to the first.
 fn emitStructCmp(c: inout Comp, st: inout LlvmCtx, a: LLVMValueRef, b: LLVMValueRef, sidx: U64) -> LLVMValueRef {
-    val sd: StructDef = c.structs[sidx]
+    val sd: StructDef = c.arena.structs[sidx]
     mut val acc: LLVMValueRef = LLVMConstInt(st.i32ty, 0U64, 0I32)
     mut val i: U64 = sd.fields.count
     while i > 0U64 {
@@ -295,13 +295,13 @@ fn emitStructCmp(c: inout Comp, st: inout LlvmCtx, a: LLVMValueRef, b: LLVMValue
 // Whether a struct's fields are all orderable here (scalar or nested orderable
 // struct — String/array/enum fields deferred).
 fn structOrdSupported(c: inout Comp, st: inout LlvmCtx, sidx: U64) -> Bool {
-    val sd: StructDef = c.structs[sidx]
+    val sd: StructDef = c.arena.structs[sidx]
     mut val i: U64 = 0
     while i < sd.fields.count {
         if sd.fields[i].tyIsArray {
             return false
         }
-        if rangeEquals(bytes: c.bytes, start: sd.fields[i].tyStart, len: sd.fields[i].tyLen, kw: "String") {
+        if rangeEquals(bytes: c.arena.bytes, start: sd.fields[i].tyStart, len: sd.fields[i].tyLen, kw: "String") {
             return false
         }
         if isEnumName(c: inout c, start: sd.fields[i].tyStart, len: sd.fields[i].tyLen) {
@@ -330,12 +330,12 @@ fn emitStructOrdOp(c: inout Comp, st: inout LlvmCtx, op: I64, a: LLVMValueRef, b
     return LLVMBuildICmp(st.b, pred, ord, zero, anon())
 }
 
-// The c.enums index of an expression's enum type, or c.enums.count. A JSX enum
+// The c.arena.enums index of an expression's enum type, or c.arena.enums.count. A JSX enum
 // construction (`<Kind.LParen />`) carries the enum name directly; otherwise the
 // typed-AST cache supplies a named type (kind 2). (Opaque extern LLVMTypeRefs
 // can't be `==`-compared in Plew, so detection is via the AST, not the value type.)
 fn exprEnumIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
-    match c.exprs[id] {
+    match c.arena.exprs[id] {
         Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, fields: _) => {
             if isEnum {
                 return enumIdxByName(c: inout c, start: typeStart, len: typeLen)
@@ -346,9 +346,9 @@ fn exprEnumIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
     // an enum local carries a bare enum TypeRef on locTypeRef (typeOf can't see it).
     val tr: U64 = exprTypeRef(c: inout c, st: inout st, id: id)
     if tr != 0U64 {
-        val tt: TypeRef = c.types[tr]
+        val tt: TypeRef = c.arena.types[tr]
         val ei: U64 = enumIdxByName(c: inout c, start: tt.nameStart, len: tt.nameLen)
-        if ei < c.enums.count {
+        if ei < c.arena.enums.count {
             return ei
         }
     }
@@ -356,13 +356,13 @@ fn exprEnumIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
     if t.kind == 2 {
         return enumIdxByName(c: inout c, start: t.nameStart, len: t.nameLen)
     }
-    return c.enums.count
+    return c.arena.enums.count
 }
 
 // Whether every variant of an enum is payload-less (so `==` is a tag comparison;
 // payload-carrying enums need a per-variant switch, deferred).
 fn enumPayloadless(c: inout Comp, eid: U64) -> Bool {
-    val ed: EnumDef = c.enums[eid]
+    val ed: EnumDef = c.arena.enums[eid]
     mut val i: U64 = 0
     while i < ed.variants.count {
         if ed.variants[i].fields.count > 0U64 {
@@ -376,7 +376,7 @@ fn enumPayloadless(c: inout Comp, eid: U64) -> Bool {
 // The payload-word count of an enum (max over variants of summed field words) — the
 // length of the `[N x i64]` payload area.
 fn enumMaxWords(c: inout Comp, st: inout LlvmCtx, eid: U64) -> U64 {
-    val ed: EnumDef = c.enums[eid]
+    val ed: EnumDef = c.arena.enums[eid]
     mut val maxW: U64 = 0
     mut val vi: U64 = 0
     while vi < ed.variants.count {
@@ -397,14 +397,14 @@ fn enumMaxWords(c: inout Comp, st: inout LlvmCtx, eid: U64) -> U64 {
 // payload field is a scalar int/Bool (no String/struct/array, whose bytes don't
 // compare by identity). Bit-equality on a zero-initialized payload is then exact.
 fn enumEqWordable(c: inout Comp, st: inout LlvmCtx, eid: U64) -> Bool {
-    val ed: EnumDef = c.enums[eid]
+    val ed: EnumDef = c.arena.enums[eid]
     mut val vi: U64 = 0
     while vi < ed.variants.count {
         val fs: Array[FieldDef] = ed.variants[vi].fields
         mut val fj: U64 = 0
         while fj < fs.count {
             if fs[fj].tyIsArray { return false }
-            if rangeEquals(bytes: c.bytes, start: fs[fj].tyStart, len: fs[fj].tyLen, kw: "String") { return false }
+            if rangeEquals(bytes: c.arena.bytes, start: fs[fj].tyStart, len: fs[fj].tyLen, kw: "String") { return false }
             if isEnumName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen) { return false }
             if structRegSlot(c: inout c, st: inout st, start: fs[fj].tyStart, len: fs[fj].tyLen) < st.structIdxs.count { return false }
             fj += 1
@@ -437,14 +437,14 @@ fn emitEnumEqWords(c: inout Comp, st: inout LlvmCtx, l: LLVMValueRef, r: LLVMVal
 // is orderable (scalar int/Bool, or a nested orderable struct — String/array/enum
 // fields deferred). Mirrors structOrdSupported over each variant's fields.
 fn enumOrdSupported(c: inout Comp, st: inout LlvmCtx, eid: U64) -> Bool {
-    val ed: EnumDef = c.enums[eid]
+    val ed: EnumDef = c.arena.enums[eid]
     mut val vi: U64 = 0
     while vi < ed.variants.count {
         val fs: Array[FieldDef] = ed.variants[vi].fields
         mut val fj: U64 = 0
         while fj < fs.count {
             if fs[fj].tyIsArray { return false }
-            if rangeEquals(bytes: c.bytes, start: fs[fj].tyStart, len: fs[fj].tyLen, kw: "String") { return false }
+            if rangeEquals(bytes: c.arena.bytes, start: fs[fj].tyStart, len: fs[fj].tyLen, kw: "String") { return false }
             if isEnumName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen) { return false }
             val sreg: U64 = structRegSlot(c: inout c, st: inout st, start: fs[fj].tyStart, len: fs[fj].tyLen)
             if sreg < st.structIdxs.count {
@@ -463,7 +463,7 @@ fn enumOrdSupported(c: inout Comp, st: inout LlvmCtx, eid: U64) -> Bool {
 // from the payload area) -> i32 ordering: the first field whose compare is nonzero
 // decides. Built as a select chain folded from the last field back to the first.
 fn emitVariantPayloadCmp(c: inout Comp, st: inout LlvmCtx, eid: U64, vi: U64, pA: LLVMValueRef, pB: LLVMValueRef) -> LLVMValueRef {
-    val fs: Array[FieldDef] = c.enums[eid].variants[vi].fields
+    val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
     mut val acc: LLVMValueRef = LLVMConstInt(st.i32ty, 0U64, 0I32)
     mut val i: U64 = fs.count
     while i > 0U64 {
@@ -490,7 +490,7 @@ fn emitEnumCmp(c: inout Comp, st: inout LlvmCtx, a: LLVMValueRef, b: LLVMValueRe
     val tagA: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, LLVMBuildStructGEP2(st.b, sty, aslot, 0U64, anon()), anon())
     val tagB: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, LLVMBuildStructGEP2(st.b, sty, bslot, 0U64, anon()), anon())
     mut val payloadOrd: LLVMValueRef = LLVMConstInt(st.i32ty, 0U64, 0I32)
-    val ed: EnumDef = c.enums[eid]
+    val ed: EnumDef = c.arena.enums[eid]
     mut val vi: U64 = 0
     while vi < ed.variants.count {
         if ed.variants[vi].fields.count > 0U64 {
@@ -525,7 +525,7 @@ fn emitEnumOrdOp(c: inout Comp, st: inout LlvmCtx, op: I64, a: LLVMValueRef, b: 
 
 // Whether a struct's fields are all comparable here (no array/enum field).
 fn structEqSupported(c: inout Comp, st: inout LlvmCtx, sidx: U64) -> Bool {
-    val sd: StructDef = c.structs[sidx]
+    val sd: StructDef = c.arena.structs[sidx]
     mut val i: U64 = 0
     while i < sd.fields.count {
         if sd.fields[i].tyIsArray {

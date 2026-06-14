@@ -5,8 +5,8 @@
 // Verify every non-extern, non-template function body.
 fn verifyProgram(c: inout Comp) {
     mut val fi: U64 = 0
-    while fi < c.funcs.count {
-        val f: Func = c.funcs[fi]
+    while fi < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[fi]
         // acceptance soundness is about the USER's code: verify only entry-module
         // (module 0) bodies. The auto-loaded prelude / std (`@Std/*`) is trusted and
         // validated separately (test suite + self-compile); walking it here falsely
@@ -93,8 +93,8 @@ fn checkDeclShapes(c: inout Comp) {
     checkDupFns(c: inout c)
     checkDupParamLabels(c: inout c)
     mut val si: U64 = 0
-    while si < c.structs.count {
-        val sd: StructDef = c.structs[si]
+    while si < c.arena.structs.count {
+        val sd: StructDef = c.arena.structs[si]
         if !(sd.isExtern) {
             if moduleOf(c: inout c, offset: sd.nameStart) == 0U64 {
                 checkDupFields(c: inout c, fs: sd.fields, ctx: "struct")
@@ -103,8 +103,8 @@ fn checkDeclShapes(c: inout Comp) {
         si += 1
     }
     mut val ei: U64 = 0
-    while ei < c.enums.count {
-        val ed: EnumDef = c.enums[ei]
+    while ei < c.arena.enums.count {
+        val ed: EnumDef = c.arena.enums[ei]
         if moduleOf(c: inout c, offset: ed.nameStart) == 0U64 {
             // duplicate variant names, and duplicate fields within each variant.
             mut val vi: U64 = 0
@@ -158,8 +158,8 @@ fn checkBlanketHeadless(c: inout Comp) {
 
 fn checkLangItemRedef(c: inout Comp) {
     mut val si: U64 = 0
-    while si < c.structs.count {
-        val sd: StructDef = c.structs[si]
+    while si < c.arena.structs.count {
+        val sd: StructDef = c.arena.structs[si]
         // extern structs ARE the canonical lang-item declarations (String/Bool/numeric
         // intrinsics in Core, defOffset 0) — skip them; only a non-extern user redef hits.
         if !(sd.isExtern) {
@@ -174,8 +174,8 @@ fn checkLangItemRedef(c: inout Comp) {
         si += 1U64
     }
     mut val ei: U64 = 0
-    while ei < c.enums.count {
-        val ed: EnumDef = c.enums[ei]
+    while ei < c.arena.enums.count {
+        val ed: EnumDef = c.arena.enums[ei]
         if offsetIsLoaded(c: inout c, offset: ed.defOffset) {
             if moduleOf(c: inout c, offset: ed.defOffset) == 0U64 {
                 if isLangItemTypeName(c: inout c, start: ed.nameStart, len: ed.nameLen) {
@@ -191,8 +191,8 @@ fn checkDupTypeNames(c: inout Comp) {
     mut val names: Array[U64] = []
     mut val offs: Array[U64] = []
     mut val si: U64 = 0
-    while si < c.structs.count {
-        val sd: StructDef = c.structs[si]
+    while si < c.arena.structs.count {
+        val sd: StructDef = c.arena.structs[si]
         if !(sd.isExtern) {
             if moduleOf(c: inout c, offset: sd.nameStart) == 0U64 {
                 names.append(value: intern(c: inout c, start: sd.nameStart, len: sd.nameLen))
@@ -202,8 +202,8 @@ fn checkDupTypeNames(c: inout Comp) {
         si += 1
     }
     mut val ei: U64 = 0
-    while ei < c.enums.count {
-        val ed: EnumDef = c.enums[ei]
+    while ei < c.arena.enums.count {
+        val ed: EnumDef = c.arena.enums[ei]
         if moduleOf(c: inout c, offset: ed.nameStart) == 0U64 {
             names.append(value: intern(c: inout c, start: ed.nameStart, len: ed.nameLen))
             offs.append(value: ed.nameStart)
@@ -226,8 +226,8 @@ fn checkDupTypeNames(c: inout Comp) {
 // The extension-view id of a parameter's declared type (0 = plain), for distinguishing
 // a view-aware overload `f(a: P)` vs `f(a: P#Ext)` from a true duplicate.
 fn paramViewId(c: inout Comp, p: Param) -> U64 {
-    if p.ty < c.types.count {
-        return c.types[p.ty].viewExtId
+    if p.ty < c.arena.types.count {
+        return c.arena.types[p.ty].viewExtId
     }
     return 0U64
 }
@@ -282,8 +282,8 @@ fn isExactDupFn(c: inout Comp, a: Func, b: Func) -> Bool {
 fn checkDupFns(c: inout Comp) {
     mut val cand: Array[U64] = []
     mut val fi: U64 = 0
-    while fi < c.funcs.count {
-        val f: Func = c.funcs[fi]
+    while fi < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[fi]
         if f.typeParams.count == 0U64 && !f.isProvided && !f.isExtern && !fnHasDefault(c: inout c, f: f) {
             if moduleOf(c: inout c, offset: f.nameStart) == 0U64 {
                 cand.append(value: fi)
@@ -295,8 +295,8 @@ fn checkDupFns(c: inout Comp) {
     while i < cand.count {
         mut val j: U64 = i + 1U64
         while j < cand.count {
-            if isExactDupFn(c: inout c, a: c.funcs[cand[i]], b: c.funcs[cand[j]]) {
-                compileErrorAt(line: lineOf(c: inout c, offset: c.funcs[cand[j]].nameStart), msg: "duplicate function: another declaration has the same name, labels, and parameter types (overloads must differ in a label or a parameter type)")
+            if isExactDupFn(c: inout c, a: c.arena.funcs[cand[i]], b: c.arena.funcs[cand[j]]) {
+                compileErrorAt(line: lineOf(c: inout c, offset: c.arena.funcs[cand[j]].nameStart), msg: "duplicate function: another declaration has the same name, labels, and parameter types (overloads must differ in a label or a parameter type)")
             }
             j += 1
         }
@@ -310,8 +310,8 @@ fn checkDupFns(c: inout Comp) {
 // params carry no label and are exempt.
 fn checkDupParamLabels(c: inout Comp) {
     mut val fi: U64 = 0
-    while fi < c.funcs.count {
-        val f: Func = c.funcs[fi]
+    while fi < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[fi]
         if !(f.isExtern || f.isProvided) {
             if moduleOf(c: inout c, offset: f.nameStart) == 0U64 {
                 mut val i: U64 = 0
@@ -375,20 +375,20 @@ fn checkGenericArity(c: inout Comp, ref: U64, offset: U64) {
     if ref == 0U64 {
         return
     }
-    if ref >= c.types.count {
+    if ref >= c.arena.types.count {
         return
     }
-    val t: TypeRef = c.types[ref]
+    val t: TypeRef = c.arena.types[ref]
     if t.args.count > 0U64 {
         val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
-        if si < c.structs.count {
-            if t.args.count != c.structs[si].typeParams.count {
+        if si < c.arena.structs.count {
+            if t.args.count != c.arena.structs[si].typeParams.count {
                 compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "wrong number of type arguments for this generic type (spec/06)")
             }
         } else {
             val ei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
-            if ei < c.enums.count {
-                if t.args.count != c.enums[ei].typeParams.count {
+            if ei < c.arena.enums.count {
+                if t.args.count != c.arena.enums[ei].typeParams.count {
                     compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "wrong number of type arguments for this generic type (spec/06)")
                 }
             }

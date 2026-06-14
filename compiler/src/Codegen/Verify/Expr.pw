@@ -8,7 +8,7 @@
 // checkLitCtx at the statement level (it walks the same tree), so this walk adds
 // only the checks checkLitCtx does not perform.
 fn verifyExpr(c: inout Comp, id: U64) {
-    match c.exprs[id] {
+    match c.arena.exprs[id] {
         Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
             // verify the closure BODY with the closure's own return type as context —
             // else `return e` inside a closure escapes the return-type check entirely
@@ -50,7 +50,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             // void and exempt). spec/04.
             if hasRet {
                 mut val retIsUnit: Bool = retLen == 0U64
-                if rangeEquals(bytes: c.bytes, start: retStart, len: retLen, kw: "()") {
+                if rangeEquals(bytes: c.arena.bytes, start: retStart, len: retLen, kw: "()") {
                     retIsUnit = true
                 }
                 if !(retIsUnit) {
@@ -96,17 +96,17 @@ fn verifyExpr(c: inout Comp, id: U64) {
             // covered by the backend missing-field check plus field defaults.)
             if isEnum {
                 mut val cei: U64 = enumIdxByName(c: inout c, start: typeStart, len: typeLen)
-                if cei >= c.enums.count {
+                if cei >= c.arena.enums.count {
                     cei = genericEnumIndex(c: inout c, nameStart: typeStart, nameLen: typeLen)
                 }
-                if cei < c.enums.count {
+                if cei < c.arena.enums.count {
                     // a construction naming a variant the enum does not declare
                     // (`<E.Z />`) would silently build variant 0 (variantIndex returns 0
                     // for an unknown name) — a garbage tag. Reject it (spec/05).
                     mut val vfound: Bool = false
                     mut val vk: U64 = 0
-                    while vk < c.enums[cei].variants.count {
-                        if spansEqual(c: inout c, aStart: c.enums[cei].variants[vk].nameStart, aLen: c.enums[cei].variants[vk].nameLen, bStart: variantStart, bLen: variantLen) {
+                    while vk < c.arena.enums[cei].variants.count {
+                        if spansEqual(c: inout c, aStart: c.arena.enums[cei].variants[vk].nameStart, aLen: c.arena.enums[cei].variants[vk].nameLen, bStart: variantStart, bLen: variantLen) {
                             vfound = true
                         }
                         vk += 1
@@ -115,13 +115,13 @@ fn verifyExpr(c: inout Comp, id: U64) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "unknown enum variant in construction (this enum has no such variant)")
                     }
                     val cvi: U64 = variantIndex(c: inout c, enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
-                    if cvi < c.enums[cei].variants.count {
-                        val cfs: Array[FieldDef] = c.enums[cei].variants[cvi].fields
+                    if cvi < c.arena.enums[cei].variants.count {
+                        val cfs: Array[FieldDef] = c.arena.enums[cei].variants[cvi].fields
                         // for a NON-generic enum, also category-check each provided
                         // payload value against the field's declared type (`<E.V a="s"/>`
                         // for `a: I64`). Generic enums (payload types need env grounding)
                         // are deferred.
-                        val enumIsGen: Bool = c.enums[cei].typeParams.count > 0U64
+                        val enumIsGen: Bool = c.arena.enums[cei].typeParams.count > 0U64
                         mut val cfi: U64 = 0
                         while cfi < cfs.count {
                             if !(makeFieldsCoverField(c: inout c, fields: fields, fieldStart: cfs[cfi].nameStart, fieldLen: cfs[cfi].nameLen)) {
@@ -147,19 +147,19 @@ fn verifyExpr(c: inout Comp, id: U64) {
             // type arguments as the type has parameters (`<Box[I64, I64] …/>` for a
             // `Box[T]` was silently accepted, dropping the extra) — spec/06.
             if ty != 0U64 {
-                val tr: TypeRef = c.types[ty]
+                val tr: TypeRef = c.arena.types[ty]
                 if tr.args.count > 0U64 {
-                    mut val tpCount: U64 = c.structs.count + c.enums.count + 1U64
+                    mut val tpCount: U64 = c.arena.structs.count + c.arena.enums.count + 1U64
                     val gsi: U64 = genericStructIndex(c: inout c, nameStart: typeStart, nameLen: typeLen)
-                    if gsi < c.structs.count {
-                        tpCount = c.structs[gsi].typeParams.count
+                    if gsi < c.arena.structs.count {
+                        tpCount = c.arena.structs[gsi].typeParams.count
                     } else {
                         val gei: U64 = genericEnumIndex(c: inout c, nameStart: typeStart, nameLen: typeLen)
-                        if gei < c.enums.count {
-                            tpCount = c.enums[gei].typeParams.count
+                        if gei < c.arena.enums.count {
+                            tpCount = c.arena.enums[gei].typeParams.count
                         }
                     }
-                    if tpCount <= c.structs.count + c.enums.count {
+                    if tpCount <= c.arena.structs.count + c.arena.enums.count {
                         if tr.args.count != tpCount {
                             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "wrong number of type arguments for this generic type")
                         }
@@ -170,12 +170,12 @@ fn verifyExpr(c: inout Comp, id: U64) {
             // field's declared type (`<A x="s" />` for `x: I64`) reinterprets the bits
             // — reject (same reliable-value discipline as the let-annotation check).
             // Generic structs / enums (field types need env grounding) are deferred.
-            mut val nonGenSidx: U64 = c.structs.count
+            mut val nonGenSidx: U64 = c.arena.structs.count
             if !(isEnum) {
-                if ty == 0U64 || c.types[ty].args.count == 0U64 {
+                if ty == 0U64 || c.arena.types[ty].args.count == 0U64 {
                     val sidxC: U64 = structIndexByName(c: inout c, start: typeStart, len: typeLen)
-                    if sidxC < c.structs.count {
-                        if c.structs[sidxC].typeParams.count == 0U64 && !c.structs[sidxC].isExtern {
+                    if sidxC < c.arena.structs.count {
+                        if c.arena.structs[sidxC].typeParams.count == 0U64 && !c.arena.structs[sidxC].isExtern {
                             nonGenSidx = sidxC
                         }
                     }
@@ -186,8 +186,8 @@ fn verifyExpr(c: inout Comp, id: U64) {
             mut val i: U64 = 0
             while i < fields.count {
                 verifyExpr(c: inout c, id: fields[i].value)
-                if nonGenSidx < c.structs.count {
-                    val cfs: Array[FieldDef] = c.structs[nonGenSidx].fields
+                if nonGenSidx < c.arena.structs.count {
+                    val cfs: Array[FieldDef] = c.arena.structs[nonGenSidx].fields
                     mut val fk: U64 = 0
                     while fk < cfs.count {
                         if spansEqual(c: inout c, aStart: cfs[fk].nameStart, aLen: cfs[fk].nameLen, bStart: fields[i].nameStart, bLen: fields[i].nameLen) {
@@ -252,7 +252,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             mut val retIsResult: Bool = false
             if !(c.curRetVoid) {
                 if c.curRetLen > 0U64 {
-                    if rangeEquals(bytes: c.bytes, start: c.curRetStart, len: c.curRetLen, kw: "Result") {
+                    if rangeEquals(bytes: c.arena.bytes, start: c.curRetStart, len: c.curRetLen, kw: "Result") {
                         retIsResult = true
                     }
                 }
@@ -266,12 +266,12 @@ fn verifyExpr(c: inout Comp, id: U64) {
             // `unwrapOr` / `?.` / `match` instead.
             val tti: TypeInfo = typeOf(c: inout c, id: expr)
             if tti.nameLen > 0U64 {
-                mut val isEnum: Bool = enumIdxByName(c: inout c, start: tti.nameStart, len: tti.nameLen) < c.enums.count
+                mut val isEnum: Bool = enumIdxByName(c: inout c, start: tti.nameStart, len: tti.nameLen) < c.arena.enums.count
                 if !(isEnum) {
-                    isEnum = genericEnumIndex(c: inout c, nameStart: tti.nameStart, nameLen: tti.nameLen) < c.enums.count
+                    isEnum = genericEnumIndex(c: inout c, nameStart: tti.nameStart, nameLen: tti.nameLen) < c.arena.enums.count
                 }
                 if isEnum {
-                    if !(rangeEquals(bytes: c.bytes, start: tti.nameStart, len: tti.nameLen, kw: "Result")) {
+                    if !(rangeEquals(bytes: c.arena.bytes, start: tti.nameStart, len: tti.nameLen, kw: "Result")) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "`try` works only on a Result; for an Optional use `unwrapOr` / `?.` / `match` (spec/13)")
                     }
                 }
@@ -282,11 +282,11 @@ fn verifyExpr(c: inout Comp, id: U64) {
                 // reinterpret the String error as an I64. Compare the Err args (index 1).
                 if retIsResult {
                     if tti.ref != 0U64 {
-                        if tti.ref < c.types.count {
+                        if tti.ref < c.arena.types.count {
                             if c.curRetTy != 0U64 {
-                                if c.curRetTy < c.types.count {
-                                    val opR: TypeRef = c.types[tti.ref]
-                                    val fnR: TypeRef = c.types[c.curRetTy]
+                                if c.curRetTy < c.arena.types.count {
+                                    val opR: TypeRef = c.arena.types[tti.ref]
+                                    val fnR: TypeRef = c.arena.types[c.curRetTy]
                                     if opR.args.count >= 2U64 {
                                         if fnR.args.count >= 2U64 {
                                             if !(typesCompatible(c: inout c, expected: fnR.args[1], inferred: opR.args[1])) {
@@ -340,7 +340,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             // yet) that is not `self` and not declared outside the enclosing branch
             // (a conditional move would skip the source's deinit on other paths).
             if !(isBorrow) {
-                match c.exprs[operand] {
+                match c.arena.exprs[operand] {
                     Expr.Ident(val start, val len) => {
                         if isSelfRef(c: inout c, start: start, len: len) {
                             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "moving `self` is not yet supported")
@@ -359,7 +359,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             // the move so later uses are caught. spec/03.
             verifyExpr(c: inout c, id: operand)
             if !(isBorrow) {
-                match c.exprs[operand] {
+                match c.arena.exprs[operand] {
                     Expr.Ident(val start, val len) => {
                         verifyMarkMoved(c: inout c, idx: localIndexByName(c: inout c, start: start, len: len))
                     }
@@ -422,11 +422,11 @@ fn bindsCoverField(c: inout Comp, binds: Array[Bind], fieldStart: U64, fieldLen:
 fn checkDestructureComplete(c: inout Comp, a: MatchArm) {
     if a.isStruct {
         mut val si: U64 = structIndexByName(c: inout c, start: a.enumStart, len: a.enumLen)
-        if si >= c.structs.count {
+        if si >= c.arena.structs.count {
             si = genericStructIndex(c: inout c, nameStart: a.enumStart, nameLen: a.enumLen)
         }
-        if si < c.structs.count {
-            val sd: StructDef = c.structs[si]
+        if si < c.arena.structs.count {
+            val sd: StructDef = c.arena.structs[si]
             mut val fi: U64 = 0
             while fi < sd.fields.count {
                 if !(bindsCoverField(c: inout c, binds: a.binds, fieldStart: sd.fields[fi].nameStart, fieldLen: sd.fields[fi].nameLen)) {
@@ -444,10 +444,10 @@ fn checkDestructureComplete(c: inout Comp, a: MatchArm) {
         return
     }
     val ei: U64 = enumIdxByName(c: inout c, start: a.enumStart, len: a.enumLen)
-    if ei < c.enums.count {
+    if ei < c.arena.enums.count {
         val vi: U64 = variantIndex(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen)
-        if vi < c.enums[ei].variants.count {
-            val fs: Array[FieldDef] = c.enums[ei].variants[vi].fields
+        if vi < c.arena.enums[ei].variants.count {
+            val fs: Array[FieldDef] = c.arena.enums[ei].variants[vi].fields
             mut val fi: U64 = 0
             while fi < fs.count {
                 if !(bindsCoverField(c: inout c, binds: a.binds, fieldStart: fs[fi].nameStart, fieldLen: fs[fi].nameLen)) {

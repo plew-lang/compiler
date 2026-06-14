@@ -6,8 +6,8 @@
 // Is TypeRef `ref` an existential `any P` (spec/08)? Its runtime value is the fat
 // pointer st.anyTy, regardless of the trait it names.
 fn refIsAny(c: inout Comp, ref: U64) -> Bool {
-    if ref < c.types.count {
-        return c.types[ref].isAny
+    if ref < c.arena.types.count {
+        return c.arena.types[ref].isAny
     }
     return false
 }
@@ -18,7 +18,7 @@ fn refIsAny(c: inout Comp, ref: U64) -> Bool {
 fn anyRecvTraitIdx(c: inout Comp, st: inout LlvmCtx, recv: U64) -> U64 {
     val r: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
     if refIsAny(c: inout c, ref: r) {
-        return findTraitIdxByName(c: inout c, start: c.types[r].nameStart, len: c.types[r].nameLen)
+        return findTraitIdxByName(c: inout c, start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen)
     }
     return c.traits.count
 }
@@ -44,7 +44,7 @@ fn anyMethodReq(c: inout Comp, traitIdx: U64, nameStart: U64, nameLen: U64, args
 // Returns false if any parameter / associated type is left unbound.
 fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Array[Bind], outArgs: inout Array[U64]) -> Bool {
     val t: TraitDef = c.traits[traitIdx]
-    val ar: TypeRef = c.types[anyRef]
+    val ar: TypeRef = c.arena.types[anyRef]
     // positional binding refs (argLabels entry 0), in source order.
     mut val positional: Array[U64] = []
     mut val ai: U64 = 0
@@ -123,8 +123,8 @@ fn anyBindKey(c: inout Comp, args: Array[U64]) -> U64 {
     mut val i: U64 = 0
     while i < args.count {
         mut val nid: U64 = 0
-        if args[i] < c.types.count {
-            nid = c.types[args[i]].nameId
+        if args[i] < c.arena.types.count {
+            nid = c.arena.types[args[i]].nameId
         }
         k = k * 1000003U64 + nid + 1U64
         i += 1
@@ -174,9 +174,9 @@ fn llvmTypeOfRef(c: inout Comp, st: inout LlvmCtx, ref: U64) -> LLVMTypeRef {
     // (the front-end models it as one, but the LLVM array machinery — literal /
     // append / for / index — all use arrayTy). Mapping it here keeps a function
     // param/return/field of array type consistent with that machinery.
-    if ref < c.types.count {
-        val at: TypeRef = c.types[ref]
-        if rangeEquals(bytes: c.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
+    if ref < c.arena.types.count {
+        val at: TypeRef = c.arena.types[ref]
+        if rangeEquals(bytes: c.arena.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
             return st.arrayTy
         }
     }
@@ -190,7 +190,7 @@ fn llvmTypeOfRef(c: inout Comp, st: inout LlvmCtx, ref: U64) -> LLVMTypeRef {
             return st.genEnumTys[ge]
         }
     }
-    val t: TypeRef = c.types[ref]
+    val t: TypeRef = c.arena.types[ref]
     return llvmScalarTy(c: inout c, st: inout st, tyStart: t.nameStart, tyLen: t.nameLen)
 }
 
@@ -242,10 +242,10 @@ fn coerceIntTo(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, tyStart: U64, 
 
 // Is this type name a fixed-width primitive integer (the operator-witness owners).
 fn isPrimIntName(c: inout Comp, start: U64, len: U64) -> Bool {
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I8") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I16") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I32") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I64") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I8") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I16") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I32") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I64") { return true }
     return isUnsignedName(c: inout c, start: start, len: len)
 }
 
@@ -316,24 +316,24 @@ fn genPrimOpWitness(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64, 
     val ty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen)
     val uns: Bool = isUnsignedName(c: inout c, start: tyStart, len: tyLen)
     // unary: neg / bitnot (one `value` arg).
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "neg") {
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "neg") {
         return buildNegChecked(c: inout c, st: inout st, v: coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: ty, unsigned: uns))
     }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "bitnot") {
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitnot") {
         return LLVMBuildNot(st.b, coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: ty, unsigned: uns), anon())
     }
     // binary: map the method name to an Op, then reuse buildBinOpS.
     mut val op: I64 = -1I64
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "add") { op = opAdd() }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "sub") { op = opSub() }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "mul") { op = opMul() }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "div") { op = opDiv() }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rem") { op = opRem() }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "bitand") { op = opBitAnd() }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "bitor") { op = opBitOr() }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "bitxor") { op = opBitXor() }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "shl") { op = opShl() }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "shr") { op = opShr() }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "add") { op = opAdd() }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "sub") { op = opSub() }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "mul") { op = opMul() }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "div") { op = opDiv() }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rem") { op = opRem() }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitand") { op = opBitAnd() }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitor") { op = opBitOr() }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitxor") { op = opBitXor() }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "shl") { op = opShl() }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "shr") { op = opShr() }
     if op == -1I64 {
         return LLVMConstNull(st.ptrty)
     }
@@ -342,9 +342,9 @@ fn genPrimOpWitness(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64, 
     return buildBinOpChecked(c: inout c, st: inout st, op: op, l: l, r: r, unsigned: uns)
 }
 
-// The c.funcs index of the binary operator-trait witness `T.<name>(lhs:, rhs:)`
+// The c.arena.funcs index of the binary operator-trait witness `T.<name>(lhs:, rhs:)`
 // for a struct/enum lhs operand (so `money + money` dispatches to the user's
-// `impl Money as Add`), or c.funcs.count when the lhs isn't a registered
+// `impl Money as Add`), or c.arena.funcs.count when the lhs isn't a registered
 // aggregate (a primitive — the caller keeps the built-in op). Mirrors the C
 // backend's findBinTraitWitness, but recovers the rhs type via the LLVM env
 // (typeOf can't see locals here), so `a + b` (rhs Vec2) picks `Add[Vec2]` over
@@ -353,14 +353,14 @@ fn binWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -
     mut val ownStart: U64 = 0
     mut val ownLen: U64 = 0
     val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: lhs)
-    if sidx < c.structs.count {
-        ownStart = c.structs[sidx].nameStart
-        ownLen = c.structs[sidx].nameLen
+    if sidx < c.arena.structs.count {
+        ownStart = c.arena.structs[sidx].nameStart
+        ownLen = c.arena.structs[sidx].nameLen
     } else {
         val eid: U64 = exprEnumIdx(c: inout c, st: inout st, id: lhs)
-        if eid < c.enums.count {
-            ownStart = c.enums[eid].nameStart
-            ownLen = c.enums[eid].nameLen
+        if eid < c.arena.enums.count {
+            ownStart = c.arena.enums[eid].nameStart
+            ownLen = c.arena.enums[eid].nameLen
         } else {
             // a String operand under an arithmetic op resolves the String lang-item's
             // witness (`String.add` for `"a" + "b"`, spec/02,12). String isn't a
@@ -370,7 +370,7 @@ fn binWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -
                 ownStart = ss.nameStart
                 ownLen = ss.nameLen
             } else {
-                return c.funcs.count
+                return c.arena.funcs.count
             }
         }
     }
@@ -381,25 +381,25 @@ fn binWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -
     mut val rhsId: U64 = 0
     mut val rhsKnown: Bool = false
     val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: rhs)
-    if rsidx < c.structs.count {
-        rhsId = intern(c: inout c, start: c.structs[rsidx].nameStart, len: c.structs[rsidx].nameLen)
+    if rsidx < c.arena.structs.count {
+        rhsId = intern(c: inout c, start: c.arena.structs[rsidx].nameStart, len: c.arena.structs[rsidx].nameLen)
         rhsKnown = true
     } else {
         val reid: U64 = exprEnumIdx(c: inout c, st: inout st, id: rhs)
-        if reid < c.enums.count {
-            rhsId = intern(c: inout c, start: c.enums[reid].nameStart, len: c.enums[reid].nameLen)
+        if reid < c.arena.enums.count {
+            rhsId = intern(c: inout c, start: c.arena.enums[reid].nameStart, len: c.arena.enums[reid].nameLen)
             rhsKnown = true
         }
     }
-    mut val firstMatch: U64 = c.funcs.count
-    mut val intMatch: U64 = c.funcs.count
+    mut val firstMatch: U64 = c.arena.funcs.count
+    mut val intMatch: U64 = c.arena.funcs.count
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if f.isAssoc {
             if f.recvId == qType {
-                if rangeEquals(bytes: c.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
-                    if firstMatch == c.funcs.count {
+                if rangeEquals(bytes: c.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
+                    if firstMatch == c.arena.funcs.count {
                         firstMatch = i
                     }
                     if f.params.count >= 2U64 {
@@ -408,7 +408,7 @@ fn binWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -
                                 return i
                             }
                         }
-                        if intMatch == c.funcs.count {
+                        if intMatch == c.arena.funcs.count {
                             if isIntType(c: inout c, start: f.params[1].tyStart, len: f.params[1].tyLen) {
                                 intMatch = i
                             }
@@ -420,26 +420,26 @@ fn binWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -
         i += 1
     }
     if !(rhsKnown) {
-        if intMatch < c.funcs.count {
+        if intMatch < c.arena.funcs.count {
             return intMatch
         }
     }
     return firstMatch
 }
 
-// The c.funcs index of the prefix-unary operator-trait witness `T.<name>(value:)`
-// for a struct/enum operand (`-money` -> `Money.neg(value:)`), or c.funcs.count
+// The c.arena.funcs index of the prefix-unary operator-trait witness `T.<name>(value:)`
+// for a struct/enum operand (`-money` -> `Money.neg(value:)`), or c.arena.funcs.count
 // when the operand isn't a registered aggregate.
 fn unaryWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, operand: U64) -> U64 {
     val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: operand)
-    if sidx < c.structs.count {
-        return findAssocByName(c: inout c, typeStart: c.structs[sidx].nameStart, typeLen: c.structs[sidx].nameLen, name: unaryMethodName(op: op))
+    if sidx < c.arena.structs.count {
+        return findAssocByName(c: inout c, typeStart: c.arena.structs[sidx].nameStart, typeLen: c.arena.structs[sidx].nameLen, name: unaryMethodName(op: op))
     }
     val eid: U64 = exprEnumIdx(c: inout c, st: inout st, id: operand)
-    if eid < c.enums.count {
-        return findAssocByName(c: inout c, typeStart: c.enums[eid].nameStart, typeLen: c.enums[eid].nameLen, name: unaryMethodName(op: op))
+    if eid < c.arena.enums.count {
+        return findAssocByName(c: inout c, typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: unaryMethodName(op: op))
     }
-    return c.funcs.count
+    return c.arena.funcs.count
 }
 
 // Emit a call to a resolved operator-trait witness assoc fn (binary: lhs/rhs;
@@ -457,7 +457,7 @@ fn emitWitnessCall(c: inout Comp, st: inout LlvmCtx, fi: U64, lhs: U64, rhs: U64
         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "LLVM backend: operator witness not emittable yet")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
-    val af: Func = c.funcs[fi]
+    val af: Func = c.arena.funcs[fi]
     mut val av: Array[LLVMValueRef] = []
     av.append(value: genArgValue(c: inout c, st: inout st, argExpr: lhs, p: af.params[0]))
     if binary {
@@ -469,10 +469,10 @@ fn emitWitnessCall(c: inout Comp, st: inout LlvmCtx, fi: U64, lhs: U64, rhs: U64
 // Is this type name an unsigned integer (for choosing signed vs unsigned ops /
 // formatting)? Defaults to signed.
 fn isUnsignedName(c: inout Comp, start: U64, len: U64) -> Bool {
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U8") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U16") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U32") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U64") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U8") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U16") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U32") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U64") { return true }
     return false
 }
 

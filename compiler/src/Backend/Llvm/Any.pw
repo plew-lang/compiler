@@ -41,13 +41,13 @@ fn paramLabelsEqual(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
 }
 
 // The witness method on concrete struct `sidx` for trait requirement `req` (matched
-// by name + param labels). c.funcs.count if none.
+// by name + param labels). c.arena.funcs.count if none.
 fn findWitnessFor(c: inout Comp, sidx: U64, req: Func) -> U64 {
-    val sd: StructDef = c.structs[sidx]
+    val sd: StructDef = c.arena.structs[sidx]
     val recvId: U64 = intern(c: inout c, start: sd.nameStart, len: sd.nameLen)
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if f.hasRecv && f.extId == 0U64 && !f.isAssoc {
             if f.nameId == req.nameId && f.recvId == recvId {
                 if paramLabelsEqual(c: inout c, a: f.params, b: req.params) {
@@ -57,7 +57,7 @@ fn findWitnessFor(c: inout Comp, sidx: U64, req: Func) -> U64 {
         }
         i += 1
     }
-    return c.funcs.count
+    return c.arena.funcs.count
 }
 
 // Does requirement `req` mention `Self` in a non-receiver INPUT position (a param)?
@@ -66,7 +66,7 @@ fn findWitnessFor(c: inout Comp, sidx: U64, req: Func) -> U64 {
 fn reqUsesSelfInInput(c: inout Comp, req: Func) -> Bool {
     mut val i: U64 = 0
     while i < req.params.count {
-        if rangeEquals(bytes: c.bytes, start: req.params[i].tyStart, len: req.params[i].tyLen, kw: "Self") {
+        if rangeEquals(bytes: c.arena.bytes, start: req.params[i].tyStart, len: req.params[i].tyLen, kw: "Self") {
             return true
         }
         i += 1
@@ -80,7 +80,7 @@ fn reqUsesSelfInInput(c: inout Comp, req: Func) -> Bool {
 // return like `Optional[Self]` is not handled yet.)
 fn reqReturnsSelf(c: inout Comp, req: Func) -> Bool {
     if req.hasRet {
-        return rangeEquals(bytes: c.bytes, start: req.retStart, len: req.retLen, kw: "Self")
+        return rangeEquals(bytes: c.arena.bytes, start: req.retStart, len: req.retLen, kw: "Self")
     }
     return false
 }
@@ -103,14 +103,14 @@ fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, trait
     // into the existential (the slot's signature returns the fat pointer).
     val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)
     val wfi: U64 = findWitnessFor(c: inout c, sidx: sidx, req: req)
-    if wfi >= c.funcs.count {
+    if wfi >= c.arena.funcs.count {
         return LLVMConstNull(st.ptrty)
     }
     val wslot: U64 = userFnSlot(st: inout st, idx: wfi)
     if wslot >= st.fnIdx.count {
         return LLVMConstNull(st.ptrty)
     }
-    val sd: StructDef = c.structs[sidx]
+    val sd: StructDef = c.arena.structs[sidx]
     val regSlot: U64 = structRegSlot(c: inout c, st: inout st, start: sd.nameStart, len: sd.nameLen)
     if regSlot >= st.structIdxs.count {
         return LLVMConstNull(st.ptrty)
@@ -194,7 +194,7 @@ fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, trait
 // independent), and returns the new box pointer. Used to give `any P` value
 // semantics on copy (a `mut val b = a` must not alias a's boxed value).
 fn buildAnyCopyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64) -> LLVMValueRef {
-    val sd: StructDef = c.structs[sidx]
+    val sd: StructDef = c.arena.structs[sidx]
     val regSlot: U64 = structRegSlot(c: inout c, st: inout st, start: sd.nameStart, len: sd.nameLen)
     if regSlot >= st.structIdxs.count {
         return LLVMConstNull(st.ptrty)
@@ -243,7 +243,7 @@ fn copyAnyValue(c: inout Comp, st: inout LlvmCtx, fat: LLVMValueRef) -> LLVMValu
 // Whether `id` is an `any P` PLACE (an Ident or Field) whose copy into a new owner
 // must duplicate the boxed value (value semantics).
 fn anyExprIsPlace(c: inout Comp, id: U64) -> Bool {
-    match c.exprs[id] {
+    match c.arena.exprs[id] {
         Expr.Ident(start: _, len: _) => { return true }
         Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
         _ => { return false }
@@ -330,7 +330,7 @@ fn anyMethodSlot(c: inout Comp, traitIdx: U64, nameStart: U64, nameLen: U64, arg
 // Box concrete value `v` of struct `sidx` into a fresh ARC cell and wrap it with the
 // (sidx, traitIdx) vtable, producing an `any P` fat-pointer value.
 fn boxIntoAny(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, sidx: U64, anyRef: U64, traitIdx: U64) -> LLVMValueRef {
-    val sd: StructDef = c.structs[sidx]
+    val sd: StructDef = c.arena.structs[sidx]
     val regSlot: U64 = structRegSlot(c: inout c, st: inout st, start: sd.nameStart, len: sd.nameLen)
     val concreteTy: LLVMTypeRef = st.structTys[regSlot]
     val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
@@ -358,10 +358,10 @@ fn coerceToAnyIfNeeded(c: inout Comp, st: inout LlvmCtx, targetRef: U64, valueEx
         return LLVMConstNull(st.ptrty)
     }
     val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: valueExpr)
-    if sidx >= c.structs.count {
+    if sidx >= c.arena.structs.count {
         return LLVMConstNull(st.ptrty)
     }
-    val tr: TypeRef = c.types[targetRef]
+    val tr: TypeRef = c.arena.types[targetRef]
     val traitIdx: U64 = findTraitIdxByName(c: inout c, start: tr.nameStart, len: tr.nameLen)
     if traitIdx >= c.traits.count {
         return LLVMConstNull(st.ptrty)
@@ -379,7 +379,7 @@ fn coerceToAnyIfNeeded(c: inout Comp, st: inout LlvmCtx, targetRef: U64, valueEx
 // the requirement's vtable slot, and calls the thunk with (data, args). Self-input
 // requirements have no vtable slot (anyMethodSlot returns 0) and are rejected.
 fn genLlvmAnyDispatch(c: inout Comp, st: inout LlvmCtx, recv: U64, anyRef: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
-    val tr: TypeRef = c.types[anyRef]
+    val tr: TypeRef = c.arena.types[anyRef]
     val traitIdx: U64 = findTraitIdxByName(c: inout c, start: tr.nameStart, len: tr.nameLen)
     if traitIdx >= c.traits.count {
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: `any` over an unknown trait")
@@ -454,7 +454,7 @@ fn genLlvmFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
 // Emit function `fi`'s body into the LLVM function value `fv` (under the active
 // substitution env, if any — used for both plain functions and generic instances).
 fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) {
-    val f: Func = c.funcs[fi]
+    val f: Func = c.arena.funcs[fi]
     st.curFn = fv
     st.curIsMain = false
     st.curRetVoid = !f.hasRet
@@ -522,18 +522,18 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
         mut val selfIsArr: Bool = false
         mut val selfElemTy: LLVMTypeRef = st.i64ty
         if st.curRecvInstRef != 0U64 {
-            if rangeEquals(bytes: c.bytes, start: c.types[st.curRecvInstRef].nameStart, len: c.types[st.curRecvInstRef].nameLen, kw: "Array") {
+            if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[st.curRecvInstRef].nameStart, len: c.arena.types[st.curRecvInstRef].nameLen, kw: "Array") {
                 recvTy = st.arrayTy
                 selfIsArr = true
-                if c.types[st.curRecvInstRef].args.count > 0U64 {
-                    selfElemTy = llvmTypeOfRef(c: inout c, st: inout st, ref: c.types[st.curRecvInstRef].args[0])
+                if c.arena.types[st.curRecvInstRef].args.count > 0U64 {
+                    selfElemTy = llvmTypeOfRef(c: inout c, st: inout st, ref: c.arena.types[st.curRecvInstRef].args[0])
                 }
             }
         }
         // an enum receiver (`impl Color { fn code() … }`): track its TypeRef so a
         // bare `match self` / `self == …` in the body recovers the enum.
         if recvRef == 0U64 {
-            if recvSidx >= c.structs.count {
+            if recvSidx >= c.arena.structs.count {
                 if enumRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.enumIdxs.count {
                     recvRef = simpleTypeRef(c: inout c, nameStart: f.recvStart, nameLen: f.recvLen)
                 }

@@ -9,7 +9,7 @@ fn ensureProvidedDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
     if existing < st.fnIdx.count {
         return existing
     }
-    val f: Func = c.funcs[fi]
+    val f: Func = c.arena.funcs[fi]
     if f.typeParams.count > 0U64 {
         return st.fnIdx.count
     }
@@ -19,7 +19,7 @@ fn ensureProvidedDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
     // a registered struct receiver, or a primitive lang-item (String / a fixed-width
     // integer) — all have a well-defined self LLVM type.
     if structRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) >= st.structIdxs.count {
-        if !(rangeEquals(bytes: c.bytes, start: f.recvStart, len: f.recvLen, kw: "String")) {
+        if !(rangeEquals(bytes: c.arena.bytes, start: f.recvStart, len: f.recvLen, kw: "String")) {
             if !(isPrimIntName(c: inout c, start: f.recvStart, len: f.recvLen)) {
                 return st.fnIdx.count
             }
@@ -65,7 +65,7 @@ fn ensureFreeFnDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
     if existing < st.fnIdx.count {
         return existing
     }
-    val f: Func = c.funcs[fi]
+    val f: Func = c.arena.funcs[fi]
     if f.typeParams.count > 0U64 { return st.fnIdx.count }
     // an assoc fn (`Trait.banner()`) has a receiver type but no self param — emit it
     // like a free function; a real method (self) is not handled here.
@@ -116,9 +116,9 @@ fn declareGenFns(c: inout Comp, st: inout LlvmCtx) {
         // restrict to the entry module: a std generic fn (print[T] etc.) has a body
         // full of not-yet-supported constructs and shouldn't be emitted (print is
         // special-cased at the call site, so its instance is never called).
-        if fin.recvInstRef == 0U64 && moduleOf(c: inout c, offset: c.funcs[fin.fnIdx].nameStart) == 0U64 {
+        if fin.recvInstRef == 0U64 && moduleOf(c: inout c, offset: c.arena.funcs[fin.fnIdx].nameStart) == 0U64 {
             if isGenericFreeFn(c: inout c, fi: fin.fnIdx) {
-                val f: Func = c.funcs[fin.fnIdx]
+                val f: Func = c.arena.funcs[fin.fnIdx]
                 val savedP: Array[Bind] = c.curTypeParams
                 val savedA: Array[U64] = c.curTypeArgs
                 c.curTypeParams = f.typeParams
@@ -151,7 +151,7 @@ fn emitGenFns(c: inout Comp, st: inout LlvmCtx) {
     mut val slot: U64 = 0
     while slot < st.genFnK.count {
         val fin: FnInst = c.monoWork.fnInsts[st.genFnK[slot]]
-        val f: Func = c.funcs[fin.fnIdx]
+        val f: Func = c.arena.funcs[fin.fnIdx]
         val savedP: Array[Bind] = c.curTypeParams
         val savedA: Array[U64] = c.curTypeArgs
         c.curTypeParams = f.typeParams
@@ -171,7 +171,7 @@ fn emitGenFns(c: inout Comp, st: inout LlvmCtx) {
 fn llvmArgTypeRef(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> U64 {
     // a closure-literal argument (`f: fn(x: I64) -> B`): build its fn TypeRef
     // (args = [ret, p0, …]) so a type param in the return/param position infers.
-    match c.exprs[argExpr] {
+    match c.arena.exprs[argExpr] {
         Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, val retTy, body: _) => {
             val fnB: Bind = kwSpan(c: inout c, kw: "fn", kwLen: 2U64)
             mut val fargs: Array[U64] = []
@@ -201,8 +201,8 @@ fn llvmArgTypeRef(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> U64 {
         return tr
     }
     val si: U64 = exprStructIdx(c: inout c, st: inout st, id: argExpr)
-    if si < c.structs.count {
-        return findOrAddTypeRef(c: inout c, nameStart: c.structs[si].nameStart, nameLen: c.structs[si].nameLen)
+    if si < c.arena.structs.count {
+        return findOrAddTypeRef(c: inout c, nameStart: c.arena.structs[si].nameStart, nameLen: c.arena.structs[si].nameLen)
     }
     val t: TypeInfo = typeOf(c: inout c, id: argExpr)
     if t.kind == 0 {
@@ -265,7 +265,7 @@ fn groundAssocFromExpected(c: inout Comp, st: inout LlvmCtx, recvStart: U64, rec
     if !(isGenericInst(c: inout c, ref: st.expectedTy)) {
         return
     }
-    val et: TypeRef = c.types[st.expectedTy]
+    val et: TypeRef = c.arena.types[st.expectedTy]
     if !(spansEqual(c: inout c, aStart: et.nameStart, aLen: et.nameLen, bStart: recvStart, bLen: recvLen)) {
         return
     }
@@ -279,7 +279,7 @@ fn groundAssocFromExpected(c: inout Comp, st: inout LlvmCtx, recvStart: U64, rec
         // the authoritative ground for this param, so override.
         mut val needsGround: Bool = inferred[i] == 0U64
         if !(needsGround) {
-            if c.types[inferred[i]].nameLen == 0U64 {
+            if c.arena.types[inferred[i]].nameLen == 0U64 {
                 needsGround = true
             }
         }

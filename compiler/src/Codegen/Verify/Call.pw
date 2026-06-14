@@ -18,15 +18,15 @@ fn knownNamedTypeId(c: inout Comp, start: U64, len: U64) -> U64 {
     val ar: Bind = aliasReal(c: inout c, start: start, len: len)
     val q: U64 = intern(c: inout c, start: ar.nameStart, len: ar.nameLen)
     val si: U64 = structIndexByName(c: inout c, start: ar.nameStart, len: ar.nameLen)
-    if si < c.structs.count {
-        if c.structs[si].isCExtern {
+    if si < c.arena.structs.count {
+        if c.arena.structs[si].isCExtern {
             return 0U64
         }
         return q
     }
     mut val ei: U64 = 0
-    while ei < c.enums.count {
-        if c.enums[ei].nameId == q {
+    while ei < c.arena.enums.count {
+        if c.arena.enums[ei].nameId == q {
             return q
         }
         ei += 1
@@ -34,8 +34,8 @@ fn knownNamedTypeId(c: inout Comp, start: U64, len: U64) -> U64 {
     // a `newtype` (spec/10) is a distinct named type: give it its own id so the type
     // checker keeps it apart from its underlying (`val x: I64 = meter` needs `as`).
     mut val ni: U64 = 0
-    while ni < c.newtypes.count {
-        if c.newtypes[ni].nameId == q {
+    while ni < c.arena.newtypes.count {
+        if c.arena.newtypes[ni].nameId == q {
             return q
         }
         ni += 1
@@ -58,12 +58,12 @@ fn checkMethodArgCategories(c: inout Comp, recv: U64, nameStart: U64, nameLen: U
         return
     }
     val nq: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-    mut val theFi: U64 = c.funcs.count
+    mut val theFi: U64 = c.arena.funcs.count
     mut val count: U64 = 0
     mut val anyOther: Bool = false
     mut val fi: U64 = 0
-    while fi < c.funcs.count {
-        val f: Func = c.funcs[fi]
+    while fi < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[fi]
         if f.hasRecv && f.nameId == nq && f.recvId == rId {
             if f.typeParams.count > 0U64 || f.isProvided || f.extId != 0U64 {
                 anyOther = true
@@ -77,7 +77,7 @@ fn checkMethodArgCategories(c: inout Comp, recv: U64, nameStart: U64, nameLen: U
     if anyOther || count != 1U64 {
         return
     }
-    val cf: Func = c.funcs[theFi]
+    val cf: Func = c.arena.funcs[theFi]
     if args.count != cf.params.count {
         return
     }
@@ -116,12 +116,12 @@ fn checkMethodArgCategories(c: inout Comp, recv: U64, nameStart: U64, nameLen: U
 // with the same reliable-value discipline as bindings.
 fn checkCallArgCategories(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) {
     val q: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-    mut val theFi: U64 = c.funcs.count
+    mut val theFi: U64 = c.arena.funcs.count
     mut val count: U64 = 0
     mut val anyGen: Bool = false
     mut val fi: U64 = 0
-    while fi < c.funcs.count {
-        val f: Func = c.funcs[fi]
+    while fi < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[fi]
         if f.nameId == q && !f.hasRecv && !f.isExtern {
             if f.typeParams.count > 0U64 {
                 anyGen = true
@@ -135,7 +135,7 @@ fn checkCallArgCategories(c: inout Comp, nameStart: U64, nameLen: U64, args: Arr
     if anyGen || count != 1U64 {
         return
     }
-    val cf: Func = c.funcs[theFi]
+    val cf: Func = c.arena.funcs[theFi]
     if args.count != cf.params.count {
         return
     }
@@ -180,9 +180,9 @@ fn variantExists(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64,
     val qEnum: U64 = intern(c: inout c, start: arE.nameStart, len: arE.nameLen)
     val qVar: U64 = intern(c: inout c, start: variantStart, len: variantLen)
     mut val ei: U64 = 0
-    while ei < c.enums.count {
-        if c.enums[ei].nameId == qEnum {
-            val vars: Array[Variant] = c.enums[ei].variants
+    while ei < c.arena.enums.count {
+        if c.arena.enums[ei].nameId == qEnum {
+            val vars: Array[Variant] = c.arena.enums[ei].variants
             mut val vi: U64 = 0
             while vi < vars.count {
                 if vars[vi].nameId == qVar {

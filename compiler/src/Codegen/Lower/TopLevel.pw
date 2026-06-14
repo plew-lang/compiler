@@ -26,7 +26,7 @@ fn lowerExtern(c: inout Comp, e: ExternAst) {
                 pj += 1
             }
         }
-        c.funcs.append(lowerSigToFunc(c: inout c, sig: e.fns[fi], isExtern: true, isCExtern: e.abiC))
+        c.arena.funcs.append(lowerSigToFunc(c: inout c, sig: e.fns[fi], isExtern: true, isCExtern: e.abiC))
         fi += 1
     }
     mut val si: U64 = 0
@@ -34,7 +34,7 @@ fn lowerExtern(c: inout Comp, e: ExternAst) {
         val nm: Bind = internBytes(c: inout c, s: e.structNames[si])
         val noTP: Array[Bind] = []
         val noFields: Array[FieldDef] = []
-        c.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) typeParams=noTP fields=noFields isUnique=false isExtern=true isCExtern=e.abiC />)
+        c.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) typeParams=noTP fields=noFields isUnique=false isExtern=true isCExtern=e.abiC />)
         // a `@[...]` derive on this opaque extern type (spec/16): lower its directive to
         // pending derives and drain them onto this type, with the `struct Name` span as
         // the item source so the harness `parseItem` recovers a `Decl` (name = the type).
@@ -127,29 +127,29 @@ fn lowerDirective(c: inout Comp, dir: DirectiveAst) {
 fn lowerExportItem(c: inout Comp, inner: TopItemAst) {
     match inner {
         TopItemAst.Extern(val e) => {
-            val xfB: U64 = c.funcs.count
-            val xsB: U64 = c.structs.count
+            val xfB: U64 = c.arena.funcs.count
+            val xsB: U64 = c.arena.structs.count
             lowerExtern(c: inout c, e: e)
             mut val xi: U64 = xfB
-            while xi < c.funcs.count {
-                recordExport(c: inout c, nameStart: c.funcs[xi].nameStart, nameLen: c.funcs[xi].nameLen)
+            while xi < c.arena.funcs.count {
+                recordExport(c: inout c, nameStart: c.arena.funcs[xi].nameStart, nameLen: c.arena.funcs[xi].nameLen)
                 xi += 1
             }
             mut val xj: U64 = xsB
-            while xj < c.structs.count {
-                recordExport(c: inout c, nameStart: c.structs[xj].nameStart, nameLen: c.structs[xj].nameLen)
+            while xj < c.arena.structs.count {
+                recordExport(c: inout c, nameStart: c.arena.structs[xj].nameStart, nameLen: c.arena.structs[xj].nameLen)
                 xj += 1
             }
         }
         TopItemAst.Decl(val d) => {
-            val sB: U64 = c.structs.count
-            val eB: U64 = c.enums.count
-            val fB: U64 = c.funcs.count
+            val sB: U64 = c.arena.structs.count
+            val eB: U64 = c.arena.enums.count
+            val fB: U64 = c.arena.funcs.count
             lowerDecl(c: inout c, d: d)
             match d.kind {
-                DeclKind.Struct => { recordExport(c: inout c, nameStart: c.structs[sB].nameStart, nameLen: c.structs[sB].nameLen) }
-                DeclKind.Enum => { recordExport(c: inout c, nameStart: c.enums[eB].nameStart, nameLen: c.enums[eB].nameLen) }
-                DeclKind.Func => { recordExport(c: inout c, nameStart: c.funcs[fB].nameStart, nameLen: c.funcs[fB].nameLen) }
+                DeclKind.Struct => { recordExport(c: inout c, nameStart: c.arena.structs[sB].nameStart, nameLen: c.arena.structs[sB].nameLen) }
+                DeclKind.Enum => { recordExport(c: inout c, nameStart: c.arena.enums[eB].nameStart, nameLen: c.arena.enums[eB].nameLen) }
+                DeclKind.Func => { recordExport(c: inout c, nameStart: c.arena.funcs[fB].nameStart, nameLen: c.arena.funcs[fB].nameLen) }
             }
         }
         TopItemAst.Trait(val t) => {
@@ -158,19 +158,19 @@ fn lowerExportItem(c: inout Comp, inner: TopItemAst) {
             recordExport(c: inout c, nameStart: c.traits[tB].nameStart, nameLen: c.traits[tB].nameLen)
         }
         TopItemAst.GlobalVal(val s) => {
-            val gB: U64 = c.globals.count
+            val gB: U64 = c.arena.globals.count
             lowerGlobalVal(c: inout c, s: s)
-            if c.globals.count > gB {
-                recordExport(c: inout c, nameStart: c.globals[gB].nameStart, nameLen: c.globals[gB].nameLen)
+            if c.arena.globals.count > gB {
+                recordExport(c: inout c, nameStart: c.arena.globals[gB].nameStart, nameLen: c.arena.globals[gB].nameLen)
             }
         }
         TopItemAst.NewType(val name, val ty, isPub: _, span: _) => {
             // `export newtype Name = Underlying` (spec/10,15): lower the distinct type,
             // then record its name as exported so other modules can import it.
-            val ntB: U64 = c.newtypes.count
+            val ntB: U64 = c.arena.newtypes.count
             lowerNewtype(c: inout c, name: name, ty: ty)
-            if c.newtypes.count > ntB {
-                recordExport(c: inout c, nameStart: c.newtypes[ntB].nameStart, nameLen: c.newtypes[ntB].nameLen)
+            if c.arena.newtypes.count > ntB {
+                recordExport(c: inout c, nameStart: c.arena.newtypes[ntB].nameStart, nameLen: c.arena.newtypes[ntB].nameLen)
             }
         }
         _ => { lowerTopItem(c: inout c, item: inner) }
@@ -202,18 +202,18 @@ fn lowerTopItem(c: inout Comp, item: TopItemAst) {
 fn lowerNewtype(c: inout Comp, name: String, ty: TypeAst) {
     val nm: Bind = internBytes(c: inout c, s: name)
     val under: PType = lowerType(c: inout c, t: ty)
-    c.newtypes.append(value: <NewtypeDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) underStart=under.start underLen=under.len underRef=under.ref />)
+    c.arena.newtypes.append(value: <NewtypeDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) underStart=under.start underLen=under.len underRef=under.ref />)
 }
 
 // Lower a module-level variable (spec/15). The shared parser hands us the same
 // `StmtAst.Let` a local binding produces; we lower it to an arena `Stmt.Let` (so the
-// initializer / type are arena nodes) and record a `Comp.globals` entry keyed by the
+// initializer / type are arena nodes) and record a `Comp.arena.globals` entry keyed by the
 // binding's name. The backend emits the LLVM global and its one-time init.
 fn lowerGlobalVal(c: inout Comp, s: StmtAst) {
     val stid: U64 = lowerStmt(c: inout c, s: s)
-    match c.stmts[stid] {
+    match c.arena.stmts[stid] {
         Stmt.Let(val mutable, val nameStart, val nameLen, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => {
-            c.globals.append(<Global nameStart=nameStart nameLen=nameLen letStmt=stid mutable=mutable />)
+            c.arena.globals.append(<Global nameStart=nameStart nameLen=nameLen letStmt=stid mutable=mutable />)
         }
         _ => {}
     }

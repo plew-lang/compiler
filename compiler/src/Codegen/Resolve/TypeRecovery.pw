@@ -51,7 +51,7 @@ fn argMatchesParam(c: inout Comp, argExpr: U64, p: Param) -> Bool {
         return false
     }
     if ti.kind == 1 {
-        return rangeEquals(bytes: c.bytes, start: p.tyStart, len: p.tyLen, kw: "String")
+        return rangeEquals(bytes: c.arena.bytes, start: p.tyStart, len: p.tyLen, kw: "String")
     }
     if ti.kind == 2 {
         return intern(c: inout c, start: ti.nameStart, len: ti.nameLen) == p.tyNameId
@@ -116,8 +116,8 @@ fn overloadsAmbiguous(c: inout Comp, fa: Func, fb: Func, args: Array[Arg]) -> Bo
 // ambiguous for this call — picking the first silently would invent meaning
 // (spec: 補完はする／忖度はしない／曖昧はエラー).
 fn checkOverloadAmbiguity(c: inout Comp, a: U64, b: U64, args: Array[Arg]) {
-    if b != c.funcs.count {
-        if overloadsAmbiguous(c: inout c, fa: c.funcs[a], fb: c.funcs[b], args: args) {
+    if b != c.arena.funcs.count {
+        if overloadsAmbiguous(c: inout c, fa: c.arena.funcs[a], fb: c.arena.funcs[b], args: args) {
             mut val off: U64 = 0
             if args.count > 0 {
                 off = exprOffset(c: inout c, id: args[0].expr)
@@ -170,8 +170,8 @@ fn matchExhaustive(c: inout Comp, arms: Array[MatchArm]) -> Bool {
     }
     val qEnum: U64 = intern(c: inout c, start: enumStart, len: enumLen)
     mut val ei: U64 = 0
-    while ei < c.enums.count {
-        val e: EnumDef = c.enums[ei]
+    while ei < c.arena.enums.count {
+        val e: EnumDef = c.arena.enums[ei]
         if e.nameId == qEnum {
             val vars: Array[Variant] = e.variants
             mut val vi: U64 = 0
@@ -197,8 +197,8 @@ fn variantIndex(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, 
     val qEnum: U64 = intern(c: inout c, start: arE.nameStart, len: arE.nameLen)
     val qVar: U64 = intern(c: inout c, start: variantStart, len: variantLen)
     mut val ei: U64 = 0
-    while ei < c.enums.count {
-        val e: EnumDef = c.enums[ei]
+    while ei < c.arena.enums.count {
+        val e: EnumDef = c.arena.enums[ei]
         if e.nameId == qEnum {
             val vars: Array[Variant] = e.variants
             mut val vi: U64 = 0
@@ -226,15 +226,15 @@ fn scalarInfo() -> TypeInfo {
 // source span to point at (a string literal's `String`, `.bytes`'s `U8`). Reuse
 // any occurrence of `kw` in the source as a label span (the match is purely the
 // bytes; a comment/string occurrence works too). nameLen=0 if `kw` never appears.
-// Append `kw`'s bytes to `c.bytes` and record their span in `c.kwCache`, so a
+// Append `kw`'s bytes to `c.arena.bytes` and record their span in `c.kwCache`, so a
 // built-in name with no guaranteed source occurrence has a stable, addressable
 // span without scanning (or planting a comment in) the source.
 fn addKwSpan(c: inout Comp, kw: String) {
-    val start: U64 = c.bytes.count
+    val start: U64 = c.arena.bytes.count
     val b: Array[U8] = kw.bytes
     mut val i: U64 = 0
     while i < b.count {
-        c.bytes.append(b[i])
+        c.arena.bytes.append(b[i])
         i += 1
     }
     c.kwCache.append(<Bind nameStart=start nameLen=b.count fieldStart=start fieldLen=b.count />)
@@ -261,19 +261,19 @@ fn kwSpan(c: inout Comp, kw: String, kwLen: U64) -> Bind {
     mut val ci: U64 = 0
     while ci < c.kwCache.count {
         val e: Bind = c.kwCache[ci]
-        if rangeEquals(bytes: c.bytes, start: e.nameStart, len: e.nameLen, kw: kw) {
+        if rangeEquals(bytes: c.arena.bytes, start: e.nameStart, len: e.nameLen, kw: kw) {
             return e
         }
         ci += 1
     }
-    val n: U64 = c.bytes.count
+    val n: U64 = c.arena.bytes.count
     if n < kwLen {
         return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
     }
     mut val i: U64 = 0
     val last: U64 = n - kwLen
     while i <= last {
-        if rangeEquals(bytes: c.bytes, start: i, len: kwLen, kw: kw) {
+        if rangeEquals(bytes: c.arena.bytes, start: i, len: kwLen, kw: kw) {
             return <Bind nameStart=i nameLen=kwLen fieldStart=i fieldLen=kwLen />
         }
         i += 1
@@ -299,7 +299,7 @@ fn typeInfoOfName(c: inout Comp, start: U64, len: U64, isArray: Bool) -> TypeInf
     if rl == 0 {
         return scalarInfo()
     }
-    if rangeEquals(bytes: c.bytes, start: rs, len: rl, kw: "String") {
+    if rangeEquals(bytes: c.arena.bytes, start: rs, len: rl, kw: "String") {
         return <TypeInfo kind=1 nameStart=rs nameLen=rl ref=0 />
     }
     if isPrimType(c: inout c, start: rs, len: rl) {

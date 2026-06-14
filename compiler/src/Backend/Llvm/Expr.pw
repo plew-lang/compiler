@@ -6,7 +6,7 @@
 // load from the alloca), arithmetic/comparison binaries, and calls. Anything else
 // is rejected loudly (no silent miscompile) until its increment lands.
 fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
-    val e: Expr = c.exprs[id]
+    val e: Expr = c.arena.exprs[id]
     match e {
         Expr.Int(val value, offset: _, val isBool, tyStart: _, tyLen: _, val isNeg) => {
             mut val ty: LLVMTypeRef = st.i64ty
@@ -37,7 +37,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             return k
         }
         Expr.Float(val start, val len, tyStart: _, tyLen: _) => {
-            // a float literal: parse the digit text (c.bytes[start..start+len]) straight
+            // a float literal: parse the digit text (c.arena.bytes[start..start+len]) straight
             // to an IEEE double constant. F32 uses double for now (see f64ty).
             return LLVMConstRealOfStringAndSize(st.f64ty, floatTextCPtr(c: inout c, start: start, len: len), len)
         }
@@ -49,7 +49,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // a bare reference to a free function (`val g = twice`): the closure
             // {thunk, env=null} value, where the thunk adapts it to the closure ABI.
             val fvi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)
-            if fvi < c.funcs.count {
+            if fvi < c.arena.funcs.count {
                 val ts: U64 = thunkSlot(st: inout st, fi: fvi)
                 if ts < st.thunkIdx.count {
                     mut val cv: LLVMValueRef = LLVMGetUndef(st.closureTy)
@@ -82,7 +82,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // the struct's fields as a {ptr,len} String and dereferences garbage.
             if op == opEq() || op == opNe() {
                 if valueKind(c: inout c, st: inout st, id: lhs) == 1U64 {
-                    if exprStructIdx(c: inout c, st: inout st, id: lhs) >= c.structs.count {
+                    if exprStructIdx(c: inout c, st: inout st, id: lhs) >= c.arena.structs.count {
                         return emitStrEq(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
                     }
                 }
@@ -93,7 +93,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // aggregate witness (binWitnessFn -> none) and falls through.
             if isBinTraitOp(op: op) {
                 val wfi: U64 = binWitnessFn(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
-                if wfi < c.funcs.count {
+                if wfi < c.arena.funcs.count {
                     return emitWitnessCall(c: inout c, st: inout st, fi: wfi, lhs: lhs, rhs: rhs, binary: true)
                 }
             }
@@ -102,7 +102,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // struct ==/!= : structural (field-by-field) equality (the Eq witness).
             if op == opEq() || op == opNe() {
                 val sidxE: U64 = exprStructIdx(c: inout c, st: inout st, id: lhs)
-                if sidxE < c.structs.count {
+                if sidxE < c.arena.structs.count {
                     if structEqSupported(c: inout c, st: inout st, sidx: sidxE) {
                         val eqv: LLVMValueRef = emitStructEq(c: inout c, st: inout st, a: l, b: r, sidx: sidxE)
                         if op == opNe() {
@@ -114,10 +114,10 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                 // enum ==/!= : a payload-less enum compares by tag (field 0). A
                 // payload-carrying enum needs a per-variant switch (deferred).
                 mut val eidE: U64 = exprEnumIdx(c: inout c, st: inout st, id: lhs)
-                if eidE >= c.enums.count {
+                if eidE >= c.arena.enums.count {
                     eidE = exprEnumIdx(c: inout c, st: inout st, id: rhs)
                 }
-                if eidE < c.enums.count {
+                if eidE < c.arena.enums.count {
                     if enumPayloadless(c: inout c, eid: eidE) {
                         val tagL: LLVMValueRef = LLVMBuildExtractValue(st.b, l, 0U64, anon())
                         val tagR: LLVMValueRef = LLVMBuildExtractValue(st.b, r, 0U64, anon())
@@ -142,17 +142,17 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // witness) -> an i32 ordering compared against 0.
             if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
                 val sidxO: U64 = exprStructIdx(c: inout c, st: inout st, id: lhs)
-                if sidxO < c.structs.count {
+                if sidxO < c.arena.structs.count {
                     if structOrdSupported(c: inout c, st: inout st, sidx: sidxO) {
                         return emitStructOrdOp(c: inout c, st: inout st, op: op, a: l, b: r, sidx: sidxO)
                     }
                 }
                 // enum ordering (`< <= > >=`): tag-then-payload lexicographic compare.
                 mut val eidO: U64 = exprEnumIdx(c: inout c, st: inout st, id: lhs)
-                if eidO >= c.enums.count {
+                if eidO >= c.arena.enums.count {
                     eidO = exprEnumIdx(c: inout c, st: inout st, id: rhs)
                 }
-                if eidO < c.enums.count {
+                if eidO < c.arena.enums.count {
                     if enumOrdSupported(c: inout c, st: inout st, eid: eidO) {
                         return emitEnumOrdOp(c: inout c, st: inout st, op: op, a: l, b: r, eid: eidO, sty: LLVMTypeOf(l))
                     }
@@ -206,15 +206,15 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             }
             // `arr.count` — an array's count is field 1.
             if exprIsArray(c: inout c, st: inout st, id: base) {
-                if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "count") {
+                if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
                     return LLVMBuildExtractValue(st.b, genLlvmExpr(c: inout c, st: inout st, id: base), 1U64, anon())
                 }
             }
             val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
-            if sidx < c.structs.count {
+            if sidx < c.arena.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                if fidx < c.structs[sidx].fields.count {
-                    val fd: FieldDef = c.structs[sidx].fields[fidx]
+                if fidx < c.arena.structs[sidx].fields.count {
+                    val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
                     val raw: LLVMValueRef = LLVMBuildExtractValue(st.b, genLlvmExpr(c: inout c, st: inout st, id: base), fidx, anon())
                     // a boxed (recursive) field holds a heap pointer; deref it to the
                     // boxed value. Ground the field's pointee type under the BASE's
@@ -287,9 +287,9 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // (an array field yields the {ptr,i64} value, whose buffer is shared, so
             // `r->arr[i] = v` mutates through any alias).
             val psidx: U64 = refPointeeStructIdx(c: inout c, st: inout st, base: base)
-            if psidx < c.structs.count {
+            if psidx < c.arena.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
-                if fidx < c.structs[psidx].fields.count {
+                if fidx < c.arena.structs[psidx].fields.count {
                     return LLVMBuildExtractValue(st.b, loadRefPointee(c: inout c, st: inout st, base: base), fidx, anon())
                 }
             }
@@ -328,7 +328,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // owner runs it). `borrow` leaves the source owned (a non-consuming read).
             val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: operand)
             if !(isBorrow) {
-                match c.exprs[operand] {
+                match c.arena.exprs[operand] {
                     Expr.Ident(start: val s, len: val l) => {
                         markLocalMoved(c: inout c, st: inout st, start: s, len: l)
                     }
@@ -371,7 +371,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             }
             val opRef: U64 = exprTypeRef(c: inout c, st: inout st, id: operand)
             if opRef != 0U64 {
-                if newtypeUnderRef(c: inout c, start: c.types[opRef].nameStart, len: c.types[opRef].nameLen) != 0U64 {
+                if newtypeUnderRef(c: inout c, start: c.arena.types[opRef].nameStart, len: c.arena.types[opRef].nameLen) != 0U64 {
                     return ov
                 }
             }
@@ -383,7 +383,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // (`-money` -> `Money.neg(value:)`, `!switch` -> `Switch.not`). A
             // primitive operand has no aggregate witness and keeps the LLVM op.
             val uwfi: U64 = unaryWitnessFn(c: inout c, st: inout st, op: op, operand: operand)
-            if uwfi < c.funcs.count {
+            if uwfi < c.arena.funcs.count {
                 return emitWitnessCall(c: inout c, st: inout st, fi: uwfi, lhs: operand, rhs: operand, binary: false)
             }
             if op == opSub() {
@@ -419,7 +419,7 @@ fn dbgSpan(c: inout Comp, start: U64, len: U64) -> String {
     mut val nm: Array[U8] = []
     mut val j: U64 = start
     while j < start + len {
-        nm.append(value: c.bytes[j])
+        nm.append(value: c.arena.bytes[j])
         j += 1
     }
     return stringFromBytesUnchecked(nm)
@@ -427,7 +427,7 @@ fn dbgSpan(c: inout Comp, start: U64, len: U64) -> String {
 
 // (diagnostic) The name of an expression's arena variant.
 fn exprFormName(c: inout Comp, id: U64) -> String {
-    match c.exprs[id] {
+    match c.arena.exprs[id] {
         Expr.Ident(start: val s, len: val l) => { return dbgSpan(c: inout c, start: s, len: l) }
         Expr.Field(base: _, val nameStart, val nameLen) => { return dbgSpan(c: inout c, start: nameStart, len: nameLen) }
         Expr.Call(val nameStart, val nameLen, args: _) => { return dbgSpan(c: inout c, start: nameStart, len: nameLen) }
@@ -435,7 +435,7 @@ fn exprFormName(c: inout Comp, id: U64) -> String {
     }
 }
 fn exprFormName2(c: inout Comp, id: U64) -> String {
-    match c.exprs[id] {
+    match c.arena.exprs[id] {
         Expr.Index(base: _, index: _) => { return "Index" }
         Expr.Array(elems: _) => { return "Array" }
         Expr.Cast(operand: _, tyStart: _, tyLen: _, ty: _) => { return "Cast" }

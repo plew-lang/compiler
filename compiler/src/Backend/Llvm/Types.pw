@@ -28,9 +28,9 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
                 if isGenericInst(c: inout c, ref: argRef) {
                     return llvmTypeOfRef(c: inout c, st: inout st, ref: argRef)
                 }
-                val at: TypeRef = c.types[argRef]
+                val at: TypeRef = c.arena.types[argRef]
                 // an array argument (`T -> Array[I32]`) is the {ptr,i64} value type.
-                if rangeEquals(bytes: c.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
+                if rangeEquals(bytes: c.arena.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
                     return st.arrayTy
                 }
                 return llvmScalarTy(c: inout c, st: inout st, tyStart: at.nameStart, tyLen: at.nameLen)
@@ -38,43 +38,43 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
             ti += 1
         }
     }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "String") {
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "String") {
         return st.strty
     }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Bool") {
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Bool") {
         return st.i1ty
     }
     // float types F32 / F64 lower to the IEEE double (F32 as double for now).
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "F64") {
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "F64") {
         return st.f64ty
     }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "F32") {
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "F32") {
         return st.f64ty
     }
     // a `Ref[T]` is a pointer to a heap cell holding the pointee (opaque ptr).
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Ref") {
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Ref") {
         return st.ptrty
     }
     // a `RawBuffer[T]` is the raw data pointer (the rawbuf floor; opaque ptr).
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "RawBuffer") {
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "RawBuffer") {
         return st.ptrty
     }
     // FFI raw pointers (`CPtr[T]`) are opaque pointers (spec/15).
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "CPtr") {
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "CPtr") {
         return st.ptrty
     }
     // a function-value type `fn(...) -> ...` is the {fn, env} closure fat pointer.
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "fn") {
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "fn") {
         return st.closureTy
     }
     // Width-accurate integers: I8/U8 -> i8, I16/U16 -> i16, I32/U32 -> i32, else
     // i64 (signedness is tracked separately as a kind, not in the LLVM type).
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "I8") { return st.i8ty }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "U8") { return st.i8ty }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "I16") { return st.i16ty }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "U16") { return st.i16ty }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "I32") { return st.i32ty }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "U32") { return st.i32ty }
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "I8") { return st.i8ty }
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "U8") { return st.i8ty }
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "I16") { return st.i16ty }
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "U16") { return st.i16ty }
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "I32") { return st.i32ty }
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "U32") { return st.i32ty }
     // a registered (all-primitive-field) user struct -> its named LLVM struct type.
     val reg: U64 = structRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen)
     if reg < st.structIdxs.count {
@@ -90,8 +90,8 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
     // (`_llvm.pw`) passes these (LLVMValueRef/LLVMTypeRef/…) pervasively, so the
     // backend must lower them to `ptr` to self-compile.
     val cxi: U64 = structIndexByName(c: inout c, start: tyStart, len: tyLen)
-    if cxi < c.structs.count {
-        if c.structs[cxi].isCExtern {
+    if cxi < c.arena.structs.count {
+        if c.arena.structs[cxi].isCExtern {
             return st.ptrty
         }
     }
@@ -102,7 +102,7 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
 // st.structIdxs.count if the type is not a registered struct.
 fn structRegSlot(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 {
     val sidx: U64 = structIndexByName(c: inout c, start: start, len: len)
-    if sidx < c.structs.count {
+    if sidx < c.arena.structs.count {
         mut val i: U64 = 0
         while i < st.structIdxs.count {
             if st.structIdxs[i] == sidx {
@@ -121,7 +121,7 @@ fn structRegSlot(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 
 // struct (struct-of-struct). Enum fields and generic-instance fields are not yet
 // modeled. Value types cannot be cyclic by value, so the recursion terminates.
 fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
-    val sd: StructDef = c.structs[sidx]
+    val sd: StructDef = c.arena.structs[sidx]
     if sd.typeParams.count > 0 { return false }
     if sd.isExtern { return false }
     // unique structs are now registerable (same field layout); their deinit runs at
@@ -148,16 +148,16 @@ fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
                 // registration order doesn't matter; non-boxed value cycles are a
                 // front-end error, so the mutual recursion terminates).
                 val feid: U64 = enumIdxByName(c: inout c, start: f.tyStart, len: f.tyLen)
-                if feid < c.enums.count {
+                if feid < c.arena.enums.count {
                     if !(enumRepresentable(c: inout c, eid: feid)) {
                         return false
                     }
                 } else {
                     val fsi: U64 = structIndexByName(c: inout c, start: f.tyStart, len: f.tyLen)
-                    if fsi < c.structs.count {
+                    if fsi < c.arena.structs.count {
                         // an extern struct field is a primitive lang-item (ok); a real
                         // nested struct must itself be registerable (recursively).
-                        if !(c.structs[fsi].isExtern) {
+                        if !(c.arena.structs[fsi].isExtern) {
                             if !(structRegisterable(c: inout c, sidx: fsi)) {
                                 return false
                             }
@@ -178,7 +178,7 @@ fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
 // through the pure predicates). Non-boxed value cycles are a front-end error, so the
 // mutual recursion with structRegisterable terminates.
 fn enumRepresentable(c: inout Comp, eid: U64) -> Bool {
-    val e: EnumDef = c.enums[eid]
+    val e: EnumDef = c.arena.enums[eid]
     if e.typeParams.count > 0 { return false }
     mut val vi: U64 = 0
     while vi < e.variants.count {
@@ -196,14 +196,14 @@ fn enumRepresentable(c: inout Comp, eid: U64) -> Bool {
                     fj += 1
                 } else {
                     val peid: U64 = enumIdxByName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen)
-                    if peid < c.enums.count {
+                    if peid < c.arena.enums.count {
                         if !(enumRepresentable(c: inout c, eid: peid)) {
                             return false
                         }
                     } else {
                         val si: U64 = structIndexByName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen)
-                        if si < c.structs.count {
-                            if !(c.structs[si].isExtern) {
+                        if si < c.arena.structs.count {
+                            if !(c.arena.structs[si].isExtern) {
                                 if !(structRegisterable(c: inout c, sidx: si)) {
                                     return false
                                 }
@@ -230,7 +230,7 @@ fn enumRepresentable(c: inout Comp, eid: U64) -> Bool {
 // body pass regardless of declaration order.
 fn registerStructNames(c: inout Comp, st: inout LlvmCtx) {
     mut val i: U64 = 0
-    while i < c.structs.count {
+    while i < c.arena.structs.count {
         if structRegisterable(c: inout c, sidx: i) {
             mut val nm: Array[U8] = []
             appendBytes(into: inout nm, from: "st".bytes)
@@ -249,7 +249,7 @@ fn registerStructNames(c: inout Comp, st: inout LlvmCtx) {
 fn registerStructBodies(c: inout Comp, st: inout LlvmCtx) {
     mut val s: U64 = 0
     while s < st.structIdxs.count {
-        val sd: StructDef = c.structs[st.structIdxs[s]]
+        val sd: StructDef = c.arena.structs[st.structIdxs[s]]
         mut val elems: Array[LLVMTypeRef] = []
         mut val fi: U64 = 0
         while fi < sd.fields.count {

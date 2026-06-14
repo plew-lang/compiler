@@ -2,7 +2,7 @@
 // ordering and import-alias / factory-construction rewriting.
 
 fn globalInitExpr(c: inout Comp, g: Global) -> U64 {
-    match c.stmts[g.letStmt] {
+    match c.arena.stmts[g.letStmt] {
         Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return init }
         _ => { return 0 }
     }
@@ -19,19 +19,19 @@ fn u64ArrayHas(a: Array[U64], v: U64) -> Bool {
     return false
 }
 
-// Collect the indices (into c.globals) of every global the expression `id` reads,
+// Collect the indices (into c.arena.globals) of every global the expression `id` reads,
 // appended (deduped) to `into`. Covers the expression forms a global initializer can
 // take; rarer block-bearing forms (match/if/closure) contribute nothing — at worst a
 // forward reference there stays declaration-ordered, never misordered.
 fn collectGlobalDeps(c: inout Comp, id: U64, into: inout Array[U64]) {
-    if id >= c.exprs.count {
+    if id >= c.arena.exprs.count {
         return
     }
-    match c.exprs[id] {
+    match c.arena.exprs[id] {
         Expr.Ident(val start, val len) => {
             mut val gi: U64 = 0
-            while gi < c.globals.count {
-                if spansEqual(c: inout c, aStart: c.globals[gi].nameStart, aLen: c.globals[gi].nameLen, bStart: start, bLen: len) {
+            while gi < c.arena.globals.count {
+                if spansEqual(c: inout c, aStart: c.arena.globals[gi].nameStart, aLen: c.arena.globals[gi].nameLen, bStart: start, bLen: len) {
                     if !(u64ArrayHas(a: into, v: gi)) {
                         into.append(value: gi)
                     }
@@ -85,12 +85,12 @@ fn globalDfs(c: inout Comp, i: U64, state: inout Array[U64], order: inout Array[
         return
     }
     if state[i] == 1U64 {
-        compileErrorAt(line: lineOf(c: inout c, offset: c.globals[i].nameStart), msg: "module-level variables form an initialization cycle (a global's initializer depends on itself transitively — spec/15)")
+        compileErrorAt(line: lineOf(c: inout c, offset: c.arena.globals[i].nameStart), msg: "module-level variables form an initialization cycle (a global's initializer depends on itself transitively — spec/15)")
         return
     }
     state[i] = 1U64
     mut val d: Array[U64] = []
-    collectGlobalDeps(c: inout c, id: globalInitExpr(c: inout c, g: c.globals[i]), into: inout d)
+    collectGlobalDeps(c: inout c, id: globalInitExpr(c: inout c, g: c.arena.globals[i]), into: inout d)
     mut val k: U64 = 0
     while k < d.count {
         globalDfs(c: inout c, i: d[k], state: inout state, order: inout order)
@@ -101,7 +101,7 @@ fn globalDfs(c: inout Comp, i: U64, state: inout Array[U64], order: inout Array[
 }
 
 fn orderGlobalsByDependency(c: inout Comp) {
-    val n: U64 = c.globals.count
+    val n: U64 = c.arena.globals.count
     if n <= 1U64 {
         return
     }
@@ -117,14 +117,14 @@ fn orderGlobalsByDependency(c: inout Comp) {
         globalDfs(c: inout c, i: s, state: inout state, order: inout order)
         s += 1
     }
-    // rebuild c.globals in dependency order (deps before dependents).
+    // rebuild c.arena.globals in dependency order (deps before dependents).
     mut val reordered: Array[Global] = []
     mut val o: U64 = 0
     while o < order.count {
-        reordered.append(value: c.globals[order[o]])
+        reordered.append(value: c.arena.globals[order[o]])
         o += 1
     }
-    c.globals = reordered
+    c.arena.globals = reordered
 }
 
 // Post-load rewrite (spec/05): a named factory call `<Type.name attrs/>` parses as a
@@ -135,8 +135,8 @@ fn orderGlobalsByDependency(c: inout Comp) {
 fn rewriteFactoryConstruction(c: inout Comp) {
     val fromN: Bind = internBytes(c: inout c, s: "from")
     mut val i: U64 = 0
-    while i < c.exprs.count {
-        match c.exprs[i] {
+    while i < c.arena.exprs.count {
+        match c.arena.exprs[i] {
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
                 if isEnum {
                     if typeHasAssocFn(c: inout c, typeStart: typeStart, typeLen: typeLen, nameStart: variantStart, nameLen: variantLen) {
@@ -147,7 +147,7 @@ fn rewriteFactoryConstruction(c: inout Comp) {
                             args.append(value: <Arg expr=fields[fi].value isInout=false labelStart=fields[fi].nameStart labelLen=fields[fi].nameLen hasLabel=true />)
                             fi += 1
                         }
-                        c.exprs[i] = <Expr.Method recv=recv nameStart=variantStart nameLen=variantLen args=args />
+                        c.arena.exprs[i] = <Expr.Method recv=recv nameStart=variantStart nameLen=variantLen args=args />
                     }
                 } else {
                     // `<T from=x/>` From form (spec/12): a single `from=…` field routes
@@ -159,7 +159,7 @@ fn rewriteFactoryConstruction(c: inout Comp) {
                                 val recv: U64 = c.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
                                 mut val fargs: Array[Arg] = []
                                 fargs.append(value: <Arg expr=fields[0].value isInout=false labelStart=fromN.nameStart labelLen=fromN.nameLen hasLabel=true />)
-                                c.exprs[i] = <Expr.Method recv=recv nameStart=fromN.nameStart nameLen=fromN.nameLen args=fargs />
+                                c.arena.exprs[i] = <Expr.Method recv=recv nameStart=fromN.nameStart nameLen=fromN.nameLen args=fargs />
                             }
                         }
                     }
@@ -173,7 +173,7 @@ fn rewriteFactoryConstruction(c: inout Comp) {
                     val recv: U64 = c.pushExpr(e: <Expr.Ident start=tyStart len=tyLen />)
                     mut val cargs: Array[Arg] = []
                     cargs.append(value: <Arg expr=operand isInout=false labelStart=fromN.nameStart labelLen=fromN.nameLen hasLabel=true />)
-                    c.exprs[i] = <Expr.Method recv=recv nameStart=fromN.nameStart nameLen=fromN.nameLen args=cargs />
+                    c.arena.exprs[i] = <Expr.Method recv=recv nameStart=fromN.nameStart nameLen=fromN.nameLen args=cargs />
                 }
             }
             _ => {}
@@ -192,15 +192,15 @@ fn rewriteImportAliases(c: inout Comp) {
         return
     }
     mut val i: U64 = 0
-    while i < c.exprs.count {
-        match c.exprs[i] {
+    while i < c.arena.exprs.count {
+        match c.arena.exprs[i] {
             Expr.Call(val nameStart, val nameLen, val args) => {
                 mut val ai: U64 = 0
                 while ai < c.importAliases.count {
                     val al: Bind = c.importAliases[ai]
                     if spansEqual(c: inout c, aStart: al.nameStart, aLen: al.nameLen, bStart: nameStart, bLen: nameLen) {
                         if moduleOf(c: inout c, offset: al.nameStart) == moduleOf(c: inout c, offset: nameStart) {
-                            c.exprs[i] = <Expr.Call nameStart=al.fieldStart nameLen=al.fieldLen args=args />
+                            c.arena.exprs[i] = <Expr.Call nameStart=al.fieldStart nameLen=al.fieldLen args=args />
                             ai = c.importAliases.count
                         } else {
                             ai += 1
@@ -244,7 +244,7 @@ fn aliasReal(c: inout Comp, start: U64, len: U64) -> Bind {
 // type's name span as an assoc-fn receiver; else signal "not an assoc call" by
 // returning len 0. Used by call codegen/type recovery to route `Type.name(args)`.
 fn assocRecvName(c: inout Comp, recv: U64) -> Bind {
-    match c.exprs[recv] {
+    match c.arena.exprs[recv] {
         Expr.Ident(val start, val len) => {
             if isSelfRef(c: inout c, start: start, len: len) {
                 return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />

@@ -41,14 +41,14 @@ fn genLlvmIndex(c: inout Comp, st: inout LlvmCtx, base: U64, index: U64) -> LLVM
     // (struct `g[i]`) desugars to `g.index(key: i)` via the Index witness (spec/12).
     if !(exprIsArray(c: inout c, st: inout st, id: base)) {
         val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
-        if bsi < c.structs.count {
+        if bsi < c.arena.structs.count {
             // a Dictionary subscript `d[k]` lowers to the panicking accessor
             // `d.at(key: k)` (spec/02); a user Index type uses `index`.
-            if rangeEquals(bytes: c.bytes, start: c.structs[bsi].nameStart, len: c.structs[bsi].nameLen, kw: "Dictionary") {
+            if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[bsi].nameStart, len: c.arena.structs[bsi].nameLen, kw: "Dictionary") {
                 val m: U64 = synthDictMethod(c: inout c, recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
                 return genLlvmExpr(c: inout c, st: inout st, id: m)
             }
-            if typeHasMethodNamed(c: inout c, typeStart: c.structs[bsi].nameStart, typeLen: c.structs[bsi].nameLen, name: "index") {
+            if typeHasMethodNamed(c: inout c, typeStart: c.arena.structs[bsi].nameStart, typeLen: c.arena.structs[bsi].nameLen, name: "index") {
                 val m: U64 = synthDictMethod(c: inout c, recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
                 return genLlvmExpr(c: inout c, st: inout st, id: m)
             }
@@ -77,7 +77,7 @@ fn genLlvmIndex(c: inout Comp, st: inout LlvmCtx, base: U64, index: U64) -> LLVM
 // The element TypeRef of an array-valued expression (an array local's
 // locElemTypeRef, or a struct field's grounded element ref), or 0.
 fn arrayExprElemRef(c: inout Comp, st: inout LlvmCtx, arrayExpr: U64) -> U64 {
-    match c.exprs[arrayExpr] {
+    match c.arena.exprs[arrayExpr] {
         Expr.Ident(val start, val len) => {
             val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
             if li < st.nLocals {
@@ -86,10 +86,10 @@ fn arrayExprElemRef(c: inout Comp, st: inout LlvmCtx, arrayExpr: U64) -> U64 {
         }
         Expr.Field(base: val fb, nameStart: val fns, nameLen: val fnl) => {
             val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: fb)
-            if bsi < c.structs.count {
+            if bsi < c.arena.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
-                if fidx < c.structs[bsi].fields.count {
-                    return fieldArrayElemRefUnderBase(c: inout c, st: inout st, base: fb, fd: c.structs[bsi].fields[fidx])
+                if fidx < c.arena.structs[bsi].fields.count {
+                    return fieldArrayElemRefUnderBase(c: inout c, st: inout st, base: fb, fd: c.arena.structs[bsi].fields[fidx])
                 }
             }
         }
@@ -127,12 +127,12 @@ fn genLlvmAppend(c: inout Comp, st: inout LlvmCtx, recv: U64, valueExpr: U64) ->
     // type, not i64-defaulted — recover it from the receiver's element ref.
     mut val ev: LLVMValueRef = LLVMConstInt(st.i64ty, 0U64, 0I32)
     mut val builtLit: Bool = false
-    match c.exprs[valueExpr] {
+    match c.arena.exprs[valueExpr] {
         Expr.Array(val elems) => {
             val recvElemRef: U64 = arrayExprElemRef(c: inout c, st: inout st, arrayExpr: recv)
             if recvElemRef != 0U64 {
-                val ret: TypeRef = c.types[recvElemRef]
-                if rangeEquals(bytes: c.bytes, start: ret.nameStart, len: ret.nameLen, kw: "Array") {
+                val ret: TypeRef = c.arena.types[recvElemRef]
+                if rangeEquals(bytes: c.arena.bytes, start: ret.nameStart, len: ret.nameLen, kw: "Array") {
                     if ret.args.count > 0U64 {
                         ev = genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: llvmTypeOfRef(c: inout c, st: inout st, ref: ret.args[0]))
                         builtLit = true
@@ -205,7 +205,7 @@ fn genLlvmShortCircuit(c: inout Comp, st: inout LlvmCtx, isAnd: Bool, lhs: U64, 
 }
 
 fn genLlvmCond(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
-    match c.exprs[id] {
+    match c.arena.exprs[id] {
         Expr.Binary(val op, lhs: _, rhs: _) => {
             if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
                 return genLlvmExpr(c: inout c, st: inout st, id: id)

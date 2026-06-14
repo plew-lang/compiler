@@ -3,14 +3,14 @@
 
 // Is `ref` a concrete generic *enum* instantiation specifically?
 fn isGenericEnumInst(c: inout Comp, ref: U64) -> Bool {
-    if ref >= c.types.count {
+    if ref >= c.arena.types.count {
         return false
     }
-    val t: TypeRef = c.types[ref]
+    val t: TypeRef = c.arena.types[ref]
     if t.args.count == 0 {
         return false
     }
-    return genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen) < c.enums.count
+    return genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen) < c.arena.enums.count
 }
 
 // Structural equality of two TypeRefs (head span + args, recursively).
@@ -18,8 +18,8 @@ fn typeRefEq(c: inout Comp, a: U64, b: U64) -> Bool {
     if a == b {
         return true
     }
-    val ta: TypeRef = c.types[a]
-    val tb: TypeRef = c.types[b]
+    val ta: TypeRef = c.arena.types[a]
+    val tb: TypeRef = c.arena.types[b]
     if ta.nameId != tb.nameId {
         return false
     }
@@ -43,20 +43,20 @@ fn typeRefEq(c: inout Comp, a: U64, b: U64) -> Bool {
 }
 
 // Append the mangled name of `ref` (the same text emitMangle would write) to the
-// end of c.bytes, so a compound array element type (`Ref[I32]`, `Array[I32]`,
+// end of c.arena.bytes, so a compound array element type (`Ref[I32]`, `Array[I32]`,
 // `Box[I32]`) gets a unique source-span name (`Ref_I32`) the existing name-span
 // machinery can use. The bytes trail all real source, so they never shift a
 // diagnostic line; the lexer has already run, so appending is safe.
 fn appendMangle(c: inout Comp, ref: U64) {
-    val t: TypeRef = c.types[resolveTy(c: inout c, tyRef: ref)]
+    val t: TypeRef = c.arena.types[resolveTy(c: inout c, tyRef: ref)]
     mut val j: U64 = 0
     while j < t.nameLen {
-        c.bytes.append(c.bytes[t.nameStart + j])
+        c.arena.bytes.append(c.arena.bytes[t.nameStart + j])
         j += 1
     }
     mut val i: U64 = 0
     while i < t.args.count {
-        c.bytes.append(95)
+        c.arena.bytes.append(95)
         appendMangle(c: inout c, ref: t.args[i])
         i += 1
     }
@@ -66,9 +66,9 @@ fn appendMangle(c: inout Comp, ref: U64) {
 // stashed in fieldStart so genCElem / the array runtime can recover the C type
 // and ARC behaviour. Used for compound Array element types.
 fn appendMangleSpan(c: inout Comp, ref: U64) -> Bind {
-    val start: U64 = c.bytes.count
+    val start: U64 = c.arena.bytes.count
     appendMangle(c: inout c, ref: ref)
-    val n: U64 = c.bytes.count
+    val n: U64 = c.arena.bytes.count
     return <Bind nameStart=start nameLen=(n - start) fieldStart=ref fieldLen=0 />
 }
 
@@ -78,14 +78,14 @@ fn appendMangleSpan(c: inout Comp, ref: U64) -> Bind {
 fn sameMangle(c: inout Comp, refA: U64, refB: U64) -> Bool {
     val ra: U64 = resolveTy(c: inout c, tyRef: refA)
     val rb: U64 = resolveTy(c: inout c, tyRef: refB)
-    if ra >= c.types.count {
+    if ra >= c.arena.types.count {
         return false
     }
-    if rb >= c.types.count {
+    if rb >= c.arena.types.count {
         return false
     }
-    val a: TypeRef = c.types[ra]
-    val b: TypeRef = c.types[rb]
+    val a: TypeRef = c.arena.types[ra]
+    val b: TypeRef = c.arena.types[rb]
     if a.nameId != b.nameId {
         return false
     }
@@ -106,30 +106,30 @@ fn sameMangle(c: inout Comp, refA: U64, refB: U64) -> Bool {
 // arguments), as opposed to a simple named type whose head name is enough?
 fn isCompoundType(c: inout Comp, ref: U64) -> Bool {
     val r: U64 = resolveTy(c: inout c, tyRef: ref)
-    if r >= c.types.count {
+    if r >= c.arena.types.count {
         return false
     }
-    return c.types[r].args.count > 0
+    return c.arena.types[r].args.count > 0
 }
 
 // Resolve a TypeRef under the active body-substitution env: a bare type
 // parameter (`T`) maps to its concrete argument; everything else is unchanged.
 // (Nested substitution like `Optional[T]` is deferred.)
 fn resolveTy(c: inout Comp, tyRef: U64) -> U64 {
-    if tyRef >= c.types.count {
+    if tyRef >= c.arena.types.count {
         return tyRef
     }
-    val t: TypeRef = c.types[tyRef]
+    val t: TypeRef = c.arena.types[tyRef]
     if t.args.count == 0 {
         // `Self`/`Item` as types (provided methods on a trait): resolve to the
         // receiver type and its associated `Item` binding (set per method).
         if c.curSelfRef != 0 {
-            if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
+            if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
                 return c.curSelfRef
             }
         }
         if c.curItemRef != 0 {
-            if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") {
+            if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") {
                 return c.curItemRef
             }
         }
@@ -162,26 +162,26 @@ fn isTypeParamName(c: inout Comp, start: U64, len: U64) -> Bool {
     // a template's own parameter is resolved by the active env before this matters.
     val qId: U64 = intern(c: inout c, start: start, len: len)
     mut val ni: U64 = 0
-    while ni < c.structs.count {
-        if c.structs[ni].typeParams.count == 0 {
-            if c.structs[ni].nameId == qId {
+    while ni < c.arena.structs.count {
+        if c.arena.structs[ni].typeParams.count == 0 {
+            if c.arena.structs[ni].nameId == qId {
                 return false
             }
         }
         ni += 1
     }
     mut val nj: U64 = 0
-    while nj < c.enums.count {
-        if c.enums[nj].typeParams.count == 0 {
-            if c.enums[nj].nameId == qId {
+    while nj < c.arena.enums.count {
+        if c.arena.enums[nj].typeParams.count == 0 {
+            if c.arena.enums[nj].nameId == qId {
                 return false
             }
         }
         nj += 1
     }
     mut val si: U64 = 0
-    while si < c.structs.count {
-        val tp: Array[Bind] = c.structs[si].typeParams
+    while si < c.arena.structs.count {
+        val tp: Array[Bind] = c.arena.structs[si].typeParams
         mut val k: U64 = 0
         while k < tp.count {
             if tp[k].nameId == qId {
@@ -192,8 +192,8 @@ fn isTypeParamName(c: inout Comp, start: U64, len: U64) -> Bool {
         si += 1
     }
     mut val ei: U64 = 0
-    while ei < c.enums.count {
-        val tp2: Array[Bind] = c.enums[ei].typeParams
+    while ei < c.arena.enums.count {
+        val tp2: Array[Bind] = c.arena.enums[ei].typeParams
         mut val k2: U64 = 0
         while k2 < tp2.count {
             if tp2[k2].nameId == qId {
@@ -204,8 +204,8 @@ fn isTypeParamName(c: inout Comp, start: U64, len: U64) -> Bool {
         ei += 1
     }
     mut val fi: U64 = 0
-    while fi < c.funcs.count {
-        val tp3: Array[Bind] = c.funcs[fi].typeParams
+    while fi < c.arena.funcs.count {
+        val tp3: Array[Bind] = c.arena.funcs[fi].typeParams
         mut val k3: U64 = 0
         while k3 < tp3.count {
             if tp3[k3].nameId == qId {
@@ -220,10 +220,10 @@ fn isTypeParamName(c: inout Comp, start: U64, len: U64) -> Bool {
 
 // Is `ref` a fully-ground type (no type parameter anywhere in head or args)?
 fn tyRefIsGround(c: inout Comp, ref: U64) -> Bool {
-    if ref >= c.types.count {
+    if ref >= c.arena.types.count {
         return true
     }
-    val t: TypeRef = c.types[ref]
+    val t: TypeRef = c.arena.types[ref]
     if isTypeParamName(c: inout c, start: t.nameStart, len: t.nameLen) {
         return false
     }
@@ -232,7 +232,7 @@ fn tyRefIsGround(c: inout Comp, ref: U64) -> Bool {
     // register it (the method-aware scan grounds the real instance). `Item` is NOT
     // treated this way — it is a legal user type name; resolveTy only rewrites it
     // when an Iterator method env is active (curItemRef set).
-    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
+    if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
         return false
     }
     mut val i: U64 = 0

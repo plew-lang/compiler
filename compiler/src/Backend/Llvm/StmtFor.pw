@@ -12,7 +12,7 @@ fn genLlvmForRange(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64,
     val hiV: LLVMValueRef = coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: hi), target: vty, unsigned: true)
     val islot: LLVMValueRef = entryAlloca(st: inout st, ty: vty)
     LLVMBuildStore(st.b, loV, islot)
-    pushLocal(st: inout st, nameStart: varStart, nameLen: varLen, ptr: islot, ty: vty, kind: 3U64, structIdx: c.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64)
+    pushLocal(st: inout st, nameStart: varStart, nameLen: varLen, ptr: islot, ty: vty, kind: 3U64, structIdx: c.arena.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64)
     val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "for.cond"))
     val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "for.body"))
     // a dedicated step block (increment) so `continue` re-runs the step, not skips it.
@@ -68,11 +68,11 @@ fn genLlvmForIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U
         }
     }
     val isidx: U64 = exprStructIdx(c: inout c, st: inout st, id: iter)
-    if isidx >= c.structs.count {
+    if isidx >= c.arena.structs.count {
         compileErrorAt(line: 0, msg: "LLVM backend: for-loop over a non-array (Iterable) not yet supported")
         return
     }
-    val isd: StructDef = c.structs[isidx]
+    val isd: StructDef = c.arena.structs[isidx]
     val noArgs: Array[Arg] = []
     val iterableVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: iter)
     // acquire the iterator: an Iterable provides `iterator()`; an Iterator IS its own
@@ -82,7 +82,7 @@ fn genLlvmForIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U
     mut val iterStructLen: U64 = isd.nameLen
     val itB: Bind = kwSpan(c: inout c, kw: "iterator", kwLen: 8U64)
     val itfi: U64 = findMethod(c: inout c, recvStart: isd.nameStart, recvLen: isd.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
-    if itfi < c.funcs.count {
+    if itfi < c.arena.funcs.count {
         val itSlotF: U64 = userFnSlot(st: inout st, idx: itfi)
         if itSlotF >= st.fnIdx.count {
             compileErrorAt(line: 0, msg: "LLVM backend: this Iterable's iterator method is not emittable yet")
@@ -91,13 +91,13 @@ fn genLlvmForIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U
         mut val itArgs: Array[LLVMValueRef] = []
         itArgs.append(value: iterableVal)
         iterVal = LLVMBuildCall2(st.b, st.fnTy[itSlotF], st.fnVal[itSlotF], arrayCPtr(itArgs), 1U64, anon())
-        iterStructStart = c.funcs[itfi].retStart
-        iterStructLen = c.funcs[itfi].retLen
+        iterStructStart = c.arena.funcs[itfi].retStart
+        iterStructLen = c.arena.funcs[itfi].retLen
     }
     // next() on the Iter struct -> Optional[Item]
     val nextB: Bind = kwSpan(c: inout c, kw: "next", kwLen: 4U64)
     val nfi: U64 = findMethod(c: inout c, recvStart: iterStructStart, recvLen: iterStructLen, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
-    if nfi >= c.funcs.count {
+    if nfi >= c.arena.funcs.count {
         compileErrorAt(line: 0, msg: "LLVM backend: Iterable for-loop needs a `next` method on the iterator")
         return
     }
@@ -106,7 +106,7 @@ fn genLlvmForIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U
         compileErrorAt(line: 0, msg: "LLVM backend: this iterator's next method is not emittable yet")
         return
     }
-    val nf: Func = c.funcs[nfi]
+    val nf: Func = c.arena.funcs[nfi]
     emitIterNextLoop(c: inout c, st: inout st, iterVal: iterVal, optRef: nf.retTy, nextTy: st.fnTy[nSlotF], nextVal: st.fnVal[nSlotF], varStart: varStart, varLen: varLen, body: body)
 }
 
@@ -116,13 +116,13 @@ fn genLlvmForIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U
 // receiver's env, and the Optional[Item] return by grounding next()'s under the
 // iterator instance's env.
 fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64, iter: U64, body: U64, recvRef: U64) {
-    val gt: TypeRef = c.types[recvRef]
+    val gt: TypeRef = c.arena.types[recvRef]
     val noArgs: Array[Arg] = []
     mut val iterVal: LLVMValueRef = LLVMConstInt(st.i64ty, 0U64, 0I32)
     mut val iterInstRef: U64 = recvRef
     val itB: Bind = kwSpan(c: inout c, kw: "iterator", kwLen: 8U64)
     val itfi: U64 = findMethod(c: inout c, recvStart: gt.nameStart, recvLen: gt.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
-    if itfi < c.funcs.count {
+    if itfi < c.arena.funcs.count {
         // an Iterable: call iterator() and switch the instance ref to the iterator's.
         val itSlot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: itfi, instRef: recvRef, ownArgs: [])
         if itSlot >= st.genMethK.count {
@@ -130,7 +130,7 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
             return
         }
         iterVal = genGenMethodCall(c: inout c, st: inout st, recv: iter, mfi: itfi, slot: itSlot, instRef: recvRef, args: noArgs)
-        val itf: Func = c.funcs[itfi]
+        val itf: Func = c.arena.funcs[itfi]
         val sP: Array[Bind] = c.curTypeParams
         val sA: Array[U64] = c.curTypeArgs
         c.curTypeParams = itf.typeParams
@@ -142,10 +142,10 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
         // the value IS its own Iterator (it has next() directly).
         iterVal = genLlvmExpr(c: inout c, st: inout st, id: iter)
     }
-    val it: TypeRef = c.types[iterInstRef]
+    val it: TypeRef = c.arena.types[iterInstRef]
     val nextB: Bind = kwSpan(c: inout c, kw: "next", kwLen: 4U64)
     val nfi: U64 = findMethod(c: inout c, recvStart: it.nameStart, recvLen: it.nameLen, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
-    if nfi >= c.funcs.count {
+    if nfi >= c.arena.funcs.count {
         compileErrorAt(line: 0, msg: "LLVM backend: generic Iterable for-loop needs a `next` method on the iterator")
         return
     }
@@ -154,7 +154,7 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
         compileErrorAt(line: 0, msg: "LLVM backend: this generic iterator's next method is not emittable yet")
         return
     }
-    val nf: Func = c.funcs[nfi]
+    val nf: Func = c.arena.funcs[nfi]
     val sP2: Array[Bind] = c.curTypeParams
     val sA2: Array[U64] = c.curTypeArgs
     c.curTypeParams = nf.typeParams
@@ -184,7 +184,7 @@ fn emitIterNextLoop(c: inout Comp, st: inout LlvmCtx, iterVal: LLVMValueRef, opt
     }
     val optEid: U64 = st.genEnumDefs[ge]
     val optTy: LLVMTypeRef = st.genEnumTys[ge]
-    val ed: EnumDef = c.enums[optEid]
+    val ed: EnumDef = c.arena.enums[optEid]
     val someB: Bind = kwSpan(c: inout c, kw: "Some", kwLen: 4U64)
     val someVi: U64 = variantIndex(c: inout c, enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: someB.nameStart, variantLen: someB.nameLen)
     val payloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: optEid, vi: someVi)
@@ -220,8 +220,8 @@ fn emitIterNextLoop(c: inout Comp, st: inout LlvmCtx, iterVal: LLVMValueRef, opt
     if itemFs[0].ty != 0U64 {
         if c.curTypeParams.count > 0U64 {
             val gx: U64 = groundTypeRef(c: inout c, ref: itemFs[0].ty)
-            xStart = c.types[gx].nameStart
-            xLen = c.types[gx].nameLen
+            xStart = c.arena.types[gx].nameStart
+            xLen = c.arena.types[gx].nameLen
         }
     }
     pushLocalR(st: inout st, nameStart: varStart, nameLen: varLen, ptr: xSlot, ty: xTy, kind: kindFromTySpan(c: inout c, tyStart: xStart, tyLen: xLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: xStart, len: xLen), isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: 0U64)
@@ -243,7 +243,7 @@ fn emitIterNextLoop(c: inout Comp, st: inout LlvmCtx, iterVal: LLVMValueRef, opt
 // dynamically dispatching `next()` on the any value (the box's iterator state
 // advances in place), binding `x` to each `Some` payload until `None`.
 fn genLlvmForAnyIter(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64, iter: U64, anyRef: U64, body: U64) {
-    val traitIdx: U64 = findTraitIdxByName(c: inout c, start: c.types[anyRef].nameStart, len: c.types[anyRef].nameLen)
+    val traitIdx: U64 = findTraitIdxByName(c: inout c, start: c.arena.types[anyRef].nameStart, len: c.arena.types[anyRef].nameLen)
     if traitIdx >= c.traits.count {
         compileErrorAt(line: 0, msg: "LLVM backend: for-loop over `any` needs a trait with a `next` method")
         return
@@ -267,7 +267,7 @@ fn genLlvmForAnyIter(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U6
     }
     val optEid: U64 = st.genEnumDefs[ge]
     val optTy: LLVMTypeRef = st.genEnumTys[ge]
-    val ed: EnumDef = c.enums[optEid]
+    val ed: EnumDef = c.arena.enums[optEid]
     val someB: Bind = kwSpan(c: inout c, kw: "Some", kwLen: 4U64)
     val someVi: U64 = variantIndex(c: inout c, enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: someB.nameStart, variantLen: someB.nameLen)
     val payloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: optEid, vi: someVi)
@@ -298,8 +298,8 @@ fn genLlvmForAnyIter(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U6
     if itemFs[0].ty != 0U64 {
         if c.curTypeParams.count > 0U64 {
             val gx: U64 = groundTypeRef(c: inout c, ref: itemFs[0].ty)
-            xStart = c.types[gx].nameStart
-            xLen = c.types[gx].nameLen
+            xStart = c.arena.types[gx].nameStart
+            xLen = c.arena.types[gx].nameLen
         }
     }
     pushLocalR(st: inout st, nameStart: varStart, nameLen: varLen, ptr: xSlot, ty: xTy, kind: kindFromTySpan(c: inout c, tyStart: xStart, tyLen: xLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: xStart, len: xLen), isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: 0U64)
@@ -333,14 +333,14 @@ fn genLlvmForArray(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64,
     // `s.m()` in the body dispatches dynamically (spec/08).
     val forElemRef: U64 = arrayExprElemRef(c: inout c, st: inout st, arrayExpr: iter)
     if refIsAny(c: inout c, ref: forElemRef) {
-        pushLocalR(st: inout st, nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: c.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: forElemRef)
+        pushLocalR(st: inout st, nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: c.arena.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: forElemRef)
     } else {
         // a struct / record element (`for val e in arrayOfStructs { e.field }`): track
         // the element's struct index and TypeRef so a field access / method call on the
         // loop var resolves (a generic-instance element keeps its instance ref).
-        mut val elemSidx: U64 = c.structs.count
+        mut val elemSidx: U64 = c.arena.structs.count
         if forElemRef != 0U64 {
-            if forElemRef < c.types.count {
+            if forElemRef < c.arena.types.count {
                 if isGenericInst(c: inout c, ref: forElemRef) {
                     val egs: U64 = genStructSlot(c: inout c, st: inout st, ref: forElemRef)
                     if egs < st.genStructRefs.count {
@@ -349,16 +349,16 @@ fn genLlvmForArray(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64,
                 } else {
                     // only a backend-registered struct (not a primitive / String): gate on
                     // structRegSlot so an `Array[I32]` element stays a plain scalar.
-                    if structRegSlot(c: inout c, st: inout st, start: c.types[forElemRef].nameStart, len: c.types[forElemRef].nameLen) < st.structIdxs.count {
-                        elemSidx = structIndexByName(c: inout c, start: c.types[forElemRef].nameStart, len: c.types[forElemRef].nameLen)
+                    if structRegSlot(c: inout c, st: inout st, start: c.arena.types[forElemRef].nameStart, len: c.arena.types[forElemRef].nameLen) < st.structIdxs.count {
+                        elemSidx = structIndexByName(c: inout c, start: c.arena.types[forElemRef].nameStart, len: c.arena.types[forElemRef].nameLen)
                     }
                 }
             }
         }
-        if elemSidx < c.structs.count {
+        if elemSidx < c.arena.structs.count {
             pushLocalR(st: inout st, nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: elemSidx, isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: forElemRef)
         } else {
-            pushLocal(st: inout st, nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: c.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64)
+            pushLocal(st: inout st, nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: c.arena.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64)
         }
     }
     val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "fora.cond"))
@@ -397,7 +397,7 @@ fn genLlvmForArrayStruct(c: inout Comp, st: inout LlvmCtx, patStart: U64, patLen
         return
     }
     val sidx: U64 = localStructIdxFor(c: inout c, st: inout st, start: patStart, len: patLen)
-    if sidx >= c.structs.count {
+    if sidx >= c.arena.structs.count {
         compileErrorAt(line: 0, msg: "LLVM backend: struct-destructure for-loop needs a registered struct pattern")
         return
     }

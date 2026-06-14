@@ -163,14 +163,14 @@ fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, v
     // enum payload (`<Optional.Some v=(index:1, value:2)/>`) can't be built.
     if typeLen == 0U64 {
         if st.expectedTy != 0U64 {
-            if st.expectedTy < c.types.count {
-                val et: TypeRef = c.types[st.expectedTy]
+            if st.expectedTy < c.arena.types.count {
+                val et: TypeRef = c.arena.types[st.expectedTy]
                 if et.nameLen > 0U64 {
-                    if c.bytes[et.nameStart] == 40U8 {
+                    if c.arena.bytes[et.nameStart] == 40U8 {
                         val rreg: U64 = structRegSlot(c: inout c, st: inout st, start: et.nameStart, len: et.nameLen)
                         if rreg < st.structIdxs.count {
                             st.expectedTy = 0U64
-                            return buildStructValue(c: inout c, st: inout st, sd: c.structs[st.structIdxs[rreg]], sty: st.structTys[rreg], fields: fields, errOffset: et.nameStart)
+                            return buildStructValue(c: inout c, st: inout st, sd: c.arena.structs[st.structIdxs[rreg]], sty: st.structTys[rreg], fields: fields, errOffset: et.nameStart)
                         }
                     }
                 }
@@ -187,7 +187,7 @@ fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, v
     if !(isGenericInst(c: inout c, ref: gty)) {
         if st.expectedTy != 0U64 {
             if isGenericInst(c: inout c, ref: st.expectedTy) {
-                val et: TypeRef = c.types[st.expectedTy]
+                val et: TypeRef = c.arena.types[st.expectedTy]
                 if spansEqual(c: inout c, aStart: et.nameStart, aLen: et.nameLen, bStart: typeStart, bLen: typeLen) {
                     gty = st.expectedTy
                 }
@@ -199,20 +199,20 @@ fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, v
     // yield the cell pointer (the Ref value). Refcount/release is hidden cost,
     // deferred (no deinit in these cases yet) — the pointer aliases on copy so
     // shared mutation through `->` is visible.
-    if rangeEquals(bytes: c.bytes, start: typeStart, len: typeLen, kw: "Ref") {
+    if rangeEquals(bytes: c.arena.bytes, start: typeStart, len: typeLen, kw: "Ref") {
         return genLlvmMakeRef(c: inout c, st: inout st, ty: gty, fields: fields)
     }
     // a generic struct instance (Box[I32]): build under its substitution env.
     if isGenericInst(c: inout c, ref: gty) {
         val gslot: U64 = genStructSlot(c: inout c, st: inout st, ref: gty)
         if gslot < st.genStructRefs.count {
-            val sd: StructDef = c.structs[st.genStructDefs[gslot]]
+            val sd: StructDef = c.arena.structs[st.genStructDefs[gslot]]
             val savedP: Array[Bind] = c.curTypeParams
             val savedA: Array[U64] = c.curTypeArgs
             // MERGE (see genLlvmMakeEnum) so a field sub-expression referencing the
             // enclosing method's type params still grounds.
             c.curTypeParams = concatParams(add: sd.typeParams, base: savedP)
-            c.curTypeArgs = concatArgs(add: c.types[gty].args, base: savedA)
+            c.curTypeArgs = concatArgs(add: c.arena.types[gty].args, base: savedA)
             val v: LLVMValueRef = buildStructValue(c: inout c, st: inout st, sd: sd, sty: st.genStructTys[gslot], fields: fields, errOffset: typeStart)
             c.curTypeParams = savedP
             c.curTypeArgs = savedA
@@ -234,13 +234,13 @@ fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, v
         compileErrorAt(line: lineOf(c: inout c, offset: typeStart), msg: "LLVM backend: construction of this type not yet supported (Ref / nested-struct structs are TODO)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
-    return buildStructValue(c: inout c, st: inout st, sd: c.structs[st.structIdxs[reg]], sty: st.structTys[reg], fields: fields, errOffset: typeStart)
+    return buildStructValue(c: inout c, st: inout st, sd: c.arena.structs[st.structIdxs[reg]], sty: st.structTys[reg], fields: fields, errOffset: typeStart)
 }
 
 // The LLVM type of a `Ref[T]`'s pointee T (from the instance's first type arg).
 fn refPointeeTy(c: inout Comp, st: inout LlvmCtx, refTy: U64) -> LLVMTypeRef {
     if isRefInst(c: inout c, ref: refTy) {
-        return llvmTypeOfRef(c: inout c, st: inout st, ref: c.types[refTy].args[0])
+        return llvmTypeOfRef(c: inout c, st: inout st, ref: c.arena.types[refTy].args[0])
     }
     return st.i64ty
 }
@@ -256,17 +256,17 @@ fn exprRefTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
 }
 
 // The struct index of a `Ref[T]` base's pointee T (for `->field` resolution), or
-// c.structs.count if the base isn't a Ref to a registered struct.
+// c.arena.structs.count if the base isn't a Ref to a registered struct.
 fn refPointeeStructIdx(c: inout Comp, st: inout LlvmCtx, base: U64) -> U64 {
     val r: U64 = exprRefTypeRef(c: inout c, st: inout st, id: base)
     if r != 0U64 {
-        val t: TypeRef = c.types[r]
+        val t: TypeRef = c.arena.types[r]
         if t.args.count > 0U64 {
-            val pt: TypeRef = c.types[t.args[0]]
+            val pt: TypeRef = c.arena.types[t.args[0]]
             return localStructIdxFor(c: inout c, st: inout st, start: pt.nameStart, len: pt.nameLen)
         }
     }
-    return c.structs.count
+    return c.arena.structs.count
 }
 
 // Load a `Ref[T]` base's pointee struct VALUE (`*cell`) — the basis for `->field`.
@@ -286,7 +286,7 @@ fn genLlvmMakeRef(c: inout Comp, st: inout LlvmCtx, ty: U64, fields: Array[MakeF
     mut val valExpr: U64 = 0
     mut val mi: U64 = 0
     while mi < fields.count {
-        if rangeEquals(bytes: c.bytes, start: fields[mi].nameStart, len: fields[mi].nameLen, kw: "value") {
+        if rangeEquals(bytes: c.arena.bytes, start: fields[mi].nameStart, len: fields[mi].nameLen, kw: "value") {
             valExpr = fields[mi].value
             mi = fields.count
         } else {

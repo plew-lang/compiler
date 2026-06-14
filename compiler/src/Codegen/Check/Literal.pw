@@ -37,7 +37,7 @@ fn addConst(na: Bool, a: U64, nb: Bool, b: U64) -> ConstInt {
 // or intermediate beyond that yields non-const (the per-leaf range check still
 // applies), so the fold never needs an unrepresentable bound.
 fn foldConst(c: inout Comp, id: U64) -> ConstInt {
-    val e: Expr = c.exprs[id]
+    val e: Expr = c.arena.exprs[id]
     match e {
         Expr.Int(val value, offset: _, val isBool, tyStart: _, tyLen: _, val isNeg) => {
             if isBool { return notConst() }
@@ -155,7 +155,7 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
             c.typeCache.intCtx[id] = floatCtxCode(bits: eBits)
         }
     }
-    val e: Expr = c.exprs[id]
+    val e: Expr = c.arena.exprs[id]
     match e {
         Expr.Int(val value, val offset, val isBool, val tyStart, val tyLen, val isNeg) => {
             checkLitLeaf(c: inout c, value: value, neg: isNeg, offset: offset, isBool: isBool, tyStart: tyStart, tyLen: tyLen, eKind: eKind, eBits: eBits, eSgn: eSgn)
@@ -165,7 +165,7 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
                 // a leading `-` on a literal folds into the literal (`-128:I8` is
                 // valid even though `128` alone exceeds I8), so check the magnitude
                 // with the negative sign; otherwise recurse with the same type.
-                val oe: Expr = c.exprs[operand]
+                val oe: Expr = c.arena.exprs[operand]
                 match oe {
                     Expr.Int(val value, val offset, val isBool, val tyStart, val tyLen, isNeg: _) => {
                         checkLitLeaf(c: inout c, value: value, neg: true, offset: offset, isBool: isBool, tyStart: tyStart, tyLen: tyLen, eKind: eKind, eBits: eBits, eSgn: eSgn)
@@ -218,7 +218,7 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
         Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
             // The operand has its own type; a direct-literal operand is range-
             // checked by the cast itself, so only recurse into compound operands.
-            val oe: Expr = c.exprs[operand]
+            val oe: Expr = c.arena.exprs[operand]
             match oe {
                 Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => {}
                 _ => { checkLitCtx(c: inout c, id: operand, eKind: 0, eBits: 0, eSgn: false) }
@@ -246,11 +246,11 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
             // surrounding context flows to each give (an else-if chain recurses here
             // via the nested IfExpr give). The condition is self-typed (Bool).
             val tg: U64 = blockGiveExpr(c: inout c, blkId: thenBlk)
-            if tg < c.exprs.count {
+            if tg < c.arena.exprs.count {
                 checkLitCtx(c: inout c, id: tg, eKind: eKind, eBits: eBits, eSgn: eSgn)
             }
             val eg: U64 = blockGiveExpr(c: inout c, blkId: elseBlk)
-            if eg < c.exprs.count {
+            if eg < c.arena.exprs.count {
                 checkLitCtx(c: inout c, id: eg, eKind: eKind, eBits: eBits, eSgn: eSgn)
             }
         }
@@ -261,7 +261,7 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
                 // context flows to each value arm's `give` value; diverging arms have none.
                 if !(arms[i].isDiverge) {
                     val g: U64 = blockGiveExpr(c: inout c, blkId: arms[i].body)
-                    if g < c.exprs.count {
+                    if g < c.arena.exprs.count {
                         checkLitCtx(c: inout c, id: g, eKind: eKind, eBits: eBits, eSgn: eSgn)
                     }
                 }
@@ -301,8 +301,8 @@ fn checkBinTraitRhs(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
     if hasBinTraitWitness(c: inout c, op: op, lhs: lhs, rhs: rhs) {
         val lt: TypeInfo = binWitnessType(c: inout c, lhs: lhs, rhs: rhs)
         val fi: U64 = findBinTraitWitness(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op), rhs: rhs)
-        if fi < c.funcs.count {
-            val f: Func = c.funcs[fi]
+        if fi < c.arena.funcs.count {
+            val f: Func = c.arena.funcs[fi]
             if f.params.count >= 2 {
                 val pit: IntTy = spanIntTy(c: inout c, start: f.params[1].tyStart, len: f.params[1].tyLen)
                 if pit.known {
@@ -326,16 +326,16 @@ fn exprIntTy(c: inout Comp, id: U64) -> IntTy {
     if tiIsInt(c: inout c, ti: ti) {
         return <IntTy known=true bits=intBits(c: inout c, start: ti.nameStart, len: ti.nameLen) sgn=intSigned(c: inout c, start: ti.nameStart, len: ti.nameLen) />
     }
-    val e: Expr = c.exprs[id]
+    val e: Expr = c.arena.exprs[id]
     match e {
         Expr.Call(val nameStart, val nameLen, val args) => {
             // argCount() is the one integer-returning I/O builtin (I64).
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "argCount") {
+            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "argCount") {
                 return <IntTy known=true bits=64 sgn=true />
             }
         }
         Expr.Field(val base, val nameStart, val nameLen) => {
-            if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "count") {
+            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
                 val bt: TypeInfo = exprType(c: inout c, id: base)
                 if bt.kind == 3 {
                     return <IntTy known=true bits=64 sgn=false />
@@ -393,7 +393,7 @@ fn checkLitTi(c: inout Comp, id: U64, ti: TypeInfo) {
         // float (`val x: F64 = 5`, `1.5 + 2`) — no implicit conversion, the literal
         // simply IS a float here. Record the float context for the backend.
         mut val fbits: U64 = 64
-        if rangeEquals(bytes: c.bytes, start: ti.nameStart, len: ti.nameLen, kw: "F32") { fbits = 32 }
+        if rangeEquals(bytes: c.arena.bytes, start: ti.nameStart, len: ti.nameLen, kw: "F32") { fbits = 32 }
         checkLitCtx(c: inout c, id: id, eKind: 2, eBits: fbits, eSgn: false)
         return
     }
@@ -407,7 +407,7 @@ fn checkLitTi(c: inout Comp, id: U64, ti: TypeInfo) {
 fn checkLitSpanCtx(c: inout Comp, id: U64, tyStart: U64, tyLen: U64, isArray: Bool, ctxRef: U64) {
     if ctxRef != 0U64 {
         if !isArray {
-            match c.exprs[id] {
+            match c.arena.exprs[id] {
                 Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
                     if isGenericEnumInst(c: inout c, ref: ctxRef) || isGenericInst(c: inout c, ref: ctxRef) {
                         checkMakeFields(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ctxRef, fields: fields)
@@ -432,7 +432,7 @@ fn checkLitSpan(c: inout Comp, id: U64, tyStart: U64, tyLen: U64, isArray: Bool)
 
 // Range-check the elements of an array literal against the element type.
 fn checkLitArray(c: inout Comp, id: U64, elemStart: U64, elemLen: U64) {
-    val e: Expr = c.exprs[id]
+    val e: Expr = c.arena.exprs[id]
     match e {
         Expr.Array(val elems) => {
             mut val i: U64 = 0

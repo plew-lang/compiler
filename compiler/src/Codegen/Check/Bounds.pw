@@ -27,7 +27,7 @@ fn assocBindingSpan(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64,
 // So a generic requirement `add(lhs: Self, rhs: Rhs)` matches a witness
 // `add(lhs: Money, rhs: Money)` on `impl Money as Add[Money]`.
 fn substReqParamHeadId(c: inout Comp, recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64], prStart: U64, prLen: U64) -> U64 {
-    if rangeEquals(bytes: c.bytes, start: prStart, len: prLen, kw: "Self") {
+    if rangeEquals(bytes: c.arena.bytes, start: prStart, len: prLen, kw: "Self") {
         return intern(c: inout c, start: recvStart, len: recvLen)
     }
     val prId: U64 = intern(c: inout c, start: prStart, len: prLen)
@@ -35,7 +35,7 @@ fn substReqParamHeadId(c: inout Comp, recvStart: U64, recvLen: U64, tps: Array[B
     while k < tps.count {
         if tps[k].nameId == prId {
             if k < targs.count {
-                return c.types[targs[k]].nameId
+                return c.arena.types[targs[k]].nameId
             }
         }
         k += 1
@@ -53,8 +53,8 @@ fn substReqParamArrayElemRef(c: inout Comp, tps: Array[Bind], targs: Array[U64],
     while k < tps.count {
         if tps[k].nameId == prId {
             if k < targs.count {
-                val tr: TypeRef = c.types[targs[k]]
-                if rangeEquals(bytes: c.bytes, start: tr.nameStart, len: tr.nameLen, kw: "Array") {
+                val tr: TypeRef = c.arena.types[targs[k]]
+                if rangeEquals(bytes: c.arena.bytes, start: tr.nameStart, len: tr.nameLen, kw: "Array") {
                     if tr.args.count > 0U64 {
                         return targs[k]
                     }
@@ -89,8 +89,8 @@ fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvSta
         val arrTarg: U64 = substReqParamArrayElemRef(c: inout c, tps: tps, targs: targs, prStart: pr.tyStart, prLen: pr.tyLen)
         if arrTarg != 0U64 {
             if pw.tyIsArray {
-                val elemRef: U64 = c.types[arrTarg].args[0]
-                if pw.tyNameId == c.types[elemRef].nameId {
+                val elemRef: U64 = c.arena.types[arrTarg].args[0]
+                if pw.tyNameId == c.arena.types[elemRef].nameId {
                     i += 1
                 } else {
                     return false
@@ -105,7 +105,7 @@ fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvSta
         // requirement's substituted Self (=recv) matches it. A concrete witness type
         // (`other: P`) keeps its own head id (pw.tyNameId).
         mut val wId: U64 = pw.tyNameId
-        if rangeEquals(bytes: c.bytes, start: pw.tyStart, len: pw.tyLen, kw: "Self") {
+        if rangeEquals(bytes: c.arena.bytes, start: pw.tyStart, len: pw.tyLen, kw: "Self") {
             wId = intern(c: inout c, start: recvStart, len: recvLen)
         }
         if wId != subId {
@@ -220,8 +220,8 @@ fn resolveTraitDef(c: inout Comp, cf: Conform) -> U64 {
 // loud formation error.
 fn checkAnyFormation(c: inout Comp) {
     mut val ti: U64 = 0
-    while ti < c.types.count {
-        val t: TypeRef = c.types[ti]
+    while ti < c.arena.types.count {
+        val t: TypeRef = c.arena.types[ti]
         if t.isAny {
             val tri: U64 = findTraitIdxByName(c: inout c, start: t.nameStart, len: t.nameLen)
             if tri < c.traits.count {
@@ -333,8 +333,8 @@ fn typeHasMember(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, na
     val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if f.hasRecv {
             if f.recvId == qRecv {
                 if f.nameId == qName {
@@ -372,12 +372,12 @@ fn checkViaTargets(c: inout Comp) {
 // Bool, String are Eq/Ord without an explicit impl). Lets `where T: Eq`/`: Ord`
 // be instantiated with a primitive (the canonical `max`/`min` over numbers).
 fn builtinEqOrd(c: inout Comp, typeStart: U64, typeLen: U64, traitStart: U64, traitLen: U64) -> Bool {
-    val isEqOrd: Bool = rangeEquals(bytes: c.bytes, start: traitStart, len: traitLen, kw: "Eq") || rangeEquals(bytes: c.bytes, start: traitStart, len: traitLen, kw: "Ord")
+    val isEqOrd: Bool = rangeEquals(bytes: c.arena.bytes, start: traitStart, len: traitLen, kw: "Eq") || rangeEquals(bytes: c.arena.bytes, start: traitStart, len: traitLen, kw: "Ord")
     if isEqOrd {
         if isPrimType(c: inout c, start: typeStart, len: typeLen) {
             return true
         }
-        return rangeEquals(bytes: c.bytes, start: typeStart, len: typeLen, kw: "String")
+        return rangeEquals(bytes: c.arena.bytes, start: typeStart, len: typeLen, kw: "String")
     }
     return false
 }
@@ -405,9 +405,9 @@ fn typeConformsTo(c: inout Comp, typeStart: U64, typeLen: U64, traitStart: U64, 
     // (spec/10), so `UserId = String` satisfies `where T: Format` because String
     // does — `print(u)` type-checks and dispatches to the underlying's witness.
     mut val ni: U64 = 0
-    while ni < c.newtypes.count {
-        if c.newtypes[ni].nameId == qType {
-            return typeConformsTo(c: inout c, typeStart: c.newtypes[ni].underStart, typeLen: c.newtypes[ni].underLen, traitStart: traitStart, traitLen: traitLen)
+    while ni < c.arena.newtypes.count {
+        if c.arena.newtypes[ni].nameId == qType {
+            return typeConformsTo(c: inout c, typeStart: c.arena.newtypes[ni].underStart, typeLen: c.arena.newtypes[ni].underLen, traitStart: traitStart, traitLen: traitLen)
         }
         ni += 1
     }
@@ -423,7 +423,7 @@ fn typeConformsToName(c: inout Comp, typeStart: U64, typeLen: U64, traitName: St
     while i < c.conforms.count {
         val cf: Conform = c.conforms[i]
         if cf.typeId == qType {
-            if rangeEquals(bytes: c.bytes, start: cf.traitStart, len: cf.traitLen, kw: traitName) {
+            if rangeEquals(bytes: c.arena.bytes, start: cf.traitStart, len: cf.traitLen, kw: traitName) {
                 return true
             }
         }
@@ -439,7 +439,7 @@ fn checkFnBounds(c: inout Comp) {
     mut val ii: U64 = 0
     while ii < c.monoWork.fnInsts.count {
         val fin: FnInst = c.monoWork.fnInsts[ii]
-        val f: Func = c.funcs[fin.fnIdx]
+        val f: Func = c.arena.funcs[fin.fnIdx]
         mut val bi: U64 = 0
         while bi < c.funcBounds.count {
             val fb: FuncBound = c.funcBounds[bi]
@@ -449,7 +449,7 @@ fn checkFnBounds(c: inout Comp) {
                     val tp: Bind = f.typeParams[pi]
                     if tp.nameId == fb.paramNameId {
                         if pi < fin.args.count {
-                            val at: TypeRef = c.types[fin.args[pi]]
+                            val at: TypeRef = c.arena.types[fin.args[pi]]
                             // a `#`-viewed type argument (`f(a: s#P)` / `g(x#Ext)`,
                             // spec/09) satisfies the bound via the conformance path the
                             // view selects, even when the bare type does not conform.
@@ -482,11 +482,11 @@ fn checkMethodBounds(c: inout Comp) {
     mut val gi: U64 = 0
     while gi < c.monoWork.genInsts.count {
         val instRef: U64 = c.monoWork.genInsts[gi]
-        val inst: TypeRef = c.types[instRef]
+        val inst: TypeRef = c.arena.types[instRef]
         mut val mfi: U64 = 0
-        while mfi < c.funcs.count {
-            if methodMatchesInst(c: inout c, f: c.funcs[mfi], instRef: instRef) {
-                val f: Func = c.funcs[mfi]
+        while mfi < c.arena.funcs.count {
+            if methodMatchesInst(c: inout c, f: c.arena.funcs[mfi], instRef: instRef) {
+                val f: Func = c.arena.funcs[mfi]
                 mut val bi: U64 = 0
                 while bi < c.funcBounds.count {
                     val fb: FuncBound = c.funcBounds[bi]
@@ -496,7 +496,7 @@ fn checkMethodBounds(c: inout Comp) {
                             val tp: Bind = f.typeParams[pi]
                             if tp.nameId == fb.paramNameId {
                                 if pi < inst.args.count {
-                                    val at: TypeRef = c.types[inst.args[pi]]
+                                    val at: TypeRef = c.arena.types[inst.args[pi]]
                                     if !(typeConformsTo(c: inout c, typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen)) {
                                         compileErrorAt(line: lineOf(c: inout c, offset: fb.paramStart), msg: "receiver type argument does not conform to the trait required by the method's `where`")
                                     }

@@ -2,7 +2,7 @@
 // opposed to a fresh value (literal / call / construction)? Used to decide
 // whether copying an array value is needed for value semantics.
 fn isPlaceExpr(c: inout Comp, id: U64) -> Bool {
-    match c.exprs[id] {
+    match c.arena.exprs[id] {
         Expr.Ident(val start, val len) => { return true }
         Expr.Field(val base, val nameStart, val nameLen) => { return true }
         Expr.Index(val base, val index) => { return true }
@@ -25,8 +25,8 @@ fn isStringEq(c: inout Comp, op: I64, lhs: U64) -> Bool {
 fn isEnumName(c: inout Comp, start: U64, len: U64) -> Bool {
     val qId: U64 = intern(c: inout c, start: start, len: len)
     mut val ei: U64 = 0
-    while ei < c.enums.count {
-        val e: EnumDef = c.enums[ei]
+    while ei < c.arena.enums.count {
+        val e: EnumDef = c.arena.enums[ei]
         if e.nameId == qId {
             return true
         }
@@ -40,8 +40,8 @@ fn isEnumName(c: inout Comp, start: U64, len: U64) -> Bool {
 fn isAllNullary(c: inout Comp, start: U64, len: U64) -> Bool {
     val qId: U64 = intern(c: inout c, start: start, len: len)
     mut val ei: U64 = 0
-    while ei < c.enums.count {
-        val e: EnumDef = c.enums[ei]
+    while ei < c.arena.enums.count {
+        val e: EnumDef = c.arena.enums[ei]
         if e.nameId == qId {
             val vars: Array[Variant] = e.variants
             mut val vi: U64 = 0
@@ -120,24 +120,24 @@ fn compareNeedsTrait(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
     return false
 }
 
-// Index of an assoc fn named `name` on type (typeStart,typeLen), or c.funcs.count.
+// Index of an assoc fn named `name` on type (typeStart,typeLen), or c.arena.funcs.count.
 // (A by-name lookup for the operator witnesses Eq.eq / Ord.compare, which have a
 // single witness per type.)
 fn findAssocByName(c: inout Comp, typeStart: U64, typeLen: U64, name: String) -> U64 {
     val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if f.isAssoc {
             if f.recvId == qType {
-                if rangeEquals(bytes: c.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
+                if rangeEquals(bytes: c.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
                     return i
                 }
             }
         }
         i += 1
     }
-    return c.funcs.count
+    return c.arena.funcs.count
 }
 
 // Whether the operand type carries the witness an operator needs: Eq's `eq` for
@@ -163,7 +163,7 @@ fn hasCompareWitness(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
         if op >= 52 {
             if op <= 55 {
                 if typeConformsToName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, traitName: "Ord") {
-                    return findAssocByName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: "compare") < c.funcs.count
+                    return findAssocByName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: "compare") < c.arena.funcs.count
                 }
             }
         }
@@ -174,7 +174,7 @@ fn hasCompareWitness(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
 // Whether the operand type both conforms to Eq and carries the `eq` witness.
 fn eqWitnessReady(c: inout Comp, ti: TypeInfo) -> Bool {
     if typeConformsToName(c: inout c, typeStart: ti.nameStart, typeLen: ti.nameLen, traitName: "Eq") {
-        return findAssocByName(c: inout c, typeStart: ti.nameStart, typeLen: ti.nameLen, name: "eq") < c.funcs.count
+        return findAssocByName(c: inout c, typeStart: ti.nameStart, typeLen: ti.nameLen, name: "eq") < c.arena.funcs.count
     }
     return false
 }
@@ -227,7 +227,7 @@ fn binTraitMethodName(op: I64) -> String {
 // Resolve the arithmetic witness assoc fn named `name` on type (typeStart,typeLen),
 // disambiguating right-operand overloads (`Mul[Vector]` vs `Mul[F64]`) by the rhs
 // type: the assoc whose 2nd param type's head id matches typeOf(rhs). Falls back to
-// the first assoc of that name (e.g. an untyped-literal rhs). c.funcs.count = none.
+// the first assoc of that name (e.g. an untyped-literal rhs). c.arena.funcs.count = none.
 fn findBinTraitWitness(c: inout Comp, typeStart: U64, typeLen: U64, name: String, rhs: U64) -> U64 {
     val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
     val rt: TypeInfo = typeOf(c: inout c, id: rhs)
@@ -235,22 +235,22 @@ fn findBinTraitWitness(c: inout Comp, typeStart: U64, typeLen: U64, name: String
     // an unsuffixed integer literal has no recovered type (kind 0, no name); it can
     // adapt to any integer rhs, so prefer an overload whose rhs param is an int type.
     val rhsUntyped: Bool = rt.kind == 0 && rt.nameLen == 0
-    mut val firstMatch: U64 = c.funcs.count
-    mut val intMatch: U64 = c.funcs.count
+    mut val firstMatch: U64 = c.arena.funcs.count
+    mut val intMatch: U64 = c.arena.funcs.count
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if f.isAssoc {
             if f.recvId == qType {
-                if rangeEquals(bytes: c.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
-                    if firstMatch == c.funcs.count {
+                if rangeEquals(bytes: c.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
+                    if firstMatch == c.arena.funcs.count {
                         firstMatch = i
                     }
                     if f.params.count >= 2 {
                         if f.params[1].tyNameId == rhsId {
                             return i
                         }
-                        if intMatch == c.funcs.count {
+                        if intMatch == c.arena.funcs.count {
                             if isIntType(c: inout c, start: f.params[1].tyStart, len: f.params[1].tyLen) {
                                 intMatch = i
                             }
@@ -262,7 +262,7 @@ fn findBinTraitWitness(c: inout Comp, typeStart: U64, typeLen: U64, name: String
         i += 1
     }
     if rhsUntyped {
-        if intMatch < c.funcs.count {
+        if intMatch < c.arena.funcs.count {
             return intMatch
         }
     }
@@ -326,7 +326,7 @@ fn hasBinTraitWitness(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
     if lt.kind == 2 || lt.kind == 0 {
         if lt.nameLen > 0 {
             if typeConformsToName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, traitName: binTraitName(op: op)) {
-                return findAssocByName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op)) < c.funcs.count
+                return findAssocByName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op)) < c.arena.funcs.count
             }
         }
     }

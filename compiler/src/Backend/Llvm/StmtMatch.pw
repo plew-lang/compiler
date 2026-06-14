@@ -37,19 +37,19 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
     val savedMP: Array[Bind] = c.curTypeParams
     val savedMA: Array[U64] = c.curTypeArgs
     // the enum: from the first non-wildcard, non-struct arm.
-    mut val eid: U64 = c.enums.count
+    mut val eid: U64 = c.arena.enums.count
     mut val ai0: U64 = 0
     while ai0 < arms.count {
         if !(arms[ai0].isWildcard) {
             if !(arms[ai0].isStruct) {
-                if eid == c.enums.count {
+                if eid == c.arena.enums.count {
                     eid = enumIdxByName(c: inout c, start: arms[ai0].enumStart, len: arms[ai0].enumLen)
                 }
             }
         }
         ai0 += 1
     }
-    if eid >= c.enums.count {
+    if eid >= c.arena.enums.count {
         compileErrorAt(line: 0, msg: "LLVM backend: match is only supported on a registered enum (so far)")
         return
     }
@@ -127,7 +127,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
     val vi: U64 = variantIndex(c: inout c, enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
     val payloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: eid, vi: vi)
     val payload: LLVMValueRef = LLVMBuildLoad2(st.b, payloadTy, LLVMBuildStructGEP2(st.b, scrutTy, scrutSlot, 1U64, anon()), anon())
-    val fs: Array[FieldDef] = c.enums[eid].variants[vi].fields
+    val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
     mut val bi: U64 = 0
     while bi < arm.binds.count {
         val b: Bind = arm.binds[bi]
@@ -156,7 +156,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
                 pty = st.arrayTy
                 isArrF = true
                 elemTyF = llvmTypeOfRef(c: inout c, st: inout st, ref: elemRef)
-                val et: TypeRef = c.types[elemRef]
+                val et: TypeRef = c.arena.types[elemRef]
                 elemKindF = kindFromTySpan(c: inout c, tyStart: et.nameStart, tyLen: et.nameLen)
             }
             // a generic-instance payload field (`Leaf(v: Optional[I64])`,
@@ -171,7 +171,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
                         gfp = groundTypeRef(c: inout c, ref: fd.ty)
                     }
                     if isGenericInst(c: inout c, ref: gfp) {
-                        if !(rangeEquals(bytes: c.bytes, start: c.types[gfp].nameStart, len: c.types[gfp].nameLen, kw: "Array")) {
+                        if !(rangeEquals(bytes: c.arena.bytes, start: c.arena.types[gfp].nameStart, len: c.arena.types[gfp].nameLen, kw: "Array")) {
                             genFieldRef = gfp
                             pty = llvmTypeOfRef(c: inout c, st: inout st, ref: gfp)
                         }
@@ -214,7 +214,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
                 if c.curTypeParams.count > 0U64 {
                     val gft: U64 = groundTypeRef(c: inout c, ref: fd.ty)
                     if gft != 0U64 {
-                        bindKind = kindFromTySpan(c: inout c, tyStart: c.types[gft].nameStart, tyLen: c.types[gft].nameLen)
+                        bindKind = kindFromTySpan(c: inout c, tyStart: c.arena.types[gft].nameStart, tyLen: c.arena.types[gft].nameLen)
                     }
                 }
             }
@@ -237,9 +237,9 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
             // and nested-array/Ref elements resolve in the arm body.
             if isArrF {
                 if elemRef != 0U64 {
-                    val et2: TypeRef = c.types[elemRef]
+                    val et2: TypeRef = c.arena.types[elemRef]
                     val esi: U64 = localStructIdxFor(c: inout c, st: inout st, start: et2.nameStart, len: et2.nameLen)
-                    if esi < c.structs.count {
+                    if esi < c.arena.structs.count {
                         setLocalElemStruct(st: inout st, esi: esi)
                     }
                     setLocalElemTypeRef(st: inout st, ref: elemRef)
@@ -256,7 +256,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
 // field types (under any generic env the caller set). Discards (`_`, empty name)
 // are skipped.
 fn bindStructPattern(c: inout Comp, st: inout LlvmCtx, sidx: U64, binds: Array[Bind], scrutTy: LLVMTypeRef, scrutSlot: LLVMValueRef) {
-    val fs: Array[FieldDef] = c.structs[sidx].fields
+    val fs: Array[FieldDef] = c.arena.structs[sidx].fields
     mut val bi: U64 = 0
     while bi < binds.count {
         val b: Bind = binds[bi]

@@ -9,20 +9,20 @@
 // Everything else falls through to the plain lowerExpr.
 fn lowerExprWithCtx(c: inout Comp, e: ExprAst, ctxRef: U64) -> U64 {
     if ctxRef != 0 {
-        if ctxRef < c.types.count {
-            val ct: TypeRef = c.types[ctxRef]
+        if ctxRef < c.arena.types.count {
+            val ct: TypeRef = c.arena.types[ctxRef]
             // a record literal adopting an annotated record type (`val p: (x: I64, y:
             // I64) = (x: 1, y: 2)`): the context already lowered to the synthetic record
             // struct (its name begins `(`), so build that struct directly.
             if ct.nameLen > 0U64 {
-                if c.bytes[ct.nameStart] == '(' {
+                if c.arena.bytes[ct.nameStart] == '(' {
                     match e {
                         ExprAst.RecordLit(val fields, val span) => {
                             // pass the record struct's canonical name so makeFieldType can
                             // resolve each field's declared type — gives a NESTED record/dict
                             // literal field (`(a: (x:1,y:2), …)`) its own context (else the
                             // inner literal lowers context-free and the backend can't build it).
-                            val recName: String = stringFromBytesUnchecked(b: extractSpan(buf: c.bytes, start: ct.nameStart, len: ct.nameLen))
+                            val recName: String = stringFromBytesUnchecked(b: extractSpan(buf: c.arena.bytes, start: ct.nameStart, len: ct.nameLen))
                             val fs: Array[MakeField] = lowerMakeFields(c: inout c, fields: fields, typeName: recName, variant: "", isEnum: false)
                             return c.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fs />)
                         }

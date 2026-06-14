@@ -71,13 +71,13 @@ fn checkDuplicateTraitReqs(c: inout Comp) {
 
 fn checkOverloadCollisions(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val fi: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val fi: Func = c.arena.funcs[i]
         if !(fi.hasRecv) {
             if !(fi.isAssoc) {
                 mut val j: U64 = i + 1
-                while j < c.funcs.count {
-                    val fj: Func = c.funcs[j]
+                while j < c.arena.funcs.count {
+                    val fj: Func = c.arena.funcs[j]
                     if !(fj.hasRecv) {
                         if !(fj.isAssoc) {
                             if fi.nameId == fj.nameId {
@@ -170,8 +170,8 @@ fn checkDefaultExtCollisions(c: inout Comp) {
     while di < c.defaultExts.count {
         val de: DefaultExt = c.defaultExts[di]
         mut val fi: U64 = 0
-        while fi < c.funcs.count {
-            val f: Func = c.funcs[fi]
+        while fi < c.arena.funcs.count {
+            val f: Func = c.arena.funcs[fi]
             if f.hasRecv {
                 if f.recvId == de.typeId {
                     if f.extId == de.extId {
@@ -179,9 +179,9 @@ fn checkDefaultExtCollisions(c: inout Comp) {
                         // every other bare-callable method on the same type (own,
                         // provided, or another default extension).
                         mut val gi: U64 = 0
-                        while gi < c.funcs.count {
+                        while gi < c.arena.funcs.count {
                             if gi != fi {
-                                val g: Func = c.funcs[gi]
+                                val g: Func = c.arena.funcs[gi]
                                 if g.hasRecv {
                                     if g.recvId == de.typeId {
                                         mut val gBare: Bool = false

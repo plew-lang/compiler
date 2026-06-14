@@ -6,20 +6,20 @@
 
 // Is `(nameStart,nameLen)` a raw-floor intrinsic name?
 fn isRawIntrinsicName(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawAlloc") { return true }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawLoad") { return true }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawStore") { return true }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawCap") { return true }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawIsUnique") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawAlloc") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawLoad") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawStore") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawCap") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawIsUnique") { return true }
     return false
 }
 
 // Is `(nameStart,nameLen)` an array intrinsic name (for the exprType of its
 // result and the call lowering)?
 fn isArrayIntrinsicName(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arrayPush") { return true }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arrayGet") { return true }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arraySet") { return true }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arrayLen") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "arrayPush") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "arrayGet") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "arraySet") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "arrayLen") { return true }
     return false
 }

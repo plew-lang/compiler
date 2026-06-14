@@ -1,6 +1,6 @@
 // The TypeRef-based type checker (approach B). A clean type layer over the existing,
 // already-debugged resolution (overload / trait / generic). It represents a type as a
-// `Comp.types` index (a TypeRef carrying head name + generic args), with 0 meaning
+// `Comp.arena.types` index (a TypeRef carrying head name + generic args), with 0 meaning
 // "unknown" — distinct from any concrete type, so the int/Bool/unknown conflation of
 // the kind-based TypeInfo is gone. Developed in LOG mode (`plewc --tc-log`): it prints
 // every mismatch it finds instead of rejecting, so coverage can be grown and triaged

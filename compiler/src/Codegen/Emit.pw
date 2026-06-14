@@ -53,54 +53,54 @@ fn compileErrorAt(line: I64, msg: String) {
 }
 
 fn isPrimType(c: inout Comp, start: U64, len: U64) -> Bool {
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I8") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I16") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I32") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I64") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U8") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U16") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U32") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U64") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Bool") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "F32") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "F64") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I8") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I16") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I32") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I64") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U8") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U16") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U32") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U64") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Bool") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "F32") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "F64") { return true }
     return false
 }
 
 // Whether a type-name span names a float type (F32 / F64).
 fn isFloatType(c: inout Comp, start: U64, len: U64) -> Bool {
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "F32") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "F64") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "F32") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "F64") { return true }
     return false
 }
 
 // Whether a type-name span is one of the 8 integer types (excludes Bool/String).
 fn isIntType(c: inout Comp, start: U64, len: U64) -> Bool {
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I8") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I16") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I32") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I64") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U8") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U16") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U32") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U64") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I8") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I16") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I32") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I64") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U8") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U16") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U32") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U64") { return true }
     return false
 }
 
 // Bit width of an integer type-name span (0 if not an integer type).
 fn intBits(c: inout Comp, start: U64, len: U64) -> U64 {
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I8") { return 8 }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U8") { return 8 }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I16") { return 16 }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U16") { return 16 }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I32") { return 32 }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U32") { return 32 }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I8") { return 8 }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U8") { return 8 }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I16") { return 16 }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U16") { return 16 }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I32") { return 32 }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U32") { return 32 }
     return 64
 }
 
 // Whether an integer type-name span is signed (`I*`). Assumes isIntType.
 fn intSigned(c: inout Comp, start: U64, len: U64) -> Bool {
-    return c.bytes[start] == 'I'
+    return c.arena.bytes[start] == 'I'
 }
 
 // Whether `src as dst` (both integer types) is lossless — i.e. dst represents
@@ -203,8 +203,8 @@ fn arrayElemNameForRef(c: inout Comp, elemRef: U64) -> Bind {
         }
         i += 1
     }
-    if elemRef < c.types.count {
-        val t: TypeRef = c.types[elemRef]
+    if elemRef < c.arena.types.count {
+        val t: TypeRef = c.arena.types[elemRef]
         return <Bind nameStart=t.nameStart nameLen=t.nameLen fieldStart=elemRef fieldLen=0 />
     }
     return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
@@ -226,7 +226,7 @@ fn spansEqual(c: inout Comp, aStart: U64, aLen: U64, bStart: U64, bLen: U64) -> 
     }
     mut val j: U64 = 0
     while j < aLen {
-        if c.bytes[aStart + j] != c.bytes[bStart + j] {
+        if c.arena.bytes[aStart + j] != c.arena.bytes[bStart + j] {
             return false
         }
         j += 1
@@ -246,7 +246,7 @@ fn internHash(c: inout Comp, start: U64, len: U64) -> U64 {
     mut val h: U64 = 14695981039346656037U64
     mut val j: U64 = 0
     while j < len {
-        h = h ^ (c.bytes[start + j] as U64)
+        h = h ^ (c.arena.bytes[start + j] as U64)
         h = h.wrappingMul(by: 1099511628211U64)
         j += 1
     }
@@ -285,14 +285,14 @@ fn internGrow(c: inout Comp) {
 // If (start, len) names a `newtype` (spec/10), its underlying type's TypeRef; else 0.
 // Codegen resolves a newtype to its underlying for representation / method dispatch.
 fn newtypeUnderRef(c: inout Comp, start: U64, len: U64) -> U64 {
-    if c.newtypes.count == 0U64 {
+    if c.arena.newtypes.count == 0U64 {
         return 0U64
     }
     val nid: U64 = intern(c: inout c, start: start, len: len)
     mut val i: U64 = 0
-    while i < c.newtypes.count {
-        if c.newtypes[i].nameId == nid {
-            return c.newtypes[i].underRef
+    while i < c.arena.newtypes.count {
+        if c.arena.newtypes[i].nameId == nid {
+            return c.arena.newtypes[i].underRef
         }
         i += 1
     }
@@ -302,12 +302,12 @@ fn newtypeUnderRef(c: inout Comp, start: U64, len: U64) -> U64 {
 // The underlying type's head-name span for a `newtype` named (start, len), or the
 // input span unchanged when it is not a newtype.
 fn newtypeUnderName(c: inout Comp, start: U64, len: U64) -> Bind {
-    if c.newtypes.count != 0U64 {
+    if c.arena.newtypes.count != 0U64 {
         val nid: U64 = intern(c: inout c, start: start, len: len)
         mut val i: U64 = 0
-        while i < c.newtypes.count {
-            if c.newtypes[i].nameId == nid {
-                return <Bind nameStart=c.newtypes[i].underStart nameLen=c.newtypes[i].underLen fieldStart=0 fieldLen=0 />
+        while i < c.arena.newtypes.count {
+            if c.arena.newtypes[i].nameId == nid {
+                return <Bind nameStart=c.arena.newtypes[i].underStart nameLen=c.arena.newtypes[i].underLen fieldStart=0 fieldLen=0 />
             }
             i += 1
         }
@@ -348,7 +348,7 @@ fn lineOf(c: inout Comp, offset: U64) -> I64 {
     mut val line: I64 = 1
     mut val i: U64 = 0
     while i < offset {
-        if c.bytes[i] == 10 {
+        if c.arena.bytes[i] == 10 {
             line += 1
         }
         i += 1
@@ -359,7 +359,7 @@ fn lineOf(c: inout Comp, offset: U64) -> I64 {
 // Best-effort byte offset for an expression (for diagnostics). Leaf nodes with
 // a span return it; compound nodes recurse to a representative child.
 fn exprOffset(c: inout Comp, id: U64) -> U64 {
-    val e: Expr = c.exprs[id]
+    val e: Expr = c.arena.exprs[id]
     match e {
         Expr.Int(value: _, val offset, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { return offset }
         Expr.Ident(val start, val len) => { return start }

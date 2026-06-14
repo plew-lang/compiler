@@ -49,17 +49,17 @@ fn isImportedInto(c: inout Comp, mod: U64, nameStart: U64, nameLen: U64) -> Bool
 // in another module is valid only if that name was imported into the using module
 // (`import … with { }`) — relying on the flat namespace is not allowed. Same-module
 // calls (the whole compiler is one module = its `part` tree) and unresolved names
-// (locals/closures/builtins not in c.funcs) are left alone. Types stay ambient, so
+// (locals/closures/builtins not in c.arena.funcs) are left alone. Types stay ambient, so
 // only function calls are gated here; member/method visibility is a separate axis.
 fn checkUseVisibility(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.exprs.count {
-        match c.exprs[i] {
+    while i < c.arena.exprs.count {
+        match c.arena.exprs[i] {
             Expr.Call(val nameStart, val nameLen, val args) => {
                 val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
-                if fi < c.funcs.count {
+                if fi < c.arena.funcs.count {
                     val useMod: U64 = moduleOf(c: inout c, offset: nameStart)
-                    val defMod: U64 = moduleOf(c: inout c, offset: c.funcs[fi].nameStart)
+                    val defMod: U64 = moduleOf(c: inout c, offset: c.arena.funcs[fi].nameStart)
                     if useMod != defMod {
                         if !(isImportedInto(c: inout c, mod: useMod, nameStart: nameStart, nameLen: nameLen)) {
                             compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "use of a function from another module without importing it (add `import … with { … }`)")
@@ -92,19 +92,19 @@ fn checkUseVisibility(c: inout Comp) {
 // intrinsics are resolved through their loaded `extern` decls, so they fall under
 // the ordinary import check above and are not listed here.)
 fn isAmbientInterceptedName(c: inout Comp, start: U64, len: U64) -> Bool {
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "print") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "eprint") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "write") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "writeByte") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "readStdin") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "readFile") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "readFileBytes") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "fileExists") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "sleep") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "exit") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "print") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "eprint") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "write") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "writeByte") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "readStdin") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "readFile") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "readFileBytes") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "fileExists") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "sleep") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "exit") { return true }
     // `assert` is a @Std/Core function (not a lang item): now that Core is ambient
     // (force-loaded), it resolves, but spec keeps it import-required, so gate it here.
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "assert") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "assert") { return true }
     return false
 }
 

@@ -14,7 +14,7 @@ struct PType {
     pub val start: U64
     pub val len: U64
     pub val isArray: Bool
-    // index into Comp.types of the full structured type (head name + type
+    // index into Comp.arena.types of the full structured type (head name + type
     // arguments). The (start,len,isArray) triple above is the legacy "head"
     // view kept for the Array / scalar / named paths; `ref` carries the general
     // `Name[Arg, ...]` shape (nested, multi-arg) for generics. For `Array[E]`
@@ -23,14 +23,14 @@ struct PType {
 }
 
 // A structured type reference: a head type name span plus a list of type
-// arguments (indices into Comp.types). Non-generic types have an empty args
+// arguments (indices into Comp.arena.types). Non-generic types have an empty args
 // list. `Array[E]` is {name="Array", args=[E]}; `Optional[I32]` is
 // {name="Optional", args=[I32]}; a bare `I32` is {name="I32", args=[]}.
 struct TypeRef {
     pub val nameStart: U64
     pub val nameLen: U64
     // interned head-name id (Phase D): the content-keyed id of (nameStart,nameLen),
-    // set centrally in `pushType` so every TypeRef in Comp.types carries it. Type-name
+    // set centrally in `pushType` so every TypeRef in Comp.arena.types carries it. Type-name
     // equality becomes integer == on this id instead of a byte-by-byte `spansEqual`.
     // Shares the global intern table with Phase C decl names: a TypeRef naming "Foo"
     // gets the same id as the StructDef "Foo" (content-keyed), so type-vs-decl scans
@@ -87,7 +87,7 @@ struct Local {
     // real type). Type equality on a local becomes integer == instead of spansEqual.
     pub val tyNameId: U64 = 0
     pub val isArray: Bool
-    // structured type (Comp.types index); carries generic type arguments that
+    // structured type (Comp.arena.types index); carries generic type arguments that
     // the (tyStart,tyLen,isArray) head view cannot.
     pub val ty: U64
     pub val isInout: Bool
@@ -118,7 +118,7 @@ struct TypeInfo {
     pub val kind: I64
     pub val nameStart: U64
     pub val nameLen: U64
-    // Comp.types index of the full structured type when this is a generic
+    // Comp.arena.types index of the full structured type when this is a generic
     // instantiation (e.g. `Optional[I32]`), so match/dispatch can recover the
     // mangled C name and substitute type parameters. 0 (sentinel) otherwise.
     pub val ref: U64
@@ -353,7 +353,7 @@ struct FieldDef {
     // mutability check on `base.field = x` (spec: both binding and field `mut`).
     pub val isMut: Bool
     // declared default value `val x: T = expr` (spec/05: memberwise-factory
-    // default-arg sugar). hasDefault gates it; defaultVal is the Comp.exprs id of
+    // default-arg sugar). hasDefault gates it; defaultVal is the Comp.arena.exprs id of
     // the default expression (re-evaluated at each construction site that omits
     // the field). Always false for enum variant fields (they take no default).
     pub val hasDefault: Bool
@@ -446,7 +446,7 @@ struct DeriveReq {
     pub val isEnum: Bool
     pub val nameStart: U64
     pub val nameLen: U64
-    // the annotated item's full source range `[declStart, declEnd)` in c.bytes
+    // the annotated item's full source range `[declStart, declEnd)` in c.arena.bytes
     // (the type keyword through its closing `}`). gen mode (spec/16) embeds this
     // slice as the `source` string the macro's `parseItem` reads, and passes
     // declStart as the span base so the macro sees original coordinates.
@@ -496,7 +496,7 @@ struct Conform {
     pub val traitStart: U64
     pub val traitLen: U64
     pub val traitId: U64 = 0
-    // trait type arguments `impl V as Add[V]` (spec/12): TypeRef indices (Comp.types)
+    // trait type arguments `impl V as Add[V]` (spec/12): TypeRef indices (Comp.arena.types)
     // bound to the trait's type parameters, positionally. Empty for a bare
     // conformance. The completeness check substitutes the trait's i-th type
     // parameter with traitArgs[i] when matching a requirement against its witness.
@@ -538,7 +538,7 @@ struct MethodAlias {
 }
 
 // A trait bound `where T: Trait` on a function (spec/08). `fnIdx` indexes
-// c.funcs; (paramStart,paramLen) names the bounded type parameter; (traitStart,
+// c.arena.funcs; (paramStart,paramLen) names the bounded type parameter; (traitStart,
 // traitLen) the required trait. `where T: A + B` and `where T: A, U: B` expand to
 // one FuncBound per atom. Enforced at instantiation: the concrete type bound to
 // the parameter must conform to the trait, else a loud error.
@@ -556,7 +556,7 @@ struct FuncBound {
 }
 
 // A concrete instantiation of a generic free function (`fn f[T](x: T)` called
-// with T = a concrete type). `fnIdx` indexes c.funcs; `args` are the concrete
+// with T = a concrete type). `fnIdx` indexes c.arena.funcs; `args` are the concrete
 // type arguments (TypeRef indices) aligned to the function's typeParams.
 // Discovered from call sites (only ground/concrete instantiations); each gets a
 // specialized C function `f_<arg-mangle...>` emitted under the type-param env.
@@ -692,13 +692,35 @@ struct NewtypeDef {
 }
 
 // Name interner (content-keyed, Phase C): maps each name span (start,len into
-// `Comp.bytes`) to a stable 1-based id, so name equality becomes an integer
+// `Comp.arena.bytes`) to a stable 1-based id, so name equality becomes an integer
 // compare instead of a byte-by-byte `spansEqual`. Declaration names are
 // pre-interned once into a `nameId` field on their table entry; a name-vs-decl
 // scan interns the query once and compares ids in the loop. `starts`/`lens` hold
 // the unique spans indexed by id-1; `buckets` is an open-addressing slot→id map
 // (0 = empty); `count` is the number of interned names. Re-interned names unify
 // by CONTENT (equal bytes ⇒ equal id), which is the whole point.
+// The shared IR arena: the program's source bytes plus every node table, the one
+// data store all passes read. `bytes` is the combined source buffer (`mut` so the
+// derive synthesizer can append synthetic identifier names and reference them by
+// span — appends land past existing token offsets). `exprs`/`stmts`/`blocks`/
+// `funcs`/`structs`/`enums` are the AST node arenas (cross-referenced by U64
+// index). `types` is the structured TypeRef arena (indexed by nodes' `ty`/`ref`
+// fields). `globals` are module-level vars in lowering (= init) order. `newtypes`
+// are `newtype Name = Underlying` declarations (spec/10).
+struct Arena {
+    pub mut val bytes: Array[U8] = []
+    pub mut val exprs: Array[Expr] = []
+    pub mut val stmts: Array[Stmt] = []
+    pub mut val blocks: Array[Block] = []
+    pub mut val funcs: Array[Func] = []
+    pub mut val structs: Array[StructDef] = []
+    pub mut val enums: Array[EnumDef] = []
+    pub mut val types: Array[TypeRef] = []
+    pub mut val globals: Array[Global] = []
+    pub mut val newtypes: Array[NewtypeDef] = []
+}
+pub impl Arena { factory }
+
 // Module identity + cross-module visibility tables (spec/15). `ranges`: each
 // entry (reusing Bind) tags a source file's [start,len) span in `bytes` with its
 // module id (fieldStart), so `moduleOf(offset)` reverse-maps a decl/use to its
@@ -765,16 +787,10 @@ struct Interner {
 pub impl Interner { factory }
 
 struct Comp {
-    // source bytes. `mut val` so the derive synthesizer can append synthetic
-    // identifier names ("eq", "lhs", ...) and reference them by span — existing
-    // token offsets are unaffected (appends land past the end).
-    pub mut val bytes: Array[U8]
-    pub mut val exprs: Array[Expr]
-    pub mut val stmts: Array[Stmt]
-    pub mut val blocks: Array[Block]
-    pub mut val funcs: Array[Func]
-    pub mut val structs: Array[StructDef]
-    pub mut val enums: Array[EnumDef]
+    // the shared IR arena: source bytes + every node table (see `Arena`). The
+    // single owner of the program's data that all passes read; `c.arena.exprs`,
+    // `c.arena.funcs`, `c.arena.bytes`, etc.
+    pub mut val arena: Arena = <Arena />
     // namespace imports (spec/15): a `import @Std/Io` (no `with`) binds the last path
     // segment (`Io`) as a namespace, so `Io.print(args)` resolves to `print` from that
     // module. Each Bind holds the segment's name span (nameStart/nameLen).
@@ -791,12 +807,6 @@ struct Comp {
     // consult it so a nested chain (`a?.x?.y`) types its inner stage. Empty in the
     // common case (no user-Chain `?.`).
     pub mut val chainResults: Array[Bind] = []
-    // module-level variables (spec/15), in lowering order (= initialization order).
-    pub mut val globals: Array[Global] = []
-    // `newtype Name = Underlying` declarations (spec/10): a distinct type with the
-    // underlying's representation and methods. Codegen resolves a newtype name to its
-    // underlying; `as` between them is a no-op re-tag.
-    pub mut val newtypes: Array[NewtypeDef] = []
     // trait declarations, recorded conformances, and `via` method aliases
     // (spec/08). `traits`/`conforms` drive the conformance-completeness check;
     // `methodAliases` redirect a requirement name to its real witness method.
@@ -830,7 +840,7 @@ struct Comp {
     pub mut val funcBounds: Array[FuncBound]
     // the function index currently being checked by the eager generic
     // type-checker (#9), so method/operator bound checks can look up its type
-    // parameters and `where` bounds. c.funcs.count when not checking.
+    // parameters and `where` bounds. c.arena.funcs.count when not checking.
     pub mut val curCheckFn: U64
     // scratch: requirement names witnessed by the trait impl currently being
     // parsed (body method or `via` alias). Reset at each `impl Type as Trait`
@@ -857,9 +867,6 @@ struct Comp {
     // typed-AST cache (Phase B): each expression node's recovered type, keyed by
     // expr id (see `TypeCache`). Built by buildExprTyTable before emission.
     pub mut val typeCache: TypeCache = <TypeCache />
-    // structured type references (TypeRef arena), indexed by the `ty`/`ref`
-    // fields above. Built during parsing; consumed by generic monomorphization.
-    pub mut val types: Array[TypeRef]
     // monomorphization work lists + derived tables (see `MonoWork`): generic
     // instantiations, fn instances / types / thunks, closure captures, Array
     // element types, and recursive-field boxing. Collected after parsing, used
@@ -942,7 +949,7 @@ struct Comp {
     pub mut val curBranchBase: U64
     // types that declared a `deinit { ... }` (spec/03). Each entry reuses Bind as
     // a (start,len) pair naming the receiver type. The deinit body itself is a
-    // synthetic Func named `deinit` (hasRecv) in c.funcs; this list lets codegen
+    // synthetic Func named `deinit` (hasRecv) in c.arena.funcs; this list lets codegen
     // ask "does type T have a deinit?" so scope-exit drops fire it.
     pub mut val deinits: Array[Bind]
     // interned name ids of structs that declared a public `factory` (spec/05:
@@ -985,30 +992,30 @@ pub impl Comp {
     inout fn appendSrc(from: Array[U8]) {
         mut val i: U64 = 0
         while i < from.count {
-            self.bytes.append(from[i])
+            self.arena.bytes.append(from[i])
             i += 1
         }
     }
     // Append an expression node, returning its arena index.
     inout fn pushExpr(e: Expr) -> U64 {
-        val id: U64 = self.exprs.count
-        self.exprs.append(e)
+        val id: U64 = self.arena.exprs.count
+        self.arena.exprs.append(e)
         return id
     }
     // Append a statement node, returning its arena index.
     inout fn pushStmt(s: Stmt) -> U64 {
-        val id: U64 = self.stmts.count
-        self.stmts.append(s)
+        val id: U64 = self.arena.stmts.count
+        self.arena.stmts.append(s)
         return id
     }
-    // Append a structured type reference, returning its Comp.types index. This is
+    // Append a structured type reference, returning its Comp.arena.types index. This is
     // the single interning choke point for type names (Phase D): the head name span
     // is interned here so every TypeRef carries its `nameId`, regardless of which
     // construction site (lowerType / Mono substitution / Self synthesis) built it.
     inout fn pushType(t: TypeRef) -> U64 {
-        val id: U64 = self.types.count
+        val id: U64 = self.arena.types.count
         val nid: U64 = intern(c: inout self, start: t.nameStart, len: t.nameLen)
-        self.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels />)
+        self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels />)
         return id
     }
 }

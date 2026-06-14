@@ -39,9 +39,9 @@ fn opShlAssign() -> I64 { return kindCode(k: <Kind.ShlEq />) }
 // receivers until the integer trait tower subsumes it. Whether a method name is
 // one of the supported wrapping ops, and its C operator.
 fn isWrappingMethod(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "wrappingMul") { return true }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "wrappingAdd") { return true }
-    if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "wrappingSub") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "wrappingMul") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "wrappingAdd") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "wrappingSub") { return true }
     return false
 }
 

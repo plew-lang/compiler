@@ -24,7 +24,7 @@ fn declareThunk(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     if !(isPlainUserFn(c: inout c, st: inout st, fi: fi)) {
         return
     }
-    val f: Func = c.funcs[fi]
+    val f: Func = c.arena.funcs[fi]
     if f.hasRecv {
         return
     }
@@ -50,12 +50,12 @@ fn declareThunk(c: inout Comp, st: inout LlvmCtx, fi: U64) {
 // function-as-value use; over-approx is harmless — an unused thunk just sits).
 fn collectThunks(c: inout Comp, st: inout LlvmCtx) {
     mut val i: U64 = 0
-    while i < c.exprs.count {
-        match c.exprs[i] {
+    while i < c.arena.exprs.count {
+        match c.arena.exprs[i] {
             Expr.Ident(val start, val len) => {
                 val fvi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)
-                if fvi < c.funcs.count {
-                    val f: Func = c.funcs[fvi]
+                if fvi < c.arena.funcs.count {
+                    val f: Func = c.arena.funcs[fvi]
                     if !(f.hasRecv || f.isAssoc || f.typeParams.count > 0U64) {
                         declareThunk(c: inout c, st: inout st, fi: fvi)
                     }
@@ -74,7 +74,7 @@ fn emitThunks(c: inout Comp, st: inout LlvmCtx) {
     while s < st.thunkIdx.count {
         val fi: U64 = st.thunkIdx[s]
         val fv: LLVMValueRef = st.thunkVal[s]
-        val f: Func = c.funcs[fi]
+        val f: Func = c.arena.funcs[fi]
         val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "entry"))
         LLVMPositionBuilderAtEnd(st.b, entry)
         val callSlot: U64 = userFnSlot(st: inout st, idx: fi)

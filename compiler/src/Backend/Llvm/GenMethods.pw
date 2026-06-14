@@ -33,12 +33,12 @@ fn declareGenMethods(c: inout Comp, st: inout LlvmCtx) {
     mut val gi: U64 = 0
     while gi < c.monoWork.genInsts.count {
         val instRef: U64 = c.monoWork.genInsts[gi]
-        val gt: TypeRef = c.types[instRef]
+        val gt: TypeRef = c.arena.types[instRef]
         // Array instances keep their methods on the array-special path; skip here.
-        if !(rangeEquals(bytes: c.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array")) {
+        if !(rangeEquals(bytes: c.arena.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array")) {
             mut val mfi: U64 = 0
-            while mfi < c.funcs.count {
-                val mf: Func = c.funcs[mfi]
+            while mfi < c.arena.funcs.count {
+                val mf: Func = c.arena.funcs[mfi]
                 if methodMatchesInst(c: inout c, f: mf, instRef: instRef) {
                     if !(mf.isProvided) {
                         if methodInEntryModule(c: inout c, f: mf) {
@@ -56,14 +56,14 @@ fn declareGenMethods(c: inout Comp, st: inout LlvmCtx) {
 }
 
 fn declareOneGenMethod(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64, ownArgs: Array[U64]) {
-    val mf: Func = c.funcs[mfi]
+    val mf: Func = c.arena.funcs[mfi]
     val savedP: Array[Bind] = c.curTypeParams
     val savedA: Array[U64] = c.curTypeArgs
     val savedR: U64 = st.curRecvInstRef
     c.curTypeParams = mf.typeParams
     // env = receiver instance args ++ method-own args (the latter empty for ordinary
     // methods); pairs 1:1 with mf.typeParams = [receiver params..., own params...].
-    c.curTypeArgs = concatArgs(add: c.types[instRef].args, base: ownArgs)
+    c.curTypeArgs = concatArgs(add: c.arena.types[instRef].args, base: ownArgs)
     st.curRecvInstRef = instRef
     // bind Self/Item to the receiver instance for a provided method, so a param/return
     // type naming `Item` resolves to the receiver's real item: a terminal returning
@@ -72,7 +72,7 @@ fn declareOneGenMethod(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64,
     val sDs: U64 = c.curSelfRef
     val sDi: U64 = c.curItemRef
     if mf.isProvided {
-        setSelfItemEnv(c: inout c, recvStart: c.types[instRef].nameStart, recvLen: c.types[instRef].nameLen, recvInstRef: instRef)
+        setSelfItemEnv(c: inout c, recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
     }
     mut val ptys: Array[LLVMTypeRef] = []
     if mf.selfInout {
@@ -110,12 +110,12 @@ fn declareOneGenMethod(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64,
 fn emitOneGenMethod(c: inout Comp, st: inout LlvmCtx, slot: U64) {
     val mfi: U64 = st.genMethK[slot]
     val instRef: U64 = st.genMethInst[slot]
-    val mf: Func = c.funcs[mfi]
+    val mf: Func = c.arena.funcs[mfi]
     val savedP: Array[Bind] = c.curTypeParams
     val savedA: Array[U64] = c.curTypeArgs
     val savedR: U64 = st.curRecvInstRef
     c.curTypeParams = mf.typeParams
-    c.curTypeArgs = concatArgs(add: c.types[instRef].args, base: st.genMethOwn[slot])
+    c.curTypeArgs = concatArgs(add: c.arena.types[instRef].args, base: st.genMethOwn[slot])
     st.curRecvInstRef = instRef
     // a provided method with method-own type params (`fold[B]` on a generic receiver):
     // its body refers to the element by the associated `Item`, while the env carries
@@ -126,7 +126,7 @@ fn emitOneGenMethod(c: inout Comp, st: inout LlvmCtx, slot: U64) {
     val s4: U64 = c.curSelfRef
     val si4: U64 = c.curItemRef
     if mf.isProvided {
-        setSelfItemEnv(c: inout c, recvStart: c.types[instRef].nameStart, recvLen: c.types[instRef].nameLen, recvInstRef: instRef)
+        setSelfItemEnv(c: inout c, recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
     }
     genLlvmFuncBody(c: inout c, st: inout st, fi: mfi, fv: st.genMethVal[slot])
     c.curSelfRef = s4
@@ -158,8 +158,8 @@ fn ensureGenMethodDeclared(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: 
     // the method's type params must pair 1:1 with the instance's args plus the
     // method-own args inferred at the call (`fold[B]`: receiver [I,F,B] + own [B]).
     // A still-mismatched count means own params we couldn't infer — leave undeclared.
-    val mf: Func = c.funcs[mfi]
-    if mf.typeParams.count != c.types[instRef].args.count + ownArgs.count {
+    val mf: Func = c.arena.funcs[mfi]
+    if mf.typeParams.count != c.arena.types[instRef].args.count + ownArgs.count {
         return st.genMethK.count
     }
     declareOneGenMethod(c: inout c, st: inout st, mfi: mfi, instRef: instRef, ownArgs: ownArgs)
@@ -197,10 +197,10 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     mut val pgStart: U64 = p.tyStart
     mut val pgLen: U64 = p.tyLen
     if p.ty != 0U64 {
-        if rangeEquals(bytes: c.bytes, start: p.tyStart, len: p.tyLen, kw: "Self") {
+        if rangeEquals(bytes: c.arena.bytes, start: p.tyStart, len: p.tyLen, kw: "Self") {
             val pgr: U64 = groundTypeRef(c: inout c, ref: p.ty)
-            pgStart = c.types[pgr].nameStart
-            pgLen = c.types[pgr].nameLen
+            pgStart = c.arena.types[pgr].nameStart
+            pgLen = c.arena.types[pgr].nameLen
         }
     }
     mut val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: pgStart, tyLen: pgLen)
@@ -210,7 +210,7 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     // a `Type#Ext`-viewed param (a plain struct otherwise): track its viewed
     // TypeRef so a bare `x.m()` in the body resolves the extension (spec/09).
     if p.ty != 0U64 {
-        if c.types[p.ty].viewExtId != 0U64 {
+        if c.arena.types[p.ty].viewExtId != 0U64 {
             pRef = p.ty
         }
     }
@@ -224,8 +224,8 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
             if c.curTypeParams.count > 0U64 {
                 val pgv: U64 = groundTypeRef(c: inout c, ref: p.ty)
                 if pgv != p.ty {
-                    if pgv < c.types.count {
-                        if c.types[pgv].viewExtId != 0U64 {
+                    if pgv < c.arena.types.count {
+                        if c.arena.types[pgv].viewExtId != 0U64 {
                             pRef = pgv
                         }
                     }
@@ -245,8 +245,8 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
         pElem = pty
         // an `Array[any P]` param: its element is the existential fat pointer.
         if p.ty != 0U64 {
-            if c.types[p.ty].args.count > 0U64 {
-                if refIsAny(c: inout c, ref: c.types[p.ty].args[0]) {
+            if c.arena.types[p.ty].args.count > 0U64 {
+                if refIsAny(c: inout c, ref: c.arena.types[p.ty].args[0]) {
                     pElem = st.anyTy
                 }
             }
@@ -290,14 +290,14 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
             if p.ty != 0U64 {
                 if c.curTypeParams.count > 0U64 {
                     val pg2: U64 = groundTypeRef(c: inout c, ref: p.ty)
-                    gs2 = c.types[pg2].nameStart
-                    gl2 = c.types[pg2].nameLen
+                    gs2 = c.arena.types[pg2].nameStart
+                    gl2 = c.arena.types[pg2].nameLen
                 }
             }
             if isPrimIntName(c: inout c, start: gs2, len: gl2) {
                 pRef = simpleTypeRef(c: inout c, nameStart: gs2, nameLen: gl2)
             }
-            if rangeEquals(bytes: c.bytes, start: gs2, len: gl2, kw: "Bool") {
+            if rangeEquals(bytes: c.arena.bytes, start: gs2, len: gl2, kw: "Bool") {
                 pRef = simpleTypeRef(c: inout c, nameStart: gs2, nameLen: gl2)
             }
             if pRef == 0U64 {
@@ -315,8 +315,8 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     if p.ty != 0U64 {
         if c.curTypeParams.count > 0U64 {
             val pg: U64 = groundTypeRef(c: inout c, ref: p.ty)
-            pKindStart = c.types[pg].nameStart
-            pKindLen = c.types[pg].nameLen
+            pKindStart = c.arena.types[pg].nameStart
+            pKindLen = c.arena.types[pg].nameLen
         }
     }
     val pKind: U64 = kindFromTySpan(c: inout c, tyStart: pKindStart, tyLen: pKindLen)
@@ -332,12 +332,12 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     // left this unset, breaking field access on a struct-array param's element).
     if p.tyIsArray {
         val esi: U64 = localStructIdxFor(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen)
-        if esi < c.structs.count {
+        if esi < c.arena.structs.count {
             setLocalElemStruct(st: inout st, esi: esi)
         }
         // element TypeRef (a Ref / nested-array / generic element): Array[E]'s first arg.
         if p.ty != 0U64 {
-            val at: TypeRef = c.types[p.ty]
+            val at: TypeRef = c.arena.types[p.ty]
             if at.args.count > 0U64 {
                 setLocalElemTypeRef(st: inout st, ref: at.args[0])
             }

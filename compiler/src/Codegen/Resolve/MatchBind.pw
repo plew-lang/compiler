@@ -2,15 +2,15 @@
 // locals.
 
 // The value expression of the last `give` in a block (the block's result), or
-// `c.exprs.count` (one past the end) if the block has no `give`. A U64 sentinel
+// `c.arena.exprs.count` (one past the end) if the block has no `give`. A U64 sentinel
 // keeps callers off signed indices. Used to infer a value-position `if`'s type.
 fn blockGiveExpr(c: inout Comp, blkId: U64) -> U64 {
-    val blk: Block = c.blocks[blkId]
+    val blk: Block = c.arena.blocks[blkId]
     val stmts: Array[U64] = blk.stmts
     mut val i: U64 = 0
-    mut val found: U64 = c.exprs.count
+    mut val found: U64 = c.arena.exprs.count
     while i < stmts.count {
-        val s: Stmt = c.stmts[stmts[i]]
+        val s: Stmt = c.arena.stmts[stmts[i]]
         match s {
             Stmt.Give(val value) => { found = value }
             _ => {}
@@ -36,8 +36,8 @@ fn addBindLocalCn(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64
     val qVar: U64 = intern(c: inout c, start: variantStart, len: variantLen)
     val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
     mut val ei: U64 = 0
-    while ei < c.enums.count {
-        val e: EnumDef = c.enums[ei]
+    while ei < c.arena.enums.count {
+        val e: EnumDef = c.arena.enums[ei]
         if e.nameId == qEnum {
             val vars: Array[Variant] = e.variants
             mut val vi: U64 = 0

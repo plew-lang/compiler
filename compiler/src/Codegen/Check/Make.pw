@@ -8,8 +8,8 @@ fn makeFieldType(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64,
         val qVar: U64 = intern(c: inout c, start: variantStart, len: variantLen)
         val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
         mut val ei: U64 = 0
-        while ei < c.enums.count {
-            val en: EnumDef = c.enums[ei]
+        while ei < c.arena.enums.count {
+            val en: EnumDef = c.arena.enums[ei]
             if en.nameId == qType {
                 val vars: Array[Variant] = en.variants
                 mut val vi: U64 = 0
@@ -45,15 +45,15 @@ fn makeFieldType(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64,
 // approximate.
 fn checkMakeFieldExists(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, mf: MakeField) {
     if isEnum {
-        if concreteEnumIndex(c: inout c, nStart: typeStart, nLen: typeLen) >= c.enums.count {
+        if concreteEnumIndex(c: inout c, nStart: typeStart, nLen: typeLen) >= c.arena.enums.count {
             return
         }
     } else {
         val si: U64 = structIndexByName(c: inout c, start: typeStart, len: typeLen)
-        if si >= c.structs.count {
+        if si >= c.arena.structs.count {
             return
         }
-        if c.structs[si].isExtern {
+        if c.arena.structs[si].isExtern {
             return
         }
     }
@@ -82,7 +82,7 @@ fn checkMakeFields(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U6
         if isRefInst(c: inout c, ref: ty) {
             // `<Ref[T] value=… />`: the `value` field has the pointee type T, so
             // a literal (`value=7`) types from T (else "no type from context").
-            val rt: TypeRef = c.types[ty]
+            val rt: TypeRef = c.arena.types[ty]
             ft = typeInfoOfRef(c: inout c, ref: rt.args[0])
         } else {
             if isGenericEnumInst(c: inout c, ref: ty) {

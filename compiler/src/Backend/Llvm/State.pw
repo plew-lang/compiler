@@ -55,7 +55,7 @@ struct LlvmCtx {
     // the value yielded by the innermost value-position block (a `give` statement
     // sets it; IfExpr reads it after emitting each branch block).
     pub mut val giveValue: LLVMValueRef
-    // registered struct types (parallel: c.structs index -> named LLVM struct type).
+    // registered struct types (parallel: c.arena.structs index -> named LLVM struct type).
     pub mut val structIdxs: Array[U64]
     pub mut val structTys: Array[LLVMTypeRef]
     // generic struct instances (parallel: TypeRef index -> LLVM type, generic def
@@ -64,7 +64,7 @@ struct LlvmCtx {
     pub mut val genStructRefs: Array[U64]
     pub mut val genStructTys: Array[LLVMTypeRef]
     pub mut val genStructDefs: Array[U64]
-    // registered enum types (parallel: c.enums index -> named LLVM type
+    // registered enum types (parallel: c.arena.enums index -> named LLVM type
     // `{ i64 tag, [maxWords x i64] payload }`).
     pub mut val enumIdxs: Array[U64]
     pub mut val enumTys: Array[LLVMTypeRef]
@@ -72,7 +72,7 @@ struct LlvmCtx {
     pub mut val genEnumRefs: Array[U64]
     pub mut val genEnumTys: Array[LLVMTypeRef]
     pub mut val genEnumDefs: Array[U64]
-    // a byte span whose content is "self" (appended to c.bytes), to bind the
+    // a byte span whose content is "self" (appended to c.arena.bytes), to bind the
     // method receiver as a local that the body's `self` identifiers resolve to.
     pub mut val selfStart: U64
     pub mut val selfLen: U64
@@ -93,7 +93,7 @@ struct LlvmCtx {
     // incl. self), so scope-exit deinit drops skip params (borrows/inout self that
     // the caller still owns and will deinit).
     pub mut val curBodyMark: U64
-    // declared user functions, cached by c.funcs index (parallel arrays), so a call
+    // declared user functions, cached by c.arena.funcs index (parallel arrays), so a call
     // resolves to the same LLVMValueRef without name mangling (the symbol name is a
     // synthetic unique `pf<idx>`; only `main`/runtime symbols have meaningful names).
     pub mut val fnIdx: Array[U64]
@@ -130,7 +130,7 @@ struct LlvmCtx {
     // unsigned int), so String ==/!= and print pick the right lowering without
     // c.locals (which the LLVM backend doesn't populate, so typeOf can't see locals).
     pub mut val locKind: Array[U64]
-    // per-local owning struct index (c.structs.count = not a struct), so field
+    // per-local owning struct index (c.arena.structs.count = not a struct), so field
     // access x.field can resolve the layout from a struct-typed local.
     pub mut val locStructIdx: Array[U64]
     // per-local array element type + is-array flag (for arr[i] / .append / .count).
@@ -138,7 +138,7 @@ struct LlvmCtx {
     pub mut val locElemTy: Array[LLVMTypeRef]
     pub mut val locElemKind: Array[U64]
     pub mut val locTypeRef: Array[U64]
-    // per-array-local element struct index (c.structs.count = element is not a
+    // per-array-local element struct index (c.arena.structs.count = element is not a
     // struct), so `arr[i].field` on an array-of-struct LOCAL resolves the element.
     pub mut val locElemStructIdx: Array[U64]
     // per-array-local element TypeRef (0 = none), so `arr[i]` recovers the element's
@@ -151,7 +151,7 @@ struct LlvmCtx {
     // arg / `move fn` receiver / `move x`), so it is NOT deinit'd here.
     pub mut val locOwned: Array[Bool]
     pub mut val locMoved: Array[Bool]
-    // module-level variables (spec/15), parallel arrays indexed by `Comp.globals`
+    // module-level variables (spec/15), parallel arrays indexed by `Comp.arena.globals`
     // position. `genLlvmInitGlobals` builds the LLVM global `gvalRef[i]` and records
     // the binding's recovered local metadata (so `seedGlobals` can re-register each
     // global as a local at every body entry, routing reads/writes/type-recovery
@@ -181,7 +181,7 @@ struct LlvmCtx {
     pub mut val cloIdx: Array[U64]
     pub mut val cloVal: Array[LLVMValueRef]
     pub mut val cloTy: Array[LLVMTypeRef]
-    // function-value thunks, cached by c.funcs index: a bare function reference
+    // function-value thunks, cached by c.arena.funcs index: a bare function reference
     // (`val g = twice`) becomes a closure {thunk, null}, where the thunk adapts the
     // plain function to the env-first closure ABI by forwarding its arguments.
     pub mut val thunkIdx: Array[U64]
@@ -217,7 +217,7 @@ struct LlvmCtx {
     pub mut val curAsyncSwitch: LLVMValueRef
     pub mut val curAsyncState: U64
     pub mut val asyncFieldNext: U64
-    // per async fn (parallel, keyed by c.funcs index): its frame struct type and
+    // per async fn (parallel, keyed by c.arena.funcs index): its frame struct type and
     // resume fn value, so the entry/resume/await sites all agree on the layout.
     pub mut val asyncFnIdx: Array[U64]
     pub mut val asyncFrameTy: Array[LLVMTypeRef]
@@ -240,13 +240,13 @@ struct LlvmCtx {
 // A NUL-terminated C string from a Plew literal, for the many `const char*` name
 // arguments LLVM builders take (cString leaks a small per-call buffer — fine for
 // a one-shot compiler pass).
-// A C pointer to the float literal's digit text (a copy of c.bytes[start..start+len]
+// A C pointer to the float literal's digit text (a copy of c.arena.bytes[start..start+len]
 // as a NUL-terminated string; LLVMConstRealOfStringAndSize takes the explicit len).
 fn floatTextCPtr(c: inout Comp, start: U64, len: U64) -> CPtr[U8] {
     mut val bs: Array[U8] = []
     mut val i: U64 = 0
     while i < len {
-        bs.append(value: c.bytes[start + i])
+        bs.append(value: c.arena.bytes[start + i])
         i += 1U64
     }
     return cstr(s: stringFromBytesUnchecked(bs))

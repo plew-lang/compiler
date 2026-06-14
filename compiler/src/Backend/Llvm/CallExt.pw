@@ -7,10 +7,10 @@ fn ffiTyOf(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> LLVMTy
     if isPrimIntName(c: inout c, start: tyStart, len: tyLen) {
         return llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen)
     }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "String") {
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "String") {
         return st.strty
     }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Bool") {
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Bool") {
         return st.i1ty
     }
     return st.ptrty
@@ -23,7 +23,7 @@ fn ffiTyOf(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> LLVMTy
 // struct (String, or a suffixed integer literal like `42I64`), for dispatching
 // `(42I64).format(...)` / `s.isEmpty()`. nameLen 0 if not such a receiver.
 fn primLangItemRecvName(c: inout Comp, st: inout LlvmCtx, recv: U64) -> Bind {
-    match c.exprs[recv] {
+    match c.arena.exprs[recv] {
         Expr.Int(value: _, offset: _, isBool: _, val tyStart, val tyLen, isNeg: _) => {
             if tyLen > 0U64 {
                 if isPrimIntName(c: inout c, start: tyStart, len: tyLen) {
@@ -38,7 +38,7 @@ fn primLangItemRecvName(c: inout Comp, st: inout LlvmCtx, recv: U64) -> Bind {
             if li < st.nLocals {
                 val tr: U64 = st.locTypeRef[li]
                 if tr != 0U64 {
-                    val t: TypeRef = c.types[tr]
+                    val t: TypeRef = c.arena.types[tr]
                     if isPrimIntName(c: inout c, start: t.nameStart, len: t.nameLen) {
                         return <Bind nameStart=t.nameStart nameLen=t.nameLen fieldStart=t.nameStart fieldLen=t.nameLen />
                     }
@@ -55,10 +55,10 @@ fn primLangItemRecvName(c: inout Comp, st: inout LlvmCtx, recv: U64) -> Bind {
             // a primitive-typed struct field (`self.a` where a: U64): its field type
             // name, for dispatching a method on the primitive (`self.a.absorb[S](…)`).
             val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
-            if bsi < c.structs.count {
+            if bsi < c.arena.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
-                if fidx < c.structs[bsi].fields.count {
-                    val fd: FieldDef = c.structs[bsi].fields[fidx]
+                if fidx < c.arena.structs[bsi].fields.count {
+                    val fd: FieldDef = c.arena.structs[bsi].fields[fidx]
                     if isPrimIntName(c: inout c, start: fd.tyStart, len: fd.tyLen) {
                         return <Bind nameStart=fd.tyStart nameLen=fd.tyLen fieldStart=fd.tyStart fieldLen=fd.tyLen />
                     }
@@ -76,7 +76,7 @@ fn primLangItemRecvName(c: inout Comp, st: inout LlvmCtx, recv: U64) -> Bind {
     // resolves here). Bool's only resolvable structured form is its own name.
     val rt: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
     if rt != 0U64 {
-        if rangeEquals(bytes: c.bytes, start: c.types[rt].nameStart, len: c.types[rt].nameLen, kw: "Bool") {
+        if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[rt].nameStart, len: c.arena.types[rt].nameLen, kw: "Bool") {
             return kwSpan(c: inout c, kw: "Bool", kwLen: 4U64)
         }
     }
@@ -93,7 +93,7 @@ fn collectViewChain(c: inout Comp, st: inout LlvmCtx, id: U64) -> Array[U64] {
     mut val cur: U64 = id
     mut val go: Bool = true
     while go {
-        match c.exprs[cur] {
+        match c.arena.exprs[cur] {
             Expr.ExtView(recv: val r, srcStart: val ss, srcLen: val sl, strip: val strp) => {
                 if strp {
                     go = false
@@ -107,8 +107,8 @@ fn collectViewChain(c: inout Comp, st: inout LlvmCtx, id: U64) -> Array[U64] {
     }
     val r: U64 = exprTypeRef(c: inout c, st: inout st, id: cur)
     if r != 0U64 {
-        if c.types[r].viewExtId != 0U64 {
-            out.append(value: c.types[r].viewExtId)
+        if c.arena.types[r].viewExtId != 0U64 {
+            out.append(value: c.arena.types[r].viewExtId)
         }
     }
     return out
@@ -118,13 +118,13 @@ fn collectViewChain(c: inout Comp, st: inout LlvmCtx, id: U64) -> Array[U64] {
 // param's declared viewExtId equals the corresponding argument's actual view
 // (spec/09). Used to pick the right overload among `f(a:P)` / `f(a:P#Ext)`.
 fn funcViewsMatch(c: inout Comp, st: inout LlvmCtx, fi: U64, args: Array[Arg]) -> Bool {
-    val f: Func = c.funcs[fi]
+    val f: Func = c.arena.funcs[fi]
     mut val i: U64 = 0
     while i < args.count {
         if i < f.params.count {
             mut val pv: U64 = 0
             if f.params[i].ty != 0U64 {
-                pv = c.types[f.params[i].ty].viewExtId
+                pv = c.arena.types[f.params[i].ty].viewExtId
             }
             if pv != exprViewExtId(c: inout c, st: inout st, id: args[i].expr) {
                 return false
@@ -141,7 +141,7 @@ fn funcViewsMatch(c: inout Comp, st: inout LlvmCtx, fi: U64, args: Array[Arg]) -
 // view-mismatch enforcement at genArgValue then reports it).
 fn findFuncViewAware(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     val base: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
-    if base >= c.funcs.count {
+    if base >= c.arena.funcs.count {
         return base
     }
     if funcViewsMatch(c: inout c, st: inout st, fi: base, args: args) {
@@ -154,13 +154,13 @@ fn findFuncViewAware(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: 
     // makes `f(a: P)` / `f(a: P#Ext)` select on the call's views.
     val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if !(f.hasRecv) {
             if !(f.isAssoc) {
                 if f.nameId == qName {
                     if paramsLabelsOk(c: inout c, params: f.params, args: args) {
-                        if sameParamTypeHeads(c: inout c, a: c.funcs[base].params, b: f.params) {
+                        if sameParamTypeHeads(c: inout c, a: c.arena.funcs[base].params, b: f.params) {
                             if funcViewsMatch(c: inout c, st: inout st, fi: i, args: args) {
                                 return i
                             }
@@ -197,7 +197,7 @@ fn sameParamTypeHeads(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
 // `v#Ext` re-view node carries it; otherwise it comes from the value's static
 // type (a param/binding typed `Type#Ext`). 0 = no view.
 fn exprViewExtId(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
-    match c.exprs[id] {
+    match c.arena.exprs[id] {
         Expr.ExtView(recv: _, val srcStart, val srcLen, val strip) => {
             // `#!Ext` strips the view → plain (bare) resolution; `#Ext` selects it.
             if strip {
@@ -208,9 +208,9 @@ fn exprViewExtId(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
         Expr.Call(val nameStart, val nameLen, val args) => {
             // a call to a `-> Type#Ext` function yields a viewed value.
             val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
-            if fi < c.funcs.count {
-                if c.funcs[fi].retTy != 0U64 {
-                    return c.types[c.funcs[fi].retTy].viewExtId
+            if fi < c.arena.funcs.count {
+                if c.arena.funcs[fi].retTy != 0U64 {
+                    return c.arena.types[c.arena.funcs[fi].retTy].viewExtId
                 }
             }
             return 0U64
@@ -219,7 +219,7 @@ fn exprViewExtId(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
     }
     val r: U64 = exprTypeRef(c: inout c, st: inout st, id: id)
     if r != 0U64 {
-        return c.types[r].viewExtId
+        return c.arena.types[r].viewExtId
     }
     return 0U64
 }

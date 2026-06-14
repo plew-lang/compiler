@@ -11,10 +11,10 @@ fn typeIsTransitivelyUnique(c: inout Comp, start: U64, len: U64) -> Bool {
         return true
     }
     val si: U64 = structIndexByName(c: inout c, start: start, len: len)
-    if si >= c.structs.count {
+    if si >= c.arena.structs.count {
         return false
     }
-    val s: StructDef = c.structs[si]
+    val s: StructDef = c.arena.structs[si]
     mut val i: U64 = 0
     while i < s.fields.count {
         val f: FieldDef = s.fields[i]
@@ -40,8 +40,8 @@ fn typeIsTransitivelyUnique(c: inout Comp, start: U64, len: U64) -> Bool {
 // unsound (copies would multi-run deinit).
 fn checkFieldContagion(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.structs.count {
-        val s: StructDef = c.structs[i]
+    while i < c.arena.structs.count {
+        val s: StructDef = c.arena.structs[i]
         if !(s.isUnique) {
             mut val j: U64 = 0
             while j < s.fields.count {
@@ -85,7 +85,7 @@ fn idInSet(set: Array[U64], id: U64) -> Bool {
 // argument / receiver / operand sub-expressions are walked. (Block-bearing forms —
 // a `give`-block if/match in a default — are exotic and not yet deep-walked.)
 fn exprMentionsAny(c: inout Comp, exprId: U64, forbidden: Array[U64]) -> Bool {
-    match c.exprs[exprId] {
+    match c.arena.exprs[exprId] {
         Expr.Ident(val start, val len) => {
             return idInSet(set: forbidden, id: intern(c: inout c, start: start, len: len))
         }
@@ -209,8 +209,8 @@ fn checkDeinitOnlyOnUnique(c: inout Comp) {
         if !(typeIsUnique(c: inout c, start: d.nameStart, len: d.nameLen)) {
             val si: U64 = structIndexByName(c: inout c, start: d.nameStart, len: d.nameLen)
             mut val off: U64 = d.nameStart
-            if si < c.structs.count {
-                off = c.structs[si].defOffset
+            if si < c.arena.structs.count {
+                off = c.arena.structs[si].defOffset
             }
             compileErrorAt(line: lineOf(c: inout c, offset: off), msg: "`deinit` is only allowed on a `unique` type (a copyable type would run it on every copy — spec/03)")
         }
@@ -220,8 +220,8 @@ fn checkDeinitOnlyOnUnique(c: inout Comp) {
 
 fn checkFieldDefaults(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.structs.count {
-        val s: StructDef = c.structs[i]
+    while i < c.arena.structs.count {
+        val s: StructDef = c.arena.structs[i]
         // sibling field names + `self` — a field default may reference none of them.
         mut val forbidden: Array[U64] = []
         mut val fk: U64 = 0
@@ -302,8 +302,8 @@ fn checkArrayElemsNotUnique(c: inout Comp) {
 // are covered too; generic templates carry type-param args (not unique) and pass.
 fn checkGenericUniqueArgs(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.types.count {
-        val t: TypeRef = c.types[i]
+    while i < c.arena.types.count {
+        val t: TypeRef = c.arena.types[i]
         if t.args.count != 0 {
             if !(isRefInst(c: inout c, ref: i)) {
                 mut val j: U64 = 0
@@ -325,8 +325,8 @@ fn checkGenericUniqueArgs(c: inout Comp) {
 // Run param-mode validity over every function/method declaration.
 fn checkAllParamModes(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        checkParamModes(c: inout c, params: c.funcs[i].params)
+    while i < c.arena.funcs.count {
+        checkParamModes(c: inout c, params: c.arena.funcs[i].params)
         i += 1
     }
 }
@@ -337,8 +337,8 @@ fn checkAllParamModes(c: inout Comp) {
 // so the full type-check catches it). Skipped for array params (separate machinery).
 fn checkParamDefaults(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val ps: Array[Param] = c.funcs[i].params
+    while i < c.arena.funcs.count {
+        val ps: Array[Param] = c.arena.funcs[i].params
         // sibling parameter names + `self` — a parameter default may reference none.
         mut val forbidden: Array[U64] = []
         mut val pk: U64 = 0

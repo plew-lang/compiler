@@ -22,25 +22,25 @@ fn drainDerives(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool, declS
     c.pendingDerives = []
 }
 
-// Append a string's bytes to c.bytes and return its (start,len) span — for
+// Append a string's bytes to c.arena.bytes and return its (start,len) span — for
 // Wrap a value Expr index into a one-`give` Block index — the body shape every
 // value-match arm now uses (MatchArm.body is a Block index). Derived `@[Eq]`/
 // `@[Ord]` matches build their arm values directly, so they wrap them here.
 fn synthGiveBlock(c: inout Comp, valueExpr: U64) -> U64 {
     mut val ss: Array[U64] = []
     ss.append(value: c.pushStmt(s: <Stmt.Give value=valueExpr />))
-    val id: U64 = c.blocks.count
-    c.blocks.append(<Block stmts=ss />)
+    val id: U64 = c.arena.blocks.count
+    c.arena.blocks.append(<Block stmts=ss />)
     return id
 }
 
 // synthetic identifier names referenced by derived code (#5: `@[Eq]`/`@[Ord]`).
 fn internBytes(c: inout Comp, s: String) -> Bind {
-    val start: U64 = c.bytes.count
+    val start: U64 = c.arena.bytes.count
     val sb: Array[U8] = s.bytes
     mut val i: U64 = 0
     while i < sb.count {
-        c.bytes.append(sb[i])
+        c.arena.bytes.append(sb[i])
         i += 1
     }
     val nid: U64 = intern(c: inout c, start: start, len: sb.count)
@@ -60,10 +60,10 @@ fn synthParam(c: inout Comp, nameSpan: Bind, tyStart: U64, tyLen: U64) -> Param 
 // type (scalar/String built-in; a struct field needs its own Eq).
 fn synthStructEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind, boolN: Bind, eqTrait: Bind) {
     val si: U64 = structIndexByName(c: inout c, start: d.typeStart, len: d.typeLen)
-    if si >= c.structs.count {
+    if si >= c.arena.structs.count {
         return
     }
-    val fields: Array[FieldDef] = c.structs[si].fields
+    val fields: Array[FieldDef] = c.arena.structs[si].fields
     mut val params: Array[Param] = []
     params.append(synthParam(c: inout c, nameSpan: lhsN, tyStart: d.typeStart, tyLen: d.typeLen))
     params.append(synthParam(c: inout c, nameSpan: rhsN, tyStart: d.typeStart, tyLen: d.typeLen))
@@ -91,10 +91,10 @@ fn synthStructEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind,
     val ret: U64 = c.pushStmt(s: <Stmt.Return value=acc hasValue=true offset=0U64 />)
     mut val stmts: Array[U64] = []
     stmts.append(ret)
-    val blkId: U64 = c.blocks.count
-    c.blocks.append(<Block stmts=stmts />)
+    val blkId: U64 = c.arena.blocks.count
+    c.arena.blocks.append(<Block stmts=stmts />)
     val noTP: Array[Bind] = []
-    c.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen nameId=intern(c: inout c, start: eqN.nameStart, len: eqN.nameLen) recvId=intern(c: inout c, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
+    c.arena.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen nameId=intern(c: inout c, start: eqN.nameStart, len: eqN.nameLen) recvId=intern(c: inout c, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
     mut val wit: Array[Func] = []
     c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen typeId=intern(c: inout c, start: d.typeStart, len: d.typeLen) traitStart=eqTrait.nameStart traitLen=eqTrait.nameLen traitId=intern(c: inout c, start: eqTrait.nameStart, len: eqTrait.nameLen) derived=true witnessed=wit />)
 }
@@ -118,31 +118,31 @@ fn appendU64Digits(c: inout Comp, n: U64) {
     if n >= 10 {
         appendU64Digits(c: inout c, n: n / 10)
     }
-    c.bytes.append(digitByte(d: n % 10))
+    c.arena.bytes.append(digitByte(d: n % 10))
 }
 
 // Intern a fresh synthetic name `<prefix><n>` (e.g. `L0`, `R3`) for a match bind.
 fn internName(c: inout Comp, prefix: U8, n: U64) -> Bind {
-    val start: U64 = c.bytes.count
-    c.bytes.append(prefix)
+    val start: U64 = c.arena.bytes.count
+    c.arena.bytes.append(prefix)
     appendU64Digits(c: inout c, n: n)
-    val len: U64 = c.bytes.count - start
+    val len: U64 = c.arena.bytes.count - start
     return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
 }
 
-// Index of the enum named (start,len), or c.enums.count if none.
+// Index of the enum named (start,len), or c.arena.enums.count if none.
 fn enumIndexByName(c: inout Comp, start: U64, len: U64) -> U64 {
     // an import alias (`with { Real as Alias }`) names the same enum as `Real` (spec/15).
     val ar: Bind = aliasReal(c: inout c, start: start, len: len)
     val qId: U64 = intern(c: inout c, start: ar.nameStart, len: ar.nameLen)
     mut val i: U64 = 0
-    while i < c.enums.count {
-        if c.enums[i].nameId == qId {
+    while i < c.arena.enums.count {
+        if c.arena.enums[i].nameId == qId {
             return i
         }
         i += 1
     }
-    return c.enums.count
+    return c.arena.enums.count
 }
 
 // A `true`/`false` Bool literal expression. `v` is the literal magnitude (0/1),
@@ -158,10 +158,10 @@ fn synthBool(c: inout Comp, v: U64) -> U64 {
 // mismatch. Plus a derived `Conform(E, Eq)`.
 fn synthEnumEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind, boolN: Bind, eqTrait: Bind) {
     val ei: U64 = enumIndexByName(c: inout c, start: d.typeStart, len: d.typeLen)
-    if ei >= c.enums.count {
+    if ei >= c.arena.enums.count {
         return
     }
-    val variants: Array[Variant] = c.enums[ei].variants
+    val variants: Array[Variant] = c.arena.enums[ei].variants
     mut val params: Array[Param] = []
     params.append(synthParam(c: inout c, nameSpan: lhsN, tyStart: d.typeStart, tyLen: d.typeLen))
     params.append(synthParam(c: inout c, nameSpan: rhsN, tyStart: d.typeStart, tyLen: d.typeLen))
@@ -214,10 +214,10 @@ fn synthEnumEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind, b
     val ret: U64 = c.pushStmt(s: <Stmt.Return value=outerMatch hasValue=true offset=0U64 />)
     mut val stmts: Array[U64] = []
     stmts.append(ret)
-    val blkId: U64 = c.blocks.count
-    c.blocks.append(<Block stmts=stmts />)
+    val blkId: U64 = c.arena.blocks.count
+    c.arena.blocks.append(<Block stmts=stmts />)
     val noTP: Array[Bind] = []
-    c.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen nameId=intern(c: inout c, start: eqN.nameStart, len: eqN.nameLen) recvId=intern(c: inout c, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
+    c.arena.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen nameId=intern(c: inout c, start: eqN.nameStart, len: eqN.nameLen) recvId=intern(c: inout c, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
     mut val wit: Array[Func] = []
     c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen typeId=intern(c: inout c, start: d.typeStart, len: d.typeLen) traitStart=eqTrait.nameStart traitLen=eqTrait.nameLen traitId=intern(c: inout c, start: eqTrait.nameStart, len: eqTrait.nameLen) derived=true witnessed=wit />)
 }
@@ -233,8 +233,8 @@ fn synthReturnBlock(c: inout Comp, value: U64) -> U64 {
     val ret: U64 = c.pushStmt(s: <Stmt.Return value=value hasValue=true offset=0U64 />)
     mut val stmts: Array[U64] = []
     stmts.append(ret)
-    val blkId: U64 = c.blocks.count
-    c.blocks.append(<Block stmts=stmts />)
+    val blkId: U64 = c.arena.blocks.count
+    c.arena.blocks.append(<Block stmts=stmts />)
     return blkId
 }
 
@@ -245,10 +245,10 @@ fn synthReturnBlock(c: inout Comp, value: U64) -> U64 {
 // derived Conform(T, Ord). Requires `enum Ordering` in scope.
 fn synthStructOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bind, ordN: Bind, lessN: Bind, greaterN: Bind, equalN: Bind, ordTrait: Bind) {
     val si: U64 = structIndexByName(c: inout c, start: d.typeStart, len: d.typeLen)
-    if si >= c.structs.count {
+    if si >= c.arena.structs.count {
         return
     }
-    val fields: Array[FieldDef] = c.structs[si].fields
+    val fields: Array[FieldDef] = c.arena.structs[si].fields
     mut val params: Array[Param] = []
     params.append(synthParam(c: inout c, nameSpan: lhsN, tyStart: d.typeStart, tyLen: d.typeLen))
     params.append(synthParam(c: inout c, nameSpan: rhsN, tyStart: d.typeStart, tyLen: d.typeLen))
@@ -271,10 +271,10 @@ fn synthStructOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bin
         fi += 1
     }
     stmts.append(c.pushStmt(s: <Stmt.Return value=synthOrdering(c: inout c, ordN: ordN, variantN: equalN) hasValue=true offset=0U64 />))
-    val blkId: U64 = c.blocks.count
-    c.blocks.append(<Block stmts=stmts />)
+    val blkId: U64 = c.arena.blocks.count
+    c.arena.blocks.append(<Block stmts=stmts />)
     val noTP: Array[Bind] = []
-    c.funcs.append(<Func nameStart=cmpN.nameStart nameLen=cmpN.nameLen nameId=intern(c: inout c, start: cmpN.nameStart, len: cmpN.nameLen) recvId=intern(c: inout c, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=ordN.nameStart retLen=ordN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
+    c.arena.funcs.append(<Func nameStart=cmpN.nameStart nameLen=cmpN.nameLen nameId=intern(c: inout c, start: cmpN.nameStart, len: cmpN.nameLen) recvId=intern(c: inout c, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=ordN.nameStart retLen=ordN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
     mut val wit: Array[Func] = []
     c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen typeId=intern(c: inout c, start: d.typeStart, len: d.typeLen) traitStart=ordTrait.nameStart traitLen=ordTrait.nameLen traitId=intern(c: inout c, start: ordTrait.nameStart, len: ordTrait.nameLen) derived=true witnessed=wit />)
 }
@@ -284,8 +284,8 @@ fn synthGiveBlock(c: inout Comp, value: U64) -> U64 {
     val g: U64 = c.pushStmt(s: <Stmt.Give value=value />)
     mut val stmts: Array[U64] = []
     stmts.append(g)
-    val blkId: U64 = c.blocks.count
-    c.blocks.append(<Block stmts=stmts />)
+    val blkId: U64 = c.arena.blocks.count
+    c.arena.blocks.append(<Block stmts=stmts />)
     return blkId
 }
 
@@ -319,10 +319,10 @@ fn synthOrdChainExpr(c: inout Comp, lhsNames: Array[Bind], rhsNames: Array[Bind]
 // `enum Ordering` in scope. Mirrors synthEnumEq's two-level match shape.
 fn synthEnumOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bind, ordN: Bind, lessN: Bind, greaterN: Bind, equalN: Bind, ordTrait: Bind) {
     val ei: U64 = enumIndexByName(c: inout c, start: d.typeStart, len: d.typeLen)
-    if ei >= c.enums.count {
+    if ei >= c.arena.enums.count {
         return
     }
-    val variants: Array[Variant] = c.enums[ei].variants
+    val variants: Array[Variant] = c.arena.enums[ei].variants
     mut val params: Array[Param] = []
     params.append(synthParam(c: inout c, nameSpan: lhsN, tyStart: d.typeStart, tyLen: d.typeLen))
     params.append(synthParam(c: inout c, nameSpan: rhsN, tyStart: d.typeStart, tyLen: d.typeLen))
@@ -382,10 +382,10 @@ fn synthEnumOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bind,
     val ret: U64 = c.pushStmt(s: <Stmt.Return value=outerMatch hasValue=true offset=0U64 />)
     mut val stmts: Array[U64] = []
     stmts.append(ret)
-    val blkId: U64 = c.blocks.count
-    c.blocks.append(<Block stmts=stmts />)
+    val blkId: U64 = c.arena.blocks.count
+    c.arena.blocks.append(<Block stmts=stmts />)
     val noTP: Array[Bind] = []
-    c.funcs.append(<Func nameStart=cmpN.nameStart nameLen=cmpN.nameLen nameId=intern(c: inout c, start: cmpN.nameStart, len: cmpN.nameLen) recvId=intern(c: inout c, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=ordN.nameStart retLen=ordN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
+    c.arena.funcs.append(<Func nameStart=cmpN.nameStart nameLen=cmpN.nameLen nameId=intern(c: inout c, start: cmpN.nameStart, len: cmpN.nameLen) recvId=intern(c: inout c, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=ordN.nameStart retLen=ordN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
     mut val wit: Array[Func] = []
     c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen typeId=intern(c: inout c, start: d.typeStart, len: d.typeLen) traitStart=ordTrait.nameStart traitLen=ordTrait.nameLen traitId=intern(c: inout c, start: ordTrait.nameStart, len: ordTrait.nameLen) derived=true witnessed=wit />)
 }
@@ -396,7 +396,7 @@ fn hasEqDeriveFor(c: inout Comp, d: DeriveReq) -> Bool {
     mut val i: U64 = 0
     while i < c.derives.count {
         val e: DeriveReq = c.derives[i]
-        if rangeEquals(bytes: c.bytes, start: e.nameStart, len: e.nameLen, kw: "Eq") {
+        if rangeEquals(bytes: c.arena.bytes, start: e.nameStart, len: e.nameLen, kw: "Eq") {
             if spansEqual(c: inout c, aStart: e.typeStart, aLen: e.typeLen, bStart: d.typeStart, bLen: d.typeLen) {
                 return true
             }
@@ -426,15 +426,15 @@ fn synthesizeDerives(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.derives.count {
         val d: DeriveReq = c.derives[i]
-        if rangeEquals(bytes: c.bytes, start: d.nameStart, len: d.nameLen, kw: "Eq") {
+        if rangeEquals(bytes: c.arena.bytes, start: d.nameStart, len: d.nameLen, kw: "Eq") {
             if d.isEnum {
                 synthEnumEq(c: inout c, d: d, eqN: eqN, lhsN: lhsN, rhsN: rhsN, boolN: boolN, eqTrait: eqTrait)
             } else {
                 synthStructEq(c: inout c, d: d, eqN: eqN, lhsN: lhsN, rhsN: rhsN, boolN: boolN, eqTrait: eqTrait)
             }
         }
-        if rangeEquals(bytes: c.bytes, start: d.nameStart, len: d.nameLen, kw: "Ord") {
-            if enumIndexByName(c: inout c, start: ordN.nameStart, len: ordN.nameLen) >= c.enums.count {
+        if rangeEquals(bytes: c.arena.bytes, start: d.nameStart, len: d.nameLen, kw: "Ord") {
+            if enumIndexByName(c: inout c, start: ordN.nameStart, len: ordN.nameLen) >= c.arena.enums.count {
                 compileErrorAt(line: lineOf(c: inout c, offset: d.nameStart), msg: "deriving `Ord` requires `enum Ordering` to be in scope")
             } else {
                 if d.isEnum {

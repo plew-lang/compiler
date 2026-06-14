@@ -11,7 +11,7 @@ fn typeUnfilled() -> I64 {
 // Called once before emission; expr ids are stable by then.
 fn buildExprTyTable(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.exprs.count {
+    while i < c.arena.exprs.count {
         c.typeCache.kind.append(typeUnfilled())
         c.typeCache.start.append(0)
         c.typeCache.len.append(0)

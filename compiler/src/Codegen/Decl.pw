@@ -2,7 +2,7 @@ fn nameIsMain(c: inout Comp, f: Func) -> Bool {
     if f.hasRecv {
         return false
     }
-    return rangeEquals(bytes: c.bytes, start: f.nameStart, len: f.nameLen, kw: "main")
+    return rangeEquals(bytes: c.arena.bytes, start: f.nameStart, len: f.nameLen, kw: "main")
 }
 
 // Whether (start,len) names a declared trait (spec/08). Distinguishes a bare
@@ -39,13 +39,13 @@ fn methodRecvIsTrait(c: inout Comp, f: Func) -> Bool {
 // codegen emits `Type_p`, whose `self.req()` resolves to Type's witness. Runs
 // once after parsing, before instantiation discovery and codegen.
 // Whether a method named (nameStart,nameLen) on receiver (recvStart,recvLen)
-// exists in c.funcs[lo..hi). Used to detect provided-method shadowing/collision.
+// exists in c.arena.funcs[lo..hi). Used to detect provided-method shadowing/collision.
 fn methodInRange(c: inout Comp, lo: U64, hi: U64, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
     val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = lo
     while i < hi {
-        val f: Func = c.funcs[i]
+        val f: Func = c.arena.funcs[i]
         if f.hasRecv {
             if f.recvId == qRecv {
                 if f.nameId == qName {
@@ -66,12 +66,12 @@ fn providedCopyTypeParams(c: inout Comp, recvStart: U64, recvLen: U64, ownParams
     mut val out: Array[Bind] = []
     val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     mut val si: U64 = 0
-    while si < c.structs.count {
-        if c.structs[si].typeParams.count > 0 {
-            if c.structs[si].nameId == qRecv {
+    while si < c.arena.structs.count {
+        if c.arena.structs[si].typeParams.count > 0 {
+            if c.arena.structs[si].nameId == qRecv {
                 mut val k: U64 = 0
-                while k < c.structs[si].typeParams.count {
-                    out.append(c.structs[si].typeParams[k])
+                while k < c.arena.structs[si].typeParams.count {
+                    out.append(c.arena.structs[si].typeParams[k])
                     k += 1
                 }
             }
@@ -92,8 +92,8 @@ fn providedCopyTypeParams(c: inout Comp, recvStart: U64, recvLen: U64, ownParams
 // name both as its receiver and as one of its own type params.
 fn isBlanketConform(c: inout Comp, cf: Conform) -> Bool {
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if f.hasRecv {
             if f.recvId == cf.typeId {
                 mut val tp: U64 = 0
@@ -131,9 +131,9 @@ fn conformExists(c: inout Comp, typeId: U64, traitId: U64) -> Bool {
     // satisfies `where T: Format` because String does — `print(u)` type-checks and
     // dispatches to String's witness (the newtype shares String's representation).
     mut val ni: U64 = 0
-    while ni < c.newtypes.count {
-        if c.newtypes[ni].nameId == typeId {
-            val underId: U64 = intern(c: inout c, start: c.newtypes[ni].underStart, len: c.newtypes[ni].underLen)
+    while ni < c.arena.newtypes.count {
+        if c.arena.newtypes[ni].nameId == typeId {
+            val underId: U64 = intern(c: inout c, start: c.arena.newtypes[ni].underStart, len: c.arena.newtypes[ni].underLen)
             return conformExists(c: inout c, typeId: underId, traitId: traitId)
         }
         ni += 1
@@ -150,8 +150,8 @@ fn isExtName(c: inout Comp, start: U64, len: U64) -> Bool {
         return false
     }
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        if c.funcs[i].extId == qId {
+    while i < c.arena.funcs.count {
+        if c.arena.funcs[i].extId == qId {
             return true
         }
         i += 1
@@ -166,9 +166,9 @@ fn extAppliesToType(c: inout Comp, extStart: U64, extLen: U64, typeStart: U64, t
     val qExt: U64 = intern(c: inout c, start: extStart, len: extLen)
     val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        if c.funcs[i].extId == qExt {
-            if c.funcs[i].recvId == qType {
+    while i < c.arena.funcs.count {
+        if c.arena.funcs[i].extId == qExt {
+            if c.arena.funcs[i].recvId == qType {
                 return true
             }
         }
@@ -176,9 +176,9 @@ fn extAppliesToType(c: inout Comp, extStart: U64, extLen: U64, typeStart: U64, t
     }
     // a newtype inherits the underlying type's extensions (spec/10).
     mut val ni: U64 = 0
-    while ni < c.newtypes.count {
-        if c.newtypes[ni].nameId == qType {
-            return extAppliesToType(c: inout c, extStart: extStart, extLen: extLen, typeStart: c.newtypes[ni].underStart, typeLen: c.newtypes[ni].underLen)
+    while ni < c.arena.newtypes.count {
+        if c.arena.newtypes[ni].nameId == qType {
+            return extAppliesToType(c: inout c, extStart: extStart, extLen: extLen, typeStart: c.arena.newtypes[ni].underStart, typeLen: c.arena.newtypes[ni].underLen)
         }
         ni += 1
     }
@@ -275,7 +275,7 @@ fn viewConformsTo(c: inout Comp, typeStart: U64, typeLen: U64, viewId: U64, trai
 fn instantiateTraitSubjectConforms(c: inout Comp) {
     // snapshot before any conferral: the dup guard and source-method scan must see
     // only originals, so sibling conferred copies coexist (multi-path ambiguity).
-    val guardHi: U64 = c.funcs.count
+    val guardHi: U64 = c.arena.funcs.count
     mut val changed: Bool = true
     while changed {
         val before: U64 = c.conforms.count
@@ -335,8 +335,8 @@ fn instantiateTraitSubjectConforms(c: inout Comp) {
 // on srcTraitId so distinct multi-paths (same name, different subject) still coexist.
 fn conferredCopyExists(c: inout Comp, recvId: U64, nameId: U64, srcTraitId: U64) -> Bool {
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if f.hasRecv {
             if f.recvId == recvId {
                 if f.nameId == nameId {
@@ -390,7 +390,7 @@ fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64,
     }
     mut val fi: U64 = 0
     while fi < guardHi {
-        val f: Func = c.funcs[fi]
+        val f: Func = c.arena.funcs[fi]
         if f.hasRecv {
             if f.recvId == blanket.typeId {
                 // skip if the type already has an inherent method of this name
@@ -408,7 +408,7 @@ fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64,
                         }
                         tp += 1
                     }
-                    c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=srcTag viewOnly=(viewRoot != 0U64) selfViewId=viewRoot />)
+                    c.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=srcTag viewOnly=(viewRoot != 0U64) selfViewId=viewRoot />)
                 }
             }
         }
@@ -420,7 +420,7 @@ fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64,
 }
 
 fn instantiateProvidedMethods(c: inout Comp) {
-    val nFuncs: U64 = c.funcs.count
+    val nFuncs: U64 = c.arena.funcs.count
     mut val ci: U64 = 0
     while ci < c.conforms.count {
         val cf: Conform = c.conforms[ci]
@@ -434,7 +434,7 @@ fn instantiateProvidedMethods(c: inout Comp) {
         }
         mut val fi: U64 = 0
         while fi < nFuncs {
-            val f: Func = c.funcs[fi]
+            val f: Func = c.arena.funcs[fi]
             if f.hasRecv {
                 // match the conformance to the right same-name trait by arity (spec/08:
                 // trait names share a flat namespace — a user `trait Sub` vs Core's
@@ -457,7 +457,7 @@ fn instantiateProvidedMethods(c: inout Comp) {
                         // preserve extId: a trait-subject extension method (spec/09
                         // `extension Ext { impl Trait { … } }`) stays view-gated on the
                         // conformer, reached via `value#Ext.m()` not a bare call.
-                        c.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout c, start: cf.typeStart, len: cf.typeLen) typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=cf.traitId extId=f.extId />)
+                        c.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout c, start: cf.typeStart, len: cf.typeLen) typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=cf.traitId extId=f.extId />)
                     }
                 }
             }
@@ -467,14 +467,14 @@ fn instantiateProvidedMethods(c: inout Comp) {
     }
 }
 
-// Index of a non-generic struct named (start,len), or c.structs.count if none.
+// Index of a non-generic struct named (start,len), or c.arena.structs.count if none.
 fn structIndexByName(c: inout Comp, start: U64, len: U64) -> U64 {
     // a use of an import alias (`with { Real as Alias }`) resolves to the real name.
     val ar: Bind = aliasReal(c: inout c, start: start, len: len)
     val qId: U64 = intern(c: inout c, start: ar.nameStart, len: ar.nameLen)
     mut val i: U64 = 0
-    while i < c.structs.count {
-        val s: StructDef = c.structs[i]
+    while i < c.arena.structs.count {
+        val s: StructDef = c.arena.structs[i]
         if s.typeParams.count == 0 {
             if s.nameId == qId {
                 return i
@@ -482,7 +482,7 @@ fn structIndexByName(c: inout Comp, start: U64, len: U64) -> U64 {
         }
         i += 1
     }
-    return c.structs.count
+    return c.arena.structs.count
 }
 
 // ── value-semantics ARC for enums & recursive boxes (spec/03) ────────────────
@@ -525,12 +525,12 @@ fn addFnThunk(c: inout Comp, fi: U64) {
 // safe: an unused thunk is harmless (and generated C is compiled with -w).
 fn collectFnThunks(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.exprs.count {
-        match c.exprs[i] {
+    while i < c.arena.exprs.count {
+        match c.arena.exprs[i] {
             Expr.Ident(val start, val len) => {
                 val fvi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)
-                if fvi < c.funcs.count {
-                    val f: Func = c.funcs[fvi]
+                if fvi < c.arena.funcs.count {
+                    val f: Func = c.arena.funcs[fvi]
                     if !(f.hasRecv) {
                         if !(f.isAssoc) {
                             if f.typeParams.count > 0 {

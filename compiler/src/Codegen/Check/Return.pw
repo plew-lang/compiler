@@ -4,7 +4,7 @@
 // Does control fall off the end of this block, or does it always leave via
 // return/panic/diverging-control? True = always diverges (never falls through).
 fn blockDiverges(c: inout Comp, blkId: U64) -> Bool {
-    val blk: Block = c.blocks[blkId]
+    val blk: Block = c.arena.blocks[blkId]
     val stmts: Array[U64] = blk.stmts
     mut val i: U64 = 0
     while i < stmts.count {
@@ -20,7 +20,7 @@ fn blockDiverges(c: inout Comp, blkId: U64) -> Bool {
 // used to tell whether `while true { … }` can fall through. Nested loops shadow
 // their own `break`, so recurse into ifs/matches but not into while/for bodies.
 fn blockHasLoopBreak(c: inout Comp, blkId: U64) -> Bool {
-    val blk: Block = c.blocks[blkId]
+    val blk: Block = c.arena.blocks[blkId]
     val stmts: Array[U64] = blk.stmts
     mut val i: U64 = 0
     while i < stmts.count {
@@ -33,7 +33,7 @@ fn blockHasLoopBreak(c: inout Comp, blkId: U64) -> Bool {
 }
 
 fn stmtHasLoopBreak(c: inout Comp, stmtId: U64) -> Bool {
-    match c.stmts[stmtId] {
+    match c.arena.stmts[stmtId] {
         Stmt.Break(offset: _) => { return true }
         Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
             if blockHasLoopBreak(c: inout c, blkId: thenBlk) {
@@ -59,7 +59,7 @@ fn stmtHasLoopBreak(c: inout Comp, stmtId: U64) -> Bool {
 }
 
 fn stmtDiverges(c: inout Comp, stmtId: U64) -> Bool {
-    match c.stmts[stmtId] {
+    match c.arena.stmts[stmtId] {
         Stmt.Return(val value, val hasValue, offset: _) => { return true }
         Stmt.Panic(val msg, val offset) => { return true }
         Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
@@ -99,10 +99,10 @@ fn stmtDiverges(c: inout Comp, stmtId: U64) -> Bool {
 
 // Is the condition expression the literal `true`?
 fn condIsLiteralTrue(c: inout Comp, id: U64) -> Bool {
-    if id >= c.exprs.count {
+    if id >= c.arena.exprs.count {
         return false
     }
-    match c.exprs[id] {
+    match c.arena.exprs[id] {
         Expr.Int(val value, val offset, val isBool, val tyStart, val tyLen, isNeg: _) => {
             return isBool && value == 1
         }
@@ -113,8 +113,8 @@ fn condIsLiteralTrue(c: inout Comp, id: U64) -> Bool {
 // Enforce that every non-`()` function returns on all paths (no silent fall-off).
 fn checkReturns(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         // exempt: `()`-returning (hasRet false), `main` (returns int), extern (no
         // body), provided/abstract (body 0), and async (state-machine return).
         if f.hasRet {

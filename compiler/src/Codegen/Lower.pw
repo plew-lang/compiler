@@ -6,7 +6,7 @@
 // so function bodies are parsed by exactly the code metaprogramming uses — no
 // second parser to drift.
 //
-// Names: most are re-interned into c.bytes (codegen `writeSpan` emits the text and
+// Names: most are re-interned into c.arena.bytes (codegen `writeSpan` emits the text and
 // resolution compares bytes, both of which work on a re-interned copy). The two
 // names that feed `moduleOf` (cross-module visibility) keep their ORIGINAL offset:
 // a `Call` name (at its node span's start) and a function *declaration* name (still

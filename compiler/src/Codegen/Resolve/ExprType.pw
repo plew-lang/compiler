@@ -4,7 +4,7 @@
 // Recover an expression's type. Only the cases plewc.pw exercises on the base
 // of a field/index/method are precise; everything else falls back to scalar.
 fn exprType(c: inout Comp, id: U64) -> TypeInfo {
-    val e: Expr = c.exprs[id]
+    val e: Expr = c.arena.exprs[id]
     match e {
         Expr.Int(value: _, offset: _, val isBool, val tyStart, val tyLen, isNeg: _) => {
             // a `true`/`false` literal is `Bool`: recover a "Bool" span so a generic
@@ -41,10 +41,10 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
         Expr.Ident(val start, val len) => {
             if isSelfRef(c: inout c, start: start, len: len) {
                 if c.curRecvInstRef != 0 {
-                    val rt: TypeRef = c.types[c.curRecvInstRef]
+                    val rt: TypeRef = c.arena.types[c.curRecvInstRef]
                     // self inside an `impl Array[T]` method types as an array (kind 3,
                     // element name) so the array/raw intrinsics dispatch on it.
-                    if rangeEquals(bytes: c.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Array") {
+                    if rangeEquals(bytes: c.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Array") {
                         if rt.args.count == 1 {
                             val en: Bind = arrayElemNameForRef(c: inout c, elemRef: rt.args[0])
                             return <TypeInfo kind=3 nameStart=en.nameStart nameLen=en.nameLen ref=c.curRecvInstRef />
@@ -63,7 +63,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     if ce.closureId == c.curClosureId {
                         if spansEqual(c: inout c, aStart: ce.nameStart, aLen: ce.nameLen, bStart: start, bLen: len) {
                             if isRefInst(c: inout c, ref: ce.ty) {
-                                val rt2: TypeRef = c.types[ce.ty]
+                                val rt2: TypeRef = c.arena.types[ce.ty]
                                 return <TypeInfo kind=2 nameStart=rt2.nameStart nameLen=rt2.nameLen ref=ce.ty />
                             }
                             return typeInfoOfName(c: inout c, start: ce.tyStart, len: ce.tyLen, isArray: ce.isArray)
@@ -86,17 +86,17 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                         return typeInfoOfName(c: inout c, start: lo.tyStart, len: lo.tyLen, isArray: true)
                     }
                     if isGenericInst(c: inout c, ref: lo.ty) {
-                        val lt: TypeRef = c.types[lo.ty]
+                        val lt: TypeRef = c.arena.types[lo.ty]
                         return <TypeInfo kind=2 nameStart=lt.nameStart nameLen=lt.nameLen ref=lo.ty />
                     }
                     if isRefInst(c: inout c, ref: lo.ty) {
-                        val lt2: TypeRef = c.types[lo.ty]
+                        val lt2: TypeRef = c.arena.types[lo.ty]
                         return <TypeInfo kind=2 nameStart=lt2.nameStart nameLen=lt2.nameLen ref=lo.ty />
                     }
                     // a RawBuffer[T] local: keep the structured ref so rawLoad can
                     // recover the element type T from its argument.
                     if isRawBufInst(c: inout c, ref: lo.ty) {
-                        val lt3: TypeRef = c.types[lo.ty]
+                        val lt3: TypeRef = c.arena.types[lo.ty]
                         return <TypeInfo kind=2 nameStart=lt3.nameStart nameLen=lt3.nameLen ref=lo.ty />
                     }
                     // resolve a type-parameter-typed local under the active
@@ -115,9 +115,9 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     // an `any P` local: keep the structured ref so its method calls can
                     // resolve through the trait P (the name-only form loses isAny).
                     if lo.ty != 0U64 {
-                        if lo.ty < c.types.count {
-                            if c.types[lo.ty].isAny {
-                                return <TypeInfo kind=2 nameStart=c.types[lo.ty].nameStart nameLen=c.types[lo.ty].nameLen ref=lo.ty />
+                        if lo.ty < c.arena.types.count {
+                            if c.arena.types[lo.ty].isAny {
+                                return <TypeInfo kind=2 nameStart=c.arena.types[lo.ty].nameStart nameLen=c.arena.types[lo.ty].nameLen ref=lo.ty />
                             }
                         }
                     }
@@ -167,23 +167,23 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // result is always bound through an explicit RawBuffer[T] annotation, so
             // a scalar placeholder suffices here (never the source of the type).
             if isRawIntrinsicName(c: inout c, nameStart: nameStart, nameLen: nameLen) {
-                if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawLoad") {
+                if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawLoad") {
                     val bt: TypeInfo = exprType(c: inout c, id: args[0].expr)
-                    if bt.ref < c.types.count {
-                        val rb: TypeRef = c.types[bt.ref]
+                    if bt.ref < c.arena.types.count {
+                        val rb: TypeRef = c.arena.types[bt.ref]
                         if rb.args.count == 1 {
                             return typeInfoOfRef(c: inout c, ref: rb.args[0])
                         }
                     }
                     return scalarInfo()
                 }
-                if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawCap") {
+                if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawCap") {
                     val u64: Bind = kwSpan(c: inout c, kw: "U64", kwLen: 3)
                     if u64.nameLen != 0 {
                         return <TypeInfo kind=0 nameStart=u64.nameStart nameLen=u64.nameLen ref=0 />
                     }
                 }
-                if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "rawIsUnique") {
+                if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawIsUnique") {
                     val bl: Bind = kwSpan(c: inout c, kw: "Bool", kwLen: 4)
                     if bl.nameLen != 0 {
                         return <TypeInfo kind=0 nameStart=bl.nameStart nameLen=bl.nameLen ref=0 />
@@ -194,11 +194,11 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // array intrinsics: arrayGet returns the element type of its `Array[T]`
             // argument, arrayLen returns U64 (arrayPush/arraySet return ()).
             if isArrayIntrinsicName(c: inout c, nameStart: nameStart, nameLen: nameLen) {
-                if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arrayGet") {
+                if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "arrayGet") {
                     val at: TypeInfo = exprType(c: inout c, id: args[0].expr)
                     return typeInfoOfName(c: inout c, start: at.nameStart, len: at.nameLen, isArray: false)
                 }
-                if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "arrayLen") {
+                if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "arrayLen") {
                     val u64: Bind = kwSpan(c: inout c, kw: "U64", kwLen: 3)
                     if u64.nameLen != 0 {
                         return <TypeInfo kind=0 nameStart=u64.nameStart nameLen=u64.nameLen ref=0 />
@@ -211,8 +211,8 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // cases here.)
             // resolve the right overload (by labels + arg types) for its return.
             val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
-            if fi < c.funcs.count {
-                val f: Func = c.funcs[fi]
+            if fi < c.arena.funcs.count {
+                val f: Func = c.arena.funcs[fi]
                 if f.hasRet {
                     // a generic free function returning a bare type parameter:
                     // substitute it with the inferred concrete type argument.
@@ -239,7 +239,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     // kind-2 instantiation (`Box[I32]`, an enum) reports as a genInst.
                     if !(f.retIsArray) {
                         if isGenericInst(c: inout c, ref: f.retTy) {
-                            val rtr: TypeRef = c.types[f.retTy]
+                            val rtr: TypeRef = c.arena.types[f.retTy]
                             return <TypeInfo kind=2 nameStart=rtr.nameStart nameLen=rtr.nameLen ref=f.retTy />
                         }
                     }
@@ -255,7 +255,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             if lvi < c.locals.count {
                 val lty: U64 = c.locals[lvi].ty
                 if isFnType(c: inout c, ref: lty) {
-                    val ftr: TypeRef = c.types[lty]
+                    val ftr: TypeRef = c.arena.types[lty]
                     if ftr.args.count > 0 {
                         return typeInfoOfRef(c: inout c, ref: ftr.args[0])
                     }
@@ -269,7 +269,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // index / `val bs = s.bytes` inference sees an array (else `.count`
             // wouldn't lower to `.len`). Recover a "U8" span to name the element.
             if bt.kind == 1 {
-                if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "bytes") {
+                if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bytes") {
                     val u8: Bind = kwSpan(c: inout c, kw: "U8", kwLen: 2)
                     if u8.nameLen != 0 {
                         return <TypeInfo kind=3 nameStart=u8.nameStart nameLen=u8.nameLen ref=0 />
@@ -279,7 +279,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // `arr.count` is U64 (spec/02). Recover a "U64" span so a generic call
             // like `print(arr.count)` infers T = U64.
             if bt.kind == 3 {
-                if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "count") {
+                if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
                     val u64: Bind = kwSpan(c: inout c, kw: "U64", kwLen: 3)
                     if u64.nameLen != 0 {
                         return <TypeInfo kind=0 nameStart=u64.nameStart nameLen=u64.nameLen ref=0 />
@@ -311,9 +311,9 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 val er: U64 = arrayElemRef(c: inout c, start: bt.nameStart, len: bt.nameLen)
                 if er != 0 {
                     val rr: U64 = resolveTy(c: inout c, tyRef: er)
-                    if rr < c.types.count {
-                        val rt: TypeRef = c.types[rr]
-                        if rangeEquals(bytes: c.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Array") {
+                    if rr < c.arena.types.count {
+                        val rt: TypeRef = c.arena.types[rr]
+                        if rangeEquals(bytes: c.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Array") {
                             if rt.args.count > 0 {
                                 val xn: Bind = arrayElemNameForRef(c: inout c, elemRef: rt.args[0])
                                 return <TypeInfo kind=3 nameStart=xn.nameStart nameLen=xn.nameLen ref=0 />
@@ -334,7 +334,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // `dict[k]` yields the Dictionary's value type V (args[1]) — the subscript
             // desugars to `.at(key:) -> V`.
             if isDictionaryType(c: inout c, ti: bt) {
-                val dt: TypeRef = c.types[bt.ref]
+                val dt: TypeRef = c.arena.types[bt.ref]
                 if dt.args.count > 1 {
                     return typeInfoOfRef(c: inout c, ref: dt.args[1])
                 }
@@ -356,8 +356,8 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             val rt: TypeInfo = exprType(c: inout c, id: recv)
             if rt.kind == 2 {
                 val mfi: U64 = findExtMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                if mfi < c.funcs.count {
-                    val mf: Func = c.funcs[mfi]
+                if mfi < c.arena.funcs.count {
+                    val mf: Func = c.arena.funcs[mfi]
                     if mf.hasRet {
                         return typeInfoOfName(c: inout c, start: mf.retStart, len: mf.retLen, isArray: mf.retIsArray)
                     }
@@ -370,10 +370,10 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             val arn: Bind = assocRecvName(c: inout c, recv: recv)
             if arn.nameLen != 0 {
                 val afi: U64 = findAssoc(c: inout c, recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                if afi == c.funcs.count {
+                if afi == c.arena.funcs.count {
                     return scalarInfo()
                 }
-                val af: Func = c.funcs[afi]
+                val af: Func = c.arena.funcs[afi]
                 if af.hasRet {
                     // a factory / Self-returning assoc fn inherited through a newtype
                     // receiver (spec/10): the result Self is the SYNTACTIC receiver
@@ -426,7 +426,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                                 if sreqs[sri].nameId == sMethod {
                                     if sreqs[sri].hasRet {
                                         if !(sreqs[sri].retIsArray) {
-                                            if isPrimType(c: inout c, start: sreqs[sri].retStart, len: sreqs[sri].retLen) || rangeEquals(bytes: c.bytes, start: sreqs[sri].retStart, len: sreqs[sri].retLen, kw: "String") {
+                                            if isPrimType(c: inout c, start: sreqs[sri].retStart, len: sreqs[sri].retLen) || rangeEquals(bytes: c.arena.bytes, start: sreqs[sri].retStart, len: sreqs[sri].retLen, kw: "String") {
                                                 return typeInfoOfName(c: inout c, start: sreqs[sri].retStart, len: sreqs[sri].retLen, isArray: false)
                                             }
                                         }
@@ -446,8 +446,8 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 // CONCRETE primitive/String return (Self / associated / generic returns
                 // stay unknown — conservative, and avoids disturbing existential codegen).
                 if rt.ref != 0U64 {
-                    if rt.ref < c.types.count {
-                        if c.types[rt.ref].isAny {
+                    if rt.ref < c.arena.types.count {
+                        if c.arena.types[rt.ref].isAny {
                             val qTrait: U64 = intern(c: inout c, start: rt.nameStart, len: rt.nameLen)
                             val qMethod: U64 = intern(c: inout c, start: nameStart, len: nameLen)
                             mut val ti: U64 = 0
@@ -459,7 +459,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                                         if reqs[ri].nameId == qMethod {
                                             if reqs[ri].hasRet {
                                                 if !(reqs[ri].retIsArray) {
-                                                    if isPrimType(c: inout c, start: reqs[ri].retStart, len: reqs[ri].retLen) || rangeEquals(bytes: c.bytes, start: reqs[ri].retStart, len: reqs[ri].retLen, kw: "String") {
+                                                    if isPrimType(c: inout c, start: reqs[ri].retStart, len: reqs[ri].retLen) || rangeEquals(bytes: c.arena.bytes, start: reqs[ri].retStart, len: reqs[ri].retLen, kw: "String") {
                                                         return typeInfoOfName(c: inout c, start: reqs[ri].retStart, len: reqs[ri].retLen, isArray: false)
                                                     }
                                                 }
@@ -476,18 +476,18 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     }
                 }
                 val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                if mi == c.funcs.count {
+                if mi == c.arena.funcs.count {
                     return scalarInfo()
                 }
-                val mf: Func = c.funcs[mi]
+                val mf: Func = c.arena.funcs[mi]
                 if mf.hasRet {
                     // a generic method (`impl[T] Box[T] { fn get() -> T }`) returning
                     // a type parameter: substitute it with the receiver's concrete
                     // instantiation argument (else `box.get()` types as the bare `T`).
                     if isGenericInst(c: inout c, ref: rt.ref) {
-                        val gt: TypeRef = c.types[rt.ref]
+                        val gt: TypeRef = c.arena.types[rt.ref]
                         val gsi: U64 = genericStructIndex(c: inout c, nameStart: gt.nameStart, nameLen: gt.nameLen)
-                        if gsi < c.structs.count {
+                        if gsi < c.arena.structs.count {
                             // ground the return type through the receiver's instantiation
                             // AND the method's own type params (a combinator on a generic
                             // receiver: `filterIter.map(f) -> MapIter[Self, …, B]`). The
@@ -498,7 +498,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                             setSelfItemEnv(c: inout c, recvStart: gt.nameStart, recvLen: gt.nameLen, recvInstRef: rt.ref)
                             val gSavedP: Array[Bind] = c.curTypeParams
                             val gSavedA: Array[U64] = c.curTypeArgs
-                            val rcount: U64 = c.structs[gsi].typeParams.count
+                            val rcount: U64 = c.arena.structs[gsi].typeParams.count
                             mut val gfa: Array[U64] = []
                             mut val gri: U64 = 0
                             while gri < rcount {
@@ -524,8 +524,8 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                             return typeInfoOfRef(c: inout c, ref: gr)
                         }
                         val gei: U64 = genericEnumIndex(c: inout c, nameStart: gt.nameStart, nameLen: gt.nameLen)
-                        if gei < c.enums.count {
-                            return substTypeInfo(c: inout c, instRef: rt.ref, params: c.enums[gei].typeParams, tyRef: mf.retTy)
+                        if gei < c.arena.enums.count {
+                            return substTypeInfo(c: inout c, instRef: rt.ref, params: c.arena.enums[gei].typeParams, tyRef: mf.retTy)
                         }
                     }
                     // a non-generic receiver whose method returns a generic instantiation
@@ -561,14 +561,14 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 // the type parameter T with the array's element type E.
                 val arrName: Bind = kwSpan(c: inout c, kw: "Array", kwLen: 5)
                 val mi: U64 = findMethod(c: inout c, recvStart: arrName.nameStart, recvLen: arrName.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                if mi == c.funcs.count {
+                if mi == c.arena.funcs.count {
                     return scalarInfo()
                 }
-                val mf: Func = c.funcs[mi]
+                val mf: Func = c.arena.funcs[mi]
                 if mf.hasRet {
                     if mf.typeParams.count >= 1 {
-                        if mf.retTy < c.types.count {
-                            val rtt: TypeRef = c.types[mf.retTy]
+                        if mf.retTy < c.arena.types.count {
+                            val rtt: TypeRef = c.arena.types[mf.retTy]
                             if rtt.nameId == mf.typeParams[0].nameId {
                                 return typeInfoOfName(c: inout c, start: rt.nameStart, len: rt.nameLen, isArray: false)
                             }
@@ -595,7 +595,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             while mai < arms.count {
                 if !(arms[mai].isDiverge) {
                     val mg: U64 = blockGiveExpr(c: inout c, blkId: arms[mai].body)
-                    if mg < c.exprs.count {
+                    if mg < c.arena.exprs.count {
                         return exprType(c: inout c, id: mg)
                     }
                 }
@@ -605,7 +605,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
         }
         Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
             val g: U64 = blockGiveExpr(c: inout c, blkId: thenBlk)
-            if g < c.exprs.count {
+            if g < c.arena.exprs.count {
                 return exprType(c: inout c, id: g)
             }
             return scalarInfo()
@@ -622,7 +622,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // result type = the Result's Ok payload T (args[0] of Result[T, E]).
             val rt: TypeInfo = exprType(c: inout c, id: expr)
             if isGenericInst(c: inout c, ref: rt.ref) {
-                val inst: TypeRef = c.types[rt.ref]
+                val inst: TypeRef = c.arena.types[rt.ref]
                 if inst.args.count > 0 {
                     return typeInfoOfRef(c: inout c, ref: inst.args[0])
                 }
@@ -633,7 +633,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // pointee field type: base is Ref[T]; resolve T then T's field.
             val bt: TypeInfo = exprType(c: inout c, id: base)
             if isRefInst(c: inout c, ref: bt.ref) {
-                val inst: TypeRef = c.types[bt.ref]
+                val inst: TypeRef = c.arena.types[bt.ref]
                 val pt: TypeInfo = typeInfoOfRef(c: inout c, ref: inst.args[0])
                 if pt.kind == 2 {
                     return fieldType(c: inout c, structStart: pt.nameStart, structLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
@@ -656,7 +656,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // type argument. A value-less Promise[()] (args empty) yields a scalar.
             val ot: TypeInfo = exprType(c: inout c, id: operand)
             if ot.ref != 0 {
-                val tr: TypeRef = c.types[ot.ref]
+                val tr: TypeRef = c.arena.types[ot.ref]
                 if tr.args.count > 0 {
                     return typeInfoOfRef(c: inout c, ref: tr.args[0])
                 }

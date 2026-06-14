@@ -129,8 +129,8 @@ fn kindFromTySpan(c: inout Comp, tyStart: U64, tyLen: U64) -> U64 {
     if ntu.nameStart != tyStart || ntu.nameLen != tyLen {
         return kindFromTySpan(c: inout c, tyStart: ntu.nameStart, tyLen: ntu.nameLen)
     }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "String") { return 1U64 }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Bool") { return 2U64 }
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "String") { return 1U64 }
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Bool") { return 2U64 }
     if isFloatType(c: inout c, start: tyStart, len: tyLen) { return 4U64 }
     if isUnsignedName(c: inout c, start: tyStart, len: tyLen) { return 3U64 }
     return 0U64
@@ -144,7 +144,7 @@ fn kindFromTySpan(c: inout Comp, tyStart: U64, tyLen: U64) -> U64 {
 // env (so `dict[K,V].getOr -> V` resolves V to the concrete value type) before
 // reading the kind, falling back to the declared return span when no env applies.
 fn methodReturnKind(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64) -> U64 {
-    val mf: Func = c.funcs[mfi]
+    val mf: Func = c.arena.funcs[mfi]
     if mf.retTy != 0U64 {
         val rRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
         val savedP: Array[Bind] = c.curTypeParams
@@ -163,14 +163,14 @@ fn methodReturnKind(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64) -> U6
             c.curTypeArgs = savedA
         }
         if g != 0U64 {
-            return kindFromTySpan(c: inout c, tyStart: c.types[g].nameStart, tyLen: c.types[g].nameLen)
+            return kindFromTySpan(c: inout c, tyStart: c.arena.types[g].nameStart, tyLen: c.arena.types[g].nameLen)
         }
     }
     return kindFromTySpan(c: inout c, tyStart: mf.retStart, tyLen: mf.retLen)
 }
 
 fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
-    match c.exprs[id] {
+    match c.arena.exprs[id] {
         Expr.Str(start: _, len: _) => { return 1U64 }
         Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { return 4U64 }
         Expr.Cast(operand: _, val tyStart, val tyLen, ty: _) => { return kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen) }
@@ -206,10 +206,10 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
         }
         Expr.Field(val base, val nameStart, val nameLen) => {
             val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
-            if sidx < c.structs.count {
+            if sidx < c.arena.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                if fidx < c.structs[sidx].fields.count {
-                    val ffd: FieldDef = c.structs[sidx].fields[fidx]
+                if fidx < c.arena.structs[sidx].fields.count {
+                    val ffd: FieldDef = c.arena.structs[sidx].fields[fidx]
                     // ground a type-parameter field under the BASE's instance env (a
                     // generic struct's `v: T` on `L[String]` must resolve T -> String, not
                     // default to int) — so e.g. `print(a.v)` dispatches to the String sink.
@@ -222,7 +222,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                         if c.curTypeParams.count > 0U64 {
                             fg = groundTypeRef(c: inout c, ref: ffd.ty)
                         }
-                        val fk: U64 = kindFromTySpan(c: inout c, tyStart: c.types[fg].nameStart, tyLen: c.types[fg].nameLen)
+                        val fk: U64 = kindFromTySpan(c: inout c, tyStart: c.arena.types[fg].nameStart, tyLen: c.arena.types[fg].nameLen)
                         if didSetF {
                             c.curTypeParams = savedFP
                             c.curTypeArgs = savedFA
@@ -240,14 +240,14 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             if atIdx < c.traits.count {
                 val rr: U64 = anyMethodRetRef(c: inout c, anyRef: exprTypeRef(c: inout c, st: inout st, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
                 if rr != 0U64 {
-                    return kindFromTySpan(c: inout c, tyStart: c.types[rr].nameStart, tyLen: c.types[rr].nameLen)
+                    return kindFromTySpan(c: inout c, tyStart: c.arena.types[rr].nameStart, tyLen: c.arena.types[rr].nameLen)
                 }
             }
             val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
-            if rsidx < c.structs.count {
-                val mfi: U64 = findMethod(c: inout c, recvStart: c.structs[rsidx].nameStart, recvLen: c.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                if mfi < c.funcs.count {
-                    if c.funcs[mfi].hasRet {
+            if rsidx < c.arena.structs.count {
+                val mfi: U64 = findMethod(c: inout c, recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                if mfi < c.arena.funcs.count {
+                    if c.arena.funcs[mfi].hasRet {
                         // ground a type-parameter return under the receiver's instance
                         // env (a generic struct local resolves to its def here, so
                         // `dict.getOr -> V` must substitute V to the concrete value
@@ -262,10 +262,10 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // the method's declared return span (Bool/numeric).
             val rRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
             if rRef != 0U64 {
-                val rt: TypeRef = c.types[rRef]
+                val rt: TypeRef = c.arena.types[rRef]
                 val gmfi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                if gmfi < c.funcs.count {
-                    if c.funcs[gmfi].hasRet {
+                if gmfi < c.arena.funcs.count {
+                    if c.arena.funcs[gmfi].hasRet {
                         return methodReturnKind(c: inout c, st: inout st, recv: recv, mfi: gmfi)
                     }
                 }
@@ -278,20 +278,20 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             val primRecvK: Bind = primLangItemRecvName(c: inout c, st: inout st, recv: recv)
             if primRecvK.nameLen != 0U64 {
                 val pmfi: U64 = findMethod(c: inout c, recvStart: primRecvK.nameStart, recvLen: primRecvK.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                if pmfi < c.funcs.count {
-                    if c.funcs[pmfi].hasRet {
-                        return kindFromTySpan(c: inout c, tyStart: c.funcs[pmfi].retStart, tyLen: c.funcs[pmfi].retLen)
+                if pmfi < c.arena.funcs.count {
+                    if c.arena.funcs[pmfi].hasRet {
+                        return kindFromTySpan(c: inout c, tyStart: c.arena.funcs[pmfi].retStart, tyLen: c.arena.funcs[pmfi].retLen)
                     }
                 }
             }
         }
         Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
             val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
-            if rsidx < c.structs.count {
-                val mfi: U64 = findExtMethod(c: inout c, recvStart: c.structs[rsidx].nameStart, recvLen: c.structs[rsidx].nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                if mfi < c.funcs.count {
-                    if c.funcs[mfi].hasRet {
-                        return kindFromTySpan(c: inout c, tyStart: c.funcs[mfi].retStart, tyLen: c.funcs[mfi].retLen)
+            if rsidx < c.arena.structs.count {
+                val mfi: U64 = findExtMethod(c: inout c, recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                if mfi < c.arena.funcs.count {
+                    if c.arena.funcs[mfi].hasRet {
+                        return kindFromTySpan(c: inout c, tyStart: c.arena.funcs[mfi].retStart, tyLen: c.arena.funcs[mfi].retLen)
                     }
                 }
             }
@@ -305,25 +305,25 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             val cli: U64 = findLocal(c: inout c, st: inout st, start: nameStart, len: nameLen)
             if cli < st.nLocals {
                 if isFnType(c: inout c, ref: st.locTypeRef[cli]) {
-                    val ft: TypeRef = c.types[st.locTypeRef[cli]]
+                    val ft: TypeRef = c.arena.types[st.locTypeRef[cli]]
                     if ft.args.count > 0U64 {
-                        val rt: TypeRef = c.types[ft.args[0]]
+                        val rt: TypeRef = c.arena.types[ft.args[0]]
                         return kindFromTySpan(c: inout c, tyStart: rt.nameStart, tyLen: rt.nameLen)
                     }
                 }
             }
             // a regular function call: the callee's return-type kind.
             val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
-            if cfi < c.funcs.count {
-                if c.funcs[cfi].hasRet {
-                    return kindFromTySpan(c: inout c, tyStart: c.funcs[cfi].retStart, tyLen: c.funcs[cfi].retLen)
+            if cfi < c.arena.funcs.count {
+                if c.arena.funcs[cfi].hasRet {
+                    return kindFromTySpan(c: inout c, tyStart: c.arena.funcs[cfi].retStart, tyLen: c.arena.funcs[cfi].retLen)
                 }
             }
         }
         Expr.Index(val base, val index) => {
             // element kind: from the array local's tracked element kind (so an
             // Array[U16] element is unsigned), else inferred from the element type.
-            match c.exprs[base] {
+            match c.arena.exprs[base] {
                 Expr.Ident(start: val s2, len: val l2) => {
                     val li2: U64 = findLocal(c: inout c, st: inout st, start: s2, len: l2)
                     if li2 < st.nLocals {
@@ -339,12 +339,12 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // method call genLlvmIndex emits, so a String/Bool value isn't defaulted to
             // int (which would miscompile the {ptr,i64} at the use site).
             val ibsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
-            if ibsi < c.structs.count {
-                if rangeEquals(bytes: c.bytes, start: c.structs[ibsi].nameStart, len: c.structs[ibsi].nameLen, kw: "Dictionary") {
+            if ibsi < c.arena.structs.count {
+                if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[ibsi].nameStart, len: c.arena.structs[ibsi].nameLen, kw: "Dictionary") {
                     val m: U64 = synthDictMethod(c: inout c, recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
                     return valueKind(c: inout c, st: inout st, id: m)
                 }
-                if typeHasMethodNamed(c: inout c, typeStart: c.structs[ibsi].nameStart, typeLen: c.structs[ibsi].nameLen, name: "index") {
+                if typeHasMethodNamed(c: inout c, typeStart: c.arena.structs[ibsi].nameStart, typeLen: c.arena.structs[ibsi].nameLen, name: "index") {
                     val m: U64 = synthDictMethod(c: inout c, recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
                     return valueKind(c: inout c, st: inout st, id: m)
                 }
@@ -364,7 +364,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
     val t: TypeInfo = typeOf(c: inout c, id: id)
     if t.kind == 1 { return 1U64 }
     if t.kind == 0 {
-        if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Bool") { return 2U64 }
+        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Bool") { return 2U64 }
         if isUnsignedName(c: inout c, start: t.nameStart, len: t.nameLen) { return 3U64 }
     }
     return 0U64

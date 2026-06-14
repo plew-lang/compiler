@@ -129,22 +129,22 @@ fn checkFnValueSig(c: inout Comp, declTy: U64, init: U64) {
     if !(isFnType(c: inout c, ref: declTy)) {
         return
     }
-    val ft: TypeRef = c.types[declTy]
-    match c.exprs[init] {
+    val ft: TypeRef = c.arena.types[declTy]
+    match c.arena.exprs[init] {
         Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, val retTy, body: _) => {
             checkFnSigAgainst(c: inout c, ft: ft, params: params, retTy: retTy, offset: exprOffset(c: inout c, id: init))
         }
         Expr.Ident(start: val s, len: val l) => {
             val fi: U64 = firstFuncByName(c: inout c, nameStart: s, nameLen: l)
-            if fi < c.funcs.count {
-                checkFnSigAgainst(c: inout c, ft: ft, params: c.funcs[fi].params, retTy: c.funcs[fi].retTy, offset: exprOffset(c: inout c, id: init))
+            if fi < c.arena.funcs.count {
+                checkFnSigAgainst(c: inout c, ft: ft, params: c.arena.funcs[fi].params, retTy: c.arena.funcs[fi].retTy, offset: exprOffset(c: inout c, id: init))
             }
         }
         _ => {}
     }
 }
 
-// The structured (Comp.types) type of a local named (nameStart,nameLen), or 0.
+// The structured (Comp.arena.types) type of a local named (nameStart,nameLen), or 0.
 fn localTypeRefByName(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
     val q: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = c.locals.count
@@ -160,14 +160,14 @@ fn localTypeRefByName(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
 fn checkCallArgs(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) {
     checkUniqueArgModes(c: inout c, args: args)
     val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
-    if fi == c.funcs.count {
+    if fi == c.arena.funcs.count {
         // calling a function VALUE (`val f: fn(x: I64)->I64 = …; f(x: true)`): the name
         // is a local, not a declared function, so check each arg against the fn type's
         // parameter types (the TypeRef stores args as [return, param0, param1, …]).
         val lty: U64 = localTypeRefByName(c: inout c, nameStart: nameStart, nameLen: nameLen)
         if lty != 0U64 {
             if isFnType(c: inout c, ref: lty) {
-                val ft: TypeRef = c.types[lty]
+                val ft: TypeRef = c.arena.types[lty]
                 mut val k: U64 = 0
                 while k < args.count {
                     if k + 1U64 < ft.args.count {
@@ -185,7 +185,7 @@ fn checkCallArgs(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) 
         }
         return
     }
-    val f: Func = c.funcs[fi]
+    val f: Func = c.arena.funcs[fi]
     tcCheckGenericArgConsistency(c: inout c, f: f, args: args)
     val ps: Array[Param] = f.params
     mut val i: U64 = 0
@@ -220,9 +220,9 @@ fn checkClosureArgArity(c: inout Comp, argExpr: U64, p: Param) {
     if !(isFnType(c: inout c, ref: p.ty)) {
         return
     }
-    match c.exprs[argExpr] {
+    match c.arena.exprs[argExpr] {
         Expr.Closure(val params, val hasRet, retStart: _, retLen: _, retIsArray: _, val retTy, body: _) => {
-            val want: U64 = c.types[p.ty].args.count
+            val want: U64 = c.arena.types[p.ty].args.count
             if want > 0U64 {
                 if params.count == want - 1U64 {
                     // each closure-literal parameter label must equal the expected
@@ -231,7 +231,7 @@ fn checkClosureArgArity(c: inout Comp, argExpr: U64, p: Param) {
                     // argument swap). argLabels parallels args ([return, p0, p1, …]),
                     // so the label for closure param j is argLabels[j+1]; 0 = an
                     // unlabeled (`~:`) position, which the closure must also leave bare.
-                    val expLabels: Array[U64] = c.types[p.ty].argLabels
+                    val expLabels: Array[U64] = c.arena.types[p.ty].argLabels
                     mut val pj: U64 = 0
                     while pj < params.count {
                         if pj + 1U64 < expLabels.count {
@@ -253,7 +253,7 @@ fn checkClosureArgArity(c: inout Comp, argExpr: U64, p: Param) {
                 // wanted reinterprets the bits). spec/04 (a function type's identity).
                 if hasRet {
                     if retTy != 0U64 {
-                        val expRet: U64 = c.types[p.ty].args[0]
+                        val expRet: U64 = c.arena.types[p.ty].args[0]
                         if expRet != 0U64 {
                             if !(typesCompatible(c: inout c, expected: expRet, inferred: retTy)) {
                                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: argExpr)), msg: "closure return type does not match the expected function type")
@@ -276,12 +276,12 @@ fn checkClosureArgArity(c: inout Comp, argExpr: U64, p: Param) {
 // (abstract) tail begins. Falls back to the receiver type info if not a known generic.
 fn recvOwnParamCount(c: inout Comp, rt: TypeInfo) -> U64 {
     val si: U64 = genericStructIndex(c: inout c, nameStart: rt.nameStart, nameLen: rt.nameLen)
-    if si < c.structs.count {
-        return c.structs[si].typeParams.count
+    if si < c.arena.structs.count {
+        return c.arena.structs[si].typeParams.count
     }
     val ei: U64 = genericEnumIndex(c: inout c, nameStart: rt.nameStart, nameLen: rt.nameLen)
-    if ei < c.enums.count {
-        return c.enums[ei].typeParams.count
+    if ei < c.arena.enums.count {
+        return c.arena.enums[ei].typeParams.count
     }
     return 0U64
 }
@@ -295,9 +295,9 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
     // value->V directly here (mirrors checkIndexKeyType for subscripts). spec/02.
     if rt.kind == 2 {
         if rt.ref != 0U64 {
-            if rt.ref < c.types.count {
-                val drt: TypeRef = c.types[rt.ref]
-                if rangeEquals(bytes: c.bytes, start: drt.nameStart, len: drt.nameLen, kw: "Dictionary") {
+            if rt.ref < c.arena.types.count {
+                val drt: TypeRef = c.arena.types[rt.ref]
+                if rangeEquals(bytes: c.arena.bytes, start: drt.nameStart, len: drt.nameLen, kw: "Dictionary") {
                     if drt.args.count >= 2U64 {
                         // the generic-receiver arg grounding is incomplete, so check the
                         // Dictionary's key/value args directly by LABEL: a `key` arg must
@@ -307,10 +307,10 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
                         mut val dai: U64 = 0
                         while dai < args.count {
                             if args[dai].hasLabel {
-                                if rangeEquals(bytes: c.bytes, start: args[dai].labelStart, len: args[dai].labelLen, kw: "key") {
+                                if rangeEquals(bytes: c.arena.bytes, start: args[dai].labelStart, len: args[dai].labelLen, kw: "key") {
                                     tcCheckValue(c: inout c, expectedRef: drt.args[0], valueExpr: args[dai].expr, pos: "dict key")
                                 }
-                                if rangeEquals(bytes: c.bytes, start: args[dai].labelStart, len: args[dai].labelLen, kw: "value") || rangeEquals(bytes: c.bytes, start: args[dai].labelStart, len: args[dai].labelLen, kw: "fallback") {
+                                if rangeEquals(bytes: c.arena.bytes, start: args[dai].labelStart, len: args[dai].labelLen, kw: "value") || rangeEquals(bytes: c.arena.bytes, start: args[dai].labelStart, len: args[dai].labelLen, kw: "fallback") {
                                     tcCheckValue(c: inout c, expectedRef: drt.args[1], valueExpr: args[dai].expr, pos: "dict value")
                                 }
                             }
@@ -323,8 +323,8 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
     }
     if rt.kind == 2 {
         val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-        if mi != c.funcs.count {
-            val mf: Func = c.funcs[mi]
+        if mi != c.arena.funcs.count {
+            val mf: Func = c.arena.funcs[mi]
             tcCheckGenericArgConsistency(c: inout c, f: mf, args: args)
             val ps: Array[Param] = mf.params
             val genericRecv: Bool = isGenericInst(c: inout c, ref: rt.ref)
@@ -361,7 +361,7 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
                             mut val headMethodOwn: Bool = false
                             if p.ty != 0U64 {
                                 val nConf: U64 = recvOwnParamCount(c: inout c, rt: rt)
-                                val headId: U64 = c.types[p.ty].nameId
+                                val headId: U64 = c.arena.types[p.ty].nameId
                                 mut val mk: U64 = nConf
                                 while mk < mf.typeParams.count {
                                     if mf.typeParams[mk].nameId == headId {
@@ -395,7 +395,7 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
         }
     }
     if rt.kind == 3 {
-        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "append") {
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "append") {
             // if the element type is itself an `Array[X]`, the appended value is
             // an array (e.g. `m.append([1,2,3])`) — check its elements against the
             // inner element X, not the outer (mangled) element name as a scalar.
@@ -405,9 +405,9 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
             val er: U64 = arrayElemRef(c: inout c, start: rt.nameStart, len: rt.nameLen)
             if er != 0 {
                 val rr: U64 = resolveTy(c: inout c, tyRef: er)
-                if rr < c.types.count {
-                    val rtp: TypeRef = c.types[rr]
-                    if rangeEquals(bytes: c.bytes, start: rtp.nameStart, len: rtp.nameLen, kw: "Array") {
+                if rr < c.arena.types.count {
+                    val rtp: TypeRef = c.arena.types[rr]
+                    if rangeEquals(bytes: c.arena.bytes, start: rtp.nameStart, len: rtp.nameLen, kw: "Array") {
                         if rtp.args.count > 0 {
                             val xn: Bind = arrayElemNameForRef(c: inout c, elemRef: rtp.args[0])
                             innerArr = true
@@ -428,7 +428,7 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
                     // literal but a `true`/typed value of the wrong type slips through). Only
                     // primitives are checked (their simpleTypeRef is reliable; a struct/
                     // generic element name may be mangled and is left to other checks).
-                    if isIntType(c: inout c, start: rt.nameStart, len: rt.nameLen) || isFloatType(c: inout c, start: rt.nameStart, len: rt.nameLen) || rangeEquals(bytes: c.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Bool") || rangeEquals(bytes: c.bytes, start: rt.nameStart, len: rt.nameLen, kw: "String") {
+                    if isIntType(c: inout c, start: rt.nameStart, len: rt.nameLen) || isFloatType(c: inout c, start: rt.nameStart, len: rt.nameLen) || rangeEquals(bytes: c.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Bool") || rangeEquals(bytes: c.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "String") {
                         tcCheckValue(c: inout c, expectedRef: simpleTypeRef(c: inout c, nameStart: rt.nameStart, nameLen: rt.nameLen), valueExpr: args[i].expr, pos: "append")
                     }
                 }
@@ -440,11 +440,11 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
     // an assoc fn call `Type.make(...)`: the recv is a TYPE NAME (not a value), so the
     // instance-method lookups above miss it. Resolve the assoc fn and check its args
     // (the value `S.make(n: true)` would otherwise reinterpret a Bool as I64).
-    match c.exprs[recv] {
+    match c.arena.exprs[recv] {
         Expr.Ident(start: val rStart, len: val rLen) => {
             val ai: U64 = findAssoc(c: inout c, recvStart: rStart, recvLen: rLen, nameStart: nameStart, nameLen: nameLen, args: args)
-            if ai < c.funcs.count {
-                val aps: Array[Param] = c.funcs[ai].params
+            if ai < c.arena.funcs.count {
+                val aps: Array[Param] = c.arena.funcs[ai].params
                 mut val k: U64 = 0
                 while k < args.count {
                     if k < aps.count {

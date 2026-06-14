@@ -4,7 +4,7 @@
 // Lower a method / assoc-fn member of an impl block. Mirrors parseFuncCommon for
 // the impl-member case: a witnessed requirement signature (for a trait impl, body-
 // less, before the body), then either a `via` alias (no body/func) or the real
-// method appended to c.funcs with its `where`-bounds (method-own then impl-level).
+// method appended to c.arena.funcs with its `where`-bounds (method-own then impl-level).
 // `recvN` is the (re-interned) receiver type name; `implParamBinds` the impl's `[T]`.
 fn lowerMethodMember(c: inout Comp, im: ImplAst, m: MemberAst, recvN: Bind, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) {
     val nameN: Bind = internBytes(c: inout c, s: m.name)
@@ -82,7 +82,7 @@ fn lowerMethodMember(c: inout Comp, im: ImplAst, m: MemberAst, recvN: Bind, impl
     c.lowerRetTy = retRef
     val body: U64 = lowerBlock(c: inout c, b: m.body)
     c.lowerRetTy = savedRet
-    val fnIdx: U64 = c.funcs.count
+    val fnIdx: U64 = c.arena.funcs.count
     // an extension method (spec/09) is tagged with its extension's name id so it is
     // excluded from bare resolution (reachable only via `value#Ext.m()`).
     mut val extId: U64 = 0
@@ -90,7 +90,7 @@ fn lowerMethodMember(c: inout Comp, im: ImplAst, m: MemberAst, recvN: Bind, impl
         val extN: Bind = internBytes(c: inout c, s: im.extName)
         extId = intern(c: inout c, start: extN.nameStart, len: extN.nameLen)
     }
-    c.funcs.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count />)
+    c.arena.funcs.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count />)
     appendFuncBounds(c: inout c, fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits)
     appendFuncBounds(c: inout c, fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits)
 }
@@ -119,7 +119,7 @@ fn lowerImpl(c: inout Comp, im: ImplAst) {
                 val body: U64 = lowerBlock(c: inout c, b: m.body)
                 val noParams: Array[Param] = []
                 val noTypeParams: Array[Bind] = []
-                c.funcs.append(<Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout c, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+                c.arena.funcs.append(<Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout c, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
                 c.deinits.append(<Bind nameStart=recvN.nameStart nameLen=recvN.nameLen fieldStart=recvN.nameStart fieldLen=recvN.nameLen />)
             }
             MemberKind.AssocType => {

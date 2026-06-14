@@ -35,33 +35,33 @@ fn verifyArgs(c: inout Comp, args: Array[Arg]) {
 // or subscript with identical base and index. Anything else (calls, etc.) compares
 // unequal — the check only fires on definite syntactic identity.
 fn exprSyntaxEq(c: inout Comp, a: U64, b: U64) -> Bool {
-    match c.exprs[a] {
+    match c.arena.exprs[a] {
         Expr.Ident(start: val s1, len: val l1) => {
-            match c.exprs[b] {
+            match c.arena.exprs[b] {
                 Expr.Ident(start: val s2, len: val l2) => { return spansEqual(c: inout c, aStart: s1, aLen: l1, bStart: s2, bLen: l2) }
                 _ => { return false }
             }
         }
         Expr.Int(value: val v1, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: val neg1) => {
-            match c.exprs[b] {
+            match c.arena.exprs[b] {
                 Expr.Int(value: val v2, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: val neg2) => { return v1 == v2 && neg1 == neg2 }
                 _ => { return false }
             }
         }
         Expr.Field(base: val base1, nameStart: val n1s, nameLen: val n1l) => {
-            match c.exprs[b] {
+            match c.arena.exprs[b] {
                 Expr.Field(base: val base2, nameStart: val n2s, nameLen: val n2l) => { return spansEqual(c: inout c, aStart: n1s, aLen: n1l, bStart: n2s, bLen: n2l) && exprSyntaxEq(c: inout c, a: base1, b: base2) }
                 _ => { return false }
             }
         }
         Expr.Arrow(base: val base1, nameStart: val n1s, nameLen: val n1l) => {
-            match c.exprs[b] {
+            match c.arena.exprs[b] {
                 Expr.Arrow(base: val base2, nameStart: val n2s, nameLen: val n2l) => { return spansEqual(c: inout c, aStart: n1s, aLen: n1l, bStart: n2s, bLen: n2l) && exprSyntaxEq(c: inout c, a: base1, b: base2) }
                 _ => { return false }
             }
         }
         Expr.Index(base: val base1, index: val idx1) => {
-            match c.exprs[b] {
+            match c.arena.exprs[b] {
                 Expr.Index(base: val base2, index: val idx2) => { return exprSyntaxEq(c: inout c, a: base1, b: base2) && exprSyntaxEq(c: inout c, a: idx1, b: idx2) }
                 _ => { return false }
             }
@@ -98,12 +98,12 @@ fn verifyMethodVis(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
         // inspects the impl block's visibility); skip if unresolved (a separate
         // "no such method" diagnostic covers that).
         val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-        if mi < c.funcs.count {
-            checkMethodVis(c: inout c, ownerStart: rt.nameStart, ownerLen: rt.nameLen, mf: c.funcs[mi], offset: nameStart)
+        if mi < c.arena.funcs.count {
+            checkMethodVis(c: inout c, ownerStart: rt.nameStart, ownerLen: rt.nameLen, mf: c.arena.funcs[mi], offset: nameStart)
             // an `inout fn` method mutates the receiver, so it must be a mutable PLACE
             // — not an rvalue temporary (`<S…/>.bump()` / `mk().bump()` would mutate a
             // value that is immediately discarded — spec/03).
-            if c.funcs[mi].selfInout {
+            if c.arena.funcs[mi].selfInout {
                 if !(exprIsPlace(c: inout c, id: recv)) {
                     compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call an `inout fn` method on a temporary value; the receiver must be a place (a variable or field) declared `mut val` (spec/03)")
                 }
@@ -127,7 +127,7 @@ fn verifyMethodVis(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
     }
     // a mutating built-in array method (`append`) on an immutable / non-place array.
     if rt.kind == 3 {
-        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "append") {
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "append") {
             if !(exprIsPlace(c: inout c, id: recv)) {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot `append` to a temporary array; the receiver must be a place declared `mut val` (spec/03)")
             }
@@ -146,7 +146,7 @@ fn verifyMethodVis(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
 // Whether expression `id` is a float (F32/F64): a float literal, or a value whose
 // recovered type names a float type.
 fn exprIsFloat(c: inout Comp, id: U64) -> Bool {
-    match c.exprs[id] {
+    match c.arena.exprs[id] {
         Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { return true }
         _ => {}
     }
@@ -154,10 +154,10 @@ fn exprIsFloat(c: inout Comp, id: U64) -> Bool {
     // (F64 is in isPrimType so typeOf gives kind 0 for a local, but kind 2 for a literal).
     val ti: TypeInfo = typeOf(c: inout c, id: id)
     if ti.nameLen > 0U64 {
-        if rangeEquals(bytes: c.bytes, start: ti.nameStart, len: ti.nameLen, kw: "F64") {
+        if rangeEquals(bytes: c.arena.bytes, start: ti.nameStart, len: ti.nameLen, kw: "F64") {
             return true
         }
-        if rangeEquals(bytes: c.bytes, start: ti.nameStart, len: ti.nameLen, kw: "F32") {
+        if rangeEquals(bytes: c.arena.bytes, start: ti.nameStart, len: ti.nameLen, kw: "F32") {
             return true
         }
     }
@@ -218,7 +218,7 @@ fn verifyEnumEqPayload(c: inout Comp, lhs: U64, rhs: U64) {
 // signedness-changing integer `as` must go through a fallible TryFrom.
 // Whether the cast operand is a Bool (a `true`/`false` literal or a Bool-typed value).
 fn castOperandIsBool(c: inout Comp, operand: U64) -> Bool {
-    match c.exprs[operand] {
+    match c.arena.exprs[operand] {
         Expr.Int(value: _, offset: _, val isBool, tyStart: _, tyLen: _, isNeg: _) => {
             if isBool { return true }
         }
@@ -226,7 +226,7 @@ fn castOperandIsBool(c: inout Comp, operand: U64) -> Bool {
     }
     val st: TypeInfo = typeOf(c: inout c, id: operand)
     if st.nameLen > 0U64 {
-        return rangeEquals(bytes: c.bytes, start: st.nameStart, len: st.nameLen, kw: "Bool")
+        return rangeEquals(bytes: c.arena.bytes, start: st.nameStart, len: st.nameLen, kw: "Bool")
     }
     return false
 }
@@ -235,7 +235,7 @@ fn verifyCastLossless(c: inout Comp, operand: U64, tyStart: U64, tyLen: U64) {
     // Bool is not a numeric type, so `as` (the lossless numeric / newtype-retag
     // conversion, spec/12) can't bridge Bool and a numeric type in either direction
     // (`true as I64`, `1I64 as Bool`) — use match / a comparison instead.
-    val targetBool: Bool = rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Bool")
+    val targetBool: Bool = rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Bool")
     val targetNum: Bool = isIntType(c: inout c, start: tyStart, len: tyLen) || isFloatType(c: inout c, start: tyStart, len: tyLen)
     if castOperandIsBool(c: inout c, operand: operand) {
         if targetNum {
@@ -255,7 +255,7 @@ fn verifyCastLossless(c: inout Comp, operand: U64, tyStart: U64, tyLen: U64) {
             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "`as` cannot convert a float to an integer (it would truncate the fractional part); use a fallible TryFrom conversion (spec/12)")
             return
         }
-        match c.exprs[operand] {
+        match c.arena.exprs[operand] {
             Expr.Int(val value, val offset, isBool: _, tyStart: _, tyLen: _, val isNeg) => {
                 if !(litFitsType(c: inout c, value: value, neg: isNeg, dstStart: tyStart, dstLen: tyLen)) {
                     compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal is out of range for the target type of `as`")

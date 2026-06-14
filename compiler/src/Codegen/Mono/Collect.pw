@@ -2,8 +2,8 @@
 
 fn collectFnInsts(c: inout Comp) {
     mut val fi: U64 = 0
-    while fi < c.funcs.count {
-        val f: Func = c.funcs[fi]
+    while fi < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[fi]
         // skip generic templates (their instances come from call sites) and extern
         // fns (body == 0 is a sentinel; walking block 0 would scan an unrelated body).
         if !(f.typeParams.count > 0 || f.isExtern) {
@@ -40,7 +40,7 @@ fn collectFnInsts(c: inout Comp) {
     mut val si: U64 = 0
     while si < c.monoWork.fnInsts.count {
         val fin: FnInst = c.monoWork.fnInsts[si]
-        val gf: Func = c.funcs[fin.fnIdx]
+        val gf: Func = c.arena.funcs[fin.fnIdx]
         c.locals = []
         seedGlobalLocals(c: inout c)
         // a generic *method* instance carries a receiver: set the self env (and the

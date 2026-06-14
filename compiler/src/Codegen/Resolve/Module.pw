@@ -25,30 +25,30 @@ fn moduleOf(c: inout Comp, offset: U64) -> U64 {
 // Ref/WeakRef, the concurrency handles). Used to reject a user REDEFINITION of one
 // (`enum Optional { … }`) — these names are reserved by the language.
 fn isLangItemTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I8") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I16") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I32") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "I64") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U8") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U16") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U32") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "U64") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "F32") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "F64") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Bool") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "String") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Array") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Dictionary") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Optional") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Result") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Ordering") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "HalfOpenRange") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "ClosedRange") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Promise") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "JoinHandle") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "Ref") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "WeakRef") { return true }
-    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "RawBuffer") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I8") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I16") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I32") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I64") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U8") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U16") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U32") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U64") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "F32") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "F64") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Bool") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "String") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Array") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Dictionary") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Optional") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Result") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Ordering") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "HalfOpenRange") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "ClosedRange") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Promise") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "JoinHandle") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Ref") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "WeakRef") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "RawBuffer") { return true }
     return false
 }
 
@@ -119,7 +119,7 @@ fn inferLetType(c: inout Comp, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U6
 // Resolve a free-function call to its overload. Candidates share the name; among
 // them the one whose selector (labels + arg types) matches the call is chosen.
 // `args` carries the call's labels/types. Returns the func index, or
-// c.funcs.count (a U64 sentinel, no signed index) if none matches.
+// c.arena.funcs.count (a U64 sentinel, no signed index) if none matches.
 fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     // Among candidates whose labels match, prefer the one whose parameter types
     // match the argument types (type-based overload). Fall back to the first
@@ -131,16 +131,16 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U6
     // module could shadow the caller's own and trigger a spurious "use without
     // importing" reject (and the wrong C symbol).
     val useMod: U64 = moduleOf(c: inout c, offset: nameStart)
-    mut val firstLabel: U64 = c.funcs.count
-    mut val typeMatch: U64 = c.funcs.count
-    mut val typeMatch2: U64 = c.funcs.count
-    mut val firstLabelSame: U64 = c.funcs.count
-    mut val typeMatchSame: U64 = c.funcs.count
-    mut val typeMatch2Same: U64 = c.funcs.count
+    mut val firstLabel: U64 = c.arena.funcs.count
+    mut val typeMatch: U64 = c.arena.funcs.count
+    mut val typeMatch2: U64 = c.arena.funcs.count
+    mut val firstLabelSame: U64 = c.arena.funcs.count
+    mut val typeMatchSame: U64 = c.arena.funcs.count
+    mut val typeMatch2Same: U64 = c.arena.funcs.count
     val qId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         // a bare call never resolves to a method (`hasRecv`) or an associated fn
         // (`isAssoc`, e.g. an operator witness `add`): both require `Type.` (or
         // `recv.`) qualification. Skipping them keeps a free fn / local closure
@@ -149,27 +149,27 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U6
             if f.nameId == qId {
                 if paramsLabelsOk(c: inout c, params: f.params, args: args) {
                     val same: Bool = moduleOf(c: inout c, offset: f.nameStart) == useMod
-                    if firstLabel == c.funcs.count {
+                    if firstLabel == c.arena.funcs.count {
                         firstLabel = i
                     }
                     if same {
-                        if firstLabelSame == c.funcs.count {
+                        if firstLabelSame == c.arena.funcs.count {
                             firstLabelSame = i
                         }
                     }
                     if paramsTypesMatch(c: inout c, params: f.params, args: args) {
-                        if typeMatch == c.funcs.count {
+                        if typeMatch == c.arena.funcs.count {
                             typeMatch = i
                         } else {
-                            if typeMatch2 == c.funcs.count {
+                            if typeMatch2 == c.arena.funcs.count {
                                 typeMatch2 = i
                             }
                         }
                         if same {
-                            if typeMatchSame == c.funcs.count {
+                            if typeMatchSame == c.arena.funcs.count {
                                 typeMatchSame = i
                             } else {
-                                if typeMatch2Same == c.funcs.count {
+                                if typeMatch2Same == c.arena.funcs.count {
                                     typeMatch2Same = i
                                 }
                             }
@@ -181,31 +181,31 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U6
         i += 1
     }
     // same-module first
-    if typeMatchSame != c.funcs.count {
+    if typeMatchSame != c.arena.funcs.count {
         checkOverloadAmbiguity(c: inout c, a: typeMatchSame, b: typeMatch2Same, args: args)
         return typeMatchSame
     }
-    if firstLabelSame != c.funcs.count {
+    if firstLabelSame != c.arena.funcs.count {
         return firstLabelSame
     }
     // no same-module candidate: fall back to any module (cross-module use is still
     // gated separately by checkUseVisibility, which requires an import).
-    if typeMatch != c.funcs.count {
+    if typeMatch != c.arena.funcs.count {
         checkOverloadAmbiguity(c: inout c, a: typeMatch, b: typeMatch2, args: args)
         return typeMatch
     }
     return firstLabel
 }
 
-// Index of the first free function named (start,len), or c.funcs.count if none.
+// Index of the first free function named (start,len), or c.arena.funcs.count if none.
 // Used where a bare function name is taken as a value (function pointer): there is
 // no call to pick an overload, so the first is used (overloaded fn-values are a
 // later concern).
 fn firstFuncByName(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
     val qId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         // skip methods and associated fns: a bare name only names a free fn (see
         // findFunc — operator witnesses like `add` are assoc, not free).
         if !(f.hasRecv || f.isAssoc) {
@@ -215,23 +215,23 @@ fn firstFuncByName(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
         }
         i += 1
     }
-    return c.funcs.count
+    return c.arena.funcs.count
 }
 
 // Index of the method named (nameStart,nameLen) on receiver type
 // (recvStart,recvLen), resolving overloads by labels + arg types (like findFunc),
-// or `c.funcs.count` if none. Falls back to the first label match.
+// or `c.arena.funcs.count` if none. Falls back to the first label match.
 // The return type of the first method named `name` on type (typeStart,typeLen),
 // scalarInfo if none / void. Used to type a subscript `a[k]` (= `a.index(...)`):
 // the Index witness has one `index` per Key, so name-only lookup suffices.
 fn firstMethodRetType(c: inout Comp, typeStart: U64, typeLen: U64, name: String) -> TypeInfo {
     val qRecv: U64 = intern(c: inout c, start: typeStart, len: typeLen)
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if f.hasRecv {
             if f.recvId == qRecv {
-                if rangeEquals(bytes: c.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
+                if rangeEquals(bytes: c.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
                     if f.hasRet {
                         return typeInfoOfName(c: inout c, start: f.retStart, len: f.retLen, isArray: f.retIsArray)
                     }
@@ -260,14 +260,14 @@ fn isDefaultExt(c: inout Comp, typeId: U64, extId: U64) -> Bool {
 }
 
 fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
-    mut val firstLabel: U64 = c.funcs.count
-    mut val typeMatch: U64 = c.funcs.count
-    mut val typeMatch2: U64 = c.funcs.count
+    mut val firstLabel: U64 = c.arena.funcs.count
+    mut val typeMatch: U64 = c.arena.funcs.count
+    mut val typeMatch2: U64 = c.arena.funcs.count
     val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     val qRecvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if f.hasRecv {
             // an extension method does not join bare resolution (spec/09): it is
             // reachable only through a `value#Ext.m()` view (findExtMethod) — unless
@@ -281,14 +281,14 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
             if f.nameId == qNameId {
                 if f.recvId == qRecvId {
                     if paramsLabelsOk(c: inout c, params: f.params, args: args) {
-                        if firstLabel == c.funcs.count {
+                        if firstLabel == c.arena.funcs.count {
                             firstLabel = i
                         }
                         if paramsTypesMatch(c: inout c, params: f.params, args: args) {
-                            if typeMatch == c.funcs.count {
+                            if typeMatch == c.arena.funcs.count {
                                 typeMatch = i
                             } else {
-                                if typeMatch2 == c.funcs.count {
+                                if typeMatch2 == c.arena.funcs.count {
                                     typeMatch2 = i
                                 }
                             }
@@ -301,16 +301,16 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
         }
         i += 1
     }
-    if typeMatch != c.funcs.count {
+    if typeMatch != c.arena.funcs.count {
         // two provided-method copies from DIFFERENT source traits matching the same
         // bare selector: the bare call is ambiguous (spec/08) — select the source
         // with `a#P.foo()`. (Only this case errors here; ordinary arg-type overloads
         // are disambiguated by the args, and identical-trait copies are the same
         // method.)
-        if typeMatch2 != c.funcs.count {
-            if c.funcs[typeMatch].srcTraitId != 0U64 {
-                if c.funcs[typeMatch2].srcTraitId != 0U64 {
-                    if c.funcs[typeMatch].srcTraitId != c.funcs[typeMatch2].srcTraitId {
+        if typeMatch2 != c.arena.funcs.count {
+            if c.arena.funcs[typeMatch].srcTraitId != 0U64 {
+                if c.arena.funcs[typeMatch2].srcTraitId != 0U64 {
+                    if c.arena.funcs[typeMatch].srcTraitId != c.arena.funcs[typeMatch2].srcTraitId {
                         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "ambiguous bare call: two conformed traits provide this method; select the source with `a#P.method()`")
                     }
                 }
@@ -319,7 +319,7 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
         checkOverloadAmbiguity(c: inout c, a: typeMatch, b: typeMatch2, args: args)
         return typeMatch
     }
-    if firstLabel != c.funcs.count {
+    if firstLabel != c.arena.funcs.count {
         return firstLabel
     }
     // no direct method: a trait `via` alias may redirect this requirement name to
@@ -334,14 +334,14 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
         }
         ai += 1
     }
-    return c.funcs.count
+    return c.arena.funcs.count
 }
 
 // Index of the method named (nameStart,nameLen) on type (recvStart,recvLen)
 // selected by the source `#X` (srcStart,srcLen) — where X is either an extension
 // (Func.extId) or a trait (Func.srcTraitId of a provided-method copy). Covers both
 // `value#Ext.m()` (spec/09) and `a#P.foo()` provided-method disambiguation
-// (spec/08). Resolves overloads by labels + arg types. c.funcs.count if none.
+// (spec/08). Resolves overloads by labels + arg types. c.arena.funcs.count if none.
 fn findExtMethod(c: inout Comp, recvStart: U64, recvLen: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     val qSrcId: U64 = intern(c: inout c, start: srcStart, len: srcLen)
     return findExtMethodById(c: inout c, recvStart: recvStart, recvLen: recvLen, srcId: qSrcId, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -354,8 +354,8 @@ fn extMethodNameExists(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U
     val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     val qRecvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if f.hasRecv {
             if f.extId != 0U64 {
                 if f.recvId == qRecvId {
@@ -378,8 +378,8 @@ fn viewOnlyMethodExists(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: 
     val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     val qRecvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if f.hasRecv {
             if f.viewOnly {
                 if f.recvId == qRecvId {
@@ -400,16 +400,16 @@ fn findExtMethodById(c: inout Comp, recvStart: U64, recvLen: U64, srcId: U64, na
     val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     val qRecvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     val qSrcId: U64 = srcId
-    mut val firstLabel: U64 = c.funcs.count
+    mut val firstLabel: U64 = c.arena.funcs.count
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if f.hasRecv {
             if f.extId == qSrcId || f.srcTraitId == qSrcId {
                 if f.nameId == qNameId {
                     if f.recvId == qRecvId {
                         if paramsLabelsOk(c: inout c, params: f.params, args: args) {
-                            if firstLabel == c.funcs.count {
+                            if firstLabel == c.arena.funcs.count {
                                 firstLabel = i
                             }
                             if paramsTypesMatch(c: inout c, params: f.params, args: args) {
@@ -426,32 +426,32 @@ fn findExtMethodById(c: inout Comp, recvStart: U64, recvLen: U64, srcId: U64, na
 }
 
 // Index of the assoc fn named (nameStart,nameLen) on type (recvStart,recvLen),
-// resolving overloads by labels + arg types, or c.funcs.count if none. An assoc
+// resolving overloads by labels + arg types, or c.arena.funcs.count if none. An assoc
 // fn has hasRecv=false (no self) but recvStart/recvLen name its owning type.
 fn findAssoc(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
-    mut val firstLabel: U64 = c.funcs.count
-    mut val typeMatch: U64 = c.funcs.count
-    mut val typeMatch2: U64 = c.funcs.count
+    mut val firstLabel: U64 = c.arena.funcs.count
+    mut val typeMatch: U64 = c.arena.funcs.count
+    mut val typeMatch2: U64 = c.arena.funcs.count
     val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     // a newtype inherits the underlying's assoc fns/factories (spec/10): resolve the
     // receiver name to the underlying so `Brand.checked(…)` finds Rgb's `checked`.
     val rnu: Bind = newtypeUnderName(c: inout c, start: recvStart, len: recvLen)
     val qRecvId: U64 = intern(c: inout c, start: rnu.nameStart, len: rnu.nameLen)
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if f.isAssoc {
             if f.nameId == qNameId {
                 if f.recvId == qRecvId {
                     if paramsLabelsOk(c: inout c, params: f.params, args: args) {
-                        if firstLabel == c.funcs.count {
+                        if firstLabel == c.arena.funcs.count {
                             firstLabel = i
                         }
                         if paramsTypesMatch(c: inout c, params: f.params, args: args) {
-                            if typeMatch == c.funcs.count {
+                            if typeMatch == c.arena.funcs.count {
                                 typeMatch = i
                             } else {
-                                if typeMatch2 == c.funcs.count {
+                                if typeMatch2 == c.arena.funcs.count {
                                     typeMatch2 = i
                                 }
                             }
@@ -462,7 +462,7 @@ fn findAssoc(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLe
         }
         i += 1
     }
-    if typeMatch != c.funcs.count {
+    if typeMatch != c.arena.funcs.count {
         checkOverloadAmbiguity(c: inout c, a: typeMatch, b: typeMatch2, args: args)
         return typeMatch
     }
@@ -472,7 +472,7 @@ fn findAssoc(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLe
 // Whether (start,len) names a struct or enum type (used to detect an assoc-fn
 // call `Type.name(args)`, where the receiver is a bare type name, not a value).
 fn isTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
-    if structIndexByName(c: inout c, start: start, len: len) < c.structs.count {
+    if structIndexByName(c: inout c, start: start, len: len) < c.arena.structs.count {
         return true
     }
     // an import alias (`with { Real as Alias }`) names the same type as `Real`.
@@ -481,15 +481,15 @@ fn isTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
     // a newtype name is a type name too (it can be an assoc-fn/factory receiver
     // through its inherited assoc fns — `Brand.gray(…)`, spec/10).
     mut val nti: U64 = 0
-    while nti < c.newtypes.count {
-        if c.newtypes[nti].nameId == qId {
+    while nti < c.arena.newtypes.count {
+        if c.arena.newtypes[nti].nameId == qId {
             return true
         }
         nti += 1
     }
     mut val ei: U64 = 0
-    while ei < c.enums.count {
-        if c.enums[ei].nameId == qId {
+    while ei < c.arena.enums.count {
+        if c.arena.enums[ei].nameId == qId {
             return true
         }
         ei += 1
@@ -506,7 +506,7 @@ fn isTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
         }
         ti += 1
     }
-    return genericStructIndex(c: inout c, nameStart: ar.nameStart, nameLen: ar.nameLen) < c.structs.count
+    return genericStructIndex(c: inout c, nameStart: ar.nameStart, nameLen: ar.nameLen) < c.arena.structs.count
 }
 
 // True if type `typeStart`/`typeLen` declares an `assoc fn` named `nameStart`/
@@ -518,10 +518,10 @@ fn typeHasAssocFn(c: inout Comp, typeStart: U64, typeLen: U64, nameStart: U64, n
     val tId: U64 = intern(c: inout c, start: tnu.nameStart, len: tnu.nameLen)
     val nId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        if c.funcs[i].isAssoc {
-            if c.funcs[i].recvId == tId {
-                if c.funcs[i].nameId == nId {
+    while i < c.arena.funcs.count {
+        if c.arena.funcs[i].isAssoc {
+            if c.arena.funcs[i].recvId == tId {
+                if c.arena.funcs[i].nameId == nId {
                     return true
                 }
             }
@@ -536,19 +536,19 @@ fn typeHasAssocFn(c: inout Comp, typeStart: U64, typeLen: U64, nameStart: U64, n
 // error conversion (spec/13): when the enclosing function's error type E differs
 // from the operand's E', E's `from` factory converts E' -> E (mirrors `x as E`).
 fn typeRefHasFromFactory(c: inout Comp, errRef: U64) -> Bool {
-    if errRef >= c.types.count {
+    if errRef >= c.arena.types.count {
         return false
     }
-    val eNameId: U64 = c.types[errRef].nameId
+    val eNameId: U64 = c.arena.types[errRef].nameId
     if eNameId == 0U64 {
         return false
     }
     val fromN: Bind = internBytes(c: inout c, s: "from")
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        if c.funcs[i].isAssoc {
-            if c.funcs[i].recvId == eNameId {
-                if c.funcs[i].nameId == fromN.nameId {
+    while i < c.arena.funcs.count {
+        if c.arena.funcs[i].isAssoc {
+            if c.arena.funcs[i].recvId == eNameId {
+                if c.arena.funcs[i].nameId == fromN.nameId {
                     return true
                 }
             }
@@ -558,35 +558,35 @@ fn typeRefHasFromFactory(c: inout Comp, errRef: U64) -> Bool {
     return false
 }
 
-// The func index of `from` factory on the type named by `errRef`, or c.funcs.count.
+// The func index of `from` factory on the type named by `errRef`, or c.arena.funcs.count.
 fn typeRefFromFactoryIdx(c: inout Comp, errRef: U64) -> U64 {
-    if errRef >= c.types.count {
-        return c.funcs.count
+    if errRef >= c.arena.types.count {
+        return c.arena.funcs.count
     }
-    val eNameId: U64 = c.types[errRef].nameId
+    val eNameId: U64 = c.arena.types[errRef].nameId
     if eNameId == 0U64 {
-        return c.funcs.count
+        return c.arena.funcs.count
     }
     val fromN: Bind = internBytes(c: inout c, s: "from")
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        if c.funcs[i].isAssoc {
-            if c.funcs[i].recvId == eNameId {
-                if c.funcs[i].nameId == fromN.nameId {
+    while i < c.arena.funcs.count {
+        if c.arena.funcs[i].isAssoc {
+            if c.arena.funcs[i].recvId == eNameId {
+                if c.arena.funcs[i].nameId == fromN.nameId {
                     return i
                 }
             }
         }
         i += 1
     }
-    return c.funcs.count
+    return c.arena.funcs.count
 }
 
 // The Err type arg (index 1) of a Result type ref, or 0 if not a 2-arg Result ref.
 fn resultErrArgRef(c: inout Comp, ref: U64) -> U64 {
-    if ref < c.types.count {
-        if c.types[ref].args.count >= 2U64 {
-            return c.types[ref].args[1]
+    if ref < c.arena.types.count {
+        if c.arena.types[ref].args.count >= 2U64 {
+            return c.arena.types[ref].args[1]
         }
     }
     return 0U64
@@ -600,15 +600,15 @@ fn resultErrArgRef(c: inout Comp, ref: U64) -> U64 {
 // and assoc fn is registered.
 fn rewriteAssocValReads(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.exprs.count {
-        match c.exprs[i] {
+    while i < c.arena.exprs.count {
+        match c.arena.exprs[i] {
             Expr.Field(val base, val nameStart, val nameLen) => {
-                match c.exprs[base] {
+                match c.arena.exprs[base] {
                     Expr.Ident(start: val tStart, len: val tLen) => {
                         if isTypeName(c: inout c, start: tStart, len: tLen) {
                             if typeHasAssocFn(c: inout c, typeStart: tStart, typeLen: tLen, nameStart: nameStart, nameLen: nameLen) {
                                 val noArgs: Array[Arg] = []
-                                c.exprs[i] = <Expr.Method recv=base nameStart=nameStart nameLen=nameLen args=noArgs />
+                                c.arena.exprs[i] = <Expr.Method recv=base nameStart=nameStart nameLen=nameLen args=noArgs />
                             }
                         }
                     }

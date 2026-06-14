@@ -18,8 +18,8 @@ fn addLocalCn(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: 
 // machinery from treating a global as a body-local to deinit.
 fn seedGlobalLocals(c: inout Comp) {
     mut val gi: U64 = 0
-    while gi < c.globals.count {
-        match c.stmts[c.globals[gi].letStmt] {
+    while gi < c.arena.globals.count {
+        match c.arena.stmts[c.arena.globals[gi].letStmt] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
                 val le: LetEff = inferLetType(c: inout c, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
                 addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: false)
@@ -90,7 +90,7 @@ fn localIsMutable(c: inout Comp, start: U64, len: U64) -> Bool {
 // uses must be dereferenced as `(*name)`).
 fn isSelfRef(c: inout Comp, start: U64, len: U64) -> Bool {
     if c.curHasRecv {
-        return rangeEquals(bytes: c.bytes, start: start, len: len, kw: "self")
+        return rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "self")
     }
     return false
 }
@@ -108,10 +108,10 @@ fn typeIsUnique(c: inout Comp, start: U64, len: U64) -> Bool {
         rLen = ntu.nameLen
     }
     val si: U64 = structIndexByName(c: inout c, start: rStart, len: rLen)
-    if si >= c.structs.count {
+    if si >= c.arena.structs.count {
         return false
     }
-    return c.structs[si].isUnique
+    return c.arena.structs[si].isUnique
 }
 
 // Index of the innermost local named (start,len), or c.locals.count if none.
@@ -138,11 +138,11 @@ fn optChainResultRef(c: inout Comp, base: U64, memberStart: U64, memberLen: U64)
     if bt.kind != 2 {
         return 0
     }
-    if bt.ref >= c.types.count {
+    if bt.ref >= c.arena.types.count {
         return 0
     }
-    val ot: TypeRef = c.types[bt.ref]
-    if !(rangeEquals(bytes: c.bytes, start: ot.nameStart, len: ot.nameLen, kw: "Optional")) {
+    val ot: TypeRef = c.arena.types[bt.ref]
+    if !(rangeEquals(bytes: c.arena.bytes, start: ot.nameStart, len: ot.nameLen, kw: "Optional")) {
         return 0
     }
     if ot.args.count < 1 {
@@ -168,18 +168,18 @@ fn fieldType(c: inout Comp, structStart: U64, structLen: U64, fieldStart: U64, f
     // a newtype inherits the underlying struct's fields (spec/10): resolve to the
     // underlying so `<Brand code=… />` / `brand.code` finds Rgb's `code` (Brand = Rgb).
     mut val ntI: U64 = 0
-    while ntI < c.newtypes.count {
-        if c.newtypes[ntI].nameId == qStruct {
-            qStruct = intern(c: inout c, start: c.newtypes[ntI].underStart, len: c.newtypes[ntI].underLen)
-            ntI = c.newtypes.count
+    while ntI < c.arena.newtypes.count {
+        if c.arena.newtypes[ntI].nameId == qStruct {
+            qStruct = intern(c: inout c, start: c.arena.newtypes[ntI].underStart, len: c.arena.newtypes[ntI].underLen)
+            ntI = c.arena.newtypes.count
         } else {
             ntI += 1
         }
     }
     val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
     mut val si: U64 = 0
-    while si < c.structs.count {
-        val s: StructDef = c.structs[si]
+    while si < c.arena.structs.count {
+        val s: StructDef = c.arena.structs[si]
         if s.nameId == qStruct {
             val fs: Array[FieldDef] = s.fields
             mut val fi: U64 = 0
@@ -210,8 +210,8 @@ fn fieldDeclaredMut(c: inout Comp, structStart: U64, structLen: U64, fieldStart:
     val qStruct: U64 = intern(c: inout c, start: structStart, len: structLen)
     val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
     mut val si: U64 = 0
-    while si < c.structs.count {
-        val s: StructDef = c.structs[si]
+    while si < c.arena.structs.count {
+        val s: StructDef = c.arena.structs[si]
         if s.nameId == qStruct {
             val fs: Array[FieldDef] = s.fields
             mut val fi: U64 = 0
@@ -235,8 +235,8 @@ fn fieldVis(c: inout Comp, structStart: U64, structLen: U64, fieldStart: U64, fi
     val qStruct: U64 = intern(c: inout c, start: structStart, len: structLen)
     val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
     mut val si: U64 = 0
-    while si < c.structs.count {
-        val s: StructDef = c.structs[si]
+    while si < c.arena.structs.count {
+        val s: StructDef = c.arena.structs[si]
         if s.nameId == qStruct {
             val fs: Array[FieldDef] = s.fields
             mut val fi: U64 = 0
@@ -260,8 +260,8 @@ fn typeHasMethodNamed(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U6
     val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if f.hasRecv {
             if f.nameId == qName {
                 if f.recvId == qRecv {
@@ -351,17 +351,17 @@ fn checkConstructVis(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool, 
         return
     }
     // a record's canonical name begins '(' — its fields are structurally public.
-    if c.bytes[typeStart] == '(' {
+    if c.arena.bytes[typeStart] == '(' {
         return
     }
     mut val sidx: U64 = structIndexByName(c: inout c, start: typeStart, len: typeLen)
-    if sidx >= c.structs.count {
+    if sidx >= c.arena.structs.count {
         sidx = genericStructIndex(c: inout c, nameStart: typeStart, nameLen: typeLen)
     }
-    if sidx >= c.structs.count {
+    if sidx >= c.arena.structs.count {
         return
     }
-    val sd: StructDef = c.structs[sidx]
+    val sd: StructDef = c.arena.structs[sidx]
     if sd.isExtern {
         return
     }
@@ -428,7 +428,7 @@ fn structHasPubFactory(c: inout Comp, nameId: U64) -> Bool {
 // rejected. (placeIsMutable defaults non-place forms to mutable for leniency, so the
 // inout check needs this stricter predicate first.)
 fn exprIsPlace(c: inout Comp, id: U64) -> Bool {
-    match c.exprs[id] {
+    match c.arena.exprs[id] {
         Expr.Ident(start: _, len: _) => { return true }
         Expr.Field(val base, nameStart: _, nameLen: _) => { return exprIsPlace(c: inout c, id: base) }
         Expr.Index(val base, index: _) => { return exprIsPlace(c: inout c, id: base) }
@@ -438,7 +438,7 @@ fn exprIsPlace(c: inout Comp, id: U64) -> Bool {
 }
 
 fn placeIsMutable(c: inout Comp, id: U64) -> Bool {
-    val e: Expr = c.exprs[id]
+    val e: Expr = c.arena.exprs[id]
     match e {
         Expr.Ident(val start, val len) => {
             return localIsMutable(c: inout c, start: start, len: len)

@@ -22,8 +22,8 @@ fn recordArrayElem(c: inout Comp, ty: PType) {
             i += 1
         }
         mut val elemRef: U64 = 0
-        if ty.ref < c.types.count {
-            val at: TypeRef = c.types[ty.ref]
+        if ty.ref < c.arena.types.count {
+            val at: TypeRef = c.arena.types[ty.ref]
             if at.args.count > 0 {
                 elemRef = at.args[0]
             }
@@ -46,11 +46,11 @@ fn recordTypeKey(c: inout Comp, pty: PType) -> Array[U8] {
     mut val out: Array[U8] = []
     mut val i: U64 = 0
     while i < pty.len {
-        out.append(value: c.bytes[pty.start + i])
+        out.append(value: c.arena.bytes[pty.start + i])
         i += 1
     }
-    if pty.ref < c.types.count {
-        val tr: TypeRef = c.types[pty.ref]
+    if pty.ref < c.arena.types.count {
+        val tr: TypeRef = c.arena.types[pty.ref]
         if tr.args.count > 0U64 {
             appendBytes(into: inout out, from: "[".bytes)
             mut val a: U64 = 0
@@ -58,10 +58,10 @@ fn recordTypeKey(c: inout Comp, pty: PType) -> Array[U8] {
                 if a > 0U64 {
                     appendBytes(into: inout out, from: ",".bytes)
                 }
-                val ar: TypeRef = c.types[tr.args[a]]
+                val ar: TypeRef = c.arena.types[tr.args[a]]
                 mut val k: U64 = 0
                 while k < ar.nameLen {
-                    out.append(value: c.bytes[ar.nameStart + k])
+                    out.append(value: c.arena.bytes[ar.nameStart + k])
                     k += 1
                 }
                 a += 1
@@ -134,8 +134,8 @@ fn ensureRecordStruct(c: inout Comp, fieldNames: Array[String], fieldTys: Array[
     val nid: U64 = intern(c: inout c, start: nm.nameStart, len: nm.nameLen)
     // already registered?
     mut val si: U64 = 0
-    while si < c.structs.count {
-        if c.structs[si].nameId == nid {
+    while si < c.arena.structs.count {
+        if c.arena.structs[si].nameId == nid {
             return nm
         }
         si += 1
@@ -150,7 +150,7 @@ fn ensureRecordStruct(c: inout Comp, fieldNames: Array[String], fieldTys: Array[
         f += 1
     }
     val noTP: Array[Bind] = []
-    c.structs.append(value: <StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nid typeParams=noTP fields=fields isUnique=false isExtern=false />)
+    c.arena.structs.append(value: <StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nid typeParams=noTP fields=fields isUnique=false isExtern=false />)
     return nm
 }
 
@@ -199,7 +199,7 @@ fn lowerType(c: inout Comp, t: TypeAst) -> PType {
     val ref: U64 = c.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId isAny=t.isAny argLabels=argLabels />)
     mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
     if t.args.count > 0 {
-        if rangeEquals(bytes: c.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {
+        if rangeEquals(bytes: c.arena.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {
             if isCompoundType(c: inout c, ref: args[0]) {
                 val mn: Bind = appendMangleSpan(c: inout c, ref: args[0])
                 result = <PType start=mn.nameStart len=mn.nameLen isArray=true ref=ref />
@@ -232,8 +232,8 @@ fn callArgType(c: inout Comp, fnName: String, argLabel: String) -> U64 {
     mut val matchCount: U64 = 0
     mut val resultTy: U64 = 0
     mut val fi: U64 = 0
-    while fi < c.funcs.count {
-        val f: Func = c.funcs[fi]
+    while fi < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[fi]
         if f.nameId == fnId {
             if !(f.hasRecv) {
                 if f.typeParams.count == 0U64 {
@@ -275,8 +275,8 @@ fn methodArgType(c: inout Comp, methodName: String, argLabel: String) -> U64 {
     mut val matchCount: U64 = 0
     mut val resultTy: U64 = 0
     mut val fi: U64 = 0
-    while fi < c.funcs.count {
-        val f: Func = c.funcs[fi]
+    while fi < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[fi]
         if f.hasRecv {
             if f.nameId == mnId {
                 if f.typeParams.count == 0U64 {
@@ -368,10 +368,10 @@ fn makeFieldType(c: inout Comp, typeName: String, variant: String, isEnum: Bool,
     // construction type name to the underlying struct so `<Brand code=255 />` finds the
     // `code` field's type for the literal's context (Brand = Rgb).
     mut val ntI: U64 = 0
-    while ntI < c.newtypes.count {
-        if c.newtypes[ntI].nameId == tid {
-            tid = intern(c: inout c, start: c.newtypes[ntI].underStart, len: c.newtypes[ntI].underLen)
-            ntI = c.newtypes.count
+    while ntI < c.arena.newtypes.count {
+        if c.arena.newtypes[ntI].nameId == tid {
+            tid = intern(c: inout c, start: c.arena.newtypes[ntI].underStart, len: c.arena.newtypes[ntI].underLen)
+            ntI = c.arena.newtypes.count
         } else {
             ntI += 1
         }
@@ -382,15 +382,15 @@ fn makeFieldType(c: inout Comp, typeName: String, variant: String, isEnum: Bool,
         val vn: Bind = internBytes(c: inout c, s: variant)
         val vid: U64 = intern(c: inout c, start: vn.nameStart, len: vn.nameLen)
         mut val ei: U64 = 0
-        while ei < c.enums.count {
-            if c.enums[ei].nameId == tid {
+        while ei < c.arena.enums.count {
+            if c.arena.enums[ei].nameId == tid {
                 mut val vi: U64 = 0
-                while vi < c.enums[ei].variants.count {
-                    if intern(c: inout c, start: c.enums[ei].variants[vi].nameStart, len: c.enums[ei].variants[vi].nameLen) == vid {
+                while vi < c.arena.enums[ei].variants.count {
+                    if intern(c: inout c, start: c.arena.enums[ei].variants[vi].nameStart, len: c.arena.enums[ei].variants[vi].nameLen) == vid {
                         mut val fj: U64 = 0
-                        while fj < c.enums[ei].variants[vi].fields.count {
-                            if intern(c: inout c, start: c.enums[ei].variants[vi].fields[fj].nameStart, len: c.enums[ei].variants[vi].fields[fj].nameLen) == fid {
-                                return c.enums[ei].variants[vi].fields[fj].ty
+                        while fj < c.arena.enums[ei].variants[vi].fields.count {
+                            if intern(c: inout c, start: c.arena.enums[ei].variants[vi].fields[fj].nameStart, len: c.arena.enums[ei].variants[vi].fields[fj].nameLen) == fid {
+                                return c.arena.enums[ei].variants[vi].fields[fj].ty
                             }
                             fj += 1
                         }
@@ -403,12 +403,12 @@ fn makeFieldType(c: inout Comp, typeName: String, variant: String, isEnum: Bool,
         return 0U64
     }
     mut val si: U64 = 0
-    while si < c.structs.count {
-        if c.structs[si].nameId == tid {
+    while si < c.arena.structs.count {
+        if c.arena.structs[si].nameId == tid {
             mut val fk: U64 = 0
-            while fk < c.structs[si].fields.count {
-                if intern(c: inout c, start: c.structs[si].fields[fk].nameStart, len: c.structs[si].fields[fk].nameLen) == fid {
-                    return c.structs[si].fields[fk].ty
+            while fk < c.arena.structs[si].fields.count {
+                if intern(c: inout c, start: c.arena.structs[si].fields[fk].nameStart, len: c.arena.structs[si].fields[fk].nameLen) == fid {
+                    return c.arena.structs[si].fields[fk].ty
                 }
                 fk += 1
             }
@@ -445,7 +445,7 @@ fn lowerMakeFields(c: inout Comp, fields: Array[MakeFieldAst], typeName: String,
 // literals take their element type from the struct field at codegen, so no element
 // type is needed here.
 fn synthEmptyDict(c: inout Comp, ctxRef: U64) -> U64 {
-    val ct: TypeRef = c.types[ctxRef]
+    val ct: TypeRef = c.arena.types[ctxRef]
     val kN: Bind = internBytes(c: inout c, s: "keys")
     val vN: Bind = internBytes(c: inout c, s: "vals")
     val hN: Bind = internBytes(c: inout c, s: "hashes")
@@ -482,9 +482,9 @@ fn synthEmptyDict(c: inout Comp, ctxRef: U64) -> U64 {
 fn lowerDictLit(c: inout Comp, keys: Array[ExprAst], vals: Array[ExprAst], ctxRef: U64, span: Span) -> U64 {
     mut val ok: Bool = false
     if ctxRef != 0 {
-        if ctxRef < c.types.count {
-            val ct: TypeRef = c.types[ctxRef]
-            if rangeEquals(bytes: c.bytes, start: ct.nameStart, len: ct.nameLen, kw: "Dictionary") {
+        if ctxRef < c.arena.types.count {
+            val ct: TypeRef = c.arena.types[ctxRef]
+            if rangeEquals(bytes: c.arena.bytes, start: ct.nameStart, len: ct.nameLen, kw: "Dictionary") {
                 if ct.args.count >= 2 {
                     ok = true
                 }
@@ -495,7 +495,7 @@ fn lowerDictLit(c: inout Comp, keys: Array[ExprAst], vals: Array[ExprAst], ctxRe
         compileErrorAt(line: lineOf(c: inout c, offset: span.start), msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)")
         return c.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 isNeg=false />)
     }
-    val ct: TypeRef = c.types[ctxRef]
+    val ct: TypeRef = c.arena.types[ctxRef]
     val dlN: Bind = internBytes(c: inout c, s: "__dl")
     mut val stmts: Array[U64] = []
     val initMake: U64 = synthEmptyDict(c: inout c, ctxRef: ctxRef)
@@ -518,13 +518,13 @@ fn lowerDictLit(c: inout Comp, keys: Array[ExprAst], vals: Array[ExprAst], ctxRe
     val giveRecv: U64 = c.pushExpr(e: <Expr.Ident start=dlN.nameStart len=dlN.nameLen />)
     val mv: U64 = c.pushExpr(e: <Expr.Move operand=giveRecv isBorrow=false />)
     stmts.append(c.pushStmt(s: <Stmt.Give value=mv />))
-    val thenBlk: U64 = c.blocks.count
-    c.blocks.append(<Block stmts=stmts />)
+    val thenBlk: U64 = c.arena.blocks.count
+    c.arena.blocks.append(<Block stmts=stmts />)
     mut val elseStmts: Array[U64] = []
     val elseDict: U64 = synthEmptyDict(c: inout c, ctxRef: ctxRef)
     elseStmts.append(c.pushStmt(s: <Stmt.Give value=elseDict />))
-    val elseBlk: U64 = c.blocks.count
-    c.blocks.append(<Block stmts=elseStmts />)
+    val elseBlk: U64 = c.arena.blocks.count
+    c.arena.blocks.append(<Block stmts=elseStmts />)
     val cond: U64 = c.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />)
     return c.pushExpr(e: <Expr.IfExpr cond=cond thenBlk=thenBlk elseBlk=elseBlk />)
 }

@@ -5,12 +5,12 @@
 // field/index/method dispatch). Generic instantiations report as kind-2 named
 // (the head span); nested generic field types are deferred (G2a).
 fn typeInfoOfRef(c: inout Comp, ref: U64) -> TypeInfo {
-    val t: TypeRef = c.types[ref]
+    val t: TypeRef = c.arena.types[ref]
     if t.args.count == 0 {
         return typeInfoOfName(c: inout c, start: t.nameStart, len: t.nameLen, isArray: false)
     }
-    if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-        val el: TypeRef = c.types[t.args[0]]
+    if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+        val el: TypeRef = c.arena.types[t.args[0]]
         return typeInfoOfName(c: inout c, start: el.nameStart, len: el.nameLen, isArray: true)
     }
     // a compound type (`Ref[T]`, `Box[I32]`, `Optional[I32]`): keep its structured
@@ -32,23 +32,23 @@ fn iterableItemInfo(c: inout Comp, et: TypeInfo) -> TypeInfo {
     mut val itRef: U64 = et.ref
     mut val nrStart: U64 = et.nameStart
     mut val nrLen: U64 = et.nameLen
-    if imi != c.funcs.count {
-        val imf: Func = c.funcs[imi]
+    if imi != c.arena.funcs.count {
+        val imf: Func = c.arena.funcs[imi]
         itRef = groundUnderInst(c: inout c, instRef: et.ref, tyRef: imf.retTy)
         nrStart = imf.retStart
         nrLen = imf.retLen
     }
     val nxName: Bind = kwSpan(c: inout c, kw: "next", kwLen: 4)
     val nmi: U64 = findMethod(c: inout c, recvStart: nrStart, recvLen: nrLen, nameStart: nxName.nameStart, nameLen: nxName.nameLen, args: noArgs)
-    if nmi == c.funcs.count {
+    if nmi == c.arena.funcs.count {
         return scalarInfo()
     }
-    val nmf: Func = c.funcs[nmi]
+    val nmf: Func = c.arena.funcs[nmi]
     // resolve Optional[Item] through the iterand's instantiation (Box[I64] ->
     // BoxIter[I64] -> Optional[I64]) so a generic iterand yields the concrete Item.
     val optRef: U64 = groundUnderInst(c: inout c, instRef: itRef, tyRef: nmf.retTy)
-    if optRef < c.types.count {
-        val ot: TypeRef = c.types[optRef]
+    if optRef < c.arena.types.count {
+        val ot: TypeRef = c.arena.types[optRef]
         if ot.args.count > 0 {
             return typeInfoOfRef(c: inout c, ref: ot.args[0])
         }
@@ -64,7 +64,7 @@ fn iterableItemInfo(c: inout Comp, et: TypeInfo) -> TypeInfo {
 // `Array_Box_T`. ref stays 0 (an array TypeInfo carries no element ref). Unifies
 // the bare-param (`Array[T]`) and compound-element (`Array[Box[T]]`) cases.
 fn groundedArrayFieldInfo(c: inout Comp, params: Array[Bind], instArgs: Array[U64], arrayTyRef: U64) -> TypeInfo {
-    val at: TypeRef = c.types[arrayTyRef]
+    val at: TypeRef = c.arena.types[arrayTyRef]
     if at.args.count == 0 {
         return typeInfoOfRef(c: inout c, ref: arrayTyRef)
     }
@@ -78,7 +78,7 @@ fn groundedArrayFieldInfo(c: inout Comp, params: Array[Bind], instArgs: Array[U6
         val mn: Bind = appendMangleSpan(c: inout c, ref: grounded)
         ti = <TypeInfo kind=3 nameStart=mn.nameStart nameLen=mn.nameLen ref=0 />
     } else {
-        val gt: TypeRef = c.types[grounded]
+        val gt: TypeRef = c.arena.types[grounded]
         ti = <TypeInfo kind=3 nameStart=gt.nameStart nameLen=gt.nameLen ref=0 />
     }
     c.curTypeParams = savedP
@@ -90,19 +90,19 @@ fn groundedArrayFieldInfo(c: inout Comp, params: Array[Bind], instArgs: Array[U6
 // with the instantiation `instRef`'s concrete argument. Used to resolve a
 // generic method's parameter types at a call site.
 fn substTypeInfo(c: inout Comp, instRef: U64, params: Array[Bind], tyRef: U64) -> TypeInfo {
-    val t: TypeRef = c.types[tyRef]
+    val t: TypeRef = c.arena.types[tyRef]
     // an `Array[E]` field: ground E (which may be a bare param `T` or a compound
     // `Box[T]`) through the instance env so the use site names the concrete runtime.
     if t.args.count > 0 {
-        if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-            return groundedArrayFieldInfo(c: inout c, params: params, instArgs: c.types[instRef].args, arrayTyRef: tyRef)
+        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+            return groundedArrayFieldInfo(c: inout c, params: params, instArgs: c.arena.types[instRef].args, arrayTyRef: tyRef)
         }
     }
     mut val i: U64 = 0
     while i < params.count {
         val p: Bind = params[i]
         if t.nameId == p.nameId {
-            val inst: TypeRef = c.types[instRef]
+            val inst: TypeRef = c.arena.types[instRef]
             if i < inst.args.count {
                 return typeInfoOfRef(c: inout c, ref: inst.args[i])
             }
@@ -115,19 +115,19 @@ fn substTypeInfo(c: inout Comp, instRef: U64, params: Array[Bind], tyRef: U64) -
 // TypeInfo of a generic struct instantiation's field, substituting the type
 // parameter with the instantiation's concrete argument (`Box[I32]`.v -> I32).
 fn genericFieldTypeInfo(c: inout Comp, instRef: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
-    val t: TypeRef = c.types[instRef]
+    val t: TypeRef = c.arena.types[instRef]
     val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
-    if si >= c.structs.count {
+    if si >= c.arena.structs.count {
         return scalarInfo()
     }
-    val s: StructDef = c.structs[si]
+    val s: StructDef = c.arena.structs[si]
     val fields: Array[FieldDef] = s.fields
     val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
     mut val i: U64 = 0
     while i < fields.count {
         val fd: FieldDef = fields[i]
         if fd.nameId == qField {
-            val ftr: TypeRef = c.types[fd.ty]
+            val ftr: TypeRef = c.arena.types[fd.ty]
             mut val pi: U64 = 0
             while pi < s.typeParams.count {
                 val p: Bind = s.typeParams[pi]
@@ -139,7 +139,7 @@ fn genericFieldTypeInfo(c: inout Comp, instRef: U64, fieldStart: U64, fieldLen: 
             // an `Array[E]` field: ground E (a bare param `T` or a compound
             // `Box[T]`) through the instance env so the use site (memberwise
             // factory, field action, index/method call) names the concrete runtime.
-            if rangeEquals(bytes: c.bytes, start: ftr.nameStart, len: ftr.nameLen, kw: "Array") {
+            if rangeEquals(bytes: c.arena.bytes, start: ftr.nameStart, len: ftr.nameLen, kw: "Array") {
                 if ftr.args.count > 0 {
                     return groundedArrayFieldInfo(c: inout c, params: s.typeParams, instArgs: t.args, arrayTyRef: fd.ty)
                 }
@@ -154,12 +154,12 @@ fn genericFieldTypeInfo(c: inout Comp, instRef: U64, fieldStart: U64, fieldLen: 
 // TypeInfo of a generic enum instantiation's variant field, substituting the
 // type parameter with the instantiation's concrete argument.
 fn genericEnumFieldTypeInfo(c: inout Comp, instRef: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
-    val t: TypeRef = c.types[instRef]
+    val t: TypeRef = c.arena.types[instRef]
     val ei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
-    if ei >= c.enums.count {
+    if ei >= c.arena.enums.count {
         return scalarInfo()
     }
-    val e: EnumDef = c.enums[ei]
+    val e: EnumDef = c.arena.enums[ei]
     val vars: Array[Variant] = e.variants
     val qVar: U64 = intern(c: inout c, start: variantStart, len: variantLen)
     val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
@@ -172,7 +172,7 @@ fn genericEnumFieldTypeInfo(c: inout Comp, instRef: U64, variantStart: U64, vari
             while fi < fs.count {
                 val fd: FieldDef = fs[fi]
                 if fd.nameId == qField {
-                    val ftr: TypeRef = c.types[fd.ty]
+                    val ftr: TypeRef = c.arena.types[fd.ty]
                     mut val pi: U64 = 0
                     while pi < e.typeParams.count {
                         val p: Bind = e.typeParams[pi]
@@ -183,7 +183,7 @@ fn genericEnumFieldTypeInfo(c: inout Comp, instRef: U64, variantStart: U64, vari
                     }
                     // an `Array[E]` variant field: ground E through the instance env.
                     if ftr.args.count > 0 {
-                        if rangeEquals(bytes: c.bytes, start: ftr.nameStart, len: ftr.nameLen, kw: "Array") {
+                        if rangeEquals(bytes: c.arena.bytes, start: ftr.nameStart, len: ftr.nameLen, kw: "Array") {
                             return groundedArrayFieldInfo(c: inout c, params: e.typeParams, instArgs: t.args, arrayTyRef: fd.ty)
                         }
                     }
@@ -212,7 +212,7 @@ fn methodMatchesInst(c: inout Comp, f: Func, instRef: U64) -> Bool {
     if f.typeParams.count == 0 {
         return false
     }
-    val inst: TypeRef = c.types[instRef]
+    val inst: TypeRef = c.arena.types[instRef]
     if f.recvId != intern(c: inout c, start: inst.nameStart, len: inst.nameLen) {
         return false
     }

@@ -3,8 +3,8 @@
 
 fn checkImplOnBuiltin(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         // only primitive *scalars* (I8..U64, Bool) are method-less: their behaviour
         // is trait-only, so an inherent method on one is rejected. `String`/`Array`
         // are owned aggregate lang-items that legitimately carry inherent methods
@@ -51,8 +51,8 @@ fn checkImplOnBuiltin(c: inout Comp) {
 // as a func keyed on the newtype name, so this never hits a synthesized member).
 fn checkImplOnNewtype(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if f.hasRecv || f.isAssoc {
             if newtypeUnderRef(c: inout c, start: f.recvStart, len: f.recvLen) != 0U64 {
                 compileErrorAt(line: lineOf(c: inout c, offset: f.nameStart), msg: "cannot write `impl` on a newtype — it inherits the underlying type's methods and conformances automatically; wrap in a struct to add behaviour (spec/10)")
@@ -67,8 +67,8 @@ fn checkImplOnNewtype(c: inout Comp) {
 // is a footgun, like `move` on a copyable parameter).
 fn checkMoveFnReceivers(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if f.hasRecv {
             if f.selfMove {
                 if !(typeIsUnique(c: inout c, start: f.recvStart, len: f.recvLen)) {

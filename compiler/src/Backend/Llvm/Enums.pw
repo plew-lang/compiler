@@ -5,7 +5,7 @@
 // Index into st.enum* for a registered enum named (start,len), or st.enumIdxs.count.
 fn enumRegSlot(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 {
     val eid: U64 = enumIdxByName(c: inout c, start: start, len: len)
-    if eid < c.enums.count {
+    if eid < c.arena.enums.count {
         mut val i: U64 = 0
         while i < st.enumIdxs.count {
             if st.enumIdxs[i] == eid {
@@ -17,19 +17,19 @@ fn enumRegSlot(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 {
     return st.enumIdxs.count
 }
 
-// The c.enums index of the enum named (start,len), or c.enums.count.
+// The c.arena.enums index of the enum named (start,len), or c.arena.enums.count.
 fn enumIdxByName(c: inout Comp, start: U64, len: U64) -> U64 {
     // an import alias (`with { Real as Alias }`) names the same enum as `Real` (spec/15).
     val ar: Bind = aliasReal(c: inout c, start: start, len: len)
     val q: U64 = intern(c: inout c, start: ar.nameStart, len: ar.nameLen)
     mut val i: U64 = 0
-    while i < c.enums.count {
-        if c.enums[i].nameId == q {
+    while i < c.arena.enums.count {
+        if c.arena.enums[i].nameId == q {
             return i
         }
         i += 1
     }
-    return c.enums.count
+    return c.arena.enums.count
 }
 
 // How many i64 words a primitive field occupies in the enum payload area (String
@@ -42,9 +42,9 @@ fn fieldWords(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> U64
         mut val ti: U64 = 0
         while ti < c.curTypeParams.count {
             if c.curTypeParams[ti].nameId == qid {
-                val at: TypeRef = c.types[c.curTypeArgs[ti]]
+                val at: TypeRef = c.arena.types[c.curTypeArgs[ti]]
                 // an array argument (`T -> Array[I32]`) is the {ptr,i64} value (2 words).
-                if rangeEquals(bytes: c.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
+                if rangeEquals(bytes: c.arena.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
                     return 2U64
                 }
                 return fieldWords(c: inout c, st: inout st, tyStart: at.nameStart, tyLen: at.nameLen)
@@ -52,15 +52,15 @@ fn fieldWords(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> U64
             ti += 1
         }
     }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "String") {
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "String") {
         return 2U64
     }
-    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Array") {
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Array") {
         return 2U64
     }
     val sreg: U64 = structRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen)
     if sreg < st.structIdxs.count {
-        val sd: StructDef = c.structs[st.structIdxs[sreg]]
+        val sd: StructDef = c.arena.structs[st.structIdxs[sreg]]
         mut val w: U64 = 0
         mut val i: U64 = 0
         while i < sd.fields.count {
@@ -75,7 +75,7 @@ fn fieldWords(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> U64
     // enclosing enum's payload area, corrupting adjacent fields). Non-boxed value
     // cycles are a front-end error, so the recursion terminates (boxed = 1).
     val ereg: U64 = enumIdxByName(c: inout c, start: tyStart, len: tyLen)
-    if ereg < c.enums.count {
+    if ereg < c.arena.enums.count {
         return 1U64 + enumPayloadWords(c: inout c, st: inout st, eid: ereg)
     }
     return 1U64
@@ -84,7 +84,7 @@ fn fieldWords(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> U64
 // The max payload-word count over an enum's variants (the size of its `[N x i64]`
 // payload area). Shared by registerEnums and fieldWords (an inline enum field).
 fn enumPayloadWords(c: inout Comp, st: inout LlvmCtx, eid: U64) -> U64 {
-    val e: EnumDef = c.enums[eid]
+    val e: EnumDef = c.arena.enums[eid]
     mut val maxW: U64 = 0
     mut val vi: U64 = 0
     while vi < e.variants.count {
@@ -124,7 +124,7 @@ fn fieldWordsF(c: inout Comp, st: inout LlvmCtx, f: FieldDef) -> U64 {
         }
         if isGenericInst(c: inout c, ref: g) {
             // Array[E] is the {ptr,i64} value type, not an inline instance.
-            if rangeEquals(bytes: c.bytes, start: c.types[g].nameStart, len: c.types[g].nameLen, kw: "Array") {
+            if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[g].nameStart, len: c.arena.types[g].nameLen, kw: "Array") {
                 return 2U64
             }
             return genInstWords(c: inout c, st: inout st, ref: g)
@@ -139,10 +139,10 @@ fn fieldWordsF(c: inout Comp, st: inout LlvmCtx, f: FieldDef) -> U64 {
 // over its variants — mirroring registerGenEnums' sizing so an inline gen-instance
 // member is sized identically to its standalone named type.
 fn genInstWords(c: inout Comp, st: inout LlvmCtx, ref: U64) -> U64 {
-    val t: TypeRef = c.types[ref]
+    val t: TypeRef = c.arena.types[ref]
     val gsi: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
-    if gsi < c.structs.count {
-        val sd: StructDef = c.structs[gsi]
+    if gsi < c.arena.structs.count {
+        val sd: StructDef = c.arena.structs[gsi]
         val savedP: Array[Bind] = c.curTypeParams
         val savedA: Array[U64] = c.curTypeArgs
         c.curTypeParams = sd.typeParams
@@ -158,8 +158,8 @@ fn genInstWords(c: inout Comp, st: inout LlvmCtx, ref: U64) -> U64 {
         return w
     }
     val gei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
-    if gei < c.enums.count {
-        val e: EnumDef = c.enums[gei]
+    if gei < c.arena.enums.count {
+        val e: EnumDef = c.arena.enums[gei]
         val savedP: Array[Bind] = c.curTypeParams
         val savedA: Array[U64] = c.curTypeArgs
         c.curTypeParams = e.typeParams
@@ -196,8 +196,8 @@ fn enumAllPrimitive(c: inout Comp, st: inout LlvmCtx, eid: U64) -> Bool {
 // `{ i64 tag, [maxWords x i64] payload }`. Called after registerStructs.
 fn registerEnums(c: inout Comp, st: inout LlvmCtx) {
     mut val ei: U64 = 0
-    while ei < c.enums.count {
-        val e: EnumDef = c.enums[ei]
+    while ei < c.arena.enums.count {
+        val e: EnumDef = c.arena.enums[ei]
         if e.typeParams.count <= 0 {
             if enumAllPrimitive(c: inout c, st: inout st, eid: ei) {
                 val maxWords: U64 = enumPayloadWords(c: inout c, st: inout st, eid: ei)
@@ -220,7 +220,7 @@ fn registerEnums(c: inout Comp, st: inout LlvmCtx) {
 
 // The LLVM struct type of a variant's payload (its fields in declared order).
 fn variantPayloadTy(c: inout Comp, st: inout LlvmCtx, eid: U64, vi: U64) -> LLVMTypeRef {
-    val fs: Array[FieldDef] = c.enums[eid].variants[vi].fields
+    val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
     mut val elems: Array[LLVMTypeRef] = []
     mut val i: U64 = 0
     while i < fs.count {
@@ -259,7 +259,7 @@ fn genLlvmMakeEnum(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U6
     if !(isGenericInst(c: inout c, ref: ty)) {
         if st.expectedTy != 0U64 {
             if isGenericInst(c: inout c, ref: st.expectedTy) {
-                val et: TypeRef = c.types[st.expectedTy]
+                val et: TypeRef = c.arena.types[st.expectedTy]
                 if spansEqual(c: inout c, aStart: et.nameStart, aLen: et.nameLen, bStart: typeStart, bLen: typeLen) {
                     ty = st.expectedTy
                 }
@@ -276,8 +276,8 @@ fn genLlvmMakeEnum(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U6
             // MERGE the enum's env onto the outer one (don't replace) so a payload
             // sub-expression referencing the enclosing method's type params still
             // grounds (e.g. `self.f` in MapIter.next's `<Optional.Some v=self.f(x:v)/>`).
-            c.curTypeParams = concatParams(add: c.enums[st.genEnumDefs[gslot]].typeParams, base: savedP)
-            c.curTypeArgs = concatArgs(add: c.types[ty].args, base: savedA)
+            c.curTypeParams = concatParams(add: c.arena.enums[st.genEnumDefs[gslot]].typeParams, base: savedP)
+            c.curTypeArgs = concatArgs(add: c.arena.types[ty].args, base: savedA)
             val v: LLVMValueRef = buildEnumValue(c: inout c, st: inout st, eid: st.genEnumDefs[gslot], ety: st.genEnumTys[gslot], typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, fields: fields)
             c.curTypeParams = savedP
             c.curTypeArgs = savedA
@@ -302,7 +302,7 @@ fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, 
     // tag+word structural `==` well-defined.
     LLVMBuildStore(st.b, LLVMConstNull(ety), slot)
     LLVMBuildStore(st.b, LLVMConstInt(st.i64ty, vi, 0I32), LLVMBuildStructGEP2(st.b, ety, slot, 0U64, anon()))
-    val fs: Array[FieldDef] = c.enums[eid].variants[vi].fields
+    val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
     if fs.count > 0U64 {
         val payloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: eid, vi: vi)
         // start ZERO (not undef) so an omitted field with no default is zero-init,
@@ -361,7 +361,7 @@ fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, 
                 // i64-defaulted.
                 val gfElem: U64 = arrayFieldElemRef(c: inout c, f: fs[fj])
                 if gfElem != 0U64 {
-                    match c.exprs[valExpr] {
+                    match c.arena.exprs[valExpr] {
                         Expr.Array(val elems) => {
                             agg = LLVMBuildInsertValue(st.b, agg, genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: llvmTypeOfRef(c: inout c, st: inout st, ref: gfElem)), fj, anon())
                         }
@@ -385,8 +385,8 @@ fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, 
                     // literal value resolves its struct (records have a `(`-prefixed name).
                     mut val gpfIsRecord: Bool = false
                     if gpf != 0U64 {
-                        if c.types[gpf].nameLen > 0U64 {
-                            if c.bytes[c.types[gpf].nameStart] == 40U8 {
+                        if c.arena.types[gpf].nameLen > 0U64 {
+                            if c.arena.bytes[c.arena.types[gpf].nameStart] == 40U8 {
                                 gpfIsRecord = true
                             }
                         }
@@ -424,9 +424,9 @@ fn fieldArrayElemRefUnderBase(c: inout Comp, st: inout LlvmCtx, base: U64, fd: F
     if c.curTypeParams.count > 0U64 {
         g = groundTypeRef(c: inout c, ref: fd.ty)
     }
-    val gt: TypeRef = c.types[g]
+    val gt: TypeRef = c.arena.types[g]
     mut val r: U64 = 0U64
-    if rangeEquals(bytes: c.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array") {
+    if rangeEquals(bytes: c.arena.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array") {
         if gt.args.count > 0U64 {
             r = gt.args[0]
         }
@@ -443,7 +443,7 @@ fn fieldArrayElemRefUnderBase(c: inout Comp, st: inout LlvmCtx, base: U64, fd: F
 fn arrayFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
     if f.tyIsArray {
         if f.ty != 0U64 {
-            val t: TypeRef = c.types[f.ty]
+            val t: TypeRef = c.arena.types[f.ty]
             if t.args.count > 0U64 {
                 return t.args[0]
             }
@@ -453,8 +453,8 @@ fn arrayFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
     if f.ty != 0U64 {
         if c.curTypeParams.count > 0U64 {
             val g: U64 = groundTypeRef(c: inout c, ref: f.ty)
-            val gt: TypeRef = c.types[g]
-            if rangeEquals(bytes: c.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array") {
+            val gt: TypeRef = c.arena.types[g]
+            if rangeEquals(bytes: c.arena.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array") {
                 if gt.args.count > 0U64 {
                     return gt.args[0]
                 }

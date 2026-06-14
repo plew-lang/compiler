@@ -22,8 +22,8 @@ fn operatorOutputType(c: inout Comp, lt: TypeInfo, op: I64) -> TypeInfo {
         val ab: AssocBinding = c.assocBindings[i]
         if ab.traitId == trN.nameId {
             if spansEqual(c: inout c, aStart: ab.recvStart, aLen: ab.recvLen, bStart: lt.nameStart, bLen: lt.nameLen) {
-                if rangeEquals(bytes: c.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Output") {
-                    if ab.ty < c.types.count {
+                if rangeEquals(bytes: c.arena.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Output") {
+                    if ab.ty < c.arena.types.count {
                         if ab.ty != 0U64 {
                             return typeInfoOfRef(c: inout c, ref: ab.ty)
                         }

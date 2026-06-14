@@ -8,7 +8,7 @@ fn isDictionaryType(c: inout Comp, ti: TypeInfo) -> Bool {
     if ti.kind != 2 {
         return false
     }
-    if !(rangeEquals(bytes: c.bytes, start: ti.nameStart, len: ti.nameLen, kw: "Dictionary")) {
+    if !(rangeEquals(bytes: c.arena.bytes, start: ti.nameStart, len: ti.nameLen, kw: "Dictionary")) {
         return false
     }
     return isGenericInst(c: inout c, ref: ti.ref)
@@ -20,11 +20,11 @@ fn isDictionaryType(c: inout Comp, ti: TypeInfo) -> Bool {
 fn typeHasMethodNamed(c: inout Comp, typeStart: U64, typeLen: U64, name: String) -> Bool {
     val qRecv: U64 = intern(c: inout c, start: typeStart, len: typeLen)
     mut val i: U64 = 0
-    while i < c.funcs.count {
-        val f: Func = c.funcs[i]
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
         if f.hasRecv {
             if f.recvId == qRecv {
-                if rangeEquals(bytes: c.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
+                if rangeEquals(bytes: c.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
                     return true
                 }
             }
@@ -37,7 +37,7 @@ fn typeHasMethodNamed(c: inout Comp, typeStart: U64, typeLen: U64, name: String)
 // Synthesize a method-call expression `recv.name(arg0Label: arg0[, arg1Label:
 // arg1])` and return its arena id, so the Dictionary subscript can route through
 // the normal generic-method dispatch (mangling, arg copy, inout self) instead of
-// re-implementing it. The label/method names are recovered from c.bytes (the
+// re-implementing it. The label/method names are recovered from c.arena.bytes (the
 // Dictionary prelude source contains them).
 fn synthDictMethod(c: inout Comp, recv: U64, name: String, arg0Label: String, arg0: U64, hasArg1: Bool, arg1Label: String, arg1: U64) -> U64 {
     val nm: Bind = kwSpan(c: inout c, kw: name, kwLen: name.bytes.count)

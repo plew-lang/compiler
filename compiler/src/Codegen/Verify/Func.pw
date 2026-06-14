@@ -13,17 +13,17 @@ fn verifyFunc(c: inout Comp, f: Func) {
         // type). Unwrap an explicitly-written Promise[T] to T so the return check uses
         // T. (tcCheckValue handles a literal/array return against the inner ref.)
         if f.isAsync {
-            if rangeEquals(bytes: c.bytes, start: rStart, len: rLen, kw: "Promise") {
+            if rangeEquals(bytes: c.arena.bytes, start: rStart, len: rLen, kw: "Promise") {
                 if rTy != 0U64 {
-                    if rTy < c.types.count {
-                        val pt: TypeRef = c.types[rTy]
+                    if rTy < c.arena.types.count {
+                        val pt: TypeRef = c.arena.types[rTy]
                         if pt.args.count >= 1U64 {
                             val innerRef: U64 = pt.args[0]
                             rTy = innerRef
                             rArr = false
-                            if innerRef < c.types.count {
-                                rStart = c.types[innerRef].nameStart
-                                rLen = c.types[innerRef].nameLen
+                            if innerRef < c.arena.types.count {
+                                rStart = c.arena.types[innerRef].nameStart
+                                rLen = c.arena.types[innerRef].nameLen
                             }
                         }
                     }
@@ -120,7 +120,7 @@ fn verifyDropMovedAbove(c: inout Comp, mark: U64) {
 
 fn verifyBlock(c: inout Comp, blockId: U64) {
     val mark: U64 = scopeMark(c: inout c)
-    val b: Block = c.blocks[blockId]
+    val b: Block = c.arena.blocks[blockId]
     mut val i: U64 = 0
     while i < b.stmts.count {
         verifyStmt(c: inout c, stmtId: b.stmts[i])
@@ -146,7 +146,7 @@ fn checkCondBool(c: inout Comp, cond: U64) {
 // name) with no fields. (A non-empty record `(x: 1)` also has no head name but has
 // fields.)
 fn exprIsUnit(c: inout Comp, id: U64) -> Bool {
-    match c.exprs[id] {
+    match c.arena.exprs[id] {
         Expr.Make(typeStart: _, val typeLen, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
             return typeLen == 0U64 && fields.count == 0U64
         }
@@ -163,9 +163,9 @@ fn exprIsUnit(c: inout Comp, id: U64) -> Bool {
 fn checkIndexKeyType(c: inout Comp, base: U64, index: U64) {
     val bt: TypeInfo = typeOf(c: inout c, id: base)
     if bt.ref != 0U64 {
-        if bt.ref < c.types.count {
-            val t: TypeRef = c.types[bt.ref]
-            if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Dictionary") {
+        if bt.ref < c.arena.types.count {
+            val t: TypeRef = c.arena.types[bt.ref]
+            if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Dictionary") {
                 if t.args.count >= 1U64 {
                     tcCheckValue(c: inout c, expectedRef: t.args[0], valueExpr: index, pos: "dict key")
                 }
@@ -180,7 +180,7 @@ fn checkIndexKeyType(c: inout Comp, base: U64, index: U64) {
 // String literal and a value of known String/struct/enum type are reliable; an array
 // literal is an array; a deferred kind-0 value (fn-value, dict, call) is left lenient.
 fn valueIsReliablyNonArray(c: inout Comp, value: U64) -> Bool {
-    match c.exprs[value] {
+    match c.arena.exprs[value] {
         Expr.Array(elems: _) => { return false }
         Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { return true }
         Expr.Str(start: _, len: _) => { return true }

@@ -2,7 +2,7 @@
 // verification (verifyStmt) and assignment type/mutability checks.
 
 fn verifyStmt(c: inout Comp, stmtId: U64) {
-    match c.stmts[stmtId] {
+    match c.arena.stmts[stmtId] {
         Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
             // literal range against the annotation (or context-free if none).
             if tyLen > 0U64 {
@@ -36,14 +36,14 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                 // category-check each element against the declared element type (tyStart
                 // names the element for an array annotation).
                 if tyIsArray {
-                    match c.exprs[init] {
+                    match c.arena.exprs[init] {
                         Expr.Array(val elems) => {
                             // the declared element type as a TypeRef: the annotation's
                             // arg (`Array[I64]` -> I64) if structured, else by name.
                             mut val elemRef: U64 = 0
                             if ty != 0U64 {
-                                if c.types[ty].args.count > 0U64 {
-                                    elemRef = c.types[ty].args[0]
+                                if c.arena.types[ty].args.count > 0U64 {
+                                    elemRef = c.arena.types[ty].args[0]
                                 }
                             }
                             mut val ek: U64 = 0
@@ -60,8 +60,8 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                             // concrete primitives (a struct/generic element is left to the
                             // existing machinery — conservative).
                             if ty != 0U64 {
-                                if c.types[ty].args.count > 0U64 {
-                                    val de: TypeRef = c.types[c.types[ty].args[0]]
+                                if c.arena.types[ty].args.count > 0U64 {
+                                    val de: TypeRef = c.arena.types[c.arena.types[ty].args[0]]
                                     val it: TypeInfo = typeOf(c: inout c, id: init)
                                     if it.kind == 3 {
                                         if it.nameLen > 0U64 {
@@ -122,7 +122,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                 // uninitialized (spec/04: a non-`()` function must return a value on
                 // every path). Valid only when the return type is `()` / absent.
                 mut val retIsUnit: Bool = c.curRetVoid || c.curRetLen == 0U64
-                if rangeEquals(bytes: c.bytes, start: c.curRetStart, len: c.curRetLen, kw: "()") {
+                if rangeEquals(bytes: c.arena.bytes, start: c.curRetStart, len: c.curRetLen, kw: "()") {
                     retIsUnit = true
                 }
                 if !(retIsUnit) {
@@ -281,7 +281,7 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
 // Assignment target mutability + field-write visibility (spec/03, /05), mirroring
 // the inline checks in genStmt's Assign arm; then verify both sides.
 fn verifyAssign(c: inout Comp, op: I64, target: U64, value: U64) {
-    match c.exprs[target] {
+    match c.arena.exprs[target] {
         Expr.Index(val base, val index) => {
             if !(placeIsMutable(c: inout c, id: base)) {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "cannot assign to an element of an immutable binding; declare it with `mut val`")
@@ -319,7 +319,7 @@ fn verifyAssign(c: inout Comp, op: I64, target: U64, value: U64) {
     // use-after-move mark (the value was verified above, so a moved read in `e` is
     // already reported). spec/03.
     if op == opAssign() {
-        match c.exprs[target] {
+        match c.arena.exprs[target] {
             Expr.Ident(val start, val len) => {
                 verifyUnmarkMoved(c: inout c, idx: localIndexByName(c: inout c, start: start, len: len))
             }

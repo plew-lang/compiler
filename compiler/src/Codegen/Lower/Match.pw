@@ -113,8 +113,8 @@ fn armGiveExprAst(arm: MatchArmAst) -> ExprAst {
 }
 
 fn blockOfStmts(c: inout Comp, stmts: Array[U64]) -> U64 {
-    val id: U64 = c.blocks.count
-    c.blocks.append(<Block stmts=stmts />)
+    val id: U64 = c.arena.blocks.count
+    c.arena.blocks.append(<Block stmts=stmts />)
     return id
 }
 
@@ -352,8 +352,8 @@ fn lowerCaptureArms(c: inout Comp, arms: Array[MatchArmAst], isExpr: Bool, scapS
             mut val ns: Array[U64] = []
             ns.append(value: capLet)
             mut val k: U64 = 0
-            while k < c.blocks[bodyIdx].stmts.count {
-                ns.append(value: c.blocks[bodyIdx].stmts[k])
+            while k < c.arena.blocks[bodyIdx].stmts.count {
+                ns.append(value: c.arena.blocks[bodyIdx].stmts[k])
                 k += 1
             }
             bodyIdx = blockOfStmts(c: inout c, stmts: ns)
@@ -456,12 +456,12 @@ fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
                     bi += 1
                 }
                 mut val ob: U64 = 0
-                while ob < c.blocks[inner].stmts.count {
-                    bstmts.append(value: c.blocks[inner].stmts[ob])
+                while ob < c.arena.blocks[inner].stmts.count {
+                    bstmts.append(value: c.arena.blocks[inner].stmts[ob])
                     ob += 1
                 }
-                val bd2: U64 = c.blocks.count
-                c.blocks.append(value: <Block stmts=bstmts />)
+                val bd2: U64 = c.arena.blocks.count
+                c.arena.blocks.append(value: <Block stmts=bstmts />)
                 result = c.pushStmt(s: <Stmt.For varStart=fe.nameStart varLen=fe.nameLen varTyStart=0 varTyLen=0 isRange=false inclusive=false iter=lo2 rangeHi=0 body=bd2 isStruct=false patStart=0 patLen=0 binds=[] />)
                 return result
             }
@@ -566,8 +566,8 @@ fn lowerBlock(c: inout Comp, b: BlockAst) -> U64 {
         }
         i += 1
     }
-    val id: U64 = c.blocks.count
-    c.blocks.append(<Block stmts=stmts />)
+    val id: U64 = c.arena.blocks.count
+    c.arena.blocks.append(<Block stmts=stmts />)
     return id
 }
 

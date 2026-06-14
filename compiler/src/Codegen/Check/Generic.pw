@@ -7,10 +7,10 @@
 // requirements (and provided methods / supertraits). Returns the trait's name id
 // via the receiver, so the capability check uses traitProvidesMember.
 fn isSelfTypeInProvided(c: inout Comp, start: U64, len: U64) -> Bool {
-    if c.curCheckFn >= c.funcs.count {
+    if c.curCheckFn >= c.arena.funcs.count {
         return false
     }
-    val f: Func = c.funcs[c.curCheckFn]
+    val f: Func = c.arena.funcs[c.curCheckFn]
     if !(methodRecvIsTrait(c: inout c, f: f)) {
         return false
     }
@@ -19,10 +19,10 @@ fn isSelfTypeInProvided(c: inout Comp, start: U64, len: U64) -> Bool {
 
 // Whether (start,len) is a type parameter of function `fnIdx`.
 fn isTypeParamOf(c: inout Comp, fnIdx: U64, start: U64, len: U64) -> Bool {
-    if fnIdx >= c.funcs.count {
+    if fnIdx >= c.arena.funcs.count {
         return false
     }
-    val tps: Array[Bind] = c.funcs[fnIdx].typeParams
+    val tps: Array[Bind] = c.arena.funcs[fnIdx].typeParams
     val qTp: U64 = intern(c: inout c, start: start, len: len)
     mut val i: U64 = 0
     while i < tps.count {
@@ -74,8 +74,8 @@ fn traitProvidesMember(c: inout Comp, traitNameId: U64, qName: U64, args: Array[
     }
     // provided method of this trait (a method with recv = the trait)
     mut val gi: U64 = 0
-    while gi < c.funcs.count {
-        val g: Func = c.funcs[gi]
+    while gi < c.arena.funcs.count {
+        val g: Func = c.arena.funcs[gi]
         if g.hasRecv {
             if g.recvId == traitNameId {
                 if g.nameId == qName {
@@ -122,7 +122,7 @@ fn boundHasTraitNamed(c: inout Comp, fnIdx: U64, tpStart: U64, tpLen: U64, trait
         val fb: FuncBound = c.funcBounds[bi]
         if fb.fnIdx == fnIdx {
             if fb.paramNameId == qTp {
-                if rangeEquals(bytes: c.bytes, start: fb.traitStart, len: fb.traitLen, kw: traitName) {
+                if rangeEquals(bytes: c.arena.bytes, start: fb.traitStart, len: fb.traitLen, kw: traitName) {
                     return true
                 }
             }
@@ -159,7 +159,7 @@ fn unOpTraitName(c: inout Comp, op: I64) -> String {
 }
 
 fn checkBoundsExpr(c: inout Comp, exprId: U64) {
-    match c.exprs[exprId] {
+    match c.arena.exprs[exprId] {
         Expr.Unary(val op, val operand) => {
             checkBoundsExpr(c: inout c, exprId: operand)
             // a unary operator on a type-parameter value needs the matching bound
@@ -182,8 +182,8 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
             // concrete operand checks in a generic body (`1I64 + true`, `aT == 5I64`):
             // the same binop type-check verifyProgram runs on non-generic bodies, but
             // only for the USER's (entry-module) generic templates (std is trusted).
-            if c.curCheckFn < c.funcs.count {
-                if methodInEntryModule(c: inout c, f: c.funcs[c.curCheckFn]) {
+            if c.curCheckFn < c.arena.funcs.count {
+                if methodInEntryModule(c: inout c, f: c.arena.funcs[c.curCheckFn]) {
                     tcCheckBinop(c: inout c, op: op, lhs: lhs, rhs: rhs)
                 }
             }
@@ -220,8 +220,8 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
             // and `f`'s `x: I64`) is a type error at the definition. The callee's own
             // type parameter (`f[U](x: U)`) is lenient (typesCompatible — they unify).
             val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
-            if fi < c.funcs.count {
-                val ps: Array[Param] = c.funcs[fi].params
+            if fi < c.arena.funcs.count {
+                val ps: Array[Param] = c.arena.funcs[fi].params
                 mut val k: U64 = 0
                 while k < args.count {
                     if k < ps.count {
@@ -263,7 +263,7 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                         // members are only the trait's requirements / provided methods /
                         // supertrait members (spec/08). Anything else is undefined on Self.
                         val qm: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-                        val selfTraitId: U64 = intern(c: inout c, start: c.funcs[c.curCheckFn].recvStart, len: c.funcs[c.curCheckFn].recvLen)
+                        val selfTraitId: U64 = intern(c: inout c, start: c.arena.funcs[c.curCheckFn].recvStart, len: c.arena.funcs[c.curCheckFn].recvLen)
                         if !(traitProvidesMember(c: inout c, traitNameId: selfTraitId, qName: qm, args: args, depth: 0U64)) {
                             compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "method not provided by this trait: a provided method's `self` (Self) can only use the trait's requirements / provided methods / supertrait members (spec/08)")
                         }
@@ -274,8 +274,8 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
                     // backend; here we check the non-generic-receiver case.
                     if !(isGenericInst(c: inout c, ref: rt.ref)) {
                         val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                        if mi != c.funcs.count {
-                            val mps: Array[Param] = c.funcs[mi].params
+                        if mi != c.arena.funcs.count {
+                            val mps: Array[Param] = c.arena.funcs[mi].params
                             mut val mk: U64 = 0
                             while mk < args.count {
                                 if mk < mps.count {
@@ -376,21 +376,21 @@ fn checkGenericTypeMatch(c: inout Comp, expectedRef: U64, valueExpr: U64) {
     if expectedRef == 0U64 {
         return
     }
-    if c.curCheckFn >= c.funcs.count {
+    if c.curCheckFn >= c.arena.funcs.count {
         return
     }
     // only the USER's (entry-module) generic bodies are judged; std/prelude is
     // trusted and validated separately (its array-element inferType quirks — e.g.
     // `Array.get` reporting the result as `Array` not the element `T` — would
     // false-positive here). Mirrors verifyProgram's entry-module gate.
-    if !(methodInEntryModule(c: inout c, f: c.funcs[c.curCheckFn])) {
+    if !(methodInEntryModule(c: inout c, f: c.arena.funcs[c.curCheckFn])) {
         return
     }
     // an untyped numeric literal cannot flow into a type parameter / Self: `val y: T = 5`
     // is invalid — T is opaque, and no bound makes it numeric-literal-receptive (spec/06).
-    if expectedRef < c.types.count {
-        if isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: c.types[expectedRef].nameStart, len: c.types[expectedRef].nameLen) || isSelfTypeInProvided(c: inout c, start: c.types[expectedRef].nameStart, len: c.types[expectedRef].nameLen) {
-            match c.exprs[valueExpr] {
+    if expectedRef < c.arena.types.count {
+        if isTypeParamOf(c: inout c, fnIdx: c.curCheckFn, start: c.arena.types[expectedRef].nameStart, len: c.arena.types[expectedRef].nameLen) || isSelfTypeInProvided(c: inout c, start: c.arena.types[expectedRef].nameStart, len: c.arena.types[expectedRef].nameLen) {
+            match c.arena.exprs[valueExpr] {
                 Expr.Int(value: _, offset: _, val isBool, tyStart: _, val tyLen, isNeg: _) => {
                     if !(isBool) {
                         if tyLen == 0U64 {
@@ -407,7 +407,7 @@ fn checkGenericTypeMatch(c: inout Comp, expectedRef: U64, valueExpr: U64) {
     }
     // a value-position if/match: each branch's `give` value must match the expected
     // type (`val x: I64 = if c { give a } else { give b }` with a: T).
-    match c.exprs[valueExpr] {
+    match c.arena.exprs[valueExpr] {
         Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
             val tv: U64 = tcBlockGiveValue(c: inout c, blockId: thenBlk)
             if tv != 0U64 {
@@ -424,7 +424,7 @@ fn checkGenericTypeMatch(c: inout Comp, expectedRef: U64, valueExpr: U64) {
                 if !(arms[ai].isDiverge) {
                     if arms[ai].binds.count == 0U64 {
                         val g: U64 = blockGiveExpr(c: inout c, blkId: arms[ai].body)
-                        if g < c.exprs.count {
+                        if g < c.arena.exprs.count {
                             checkGenericTypeMatch(c: inout c, expectedRef: expectedRef, valueExpr: g)
                         }
                     }
@@ -436,12 +436,12 @@ fn checkGenericTypeMatch(c: inout Comp, expectedRef: U64, valueExpr: U64) {
     }
     // an array literal in an `Array[E]` position: recurse element-wise (inferType
     // reports an array literal as unknown, so check each element against E).
-    if expectedRef < c.types.count {
-        if rangeEquals(bytes: c.bytes, start: c.types[expectedRef].nameStart, len: c.types[expectedRef].nameLen, kw: "Array") {
-            if c.types[expectedRef].args.count > 0U64 {
-                match c.exprs[valueExpr] {
+    if expectedRef < c.arena.types.count {
+        if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[expectedRef].nameStart, len: c.arena.types[expectedRef].nameLen, kw: "Array") {
+            if c.arena.types[expectedRef].args.count > 0U64 {
+                match c.arena.exprs[valueExpr] {
                     Expr.Array(val elems) => {
-                        val elemRef: U64 = c.types[expectedRef].args[0]
+                        val elemRef: U64 = c.arena.types[expectedRef].args[0]
                         mut val ei: U64 = 0
                         while ei < elems.count {
                             checkGenericTypeMatch(c: inout c, expectedRef: elemRef, valueExpr: elems[ei])
@@ -461,7 +461,7 @@ fn checkGenericTypeMatch(c: inout Comp, expectedRef: U64, valueExpr: U64) {
 }
 
 fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
-    match c.stmts[stmtId] {
+    match c.arena.stmts[stmtId] {
         Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
             checkBoundsExpr(c: inout c, exprId: init)
             if tyLen > 0U64 {
@@ -481,8 +481,8 @@ fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
         Stmt.Return(val value, val hasValue, offset: _) => {
             if hasValue {
                 checkBoundsExpr(c: inout c, exprId: value)
-                if c.curCheckFn < c.funcs.count {
-                    checkGenericTypeMatch(c: inout c, expectedRef: c.funcs[c.curCheckFn].retTy, valueExpr: value)
+                if c.curCheckFn < c.arena.funcs.count {
+                    checkGenericTypeMatch(c: inout c, expectedRef: c.arena.funcs[c.curCheckFn].retTy, valueExpr: value)
                 }
             }
         }
@@ -541,7 +541,7 @@ fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
 
 fn checkBoundsBlock(c: inout Comp, blkId: U64) {
     val mark: U64 = scopeMark(c: inout c)
-    val stmts: Array[U64] = c.blocks[blkId].stmts
+    val stmts: Array[U64] = c.arena.blocks[blkId].stmts
     mut val i: U64 = 0
     while i < stmts.count {
         checkBoundsStmt(c: inout c, stmtId: stmts[i])
@@ -556,8 +556,8 @@ fn checkBoundsBlock(c: inout Comp, blkId: U64) {
 // local reports as its abstract name). Does not emit C (a validation pass).
 fn checkGenericBodies(c: inout Comp) {
     mut val fi: U64 = 0
-    while fi < c.funcs.count {
-        val f: Func = c.funcs[fi]
+    while fi < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[fi]
         // skip extern fns: they have no body (`body == 0` is a sentinel, not a real
         // block). Generic externs like `arrayPush[T]` would otherwise have block 0
         // (some unrelated function's body) walked under their own bound-less type
@@ -601,6 +601,6 @@ fn checkGenericBodies(c: inout Comp) {
     }
     c.locals = []
     c.curHasRecv = false
-    c.curCheckFn = c.funcs.count
+    c.curCheckFn = c.arena.funcs.count
 }
 
