@@ -1,0 +1,756 @@
+// Part of the LLVM backend (root: _.pw): statement emission (the genLlvmStmt dispatcher — one large function).
+
+// ---- statement / block emission ----
+
+fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
+    if st.terminated {
+        return
+    }
+    val s: Stmt = c.stmts[id]
+    match s {
+        Stmt.Let(mutable: _, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+            // extension-view invariance (spec/09): an explicit annotation `val v:
+            // P#Ext = init` requires the initializer's view to match — no implicit
+            // application/drop of a view.
+            if ty != 0U64 {
+                if tyLen > 0U64 {
+                    if c.types[ty].viewExtId != exprViewExtId(c: inout c, st: inout st, id: init) {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: init)), msg: "extension view mismatch: the binding's `#Ext` view must match its initializer — apply or drop the view explicitly (`value#Ext` / `value#!Ext`)")
+                    }
+                }
+            }
+            // inside an async fn, a binding whose initializer is `await e` suspends,
+            // then stores the type-erased awaited value into the binding's frame
+            // field. (A normal binding falls through to the shared handler, which
+            // routes its storage to a frame field via asyncFrameSlotFor.)
+            if st.curAsync {
+                if exprIsAwaitLL(c: inout c, id: init) {
+                    match c.exprs[init] {
+                        Expr.Await(val operand) => {
+                            genLlvmAsyncAwaitLet(c: inout c, st: inout st, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, ty: ty, operand: operand)
+                        }
+                        _ => {}
+                    }
+                    return
+                }
+            }
+            // an array binding: element type from the annotation, else the literal's
+            // first element. Tracked so arr[i] / .append know the element layout.
+            mut val isArr: Bool = tyIsArray
+            mut val elemTy: LLVMTypeRef = st.i64ty
+            mut val elemKind: U64 = 0
+            if tyIsArray {
+                elemTy = llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen)
+                // a compound element (`Array[Ref[Box]]`, `Array[Box[I32]]`) has a
+                // mangled tyStart llvmScalarTy can't resolve — use the element ref.
+                if ty != 0U64 {
+                    if c.types[ty].args.count > 0U64 {
+                        elemTy = llvmTypeOfRef(c: inout c, st: inout st, ref: c.types[ty].args[0])
+                    }
+                }
+                elemKind = kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen)
+            } else {
+                match c.exprs[init] {
+                    Expr.Array(val elems) => {
+                        isArr = true
+                        if elems.count > 0U64 {
+                            elemTy = exprLlvmType(c: inout c, st: inout st, id: elems[0])
+                            elemKind = valueKind(c: inout c, st: inout st, id: elems[0])
+                        }
+                    }
+                    _ => {
+                        // an un-annotated array-valued initializer (`val bs = s.bytes`):
+                        // track it as an array so `bs.count` / `bs[i]` resolve.
+                        if exprIsArray(c: inout c, st: inout st, id: init) {
+                            isArr = true
+                            elemTy = arrElemTyOf(c: inout c, st: inout st, id: init)
+                            elemKind = arrElemKindOf(c: inout c, st: inout st, id: init)
+                        }
+                    }
+                }
+            }
+            // an array literal initializer is built with the binding's element type
+            // (so `Array[U16] = [300, 1000]` uses i16 elements, not i64-defaulted).
+            mut val v: LLVMValueRef = LLVMConstInt(st.i64ty, 0U64, 0I32)
+            mut val builtArr: Bool = false
+            if isArr {
+                match c.exprs[init] {
+                    Expr.Array(val elems) => {
+                        mut val litElemRef: U64 = 0
+                        if ty != 0U64 {
+                            if c.types[ty].args.count > 0U64 {
+                                litElemRef = c.types[ty].args[0]
+                            }
+                        }
+                        v = genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: elemTy, elemRef: litElemRef)
+                        builtArr = true
+                    }
+                    _ => {}
+                }
+            }
+            // a scalar `any P` binding (spec/08): box the concrete initializer into
+            // the existential fat pointer.
+            if !(isArr) {
+                if ty != 0U64 {
+                    if refIsAny(c: inout c, ref: ty) {
+                        mut val lb: Bool = false
+                        v = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: ty, valueExpr: init, outBoxed: inout lb)
+                        if !(lb) {
+                            // initializer is already an `any P` value (`val s2 = s`):
+                            // value semantics — copy the box if it is a place.
+                            v = copyAnyIfPlace(c: inout c, st: inout st, rv: genLlvmExpr(c: inout c, st: inout st, id: init), valueExpr: init)
+                        }
+                        builtArr = true
+                    }
+                }
+            }
+            if !(builtArr) {
+                // a let annotation provides the expected type so an un-suffixed JSX
+                // generic construction (`val o: Optional[I64] = <Optional.Some … />`)
+                // infers its type args. Consumed by the construction (cleared there).
+                if !(isArr) {
+                    st.expectedTy = ty
+                }
+                v = genLlvmExpr(c: inout c, st: inout st, id: init)
+                st.expectedTy = 0U64
+                // value semantics: binding an array from an existing place (`val b = a`)
+                // copies the buffer so later mutation through one binding leaves the
+                // other unchanged (CoW, here eager).
+                if isArr {
+                    if arrayExprIsPlace(c: inout c, id: init) {
+                        v = copyArrayValue(c: inout c, st: inout st, arrVal: v, elemTy: elemTy)
+                    }
+                } else {
+                    // a struct value bound from a place deep-copies its array fields
+                    // (`val y = x` then `x.items[0]=…` leaves y.items unchanged; a
+                    // generic field grounding to an array is handled under the env).
+                    v = copyValueIfPlace(c: inout c, st: inout st, rv: v, valueExpr: init)
+                }
+            }
+            mut val kind: U64 = valueKind(c: inout c, st: inout st, id: init)
+            if tyLen > 0U64 {
+                if !(isArr) {
+                    v = coerceIntTo(c: inout c, st: inout st, v: v, tyStart: tyStart, tyLen: tyLen)
+                    kind = kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen)
+                }
+            }
+            val lty: LLVMTypeRef = LLVMTypeOf(v)
+            mut val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: init)
+            if tyLen > 0U64 {
+                sidx = localStructIdxFor(c: inout c, st: inout st, start: tyStart, len: tyLen)
+            }
+            // a generic struct instance (Box[I32]): point at the generic def (so
+            // field access works) and track the instance ref for substitution.
+            mut val tref: U64 = 0
+            if isGenericInst(c: inout c, ref: ty) {
+                val gslot: U64 = genStructSlot(c: inout c, st: inout st, ref: ty)
+                if gslot < st.genStructRefs.count {
+                    sidx = st.genStructDefs[gslot]
+                    tref = ty
+                } else {
+                    if genEnumSlot(c: inout c, st: inout st, ref: ty) < st.genEnumRefs.count {
+                        tref = ty
+                    }
+                }
+            }
+            // a `Ref[T]` local: track the instance so `->` resolves the pointee
+            // struct (Ref isn't a registered generic struct/enum, so isGenericInst
+            // is false for it).
+            if isRefInst(c: inout c, ref: ty) {
+                tref = ty
+            }
+            // a `RawBuffer[T]` local: track its type so the raw* intrinsics recover
+            // the element type T (the buffer is just a data pointer).
+            if ty != 0U64 {
+                if rangeEquals(bytes: c.bytes, start: c.types[ty].nameStart, len: c.types[ty].nameLen, kw: "RawBuffer") {
+                    tref = ty
+                }
+            }
+            // a function-value local (`val g: fn(n: I32) -> I32 = …`): track the fn
+            // TypeRef so a call `g(n: 4)` resolves the closure signature.
+            if isFnType(c: inout c, ref: ty) {
+                tref = ty
+            }
+            // an un-annotated binding to a call returning a generic instance
+            // (`val r = makeBox()` -> Box[I64]): recover the instance ref + def so
+            // `r.v` substitutes T. (typeOf can't see this local; resolve from AST.)
+            if tref == 0U64 {
+                if tyLen == 0U64 {
+                    if !(isArr) {
+                        val rref: U64 = exprResultRef(c: inout c, st: inout st, id: init)
+                        if isGenericInst(c: inout c, ref: rref) {
+                            val gslot2: U64 = genStructSlot(c: inout c, st: inout st, ref: rref)
+                            if gslot2 < st.genStructRefs.count {
+                                sidx = st.genStructDefs[gslot2]
+                                tref = rref
+                            } else {
+                                if genEnumSlot(c: inout c, st: inout st, ref: rref) < st.genEnumRefs.count {
+                                    tref = rref
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // a non-generic enum local: track a bare TypeRef so `==`/match recover
+            // the enum (typeOf can't see locals — c.locals is unpopulated here).
+            if tref == 0U64 {
+                if tyLen > 0U64 {
+                    if enumRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen) < st.enumIdxs.count {
+                        tref = simpleTypeRef(c: inout c, nameStart: tyStart, nameLen: tyLen)
+                    }
+                }
+            }
+            // a primitive-int local (`val x: I64 = …`): track its type name so a
+            // method on the primitive (`x#Ext.m()` / `x.hash[H](…)`) dispatches.
+            if tref == 0U64 {
+                if tyLen > 0U64 {
+                    if isPrimIntName(c: inout c, start: tyStart, len: tyLen) {
+                        tref = simpleTypeRef(c: inout c, nameStart: tyStart, nameLen: tyLen)
+                    }
+                }
+            }
+            // a `newtype` local (`val u: UserId = …`, spec/10): track the newtype's own
+            // TypeRef (not the underlying) so `exprTypeRef(u)` reports UserId — needed
+            // for an unwrap re-tag `u as String` to recognise the operand is a newtype.
+            if tref == 0U64 {
+                if tyLen > 0U64 {
+                    if newtypeUnderRef(c: inout c, start: tyStart, len: tyLen) != 0U64 {
+                        tref = simpleTypeRef(c: inout c, nameStart: tyStart, nameLen: tyLen)
+                    }
+                }
+            }
+            // an existential `any P` binding: track its TypeRef so a bare `v.m()`
+            // dispatches dynamically (exprTypeRef sees isAny).
+            if tref == 0U64 {
+                if ty != 0U64 {
+                    if refIsAny(c: inout c, ref: ty) {
+                        tref = ty
+                    }
+                }
+            }
+            // a `Type#Ext`-viewed binding: track the viewed TypeRef (carrying
+            // viewExtId) so a bare `v.m()` resolves the extension (spec/09). The view
+            // comes from an explicit annotation (`val v: P#Ext = …`) or, for an
+            // un-annotated binding, the initializer's own view (`val v = p#Ext`).
+            if tref == 0U64 {
+                if ty != 0U64 {
+                    if c.types[ty].viewExtId != 0U64 {
+                        tref = ty
+                    }
+                }
+            }
+            if tref == 0U64 {
+                val ir: U64 = exprTypeRef(c: inout c, st: inout st, id: init)
+                if ir != 0U64 {
+                    if c.types[ir].viewExtId != 0U64 {
+                        tref = ir
+                    }
+                }
+            }
+            // a `mut val` captured by a closure (Swift-style reference capture) is
+            // stored in a heap cell that outlives this scope; locPtr IS that cell, so
+            // reads/writes and the closure share it. Otherwise a plain stack alloca.
+            mut val slot: LLVMValueRef = LLVMConstNull(st.ptrty)
+            if st.curAsync {
+                // inside an async fn, a (non-await) binding's storage is a frame
+                // field so its value survives later `await` suspensions.
+                slot = asyncFrameSlot(c: inout c, st: inout st, idx: st.asyncFieldNext)
+                st.asyncFieldNext = st.asyncFieldNext + 1
+            } else {
+                if localIsBoxedCapture(c: inout c, start: nameStart, len: nameLen) {
+                    slot = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(lty), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
+                } else {
+                    slot = entryAlloca(st: inout st, ty: lty)
+                }
+            }
+            LLVMBuildStore(st.b, v, slot)
+            pushLocalR(st: inout st, nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind, structIdx: sidx, isArr: isArr, elemTy: elemTy, elemKind: elemKind, typeRef: tref)
+            // sharing a Ref to a deinit-bearing pointee (`val r2 = r`): retain the
+            // shared cell so the pointee deinits only when the LAST owner drops.
+            if refDeinitPointeeSidx(c: inout c, st: inout st, refTy: tref) < c.structs.count {
+                if arrayExprIsPlace(c: inout c, id: init) {
+                    rawbufRetain(c: inout c, st: inout st, cell: v)
+                }
+            }
+            // an array-of-struct local (`store: Array[Box]`): track the element struct
+            // so `store[i].field` resolves the element (tyStart names the element type).
+            if isArr {
+                if tyLen > 0U64 {
+                    val esi: U64 = localStructIdxFor(c: inout c, st: inout st, start: tyStart, len: tyLen)
+                    if esi < c.structs.count {
+                        setLocalElemStruct(st: inout st, esi: esi)
+                    }
+                }
+                // track the element's TypeRef so `ys[i]` recovers a Ref / nested-array
+                // element. `ty` is the Array[E] ref, so the element is its first arg.
+                if tyIsArray {
+                    if ty != 0U64 {
+                        val at: TypeRef = c.types[ty]
+                        if at.args.count > 0U64 {
+                            setLocalElemTypeRef(st: inout st, ref: at.args[0])
+                        }
+                    }
+                }
+            }
+        }
+        Stmt.Assign(val op, val target, val value) => {
+            // extension-view invariance (spec/09): an assignment must not implicitly
+            // change a value's view — the target's and value's views must match.
+            if exprViewExtId(c: inout c, st: inout st, id: target) != exprViewExtId(c: inout c, st: inout st, id: value) {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "extension view mismatch: assignment must not implicitly apply or drop a `#Ext` view — adjust it explicitly (`value#Ext` / `value#!Ext`)")
+            }
+            match c.exprs[target] {
+                Expr.Ident(val start, val len) => {
+                    val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+                    if li < st.nLocals {
+                        // an existential `any P` local: box a concrete conforming RHS
+                        // into the fat pointer before the store (spec/08).
+                        if refIsAny(c: inout c, ref: st.locTypeRef[li]) {
+                            mut val ab: Bool = false
+                            mut val arv: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: st.locTypeRef[li], valueExpr: value, outBoxed: inout ab)
+                            if !(ab) {
+                                // any -> any: value-semantics copy of a place.
+                                arv = copyAnyIfPlace(c: inout c, st: inout st, rv: genLlvmExpr(c: inout c, st: inout st, id: value), valueExpr: value)
+                            }
+                            LLVMBuildStore(st.b, arv, st.locPtr[li])
+                            return
+                        }
+                        // a generic-instance local (`r: Result[I64, String]`): pass its
+                        // tracked TypeRef as the expected type so an un-suffixed RHS
+                        // construction (`r = <Result.Err error="x" />`) infers the
+                        // instance's type args (genLlvmMakeEnum / genLlvmMake consume it).
+                        if isGenericInst(c: inout c, ref: st.locTypeRef[li]) {
+                            st.expectedTy = st.locTypeRef[li]
+                        }
+                        mut val rv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
+                        st.expectedTy = 0U64
+                        // coerce the value to the local's width (a context-less
+                        // literal may default wider/narrower).
+                        if LLVMGetTypeKind(LLVMTypeOf(rv)) == 8U32 {
+                            rv = coerceInt(st: inout st, v: rv, target: st.locTy[li], unsigned: st.locKind[li] == 3U64)
+                        }
+                        // value semantics: a plain assignment from an array/struct place
+                        // (`b = a`) copies so the two bindings stay independent.
+                        if op == opAssign() {
+                            rv = copyValueIfPlace(c: inout c, st: inout st, rv: rv, valueExpr: value)
+                        }
+                        if op == opAssign() {
+                            // reassigning a unique local deinits its PREVIOUS value
+                            // first (spec/03) — load and destroy the old, unless the
+                            // local was moved out (no live value) or not owned.
+                            if st.locOwned[li] {
+                                if !(st.locMoved[li]) {
+                                    val osi: U64 = st.locStructIdx[li]
+                                    if osi < c.structs.count {
+                                        if structNeedsDeinit(c: inout c, st: inout st, sidx: osi) {
+                                            emitDeinitValue(c: inout c, st: inout st, v: LLVMBuildLoad2(st.b, st.locTy[li], st.locPtr[li], anon()), sidx: osi)
+                                        }
+                                    }
+                                }
+                            }
+                            // the local re-owns the new value (clear any moved flag).
+                            st.locMoved[li] = false
+                            LLVMBuildStore(st.b, rv, st.locPtr[li])
+                        } else {
+                            val cur: LLVMValueRef = LLVMBuildLoad2(st.b, st.locTy[li], st.locPtr[li], anon())
+                            mut val nv: LLVMValueRef = LLVMConstNull(st.ptrty)
+                            if valueKind(c: inout c, st: inout st, id: target) == 4U64 {
+                                // a float local: the compound op is an IEEE float op.
+                                nv = buildF64BinOp(st: inout st, op: compoundBinOp(op: op), l: cur, r: rv)
+                            } else {
+                                nv = buildBinOpChecked(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: valueKind(c: inout c, st: inout st, id: target) == 3U64)
+                            }
+                            LLVMBuildStore(st.b, nv, st.locPtr[li])
+                        }
+                    } else {
+                        compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "LLVM backend: assignment target must be a local (so far)")
+                    }
+                }
+                Expr.Index(base: val ibase, index: val iindex) => {
+                    // place mutation `arr[i] = v` / `arr[i] OP= v`: bounds-checked
+                    // element pointer + store (the buffer is shared; no CoW yet).
+                    // A user IndexSet-impl subscript desugars `g[i] = v` to
+                    // `g.indexSet(key: i, value: v)` via the IndexSet witness (the
+                    // compound form `g[i] OP= v` desugars `v` to `g[i] OP v` first).
+                    if !(exprIsArray(c: inout c, st: inout st, id: ibase)) {
+                        val ibsi: U64 = exprStructIdx(c: inout c, st: inout st, id: ibase)
+                        if ibsi < c.structs.count {
+                            // a Dictionary `d[k] = v` lowers to `d.insert(key:, value:)`.
+                            if rangeEquals(bytes: c.bytes, start: c.structs[ibsi].nameStart, len: c.structs[ibsi].nameLen, kw: "Dictionary") {
+                                // `d[k] = v` -> d.insert(key: k, value: v). A compound
+                                // `d[k] OP= v` first builds the new value `d[k] OP v` (the
+                                // missing-key read panics, like a bare `d[k]`), then inserts.
+                                mut val insVal: U64 = value
+                                if op != opAssign() {
+                                    val getExpr: U64 = c.pushExpr(e: <Expr.Index base=ibase index=iindex />)
+                                    insVal = c.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=getExpr rhs=value />)
+                                }
+                                val m: U64 = synthDictMethod(c: inout c, recv: ibase, name: "insert", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: insVal)
+                                genLlvmExpr(c: inout c, st: inout st, id: m)
+                                return
+                            }
+                            if typeHasMethodNamed(c: inout c, typeStart: c.structs[ibsi].nameStart, typeLen: c.structs[ibsi].nameLen, name: "indexSet") {
+                                mut val rhsExpr: U64 = value
+                                if op != opAssign() {
+                                    val getExpr: U64 = c.pushExpr(e: <Expr.Index base=ibase index=iindex />)
+                                    rhsExpr = c.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=getExpr rhs=value />)
+                                }
+                                val m: U64 = synthDictMethod(c: inout c, recv: ibase, name: "indexSet", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: rhsExpr)
+                                genLlvmExpr(c: inout c, st: inout st, id: m)
+                                return
+                            }
+                        }
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: ibase)), msg: "LLVM backend: user IndexSet subscript needs an `indexSet` method")
+                        return
+                    }
+                    val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: ibase)
+                    val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: ibase)
+                    val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 0U64, anon())
+                    val count: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 1U64, anon())
+                    val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: iindex)
+                    emitBoundsCheck(c: inout c, st: inout st, idx: idx, count: count)
+                    val ep: LLVMValueRef = arrElemPtr(st: inout st, elemTy: elemTy, data: data, idx: idx)
+                    val rv: LLVMValueRef = coerceElem(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: value), elemTy: elemTy)
+                    if op == opAssign() {
+                        LLVMBuildStore(st.b, rv, ep)
+                    } else {
+                        val cur: LLVMValueRef = LLVMBuildLoad2(st.b, elemTy, ep, anon())
+                        LLVMBuildStore(st.b, buildBinOpChecked(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: valueKind(c: inout c, st: inout st, id: target) == 3U64), ep)
+                    }
+                }
+                Expr.Field(base: val fbase, nameStart: val fnameStart, nameLen: val fnameLen) => {
+                    // place mutation `base.field = v`: GEP into the base local's
+                    // alloca + store (base must be an addressable struct local).
+                    match c.exprs[fbase] {
+                        Expr.Ident(start: val bs, len: val bl) => {
+                            val li: U64 = findLocal(c: inout c, st: inout st, start: bs, len: bl)
+                            val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: fbase)
+                            if li < st.nLocals && sidx < c.structs.count {
+                                val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: fnameStart, len: fnameLen)
+                                if fidx < c.structs[sidx].fields.count {
+                                    val fld: FieldDef = c.structs[sidx].fields[fidx]
+                                    val gep: LLVMValueRef = LLVMBuildStructGEP2(st.b, st.locTy[li], st.locPtr[li], fidx, anon())
+                                    // a boxed (recursive) field (`a.next = <Optional.None/>`):
+                                    // build the value (its type is the expected type, so a
+                                    // bare construction infers its args), heap-allocate a
+                                    // FRESH cell, and repoint the field — value semantics
+                                    // (a copy that still points at the old cell is unchanged).
+                                    if op == opAssign() {
+                                        if fieldIsBoxed(c: inout c, f: fld) {
+                                            st.expectedTy = fld.ty
+                                            val bv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
+                                            st.expectedTy = 0U64
+                                            val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(LLVMTypeOf(bv)), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
+                                            LLVMBuildStore(st.b, bv, cell)
+                                            LLVMBuildStore(st.b, cell, gep)
+                                            return
+                                        }
+                                        val gfr: U64 = fieldGenInstRef(c: inout c, fld: fld)
+                                        if gfr != 0U64 {
+                                            st.expectedTy = gfr
+                                            val gv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
+                                            st.expectedTy = 0U64
+                                            LLVMBuildStore(st.b, gv, gep)
+                                            return
+                                        }
+                                    }
+                                    val rv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                    if op == opAssign() {
+                                        LLVMBuildStore(st.b, rv, gep)
+                                    } else {
+                                        val ftype: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                        val cur: LLVMValueRef = LLVMBuildLoad2(st.b, ftype, gep, anon())
+                                        LLVMBuildStore(st.b, buildBinOpChecked(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: isUnsignedName(c: inout c, start: fld.tyStart, len: fld.tyLen)), gep)
+                                    }
+                                    return
+                                }
+                            }
+                            compileErrorAt(line: lineOf(c: inout c, offset: fnameStart), msg: "LLVM backend: field assignment only on a registered struct local (so far)")
+                        }
+                        _ => {
+                            // a general place base (`arr[i].field = v`, get-modify-set):
+                            // the base struct pointer via placePtrOf, then GEP the field.
+                            val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: fbase)
+                            mut val handled: Bool = false
+                            if bsi < c.structs.count {
+                                val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fnameStart, len: fnameLen)
+                                if fidx < c.structs[bsi].fields.count {
+                                    val baseTy: LLVMTypeRef = structLlvmTyOfExpr(c: inout c, st: inout st, structExpr: fbase, sidx: bsi)
+                                    if LLVMIsNull(baseTy) == 0I32 {
+                                        val fld: FieldDef = c.structs[bsi].fields[fidx]
+                                        val basePtr: LLVMValueRef = placePtrOf(c: inout c, st: inout st, id: fbase)
+                                        val gep: LLVMValueRef = LLVMBuildStructGEP2(st.b, baseTy, basePtr, fidx, anon())
+                                        val gfr2: U64 = fieldGenInstRef(c: inout c, fld: fld)
+                                        if op == opAssign() && gfr2 != 0U64 {
+                                            st.expectedTy = gfr2
+                                            val gv2: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
+                                            st.expectedTy = 0U64
+                                            LLVMBuildStore(st.b, gv2, gep)
+                                            return
+                                        }
+                                        val rv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                        if op == opAssign() {
+                                            LLVMBuildStore(st.b, rv, gep)
+                                        } else {
+                                            val ftype: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                            val cur: LLVMValueRef = LLVMBuildLoad2(st.b, ftype, gep, anon())
+                                            LLVMBuildStore(st.b, buildBinOpChecked(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: isUnsignedName(c: inout c, start: fld.tyStart, len: fld.tyLen)), gep)
+                                        }
+                                        handled = true
+                                    }
+                                }
+                            }
+                            if !(handled) {
+                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "LLVM backend: nested place assignment not yet supported")
+                            }
+                        }
+                    }
+                }
+                Expr.Arrow(base: val abase, nameStart: val ans, nameLen: val anl) => {
+                    // `r->field = v`: GEP into the Ref's cell (the pointee struct) and
+                    // store. The cell is shared, so the write is visible through any
+                    // alias of the Ref.
+                    val psidx: U64 = refPointeeStructIdx(c: inout c, st: inout st, base: abase)
+                    if psidx < c.structs.count {
+                        val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: ans, len: anl)
+                        if fidx < c.structs[psidx].fields.count {
+                            val fld: FieldDef = c.structs[psidx].fields[fidx]
+                            val pty: LLVMTypeRef = refPointeeTy(c: inout c, st: inout st, refTy: exprRefTypeRef(c: inout c, st: inout st, id: abase))
+                            val cellPtr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: abase)
+                            val gep: LLVMValueRef = LLVMBuildStructGEP2(st.b, pty, cellPtr, fidx, anon())
+                            val gfr3: U64 = fieldGenInstRef(c: inout c, fld: fld)
+                            if op == opAssign() && gfr3 != 0U64 {
+                                st.expectedTy = gfr3
+                                val gv3: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
+                                st.expectedTy = 0U64
+                                LLVMBuildStore(st.b, gv3, gep)
+                                return
+                            }
+                            val rv: LLVMValueRef = coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
+                            if op == opAssign() {
+                                LLVMBuildStore(st.b, rv, gep)
+                            } else {
+                                val ftype: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                val cur: LLVMValueRef = LLVMBuildLoad2(st.b, ftype, gep, anon())
+                                LLVMBuildStore(st.b, buildBinOpChecked(c: inout c, st: inout st, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: isUnsignedName(c: inout c, start: fld.tyStart, len: fld.tyLen)), gep)
+                            }
+                            return
+                        }
+                    }
+                    compileErrorAt(line: lineOf(c: inout c, offset: ans), msg: "LLVM backend: `->` assignment only on a Ref to a registered struct (so far)")
+                }
+                _ => {
+                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "LLVM backend: only simple `name = …` assignment is supported so far")
+                }
+            }
+        }
+        Stmt.ExprStmt(val expr) => {
+            // a bare `await e` inside an async fn is a suspension point with no value.
+            if st.curAsync {
+                if exprIsAwaitLL(c: inout c, id: expr) {
+                    match c.exprs[expr] {
+                        Expr.Await(val operand) => {
+                            emitLlvmAsyncSuspend(c: inout c, st: inout st, operandId: operand)
+                        }
+                        _ => {}
+                    }
+                    return
+                }
+            }
+            val ignore: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: expr)
+        }
+        Stmt.Panic(val msg, offset: _) => {
+            val ignore: LLVMValueRef = emitStrSink(c: inout c, st: inout st, rtName: "plew_panic_raw", rtId: 4U64, argExpr: msg)
+            LLVMBuildUnreachable(st.b)
+            st.terminated = true
+        }
+        Stmt.Return(val value, val hasValue, offset: _) => {
+            // inside an async fn, `return` resolves `__self` (a `return await e`
+            // first suspends), frees the frame, and returns from the resume fn.
+            if st.curAsync {
+                genLlvmAsyncReturn(c: inout c, st: inout st, value: value, hasValue: hasValue)
+                return
+            }
+            val sentinel: U64 = 18446744073709551615U64
+            if st.curIsMain {
+                // Plew `main` returns () -> C `int main` returns 0; drop live locals.
+                dropScope(c: inout c, st: inout st, fromMark: 0U64, excludeLi: sentinel)
+                LLVMBuildRet(st.b, LLVMConstInt(st.i32ty, 0U64, 0I32))
+            } else {
+                if hasValue {
+                    // extension-view invariance (spec/09): a returned value's view
+                    // must match the declared return type's view.
+                    if st.curRetRef != 0U64 {
+                        if c.types[st.curRetRef].viewExtId != exprViewExtId(c: inout c, st: inout st, id: value) {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "extension view mismatch: the returned value's `#Ext` view must match the declared return type — apply or drop the view explicitly")
+                        }
+                    }
+                    // an existential `any P` return (spec/08): box a concrete
+                    // conforming value into the fat pointer.
+                    if refIsAny(c: inout c, ref: st.curRetRef) {
+                        mut val rb: Bool = false
+                        mut val rav: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: st.curRetRef, valueExpr: value, outBoxed: inout rb)
+                        if !(rb) {
+                            // already an `any P` value: value-semantics copy of a place.
+                            rav = copyAnyIfPlace(c: inout c, st: inout st, rv: genLlvmExpr(c: inout c, st: inout st, id: value), valueExpr: value)
+                        }
+                        mut val exLi: U64 = sentinel
+                        match c.exprs[value] {
+                            Expr.Ident(start: val vs, len: val vl) => { exLi = findLocal(c: inout c, st: inout st, start: vs, len: vl) }
+                            _ => {}
+                        }
+                        dropScope(c: inout c, st: inout st, fromMark: 0U64, excludeLi: exLi)
+                        LLVMBuildRet(st.b, rav)
+                        st.terminated = true
+                        return
+                    }
+                    // the declared return type is the expected type, so a returned
+                    // un-suffixed generic construction (`return <Optional.Some …/>`)
+                    // infers its type args. Consumed by the construction.
+                    st.expectedTy = st.curRetRef
+                    mut val rv: LLVMValueRef = LLVMConstInt(st.i64ty, 0U64, 0I32)
+                    mut val retLit: Bool = false
+                    // an array-literal return (`return [10,20,30]` for `-> Array[I32]`)
+                    // builds with the declared element type, not i64-defaulted.
+                    if st.curRetTyLen > 0U64 {
+                        match c.exprs[value] {
+                            Expr.Array(val elems) => {
+                                // an `Array[any P]` return literal: box each element.
+                                mut val retElemRef: U64 = 0
+                                mut val retElemTy: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: st.curRetTyStart, tyLen: st.curRetTyLen)
+                                if st.curRetRef != 0U64 {
+                                    if c.types[st.curRetRef].args.count > 0U64 {
+                                        retElemRef = c.types[st.curRetRef].args[0]
+                                        if refIsAny(c: inout c, ref: retElemRef) {
+                                            retElemTy = st.anyTy
+                                        }
+                                    }
+                                }
+                                rv = genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: retElemTy, elemRef: retElemRef)
+                                retLit = true
+                            }
+                            _ => {}
+                        }
+                    }
+                    if !(retLit) {
+                        rv = genLlvmExpr(c: inout c, st: inout st, id: value)
+                    }
+                    st.expectedTy = 0U64
+                    if st.curRetTyLen > 0U64 {
+                        if !(retLit) {
+                            rv = coerceIntTo(c: inout c, st: inout st, v: rv, tyStart: st.curRetTyStart, tyLen: st.curRetTyLen)
+                        }
+                    }
+                    // value semantics: returning an array/struct place gives the caller
+                    // an independent value (`return b.xs` then caller's `r[0]=…`).
+                    rv = copyValueIfPlace(c: inout c, st: inout st, rv: rv, valueExpr: value)
+                    // scope-exit deinits for all live locals — but a returned local is
+                    // moved out to the caller, so exclude it.
+                    mut val excludeLi: U64 = sentinel
+                    match c.exprs[value] {
+                        Expr.Ident(start: val s, len: val l) => {
+                            val li: U64 = findLocal(c: inout c, st: inout st, start: s, len: l)
+                            if li < st.nLocals {
+                                excludeLi = li
+                            }
+                        }
+                        _ => {}
+                    }
+                    dropScope(c: inout c, st: inout st, fromMark: 0U64, excludeLi: excludeLi)
+                    LLVMBuildRet(st.b, rv)
+                } else {
+                    dropScope(c: inout c, st: inout st, fromMark: 0U64, excludeLi: sentinel)
+                    LLVMBuildRetVoid(st.b)
+                }
+            }
+            st.terminated = true
+        }
+        Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
+            val cv: LLVMValueRef = genLlvmCond(c: inout c, st: inout st, id: cond)
+            val thenBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "then"))
+            val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "endif"))
+            mut val elseBB: LLVMBasicBlockRef = contBB
+            if hasElse {
+                elseBB = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "else"))
+            }
+            LLVMBuildCondBr(st.b, cv, thenBB, elseBB)
+            // then
+            LLVMPositionBuilderAtEnd(st.b, thenBB)
+            st.terminated = false
+            genLlvmBlock(c: inout c, st: inout st, id: thenBlk)
+            if !(st.terminated) {
+                LLVMBuildBr(st.b, contBB)
+            }
+            // else
+            if hasElse {
+                LLVMPositionBuilderAtEnd(st.b, elseBB)
+                st.terminated = false
+                genLlvmBlock(c: inout c, st: inout st, id: elseBlk)
+                if !(st.terminated) {
+                    LLVMBuildBr(st.b, contBB)
+                }
+            }
+            LLVMPositionBuilderAtEnd(st.b, contBB)
+            st.terminated = false
+        }
+        Stmt.While(val cond, val body) => {
+            val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "while.cond"))
+            val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "while.body"))
+            val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "while.end"))
+            LLVMBuildBr(st.b, condBB)
+            LLVMPositionBuilderAtEnd(st.b, condBB)
+            val cv: LLVMValueRef = genLlvmCond(c: inout c, st: inout st, id: cond)
+            LLVMBuildCondBr(st.b, cv, bodyBB, endBB)
+            LLVMPositionBuilderAtEnd(st.b, bodyBB)
+            st.terminated = false
+            // `break` -> endBB, `continue` -> condBB (re-test) for this loop.
+            pushLoop(st: inout st, breakBB: endBB, contBB: condBB)
+            genLlvmBlock(c: inout c, st: inout st, id: body)
+            popLoop(st: inout st)
+            if !(st.terminated) {
+                LLVMBuildBr(st.b, condBB)
+            }
+            LLVMPositionBuilderAtEnd(st.b, endBB)
+            st.terminated = false
+        }
+        Stmt.Break(offset: _) => {
+            if st.loopDepth > 0U64 {
+                LLVMBuildBr(st.b, st.loopBreakBB[st.loopDepth - 1U64])
+                st.terminated = true
+            } else {
+                compileErrorAt(line: 0, msg: "LLVM backend: `break` outside a loop")
+            }
+        }
+        Stmt.Continue(offset: _) => {
+            if st.loopDepth > 0U64 {
+                LLVMBuildBr(st.b, st.loopContBB[st.loopDepth - 1U64])
+                st.terminated = true
+            } else {
+                compileErrorAt(line: 0, msg: "LLVM backend: `continue` outside a loop")
+            }
+        }
+        Stmt.Match(val scrut, val arms) => {
+            genLlvmMatch(c: inout c, st: inout st, scrut: scrut, arms: arms)
+        }
+        Stmt.Give(val value) => {
+            // yield the enclosing value-position block's result (IfExpr reads it).
+            st.giveValue = genLlvmExpr(c: inout c, st: inout st, id: value)
+        }
+        Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
+            if isStruct {
+                genLlvmForArrayStruct(c: inout c, st: inout st, patStart: patStart, patLen: patLen, iter: iter, binds: binds, body: body)
+            } else {
+                if isRange {
+                    genLlvmForRange(c: inout c, st: inout st, varStart: varStart, varLen: varLen, varTyStart: varTyStart, varTyLen: varTyLen, inclusive: inclusive, lo: iter, hi: rangeHi, body: body)
+                } else {
+                    genLlvmForArray(c: inout c, st: inout st, varStart: varStart, varLen: varLen, iter: iter, body: body)
+                }
+            }
+        }
+        _ => {
+            compileErrorAt(line: 0, msg: "LLVM backend: statement form not yet supported")
+        }
+    }
+}
+

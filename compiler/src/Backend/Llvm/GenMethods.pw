@@ -1,0 +1,347 @@
+// Part of the LLVM backend (root: _.pw): generic method monomorphization per receiver instantiation.
+
+// ---- generic methods (monomorphized per receiver instantiation) ----
+//
+// A method on a generic struct/enum receiver (`box.get()`, `maybe.unwrapOr(...)`)
+// has no method-own type params (those go through the FnInst path); it is emitted
+// once per receiver instance, like the C backend's emitMonoMethods. Keyed by
+// (method func idx, receiver instance ref). Restricted to entry-module,
+// non-provided methods (std combinators / provided Iterator methods are deferred).
+
+// The st.genMeth* slot for (mfi, instRef), or st.genMethK.count if not registered.
+fn genMethSlotFor(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64, ownArgs: Array[U64]) -> U64 {
+    mut val i: U64 = 0
+    while i < st.genMethK.count {
+        if st.genMethK[i] == mfi {
+            if typeRefEq(c: inout c, a: st.genMethInst[i], b: instRef) {
+                // a method-own-param terminal (`fold[B]`) is keyed by its own args too,
+                // so the same receiver instance folding into different accumulators maps
+                // to distinct slots.
+                if typeArgsEq(c: inout c, a: st.genMethOwn[i], b: ownArgs) {
+                    return i
+                }
+            }
+        }
+        i += 1
+    }
+    return st.genMethK.count
+}
+
+// Declare an LLVM function for each (generic instance, matching method): self + the
+// method's params, return type — all under the receiver's substitution env.
+fn declareGenMethods(c: inout Comp, st: inout LlvmCtx) {
+    mut val gi: U64 = 0
+    while gi < c.genInsts.count {
+        val instRef: U64 = c.genInsts[gi]
+        val gt: TypeRef = c.types[instRef]
+        // Array instances keep their methods on the array-special path; skip here.
+        if !(rangeEquals(bytes: c.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array")) {
+            mut val mfi: U64 = 0
+            while mfi < c.funcs.count {
+                val mf: Func = c.funcs[mfi]
+                if methodMatchesInst(c: inout c, f: mf, instRef: instRef) {
+                    if !(mf.isProvided) {
+                        if methodInEntryModule(c: inout c, f: mf) {
+                            if genMethSlotFor(c: inout c, st: inout st, mfi: mfi, instRef: instRef, ownArgs: []) == st.genMethK.count {
+                                declareOneGenMethod(c: inout c, st: inout st, mfi: mfi, instRef: instRef, ownArgs: [])
+                            }
+                        }
+                    }
+                }
+                mfi += 1
+            }
+        }
+        gi += 1
+    }
+}
+
+fn declareOneGenMethod(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64, ownArgs: Array[U64]) {
+    val mf: Func = c.funcs[mfi]
+    val savedP: Array[Bind] = c.curTypeParams
+    val savedA: Array[U64] = c.curTypeArgs
+    val savedR: U64 = st.curRecvInstRef
+    c.curTypeParams = mf.typeParams
+    // env = receiver instance args ++ method-own args (the latter empty for ordinary
+    // methods); pairs 1:1 with mf.typeParams = [receiver params..., own params...].
+    c.curTypeArgs = concatArgs(add: c.types[instRef].args, base: ownArgs)
+    st.curRecvInstRef = instRef
+    // bind Self/Item to the receiver instance for a provided method, so a param/return
+    // type naming `Item` resolves to the receiver's real item: a terminal returning
+    // `Optional[Item]` (`first`/`reduce`) grounds its signature, and an own-param
+    // terminal (`fold[B]`) sees the right item independent of the B/B collision.
+    val sDs: U64 = c.curSelfRef
+    val sDi: U64 = c.curItemRef
+    if mf.isProvided {
+        setSelfItemEnv(c: inout c, recvStart: c.types[instRef].nameStart, recvLen: c.types[instRef].nameLen, recvInstRef: instRef)
+    }
+    mut val ptys: Array[LLVMTypeRef] = []
+    if mf.selfInout {
+        ptys.append(value: st.ptrty)
+    } else {
+        ptys.append(value: llvmTypeOfRef(c: inout c, st: inout st, ref: instRef))
+    }
+    mut val pi: U64 = 0
+    while pi < mf.params.count {
+        ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: mf.params[pi]))
+        pi += 1
+    }
+    val fty: LLVMTypeRef = LLVMFunctionType(llvmFnRetTy(c: inout c, st: inout st, f: mf), arrayCPtr(ptys), ptys.count, 0I32)
+    mut val nm: Array[U8] = []
+    appendBytes(into: inout nm, from: "gm".bytes)
+    appendU64Dec(into: inout nm, n: mfi)
+    appendBytes(into: inout nm, from: "_".bytes)
+    appendU64Dec(into: inout nm, n: instRef)
+    nm.append(value: 0)
+    val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
+    st.genMethK.append(value: mfi)
+    st.genMethInst.append(value: instRef)
+    st.genMethVal.append(value: fv)
+    st.genMethTy.append(value: fty)
+    st.genMethOwn.append(value: ownArgs)
+    c.curSelfRef = sDs
+    c.curItemRef = sDi
+    c.curTypeParams = savedP
+    c.curTypeArgs = savedA
+    st.curRecvInstRef = savedR
+}
+
+// Emit one generic-method instance body (slot index into genMeth*) under its
+// receiver's substitution env.
+fn emitOneGenMethod(c: inout Comp, st: inout LlvmCtx, slot: U64) {
+    val mfi: U64 = st.genMethK[slot]
+    val instRef: U64 = st.genMethInst[slot]
+    val mf: Func = c.funcs[mfi]
+    val savedP: Array[Bind] = c.curTypeParams
+    val savedA: Array[U64] = c.curTypeArgs
+    val savedR: U64 = st.curRecvInstRef
+    c.curTypeParams = mf.typeParams
+    c.curTypeArgs = concatArgs(add: c.types[instRef].args, base: st.genMethOwn[slot])
+    st.curRecvInstRef = instRef
+    // a provided method with method-own type params (`fold[B]` on a generic receiver):
+    // its body refers to the element by the associated `Item`, while the env carries
+    // two same-named params (the receiver's `B` = item, the method-own `B` = accumulator)
+    // that last-match resolution collapses to the accumulator. Bind `Self`/`Item` to the
+    // receiver instance so the element type resolves to the real item, independent of the
+    // name collision (only when own args are present, leaving ordinary methods untouched).
+    val s4: U64 = c.curSelfRef
+    val si4: U64 = c.curItemRef
+    if mf.isProvided {
+        setSelfItemEnv(c: inout c, recvStart: c.types[instRef].nameStart, recvLen: c.types[instRef].nameLen, recvInstRef: instRef)
+    }
+    genLlvmFuncBody(c: inout c, st: inout st, fi: mfi, fv: st.genMethVal[slot])
+    c.curSelfRef = s4
+    c.curItemRef = si4
+    c.curTypeParams = savedP
+    c.curTypeArgs = savedA
+    st.curRecvInstRef = savedR
+}
+
+// Emit each eagerly-declared generic-method instance body under its receiver's env.
+fn emitGenMethods(c: inout Comp, st: inout LlvmCtx) {
+    mut val slot: U64 = 0
+    while slot < st.genMethK.count {
+        emitOneGenMethod(c: inout c, st: inout st, slot: slot)
+        slot += 1
+    }
+}
+
+// Declare a generic-method instance on demand — a std / non-entry-module generic
+// method (Optional.unwrapOr, MapIter.next) reached by a call — and queue its body
+// for the post-pass drain. Returns the genMeth* slot, or genMethK.count if it
+// can't be declared (the method has its own type params beyond the receiver
+// instance's — provided map[B]/filter is handled separately). Idempotent.
+fn ensureGenMethodDeclared(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64, ownArgs: Array[U64]) -> U64 {
+    val existing: U64 = genMethSlotFor(c: inout c, st: inout st, mfi: mfi, instRef: instRef, ownArgs: ownArgs)
+    if existing < st.genMethK.count {
+        return existing
+    }
+    // the method's type params must pair 1:1 with the instance's args plus the
+    // method-own args inferred at the call (`fold[B]`: receiver [I,F,B] + own [B]).
+    // A still-mismatched count means own params we couldn't infer — leave undeclared.
+    val mf: Func = c.funcs[mfi]
+    if mf.typeParams.count != c.types[instRef].args.count + ownArgs.count {
+        return st.genMethK.count
+    }
+    declareOneGenMethod(c: inout c, st: inout st, mfi: mfi, instRef: instRef, ownArgs: ownArgs)
+    val slot: U64 = st.genMethK.count - 1U64
+    st.genMethEmit.append(value: slot)
+    return slot
+}
+
+// Element-wise structural equality of two type-argument lists.
+fn typeArgsEq(c: inout Comp, a: Array[U64], b: Array[U64]) -> Bool {
+    if a.count != b.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.count {
+        if !(typeRefEq(c: inout c, a: a[i], b: b[i])) {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// Bind one function/closure parameter (the LLVM arg at `argIdx`) as a local: an
+// array param is the {ptr,i64} value; a generic-instance / Ref / enum param tracks
+// its instance/enum ref; an `inout` param binds the caller pointer directly, else
+// the value is stored into a fresh alloca.
+fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, argIdx: U64) {
+    // a `Self`-typed param (`fn eqTo(other: Self)` inside `impl P as MyEq`): ground
+    // the head-name span through the active env (curSelfRef resolves `Self` -> the
+    // receiver type) so the struct/enum-index + scalar-type lookups see `P`, not the
+    // literal `Self` (which is not a registered type — field access would then fail).
+    // The `p.ty`-based predicates below stay on the raw ref (groundTypeRef does not
+    // preserve isAny/viewExtId, and Self carries neither, so this is span-only).
+    mut val pgStart: U64 = p.tyStart
+    mut val pgLen: U64 = p.tyLen
+    if p.ty != 0U64 {
+        if rangeEquals(bytes: c.bytes, start: p.tyStart, len: p.tyLen, kw: "Self") {
+            val pgr: U64 = groundTypeRef(c: inout c, ref: p.ty)
+            pgStart = c.types[pgr].nameStart
+            pgLen = c.types[pgr].nameLen
+        }
+    }
+    mut val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: pgStart, tyLen: pgLen)
+    mut val pElem: LLVMTypeRef = st.i64ty
+    mut val pSidx: U64 = localStructIdxFor(c: inout c, st: inout st, start: pgStart, len: pgLen)
+    mut val pRef: U64 = 0
+    // a `Type#Ext`-viewed param (a plain struct otherwise): track its viewed
+    // TypeRef so a bare `x.m()` in the body resolves the extension (spec/09).
+    if p.ty != 0U64 {
+        if c.types[p.ty].viewExtId != 0U64 {
+            pRef = p.ty
+        }
+    }
+    // a generic type-parameter param whose substituted argument carries a view
+    // (`T -> S#P`, from a `#`-viewed call argument `f(a: s#P)` / `g(x#Ext)`): track
+    // the grounded viewed ref so a bare `x.m()` in the body resolves via the view
+    // (spec/09 view-aware monomorphization). resolveTy returns the env's arg ref
+    // verbatim, so its viewExtId survives grounding.
+    if pRef == 0U64 {
+        if p.ty != 0U64 {
+            if c.curTypeParams.count > 0U64 {
+                val pgv: U64 = groundTypeRef(c: inout c, ref: p.ty)
+                if pgv != p.ty {
+                    if pgv < c.types.count {
+                        if c.types[pgv].viewExtId != 0U64 {
+                            pRef = pgv
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // an existential `any P` param (spec/08): its LLVM type is the fat pointer and
+    // its TypeRef is tracked so a bare `x.m()` in the body dispatches dynamically.
+    if p.ty != 0U64 {
+        if refIsAny(c: inout c, ref: p.ty) {
+            pty = st.anyTy
+            pRef = p.ty
+        }
+    }
+    if p.tyIsArray {
+        pElem = pty
+        // an `Array[any P]` param: its element is the existential fat pointer.
+        if p.ty != 0U64 {
+            if c.types[p.ty].args.count > 0U64 {
+                if refIsAny(c: inout c, ref: c.types[p.ty].args[0]) {
+                    pElem = st.anyTy
+                }
+            }
+        }
+        pty = st.arrayTy
+    } else {
+        if isGenericInst(c: inout c, ref: p.ty) {
+            pty = llvmTypeOfRef(c: inout c, st: inout st, ref: p.ty)
+            pRef = p.ty
+            val pgs: U64 = genStructSlot(c: inout c, st: inout st, ref: p.ty)
+            if pgs < st.genStructRefs.count {
+                pSidx = st.genStructDefs[pgs]
+            }
+        }
+        if isRefInst(c: inout c, ref: p.ty) {
+            pty = st.ptrty
+            pRef = p.ty
+        }
+        // a function-value param (`f: fn(n: I32) -> I32`): track the fn TypeRef so a
+        // call `f(n: x)` resolves the closure signature for the indirect call.
+        if isFnType(c: inout c, ref: p.ty) {
+            pRef = p.ty
+        }
+        if pRef == 0U64 {
+            // grounded span so a `Self` param on an enum receiver tracks the enum.
+            if enumRegSlot(c: inout c, st: inout st, start: pgStart, len: pgLen) < st.enumIdxs.count {
+                pRef = simpleTypeRef(c: inout c, nameStart: pgStart, nameLen: pgLen)
+            }
+        }
+    }
+    // a primitive param (an int, or a generic `v: K` with K -> U64 / Bool): track its
+    // (grounded) type name so a method on the primitive (`v.hash[H](…)`) dispatches.
+    // An enum-grounded generic param (`x: T` with T -> Color) is tracked the same way,
+    // so a trait method on it (`x.describe()` in `fn f[T](x:T) where T: Describe`)
+    // resolves through the enum-receiver dispatch — the pre-ground enum check above
+    // only sees the Self-grounded span, missing a `T`-named param.
+    if pRef == 0U64 {
+        if !(p.tyIsArray) {
+            mut val gs2: U64 = p.tyStart
+            mut val gl2: U64 = p.tyLen
+            if p.ty != 0U64 {
+                if c.curTypeParams.count > 0U64 {
+                    val pg2: U64 = groundTypeRef(c: inout c, ref: p.ty)
+                    gs2 = c.types[pg2].nameStart
+                    gl2 = c.types[pg2].nameLen
+                }
+            }
+            if isPrimIntName(c: inout c, start: gs2, len: gl2) {
+                pRef = simpleTypeRef(c: inout c, nameStart: gs2, nameLen: gl2)
+            }
+            if rangeEquals(bytes: c.bytes, start: gs2, len: gl2, kw: "Bool") {
+                pRef = simpleTypeRef(c: inout c, nameStart: gs2, nameLen: gl2)
+            }
+            if pRef == 0U64 {
+                if enumRegSlot(c: inout c, st: inout st, start: gs2, len: gl2) < st.enumIdxs.count {
+                    pRef = simpleTypeRef(c: inout c, nameStart: gs2, nameLen: gl2)
+                }
+            }
+        }
+    }
+    // ground a generic param type for its kind (a `key: K` with K -> String must be
+    // kind 1 so a String method dispatches; K -> U64 unsigned, etc.). Start from the
+    // Self-grounded span so a `Self` param gets the receiver type's kind.
+    mut val pKindStart: U64 = pgStart
+    mut val pKindLen: U64 = pgLen
+    if p.ty != 0U64 {
+        if c.curTypeParams.count > 0U64 {
+            val pg: U64 = groundTypeRef(c: inout c, ref: p.ty)
+            pKindStart = c.types[pg].nameStart
+            pKindLen = c.types[pg].nameLen
+        }
+    }
+    val pKind: U64 = kindFromTySpan(c: inout c, tyStart: pKindStart, tyLen: pKindLen)
+    if p.isInout {
+        pushLocalR(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: LLVMGetParam(fv, argIdx), ty: pty, kind: pKind, structIdx: pSidx, isArr: p.tyIsArray, elemTy: pElem, elemKind: pKind, typeRef: pRef)
+    } else {
+        val slot2: LLVMValueRef = entryAlloca(st: inout st, ty: pty)
+        LLVMBuildStore(st.b, LLVMGetParam(fv, argIdx), slot2)
+        pushLocalR(st: inout st, nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty, kind: pKind, structIdx: pSidx, isArr: p.tyIsArray, elemTy: pElem, elemKind: pKind, typeRef: pRef)
+    }
+    // an array-of-struct param (`lhsNames: Array[Bind]`): track the element struct
+    // so `param[i].field` resolves (mirrors the Let handler — bindOneParam alone
+    // left this unset, breaking field access on a struct-array param's element).
+    if p.tyIsArray {
+        val esi: U64 = localStructIdxFor(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen)
+        if esi < c.structs.count {
+            setLocalElemStruct(st: inout st, esi: esi)
+        }
+        // element TypeRef (a Ref / nested-array / generic element): Array[E]'s first arg.
+        if p.ty != 0U64 {
+            val at: TypeRef = c.types[p.ty]
+            if at.args.count > 0U64 {
+                setLocalElemTypeRef(st: inout st, ref: at.args[0])
+            }
+        }
+    }
+}
+

@@ -1,0 +1,268 @@
+// Part of the LLVM backend (root: _.pw): scalar / struct type mapping and struct registration.
+
+// ---- type mapping ----
+//
+// Map a Plew scalar type name span to an LLVM integer type. v1 recognizes the
+// fixed-width integer lang-items and Bool; everything else falls back to i64
+// (the default scalar). Width/signedness refinement and
+// non-scalar types (String/struct/array) come in later increments.
+fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> LLVMTypeRef {
+    // a `newtype` (spec/10) has its underlying type's representation: resolve the name
+    // to the underlying before any further handling.
+    val ntu: Bind = newtypeUnderName(c: inout c, start: tyStart, len: tyLen)
+    if ntu.nameStart != tyStart || ntu.nameLen != tyLen {
+        return llvmScalarTy(c: inout c, st: inout st, tyStart: ntu.nameStart, tyLen: ntu.nameLen)
+    }
+    // generic substitution: a type-parameter name (T) in scope resolves to its
+    // concrete argument (the monomorphization env curTypeParams -> curTypeArgs,
+    // set while emitting a generic instance). No-op outside a generic context.
+    if c.curTypeParams.count > 0U64 {
+        val qid: U64 = intern(c: inout c, start: tyStart, len: tyLen)
+        mut val ti: U64 = 0
+        while ti < c.curTypeParams.count {
+            if c.curTypeParams[ti].nameId == qid {
+                // a type param bound to a generic instance (`I -> MapIter[Counter,…]`)
+                // must resolve to that registered instance type — recursing on the
+                // bare name would drop the args and miss it.
+                val argRef: U64 = c.curTypeArgs[ti]
+                if isGenericInst(c: inout c, ref: argRef) {
+                    return llvmTypeOfRef(c: inout c, st: inout st, ref: argRef)
+                }
+                val at: TypeRef = c.types[argRef]
+                // an array argument (`T -> Array[I32]`) is the {ptr,i64} value type.
+                if rangeEquals(bytes: c.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
+                    return st.arrayTy
+                }
+                return llvmScalarTy(c: inout c, st: inout st, tyStart: at.nameStart, tyLen: at.nameLen)
+            }
+            ti += 1
+        }
+    }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "String") {
+        return st.strty
+    }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Bool") {
+        return st.i1ty
+    }
+    // float types F32 / F64 lower to the IEEE double (F32 as double for now).
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "F64") {
+        return st.f64ty
+    }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "F32") {
+        return st.f64ty
+    }
+    // a `Ref[T]` is a pointer to a heap cell holding the pointee (opaque ptr).
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Ref") {
+        return st.ptrty
+    }
+    // a `RawBuffer[T]` is the raw data pointer (the rawbuf floor; opaque ptr).
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "RawBuffer") {
+        return st.ptrty
+    }
+    // FFI raw pointers (`CPtr[T]`) are opaque pointers (spec/15).
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "CPtr") {
+        return st.ptrty
+    }
+    // a function-value type `fn(...) -> ...` is the {fn, env} closure fat pointer.
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "fn") {
+        return st.closureTy
+    }
+    // Width-accurate integers: I8/U8 -> i8, I16/U16 -> i16, I32/U32 -> i32, else
+    // i64 (signedness is tracked separately as a kind, not in the LLVM type).
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "I8") { return st.i8ty }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "U8") { return st.i8ty }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "I16") { return st.i16ty }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "U16") { return st.i16ty }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "I32") { return st.i32ty }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "U32") { return st.i32ty }
+    // a registered (all-primitive-field) user struct -> its named LLVM struct type.
+    val reg: U64 = structRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen)
+    if reg < st.structIdxs.count {
+        return st.structTys[reg]
+    }
+    // a registered enum -> its named tagged-union type.
+    val ereg: U64 = enumRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen)
+    if ereg < st.enumIdxs.count {
+        return st.enumTys[ereg]
+    }
+    // an extern(c) opaque foreign-C handle type (`type LLVMTypeRef`) — the C
+    // backend's `typedef void* <Name>` — is an opaque pointer. The LLVM root
+    // (`_llvm.pw`) passes these (LLVMValueRef/LLVMTypeRef/…) pervasively, so the
+    // backend must lower them to `ptr` to self-compile.
+    val cxi: U64 = structIndexByName(c: inout c, start: tyStart, len: tyLen)
+    if cxi < c.structs.count {
+        if c.structs[cxi].isCExtern {
+            return st.ptrty
+        }
+    }
+    return st.i64ty
+}
+
+// Index into st.struct* for a registered struct named (start,len), or
+// st.structIdxs.count if the type is not a registered struct.
+fn structRegSlot(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 {
+    val sidx: U64 = structIndexByName(c: inout c, start: start, len: len)
+    if sidx < c.structs.count {
+        mut val i: U64 = 0
+        while i < st.structIdxs.count {
+            if st.structIdxs[i] == sidx {
+                return i
+            }
+            i += 1
+        }
+    }
+    return st.structIdxs.count
+}
+
+// Whether a struct is registerable as a named LLVM value type in this increment:
+// non-generic, non-extern, non-unique, and every field is either an array (the
+// {ptr,i64} value type, element-agnostic), a primitive scalar/String/Bool, an
+// extern lang-item struct field (I64/String/Bool), or a *nested registerable*
+// struct (struct-of-struct). Enum fields and generic-instance fields are not yet
+// modeled. Value types cannot be cyclic by value, so the recursion terminates.
+fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
+    val sd: StructDef = c.structs[sidx]
+    if sd.typeParams.count > 0 { return false }
+    if sd.isExtern { return false }
+    // unique structs are now registerable (same field layout); their deinit runs at
+    // scope-exit drop (emitted via the synthetic `deinit` method).
+    mut val i: U64 = 0
+    while i < sd.fields.count {
+        val f: FieldDef = sd.fields[i]
+        // a boxed (recursive) field is a heap pointer regardless of its pointee
+        // type — always representable, and it breaks the recursion cycle (we don't
+        // recurse into the pointee, so a mutually-recursive struct still terminates).
+        if fieldIsBoxed(c: inout c, f: f) {
+            i += 1
+        } else {
+            if f.tyIsArray {
+            } else if isGenericInst(c: inout c, ref: f.ty) {
+                // a generic-instance field (`o: Optional[I64]`, `b: Box[I32]`): its
+                // concrete instance is registered as a named tagged-union / struct type
+                // (every reached instance in c.genInsts is registered), so the field is
+                // representable by value. The named type is created before any body is
+                // set, so referencing it here is order-independent.
+            } else {
+                // an enum-typed field (`kind: Kind`): the enum's tagged-union value by
+                // value — OK if the enum is itself representable (pure predicate, so
+                // registration order doesn't matter; non-boxed value cycles are a
+                // front-end error, so the mutual recursion terminates).
+                val feid: U64 = enumIdxByName(c: inout c, start: f.tyStart, len: f.tyLen)
+                if feid < c.enums.count {
+                    if !(enumRepresentable(c: inout c, eid: feid)) {
+                        return false
+                    }
+                } else {
+                    val fsi: U64 = structIndexByName(c: inout c, start: f.tyStart, len: f.tyLen)
+                    if fsi < c.structs.count {
+                        // an extern struct field is a primitive lang-item (ok); a real
+                        // nested struct must itself be registerable (recursively).
+                        if !(c.structs[fsi].isExtern) {
+                            if !(structRegisterable(c: inout c, sidx: fsi)) {
+                                return false
+                            }
+                        }
+                    }
+                    // else: a primitive scalar name (I8.. / unknown) -> a scalar.
+                }
+            }
+            i += 1
+        }
+    }
+    return true
+}
+
+// Whether an enum is representable as a named tagged-union `{ i64 tag, [maxWords x
+// i64] payload }` — pure (type-graph only, registration-order-independent): every
+// variant field is primitive/array/boxed, or a representable struct/enum (recursing
+// through the pure predicates). Non-boxed value cycles are a front-end error, so the
+// mutual recursion with structRegisterable terminates.
+fn enumRepresentable(c: inout Comp, eid: U64) -> Bool {
+    val e: EnumDef = c.enums[eid]
+    if e.typeParams.count > 0 { return false }
+    mut val vi: U64 = 0
+    while vi < e.variants.count {
+        val fs: Array[FieldDef] = e.variants[vi].fields
+        mut val fj: U64 = 0
+        while fj < fs.count {
+            if fieldIsBoxed(c: inout c, f: fs[fj]) {
+                fj += 1
+            } else {
+                if fs[fj].tyIsArray {
+                    fj += 1
+                } else if isGenericInst(c: inout c, ref: fs[fj].ty) {
+                    // a generic-instance variant payload (`A(o: Optional[I64])`): its
+                    // concrete instance is a registered named type (see structRegisterable).
+                    fj += 1
+                } else {
+                    val peid: U64 = enumIdxByName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen)
+                    if peid < c.enums.count {
+                        if !(enumRepresentable(c: inout c, eid: peid)) {
+                            return false
+                        }
+                    } else {
+                        val si: U64 = structIndexByName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen)
+                        if si < c.structs.count {
+                            if !(c.structs[si].isExtern) {
+                                if !(structRegisterable(c: inout c, sidx: si)) {
+                                    return false
+                                }
+                            }
+                        }
+                        // else: a primitive scalar (I8.. / String / Bool / unknown).
+                    }
+                    fj += 1
+                }
+            }
+        }
+        vi += 1
+    }
+    return true
+}
+
+// Register every registerable struct as a named LLVM struct type. Two passes so a
+// nested-struct field resolves to the (already-created) named type of the field's
+// struct: pass 1 creates all the named types, pass 2 sets their bodies. Called once
+// before function emission. (Ref / unique / generic / enum-field structs stay
+// unregistered, so their construction/access is rejected, not miscompiled.)
+// Create the named LLVM struct type for every registerable struct (no bodies yet),
+// so cross-references (struct-of-struct, struct-with-enum-field) resolve in the
+// body pass regardless of declaration order.
+fn registerStructNames(c: inout Comp, st: inout LlvmCtx) {
+    mut val i: U64 = 0
+    while i < c.structs.count {
+        if structRegisterable(c: inout c, sidx: i) {
+            mut val nm: Array[U8] = []
+            appendBytes(into: inout nm, from: "st".bytes)
+            appendU64Dec(into: inout nm, n: i)
+            nm.append(value: 0)
+            st.structIdxs.append(value: i)
+            st.structTys.append(value: LLVMStructCreateNamed(st.ctx, arrayCPtr(nm)))
+        }
+        i += 1
+    }
+}
+
+// Set the body of every registered struct. Run AFTER registerStructNames AND
+// registerEnums, so an enum-typed or nested-struct field resolves to an existing
+// named type (llvmTypeFor -> llvmScalarTy finds the registered enum/struct).
+fn registerStructBodies(c: inout Comp, st: inout LlvmCtx) {
+    mut val s: U64 = 0
+    while s < st.structIdxs.count {
+        val sd: StructDef = c.structs[st.structIdxs[s]]
+        mut val elems: Array[LLVMTypeRef] = []
+        mut val fi: U64 = 0
+        while fi < sd.fields.count {
+            // a boxed (recursive) field is stored as a heap pointer.
+            if fieldIsBoxed(c: inout c, f: sd.fields[fi]) {
+                elems.append(value: st.ptrty)
+            } else {
+                elems.append(value: fieldLlvmTy(c: inout c, st: inout st, fd: sd.fields[fi]))
+            }
+            fi += 1
+        }
+        LLVMStructSetBody(st.structTys[s], arrayCPtr(elems), sd.fields.count, 0I32)
+        s += 1
+    }
+}
+

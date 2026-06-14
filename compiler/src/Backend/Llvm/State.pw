@@ -1,0 +1,263 @@
+// Part of the LLVM backend (root: _.pw): backend state context (LlvmCtx) plus small string / name utilities.
+
+// ---- backend state (threaded inout through the emitters) ----
+//
+// Holds the LLVM context/module/builder, cached primitive types, the current
+// function being emitted, and the local-variable environment (a stack of
+// name-span -> alloca pointer + element type; searched from the end so a
+// shadowing redeclaration wins). `terminated` tracks whether the current basic
+// block already has a terminator, so we never append after a ret/br.
+struct LlvmCtx {
+    pub val ctx: LLVMContextRef
+    pub val mod: LLVMModuleRef
+    pub mut val b: LLVMBuilderRef
+    pub val i1ty: LLVMTypeRef
+    pub val i8ty: LLVMTypeRef
+    pub val i16ty: LLVMTypeRef
+    pub val i32ty: LLVMTypeRef
+    pub val i64ty: LLVMTypeRef
+    // the IEEE-754 double type for float (F64/F32) literals and arithmetic. F32 is
+    // represented as double for now (observably fine for the float floor; a true 32-bit
+    // float is additive).
+    pub val f64ty: LLVMTypeRef
+    pub val voidty: LLVMTypeRef
+    pub val ptrty: LLVMTypeRef
+    // String value type: { i8* data, i64 len } (ABI-identical to C PlewString).
+    pub val strty: LLVMTypeRef
+    // Array value type: { ptr data, i64 count } (element behind the pointer).
+    pub val arrayTy: LLVMTypeRef
+    // Closure / function-value type: { ptr fn, ptr env } — a lambda-lifted function
+    // pointer plus its captured-environment pointer (NULL for non-capturing). Every
+    // `fn(...) -> ...` value is this fat pointer; the callee ABI takes env first.
+    pub val closureTy: LLVMTypeRef
+    // Existential `any P` value type (spec/08): { ptr data, ptr vtable } — a fat
+    // pointer. `data` points at an ARC-boxed copy of the erased concrete value;
+    // `vtable` at the static per-(concrete-type, trait) thunk table (slot 0 = drop,
+    // slot 1.. = the trait's requirement methods in declaration order).
+    pub val anyTy: LLVMTypeRef
+    // built vtables, cached by (concrete struct idx, traitId, binding key) -> the LLVM
+    // global value. The binding key distinguishes existentials whose associated-type /
+    // type-parameter bindings differ (`any Add[I32,…]` vs `any Add[I64,…]`).
+    pub mut val anyVtType: Array[U64]
+    pub mut val anyVtTrait: Array[U64]
+    pub mut val anyVtBindKey: Array[U64]
+    pub mut val anyVtVal: Array[LLVMValueRef]
+    pub mut val curFn: LLVMValueRef
+    pub mut val terminated: Bool
+    // the function currently being emitted: is it `main` (returns i32 0), and its
+    // LLVM return type + whether it returns void (Plew `()`), so `return` and the
+    // fall-through epilogue terminate with the right instruction.
+    pub mut val curIsMain: Bool
+    pub mut val curRetVoid: Bool
+    pub mut val curRetTy: LLVMTypeRef
+    pub mut val curRetTyStart: U64
+    pub mut val curRetTyLen: U64
+    // the value yielded by the innermost value-position block (a `give` statement
+    // sets it; IfExpr reads it after emitting each branch block).
+    pub mut val giveValue: LLVMValueRef
+    // registered struct types (parallel: c.structs index -> named LLVM struct type).
+    pub mut val structIdxs: Array[U64]
+    pub mut val structTys: Array[LLVMTypeRef]
+    // generic struct instances (parallel: TypeRef index -> LLVM type, generic def
+    // index). A generic-typed local points locStructIdx at the def and locTypeRef
+    // at the instance, so field access reuses the struct machinery + substitution.
+    pub mut val genStructRefs: Array[U64]
+    pub mut val genStructTys: Array[LLVMTypeRef]
+    pub mut val genStructDefs: Array[U64]
+    // registered enum types (parallel: c.enums index -> named LLVM type
+    // `{ i64 tag, [maxWords x i64] payload }`).
+    pub mut val enumIdxs: Array[U64]
+    pub mut val enumTys: Array[LLVMTypeRef]
+    // generic enum instances (parallel: TypeRef ref -> LLVM type, generic def idx).
+    pub mut val genEnumRefs: Array[U64]
+    pub mut val genEnumTys: Array[LLVMTypeRef]
+    pub mut val genEnumDefs: Array[U64]
+    // a byte span whose content is "self" (appended to c.bytes), to bind the
+    // method receiver as a local that the body's `self` identifiers resolve to.
+    pub mut val selfStart: U64
+    pub mut val selfLen: U64
+    // while emitting a generic method body, the receiver's instantiation TypeRef
+    // (so `self`'s LLVM type / struct-or-enum env resolve to the instance). 0 when
+    // emitting a free function or a non-generic method.
+    pub mut val curRecvInstRef: U64
+    // the expected type of the expression about to be emitted (a let annotation, a
+    // boxed field's pointee type, …) — used to infer a JSX generic-enum/struct
+    // construction whose own `ty` is the ungrounded head (`<Optional.Some v=42 />`
+    // with no `[I64]`). Consumed (cleared to 0) by the construction that uses it so
+    // it doesn't leak into sub-expressions. 0 when no expectation is in effect.
+    pub mut val expectedTy: U64
+    // the current function/closure's return TypeRef (0 = void / none), so a `return
+    // <Optional.Some …/>` infers its type args from the declared return type.
+    pub mut val curRetRef: U64
+    // the local index of the current function's FIRST body local (= param count
+    // incl. self), so scope-exit deinit drops skip params (borrows/inout self that
+    // the caller still owns and will deinit).
+    pub mut val curBodyMark: U64
+    // declared user functions, cached by c.funcs index (parallel arrays), so a call
+    // resolves to the same LLVMValueRef without name mangling (the symbol name is a
+    // synthetic unique `pf<idx>`; only `main`/runtime symbols have meaningful names).
+    pub mut val fnIdx: Array[U64]
+    pub mut val fnVal: Array[LLVMValueRef]
+    pub mut val fnTy: Array[LLVMTypeRef]
+    // generic free-function instances (parallel: c.fnInsts index -> value, type).
+    pub mut val genFnK: Array[U64]
+    pub mut val genFnVal: Array[LLVMValueRef]
+    pub mut val genFnTy: Array[LLVMTypeRef]
+    // generic-method instances, one per (method func, receiver instantiation):
+    // a method on a generic struct/enum (`box.get()`, `maybe.unwrapOr(...)`) is
+    // monomorphized per receiver instance, keyed by (genMethK, genMethInst).
+    pub mut val genMethK: Array[U64]
+    pub mut val genMethInst: Array[U64]
+    pub mut val genMethVal: Array[LLVMValueRef]
+    pub mut val genMethTy: Array[LLVMTypeRef]
+    // method-own type arguments for each gen-method slot (parallel to genMethK):
+    // a provided terminal with its own type params (`fold[B]` copied onto a generic
+    // receiver) instantiates per (mfi, instRef, ownArgs), since the same receiver
+    // instance folds into different accumulator types. Empty for ordinary methods
+    // whose type params are fully grounded by the receiver instance.
+    pub mut val genMethOwn: Array[Array[U64]]
+    // local environment (parallel arrays). `nLocals` is the logical count: blocks
+    // save it on entry and restore it on exit (lexical scope), so a shadowing
+    // binding inside a block leaves scope at the block's end and a later reference
+    // resolves to the outer binding. push overwrites the slot at `nLocals` (or
+    // appends), so the arrays may be longer than `nLocals` — only [0, nLocals) is live.
+    pub mut val nLocals: U64
+    pub mut val locStart: Array[U64]
+    pub mut val locLen: Array[U64]
+    pub mut val locPtr: Array[LLVMValueRef]
+    pub mut val locTy: Array[LLVMTypeRef]
+    // a small Plew-type-kind tag per local (0 int/signed, 1 String, 2 Bool, 3
+    // unsigned int), so String ==/!= and print pick the right lowering without
+    // c.locals (which the LLVM backend doesn't populate, so typeOf can't see locals).
+    pub mut val locKind: Array[U64]
+    // per-local owning struct index (c.structs.count = not a struct), so field
+    // access x.field can resolve the layout from a struct-typed local.
+    pub mut val locStructIdx: Array[U64]
+    // per-local array element type + is-array flag (for arr[i] / .append / .count).
+    pub mut val locIsArr: Array[Bool]
+    pub mut val locElemTy: Array[LLVMTypeRef]
+    pub mut val locElemKind: Array[U64]
+    pub mut val locTypeRef: Array[U64]
+    // per-array-local element struct index (c.structs.count = element is not a
+    // struct), so `arr[i].field` on an array-of-struct LOCAL resolves the element.
+    pub mut val locElemStructIdx: Array[U64]
+    // per-array-local element TypeRef (0 = none), so `arr[i]` recovers the element's
+    // instance — a Ref (`Array[Ref[Box]]` -> `ys[0]->v`) or a nested array.
+    pub mut val locElemTypeRef: Array[U64]
+    // per-local ownership for scope-exit deinit (spec/03): `locOwned` = this local's
+    // value is owned here and must be deinit'd at scope exit (body locals + `move`
+    // params + a `move fn` self; false for inout/borrow params / by-value-self
+    // borrows the caller owns). `locMoved` = ownership was handed off (a `move`
+    // arg / `move fn` receiver / `move x`), so it is NOT deinit'd here.
+    pub mut val locOwned: Array[Bool]
+    pub mut val locMoved: Array[Bool]
+    // module-level variables (spec/15), parallel arrays indexed by `Comp.globals`
+    // position. `genLlvmInitGlobals` builds the LLVM global `gvalRef[i]` and records
+    // the binding's recovered local metadata (so `seedGlobals` can re-register each
+    // global as a local at every body entry, routing reads/writes/type-recovery
+    // through the normal local machinery). The init values are stored once, in
+    // declaration order, by `plew_init_globals`.
+    pub mut val gvalRef: Array[LLVMValueRef] = []
+    pub mut val gvalLty: Array[LLVMTypeRef] = []
+    pub mut val gvalKind: Array[U64] = []
+    pub mut val gvalSidx: Array[U64] = []
+    pub mut val gvalIsArr: Array[Bool] = []
+    pub mut val gvalElemTy: Array[LLVMTypeRef] = []
+    pub mut val gvalElemKind: Array[U64] = []
+    pub mut val gvalTref: Array[U64] = []
+    pub mut val gvalElemStructIdx: Array[U64] = []
+    pub mut val gvalElemTypeRef: Array[U64] = []
+    // declared runtime/intrinsic functions, cached by name id (parallel arrays).
+    pub mut val declId: Array[U64]
+    pub mut val declFn: Array[LLVMValueRef]
+    pub mut val declTy: Array[LLVMTypeRef]
+    // associated functions reached (called) from emitted code — only these are
+    // emitted, so derive-generated but uncalled witnesses (the LLVM backend lowers
+    // Eq/Ord natively, bypassing them) aren't emitted into failing bodies.
+    pub mut val reachAssoc: Array[U64]
+    // lambda-lifted closures, cached by Closure-expr arena id (parallel arrays):
+    // the emitted `__closure<id>` LLVM function value and its function type (env
+    // pointer first param). A closure literal builds a {fn, env} value from these.
+    pub mut val cloIdx: Array[U64]
+    pub mut val cloVal: Array[LLVMValueRef]
+    pub mut val cloTy: Array[LLVMTypeRef]
+    // function-value thunks, cached by c.funcs index: a bare function reference
+    // (`val g = twice`) becomes a closure {thunk, null}, where the thunk adapts the
+    // plain function to the env-first closure ABI by forwarding its arguments.
+    pub mut val thunkIdx: Array[U64]
+    pub mut val thunkVal: Array[LLVMValueRef]
+    pub mut val thunkTy: Array[LLVMTypeRef]
+    // provided trait methods reached (called) during emission: declared lazily (so
+    // an uncalled std-trait adapter method — map/filter, whose body constructs an
+    // unsupported adapter — is never emitted), then their bodies drained after the
+    // main pass (a body may reach further provided methods — fixpoint).
+    pub mut val provEmit: Array[U64]
+    // generic-method instances declared LAZILY on demand (a std/non-entry-module
+    // generic method — Optional.unwrapOr, MapIter.next — reached by a call): the
+    // genMeth* slot index is queued here and its body drained after the main pass,
+    // looping until the queue stops growing (a body may reach further ones).
+    pub mut val genMethEmit: Array[U64]
+    // ---- async (spec/14): stackless state machine, mirrors Codegen/Async.pw ----
+    // PlewPromise value type { i32 done, i64 value, ptr k, ptr kframe } — ABI-
+    // identical to the C runtime's PlewPromise (the resume continuation `k` is a
+    // void(*)(void*); `kframe` is its frame). Awaited promises are PlewPromise*.
+    pub mut val promiseTy: LLVMTypeRef
+    // emitting an async fn's resume body? When set, `let`/match-bind storage is a
+    // frame field (survives `await` suspensions) not an alloca, `return` resolves
+    // `__self`, and a head `await` suspends.
+    pub mut val curAsync: Bool
+    // the current resume fn's frame pointer (void* arg 0, used as the frame base),
+    // its named struct type `{i32 state, ptr self, ptr sub, <params>, <locals>}`,
+    // the resume fn value (stored as a suspended promise's continuation), the entry
+    // dispatch `switch` (await points add a `case state -> resume block`), the await
+    // state counter (1-based), and the next frame field index to hand a `let`/bind.
+    pub mut val curFrameBase: LLVMValueRef
+    pub mut val curFrameTy: LLVMTypeRef
+    pub mut val curResumeFn: LLVMValueRef
+    pub mut val curAsyncSwitch: LLVMValueRef
+    pub mut val curAsyncState: U64
+    pub mut val asyncFieldNext: U64
+    // per async fn (parallel, keyed by c.funcs index): its frame struct type and
+    // resume fn value, so the entry/resume/await sites all agree on the layout.
+    pub mut val asyncFnIdx: Array[U64]
+    pub mut val asyncFrameTy: Array[LLVMTypeRef]
+    pub mut val asyncResumeFn: Array[LLVMValueRef]
+    // the current resume fn's per-field frame-slot GEPs, ALL built in the resume
+    // entry block (which dominates every resume block reached via the dispatch
+    // switch) — caching them there avoids "instruction does not dominate all uses"
+    // when a field GEP built mid-body is read in a switch-reachable resume block.
+    pub mut val asyncSlotPtrs: Array[LLVMValueRef]
+    // loop break/continue target blocks (a stack — innermost loop on top), so a
+    // `break` branches to the enclosing loop's end and `continue` to its
+    // header/step. Pushed by while/for codegen, popped at the loop's end. The
+    // arrays are reused buffers; loopDepth is the live count (overwrite-in-place,
+    // matching the local-scope idiom — Array has no pop).
+    pub mut val loopBreakBB: Array[LLVMBasicBlockRef]
+    pub mut val loopContBB: Array[LLVMBasicBlockRef]
+    pub mut val loopDepth: U64
+}
+
+// A NUL-terminated C string from a Plew literal, for the many `const char*` name
+// arguments LLVM builders take (cString leaks a small per-call buffer — fine for
+// a one-shot compiler pass).
+// A C pointer to the float literal's digit text (a copy of c.bytes[start..start+len]
+// as a NUL-terminated string; LLVMConstRealOfStringAndSize takes the explicit len).
+fn floatTextCPtr(c: inout Comp, start: U64, len: U64) -> CPtr[U8] {
+    mut val bs: Array[U8] = []
+    mut val i: U64 = 0
+    while i < len {
+        bs.append(value: c.bytes[start + i])
+        i += 1U64
+    }
+    return cstr(s: stringFromBytesUnchecked(bs))
+}
+
+fn cstr(s: String) -> CPtr[U8] {
+    return cString(s)
+}
+
+// Empty instruction name (LLVM auto-numbers unnamed values).
+fn anon() -> CPtr[U8] {
+    return cString("")
+}
+

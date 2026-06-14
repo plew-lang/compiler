@@ -1,0 +1,386 @@
+// Part of the LLVM backend (root: _.pw): reachable-associated-fn marking, scanning, and user-fn declaration.
+
+// Whether a Func is a plain user free function the LLVM backend emits directly
+// (not main / extern / generic / method / assoc / provided / trait-receiver).
+// Restricted to the ENTRY module (id 0): the std library (Prelude/Core/…) is full
+// of features not yet covered, and a simple program doesn't call them — emitting
+// only the user's own module keeps bring-up tractable. (Proper call-graph
+// reachability, which will pull in exactly the reached std functions, replaces
+// this once arrays/methods/generics land.)
+// ---- reachable associated functions ----
+//
+// Mark assoc fn `fi` reached, if not already (so its body is scanned for further
+// assoc calls and it gets emitted). Returns whether it was newly added.
+fn markReachAssoc(st: inout LlvmCtx, fi: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < st.reachAssoc.count {
+        if st.reachAssoc[i] == fi {
+            return false
+        }
+        i += 1
+    }
+    st.reachAssoc.append(value: fi)
+    return true
+}
+
+// Whether an assoc-fn name is an operator-trait witness (binary add/sub/mul/div/
+// rem/bitand/bitor/bitxor/shl/shr, unary neg/not/bitnot). Used to seed reachable
+// emission for operator desugar, which leaves no call node to scan.
+fn isOperatorWitnessName(c: inout Comp, start: U64, len: U64) -> Bool {
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "add") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "sub") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "mul") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "div") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "rem") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "bitand") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "bitor") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "bitxor") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "shl") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "shr") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "neg") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "not") { return true }
+    if rangeEquals(bytes: c.bytes, start: start, len: len, kw: "bitnot") { return true }
+    return false
+}
+
+fn inReachAssoc(st: inout LlvmCtx, fi: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < st.reachAssoc.count {
+        if st.reachAssoc[i] == fi {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Walk an expression, marking every `Type.name(args)` assoc-fn call it reaches.
+fn scanExprAssoc(c: inout Comp, st: inout LlvmCtx, id: U64) {
+    match c.exprs[id] {
+        Expr.Unary(op: _, val operand) => { scanExprAssoc(c: inout c, st: inout st, id: operand) }
+        Expr.Binary(op: _, val lhs, val rhs) => { scanExprAssoc(c: inout c, st: inout st, id: lhs) scanExprAssoc(c: inout c, st: inout st, id: rhs) }
+        Expr.Call(nameStart: _, nameLen: _, val args) => {
+            mut val i: U64 = 0
+            while i < args.count { scanExprAssoc(c: inout c, st: inout st, id: args[i].expr) i += 1 }
+        }
+        Expr.Field(val base, nameStart: _, nameLen: _) => { scanExprAssoc(c: inout c, st: inout st, id: base) }
+        Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+            mut val i: U64 = 0
+            while i < fields.count { scanExprAssoc(c: inout c, st: inout st, id: fields[i].value) i += 1 }
+        }
+        Expr.Array(val elems) => {
+            mut val i: U64 = 0
+            while i < elems.count { scanExprAssoc(c: inout c, st: inout st, id: elems[i]) i += 1 }
+        }
+        Expr.Index(val base, val index) => { scanExprAssoc(c: inout c, st: inout st, id: base) scanExprAssoc(c: inout c, st: inout st, id: index) }
+        Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+            val arn: Bind = assocRecvName(c: inout c, recv: recv)
+            if arn.nameLen != 0U64 {
+                val afi: U64 = findAssoc(c: inout c, recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                if afi < c.funcs.count {
+                    markReachAssoc(st: inout st, fi: afi)
+                }
+            } else {
+                scanExprAssoc(c: inout c, st: inout st, id: recv)
+            }
+            mut val i: U64 = 0
+            while i < args.count { scanExprAssoc(c: inout c, st: inout st, id: args[i].expr) i += 1 }
+        }
+        Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+            scanExprAssoc(c: inout c, st: inout st, id: recv)
+            mut val i: U64 = 0
+            while i < args.count { scanExprAssoc(c: inout c, st: inout st, id: args[i].expr) i += 1 }
+        }
+        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
+            scanExprAssoc(c: inout c, st: inout st, id: recv)
+        }
+        Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { scanExprAssoc(c: inout c, st: inout st, id: operand) }
+        Expr.MatchExpr(val scrut, val arms) => {
+            scanExprAssoc(c: inout c, st: inout st, id: scrut)
+            mut val i: U64 = 0
+            while i < arms.count {
+                scanBlockAssoc(c: inout c, st: inout st, id: arms[i].body)
+                i += 1
+            }
+        }
+        Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
+            scanExprAssoc(c: inout c, st: inout st, id: cond)
+            scanBlockAssoc(c: inout c, st: inout st, id: thenBlk)
+            scanBlockAssoc(c: inout c, st: inout st, id: elseBlk)
+        }
+        Expr.OptChain(val base, memberStart: _, memberLen: _) => { scanExprAssoc(c: inout c, st: inout st, id: base) }
+        Expr.Try(val expr) => { scanExprAssoc(c: inout c, st: inout st, id: expr) }
+        Expr.Arrow(val base, nameStart: _, nameLen: _) => { scanExprAssoc(c: inout c, st: inout st, id: base) }
+        Expr.Move(val operand, isBorrow: _) => { scanExprAssoc(c: inout c, st: inout st, id: operand) }
+        Expr.Await(val operand) => { scanExprAssoc(c: inout c, st: inout st, id: operand) }
+        Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, val body) => { scanBlockAssoc(c: inout c, st: inout st, id: body) }
+        _ => {}
+    }
+}
+
+fn scanStmtAssoc(c: inout Comp, st: inout LlvmCtx, id: U64) {
+    match c.stmts[id] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { scanExprAssoc(c: inout c, st: inout st, id: init) }
+        Stmt.Assign(op: _, val target, val value) => { scanExprAssoc(c: inout c, st: inout st, id: target) scanExprAssoc(c: inout c, st: inout st, id: value) }
+        Stmt.ExprStmt(val expr) => { scanExprAssoc(c: inout c, st: inout st, id: expr) }
+        Stmt.Return(val value, val hasValue, offset: _) => { if hasValue { scanExprAssoc(c: inout c, st: inout st, id: value) } }
+        Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
+            scanExprAssoc(c: inout c, st: inout st, id: cond)
+            scanBlockAssoc(c: inout c, st: inout st, id: thenBlk)
+            if hasElse { scanBlockAssoc(c: inout c, st: inout st, id: elseBlk) }
+        }
+        Stmt.While(val cond, val body) => { scanExprAssoc(c: inout c, st: inout st, id: cond) scanBlockAssoc(c: inout c, st: inout st, id: body) }
+        Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, val iter, val rangeHi, val body, isStruct: _, patStart: _, patLen: _, binds: _) => {
+            scanExprAssoc(c: inout c, st: inout st, id: iter)
+            scanExprAssoc(c: inout c, st: inout st, id: rangeHi)
+            scanBlockAssoc(c: inout c, st: inout st, id: body)
+        }
+        Stmt.Match(val scrut, val arms) => {
+            scanExprAssoc(c: inout c, st: inout st, id: scrut)
+            mut val i: U64 = 0
+            while i < arms.count {
+                scanBlockAssoc(c: inout c, st: inout st, id: arms[i].body)
+                i += 1
+            }
+        }
+        Stmt.Panic(val msg, offset: _) => { scanExprAssoc(c: inout c, st: inout st, id: msg) }
+        Stmt.Give(val value) => { scanExprAssoc(c: inout c, st: inout st, id: value) }
+        _ => {}
+    }
+}
+
+fn scanBlockAssoc(c: inout Comp, st: inout LlvmCtx, id: U64) {
+    if id == 0U64 {
+        return
+    }
+    val blk: Block = c.blocks[id]
+    mut val i: U64 = 0
+    while i < blk.stmts.count {
+        scanStmtAssoc(c: inout c, st: inout st, id: blk.stmts[i])
+        i += 1
+    }
+}
+
+// Collect the assoc fns reachable from emitted code: seed by scanning every
+// non-assoc function body (those we emit), then iterate to a fixpoint over the
+// reached assoc fns' own bodies (which may call further assoc fns). Run before
+// declareUserFns, which only emits an assoc fn that is reachable.
+fn collectReachableAssoc(c: inout Comp, st: inout LlvmCtx) {
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        if c.funcs[fi].isAssoc {
+            // an operator-trait witness (add/sub/.../neg/not/bitnot) is reached
+            // structurally, not by call-graph: operator desugar (`a + b`, `-x`)
+            // leaves no `Type.name(...)` call in the AST for the scan to see, and
+            // a value operand's type isn't known at scan time (c.locals is empty
+            // outside codegen). These names never collide with derive-generated
+            // Eq/Ord (eq/compare), so derived witnesses stay correctly excluded.
+            if isOperatorWitnessName(c: inout c, start: c.funcs[fi].nameStart, len: c.funcs[fi].nameLen) {
+                markReachAssoc(st: inout st, fi: fi)
+            }
+        } else {
+            scanBlockAssoc(c: inout c, st: inout st, id: c.funcs[fi].body)
+        }
+        fi += 1
+    }
+    mut val prev: U64 = c.funcs.count + 1U64
+    while st.reachAssoc.count != prev {
+        prev = st.reachAssoc.count
+        mut val ri: U64 = 0
+        while ri < st.reachAssoc.count {
+            scanBlockAssoc(c: inout c, st: inout st, id: c.funcs[st.reachAssoc[ri]].body)
+            ri += 1
+        }
+    }
+}
+
+fn isPlainUserFn(c: inout Comp, st: inout LlvmCtx, fi: U64) -> Bool {
+    val f: Func = c.funcs[fi]
+    if nameIsMain(c: inout c, f: f) { return false }
+    if f.isExtern { return false }
+    // an `async fn` is lowered to a state machine (entry + resume), not a plain
+    // body — declared/emitted by declareAsyncFns / emitAsyncFns.
+    if f.isAsync { return false }
+    // a provided trait method is NOT emitted upfront: it is declared+emitted lazily
+    // the first time a call resolves to it (ensureProvidedDeclared), so an uncalled
+    // std-trait adapter method (map/filter, whose body builds an unsupported adapter)
+    // never gets emitted. The body offset can't tell std from entry reliably here, so
+    // reachability is the gate, not module membership.
+    if f.isProvided { return false }
+    if f.typeParams.count > 0 { return false }
+    if f.isAssoc {
+        // an associated function (`Type.name(args)`, no self) is emitted like a
+        // free function, gated to a registered owner type in the entry module AND
+        // actually reached (called) — so derive-generated but uncalled witnesses
+        // (Eq/Ord lowered natively here) aren't emitted into failing bodies.
+        // Trait assoc fns and generic ones are deferred.
+        if !(inReachAssoc(st: inout st, fi: fi)) {
+            return false
+        }
+        if isTraitName(c: inout c, start: f.recvStart, len: f.recvLen) { return false }
+        if structRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.structIdxs.count {
+            return methodInEntryModule(c: inout c, f: f)
+        }
+        if enumRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.enumIdxs.count {
+            return methodInEntryModule(c: inout c, f: f)
+        }
+        return false
+    }
+    if f.hasRecv {
+        // a method: emit it iff its receiver is a registered struct OR enum AND it is
+        // defined in the entry module. (A method name is re-interned so moduleOf on
+        // it is unreliable; use the body's first statement, whose exprs keep their
+        // original source offsets, to recover the defining module — this keeps std
+        // struct methods, full of not-yet-supported constructs, from being emitted.)
+        if isTraitName(c: inout c, start: f.recvStart, len: f.recvLen) { return false }
+        if structRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) >= st.structIdxs.count {
+            if enumRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) >= st.enumIdxs.count {
+                return false
+            }
+        }
+        return methodInEntryModule(c: inout c, f: f)
+    }
+    // a free function: entry module only (see registerStructs note on reachability).
+    return moduleOf(c: inout c, offset: f.nameStart) == 0U64
+}
+
+// The source offset of a statement's principal expression (which carries an
+// original-source offset, unlike re-interned decl names), for recovering the
+// defining module. Falls back to 0 (= module 0) for offsetless statements.
+fn stmtPrincipalOffset(c: inout Comp, sid: U64) -> U64 {
+    match c.stmts[sid] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return exprOffset(c: inout c, id: init) }
+        Stmt.Assign(op: _, val target, value: _) => { return exprOffset(c: inout c, id: target) }
+        Stmt.ExprStmt(val expr) => { return exprOffset(c: inout c, id: expr) }
+        Stmt.Return(val value, val hasValue, offset: _) => { if hasValue { return exprOffset(c: inout c, id: value) } return 0U64 }
+        Stmt.If(val cond, thenBlk: _, elseBlk: _, hasElse: _) => { return exprOffset(c: inout c, id: cond) }
+        Stmt.While(val cond, body: _) => { return exprOffset(c: inout c, id: cond) }
+        Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, val iter, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => { return exprOffset(c: inout c, id: iter) }
+        Stmt.Match(val scrut, arms: _) => { return exprOffset(c: inout c, id: scrut) }
+        Stmt.Panic(msg: _, val offset) => { return offset }
+        Stmt.Give(val value) => { return exprOffset(c: inout c, id: value) }
+        _ => { return 0U64 }
+    }
+}
+
+// Whether a method is defined in the entry module (id 0), via the body's first
+// statement's principal-expr offset.
+fn methodInEntryModule(c: inout Comp, f: Func) -> Bool {
+    if f.body == 0U64 {
+        return false
+    }
+    val blk: Block = c.blocks[f.body]
+    if blk.stmts.count == 0U64 {
+        return false
+    }
+    return moduleOf(c: inout c, offset: stmtPrincipalOffset(c: inout c, sid: blk.stmts[0])) == 0U64
+}
+
+// The LLVM type of a parameter: a pointer for an `inout` parameter (it receives
+// the caller's address and mutates in place), else the value type (array-aware).
+fn paramLlvmTy(c: inout Comp, st: inout LlvmCtx, p: Param) -> LLVMTypeRef {
+    if p.isInout {
+        return st.ptrty
+    }
+    // a `Self`-typed param resolves to the receiver type (Self env set during method
+    // emission).
+    if c.curSelfRef != 0U64 {
+        if rangeEquals(bytes: c.bytes, start: p.tyStart, len: p.tyLen, kw: "Self") {
+            return llvmTypeOfRef(c: inout c, st: inout st, ref: c.curSelfRef)
+        }
+    }
+    // an existential `any P` param: the fat pointer (spec/08).
+    if refIsAny(c: inout c, ref: p.ty) {
+        return st.anyTy
+    }
+    // ground a generic-instance param type (`Box[T]`) through the active env.
+    mut val pt: U64 = p.ty
+    if c.curTypeParams.count > 0U64 {
+        pt = groundTypeRef(c: inout c, ref: pt)
+    }
+    if isGenericInst(c: inout c, ref: pt) {
+        return llvmTypeOfRef(c: inout c, st: inout st, ref: pt)
+    }
+    return llvmTypeFor(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+}
+
+// The LLVM type of a method's `self` parameter: a pointer for `inout fn` (mutates
+// the caller's value), else the receiver struct by value.
+fn selfParamTy(c: inout Comp, st: inout LlvmCtx, f: Func) -> LLVMTypeRef {
+    if f.selfInout {
+        return st.ptrty
+    }
+    return llvmScalarTy(c: inout c, st: inout st, tyStart: f.recvStart, tyLen: f.recvLen)
+}
+
+// The LLVM return type of a function (and whether it is void = Plew `()`).
+fn llvmFnRetTy(c: inout Comp, st: inout LlvmCtx, f: Func) -> LLVMTypeRef {
+    if f.hasRet {
+        // a `-> Self` return resolves to the receiver type (the Self env is set while
+        // emitting a method): `fn dup() -> Self` on N returns N.
+        if c.curSelfRef != 0U64 {
+            if rangeEquals(bytes: c.bytes, start: f.retStart, len: f.retLen, kw: "Self") {
+                return llvmTypeOfRef(c: inout c, st: inout st, ref: c.curSelfRef)
+            }
+        }
+        // an existential `any P` return: the fat pointer (spec/08).
+        if refIsAny(c: inout c, ref: f.retTy) {
+            return st.anyTy
+        }
+        // ground a generic-instance return (`Box[T]`) through the active env so it
+        // resolves to the registered concrete instance (`Box[I32]`). Also ground when
+        // only a Self/Item env is active (a non-generic method on a conforming type:
+        // `first() -> Optional[Item]` on Counter grounds Item -> I64 via curItemRef,
+        // even though Counter has no type params).
+        mut val rt: U64 = f.retTy
+        if c.curTypeParams.count > 0U64 || c.curItemRef != 0U64 || c.curSelfRef != 0U64 {
+            rt = groundTypeRef(c: inout c, ref: rt)
+        }
+        if isGenericInst(c: inout c, ref: rt) {
+            return llvmTypeOfRef(c: inout c, st: inout st, ref: rt)
+        }
+        return llvmTypeFor(c: inout c, st: inout st, tyStart: f.retStart, tyLen: f.retLen, isArray: f.retIsArray)
+    }
+    return st.voidty
+}
+
+// Pass 1: declare every plain user function as `pf<idx>` with its LLVM signature,
+// caching (idx -> value, type) so calls resolve without name mangling.
+fn declareUserFns(c: inout Comp, st: inout LlvmCtx) {
+    mut val fi: U64 = 0
+    while fi < c.funcs.count {
+        val f: Func = c.funcs[fi]
+        if isPlainUserFn(c: inout c, st: inout st, fi: fi) {
+            // a plain method's `Self` (in `-> Self` / a `Self` param) resolves to the
+            // receiver type; set the Self env so the signature types ground.
+            val didSelf: Bool = f.hasRecv
+            if didSelf {
+                setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
+            }
+            mut val ptys: Array[LLVMTypeRef] = []
+            if f.hasRecv {
+                ptys.append(value: selfParamTy(c: inout c, st: inout st, f: f))
+            }
+            mut val pi: U64 = 0
+            while pi < f.params.count {
+                ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: f.params[pi]))
+                pi += 1
+            }
+            val rty: LLVMTypeRef = llvmFnRetTy(c: inout c, st: inout st, f: f)
+            if didSelf {
+                clearSelfItemEnv(c: inout c)
+            }
+            val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
+            mut val nm: Array[U8] = []
+            appendBytes(into: inout nm, from: "pf".bytes)
+            appendU64Dec(into: inout nm, n: fi)
+            nm.append(value: 0)
+            val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
+            st.fnIdx.append(value: fi)
+            st.fnVal.append(value: fv)
+            st.fnTy.append(value: fty)
+        }
+        fi += 1
+    }
+}
+

@@ -1,0 +1,336 @@
+// Part of the LLVM backend (root: _.pw): arithmetic / comparison / checked-arithmetic ops and value construction.
+
+// ---- arithmetic / comparison ----
+
+// Build an integer binary op as a single (raw, unchecked) LLVM instruction,
+// choosing unsigned vs signed forms (div/rem/cmp/shr) by the operand signedness.
+// Comparisons yield i1; arithmetic yields the operand width. This is the WRAPPING
+// floor — the wrapping* methods call it directly; the normal operator/compound
+// paths go through buildBinOpChecked (overflow / div-by-zero panic).
+fn buildBinOpS(c: inout Comp, st: inout LlvmCtx, op: I64, l: LLVMValueRef, r: LLVMValueRef, unsigned: Bool) -> LLVMValueRef {
+    if op == opAdd() { return LLVMBuildAdd(st.b, l, r, anon()) }
+    if op == opSub() { return LLVMBuildSub(st.b, l, r, anon()) }
+    if op == opMul() { return LLVMBuildMul(st.b, l, r, anon()) }
+    if op == opDiv() { if unsigned { return LLVMBuildUDiv(st.b, l, r, anon()) } return LLVMBuildSDiv(st.b, l, r, anon()) }
+    if op == opRem() { if unsigned { return LLVMBuildURem(st.b, l, r, anon()) } return LLVMBuildSRem(st.b, l, r, anon()) }
+    if op == opBitAnd() { return LLVMBuildAnd(st.b, l, r, anon()) }
+    if op == opBitOr() { return LLVMBuildOr(st.b, l, r, anon()) }
+    if op == opBitXor() { return LLVMBuildXor(st.b, l, r, anon()) }
+    if op == opShl() { return LLVMBuildShl(st.b, l, r, anon()) }
+    if op == opShr() { if unsigned { return LLVMBuildLShr(st.b, l, r, anon()) } return LLVMBuildAShr(st.b, l, r, anon()) }
+    if op == opEq() { return LLVMBuildICmp(st.b, llvmIntEq(), l, r, anon()) }
+    if op == opNe() { return LLVMBuildICmp(st.b, llvmIntNe(), l, r, anon()) }
+    if op == opLt() { if unsigned { return LLVMBuildICmp(st.b, llvmIntUlt(), l, r, anon()) } return LLVMBuildICmp(st.b, llvmIntSlt(), l, r, anon()) }
+    if op == opLe() { if unsigned { return LLVMBuildICmp(st.b, llvmIntUle(), l, r, anon()) } return LLVMBuildICmp(st.b, llvmIntSle(), l, r, anon()) }
+    if op == opGt() { if unsigned { return LLVMBuildICmp(st.b, llvmIntUgt(), l, r, anon()) } return LLVMBuildICmp(st.b, llvmIntSgt(), l, r, anon()) }
+    if op == opGe() { if unsigned { return LLVMBuildICmp(st.b, llvmIntUge(), l, r, anon()) } return LLVMBuildICmp(st.b, llvmIntSge(), l, r, anon()) }
+    // unsupported op (bitwise/shift land in a later increment): reject loudly.
+    compileErrorAt(line: 0, msg: "LLVM backend: operator not yet supported")
+    return l
+}
+
+// ---- checked arithmetic (overflow / divide-by-zero panic) ----
+//
+// add/sub/mul/div/rem route through the runtime `plew_<w><Op>` helpers (which
+// panic on overflow / div-by-zero), matching the C backend's checked floor
+// (spec/12: overflow and 0-division always panic; wrapping is opt-in). Bitwise,
+// shift, and comparison ops have no overflow and stay raw (buildBinOpS). The
+// wrapping* methods deliberately keep calling buildBinOpS (no check).
+
+// Width bucket 0..3 for an 8/16/32/64-bit integer type.
+fn llvmWidthIdx(w: U32) -> U64 {
+    if w <= 8U32 { return 0U64 }
+    if w <= 16U32 { return 1U64 }
+    if w <= 32U32 { return 2U64 }
+    return 3U64
+}
+
+// The i8/i16/i32/i64 LLVM type for a width bucket.
+fn llvmIntTyOfIdx(st: inout LlvmCtx, wi: U64) -> LLVMTypeRef {
+    if wi == 0U64 { return st.i8ty }
+    if wi == 1U64 { return st.i16ty }
+    if wi == 2U64 { return st.i32ty }
+    return st.i64ty
+}
+
+// "Add"/"Sub"/"Mul"/"Div"/"Rem" bytes for an op (callers guard to these ops).
+fn checkedOpName(op: I64) -> Array[U8] {
+    if op == opAdd() { return "Add".bytes }
+    if op == opSub() { return "Sub".bytes }
+    if op == opMul() { return "Mul".bytes }
+    if op == opDiv() { return "Div".bytes }
+    return "Rem".bytes
+}
+
+// 0..4 op index for a checked binary op (Add/Sub/Mul/Div/Rem), for nameId.
+fn checkedOpIdx(op: I64) -> U64 {
+    if op == opAdd() { return 0U64 }
+    if op == opSub() { return 1U64 }
+    if op == opMul() { return 2U64 }
+    if op == opDiv() { return 3U64 }
+    return 4U64
+}
+
+// "i8".."u64" prefix bytes (signedness + width) for a `plew_<prefix><Op>` symbol.
+fn checkedPrefixBytes(unsigned: Bool, wi: U64) -> Array[U8] {
+    mut val b: Array[U8] = []
+    if unsigned { b.append(value: 117) } else { b.append(value: 105) }
+    if wi == 0U64 {
+        b.append(value: 56)
+        return b
+    }
+    if wi == 1U64 {
+        b.append(value: 49)
+        b.append(value: 54)
+        return b
+    }
+    if wi == 2U64 {
+        b.append(value: 51)
+        b.append(value: 50)
+        return b
+    }
+    b.append(value: 54)
+    b.append(value: 52)
+    return b
+}
+
+// The runtime symbol name for a checked binary op: `plew_<prefix><Op>`.
+fn checkedFnName(op: I64, unsigned: Bool, wi: U64) -> String {
+    mut val b: Array[U8] = "plew_".bytes
+    appendBytes(into: inout b, from: checkedPrefixBytes(unsigned: unsigned, wi: wi))
+    appendBytes(into: inout b, from: checkedOpName(op: op))
+    return stringFromBytesUnchecked(b)
+}
+
+// A stable, collision-free getOrDeclare id for a checked helper (base 9000;
+// op*8 + sign*? + width keeps the 48 binop slots distinct; Neg uses 9100+wi).
+fn checkedNameId(op: I64, unsigned: Bool, wi: U64) -> U64 {
+    mut val sgn: U64 = 0U64
+    if unsigned { sgn = 4U64 }
+    return 9000U64 + checkedOpIdx(op: op) * 8U64 + sgn + wi
+}
+
+// add/sub/mul/div/rem -> a call to the checked runtime helper; any other op (and
+// the wrapping* methods, which call buildBinOpS directly) -> the raw builder.
+fn buildBinOpChecked(c: inout Comp, st: inout LlvmCtx, op: I64, l: LLVMValueRef, r: LLVMValueRef, unsigned: Bool) -> LLVMValueRef {
+    if op == opAdd() || op == opSub() || op == opMul() || op == opDiv() || op == opRem() {
+        val wi: U64 = llvmWidthIdx(w: LLVMGetIntTypeWidth(LLVMTypeOf(l)))
+        val ity: LLVMTypeRef = llvmIntTyOfIdx(st: inout st, wi: wi)
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: ity)
+        ptys.append(value: ity)
+        val fty: LLVMTypeRef = LLVMFunctionType(ity, arrayCPtr(ptys), 2U64, 0I32)
+        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: checkedFnName(op: op, unsigned: unsigned, wi: wi), nameId: checkedNameId(op: op, unsigned: unsigned, wi: wi), fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: l)
+        av.append(value: r)
+        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U64, anon())
+    }
+    return buildBinOpS(c: inout c, st: inout st, op: op, l: l, r: r, unsigned: unsigned)
+}
+
+// Checked signed negation (`-x`): a call to `plew_<iN>Neg`, which panics on
+// INT_MIN. Neg is signed-only (spec/12), so the helper prefix is always signed.
+fn buildNegChecked(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef) -> LLVMValueRef {
+    val wi: U64 = llvmWidthIdx(w: LLVMGetIntTypeWidth(LLVMTypeOf(v)))
+    val ity: LLVMTypeRef = llvmIntTyOfIdx(st: inout st, wi: wi)
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: ity)
+    val fty: LLVMTypeRef = LLVMFunctionType(ity, arrayCPtr(ptys), 1U64, 0I32)
+    mut val nm: Array[U8] = "plew_".bytes
+    appendBytes(into: inout nm, from: checkedPrefixBytes(unsigned: false, wi: wi))
+    appendBytes(into: inout nm, from: "Neg".bytes)
+    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: stringFromBytesUnchecked(nm), nameId: 9100U64 + wi, fnTy: fty)
+    mut val av: Array[LLVMValueRef] = []
+    av.append(value: v)
+    return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U64, anon())
+}
+
+// Construct a registered struct value from a JSX `<Type field=expr ... />`: build
+// each declared field (matched by name, or its default) in order via insertvalue.
+fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: Array[MakeField]) -> LLVMValueRef {
+    // inside a generic method/function body, a construction `<Box[T] … />` names
+    // the syntactic `Box[T]`; ground its type args through the active env so it
+    // resolves to the registered concrete instance (`Box[I32]`).
+    mut val gty: U64 = ty
+    if c.curTypeParams.count > 0U64 {
+        gty = groundTypeRef(c: inout c, ref: ty)
+    }
+    // a context-less record literal `(a:1, b:2)` lowers to a Make with NO type name
+    // (Lower.pw): resolve its record struct from the construction context — the
+    // enclosing field/payload builder sets `st.expectedTy` to the field's declared
+    // record type (a `(`-prefixed canonical name). Without this, a record used as an
+    // enum payload (`<Optional.Some v=(index:1, value:2)/>`) can't be built.
+    if typeLen == 0U64 {
+        if st.expectedTy != 0U64 {
+            if st.expectedTy < c.types.count {
+                val et: TypeRef = c.types[st.expectedTy]
+                if et.nameLen > 0U64 {
+                    if c.bytes[et.nameStart] == 40U8 {
+                        val rreg: U64 = structRegSlot(c: inout c, st: inout st, start: et.nameStart, len: et.nameLen)
+                        if rreg < st.structIdxs.count {
+                            st.expectedTy = 0U64
+                            return buildStructValue(c: inout c, st: inout st, sd: c.structs[st.structIdxs[rreg]], sty: st.structTys[rreg], fields: fields, errOffset: et.nameStart)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if isEnum {
+        return genLlvmMakeEnum(c: inout c, st: inout st, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, ty: gty, fields: fields)
+    }
+    // an un-suffixed generic-struct construction (`inner=<Box value=e />`) has an
+    // ungrounded head `gty`; fall back to the expected type from context (the field's
+    // declared instance type set by genFieldValue) when it names this same generic
+    // struct. Consume it so it can't leak into the field sub-expressions.
+    if !(isGenericInst(c: inout c, ref: gty)) {
+        if st.expectedTy != 0U64 {
+            if isGenericInst(c: inout c, ref: st.expectedTy) {
+                val et: TypeRef = c.types[st.expectedTy]
+                if spansEqual(c: inout c, aStart: et.nameStart, aLen: et.nameLen, bStart: typeStart, bLen: typeLen) {
+                    gty = st.expectedTy
+                }
+            }
+        }
+    }
+    st.expectedTy = 0U64
+    // `<Ref[T] value=e />`: allocate a heap cell holding the pointee, store e, and
+    // yield the cell pointer (the Ref value). Refcount/release is hidden cost,
+    // deferred (no deinit in these cases yet) — the pointer aliases on copy so
+    // shared mutation through `->` is visible.
+    if rangeEquals(bytes: c.bytes, start: typeStart, len: typeLen, kw: "Ref") {
+        return genLlvmMakeRef(c: inout c, st: inout st, ty: gty, fields: fields)
+    }
+    // a generic struct instance (Box[I32]): build under its substitution env.
+    if isGenericInst(c: inout c, ref: gty) {
+        val gslot: U64 = genStructSlot(c: inout c, st: inout st, ref: gty)
+        if gslot < st.genStructRefs.count {
+            val sd: StructDef = c.structs[st.genStructDefs[gslot]]
+            val savedP: Array[Bind] = c.curTypeParams
+            val savedA: Array[U64] = c.curTypeArgs
+            // MERGE (see genLlvmMakeEnum) so a field sub-expression referencing the
+            // enclosing method's type params still grounds.
+            c.curTypeParams = concatParams(add: sd.typeParams, base: savedP)
+            c.curTypeArgs = concatArgs(add: c.types[gty].args, base: savedA)
+            val v: LLVMValueRef = buildStructValue(c: inout c, st: inout st, sd: sd, sty: st.genStructTys[gslot], fields: fields, errOffset: typeStart)
+            c.curTypeParams = savedP
+            c.curTypeArgs = savedA
+            return v
+        }
+    }
+    // a newtype over a struct inherits its factory (spec/10): `<Brand code=… />`
+    // builds the underlying Rgb struct (identical representation). Resolve the
+    // construction name to the underlying before the registered-struct lookup.
+    mut val rtStart: U64 = typeStart
+    mut val rtLen: U64 = typeLen
+    val ntn: Bind = newtypeUnderName(c: inout c, start: typeStart, len: typeLen)
+    if ntn.nameStart != typeStart || ntn.nameLen != typeLen {
+        rtStart = ntn.nameStart
+        rtLen = ntn.nameLen
+    }
+    val reg: U64 = structRegSlot(c: inout c, st: inout st, start: rtStart, len: rtLen)
+    if reg >= st.structIdxs.count {
+        compileErrorAt(line: lineOf(c: inout c, offset: typeStart), msg: "LLVM backend: construction of this type not yet supported (Ref / nested-struct structs are TODO)")
+        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    }
+    return buildStructValue(c: inout c, st: inout st, sd: c.structs[st.structIdxs[reg]], sty: st.structTys[reg], fields: fields, errOffset: typeStart)
+}
+
+// The LLVM type of a `Ref[T]`'s pointee T (from the instance's first type arg).
+fn refPointeeTy(c: inout Comp, st: inout LlvmCtx, refTy: U64) -> LLVMTypeRef {
+    if isRefInst(c: inout c, ref: refTy) {
+        return llvmTypeOfRef(c: inout c, st: inout st, ref: c.types[refTy].args[0])
+    }
+    return st.i64ty
+}
+
+// The Ref instance TypeRef of an expression that evaluates to a `Ref[T]` (a local
+// carries it on locTypeRef), or 0 if it is not a Ref-typed expression.
+fn exprRefTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
+    val r: U64 = exprTypeRef(c: inout c, st: inout st, id: id)
+    if isRefInst(c: inout c, ref: r) {
+        return r
+    }
+    return 0U64
+}
+
+// The struct index of a `Ref[T]` base's pointee T (for `->field` resolution), or
+// c.structs.count if the base isn't a Ref to a registered struct.
+fn refPointeeStructIdx(c: inout Comp, st: inout LlvmCtx, base: U64) -> U64 {
+    val r: U64 = exprRefTypeRef(c: inout c, st: inout st, id: base)
+    if r != 0U64 {
+        val t: TypeRef = c.types[r]
+        if t.args.count > 0U64 {
+            val pt: TypeRef = c.types[t.args[0]]
+            return localStructIdxFor(c: inout c, st: inout st, start: pt.nameStart, len: pt.nameLen)
+        }
+    }
+    return c.structs.count
+}
+
+// Load a `Ref[T]` base's pointee struct VALUE (`*cell`) — the basis for `->field`.
+fn loadRefPointee(c: inout Comp, st: inout LlvmCtx, base: U64) -> LLVMValueRef {
+    val r: U64 = exprRefTypeRef(c: inout c, st: inout st, id: base)
+    val pty: LLVMTypeRef = refPointeeTy(c: inout c, st: inout st, refTy: r)
+    val cellPtr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: base)
+    return LLVMBuildLoad2(st.b, pty, cellPtr, anon())
+}
+
+// Build a `Ref[T]` value: malloc a cell of sizeof(T), store the `value` field's
+// pointee into it, and return the cell pointer.
+fn genLlvmMakeRef(c: inout Comp, st: inout LlvmCtx, ty: U64, fields: Array[MakeField]) -> LLVMValueRef {
+    val pty: LLVMTypeRef = refPointeeTy(c: inout c, st: inout st, refTy: ty)
+    val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(pty), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
+    // the pointee value (the `value` field).
+    mut val valExpr: U64 = 0
+    mut val mi: U64 = 0
+    while mi < fields.count {
+        if rangeEquals(bytes: c.bytes, start: fields[mi].nameStart, len: fields[mi].nameLen, kw: "value") {
+            valExpr = fields[mi].value
+            mi = fields.count
+        } else {
+            mi += 1
+        }
+    }
+    mut val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: valExpr)
+    if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
+        v = coerceInt(st: inout st, v: v, target: pty, unsigned: false)
+    }
+    LLVMBuildStore(st.b, v, cell)
+    return cell
+}
+
+// Build a struct value of LLVM type `sty` from def `sd`: each declared field
+// (matched by name, or its default), under the active substitution env.
+fn buildStructValue(c: inout Comp, st: inout LlvmCtx, sd: StructDef, sty: LLVMTypeRef, fields: Array[MakeField], errOffset: U64) -> LLVMValueRef {
+    mut val agg: LLVMValueRef = LLVMGetUndef(sty)
+    mut val fi: U64 = 0
+    while fi < sd.fields.count {
+        val fld: FieldDef = sd.fields[fi]
+        mut val provided: Bool = false
+        mut val valExpr: U64 = 0
+        mut val mi: U64 = 0
+        while mi < fields.count {
+            if spansEqual(c: inout c, aStart: fields[mi].nameStart, aLen: fields[mi].nameLen, bStart: fld.nameStart, bLen: fld.nameLen) {
+                provided = true
+                valExpr = fields[mi].value
+                mi = fields.count
+            } else {
+                mi += 1
+            }
+        }
+        if !(provided) {
+            if fld.hasDefault {
+                valExpr = fld.defaultVal
+            } else {
+                compileErrorAt(line: lineOf(c: inout c, offset: errOffset), msg: "LLVM backend: missing struct field in construction")
+                return agg
+            }
+        }
+        agg = LLVMBuildInsertValue(st.b, agg, genFieldValue(c: inout c, st: inout st, valExpr: valExpr, fld: fld), fi, anon())
+        fi += 1
+    }
+    return agg
+}
+

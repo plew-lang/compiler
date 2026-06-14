@@ -1,0 +1,307 @@
+// Part of the LLVM backend (root: _.pw): provided / free / generic function declaration and emission.
+
+// Lazily declare a (non-generic) provided trait method `fi` reached at a call site:
+// add its `pf<fi>` symbol with the self-first method signature and queue its body
+// for emission (provEmit). Returns the fnIdx slot, or st.fnIdx.count if it can't be
+// emitted (generic / non-struct receiver). Idempotent (returns the existing slot).
+fn ensureProvidedDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
+    val existing: U64 = userFnSlot(st: inout st, idx: fi)
+    if existing < st.fnIdx.count {
+        return existing
+    }
+    val f: Func = c.funcs[fi]
+    if f.typeParams.count > 0U64 {
+        return st.fnIdx.count
+    }
+    if !(f.hasRecv) {
+        return st.fnIdx.count
+    }
+    // a registered struct receiver, or a primitive lang-item (String / a fixed-width
+    // integer) — all have a well-defined self LLVM type.
+    if structRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) >= st.structIdxs.count {
+        if !(rangeEquals(bytes: c.bytes, start: f.recvStart, len: f.recvLen, kw: "String")) {
+            if !(isPrimIntName(c: inout c, start: f.recvStart, len: f.recvLen)) {
+                return st.fnIdx.count
+            }
+        }
+    }
+    // bind `Self`/`Item` to the concrete receiver while computing the signature, so a
+    // provided terminal whose return type names `Item` (`first()`/`reduce() ->
+    // Optional[Item]`) declares the grounded type (`Optional[I64]`) — matching the body,
+    // which genLlvmFuncBody grounds the same way. Without this the declared return is the
+    // ungrounded `Optional[Item]` and the call site emits invalid GEP indices.
+    val savedPS: U64 = c.curSelfRef
+    val savedPI: U64 = c.curItemRef
+    setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
+    mut val ptys: Array[LLVMTypeRef] = []
+    ptys.append(value: selfParamTy(c: inout c, st: inout st, f: f))
+    mut val pi: U64 = 0
+    while pi < f.params.count {
+        ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: f.params[pi]))
+        pi += 1
+    }
+    val fty: LLVMTypeRef = LLVMFunctionType(llvmFnRetTy(c: inout c, st: inout st, f: f), arrayCPtr(ptys), ptys.count, 0I32)
+    c.curSelfRef = savedPS
+    c.curItemRef = savedPI
+    mut val nm: Array[U8] = []
+    appendBytes(into: inout nm, from: "pf".bytes)
+    appendU64Dec(into: inout nm, n: fi)
+    nm.append(value: 0)
+    val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
+    st.fnIdx.append(value: fi)
+    st.fnVal.append(value: fv)
+    st.fnTy.append(value: fty)
+    st.provEmit.append(value: fi)
+    return st.fnIdx.count - 1U64
+}
+
+// Declare a non-generic free function on demand and queue its body — a std free
+// function (digitByteI, called by I64.format) reached from an emitted body but
+// gated out of the eager pass (entry-module only). Reachability-driven, so an
+// uncalled std fn with unsupported constructs is never emitted. Returns the slot
+// or st.fnIdx.count.
+fn ensureFreeFnDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
+    val existing: U64 = userFnSlot(st: inout st, idx: fi)
+    if existing < st.fnIdx.count {
+        return existing
+    }
+    val f: Func = c.funcs[fi]
+    if f.typeParams.count > 0U64 { return st.fnIdx.count }
+    // an assoc fn (`Trait.banner()`) has a receiver type but no self param — emit it
+    // like a free function; a real method (self) is not handled here.
+    if f.hasRecv {
+        if !(f.isAssoc) {
+            return st.fnIdx.count
+        }
+    }
+    if f.isExtern { return st.fnIdx.count }
+    if nameIsMain(c: inout c, f: f) { return st.fnIdx.count }
+    mut val ptys: Array[LLVMTypeRef] = []
+    mut val pi: U64 = 0
+    while pi < f.params.count {
+        ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: f.params[pi]))
+        pi += 1
+    }
+    val fty: LLVMTypeRef = LLVMFunctionType(llvmFnRetTy(c: inout c, st: inout st, f: f), arrayCPtr(ptys), ptys.count, 0I32)
+    mut val nm: Array[U8] = []
+    appendBytes(into: inout nm, from: "pf".bytes)
+    appendU64Dec(into: inout nm, n: fi)
+    nm.append(value: 0)
+    val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
+    st.fnIdx.append(value: fi)
+    st.fnVal.append(value: fv)
+    st.fnTy.append(value: fty)
+    st.provEmit.append(value: fi)
+    return st.fnIdx.count - 1U64
+}
+
+// Append the decimal digits of n to a byte buffer (for synthetic symbol names).
+// Uses digitStrU's per-digit String (its bytes are U8) to avoid a U64->U8 narrow,
+// which Plew's lossless `as` does not allow.
+fn appendU64Dec(into: inout Array[U8], n: U64) {
+    if n >= 10U64 {
+        appendU64Dec(into: inout into, n: n / 10U64)
+    }
+    appendBytes(into: inout into, from: digitStrU(d: n % 10U64).bytes)
+}
+
+// Pass 2: emit a plain user function's body.
+// Declare each concrete generic free-function instantiation (c.fnInsts) as a
+// symbol `gf<k>` with its signature built under the instance's substitution env.
+fn declareGenFns(c: inout Comp, st: inout LlvmCtx) {
+    mut val k: U64 = 0
+    while k < c.fnInsts.count {
+        val fin: FnInst = c.fnInsts[k]
+        // free-function instances only (recvInstRef == 0); methods are a later step.
+        // restrict to the entry module: a std generic fn (print[T] etc.) has a body
+        // full of not-yet-supported constructs and shouldn't be emitted (print is
+        // special-cased at the call site, so its instance is never called).
+        if fin.recvInstRef == 0U64 && moduleOf(c: inout c, offset: c.funcs[fin.fnIdx].nameStart) == 0U64 {
+            if isGenericFreeFn(c: inout c, fi: fin.fnIdx) {
+                val f: Func = c.funcs[fin.fnIdx]
+                val savedP: Array[Bind] = c.curTypeParams
+                val savedA: Array[U64] = c.curTypeArgs
+                c.curTypeParams = f.typeParams
+                c.curTypeArgs = fin.args
+                mut val ptys: Array[LLVMTypeRef] = []
+                mut val pi: U64 = 0
+                while pi < f.params.count {
+                    ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: f.params[pi]))
+                    pi += 1
+                }
+                val fty: LLVMTypeRef = LLVMFunctionType(llvmFnRetTy(c: inout c, st: inout st, f: f), arrayCPtr(ptys), f.params.count, 0I32)
+                mut val nm: Array[U8] = []
+                appendBytes(into: inout nm, from: "gf".bytes)
+                appendU64Dec(into: inout nm, n: k)
+                nm.append(value: 0)
+                val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
+                c.curTypeParams = savedP
+                c.curTypeArgs = savedA
+                st.genFnK.append(value: k)
+                st.genFnVal.append(value: fv)
+                st.genFnTy.append(value: fty)
+            }
+        }
+        k += 1
+    }
+}
+
+// Emit each generic free-function instance body under its env.
+fn emitGenFns(c: inout Comp, st: inout LlvmCtx) {
+    mut val slot: U64 = 0
+    while slot < st.genFnK.count {
+        val fin: FnInst = c.fnInsts[st.genFnK[slot]]
+        val f: Func = c.funcs[fin.fnIdx]
+        val savedP: Array[Bind] = c.curTypeParams
+        val savedA: Array[U64] = c.curTypeArgs
+        c.curTypeParams = f.typeParams
+        c.curTypeArgs = fin.args
+        genLlvmFuncBody(c: inout c, st: inout st, fi: fin.fnIdx, fv: st.genFnVal[slot])
+        c.curTypeParams = savedP
+        c.curTypeArgs = savedA
+        slot += 1
+    }
+}
+
+// The TypeRef of a call argument, using the LLVM backend's own local tracking
+// (the front-end `typeOf` can't see locals — the LLVM backend doesn't populate
+// c.locals). A generic-instance local carries its ref; a struct value maps to a
+// bare TypeRef by its struct name; a scalar/String comes from the typed-AST cache
+// (which works for literals/expressions). 0 when no type can be recovered.
+fn llvmArgTypeRef(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> U64 {
+    // a closure-literal argument (`f: fn(x: I64) -> B`): build its fn TypeRef
+    // (args = [ret, p0, …]) so a type param in the return/param position infers.
+    match c.exprs[argExpr] {
+        Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, val retTy, body: _) => {
+            val fnB: Bind = kwSpan(c: inout c, kw: "fn", kwLen: 2U64)
+            mut val fargs: Array[U64] = []
+            fargs.append(value: retTy)
+            mut val pj: U64 = 0
+            while pj < params.count {
+                fargs.append(value: params[pj].ty)
+                pj += 1
+            }
+            return c.pushType(t: <TypeRef nameStart=fnB.nameStart nameLen=fnB.nameLen args=fargs />)
+        }
+        Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, isEnum: _, val ty, fields: _) => {
+            // an inline construction argument (`f(x: <Color.Blue/>)` / `<Point x=1/>`):
+            // its type is the constructed type, so a generic call infers `T` from it
+            // (exprTypeRef has no Make case — a Make arg would otherwise infer to 0 and
+            // miss the registered instance). Prefer the annotated ref (carries generic
+            // args), else the bare type name.
+            if ty != 0U64 {
+                return ty
+            }
+            return findOrAddTypeRef(c: inout c, nameStart: typeStart, nameLen: typeLen)
+        }
+        _ => {}
+    }
+    val tr: U64 = exprTypeRef(c: inout c, st: inout st, id: argExpr)
+    if tr != 0U64 {
+        return tr
+    }
+    val si: U64 = exprStructIdx(c: inout c, st: inout st, id: argExpr)
+    if si < c.structs.count {
+        return findOrAddTypeRef(c: inout c, nameStart: c.structs[si].nameStart, nameLen: c.structs[si].nameLen)
+    }
+    val t: TypeInfo = typeOf(c: inout c, id: argExpr)
+    if t.kind == 0 {
+        return findOrAddTypeRef(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    }
+    if t.kind == 1 {
+        return findOrAddTypeRef(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    }
+    return 0U64
+}
+
+// Infer a generic free function's type arguments from a call's arguments, mirroring
+// the front-end `inferFnArgs` but recovering each argument's type via the LLVM
+// backend's local tracking (so a struct local arg resolves, which front-end typeOf
+// can't for an unpopulated c.locals).
+fn llvmInferFnArgs(c: inout Comp, st: inout LlvmCtx, f: Func, args: Array[Arg]) -> Array[U64] {
+    mut val out: Array[U64] = []
+    mut val ti: U64 = 0
+    while ti < f.typeParams.count {
+        val tp: Bind = f.typeParams[ti]
+        mut val found: U64 = 0
+        mut val pi: U64 = 0
+        while pi < f.params.count {
+            val p: Param = f.params[pi]
+            if p.tyIsArray {
+                if p.tyNameId == tp.nameId {
+                    if pi < args.count {
+                        if found == 0U64 {
+                            // recover the array arg's element ref via LLVM-side tracking
+                            // (locElemTypeRef); c.locals is unpopulated in this backend.
+                            found = arrayExprElemRef(c: inout c, st: inout st, arrayExpr: args[pi].expr)
+                        }
+                    }
+                }
+            } else {
+                if pi < args.count {
+                    if found == 0U64 {
+                        val argRef: U64 = llvmArgTypeRef(c: inout c, st: inout st, argExpr: args[pi].expr)
+                        found = unifyTypeParam(c: inout c, paramRef: p.ty, argRef: argRef, tpStart: tp.nameStart, tpLen: tp.nameLen)
+                    }
+                }
+            }
+            pi += 1
+        }
+        out.append(value: found)
+        ti += 1
+    }
+    return out
+}
+
+// Fill a generic factory's type params left unfound by argument inference (a no-arg
+// factory like `Head.empty()`) from the expected type. A factory returns `Self =
+// Head[typeParams]`, so when the call's context wants a same-head generic instance
+// (`st.expectedTy = Head[U]`), its type args line up with the params positionally.
+// Only touches unfound (0) slots; an arg-inferred param wins.
+fn groundAssocFromExpected(c: inout Comp, st: inout LlvmCtx, recvStart: U64, recvLen: U64, fi: U64, inferred: inout Array[U64]) {
+    if st.expectedTy == 0U64 {
+        return
+    }
+    if !(isGenericInst(c: inout c, ref: st.expectedTy)) {
+        return
+    }
+    val et: TypeRef = c.types[st.expectedTy]
+    if !(spansEqual(c: inout c, aStart: et.nameStart, aLen: et.nameLen, bStart: recvStart, bLen: recvLen)) {
+        return
+    }
+    if et.args.count != inferred.count {
+        return
+    }
+    mut val i: U64 = 0
+    while i < inferred.count {
+        // unfound (0) OR a width-less recovery (a nameless ref, e.g. an integer field
+        // whose width the structural pass couldn't name): the expected type's arg is
+        // the authoritative ground for this param, so override.
+        mut val needsGround: Bool = inferred[i] == 0U64
+        if !(needsGround) {
+            if c.types[inferred[i]].nameLen == 0U64 {
+                needsGround = true
+            }
+        }
+        if needsGround {
+            inferred[i] = et.args[i]
+        }
+        i += 1
+    }
+}
+
+// Find the registered generic-fn instance slot for (fnIdx, args), or count.
+fn genFnSlotFor(c: inout Comp, fnIdx: U64, args: Array[U64], st: inout LlvmCtx) -> U64 {
+    mut val slot: U64 = 0
+    while slot < st.genFnK.count {
+        val fin: FnInst = c.fnInsts[st.genFnK[slot]]
+        if fin.fnIdx == fnIdx {
+            if typeArgsEq(c: inout c, a: fin.args, b: args) {
+                return slot
+            }
+        }
+        slot += 1
+    }
+    return st.genFnK.count
+}
+

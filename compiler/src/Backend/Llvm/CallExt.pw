@@ -1,0 +1,226 @@
+// Part of the LLVM backend (root: _.pw): FFI / lang-item dispatch, view-aware lookup, and argument emission.
+
+// The LLVM type of an FFI parameter/return type span: a fixed-width integer /
+// String / Bool maps to its scalar type; any other (an opaque `type` handle, a
+// `CPtr[T]`) is an opaque pointer (spec/15).
+fn ffiTyOf(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> LLVMTypeRef {
+    if isPrimIntName(c: inout c, start: tyStart, len: tyLen) {
+        return llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen)
+    }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "String") {
+        return st.strty
+    }
+    if rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Bool") {
+        return st.i1ty
+    }
+    return st.ptrty
+}
+
+// Emit a method call `recv.m(args)`: resolve the method on the receiver's struct,
+// pass self first (a pointer for `inout fn`, else the struct value), then the
+// coerced arguments, and call the cached LLVMValueRef.
+// The primitive lang-item type-name of a method receiver that isn't a registered
+// struct (String, or a suffixed integer literal like `42I64`), for dispatching
+// `(42I64).format(...)` / `s.isEmpty()`. nameLen 0 if not such a receiver.
+fn primLangItemRecvName(c: inout Comp, st: inout LlvmCtx, recv: U64) -> Bind {
+    match c.exprs[recv] {
+        Expr.Int(value: _, offset: _, isBool: _, val tyStart, val tyLen, isNeg: _) => {
+            if tyLen > 0U64 {
+                if isPrimIntName(c: inout c, start: tyStart, len: tyLen) {
+                    return <Bind nameStart=tyStart nameLen=tyLen fieldStart=tyStart fieldLen=tyLen />
+                }
+            }
+        }
+        Expr.Ident(val start, val len) => {
+            // a primitive-int local/param (`v: U64`): its tracked type name (locTypeRef),
+            // so `v.hash[H](…)` dispatches on the primitive.
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.nLocals {
+                val tr: U64 = st.locTypeRef[li]
+                if tr != 0U64 {
+                    val t: TypeRef = c.types[tr]
+                    if isPrimIntName(c: inout c, start: t.nameStart, len: t.nameLen) {
+                        return <Bind nameStart=t.nameStart nameLen=t.nameLen fieldStart=t.nameStart fieldLen=t.nameLen />
+                    }
+                }
+            }
+        }
+        Expr.Cast(operand: _, val tyStart, val tyLen, ty: _) => {
+            // `(self as I64).format(...)`: the cast target's primitive type.
+            if isPrimIntName(c: inout c, start: tyStart, len: tyLen) {
+                return <Bind nameStart=tyStart nameLen=tyLen fieldStart=tyStart fieldLen=tyLen />
+            }
+        }
+        Expr.Field(val base, val nameStart, val nameLen) => {
+            // a primitive-typed struct field (`self.a` where a: U64): its field type
+            // name, for dispatching a method on the primitive (`self.a.absorb[S](…)`).
+            val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+            if bsi < c.structs.count {
+                val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
+                if fidx < c.structs[bsi].fields.count {
+                    val fd: FieldDef = c.structs[bsi].fields[fidx]
+                    if isPrimIntName(c: inout c, start: fd.tyStart, len: fd.tyLen) {
+                        return <Bind nameStart=fd.tyStart nameLen=fd.tyLen fieldStart=fd.tyStart fieldLen=fd.tyLen />
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    if valueKind(c: inout c, st: inout st, id: recv) == 1U64 {
+        return kwSpan(c: inout c, kw: "String", kwLen: 6U64)
+    }
+    // a Bool receiver (`b.hash[H](…)`, `flag.eq(…)`): the backend models Bool method
+    // dispatch like a primitive lang-item. Recover the type from the grounded env
+    // (`exprTypeRef` applies the instance args, so a generic `K` param bound to Bool
+    // resolves here). Bool's only resolvable structured form is its own name.
+    val rt: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
+    if rt != 0U64 {
+        if rangeEquals(bytes: c.bytes, start: c.types[rt].nameStart, len: c.types[rt].nameLen, kw: "Bool") {
+            return kwSpan(c: inout c, kw: "Bool", kwLen: 4U64)
+        }
+    }
+    val z: Bind = <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+    return z
+}
+
+// The stack of extension-view ids active on an expression's value (spec/09),
+// outermost first: nested `v#A#B` re-view nodes contribute B then A; a `#!Ext`
+// strip ends the chain (views below it are dropped); the unwrapped base value's
+// own type view (a `Type#Ext` param/binding) is appended last. Empty = no view.
+fn collectViewChain(c: inout Comp, st: inout LlvmCtx, id: U64) -> Array[U64] {
+    mut val out: Array[U64] = []
+    mut val cur: U64 = id
+    mut val go: Bool = true
+    while go {
+        match c.exprs[cur] {
+            Expr.ExtView(recv: val r, srcStart: val ss, srcLen: val sl, strip: val strp) => {
+                if strp {
+                    go = false
+                } else {
+                    out.append(value: intern(c: inout c, start: ss, len: sl))
+                    cur = r
+                }
+            }
+            _ => { go = false }
+        }
+    }
+    val r: U64 = exprTypeRef(c: inout c, st: inout st, id: cur)
+    if r != 0U64 {
+        if c.types[r].viewExtId != 0U64 {
+            out.append(value: c.types[r].viewExtId)
+        }
+    }
+    return out
+}
+
+// Whether function `fi`'s parameter views match the call's argument views — each
+// param's declared viewExtId equals the corresponding argument's actual view
+// (spec/09). Used to pick the right overload among `f(a:P)` / `f(a:P#Ext)`.
+fn funcViewsMatch(c: inout Comp, st: inout LlvmCtx, fi: U64, args: Array[Arg]) -> Bool {
+    val f: Func = c.funcs[fi]
+    mut val i: U64 = 0
+    while i < args.count {
+        if i < f.params.count {
+            mut val pv: U64 = 0
+            if f.params[i].ty != 0U64 {
+                pv = c.types[f.params[i].ty].viewExtId
+            }
+            if pv != exprViewExtId(c: inout c, st: inout st, id: args[i].expr) {
+                return false
+            }
+        }
+        i += 1
+    }
+    return true
+}
+
+// Resolve a free-function call, refining a view-blind match by parameter views so
+// `f(a: P)` and `f(a: P#Ext)` coexist and select on the arguments' views (spec/09).
+// Falls back to the view-blind result if no view-matching overload exists (the
+// view-mismatch enforcement at genArgValue then reports it).
+fn findFuncViewAware(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    val base: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+    if base >= c.funcs.count {
+        return base
+    }
+    if funcViewsMatch(c: inout c, st: inout st, fi: base, args: args) {
+        return base
+    }
+    // the front-end type check (paramsTypesMatch) can't see a local argument's
+    // struct type (it falls back to a label-only match — so base is first-by-label).
+    // Among same-name, same-label, same-param-type-head candidates, pick the one
+    // whose views match the arguments (the backend can recover views). This is what
+    // makes `f(a: P)` / `f(a: P#Ext)` select on the call's views.
+    val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
+    mut val i: U64 = 0
+    while i < c.funcs.count {
+        val f: Func = c.funcs[i]
+        if !(f.hasRecv) {
+            if !(f.isAssoc) {
+                if f.nameId == qName {
+                    if paramsLabelsOk(c: inout c, params: f.params, args: args) {
+                        if sameParamTypeHeads(c: inout c, a: c.funcs[base].params, b: f.params) {
+                            if funcViewsMatch(c: inout c, st: inout st, fi: i, args: args) {
+                                return i
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        i += 1
+    }
+    return base
+}
+
+// Whether two parameter lists have the same type-name heads (ignoring views) —
+// i.e. they are the same overload signature differing only by a `#Ext` view.
+fn sameParamTypeHeads(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
+    if a.count != b.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.count {
+        if a[i].tyNameId != b[i].tyNameId {
+            return false
+        }
+        if a[i].tyIsArray != b[i].tyIsArray {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// The extension-view id active on an expression's value (spec/09): a direct
+// `v#Ext` re-view node carries it; otherwise it comes from the value's static
+// type (a param/binding typed `Type#Ext`). 0 = no view.
+fn exprViewExtId(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
+    match c.exprs[id] {
+        Expr.ExtView(recv: _, val srcStart, val srcLen, val strip) => {
+            // `#!Ext` strips the view → plain (bare) resolution; `#Ext` selects it.
+            if strip {
+                return 0U64
+            }
+            return intern(c: inout c, start: srcStart, len: srcLen)
+        }
+        Expr.Call(val nameStart, val nameLen, val args) => {
+            // a call to a `-> Type#Ext` function yields a viewed value.
+            val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            if fi < c.funcs.count {
+                if c.funcs[fi].retTy != 0U64 {
+                    return c.types[c.funcs[fi].retTy].viewExtId
+                }
+            }
+            return 0U64
+        }
+        _ => {}
+    }
+    val r: U64 = exprTypeRef(c: inout c, st: inout st, id: id)
+    if r != 0U64 {
+        return c.types[r].viewExtId
+    }
+    return 0U64
+}
+

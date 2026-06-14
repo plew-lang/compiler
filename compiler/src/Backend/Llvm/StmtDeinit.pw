@@ -1,0 +1,139 @@
+// Part of the LLVM backend (root: _.pw): deinit emission, scope drop, and block execution.
+
+// The `deinit` method index of struct `sidx`, or c.funcs.count if it has none.
+fn structDeinitFi(c: inout Comp, sidx: U64) -> U64 {
+    val sd: StructDef = c.structs[sidx]
+    val b: Bind = kwSpan(c: inout c, kw: "deinit", kwLen: 6U64)
+    val noArgs: Array[Arg] = []
+    return findMethod(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: b.nameStart, nameLen: b.nameLen, args: noArgs)
+}
+
+// Whether destroying a value of struct `sidx` runs any deinit — its own, or a
+// (registered, non-array) field's, recursively (spec/03).
+fn structNeedsDeinit(c: inout Comp, st: inout LlvmCtx, sidx: U64) -> Bool {
+    if structDeinitFi(c: inout c, sidx: sidx) < c.funcs.count {
+        return true
+    }
+    val sd: StructDef = c.structs[sidx]
+    mut val i: U64 = 0
+    while i < sd.fields.count {
+        val fd: FieldDef = sd.fields[i]
+        if !(fd.tyIsArray) {
+            val fsi: U64 = structIndexByName(c: inout c, start: fd.tyStart, len: fd.tyLen)
+            if fsi < c.structs.count {
+                if !(c.structs[fsi].isExtern) {
+                    if structNeedsDeinit(c: inout c, st: inout st, sidx: fsi) {
+                        return true
+                    }
+                }
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// Destroy a struct VALUE `v` of struct `sidx` (spec/03): run its own `deinit` body
+// first, then each field's deinit in declaration order, recursively.
+fn emitDeinitValue(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, sidx: U64) {
+    val sd: StructDef = c.structs[sidx]
+    val fi: U64 = structDeinitFi(c: inout c, sidx: sidx)
+    if fi < c.funcs.count {
+        val slot: U64 = userFnSlot(st: inout st, idx: fi)
+        if slot < st.fnIdx.count {
+            mut val av: Array[LLVMValueRef] = []
+            av.append(value: v)
+            LLVMBuildCall2(st.b, st.fnTy[slot], st.fnVal[slot], arrayCPtr(av), 1U64, anon())
+        }
+    }
+    mut val i: U64 = 0
+    while i < sd.fields.count {
+        val fd: FieldDef = sd.fields[i]
+        if !(fd.tyIsArray) {
+            val fsi: U64 = structIndexByName(c: inout c, start: fd.tyStart, len: fd.tyLen)
+            if fsi < c.structs.count {
+                if !(c.structs[fsi].isExtern) {
+                    if structNeedsDeinit(c: inout c, st: inout st, sidx: fsi) {
+                        emitDeinitValue(c: inout c, st: inout st, v: LLVMBuildExtractValue(st.b, v, i, anon()), sidx: fsi)
+                    }
+                }
+            }
+        }
+        i += 1
+    }
+}
+
+// Run scope-exit destruction of local `li` (spec/03) if it is an owned, not-moved
+// unique struct local whose type needs a deinit (own or a field's). The struct
+// value is loaded and destroyed recursively.
+fn emitDeinitCall(c: inout Comp, st: inout LlvmCtx, li: U64) {
+    // skip a borrow/inout param (not owned here) or a value already moved out.
+    if !(st.locOwned[li]) {
+        return
+    }
+    if st.locMoved[li] {
+        return
+    }
+    // a `Ref[T]` local with a deinit-bearing pointee: release the shared cell; when
+    // the last owner drops (refcount hits 0), destroy the pointee (spec/03).
+    val rpsi: U64 = refDeinitPointeeSidx(c: inout c, st: inout st, refTy: st.locTypeRef[li])
+    if rpsi < c.structs.count {
+        val cell: LLVMValueRef = LLVMBuildLoad2(st.b, st.ptrty, st.locPtr[li], anon())
+        val newcount: LLVMValueRef = rawbufRelease(c: inout c, st: inout st, cell: cell)
+        val isZero: LLVMValueRef = LLVMBuildICmp(st.b, llvmIntEq(), newcount, LLVMConstInt(st.i64ty, 0U64, 0I32), anon())
+        val deinitBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "refdrop.deinit"))
+        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "refdrop.cont"))
+        LLVMBuildCondBr(st.b, isZero, deinitBB, contBB)
+        LLVMPositionBuilderAtEnd(st.b, deinitBB)
+        val pty: LLVMTypeRef = refPointeeTy(c: inout c, st: inout st, refTy: st.locTypeRef[li])
+        emitDeinitValue(c: inout c, st: inout st, v: LLVMBuildLoad2(st.b, pty, cell, anon()), sidx: rpsi)
+        LLVMBuildBr(st.b, contBB)
+        LLVMPositionBuilderAtEnd(st.b, contBB)
+        return
+    }
+    val sidx: U64 = st.locStructIdx[li]
+    if sidx >= c.structs.count {
+        return
+    }
+    if !(structNeedsDeinit(c: inout c, st: inout st, sidx: sidx)) {
+        return
+    }
+    val selfVal: LLVMValueRef = LLVMBuildLoad2(st.b, st.locTy[li], st.locPtr[li], anon())
+    emitDeinitValue(c: inout c, st: inout st, v: selfVal, sidx: sidx)
+}
+
+// Drop (deinit) the live locals in [fromMark, nLocals) in REVERSE declaration order
+// — spec/03's deterministic scope-exit destruction. `excludeLi` (or a large
+// sentinel) is skipped, so a unique value being moved out (e.g. returned) is not
+// also dropped here. Only deinit-bearing locals emit a call.
+fn dropScope(c: inout Comp, st: inout LlvmCtx, fromMark: U64, excludeLi: U64) {
+    mut val i: U64 = st.nLocals
+    while i > fromMark {
+        i -= 1U64
+        if i != excludeLi {
+            emitDeinitCall(c: inout c, st: inout st, li: i)
+        }
+    }
+}
+
+fn genLlvmBlock(c: inout Comp, st: inout LlvmCtx, id: U64) {
+    // lexical scope: bindings declared in this block leave scope at its end.
+    val mark: U64 = st.nLocals
+    val blk: Block = c.blocks[id]
+    mut val i: U64 = 0
+    while i < blk.stmts.count {
+        if st.terminated {
+            st.nLocals = mark
+            return
+        }
+        genLlvmStmt(c: inout c, st: inout st, id: blk.stmts[i])
+        i += 1
+    }
+    // fall-through exit: run scope-exit deinits for this block's locals (a return
+    // inside already dropped all live locals and set terminated).
+    if !(st.terminated) {
+        dropScope(c: inout c, st: inout st, fromMark: mark, excludeLi: 18446744073709551615U64)
+    }
+    st.nLocals = mark
+}
+

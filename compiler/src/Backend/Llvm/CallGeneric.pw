@@ -1,0 +1,287 @@
+// Part of the LLVM backend (root: _.pw): generic-method call emission and argument binding.
+
+// Emit a call to a monomorphized generic method (slot in st.genMeth*). The self
+// value is built in the caller's context; the call arguments are built under the
+// receiver's substitution env (so a `fallback: T` arg coerces to the instance's
+// concrete type).
+// Dispatch a call to a method with its OWN type params (`absorb[S]…`): infer the
+// method type args from the call, monomorphize keyed by a pseudo instance ref
+// (receiver name + the inferred args), and call. Returns a null sentinel if the
+// args can't be inferred / the instance can't be declared.
+fn genMethodOwnTypeParamCall(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64, recvStart: U64, recvLen: U64, args: Array[Arg]) -> LLVMValueRef {
+    val mf: Func = c.funcs[mfi]
+    val margs: Array[U64] = llvmInferFnArgs(c: inout c, st: inout st, f: mf, args: args)
+    mut val mi: U64 = 0
+    while mi < margs.count {
+        if margs[mi] == 0U64 {
+            return LLVMConstNull(st.ptrty)
+        }
+        mi += 1
+    }
+    // a pseudo instance ref: the receiver type name + the method type args, so the
+    // body emits with curTypeParams = mf.typeParams -> curTypeArgs = margs while the
+    // self type still resolves from the receiver name.
+    val pinst: U64 = c.pushType(t: <TypeRef nameStart=recvStart nameLen=recvLen args=margs />)
+    val gslot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: mfi, instRef: pinst, ownArgs: [])
+    if gslot < st.genMethK.count {
+        return genGenMethodCall(c: inout c, st: inout st, recv: recv, mfi: mfi, slot: gslot, instRef: pinst, args: args)
+    }
+    return LLVMConstNull(st.ptrty)
+}
+
+// The method-own type arguments of a call — those of the method's type params that
+// the receiver instance does NOT ground. Empty for an ordinary method (all its type
+// params are the receiver's). For a provided terminal copied onto a generic receiver
+// (`fold[B]` on `MapIter[I, F, B]`: own param B), infer the full arg list from the
+// call (inferFnArgs) and return the entries beyond the receiver's arg count.
+fn methodOwnArgs(c: inout Comp, mfi: U64, instRef: U64, args: Array[Arg]) -> Array[U64] {
+    val mf: Func = c.funcs[mfi]
+    val rcount: U64 = c.types[instRef].args.count
+    if mf.typeParams.count <= rcount {
+        return []
+    }
+    val inferred: Array[U64] = inferFnArgs(c: inout c, f: mf, args: args)
+    mut val out: Array[U64] = []
+    mut val i: U64 = rcount
+    while i < inferred.count {
+        // a failed inference (0) or out-of-range ref would seed the env with the index-0
+        // dummy type and crash emission; bail to an empty list so the caller leaves the
+        // method undeclared and reports the honest "not emittable yet" instead.
+        if inferred[i] == 0U64 || inferred[i] >= c.types.count {
+            return []
+        }
+        // only a primitive (int / float) own argument is supported for now: a scalar
+        // accumulator shares the item's i64/double representation, so the receiver-`B`
+        // (item) / own-`B` (accumulator) name collision is observably harmless. A
+        // String / struct / array accumulator (a different LLVM representation) is not
+        // yet emitted correctly through the collided env, so bail to the loud reject
+        // rather than miscompile.
+        val owt: TypeRef = c.types[inferred[i]]
+        if !(isIntType(c: inout c, start: owt.nameStart, len: owt.nameLen) || isFloatType(c: inout c, start: owt.nameStart, len: owt.nameLen)) {
+            return []
+        }
+        out.append(value: inferred[i])
+        i += 1
+    }
+    return out
+}
+
+fn genGenMethodCall(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64, slot: U64, instRef: U64, args: Array[Arg]) -> LLVMValueRef {
+    val mf: Func = c.funcs[mfi]
+    mut val av: Array[LLVMValueRef] = []
+    if mf.selfInout {
+        av.append(value: placePtrOf(c: inout c, st: inout st, id: recv))
+    } else {
+        av.append(value: genLlvmExpr(c: inout c, st: inout st, id: recv))
+    }
+    val savedP: Array[Bind] = c.curTypeParams
+    val savedA: Array[U64] = c.curTypeArgs
+    c.curTypeParams = mf.typeParams
+    c.curTypeArgs = concatArgs(add: c.types[instRef].args, base: st.genMethOwn[slot])
+    // bind Self/Item for an own-param provided call so an argument typed by `Item`
+    // coerces against the receiver's real item type (see emitOneGenMethod).
+    val sGs: U64 = c.curSelfRef
+    val sGi: U64 = c.curItemRef
+    if mf.isProvided {
+        setSelfItemEnv(c: inout c, recvStart: c.types[instRef].nameStart, recvLen: c.types[instRef].nameLen, recvInstRef: instRef)
+    }
+    mut val ai: U64 = 0
+    while ai < args.count {
+        av.append(value: genArgValue(c: inout c, st: inout st, argExpr: args[ai].expr, p: mf.params[ai]))
+        ai += 1
+    }
+    mut val di: U64 = args.count
+    while di < mf.params.count {
+        av.append(value: genArgValue(c: inout c, st: inout st, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
+        di += 1
+    }
+    c.curSelfRef = sGs
+    c.curItemRef = sGi
+    c.curTypeParams = savedP
+    c.curTypeArgs = savedA
+    return LLVMBuildCall2(st.b, st.genMethTy[slot], st.genMethVal[slot], arrayCPtr(av), av.count, anon())
+}
+
+// The address of an addressable place (a struct local), for `inout` self. Falls
+// back to a fresh alloca holding the value for a non-place receiver.
+// The LLVM struct type of a struct-valued expression `structExpr` (def `sidx`):
+// its generic instance type if it carries one, else the registered non-generic
+// type. LLVMConstNull(ptr) if neither (so the caller can fall back / error).
+fn structLlvmTyOfExpr(c: inout Comp, st: inout LlvmCtx, structExpr: U64, sidx: U64) -> LLVMTypeRef {
+    val ref: U64 = exprTypeRef(c: inout c, st: inout st, id: structExpr)
+    if ref != 0U64 {
+        if isGenericInst(c: inout c, ref: ref) {
+            val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: ref)
+            if gs < st.genStructRefs.count {
+                return st.genStructTys[gs]
+            }
+        }
+    }
+    val reg: U64 = structRegSlot(c: inout c, st: inout st, start: c.structs[sidx].nameStart, len: c.structs[sidx].nameLen)
+    if reg < st.structIdxs.count {
+        return st.structTys[reg]
+    }
+    return LLVMConstNull(st.ptrty)
+}
+
+fn placePtrOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
+    match c.exprs[id] {
+        Expr.Ident(val start, val len) => {
+            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            if li < st.nLocals {
+                return st.locPtr[li]
+            }
+        }
+        Expr.Field(val base, val nameStart, val nameLen) => {
+            // a field place `self.inner` (the adapter pattern: `self.inner.next()`
+            // with `inout` next): GEP into the base's storage so the callee mutates
+            // in place, not a copy. The base must be an addressable struct local.
+            match c.exprs[base] {
+                Expr.Ident(start: val bs, len: val bl) => {
+                    val bli: U64 = findLocal(c: inout c, st: inout st, start: bs, len: bl)
+                    val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+                    if bli < st.nLocals && bsi < c.structs.count {
+                        val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
+                        if fidx < c.structs[bsi].fields.count {
+                            return LLVMBuildStructGEP2(st.b, st.locTy[bli], st.locPtr[bli], fidx, anon())
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        Expr.Index(val base, val index) => {
+            // an array element place `xs[i]` (get-modify-set: `xs[i].bump()` with an
+            // `inout` method): the element pointer into the owned buffer, so the
+            // callee mutates in place. (The buffer is owned — value-semantics CoW
+            // already split any alias — so direct mutation is observably correct.)
+            if exprIsArray(c: inout c, st: inout st, id: base) {
+                val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: base)
+                val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: base)
+                val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 0U64, anon())
+                val count: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 1U64, anon())
+                val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: index)
+                emitBoundsCheck(c: inout c, st: inout st, idx: idx, count: count)
+                return arrElemPtr(st: inout st, elemTy: elemTy, data: data, idx: idx)
+            }
+        }
+        _ => {}
+    }
+    val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: id)
+    val slot: LLVMValueRef = entryAlloca(st: inout st, ty: LLVMTypeOf(v))
+    LLVMBuildStore(st.b, v, slot)
+    return slot
+}
+
+// Emit a call argument for a parameter `p`: an array-literal arg is built with the
+// parameter's element type (so `[10,20]` for an `Array[I32]` param uses i32, not
+// i64-defaulted elements); a scalar arg is width-coerced to the parameter type.
+// Whether (start,len) names a concrete value type (struct / enum / newtype /
+// primitive) — as opposed to a bare generic type parameter. A generic parameter
+// absorbs a `#`-view argument via inference (`T` binds to `S#P`), so the view-
+// invariance check below must not fire on it.
+fn tyNameConcrete(c: inout Comp, start: U64, len: U64) -> Bool {
+    if isPrimType(c: inout c, start: start, len: len) {
+        return true
+    }
+    if structIndexByName(c: inout c, start: start, len: len) < c.structs.count {
+        return true
+    }
+    if isEnumName(c: inout c, start: start, len: len) {
+        return true
+    }
+    val qid: U64 = intern(c: inout c, start: start, len: len)
+    mut val nti: U64 = 0
+    while nti < c.newtypes.count {
+        if c.newtypes[nti].nameId == qid {
+            return true
+        }
+        nti += 1
+    }
+    return false
+}
+
+fn genArgValue(c: inout Comp, st: inout LlvmCtx, argExpr: U64, p: Param) -> LLVMValueRef {
+    // extension-view invariance (spec/09): `A` and `A#Ext` are distinct types with
+    // no implicit cast either way, so an argument's view must match the parameter's
+    // declared view exactly — the view is applied/dropped explicitly at the call
+    // (`value#Ext` / `value#!Ext`). Plain code (no views) has both sides 0. A generic
+    // type-parameter param absorbs the view (it binds to `S#P` via inference), so the
+    // check applies only to a concrete param type.
+    mut val pView: U64 = 0
+    mut val pConcrete: Bool = true
+    if p.ty != 0U64 {
+        pView = c.types[p.ty].viewExtId
+        pConcrete = tyNameConcrete(c: inout c, start: c.types[p.ty].nameStart, len: c.types[p.ty].nameLen)
+    }
+    if pConcrete {
+        if pView != exprViewExtId(c: inout c, st: inout st, id: argExpr) {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: argExpr)), msg: "extension view mismatch: a plain type and its `#Ext` view are distinct — apply or drop the view explicitly at the call (`value#Ext` / `value#!Ext`)")
+        }
+    }
+    if p.isInout {
+        // pass the caller's place address (the callee mutates in place).
+        return placePtrOf(c: inout c, st: inout st, id: argExpr)
+    }
+    // a `move` parameter consumes the argument — the callee owns it and runs
+    // deinit, so mark the source local moved (excluded from the caller's drop).
+    if p.isMove {
+        match c.exprs[argExpr] {
+            Expr.Ident(start: val s, len: val l) => {
+                markLocalMoved(c: inout c, st: inout st, start: s, len: l)
+            }
+            _ => {}
+        }
+    }
+    // an `any P` parameter (spec/08): box a concrete conforming argument into the
+    // existential fat pointer, or value-semantics-copy an existing `any` place.
+    mut val argBoxed: Bool = false
+    val argAny: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: p.ty, valueExpr: argExpr, outBoxed: inout argBoxed)
+    if argBoxed {
+        return argAny
+    }
+    if refIsAny(c: inout c, ref: p.ty) {
+        return copyAnyIfPlace(c: inout c, st: inout st, rv: genLlvmExpr(c: inout c, st: inout st, id: argExpr), valueExpr: argExpr)
+    }
+    if p.tyIsArray {
+        match c.exprs[argExpr] {
+            Expr.Array(val elems) => {
+                mut val argElemRef: U64 = 0
+                if p.ty != 0U64 {
+                    if c.types[p.ty].args.count > 0U64 {
+                        argElemRef = c.types[p.ty].args[0]
+                    }
+                }
+                return genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen), elemRef: argElemRef)
+            }
+            _ => {}
+        }
+        return genLlvmExpr(c: inout c, st: inout st, id: argExpr)
+    }
+    // a generic-instance parameter (`o: Optional[I64]`, `b: Box[I32]`): flow the
+    // expected concrete instance to the argument so a JSX construction without
+    // explicit type args (`<Optional.Some v=5 />`) grounds its head from context
+    // (genLlvmMake/genLlvmMakeEnum consume st.expectedTy). Reset after so an
+    // unconsumed value (a non-construction arg) cannot leak into a later one.
+    if p.ty != 0U64 {
+        if isGenericInst(c: inout c, ref: p.ty) {
+            st.expectedTy = p.ty
+        }
+    }
+    val argV: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: argExpr)
+    st.expectedTy = 0U64
+    return coerceIntTo(c: inout c, st: inout st, v: argV, tyStart: p.tyStart, tyLen: p.tyLen)
+}
+
+// Index into st.fn* for a cached user function (by c.funcs index), or st.fnIdx.count.
+fn userFnSlot(st: inout LlvmCtx, idx: U64) -> U64 {
+    mut val i: U64 = 0
+    while i < st.fnIdx.count {
+        if st.fnIdx[i] == idx {
+            return i
+        }
+        i += 1
+    }
+    return st.fnIdx.count
+}
+
