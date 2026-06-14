@@ -2,7 +2,7 @@
 
 正典コンパイラ `compiler/src/` を「現実装の理想像」までリファクタする計画。**なぜ・到達点・マイルストーン・未検証リスク**を残す（進捗の「やった」は git）。現在地は [worklog.md](worklog.md)。
 
-> **現在地（tag）**：M0（cross-module 変異 probe）・M1（巨大ファイル全分割＝最大 756 行）・M2＋M3（`Comp` god-struct を 83→**11 フィールド**＝ `arena`/`interner`/`typeCache`/`monoWork`/`modules`/`decls`/`parseScratch`/`cur`＋mode flags 3 に集約）まで完了（tag `refactor-m0`〜`m3`）。前提として backend にネスト place 変異（`placePtrStrict`）を追加済。**残るは M4（モジュール昇格）のみ** ── part 木を `import` 境界の独立モジュール（Backend/・Ir/）へ。M0 で前提（cross-module `inout` 変異）は検証済だが大物ゆえ着手前に確認。
+> **現在地（tag）**：M0（cross-module 変異 probe）・M1（巨大ファイル全分割＝最大 756 行）・M2＋M3（`Comp` god-struct を 83→**11 フィールド**＝ `arena`/`interner`/`typeCache`/`monoWork`/`modules`/`decls`/`parseScratch`/`cur`＋mode flags 3 に集約）まで完了（tag `refactor-m0`〜`m3`）。前提として backend にネスト place 変異（`placePtrStrict`）を追加済。**残り＝M5（scoped resolution・着手中）→ M4（モジュール昇格）の順**。循環 import 禁止（DAG）を確定（[spec/15 循環依存](../spec/04-execution/15-modules.md#循環依存モジュールグラフは-dag)）し、それを機に resolver を **flat global＋ヒューリスティック＋post-hoc gate** から **scoped resolution** へ移行する（下記「[scoped resolution](#scoped-resolution-への移行m5resolver-の理想化)」）。**型/関数の可視性 gate は使い捨てゆえ作らず、scoped resolution で構造的に解消**。M5 は単一モジュールのまま実装でき緑を保てる＝M4 の前提インフラ。
 
 ## 診断（何が問題か）
 
@@ -65,9 +65,51 @@ a/b は「結合のため」でなく**可読性のため**カテゴリ別子構
 | **M1** | **巨大ファイルを part 分割**（Llvm 11.6k→~20、Check/Resolve/Mono/Lower/Verify/Ast も ≤500・std の >500 も）。構造・意味は不変＝観測出力不変で不動点が守る | 不要 | 低 | 可読性・即効・以降を扱いやすく |
 | **M2** | **`Comp` の (a)+(b) をカテゴリ別子構造体へ解体**（Arena/Interner/TypeCache/MonoWork/ModuleTable/DeclTables）。`c.exprs`→`c.arena.exprs` 等の機械的書換・**1 カテゴリ 1 コミット**で緑維持 | 不要（intra-module） | 中 | god-object の (a)(b) 側を構造化 |
 | **M3** | **(c) パス一時状態を per-pass コンテキストへ抽出**（VerifyCtx→ParseScratch→LowerCtx→**CodegenCtx** の順＝小→大）。署名 `(c: inout Comp,…)`→`(…, ctx: inout CodegenCtx,…)` を threading | 不要（intra-module） | 高（最大 churn） | **god-object を実際に解消** |
-| **M4** | **モジュール昇格**（M0 が通れば）：Backend を独立モジュール化＋Ir をデータモジュール群へ＋パスをモジュールへ。「1 モジュール 1 主構造体」「巨大 part 羅列」を解消 | 必要 | 中（M0 次第） | 理想像の完成 |
+| **M5** | **scoped resolution＋循環検出**（M4 の前提・**M4 より先**）：名前解決をスコープ化＋import グラフ DFS で循環 reject。gate は作らず構造的に解消 | 不要（単一モジュールのまま） | 中 | resolver を理想化・spec 準拠化 |
+| **M4** | **モジュール昇格**（M0＋M5 が通れば）：Backend を独立モジュール化＋Ir をデータモジュール群へ＋パスをモジュールへ。「1 モジュール 1 主構造体」「巨大 part 羅列」を解消 | 必要 | 中（M0 次第） | 理想像の完成 |
 
-各 M 内も増分（1 ファイル/1 カテゴリ/1 パスごと commit＋tag）。M3 完了時点で god-object は消え、M4 は「綺麗になった塊をモジュール境界で切る」だけの仕事になる。
+各 M 内も増分（1 ファイル/1 カテゴリ/1 パスごと commit＋tag）。M3 完了時点で god-object は消え、**実施順は M3→M5→M4**：M5（resolver の scoped 化）を単一モジュールのまま終え、M4 で「分割した境界を scoped resolution が検査する」が噛み合う。
+
+## scoped resolution への移行（M5・resolver の理想化）
+
+**決定**：循環 import 禁止（[spec/15 循環依存](../spec/04-execution/15-modules.md#循環依存モジュールグラフは-dag)）を機に、resolver を移行する。**gate（型参照 gate・関数 gate）は使い捨てなので作らない** ── scoped resolution で構造的に解消する。
+
+### 今のモデルの病理（実装が示す事実）
+- 全 struct/func は単一プール `c.arena.structs`/`c.arena.funcs`。モジュール容れ物なし。
+- `findFunc`（Resolve/Module.pw:123）＝全 funcs を線形走査し、**同モジュール優先ヒューリスティック**で別モジュールの同名 private を退ける（コメントが「これが無いと spurious reject」と自認）。
+- 可視性は **post-hoc gate**：`checkImports`（import 文の名が export 済か）＋`checkUseVisibility`（cross-module 関数呼びが import 済か）。Driver.pw:291-292 で実行。
+- **型参照は素通し**（"Types stay ambient"・Check/Visibility.pw:52）＝spec 逸脱の穴。
+- これらは「全部見える前提を後から矯正する3絆創膏」。
+
+### 理想像
+> モジュール＝スコープ。スコープ = 自モジュール宣言 ∪ import で持ち込んだ依存の export 名 ∪ lang-item 型。名前解決＝**スコープ内候補のみ**考慮。
+
+帰結：型 gate 不要（未 import 型はそもそも解決されない）／同モジュール優先ヒューリスティック不要（別モジュール非 import は候補にすら入らない）／`checkUseVisibility` 不要（解決に内包）。3 絆創膏→1 原理。
+
+### 実装方針
+- **新コンテナは作らない**。中央述語 **`nameVisibleFrom(comp, useMod, candMod, candStart, candLen) -> Bool`** を全「ソース名→宣言」解決に **FILTER** として適用＝arena 線形走査の現スタイルに整合（スコープの実体＝述語）。
+- **可視判定**：`candMod == useMod` ∥ lang-item 型（`isLangItemTypeName`）∥ Core ambient ∥（candName が useMod の `c.modules.imports` に在り、かつ candName が `c.modules.exports` に在る）。namespace/alias 経由も `markImport`（Parser/Decl.pw:467）で `imports` に登録済 → 同じ述語で効く。**型の namespace 参照（型位置の `P.Foo`）は現状未処理＝要実装**。
+- **適用箇所**：
+  - free fn＝`findFunc` の候補ループに `nameVisibleFrom` を入れ、**同モジュール優先ヒューリスティックを削除**（in-scope 候補のみ残す）。
+  - 型名＝**チョークポイント散在**（~22 ファイルが `c.arena.structs` 直走査・集約は `structIndexByName` Decl.pw:471 のみ）。ソース由来の型名解決（型注釈・TypeRef 検査・構築ヘッド・match パターン型）に述語を適用。当面は **書かれた TypeRef を走査して in-scope を検査する小パス**（findFunc が関数に埋めるのと同じ「スコープ内に解決するか」を型側でも行う＝gate ではなく scoped resolution の型側）。理想は全型ルックアップを scope-aware な単一チョークポイントへ寄せること（散在解消は付随リファクタ）。
+  - トップレベル global（`val`/`mut val`）名も同様。
+- **対象外（import スコープ非依存）**：メソッド・assoc fn・演算子・トレイト impl の dispatch は型＋有効 `#Ext` だけで決まる（spec/09）＝モジュールスコープに掛けない。
+- **Core ambient 維持**：`@Std/Core` は force-load 済 ambient（Optional/Result/演算子 witness/range/`for`）＝スコープ常駐扱い。`assert` は従来どおり import gate（spec）。
+- **削除**：`checkUseVisibility`・`findFunc` の same-module 優先ヒューリスティック・型 ambient 素通し。**保持**：`checkImports`（import 文自体の検証＝「import した名が未 export」を良い診断で出す・解決とは別の入口検証）。
+
+### 循環検出（DAG 強制・独立の小追加）
+`c.modules.imports`（`fieldStart`=importing module id）＝import 辺。これを辺集合に **DFS で循環検出 → コンパイルエラー**（輪のモジュール列を診断）。scoped resolution とは独立だが spec/15 の確定事項なので同時に入れる。
+
+### 順序・ブートストラップ安全
+- コンパイラは**現状 1 モジュール（全 part）** ＝内部参照は全て same-module＝scoped 化しても**挙動不変・緑のまま**。
+- cross-module scoping を実際に exercise するのは **compiler↔@Std 境界**（`_.pw` の import 群）＝型 scoping ON で「std 型を使うが未 import」が compiler 自身に出れば import 群へ追補（**健全な churn**・spec 準拠化）。これが scoped resolution の実テスト。
+- 段取り（各段 dev-rebuild→test→reseed→不動点→commit）：
+  1. `nameVisibleFrom` 追加＋free fn を scoped 化（ヒューリスティック削除）。
+  2. 型名解決を scoped 化（書かれた TypeRef の in-scope 検査）＋compiler/std 自身の未 import を追補。
+  3. `checkUseVisibility` 削除（内包確認）。
+  4. import 循環検出（DFS）追加。
+  5. reject テスト追加：①未 import 型参照 ②未 import 関数呼び ③循環 import。
+- **その後 M4（モジュール分割）が本当に検査される**＝M5 が M4 の前提インフラ。
 
 ### M2 の前提：ネスト place 変異（backend 機能・解決済）
 
