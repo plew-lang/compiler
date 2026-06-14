@@ -2,7 +2,7 @@
 
 正典コンパイラ `compiler/src/` を「現実装の理想像」までリファクタする計画。**なぜ・到達点・マイルストーン・未検証リスク**を残す（進捗の「やった」は git）。現在地は [worklog.md](worklog.md)。
 
-> **現在地（tag）**：M0（cross-module 変異 probe）・M1（巨大ファイル全分割＝最大 756 行）・M2＋M3（`Comp` god-struct を 83→**11 フィールド**＝ `arena`/`interner`/`typeCache`/`monoWork`/`modules`/`decls`/`parseScratch`/`cur`＋mode flags 3 に集約）まで完了（tag `refactor-m0`〜`m3`）。前提として backend にネスト place 変異（`placePtrStrict`）を追加済。**残り＝M5（scoped resolution・着手中）→ M4（モジュール昇格）の順**。循環 import 禁止（DAG）を確定（[spec/15 循環依存](../spec/04-execution/15-modules.md#循環依存モジュールグラフは-dag)）し、それを機に resolver を **flat global＋ヒューリスティック＋post-hoc gate** から **scoped resolution** へ移行する（下記「[scoped resolution](#scoped-resolution-への移行m5resolver-の理想化)」）。**型/関数の可視性 gate は使い捨てゆえ作らず、scoped resolution で構造的に解消**。M5 は単一モジュールのまま実装でき緑を保てる＝M4 の前提インフラ。
+> **現在地（tag）**：M0〜M3（`Comp` god-struct 83→**11 フィールド**・巨大ファイル全分割）＋**M5（scoped resolution＋循環検出）完了**。残り＝**M4（モジュール昇格）のみ**。M5 で resolver を **flat global＋ヒューリスティック＋post-hoc gate** から **scoped resolution** へ移行済：`nameVisibleFrom`（同モジュール定義 or imported+exported）を選択の唯一の基準にし、自由関数（`findFunc`）・型/トレイト（`checkTypeVisibility`）の双方をスコープ化、`detectImportCycles` で DAG を強制（[spec/15 循環依存](../spec/04-execution/15-modules.md#循環依存モジュールグラフは-dag)）。**gate は作らず構造的に解消**（当初計画通り）。M5 は単一モジュールのまま緑を保ったまま完了＝M4 の前提インフラが整った。新カテゴリ `tests/partreject/`（多ファイル reject）追加。
 
 ## 診断（何が問題か）
 
@@ -110,6 +110,8 @@ a/b は「結合のため」でなく**可読性のため**カテゴリ別子構
   4. import 循環検出（DFS）追加。
   5. reject テスト追加：①未 import 型参照 ②未 import 関数呼び ③循環 import。
 - **その後 M4（モジュール分割）が本当に検査される**＝M5 が M4 の前提インフラ。
+
+**実装で判明した罠（M5 完了済）**：①**型注釈スパンは再 intern**（Phase D・ソース offset でない）ので `moduleOf(型スパン)` は使えない ── use-site module は**包含 decl の実 offset**（func `nameStart`・struct/enum `defOffset`）から、型の定義モジュールも `defOffset` から取る。②`NewtypeDef` に `defOffset` を追加（StructDef/EnumDef と同型）＝cross-module newtype が解決。③型パラメータは**包含 decl の `typeParams`** と照合して skip（グローバル `isTypeParamName` は単一大文字 struct `P` 等で破れる ── `FilterIter[I,P,E]`）。④循環検出は import 名→`definingModuleOfName` で module 辺を作り DFS color。⑤backend は `array[i].field` チェーン読みを未対応 ── 中間値をローカル束縛して回避。
 
 ### M2 の前提：ネスト place 変異（backend 機能・解決済）
 
