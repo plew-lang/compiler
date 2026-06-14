@@ -254,12 +254,12 @@ fn internHash(c: inout Comp, start: U64, len: U64) -> U64 {
 }
 
 // Grow the bucket index (double, or 8 from empty), re-placing every interned span
-// by re-hashing. The dense internStarts/internLens arrays are untouched (ids stay
+// by re-hashing. The dense interner.starts/lens arrays are untouched (ids stay
 // stable). Capacity is a power of two so the slot index is a bitmask (& cap-1).
 fn internGrow(c: inout Comp) {
     mut val newCap: U64 = 8
-    if c.internBuckets.count > 0 {
-        newCap = c.internBuckets.count * 2
+    if c.interner.buckets.count > 0 {
+        newCap = c.interner.buckets.count * 2
     }
     mut val nb: Array[U64] = []
     mut val k: U64 = 0
@@ -268,8 +268,8 @@ fn internGrow(c: inout Comp) {
         k += 1
     }
     mut val i: U64 = 0
-    while i < c.internCount {
-        val code: U64 = internHash(c: inout c, start: c.internStarts[i], len: c.internLens[i])
+    while i < c.interner.count {
+        val code: U64 = internHash(c: inout c, start: c.interner.starts[i], len: c.interner.lens[i])
         mut val slot: U64 = code & (newCap - 1)
         while nb[slot] != 0 {
             slot = (slot + 1) & (newCap - 1)
@@ -277,7 +277,7 @@ fn internGrow(c: inout Comp) {
         nb.set(i: slot, value: i + 1)
         i += 1
     }
-    c.internBuckets = nb
+    c.interner.buckets = nb
 }
 
 // Intern a name span to its stable 1-based id (equal content ⇒ equal id; 0 is
@@ -316,26 +316,26 @@ fn newtypeUnderName(c: inout Comp, start: U64, len: U64) -> Bind {
 }
 
 fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
-    if c.internBuckets.count == 0 {
+    if c.interner.buckets.count == 0 {
         internGrow(c: inout c)
     } else {
-        if (c.internCount + 1) * 4 > c.internBuckets.count * 3 {
+        if (c.interner.count + 1) * 4 > c.interner.buckets.count * 3 {
             internGrow(c: inout c)
         }
     }
     val code: U64 = internHash(c: inout c, start: start, len: len)
-    val cap: U64 = c.internBuckets.count
+    val cap: U64 = c.interner.buckets.count
     mut val slot: U64 = code & (cap - 1)
     while true {
-        val b: U64 = c.internBuckets[slot]
+        val b: U64 = c.interner.buckets[slot]
         if b == 0 {
-            c.internStarts.append(value: start)
-            c.internLens.append(value: len)
-            c.internCount += 1
-            c.internBuckets.set(i: slot, value: c.internCount)
-            return c.internCount
+            c.interner.starts.append(value: start)
+            c.interner.lens.append(value: len)
+            c.interner.count += 1
+            c.interner.buckets.set(i: slot, value: c.interner.count)
+            return c.interner.count
         }
-        if spansEqual(c: inout c, aStart: c.internStarts[b - 1], aLen: c.internLens[b - 1], bStart: start, bLen: len) {
+        if spansEqual(c: inout c, aStart: c.interner.starts[b - 1], aLen: c.interner.lens[b - 1], bStart: start, bLen: len) {
             return b
         }
         slot = (slot + 1) & (cap - 1)

@@ -691,6 +691,22 @@ struct NewtypeDef {
     pub val underRef: U64
 }
 
+// Name interner (content-keyed, Phase C): maps each name span (start,len into
+// `Comp.bytes`) to a stable 1-based id, so name equality becomes an integer
+// compare instead of a byte-by-byte `spansEqual`. Declaration names are
+// pre-interned once into a `nameId` field on their table entry; a name-vs-decl
+// scan interns the query once and compares ids in the loop. `starts`/`lens` hold
+// the unique spans indexed by id-1; `buckets` is an open-addressing slot→id map
+// (0 = empty); `count` is the number of interned names. Re-interned names unify
+// by CONTENT (equal bytes ⇒ equal id), which is the whole point.
+struct Interner {
+    pub mut val starts: Array[U64] = []
+    pub mut val lens: Array[U64] = []
+    pub mut val buckets: Array[U64] = []
+    pub mut val count: U64 = 0
+}
+pub impl Interner { factory }
+
 struct Comp {
     // source bytes. `mut val` so the derive synthesizer can append synthetic
     // identifier names ("eq", "lhs", ...) and reference them by span — existing
@@ -778,19 +794,9 @@ struct Comp {
     // by appending the names to `bytes` at known offsets, so kwSpan is an O(1) table
     // lookup instead of an O(n) source scan + a planted-comment occurrence guarantee.
     pub mut val kwCache: Array[Bind] = []
-    // name interning (Phase C): a content-keyed table that maps each name span
-    // (start,len into `bytes`) to a stable 1-based integer id, so name equality
-    // becomes integer == instead of a byte-by-byte `spansEqual`. Declaration names
-    // (struct/enum/variant/field/func/trait/local/…) are pre-interned once into a
-    // `nameId` field on their table entry, so a name-vs-decl scan interns the query
-    // once and compares ids in the loop. `internStarts`/`internLens` hold the unique
-    // spans indexed by id-1; `internBuckets` is an open-addressing slot→id map
-    // (0 = empty). Re-interned names (internBytes gives each decl a distinct byte
-    // range) unify by CONTENT, which is the whole point — equal bytes ⇒ equal id.
-    pub mut val internStarts: Array[U64] = []
-    pub mut val internLens: Array[U64] = []
-    pub mut val internBuckets: Array[U64] = []
-    pub mut val internCount: U64 = 0
+    // name interning (Phase C): a content-keyed table mapping each name span to a
+    // stable 1-based id, so name equality is an integer compare (see `Interner`).
+    pub mut val interner: Interner = <Interner />
     // typed-AST cache (Phase B): each expression node's recovered `TypeInfo`,
     // stored as 4 parallel scalar arrays keyed by expr id (struct-array IndexSet
     // isn't available in the self-host subset). `typeOf` fills these lazily during
