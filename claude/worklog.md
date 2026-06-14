@@ -13,6 +13,8 @@
 
 **実装済みの主要能力の正典地図は [provisional.md](provisional.md)**（spec 章ごとに「✅＝完了／✅でない＝残作業」を列挙）。ここでは再掲しない。大物の経緯は git タグ。
 
+**計画中の大物＝コンパイラ構造リファクタ**（83 フィールドの `Comp` god-object 解体＋巨大ファイル分割＋モジュール化）＝[compiler-refactor.md](compiler-refactor.md)（診断・到達点・マイルストーン M0-M4・未検証リスク）。引数名/ラベルは [spec/04 規約](../spec/01-basics/04-functions.md#引数名とラベルの指針規約) に揃える。未着手（M0 probe から）。
+
 ## 🎯 ゴール＝「3 大機能を除く spec 完全準拠」
 
 **並行 spawn・循環回収・パッケージ管理（M3）の 3 つを意図的に後回しにし、それ以外で Plew が完全に仕様通り動く状態を目指す。** 残作業の正典地図は [provisional.md](provisional.md)（＝現コンパイラが spec から意図的に剥離している箇所のカタログ・`✅` でない項が残作業）＝**この 3 つ以外の剥離をすべて潰す**のがゴール。完了の目安＝provisional.md が（3 大機能・spec-future を除いて）すべて `✅` になり、spec 由来の reject/run テストが網羅される。
