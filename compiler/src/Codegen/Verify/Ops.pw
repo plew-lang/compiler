@@ -1,0 +1,274 @@
+// Part of the acceptance verification pass (root: _.pw): argument, field/
+// method visibility, binary-operator, and `as`-cast lossless checks.
+
+// verify each call/method argument's expression (the arg-mode checks themselves
+// run via checkLitCtx -> checkCallArgs -> checkUniqueArgModes).
+fn verifyArgs(c: inout Comp, args: Array[Arg]) {
+    mut val i: U64 = 0
+    while i < args.count {
+        verifyExpr(c: inout c, id: args[i].expr)
+        i += 1
+    }
+    // overlapping `inout` (spec/03): two or more `inout` arguments of ONE call that
+    // name the SAME place are forbidden — last-write-wins would be a silent bug. This
+    // is the syntactic case ① (identical place expressions); distinct-provability for
+    // subscripts (case ②/③) is a separate lint/runtime concern.
+    mut val a: U64 = 0
+    while a < args.count {
+        if args[a].isInout {
+            mut val b: U64 = a + 1U64
+            while b < args.count {
+                if args[b].isInout {
+                    if exprSyntaxEq(c: inout c, a: args[a].expr, b: args[b].expr) {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: args[b].expr)), msg: "two `inout` arguments refer to the same place in one call; overlapping `inout` is forbidden (last-write-wins would be a silent bug)")
+                    }
+                }
+                b += 1U64
+            }
+        }
+        a += 1U64
+    }
+}
+
+// Conservative syntactic equality of two place/value expressions, for the
+// overlapping-`inout` check (spec/03 case ①): identical variable, field/arrow chain,
+// or subscript with identical base and index. Anything else (calls, etc.) compares
+// unequal — the check only fires on definite syntactic identity.
+fn exprSyntaxEq(c: inout Comp, a: U64, b: U64) -> Bool {
+    match c.exprs[a] {
+        Expr.Ident(start: val s1, len: val l1) => {
+            match c.exprs[b] {
+                Expr.Ident(start: val s2, len: val l2) => { return spansEqual(c: inout c, aStart: s1, aLen: l1, bStart: s2, bLen: l2) }
+                _ => { return false }
+            }
+        }
+        Expr.Int(value: val v1, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: val neg1) => {
+            match c.exprs[b] {
+                Expr.Int(value: val v2, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: val neg2) => { return v1 == v2 && neg1 == neg2 }
+                _ => { return false }
+            }
+        }
+        Expr.Field(base: val base1, nameStart: val n1s, nameLen: val n1l) => {
+            match c.exprs[b] {
+                Expr.Field(base: val base2, nameStart: val n2s, nameLen: val n2l) => { return spansEqual(c: inout c, aStart: n1s, aLen: n1l, bStart: n2s, bLen: n2l) && exprSyntaxEq(c: inout c, a: base1, b: base2) }
+                _ => { return false }
+            }
+        }
+        Expr.Arrow(base: val base1, nameStart: val n1s, nameLen: val n1l) => {
+            match c.exprs[b] {
+                Expr.Arrow(base: val base2, nameStart: val n2s, nameLen: val n2l) => { return spansEqual(c: inout c, aStart: n1s, aLen: n1l, bStart: n2s, bLen: n2l) && exprSyntaxEq(c: inout c, a: base1, b: base2) }
+                _ => { return false }
+            }
+        }
+        Expr.Index(base: val base1, index: val idx1) => {
+            match c.exprs[b] {
+                Expr.Index(base: val base2, index: val idx2) => { return exprSyntaxEq(c: inout c, a: base1, b: base2) && exprSyntaxEq(c: inout c, a: idx1, b: idx2) }
+                _ => { return false }
+            }
+        }
+        _ => { return false }
+    }
+}
+
+// field-read visibility, mirroring genExpr's Field arm (Expr.pw): a struct base
+// checks the field against its owner; an array base against `Array`. Also rejects
+// using a method as a value.
+fn verifyFieldReadVis(c: inout Comp, base: U64, nameStart: U64, nameLen: U64) {
+    val bt: TypeInfo = typeOf(c: inout c, id: base)
+    if bt.kind == 2 {
+        if fieldVis(c: inout c, structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) == 3U64 {
+            if typeHasMethodNamed(c: inout c, recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen) {
+                compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "a method cannot be used as a value; call it, or wrap it in a closure (e.g. `fn() { obj.method() }`)")
+            }
+        }
+        checkFieldReadVis(c: inout c, ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+    } else {
+        if bt.kind == 3 {
+            val arrName: Bind = kwSpan(c: inout c, kw: "Array", kwLen: 5)
+            checkFieldReadVis(c: inout c, ownerStart: arrName.nameStart, ownerLen: arrName.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+        }
+    }
+}
+
+// method-call visibility, mirroring genExpr's Method arm (Expr.pw).
+fn verifyMethodVis(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    val rt: TypeInfo = typeOf(c: inout c, id: recv)
+    if rt.kind == 2 {
+        // resolve the method on the receiver type to get its Func (checkMethodVis
+        // inspects the impl block's visibility); skip if unresolved (a separate
+        // "no such method" diagnostic covers that).
+        val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        if mi < c.funcs.count {
+            checkMethodVis(c: inout c, ownerStart: rt.nameStart, ownerLen: rt.nameLen, mf: c.funcs[mi], offset: nameStart)
+            // an `inout fn` method mutates the receiver, so it must be a mutable PLACE
+            // — not an rvalue temporary (`<S…/>.bump()` / `mk().bump()` would mutate a
+            // value that is immediately discarded — spec/03).
+            if c.funcs[mi].selfInout {
+                if !(exprIsPlace(c: inout c, id: recv)) {
+                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call an `inout fn` method on a temporary value; the receiver must be a place (a variable or field) declared `mut val` (spec/03)")
+                }
+                if !(placeIsMutable(c: inout c, id: recv)) {
+                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
+                }
+                // overlapping `inout` (spec/03 case ①): an `inout fn` self IS an inout
+                // position, so an `inout` argument naming the same place as the receiver
+                // overlaps — last-write-wins would be a silent bug.
+                mut val k: U64 = 0
+                while k < args.count {
+                    if args[k].isInout {
+                        if exprSyntaxEq(c: inout c, a: recv, b: args[k].expr) {
+                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: args[k].expr)), msg: "the receiver of an `inout fn` and an `inout` argument refer to the same place; overlapping `inout` is forbidden (last-write-wins would be a silent bug)")
+                        }
+                    }
+                    k += 1U64
+                }
+            }
+        }
+    }
+    // a mutating built-in array method (`append`) on an immutable / non-place array.
+    if rt.kind == 3 {
+        if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "append") {
+            if !(exprIsPlace(c: inout c, id: recv)) {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot `append` to a temporary array; the receiver must be a place declared `mut val` (spec/03)")
+            }
+            if !(placeIsMutable(c: inout c, id: recv)) {
+                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
+            }
+        }
+    }
+}
+
+// Binary operator-witness availability, mirroring genExpr's Binary arm exactly:
+// String/compare-witness/enum-eq are fine; a struct/array comparison without
+// Eq/Ord errors; an arithmetic op resolves a witness or errors. The hasXWitness
+// guards run first so a valid op (whose operand type resolves to a witness) is
+// accepted — only genuinely unwitnessed ops fall through to the error arms.
+// Whether expression `id` is a float (F32/F64): a float literal, or a value whose
+// recovered type names a float type.
+fn exprIsFloat(c: inout Comp, id: U64) -> Bool {
+    match c.exprs[id] {
+        Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { return true }
+        _ => {}
+    }
+    // a value whose recovered type names a float type — by NAME regardless of kind
+    // (F64 is in isPrimType so typeOf gives kind 0 for a local, but kind 2 for a literal).
+    val ti: TypeInfo = typeOf(c: inout c, id: id)
+    if ti.nameLen > 0U64 {
+        if rangeEquals(bytes: c.bytes, start: ti.nameStart, len: ti.nameLen, kw: "F64") {
+            return true
+        }
+        if rangeEquals(bytes: c.bytes, start: ti.nameStart, len: ti.nameLen, kw: "F32") {
+            return true
+        }
+    }
+    return false
+}
+
+fn verifyBinaryOp(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
+    // float arithmetic / comparison is accepted directly (the backend emits the IEEE
+    // op); `%`/`Rem` is integer-only, so reject it on a float (spec/12).
+    if exprIsFloat(c: inout c, id: lhs) || exprIsFloat(c: inout c, id: rhs) {
+        if op == opRem() {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "`%` (remainder) is integer-only; not defined for floats (spec/12)")
+        }
+        return
+    }
+    if isStringEq(c: inout c, op: op, lhs: lhs) {
+        return
+    }
+    if hasCompareWitness(c: inout c, op: op, lhs: lhs, rhs: rhs) {
+        return
+    }
+    if isEnumEq(c: inout c, op: op, lhs: lhs) {
+        verifyEnumEqPayload(c: inout c, lhs: lhs, rhs: rhs)
+        return
+    }
+    if compareNeedsTrait(c: inout c, op: op, lhs: lhs, rhs: rhs) {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "comparison needs Eq/Ord; not available for a struct or array")
+        return
+    }
+    if hasBinTraitWitness(c: inout c, op: op, lhs: lhs, rhs: rhs) {
+        return
+    }
+    if binTraitNeedsTrait(c: inout c, op: op, lhs: lhs, rhs: rhs) {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type")
+    }
+}
+
+// enum `==`/`!=` needs structural Eq for payload variants; only all-nullary enums
+// compare by tag (mirrors emitEnumTagCmp's guard).
+fn verifyEnumEqPayload(c: inout Comp, lhs: U64, rhs: U64) {
+    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
+    mut val enStart: U64 = 0
+    mut val enLen: U64 = 0
+    if lt.kind == 2 {
+        enStart = lt.nameStart
+        enLen = lt.nameLen
+    } else {
+        val rt: TypeInfo = typeOf(c: inout c, id: rhs)
+        enStart = rt.nameStart
+        enLen = rt.nameLen
+    }
+    if !(isAllNullary(c: inout c, start: enStart, len: enLen)) {
+        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "enum == needs structural Eq for payload variants (only all-nullary enums compare by tag)")
+    }
+}
+
+// `as` lossless check, mirroring genExpr's Cast arm (Expr.pw): a narrowing or
+// signedness-changing integer `as` must go through a fallible TryFrom.
+// Whether the cast operand is a Bool (a `true`/`false` literal or a Bool-typed value).
+fn castOperandIsBool(c: inout Comp, operand: U64) -> Bool {
+    match c.exprs[operand] {
+        Expr.Int(value: _, offset: _, val isBool, tyStart: _, tyLen: _, isNeg: _) => {
+            if isBool { return true }
+        }
+        _ => {}
+    }
+    val st: TypeInfo = typeOf(c: inout c, id: operand)
+    if st.nameLen > 0U64 {
+        return rangeEquals(bytes: c.bytes, start: st.nameStart, len: st.nameLen, kw: "Bool")
+    }
+    return false
+}
+
+fn verifyCastLossless(c: inout Comp, operand: U64, tyStart: U64, tyLen: U64) {
+    // Bool is not a numeric type, so `as` (the lossless numeric / newtype-retag
+    // conversion, spec/12) can't bridge Bool and a numeric type in either direction
+    // (`true as I64`, `1I64 as Bool`) — use match / a comparison instead.
+    val targetBool: Bool = rangeEquals(bytes: c.bytes, start: tyStart, len: tyLen, kw: "Bool")
+    val targetNum: Bool = isIntType(c: inout c, start: tyStart, len: tyLen) || isFloatType(c: inout c, start: tyStart, len: tyLen)
+    if castOperandIsBool(c: inout c, operand: operand) {
+        if targetNum {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "`as` cannot cast a Bool to a numeric type (Bool is not numeric; spec/12)")
+            return
+        }
+    } else {
+        if targetBool {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "`as` cannot cast to Bool (Bool is not numeric; spec/12)")
+            return
+        }
+    }
+    if isIntType(c: inout c, start: tyStart, len: tyLen) {
+        // a float -> int `as` truncates the fractional part = lossy, so it is not a
+        // valid `as` conversion (spec/12: `as` is lossless/total only). Use TryFrom.
+        if exprIsFloat(c: inout c, id: operand) {
+            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "`as` cannot convert a float to an integer (it would truncate the fractional part); use a fallible TryFrom conversion (spec/12)")
+            return
+        }
+        match c.exprs[operand] {
+            Expr.Int(val value, val offset, isBool: _, tyStart: _, tyLen: _, val isNeg) => {
+                if !(litFitsType(c: inout c, value: value, neg: isNeg, dstStart: tyStart, dstLen: tyLen)) {
+                    compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "integer literal is out of range for the target type of `as`")
+                }
+            }
+            _ => {
+                val st: TypeInfo = typeOf(c: inout c, id: operand)
+                if isIntType(c: inout c, start: st.nameStart, len: st.nameLen) {
+                    if !(losslessInt(c: inout c, srcStart: st.nameStart, srcLen: st.nameLen, dstStart: tyStart, dstLen: tyLen)) {
+                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "`as` would lose information (narrowing or signedness change); use a fallible TryFrom conversion")
+                    }
+                }
+            }
+        }
+    }
+}

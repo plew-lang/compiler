@@ -1,0 +1,199 @@
+// Part of the acceptance verification pass (root: _.pw): per-function and
+// per-block verification plus the move-tracking bookkeeping it relies on.
+
+fn verifyFunc(c: inout Comp, f: Func) {
+    if f.hasRet {
+        c.curRetVoid = false
+        mut val rStart: U64 = f.retStart
+        mut val rLen: U64 = f.retLen
+        mut val rTy: U64 = f.retTy
+        mut val rArr: Bool = f.retIsArray
+        // an async fn's body returns the Promise's INNER type (`return n` yields I64
+        // even for `-> Promise[I64]`; the implicit `-> I64` form is already the inner
+        // type). Unwrap an explicitly-written Promise[T] to T so the return check uses
+        // T. (tcCheckValue handles a literal/array return against the inner ref.)
+        if f.isAsync {
+            if rangeEquals(bytes: c.bytes, start: rStart, len: rLen, kw: "Promise") {
+                if rTy != 0U64 {
+                    if rTy < c.types.count {
+                        val pt: TypeRef = c.types[rTy]
+                        if pt.args.count >= 1U64 {
+                            val innerRef: U64 = pt.args[0]
+                            rTy = innerRef
+                            rArr = false
+                            if innerRef < c.types.count {
+                                rStart = c.types[innerRef].nameStart
+                                rLen = c.types[innerRef].nameLen
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        c.curRetStart = rStart
+        c.curRetLen = rLen
+        c.curRetIsArray = rArr
+        c.curRetTy = rTy
+    } else {
+        c.curRetVoid = true
+        c.curRetStart = 0
+        c.curRetLen = 0
+        c.curRetIsArray = false
+        c.curRetTy = 0
+    }
+    c.curHasRecv = f.hasRecv
+    c.curRecvStart = f.recvStart
+    c.curRecvLen = f.recvLen
+    c.curSelfInout = f.selfInout
+    c.curSelfMove = f.selfMove
+    if f.hasRecv {
+        setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0)
+    } else {
+        clearSelfItemEnv(c: inout c)
+    }
+    c.curBranchBase = 0
+    c.locals = []
+    c.verifyMovedIdx = []
+    seedGlobalLocals(c: inout c)
+    checkGenericArity(c: inout c, ref: f.retTy, offset: f.nameStart)
+    mut val pi: U64 = 0
+    while pi < f.params.count {
+        val p: Param = f.params[pi]
+        checkGenericArity(c: inout c, ref: p.ty, offset: p.nameStart)
+        addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: p.isMove)
+        pi += 1
+    }
+    verifyBlock(c: inout c, blockId: f.body)
+}
+
+// Verify a block in its own lexical scope: bindings introduced inside are popped
+// on exit (so a sibling/enclosing scope cannot resolve them), mirroring genBlock.
+// --- use-after-move tracking (spec/03) ---
+fn verifyMarkMoved(c: inout Comp, idx: U64) {
+    mut val i: U64 = 0
+    while i < c.verifyMovedIdx.count {
+        if c.verifyMovedIdx[i] == idx {
+            return
+        }
+        i += 1
+    }
+    c.verifyMovedIdx.append(idx)
+}
+
+fn verifyIsMoved(c: inout Comp, idx: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.verifyMovedIdx.count {
+        if c.verifyMovedIdx[i] == idx {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Clear the moved mark on `idx` (a reassignment reinitializes the local).
+fn verifyUnmarkMoved(c: inout Comp, idx: U64) {
+    mut val kept: Array[U64] = []
+    mut val i: U64 = 0
+    while i < c.verifyMovedIdx.count {
+        if c.verifyMovedIdx[i] != idx {
+            kept.append(c.verifyMovedIdx[i])
+        }
+        i += 1
+    }
+    c.verifyMovedIdx = kept
+}
+
+// Drop moved marks for locals at or above `mark` (their scope has ended, and the
+// index will be reused by a sibling scope — a stale mark would false-flag it).
+fn verifyDropMovedAbove(c: inout Comp, mark: U64) {
+    mut val kept: Array[U64] = []
+    mut val i: U64 = 0
+    while i < c.verifyMovedIdx.count {
+        if c.verifyMovedIdx[i] < mark {
+            kept.append(c.verifyMovedIdx[i])
+        }
+        i += 1
+    }
+    c.verifyMovedIdx = kept
+}
+
+fn verifyBlock(c: inout Comp, blockId: U64) {
+    val mark: U64 = scopeMark(c: inout c)
+    val b: Block = c.blocks[blockId]
+    mut val i: U64 = 0
+    while i < b.stmts.count {
+        verifyStmt(c: inout c, stmtId: b.stmts[i])
+        i += 1
+    }
+    popLocals(c: inout c, mark: mark)
+    verifyDropMovedAbove(c: inout c, mark: mark)
+}
+
+// A condition (`if`/`while`) must be Bool (spec/11) — `while 5I64 { }` is a type
+// error, not a truthiness coercion. Rejects only a DEFINITE non-Bool (tcCheckValue),
+// so an unrecovered/complex Bool expression passes.
+fn checkCondBool(c: inout Comp, cond: U64) {
+    val bs: Bind = kwSpan(c: inout c, kw: "Bool", kwLen: 4U64)
+    if bs.nameLen == 0U64 {
+        return
+    }
+    val boolRef: U64 = simpleTypeRef(c: inout c, nameStart: bs.nameStart, nameLen: bs.nameLen)
+    tcCheckValue(c: inout c, expectedRef: boolRef, valueExpr: cond, pos: "condition")
+}
+
+// Whether `id` is the unit value `()` — an anonymous record construction (no head
+// name) with no fields. (A non-empty record `(x: 1)` also has no head name but has
+// fields.)
+fn exprIsUnit(c: inout Comp, id: U64) -> Bool {
+    match c.exprs[id] {
+        Expr.Make(typeStart: _, val typeLen, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+            return typeLen == 0U64 && fields.count == 0U64
+        }
+        _ => {
+            return false
+        }
+    }
+}
+
+// A dictionary subscript `d[k]` / `d[k]=v` must use a key of the dictionary's key
+// type K (spec/02) — `d[5I64]` on a `Dictionary[String, _]` would hash an I64 as a
+// String and CRASH at runtime. Check the index against K (the instance's first type
+// argument). Arrays (U64 index) and other bases are left to their own checks.
+fn checkIndexKeyType(c: inout Comp, base: U64, index: U64) {
+    val bt: TypeInfo = typeOf(c: inout c, id: base)
+    if bt.ref != 0U64 {
+        if bt.ref < c.types.count {
+            val t: TypeRef = c.types[bt.ref]
+            if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: "Dictionary") {
+                if t.args.count >= 1U64 {
+                    tcCheckValue(c: inout c, expectedRef: t.args[0], valueExpr: index, pos: "dict key")
+                }
+            }
+        }
+    }
+}
+
+// Whether `value` is RELIABLY a non-array (so passing it where an array type is
+// expected is a definite mismatch — `val a: Array[I64] = 5I64` / `return 5I64` from
+// `-> Array[I64]`, which would reinterpret a scalar's bits as an array). A scalar /
+// String literal and a value of known String/struct/enum type are reliable; an array
+// literal is an array; a deferred kind-0 value (fn-value, dict, call) is left lenient.
+fn valueIsReliablyNonArray(c: inout Comp, value: U64) -> Bool {
+    match c.exprs[value] {
+        Expr.Array(elems: _) => { return false }
+        Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { return true }
+        Expr.Str(start: _, len: _) => { return true }
+        _ => {
+            val it: TypeInfo = typeOf(c: inout c, id: value)
+            if it.kind == 1 {
+                return true
+            }
+            if it.kind == 2 {
+                return true
+            }
+            return false
+        }
+    }
+}
+
