@@ -248,6 +248,118 @@ fn checkTypeVisibility(c: inout Comp) {
     }
 }
 
+// Sentinel for "no defining module found" (a value no real module id takes).
+fn importCycleSentinel() -> U64 { return 4000000000U64 }
+
+// The module that DEFINES the name (start,len): a free function's own module, or a
+// type declaration's module (via defOffset / nameStart, since type nameStart is
+// re-interned). importCycleSentinel() if no such declaration is loaded. Used to turn an
+// `import … with { name }` record into a module→module dependency edge.
+fn definingModuleOfName(c: inout Comp, start: U64, len: U64) -> U64 {
+    val fi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)
+    if fi < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[fi]
+        return moduleOf(c: inout c, offset: f.nameStart)
+    }
+    val qId: U64 = intern(c: inout c, start: start, len: len)
+    mut val i: U64 = 0
+    while i < c.arena.structs.count {
+        val sd: StructDef = c.arena.structs[i]
+        if sd.nameId == qId {
+            if sd.defOffset != 0U64 { return moduleOf(c: inout c, offset: sd.defOffset) }
+        }
+        i += 1
+    }
+    i = 0
+    while i < c.arena.enums.count {
+        val ed: EnumDef = c.arena.enums[i]
+        if ed.nameId == qId {
+            if ed.defOffset != 0U64 { return moduleOf(c: inout c, offset: ed.defOffset) }
+        }
+        i += 1
+    }
+    i = 0
+    while i < c.decls.traits.count {
+        val td: TraitDef = c.decls.traits[i]
+        if td.nameId == qId { return moduleOf(c: inout c, offset: td.nameStart) }
+        i += 1
+    }
+    i = 0
+    while i < c.arena.newtypes.count {
+        val nt: NewtypeDef = c.arena.newtypes[i]
+        if spansEqual(c: inout c, aStart: nt.nameStart, aLen: nt.nameLen, bStart: start, bLen: len) {
+            if nt.defOffset != 0U64 { return moduleOf(c: inout c, offset: nt.defOffset) }
+        }
+        i += 1
+    }
+    return importCycleSentinel()
+}
+
+// DFS over the module import graph (colors: 0=white, 1=gray/on-stack, 2=black). A gray
+// target is a back edge → a circular import; report it at the offending import.
+fn dfsImportCycle(c: inout Comp, node: U64, color: inout Array[U64], ef: Array[U64], et: Array[U64], eo: Array[U64]) {
+    color[node] = 1U64
+    mut val k: U64 = 0
+    while k < ef.count {
+        if ef[k] == node {
+            val w: U64 = et[k]
+            if color[w] == 1U64 {
+                compileErrorAt(line: lineOf(c: inout c, offset: eo[k]), msg: "circular import: the module import graph must be acyclic (spec/15). A cycle means these files are logically one module — join them with `part` instead of `import`.")
+            }
+            if color[w] == 0U64 {
+                dfsImportCycle(c: inout c, node: w, color: inout color, ef: ef, et: et, eo: eo)
+            }
+        }
+        k += 1
+    }
+    color[node] = 2U64
+}
+
+// Enforce the DAG rule (spec/15): the module `import` graph must have no cycle. Each
+// `import … with { name }` becomes an edge importing-module → defining-module-of-name;
+// a cycle among them is a compile error (parts share a module id, so they never form an
+// inter-module edge).
+fn detectImportCycles(c: inout Comp) {
+    mut val maxId: U64 = 0
+    mut val ri: U64 = 0
+    while ri < c.modules.ranges.count {
+        val r: Bind = c.modules.ranges[ri]
+        if r.fieldStart > maxId { maxId = r.fieldStart }
+        ri += 1
+    }
+    val n: U64 = maxId + 1
+    mut val ef: Array[U64] = []
+    mut val et: Array[U64] = []
+    mut val eo: Array[U64] = []
+    mut val ii: U64 = 0
+    while ii < c.modules.imports.count {
+        val im: Bind = c.modules.imports[ii]
+        val from: U64 = im.fieldStart
+        val to: U64 = definingModuleOfName(c: inout c, start: im.nameStart, len: im.nameLen)
+        if to != importCycleSentinel() {
+            if to != from {
+                ef.append(from)
+                et.append(to)
+                eo.append(im.nameStart)
+            }
+        }
+        ii += 1
+    }
+    mut val color: Array[U64] = []
+    mut val ci: U64 = 0
+    while ci < n {
+        color.append(0U64)
+        ci += 1
+    }
+    mut val s: U64 = 0
+    while s < n {
+        if color[s] == 0U64 {
+            dfsImportCycle(c: inout c, node: s, color: inout color, ef: ef, et: et, eo: eo)
+        }
+        s += 1
+    }
+}
+
 // Is (start,len) the name of an `@Std` function the LLVM backend intercepts by raw
 // name (so it would emit without an import)? These need a real import gate (spec/15):
 // the user-facing I/O / process / async intrinsics. (The RawBuffer/String/FFI floor

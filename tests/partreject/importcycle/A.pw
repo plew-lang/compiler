@@ -1,0 +1,5 @@
+// A imports B and B imports A — a circular module import. The graph must be acyclic
+// (spec/15); this must be rejected. (If two modules genuinely need each other, they
+// are one module — join them with `part`.)
+import ./B with { bVal }
+export fn aVal() -> U64 { return bVal() + 1U64 }

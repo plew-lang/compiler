@@ -107,7 +107,22 @@ for main in tests/part/*/Main.pw tests/part/Main.pw; do
     fi
 done
 
+# --- partreject/ : multi-file modules whose Main.pw the FRONT-END must reject —
+#     cross-module rules that need real loaded sibling modules (e.g. a circular
+#     import, which a single file cannot express). ---
+prpass=0
+for main in tests/partreject/*/Main.pw; do
+    [ -f "$main" ] || continue
+    dir=$(dirname "$main")
+    name=$(basename "$dir")
+    if "$PLEWC" "$main" > /dev/null 2>/tmp/t_err; then
+        fail=$((fail + 1)); failed="$failed partreject/$name(accepted)"
+    else
+        prpass=$((prpass + 1))
+    fi
+done
+
 echo "----"
-echo "plewc: run=$pass  panic=$ppass  reject=$rpass  part=$qpass  skip=$skip  fail=$fail"
+echo "plewc: run=$pass  panic=$ppass  reject=$rpass  part=$qpass  partreject=$prpass  skip=$skip  fail=$fail"
 [ -n "$failed" ] && echo "failing:$failed"
 [ "$fail" -eq 0 ]

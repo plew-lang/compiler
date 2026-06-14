@@ -1,0 +1,2 @@
+import ./A with { aVal }
+export fn bVal() -> U64 { return 2U64 }
