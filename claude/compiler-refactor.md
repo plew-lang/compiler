@@ -67,6 +67,14 @@ a/b は「結合のため」でなく**可読性のため**カテゴリ別子構
 
 各 M 内も増分（1 ファイル/1 カテゴリ/1 パスごと commit＋tag）。M3 完了時点で god-object は消え、M4 は「綺麗になった塊をモジュール境界で切る」だけの仕事になる。
 
+### M2 の前提：ネスト place 変異（backend 機能・解決済）
+
+`c.exprs`→`c.arena.exprs` は **読み取りは元から動くが、変異（`c.arena.exprs.append`／`c.arena.exprs[i]=v`／`inout c.arena.exprs`／ネスト scalar field 代入）は backend が未対応だった**（lvalue ポインタ計算が一段＝local/直下フィールド止まり）。`placePtrStrict`（再帰的 lvalue ポインタ＝Ident／ネスト Field を GEP／array Index 要素）を入れ、`placePtrOf`・`arrStoragePtr`・index/field 代入をそれ経由にして解決（generic ネスト place は従来どおり未対応）。**M2 はこの backend 拡張が前提**。
+
+### M3 の形：per-pass コンテキスト引数 vs `Comp` 上の子構造体
+
+(c) の ~36 カーソル状態の追い出しには2案。**(i) per-pass コンテキストを別引数で threading**（`(c: inout Comp, ctx: inout CodegenCtx,…)`）＝アーキ的に純（スコープ付き寿命・god-object を真に解消）だが**全パスの全関数に引数追加＋呼び出し書換で最大 churn**。**(ii) `Comp` 上の子構造体に grouping**（`c.cur.retTy` 等＝M2 と同じ機械的書換）＝可読性（フィールド数）は解決するが共有可変のまま（god-object の臭いは残る）。ユーザーの主訴は**フィールド数の把握困難**で、(ii) はそれを M2 と同じ手法で解く（フェーズ別の小さな cursor 群＝ParseScratch／CodegenCursor 等に分けると各々が grok 可能）。(i) のアーキ純度は別目標。**どちらを採るかは着手前に確認**。
+
 ## 未検証リスク（M0 で先に潰す）
 
 **モジュール昇格（M4）は `Comp`（＋arena 型）を `pub` フィールド付きで `export` し、別モジュールの関数が `inout Comp` で跨いで変異することを要求する。これは現コンパイラで前例ゼロの未検証パス**（std 側はパーサが値ツリーを返すだけで、跨ぐ共有可変状態が一切ない）。
