@@ -1,4 +1,4 @@
-// String-to-integer parsing via `TryFrom` (spec/12): `<I64.convert from="123"/>`
+// String-to-integer parsing via `TryFrom` (spec/12): `<I64.checked source="123"/>`
 // yields `Result[I64, ParseError]`. Built on the factory-as-trait-requirement
 // keystone. The parser accumulates in negative space so I64.min (whose magnitude
 // exceeds I64.max) parses, and rejects overflow before the checked `*`/`-` panic.
@@ -6,20 +6,20 @@ import @Std/Io with { print }
 import @Std/Core with { ParseError }
 
 fn main() {
-    val a: Result[I64, ParseError] = <I64.convert from="12345" />
+    val a: Result[I64, ParseError] = <I64.checked source="12345" />
     print(a.unwrapOr(fallback: -1I64))       // 12345
-    val b: Result[I64, ParseError] = <I64.convert from="-678" />
+    val b: Result[I64, ParseError] = <I64.checked source="-678" />
     print(b.unwrapOr(fallback: -1I64))       // -678
-    val c: Result[I64, ParseError] = <I64.convert from="9223372036854775807" />
+    val c: Result[I64, ParseError] = <I64.checked source="9223372036854775807" />
     print(c.unwrapOr(fallback: 0I64))        // I64 max
-    val d: Result[I64, ParseError] = <I64.convert from="-9223372036854775808" />
+    val d: Result[I64, ParseError] = <I64.checked source="-9223372036854775808" />
     print(d.unwrapOr(fallback: 0I64))        // I64 min
-    val e: Result[I64, ParseError] = <I64.convert from="9223372036854775808" />
+    val e: Result[I64, ParseError] = <I64.checked source="9223372036854775808" />
     print(e.isErr())                          // 1 (overflow)
-    val f: Result[I64, ParseError] = <I64.convert from="12x3" />
+    val f: Result[I64, ParseError] = <I64.checked source="12x3" />
     print(f.isErr())                          // 1 (non-digit)
-    val g: Result[I64, ParseError] = <I64.convert from="" />
+    val g: Result[I64, ParseError] = <I64.checked source="" />
     print(g.isErr())                          // 1 (empty)
-    val h: Result[I64, ParseError] = <I64.convert from="-" />
+    val h: Result[I64, ParseError] = <I64.checked source="-" />
     print(h.isErr())                          // 1 (lone sign)
 }

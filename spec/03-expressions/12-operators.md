@@ -28,35 +28,35 @@ val y: I64 = x as I64  // <I64 from=x /> と同等
 
 ## 失敗し得る変換（TryFrom トレイト）
 
-範囲外になり得る変換（`I64→I8` の縮小、`F64→I32`、文字列パースなど）は**全域でない**ので `From`＝`as` には乗せず、**`TryFrom[Source]` の fallible factory `convert`** で表します。戻りは `Result[Self, Error]` で、失敗を静かに切り詰め／飽和させず（Rust の `as` の silent truncate を採らない）、エラーを値として返します。
+範囲外になり得る変換（`I64→I8` の縮小、`F64→I32`、文字列パースなど）は**全域でない**ので `From`＝`as` には乗せず、**`TryFrom[Source]` の fallible factory `checked`** で表します。戻りは `Result[Self, Error]` で、失敗を静かに切り詰め／飽和させず（Rust の `as` の silent truncate を採らない）、エラーを値として返します。
 
-`From` は共通ケースなので**無名 factory ＋ `as` 糖衣**、`TryFrom` は稀なので**名前付き factory `convert`** ── 非対称にすることで、同じ `Source` から「失敗しない版（`From`）」と「失敗し得る版（`TryFrom`）」を**両方**書いても衝突しません（無名 `factory(from:)` と名前付き `factory convert(from:)` で別物）。
+`From` は共通ケースなので**無名 factory ＋ `as` 糖衣**、`TryFrom` は稀なので**名前付き factory `checked`** ── 非対称にすることで、同じ `Source` から「失敗しない版（`From`）」と「失敗し得る版（`TryFrom`）」を**両方**書いても衝突しません（無名 `factory(from:)` と名前付き `factory checked(source:)` で別物）。
 
 ```plew
 trait TryFrom[Source] {
-    type Error                                 // 出力＝関連型（impl が一意に決める）
-    result[Error] factory convert(from: Source) // fallible factory（→ Result[Self, Error]）
+    type Error                                    // 出力＝関連型（impl が一意に決める）
+    result[Error] factory checked(source: Source) // fallible factory（→ Result[Self, Error]）
 }
 
 impl I8 as TryFrom[I64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: I64) {
-        guard from >= -128 && from <= 127 { return <Result.Err error=<RangeError /> /> }
+    result[RangeError] factory checked(source: I64) {
+        guard source >= -128 && source <= 127 { return <Result.Err error=<RangeError /> /> }
         return <Result.Ok value=<I8 ... /> />
     }
 }
 
-val r = <I8.convert from=big />          // Result[I8, RangeError]
-val n = try <I8.convert from=big />      // try で早期 return（前置 try が JSX 全体に掛かる）
+val r = <I8.checked source=big />        // Result[I8, RangeError]
+val n = try <I8.checked source=big />    // try で早期 return（前置 try が JSX 全体に掛かる）
 ```
 
-- **`as` の糖衣は持たない**：fallible 変換は `<T.convert from=… />`（factory）で明示する（infallible な `as` と取り違えないよう、可謬は常に factory 形）。
-- **`Error` は関連型**（impl が一意に決める出力なので・`From` の `Source` が型引数なのと対）。`convert` のエラーは `try` の `From` 変換に乗って関数の戻りエラー型へ集約できる（→ [エラーハンドリング](13-error-handling.md)）。
-- **判定基準＝全域か可謬か**：必ず値を作れる（無損失 or 規定の丸め）＝`From`／`as`。表現できない入力があり得る＝`TryFrom`／`convert`。浮動小数の丸め（精度欠落）は「型を取り違える wrap」ではなく IEEE の規定動作なので `From` 側（静かな嘘ではない）。
-- **浮動小数→整数は `TryFrom[F64]`**（`<IX.convert from=f />`）：小数部があり得る（全域でない）ので `as` には乗らない。変換は **0 方向への切り捨て**（C/Rust 慣習・`3.7→3`・`-3.7→-3`）で、整数部が**ターゲットの範囲を外れる／`NaN`／±inf** のときだけ `Err`（`RangeError`）を返す。範囲内なら小数部を捨てて必ず成功する（精度欠落＝丸めの規定動作で、これは「嘘」ではない）。`NaN` 判定を順序比較より**先**に行う（float の `==`/`<` は NaN で panic するため → [基本型](../01-basics/02-basic-types.md#浮動小数の実行時セマンティクスnan--inf)）。
-- **命名**：`convert` は中立な一般動詞（`fit`＝範囲限定・`parse`＝文字列限定・`coerce`＝成功含意・`try_from`＝伝播 `try` と韻を踏む、を避けた）。可謬性は語ではなく `Result` 戻り＋呼び出し側の `try` が担う（Plew は fallible 関数に `try_` 接頭辞を付けない → [概要](../01-basics/01-overview.md)）。
+- **`as` の糖衣は持たない**：fallible 変換は `<T.checked source=… />`（factory）で明示する（infallible な `as` と取り違えないよう、可謬は常に factory 形）。
+- **`Error` は関連型**（impl が一意に決める出力なので・`From` の `Source` が型引数なのと対）。`checked` のエラーは `try` の `From` 変換に乗って関数の戻りエラー型へ集約できる（→ [エラーハンドリング](13-error-handling.md)）。
+- **判定基準＝全域か可謬か**：必ず値を作れる（無損失 or 規定の丸め）＝`From`／`as`。表現できない入力があり得る＝`TryFrom`／`checked`。浮動小数の丸め（精度欠落）は「型を取り違える wrap」ではなく IEEE の規定動作なので `From` 側（静かな嘘ではない）。
+- **浮動小数→整数は `TryFrom[F64]`**（`<IX.checked source=f />`）：小数部があり得る（全域でない）ので `as` には乗らない。変換は **0 方向への切り捨て**（C/Rust 慣習・`3.7→3`・`-3.7→-3`）で、整数部が**ターゲットの範囲を外れる／`NaN`／±inf** のときだけ `Err`（`RangeError`）を返す。範囲内なら小数部を捨てて必ず成功する（精度欠落＝丸めの規定動作で、これは「嘘」ではない）。`NaN` 判定を順序比較より**先**に行う（float の `==`/`<` は NaN で panic するため → [基本型](../01-basics/02-basic-types.md#浮動小数の実行時セマンティクスnan--inf)）。
+- **命名**：factory 名 `checked` は暗黙の「生成（create）」の修飾語＝「範囲を検査して作る」を表す**過去分詞形容詞**（`<I8.checked source=… />`＝"checked construction"）。ラベル `source` が検査対象の入力を名指す（[ファクトリ名の指針](../02-type-system/05-structs-enums.md#ファクトリ名の指針規約)）。退けた候補：単独動詞 `convert`（生成でなく「ソース側のメソッド」に読める）・`checkedFrom`／`tryFrom`（ラベル `source` と "from" が重複）・`fit`／`parse`／`coerce`（範囲・文字列・成功含意に寄り過ぎ）。可謬性は語ではなく `Result` 戻り＋呼び出し側の `try` が担う（Plew は fallible 関数に `try_` 接頭辞を付けない → [概要](../01-basics/01-overview.md)）。
 
-**暗黙変換は持ちません。** 型変換は常に明示の `as`（数値の幅変更 `I32→I64` 等も `x as I64`）か、可謬なら `<T.convert from=… />`。例外は `try` のエラー変換（`From` を暗黙挿入）と数値リテラルの多相だけ。これによりオーバーロード解決は「ラベル＋具体型の完全一致（リテラルは互換候補に絞り一意か否か）」に保たれ、変換ランク付けの曖昧さが生じません。なお[拡張ビューの変更](../02-type-system/09-extensions.md#拡張ビューの変更は明示暗黙キャストなし)（`A`↔`A#P`）は値の表現を変えない**ビューの再解釈**で型変換ではありませんが、これも暗黙には起きず常に `#`／`#!` を明示します。
+**暗黙変換は持ちません。** 型変換は常に明示の `as`（数値の幅変更 `I32→I64` 等も `x as I64`）か、可謬なら `<T.checked source=… />`。例外は `try` のエラー変換（`From` を暗黙挿入）と数値リテラルの多相だけ。これによりオーバーロード解決は「ラベル＋具体型の完全一致（リテラルは互換候補に絞り一意か否か）」に保たれ、変換ランク付けの曖昧さが生じません。なお[拡張ビューの変更](../02-type-system/09-extensions.md#拡張ビューの変更は明示暗黙キャストなし)（`A`↔`A#P`）は値の表現を変えない**ビューの再解釈**で型変換ではありませんが、これも暗黙には起きず常に `#`／`#!` を明示します。
 
 ## 演算子システム
 

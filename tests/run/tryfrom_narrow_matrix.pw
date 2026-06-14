@@ -9,27 +9,27 @@ import @Std/Core with { RangeError }
 
 fn main() {
     // signed -> narrower signed
-    val a: Result[I8, RangeError] = <I8.convert from=100I32 />
+    val a: Result[I8, RangeError] = <I8.checked source=100I32 />
     print(a.unwrapOr(fallback: 0I8))      // 100
-    val b: Result[I8, RangeError] = <I8.convert from=300I32 />
+    val b: Result[I8, RangeError] = <I8.checked source=300I32 />
     print(b.isErr())                       // 1
     // unsigned -> narrower unsigned
-    val c: Result[U8, RangeError] = <U8.convert from=200U16 />
+    val c: Result[U8, RangeError] = <U8.checked source=200U16 />
     print(c.unwrapOr(fallback: 0U8))      // 200
-    val d: Result[U8, RangeError] = <U8.convert from=999U16 />
+    val d: Result[U8, RangeError] = <U8.checked source=999U16 />
     print(d.isErr())                       // 1
     // cross-sign: signed source, negative -> unsigned target fails
-    val e: Result[U8, RangeError] = <U8.convert from=0I16 - 5I16 />
+    val e: Result[U8, RangeError] = <U8.checked source=0I16 - 5I16 />
     print(e.isErr())                       // 1
     // cross-sign: unsigned source above signed target's max fails
-    val f: Result[I8, RangeError] = <I8.convert from=200U16 />
+    val f: Result[I8, RangeError] = <I8.checked source=200U16 />
     print(f.isErr())                       // 1
     // cross-sign in range
-    val g: Result[I16, RangeError] = <I16.convert from=1000U32 />
+    val g: Result[I16, RangeError] = <I16.checked source=1000U32 />
     print(g.unwrapOr(fallback: 0I16))     // 1000
     // unsigned 64-wide target from a signed source (negative fails)
-    val h: Result[U64, RangeError] = <U64.convert from=0I32 - 1I32 />
+    val h: Result[U64, RangeError] = <U64.checked source=0I32 - 1I32 />
     print(h.isErr())                       // 1
-    val k: Result[U64, RangeError] = <U64.convert from=42I32 />
+    val k: Result[U64, RangeError] = <U64.checked source=42I32 />
     print(k.unwrapOr(fallback: 0U64))     // 42
 }

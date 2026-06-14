@@ -27,7 +27,7 @@
 
 ## 文字列
 
-- `String`＝不変・UTF-8 妥当・`==` バイト等価な CoW 値型 → **現状：`{ptr,len}`・不変・byte-`==`**（不変と byte-eq は spec 通り）。✅ 連結 `+`〔`impl String as Add[String]`〕・✅ UTF-8 妥当性チェック〔安全な公開コンストラクタ `<String.convert from=bytes/>`→`Result[String, Utf8Error]`・unchecked 床は `stringFromBytesUnchecked`〕。**残：`scalars`/`graphemes`/`Ord`/substring/`Slice` なし**・解放なし〔leak〕。`.bytes`（`Array[U8]` O(1) ビュー）は spec 通り。spec/02。
+- `String`＝不変・UTF-8 妥当・`==` バイト等価な CoW 値型 → **現状：`{ptr,len}`・不変・byte-`==`**（不変と byte-eq は spec 通り）。✅ 連結 `+`〔`impl String as Add[String]`〕・✅ UTF-8 妥当性チェック〔安全な公開コンストラクタ `<String.checked source=bytes/>`→`Result[String, Utf8Error]`・unchecked 床は `stringFromBytesUnchecked`〕。**残：`scalars`/`graphemes`/`Ord`/substring/`Slice` なし**・解放なし〔leak〕。`.bytes`（`Array[U8]` O(1) ビュー）は spec 通り。spec/02。
 - ✅ **文字列リテラルのエスケープ**：`\n`/`\t`/`\r`/`\0`＋`\\`/`\"`/`\'`・`\u{XXXX}` Unicode エスケープ〔UTF-8 1-4 byte encode・無効コードポイント/サロゲートは loud reject〕。spec/02。
 
 ## 配列・辞書・集合・タプル
@@ -61,8 +61,8 @@
 ## 演算子・変換
 
 - ✅ **対応**：算術 `+ - * / %`・比較 `== != < <= > >=`・論理 `&& ||`・ビット/シフト `& | ^ << >> ~`・単項 `! - ~`・代入＋複合〔ビット系含む〕・`Optional.unwrapOr`〔旧 `??`〕・添字 `[]`/`[]=`〔Index/IndexSet〕・一般 Chain `?.`〔任意の value-or-empty 型・ネスト可〕・`pow`〔`Pow[Exp]`・float pow は additive〕。
-- ✅ **factory 機構＋From/TryFrom（user 型）**＝named factory〔`<Type.name attrs/>`〕・fallible〔`optional`/`result[E] factory`→Optional/Result〕・From〔anonymous `factory(from: S)`＋`x as T`/`<T from=x/>` 脱糖〕・TryFrom〔`result[E] factory convert(from:)`＋`<T.convert from=…/>`〕・factory-as-trait-requirement〔trait が `factory` 要求を持てる＝キーストーン〕・`try` の異エラー型 From 変換。
-- ✅ **TryFrom 数値 matrix 完成**＝primitive 整数 narrowing〔I8/I16/I32 from I64・range-check＋trunc・`RangeError`〕・unsigned narrowing〔U8/U16/U32 from U64〕・cross-sign〔I64↔U64・bit reinterpret〕・narrower-source＋cross-sign の sub-64bit 全ペア〔`@[IntTryFrom]` derive で dogfood 生成・deriver は完全 dumb で一様 body `<T.convert from=(from as I64)/>`・`Core.gen.pw` にコミット・**extern ブロックへの `@[...]` derive をサポート**〕・float→signed/unsigned〔`f64ToI64`/`f64ToU64` intrinsic〕・文字列→I64 パース〔`ParseError`〕。残は ISize/USize 等の将来幅のみ。
+- ✅ **factory 機構＋From/TryFrom（user 型）**＝named factory〔`<Type.name attrs/>`〕・fallible〔`optional`/`result[E] factory`→Optional/Result〕・From〔anonymous `factory(from: S)`＋`x as T`/`<T from=x/>` 脱糖〕・TryFrom〔`result[E] factory checked(source:)`＋`<T.checked source=…/>`〕・factory-as-trait-requirement〔trait が `factory` 要求を持てる＝キーストーン〕・`try` の異エラー型 From 変換。
+- ✅ **TryFrom 数値 matrix 完成**＝primitive 整数 narrowing〔I8/I16/I32 from I64・range-check＋trunc・`RangeError`〕・unsigned narrowing〔U8/U16/U32 from U64〕・cross-sign〔I64↔U64・bit reinterpret〕・narrower-source＋cross-sign の sub-64bit 全ペア〔`@[IntTryFrom]` derive で dogfood 生成・deriver は完全 dumb で一様 body `<T.checked source=(source as I64)/>`・`Core.gen.pw` にコミット・**extern ブロックへの `@[...]` derive をサポート**〕・float→signed/unsigned〔`f64ToI64`/`f64ToU64` intrinsic〕・文字列→I64 パース〔`ParseError`〕。残は ISize/USize 等の将来幅のみ。
 - ✅ **`as`**＝数値↔数値の C キャスト〔無損失検査済・narrowing reject〕。✅ **単項演算子の適用可能性**（`!`=Bool/`-`=signed int・float/`~`=int・String への `-`/`!`/`~` を reject）。残（低 harm）＝witness を持たない user struct/enum への単項〔clang が invalid IR を reject＝silent miscompile でない〕。
 - ✅ **`try`**＝Result 早期 return〔非 Result〔特に Optional〕operand は loud reject・error 型一致検査〕。spec/12,13。
 - ✅ **曖昧な無サフィックス整数リテラルのオーバーロードを loud reject**・✅ **`val f = obj.method`（メソッド値化）を loud reject**・✅ **ユーザー struct/enum 名が lang-item 型パラメータ名と衝突→loud reject 化**〔根治＝型パラメータ同一性のスコープ化は将来・回避＝リネーム〕。

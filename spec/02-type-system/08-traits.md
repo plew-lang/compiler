@@ -297,7 +297,7 @@ fn f(a: any Eq, b: any Eq) {        // 型として持つ・配列に入れる�
 | 種別 | トレイト | 演算子・用途 |
 | --- | --- | --- |
 | 変換（全域） | `From[Source]` | `x as T`（無名 factory `(from:)`・必ず成功。`try` のエラー変換も。newtype⇔元型の `as` だけは From でなくゼロコスト再タグ） |
-| 変換（可謬） | `TryFrom[Source]` | `<T.convert from=… />`（fallible factory `convert`・関連型 `Error`・`Result[Self, Error]`。`as` 糖衣なし） |
+| 変換（可謬） | `TryFrom[Source]` | `<T.checked source=… />`（fallible factory `checked`・関連型 `Error`・`Result[Self, Error]`。`as` 糖衣なし） |
 | 算術 | `Add[Rhs]` / `Sub[Rhs]` / `Mul[Rhs]` / `Div[Rhs]` | `+ - * /`・結果型は `type Output` |
 | 等価 | `Eq`（型引数なし・右辺 `Self`） | `== !=` |
 | 順序 | `Ord: Eq`（型引数なし） | `< <= > >=` |

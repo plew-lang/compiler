@@ -1,4 +1,4 @@
-// Validated `Array[U8]` -> `String` (spec/02,12): `<String.convert from=bytes/>` yields
+// Validated `Array[U8]` -> `String` (spec/02,12): `<String.checked source=bytes/>` yields
 // `Result[String, Utf8Error]`, enforcing the spec's "a String is UTF-8 valid" invariant.
 // The unchecked floor `stringFromBytesUnchecked` is the escape hatch for known-valid
 // bytes. Exercises the well-formed-UTF-8 table: ASCII, 2/3/4-byte sequences, and the
@@ -7,13 +7,13 @@ import @Std/Io with { print }
 import @Std/Core with { TryFrom, Utf8Error }
 
 fn ok(bytes: Array[U8]) -> Bool {
-    val r: Result[String, Utf8Error] = <String.convert from=bytes />
+    val r: Result[String, Utf8Error] = <String.checked source=bytes />
     return r.isOk()
 }
 
 fn main() {
     // valid sequences.
-    val hi: Result[String, Utf8Error] = <String.convert from=[72U8, 105U8] />
+    val hi: Result[String, Utf8Error] = <String.checked source=[72U8, 105U8] />
     match hi {
         Result.Ok(value: val s) => { print(s) }                 // Hi
         Result.Err(error: val e) => { print(e.index) }
@@ -29,7 +29,7 @@ fn main() {
     print(ok(bytes: [0xEDU8, 0xA0U8, 0x80U8]))          // 0: surrogate U+D800
     print(ok(bytes: [0xF5U8, 0x80U8, 0x80U8, 0x80U8]))  // 0: lead > U+10FFFF
     // the error carries the offset of the first bad byte.
-    val bad: Result[String, Utf8Error] = <String.convert from=[72U8, 0x80U8] />
+    val bad: Result[String, Utf8Error] = <String.checked source=[72U8, 0x80U8] />
     match bad {
         Result.Ok(value: val s) => { print(s) }
         Result.Err(error: val e) => { print(e.index) }          // 1

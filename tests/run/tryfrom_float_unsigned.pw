@@ -6,16 +6,16 @@ import @Std/Io with { print }
 import @Std/Core with { RangeError }
 
 fn main() {
-    val a: Result[U8, RangeError] = <U8.convert from=200.7 />
+    val a: Result[U8, RangeError] = <U8.checked source=200.7 />
     print(a.unwrapOr(fallback: 0U8))      // 200 (toward zero)
-    val b: Result[U8, RangeError] = <U8.convert from=300.0 />
+    val b: Result[U8, RangeError] = <U8.checked source=300.0 />
     print(b.isErr())                       // 1 (> 255)
-    val c: Result[U8, RangeError] = <U8.convert from=0.0 - 1.0 />
+    val c: Result[U8, RangeError] = <U8.checked source=0.0 - 1.0 />
     print(c.isErr())                       // 1 (negative)
-    val d: Result[U64, RangeError] = <U64.convert from=42.9 />
+    val d: Result[U64, RangeError] = <U64.checked source=42.9 />
     print(d.unwrapOr(fallback: 0U64))     // 42
-    val e: Result[U32, RangeError] = <U32.convert from=4000000000.0 />
+    val e: Result[U32, RangeError] = <U32.checked source=4000000000.0 />
     print(e.unwrapOr(fallback: 0U32))     // 4000000000
-    val f: Result[U64, RangeError] = <U64.convert from=18446744073709551616.0 />
+    val f: Result[U64, RangeError] = <U64.checked source=18446744073709551616.0 />
     print(f.isErr())                       // 1 (>= 2^64)
 }

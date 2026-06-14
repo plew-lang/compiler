@@ -5792,7 +5792,7 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
     if rangeEquals(bytes: c.bytes, start: nameStart, len: nameLen, kw: "stringFromBytesUnchecked") {
         // an (assumed-valid) UTF-8 Array[U8] -> String: same {ptr,i64} layout, so rebuild
         // the strty aggregate from the array's data + count. The validated public path is
-        // `<String.convert from=bytes/>` (TryFrom[Array[U8]]); this is the unchecked floor.
+        // `<String.checked source=bytes/>` (TryFrom[Array[U8]]); this is the unchecked floor.
         val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
         mut val s: LLVMValueRef = LLVMGetUndef(st.strty)
         s = LLVMBuildInsertValue(st.b, s, LLVMBuildExtractValue(st.b, arr, 0U64, anon()), 0U64, anon())

@@ -526,7 +526,7 @@ export trait IndexSet[Key] { type Value   inout fn indexSet(key: Key, value: Val
 
 // Build a String from a byte array WITHOUT validating UTF-8 — the unchecked floor (the
 // bytes must already be valid UTF-8; decimal digits and interned source spans always
-// are). The validated public constructor is `<String.convert from=bytes/>`
+// are). The validated public constructor is `<String.checked source=bytes/>`
 // (`String as TryFrom[Array[U8]]`, below). Lowered inline to the {ptr,i64} reinterpret.
 // Exported so @Std/Syntax's parser and the compiler can turn known-valid byte ranges
 // into Strings without paying re-validation; user code should prefer the checked form.
@@ -539,7 +539,7 @@ export extern "plew-intrinsic" {
     // literal `\u{...}` decoding, where each computed byte is known to fit in U8.
     fn truncU8(n: U64) -> U8
     // Truncate a (range-checked) integer to a narrower signed width. `as` is
-    // lossless-only and rejects narrowing, so the fallible `convert` factories
+    // lossless-only and rejects narrowing, so the fallible `checked` factories
     // (spec/12 TryFrom) reach for these after proving the value is in range.
     fn truncI8(n: I64) -> I8
     fn truncI16(n: I64) -> I16
@@ -548,19 +548,19 @@ export extern "plew-intrinsic" {
     fn truncU32(n: U64) -> U32
     // Reinterpret an integer's bit pattern across signedness (no-op at the machine
     // level; both are i64). `as` is lossless-only and rejects a sign change, so the
-    // cross-sign `convert` factories reach for these after a range check. `bitCastU64`
+    // cross-sign `checked` factories reach for these after a range check. `bitCastU64`
     // (I64->U64) mirrors Prelude's same-named intrinsic; `bitCastI64` is the inverse.
     fn bitCastI64(n: U64) -> I64
     fn bitCastU64(n: I64) -> U64
     // Is this float a NaN? A direct intrinsic because `==`/`!=` on floats PANIC on a
-    // NaN operand (spec/02), so the fallible float->int `convert` (spec/12) must test
+    // NaN operand (spec/02), so the fallible float->int `checked` (spec/12) must test
     // NaN with this BEFORE any ordered comparison.
     fn isNanF64(f: F64) -> Bool
     // Truncate a float toward zero to I64 (`fptosi`). UB outside [-2^63, 2^63), so the
-    // `convert` factory range-checks first and calls this only once the value fits.
+    // `checked` factory range-checks first and calls this only once the value fits.
     fn f64ToI64(f: F64) -> I64
     // Truncate a NON-NEGATIVE float toward zero to U64 (`fptoui`). UB outside [0, 2^64),
-    // so the `convert` factory checks `>= 0.0` and `< 2^64` first (spec/12 float->unsigned).
+    // so the `checked` factory checks `>= 0.0` and `< 2^64` first (spec/12 float->unsigned).
     fn f64ToU64(f: F64) -> U64
 }
 
@@ -736,53 +736,53 @@ export struct RangeError {
     pub val value: I64
 }
 
-// Failure-possible conversion (spec/12): `convert` is a fallible factory yielding
+// Failure-possible conversion (spec/12): `checked` is a fallible factory yielding
 // `Result[Self, Error]`. `as` (From) is total; `TryFrom` covers narrowing/parsing
 // where some inputs can't be represented. `Error` is an associated type the impl
 // picks. Used here for primitive integer narrowing.
 export trait TryFrom[Source] {
     type Error
-    result[Error] factory convert(from: Source)
+    result[Error] factory checked(source: Source)
 }
 
-// Fallible narrowing conversions (spec/12): `<I8.convert from=big/>` yields
+// Fallible narrowing conversions (spec/12): `<I8.checked source=big/>` yields
 // `Result[I8, RangeError]`. `as` is infallible/total only (rejects narrowing), so a
-// value that may not fit is a named `convert` factory that range-checks first and
+// value that may not fit is a named `checked` factory that range-checks first and
 // truncates only once proven in range (`truncI8`).
 pub impl I8 as TryFrom[I64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: I64) {
-        if from < -128I64 {
-            return <Result[I8, RangeError].Err error=<RangeError value=from /> />
+    result[RangeError] factory checked(source: I64) {
+        if source < -128I64 {
+            return <Result[I8, RangeError].Err error=<RangeError value=source /> />
         }
-        if from > 127I64 {
-            return <Result[I8, RangeError].Err error=<RangeError value=from /> />
+        if source > 127I64 {
+            return <Result[I8, RangeError].Err error=<RangeError value=source /> />
         }
-        return <Result[I8, RangeError].Ok value=truncI8(n: from) />
+        return <Result[I8, RangeError].Ok value=truncI8(n: source) />
     }
 }
 pub impl I16 as TryFrom[I64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: I64) {
-        if from < -32768I64 {
-            return <Result[I16, RangeError].Err error=<RangeError value=from /> />
+    result[RangeError] factory checked(source: I64) {
+        if source < -32768I64 {
+            return <Result[I16, RangeError].Err error=<RangeError value=source /> />
         }
-        if from > 32767I64 {
-            return <Result[I16, RangeError].Err error=<RangeError value=from /> />
+        if source > 32767I64 {
+            return <Result[I16, RangeError].Err error=<RangeError value=source /> />
         }
-        return <Result[I16, RangeError].Ok value=truncI16(n: from) />
+        return <Result[I16, RangeError].Ok value=truncI16(n: source) />
     }
 }
 pub impl I32 as TryFrom[I64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: I64) {
-        if from < -2147483648I64 {
-            return <Result[I32, RangeError].Err error=<RangeError value=from /> />
+    result[RangeError] factory checked(source: I64) {
+        if source < -2147483648I64 {
+            return <Result[I32, RangeError].Err error=<RangeError value=source /> />
         }
-        if from > 2147483647I64 {
-            return <Result[I32, RangeError].Err error=<RangeError value=from /> />
+        if source > 2147483647I64 {
+            return <Result[I32, RangeError].Err error=<RangeError value=source /> />
         }
-        return <Result[I32, RangeError].Ok value=truncI32(n: from) />
+        return <Result[I32, RangeError].Ok value=truncI32(n: source) />
     }
 }
 // Unsigned narrowing from U64 (spec/12): no floor check (unsigned), only the upper
@@ -791,131 +791,131 @@ pub impl I32 as TryFrom[I64] {
 // still report (the field wraps via the same two's-complement bits).
 pub impl U8 as TryFrom[U64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: U64) {
-        if from > 255U64 {
+    result[RangeError] factory checked(source: U64) {
+        if source > 255U64 {
             return <Result[U8, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        return <Result[U8, RangeError].Ok value=truncU8(n: from) />
+        return <Result[U8, RangeError].Ok value=truncU8(n: source) />
     }
 }
 pub impl U16 as TryFrom[U64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: U64) {
-        if from > 65535U64 {
+    result[RangeError] factory checked(source: U64) {
+        if source > 65535U64 {
             return <Result[U16, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        return <Result[U16, RangeError].Ok value=truncU16(n: from) />
+        return <Result[U16, RangeError].Ok value=truncU16(n: source) />
     }
 }
 pub impl U32 as TryFrom[U64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: U64) {
-        if from > 4294967295U64 {
+    result[RangeError] factory checked(source: U64) {
+        if source > 4294967295U64 {
             return <Result[U32, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        return <Result[U32, RangeError].Ok value=truncU32(n: from) />
+        return <Result[U32, RangeError].Ok value=truncU32(n: source) />
     }
 }
 
 // Unsigned narrowing from the wide SIGNED I64 (spec/12): the per-target base that the
 // generated narrower-source witnesses (`@[IntTryFrom]` -> Core.gen.pw) delegate to after
-// widening their source `from as I64`. A signed wide value must be non-negative AND within
+// widening their source `source as I64`. A signed wide value must be non-negative AND within
 // the unsigned target's upper bound; then reinterpret-and-truncate via the U64 floor.
 pub impl U8 as TryFrom[I64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: I64) {
-        if from < 0I64 {
-            return <Result[U8, RangeError].Err error=<RangeError value=from /> />
+    result[RangeError] factory checked(source: I64) {
+        if source < 0I64 {
+            return <Result[U8, RangeError].Err error=<RangeError value=source /> />
         }
-        if from > 255I64 {
-            return <Result[U8, RangeError].Err error=<RangeError value=from /> />
+        if source > 255I64 {
+            return <Result[U8, RangeError].Err error=<RangeError value=source /> />
         }
-        return <Result[U8, RangeError].Ok value=truncU8(n: bitCastU64(n: from)) />
+        return <Result[U8, RangeError].Ok value=truncU8(n: bitCastU64(n: source)) />
     }
 }
 pub impl U16 as TryFrom[I64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: I64) {
-        if from < 0I64 {
-            return <Result[U16, RangeError].Err error=<RangeError value=from /> />
+    result[RangeError] factory checked(source: I64) {
+        if source < 0I64 {
+            return <Result[U16, RangeError].Err error=<RangeError value=source /> />
         }
-        if from > 65535I64 {
-            return <Result[U16, RangeError].Err error=<RangeError value=from /> />
+        if source > 65535I64 {
+            return <Result[U16, RangeError].Err error=<RangeError value=source /> />
         }
-        return <Result[U16, RangeError].Ok value=truncU16(n: bitCastU64(n: from)) />
+        return <Result[U16, RangeError].Ok value=truncU16(n: bitCastU64(n: source)) />
     }
 }
 pub impl U32 as TryFrom[I64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: I64) {
-        if from < 0I64 {
-            return <Result[U32, RangeError].Err error=<RangeError value=from /> />
+    result[RangeError] factory checked(source: I64) {
+        if source < 0I64 {
+            return <Result[U32, RangeError].Err error=<RangeError value=source /> />
         }
-        if from > 4294967295I64 {
-            return <Result[U32, RangeError].Err error=<RangeError value=from /> />
+        if source > 4294967295I64 {
+            return <Result[U32, RangeError].Err error=<RangeError value=source /> />
         }
-        return <Result[U32, RangeError].Ok value=truncU32(n: bitCastU64(n: from)) />
+        return <Result[U32, RangeError].Ok value=truncU32(n: bitCastU64(n: source)) />
     }
 }
 
 // Cross-sign conversions between the two wide types (spec/12): `as` is lossless-only and
-// rejects a sign change, so `<I64.convert from=u/>` / `<U64.convert from=n/>` range-check
+// rejects a sign change, so `<I64.checked source=u/>` / `<U64.checked source=n/>` range-check
 // then reinterpret the (identical) bit pattern. A U64 above I64.max, or a negative I64,
 // does not fit the other's range.
 pub impl I64 as TryFrom[U64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: U64) {
-        if from > 9223372036854775807U64 {
+    result[RangeError] factory checked(source: U64) {
+        if source > 9223372036854775807U64 {
             return <Result[I64, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        return <Result[I64, RangeError].Ok value=bitCastI64(n: from) />
+        return <Result[I64, RangeError].Ok value=bitCastI64(n: source) />
     }
 }
 pub impl U64 as TryFrom[I64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: I64) {
-        if from < 0I64 {
-            return <Result[U64, RangeError].Err error=<RangeError value=from /> />
+    result[RangeError] factory checked(source: I64) {
+        if source < 0I64 {
+            return <Result[U64, RangeError].Err error=<RangeError value=source /> />
         }
-        return <Result[U64, RangeError].Ok value=bitCastU64(n: from) />
+        return <Result[U64, RangeError].Ok value=bitCastU64(n: source) />
     }
 }
 
 // Fallible float->int conversions (spec/12: `F64->I32` is a TryFrom example). `as`
 // rejects float->int (it would truncate the fraction), so the lossy conversion is the
-// named `convert`: it TRUNCATES TOWARD ZERO (3.7 -> 3, -3.7 -> -3 — the universal
+// named `checked`: it TRUNCATES TOWARD ZERO (3.7 -> 3, -3.7 -> -3 — the universal
 // convention) and fails ONLY when the result is out of the target's range or the
 // input is NaN/±inf. NaN is tested first (float `==`/`<` panic on NaN, spec/02). The
 // narrow targets truncate within I64 first (safe `f64ToI64`), then integer-range-check.
 pub impl I64 as TryFrom[F64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: F64) {
-        if isNanF64(f: from) {
+    result[RangeError] factory checked(source: F64) {
+        if isNanF64(f: source) {
             return <Result[I64, RangeError].Err error=<RangeError value=0I64 /> />
         }
         // outside [-2^63, 2^63) (±inf included): not representable in I64.
-        if from < -9223372036854775808.0 {
+        if source < -9223372036854775808.0 {
             return <Result[I64, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        if from >= 9223372036854775808.0 {
+        if source >= 9223372036854775808.0 {
             return <Result[I64, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        return <Result[I64, RangeError].Ok value=f64ToI64(f: from) />
+        return <Result[I64, RangeError].Ok value=f64ToI64(f: source) />
     }
 }
 pub impl I32 as TryFrom[F64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: F64) {
-        if isNanF64(f: from) {
+    result[RangeError] factory checked(source: F64) {
+        if isNanF64(f: source) {
             return <Result[I32, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        if from < -9223372036854775808.0 {
+        if source < -9223372036854775808.0 {
             return <Result[I32, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        if from >= 9223372036854775808.0 {
+        if source >= 9223372036854775808.0 {
             return <Result[I32, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        val n: I64 = f64ToI64(f: from)
+        val n: I64 = f64ToI64(f: source)
         if n < -2147483648I64 {
             return <Result[I32, RangeError].Err error=<RangeError value=n /> />
         }
@@ -927,17 +927,17 @@ pub impl I32 as TryFrom[F64] {
 }
 pub impl I16 as TryFrom[F64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: F64) {
-        if isNanF64(f: from) {
+    result[RangeError] factory checked(source: F64) {
+        if isNanF64(f: source) {
             return <Result[I16, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        if from < -9223372036854775808.0 {
+        if source < -9223372036854775808.0 {
             return <Result[I16, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        if from >= 9223372036854775808.0 {
+        if source >= 9223372036854775808.0 {
             return <Result[I16, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        val n: I64 = f64ToI64(f: from)
+        val n: I64 = f64ToI64(f: source)
         if n < -32768I64 {
             return <Result[I16, RangeError].Err error=<RangeError value=n /> />
         }
@@ -949,17 +949,17 @@ pub impl I16 as TryFrom[F64] {
 }
 pub impl I8 as TryFrom[F64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: F64) {
-        if isNanF64(f: from) {
+    result[RangeError] factory checked(source: F64) {
+        if isNanF64(f: source) {
             return <Result[I8, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        if from < -9223372036854775808.0 {
+        if source < -9223372036854775808.0 {
             return <Result[I8, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        if from >= 9223372036854775808.0 {
+        if source >= 9223372036854775808.0 {
             return <Result[I8, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        val n: I64 = f64ToI64(f: from)
+        val n: I64 = f64ToI64(f: source)
         if n < -128I64 {
             return <Result[I8, RangeError].Err error=<RangeError value=n /> />
         }
@@ -976,62 +976,62 @@ pub impl I8 as TryFrom[F64] {
 // < 2^64, so `f64ToU64` is in range) and truncate.
 pub impl U64 as TryFrom[F64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: F64) {
-        if isNanF64(f: from) {
+    result[RangeError] factory checked(source: F64) {
+        if isNanF64(f: source) {
             return <Result[U64, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        if from < 0.0 {
+        if source < 0.0 {
             return <Result[U64, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        if from >= 18446744073709551616.0 {
+        if source >= 18446744073709551616.0 {
             return <Result[U64, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        return <Result[U64, RangeError].Ok value=f64ToU64(f: from) />
+        return <Result[U64, RangeError].Ok value=f64ToU64(f: source) />
     }
 }
 pub impl U32 as TryFrom[F64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: F64) {
-        if isNanF64(f: from) {
+    result[RangeError] factory checked(source: F64) {
+        if isNanF64(f: source) {
             return <Result[U32, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        if from < 0.0 {
+        if source < 0.0 {
             return <Result[U32, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        if from >= 4294967296.0 {
+        if source >= 4294967296.0 {
             return <Result[U32, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        return <Result[U32, RangeError].Ok value=truncU32(n: f64ToU64(f: from)) />
+        return <Result[U32, RangeError].Ok value=truncU32(n: f64ToU64(f: source)) />
     }
 }
 pub impl U16 as TryFrom[F64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: F64) {
-        if isNanF64(f: from) {
+    result[RangeError] factory checked(source: F64) {
+        if isNanF64(f: source) {
             return <Result[U16, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        if from < 0.0 {
+        if source < 0.0 {
             return <Result[U16, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        if from >= 65536.0 {
+        if source >= 65536.0 {
             return <Result[U16, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        return <Result[U16, RangeError].Ok value=truncU16(n: f64ToU64(f: from)) />
+        return <Result[U16, RangeError].Ok value=truncU16(n: f64ToU64(f: source)) />
     }
 }
 pub impl U8 as TryFrom[F64] {
     type Error = RangeError
-    result[RangeError] factory convert(from: F64) {
-        if isNanF64(f: from) {
+    result[RangeError] factory checked(source: F64) {
+        if isNanF64(f: source) {
             return <Result[U8, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        if from < 0.0 {
+        if source < 0.0 {
             return <Result[U8, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        if from >= 256.0 {
+        if source >= 256.0 {
             return <Result[U8, RangeError].Err error=<RangeError value=0I64 /> />
         }
-        return <Result[U8, RangeError].Ok value=truncU8(n: f64ToU64(f: from)) />
+        return <Result[U8, RangeError].Ok value=truncU8(n: f64ToU64(f: source)) />
     }
 }
 
@@ -1101,15 +1101,15 @@ fn utf8FirstInvalid(bytes: Array[U8]) -> U64 {
     return n
 }
 
-// Validated `Array[U8]` -> `String` (spec/02,12): `<String.convert from=bytes/>` yields
+// Validated `Array[U8]` -> `String` (spec/02,12): `<String.checked source=bytes/>` yields
 // `Result[String, Utf8Error]`. This is the safe public constructor; the unchecked floor
 // `stringFromBytesUnchecked` is the escape hatch for already-known-valid bytes.
 pub impl String as TryFrom[Array[U8]] {
     type Error = Utf8Error
-    result[Utf8Error] factory convert(from: Array[U8]) {
-        val bad: U64 = utf8FirstInvalid(bytes: from)
-        if bad == from.count {
-            return <Result[String, Utf8Error].Ok value=stringFromBytesUnchecked(from) />
+    result[Utf8Error] factory checked(source: Array[U8]) {
+        val bad: U64 = utf8FirstInvalid(bytes: source)
+        if bad == source.count {
+            return <Result[String, Utf8Error].Ok value=stringFromBytesUnchecked(source) />
         }
         return <Result[String, Utf8Error].Err error=<Utf8Error index=bad /> />
     }
@@ -1121,17 +1121,17 @@ export struct ParseError {
     pub val input: String
 }
 
-// Parse a decimal string to `I64` (spec/12 TryFrom): `<I64.convert from="-42"/>`
+// Parse a decimal string to `I64` (spec/12 TryFrom): `<I64.checked source="-42"/>`
 // yields `Result[I64, ParseError]`. Accumulates in NEGATIVE space (so `I64.min`, whose
 // magnitude exceeds `I64.max`, is representable) and rejects overflow BEFORE it would
 // panic — the checked `*`/`-` never see an out-of-range intermediate. An empty string,
 // a lone sign, or a non-`0..9` byte is a parse error.
 pub impl I64 as TryFrom[String] {
     type Error = ParseError
-    result[ParseError] factory convert(from: String) {
-        val bs: Array[U8] = from.bytes
+    result[ParseError] factory checked(source: String) {
+        val bs: Array[U8] = source.bytes
         if bs.count == 0U64 {
-            return <Result[I64, ParseError].Err error=<ParseError input=from /> />
+            return <Result[I64, ParseError].Err error=<ParseError input=source /> />
         }
         mut val i: U64 = 0
         mut val neg: Bool = false
@@ -1144,22 +1144,22 @@ pub impl I64 as TryFrom[String] {
             }
         }
         if i >= bs.count {
-            return <Result[I64, ParseError].Err error=<ParseError input=from /> />
+            return <Result[I64, ParseError].Err error=<ParseError input=source /> />
         }
         mut val acc: I64 = 0I64
         while i < bs.count {
             val b: U8 = bs[i]
             if b < 48U8 {
-                return <Result[I64, ParseError].Err error=<ParseError input=from /> />
+                return <Result[I64, ParseError].Err error=<ParseError input=source /> />
             }
             if b > 57U8 {
-                return <Result[I64, ParseError].Err error=<ParseError input=from /> />
+                return <Result[I64, ParseError].Err error=<ParseError input=source /> />
             }
             val d: I64 = (b - 48U8) as I64
             // acc is <= 0; going more negative as acc*10 - d. Overflow (below I64.min)
             // when acc < (min + d) / 10 — checked before the multiply so `*` never panics.
             if acc < (-9223372036854775808I64 + d) / 10I64 {
-                return <Result[I64, ParseError].Err error=<ParseError input=from /> />
+                return <Result[I64, ParseError].Err error=<ParseError input=source /> />
             }
             acc = acc * 10I64 - d
             i = i + 1U64
@@ -1170,7 +1170,7 @@ pub impl I64 as TryFrom[String] {
         // a positive value is the negation of the accumulator; only I64.min can't be
         // negated (its positive is out of range).
         if acc == -9223372036854775808I64 {
-            return <Result[I64, ParseError].Err error=<ParseError input=from /> />
+            return <Result[I64, ParseError].Err error=<ParseError input=source /> />
         }
         return <Result[I64, ParseError].Ok value=0I64 - acc />
     }

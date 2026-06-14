@@ -1250,7 +1250,7 @@ export fn parseTraitDecl(p: inout P) -> TraitAst {
             _ => {
                 if curIs(p: inout p, kw: "factory") || curIs(p: inout p, kw: "optional") || curIs(p: inout p, kw: "result") {
                     // a factory requirement `[optional | result[E]] factory name(params)`
-                    // (spec/05,12 — e.g. `TryFrom`'s `result[Error] factory convert(from:)`,
+                    // (spec/05,12 — e.g. `TryFrom`'s `result[Error] factory checked(source:)`,
                     // `Chain`'s `factory fromValue/empty`). Recorded as an assoc-fn
                     // requirement by its SELECTOR (name + labels); the fallible wrapper
                     // (optional/result[E]) and the implicit `Self` return are the impl's
