@@ -189,6 +189,26 @@ fn checkTypeName(c: inout Comp, siteOffset: U64, typeParams: Array[Bind], start:
     }
 }
 
+// Recurse into a structured type's generic arguments (c.arena.types[tyIdx].args),
+// checking each in scope. The annotation HEAD is checked by the caller via checkTypeName;
+// its bare span doesn't reach the args (`Optional[Widget]` has head `Optional` but
+// `Widget` lives in args), so non-array generic arguments need this walk. (An array's
+// element type is stored as the head, so it is already covered.)
+fn checkTypeArgs(c: inout Comp, siteOffset: U64, typeParams: Array[Bind], tyIdx: U64) {
+    if tyIdx >= c.arena.types.count { return }
+    val t: TypeRef = c.arena.types[tyIdx]
+    mut val k: U64 = 0
+    while k < t.args.count {
+        val argIdx: U64 = t.args[k]
+        if argIdx < c.arena.types.count {
+            val at: TypeRef = c.arena.types[argIdx]
+            checkTypeName(c: inout c, siteOffset: siteOffset, typeParams: typeParams, start: at.nameStart, len: at.nameLen)
+            checkTypeArgs(c: inout c, siteOffset: siteOffset, typeParams: typeParams, tyIdx: argIdx)
+        }
+        k += 1
+    }
+}
+
 // Type-side diagnostic arm of scoped resolution (spec/15): every user-written type
 // name in a declaration (function param / return, struct & enum fields) must resolve
 // to a type in scope. The use-site module is the containing declaration's module
@@ -199,11 +219,15 @@ fn checkTypeVisibility(c: inout Comp) {
     while fi < c.arena.funcs.count {
         val f: Func = c.arena.funcs[fi]
         if offsetIsLoaded(c: inout c, offset: f.nameStart) {
-            if f.hasRet { checkTypeName(c: inout c, siteOffset: f.nameStart, typeParams: f.typeParams, start: f.retStart, len: f.retLen) }
+            if f.hasRet {
+                checkTypeName(c: inout c, siteOffset: f.nameStart, typeParams: f.typeParams, start: f.retStart, len: f.retLen)
+                checkTypeArgs(c: inout c, siteOffset: f.nameStart, typeParams: f.typeParams, tyIdx: f.retTy)
+            }
             mut val pi: U64 = 0
             while pi < f.params.count {
                 val prm: Param = f.params[pi]
                 checkTypeName(c: inout c, siteOffset: f.nameStart, typeParams: f.typeParams, start: prm.tyStart, len: prm.tyLen)
+                checkTypeArgs(c: inout c, siteOffset: f.nameStart, typeParams: f.typeParams, tyIdx: prm.ty)
                 pi += 1
             }
         }
@@ -220,6 +244,7 @@ fn checkTypeVisibility(c: inout Comp) {
                 while di < s.fields.count {
                     val fld: FieldDef = s.fields[di]
                     checkTypeName(c: inout c, siteOffset: s.defOffset, typeParams: s.typeParams, start: fld.tyStart, len: fld.tyLen)
+                    checkTypeArgs(c: inout c, siteOffset: s.defOffset, typeParams: s.typeParams, tyIdx: fld.ty)
                     di += 1
                 }
             }
@@ -238,6 +263,7 @@ fn checkTypeVisibility(c: inout Comp) {
                 while di2 < vr.fields.count {
                     val fld2: FieldDef = vr.fields[di2]
                     checkTypeName(c: inout c, siteOffset: e.defOffset, typeParams: e.typeParams, start: fld2.tyStart, len: fld2.tyLen)
+                    checkTypeArgs(c: inout c, siteOffset: e.defOffset, typeParams: e.typeParams, tyIdx: fld2.ty)
                     di2 += 1
                 }
                 vi += 1
