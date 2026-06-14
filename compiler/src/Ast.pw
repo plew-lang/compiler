@@ -699,6 +699,25 @@ struct NewtypeDef {
 // the unique spans indexed by id-1; `buckets` is an open-addressing slot→id map
 // (0 = empty); `count` is the number of interned names. Re-interned names unify
 // by CONTENT (equal bytes ⇒ equal id), which is the whole point.
+// Typed-AST cache (Phase B): each expression node's recovered `TypeInfo`, stored
+// as parallel scalar arrays keyed by expr id (struct-array IndexSet isn't in the
+// self-host subset). `typeOf` fills these lazily during codegen in a NON-generic
+// context (a node's type is env-independent and computed once) and reads them
+// back, so codegen stops re-deriving via `exprType`. `kind == typeUnfilled` marks
+// an uncomputed slot. `filled` lists ids filled since the last clear so the cache
+// resets in O(fills) at each body-emission entry. `intCtx` is the checker-recorded
+// integer CONTEXT type (code 1..8, 0 = none), which persists (not cleared per
+// body — a literal's context type is env-independent).
+struct TypeCache {
+    pub mut val kind: Array[I64] = []
+    pub mut val start: Array[U64] = []
+    pub mut val len: Array[U64] = []
+    pub mut val ref: Array[U64] = []
+    pub mut val filled: Array[U64] = []
+    pub mut val intCtx: Array[U64] = []
+}
+pub impl TypeCache { factory }
+
 struct Interner {
     pub mut val starts: Array[U64] = []
     pub mut val lens: Array[U64] = []
@@ -797,31 +816,9 @@ struct Comp {
     // name interning (Phase C): a content-keyed table mapping each name span to a
     // stable 1-based id, so name equality is an integer compare (see `Interner`).
     pub mut val interner: Interner = <Interner />
-    // typed-AST cache (Phase B): each expression node's recovered `TypeInfo`,
-    // stored as 4 parallel scalar arrays keyed by expr id (struct-array IndexSet
-    // isn't available in the self-host subset). `typeOf` fills these lazily during
-    // codegen in a NON-generic context (where a node's type is env-independent and
-    // computed once) and reads them back, so codegen stops re-deriving types via
-    // `exprType`. `exprTyKind == typeUnfilled` marks an uncomputed slot. Built by
-    // buildExprTyTable before emission.
-    pub mut val exprTyKind: Array[I64] = []
-    pub mut val exprTyStart: Array[U64] = []
-    pub mut val exprTyLen: Array[U64] = []
-    pub mut val exprTyRef: Array[U64] = []
-    // ids filled since the last clear, so clearExprTyCache resets only those (O(fills)
-    // not O(nodes)). The cache is cleared at each function/closure body-emission entry,
-    // so a cached (grounded) type is only ever read within the single body emission
-    // that produced it — env (Self/type args) is constant there, so methods and
-    // generic instantiations can cache too (each instantiation refills after a clear).
-    pub mut val exprTyFilled: Array[U64] = []
-    // checker-recorded integer CONTEXT type for an expression (spec/02 literal
-    // context typing): a code 1..8 = I8/I16/I32/I64/U8/U16/U32/U64, 0 = none. The
-    // checker fills it whenever it applies a known int context (`val b: I32 = 0-1`,
-    // `match{...}+1`), so `typeOf` can recover the type of an otherwise width-less
-    // form whose type comes only from context — routing it through the operator
-    // witness instead of the built-in. Built alongside exprTyKind; persists (not
-    // cleared per body — a literal's context type is env-independent).
-    pub mut val exprIntCtx: Array[U64] = []
+    // typed-AST cache (Phase B): each expression node's recovered type, keyed by
+    // expr id (see `TypeCache`). Built by buildExprTyTable before emission.
+    pub mut val typeCache: TypeCache = <TypeCache />
     // recursive-value-type boxing (spec/03): the set of fields whose declared type
     // transitively reaches their owning concrete struct/enum (a containment cycle).
     // Such a field is stored behind a heap pointer (`T*`) so the C type is finite —

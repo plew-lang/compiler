@@ -1,7 +1,7 @@
 // Part of name/type resolution (root: _.pw): expression type-cache table
 // construction.
 
-// Sentinel `exprTyKind` value marking an uncomputed type-cache slot (real kinds
+// Sentinel `typeCache.kind` value marking an uncomputed type-cache slot (real kinds
 // are 0=scalar/1=String/2=named/3=array).
 fn typeUnfilled() -> I64 {
     return 99
@@ -12,11 +12,11 @@ fn typeUnfilled() -> I64 {
 fn buildExprTyTable(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.exprs.count {
-        c.exprTyKind.append(typeUnfilled())
-        c.exprTyStart.append(0)
-        c.exprTyLen.append(0)
-        c.exprTyRef.append(0)
-        c.exprIntCtx.append(0)
+        c.typeCache.kind.append(typeUnfilled())
+        c.typeCache.start.append(0)
+        c.typeCache.len.append(0)
+        c.typeCache.ref.append(0)
+        c.typeCache.intCtx.append(0)
         i += 1
     }
 }
@@ -38,8 +38,8 @@ fn intCtxKw(code: U64) -> String {
 // The TypeInfo for `id`'s recorded int context (scalarInfo if none) — the fallback
 // `typeOf` uses for a width-less expression whose type came only from context.
 fn exprIntCtxTypeInfo(c: inout Comp, id: U64) -> TypeInfo {
-    if id < c.exprIntCtx.count {
-        val code: U64 = c.exprIntCtx[id]
+    if id < c.typeCache.intCtx.count {
+        val code: U64 = c.typeCache.intCtx[id]
         if code != 0 {
             val kw: String = intCtxKw(code: code)
             val b: Bind = kwSpan(c: inout c, kw: kw, kwLen: kw.bytes.count)
@@ -76,16 +76,16 @@ fn chainResultRef(c: inout Comp, exprId: U64) -> U64 {
 
 fn typeOf(c: inout Comp, id: U64) -> TypeInfo {
     mut val t: TypeInfo = scalarInfo()
-    if id < c.exprTyKind.count {
-        if c.exprTyKind[id] == typeUnfilled() {
+    if id < c.typeCache.kind.count {
+        if c.typeCache.kind[id] == typeUnfilled() {
             t = exprType(c: inout c, id: id)
-            c.exprTyKind[id] = t.kind
-            c.exprTyStart[id] = t.nameStart
-            c.exprTyLen[id] = t.nameLen
-            c.exprTyRef[id] = t.ref
-            c.exprTyFilled.append(id)
+            c.typeCache.kind[id] = t.kind
+            c.typeCache.start[id] = t.nameStart
+            c.typeCache.len[id] = t.nameLen
+            c.typeCache.ref[id] = t.ref
+            c.typeCache.filled.append(id)
         } else {
-            t = <TypeInfo kind=c.exprTyKind[id] nameStart=c.exprTyStart[id] nameLen=c.exprTyLen[id] ref=c.exprTyRef[id] />
+            t = <TypeInfo kind=c.typeCache.kind[id] nameStart=c.typeCache.start[id] nameLen=c.typeCache.len[id] ref=c.typeCache.ref[id] />
         }
     } else {
         t = exprType(c: inout c, id: id)
@@ -93,7 +93,7 @@ fn typeOf(c: inout Comp, id: U64) -> TypeInfo {
     // width-less recovery: a form whose type came only from context (`0-1` in an
     // `I32` binding, `match{...}+1`) is type-less to the structural recovery but the
     // checker recorded its int context — use it so the op routes through the witness.
-    // Read fresh (not cached) since exprIntCtx is filled during emission.
+    // Read fresh (not cached) since typeCache.intCtx is filled during emission.
     if t.kind == 0 {
         if t.nameLen == 0 {
             val ctx: TypeInfo = exprIntCtxTypeInfo(c: inout c, id: id)

@@ -14,7 +14,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                 ty = st.i1ty
             } else {
                 // width from the literal's recovered type (typeOf folds in the
-                // suffix and the checker-recorded context width exprIntCtx).
+                // suffix and the checker-recorded context width typeCache.intCtx).
                 val t: TypeInfo = typeOf(c: inout c, id: id)
                 if t.kind == 0 {
                     if isFloatType(c: inout c, start: t.nameStart, len: t.nameLen) {

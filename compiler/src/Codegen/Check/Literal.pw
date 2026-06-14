@@ -91,7 +91,7 @@ fn tiIsFloat(c: inout Comp, ti: TypeInfo) -> Bool {
     return false
 }
 
-// Encode a float context as an exprIntCtx code (9 = F64, 10 = F32) so the backend
+// Encode a float context as an typeCache.intCtx code (9 = F64, 10 = F32) so the backend
 // emits an otherwise-untyped integer literal as a double constant in float context.
 fn floatCtxCode(bits: U64) -> U64 {
     if bits == 32 { return 10 }
@@ -142,17 +142,17 @@ fn intCtxCode(bits: U64, sgn: Bool) -> U64 {
 
 fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
     // record the int context so `typeOf` can recover an otherwise width-less form
-    // (`0-1` / `match{...}+1` typed only by its binding) — see exprIntCtx. eKind 1
+    // (`0-1` / `match{...}+1` typed only by its binding) — see typeCache.intCtx. eKind 1
     // means a definite int context (bits/sgn known); the recursion below propagates
     // the same context to operands, so the whole arith subtree is recorded.
     if eKind == 1 {
-        if id < c.exprIntCtx.count {
-            c.exprIntCtx[id] = intCtxCode(bits: eBits, sgn: eSgn)
+        if id < c.typeCache.intCtx.count {
+            c.typeCache.intCtx[id] = intCtxCode(bits: eBits, sgn: eSgn)
         }
     }
     if eKind == 2 {
-        if id < c.exprIntCtx.count {
-            c.exprIntCtx[id] = floatCtxCode(bits: eBits)
+        if id < c.typeCache.intCtx.count {
+            c.typeCache.intCtx[id] = floatCtxCode(bits: eBits)
         }
     }
     val e: Expr = c.exprs[id]
