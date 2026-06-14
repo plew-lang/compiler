@@ -2,7 +2,7 @@
 
 // ---- generic struct instances ----
 
-// Register each concrete generic-struct instantiation (from c.genInsts) as a named
+// Register each concrete generic-struct instantiation (from c.monoWork.genInsts) as a named
 // LLVM type with its type parameters substituted (env curTypeParams->curTypeArgs).
 // Split into a NAMES pass and a BODIES pass (called separately by the backend init)
 // so EVERY named type — plain structs/enums AND all generic instances — exists
@@ -16,8 +16,8 @@ fn registerGenStructNames(c: inout Comp, st: inout LlvmCtx) {
     // instance type (an adapter wrapping another: FilterIter's inner = MapIter[…], or
     // an explicit `Optional[I64]` member) resolves to the already-created named type.
     mut val k: U64 = 0
-    while k < c.genInsts.count {
-        val ref: U64 = c.genInsts[k]
+    while k < c.monoWork.genInsts.count {
+        val ref: U64 = c.monoWork.genInsts[k]
         if isGenericInst(c: inout c, ref: ref) {
             val t: TypeRef = c.types[ref]
             val defIdx: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
@@ -85,8 +85,8 @@ fn genStructSlot(c: inout Comp, st: inout LlvmCtx, ref: U64) -> U64 {
 // `{ i64 tag, [maxWords(args) x i64] payload }` with type parameters substituted.
 fn registerGenEnums(c: inout Comp, st: inout LlvmCtx) {
     mut val k: U64 = 0
-    while k < c.genInsts.count {
-        val ref: U64 = c.genInsts[k]
+    while k < c.monoWork.genInsts.count {
+        val ref: U64 = c.monoWork.genInsts[k]
         if isGenericInst(c: inout c, ref: ref) {
             val t: TypeRef = c.types[ref]
             val defIdx: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)

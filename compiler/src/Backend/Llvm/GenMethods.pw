@@ -31,8 +31,8 @@ fn genMethSlotFor(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64, ownA
 // method's params, return type — all under the receiver's substitution env.
 fn declareGenMethods(c: inout Comp, st: inout LlvmCtx) {
     mut val gi: U64 = 0
-    while gi < c.genInsts.count {
-        val instRef: U64 = c.genInsts[gi]
+    while gi < c.monoWork.genInsts.count {
+        val instRef: U64 = c.monoWork.genInsts[gi]
         val gt: TypeRef = c.types[instRef]
         // Array instances keep their methods on the array-special path; skip here.
         if !(rangeEquals(bytes: c.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array")) {

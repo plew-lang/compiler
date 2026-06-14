@@ -106,12 +106,12 @@ fn appendU64Dec(into: inout Array[U8], n: U64) {
 }
 
 // Pass 2: emit a plain user function's body.
-// Declare each concrete generic free-function instantiation (c.fnInsts) as a
+// Declare each concrete generic free-function instantiation (c.monoWork.fnInsts) as a
 // symbol `gf<k>` with its signature built under the instance's substitution env.
 fn declareGenFns(c: inout Comp, st: inout LlvmCtx) {
     mut val k: U64 = 0
-    while k < c.fnInsts.count {
-        val fin: FnInst = c.fnInsts[k]
+    while k < c.monoWork.fnInsts.count {
+        val fin: FnInst = c.monoWork.fnInsts[k]
         // free-function instances only (recvInstRef == 0); methods are a later step.
         // restrict to the entry module: a std generic fn (print[T] etc.) has a body
         // full of not-yet-supported constructs and shouldn't be emitted (print is
@@ -150,7 +150,7 @@ fn declareGenFns(c: inout Comp, st: inout LlvmCtx) {
 fn emitGenFns(c: inout Comp, st: inout LlvmCtx) {
     mut val slot: U64 = 0
     while slot < st.genFnK.count {
-        val fin: FnInst = c.fnInsts[st.genFnK[slot]]
+        val fin: FnInst = c.monoWork.fnInsts[st.genFnK[slot]]
         val f: Func = c.funcs[fin.fnIdx]
         val savedP: Array[Bind] = c.curTypeParams
         val savedA: Array[U64] = c.curTypeArgs
@@ -294,7 +294,7 @@ fn groundAssocFromExpected(c: inout Comp, st: inout LlvmCtx, recvStart: U64, rec
 fn genFnSlotFor(c: inout Comp, fnIdx: U64, args: Array[U64], st: inout LlvmCtx) -> U64 {
     mut val slot: U64 = 0
     while slot < st.genFnK.count {
-        val fin: FnInst = c.fnInsts[st.genFnK[slot]]
+        val fin: FnInst = c.monoWork.fnInsts[st.genFnK[slot]]
         if fin.fnIdx == fnIdx {
             if typeArgsEq(c: inout c, a: fin.args, b: args) {
                 return slot

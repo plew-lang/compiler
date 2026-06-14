@@ -99,7 +99,7 @@ struct LlvmCtx {
     pub mut val fnIdx: Array[U64]
     pub mut val fnVal: Array[LLVMValueRef]
     pub mut val fnTy: Array[LLVMTypeRef]
-    // generic free-function instances (parallel: c.fnInsts index -> value, type).
+    // generic free-function instances (parallel: c.monoWork.fnInsts index -> value, type).
     pub mut val genFnK: Array[U64]
     pub mut val genFnVal: Array[LLVMValueRef]
     pub mut val genFnTy: Array[LLVMTypeRef]

@@ -6,9 +6,9 @@
 fn closureCaptures(c: inout Comp, cloId: U64) -> Array[CaptureEntry] {
     mut val out: Array[CaptureEntry] = []
     mut val i: U64 = 0
-    while i < c.captures.count {
-        if c.captures[i].closureId == cloId {
-            out.append(value: c.captures[i])
+    while i < c.monoWork.captures.count {
+        if c.monoWork.captures[i].closureId == cloId {
+            out.append(value: c.monoWork.captures[i])
         }
         i += 1
     }
@@ -41,9 +41,9 @@ fn captureSlotTy(c: inout Comp, st: inout LlvmCtx, cap: CaptureEntry) -> LLVMTyp
 // outlives the declaring scope (Swift-style reference capture).
 fn localIsBoxedCapture(c: inout Comp, start: U64, len: U64) -> Bool {
     mut val i: U64 = 0
-    while i < c.captures.count {
-        if c.captures[i].boxed {
-            if spansEqual(c: inout c, aStart: c.captures[i].nameStart, aLen: c.captures[i].nameLen, bStart: start, bLen: len) {
+    while i < c.monoWork.captures.count {
+        if c.monoWork.captures[i].boxed {
+            if spansEqual(c: inout c, aStart: c.monoWork.captures[i].nameStart, aLen: c.monoWork.captures[i].nameLen, bStart: start, bLen: len) {
                 return true
             }
         }
@@ -81,15 +81,15 @@ fn closureSlot(st: inout LlvmCtx, id: U64) -> U64 {
 // literal rejects loudly (a clean unsupported, not a miscompile).
 fn closureSupported(c: inout Comp, cloId: U64) -> Bool {
     mut val i: U64 = 0
-    while i < c.captures.count {
-        if c.captures[i].closureId == cloId {
+    while i < c.monoWork.captures.count {
+        if c.monoWork.captures[i].closureId == cloId {
             // a boxed (mut) capture is supported for a scalar/Bool cell; a boxed
             // array/struct/generic-instance cell isn't modeled yet.
-            if c.captures[i].boxed {
-                if c.captures[i].isArray {
+            if c.monoWork.captures[i].boxed {
+                if c.monoWork.captures[i].isArray {
                     return false
                 }
-                if isGenericInst(c: inout c, ref: c.captures[i].ty) {
+                if isGenericInst(c: inout c, ref: c.monoWork.captures[i].ty) {
                     return false
                 }
             }

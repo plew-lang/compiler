@@ -58,8 +58,8 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // type from the capture entry (so field/index dispatch on it works).
             if c.curInClosure {
                 mut val ci: U64 = 0
-                while ci < c.captures.count {
-                    val ce: CaptureEntry = c.captures[ci]
+                while ci < c.monoWork.captures.count {
+                    val ce: CaptureEntry = c.monoWork.captures[ci]
                     if ce.closureId == c.curClosureId {
                         if spansEqual(c: inout c, aStart: ce.nameStart, aLen: ce.nameLen, bStart: start, bLen: len) {
                             if isRefInst(c: inout c, ref: ce.ty) {

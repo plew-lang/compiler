@@ -437,8 +437,8 @@ fn typeConformsToName(c: inout Comp, typeStart: U64, typeLen: U64, traitName: St
 // required trait, else a loud error. Runs after instantiation discovery.
 fn checkFnBounds(c: inout Comp) {
     mut val ii: U64 = 0
-    while ii < c.fnInsts.count {
-        val fin: FnInst = c.fnInsts[ii]
+    while ii < c.monoWork.fnInsts.count {
+        val fin: FnInst = c.monoWork.fnInsts[ii]
         val f: Func = c.funcs[fin.fnIdx]
         mut val bi: U64 = 0
         while bi < c.funcBounds.count {
@@ -480,8 +480,8 @@ fn checkFnBounds(c: inout Comp) {
 // have the method would slip through).
 fn checkMethodBounds(c: inout Comp) {
     mut val gi: U64 = 0
-    while gi < c.genInsts.count {
-        val instRef: U64 = c.genInsts[gi]
+    while gi < c.monoWork.genInsts.count {
+        val instRef: U64 = c.monoWork.genInsts[gi]
         val inst: TypeRef = c.types[instRef]
         mut val mfi: U64 = 0
         while mfi < c.funcs.count {

@@ -18,8 +18,8 @@ fn findAdapterInst(c: inout Comp, st: inout LlvmCtx, recv: U64, headKw: String) 
     val recvRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
     val recvSidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
     mut val gi: U64 = 0
-    while gi < c.genInsts.count {
-        val ref: U64 = c.genInsts[gi]
+    while gi < c.monoWork.genInsts.count {
+        val ref: U64 = c.monoWork.genInsts[gi]
         val t: TypeRef = c.types[ref]
         if rangeEquals(bytes: c.bytes, start: t.nameStart, len: t.nameLen, kw: headKw) {
             if t.args.count > 0U64 {

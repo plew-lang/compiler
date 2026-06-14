@@ -35,11 +35,11 @@ fn collectFnInsts(c: inout Comp) {
     // transitive instantiation: walk each generic free function instance's body
     // with its type-parameter env active (so type-parameter-typed args resolve to
     // concrete types), registering the instances it calls. The loop re-reads
-    // c.fnInsts.count each step, so newly appended instances are scanned too — a
+    // c.monoWork.fnInsts.count each step, so newly appended instances are scanned too — a
     // worklist that runs to fixpoint (a generic fn calling another generic fn).
     mut val si: U64 = 0
-    while si < c.fnInsts.count {
-        val fin: FnInst = c.fnInsts[si]
+    while si < c.monoWork.fnInsts.count {
+        val fin: FnInst = c.monoWork.fnInsts[si]
         val gf: Func = c.funcs[fin.fnIdx]
         c.locals = []
         seedGlobalLocals(c: inout c)

@@ -44,8 +44,8 @@ fn captureSupported(c: inout Comp, lo: Local) -> Bool {
 fn recordCapture(c: inout Comp, closureId: U64, localIdx: U64) {
     val lo: Local = c.locals[localIdx]
     mut val i: U64 = 0
-    while i < c.captures.count {
-        val e: CaptureEntry = c.captures[i]
+    while i < c.monoWork.captures.count {
+        val e: CaptureEntry = c.monoWork.captures[i]
         if e.closureId == closureId {
             if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: lo.nameStart, bLen: lo.nameLen) {
                 return
@@ -72,7 +72,7 @@ fn recordCapture(c: inout Comp, closureId: U64, localIdx: U64) {
             compileErrorAt(line: lineOf(c: inout c, offset: lo.nameStart), msg: "capturing this value (unique / generic / enum / function) in a closure is not yet supported")
         }
     }
-    c.captures.append(<CaptureEntry closureId=closureId nameStart=lo.nameStart nameLen=lo.nameLen tyStart=lo.tyStart tyLen=lo.tyLen isArray=lo.isArray ty=lo.ty boxed=boxed />)
+    c.monoWork.captures.append(<CaptureEntry closureId=closureId nameStart=lo.nameStart nameLen=lo.nameLen tyStart=lo.tyStart tyLen=lo.tyLen isArray=lo.isArray ty=lo.ty boxed=boxed />)
 }
 
 // Optional chaining over a NON-Optional `Chain` type (spec/12): rewrite the
@@ -194,7 +194,7 @@ fn registerChainFactoryInst(c: inout Comp, headStart: U64, headLen: U64, name: S
     mut val fArgs: Array[U64] = []
     fArgs.append(value: uRef)
     if !(fnInstExists(c: inout c, fnIdx: fi, args: fArgs)) {
-        c.fnInsts.append(<FnInst fnIdx=fi args=fArgs />)
+        c.monoWork.fnInsts.append(<FnInst fnIdx=fi args=fArgs />)
     }
 }
 
@@ -519,8 +519,8 @@ fn scanBlockInsts(c: inout Comp, blkId: U64) {
 // them here would mis-ground `self` and register `Array_T_*`, so they are skipped.
 fn scanGenInstMethodBodies(c: inout Comp) {
     mut val gi: U64 = 0
-    while gi < c.genInsts.count {
-        val instRef: U64 = c.genInsts[gi]
+    while gi < c.monoWork.genInsts.count {
+        val instRef: U64 = c.monoWork.genInsts[gi]
         val inst: TypeRef = c.types[instRef]
         if rangeEquals(bytes: c.bytes, start: inst.nameStart, len: inst.nameLen, kw: "Array") {
             gi += 1

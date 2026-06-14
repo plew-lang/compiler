@@ -234,7 +234,7 @@ fn fieldReachesOwner(c: inout Comp, f: FieldDef, tStart: U64, tLen: U64, visited
 
 // Codegen query: is field `f` stored boxed (behind a heap pointer)?
 fn fieldIsBoxed(c: inout Comp, f: FieldDef) -> Bool {
-    return containsU64(xs: c.boxedFields, v: f.nameStart)
+    return containsU64(xs: c.monoWork.boxedFields, v: f.nameStart)
 }
 
 // The FieldDef sentinel returned when a lookup fails (nameLen == 0).
@@ -308,7 +308,7 @@ fn markBoxedFields(c: inout Comp) {
             val f: FieldDef = fields[fi]
             mut val visited: Array[U64] = []
             if fieldReachesOwner(c: inout c, f: f, tStart: s.nameStart, tLen: s.nameLen, visited: inout visited) {
-                c.boxedFields.append(f.nameStart)
+                c.monoWork.boxedFields.append(f.nameStart)
             }
             fi += 1
         }
@@ -326,7 +326,7 @@ fn markBoxedFields(c: inout Comp) {
                 val f: FieldDef = vf[fj]
                 mut val visited: Array[U64] = []
                 if fieldReachesOwner(c: inout c, f: f, tStart: e.nameStart, tLen: e.nameLen, visited: inout visited) {
-                    c.boxedFields.append(f.nameStart)
+                    c.monoWork.boxedFields.append(f.nameStart)
                 }
                 fj += 1
             }

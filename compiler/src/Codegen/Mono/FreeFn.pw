@@ -221,8 +221,8 @@ fn fnArgsAllGround(c: inout Comp, args: Array[U64]) -> Bool {
 // Whether the FnInst (fnIdx, args) is already registered (structural arg match).
 fn fnInstExists(c: inout Comp, fnIdx: U64, args: Array[U64]) -> Bool {
     mut val i: U64 = 0
-    while i < c.fnInsts.count {
-        val fin: FnInst = c.fnInsts[i]
+    while i < c.monoWork.fnInsts.count {
+        val fin: FnInst = c.monoWork.fnInsts[i]
         if fin.fnIdx == fnIdx {
             if fin.args.count == args.count {
                 mut val same: Bool = true
@@ -260,7 +260,7 @@ fn registerCallInst(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg
             val inferred: Array[U64] = inferFnArgs(c: inout c, f: c.funcs[fi], args: args)
             if fnArgsAllGround(c: inout c, args: inferred) {
                 if !(fnInstExists(c: inout c, fnIdx: fi, args: inferred)) {
-                    c.fnInsts.append(<FnInst fnIdx=fi args=inferred />)
+                    c.monoWork.fnInsts.append(<FnInst fnIdx=fi args=inferred />)
                 }
             }
         }
@@ -288,7 +288,7 @@ fn registerAssocInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, arg
         val inferred: Array[U64] = inferFnArgs(c: inout c, f: c.funcs[afi], args: args)
         if fnArgsAllGround(c: inout c, args: inferred) {
             if !(fnInstExists(c: inout c, fnIdx: afi, args: inferred)) {
-                c.fnInsts.append(<FnInst fnIdx=afi args=inferred />)
+                c.monoWork.fnInsts.append(<FnInst fnIdx=afi args=inferred />)
             }
         }
     }
@@ -370,7 +370,7 @@ fn registerMethodInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, ar
     }
     if fnArgsAllGround(c: inout c, args: fullArgs) {
         if !(fnInstExists(c: inout c, fnIdx: mi, args: fullArgs)) {
-            c.fnInsts.append(<FnInst fnIdx=mi args=fullArgs recvInstRef=recvInst />)
+            c.monoWork.fnInsts.append(<FnInst fnIdx=mi args=fullArgs recvInstRef=recvInst />)
         }
         // register the grounded return adapter (`MapIter[…,I64]`) + its transitive
         // instantiations, so its typedef/methods get emitted (a generic method is

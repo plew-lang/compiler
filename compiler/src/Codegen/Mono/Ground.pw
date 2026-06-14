@@ -6,11 +6,11 @@
 // emitted before the type that contains it; deduped structurally. A type that
 // still mentions a type parameter (a template like `Box[T]`) is not collected.
 // Register the element type of an Array reached via a type argument into
-// c.arrayElems (deduped by name span) so its PlewArray runtime is emitted.
+// c.monoWork.arrayElems (deduped by name span) so its PlewArray runtime is emitted.
 // If an array element is itself an `Array[X]`, its C type is `PlewArray_<X>`, so
 // the inner element X must be registered (and emitted) before the outer. Register
 // the inner first (recursively, for deeper nesting) so it lands earlier in
-// c.arrayElems and its runtime is defined before the dependent one.
+// c.monoWork.arrayElems and its runtime is defined before the dependent one.
 fn ensureArrayElemDeps(c: inout Comp, elemRef: U64) {
     if elemRef == 0 {
         return
@@ -49,14 +49,14 @@ fn registerArrayElemRef(c: inout Comp, elemRef: U64) {
         fRef = re
     }
     mut val i: U64 = 0
-    while i < c.arrayElems.count {
-        val ae: Bind = c.arrayElems[i]
+    while i < c.monoWork.arrayElems.count {
+        val ae: Bind = c.monoWork.arrayElems[i]
         if spansEqual(c: inout c, aStart: ae.nameStart, aLen: ae.nameLen, bStart: nStart, bLen: nLen) {
             return
         }
         i += 1
     }
-    c.arrayElems.append(<Bind nameStart=nStart nameLen=nLen fieldStart=fRef fieldLen=0 />)
+    c.monoWork.arrayElems.append(<Bind nameStart=nStart nameLen=nLen fieldStart=fRef fieldLen=0 />)
 }
 
 // Substitute the active monomorphization env (curTypeParams -> curTypeArgs) into
@@ -375,21 +375,21 @@ fn scanType(c: inout Comp, ref: U64) {
     if isFnType(c: inout c, ref: ref) {
         mut val fj: U64 = 0
         mut val seen: Bool = false
-        while fj < c.fnTypes.count {
-            if typeRefEq(c: inout c, a: c.fnTypes[fj], b: ref) {
+        while fj < c.monoWork.fnTypes.count {
+            if typeRefEq(c: inout c, a: c.monoWork.fnTypes[fj], b: ref) {
                 seen = true
             }
             fj += 1
         }
         if !(seen) {
-            c.fnTypes.append(ref)
+            c.monoWork.fnTypes.append(ref)
         }
     }
     if isGenericInst(c: inout c, ref: ref) {
         if tyRefIsGround(c: inout c, ref: ref) {
             mut val j: U64 = 0
-            while j < c.genInsts.count {
-                if typeRefEq(c: inout c, a: c.genInsts[j], b: ref) {
+            while j < c.monoWork.genInsts.count {
+                if typeRefEq(c: inout c, a: c.monoWork.genInsts[j], b: ref) {
                     return
                 }
                 j += 1
@@ -403,7 +403,7 @@ fn scanType(c: inout Comp, ref: U64) {
                     return
                 }
             }
-            c.genInsts.append(ref)
+            c.monoWork.genInsts.append(ref)
             // scan the generic struct's fields under this instantiation's env so an
             // `Array[T]` field registers its concrete element (`Array[I32]`) — the
             // runtime is keyed off the instantiation, not the `PlewArray_T` template.

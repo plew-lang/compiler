@@ -139,7 +139,7 @@ fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
             } else if isGenericInst(c: inout c, ref: f.ty) {
                 // a generic-instance field (`o: Optional[I64]`, `b: Box[I32]`): its
                 // concrete instance is registered as a named tagged-union / struct type
-                // (every reached instance in c.genInsts is registered), so the field is
+                // (every reached instance in c.monoWork.genInsts is registered), so the field is
                 // representable by value. The named type is created before any body is
                 // set, so referencing it here is order-independent.
             } else {

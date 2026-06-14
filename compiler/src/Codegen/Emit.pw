@@ -170,8 +170,8 @@ fn litFitsBits(value: U64, neg: Bool, bits: U64, sgn: Bool) -> Bool {
 // it is not a recorded element (genCElem falls back to the name path then).
 fn arrayElemRef(c: inout Comp, start: U64, len: U64) -> U64 {
     mut val i: U64 = 0
-    while i < c.arrayElems.count {
-        val ae: Bind = c.arrayElems[i]
+    while i < c.monoWork.arrayElems.count {
+        val ae: Bind = c.monoWork.arrayElems[i]
         if spansEqual(c: inout c, aStart: ae.nameStart, aLen: ae.nameLen, bStart: start, bLen: len) {
             return ae.fieldStart
         }
@@ -185,8 +185,8 @@ fn arrayElemRef(c: inout Comp, start: U64, len: U64) -> U64 {
 // type's head name. Used to recover a nested array's element name in exprType.
 fn arrayElemNameForRef(c: inout Comp, elemRef: U64) -> Bind {
     mut val i: U64 = 0
-    while i < c.arrayElems.count {
-        val ae: Bind = c.arrayElems[i]
+    while i < c.monoWork.arrayElems.count {
+        val ae: Bind = c.monoWork.arrayElems[i]
         // match by mangle (type refs are not interned, so the same type can have
         // a different index than the one stored at registration). Skip a non-ground
         // (template) entry like `Array[T]`'s element `T`: sameMangle resolves through

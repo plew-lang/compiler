@@ -14,8 +14,8 @@ fn spanLen(s: Span) -> U64 {
 fn recordArrayElem(c: inout Comp, ty: PType) {
     if ty.isArray {
         mut val i: U64 = 0
-        while i < c.arrayElems.count {
-            val e: Bind = c.arrayElems[i]
+        while i < c.monoWork.arrayElems.count {
+            val e: Bind = c.monoWork.arrayElems[i]
             if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: ty.start, bLen: ty.len) {
                 return
             }
@@ -31,7 +31,7 @@ fn recordArrayElem(c: inout Comp, ty: PType) {
         // a nested array element (`Array[Array[I32]]`) needs the inner
         // `PlewArray_<inner>` registered (and emitted) first.
         ensureArrayElemDeps(c: inout c, elemRef: elemRef)
-        c.arrayElems.append(<Bind nameStart=ty.start nameLen=ty.len fieldStart=elemRef fieldLen=0 />)
+        c.monoWork.arrayElems.append(<Bind nameStart=ty.start nameLen=ty.len fieldStart=elemRef fieldLen=0 />)
     }
 }
 

@@ -510,13 +510,13 @@ fn structIndexByName(c: inout Comp, start: U64, len: U64) -> U64 {
 // Record that free function `fi` is used as a bare value (needs a thunk).
 fn addFnThunk(c: inout Comp, fi: U64) {
     mut val i: U64 = 0
-    while i < c.fnThunks.count {
-        if c.fnThunks[i] == fi {
+    while i < c.monoWork.fnThunks.count {
+        if c.monoWork.fnThunks[i] == fi {
             return
         }
         i += 1
     }
-    c.fnThunks.append(fi)
+    c.monoWork.fnThunks.append(fi)
 }
 
 // Pre-pass: every bare identifier that names a (non-generic, non-method) free
@@ -552,8 +552,8 @@ fn collectFnThunks(c: inout Comp) {
 // Is (start,len) a boxed (mutable, reference) capture of closure `closureId`?
 fn isBoxedCaptureOf(c: inout Comp, closureId: U64, start: U64, len: U64) -> Bool {
     mut val i: U64 = 0
-    while i < c.captures.count {
-        val e: CaptureEntry = c.captures[i]
+    while i < c.monoWork.captures.count {
+        val e: CaptureEntry = c.monoWork.captures[i]
         if e.closureId == closureId {
             if e.boxed {
                 if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) {
@@ -569,8 +569,8 @@ fn isBoxedCaptureOf(c: inout Comp, closureId: U64, start: U64, len: U64) -> Bool
 // Is (start,len) the name of one of closure `closureId`'s captures?
 fn isCaptureOf(c: inout Comp, closureId: U64, start: U64, len: U64) -> Bool {
     mut val i: U64 = 0
-    while i < c.captures.count {
-        val e: CaptureEntry = c.captures[i]
+    while i < c.monoWork.captures.count {
+        val e: CaptureEntry = c.monoWork.captures[i]
         if e.closureId == closureId {
             if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) {
                 return true

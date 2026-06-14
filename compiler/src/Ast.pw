@@ -699,6 +699,29 @@ struct NewtypeDef {
 // the unique spans indexed by id-1; `buckets` is an open-addressing slot→id map
 // (0 = empty); `count` is the number of interned names. Re-interned names unify
 // by CONTENT (equal bytes ⇒ equal id), which is the whole point.
+// Monomorphization work lists + derived tables, collected after parsing and
+// consumed by codegen. `genInsts`: concrete generic instantiations to emit
+// (TypeRef indices, deduped, post-order so a nested by-value instance precedes
+// its container). `fnInsts`: concrete instantiations of generic free functions.
+// `fnTypes`: distinct function-type TypeRefs (one C fn-pointer typedef each).
+// `fnThunks`: function indices used as bare values (each needs a closure-ABI
+// thunk). `captures`: closure value captures (flat, keyed by closure arena id).
+// `arrayElems`: distinct Array element type names (for PlewArray_<E> + runtime;
+// each reuses Bind as a (start,len) pair). `boxedFields`: fields whose declared
+// type transitively reaches their owning struct/enum (a containment cycle), so
+// stored behind a heap pointer (deref-on-read / repoint-on-write keeps value
+// semantics); keyed by the field decl's nameStart.
+struct MonoWork {
+    pub mut val genInsts: Array[U64] = []
+    pub mut val fnInsts: Array[FnInst] = []
+    pub mut val fnTypes: Array[U64] = []
+    pub mut val fnThunks: Array[U64] = []
+    pub mut val captures: Array[CaptureEntry] = []
+    pub mut val arrayElems: Array[Bind] = []
+    pub mut val boxedFields: Array[U64] = []
+}
+pub impl MonoWork { factory }
+
 // Typed-AST cache (Phase B): each expression node's recovered `TypeInfo`, stored
 // as parallel scalar arrays keyed by expr id (struct-array IndexSet isn't in the
 // self-host subset). `typeOf` fills these lazily during codegen in a NON-generic
@@ -819,34 +842,14 @@ struct Comp {
     // typed-AST cache (Phase B): each expression node's recovered type, keyed by
     // expr id (see `TypeCache`). Built by buildExprTyTable before emission.
     pub mut val typeCache: TypeCache = <TypeCache />
-    // recursive-value-type boxing (spec/03): the set of fields whose declared type
-    // transitively reaches their owning concrete struct/enum (a containment cycle).
-    // Such a field is stored behind a heap pointer (`T*`) so the C type is finite —
-    // a hidden indirection cost; value semantics are preserved by deref-on-read and
-    // repoint-on-write. Keyed by the field declaration's `nameStart` (unique per
-    // source field). Computed by markBoxedFields before codegen.
-    pub mut val boxedFields: Array[U64] = []
     // structured type references (TypeRef arena), indexed by the `ty`/`ref`
     // fields above. Built during parsing; consumed by generic monomorphization.
     pub mut val types: Array[TypeRef]
-    // concrete generic instantiations to monomorphize (TypeRef indices, deduped
-    // structurally), collected from use sites after parsing. Post-order so a
-    // by-value nested instance is defined before the type that contains it.
-    pub mut val genInsts: Array[U64]
-    // concrete instantiations of generic free functions (FnInst), discovered
-    // from call sites after parsing. Each is emitted as a specialized C function.
-    pub mut val fnInsts: Array[FnInst]
-    // distinct function-type TypeRefs (head `fn`), for emitting a C function
-    // pointer typedef per signature. Collected with genInsts during scanType.
-    pub mut val fnTypes: Array[U64]
-    // function indices used as a bare value (a function reference, not a call):
-    // each needs a thunk `<sel>__thunk(void* env, ...)` to adapt the plain C
-    // function to the uniform closure ABI. Collected before signatures are
-    // emitted (collectFnThunks), so the thunk protos precede every use.
-    pub mut val fnThunks: Array[U64]
-    // closure value captures (flat, keyed by closure arena id). Collected by the
-    // scope-aware scan; drives env-struct emission and in-body capture access.
-    pub mut val captures: Array[CaptureEntry]
+    // monomorphization work lists + derived tables (see `MonoWork`): generic
+    // instantiations, fn instances / types / thunks, closure captures, Array
+    // element types, and recursive-field boxing. Collected after parsing, used
+    // by codegen.
+    pub mut val monoWork: MonoWork = <MonoWork />
     // the closure arena id currently being emitted (so an Ident that names one of
     // its captures lowers to an env access). Guarded by curInClosure.
     pub mut val curClosureId: U64
@@ -855,9 +858,6 @@ struct Comp {
     // closure's entry. An identifier resolving below it is an enclosing local
     // (a capture); at or above it is a closure param / body-local.
     pub mut val curCaptureMark: U64
-    // distinct Array element type names seen in declarations (for monomorphizing
-    // PlewArray_<E> + runtime); each entry reuses Bind as a (start,len) pair.
-    pub mut val arrayElems: Array[Bind]
     // variables in scope during codegen (params / lets / match binds), for type
     // recovery (monomorphization + `.bytes` dispatch).
     pub mut val locals: Array[Local]
