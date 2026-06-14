@@ -143,8 +143,8 @@ fn checkDeclShapes(c: inout Comp) {
 // constructor head like `Optional[T]` / `MapIter[I,F,B]`).
 fn checkBlanketHeadless(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.conforms.count {
-        val cf: Conform = c.conforms[i]
+    while i < c.decls.conforms.count {
+        val cf: Conform = c.decls.conforms[i]
         if !(cf.derived) {
             if moduleOf(c: inout c, offset: cf.typeStart) == 0U64 {
                 if isBlanketConform(c: inout c, cf: cf) {

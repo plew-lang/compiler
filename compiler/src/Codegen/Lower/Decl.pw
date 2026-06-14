@@ -50,7 +50,7 @@ fn lowerFieldDef(c: inout Comp, f: FieldAst) -> FieldDef {
 }
 
 // Lower a `struct` DeclAst: append a StructDef, a synthetic `Type_deinit` method +
-// a c.deinits record when the struct carries a `deinit`, then drain pending
+// a c.decls.deinits record when the struct carries a `deinit`, then drain pending
 // `@[...]` derives onto the type. Mirrors parseStruct.
 fn lowerStructDecl(c: inout Comp, d: DeclAst) {
     val nm: Bind = internBytes(c: inout c, s: d.name)
@@ -62,7 +62,7 @@ fn lowerStructDecl(c: inout Comp, d: DeclAst) {
         i += 1
     }
     // a `deinit { body }` lowers to a synthetic method `Type_deinit(Type self)`
-    // (name span = the text "deinit") plus a c.deinits record so scope-exit drops
+    // (name span = the text "deinit") plus a c.decls.deinits record so scope-exit drops
     // fire it. Appended at the same point in c.arena.funcs as the native parser (during
     // this struct's processing), so the function stream order is preserved.
     if d.hasDeinit {
@@ -71,7 +71,7 @@ fn lowerStructDecl(c: inout Comp, d: DeclAst) {
         val noParams: Array[Param] = []
         val noTypeParams: Array[Bind] = []
         c.arena.funcs.append(<Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout c, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nm.nameStart recvLen=nm.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
-        c.deinits.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen fieldStart=nm.nameStart fieldLen=nm.nameLen />)
+        c.decls.deinits.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen fieldStart=nm.nameStart fieldLen=nm.nameLen />)
     }
     c.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams fields=fields isUnique=d.isUnique isExtern=false defOffset=d.span.start />)
     // `defaultExtension #Ext` (spec/09): record (type, extension) so the extension's
@@ -80,7 +80,7 @@ fn lowerStructDecl(c: inout Comp, d: DeclAst) {
     mut val di: U64 = 0
     while di < d.defaultExts.count {
         val extN: Bind = internBytes(c: inout c, s: d.defaultExts[di])
-        c.defaultExts.append(<DefaultExt typeId=tid extId=intern(c: inout c, start: extN.nameStart, len: extN.nameLen) />)
+        c.decls.defaultExts.append(<DefaultExt typeId=tid extId=intern(c: inout c, start: extN.nameStart, len: extN.nameLen) />)
         di += 1
     }
     drainDerives(c: inout c, typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
@@ -112,7 +112,7 @@ fn lowerEnumDecl(c: inout Comp, d: DeclAst) {
     mut val di: U64 = 0
     while di < d.defaultExts.count {
         val extN: Bind = internBytes(c: inout c, s: d.defaultExts[di])
-        c.defaultExts.append(<DefaultExt typeId=tid extId=intern(c: inout c, start: extN.nameStart, len: extN.nameLen) />)
+        c.decls.defaultExts.append(<DefaultExt typeId=tid extId=intern(c: inout c, start: extN.nameStart, len: extN.nameLen) />)
         di += 1
     }
     drainDerives(c: inout c, typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: true, declStart: d.span.start, declEnd: d.span.end)
@@ -149,7 +149,7 @@ fn lowerFuncDecl(c: inout Comp, d: DeclAst) {
     while wi < d.whereParams.count {
         val pn: Bind = internBytes(c: inout c, s: d.whereParams[wi])
         val tn: Bind = internBytes(c: inout c, s: d.whereTraits[wi])
-        c.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen />)
+        c.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen />)
         wi += 1
     }
     // attach pending `@[...]` directives to this fn (a macro on a free function);
@@ -165,7 +165,7 @@ fn appendFuncBounds(c: inout Comp, fnIdx: U64, params: Array[String], traits: Ar
     while i < params.count {
         val pn: Bind = internBytes(c: inout c, s: params[i])
         val tn: Bind = internBytes(c: inout c, s: traits[i])
-        c.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen />)
+        c.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen />)
         i += 1
     }
 }

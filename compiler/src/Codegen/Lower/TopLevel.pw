@@ -75,7 +75,7 @@ fn lowerImport(c: inout Comp, imp: ImportAst) {
                 nsEnd = imp.aliasSpan.end
             }
             if nsEnd > nsStart {
-                c.namespaces.append(value: <Bind nameStart=nsStart nameLen=nsEnd - nsStart fieldStart=0 fieldLen=0 />)
+                c.decls.namespaces.append(value: <Bind nameStart=nsStart nameLen=nsEnd - nsStart fieldStart=0 fieldLen=0 />)
             }
         }
     }
@@ -87,7 +87,7 @@ fn lowerImport(c: inout Comp, imp: ImportAst) {
         if i < imp.nameAliasSpans.count {
             val al: Span = imp.nameAliasSpans[i]
             if al.end > al.start {
-                c.importAliases.append(value: <Bind nameStart=al.start nameLen=al.end - al.start fieldStart=nspan.start fieldLen=nspan.end - nspan.start />)
+                c.decls.importAliases.append(value: <Bind nameStart=al.start nameLen=al.end - al.start fieldStart=nspan.start fieldLen=nspan.end - nspan.start />)
             }
         }
         i += 1
@@ -98,8 +98,8 @@ fn lowerImport(c: inout Comp, imp: ImportAst) {
 fn isNamespaceName(c: inout Comp, name: String) -> Bool {
     val nb: Bind = internBytes(c: inout c, s: name)
     mut val i: U64 = 0
-    while i < c.namespaces.count {
-        if spansEqual(c: inout c, aStart: c.namespaces[i].nameStart, aLen: c.namespaces[i].nameLen, bStart: nb.nameStart, bLen: nb.nameLen) {
+    while i < c.decls.namespaces.count {
+        if spansEqual(c: inout c, aStart: c.decls.namespaces[i].nameStart, aLen: c.decls.namespaces[i].nameLen, bStart: nb.nameStart, bLen: nb.nameLen) {
             return true
         }
         i += 1
@@ -153,9 +153,9 @@ fn lowerExportItem(c: inout Comp, inner: TopItemAst) {
             }
         }
         TopItemAst.Trait(val t) => {
-            val tB: U64 = c.traits.count
+            val tB: U64 = c.decls.traits.count
             lowerTrait(c: inout c, t: t)
-            recordExport(c: inout c, nameStart: c.traits[tB].nameStart, nameLen: c.traits[tB].nameLen)
+            recordExport(c: inout c, nameStart: c.decls.traits[tB].nameStart, nameLen: c.decls.traits[tB].nameLen)
         }
         TopItemAst.GlobalVal(val s) => {
             val gB: U64 = c.arena.globals.count

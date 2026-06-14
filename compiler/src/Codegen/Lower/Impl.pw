@@ -72,7 +72,7 @@ fn lowerMethodMember(c: inout Comp, im: ImplAst, m: MemberAst, recvN: Bind, impl
     if im.isTraitImpl {
         if m.isVia {
             val realN: Bind = internBytes(c: inout c, s: m.viaName)
-            c.methodAliases.append(<MethodAlias recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) aliasStart=nameN.nameStart aliasLen=nameN.nameLen aliasId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) realStart=realN.nameStart realLen=realN.nameLen realId=intern(c: inout c, start: realN.nameStart, len: realN.nameLen) />)
+            c.decls.methodAliases.append(<MethodAlias recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) aliasStart=nameN.nameStart aliasLen=nameN.nameLen aliasId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) realStart=realN.nameStart realLen=realN.nameLen realId=intern(c: inout c, start: realN.nameStart, len: realN.nameLen) />)
             witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) typeParams=typeParams params=params hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
             return
         }
@@ -120,7 +120,7 @@ fn lowerImpl(c: inout Comp, im: ImplAst) {
                 val noParams: Array[Param] = []
                 val noTypeParams: Array[Bind] = []
                 c.arena.funcs.append(<Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout c, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
-                c.deinits.append(<Bind nameStart=recvN.nameStart nameLen=recvN.nameLen fieldStart=recvN.nameStart fieldLen=recvN.nameLen />)
+                c.decls.deinits.append(<Bind nameStart=recvN.nameStart nameLen=recvN.nameLen fieldStart=recvN.nameStart fieldLen=recvN.nameLen />)
             }
             MemberKind.AssocType => {
                 val pt: PType = lowerType(c: inout c, t: m.assocTy)
@@ -130,13 +130,13 @@ fn lowerImpl(c: inout Comp, im: ImplAst) {
                     val trN: Bind = internBytes(c: inout c, s: im.traitName)
                     trId = trN.nameId
                 }
-                c.assocBindings.append(<AssocBinding recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) nameStart=atN.nameStart nameLen=atN.nameLen nameId=intern(c: inout c, start: atN.nameStart, len: atN.nameLen) traitId=trId tyStart=pt.start tyLen=pt.len tyIsArray=pt.isArray ty=pt.ref />)
+                c.decls.assocBindings.append(<AssocBinding recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) nameStart=atN.nameStart nameLen=atN.nameLen nameId=intern(c: inout c, start: atN.nameStart, len: atN.nameLen) traitId=trId tyStart=pt.start tyLen=pt.len tyIsArray=pt.isArray ty=pt.ref />)
             }
             MemberKind.Factory => {
                 // `factory` in a `pub impl T` publishes T's default memberwise factory
                 // (spec/05) — record T's name id so cross-module `<T …/>` is allowed.
                 if im.isPub {
-                    c.pubFactories.append(intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen))
+                    c.decls.pubFactories.append(intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen))
                 }
             }
         }
@@ -156,7 +156,7 @@ fn lowerImpl(c: inout Comp, im: ImplAst) {
             val cfExtN: Bind = internBytes(c: inout c, s: im.extName)
             cfExtId = intern(c: inout c, start: cfExtN.nameStart, len: cfExtN.nameLen)
         }
-        c.conforms.append(<Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout c, start: traitN.nameStart, len: traitN.nameLen) traitArgs=traitArgs derived=false witnessed=witnessed extId=cfExtId />)
+        c.decls.conforms.append(<Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout c, start: traitN.nameStart, len: traitN.nameLen) traitArgs=traitArgs derived=false witnessed=witnessed extId=cfExtId />)
     }
     // attach pending `@[...]` directives to this impl block (a macro on an impl);
     // declStart/declEnd = the impl block's source span for the gen harness slice.
@@ -211,7 +211,7 @@ fn lowerTrait(c: inout Comp, t: TraitAst) {
         ai += 1
     }
     val typeParams: Array[Bind] = lowerTypeParamNames(c: inout c, names: t.typeParams)
-    c.traits.append(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout c, start: nameStart, len: nameLen) typeParams=typeParams supertraits=supertraits reqs=reqs assocTypes=assocTypes />)
+    c.decls.traits.append(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout c, start: nameStart, len: nameLen) typeParams=typeParams supertraits=supertraits reqs=reqs assocTypes=assocTypes />)
     // attach pending `@[...]` directives to this trait (a macro on a trait);
     // declStart/declEnd = the trait's source span for the gen harness slice.
     drainDerives(c: inout c, typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: t.span.start, declEnd: t.span.end)

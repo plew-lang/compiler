@@ -228,8 +228,8 @@ fn simpleTypeRef(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
 fn assocItemRef(c: inout Comp, recvStart: U64, recvLen: U64) -> U64 {
     val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     mut val i: U64 = 0
-    while i < c.assocBindings.count {
-        val ab: AssocBinding = c.assocBindings[i]
+    while i < c.decls.assocBindings.count {
+        val ab: AssocBinding = c.decls.assocBindings[i]
         if ab.recvId == qRecv {
             if rangeEquals(bytes: c.arena.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Item") {
                 return ab.ty
@@ -328,7 +328,7 @@ fn instArgCollidesParamName(c: inout Comp, instRef: U64) -> Bool {
 // hasn't produced. The real program instantiates it normally in phase 2 (the
 // auto-parted `.gen.pw` supplies the derive). Only relevant when `c.genMode`.
 fn refArgNamesADeriveTarget(c: inout Comp, ref: U64) -> Bool {
-    if c.derives.count == 0U64 {
+    if c.decls.derives.count == 0U64 {
         return false
     }
     val t: TypeRef = c.arena.types[ref]
@@ -336,8 +336,8 @@ fn refArgNamesADeriveTarget(c: inout Comp, ref: U64) -> Bool {
     while i < t.args.count {
         val argT: TypeRef = c.arena.types[t.args[i]]
         mut val di: U64 = 0
-        while di < c.derives.count {
-            if spansEqual(c: inout c, aStart: argT.nameStart, aLen: argT.nameLen, bStart: c.derives[di].typeStart, bLen: c.derives[di].typeLen) {
+        while di < c.decls.derives.count {
+            if spansEqual(c: inout c, aStart: argT.nameStart, aLen: argT.nameLen, bStart: c.decls.derives[di].typeStart, bLen: c.decls.derives[di].typeLen) {
                 return true
             }
             di += 1

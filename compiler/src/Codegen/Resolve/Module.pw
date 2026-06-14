@@ -248,9 +248,9 @@ fn firstMethodRetType(c: inout Comp, typeStart: U64, typeLen: U64, name: String)
 // (spec/09): its methods then join the type's bare resolution surface.
 fn isDefaultExt(c: inout Comp, typeId: U64, extId: U64) -> Bool {
     mut val i: U64 = 0
-    while i < c.defaultExts.count {
-        if c.defaultExts[i].typeId == typeId {
-            if c.defaultExts[i].extId == extId {
+    while i < c.decls.defaultExts.count {
+        if c.decls.defaultExts[i].typeId == typeId {
+            if c.decls.defaultExts[i].extId == extId {
                 return true
             }
         }
@@ -325,8 +325,8 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
     // no direct method: a trait `via` alias may redirect this requirement name to
     // a real member (spec/08). Retry resolution under the real name.
     mut val ai: U64 = 0
-    while ai < c.methodAliases.count {
-        val al: MethodAlias = c.methodAliases[ai]
+    while ai < c.decls.methodAliases.count {
+        val al: MethodAlias = c.decls.methodAliases[ai]
         if al.recvId == qRecvId {
             if al.aliasId == qNameId {
                 return findMethod(c: inout c, recvStart: recvStart, recvLen: recvLen, nameStart: al.realStart, nameLen: al.realLen, args: args)
@@ -500,8 +500,8 @@ fn isTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
     // `Hash.derive(input)` rides on this). This is `isTypeName`'s only caller
     // (assocRecvName), so traits qualify only for that routing.
     mut val ti: U64 = 0
-    while ti < c.traits.count {
-        if c.traits[ti].nameId == qId {
+    while ti < c.decls.traits.count {
+        if c.decls.traits[ti].nameId == qId {
             return true
         }
         ti += 1

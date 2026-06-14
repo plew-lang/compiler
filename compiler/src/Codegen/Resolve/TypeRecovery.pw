@@ -226,7 +226,7 @@ fn scalarInfo() -> TypeInfo {
 // source span to point at (a string literal's `String`, `.bytes`'s `U8`). Reuse
 // any occurrence of `kw` in the source as a label span (the match is purely the
 // bytes; a comment/string occurrence works too). nameLen=0 if `kw` never appears.
-// Append `kw`'s bytes to `c.arena.bytes` and record their span in `c.kwCache`, so a
+// Append `kw`'s bytes to `c.arena.bytes` and record their span in `c.decls.kwCache`, so a
 // built-in name with no guaranteed source occurrence has a stable, addressable
 // span without scanning (or planting a comment in) the source.
 fn addKwSpan(c: inout Comp, kw: String) {
@@ -237,7 +237,7 @@ fn addKwSpan(c: inout Comp, kw: String) {
         c.arena.bytes.append(b[i])
         i += 1
     }
-    c.kwCache.append(<Bind nameStart=start nameLen=b.count fieldStart=start fieldLen=b.count />)
+    c.decls.kwCache.append(<Bind nameStart=start nameLen=b.count fieldStart=start fieldLen=b.count />)
 }
 
 // Build the built-in-name span cache once (before any kwSpan use). Covers exactly
@@ -259,8 +259,8 @@ fn buildKwCache(c: inout Comp) {
 // callers treat as "no span").
 fn kwSpan(c: inout Comp, kw: String, kwLen: U64) -> Bind {
     mut val ci: U64 = 0
-    while ci < c.kwCache.count {
-        val e: Bind = c.kwCache[ci]
+    while ci < c.decls.kwCache.count {
+        val e: Bind = c.decls.kwCache[ci]
         if rangeEquals(bytes: c.arena.bytes, start: e.nameStart, len: e.nameLen, kw: kw) {
             return e
         }

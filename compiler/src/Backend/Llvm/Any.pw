@@ -11,17 +11,17 @@
 // signature `(ptr self_data, <req params>) -> <req ret>` and forwards to the
 // concrete witness pf<wfi> after loading the boxed self.
 
-// Trait def index for the trait named (start,len), or c.traits.count if none.
+// Trait def index for the trait named (start,len), or c.decls.traits.count if none.
 fn findTraitIdxByName(c: inout Comp, start: U64, len: U64) -> U64 {
     val qId: U64 = intern(c: inout c, start: start, len: len)
     mut val ti: U64 = 0
-    while ti < c.traits.count {
-        if c.traits[ti].nameId == qId {
+    while ti < c.decls.traits.count {
+        if c.decls.traits[ti].nameId == qId {
             return ti
         }
         ti += 1
     }
-    return c.traits.count
+    return c.decls.traits.count
 }
 
 // Do two parameter lists have identical labels positionally (a conformance witness
@@ -278,7 +278,7 @@ fn ensureAnyVtable(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, tra
         }
         ci += 1
     }
-    val t: TraitDef = c.traits[traitIdx]
+    val t: TraitDef = c.decls.traits[traitIdx]
     // pre-create the global (with its final array type) and CACHE it before building
     // thunks, so a `-> Self` re-erasure thunk that re-boxes into this same existential
     // resolves to this vtable instead of recursing into ensureAnyVtable forever.
@@ -314,7 +314,7 @@ fn ensureAnyVtable(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, tra
 // = "not found"). Slot = 1 + requirement-declaration-index.
 fn anyMethodSlot(c: inout Comp, traitIdx: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-    val t: TraitDef = c.traits[traitIdx]
+    val t: TraitDef = c.decls.traits[traitIdx]
     mut val ri: U64 = 0
     while ri < t.reqs.count {
         if t.reqs[ri].nameId == qNameId {
@@ -363,7 +363,7 @@ fn coerceToAnyIfNeeded(c: inout Comp, st: inout LlvmCtx, targetRef: U64, valueEx
     }
     val tr: TypeRef = c.arena.types[targetRef]
     val traitIdx: U64 = findTraitIdxByName(c: inout c, start: tr.nameStart, len: tr.nameLen)
-    if traitIdx >= c.traits.count {
+    if traitIdx >= c.decls.traits.count {
         return LLVMConstNull(st.ptrty)
     }
     // value semantics: boxing a concrete PLACE (`val a: any P = h`) deep-copies its
@@ -381,7 +381,7 @@ fn coerceToAnyIfNeeded(c: inout Comp, st: inout LlvmCtx, targetRef: U64, valueEx
 fn genLlvmAnyDispatch(c: inout Comp, st: inout LlvmCtx, recv: U64, anyRef: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
     val tr: TypeRef = c.arena.types[anyRef]
     val traitIdx: U64 = findTraitIdxByName(c: inout c, start: tr.nameStart, len: tr.nameLen)
-    if traitIdx >= c.traits.count {
+    if traitIdx >= c.decls.traits.count {
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: `any` over an unknown trait")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -390,7 +390,7 @@ fn genLlvmAnyDispatch(c: inout Comp, st: inout LlvmCtx, recv: U64, anyRef: U64, 
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "this member is not callable through `any P`: it takes `Self` in a non-receiver position, is an associated function, or is not a requirement of the trait (spec/08)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
-    val req: Func = c.traits[traitIdx].reqs[slot - 1U64]
+    val req: Func = c.decls.traits[traitIdx].reqs[slot - 1U64]
     // spec/08: a member with `Self` in a non-receiver INPUT position is not callable
     // through `any` (the erased concretes need not match, so a `Self` argument cannot
     // be supplied). A `-> Self` return IS callable — it is re-erased to `any P`.

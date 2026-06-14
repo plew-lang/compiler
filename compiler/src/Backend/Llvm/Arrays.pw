@@ -42,7 +42,7 @@ fn exprLlvmType(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
             // an `any P` receiver: the result LLVM type is the requirement's return,
             // grounded under the existential's bindings.
             val atIdx: U64 = anyRecvTraitIdx(c: inout c, st: inout st, recv: recv)
-            if atIdx < c.traits.count {
+            if atIdx < c.decls.traits.count {
                 val rr: U64 = anyMethodRetRef(c: inout c, anyRef: exprTypeRef(c: inout c, st: inout st, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
                 if rr != 0U64 {
                     return llvmTypeOfRef(c: inout c, st: inout st, ref: rr)

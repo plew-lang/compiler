@@ -65,9 +65,9 @@ fn exprIntCtxTypeInfo(c: inout Comp, id: U64) -> TypeInfo {
 // match's internal bindings (needed for a nested `a?.x?.y`).
 fn chainResultRef(c: inout Comp, exprId: U64) -> U64 {
     mut val i: U64 = 0
-    while i < c.chainResults.count {
-        if c.chainResults[i].nameStart == exprId {
-            return c.chainResults[i].fieldStart
+    while i < c.decls.chainResults.count {
+        if c.decls.chainResults[i].nameStart == exprId {
+            return c.decls.chainResults[i].fieldStart
         }
         i += 1
     }

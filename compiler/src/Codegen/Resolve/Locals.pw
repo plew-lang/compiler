@@ -407,8 +407,8 @@ fn checkConstructVis(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool, 
 // Whether struct name id `nameId` declared a public `factory` (spec/05).
 fn structHasPubFactory(c: inout Comp, nameId: U64) -> Bool {
     mut val i: U64 = 0
-    while i < c.pubFactories.count {
-        if c.pubFactories[i] == nameId {
+    while i < c.decls.pubFactories.count {
+        if c.decls.pubFactories[i] == nameId {
             return true
         }
         i += 1U64

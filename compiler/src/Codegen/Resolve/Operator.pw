@@ -18,8 +18,8 @@ fn operatorOutputType(c: inout Comp, lt: TypeInfo, op: I64) -> TypeInfo {
     }
     val trN: Bind = internBytes(c: inout c, s: binTraitName(op: op))
     mut val i: U64 = 0
-    while i < c.assocBindings.count {
-        val ab: AssocBinding = c.assocBindings[i]
+    while i < c.decls.assocBindings.count {
+        val ab: AssocBinding = c.decls.assocBindings[i]
         if ab.traitId == trN.nameId {
             if spansEqual(c: inout c, aStart: ab.recvStart, aLen: ab.recvLen, bStart: lt.nameStart, bLen: lt.nameLen) {
                 if rangeEquals(bytes: c.arena.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Output") {

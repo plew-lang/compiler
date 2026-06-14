@@ -157,7 +157,7 @@ fn registerChainResultInsts(c: inout Comp, exprId: U64, baseRef: U64, memberStar
     scanType(c: inout c, ref: oRef)
     // record this chain stage's result type `Head[U]` so typeOf/exprTypeRef on the
     // rewritten MatchExpr recover it (a nested `a?.x?.y` types its inner stage).
-    c.chainResults.append(value: <Bind nameStart=exprId nameLen=0 fieldStart=oRef fieldLen=0 />)
+    c.decls.chainResults.append(value: <Bind nameStart=exprId nameLen=0 fieldStart=oRef fieldLen=0 />)
     // the chain() result `Optional[V]` (V = the receiver's chain Value = its first
     // type arg): register the concrete instance so the desugar's `match base.chain()`
     // sets the enum env and types the Some-payload bind (the front-end method-result

@@ -16,7 +16,7 @@ fn drainDerives(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool, declS
     mut val i: U64 = 0
     while i < c.pendingDerives.count {
         val d: DeriveReq = c.pendingDerives[i]
-        c.derives.append(<DeriveReq typeStart=typeStart typeLen=typeLen isEnum=isEnum nameStart=d.nameStart nameLen=d.nameLen declStart=declStart declEnd=declEnd args=d.args />)
+        c.decls.derives.append(<DeriveReq typeStart=typeStart typeLen=typeLen isEnum=isEnum nameStart=d.nameStart nameLen=d.nameLen declStart=declStart declEnd=declEnd args=d.args />)
         i += 1
     }
     c.pendingDerives = []
@@ -96,7 +96,7 @@ fn synthStructEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind,
     val noTP: Array[Bind] = []
     c.arena.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen nameId=intern(c: inout c, start: eqN.nameStart, len: eqN.nameLen) recvId=intern(c: inout c, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
     mut val wit: Array[Func] = []
-    c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen typeId=intern(c: inout c, start: d.typeStart, len: d.typeLen) traitStart=eqTrait.nameStart traitLen=eqTrait.nameLen traitId=intern(c: inout c, start: eqTrait.nameStart, len: eqTrait.nameLen) derived=true witnessed=wit />)
+    c.decls.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen typeId=intern(c: inout c, start: d.typeStart, len: d.typeLen) traitStart=eqTrait.nameStart traitLen=eqTrait.nameLen traitId=intern(c: inout c, start: eqTrait.nameStart, len: eqTrait.nameLen) derived=true witnessed=wit />)
 }
 
 // A decimal digit (0-9) as its ASCII byte. (`48 + d` would need a U64->U8 cast,
@@ -219,7 +219,7 @@ fn synthEnumEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind, b
     val noTP: Array[Bind] = []
     c.arena.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen nameId=intern(c: inout c, start: eqN.nameStart, len: eqN.nameLen) recvId=intern(c: inout c, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
     mut val wit: Array[Func] = []
-    c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen typeId=intern(c: inout c, start: d.typeStart, len: d.typeLen) traitStart=eqTrait.nameStart traitLen=eqTrait.nameLen traitId=intern(c: inout c, start: eqTrait.nameStart, len: eqTrait.nameLen) derived=true witnessed=wit />)
+    c.decls.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen typeId=intern(c: inout c, start: d.typeStart, len: d.typeLen) traitStart=eqTrait.nameStart traitLen=eqTrait.nameLen traitId=intern(c: inout c, start: eqTrait.nameStart, len: eqTrait.nameLen) derived=true witnessed=wit />)
 }
 
 // An `<Ordering.Variant />` construction (Less/Equal/Greater) for derived Ord.
@@ -276,7 +276,7 @@ fn synthStructOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bin
     val noTP: Array[Bind] = []
     c.arena.funcs.append(<Func nameStart=cmpN.nameStart nameLen=cmpN.nameLen nameId=intern(c: inout c, start: cmpN.nameStart, len: cmpN.nameLen) recvId=intern(c: inout c, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=ordN.nameStart retLen=ordN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
     mut val wit: Array[Func] = []
-    c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen typeId=intern(c: inout c, start: d.typeStart, len: d.typeLen) traitStart=ordTrait.nameStart traitLen=ordTrait.nameLen traitId=intern(c: inout c, start: ordTrait.nameStart, len: ordTrait.nameLen) derived=true witnessed=wit />)
+    c.decls.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen typeId=intern(c: inout c, start: d.typeStart, len: d.typeLen) traitStart=ordTrait.nameStart traitLen=ordTrait.nameLen traitId=intern(c: inout c, start: ordTrait.nameStart, len: ordTrait.nameLen) derived=true witnessed=wit />)
 }
 
 // A `{ give <value> }` block (one statement) — an if-expression branch.
@@ -387,15 +387,15 @@ fn synthEnumOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bind,
     val noTP: Array[Bind] = []
     c.arena.funcs.append(<Func nameStart=cmpN.nameStart nameLen=cmpN.nameLen nameId=intern(c: inout c, start: cmpN.nameStart, len: cmpN.nameLen) recvId=intern(c: inout c, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=ordN.nameStart retLen=ordN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
     mut val wit: Array[Func] = []
-    c.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen typeId=intern(c: inout c, start: d.typeStart, len: d.typeLen) traitStart=ordTrait.nameStart traitLen=ordTrait.nameLen traitId=intern(c: inout c, start: ordTrait.nameStart, len: ordTrait.nameLen) derived=true witnessed=wit />)
+    c.decls.conforms.append(<Conform typeStart=d.typeStart typeLen=d.typeLen typeId=intern(c: inout c, start: d.typeStart, len: d.typeLen) traitStart=ordTrait.nameStart traitLen=ordTrait.nameLen traitId=intern(c: inout c, start: ordTrait.nameStart, len: ordTrait.nameLen) derived=true witnessed=wit />)
 }
 
 // Whether an explicit `@[Eq]` derive is also recorded for the same type as `d`
 // (so `@[Ord]`, which implies Eq via `Ord: Eq`, must not synthesize Eq twice).
 fn hasEqDeriveFor(c: inout Comp, d: DeriveReq) -> Bool {
     mut val i: U64 = 0
-    while i < c.derives.count {
-        val e: DeriveReq = c.derives[i]
+    while i < c.decls.derives.count {
+        val e: DeriveReq = c.decls.derives[i]
         if rangeEquals(bytes: c.arena.bytes, start: e.nameStart, len: e.nameLen, kw: "Eq") {
             if spansEqual(c: inout c, aStart: e.typeStart, aLen: e.typeLen, bStart: d.typeStart, bLen: d.typeLen) {
                 return true
@@ -409,7 +409,7 @@ fn hasEqDeriveFor(c: inout Comp, d: DeriveReq) -> Bool {
 // Synthesize all recorded `@[...]` derives (#5): `@[Eq]` (struct + enum) and
 // `@[Ord]` (struct). `@[Ord]` requires `enum Ordering` in scope.
 fn synthesizeDerives(c: inout Comp) {
-    if c.derives.count == 0 {
+    if c.decls.derives.count == 0 {
         return
     }
     val eqN: Bind = internBytes(c: inout c, s: "eq")
@@ -424,8 +424,8 @@ fn synthesizeDerives(c: inout Comp) {
     val equalN: Bind = internBytes(c: inout c, s: "Equal")
     val ordTrait: Bind = internBytes(c: inout c, s: "Ord")
     mut val i: U64 = 0
-    while i < c.derives.count {
-        val d: DeriveReq = c.derives[i]
+    while i < c.decls.derives.count {
+        val d: DeriveReq = c.decls.derives[i]
         if rangeEquals(bytes: c.arena.bytes, start: d.nameStart, len: d.nameLen, kw: "Eq") {
             if d.isEnum {
                 synthEnumEq(c: inout c, d: d, eqN: eqN, lhsN: lhsN, rhsN: rhsN, boolN: boolN, eqTrait: eqTrait)

@@ -188,7 +188,7 @@ fn rewriteFactoryConstruction(c: inout Comp) {
 // the normal name resolution and import-visibility checks. (Function-call uses only;
 // type/value aliases are additive.)
 fn rewriteImportAliases(c: inout Comp) {
-    if c.importAliases.count == 0U64 {
+    if c.decls.importAliases.count == 0U64 {
         return
     }
     mut val i: U64 = 0
@@ -196,12 +196,12 @@ fn rewriteImportAliases(c: inout Comp) {
         match c.arena.exprs[i] {
             Expr.Call(val nameStart, val nameLen, val args) => {
                 mut val ai: U64 = 0
-                while ai < c.importAliases.count {
-                    val al: Bind = c.importAliases[ai]
+                while ai < c.decls.importAliases.count {
+                    val al: Bind = c.decls.importAliases[ai]
                     if spansEqual(c: inout c, aStart: al.nameStart, aLen: al.nameLen, bStart: nameStart, bLen: nameLen) {
                         if moduleOf(c: inout c, offset: al.nameStart) == moduleOf(c: inout c, offset: nameStart) {
                             c.arena.exprs[i] = <Expr.Call nameStart=al.fieldStart nameLen=al.fieldLen args=args />
-                            ai = c.importAliases.count
+                            ai = c.decls.importAliases.count
                         } else {
                             ai += 1
                         }
@@ -224,12 +224,12 @@ fn rewriteImportAliases(c: inout Comp) {
 // name a local alias (returns the input span unchanged). The alias is module-scoped:
 // only a use in the same module as the `with` clause resolves.
 fn aliasReal(c: inout Comp, start: U64, len: U64) -> Bind {
-    if c.importAliases.count == 0U64 {
+    if c.decls.importAliases.count == 0U64 {
         return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
     }
     mut val ai: U64 = 0
-    while ai < c.importAliases.count {
-        val al: Bind = c.importAliases[ai]
+    while ai < c.decls.importAliases.count {
+        val al: Bind = c.decls.importAliases[ai]
         if spansEqual(c: inout c, aStart: al.nameStart, aLen: al.nameLen, bStart: start, bLen: len) {
             if moduleOf(c: inout c, offset: al.nameStart) == moduleOf(c: inout c, offset: start) {
                 return <Bind nameStart=al.fieldStart nameLen=al.fieldLen fieldStart=al.fieldStart fieldLen=al.fieldLen />

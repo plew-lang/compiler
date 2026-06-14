@@ -13,14 +13,14 @@ fn refIsAny(c: inout Comp, ref: U64) -> Bool {
 }
 
 // If expression `recv` has an existential `any P` type, the trait def index of P;
-// else c.traits.count. (Resolved later than refIsAny so the forward reference to
+// else c.decls.traits.count. (Resolved later than refIsAny so the forward reference to
 // findTraitIdxByName is fine — the module is one compilation unit.)
 fn anyRecvTraitIdx(c: inout Comp, st: inout LlvmCtx, recv: U64) -> U64 {
     val r: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
     if refIsAny(c: inout c, ref: r) {
         return findTraitIdxByName(c: inout c, start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen)
     }
-    return c.traits.count
+    return c.decls.traits.count
 }
 
 // The requirement of trait `traitIdx` matching method (name,args), or a sentinel
@@ -30,7 +30,7 @@ fn anyRecvTraitIdx(c: inout Comp, st: inout LlvmCtx, recv: U64) -> U64 {
 fn anyMethodReq(c: inout Comp, traitIdx: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Func {
     val slot: U64 = anyMethodSlot(c: inout c, traitIdx: traitIdx, nameStart: nameStart, nameLen: nameLen, args: args)
     if slot != 0U64 {
-        return c.traits[traitIdx].reqs[slot - 1U64]
+        return c.decls.traits[traitIdx].reqs[slot - 1U64]
     }
     return <Func nameStart=0 nameLen=0 typeParams=[] params=[] hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />
 }
@@ -43,7 +43,7 @@ fn anyMethodReq(c: inout Comp, traitIdx: U64, nameStart: U64, nameLen: U64, args
 // requirement signatures naming `Rhs`/`Item`/`Output` ground to concrete types.
 // Returns false if any parameter / associated type is left unbound.
 fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Array[Bind], outArgs: inout Array[U64]) -> Bool {
-    val t: TraitDef = c.traits[traitIdx]
+    val t: TraitDef = c.decls.traits[traitIdx]
     val ar: TypeRef = c.arena.types[anyRef]
     // positional binding refs (argLabels entry 0), in source order.
     mut val positional: Array[U64] = []

@@ -45,8 +45,8 @@ fn traitProvidesMember(c: inout Comp, traitNameId: U64, qName: U64, args: Array[
         return false
     }
     mut val ti: U64 = 0
-    while ti < c.traits.count {
-        val t: TraitDef = c.traits[ti]
+    while ti < c.decls.traits.count {
+        val t: TraitDef = c.decls.traits[ti]
         if t.nameId == traitNameId {
             // requirement of this trait
             mut val ri: U64 = 0
@@ -98,8 +98,8 @@ fn boundProvidesMethod(c: inout Comp, fnIdx: U64, tpStart: U64, tpLen: U64, name
     val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     val qTp: U64 = intern(c: inout c, start: tpStart, len: tpLen)
     mut val bi: U64 = 0
-    while bi < c.funcBounds.count {
-        val fb: FuncBound = c.funcBounds[bi]
+    while bi < c.decls.funcBounds.count {
+        val fb: FuncBound = c.decls.funcBounds[bi]
         if fb.fnIdx == fnIdx {
             if fb.paramNameId == qTp {
                 val qTrait: U64 = intern(c: inout c, start: fb.traitStart, len: fb.traitLen)
@@ -118,8 +118,8 @@ fn boundProvidesMethod(c: inout Comp, fnIdx: U64, tpStart: U64, tpLen: U64, name
 fn boundHasTraitNamed(c: inout Comp, fnIdx: U64, tpStart: U64, tpLen: U64, traitName: String) -> Bool {
     val qTp: U64 = intern(c: inout c, start: tpStart, len: tpLen)
     mut val bi: U64 = 0
-    while bi < c.funcBounds.count {
-        val fb: FuncBound = c.funcBounds[bi]
+    while bi < c.decls.funcBounds.count {
+        val fb: FuncBound = c.decls.funcBounds[bi]
         if fb.fnIdx == fnIdx {
             if fb.paramNameId == qTp {
                 if rangeEquals(bytes: c.arena.bytes, start: fb.traitStart, len: fb.traitLen, kw: traitName) {

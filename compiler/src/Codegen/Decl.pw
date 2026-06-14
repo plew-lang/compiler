@@ -11,8 +11,8 @@ fn nameIsMain(c: inout Comp, f: Func) -> Bool {
 fn isTraitName(c: inout Comp, start: U64, len: U64) -> Bool {
     val qId: U64 = intern(c: inout c, start: start, len: len)
     mut val i: U64 = 0
-    while i < c.traits.count {
-        val t: TraitDef = c.traits[i]
+    while i < c.decls.traits.count {
+        val t: TraitDef = c.decls.traits[i]
         if t.nameId == qId {
             return true
         }
@@ -116,10 +116,10 @@ fn isBlanketConform(c: inout Comp, cf: Conform) -> Bool {
 // ambiguous and must pick a path. (Also used to avoid registering a duplicate.)
 fn conformExists(c: inout Comp, typeId: U64, traitId: U64) -> Bool {
     mut val i: U64 = 0
-    while i < c.conforms.count {
-        if c.conforms[i].typeId == typeId {
-            if c.conforms[i].traitId == traitId {
-                if c.conforms[i].viewRootId == 0U64 {
+    while i < c.decls.conforms.count {
+        if c.decls.conforms[i].typeId == typeId {
+            if c.decls.conforms[i].traitId == traitId {
+                if c.decls.conforms[i].viewRootId == 0U64 {
                     return true
                 }
             }
@@ -193,8 +193,8 @@ fn extAppliesToType(c: inout Comp, extStart: U64, extLen: U64, typeStart: U64, t
 fn subjectPathCount(c: inout Comp, tId: U64, aTraitId: U64) -> U64 {
     mut val count: U64 = 0
     mut val i: U64 = 0
-    while i < c.conforms.count {
-        val cf: Conform = c.conforms[i]
+    while i < c.decls.conforms.count {
+        val cf: Conform = c.decls.conforms[i]
         if !(cf.derived) && cf.extId == 0U64 {
             if cf.traitId == aTraitId {
                 if isTraitName(c: inout c, start: cf.typeStart, len: cf.typeLen) {
@@ -224,8 +224,8 @@ fn viewConformsTo(c: inout Comp, typeStart: U64, typeLen: U64, viewId: U64, trai
     val typeId: U64 = intern(c: inout c, start: typeStart, len: typeLen)
     val targetId: U64 = intern(c: inout c, start: traitStart, len: traitLen)
     mut val i: U64 = 0
-    while i < c.conforms.count {
-        val cf: Conform = c.conforms[i]
+    while i < c.decls.conforms.count {
+        val cf: Conform = c.decls.conforms[i]
         if cf.traitId == targetId {
             // cf must be a trait-subject conform (`impl B as A`) reachable via viewId:
             // a bare inter-trait conform whose subject trait is the view, or an
@@ -278,12 +278,12 @@ fn instantiateTraitSubjectConforms(c: inout Comp) {
     val guardHi: U64 = c.arena.funcs.count
     mut val changed: Bool = true
     while changed {
-        val before: U64 = c.conforms.count
+        val before: U64 = c.decls.conforms.count
         // re-read the live count each pass: a conformance conferred earlier this pass
         // is a valid candidate for a later hop (transitivity).
         mut val ci: U64 = 0
-        while ci < c.conforms.count {
-            val cf: Conform = c.conforms[ci]
+        while ci < c.decls.conforms.count {
+            val cf: Conform = c.decls.conforms[ci]
             // a trait-subject conform: subject (typeStart,typeLen) names a trait B.
             // Skip extension conforms (`extension Ext { impl B as A }`, extId != 0):
             // those stay view-gated (`value#Ext`), handled by the extension machinery —
@@ -291,8 +291,8 @@ fn instantiateTraitSubjectConforms(c: inout Comp) {
             if cf.extId == 0U64 && isTraitName(c: inout c, start: cf.typeStart, len: cf.typeLen) {
                 // candidate concrete types: those conforming to the subject trait B.
                 mut val cj: U64 = 0
-                while cj < c.conforms.count {
-                    val cand: Conform = c.conforms[cj]
+                while cj < c.decls.conforms.count {
+                    val cand: Conform = c.decls.conforms[cj]
                     if cand.traitId == cf.typeId {
                         if !(isTraitName(c: inout c, start: cand.typeStart, len: cand.typeLen)) {
                             // the view-root under which we confer A on T via this impl
@@ -316,7 +316,7 @@ fn instantiateTraitSubjectConforms(c: inout Comp) {
             }
             ci += 1
         }
-        changed = c.conforms.count > before
+        changed = c.decls.conforms.count > before
     }
 }
 
@@ -357,10 +357,10 @@ fn conferredCopyExists(c: inout Comp, recvId: U64, nameId: U64, srcTraitId: U64)
 // block the 2nd path).
 fn conformWithRootExists(c: inout Comp, typeId: U64, traitId: U64, viewRootId: U64) -> Bool {
     mut val i: U64 = 0
-    while i < c.conforms.count {
-        if c.conforms[i].typeId == typeId {
-            if c.conforms[i].traitId == traitId {
-                if c.conforms[i].viewRootId == viewRootId {
+    while i < c.decls.conforms.count {
+        if c.decls.conforms[i].typeId == typeId {
+            if c.decls.conforms[i].traitId == traitId {
+                if c.decls.conforms[i].viewRootId == viewRootId {
                     return true
                 }
             }
@@ -415,15 +415,15 @@ fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64,
         fi += 1
     }
     if !(conformWithRootExists(c: inout c, typeId: recvId, traitId: blanket.traitId, viewRootId: viewRoot)) {
-        c.conforms.append(<Conform typeStart=recvStart typeLen=recvLen typeId=recvId traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed viewRootId=viewRoot />)
+        c.decls.conforms.append(<Conform typeStart=recvStart typeLen=recvLen typeId=recvId traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed viewRootId=viewRoot />)
     }
 }
 
 fn instantiateProvidedMethods(c: inout Comp) {
     val nFuncs: U64 = c.arena.funcs.count
     mut val ci: U64 = 0
-    while ci < c.conforms.count {
-        val cf: Conform = c.conforms[ci]
+    while ci < c.decls.conforms.count {
+        val cf: Conform = c.decls.conforms[ci]
         // a view-rooted conform (spec/09 chain conflict) is reached only via
         // `value#root`; its trait's provided methods must not land on the bare
         // surface. The witness methods are already conferred (applyBlanketTo, tagged

@@ -111,8 +111,8 @@ fn synthGenMain(c: inout Comp) {
     val mainN: Bind = internBytes(c: inout c, s: "main")
     mut val stmts: Array[U64] = []
     mut val i: U64 = 0
-    while i < c.derives.count {
-        val d: DeriveReq = c.derives[i]
+    while i < c.decls.derives.count {
+        val d: DeriveReq = c.decls.derives[i]
         // only generate from the ENTRY file's annotations (module 0), not those of its
         // dependencies (spec/16: `plew gen <file>` processes <file>, not the libraries it
         // imports). This matters now that std files carry `@[...]` (e.g. Core's primitive

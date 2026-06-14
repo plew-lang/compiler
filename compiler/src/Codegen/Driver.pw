@@ -33,7 +33,7 @@ fn runFrontend() -> Comp {
     // a file's source sits at `fileStart` before its items lower, and re-interned
     // names land in between — harmless: writeSpan emits text, moduleOf uses the
     // per-file ranges. `toks`/`pos` are unused now that all parsing is per-file.)
-    mut val c: Comp = <Comp traits=[] conforms=[] methodAliases=[] defaultExts=[] derives=[] pendingDerives=[] funcBounds=[] curCheckFn=0 curWitnessed=[] curWhereTraits=[] curClosureId=0 curInClosure=false curCaptureMark=0 locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curRetTy=0 curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curSelfMove=false curTypeParams=[] curTypeArgs=[] curRecvInstRef=0 curGiveTmp=0 curLoopMark=0 curBranchBase=0 deinits=[] curAsync=false asyncState=0 curAsyncFn=0 asyncVarSeq=0 />
+    mut val c: Comp = <Comp pendingDerives=[] curCheckFn=0 curWitnessed=[] curWhereTraits=[] curClosureId=0 curInClosure=false curCaptureMark=0 locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curRetTy=0 curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curSelfMove=false curTypeParams=[] curTypeArgs=[] curRecvInstRef=0 curGiveTmp=0 curLoopMark=0 curBranchBase=0 curAsync=false asyncState=0 curAsyncFn=0 asyncVarSeq=0 />
     // reserve TypeRef index 0 as the "no type" sentinel so a `ty` field of 0
     // (synthetic locals, untyped positions) never aliases a real parsed type.
     c.arena.types.append(<TypeRef nameStart=0 nameLen=0 args=[] />)

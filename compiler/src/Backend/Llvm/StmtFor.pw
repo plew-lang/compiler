@@ -244,7 +244,7 @@ fn emitIterNextLoop(c: inout Comp, st: inout LlvmCtx, iterVal: LLVMValueRef, opt
 // advances in place), binding `x` to each `Some` payload until `None`.
 fn genLlvmForAnyIter(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64, iter: U64, anyRef: U64, body: U64) {
     val traitIdx: U64 = findTraitIdxByName(c: inout c, start: c.arena.types[anyRef].nameStart, len: c.arena.types[anyRef].nameLen)
-    if traitIdx >= c.traits.count {
+    if traitIdx >= c.decls.traits.count {
         compileErrorAt(line: 0, msg: "LLVM backend: for-loop over `any` needs a trait with a `next` method")
         return
     }

@@ -237,7 +237,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // an `any P` receiver: the result kind is the requirement's return,
             // grounded under the existential's bindings (`Out`/`Item` -> concrete).
             val atIdx: U64 = anyRecvTraitIdx(c: inout c, st: inout st, recv: recv)
-            if atIdx < c.traits.count {
+            if atIdx < c.decls.traits.count {
                 val rr: U64 = anyMethodRetRef(c: inout c, anyRef: exprTypeRef(c: inout c, st: inout st, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
                 if rr != 0U64 {
                     return kindFromTySpan(c: inout c, tyStart: c.arena.types[rr].nameStart, tyLen: c.arena.types[rr].nameLen)

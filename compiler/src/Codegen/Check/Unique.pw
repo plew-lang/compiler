@@ -200,12 +200,12 @@ fn checkDefaultSelfContained(c: inout Comp, exprId: U64, forbidden: Array[U64], 
 
 // `deinit` is only valid on a `unique` type (spec/03: a copyable type would run
 // deinit on every CoW copy = double-free, like Swift structs having no deinit).
-// Each user `deinit { }` registers a c.deinits entry (the type name); reject any
+// Each user `deinit { }` registers a c.decls.deinits entry (the type name); reject any
 // whose type is not a unique struct. Reported at the struct's declaration.
 fn checkDeinitOnlyOnUnique(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.deinits.count {
-        val d: Bind = c.deinits[i]
+    while i < c.decls.deinits.count {
+        val d: Bind = c.decls.deinits[i]
         if !(typeIsUnique(c: inout c, start: d.nameStart, len: d.nameLen)) {
             val si: U64 = structIndexByName(c: inout c, start: d.nameStart, len: d.nameLen)
             mut val off: U64 = d.nameStart

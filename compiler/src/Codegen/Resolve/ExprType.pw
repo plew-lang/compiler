@@ -418,9 +418,9 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     val sTrait: U64 = intern(c: inout c, start: rt.nameStart, len: rt.nameLen)
                     val sMethod: U64 = intern(c: inout c, start: nameStart, len: nameLen)
                     mut val sti: U64 = 0
-                    while sti < c.traits.count {
-                        if c.traits[sti].nameId == sTrait {
-                            val sreqs: Array[Func] = c.traits[sti].reqs
+                    while sti < c.decls.traits.count {
+                        if c.decls.traits[sti].nameId == sTrait {
+                            val sreqs: Array[Func] = c.decls.traits[sti].reqs
                             mut val sri: U64 = 0
                             while sri < sreqs.count {
                                 if sreqs[sri].nameId == sMethod {
@@ -451,9 +451,9 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                             val qTrait: U64 = intern(c: inout c, start: rt.nameStart, len: rt.nameLen)
                             val qMethod: U64 = intern(c: inout c, start: nameStart, len: nameLen)
                             mut val ti: U64 = 0
-                            while ti < c.traits.count {
-                                if c.traits[ti].nameId == qTrait {
-                                    val reqs: Array[Func] = c.traits[ti].reqs
+                            while ti < c.decls.traits.count {
+                                if c.decls.traits[ti].nameId == qTrait {
+                                    val reqs: Array[Func] = c.decls.traits[ti].reqs
                                     mut val ri: U64 = 0
                                     while ri < reqs.count {
                                         if reqs[ri].nameId == qMethod {

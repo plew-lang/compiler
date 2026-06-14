@@ -721,6 +721,34 @@ struct Arena {
 }
 pub impl Arena { factory }
 
+// Declaration / conformance / name side-tables built during loading & analysis.
+// `traits`/`conforms`/`methodAliases` drive trait conformance (spec/08): trait
+// decls, recorded conformances, and `via` requirement→witness redirects.
+// `defaultExts`: `defaultExtension #Ext` (type id, ext id) pairs (spec/09).
+// `derives`: `@[...]` derive requests on type decls. `funcBounds`: `where T:
+// Trait` bounds keyed by function index. `deinits`: types with a `deinit` (Bind
+// = receiver type span). `assocBindings`: `type Item = Concrete` lines from
+// conformances. `pubFactories`: interned ids of types with a `pub factory`.
+// `namespaces`: `import @Std/Io` namespace binds. `importAliases`: `import …
+// with { real as alias }` rewrites. `chainResults`: result TypeRef of each
+// desugared `?.` (exprId→ref). `kwCache`: cached built-in name spans (O(1) kwSpan).
+struct Decls {
+    pub mut val traits: Array[TraitDef] = []
+    pub mut val conforms: Array[Conform] = []
+    pub mut val methodAliases: Array[MethodAlias] = []
+    pub mut val defaultExts: Array[DefaultExt] = []
+    pub mut val derives: Array[DeriveReq] = []
+    pub mut val funcBounds: Array[FuncBound] = []
+    pub mut val deinits: Array[Bind] = []
+    pub mut val assocBindings: Array[AssocBinding] = []
+    pub mut val pubFactories: Array[U64] = []
+    pub mut val namespaces: Array[Bind] = []
+    pub mut val importAliases: Array[Bind] = []
+    pub mut val chainResults: Array[Bind] = []
+    pub mut val kwCache: Array[Bind] = []
+}
+pub impl Decls { factory }
+
 // Module identity + cross-module visibility tables (spec/15). `ranges`: each
 // entry (reusing Bind) tags a source file's [start,len) span in `bytes` with its
 // module id (fieldStart), so `moduleOf(offset)` reverse-maps a decl/use to its
@@ -791,34 +819,13 @@ struct Comp {
     // single owner of the program's data that all passes read; `c.arena.exprs`,
     // `c.arena.funcs`, `c.arena.bytes`, etc.
     pub mut val arena: Arena = <Arena />
-    // namespace imports (spec/15): a `import @Std/Io` (no `with`) binds the last path
-    // segment (`Io`) as a namespace, so `Io.print(args)` resolves to `print` from that
-    // module. Each Bind holds the segment's name span (nameStart/nameLen).
-    pub mut val namespaces: Array[Bind] = []
-    // `import … with { real as alias }` name aliases (spec/15). Each Bind: the alias
-    // span (nameStart/nameLen) and the real imported name span (fieldStart/fieldLen).
-    // The owning module is moduleOf(nameStart). A call/use of the alias is rewritten
-    // to the real name (function-call uses; type/value aliases are additive).
-    pub mut val importAliases: Array[Bind] = []
-    // result type of each desugared non-Optional `?.` (spec/12): the `Chain` rewrite
-    // replaces an `Expr.OptChain` with a `MatchExpr` whose type can't be re-derived
-    // from outside (its arm's bound `__chainVal` isn't in scope), so the rewrite records
-    // `nameStart = exprId`, `fieldStart = result TypeRef` here. typeOf / exprTypeRef
-    // consult it so a nested chain (`a?.x?.y`) types its inner stage. Empty in the
-    // common case (no user-Chain `?.`).
-    pub mut val chainResults: Array[Bind] = []
-    // trait declarations, recorded conformances, and `via` method aliases
-    // (spec/08). `traits`/`conforms` drive the conformance-completeness check;
-    // `methodAliases` redirect a requirement name to its real witness method.
-    pub mut val traits: Array[TraitDef]
-    pub mut val conforms: Array[Conform]
-    pub mut val methodAliases: Array[MethodAlias]
-    // `defaultExtension #Ext` (spec/09): (type id, extension id) pairs declaring
-    // that the extension's methods join the type's bare resolution surface.
-    pub mut val defaultExts: Array[DefaultExt]
-    // `@[...]` derive requests recorded on type declarations, plus the scratch
-    // list of derive names parsed for the *next* type declaration.
-    pub mut val derives: Array[DeriveReq]
+    // declaration / conformance / name side-tables built during loading & analysis
+    // (see `Decls`): traits, conformances, method aliases, default extensions,
+    // derive requests, where-bounds, deinits, assoc bindings, pub factories, and
+    // the import-name / chain-result / keyword-span caches.
+    pub mut val decls: Decls = <Decls />
+    // scratch: derive names parsed for the *next* type declaration (folded into
+    // decls.derives at that declaration).
     pub mut val pendingDerives: Array[DeriveReq]
     // gen mode (spec/16 `plew gen`): set when invoked as `plewc --gen <file>`.
     // The driver then suppresses the user's own `main` and the auto-part of
@@ -836,8 +843,6 @@ struct Comp {
     // currently being lowered, so a `return <Gen … />` generic constructor infers
     // its type arguments from the return type (Bug11). Saved/restored per body.
     pub mut val lowerRetTy: U64 = 0
-    // `where T: Trait` bounds on functions (spec/08), keyed by function index.
-    pub mut val funcBounds: Array[FuncBound]
     // the function index currently being checked by the eager generic
     // type-checker (#9), so method/operator bound checks can look up its type
     // parameters and `where` bounds. c.arena.funcs.count when not checking.
@@ -851,16 +856,11 @@ struct Comp {
     pub mut val curWhereTraits: Array[Bind]
     // scratch: the impl-level `where T: Trait` bounds of the impl currently being
     // parsed (`impl[I] Wrap[I] where I: Iterator { ... }`), parallel param/trait
-    // spans. Each member fn folds these into c.funcBounds for its own index, so a
+    // spans. Each member fn folds these into c.decls.funcBounds for its own index, so a
     // method body can call the bound trait's methods on the type parameter. Reset
     // to [] at the impl's close (so top-level fns and later impls don't inherit).
     pub mut val curImplBoundParams: Array[Bind] = []
     pub mut val curImplBoundTraits: Array[Bind] = []
-    // cached source spans for built-in type/method names that have no guaranteed
-    // syntactic occurrence (String/U64/Array/iterator/…). Built once (buildKwCache)
-    // by appending the names to `bytes` at known offsets, so kwSpan is an O(1) table
-    // lookup instead of an O(n) source scan + a planted-comment occurrence guarantee.
-    pub mut val kwCache: Array[Bind] = []
     // name interning (Phase C): a content-keyed table mapping each name span to a
     // stable 1-based id, so name equality is an integer compare (see `Interner`).
     pub mut val interner: Interner = <Interner />
@@ -947,15 +947,6 @@ struct Comp {
     // moved flag would skip the value's deinit on the not-taken path) — so it is
     // rejected. 0 at function top level (straight-line moves always allowed).
     pub mut val curBranchBase: U64
-    // types that declared a `deinit { ... }` (spec/03). Each entry reuses Bind as
-    // a (start,len) pair naming the receiver type. The deinit body itself is a
-    // synthetic Func named `deinit` (hasRecv) in c.arena.funcs; this list lets codegen
-    // ask "does type T have a deinit?" so scope-exit drops fire it.
-    pub mut val deinits: Array[Bind]
-    // interned name ids of structs that declared a public `factory` (spec/05:
-    // `pub impl T { factory }`). Only these may be constructed `<T …/>` from another
-    // module; the default memberwise factory is otherwise module-private.
-    pub mut val pubFactories: Array[U64] = []
     // async lowering state (spec/14). curAsync: emitting an `async fn` body, so a
     // top-level binding lowers to a frame-struct field and a local reference to
     // `__f->name`. asyncState: the next `await` suspension index (a `switch`
@@ -972,10 +963,6 @@ struct Comp {
     pub mut val asyncVarSeq: U64
     // module identity + cross-module visibility tables (spec/15): see `Modules`.
     pub mut val modules: Modules = <Modules />
-    // associated-type bindings (spec/08): `type Item = Concrete` lines from
-    // conformances, recording how each conforming type resolves a trait's associated
-    // type. Default empty; populated by parseImpl.
-    pub mut val assocBindings: Array[AssocBinding] = []
 }
 
 // ---- arena helpers ----

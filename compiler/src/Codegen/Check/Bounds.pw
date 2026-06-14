@@ -8,8 +8,8 @@ fn assocBindingSpan(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64,
     val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = 0
-    while i < c.assocBindings.count {
-        val ab: AssocBinding = c.assocBindings[i]
+    while i < c.decls.assocBindings.count {
+        val ab: AssocBinding = c.decls.assocBindings[i]
         if ab.recvId == qRecv {
             if ab.nameId == qName {
                 return <Bind nameStart=ab.tyStart nameLen=ab.tyLen nameId=intern(c: inout c, start: ab.tyStart, len: ab.tyLen) fieldStart=ab.tyStart fieldLen=ab.tyLen />
@@ -193,14 +193,14 @@ fn confWitnessesAll(c: inout Comp, cf: Conform, t: TraitDef) -> Bool {
 // from an ambient operator trait of the same name (`Not { not }`) without needing
 // module/visibility info (the impl-site name spans are re-interned, so they carry
 // no reliable module). Returns the satisfied def, else the first candidate (to
-// drive the incomplete-conformance error), else c.traits.count (unknown trait).
+// drive the incomplete-conformance error), else c.decls.traits.count (unknown trait).
 fn resolveTraitDef(c: inout Comp, cf: Conform) -> U64 {
-    mut val firstCandidate: U64 = c.traits.count
+    mut val firstCandidate: U64 = c.decls.traits.count
     mut val ti: U64 = 0
-    while ti < c.traits.count {
-        val t: TraitDef = c.traits[ti]
+    while ti < c.decls.traits.count {
+        val t: TraitDef = c.decls.traits[ti]
         if t.nameId == cf.traitId && t.typeParams.count == cf.traitArgs.count {
-            if firstCandidate == c.traits.count {
+            if firstCandidate == c.decls.traits.count {
                 firstCandidate = ti
             }
             if confWitnessesAll(c: inout c, cf: cf, t: t) {
@@ -224,8 +224,8 @@ fn checkAnyFormation(c: inout Comp) {
         val t: TypeRef = c.arena.types[ti]
         if t.isAny {
             val tri: U64 = findTraitIdxByName(c: inout c, start: t.nameStart, len: t.nameLen)
-            if tri < c.traits.count {
-                val tr: TraitDef = c.traits[tri]
+            if tri < c.decls.traits.count {
+                val tr: TraitDef = c.decls.traits[tri]
                 // count positional bindings (argLabels entry 0 / absent).
                 mut val positional: U64 = 0
                 mut val ai: U64 = 0
@@ -284,8 +284,8 @@ fn anyHasNamedBinding(c: inout Comp, t: TypeRef, nameId: U64) -> Bool {
 
 fn checkConformances(c: inout Comp) {
     mut val ci: U64 = 0
-    while ci < c.conforms.count {
-        val cf: Conform = c.conforms[ci]
+    while ci < c.decls.conforms.count {
+        val cf: Conform = c.decls.conforms[ci]
         if cf.derived {
             // compiler-synthesized (`@[Eq]`/`@[Ord]`): trivially complete, and its
             // trait is compiler-known — exempt from unknown-trait/completeness.
@@ -295,8 +295,8 @@ fn checkConformances(c: inout Comp) {
         // resolveTraitDef); a conformance to an undeclared/unimported trait is a
         // loud error (spec/08: explicit conformance).
         val ti: U64 = resolveTraitDef(c: inout c, cf: cf)
-        if ti < c.traits.count {
-            val t: TraitDef = c.traits[ti]
+        if ti < c.decls.traits.count {
+            val t: TraitDef = c.decls.traits[ti]
             // re-check reqs on the resolved def: a fully-witnessed def passes; if
             // resolveTraitDef fell back to the first candidate (none satisfied),
             // this reports which requirement is missing.
@@ -359,8 +359,8 @@ fn typeHasMember(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, na
 // type (a loud error otherwise, instead of failing only when the alias is used).
 fn checkViaTargets(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.methodAliases.count {
-        val al: MethodAlias = c.methodAliases[i]
+    while i < c.decls.methodAliases.count {
+        val al: MethodAlias = c.decls.methodAliases[i]
         if !(typeHasMember(c: inout c, recvStart: al.recvStart, recvLen: al.recvLen, nameStart: al.realStart, nameLen: al.realLen)) {
             compileErrorAt(line: lineOf(c: inout c, offset: al.aliasStart), msg: "`via` target is not a member of this type")
         }
@@ -392,8 +392,8 @@ fn typeConformsTo(c: inout Comp, typeStart: U64, typeLen: U64, traitStart: U64, 
     val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
     val qTrait: U64 = intern(c: inout c, start: traitStart, len: traitLen)
     mut val i: U64 = 0
-    while i < c.conforms.count {
-        val cf: Conform = c.conforms[i]
+    while i < c.decls.conforms.count {
+        val cf: Conform = c.decls.conforms[i]
         if cf.typeId == qType {
             if cf.traitId == qTrait {
                 return true
@@ -420,8 +420,8 @@ fn typeConformsTo(c: inout Comp, typeStart: U64, typeLen: U64, traitStart: U64, 
 fn typeConformsToName(c: inout Comp, typeStart: U64, typeLen: U64, traitName: String) -> Bool {
     val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
     mut val i: U64 = 0
-    while i < c.conforms.count {
-        val cf: Conform = c.conforms[i]
+    while i < c.decls.conforms.count {
+        val cf: Conform = c.decls.conforms[i]
         if cf.typeId == qType {
             if rangeEquals(bytes: c.arena.bytes, start: cf.traitStart, len: cf.traitLen, kw: traitName) {
                 return true
@@ -441,8 +441,8 @@ fn checkFnBounds(c: inout Comp) {
         val fin: FnInst = c.monoWork.fnInsts[ii]
         val f: Func = c.arena.funcs[fin.fnIdx]
         mut val bi: U64 = 0
-        while bi < c.funcBounds.count {
-            val fb: FuncBound = c.funcBounds[bi]
+        while bi < c.decls.funcBounds.count {
+            val fb: FuncBound = c.decls.funcBounds[bi]
             if fb.fnIdx == fin.fnIdx {
                 mut val pi: U64 = 0
                 while pi < f.typeParams.count {
@@ -488,8 +488,8 @@ fn checkMethodBounds(c: inout Comp) {
             if methodMatchesInst(c: inout c, f: c.arena.funcs[mfi], instRef: instRef) {
                 val f: Func = c.arena.funcs[mfi]
                 mut val bi: U64 = 0
-                while bi < c.funcBounds.count {
-                    val fb: FuncBound = c.funcBounds[bi]
+                while bi < c.decls.funcBounds.count {
+                    val fb: FuncBound = c.decls.funcBounds[bi]
                     if fb.fnIdx == mfi {
                         mut val pi: U64 = 0
                         while pi < f.typeParams.count {

@@ -48,8 +48,8 @@ fn paramTypesEqual(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
 // requirements differing in a label or a parameter type are allowed.
 fn checkDuplicateTraitReqs(c: inout Comp) {
     mut val ti: U64 = 0
-    while ti < c.traits.count {
-        val reqs: Array[Func] = c.traits[ti].reqs
+    while ti < c.decls.traits.count {
+        val reqs: Array[Func] = c.decls.traits[ti].reqs
         mut val a: U64 = 0
         while a < reqs.count {
             mut val b: U64 = a + 1U64
@@ -114,12 +114,12 @@ fn methodWitnessesAConformance(c: inout Comp, recvStart: U64, recvLen: U64, mSta
     val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     val qM: U64 = intern(c: inout c, start: mStart, len: mLen)
     mut val ci: U64 = 0
-    while ci < c.conforms.count {
-        val cf: Conform = c.conforms[ci]
+    while ci < c.decls.conforms.count {
+        val cf: Conform = c.decls.conforms[ci]
         if cf.typeId == qRecv {
             mut val ti: U64 = 0
-            while ti < c.traits.count {
-                val tr: TraitDef = c.traits[ti]
+            while ti < c.decls.traits.count {
+                val tr: TraitDef = c.decls.traits[ti]
                 if tr.nameId == cf.traitId {
                     mut val ri: U64 = 0
                     while ri < tr.reqs.count {
@@ -167,8 +167,8 @@ fn sameSelector(c: inout Comp, a: Func, b: Func) -> Bool {
 // ambiguously). Reported at the type — loud, not a silent shadow.
 fn checkDefaultExtCollisions(c: inout Comp) {
     mut val di: U64 = 0
-    while di < c.defaultExts.count {
-        val de: DefaultExt = c.defaultExts[di]
+    while di < c.decls.defaultExts.count {
+        val de: DefaultExt = c.decls.defaultExts[di]
         mut val fi: U64 = 0
         while fi < c.arena.funcs.count {
             val f: Func = c.arena.funcs[fi]
