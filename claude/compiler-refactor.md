@@ -75,3 +75,25 @@ a/b は「結合のため」でなく**可読性のため**カテゴリ別子構
 - **M0 が NG なら M3 で止めても価値は大半得られる**（小ファイル＋カテゴリ化コア＋per-pass コンテキスト）。その場合は「cross-module 変異を有効化」を別タスクに切り出す。
 
 なお **型定義のモジュール化**（Expr/Stmt を子モジュールへ）は変異を跨がない（型は不変な定義＝import して match するのは tested path）ので、M4 の中でも先行して安全に踏める。
+
+## リファクタの心構え：legacy workaround を現代の Plew へ
+
+コンパイラは Plew の文法がまだ貧弱だった頃から育っているので、**今の言語機能なら素直に書ける箇所を、当時の回りくどい workaround のまま**抱えている。リファクタは「コードを移動するだけ」ではなく、**触る箇所すべてで『今の Plew でもっと良く書けないか』を能動的に問う**。
+
+> ⚠ **周囲の（古い）書き方に引きずられない。** LLM は周辺コードのスタイルを模倣しがちだが、ここでは周辺こそが負債。各片について「これは workaround か？ 今の機能で直せるか？」を**毎回・強く**問う。
+
+典型パターン（非網羅・見たら直す）：
+
+- `if foo { } else { BODY }`（空の then）→ `if !foo { BODY }`（worklog「コード整理 TODO」の既知項）。
+- Optional を手で `match` → `?.`（Chain）・`unwrapOr`・`if`/`while`-let・`guard`。
+- フラグ変数＋後段 `if` → `guard`／早期 `return` でネスト削減。
+- 多値返却を `inout` out-param や「並列スカラ配列＋第二の戻り値もどき」で代用（例：`curWhereTraits` ＝ "a second return value without a tuple type"）→ ラベル付きレコード `(a:, b:)` 返却。
+- 値位置の `if`/`match` を一時変数＋代入で代用 → `give` 値ブロック・value-position match。
+- 文字列の手組み連結 → 補間 `"{x}"`。
+- enum/primitive のディスパッチを自由関数で代用 → メソッド（今は enum/primitive メソッドが動く）。
+- `assoc fn` を生成に流用 → named/fallible factory。
+- 引数名・ラベルは [spec/04 規約](../spec/01-basics/04-functions.md#引数名とラベルの指針規約)・factory 名は [spec/05 規約](../spec/02-type-system/05-structs-enums.md#ファクトリ名の指針規約) に揃える。
+
+**ただし「今は直せない workaround」と「今なら直せる workaround」を見分ける**：一部の並列スカラ配列は**まだ存在しない機能**の代用（例：`exprTy*` の 4 並列配列＝「struct-array の `IndexSet` が self-host サブセットに無い」ため）。**機能がまだ無いものは無理に直さない**。問うのは「今の機能で直せるか？」で、直せる箇所だけ直す。
+
+**安全規律**：これらは**意味を変えない idiomatic 書き換え**だが純粋な move ではない。だから **pure move のコミットと idiomatic rewrite のコミットは可能なら分ける**（不動点が割れたとき bisect しやすい）。各書き換えは test＋不動点で守る。意味論を変える整理だけは仰ぐ（[CLAUDE.md](../CLAUDE.md) 方針）。
