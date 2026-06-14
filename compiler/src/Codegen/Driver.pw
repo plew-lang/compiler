@@ -33,7 +33,7 @@ fn runFrontend() -> Comp {
     // a file's source sits at `fileStart` before its items lower, and re-interned
     // names land in between — harmless: writeSpan emits text, moduleOf uses the
     // per-file ranges. `toks`/`pos` are unused now that all parsing is per-file.)
-    mut val c: Comp = <Comp bytes=[] exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] traits=[] conforms=[] methodAliases=[] defaultExts=[] derives=[] pendingDerives=[] funcBounds=[] curCheckFn=0 curWitnessed=[] curWhereTraits=[] types=[] curClosureId=0 curInClosure=false curCaptureMark=0 locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curRetTy=0 curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curSelfMove=false curTypeParams=[] curTypeArgs=[] curRecvInstRef=0 curGiveTmp=0 curLoopMark=0 curBranchBase=0 deinits=[] curAsync=false asyncState=0 curAsyncFn=0 asyncVarSeq=0 moduleRanges=[] exports=[] imports=[] />
+    mut val c: Comp = <Comp bytes=[] exprs=[] stmts=[] blocks=[] funcs=[] structs=[] enums=[] traits=[] conforms=[] methodAliases=[] defaultExts=[] derives=[] pendingDerives=[] funcBounds=[] curCheckFn=0 curWitnessed=[] curWhereTraits=[] types=[] curClosureId=0 curInClosure=false curCaptureMark=0 locals=[] tmp=0 curIsMain=false curRetVoid=false curRetStart=0 curRetLen=0 curRetIsArray=false curRetTy=0 curHasRecv=false curRecvStart=0 curRecvLen=0 curSelfInout=false curSelfMove=false curTypeParams=[] curTypeArgs=[] curRecvInstRef=0 curGiveTmp=0 curLoopMark=0 curBranchBase=0 deinits=[] curAsync=false asyncState=0 curAsyncFn=0 asyncVarSeq=0 />
     // reserve TypeRef index 0 as the "no type" sentinel so a `ty` field of 0
     // (synthetic locals, untyped positions) never aliases a real parsed type.
     c.types.append(<TypeRef nameStart=0 nameLen=0 args=[] />)
@@ -130,7 +130,7 @@ fn runFrontend() -> Comp {
             }
             val fileStart: U64 = c.bytes.count
             c.appendSrc(from: sb)
-            c.moduleRanges.append(<Bind nameStart=fileStart nameLen=c.bytes.count - fileStart fieldStart=moduleId fieldLen=0 />)
+            c.modules.ranges.append(<Bind nameStart=fileStart nameLen=c.bytes.count - fileStart fieldStart=moduleId fieldLen=0 />)
             // parse the file and lower its items; the returned tree drives discovery.
             val items: Array[TopItemAst] = parseAndLowerFile(c: inout c, fileBytes: sb, fileStart: fileStart)
             val baseLen: U64 = dirPrefixLen(path: path)
@@ -197,7 +197,7 @@ fn runFrontend() -> Comp {
         val s: String = readStdin()
         val fileStart: U64 = c.bytes.count
         c.appendSrc(from: s.bytes)
-        c.moduleRanges.append(<Bind nameStart=fileStart nameLen=c.bytes.count - fileStart fieldStart=0 fieldLen=0 />)
+        c.modules.ranges.append(<Bind nameStart=fileStart nameLen=c.bytes.count - fileStart fieldStart=0 fieldLen=0 />)
         val items: Array[TopItemAst] = parseAndLowerFile(c: inout c, fileBytes: s.bytes, fileStart: fileStart)
     }
     // Auto-load the implicit prelude (the ambient Array methods) as its own module,
@@ -214,7 +214,7 @@ fn runFrontend() -> Comp {
         }
         val prelStart: U64 = c.bytes.count
         c.appendSrc(from: prelSrc.bytes)
-        c.moduleRanges.append(<Bind nameStart=prelStart nameLen=c.bytes.count - prelStart fieldStart=nextModuleId fieldLen=0 />)
+        c.modules.ranges.append(<Bind nameStart=prelStart nameLen=c.bytes.count - prelStart fieldStart=nextModuleId fieldLen=0 />)
         nextModuleId = nextModuleId + 1
         val items: Array[TopItemAst] = parseAndLowerFile(c: inout c, fileBytes: prelSrc.bytes, fileStart: prelStart)
     }

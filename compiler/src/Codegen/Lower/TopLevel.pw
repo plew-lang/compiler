@@ -60,7 +60,7 @@ fn lowerDecl(c: inout Comp, d: DeclAst) {
 }
 
 // Lower an `import … with { names }` statement (spec/15): record each imported name
-// in c.imports (its ORIGINAL offset feeds moduleOf for the importing module). The
+// in c.modules.imports (its ORIGINAL offset feeds moduleOf for the importing module). The
 // path itself is consumed by the loader to find files; nothing else is recorded.
 fn lowerImport(c: inout Comp, imp: ImportAst) {
     // a `with`-less import (`import @Std/Io`) binds the last path segment as a

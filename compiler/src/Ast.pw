@@ -699,6 +699,21 @@ struct NewtypeDef {
 // the unique spans indexed by id-1; `buckets` is an open-addressing slot→id map
 // (0 = empty); `count` is the number of interned names. Re-interned names unify
 // by CONTENT (equal bytes ⇒ equal id), which is the whole point.
+// Module identity + cross-module visibility tables (spec/15). `ranges`: each
+// entry (reusing Bind) tags a source file's [start,len) span in `bytes` with its
+// module id (fieldStart), so `moduleOf(offset)` reverse-maps a decl/use to its
+// module (a module = a root file + its `part` tree; each `import` target is
+// another). `exports`: name spans of `export`ed top-level decls (a name is public
+// iff it appears here). `imports`: imported name spans with `fieldStart` = the
+// importing module id (a cross-module use is visible only if imported there, and
+// exported by its own module). Aliases / namespace imports are additive.
+struct Modules {
+    pub mut val ranges: Array[Bind] = []
+    pub mut val exports: Array[Bind] = []
+    pub mut val imports: Array[Bind] = []
+}
+pub impl Modules { factory }
+
 // Monomorphization work lists + derived tables, collected after parsing and
 // consumed by codegen. `genInsts`: concrete generic instantiations to emit
 // (TypeRef indices, deduped, post-order so a nested by-value instance precedes
@@ -948,21 +963,8 @@ struct Comp {
     // names legitimately repeat). The frame-field collection and the resume-body
     // codegen walk the body in the same DFS order, so they assign matching suffixes.
     pub mut val asyncVarSeq: U64
-    // module identity (spec/15 visibility): each entry (reusing Bind) records a
-    // source file's [start,len) span in `bytes` tagged with its module id
-    // (fieldStart). Built by the loader; `moduleOf(offset)` reverse-maps a decl/use
-    // to its module so export/import visibility can be enforced across module lines
-    // (a module = a root file + its `part` tree; each `import` target is another).
-    pub mut val moduleRanges: Array[Bind]
-    // exported declarations (spec/15 `export`): each entry (Bind) is the name span
-    // of a top-level decl marked `export`. A name is part of its module's public
-    // surface iff it appears here; cross-module use requires it.
-    pub mut val exports: Array[Bind]
-    // imported names (spec/15 `import … with { }`): each entry (Bind) is an imported
-    // name span with `fieldStart` = the importing module id. A use of a name from
-    // another module is visible only if the name was imported into the using module
-    // (and exported by its own). Aliases (`as`) and namespace imports are additive.
-    pub mut val imports: Array[Bind]
+    // module identity + cross-module visibility tables (spec/15): see `Modules`.
+    pub mut val modules: Modules = <Modules />
     // associated-type bindings (spec/08): `type Item = Concrete` lines from
     // conformances, recording how each conforming type resolves a trait's associated
     // type. Default empty; populated by parseImpl.

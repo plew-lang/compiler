@@ -5,8 +5,8 @@
 // by text against the recorded export name spans (across all loaded modules).
 fn isExportedName(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
     mut val i: U64 = 0
-    while i < c.exports.count {
-        val e: Bind = c.exports[i]
+    while i < c.modules.exports.count {
+        val e: Bind = c.modules.exports[i]
         if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: nameStart, bLen: nameLen) {
             return true
         }
@@ -21,8 +21,8 @@ fn isExportedName(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
 // the name is absent from the exported set) — is a compile error.
 fn checkImports(c: inout Comp) {
     mut val i: U64 = 0
-    while i < c.imports.count {
-        val im: Bind = c.imports[i]
+    while i < c.modules.imports.count {
+        val im: Bind = c.modules.imports[i]
         if !(isExportedName(c: inout c, nameStart: im.nameStart, nameLen: im.nameLen)) {
             compileErrorAt(line: lineOf(c: inout c, offset: im.nameStart), msg: "imported name is not exported (mark it `export` in its module, or import it from the right module)")
         }
@@ -33,8 +33,8 @@ fn checkImports(c: inout Comp) {
 // Was the name `(nameStart,nameLen)` imported into module `mod` via `import … with`?
 fn isImportedInto(c: inout Comp, mod: U64, nameStart: U64, nameLen: U64) -> Bool {
     mut val i: U64 = 0
-    while i < c.imports.count {
-        val im: Bind = c.imports[i]
+    while i < c.modules.imports.count {
+        val im: Bind = c.modules.imports[i]
         if im.fieldStart == mod {
             if spansEqual(c: inout c, aStart: im.nameStart, aLen: im.nameLen, bStart: nameStart, bLen: nameLen) {
                 return true

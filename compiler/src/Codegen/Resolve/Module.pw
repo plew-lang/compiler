@@ -8,8 +8,8 @@
 // range matches (e.g. synthetic spans appended after loading).
 fn moduleOf(c: inout Comp, offset: U64) -> U64 {
     mut val i: U64 = 0
-    while i < c.moduleRanges.count {
-        val r: Bind = c.moduleRanges[i]
+    while i < c.modules.ranges.count {
+        val r: Bind = c.modules.ranges[i]
         if offset >= r.nameStart {
             if offset < r.nameStart + r.nameLen {
                 return r.fieldStart
@@ -60,8 +60,8 @@ fn isLangItemTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
 // synthesized constructions while still checking user-written `<Type field=…/>`.
 fn offsetIsLoaded(c: inout Comp, offset: U64) -> Bool {
     mut val i: U64 = 0
-    while i < c.moduleRanges.count {
-        val r: Bind = c.moduleRanges[i]
+    while i < c.modules.ranges.count {
+        val r: Bind = c.modules.ranges[i]
         if offset >= r.nameStart {
             if offset < r.nameStart + r.nameLen {
                 return true
