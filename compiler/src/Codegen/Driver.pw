@@ -290,6 +290,7 @@ fn runFrontend() -> Comp {
     // among the exported (loaded) declarations.
     checkImports(c: inout c)
     checkUseVisibility(c: inout c)
+    checkTypeVisibility(c: inout c)
     // gen mode (spec/16): replace the program with the synthesized derive-runner
     // harness `main`. Added after the user-code checks (so its synthetic call to
     // `deriveFromSource`/`write` is exempt from import hygiene) and before

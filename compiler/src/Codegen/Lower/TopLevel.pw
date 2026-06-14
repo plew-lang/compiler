@@ -164,11 +164,11 @@ fn lowerExportItem(c: inout Comp, inner: TopItemAst) {
                 recordExport(c: inout c, nameStart: c.arena.globals[gB].nameStart, nameLen: c.arena.globals[gB].nameLen)
             }
         }
-        TopItemAst.NewType(val name, val ty, isPub: _, span: _) => {
+        TopItemAst.NewType(val name, val ty, isPub: _, val span) => {
             // `export newtype Name = Underlying` (spec/10,15): lower the distinct type,
             // then record its name as exported so other modules can import it.
             val ntB: U64 = c.arena.newtypes.count
-            lowerNewtype(c: inout c, name: name, ty: ty)
+            lowerNewtype(c: inout c, name: name, ty: ty, defOffset: span.start)
             if c.arena.newtypes.count > ntB {
                 recordExport(c: inout c, nameStart: c.arena.newtypes[ntB].nameStart, nameLen: c.arena.newtypes[ntB].nameLen)
             }
@@ -192,17 +192,17 @@ fn lowerTopItem(c: inout Comp, item: TopItemAst) {
         TopItemAst.ReExport(val pathSpan) => {}
         TopItemAst.Directive(val dir) => { lowerDirective(c: inout c, dir: dir) }
         TopItemAst.GlobalVal(val s) => { lowerGlobalVal(c: inout c, s: s) }
-        TopItemAst.NewType(val name, val ty, val isPub, val span) => { lowerNewtype(c: inout c, name: name, ty: ty) }
+        TopItemAst.NewType(val name, val ty, val isPub, val span) => { lowerNewtype(c: inout c, name: name, ty: ty, defOffset: span.start) }
     }
 }
 
 // Lower a `newtype Name = Underlying` (spec/10): record the distinct name and its
 // underlying type. Codegen resolves the name to the underlying for representation and
 // method dispatch; the type checker keeps them distinct.
-fn lowerNewtype(c: inout Comp, name: String, ty: TypeAst) {
+fn lowerNewtype(c: inout Comp, name: String, ty: TypeAst, defOffset: U64) {
     val nm: Bind = internBytes(c: inout c, s: name)
     val under: PType = lowerType(c: inout c, t: ty)
-    c.arena.newtypes.append(value: <NewtypeDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) underStart=under.start underLen=under.len underRef=under.ref />)
+    c.arena.newtypes.append(value: <NewtypeDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) underStart=under.start underLen=under.len underRef=under.ref defOffset=defOffset />)
 }
 
 // Lower a module-level variable (spec/15). The shared parser hands us the same

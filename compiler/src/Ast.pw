@@ -689,6 +689,9 @@ struct NewtypeDef {
     pub val underStart: U64
     pub val underLen: U64
     pub val underRef: U64
+    // original source offset of the declaration (see StructDef.defOffset): kept for
+    // `moduleOf` (scoped type-visibility), since nameStart is re-interned. 0 if unknown.
+    pub val defOffset: U64 = 0
 }
 
 // Name interner (content-keyed, Phase C): maps each name span (start,len into
