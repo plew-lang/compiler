@@ -1,53 +1,27 @@
-// @Std/Lang — THE ambient module (spec/15). It declares the language's built-in
-// types — the lang items — which are in scope EVERYWHERE without an `import`, the way
+// @Std/Lang — THE ambient module (spec/15): its EXPORT SURFACE is the language's
+// import-free set — the lang items, in scope EVERYWHERE without an `import`, the way
 // `Optional`, `Result`, `[…]` literals, and `2 + 3` always have been. This is the one
-// module you can point at for "what is import-free"; everything NOT declared here is
+// module you can point at for "what is import-free"; everything NOT exported here is
 // import-required. Force-loaded first (Driver), so the foundational types resolve for
 // Core/Hash/Prelude; its module id is the ambient axis of type visibility.
 //
-// (Holds Optional/Result, Array/Dictionary, and the primitive scalar types. `Ordering`,
-// `Ref`/`WeakRef`, and the `RawBuffer` floor are NOT ambient by the spec/15 criterion —
-// they live in @Std/Core and are import-required (this module imports `RawBuffer` for
-// `Array`). Ambient is still keyed by `isLangItemTypeName`, which now matches the spec/15
-// list exactly.)
+// This module is the ambient MANIFEST: the primitive scalar types are DEFINED in
+// @Std/Core (alongside their operator/Format/Eq/Ord/TryFrom witnesses — type-owned
+// coherence), and re-exported here so they are ambient. Optional/Result/Array/Dictionary
+// are language-core types with no library home, so they are declared (and exported)
+// directly here. Either way, what @Std/Lang exports IS the import-free surface.
 
 // The `Dictionary` lang item (below) is built on hashing, which is NOT a language item
-// (spec/15): its `K: Hash` bound and `SipHasher` resolve from @Std/Hash, so this module
-// imports it like any non-ambient dependency.
+// (spec/15): its `K: Hash` bound and `SipHasher` resolve from @Std/Hash. `Array`'s
+// storage floor `RawBuffer` is a non-ambient primitive imported from @Std/Core.
 import @Std/Hash with { Hash, Hasher, SipHasher }
-// The primitive `@[IntTryFrom]` derive (below) generates `impl T as TryFrom[S]` into
-// Lang.gen.pw, which names `TryFrom`/`RangeError` (the conversion protocol, owned by Core
-// — non-ambient, import-required). Importing them here is not a cycle: Core uses Lang's
-// ambient types (primitives, Optional, Array) without importing Lang.
-import @Std/Core with { TryFrom, RangeError, RawBuffer }
+import @Std/Core with { RawBuffer }
 
-// --- lang-item primitive type declarations (spec/15 core-library boundary) ---
-// Opaque intrinsic types (representation is the compiler's int*_t / PlewString mapping):
-// the language's built-in scalar types, declared here in the ambient module so they are in
-// scope everywhere. The integer primitives carry `@[IntTryFrom(sources: […])]` listing the
-// sub-64-bit SOURCE types whose narrowing TryFrom into that target is fallible (spec/12);
-// the `@[IntTryFrom]` derive (in @Std/Syntax) renders one delegating `impl T as TryFrom[S]`
-// per source into Lang.gen.pw. (I64 as a TARGET has no fallible sub-64-bit source — all
-// widen into it — and the wide/float sources are hand-written in Core, where TryFrom lives.)
-extern "plew-intrinsic" {
-    @[IntTryFrom(sources: ["I16", "I32", "U8", "U16", "U32"])]
-    struct I8
-    @[IntTryFrom(sources: ["I32", "U16", "U32"])]
-    struct I16
-    @[IntTryFrom(sources: ["U32"])]
-    struct I32
-    struct I64
-    @[IntTryFrom(sources: ["I8", "I16", "I32", "U16", "U32"])]
-    struct U8
-    @[IntTryFrom(sources: ["I8", "I16", "I32", "U32"])]
-    struct U16
-    @[IntTryFrom(sources: ["I8", "I16", "I32"])]
-    struct U32
-    @[IntTryFrom(sources: ["I8", "I16", "I32"])]
-    struct U64
-    struct F32  struct F64
-    struct Bool struct String
-}
+// Re-export the primitive scalar types from @Std/Core (where they are DEFINED, with
+// their operator/conversion witnesses — coherent). The re-export makes them ambient:
+// `@Std/Lang`'s export surface is the import-free set (spec/15). Their narrowing-TryFrom
+// witnesses (`@[IntTryFrom]`) are generated into Core.gen.pw next to their declarations.
+export @Std/Core with { I8, I16, I32, I64, U8, U16, U32, U64, F32, F64, Bool, String }
 
 // An optional value: `Some` holds a `T`, `None` holds nothing.
 enum Optional[T] {
