@@ -239,6 +239,38 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U6
         checkOverloadAmbiguity(c: inout c, a: typeMatch, b: typeMatch2, args: args)
         return typeMatch
     }
+    if firstLabel != c.arena.funcs.count {
+        return firstLabel
+    }
+    // gen mode (spec/16): the synthesized derive-runner harness calls force-loaded std
+    // free fns (`parseItem`/`write`/…) that the gen'd entry file does not `import` —
+    // force-load is NOT import, so scoped resolution above found no visible candidate
+    // (the harness's call has a re-interned nameStart, `moduleOf` 0, which can't see
+    // @Std/Syntax). The harness is trusted compiler-generated code, so resolve it
+    // GLOBALLY here, gen-only (the pre-scoped-resolution behaviour): first label match,
+    // type match preferred. Normal compilation never reaches this — it returns
+    // "not found" (firstLabel == count) so checkUseVisibility can demand an import.
+    if c.genMode {
+        mut val gLabel: U64 = c.arena.funcs.count
+        mut val gj: U64 = 0
+        while gj < c.arena.funcs.count {
+            val gf: Func = c.arena.funcs[gj]
+            if !(gf.hasRecv || gf.isAssoc) {
+                if gf.nameId == qId {
+                    if paramsLabelsOk(c: inout c, params: gf.params, args: args) {
+                        if paramsTypesMatch(c: inout c, params: gf.params, args: args) {
+                            return gj
+                        }
+                        if gLabel == c.arena.funcs.count {
+                            gLabel = gj
+                        }
+                    }
+                }
+            }
+            gj += 1
+        }
+        return gLabel
+    }
     return firstLabel
 }
 

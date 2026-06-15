@@ -1,4 +1,8 @@
 import @Std/Io with { print }
+// Hashing is not a lang item (spec/15) — `Hash`/`Hasher`/`SipHasher` are import-required
+// (`@Std/Hash`). The generated `impl Point as Hash` names `Hash`/`Hasher`; `main` uses
+// `SipHasher`.
+import @Std/Hash with { Hash, Hasher, SipHasher }
 
 // `@[Hash]` is a built-in derive, dogfooded as a real `impl Hash as Derive` in
 // @Std/Syntax (no compiler-privileged synthesis). It generates a field-wise

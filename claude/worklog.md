@@ -9,7 +9,7 @@
 - **バイナリ 1 本**：`compiler/plewc`（root `_.pw`＝フロントエンド part 群＋`Backend/Llvm`・libLLVM-C をリンク）。`main`＝`runFrontend()`（共有フロントエンド `Codegen/Driver.pw`・`Comp` を返す）→ `emitLlvm()`。
 - **受理健全性は emission 非依存の共有パス `Codegen/Verify.pw`**（`verifyProgram`）＝全 non-generic・non-async 関数を walk し spec 不正を弾く。**型は `Codegen/Infer.pw`（TypeRef ベース型チェッカ）**＝`inferType`（精密型 or 0=不明）＋`typesCompatible`（保守的・確定的不一致のみ reject）。
 - **self-host**：`./bootstrap.sh`（IR 種 `compiler/plewc.seed.ll`＋`.seed.runtime.c`→clang＋libLLVM→plewc0→自己コンパイル→IR 不動点）。`--reseed` で種更新（→ 種＋追跡バイナリ `compiler/plewc` を commit）。
-- **グリーン**：`./test.sh`（run307/panic14/reject285/part11/partreject1＋不動点・fail=0）。⚠ `./test-gen.sh` は現状 pass=0/skip=11＝gen harness の `parseItem` 呼びが backend 未 lower（"this call is not yet supported"）＝既存リグレッション（import 必須化・std 整理とは無関係・別途要修正）。
+- **グリーン**：`./test.sh`（run307/panic14/reject286/part11/partreject1＋不動点・fail=0）／`./test-gen.sh`（pass11/reject1/skip0/fail0）。
 
 **実装済みの主要能力の正典地図は [provisional.md](provisional.md)**（spec 章ごとに「✅＝完了／✅でない＝残作業」を列挙）。ここでは再掲しない。大物の経緯は git タグ。
 
@@ -110,7 +110,7 @@ hidden-meaning 穴は概ね閉じた（ユーザー確認済）。閉じたも�
 - **checked 算術床**：add/sub/mul/div/rem/neg は runtime helper `plew_<w><Op>`（i8-i64 符号別・`__builtin_*_overflow`＋ガード）経由＝overflow/0除算 loud panic。`buildBinOpS` は wrapping 床（`wrapping*` 専用）。
 - **`extern(c)` 不透明ハンドル型**（`StructDef.isCExtern`）は `llvmScalarTy` でも `ptr` に落とす（i64 既定だと invalid IR）。
 - **for-over-array の element 追跡**：`genLlvmForArray` がループ変数を element の struct index＋TypeRef で束縛（field access/method dispatch が効く）。**primitive 要素は `structRegSlot` ゲートで除外**（scalar を struct 誤認しない）。generic-instance 要素は `genStructSlot`。
-- **gen モード（`plew gen`）**：fn emission で `c.genMode` 時は `genMainIdx`（合成 harness main）だけを main 扱い。**entry モジュール（module 0）の derive のみ処理**＝`synthGenMain` の `moduleOf(declStart)!=0` skip（std file を gen 時に force-load @Std/Core と二重収集するのを防ぐ）。
+- **gen モード（`plew gen`）**：fn emission で `c.genMode` 時は `genMainIdx`（合成 harness main）だけを main 扱い。**entry モジュール（module 0）の derive のみ処理**＝`synthGenMain` の `moduleOf(declStart)!=0` skip（std file を gen 時に force-load @Std/Core と二重収集するのを防ぐ）。**⚠ 合成 harness の free-fn 呼び（`parseItem`/`write`）はスコープ解決を逃れる**＝再インターン nameStart の `moduleOf` が 0 で、force-load された `@Std/Syntax`/`@Std/Io` は import してない（force-load ≠ import）ので `findFunc` のスコープ解決が候補ゼロを返す。`findFunc` は **gen モード限定でスコープ空振り時グローバルにフォールバック**（信頼された生成コード・M5 スコープ化が壊した点の根治）。これが無いと "this call is not yet supported" で全 gen テストが skip。
 - **検証配置の罠**：種ビルド binary は **std の 1 つ上**に置く（`computeStdRoot`＝binary dir＋`std/`）。
 
 ### 受理検査の共有パス（`Codegen/Verify.pw`／型チェッカ `Codegen/Infer.pw`）
