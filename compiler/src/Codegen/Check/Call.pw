@@ -51,12 +51,12 @@ fn tcCheckGenericArgConsistency(c: inout Comp, f: Func, args: Array[Arg]) {
                 val p: Param = f.params[ai]
                 if p.tyLen > 0U64 {
                     if intern(c: inout c, start: p.tyStart, len: p.tyLen) == tpId {
-                        val ar: U64 = inferType(c: inout c, id: args[ai].expr)
+                        val ar: U64 = c.inferType(id: args[ai].expr)
                         if ar != 0U64 {
                             if firstRef == 0U64 {
                                 firstRef = ar
                             } else {
-                                if !(typesCompatible(c: inout c, expected: firstRef, inferred: ar)) {
+                                if !(c.typesCompatible(expected: firstRef, inferred: ar)) {
                                     compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: args[ai].expr)), msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types")
                                 }
                             }
@@ -104,7 +104,7 @@ fn checkFnSigAgainst(c: inout Comp, ft: TypeRef, params: Array[Param], retTy: U6
     // return type: ft.args[0].
     if ft.args.count >= 1U64 {
         if retTy != 0U64 {
-            if !(typesCompatible(c: inout c, expected: ft.args[0], inferred: retTy)) {
+            if !(c.typesCompatible(expected: ft.args[0], inferred: retTy)) {
                 compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "function value's return type does not match the expected function type (spec/04)")
             }
         }
@@ -113,7 +113,7 @@ fn checkFnSigAgainst(c: inout Comp, ft: TypeRef, params: Array[Param], retTy: U6
     while k < params.count {
         if k + 1U64 < ft.args.count {
             if params[k].ty != 0U64 {
-                if !(typesCompatible(c: inout c, expected: ft.args[k + 1U64], inferred: params[k].ty)) {
+                if !(c.typesCompatible(expected: ft.args[k + 1U64], inferred: params[k].ty)) {
                     compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "function value's parameter type does not match the expected function type (spec/04)")
                 }
             }
@@ -255,7 +255,7 @@ fn checkClosureArgArity(c: inout Comp, argExpr: U64, p: Param) {
                     if retTy != 0U64 {
                         val expRet: U64 = c.arena.types[p.ty].args[0]
                         if expRet != 0U64 {
-                            if !(typesCompatible(c: inout c, expected: expRet, inferred: retTy)) {
+                            if !(c.typesCompatible(expected: expRet, inferred: retTy)) {
                                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: argExpr)), msg: "closure return type does not match the expected function type")
                             }
                         }

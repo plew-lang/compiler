@@ -11,7 +11,7 @@ fn tcCheckValue(c: inout Comp, expectedRef: U64, valueExpr: U64, pos: String) {
     checkFnValueSig(c: inout c, declTy: expectedRef, init: valueExpr)
     // a void function's result is `()` — using it where a typed value is expected
     // (`val x: I64 = doNothing()`) is a type error (spec/04).
-    if exprIsVoidCall(c: inout c, id: valueExpr) {
+    if c.exprIsVoidCall(id: valueExpr) {
         if !(c.tcLog) {
             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueExpr)), msg: "cannot use the result of a function that returns no value (spec/04)")
         }
@@ -76,8 +76,8 @@ fn tcCheckValue(c: inout Comp, expectedRef: U64, valueExpr: U64, pos: String) {
         }
         _ => {}
     }
-    val inferred: U64 = inferType(c: inout c, id: valueExpr)
-    if typesCompatible(c: inout c, expected: expectedRef, inferred: inferred) {
+    val inferred: U64 = c.inferType(id: valueExpr)
+    if c.typesCompatible(expected: expectedRef, inferred: inferred) {
         return
     }
     if c.tcLog {
@@ -131,8 +131,8 @@ fn tcCheckBinop(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
     if !(handled) {
         return
     }
-    val l: U64 = inferType(c: inout c, id: lhs)
-    val r: U64 = inferType(c: inout c, id: rhs)
+    val l: U64 = c.inferType(id: lhs)
+    val r: U64 = c.inferType(id: rhs)
     if l == 0U64 || r == 0U64 {
         return
     }
@@ -178,7 +178,7 @@ fn tcUnaryReject(c: inout Comp, operand: U64, msg: String) {
         eprint(text: "TC unary ")
         eprint(text: msg)
         eprint(text: " got=")
-        eprint(text: tcRefName(c: inout c, ref: inferType(c: inout c, id: operand)))
+        eprint(text: tcRefName(c: inout c, ref: c.inferType(id: operand)))
         eprint(text: " line=")
         eprintInt(n: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)))
         eprint(text: "\n")
@@ -192,7 +192,7 @@ fn tcUnaryReject(c: inout Comp, operand: U64, msg: String) {
 //   `-` (Neg): signed integers / floats only (no Neg witness for unsigned or Bool);
 //   `!` (Not): Bool only; `~` (BitNot): integers only.
 fn tcCheckUnary(c: inout Comp, op: I64, operand: U64) {
-    val t: U64 = inferType(c: inout c, id: operand)
+    val t: U64 = c.inferType(id: operand)
     if t == 0U64 || t >= c.arena.types.count {
         return
     }
@@ -244,7 +244,7 @@ fn tcCheckCompoundAssign(c: inout Comp, op: I64, target: U64, value: U64) {
     if !(op == opAddAssign() || op == opSubAssign() || op == opMulAssign() || op == opDivAssign() || op == opRemAssign()) {
         return
     }
-    val l: U64 = inferType(c: inout c, id: target)
+    val l: U64 = c.inferType(id: target)
     if l == 0U64 || l >= c.arena.types.count {
         return
     }
@@ -269,7 +269,7 @@ fn tcCheckArrayIndex(c: inout Comp, base: U64, index: U64) {
         tcCheckValue(c: inout c, expectedRef: simpleTypeRef(c: inout c, nameStart: u64.nameStart, nameLen: u64.nameLen), valueExpr: index, pos: "index")
         return
     }
-    val br: U64 = inferType(c: inout c, id: base)
+    val br: U64 = c.inferType(id: base)
     if br != 0U64 {
         if br < c.arena.types.count {
             val bref: TypeRef = c.arena.types[br]

@@ -454,8 +454,8 @@ fn checkGenericTypeMatch(c: inout Comp, expectedRef: U64, valueExpr: U64) {
             }
         }
     }
-    val inferred: U64 = inferType(c: inout c, id: valueExpr)
-    if !(typesCompatible(c: inout c, expected: expectedRef, inferred: inferred)) {
+    val inferred: U64 = c.inferType(id: valueExpr)
+    if !(c.typesCompatible(expected: expectedRef, inferred: inferred)) {
         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueExpr)), msg: "type mismatch in a generic body: a type parameter is a distinct opaque type, not the type required here (spec/06)")
     }
 }
@@ -475,7 +475,7 @@ fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
             checkBoundsExpr(c: inout c, exprId: value)
             // the assigned value must match the place's type (`x = a` / `x += a` where
             // x: I64 and a: T is a type error). The place type is inferType(target).
-            checkGenericTypeMatch(c: inout c, expectedRef: inferType(c: inout c, id: target), valueExpr: value)
+            checkGenericTypeMatch(c: inout c, expectedRef: c.inferType(id: target), valueExpr: value)
         }
         Stmt.ExprStmt(val expr) => { checkBoundsExpr(c: inout c, exprId: expr) }
         Stmt.Return(val value, val hasValue, offset: _) => {

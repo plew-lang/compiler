@@ -289,7 +289,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
                                     val fnR: TypeRef = c.arena.types[c.cur.retTy]
                                     if opR.args.count >= 2U64 {
                                         if fnR.args.count >= 2U64 {
-                                            if !(typesCompatible(c: inout c, expected: fnR.args[1], inferred: opR.args[1])) {
+                                            if !(c.typesCompatible(expected: fnR.args[1], inferred: opR.args[1])) {
                                                 // E != E' is allowed when E owns a `from` factory:
                                                 // `try` then converts E' -> E via E.from (spec/13).
                                                 if !(typeRefHasFromFactory(c: inout c, errRef: fnR.args[1])) {

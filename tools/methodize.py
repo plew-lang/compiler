@@ -12,6 +12,14 @@ path = sys.argv[1]
 text = open(path).read()
 lines = text.split("\n")
 
+# Guard: this script only handles "all-c" files (every top-level fn takes
+# `c: inout Comp` first). A mixed file would have its non-c fns silently dropped.
+_tot = sum(1 for L in lines if re.match(r'^(export )?fn ', L))
+_cf = sum(1 for L in lines if re.match(r'^(export )?fn [A-Za-z0-9_]+\(c: inout Comp', L))
+if _tot != _cf:
+    print(f"REFUSE: {path} is mixed ({_cf}/{_tot} c-first). Handle non-c fns manually.", file=sys.stderr)
+    sys.exit(2)
+
 fn_re = re.compile(r'^(export )?fn ([A-Za-z0-9_]+)\(c: inout Comp(, )?(.*)\) -> (.+) \{$')
 fn_re_noret = re.compile(r'^(export )?fn ([A-Za-z0-9_]+)\(c: inout Comp(, )?(.*)\) \{$')
 

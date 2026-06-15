@@ -1,82 +1,73 @@
 // Part of compile-time checks (root: _.pw): impl-on-builtin / newtype and
 // move-receiver validation.
 
-fn checkImplOnBuiltin(c: inout Comp) {
-    mut val i: U64 = 0
-    while i < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[i]
-        // only primitive *scalars* (I8..U64, Bool) are method-less: their behaviour
-        // is trait-only, so an inherent method on one is rejected. `String`/`Array`
-        // are owned aggregate lang-items that legitimately carry inherent methods
-        // (`isEmpty`, `append`, …) written in Core, so they are not in this group.
-        mut val onBuiltin: Bool = false
-        if f.hasRecv {
-            onBuiltin = isPrimType(c: inout c, start: f.recvStart, len: f.recvLen)
-        } else {
-            if f.isAssoc {
-                onBuiltin = isPrimType(c: inout c, start: f.recvStart, len: f.recvLen)
-            }
-        }
-        // a *trait-conformance* member on a primitive/String is allowed: Core owns
-        // the type (`extern { struct I32 }`) and may coherently `impl I32 as Format`
-        // (spec/07,09). An *inherent* method on a primitive (`impl I32 { fn foo }`)
-        // is still rejected — primitive behaviour is trait-only, and a third party
-        // must use `#Ext`. (Full owner-only enforcement of conformances awaits
-        // module identity; a non-witnessing inherent method is the case we can tell
-        // apart in the flat model, and it covers the impl-on-builtin footgun.)
-        if onBuiltin {
-            if methodWitnessesAConformance(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, mStart: f.nameStart, mLen: f.nameLen) {
-                onBuiltin = false
-            }
-        }
-        // an extension method (`extension Ext { impl I64 { … } }`) legitimately adds
-        // behaviour to a built-in via the `#Ext` view (spec/09) — not bare — so it is
-        // exempt from the inherent-method-on-builtin rejection.
-        if f.extId != 0U64 {
-            onBuiltin = false
-        }
-        if onBuiltin {
-            compileErrorAt(line: lineOf(c: inout c, offset: f.nameStart), msg: "cannot define methods on a built-in type you do not own (use a trait conformance via core, or an extension `#Ext`)")
-        }
-        i += 1
-    }
-}
-
-// Reject a user-written `impl` on a `newtype` (spec/10: a newtype inherits ALL of
-// the underlying type's implementations — methods, trait conformances, operators,
-// factories — automatically, synthesized by the compiler; the user cannot write
-// their own `impl`/conformance/extension on it. To add behaviour, wrap in a struct).
-// Any func whose receiver names a newtype is therefore a user impl and is rejected
-// (the inherited surface is resolved at the use site through the underlying, never
-// as a func keyed on the newtype name, so this never hits a synthesized member).
-fn checkImplOnNewtype(c: inout Comp) {
-    mut val i: U64 = 0
-    while i < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[i]
-        if f.hasRecv || f.isAssoc {
-            if newtypeUnderRef(c: inout c, start: f.recvStart, len: f.recvLen) != 0U64 {
-                compileErrorAt(line: lineOf(c: inout c, offset: f.nameStart), msg: "cannot write `impl` on a newtype — it inherits the underlying type's methods and conformances automatically; wrap in a struct to add behaviour (spec/10)")
-            }
-        }
-        i += 1
-    }
-}
-
-// Reject `move fn` (consuming self) on a non-unique type (spec/07: a consuming
-// receiver is only meaningful for a unique/move-only type; on a copyable type it
-// is a footgun, like `move` on a copyable parameter).
-fn checkMoveFnReceivers(c: inout Comp) {
-    mut val i: U64 = 0
-    while i < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[i]
-        if f.hasRecv {
-            if f.selfMove {
-                if !(typeIsUnique(c: inout c, start: f.recvStart, len: f.recvLen)) {
-                    compileErrorAt(line: lineOf(c: inout c, offset: f.nameStart), msg: "`move fn` (consuming self) is only allowed on a unique type")
+pub impl Comp {
+    inout fn checkImplOnBuiltin() {
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[i]
+            // only primitive *scalars* (I8..U64, Bool) are method-less: their behaviour
+            // is trait-only, so an inherent method on one is rejected. `String`/`Array`
+            // are owned aggregate lang-items that legitimately carry inherent methods
+            // (`isEmpty`, `append`, …) written in Core, so they are not in this group.
+            mut val onBuiltin: Bool = false
+            if f.hasRecv {
+                onBuiltin = isPrimType(c: inout self, start: f.recvStart, len: f.recvLen)
+            } else {
+                if f.isAssoc {
+                    onBuiltin = isPrimType(c: inout self, start: f.recvStart, len: f.recvLen)
                 }
             }
+            // a *trait-conformance* member on a primitive/String is allowed: Core owns
+            // the type (`extern { struct I32 }`) and may coherently `impl I32 as Format`
+            // (spec/07,09). An *inherent* method on a primitive (`impl I32 { fn foo }`)
+            // is still rejected — primitive behaviour is trait-only, and a third party
+            // must use `#Ext`. (Full owner-only enforcement of conformances awaits
+            // module identity; a non-witnessing inherent method is the case we can tell
+            // apart in the flat model, and it covers the impl-on-builtin footgun.)
+            if onBuiltin {
+                if methodWitnessesAConformance(c: inout self, recvStart: f.recvStart, recvLen: f.recvLen, mStart: f.nameStart, mLen: f.nameLen) {
+                    onBuiltin = false
+                }
+            }
+            // an extension method (`extension Ext { impl I64 { … } }`) legitimately adds
+            // behaviour to a built-in via the `#Ext` view (spec/09) — not bare — so it is
+            // exempt from the inherent-method-on-builtin rejection.
+            if f.extId != 0U64 {
+                onBuiltin = false
+            }
+            if onBuiltin {
+                compileErrorAt(line: lineOf(c: inout self, offset: f.nameStart), msg: "cannot define methods on a built-in type you do not own (use a trait conformance via core, or an extension `#Ext`)")
+            }
+            i += 1
         }
-        i += 1
+    }
+
+    inout fn checkImplOnNewtype() {
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[i]
+            if f.hasRecv || f.isAssoc {
+                if newtypeUnderRef(c: inout self, start: f.recvStart, len: f.recvLen) != 0U64 {
+                    compileErrorAt(line: lineOf(c: inout self, offset: f.nameStart), msg: "cannot write `impl` on a newtype — it inherits the underlying type's methods and conformances automatically; wrap in a struct to add behaviour (spec/10)")
+                }
+            }
+            i += 1
+        }
+    }
+
+    inout fn checkMoveFnReceivers() {
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[i]
+            if f.hasRecv {
+                if f.selfMove {
+                    if !(typeIsUnique(c: inout self, start: f.recvStart, len: f.recvLen)) {
+                        compileErrorAt(line: lineOf(c: inout self, offset: f.nameStart), msg: "`move fn` (consuming self) is only allowed on a unique type")
+                    }
+                }
+            }
+            i += 1
+        }
     }
 }
-

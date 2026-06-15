@@ -313,9 +313,9 @@ export fn runFrontend() -> Comp {
     // a copyable receiver.
     checkOverloadCollisions(c: inout c)
     checkDuplicateTraitReqs(c: inout c)
-    checkImplOnBuiltin(c: inout c)
-    checkImplOnNewtype(c: inout c)
-    checkMoveFnReceivers(c: inout c)
+    c.checkImplOnBuiltin()
+    c.checkImplOnNewtype()
+    c.checkMoveFnReceivers()
     // module visibility (spec/15): a name brought in by `import … with { }` must be
     // part of its module's public surface (`export`). Importing from the wrong
     // module also fails here — that module doesn't get loaded, so the name isn't
@@ -335,7 +335,7 @@ export fn runFrontend() -> Comp {
     collectGenInsts(c: inout c)
     // discover concrete instantiations of generic free functions from call sites
     // (each emitted as a specialized C function `f_<arg-mangle>`).
-    collectFnInsts(c: inout c)
+    c.collectFnInsts()
     // discover bare function-value references (need a closure-ABI thunk each).
     collectFnThunks(c: inout c)
     // enforce `where T: Trait` bounds (spec/08): each instantiation's concrete

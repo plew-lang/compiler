@@ -187,7 +187,7 @@ pub impl Comp {
                     } else {
                         checkArithNoCtx(c: inout self, lhs: iter, rhs: rangeHi)
                         // both bounds must share a type (`0I64..<5I32` is a width mismatch).
-                        tcCheckValue(c: inout self, expectedRef: inferType(c: inout self, id: iter), valueExpr: rangeHi, pos: "range bound")
+                        tcCheckValue(c: inout self, expectedRef: self.inferType(id: iter), valueExpr: rangeHi, pos: "range bound")
                     }
                 }
                 // scope the loop binding(s) to the body, mirroring genStmt's For.
@@ -329,7 +329,7 @@ pub impl Comp {
         // subsumes the old numeric/String/named-id category checks here, with generic-arg
         // precision and Bool/width/sign distinctions).
         if op == opAssign() {
-            tcCheckValue(c: inout self, expectedRef: inferType(c: inout self, id: target), valueExpr: value, pos: "assign")
+            tcCheckValue(c: inout self, expectedRef: self.inferType(id: target), valueExpr: value, pos: "assign")
         } else {
             tcCheckCompoundAssign(c: inout self, op: op, target: target, value: value)
         }

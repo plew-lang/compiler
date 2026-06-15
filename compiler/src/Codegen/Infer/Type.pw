@@ -1,211 +1,193 @@
 // Part of type inference/checking (root: _.pw): expression type inference
 // and type compatibility.
 
-fn inferType(c: inout Comp, id: U64) -> U64 {
-    // an un-suffixed integer literal has no intrinsic type — it adapts to its context
-    // (`u64var + 5`, `val x: I32 = 5`). typeOf may attach an emission-context width to
-    // it, but for type CHECKING it is genuinely unknown, so report 0 (a typed literal
-    // `5I64` keeps its suffix type; `true`/`false` fall through to Bool).
-    match c.arena.exprs[id] {
-        Expr.Int(value: _, offset: _, val isBool, tyStart: _, val tyLen, isNeg: _) => {
-            if !(isBool) {
-                if tyLen == 0U64 {
-                    return 0U64
-                }
-            }
-        }
-        _ => {}
-    }
-    val ti: TypeInfo = typeOf(c: inout c, id: id)
-    if ti.ref != 0U64 {
-        return ti.ref
-    }
-    if ti.nameLen == 0U64 {
-        return 0U64
-    }
-    // arrays (kind 3): conservative for now — their element comparison is deferred.
-    if ti.kind == 3 {
-        return 0U64
-    }
-    return simpleTypeRef(c: inout c, nameStart: ti.nameStart, nameLen: ti.nameLen)
-}
-
-// Whether a value of type `inferred` is acceptable where `expected` is required.
-// Conservative: returns true (compatible / don't-judge) unless it finds a DEFINITE
-// mismatch, so it never false-rejects on an unrecovered or not-yet-modeled form.
-// Definite mismatches: two different known head types (Bool vs I32, String vs A, A vs
-// B, Optional vs Result), or the same generic head with an incompatible type argument
-// (Optional[I64] vs Optional[String]). Exemptions: unknown (0) on either side; an
-// existential `any P` target (a concrete value coerces into it); `extern(c)` opaque
-// FFI handles (all void*, knownNamedTypeId yields 0 for them).
-// Whether (start,len) names a CONCRETE type (a recognized primitive / String / Bool
-// or a known struct/enum/newtype) — as opposed to an opaque type-parameter name. Used
-// by the generic-body abstract check to tell `T` vs `I64` (reject) from `T` vs another
-// generic's parameter `U` (lenient — they unify at instantiation).
-fn isConcreteTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
-    if isPrimType(c: inout c, start: start, len: len) {
-        return true
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "String") {
-        return true
-    }
-    if knownNamedTypeId(c: inout c, start: start, len: len) != 0U64 {
-        return true
-    }
-    return false
-}
-
-fn typesCompatible(c: inout Comp, expected: U64, inferred: U64) -> Bool {
-    if expected == 0U64 || inferred == 0U64 {
-        return true
-    }
-    if expected >= c.arena.types.count || inferred >= c.arena.types.count {
-        return true
-    }
-    // ground the expected type through any active generic env (a `-> T` return / `T`
-    // param resolves to the concrete instantiation argument); inferred is grounded.
-    val exp: U64 = groundTypeRef(c: inout c, ref: expected)
-    if exp >= c.arena.types.count {
-        return true
-    }
-    val te: TypeRef = c.arena.types[exp]
-    val tin: TypeRef = c.arena.types[inferred]
-    if te.isAny || tin.isAny {
-        // a CONCRETE value coercing INTO `any P` must conform to P (spec/08) — else its
-        // existential box has no vtable entry and a member call null-dereferences at
-        // runtime. Check the conformance table when the source is a known concrete
-        // struct/enum; a generic param (id 0, conforms via its `where` bound) or an
-        // existing `any` source is left to the conservative pass-through.
-        if te.isAny {
-            if !(tin.isAny) {
-                val srcId: U64 = knownNamedTypeId(c: inout c, start: tin.nameStart, len: tin.nameLen)
-                if srcId != 0U64 {
-                    val traitId: U64 = intern(c: inout c, start: te.nameStart, len: te.nameLen)
-                    if !(conformExists(c: inout c, typeId: srcId, traitId: traitId)) {
-                        return false
+pub impl Comp {
+    inout fn inferType(id: U64) -> U64 {
+        // an un-suffixed integer literal has no intrinsic type — it adapts to its context
+        // (`u64var + 5`, `val x: I32 = 5`). typeOf may attach an emission-context width to
+        // it, but for type CHECKING it is genuinely unknown, so report 0 (a typed literal
+        // `5I64` keeps its suffix type; `true`/`false` fall through to Bool).
+        match self.arena.exprs[id] {
+            Expr.Int(value: _, offset: _, val isBool, tyStart: _, val tyLen, isNeg: _) => {
+                if !(isBool) {
+                    if tyLen == 0U64 {
+                        return 0U64
                     }
                 }
             }
+            _ => {}
         }
-        return true
-    }
-    // float-to-float is exempt: F32 is currently lowered as F64 (true F32 deferred), so
-    // an F64 value flowing into an F32 position is not a real mismatch yet, and a float
-    // literal recovered as F64 may meet a float local reporting otherwise. But a float
-    // paired with a NON-float (`val x: F64 = nI64`) IS a real mismatch — no implicit
-    // int↔float conversion (spec/12) — so only exempt when BOTH sides are float. (An
-    // untyped int LITERAL flowing into a float context is polymorphic and passes via the
-    // unknown-id path below, not here.)
-    val eFloat: Bool = isFloatType(c: inout c, start: te.nameStart, len: te.nameLen)
-    val iFloat: Bool = isFloatType(c: inout c, start: tin.nameStart, len: tin.nameLen)
-    if eFloat && iFloat {
-        return true
-    }
-    if eFloat || iFloat {
-        // one side float, the other not: a mismatch UNLESS the non-float side is an
-        // untyped/unknown type (a bare int literal — polymorphic, handled below).
-        if eFloat {
-            if knownNamedTypeId(c: inout c, start: tin.nameStart, len: tin.nameLen) == 0U64 {
-                return true
-            }
-        } else {
-            if knownNamedTypeId(c: inout c, start: te.nameStart, len: te.nameLen) == 0U64 {
-                return true
-            }
+        val ti: TypeInfo = typeOf(c: inout self, id: id)
+        if ti.ref != 0U64 {
+            return ti.ref
         }
-        return false
-    }
-    // generic-body abstract check (spec/06): a type parameter of the function being
-    // checked (`c.cur.checkFn`) is an opaque DISTINCT type — incompatible with a
-    // CONCRETE type or a DIFFERENT parameter of the same function, but lenient against
-    // an unknown / another generic's type parameter (which unifies at instantiation,
-    // e.g. passing this fn's `T` to `f[U](x: U)`). Active only while checking a generic
-    // template body (curCheckFn valid); elsewhere isTypeParamOf is false.
-    val eTp: Bool = isTypeParamOf(c: inout c, fnIdx: c.cur.checkFn, start: te.nameStart, len: te.nameLen)
-    val iTp: Bool = isTypeParamOf(c: inout c, fnIdx: c.cur.checkFn, start: tin.nameStart, len: tin.nameLen)
-    if eTp {
-        if iTp {
-            // both are this function's parameters: compatible iff the SAME one.
-            return spansEqual(c: inout c, aStart: te.nameStart, aLen: te.nameLen, bStart: tin.nameStart, bLen: tin.nameLen)
+        if ti.nameLen == 0U64 {
+            return 0U64
         }
-        // T vs a CONCRETE type -> incompatible; T vs unknown / another param -> lenient.
-        if isConcreteTypeName(c: inout c, start: tin.nameStart, len: tin.nameLen) {
-            return false
+        // arrays (kind 3): conservative for now — their element comparison is deferred.
+        if ti.kind == 3 {
+            return 0U64
         }
-        return true
+        return simpleTypeRef(c: inout self, nameStart: ti.nameStart, nameLen: ti.nameLen)
     }
-    if iTp {
-        if isConcreteTypeName(c: inout c, start: te.nameStart, len: te.nameLen) {
-            return false
-        }
-        return true
-    }
-    // the abstract Self of a trait provided-method body is likewise opaque: Self vs a
-    // CONCRETE type -> incompatible (`return self` from `-> I64`), Self vs Self -> ok.
-    val eSelf: Bool = isSelfTypeInProvided(c: inout c, start: te.nameStart, len: te.nameLen)
-    val iSelf: Bool = isSelfTypeInProvided(c: inout c, start: tin.nameStart, len: tin.nameLen)
-    if eSelf {
-        if iSelf {
+
+    inout fn isConcreteTypeName(start: U64, len: U64) -> Bool {
+        if isPrimType(c: inout self, start: start, len: len) {
             return true
         }
-        if isConcreteTypeName(c: inout c, start: tin.nameStart, len: tin.nameLen) {
-            return false
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "String") {
+            return true
         }
-        return true
-    }
-    if iSelf {
-        if isConcreteTypeName(c: inout c, start: te.nameStart, len: te.nameLen) {
-            return false
+        if knownNamedTypeId(c: inout self, start: start, len: len) != 0U64 {
+            return true
         }
-        return true
-    }
-    val eId: U64 = knownNamedTypeId(c: inout c, start: te.nameStart, len: te.nameLen)
-    val iId: U64 = knownNamedTypeId(c: inout c, start: tin.nameStart, len: tin.nameLen)
-    if eId == 0U64 || iId == 0U64 {
-        return true
-    }
-    if eId != iId {
         return false
     }
-    // same head: a generic head must agree on its type arguments.
-    if te.args.count == tin.args.count {
-        mut val i: U64 = 0
-        while i < te.args.count {
-            if !(typesCompatible(c: inout c, expected: te.args[i], inferred: tin.args[i])) {
-                return false
-            }
-            i += 1
-        }
-    }
-    return true
-}
 
-// Check that `valueExpr`'s inferred type is compatible with `expectedRef` at a typed
-// position (a binding annotation, a return, a call argument, …). On a DEFINITE
-// mismatch it rejects (spec/12: no implicit conversion) — unless `--tc-log` is set,
-// where it instead prints a `TC` diagnostic and continues, so a NEW check position can
-// be developed/triaged against self-compile before it goes live.
-// Whether `id` is a call to a user function/method that returns no value (`()`),
-// so its "result" can't be used where a value is expected (spec/04).
-fn exprIsVoidCall(c: inout Comp, id: U64) -> Bool {
-    match c.arena.exprs[id] {
-        Expr.Call(val nameStart, val nameLen, val args) => {
-            val fi: U64 = resolvedCallee(c: inout c, id: id)
-            if fi < c.arena.funcs.count {
-                return !c.arena.funcs[fi].hasRet
-            }
+    inout fn typesCompatible(expected: U64, inferred: U64) -> Bool {
+        if expected == 0U64 || inferred == 0U64 {
+            return true
         }
-        Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-            val rt: TypeInfo = exprType(c: inout c, id: recv)
-            if rt.kind == 2 {
-                val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                if mi != c.arena.funcs.count {
-                    return !c.arena.funcs[mi].hasRet
+        if expected >= self.arena.types.count || inferred >= self.arena.types.count {
+            return true
+        }
+        // ground the expected type through any active generic env (a `-> T` return / `T`
+        // param resolves to the concrete instantiation argument); inferred is grounded.
+        val exp: U64 = groundTypeRef(c: inout self, ref: expected)
+        if exp >= self.arena.types.count {
+            return true
+        }
+        val te: TypeRef = self.arena.types[exp]
+        val tin: TypeRef = self.arena.types[inferred]
+        if te.isAny || tin.isAny {
+            // a CONCRETE value coercing INTO `any P` must conform to P (spec/08) — else its
+            // existential box has no vtable entry and a member call null-dereferences at
+            // runtime. Check the conformance table when the source is a known concrete
+            // struct/enum; a generic param (id 0, conforms via its `where` bound) or an
+            // existing `any` source is left to the conservative pass-through.
+            if te.isAny {
+                if !(tin.isAny) {
+                    val srcId: U64 = knownNamedTypeId(c: inout self, start: tin.nameStart, len: tin.nameLen)
+                    if srcId != 0U64 {
+                        val traitId: U64 = intern(c: inout self, start: te.nameStart, len: te.nameLen)
+                        if !(conformExists(c: inout self, typeId: srcId, traitId: traitId)) {
+                            return false
+                        }
+                    }
                 }
             }
+            return true
         }
-        _ => {}
+        // float-to-float is exempt: F32 is currently lowered as F64 (true F32 deferred), so
+        // an F64 value flowing into an F32 position is not a real mismatch yet, and a float
+        // literal recovered as F64 may meet a float local reporting otherwise. But a float
+        // paired with a NON-float (`val x: F64 = nI64`) IS a real mismatch — no implicit
+        // int↔float conversion (spec/12) — so only exempt when BOTH sides are float. (An
+        // untyped int LITERAL flowing into a float context is polymorphic and passes via the
+        // unknown-id path below, not here.)
+        val eFloat: Bool = isFloatType(c: inout self, start: te.nameStart, len: te.nameLen)
+        val iFloat: Bool = isFloatType(c: inout self, start: tin.nameStart, len: tin.nameLen)
+        if eFloat && iFloat {
+            return true
+        }
+        if eFloat || iFloat {
+            // one side float, the other not: a mismatch UNLESS the non-float side is an
+            // untyped/unknown type (a bare int literal — polymorphic, handled below).
+            if eFloat {
+                if knownNamedTypeId(c: inout self, start: tin.nameStart, len: tin.nameLen) == 0U64 {
+                    return true
+                }
+            } else {
+                if knownNamedTypeId(c: inout self, start: te.nameStart, len: te.nameLen) == 0U64 {
+                    return true
+                }
+            }
+            return false
+        }
+        // generic-body abstract check (spec/06): a type parameter of the function being
+        // checked (`self.cur.checkFn`) is an opaque DISTINCT type — incompatible with a
+        // CONCRETE type or a DIFFERENT parameter of the same function, but lenient against
+        // an unknown / another generic's type parameter (which unifies at instantiation,
+        // e.g. passing this fn's `T` to `f[U](x: U)`). Active only while checking a generic
+        // template body (curCheckFn valid); elsewhere isTypeParamOf is false.
+        val eTp: Bool = isTypeParamOf(c: inout self, fnIdx: self.cur.checkFn, start: te.nameStart, len: te.nameLen)
+        val iTp: Bool = isTypeParamOf(c: inout self, fnIdx: self.cur.checkFn, start: tin.nameStart, len: tin.nameLen)
+        if eTp {
+            if iTp {
+                // both are this function's parameters: compatible iff the SAME one.
+                return spansEqual(c: inout self, aStart: te.nameStart, aLen: te.nameLen, bStart: tin.nameStart, bLen: tin.nameLen)
+            }
+            // T vs a CONCRETE type -> incompatible; T vs unknown / another param -> lenient.
+            if self.isConcreteTypeName(start: tin.nameStart, len: tin.nameLen) {
+                return false
+            }
+            return true
+        }
+        if iTp {
+            if self.isConcreteTypeName(start: te.nameStart, len: te.nameLen) {
+                return false
+            }
+            return true
+        }
+        // the abstract Self of a trait provided-method body is likewise opaque: Self vs a
+        // CONCRETE type -> incompatible (`return self` from `-> I64`), Self vs Self -> ok.
+        val eSelf: Bool = isSelfTypeInProvided(c: inout self, start: te.nameStart, len: te.nameLen)
+        val iSelf: Bool = isSelfTypeInProvided(c: inout self, start: tin.nameStart, len: tin.nameLen)
+        if eSelf {
+            if iSelf {
+                return true
+            }
+            if self.isConcreteTypeName(start: tin.nameStart, len: tin.nameLen) {
+                return false
+            }
+            return true
+        }
+        if iSelf {
+            if self.isConcreteTypeName(start: te.nameStart, len: te.nameLen) {
+                return false
+            }
+            return true
+        }
+        val eId: U64 = knownNamedTypeId(c: inout self, start: te.nameStart, len: te.nameLen)
+        val iId: U64 = knownNamedTypeId(c: inout self, start: tin.nameStart, len: tin.nameLen)
+        if eId == 0U64 || iId == 0U64 {
+            return true
+        }
+        if eId != iId {
+            return false
+        }
+        // same head: a generic head must agree on its type arguments.
+        if te.args.count == tin.args.count {
+            mut val i: U64 = 0
+            while i < te.args.count {
+                if !(self.typesCompatible(expected: te.args[i], inferred: tin.args[i])) {
+                    return false
+                }
+                i += 1
+            }
+        }
+        return true
     }
-    return false
-}
 
+    inout fn exprIsVoidCall(id: U64) -> Bool {
+        match self.arena.exprs[id] {
+            Expr.Call(val nameStart, val nameLen, val args) => {
+                val fi: U64 = resolvedCallee(c: inout self, id: id)
+                if fi < self.arena.funcs.count {
+                    return !self.arena.funcs[fi].hasRet
+                }
+            }
+            Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+                val rt: TypeInfo = exprType(c: inout self, id: recv)
+                if rt.kind == 2 {
+                    val mi: U64 = findMethod(c: inout self, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    if mi != self.arena.funcs.count {
+                        return !self.arena.funcs[mi].hasRet
+                    }
+                }
+            }
+            _ => {}
+        }
+        return false
+    }
+}
