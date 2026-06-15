@@ -70,6 +70,25 @@ a/b は「結合のため」でなく**可読性のため**カテゴリ別子構
 
 各 M 内も増分（1 ファイル/1 カテゴリ/1 パスごと commit＋tag）。M3 完了時点で god-object は消え、**実施順は M3→M5→M4**：M5（resolver の scoped 化）を単一モジュールのまま終え、M4 で「分割した境界を scoped resolution が検査する」が噛み合う。
 
+### M4 の改訂：目標を B（典型 IR／解決の前計算）に据え、モジュール昇格は最後（決定）
+
+**決定（ユーザー）**：M4 の本来あるべき終状態は **B＝pre-resolved arena**（Backend は解決を一切行わず、フロントが確定した結果を arena から読むだけ）。モジュール昇格（旧 M4＝Backend/Frontend を独立モジュール化）はその副産物として最後に pure-move で行う。
+
+**なぜ B が先か（A 先行をやめた根拠）**：Backend を素朴に独立モジュール化しようとすると、Backend は他パスの自由関数を **~78 個**呼んでおり（裏取り済）、うち**解決の「決定」**を emission 中に再実行している（`findFunc` 8 箇所・`structIndexByName` 8 箇所・`moduleOf` 等）。逆に Backend 定義の共有クエリ（`enumIdxByName`/`findTraitIdxByName`/`methodInEntryModule`）を Verify/Check が呼ぶ**逆依存も 5 個**。これは architecture.md「根① 型付き IR が無い」の症状そのもの。**A（純粋クエリを共有 `Sema` 層へ移す pure-move）は B を楽にしない**（B が触るのは「決定」であって純粋ルックアップと独立）。かつ **B は挙動依存**なので、本節冒頭の原則「構造改造は単一モジュール内で完結・昇格は最後」に従い、**1 モジュールのうちに B を済ませる**のが安全（不動点が挙動を守る）。B 完了後は Backend の外向き依存が純粋クエリのみになり、Sema 抽出＋モジュール昇格は綺麗な pure-move に落ちる。
+
+**B の中核＝解決の前計算（旗艦増分）**：`Expr.Call(nameStart, nameLen, args)` は**解決済み callee を持たない**ため、`findFunc(nameStart, nameLen, args) -> funcIdx` が**コンパイラ全体で 13 箇所**（Backend 8＋フロント 5＝ExprType/Mono/Infer/Check×2）から独立に再実行されている。
+- **健全性の根拠**：`Arg` は型を持たず `expr`（引数式 id）＋ラベルのみ。∴ `findFunc` は「**どの関数 decl か**（テンプレート選択）」を返すだけで、インスタンス選択は別機構（`registerCallInst`→`fnInsts`・型引数キー）。型キャッシュ（`TypeCache`）が exprId キーで安定なので、**findFunc の結果は call-expr-id ごとに安定**＝per-exprId の callee キャッシュ（`TypeCache` と同じ side-table パターン）で正しく前計算できる。全 findFunc 呼び出しは `match c.arena.exprs[id] { Expr.Call(...) }` の中＝exprId が手元にある。
+- **増分手順**：① arena に `callCallee: Array[U64]`（exprId キー・sentinel=funcs.count）と memo 化 `resolvedCallee(c, id)` を追加。② フロントの解決パスで `Expr.Call` を見たとき findFunc 結果を記録（or lazy memo）。③ 13 箇所を `resolvedCallee` 読みに置換。各ステップ dev-rebuild→test→不動点。
+- **唯一の注意＝view-aware refinement**（`findFuncViewAware`・1 箇所のみ）：codegen 時の引数 view に依存（フロントは local 引数の view を見られない）。view-blind キャッシュの**上**の refinement として残す（or view 計算を前倒し）。B の他部分と分けて個別に扱う。
+
+**B の残り**：findFunc 以外の「決定」（`structIndexByName` 等は純粋ルックアップ＝B 対象外で A 行き／Check・Verify の解決呼びは個別精査）も同じ「フロントで決定→arena 記録→読むだけ」で順次消す。Backend の外向き「決定」依存がゼロになった時点で、A（Sema 抽出）＋Backend/Frontend モジュール昇格を pure-move で実施。
+
+| M | 内容 | リスク | 主眼 |
+|---|---|---|---|
+| **M4-1** | **IR をデータモジュール `Ir.pw` へ昇格**（完了・tag `refactor-m4-1`）。旧 `Ast.pw`＝コンパイラ IR 語彙＋共有 `Comp` を `export`、pub factory、interner 同梱。root が `import ./Ir`＝初の cross-module 共有可変 `Comp`。 | 低 | モジュール昇格の足場 |
+| **M4-B** | **解決の前計算（典型 IR 化）**：findFunc 系の「決定」をフロントで確定し arena へ記録、Backend は読むだけに。単一モジュール内・不動点で挙動を固定。 | 中（挙動依存） | **「根① 型付き IR が無い」の解消** |
+| **M4-2** | **A＋モジュール昇格**：純粋クエリを共有 `Sema` 層へ、Backend/Frontend を独立モジュール化（B 完了後の pure-move）。 | 低 | 理想像の完成 |
+
 ## scoped resolution への移行（M5・resolver の理想化）
 
 **決定**：循環 import 禁止（[spec/15 循環依存](../spec/04-execution/15-modules.md#循環依存モジュールグラフは-dag)）を機に、resolver を移行する。**gate（型参照 gate・関数 gate）は使い捨てなので作らない** ── scoped resolution で構造的に解消する。
