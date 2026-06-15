@@ -486,7 +486,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     // instantiation argument (else `box.get()` types as the bare `T`).
                     if isGenericInst(c: inout c, ref: rt.ref) {
                         val gt: TypeRef = c.arena.types[rt.ref]
-                        val gsi: U64 = genericStructIndex(c: inout c, nameStart: gt.nameStart, nameLen: gt.nameLen)
+                        val gsi: U64 = c.genericStructIndex(nameStart: gt.nameStart, nameLen: gt.nameLen)
                         if gsi < c.arena.structs.count {
                             // ground the return type through the receiver's instantiation
                             // AND the method's own type params (a combinator on a generic
@@ -523,7 +523,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                             clearSelfItemEnv(c: inout c)
                             return typeInfoOfRef(c: inout c, ref: gr)
                         }
-                        val gei: U64 = genericEnumIndex(c: inout c, nameStart: gt.nameStart, nameLen: gt.nameLen)
+                        val gei: U64 = c.genericEnumIndex(nameStart: gt.nameStart, nameLen: gt.nameLen)
                         if gei < c.arena.enums.count {
                             return substTypeInfo(c: inout c, instRef: rt.ref, params: c.arena.enums[gei].typeParams, tyRef: mf.retTy)
                         }

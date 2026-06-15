@@ -333,7 +333,7 @@ fn tcCheckMakeFields(c: inout Comp, expectedRef: U64, makeId: U64) {
                 return
             }
             if isEnum {
-                val ei: U64 = genericEnumIndex(c: inout c, nameStart: et.nameStart, nameLen: et.nameLen)
+                val ei: U64 = c.genericEnumIndex(nameStart: et.nameStart, nameLen: et.nameLen)
                 if ei >= c.arena.enums.count {
                     return
                 }
@@ -343,7 +343,7 @@ fn tcCheckMakeFields(c: inout Comp, expectedRef: U64, makeId: U64) {
                 }
                 tcCheckFieldsUnder(c: inout c, params: c.arena.enums[ei].typeParams, targs: et.args, defFields: c.arena.enums[ei].variants[vi].fields, makeFields: fields)
             } else {
-                val si: U64 = genericStructIndex(c: inout c, nameStart: et.nameStart, nameLen: et.nameLen)
+                val si: U64 = c.genericStructIndex(nameStart: et.nameStart, nameLen: et.nameLen)
                 if si >= c.arena.structs.count {
                     return
                 }

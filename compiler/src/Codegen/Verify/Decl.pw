@@ -380,13 +380,13 @@ fn checkGenericArity(c: inout Comp, ref: U64, offset: U64) {
     }
     val t: TypeRef = c.arena.types[ref]
     if t.args.count > 0U64 {
-        val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+        val si: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
         if si < c.arena.structs.count {
             if t.args.count != c.arena.structs[si].typeParams.count {
                 compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "wrong number of type arguments for this generic type (spec/06)")
             }
         } else {
-            val ei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+            val ei: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
             if ei < c.arena.enums.count {
                 if t.args.count != c.arena.enums[ei].typeParams.count {
                     compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "wrong number of type arguments for this generic type (spec/06)")

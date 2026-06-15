@@ -2,35 +2,35 @@
 
 // Index in c.arena.structs of a generic struct named (nameStart,nameLen), or
 // c.arena.structs.count if there is no such generic struct.
-export fn genericStructIndex(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
-    val qId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-    mut val i: U64 = 0
-    while i < c.arena.structs.count {
-        val s: StructDef = c.arena.structs[i]
-        if s.typeParams.count > 0 {
-            if s.nameId == qId {
-                return i
-            }
-        }
-        i += 1
-    }
-    return c.arena.structs.count
-}
 
-// Index in c.arena.enums of a generic enum named (nameStart,nameLen), or c.arena.enums.count
-// if there is no such generic enum.
-export fn genericEnumIndex(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
-    val qId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-    mut val i: U64 = 0
-    while i < c.arena.enums.count {
-        val e: EnumDef = c.arena.enums[i]
-        if e.typeParams.count > 0 {
-            if e.nameId == qId {
-                return i
+pub impl Comp {
+    inout fn genericStructIndex(nameStart: U64, nameLen: U64) -> U64 {
+        val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val i: U64 = 0
+        while i < self.arena.structs.count {
+            val s: StructDef = self.arena.structs[i]
+            if s.typeParams.count > 0 {
+                if s.nameId == qId {
+                    return i
+                }
             }
+            i += 1
         }
-        i += 1
+        return self.arena.structs.count
     }
-    return c.arena.enums.count
-}
 
+    inout fn genericEnumIndex(nameStart: U64, nameLen: U64) -> U64 {
+        val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val i: U64 = 0
+        while i < self.arena.enums.count {
+            val e: EnumDef = self.arena.enums[i]
+            if e.typeParams.count > 0 {
+                if e.nameId == qId {
+                    return i
+                }
+            }
+            i += 1
+        }
+        return self.arena.enums.count
+    }
+}

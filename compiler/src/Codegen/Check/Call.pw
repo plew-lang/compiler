@@ -275,11 +275,11 @@ fn checkClosureArgArity(c: inout Comp, argExpr: U64, p: Param) {
 // prefix is grounded by the instance's type args, so this marks where the method-own
 // (abstract) tail begins. Falls back to the receiver type info if not a known generic.
 fn recvOwnParamCount(c: inout Comp, rt: TypeInfo) -> U64 {
-    val si: U64 = genericStructIndex(c: inout c, nameStart: rt.nameStart, nameLen: rt.nameLen)
+    val si: U64 = c.genericStructIndex(nameStart: rt.nameStart, nameLen: rt.nameLen)
     if si < c.arena.structs.count {
         return c.arena.structs[si].typeParams.count
     }
-    val ei: U64 = genericEnumIndex(c: inout c, nameStart: rt.nameStart, nameLen: rt.nameLen)
+    val ei: U64 = c.genericEnumIndex(nameStart: rt.nameStart, nameLen: rt.nameLen)
     if ei < c.arena.enums.count {
         return c.arena.enums[ei].typeParams.count
     }

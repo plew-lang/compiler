@@ -122,7 +122,7 @@ fn substTypeInfo(c: inout Comp, instRef: U64, params: Array[Bind], tyRef: U64) -
 // parameter with the instantiation's concrete argument (`Box[I32]`.v -> I32).
 fn genericFieldTypeInfo(c: inout Comp, instRef: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
     val t: TypeRef = c.arena.types[instRef]
-    val si: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    val si: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
     if si >= c.arena.structs.count {
         return scalarInfo()
     }
@@ -161,7 +161,7 @@ fn genericFieldTypeInfo(c: inout Comp, instRef: U64, fieldStart: U64, fieldLen: 
 // type parameter with the instantiation's concrete argument.
 fn genericEnumFieldTypeInfo(c: inout Comp, instRef: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
     val t: TypeRef = c.arena.types[instRef]
-    val ei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    val ei: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
     if ei >= c.arena.enums.count {
         return scalarInfo()
     }

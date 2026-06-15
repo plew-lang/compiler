@@ -639,7 +639,7 @@ fn isTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
         }
         ti += 1
     }
-    return genericStructIndex(c: inout c, nameStart: ar.nameStart, nameLen: ar.nameLen) < c.arena.structs.count
+    return c.genericStructIndex(nameStart: ar.nameStart, nameLen: ar.nameLen) < c.arena.structs.count
 }
 
 // True if type `typeStart`/`typeLen` declares an `assoc fn` named `nameStart`/

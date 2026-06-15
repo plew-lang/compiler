@@ -97,7 +97,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             if isEnum {
                 mut val cei: U64 = enumIdxByName(c: inout c, start: typeStart, len: typeLen)
                 if cei >= c.arena.enums.count {
-                    cei = genericEnumIndex(c: inout c, nameStart: typeStart, nameLen: typeLen)
+                    cei = c.genericEnumIndex(nameStart: typeStart, nameLen: typeLen)
                 }
                 if cei < c.arena.enums.count {
                     // a construction naming a variant the enum does not declare
@@ -150,11 +150,11 @@ fn verifyExpr(c: inout Comp, id: U64) {
                 val tr: TypeRef = c.arena.types[ty]
                 if tr.args.count > 0U64 {
                     mut val tpCount: U64 = c.arena.structs.count + c.arena.enums.count + 1U64
-                    val gsi: U64 = genericStructIndex(c: inout c, nameStart: typeStart, nameLen: typeLen)
+                    val gsi: U64 = c.genericStructIndex(nameStart: typeStart, nameLen: typeLen)
                     if gsi < c.arena.structs.count {
                         tpCount = c.arena.structs[gsi].typeParams.count
                     } else {
-                        val gei: U64 = genericEnumIndex(c: inout c, nameStart: typeStart, nameLen: typeLen)
+                        val gei: U64 = c.genericEnumIndex(nameStart: typeStart, nameLen: typeLen)
                         if gei < c.arena.enums.count {
                             tpCount = c.arena.enums[gei].typeParams.count
                         }
@@ -268,7 +268,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             if tti.nameLen > 0U64 {
                 mut val isEnum: Bool = enumIdxByName(c: inout c, start: tti.nameStart, len: tti.nameLen) < c.arena.enums.count
                 if !(isEnum) {
-                    isEnum = genericEnumIndex(c: inout c, nameStart: tti.nameStart, nameLen: tti.nameLen) < c.arena.enums.count
+                    isEnum = c.genericEnumIndex(nameStart: tti.nameStart, nameLen: tti.nameLen) < c.arena.enums.count
                 }
                 if isEnum {
                     if !(rangeEquals(bytes: c.arena.bytes, start: tti.nameStart, len: tti.nameLen, kw: "Result")) {
@@ -423,7 +423,7 @@ fn checkDestructureComplete(c: inout Comp, a: MatchArm) {
     if a.isStruct {
         mut val si: U64 = structIndexByName(c: inout c, start: a.enumStart, len: a.enumLen)
         if si >= c.arena.structs.count {
-            si = genericStructIndex(c: inout c, nameStart: a.enumStart, nameLen: a.enumLen)
+            si = c.genericStructIndex(nameStart: a.enumStart, nameLen: a.enumLen)
         }
         if si < c.arena.structs.count {
             val sd: StructDef = c.arena.structs[si]

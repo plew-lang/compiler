@@ -20,7 +20,7 @@ fn registerGenStructNames(c: inout Comp, st: inout LlvmCtx) {
         val ref: U64 = c.monoWork.genInsts[k]
         if isGenericInst(c: inout c, ref: ref) {
             val t: TypeRef = c.arena.types[ref]
-            val defIdx: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+            val defIdx: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
             if defIdx < c.arena.structs.count {
                 mut val nm: Array[U8] = []
                 appendBytes(into: inout nm, from: "gs".bytes)
@@ -89,7 +89,7 @@ fn registerGenEnums(c: inout Comp, st: inout LlvmCtx) {
         val ref: U64 = c.monoWork.genInsts[k]
         if isGenericInst(c: inout c, ref: ref) {
             val t: TypeRef = c.arena.types[ref]
-            val defIdx: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+            val defIdx: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
             if defIdx < c.arena.enums.count {
                 val e: EnumDef = c.arena.enums[defIdx]
                 val savedP: Array[Bind] = c.cur.typeParams

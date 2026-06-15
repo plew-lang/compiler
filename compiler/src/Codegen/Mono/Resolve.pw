@@ -10,7 +10,7 @@ fn isGenericEnumInst(c: inout Comp, ref: U64) -> Bool {
     if t.args.count == 0 {
         return false
     }
-    return genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen) < c.arena.enums.count
+    return c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen) < c.arena.enums.count
 }
 
 // Structural equality of two TypeRefs (head span + args, recursively).

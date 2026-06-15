@@ -198,7 +198,7 @@ fn groundUnderInst(c: inout Comp, instRef: U64, tyRef: U64) -> U64 {
         return tyRef
     }
     val inst: TypeRef = c.arena.types[instRef]
-    val si: U64 = genericStructIndex(c: inout c, nameStart: inst.nameStart, nameLen: inst.nameLen)
+    val si: U64 = c.genericStructIndex(nameStart: inst.nameStart, nameLen: inst.nameLen)
     if si >= c.arena.structs.count {
         return tyRef
     }
@@ -287,11 +287,11 @@ fn instArgCollidesParamName(c: inout Comp, instRef: U64) -> Bool {
     // terminates; rejecting that rare ambiguous case too is the accepted cost of a
     // simple, crash-proof rule (rename the colliding type).
     mut val params: Array[Bind] = []
-    val gsi: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    val gsi: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
     if gsi < c.arena.structs.count {
         params = c.arena.structs[gsi].typeParams
     } else {
-        val gei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+        val gei: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
         if gei < c.arena.enums.count {
             params = c.arena.enums[gei].typeParams
         } else {
@@ -498,7 +498,7 @@ fn collectGenInsts(c: inout Comp) {
             skipProvidedTemplate = true
         }
         if f.isProvided {
-            if genericStructIndex(c: inout c, nameStart: f.recvStart, nameLen: f.recvLen) < c.arena.structs.count {
+            if c.genericStructIndex(nameStart: f.recvStart, nameLen: f.recvLen) < c.arena.structs.count {
                 skipProvidedTemplate = true
             }
         }

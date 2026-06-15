@@ -393,11 +393,11 @@ fn registerMethodInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, ar
 // this-many of the method's type args come from the receiver instantiation; the
 // rest are the method's own (encoded in the mangle suffix).
 fn recvParamCount(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
-    val gsi: U64 = genericStructIndex(c: inout c, nameStart: nameStart, nameLen: nameLen)
+    val gsi: U64 = c.genericStructIndex(nameStart: nameStart, nameLen: nameLen)
     if gsi < c.arena.structs.count {
         return c.arena.structs[gsi].typeParams.count
     }
-    val gei: U64 = genericEnumIndex(c: inout c, nameStart: nameStart, nameLen: nameLen)
+    val gei: U64 = c.genericEnumIndex(nameStart: nameStart, nameLen: nameLen)
     if gei < c.arena.enums.count {
         return c.arena.enums[gei].typeParams.count
     }

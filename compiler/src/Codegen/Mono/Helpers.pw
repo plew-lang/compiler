@@ -22,10 +22,10 @@ export fn isGenericInst(c: inout Comp, ref: U64) -> Bool {
             return false
         }
     }
-    if genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen) < c.arena.structs.count {
+    if c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen) < c.arena.structs.count {
         return true
     }
-    return genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen) < c.arena.enums.count
+    return c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen) < c.arena.enums.count
 }
 
 // Is `ref` a function type (head `fn`, args = [return, params...])?
@@ -150,7 +150,7 @@ fn nameReachesOwner(c: inout Comp, nStart: U64, nLen: U64, args: Array[U64], tSt
     // through the generic partner's fields, fails to box, and overflows at sizing.
     mut val si: U64 = structIndexByName(c: inout c, start: nStart, len: nLen)
     if si >= c.arena.structs.count {
-        si = genericStructIndex(c: inout c, nameStart: nStart, nameLen: nLen)
+        si = c.genericStructIndex(nameStart: nStart, nameLen: nLen)
     }
     if si < c.arena.structs.count {
         val key: U64 = c.arena.structs[si].nameStart
@@ -173,7 +173,7 @@ fn nameReachesOwner(c: inout Comp, nStart: U64, nLen: U64, args: Array[U64], tSt
     // cyclic variant payload instead of overflowing at sizing, mirroring the struct case).
     mut val ei: U64 = concreteEnumIndex(c: inout c, nStart: nStart, nLen: nLen)
     if ei >= c.arena.enums.count {
-        ei = genericEnumIndex(c: inout c, nameStart: nStart, nameLen: nLen)
+        ei = c.genericEnumIndex(nameStart: nStart, nameLen: nLen)
     }
     if ei < c.arena.enums.count {
         val key: U64 = c.arena.enums[ei].nameStart

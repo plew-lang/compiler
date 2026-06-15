@@ -356,7 +356,7 @@ fn checkConstructVis(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool, 
     }
     mut val sidx: U64 = structIndexByName(c: inout c, start: typeStart, len: typeLen)
     if sidx >= c.arena.structs.count {
-        sidx = genericStructIndex(c: inout c, nameStart: typeStart, nameLen: typeLen)
+        sidx = c.genericStructIndex(nameStart: typeStart, nameLen: typeLen)
     }
     if sidx >= c.arena.structs.count {
         return

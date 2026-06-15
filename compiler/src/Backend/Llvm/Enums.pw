@@ -125,7 +125,7 @@ fn fieldWordsF(c: inout Comp, st: inout LlvmCtx, f: FieldDef) -> U64 {
 // member is sized identically to its standalone named type.
 fn genInstWords(c: inout Comp, st: inout LlvmCtx, ref: U64) -> U64 {
     val t: TypeRef = c.arena.types[ref]
-    val gsi: U64 = genericStructIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    val gsi: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
     if gsi < c.arena.structs.count {
         val sd: StructDef = c.arena.structs[gsi]
         val savedP: Array[Bind] = c.cur.typeParams
@@ -142,7 +142,7 @@ fn genInstWords(c: inout Comp, st: inout LlvmCtx, ref: U64) -> U64 {
         c.cur.typeArgs = savedA
         return w
     }
-    val gei: U64 = genericEnumIndex(c: inout c, nameStart: t.nameStart, nameLen: t.nameLen)
+    val gei: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
     if gei < c.arena.enums.count {
         val e: EnumDef = c.arena.enums[gei]
         val savedP: Array[Bind] = c.cur.typeParams
