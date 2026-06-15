@@ -323,9 +323,9 @@ fn lowerArgs(c: inout Comp, args: Array[ArgAst], fnName: String) -> Array[Arg] {
         val actx: U64 = callArgType(c: inout c, fnName: fnName, argLabel: a.label)
         mut val e: U64 = 0
         if actx != 0U64 {
-            e = lowerExprWithCtx(c: inout c, e: a.value, ctxRef: actx)
+            e = c.lowerExprWithCtx(e: a.value, ctxRef: actx)
         } else {
-            e = lowerExpr(c: inout c, e: a.value)
+            e = c.lowerExpr(e: a.value)
         }
         mut val labelStart: U64 = 0
         mut val labelLen: U64 = 0
@@ -351,9 +351,9 @@ fn lowerMethodArgs(c: inout Comp, args: Array[ArgAst], methodName: String) -> Ar
         val actx: U64 = methodArgType(c: inout c, methodName: methodName, argLabel: a.label)
         mut val e: U64 = 0
         if actx != 0U64 {
-            e = lowerExprWithCtx(c: inout c, e: a.value, ctxRef: actx)
+            e = c.lowerExprWithCtx(e: a.value, ctxRef: actx)
         } else {
-            e = lowerExpr(c: inout c, e: a.value)
+            e = c.lowerExpr(e: a.value)
         }
         mut val labelStart: U64 = 0
         mut val labelLen: U64 = 0
@@ -442,9 +442,9 @@ fn lowerMakeFields(c: inout Comp, fields: Array[MakeFieldAst], typeName: String,
         val fctx: U64 = makeFieldType(c: inout c, typeName: typeName, variant: variant, isEnum: isEnum, fieldName: f.name)
         mut val v: U64 = 0
         if fctx != 0U64 {
-            v = lowerExprWithCtx(c: inout c, e: f.value, ctxRef: fctx)
+            v = c.lowerExprWithCtx(e: f.value, ctxRef: fctx)
         } else {
-            v = lowerExpr(c: inout c, e: f.value)
+            v = c.lowerExpr(e: f.value)
         }
         val nm: Bind = internBytes(c: inout c, s: f.name)
         out.append(<MakeField nameStart=nm.nameStart nameLen=nm.nameLen value=v offset=f.span.start />)
@@ -518,8 +518,8 @@ fn lowerDictLit(c: inout Comp, keys: Array[ExprAst], vals: Array[ExprAst], ctxRe
     val valL: Bind = internBytes(c: inout c, s: "value")
     mut val i: U64 = 0
     while i < keys.count {
-        val kId: U64 = lowerExpr(c: inout c, e: keys[i])
-        val vId: U64 = lowerExpr(c: inout c, e: vals[i])
+        val kId: U64 = c.lowerExpr(e: keys[i])
+        val vId: U64 = c.lowerExpr(e: vals[i])
         val recv: U64 = c.pushExpr(e: <Expr.Ident start=dlN.nameStart len=dlN.nameLen />)
         mut val args: Array[Arg] = []
         args.append(<Arg expr=kId isInout=false labelStart=keyL.nameStart labelLen=keyL.nameLen hasLabel=true />)

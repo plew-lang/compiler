@@ -42,7 +42,7 @@ pub impl Comp {
         mut val hasDefault: Bool = false
         mut val defaultVal: U64 = 0
         if f.hasDefault {
-            defaultVal = lowerExpr(c: inout self, e: f.defaultVal)
+            defaultVal = self.lowerExpr(e: f.defaultVal)
             hasDefault = true
         }
         return <FieldDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) tyIsArray=tyIsArray ty=tyRef isMut=f.isMut hasDefault=hasDefault defaultVal=defaultVal vis=f.vis />

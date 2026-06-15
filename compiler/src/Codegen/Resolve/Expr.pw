@@ -113,7 +113,7 @@ export fn typeOf(c: inout Comp, id: U64) -> TypeInfo {
     mut val t: TypeInfo = scalarInfo()
     if id < c.typeCache.kind.count {
         if c.typeCache.kind[id] == typeUnfilled() {
-            t = exprType(c: inout c, id: id)
+            t = c.exprType(id: id)
             c.typeCache.kind[id] = t.kind
             c.typeCache.start[id] = t.nameStart
             c.typeCache.len[id] = t.nameLen
@@ -123,7 +123,7 @@ export fn typeOf(c: inout Comp, id: U64) -> TypeInfo {
             t = <TypeInfo kind=c.typeCache.kind[id] nameStart=c.typeCache.start[id] nameLen=c.typeCache.len[id] ref=c.typeCache.ref[id] />
         }
     } else {
-        t = exprType(c: inout c, id: id)
+        t = c.exprType(id: id)
     }
     // width-less recovery: a form whose type came only from context (`0-1` in an
     // `I32` binding, `match{...}+1`) is type-less to the structural recovery but the

@@ -43,7 +43,7 @@ export fn paramsLabelsOk(c: inout Comp, params: Array[Param], args: Array[Arg]) 
 // (used to discriminate same-label overloads — spec: overload by argument type).
 // An untyped integer literal (no suffix) matches any integer-typed parameter.
 fn argMatchesParam(c: inout Comp, argExpr: U64, p: Param) -> Bool {
-    val ti: TypeInfo = exprType(c: inout c, id: argExpr)
+    val ti: TypeInfo = c.exprType(id: argExpr)
     if p.tyIsArray {
         if ti.kind == 3 {
             return intern(c: inout c, start: ti.nameStart, len: ti.nameLen) == p.tyNameId
@@ -84,7 +84,7 @@ fn paramsTypesMatch(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bo
 // argument is the only source of "one call matches two overloads": a typed value
 // matches exactly one parameter type.
 fn argIsUntypedIntLit(c: inout Comp, argExpr: U64) -> Bool {
-    val ti: TypeInfo = exprType(c: inout c, id: argExpr)
+    val ti: TypeInfo = c.exprType(id: argExpr)
     if ti.kind == 0 {
         return ti.nameLen == 0
     }

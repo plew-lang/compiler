@@ -39,13 +39,13 @@ pub impl Comp {
     // carries one (a struct/String/array result or a typed scalar), else the other
     // operand. Lets a chained `0 - big - 1` recover I32 from `big` not the untyped `0`.
     inout fn binResultTypeInfo(lhs: U64, rhs: U64, op: I64) -> TypeInfo {
-        mut val lt: TypeInfo = exprType(c: inout self, id: lhs)
+        mut val lt: TypeInfo = self.exprType(id: lhs)
         if lt.kind != 0 {
             return self.operatorOutputType(lt: lt, op: op)
         }
         if lt.nameLen > 0 {
             return self.operatorOutputType(lt: lt, op: op)
         }
-        return self.operatorOutputType(lt: exprType(c: inout self, id: rhs), op: op)
+        return self.operatorOutputType(lt: self.exprType(id: rhs), op: op)
     }
 }

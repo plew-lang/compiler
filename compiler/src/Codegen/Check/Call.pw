@@ -13,7 +13,7 @@ pub impl Comp {
             return
         }
         if isPlaceExpr(c: inout self, id: exprId) {
-            val ti: TypeInfo = exprType(c: inout self, id: exprId)
+            val ti: TypeInfo = self.exprType(id: exprId)
             if ti.kind == 2 {
                 if self.typeIsUnique(start: ti.nameStart, len: ti.nameLen) {
                     compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: exprId)), msg: "a unique value cannot be copied; use `move`, `borrow`, or `inout`")
@@ -258,7 +258,7 @@ pub impl Comp {
     inout fn checkMethodArgs(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
         self.checkUniqueArgModes(args: args)
         checkLitCtx(c: inout self, id: recv, eKind: 0, eBits: 0, eSgn: false)
-        val rt: TypeInfo = exprType(c: inout self, id: recv)
+        val rt: TypeInfo = self.exprType(id: recv)
         // `dict.insert(key:, value:)` on a Dictionary[K, V] (also how a `[k: v]` literal
         // lowers): the generic-receiver arg grounding is incomplete, so check key->K and
         // value->V directly here (mirrors checkIndexKeyType for subscripts). spec/02.

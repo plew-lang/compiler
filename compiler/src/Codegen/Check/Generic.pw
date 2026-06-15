@@ -148,7 +148,7 @@ pub impl Comp {
                 self.checkBoundsExpr(exprId: operand)
                 // a unary operator on a type-parameter value needs the matching bound
                 // (`-x` -> `where T: Neg`, `!x` -> `: Not`, `~x` -> `: BitNot`). spec/12.
-                val ut: TypeInfo = exprType(c: inout self, id: operand)
+                val ut: TypeInfo = self.exprType(id: operand)
                 if ut.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: ut.nameStart, len: ut.nameLen) {
                         val need: String = self.unOpTraitName(op: op)
@@ -171,7 +171,7 @@ pub impl Comp {
                         self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
                     }
                 }
-                val lt: TypeInfo = exprType(c: inout self, id: lhs)
+                val lt: TypeInfo = self.exprType(id: lhs)
                 if lt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: lt.nameStart, len: lt.nameLen) {
                         mut val need: String = ""
@@ -235,7 +235,7 @@ pub impl Comp {
                     self.checkBoundsExpr(exprId: args[i].expr)
                     i += 1
                 }
-                val rt: TypeInfo = exprType(c: inout self, id: recv)
+                val rt: TypeInfo = self.exprType(id: recv)
                 if rt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
                         if !(self.boundProvidesMethod(fnIdx: self.cur.checkFn, tpStart: rt.nameStart, tpLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)) {
@@ -280,7 +280,7 @@ pub impl Comp {
                 // a field access on a type-parameter value is invalid: `T` is opaque and
                 // traits declare methods, not fields, so a bound cannot grant a field
                 // (spec/06). `.count`/`.bytes` etself. on a `T` value have no meaning.
-                val bt: TypeInfo = exprType(c: inout self, id: base)
+                val bt: TypeInfo = self.exprType(id: base)
                 if bt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: bt.nameStart, len: bt.nameLen) {
                         compileErrorAt(line: lineOf(c: inout self, offset: nameStart), msg: "field access on a type parameter: `T` is opaque (traits declare methods, not fields) — no bound can provide a field (spec/06)")
@@ -292,7 +292,7 @@ pub impl Comp {
                 self.checkBoundsExpr(exprId: index)
                 // `x[i]` on a type-parameter value needs `where T: Index` (spec/12: the
                 // subscript desugars to the Index trait).
-                val ibt: TypeInfo = exprType(c: inout self, id: base)
+                val ibt: TypeInfo = self.exprType(id: base)
                 if ibt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: ibt.nameStart, len: ibt.nameLen) {
                         if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: ibt.nameStart, tpLen: ibt.nameLen, traitName: "Index")) {
@@ -341,7 +341,7 @@ pub impl Comp {
                 while ai < arms.count {
                     val a: MatchArm = arms[ai]
                     val mark: U64 = self.scopeMark()
-                    scanAddArmBinds(c: inout self, a: a, scrutTi: exprType(c: inout self, id: scrut))
+                    scanAddArmBinds(c: inout self, a: a, scrutTi: self.exprType(id: scrut))
                     self.checkBoundsBlock(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
@@ -484,7 +484,7 @@ pub impl Comp {
                     self.checkBoundsExpr(exprId: rangeHi)
                     self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {
-                    val et: TypeInfo = exprType(c: inout self, id: iter)
+                    val et: TypeInfo = self.exprType(id: iter)
                     if isStruct {
                         addForStructBinds(c: inout self, et: et, binds: binds)
                     } else {
@@ -506,7 +506,7 @@ pub impl Comp {
                 while ai < arms.count {
                     val a: MatchArm = arms[ai]
                     val mark: U64 = self.scopeMark()
-                    scanAddArmBinds(c: inout self, a: a, scrutTi: exprType(c: inout self, id: scrut))
+                    scanAddArmBinds(c: inout self, a: a, scrutTi: self.exprType(id: scrut))
                     self.checkBoundsBlock(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1

@@ -322,7 +322,7 @@ fn checkBinTraitRhs(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
 // array element read `arr[i]` (the element's int type) — so a literal sibling in
 // `0 ..< arr.count` infers U64 and is not flagged ambiguous.
 fn exprIntTy(c: inout Comp, id: U64) -> IntTy {
-    val ti: TypeInfo = exprType(c: inout c, id: id)
+    val ti: TypeInfo = c.exprType(id: id)
     if tiIsInt(c: inout c, ti: ti) {
         return <IntTy known=true bits=intBits(c: inout c, start: ti.nameStart, len: ti.nameLen) sgn=intSigned(c: inout c, start: ti.nameStart, len: ti.nameLen) />
     }
@@ -336,14 +336,14 @@ fn exprIntTy(c: inout Comp, id: U64) -> IntTy {
         }
         Expr.Field(val base, val nameStart, val nameLen) => {
             if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
-                val bt: TypeInfo = exprType(c: inout c, id: base)
+                val bt: TypeInfo = c.exprType(id: base)
                 if bt.kind == 3 {
                     return <IntTy known=true bits=64 sgn=false />
                 }
             }
         }
         Expr.Index(val base, val index) => {
-            val bt: TypeInfo = exprType(c: inout c, id: base)
+            val bt: TypeInfo = c.exprType(id: base)
             if bt.kind == 3 {
                 if isIntType(c: inout c, start: bt.nameStart, len: bt.nameLen) {
                     return <IntTy known=true bits=intBits(c: inout c, start: bt.nameStart, len: bt.nameLen) sgn=intSigned(c: inout c, start: bt.nameStart, len: bt.nameLen) />

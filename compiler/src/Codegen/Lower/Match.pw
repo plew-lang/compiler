@@ -127,7 +127,7 @@ fn blockOfGive(c: inout Comp, giveExpr: U64) -> U64 {
 // `<lhsIdent> == <lit>` as an arena Binary, going through the `==` operator witness.
 fn lowerLitEq(c: inout Comp, lhsStart: U64, lhsLen: U64, lit: ExprAst) -> U64 {
     val lhs: U64 = c.pushExpr(e: <Expr.Ident start=lhsStart len=lhsLen />)
-    val rhs: U64 = lowerExpr(c: inout c, e: lit)
+    val rhs: U64 = c.lowerExpr(e: lit)
     return c.pushExpr(e: <Expr.Binary op=opEq() lhs=lhs rhs=rhs />)
 }
 
@@ -180,7 +180,7 @@ fn scalarMatchElseIdx(c: inout Comp, arms: Array[MatchArmAst]) -> U64 {
 // match need not yield a value).
 fn lowerScalarMatchStmtInto(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst], span: Span, stmts: inout Array[U64]) {
     val tmp: Bind = internBytes(c: inout c, s: "__mtmp")
-    val sv: U64 = lowerExpr(c: inout c, e: scrut)
+    val sv: U64 = c.lowerExpr(e: scrut)
     stmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
     bindScalarCapturesInto(c: inout c, arms: arms, srcStart: tmp.nameStart, srcLen: tmp.nameLen, stmts: inout stmts)
     val elseIdx: U64 = scalarMatchElseIdx(c: inout c, arms: arms)
@@ -292,7 +292,7 @@ fn lowerScalarMatchExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst],
         }
     }
     if !(haveHead) {
-        headExpr = lowerExpr(c: inout c, e: valueGive)
+        headExpr = c.lowerExpr(e: valueGive)
     }
     if scrutIsIdent {
         return headExpr
@@ -301,7 +301,7 @@ fn lowerScalarMatchExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst],
     // wrapper `if true { val __mtmp = scrut; …captures…; give head } else { panic }`.
     // The dead `else` diverges (panic), so genLlvmIfExpr excludes it from the result
     // PHI — no dummy value is needed (and it cannot reference a capture binding).
-    val sv: U64 = lowerExpr(c: inout c, e: scrut)
+    val sv: U64 = c.lowerExpr(e: scrut)
     mut val thenStmts: Array[U64] = []
     thenStmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
     bindScalarCapturesInto(c: inout c, arms: arms, srcStart: tmp.nameStart, srcLen: tmp.nameLen, stmts: inout thenStmts)
@@ -324,7 +324,7 @@ fn lowerScalarMatchExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst],
 // binding makes the captured scrutinee available under the chosen name.
 fn lowerEnumMatchCaptureInto(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst], span: Span, stmts: inout Array[U64]) {
     val tmp: Bind = internBytes(c: inout c, s: "__scap")
-    val sv: U64 = lowerExpr(c: inout c, e: scrut)
+    val sv: U64 = c.lowerExpr(e: scrut)
     stmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
     val ma: Array[MatchArm] = lowerCaptureArms(c: inout c, arms: arms, isExpr: false, scapStart: tmp.nameStart, scapLen: tmp.nameLen)
     val scrutId: U64 = c.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
@@ -370,7 +370,7 @@ fn lowerCaptureArms(c: inout Comp, arms: Array[MatchArmAst], isExpr: Bool, scapS
 // — no dummy value is needed. Capture arms bind `val <name> = __scap` (spec/11).
 fn lowerEnumMatchCaptureExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst], span: Span) -> U64 {
     val tmp: Bind = internBytes(c: inout c, s: "__scap")
-    val sv: U64 = lowerExpr(c: inout c, e: scrut)
+    val sv: U64 = c.lowerExpr(e: scrut)
     val ma: Array[MatchArm] = lowerCaptureArms(c: inout c, arms: arms, isExpr: true, scapStart: tmp.nameStart, scapLen: tmp.nameLen)
     val scrutId: U64 = c.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
     val matchExpr: U64 = c.pushExpr(e: <Expr.MatchExpr scrut=scrutId arms=ma />)
@@ -403,27 +403,27 @@ fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
                 tyIsArray = pt.isArray
                 tyRef = pt.ref
             }
-            val iv: U64 = lowerExprWithCtx(c: inout c, e: init, ctxRef: tyRef)
+            val iv: U64 = c.lowerExprWithCtx(e: init, ctxRef: tyRef)
             result = c.pushStmt(s: <Stmt.Let mutable=mutable nameStart=nm.nameStart nameLen=nm.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=iv />)
         }
         StmtAst.Assign(val op, val target, val value, val span) => {
-            val t: U64 = lowerExpr(c: inout c, e: target)
-            val v: U64 = lowerExpr(c: inout c, e: value)
+            val t: U64 = c.lowerExpr(e: target)
+            val v: U64 = c.lowerExpr(e: value)
             result = c.pushStmt(s: <Stmt.Assign op=op target=t value=v />)
         }
         StmtAst.ExprStmt(val expr, val span) => {
-            val e: U64 = lowerExpr(c: inout c, e: expr)
+            val e: U64 = c.lowerExpr(e: expr)
             result = c.pushStmt(s: <Stmt.ExprStmt expr=e />)
         }
         StmtAst.Return(val value, val hasValue, val span) => {
             mut val v: U64 = 0
             if hasValue {
-                v = lowerExprWithCtx(c: inout c, e: value, ctxRef: c.cur.lowerRetTy)
+                v = c.lowerExprWithCtx(e: value, ctxRef: c.cur.lowerRetTy)
             }
             result = c.pushStmt(s: <Stmt.Return value=v hasValue=hasValue offset=span.start />)
         }
         StmtAst.If(val cond, val thenBlk, val elseBlk, val hasElse, val span) => {
-            val cnd: U64 = lowerExpr(c: inout c, e: cond)
+            val cnd: U64 = c.lowerExpr(e: cond)
             val tb: U64 = lowerBlock(c: inout c, b: thenBlk)
             mut val eb: U64 = 0
             if hasElse {
@@ -432,7 +432,7 @@ fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
             result = c.pushStmt(s: <Stmt.If cond=cnd thenBlk=tb elseBlk=eb hasElse=hasElse />)
         }
         StmtAst.While(val cond, val body, val span) => {
-            val cnd: U64 = lowerExpr(c: inout c, e: cond)
+            val cnd: U64 = c.lowerExpr(e: cond)
             val bd: U64 = lowerBlock(c: inout c, b: body)
             result = c.pushStmt(s: <Stmt.While cond=cnd body=bd />)
         }
@@ -443,7 +443,7 @@ fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
             // source by span). The element's struct is tracked by the for-over-array path.
             if patType == "__rec__" {
                 val fe: Bind = internBytes(c: inout c, s: "__fe")
-                val lo2: U64 = lowerExpr(c: inout c, e: iter)
+                val lo2: U64 = c.lowerExpr(e: iter)
                 val inner: U64 = lowerBlock(c: inout c, b: body)
                 mut val bstmts: Array[U64] = []
                 mut val bi: U64 = 0
@@ -479,10 +479,10 @@ fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
                 vtStart = vpt.start
                 vtLen = vpt.len
             }
-            val lo: U64 = lowerExpr(c: inout c, e: iter)
+            val lo: U64 = c.lowerExpr(e: iter)
             mut val hi: U64 = 0
             if isRange {
-                hi = lowerExpr(c: inout c, e: rangeHi)
+                hi = c.lowerExpr(e: rangeHi)
             }
             val bd: U64 = lowerBlock(c: inout c, b: body)
             mut val pStart: U64 = 0
@@ -496,16 +496,16 @@ fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
             result = c.pushStmt(s: <Stmt.For varStart=vStart varLen=vLen varTyStart=vtStart varTyLen=vtLen isRange=isRange inclusive=inclusive iter=lo rangeHi=hi body=bd isStruct=isStruct patStart=pStart patLen=pLen binds=bnds />)
         }
         StmtAst.Match(val scrut, val arms, val span) => {
-            val sc: U64 = lowerExpr(c: inout c, e: scrut)
+            val sc: U64 = c.lowerExpr(e: scrut)
             val ma: Array[MatchArm] = lowerMatchArms(c: inout c, arms: arms, isExpr: false)
             result = c.pushStmt(s: <Stmt.Match scrut=sc arms=ma />)
         }
         StmtAst.Panic(val msg, val span) => {
-            val m: U64 = lowerExpr(c: inout c, e: msg)
+            val m: U64 = c.lowerExpr(e: msg)
             result = c.pushStmt(s: <Stmt.Panic msg=m offset=span.start />)
         }
         StmtAst.Give(val value, val span) => {
-            val v: U64 = lowerExpr(c: inout c, e: value)
+            val v: U64 = c.lowerExpr(e: value)
             result = c.pushStmt(s: <Stmt.Give value=v />)
         }
         StmtAst.Break(val span) => { result = c.pushStmt(s: <Stmt.Break offset=span.start />) }
@@ -514,7 +514,7 @@ fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
             // normally expanded by lowerBlock into several statements; reached only if a
             // destructuring appears outside a statement list — lower the initializer as a
             // plain expression statement so the value is still evaluated.
-            result = c.pushStmt(s: <Stmt.ExprStmt expr=lowerExpr(c: inout c, e: init) />)
+            result = c.pushStmt(s: <Stmt.ExprStmt expr=c.lowerExpr(e: init) />)
         }
     }
     return result
@@ -527,7 +527,7 @@ fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
 // harmlessly — each temp is consumed by the field reads that immediately follow).
 fn lowerDestructureInto(c: inout Comp, binds: Array[BindAst], init: ExprAst, stmts: inout Array[U64]) {
     val tmp: Bind = internBytes(c: inout c, s: "__dtmp")
-    val iv: U64 = lowerExpr(c: inout c, e: init)
+    val iv: U64 = c.lowerExpr(e: init)
     stmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=iv />))
     mut val bi: U64 = 0
     while bi < binds.count {

@@ -111,7 +111,7 @@ pub impl Comp {
         mut val effTy: U64 = ty
         if tyLen == 0 {
             if !(tyIsArray) {
-                val ti: TypeInfo = exprType(c: inout self, id: init)
+                val ti: TypeInfo = self.exprType(id: init)
                 effStart = ti.nameStart
                 effLen = ti.nameLen
                 effTy = ti.ref

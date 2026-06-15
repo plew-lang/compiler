@@ -47,7 +47,7 @@ pub impl Comp {
         if strip {
             return
         }
-        val rt: TypeInfo = exprType(c: inout self, id: recv)
+        val rt: TypeInfo = self.exprType(id: recv)
         if rt.nameLen == 0U64 {
             return
         }

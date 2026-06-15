@@ -367,7 +367,7 @@ pub impl Comp {
                 return self.localIsMutable(start: start, len: len)
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
-                val bt: TypeInfo = exprType(c: inout self, id: base)
+                val bt: TypeInfo = self.exprType(id: base)
                 if bt.kind == 2 {
                     if self.fieldDeclaredMut(structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) {
                         return self.placeIsMutable(id: base)

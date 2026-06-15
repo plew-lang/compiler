@@ -120,7 +120,7 @@ Backend/  _.pw = バレル；leaf ヘルパ(import) ＋ codegen Core(impl LlvmCt
 
 #### メソッド化の手順（確定レシピ・増分で各段不動点）
 
-進捗：keystone（Comp を Frontend へ）＋pilot 2 ファイル済＝**`Comp.isRawIntrinsicName`/`isArrayIntrinsicName`（旧 Codegen/Array）/`isDictionaryType`/`typeHasMethodNamed`/`synthDictMethod`（Codegen/Expr.pw）**。1 ファイルずつ機械的に：
+進捗：keystone（Comp を Frontend へ）済。methodize 済ファイル＝Codegen/Expr（pilot）・Resolve/Locals・Codegen/Decl・**Resolve/Module（全24・`struct LetEff` を Frontend root へ退避）**・**Resolve/ExprType（`exprType`）**・**Lower/Expr（`lowerExpr`/`lowerExprWithCtx`）**。残 all-c-ready＝Check/Make・Mono/Call（両方とも双子を含むので相方と同時 methodize 待ち）。残は MIXED 多数（手動）。1 ファイルずつ機械的に：
 
 1. **定義**：`fn NAME(c: inout Comp, REST) -> R {` を `pub impl Comp { … }` で包み `inout fn NAME(REST) -> R {` へ。本体は `c.X`→`self.X`、まだ自由関数のままの被呼 `g(c: inout c, …)`→`g(c: inout self, …)`、bare `c`→`self`（ラベル `c:` は触らない）。
    - **一律 `inout fn`**：全自由関数が `c: inout Comp` を取る＝呼び手は常に可変、かつ inout self を他の自由関数へ渡せる（`pushType`→`intern` で実証済）。read-only でも inout self を下流へ渡すため inout fn が無難。
@@ -129,7 +129,10 @@ Backend/  _.pw = バレル；leaf ヘルパ(import) ＋ codegen Core(impl LlvmCt
 3. **import 整理**：methodize した **export 関数は Backend の `import ./Frontend` 名簿から外す**（メソッドは受け手型経由で解決＝名前 import 不要）。同名の自由関数が別に残る場合（オーバーロード双子・例 `typeHasMethodNamed` は Resolve/Locals に別シグネチャの自由版が残存）はメソッド呼び `c.f(…)` と自由呼び `f(c: inout c,…)` が構文で分離＝共存可。free 版が完全消滅した名（例 `synthDictMethod`）は import に残すと「not exported」エラー＝必ず外す。
 4. **検証**：dev-rebuild→test→（区切りで）reseed→不動点。不動点が**意味不変**を保証するので、本体 `c→self` 機械置換の取りこぼし（文字列内 `c` 等）も検出できる。
 
-**自動化の所見**：`\bc\b(?!:)`→`self`（本体）＋`\bNAME\(c: inout (\w+), `→`\1.NAME(`（呼び出し）で機械化可。ただしオーバーロード双子・read/inout 判定・import 整理は手当てが要るので 1 ファイル単位で適用→compile が安全。
+**自動化の所見**：`tools/methodize.py <file.pw>` が all-c ファイルを一括変換（本体 `c→self`・呼び出し点 repo 全体・methodize した export 名を表示）。ただし手当てが要る罠が3つ：
+- **混在ファイル拒否**：全 top-level fn が `c: inout Comp` 先頭でないと silently drop ⇒ script は `_cf != _tot` で REFUSE（混在は手動 methodize）。
+- **埋め込み非 fn 宣言の drop**：fn 群の間に挟まった top-level `struct`/`enum`/`val` 等は body 収集ループが落とす（実際 `struct LetEff` を落とし、`val le: LetEff` 全束縛の backend 構造体型回復が壊れた＝`field access only on a registered struct` で発覚）。script は column-0 の非 fn 宣言を検出して REFUSE する ⇒ **先に module root（自由型）へ退避**してから methodize（`LetEff` は Frontend.pw の Comp 隣へ移動済）。
+- **オーバーロード双子**：同名 c-first 関数が複数ファイルに（例 `makeFieldType`＝Lower/Types+Check/Make・`findAssocByName`＝Stmt+Mono/Call）。呼び出し点書き換え `NAME(c: inout RECV` は両 overload の call を区別せず叩く ⇒ 双子の片方だけ methodize すると他方の call が壊れた method 呼びになる。**双子は両 overload を同時に methodize**（相方が混在ファイルなら手動）するまで保留。
 
 **済んだ予備作業**＝`findFunc` の解決を単一チョークポイント `resolvedCallee`（exprId キー永続 memo `TypeCache.callee`）へ集約済（13 site 中 12・tag `refactor-m4-b1` 他）。下記 typed IR トラックの一部だが、Backend の findFunc 呼びを memo 読みに替えて結合を薄くする副次効果もある。
 

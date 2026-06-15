@@ -25,7 +25,7 @@ fn lowerParams(c: inout Comp, params: Array[ParamAst]) -> Array[Param] {
         mut val hasDefault: Bool = false
         mut val defaultExpr: U64 = 0
         if p.hasDefault {
-            defaultExpr = lowerExpr(c: inout c, e: p.defaultVal)
+            defaultExpr = c.lowerExpr(e: p.defaultVal)
             hasDefault = true
         }
         out.append(<Param nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout c, start: tyStart, len: tyLen) tyIsArray=tyIsArray ty=tyRef isInout=p.isInout isMove=p.isMove isBorrow=p.isBorrow noLabel=p.noLabel hasDefault=hasDefault defaultExpr=defaultExpr />)
