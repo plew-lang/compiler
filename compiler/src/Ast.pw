@@ -771,6 +771,12 @@ struct Modules {
     pub mut val ranges: Array[Bind] = []
     pub mut val exports: Array[Bind] = []
     pub mut val imports: Array[Bind] = []
+    // the module id of the ambient lang-item module @Std/Lang (std/Lang.pw), or the
+    // "none" sentinel 4_000_000_000 when it was not loaded. Lang is THE ambient module
+    // (spec/15): the types it declares — the language's built-in types — are in scope
+    // everywhere without an `import`. Type visibility (Check/Visibility.pw) treats a type
+    // defined in this module as ambient. Captured when the driver force-loads Lang.
+    pub mut val langModule: U64 = 4000000000U64
 }
 pub impl Modules { factory }
 

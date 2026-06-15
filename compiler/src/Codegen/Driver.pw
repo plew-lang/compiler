@@ -73,6 +73,21 @@ fn runFrontend() -> Comp {
         val es: U64 = pathBuf.count
         appendBytes(into: inout pathBuf, from: entryBytes)
         loaded.append(<Bind nameStart=es nameLen=entryBytes.count fieldStart=0 fieldLen=entryBytes.count />)
+        // Force-load @Std/Lang FIRST: it is THE ambient module (spec/15) — it declares the
+        // language's built-in types (the lang items), in scope everywhere without an import.
+        // Loaded before Core/Hash/Prelude so the foundational types resolve for them. Its
+        // module id is captured (`langModule`) so type visibility can treat a type defined
+        // here as ambient. Guarded by fileExists (a freshly-seeded compiler may lack it).
+        mut val langPath: Array[U8] = []
+        appendBytes(into: inout langPath, from: stdRoot)
+        appendBytes(into: inout langPath, from: "Lang.pw".bytes)
+        if fileExists(path: langPath) {
+            val lps: U64 = pathBuf.count
+            appendBytes(into: inout pathBuf, from: langPath)
+            loaded.append(<Bind nameStart=lps nameLen=langPath.count fieldStart=nextModuleId fieldLen=langPath.count />)
+            c.modules.langModule = nextModuleId
+            nextModuleId = nextModuleId + 1
+        }
         // Force-load @Std/Core so its lang-item types (Optional/Result/Ordering),
         // operator traits + witnesses, and Iterator/Index machinery are AMBIENT
         // (spec/15: usable without `import` — `2 + 3`, `Optional`, `for` need none).
