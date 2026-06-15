@@ -361,7 +361,7 @@ fn exprIntTy(c: inout Comp, id: U64) -> IntTy {
 fn checkArithNoCtx(c: inout Comp, lhs: U64, rhs: U64) {
     // a float-typed sibling makes the whole arith float (`1.5 + 2`); the untyped
     // literal types as a float there (spec/02,12).
-    if exprIsFloat(c: inout c, id: lhs) || exprIsFloat(c: inout c, id: rhs) {
+    if c.exprIsFloat(id: lhs) || c.exprIsFloat(id: rhs) {
         checkLitCtx(c: inout c, id: lhs, eKind: 2, eBits: 64, eSgn: false)
         checkLitCtx(c: inout c, id: rhs, eKind: 2, eBits: 64, eSgn: false)
         return

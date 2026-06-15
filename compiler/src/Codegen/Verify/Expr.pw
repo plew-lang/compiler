@@ -67,26 +67,26 @@ fn verifyExpr(c: inout Comp, id: U64) {
             c.cur.retTy = sRT
         }
         Expr.Field(val base, val nameStart, val nameLen) => {
-            verifyFieldReadVis(c: inout c, base: base, nameStart: nameStart, nameLen: nameLen)
+            c.verifyFieldReadVis(base: base, nameStart: nameStart, nameLen: nameLen)
             verifyExpr(c: inout c, id: base)
         }
         Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-            verifyMethodVis(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+            c.verifyMethodVis(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
             verifyExpr(c: inout c, id: recv)
-            verifyArgs(c: inout c, args: args)
+            c.verifyArgs(args: args)
             c.checkMethodArgCategories(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.ExtMethod(val recv, val srcStart, val srcLen, nameStart: _, nameLen: _, val args) => {
             checkViewValid(c: inout c, recv: recv, srcStart: srcStart, srcLen: srcLen, strip: false)
             verifyExpr(c: inout c, id: recv)
-            verifyArgs(c: inout c, args: args)
+            c.verifyArgs(args: args)
         }
         Expr.ExtView(val recv, val srcStart, val srcLen, val strip) => {
             checkViewValid(c: inout c, recv: recv, srcStart: srcStart, srcLen: srcLen, strip: strip)
             verifyExpr(c: inout c, id: recv)
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
-            verifyArgs(c: inout c, args: args)
+            c.verifyArgs(args: args)
             c.checkCallArgCategories(nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
@@ -211,13 +211,13 @@ fn verifyExpr(c: inout Comp, id: U64) {
             }
         }
         Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
-            verifyCastLossless(c: inout c, operand: operand, tyStart: tyStart, tyLen: tyLen)
+            c.verifyCastLossless(operand: operand, tyStart: tyStart, tyLen: tyLen)
             verifyExpr(c: inout c, id: operand)
         }
         Expr.Binary(val op, val lhs, val rhs) => {
             verifyExpr(c: inout c, id: lhs)
             verifyExpr(c: inout c, id: rhs)
-            verifyBinaryOp(c: inout c, op: op, lhs: lhs, rhs: rhs)
+            c.verifyBinaryOp(op: op, lhs: lhs, rhs: rhs)
             tcCheckBinop(c: inout c, op: op, lhs: lhs, rhs: rhs)
         }
         Expr.Unary(val op, val operand) => {
@@ -479,7 +479,7 @@ fn verifyAddArmBinds(c: inout Comp, a: MatchArm, scrut: U64) {
             val bd: Bind = a.binds[bi]
             mut val ft: TypeInfo = scalarInfo()
             if generic {
-                ft = genericFieldTypeInfo(c: inout c, instRef: st.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                ft = c.genericFieldTypeInfo(instRef: st.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
             } else {
                 ft = fieldType(c: inout c, structStart: a.enumStart, structLen: a.enumLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
             }
@@ -490,7 +490,7 @@ fn verifyAddArmBinds(c: inout Comp, a: MatchArm, scrut: U64) {
         while bi < a.binds.count {
             val bd: Bind = a.binds[bi]
             if generic {
-                val bti: TypeInfo = genericEnumFieldTypeInfo(c: inout c, instRef: st.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                val bti: TypeInfo = c.genericEnumFieldTypeInfo(instRef: st.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
                 addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false)
             } else {
                 c.addBindLocalCn(enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen, cnum: 0)

@@ -144,7 +144,7 @@ fn registerChainResultInsts(c: inout Comp, exprId: U64, baseRef: U64, memberStar
         return
     }
     val vRef: U64 = c.arena.types[baseRef].args[0]
-    val vInfo: TypeInfo = typeInfoOfRef(c: inout c, ref: vRef)
+    val vInfo: TypeInfo = c.typeInfoOfRef(ref: vRef)
     val uInfo: TypeInfo = fieldType(c: inout c, structStart: vInfo.nameStart, structLen: vInfo.nameLen, fieldStart: memberStart, fieldLen: memberLen)
     mut val uRef: U64 = uInfo.ref
     if uRef == 0 {
@@ -397,7 +397,7 @@ fn scanAddArmBinds(c: inout Comp, a: MatchArm, scrutTi: TypeInfo) {
     while bi < a.binds.count {
         val bd: Bind = a.binds[bi]
         if genericMatch {
-            val bti: TypeInfo = genericEnumFieldTypeInfo(c: inout c, instRef: scrutTi.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+            val bti: TypeInfo = c.genericEnumFieldTypeInfo(instRef: scrutTi.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
             addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false)
         } else {
             c.addBindLocal(enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
@@ -465,7 +465,7 @@ fn scanStmtInsts(c: inout Comp, stmtId: U64) {
                     if et.kind == 3 {
                         addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                     } else {
-                        val elemTi: TypeInfo = iterableItemInfo(c: inout c, et: et)
+                        val elemTi: TypeInfo = c.iterableItemInfo(et: et)
                         addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
                     }
                 }
@@ -528,7 +528,7 @@ fn scanGenInstMethodBodies(c: inout Comp) {
             mut val mfi: U64 = 0
             while mfi < c.arena.funcs.count {
                 val mf: Func = c.arena.funcs[mfi]
-                if methodMatchesInst(c: inout c, f: mf, instRef: instRef) {
+                if c.methodMatchesInst(f: mf, instRef: instRef) {
                     // provided combinators (`map[B]`) instantiate from call sites, not here.
                     if !(mf.isProvided) {
                         if mf.body != 0 {

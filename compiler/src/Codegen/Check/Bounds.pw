@@ -485,7 +485,7 @@ fn checkMethodBounds(c: inout Comp) {
         val inst: TypeRef = c.arena.types[instRef]
         mut val mfi: U64 = 0
         while mfi < c.arena.funcs.count {
-            if methodMatchesInst(c: inout c, f: c.arena.funcs[mfi], instRef: instRef) {
+            if c.methodMatchesInst(f: c.arena.funcs[mfi], instRef: instRef) {
                 val f: Func = c.arena.funcs[mfi]
                 mut val bi: U64 = 0
                 while bi < c.decls.funcBounds.count {

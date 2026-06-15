@@ -107,7 +107,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                         while k < c.cur.typeParams.count {
                             val tp: Bind = c.cur.typeParams[k]
                             if lo.tyNameId == tp.nameId {
-                                return typeInfoOfRef(c: inout c, ref: c.cur.typeArgs[k])
+                                return c.typeInfoOfRef(ref: c.cur.typeArgs[k])
                             }
                             k += 1
                         }
@@ -172,7 +172,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                     if bt.ref < c.arena.types.count {
                         val rb: TypeRef = c.arena.types[bt.ref]
                         if rb.args.count == 1 {
-                            return typeInfoOfRef(c: inout c, ref: rb.args[0])
+                            return c.typeInfoOfRef(ref: rb.args[0])
                         }
                     }
                     return scalarInfo()
@@ -227,7 +227,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                                 if qRet == tp.nameId {
                                     if k < inferred.count {
                                         if inferred[k] != 0 {
-                                            return typeInfoOfRef(c: inout c, ref: inferred[k])
+                                            return c.typeInfoOfRef(ref: inferred[k])
                                         }
                                     }
                                 }
@@ -257,7 +257,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 if isFnType(c: inout c, ref: lty) {
                     val ftr: TypeRef = c.arena.types[lty]
                     if ftr.args.count > 0 {
-                        return typeInfoOfRef(c: inout c, ref: ftr.args[0])
+                        return c.typeInfoOfRef(ref: ftr.args[0])
                     }
                 }
             }
@@ -288,7 +288,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             // a generic struct instantiation's field type is substituted.
             if isGenericInst(c: inout c, ref: bt.ref) {
-                return genericFieldTypeInfo(c: inout c, instRef: bt.ref, fieldStart: nameStart, fieldLen: nameLen)
+                return c.genericFieldTypeInfo(instRef: bt.ref, fieldStart: nameStart, fieldLen: nameLen)
             }
             if bt.kind == 2 {
                 return fieldType(c: inout c, structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
@@ -336,7 +336,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             if c.isDictionaryType(ti: bt) {
                 val dt: TypeRef = c.arena.types[bt.ref]
                 if dt.args.count > 1 {
-                    return typeInfoOfRef(c: inout c, ref: dt.args[1])
+                    return c.typeInfoOfRef(ref: dt.args[1])
                 }
             }
             // a user type's `a[k]` desugars to `a.index(key:k)`; its type is the
@@ -521,11 +521,11 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                             c.cur.typeParams = gSavedP
                             c.cur.typeArgs = gSavedA
                             clearSelfItemEnv(c: inout c)
-                            return typeInfoOfRef(c: inout c, ref: gr)
+                            return c.typeInfoOfRef(ref: gr)
                         }
                         val gei: U64 = c.genericEnumIndex(nameStart: gt.nameStart, nameLen: gt.nameLen)
                         if gei < c.arena.enums.count {
-                            return substTypeInfo(c: inout c, instRef: rt.ref, params: c.arena.enums[gei].typeParams, tyRef: mf.retTy)
+                            return c.substTypeInfo(instRef: rt.ref, params: c.arena.enums[gei].typeParams, tyRef: mf.retTy)
                         }
                     }
                     // a non-generic receiver whose method returns a generic instantiation
@@ -549,7 +549,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                         c.cur.typeParams = savedTP
                         c.cur.typeArgs = savedTA
                         clearSelfItemEnv(c: inout c)
-                        return typeInfoOfRef(c: inout c, ref: gr2)
+                        return c.typeInfoOfRef(ref: gr2)
                     }
                     return typeInfoOfName(c: inout c, start: mf.retStart, len: mf.retLen, isArray: mf.retIsArray)
                 }
@@ -588,7 +588,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // references a bound `__chainVal` not in scope from here, so re-deriving fails).
             val cr: U64 = chainResultRef(c: inout c, exprId: id)
             if cr != 0 {
-                return typeInfoOfRef(c: inout c, ref: cr)
+                return c.typeInfoOfRef(ref: cr)
             }
             // the result type is the give value of the first non-diverging arm.
             mut val mai: U64 = 0
@@ -616,7 +616,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             if rr == 0 {
                 return scalarInfo()
             }
-            return typeInfoOfRef(c: inout c, ref: rr)
+            return c.typeInfoOfRef(ref: rr)
         }
         Expr.Try(val expr) => {
             // result type = the Result's Ok payload T (args[0] of Result[T, E]).
@@ -624,7 +624,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             if isGenericInst(c: inout c, ref: rt.ref) {
                 val inst: TypeRef = c.arena.types[rt.ref]
                 if inst.args.count > 0 {
-                    return typeInfoOfRef(c: inout c, ref: inst.args[0])
+                    return c.typeInfoOfRef(ref: inst.args[0])
                 }
             }
             return scalarInfo()
@@ -634,7 +634,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             val bt: TypeInfo = exprType(c: inout c, id: base)
             if isRefInst(c: inout c, ref: bt.ref) {
                 val inst: TypeRef = c.arena.types[bt.ref]
-                val pt: TypeInfo = typeInfoOfRef(c: inout c, ref: inst.args[0])
+                val pt: TypeInfo = c.typeInfoOfRef(ref: inst.args[0])
                 if pt.kind == 2 {
                     return fieldType(c: inout c, structStart: pt.nameStart, structLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
                 }
@@ -645,7 +645,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // a closure literal's type is `fn(params) -> ret`; recover it so a
             // generic call can structurally infer a type parameter from it
             // (`map(f: fn(x:I64)->I64)` -> B = I64).
-            return typeInfoOfRef(c: inout c, ref: closureFnTypeRef(c: inout c, params: params, retTy: retTy))
+            return c.typeInfoOfRef(ref: closureFnTypeRef(c: inout c, params: params, retTy: retTy))
         }
         Expr.Move(val operand, val isBorrow) => {
             // `move`/`borrow` have the operand's type (the value just flows).
@@ -658,7 +658,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             if ot.ref != 0 {
                 val tr: TypeRef = c.arena.types[ot.ref]
                 if tr.args.count > 0 {
-                    return typeInfoOfRef(c: inout c, ref: tr.args[0])
+                    return c.typeInfoOfRef(ref: tr.args[0])
                 }
             }
             return scalarInfo()

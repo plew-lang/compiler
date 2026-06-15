@@ -60,9 +60,9 @@ fn lowerExtern(c: inout Comp, e: ExternAst) {
 // Lower a nominal declaration by kind (struct / enum / free function).
 fn lowerDecl(c: inout Comp, d: DeclAst) {
     match d.kind {
-        DeclKind.Struct => { lowerStructDecl(c: inout c, d: d) }
-        DeclKind.Enum => { lowerEnumDecl(c: inout c, d: d) }
-        DeclKind.Func => { lowerFuncDecl(c: inout c, d: d) }
+        DeclKind.Struct => { c.lowerStructDecl(d: d) }
+        DeclKind.Enum => { c.lowerEnumDecl(d: d) }
+        DeclKind.Func => { c.lowerFuncDecl(d: d) }
     }
 }
 

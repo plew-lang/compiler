@@ -280,7 +280,7 @@ export fn runFrontend() -> Comp {
     // defaultExtension collisions (spec/09): a default extension's method must not
     // share a selector with the type's own / provided / another default extension's
     // method (they would both join bare resolution). Loud at the declaration.
-    checkDefaultExtCollisions(c: inout c)
+    c.checkDefaultExtCollisions()
     // recursive value types (spec/03): mark fields that close a containment cycle
     // onto their owner; codegen stores them behind a heap pointer so the C type is
     // finite (hidden indirection; value semantics kept by deref-read/repoint-write).
@@ -311,8 +311,8 @@ export fn runFrontend() -> Comp {
     // additional spec-fidelity checks (trait/generics audit): reject a generic vs
     // another same-selector overload, methods on built-in types, and `move fn` on
     // a copyable receiver.
-    checkOverloadCollisions(c: inout c)
-    checkDuplicateTraitReqs(c: inout c)
+    c.checkOverloadCollisions()
+    c.checkDuplicateTraitReqs()
     c.checkImplOnBuiltin()
     c.checkImplOnNewtype()
     c.checkMoveFnReceivers()

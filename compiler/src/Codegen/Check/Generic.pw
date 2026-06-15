@@ -512,7 +512,7 @@ fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
                         addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                     } else {
                         // a general Iterable: the loop var is the iterator's Item type.
-                        val elemTi: TypeInfo = iterableItemInfo(c: inout c, et: et)
+                        val elemTi: TypeInfo = c.iterableItemInfo(et: et)
                         addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
                     }
                 }

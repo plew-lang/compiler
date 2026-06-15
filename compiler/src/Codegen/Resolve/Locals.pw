@@ -148,7 +148,7 @@ fn optChainResultRef(c: inout Comp, base: U64, memberStart: U64, memberLen: U64)
     if ot.args.count < 1 {
         return 0
     }
-    val tInfo: TypeInfo = typeInfoOfRef(c: inout c, ref: ot.args[0])
+    val tInfo: TypeInfo = c.typeInfoOfRef(ref: ot.args[0])
     val uInfo: TypeInfo = fieldType(c: inout c, structStart: tInfo.nameStart, structLen: tInfo.nameLen, fieldStart: memberStart, fieldLen: memberLen)
     mut val uRef: U64 = uInfo.ref
     if uRef == 0 {

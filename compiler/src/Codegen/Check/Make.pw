@@ -83,13 +83,13 @@ fn checkMakeFields(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U6
             // `<Ref[T] value=… />`: the `value` field has the pointee type T, so
             // a literal (`value=7`) types from T (else "no type from context").
             val rt: TypeRef = c.arena.types[ty]
-            ft = typeInfoOfRef(c: inout c, ref: rt.args[0])
+            ft = c.typeInfoOfRef(ref: rt.args[0])
         } else {
             if isGenericEnumInst(c: inout c, ref: ty) {
-                ft = genericEnumFieldTypeInfo(c: inout c, instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                ft = c.genericEnumFieldTypeInfo(instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
             } else {
                 if isGenericInst(c: inout c, ref: ty) {
-                    ft = genericFieldTypeInfo(c: inout c, instRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                    ft = c.genericFieldTypeInfo(instRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
                 } else {
                     ft = makeFieldType(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
                 }

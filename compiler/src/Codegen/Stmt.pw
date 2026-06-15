@@ -366,7 +366,7 @@ export fn unaryMethodName(op: I64) -> String {
 // check/mono/codegen passes so they agree on each bound field's type.
 fn forBindFieldType(c: inout Comp, et: TypeInfo, bd: Bind) -> TypeInfo {
     if isGenericInst(c: inout c, ref: et.ref) {
-        return genericFieldTypeInfo(c: inout c, instRef: et.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+        return c.genericFieldTypeInfo(instRef: et.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
     }
     return fieldType(c: inout c, structStart: et.nameStart, structLen: et.nameLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
 }

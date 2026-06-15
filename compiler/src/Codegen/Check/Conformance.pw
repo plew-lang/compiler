@@ -26,7 +26,7 @@ pub impl Comp {
             // module identity; a non-witnessing inherent method is the case we can tell
             // apart in the flat model, and it covers the impl-on-builtin footgun.)
             if onBuiltin {
-                if methodWitnessesAConformance(c: inout self, recvStart: f.recvStart, recvLen: f.recvLen, mStart: f.nameStart, mLen: f.nameLen) {
+                if self.methodWitnessesAConformance(recvStart: f.recvStart, recvLen: f.recvLen, mStart: f.nameStart, mLen: f.nameLen) {
                     onBuiltin = false
                 }
             }

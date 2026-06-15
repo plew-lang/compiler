@@ -23,7 +23,7 @@ pub impl Comp {
                     if rangeEquals(bytes: self.arena.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Output") {
                         if ab.ty < self.arena.types.count {
                             if ab.ty != 0U64 {
-                                return typeInfoOfRef(c: inout self, ref: ab.ty)
+                                return self.typeInfoOfRef(ref: ab.ty)
                             }
                         }
                         return typeInfoOfName(c: inout self, start: ab.tyStart, len: ab.tyLen, isArray: ab.tyIsArray)

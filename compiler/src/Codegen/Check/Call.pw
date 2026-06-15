@@ -344,7 +344,7 @@ fn checkMethodArgs(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args:
                         } else {
                             // resolve the param's type under the receiver's
                             // instantiation so a literal arg gets the concrete context.
-                            val pti: TypeInfo = substTypeInfo(c: inout c, instRef: rt.ref, params: mf.typeParams, tyRef: p.ty)
+                            val pti: TypeInfo = c.substTypeInfo(instRef: rt.ref, params: mf.typeParams, tyRef: p.ty)
                             checkLitTi(c: inout c, id: args[i].expr, ti: pti)
                             // full type-compatibility against the GROUNDED param type — a
                             // typed value whose type disagrees with the (instantiated)

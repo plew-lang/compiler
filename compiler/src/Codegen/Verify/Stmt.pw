@@ -163,7 +163,7 @@ pub impl Comp {
                     // a range is iterated via `Step`, which is integer-only (spec/02,11):
                     // `for x in 0.0..<5.0` has no Step witness. Reject a float-typed range
                     // (by the loop-var annotation or either bound).
-                    mut val rangeIsFloat: Bool = exprIsFloat(c: inout self, id: iter) || exprIsFloat(c: inout self, id: rangeHi)
+                    mut val rangeIsFloat: Bool = self.exprIsFloat(id: iter) || self.exprIsFloat(id: rangeHi)
                     if varTyLen != 0U64 {
                         if isFloatType(c: inout self, start: varTyStart, len: varTyLen) {
                             rangeIsFloat = true

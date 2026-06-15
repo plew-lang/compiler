@@ -308,7 +308,7 @@ fn checkGenericUniqueArgs(c: inout Comp) {
             if !(isRefInst(c: inout c, ref: i)) {
                 mut val j: U64 = 0
                 while j < t.args.count {
-                    val ai: TypeInfo = typeInfoOfRef(c: inout c, ref: t.args[j])
+                    val ai: TypeInfo = c.typeInfoOfRef(ref: t.args[j])
                     if ai.kind == 2 {
                         if typeIsUnique(c: inout c, start: ai.nameStart, len: ai.nameLen) {
                             compileErrorAt(line: lineOf(c: inout c, offset: ai.nameStart), msg: "a unique type cannot be a generic type argument; wrap it in Ref[T]")
