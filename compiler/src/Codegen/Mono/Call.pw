@@ -275,7 +275,7 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
                 scanExprInsts(c: inout c, exprId: args[i].expr)
                 i += 1
             }
-            registerCallInst(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            registerCallInst(c: inout c, id: exprId, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
             scanExprInsts(c: inout c, exprId: recv)

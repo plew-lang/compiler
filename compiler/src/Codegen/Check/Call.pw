@@ -157,9 +157,9 @@ fn localTypeRefByName(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
     return 0U64
 }
 
-fn checkCallArgs(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+fn checkCallArgs(c: inout Comp, id: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
     checkUniqueArgModes(c: inout c, args: args)
-    val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+    val fi: U64 = resolvedCallee(c: inout c, id: id)
     if fi == c.arena.funcs.count {
         // calling a function VALUE (`val f: fn(x: I64)->I64 = …; f(x: true)`): the name
         // is a local, not a declared function, so check each arg against the fn type's

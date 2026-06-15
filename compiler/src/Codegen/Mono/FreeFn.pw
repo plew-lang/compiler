@@ -247,8 +247,8 @@ fn fnInstExists(c: inout Comp, fnIdx: U64, args: Array[U64]) -> Bool {
 // its type arguments all infer to ground types (deduped). Type recovery needs
 // the caller's local scope, so this runs during a scope-aware walk (below), not
 // a flat scan of the expression arena.
-fn registerCallInst(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) {
-    val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+fn registerCallInst(c: inout Comp, id: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    val fi: U64 = resolvedCallee(c: inout c, id: id)
     if fi < c.arena.funcs.count {
         if c.arena.funcs[fi].isExtern {
             // a generic `extern "plew-intrinsic"` (e.g. `rawAlloc[T]`, `arrayPush[T]`):

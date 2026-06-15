@@ -210,7 +210,7 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
             }
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
-            checkCallArgs(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            checkCallArgs(c: inout c, id: id, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.Method(val recv, val nameStart, val nameLen, val args) => {
             checkMethodArgs(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)

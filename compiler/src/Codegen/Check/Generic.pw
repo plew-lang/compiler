@@ -219,7 +219,7 @@ fn checkBoundsExpr(c: inout Comp, exprId: U64) {
             // a `T` value passed to a CONCRETE-typed parameter (`f(x: a)` where `a: T`
             // and `f`'s `x: I64`) is a type error at the definition. The callee's own
             // type parameter (`f[U](x: U)`) is lenient (typesCompatible — they unify).
-            val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            val fi: U64 = resolvedCallee(c: inout c, id: exprId)
             if fi < c.arena.funcs.count {
                 val ps: Array[Param] = c.arena.funcs[fi].params
                 mut val k: U64 = 0
