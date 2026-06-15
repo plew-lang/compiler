@@ -1,0 +1,97 @@
+// @Std/Lang — THE ambient module (spec/15). It declares the language's built-in
+// types — the lang items — which are in scope EVERYWHERE without an `import`, the way
+// `Optional`, `Result`, `[…]` literals, and `2 + 3` always have been. This is the one
+// module you can point at for "what is import-free"; everything NOT declared here is
+// import-required. Force-loaded first (Driver), so the foundational types resolve for
+// Core/Hash/Prelude; its module id is the ambient axis of type visibility.
+//
+// (Currently holds Optional/Result/Ordering; Array/Dictionary and the primitive +
+// synthesized intrinsic types move here in following increments. Until the visibility
+// flip, ambient is still keyed by `isLangItemTypeName` — these types stay ambient by
+// name regardless of which module declares them, so the move is behaviour-neutral.)
+
+// An optional value: `Some` holds a `T`, `None` holds nothing.
+enum Optional[T] {
+    Some(v: T)
+    None
+}
+
+pub impl[T] Optional[T] {
+    // Is this `Some`?
+    fn isSome() -> Bool {
+        match self {
+            Optional.Some(val v) => { return true }
+            Optional.None => { return false }
+        }
+    }
+    // Is this `None`?
+    fn isNone() -> Bool {
+        match self {
+            Optional.Some(val v) => { return false }
+            Optional.None => { return true }
+        }
+    }
+    // The contained value, or `fallback` when `None` (eager — `fallback` is always
+    // evaluated). Overloaded by argument type with the lazy form below.
+    fn unwrapOr(fallback: T) -> T {
+        match self {
+            Optional.Some(val v) => { return v }
+            Optional.None => { return fallback }
+        }
+    }
+    // The contained value, or `fallback()` when `None` (lazy — the closure runs only
+    // on `None`). The explicit short-circuit form, replacing the removed `??`: the
+    // deferred evaluation is visible as a closure `{ … }`, not hidden in an operator.
+    fn unwrapOr(fallback: fn() -> T) -> T {
+        match self {
+            Optional.Some(val v) => { return v }
+            Optional.None => { return fallback() }
+        }
+    }
+    // The contained value; panics when `None`.
+    fn unwrap() -> T {
+        match self {
+            Optional.Some(val v) => { return v }
+            Optional.None => { panic "called unwrap on a None Optional" }
+        }
+    }
+}
+
+// The result of a fallible operation: `Ok` holds a `T`, `Err` holds an `E`.
+enum Result[T, E] {
+    Ok(value: T)
+    Err(error: E)
+}
+
+pub impl[T, E] Result[T, E] {
+    // Is this `Ok`?
+    fn isOk() -> Bool {
+        match self {
+            Result.Ok(val value) => { return true }
+            Result.Err(val error) => { return false }
+        }
+    }
+    // Is this `Err`?
+    fn isErr() -> Bool {
+        match self {
+            Result.Ok(val value) => { return false }
+            Result.Err(val error) => { return true }
+        }
+    }
+    // The success value, or `fallback` when `Err`.
+    fn unwrapOr(fallback: T) -> T {
+        match self {
+            Result.Ok(val value) => { return value }
+            Result.Err(val error) => { return fallback }
+        }
+    }
+    // The success value; panics when `Err`.
+    fn unwrap() -> T {
+        match self {
+            Result.Ok(val value) => { return value }
+            Result.Err(val error) => { panic "called unwrap on an Err Result" }
+        }
+    }
+}
+
+export enum Ordering { Less  Equal  Greater }
