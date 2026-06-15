@@ -144,12 +144,12 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // instead of reporting it as type-less. Comparisons fall to scalar Bool.
             if op >= 56 {
                 if op <= 60 {
-                    return binResultTypeInfo(c: inout c, lhs: lhs, rhs: rhs, op: op)
+                    return c.binResultTypeInfo(lhs: lhs, rhs: rhs, op: op)
                 }
             }
             if op >= 74 {
                 if op <= 78 {
-                    return binResultTypeInfo(c: inout c, lhs: lhs, rhs: rhs, op: op)
+                    return c.binResultTypeInfo(lhs: lhs, rhs: rhs, op: op)
                 }
             }
             // comparisons (50-55) and logical `&&`/`||` (61,62) produce Bool — report
