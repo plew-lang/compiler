@@ -9,7 +9,7 @@
 - **バイナリ 1 本**：`compiler/plewc`（root `_.pw`＝フロントエンド part 群＋`Backend/Llvm`・libLLVM-C をリンク）。`main`＝`runFrontend()`（共有フロントエンド `Codegen/Driver.pw`・`Comp` を返す）→ `emitLlvm()`。
 - **受理健全性は emission 非依存の共有パス `Codegen/Verify.pw`**（`verifyProgram`）＝全 non-generic・non-async 関数を walk し spec 不正を弾く。**型は `Codegen/Infer.pw`（TypeRef ベース型チェッカ）**＝`inferType`（精密型 or 0=不明）＋`typesCompatible`（保守的・確定的不一致のみ reject）。
 - **self-host**：`./bootstrap.sh`（IR 種 `compiler/plewc.seed.ll`＋`.seed.runtime.c`→clang＋libLLVM→plewc0→自己コンパイル→IR 不動点）。`--reseed` で種更新（→ 種＋追跡バイナリ `compiler/plewc` を commit）。
-- **グリーン**：`./test.sh`（run306/panic14/reject282/part＋不動点・fail=0）／`./test-gen.sh`（gen11）。
+- **グリーン**：`./test.sh`（run307/panic14/reject285/part11/partreject1＋不動点・fail=0）。⚠ `./test-gen.sh` は現状 pass=0/skip=11＝gen harness の `parseItem` 呼びが backend 未 lower（"this call is not yet supported"）＝既存リグレッション（import 必須化・std 整理とは無関係・別途要修正）。
 
 **実装済みの主要能力の正典地図は [provisional.md](provisional.md)**（spec 章ごとに「✅＝完了／✅でない＝残作業」を列挙）。ここでは再掲しない。大物の経緯は git タグ。
 
@@ -70,7 +70,9 @@ hidden-meaning 穴は概ね閉じた（ユーザー確認済）。閉じたも�
 
 - **型付き AST キャッシュ**：`typeOf(c, id)`＝codegen の型読み口。ノード型を `Comp` の **4 並列 scalar 配列**にキャッシュ（self-host は struct 配列 IndexSet 非対応ゆえ）。**body emission のエントリ（`genFunc`/`genClosure`/`genAsyncFunc`）で `clearExprTyCache`**＝env（Self/型 args/インスタンス）は 1 body の emission 中だけ一定なので grounded 型をその間だけキャッシュ・関数境界で破棄。`buildExprTyTable` は slot を allocate するだけで充填はしない（typeOf が emission 中に遅延充填）。
 - **共有パーサ→arena lower**：共有 @Std/Syntax パーサが値ツリー（`TopItemAst`/`DeclAst`/…）を返し、`Codegen/Lower.pw` が arena（`Expr`/`Stmt`/`Func`/`StructDef`…）へ lower。**名前の offset 規律**＝`moduleOf` に効く名前（free fn 宣言名・call 名・extern fn 名・import/export 名）は**原本 offset 維持**、それ以外（struct/enum/field/型名・impl 系全部）は `internBytes` で再インターン。
-- **block 0 は dummy 予約**：`body` フィールド 0 は「無本体」sentinel。entry ファイルは ambient Prelude より先に lower されるので予約しないと最初の関数本体が block 0 に来て無本体と誤判定。
+- **block 0 は dummy 予約**：`body` フィールド 0 は「無本体」sentinel。entry ファイル（module 0）は force-load される std より先に lower されるので予約しないと最初の関数本体が block 0 に来て無本体と誤判定。
+- **ambient ＝ `@Std/Lang` の export 面マニフェスト**（`isAmbientInLang`・旧ハードコード `isLangItemTypeName` 廃止）：Lang が**宣言**（`Optional`/`Result`/`Array`/`Dictionary`＋不透明合成 intrinsic `Promise`/`JoinHandle`/レンジ2型）or **再エクスポート**（プリミティブ＝`@Std/Core` 定義＝`export @Std/Core with { I8… }`）する型だけが import 不要。判定＝struct/enum を `defOffset` のモジュール=langModule か走査＋再エクスポート記録（`exports` の `fieldStart==langModule`）。**再エクスポート**は `export <path> with { … }`（`ReExport(ImportAst)`・ローダがフォワード先ロード・`lowerReExport`＝転送名を自モジュール export 面へ・ローカル束縛なし）。`Ordering`/`Ref`/`WeakRef`/`RawBuffer`・全トレイト・`SipHasher` は import 必須（`@Std/Core`・`@Std/Hash`）。`@Std/Prelude` 廃止。
+- **⚠ extern struct の `defOffset` は実ソース offset 必須**：`lowerExtern` が `e.structSpans[si].start` を `StructDef.defOffset` に刻む（旧 0）。0 だと型可視性が宣言モジュールを引けず、**コンパイラ全体が module 0 ゆえ `moduleOf(0)==0` で偶然通っていた**だけ＝module 0 以外（force-load std）で宣言した非 ambient extern 型（`RawBuffer`/`Ref`）が out-of-scope 誤判定。
 - **名前/型 interning（Phase C＋D）**：`intern(c, start, len) -> U64`＝span の**内容**を 1-based id に。**0 は返さない**＝`nameId`/`tyNameId` の既定 0 が「未設定」sentinel。唯一の content-keyed テーブルを宣言名と型名が共有。`TypeRef.nameId` の choke point＝`pushType`。**罠**：①構築点を 1 つ漏らすと id=0 で converted スキャンが取りこぼす silent miscompile（「Bind を返すヘルパ」が raw `<Bind/>` で nameId を落とすと比較が恒偽）。②Local は動的＝`addLocalCn` で intern。③スキャンは「クエリを 1 回 intern→ループは整数 ==」。
 - **演算子 opcode**：`op` フィールドは `kindCode(Kind)` の整数。`Ops.pw` の `opAdd()..` が単一の symbolic 源。
 - **負リテラル畳み込みは lower で実装済**：`lowerExpr` が `Unary(Neg, IntLit)` を符号付き `Expr.Int`（`isNeg`）へ畳む（precedence 解決後ゆえ `-128.foo()` は real Neg）。新リテラル種を足すなら `Expr.Int` の全 match/構築点に `isNeg` を通す。

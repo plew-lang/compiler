@@ -88,7 +88,7 @@ a/b は「結合のため」でなく**可読性のため**カテゴリ別子構
 
 ### 実装方針
 - **新コンテナは作らない**。中央述語 **`nameVisibleFrom(comp, useMod, candMod, candStart, candLen) -> Bool`** を全「ソース名→宣言」解決に **FILTER** として適用＝arena 線形走査の現スタイルに整合（スコープの実体＝述語）。
-- **可視判定**：`candMod == useMod` ∥ lang-item 型（`isLangItemTypeName`）∥ Core ambient ∥（candName が useMod の `c.modules.imports` に在り、かつ candName が `c.modules.exports` に在る）。namespace/alias 経由も `markImport`（Parser/Decl.pw:467）で `imports` に登録済 → 同じ述語で効く。**型の namespace 参照（型位置の `P.Foo`）は現状未処理＝要実装**。
+- **可視判定**：`candMod == useMod` ∥ ambient 型（`isAmbientInLang`＝`@Std/Lang` の export 面）∥（candName が useMod の `c.modules.imports` に在り、かつ candName が `c.modules.exports` に在る）。namespace/alias 経由も `markImport`（Parser/Decl.pw:467）で `imports` に登録済 → 同じ述語で効く。**型の namespace 参照（型位置の `P.Foo`）は現状未処理＝要実装**。
 - **適用箇所**：
   - free fn＝`findFunc` の候補ループに `nameVisibleFrom` を入れ、**同モジュール優先ヒューリスティックを削除**（in-scope 候補のみ残す）。
   - 型名＝**チョークポイント散在**（~22 ファイルが `c.arena.structs` 直走査・集約は `structIndexByName` Decl.pw:471 のみ）。ソース由来の型名解決（型注釈・TypeRef 検査・構築ヘッド・match パターン型）に述語を適用。当面は **書かれた TypeRef を走査して in-scope を検査する小パス**（findFunc が関数に埋めるのと同じ「スコープ内に解決するか」を型側でも行う＝gate ではなく scoped resolution の型側）。理想は全型ルックアップを scope-aware な単一チョークポイントへ寄せること（散在解消は付随リファクタ）。
@@ -125,7 +125,7 @@ a/b は「結合のため」でなく**可読性のため**カテゴリ別子構
 - **検証**＝コンパイラ自身が generics の塊なので、型パラメータ scope の配線漏れ・衝突は self-host で露見する（fixpoint が実テスト）。残る理論的偽陽性は「型パラメータ名が実在の型名と衝突」のみ＝稀・loud・リネームで回避（単一大文字 struct 衝突と同根）。
 
 **チョークポイント化が炙り出した健全な churn**（従来は未 walk ゆえ素通りしていた・移行で顕在化＝正しい挙動）：
-- **prelude 型は ambient**＝`std/Prelude.pw`／`@Std/Core` は auto-load で import パスを持たず常時 in-scope（`SipHasher.new()` 等が bare で解決する de-facto ambient）。`Modules.preludeModule`（id）を記録し `defModuleVisible` が同モジュール同様に許可。lang-item 型（`isLangItemTypeName`）と同じ ambient 軸の一般化。
+- **ambient ＝ `@Std/Lang` の export 面**（`isAmbientInLang`・旧 `isLangItemTypeName` 名リストと旧 `preludeModule` de-facto-ambient はともに廃止）＝Lang が宣言/再エクスポートする型だけが import 不要。`@Std/Core`/`@Std/Hash` は force-load されるが ambient ではない（型名の名指しに import 要・`SipHasher.new()` 等は `import @Std/Hash` 必須）。`@Std/Prelude` は撤去。
 - **alias を型位置で解決**＝`import M with { Real as Alias }` の `Alias` を型注釈に書く use を `realTypeNameInModule`（use-site module scope）で real 名へ解決してから可視性判定（imports/exports は real 名 keyed）。従来 alias は param 位置に現れず未検証だった。
 - **トレイト関連型を impl の skip scope へ**＝`pub impl Iterator { fn map(...) -> ...[Item] }` 等、提供メソッドが書く関連型 `Item` は binder。`lowerImpl` が実装/拡張するトレイトの `assocTypes` を `appendTraitAssocTypes` で skip scope に積む（`lowerMethodMember` はそれ＋メソッド own `[U]` を継ぐ）。ユーザが `struct Item` を定義した時のみ衝突として顕在化＝関連型 scope の必要性を示す実例。
 

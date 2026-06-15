@@ -109,7 +109,7 @@ compiler/             ★ 正典のコンパイラ＝Plew パッケージ（今�
     Parser/Decl.pw    コンパイラ frontend driver＝module-tag helper（markImport/recordExport）＋derive 合成（synth*）。宣言パーサは持たない（共有 @Std/Syntax へ）
     Codegen/          共有フロントエンド＝AST→arena lower＋名前/型解決＋軽量型復元＋受理健全性検査＋mono 探索＝Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array/Emit/Gen/Lower/Driver/Verify/Infer（Lower＝共有 AST→arena・Driver＝`runFrontend`・Verify＝emission 非依存の受理検査パス `verifyProgram`・Infer＝TypeRef ベース型チェッカ・Emit＝共有 codegen ユーティリティ〔interning/span/型述語/行追跡〕・Gen＝`plewc --gen` の harness 合成）
     Backend/Llvm.pw   LLVM IR エミッタ（`emitLlvm`・libLLVM-C を呼ぶ＝`compiler/plewc` が libLLVM をリンクする唯一の part）
-  std/                言語標準ライブラリ＝Core/Io/Process/Async/Ffi/Syntax＋Prelude（全プログラム自動ロード／Syntax＝メタプロ＆コンパイラ共有の構文層 `@Std/Syntax`＝`Syntax/`〔Lexer/Ast/Trees/Parser/ParseBody/Build〕）
+  std/                言語標準ライブラリ＝Lang/Core/Hash/Io/Process/Async/Ffi/Random/Syntax（Lang＝ambient マニフェスト＝import 不要面の唯一の正本〔`Optional`/`Result`/`Array`/`Dictionary`＋合成 intrinsic を宣言・プリミティブを Core から再エクスポート〕・Core＝import 必須の trait/プリミティブ定義＋witness／Hash＝`Hash`/`SipHasher`／Lang・Core・Hash・Syntax は起動時 force-load／Syntax＝メタプロ＆コンパイラ共有の構文層 `@Std/Syntax`＝`Syntax/`〔Lexer/Ast/Trees/Parser/ParseBody/Build〕）
   plewc.seed.ll       ブートストラップ種＝`_.pw` の LLVM IR（＋`plewc.seed.runtime.c`＝随伴ランタイム・チェックイン）
   (plewc / plewc0 / plewc.ll / plewc.runtime.c   ビルド生成物・gitignore。plewc バイナリ自体は追跡)
 examples/             実証用 Plew プログラム（hello.pw＋self-host 途上の小コンパイラ群）
