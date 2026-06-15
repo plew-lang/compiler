@@ -129,6 +129,12 @@ export struct TypeInfo {
     // instantiation (e.g. `Optional[I32]`), so match/dispatch can recover the
     // mangled C name and substitute type parameters. 0 (sentinel) otherwise.
     pub val ref: U64
+    // the extension-view id (`Person#Ext`, spec/09), 0 for a plain type. Carried so
+    // the front-end type recovery stops dropping the view that `TypeRef.viewExtId`
+    // holds — the first step toward unifying recovery with the backend (which needs
+    // the view for view-aware overload selection). Default 0 keeps existing
+    // constructions (which omit it) view-less, as before.
+    pub val viewExtId: U64 = 0
 }
 
 // One `field=expr` pair inside a JSX construction `<Type field=expr ... />`.

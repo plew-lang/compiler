@@ -7,7 +7,13 @@
 fn typeInfoOfRef(c: inout Comp, ref: U64) -> TypeInfo {
     val t: TypeRef = c.arena.types[ref]
     if t.args.count == 0 {
-        return typeInfoOfName(c: inout c, start: t.nameStart, len: t.nameLen, isArray: false)
+        val base: TypeInfo = typeInfoOfName(c: inout c, start: t.nameStart, len: t.nameLen, isArray: false)
+        // carry the view (`Person#Ext` has no args but a viewExtId) so recovery is
+        // not lossy; the `ref`-shape is unchanged so downstream behavior is identical.
+        if t.viewExtId != 0U64 {
+            return <TypeInfo kind=base.kind nameStart=base.nameStart nameLen=base.nameLen ref=base.ref viewExtId=t.viewExtId />
+        }
+        return base
     }
     if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
         val el: TypeRef = c.arena.types[t.args[0]]
@@ -16,7 +22,7 @@ fn typeInfoOfRef(c: inout Comp, ref: U64) -> TypeInfo {
     // a compound type (`Ref[T]`, `Box[I32]`, `Optional[I32]`): keep its structured
     // ref so downstream `->`/`.field`/method resolution can recover the pointee or
     // instantiation arguments (dropping it loses generic/Ref-ness).
-    return <TypeInfo kind=2 nameStart=t.nameStart nameLen=t.nameLen ref=ref />
+    return <TypeInfo kind=2 nameStart=t.nameStart nameLen=t.nameLen ref=ref viewExtId=t.viewExtId />
 }
 
 // The element (`Item`) type of an Iterable iterand of type `et` (a struct with an
