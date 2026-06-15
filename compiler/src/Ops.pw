@@ -1,0 +1,57 @@
+// @Ops — operator opcodes (the shared operator vocabulary). The `op` field of
+// Expr.Binary/Unary/Assign stores a `kindCode(Kind)` (the lexer's stable token-kind
+// number). These named accessors are the single symbolic source for the opcode
+// comparisons both the front-end and the backend make — renumbering a token in
+// `kindCode` flows through here, so no bare magic numbers leak into either layer.
+// A pure leaf module (depends only on `@Std/Syntax`): both `./Frontend` and
+// `./Backend` import it, so the opcodes belong to neither layer (a clean DAG edge).
+
+import @Std/Syntax with { Kind, kindCode }
+
+export fn opEq() -> I64 { return kindCode(k: <Kind.EqEq />) }
+export fn opNe() -> I64 { return kindCode(k: <Kind.Ne />) }
+export fn opLt() -> I64 { return kindCode(k: <Kind.Lt />) }
+export fn opLe() -> I64 { return kindCode(k: <Kind.Le />) }
+export fn opGt() -> I64 { return kindCode(k: <Kind.Gt />) }
+export fn opGe() -> I64 { return kindCode(k: <Kind.Ge />) }
+export fn opAdd() -> I64 { return kindCode(k: <Kind.Plus />) }
+export fn opSub() -> I64 { return kindCode(k: <Kind.Minus />) }
+export fn opMul() -> I64 { return kindCode(k: <Kind.Star />) }
+export fn opDiv() -> I64 { return kindCode(k: <Kind.Slash />) }
+export fn opRem() -> I64 { return kindCode(k: <Kind.Percent />) }
+export fn opAnd() -> I64 { return kindCode(k: <Kind.AmpAmp />) }
+export fn opOr() -> I64 { return kindCode(k: <Kind.PipePipe />) }
+export fn opNot() -> I64 { return kindCode(k: <Kind.Bang />) }
+export fn opBitAnd() -> I64 { return kindCode(k: <Kind.Amp />) }
+export fn opBitOr() -> I64 { return kindCode(k: <Kind.Pipe />) }
+export fn opBitXor() -> I64 { return kindCode(k: <Kind.Caret />) }
+export fn opShl() -> I64 { return kindCode(k: <Kind.Shl />) }
+export fn opShr() -> I64 { return kindCode(k: <Kind.Shr />) }
+export fn opBitNot() -> I64 { return kindCode(k: <Kind.Tilde />) }
+export fn opAssign() -> I64 { return kindCode(k: <Kind.Eq />) }
+export fn opAddAssign() -> I64 { return kindCode(k: <Kind.PlusEq />) }
+export fn opSubAssign() -> I64 { return kindCode(k: <Kind.MinusEq />) }
+export fn opMulAssign() -> I64 { return kindCode(k: <Kind.StarEq />) }
+export fn opDivAssign() -> I64 { return kindCode(k: <Kind.SlashEq />) }
+export fn opRemAssign() -> I64 { return kindCode(k: <Kind.PercentEq />) }
+fn opBitAndAssign() -> I64 { return kindCode(k: <Kind.AmpEq />) }
+fn opBitOrAssign() -> I64 { return kindCode(k: <Kind.PipeEq />) }
+fn opBitXorAssign() -> I64 { return kindCode(k: <Kind.CaretEq />) }
+fn opShlAssign() -> I64 { return kindCode(k: <Kind.ShlEq />) }
+
+// The binary opcode underlying a compound-assign op (`+=` -> `+`, `&=` -> `&`),
+// so `target OP= value` can desugar to `target = target OP value` and route the
+// `OP` through the operator-trait witness dispatch (spec/12). 0 is never returned
+// for a real compound op (the caller guards `op == opAssign()` first).
+export fn compoundBinOp(op: I64) -> I64 {
+    if op == opAddAssign() { return opAdd() }
+    if op == opSubAssign() { return opSub() }
+    if op == opMulAssign() { return opMul() }
+    if op == opDivAssign() { return opDiv() }
+    if op == opRemAssign() { return opRem() }
+    if op == opBitAndAssign() { return opBitAnd() }
+    if op == opBitOrAssign() { return opBitOr() }
+    if op == opBitXorAssign() { return opBitXor() }
+    if op == opShlAssign() { return opShl() }
+    return opShr()
+}

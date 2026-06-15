@@ -405,7 +405,7 @@ pub impl Comp {
                 // wrapping arithmetic on an integer receiver yields the receiver's type
                 // (`x.wrappingMul(by: y): U64` when x: U64) — a privileged lowering with
                 // no real fn, so its type is recovered here (see Expr.pw codegen).
-                if isWrappingMethod(c: inout self, nameStart: nameStart, nameLen: nameLen) {
+                if self.isWrappingMethod(nameStart: nameStart, nameLen: nameLen) {
                     if self.isIntType(start: rt.nameStart, len: rt.nameLen) {
                         return rt
                     }

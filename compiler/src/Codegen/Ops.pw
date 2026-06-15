@@ -1,49 +1,5 @@
-// Operator opcodes. The `op` field of Expr.Binary/Unary/Assign stores a
-// `kindCode(Kind)` (the lexer's stable token-kind number). These named accessors
-// are the single symbolic source for codegen comparisons — renumbering a token
-// in `kindCode` flows through here, so no bare magic numbers leak into codegen.
-export fn opEq() -> I64 { return kindCode(k: <Kind.EqEq />) }
-export fn opNe() -> I64 { return kindCode(k: <Kind.Ne />) }
-export fn opLt() -> I64 { return kindCode(k: <Kind.Lt />) }
-export fn opLe() -> I64 { return kindCode(k: <Kind.Le />) }
-export fn opGt() -> I64 { return kindCode(k: <Kind.Gt />) }
-export fn opGe() -> I64 { return kindCode(k: <Kind.Ge />) }
-export fn opAdd() -> I64 { return kindCode(k: <Kind.Plus />) }
-export fn opSub() -> I64 { return kindCode(k: <Kind.Minus />) }
-export fn opMul() -> I64 { return kindCode(k: <Kind.Star />) }
-export fn opDiv() -> I64 { return kindCode(k: <Kind.Slash />) }
-export fn opRem() -> I64 { return kindCode(k: <Kind.Percent />) }
-export fn opAnd() -> I64 { return kindCode(k: <Kind.AmpAmp />) }
-export fn opOr() -> I64 { return kindCode(k: <Kind.PipePipe />) }
-export fn opNot() -> I64 { return kindCode(k: <Kind.Bang />) }
-export fn opBitAnd() -> I64 { return kindCode(k: <Kind.Amp />) }
-export fn opBitOr() -> I64 { return kindCode(k: <Kind.Pipe />) }
-export fn opBitXor() -> I64 { return kindCode(k: <Kind.Caret />) }
-export fn opShl() -> I64 { return kindCode(k: <Kind.Shl />) }
-export fn opShr() -> I64 { return kindCode(k: <Kind.Shr />) }
-export fn opBitNot() -> I64 { return kindCode(k: <Kind.Tilde />) }
-export fn opAssign() -> I64 { return kindCode(k: <Kind.Eq />) }
-fn opAddAssign() -> I64 { return kindCode(k: <Kind.PlusEq />) }
-fn opSubAssign() -> I64 { return kindCode(k: <Kind.MinusEq />) }
-fn opMulAssign() -> I64 { return kindCode(k: <Kind.StarEq />) }
-fn opDivAssign() -> I64 { return kindCode(k: <Kind.SlashEq />) }
-fn opRemAssign() -> I64 { return kindCode(k: <Kind.PercentEq />) }
-fn opBitAndAssign() -> I64 { return kindCode(k: <Kind.AmpEq />) }
-fn opBitOrAssign() -> I64 { return kindCode(k: <Kind.PipeEq />) }
-fn opBitXorAssign() -> I64 { return kindCode(k: <Kind.CaretEq />) }
-fn opShlAssign() -> I64 { return kindCode(k: <Kind.ShlEq />) }
-
-// Wrapping arithmetic (spec/02): integer `* + -` panic on overflow; the
-// `wrapping*` methods opt into two's-complement wraparound instead (the only
-// way to wrap — there is no `&+` operator). A privileged lowering on integer
-// receivers until the integer trait tower subsumes it. Whether a method name is
-// one of the supported wrapping ops, and its C operator.
-fn isWrappingMethod(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "wrappingMul") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "wrappingAdd") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "wrappingSub") { return true }
-    return false
-}
+// Part of name/type resolution (root: _.pw): integer-arithmetic typing helpers.
+// (The operator opcodes themselves now live in the shared leaf module `@Ops`.)
 
 pub impl Comp {
 
@@ -65,21 +21,16 @@ pub impl Comp {
         }
         return scalarInfo()
     }
-}
 
-// The binary opcode underlying a compound-assign op (`+=` -> `+`, `&=` -> `&`),
-// so `target OP= value` can desugar to `target = target OP value` and route the
-// `OP` through the operator-trait witness dispatch (spec/12). 0 is never returned
-// for a real compound op (the caller guards `op == opAssign()` first).
-export fn compoundBinOp(op: I64) -> I64 {
-    if op == opAddAssign() { return opAdd() }
-    if op == opSubAssign() { return opSub() }
-    if op == opMulAssign() { return opMul() }
-    if op == opDivAssign() { return opDiv() }
-    if op == opRemAssign() { return opRem() }
-    if op == opBitAndAssign() { return opBitAnd() }
-    if op == opBitOrAssign() { return opBitOr() }
-    if op == opBitXorAssign() { return opBitXor() }
-    if op == opShlAssign() { return opShl() }
-    return opShr()
+    // Wrapping arithmetic (spec/02): integer `* + -` panic on overflow; the
+    // `wrapping*` methods opt into two's-complement wraparound instead (the only
+    // way to wrap — there is no `&+` operator). A privileged lowering on integer
+    // receivers until the integer trait tower subsumes it. Whether a method name is
+    // one of the supported wrapping ops.
+    inout fn isWrappingMethod(nameStart: U64, nameLen: U64) -> Bool {
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "wrappingMul") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "wrappingAdd") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "wrappingSub") { return true }
+        return false
+    }
 }

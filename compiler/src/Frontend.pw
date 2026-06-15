@@ -18,6 +18,7 @@ import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
 import ./Ir with { PType, TypeRef, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, DefaultExt, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, genSiblingPath, pathSeen }
+import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, opAddAssign, opSubAssign, opMulAssign, opDivAssign, opRemAssign, compoundBinOp }
 
 export struct Comp {
     // the shared IR arena: source bytes + every node table (see `Arena`). The
