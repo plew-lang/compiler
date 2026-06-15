@@ -1,0 +1,7 @@
+// `Ordering` is NOT a lang item (spec/15): the comparison operators `< > <= >=` desugar
+// through it but return `Bool`, so no syntax produces an `Ordering` value — naming it
+// requires `import @Std/Core with { Ordering }`. Using it bare must be rejected (it is
+// not in @Std/Lang's ambient export surface). Guards the import-required manifest.
+fn main() {
+    val x: Ordering = <Ordering.Less />
+}
