@@ -115,17 +115,6 @@ pub impl Comp {
     }
 }
 
-fn containsU64(xs: Array[U64], v: U64) -> Bool {
-    mut val i: U64 = 0
-    while i < xs.count {
-        if xs[i] == v {
-            return true
-        }
-        i += 1
-    }
-    return false
-}
-
 pub impl Comp {
 
     // Does a type, named `nStart/nLen` with `args`, by-value reach the owner type
@@ -241,11 +230,6 @@ pub impl Comp {
     inout fn fieldIsBoxed(f: FieldDef) -> Bool {
         return containsU64(xs: self.monoWork.boxedFields, v: f.nameStart)
     }
-}
-
-// The FieldDef sentinel returned when a lookup fails (nameLen == 0).
-fn noField() -> FieldDef {
-    return <FieldDef nameStart=0 nameLen=0 tyStart=0 tyLen=0 tyIsArray=false ty=0 isMut=false hasDefault=false defaultVal=0 vis=0 />
 }
 
 pub impl Comp {

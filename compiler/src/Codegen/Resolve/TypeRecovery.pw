@@ -218,12 +218,6 @@ pub impl Comp {
     }
 }
 
-// ---- lightweight type recovery (for monomorphization + .bytes dispatch) ----
-
-fn scalarInfo() -> TypeInfo {
-    return <TypeInfo kind=0 nameStart=0 nameLen=0 ref=0 />
-}
-
 pub impl Comp {
 
     // A source span whose bytes read `kw` (length `kwLen`). The type system recovers

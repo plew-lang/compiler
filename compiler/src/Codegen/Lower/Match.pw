@@ -29,30 +29,6 @@ pub impl Comp {
     }
 }
 
-// ---- scalar (literal) match desugar (spec/11) ----
-// A `match` that does NOT dispatch on enum variants or struct destructuring — its
-// arms are only bare literals (`0`/`"x"`/`true`/`-1`) and wildcards — is not an enum
-// match: it desugars here into a single-eval scrutinee binding plus an `==` if/else
-// chain, reusing the operator-witness `==` and the existing if-codegen. The arena's
-// Stmt.Match / Expr.MatchExpr never see a literal/scalar pattern, so the backend
-// enum-tag match emitter stays untouched.
-
-// True if any arm dispatches on an enum variant or a struct pattern (so the match
-// must go through the enum emitter, not the scalar desugar).
-fn matchHasEnumOrStruct(arms: Array[MatchArmAst]) -> Bool {
-    mut val i: U64 = 0
-    while i < arms.count {
-        val p: PatternAst = arms[i].pattern
-        if !(p.isWildcard) {
-            if !(p.isLiteral) {
-                return true
-            }
-        }
-        i += 1
-    }
-    return false
-}
-
 pub impl Comp {
 
     // Build a scalar-match arm's condition: `__mtmp == lit` for a literal arm; a wildcard
@@ -63,52 +39,6 @@ pub impl Comp {
         }
         return <ScalarCond hasCond=false cond=0 />
     }
-}
-
-// True if the arms are exactly the two boolean literals `true` and `false` (a
-// structurally exhaustive Bool match — no wildcard needed, spec/11). Used to allow
-// `match b { true => … false => … }`.
-fn litArmsAreBoolExhaustive(arms: Array[MatchArmAst]) -> Bool {
-    mut val sawTrue: Bool = false
-    mut val sawFalse: Bool = false
-    mut val i: U64 = 0
-    while i < arms.count {
-        val p: PatternAst = arms[i].pattern
-        if p.isWildcard {
-            return false
-        }
-        if p.isLiteral {
-            match p.lit {
-                ExprAst.IntLit(val value, val isBool, tySuffix: _, span: _) => {
-                    if isBool {
-                        if value == 1U64 {
-                            sawTrue = true
-                        }
-                        if value == 0U64 {
-                            sawFalse = true
-                        }
-                    } else {
-                        return false
-                    }
-                }
-                _ => { return false }
-            }
-        } else {
-            return false
-        }
-        i += 1
-    }
-    return sawTrue && sawFalse
-}
-
-fn armGiveExprAst(arm: MatchArmAst) -> ExprAst {
-    if arm.body.stmts.count > 0 {
-        match arm.body.stmts[0] {
-            StmtAst.Give(val value, val span) => { return value }
-            _ => {}
-        }
-    }
-    return emptyExpr()
 }
 
 pub impl Comp {
@@ -131,17 +61,6 @@ pub impl Comp {
         val rhs: U64 = self.lowerExpr(e: lit)
         return self.pushExpr(e: <Expr.Binary op=opEq() lhs=lhs rhs=rhs />)
     }
-}
-
-fn matchHasCapture(arms: Array[MatchArmAst]) -> Bool {
-    mut val i: U64 = 0
-    while i < arms.count {
-        if arms[i].pattern.captureName.bytes.count > 0 {
-            return true
-        }
-        i += 1
-    }
-    return false
 }
 
 pub impl Comp {

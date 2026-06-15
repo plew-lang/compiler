@@ -374,26 +374,6 @@ pub impl Comp {
     }
 }
 
-// Add a match arm's payload binds to the current scope with their field types so
-// the arm body resolves them (mirrors the C emitter's per-arm bindings, incl.
-// grounding a generic instance's field types under the scrutinee's type args —
-// `Box[I32] { val v }` binds v: I32, not the template T). Enum arms resolve via
-// the variant; struct-destructure arms (`S { val x }`) via the struct.
-// Whether any of `binds` matches the struct field (start,len) by FIELD name (a real
-// bind or a `field: _` discard — both cover the field; content comparison unifies the
-// re-interned struct-field name with the pattern's original field span).
-// A reliable source offset for a match-arm diagnostic: a bind's original-source
-// offset (set by lowerBinds) if present, else the (possibly re-interned) pattern
-// type-name offset as a fallback.
-fn armDiagOffset(a: MatchArm) -> U64 {
-    if a.binds.count > 0U64 {
-        if a.binds[0].offset > 0U64 {
-            return a.binds[0].offset
-        }
-    }
-    return a.enumStart
-}
-
 pub impl Comp {
 
     // Whether any construction field matches the given field name (start,len).

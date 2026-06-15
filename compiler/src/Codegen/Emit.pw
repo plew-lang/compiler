@@ -4,53 +4,6 @@
 // lossless-conversion / literal-fits checks), array element-type lookup, and
 // source line/offset tracking.
 
-fn digitStr(d: I64) -> String {
-    if d == 0 { return "0" }
-    if d == 1 { return "1" }
-    if d == 2 { return "2" }
-    if d == 3 { return "3" }
-    if d == 4 { return "4" }
-    if d == 5 { return "5" }
-    if d == 6 { return "6" }
-    if d == 7 { return "7" }
-    if d == 8 { return "8" }
-    return "9"
-}
-
-// U64 digit (0-9) -> its glyph. A U64 twin of digitStr: with no implicit
-// conversions and `as` restricted to lossless, an I64 digitStr cannot serve a
-// U64 caller (U64->I64 is not lossless), so unsigned printing needs its own.
-export fn digitStrU(d: U64) -> String {
-    if d == 0 { return "0" }
-    if d == 1 { return "1" }
-    if d == 2 { return "2" }
-    if d == 3 { return "3" }
-    if d == 4 { return "4" }
-    if d == 5 { return "5" }
-    if d == 6 { return "6" }
-    if d == 7 { return "7" }
-    if d == 8 { return "8" }
-    return "9"
-}
-
-// Compiler diagnostics. Ordinary module functions (not ambient builtins) so the
-// compiler source stays spec-valid: they report on stderr via @Std/Io `eprint`
-// and stop via @Std/Process `exit`. `compileErrorAt` includes a source line.
-fn eprintInt(n: I64) {
-    if n >= 10 {
-        eprintInt(n: n / 10)
-    }
-    eprint(text: digitStr(d: n % 10))
-}
-
-export fn compileErrorAt(line: I64, msg: String) {
-    eprint(text: "plewc: error: line ")
-    eprintInt(n: line)
-    eprint(text: ": ")
-    eprint(text: msg)
-    eprint(text: "\n")
-    exit(code: 1)
-}
 
 pub impl Comp {
 
@@ -133,35 +86,6 @@ pub impl Comp {
         val sgn: Bool = self.intSigned(start: dstStart, len: dstLen)
         return litFitsBits(value: value, neg: neg, bits: bits, sgn: sgn)
     }
-}
-
-// Whether the literal (non-negative magnitude `value`, negated when `neg`) fits
-// an integer type of the given width and signedness. Span-free core of
-// litFitsType, so synthetic contexts (index = U64, print = I64) can range-check
-// literals without a type-name span. The 64-bit signed-negative bound (2^63) is
-// expressed via `value - 1 <= 2^63-1` so no 2^63 literal is needed.
-fn litFitsBits(value: U64, neg: Bool, bits: U64, sgn: Bool) -> Bool {
-    if neg {
-        // a negative literal needs a signed target; magnitude <= 2^(bits-1).
-        if !(sgn) {
-            return false
-        }
-        if bits == 8 { return value <= 128 }
-        if bits == 16 { return value <= 32768 }
-        if bits == 32 { return value <= 2147483648 }
-        if value == 0 { return true }
-        return (value - 1) <= 9223372036854775807U64
-    }
-    if sgn {
-        if bits == 8 { return value <= 127 }
-        if bits == 16 { return value <= 32767 }
-        if bits == 32 { return value <= 2147483647 }
-        return value <= 9223372036854775807U64
-    }
-    if bits == 8 { return value <= 255 }
-    if bits == 16 { return value <= 65535 }
-    if bits == 32 { return value <= 4294967295 }
-    return true
 }
 
 pub impl Comp {

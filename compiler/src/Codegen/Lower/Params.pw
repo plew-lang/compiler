@@ -66,15 +66,3 @@ pub impl Comp {
         return <PatInfo isWildcard=false enumStart=en.nameStart enumLen=en.nameLen variantStart=vStart variantLen=vLen binds=binds isStruct=p.isStruct />
     }
 }
-
-// True if a value-match arm block diverges (`=> panic …` / `=> return …`) rather
-// than giving a value — its terminal statement is not a `give`.
-fn armBlockDiverges(b: BlockAst) -> Bool {
-    if b.stmts.count == 0 {
-        return false
-    }
-    match b.stmts[b.stmts.count - 1] {
-        StmtAst.Give(value: _, span: _) => { return false }
-        _ => { return true }
-    }
-}

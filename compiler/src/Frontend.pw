@@ -268,5 +268,710 @@ part ./Codegen/Gen
 part ./Codegen/Verify
 part ./Codegen/Infer
 part ./Codegen/Lower
-part ./Codegen/Driver
 part ./Loader
+
+// ---- relocated free helpers (were in parts; kept at module root so parts are impl-only) ----
+
+fn u64ArrayHas(a: Array[U64], v: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < a.count {
+        if a[i] == v {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+fn notConst() -> ConstInt {
+    return <ConstInt isConst=false neg=false value=0 />
+}
+
+// Build a ConstInt, normalizing -0 to +0.
+fn mkConst(neg: Bool, mag: U64) -> ConstInt {
+    if mag == 0 { return <ConstInt isConst=true neg=false value=0 /> }
+    return <ConstInt isConst=true neg=neg value=mag />
+}
+
+// (na,a) + (nb,b) as a signed magnitude, or notConst if the result magnitude
+// would exceed the fold domain (2^63-1; keeps every magnitude expressible).
+fn addConst(na: Bool, a: U64, nb: Bool, b: U64) -> ConstInt {
+    if na == nb {
+        if a > 9223372036854775807U64 - b { return notConst() }
+        return mkConst(neg: na, mag: a + b)
+    }
+    if a >= b { return mkConst(neg: na, mag: a - b) }
+    return mkConst(neg: nb, mag: b - a)
+}
+
+// Encode a float context as an typeCache.intCtx code (9 = F64, 10 = F32) so the backend
+// emits an otherwise-untyped integer literal as a double constant in float context.
+fn floatCtxCode(bits: U64) -> U64 {
+    if bits == 32 { return 10 }
+    return 9
+}
+
+// Encode a known int context (bits, sgn) as a code 1..8 (I8/I16/I32/I64/U8/U16/U32/U64).
+fn intCtxCode(bits: U64, sgn: Bool) -> U64 {
+    if sgn {
+        if bits == 8 { return 1 }
+        if bits == 16 { return 2 }
+        if bits == 32 { return 3 }
+        return 4
+    }
+    if bits == 8 { return 5 }
+    if bits == 16 { return 6 }
+    if bits == 32 { return 7 }
+    return 8
+}
+
+// Range-check each struct field's default-value literal against the field's
+// declared type (spec/05: `val x: T = expr` is memberwise-factory default-arg
+// sugar, so the default must fit T exactly as an explicit construction would —
+// `val n: I8 = 300` is rejected here, not silently truncated at codegen). Enum
+// variant fields take no default, so only struct fields are visited.
+// Whether interned id `id` is in `set`.
+fn idInSet(set: Array[U64], id: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < set.count {
+        if set[i] == id {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Sentinel for "no defining module found" (a value no real module id takes).
+fn importCycleSentinel() -> U64 { return 4000000000U64 }
+
+// Build and return the fully-analyzed compiler arena: parse-driven module loading,
+// derive synthesis, all soundness/visibility checks, monomorphization discovery,
+// and the typed-AST cache. Backend-agnostic — no LLVM emission happens here.
+export fn runFrontend() -> Comp {
+    // gen mode (spec/16): `plewc --gen <file>` synthesizes a derive-runner harness
+    // instead of compiling the user program. The entry path then sits at argv[2].
+    mut val genMode: Bool = false
+    mut val tcLog: Bool = false
+    mut val entryArgIdx: I64 = 1
+    if argCount() > 1 {
+        if argAt(1) == "--gen" {
+            genMode = true
+            entryArgIdx = 2
+        }
+        // `plewc --tc-log <file>`: run the new TypeRef-based type checker in
+        // log-only mode (print mismatches, reject nothing) for development/triage.
+        if argAt(1) == "--tc-log" {
+            tcLog = true
+            entryArgIdx = 2
+        }
+    }
+    // The compiler arena. The loader below fills `bytes`/`moduleRanges` and lowers
+    // every item into it: PARSE-DRIVEN LOADING — each file's source is appended to
+    // `c.arena.bytes`, parsed by the shared @Std/Syntax parser, its items lowered, and its
+    // `import`/`part` nodes followed to more files. There is no separate directive
+    // pre-scan: the parsed tree drives discovery. (`bytes` is built incrementally, so
+    // a file's source sits at `fileStart` before its items lower, and re-interned
+    // names land in between — harmless: writeSpan emits text, moduleOf uses the
+    // per-file ranges. `toks`/`pos` are unused now that all parsing is per-file.)
+    mut val c: Comp = <Comp />
+    // reserve TypeRef index 0 as the "no type" sentinel so a `ty` field of 0
+    // (synthetic locals, untyped positions) never aliases a real parsed type.
+    c.arena.types.append(<TypeRef nameStart=0 nameLen=0 args=[] />)
+    // reserve Block index 0 as a dummy so a `body` field of 0 is an unambiguous
+    // "no body" sentinel (extern fns, trait-requirement signatures). Without this,
+    // the first function body lowered (the entry file, which loads before the
+    // ambient Prelude) would land at block 0 and be indistinguishable from no body
+    // — wrongly skipped by the body-walks that gate on `body != 0`.
+    c.arena.blocks.append(<Block stmts=[] />)
+    c.genMode = genMode
+    c.tcLog = tcLog
+    mut val nextModuleId: U64 = 1
+    if argCount() > entryArgIdx {
+        // Module loader: a recursive, deduplicated worklist over local includes.
+        // Each file's `part`/`import` paths resolve relative to that file's own
+        // directory; every distinct file is appended once (single-arena / single-C).
+        val rootPath: String = argAt(entryArgIdx)
+        val entryBytes: Array[U8] = rootPath.bytes
+        // Loud-fail on a missing entry file: without this readFileBytes returns an
+        // empty string and the compiler silently emits an empty program (exit 0),
+        // which hides a typo'd path. (Acceptance soundness: never silently accept.)
+        if !(fileExists(path: entryBytes)) {
+            eprint(text: "plewc: error: cannot open source file: ")
+            eprint(text: rootPath)
+            eprint(text: "\n")
+            exit(code: 1)
+        }
+        mut val pathBuf: Array[U8] = []
+        mut val loaded: Array[Bind] = []
+        // `loaded[i].fieldStart` carries each queued file's module id.
+        // package src root for `/…` absolute imports (from the Plew.toml walk-up;
+        // empty if no manifest is found, in which case `/…` imports are skipped).
+        val srcRoot: Array[U8] = findSrcRoot(entry: entryBytes)
+        // std library root for `@Std/…`: the `std/` directory next to the plewc
+        // binary (argv[0]'s directory), so `@Std/Core` -> `<plewcdir>/std/Core.pw`.
+        val stdRoot: Array[U8] = computeStdRoot(arg0: argAt(0).bytes)
+        val es: U64 = pathBuf.count
+        appendBytes(into: inout pathBuf, from: entryBytes)
+        loaded.append(<Bind nameStart=es nameLen=entryBytes.count fieldStart=0 fieldLen=entryBytes.count />)
+        // Force-load @Std/Lang FIRST: it is THE ambient module (spec/15) — it declares the
+        // language's built-in types (the lang items), in scope everywhere without an import.
+        // Loaded before Core/Hash/Prelude so the foundational types resolve for them. Its
+        // module id is captured (`langModule`) so type visibility can treat a type defined
+        // here as ambient. Guarded by fileExists (a freshly-seeded compiler may lack it).
+        mut val langPath: Array[U8] = []
+        appendBytes(into: inout langPath, from: stdRoot)
+        appendBytes(into: inout langPath, from: "Lang.pw".bytes)
+        if fileExists(path: langPath) {
+            val lps: U64 = pathBuf.count
+            appendBytes(into: inout pathBuf, from: langPath)
+            loaded.append(<Bind nameStart=lps nameLen=langPath.count fieldStart=nextModuleId fieldLen=langPath.count />)
+            c.modules.langModule = nextModuleId
+            nextModuleId = nextModuleId + 1
+        }
+        // Force-load @Std/Core so its lang-item types (Optional/Result/Ordering),
+        // operator traits + witnesses, and Iterator/Index machinery are AMBIENT
+        // (spec/15: usable without `import` — `2 + 3`, `Optional`, `for` need none).
+        // Its `part Core/Num.pw` + imports are followed by the BFS; a target that also
+        // `import @Std/Core`s dedups via pathSeen. A Core free function like `assert`
+        // still needs an explicit import — checkUseVisibility gates it as an ordinary
+        // cross-module call (only types/operators are ambient, not free functions).
+        mut val corePath: Array[U8] = []
+        appendBytes(into: inout corePath, from: stdRoot)
+        appendBytes(into: inout corePath, from: "Core.pw".bytes)
+        if fileExists(path: corePath) {
+            val cps: U64 = pathBuf.count
+            appendBytes(into: inout pathBuf, from: corePath)
+            loaded.append(<Bind nameStart=cps nameLen=corePath.count fieldStart=nextModuleId fieldLen=corePath.count />)
+            nextModuleId = nextModuleId + 1
+        }
+        // Force-load @Std/Hash: the implicit prelude's `Dictionary` lang item is built on
+        // hashing (the `[k:v]` literal's `K: Hash` machinery + `SipHasher`), so the hashing
+        // floor must always be LOADED even when the target never imports it. Force-load is
+        // loading only — `Hash`/`Hasher`/`SipHasher` are NOT ambient (spec/15: not lang
+        // items), so naming them in a type position still needs `import @Std/Hash`. The
+        // prelude itself imports it; a target that also imports it dedups via pathSeen.
+        mut val hashPath: Array[U8] = []
+        appendBytes(into: inout hashPath, from: stdRoot)
+        appendBytes(into: inout hashPath, from: "Hash.pw".bytes)
+        if fileExists(path: hashPath) {
+            val hps: U64 = pathBuf.count
+            appendBytes(into: inout pathBuf, from: hashPath)
+            loaded.append(<Bind nameStart=hps nameLen=hashPath.count fieldStart=nextModuleId fieldLen=hashPath.count />)
+            nextModuleId = nextModuleId + 1
+        }
+        // gen mode: force-load @Std/Io as its own module so the synthesized harness
+        // `main` can call `write` even if the target file doesn't import it.
+        if genMode {
+            mut val ioPath: Array[U8] = []
+            appendBytes(into: inout ioPath, from: stdRoot)
+            appendBytes(into: inout ioPath, from: "Io.pw".bytes)
+            if fileExists(path: ioPath) {
+                val ios: U64 = pathBuf.count
+                appendBytes(into: inout pathBuf, from: ioPath)
+                loaded.append(<Bind nameStart=ios nameLen=ioPath.count fieldStart=nextModuleId fieldLen=ioPath.count />)
+                nextModuleId = nextModuleId + 1
+            }
+            // force-load @Std/Syntax too: the harness calls `parseItem` and the derive
+            // interfaces / built-in derivers (`impl Hash as Derive`) live there. Its
+            // `part`s + `import @Std/Core` are followed by the BFS below; a target file
+            // that also imports it dedups via pathSeen.
+            mut val synPath: Array[U8] = []
+            appendBytes(into: inout synPath, from: stdRoot)
+            appendBytes(into: inout synPath, from: "Syntax.pw".bytes)
+            if fileExists(path: synPath) {
+                if !(pathSeen(buf: pathBuf, loaded: loaded, path: synPath)) {
+                    val sys: U64 = pathBuf.count
+                    appendBytes(into: inout pathBuf, from: synPath)
+                    loaded.append(<Bind nameStart=sys nameLen=synPath.count fieldStart=nextModuleId fieldLen=synPath.count />)
+                    nextModuleId = nextModuleId + 1
+                }
+            }
+        }
+        mut val qi: U64 = 0
+        while qi < loaded.count {
+            val ent: Bind = loaded[qi]
+            qi += 1
+            val moduleId: U64 = ent.fieldStart
+            val path: Array[U8] = extractSpan(buf: pathBuf, start: ent.nameStart, len: ent.nameLen)
+            val src: String = readFileBytes(path)
+            val sb: Array[U8] = src.bytes
+            if c.arena.bytes.count > 0 {
+                c.arena.bytes.append(10)
+            }
+            val fileStart: U64 = c.arena.bytes.count
+            c.appendSrc(from: sb)
+            c.modules.ranges.append(<Bind nameStart=fileStart nameLen=c.arena.bytes.count - fileStart fieldStart=moduleId fieldLen=0 />)
+            // parse the file and lower its items; the returned tree drives discovery.
+            val items: Array[TopItemAst] = c.parseAndLowerFile(fileBytes: sb, fileStart: fileStart)
+            val baseLen: U64 = dirPrefixLen(path: path)
+            // follow `import`/`part` nodes to child files (in source order); note a
+            // `@[...]` directive so the generated sibling can be auto-parted.
+            mut val sawDirective: Bool = false
+            mut val ii: U64 = 0
+            while ii < items.count {
+                match items[ii] {
+                    TopItemAst.Import(val imp) => {
+                        val childPath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, importer: path, baseLen: baseLen, srcRoot: srcRoot, srcRootLen: srcRoot.count, stdRoot: stdRoot, stdRootLen: stdRoot.count)
+                        if childPath.count != 0 {
+                            if !(pathSeen(buf: pathBuf, loaded: loaded, path: childPath)) {
+                                // a `part` (isImport=false) joins this module; an
+                                // `import` (true) starts a fresh module.
+                                mut val childModule: U64 = moduleId
+                                if imp.isImport {
+                                    childModule = nextModuleId
+                                    nextModuleId = nextModuleId + 1
+                                }
+                                val cs: U64 = pathBuf.count
+                                appendBytes(into: inout pathBuf, from: childPath)
+                                loaded.append(<Bind nameStart=cs nameLen=childPath.count fieldStart=childModule fieldLen=childPath.count />)
+                            }
+                        }
+                    }
+                    TopItemAst.ReExport(val imp) => {
+                        // a re-export (`export <path> with { … }`, spec/15) forwards another
+                        // module's names; follow its path so that origin module is LOADED
+                        // (its declarations + own exports must exist for the forward to
+                        // resolve). It always starts a fresh module (like an import). Binds
+                        // nothing locally — that's lowerReExport's job (export surface only).
+                        val rePath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, importer: path, baseLen: baseLen, srcRoot: srcRoot, srcRootLen: srcRoot.count, stdRoot: stdRoot, stdRootLen: stdRoot.count)
+                        if rePath.count != 0 {
+                            if !(pathSeen(buf: pathBuf, loaded: loaded, path: rePath)) {
+                                val rm: U64 = nextModuleId
+                                nextModuleId = nextModuleId + 1
+                                val rs: U64 = pathBuf.count
+                                appendBytes(into: inout pathBuf, from: rePath)
+                                loaded.append(<Bind nameStart=rs nameLen=rePath.count fieldStart=rm fieldLen=rePath.count />)
+                            }
+                        }
+                    }
+                    TopItemAst.Directive(val dir) => { sawDirective = true }
+                    TopItemAst.Extern(val e) => {
+                        // a `@[...]` derive on an opaque extern lang-item (spec/15,16:
+                        // e.g. `@[IntTryFrom] struct I8`) lives inside the extern block,
+                        // not at top level — scan its per-struct directives too so the
+                        // generated sibling is auto-parted.
+                        mut val di: U64 = 0
+                        while di < e.structDirectives.count {
+                            if e.structDirectives[di].reqs.count > 0U64 {
+                                sawDirective = true
+                            }
+                            di += 1
+                        }
+                    }
+                    _ => {}
+                }
+                ii += 1
+            }
+            // auto-part (spec/16): a file annotated with `@[...]` pulls in its
+            // generated sibling `<file>.gen.pw` as a part of the same module (when it
+            // exists); suppressed in gen mode, which is producing that sibling.
+            if !(genMode) {
+                if sawDirective {
+                    val genPath: Array[U8] = genSiblingPath(path: path)
+                    if genPath.count != 0 {
+                        if fileExists(path: genPath) {
+                            if !(pathSeen(buf: pathBuf, loaded: loaded, path: genPath)) {
+                                val gs: U64 = pathBuf.count
+                                appendBytes(into: inout pathBuf, from: genPath)
+                                loaded.append(<Bind nameStart=gs nameLen=genPath.count fieldStart=moduleId fieldLen=genPath.count />)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        val s: String = readStdin()
+        val fileStart: U64 = c.arena.bytes.count
+        c.appendSrc(from: s.bytes)
+        c.modules.ranges.append(<Bind nameStart=fileStart nameLen=c.arena.bytes.count - fileStart fieldStart=0 fieldLen=0 />)
+        val items: Array[TopItemAst] = c.parseAndLowerFile(fileBytes: s.bytes, fileStart: fileStart)
+    }
+    // (The former @Std/Prelude force-load is gone: the ambient lang items it once carried
+    // — Array/Dictionary — now live in @Std/Lang, the single ambient module force-loaded
+    // first above. There is no implicit prelude module anymore.)
+    // built-in-name span cache (kwSpan): append the lang-item names at known
+    // offsets so type recovery can name `String`/`U64`/`Array`/… without scanning
+    // the source. Before any analysis (which calls kwSpan via exprType).
+    c.buildKwCache()
+    // assoc-val reads (spec/05): rewrite `Type.NAME` (a Field on a type that owns an
+    // `assoc fn NAME`) into a zero-arg assoc-fn call, before any analysis sees it.
+    c.rewriteAssocValReads()
+    // named factory calls (spec/05): rewrite `<Type.name attrs/>` to an assoc-fn call
+    // when `name` is a named factory (not an enum variant).
+    c.rewriteFactoryConstruction()
+    // import name aliases (spec/15): rewrite `alias(args)` to the real imported name
+    // for each `with { real as alias }`, before visibility/resolution analysis.
+    c.rewriteImportAliases()
+    // module-level variable init order (spec/15): topologically sort globals so a
+    // forward reference in an initializer reads the already-initialized value.
+    c.orderGlobalsByDependency()
+    // derive (#5): synthesize `@[Eq]`/`@[Ord]` witnesses before any analysis.
+    c.synthesizeDerives()
+    // inter-trait conformance (spec/08,09): `impl B as A` makes every type
+    // conforming to subject trait B also conform to A; copy the methods onto each
+    // conforming concrete type (before provided methods, so A's own provided
+    // methods also reach the newly-conforming types). The headless form
+    // `impl[T] T as A where T: B` is rejected separately (Verify.checkBlanketHeadless).
+    c.instantiateTraitSubjectConforms()
+    // trait provided methods (spec/08): copy each `impl Trait { }` provided
+    // method onto every conforming type, so they ride normal method resolution.
+    c.instantiateProvidedMethods()
+    // defaultExtension collisions (spec/09): a default extension's method must not
+    // share a selector with the type's own / provided / another default extension's
+    // method (they would both join bare resolution). Loud at the declaration.
+    c.checkDefaultExtCollisions()
+    // recursive value types (spec/03): mark fields that close a containment cycle
+    // onto their owner; codegen stores them behind a heap pointer so the C type is
+    // finite (hidden indirection; value semantics kept by deref-read/repoint-write).
+    c.markBoxedFields()
+    // ownership validity (spec/03): a struct owning a unique value must be
+    // `unique`; parameter access modes must match copyability. Both exit on error.
+    c.checkFieldContagion()
+    // `deinit` only on a unique type (spec/03). (Distinct generic type-param names are
+    // checked per-bracket in lowerTypeParamNames, before impl++method lists merge.)
+    c.checkDeinitOnlyOnUnique()
+    c.checkFieldDefaults()
+    c.checkParamDefaults()
+    c.checkAllParamModes()
+    c.checkArrayElemsNotUnique()
+    // match pattern soundness (spec/11): a variant/struct pattern must name real
+    // fields (else codegen emits `_m.data.V.<missing>` -> broken C). Loud-reject.
+    c.checkMatchBinds()
+    // missing-return (spec/11): a non-`()` function must return/panic/diverge on
+    // every path — Plew does not implicitly return the tail expression, so falling
+    // off the end would silently yield uninitialized memory.
+    c.checkReturns()
+    // trait conformance is explicit and complete (spec/08): every requirement of
+    // each `impl Type as Trait` must be witnessed (a body method or a `via` alias).
+    c.checkConformances()
+    // existential formation (spec/08): `any P` is supported only over a trait with
+    // no type args / associated types in this increment (else loud-reject).
+    c.checkAnyFormation()
+    // additional spec-fidelity checks (trait/generics audit): reject a generic vs
+    // another same-selector overload, methods on built-in types, and `move fn` on
+    // a copyable receiver.
+    c.checkOverloadCollisions()
+    c.checkDuplicateTraitReqs()
+    c.checkImplOnBuiltin()
+    c.checkImplOnNewtype()
+    c.checkMoveFnReceivers()
+    // module visibility (spec/15): a name brought in by `import … with { }` must be
+    // part of its module's public surface (`export`). Importing from the wrong
+    // module also fails here — that module doesn't get loaded, so the name isn't
+    // among the exported (loaded) declarations.
+    c.checkImports()
+    c.detectImportCycles()
+    c.checkUseVisibility()
+    c.checkTypeVisibility()
+    // gen mode (spec/16): replace the program with the synthesized derive-runner
+    // harness `main`. Added after the user-code checks (so its synthetic call to
+    // `deriveFromSource`/`write` is exempt from import hygiene) and before
+    // instantiation discovery (so its `print`/method instances are emitted).
+    if c.genMode {
+        c.synthGenMain()
+    }
+    // discover concrete generic instantiations to monomorphize.
+    c.collectGenInsts()
+    // discover concrete instantiations of generic free functions from call sites
+    // (each emitted as a specialized C function `f_<arg-mangle>`).
+    c.collectFnInsts()
+    // discover bare function-value references (need a closure-ABI thunk each).
+    c.collectFnThunks()
+    // enforce `where T: Trait` bounds (spec/08): each instantiation's concrete
+    // type argument must conform to the trait its parameter is bound to.
+    c.checkFnBounds()
+    // eager generic type-check (#9): every generic template body is checked once
+    // against its `where` bounds — a method/operator on a type parameter must be
+    // provided by its bounds (no C++-style "errors only at instantiation").
+    c.checkGenericBodies()
+    // unique types cannot be generic type arguments (wrap in Ref[T]); checked
+    // after instantiation discovery since it scans the concrete genInsts.
+    c.checkGenericUniqueArgs()
+    // typed-AST cache (Phase B): one type slot per expression node, filled lazily
+    // by `typeOf` during non-generic emission. Built now — expr ids are stable.
+    c.buildExprTyTable()
+    // backend-independent acceptance pass (spec/15): run the per-expr/stmt checks
+    // that were historically done inline during emission (rebuilding the local
+    // symbol table as it walks), so acceptance soundness does not depend on how
+    // emission works. Runs AFTER the typed-AST cache so the operator-witness /
+    // visibility checks see recovered expression types.
+    c.verifyProgram()
+    return c
+}
+
+fn digitStr(d: I64) -> String {
+    if d == 0 { return "0" }
+    if d == 1 { return "1" }
+    if d == 2 { return "2" }
+    if d == 3 { return "3" }
+    if d == 4 { return "4" }
+    if d == 5 { return "5" }
+    if d == 6 { return "6" }
+    if d == 7 { return "7" }
+    if d == 8 { return "8" }
+    return "9"
+}
+
+// U64 digit (0-9) -> its glyph. A U64 twin of digitStr: with no implicit
+// conversions and `as` restricted to lossless, an I64 digitStr cannot serve a
+// U64 caller (U64->I64 is not lossless), so unsigned printing needs its own.
+export fn digitStrU(d: U64) -> String {
+    if d == 0 { return "0" }
+    if d == 1 { return "1" }
+    if d == 2 { return "2" }
+    if d == 3 { return "3" }
+    if d == 4 { return "4" }
+    if d == 5 { return "5" }
+    if d == 6 { return "6" }
+    if d == 7 { return "7" }
+    if d == 8 { return "8" }
+    return "9"
+}
+
+// Compiler diagnostics. Ordinary module functions (not ambient builtins) so the
+// compiler source stays spec-valid: they report on stderr via @Std/Io `eprint`
+// and stop via @Std/Process `exit`. `compileErrorAt` includes a source line.
+fn eprintInt(n: I64) {
+    if n >= 10 {
+        eprintInt(n: n / 10)
+    }
+    eprint(text: digitStr(d: n % 10))
+}
+
+export fn compileErrorAt(line: I64, msg: String) {
+    eprint(text: "plewc: error: line ")
+    eprintInt(n: line)
+    eprint(text: ": ")
+    eprint(text: msg)
+    eprint(text: "\n")
+    exit(code: 1)
+}
+
+// Whether the literal (non-negative magnitude `value`, negated when `neg`) fits
+// an integer type of the given width and signedness. Span-free core of
+// litFitsType, so synthetic contexts (index = U64, print = I64) can range-check
+// literals without a type-name span. The 64-bit signed-negative bound (2^63) is
+// expressed via `value - 1 <= 2^63-1` so no 2^63 literal is needed.
+fn litFitsBits(value: U64, neg: Bool, bits: U64, sgn: Bool) -> Bool {
+    if neg {
+        // a negative literal needs a signed target; magnitude <= 2^(bits-1).
+        if !(sgn) {
+            return false
+        }
+        if bits == 8 { return value <= 128 }
+        if bits == 16 { return value <= 32768 }
+        if bits == 32 { return value <= 2147483648 }
+        if value == 0 { return true }
+        return (value - 1) <= 9223372036854775807U64
+    }
+    if sgn {
+        if bits == 8 { return value <= 127 }
+        if bits == 16 { return value <= 32767 }
+        if bits == 32 { return value <= 2147483647 }
+        return value <= 9223372036854775807U64
+    }
+    if bits == 8 { return value <= 255 }
+    if bits == 16 { return value <= 65535 }
+    if bits == 32 { return value <= 4294967295 }
+    return true
+}
+
+// ---- scalar (literal) match desugar (spec/11) ----
+// A `match` that does NOT dispatch on enum variants or struct destructuring — its
+// arms are only bare literals (`0`/`"x"`/`true`/`-1`) and wildcards — is not an enum
+// match: it desugars here into a single-eval scrutinee binding plus an `==` if/else
+// chain, reusing the operator-witness `==` and the existing if-codegen. The arena's
+// Stmt.Match / Expr.MatchExpr never see a literal/scalar pattern, so the backend
+// enum-tag match emitter stays untouched.
+// True if any arm dispatches on an enum variant or a struct pattern (so the match
+// must go through the enum emitter, not the scalar desugar).
+fn matchHasEnumOrStruct(arms: Array[MatchArmAst]) -> Bool {
+    mut val i: U64 = 0
+    while i < arms.count {
+        val p: PatternAst = arms[i].pattern
+        if !(p.isWildcard) {
+            if !(p.isLiteral) {
+                return true
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// True if the arms are exactly the two boolean literals `true` and `false` (a
+// structurally exhaustive Bool match — no wildcard needed, spec/11). Used to allow
+// `match b { true => … false => … }`.
+fn litArmsAreBoolExhaustive(arms: Array[MatchArmAst]) -> Bool {
+    mut val sawTrue: Bool = false
+    mut val sawFalse: Bool = false
+    mut val i: U64 = 0
+    while i < arms.count {
+        val p: PatternAst = arms[i].pattern
+        if p.isWildcard {
+            return false
+        }
+        if p.isLiteral {
+            match p.lit {
+                ExprAst.IntLit(val value, val isBool, tySuffix: _, span: _) => {
+                    if isBool {
+                        if value == 1U64 {
+                            sawTrue = true
+                        }
+                        if value == 0U64 {
+                            sawFalse = true
+                        }
+                    } else {
+                        return false
+                    }
+                }
+                _ => { return false }
+            }
+        } else {
+            return false
+        }
+        i += 1
+    }
+    return sawTrue && sawFalse
+}
+
+fn armGiveExprAst(arm: MatchArmAst) -> ExprAst {
+    if arm.body.stmts.count > 0 {
+        match arm.body.stmts[0] {
+            StmtAst.Give(val value, val span) => { return value }
+            _ => {}
+        }
+    }
+    return emptyExpr()
+}
+
+fn matchHasCapture(arms: Array[MatchArmAst]) -> Bool {
+    mut val i: U64 = 0
+    while i < arms.count {
+        if arms[i].pattern.captureName.bytes.count > 0 {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// True if a value-match arm block diverges (`=> panic …` / `=> return …`) rather
+// than giving a value — its terminal statement is not a `give`.
+fn armBlockDiverges(b: BlockAst) -> Bool {
+    if b.stmts.count == 0 {
+        return false
+    }
+    match b.stmts[b.stmts.count - 1] {
+        StmtAst.Give(value: _, span: _) => { return false }
+        _ => { return true }
+    }
+}
+
+// Byte length of a span.
+fn spanLen(s: Span) -> U64 {
+    return s.end - s.start
+}
+
+// Whether string `a` sorts after string `b` (byte-lexicographic) — for ordering a
+// record's fields by name into a canonical layout.
+fn stringGt(a: String, b: String) -> Bool {
+    mut val i: U64 = 0
+    while i < a.bytes.count {
+        if i >= b.bytes.count {
+            return true
+        }
+        if a.bytes[i] > b.bytes[i] {
+            return true
+        }
+        if a.bytes[i] < b.bytes[i] {
+            return false
+        }
+        i += 1
+    }
+    return false
+}
+
+fn containsU64(xs: Array[U64], v: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < xs.count {
+        if xs[i] == v {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// The FieldDef sentinel returned when a lookup fails (nameLen == 0).
+fn noField() -> FieldDef {
+    return <FieldDef nameStart=0 nameLen=0 tyStart=0 tyLen=0 tyIsArray=false ty=0 isMut=false hasDefault=false defaultVal=0 vis=0 />
+}
+
+// Sentinel `typeCache.kind` value marking an uncomputed type-cache slot (real kinds
+// are 0=scalar/1=String/2=named/3=array).
+fn typeUnfilled() -> I64 {
+    return 99
+}
+
+// Sentinel `typeCache.callee` value marking an uncomputed callee slot. U64 max can
+// never be a real `arena.funcs` index nor the `funcs.count` not-found marker.
+fn calleeUnfilled() -> U64 {
+    return 18446744073709551615U64
+}
+
+// The kw name for a recorded int-context code (1..8 -> I8..U64).
+fn intCtxKw(code: U64) -> String {
+    if code == 1 { return "I8" }
+    if code == 2 { return "I16" }
+    if code == 3 { return "I32" }
+    if code == 4 { return "I64" }
+    if code == 5 { return "U8" }
+    if code == 6 { return "U16" }
+    if code == 7 { return "U32" }
+    if code == 8 { return "U64" }
+    if code == 9 { return "F64" }
+    return "F32"
+}
+
+// ---- lightweight type recovery (for monomorphization + .bytes dispatch) ----
+fn scalarInfo() -> TypeInfo {
+    return <TypeInfo kind=0 nameStart=0 nameLen=0 ref=0 />
+}
+
+// Add a match arm's payload binds to the current scope with their field types so
+// the arm body resolves them (mirrors the C emitter's per-arm bindings, incl.
+// grounding a generic instance's field types under the scrutinee's type args —
+// `Box[I32] { val v }` binds v: I32, not the template T). Enum arms resolve via
+// the variant; struct-destructure arms (`S { val x }`) via the struct.
+// Whether any of `binds` matches the struct field (start,len) by FIELD name (a real
+// bind or a `field: _` discard — both cover the field; content comparison unifies the
+// re-interned struct-field name with the pattern's original field span).
+// A reliable source offset for a match-arm diagnostic: a bind's original-source
+// offset (set by lowerBinds) if present, else the (possibly re-interned) pattern
+// type-name offset as a fallback.
+fn armDiagOffset(a: MatchArm) -> U64 {
+    if a.binds.count > 0U64 {
+        if a.binds[0].offset > 0U64 {
+            return a.binds[0].offset
+        }
+    }
+    return a.enumStart
+}
+
+// A decimal digit (0-9) as its ASCII byte. (`48 + d` would need a U64->U8 cast,
+// which the lossless-`as` discipline forbids, so spell it out.)
+fn digitByte(d: U64) -> U8 {
+    if d == 0 { return 48 }
+    if d == 1 { return 49 }
+    if d == 2 { return 50 }
+    if d == 3 { return 51 }
+    if d == 4 { return 52 }
+    if d == 5 { return 53 }
+    if d == 6 { return 54 }
+    if d == 7 { return 55 }
+    if d == 8 { return 56 }
+    return 57
+}

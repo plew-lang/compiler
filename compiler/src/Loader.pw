@@ -14,18 +14,20 @@
 // fileStart` so every node span is an absolute offset into c.arena.bytes (module tagging
 // via moduleOf works). Returns the parsed item list so the loader can follow the
 // `Import` items (part/import) to more files and notice `@[...]` directives.
-fn parseAndLowerFile(c: inout Comp, fileBytes: Array[U8], fileStart: U64) -> Array[TopItemAst] {
-    mut val lx: Lexer = <Lexer bytes=fileBytes pos=0 toks=[] depth=0 />
-    lex(lx: inout lx)
-    mut val p: P = <P bytes=fileBytes toks=lx.toks pos=0 base=fileStart />
-    val items: Array[TopItemAst] = parseProgramAst(p: inout p)
-    if p.hasErr {
-        compileErrorAt(line: c.lineOf(offset: p.errOff), msg: p.errMsg)
+pub impl Comp {
+    inout fn parseAndLowerFile(fileBytes: Array[U8], fileStart: U64) -> Array[TopItemAst] {
+        mut val lx: Lexer = <Lexer bytes=fileBytes pos=0 toks=[] depth=0 />
+        lex(lx: inout lx)
+        mut val p: P = <P bytes=fileBytes toks=lx.toks pos=0 base=fileStart />
+        val items: Array[TopItemAst] = parseProgramAst(p: inout p)
+        if p.hasErr {
+            compileErrorAt(line: self.lineOf(offset: p.errOff), msg: p.errMsg)
+        }
+        mut val i: U64 = 0
+        while i < items.count {
+            self.lowerTopItem(item: items[i])
+            i += 1
+        }
+        return items
     }
-    mut val i: U64 = 0
-    while i < items.count {
-        c.lowerTopItem(item: items[i])
-        i += 1
-    }
-    return items
 }

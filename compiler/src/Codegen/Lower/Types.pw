@@ -1,11 +1,6 @@
 // Part of the lowering pass (root: _.pw): type lowering, record-struct
 // synthesis, and argument / field / dict-literal lowering.
 
-// Byte length of a span.
-fn spanLen(s: Span) -> U64 {
-    return s.end - s.start
-}
-
 pub impl Comp {
 
     // Register an Array element type name for later monomorphization (deduped by the
@@ -73,25 +68,6 @@ pub impl Comp {
         }
         return out
     }
-}
-
-// Whether string `a` sorts after string `b` (byte-lexicographic) — for ordering a
-// record's fields by name into a canonical layout.
-fn stringGt(a: String, b: String) -> Bool {
-    mut val i: U64 = 0
-    while i < a.bytes.count {
-        if i >= b.bytes.count {
-            return true
-        }
-        if a.bytes[i] > b.bytes[i] {
-            return true
-        }
-        if a.bytes[i] < b.bytes[i] {
-            return false
-        }
-        i += 1
-    }
-    return false
 }
 
 pub impl Comp {

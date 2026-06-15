@@ -102,21 +102,6 @@ pub impl Comp {
     }
 }
 
-// A decimal digit (0-9) as its ASCII byte. (`48 + d` would need a U64->U8 cast,
-// which the lossless-`as` discipline forbids, so spell it out.)
-fn digitByte(d: U64) -> U8 {
-    if d == 0 { return 48 }
-    if d == 1 { return 49 }
-    if d == 2 { return 50 }
-    if d == 3 { return 51 }
-    if d == 4 { return 52 }
-    if d == 5 { return 53 }
-    if d == 6 { return 54 }
-    if d == 7 { return 55 }
-    if d == 8 { return 56 }
-    return 57
-}
-
 pub impl Comp {
 
     inout fn appendU64Digits(n: U64) {

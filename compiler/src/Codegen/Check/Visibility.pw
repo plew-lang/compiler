@@ -228,9 +228,6 @@ pub impl Comp {
     }
 }
 
-// Sentinel for "no defining module found" (a value no real module id takes).
-fn importCycleSentinel() -> U64 { return 4000000000U64 }
-
 pub impl Comp {
 
     // The module that DEFINES the name (start,len): a free function's own module, or a

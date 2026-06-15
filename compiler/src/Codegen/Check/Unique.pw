@@ -61,23 +61,6 @@ pub impl Comp {
     }
 }
 
-// Range-check each struct field's default-value literal against the field's
-// declared type (spec/05: `val x: T = expr` is memberwise-factory default-arg
-// sugar, so the default must fit T exactly as an explicit construction would —
-// `val n: I8 = 300` is rejected here, not silently truncated at codegen). Enum
-// variant fields take no default, so only struct fields are visited.
-// Whether interned id `id` is in `set`.
-fn idInSet(set: Array[U64], id: U64) -> Bool {
-    mut val i: U64 = 0
-    while i < set.count {
-        if set[i] == id {
-            return true
-        }
-        i += 1
-    }
-    return false
-}
-
 pub impl Comp {
 
     // Does expression `exprId` reference any name whose interned id is in `forbidden`?
