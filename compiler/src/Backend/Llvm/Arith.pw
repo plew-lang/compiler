@@ -7,26 +7,29 @@
 // Comparisons yield i1; arithmetic yields the operand width. This is the WRAPPING
 // floor — the wrapping* methods call it directly; the normal operator/compound
 // paths go through buildBinOpChecked (overflow / div-by-zero panic).
-fn buildBinOpS(c: inout Comp, st: inout LlvmCtx, op: I64, l: LLVMValueRef, r: LLVMValueRef, unsigned: Bool) -> LLVMValueRef {
-    if op == opAdd() { return LLVMBuildAdd(st.b, l, r, anon()) }
-    if op == opSub() { return LLVMBuildSub(st.b, l, r, anon()) }
-    if op == opMul() { return LLVMBuildMul(st.b, l, r, anon()) }
-    if op == opDiv() { if unsigned { return LLVMBuildUDiv(st.b, l, r, anon()) } return LLVMBuildSDiv(st.b, l, r, anon()) }
-    if op == opRem() { if unsigned { return LLVMBuildURem(st.b, l, r, anon()) } return LLVMBuildSRem(st.b, l, r, anon()) }
-    if op == opBitAnd() { return LLVMBuildAnd(st.b, l, r, anon()) }
-    if op == opBitOr() { return LLVMBuildOr(st.b, l, r, anon()) }
-    if op == opBitXor() { return LLVMBuildXor(st.b, l, r, anon()) }
-    if op == opShl() { return LLVMBuildShl(st.b, l, r, anon()) }
-    if op == opShr() { if unsigned { return LLVMBuildLShr(st.b, l, r, anon()) } return LLVMBuildAShr(st.b, l, r, anon()) }
-    if op == opEq() { return LLVMBuildICmp(st.b, llvmIntEq(), l, r, anon()) }
-    if op == opNe() { return LLVMBuildICmp(st.b, llvmIntNe(), l, r, anon()) }
-    if op == opLt() { if unsigned { return LLVMBuildICmp(st.b, llvmIntUlt(), l, r, anon()) } return LLVMBuildICmp(st.b, llvmIntSlt(), l, r, anon()) }
-    if op == opLe() { if unsigned { return LLVMBuildICmp(st.b, llvmIntUle(), l, r, anon()) } return LLVMBuildICmp(st.b, llvmIntSle(), l, r, anon()) }
-    if op == opGt() { if unsigned { return LLVMBuildICmp(st.b, llvmIntUgt(), l, r, anon()) } return LLVMBuildICmp(st.b, llvmIntSgt(), l, r, anon()) }
-    if op == opGe() { if unsigned { return LLVMBuildICmp(st.b, llvmIntUge(), l, r, anon()) } return LLVMBuildICmp(st.b, llvmIntSge(), l, r, anon()) }
-    // unsupported op (bitwise/shift land in a later increment): reject loudly.
-    compileErrorAt(line: 0, msg: "LLVM backend: operator not yet supported")
-    return l
+
+pub impl LlvmCtx {
+    inout fn buildBinOpS(c: inout Comp, op: I64, l: LLVMValueRef, r: LLVMValueRef, unsigned: Bool) -> LLVMValueRef {
+        if op == opAdd() { return LLVMBuildAdd(self.b, l, r, anon()) }
+        if op == opSub() { return LLVMBuildSub(self.b, l, r, anon()) }
+        if op == opMul() { return LLVMBuildMul(self.b, l, r, anon()) }
+        if op == opDiv() { if unsigned { return LLVMBuildUDiv(self.b, l, r, anon()) } return LLVMBuildSDiv(self.b, l, r, anon()) }
+        if op == opRem() { if unsigned { return LLVMBuildURem(self.b, l, r, anon()) } return LLVMBuildSRem(self.b, l, r, anon()) }
+        if op == opBitAnd() { return LLVMBuildAnd(self.b, l, r, anon()) }
+        if op == opBitOr() { return LLVMBuildOr(self.b, l, r, anon()) }
+        if op == opBitXor() { return LLVMBuildXor(self.b, l, r, anon()) }
+        if op == opShl() { return LLVMBuildShl(self.b, l, r, anon()) }
+        if op == opShr() { if unsigned { return LLVMBuildLShr(self.b, l, r, anon()) } return LLVMBuildAShr(self.b, l, r, anon()) }
+        if op == opEq() { return LLVMBuildICmp(self.b, llvmIntEq(), l, r, anon()) }
+        if op == opNe() { return LLVMBuildICmp(self.b, llvmIntNe(), l, r, anon()) }
+        if op == opLt() { if unsigned { return LLVMBuildICmp(self.b, llvmIntUlt(), l, r, anon()) } return LLVMBuildICmp(self.b, llvmIntSlt(), l, r, anon()) }
+        if op == opLe() { if unsigned { return LLVMBuildICmp(self.b, llvmIntUle(), l, r, anon()) } return LLVMBuildICmp(self.b, llvmIntSle(), l, r, anon()) }
+        if op == opGt() { if unsigned { return LLVMBuildICmp(self.b, llvmIntUgt(), l, r, anon()) } return LLVMBuildICmp(self.b, llvmIntSgt(), l, r, anon()) }
+        if op == opGe() { if unsigned { return LLVMBuildICmp(self.b, llvmIntUge(), l, r, anon()) } return LLVMBuildICmp(self.b, llvmIntSge(), l, r, anon()) }
+        // unsupported op (bitwise/shift land in a later increment): reject loudly.
+        compileErrorAt(line: 0, msg: "LLVM backend: operator not yet supported")
+        return l
+    }
 }
 
 // ---- checked arithmetic (overflow / divide-by-zero panic) ----
@@ -45,12 +48,15 @@ fn llvmWidthIdx(w: U32) -> U64 {
     return 3U64
 }
 
-// The i8/i16/i32/i64 LLVM type for a width bucket.
-fn llvmIntTyOfIdx(st: inout LlvmCtx, wi: U64) -> LLVMTypeRef {
-    if wi == 0U64 { return st.i8ty }
-    if wi == 1U64 { return st.i16ty }
-    if wi == 2U64 { return st.i32ty }
-    return st.i64ty
+pub impl LlvmCtx {
+
+    // The i8/i16/i32/i64 LLVM type for a width bucket.
+    inout fn llvmIntTyOfIdx(wi: U64) -> LLVMTypeRef {
+        if wi == 0U64 { return self.i8ty }
+        if wi == 1U64 { return self.i16ty }
+        if wi == 2U64 { return self.i32ty }
+        return self.i64ty
+    }
 }
 
 // "Add"/"Sub"/"Mul"/"Div"/"Rem" bytes for an op (callers guard to these ops).
@@ -110,227 +116,229 @@ fn checkedNameId(op: I64, unsigned: Bool, wi: U64) -> U64 {
     return 9000U64 + checkedOpIdx(op: op) * 8U64 + sgn + wi
 }
 
-// add/sub/mul/div/rem -> a call to the checked runtime helper; any other op (and
-// the wrapping* methods, which call buildBinOpS directly) -> the raw builder.
-fn buildBinOpChecked(c: inout Comp, st: inout LlvmCtx, op: I64, l: LLVMValueRef, r: LLVMValueRef, unsigned: Bool) -> LLVMValueRef {
-    if op == opAdd() || op == opSub() || op == opMul() || op == opDiv() || op == opRem() {
-        val wi: U64 = llvmWidthIdx(w: LLVMGetIntTypeWidth(LLVMTypeOf(l)))
-        val ity: LLVMTypeRef = llvmIntTyOfIdx(st: inout st, wi: wi)
+pub impl LlvmCtx {
+
+    // add/sub/mul/div/rem -> a call to the checked runtime helper; any other op (and
+    // the wrapping* methods, which call buildBinOpS directly) -> the raw builder.
+    inout fn buildBinOpChecked(c: inout Comp, op: I64, l: LLVMValueRef, r: LLVMValueRef, unsigned: Bool) -> LLVMValueRef {
+        if op == opAdd() || op == opSub() || op == opMul() || op == opDiv() || op == opRem() {
+            val wi: U64 = llvmWidthIdx(w: LLVMGetIntTypeWidth(LLVMTypeOf(l)))
+            val ity: LLVMTypeRef = self.llvmIntTyOfIdx(wi: wi)
+            mut val ptys: Array[LLVMTypeRef] = []
+            ptys.append(value: ity)
+            ptys.append(value: ity)
+            val fty: LLVMTypeRef = LLVMFunctionType(ity, arrayCPtr(ptys), 2U64, 0I32)
+            val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: checkedFnName(op: op, unsigned: unsigned, wi: wi), nameId: checkedNameId(op: op, unsigned: unsigned, wi: wi), fnTy: fty)
+            mut val av: Array[LLVMValueRef] = []
+            av.append(value: l)
+            av.append(value: r)
+            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
+        }
+        return self.buildBinOpS(c: inout c, op: op, l: l, r: r, unsigned: unsigned)
+    }
+
+    // Checked signed negation (`-x`): a call to `plew_<iN>Neg`, which panics on
+    // INT_MIN. Neg is signed-only (spec/12), so the helper prefix is always signed.
+    inout fn buildNegChecked(c: inout Comp, v: LLVMValueRef) -> LLVMValueRef {
+        val wi: U64 = llvmWidthIdx(w: LLVMGetIntTypeWidth(LLVMTypeOf(v)))
+        val ity: LLVMTypeRef = self.llvmIntTyOfIdx(wi: wi)
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(value: ity)
-        ptys.append(value: ity)
-        val fty: LLVMTypeRef = LLVMFunctionType(ity, arrayCPtr(ptys), 2U64, 0I32)
-        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: checkedFnName(op: op, unsigned: unsigned, wi: wi), nameId: checkedNameId(op: op, unsigned: unsigned, wi: wi), fnTy: fty)
+        val fty: LLVMTypeRef = LLVMFunctionType(ity, arrayCPtr(ptys), 1U64, 0I32)
+        mut val nm: Array[U8] = "plew_".bytes
+        appendBytes(into: inout nm, from: checkedPrefixBytes(unsigned: false, wi: wi))
+        appendBytes(into: inout nm, from: "Neg".bytes)
+        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: stringFromBytesUnchecked(nm), nameId: 9100U64 + wi, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: l)
-        av.append(value: r)
-        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U64, anon())
+        av.append(value: v)
+        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
-    return buildBinOpS(c: inout c, st: inout st, op: op, l: l, r: r, unsigned: unsigned)
-}
 
-// Checked signed negation (`-x`): a call to `plew_<iN>Neg`, which panics on
-// INT_MIN. Neg is signed-only (spec/12), so the helper prefix is always signed.
-fn buildNegChecked(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef) -> LLVMValueRef {
-    val wi: U64 = llvmWidthIdx(w: LLVMGetIntTypeWidth(LLVMTypeOf(v)))
-    val ity: LLVMTypeRef = llvmIntTyOfIdx(st: inout st, wi: wi)
-    mut val ptys: Array[LLVMTypeRef] = []
-    ptys.append(value: ity)
-    val fty: LLVMTypeRef = LLVMFunctionType(ity, arrayCPtr(ptys), 1U64, 0I32)
-    mut val nm: Array[U8] = "plew_".bytes
-    appendBytes(into: inout nm, from: checkedPrefixBytes(unsigned: false, wi: wi))
-    appendBytes(into: inout nm, from: "Neg".bytes)
-    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: stringFromBytesUnchecked(nm), nameId: 9100U64 + wi, fnTy: fty)
-    mut val av: Array[LLVMValueRef] = []
-    av.append(value: v)
-    return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U64, anon())
-}
-
-// Construct a registered struct value from a JSX `<Type field=expr ... />`: build
-// each declared field (matched by name, or its default) in order via insertvalue.
-fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: Array[MakeField]) -> LLVMValueRef {
-    // inside a generic method/function body, a construction `<Box[T] … />` names
-    // the syntactic `Box[T]`; ground its type args through the active env so it
-    // resolves to the registered concrete instance (`Box[I32]`).
-    mut val gty: U64 = ty
-    if c.cur.typeParams.count > 0U64 {
-        gty = c.groundTypeRef(ref: ty)
-    }
-    // a context-less record literal `(a:1, b:2)` lowers to a Make with NO type name
-    // (Lower.pw): resolve its record struct from the construction context — the
-    // enclosing field/payload builder sets `st.expectedTy` to the field's declared
-    // record type (a `(`-prefixed canonical name). Without this, a record used as an
-    // enum payload (`<Optional.Some v=(index:1, value:2)/>`) can't be built.
-    if typeLen == 0U64 {
-        if st.expectedTy != 0U64 {
-            if st.expectedTy < c.arena.types.count {
-                val et: TypeRef = c.arena.types[st.expectedTy]
-                if et.nameLen > 0U64 {
-                    if c.arena.bytes[et.nameStart] == 40U8 {
-                        val rreg: U64 = structRegSlot(c: inout c, st: inout st, start: et.nameStart, len: et.nameLen)
-                        if rreg < st.structIdxs.count {
-                            st.expectedTy = 0U64
-                            return buildStructValue(c: inout c, st: inout st, sd: c.arena.structs[st.structIdxs[rreg]], sty: st.structTys[rreg], fields: fields, errOffset: et.nameStart)
+    // Construct a registered struct value from a JSX `<Type field=expr ... />`: build
+    // each declared field (matched by name, or its default) in order via insertvalue.
+    inout fn genLlvmMake(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: Array[MakeField]) -> LLVMValueRef {
+        // inside a generic method/function body, a construction `<Box[T] … />` names
+        // the syntactic `Box[T]`; ground its type args through the active env so it
+        // resolves to the registered concrete instance (`Box[I32]`).
+        mut val gty: U64 = ty
+        if c.cur.typeParams.count > 0U64 {
+            gty = c.groundTypeRef(ref: ty)
+        }
+        // a context-less record literal `(a:1, b:2)` lowers to a Make with NO type name
+        // (Lower.pw): resolve its record struct from the construction context — the
+        // enclosing field/payload builder sets `self.expectedTy` to the field's declared
+        // record type (a `(`-prefixed canonical name). Without this, a record used as an
+        // enum payload (`<Optional.Some v=(index:1, value:2)/>`) can't be built.
+        if typeLen == 0U64 {
+            if self.expectedTy != 0U64 {
+                if self.expectedTy < c.arena.types.count {
+                    val et: TypeRef = c.arena.types[self.expectedTy]
+                    if et.nameLen > 0U64 {
+                        if c.arena.bytes[et.nameStart] == 40U8 {
+                            val rreg: U64 = structRegSlot(c: inout c, st: inout self, start: et.nameStart, len: et.nameLen)
+                            if rreg < self.structIdxs.count {
+                                self.expectedTy = 0U64
+                                return self.buildStructValue(c: inout c, sd: c.arena.structs[self.structIdxs[rreg]], sty: self.structTys[rreg], fields: fields, errOffset: et.nameStart)
+                            }
                         }
                     }
                 }
             }
         }
-    }
-    if isEnum {
-        return st.genLlvmMakeEnum(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, ty: gty, fields: fields)
-    }
-    // an un-suffixed generic-struct construction (`inner=<Box value=e />`) has an
-    // ungrounded head `gty`; fall back to the expected type from context (the field's
-    // declared instance type set by genFieldValue) when it names this same generic
-    // struct. Consume it so it can't leak into the field sub-expressions.
-    if !(c.isGenericInst(ref: gty)) {
-        if st.expectedTy != 0U64 {
-            if c.isGenericInst(ref: st.expectedTy) {
-                val et: TypeRef = c.arena.types[st.expectedTy]
-                if spansEqual(c: inout c, aStart: et.nameStart, aLen: et.nameLen, bStart: typeStart, bLen: typeLen) {
-                    gty = st.expectedTy
+        if isEnum {
+            return self.genLlvmMakeEnum(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, ty: gty, fields: fields)
+        }
+        // an un-suffixed generic-struct construction (`inner=<Box value=e />`) has an
+        // ungrounded head `gty`; fall back to the expected type from context (the field's
+        // declared instance type set by genFieldValue) when it names this same generic
+        // struct. Consume it so it can't leak into the field sub-expressions.
+        if !(c.isGenericInst(ref: gty)) {
+            if self.expectedTy != 0U64 {
+                if c.isGenericInst(ref: self.expectedTy) {
+                    val et: TypeRef = c.arena.types[self.expectedTy]
+                    if spansEqual(c: inout c, aStart: et.nameStart, aLen: et.nameLen, bStart: typeStart, bLen: typeLen) {
+                        gty = self.expectedTy
+                    }
                 }
             }
         }
-    }
-    st.expectedTy = 0U64
-    // `<Ref[T] value=e />`: allocate a heap cell holding the pointee, store e, and
-    // yield the cell pointer (the Ref value). Refcount/release is hidden cost,
-    // deferred (no deinit in these cases yet) — the pointer aliases on copy so
-    // shared mutation through `->` is visible.
-    if rangeEquals(bytes: c.arena.bytes, start: typeStart, len: typeLen, kw: "Ref") {
-        return genLlvmMakeRef(c: inout c, st: inout st, ty: gty, fields: fields)
-    }
-    // a generic struct instance (Box[I32]): build under its substitution env.
-    if c.isGenericInst(ref: gty) {
-        val gslot: U64 = genStructSlot(c: inout c, st: inout st, ref: gty)
-        if gslot < st.genStructRefs.count {
-            val sd: StructDef = c.arena.structs[st.genStructDefs[gslot]]
-            val savedP: Array[Bind] = c.cur.typeParams
-            val savedA: Array[U64] = c.cur.typeArgs
-            // MERGE (see genLlvmMakeEnum) so a field sub-expression referencing the
-            // enclosing method's type params still grounds.
-            c.cur.typeParams = concatParams(add: sd.typeParams, base: savedP)
-            c.cur.typeArgs = concatArgs(add: c.arena.types[gty].args, base: savedA)
-            val v: LLVMValueRef = buildStructValue(c: inout c, st: inout st, sd: sd, sty: st.genStructTys[gslot], fields: fields, errOffset: typeStart)
-            c.cur.typeParams = savedP
-            c.cur.typeArgs = savedA
-            return v
+        self.expectedTy = 0U64
+        // `<Ref[T] value=e />`: allocate a heap cell holding the pointee, store e, and
+        // yield the cell pointer (the Ref value). Refcount/release is hidden cost,
+        // deferred (no deinit in these cases yet) — the pointer aliases on copy so
+        // shared mutation through `->` is visible.
+        if rangeEquals(bytes: c.arena.bytes, start: typeStart, len: typeLen, kw: "Ref") {
+            return self.genLlvmMakeRef(c: inout c, ty: gty, fields: fields)
         }
-    }
-    // a newtype over a struct inherits its factory (spec/10): `<Brand code=… />`
-    // builds the underlying Rgb struct (identical representation). Resolve the
-    // construction name to the underlying before the registered-struct lookup.
-    mut val rtStart: U64 = typeStart
-    mut val rtLen: U64 = typeLen
-    val ntn: Bind = c.newtypeUnderName(start: typeStart, len: typeLen)
-    if ntn.nameStart != typeStart || ntn.nameLen != typeLen {
-        rtStart = ntn.nameStart
-        rtLen = ntn.nameLen
-    }
-    val reg: U64 = structRegSlot(c: inout c, st: inout st, start: rtStart, len: rtLen)
-    if reg >= st.structIdxs.count {
-        compileErrorAt(line: c.lineOf(offset: typeStart), msg: "LLVM backend: construction of this type not yet supported (Ref / nested-struct structs are TODO)")
-        return LLVMConstInt(st.i64ty, 0U64, 0I32)
-    }
-    return buildStructValue(c: inout c, st: inout st, sd: c.arena.structs[st.structIdxs[reg]], sty: st.structTys[reg], fields: fields, errOffset: typeStart)
-}
-
-// The LLVM type of a `Ref[T]`'s pointee T (from the instance's first type arg).
-fn refPointeeTy(c: inout Comp, st: inout LlvmCtx, refTy: U64) -> LLVMTypeRef {
-    if c.isRefInst(ref: refTy) {
-        return llvmTypeOfRef(c: inout c, st: inout st, ref: c.arena.types[refTy].args[0])
-    }
-    return st.i64ty
-}
-
-// The Ref instance TypeRef of an expression that evaluates to a `Ref[T]` (a local
-// carries it on locTypeRef), or 0 if it is not a Ref-typed expression.
-fn exprRefTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
-    val r: U64 = exprTypeRef(c: inout c, st: inout st, id: id)
-    if c.isRefInst(ref: r) {
-        return r
-    }
-    return 0U64
-}
-
-// The struct index of a `Ref[T]` base's pointee T (for `->field` resolution), or
-// c.arena.structs.count if the base isn't a Ref to a registered struct.
-fn refPointeeStructIdx(c: inout Comp, st: inout LlvmCtx, base: U64) -> U64 {
-    val r: U64 = exprRefTypeRef(c: inout c, st: inout st, id: base)
-    if r != 0U64 {
-        val t: TypeRef = c.arena.types[r]
-        if t.args.count > 0U64 {
-            val pt: TypeRef = c.arena.types[t.args[0]]
-            return localStructIdxFor(c: inout c, st: inout st, start: pt.nameStart, len: pt.nameLen)
+        // a generic struct instance (Box[I32]): build under its substitution env.
+        if c.isGenericInst(ref: gty) {
+            val gslot: U64 = self.genStructSlot(c: inout c, ref: gty)
+            if gslot < self.genStructRefs.count {
+                val sd: StructDef = c.arena.structs[self.genStructDefs[gslot]]
+                val savedP: Array[Bind] = c.cur.typeParams
+                val savedA: Array[U64] = c.cur.typeArgs
+                // MERGE (see genLlvmMakeEnum) so a field sub-expression referencing the
+                // enclosing method's type params still grounds.
+                c.cur.typeParams = concatParams(add: sd.typeParams, base: savedP)
+                c.cur.typeArgs = concatArgs(add: c.arena.types[gty].args, base: savedA)
+                val v: LLVMValueRef = self.buildStructValue(c: inout c, sd: sd, sty: self.genStructTys[gslot], fields: fields, errOffset: typeStart)
+                c.cur.typeParams = savedP
+                c.cur.typeArgs = savedA
+                return v
+            }
         }
-    }
-    return c.arena.structs.count
-}
-
-// Load a `Ref[T]` base's pointee struct VALUE (`*cell`) — the basis for `->field`.
-fn loadRefPointee(c: inout Comp, st: inout LlvmCtx, base: U64) -> LLVMValueRef {
-    val r: U64 = exprRefTypeRef(c: inout c, st: inout st, id: base)
-    val pty: LLVMTypeRef = refPointeeTy(c: inout c, st: inout st, refTy: r)
-    val cellPtr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: base)
-    return LLVMBuildLoad2(st.b, pty, cellPtr, anon())
-}
-
-// Build a `Ref[T]` value: malloc a cell of sizeof(T), store the `value` field's
-// pointee into it, and return the cell pointer.
-fn genLlvmMakeRef(c: inout Comp, st: inout LlvmCtx, ty: U64, fields: Array[MakeField]) -> LLVMValueRef {
-    val pty: LLVMTypeRef = refPointeeTy(c: inout c, st: inout st, refTy: ty)
-    val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(pty), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
-    // the pointee value (the `value` field).
-    mut val valExpr: U64 = 0
-    mut val mi: U64 = 0
-    while mi < fields.count {
-        if rangeEquals(bytes: c.arena.bytes, start: fields[mi].nameStart, len: fields[mi].nameLen, kw: "value") {
-            valExpr = fields[mi].value
-            mi = fields.count
-        } else {
-            mi += 1
+        // a newtype over a struct inherits its factory (spec/10): `<Brand code=… />`
+        // builds the underlying Rgb struct (identical representation). Resolve the
+        // construction name to the underlying before the registered-struct lookup.
+        mut val rtStart: U64 = typeStart
+        mut val rtLen: U64 = typeLen
+        val ntn: Bind = c.newtypeUnderName(start: typeStart, len: typeLen)
+        if ntn.nameStart != typeStart || ntn.nameLen != typeLen {
+            rtStart = ntn.nameStart
+            rtLen = ntn.nameLen
         }
+        val reg: U64 = structRegSlot(c: inout c, st: inout self, start: rtStart, len: rtLen)
+        if reg >= self.structIdxs.count {
+            compileErrorAt(line: c.lineOf(offset: typeStart), msg: "LLVM backend: construction of this type not yet supported (Ref / nested-struct structs are TODO)")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        return self.buildStructValue(c: inout c, sd: c.arena.structs[self.structIdxs[reg]], sty: self.structTys[reg], fields: fields, errOffset: typeStart)
     }
-    mut val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: valExpr)
-    if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
-        v = coerceInt(st: inout st, v: v, target: pty, unsigned: false)
-    }
-    LLVMBuildStore(st.b, v, cell)
-    return cell
-}
 
-// Build a struct value of LLVM type `sty` from def `sd`: each declared field
-// (matched by name, or its default), under the active substitution env.
-fn buildStructValue(c: inout Comp, st: inout LlvmCtx, sd: StructDef, sty: LLVMTypeRef, fields: Array[MakeField], errOffset: U64) -> LLVMValueRef {
-    mut val agg: LLVMValueRef = LLVMGetUndef(sty)
-    mut val fi: U64 = 0
-    while fi < sd.fields.count {
-        val fld: FieldDef = sd.fields[fi]
-        mut val provided: Bool = false
+    // The LLVM type of a `Ref[T]`'s pointee T (from the instance's first type arg).
+    inout fn refPointeeTy(c: inout Comp, refTy: U64) -> LLVMTypeRef {
+        if c.isRefInst(ref: refTy) {
+            return llvmTypeOfRef(c: inout c, st: inout self, ref: c.arena.types[refTy].args[0])
+        }
+        return self.i64ty
+    }
+
+    // The Ref instance TypeRef of an expression that evaluates to a `Ref[T]` (a local
+    // carries it on locTypeRef), or 0 if it is not a Ref-typed expression.
+    inout fn exprRefTypeRef(c: inout Comp, id: U64) -> U64 {
+        val r: U64 = self.exprTypeRef(c: inout c, id: id)
+        if c.isRefInst(ref: r) {
+            return r
+        }
+        return 0U64
+    }
+
+    // The struct index of a `Ref[T]` base's pointee T (for `->field` resolution), or
+    // c.arena.structs.count if the base isn't a Ref to a registered struct.
+    inout fn refPointeeStructIdx(c: inout Comp, base: U64) -> U64 {
+        val r: U64 = self.exprRefTypeRef(c: inout c, id: base)
+        if r != 0U64 {
+            val t: TypeRef = c.arena.types[r]
+            if t.args.count > 0U64 {
+                val pt: TypeRef = c.arena.types[t.args[0]]
+                return self.localStructIdxFor(c: inout c, start: pt.nameStart, len: pt.nameLen)
+            }
+        }
+        return c.arena.structs.count
+    }
+
+    // Load a `Ref[T]` base's pointee struct VALUE (`*cell`) — the basis for `->field`.
+    inout fn loadRefPointee(c: inout Comp, base: U64) -> LLVMValueRef {
+        val r: U64 = self.exprRefTypeRef(c: inout c, id: base)
+        val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: r)
+        val cellPtr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: base)
+        return LLVMBuildLoad2(self.b, pty, cellPtr, anon())
+    }
+
+    // Build a `Ref[T]` value: malloc a cell of sizeof(T), store the `value` field's
+    // pointee into it, and return the cell pointer.
+    inout fn genLlvmMakeRef(c: inout Comp, ty: U64, fields: Array[MakeField]) -> LLVMValueRef {
+        val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: ty)
+        val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(pty), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
+        // the pointee value (the `value` field).
         mut val valExpr: U64 = 0
         mut val mi: U64 = 0
         while mi < fields.count {
-            if spansEqual(c: inout c, aStart: fields[mi].nameStart, aLen: fields[mi].nameLen, bStart: fld.nameStart, bLen: fld.nameLen) {
-                provided = true
+            if rangeEquals(bytes: c.arena.bytes, start: fields[mi].nameStart, len: fields[mi].nameLen, kw: "value") {
                 valExpr = fields[mi].value
                 mi = fields.count
             } else {
                 mi += 1
             }
         }
-        if !(provided) {
-            if fld.hasDefault {
-                valExpr = fld.defaultVal
-            } else {
-                compileErrorAt(line: c.lineOf(offset: errOffset), msg: "LLVM backend: missing struct field in construction")
-                return agg
-            }
+        mut val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: valExpr)
+        if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
+            v = coerceInt(st: inout self, v: v, target: pty, unsigned: false)
         }
-        agg = LLVMBuildInsertValue(st.b, agg, genFieldValue(c: inout c, st: inout st, valExpr: valExpr, fld: fld), fi, anon())
-        fi += 1
+        LLVMBuildStore(self.b, v, cell)
+        return cell
     }
-    return agg
-}
 
+    // Build a struct value of LLVM type `sty` from def `sd`: each declared field
+    // (matched by name, or its default), under the active substitution env.
+    inout fn buildStructValue(c: inout Comp, sd: StructDef, sty: LLVMTypeRef, fields: Array[MakeField], errOffset: U64) -> LLVMValueRef {
+        mut val agg: LLVMValueRef = LLVMGetUndef(sty)
+        mut val fi: U64 = 0
+        while fi < sd.fields.count {
+            val fld: FieldDef = sd.fields[fi]
+            mut val provided: Bool = false
+            mut val valExpr: U64 = 0
+            mut val mi: U64 = 0
+            while mi < fields.count {
+                if spansEqual(c: inout c, aStart: fields[mi].nameStart, aLen: fields[mi].nameLen, bStart: fld.nameStart, bLen: fld.nameLen) {
+                    provided = true
+                    valExpr = fields[mi].value
+                    mi = fields.count
+                } else {
+                    mi += 1
+                }
+            }
+            if !(provided) {
+                if fld.hasDefault {
+                    valExpr = fld.defaultVal
+                } else {
+                    compileErrorAt(line: c.lineOf(offset: errOffset), msg: "LLVM backend: missing struct field in construction")
+                    return agg
+                }
+            }
+            agg = LLVMBuildInsertValue(self.b, agg, self.genFieldValue(c: inout c, valExpr: valExpr, fld: fld), fi, anon())
+            fi += 1
+        }
+        return agg
+    }
+}

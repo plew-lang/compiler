@@ -146,16 +146,16 @@ fn kindFromTySpan(c: inout Comp, tyStart: U64, tyLen: U64) -> U64 {
 fn methodReturnKind(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64) -> U64 {
     val mf: Func = c.arena.funcs[mfi]
     if mf.retTy != 0U64 {
-        val rRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
+        val rRef: U64 = st.exprTypeRef(c: inout c, id: recv)
         val savedP: Array[Bind] = c.cur.typeParams
         val savedA: Array[U64] = c.cur.typeArgs
         // ground the return's type param under the receiver's instance env. The receiver
         // may be a generic STRUCT or a generic ENUM (`Optional[U8].unwrapOr -> T`): the
         // enum case is what carries an unsigned element through, so without it `T` stays
         // abstract and the kind defaults to signed (a U8 result printed as -56).
-        mut val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: rRef)
+        mut val didSet: Bool = st.setStructEnv(c: inout c, ref: rRef)
         if !(didSet) {
-            didSet = setEnumEnv(c: inout c, st: inout st, ref: rRef)
+            didSet = st.setEnumEnv(c: inout c, ref: rRef)
         }
         val g: U64 = c.groundTypeRef(ref: mf.retTy)
         if didSet {
@@ -205,7 +205,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             return valueKind(c: inout c, st: inout st, id: lhs)
         }
         Expr.Field(val base, val nameStart, val nameLen) => {
-            val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+            val sidx: U64 = st.exprStructIdx(c: inout c, id: base)
             if sidx < c.arena.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
                 if fidx < c.arena.structs[sidx].fields.count {
@@ -214,10 +214,10 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                     // generic struct's `v: T` on `L[String]` must resolve T -> String, not
                     // default to int) — so e.g. `print(a.v)` dispatches to the String sink.
                     if ffd.ty != 0U64 {
-                        val fBaseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
+                        val fBaseRef: U64 = st.exprTypeRef(c: inout c, id: base)
                         val savedFP: Array[Bind] = c.cur.typeParams
                         val savedFA: Array[U64] = c.cur.typeArgs
-                        val didSetF: Bool = setStructEnv(c: inout c, st: inout st, ref: fBaseRef)
+                        val didSetF: Bool = st.setStructEnv(c: inout c, ref: fBaseRef)
                         mut val fg: U64 = ffd.ty
                         if c.cur.typeParams.count > 0U64 {
                             fg = c.groundTypeRef(ref: ffd.ty)
@@ -238,12 +238,12 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // grounded under the existential's bindings (`Out`/`Item` -> concrete).
             val atIdx: U64 = anyRecvTraitIdx(c: inout c, st: inout st, recv: recv)
             if atIdx < c.decls.traits.count {
-                val rr: U64 = anyMethodRetRef(c: inout c, anyRef: exprTypeRef(c: inout c, st: inout st, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
+                val rr: U64 = anyMethodRetRef(c: inout c, anyRef: st.exprTypeRef(c: inout c, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
                 if rr != 0U64 {
                     return kindFromTySpan(c: inout c, tyStart: c.arena.types[rr].nameStart, tyLen: c.arena.types[rr].nameLen)
                 }
             }
-            val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
+            val rsidx: U64 = st.exprStructIdx(c: inout c, id: recv)
             if rsidx < c.arena.structs.count {
                 val mfi: U64 = c.findMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mfi < c.arena.funcs.count {
@@ -260,7 +260,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // `res.isOk()` -> Bool): resolve via the receiver's instance ref, since
             // exprStructIdx doesn't see enums. The concrete return kind comes from
             // the method's declared return span (Bool/numeric).
-            val rRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
+            val rRef: U64 = st.exprTypeRef(c: inout c, id: recv)
             if rRef != 0U64 {
                 val rt: TypeRef = c.arena.types[rRef]
                 val gmfi: U64 = c.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -275,7 +275,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // underlying lang-item, mirroring genLlvmMethod's primRecv dispatch, so the
             // return kind isn't defaulted to int. The front-end's typeOf can't see a
             // newtype's inherited methods, so the fallback below would mis-kind it.
-            val primRecvK: Bind = primLangItemRecvName(c: inout c, st: inout st, recv: recv)
+            val primRecvK: Bind = st.primLangItemRecvName(c: inout c, recv: recv)
             if primRecvK.nameLen != 0U64 {
                 val pmfi: U64 = c.findMethod(recvStart: primRecvK.nameStart, recvLen: primRecvK.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if pmfi < c.arena.funcs.count {
@@ -286,7 +286,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             }
         }
         Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
-            val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
+            val rsidx: U64 = st.exprStructIdx(c: inout c, id: recv)
             if rsidx < c.arena.structs.count {
                 val mfi: U64 = c.findExtMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mfi < c.arena.funcs.count {
@@ -338,7 +338,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // `g[i]` -> `g.index(key: i)`): recover the kind through the same synthesized
             // method call genLlvmIndex emits, so a String/Bool value isn't defaulted to
             // int (which would miscompile the {ptr,i64} at the use site).
-            val ibsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+            val ibsi: U64 = st.exprStructIdx(c: inout c, id: base)
             if ibsi < c.arena.structs.count {
                 if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[ibsi].nameStart, len: c.arena.structs[ibsi].nameLen, kw: "Dictionary") {
                     val m: U64 = c.synthDictMethod(recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
@@ -351,7 +351,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             }
             // the env-aware element type (a generic array field `self.keys: Array[K]`
             // with K -> String grounds to strty, so `self.keys[i] == key` is String ==).
-            val et: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: base)
+            val et: LLVMTypeRef = st.arrElemTyOf(c: inout c, id: base)
             if LLVMGetTypeKind(et) == 10U32 { return 1U64 }
             if LLVMGetTypeKind(et) == 8U32 {
                 if LLVMGetIntTypeWidth(et) == 1U32 { return 2U64 }

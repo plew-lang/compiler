@@ -17,8 +17,8 @@
 
 pub impl LlvmCtx {
     inout fn findAdapterInst(c: inout Comp, recv: U64, headKw: String) -> U64 {
-        val recvRef: U64 = exprTypeRef(c: inout c, st: inout self, id: recv)
-        val recvSidx: U64 = exprStructIdx(c: inout c, st: inout self, id: recv)
+        val recvRef: U64 = self.exprTypeRef(c: inout c, id: recv)
+        val recvSidx: U64 = self.exprStructIdx(c: inout c, id: recv)
         mut val gi: U64 = 0
         while gi < c.monoWork.genInsts.count {
             val ref: U64 = c.monoWork.genInsts[gi]
@@ -74,7 +74,7 @@ pub impl LlvmCtx {
     // adapter instance's substitution env. Mirrors the provided method's one-line body
     // `<MapIter inner=self f=f />` with `self` = the receiver.
     inout fn genLlvmAdapterWrap(c: inout Comp, recv: U64, args: Array[Arg], adapterRef: U64) -> LLVMValueRef {
-        val gslot: U64 = genStructSlot(c: inout c, st: inout self, ref: adapterRef)
+        val gslot: U64 = self.genStructSlot(c: inout c, ref: adapterRef)
         if gslot >= self.genStructRefs.count {
             compileErrorAt(line: 0, msg: "LLVM backend: iterator adapter struct is not registered")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
@@ -94,7 +94,7 @@ pub impl LlvmCtx {
         val savedA: Array[U64] = c.cur.typeArgs
         c.cur.typeParams = sd.typeParams
         c.cur.typeArgs = c.arena.types[adapterRef].args
-        val v: LLVMValueRef = buildStructValue(c: inout c, st: inout self, sd: sd, sty: self.genStructTys[gslot], fields: fields, errOffset: c.exprOffset(id: recv))
+        val v: LLVMValueRef = self.buildStructValue(c: inout c, sd: sd, sty: self.genStructTys[gslot], fields: fields, errOffset: c.exprOffset(id: recv))
         c.cur.typeParams = savedP
         c.cur.typeArgs = savedA
         return v

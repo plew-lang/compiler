@@ -82,7 +82,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // the struct's fields as a {ptr,len} String and dereferences garbage.
             if op == opEq() || op == opNe() {
                 if valueKind(c: inout c, st: inout st, id: lhs) == 1U64 {
-                    if exprStructIdx(c: inout c, st: inout st, id: lhs) >= c.arena.structs.count {
+                    if st.exprStructIdx(c: inout c, id: lhs) >= c.arena.structs.count {
                         return emitStrEq(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
                     }
                 }
@@ -101,7 +101,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             mut val r: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: rhs)
             // struct ==/!= : structural (field-by-field) equality (the Eq witness).
             if op == opEq() || op == opNe() {
-                val sidxE: U64 = exprStructIdx(c: inout c, st: inout st, id: lhs)
+                val sidxE: U64 = st.exprStructIdx(c: inout c, id: lhs)
                 if sidxE < c.arena.structs.count {
                     if structEqSupported(c: inout c, st: inout st, sidx: sidxE) {
                         val eqv: LLVMValueRef = emitStructEq(c: inout c, st: inout st, a: l, b: r, sidx: sidxE)
@@ -141,7 +141,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // struct ordering (`< <= > >=`): lexicographic field compare (the Ord
             // witness) -> an i32 ordering compared against 0.
             if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
-                val sidxO: U64 = exprStructIdx(c: inout c, st: inout st, id: lhs)
+                val sidxO: U64 = st.exprStructIdx(c: inout c, id: lhs)
                 if sidxO < c.arena.structs.count {
                     if structOrdSupported(c: inout c, st: inout st, sidx: sidxO) {
                         return emitStructOrdOp(c: inout c, st: inout st, op: op, a: l, b: r, sidx: sidxO)
@@ -180,18 +180,18 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             mut val uns: Bool = false
             if valueKind(c: inout c, st: inout st, id: lhs) == 3U64 { uns = true }
             if valueKind(c: inout c, st: inout st, id: rhs) == 3U64 { uns = true }
-            return buildBinOpChecked(c: inout c, st: inout st, op: op, l: l, r: r, unsigned: uns)
+            return st.buildBinOpChecked(c: inout c, op: op, l: l, r: r, unsigned: uns)
         }
         Expr.Str(val start, val len) => {
             return genLlvmStr(c: inout c, st: inout st, start: start, len: len)
         }
         Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
-            return genLlvmMake(c: inout c, st: inout st, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ty, fields: fields)
+            return st.genLlvmMake(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ty, fields: fields)
         }
         Expr.Array(val elems) => {
             mut val et: LLVMTypeRef = st.i64ty
             if elems.count > 0U64 {
-                et = exprLlvmType(c: inout c, st: inout st, id: elems[0])
+                et = st.exprLlvmType(c: inout c, id: elems[0])
             }
             return st.genLlvmArrayLit(c: inout c, elems: elems, elemTy: et)
         }
@@ -201,16 +201,16 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
         Expr.Field(val base, val nameStart, val nameLen) => {
             // `s.bytes` on a String: the String value IS the {ptr,i64} byte array
             // (same layout), so the view is the value itself (no copy).
-            if isStringBytesField(c: inout c, st: inout st, base: base, nameStart: nameStart, nameLen: nameLen) {
+            if st.isStringBytesField(c: inout c, base: base, nameStart: nameStart, nameLen: nameLen) {
                 return genLlvmExpr(c: inout c, st: inout st, id: base)
             }
             // `arr.count` — an array's count is field 1.
-            if exprIsArray(c: inout c, st: inout st, id: base) {
+            if st.exprIsArray(c: inout c, id: base) {
                 if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
                     return LLVMBuildExtractValue(st.b, genLlvmExpr(c: inout c, st: inout st, id: base), 1U64, anon())
                 }
             }
-            val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
+            val sidx: U64 = st.exprStructIdx(c: inout c, id: base)
             if sidx < c.arena.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
                 if fidx < c.arena.structs[sidx].fields.count {
@@ -223,10 +223,10 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                     // `Optional[N[I64]]` layout, not the ungrounded template (which would
                     // default to i64 and load the wrong type).
                     if c.fieldIsBoxed(f: fd) {
-                        val bRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
+                        val bRef: U64 = st.exprTypeRef(c: inout c, id: base)
                         val savedBP: Array[Bind] = c.cur.typeParams
                         val savedBA: Array[U64] = c.cur.typeArgs
-                        val didSetB: Bool = setStructEnv(c: inout c, st: inout st, ref: bRef)
+                        val didSetB: Bool = st.setStructEnv(c: inout c, ref: bRef)
                         mut val pg: U64 = fd.ty
                         if c.cur.typeParams.count > 0U64 {
                             pg = c.groundTypeRef(ref: fd.ty)
@@ -255,7 +255,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                 val caps: Array[CaptureEntry] = closureCaptures(c: inout c, cloId: id)
                 if caps.count > 0U64 {
                     val envTy: LLVMTypeRef = st.closureEnvTy(c: inout c, caps: caps)
-                    env = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(envTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
+                    env = st.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(envTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
                     mut val ci: U64 = 0
                     while ci < caps.count {
                         val cap: CaptureEntry = caps[ci]
@@ -286,11 +286,11 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // `r->field`: load the pointee struct from the cell and extract `field`
             // (an array field yields the {ptr,i64} value, whose buffer is shared, so
             // `r->arr[i] = v` mutates through any alias).
-            val psidx: U64 = refPointeeStructIdx(c: inout c, st: inout st, base: base)
+            val psidx: U64 = st.refPointeeStructIdx(c: inout c, base: base)
             if psidx < c.arena.structs.count {
                 val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
                 if fidx < c.arena.structs[psidx].fields.count {
-                    return LLVMBuildExtractValue(st.b, loadRefPointee(c: inout c, st: inout st, base: base), fidx, anon())
+                    return LLVMBuildExtractValue(st.b, st.loadRefPointee(c: inout c, base: base), fidx, anon())
                 }
             }
             compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: `->` only on a Ref to a registered struct (so far)")
@@ -369,7 +369,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             if c.newtypeUnderRef(start: tyStart, len: tyLen) != 0U64 {
                 return ov
             }
-            val opRef: U64 = exprTypeRef(c: inout c, st: inout st, id: operand)
+            val opRef: U64 = st.exprTypeRef(c: inout c, id: operand)
             if opRef != 0U64 {
                 if c.newtypeUnderRef(start: c.arena.types[opRef].nameStart, len: c.arena.types[opRef].nameLen) != 0U64 {
                     return ov
@@ -391,7 +391,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                 // a signed-integer negation is overflow-checked (`-INT_MIN` panics);
                 // float negation keeps the raw op.
                 if LLVMGetTypeKind(LLVMTypeOf(ov)) == 8U32 {
-                    return buildNegChecked(c: inout c, st: inout st, v: ov)
+                    return st.buildNegChecked(c: inout c, v: ov)
                 }
                 return LLVMBuildFNeg(st.b, ov, anon())
             }

@@ -171,7 +171,7 @@ fn emitI64Sink(c: inout Comp, st: inout LlvmCtx, rtName: String, rtId: U64, v: L
 // String types — observably identical. A user type implementing Format is not yet
 // supported here (rejected loudly).
 fn emitPrint(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> LLVMValueRef {
-    if exprStructIdx(c: inout c, st: inout st, id: argExpr) < c.arena.structs.count {
+    if st.exprStructIdx(c: inout c, id: argExpr) < c.arena.structs.count {
         compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: argExpr)), msg: "LLVM backend: print of a struct (Format witness) not yet supported")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
@@ -344,7 +344,7 @@ fn exprEnumIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
         _ => {}
     }
     // an enum local carries a bare enum TypeRef on locTypeRef (typeOf can't see it).
-    val tr: U64 = exprTypeRef(c: inout c, st: inout st, id: id)
+    val tr: U64 = st.exprTypeRef(c: inout c, id: id)
     if tr != 0U64 {
         val tt: TypeRef = c.arena.types[tr]
         val ei: U64 = c.enumIdxByName(start: tt.nameStart, len: tt.nameLen)

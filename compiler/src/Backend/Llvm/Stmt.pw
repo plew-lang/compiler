@@ -15,7 +15,7 @@ pub impl LlvmCtx {
                 // application/drop of a view.
                 if ty != 0U64 {
                     if tyLen > 0U64 {
-                        if c.arena.types[ty].viewExtId != exprViewExtId(c: inout c, st: inout self, id: init) {
+                        if c.arena.types[ty].viewExtId != self.exprViewExtId(c: inout c, id: init) {
                             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: init)), msg: "extension view mismatch: the binding's `#Ext` view must match its initializer — apply or drop the view explicitly (`value#Ext` / `value#!Ext`)")
                         }
                     }
@@ -55,17 +55,17 @@ pub impl LlvmCtx {
                         Expr.Array(val elems) => {
                             isArr = true
                             if elems.count > 0U64 {
-                                elemTy = exprLlvmType(c: inout c, st: inout self, id: elems[0])
+                                elemTy = self.exprLlvmType(c: inout c, id: elems[0])
                                 elemKind = valueKind(c: inout c, st: inout self, id: elems[0])
                             }
                         }
                         _ => {
                             // an un-annotated array-valued initializer (`val bs = s.bytes`):
                             // track it as an array so `bs.count` / `bs[i]` resolve.
-                            if exprIsArray(c: inout c, st: inout self, id: init) {
+                            if self.exprIsArray(c: inout c, id: init) {
                                 isArr = true
-                                elemTy = arrElemTyOf(c: inout c, st: inout self, id: init)
-                                elemKind = arrElemKindOf(c: inout c, st: inout self, id: init)
+                                elemTy = self.arrElemTyOf(c: inout c, id: init)
+                                elemKind = self.arrElemKindOf(c: inout c, id: init)
                             }
                         }
                     }
@@ -119,13 +119,13 @@ pub impl LlvmCtx {
                     // other unchanged (CoW, here eager).
                     if isArr {
                         if arrayExprIsPlace(c: inout c, id: init) {
-                            v = copyArrayValue(c: inout c, st: inout self, arrVal: v, elemTy: elemTy)
+                            v = self.copyArrayValue(c: inout c, arrVal: v, elemTy: elemTy)
                         }
                     } else {
                         // a struct value bound from a place deep-copies its array fields
                         // (`val y = x` then `x.items[0]=…` leaves y.items unchanged; a
                         // generic field grounding to an array is handled under the env).
-                        v = copyValueIfPlace(c: inout c, st: inout self, rv: v, valueExpr: init)
+                        v = self.copyValueIfPlace(c: inout c, rv: v, valueExpr: init)
                     }
                 }
                 mut val kind: U64 = valueKind(c: inout c, st: inout self, id: init)
@@ -136,20 +136,20 @@ pub impl LlvmCtx {
                     }
                 }
                 val lty: LLVMTypeRef = LLVMTypeOf(v)
-                mut val sidx: U64 = exprStructIdx(c: inout c, st: inout self, id: init)
+                mut val sidx: U64 = self.exprStructIdx(c: inout c, id: init)
                 if tyLen > 0U64 {
-                    sidx = localStructIdxFor(c: inout c, st: inout self, start: tyStart, len: tyLen)
+                    sidx = self.localStructIdxFor(c: inout c, start: tyStart, len: tyLen)
                 }
                 // a generic struct instance (Box[I32]): point at the generic def (so
                 // field access works) and track the instance ref for substitution.
                 mut val tref: U64 = 0
                 if c.isGenericInst(ref: ty) {
-                    val gslot: U64 = genStructSlot(c: inout c, st: inout self, ref: ty)
+                    val gslot: U64 = self.genStructSlot(c: inout c, ref: ty)
                     if gslot < self.genStructRefs.count {
                         sidx = self.genStructDefs[gslot]
                         tref = ty
                     } else {
-                        if genEnumSlot(c: inout c, st: inout self, ref: ty) < self.genEnumRefs.count {
+                        if self.genEnumSlot(c: inout c, ref: ty) < self.genEnumRefs.count {
                             tref = ty
                         }
                     }
@@ -178,14 +178,14 @@ pub impl LlvmCtx {
                 if tref == 0U64 {
                     if tyLen == 0U64 {
                         if !(isArr) {
-                            val rref: U64 = exprResultRef(c: inout c, st: inout self, id: init)
+                            val rref: U64 = self.exprResultRef(c: inout c, id: init)
                             if c.isGenericInst(ref: rref) {
-                                val gslot2: U64 = genStructSlot(c: inout c, st: inout self, ref: rref)
+                                val gslot2: U64 = self.genStructSlot(c: inout c, ref: rref)
                                 if gslot2 < self.genStructRefs.count {
                                     sidx = self.genStructDefs[gslot2]
                                     tref = rref
                                 } else {
-                                    if genEnumSlot(c: inout c, st: inout self, ref: rref) < self.genEnumRefs.count {
+                                    if self.genEnumSlot(c: inout c, ref: rref) < self.genEnumRefs.count {
                                         tref = rref
                                     }
                                 }
@@ -242,7 +242,7 @@ pub impl LlvmCtx {
                     }
                 }
                 if tref == 0U64 {
-                    val ir: U64 = exprTypeRef(c: inout c, st: inout self, id: init)
+                    val ir: U64 = self.exprTypeRef(c: inout c, id: init)
                     if ir != 0U64 {
                         if c.arena.types[ir].viewExtId != 0U64 {
                             tref = ir
@@ -260,7 +260,7 @@ pub impl LlvmCtx {
                     self.asyncFieldNext = self.asyncFieldNext + 1
                 } else {
                     if localIsBoxedCapture(c: inout c, start: nameStart, len: nameLen) {
-                        slot = rawbufAlloc(c: inout c, st: inout self, elemSize: LLVMSizeOf(lty), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
+                        slot = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(lty), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
                     } else {
                         slot = entryAlloca(st: inout self, ty: lty)
                     }
@@ -269,16 +269,16 @@ pub impl LlvmCtx {
                 pushLocalR(st: inout self, nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind, structIdx: sidx, isArr: isArr, elemTy: elemTy, elemKind: elemKind, typeRef: tref)
                 // sharing a Ref to a deinit-bearing pointee (`val r2 = r`): retain the
                 // shared cell so the pointee deinits only when the LAST owner drops.
-                if refDeinitPointeeSidx(c: inout c, st: inout self, refTy: tref) < c.arena.structs.count {
+                if self.refDeinitPointeeSidx(c: inout c, refTy: tref) < c.arena.structs.count {
                     if arrayExprIsPlace(c: inout c, id: init) {
-                        rawbufRetain(c: inout c, st: inout self, cell: v)
+                        self.rawbufRetain(c: inout c, cell: v)
                     }
                 }
                 // an array-of-struct local (`store: Array[Box]`): track the element struct
                 // so `store[i].field` resolves the element (tyStart names the element type).
                 if isArr {
                     if tyLen > 0U64 {
-                        val esi: U64 = localStructIdxFor(c: inout c, st: inout self, start: tyStart, len: tyLen)
+                        val esi: U64 = self.localStructIdxFor(c: inout c, start: tyStart, len: tyLen)
                         if esi < c.arena.structs.count {
                             setLocalElemStruct(st: inout self, esi: esi)
                         }
@@ -298,7 +298,7 @@ pub impl LlvmCtx {
             Stmt.Assign(val op, val target, val value) => {
                 // extension-view invariance (spec/09): an assignment must not implicitly
                 // change a value's view — the target's and value's views must match.
-                if exprViewExtId(c: inout c, st: inout self, id: target) != exprViewExtId(c: inout c, st: inout self, id: value) {
+                if self.exprViewExtId(c: inout c, id: target) != self.exprViewExtId(c: inout c, id: value) {
                     compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: value)), msg: "extension view mismatch: assignment must not implicitly apply or drop a `#Ext` view — adjust it explicitly (`value#Ext` / `value#!Ext`)")
                 }
                 match c.arena.exprs[target] {
@@ -334,7 +334,7 @@ pub impl LlvmCtx {
                             // value semantics: a plain assignment from an array/struct place
                             // (`b = a`) copies so the two bindings stay independent.
                             if op == opAssign() {
-                                rv = copyValueIfPlace(c: inout c, st: inout self, rv: rv, valueExpr: value)
+                                rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
                             }
                             if op == opAssign() {
                                 // reassigning a unique local deinits its PREVIOUS value
@@ -360,7 +360,7 @@ pub impl LlvmCtx {
                                     // a float local: the compound op is an IEEE float op.
                                     nv = buildF64BinOp(st: inout self, op: compoundBinOp(op: op), l: cur, r: rv)
                                 } else {
-                                    nv = buildBinOpChecked(c: inout c, st: inout self, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: valueKind(c: inout c, st: inout self, id: target) == 3U64)
+                                    nv = self.buildBinOpChecked(c: inout c, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: valueKind(c: inout c, st: inout self, id: target) == 3U64)
                                 }
                                 LLVMBuildStore(self.b, nv, self.locPtr[li])
                             }
@@ -374,8 +374,8 @@ pub impl LlvmCtx {
                         // A user IndexSet-impl subscript desugars `g[i] = v` to
                         // `g.indexSet(key: i, value: v)` via the IndexSet witness (the
                         // compound form `g[i] OP= v` desugars `v` to `g[i] OP v` first).
-                        if !(exprIsArray(c: inout c, st: inout self, id: ibase)) {
-                            val ibsi: U64 = exprStructIdx(c: inout c, st: inout self, id: ibase)
+                        if !(self.exprIsArray(c: inout c, id: ibase)) {
+                            val ibsi: U64 = self.exprStructIdx(c: inout c, id: ibase)
                             if ibsi < c.arena.structs.count {
                                 // a Dictionary `d[k] = v` lowers to `d.insert(key:, value:)`.
                                 if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[ibsi].nameStart, len: c.arena.structs[ibsi].nameLen, kw: "Dictionary") {
@@ -405,19 +405,19 @@ pub impl LlvmCtx {
                             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: ibase)), msg: "LLVM backend: user IndexSet subscript needs an `indexSet` method")
                             return
                         }
-                        val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout self, id: ibase)
+                        val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: ibase)
                         val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: ibase)
                         val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
                         val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
                         val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: iindex)
-                        emitBoundsCheck(c: inout c, st: inout self, idx: idx, count: count)
-                        val ep: LLVMValueRef = arrElemPtr(st: inout self, elemTy: elemTy, data: data, idx: idx)
-                        val rv: LLVMValueRef = coerceElem(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: value), elemTy: elemTy)
+                        self.emitBoundsCheck(c: inout c, idx: idx, count: count)
+                        val ep: LLVMValueRef = self.arrElemPtr(elemTy: elemTy, data: data, idx: idx)
+                        val rv: LLVMValueRef = self.coerceElem(v: genLlvmExpr(c: inout c, st: inout self, id: value), elemTy: elemTy)
                         if op == opAssign() {
                             LLVMBuildStore(self.b, rv, ep)
                         } else {
                             val cur: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, ep, anon())
-                            LLVMBuildStore(self.b, buildBinOpChecked(c: inout c, st: inout self, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: valueKind(c: inout c, st: inout self, id: target) == 3U64), ep)
+                            LLVMBuildStore(self.b, self.buildBinOpChecked(c: inout c, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: valueKind(c: inout c, st: inout self, id: target) == 3U64), ep)
                         }
                     }
                     Expr.Field(base: val fbase, nameStart: val fnameStart, nameLen: val fnameLen) => {
@@ -426,7 +426,7 @@ pub impl LlvmCtx {
                         match c.arena.exprs[fbase] {
                             Expr.Ident(start: val bs, len: val bl) => {
                                 val li: U64 = findLocal(c: inout c, st: inout self, start: bs, len: bl)
-                                val sidx: U64 = exprStructIdx(c: inout c, st: inout self, id: fbase)
+                                val sidx: U64 = self.exprStructIdx(c: inout c, id: fbase)
                                 if li < self.nLocals && sidx < c.arena.structs.count {
                                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: fnameStart, len: fnameLen)
                                     if fidx < c.arena.structs[sidx].fields.count {
@@ -442,7 +442,7 @@ pub impl LlvmCtx {
                                                 self.expectedTy = fld.ty
                                                 val bv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: value)
                                                 self.expectedTy = 0U64
-                                                val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout self, elemSize: LLVMSizeOf(LLVMTypeOf(bv)), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
+                                                val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(LLVMTypeOf(bv)), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
                                                 LLVMBuildStore(self.b, bv, cell)
                                                 LLVMBuildStore(self.b, cell, gep)
                                                 return
@@ -462,7 +462,7 @@ pub impl LlvmCtx {
                                         } else {
                                             val ftype: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout self, tyStart: fld.tyStart, tyLen: fld.tyLen)
                                             val cur: LLVMValueRef = LLVMBuildLoad2(self.b, ftype, gep, anon())
-                                            LLVMBuildStore(self.b, buildBinOpChecked(c: inout c, st: inout self, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: isUnsignedName(c: inout c, start: fld.tyStart, len: fld.tyLen)), gep)
+                                            LLVMBuildStore(self.b, self.buildBinOpChecked(c: inout c, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: isUnsignedName(c: inout c, start: fld.tyStart, len: fld.tyLen)), gep)
                                         }
                                         return
                                     }
@@ -472,15 +472,15 @@ pub impl LlvmCtx {
                             _ => {
                                 // a general place base (`arr[i].field = v`, get-modify-set):
                                 // the base struct pointer via placePtrOf, then GEP the field.
-                                val bsi: U64 = exprStructIdx(c: inout c, st: inout self, id: fbase)
+                                val bsi: U64 = self.exprStructIdx(c: inout c, id: fbase)
                                 mut val handled: Bool = false
                                 if bsi < c.arena.structs.count {
                                     val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fnameStart, len: fnameLen)
                                     if fidx < c.arena.structs[bsi].fields.count {
-                                        val baseTy: LLVMTypeRef = structLlvmTyOfExpr(c: inout c, st: inout self, structExpr: fbase, sidx: bsi)
+                                        val baseTy: LLVMTypeRef = self.structLlvmTyOfExpr(c: inout c, structExpr: fbase, sidx: bsi)
                                         if LLVMIsNull(baseTy) == 0I32 {
                                             val fld: FieldDef = c.arena.structs[bsi].fields[fidx]
-                                            val basePtr: LLVMValueRef = placePtrOf(c: inout c, st: inout self, id: fbase)
+                                            val basePtr: LLVMValueRef = self.placePtrOf(c: inout c, id: fbase)
                                             val gep: LLVMValueRef = LLVMBuildStructGEP2(self.b, baseTy, basePtr, fidx, anon())
                                             val gfr2: U64 = fieldGenInstRef(c: inout c, fld: fld)
                                             if op == opAssign() && gfr2 != 0U64 {
@@ -496,7 +496,7 @@ pub impl LlvmCtx {
                                             } else {
                                                 val ftype: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout self, tyStart: fld.tyStart, tyLen: fld.tyLen)
                                                 val cur: LLVMValueRef = LLVMBuildLoad2(self.b, ftype, gep, anon())
-                                                LLVMBuildStore(self.b, buildBinOpChecked(c: inout c, st: inout self, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: isUnsignedName(c: inout c, start: fld.tyStart, len: fld.tyLen)), gep)
+                                                LLVMBuildStore(self.b, self.buildBinOpChecked(c: inout c, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: isUnsignedName(c: inout c, start: fld.tyStart, len: fld.tyLen)), gep)
                                             }
                                             handled = true
                                         }
@@ -512,12 +512,12 @@ pub impl LlvmCtx {
                         // `r->field = v`: GEP into the Ref's cell (the pointee struct) and
                         // store. The cell is shared, so the write is visible through any
                         // alias of the Ref.
-                        val psidx: U64 = refPointeeStructIdx(c: inout c, st: inout self, base: abase)
+                        val psidx: U64 = self.refPointeeStructIdx(c: inout c, base: abase)
                         if psidx < c.arena.structs.count {
                             val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: ans, len: anl)
                             if fidx < c.arena.structs[psidx].fields.count {
                                 val fld: FieldDef = c.arena.structs[psidx].fields[fidx]
-                                val pty: LLVMTypeRef = refPointeeTy(c: inout c, st: inout self, refTy: exprRefTypeRef(c: inout c, st: inout self, id: abase))
+                                val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: self.exprRefTypeRef(c: inout c, id: abase))
                                 val cellPtr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: abase)
                                 val gep: LLVMValueRef = LLVMBuildStructGEP2(self.b, pty, cellPtr, fidx, anon())
                                 val gfr3: U64 = fieldGenInstRef(c: inout c, fld: fld)
@@ -534,7 +534,7 @@ pub impl LlvmCtx {
                                 } else {
                                     val ftype: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout self, tyStart: fld.tyStart, tyLen: fld.tyLen)
                                     val cur: LLVMValueRef = LLVMBuildLoad2(self.b, ftype, gep, anon())
-                                    LLVMBuildStore(self.b, buildBinOpChecked(c: inout c, st: inout self, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: isUnsignedName(c: inout c, start: fld.tyStart, len: fld.tyLen)), gep)
+                                    LLVMBuildStore(self.b, self.buildBinOpChecked(c: inout c, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: isUnsignedName(c: inout c, start: fld.tyStart, len: fld.tyLen)), gep)
                                 }
                                 return
                             }
@@ -583,7 +583,7 @@ pub impl LlvmCtx {
                         // extension-view invariance (spec/09): a returned value's view
                         // must match the declared return type's view.
                         if self.curRetRef != 0U64 {
-                            if c.arena.types[self.curRetRef].viewExtId != exprViewExtId(c: inout c, st: inout self, id: value) {
+                            if c.arena.types[self.curRetRef].viewExtId != self.exprViewExtId(c: inout c, id: value) {
                                 compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: value)), msg: "extension view mismatch: the returned value's `#Ext` view must match the declared return type — apply or drop the view explicitly")
                             }
                         }
@@ -645,7 +645,7 @@ pub impl LlvmCtx {
                         }
                         // value semantics: returning an array/struct place gives the caller
                         // an independent value (`return b.xs` then caller's `r[0]=…`).
-                        rv = copyValueIfPlace(c: inout c, st: inout self, rv: rv, valueExpr: value)
+                        rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
                         // scope-exit deinits for all live locals — but a returned local is
                         // moved out to the caller, so exclude it.
                         mut val excludeLi: U64 = sentinel

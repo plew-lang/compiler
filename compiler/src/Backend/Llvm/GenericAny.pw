@@ -16,7 +16,7 @@ fn refIsAny(c: inout Comp, ref: U64) -> Bool {
 // else c.decls.traits.count. (Resolved later than refIsAny so the forward reference to
 // findTraitIdxByName is fine — the module is one compilation unit.)
 fn anyRecvTraitIdx(c: inout Comp, st: inout LlvmCtx, recv: U64) -> U64 {
-    val r: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
+    val r: U64 = st.exprTypeRef(c: inout c, id: recv)
     if refIsAny(c: inout c, ref: r) {
         return c.findTraitIdxByName(start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen)
     }
@@ -181,11 +181,11 @@ fn llvmTypeOfRef(c: inout Comp, st: inout LlvmCtx, ref: U64) -> LLVMTypeRef {
         }
     }
     if c.isGenericInst(ref: ref) {
-        val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: ref)
+        val gs: U64 = st.genStructSlot(c: inout c, ref: ref)
         if gs < st.genStructRefs.count {
             return st.genStructTys[gs]
         }
-        val ge: U64 = genEnumSlot(c: inout c, st: inout st, ref: ref)
+        val ge: U64 = st.genEnumSlot(c: inout c, ref: ref)
         if ge < st.genEnumRefs.count {
             return st.genEnumTys[ge]
         }
@@ -317,7 +317,7 @@ fn genPrimOpWitness(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64, 
     val uns: Bool = isUnsignedName(c: inout c, start: tyStart, len: tyLen)
     // unary: neg / bitnot (one `value` arg).
     if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "neg") {
-        return buildNegChecked(c: inout c, st: inout st, v: coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: ty, unsigned: uns))
+        return st.buildNegChecked(c: inout c, v: coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: ty, unsigned: uns))
     }
     if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitnot") {
         return LLVMBuildNot(st.b, coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: ty, unsigned: uns), anon())
@@ -339,7 +339,7 @@ fn genPrimOpWitness(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64, 
     }
     val l: LLVMValueRef = coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: ty, unsigned: uns)
     val r: LLVMValueRef = coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[1].expr), target: ty, unsigned: uns)
-    return buildBinOpChecked(c: inout c, st: inout st, op: op, l: l, r: r, unsigned: uns)
+    return st.buildBinOpChecked(c: inout c, op: op, l: l, r: r, unsigned: uns)
 }
 
 // The c.arena.funcs index of the binary operator-trait witness `T.<name>(lhs:, rhs:)`
@@ -352,7 +352,7 @@ fn genPrimOpWitness(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64, 
 fn binWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -> U64 {
     mut val ownStart: U64 = 0
     mut val ownLen: U64 = 0
-    val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: lhs)
+    val sidx: U64 = st.exprStructIdx(c: inout c, id: lhs)
     if sidx < c.arena.structs.count {
         ownStart = c.arena.structs[sidx].nameStart
         ownLen = c.arena.structs[sidx].nameLen
@@ -380,7 +380,7 @@ fn binWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -
     // exact name (-> exact overload); a primitive rhs is int-ish (-> int overload).
     mut val rhsId: U64 = 0
     mut val rhsKnown: Bool = false
-    val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: rhs)
+    val rsidx: U64 = st.exprStructIdx(c: inout c, id: rhs)
     if rsidx < c.arena.structs.count {
         rhsId = intern(c: inout c, start: c.arena.structs[rsidx].nameStart, len: c.arena.structs[rsidx].nameLen)
         rhsKnown = true
@@ -431,7 +431,7 @@ fn binWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -
 // for a struct/enum operand (`-money` -> `Money.neg(value:)`), or c.arena.funcs.count
 // when the operand isn't a registered aggregate.
 fn unaryWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, operand: U64) -> U64 {
-    val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: operand)
+    val sidx: U64 = st.exprStructIdx(c: inout c, id: operand)
     if sidx < c.arena.structs.count {
         return c.findAssocByName(typeStart: c.arena.structs[sidx].nameStart, typeLen: c.arena.structs[sidx].nameLen, name: unaryMethodName(op: op))
     }
@@ -446,7 +446,7 @@ fn unaryWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, operand: U64) -> U6
 // unary: just lhs). The witness must be emitted (collectReachableAssoc seeds all
 // operator witnesses); a missing slot is a loud not-yet-emittable error.
 fn emitWitnessCall(c: inout Comp, st: inout LlvmCtx, fi: U64, lhs: U64, rhs: U64, binary: Bool) -> LLVMValueRef {
-    mut val aslot: U64 = userFnSlot(st: inout st, idx: fi)
+    mut val aslot: U64 = st.userFnSlot(idx: fi)
     if aslot >= st.fnIdx.count {
         // a witness on a lang-item the upfront pass doesn't emit (`String.add` for
         // `"a" + "b"` — String isn't a registered struct, so isPlainUserFn skips it):
@@ -459,9 +459,9 @@ fn emitWitnessCall(c: inout Comp, st: inout LlvmCtx, fi: U64, lhs: U64, rhs: U64
     }
     val af: Func = c.arena.funcs[fi]
     mut val av: Array[LLVMValueRef] = []
-    av.append(value: genArgValue(c: inout c, st: inout st, argExpr: lhs, p: af.params[0]))
+    av.append(value: st.genArgValue(c: inout c, argExpr: lhs, p: af.params[0]))
     if binary {
-        av.append(value: genArgValue(c: inout c, st: inout st, argExpr: rhs, p: af.params[1]))
+        av.append(value: st.genArgValue(c: inout c, argExpr: rhs, p: af.params[1]))
     }
     return LLVMBuildCall2(st.b, st.fnTy[aslot], st.fnVal[aslot], arrayCPtr(av), av.count, anon())
 }

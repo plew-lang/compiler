@@ -65,10 +65,10 @@ export fn emitLlvm(c: inout Comp) {
     // types, so those are deferred to the body passes.)
     registerStructNames(c: inout c, st: inout st)
     st.registerEnums(c: inout c)
-    registerGenStructNames(c: inout c, st: inout st)
-    registerGenEnums(c: inout c, st: inout st)
+    st.registerGenStructNames(c: inout c)
+    st.registerGenEnums(c: inout c)
     registerStructBodies(c: inout c, st: inout st)
-    registerGenStructBodies(c: inout c, st: inout st)
+    st.registerGenStructBodies(c: inout c)
 
     // determine which assoc fns are actually reached (called) before declaring.
     st.collectReachableAssoc(c: inout c)
@@ -145,7 +145,7 @@ export fn emitLlvm(c: inout Comp) {
     mut val draining: Bool = true
     while draining {
         while provDone < st.provEmit.count {
-            genLlvmFuncBody(c: inout c, st: inout st, fi: st.provEmit[provDone], fv: st.fnVal[userFnSlot(st: inout st, idx: st.provEmit[provDone])])
+            genLlvmFuncBody(c: inout c, st: inout st, fi: st.provEmit[provDone], fv: st.fnVal[st.userFnSlot(idx: st.provEmit[provDone])])
             provDone += 1
         }
         while genmDone < st.genMethEmit.count {

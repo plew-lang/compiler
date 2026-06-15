@@ -205,7 +205,7 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     }
     mut val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: pgStart, tyLen: pgLen)
     mut val pElem: LLVMTypeRef = st.i64ty
-    mut val pSidx: U64 = localStructIdxFor(c: inout c, st: inout st, start: pgStart, len: pgLen)
+    mut val pSidx: U64 = st.localStructIdxFor(c: inout c, start: pgStart, len: pgLen)
     mut val pRef: U64 = 0
     // a `Type#Ext`-viewed param (a plain struct otherwise): track its viewed
     // TypeRef so a bare `x.m()` in the body resolves the extension (spec/09).
@@ -256,7 +256,7 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
         if c.isGenericInst(ref: p.ty) {
             pty = llvmTypeOfRef(c: inout c, st: inout st, ref: p.ty)
             pRef = p.ty
-            val pgs: U64 = genStructSlot(c: inout c, st: inout st, ref: p.ty)
+            val pgs: U64 = st.genStructSlot(c: inout c, ref: p.ty)
             if pgs < st.genStructRefs.count {
                 pSidx = st.genStructDefs[pgs]
             }
@@ -331,7 +331,7 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     // so `param[i].field` resolves (mirrors the Let handler — bindOneParam alone
     // left this unset, breaking field access on a struct-array param's element).
     if p.tyIsArray {
-        val esi: U64 = localStructIdxFor(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen)
+        val esi: U64 = st.localStructIdxFor(c: inout c, start: p.tyStart, len: p.tyLen)
         if esi < c.arena.structs.count {
             setLocalElemStruct(st: inout st, esi: esi)
         }

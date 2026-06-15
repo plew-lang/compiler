@@ -79,7 +79,7 @@ pub impl LlvmCtx {
             val f: Func = c.arena.funcs[fi]
             val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
             LLVMPositionBuilderAtEnd(self.b, entry)
-            val callSlot: U64 = userFnSlot(st: inout self, idx: fi)
+            val callSlot: U64 = self.userFnSlot(idx: fi)
             mut val av: Array[LLVMValueRef] = []
             mut val pi: U64 = 0
             while pi < f.params.count {

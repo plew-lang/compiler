@@ -257,7 +257,7 @@ fn registerStructBodies(c: inout Comp, st: inout LlvmCtx) {
             if c.fieldIsBoxed(f: sd.fields[fi]) {
                 elems.append(value: st.ptrty)
             } else {
-                elems.append(value: fieldLlvmTy(c: inout c, st: inout st, fd: sd.fields[fi]))
+                elems.append(value: st.fieldLlvmTy(c: inout c, fd: sd.fields[fi]))
             }
             fi += 1
         }

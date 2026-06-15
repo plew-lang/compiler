@@ -4,369 +4,372 @@
 //
 // Recover an expression's LLVM type WITHOUT emitting (for element-type inference
 // and array detection). Covers the common forms; falls back to i64.
-fn exprLlvmType(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
-    match c.arena.exprs[id] {
-        Expr.Int(value: _, offset: _, val isBool, tyStart: _, tyLen: _, isNeg: _) => {
-            if isBool { return st.i1ty }
-            val t: TypeInfo = c.typeOf(id: id)
-            if t.kind == 0 {
-                return llvmScalarTy(c: inout c, st: inout st, tyStart: t.nameStart, tyLen: t.nameLen)
-            }
-            return st.i64ty
-        }
-        Expr.Str(start: _, len: _) => { return st.strty }
-        Expr.Ident(val start, val len) => {
-            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
-            if li < st.nLocals {
-                if st.locIsArr[li] {
-                    return st.arrayTy
-                }
-                return st.locTy[li]
-            }
-            return st.i64ty
-        }
-        Expr.Field(val base, val nameStart, val nameLen) => {
-            val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
-            if sidx < c.arena.structs.count {
-                val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                if fidx < c.arena.structs[sidx].fields.count {
-                    return fieldLlvmTy(c: inout c, st: inout st, fd: c.arena.structs[sidx].fields[fidx])
-                }
-            }
-            return st.i64ty
-        }
-        Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, fields: _) => {
-            return llvmScalarTy(c: inout c, st: inout st, tyStart: typeStart, tyLen: typeLen)
-        }
-        Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-            // an `any P` receiver: the result LLVM type is the requirement's return,
-            // grounded under the existential's bindings.
-            val atIdx: U64 = anyRecvTraitIdx(c: inout c, st: inout st, recv: recv)
-            if atIdx < c.decls.traits.count {
-                val rr: U64 = anyMethodRetRef(c: inout c, anyRef: exprTypeRef(c: inout c, st: inout st, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
-                if rr != 0U64 {
-                    return llvmTypeOfRef(c: inout c, st: inout st, ref: rr)
-                }
-            }
-            val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
-            if rsidx < c.arena.structs.count {
-                val mfi: U64 = c.findMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                if mfi < c.arena.funcs.count {
-                    return st.llvmFnRetTy(c: inout c, f: c.arena.funcs[mfi])
-                }
-            }
-            return st.i64ty
-        }
-        Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
-            val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
-            if rsidx < c.arena.structs.count {
-                val mfi: U64 = c.findExtMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                if mfi < c.arena.funcs.count {
-                    return st.llvmFnRetTy(c: inout c, f: c.arena.funcs[mfi])
-                }
-            }
-            return st.i64ty
-        }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
-            return exprLlvmType(c: inout c, st: inout st, id: recv)
-        }
-        Expr.Call(val nameStart, val nameLen, val args) => {
-            val cfi: U64 = c.resolvedCallee(id: id)
-            if cfi < c.arena.funcs.count {
-                return st.llvmFnRetTy(c: inout c, f: c.arena.funcs[cfi])
-            }
-            return st.i64ty
-        }
-        Expr.Binary(val op, val lhs, rhs: _) => {
-            if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
-                return st.i1ty
-            }
-            return exprLlvmType(c: inout c, st: inout st, id: lhs)
-        }
-        Expr.Unary(val op, val operand) => {
-            if op == opNot() { return st.i1ty }
-            return exprLlvmType(c: inout c, st: inout st, id: operand)
-        }
-        Expr.Array(elems: _) => { return st.arrayTy }
-        _ => { return st.i64ty }
-    }
-}
 
-// `s.bytes` on a String value: String is `{i8*, i64}`, layout-identical to
-// Array[U8] `{ptr, i64}`, so `.bytes` is the String value viewed as a U8 array
-// (O(1), no copy — spec/02). The view's element type is i8 (unsigned).
-fn isStringBytesField(c: inout Comp, st: inout LlvmCtx, base: U64, nameStart: U64, nameLen: U64) -> Bool {
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bytes") {
-        return valueKind(c: inout c, st: inout st, id: base) == 1U64
-    }
-    return false
-}
-
-// Whether an expression is array-typed (for routing `.count`/`.append`/index).
-fn exprIsArray(c: inout Comp, st: inout LlvmCtx, id: U64) -> Bool {
-    match c.arena.exprs[id] {
-        Expr.Ident(val start, val len) => {
-            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
-            if li < st.nLocals {
-                return st.locIsArr[li]
+pub impl LlvmCtx {
+    inout fn exprLlvmType(c: inout Comp, id: U64) -> LLVMTypeRef {
+        match c.arena.exprs[id] {
+            Expr.Int(value: _, offset: _, val isBool, tyStart: _, tyLen: _, isNeg: _) => {
+                if isBool { return self.i1ty }
+                val t: TypeInfo = c.typeOf(id: id)
+                if t.kind == 0 {
+                    return llvmScalarTy(c: inout c, st: inout self, tyStart: t.nameStart, tyLen: t.nameLen)
+                }
+                return self.i64ty
             }
-        }
-        Expr.Field(val base, val nameStart, val nameLen) => {
-            if isStringBytesField(c: inout c, st: inout st, base: base, nameStart: nameStart, nameLen: nameLen) {
-                return true
-            }
-            val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
-            if sidx < c.arena.structs.count {
-                val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                if fidx < c.arena.structs[sidx].fields.count {
-                    val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
-                    if fd.tyIsArray {
-                        return true
+            Expr.Str(start: _, len: _) => { return self.strty }
+            Expr.Ident(val start, val len) => {
+                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                if li < self.nLocals {
+                    if self.locIsArr[li] {
+                        return self.arrayTy
                     }
-                    // a generic field grounding to an array (`Box[Array[I32]].v`).
-                    return st.fieldArrayElemRefUnderBase(c: inout c, base: base, fd: fd) != 0U64
+                    return self.locTy[li]
                 }
+                return self.i64ty
             }
-        }
-        Expr.Arrow(val base, val nameStart, val nameLen) => {
-            val psidx: U64 = refPointeeStructIdx(c: inout c, st: inout st, base: base)
-            if psidx < c.arena.structs.count {
-                val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
-                if fidx < c.arena.structs[psidx].fields.count {
-                    return c.arena.structs[psidx].fields[fidx].tyIsArray
-                }
-            }
-        }
-        Expr.Array(elems: _) => { return true }
-        Expr.Index(base: _, index: _) => {
-            // a nested-array element (`m[i]` where m: Array[Array[I32]]): its element
-            // type ref is itself an Array.
-            val r: U64 = exprTypeRef(c: inout c, st: inout st, id: id)
-            if r != 0U64 {
-                return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen, kw: "Array")
-            }
-        }
-        Expr.Call(val nameStart, val nameLen, val args) => {
-            // an array-returning call (`val a = mk()`): tracked as an array.
-            val cfi: U64 = c.resolvedCallee(id: id)
-            if cfi < c.arena.funcs.count {
-                return c.arena.funcs[cfi].retIsArray
-            }
-        }
-        _ => {}
-    }
-    return false
-}
-
-// The element type of an array-typed receiver (Ident local / struct field).
-fn arrElemTyOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
-    match c.arena.exprs[id] {
-        Expr.Ident(val start, val len) => {
-            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
-            if li < st.nLocals {
-                if st.locIsArr[li] { return st.locElemTy[li] }
-            }
-        }
-        Expr.Field(val base, val nameStart, val nameLen) => {
-            if isStringBytesField(c: inout c, st: inout st, base: base, nameStart: nameStart, nameLen: nameLen) {
-                return st.i8ty
-            }
-            val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
-            if sidx < c.arena.structs.count {
-                val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                if fidx < c.arena.structs[sidx].fields.count {
-                    val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
-                    // an array field's element type, resolved under the base's instance
-                    // env (`Holder[I64].items : Array[Box[T]]` -> Box[I64]; a generic
-                    // field `Box[Array[I32]].v` -> I32).
-                    val er: U64 = st.fieldArrayElemRefUnderBase(c: inout c, base: base, fd: fd)
-                    if er != 0U64 {
-                        return llvmTypeOfRef(c: inout c, st: inout st, ref: er)
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
+                if sidx < c.arena.structs.count {
+                    val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
+                    if fidx < c.arena.structs[sidx].fields.count {
+                        return self.fieldLlvmTy(c: inout c, fd: c.arena.structs[sidx].fields[fidx])
                     }
-                    return llvmScalarTy(c: inout c, st: inout st, tyStart: fd.tyStart, tyLen: fd.tyLen)
+                }
+                return self.i64ty
+            }
+            Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, fields: _) => {
+                return llvmScalarTy(c: inout c, st: inout self, tyStart: typeStart, tyLen: typeLen)
+            }
+            Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+                // an `any P` receiver: the result LLVM type is the requirement's return,
+                // grounded under the existential's bindings.
+                val atIdx: U64 = anyRecvTraitIdx(c: inout c, st: inout self, recv: recv)
+                if atIdx < c.decls.traits.count {
+                    val rr: U64 = anyMethodRetRef(c: inout c, anyRef: self.exprTypeRef(c: inout c, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
+                    if rr != 0U64 {
+                        return llvmTypeOfRef(c: inout c, st: inout self, ref: rr)
+                    }
+                }
+                val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
+                if rsidx < c.arena.structs.count {
+                    val mfi: U64 = c.findMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    if mfi < c.arena.funcs.count {
+                        return self.llvmFnRetTy(c: inout c, f: c.arena.funcs[mfi])
+                    }
+                }
+                return self.i64ty
+            }
+            Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
+                val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
+                if rsidx < c.arena.structs.count {
+                    val mfi: U64 = c.findExtMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    if mfi < c.arena.funcs.count {
+                        return self.llvmFnRetTy(c: inout c, f: c.arena.funcs[mfi])
+                    }
+                }
+                return self.i64ty
+            }
+            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
+                return self.exprLlvmType(c: inout c, id: recv)
+            }
+            Expr.Call(val nameStart, val nameLen, val args) => {
+                val cfi: U64 = c.resolvedCallee(id: id)
+                if cfi < c.arena.funcs.count {
+                    return self.llvmFnRetTy(c: inout c, f: c.arena.funcs[cfi])
+                }
+                return self.i64ty
+            }
+            Expr.Binary(val op, val lhs, rhs: _) => {
+                if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
+                    return self.i1ty
+                }
+                return self.exprLlvmType(c: inout c, id: lhs)
+            }
+            Expr.Unary(val op, val operand) => {
+                if op == opNot() { return self.i1ty }
+                return self.exprLlvmType(c: inout c, id: operand)
+            }
+            Expr.Array(elems: _) => { return self.arrayTy }
+            _ => { return self.i64ty }
+        }
+    }
+
+    // `s.bytes` on a String value: String is `{i8*, i64}`, layout-identical to
+    // Array[U8] `{ptr, i64}`, so `.bytes` is the String value viewed as a U8 array
+    // (O(1), no copy — spec/02). The view's element type is i8 (unsigned).
+    inout fn isStringBytesField(c: inout Comp, base: U64, nameStart: U64, nameLen: U64) -> Bool {
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bytes") {
+            return valueKind(c: inout c, st: inout self, id: base) == 1U64
+        }
+        return false
+    }
+
+    // Whether an expression is array-typed (for routing `.count`/`.append`/index).
+    inout fn exprIsArray(c: inout Comp, id: U64) -> Bool {
+        match c.arena.exprs[id] {
+            Expr.Ident(val start, val len) => {
+                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                if li < self.nLocals {
+                    return self.locIsArr[li]
                 }
             }
-        }
-        Expr.Arrow(val base, val nameStart, val nameLen) => {
-            val psidx: U64 = refPointeeStructIdx(c: inout c, st: inout st, base: base)
-            if psidx < c.arena.structs.count {
-                val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
-                if fidx < c.arena.structs[psidx].fields.count {
-                    return llvmScalarTy(c: inout c, st: inout st, tyStart: c.arena.structs[psidx].fields[fidx].tyStart, tyLen: c.arena.structs[psidx].fields[fidx].tyLen)
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                if self.isStringBytesField(c: inout c, base: base, nameStart: nameStart, nameLen: nameLen) {
+                    return true
                 }
-            }
-        }
-        Expr.Index(base: _, index: _) => {
-            // a nested-array element's element type (`m[i]` -> the inner element of
-            // m[i], e.g. i32 for m: Array[Array[I32]]): unwrap the element ref.
-            val r: U64 = exprTypeRef(c: inout c, st: inout st, id: id)
-            if r != 0U64 {
-                val t: TypeRef = c.arena.types[r]
-                if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-                    if t.args.count > 0U64 {
-                        return llvmTypeOfRef(c: inout c, st: inout st, ref: t.args[0])
+                val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
+                if sidx < c.arena.structs.count {
+                    val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
+                    if fidx < c.arena.structs[sidx].fields.count {
+                        val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
+                        if fd.tyIsArray {
+                            return true
+                        }
+                        // a generic field grounding to an array (`Box[Array[I32]].v`).
+                        return self.fieldArrayElemRefUnderBase(c: inout c, base: base, fd: fd) != 0U64
                     }
                 }
             }
-        }
-        Expr.Call(val nameStart, val nameLen, val args) => {
-            // an array-returning call's element type (`val a = mk()` -> element of
-            // mk's Array return).
-            val cfi: U64 = c.resolvedCallee(id: id)
-            if cfi < c.arena.funcs.count {
-                if c.arena.funcs[cfi].retIsArray {
-                    return llvmScalarTy(c: inout c, st: inout st, tyStart: c.arena.funcs[cfi].retStart, tyLen: c.arena.funcs[cfi].retLen)
+            Expr.Arrow(val base, val nameStart, val nameLen) => {
+                val psidx: U64 = self.refPointeeStructIdx(c: inout c, base: base)
+                if psidx < c.arena.structs.count {
+                    val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
+                    if fidx < c.arena.structs[psidx].fields.count {
+                        return c.arena.structs[psidx].fields[fidx].tyIsArray
+                    }
                 }
             }
-        }
-        _ => {}
-    }
-    return st.i64ty
-}
-
-// The element kind (0 int/signed, 1 String, 2 Bool, 3 unsigned) of an array-valued
-// expression — for tracking an un-annotated array binding's element kind.
-fn arrElemKindOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
-    match c.arena.exprs[id] {
-        Expr.Ident(val start, val len) => {
-            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
-            if li < st.nLocals {
-                if st.locIsArr[li] { return st.locElemKind[li] }
+            Expr.Array(elems: _) => { return true }
+            Expr.Index(base: _, index: _) => {
+                // a nested-array element (`m[i]` where m: Array[Array[I32]]): its element
+                // type ref is itself an Array.
+                val r: U64 = self.exprTypeRef(c: inout c, id: id)
+                if r != 0U64 {
+                    return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen, kw: "Array")
+                }
             }
-        }
-        Expr.Field(val base, val nameStart, val nameLen) => {
-            if isStringBytesField(c: inout c, st: inout st, base: base, nameStart: nameStart, nameLen: nameLen) {
-                return 3U64
-            }
-        }
-        _ => {}
-    }
-    return 0U64
-}
-
-// A pointer to the {ptr,i64} storage of an array place (an array local or an
-// array struct field of a struct local), so `.append` can grow it in place.
-// Returns LLVMConstNull(ptr) if not an addressable array place.
-fn arrStoragePtr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
-    match c.arena.exprs[id] {
-        Expr.Ident(val start, val len) => {
-            // only an array LOCAL has its {ptr,count} in an alloca we can mutate in
-            // place; a non-array local is not array storage (null -> caller errors).
-            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
-            if li < st.nLocals {
-                if st.locIsArr[li] { return st.locPtr[li] }
-            }
-            return LLVMConstNull(st.ptrty)
-        }
-        _ => {}
-    }
-    // a field/element place (possibly nested, e.g. `c.arena.items`): its place
-    // pointer IS the array-storage slot. placePtrStrict recurses through nesting.
-    return placePtrStrict(c: inout c, st: inout st, id: id)
-}
-
-// Build a struct/enum field value, honoring an array field's element type (so an
-// array-literal field uses the field's element type, not i64-defaulted).
-fn genFieldValue(c: inout Comp, st: inout LlvmCtx, valExpr: U64, fld: FieldDef) -> LLVMValueRef {
-    if fld.tyIsArray {
-        match c.arena.exprs[valExpr] {
-            Expr.Array(val elems) => {
-                return st.genLlvmArrayLit(c: inout c, elems: elems, elemTy: llvmScalarTy(c: inout c, st: inout st, tyStart: fld.tyStart, tyLen: fld.tyLen))
+            Expr.Call(val nameStart, val nameLen, val args) => {
+                // an array-returning call (`val a = mk()`): tracked as an array.
+                val cfi: U64 = c.resolvedCallee(id: id)
+                if cfi < c.arena.funcs.count {
+                    return c.arena.funcs[cfi].retIsArray
+                }
             }
             _ => {}
         }
-        // value semantics: an array field initialized from a place (`<Holder items=a/>`)
-        // copies the buffer so later mutation of the source leaves the struct's
-        // field unchanged.
-        mut val av: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: valExpr)
-        if arrayExprIsPlace(c: inout c, id: valExpr) {
-            av = copyArrayValue(c: inout c, st: inout st, arrVal: av, elemTy: llvmScalarTy(c: inout c, st: inout st, tyStart: fld.tyStart, tyLen: fld.tyLen))
-        }
-        return av
+        return false
     }
-    // an existential `any P` field (spec/08): box a concrete conforming initializer,
-    // or value-semantics-copy an existing `any` place.
-    mut val fldBoxed: Bool = false
-    val fldAny: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: fld.ty, valueExpr: valExpr, outBoxed: inout fldBoxed)
-    if fldBoxed {
-        return fldAny
-    }
-    if refIsAny(c: inout c, ref: fld.ty) {
-        return copyAnyIfPlace(c: inout c, st: inout st, rv: genLlvmExpr(c: inout c, st: inout st, id: valExpr), valueExpr: valExpr)
-    }
-    // a boxed (recursive) struct field: build the value, heap-allocate a cell, store
-    // it, and put the cell pointer in the struct (leaky, like Ref — no free yet).
-    if c.fieldIsBoxed(f: fld) {
-        // the boxed value is in the field's (pointee) type context, so a nested
-        // un-suffixed JSX construction (`next=<Optional.Some … />`) infers its args.
-        // GROUND the field type under the active instance env first, so a recursive
-        // GENERIC field (`next: Optional[N[T]]` in `N[I64]`) grounds to the registered
-        // concrete instance (`Optional[N[I64]]`) instead of the ungrounded template.
-        mut val bg: U64 = fld.ty
-        if c.cur.typeParams.count > 0U64 {
-            bg = c.groundTypeRef(ref: fld.ty)
-        }
-        st.expectedTy = bg
-        val boxedVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: valExpr)
-        val boxedTy: LLVMTypeRef = LLVMTypeOf(boxedVal)
-        val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(boxedTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
-        LLVMBuildStore(st.b, boxedVal, cell)
-        return cell
-    }
-    // a (non-boxed) generic-instance field by value (`a: Optional[I64]`,
-    // `inner: Box[I32]`): ground the field's declared type and pass it as the expected
-    // type so an un-suffixed nested JSX construction (`a=<Optional.Some v=7 />`) infers
-    // the instance's type args (genLlvmMakeEnum / genLlvmMake consume st.expectedTy).
-    if fld.ty != 0U64 {
-        mut val g: U64 = fld.ty
-        if c.cur.typeParams.count > 0U64 {
-            g = c.groundTypeRef(ref: fld.ty)
-        }
-        if c.isGenericInst(ref: g) {
-            st.expectedTy = g
-            return genLlvmExpr(c: inout c, st: inout st, id: valExpr)
-        }
-    }
-    return coerceIntTo(c: inout c, st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valExpr), tyStart: fld.tyStart, tyLen: fld.tyLen)
-}
 
-// Declare/cache `plew_rawbuf_alloc(i64 elemSize, i64 cap) -> ptr`.
-fn rawbufAlloc(c: inout Comp, st: inout LlvmCtx, elemSize: LLVMValueRef, cap: LLVMValueRef) -> LLVMValueRef {
-    mut val ptys: Array[LLVMTypeRef] = []
-    ptys.append(value: st.i64ty)
-    ptys.append(value: st.i64ty)
-    val fty: LLVMTypeRef = LLVMFunctionType(st.ptrty, arrayCPtr(ptys), 2U64, 0I32)
-    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_rawbuf_alloc", nameId: 20U64, fnTy: fty)
-    mut val av: Array[LLVMValueRef] = []
-    av.append(value: elemSize)
-    av.append(value: cap)
-    return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U64, anon())
-}
+    // The element type of an array-typed receiver (Ident local / struct field).
+    inout fn arrElemTyOf(c: inout Comp, id: U64) -> LLVMTypeRef {
+        match c.arena.exprs[id] {
+            Expr.Ident(val start, val len) => {
+                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                if li < self.nLocals {
+                    if self.locIsArr[li] { return self.locElemTy[li] }
+                }
+            }
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                if self.isStringBytesField(c: inout c, base: base, nameStart: nameStart, nameLen: nameLen) {
+                    return self.i8ty
+                }
+                val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
+                if sidx < c.arena.structs.count {
+                    val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
+                    if fidx < c.arena.structs[sidx].fields.count {
+                        val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
+                        // an array field's element type, resolved under the base's instance
+                        // env (`Holder[I64].items : Array[Box[T]]` -> Box[I64]; a generic
+                        // field `Box[Array[I32]].v` -> I32).
+                        val er: U64 = self.fieldArrayElemRefUnderBase(c: inout c, base: base, fd: fd)
+                        if er != 0U64 {
+                            return llvmTypeOfRef(c: inout c, st: inout self, ref: er)
+                        }
+                        return llvmScalarTy(c: inout c, st: inout self, tyStart: fd.tyStart, tyLen: fd.tyLen)
+                    }
+                }
+            }
+            Expr.Arrow(val base, val nameStart, val nameLen) => {
+                val psidx: U64 = self.refPointeeStructIdx(c: inout c, base: base)
+                if psidx < c.arena.structs.count {
+                    val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
+                    if fidx < c.arena.structs[psidx].fields.count {
+                        return llvmScalarTy(c: inout c, st: inout self, tyStart: c.arena.structs[psidx].fields[fidx].tyStart, tyLen: c.arena.structs[psidx].fields[fidx].tyLen)
+                    }
+                }
+            }
+            Expr.Index(base: _, index: _) => {
+                // a nested-array element's element type (`m[i]` -> the inner element of
+                // m[i], e.g. i32 for m: Array[Array[I32]]): unwrap the element ref.
+                val r: U64 = self.exprTypeRef(c: inout c, id: id)
+                if r != 0U64 {
+                    val t: TypeRef = c.arena.types[r]
+                    if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+                        if t.args.count > 0U64 {
+                            return llvmTypeOfRef(c: inout c, st: inout self, ref: t.args[0])
+                        }
+                    }
+                }
+            }
+            Expr.Call(val nameStart, val nameLen, val args) => {
+                // an array-returning call's element type (`val a = mk()` -> element of
+                // mk's Array return).
+                val cfi: U64 = c.resolvedCallee(id: id)
+                if cfi < c.arena.funcs.count {
+                    if c.arena.funcs[cfi].retIsArray {
+                        return llvmScalarTy(c: inout c, st: inout self, tyStart: c.arena.funcs[cfi].retStart, tyLen: c.arena.funcs[cfi].retLen)
+                    }
+                }
+            }
+            _ => {}
+        }
+        return self.i64ty
+    }
 
-// Eager value-semantics copy of an array value `{data,count}`: allocate a fresh
-// buffer of `count` elements (size from elemTy) and memcpy, returning the new
-// `{newdata,count}`. Shallow — the elements themselves are bit-copied (correct for
-// primitives / flat structs; a deep copy of array/Ref-bearing elements is a later
-// ARC refinement). Used so binding/assigning an array from an existing place gives
-// an independent value (`val b = a` then `a[0]=…` leaves b unchanged).
-fn copyArrayValue(c: inout Comp, st: inout LlvmCtx, arrVal: LLVMValueRef, elemTy: LLVMTypeRef) -> LLVMValueRef {
-    val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arrVal, 0U64, anon())
-    val count: LLVMValueRef = LLVMBuildExtractValue(st.b, arrVal, 1U64, anon())
-    mut val ptys: Array[LLVMTypeRef] = []
-    ptys.append(value: st.ptrty)
-    ptys.append(value: st.i64ty)
-    ptys.append(value: st.i64ty)
-    val fty: LLVMTypeRef = LLVMFunctionType(st.ptrty, arrayCPtr(ptys), 3U64, 0I32)
-    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_arr_copy", nameId: 24U64, fnTy: fty)
-    mut val av: Array[LLVMValueRef] = []
-    av.append(value: data)
-    av.append(value: LLVMSizeOf(elemTy))
-    av.append(value: count)
-    val nd: LLVMValueRef = LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 3U64, anon())
-    mut val agg: LLVMValueRef = LLVMGetUndef(st.arrayTy)
-    agg = LLVMBuildInsertValue(st.b, agg, nd, 0U64, anon())
-    agg = LLVMBuildInsertValue(st.b, agg, count, 1U64, anon())
-    return agg
+    // The element kind (0 int/signed, 1 String, 2 Bool, 3 unsigned) of an array-valued
+    // expression — for tracking an un-annotated array binding's element kind.
+    inout fn arrElemKindOf(c: inout Comp, id: U64) -> U64 {
+        match c.arena.exprs[id] {
+            Expr.Ident(val start, val len) => {
+                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                if li < self.nLocals {
+                    if self.locIsArr[li] { return self.locElemKind[li] }
+                }
+            }
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                if self.isStringBytesField(c: inout c, base: base, nameStart: nameStart, nameLen: nameLen) {
+                    return 3U64
+                }
+            }
+            _ => {}
+        }
+        return 0U64
+    }
+
+    // A pointer to the {ptr,i64} storage of an array place (an array local or an
+    // array struct field of a struct local), so `.append` can grow it in place.
+    // Returns LLVMConstNull(ptr) if not an addressable array place.
+    inout fn arrStoragePtr(c: inout Comp, id: U64) -> LLVMValueRef {
+        match c.arena.exprs[id] {
+            Expr.Ident(val start, val len) => {
+                // only an array LOCAL has its {ptr,count} in an alloca we can mutate in
+                // place; a non-array local is not array storage (null -> caller errors).
+                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                if li < self.nLocals {
+                    if self.locIsArr[li] { return self.locPtr[li] }
+                }
+                return LLVMConstNull(self.ptrty)
+            }
+            _ => {}
+        }
+        // a field/element place (possibly nested, e.g. `c.arena.items`): its place
+        // pointer IS the array-storage slot. placePtrStrict recurses through nesting.
+        return self.placePtrStrict(c: inout c, id: id)
+    }
+
+    // Build a struct/enum field value, honoring an array field's element type (so an
+    // array-literal field uses the field's element type, not i64-defaulted).
+    inout fn genFieldValue(c: inout Comp, valExpr: U64, fld: FieldDef) -> LLVMValueRef {
+        if fld.tyIsArray {
+            match c.arena.exprs[valExpr] {
+                Expr.Array(val elems) => {
+                    return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: llvmScalarTy(c: inout c, st: inout self, tyStart: fld.tyStart, tyLen: fld.tyLen))
+                }
+                _ => {}
+            }
+            // value semantics: an array field initialized from a place (`<Holder items=a/>`)
+            // copies the buffer so later mutation of the source leaves the struct's
+            // field unchanged.
+            mut val av: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: valExpr)
+            if arrayExprIsPlace(c: inout c, id: valExpr) {
+                av = self.copyArrayValue(c: inout c, arrVal: av, elemTy: llvmScalarTy(c: inout c, st: inout self, tyStart: fld.tyStart, tyLen: fld.tyLen))
+            }
+            return av
+        }
+        // an existential `any P` field (spec/08): box a concrete conforming initializer,
+        // or value-semantics-copy an existing `any` place.
+        mut val fldBoxed: Bool = false
+        val fldAny: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout self, targetRef: fld.ty, valueExpr: valExpr, outBoxed: inout fldBoxed)
+        if fldBoxed {
+            return fldAny
+        }
+        if refIsAny(c: inout c, ref: fld.ty) {
+            return copyAnyIfPlace(c: inout c, st: inout self, rv: genLlvmExpr(c: inout c, st: inout self, id: valExpr), valueExpr: valExpr)
+        }
+        // a boxed (recursive) struct field: build the value, heap-allocate a cell, store
+        // it, and put the cell pointer in the struct (leaky, like Ref — no free yet).
+        if c.fieldIsBoxed(f: fld) {
+            // the boxed value is in the field's (pointee) type context, so a nested
+            // un-suffixed JSX construction (`next=<Optional.Some … />`) infers its args.
+            // GROUND the field type under the active instance env first, so a recursive
+            // GENERIC field (`next: Optional[N[T]]` in `N[I64]`) grounds to the registered
+            // concrete instance (`Optional[N[I64]]`) instead of the ungrounded template.
+            mut val bg: U64 = fld.ty
+            if c.cur.typeParams.count > 0U64 {
+                bg = c.groundTypeRef(ref: fld.ty)
+            }
+            self.expectedTy = bg
+            val boxedVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: valExpr)
+            val boxedTy: LLVMTypeRef = LLVMTypeOf(boxedVal)
+            val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(boxedTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
+            LLVMBuildStore(self.b, boxedVal, cell)
+            return cell
+        }
+        // a (non-boxed) generic-instance field by value (`a: Optional[I64]`,
+        // `inner: Box[I32]`): ground the field's declared type and pass it as the expected
+        // type so an un-suffixed nested JSX construction (`a=<Optional.Some v=7 />`) infers
+        // the instance's type args (genLlvmMakeEnum / genLlvmMake consume self.expectedTy).
+        if fld.ty != 0U64 {
+            mut val g: U64 = fld.ty
+            if c.cur.typeParams.count > 0U64 {
+                g = c.groundTypeRef(ref: fld.ty)
+            }
+            if c.isGenericInst(ref: g) {
+                self.expectedTy = g
+                return genLlvmExpr(c: inout c, st: inout self, id: valExpr)
+            }
+        }
+        return coerceIntTo(c: inout c, st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: valExpr), tyStart: fld.tyStart, tyLen: fld.tyLen)
+    }
+
+    // Declare/cache `plew_rawbuf_alloc(i64 elemSize, i64 cap) -> ptr`.
+    inout fn rawbufAlloc(c: inout Comp, elemSize: LLVMValueRef, cap: LLVMValueRef) -> LLVMValueRef {
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.i64ty)
+        ptys.append(value: self.i64ty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 2U64, 0I32)
+        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_rawbuf_alloc", nameId: 20U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: elemSize)
+        av.append(value: cap)
+        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
+    }
+
+    // Eager value-semantics copy of an array value `{data,count}`: allocate a fresh
+    // buffer of `count` elements (size from elemTy) and memcpy, returning the new
+    // `{newdata,count}`. Shallow — the elements themselves are bit-copied (correct for
+    // primitives / flat structs; a deep copy of array/Ref-bearing elements is a later
+    // ARC refinement). Used so binding/assigning an array from an existing place gives
+    // an independent value (`val b = a` then `a[0]=…` leaves b unchanged).
+    inout fn copyArrayValue(c: inout Comp, arrVal: LLVMValueRef, elemTy: LLVMTypeRef) -> LLVMValueRef {
+        val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arrVal, 0U64, anon())
+        val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arrVal, 1U64, anon())
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.ptrty)
+        ptys.append(value: self.i64ty)
+        ptys.append(value: self.i64ty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 3U64, 0I32)
+        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_arr_copy", nameId: 24U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: data)
+        av.append(value: LLVMSizeOf(elemTy))
+        av.append(value: count)
+        val nd: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 3U64, anon())
+        mut val agg: LLVMValueRef = LLVMGetUndef(self.arrayTy)
+        agg = LLVMBuildInsertValue(self.b, agg, nd, 0U64, anon())
+        agg = LLVMBuildInsertValue(self.b, agg, count, 1U64, anon())
+        return agg
+    }
 }
 
 // Whether an array-valued expression is an existing PLACE (an array local or a
@@ -381,39 +384,42 @@ fn arrayExprIsPlace(c: inout Comp, id: U64) -> Bool {
     }
 }
 
-// Deep value-semantics copy of a struct value `v` of struct `sidx`: the aggregate
-// is already bit-copied (LLVM by-value), but each ARRAY field's buffer is shared,
-// so copy it (and recurse into nested-struct fields) — `val y = x` then
-// `x.items[0]=…` must leave y.items unchanged. Fields under a generic env resolve
-// via the active substitution. Non-array/non-struct fields pass through unchanged.
-fn deepCopyStructValue(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, sidx: U64) -> LLVMValueRef {
-    val sd: StructDef = c.arena.structs[sidx]
-    mut val agg: LLVMValueRef = v
-    mut val fi: U64 = 0
-    while fi < sd.fields.count {
-        val fd: FieldDef = sd.fields[fi]
-        // an array field (declared `Array[E]` or a type param grounding to one under
-        // the active env): deep-copy the buffer.
-        val er: U64 = arrayFieldElemRef(c: inout c, f: fd)
-        if er != 0U64 {
-            val elem: LLVMValueRef = LLVMBuildExtractValue(st.b, agg, fi, anon())
-            val et: LLVMTypeRef = llvmTypeOfRef(c: inout c, st: inout st, ref: er)
-            agg = LLVMBuildInsertValue(st.b, agg, copyArrayValue(c: inout c, st: inout st, arrVal: elem, elemTy: et), fi, anon())
-        } else {
-            if c.fieldIsBoxed(f: fd) {
-                // a boxed (recursive) field is a shared heap pointer — leave it (deep
-                // copy of the cyclic graph is a later ARC refinement).
+pub impl LlvmCtx {
+
+    // Deep value-semantics copy of a struct value `v` of struct `sidx`: the aggregate
+    // is already bit-copied (LLVM by-value), but each ARRAY field's buffer is shared,
+    // so copy it (and recurse into nested-struct fields) — `val y = x` then
+    // `x.items[0]=…` must leave y.items unchanged. Fields under a generic env resolve
+    // via the active substitution. Non-array/non-struct fields pass through unchanged.
+    inout fn deepCopyStructValue(c: inout Comp, v: LLVMValueRef, sidx: U64) -> LLVMValueRef {
+        val sd: StructDef = c.arena.structs[sidx]
+        mut val agg: LLVMValueRef = v
+        mut val fi: U64 = 0
+        while fi < sd.fields.count {
+            val fd: FieldDef = sd.fields[fi]
+            // an array field (declared `Array[E]` or a type param grounding to one under
+            // the active env): deep-copy the buffer.
+            val er: U64 = arrayFieldElemRef(c: inout c, f: fd)
+            if er != 0U64 {
+                val elem: LLVMValueRef = LLVMBuildExtractValue(self.b, agg, fi, anon())
+                val et: LLVMTypeRef = llvmTypeOfRef(c: inout c, st: inout self, ref: er)
+                agg = LLVMBuildInsertValue(self.b, agg, self.copyArrayValue(c: inout c, arrVal: elem, elemTy: et), fi, anon())
             } else {
-                val nsi: U64 = localStructIdxFor(c: inout c, st: inout st, start: fd.tyStart, len: fd.tyLen)
-                if nsi < c.arena.structs.count {
-                    val elem: LLVMValueRef = LLVMBuildExtractValue(st.b, agg, fi, anon())
-                    agg = LLVMBuildInsertValue(st.b, agg, deepCopyStructValue(c: inout c, st: inout st, v: elem, sidx: nsi), fi, anon())
+                if c.fieldIsBoxed(f: fd) {
+                    // a boxed (recursive) field is a shared heap pointer — leave it (deep
+                    // copy of the cyclic graph is a later ARC refinement).
+                } else {
+                    val nsi: U64 = self.localStructIdxFor(c: inout c, start: fd.tyStart, len: fd.tyLen)
+                    if nsi < c.arena.structs.count {
+                        val elem: LLVMValueRef = LLVMBuildExtractValue(self.b, agg, fi, anon())
+                        agg = LLVMBuildInsertValue(self.b, agg, self.deepCopyStructValue(c: inout c, v: elem, sidx: nsi), fi, anon())
+                    }
                 }
             }
+            fi += 1
         }
-        fi += 1
+        return agg
     }
-    return agg
 }
 
 // Whether a non-array expression is an existing struct PLACE (Ident/Field) whose
@@ -426,116 +432,118 @@ fn structExprIsPlace(c: inout Comp, id: U64) -> Bool {
     }
 }
 
-// Value-semantics copy of `rv` (the already-emitted value of `valueExpr`) when
-// `valueExpr` is an existing array/struct PLACE being moved into a NEW owner
-// (return, assignment RHS, a struct/array field initializer). A literal / call /
-// append result already owns its buffer and is returned unchanged. Over-copying is
-// observably harmless (value semantics shares nothing); under-copying miscompiles.
-fn copyValueIfPlace(c: inout Comp, st: inout LlvmCtx, rv: LLVMValueRef, valueExpr: U64) -> LLVMValueRef {
-    if exprIsArray(c: inout c, st: inout st, id: valueExpr) {
-        if arrayExprIsPlace(c: inout c, id: valueExpr) {
-            return copyArrayValue(c: inout c, st: inout st, arrVal: rv, elemTy: arrElemTyOf(c: inout c, st: inout st, id: valueExpr))
+pub impl LlvmCtx {
+
+    // Value-semantics copy of `rv` (the already-emitted value of `valueExpr`) when
+    // `valueExpr` is an existing array/struct PLACE being moved into a NEW owner
+    // (return, assignment RHS, a struct/array field initializer). A literal / call /
+    // append result already owns its buffer and is returned unchanged. Over-copying is
+    // observably harmless (value semantics shares nothing); under-copying miscompiles.
+    inout fn copyValueIfPlace(c: inout Comp, rv: LLVMValueRef, valueExpr: U64) -> LLVMValueRef {
+        if self.exprIsArray(c: inout c, id: valueExpr) {
+            if arrayExprIsPlace(c: inout c, id: valueExpr) {
+                return self.copyArrayValue(c: inout c, arrVal: rv, elemTy: self.arrElemTyOf(c: inout c, id: valueExpr))
+            }
+            return rv
+        }
+        if structExprIsPlace(c: inout c, id: valueExpr) {
+            val sidx: U64 = self.exprStructIdx(c: inout c, id: valueExpr)
+            if sidx < c.arena.structs.count {
+                // set the value's generic instance env so a field of param type that
+                // grounds to an array (`Box[Array[I32]].v`) is deep-copied.
+                val ref: U64 = self.exprTypeRef(c: inout c, id: valueExpr)
+                val savedP: Array[Bind] = c.cur.typeParams
+                val savedA: Array[U64] = c.cur.typeArgs
+                val didSet: Bool = self.setStructEnv(c: inout c, ref: ref)
+                val copied: LLVMValueRef = self.deepCopyStructValue(c: inout c, v: rv, sidx: sidx)
+                if didSet {
+                    c.cur.typeParams = savedP
+                    c.cur.typeArgs = savedA
+                }
+                return copied
+            }
         }
         return rv
     }
-    if structExprIsPlace(c: inout c, id: valueExpr) {
-        val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: valueExpr)
-        if sidx < c.arena.structs.count {
-            // set the value's generic instance env so a field of param type that
-            // grounds to an array (`Box[Array[I32]].v`) is deep-copied.
-            val ref: U64 = exprTypeRef(c: inout c, st: inout st, id: valueExpr)
-            val savedP: Array[Bind] = c.cur.typeParams
-            val savedA: Array[U64] = c.cur.typeArgs
-            val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: ref)
-            val copied: LLVMValueRef = deepCopyStructValue(c: inout c, st: inout st, v: rv, sidx: sidx)
-            if didSet {
-                c.cur.typeParams = savedP
-                c.cur.typeArgs = savedA
+
+    // The LLVM element type of a `RawBuffer[T]` argument expression (from its tracked
+    // RawBuffer[T] type ref), or i64 if not resolvable.
+    inout fn rawBufElemTy(c: inout Comp, bufExpr: U64) -> LLVMTypeRef {
+        val r: U64 = self.exprTypeRef(c: inout c, id: bufExpr)
+        if r != 0U64 {
+            if c.arena.types[r].args.count > 0U64 {
+                return llvmTypeOfRef(c: inout c, st: inout self, ref: c.arena.types[r].args[0])
             }
-            return copied
         }
+        return self.i64ty
     }
-    return rv
-}
 
-// The LLVM element type of a `RawBuffer[T]` argument expression (from its tracked
-// RawBuffer[T] type ref), or i64 if not resolvable.
-fn rawBufElemTy(c: inout Comp, st: inout LlvmCtx, bufExpr: U64) -> LLVMTypeRef {
-    val r: U64 = exprTypeRef(c: inout c, st: inout st, id: bufExpr)
-    if r != 0U64 {
-        if c.arena.types[r].args.count > 0U64 {
-            return llvmTypeOfRef(c: inout c, st: inout st, ref: c.arena.types[r].args[0])
-        }
+    // Increment a rawbuf cell's refcount (`Ref` share — `val r2 = r`).
+    inout fn rawbufRetain(c: inout Comp, cell: LLVMValueRef) {
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.ptrty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
+        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_rawbuf_retain", nameId: 25U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: cell)
+        LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
-    return st.i64ty
-}
 
-// Increment a rawbuf cell's refcount (`Ref` share — `val r2 = r`).
-fn rawbufRetain(c: inout Comp, st: inout LlvmCtx, cell: LLVMValueRef) {
-    mut val ptys: Array[LLVMTypeRef] = []
-    ptys.append(value: st.ptrty)
-    val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(ptys), 1U64, 0I32)
-    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_rawbuf_retain", nameId: 25U64, fnTy: fty)
-    mut val av: Array[LLVMValueRef] = []
-    av.append(value: cell)
-    LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U64, anon())
-}
+    // Decrement a rawbuf cell's refcount and return the new count (i64).
+    inout fn rawbufRelease(c: inout Comp, cell: LLVMValueRef) -> LLVMValueRef {
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.ptrty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 1U64, 0I32)
+        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_rawbuf_release", nameId: 26U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: cell)
+        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+    }
 
-// Decrement a rawbuf cell's refcount and return the new count (i64).
-fn rawbufRelease(c: inout Comp, st: inout LlvmCtx, cell: LLVMValueRef) -> LLVMValueRef {
-    mut val ptys: Array[LLVMTypeRef] = []
-    ptys.append(value: st.ptrty)
-    val fty: LLVMTypeRef = LLVMFunctionType(st.i64ty, arrayCPtr(ptys), 1U64, 0I32)
-    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_rawbuf_release", nameId: 26U64, fnTy: fty)
-    mut val av: Array[LLVMValueRef] = []
-    av.append(value: cell)
-    return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U64, anon())
-}
-
-// The pointee struct index of a `Ref[T]` instance ref if T is a registered struct
-// that needs a deinit, else c.arena.structs.count.
-fn refDeinitPointeeSidx(c: inout Comp, st: inout LlvmCtx, refTy: U64) -> U64 {
-    if c.isRefInst(ref: refTy) {
-        if c.arena.types[refTy].args.count > 0U64 {
-            val pt: TypeRef = c.arena.types[c.arena.types[refTy].args[0]]
-            val psi: U64 = c.structIndexByName(start: pt.nameStart, len: pt.nameLen)
-            if psi < c.arena.structs.count {
-                if st.structNeedsDeinit(c: inout c, sidx: psi) {
-                    return psi
+    // The pointee struct index of a `Ref[T]` instance ref if T is a registered struct
+    // that needs a deinit, else c.arena.structs.count.
+    inout fn refDeinitPointeeSidx(c: inout Comp, refTy: U64) -> U64 {
+        if c.isRefInst(ref: refTy) {
+            if c.arena.types[refTy].args.count > 0U64 {
+                val pt: TypeRef = c.arena.types[c.arena.types[refTy].args[0]]
+                val psi: U64 = c.structIndexByName(start: pt.nameStart, len: pt.nameLen)
+                if psi < c.arena.structs.count {
+                    if self.structNeedsDeinit(c: inout c, sidx: psi) {
+                        return psi
+                    }
                 }
             }
         }
+        return c.arena.structs.count
     }
-    return c.arena.structs.count
-}
 
-// Bounds-check `i` against `count` via the runtime (panics on out-of-range).
-fn emitBoundsCheck(c: inout Comp, st: inout LlvmCtx, idx: LLVMValueRef, count: LLVMValueRef) {
-    mut val ptys: Array[LLVMTypeRef] = []
-    ptys.append(value: st.i64ty)
-    ptys.append(value: st.i64ty)
-    val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(ptys), 2U64, 0I32)
-    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_bounds", nameId: 21U64, fnTy: fty)
-    mut val av: Array[LLVMValueRef] = []
-    av.append(value: idx)
-    av.append(value: count)
-    LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U64, anon())
-}
+    // Bounds-check `i` against `count` via the runtime (panics on out-of-range).
+    inout fn emitBoundsCheck(c: inout Comp, idx: LLVMValueRef, count: LLVMValueRef) {
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.i64ty)
+        ptys.append(value: self.i64ty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
+        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_bounds", nameId: 21U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: idx)
+        av.append(value: count)
+        LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
+    }
 
-// GEP &data[i] for element type elemTy.
-fn arrElemPtr(st: inout LlvmCtx, elemTy: LLVMTypeRef, data: LLVMValueRef, idx: LLVMValueRef) -> LLVMValueRef {
-    mut val idxs: Array[LLVMValueRef] = []
-    idxs.append(value: idx)
-    return LLVMBuildGEP2(st.b, elemTy, data, arrayCPtr(idxs), 1U64, anon())
-}
+    // GEP &data[i] for element type elemTy.
+    inout fn arrElemPtr(elemTy: LLVMTypeRef, data: LLVMValueRef, idx: LLVMValueRef) -> LLVMValueRef {
+        mut val idxs: Array[LLVMValueRef] = []
+        idxs.append(value: idx)
+        return LLVMBuildGEP2(self.b, elemTy, data, arrayCPtr(idxs), 1U64, anon())
+    }
 
-// Coerce an element value to the array's element type (int width only).
-fn coerceElem(st: inout LlvmCtx, v: LLVMValueRef, elemTy: LLVMTypeRef) -> LLVMValueRef {
-    if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
-        if LLVMGetTypeKind(elemTy) == 8U32 {
-            return coerceInt(st: inout st, v: v, target: elemTy, unsigned: false)
+    // Coerce an element value to the array's element type (int width only).
+    inout fn coerceElem(v: LLVMValueRef, elemTy: LLVMTypeRef) -> LLVMValueRef {
+        if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
+            if LLVMGetTypeKind(elemTy) == 8U32 {
+                return coerceInt(st: inout self, v: v, target: elemTy, unsigned: false)
+            }
         }
+        return v
     }
-    return v
 }
-

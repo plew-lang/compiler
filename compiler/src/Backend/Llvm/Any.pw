@@ -93,7 +93,7 @@ fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, trait
     if wfi >= c.arena.funcs.count {
         return LLVMConstNull(st.ptrty)
     }
-    val wslot: U64 = userFnSlot(st: inout st, idx: wfi)
+    val wslot: U64 = st.userFnSlot(idx: wfi)
     if wslot >= st.fnIdx.count {
         return LLVMConstNull(st.ptrty)
     }
@@ -199,8 +199,8 @@ fn buildAnyCopyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64) -> LLVMValueRe
     val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "entry"))
     LLVMPositionBuilderAtEnd(st.b, entry)
     val srcVal: LLVMValueRef = LLVMBuildLoad2(st.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
-    val copied: LLVMValueRef = deepCopyStructValue(c: inout c, st: inout st, v: srcVal, sidx: sidx)
-    val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
+    val copied: LLVMValueRef = st.deepCopyStructValue(c: inout c, v: srcVal, sidx: sidx)
+    val cell: LLVMValueRef = st.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
     LLVMBuildStore(st.b, copied, cell)
     LLVMBuildRet(st.b, cell)
     LLVMPositionBuilderAtEnd(st.b, savedBB)
@@ -240,7 +240,7 @@ fn anyExprIsPlace(c: inout Comp, id: U64) -> Bool {
 // If `valueExpr` is an existing `any P` place being copied into a new owner, return
 // a value-semantics copy of its already-emitted value `rv`; else `rv` unchanged.
 fn copyAnyIfPlace(c: inout Comp, st: inout LlvmCtx, rv: LLVMValueRef, valueExpr: U64) -> LLVMValueRef {
-    if refIsAny(c: inout c, ref: exprTypeRef(c: inout c, st: inout st, id: valueExpr)) {
+    if refIsAny(c: inout c, ref: st.exprTypeRef(c: inout c, id: valueExpr)) {
         if anyExprIsPlace(c: inout c, id: valueExpr) {
             return copyAnyValue(c: inout c, st: inout st, fat: rv)
         }
@@ -320,7 +320,7 @@ fn boxIntoAny(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, sidx: U64, anyR
     val sd: StructDef = c.arena.structs[sidx]
     val regSlot: U64 = structRegSlot(c: inout c, st: inout st, start: sd.nameStart, len: sd.nameLen)
     val concreteTy: LLVMTypeRef = st.structTys[regSlot]
-    val cell: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
+    val cell: LLVMValueRef = st.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
     LLVMBuildStore(st.b, v, cell)
     val vt: LLVMValueRef = ensureAnyVtable(c: inout c, st: inout st, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx)
     mut val agg: LLVMValueRef = LLVMGetUndef(st.anyTy)
@@ -340,11 +340,11 @@ fn coerceToAnyIfNeeded(c: inout Comp, st: inout LlvmCtx, targetRef: U64, valueEx
     }
     // already an `any` value (e.g. passing an `any P` local to an `any P` param):
     // no re-boxing.
-    val srcRef: U64 = exprTypeRef(c: inout c, st: inout st, id: valueExpr)
+    val srcRef: U64 = st.exprTypeRef(c: inout c, id: valueExpr)
     if refIsAny(c: inout c, ref: srcRef) {
         return LLVMConstNull(st.ptrty)
     }
-    val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: valueExpr)
+    val sidx: U64 = st.exprStructIdx(c: inout c, id: valueExpr)
     if sidx >= c.arena.structs.count {
         return LLVMConstNull(st.ptrty)
     }
@@ -356,7 +356,7 @@ fn coerceToAnyIfNeeded(c: inout Comp, st: inout LlvmCtx, targetRef: U64, valueEx
     // value semantics: boxing a concrete PLACE (`val a: any P = h`) deep-copies its
     // array/struct fields into the box, matching a plain struct copy — so a later
     // mutation of the source leaves the existential's boxed value unchanged.
-    val v: LLVMValueRef = copyValueIfPlace(c: inout c, st: inout st, rv: genLlvmExpr(c: inout c, st: inout st, id: valueExpr), valueExpr: valueExpr)
+    val v: LLVMValueRef = st.copyValueIfPlace(c: inout c, rv: genLlvmExpr(c: inout c, st: inout st, id: valueExpr), valueExpr: valueExpr)
     outBoxed = true
     return boxIntoAny(c: inout c, st: inout st, v: v, sidx: sidx, anyRef: targetRef, traitIdx: traitIdx)
 }
@@ -427,14 +427,14 @@ fn genLlvmAnyDispatch(c: inout Comp, st: inout LlvmCtx, recv: U64, anyRef: U64, 
     av.append(value: dataPtr)
     mut val ai: U64 = 0
     while ai < args.count {
-        av.append(value: genArgValue(c: inout c, st: inout st, argExpr: args[ai].expr, p: req.params[ai]))
+        av.append(value: st.genArgValue(c: inout c, argExpr: args[ai].expr, p: req.params[ai]))
         ai += 1
     }
     return LLVMBuildCall2(st.b, fty, fnPtr, arrayCPtr(av), av.count, anon())
 }
 
 fn genLlvmFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
-    val slot: U64 = userFnSlot(st: inout st, idx: fi)
+    val slot: U64 = st.userFnSlot(idx: fi)
     genLlvmFuncBody(c: inout c, st: inout st, fi: fi, fv: st.fnVal[slot])
 }
 
@@ -490,18 +490,18 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
         // LLVM type / struct-index / env come from the instance, not the bare head
         // name (which `llvmScalarTy` can't resolve to a registered generic type).
         mut val recvTy: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: f.recvStart, tyLen: f.recvLen)
-        mut val recvSidx: U64 = localStructIdxFor(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen)
+        mut val recvSidx: U64 = st.localStructIdxFor(c: inout c, start: f.recvStart, len: f.recvLen)
         mut val recvRef: U64 = 0
         if st.curRecvInstRef != 0U64 {
             recvRef = st.curRecvInstRef
             recvTy = llvmTypeOfRef(c: inout c, st: inout st, ref: st.curRecvInstRef)
-            val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: st.curRecvInstRef)
+            val gs: U64 = st.genStructSlot(c: inout c, ref: st.curRecvInstRef)
             if gs < st.genStructRefs.count {
                 recvSidx = st.genStructDefs[gs]
             } else {
                 // a method-own-type-param pseudo instance (`Pair[Bag]` where Pair is
                 // NOT generic): keep the receiver-name's struct so `self.a` resolves.
-                recvSidx = localStructIdxFor(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen)
+                recvSidx = st.localStructIdxFor(c: inout c, start: f.recvStart, len: f.recvLen)
             }
         }
         // an `Array[T]` receiver (a user method `impl[T] Array[T]`): self is the

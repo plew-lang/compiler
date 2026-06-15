@@ -41,7 +41,7 @@ pub impl LlvmCtx {
         val sd: StructDef = c.arena.structs[sidx]
         val fi: U64 = structDeinitFi(c: inout c, sidx: sidx)
         if fi < c.arena.funcs.count {
-            val slot: U64 = userFnSlot(st: inout self, idx: fi)
+            val slot: U64 = self.userFnSlot(idx: fi)
             if slot < self.fnIdx.count {
                 mut val av: Array[LLVMValueRef] = []
                 av.append(value: v)
@@ -78,16 +78,16 @@ pub impl LlvmCtx {
         }
         // a `Ref[T]` local with a deinit-bearing pointee: release the shared cell; when
         // the last owner drops (refcount hits 0), destroy the pointee (spec/03).
-        val rpsi: U64 = refDeinitPointeeSidx(c: inout c, st: inout self, refTy: self.locTypeRef[li])
+        val rpsi: U64 = self.refDeinitPointeeSidx(c: inout c, refTy: self.locTypeRef[li])
         if rpsi < c.arena.structs.count {
             val cell: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon())
-            val newcount: LLVMValueRef = rawbufRelease(c: inout c, st: inout self, cell: cell)
+            val newcount: LLVMValueRef = self.rawbufRelease(c: inout c, cell: cell)
             val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), newcount, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
             val deinitBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refdrop.deinit"))
             val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refdrop.cont"))
             LLVMBuildCondBr(self.b, isZero, deinitBB, contBB)
             LLVMPositionBuilderAtEnd(self.b, deinitBB)
-            val pty: LLVMTypeRef = refPointeeTy(c: inout c, st: inout self, refTy: self.locTypeRef[li])
+            val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: self.locTypeRef[li])
             self.emitDeinitValue(c: inout c, v: LLVMBuildLoad2(self.b, pty, cell, anon()), sidx: rpsi)
             LLVMBuildBr(self.b, contBB)
             LLVMPositionBuilderAtEnd(self.b, contBB)

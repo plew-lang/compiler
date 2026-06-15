@@ -12,17 +12,17 @@ pub impl LlvmCtx {
         // registered enum, or a primitive lang-item (spec/09 — `x#Ext.m()` on any of them).
         mut val recvNameStart: U64 = 0
         mut val recvNameLen: U64 = 0
-        val rsidx: U64 = exprStructIdx(c: inout c, st: inout self, id: recv)
+        val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
         if rsidx < c.arena.structs.count {
             recvNameStart = c.arena.structs[rsidx].nameStart
             recvNameLen = c.arena.structs[rsidx].nameLen
         } else {
-            val erecvRef: U64 = exprTypeRef(c: inout c, st: inout self, id: recv)
+            val erecvRef: U64 = self.exprTypeRef(c: inout c, id: recv)
             if erecvRef != 0U64 && self.enumRegSlot(c: inout c, start: c.arena.types[erecvRef].nameStart, len: c.arena.types[erecvRef].nameLen) < self.enumIdxs.count {
                 recvNameStart = c.arena.types[erecvRef].nameStart
                 recvNameLen = c.arena.types[erecvRef].nameLen
             } else {
-                val pb: Bind = primLangItemRecvName(c: inout c, st: inout self, recv: recv)
+                val pb: Bind = self.primLangItemRecvName(c: inout c, recv: recv)
                 if pb.nameLen != 0U64 {
                     recvNameStart = pb.nameStart
                     recvNameLen = pb.nameLen
@@ -37,7 +37,7 @@ pub impl LlvmCtx {
         // name must resolve in exactly one view (same-name in two is ambiguous).
         mut val views: Array[U64] = []
         views.append(value: intern(c: inout c, start: srcStart, len: srcLen))
-        val recvChain: Array[U64] = collectViewChain(c: inout c, st: inout self, id: recv)
+        val recvChain: Array[U64] = self.collectViewChain(c: inout c, id: recv)
         mut val rci: U64 = 0
         while rci < recvChain.count {
             views.append(value: recvChain[rci])
@@ -73,7 +73,7 @@ pub impl LlvmCtx {
             compileErrorAt(line: c.lineOf(offset: nameStart), msg: "no such extension method on this type (is the extension name right, and a `pub impl`?)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
-        mut val slot: U64 = userFnSlot(st: inout self, idx: mfi)
+        mut val slot: U64 = self.userFnSlot(idx: mfi)
         if slot >= self.fnIdx.count {
             slot = self.ensureProvidedDeclared(c: inout c, fi: mfi)
         }
@@ -84,18 +84,18 @@ pub impl LlvmCtx {
         val mf: Func = c.arena.funcs[mfi]
         mut val av: Array[LLVMValueRef] = []
         if mf.selfInout {
-            av.append(value: placePtrOf(c: inout c, st: inout self, id: recv))
+            av.append(value: self.placePtrOf(c: inout c, id: recv))
         } else {
             av.append(value: genLlvmExpr(c: inout c, st: inout self, id: recv))
         }
         mut val ai: U64 = 0
         while ai < args.count {
-            av.append(value: genArgValue(c: inout c, st: inout self, argExpr: args[ai].expr, p: mf.params[ai]))
+            av.append(value: self.genArgValue(c: inout c, argExpr: args[ai].expr, p: mf.params[ai]))
             ai += 1
         }
         mut val di: U64 = args.count
         while di < mf.params.count {
-            av.append(value: genArgValue(c: inout c, st: inout self, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
+            av.append(value: self.genArgValue(c: inout c, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
             di += 1
         }
         return LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(av), av.count, anon())
@@ -104,7 +104,7 @@ pub impl LlvmCtx {
     inout fn genLlvmMethod(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
         // an existential `any P` receiver (spec/08): dynamic dispatch through the value's
         // vtable. The receiver's TypeRef carries isAny.
-        val anyRecvRef: U64 = exprTypeRef(c: inout c, st: inout self, id: recv)
+        val anyRecvRef: U64 = self.exprTypeRef(c: inout c, id: recv)
         if refIsAny(c: inout c, ref: anyRecvRef) {
             return genLlvmAnyDispatch(c: inout c, st: inout self, recv: recv, anyRef: anyRecvRef, nameStart: nameStart, nameLen: nameLen, args: args)
         }
@@ -145,12 +145,12 @@ pub impl LlvmCtx {
                         mut val gav: Array[LLVMValueRef] = []
                         mut val gai: U64 = 0
                         while gai < args.count {
-                            gav.append(value: genArgValue(c: inout c, st: inout self, argExpr: args[gai].expr, p: gaf.params[gai]))
+                            gav.append(value: self.genArgValue(c: inout c, argExpr: args[gai].expr, p: gaf.params[gai]))
                             gai += 1
                         }
                         mut val gdi: U64 = args.count
                         while gdi < gaf.params.count {
-                            gav.append(value: genArgValue(c: inout c, st: inout self, argExpr: gaf.params[gdi].defaultExpr, p: gaf.params[gdi]))
+                            gav.append(value: self.genArgValue(c: inout c, argExpr: gaf.params[gdi].defaultExpr, p: gaf.params[gdi]))
                             gdi += 1
                         }
                         c.cur.typeParams = gsavedP
@@ -158,7 +158,7 @@ pub impl LlvmCtx {
                         return LLVMBuildCall2(self.b, self.genFnTy[agslot], self.genFnVal[agslot], arrayCPtr(gav), gav.count, anon())
                     }
                 }
-                mut val aslot: U64 = userFnSlot(st: inout self, idx: afi)
+                mut val aslot: U64 = self.userFnSlot(idx: afi)
                 // a trait/std provided assoc fn (`Greeter.banner()`) is declared+emitted
                 // lazily (no self param), like a free function.
                 if aslot >= self.fnIdx.count {
@@ -169,12 +169,12 @@ pub impl LlvmCtx {
                     mut val aav: Array[LLVMValueRef] = []
                     mut val aai: U64 = 0
                     while aai < args.count {
-                        aav.append(value: genArgValue(c: inout c, st: inout self, argExpr: args[aai].expr, p: af.params[aai]))
+                        aav.append(value: self.genArgValue(c: inout c, argExpr: args[aai].expr, p: af.params[aai]))
                         aai += 1
                     }
                     mut val adi: U64 = args.count
                     while adi < af.params.count {
-                        aav.append(value: genArgValue(c: inout c, st: inout self, argExpr: af.params[adi].defaultExpr, p: af.params[adi]))
+                        aav.append(value: self.genArgValue(c: inout c, argExpr: af.params[adi].defaultExpr, p: af.params[adi]))
                         adi += 1
                     }
                     return LLVMBuildCall2(self.b, self.fnTy[aslot], self.fnVal[aslot], arrayCPtr(aav), aav.count, anon())
@@ -193,13 +193,13 @@ pub impl LlvmCtx {
         // a method on a primitive lang-item receiver (`s.isEmpty()` on String,
         // `(42I64).format(...)` on I64): these are extern lang-items (not registered
         // structs), so dispatch to their std method and lazily emit the body.
-        val primRecv: Bind = primLangItemRecvName(c: inout c, st: inout self, recv: recv)
+        val primRecv: Bind = self.primLangItemRecvName(c: inout c, recv: recv)
         if primRecv.nameLen != 0U64 {
             val smfi: U64 = c.findMethod(recvStart: primRecv.nameStart, recvLen: primRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
             if smfi < c.arena.funcs.count {
                 // a method with its own type params on a primitive (`(self.a:U64).absorb[S](…)`).
                 if c.arena.funcs[smfi].typeParams.count > 0U64 {
-                    val mtv: LLVMValueRef = genMethodOwnTypeParamCall(c: inout c, st: inout self, recv: recv, mfi: smfi, recvStart: primRecv.nameStart, recvLen: primRecv.nameLen, args: args)
+                    val mtv: LLVMValueRef = self.genMethodOwnTypeParamCall(c: inout c, recv: recv, mfi: smfi, recvStart: primRecv.nameStart, recvLen: primRecv.nameLen, args: args)
                     if LLVMIsNull(mtv) == 0I32 {
                         return mtv
                     }
@@ -209,13 +209,13 @@ pub impl LlvmCtx {
                     val smf: Func = c.arena.funcs[smfi]
                     mut val sav: Array[LLVMValueRef] = []
                     if smf.selfInout {
-                        sav.append(value: placePtrOf(c: inout c, st: inout self, id: recv))
+                        sav.append(value: self.placePtrOf(c: inout c, id: recv))
                     } else {
                         sav.append(value: genLlvmExpr(c: inout c, st: inout self, id: recv))
                     }
                     mut val sai: U64 = 0
                     while sai < args.count {
-                        sav.append(value: genArgValue(c: inout c, st: inout self, argExpr: args[sai].expr, p: smf.params[sai]))
+                        sav.append(value: self.genArgValue(c: inout c, argExpr: args[sai].expr, p: smf.params[sai]))
                         sai += 1
                     }
                     return LLVMBuildCall2(self.b, self.fnTy[sslot], self.fnVal[sslot], arrayCPtr(sav), sav.count, anon())
@@ -225,7 +225,7 @@ pub impl LlvmCtx {
         // generic-receiver method dispatch (`box.get()`, `maybe.unwrapOr(...)`): the
         // receiver local carries its instantiation ref; route to the monomorphized
         // method instance emitted by declareGenMethods.
-        val recvRef: U64 = exprTypeRef(c: inout c, st: inout self, id: recv)
+        val recvRef: U64 = self.exprTypeRef(c: inout c, id: recv)
         if recvRef != 0U64 {
             val rtnm: TypeRef = c.arena.types[recvRef]
             if c.isGenericInst(ref: recvRef) && !rangeEquals(bytes: c.arena.bytes, start: rtnm.nameStart, len: rtnm.nameLen, kw: "Array") {
@@ -238,7 +238,7 @@ pub impl LlvmCtx {
                     val gOwn: Array[U64] = methodOwnArgs(c: inout c, mfi: gmfi, instRef: recvRef, args: args)
                     val gslot: U64 = ensureGenMethodDeclared(c: inout c, st: inout self, mfi: gmfi, instRef: recvRef, ownArgs: gOwn)
                     if gslot < self.genMethK.count {
-                        return genGenMethodCall(c: inout c, st: inout self, recv: recv, mfi: gmfi, slot: gslot, instRef: recvRef, args: args)
+                        return self.genGenMethodCall(c: inout c, recv: recv, mfi: gmfi, slot: gslot, instRef: recvRef, args: args)
                     }
                     compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this generic method is not emittable yet (provided / std / method-own type params)")
                     return LLVMConstInt(self.i64ty, 0U64, 0I32)
@@ -246,7 +246,7 @@ pub impl LlvmCtx {
             }
         }
         // array methods (append / get / set; user methods on Array are TODO).
-        if exprIsArray(c: inout c, st: inout self, id: recv) {
+        if self.exprIsArray(c: inout c, id: recv) {
             if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "append") {
                 return self.genLlvmAppend(c: inout c, recv: recv, valueExpr: args[0].expr)
             }
@@ -270,7 +270,7 @@ pub impl LlvmCtx {
                     val arrInst: U64 = c.pushType(t: <TypeRef nameStart=arrB.nameStart nameLen=arrB.nameLen args=aargs />)
                     val gslot: U64 = ensureGenMethodDeclared(c: inout c, st: inout self, mfi: amfi, instRef: arrInst, ownArgs: [])
                     if gslot < self.genMethK.count {
-                        return genGenMethodCall(c: inout c, st: inout self, recv: recv, mfi: amfi, slot: gslot, instRef: arrInst, args: args)
+                        return self.genGenMethodCall(c: inout c, recv: recv, mfi: amfi, slot: gslot, instRef: arrInst, args: args)
                     }
                 }
             }
@@ -291,20 +291,20 @@ pub impl LlvmCtx {
             if LLVMGetTypeKind(LLVMTypeOf(rv)) == 8U32 {
                 val uns: Bool = valueKind(c: inout c, st: inout self, id: recv) == 3U64
                 val bv: LLVMValueRef = coerceInt(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), target: LLVMTypeOf(rv), unsigned: uns)
-                return buildBinOpS(c: inout c, st: inout self, op: wop, l: rv, r: bv, unsigned: uns)
+                return self.buildBinOpS(c: inout c, op: wop, l: rv, r: bv, unsigned: uns)
             }
         }
-        val rsidx: U64 = exprStructIdx(c: inout c, st: inout self, id: recv)
+        val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
         if rsidx >= c.arena.structs.count {
             // an enum-receiver method (`c.code()` on an enum value): dispatch like a
             // struct method (self by value, or a pointer for `inout fn`).
-            val erecvRef: U64 = exprTypeRef(c: inout c, st: inout self, id: recv)
+            val erecvRef: U64 = self.exprTypeRef(c: inout c, id: recv)
             if erecvRef != 0U64 {
                 val et: TypeRef = c.arena.types[erecvRef]
                 if self.enumRegSlot(c: inout c, start: et.nameStart, len: et.nameLen) < self.enumIdxs.count {
                     val emfi: U64 = c.findMethod(recvStart: et.nameStart, recvLen: et.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                     if emfi < c.arena.funcs.count {
-                        mut val eslot: U64 = userFnSlot(st: inout self, idx: emfi)
+                        mut val eslot: U64 = self.userFnSlot(idx: emfi)
                         if eslot >= self.fnIdx.count {
                             eslot = self.ensureProvidedDeclared(c: inout c, fi: emfi)
                         }
@@ -312,18 +312,18 @@ pub impl LlvmCtx {
                             val emf: Func = c.arena.funcs[emfi]
                             mut val eav: Array[LLVMValueRef] = []
                             if emf.selfInout {
-                                eav.append(value: placePtrOf(c: inout c, st: inout self, id: recv))
+                                eav.append(value: self.placePtrOf(c: inout c, id: recv))
                             } else {
                                 eav.append(value: genLlvmExpr(c: inout c, st: inout self, id: recv))
                             }
                             mut val eai: U64 = 0
                             while eai < args.count {
-                                eav.append(value: genArgValue(c: inout c, st: inout self, argExpr: args[eai].expr, p: emf.params[eai]))
+                                eav.append(value: self.genArgValue(c: inout c, argExpr: args[eai].expr, p: emf.params[eai]))
                                 eai += 1
                             }
                             mut val edi: U64 = args.count
                             while edi < emf.params.count {
-                                eav.append(value: genArgValue(c: inout c, st: inout self, argExpr: emf.params[edi].defaultExpr, p: emf.params[edi]))
+                                eav.append(value: self.genArgValue(c: inout c, argExpr: emf.params[edi].defaultExpr, p: emf.params[edi]))
                                 edi += 1
                             }
                             return LLVMBuildCall2(self.b, self.fnTy[eslot], self.fnVal[eslot], arrayCPtr(eav), eav.count, anon())
@@ -342,7 +342,7 @@ pub impl LlvmCtx {
         // (spec/09); the extension shadows a same-name bare method under the view. With
         // stacked views, the name must resolve in exactly one (same-name in two stacked
         // views is ambiguous).
-        val viewChain: Array[U64] = collectViewChain(c: inout c, st: inout self, id: recv)
+        val viewChain: Array[U64] = self.collectViewChain(c: inout c, id: recv)
         mut val mfi: U64 = c.arena.funcs.count
         mut val vci: U64 = 0
         while vci < viewChain.count {
@@ -394,12 +394,12 @@ pub impl LlvmCtx {
         // infer them from the args and monomorphize on (method, method-type-args),
         // keyed by a pseudo instance ref (receiver name + the inferred method args).
         if c.arena.funcs[mfi].typeParams.count > 0U64 {
-            val mtv: LLVMValueRef = genMethodOwnTypeParamCall(c: inout c, st: inout self, recv: recv, mfi: mfi, recvStart: sd.nameStart, recvLen: sd.nameLen, args: args)
+            val mtv: LLVMValueRef = self.genMethodOwnTypeParamCall(c: inout c, recv: recv, mfi: mfi, recvStart: sd.nameStart, recvLen: sd.nameLen, args: args)
             if LLVMIsNull(mtv) == 0I32 {
                 return mtv
             }
         }
-        mut val slot: U64 = userFnSlot(st: inout self, idx: mfi)
+        mut val slot: U64 = self.userFnSlot(idx: mfi)
         // a provided trait method OR a non-entry-module std method (SipHasher.writeU64,
         // reached via a generic Hasher) is declared+emitted lazily on first call.
         if slot >= self.fnIdx.count {
@@ -423,18 +423,18 @@ pub impl LlvmCtx {
         mut val av: Array[LLVMValueRef] = []
         // self: an `inout fn` needs the receiver's address (a place); else its value.
         if mf.selfInout {
-            av.append(value: placePtrOf(c: inout c, st: inout self, id: recv))
+            av.append(value: self.placePtrOf(c: inout c, id: recv))
         } else {
             av.append(value: genLlvmExpr(c: inout c, st: inout self, id: recv))
         }
         mut val ai: U64 = 0
         while ai < args.count {
-            av.append(value: genArgValue(c: inout c, st: inout self, argExpr: args[ai].expr, p: mf.params[ai]))
+            av.append(value: self.genArgValue(c: inout c, argExpr: args[ai].expr, p: mf.params[ai]))
             ai += 1
         }
         mut val di: U64 = args.count
         while di < mf.params.count {
-            av.append(value: genArgValue(c: inout c, st: inout self, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
+            av.append(value: self.genArgValue(c: inout c, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
             di += 1
         }
         return LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(av), av.count, anon())

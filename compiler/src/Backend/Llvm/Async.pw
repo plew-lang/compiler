@@ -282,7 +282,7 @@ fn genLlvmAsyncAwaitLet(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLe
     if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Promise") {
         tref = 0U64
     }
-    pushLocalR(st: inout st, nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: tyStart, len: tyLen), isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: tref)
+    pushLocalR(st: inout st, nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen), structIdx: st.localStructIdxFor(c: inout c, start: tyStart, len: tyLen), isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: tref)
 }
 
 // Lower a `return` inside an async fn (mirrors genAsyncReturn): resolve `__self`
@@ -367,14 +367,14 @@ fn bindAsyncParam(c: inout Comp, st: inout LlvmCtx, p: Param, fieldIdx: U64) {
     val slot: LLVMValueRef = asyncFrameSlot(c: inout c, st: inout st, idx: fieldIdx)
     mut val pty: LLVMTypeRef = asyncParamTy(c: inout c, st: inout st, p: p)
     mut val pElem: LLVMTypeRef = st.i64ty
-    mut val pSidx: U64 = localStructIdxFor(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen)
+    mut val pSidx: U64 = st.localStructIdxFor(c: inout c, start: p.tyStart, len: p.tyLen)
     mut val pRef: U64 = 0
     if p.tyIsArray {
         pElem = llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen)
     } else {
         if c.isGenericInst(ref: p.ty) {
             pRef = p.ty
-            val pgs: U64 = genStructSlot(c: inout c, st: inout st, ref: p.ty)
+            val pgs: U64 = st.genStructSlot(c: inout c, ref: p.ty)
             if pgs < st.genStructRefs.count {
                 pSidx = st.genStructDefs[pgs]
             }
@@ -405,7 +405,7 @@ fn genLlvmAsyncFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
         val mainTy: LLVMTypeRef = LLVMFunctionType(st.i32ty, arrayCPtr(noParams), 0U64, 0I32)
         entryFn = LLVMAddFunction(st.mod, cstr(s: "main"), mainTy)
     } else {
-        entryFn = st.fnVal[userFnSlot(st: inout st, idx: fi)]
+        entryFn = st.fnVal[st.userFnSlot(idx: fi)]
     }
     st.curFn = entryFn
     val entryBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, entryFn, cstr(s: "entry"))

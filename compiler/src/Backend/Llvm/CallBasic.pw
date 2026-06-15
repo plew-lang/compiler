@@ -74,7 +74,7 @@ fn genPowCall(c: inout Comp, st: inout LlvmCtx, base: U64, args: Array[Arg]) -> 
     if afi >= c.arena.funcs.count {
         return LLVMConstNull(st.ptrty)
     }
-    mut val aslot: U64 = userFnSlot(st: inout st, idx: afi)
+    mut val aslot: U64 = st.userFnSlot(idx: afi)
     if aslot >= st.fnIdx.count {
         aslot = st.ensureFreeFnDeclared(c: inout c, fi: afi)
     }
@@ -85,7 +85,7 @@ fn genPowCall(c: inout Comp, st: inout LlvmCtx, base: U64, args: Array[Arg]) -> 
     mut val av: Array[LLVMValueRef] = []
     mut val ai: U64 = 0
     while ai < args.count {
-        av.append(value: genArgValue(c: inout c, st: inout st, argExpr: args[ai].expr, p: af.params[ai]))
+        av.append(value: st.genArgValue(c: inout c, argExpr: args[ai].expr, p: af.params[ai]))
         ai += 1
     }
     return LLVMBuildCall2(st.b, st.fnTy[aslot], st.fnVal[aslot], arrayCPtr(av), av.count, anon())
@@ -257,20 +257,20 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
         // rawAlloc[T](cap, of) -> RawBuffer[T]: malloc cap*sizeof(T); `of`'s type is T.
         val ofTy: LLVMTypeRef = LLVMTypeOf(genLlvmExpr(c: inout c, st: inout st, id: args[1].expr))
         val cap: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
-        return rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(ofTy), cap: cap)
+        return st.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(ofTy), cap: cap)
     }
     if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawLoad") {
-        val et: LLVMTypeRef = rawBufElemTy(c: inout c, st: inout st, bufExpr: args[0].expr)
+        val et: LLVMTypeRef = st.rawBufElemTy(c: inout c, bufExpr: args[0].expr)
         val data: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
         val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[1].expr)
-        return LLVMBuildLoad2(st.b, et, arrElemPtr(st: inout st, elemTy: et, data: data, idx: idx), anon())
+        return LLVMBuildLoad2(st.b, et, st.arrElemPtr(elemTy: et, data: data, idx: idx), anon())
     }
     if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawStore") {
-        val et: LLVMTypeRef = rawBufElemTy(c: inout c, st: inout st, bufExpr: args[0].expr)
+        val et: LLVMTypeRef = st.rawBufElemTy(c: inout c, bufExpr: args[0].expr)
         val data: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
         val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[1].expr)
-        val v: LLVMValueRef = coerceElem(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[2].expr), elemTy: et)
-        LLVMBuildStore(st.b, v, arrElemPtr(st: inout st, elemTy: et, data: data, idx: idx))
+        val v: LLVMValueRef = st.coerceElem(v: genLlvmExpr(c: inout c, st: inout st, id: args[2].expr), elemTy: et)
+        LLVMBuildStore(st.b, v, st.arrElemPtr(elemTy: et, data: data, idx: idx))
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawCap") {
@@ -389,9 +389,9 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
     // beyond a plain match arrive in later increments. Overloads differing only by
     // a parameter's `#Ext` view (`f(a: P)` vs `f(a: P#Ext)`) are refined by the
     // arguments' actual views (spec/09) — resolution is otherwise view-blind.
-    val cfi: U64 = findFuncViewAware(c: inout c, st: inout st, nameStart: nameStart, nameLen: nameLen, args: args)
+    val cfi: U64 = st.findFuncViewAware(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
     if cfi < c.arena.funcs.count {
-        mut val slot: U64 = userFnSlot(st: inout st, idx: cfi)
+        mut val slot: U64 = st.userFnSlot(idx: cfi)
         // a std free function reached from an emitted body (digitByteI from
         // I64.format) is declared+emitted lazily.
         if slot >= st.fnIdx.count {
@@ -405,13 +405,13 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
             mut val ai: U64 = 0
             while ai < args.count {
                 // coerce each argument to the parameter's integer width.
-                av2.append(value: genArgValue(c: inout c, st: inout st, argExpr: args[ai].expr, p: cf.params[ai]))
+                av2.append(value: st.genArgValue(c: inout c, argExpr: args[ai].expr, p: cf.params[ai]))
                 ai += 1
             }
             // fill omitted trailing params with their default expressions (spec/04).
             mut val di: U64 = args.count
             while di < cf.params.count {
-                av2.append(value: genArgValue(c: inout c, st: inout st, argExpr: cf.params[di].defaultExpr, p: cf.params[di]))
+                av2.append(value: st.genArgValue(c: inout c, argExpr: cf.params[di].defaultExpr, p: cf.params[di]))
                 di += 1
             }
             return LLVMBuildCall2(st.b, st.fnTy[slot], st.fnVal[slot], arrayCPtr(av2), av2.count, anon())
@@ -430,12 +430,12 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
                 mut val av3: Array[LLVMValueRef] = []
                 mut val ai3: U64 = 0
                 while ai3 < args.count {
-                    av3.append(value: genArgValue(c: inout c, st: inout st, argExpr: args[ai3].expr, p: cf.params[ai3]))
+                    av3.append(value: st.genArgValue(c: inout c, argExpr: args[ai3].expr, p: cf.params[ai3]))
                     ai3 += 1
                 }
                 mut val di3: U64 = args.count
                 while di3 < cf.params.count {
-                    av3.append(value: genArgValue(c: inout c, st: inout st, argExpr: cf.params[di3].defaultExpr, p: cf.params[di3]))
+                    av3.append(value: st.genArgValue(c: inout c, argExpr: cf.params[di3].defaultExpr, p: cf.params[di3]))
                     di3 += 1
                 }
                 c.cur.typeParams = savedP
@@ -452,12 +452,12 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
             mut val ptys: Array[LLVMTypeRef] = []
             mut val pe: U64 = 0
             while pe < ef.params.count {
-                ptys.append(value: ffiTyOf(c: inout c, st: inout st, tyStart: ef.params[pe].tyStart, tyLen: ef.params[pe].tyLen))
+                ptys.append(value: st.ffiTyOf(c: inout c, tyStart: ef.params[pe].tyStart, tyLen: ef.params[pe].tyLen))
                 pe += 1
             }
             mut val rty: LLVMTypeRef = st.voidty
             if ef.hasRet {
-                rty = ffiTyOf(c: inout c, st: inout st, tyStart: ef.retStart, tyLen: ef.retLen)
+                rty = st.ffiTyOf(c: inout c, tyStart: ef.retStart, tyLen: ef.retLen)
             }
             val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
             // the C symbol is the raw function name (no mangling); cache by the

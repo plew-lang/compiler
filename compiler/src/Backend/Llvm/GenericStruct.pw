@@ -10,362 +10,365 @@
 // (`struct Pair { a: Optional[I64] }`) regardless of registration order, since
 // LLVMStructSetBody only records element-type *references* (sizes resolve later, at
 // emission, by which point all bodies are set).
-fn registerGenStructNames(c: inout Comp, st: inout LlvmCtx) {
-    // create every instance's NAMED struct type (opaque, body unset) and record its
-    // def. Bodies are set later (registerGenStructBodies) so a field of generic-
-    // instance type (an adapter wrapping another: FilterIter's inner = MapIter[…], or
-    // an explicit `Optional[I64]` member) resolves to the already-created named type.
-    mut val k: U64 = 0
-    while k < c.monoWork.genInsts.count {
-        val ref: U64 = c.monoWork.genInsts[k]
-        if c.isGenericInst(ref: ref) {
-            val t: TypeRef = c.arena.types[ref]
-            val defIdx: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-            if defIdx < c.arena.structs.count {
-                mut val nm: Array[U8] = []
-                appendBytes(into: inout nm, from: "gs".bytes)
-                appendU64Dec(into: inout nm, n: k)
-                nm.append(value: 0)
-                st.genStructRefs.append(value: ref)
-                st.genStructTys.append(value: LLVMStructCreateNamed(st.ctx, arrayCPtr(nm)))
-                st.genStructDefs.append(value: defIdx)
-            }
-        }
-        k += 1
-    }
-}
 
-// Set each generic-struct instance's body (field types under its substitution env; a
-// generic-instance field now resolves via fieldLlvmTy -> llvmTypeOfRef to the named
-// type created in registerGenStructNames). Run after ALL names (plain + generic).
-fn registerGenStructBodies(c: inout Comp, st: inout LlvmCtx) {
-    mut val s: U64 = 0
-    while s < st.genStructRefs.count {
-        val ref: U64 = st.genStructRefs[s]
-        val sd: StructDef = c.arena.structs[st.genStructDefs[s]]
-        val savedP: Array[Bind] = c.cur.typeParams
-        val savedA: Array[U64] = c.cur.typeArgs
-        c.cur.typeParams = sd.typeParams
-        c.cur.typeArgs = c.arena.types[ref].args
-        mut val elems: Array[LLVMTypeRef] = []
-        mut val fi: U64 = 0
-        while fi < sd.fields.count {
-            // a boxed (recursive) field is a heap pointer — matching the non-generic
-            // registerStructBodies and the value built in genFieldValue. Required for a
-            // recursive GENERIC value type (`N[I64]` with `next: Optional[N[I64]]`), else
-            // the inline layout disagrees with the boxed (ptr) construction value.
-            if c.fieldIsBoxed(f: sd.fields[fi]) {
-                elems.append(value: st.ptrty)
-            } else {
-                elems.append(value: fieldLlvmTy(c: inout c, st: inout st, fd: sd.fields[fi]))
-            }
-            fi += 1
-        }
-        LLVMStructSetBody(st.genStructTys[s], arrayCPtr(elems), sd.fields.count, 0I32)
-        c.cur.typeParams = savedP
-        c.cur.typeArgs = savedA
-        s += 1
-    }
-}
-
-// Index into st.genStruct* for the registered instance structurally equal to `ref`,
-// or st.genStructRefs.count.
-fn genStructSlot(c: inout Comp, st: inout LlvmCtx, ref: U64) -> U64 {
-    mut val i: U64 = 0
-    while i < st.genStructRefs.count {
-        if c.typeRefEq(a: st.genStructRefs[i], b: ref) {
-            return i
-        }
-        i += 1
-    }
-    return st.genStructRefs.count
-}
-
-// Register each concrete generic-enum instantiation as a named tagged-union type
-// `{ i64 tag, [maxWords(args) x i64] payload }` with type parameters substituted.
-fn registerGenEnums(c: inout Comp, st: inout LlvmCtx) {
-    mut val k: U64 = 0
-    while k < c.monoWork.genInsts.count {
-        val ref: U64 = c.monoWork.genInsts[k]
-        if c.isGenericInst(ref: ref) {
-            val t: TypeRef = c.arena.types[ref]
-            val defIdx: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-            if defIdx < c.arena.enums.count {
-                val e: EnumDef = c.arena.enums[defIdx]
-                val savedP: Array[Bind] = c.cur.typeParams
-                val savedA: Array[U64] = c.cur.typeArgs
-                c.cur.typeParams = e.typeParams
-                c.cur.typeArgs = t.args
-                mut val maxWords: U64 = 0
-                mut val vi: U64 = 0
-                while vi < e.variants.count {
-                    val fs: Array[FieldDef] = e.variants[vi].fields
-                    mut val w: U64 = 0
-                    mut val fj: U64 = 0
-                    while fj < fs.count {
-                        // fieldWordsF (not fieldWords) so a boxed / array / nested
-                        // generic-instance payload field is sized correctly under the env.
-                        w = w + st.fieldWordsF(c: inout c, f: fs[fj])
-                        fj += 1
-                    }
-                    if w > maxWords {
-                        maxWords = w
-                    }
-                    vi += 1
+pub impl LlvmCtx {
+    inout fn registerGenStructNames(c: inout Comp) {
+        // create every instance's NAMED struct type (opaque, body unset) and record its
+        // def. Bodies are set later (registerGenStructBodies) so a field of generic-
+        // instance type (an adapter wrapping another: FilterIter's inner = MapIter[…], or
+        // an explicit `Optional[I64]` member) resolves to the already-created named type.
+        mut val k: U64 = 0
+        while k < c.monoWork.genInsts.count {
+            val ref: U64 = c.monoWork.genInsts[k]
+            if c.isGenericInst(ref: ref) {
+                val t: TypeRef = c.arena.types[ref]
+                val defIdx: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
+                if defIdx < c.arena.structs.count {
+                    mut val nm: Array[U8] = []
+                    appendBytes(into: inout nm, from: "gs".bytes)
+                    appendU64Dec(into: inout nm, n: k)
+                    nm.append(value: 0)
+                    self.genStructRefs.append(value: ref)
+                    self.genStructTys.append(value: LLVMStructCreateNamed(self.ctx, arrayCPtr(nm)))
+                    self.genStructDefs.append(value: defIdx)
                 }
-                mut val nm: Array[U8] = []
-                appendBytes(into: inout nm, from: "ge".bytes)
-                appendU64Dec(into: inout nm, n: k)
-                nm.append(value: 0)
-                val ty: LLVMTypeRef = LLVMStructCreateNamed(st.ctx, arrayCPtr(nm))
-                mut val elems: Array[LLVMTypeRef] = []
-                elems.append(value: st.i64ty)
-                elems.append(value: LLVMArrayType2(st.i64ty, maxWords))
-                LLVMStructSetBody(ty, arrayCPtr(elems), 2U64, 0I32)
-                c.cur.typeParams = savedP
-                c.cur.typeArgs = savedA
-                st.genEnumRefs.append(value: ref)
-                st.genEnumTys.append(value: ty)
-                st.genEnumDefs.append(value: defIdx)
             }
+            k += 1
         }
-        k += 1
     }
-}
 
-// The tracked TypeRef of an expression (an Ident local's locTypeRef, or a struct
-// field whose declared type is a generic instance), or 0.
-fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
-    // a desugared non-Optional `?.` (a Chain rewrite) records its result `Head[U]`; use
-    // it so a method call on the result (`(a?.x).chain()` in a nested `a?.x?.y`) resolves
-    // its receiver type. Checked first since the node is a generic MatchExpr.
-    val cr: U64 = c.chainResultRef(exprId: id)
-    if cr != 0U64 {
-        return cr
-    }
-    match c.arena.exprs[id] {
-        Expr.Ident(val start, val len) => {
-            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
-            if li < st.nLocals {
-                return st.locTypeRef[li]
+    // Set each generic-struct instance's body (field types under its substitution env; a
+    // generic-instance field now resolves via fieldLlvmTy -> llvmTypeOfRef to the named
+    // type created in registerGenStructNames). Run after ALL names (plain + generic).
+    inout fn registerGenStructBodies(c: inout Comp) {
+        mut val s: U64 = 0
+        while s < self.genStructRefs.count {
+            val ref: U64 = self.genStructRefs[s]
+            val sd: StructDef = c.arena.structs[self.genStructDefs[s]]
+            val savedP: Array[Bind] = c.cur.typeParams
+            val savedA: Array[U64] = c.cur.typeArgs
+            c.cur.typeParams = sd.typeParams
+            c.cur.typeArgs = c.arena.types[ref].args
+            mut val elems: Array[LLVMTypeRef] = []
+            mut val fi: U64 = 0
+            while fi < sd.fields.count {
+                // a boxed (recursive) field is a heap pointer — matching the non-generic
+                // registerStructBodies and the value built in genFieldValue. Required for a
+                // recursive GENERIC value type (`N[I64]` with `next: Optional[N[I64]]`), else
+                // the inline layout disagrees with the boxed (ptr) construction value.
+                if c.fieldIsBoxed(f: sd.fields[fi]) {
+                    elems.append(value: self.ptrty)
+                } else {
+                    elems.append(value: self.fieldLlvmTy(c: inout c, fd: sd.fields[fi]))
+                }
+                fi += 1
             }
+            LLVMStructSetBody(self.genStructTys[s], arrayCPtr(elems), sd.fields.count, 0I32)
+            c.cur.typeParams = savedP
+            c.cur.typeArgs = savedA
+            s += 1
         }
-        Expr.Field(val base, val nameStart, val nameLen) => {
-            // a field of generic-instance type (`node.next : Optional[Node]`): yield
-            // the instance ref (grounded under any active env) so a match on the
-            // field read recovers the enum's substitution env.
-            val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
-            if sidx < c.arena.structs.count {
-                val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                if fidx < c.arena.structs[sidx].fields.count {
-                    val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
-                    // ground the field type under the BASE's instance env (so `bb.v`
-                    // with bb: Box[Box[I32]] yields Box[I32]) AND any active env (a
-                    // monomorphized adapter's `inner: I` -> MapIter[Counter,…]).
-                    val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
+    }
+
+    // Index into st.genStruct* for the registered instance structurally equal to `ref`,
+    // or st.genStructRefs.count.
+    inout fn genStructSlot(c: inout Comp, ref: U64) -> U64 {
+        mut val i: U64 = 0
+        while i < self.genStructRefs.count {
+            if c.typeRefEq(a: self.genStructRefs[i], b: ref) {
+                return i
+            }
+            i += 1
+        }
+        return self.genStructRefs.count
+    }
+
+    // Register each concrete generic-enum instantiation as a named tagged-union type
+    // `{ i64 tag, [maxWords(args) x i64] payload }` with type parameters substituted.
+    inout fn registerGenEnums(c: inout Comp) {
+        mut val k: U64 = 0
+        while k < c.monoWork.genInsts.count {
+            val ref: U64 = c.monoWork.genInsts[k]
+            if c.isGenericInst(ref: ref) {
+                val t: TypeRef = c.arena.types[ref]
+                val defIdx: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
+                if defIdx < c.arena.enums.count {
+                    val e: EnumDef = c.arena.enums[defIdx]
                     val savedP: Array[Bind] = c.cur.typeParams
                     val savedA: Array[U64] = c.cur.typeArgs
-                    val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: baseRef)
-                    mut val g: U64 = fd.ty
-                    if fd.ty != 0U64 {
-                        if c.cur.typeParams.count > 0U64 {
-                            g = c.groundTypeRef(ref: fd.ty)
+                    c.cur.typeParams = e.typeParams
+                    c.cur.typeArgs = t.args
+                    mut val maxWords: U64 = 0
+                    mut val vi: U64 = 0
+                    while vi < e.variants.count {
+                        val fs: Array[FieldDef] = e.variants[vi].fields
+                        mut val w: U64 = 0
+                        mut val fj: U64 = 0
+                        while fj < fs.count {
+                            // fieldWordsF (not fieldWords) so a boxed / array / nested
+                            // generic-instance payload field is sized correctly under the env.
+                            w = w + self.fieldWordsF(c: inout c, f: fs[fj])
+                            fj += 1
                         }
-                    }
-                    if didSet {
-                        c.cur.typeParams = savedP
-                        c.cur.typeArgs = savedA
-                    }
-                    if g != 0U64 {
-                        if c.isGenericInst(ref: g) {
-                            return g
+                        if w > maxWords {
+                            maxWords = w
                         }
-                        // an existential `any P` field: yield its TypeRef so a bare
-                        // `base.field.m()` dispatches dynamically (spec/08).
-                        if refIsAny(c: inout c, ref: g) {
-                            return g
-                        }
+                        vi += 1
                     }
+                    mut val nm: Array[U8] = []
+                    appendBytes(into: inout nm, from: "ge".bytes)
+                    appendU64Dec(into: inout nm, n: k)
+                    nm.append(value: 0)
+                    val ty: LLVMTypeRef = LLVMStructCreateNamed(self.ctx, arrayCPtr(nm))
+                    mut val elems: Array[LLVMTypeRef] = []
+                    elems.append(value: self.i64ty)
+                    elems.append(value: LLVMArrayType2(self.i64ty, maxWords))
+                    LLVMStructSetBody(ty, arrayCPtr(elems), 2U64, 0I32)
+                    c.cur.typeParams = savedP
+                    c.cur.typeArgs = savedA
+                    self.genEnumRefs.append(value: ref)
+                    self.genEnumTys.append(value: ty)
+                    self.genEnumDefs.append(value: defIdx)
                 }
             }
+            k += 1
         }
-        Expr.Index(val base, index: _) => {
-            // `arr[i]` : the array's element TypeRef (a Ref element `Array[Ref[Box]]`
-            // -> `ys[i]->v`, a generic element, or a nested-array element).
-            match c.arena.exprs[base] {
-                Expr.Ident(start: val bs, len: val bl) => {
-                    val bli: U64 = findLocal(c: inout c, st: inout st, start: bs, len: bl)
-                    if bli < st.nLocals {
-                        return st.locElemTypeRef[bli]
-                    }
+    }
+
+    // The tracked TypeRef of an expression (an Ident local's locTypeRef, or a struct
+    // field whose declared type is a generic instance), or 0.
+    inout fn exprTypeRef(c: inout Comp, id: U64) -> U64 {
+        // a desugared non-Optional `?.` (a Chain rewrite) records its result `Head[U]`; use
+        // it so a method call on the result (`(a?.x).chain()` in a nested `a?.x?.y`) resolves
+        // its receiver type. Checked first since the node is a generic MatchExpr.
+        val cr: U64 = c.chainResultRef(exprId: id)
+        if cr != 0U64 {
+            return cr
+        }
+        match c.arena.exprs[id] {
+            Expr.Ident(val start, val len) => {
+                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                if li < self.nLocals {
+                    return self.locTypeRef[li]
                 }
-                Expr.Field(base: val fb, nameStart: val fns2, nameLen: val fnl2) => {
-                    // an array struct field's element (`hc.items[0]` for
-                    // items: Array[Ref[Cell]]): the field's grounded element ref.
-                    val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: fb)
-                    if bsi < c.arena.structs.count {
-                        val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns2, len: fnl2)
-                        if fidx < c.arena.structs[bsi].fields.count {
-                            return st.fieldArrayElemRefUnderBase(c: inout c, base: fb, fd: c.arena.structs[bsi].fields[fidx])
+            }
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                // a field of generic-instance type (`node.next : Optional[Node]`): yield
+                // the instance ref (grounded under any active env) so a match on the
+                // field read recovers the enum's substitution env.
+                val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
+                if sidx < c.arena.structs.count {
+                    val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
+                    if fidx < c.arena.structs[sidx].fields.count {
+                        val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
+                        // ground the field type under the BASE's instance env (so `bb.v`
+                        // with bb: Box[Box[I32]] yields Box[I32]) AND any active env (a
+                        // monomorphized adapter's `inner: I` -> MapIter[Counter,…]).
+                        val baseRef: U64 = self.exprTypeRef(c: inout c, id: base)
+                        val savedP: Array[Bind] = c.cur.typeParams
+                        val savedA: Array[U64] = c.cur.typeArgs
+                        val didSet: Bool = self.setStructEnv(c: inout c, ref: baseRef)
+                        mut val g: U64 = fd.ty
+                        if fd.ty != 0U64 {
+                            if c.cur.typeParams.count > 0U64 {
+                                g = c.groundTypeRef(ref: fd.ty)
+                            }
                         }
-                    }
-                }
-                _ => {
-                    // a nested index (`t[0][0]`): unwrap one Array level from the base
-                    // array's element type ref.
-                    val br: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
-                    if br != 0U64 {
-                        val bt: TypeRef = c.arena.types[br]
-                        if rangeEquals(bytes: c.arena.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Array") {
-                            if bt.args.count > 0U64 {
-                                return bt.args[0]
+                        if didSet {
+                            c.cur.typeParams = savedP
+                            c.cur.typeArgs = savedA
+                        }
+                        if g != 0U64 {
+                            if c.isGenericInst(ref: g) {
+                                return g
+                            }
+                            // an existential `any P` field: yield its TypeRef so a bare
+                            // `base.field.m()` dispatches dynamically (spec/08).
+                            if refIsAny(c: inout c, ref: g) {
+                                return g
                             }
                         }
                     }
                 }
             }
-        }
-        Expr.OptChain(val base, val memberStart, val memberLen) => {
-            // `base?.member : Optional[U]` — so a chained `a?.b?.c` types its inner.
-            return optChainResultRefLL(c: inout c, st: inout st, base: base, memberStart: memberStart, memberLen: memberLen)
-        }
-        Expr.ExtView(val recv, val srcStart, val srcLen, val strip) => {
-            // `recv#Ext` : recv's type refined with the extension view (viewExtId);
-            // `recv#!Ext` (strip) removes the view (the result type is plain).
-            mut val vid: U64 = intern(c: inout c, start: srcStart, len: srcLen)
-            if strip {
-                vid = 0U64
-            }
-            val br: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
-            if br != 0U64 {
-                val bt: TypeRef = c.arena.types[br]
-                return c.pushType(t: <TypeRef nameStart=bt.nameStart nameLen=bt.nameLen args=bt.args viewExtId=vid />)
-            }
-            val si: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
-            if si < c.arena.structs.count {
-                mut val noArgs: Array[U64] = []
-                return c.pushType(t: <TypeRef nameStart=c.arena.structs[si].nameStart nameLen=c.arena.structs[si].nameLen args=noArgs viewExtId=vid />)
-            }
-        }
-        Expr.Method(val recv, val nameStart, val nameLen, args: val margs) => {
-            // an `any P` receiver: the requirement's return TypeRef, grounded under
-            // the existential's bindings (so a `match it.next()` on `any Iter[Item=I64]`
-            // recovers `Optional[I64]`).
-            val atIdx: U64 = anyRecvTraitIdx(c: inout c, st: inout st, recv: recv)
-            if atIdx < c.decls.traits.count {
-                val rr: U64 = anyMethodRetRef(c: inout c, anyRef: exprTypeRef(c: inout c, st: inout st, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: margs)
-                if rr != 0U64 {
-                    return rr
+            Expr.Index(val base, index: _) => {
+                // `arr[i]` : the array's element TypeRef (a Ref element `Array[Ref[Box]]`
+                // -> `ys[i]->v`, a generic element, or a nested-array element).
+                match c.arena.exprs[base] {
+                    Expr.Ident(start: val bs, len: val bl) => {
+                        val bli: U64 = findLocal(c: inout c, st: inout self, start: bs, len: bl)
+                        if bli < self.nLocals {
+                            return self.locElemTypeRef[bli]
+                        }
+                    }
+                    Expr.Field(base: val fb, nameStart: val fns2, nameLen: val fnl2) => {
+                        // an array struct field's element (`hc.items[0]` for
+                        // items: Array[Ref[Cell]]): the field's grounded element ref.
+                        val bsi: U64 = self.exprStructIdx(c: inout c, id: fb)
+                        if bsi < c.arena.structs.count {
+                            val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns2, len: fnl2)
+                            if fidx < c.arena.structs[bsi].fields.count {
+                                return self.fieldArrayElemRefUnderBase(c: inout c, base: fb, fd: c.arena.structs[bsi].fields[fidx])
+                            }
+                        }
+                    }
+                    _ => {
+                        // a nested index (`t[0][0]`): unwrap one Array level from the base
+                        // array's element type ref.
+                        val br: U64 = self.exprTypeRef(c: inout c, id: base)
+                        if br != 0U64 {
+                            val bt: TypeRef = c.arena.types[br]
+                            if rangeEquals(bytes: c.arena.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Array") {
+                                if bt.args.count > 0U64 {
+                                    return bt.args[0]
+                                }
+                            }
+                        }
+                    }
                 }
             }
-            // `xs.map(f)` / `xs.filter(p)` : the lazy adapter instance it produces,
-            // so a `for v in xs.map(f).filter(p)` (and the chain) types its iterand.
-            val adp: U64 = st.adapterCallResultInst(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen)
-            if adp != 0U64 {
-                return adp
+            Expr.OptChain(val base, val memberStart, val memberLen) => {
+                // `base?.member : Optional[U]` — so a chained `a?.b?.c` types its inner.
+                return self.optChainResultRefLL(c: inout c, base: base, memberStart: memberStart, memberLen: memberLen)
             }
-            // a general method whose return is a generic instance (`d.get(k) ->
-            // Optional[V]`): ground it under the receiver's env so a chained call on
-            // the result (`d.get(k).unwrapOr(...)`) recovers the instance to dispatch.
-            return methodResultRef(c: inout c, st: inout st, recv: recv, nameStart: nameStart, nameLen: nameLen, margs: margs)
-        }
-        Expr.Call(val nameStart, val nameLen, val args) => {
-            // `pow(base: x, exp: n)` (spec/12) yields the base argument's type (the
-            // `Pow` Output is the base type for the integer conformances), so a print /
-            // assignment recovers the right width and signedness.
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "pow") {
-                if args.count == 2U64 {
-                    return st.llvmArgTypeRef(c: inout c, argExpr: args[0].expr)
+            Expr.ExtView(val recv, val srcStart, val srcLen, val strip) => {
+                // `recv#Ext` : recv's type refined with the extension view (viewExtId);
+                // `recv#!Ext` (strip) removes the view (the result type is plain).
+                mut val vid: U64 = intern(c: inout c, start: srcStart, len: srcLen)
+                if strip {
+                    vid = 0U64
+                }
+                val br: U64 = self.exprTypeRef(c: inout c, id: recv)
+                if br != 0U64 {
+                    val bt: TypeRef = c.arena.types[br]
+                    return c.pushType(t: <TypeRef nameStart=bt.nameStart nameLen=bt.nameLen args=bt.args viewExtId=vid />)
+                }
+                val si: U64 = self.exprStructIdx(c: inout c, id: recv)
+                if si < c.arena.structs.count {
+                    mut val noArgs: Array[U64] = []
+                    return c.pushType(t: <TypeRef nameStart=c.arena.structs[si].nameStart nameLen=c.arena.structs[si].nameLen args=noArgs viewExtId=vid />)
                 }
             }
+            Expr.Method(val recv, val nameStart, val nameLen, args: val margs) => {
+                // an `any P` receiver: the requirement's return TypeRef, grounded under
+                // the existential's bindings (so a `match it.next()` on `any Iter[Item=I64]`
+                // recovers `Optional[I64]`).
+                val atIdx: U64 = anyRecvTraitIdx(c: inout c, st: inout self, recv: recv)
+                if atIdx < c.decls.traits.count {
+                    val rr: U64 = anyMethodRetRef(c: inout c, anyRef: self.exprTypeRef(c: inout c, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: margs)
+                    if rr != 0U64 {
+                        return rr
+                    }
+                }
+                // `xs.map(f)` / `xs.filter(p)` : the lazy adapter instance it produces,
+                // so a `for v in xs.map(f).filter(p)` (and the chain) types its iterand.
+                val adp: U64 = self.adapterCallResultInst(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen)
+                if adp != 0U64 {
+                    return adp
+                }
+                // a general method whose return is a generic instance (`d.get(k) ->
+                // Optional[V]`): ground it under the receiver's env so a chained call on
+                // the result (`d.get(k).unwrapOr(...)`) recovers the instance to dispatch.
+                return self.methodResultRef(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, margs: margs)
+            }
+            Expr.Call(val nameStart, val nameLen, val args) => {
+                // `pow(base: x, exp: n)` (spec/12) yields the base argument's type (the
+                // `Pow` Output is the base type for the integer conformances), so a print /
+                // assignment recovers the right width and signedness.
+                if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "pow") {
+                    if args.count == 2U64 {
+                        return self.llvmArgTypeRef(c: inout c, argExpr: args[0].expr)
+                    }
+                }
+            }
+            _ => {}
         }
-        _ => {}
+        return 0U64
     }
-    return 0U64
-}
 
-// The grounded result TypeRef of a non-adapter method call `recv.m(args)`: find the
-// method on the receiver's (possibly generic) type and ground its declared return
-// type under the receiver instance's env, yielding the generic instance the result
-// is (e.g. `Optional[I64]` for `dict[String,I64].get(k)`). 0 when the receiver type
-// or method can't be resolved or the return isn't a generic instance — so a plain
-// (non-generic) return leaves the caller's behavior unchanged.
-fn methodResultRef(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, nameLen: U64, margs: Array[Arg]) -> U64 {
-    val recvRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
-    mut val headStart: U64 = 0
-    mut val headLen: U64 = 0
-    if recvRef != 0U64 {
-        headStart = c.arena.types[recvRef].nameStart
-        headLen = c.arena.types[recvRef].nameLen
-    } else {
-        val si: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
-        if si < c.arena.structs.count {
-            headStart = c.arena.structs[si].nameStart
-            headLen = c.arena.structs[si].nameLen
+    // The grounded result TypeRef of a non-adapter method call `recv.m(args)`: find the
+    // method on the receiver's (possibly generic) type and ground its declared return
+    // type under the receiver instance's env, yielding the generic instance the result
+    // is (e.g. `Optional[I64]` for `dict[String,I64].get(k)`). 0 when the receiver type
+    // or method can't be resolved or the return isn't a generic instance — so a plain
+    // (non-generic) return leaves the caller's behavior unchanged.
+    inout fn methodResultRef(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, margs: Array[Arg]) -> U64 {
+        val recvRef: U64 = self.exprTypeRef(c: inout c, id: recv)
+        mut val headStart: U64 = 0
+        mut val headLen: U64 = 0
+        if recvRef != 0U64 {
+            headStart = c.arena.types[recvRef].nameStart
+            headLen = c.arena.types[recvRef].nameLen
         } else {
+            val si: U64 = self.exprStructIdx(c: inout c, id: recv)
+            if si < c.arena.structs.count {
+                headStart = c.arena.structs[si].nameStart
+                headLen = c.arena.structs[si].nameLen
+            } else {
+                return 0U64
+            }
+        }
+        val mfi: U64 = c.findMethod(recvStart: headStart, recvLen: headLen, nameStart: nameStart, nameLen: nameLen, args: margs)
+        if mfi < c.arena.funcs.count {
+            val mf: Func = c.arena.funcs[mfi]
+            if mf.hasRet {
+                if mf.retTy != 0U64 {
+                    val savedP: Array[Bind] = c.cur.typeParams
+                    val savedA: Array[U64] = c.cur.typeArgs
+                    // the receiver may be a struct OR an enum (`Loaded[Box].chain()` — an
+                    // enum Chain conformer): set whichever env grounds its type params.
+                    mut val didSet: Bool = self.setStructEnv(c: inout c, ref: recvRef)
+                    if !(didSet) {
+                        didSet = self.setEnumEnv(c: inout c, ref: recvRef)
+                    }
+                    val g: U64 = c.groundTypeRef(ref: mf.retTy)
+                    if didSet {
+                        c.cur.typeParams = savedP
+                        c.cur.typeArgs = savedA
+                    }
+                    if c.isGenericInst(ref: g) {
+                        return g
+                    }
+                }
+            }
+        }
+        return 0U64
+    }
+
+    // The `Optional[U]` result-type ref of `base?.member`, resolved through the
+    // LLVM-side type tracker (exprTypeRef) rather than the typed-AST cache (typeOf,
+    // unpopulated in this backend). Returns 0 if base isn't a concrete Optional whose
+    // element struct has the named field.
+    inout fn optChainResultRefLL(c: inout Comp, base: U64, memberStart: U64, memberLen: U64) -> U64 {
+        val baseRef: U64 = self.exprTypeRef(c: inout c, id: base)
+        if baseRef == 0U64 { return 0U64 }
+        if baseRef >= c.arena.types.count {
             return 0U64
         }
-    }
-    val mfi: U64 = c.findMethod(recvStart: headStart, recvLen: headLen, nameStart: nameStart, nameLen: nameLen, args: margs)
-    if mfi < c.arena.funcs.count {
-        val mf: Func = c.arena.funcs[mfi]
-        if mf.hasRet {
-            if mf.retTy != 0U64 {
-                val savedP: Array[Bind] = c.cur.typeParams
-                val savedA: Array[U64] = c.cur.typeArgs
-                // the receiver may be a struct OR an enum (`Loaded[Box].chain()` — an
-                // enum Chain conformer): set whichever env grounds its type params.
-                mut val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: recvRef)
-                if !(didSet) {
-                    didSet = setEnumEnv(c: inout c, st: inout st, ref: recvRef)
-                }
-                val g: U64 = c.groundTypeRef(ref: mf.retTy)
-                if didSet {
-                    c.cur.typeParams = savedP
-                    c.cur.typeArgs = savedA
-                }
-                if c.isGenericInst(ref: g) {
-                    return g
-                }
-            }
+        val bt: TypeRef = c.arena.types[baseRef]
+        if !(rangeEquals(bytes: c.arena.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Optional")) {
+            return 0U64
         }
+        if bt.args.count < 1U64 { return 0U64 }
+        val tName: TypeRef = c.arena.types[bt.args[0]]
+        val tSidx: U64 = c.structIndexByName(start: tName.nameStart, len: tName.nameLen)
+        if tSidx >= c.arena.structs.count {
+            return 0U64
+        }
+        val fidx: U64 = structFieldIndex(c: inout c, sidx: tSidx, start: memberStart, len: memberLen)
+        if fidx >= c.arena.structs[tSidx].fields.count {
+            return 0U64
+        }
+        val fd: FieldDef = c.arena.structs[tSidx].fields[fidx]
+        mut val uRef: U64 = fd.ty
+        if uRef == 0U64 {
+            val noArgs: Array[U64] = []
+            uRef = c.pushType(t: <TypeRef nameStart=fd.tyStart nameLen=fd.tyLen args=noArgs />)
+        }
+        mut val rArgs: Array[U64] = []
+        rArgs.append(value: uRef)
+        return c.pushType(t: <TypeRef nameStart=bt.nameStart nameLen=bt.nameLen args=rArgs />)
     }
-    return 0U64
-}
-
-// The `Optional[U]` result-type ref of `base?.member`, resolved through the
-// LLVM-side type tracker (exprTypeRef) rather than the typed-AST cache (typeOf,
-// unpopulated in this backend). Returns 0 if base isn't a concrete Optional whose
-// element struct has the named field.
-fn optChainResultRefLL(c: inout Comp, st: inout LlvmCtx, base: U64, memberStart: U64, memberLen: U64) -> U64 {
-    val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
-    if baseRef == 0U64 { return 0U64 }
-    if baseRef >= c.arena.types.count {
-        return 0U64
-    }
-    val bt: TypeRef = c.arena.types[baseRef]
-    if !(rangeEquals(bytes: c.arena.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Optional")) {
-        return 0U64
-    }
-    if bt.args.count < 1U64 { return 0U64 }
-    val tName: TypeRef = c.arena.types[bt.args[0]]
-    val tSidx: U64 = c.structIndexByName(start: tName.nameStart, len: tName.nameLen)
-    if tSidx >= c.arena.structs.count {
-        return 0U64
-    }
-    val fidx: U64 = structFieldIndex(c: inout c, sidx: tSidx, start: memberStart, len: memberLen)
-    if fidx >= c.arena.structs[tSidx].fields.count {
-        return 0U64
-    }
-    val fd: FieldDef = c.arena.structs[tSidx].fields[fidx]
-    mut val uRef: U64 = fd.ty
-    if uRef == 0U64 {
-        val noArgs: Array[U64] = []
-        uRef = c.pushType(t: <TypeRef nameStart=fd.tyStart nameLen=fd.tyLen args=noArgs />)
-    }
-    mut val rArgs: Array[U64] = []
-    rArgs.append(value: uRef)
-    return c.pushType(t: <TypeRef nameStart=bt.nameStart nameLen=bt.nameLen args=rArgs />)
 }
 
 // Concatenate two type-param lists (`add` first, then `base`). Used to MERGE a
@@ -391,47 +394,49 @@ fn concatArgs(add: Array[U64], base: Array[U64]) -> Array[U64] {
     return r
 }
 
-// If `ref` is a generic enum instance, set the substitution env to it and return
-// the saved-params (so the caller restores). Returns an empty saved env otherwise.
-// Pairs with restoreEnv. Encoded via the inout saved arrays.
-fn setEnumEnv(c: inout Comp, st: inout LlvmCtx, ref: U64) -> Bool {
-    if ref == 0U64 {
-        return false
-    }
-    val ge: U64 = genEnumSlot(c: inout c, st: inout st, ref: ref)
-    if ge < st.genEnumRefs.count {
-        c.cur.typeParams = c.arena.enums[st.genEnumDefs[ge]].typeParams
-        c.cur.typeArgs = c.arena.types[ref].args
-        return true
-    }
-    return false
-}
+pub impl LlvmCtx {
 
-// If `ref` is a generic struct instance, set the substitution env to it (so a
-// destructured field of type `T` grounds to the instance's concrete arg). Returns
-// whether it set the env (caller restores). Mirrors setEnumEnv for structs.
-fn setStructEnv(c: inout Comp, st: inout LlvmCtx, ref: U64) -> Bool {
-    if ref == 0U64 {
-        return false
-    }
-    val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: ref)
-    if gs < st.genStructRefs.count {
-        c.cur.typeParams = c.arena.structs[st.genStructDefs[gs]].typeParams
-        c.cur.typeArgs = c.arena.types[ref].args
-        return true
-    }
-    return false
-}
-
-// Index into st.genEnum* for the registered instance structurally equal to `ref`.
-fn genEnumSlot(c: inout Comp, st: inout LlvmCtx, ref: U64) -> U64 {
-    mut val i: U64 = 0
-    while i < st.genEnumRefs.count {
-        if c.typeRefEq(a: st.genEnumRefs[i], b: ref) {
-            return i
+    // If `ref` is a generic enum instance, set the substitution env to it and return
+    // the saved-params (so the caller restores). Returns an empty saved env otherwise.
+    // Pairs with restoreEnv. Encoded via the inout saved arrays.
+    inout fn setEnumEnv(c: inout Comp, ref: U64) -> Bool {
+        if ref == 0U64 {
+            return false
         }
-        i += 1
+        val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
+        if ge < self.genEnumRefs.count {
+            c.cur.typeParams = c.arena.enums[self.genEnumDefs[ge]].typeParams
+            c.cur.typeArgs = c.arena.types[ref].args
+            return true
+        }
+        return false
     }
-    return st.genEnumRefs.count
-}
 
+    // If `ref` is a generic struct instance, set the substitution env to it (so a
+    // destructured field of type `T` grounds to the instance's concrete arg). Returns
+    // whether it set the env (caller restores). Mirrors setEnumEnv for structs.
+    inout fn setStructEnv(c: inout Comp, ref: U64) -> Bool {
+        if ref == 0U64 {
+            return false
+        }
+        val gs: U64 = self.genStructSlot(c: inout c, ref: ref)
+        if gs < self.genStructRefs.count {
+            c.cur.typeParams = c.arena.structs[self.genStructDefs[gs]].typeParams
+            c.cur.typeArgs = c.arena.types[ref].args
+            return true
+        }
+        return false
+    }
+
+    // Index into st.genEnum* for the registered instance structurally equal to `ref`.
+    inout fn genEnumSlot(c: inout Comp, ref: U64) -> U64 {
+        mut val i: U64 = 0
+        while i < self.genEnumRefs.count {
+            if c.typeRefEq(a: self.genEnumRefs[i], b: ref) {
+                return i
+            }
+            i += 1
+        }
+        return self.genEnumRefs.count
+    }
+}

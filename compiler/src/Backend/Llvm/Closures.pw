@@ -131,7 +131,7 @@ pub impl LlvmCtx {
                     if c.isGenericInst(ref: retTy) {
                         rty = llvmTypeOfRef(c: inout c, st: inout self, ref: retTy)
                     } else {
-                        rty = llvmTypeFor(c: inout c, st: inout self, tyStart: retStart, tyLen: retLen, isArray: retIsArray)
+                        rty = self.llvmTypeFor(c: inout c, tyStart: retStart, tyLen: retLen, isArray: retIsArray)
                     }
                 }
                 val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
@@ -289,7 +289,7 @@ pub impl LlvmCtx {
                         if c.isGenericInst(ref: retTy) {
                             self.curRetTy = llvmTypeOfRef(c: inout c, st: inout self, ref: retTy)
                         } else {
-                            self.curRetTy = llvmTypeFor(c: inout c, st: inout self, tyStart: retStart, tyLen: retLen, isArray: retIsArray)
+                            self.curRetTy = self.llvmTypeFor(c: inout c, tyStart: retStart, tyLen: retLen, isArray: retIsArray)
                         }
                     } else {
                         self.curRetTy = self.voidty
@@ -363,7 +363,7 @@ pub impl LlvmCtx {
                             if cap.isArray {
                                 cElem = llvmScalarTy(c: inout c, st: inout self, tyStart: cap.tyStart, tyLen: cap.tyLen)
                             }
-                            pushLocalR(st: inout self, nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: a, ty: slotTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout self, start: cap.tyStart, len: cap.tyLen), isArr: cap.isArray, elemTy: cElem, elemKind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), typeRef: cRef)
+                            pushLocalR(st: inout self, nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: a, ty: slotTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: self.localStructIdxFor(c: inout c, start: cap.tyStart, len: cap.tyLen), isArr: cap.isArray, elemTy: cElem, elemKind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), typeRef: cRef)
                             ci += 1
                             }
                         }

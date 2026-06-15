@@ -14,10 +14,10 @@ pub impl LlvmCtx {
         // (one arm, no tag): store the scrutinee, bind its fields, emit the body.
         if arms.count > 0U64 {
             if arms[0].isStruct {
-                val ssidx: U64 = exprStructIdx(c: inout c, st: inout self, id: scrut)
+                val ssidx: U64 = self.exprStructIdx(c: inout c, id: scrut)
                 val savedSP: Array[Bind] = c.cur.typeParams
                 val savedSA: Array[U64] = c.cur.typeArgs
-                val didSetS: Bool = setStructEnv(c: inout c, st: inout self, ref: exprTypeRef(c: inout c, st: inout self, id: scrut))
+                val didSetS: Bool = self.setStructEnv(c: inout c, ref: self.exprTypeRef(c: inout c, id: scrut))
                 val sslot0: LLVMValueRef = entryAlloca(st: inout self, ty: sty)
                 LLVMBuildStore(self.b, sv, sslot0)
                 val mark0: U64 = self.nLocals
@@ -35,7 +35,7 @@ pub impl LlvmCtx {
         // is set ONLY around bindMatchPayload — NOT for the arm bodies, which must keep
         // the outer (e.g. monomorphized-method) env so a body's `self.f` / `self.inner`
         // still grounds. Saved here so each arm can set/restore around its bind.
-        val scrutRef: U64 = exprTypeRef(c: inout c, st: inout self, id: scrut)
+        val scrutRef: U64 = self.exprTypeRef(c: inout c, id: scrut)
         val savedMP: Array[Bind] = c.cur.typeParams
         val savedMA: Array[U64] = c.cur.typeArgs
         // the enum: from the first non-wildcard, non-struct arm.
@@ -89,7 +89,7 @@ pub impl LlvmCtx {
             if !(arm.isWildcard) {
                 // bind the payload under the enum env, then restore the outer env so the
                 // arm body grounds against the enclosing method/function, not the enum.
-                val didB: Bool = setEnumEnv(c: inout c, st: inout self, ref: scrutRef)
+                val didB: Bool = self.setEnumEnv(c: inout c, ref: scrutRef)
                 self.bindMatchPayload(c: inout c, eid: eid, arm: arm, scrutTy: sty, scrutSlot: sslot)
                 if didB {
                     c.cur.typeParams = savedMP
@@ -224,10 +224,10 @@ pub impl LlvmCtx {
                 // its struct index is the generic struct DEF (via genStructSlot), not a
                 // lookup by the un-grounded param name `fd.tyStart` (`T`), so field access
                 // `v.field` in the arm body resolves.
-                mut val bindStructIdx: U64 = localStructIdxFor(c: inout c, st: inout self, start: fd.tyStart, len: fd.tyLen)
+                mut val bindStructIdx: U64 = self.localStructIdxFor(c: inout c, start: fd.tyStart, len: fd.tyLen)
                 if genFieldRef != 0U64 {
                     if c.isGenericInst(ref: genFieldRef) {
-                        val gbs: U64 = genStructSlot(c: inout c, st: inout self, ref: genFieldRef)
+                        val gbs: U64 = self.genStructSlot(c: inout c, ref: genFieldRef)
                         if gbs < self.genStructRefs.count {
                             bindStructIdx = self.genStructDefs[gbs]
                         }
@@ -240,7 +240,7 @@ pub impl LlvmCtx {
                 if isArrF {
                     if elemRef != 0U64 {
                         val et2: TypeRef = c.arena.types[elemRef]
-                        val esi: U64 = localStructIdxFor(c: inout c, st: inout self, start: et2.nameStart, len: et2.nameLen)
+                        val esi: U64 = self.localStructIdxFor(c: inout c, start: et2.nameStart, len: et2.nameLen)
                         if esi < c.arena.structs.count {
                             setLocalElemStruct(st: inout self, esi: esi)
                         }
@@ -278,7 +278,7 @@ pub impl LlvmCtx {
                 }
                 if fidx < fs.count {
                     val fld: FieldDef = fs[fidx]
-                    val fty: LLVMTypeRef = llvmTypeFor(c: inout c, st: inout self, tyStart: fld.tyStart, tyLen: fld.tyLen, isArray: fld.tyIsArray)
+                    val fty: LLVMTypeRef = self.llvmTypeFor(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen, isArray: fld.tyIsArray)
                     val fv: LLVMValueRef = LLVMBuildLoad2(self.b, fty, LLVMBuildStructGEP2(self.b, scrutTy, scrutSlot, fidx, anon()), anon())
                     val slot: LLVMValueRef = entryAlloca(st: inout self, ty: fty)
                     LLVMBuildStore(self.b, fv, slot)
@@ -288,7 +288,7 @@ pub impl LlvmCtx {
                         elemTy = llvmScalarTy(c: inout c, st: inout self, tyStart: fld.tyStart, tyLen: fld.tyLen)
                         elemKind = kindFromTySpan(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen)
                     }
-                    pushLocal(st: inout self, nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: fty, kind: kindFromTySpan(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout self, start: fld.tyStart, len: fld.tyLen), isArr: fld.tyIsArray, elemTy: elemTy, elemKind: elemKind)
+                    pushLocal(st: inout self, nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: fty, kind: kindFromTySpan(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), structIdx: self.localStructIdxFor(c: inout c, start: fld.tyStart, len: fld.tyLen), isArr: fld.tyIsArray, elemTy: elemTy, elemKind: elemKind)
                 }
                 bi += 1
             }

@@ -55,7 +55,7 @@ pub impl LlvmCtx {
         // an existential iterator (`for x in (it: any Iter[Item=I64])`): each iteration
         // dynamically dispatches `next()` on the any value (spec/08). The box is shared
         // via the fat pointer's data field, so the iterator state advances across calls.
-        val recvRef: U64 = exprTypeRef(c: inout c, st: inout self, id: iter)
+        val recvRef: U64 = self.exprTypeRef(c: inout c, id: iter)
         if refIsAny(c: inout c, ref: recvRef) {
             self.genLlvmForAnyIter(c: inout c, varStart: varStart, varLen: varLen, iter: iter, anyRef: recvRef, body: body)
             return
@@ -69,7 +69,7 @@ pub impl LlvmCtx {
                 return
             }
         }
-        val isidx: U64 = exprStructIdx(c: inout c, st: inout self, id: iter)
+        val isidx: U64 = self.exprStructIdx(c: inout c, id: iter)
         if isidx >= c.arena.structs.count {
             compileErrorAt(line: 0, msg: "LLVM backend: for-loop over a non-array (Iterable) not yet supported")
             return
@@ -85,7 +85,7 @@ pub impl LlvmCtx {
         val itB: Bind = c.kwSpan(kw: "iterator", kwLen: 8U64)
         val itfi: U64 = c.findMethod(recvStart: isd.nameStart, recvLen: isd.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
         if itfi < c.arena.funcs.count {
-            val itSlotF: U64 = userFnSlot(st: inout self, idx: itfi)
+            val itSlotF: U64 = self.userFnSlot(idx: itfi)
             if itSlotF >= self.fnIdx.count {
                 compileErrorAt(line: 0, msg: "LLVM backend: this Iterable's iterator method is not emittable yet")
                 return
@@ -103,7 +103,7 @@ pub impl LlvmCtx {
             compileErrorAt(line: 0, msg: "LLVM backend: Iterable for-loop needs a `next` method on the iterator")
             return
         }
-        val nSlotF: U64 = userFnSlot(st: inout self, idx: nfi)
+        val nSlotF: U64 = self.userFnSlot(idx: nfi)
         if nSlotF >= self.fnIdx.count {
             compileErrorAt(line: 0, msg: "LLVM backend: this iterator's next method is not emittable yet")
             return
@@ -131,7 +131,7 @@ pub impl LlvmCtx {
                 compileErrorAt(line: 0, msg: "LLVM backend: this generic Iterable's iterator method is not emittable yet")
                 return
             }
-            iterVal = genGenMethodCall(c: inout c, st: inout self, recv: iter, mfi: itfi, slot: itSlot, instRef: recvRef, args: noArgs)
+            iterVal = self.genGenMethodCall(c: inout c, recv: iter, mfi: itfi, slot: itSlot, instRef: recvRef, args: noArgs)
             val itf: Func = c.arena.funcs[itfi]
             val sP: Array[Bind] = c.cur.typeParams
             val sA: Array[U64] = c.cur.typeArgs
@@ -177,8 +177,8 @@ pub impl LlvmCtx {
         // resolve the Optional enum (def + Some variant) under its instance env.
         val savedP: Array[Bind] = c.cur.typeParams
         val savedA: Array[U64] = c.cur.typeArgs
-        val didSet: Bool = setEnumEnv(c: inout c, st: inout self, ref: optRef)
-        val ge: U64 = genEnumSlot(c: inout c, st: inout self, ref: optRef)
+        val didSet: Bool = self.setEnumEnv(c: inout c, ref: optRef)
+        val ge: U64 = self.genEnumSlot(c: inout c, ref: optRef)
         if ge >= self.genEnumRefs.count {
             if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
             compileErrorAt(line: 0, msg: "LLVM backend: iterator next must return a registered Optional instance")
@@ -226,7 +226,7 @@ pub impl LlvmCtx {
                 xLen = c.arena.types[gx].nameLen
             }
         }
-        pushLocalR(st: inout self, nameStart: varStart, nameLen: varLen, ptr: xSlot, ty: xTy, kind: kindFromTySpan(c: inout c, tyStart: xStart, tyLen: xLen), structIdx: localStructIdxFor(c: inout c, st: inout self, start: xStart, len: xLen), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: 0U64)
+        pushLocalR(st: inout self, nameStart: varStart, nameLen: varLen, ptr: xSlot, ty: xTy, kind: kindFromTySpan(c: inout c, tyStart: xStart, tyLen: xLen), structIdx: self.localStructIdxFor(c: inout c, start: xStart, len: xLen), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: 0U64)
         if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
         // `continue` -> condBB (next() again), `break` -> endBB.
         pushLoop(st: inout self, breakBB: endBB, contBB: condBB)
@@ -260,8 +260,8 @@ pub impl LlvmCtx {
         }
         val savedP: Array[Bind] = c.cur.typeParams
         val savedA: Array[U64] = c.cur.typeArgs
-        val didSet: Bool = setEnumEnv(c: inout c, st: inout self, ref: optRef)
-        val ge: U64 = genEnumSlot(c: inout c, st: inout self, ref: optRef)
+        val didSet: Bool = self.setEnumEnv(c: inout c, ref: optRef)
+        val ge: U64 = self.genEnumSlot(c: inout c, ref: optRef)
         if ge >= self.genEnumRefs.count {
             if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
             compileErrorAt(line: 0, msg: "LLVM backend: `any` iterator next must return a registered Optional instance")
@@ -304,7 +304,7 @@ pub impl LlvmCtx {
                 xLen = c.arena.types[gx].nameLen
             }
         }
-        pushLocalR(st: inout self, nameStart: varStart, nameLen: varLen, ptr: xSlot, ty: xTy, kind: kindFromTySpan(c: inout c, tyStart: xStart, tyLen: xLen), structIdx: localStructIdxFor(c: inout c, st: inout self, start: xStart, len: xLen), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: 0U64)
+        pushLocalR(st: inout self, nameStart: varStart, nameLen: varLen, ptr: xSlot, ty: xTy, kind: kindFromTySpan(c: inout c, tyStart: xStart, tyLen: xLen), structIdx: self.localStructIdxFor(c: inout c, start: xStart, len: xLen), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: 0U64)
         if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
         pushLoop(st: inout self, breakBB: endBB, contBB: condBB)
         self.genLlvmBlock(c: inout c, id: body)
@@ -319,12 +319,12 @@ pub impl LlvmCtx {
     }
 
     inout fn genLlvmForArray(c: inout Comp, varStart: U64, varLen: U64, iter: U64, body: U64) {
-        if !(exprIsArray(c: inout c, st: inout self, id: iter)) {
+        if !(self.exprIsArray(c: inout c, id: iter)) {
             self.genLlvmForIterable(c: inout c, varStart: varStart, varLen: varLen, iter: iter, body: body)
             return
         }
         val mark: U64 = self.nLocals
-        val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout self, id: iter)
+        val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: iter)
         val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: iter)
         val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
         val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
@@ -344,7 +344,7 @@ pub impl LlvmCtx {
             if forElemRef != 0U64 {
                 if forElemRef < c.arena.types.count {
                     if c.isGenericInst(ref: forElemRef) {
-                        val egs: U64 = genStructSlot(c: inout c, st: inout self, ref: forElemRef)
+                        val egs: U64 = self.genStructSlot(c: inout c, ref: forElemRef)
                         if egs < self.genStructRefs.count {
                             elemSidx = self.genStructDefs[egs]
                         }
@@ -373,7 +373,7 @@ pub impl LlvmCtx {
         LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntUlt(), iv, count, anon()), bodyBB, endBB)
         LLVMPositionBuilderAtEnd(self.b, bodyBB)
         self.terminated = false
-        LLVMBuildStore(self.b, LLVMBuildLoad2(self.b, elemTy, arrElemPtr(st: inout self, elemTy: elemTy, data: data, idx: iv), anon()), vslot)
+        LLVMBuildStore(self.b, LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: iv), anon()), vslot)
         pushLoop(st: inout self, breakBB: endBB, contBB: stepBB)
         self.genLlvmBlock(c: inout c, id: body)
         popLoop(st: inout self)
@@ -394,17 +394,17 @@ pub impl LlvmCtx {
     // the match struct pattern. The element struct is stored in a slot so its fields
     // can be GEP'd; field binds are popped at the end of every iteration.
     inout fn genLlvmForArrayStruct(c: inout Comp, patStart: U64, patLen: U64, iter: U64, binds: Array[Bind], body: U64) {
-        if !(exprIsArray(c: inout c, st: inout self, id: iter)) {
+        if !(self.exprIsArray(c: inout c, id: iter)) {
             compileErrorAt(line: 0, msg: "LLVM backend: struct-destructure for-loop over a non-array not yet supported")
             return
         }
-        val sidx: U64 = localStructIdxFor(c: inout c, st: inout self, start: patStart, len: patLen)
+        val sidx: U64 = self.localStructIdxFor(c: inout c, start: patStart, len: patLen)
         if sidx >= c.arena.structs.count {
             compileErrorAt(line: 0, msg: "LLVM backend: struct-destructure for-loop needs a registered struct pattern")
             return
         }
         val mark: U64 = self.nLocals
-        val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout self, id: iter)
+        val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: iter)
         val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: iter)
         val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
         val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
@@ -420,7 +420,7 @@ pub impl LlvmCtx {
         LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntUlt(), iv, count, anon()), bodyBB, endBB)
         LLVMPositionBuilderAtEnd(self.b, bodyBB)
         self.terminated = false
-        LLVMBuildStore(self.b, LLVMBuildLoad2(self.b, elemTy, arrElemPtr(st: inout self, elemTy: elemTy, data: data, idx: iv), anon()), eslot)
+        LLVMBuildStore(self.b, LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: iv), anon()), eslot)
         val bmark: U64 = self.nLocals
         self.bindStructPattern(c: inout c, sidx: sidx, binds: binds, scrutTy: elemTy, scrutSlot: eslot)
         val stepBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "fors.step"))

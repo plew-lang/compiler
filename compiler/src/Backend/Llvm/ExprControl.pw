@@ -81,10 +81,10 @@ pub impl LlvmCtx {
         // scrutinee's fields (under any generic env), then evaluate the arm expression.
         if arms.count > 0U64 {
             if arms[0].isStruct {
-                val ssidx: U64 = exprStructIdx(c: inout c, st: inout self, id: scrut)
+                val ssidx: U64 = self.exprStructIdx(c: inout c, id: scrut)
                 val savedSP: Array[Bind] = c.cur.typeParams
                 val savedSA: Array[U64] = c.cur.typeArgs
-                val didSetS: Bool = setStructEnv(c: inout c, st: inout self, ref: exprTypeRef(c: inout c, st: inout self, id: scrut))
+                val didSetS: Bool = self.setStructEnv(c: inout c, ref: self.exprTypeRef(c: inout c, id: scrut))
                 val sslot0: LLVMValueRef = entryAlloca(st: inout self, ty: sty)
                 LLVMBuildStore(self.b, sv, sslot0)
                 val mark0: U64 = self.nLocals
@@ -104,7 +104,7 @@ pub impl LlvmCtx {
         // The scrutinee's enum instance ref. As in genLlvmMatch, the enum env is set
         // ONLY around bindMatchPayload, never for the arm bodies (which keep the outer
         // env so a body's `self.f` grounds against the enclosing method).
-        val scrutRef: U64 = exprTypeRef(c: inout c, st: inout self, id: scrut)
+        val scrutRef: U64 = self.exprTypeRef(c: inout c, id: scrut)
         val savedVP: Array[Bind] = c.cur.typeParams
         val savedVA: Array[U64] = c.cur.typeArgs
         mut val eid: U64 = c.arena.enums.count
@@ -150,7 +150,7 @@ pub impl LlvmCtx {
             LLVMPositionBuilderAtEnd(self.b, armBB)
             self.terminated = false
             if !(arm.isWildcard) {
-                val didB: Bool = setEnumEnv(c: inout c, st: inout self, ref: scrutRef)
+                val didB: Bool = self.setEnumEnv(c: inout c, ref: scrutRef)
                 self.bindMatchPayload(c: inout c, eid: eid, arm: arm, scrutTy: sty, scrutSlot: sslot)
                 if didB {
                     c.cur.typeParams = savedVP
@@ -203,8 +203,8 @@ pub impl LlvmCtx {
     inout fn genLlvmOptChain(c: inout Comp, base: U64, memberStart: U64, memberLen: U64) -> LLVMValueRef {
         // resolve the base Optional[T] instance via the LLVM-side type tracker (the
         // typed-AST cache typeOf relies on isn't populated in this backend).
-        val baseRef: U64 = exprTypeRef(c: inout c, st: inout self, id: base)
-        val bge: U64 = genEnumSlot(c: inout c, st: inout self, ref: baseRef)
+        val baseRef: U64 = self.exprTypeRef(c: inout c, id: base)
+        val bge: U64 = self.genEnumSlot(c: inout c, ref: baseRef)
         if bge >= self.genEnumRefs.count {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: `?.` base must be a registered Optional instance")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
@@ -240,7 +240,7 @@ pub impl LlvmCtx {
         mut val rArgs: Array[U64] = []
         rArgs.append(value: uRef)
         val rr: U64 = c.pushType(t: <TypeRef nameStart=ed.nameStart nameLen=ed.nameLen args=rArgs />)
-        val rge: U64 = genEnumSlot(c: inout c, st: inout self, ref: rr)
+        val rge: U64 = self.genEnumSlot(c: inout c, ref: rr)
         if rge >= self.genEnumRefs.count {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: `?.` result Optional instance is not registered")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
@@ -261,13 +261,13 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(self.b, someBB)
         val savedP: Array[Bind] = c.cur.typeParams
         val savedA: Array[U64] = c.cur.typeArgs
-        val didB: Bool = setEnumEnv(c: inout c, st: inout self, ref: baseRef)
+        val didB: Bool = self.setEnumEnv(c: inout c, ref: baseRef)
         val basePayloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: beid, vi: someVi)
         if didB { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
         val payload: LLVMValueRef = LLVMBuildLoad2(self.b, basePayloadTy, LLVMBuildStructGEP2(self.b, bety, sslot, 1U64, anon()), anon())
         val innerVal: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, 0U64, anon())
         val memberVal: LLVMValueRef = LLVMBuildExtractValue(self.b, innerVal, fidx, anon())
-        val didR: Bool = setEnumEnv(c: inout c, st: inout self, ref: rr)
+        val didR: Bool = self.setEnumEnv(c: inout c, ref: rr)
         mut val someArgs: Array[LLVMValueRef] = []
         someArgs.append(value: memberVal)
         val someResult: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: reid, ety: rety, vi: someVi, payloadVals: someArgs)
@@ -290,12 +290,12 @@ pub impl LlvmCtx {
     // `from` factory when the error types differ; on `Ok(v)` yield `v` and continue. Couples
     // to @Std/Core Result (Ok / Err). Only valid in a fn returning a Result.
     inout fn genLlvmTry(c: inout Comp, expr: U64) -> LLVMValueRef {
-        mut val exprRef: U64 = exprResultRef(c: inout c, st: inout self, id: expr)
+        mut val exprRef: U64 = self.exprResultRef(c: inout c, id: expr)
         if exprRef == 0U64 {
-            exprRef = exprTypeRef(c: inout c, st: inout self, id: expr)
+            exprRef = self.exprTypeRef(c: inout c, id: expr)
         }
-        val ege: U64 = genEnumSlot(c: inout c, st: inout self, ref: exprRef)
-        val rge: U64 = genEnumSlot(c: inout c, st: inout self, ref: self.curRetRef)
+        val ege: U64 = self.genEnumSlot(c: inout c, ref: exprRef)
+        val rge: U64 = self.genEnumSlot(c: inout c, ref: self.curRetRef)
         if ege >= self.genEnumRefs.count {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: expr)), msg: "LLVM backend: `try` needs a registered Result instance")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
@@ -325,7 +325,7 @@ pub impl LlvmCtx {
         val savedA: Array[U64] = c.cur.typeArgs
         // Err: extract the error (source env), rebuild the function's Result Err, return.
         LLVMPositionBuilderAtEnd(self.b, errBB)
-        val didE: Bool = setEnumEnv(c: inout c, st: inout self, ref: exprRef)
+        val didE: Bool = self.setEnumEnv(c: inout c, ref: exprRef)
         val errPayloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eeid, vi: errVi)
         val errPayload: LLVMValueRef = LLVMBuildLoad2(self.b, errPayloadTy, LLVMBuildStructGEP2(self.b, eety, eslot, 1U64, anon()), anon())
         val errVal: LLVMValueRef = LLVMBuildExtractValue(self.b, errPayload, 0U64, anon())
@@ -340,7 +340,7 @@ pub impl LlvmCtx {
                 if c.arena.types[opErrRef].nameId != c.arena.types[fnErrRef].nameId {
                     val ffi: U64 = c.typeRefFromFactoryIdx(errRef: fnErrRef)
                     if ffi < c.arena.funcs.count {
-                        mut val fslot: U64 = userFnSlot(st: inout self, idx: ffi)
+                        mut val fslot: U64 = self.userFnSlot(idx: ffi)
                         if fslot >= self.fnIdx.count {
                             fslot = self.ensureFreeFnDeclared(c: inout c, fi: ffi)
                         }
@@ -353,7 +353,7 @@ pub impl LlvmCtx {
                 }
             }
         }
-        val didR: Bool = setEnumEnv(c: inout c, st: inout self, ref: self.curRetRef)
+        val didR: Bool = self.setEnumEnv(c: inout c, ref: self.curRetRef)
         mut val errArgs: Array[LLVMValueRef] = []
         errArgs.append(value: convErrVal)
         val retResult: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: reid, ety: rety, vi: errVi, payloadVals: errArgs)
@@ -362,7 +362,7 @@ pub impl LlvmCtx {
         // Ok: extract and yield the value; control continues at okBB.
         LLVMPositionBuilderAtEnd(self.b, okBB)
         self.terminated = false
-        val didO: Bool = setEnumEnv(c: inout c, st: inout self, ref: exprRef)
+        val didO: Bool = self.setEnumEnv(c: inout c, ref: exprRef)
         val okPayloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eeid, vi: okVi)
         val okPayload: LLVMValueRef = LLVMBuildLoad2(self.b, okPayloadTy, LLVMBuildStructGEP2(self.b, eety, eslot, 1U64, anon()), anon())
         val okVal: LLVMValueRef = LLVMBuildExtractValue(self.b, okPayload, 0U64, anon())

@@ -274,7 +274,7 @@ pub impl LlvmCtx {
         if c.isGenericInst(ref: pt) {
             return llvmTypeOfRef(c: inout c, st: inout self, ref: pt)
         }
-        return llvmTypeFor(c: inout c, st: inout self, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+        return self.llvmTypeFor(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
     }
 
     // The LLVM type of a method's `self` parameter: a pointer for `inout fn` (mutates
@@ -312,7 +312,7 @@ pub impl LlvmCtx {
             if c.isGenericInst(ref: rt) {
                 return llvmTypeOfRef(c: inout c, st: inout self, ref: rt)
             }
-            return llvmTypeFor(c: inout c, st: inout self, tyStart: f.retStart, tyLen: f.retLen, isArray: f.retIsArray)
+            return self.llvmTypeFor(c: inout c, tyStart: f.retStart, tyLen: f.retLen, isArray: f.retIsArray)
         }
         return self.voidty
     }

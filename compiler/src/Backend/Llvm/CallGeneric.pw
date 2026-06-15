@@ -8,25 +8,28 @@
 // method type args from the call, monomorphize keyed by a pseudo instance ref
 // (receiver name + the inferred args), and call. Returns a null sentinel if the
 // args can't be inferred / the instance can't be declared.
-fn genMethodOwnTypeParamCall(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64, recvStart: U64, recvLen: U64, args: Array[Arg]) -> LLVMValueRef {
-    val mf: Func = c.arena.funcs[mfi]
-    val margs: Array[U64] = st.llvmInferFnArgs(c: inout c, f: mf, args: args)
-    mut val mi: U64 = 0
-    while mi < margs.count {
-        if margs[mi] == 0U64 {
-            return LLVMConstNull(st.ptrty)
+
+pub impl LlvmCtx {
+    inout fn genMethodOwnTypeParamCall(c: inout Comp, recv: U64, mfi: U64, recvStart: U64, recvLen: U64, args: Array[Arg]) -> LLVMValueRef {
+        val mf: Func = c.arena.funcs[mfi]
+        val margs: Array[U64] = self.llvmInferFnArgs(c: inout c, f: mf, args: args)
+        mut val mi: U64 = 0
+        while mi < margs.count {
+            if margs[mi] == 0U64 {
+                return LLVMConstNull(self.ptrty)
+            }
+            mi += 1
         }
-        mi += 1
+        // a pseudo instance ref: the receiver type name + the method type args, so the
+        // body emits with curTypeParams = mf.typeParams -> curTypeArgs = margs while the
+        // self type still resolves from the receiver name.
+        val pinst: U64 = c.pushType(t: <TypeRef nameStart=recvStart nameLen=recvLen args=margs />)
+        val gslot: U64 = ensureGenMethodDeclared(c: inout c, st: inout self, mfi: mfi, instRef: pinst, ownArgs: [])
+        if gslot < self.genMethK.count {
+            return self.genGenMethodCall(c: inout c, recv: recv, mfi: mfi, slot: gslot, instRef: pinst, args: args)
+        }
+        return LLVMConstNull(self.ptrty)
     }
-    // a pseudo instance ref: the receiver type name + the method type args, so the
-    // body emits with curTypeParams = mf.typeParams -> curTypeArgs = margs while the
-    // self type still resolves from the receiver name.
-    val pinst: U64 = c.pushType(t: <TypeRef nameStart=recvStart nameLen=recvLen args=margs />)
-    val gslot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: mfi, instRef: pinst, ownArgs: [])
-    if gslot < st.genMethK.count {
-        return genGenMethodCall(c: inout c, st: inout st, recv: recv, mfi: mfi, slot: gslot, instRef: pinst, args: args)
-    }
-    return LLVMConstNull(st.ptrty)
 }
 
 // The method-own type arguments of a call — those of the method's type params that
@@ -66,142 +69,145 @@ fn methodOwnArgs(c: inout Comp, mfi: U64, instRef: U64, args: Array[Arg]) -> Arr
     return out
 }
 
-fn genGenMethodCall(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64, slot: U64, instRef: U64, args: Array[Arg]) -> LLVMValueRef {
-    val mf: Func = c.arena.funcs[mfi]
-    mut val av: Array[LLVMValueRef] = []
-    if mf.selfInout {
-        av.append(value: placePtrOf(c: inout c, st: inout st, id: recv))
-    } else {
-        av.append(value: genLlvmExpr(c: inout c, st: inout st, id: recv))
-    }
-    val savedP: Array[Bind] = c.cur.typeParams
-    val savedA: Array[U64] = c.cur.typeArgs
-    c.cur.typeParams = mf.typeParams
-    c.cur.typeArgs = concatArgs(add: c.arena.types[instRef].args, base: st.genMethOwn[slot])
-    // bind Self/Item for an own-param provided call so an argument typed by `Item`
-    // coerces against the receiver's real item type (see emitOneGenMethod).
-    val sGs: U64 = c.cur.selfRef
-    val sGi: U64 = c.cur.itemRef
-    if mf.isProvided {
-        c.setSelfItemEnv(recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
-    }
-    mut val ai: U64 = 0
-    while ai < args.count {
-        av.append(value: genArgValue(c: inout c, st: inout st, argExpr: args[ai].expr, p: mf.params[ai]))
-        ai += 1
-    }
-    mut val di: U64 = args.count
-    while di < mf.params.count {
-        av.append(value: genArgValue(c: inout c, st: inout st, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
-        di += 1
-    }
-    c.cur.selfRef = sGs
-    c.cur.itemRef = sGi
-    c.cur.typeParams = savedP
-    c.cur.typeArgs = savedA
-    return LLVMBuildCall2(st.b, st.genMethTy[slot], st.genMethVal[slot], arrayCPtr(av), av.count, anon())
-}
+pub impl LlvmCtx {
 
-// The address of an addressable place (a struct local), for `inout` self. Falls
-// back to a fresh alloca holding the value for a non-place receiver.
-// The LLVM struct type of a struct-valued expression `structExpr` (def `sidx`):
-// its generic instance type if it carries one, else the registered non-generic
-// type. LLVMConstNull(ptr) if neither (so the caller can fall back / error).
-fn structLlvmTyOfExpr(c: inout Comp, st: inout LlvmCtx, structExpr: U64, sidx: U64) -> LLVMTypeRef {
-    val ref: U64 = exprTypeRef(c: inout c, st: inout st, id: structExpr)
-    if ref != 0U64 {
-        if c.isGenericInst(ref: ref) {
-            val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: ref)
-            if gs < st.genStructRefs.count {
-                return st.genStructTys[gs]
-            }
+    inout fn genGenMethodCall(c: inout Comp, recv: U64, mfi: U64, slot: U64, instRef: U64, args: Array[Arg]) -> LLVMValueRef {
+        val mf: Func = c.arena.funcs[mfi]
+        mut val av: Array[LLVMValueRef] = []
+        if mf.selfInout {
+            av.append(value: self.placePtrOf(c: inout c, id: recv))
+        } else {
+            av.append(value: genLlvmExpr(c: inout c, st: inout self, id: recv))
         }
+        val savedP: Array[Bind] = c.cur.typeParams
+        val savedA: Array[U64] = c.cur.typeArgs
+        c.cur.typeParams = mf.typeParams
+        c.cur.typeArgs = concatArgs(add: c.arena.types[instRef].args, base: self.genMethOwn[slot])
+        // bind Self/Item for an own-param provided call so an argument typed by `Item`
+        // coerces against the receiver's real item type (see emitOneGenMethod).
+        val sGs: U64 = c.cur.selfRef
+        val sGi: U64 = c.cur.itemRef
+        if mf.isProvided {
+            c.setSelfItemEnv(recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
+        }
+        mut val ai: U64 = 0
+        while ai < args.count {
+            av.append(value: self.genArgValue(c: inout c, argExpr: args[ai].expr, p: mf.params[ai]))
+            ai += 1
+        }
+        mut val di: U64 = args.count
+        while di < mf.params.count {
+            av.append(value: self.genArgValue(c: inout c, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
+            di += 1
+        }
+        c.cur.selfRef = sGs
+        c.cur.itemRef = sGi
+        c.cur.typeParams = savedP
+        c.cur.typeArgs = savedA
+        return LLVMBuildCall2(self.b, self.genMethTy[slot], self.genMethVal[slot], arrayCPtr(av), av.count, anon())
     }
-    val reg: U64 = structRegSlot(c: inout c, st: inout st, start: c.arena.structs[sidx].nameStart, len: c.arena.structs[sidx].nameLen)
-    if reg < st.structIdxs.count {
-        return st.structTys[reg]
-    }
-    return LLVMConstNull(st.ptrty)
-}
 
-// Pointer to an addressable PLACE expression (lvalue), or a null constant if `id`
-// is not a place. Recurses through nested field/element access so a deep place
-// like `c.arena.items` (a field of a field) yields a real pointer into the
-// original storage — what `inout`, array `.append`, `.set`, and index-assign all
-// need to write through (a non-recursive one-level scheme would copy instead).
-fn placePtrStrict(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
-    match c.arena.exprs[id] {
-        Expr.Ident(val start, val len) => {
-            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
-            if li < st.nLocals {
-                return st.locPtr[li]
-            }
-        }
-        Expr.Field(val base, val nameStart, val nameLen) => {
-            // fast path: the base is an addressable local. Use ITS tracked LLVM type
-            // (so a generic-struct local's field GEPs with the right instance type).
-            match c.arena.exprs[base] {
-                Expr.Ident(start: val bs, len: val bl) => {
-                    val bli: U64 = findLocal(c: inout c, st: inout st, start: bs, len: bl)
-                    val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
-                    if bli < st.nLocals && bsi < c.arena.structs.count {
-                        val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
-                        if fidx < c.arena.structs[bsi].fields.count {
-                            return LLVMBuildStructGEP2(st.b, st.locTy[bli], st.locPtr[bli], fidx, anon())
-                        }
-                    }
-                }
-                _ => {}
-            }
-            // recursive path: the base is itself a place (nested field / element).
-            // Pointer to the base, then GEP the field using the base struct's own
-            // named LLVM type (the non-generic case — generic nested places fall
-            // through to a null result, as before).
-            val basePtr: LLVMValueRef = placePtrStrict(c: inout c, st: inout st, id: base)
-            if LLVMIsNull(basePtr) == 0I32 {
-                val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
-                if bsi < c.arena.structs.count {
-                    val sd: StructDef = c.arena.structs[bsi]
-                    val reg: U64 = structRegSlot(c: inout c, st: inout st, start: sd.nameStart, len: sd.nameLen)
-                    if reg < st.structIdxs.count {
-                        val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
-                        if fidx < c.arena.structs[bsi].fields.count {
-                            return LLVMBuildStructGEP2(st.b, st.structTys[reg], basePtr, fidx, anon())
-                        }
-                    }
+    // The address of an addressable place (a struct local), for `inout` self. Falls
+    // back to a fresh alloca holding the value for a non-place receiver.
+    // The LLVM struct type of a struct-valued expression `structExpr` (def `sidx`):
+    // its generic instance type if it carries one, else the registered non-generic
+    // type. LLVMConstNull(ptr) if neither (so the caller can fall back / error).
+    inout fn structLlvmTyOfExpr(c: inout Comp, structExpr: U64, sidx: U64) -> LLVMTypeRef {
+        val ref: U64 = self.exprTypeRef(c: inout c, id: structExpr)
+        if ref != 0U64 {
+            if c.isGenericInst(ref: ref) {
+                val gs: U64 = self.genStructSlot(c: inout c, ref: ref)
+                if gs < self.genStructRefs.count {
+                    return self.genStructTys[gs]
                 }
             }
         }
-        Expr.Index(val base, val index) => {
-            // an array element place `xs[i]`: the element pointer into the owned
-            // buffer (the buffer is owned — value-semantics CoW already split any
-            // alias — so writing through it is observably correct).
-            if exprIsArray(c: inout c, st: inout st, id: base) {
-                val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: base)
-                val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: base)
-                val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 0U64, anon())
-                val count: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 1U64, anon())
-                val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: index)
-                emitBoundsCheck(c: inout c, st: inout st, idx: idx, count: count)
-                return arrElemPtr(st: inout st, elemTy: elemTy, data: data, idx: idx)
-            }
+        val reg: U64 = structRegSlot(c: inout c, st: inout self, start: c.arena.structs[sidx].nameStart, len: c.arena.structs[sidx].nameLen)
+        if reg < self.structIdxs.count {
+            return self.structTys[reg]
         }
-        _ => {}
+        return LLVMConstNull(self.ptrty)
     }
-    return LLVMConstNull(st.ptrty)
-}
 
-fn placePtrOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
-    val p: LLVMValueRef = placePtrStrict(c: inout c, st: inout st, id: id)
-    if LLVMIsNull(p) == 0I32 {
-        return p
+    // Pointer to an addressable PLACE expression (lvalue), or a null constant if `id`
+    // is not a place. Recurses through nested field/element access so a deep place
+    // like `c.arena.items` (a field of a field) yields a real pointer into the
+    // original storage — what `inout`, array `.append`, `.set`, and index-assign all
+    // need to write through (a non-recursive one-level scheme would copy instead).
+    inout fn placePtrStrict(c: inout Comp, id: U64) -> LLVMValueRef {
+        match c.arena.exprs[id] {
+            Expr.Ident(val start, val len) => {
+                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                if li < self.nLocals {
+                    return self.locPtr[li]
+                }
+            }
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                // fast path: the base is an addressable local. Use ITS tracked LLVM type
+                // (so a generic-struct local's field GEPs with the right instance type).
+                match c.arena.exprs[base] {
+                    Expr.Ident(start: val bs, len: val bl) => {
+                        val bli: U64 = findLocal(c: inout c, st: inout self, start: bs, len: bl)
+                        val bsi: U64 = self.exprStructIdx(c: inout c, id: base)
+                        if bli < self.nLocals && bsi < c.arena.structs.count {
+                            val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
+                            if fidx < c.arena.structs[bsi].fields.count {
+                                return LLVMBuildStructGEP2(self.b, self.locTy[bli], self.locPtr[bli], fidx, anon())
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                // recursive path: the base is itself a place (nested field / element).
+                // Pointer to the base, then GEP the field using the base struct's own
+                // named LLVM type (the non-generic case — generic nested places fall
+                // through to a null result, as before).
+                val basePtr: LLVMValueRef = self.placePtrStrict(c: inout c, id: base)
+                if LLVMIsNull(basePtr) == 0I32 {
+                    val bsi: U64 = self.exprStructIdx(c: inout c, id: base)
+                    if bsi < c.arena.structs.count {
+                        val sd: StructDef = c.arena.structs[bsi]
+                        val reg: U64 = structRegSlot(c: inout c, st: inout self, start: sd.nameStart, len: sd.nameLen)
+                        if reg < self.structIdxs.count {
+                            val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
+                            if fidx < c.arena.structs[bsi].fields.count {
+                                return LLVMBuildStructGEP2(self.b, self.structTys[reg], basePtr, fidx, anon())
+                            }
+                        }
+                    }
+                }
+            }
+            Expr.Index(val base, val index) => {
+                // an array element place `xs[i]`: the element pointer into the owned
+                // buffer (the buffer is owned — value-semantics CoW already split any
+                // alias — so writing through it is observably correct).
+                if self.exprIsArray(c: inout c, id: base) {
+                    val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: base)
+                    val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: base)
+                    val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
+                    val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
+                    val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: index)
+                    self.emitBoundsCheck(c: inout c, idx: idx, count: count)
+                    return self.arrElemPtr(elemTy: elemTy, data: data, idx: idx)
+                }
+            }
+            _ => {}
+        }
+        return LLVMConstNull(self.ptrty)
     }
-    // not a place (a fresh value): materialize into a temp slot so a callee taking
-    // `inout`/`borrow` still gets a pointer (it mutates the copy, harmlessly).
-    val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: id)
-    val slot: LLVMValueRef = entryAlloca(st: inout st, ty: LLVMTypeOf(v))
-    LLVMBuildStore(st.b, v, slot)
-    return slot
+
+    inout fn placePtrOf(c: inout Comp, id: U64) -> LLVMValueRef {
+        val p: LLVMValueRef = self.placePtrStrict(c: inout c, id: id)
+        if LLVMIsNull(p) == 0I32 {
+            return p
+        }
+        // not a place (a fresh value): materialize into a temp slot so a callee taking
+        // `inout`/`borrow` still gets a pointer (it mutates the copy, harmlessly).
+        val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: id)
+        val slot: LLVMValueRef = entryAlloca(st: inout self, ty: LLVMTypeOf(v))
+        LLVMBuildStore(self.b, v, slot)
+        return slot
+    }
 }
 
 // Emit a call argument for a parameter `p`: an array-literal arg is built with the
@@ -232,87 +238,89 @@ fn tyNameConcrete(c: inout Comp, start: U64, len: U64) -> Bool {
     return false
 }
 
-fn genArgValue(c: inout Comp, st: inout LlvmCtx, argExpr: U64, p: Param) -> LLVMValueRef {
-    // extension-view invariance (spec/09): `A` and `A#Ext` are distinct types with
-    // no implicit cast either way, so an argument's view must match the parameter's
-    // declared view exactly — the view is applied/dropped explicitly at the call
-    // (`value#Ext` / `value#!Ext`). Plain code (no views) has both sides 0. A generic
-    // type-parameter param absorbs the view (it binds to `S#P` via inference), so the
-    // check applies only to a concrete param type.
-    mut val pView: U64 = 0
-    mut val pConcrete: Bool = true
-    if p.ty != 0U64 {
-        pView = c.arena.types[p.ty].viewExtId
-        pConcrete = tyNameConcrete(c: inout c, start: c.arena.types[p.ty].nameStart, len: c.arena.types[p.ty].nameLen)
-    }
-    if pConcrete {
-        if pView != exprViewExtId(c: inout c, st: inout st, id: argExpr) {
-            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: argExpr)), msg: "extension view mismatch: a plain type and its `#Ext` view are distinct — apply or drop the view explicitly at the call (`value#Ext` / `value#!Ext`)")
+pub impl LlvmCtx {
+
+    inout fn genArgValue(c: inout Comp, argExpr: U64, p: Param) -> LLVMValueRef {
+        // extension-view invariance (spec/09): `A` and `A#Ext` are distinct types with
+        // no implicit cast either way, so an argument's view must match the parameter's
+        // declared view exactly — the view is applied/dropped explicitly at the call
+        // (`value#Ext` / `value#!Ext`). Plain code (no views) has both sides 0. A generic
+        // type-parameter param absorbs the view (it binds to `S#P` via inference), so the
+        // check applies only to a concrete param type.
+        mut val pView: U64 = 0
+        mut val pConcrete: Bool = true
+        if p.ty != 0U64 {
+            pView = c.arena.types[p.ty].viewExtId
+            pConcrete = tyNameConcrete(c: inout c, start: c.arena.types[p.ty].nameStart, len: c.arena.types[p.ty].nameLen)
         }
-    }
-    if p.isInout {
-        // pass the caller's place address (the callee mutates in place).
-        return placePtrOf(c: inout c, st: inout st, id: argExpr)
-    }
-    // a `move` parameter consumes the argument — the callee owns it and runs
-    // deinit, so mark the source local moved (excluded from the caller's drop).
-    if p.isMove {
-        match c.arena.exprs[argExpr] {
-            Expr.Ident(start: val s, len: val l) => {
-                markLocalMoved(c: inout c, st: inout st, start: s, len: l)
+        if pConcrete {
+            if pView != self.exprViewExtId(c: inout c, id: argExpr) {
+                compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: argExpr)), msg: "extension view mismatch: a plain type and its `#Ext` view are distinct — apply or drop the view explicitly at the call (`value#Ext` / `value#!Ext`)")
             }
-            _ => {}
         }
-    }
-    // an `any P` parameter (spec/08): box a concrete conforming argument into the
-    // existential fat pointer, or value-semantics-copy an existing `any` place.
-    mut val argBoxed: Bool = false
-    val argAny: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: p.ty, valueExpr: argExpr, outBoxed: inout argBoxed)
-    if argBoxed {
-        return argAny
-    }
-    if refIsAny(c: inout c, ref: p.ty) {
-        return copyAnyIfPlace(c: inout c, st: inout st, rv: genLlvmExpr(c: inout c, st: inout st, id: argExpr), valueExpr: argExpr)
-    }
-    if p.tyIsArray {
-        match c.arena.exprs[argExpr] {
-            Expr.Array(val elems) => {
-                mut val argElemRef: U64 = 0
-                if p.ty != 0U64 {
-                    if c.arena.types[p.ty].args.count > 0U64 {
-                        argElemRef = c.arena.types[p.ty].args[0]
-                    }
+        if p.isInout {
+            // pass the caller's place address (the callee mutates in place).
+            return self.placePtrOf(c: inout c, id: argExpr)
+        }
+        // a `move` parameter consumes the argument — the callee owns it and runs
+        // deinit, so mark the source local moved (excluded from the caller's drop).
+        if p.isMove {
+            match c.arena.exprs[argExpr] {
+                Expr.Ident(start: val s, len: val l) => {
+                    markLocalMoved(c: inout c, st: inout self, start: s, len: l)
                 }
-                return st.genLlvmArrayLit(c: inout c, elems: elems, elemTy: llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen), elemRef: argElemRef)
+                _ => {}
             }
-            _ => {}
         }
-        return genLlvmExpr(c: inout c, st: inout st, id: argExpr)
-    }
-    // a generic-instance parameter (`o: Optional[I64]`, `b: Box[I32]`): flow the
-    // expected concrete instance to the argument so a JSX construction without
-    // explicit type args (`<Optional.Some v=5 />`) grounds its head from context
-    // (genLlvmMake/genLlvmMakeEnum consume st.expectedTy). Reset after so an
-    // unconsumed value (a non-construction arg) cannot leak into a later one.
-    if p.ty != 0U64 {
-        if c.isGenericInst(ref: p.ty) {
-            st.expectedTy = p.ty
+        // an `any P` parameter (spec/08): box a concrete conforming argument into the
+        // existential fat pointer, or value-semantics-copy an existing `any` place.
+        mut val argBoxed: Bool = false
+        val argAny: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout self, targetRef: p.ty, valueExpr: argExpr, outBoxed: inout argBoxed)
+        if argBoxed {
+            return argAny
         }
+        if refIsAny(c: inout c, ref: p.ty) {
+            return copyAnyIfPlace(c: inout c, st: inout self, rv: genLlvmExpr(c: inout c, st: inout self, id: argExpr), valueExpr: argExpr)
+        }
+        if p.tyIsArray {
+            match c.arena.exprs[argExpr] {
+                Expr.Array(val elems) => {
+                    mut val argElemRef: U64 = 0
+                    if p.ty != 0U64 {
+                        if c.arena.types[p.ty].args.count > 0U64 {
+                            argElemRef = c.arena.types[p.ty].args[0]
+                        }
+                    }
+                    return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: llvmScalarTy(c: inout c, st: inout self, tyStart: p.tyStart, tyLen: p.tyLen), elemRef: argElemRef)
+                }
+                _ => {}
+            }
+            return genLlvmExpr(c: inout c, st: inout self, id: argExpr)
+        }
+        // a generic-instance parameter (`o: Optional[I64]`, `b: Box[I32]`): flow the
+        // expected concrete instance to the argument so a JSX construction without
+        // explicit type args (`<Optional.Some v=5 />`) grounds its head from context
+        // (genLlvmMake/genLlvmMakeEnum consume self.expectedTy). Reset after so an
+        // unconsumed value (a non-construction arg) cannot leak into a later one.
+        if p.ty != 0U64 {
+            if c.isGenericInst(ref: p.ty) {
+                self.expectedTy = p.ty
+            }
+        }
+        val argV: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: argExpr)
+        self.expectedTy = 0U64
+        return coerceIntTo(c: inout c, st: inout self, v: argV, tyStart: p.tyStart, tyLen: p.tyLen)
     }
-    val argV: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: argExpr)
-    st.expectedTy = 0U64
-    return coerceIntTo(c: inout c, st: inout st, v: argV, tyStart: p.tyStart, tyLen: p.tyLen)
-}
 
-// Index into st.fn* for a cached user function (by c.arena.funcs index), or st.fnIdx.count.
-fn userFnSlot(st: inout LlvmCtx, idx: U64) -> U64 {
-    mut val i: U64 = 0
-    while i < st.fnIdx.count {
-        if st.fnIdx[i] == idx {
-            return i
+    // Index into st.fn* for a cached user function (by c.arena.funcs index), or st.fnIdx.count.
+    inout fn userFnSlot(idx: U64) -> U64 {
+        mut val i: U64 = 0
+        while i < self.fnIdx.count {
+            if self.fnIdx[i] == idx {
+                return i
+            }
+            i += 1
         }
-        i += 1
+        return self.fnIdx.count
     }
-    return st.fnIdx.count
 }
-

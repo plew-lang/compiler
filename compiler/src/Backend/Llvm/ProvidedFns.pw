@@ -7,7 +7,7 @@
 
 pub impl LlvmCtx {
     inout fn ensureProvidedDeclared(c: inout Comp, fi: U64) -> U64 {
-        val existing: U64 = userFnSlot(st: inout self, idx: fi)
+        val existing: U64 = self.userFnSlot(idx: fi)
         if existing < self.fnIdx.count {
             return existing
         }
@@ -63,7 +63,7 @@ pub impl LlvmCtx {
     // uncalled std fn with unsupported constructs is never emitted. Returns the slot
     // or st.fnIdx.count.
     inout fn ensureFreeFnDeclared(c: inout Comp, fi: U64) -> U64 {
-        val existing: U64 = userFnSlot(st: inout self, idx: fi)
+        val existing: U64 = self.userFnSlot(idx: fi)
         if existing < self.fnIdx.count {
             return existing
         }
@@ -201,11 +201,11 @@ pub impl LlvmCtx {
             }
             _ => {}
         }
-        val tr: U64 = exprTypeRef(c: inout c, st: inout self, id: argExpr)
+        val tr: U64 = self.exprTypeRef(c: inout c, id: argExpr)
         if tr != 0U64 {
             return tr
         }
-        val si: U64 = exprStructIdx(c: inout c, st: inout self, id: argExpr)
+        val si: U64 = self.exprStructIdx(c: inout c, id: argExpr)
         if si < c.arena.structs.count {
             return c.findOrAddTypeRef(nameStart: c.arena.structs[si].nameStart, nameLen: c.arena.structs[si].nameLen)
         }
