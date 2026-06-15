@@ -83,7 +83,7 @@ fn genGenMethodCall(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64, slot:
     val sGs: U64 = c.cur.selfRef
     val sGi: U64 = c.cur.itemRef
     if mf.isProvided {
-        setSelfItemEnv(c: inout c, recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
+        c.setSelfItemEnv(recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
     }
     mut val ai: U64 = 0
     while ai < args.count {

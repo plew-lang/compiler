@@ -30,7 +30,7 @@ fn recordArrayElem(c: inout Comp, ty: PType) {
         }
         // a nested array element (`Array[Array[I32]]`) needs the inner
         // `PlewArray_<inner>` registered (and emitted) first.
-        ensureArrayElemDeps(c: inout c, elemRef: elemRef)
+        c.ensureArrayElemDeps(elemRef: elemRef)
         c.monoWork.arrayElems.append(<Bind nameStart=ty.start nameLen=ty.len fieldStart=elemRef fieldLen=0 />)
     }
 }

@@ -381,7 +381,7 @@ fn bindAsyncParam(c: inout Comp, st: inout LlvmCtx, p: Param, fieldIdx: U64) {
         }
         if pRef == 0U64 {
             if enumRegSlot(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen) < st.enumIdxs.count {
-                pRef = simpleTypeRef(c: inout c, nameStart: p.tyStart, nameLen: p.tyLen)
+                pRef = c.simpleTypeRef(nameStart: p.tyStart, nameLen: p.tyLen)
             }
         }
     }

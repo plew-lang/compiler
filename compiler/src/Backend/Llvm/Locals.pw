@@ -157,7 +157,7 @@ fn methodReturnKind(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64) -> U6
         if !(didSet) {
             didSet = setEnumEnv(c: inout c, st: inout st, ref: rRef)
         }
-        val g: U64 = groundTypeRef(c: inout c, ref: mf.retTy)
+        val g: U64 = c.groundTypeRef(ref: mf.retTy)
         if didSet {
             c.cur.typeParams = savedP
             c.cur.typeArgs = savedA
@@ -220,7 +220,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                         val didSetF: Bool = setStructEnv(c: inout c, st: inout st, ref: fBaseRef)
                         mut val fg: U64 = ffd.ty
                         if c.cur.typeParams.count > 0U64 {
-                            fg = groundTypeRef(c: inout c, ref: ffd.ty)
+                            fg = c.groundTypeRef(ref: ffd.ty)
                         }
                         val fk: U64 = kindFromTySpan(c: inout c, tyStart: c.arena.types[fg].nameStart, tyLen: c.arena.types[fg].nameLen)
                         if didSetF {

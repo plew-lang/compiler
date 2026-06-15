@@ -181,7 +181,7 @@ pub impl Comp {
                         // checkLitSpan only range-checks a SUFFIXED literal against its own
                         // suffix, so a mismatched width (`for val i: I64 in 0I64..<5I32`)
                         // slips through — check each bound's type against the loop var type.
-                        val vref: U64 = simpleTypeRef(c: inout self, nameStart: varTyStart, nameLen: varTyLen)
+                        val vref: U64 = self.simpleTypeRef(nameStart: varTyStart, nameLen: varTyLen)
                         self.tcCheckValue(expectedRef: vref, valueExpr: iter, pos: "range bound")
                         self.tcCheckValue(expectedRef: vref, valueExpr: rangeHi, pos: "range bound")
                     } else {

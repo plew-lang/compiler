@@ -72,7 +72,7 @@ fn declareOneGenMethod(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64,
     val sDs: U64 = c.cur.selfRef
     val sDi: U64 = c.cur.itemRef
     if mf.isProvided {
-        setSelfItemEnv(c: inout c, recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
+        c.setSelfItemEnv(recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
     }
     mut val ptys: Array[LLVMTypeRef] = []
     if mf.selfInout {
@@ -126,7 +126,7 @@ fn emitOneGenMethod(c: inout Comp, st: inout LlvmCtx, slot: U64) {
     val s4: U64 = c.cur.selfRef
     val si4: U64 = c.cur.itemRef
     if mf.isProvided {
-        setSelfItemEnv(c: inout c, recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
+        c.setSelfItemEnv(recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
     }
     genLlvmFuncBody(c: inout c, st: inout st, fi: mfi, fv: st.genMethVal[slot])
     c.cur.selfRef = s4
@@ -198,7 +198,7 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     mut val pgLen: U64 = p.tyLen
     if p.ty != 0U64 {
         if rangeEquals(bytes: c.arena.bytes, start: p.tyStart, len: p.tyLen, kw: "Self") {
-            val pgr: U64 = groundTypeRef(c: inout c, ref: p.ty)
+            val pgr: U64 = c.groundTypeRef(ref: p.ty)
             pgStart = c.arena.types[pgr].nameStart
             pgLen = c.arena.types[pgr].nameLen
         }
@@ -222,7 +222,7 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     if pRef == 0U64 {
         if p.ty != 0U64 {
             if c.cur.typeParams.count > 0U64 {
-                val pgv: U64 = groundTypeRef(c: inout c, ref: p.ty)
+                val pgv: U64 = c.groundTypeRef(ref: p.ty)
                 if pgv != p.ty {
                     if pgv < c.arena.types.count {
                         if c.arena.types[pgv].viewExtId != 0U64 {
@@ -273,7 +273,7 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
         if pRef == 0U64 {
             // grounded span so a `Self` param on an enum receiver tracks the enum.
             if enumRegSlot(c: inout c, st: inout st, start: pgStart, len: pgLen) < st.enumIdxs.count {
-                pRef = simpleTypeRef(c: inout c, nameStart: pgStart, nameLen: pgLen)
+                pRef = c.simpleTypeRef(nameStart: pgStart, nameLen: pgLen)
             }
         }
     }
@@ -289,20 +289,20 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
             mut val gl2: U64 = p.tyLen
             if p.ty != 0U64 {
                 if c.cur.typeParams.count > 0U64 {
-                    val pg2: U64 = groundTypeRef(c: inout c, ref: p.ty)
+                    val pg2: U64 = c.groundTypeRef(ref: p.ty)
                     gs2 = c.arena.types[pg2].nameStart
                     gl2 = c.arena.types[pg2].nameLen
                 }
             }
             if isPrimIntName(c: inout c, start: gs2, len: gl2) {
-                pRef = simpleTypeRef(c: inout c, nameStart: gs2, nameLen: gl2)
+                pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
             }
             if rangeEquals(bytes: c.arena.bytes, start: gs2, len: gl2, kw: "Bool") {
-                pRef = simpleTypeRef(c: inout c, nameStart: gs2, nameLen: gl2)
+                pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
             }
             if pRef == 0U64 {
                 if enumRegSlot(c: inout c, st: inout st, start: gs2, len: gl2) < st.enumIdxs.count {
-                    pRef = simpleTypeRef(c: inout c, nameStart: gs2, nameLen: gl2)
+                    pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
                 }
             }
         }
@@ -314,7 +314,7 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
     mut val pKindLen: U64 = pgLen
     if p.ty != 0U64 {
         if c.cur.typeParams.count > 0U64 {
-            val pg: U64 = groundTypeRef(c: inout c, ref: p.ty)
+            val pg: U64 = c.groundTypeRef(ref: p.ty)
             pKindStart = c.arena.types[pg].nameStart
             pKindLen = c.arena.types[pg].nameLen
         }

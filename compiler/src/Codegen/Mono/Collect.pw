@@ -56,7 +56,7 @@ pub impl Comp {
             self.cur.selfInout = gf.selfInout
             self.cur.recvInstRef = fin.recvInstRef
             if gf.hasRecv {
-                setSelfItemEnv(c: inout self, recvStart: gf.recvStart, recvLen: gf.recvLen, recvInstRef: fin.recvInstRef)
+                self.setSelfItemEnv(recvStart: gf.recvStart, recvLen: gf.recvLen, recvInstRef: fin.recvInstRef)
             }
             self.cur.typeParams = gf.typeParams
             self.cur.typeArgs = fin.args
@@ -68,7 +68,7 @@ pub impl Comp {
             }
             scanBlockInsts(c: inout self, blkId: gf.body)
             if gf.hasRecv {
-                clearSelfItemEnv(c: inout self)
+                self.clearSelfItemEnv()
             }
             si += 1
         }

@@ -154,7 +154,7 @@ fn registerChainResultInsts(c: inout Comp, exprId: U64, baseRef: U64, memberStar
     mut val oArgs: Array[U64] = []
     oArgs.append(value: uRef)
     val oRef: U64 = c.pushType(t: <TypeRef nameStart=headStart nameLen=headLen args=oArgs />)
-    scanType(c: inout c, ref: oRef)
+    c.scanType(ref: oRef)
     // record this chain stage's result type `Head[U]` so typeOf/exprTypeRef on the
     // rewritten MatchExpr recover it (a nested `a?.x?.y` types its inner stage).
     c.decls.chainResults.append(value: <Bind nameStart=exprId nameLen=0 fieldStart=oRef fieldLen=0 />)
@@ -166,14 +166,14 @@ fn registerChainResultInsts(c: inout Comp, exprId: U64, baseRef: U64, memberStar
     mut val optArgs: Array[U64] = []
     optArgs.append(value: vRef)
     val optVRef: U64 = c.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=optArgs />)
-    scanType(c: inout c, ref: optVRef)
+    c.scanType(ref: optVRef)
     // registering the result `Head[U]` pulls in its own `chain()`, whose body builds
     // `Optional[U]`; register that too (U may differ from V — `Head[U]` vs receiver
     // `Head[V]`).
     mut val optUArgs: Array[U64] = []
     optUArgs.append(value: uRef)
     val optURef: U64 = c.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=optUArgs />)
-    scanType(c: inout c, ref: optURef)
+    c.scanType(ref: optURef)
     // both factories monomorphize to `Head[U]`: `empty()` has no argument, and the
     // `fromValue(value:)` argument is the synthesized `__chainVal.member` whose type
     // the argument-inference path can't recover (a fresh match-bound place), so
@@ -306,7 +306,7 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
             // on registering it here.
             val mrt: TypeInfo = typeOf(c: inout c, id: exprId)
             if mrt.ref != 0 {
-                scanType(c: inout c, ref: mrt.ref)
+                c.scanType(ref: mrt.ref)
             }
         }
         Expr.Field(val base, val nameStart, val nameLen) => { scanExprInsts(c: inout c, exprId: base) }
@@ -355,7 +355,7 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
             // register the Optional[U] result so its C struct is emitted.
             val rr: U64 = optChainResultRef(c: inout c, base: base, memberStart: memberStart, memberLen: memberLen)
             if rr != 0 {
-                scanType(c: inout c, ref: rr)
+                c.scanType(ref: rr)
             }
         }
         Expr.Try(val expr) => { scanExprInsts(c: inout c, exprId: expr) }
@@ -541,7 +541,7 @@ fn scanGenInstMethodBodies(c: inout Comp) {
                             c.cur.recvInstRef = instRef
                             c.cur.typeParams = mf.typeParams
                             c.cur.typeArgs = inst.args
-                            setSelfItemEnv(c: inout c, recvStart: mf.recvStart, recvLen: mf.recvLen, recvInstRef: instRef)
+                            c.setSelfItemEnv(recvStart: mf.recvStart, recvLen: mf.recvLen, recvInstRef: instRef)
                             mut val pi: U64 = 0
                             while pi < mf.params.count {
                                 val p: Param = mf.params[pi]
@@ -549,7 +549,7 @@ fn scanGenInstMethodBodies(c: inout Comp) {
                                 pi += 1
                             }
                             scanBlockInsts(c: inout c, blkId: mf.body)
-                            clearSelfItemEnv(c: inout c)
+                            c.clearSelfItemEnv()
                         }
                     }
                 }

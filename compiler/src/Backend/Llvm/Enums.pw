@@ -105,7 +105,7 @@ fn fieldWordsF(c: inout Comp, st: inout LlvmCtx, f: FieldDef) -> U64 {
     if f.ty != 0U64 {
         mut val g: U64 = f.ty
         if c.cur.typeParams.count > 0U64 {
-            g = groundTypeRef(c: inout c, ref: f.ty)
+            g = c.groundTypeRef(ref: f.ty)
         }
         if isGenericInst(c: inout c, ref: g) {
             // Array[E] is the {ptr,i64} value type, not an inline instance.
@@ -238,7 +238,7 @@ fn genLlvmMakeEnum(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U6
     // ungrounded `Optional[T]` template and fails.
     if isGenericInst(c: inout c, ref: ty) {
         if c.cur.typeParams.count > 0U64 {
-            ty = groundTypeRef(c: inout c, ref: ty)
+            ty = c.groundTypeRef(ref: ty)
         }
     }
     if !(isGenericInst(c: inout c, ref: ty)) {
@@ -331,7 +331,7 @@ fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, 
                 // registered concrete instance instead of the ungrounded template.
                 mut val bg: U64 = fs[fj].ty
                 if c.cur.typeParams.count > 0U64 {
-                    bg = groundTypeRef(c: inout c, ref: fs[fj].ty)
+                    bg = c.groundTypeRef(ref: fs[fj].ty)
                 }
                 st.expectedTy = bg
                 val boxedVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: valExpr)
@@ -362,7 +362,7 @@ fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, 
                     mut val gpf: U64 = fs[fj].ty
                     if gpf != 0U64 {
                         if c.cur.typeParams.count > 0U64 {
-                            gpf = groundTypeRef(c: inout c, ref: fs[fj].ty)
+                            gpf = c.groundTypeRef(ref: fs[fj].ty)
                         }
                     }
                     // a record-typed payload (`v: (index:U64,value:I64)`, or a type param
@@ -407,7 +407,7 @@ fn fieldArrayElemRefUnderBase(c: inout Comp, st: inout LlvmCtx, base: U64, fd: F
     val didSet: Bool = setStructEnv(c: inout c, st: inout st, ref: baseRef)
     mut val g: U64 = fd.ty
     if c.cur.typeParams.count > 0U64 {
-        g = groundTypeRef(c: inout c, ref: fd.ty)
+        g = c.groundTypeRef(ref: fd.ty)
     }
     val gt: TypeRef = c.arena.types[g]
     mut val r: U64 = 0U64
@@ -437,7 +437,7 @@ fn arrayFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
     }
     if f.ty != 0U64 {
         if c.cur.typeParams.count > 0U64 {
-            val g: U64 = groundTypeRef(c: inout c, ref: f.ty)
+            val g: U64 = c.groundTypeRef(ref: f.ty)
             val gt: TypeRef = c.arena.types[g]
             if rangeEquals(bytes: c.arena.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array") {
                 if gt.args.count > 0U64 {

@@ -85,7 +85,7 @@ pub impl Comp {
             eprint(text: "TC ")
             eprint(text: pos)
             eprint(text: " expected=")
-            eprint(text: self.tcRefName(ref: groundTypeRef(c: inout self, ref: expectedRef)))
+            eprint(text: self.tcRefName(ref: self.groundTypeRef(ref: expectedRef)))
             eprint(text: " got=")
             eprint(text: self.tcRefName(ref: inferred))
             eprint(text: " from=")
@@ -104,7 +104,7 @@ pub impl Comp {
         if op == opAnd() || op == opOr() {
             val bs: Bind = kwSpan(c: inout self, kw: "Bool", kwLen: 4U64)
             if bs.nameLen != 0U64 {
-                val boolRef: U64 = simpleTypeRef(c: inout self, nameStart: bs.nameStart, nameLen: bs.nameLen)
+                val boolRef: U64 = self.simpleTypeRef(nameStart: bs.nameStart, nameLen: bs.nameLen)
                 self.tcCheckValue(expectedRef: boolRef, valueExpr: lhs, pos: "logical")
                 self.tcCheckValue(expectedRef: boolRef, valueExpr: rhs, pos: "logical")
             }
@@ -248,7 +248,7 @@ pub impl Comp {
             if u64.nameLen == 0U64 {
                 return
             }
-            self.tcCheckValue(expectedRef: simpleTypeRef(c: inout self, nameStart: u64.nameStart, nameLen: u64.nameLen), valueExpr: index, pos: "index")
+            self.tcCheckValue(expectedRef: self.simpleTypeRef(nameStart: u64.nameStart, nameLen: u64.nameLen), valueExpr: index, pos: "index")
             return
         }
         val br: U64 = self.inferType(id: base)
@@ -339,7 +339,7 @@ pub impl Comp {
                         val savedA: Array[U64] = self.cur.typeArgs
                         self.cur.typeParams = params
                         self.cur.typeArgs = targs
-                        val grounded: U64 = groundTypeRef(c: inout self, ref: defFields[di].ty)
+                        val grounded: U64 = self.groundTypeRef(ref: defFields[di].ty)
                         self.cur.typeParams = savedP
                         self.cur.typeArgs = savedA
                         self.tcCheckValue(expectedRef: grounded, valueExpr: makeFields[mi].value, pos: "ginst-field")

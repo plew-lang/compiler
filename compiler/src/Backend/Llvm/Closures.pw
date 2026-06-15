@@ -347,7 +347,7 @@ fn emitClosures(c: inout Comp, st: inout LlvmCtx) {
                                 cRef = cap.ty
                             } else {
                                 if enumRegSlot(c: inout c, st: inout st, start: cap.tyStart, len: cap.tyLen) < st.enumIdxs.count {
-                                    cRef = simpleTypeRef(c: inout c, nameStart: cap.tyStart, nameLen: cap.tyLen)
+                                    cRef = c.simpleTypeRef(nameStart: cap.tyStart, nameLen: cap.tyLen)
                                 }
                             }
                         }

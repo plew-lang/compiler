@@ -168,7 +168,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
                 if fd.ty != 0U64 {
                     mut val gfp: U64 = fd.ty
                     if c.cur.typeParams.count > 0U64 {
-                        gfp = groundTypeRef(c: inout c, ref: fd.ty)
+                        gfp = c.groundTypeRef(ref: fd.ty)
                     }
                     if isGenericInst(c: inout c, ref: gfp) {
                         if !(rangeEquals(bytes: c.arena.bytes, start: c.arena.types[gfp].nameStart, len: c.arena.types[gfp].nameLen, kw: "Array")) {
@@ -198,7 +198,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
             // (the recursive case) recovers the enum (typeOf can't see this local).
             mut val tref: U64 = 0
             if enumRegSlot(c: inout c, st: inout st, start: fd.tyStart, len: fd.tyLen) < st.enumIdxs.count {
-                tref = simpleTypeRef(c: inout c, nameStart: fd.tyStart, nameLen: fd.tyLen)
+                tref = c.simpleTypeRef(nameStart: fd.tyStart, nameLen: fd.tyLen)
             }
             // a generic-instance payload bind carries the full instance TypeRef so a
             // nested match / field access on it recovers the substitution env.
@@ -212,7 +212,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
             mut val bindKind: U64 = kindFromTySpan(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
             if fd.ty != 0U64 {
                 if c.cur.typeParams.count > 0U64 {
-                    val gft: U64 = groundTypeRef(c: inout c, ref: fd.ty)
+                    val gft: U64 = c.groundTypeRef(ref: fd.ty)
                     if gft != 0U64 {
                         bindKind = kindFromTySpan(c: inout c, tyStart: c.arena.types[gft].nameStart, tyLen: c.arena.types[gft].nameLen)
                     }

@@ -264,7 +264,7 @@ fn paramLlvmTy(c: inout Comp, st: inout LlvmCtx, p: Param) -> LLVMTypeRef {
     // ground a generic-instance param type (`Box[T]`) through the active env.
     mut val pt: U64 = p.ty
     if c.cur.typeParams.count > 0U64 {
-        pt = groundTypeRef(c: inout c, ref: pt)
+        pt = c.groundTypeRef(ref: pt)
     }
     if isGenericInst(c: inout c, ref: pt) {
         return llvmTypeOfRef(c: inout c, st: inout st, ref: pt)
@@ -302,7 +302,7 @@ fn llvmFnRetTy(c: inout Comp, st: inout LlvmCtx, f: Func) -> LLVMTypeRef {
         // even though Counter has no type params).
         mut val rt: U64 = f.retTy
         if c.cur.typeParams.count > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
-            rt = groundTypeRef(c: inout c, ref: rt)
+            rt = c.groundTypeRef(ref: rt)
         }
         if isGenericInst(c: inout c, ref: rt) {
             return llvmTypeOfRef(c: inout c, st: inout st, ref: rt)
@@ -323,7 +323,7 @@ fn declareUserFns(c: inout Comp, st: inout LlvmCtx) {
             // receiver type; set the Self env so the signature types ground.
             val didSelf: Bool = f.hasRecv
             if didSelf {
-                setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
+                c.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
             }
             mut val ptys: Array[LLVMTypeRef] = []
             if f.hasRecv {
@@ -336,7 +336,7 @@ fn declareUserFns(c: inout Comp, st: inout LlvmCtx) {
             }
             val rty: LLVMTypeRef = llvmFnRetTy(c: inout c, st: inout st, f: f)
             if didSelf {
-                clearSelfItemEnv(c: inout c)
+                c.clearSelfItemEnv()
             }
             val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
             mut val nm: Array[U8] = []

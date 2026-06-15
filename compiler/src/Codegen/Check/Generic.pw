@@ -312,7 +312,7 @@ pub impl Comp {
                     if ft.nameLen > 0U64 {
                         mut val fref: U64 = ft.ref
                         if fref == 0U64 {
-                            fref = simpleTypeRef(c: inout self, nameStart: ft.nameStart, nameLen: ft.nameLen)
+                            fref = self.simpleTypeRef(nameStart: ft.nameStart, nameLen: ft.nameLen)
                         }
                         self.checkGenericTypeMatch(expectedRef: fref, valueExpr: fields[i].value)
                     }

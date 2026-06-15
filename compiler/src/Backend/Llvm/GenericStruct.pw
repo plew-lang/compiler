@@ -169,7 +169,7 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                     mut val g: U64 = fd.ty
                     if fd.ty != 0U64 {
                         if c.cur.typeParams.count > 0U64 {
-                            g = groundTypeRef(c: inout c, ref: fd.ty)
+                            g = c.groundTypeRef(ref: fd.ty)
                         }
                     }
                     if didSet {
@@ -319,7 +319,7 @@ fn methodResultRef(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, 
                 if !(didSet) {
                     didSet = setEnumEnv(c: inout c, st: inout st, ref: recvRef)
                 }
-                val g: U64 = groundTypeRef(c: inout c, ref: mf.retTy)
+                val g: U64 = c.groundTypeRef(ref: mf.retTy)
                 if didSet {
                     c.cur.typeParams = savedP
                     c.cur.typeArgs = savedA

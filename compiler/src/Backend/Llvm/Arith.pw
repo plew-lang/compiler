@@ -154,7 +154,7 @@ fn genLlvmMake(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U64, v
     // resolves to the registered concrete instance (`Box[I32]`).
     mut val gty: U64 = ty
     if c.cur.typeParams.count > 0U64 {
-        gty = groundTypeRef(c: inout c, ref: ty)
+        gty = c.groundTypeRef(ref: ty)
     }
     // a context-less record literal `(a:1, b:2)` lowers to a Make with NO type name
     // (Lower.pw): resolve its record struct from the construction context — the

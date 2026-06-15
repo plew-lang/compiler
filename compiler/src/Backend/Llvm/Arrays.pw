@@ -304,7 +304,7 @@ fn genFieldValue(c: inout Comp, st: inout LlvmCtx, valExpr: U64, fld: FieldDef) 
         // concrete instance (`Optional[N[I64]]`) instead of the ungrounded template.
         mut val bg: U64 = fld.ty
         if c.cur.typeParams.count > 0U64 {
-            bg = groundTypeRef(c: inout c, ref: fld.ty)
+            bg = c.groundTypeRef(ref: fld.ty)
         }
         st.expectedTy = bg
         val boxedVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: valExpr)
@@ -320,7 +320,7 @@ fn genFieldValue(c: inout Comp, st: inout LlvmCtx, valExpr: U64, fld: FieldDef) 
     if fld.ty != 0U64 {
         mut val g: U64 = fld.ty
         if c.cur.typeParams.count > 0U64 {
-            g = groundTypeRef(c: inout c, ref: fld.ty)
+            g = c.groundTypeRef(ref: fld.ty)
         }
         if isGenericInst(c: inout c, ref: g) {
             st.expectedTy = g

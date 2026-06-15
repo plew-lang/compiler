@@ -11,574 +11,528 @@
 // the inner element X must be registered (and emitted) before the outer. Register
 // the inner first (recursively, for deeper nesting) so it lands earlier in
 // c.monoWork.arrayElems and its runtime is defined before the dependent one.
-fn ensureArrayElemDeps(c: inout Comp, elemRef: U64) {
-    if elemRef == 0 {
-        return
-    }
-    val r: U64 = c.resolveTy(tyRef: elemRef)
-    if r >= c.arena.types.count {
-        return
-    }
-    val t: TypeRef = c.arena.types[r]
-    if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-        if t.args.count > 0 {
-            registerArrayElemRef(c: inout c, elemRef: t.args[0])
-        }
-    }
-}
 
-fn registerArrayElemRef(c: inout Comp, elemRef: U64) {
-    // resolve a bare type parameter (`Array[T]` inside a generic instance) to its
-    // concrete argument under the active env, so the runtime is emitted for the
-    // instantiation (`Array[I32]`), not the template (`PlewArray_T`).
-    val re: U64 = c.resolveTy(tyRef: elemRef)
-    if re >= c.arena.types.count {
-        return
-    }
-    ensureArrayElemDeps(c: inout c, elemRef: re)
-    // a compound element (`Ref[I32]`, `Array[I32]`, `Box[I32]`) gets a mangled
-    // name span + its ref, matching the parser's recordArrayElem (so the runtime
-    // and use sites agree); a simple element uses its head name.
-    mut val nStart: U64 = c.arena.types[re].nameStart
-    mut val nLen: U64 = c.arena.types[re].nameLen
-    mut val fRef: U64 = 0
-    if c.isCompoundType(ref: re) {
-        val mn: Bind = c.appendMangleSpan(ref: re)
-        nStart = mn.nameStart
-        nLen = mn.nameLen
-        fRef = re
-    }
-    mut val i: U64 = 0
-    while i < c.monoWork.arrayElems.count {
-        val ae: Bind = c.monoWork.arrayElems[i]
-        if spansEqual(c: inout c, aStart: ae.nameStart, aLen: ae.nameLen, bStart: nStart, bLen: nLen) {
+pub impl Comp {
+    inout fn ensureArrayElemDeps(elemRef: U64) {
+        if elemRef == 0 {
             return
         }
-        i += 1
-    }
-    c.monoWork.arrayElems.append(<Bind nameStart=nStart nameLen=nLen fieldStart=fRef fieldLen=0 />)
-}
-
-// Substitute the active monomorphization env (curTypeParams -> curTypeArgs) into
-// a TypeRef, returning a ground ref. A bare type parameter resolves to its arg; a
-// compound type (`Array[T]`, `Box[T]`) rebuilds with grounded args (appending a
-// fresh TypeRef only when an arg actually changed). Returns `ref` unchanged when
-// it is already ground or a param has no binding. Used so a generic struct's
-// non-ground field type (`Array[T]` inside `Box[I64]`) registers its grounded
-// instantiation (`Array[I64]`), whose C typedef would otherwise never be emitted.
-// The record-field key for a (grounded) TypeRef, matching `recordTypeKey`'s output for
-// the equivalent PType: the head-name span, then `[arg-heads]` for a generic instance.
-// Used to rebuild a record struct's canonical name from grounded field types.
-fn recordTypeKeyFromRef(c: inout Comp, ref: U64) -> Array[U8] {
-    mut val out: Array[U8] = []
-    if ref >= c.arena.types.count {
-        return out
-    }
-    val tr: TypeRef = c.arena.types[ref]
-    mut val i: U64 = 0
-    while i < tr.nameLen {
-        out.append(value: c.arena.bytes[tr.nameStart + i])
-        i += 1
-    }
-    if tr.args.count > 0U64 {
-        appendBytes(into: inout out, from: "[".bytes)
-        mut val a: U64 = 0
-        while a < tr.args.count {
-            if a > 0U64 {
-                appendBytes(into: inout out, from: ",".bytes)
-            }
-            val ar: TypeRef = c.arena.types[tr.args[a]]
-            mut val k: U64 = 0
-            while k < ar.nameLen {
-                out.append(value: c.arena.bytes[ar.nameStart + k])
-                k += 1
-            }
-            a += 1
+        val r: U64 = self.resolveTy(tyRef: elemRef)
+        if r >= self.arena.types.count {
+            return
         }
-        appendBytes(into: inout out, from: "]".bytes)
-    }
-    return out
-}
-
-// Ground a record struct's FIELD types under the active env and resolve to the
-// concrete record (spec/02). A record `(index:U64,value:E)` lowers to a canonical
-// struct whose name bakes in the field types — so `groundTypeRef` (which substitutes
-// type ARGS) never grounds `E`. Here, when `ref` names a record struct (`(`-prefixed)
-// and some field grounds to a different type, rebuild the canonical name from the
-// grounded fields and return the matching registered struct's ref. Returns `ref`
-// unchanged for a non-record, an all-concrete record, or an unregistered grounded one.
-fn groundRecordStruct(c: inout Comp, ref: U64) -> U64 {
-    val t: TypeRef = c.arena.types[ref]
-    if t.nameLen == 0U64 {
-        return ref
-    }
-    if c.arena.bytes[t.nameStart] != 40U8 {
-        return ref
-    }
-    val si: U64 = structIndexByName(c: inout c, start: t.nameStart, len: t.nameLen)
-    if si >= c.arena.structs.count {
-        return ref
-    }
-    val sd: StructDef = c.arena.structs[si]
-    mut val cn: Array[U8] = []
-    appendBytes(into: inout cn, from: "(".bytes)
-    mut val changed: Bool = false
-    mut val j: U64 = 0
-    while j < sd.fields.count {
-        if j > 0U64 {
-            appendBytes(into: inout cn, from: ",".bytes)
-        }
-        val fd: FieldDef = sd.fields[j]
-        mut val k: U64 = 0
-        while k < fd.nameLen {
-            cn.append(value: c.arena.bytes[fd.nameStart + k])
-            k += 1
-        }
-        appendBytes(into: inout cn, from: ":".bytes)
-        val g: U64 = groundTypeRef(c: inout c, ref: fd.ty)
-        if g != fd.ty {
-            changed = true
-        }
-        appendBytes(into: inout cn, from: recordTypeKeyFromRef(c: inout c, ref: g))
-        j += 1
-    }
-    appendBytes(into: inout cn, from: ")".bytes)
-    if !(changed) {
-        return ref
-    }
-    val nm: Bind = internBytes(c: inout c, s: stringFromBytesUnchecked(b: cn))
-    val nid: U64 = intern(c: inout c, start: nm.nameStart, len: nm.nameLen)
-    mut val gi: U64 = 0
-    while gi < c.arena.structs.count {
-        if c.arena.structs[gi].nameId == nid {
-            mut val noArgs: Array[U64] = []
-            return c.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=noArgs />)
-        }
-        gi += 1
-    }
-    return ref
-}
-
-export fn groundTypeRef(c: inout Comp, ref: U64) -> U64 {
-    if ref >= c.arena.types.count {
-        return ref
-    }
-    val t: TypeRef = c.arena.types[ref]
-    if t.args.count == 0 {
-        val rg: U64 = groundRecordStruct(c: inout c, ref: ref)
-        if rg != ref {
-            return rg
-        }
-        return c.resolveTy(tyRef: ref)
-    }
-    mut val newArgs: Array[U64] = []
-    mut val changed: Bool = false
-    mut val i: U64 = 0
-    while i < t.args.count {
-        val g: U64 = groundTypeRef(c: inout c, ref: t.args[i])
-        if g != t.args[i] {
-            changed = true
-        }
-        newArgs.append(g)
-        i += 1
-    }
-    if changed {
-        return c.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=newArgs />)
-    }
-    return ref
-}
-
-// Ground `tyRef` under the env of the generic struct instantiation `instRef`
-// (its type params -> its concrete args). Returns `tyRef` unchanged when `instRef`
-// is not a ground generic struct instance. Used to resolve an iterable's
-// iterator()/next() return types through the concrete iterand (`Box[I64]` ->
-// `BoxIter[I64]`, then `BoxIter[I64]`'s `next` -> `Optional[I64]`).
-fn groundUnderInst(c: inout Comp, instRef: U64, tyRef: U64) -> U64 {
-    if !(isGenericInst(c: inout c, ref: instRef)) {
-        return tyRef
-    }
-    val inst: TypeRef = c.arena.types[instRef]
-    val si: U64 = c.genericStructIndex(nameStart: inst.nameStart, nameLen: inst.nameLen)
-    if si >= c.arena.structs.count {
-        return tyRef
-    }
-    val sd: StructDef = c.arena.structs[si]
-    if sd.typeParams.count != inst.args.count {
-        return tyRef
-    }
-    val savedP: Array[Bind] = c.cur.typeParams
-    val savedA: Array[U64] = c.cur.typeArgs
-    c.cur.typeParams = sd.typeParams
-    c.cur.typeArgs = inst.args
-    val g: U64 = groundTypeRef(c: inout c, ref: tyRef)
-    c.cur.typeParams = savedP
-    c.cur.typeArgs = savedA
-    return g
-}
-
-// Append a bare (no-args) TypeRef for a type name, returning its index. Used to
-// give `Self` a concrete TypeRef when the receiver is non-generic (no inst ref).
-export fn simpleTypeRef(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
-    val noArgs: Array[U64] = []
-    return c.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=noArgs />)
-}
-
-// The bound type ref of a receiver's `type Item = X` associated binding (the
-// Iterator conformance's element), or 0 if none. Keyed by the receiver type name.
-fn assocItemRef(c: inout Comp, recvStart: U64, recvLen: U64) -> U64 {
-    val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
-    mut val i: U64 = 0
-    while i < c.decls.assocBindings.count {
-        val ab: AssocBinding = c.decls.assocBindings[i]
-        if ab.recvId == qRecv {
-            if rangeEquals(bytes: c.arena.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Item") {
-                return ab.ty
+        val t: TypeRef = self.arena.types[r]
+        if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+            if t.args.count > 0 {
+                self.registerArrayElemRef(elemRef: t.args[0])
             }
         }
-        i += 1
     }
-    return 0
-}
 
-// Set the `Self`/`Item`-as-type env for a method on the given receiver (recvInstRef
-// = its concrete instantiation when generic, else 0). Self = the receiver type;
-// Item = its `type Item` binding, grounded under the instantiation so a generic
-// receiver's Item resolves to the concrete element. Pair with clearSelfItemEnv.
-export fn setSelfItemEnv(c: inout Comp, recvStart: U64, recvLen: U64, recvInstRef: U64) {
-    if recvInstRef != 0 {
-        c.cur.selfRef = recvInstRef
-    } else {
-        c.cur.selfRef = simpleTypeRef(c: inout c, nameStart: recvStart, nameLen: recvLen)
-    }
-    val itemR0: U64 = assocItemRef(c: inout c, recvStart: recvStart, recvLen: recvLen)
-    if itemR0 == 0 {
-        c.cur.itemRef = 0
-    } else {
-        if recvInstRef != 0 {
-            c.cur.itemRef = groundUnderInst(c: inout c, instRef: recvInstRef, tyRef: itemR0)
-        } else {
-            c.cur.itemRef = itemR0
+    inout fn registerArrayElemRef(elemRef: U64) {
+        // resolve a bare type parameter (`Array[T]` inside a generic instance) to its
+        // concrete argument under the active env, so the runtime is emitted for the
+        // instantiation (`Array[I32]`), not the template (`PlewArray_T`).
+        val re: U64 = self.resolveTy(tyRef: elemRef)
+        if re >= self.arena.types.count {
+            return
         }
-    }
-}
-
-export fn clearSelfItemEnv(c: inout Comp) {
-    c.cur.selfRef = 0
-    c.cur.itemRef = 0
-}
-
-// A generic instantiation whose type ARGUMENT names a type whose head collides with
-// one of the generic's own type-PARAMETER names (`Dictionary[String, V]` where the
-// user also declares `struct V` — V is both Dictionary's value param and a concrete
-// type). Type-parameter identity is name-based, so the two are indistinguishable and
-// substitution/grounding cannot terminate (it would otherwise stack-overflow). Detect
-// it so the front-end can reject loudly (spec: 曖昧はエラー) instead of crashing.
-fn instArgCollidesParamName(c: inout Comp, instRef: U64) -> Bool {
-    val t: TypeRef = c.arena.types[instRef]
-    if t.args.count == 0U64 {
-        return false
-    }
-    // the generic's own type-parameter names (struct or enum). The collision is
-    // pervasive: with a name-based parameter identity, ANY generic — struct or enum —
-    // whose type ARGUMENT coincides with one of its parameter names cannot be grounded
-    // (the concrete type and the parameter are indistinguishable, so substitution never
-    // terminates and the compiler stack-overflows). The lone exception is a generic
-    // floored purely on an extern intrinsic (`Array[T]` over `RawBuffer`), which
-    // terminates; rejecting that rare ambiguous case too is the accepted cost of a
-    // simple, crash-proof rule (rename the colliding type).
-    mut val params: Array[Bind] = []
-    val gsi: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-    if gsi < c.arena.structs.count {
-        params = c.arena.structs[gsi].typeParams
-    } else {
-        val gei: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-        if gei < c.arena.enums.count {
-            params = c.arena.enums[gei].typeParams
-        } else {
-            return false
+        self.ensureArrayElemDeps(elemRef: re)
+        // a compound element (`Ref[I32]`, `Array[I32]`, `Box[I32]`) gets a mangled
+        // name span + its ref, matching the parser's recordArrayElem (so the runtime
+        // and use sites agree); a simple element uses its head name.
+        mut val nStart: U64 = self.arena.types[re].nameStart
+        mut val nLen: U64 = self.arena.types[re].nameLen
+        mut val fRef: U64 = 0
+        if self.isCompoundType(ref: re) {
+            val mn: Bind = self.appendMangleSpan(ref: re)
+            nStart = mn.nameStart
+            nLen = mn.nameLen
+            fRef = re
         }
+        mut val i: U64 = 0
+        while i < self.monoWork.arrayElems.count {
+            val ae: Bind = self.monoWork.arrayElems[i]
+            if spansEqual(c: inout self, aStart: ae.nameStart, aLen: ae.nameLen, bStart: nStart, bLen: nLen) {
+                return
+            }
+            i += 1
+        }
+        self.monoWork.arrayElems.append(<Bind nameStart=nStart nameLen=nLen fieldStart=fRef fieldLen=0 />)
     }
-    mut val ai: U64 = 0
-    while ai < t.args.count {
-        val arg: TypeRef = c.arena.types[t.args[ai]]
-        // a bare argument whose head names a declared concrete type AND coincides with
-        // one of this generic's parameter names (skip an argument that is itself a
-        // parameter — a template position, resolved by the active env, not a collision).
-        val argId: U64 = arg.nameId
-        if argId != 0U64 {
-            if !(c.isTypeParamName(start: arg.nameStart, len: arg.nameLen)) {
-                mut val pi: U64 = 0
-                while pi < params.count {
-                    if params[pi].nameId == argId {
-                        return true
-                    }
-                    pi += 1
+
+    inout fn recordTypeKeyFromRef(ref: U64) -> Array[U8] {
+        mut val out: Array[U8] = []
+        if ref >= self.arena.types.count {
+            return out
+        }
+        val tr: TypeRef = self.arena.types[ref]
+        mut val i: U64 = 0
+        while i < tr.nameLen {
+            out.append(value: self.arena.bytes[tr.nameStart + i])
+            i += 1
+        }
+        if tr.args.count > 0U64 {
+            appendBytes(into: inout out, from: "[".bytes)
+            mut val a: U64 = 0
+            while a < tr.args.count {
+                if a > 0U64 {
+                    appendBytes(into: inout out, from: ",".bytes)
                 }
-            }
-        }
-        ai += 1
-    }
-    return false
-}
-
-// Whether a type argument of `ref` names a type that has a pending `@[...]` derive
-// (so its `Hash`/`Eq`/... impl is generated by THIS `plew gen` run, not yet present).
-// In gen mode such a generic instance must not register (spec/16): monomorphizing e.g.
-// `Dictionary[Pair, _]`'s `where K: Hash` methods would demand a `Pair.hash` the run
-// hasn't produced. The real program instantiates it normally in phase 2 (the
-// auto-parted `.gen.pw` supplies the derive). Only relevant when `c.genMode`.
-fn refArgNamesADeriveTarget(c: inout Comp, ref: U64) -> Bool {
-    if c.decls.derives.count == 0U64 {
-        return false
-    }
-    val t: TypeRef = c.arena.types[ref]
-    mut val i: U64 = 0
-    while i < t.args.count {
-        val argT: TypeRef = c.arena.types[t.args[i]]
-        mut val di: U64 = 0
-        while di < c.decls.derives.count {
-            if spansEqual(c: inout c, aStart: argT.nameStart, aLen: argT.nameLen, bStart: c.decls.derives[di].typeStart, bLen: c.decls.derives[di].typeLen) {
-                return true
-            }
-            di += 1
-        }
-        i += 1
-    }
-    return false
-}
-
-fn scanType(c: inout Comp, ref: U64) {
-    if ref >= c.arena.types.count {
-        return
-    }
-    // resolve any active env (a generic struct's field `Array[T]` -> `Array[I64]`)
-    // so the grounded instantiation, not the template, is what gets registered.
-    // (Shadows the parameter; the public label stays `ref` for all callers.)
-    val ref: U64 = groundTypeRef(c: inout c, ref: ref)
-    if ref >= c.arena.types.count {
-        return
-    }
-    val t: TypeRef = c.arena.types[ref]
-    mut val i: U64 = 0
-    while i < t.args.count {
-        scanType(c: inout c, ref: t.args[i])
-        i += 1
-    }
-    // an `Array[E]` reached via a type argument (e.g. inside `Box[Array[I32]]`)
-    // still needs its `PlewArray_E` runtime emitted — register the element.
-    if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-        if t.args.count == 1 {
-            registerArrayElemRef(c: inout c, elemRef: t.args[0])
-        }
-    }
-    // register a function type for its C typedef (deduped structurally).
-    if isFnType(c: inout c, ref: ref) {
-        mut val fj: U64 = 0
-        mut val seen: Bool = false
-        while fj < c.monoWork.fnTypes.count {
-            if c.typeRefEq(a: c.monoWork.fnTypes[fj], b: ref) {
-                seen = true
-            }
-            fj += 1
-        }
-        if !(seen) {
-            c.monoWork.fnTypes.append(ref)
-        }
-    }
-    if isGenericInst(c: inout c, ref: ref) {
-        if c.tyRefIsGround(ref: ref) {
-            mut val j: U64 = 0
-            while j < c.monoWork.genInsts.count {
-                if c.typeRefEq(a: c.monoWork.genInsts[j], b: ref) {
-                    return
-                }
-                j += 1
-            }
-            if instArgCollidesParamName(c: inout c, instRef: ref) {
-                compileErrorAt(line: lineOf(c: inout c, offset: c.arena.types[ref].nameStart), msg: "a type argument's name collides with this generic's type-parameter name (e.g. `struct V` used as the value of `Dictionary[K, V]`); rename the type")
-            }
-            // gen mode: don't instantiate a generic over a to-be-derived type (spec/16).
-            if c.genMode {
-                if refArgNamesADeriveTarget(c: inout c, ref: ref) {
-                    return
-                }
-            }
-            c.monoWork.genInsts.append(ref)
-            // scan the generic struct's fields under this instantiation's env so an
-            // `Array[T]` field registers its concrete element (`Array[I32]`) — the
-            // runtime is keyed off the instantiation, not the `PlewArray_T` template.
-            scanGenInstFields(c: inout c, instRef: ref)
-        }
-    }
-}
-
-// Scan the fields of the generic struct named by `instRef` with the env set to
-// this instantiation (params -> args), so array-typed fields register their
-// resolved element type.
-fn scanGenInstFields(c: inout Comp, instRef: U64) {
-    val inst: TypeRef = c.arena.types[instRef]
-    val qInst: U64 = intern(c: inout c, start: inst.nameStart, len: inst.nameLen)
-    mut val si: U64 = 0
-    while si < c.arena.structs.count {
-        val sd: StructDef = c.arena.structs[si]
-        if sd.nameId == qInst {
-            if sd.typeParams.count == inst.args.count {
-                if sd.typeParams.count > 0 {
-                    val savedP: Array[Bind] = c.cur.typeParams
-                    val savedA: Array[U64] = c.cur.typeArgs
-                    c.cur.typeParams = sd.typeParams
-                    c.cur.typeArgs = inst.args
-                    val fs: Array[FieldDef] = sd.fields
-                    mut val k: U64 = 0
-                    while k < fs.count {
-                        scanType(c: inout c, ref: fs[k].ty)
-                        k += 1
-                    }
-                    // also scan this struct's methods' return/param types under the
-                    // env, so a method returning another generic type (an iterable's
-                    // `iterator() -> BoxIter[T]`) registers its grounded instantiation
-                    // (`BoxIter[I64]`), whose typedef/methods would else be missing. A
-                    // leftover (generic-method) param stays non-ground and is skipped.
-                    mut val mfi: U64 = 0
-                    while mfi < c.arena.funcs.count {
-                        val mf: Func = c.arena.funcs[mfi]
-                        if mf.hasRecv {
-                            // skip copied provided methods (`map[B] -> MapIter[Self,…]`):
-                            // their instances come from call sites, and expanding one here
-                            // under Self=this inst would recurse forever (MapIter[MapIter[…]]).
-                            if !(mf.isProvided) {
-                            if mf.recvId == qInst {
-                                // a non-generic method may still mention `Self`/`Item`
-                                // (`fn iterator() -> Self`); resolve them to this inst.
-                                setSelfItemEnv(c: inout c, recvStart: inst.nameStart, recvLen: inst.nameLen, recvInstRef: instRef)
-                                if mf.hasRet {
-                                    scanType(c: inout c, ref: mf.retTy)
-                                }
-                                val mps: Array[Param] = mf.params
-                                mut val mpi: U64 = 0
-                                while mpi < mps.count {
-                                    scanType(c: inout c, ref: mps[mpi].ty)
-                                    mpi += 1
-                                }
-                                clearSelfItemEnv(c: inout c)
-                            }
-                            }
-                        }
-                        mfi += 1
-                    }
-                    c.cur.typeParams = savedP
-                    c.cur.typeArgs = savedA
-                }
-            }
-        }
-        si += 1
-    }
-}
-
-// Discover all concrete generic instantiations from use sites (function params/
-// returns, non-generic struct/enum fields, let bindings, casts). G2 has no
-// generic functions yet, so every use-site type argument is concrete.
-fn collectGenInsts(c: inout Comp) {
-    mut val fi: U64 = 0
-    while fi < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[fi]
-        // skip generic templates: their param/return types contain type
-        // parameters (not concrete), resolved per instantiation instead.
-        if f.typeParams.count <= 0 {
-        // skip a provided-method template (receiver = a trait): it is not a real
-        // method (it is copied onto each conformer), and scanning its signature
-        // would resolve `Self` to the trait name and register a bogus instantiation
-        // (`FilterIter[Iterator,…]`). The per-conformer copies are scanned instead.
-        // Likewise skip a provided method copied onto a *generic* conformer (`filter`
-        // on `MapIter`): it is still a template (Self/Item are the conformer's type
-        // params, not concrete), emitted per receiver instantiation — scanning it as
-        // concrete would register garbage like `FilterIter[MapIter, fn, B]`.
-        mut val skipProvidedTemplate: Bool = false
-        if methodRecvIsTrait(c: inout c, f: f) {
-            skipProvidedTemplate = true
-        }
-        if f.isProvided {
-            if c.genericStructIndex(nameStart: f.recvStart, nameLen: f.recvLen) < c.arena.structs.count {
-                skipProvidedTemplate = true
-            }
-        }
-        if !(skipProvidedTemplate) {
-            // a provided method copied onto a concrete conformer (`filter` on
-            // Counter) may mention `Self`/`Item` in its signature; resolve them to
-            // the receiver so its adapter instantiation (`FilterIter[Counter,…,I64]`)
-            // grounds instead of leaking literal `Self`.
-            if f.hasRecv {
-                setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0)
-            } else {
-                clearSelfItemEnv(c: inout c)
-            }
-            if f.hasRet {
-                scanType(c: inout c, ref: f.retTy)
-            }
-            val ps: Array[Param] = f.params
-            mut val pi: U64 = 0
-            while pi < ps.count {
-                scanType(c: inout c, ref: ps[pi].ty)
-                pi += 1
-            }
-            clearSelfItemEnv(c: inout c)
-        }
-        }
-        fi += 1
-    }
-    mut val si: U64 = 0
-    while si < c.arena.structs.count {
-        val s: StructDef = c.arena.structs[si]
-        if s.typeParams.count == 0 {
-            val fs: Array[FieldDef] = s.fields
-            mut val k: U64 = 0
-            while k < fs.count {
-                scanType(c: inout c, ref: fs[k].ty)
-                k += 1
-            }
-        }
-        si += 1
-    }
-    mut val ei: U64 = 0
-    while ei < c.arena.enums.count {
-        val e: EnumDef = c.arena.enums[ei]
-        if e.typeParams.count == 0 {
-            val vs: Array[Variant] = e.variants
-            mut val vi: U64 = 0
-            while vi < vs.count {
-                val vfs: Array[FieldDef] = vs[vi].fields
+                val ar: TypeRef = self.arena.types[tr.args[a]]
                 mut val k: U64 = 0
-                while k < vfs.count {
-                    scanType(c: inout c, ref: vfs[k].ty)
+                while k < ar.nameLen {
+                    out.append(value: self.arena.bytes[ar.nameStart + k])
                     k += 1
                 }
-                vi += 1
+                a += 1
             }
+            appendBytes(into: inout out, from: "]".bytes)
         }
-        ei += 1
+        return out
     }
-    mut val sti: U64 = 0
-    while sti < c.arena.stmts.count {
-        match c.arena.stmts[sti] {
-            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, val ty, init: _) => {
-                scanType(c: inout c, ref: ty)
-            }
-            _ => {}
+
+    inout fn groundRecordStruct(ref: U64) -> U64 {
+        val t: TypeRef = self.arena.types[ref]
+        if t.nameLen == 0U64 {
+            return ref
         }
-        sti += 1
+        if self.arena.bytes[t.nameStart] != 40U8 {
+            return ref
+        }
+        val si: U64 = structIndexByName(c: inout self, start: t.nameStart, len: t.nameLen)
+        if si >= self.arena.structs.count {
+            return ref
+        }
+        val sd: StructDef = self.arena.structs[si]
+        mut val cn: Array[U8] = []
+        appendBytes(into: inout cn, from: "(".bytes)
+        mut val changed: Bool = false
+        mut val j: U64 = 0
+        while j < sd.fields.count {
+            if j > 0U64 {
+                appendBytes(into: inout cn, from: ",".bytes)
+            }
+            val fd: FieldDef = sd.fields[j]
+            mut val k: U64 = 0
+            while k < fd.nameLen {
+                cn.append(value: self.arena.bytes[fd.nameStart + k])
+                k += 1
+            }
+            appendBytes(into: inout cn, from: ":".bytes)
+            val g: U64 = self.groundTypeRef(ref: fd.ty)
+            if g != fd.ty {
+                changed = true
+            }
+            appendBytes(into: inout cn, from: self.recordTypeKeyFromRef(ref: g))
+            j += 1
+        }
+        appendBytes(into: inout cn, from: ")".bytes)
+        if !(changed) {
+            return ref
+        }
+        val nm: Bind = internBytes(c: inout self, s: stringFromBytesUnchecked(b: cn))
+        val nid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
+        mut val gi: U64 = 0
+        while gi < self.arena.structs.count {
+            if self.arena.structs[gi].nameId == nid {
+                mut val noArgs: Array[U64] = []
+                return self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=noArgs />)
+            }
+            gi += 1
+        }
+        return ref
     }
-    mut val xi: U64 = 0
-    while xi < c.arena.exprs.count {
-        match c.arena.exprs[xi] {
-            Expr.Cast(val operand, val tyStart, val tyLen, val ty) => {
-                scanType(c: inout c, ref: ty)
-            }
-            Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
-                scanType(c: inout c, ref: ty)
-            }
-            _ => {}
+
+    inout fn groundTypeRef(ref: U64) -> U64 {
+        if ref >= self.arena.types.count {
+            return ref
         }
-        xi += 1
+        val t: TypeRef = self.arena.types[ref]
+        if t.args.count == 0 {
+            val rg: U64 = self.groundRecordStruct(ref: ref)
+            if rg != ref {
+                return rg
+            }
+            return self.resolveTy(tyRef: ref)
+        }
+        mut val newArgs: Array[U64] = []
+        mut val changed: Bool = false
+        mut val i: U64 = 0
+        while i < t.args.count {
+            val g: U64 = self.groundTypeRef(ref: t.args[i])
+            if g != t.args[i] {
+                changed = true
+            }
+            newArgs.append(g)
+            i += 1
+        }
+        if changed {
+            return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=newArgs />)
+        }
+        return ref
+    }
+
+    inout fn groundUnderInst(instRef: U64, tyRef: U64) -> U64 {
+        if !(isGenericInst(c: inout self, ref: instRef)) {
+            return tyRef
+        }
+        val inst: TypeRef = self.arena.types[instRef]
+        val si: U64 = self.genericStructIndex(nameStart: inst.nameStart, nameLen: inst.nameLen)
+        if si >= self.arena.structs.count {
+            return tyRef
+        }
+        val sd: StructDef = self.arena.structs[si]
+        if sd.typeParams.count != inst.args.count {
+            return tyRef
+        }
+        val savedP: Array[Bind] = self.cur.typeParams
+        val savedA: Array[U64] = self.cur.typeArgs
+        self.cur.typeParams = sd.typeParams
+        self.cur.typeArgs = inst.args
+        val g: U64 = self.groundTypeRef(ref: tyRef)
+        self.cur.typeParams = savedP
+        self.cur.typeArgs = savedA
+        return g
+    }
+
+    inout fn simpleTypeRef(nameStart: U64, nameLen: U64) -> U64 {
+        val noArgs: Array[U64] = []
+        return self.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=noArgs />)
+    }
+
+    inout fn assocItemRef(recvStart: U64, recvLen: U64) -> U64 {
+        val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
+        mut val i: U64 = 0
+        while i < self.decls.assocBindings.count {
+            val ab: AssocBinding = self.decls.assocBindings[i]
+            if ab.recvId == qRecv {
+                if rangeEquals(bytes: self.arena.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Item") {
+                    return ab.ty
+                }
+            }
+            i += 1
+        }
+        return 0
+    }
+
+    inout fn setSelfItemEnv(recvStart: U64, recvLen: U64, recvInstRef: U64) {
+        if recvInstRef != 0 {
+            self.cur.selfRef = recvInstRef
+        } else {
+            self.cur.selfRef = self.simpleTypeRef(nameStart: recvStart, nameLen: recvLen)
+        }
+        val itemR0: U64 = self.assocItemRef(recvStart: recvStart, recvLen: recvLen)
+        if itemR0 == 0 {
+            self.cur.itemRef = 0
+        } else {
+            if recvInstRef != 0 {
+                self.cur.itemRef = self.groundUnderInst(instRef: recvInstRef, tyRef: itemR0)
+            } else {
+                self.cur.itemRef = itemR0
+            }
+        }
+    }
+
+    inout fn clearSelfItemEnv() {
+        self.cur.selfRef = 0
+        self.cur.itemRef = 0
+    }
+
+    inout fn instArgCollidesParamName(instRef: U64) -> Bool {
+        val t: TypeRef = self.arena.types[instRef]
+        if t.args.count == 0U64 {
+            return false
+        }
+        // the generic's own type-parameter names (struct or enum). The collision is
+        // pervasive: with a name-based parameter identity, ANY generic — struct or enum —
+        // whose type ARGUMENT coincides with one of its parameter names cannot be grounded
+        // (the concrete type and the parameter are indistinguishable, so substitution never
+        // terminates and the compiler stack-overflows). The lone exception is a generic
+        // floored purely on an extern intrinsic (`Array[T]` over `RawBuffer`), which
+        // terminates; rejecting that rare ambiguous case too is the accepted cost of a
+        // simple, crash-proof rule (rename the colliding type).
+        mut val params: Array[Bind] = []
+        val gsi: U64 = self.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
+        if gsi < self.arena.structs.count {
+            params = self.arena.structs[gsi].typeParams
+        } else {
+            val gei: U64 = self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
+            if gei < self.arena.enums.count {
+                params = self.arena.enums[gei].typeParams
+            } else {
+                return false
+            }
+        }
+        mut val ai: U64 = 0
+        while ai < t.args.count {
+            val arg: TypeRef = self.arena.types[t.args[ai]]
+            // a bare argument whose head names a declared concrete type AND coincides with
+            // one of this generic's parameter names (skip an argument that is itself a
+            // parameter — a template position, resolved by the active env, not a collision).
+            val argId: U64 = arg.nameId
+            if argId != 0U64 {
+                if !(self.isTypeParamName(start: arg.nameStart, len: arg.nameLen)) {
+                    mut val pi: U64 = 0
+                    while pi < params.count {
+                        if params[pi].nameId == argId {
+                            return true
+                        }
+                        pi += 1
+                    }
+                }
+            }
+            ai += 1
+        }
+        return false
+    }
+
+    inout fn refArgNamesADeriveTarget(ref: U64) -> Bool {
+        if self.decls.derives.count == 0U64 {
+            return false
+        }
+        val t: TypeRef = self.arena.types[ref]
+        mut val i: U64 = 0
+        while i < t.args.count {
+            val argT: TypeRef = self.arena.types[t.args[i]]
+            mut val di: U64 = 0
+            while di < self.decls.derives.count {
+                if spansEqual(c: inout self, aStart: argT.nameStart, aLen: argT.nameLen, bStart: self.decls.derives[di].typeStart, bLen: self.decls.derives[di].typeLen) {
+                    return true
+                }
+                di += 1
+            }
+            i += 1
+        }
+        return false
+    }
+
+    inout fn scanType(ref: U64) {
+        if ref >= self.arena.types.count {
+            return
+        }
+        // resolve any active env (a generic struct's field `Array[T]` -> `Array[I64]`)
+        // so the grounded instantiation, not the template, is what gets registered.
+        // (Shadows the parameter; the public label stays `ref` for all callers.)
+        val ref: U64 = self.groundTypeRef(ref: ref)
+        if ref >= self.arena.types.count {
+            return
+        }
+        val t: TypeRef = self.arena.types[ref]
+        mut val i: U64 = 0
+        while i < t.args.count {
+            self.scanType(ref: t.args[i])
+            i += 1
+        }
+        // an `Array[E]` reached via a type argument (e.g. inside `Box[Array[I32]]`)
+        // still needs its `PlewArray_E` runtime emitted — register the element.
+        if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+            if t.args.count == 1 {
+                self.registerArrayElemRef(elemRef: t.args[0])
+            }
+        }
+        // register a function type for its C typedef (deduped structurally).
+        if isFnType(c: inout self, ref: ref) {
+            mut val fj: U64 = 0
+            mut val seen: Bool = false
+            while fj < self.monoWork.fnTypes.count {
+                if self.typeRefEq(a: self.monoWork.fnTypes[fj], b: ref) {
+                    seen = true
+                }
+                fj += 1
+            }
+            if !(seen) {
+                self.monoWork.fnTypes.append(ref)
+            }
+        }
+        if isGenericInst(c: inout self, ref: ref) {
+            if self.tyRefIsGround(ref: ref) {
+                mut val j: U64 = 0
+                while j < self.monoWork.genInsts.count {
+                    if self.typeRefEq(a: self.monoWork.genInsts[j], b: ref) {
+                        return
+                    }
+                    j += 1
+                }
+                if self.instArgCollidesParamName(instRef: ref) {
+                    compileErrorAt(line: lineOf(c: inout self, offset: self.arena.types[ref].nameStart), msg: "a type argument's name collides with this generic's type-parameter name (e.g. `struct V` used as the value of `Dictionary[K, V]`); rename the type")
+                }
+                // gen mode: don't instantiate a generic over a to-be-derived type (spec/16).
+                if self.genMode {
+                    if self.refArgNamesADeriveTarget(ref: ref) {
+                        return
+                    }
+                }
+                self.monoWork.genInsts.append(ref)
+                // scan the generic struct's fields under this instantiation's env so an
+                // `Array[T]` field registers its concrete element (`Array[I32]`) — the
+                // runtime is keyed off the instantiation, not the `PlewArray_T` template.
+                self.scanGenInstFields(instRef: ref)
+            }
+        }
+    }
+
+    inout fn scanGenInstFields(instRef: U64) {
+        val inst: TypeRef = self.arena.types[instRef]
+        val qInst: U64 = intern(c: inout self, start: inst.nameStart, len: inst.nameLen)
+        mut val si: U64 = 0
+        while si < self.arena.structs.count {
+            val sd: StructDef = self.arena.structs[si]
+            if sd.nameId == qInst {
+                if sd.typeParams.count == inst.args.count {
+                    if sd.typeParams.count > 0 {
+                        val savedP: Array[Bind] = self.cur.typeParams
+                        val savedA: Array[U64] = self.cur.typeArgs
+                        self.cur.typeParams = sd.typeParams
+                        self.cur.typeArgs = inst.args
+                        val fs: Array[FieldDef] = sd.fields
+                        mut val k: U64 = 0
+                        while k < fs.count {
+                            self.scanType(ref: fs[k].ty)
+                            k += 1
+                        }
+                        // also scan this struct's methods' return/param types under the
+                        // env, so a method returning another generic type (an iterable's
+                        // `iterator() -> BoxIter[T]`) registers its grounded instantiation
+                        // (`BoxIter[I64]`), whose typedef/methods would else be missing. A
+                        // leftover (generic-method) param stays non-ground and is skipped.
+                        mut val mfi: U64 = 0
+                        while mfi < self.arena.funcs.count {
+                            val mf: Func = self.arena.funcs[mfi]
+                            if mf.hasRecv {
+                                // skip copied provided methods (`map[B] -> MapIter[Self,…]`):
+                                // their instances come from call sites, and expanding one here
+                                // under Self=this inst would recurse forever (MapIter[MapIter[…]]).
+                                if !(mf.isProvided) {
+                                if mf.recvId == qInst {
+                                    // a non-generic method may still mention `Self`/`Item`
+                                    // (`fn iterator() -> Self`); resolve them to this inst.
+                                    self.setSelfItemEnv(recvStart: inst.nameStart, recvLen: inst.nameLen, recvInstRef: instRef)
+                                    if mf.hasRet {
+                                        self.scanType(ref: mf.retTy)
+                                    }
+                                    val mps: Array[Param] = mf.params
+                                    mut val mpi: U64 = 0
+                                    while mpi < mps.count {
+                                        self.scanType(ref: mps[mpi].ty)
+                                        mpi += 1
+                                    }
+                                    self.clearSelfItemEnv()
+                                }
+                                }
+                            }
+                            mfi += 1
+                        }
+                        self.cur.typeParams = savedP
+                        self.cur.typeArgs = savedA
+                    }
+                }
+            }
+            si += 1
+        }
+    }
+
+    inout fn collectGenInsts() {
+        mut val fi: U64 = 0
+        while fi < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[fi]
+            // skip generic templates: their param/return types contain type
+            // parameters (not concrete), resolved per instantiation instead.
+            if f.typeParams.count <= 0 {
+            // skip a provided-method template (receiver = a trait): it is not a real
+            // method (it is copied onto each conformer), and scanning its signature
+            // would resolve `Self` to the trait name and register a bogus instantiation
+            // (`FilterIter[Iterator,…]`). The per-conformer copies are scanned instead.
+            // Likewise skip a provided method copied onto a *generic* conformer (`filter`
+            // on `MapIter`): it is still a template (Self/Item are the conformer's type
+            // params, not concrete), emitted per receiver instantiation — scanning it as
+            // concrete would register garbage like `FilterIter[MapIter, fn, B]`.
+            mut val skipProvidedTemplate: Bool = false
+            if methodRecvIsTrait(c: inout self, f: f) {
+                skipProvidedTemplate = true
+            }
+            if f.isProvided {
+                if self.genericStructIndex(nameStart: f.recvStart, nameLen: f.recvLen) < self.arena.structs.count {
+                    skipProvidedTemplate = true
+                }
+            }
+            if !(skipProvidedTemplate) {
+                // a provided method copied onto a concrete conformer (`filter` on
+                // Counter) may mention `Self`/`Item` in its signature; resolve them to
+                // the receiver so its adapter instantiation (`FilterIter[Counter,…,I64]`)
+                // grounds instead of leaking literal `Self`.
+                if f.hasRecv {
+                    self.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0)
+                } else {
+                    self.clearSelfItemEnv()
+                }
+                if f.hasRet {
+                    self.scanType(ref: f.retTy)
+                }
+                val ps: Array[Param] = f.params
+                mut val pi: U64 = 0
+                while pi < ps.count {
+                    self.scanType(ref: ps[pi].ty)
+                    pi += 1
+                }
+                self.clearSelfItemEnv()
+            }
+            }
+            fi += 1
+        }
+        mut val si: U64 = 0
+        while si < self.arena.structs.count {
+            val s: StructDef = self.arena.structs[si]
+            if s.typeParams.count == 0 {
+                val fs: Array[FieldDef] = s.fields
+                mut val k: U64 = 0
+                while k < fs.count {
+                    self.scanType(ref: fs[k].ty)
+                    k += 1
+                }
+            }
+            si += 1
+        }
+        mut val ei: U64 = 0
+        while ei < self.arena.enums.count {
+            val e: EnumDef = self.arena.enums[ei]
+            if e.typeParams.count == 0 {
+                val vs: Array[Variant] = e.variants
+                mut val vi: U64 = 0
+                while vi < vs.count {
+                    val vfs: Array[FieldDef] = vs[vi].fields
+                    mut val k: U64 = 0
+                    while k < vfs.count {
+                        self.scanType(ref: vfs[k].ty)
+                        k += 1
+                    }
+                    vi += 1
+                }
+            }
+            ei += 1
+        }
+        mut val sti: U64 = 0
+        while sti < self.arena.stmts.count {
+            match self.arena.stmts[sti] {
+                Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, val ty, init: _) => {
+                    self.scanType(ref: ty)
+                }
+                _ => {}
+            }
+            sti += 1
+        }
+        mut val xi: U64 = 0
+        while xi < self.arena.exprs.count {
+            match self.arena.exprs[xi] {
+                Expr.Cast(val operand, val tyStart, val tyLen, val ty) => {
+                    self.scanType(ref: ty)
+                }
+                Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
+                    self.scanType(ref: ty)
+                }
+                _ => {}
+            }
+            xi += 1
+        }
     }
 }
-

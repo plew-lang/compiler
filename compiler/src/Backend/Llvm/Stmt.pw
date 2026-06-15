@@ -197,7 +197,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             if tref == 0U64 {
                 if tyLen > 0U64 {
                     if enumRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen) < st.enumIdxs.count {
-                        tref = simpleTypeRef(c: inout c, nameStart: tyStart, nameLen: tyLen)
+                        tref = c.simpleTypeRef(nameStart: tyStart, nameLen: tyLen)
                     }
                 }
             }
@@ -206,7 +206,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             if tref == 0U64 {
                 if tyLen > 0U64 {
                     if isPrimIntName(c: inout c, start: tyStart, len: tyLen) {
-                        tref = simpleTypeRef(c: inout c, nameStart: tyStart, nameLen: tyLen)
+                        tref = c.simpleTypeRef(nameStart: tyStart, nameLen: tyLen)
                     }
                 }
             }
@@ -216,7 +216,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             if tref == 0U64 {
                 if tyLen > 0U64 {
                     if newtypeUnderRef(c: inout c, start: tyStart, len: tyLen) != 0U64 {
-                        tref = simpleTypeRef(c: inout c, nameStart: tyStart, nameLen: tyLen)
+                        tref = c.simpleTypeRef(nameStart: tyStart, nameLen: tyLen)
                     }
                 }
             }

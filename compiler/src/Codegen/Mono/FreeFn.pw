@@ -81,7 +81,7 @@ pub impl Comp {
         if ti.kind == 1 {
             val ss: Bind = stringTypeSpan(c: inout self)
             if ss.nameLen != 0 {
-                return simpleTypeRef(c: inout self, nameStart: ss.nameStart, nameLen: ss.nameLen)
+                return self.simpleTypeRef(nameStart: ss.nameStart, nameLen: ss.nameLen)
             }
         }
         if ti.nameLen == 0 {
@@ -298,7 +298,7 @@ pub impl Comp {
                 return
             }
         }
-        setSelfItemEnv(c: inout self, recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: recvInst)
+        self.setSelfItemEnv(recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: recvInst)
         val inferred: Array[U64] = self.inferFnArgs(f: mf, args: args)
         // build the full type-arg vector: the receiver's args fill the first `rcount`
         // slots (not inferrable from the call), the method-own args the rest.
@@ -336,12 +336,12 @@ pub impl Comp {
             self.cur.typeParams = mf.typeParams
             self.cur.typeArgs = fullArgs
             if mf.hasRet {
-                scanType(c: inout self, ref: mf.retTy)
+                self.scanType(ref: mf.retTy)
             }
             self.cur.typeParams = savedP
             self.cur.typeArgs = savedA
         }
-        clearSelfItemEnv(c: inout self)
+        self.clearSelfItemEnv()
     }
 
     inout fn recvParamCount(nameStart: U64, nameLen: U64) -> U64 {

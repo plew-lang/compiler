@@ -229,7 +229,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                         val didSetB: Bool = setStructEnv(c: inout c, st: inout st, ref: bRef)
                         mut val pg: U64 = fd.ty
                         if c.cur.typeParams.count > 0U64 {
-                            pg = groundTypeRef(c: inout c, ref: fd.ty)
+                            pg = c.groundTypeRef(ref: fd.ty)
                         }
                         val pteTy: LLVMTypeRef = llvmTypeOfRef(c: inout c, st: inout st, ref: pg)
                         if didSetB {

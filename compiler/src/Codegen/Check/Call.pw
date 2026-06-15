@@ -343,7 +343,7 @@ pub impl Comp {
                                     mut val pref: U64 = pti.ref
                                     if pref == 0U64 {
                                         if pti.nameLen > 0U64 {
-                                            pref = simpleTypeRef(c: inout self, nameStart: pti.nameStart, nameLen: pti.nameLen)
+                                            pref = self.simpleTypeRef(nameStart: pti.nameStart, nameLen: pti.nameLen)
                                         }
                                     }
                                     if pref != 0U64 {
@@ -398,7 +398,7 @@ pub impl Comp {
                         // primitives are checked (their simpleTypeRef is reliable; a struct/
                         // generic element name may be mangled and is left to other checks).
                         if isIntType(c: inout self, start: rt.nameStart, len: rt.nameLen) || isFloatType(c: inout self, start: rt.nameStart, len: rt.nameLen) || rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Bool") || rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "String") {
-                            self.tcCheckValue(expectedRef: simpleTypeRef(c: inout self, nameStart: rt.nameStart, nameLen: rt.nameLen), valueExpr: args[i].expr, pos: "append")
+                            self.tcCheckValue(expectedRef: self.simpleTypeRef(nameStart: rt.nameStart, nameLen: rt.nameLen), valueExpr: args[i].expr, pos: "append")
                         }
                     }
                     i += 1

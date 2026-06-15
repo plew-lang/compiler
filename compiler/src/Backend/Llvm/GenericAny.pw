@@ -158,7 +158,7 @@ fn anyMethodRetRef(c: inout Comp, anyRef: U64, traitIdx: U64, nameStart: U64, na
     val savedA: Array[U64] = c.cur.typeArgs
     c.cur.typeParams = params
     c.cur.typeArgs = argz
-    val g: U64 = groundTypeRef(c: inout c, ref: req.retTy)
+    val g: U64 = c.groundTypeRef(ref: req.retTy)
     c.cur.typeParams = savedP
     c.cur.typeArgs = savedA
     return g

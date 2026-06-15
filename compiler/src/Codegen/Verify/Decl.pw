@@ -52,7 +52,7 @@ pub impl Comp {
             return
         }
         if isTraitName(c: inout self, start: srcStart, len: srcLen) {
-            if !(typeConformsTo(c: inout self, typeStart: rt.nameStart, typeLen: rt.nameLen, traitStart: srcStart, traitLen: srcLen)) {
+            if !(self.typeConformsTo(typeStart: rt.nameStart, typeLen: rt.nameLen, traitStart: srcStart, traitLen: srcLen)) {
                 compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: recv)), msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)")
             }
             return

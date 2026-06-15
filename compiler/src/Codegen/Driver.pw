@@ -304,10 +304,10 @@ export fn runFrontend() -> Comp {
     c.checkReturns()
     // trait conformance is explicit and complete (spec/08): every requirement of
     // each `impl Type as Trait` must be witnessed (a body method or a `via` alias).
-    checkConformances(c: inout c)
+    c.checkConformances()
     // existential formation (spec/08): `any P` is supported only over a trait with
     // no type args / associated types in this increment (else loud-reject).
-    checkAnyFormation(c: inout c)
+    c.checkAnyFormation()
     // additional spec-fidelity checks (trait/generics audit): reject a generic vs
     // another same-selector overload, methods on built-in types, and `move fn` on
     // a copyable receiver.
@@ -332,7 +332,7 @@ export fn runFrontend() -> Comp {
         c.synthGenMain()
     }
     // discover concrete generic instantiations to monomorphize.
-    collectGenInsts(c: inout c)
+    c.collectGenInsts()
     // discover concrete instantiations of generic free functions from call sites
     // (each emitted as a specialized C function `f_<arg-mangle>`).
     c.collectFnInsts()
@@ -340,7 +340,7 @@ export fn runFrontend() -> Comp {
     collectFnThunks(c: inout c)
     // enforce `where T: Trait` bounds (spec/08): each instantiation's concrete
     // type argument must conform to the trait its parameter is bound to.
-    checkFnBounds(c: inout c)
+    c.checkFnBounds()
     // eager generic type-check (#9): every generic template body is checked once
     // against its `where` bounds — a method/operator on a type parameter must be
     // provided by its bounds (no C++-style "errors only at instantiation").

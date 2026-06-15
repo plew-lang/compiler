@@ -38,7 +38,7 @@ pub impl Comp {
         mut val nrLen: U64 = et.nameLen
         if imi != self.arena.funcs.count {
             val imf: Func = self.arena.funcs[imi]
-            itRef = groundUnderInst(c: inout self, instRef: et.ref, tyRef: imf.retTy)
+            itRef = self.groundUnderInst(instRef: et.ref, tyRef: imf.retTy)
             nrStart = imf.retStart
             nrLen = imf.retLen
         }
@@ -50,7 +50,7 @@ pub impl Comp {
         val nmf: Func = self.arena.funcs[nmi]
         // resolve Optional[Item] through the iterand's instantiation (Box[I64] ->
         // BoxIter[I64] -> Optional[I64]) so a generic iterand yields the concrete Item.
-        val optRef: U64 = groundUnderInst(c: inout self, instRef: itRef, tyRef: nmf.retTy)
+        val optRef: U64 = self.groundUnderInst(instRef: itRef, tyRef: nmf.retTy)
         if optRef < self.arena.types.count {
             val ot: TypeRef = self.arena.types[optRef]
             if ot.args.count > 0 {
@@ -69,7 +69,7 @@ pub impl Comp {
         val savedA: Array[U64] = self.cur.typeArgs
         self.cur.typeParams = params
         self.cur.typeArgs = instArgs
-        val grounded: U64 = groundTypeRef(c: inout self, ref: at.args[0])
+        val grounded: U64 = self.groundTypeRef(ref: at.args[0])
         mut val ti: TypeInfo = scalarInfo()
         if self.isCompoundType(ref: grounded) {
             val mn: Bind = self.appendMangleSpan(ref: grounded)

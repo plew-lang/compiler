@@ -4,522 +4,449 @@
 // The concrete type span that the conforming type `(recvStart,recvLen)` binds for
 // the associated type named `(nameStart,nameLen)` (spec/08 `type Item = Concrete`),
 // or the input name unchanged when it is not an associated type / has no binding.
-fn assocBindingSpan(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bind {
-    val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
-    val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-    mut val i: U64 = 0
-    while i < c.decls.assocBindings.count {
-        val ab: AssocBinding = c.decls.assocBindings[i]
-        if ab.recvId == qRecv {
-            if ab.nameId == qName {
-                return <Bind nameStart=ab.tyStart nameLen=ab.tyLen nameId=intern(c: inout c, start: ab.tyStart, len: ab.tyLen) fieldStart=ab.tyStart fieldLen=ab.tyLen />
-            }
-        }
-        i += 1
-    }
-    return <Bind nameStart=nameStart nameLen=nameLen nameId=qName fieldStart=nameStart fieldLen=nameLen />
-}
 
-// The head-name id a requirement-param type resolves to, for the conforming type
-// (spec/08,12): `Self` -> the receiver type; a trait type parameter (`Rhs` of
-// `Add[Rhs]`) -> the conformance's i-th `traitArgs` binding; an associated type
-// (`Item`) -> its `type Item = X` binding; anything else (a concrete type) -> itself.
-// So a generic requirement `add(lhs: Self, rhs: Rhs)` matches a witness
-// `add(lhs: Money, rhs: Money)` on `impl Money as Add[Money]`.
-fn substReqParamHeadId(c: inout Comp, recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64], prStart: U64, prLen: U64) -> U64 {
-    if rangeEquals(bytes: c.arena.bytes, start: prStart, len: prLen, kw: "Self") {
-        return intern(c: inout c, start: recvStart, len: recvLen)
-    }
-    val prId: U64 = intern(c: inout c, start: prStart, len: prLen)
-    mut val k: U64 = 0
-    while k < tps.count {
-        if tps[k].nameId == prId {
-            if k < targs.count {
-                return c.arena.types[targs[k]].nameId
+pub impl Comp {
+    inout fn assocBindingSpan(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bind {
+        val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
+        val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val i: U64 = 0
+        while i < self.decls.assocBindings.count {
+            val ab: AssocBinding = self.decls.assocBindings[i]
+            if ab.recvId == qRecv {
+                if ab.nameId == qName {
+                    return <Bind nameStart=ab.tyStart nameLen=ab.tyLen nameId=intern(c: inout self, start: ab.tyStart, len: ab.tyLen) fieldStart=ab.tyStart fieldLen=ab.tyLen />
+                }
             }
+            i += 1
         }
-        k += 1
+        return <Bind nameStart=nameStart nameLen=nameLen nameId=qName fieldStart=nameStart fieldLen=nameLen />
     }
-    val sub: Bind = assocBindingSpan(c: inout c, recvStart: recvStart, recvLen: recvLen, nameStart: prStart, nameLen: prLen)
-    return sub.nameId
-}
 
-// If requirement param type (prStart,prLen) is a trait type parameter bound to an
-// `Array[Elem]` trait argument (`impl X as P[Array[U8]]`), return that `Array[Elem]`
-// TypeRef ref (so the caller can compare the witness's array element); else 0.
-fn substReqParamArrayElemRef(c: inout Comp, tps: Array[Bind], targs: Array[U64], prStart: U64, prLen: U64) -> U64 {
-    val prId: U64 = intern(c: inout c, start: prStart, len: prLen)
-    mut val k: U64 = 0
-    while k < tps.count {
-        if tps[k].nameId == prId {
-            if k < targs.count {
-                val tr: TypeRef = c.arena.types[targs[k]]
-                if rangeEquals(bytes: c.arena.bytes, start: tr.nameStart, len: tr.nameLen, kw: "Array") {
-                    if tr.args.count > 0U64 {
-                        return targs[k]
+    inout fn substReqParamHeadId(recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64], prStart: U64, prLen: U64) -> U64 {
+        if rangeEquals(bytes: self.arena.bytes, start: prStart, len: prLen, kw: "Self") {
+            return intern(c: inout self, start: recvStart, len: recvLen)
+        }
+        val prId: U64 = intern(c: inout self, start: prStart, len: prLen)
+        mut val k: U64 = 0
+        while k < tps.count {
+            if tps[k].nameId == prId {
+                if k < targs.count {
+                    return self.arena.types[targs[k]].nameId
+                }
+            }
+            k += 1
+        }
+        val sub: Bind = self.assocBindingSpan(recvStart: recvStart, recvLen: recvLen, nameStart: prStart, nameLen: prLen)
+        return sub.nameId
+    }
+
+    inout fn substReqParamArrayElemRef(tps: Array[Bind], targs: Array[U64], prStart: U64, prLen: U64) -> U64 {
+        val prId: U64 = intern(c: inout self, start: prStart, len: prLen)
+        mut val k: U64 = 0
+        while k < tps.count {
+            if tps[k].nameId == prId {
+                if k < targs.count {
+                    val tr: TypeRef = self.arena.types[targs[k]]
+                    if rangeEquals(bytes: self.arena.bytes, start: tr.nameStart, len: tr.nameLen, kw: "Array") {
+                        if tr.args.count > 0U64 {
+                            return targs[k]
+                        }
                     }
                 }
             }
+            k += 1
         }
-        k += 1
+        return 0U64
     }
-    return 0U64
-}
 
-// Like paramSelectorEq, but substitutes the requirement side's `Self` / trait type
-// parameters / associated types with the conforming type's bindings before comparing
-// (so `add(lhs: Self, rhs: Rhs)` with `impl Money as Add[Money]` matches a witness
-// `add(lhs: Money, rhs: Money)`). `tps`/`targs` are the trait's type parameters and
-// the conformance's bound type arguments (positional).
-fn paramSelectorEqSubst(c: inout Comp, w: Array[Param], r: Array[Param], recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64]) -> Bool {
-    if w.count != r.count {
-        return false
-    }
-    mut val i: U64 = 0
-    while i < w.count {
-        val pw: Param = w[i]
-        val pr: Param = r[i]
-        if pw.nameId != pr.nameId {
+    inout fn paramSelectorEqSubst(w: Array[Param], r: Array[Param], recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64]) -> Bool {
+        if w.count != r.count {
             return false
         }
-        // a requirement param that substitutes to an `Array[Elem]` (e.g. `convert(from:
-        // Source)` with `impl String as TryFrom[Array[U8]]`): the witness side writes it
-        // as an array param (`from: Array[U8]`, head id = the ELEMENT), so compare arrayness
-        // + element rather than the bare head ("Array" vs "U8" would never match).
-        val arrTarg: U64 = substReqParamArrayElemRef(c: inout c, tps: tps, targs: targs, prStart: pr.tyStart, prLen: pr.tyLen)
-        if arrTarg != 0U64 {
-            if pw.tyIsArray {
-                val elemRef: U64 = c.arena.types[arrTarg].args[0]
-                if pw.tyNameId == c.arena.types[elemRef].nameId {
-                    i += 1
+        mut val i: U64 = 0
+        while i < w.count {
+            val pw: Param = w[i]
+            val pr: Param = r[i]
+            if pw.nameId != pr.nameId {
+                return false
+            }
+            // a requirement param that substitutes to an `Array[Elem]` (e.g. `convert(from:
+            // Source)` with `impl String as TryFrom[Array[U8]]`): the witness side writes it
+            // as an array param (`from: Array[U8]`, head id = the ELEMENT), so compare arrayness
+            // + element rather than the bare head ("Array" vs "U8" would never match).
+            val arrTarg: U64 = self.substReqParamArrayElemRef(tps: tps, targs: targs, prStart: pr.tyStart, prLen: pr.tyLen)
+            if arrTarg != 0U64 {
+                if pw.tyIsArray {
+                    val elemRef: U64 = self.arena.types[arrTarg].args[0]
+                    if pw.tyNameId == self.arena.types[elemRef].nameId {
+                        i += 1
+                    } else {
+                        return false
+                    }
                 } else {
                     return false
                 }
             } else {
+            val subId: U64 = self.substReqParamHeadId(recvStart: recvStart, recvLen: recvLen, tps: tps, targs: targs, prStart: pr.tyStart, prLen: pr.tyLen)
+            // the WITNESS side may also write `Self` (`fn eqTo(other: Self)` inside
+            // `impl P as MyEq`): substitute its Self -> the conforming type too, so the
+            // requirement's substituted Self (=recv) matches it. A concrete witness type
+            // (`other: P`) keeps its own head id (pw.tyNameId).
+            mut val wId: U64 = pw.tyNameId
+            if rangeEquals(bytes: self.arena.bytes, start: pw.tyStart, len: pw.tyLen, kw: "Self") {
+                wId = intern(c: inout self, start: recvStart, len: recvLen)
+            }
+            if wId != subId {
                 return false
             }
-        } else {
-        val subId: U64 = substReqParamHeadId(c: inout c, recvStart: recvStart, recvLen: recvLen, tps: tps, targs: targs, prStart: pr.tyStart, prLen: pr.tyLen)
-        // the WITNESS side may also write `Self` (`fn eqTo(other: Self)` inside
-        // `impl P as MyEq`): substitute its Self -> the conforming type too, so the
-        // requirement's substituted Self (=recv) matches it. A concrete witness type
-        // (`other: P`) keeps its own head id (pw.tyNameId).
-        mut val wId: U64 = pw.tyNameId
-        if rangeEquals(bytes: c.arena.bytes, start: pw.tyStart, len: pw.tyLen, kw: "Self") {
-            wId = intern(c: inout c, start: recvStart, len: recvLen)
+            i += 1
+            }
         }
-        if wId != subId {
+        return true
+    }
+
+    inout fn reqReturnMismatch(w: Func, r: Func, recvStart: U64, recvLen: U64) -> Bool {
+        if !(r.hasRet) {
             return false
         }
-        i += 1
+        if r.retIsArray {
+            return false
+        }
+        // resolve an associated-type requirement return (`fn first()->Item` with
+        // `type Item = I64`) through the conformance's binding, so the witness's concrete
+        // return is compared to the bound concrete type.
+        val rr: Bind = self.assocBindingSpan(recvStart: recvStart, recvLen: recvLen, nameStart: r.retStart, nameLen: r.retLen)
+        if !(isPrimType(c: inout self, start: rr.nameStart, len: rr.nameLen)) {
+            return false
+        }
+        // requirement returns a concrete primitive: the witness must return it exactly.
+        if !(w.hasRet) {
+            return true
+        }
+        if w.retIsArray {
+            return true
+        }
+        if spansEqual(c: inout self, aStart: rr.nameStart, aLen: rr.nameLen, bStart: w.retStart, bLen: w.retLen) {
+            return false
+        }
+        return true
+    }
+
+    inout fn witnessedHas(witnessed: Array[Func], r: Func, recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64]) -> Bool {
+        mut val i: U64 = 0
+        while i < witnessed.count {
+            val w: Func = witnessed[i]
+            if w.nameId == r.nameId {
+                if self.paramSelectorEqSubst(w: w.params, r: r.params, recvStart: recvStart, recvLen: recvLen, tps: tps, targs: targs) {
+                    if !(self.reqReturnMismatch(w: w, r: r, recvStart: recvStart, recvLen: recvLen)) {
+                        return true
+                    }
+                }
+            }
+            i += 1
+        }
+        return false
+    }
+
+    inout fn confWitnessesAll(cf: Conform, t: TraitDef) -> Bool {
+        mut val ri: U64 = 0
+        while ri < t.reqs.count {
+            val r: Func = t.reqs[ri]
+            if !(self.witnessedHas(witnessed: cf.witnessed, r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: cf.traitArgs)) {
+                return false
+            }
+            ri += 1
+        }
+        return true
+    }
+
+    inout fn resolveTraitDef(cf: Conform) -> U64 {
+        mut val firstCandidate: U64 = self.decls.traits.count
+        mut val ti: U64 = 0
+        while ti < self.decls.traits.count {
+            val t: TraitDef = self.decls.traits[ti]
+            if t.nameId == cf.traitId && t.typeParams.count == cf.traitArgs.count {
+                if firstCandidate == self.decls.traits.count {
+                    firstCandidate = ti
+                }
+                if self.confWitnessesAll(cf: cf, t: t) {
+                    return ti
+                }
+            }
+            ti += 1
+        }
+        return firstCandidate
+    }
+
+    inout fn checkAnyFormation() {
+        mut val ti: U64 = 0
+        while ti < self.arena.types.count {
+            val t: TypeRef = self.arena.types[ti]
+            if t.isAny {
+                val tri: U64 = findTraitIdxByName(c: inout self, start: t.nameStart, len: t.nameLen)
+                if tri < self.decls.traits.count {
+                    val tr: TraitDef = self.decls.traits[tri]
+                    // count positional bindings (argLabels entry 0 / absent).
+                    mut val positional: U64 = 0
+                    mut val ai: U64 = 0
+                    while ai < t.args.count {
+                        mut val lbl: U64 = 0
+                        if ai < t.argLabels.count {
+                            lbl = t.argLabels[ai]
+                        }
+                        if lbl == 0U64 {
+                            positional += 1U64
+                        }
+                        ai += 1
+                    }
+                    // each type parameter is bound positionally or by name.
+                    mut val tpi: U64 = 0
+                    mut val posNeed: U64 = 0
+                    while tpi < tr.typeParams.count {
+                        if !(self.anyHasNamedBinding(t: t, nameId: tr.typeParams[tpi].nameId)) {
+                            posNeed += 1U64
+                        }
+                        tpi += 1
+                    }
+                    if positional < posNeed {
+                        compileErrorAt(line: lineOf(c: inout self, offset: t.nameStart), msg: "`any P` leaves a type parameter unbound — bind all of the trait's type arguments (spec/08)")
+                    }
+                    // each associated type must be bound by name.
+                    mut val asi: U64 = 0
+                    while asi < tr.assocTypes.count {
+                        if !(self.anyHasNamedBinding(t: t, nameId: tr.assocTypes[asi].nameId)) {
+                            compileErrorAt(line: lineOf(c: inout self, offset: t.nameStart), msg: "`any P` leaves an associated type unbound — bind it as `any P[Item=Type]` (spec/08)")
+                        }
+                        asi += 1
+                    }
+                } else {
+                    compileErrorAt(line: lineOf(c: inout self, offset: t.nameStart), msg: "`any P` names an unknown trait — `any` exists only over a trait (spec/08)")
+                }
+            }
+            ti += 1
         }
     }
-    return true
-}
 
-// Whether `witnessed` contains a member matching requirement `r`'s selector
-// (name + params). Distinguishes overloaded requirements by signature. Requirement
-// param types are substituted through the conforming type's Self / trait-type-arg /
-// associated-type bindings (`tps`/`targs` = the trait's type params + the conformance's args).
-// Whether witness `w`'s return type clashes with requirement `r`'s — judged ONLY
-// when the requirement returns a CONCRETE primitive (`size()->U64`): the witness
-// must then return the same primitive (`size()->I64` does NOT satisfy it). A Self /
-// type-param / associated-type / named / array requirement return is left to the
-// existing machinery (conservative — never false-reject a valid conformance).
-fn reqReturnMismatch(c: inout Comp, w: Func, r: Func, recvStart: U64, recvLen: U64) -> Bool {
-    if !(r.hasRet) {
-        return false
-    }
-    if r.retIsArray {
-        return false
-    }
-    // resolve an associated-type requirement return (`fn first()->Item` with
-    // `type Item = I64`) through the conformance's binding, so the witness's concrete
-    // return is compared to the bound concrete type.
-    val rr: Bind = assocBindingSpan(c: inout c, recvStart: recvStart, recvLen: recvLen, nameStart: r.retStart, nameLen: r.retLen)
-    if !(isPrimType(c: inout c, start: rr.nameStart, len: rr.nameLen)) {
-        return false
-    }
-    // requirement returns a concrete primitive: the witness must return it exactly.
-    if !(w.hasRet) {
-        return true
-    }
-    if w.retIsArray {
-        return true
-    }
-    if spansEqual(c: inout c, aStart: rr.nameStart, aLen: rr.nameLen, bStart: w.retStart, bLen: w.retLen) {
-        return false
-    }
-    return true
-}
-
-fn witnessedHas(c: inout Comp, witnessed: Array[Func], r: Func, recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64]) -> Bool {
-    mut val i: U64 = 0
-    while i < witnessed.count {
-        val w: Func = witnessed[i]
-        if w.nameId == r.nameId {
-            if paramSelectorEqSubst(c: inout c, w: w.params, r: r.params, recvStart: recvStart, recvLen: recvLen, tps: tps, targs: targs) {
-                if !(reqReturnMismatch(c: inout c, w: w, r: r, recvStart: recvStart, recvLen: recvLen)) {
+    inout fn anyHasNamedBinding(t: TypeRef, nameId: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < t.args.count {
+            if i < t.argLabels.count {
+                if t.argLabels[i] == nameId && nameId != 0U64 {
                     return true
                 }
             }
+            i += 1
         }
-        i += 1
+        return false
     }
-    return false
-}
 
-// Conformance completeness (spec/08): every requirement of each `impl Type as
-// Trait` must be witnessed in that impl (a body method or a `via` alias). An
-// empty or partial conformance is an error (no implicit/silent conformance).
-// Are all of trait def `t`'s requirements witnessed by conformance `cf`?
-fn confWitnessesAll(c: inout Comp, cf: Conform, t: TraitDef) -> Bool {
-    mut val ri: U64 = 0
-    while ri < t.reqs.count {
-        val r: Func = t.reqs[ri]
-        if !(witnessedHas(c: inout c, witnessed: cf.witnessed, r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: cf.traitArgs)) {
-            return false
-        }
-        ri += 1
-    }
-    return true
-}
-
-// Resolve the single trait def a conformance `impl X as P[...]` refers to (spec/08).
-// Trait identity is matched by name AND type-param arity (`impl X as Sub` with 0
-// args is not a conformance to the operator `Sub[Rhs]` with 1 param), and among
-// remaining same-name/arity candidates the one the conformance actually witnesses
-// is chosen — STRUCTURAL resolution. This separates a user trait (`Not { flip }`)
-// from an ambient operator trait of the same name (`Not { not }`) without needing
-// module/visibility info (the impl-site name spans are re-interned, so they carry
-// no reliable module). Returns the satisfied def, else the first candidate (to
-// drive the incomplete-conformance error), else c.decls.traits.count (unknown trait).
-fn resolveTraitDef(c: inout Comp, cf: Conform) -> U64 {
-    mut val firstCandidate: U64 = c.decls.traits.count
-    mut val ti: U64 = 0
-    while ti < c.decls.traits.count {
-        val t: TraitDef = c.decls.traits[ti]
-        if t.nameId == cf.traitId && t.typeParams.count == cf.traitArgs.count {
-            if firstCandidate == c.decls.traits.count {
-                firstCandidate = ti
-            }
-            if confWitnessesAll(c: inout c, cf: cf, t: t) {
-                return ti
-            }
-        }
-        ti += 1
-    }
-    return firstCandidate
-}
-
-// Existential formation (spec/08): `any P` requires P's type arguments and
-// associated types to all be bound (`any Iterator[Item=I32]`, `any Add[I32,
-// Output=I32]`), so the only thing still erased is `Self`. A positional binding
-// fills a type parameter in order; a named binding `Name=Type` fills a type
-// parameter or associated type by name. An unbound parameter / associated type is a
-// loud formation error.
-fn checkAnyFormation(c: inout Comp) {
-    mut val ti: U64 = 0
-    while ti < c.arena.types.count {
-        val t: TypeRef = c.arena.types[ti]
-        if t.isAny {
-            val tri: U64 = findTraitIdxByName(c: inout c, start: t.nameStart, len: t.nameLen)
-            if tri < c.decls.traits.count {
-                val tr: TraitDef = c.decls.traits[tri]
-                // count positional bindings (argLabels entry 0 / absent).
-                mut val positional: U64 = 0
-                mut val ai: U64 = 0
-                while ai < t.args.count {
-                    mut val lbl: U64 = 0
-                    if ai < t.argLabels.count {
-                        lbl = t.argLabels[ai]
+    inout fn checkConformances() {
+        mut val ci: U64 = 0
+        while ci < self.decls.conforms.count {
+            val cf: Conform = self.decls.conforms[ci]
+            if cf.derived {
+                // compiler-synthesized (`@[Eq]`/`@[Ord]`): trivially complete, and its
+                // trait is compiler-known — exempt from unknown-trait/completeness.
+                ci += 1
+            } else {
+            // resolve the one trait this conformance refers to (structural — see
+            // resolveTraitDef); a conformance to an undeclared/unimported trait is a
+            // loud error (spec/08: explicit conformance).
+            val ti: U64 = self.resolveTraitDef(cf: cf)
+            if ti < self.decls.traits.count {
+                val t: TraitDef = self.decls.traits[ti]
+                // re-check reqs on the resolved def: a fully-witnessed def passes; if
+                // resolveTraitDef fell back to the first candidate (none satisfied),
+                // this reports which requirement is missing.
+                mut val ri: U64 = 0
+                while ri < t.reqs.count {
+                    val r: Func = t.reqs[ri]
+                    if !(self.witnessedHas(witnessed: cf.witnessed, r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: cf.traitArgs)) {
+                        compileErrorAt(line: lineOf(c: inout self, offset: cf.typeStart), msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)")
                     }
-                    if lbl == 0U64 {
-                        positional += 1U64
-                    }
-                    ai += 1
+                    ri += 1
                 }
-                // each type parameter is bound positionally or by name.
-                mut val tpi: U64 = 0
-                mut val posNeed: U64 = 0
-                while tpi < tr.typeParams.count {
-                    if !(anyHasNamedBinding(c: inout c, t: t, nameId: tr.typeParams[tpi].nameId)) {
-                        posNeed += 1U64
+                // supertraits (spec/08): conforming to Sub requires conforming to
+                // each Super (a constraint, not auto-implemented).
+                mut val sti: U64 = 0
+                while sti < t.supertraits.count {
+                    val sup: Bind = t.supertraits[sti]
+                    if !(self.typeConformsTo(typeStart: cf.typeStart, typeLen: cf.typeLen, traitStart: sup.nameStart, traitLen: sup.nameLen)) {
+                        compileErrorAt(line: lineOf(c: inout self, offset: cf.typeStart), msg: "supertrait not satisfied: this type must also conform to the trait's supertrait")
                     }
-                    tpi += 1
-                }
-                if positional < posNeed {
-                    compileErrorAt(line: lineOf(c: inout c, offset: t.nameStart), msg: "`any P` leaves a type parameter unbound — bind all of the trait's type arguments (spec/08)")
-                }
-                // each associated type must be bound by name.
-                mut val asi: U64 = 0
-                while asi < tr.assocTypes.count {
-                    if !(anyHasNamedBinding(c: inout c, t: t, nameId: tr.assocTypes[asi].nameId)) {
-                        compileErrorAt(line: lineOf(c: inout c, offset: t.nameStart), msg: "`any P` leaves an associated type unbound — bind it as `any P[Item=Type]` (spec/08)")
-                    }
-                    asi += 1
+                    sti += 1
                 }
             } else {
-                compileErrorAt(line: lineOf(c: inout c, offset: t.nameStart), msg: "`any P` names an unknown trait — `any` exists only over a trait (spec/08)")
+                compileErrorAt(line: lineOf(c: inout self, offset: cf.traitStart), msg: "conformance to an unknown trait (is it declared / imported?)")
             }
-        }
-        ti += 1
-    }
-}
-
-// Does existential TypeRef `t` carry a named binding `Name=Type` whose name is the
-// interned `nameId`?
-fn anyHasNamedBinding(c: inout Comp, t: TypeRef, nameId: U64) -> Bool {
-    mut val i: U64 = 0
-    while i < t.args.count {
-        if i < t.argLabels.count {
-            if t.argLabels[i] == nameId && nameId != 0U64 {
-                return true
-            }
-        }
-        i += 1
-    }
-    return false
-}
-
-fn checkConformances(c: inout Comp) {
-    mut val ci: U64 = 0
-    while ci < c.decls.conforms.count {
-        val cf: Conform = c.decls.conforms[ci]
-        if cf.derived {
-            // compiler-synthesized (`@[Eq]`/`@[Ord]`): trivially complete, and its
-            // trait is compiler-known — exempt from unknown-trait/completeness.
             ci += 1
-        } else {
-        // resolve the one trait this conformance refers to (structural — see
-        // resolveTraitDef); a conformance to an undeclared/unimported trait is a
-        // loud error (spec/08: explicit conformance).
-        val ti: U64 = resolveTraitDef(c: inout c, cf: cf)
-        if ti < c.decls.traits.count {
-            val t: TraitDef = c.decls.traits[ti]
-            // re-check reqs on the resolved def: a fully-witnessed def passes; if
-            // resolveTraitDef fell back to the first candidate (none satisfied),
-            // this reports which requirement is missing.
-            mut val ri: U64 = 0
-            while ri < t.reqs.count {
-                val r: Func = t.reqs[ri]
-                if !(witnessedHas(c: inout c, witnessed: cf.witnessed, r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: cf.traitArgs)) {
-                    compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)")
-                }
-                ri += 1
             }
-            // supertraits (spec/08): conforming to Sub requires conforming to
-            // each Super (a constraint, not auto-implemented).
-            mut val sti: U64 = 0
-            while sti < t.supertraits.count {
-                val sup: Bind = t.supertraits[sti]
-                if !(typeConformsTo(c: inout c, typeStart: cf.typeStart, typeLen: cf.typeLen, traitStart: sup.nameStart, traitLen: sup.nameLen)) {
-                    compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "supertrait not satisfied: this type must also conform to the trait's supertrait")
-                }
-                sti += 1
-            }
-        } else {
-            compileErrorAt(line: lineOf(c: inout c, offset: cf.traitStart), msg: "conformance to an unknown trait (is it declared / imported?)")
         }
-        ci += 1
-        }
+        self.checkViaTargets()
     }
-    checkViaTargets(c: inout c)
-}
 
-// Whether type (recvStart,recvLen) has a member named (nameStart,nameLen) — a
-// method (hasRecv) or an assoc fn. Used to validate `via` alias targets.
-fn typeHasMember(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
-    val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
-    val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-    mut val i: U64 = 0
-    while i < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[i]
-        if f.hasRecv {
-            if f.recvId == qRecv {
-                if f.nameId == qName {
-                    return true
-                }
-            }
-        } else {
-            if f.isAssoc {
+    inout fn typeHasMember(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
+        val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
+        val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[i]
+            if f.hasRecv {
                 if f.recvId == qRecv {
                     if f.nameId == qName {
                         return true
                     }
                 }
+            } else {
+                if f.isAssoc {
+                    if f.recvId == qRecv {
+                        if f.nameId == qName {
+                            return true
+                        }
+                    }
+                }
             }
+            i += 1
         }
-        i += 1
+        return false
     }
-    return false
-}
 
-// Validate every `via real` alias (spec/08): the real member must exist on the
-// type (a loud error otherwise, instead of failing only when the alias is used).
-fn checkViaTargets(c: inout Comp) {
-    mut val i: U64 = 0
-    while i < c.decls.methodAliases.count {
-        val al: MethodAlias = c.decls.methodAliases[i]
-        if !(typeHasMember(c: inout c, recvStart: al.recvStart, recvLen: al.recvLen, nameStart: al.realStart, nameLen: al.realLen)) {
-            compileErrorAt(line: lineOf(c: inout c, offset: al.aliasStart), msg: "`via` target is not a member of this type")
+    inout fn checkViaTargets() {
+        mut val i: U64 = 0
+        while i < self.decls.methodAliases.count {
+            val al: MethodAlias = self.decls.methodAliases[i]
+            if !(self.typeHasMember(recvStart: al.recvStart, recvLen: al.recvLen, nameStart: al.realStart, nameLen: al.realLen)) {
+                compileErrorAt(line: lineOf(c: inout self, offset: al.aliasStart), msg: "`via` target is not a member of this type")
+            }
+            i += 1
         }
-        i += 1
     }
-}
 
-// Built-in conformance of primitives/String to Eq/Ord (spec/12: numeric types,
-// Bool, String are Eq/Ord without an explicit impl). Lets `where T: Eq`/`: Ord`
-// be instantiated with a primitive (the canonical `max`/`min` over numbers).
-fn builtinEqOrd(c: inout Comp, typeStart: U64, typeLen: U64, traitStart: U64, traitLen: U64) -> Bool {
-    val isEqOrd: Bool = rangeEquals(bytes: c.arena.bytes, start: traitStart, len: traitLen, kw: "Eq") || rangeEquals(bytes: c.arena.bytes, start: traitStart, len: traitLen, kw: "Ord")
-    if isEqOrd {
-        if isPrimType(c: inout c, start: typeStart, len: typeLen) {
+    inout fn builtinEqOrd(typeStart: U64, typeLen: U64, traitStart: U64, traitLen: U64) -> Bool {
+        val isEqOrd: Bool = rangeEquals(bytes: self.arena.bytes, start: traitStart, len: traitLen, kw: "Eq") || rangeEquals(bytes: self.arena.bytes, start: traitStart, len: traitLen, kw: "Ord")
+        if isEqOrd {
+            if isPrimType(c: inout self, start: typeStart, len: typeLen) {
+                return true
+            }
+            return rangeEquals(bytes: self.arena.bytes, start: typeStart, len: typeLen, kw: "String")
+        }
+        return false
+    }
+
+    inout fn typeConformsTo(typeStart: U64, typeLen: U64, traitStart: U64, traitLen: U64) -> Bool {
+        if self.builtinEqOrd(typeStart: typeStart, typeLen: typeLen, traitStart: traitStart, traitLen: traitLen) {
             return true
         }
-        return rangeEquals(bytes: c.arena.bytes, start: typeStart, len: typeLen, kw: "String")
-    }
-    return false
-}
-
-// Whether the type named (typeStart,typeLen) conforms to the trait named
-// (traitStart,traitLen) — i.e. an `impl Type as Trait` was recorded (spec/08),
-// or it is a built-in Eq/Ord conformance of a primitive/String.
-fn typeConformsTo(c: inout Comp, typeStart: U64, typeLen: U64, traitStart: U64, traitLen: U64) -> Bool {
-    if builtinEqOrd(c: inout c, typeStart: typeStart, typeLen: typeLen, traitStart: traitStart, traitLen: traitLen) {
-        return true
-    }
-    val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
-    val qTrait: U64 = intern(c: inout c, start: traitStart, len: traitLen)
-    mut val i: U64 = 0
-    while i < c.decls.conforms.count {
-        val cf: Conform = c.decls.conforms[i]
-        if cf.typeId == qType {
-            if cf.traitId == qTrait {
-                return true
-            }
-        }
-        i += 1
-    }
-    // a `newtype` inherits the underlying type's trait conformances automatically
-    // (spec/10), so `UserId = String` satisfies `where T: Format` because String
-    // does — `print(u)` type-checks and dispatches to the underlying's witness.
-    mut val ni: U64 = 0
-    while ni < c.arena.newtypes.count {
-        if c.arena.newtypes[ni].nameId == qType {
-            return typeConformsTo(c: inout c, typeStart: c.arena.newtypes[ni].underStart, typeLen: c.arena.newtypes[ni].underLen, traitStart: traitStart, traitLen: traitLen)
-        }
-        ni += 1
-    }
-    return false
-}
-
-// Whether type (typeStart,typeLen) conforms to the trait named `traitName`
-// (a literal trait name, e.g. "Eq"/"Ord"). Used to gate operator desugaring on
-// an explicit `impl T as Eq`/`as Ord` conformance (spec/12).
-fn typeConformsToName(c: inout Comp, typeStart: U64, typeLen: U64, traitName: String) -> Bool {
-    val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
-    mut val i: U64 = 0
-    while i < c.decls.conforms.count {
-        val cf: Conform = c.decls.conforms[i]
-        if cf.typeId == qType {
-            if rangeEquals(bytes: c.arena.bytes, start: cf.traitStart, len: cf.traitLen, kw: traitName) {
-                return true
-            }
-        }
-        i += 1
-    }
-    return false
-}
-
-// Enforce `where T: Trait` bounds (spec/08) at each instantiation: the concrete
-// type argument bound to a constrained type parameter must conform to the
-// required trait, else a loud error. Runs after instantiation discovery.
-fn checkFnBounds(c: inout Comp) {
-    mut val ii: U64 = 0
-    while ii < c.monoWork.fnInsts.count {
-        val fin: FnInst = c.monoWork.fnInsts[ii]
-        val f: Func = c.arena.funcs[fin.fnIdx]
-        mut val bi: U64 = 0
-        while bi < c.decls.funcBounds.count {
-            val fb: FuncBound = c.decls.funcBounds[bi]
-            if fb.fnIdx == fin.fnIdx {
-                mut val pi: U64 = 0
-                while pi < f.typeParams.count {
-                    val tp: Bind = f.typeParams[pi]
-                    if tp.nameId == fb.paramNameId {
-                        if pi < fin.args.count {
-                            val at: TypeRef = c.arena.types[fin.args[pi]]
-                            // a `#`-viewed type argument (`f(a: s#P)` / `g(x#Ext)`,
-                            // spec/09) satisfies the bound via the conformance path the
-                            // view selects, even when the bare type does not conform.
-                            mut val ok: Bool = typeConformsTo(c: inout c, typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen)
-                            if !ok && at.viewExtId != 0U64 {
-                                ok = viewConformsTo(c: inout c, typeStart: at.nameStart, typeLen: at.nameLen, viewId: at.viewExtId, traitStart: fb.traitStart, traitLen: fb.traitLen)
-                            }
-                            if !ok {
-                                compileErrorAt(line: lineOf(c: inout c, offset: fb.paramStart), msg: "type argument does not conform to the trait required by `where`")
-                            }
-                        }
-                    }
-                    pi += 1
+        val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
+        val qTrait: U64 = intern(c: inout self, start: traitStart, len: traitLen)
+        mut val i: U64 = 0
+        while i < self.decls.conforms.count {
+            val cf: Conform = self.decls.conforms[i]
+            if cf.typeId == qType {
+                if cf.traitId == qTrait {
+                    return true
                 }
             }
-            bi += 1
+            i += 1
         }
-        ii += 1
+        // a `newtype` inherits the underlying type's trait conformances automatically
+        // (spec/10), so `UserId = String` satisfies `where T: Format` because String
+        // does — `print(u)` type-checks and dispatches to the underlying's witness.
+        mut val ni: U64 = 0
+        while ni < self.arena.newtypes.count {
+            if self.arena.newtypes[ni].nameId == qType {
+                return self.typeConformsTo(typeStart: self.arena.newtypes[ni].underStart, typeLen: self.arena.newtypes[ni].underLen, traitStart: traitStart, traitLen: traitLen)
+            }
+            ni += 1
+        }
+        return false
     }
-    checkMethodBounds(c: inout c)
-}
 
-// Enforce `where T: Trait` bounds on generic *methods* at instantiation (gap #8,
-// the receiver-driven counterpart of checkFnBounds). For each concrete receiver
-// instantiation (Box[X]) and each of its methods carrying a `where` bound, the
-// type argument bound to the constrained parameter must conform — else a loud
-// error (closing the lenient hole where a non-conforming type that happens to
-// have the method would slip through).
-fn checkMethodBounds(c: inout Comp) {
-    mut val gi: U64 = 0
-    while gi < c.monoWork.genInsts.count {
-        val instRef: U64 = c.monoWork.genInsts[gi]
-        val inst: TypeRef = c.arena.types[instRef]
-        mut val mfi: U64 = 0
-        while mfi < c.arena.funcs.count {
-            if c.methodMatchesInst(f: c.arena.funcs[mfi], instRef: instRef) {
-                val f: Func = c.arena.funcs[mfi]
-                mut val bi: U64 = 0
-                while bi < c.decls.funcBounds.count {
-                    val fb: FuncBound = c.decls.funcBounds[bi]
-                    if fb.fnIdx == mfi {
-                        mut val pi: U64 = 0
-                        while pi < f.typeParams.count {
-                            val tp: Bind = f.typeParams[pi]
-                            if tp.nameId == fb.paramNameId {
-                                if pi < inst.args.count {
-                                    val at: TypeRef = c.arena.types[inst.args[pi]]
-                                    if !(typeConformsTo(c: inout c, typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen)) {
-                                        compileErrorAt(line: lineOf(c: inout c, offset: fb.paramStart), msg: "receiver type argument does not conform to the trait required by the method's `where`")
-                                    }
+    inout fn typeConformsToName(typeStart: U64, typeLen: U64, traitName: String) -> Bool {
+        val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
+        mut val i: U64 = 0
+        while i < self.decls.conforms.count {
+            val cf: Conform = self.decls.conforms[i]
+            if cf.typeId == qType {
+                if rangeEquals(bytes: self.arena.bytes, start: cf.traitStart, len: cf.traitLen, kw: traitName) {
+                    return true
+                }
+            }
+            i += 1
+        }
+        return false
+    }
+
+    inout fn checkFnBounds() {
+        mut val ii: U64 = 0
+        while ii < self.monoWork.fnInsts.count {
+            val fin: FnInst = self.monoWork.fnInsts[ii]
+            val f: Func = self.arena.funcs[fin.fnIdx]
+            mut val bi: U64 = 0
+            while bi < self.decls.funcBounds.count {
+                val fb: FuncBound = self.decls.funcBounds[bi]
+                if fb.fnIdx == fin.fnIdx {
+                    mut val pi: U64 = 0
+                    while pi < f.typeParams.count {
+                        val tp: Bind = f.typeParams[pi]
+                        if tp.nameId == fb.paramNameId {
+                            if pi < fin.args.count {
+                                val at: TypeRef = self.arena.types[fin.args[pi]]
+                                // a `#`-viewed type argument (`f(a: s#P)` / `g(x#Ext)`,
+                                // spec/09) satisfies the bound via the conformance path the
+                                // view selects, even when the bare type does not conform.
+                                mut val ok: Bool = self.typeConformsTo(typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen)
+                                if !ok && at.viewExtId != 0U64 {
+                                    ok = viewConformsTo(c: inout self, typeStart: at.nameStart, typeLen: at.nameLen, viewId: at.viewExtId, traitStart: fb.traitStart, traitLen: fb.traitLen)
+                                }
+                                if !ok {
+                                    compileErrorAt(line: lineOf(c: inout self, offset: fb.paramStart), msg: "type argument does not conform to the trait required by `where`")
                                 }
                             }
-                            pi += 1
                         }
+                        pi += 1
                     }
-                    bi += 1
                 }
+                bi += 1
             }
-            mfi += 1
+            ii += 1
         }
-        gi += 1
+        self.checkMethodBounds()
+    }
+
+    inout fn checkMethodBounds() {
+        mut val gi: U64 = 0
+        while gi < self.monoWork.genInsts.count {
+            val instRef: U64 = self.monoWork.genInsts[gi]
+            val inst: TypeRef = self.arena.types[instRef]
+            mut val mfi: U64 = 0
+            while mfi < self.arena.funcs.count {
+                if self.methodMatchesInst(f: self.arena.funcs[mfi], instRef: instRef) {
+                    val f: Func = self.arena.funcs[mfi]
+                    mut val bi: U64 = 0
+                    while bi < self.decls.funcBounds.count {
+                        val fb: FuncBound = self.decls.funcBounds[bi]
+                        if fb.fnIdx == mfi {
+                            mut val pi: U64 = 0
+                            while pi < f.typeParams.count {
+                                val tp: Bind = f.typeParams[pi]
+                                if tp.nameId == fb.paramNameId {
+                                    if pi < inst.args.count {
+                                        val at: TypeRef = self.arena.types[inst.args[pi]]
+                                        if !(self.typeConformsTo(typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen)) {
+                                            compileErrorAt(line: lineOf(c: inout self, offset: fb.paramStart), msg: "receiver type argument does not conform to the trait required by the method's `where`")
+                                        }
+                                    }
+                                }
+                                pi += 1
+                            }
+                        }
+                        bi += 1
+                    }
+                }
+                mfi += 1
+            }
+            gi += 1
+        }
     }
 }
-
-// ---- #9: eager generic type-checking (check templates, not just instances) ----
-//
-// A generic function/method body is checked once, abstractly: a type parameter
-// `T` is treated as a value whose only members are those its `where T: Trait`
-// bounds provide. Calling a method (or `==`/`<`) on a `T`-typed value that no
-// bound provides is an error at the *definition*, not deep in an instantiation
-// (escaping C++-template ergonomics). Associated types are deferred, so chained
-// calls whose receiver type is a type parameter's result degrade to unchecked.
-

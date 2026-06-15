@@ -450,7 +450,7 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
     // instantiation elsewhere; here it covers a non-generic method on a plain type).
     val didSelf: Bool = f.hasRecv && st.curRecvInstRef == 0U64 && c.cur.selfRef == 0U64
     if didSelf {
-        setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
+        c.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
     }
     st.curRetTy = llvmFnRetTy(c: inout c, st: inout st, f: f)
     st.curRetTyStart = f.retStart
@@ -458,7 +458,7 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
     // ground the return ref under any active generic env (a monomorphized method
     // body: `Optional[T]` -> `Optional[I64]`) so return-context enum construction
     // can infer the concrete instance.
-    st.curRetRef = groundTypeRef(c: inout c, ref: f.retTy)
+    st.curRetRef = c.groundTypeRef(ref: f.retTy)
     beginFnBody(st: inout st, fv: fv)
     // fresh local scope; bind each param into an alloca (so it reads/writes
     // uniformly with locals).
@@ -522,7 +522,7 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
         if recvRef == 0U64 {
             if recvSidx >= c.arena.structs.count {
                 if enumRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.enumIdxs.count {
-                    recvRef = simpleTypeRef(c: inout c, nameStart: f.recvStart, nameLen: f.recvLen)
+                    recvRef = c.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
                 }
             }
         }
@@ -578,7 +578,7 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
         }
     }
     if didSelf {
-        clearSelfItemEnv(c: inout c)
+        c.clearSelfItemEnv()
     }
 }
 

@@ -48,9 +48,9 @@ pub impl Comp {
         self.cur.selfInout = f.selfInout
         self.cur.selfMove = f.selfMove
         if f.hasRecv {
-            setSelfItemEnv(c: inout self, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0)
+            self.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0)
         } else {
-            clearSelfItemEnv(c: inout self)
+            self.clearSelfItemEnv()
         }
         self.cur.branchBase = 0
         self.cur.locals = []
@@ -130,7 +130,7 @@ pub impl Comp {
         if bs.nameLen == 0U64 {
             return
         }
-        val boolRef: U64 = simpleTypeRef(c: inout self, nameStart: bs.nameStart, nameLen: bs.nameLen)
+        val boolRef: U64 = self.simpleTypeRef(nameStart: bs.nameStart, nameLen: bs.nameLen)
         self.tcCheckValue(expectedRef: boolRef, valueExpr: cond, pos: "condition")
     }
 

@@ -135,7 +135,7 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
         val sA: Array[U64] = c.cur.typeArgs
         c.cur.typeParams = itf.typeParams
         c.cur.typeArgs = gt.args
-        iterInstRef = groundTypeRef(c: inout c, ref: itf.retTy)
+        iterInstRef = c.groundTypeRef(ref: itf.retTy)
         c.cur.typeParams = sP
         c.cur.typeArgs = sA
     } else {
@@ -159,7 +159,7 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
     val sA2: Array[U64] = c.cur.typeArgs
     c.cur.typeParams = nf.typeParams
     c.cur.typeArgs = it.args
-    val optRef: U64 = groundTypeRef(c: inout c, ref: nf.retTy)
+    val optRef: U64 = c.groundTypeRef(ref: nf.retTy)
     c.cur.typeParams = sP2
     c.cur.typeArgs = sA2
     emitIterNextLoop(c: inout c, st: inout st, iterVal: iterVal, optRef: optRef, nextTy: st.genMethTy[nSlot], nextVal: st.genMethVal[nSlot], varStart: varStart, varLen: varLen, body: body)
@@ -219,7 +219,7 @@ fn emitIterNextLoop(c: inout Comp, st: inout LlvmCtx, iterVal: LLVMValueRef, opt
     // (a `map`-to-Bool element is i1 -> kind 2, zero-extended on print, not -1).
     if itemFs[0].ty != 0U64 {
         if c.cur.typeParams.count > 0U64 {
-            val gx: U64 = groundTypeRef(c: inout c, ref: itemFs[0].ty)
+            val gx: U64 = c.groundTypeRef(ref: itemFs[0].ty)
             xStart = c.arena.types[gx].nameStart
             xLen = c.arena.types[gx].nameLen
         }
@@ -297,7 +297,7 @@ fn genLlvmForAnyIter(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U6
     mut val xLen: U64 = itemFs[0].tyLen
     if itemFs[0].ty != 0U64 {
         if c.cur.typeParams.count > 0U64 {
-            val gx: U64 = groundTypeRef(c: inout c, ref: itemFs[0].ty)
+            val gx: U64 = c.groundTypeRef(ref: itemFs[0].ty)
             xStart = c.arena.types[gx].nameStart
             xLen = c.arena.types[gx].nameLen
         }

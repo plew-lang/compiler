@@ -32,7 +32,7 @@ fn ensureProvidedDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
     // ungrounded `Optional[Item]` and the call site emits invalid GEP indices.
     val savedPS: U64 = c.cur.selfRef
     val savedPI: U64 = c.cur.itemRef
-    setSelfItemEnv(c: inout c, recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
+    c.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
     mut val ptys: Array[LLVMTypeRef] = []
     ptys.append(value: selfParamTy(c: inout c, st: inout st, f: f))
     mut val pi: U64 = 0

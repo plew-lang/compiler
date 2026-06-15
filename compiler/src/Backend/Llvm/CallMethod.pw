@@ -365,7 +365,7 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         // and call it indirectly. The field type grounds through any generic env.
         val ffi: U64 = structFieldIndex(c: inout c, sidx: rsidx, start: nameStart, len: nameLen)
         if ffi < sd.fields.count {
-            val grounded: U64 = groundTypeRef(c: inout c, ref: sd.fields[ffi].ty)
+            val grounded: U64 = c.groundTypeRef(ref: sd.fields[ffi].ty)
             if isFnType(c: inout c, ref: grounded) {
                 val recvVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: recv)
                 val cloVal: LLVMValueRef = LLVMBuildExtractValue(st.b, recvVal, ffi, anon())
