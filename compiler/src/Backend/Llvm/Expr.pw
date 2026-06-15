@@ -65,7 +65,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // `&&` / `||` are short-circuit control flow (spec/12), not trait ops:
             // evaluate the rhs only on the deciding lhs value; the result is an i1.
             if op == opAnd() || op == opOr() {
-                return genLlvmShortCircuit(c: inout c, st: inout st, isAnd: op == opAnd(), lhs: lhs, rhs: rhs)
+                return st.genLlvmShortCircuit(c: inout c, isAnd: op == opAnd(), lhs: lhs, rhs: rhs)
             }
             // float arithmetic / comparison: emit the IEEE op directly (the operands
             // are doubles). Arithmetic -> f-op; comparison -> fcmp (ordered) -> i1.
@@ -193,10 +193,10 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             if elems.count > 0U64 {
                 et = exprLlvmType(c: inout c, st: inout st, id: elems[0])
             }
-            return genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: et)
+            return st.genLlvmArrayLit(c: inout c, elems: elems, elemTy: et)
         }
         Expr.Index(val base, val index) => {
-            return genLlvmIndex(c: inout c, st: inout st, base: base, index: index)
+            return st.genLlvmIndex(c: inout c, base: base, index: index)
         }
         Expr.Field(val base, val nameStart, val nameLen) => {
             // `s.bytes` on a String: the String value IS the {ptr,i64} byte array
@@ -249,12 +249,12 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // function plus its environment. A capturing closure heap-allocates an env
             // struct and copies each captured value (or the shared cell pointer for a
             // `mut val` capture) into it; a non-capturing one has a NULL env.
-            val slot: U64 = closureSlot(st: inout st, id: id)
+            val slot: U64 = st.closureSlot(id: id)
             if slot < st.cloIdx.count {
                 mut val env: LLVMValueRef = LLVMConstNull(st.ptrty)
                 val caps: Array[CaptureEntry] = closureCaptures(c: inout c, cloId: id)
                 if caps.count > 0U64 {
-                    val envTy: LLVMTypeRef = closureEnvTy(c: inout c, st: inout st, caps: caps)
+                    val envTy: LLVMTypeRef = st.closureEnvTy(c: inout c, caps: caps)
                     env = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(envTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
                     mut val ci: U64 = 0
                     while ci < caps.count {

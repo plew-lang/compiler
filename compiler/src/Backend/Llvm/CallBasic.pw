@@ -64,7 +64,7 @@ fn genLlvmClosureCall(c: inout Comp, st: inout LlvmCtx, li: U64, args: Array[Arg
 fn genPowCall(c: inout Comp, st: inout LlvmCtx, base: U64, args: Array[Arg]) -> LLVMValueRef {
     // llvmArgTypeRef (not exprTypeRef) so a suffixed literal base (`pow(base: 10I64,…)`)
     // recovers its type via typeOf, not just a typed local.
-    val br: U64 = llvmArgTypeRef(c: inout c, st: inout st, argExpr: base)
+    val br: U64 = st.llvmArgTypeRef(c: inout c, argExpr: base)
     if br == 0U64 {
         return LLVMConstNull(st.ptrty)
     }
@@ -76,7 +76,7 @@ fn genPowCall(c: inout Comp, st: inout LlvmCtx, base: U64, args: Array[Arg]) -> 
     }
     mut val aslot: U64 = userFnSlot(st: inout st, idx: afi)
     if aslot >= st.fnIdx.count {
-        aslot = ensureFreeFnDeclared(c: inout c, st: inout st, fi: afi)
+        aslot = st.ensureFreeFnDeclared(c: inout c, fi: afi)
     }
     if aslot >= st.fnIdx.count {
         return LLVMConstNull(st.ptrty)
@@ -348,7 +348,7 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
     }
     if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "assert") {
         // assert(cond): branch to a panic block when the condition is false.
-        val cond: LLVMValueRef = genLlvmCond(c: inout c, st: inout st, id: args[0].expr)
+        val cond: LLVMValueRef = st.genLlvmCond(c: inout c, id: args[0].expr)
         val okBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "assert.ok"))
         val failBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "assert.fail"))
         LLVMBuildCondBr(st.b, cond, okBB, failBB)
@@ -396,7 +396,7 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
         // I64.format) is declared+emitted lazily.
         if slot >= st.fnIdx.count {
             if !(c.isGenericFreeFn(fi: cfi)) {
-                slot = ensureFreeFnDeclared(c: inout c, st: inout st, fi: cfi)
+                slot = st.ensureFreeFnDeclared(c: inout c, fi: cfi)
             }
         }
         if slot < st.fnIdx.count {
@@ -419,7 +419,7 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
         // a generic free-function call: infer its concrete type args, find the
         // instance, build args under the instance env, and call it.
         if c.isGenericFreeFn(fi: cfi) {
-            val inferred: Array[U64] = llvmInferFnArgs(c: inout c, st: inout st, f: c.arena.funcs[cfi], args: args)
+            val inferred: Array[U64] = st.llvmInferFnArgs(c: inout c, f: c.arena.funcs[cfi], args: args)
             val gslot: U64 = genFnSlotFor(c: inout c, fnIdx: cfi, args: inferred, st: inout st)
             if gslot < st.genFnK.count {
                 val cf: Func = c.arena.funcs[cfi]

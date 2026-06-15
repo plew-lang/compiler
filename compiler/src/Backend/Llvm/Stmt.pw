@@ -83,7 +83,7 @@ pub impl LlvmCtx {
                                     litElemRef = c.arena.types[ty].args[0]
                                 }
                             }
-                            v = genLlvmArrayLit(c: inout c, st: inout self, elems: elems, elemTy: elemTy, elemRef: litElemRef)
+                            v = self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: elemTy, elemRef: litElemRef)
                             builtArr = true
                         }
                         _ => {}
@@ -197,7 +197,7 @@ pub impl LlvmCtx {
                 // the enum (typeOf can't see locals — c.cur.locals is unpopulated here).
                 if tref == 0U64 {
                     if tyLen > 0U64 {
-                        if enumRegSlot(c: inout c, st: inout self, start: tyStart, len: tyLen) < self.enumIdxs.count {
+                        if self.enumRegSlot(c: inout c, start: tyStart, len: tyLen) < self.enumIdxs.count {
                             tref = c.simpleTypeRef(nameStart: tyStart, nameLen: tyLen)
                         }
                     }
@@ -344,8 +344,8 @@ pub impl LlvmCtx {
                                     if !(self.locMoved[li]) {
                                         val osi: U64 = self.locStructIdx[li]
                                         if osi < c.arena.structs.count {
-                                            if structNeedsDeinit(c: inout c, st: inout self, sidx: osi) {
-                                                emitDeinitValue(c: inout c, st: inout self, v: LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon()), sidx: osi)
+                                            if self.structNeedsDeinit(c: inout c, sidx: osi) {
+                                                self.emitDeinitValue(c: inout c, v: LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon()), sidx: osi)
                                             }
                                         }
                                     }
@@ -576,7 +576,7 @@ pub impl LlvmCtx {
                 val sentinel: U64 = 18446744073709551615U64
                 if self.curIsMain {
                     // Plew `main` returns () -> C `int main` returns 0; drop live locals.
-                    dropScope(c: inout c, st: inout self, fromMark: 0U64, excludeLi: sentinel)
+                    self.dropScope(c: inout c, fromMark: 0U64, excludeLi: sentinel)
                     LLVMBuildRet(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32))
                 } else {
                     if hasValue {
@@ -601,7 +601,7 @@ pub impl LlvmCtx {
                                 Expr.Ident(start: val vs, len: val vl) => { exLi = findLocal(c: inout c, st: inout self, start: vs, len: vl) }
                                 _ => {}
                             }
-                            dropScope(c: inout c, st: inout self, fromMark: 0U64, excludeLi: exLi)
+                            self.dropScope(c: inout c, fromMark: 0U64, excludeLi: exLi)
                             LLVMBuildRet(self.b, rav)
                             self.terminated = true
                             return
@@ -628,7 +628,7 @@ pub impl LlvmCtx {
                                             }
                                         }
                                     }
-                                    rv = genLlvmArrayLit(c: inout c, st: inout self, elems: elems, elemTy: retElemTy, elemRef: retElemRef)
+                                    rv = self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: retElemTy, elemRef: retElemRef)
                                     retLit = true
                                 }
                                 _ => {}
@@ -658,17 +658,17 @@ pub impl LlvmCtx {
                             }
                             _ => {}
                         }
-                        dropScope(c: inout c, st: inout self, fromMark: 0U64, excludeLi: excludeLi)
+                        self.dropScope(c: inout c, fromMark: 0U64, excludeLi: excludeLi)
                         LLVMBuildRet(self.b, rv)
                     } else {
-                        dropScope(c: inout c, st: inout self, fromMark: 0U64, excludeLi: sentinel)
+                        self.dropScope(c: inout c, fromMark: 0U64, excludeLi: sentinel)
                         LLVMBuildRetVoid(self.b)
                     }
                 }
                 self.terminated = true
             }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
-                val cv: LLVMValueRef = genLlvmCond(c: inout c, st: inout self, id: cond)
+                val cv: LLVMValueRef = self.genLlvmCond(c: inout c, id: cond)
                 val thenBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "then"))
                 val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "endif"))
                 mut val elseBB: LLVMBasicBlockRef = contBB
@@ -679,7 +679,7 @@ pub impl LlvmCtx {
                 // then
                 LLVMPositionBuilderAtEnd(self.b, thenBB)
                 self.terminated = false
-                genLlvmBlock(c: inout c, st: inout self, id: thenBlk)
+                self.genLlvmBlock(c: inout c, id: thenBlk)
                 if !(self.terminated) {
                     LLVMBuildBr(self.b, contBB)
                 }
@@ -687,7 +687,7 @@ pub impl LlvmCtx {
                 if hasElse {
                     LLVMPositionBuilderAtEnd(self.b, elseBB)
                     self.terminated = false
-                    genLlvmBlock(c: inout c, st: inout self, id: elseBlk)
+                    self.genLlvmBlock(c: inout c, id: elseBlk)
                     if !(self.terminated) {
                         LLVMBuildBr(self.b, contBB)
                     }
@@ -701,13 +701,13 @@ pub impl LlvmCtx {
                 val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "while.end"))
                 LLVMBuildBr(self.b, condBB)
                 LLVMPositionBuilderAtEnd(self.b, condBB)
-                val cv: LLVMValueRef = genLlvmCond(c: inout c, st: inout self, id: cond)
+                val cv: LLVMValueRef = self.genLlvmCond(c: inout c, id: cond)
                 LLVMBuildCondBr(self.b, cv, bodyBB, endBB)
                 LLVMPositionBuilderAtEnd(self.b, bodyBB)
                 self.terminated = false
                 // `break` -> endBB, `continue` -> condBB (re-test) for this loop.
                 pushLoop(st: inout self, breakBB: endBB, contBB: condBB)
-                genLlvmBlock(c: inout c, st: inout self, id: body)
+                self.genLlvmBlock(c: inout c, id: body)
                 popLoop(st: inout self)
                 if !(self.terminated) {
                     LLVMBuildBr(self.b, condBB)

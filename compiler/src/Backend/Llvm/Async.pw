@@ -380,7 +380,7 @@ fn bindAsyncParam(c: inout Comp, st: inout LlvmCtx, p: Param, fieldIdx: U64) {
             }
         }
         if pRef == 0U64 {
-            if enumRegSlot(c: inout c, st: inout st, start: p.tyStart, len: p.tyLen) < st.enumIdxs.count {
+            if st.enumRegSlot(c: inout c, start: p.tyStart, len: p.tyLen) < st.enumIdxs.count {
                 pRef = c.simpleTypeRef(nameStart: p.tyStart, nameLen: p.tyLen)
             }
         }
@@ -492,7 +492,7 @@ fn genLlvmAsyncFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
         qi += 1
     }
     st.asyncFieldNext = 3U64 + f.params.count
-    genLlvmBlock(c: inout c, st: inout st, id: f.body)
+    st.genLlvmBlock(c: inout c, id: f.body)
     // fall-through end: a value-less async resolves with 0.
     if !(st.terminated) {
         asyncResolveAndReturn(c: inout c, st: inout st, value: LLVMConstInt(st.i64ty, 0U64, 0I32))

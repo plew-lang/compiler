@@ -22,7 +22,7 @@ pub impl LlvmCtx {
                 LLVMBuildStore(self.b, sv, sslot0)
                 val mark0: U64 = self.nLocals
                 self.bindStructPattern(c: inout c, sidx: ssidx, binds: arms[0].binds, scrutTy: sty, scrutSlot: sslot0)
-                genLlvmBlock(c: inout c, st: inout self, id: arms[0].body)
+                self.genLlvmBlock(c: inout c, id: arms[0].body)
                 self.nLocals = mark0
                 if didSetS {
                     c.cur.typeParams = savedSP
@@ -96,7 +96,7 @@ pub impl LlvmCtx {
                     c.cur.typeArgs = savedMA
                 }
             }
-            genLlvmBlock(c: inout c, st: inout self, id: arm.body)
+            self.genLlvmBlock(c: inout c, id: arm.body)
             self.nLocals = savedBB
             if !(self.terminated) {
                 LLVMBuildBr(self.b, contBB)
@@ -127,7 +127,7 @@ pub impl LlvmCtx {
             return
         }
         val vi: U64 = c.variantIndex(enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
-        val payloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout self, eid: eid, vi: vi)
+        val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi)
         val payload: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, LLVMBuildStructGEP2(self.b, scrutTy, scrutSlot, 1U64, anon()), anon())
         val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
         mut val bi: U64 = 0
@@ -199,7 +199,7 @@ pub impl LlvmCtx {
                 // an enum-typed bind carries a bare enum TypeRef so a nested match on it
                 // (the recursive case) recovers the enum (typeOf can't see this local).
                 mut val tref: U64 = 0
-                if enumRegSlot(c: inout c, st: inout self, start: fd.tyStart, len: fd.tyLen) < self.enumIdxs.count {
+                if self.enumRegSlot(c: inout c, start: fd.tyStart, len: fd.tyLen) < self.enumIdxs.count {
                     tref = c.simpleTypeRef(nameStart: fd.tyStart, nameLen: fd.tyLen)
                 }
                 // a generic-instance payload bind carries the full instance TypeRef so a

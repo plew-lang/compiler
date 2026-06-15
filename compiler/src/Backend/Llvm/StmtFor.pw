@@ -31,7 +31,7 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(self.b, bodyBB)
         self.terminated = false
         pushLoop(st: inout self, breakBB: endBB, contBB: stepBB)
-        genLlvmBlock(c: inout c, st: inout self, id: body)
+        self.genLlvmBlock(c: inout c, id: body)
         popLoop(st: inout self)
         if !(self.terminated) {
             LLVMBuildBr(self.b, stepBB)
@@ -189,7 +189,7 @@ pub impl LlvmCtx {
         val ed: EnumDef = c.arena.enums[optEid]
         val someB: Bind = c.kwSpan(kw: "Some", kwLen: 4U64)
         val someVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: someB.nameStart, variantLen: someB.nameLen)
-        val payloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout self, eid: optEid, vi: someVi)
+        val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: optEid, vi: someVi)
         // the bound element's declared type (the Some payload's single field).
         val itemFs: Array[FieldDef] = ed.variants[someVi].fields
         val mark: U64 = self.nLocals
@@ -230,7 +230,7 @@ pub impl LlvmCtx {
         if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
         // `continue` -> condBB (next() again), `break` -> endBB.
         pushLoop(st: inout self, breakBB: endBB, contBB: condBB)
-        genLlvmBlock(c: inout c, st: inout self, id: body)
+        self.genLlvmBlock(c: inout c, id: body)
         popLoop(st: inout self)
         self.nLocals = mark
         if !(self.terminated) {
@@ -272,7 +272,7 @@ pub impl LlvmCtx {
         val ed: EnumDef = c.arena.enums[optEid]
         val someB: Bind = c.kwSpan(kw: "Some", kwLen: 4U64)
         val someVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: someB.nameStart, variantLen: someB.nameLen)
-        val payloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout self, eid: optEid, vi: someVi)
+        val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: optEid, vi: someVi)
         val itemFs: Array[FieldDef] = ed.variants[someVi].fields
         val mark: U64 = self.nLocals
         val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "fai.cond"))
@@ -307,7 +307,7 @@ pub impl LlvmCtx {
         pushLocalR(st: inout self, nameStart: varStart, nameLen: varLen, ptr: xSlot, ty: xTy, kind: kindFromTySpan(c: inout c, tyStart: xStart, tyLen: xLen), structIdx: localStructIdxFor(c: inout c, st: inout self, start: xStart, len: xLen), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: 0U64)
         if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
         pushLoop(st: inout self, breakBB: endBB, contBB: condBB)
-        genLlvmBlock(c: inout c, st: inout self, id: body)
+        self.genLlvmBlock(c: inout c, id: body)
         popLoop(st: inout self)
         self.nLocals = mark
         if !(self.terminated) {
@@ -333,7 +333,7 @@ pub impl LlvmCtx {
         val vslot: LLVMValueRef = entryAlloca(st: inout self, ty: elemTy)
         // an `Array[any P]` element: track the loop var's existential TypeRef so a bare
         // `s.m()` in the body dispatches dynamically (spec/08).
-        val forElemRef: U64 = arrayExprElemRef(c: inout c, st: inout self, arrayExpr: iter)
+        val forElemRef: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: iter)
         if refIsAny(c: inout c, ref: forElemRef) {
             pushLocalR(st: inout self, nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: c.arena.structs.count, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: forElemRef)
         } else {
@@ -375,7 +375,7 @@ pub impl LlvmCtx {
         self.terminated = false
         LLVMBuildStore(self.b, LLVMBuildLoad2(self.b, elemTy, arrElemPtr(st: inout self, elemTy: elemTy, data: data, idx: iv), anon()), vslot)
         pushLoop(st: inout self, breakBB: endBB, contBB: stepBB)
-        genLlvmBlock(c: inout c, st: inout self, id: body)
+        self.genLlvmBlock(c: inout c, id: body)
         popLoop(st: inout self)
         if !(self.terminated) {
             LLVMBuildBr(self.b, stepBB)
@@ -425,7 +425,7 @@ pub impl LlvmCtx {
         self.bindStructPattern(c: inout c, sidx: sidx, binds: binds, scrutTy: elemTy, scrutSlot: eslot)
         val stepBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "fors.step"))
         pushLoop(st: inout self, breakBB: endBB, contBB: stepBB)
-        genLlvmBlock(c: inout c, st: inout self, id: body)
+        self.genLlvmBlock(c: inout c, id: body)
         popLoop(st: inout self)
         self.nLocals = bmark
         if !(self.terminated) {

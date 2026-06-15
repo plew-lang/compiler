@@ -15,25 +15,28 @@ fn closureCaptures(c: inout Comp, cloId: U64) -> Array[CaptureEntry] {
     return out
 }
 
-// The captured variable's own VALUE type (ignoring boxing) — the type stored in
-// the shared cell for a boxed capture, or in the env slot for a by-value one.
-fn captureValueTy(c: inout Comp, st: inout LlvmCtx, cap: CaptureEntry) -> LLVMTypeRef {
-    if cap.isArray {
-        return st.arrayTy
-    }
-    if c.isGenericInst(ref: cap.ty) {
-        return llvmTypeOfRef(c: inout c, st: inout st, ref: cap.ty)
-    }
-    return llvmScalarTy(c: inout c, st: inout st, tyStart: cap.tyStart, tyLen: cap.tyLen)
-}
+pub impl LlvmCtx {
 
-// The LLVM type of a capture slot in the env struct: a `mut val` (boxed) capture is
-// a pointer to the shared cell; otherwise the captured value's own type.
-fn captureSlotTy(c: inout Comp, st: inout LlvmCtx, cap: CaptureEntry) -> LLVMTypeRef {
-    if cap.boxed {
-        return st.ptrty
+    // The captured variable's own VALUE type (ignoring boxing) — the type stored in
+    // the shared cell for a boxed capture, or in the env slot for a by-value one.
+    inout fn captureValueTy(c: inout Comp, cap: CaptureEntry) -> LLVMTypeRef {
+        if cap.isArray {
+            return self.arrayTy
+        }
+        if c.isGenericInst(ref: cap.ty) {
+            return llvmTypeOfRef(c: inout c, st: inout self, ref: cap.ty)
+        }
+        return llvmScalarTy(c: inout c, st: inout self, tyStart: cap.tyStart, tyLen: cap.tyLen)
     }
-    return captureValueTy(c: inout c, st: inout st, cap: cap)
+
+    // The LLVM type of a capture slot in the env struct: a `mut val` (boxed) capture is
+    // a pointer to the shared cell; otherwise the captured value's own type.
+    inout fn captureSlotTy(c: inout Comp, cap: CaptureEntry) -> LLVMTypeRef {
+        if cap.boxed {
+            return self.ptrty
+        }
+        return self.captureValueTy(c: inout c, cap: cap)
+    }
 }
 
 // Whether the local named (start,len) is captured by some closure as a boxed
@@ -52,28 +55,31 @@ fn localIsBoxedCapture(c: inout Comp, start: U64, len: U64) -> Bool {
     return false
 }
 
-// The env struct type for closure `cloId` (its captures in order). Caller guards on
-// caps.count > 0 before using it.
-fn closureEnvTy(c: inout Comp, st: inout LlvmCtx, caps: Array[CaptureEntry]) -> LLVMTypeRef {
-    mut val elems: Array[LLVMTypeRef] = []
-    mut val i: U64 = 0
-    while i < caps.count {
-        elems.append(value: captureSlotTy(c: inout c, st: inout st, cap: caps[i]))
-        i += 1
-    }
-    return LLVMStructTypeInContext(st.ctx, arrayCPtr(elems), elems.count, 0I32)
-}
+pub impl LlvmCtx {
 
-// Index into st.clo* for a Closure-expr arena id, or st.cloIdx.count.
-fn closureSlot(st: inout LlvmCtx, id: U64) -> U64 {
-    mut val i: U64 = 0
-    while i < st.cloIdx.count {
-        if st.cloIdx[i] == id {
-            return i
+    // The env struct type for closure `cloId` (its captures in order). Caller guards on
+    // caps.count > 0 before using it.
+    inout fn closureEnvTy(c: inout Comp, caps: Array[CaptureEntry]) -> LLVMTypeRef {
+        mut val elems: Array[LLVMTypeRef] = []
+        mut val i: U64 = 0
+        while i < caps.count {
+            elems.append(value: self.captureSlotTy(c: inout c, cap: caps[i]))
+            i += 1
         }
-        i += 1
+        return LLVMStructTypeInContext(self.ctx, arrayCPtr(elems), elems.count, 0I32)
     }
-    return st.cloIdx.count
+
+    // Index into st.clo* for a Closure-expr arena id, or st.cloIdx.count.
+    inout fn closureSlot(id: U64) -> U64 {
+        mut val i: U64 = 0
+        while i < self.cloIdx.count {
+            if self.cloIdx[i] == id {
+                return i
+            }
+            i += 1
+        }
+        return self.cloIdx.count
+    }
 }
 
 // Whether the LLVM backend can lower closure `cloId` yet: a `mut val` (boxed,
@@ -99,284 +105,286 @@ fn closureSupported(c: inout Comp, cloId: U64) -> Bool {
     return true
 }
 
-// Declare a closure as `__closure<id>(ptr env, params...)` (env first per the
-// uniform closure ABI) and cache it. Idempotent (skips an already-declared id);
-// a closure with an unsupported (boxed) capture is left undeclared.
-fn declareClosure(c: inout Comp, st: inout LlvmCtx, id: U64) {
-    if closureSlot(st: inout st, id: id) < st.cloIdx.count {
-        return
-    }
-    if !(closureSupported(c: inout c, cloId: id)) {
-        return
-    }
-    match c.arena.exprs[id] {
-        Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, body: _) => {
-            mut val ptys: Array[LLVMTypeRef] = []
-            ptys.append(value: st.ptrty)
-            mut val pi: U64 = 0
-            while pi < params.count {
-                ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: params[pi]))
-                pi += 1
-            }
-            mut val rty: LLVMTypeRef = st.voidty
-            if hasRet {
-                if c.isGenericInst(ref: retTy) {
-                    rty = llvmTypeOfRef(c: inout c, st: inout st, ref: retTy)
-                } else {
-                    rty = llvmTypeFor(c: inout c, st: inout st, tyStart: retStart, tyLen: retLen, isArray: retIsArray)
-                }
-            }
-            val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
-            mut val nm: Array[U8] = []
-            appendBytes(into: inout nm, from: "__closure".bytes)
-            appendU64Dec(into: inout nm, n: id)
-            nm.append(value: 0)
-            val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
-            st.cloIdx.append(value: id)
-            st.cloVal.append(value: fv)
-            st.cloTy.append(value: fty)
-        }
-        _ => {}
-    }
-}
+pub impl LlvmCtx {
 
-// Walk an expression / statement / block, declaring every Closure it contains
-// (and nested closures via the declared closure's own body scan, run later).
-fn scanExprClosures(c: inout Comp, st: inout LlvmCtx, id: U64) {
-    match c.arena.exprs[id] {
-        Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {
-            declareClosure(c: inout c, st: inout st, id: id)
+    // Declare a closure as `__closure<id>(ptr env, params...)` (env first per the
+    // uniform closure ABI) and cache it. Idempotent (skips an already-declared id);
+    // a closure with an unsupported (boxed) capture is left undeclared.
+    inout fn declareClosure(c: inout Comp, id: U64) {
+        if self.closureSlot(id: id) < self.cloIdx.count {
+            return
         }
-        Expr.Unary(op: _, val operand) => { scanExprClosures(c: inout c, st: inout st, id: operand) }
-        Expr.Binary(op: _, val lhs, val rhs) => { scanExprClosures(c: inout c, st: inout st, id: lhs) scanExprClosures(c: inout c, st: inout st, id: rhs) }
-        Expr.Call(nameStart: _, nameLen: _, val args) => {
-            mut val i: U64 = 0
-            while i < args.count { scanExprClosures(c: inout c, st: inout st, id: args[i].expr) i += 1 }
+        if !(closureSupported(c: inout c, cloId: id)) {
+            return
         }
-        Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
-            scanExprClosures(c: inout c, st: inout st, id: recv)
-            mut val i: U64 = 0
-            while i < args.count { scanExprClosures(c: inout c, st: inout st, id: args[i].expr) i += 1 }
-        }
-        Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
-            scanExprClosures(c: inout c, st: inout st, id: recv)
-            mut val i: U64 = 0
-            while i < args.count { scanExprClosures(c: inout c, st: inout st, id: args[i].expr) i += 1 }
-        }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
-            scanExprClosures(c: inout c, st: inout st, id: recv)
-        }
-        Expr.Field(val base, nameStart: _, nameLen: _) => { scanExprClosures(c: inout c, st: inout st, id: base) }
-        Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
-            mut val i: U64 = 0
-            while i < fields.count { scanExprClosures(c: inout c, st: inout st, id: fields[i].value) i += 1 }
-        }
-        Expr.Array(val elems) => {
-            mut val i: U64 = 0
-            while i < elems.count { scanExprClosures(c: inout c, st: inout st, id: elems[i]) i += 1 }
-        }
-        Expr.Index(val base, val index) => { scanExprClosures(c: inout c, st: inout st, id: base) scanExprClosures(c: inout c, st: inout st, id: index) }
-        Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { scanExprClosures(c: inout c, st: inout st, id: operand) }
-        Expr.MatchExpr(val scrut, val arms) => {
-            scanExprClosures(c: inout c, st: inout st, id: scrut)
-            mut val i: U64 = 0
-            while i < arms.count {
-                scanBlockClosures(c: inout c, st: inout st, id: arms[i].body)
-                i += 1
-            }
-        }
-        Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-            scanExprClosures(c: inout c, st: inout st, id: cond)
-            scanBlockClosures(c: inout c, st: inout st, id: thenBlk)
-            scanBlockClosures(c: inout c, st: inout st, id: elseBlk)
-        }
-        Expr.OptChain(val base, memberStart: _, memberLen: _) => { scanExprClosures(c: inout c, st: inout st, id: base) }
-        Expr.Try(val expr) => { scanExprClosures(c: inout c, st: inout st, id: expr) }
-        Expr.Arrow(val base, nameStart: _, nameLen: _) => { scanExprClosures(c: inout c, st: inout st, id: base) }
-        Expr.Move(val operand, isBorrow: _) => { scanExprClosures(c: inout c, st: inout st, id: operand) }
-        Expr.Await(val operand) => { scanExprClosures(c: inout c, st: inout st, id: operand) }
-        _ => {}
-    }
-}
-
-fn scanStmtClosures(c: inout Comp, st: inout LlvmCtx, id: U64) {
-    match c.arena.stmts[id] {
-        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { scanExprClosures(c: inout c, st: inout st, id: init) }
-        Stmt.Assign(op: _, val target, val value) => { scanExprClosures(c: inout c, st: inout st, id: target) scanExprClosures(c: inout c, st: inout st, id: value) }
-        Stmt.ExprStmt(val expr) => { scanExprClosures(c: inout c, st: inout st, id: expr) }
-        Stmt.Return(val value, val hasValue, offset: _) => { if hasValue { scanExprClosures(c: inout c, st: inout st, id: value) } }
-        Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
-            scanExprClosures(c: inout c, st: inout st, id: cond)
-            scanBlockClosures(c: inout c, st: inout st, id: thenBlk)
-            if hasElse { scanBlockClosures(c: inout c, st: inout st, id: elseBlk) }
-        }
-        Stmt.While(val cond, val body) => { scanExprClosures(c: inout c, st: inout st, id: cond) scanBlockClosures(c: inout c, st: inout st, id: body) }
-        Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, val iter, val rangeHi, val body, isStruct: _, patStart: _, patLen: _, binds: _) => {
-            scanExprClosures(c: inout c, st: inout st, id: iter)
-            scanExprClosures(c: inout c, st: inout st, id: rangeHi)
-            scanBlockClosures(c: inout c, st: inout st, id: body)
-        }
-        Stmt.Match(val scrut, val arms) => {
-            scanExprClosures(c: inout c, st: inout st, id: scrut)
-            mut val i: U64 = 0
-            while i < arms.count {
-                scanBlockClosures(c: inout c, st: inout st, id: arms[i].body)
-                i += 1
-            }
-        }
-        Stmt.Panic(val msg, offset: _) => { scanExprClosures(c: inout c, st: inout st, id: msg) }
-        Stmt.Give(val value) => { scanExprClosures(c: inout c, st: inout st, id: value) }
-        _ => {}
-    }
-}
-
-fn scanBlockClosures(c: inout Comp, st: inout LlvmCtx, id: U64) {
-    if id == 0U64 {
-        return
-    }
-    val blk: Block = c.arena.blocks[id]
-    mut val i: U64 = 0
-    while i < blk.stmts.count {
-        scanStmtClosures(c: inout c, st: inout st, id: blk.stmts[i])
-        i += 1
-    }
-}
-
-// Declare every closure reachable from emitted code (main + plain user fns), then
-// fixpoint over declared closures' own bodies (nested closures). Run before bodies.
-fn collectClosures(c: inout Comp, st: inout LlvmCtx) {
-    mut val fi: U64 = 0
-    while fi < c.arena.funcs.count {
-        if c.nameIsMain(f: c.arena.funcs[fi]) || isPlainUserFn(c: inout c, st: inout st, fi: fi) {
-            scanBlockClosures(c: inout c, st: inout st, id: c.arena.funcs[fi].body)
-        }
-        fi += 1
-    }
-    mut val seen: U64 = 0
-    while seen < st.cloIdx.count {
-        val cid: U64 = st.cloIdx[seen]
-        match c.arena.exprs[cid] {
-            Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, val body) => {
-                scanBlockClosures(c: inout c, st: inout st, id: body)
-            }
-            _ => {}
-        }
-        seen += 1
-    }
-}
-
-// Emit each declared closure's body: env pointer is arg 0 (ignored for a
-// non-capturing closure), the closure params follow at 1.., then the body.
-fn emitClosures(c: inout Comp, st: inout LlvmCtx) {
-    mut val s: U64 = 0
-    while s < st.cloIdx.count {
-        val cid: U64 = st.cloIdx[s]
-        val fv: LLVMValueRef = st.cloVal[s]
-        match c.arena.exprs[cid] {
-            Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
-                st.curFn = fv
-                st.curIsMain = false
-                st.curRetVoid = !hasRet
-                if hasRet {
-                    if c.isGenericInst(ref: retTy) {
-                        st.curRetTy = llvmTypeOfRef(c: inout c, st: inout st, ref: retTy)
-                    } else {
-                        st.curRetTy = llvmTypeFor(c: inout c, st: inout st, tyStart: retStart, tyLen: retLen, isArray: retIsArray)
-                    }
-                } else {
-                    st.curRetTy = st.voidty
-                }
-                st.curRetTyStart = retStart
-                st.curRetTyLen = retLen
-                st.curRetRef = retTy
-                beginFnBody(st: inout st, fv: fv)
-                st.nLocals = 0
-                st.locStart = []
-                st.locLen = []
-                st.locPtr = []
-                st.locTy = []
-                st.locKind = []
-                st.locStructIdx = []
-                st.locIsArr = []
-                st.locElemTy = []
-                st.locElemKind = []
-                st.locTypeRef = []
-    st.locElemStructIdx = []
-    st.locElemTypeRef = []
-    st.locOwned = []
-    st.locMoved = []
-                st.locElemStructIdx = []
-    st.locElemTypeRef = []
-    st.locOwned = []
-    st.locMoved = []
-                st.locElemTypeRef = []
-    st.locOwned = []
-    st.locMoved = []
-                st.locOwned = []
-                st.locMoved = []
-                // module-level variables (spec/15) are visible inside closures too.
-                seedGlobals(c: inout c, st: inout st)
-                // bind captures from the env pointer (param 0): each capture loads
-                // from its env slot into a fresh local, so the body's identifier
-                // accesses resolve normally. (Immutable captures are by-value; a
-                // boxed `mut val` capture binds the cell pointer as a Ref-like local.)
-                val caps: Array[CaptureEntry] = closureCaptures(c: inout c, cloId: cid)
-                if caps.count > 0U64 {
-                    val envTy: LLVMTypeRef = closureEnvTy(c: inout c, st: inout st, caps: caps)
-                    val envPtr: LLVMValueRef = LLVMGetParam(fv, 0U64)
-                    mut val ci: U64 = 0
-                    while ci < caps.count {
-                        val cap: CaptureEntry = caps[ci]
-                        val slotTy: LLVMTypeRef = captureSlotTy(c: inout c, st: inout st, cap: cap)
-                        val cv: LLVMValueRef = LLVMBuildLoad2(st.b, slotTy, LLVMBuildStructGEP2(st.b, envTy, envPtr, ci, anon()), anon())
-                        // a boxed (mut) capture: `cv` is the shared cell POINTER — bind
-                        // the local directly to it (ty = the value type), so reads/writes
-                        // in the body go through the same cell as the enclosing scope.
-                        if cap.boxed {
-                            val valTy: LLVMTypeRef = captureValueTy(c: inout c, st: inout st, cap: cap)
-                            pushLocalR(st: inout st, nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: cv, ty: valTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: c.arena.structs.count, isArr: false, elemTy: st.i64ty, elemKind: 0U64, typeRef: 0U64)
-                            ci += 1
-                        } else {
-                        val a: LLVMValueRef = entryAlloca(st: inout st, ty: slotTy)
-                        LLVMBuildStore(st.b, cv, a)
-                        mut val cRef: U64 = 0
-                        if cap.boxed {
-                            cRef = cap.ty
-                        } else {
-                            if c.isGenericInst(ref: cap.ty) {
-                                cRef = cap.ty
-                            } else {
-                                if enumRegSlot(c: inout c, st: inout st, start: cap.tyStart, len: cap.tyLen) < st.enumIdxs.count {
-                                    cRef = c.simpleTypeRef(nameStart: cap.tyStart, nameLen: cap.tyLen)
-                                }
-                            }
-                        }
-                        mut val cElem: LLVMTypeRef = st.i64ty
-                        if cap.isArray {
-                            cElem = llvmScalarTy(c: inout c, st: inout st, tyStart: cap.tyStart, tyLen: cap.tyLen)
-                        }
-                        pushLocalR(st: inout st, nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: a, ty: slotTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout st, start: cap.tyStart, len: cap.tyLen), isArr: cap.isArray, elemTy: cElem, elemKind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), typeRef: cRef)
-                        ci += 1
-                        }
-                    }
-                }
+        match c.arena.exprs[id] {
+            Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, body: _) => {
+                mut val ptys: Array[LLVMTypeRef] = []
+                ptys.append(value: self.ptrty)
                 mut val pi: U64 = 0
                 while pi < params.count {
-                    bindOneParam(c: inout c, st: inout st, p: params[pi], fv: fv, argIdx: pi + 1U64)
+                    ptys.append(value: self.paramLlvmTy(c: inout c, p: params[pi]))
                     pi += 1
                 }
-                genLlvmBlock(c: inout c, st: inout st, id: body)
-                if !(st.terminated) {
-                    if st.curRetVoid {
-                        LLVMBuildRetVoid(st.b)
+                mut val rty: LLVMTypeRef = self.voidty
+                if hasRet {
+                    if c.isGenericInst(ref: retTy) {
+                        rty = llvmTypeOfRef(c: inout c, st: inout self, ref: retTy)
                     } else {
-                        LLVMBuildUnreachable(st.b)
+                        rty = llvmTypeFor(c: inout c, st: inout self, tyStart: retStart, tyLen: retLen, isArray: retIsArray)
                     }
                 }
+                val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
+                mut val nm: Array[U8] = []
+                appendBytes(into: inout nm, from: "__closure".bytes)
+                appendU64Dec(into: inout nm, n: id)
+                nm.append(value: 0)
+                val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+                self.cloIdx.append(value: id)
+                self.cloVal.append(value: fv)
+                self.cloTy.append(value: fty)
             }
             _ => {}
         }
-        s += 1
+    }
+
+    // Walk an expression / statement / block, declaring every Closure it contains
+    // (and nested closures via the declared closure's own body scan, run later).
+    inout fn scanExprClosures(c: inout Comp, id: U64) {
+        match c.arena.exprs[id] {
+            Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {
+                self.declareClosure(c: inout c, id: id)
+            }
+            Expr.Unary(op: _, val operand) => { self.scanExprClosures(c: inout c, id: operand) }
+            Expr.Binary(op: _, val lhs, val rhs) => { self.scanExprClosures(c: inout c, id: lhs) self.scanExprClosures(c: inout c, id: rhs) }
+            Expr.Call(nameStart: _, nameLen: _, val args) => {
+                mut val i: U64 = 0
+                while i < args.count { self.scanExprClosures(c: inout c, id: args[i].expr) i += 1 }
+            }
+            Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
+                self.scanExprClosures(c: inout c, id: recv)
+                mut val i: U64 = 0
+                while i < args.count { self.scanExprClosures(c: inout c, id: args[i].expr) i += 1 }
+            }
+            Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+                self.scanExprClosures(c: inout c, id: recv)
+                mut val i: U64 = 0
+                while i < args.count { self.scanExprClosures(c: inout c, id: args[i].expr) i += 1 }
+            }
+            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
+                self.scanExprClosures(c: inout c, id: recv)
+            }
+            Expr.Field(val base, nameStart: _, nameLen: _) => { self.scanExprClosures(c: inout c, id: base) }
+            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+                mut val i: U64 = 0
+                while i < fields.count { self.scanExprClosures(c: inout c, id: fields[i].value) i += 1 }
+            }
+            Expr.Array(val elems) => {
+                mut val i: U64 = 0
+                while i < elems.count { self.scanExprClosures(c: inout c, id: elems[i]) i += 1 }
+            }
+            Expr.Index(val base, val index) => { self.scanExprClosures(c: inout c, id: base) self.scanExprClosures(c: inout c, id: index) }
+            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { self.scanExprClosures(c: inout c, id: operand) }
+            Expr.MatchExpr(val scrut, val arms) => {
+                self.scanExprClosures(c: inout c, id: scrut)
+                mut val i: U64 = 0
+                while i < arms.count {
+                    self.scanBlockClosures(c: inout c, id: arms[i].body)
+                    i += 1
+                }
+            }
+            Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
+                self.scanExprClosures(c: inout c, id: cond)
+                self.scanBlockClosures(c: inout c, id: thenBlk)
+                self.scanBlockClosures(c: inout c, id: elseBlk)
+            }
+            Expr.OptChain(val base, memberStart: _, memberLen: _) => { self.scanExprClosures(c: inout c, id: base) }
+            Expr.Try(val expr) => { self.scanExprClosures(c: inout c, id: expr) }
+            Expr.Arrow(val base, nameStart: _, nameLen: _) => { self.scanExprClosures(c: inout c, id: base) }
+            Expr.Move(val operand, isBorrow: _) => { self.scanExprClosures(c: inout c, id: operand) }
+            Expr.Await(val operand) => { self.scanExprClosures(c: inout c, id: operand) }
+            _ => {}
+        }
+    }
+
+    inout fn scanStmtClosures(c: inout Comp, id: U64) {
+        match c.arena.stmts[id] {
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { self.scanExprClosures(c: inout c, id: init) }
+            Stmt.Assign(op: _, val target, val value) => { self.scanExprClosures(c: inout c, id: target) self.scanExprClosures(c: inout c, id: value) }
+            Stmt.ExprStmt(val expr) => { self.scanExprClosures(c: inout c, id: expr) }
+            Stmt.Return(val value, val hasValue, offset: _) => { if hasValue { self.scanExprClosures(c: inout c, id: value) } }
+            Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
+                self.scanExprClosures(c: inout c, id: cond)
+                self.scanBlockClosures(c: inout c, id: thenBlk)
+                if hasElse { self.scanBlockClosures(c: inout c, id: elseBlk) }
+            }
+            Stmt.While(val cond, val body) => { self.scanExprClosures(c: inout c, id: cond) self.scanBlockClosures(c: inout c, id: body) }
+            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, val iter, val rangeHi, val body, isStruct: _, patStart: _, patLen: _, binds: _) => {
+                self.scanExprClosures(c: inout c, id: iter)
+                self.scanExprClosures(c: inout c, id: rangeHi)
+                self.scanBlockClosures(c: inout c, id: body)
+            }
+            Stmt.Match(val scrut, val arms) => {
+                self.scanExprClosures(c: inout c, id: scrut)
+                mut val i: U64 = 0
+                while i < arms.count {
+                    self.scanBlockClosures(c: inout c, id: arms[i].body)
+                    i += 1
+                }
+            }
+            Stmt.Panic(val msg, offset: _) => { self.scanExprClosures(c: inout c, id: msg) }
+            Stmt.Give(val value) => { self.scanExprClosures(c: inout c, id: value) }
+            _ => {}
+        }
+    }
+
+    inout fn scanBlockClosures(c: inout Comp, id: U64) {
+        if id == 0U64 {
+            return
+        }
+        val blk: Block = c.arena.blocks[id]
+        mut val i: U64 = 0
+        while i < blk.stmts.count {
+            self.scanStmtClosures(c: inout c, id: blk.stmts[i])
+            i += 1
+        }
+    }
+
+    // Declare every closure reachable from emitted code (main + plain user fns), then
+    // fixpoint over declared closures' own bodies (nested closures). Run before bodies.
+    inout fn collectClosures(c: inout Comp) {
+        mut val fi: U64 = 0
+        while fi < c.arena.funcs.count {
+            if c.nameIsMain(f: c.arena.funcs[fi]) || self.isPlainUserFn(c: inout c, fi: fi) {
+                self.scanBlockClosures(c: inout c, id: c.arena.funcs[fi].body)
+            }
+            fi += 1
+        }
+        mut val seen: U64 = 0
+        while seen < self.cloIdx.count {
+            val cid: U64 = self.cloIdx[seen]
+            match c.arena.exprs[cid] {
+                Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, val body) => {
+                    self.scanBlockClosures(c: inout c, id: body)
+                }
+                _ => {}
+            }
+            seen += 1
+        }
+    }
+
+    // Emit each declared closure's body: env pointer is arg 0 (ignored for a
+    // non-capturing closure), the closure params follow at 1.., then the body.
+    inout fn emitClosures(c: inout Comp) {
+        mut val s: U64 = 0
+        while s < self.cloIdx.count {
+            val cid: U64 = self.cloIdx[s]
+            val fv: LLVMValueRef = self.cloVal[s]
+            match c.arena.exprs[cid] {
+                Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
+                    self.curFn = fv
+                    self.curIsMain = false
+                    self.curRetVoid = !hasRet
+                    if hasRet {
+                        if c.isGenericInst(ref: retTy) {
+                            self.curRetTy = llvmTypeOfRef(c: inout c, st: inout self, ref: retTy)
+                        } else {
+                            self.curRetTy = llvmTypeFor(c: inout c, st: inout self, tyStart: retStart, tyLen: retLen, isArray: retIsArray)
+                        }
+                    } else {
+                        self.curRetTy = self.voidty
+                    }
+                    self.curRetTyStart = retStart
+                    self.curRetTyLen = retLen
+                    self.curRetRef = retTy
+                    beginFnBody(st: inout self, fv: fv)
+                    self.nLocals = 0
+                    self.locStart = []
+                    self.locLen = []
+                    self.locPtr = []
+                    self.locTy = []
+                    self.locKind = []
+                    self.locStructIdx = []
+                    self.locIsArr = []
+                    self.locElemTy = []
+                    self.locElemKind = []
+                    self.locTypeRef = []
+        self.locElemStructIdx = []
+        self.locElemTypeRef = []
+        self.locOwned = []
+        self.locMoved = []
+                    self.locElemStructIdx = []
+        self.locElemTypeRef = []
+        self.locOwned = []
+        self.locMoved = []
+                    self.locElemTypeRef = []
+        self.locOwned = []
+        self.locMoved = []
+                    self.locOwned = []
+                    self.locMoved = []
+                    // module-level variables (spec/15) are visible inside closures too.
+                    seedGlobals(c: inout c, st: inout self)
+                    // bind captures from the env pointer (param 0): each capture loads
+                    // from its env slot into a fresh local, so the body's identifier
+                    // accesses resolve normally. (Immutable captures are by-value; a
+                    // boxed `mut val` capture binds the cell pointer as a Ref-like local.)
+                    val caps: Array[CaptureEntry] = closureCaptures(c: inout c, cloId: cid)
+                    if caps.count > 0U64 {
+                        val envTy: LLVMTypeRef = self.closureEnvTy(c: inout c, caps: caps)
+                        val envPtr: LLVMValueRef = LLVMGetParam(fv, 0U64)
+                        mut val ci: U64 = 0
+                        while ci < caps.count {
+                            val cap: CaptureEntry = caps[ci]
+                            val slotTy: LLVMTypeRef = self.captureSlotTy(c: inout c, cap: cap)
+                            val cv: LLVMValueRef = LLVMBuildLoad2(self.b, slotTy, LLVMBuildStructGEP2(self.b, envTy, envPtr, ci, anon()), anon())
+                            // a boxed (mut) capture: `cv` is the shared cell POINTER — bind
+                            // the local directly to it (ty = the value type), so reads/writes
+                            // in the body go through the same cell as the enclosing scope.
+                            if cap.boxed {
+                                val valTy: LLVMTypeRef = self.captureValueTy(c: inout c, cap: cap)
+                                pushLocalR(st: inout self, nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: cv, ty: valTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: c.arena.structs.count, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: 0U64)
+                                ci += 1
+                            } else {
+                            val a: LLVMValueRef = entryAlloca(st: inout self, ty: slotTy)
+                            LLVMBuildStore(self.b, cv, a)
+                            mut val cRef: U64 = 0
+                            if cap.boxed {
+                                cRef = cap.ty
+                            } else {
+                                if c.isGenericInst(ref: cap.ty) {
+                                    cRef = cap.ty
+                                } else {
+                                    if self.enumRegSlot(c: inout c, start: cap.tyStart, len: cap.tyLen) < self.enumIdxs.count {
+                                        cRef = c.simpleTypeRef(nameStart: cap.tyStart, nameLen: cap.tyLen)
+                                    }
+                                }
+                            }
+                            mut val cElem: LLVMTypeRef = self.i64ty
+                            if cap.isArray {
+                                cElem = llvmScalarTy(c: inout c, st: inout self, tyStart: cap.tyStart, tyLen: cap.tyLen)
+                            }
+                            pushLocalR(st: inout self, nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: a, ty: slotTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: localStructIdxFor(c: inout c, st: inout self, start: cap.tyStart, len: cap.tyLen), isArr: cap.isArray, elemTy: cElem, elemKind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), typeRef: cRef)
+                            ci += 1
+                            }
+                        }
+                    }
+                    mut val pi: U64 = 0
+                    while pi < params.count {
+                        bindOneParam(c: inout c, st: inout self, p: params[pi], fv: fv, argIdx: pi + 1U64)
+                        pi += 1
+                    }
+                    self.genLlvmBlock(c: inout c, id: body)
+                    if !(self.terminated) {
+                        if self.curRetVoid {
+                            LLVMBuildRetVoid(self.b)
+                        } else {
+                            LLVMBuildUnreachable(self.b)
+                        }
+                    }
+                }
+                _ => {}
+            }
+            s += 1
+        }
     }
 }
-

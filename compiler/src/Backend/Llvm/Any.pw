@@ -120,10 +120,10 @@ fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, trait
     ptys.append(value: st.ptrty)
     mut val pi: U64 = 0
     while pi < req.params.count {
-        ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: req.params[pi]))
+        ptys.append(value: st.paramLlvmTy(c: inout c, p: req.params[pi]))
         pi += 1
     }
-    mut val rty: LLVMTypeRef = llvmFnRetTy(c: inout c, st: inout st, f: req)
+    mut val rty: LLVMTypeRef = st.llvmFnRetTy(c: inout c, f: req)
     if haveEnv {
         c.cur.typeParams = savedEP
         c.cur.typeArgs = savedEA
@@ -410,10 +410,10 @@ fn genLlvmAnyDispatch(c: inout Comp, st: inout LlvmCtx, recv: U64, anyRef: U64, 
     ptys.append(value: st.ptrty)
     mut val pi: U64 = 0
     while pi < req.params.count {
-        ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: req.params[pi]))
+        ptys.append(value: st.paramLlvmTy(c: inout c, p: req.params[pi]))
         pi += 1
     }
-    mut val rty: LLVMTypeRef = llvmFnRetTy(c: inout c, st: inout st, f: req)
+    mut val rty: LLVMTypeRef = st.llvmFnRetTy(c: inout c, f: req)
     if haveEnv {
         c.cur.typeParams = savedEP
         c.cur.typeArgs = savedEA
@@ -452,7 +452,7 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
     if didSelf {
         c.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
     }
-    st.curRetTy = llvmFnRetTy(c: inout c, st: inout st, f: f)
+    st.curRetTy = st.llvmFnRetTy(c: inout c, f: f)
     st.curRetTyStart = f.retStart
     st.curRetTyLen = f.retLen
     // ground the return ref under any active generic env (a monomorphized method
@@ -521,7 +521,7 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
         // bare `match self` / `self == …` in the body recovers the enum.
         if recvRef == 0U64 {
             if recvSidx >= c.arena.structs.count {
-                if enumRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.enumIdxs.count {
+                if st.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < st.enumIdxs.count {
                     recvRef = c.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
                 }
             }
@@ -564,11 +564,11 @@ fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) 
         pi += 1
     }
     st.curBodyMark = st.nLocals
-    genLlvmBlock(c: inout c, st: inout st, id: f.body)
+    st.genLlvmBlock(c: inout c, id: f.body)
     if !(st.terminated) {
         // fall-through: the body block dropped its body locals; now drop owned
         // params (a `move` param / `move fn` self the callee deinits).
-        dropScope(c: inout c, st: inout st, fromMark: 0U64, excludeLi: 18446744073709551615U64)
+        st.dropScope(c: inout c, fromMark: 0U64, excludeLi: 18446744073709551615U64)
         // checkReturns guarantees a non-() function diverges on every path, so a
         // fall-through here is a () function: return void.
         if st.curRetVoid {

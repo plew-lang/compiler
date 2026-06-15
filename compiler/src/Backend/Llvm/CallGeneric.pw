@@ -10,7 +10,7 @@
 // args can't be inferred / the instance can't be declared.
 fn genMethodOwnTypeParamCall(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64, recvStart: U64, recvLen: U64, args: Array[Arg]) -> LLVMValueRef {
     val mf: Func = c.arena.funcs[mfi]
-    val margs: Array[U64] = llvmInferFnArgs(c: inout c, st: inout st, f: mf, args: args)
+    val margs: Array[U64] = st.llvmInferFnArgs(c: inout c, f: mf, args: args)
     mut val mi: U64 = 0
     while mi < margs.count {
         if margs[mi] == 0U64 {
@@ -283,7 +283,7 @@ fn genArgValue(c: inout Comp, st: inout LlvmCtx, argExpr: U64, p: Param) -> LLVM
                         argElemRef = c.arena.types[p.ty].args[0]
                     }
                 }
-                return genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen), elemRef: argElemRef)
+                return st.genLlvmArrayLit(c: inout c, elems: elems, elemTy: llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen), elemRef: argElemRef)
             }
             _ => {}
         }

@@ -105,7 +105,7 @@ fn registerGenEnums(c: inout Comp, st: inout LlvmCtx) {
                     while fj < fs.count {
                         // fieldWordsF (not fieldWords) so a boxed / array / nested
                         // generic-instance payload field is sized correctly under the env.
-                        w = w + fieldWordsF(c: inout c, st: inout st, f: fs[fj])
+                        w = w + st.fieldWordsF(c: inout c, f: fs[fj])
                         fj += 1
                     }
                     if w > maxWords {
@@ -206,7 +206,7 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                     if bsi < c.arena.structs.count {
                         val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns2, len: fnl2)
                         if fidx < c.arena.structs[bsi].fields.count {
-                            return fieldArrayElemRefUnderBase(c: inout c, st: inout st, base: fb, fd: c.arena.structs[bsi].fields[fidx])
+                            return st.fieldArrayElemRefUnderBase(c: inout c, base: fb, fd: c.arena.structs[bsi].fields[fidx])
                         }
                     }
                 }
@@ -275,7 +275,7 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // assignment recovers the right width and signedness.
             if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "pow") {
                 if args.count == 2U64 {
-                    return llvmArgTypeRef(c: inout c, st: inout st, argExpr: args[0].expr)
+                    return st.llvmArgTypeRef(c: inout c, argExpr: args[0].expr)
                 }
             }
         }

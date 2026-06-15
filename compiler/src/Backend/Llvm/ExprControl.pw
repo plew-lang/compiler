@@ -5,7 +5,7 @@
 
 pub impl LlvmCtx {
     inout fn genLlvmIfExpr(c: inout Comp, cond: U64, thenBlk: U64, elseBlk: U64) -> LLVMValueRef {
-        val cv: LLVMValueRef = genLlvmCond(c: inout c, st: inout self, id: cond)
+        val cv: LLVMValueRef = self.genLlvmCond(c: inout c, id: cond)
         val thenBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "vif.then"))
         val elseBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "vif.else"))
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "vif.end"))
@@ -18,7 +18,7 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(self.b, thenBB)
         self.terminated = false
         val markT: U64 = self.nLocals
-        genLlvmBlock(c: inout c, st: inout self, id: thenBlk)
+        self.genLlvmBlock(c: inout c, id: thenBlk)
         val thenDiv: Bool = self.terminated
         val thenVal: LLVMValueRef = self.giveValue
         val thenEnd: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
@@ -31,7 +31,7 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(self.b, elseBB)
         self.terminated = false
         val markE: U64 = self.nLocals
-        genLlvmBlock(c: inout c, st: inout self, id: elseBlk)
+        self.genLlvmBlock(c: inout c, id: elseBlk)
         val elseDiv: Bool = self.terminated
         mut val elseVal: LLVMValueRef = self.giveValue
         val elseEnd: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
@@ -91,7 +91,7 @@ pub impl LlvmCtx {
                 self.bindStructPattern(c: inout c, sidx: ssidx, binds: arms[0].binds, scrutTy: sty, scrutSlot: sslot0)
                 self.terminated = false
                 self.expectedTy = matchExpectedTy
-                genLlvmBlock(c: inout c, st: inout self, id: arms[0].body)
+                self.genLlvmBlock(c: inout c, id: arms[0].body)
                 val rv: LLVMValueRef = self.giveValue
                 self.nLocals = mark0
                 if didSetS {
@@ -160,7 +160,7 @@ pub impl LlvmCtx {
             // each arm body is a block ending in `give` (value) or in `panic`/`return`
             // (diverging). genLlvmBlock sets self.giveValue / self.terminated.
             self.expectedTy = matchExpectedTy
-            genLlvmBlock(c: inout c, st: inout self, id: arm.body)
+            self.genLlvmBlock(c: inout c, id: arm.body)
             val armDiverged: Bool = self.terminated
             if armDiverged {
                 // a diverging arm (`=> panic`/`=> return`) already terminated its block;
@@ -262,7 +262,7 @@ pub impl LlvmCtx {
         val savedP: Array[Bind] = c.cur.typeParams
         val savedA: Array[U64] = c.cur.typeArgs
         val didB: Bool = setEnumEnv(c: inout c, st: inout self, ref: baseRef)
-        val basePayloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout self, eid: beid, vi: someVi)
+        val basePayloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: beid, vi: someVi)
         if didB { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
         val payload: LLVMValueRef = LLVMBuildLoad2(self.b, basePayloadTy, LLVMBuildStructGEP2(self.b, bety, sslot, 1U64, anon()), anon())
         val innerVal: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, 0U64, anon())
@@ -270,14 +270,14 @@ pub impl LlvmCtx {
         val didR: Bool = setEnumEnv(c: inout c, st: inout self, ref: rr)
         mut val someArgs: Array[LLVMValueRef] = []
         someArgs.append(value: memberVal)
-        val someResult: LLVMValueRef = buildEnumFromValues(c: inout c, st: inout self, eid: reid, ety: rety, vi: someVi, payloadVals: someArgs)
+        val someResult: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: reid, ety: rety, vi: someVi, payloadVals: someArgs)
         if didR { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
         LLVMBuildStore(self.b, someResult, resSlot)
         LLVMBuildBr(self.b, contBB)
         // None: rebuild None.
         LLVMPositionBuilderAtEnd(self.b, noneBB)
         mut val noneArgs: Array[LLVMValueRef] = []
-        val noneResult: LLVMValueRef = buildEnumFromValues(c: inout c, st: inout self, eid: reid, ety: rety, vi: noneVi, payloadVals: noneArgs)
+        val noneResult: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: reid, ety: rety, vi: noneVi, payloadVals: noneArgs)
         LLVMBuildStore(self.b, noneResult, resSlot)
         LLVMBuildBr(self.b, contBB)
         LLVMPositionBuilderAtEnd(self.b, contBB)
@@ -326,7 +326,7 @@ pub impl LlvmCtx {
         // Err: extract the error (source env), rebuild the function's Result Err, return.
         LLVMPositionBuilderAtEnd(self.b, errBB)
         val didE: Bool = setEnumEnv(c: inout c, st: inout self, ref: exprRef)
-        val errPayloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout self, eid: eeid, vi: errVi)
+        val errPayloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eeid, vi: errVi)
         val errPayload: LLVMValueRef = LLVMBuildLoad2(self.b, errPayloadTy, LLVMBuildStructGEP2(self.b, eety, eslot, 1U64, anon()), anon())
         val errVal: LLVMValueRef = LLVMBuildExtractValue(self.b, errPayload, 0U64, anon())
         if didE { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
@@ -342,7 +342,7 @@ pub impl LlvmCtx {
                     if ffi < c.arena.funcs.count {
                         mut val fslot: U64 = userFnSlot(st: inout self, idx: ffi)
                         if fslot >= self.fnIdx.count {
-                            fslot = ensureFreeFnDeclared(c: inout c, st: inout self, fi: ffi)
+                            fslot = self.ensureFreeFnDeclared(c: inout c, fi: ffi)
                         }
                         if fslot < self.fnIdx.count {
                             mut val cav: Array[LLVMValueRef] = []
@@ -356,14 +356,14 @@ pub impl LlvmCtx {
         val didR: Bool = setEnumEnv(c: inout c, st: inout self, ref: self.curRetRef)
         mut val errArgs: Array[LLVMValueRef] = []
         errArgs.append(value: convErrVal)
-        val retResult: LLVMValueRef = buildEnumFromValues(c: inout c, st: inout self, eid: reid, ety: rety, vi: errVi, payloadVals: errArgs)
+        val retResult: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: reid, ety: rety, vi: errVi, payloadVals: errArgs)
         if didR { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
         LLVMBuildRet(self.b, retResult)
         // Ok: extract and yield the value; control continues at okBB.
         LLVMPositionBuilderAtEnd(self.b, okBB)
         self.terminated = false
         val didO: Bool = setEnumEnv(c: inout c, st: inout self, ref: exprRef)
-        val okPayloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout self, eid: eeid, vi: okVi)
+        val okPayloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eeid, vi: okVi)
         val okPayload: LLVMValueRef = LLVMBuildLoad2(self.b, okPayloadTy, LLVMBuildStructGEP2(self.b, eety, eslot, 1U64, anon()), anon())
         val okVal: LLVMValueRef = LLVMBuildExtractValue(self.b, okPayload, 0U64, anon())
         if didO { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }

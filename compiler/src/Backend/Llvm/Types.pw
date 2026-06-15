@@ -81,7 +81,7 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
         return st.structTys[reg]
     }
     // a registered enum -> its named tagged-union type.
-    val ereg: U64 = enumRegSlot(c: inout c, st: inout st, start: tyStart, len: tyLen)
+    val ereg: U64 = st.enumRegSlot(c: inout c, start: tyStart, len: tyLen)
     if ereg < st.enumIdxs.count {
         return st.enumTys[ereg]
     }

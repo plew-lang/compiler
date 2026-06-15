@@ -3,217 +3,219 @@
 // Build an array literal `[e0, e1, ...]` of element type `elemTy` (provided by the
 // caller from the annotation, or inferred from the first element) as a
 // `{ ptr data, i64 count }` value.
-fn genLlvmArrayLit(c: inout Comp, st: inout LlvmCtx, elems: Array[U64], elemTy: LLVMTypeRef, elemRef: U64 = 0) -> LLVMValueRef {
-    mut val agg: LLVMValueRef = LLVMGetUndef(st.arrayTy)
-    val n: U64 = elems.count
-    if n == 0U64 {
-        agg = LLVMBuildInsertValue(st.b, agg, LLVMConstNull(st.ptrty), 0U64, anon())
-        agg = LLVMBuildInsertValue(st.b, agg, LLVMConstInt(st.i64ty, 0U64, 0I32), 1U64, anon())
+
+pub impl LlvmCtx {
+    inout fn genLlvmArrayLit(c: inout Comp, elems: Array[U64], elemTy: LLVMTypeRef, elemRef: U64 = 0) -> LLVMValueRef {
+        mut val agg: LLVMValueRef = LLVMGetUndef(self.arrayTy)
+        val n: U64 = elems.count
+        if n == 0U64 {
+            agg = LLVMBuildInsertValue(self.b, agg, LLVMConstNull(self.ptrty), 0U64, anon())
+            agg = LLVMBuildInsertValue(self.b, agg, LLVMConstInt(self.i64ty, 0U64, 0I32), 1U64, anon())
+            return agg
+        }
+        // an `Array[any P]` literal (spec/08): each concrete element is boxed into the
+        // existential fat pointer so heterogeneous concrete types share one element slot.
+        val elemIsAny: Bool = refIsAny(c: inout c, ref: elemRef)
+        val data: LLVMValueRef = rawbufAlloc(c: inout c, st: inout self, elemSize: LLVMSizeOf(elemTy), cap: LLVMConstInt(self.i64ty, n, 0I32))
+        mut val i: U64 = 0
+        while i < n {
+            mut val ev: LLVMValueRef = LLVMConstNull(self.ptrty)
+            if elemIsAny {
+                mut val eb: Bool = false
+                ev = coerceToAnyIfNeeded(c: inout c, st: inout self, targetRef: elemRef, valueExpr: elems[i], outBoxed: inout eb)
+                if !(eb) {
+                    ev = genLlvmExpr(c: inout c, st: inout self, id: elems[i])
+                }
+            } else {
+                ev = coerceElem(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: elems[i]), elemTy: elemTy)
+            }
+            LLVMBuildStore(self.b, ev, arrElemPtr(st: inout self, elemTy: elemTy, data: data, idx: LLVMConstInt(self.i64ty, i, 0I32)))
+            i += 1
+        }
+        agg = LLVMBuildInsertValue(self.b, agg, data, 0U64, anon())
+        agg = LLVMBuildInsertValue(self.b, agg, LLVMConstInt(self.i64ty, n, 0I32), 1U64, anon())
         return agg
     }
-    // an `Array[any P]` literal (spec/08): each concrete element is boxed into the
-    // existential fat pointer so heterogeneous concrete types share one element slot.
-    val elemIsAny: Bool = refIsAny(c: inout c, ref: elemRef)
-    val data: LLVMValueRef = rawbufAlloc(c: inout c, st: inout st, elemSize: LLVMSizeOf(elemTy), cap: LLVMConstInt(st.i64ty, n, 0I32))
-    mut val i: U64 = 0
-    while i < n {
-        mut val ev: LLVMValueRef = LLVMConstNull(st.ptrty)
-        if elemIsAny {
-            mut val eb: Bool = false
-            ev = coerceToAnyIfNeeded(c: inout c, st: inout st, targetRef: elemRef, valueExpr: elems[i], outBoxed: inout eb)
-            if !(eb) {
-                ev = genLlvmExpr(c: inout c, st: inout st, id: elems[i])
-            }
-        } else {
-            ev = coerceElem(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: elems[i]), elemTy: elemTy)
-        }
-        LLVMBuildStore(st.b, ev, arrElemPtr(st: inout st, elemTy: elemTy, data: data, idx: LLVMConstInt(st.i64ty, i, 0I32)))
-        i += 1
-    }
-    agg = LLVMBuildInsertValue(st.b, agg, data, 0U64, anon())
-    agg = LLVMBuildInsertValue(st.b, agg, LLVMConstInt(st.i64ty, n, 0I32), 1U64, anon())
-    return agg
-}
 
-// `arr[i]` read: bounds-checked element load.
-fn genLlvmIndex(c: inout Comp, st: inout LlvmCtx, base: U64, index: U64) -> LLVMValueRef {
-    // only a built-in Array is indexed directly; a user `Index`-impl subscript
-    // (struct `g[i]`) desugars to `g.index(key: i)` via the Index witness (spec/12).
-    if !(exprIsArray(c: inout c, st: inout st, id: base)) {
-        val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
-        if bsi < c.arena.structs.count {
-            // a Dictionary subscript `d[k]` lowers to the panicking accessor
-            // `d.at(key: k)` (spec/02); a user Index type uses `index`.
-            if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[bsi].nameStart, len: c.arena.structs[bsi].nameLen, kw: "Dictionary") {
-                val m: U64 = c.synthDictMethod(recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
-                return genLlvmExpr(c: inout c, st: inout st, id: m)
-            }
-            if c.typeHasMethodNamed(typeStart: c.arena.structs[bsi].nameStart, typeLen: c.arena.structs[bsi].nameLen, name: "index") {
-                val m: U64 = c.synthDictMethod(recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
-                return genLlvmExpr(c: inout c, st: inout st, id: m)
-            }
-        }
-        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: user Index subscript needs an `index` method")
-        return LLVMConstInt(st.i64ty, 0U64, 0I32)
-    }
-    val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: base)
-    val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: base)
-    // the base must be an array {ptr,i64} aggregate; a non-aggregate here means a
-    // nested array (Array[Array[T]]) or unsupported element typing — reject loudly
-    // rather than extractvalue on a scalar (which crashes the LLVM builder).
-    if LLVMGetTypeKind(LLVMTypeOf(arr)) != 10U32 {
-        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: nested arrays / this index form not yet supported")
-        return LLVMConstInt(st.i64ty, 0U64, 0I32)
-    }
-    val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 0U64, anon())
-    val count: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 1U64, anon())
-    val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: index)
-    emitBoundsCheck(c: inout c, st: inout st, idx: idx, count: count)
-    return LLVMBuildLoad2(st.b, elemTy, arrElemPtr(st: inout st, elemTy: elemTy, data: data, idx: idx), anon())
-}
-
-// `arr.append(v)` on an array local: grow the buffer if full, store v at `count`,
-// increment count (mutating the local's {data,count}). No CoW yet (shares buffer).
-// The element TypeRef of an array-valued expression (an array local's
-// locElemTypeRef, or a struct field's grounded element ref), or 0.
-fn arrayExprElemRef(c: inout Comp, st: inout LlvmCtx, arrayExpr: U64) -> U64 {
-    match c.arena.exprs[arrayExpr] {
-        Expr.Ident(val start, val len) => {
-            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
-            if li < st.nLocals {
-                return st.locElemTypeRef[li]
-            }
-        }
-        Expr.Field(base: val fb, nameStart: val fns, nameLen: val fnl) => {
-            val bsi: U64 = exprStructIdx(c: inout c, st: inout st, id: fb)
+    // `arr[i]` read: bounds-checked element load.
+    inout fn genLlvmIndex(c: inout Comp, base: U64, index: U64) -> LLVMValueRef {
+        // only a built-in Array is indexed directly; a user `Index`-impl subscript
+        // (struct `g[i]`) desugars to `g.index(key: i)` via the Index witness (spec/12).
+        if !(exprIsArray(c: inout c, st: inout self, id: base)) {
+            val bsi: U64 = exprStructIdx(c: inout c, st: inout self, id: base)
             if bsi < c.arena.structs.count {
-                val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
-                if fidx < c.arena.structs[bsi].fields.count {
-                    return fieldArrayElemRefUnderBase(c: inout c, st: inout st, base: fb, fd: c.arena.structs[bsi].fields[fidx])
+                // a Dictionary subscript `d[k]` lowers to the panicking accessor
+                // `d.at(key: k)` (spec/02); a user Index type uses `index`.
+                if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[bsi].nameStart, len: c.arena.structs[bsi].nameLen, kw: "Dictionary") {
+                    val m: U64 = c.synthDictMethod(recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
+                    return genLlvmExpr(c: inout c, st: inout self, id: m)
+                }
+                if c.typeHasMethodNamed(typeStart: c.arena.structs[bsi].nameStart, typeLen: c.arena.structs[bsi].nameLen, name: "index") {
+                    val m: U64 = c.synthDictMethod(recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
+                    return genLlvmExpr(c: inout c, st: inout self, id: m)
                 }
             }
+            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: user Index subscript needs an `index` method")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
-        _ => {}
+        val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout self, id: base)
+        val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: base)
+        // the base must be an array {ptr,i64} aggregate; a non-aggregate here means a
+        // nested array (Array[Array[T]]) or unsupported element typing — reject loudly
+        // rather than extractvalue on a scalar (which crashes the LLVM builder).
+        if LLVMGetTypeKind(LLVMTypeOf(arr)) != 10U32 {
+            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: nested arrays / this index form not yet supported")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
+        val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
+        val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: index)
+        emitBoundsCheck(c: inout c, st: inout self, idx: idx, count: count)
+        return LLVMBuildLoad2(self.b, elemTy, arrElemPtr(st: inout self, elemTy: elemTy, data: data, idx: idx), anon())
     }
-    return 0U64
-}
 
-fn genLlvmAppend(c: inout Comp, st: inout LlvmCtx, recv: U64, valueExpr: U64) -> LLVMValueRef {
-    val arrPtr: LLVMValueRef = arrStoragePtr(c: inout c, st: inout st, id: recv)
-    if LLVMIsNull(arrPtr) != 0I32 {
-        compileErrorAt(line: 0, msg: "LLVM backend: append only on an array local / struct field (so far)")
-        return LLVMConstInt(st.i64ty, 0U64, 0I32)
-    }
-    val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: recv)
-    val dataPtr: LLVMValueRef = LLVMBuildStructGEP2(st.b, st.arrayTy, arrPtr, 0U64, anon())
-    val countPtr: LLVMValueRef = LLVMBuildStructGEP2(st.b, st.arrayTy, arrPtr, 1U64, anon())
-    val data: LLVMValueRef = LLVMBuildLoad2(st.b, st.ptrty, dataPtr, anon())
-    val count: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, countPtr, anon())
-    // newdata = plew_arr_grow(data, elemSize, count)
-    mut val gtys: Array[LLVMTypeRef] = []
-    gtys.append(value: st.ptrty)
-    gtys.append(value: st.i64ty)
-    gtys.append(value: st.i64ty)
-    val gfty: LLVMTypeRef = LLVMFunctionType(st.ptrty, arrayCPtr(gtys), 3U64, 0I32)
-    val grow: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_arr_grow", nameId: 22U64, fnTy: gfty)
-    mut val gav: Array[LLVMValueRef] = []
-    gav.append(value: data)
-    gav.append(value: LLVMSizeOf(elemTy))
-    gav.append(value: count)
-    val newdata: LLVMValueRef = LLVMBuildCall2(st.b, gfty, grow, arrayCPtr(gav), 3U64, anon())
-    LLVMBuildStore(st.b, newdata, dataPtr)
-    // build the appended value. An array-LITERAL appended to a nested array
-    // (`m.append([1,2,3])` for m: Array[Array[I32]]) must use the inner element
-    // type, not i64-defaulted — recover it from the receiver's element ref.
-    mut val ev: LLVMValueRef = LLVMConstInt(st.i64ty, 0U64, 0I32)
-    mut val builtLit: Bool = false
-    match c.arena.exprs[valueExpr] {
-        Expr.Array(val elems) => {
-            val recvElemRef: U64 = arrayExprElemRef(c: inout c, st: inout st, arrayExpr: recv)
-            if recvElemRef != 0U64 {
-                val ret: TypeRef = c.arena.types[recvElemRef]
-                if rangeEquals(bytes: c.arena.bytes, start: ret.nameStart, len: ret.nameLen, kw: "Array") {
-                    if ret.args.count > 0U64 {
-                        ev = genLlvmArrayLit(c: inout c, st: inout st, elems: elems, elemTy: llvmTypeOfRef(c: inout c, st: inout st, ref: ret.args[0]))
-                        builtLit = true
+    // `arr.append(v)` on an array local: grow the buffer if full, store v at `count`,
+    // increment count (mutating the local's {data,count}). No CoW yet (shares buffer).
+    // The element TypeRef of an array-valued expression (an array local's
+    // locElemTypeRef, or a struct field's grounded element ref), or 0.
+    inout fn arrayExprElemRef(c: inout Comp, arrayExpr: U64) -> U64 {
+        match c.arena.exprs[arrayExpr] {
+            Expr.Ident(val start, val len) => {
+                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                if li < self.nLocals {
+                    return self.locElemTypeRef[li]
+                }
+            }
+            Expr.Field(base: val fb, nameStart: val fns, nameLen: val fnl) => {
+                val bsi: U64 = exprStructIdx(c: inout c, st: inout self, id: fb)
+                if bsi < c.arena.structs.count {
+                    val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
+                    if fidx < c.arena.structs[bsi].fields.count {
+                        return self.fieldArrayElemRefUnderBase(c: inout c, base: fb, fd: c.arena.structs[bsi].fields[fidx])
                     }
                 }
             }
+            _ => {}
         }
-        _ => {}
+        return 0U64
     }
-    if !(builtLit) {
-        ev = coerceElem(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valueExpr), elemTy: elemTy)
-    }
-    LLVMBuildStore(st.b, ev, arrElemPtr(st: inout st, elemTy: elemTy, data: newdata, idx: count))
-    LLVMBuildStore(st.b, LLVMBuildAdd(st.b, count, LLVMConstInt(st.i64ty, 1U64, 0I32), anon()), countPtr)
-    return LLVMConstInt(st.i64ty, 0U64, 0I32)
-}
 
-// `arr.set(i:, value:)`: bounds-checked element store through the array's shared
-// buffer (same place mutation as `arr[i] = v`; no CoW yet). Returns a unit value.
-fn genLlvmArraySet(c: inout Comp, st: inout LlvmCtx, recv: U64, indexExpr: U64, valueExpr: U64) -> LLVMValueRef {
-    val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: recv)
-    val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: recv)
-    val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 0U64, anon())
-    val count: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 1U64, anon())
-    val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: indexExpr)
-    emitBoundsCheck(c: inout c, st: inout st, idx: idx, count: count)
-    val ep: LLVMValueRef = arrElemPtr(st: inout st, elemTy: elemTy, data: data, idx: idx)
-    val rv: LLVMValueRef = coerceElem(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: valueExpr), elemTy: elemTy)
-    LLVMBuildStore(st.b, rv, ep)
-    return LLVMConstInt(st.i64ty, 0U64, 0I32)
-}
-
-// Emit a condition expression as an i1. A comparison binary already yields i1; any
-// other integer becomes `x != 0`.
-// `a && b` / `a || b` with short-circuit semantics (spec/12), yielding an i1.
-// For `&&`: if a is false, the result is false without evaluating b; for `||`: if
-// a is true, the result is true without evaluating b. A PHI merges the short-
-// circuit constant (from the lhs block) with b's value (from the rhs block).
-fn genLlvmShortCircuit(c: inout Comp, st: inout LlvmCtx, isAnd: Bool, lhs: U64, rhs: U64) -> LLVMValueRef {
-    val lv: LLVMValueRef = genLlvmCond(c: inout c, st: inout st, id: lhs)
-    val lhsEndBB: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
-    val rhsBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "sc.rhs"))
-    val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "sc.cont"))
-    // && : true -> eval rhs, false -> short-circuit (false). || : true -> short-
-    // circuit (true), false -> eval rhs.
-    if isAnd {
-        LLVMBuildCondBr(st.b, lv, rhsBB, contBB)
-    } else {
-        LLVMBuildCondBr(st.b, lv, contBB, rhsBB)
-    }
-    LLVMPositionBuilderAtEnd(st.b, rhsBB)
-    val rv: LLVMValueRef = genLlvmCond(c: inout c, st: inout st, id: rhs)
-    val rhsEndBB: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
-    LLVMBuildBr(st.b, contBB)
-    LLVMPositionBuilderAtEnd(st.b, contBB)
-    val phi: LLVMValueRef = LLVMBuildPhi(st.b, st.i1ty, anon())
-    // the short-circuit constant on the lhs edge: && -> false, || -> true.
-    mut val scConst: LLVMValueRef = LLVMConstInt(st.i1ty, 0U64, 0I32)
-    if !(isAnd) {
-        scConst = LLVMConstInt(st.i1ty, 1U64, 0I32)
-    }
-    mut val vals: Array[LLVMValueRef] = []
-    vals.append(value: scConst)
-    vals.append(value: rv)
-    mut val blocks: Array[LLVMBasicBlockRef] = []
-    blocks.append(value: lhsEndBB)
-    blocks.append(value: rhsEndBB)
-    LLVMAddIncoming(phi, arrayCPtr(vals), arrayCPtr(blocks), 2U64)
-    return phi
-}
-
-fn genLlvmCond(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
-    match c.arena.exprs[id] {
-        Expr.Binary(val op, lhs: _, rhs: _) => {
-            if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
-                return genLlvmExpr(c: inout c, st: inout st, id: id)
+    inout fn genLlvmAppend(c: inout Comp, recv: U64, valueExpr: U64) -> LLVMValueRef {
+        val arrPtr: LLVMValueRef = arrStoragePtr(c: inout c, st: inout self, id: recv)
+        if LLVMIsNull(arrPtr) != 0I32 {
+            compileErrorAt(line: 0, msg: "LLVM backend: append only on an array local / struct field (so far)")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout self, id: recv)
+        val dataPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.arrayTy, arrPtr, 0U64, anon())
+        val countPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.arrayTy, arrPtr, 1U64, anon())
+        val data: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, dataPtr, anon())
+        val count: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, countPtr, anon())
+        // newdata = plew_arr_grow(data, elemSize, count)
+        mut val gtys: Array[LLVMTypeRef] = []
+        gtys.append(value: self.ptrty)
+        gtys.append(value: self.i64ty)
+        gtys.append(value: self.i64ty)
+        val gfty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(gtys), 3U64, 0I32)
+        val grow: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_arr_grow", nameId: 22U64, fnTy: gfty)
+        mut val gav: Array[LLVMValueRef] = []
+        gav.append(value: data)
+        gav.append(value: LLVMSizeOf(elemTy))
+        gav.append(value: count)
+        val newdata: LLVMValueRef = LLVMBuildCall2(self.b, gfty, grow, arrayCPtr(gav), 3U64, anon())
+        LLVMBuildStore(self.b, newdata, dataPtr)
+        // build the appended value. An array-LITERAL appended to a nested array
+        // (`m.append([1,2,3])` for m: Array[Array[I32]]) must use the inner element
+        // type, not i64-defaulted — recover it from the receiver's element ref.
+        mut val ev: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
+        mut val builtLit: Bool = false
+        match c.arena.exprs[valueExpr] {
+            Expr.Array(val elems) => {
+                val recvElemRef: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: recv)
+                if recvElemRef != 0U64 {
+                    val ret: TypeRef = c.arena.types[recvElemRef]
+                    if rangeEquals(bytes: c.arena.bytes, start: ret.nameStart, len: ret.nameLen, kw: "Array") {
+                        if ret.args.count > 0U64 {
+                            ev = self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: llvmTypeOfRef(c: inout c, st: inout self, ref: ret.args[0]))
+                            builtLit = true
+                        }
+                    }
+                }
             }
+            _ => {}
         }
-        _ => {}
+        if !(builtLit) {
+            ev = coerceElem(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: valueExpr), elemTy: elemTy)
+        }
+        LLVMBuildStore(self.b, ev, arrElemPtr(st: inout self, elemTy: elemTy, data: newdata, idx: count))
+        LLVMBuildStore(self.b, LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), countPtr)
+        return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
-    val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: id)
-    return LLVMBuildICmp(st.b, llvmIntNe(), v, LLVMConstInt(st.i1ty, 0U64, 0I32), anon())
-}
 
+    // `arr.set(i:, value:)`: bounds-checked element store through the array's shared
+    // buffer (same place mutation as `arr[i] = v`; no CoW yet). Returns a unit value.
+    inout fn genLlvmArraySet(c: inout Comp, recv: U64, indexExpr: U64, valueExpr: U64) -> LLVMValueRef {
+        val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout self, id: recv)
+        val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: recv)
+        val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
+        val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
+        val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: indexExpr)
+        emitBoundsCheck(c: inout c, st: inout self, idx: idx, count: count)
+        val ep: LLVMValueRef = arrElemPtr(st: inout self, elemTy: elemTy, data: data, idx: idx)
+        val rv: LLVMValueRef = coerceElem(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: valueExpr), elemTy: elemTy)
+        LLVMBuildStore(self.b, rv, ep)
+        return LLVMConstInt(self.i64ty, 0U64, 0I32)
+    }
+
+    // Emit a condition expression as an i1. A comparison binary already yields i1; any
+    // other integer becomes `x != 0`.
+    // `a && b` / `a || b` with short-circuit semantics (spec/12), yielding an i1.
+    // For `&&`: if a is false, the result is false without evaluating b; for `||`: if
+    // a is true, the result is true without evaluating b. A PHI merges the short-
+    // circuit constant (from the lhs block) with b's value (from the rhs block).
+    inout fn genLlvmShortCircuit(c: inout Comp, isAnd: Bool, lhs: U64, rhs: U64) -> LLVMValueRef {
+        val lv: LLVMValueRef = self.genLlvmCond(c: inout c, id: lhs)
+        val lhsEndBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
+        val rhsBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "sc.rhs"))
+        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "sc.cont"))
+        // && : true -> eval rhs, false -> short-circuit (false). || : true -> short-
+        // circuit (true), false -> eval rhs.
+        if isAnd {
+            LLVMBuildCondBr(self.b, lv, rhsBB, contBB)
+        } else {
+            LLVMBuildCondBr(self.b, lv, contBB, rhsBB)
+        }
+        LLVMPositionBuilderAtEnd(self.b, rhsBB)
+        val rv: LLVMValueRef = self.genLlvmCond(c: inout c, id: rhs)
+        val rhsEndBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
+        LLVMBuildBr(self.b, contBB)
+        LLVMPositionBuilderAtEnd(self.b, contBB)
+        val phi: LLVMValueRef = LLVMBuildPhi(self.b, self.i1ty, anon())
+        // the short-circuit constant on the lhs edge: && -> false, || -> true.
+        mut val scConst: LLVMValueRef = LLVMConstInt(self.i1ty, 0U64, 0I32)
+        if !(isAnd) {
+            scConst = LLVMConstInt(self.i1ty, 1U64, 0I32)
+        }
+        mut val vals: Array[LLVMValueRef] = []
+        vals.append(value: scConst)
+        vals.append(value: rv)
+        mut val blocks: Array[LLVMBasicBlockRef] = []
+        blocks.append(value: lhsEndBB)
+        blocks.append(value: rhsEndBB)
+        LLVMAddIncoming(phi, arrayCPtr(vals), arrayCPtr(blocks), 2U64)
+        return phi
+    }
+
+    inout fn genLlvmCond(c: inout Comp, id: U64) -> LLVMValueRef {
+        match c.arena.exprs[id] {
+            Expr.Binary(val op, lhs: _, rhs: _) => {
+                if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
+                    return genLlvmExpr(c: inout c, st: inout self, id: id)
+                }
+            }
+            _ => {}
+        }
+        val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: id)
+        return LLVMBuildICmp(self.b, llvmIntNe(), v, LLVMConstInt(self.i1ty, 0U64, 0I32), anon())
+    }
+}

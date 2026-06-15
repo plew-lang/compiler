@@ -451,7 +451,7 @@ fn emitWitnessCall(c: inout Comp, st: inout LlvmCtx, fi: U64, lhs: U64, rhs: U64
         // a witness on a lang-item the upfront pass doesn't emit (`String.add` for
         // `"a" + "b"` — String isn't a registered struct, so isPlainUserFn skips it):
         // declare it lazily like a provided method and queue its body for emission.
-        aslot = ensureFreeFnDeclared(c: inout c, st: inout st, fi: fi)
+        aslot = st.ensureFreeFnDeclared(c: inout c, fi: fi)
     }
     if aslot >= st.fnIdx.count {
         compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: lhs)), msg: "LLVM backend: operator witness not emittable yet")

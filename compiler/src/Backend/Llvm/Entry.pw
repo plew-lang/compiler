@@ -64,19 +64,19 @@ export fn emitLlvm(c: inout Comp) {
     // set with their names; only struct + generic-struct bodies cross-reference named
     // types, so those are deferred to the body passes.)
     registerStructNames(c: inout c, st: inout st)
-    registerEnums(c: inout c, st: inout st)
+    st.registerEnums(c: inout c)
     registerGenStructNames(c: inout c, st: inout st)
     registerGenEnums(c: inout c, st: inout st)
     registerStructBodies(c: inout c, st: inout st)
     registerGenStructBodies(c: inout c, st: inout st)
 
     // determine which assoc fns are actually reached (called) before declaring.
-    collectReachableAssoc(c: inout c, st: inout st)
+    st.collectReachableAssoc(c: inout c)
 
     // pass 1: declare all plain user functions + generic free-fn instances + generic
     // method instances (one per receiver instantiation).
-    declareUserFns(c: inout c, st: inout st)
-    declareGenFns(c: inout c, st: inout st)
+    st.declareUserFns(c: inout c)
+    st.declareGenFns(c: inout c)
     declareGenMethods(c: inout c, st: inout st)
     // async fns: build each frame struct + resume fn, and a non-main entry symbol
     // in the fnIdx table (so a call `doubler(x: 21)` resolves to a promise-returning
@@ -84,7 +84,7 @@ export fn emitLlvm(c: inout Comp) {
     declareAsyncFns(c: inout c, st: inout st)
     // declare lambda-lifted closures (after the named types + functions they may
     // reference exist), so a closure literal can build its {fn, env} value.
-    collectClosures(c: inout c, st: inout st)
+    st.collectClosures(c: inout c)
     // declare function-value thunks (a bare function reference -> {thunk, null}).
     st.collectThunks(c: inout c)
 
@@ -121,7 +121,7 @@ export fn emitLlvm(c: inout Comp) {
             if c.genMode && c.nameIsMain(f: c.arena.funcs[fi]) {
                 // the dead user main: skip entirely.
             } else {
-                if isPlainUserFn(c: inout c, st: inout st, fi: fi) {
+                if st.isPlainUserFn(c: inout c, fi: fi) {
                     genLlvmFunc(c: inout c, st: inout st, fi: fi)
                 }
             }
@@ -131,10 +131,10 @@ export fn emitLlvm(c: inout Comp) {
     // async fn entry + resume bodies (main's entry drains the loop).
     emitAsyncFns(c: inout c, st: inout st)
     // generic free-function + generic-method instance bodies.
-    emitGenFns(c: inout c, st: inout st)
+    st.emitGenFns(c: inout c)
     emitGenMethods(c: inout c, st: inout st)
     // lambda-lifted closure bodies + function-value thunks.
-    emitClosures(c: inout c, st: inout st)
+    st.emitClosures(c: inout c)
     st.emitThunks(c: inout c)
     // provided trait methods + lazily-declared std/generic methods reached during
     // the passes above. Both queues can grow as bodies emit (a provided body calls
@@ -295,7 +295,7 @@ fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     st.locOwned = []
     st.locMoved = []
     seedGlobals(c: inout c, st: inout st)
-    genLlvmBlock(c: inout c, st: inout st, id: c.arena.funcs[fi].body)
+    st.genLlvmBlock(c: inout c, id: c.arena.funcs[fi].body)
     if !(st.terminated) {
         LLVMBuildRet(st.b, LLVMConstInt(st.i32ty, 0U64, 0I32))
     }

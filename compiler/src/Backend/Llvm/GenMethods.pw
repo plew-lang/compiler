@@ -82,10 +82,10 @@ fn declareOneGenMethod(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64,
     }
     mut val pi: U64 = 0
     while pi < mf.params.count {
-        ptys.append(value: paramLlvmTy(c: inout c, st: inout st, p: mf.params[pi]))
+        ptys.append(value: st.paramLlvmTy(c: inout c, p: mf.params[pi]))
         pi += 1
     }
-    val fty: LLVMTypeRef = LLVMFunctionType(llvmFnRetTy(c: inout c, st: inout st, f: mf), arrayCPtr(ptys), ptys.count, 0I32)
+    val fty: LLVMTypeRef = LLVMFunctionType(st.llvmFnRetTy(c: inout c, f: mf), arrayCPtr(ptys), ptys.count, 0I32)
     mut val nm: Array[U8] = []
     appendBytes(into: inout nm, from: "gm".bytes)
     appendU64Dec(into: inout nm, n: mfi)
@@ -272,7 +272,7 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
         }
         if pRef == 0U64 {
             // grounded span so a `Self` param on an enum receiver tracks the enum.
-            if enumRegSlot(c: inout c, st: inout st, start: pgStart, len: pgLen) < st.enumIdxs.count {
+            if st.enumRegSlot(c: inout c, start: pgStart, len: pgLen) < st.enumIdxs.count {
                 pRef = c.simpleTypeRef(nameStart: pgStart, nameLen: pgLen)
             }
         }
@@ -301,7 +301,7 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
                 pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
             }
             if pRef == 0U64 {
-                if enumRegSlot(c: inout c, st: inout st, start: gs2, len: gl2) < st.enumIdxs.count {
+                if st.enumRegSlot(c: inout c, start: gs2, len: gl2) < st.enumIdxs.count {
                     pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
                 }
             }

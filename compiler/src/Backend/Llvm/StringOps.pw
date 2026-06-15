@@ -384,7 +384,7 @@ fn enumMaxWords(c: inout Comp, st: inout LlvmCtx, eid: U64) -> U64 {
         mut val w: U64 = 0
         mut val fj: U64 = 0
         while fj < fs.count {
-            w = w + fieldWordsF(c: inout c, st: inout st, f: fs[fj])
+            w = w + st.fieldWordsF(c: inout c, f: fs[fj])
             fj += 1
         }
         if w > maxW { maxW = w }
@@ -494,7 +494,7 @@ fn emitEnumCmp(c: inout Comp, st: inout LlvmCtx, a: LLVMValueRef, b: LLVMValueRe
     mut val vi: U64 = 0
     while vi < ed.variants.count {
         if ed.variants[vi].fields.count > 0U64 {
-            val payloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: eid, vi: vi)
+            val payloadTy: LLVMTypeRef = st.variantPayloadTy(c: inout c, eid: eid, vi: vi)
             val pA: LLVMValueRef = LLVMBuildLoad2(st.b, payloadTy, LLVMBuildStructGEP2(st.b, sty, aslot, 1U64, anon()), anon())
             val pB: LLVMValueRef = LLVMBuildLoad2(st.b, payloadTy, LLVMBuildStructGEP2(st.b, sty, bslot, 1U64, anon()), anon())
             val vOrd: LLVMValueRef = emitVariantPayloadCmp(c: inout c, st: inout st, eid: eid, vi: vi, pA: pA, pB: pB)

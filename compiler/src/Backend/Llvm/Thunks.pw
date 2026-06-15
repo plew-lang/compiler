@@ -23,7 +23,7 @@ pub impl LlvmCtx {
         if self.thunkSlot(fi: fi) < self.thunkIdx.count {
             return
         }
-        if !(isPlainUserFn(c: inout c, st: inout self, fi: fi)) {
+        if !(self.isPlainUserFn(c: inout c, fi: fi)) {
             return
         }
         val f: Func = c.arena.funcs[fi]
@@ -34,10 +34,10 @@ pub impl LlvmCtx {
         ptys.append(value: self.ptrty)
         mut val pi: U64 = 0
         while pi < f.params.count {
-            ptys.append(value: paramLlvmTy(c: inout c, st: inout self, p: f.params[pi]))
+            ptys.append(value: self.paramLlvmTy(c: inout c, p: f.params[pi]))
             pi += 1
         }
-        val fty: LLVMTypeRef = LLVMFunctionType(llvmFnRetTy(c: inout c, st: inout self, f: f), arrayCPtr(ptys), ptys.count, 0I32)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: f), arrayCPtr(ptys), ptys.count, 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "__fnthunk".bytes)
         appendU64Dec(into: inout nm, n: fi)
