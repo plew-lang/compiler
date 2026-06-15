@@ -17,153 +17,135 @@
 // Is `(start,len)` a compiler-privileged built-in derive (`@[Eq]`/`@[Ord]`),
 // synthesized directly by the compiler rather than run as a user macro? Those are
 // skipped by the harness (they have no `Derive`-implementing struct to call).
-fn isBuiltinDerive(c: inout Comp, start: U64, len: U64) -> Bool {
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Eq") {
-        return true
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Ord") {
-        return true
-    }
-    return false
-}
 
-// Intern the source slice `c.arena.bytes[from..to]` as a quoted, escaped string literal
-// (appended to c.arena.bytes) and return its (start,len) span including the quotes. The
-// Expr.Str emitter splices the bytes between the quotes raw into a C "..." literal,
-// so backslash/quote/newline/CR/tab must be escaped here; the C compiler then
-// reconstructs the original text at runtime. Used by gen mode to embed the
-// annotated item's own source so the macro's `parseItem` can read it.
-fn internSourceLiteral(c: inout Comp, from: U64, to: U64) -> Bind {
-    val start: U64 = c.arena.bytes.count
-    c.arena.bytes.append('"')
-    mut val i: U64 = from
-    while i < to {
-        val b: U8 = c.arena.bytes[i]
-        if b == '\\' {
-            c.arena.bytes.append('\\')
-            c.arena.bytes.append('\\')
-        } else {
-            if b == '"' {
-                c.arena.bytes.append('\\')
-                c.arena.bytes.append('"')
+pub impl Comp {
+    inout fn isBuiltinDerive(start: U64, len: U64) -> Bool {
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "Eq") {
+            return true
+        }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "Ord") {
+            return true
+        }
+        return false
+    }
+
+    inout fn internSourceLiteral(from: U64, to: U64) -> Bind {
+        val start: U64 = self.arena.bytes.count
+        self.arena.bytes.append('"')
+        mut val i: U64 = from
+        while i < to {
+            val b: U8 = self.arena.bytes[i]
+            if b == '\\' {
+                self.arena.bytes.append('\\')
+                self.arena.bytes.append('\\')
             } else {
-                if b == '\n' {
-                    c.arena.bytes.append('\\')
-                    c.arena.bytes.append('n')
+                if b == '"' {
+                    self.arena.bytes.append('\\')
+                    self.arena.bytes.append('"')
                 } else {
-                    if b == '\r' {
-                        c.arena.bytes.append('\\')
-                        c.arena.bytes.append('r')
+                    if b == '\n' {
+                        self.arena.bytes.append('\\')
+                        self.arena.bytes.append('n')
                     } else {
-                        if b == '\t' {
-                            c.arena.bytes.append('\\')
-                            c.arena.bytes.append('t')
+                        if b == '\r' {
+                            self.arena.bytes.append('\\')
+                            self.arena.bytes.append('r')
                         } else {
-                            c.arena.bytes.append(b)
+                            if b == '\t' {
+                                self.arena.bytes.append('\\')
+                                self.arena.bytes.append('t')
+                            } else {
+                                self.arena.bytes.append(b)
+                            }
                         }
                     }
                 }
             }
-        }
-        i += 1
-    }
-    c.arena.bytes.append('"')
-    val len: U64 = c.arena.bytes.count - start
-    return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
-}
-
-// A macro that takes directive arguments `@[Name(field: …)]` is constructed
-// `<Name field=… />` by the harness, which writes those fields. The harness is
-// synthesized after the visibility checks, so enforce the construction rule here:
-// each directive-argument field must be publicly settable on the macro struct
-// (not private), exactly as an explicit external `<Name field=… />` would require.
-// This keeps the macro model honest — to be configured via `@[Name(…)]`, a macro
-// must expose a public factory (its fields `pub`/`pub(get)`, not private).
-fn checkDirectiveArgsPublic(c: inout Comp, d: DeriveReq) {
-    mut val ai: U64 = 0
-    while ai < d.args.count {
-        val mf: MakeField = d.args[ai]
-        val v: U64 = fieldVis(c: inout c, structStart: d.nameStart, structLen: d.nameLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
-        if v == 0U64 {
-            compileErrorAt(line: lineOf(c: inout c, offset: mf.nameStart), msg: "directive argument sets a private field of the macro struct; a macro taking `@[Name(field: …)]` arguments must expose those fields publicly (mark them `pub`)")
-        }
-        ai += 1
-    }
-}
-
-// Synthesize the harness `main` for gen mode: for every user `@[Name]` derive
-// request, append `write(s: <Name />.deriveFromSource(source: <item src>, start:
-// declStart, end: declEnd))`.
-// Built as arena AST (like synthesizeDerives), so it rides normal codegen — the
-// `deriveFromSource` method resolves on the conforming macro struct (instantiated
-// by instantiateProvidedMethods) and `write` lowers to the runtime intrinsic.
-// Records the new func's index in `genMainIdx` so the emission loop skips the
-// user's own `main` and emits only this one as C `main`.
-fn synthGenMain(c: inout Comp) {
-    val writeN: Bind = internBytes(c: inout c, s: "write")
-    val sN: Bind = internBytes(c: inout c, s: "s")
-    val deriveN: Bind = internBytes(c: inout c, s: "derive")
-    val parseN: Bind = internBytes(c: inout c, s: "parseItem")
-    val inputN: Bind = internBytes(c: inout c, s: "input")
-    val srcN: Bind = internBytes(c: inout c, s: "source")
-    val startN: Bind = internBytes(c: inout c, s: "start")
-    val endN: Bind = internBytes(c: inout c, s: "end")
-    val mainN: Bind = internBytes(c: inout c, s: "main")
-    mut val stmts: Array[U64] = []
-    mut val i: U64 = 0
-    while i < c.decls.derives.count {
-        val d: DeriveReq = c.decls.derives[i]
-        // only generate from the ENTRY file's annotations (module 0), not those of its
-        // dependencies (spec/16: `plew gen <file>` processes <file>, not the libraries it
-        // imports). This matters now that std files carry `@[...]` (e.g. Core's primitive
-        // `@[IntTryFrom]`): force-loading @Std/Core alongside an entry that IS Core would
-        // otherwise collect the same annotations twice.
-        if moduleOf(c: inout c, offset: d.declStart) != 0U64 {
             i += 1
-            continue
         }
-        if !(isBuiltinDerive(c: inout c, start: d.nameStart, len: d.nameLen)) {
-            // directive arguments must set publicly-settable fields (enforce the
-            // construction rule the post-checks pass skipped for this synthetic Make).
-            checkDirectiveArgsPublic(c: inout c, d: d)
-            // `parseItem(source: <item src>, start: declStart, end: declEnd)` — the
-            // annotated item's own source slice, with its original offset so the macro
-            // sees spans in original coordinates. (Synthesized post-checks, so the
-            // free-fn cross-module use of `parseItem` bypasses import hygiene.)
-            val srcLit: Bind = internSourceLiteral(c: inout c, from: d.declStart, to: d.declEnd)
-            val srcE: U64 = c.pushExpr(e: <Expr.Str start=srcLit.nameStart len=srcLit.nameLen />)
-            val startE: U64 = c.pushExpr(e: <Expr.Int value=d.declStart offset=0 isBool=false tyStart=0 tyLen=0 isNeg=false />)
-            val endE: U64 = c.pushExpr(e: <Expr.Int value=d.declEnd offset=0 isBool=false tyStart=0 tyLen=0 isNeg=false />)
-            mut val pargs: Array[Arg] = []
-            pargs.append(<Arg expr=srcE isInout=false labelStart=srcN.nameStart labelLen=srcN.nameLen hasLabel=true />)
-            pargs.append(<Arg expr=startE isInout=false labelStart=startN.nameStart labelLen=startN.nameLen hasLabel=true />)
-            pargs.append(<Arg expr=endE isInout=false labelStart=endN.nameStart labelLen=endN.nameLen hasLabel=true />)
-            val parseCall: U64 = c.pushExpr(e: <Expr.Call nameStart=parseN.nameStart nameLen=parseN.nameLen args=pargs />)
-            // the receiver of `.derive`: a bare `@[X]` (no args) names the type/trait X
-            // directly (assoc `Derive`); `@[X(args)]` constructs `<X args/>` first
-            // (instance `ParameterizedDerive`, `self` = the config).
-            mut val recv: U64 = 0
-            if d.args.count == 0 {
-                recv = c.pushExpr(e: <Expr.Ident start=d.nameStart len=d.nameLen />)
-            } else {
-                recv = c.pushExpr(e: <Expr.Make typeStart=d.nameStart typeLen=d.nameLen variantStart=0 variantLen=0 isEnum=false ty=0 fields=d.args />)
-            }
-            // `recv.derive(input: parseItem(...))`
-            mut val dargs: Array[Arg] = []
-            dargs.append(<Arg expr=parseCall isInout=false labelStart=inputN.nameStart labelLen=inputN.nameLen hasLabel=true />)
-            val call: U64 = c.pushExpr(e: <Expr.Method recv=recv nameStart=deriveN.nameStart nameLen=deriveN.nameLen args=dargs />)
-            // `write(s: <that>)`.
-            mut val wargs: Array[Arg] = []
-            wargs.append(<Arg expr=call isInout=false labelStart=sN.nameStart labelLen=sN.nameLen hasLabel=true />)
-            val wc: U64 = c.pushExpr(e: <Expr.Call nameStart=writeN.nameStart nameLen=writeN.nameLen args=wargs />)
-            stmts.append(c.pushStmt(s: <Stmt.ExprStmt expr=wc />))
-        }
-        i += 1
+        self.arena.bytes.append('"')
+        val len: U64 = self.arena.bytes.count - start
+        return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
     }
-    val blkId: U64 = c.arena.blocks.count
-    c.arena.blocks.append(<Block stmts=stmts />)
-    val noTP: Array[Bind] = []
-    val noParams: Array[Param] = []
-    c.genMainIdx = c.arena.funcs.count
-    c.arena.funcs.append(<Func nameStart=mainN.nameStart nameLen=mainN.nameLen nameId=intern(c: inout c, start: mainN.nameStart, len: mainN.nameLen) typeParams=noTP params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+
+    inout fn checkDirectiveArgsPublic(d: DeriveReq) {
+        mut val ai: U64 = 0
+        while ai < d.args.count {
+            val mf: MakeField = d.args[ai]
+            val v: U64 = fieldVis(c: inout self, structStart: d.nameStart, structLen: d.nameLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+            if v == 0U64 {
+                compileErrorAt(line: lineOf(c: inout self, offset: mf.nameStart), msg: "directive argument sets a private field of the macro struct; a macro taking `@[Name(field: …)]` arguments must expose those fields publicly (mark them `pub`)")
+            }
+            ai += 1
+        }
+    }
+
+    inout fn synthGenMain() {
+        val writeN: Bind = internBytes(c: inout self, s: "write")
+        val sN: Bind = internBytes(c: inout self, s: "s")
+        val deriveN: Bind = internBytes(c: inout self, s: "derive")
+        val parseN: Bind = internBytes(c: inout self, s: "parseItem")
+        val inputN: Bind = internBytes(c: inout self, s: "input")
+        val srcN: Bind = internBytes(c: inout self, s: "source")
+        val startN: Bind = internBytes(c: inout self, s: "start")
+        val endN: Bind = internBytes(c: inout self, s: "end")
+        val mainN: Bind = internBytes(c: inout self, s: "main")
+        mut val stmts: Array[U64] = []
+        mut val i: U64 = 0
+        while i < self.decls.derives.count {
+            val d: DeriveReq = self.decls.derives[i]
+            // only generate from the ENTRY file's annotations (module 0), not those of its
+            // dependencies (spec/16: `plew gen <file>` processes <file>, not the libraries it
+            // imports). This matters now that std files carry `@[...]` (e.g. Core's primitive
+            // `@[IntTryFrom]`): force-loading @Std/Core alongside an entry that IS Core would
+            // otherwise collect the same annotations twice.
+            if moduleOf(c: inout self, offset: d.declStart) != 0U64 {
+                i += 1
+                continue
+            }
+            if !(self.isBuiltinDerive(start: d.nameStart, len: d.nameLen)) {
+                // directive arguments must set publicly-settable fields (enforce the
+                // construction rule the post-checks pass skipped for this synthetic Make).
+                self.checkDirectiveArgsPublic(d: d)
+                // `parseItem(source: <item src>, start: declStart, end: declEnd)` — the
+                // annotated item's own source slice, with its original offset so the macro
+                // sees spans in original coordinates. (Synthesized post-checks, so the
+                // free-fn cross-module use of `parseItem` bypasses import hygiene.)
+                val srcLit: Bind = self.internSourceLiteral(from: d.declStart, to: d.declEnd)
+                val srcE: U64 = self.pushExpr(e: <Expr.Str start=srcLit.nameStart len=srcLit.nameLen />)
+                val startE: U64 = self.pushExpr(e: <Expr.Int value=d.declStart offset=0 isBool=false tyStart=0 tyLen=0 isNeg=false />)
+                val endE: U64 = self.pushExpr(e: <Expr.Int value=d.declEnd offset=0 isBool=false tyStart=0 tyLen=0 isNeg=false />)
+                mut val pargs: Array[Arg] = []
+                pargs.append(<Arg expr=srcE isInout=false labelStart=srcN.nameStart labelLen=srcN.nameLen hasLabel=true />)
+                pargs.append(<Arg expr=startE isInout=false labelStart=startN.nameStart labelLen=startN.nameLen hasLabel=true />)
+                pargs.append(<Arg expr=endE isInout=false labelStart=endN.nameStart labelLen=endN.nameLen hasLabel=true />)
+                val parseCall: U64 = self.pushExpr(e: <Expr.Call nameStart=parseN.nameStart nameLen=parseN.nameLen args=pargs />)
+                // the receiver of `.derive`: a bare `@[X]` (no args) names the type/trait X
+                // directly (assoc `Derive`); `@[X(args)]` constructs `<X args/>` first
+                // (instance `ParameterizedDerive`, `self` = the config).
+                mut val recv: U64 = 0
+                if d.args.count == 0 {
+                    recv = self.pushExpr(e: <Expr.Ident start=d.nameStart len=d.nameLen />)
+                } else {
+                    recv = self.pushExpr(e: <Expr.Make typeStart=d.nameStart typeLen=d.nameLen variantStart=0 variantLen=0 isEnum=false ty=0 fields=d.args />)
+                }
+                // `recv.derive(input: parseItem(...))`
+                mut val dargs: Array[Arg] = []
+                dargs.append(<Arg expr=parseCall isInout=false labelStart=inputN.nameStart labelLen=inputN.nameLen hasLabel=true />)
+                val call: U64 = self.pushExpr(e: <Expr.Method recv=recv nameStart=deriveN.nameStart nameLen=deriveN.nameLen args=dargs />)
+                // `write(s: <that>)`.
+                mut val wargs: Array[Arg] = []
+                wargs.append(<Arg expr=call isInout=false labelStart=sN.nameStart labelLen=sN.nameLen hasLabel=true />)
+                val wc: U64 = self.pushExpr(e: <Expr.Call nameStart=writeN.nameStart nameLen=writeN.nameLen args=wargs />)
+                stmts.append(self.pushStmt(s: <Stmt.ExprStmt expr=wc />))
+            }
+            i += 1
+        }
+        val blkId: U64 = self.arena.blocks.count
+        self.arena.blocks.append(<Block stmts=stmts />)
+        val noTP: Array[Bind] = []
+        val noParams: Array[Param] = []
+        self.genMainIdx = self.arena.funcs.count
+        self.arena.funcs.append(<Func nameStart=mainN.nameStart nameLen=mainN.nameLen nameId=intern(c: inout self, start: mainN.nameStart, len: mainN.nameLen) typeParams=noTP params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    }
 }

@@ -38,7 +38,7 @@ pub impl Comp {
         if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "String") {
             return true
         }
-        if knownNamedTypeId(c: inout self, start: start, len: len) != 0U64 {
+        if self.knownNamedTypeId(start: start, len: len) != 0U64 {
             return true
         }
         return false
@@ -67,7 +67,7 @@ pub impl Comp {
             // existing `any` source is left to the conservative pass-through.
             if te.isAny {
                 if !(tin.isAny) {
-                    val srcId: U64 = knownNamedTypeId(c: inout self, start: tin.nameStart, len: tin.nameLen)
+                    val srcId: U64 = self.knownNamedTypeId(start: tin.nameStart, len: tin.nameLen)
                     if srcId != 0U64 {
                         val traitId: U64 = intern(c: inout self, start: te.nameStart, len: te.nameLen)
                         if !(conformExists(c: inout self, typeId: srcId, traitId: traitId)) {
@@ -94,11 +94,11 @@ pub impl Comp {
             // one side float, the other not: a mismatch UNLESS the non-float side is an
             // untyped/unknown type (a bare int literal — polymorphic, handled below).
             if eFloat {
-                if knownNamedTypeId(c: inout self, start: tin.nameStart, len: tin.nameLen) == 0U64 {
+                if self.knownNamedTypeId(start: tin.nameStart, len: tin.nameLen) == 0U64 {
                     return true
                 }
             } else {
-                if knownNamedTypeId(c: inout self, start: te.nameStart, len: te.nameLen) == 0U64 {
+                if self.knownNamedTypeId(start: te.nameStart, len: te.nameLen) == 0U64 {
                     return true
                 }
             }
@@ -148,8 +148,8 @@ pub impl Comp {
             }
             return true
         }
-        val eId: U64 = knownNamedTypeId(c: inout self, start: te.nameStart, len: te.nameLen)
-        val iId: U64 = knownNamedTypeId(c: inout self, start: tin.nameStart, len: tin.nameLen)
+        val eId: U64 = self.knownNamedTypeId(start: te.nameStart, len: te.nameLen)
+        val iId: U64 = self.knownNamedTypeId(start: tin.nameStart, len: tin.nameLen)
         if eId == 0U64 || iId == 0U64 {
             return true
         }

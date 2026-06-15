@@ -235,7 +235,7 @@ pub impl Comp {
             }
             Stmt.Match(val scrut, val arms) => {
                 verifyExpr(c: inout self, id: scrut)
-                checkMatchArmsEnum(c: inout self, scrut: scrut, arms: arms)
+                self.checkMatchArmsEnum(scrut: scrut, arms: arms)
                 if !(matchExhaustive(c: inout self, arms: arms)) {
                     compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
                 }

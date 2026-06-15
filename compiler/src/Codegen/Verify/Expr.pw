@@ -54,7 +54,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
                     retIsUnit = true
                 }
                 if !(retIsUnit) {
-                    if !(blockDiverges(c: inout c, blkId: body)) {
+                    if !(c.blockDiverges(blkId: body)) {
                         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "this closure has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (spec/04)")
                     }
                 }
@@ -74,7 +74,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             verifyMethodVis(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
             verifyExpr(c: inout c, id: recv)
             verifyArgs(c: inout c, args: args)
-            checkMethodArgCategories(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+            c.checkMethodArgCategories(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.ExtMethod(val recv, val srcStart, val srcLen, nameStart: _, nameLen: _, val args) => {
             checkViewValid(c: inout c, recv: recv, srcStart: srcStart, srcLen: srcLen, strip: false)
@@ -87,7 +87,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
             verifyArgs(c: inout c, args: args)
-            checkCallArgCategories(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            c.checkCallArgCategories(nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
             // enum variant construction (`<E.A x=1 />`) must specify EVERY payload
@@ -307,7 +307,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
         }
         Expr.MatchExpr(val scrut, val arms) => {
             verifyExpr(c: inout c, id: scrut)
-            checkMatchArmsEnum(c: inout c, scrut: scrut, arms: arms)
+            c.checkMatchArmsEnum(scrut: scrut, arms: arms)
             if !(matchExhaustive(c: inout c, arms: arms)) {
                 compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
             }

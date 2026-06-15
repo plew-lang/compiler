@@ -3,133 +3,131 @@
 
 // Does control fall off the end of this block, or does it always leave via
 // return/panic/diverging-control? True = always diverges (never falls through).
-fn blockDiverges(c: inout Comp, blkId: U64) -> Bool {
-    val blk: Block = c.arena.blocks[blkId]
-    val stmts: Array[U64] = blk.stmts
-    mut val i: U64 = 0
-    while i < stmts.count {
-        if stmtDiverges(c: inout c, stmtId: stmts[i]) {
-            return true
-        }
-        i += 1
-    }
-    return false
-}
 
-// Whether a `break` (that exits THIS loop, not a nested one) appears in the block —
-// used to tell whether `while true { … }` can fall through. Nested loops shadow
-// their own `break`, so recurse into ifs/matches but not into while/for bodies.
-fn blockHasLoopBreak(c: inout Comp, blkId: U64) -> Bool {
-    val blk: Block = c.arena.blocks[blkId]
-    val stmts: Array[U64] = blk.stmts
-    mut val i: U64 = 0
-    while i < stmts.count {
-        if stmtHasLoopBreak(c: inout c, stmtId: stmts[i]) {
-            return true
-        }
-        i += 1
-    }
-    return false
-}
-
-fn stmtHasLoopBreak(c: inout Comp, stmtId: U64) -> Bool {
-    match c.arena.stmts[stmtId] {
-        Stmt.Break(offset: _) => { return true }
-        Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
-            if blockHasLoopBreak(c: inout c, blkId: thenBlk) {
+pub impl Comp {
+    inout fn blockDiverges(blkId: U64) -> Bool {
+        val blk: Block = self.arena.blocks[blkId]
+        val stmts: Array[U64] = blk.stmts
+        mut val i: U64 = 0
+        while i < stmts.count {
+            if self.stmtDiverges(stmtId: stmts[i]) {
                 return true
             }
-            if hasElse {
-                return blockHasLoopBreak(c: inout c, blkId: elseBlk)
-            }
-            return false
+            i += 1
         }
-        Stmt.Match(val scrut, val arms) => {
-            mut val i: U64 = 0
-            while i < arms.count {
-                if blockHasLoopBreak(c: inout c, blkId: arms[i].body) {
-                    return true
-                }
-                i += 1
-            }
-            return false
-        }
-        _ => { return false }
-    }
-}
-
-fn stmtDiverges(c: inout Comp, stmtId: U64) -> Bool {
-    match c.arena.stmts[stmtId] {
-        Stmt.Return(val value, val hasValue, offset: _) => { return true }
-        Stmt.Panic(val msg, val offset) => { return true }
-        Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
-            if hasElse {
-                if blockDiverges(c: inout c, blkId: thenBlk) {
-                    return blockDiverges(c: inout c, blkId: elseBlk)
-                }
-            }
-            return false
-        }
-        Stmt.Match(val scrut, val arms) => {
-            // match is exhaustive (checkMatchBinds / structural exhaustiveness), so
-            // it diverges iff every arm's block diverges.
-            if arms.count == 0 {
-                return false
-            }
-            mut val i: U64 = 0
-            while i < arms.count {
-                if !(blockDiverges(c: inout c, blkId: arms[i].body)) {
-                    return false
-                }
-                i += 1
-            }
-            return true
-        }
-        Stmt.While(val cond, val body) => {
-            // an unconditional `while true { … }` with no exiting `break` never falls
-            // through (it loops forever or leaves via return/panic inside).
-            if condIsLiteralTrue(c: inout c, id: cond) {
-                return !blockHasLoopBreak(c: inout c, blkId: body)
-            }
-            return false
-        }
-        _ => { return false }
-    }
-}
-
-// Is the condition expression the literal `true`?
-fn condIsLiteralTrue(c: inout Comp, id: U64) -> Bool {
-    if id >= c.arena.exprs.count {
         return false
     }
-    match c.arena.exprs[id] {
-        Expr.Int(val value, val offset, val isBool, val tyStart, val tyLen, isNeg: _) => {
-            return isBool && value == 1
-        }
-        _ => { return false }
-    }
-}
 
-// Enforce that every non-`()` function returns on all paths (no silent fall-off).
-fn checkReturns(c: inout Comp) {
-    mut val i: U64 = 0
-    while i < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[i]
-        // exempt: `()`-returning (hasRet false), `main` (returns int), extern (no
-        // body), provided/abstract (body 0), and async (state-machine return).
-        if f.hasRet {
-            if !(f.isExtern) {
-                if !(f.isAsync) {
-                    if f.body != 0 {
-                        if !(nameIsMain(c: inout c, f: f)) {
-                            if !(blockDiverges(c: inout c, blkId: f.body)) {
-                                compileErrorAt(line: lineOf(c: inout c, offset: f.nameStart), msg: "this function has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (Plew does not implicitly return the last expression)")
+    inout fn blockHasLoopBreak(blkId: U64) -> Bool {
+        val blk: Block = self.arena.blocks[blkId]
+        val stmts: Array[U64] = blk.stmts
+        mut val i: U64 = 0
+        while i < stmts.count {
+            if self.stmtHasLoopBreak(stmtId: stmts[i]) {
+                return true
+            }
+            i += 1
+        }
+        return false
+    }
+
+    inout fn stmtHasLoopBreak(stmtId: U64) -> Bool {
+        match self.arena.stmts[stmtId] {
+            Stmt.Break(offset: _) => { return true }
+            Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
+                if self.blockHasLoopBreak(blkId: thenBlk) {
+                    return true
+                }
+                if hasElse {
+                    return self.blockHasLoopBreak(blkId: elseBlk)
+                }
+                return false
+            }
+            Stmt.Match(val scrut, val arms) => {
+                mut val i: U64 = 0
+                while i < arms.count {
+                    if self.blockHasLoopBreak(blkId: arms[i].body) {
+                        return true
+                    }
+                    i += 1
+                }
+                return false
+            }
+            _ => { return false }
+        }
+    }
+
+    inout fn stmtDiverges(stmtId: U64) -> Bool {
+        match self.arena.stmts[stmtId] {
+            Stmt.Return(val value, val hasValue, offset: _) => { return true }
+            Stmt.Panic(val msg, val offset) => { return true }
+            Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
+                if hasElse {
+                    if self.blockDiverges(blkId: thenBlk) {
+                        return self.blockDiverges(blkId: elseBlk)
+                    }
+                }
+                return false
+            }
+            Stmt.Match(val scrut, val arms) => {
+                // match is exhaustive (checkMatchBinds / structural exhaustiveness), so
+                // it diverges iff every arm's block diverges.
+                if arms.count == 0 {
+                    return false
+                }
+                mut val i: U64 = 0
+                while i < arms.count {
+                    if !(self.blockDiverges(blkId: arms[i].body)) {
+                        return false
+                    }
+                    i += 1
+                }
+                return true
+            }
+            Stmt.While(val cond, val body) => {
+                // an unconditional `while true { … }` with no exiting `break` never falls
+                // through (it loops forever or leaves via return/panic inside).
+                if self.condIsLiteralTrue(id: cond) {
+                    return !self.blockHasLoopBreak(blkId: body)
+                }
+                return false
+            }
+            _ => { return false }
+        }
+    }
+
+    inout fn condIsLiteralTrue(id: U64) -> Bool {
+        if id >= self.arena.exprs.count {
+            return false
+        }
+        match self.arena.exprs[id] {
+            Expr.Int(val value, val offset, val isBool, val tyStart, val tyLen, isNeg: _) => {
+                return isBool && value == 1
+            }
+            _ => { return false }
+        }
+    }
+
+    inout fn checkReturns() {
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[i]
+            // exempt: `()`-returning (hasRet false), `main` (returns int), extern (no
+            // body), provided/abstract (body 0), and async (state-machine return).
+            if f.hasRet {
+                if !(f.isExtern) {
+                    if !(f.isAsync) {
+                        if f.body != 0 {
+                            if !(nameIsMain(c: inout self, f: f)) {
+                                if !(self.blockDiverges(blkId: f.body)) {
+                                    compileErrorAt(line: lineOf(c: inout self, offset: f.nameStart), msg: "this function has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (Plew does not implicitly return the last expression)")
+                                }
                             }
                         }
                     }
                 }
             }
+            i += 1
         }
-        i += 1
     }
 }

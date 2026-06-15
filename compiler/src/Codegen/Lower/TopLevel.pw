@@ -26,7 +26,7 @@ fn lowerExtern(c: inout Comp, e: ExternAst) {
                 pj += 1
             }
         }
-        c.arena.funcs.append(lowerSigToFunc(c: inout c, sig: e.fns[fi], isExtern: true, isCExtern: e.abiC))
+        c.arena.funcs.append(c.lowerSigToFunc(sig: e.fns[fi], isExtern: true, isCExtern: e.abiC))
         fi += 1
     }
     mut val si: U64 = 0
@@ -188,7 +188,7 @@ fn lowerExportItem(c: inout Comp, inner: TopItemAst) {
         }
         TopItemAst.Trait(val t) => {
             val tB: U64 = c.decls.traits.count
-            lowerTrait(c: inout c, t: t)
+            c.lowerTrait(t: t)
             recordExport(c: inout c, nameStart: c.decls.traits[tB].nameStart, nameLen: c.decls.traits[tB].nameLen)
         }
         TopItemAst.GlobalVal(val s) => {
@@ -223,8 +223,8 @@ fn lowerTopItem(c: inout Comp, item: TopItemAst) {
     c.cur.typeParams = []
     match item {
         TopItemAst.Decl(val d) => { lowerDecl(c: inout c, d: d) }
-        TopItemAst.Impl(val im) => { lowerImpl(c: inout c, im: im) }
-        TopItemAst.Trait(val t) => { lowerTrait(c: inout c, t: t) }
+        TopItemAst.Impl(val im) => { c.lowerImpl(im: im) }
+        TopItemAst.Trait(val t) => { c.lowerTrait(t: t) }
         TopItemAst.Extern(val e) => { lowerExtern(c: inout c, e: e) }
         TopItemAst.Import(val imp) => { lowerImport(c: inout c, imp: imp) }
         TopItemAst.Export(val inner) => { lowerExportItem(c: inout c, inner: inner) }

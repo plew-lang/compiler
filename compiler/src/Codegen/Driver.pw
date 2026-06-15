@@ -301,7 +301,7 @@ export fn runFrontend() -> Comp {
     // missing-return (spec/11): a non-`()` function must return/panic/diverge on
     // every path — Plew does not implicitly return the tail expression, so falling
     // off the end would silently yield uninitialized memory.
-    checkReturns(c: inout c)
+    c.checkReturns()
     // trait conformance is explicit and complete (spec/08): every requirement of
     // each `impl Type as Trait` must be witnessed (a body method or a `via` alias).
     checkConformances(c: inout c)
@@ -329,7 +329,7 @@ export fn runFrontend() -> Comp {
     // `deriveFromSource`/`write` is exempt from import hygiene) and before
     // instantiation discovery (so its `print`/method instances are emitted).
     if c.genMode {
-        synthGenMain(c: inout c)
+        c.synthGenMain()
     }
     // discover concrete generic instantiations to monomorphize.
     collectGenInsts(c: inout c)
