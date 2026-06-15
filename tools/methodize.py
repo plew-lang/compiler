@@ -35,15 +35,20 @@ fn_re_noret = re.compile(r'^(export )?fn ([A-Za-z0-9_]+)\(c: inout Comp(, )?(.*)
 
 def consume_fn(i):
     # Return (block_lines, next_i): lines[i] (the `fn …`/`impl …` line) through its
-    # matching closing brace, handling a multi-line signature (the `{` may be later).
-    block = [lines[i]]
+    # matching closing brace. Handles a single-line body (`fn f() { … }`, braces
+    # balanced on the sig line) AND a multi-line signature (the `{` may be later):
+    # "opened" means a `{` has been SEEN, not merely depth>0 (a single-line body
+    # returns to depth 0 on the sig line and must not keep swallowing later fns).
     depth = lines[i].count("{") - lines[i].count("}")
-    opened = depth > 0
+    opened = "{" in lines[i]
+    if opened and depth == 0:
+        return [lines[i]], i + 1
+    block = [lines[i]]
     j = i + 1
     while j < len(lines):
         bl = lines[j]; block.append(bl)
         depth += bl.count("{") - bl.count("}")
-        if not opened and depth > 0:
+        if "{" in bl:
             opened = True
         j += 1
         if opened and depth == 0:

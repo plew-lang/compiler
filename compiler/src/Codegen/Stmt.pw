@@ -187,51 +187,6 @@ pub impl Comp {
     }
 }
 
-// Whether a binary op is a trait-dispatched operator (spec/12): arithmetic
-// (Add/Sub/Mul/Div/Rem) or bitwise/shift (BitAnd/BitOr/BitXor/Shl/Shr). Comparison
-// (Eq/Ord) and `&&`/`||`/`??` are handled separately.
-export fn isBinTraitOp(op: I64) -> Bool {
-    if op == opAdd() { return true }
-    if op == opSub() { return true }
-    if op == opMul() { return true }
-    if op == opDiv() { return true }
-    if op == opRem() { return true }
-    if op == opBitAnd() { return true }
-    if op == opBitOr() { return true }
-    if op == opBitXor() { return true }
-    if op == opShl() { return true }
-    if op == opShr() { return true }
-    return false
-}
-
-// The operator trait name for a binary op (`+` -> "Add", `&` -> "BitAnd").
-fn binTraitName(op: I64) -> String {
-    if op == opAdd() { return "Add" }
-    if op == opSub() { return "Sub" }
-    if op == opMul() { return "Mul" }
-    if op == opDiv() { return "Div" }
-    if op == opRem() { return "Rem" }
-    if op == opBitAnd() { return "BitAnd" }
-    if op == opBitOr() { return "BitOr" }
-    if op == opBitXor() { return "BitXor" }
-    if op == opShl() { return "Shl" }
-    return "Shr"
-}
-
-// The witness assoc-fn name for a binary op (`+` -> "add", `&` -> "bitand").
-export fn binTraitMethodName(op: I64) -> String {
-    if op == opAdd() { return "add" }
-    if op == opSub() { return "sub" }
-    if op == opMul() { return "mul" }
-    if op == opDiv() { return "div" }
-    if op == opRem() { return "rem" }
-    if op == opBitAnd() { return "bitand" }
-    if op == opBitOr() { return "bitor" }
-    if op == opBitXor() { return "bitxor" }
-    if op == opShl() { return "shl" }
-    return "shr"
-}
-
 pub impl Comp {
 
     // Resolve the arithmetic witness assoc fn named `name` on type (typeStart,typeLen),
@@ -364,12 +319,6 @@ pub impl Comp {
         }
         return false
     }
-}
-
-export fn unaryMethodName(op: I64) -> String {
-    if op == opSub() { return "neg" }
-    if op == opNot() { return "not" }
-    return "bitnot"
 }
 
 pub impl Comp {

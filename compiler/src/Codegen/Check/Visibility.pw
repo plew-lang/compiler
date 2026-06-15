@@ -231,48 +231,51 @@ pub impl Comp {
 // Sentinel for "no defining module found" (a value no real module id takes).
 fn importCycleSentinel() -> U64 { return 4000000000U64 }
 
-// The module that DEFINES the name (start,len): a free function's own module, or a
-// type declaration's module (via defOffset / nameStart, since type nameStart is
-// re-interned). importCycleSentinel() if no such declaration is loaded. Used to turn an
-// `import … with { name }` record into a module→module dependency edge.
-fn definingModuleOfName(c: inout Comp, start: U64, len: U64) -> U64 {
-    val fi: U64 = c.firstFuncByName(nameStart: start, nameLen: len)
-    if fi < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[fi]
-        return c.moduleOf(offset: f.nameStart)
-    }
-    val qId: U64 = intern(c: inout c, start: start, len: len)
-    mut val i: U64 = 0
-    while i < c.arena.structs.count {
-        val sd: StructDef = c.arena.structs[i]
-        if sd.nameId == qId {
-            if sd.defOffset != 0U64 { return c.moduleOf(offset: sd.defOffset) }
+pub impl Comp {
+
+    // The module that DEFINES the name (start,len): a free function's own module, or a
+    // type declaration's module (via defOffset / nameStart, since type nameStart is
+    // re-interned). importCycleSentinel() if no such declaration is loaded. Used to turn an
+    // `import … with { name }` record into a module→module dependency edge.
+    inout fn definingModuleOfName(start: U64, len: U64) -> U64 {
+        val fi: U64 = self.firstFuncByName(nameStart: start, nameLen: len)
+        if fi < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[fi]
+            return self.moduleOf(offset: f.nameStart)
         }
-        i += 1
-    }
-    i = 0
-    while i < c.arena.enums.count {
-        val ed: EnumDef = c.arena.enums[i]
-        if ed.nameId == qId {
-            if ed.defOffset != 0U64 { return c.moduleOf(offset: ed.defOffset) }
+        val qId: U64 = intern(c: inout self, start: start, len: len)
+        mut val i: U64 = 0
+        while i < self.arena.structs.count {
+            val sd: StructDef = self.arena.structs[i]
+            if sd.nameId == qId {
+                if sd.defOffset != 0U64 { return self.moduleOf(offset: sd.defOffset) }
+            }
+            i += 1
         }
-        i += 1
-    }
-    i = 0
-    while i < c.decls.traits.count {
-        val td: TraitDef = c.decls.traits[i]
-        if td.nameId == qId { return c.moduleOf(offset: td.nameStart) }
-        i += 1
-    }
-    i = 0
-    while i < c.arena.newtypes.count {
-        val nt: NewtypeDef = c.arena.newtypes[i]
-        if spansEqual(c: inout c, aStart: nt.nameStart, aLen: nt.nameLen, bStart: start, bLen: len) {
-            if nt.defOffset != 0U64 { return c.moduleOf(offset: nt.defOffset) }
+        i = 0
+        while i < self.arena.enums.count {
+            val ed: EnumDef = self.arena.enums[i]
+            if ed.nameId == qId {
+                if ed.defOffset != 0U64 { return self.moduleOf(offset: ed.defOffset) }
+            }
+            i += 1
         }
-        i += 1
+        i = 0
+        while i < self.decls.traits.count {
+            val td: TraitDef = self.decls.traits[i]
+            if td.nameId == qId { return self.moduleOf(offset: td.nameStart) }
+            i += 1
+        }
+        i = 0
+        while i < self.arena.newtypes.count {
+            val nt: NewtypeDef = self.arena.newtypes[i]
+            if spansEqual(c: inout self, aStart: nt.nameStart, aLen: nt.nameLen, bStart: start, bLen: len) {
+                if nt.defOffset != 0U64 { return self.moduleOf(offset: nt.defOffset) }
+            }
+            i += 1
+        }
+        return importCycleSentinel()
     }
-    return importCycleSentinel()
 }
 
 pub impl Comp {
@@ -317,7 +320,7 @@ pub impl Comp {
         while ii < self.modules.imports.count {
             val im: Bind = self.modules.imports[ii]
             val from: U64 = im.fieldStart
-            val to: U64 = definingModuleOfName(c: inout self, start: im.nameStart, len: im.nameLen)
+            val to: U64 = self.definingModuleOfName(start: im.nameStart, len: im.nameLen)
             if to != importCycleSentinel() {
                 if to != from {
                     ef.append(from)
