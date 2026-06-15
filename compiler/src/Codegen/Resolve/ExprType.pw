@@ -594,7 +594,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             mut val mai: U64 = 0
             while mai < arms.count {
                 if !(arms[mai].isDiverge) {
-                    val mg: U64 = blockGiveExpr(c: inout c, blkId: arms[mai].body)
+                    val mg: U64 = c.blockGiveExpr(blkId: arms[mai].body)
                     if mg < c.arena.exprs.count {
                         return exprType(c: inout c, id: mg)
                     }
@@ -604,7 +604,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             return scalarInfo()
         }
         Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-            val g: U64 = blockGiveExpr(c: inout c, blkId: thenBlk)
+            val g: U64 = c.blockGiveExpr(blkId: thenBlk)
             if g < c.arena.exprs.count {
                 return exprType(c: inout c, id: g)
             }

@@ -1,74 +1,76 @@
 // Part of the acceptance verification pass (root: _.pw): statement-level
 // verification (verifyStmt) and assignment type/mutability checks.
 
-fn verifyStmt(c: inout Comp, stmtId: U64) {
-    match c.arena.stmts[stmtId] {
-        Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
-            // literal range against the annotation (or context-free if none).
-            if tyLen > 0U64 {
-                checkLitSpanCtx(c: inout c, id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ctxRef: ty)
-            } else {
-                checkLitCtx(c: inout c, id: init, eKind: 0, eBits: 0, eSgn: false)
-            }
-            // a bare unique place on the rhs is a forbidden copy (`val g = f`).
-            checkUniquePlaceCopy(c: inout c, exprId: init, inoutOk: false)
-            verifyExpr(c: inout c, id: init)
-            // an explicit annotation whose category clearly disagrees with the
-            // initializer reinterprets the bits — a hidden-meaning bug (`val x: I64 =
-            // "s"` / `val a: A = <B…/>`). Reject only when the INITIALIZER is RELIABLY
-            // typed: a String (kind 1) or a value of a KNOWN struct/enum (kind 2 whose
-            // name resolves). typeOf returns kind 0 (numeric) BOTH for a real int AND
-            // as an unrecovered default (a fn-value ref, a dict literal, a call), so an
-            // init reported numeric is never trusted as a mismatch source (that sank the
-            // first attempt — fn_value / dict / rawAlloc false-rejected). Skip arrays
-            // (separate machinery) and floats (typeOf wobbles float literal vs local).
-            checkGenericArity(c: inout c, ref: ty, offset: nameStart)
-            // declared an array but initialized with a non-array (`val a: Array[I64] =
-            // 5I64`) reinterprets the scalar bits as an array — a definite mismatch.
-            if tyIsArray {
-                if valueIsReliablyNonArray(c: inout c, value: init) {
-                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: init)), msg: "this binding is declared as an array, but the value is not an array (Plew has no implicit conversion — spec/12)")
+pub impl Comp {
+    inout fn verifyStmt(stmtId: U64) {
+        match self.arena.stmts[stmtId] {
+            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+                // literal range against the annotation (or context-free if none).
+                if tyLen > 0U64 {
+                    checkLitSpanCtx(c: inout self, id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ctxRef: ty)
+                } else {
+                    checkLitCtx(c: inout self, id: init, eKind: 0, eBits: 0, eSgn: false)
                 }
-            }
-            if tyLen > 0U64 {
-                tcCheckValue(c: inout c, expectedRef: ty, valueExpr: init, pos: "let")
-                // an array binding's literal elements (`Array[I64] = ["a", "b"]`):
-                // category-check each element against the declared element type (tyStart
-                // names the element for an array annotation).
+                // a bare unique place on the rhs is a forbidden copy (`val g = f`).
+                checkUniquePlaceCopy(c: inout self, exprId: init, inoutOk: false)
+                verifyExpr(c: inout self, id: init)
+                // an explicit annotation whose category clearly disagrees with the
+                // initializer reinterprets the bits — a hidden-meaning bug (`val x: I64 =
+                // "s"` / `val a: A = <B…/>`). Reject only when the INITIALIZER is RELIABLY
+                // typed: a String (kind 1) or a value of a KNOWN struct/enum (kind 2 whose
+                // name resolves). typeOf returns kind 0 (numeric) BOTH for a real int AND
+                // as an unrecovered default (a fn-value ref, a dict literal, a call), so an
+                // init reported numeric is never trusted as a mismatch source (that sank the
+                // first attempt — fn_value / dict / rawAlloc false-rejected). Skip arrays
+                // (separate machinery) and floats (typeOf wobbles float literal vs local).
+                checkGenericArity(c: inout self, ref: ty, offset: nameStart)
+                // declared an array but initialized with a non-array (`val a: Array[I64] =
+                // 5I64`) reinterprets the scalar bits as an array — a definite mismatch.
                 if tyIsArray {
-                    match c.arena.exprs[init] {
-                        Expr.Array(val elems) => {
-                            // the declared element type as a TypeRef: the annotation's
-                            // arg (`Array[I64]` -> I64) if structured, else by name.
-                            mut val elemRef: U64 = 0
-                            if ty != 0U64 {
-                                if c.arena.types[ty].args.count > 0U64 {
-                                    elemRef = c.arena.types[ty].args[0]
+                    if valueIsReliablyNonArray(c: inout self, value: init) {
+                        compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: init)), msg: "this binding is declared as an array, but the value is not an array (Plew has no implicit conversion — spec/12)")
+                    }
+                }
+                if tyLen > 0U64 {
+                    tcCheckValue(c: inout self, expectedRef: ty, valueExpr: init, pos: "let")
+                    // an array binding's literal elements (`Array[I64] = ["a", "b"]`):
+                    // category-check each element against the declared element type (tyStart
+                    // names the element for an array annotation).
+                    if tyIsArray {
+                        match self.arena.exprs[init] {
+                            Expr.Array(val elems) => {
+                                // the declared element type as a TypeRef: the annotation's
+                                // arg (`Array[I64]` -> I64) if structured, else by name.
+                                mut val elemRef: U64 = 0
+                                if ty != 0U64 {
+                                    if self.arena.types[ty].args.count > 0U64 {
+                                        elemRef = self.arena.types[ty].args[0]
+                                    }
+                                }
+                                mut val ek: U64 = 0
+                                while ek < elems.count {
+                                    tcCheckValue(c: inout self, expectedRef: elemRef, valueExpr: elems[ek], pos: "element")
+                                    ek += 1
                                 }
                             }
-                            mut val ek: U64 = 0
-                            while ek < elems.count {
-                                tcCheckValue(c: inout c, expectedRef: elemRef, valueExpr: elems[ek], pos: "element")
-                                ek += 1
-                            }
-                        }
-                        _ => {
-                            // a NON-literal array value (`val b: Array[I64] = s.bytes`):
-                            // inferType reports arrays as kind 0 (deferred), so tcCheckValue
-                            // above can't compare element types. Compare the init's element
-                            // type to the declared one directly, but only when BOTH are
-                            // concrete primitives (a struct/generic element is left to the
-                            // existing machinery — conservative).
-                            if ty != 0U64 {
-                                if c.arena.types[ty].args.count > 0U64 {
-                                    val de: TypeRef = c.arena.types[c.arena.types[ty].args[0]]
-                                    val it: TypeInfo = typeOf(c: inout c, id: init)
-                                    if it.kind == 3 {
-                                        if it.nameLen > 0U64 {
-                                            if isPrimType(c: inout c, start: de.nameStart, len: de.nameLen) {
-                                                if isPrimType(c: inout c, start: it.nameStart, len: it.nameLen) {
-                                                    if !(spansEqual(c: inout c, aStart: de.nameStart, aLen: de.nameLen, bStart: it.nameStart, bLen: it.nameLen)) {
-                                                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: init)), msg: "array element type does not match the declared element type (Plew has no implicit conversion — spec/12)")
+                            _ => {
+                                // a NON-literal array value (`val b: Array[I64] = s.bytes`):
+                                // inferType reports arrays as kind 0 (deferred), so tcCheckValue
+                                // above can't compare element types. Compare the init's element
+                                // type to the declared one directly, but only when BOTH are
+                                // concrete primitives (a struct/generic element is left to the
+                                // existing machinery — conservative).
+                                if ty != 0U64 {
+                                    if self.arena.types[ty].args.count > 0U64 {
+                                        val de: TypeRef = self.arena.types[self.arena.types[ty].args[0]]
+                                        val it: TypeInfo = typeOf(c: inout self, id: init)
+                                        if it.kind == 3 {
+                                            if it.nameLen > 0U64 {
+                                                if isPrimType(c: inout self, start: de.nameStart, len: de.nameLen) {
+                                                    if isPrimType(c: inout self, start: it.nameStart, len: it.nameLen) {
+                                                        if !(spansEqual(c: inout self, aStart: de.nameStart, aLen: de.nameLen, bStart: it.nameStart, bLen: it.nameLen)) {
+                                                            compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: init)), msg: "array element type does not match the declared element type (Plew has no implicit conversion — spec/12)")
+                                                        }
                                                     }
                                                 }
                                             }
@@ -79,260 +81,257 @@ fn verifyStmt(c: inout Comp, stmtId: U64) {
                         }
                     }
                 }
+                // register the binding (after the init, so it can't see itself) with its
+                // effective type and mutability, so later places resolve / check.
+                val le: LetEff = inferLetType(c: inout self, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                addLocal(c: inout self, nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
             }
-            // register the binding (after the init, so it can't see itself) with its
-            // effective type and mutability, so later places resolve / check.
-            val le: LetEff = inferLetType(c: inout c, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
-            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
-        }
-        Stmt.Assign(val op, val target, val value) => {
-            verifyAssign(c: inout c, op: op, target: target, value: value)
-        }
-        Stmt.ExprStmt(val expr) => {
-            checkLitCtx(c: inout c, id: expr, eKind: 0, eBits: 0, eSgn: false)
-            verifyExpr(c: inout c, id: expr)
-        }
-        Stmt.Return(val value, val hasValue, val offset) => {
-            if hasValue {
-                // a function with no declared return type (`fn f() { … }`) returns `()` —
-                // `return 5I64` from it is a type error (the value is silently dropped),
-                // unless the value is itself the unit `()` (a bare-record construction).
-                if c.cur.retVoid {
-                    if !(exprIsUnit(c: inout c, id: value)) {
-                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "a function with no return type cannot return a value (spec/04)")
-                    }
-                }
-                checkLitSpanCtx(c: inout c, id: value, tyStart: c.cur.retStart, tyLen: c.cur.retLen, isArray: c.cur.retIsArray, ctxRef: c.cur.retTy)
-                // returning a non-array where the declared return type IS an array
-                // (`return 5I64` from `-> Array[I64]`) reinterprets the scalar bits.
-                if c.cur.retIsArray {
-                    if valueIsReliablyNonArray(c: inout c, value: value) {
-                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "this function returns an array, but the returned value is not an array (Plew has no implicit conversion — spec/12)")
-                    }
-                }
-                // a returned value whose category disagrees with the declared return
-                // type (`return "s"` / `return <A…/>` from `-> I64`). Same shared,
-                // reliable-value discipline as bindings; curRetLen 0 = `()` return.
-                if c.cur.retLen > 0U64 {
-                    tcCheckValue(c: inout c, expectedRef: c.cur.retTy, valueExpr: value, pos: "return")
-                }
-                verifyExpr(c: inout c, id: value)
-            } else {
-                // a bare `return` in a value-returning function leaves the result
-                // uninitialized (spec/04: a non-`()` function must return a value on
-                // every path). Valid only when the return type is `()` / absent.
-                mut val retIsUnit: Bool = c.cur.retVoid || c.cur.retLen == 0U64
-                if rangeEquals(bytes: c.arena.bytes, start: c.cur.retStart, len: c.cur.retLen, kw: "()") {
-                    retIsUnit = true
-                }
-                if !(retIsUnit) {
-                    compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "a bare `return` cannot appear in a function that returns a value — return a value (spec/04)")
-                }
+            Stmt.Assign(val op, val target, val value) => {
+                self.verifyAssign(op: op, target: target, value: value)
             }
-        }
-        Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
-            checkLitCtx(c: inout c, id: cond, eKind: 0, eBits: 0, eSgn: false)
-            checkCondBool(c: inout c, cond: cond)
-            verifyExpr(c: inout c, id: cond)
-            // locals already in scope are "outside" this branch (a `move` of one
-            // inside would be conditional) — mark the boundary for the move guard.
-            val savedBB: U64 = c.cur.branchBase
-            c.cur.branchBase = scopeMark(c: inout c)
-            verifyBlock(c: inout c, blockId: thenBlk)
-            if hasElse {
-                verifyBlock(c: inout c, blockId: elseBlk)
+            Stmt.ExprStmt(val expr) => {
+                checkLitCtx(c: inout self, id: expr, eKind: 0, eBits: 0, eSgn: false)
+                verifyExpr(c: inout self, id: expr)
             }
-            c.cur.branchBase = savedBB
-        }
-        Stmt.While(val cond, val body) => {
-            checkLitCtx(c: inout c, id: cond, eKind: 0, eBits: 0, eSgn: false)
-            checkCondBool(c: inout c, cond: cond)
-            verifyExpr(c: inout c, id: cond)
-            val savedBB: U64 = c.cur.branchBase
-            c.cur.branchBase = scopeMark(c: inout c)
-            c.cur.verifyLoopDepth = c.cur.verifyLoopDepth + 1U64
-            verifyBlock(c: inout c, blockId: body)
-            c.cur.verifyLoopDepth = c.cur.verifyLoopDepth - 1U64
-            c.cur.branchBase = savedBB
-        }
-        Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
-            verifyExpr(c: inout c, id: iter)
-            if isRange {
-                verifyExpr(c: inout c, id: rangeHi)
-                // a range is iterated via `Step`, which is integer-only (spec/02,11):
-                // `for x in 0.0..<5.0` has no Step witness. Reject a float-typed range
-                // (by the loop-var annotation or either bound).
-                mut val rangeIsFloat: Bool = exprIsFloat(c: inout c, id: iter) || exprIsFloat(c: inout c, id: rangeHi)
-                if varTyLen != 0U64 {
-                    if isFloatType(c: inout c, start: varTyStart, len: varTyLen) {
-                        rangeIsFloat = true
+            Stmt.Return(val value, val hasValue, val offset) => {
+                if hasValue {
+                    // a function with no declared return type (`fn f() { … }`) returns `()` —
+                    // `return 5I64` from it is a type error (the value is silently dropped),
+                    // unless the value is itself the unit `()` (a bare-record construction).
+                    if self.cur.retVoid {
+                        if !(exprIsUnit(c: inout self, id: value)) {
+                            compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: value)), msg: "a function with no return type cannot return a value (spec/04)")
+                        }
                     }
-                }
-                if rangeIsFloat {
-                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: iter)), msg: "a range is iterated via Step, which is integer-only — a float range cannot be a for-loop iterable (spec/02,11)")
-                }
-                // a range bound annotated by the loop var (`for val i: I32 in …`)
-                // types both bounds; otherwise each must determine its own type, so a
-                // bare literal range (`0..<5`) is ambiguous and rejected.
-                if varTyLen != 0U64 {
-                    checkLitSpan(c: inout c, id: iter, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
-                    checkLitSpan(c: inout c, id: rangeHi, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
-                    // checkLitSpan only range-checks a SUFFIXED literal against its own
-                    // suffix, so a mismatched width (`for val i: I64 in 0I64..<5I32`)
-                    // slips through — check each bound's type against the loop var type.
-                    val vref: U64 = simpleTypeRef(c: inout c, nameStart: varTyStart, nameLen: varTyLen)
-                    tcCheckValue(c: inout c, expectedRef: vref, valueExpr: iter, pos: "range bound")
-                    tcCheckValue(c: inout c, expectedRef: vref, valueExpr: rangeHi, pos: "range bound")
+                    checkLitSpanCtx(c: inout self, id: value, tyStart: self.cur.retStart, tyLen: self.cur.retLen, isArray: self.cur.retIsArray, ctxRef: self.cur.retTy)
+                    // returning a non-array where the declared return type IS an array
+                    // (`return 5I64` from `-> Array[I64]`) reinterprets the scalar bits.
+                    if self.cur.retIsArray {
+                        if valueIsReliablyNonArray(c: inout self, value: value) {
+                            compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: value)), msg: "this function returns an array, but the returned value is not an array (Plew has no implicit conversion — spec/12)")
+                        }
+                    }
+                    // a returned value whose category disagrees with the declared return
+                    // type (`return "s"` / `return <A…/>` from `-> I64`). Same shared,
+                    // reliable-value discipline as bindings; curRetLen 0 = `()` return.
+                    if self.cur.retLen > 0U64 {
+                        tcCheckValue(c: inout self, expectedRef: self.cur.retTy, valueExpr: value, pos: "return")
+                    }
+                    verifyExpr(c: inout self, id: value)
                 } else {
-                    checkArithNoCtx(c: inout c, lhs: iter, rhs: rangeHi)
-                    // both bounds must share a type (`0I64..<5I32` is a width mismatch).
-                    tcCheckValue(c: inout c, expectedRef: inferType(c: inout c, id: iter), valueExpr: rangeHi, pos: "range bound")
-                }
-            }
-            // scope the loop binding(s) to the body, mirroring genStmt's For.
-            val forMark: U64 = scopeMark(c: inout c)
-            val savedForBB: U64 = c.cur.branchBase
-            c.cur.branchBase = forMark
-            if isRange {
-                // loop var type: the annotation, else the range bound's own type.
-                mut val ltS: U64 = varTyStart
-                mut val ltL: U64 = varTyLen
-                if ltL == 0U64 {
-                    val bt2: TypeInfo = typeOf(c: inout c, id: rangeHi)
-                    if bt2.kind == 0 {
-                        ltS = bt2.nameStart
-                        ltL = bt2.nameLen
+                    // a bare `return` in a value-returning function leaves the result
+                    // uninitialized (spec/04: a non-`()` function must return a value on
+                    // every path). Valid only when the return type is `()` / absent.
+                    mut val retIsUnit: Bool = self.cur.retVoid || self.cur.retLen == 0U64
+                    if rangeEquals(bytes: self.arena.bytes, start: self.cur.retStart, len: self.cur.retLen, kw: "()") {
+                        retIsUnit = true
+                    }
+                    if !(retIsUnit) {
+                        compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "a bare `return` cannot appear in a function that returns a value — return a value (spec/04)")
                     }
                 }
-                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: ltS, tyLen: ltL, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
-            } else {
-                val et: TypeInfo = typeOf(c: inout c, id: iter)
-                if et.kind == 3 {
-                    if isStruct {
-                        // the destructure pattern type must name the element struct.
-                        if intern(c: inout c, start: patStart, len: patLen) != intern(c: inout c, start: et.nameStart, len: et.nameLen) {
-                            compileErrorAt(line: lineOf(c: inout c, offset: patStart), msg: "for-loop destructure pattern type does not match the element type")
+            }
+            Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
+                checkLitCtx(c: inout self, id: cond, eKind: 0, eBits: 0, eSgn: false)
+                checkCondBool(c: inout self, cond: cond)
+                verifyExpr(c: inout self, id: cond)
+                // locals already in scope are "outside" this branch (a `move` of one
+                // inside would be conditional) — mark the boundary for the move guard.
+                val savedBB: U64 = self.cur.branchBase
+                self.cur.branchBase = scopeMark(c: inout self)
+                verifyBlock(c: inout self, blockId: thenBlk)
+                if hasElse {
+                    verifyBlock(c: inout self, blockId: elseBlk)
+                }
+                self.cur.branchBase = savedBB
+            }
+            Stmt.While(val cond, val body) => {
+                checkLitCtx(c: inout self, id: cond, eKind: 0, eBits: 0, eSgn: false)
+                checkCondBool(c: inout self, cond: cond)
+                verifyExpr(c: inout self, id: cond)
+                val savedBB: U64 = self.cur.branchBase
+                self.cur.branchBase = scopeMark(c: inout self)
+                self.cur.verifyLoopDepth = self.cur.verifyLoopDepth + 1U64
+                verifyBlock(c: inout self, blockId: body)
+                self.cur.verifyLoopDepth = self.cur.verifyLoopDepth - 1U64
+                self.cur.branchBase = savedBB
+            }
+            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
+                verifyExpr(c: inout self, id: iter)
+                if isRange {
+                    verifyExpr(c: inout self, id: rangeHi)
+                    // a range is iterated via `Step`, which is integer-only (spec/02,11):
+                    // `for x in 0.0..<5.0` has no Step witness. Reject a float-typed range
+                    // (by the loop-var annotation or either bound).
+                    mut val rangeIsFloat: Bool = exprIsFloat(c: inout self, id: iter) || exprIsFloat(c: inout self, id: rangeHi)
+                    if varTyLen != 0U64 {
+                        if isFloatType(c: inout self, start: varTyStart, len: varTyLen) {
+                            rangeIsFloat = true
                         }
-                        mut val bi: U64 = 0
-                        while bi < binds.count {
-                            val bd: Bind = binds[bi]
-                            val ft: TypeInfo = forBindFieldType(c: inout c, et: et, bd: bd)
-                            addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
-                            bi += 1
-                        }
+                    }
+                    if rangeIsFloat {
+                        compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: iter)), msg: "a range is iterated via Step, which is integer-only — a float range cannot be a for-loop iterable (spec/02,11)")
+                    }
+                    // a range bound annotated by the loop var (`for val i: I32 in …`)
+                    // types both bounds; otherwise each must determine its own type, so a
+                    // bare literal range (`0..<5`) is ambiguous and rejected.
+                    if varTyLen != 0U64 {
+                        checkLitSpan(c: inout self, id: iter, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
+                        checkLitSpan(c: inout self, id: rangeHi, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
+                        // checkLitSpan only range-checks a SUFFIXED literal against its own
+                        // suffix, so a mismatched width (`for val i: I64 in 0I64..<5I32`)
+                        // slips through — check each bound's type against the loop var type.
+                        val vref: U64 = simpleTypeRef(c: inout self, nameStart: varTyStart, nameLen: varTyLen)
+                        tcCheckValue(c: inout self, expectedRef: vref, valueExpr: iter, pos: "range bound")
+                        tcCheckValue(c: inout self, expectedRef: vref, valueExpr: rangeHi, pos: "range bound")
                     } else {
-                        // single binding to the element type (`for val b in bs` -> U8).
-                        addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                        checkArithNoCtx(c: inout self, lhs: iter, rhs: rangeHi)
+                        // both bounds must share a type (`0I64..<5I32` is a width mismatch).
+                        tcCheckValue(c: inout self, expectedRef: inferType(c: inout self, id: iter), valueExpr: rangeHi, pos: "range bound")
                     }
                 }
+                // scope the loop binding(s) to the body, mirroring genStmt's For.
+                val forMark: U64 = scopeMark(c: inout self)
+                val savedForBB: U64 = self.cur.branchBase
+                self.cur.branchBase = forMark
+                if isRange {
+                    // loop var type: the annotation, else the range bound's own type.
+                    mut val ltS: U64 = varTyStart
+                    mut val ltL: U64 = varTyLen
+                    if ltL == 0U64 {
+                        val bt2: TypeInfo = typeOf(c: inout self, id: rangeHi)
+                        if bt2.kind == 0 {
+                            ltS = bt2.nameStart
+                            ltL = bt2.nameLen
+                        }
+                    }
+                    addLocal(c: inout self, nameStart: varStart, nameLen: varLen, tyStart: ltS, tyLen: ltL, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                } else {
+                    val et: TypeInfo = typeOf(c: inout self, id: iter)
+                    if et.kind == 3 {
+                        if isStruct {
+                            // the destructure pattern type must name the element struct.
+                            if intern(c: inout self, start: patStart, len: patLen) != intern(c: inout self, start: et.nameStart, len: et.nameLen) {
+                                compileErrorAt(line: lineOf(c: inout self, offset: patStart), msg: "for-loop destructure pattern type does not match the element type")
+                            }
+                            mut val bi: U64 = 0
+                            while bi < binds.count {
+                                val bd: Bind = binds[bi]
+                                val ft: TypeInfo = forBindFieldType(c: inout self, et: et, bd: bd)
+                                addLocal(c: inout self, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
+                                bi += 1
+                            }
+                        } else {
+                            // single binding to the element type (`for val b in bs` -> U8).
+                            addLocal(c: inout self, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                        }
+                    }
+                }
+                self.cur.verifyLoopDepth = self.cur.verifyLoopDepth + 1U64
+                verifyBlock(c: inout self, blockId: body)
+                self.cur.verifyLoopDepth = self.cur.verifyLoopDepth - 1U64
+                self.cur.branchBase = savedForBB
+                popLocals(c: inout self, mark: forMark)
             }
-            c.cur.verifyLoopDepth = c.cur.verifyLoopDepth + 1U64
-            verifyBlock(c: inout c, blockId: body)
-            c.cur.verifyLoopDepth = c.cur.verifyLoopDepth - 1U64
-            c.cur.branchBase = savedForBB
-            popLocals(c: inout c, mark: forMark)
-        }
-        Stmt.Match(val scrut, val arms) => {
-            verifyExpr(c: inout c, id: scrut)
-            checkMatchArmsEnum(c: inout c, scrut: scrut, arms: arms)
-            if !(matchExhaustive(c: inout c, arms: arms)) {
-                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
-            }
-            mut val ai: U64 = 0
-            while ai < arms.count {
-                val armMark: U64 = scopeMark(c: inout c)
-                val savedArmBB: U64 = c.cur.branchBase
-                c.cur.branchBase = armMark
-                checkDestructureComplete(c: inout c, a: arms[ai])
-                verifyAddArmBinds(c: inout c, a: arms[ai], scrut: scrut)
-                verifyBlock(c: inout c, blockId: arms[ai].body)
-                c.cur.branchBase = savedArmBB
-                popLocals(c: inout c, mark: armMark)
-                ai += 1
-            }
-        }
-        Stmt.Panic(val msg, offset: _) => {
-            verifyExpr(c: inout c, id: msg)
-        }
-        Stmt.Give(val value) => {
-            // a value-position if/match yielding a unique value isn't supported yet
-            // (per-path move/drop handling); mirrors genStmt's Give guard.
-            val gvt: TypeInfo = typeOf(c: inout c, id: value)
-            if gvt.kind == 2 {
-                if typeIsUnique(c: inout c, start: gvt.nameStart, len: gvt.nameLen) {
-                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "a value-position if/match cannot yield a unique value yet; use a statement form")
+            Stmt.Match(val scrut, val arms) => {
+                verifyExpr(c: inout self, id: scrut)
+                checkMatchArmsEnum(c: inout self, scrut: scrut, arms: arms)
+                if !(matchExhaustive(c: inout self, arms: arms)) {
+                    compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
+                }
+                mut val ai: U64 = 0
+                while ai < arms.count {
+                    val armMark: U64 = scopeMark(c: inout self)
+                    val savedArmBB: U64 = self.cur.branchBase
+                    self.cur.branchBase = armMark
+                    checkDestructureComplete(c: inout self, a: arms[ai])
+                    verifyAddArmBinds(c: inout self, a: arms[ai], scrut: scrut)
+                    verifyBlock(c: inout self, blockId: arms[ai].body)
+                    self.cur.branchBase = savedArmBB
+                    popLocals(c: inout self, mark: armMark)
+                    ai += 1
                 }
             }
-            verifyExpr(c: inout c, id: value)
-        }
-        Stmt.Break(val offset) => {
-            if c.cur.verifyLoopDepth == 0U64 {
-                compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "`break` outside a loop (spec/11)")
+            Stmt.Panic(val msg, offset: _) => {
+                verifyExpr(c: inout self, id: msg)
             }
-        }
-        Stmt.Continue(val offset) => {
-            if c.cur.verifyLoopDepth == 0U64 {
-                compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "`continue` outside a loop (spec/11)")
+            Stmt.Give(val value) => {
+                // a value-position if/match yielding a unique value isn't supported yet
+                // (per-path move/drop handling); mirrors genStmt's Give guard.
+                val gvt: TypeInfo = typeOf(c: inout self, id: value)
+                if gvt.kind == 2 {
+                    if typeIsUnique(c: inout self, start: gvt.nameStart, len: gvt.nameLen) {
+                        compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: value)), msg: "a value-position if/match cannot yield a unique value yet; use a statement form")
+                    }
+                }
+                verifyExpr(c: inout self, id: value)
+            }
+            Stmt.Break(val offset) => {
+                if self.cur.verifyLoopDepth == 0U64 {
+                    compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "`break` outside a loop (spec/11)")
+                }
+            }
+            Stmt.Continue(val offset) => {
+                if self.cur.verifyLoopDepth == 0U64 {
+                    compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "`continue` outside a loop (spec/11)")
+                }
             }
         }
     }
-}
 
-// Assignment target mutability + field-write visibility (spec/03, /05), mirroring
-// the inline checks in genStmt's Assign arm; then verify both sides.
-fn verifyAssign(c: inout Comp, op: I64, target: U64, value: U64) {
-    match c.arena.exprs[target] {
-        Expr.Index(val base, val index) => {
-            if !(placeIsMutable(c: inout c, id: base)) {
-                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "cannot assign to an element of an immutable binding; declare it with `mut val`")
+    inout fn verifyAssign(op: I64, target: U64, value: U64) {
+        match self.arena.exprs[target] {
+            Expr.Index(val base, val index) => {
+                if !(placeIsMutable(c: inout self, id: base)) {
+                    compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: base)), msg: "cannot assign to an element of an immutable binding; declare it with `mut val`")
+                }
+                verifyExpr(c: inout self, id: base)
+                verifyExpr(c: inout self, id: index)
+                checkIndexKeyType(c: inout self, base: base, index: index)
             }
-            verifyExpr(c: inout c, id: base)
-            verifyExpr(c: inout c, id: index)
-            checkIndexKeyType(c: inout c, base: base, index: index)
-        }
-        Expr.Field(base: val fbase, val nameStart, val nameLen) => {
-            // the whole place must be mutable (binding + field both `mut val`).
-            if !(placeIsMutable(c: inout c, id: target)) {
-                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "cannot assign to an immutable place; the binding and field must be declared `mut val`")
+            Expr.Field(base: val fbase, val nameStart, val nameLen) => {
+                // the whole place must be mutable (binding + field both `mut val`).
+                if !(placeIsMutable(c: inout self, id: target)) {
+                    compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: target)), msg: "cannot assign to an immutable place; the binding and field must be declared `mut val`")
+                }
+                // field-write visibility on the base's owner type.
+                val bt: TypeInfo = typeOf(c: inout self, id: fbase)
+                if bt.kind == 2 {
+                    checkFieldWriteVis(c: inout self, ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+                }
+                verifyExpr(c: inout self, id: fbase)
             }
-            // field-write visibility on the base's owner type.
-            val bt: TypeInfo = typeOf(c: inout c, id: fbase)
-            if bt.kind == 2 {
-                checkFieldWriteVis(c: inout c, ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
-            }
-            verifyExpr(c: inout c, id: fbase)
-        }
-        Expr.Ident(val start, val len) => {
-            if !(placeIsMutable(c: inout c, id: target)) {
-                compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "cannot assign to an immutable binding; declare it with `mut val`")
-            }
-        }
-        Expr.Arrow(val base, nameStart: _, nameLen: _) => {
-            // a Ref pointee is always mutable through `->`.
-            verifyExpr(c: inout c, id: base)
-        }
-        _ => {}
-    }
-    checkUniquePlaceCopy(c: inout c, exprId: value, inoutOk: false)
-    verifyExpr(c: inout c, id: value)
-    // a plain reassignment `u = e` reinitializes `u`, so it is live again — clear any
-    // use-after-move mark (the value was verified above, so a moved read in `e` is
-    // already reported). spec/03.
-    if op == opAssign() {
-        match c.arena.exprs[target] {
             Expr.Ident(val start, val len) => {
-                verifyUnmarkMoved(c: inout c, idx: localIndexByName(c: inout c, start: start, len: len))
+                if !(placeIsMutable(c: inout self, id: target)) {
+                    compileErrorAt(line: lineOf(c: inout self, offset: start), msg: "cannot assign to an immutable binding; declare it with `mut val`")
+                }
+            }
+            Expr.Arrow(val base, nameStart: _, nameLen: _) => {
+                // a Ref pointee is always mutable through `->`.
+                verifyExpr(c: inout self, id: base)
             }
             _ => {}
         }
-    }
-    // the assigned value's type must match the place's type (the TypeRef checker
-    // subsumes the old numeric/String/named-id category checks here, with generic-arg
-    // precision and Bool/width/sign distinctions).
-    if op == opAssign() {
-        tcCheckValue(c: inout c, expectedRef: inferType(c: inout c, id: target), valueExpr: value, pos: "assign")
-    } else {
-        tcCheckCompoundAssign(c: inout c, op: op, target: target, value: value)
+        checkUniquePlaceCopy(c: inout self, exprId: value, inoutOk: false)
+        verifyExpr(c: inout self, id: value)
+        // a plain reassignment `u = e` reinitializes `u`, so it is live again — clear any
+        // use-after-move mark (the value was verified above, so a moved read in `e` is
+        // already reported). spec/03.
+        if op == opAssign() {
+            match self.arena.exprs[target] {
+                Expr.Ident(val start, val len) => {
+                    verifyUnmarkMoved(c: inout self, idx: localIndexByName(c: inout self, start: start, len: len))
+                }
+                _ => {}
+            }
+        }
+        // the assigned value's type must match the place's type (the TypeRef checker
+        // subsumes the old numeric/String/named-id category checks here, with generic-arg
+        // precision and Bool/width/sign distinctions).
+        if op == opAssign() {
+            tcCheckValue(c: inout self, expectedRef: inferType(c: inout self, id: target), valueExpr: value, pos: "assign")
+        } else {
+            tcCheckCompoundAssign(c: inout self, op: op, target: target, value: value)
+        }
     }
 }
-

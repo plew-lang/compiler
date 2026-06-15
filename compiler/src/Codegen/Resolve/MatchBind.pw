@@ -4,61 +4,56 @@
 // The value expression of the last `give` in a block (the block's result), or
 // `c.arena.exprs.count` (one past the end) if the block has no `give`. A U64 sentinel
 // keeps callers off signed indices. Used to infer a value-position `if`'s type.
-fn blockGiveExpr(c: inout Comp, blkId: U64) -> U64 {
-    val blk: Block = c.arena.blocks[blkId]
-    val stmts: Array[U64] = blk.stmts
-    mut val i: U64 = 0
-    mut val found: U64 = c.arena.exprs.count
-    while i < stmts.count {
-        val s: Stmt = c.arena.stmts[stmts[i]]
-        match s {
-            Stmt.Give(val value) => { found = value }
-            _ => {}
-        }
-        i += 1
-    }
-    return found
-}
 
-// Register a match-bound field as an in-scope local with its declared type.
-// Register a match-bound field as an in-scope local. The field is found by
-// (fieldStart,fieldLen); the local is named (bindStart,bindLen) — equal for
-// punning, different for a `field: val name` rename.
-fn addBindLocal(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64, bindStart: U64, bindLen: U64) {
-    addBindLocalCn(c: inout c, enumStart: enumStart, enumLen: enumLen, variantStart: variantStart, variantLen: variantLen, fieldStart: fieldStart, fieldLen: fieldLen, bindStart: bindStart, bindLen: bindLen, cnum: 0)
-}
-
-// Like addBindLocal but with an explicit C-name disambiguator (async frame
-// fields use a monotonic suffix so repeated match-bind names across arms don't
-// collide in the flat frame struct).
-fn addBindLocalCn(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64, bindStart: U64, bindLen: U64, cnum: U64) {
-    val qEnum: U64 = intern(c: inout c, start: enumStart, len: enumLen)
-    val qVar: U64 = intern(c: inout c, start: variantStart, len: variantLen)
-    val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
-    mut val ei: U64 = 0
-    while ei < c.arena.enums.count {
-        val e: EnumDef = c.arena.enums[ei]
-        if e.nameId == qEnum {
-            val vars: Array[Variant] = e.variants
-            mut val vi: U64 = 0
-            while vi < vars.count {
-                val v: Variant = vars[vi]
-                if v.nameId == qVar {
-                    val fs: Array[FieldDef] = v.fields
-                    mut val fi: U64 = 0
-                    while fi < fs.count {
-                        val f: FieldDef = fs[fi]
-                        if f.nameId == qField {
-                            addLocalCn(c: inout c, nameStart: bindStart, nameLen: bindLen, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray, ty: f.ty, isInout: false, isMut: false, owned: false, cnum: cnum)
-                            return
-                        }
-                        fi += 1
-                    }
-                }
-                vi += 1
+pub impl Comp {
+    inout fn blockGiveExpr(blkId: U64) -> U64 {
+        val blk: Block = self.arena.blocks[blkId]
+        val stmts: Array[U64] = blk.stmts
+        mut val i: U64 = 0
+        mut val found: U64 = self.arena.exprs.count
+        while i < stmts.count {
+            val s: Stmt = self.arena.stmts[stmts[i]]
+            match s {
+                Stmt.Give(val value) => { found = value }
+                _ => {}
             }
+            i += 1
         }
-        ei += 1
+        return found
+    }
+
+    inout fn addBindLocal(enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64, bindStart: U64, bindLen: U64) {
+        self.addBindLocalCn(enumStart: enumStart, enumLen: enumLen, variantStart: variantStart, variantLen: variantLen, fieldStart: fieldStart, fieldLen: fieldLen, bindStart: bindStart, bindLen: bindLen, cnum: 0)
+    }
+
+    inout fn addBindLocalCn(enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64, bindStart: U64, bindLen: U64, cnum: U64) {
+        val qEnum: U64 = intern(c: inout self, start: enumStart, len: enumLen)
+        val qVar: U64 = intern(c: inout self, start: variantStart, len: variantLen)
+        val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
+        mut val ei: U64 = 0
+        while ei < self.arena.enums.count {
+            val e: EnumDef = self.arena.enums[ei]
+            if e.nameId == qEnum {
+                val vars: Array[Variant] = e.variants
+                mut val vi: U64 = 0
+                while vi < vars.count {
+                    val v: Variant = vars[vi]
+                    if v.nameId == qVar {
+                        val fs: Array[FieldDef] = v.fields
+                        mut val fi: U64 = 0
+                        while fi < fs.count {
+                            val f: FieldDef = fs[fi]
+                            if f.nameId == qField {
+                                addLocalCn(c: inout self, nameStart: bindStart, nameLen: bindLen, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray, ty: f.ty, isInout: false, isMut: false, owned: false, cnum: cnum)
+                                return
+                            }
+                            fi += 1
+                        }
+                    }
+                    vi += 1
+                }
+            }
+            ei += 1
+        }
     }
 }
-

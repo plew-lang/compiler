@@ -65,10 +65,10 @@ for sig, body in bodies:
 newfile = newfile.rstrip("\n") + "\n}\n"
 open(path, "w").write(newfile)
 
-# rewrite call sites repo-wide
+# rewrite call sites repo-wide (INCLUDING the transformed file itself — its own
+# intra-file calls, now `NAME(c: inout self, …)`, must become `self.NAME(…)`).
 names = [n for n, _ in methodized]
 for f in glob.glob(SRC + "/**/*.pw", recursive=True):
-    if f == path: continue
     s = open(f).read(); orig = s
     for n in names:
         s = re.sub(r'\b' + n + r'\(c: inout (\w+)\)', r'\1.' + n + r'()', s)

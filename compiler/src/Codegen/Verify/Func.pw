@@ -123,7 +123,7 @@ fn verifyBlock(c: inout Comp, blockId: U64) {
     val b: Block = c.arena.blocks[blockId]
     mut val i: U64 = 0
     while i < b.stmts.count {
-        verifyStmt(c: inout c, stmtId: b.stmts[i])
+        c.verifyStmt(stmtId: b.stmts[i])
         i += 1
     }
     popLocals(c: inout c, mark: mark)

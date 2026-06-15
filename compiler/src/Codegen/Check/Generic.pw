@@ -423,7 +423,7 @@ fn checkGenericTypeMatch(c: inout Comp, expectedRef: U64, valueExpr: U64) {
             while ai < arms.count {
                 if !(arms[ai].isDiverge) {
                     if arms[ai].binds.count == 0U64 {
-                        val g: U64 = blockGiveExpr(c: inout c, blkId: arms[ai].body)
+                        val g: U64 = c.blockGiveExpr(blkId: arms[ai].body)
                         if g < c.arena.exprs.count {
                             checkGenericTypeMatch(c: inout c, expectedRef: expectedRef, valueExpr: g)
                         }

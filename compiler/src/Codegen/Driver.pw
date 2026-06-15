@@ -297,7 +297,7 @@ export fn runFrontend() -> Comp {
     checkArrayElemsNotUnique(c: inout c)
     // match pattern soundness (spec/11): a variant/struct pattern must name real
     // fields (else codegen emits `_m.data.V.<missing>` -> broken C). Loud-reject.
-    checkMatchBinds(c: inout c)
+    c.checkMatchBinds()
     // missing-return (spec/11): a non-`()` function must return/panic/diverge on
     // every path — Plew does not implicitly return the tail expression, so falling
     // off the end would silently yield uninitialized memory.

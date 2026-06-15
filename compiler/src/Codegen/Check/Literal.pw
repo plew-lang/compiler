@@ -245,11 +245,11 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
             // a value-position `if`'s result is its branches' `give` values, so the
             // surrounding context flows to each give (an else-if chain recurses here
             // via the nested IfExpr give). The condition is self-typed (Bool).
-            val tg: U64 = blockGiveExpr(c: inout c, blkId: thenBlk)
+            val tg: U64 = c.blockGiveExpr(blkId: thenBlk)
             if tg < c.arena.exprs.count {
                 checkLitCtx(c: inout c, id: tg, eKind: eKind, eBits: eBits, eSgn: eSgn)
             }
-            val eg: U64 = blockGiveExpr(c: inout c, blkId: elseBlk)
+            val eg: U64 = c.blockGiveExpr(blkId: elseBlk)
             if eg < c.arena.exprs.count {
                 checkLitCtx(c: inout c, id: eg, eKind: eKind, eBits: eBits, eSgn: eSgn)
             }
@@ -260,7 +260,7 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
             while i < arms.count {
                 // context flows to each value arm's `give` value; diverging arms have none.
                 if !(arms[i].isDiverge) {
-                    val g: U64 = blockGiveExpr(c: inout c, blkId: arms[i].body)
+                    val g: U64 = c.blockGiveExpr(blkId: arms[i].body)
                     if g < c.arena.exprs.count {
                         checkLitCtx(c: inout c, id: g, eKind: eKind, eBits: eBits, eSgn: eSgn)
                     }
