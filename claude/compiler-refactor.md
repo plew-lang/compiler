@@ -2,7 +2,7 @@
 
 正典コンパイラ `compiler/src/` を「現実装の理想像」までリファクタする計画。**なぜ・到達点・マイルストーン・未検証リスク**を残す（進捗の「やった」は git）。現在地は [worklog.md](worklog.md)。
 
-> **現在地（tag）**：M0〜M3（`Comp` god-struct 83→**11 フィールド**・巨大ファイル全分割）＋**M5（scoped resolution＋循環検出）完了**。**M4（モジュール昇格）に着手＝M4-1 完了：IR をデータモジュール `Ir.pw` へ昇格**（旧 `Ast.pw`＝コンパイラ自身の IR 語彙＋共有 `Comp` 算術。パーサ AST = `@Std/Syntax` の `*Ast` とは別物なので名前も是正）。全 IR 型を `export`、passes が cross-module 構築する leaf/decl struct＋`Comp` に pub `factory` を付与、interner サービス（`intern`/`spansEqual` を export・`internHash`/`internGrow` は内部）を `Comp.pushType` の循環回避のため Ir へ同梱。root `_.pw` は `part ./Ast`→`import ./Ir with { … }`。**これがコンパイラ初の cross-module 共有可変 `Comp`**（M0 probe が struct 変異＋enum variant 構築の両方を実証済）。**M4 の主目的は part 撲滅＝モジュール構造を [spec/15](../spec/04-execution/15-modules.md) 準拠に**（91 part の単一モジュール解消）。残り＝**M4-2（逆依存を断ち Backend 独立モジュール化）→ M4-3（Frontend モジュール化）**。型回復統一（typed IR）は part 撲滅に不要と判明し**後段の任意トラックへ退避**（下記）。M5 で resolver を **flat global＋ヒューリスティック＋post-hoc gate** から **scoped resolution** へ移行済：`nameVisibleFrom`（同モジュール定義 or imported+exported）を選択の唯一の基準にし、自由関数（`findFunc`）・型/トレイト（`checkTypeVisibility`）の双方をスコープ化、`detectImportCycles` で DAG を強制（[spec/15 循環依存](../spec/04-execution/15-modules.md#循環依存モジュールグラフは-dag)）。**gate は作らず構造的に解消**（当初計画通り）。M5 は単一モジュールのまま緑を保ったまま完了＝M4 の前提インフラが整った。新カテゴリ `tests/partreject/`（多ファイル reject）追加。
+> **現在地（tag）**：M0〜M3（`Comp` god-struct 83→**11 フィールド**・巨大ファイル全分割）＋**M5（scoped resolution＋循環検出）完了**。**M4（モジュール昇格）に着手＝M4-1 完了：IR をデータモジュール `Ir.pw` へ昇格**（旧 `Ast.pw`＝コンパイラ自身の IR 語彙＋共有 `Comp` 算術。パーサ AST = `@Std/Syntax` の `*Ast` とは別物なので名前も是正）。全 IR 型を `export`、passes が cross-module 構築する leaf/decl struct＋`Comp` に pub `factory` を付与、interner サービス（`intern`/`spansEqual` を export・`internHash`/`internGrow` は内部）を `Comp.pushType` の循環回避のため Ir へ同梱。root `_.pw` は `part ./Ast`→`import ./Ir with { … }`。**これがコンパイラ初の cross-module 共有可変 `Comp`**（M0 probe が struct 変異＋enum variant 構築の両方を実証済）。**M4 の主目的は part 撲滅＝モジュール構造を [spec/15](../spec/04-execution/15-modules.md) 準拠に**（91 part の単一モジュール解消）。**M4-2/M4-3 完了＝`Ir ← Frontend ← Backend ← entry` の一方向 DAG を達成**（commit `2ddba1b`・不動点緑）。残 91 part は全て Frontend/Backend 内にあり、依存グラフ実測で**核が強連結成分（Resolve↔Check↔Mono↔Infer↔Verify↔Stmt）＝spec/15 理由②で part が正当**と確認＝**「part 最低限・spec/15 準拠」は実質達成**（下表「到達状態」）。さらなる削減は周縁モジュール抽出（小利得）かメソッド化（北極星）のみ。型回復統一（typed IR）は part 撲滅に不要と判明し**後段の任意トラックへ退避**（下記）。M5 で resolver を **flat global＋ヒューリスティック＋post-hoc gate** から **scoped resolution** へ移行済：`nameVisibleFrom`（同モジュール定義 or imported+exported）を選択の唯一の基準にし、自由関数（`findFunc`）・型/トレイト（`checkTypeVisibility`）の双方をスコープ化、`detectImportCycles` で DAG を強制（[spec/15 循環依存](../spec/04-execution/15-modules.md#循環依存モジュールグラフは-dag)）。**gate は作らず構造的に解消**（当初計画通り）。M5 は単一モジュールのまま緑を保ったまま完了＝M4 の前提インフラが整った。新カテゴリ `tests/partreject/`（多ファイル reject）追加。
 
 ## 診断（何が問題か）
 
@@ -87,10 +87,20 @@ a/b は「結合のため」でなく**可読性のため**カテゴリ別子構
 | M | 内容 | 状態 |
 |---|---|---|
 | **M4-1** | IR をデータモジュール `Ir.pw` へ昇格（`Expr`/`Stmt`/`Comp`/interner…）。初の cross-module 共有可変 `Comp`。 | 完了・tag `refactor-m4-1` |
-| **M4-2** | 逆依存3関数を Backend→Frontend/Ir へ戻し循環を断つ → **Backend を独立モジュール化**（`import Ir` ＋ Frontend の export 結果）。 | 次 |
-| **M4-3** | **Frontend をモジュール化**（root＝Driver/Loader/main が `import`）。内部で DAG に切れる層は更に `import`、相互再帰核は spec/15 が許す `part` のまま残す（目標は「part ゼロ」でなく「spec が正当化する part だけ」）。 | 後 |
+| **M4-2** | 逆依存3関数（＋`stmtPrincipalOffset`）を Backend→Frontend/Ir へ戻し循環を断つ → **Backend を独立モジュール化**（`import Ir` ＋ Frontend の export 80 名）。 | 完了 |
+| **M4-3** | **Frontend をモジュール化**（root `_.pw`＝`main` のみ・`runFrontend`/`emitLlvm` を import）。**Ir ← Frontend ← Backend ← entry の一方向 DAG 達成**・不動点緑・commit `2ddba1b`。 | 完了 |
 
 各段 dev-rebuild→test→reseed→不動点→tag。M5 の循環検出が「分割境界が DAG か」を実際に検査する。
+
+#### 到達状態と「これ以上の part 削減」の地図（依存グラフ実測）
+
+**cross-module 構造は spec/15 ベストプラクティス準拠（DAG）達成**。残 91 part は全て Frontend / Backend の 2 モジュール内にあり、その正当性を実測（`fn` 定義元 → 呼出元の area 間エッジ集計）で確認した：
+
+- **Frontend の核は強連結成分（SCC）**＝`Resolve ↔ Check ↔ Mono ↔ Infer ↔ Verify ↔ Stmt`（Resolve↔Mono 21/40・Check↔Resolve 49/3・Check↔Infer 23/5 等の双方向）。**spec/15 理由②（DAG に切れない＝論理的に1モジュール）で part が正当**。この核が Frontend の大半＝part 削減の主塊は本質的に不可分（メソッド化＝北極星を除き）。
+- **周縁は概ね一方向**で SCC に入れているのは**誤配置ユーティリティの逆エッジ1〜2本のみ**：`aliasReal`(Parser→Resolve)・`tyRefIsGround`/`sameMangle`(Emit→Mono)・`extractSpan`(Lower→Loader)。これらを正しい層（Ir / 低位クエリ area）へ pure-move すれば Parser/Emit/Loader 等は一方向化し、別 `import` モジュールへ昇格し得る（＝part を import 層へ振替）。ただし**総 part は大きくは減らない**（核 SCC＋Backend codegen 核は残る）。
+- **Backend/Llvm（32 part）** も式↔文↔呼出の codegen が相互再帰＝同様に理由②で1モジュール正当。
+
+∴ **「part 最低限・spec/15 準拠」は実質達成**（part は全て理由②の相互再帰核に収まる）。**さらに減らすには (a) 周縁モジュール抽出＝小利得・要逆エッジ除去 か (b) メソッド化＝北極星（長い裾）** のいずれか。
 
 #### 努力目標（後で言語制約化）：part 内は `impl` のみ
 
