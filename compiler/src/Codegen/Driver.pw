@@ -89,6 +89,21 @@ fn runFrontend() -> Comp {
             loaded.append(<Bind nameStart=cps nameLen=corePath.count fieldStart=nextModuleId fieldLen=corePath.count />)
             nextModuleId = nextModuleId + 1
         }
+        // Force-load @Std/Hash: the implicit prelude's `Dictionary` lang item is built on
+        // hashing (the `[k:v]` literal's `K: Hash` machinery + `SipHasher`), so the hashing
+        // floor must always be LOADED even when the target never imports it. Force-load is
+        // loading only — `Hash`/`Hasher`/`SipHasher` are NOT ambient (spec/15: not lang
+        // items), so naming them in a type position still needs `import @Std/Hash`. The
+        // prelude itself imports it; a target that also imports it dedups via pathSeen.
+        mut val hashPath: Array[U8] = []
+        appendBytes(into: inout hashPath, from: stdRoot)
+        appendBytes(into: inout hashPath, from: "Hash.pw".bytes)
+        if fileExists(path: hashPath) {
+            val hps: U64 = pathBuf.count
+            appendBytes(into: inout pathBuf, from: hashPath)
+            loaded.append(<Bind nameStart=hps nameLen=hashPath.count fieldStart=nextModuleId fieldLen=hashPath.count />)
+            nextModuleId = nextModuleId + 1
+        }
         // gen mode: force-load @Std/Io as its own module so the synthesized harness
         // `main` can call `write` even if the target file doesn't import it.
         if genMode {
