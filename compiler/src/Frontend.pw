@@ -14,6 +14,7 @@ import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
 import ./Ir with { PType, TypeRef, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, DefaultExt, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Comp, Expr, Stmt, intern, spansEqual, appendBytes }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, genSiblingPath, pathSeen }
+import ./Codegen/Array with { isRawIntrinsicName, isArrayIntrinsicName }
 
 part ./Parser/Decl
 part ./Codegen/Emit
@@ -24,7 +25,6 @@ part ./Codegen/Expr
 part ./Codegen/Stmt
 part ./Codegen/Decl
 part ./Codegen/Mono
-part ./Codegen/Array
 part ./Codegen/Gen
 part ./Codegen/Verify
 part ./Codegen/Infer

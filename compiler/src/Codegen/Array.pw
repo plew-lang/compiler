@@ -1,11 +1,15 @@
-// Part of the Plew compiler module (root: _.pw). Name predicates for the array
-// and raw-buffer intrinsic floor (spec/15 core-library boundary): the small set
-// of `extern "plew-intrinsic"` operations Core's `Array`/`RawBuffer` methods call.
-// The backend recognizes these names to lower the calls and to recover the
-// element type of their results.
+// @Codegen/Array — name predicates for the array and raw-buffer intrinsic floor
+// (spec/15 core-library boundary): the small set of `extern "plew-intrinsic"`
+// operations Core's `Array`/`RawBuffer` methods call. A DAG-bottom leaf module
+// (`Ir ← Codegen/Array`) imported by the front-end's type recovery — it only
+// reads name spans, so it depends on nothing but the shared IR and the lexer's
+// `rangeEquals`.
+
+import @Std/Syntax with { rangeEquals }
+import ../Ir with { Comp }
 
 // Is `(nameStart,nameLen)` a raw-floor intrinsic name?
-fn isRawIntrinsicName(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
+export fn isRawIntrinsicName(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
     if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawAlloc") { return true }
     if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawLoad") { return true }
     if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawStore") { return true }
@@ -16,7 +20,7 @@ fn isRawIntrinsicName(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
 
 // Is `(nameStart,nameLen)` an array intrinsic name (for the exprType of its
 // result and the call lowering)?
-fn isArrayIntrinsicName(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
+export fn isArrayIntrinsicName(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
     if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "arrayPush") { return true }
     if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "arrayGet") { return true }
     if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "arraySet") { return true }
