@@ -240,7 +240,7 @@ pub impl LlvmCtx {
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 // an `any P` receiver: the result kind is the requirement's return,
                 // grounded under the existential's bindings (`Out`/`Item` -> concrete).
-                val atIdx: U64 = anyRecvTraitIdx(c: inout c, st: inout self, recv: recv)
+                val atIdx: U64 = self.anyRecvTraitIdx(c: inout c, recv: recv)
                 if atIdx < c.decls.traits.count {
                     val rr: U64 = anyMethodRetRef(c: inout c, anyRef: self.exprTypeRef(c: inout c, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
                     if rr != 0U64 {

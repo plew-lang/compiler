@@ -12,7 +12,7 @@ pub impl LlvmCtx {
                 if isBool { return self.i1ty }
                 val t: TypeInfo = c.typeOf(id: id)
                 if t.kind == 0 {
-                    return llvmScalarTy(c: inout c, st: inout self, tyStart: t.nameStart, tyLen: t.nameLen)
+                    return self.llvmScalarTy(c: inout c, tyStart: t.nameStart, tyLen: t.nameLen)
                 }
                 return self.i64ty
             }
@@ -38,16 +38,16 @@ pub impl LlvmCtx {
                 return self.i64ty
             }
             Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, fields: _) => {
-                return llvmScalarTy(c: inout c, st: inout self, tyStart: typeStart, tyLen: typeLen)
+                return self.llvmScalarTy(c: inout c, tyStart: typeStart, tyLen: typeLen)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 // an `any P` receiver: the result LLVM type is the requirement's return,
                 // grounded under the existential's bindings.
-                val atIdx: U64 = anyRecvTraitIdx(c: inout c, st: inout self, recv: recv)
+                val atIdx: U64 = self.anyRecvTraitIdx(c: inout c, recv: recv)
                 if atIdx < c.decls.traits.count {
                     val rr: U64 = anyMethodRetRef(c: inout c, anyRef: self.exprTypeRef(c: inout c, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
                     if rr != 0U64 {
-                        return llvmTypeOfRef(c: inout c, st: inout self, ref: rr)
+                        return self.llvmTypeOfRef(c: inout c, ref: rr)
                     }
                 }
                 val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
@@ -183,9 +183,9 @@ pub impl LlvmCtx {
                         // field `Box[Array[I32]].v` -> I32).
                         val er: U64 = self.fieldArrayElemRefUnderBase(c: inout c, base: base, fd: fd)
                         if er != 0U64 {
-                            return llvmTypeOfRef(c: inout c, st: inout self, ref: er)
+                            return self.llvmTypeOfRef(c: inout c, ref: er)
                         }
-                        return llvmScalarTy(c: inout c, st: inout self, tyStart: fd.tyStart, tyLen: fd.tyLen)
+                        return self.llvmScalarTy(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
                     }
                 }
             }
@@ -194,7 +194,7 @@ pub impl LlvmCtx {
                 if psidx < c.arena.structs.count {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
                     if fidx < c.arena.structs[psidx].fields.count {
-                        return llvmScalarTy(c: inout c, st: inout self, tyStart: c.arena.structs[psidx].fields[fidx].tyStart, tyLen: c.arena.structs[psidx].fields[fidx].tyLen)
+                        return self.llvmScalarTy(c: inout c, tyStart: c.arena.structs[psidx].fields[fidx].tyStart, tyLen: c.arena.structs[psidx].fields[fidx].tyLen)
                     }
                 }
             }
@@ -206,7 +206,7 @@ pub impl LlvmCtx {
                     val t: TypeRef = c.arena.types[r]
                     if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
                         if t.args.count > 0U64 {
-                            return llvmTypeOfRef(c: inout c, st: inout self, ref: t.args[0])
+                            return self.llvmTypeOfRef(c: inout c, ref: t.args[0])
                         }
                     }
                 }
@@ -217,7 +217,7 @@ pub impl LlvmCtx {
                 val cfi: U64 = c.resolvedCallee(id: id)
                 if cfi < c.arena.funcs.count {
                     if c.arena.funcs[cfi].retIsArray {
-                        return llvmScalarTy(c: inout c, st: inout self, tyStart: c.arena.funcs[cfi].retStart, tyLen: c.arena.funcs[cfi].retLen)
+                        return self.llvmScalarTy(c: inout c, tyStart: c.arena.funcs[cfi].retStart, tyLen: c.arena.funcs[cfi].retLen)
                     }
                 }
             }
@@ -273,16 +273,16 @@ pub impl LlvmCtx {
         if fld.tyIsArray {
             match c.arena.exprs[valExpr] {
                 Expr.Array(val elems) => {
-                    return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: llvmScalarTy(c: inout c, st: inout self, tyStart: fld.tyStart, tyLen: fld.tyLen))
+                    return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen))
                 }
                 _ => {}
             }
             // value semantics: an array field initialized from a place (`<Holder items=a/>`)
             // copies the buffer so later mutation of the source leaves the struct's
             // field unchanged.
-            mut val av: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: valExpr)
+            mut val av: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
             if arrayExprIsPlace(c: inout c, id: valExpr) {
-                av = self.copyArrayValue(c: inout c, arrVal: av, elemTy: llvmScalarTy(c: inout c, st: inout self, tyStart: fld.tyStart, tyLen: fld.tyLen))
+                av = self.copyArrayValue(c: inout c, arrVal: av, elemTy: self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen))
             }
             return av
         }
@@ -294,7 +294,7 @@ pub impl LlvmCtx {
             return fldAny
         }
         if refIsAny(c: inout c, ref: fld.ty) {
-            return self.copyAnyIfPlace(c: inout c, rv: genLlvmExpr(c: inout c, st: inout self, id: valExpr), valueExpr: valExpr)
+            return self.copyAnyIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: valExpr), valueExpr: valExpr)
         }
         // a boxed (recursive) struct field: build the value, heap-allocate a cell, store
         // it, and put the cell pointer in the struct (leaky, like Ref — no free yet).
@@ -309,7 +309,7 @@ pub impl LlvmCtx {
                 bg = c.groundTypeRef(ref: fld.ty)
             }
             self.expectedTy = bg
-            val boxedVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: valExpr)
+            val boxedVal: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
             val boxedTy: LLVMTypeRef = LLVMTypeOf(boxedVal)
             val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(boxedTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
             LLVMBuildStore(self.b, boxedVal, cell)
@@ -326,10 +326,10 @@ pub impl LlvmCtx {
             }
             if c.isGenericInst(ref: g) {
                 self.expectedTy = g
-                return genLlvmExpr(c: inout c, st: inout self, id: valExpr)
+                return self.genLlvmExpr(c: inout c, id: valExpr)
             }
         }
-        return coerceIntTo(c: inout c, st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: valExpr), tyStart: fld.tyStart, tyLen: fld.tyLen)
+        return self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), tyStart: fld.tyStart, tyLen: fld.tyLen)
     }
 
     // Declare/cache `plew_rawbuf_alloc(i64 elemSize, i64 cap) -> ptr`.
@@ -338,7 +338,7 @@ pub impl LlvmCtx {
         ptys.append(value: self.i64ty)
         ptys.append(value: self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 2U64, 0I32)
-        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_rawbuf_alloc", nameId: 20U64, fnTy: fty)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_alloc", nameId: 20U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
         av.append(value: elemSize)
         av.append(value: cap)
@@ -359,7 +359,7 @@ pub impl LlvmCtx {
         ptys.append(value: self.i64ty)
         ptys.append(value: self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 3U64, 0I32)
-        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_arr_copy", nameId: 24U64, fnTy: fty)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_arr_copy", nameId: 24U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
         av.append(value: data)
         av.append(value: LLVMSizeOf(elemTy))
@@ -402,7 +402,7 @@ pub impl LlvmCtx {
             val er: U64 = arrayFieldElemRef(c: inout c, f: fd)
             if er != 0U64 {
                 val elem: LLVMValueRef = LLVMBuildExtractValue(self.b, agg, fi, anon())
-                val et: LLVMTypeRef = llvmTypeOfRef(c: inout c, st: inout self, ref: er)
+                val et: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: er)
                 agg = LLVMBuildInsertValue(self.b, agg, self.copyArrayValue(c: inout c, arrVal: elem, elemTy: et), fi, anon())
             } else {
                 if c.fieldIsBoxed(f: fd) {
@@ -472,7 +472,7 @@ pub impl LlvmCtx {
         val r: U64 = self.exprTypeRef(c: inout c, id: bufExpr)
         if r != 0U64 {
             if c.arena.types[r].args.count > 0U64 {
-                return llvmTypeOfRef(c: inout c, st: inout self, ref: c.arena.types[r].args[0])
+                return self.llvmTypeOfRef(c: inout c, ref: c.arena.types[r].args[0])
             }
         }
         return self.i64ty
@@ -483,7 +483,7 @@ pub impl LlvmCtx {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(value: self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_rawbuf_retain", nameId: 25U64, fnTy: fty)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_retain", nameId: 25U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
         av.append(value: cell)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
@@ -494,7 +494,7 @@ pub impl LlvmCtx {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(value: self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_rawbuf_release", nameId: 26U64, fnTy: fty)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_release", nameId: 26U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
         av.append(value: cell)
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
@@ -523,7 +523,7 @@ pub impl LlvmCtx {
         ptys.append(value: self.i64ty)
         ptys.append(value: self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
-        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_bounds", nameId: 21U64, fnTy: fty)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_bounds", nameId: 21U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
         av.append(value: idx)
         av.append(value: count)
@@ -541,7 +541,7 @@ pub impl LlvmCtx {
     inout fn coerceElem(v: LLVMValueRef, elemTy: LLVMTypeRef) -> LLVMValueRef {
         if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
             if LLVMGetTypeKind(elemTy) == 8U32 {
-                return coerceInt(st: inout self, v: v, target: elemTy, unsigned: false)
+                return self.coerceInt(v: v, target: elemTy, unsigned: false)
             }
         }
         return v

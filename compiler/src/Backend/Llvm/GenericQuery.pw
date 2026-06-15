@@ -27,7 +27,7 @@ pub impl LlvmCtx {
                 ti += 1
             }
         }
-        if structRegSlot(c: inout c, st: inout self, start: start, len: len) < self.structIdxs.count {
+        if self.structRegSlot(c: inout c, start: start, len: len) < self.structIdxs.count {
             return c.structIndexByName(start: start, len: len)
         }
         return c.arena.structs.count
@@ -212,7 +212,7 @@ pub impl LlvmCtx {
             Expr.Unary(val op, val operand) => {
                 // a unary operator result used as a struct (`(-m).cents`): the witness's
                 // return type drives further field access.
-                val uwfi: U64 = unaryWitnessFn(c: inout c, st: inout self, op: op, operand: operand)
+                val uwfi: U64 = self.unaryWitnessFn(c: inout c, op: op, operand: operand)
                 if uwfi < c.arena.funcs.count {
                     if c.arena.funcs[uwfi].hasRet {
                         return self.localStructIdxFor(c: inout c, start: c.arena.funcs[uwfi].retStart, len: c.arena.funcs[uwfi].retLen)
@@ -223,7 +223,7 @@ pub impl LlvmCtx {
                 // a binary operator result used as a struct (`(a + b).x`): the witness's
                 // return type drives further field access.
                 if isBinTraitOp(op: op) {
-                    val wfi: U64 = binWitnessFn(c: inout c, st: inout self, op: op, lhs: lhs, rhs: rhs)
+                    val wfi: U64 = self.binWitnessFn(c: inout c, op: op, lhs: lhs, rhs: rhs)
                     if wfi < c.arena.funcs.count {
                         if c.arena.funcs[wfi].hasRet {
                             return self.localStructIdxFor(c: inout c, start: c.arena.funcs[wfi].retStart, len: c.arena.funcs[wfi].retLen)
@@ -377,7 +377,7 @@ pub impl LlvmCtx {
         if isArray {
             return self.arrayTy
         }
-        return llvmScalarTy(c: inout c, st: inout self, tyStart: tyStart, tyLen: tyLen)
+        return self.llvmScalarTy(c: inout c, tyStart: tyStart, tyLen: tyLen)
     }
 }
 
@@ -427,7 +427,7 @@ pub impl LlvmCtx {
                 g = c.groundTypeRef(ref: fd.ty)
             }
             if c.isGenericInst(ref: g) {
-                return llvmTypeOfRef(c: inout c, st: inout self, ref: g)
+                return self.llvmTypeOfRef(c: inout c, ref: g)
             }
         }
         return self.llvmTypeFor(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen, isArray: false)

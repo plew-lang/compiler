@@ -77,7 +77,7 @@ pub impl LlvmCtx {
         if mf.selfInout {
             av.append(value: self.placePtrOf(c: inout c, id: recv))
         } else {
-            av.append(value: genLlvmExpr(c: inout c, st: inout self, id: recv))
+            av.append(value: self.genLlvmExpr(c: inout c, id: recv))
         }
         val savedP: Array[Bind] = c.cur.typeParams
         val savedA: Array[U64] = c.cur.typeArgs
@@ -122,7 +122,7 @@ pub impl LlvmCtx {
                 }
             }
         }
-        val reg: U64 = structRegSlot(c: inout c, st: inout self, start: c.arena.structs[sidx].nameStart, len: c.arena.structs[sidx].nameLen)
+        val reg: U64 = self.structRegSlot(c: inout c, start: c.arena.structs[sidx].nameStart, len: c.arena.structs[sidx].nameLen)
         if reg < self.structIdxs.count {
             return self.structTys[reg]
         }
@@ -167,7 +167,7 @@ pub impl LlvmCtx {
                     val bsi: U64 = self.exprStructIdx(c: inout c, id: base)
                     if bsi < c.arena.structs.count {
                         val sd: StructDef = c.arena.structs[bsi]
-                        val reg: U64 = structRegSlot(c: inout c, st: inout self, start: sd.nameStart, len: sd.nameLen)
+                        val reg: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
                         if reg < self.structIdxs.count {
                             val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
                             if fidx < c.arena.structs[bsi].fields.count {
@@ -183,10 +183,10 @@ pub impl LlvmCtx {
                 // alias — so writing through it is observably correct).
                 if self.exprIsArray(c: inout c, id: base) {
                     val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: base)
-                    val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: base)
+                    val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
                     val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
                     val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
-                    val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: index)
+                    val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: index)
                     self.emitBoundsCheck(c: inout c, idx: idx, count: count)
                     return self.arrElemPtr(elemTy: elemTy, data: data, idx: idx)
                 }
@@ -203,7 +203,7 @@ pub impl LlvmCtx {
         }
         // not a place (a fresh value): materialize into a temp slot so a callee taking
         // `inout`/`borrow` still gets a pointer (it mutates the copy, harmlessly).
-        val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: id)
+        val v: LLVMValueRef = self.genLlvmExpr(c: inout c, id: id)
         val slot: LLVMValueRef = self.entryAlloca(ty: LLVMTypeOf(v))
         LLVMBuildStore(self.b, v, slot)
         return slot
@@ -280,7 +280,7 @@ pub impl LlvmCtx {
             return argAny
         }
         if refIsAny(c: inout c, ref: p.ty) {
-            return self.copyAnyIfPlace(c: inout c, rv: genLlvmExpr(c: inout c, st: inout self, id: argExpr), valueExpr: argExpr)
+            return self.copyAnyIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: argExpr), valueExpr: argExpr)
         }
         if p.tyIsArray {
             match c.arena.exprs[argExpr] {
@@ -291,11 +291,11 @@ pub impl LlvmCtx {
                             argElemRef = c.arena.types[p.ty].args[0]
                         }
                     }
-                    return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: llvmScalarTy(c: inout c, st: inout self, tyStart: p.tyStart, tyLen: p.tyLen), elemRef: argElemRef)
+                    return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmScalarTy(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen), elemRef: argElemRef)
                 }
                 _ => {}
             }
-            return genLlvmExpr(c: inout c, st: inout self, id: argExpr)
+            return self.genLlvmExpr(c: inout c, id: argExpr)
         }
         // a generic-instance parameter (`o: Optional[I64]`, `b: Box[I32]`): flow the
         // expected concrete instance to the argument so a JSX construction without
@@ -307,9 +307,9 @@ pub impl LlvmCtx {
                 self.expectedTy = p.ty
             }
         }
-        val argV: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: argExpr)
+        val argV: LLVMValueRef = self.genLlvmExpr(c: inout c, id: argExpr)
         self.expectedTy = 0U64
-        return coerceIntTo(c: inout c, st: inout self, v: argV, tyStart: p.tyStart, tyLen: p.tyLen)
+        return self.coerceIntTo(c: inout c, v: argV, tyStart: p.tyStart, tyLen: p.tyLen)
     }
 
     // Index into st.fn* for a cached user function (by c.arena.funcs index), or st.fnIdx.count.

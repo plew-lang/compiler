@@ -100,7 +100,7 @@ pub impl LlvmCtx {
             return LLVMConstNull(self.ptrty)
         }
         val sd: StructDef = c.arena.structs[sidx]
-        val regSlot: U64 = structRegSlot(c: inout c, st: inout self, start: sd.nameStart, len: sd.nameLen)
+        val regSlot: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
         if regSlot >= self.structIdxs.count {
             return LLVMConstNull(self.ptrty)
         }
@@ -184,7 +184,7 @@ pub impl LlvmCtx {
     // semantics on copy (a `mut val b = a` must not alias a's boxed value).
     inout fn buildAnyCopyThunk(c: inout Comp, sidx: U64) -> LLVMValueRef {
         val sd: StructDef = c.arena.structs[sidx]
-        val regSlot: U64 = structRegSlot(c: inout c, st: inout self, start: sd.nameStart, len: sd.nameLen)
+        val regSlot: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
         if regSlot >= self.structIdxs.count {
             return LLVMConstNull(self.ptrty)
         }
@@ -326,7 +326,7 @@ pub impl LlvmCtx {
     // (sidx, traitIdx) vtable, producing an `any P` fat-pointer value.
     inout fn boxIntoAny(c: inout Comp, v: LLVMValueRef, sidx: U64, anyRef: U64, traitIdx: U64) -> LLVMValueRef {
         val sd: StructDef = c.arena.structs[sidx]
-        val regSlot: U64 = structRegSlot(c: inout c, st: inout self, start: sd.nameStart, len: sd.nameLen)
+        val regSlot: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
         val concreteTy: LLVMTypeRef = self.structTys[regSlot]
         val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
         LLVMBuildStore(self.b, v, cell)
@@ -364,7 +364,7 @@ pub impl LlvmCtx {
         // value semantics: boxing a concrete PLACE (`val a: any P = h`) deep-copies its
         // array/struct fields into the box, matching a plain struct copy — so a later
         // mutation of the source leaves the existential's boxed value unchanged.
-        val v: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: genLlvmExpr(c: inout c, st: inout self, id: valueExpr), valueExpr: valueExpr)
+        val v: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: valueExpr), valueExpr: valueExpr)
         outBoxed = true
         return self.boxIntoAny(c: inout c, v: v, sidx: sidx, anyRef: targetRef, traitIdx: traitIdx)
     }
@@ -394,7 +394,7 @@ pub impl LlvmCtx {
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)
-        val fat: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: recv)
+        val fat: LLVMValueRef = self.genLlvmExpr(c: inout c, id: recv)
         val dataPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 0U64, anon())
         val vtPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
         // &vtable[slot] via flat ptr-element GEP (element type ptr), then load the fn ptr.
@@ -497,12 +497,12 @@ pub impl LlvmCtx {
             // a generic method's receiver is its instantiation (curRecvInstRef): its
             // LLVM type / struct-index / env come from the instance, not the bare head
             // name (which `llvmScalarTy` can't resolve to a registered generic type).
-            mut val recvTy: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout self, tyStart: f.recvStart, tyLen: f.recvLen)
+            mut val recvTy: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: f.recvStart, tyLen: f.recvLen)
             mut val recvSidx: U64 = self.localStructIdxFor(c: inout c, start: f.recvStart, len: f.recvLen)
             mut val recvRef: U64 = 0
             if self.curRecvInstRef != 0U64 {
                 recvRef = self.curRecvInstRef
-                recvTy = llvmTypeOfRef(c: inout c, st: inout self, ref: self.curRecvInstRef)
+                recvTy = self.llvmTypeOfRef(c: inout c, ref: self.curRecvInstRef)
                 val gs: U64 = self.genStructSlot(c: inout c, ref: self.curRecvInstRef)
                 if gs < self.genStructRefs.count {
                     recvSidx = self.genStructDefs[gs]
@@ -521,7 +521,7 @@ pub impl LlvmCtx {
                     recvTy = self.arrayTy
                     selfIsArr = true
                     if c.arena.types[self.curRecvInstRef].args.count > 0U64 {
-                        selfElemTy = llvmTypeOfRef(c: inout c, st: inout self, ref: c.arena.types[self.curRecvInstRef].args[0])
+                        selfElemTy = self.llvmTypeOfRef(c: inout c, ref: c.arena.types[self.curRecvInstRef].args[0])
                     }
                 }
             }

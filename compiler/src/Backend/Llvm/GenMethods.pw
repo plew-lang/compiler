@@ -80,7 +80,7 @@ pub impl LlvmCtx {
         if mf.selfInout {
             ptys.append(value: self.ptrty)
         } else {
-            ptys.append(value: llvmTypeOfRef(c: inout c, st: inout self, ref: instRef))
+            ptys.append(value: self.llvmTypeOfRef(c: inout c, ref: instRef))
         }
         mut val pi: U64 = 0
         while pi < mf.params.count {
@@ -208,7 +208,7 @@ pub impl LlvmCtx {
                 pgLen = c.arena.types[pgr].nameLen
             }
         }
-        mut val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout self, tyStart: pgStart, tyLen: pgLen)
+        mut val pty: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: pgStart, tyLen: pgLen)
         mut val pElem: LLVMTypeRef = self.i64ty
         mut val pSidx: U64 = self.localStructIdxFor(c: inout c, start: pgStart, len: pgLen)
         mut val pRef: U64 = 0
@@ -259,7 +259,7 @@ pub impl LlvmCtx {
             pty = self.arrayTy
         } else {
             if c.isGenericInst(ref: p.ty) {
-                pty = llvmTypeOfRef(c: inout c, st: inout self, ref: p.ty)
+                pty = self.llvmTypeOfRef(c: inout c, ref: p.ty)
                 pRef = p.ty
                 val pgs: U64 = self.genStructSlot(c: inout c, ref: p.ty)
                 if pgs < self.genStructRefs.count {

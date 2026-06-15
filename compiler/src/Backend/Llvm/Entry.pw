@@ -63,11 +63,11 @@ export fn emitLlvm(c: inout Comp) {
     // `{ i64 tag, [maxWords] payload }`, sized by the front-end, so their bodies are
     // set with their names; only struct + generic-struct bodies cross-reference named
     // types, so those are deferred to the body passes.)
-    registerStructNames(c: inout c, st: inout st)
+    st.registerStructNames(c: inout c)
     st.registerEnums(c: inout c)
     st.registerGenStructNames(c: inout c)
     st.registerGenEnums(c: inout c)
-    registerStructBodies(c: inout c, st: inout st)
+    st.registerStructBodies(c: inout c)
     st.registerGenStructBodies(c: inout c)
 
     // determine which assoc fns are actually reached (called) before declaring.
@@ -184,7 +184,7 @@ pub impl LlvmCtx {
         }
         mut val noParams: Array[LLVMTypeRef] = []
         val fnTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(noParams), 0U64, 0I32)
-        val fv: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_init_globals", nameId: 9120U64, fnTy: fnTy)
+        val fv: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_init_globals", nameId: 9120U64, fnTy: fnTy)
         self.curFn = fv
         self.curIsMain = false
         self.curRetVoid = true
@@ -276,7 +276,7 @@ pub impl LlvmCtx {
         saTys.append(value: self.i32ty)
         saTys.append(value: self.ptrty)
         val saTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(saTys), 2U64, 0I32)
-        val saFn: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_set_args", nameId: 56U64, fnTy: saTy)
+        val saFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_set_args", nameId: 56U64, fnTy: saTy)
         mut val saArgs: Array[LLVMValueRef] = []
         saArgs.append(value: LLVMGetParam(mainFn, 0U64))
         saArgs.append(value: LLVMGetParam(mainFn, 1U64))
@@ -313,7 +313,7 @@ pub impl LlvmCtx {
         }
         mut val noParams: Array[LLVMTypeRef] = []
         val igTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(noParams), 0U64, 0I32)
-        val igFn: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_init_globals", nameId: 9120U64, fnTy: igTy)
+        val igFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_init_globals", nameId: 9120U64, fnTy: igTy)
         mut val noArgs: Array[LLVMValueRef] = []
         LLVMBuildCall2(self.b, igTy, igFn, arrayCPtr(noArgs), 0U64, anon())
     }

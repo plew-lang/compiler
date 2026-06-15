@@ -39,7 +39,7 @@ pub impl LlvmCtx {
         if !(elseDiv) {
             // unify the else branch's width to a value branch (context-less literals).
             if phiVals.count > 0U64 {
-                elseVal = coerceInt(st: inout self, v: elseVal, target: LLVMTypeOf(phiVals[0]), unsigned: false)
+                elseVal = self.coerceInt(v: elseVal, target: LLVMTypeOf(phiVals[0]), unsigned: false)
             }
             phiVals.append(value: elseVal)
             phiBlocks.append(value: elseEnd)
@@ -75,7 +75,7 @@ pub impl LlvmCtx {
         if crET != 0U64 {
             matchExpectedTy = crET
         }
-        val sv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: scrut)
+        val sv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: scrut)
         val sty: LLVMTypeRef = LLVMTypeOf(sv)
         // a value-position struct destructuring match (irrefutable, one arm): bind the
         // scrutinee's fields (under any generic env), then evaluate the arm expression.
@@ -170,7 +170,7 @@ pub impl LlvmCtx {
                 // unify integer arm values to the first arm's width (a context-less literal
                 // may default wider/narrower) so the PHI is single-typed.
                 if phiVals.count > 0U64 {
-                    armVal = coerceInt(st: inout self, v: armVal, target: LLVMTypeOf(phiVals[0]), unsigned: false)
+                    armVal = self.coerceInt(v: armVal, target: LLVMTypeOf(phiVals[0]), unsigned: false)
                 }
                 phiVals.append(value: armVal)
                 phiBlocks.append(value: LLVMGetInsertBlock(self.b))
@@ -247,7 +247,7 @@ pub impl LlvmCtx {
         }
         val reid: U64 = self.genEnumDefs[rge]
         val rety: LLVMTypeRef = self.genEnumTys[rge]
-        val sv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: base)
+        val sv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
         val sslot: LLVMValueRef = self.entryAlloca(ty: bety)
         LLVMBuildStore(self.b, sv, sslot)
         val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, bety, sslot, 0U64, anon()), anon())
@@ -313,7 +313,7 @@ pub impl LlvmCtx {
         val errB: Bind = c.kwSpan(kw: "Err", kwLen: 3U64)
         val okVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: okB.nameStart, variantLen: okB.nameLen)
         val errVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: errB.nameStart, variantLen: errB.nameLen)
-        val ev: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: expr)
+        val ev: LLVMValueRef = self.genLlvmExpr(c: inout c, id: expr)
         val eslot: LLVMValueRef = self.entryAlloca(ty: eety)
         LLVMBuildStore(self.b, ev, eslot)
         val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, eety, eslot, 0U64, anon()), anon())

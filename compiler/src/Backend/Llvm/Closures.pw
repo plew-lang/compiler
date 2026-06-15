@@ -24,9 +24,9 @@ pub impl LlvmCtx {
             return self.arrayTy
         }
         if c.isGenericInst(ref: cap.ty) {
-            return llvmTypeOfRef(c: inout c, st: inout self, ref: cap.ty)
+            return self.llvmTypeOfRef(c: inout c, ref: cap.ty)
         }
-        return llvmScalarTy(c: inout c, st: inout self, tyStart: cap.tyStart, tyLen: cap.tyLen)
+        return self.llvmScalarTy(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen)
     }
 
     // The LLVM type of a capture slot in the env struct: a `mut val` (boxed) capture is
@@ -129,7 +129,7 @@ pub impl LlvmCtx {
                 mut val rty: LLVMTypeRef = self.voidty
                 if hasRet {
                     if c.isGenericInst(ref: retTy) {
-                        rty = llvmTypeOfRef(c: inout c, st: inout self, ref: retTy)
+                        rty = self.llvmTypeOfRef(c: inout c, ref: retTy)
                     } else {
                         rty = self.llvmTypeFor(c: inout c, tyStart: retStart, tyLen: retLen, isArray: retIsArray)
                     }
@@ -287,7 +287,7 @@ pub impl LlvmCtx {
                     self.curRetVoid = !hasRet
                     if hasRet {
                         if c.isGenericInst(ref: retTy) {
-                            self.curRetTy = llvmTypeOfRef(c: inout c, st: inout self, ref: retTy)
+                            self.curRetTy = self.llvmTypeOfRef(c: inout c, ref: retTy)
                         } else {
                             self.curRetTy = self.llvmTypeFor(c: inout c, tyStart: retStart, tyLen: retLen, isArray: retIsArray)
                         }
@@ -361,7 +361,7 @@ pub impl LlvmCtx {
                             }
                             mut val cElem: LLVMTypeRef = self.i64ty
                             if cap.isArray {
-                                cElem = llvmScalarTy(c: inout c, st: inout self, tyStart: cap.tyStart, tyLen: cap.tyLen)
+                                cElem = self.llvmScalarTy(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen)
                             }
                             self.pushLocalR(nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: a, ty: slotTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: self.localStructIdxFor(c: inout c, start: cap.tyStart, len: cap.tyLen), isArr: cap.isArray, elemTy: cElem, elemKind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), typeRef: cRef)
                             ci += 1

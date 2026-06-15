@@ -8,7 +8,7 @@
 
 pub impl LlvmCtx {
     inout fn genLlvmMatch(c: inout Comp, scrut: U64, arms: Array[MatchArm]) {
-        val sv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: scrut)
+        val sv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: scrut)
         val sty: LLVMTypeRef = LLVMTypeOf(sv)
         // a struct destructuring match `match s { S { val x } => … }` is irrefutable
         // (one arm, no tag): store the scrutinee, bind its fields, emit the body.
@@ -150,14 +150,14 @@ pub impl LlvmCtx {
                 // grounds to one): the bound local is the {ptr,i64} array value, tracked
                 // as an array so `v[i]` / `v.count` work in the arm body.
                 val elemRef: U64 = arrayFieldElemRef(c: inout c, f: fd)
-                mut val pty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout self, tyStart: fd.tyStart, tyLen: fd.tyLen)
+                mut val pty: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
                 mut val isArrF: Bool = false
                 mut val elemTyF: LLVMTypeRef = self.i64ty
                 mut val elemKindF: U64 = 0U64
                 if elemRef != 0U64 {
                     pty = self.arrayTy
                     isArrF = true
-                    elemTyF = llvmTypeOfRef(c: inout c, st: inout self, ref: elemRef)
+                    elemTyF = self.llvmTypeOfRef(c: inout c, ref: elemRef)
                     val et: TypeRef = c.arena.types[elemRef]
                     elemKindF = kindFromTySpan(c: inout c, tyStart: et.nameStart, tyLen: et.nameLen)
                 }
@@ -175,7 +175,7 @@ pub impl LlvmCtx {
                         if c.isGenericInst(ref: gfp) {
                             if !(rangeEquals(bytes: c.arena.bytes, start: c.arena.types[gfp].nameStart, len: c.arena.types[gfp].nameLen, kw: "Array")) {
                                 genFieldRef = gfp
-                                pty = llvmTypeOfRef(c: inout c, st: inout self, ref: gfp)
+                                pty = self.llvmTypeOfRef(c: inout c, ref: gfp)
                             }
                         }
                     }
@@ -285,7 +285,7 @@ pub impl LlvmCtx {
                     mut val elemTy: LLVMTypeRef = self.i64ty
                     mut val elemKind: U64 = 0
                     if fld.tyIsArray {
-                        elemTy = llvmScalarTy(c: inout c, st: inout self, tyStart: fld.tyStart, tyLen: fld.tyLen)
+                        elemTy = self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen)
                         elemKind = kindFromTySpan(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen)
                     }
                     self.pushLocal(nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: fty, kind: kindFromTySpan(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), structIdx: self.localStructIdxFor(c: inout c, start: fld.tyStart, len: fld.tyLen), isArr: fld.tyIsArray, elemTy: elemTy, elemKind: elemKind)

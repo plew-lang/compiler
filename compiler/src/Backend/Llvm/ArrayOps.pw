@@ -24,10 +24,10 @@ pub impl LlvmCtx {
                 mut val eb: Bool = false
                 ev = self.coerceToAnyIfNeeded(c: inout c, targetRef: elemRef, valueExpr: elems[i], outBoxed: inout eb)
                 if !(eb) {
-                    ev = genLlvmExpr(c: inout c, st: inout self, id: elems[i])
+                    ev = self.genLlvmExpr(c: inout c, id: elems[i])
                 }
             } else {
-                ev = self.coerceElem(v: genLlvmExpr(c: inout c, st: inout self, id: elems[i]), elemTy: elemTy)
+                ev = self.coerceElem(v: self.genLlvmExpr(c: inout c, id: elems[i]), elemTy: elemTy)
             }
             LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: data, idx: LLVMConstInt(self.i64ty, i, 0I32)))
             i += 1
@@ -48,18 +48,18 @@ pub impl LlvmCtx {
                 // `d.at(key: k)` (spec/02); a user Index type uses `index`.
                 if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[bsi].nameStart, len: c.arena.structs[bsi].nameLen, kw: "Dictionary") {
                     val m: U64 = c.synthDictMethod(recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
-                    return genLlvmExpr(c: inout c, st: inout self, id: m)
+                    return self.genLlvmExpr(c: inout c, id: m)
                 }
                 if c.typeHasMethodNamed(typeStart: c.arena.structs[bsi].nameStart, typeLen: c.arena.structs[bsi].nameLen, name: "index") {
                     val m: U64 = c.synthDictMethod(recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
-                    return genLlvmExpr(c: inout c, st: inout self, id: m)
+                    return self.genLlvmExpr(c: inout c, id: m)
                 }
             }
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: user Index subscript needs an `index` method")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: base)
-        val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: base)
+        val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
         // the base must be an array {ptr,i64} aggregate; a non-aggregate here means a
         // nested array (Array[Array[T]]) or unsupported element typing — reject loudly
         // rather than extractvalue on a scalar (which crashes the LLVM builder).
@@ -69,7 +69,7 @@ pub impl LlvmCtx {
         }
         val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
         val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
-        val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: index)
+        val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: index)
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
         return LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
     }
@@ -117,7 +117,7 @@ pub impl LlvmCtx {
         gtys.append(value: self.i64ty)
         gtys.append(value: self.i64ty)
         val gfty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(gtys), 3U64, 0I32)
-        val grow: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_arr_grow", nameId: 22U64, fnTy: gfty)
+        val grow: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_arr_grow", nameId: 22U64, fnTy: gfty)
         mut val gav: Array[LLVMValueRef] = []
         gav.append(value: data)
         gav.append(value: LLVMSizeOf(elemTy))
@@ -136,7 +136,7 @@ pub impl LlvmCtx {
                     val ret: TypeRef = c.arena.types[recvElemRef]
                     if rangeEquals(bytes: c.arena.bytes, start: ret.nameStart, len: ret.nameLen, kw: "Array") {
                         if ret.args.count > 0U64 {
-                            ev = self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: llvmTypeOfRef(c: inout c, st: inout self, ref: ret.args[0]))
+                            ev = self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmTypeOfRef(c: inout c, ref: ret.args[0]))
                             builtLit = true
                         }
                     }
@@ -145,7 +145,7 @@ pub impl LlvmCtx {
             _ => {}
         }
         if !(builtLit) {
-            ev = self.coerceElem(v: genLlvmExpr(c: inout c, st: inout self, id: valueExpr), elemTy: elemTy)
+            ev = self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy)
         }
         LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: newdata, idx: count))
         LLVMBuildStore(self.b, LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), countPtr)
@@ -156,13 +156,13 @@ pub impl LlvmCtx {
     // buffer (same place mutation as `arr[i] = v`; no CoW yet). Returns a unit value.
     inout fn genLlvmArraySet(c: inout Comp, recv: U64, indexExpr: U64, valueExpr: U64) -> LLVMValueRef {
         val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: recv)
-        val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: recv)
+        val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: recv)
         val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
         val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
-        val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: indexExpr)
+        val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
         val ep: LLVMValueRef = self.arrElemPtr(elemTy: elemTy, data: data, idx: idx)
-        val rv: LLVMValueRef = self.coerceElem(v: genLlvmExpr(c: inout c, st: inout self, id: valueExpr), elemTy: elemTy)
+        val rv: LLVMValueRef = self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy)
         LLVMBuildStore(self.b, rv, ep)
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
@@ -210,12 +210,12 @@ pub impl LlvmCtx {
         match c.arena.exprs[id] {
             Expr.Binary(val op, lhs: _, rhs: _) => {
                 if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
-                    return genLlvmExpr(c: inout c, st: inout self, id: id)
+                    return self.genLlvmExpr(c: inout c, id: id)
                 }
             }
             _ => {}
         }
-        val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: id)
+        val v: LLVMValueRef = self.genLlvmExpr(c: inout c, id: id)
         return LLVMBuildICmp(self.b, llvmIntNe(), v, LLVMConstInt(self.i1ty, 0U64, 0I32), anon())
     }
 }

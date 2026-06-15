@@ -253,7 +253,7 @@ pub impl LlvmCtx {
                 // an `any P` receiver: the requirement's return TypeRef, grounded under
                 // the existential's bindings (so a `match it.next()` on `any Iter[Item=I64]`
                 // recovers `Optional[I64]`).
-                val atIdx: U64 = anyRecvTraitIdx(c: inout c, st: inout self, recv: recv)
+                val atIdx: U64 = self.anyRecvTraitIdx(c: inout c, recv: recv)
                 if atIdx < c.decls.traits.count {
                     val rr: U64 = anyMethodRetRef(c: inout c, anyRef: self.exprTypeRef(c: inout c, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: margs)
                     if rr != 0U64 {

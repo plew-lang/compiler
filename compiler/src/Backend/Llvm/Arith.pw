@@ -128,7 +128,7 @@ pub impl LlvmCtx {
             ptys.append(value: ity)
             ptys.append(value: ity)
             val fty: LLVMTypeRef = LLVMFunctionType(ity, arrayCPtr(ptys), 2U64, 0I32)
-            val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: checkedFnName(op: op, unsigned: unsigned, wi: wi), nameId: checkedNameId(op: op, unsigned: unsigned, wi: wi), fnTy: fty)
+            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: checkedFnName(op: op, unsigned: unsigned, wi: wi), nameId: checkedNameId(op: op, unsigned: unsigned, wi: wi), fnTy: fty)
             mut val av: Array[LLVMValueRef] = []
             av.append(value: l)
             av.append(value: r)
@@ -148,7 +148,7 @@ pub impl LlvmCtx {
         mut val nm: Array[U8] = "plew_".bytes
         appendBytes(into: inout nm, from: checkedPrefixBytes(unsigned: false, wi: wi))
         appendBytes(into: inout nm, from: "Neg".bytes)
-        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: stringFromBytesUnchecked(nm), nameId: 9100U64 + wi, fnTy: fty)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: stringFromBytesUnchecked(nm), nameId: 9100U64 + wi, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
         av.append(value: v)
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
@@ -175,7 +175,7 @@ pub impl LlvmCtx {
                     val et: TypeRef = c.arena.types[self.expectedTy]
                     if et.nameLen > 0U64 {
                         if c.arena.bytes[et.nameStart] == 40U8 {
-                            val rreg: U64 = structRegSlot(c: inout c, st: inout self, start: et.nameStart, len: et.nameLen)
+                            val rreg: U64 = self.structRegSlot(c: inout c, start: et.nameStart, len: et.nameLen)
                             if rreg < self.structIdxs.count {
                                 self.expectedTy = 0U64
                                 return self.buildStructValue(c: inout c, sd: c.arena.structs[self.structIdxs[rreg]], sty: self.structTys[rreg], fields: fields, errOffset: et.nameStart)
@@ -237,7 +237,7 @@ pub impl LlvmCtx {
             rtStart = ntn.nameStart
             rtLen = ntn.nameLen
         }
-        val reg: U64 = structRegSlot(c: inout c, st: inout self, start: rtStart, len: rtLen)
+        val reg: U64 = self.structRegSlot(c: inout c, start: rtStart, len: rtLen)
         if reg >= self.structIdxs.count {
             compileErrorAt(line: c.lineOf(offset: typeStart), msg: "LLVM backend: construction of this type not yet supported (Ref / nested-struct structs are TODO)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
@@ -248,7 +248,7 @@ pub impl LlvmCtx {
     // The LLVM type of a `Ref[T]`'s pointee T (from the instance's first type arg).
     inout fn refPointeeTy(c: inout Comp, refTy: U64) -> LLVMTypeRef {
         if c.isRefInst(ref: refTy) {
-            return llvmTypeOfRef(c: inout c, st: inout self, ref: c.arena.types[refTy].args[0])
+            return self.llvmTypeOfRef(c: inout c, ref: c.arena.types[refTy].args[0])
         }
         return self.i64ty
     }
@@ -281,7 +281,7 @@ pub impl LlvmCtx {
     inout fn loadRefPointee(c: inout Comp, base: U64) -> LLVMValueRef {
         val r: U64 = self.exprRefTypeRef(c: inout c, id: base)
         val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: r)
-        val cellPtr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: base)
+        val cellPtr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
         return LLVMBuildLoad2(self.b, pty, cellPtr, anon())
     }
 
@@ -301,9 +301,9 @@ pub impl LlvmCtx {
                 mi += 1
             }
         }
-        mut val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: valExpr)
+        mut val v: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
         if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
-            v = coerceInt(st: inout self, v: v, target: pty, unsigned: false)
+            v = self.coerceInt(v: v, target: pty, unsigned: false)
         }
         LLVMBuildStore(self.b, v, cell)
         return cell

@@ -12,15 +12,18 @@ fn refIsAny(c: inout Comp, ref: U64) -> Bool {
     return false
 }
 
-// If expression `recv` has an existential `any P` type, the trait def index of P;
-// else c.decls.traits.count. (Resolved later than refIsAny so the forward reference to
-// findTraitIdxByName is fine — the module is one compilation unit.)
-fn anyRecvTraitIdx(c: inout Comp, st: inout LlvmCtx, recv: U64) -> U64 {
-    val r: U64 = st.exprTypeRef(c: inout c, id: recv)
-    if refIsAny(c: inout c, ref: r) {
-        return c.findTraitIdxByName(start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen)
+pub impl LlvmCtx {
+
+    // If expression `recv` has an existential `any P` type, the trait def index of P;
+    // else c.decls.traits.count. (Resolved later than refIsAny so the forward reference to
+    // findTraitIdxByName is fine — the module is one compilation unit.)
+    inout fn anyRecvTraitIdx(c: inout Comp, recv: U64) -> U64 {
+        val r: U64 = self.exprTypeRef(c: inout c, id: recv)
+        if refIsAny(c: inout c, ref: r) {
+            return c.findTraitIdxByName(start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen)
+        }
+        return c.decls.traits.count
     }
-    return c.decls.traits.count
 }
 
 // The requirement of trait `traitIdx` matching method (name,args), or a sentinel
@@ -164,80 +167,83 @@ fn anyMethodRetRef(c: inout Comp, anyRef: U64, traitIdx: U64, nameStart: U64, na
     return g
 }
 
-fn llvmTypeOfRef(c: inout Comp, st: inout LlvmCtx, ref: U64) -> LLVMTypeRef {
-    // an existential `any P`: the fat pointer { data, vtable }, not the named
-    // trait's (nonexistent) own layout.
-    if refIsAny(c: inout c, ref: ref) {
-        return st.anyTy
-    }
-    // `Array[T]` is the special {ptr,i64} value type, NOT a generic struct instance
-    // (the front-end models it as one, but the LLVM array machinery — literal /
-    // append / for / index — all use arrayTy). Mapping it here keeps a function
-    // param/return/field of array type consistent with that machinery.
-    if ref < c.arena.types.count {
-        val at: TypeRef = c.arena.types[ref]
-        if rangeEquals(bytes: c.arena.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
-            return st.arrayTy
-        }
-    }
-    if c.isGenericInst(ref: ref) {
-        val gs: U64 = st.genStructSlot(c: inout c, ref: ref)
-        if gs < st.genStructRefs.count {
-            return st.genStructTys[gs]
-        }
-        val ge: U64 = st.genEnumSlot(c: inout c, ref: ref)
-        if ge < st.genEnumRefs.count {
-            return st.genEnumTys[ge]
-        }
-    }
-    val t: TypeRef = c.arena.types[ref]
-    return llvmScalarTy(c: inout c, st: inout st, tyStart: t.nameStart, tyLen: t.nameLen)
-}
+pub impl LlvmCtx {
 
-// Sign/zero-extend an integer value to i64 for the runtime boundary (print / exit
-// take i64). No-op if already i64; unsigned -> zext, signed -> sext.
-fn extendToI64(st: inout LlvmCtx, v: LLVMValueRef, unsigned: Bool) -> LLVMValueRef {
-    if LLVMGetIntTypeWidth(LLVMTypeOf(v)) >= 64U32 {
-        return v
+    inout fn llvmTypeOfRef(c: inout Comp, ref: U64) -> LLVMTypeRef {
+        // an existential `any P`: the fat pointer { data, vtable }, not the named
+        // trait's (nonexistent) own layout.
+        if refIsAny(c: inout c, ref: ref) {
+            return self.anyTy
+        }
+        // `Array[T]` is the special {ptr,i64} value type, NOT a generic struct instance
+        // (the front-end models it as one, but the LLVM array machinery — literal /
+        // append / for / index — all use arrayTy). Mapping it here keeps a function
+        // param/return/field of array type consistent with that machinery.
+        if ref < c.arena.types.count {
+            val at: TypeRef = c.arena.types[ref]
+            if rangeEquals(bytes: c.arena.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
+                return self.arrayTy
+            }
+        }
+        if c.isGenericInst(ref: ref) {
+            val gs: U64 = self.genStructSlot(c: inout c, ref: ref)
+            if gs < self.genStructRefs.count {
+                return self.genStructTys[gs]
+            }
+            val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
+            if ge < self.genEnumRefs.count {
+                return self.genEnumTys[ge]
+            }
+        }
+        val t: TypeRef = c.arena.types[ref]
+        return self.llvmScalarTy(c: inout c, tyStart: t.nameStart, tyLen: t.nameLen)
     }
-    if unsigned {
-        return LLVMBuildZExt(st.b, v, st.i64ty, anon())
-    }
-    return LLVMBuildSExt(st.b, v, st.i64ty, anon())
-}
 
-// Adjust an integer value to a target integer width (trunc / sext / zext), so a
-// value reaching a typed sink (annotated let, call arg, return) matches the
-// expected width — e.g. an i64-defaulted literal `5` stored into an `I32` local.
-fn coerceInt(st: inout LlvmCtx, v: LLVMValueRef, target: LLVMTypeRef, unsigned: Bool) -> LLVMValueRef {
-    // only integers are width-coerced; arrays/structs/enums/String pass through.
-    if LLVMGetTypeKind(LLVMTypeOf(v)) != 8U32 {
-        return v
+    // Sign/zero-extend an integer value to i64 for the runtime boundary (print / exit
+    // take i64). No-op if already i64; unsigned -> zext, signed -> sext.
+    inout fn extendToI64(v: LLVMValueRef, unsigned: Bool) -> LLVMValueRef {
+        if LLVMGetIntTypeWidth(LLVMTypeOf(v)) >= 64U32 {
+            return v
+        }
+        if unsigned {
+            return LLVMBuildZExt(self.b, v, self.i64ty, anon())
+        }
+        return LLVMBuildSExt(self.b, v, self.i64ty, anon())
     }
-    if LLVMGetTypeKind(target) != 8U32 {
-        return v
-    }
-    val vw: U32 = LLVMGetIntTypeWidth(LLVMTypeOf(v))
-    val tw: U32 = LLVMGetIntTypeWidth(target)
-    if vw == tw {
-        return v
-    }
-    if vw > tw {
-        return LLVMBuildTrunc(st.b, v, target, anon())
-    }
-    if unsigned {
-        return LLVMBuildZExt(st.b, v, target, anon())
-    }
-    return LLVMBuildSExt(st.b, v, target, anon())
-}
 
-// Coerce an int value to the integer type named by a type span, unless that type
-// is String (kind 1) — then pass through (no width concept).
-fn coerceIntTo(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, tyStart: U64, tyLen: U64) -> LLVMValueRef {
-    if kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen) == 1U64 {
-        return v
+    // Adjust an integer value to a target integer width (trunc / sext / zext), so a
+    // value reaching a typed sink (annotated let, call arg, return) matches the
+    // expected width — e.g. an i64-defaulted literal `5` stored into an `I32` local.
+    inout fn coerceInt(v: LLVMValueRef, target: LLVMTypeRef, unsigned: Bool) -> LLVMValueRef {
+        // only integers are width-coerced; arrays/structs/enums/String pass through.
+        if LLVMGetTypeKind(LLVMTypeOf(v)) != 8U32 {
+            return v
+        }
+        if LLVMGetTypeKind(target) != 8U32 {
+            return v
+        }
+        val vw: U32 = LLVMGetIntTypeWidth(LLVMTypeOf(v))
+        val tw: U32 = LLVMGetIntTypeWidth(target)
+        if vw == tw {
+            return v
+        }
+        if vw > tw {
+            return LLVMBuildTrunc(self.b, v, target, anon())
+        }
+        if unsigned {
+            return LLVMBuildZExt(self.b, v, target, anon())
+        }
+        return LLVMBuildSExt(self.b, v, target, anon())
     }
-    return coerceInt(st: inout st, v: v, target: llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen), unsigned: isUnsignedName(c: inout c, start: tyStart, len: tyLen))
+
+    // Coerce an int value to the integer type named by a type span, unless that type
+    // is String (kind 1) — then pass through (no width concept).
+    inout fn coerceIntTo(c: inout Comp, v: LLVMValueRef, tyStart: U64, tyLen: U64) -> LLVMValueRef {
+        if kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen) == 1U64 {
+            return v
+        }
+        return self.coerceInt(v: v, target: self.llvmScalarTy(c: inout c, tyStart: tyStart, tyLen: tyLen), unsigned: isUnsignedName(c: inout c, start: tyStart, len: tyLen))
+    }
 }
 
 // Is this type name a fixed-width primitive integer (the operator-witness owners).
@@ -249,221 +255,224 @@ fn isPrimIntName(c: inout Comp, start: U64, len: U64) -> Bool {
     return isUnsignedName(c: inout c, start: start, len: len)
 }
 
-// Lower a primitive numeric operator-witness assoc call (`I32.add(lhs:, rhs:)`,
-// `I64.neg(value:)`, `U8.bitnot(value:)`) directly to the LLVM op. Binary ops take
-// `lhs`/`rhs`, unary `value`; the result is the receiver primitive's type and
-// signedness. Returns a null sentinel for an unrecognized method (the caller then
-// falls back to the normal assoc path).
-// IEEE float binary op from two double VALUES (for compound assign `x += 2.5`).
-fn buildF64BinOp(st: inout LlvmCtx, op: I64, l: LLVMValueRef, r: LLVMValueRef) -> LLVMValueRef {
-    if op == opAdd() { return LLVMBuildFAdd(st.b, l, r, anon()) }
-    if op == opSub() { return LLVMBuildFSub(st.b, l, r, anon()) }
-    if op == opMul() { return LLVMBuildFMul(st.b, l, r, anon()) }
-    if op == opDiv() { return LLVMBuildFDiv(st.b, l, r, anon()) }
-    return l
-}
+pub impl LlvmCtx {
 
-// IEEE float binary op (spec/02,12): arithmetic -> fadd/fsub/fmul/fdiv; comparison ->
-// ordered fcmp -> i1. Both operands are coerced to double. (NaN-compare panic and
-// integer `%` rejection are handled at the verify layer / are follow-ups.)
-fn genLlvmFloatBinop(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -> LLVMValueRef {
-    val l: LLVMValueRef = coerceToF64(c: inout c, st: inout st, id: lhs)
-    val r: LLVMValueRef = coerceToF64(c: inout c, st: inout st, id: rhs)
-    if op == opAdd() { return LLVMBuildFAdd(st.b, l, r, anon()) }
-    if op == opSub() { return LLVMBuildFSub(st.b, l, r, anon()) }
-    if op == opMul() { return LLVMBuildFMul(st.b, l, r, anon()) }
-    if op == opDiv() { return LLVMBuildFDiv(st.b, l, r, anon()) }
-    // comparison: NaN compares must panic (spec/02) — a runtime check panics if either
-    // operand is NaN, then the ordered fcmp produces the boolean.
-    emitF64NanCheck(c: inout c, st: inout st, l: l, r: r)
-    // ordered comparison predicates (LLVMRealOEQ=1 OGT=2 OGE=3 OLT=4 OLE=5 ONE=6).
-    if op == opEq() { return LLVMBuildFCmp(st.b, 1U32, l, r, anon()) }
-    if op == opNe() { return LLVMBuildFCmp(st.b, 6U32, l, r, anon()) }
-    if op == opLt() { return LLVMBuildFCmp(st.b, 4U32, l, r, anon()) }
-    if op == opLe() { return LLVMBuildFCmp(st.b, 5U32, l, r, anon()) }
-    if op == opGt() { return LLVMBuildFCmp(st.b, 2U32, l, r, anon()) }
-    if op == opGe() { return LLVMBuildFCmp(st.b, 3U32, l, r, anon()) }
-    return l
-}
-
-// Emit a runtime NaN-compare guard (spec/02): panics if either double operand is NaN
-// before an ordered comparison runs (so NaN compares are loud, not silently false).
-fn emitF64NanCheck(c: inout Comp, st: inout LlvmCtx, l: LLVMValueRef, r: LLVMValueRef) {
-    mut val tys: Array[LLVMTypeRef] = []
-    tys.append(value: st.f64ty)
-    tys.append(value: st.f64ty)
-    val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(tys), 2U64, 0I32)
-    val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_f64_nan_check", nameId: 9150U64, fnTy: fty)
-    mut val av: Array[LLVMValueRef] = []
-    av.append(value: l)
-    av.append(value: r)
-    LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U64, anon())
-}
-
-// Emit `id` as a double: a float value is already double; an integer value (e.g. a
-// literal `2` in `1.5 + 2`) is converted with sitofp/uitofp.
-fn coerceToF64(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
-    val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: id)
-    if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
-        // an integer operand: signed-int-to-float (unsigned uses uitofp — rare in
-        // mixed float expressions; signed covers the literal case).
-        return LLVMBuildSIToFP(st.b, v, st.f64ty, anon())
+    // Lower a primitive numeric operator-witness assoc call (`I32.add(lhs:, rhs:)`,
+    // `I64.neg(value:)`, `U8.bitnot(value:)`) directly to the LLVM op. Binary ops take
+    // `lhs`/`rhs`, unary `value`; the result is the receiver primitive's type and
+    // signedness. Returns a null sentinel for an unrecognized method (the caller then
+    // falls back to the normal assoc path).
+    // IEEE float binary op from two double VALUES (for compound assign `x += 2.5`).
+    inout fn buildF64BinOp(op: I64, l: LLVMValueRef, r: LLVMValueRef) -> LLVMValueRef {
+        if op == opAdd() { return LLVMBuildFAdd(self.b, l, r, anon()) }
+        if op == opSub() { return LLVMBuildFSub(self.b, l, r, anon()) }
+        if op == opMul() { return LLVMBuildFMul(self.b, l, r, anon()) }
+        if op == opDiv() { return LLVMBuildFDiv(self.b, l, r, anon()) }
+        return l
     }
-    return v
-}
 
-fn genPrimOpWitness(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
-    val ty: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen)
-    val uns: Bool = isUnsignedName(c: inout c, start: tyStart, len: tyLen)
-    // unary: neg / bitnot (one `value` arg).
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "neg") {
-        return st.buildNegChecked(c: inout c, v: coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: ty, unsigned: uns))
+    // IEEE float binary op (spec/02,12): arithmetic -> fadd/fsub/fmul/fdiv; comparison ->
+    // ordered fcmp -> i1. Both operands are coerced to double. (NaN-compare panic and
+    // integer `%` rejection are handled at the verify layer / are follow-ups.)
+    inout fn genLlvmFloatBinop(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> LLVMValueRef {
+        val l: LLVMValueRef = self.coerceToF64(c: inout c, id: lhs)
+        val r: LLVMValueRef = self.coerceToF64(c: inout c, id: rhs)
+        if op == opAdd() { return LLVMBuildFAdd(self.b, l, r, anon()) }
+        if op == opSub() { return LLVMBuildFSub(self.b, l, r, anon()) }
+        if op == opMul() { return LLVMBuildFMul(self.b, l, r, anon()) }
+        if op == opDiv() { return LLVMBuildFDiv(self.b, l, r, anon()) }
+        // comparison: NaN compares must panic (spec/02) — a runtime check panics if either
+        // operand is NaN, then the ordered fcmp produces the boolean.
+        self.emitF64NanCheck(c: inout c, l: l, r: r)
+        // ordered comparison predicates (LLVMRealOEQ=1 OGT=2 OGE=3 OLT=4 OLE=5 ONE=6).
+        if op == opEq() { return LLVMBuildFCmp(self.b, 1U32, l, r, anon()) }
+        if op == opNe() { return LLVMBuildFCmp(self.b, 6U32, l, r, anon()) }
+        if op == opLt() { return LLVMBuildFCmp(self.b, 4U32, l, r, anon()) }
+        if op == opLe() { return LLVMBuildFCmp(self.b, 5U32, l, r, anon()) }
+        if op == opGt() { return LLVMBuildFCmp(self.b, 2U32, l, r, anon()) }
+        if op == opGe() { return LLVMBuildFCmp(self.b, 3U32, l, r, anon()) }
+        return l
     }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitnot") {
-        return LLVMBuildNot(st.b, coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: ty, unsigned: uns), anon())
-    }
-    // binary: map the method name to an Op, then reuse buildBinOpS.
-    mut val op: I64 = -1I64
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "add") { op = opAdd() }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "sub") { op = opSub() }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "mul") { op = opMul() }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "div") { op = opDiv() }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rem") { op = opRem() }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitand") { op = opBitAnd() }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitor") { op = opBitOr() }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitxor") { op = opBitXor() }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "shl") { op = opShl() }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "shr") { op = opShr() }
-    if op == -1I64 {
-        return LLVMConstNull(st.ptrty)
-    }
-    val l: LLVMValueRef = coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: ty, unsigned: uns)
-    val r: LLVMValueRef = coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[1].expr), target: ty, unsigned: uns)
-    return st.buildBinOpChecked(c: inout c, op: op, l: l, r: r, unsigned: uns)
-}
 
-// The c.arena.funcs index of the binary operator-trait witness `T.<name>(lhs:, rhs:)`
-// for a struct/enum lhs operand (so `money + money` dispatches to the user's
-// `impl Money as Add`), or c.arena.funcs.count when the lhs isn't a registered
-// aggregate (a primitive — the caller keeps the built-in op). Mirrors the C
-// backend's findBinTraitWitness, but recovers the rhs type via the LLVM env
-// (typeOf can't see locals here), so `a + b` (rhs Vec2) picks `Add[Vec2]` over
-// `Add[I64]` correctly.
-fn binWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -> U64 {
-    mut val ownStart: U64 = 0
-    mut val ownLen: U64 = 0
-    val sidx: U64 = st.exprStructIdx(c: inout c, id: lhs)
-    if sidx < c.arena.structs.count {
-        ownStart = c.arena.structs[sidx].nameStart
-        ownLen = c.arena.structs[sidx].nameLen
-    } else {
-        val eid: U64 = exprEnumIdx(c: inout c, st: inout st, id: lhs)
-        if eid < c.arena.enums.count {
-            ownStart = c.arena.enums[eid].nameStart
-            ownLen = c.arena.enums[eid].nameLen
+    // Emit a runtime NaN-compare guard (spec/02): panics if either double operand is NaN
+    // before an ordered comparison runs (so NaN compares are loud, not silently false).
+    inout fn emitF64NanCheck(c: inout Comp, l: LLVMValueRef, r: LLVMValueRef) {
+        mut val tys: Array[LLVMTypeRef] = []
+        tys.append(value: self.f64ty)
+        tys.append(value: self.f64ty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(tys), 2U64, 0I32)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_f64_nan_check", nameId: 9150U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: l)
+        av.append(value: r)
+        LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
+    }
+
+    // Emit `id` as a double: a float value is already double; an integer value (e.g. a
+    // literal `2` in `1.5 + 2`) is converted with sitofp/uitofp.
+    inout fn coerceToF64(c: inout Comp, id: U64) -> LLVMValueRef {
+        val v: LLVMValueRef = self.genLlvmExpr(c: inout c, id: id)
+        if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
+            // an integer operand: signed-int-to-float (unsigned uses uitofp — rare in
+            // mixed float expressions; signed covers the literal case).
+            return LLVMBuildSIToFP(self.b, v, self.f64ty, anon())
+        }
+        return v
+    }
+
+    inout fn genPrimOpWitness(c: inout Comp, tyStart: U64, tyLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+        val ty: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: tyStart, tyLen: tyLen)
+        val uns: Bool = isUnsignedName(c: inout c, start: tyStart, len: tyLen)
+        // unary: neg / bitnot (one `value` arg).
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "neg") {
+            return self.buildNegChecked(c: inout c, v: self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[0].expr), target: ty, unsigned: uns))
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitnot") {
+            return LLVMBuildNot(self.b, self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[0].expr), target: ty, unsigned: uns), anon())
+        }
+        // binary: map the method name to an Op, then reuse buildBinOpS.
+        mut val op: I64 = -1I64
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "add") { op = opAdd() }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "sub") { op = opSub() }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "mul") { op = opMul() }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "div") { op = opDiv() }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rem") { op = opRem() }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitand") { op = opBitAnd() }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitor") { op = opBitOr() }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitxor") { op = opBitXor() }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "shl") { op = opShl() }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "shr") { op = opShr() }
+        if op == -1I64 {
+            return LLVMConstNull(self.ptrty)
+        }
+        val l: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[0].expr), target: ty, unsigned: uns)
+        val r: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[1].expr), target: ty, unsigned: uns)
+        return self.buildBinOpChecked(c: inout c, op: op, l: l, r: r, unsigned: uns)
+    }
+
+    // The c.arena.funcs index of the binary operator-trait witness `T.<name>(lhs:, rhs:)`
+    // for a struct/enum lhs operand (so `money + money` dispatches to the user's
+    // `impl Money as Add`), or c.arena.funcs.count when the lhs isn't a registered
+    // aggregate (a primitive — the caller keeps the built-in op). Mirrors the C
+    // backend's findBinTraitWitness, but recovers the rhs type via the LLVM env
+    // (typeOf can't see locals here), so `a + b` (rhs Vec2) picks `Add[Vec2]` over
+    // `Add[I64]` correctly.
+    inout fn binWitnessFn(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> U64 {
+        mut val ownStart: U64 = 0
+        mut val ownLen: U64 = 0
+        val sidx: U64 = self.exprStructIdx(c: inout c, id: lhs)
+        if sidx < c.arena.structs.count {
+            ownStart = c.arena.structs[sidx].nameStart
+            ownLen = c.arena.structs[sidx].nameLen
         } else {
-            // a String operand under an arithmetic op resolves the String lang-item's
-            // witness (`String.add` for `"a" + "b"`, spec/02,12). String isn't a
-            // registered struct/enum, so detect it by value-kind.
-            if st.valueKind(c: inout c, id: lhs) == 1U64 {
-                val ss: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
-                ownStart = ss.nameStart
-                ownLen = ss.nameLen
+            val eid: U64 = self.exprEnumIdx(c: inout c, id: lhs)
+            if eid < c.arena.enums.count {
+                ownStart = c.arena.enums[eid].nameStart
+                ownLen = c.arena.enums[eid].nameLen
             } else {
-                return c.arena.funcs.count
+                // a String operand under an arithmetic op resolves the String lang-item's
+                // witness (`String.add` for `"a" + "b"`, spec/02,12). String isn't a
+                // registered struct/enum, so detect it by value-kind.
+                if self.valueKind(c: inout c, id: lhs) == 1U64 {
+                    val ss: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
+                    ownStart = ss.nameStart
+                    ownLen = ss.nameLen
+                } else {
+                    return c.arena.funcs.count
+                }
             }
         }
-    }
-    val qType: U64 = intern(c: inout c, start: ownStart, len: ownLen)
-    val name: String = binTraitMethodName(op: op)
-    // the rhs type id, recovered from the LLVM env: a known struct/enum has an
-    // exact name (-> exact overload); a primitive rhs is int-ish (-> int overload).
-    mut val rhsId: U64 = 0
-    mut val rhsKnown: Bool = false
-    val rsidx: U64 = st.exprStructIdx(c: inout c, id: rhs)
-    if rsidx < c.arena.structs.count {
-        rhsId = intern(c: inout c, start: c.arena.structs[rsidx].nameStart, len: c.arena.structs[rsidx].nameLen)
-        rhsKnown = true
-    } else {
-        val reid: U64 = exprEnumIdx(c: inout c, st: inout st, id: rhs)
-        if reid < c.arena.enums.count {
-            rhsId = intern(c: inout c, start: c.arena.enums[reid].nameStart, len: c.arena.enums[reid].nameLen)
+        val qType: U64 = intern(c: inout c, start: ownStart, len: ownLen)
+        val name: String = binTraitMethodName(op: op)
+        // the rhs type id, recovered from the LLVM env: a known struct/enum has an
+        // exact name (-> exact overload); a primitive rhs is int-ish (-> int overload).
+        mut val rhsId: U64 = 0
+        mut val rhsKnown: Bool = false
+        val rsidx: U64 = self.exprStructIdx(c: inout c, id: rhs)
+        if rsidx < c.arena.structs.count {
+            rhsId = intern(c: inout c, start: c.arena.structs[rsidx].nameStart, len: c.arena.structs[rsidx].nameLen)
             rhsKnown = true
+        } else {
+            val reid: U64 = self.exprEnumIdx(c: inout c, id: rhs)
+            if reid < c.arena.enums.count {
+                rhsId = intern(c: inout c, start: c.arena.enums[reid].nameStart, len: c.arena.enums[reid].nameLen)
+                rhsKnown = true
+            }
         }
-    }
-    mut val firstMatch: U64 = c.arena.funcs.count
-    mut val intMatch: U64 = c.arena.funcs.count
-    mut val i: U64 = 0
-    while i < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[i]
-        if f.isAssoc {
-            if f.recvId == qType {
-                if rangeEquals(bytes: c.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
-                    if firstMatch == c.arena.funcs.count {
-                        firstMatch = i
-                    }
-                    if f.params.count >= 2U64 {
-                        if rhsKnown {
-                            if f.params[1].tyNameId == rhsId {
-                                return i
-                            }
+        mut val firstMatch: U64 = c.arena.funcs.count
+        mut val intMatch: U64 = c.arena.funcs.count
+        mut val i: U64 = 0
+        while i < c.arena.funcs.count {
+            val f: Func = c.arena.funcs[i]
+            if f.isAssoc {
+                if f.recvId == qType {
+                    if rangeEquals(bytes: c.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
+                        if firstMatch == c.arena.funcs.count {
+                            firstMatch = i
                         }
-                        if intMatch == c.arena.funcs.count {
-                            if c.isIntType(start: f.params[1].tyStart, len: f.params[1].tyLen) {
-                                intMatch = i
+                        if f.params.count >= 2U64 {
+                            if rhsKnown {
+                                if f.params[1].tyNameId == rhsId {
+                                    return i
+                                }
+                            }
+                            if intMatch == c.arena.funcs.count {
+                                if c.isIntType(start: f.params[1].tyStart, len: f.params[1].tyLen) {
+                                    intMatch = i
+                                }
                             }
                         }
                     }
                 }
             }
+            i += 1
         }
-        i += 1
-    }
-    if !(rhsKnown) {
-        if intMatch < c.arena.funcs.count {
-            return intMatch
+        if !(rhsKnown) {
+            if intMatch < c.arena.funcs.count {
+                return intMatch
+            }
         }
+        return firstMatch
     }
-    return firstMatch
-}
 
-// The c.arena.funcs index of the prefix-unary operator-trait witness `T.<name>(value:)`
-// for a struct/enum operand (`-money` -> `Money.neg(value:)`), or c.arena.funcs.count
-// when the operand isn't a registered aggregate.
-fn unaryWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, operand: U64) -> U64 {
-    val sidx: U64 = st.exprStructIdx(c: inout c, id: operand)
-    if sidx < c.arena.structs.count {
-        return c.findAssocByName(typeStart: c.arena.structs[sidx].nameStart, typeLen: c.arena.structs[sidx].nameLen, name: unaryMethodName(op: op))
+    // The c.arena.funcs index of the prefix-unary operator-trait witness `T.<name>(value:)`
+    // for a struct/enum operand (`-money` -> `Money.neg(value:)`), or c.arena.funcs.count
+    // when the operand isn't a registered aggregate.
+    inout fn unaryWitnessFn(c: inout Comp, op: I64, operand: U64) -> U64 {
+        val sidx: U64 = self.exprStructIdx(c: inout c, id: operand)
+        if sidx < c.arena.structs.count {
+            return c.findAssocByName(typeStart: c.arena.structs[sidx].nameStart, typeLen: c.arena.structs[sidx].nameLen, name: unaryMethodName(op: op))
+        }
+        val eid: U64 = self.exprEnumIdx(c: inout c, id: operand)
+        if eid < c.arena.enums.count {
+            return c.findAssocByName(typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: unaryMethodName(op: op))
+        }
+        return c.arena.funcs.count
     }
-    val eid: U64 = exprEnumIdx(c: inout c, st: inout st, id: operand)
-    if eid < c.arena.enums.count {
-        return c.findAssocByName(typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: unaryMethodName(op: op))
-    }
-    return c.arena.funcs.count
-}
 
-// Emit a call to a resolved operator-trait witness assoc fn (binary: lhs/rhs;
-// unary: just lhs). The witness must be emitted (collectReachableAssoc seeds all
-// operator witnesses); a missing slot is a loud not-yet-emittable error.
-fn emitWitnessCall(c: inout Comp, st: inout LlvmCtx, fi: U64, lhs: U64, rhs: U64, binary: Bool) -> LLVMValueRef {
-    mut val aslot: U64 = st.userFnSlot(idx: fi)
-    if aslot >= st.fnIdx.count {
-        // a witness on a lang-item the upfront pass doesn't emit (`String.add` for
-        // `"a" + "b"` — String isn't a registered struct, so isPlainUserFn skips it):
-        // declare it lazily like a provided method and queue its body for emission.
-        aslot = st.ensureFreeFnDeclared(c: inout c, fi: fi)
+    // Emit a call to a resolved operator-trait witness assoc fn (binary: lhs/rhs;
+    // unary: just lhs). The witness must be emitted (collectReachableAssoc seeds all
+    // operator witnesses); a missing slot is a loud not-yet-emittable error.
+    inout fn emitWitnessCall(c: inout Comp, fi: U64, lhs: U64, rhs: U64, binary: Bool) -> LLVMValueRef {
+        mut val aslot: U64 = self.userFnSlot(idx: fi)
+        if aslot >= self.fnIdx.count {
+            // a witness on a lang-item the upfront pass doesn't emit (`String.add` for
+            // `"a" + "b"` — String isn't a registered struct, so isPlainUserFn skips it):
+            // declare it lazily like a provided method and queue its body for emission.
+            aslot = self.ensureFreeFnDeclared(c: inout c, fi: fi)
+        }
+        if aslot >= self.fnIdx.count {
+            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: lhs)), msg: "LLVM backend: operator witness not emittable yet")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        val af: Func = c.arena.funcs[fi]
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: self.genArgValue(c: inout c, argExpr: lhs, p: af.params[0]))
+        if binary {
+            av.append(value: self.genArgValue(c: inout c, argExpr: rhs, p: af.params[1]))
+        }
+        return LLVMBuildCall2(self.b, self.fnTy[aslot], self.fnVal[aslot], arrayCPtr(av), av.count, anon())
     }
-    if aslot >= st.fnIdx.count {
-        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: lhs)), msg: "LLVM backend: operator witness not emittable yet")
-        return LLVMConstInt(st.i64ty, 0U64, 0I32)
-    }
-    val af: Func = c.arena.funcs[fi]
-    mut val av: Array[LLVMValueRef] = []
-    av.append(value: st.genArgValue(c: inout c, argExpr: lhs, p: af.params[0]))
-    if binary {
-        av.append(value: st.genArgValue(c: inout c, argExpr: rhs, p: af.params[1]))
-    }
-    return LLVMBuildCall2(st.b, st.fnTy[aslot], st.fnVal[aslot], arrayCPtr(av), av.count, anon())
 }
 
 // Is this type name an unsigned integer (for choosing signed vs unsigned ops /
@@ -475,4 +484,3 @@ fn isUnsignedName(c: inout Comp, start: U64, len: U64) -> Bool {
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U64") { return true }
     return false
 }
-

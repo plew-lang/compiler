@@ -31,12 +31,12 @@ pub impl LlvmCtx {
             return self.ptrty
         }
         if c.isGenericInst(ref: ty) {
-            return llvmTypeOfRef(c: inout c, st: inout self, ref: ty)
+            return self.llvmTypeOfRef(c: inout c, ref: ty)
         }
         if c.isRefInst(ref: ty) {
             return self.ptrty
         }
-        return llvmScalarTy(c: inout c, st: inout self, tyStart: tyStart, tyLen: tyLen)
+        return self.llvmScalarTy(c: inout c, tyStart: tyStart, tyLen: tyLen)
     }
 
     // One async param's frame-field type (Promise -> ptr; otherwise the param's
@@ -122,7 +122,7 @@ pub impl LlvmCtx {
                     if c.fieldIsBoxed(f: fd) {
                         pty = self.ptrty
                     } else {
-                        pty = llvmScalarTy(c: inout c, st: inout self, tyStart: fd.tyStart, tyLen: fd.tyLen)
+                        pty = self.llvmScalarTy(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
                     }
                 }
             }
@@ -231,7 +231,7 @@ pub impl LlvmCtx {
     inout fn emitLlvmAsyncSuspend(c: inout Comp, operandId: U64) {
         self.curAsyncState = self.curAsyncState + 1
         val state: U64 = self.curAsyncState
-        val subPromise: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: operandId)
+        val subPromise: LLVMValueRef = self.genLlvmExpr(c: inout c, id: operandId)
         LLVMBuildStore(self.b, subPromise, self.asyncFrameSlot(c: inout c, idx: 2U64))
         LLVMBuildStore(self.b, LLVMConstInt(self.i32ty, state, 0I32), self.asyncFrameSlot(c: inout c, idx: 0U64))
         val donePtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.promiseTy, subPromise, 0U64, anon())
@@ -278,7 +278,7 @@ pub impl LlvmCtx {
         mut val v: LLVMValueRef = self.asyncSubValue(c: inout c)
         val lty: LLVMTypeRef = self.asyncFieldTy(c: inout c, tyStart: tyStart, tyLen: tyLen, ty: ty, isArray: false)
         if tyLen > 0U64 {
-            v = coerceIntTo(c: inout c, st: inout self, v: v, tyStart: tyStart, tyLen: tyLen)
+            v = self.coerceIntTo(c: inout c, v: v, tyStart: tyStart, tyLen: tyLen)
         }
         val slot: LLVMValueRef = self.asyncFrameSlot(c: inout c, idx: self.asyncFieldNext)
         self.asyncFieldNext = self.asyncFieldNext + 1
@@ -305,7 +305,7 @@ pub impl LlvmCtx {
                     _ => {}
                 }
             } else {
-                rv = extendToI64(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: value), unsigned: false)
+                rv = self.extendToI64(v: self.genLlvmExpr(c: inout c, id: value), unsigned: false)
             }
         }
         self.asyncResolveAndReturn(c: inout c, value: rv)
@@ -322,7 +322,7 @@ pub impl LlvmCtx {
         rty.append(value: self.ptrty)
         rty.append(value: self.i64ty)
         val resolveTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(rty), 2U64, 0I32)
-        val resolve: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_promise_resolve", nameId: 41U64, fnTy: resolveTy)
+        val resolve: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_promise_resolve", nameId: 41U64, fnTy: resolveTy)
         val ignore: LLVMValueRef = LLVMBuildCall2(self.b, resolveTy, resolve, arrayCPtr(rargs), 2U64, anon())
         self.asyncFreeFrame(c: inout c, frame: self.curFrameBase)
         LLVMBuildRetVoid(self.b)
@@ -335,7 +335,7 @@ pub impl LlvmCtx {
         mut val fty: Array[LLVMTypeRef] = []
         fty.append(value: self.ptrty)
         val freeTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(fty), 1U64, 0I32)
-        val freeFn: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_frame_free", nameId: 45U64, fnTy: freeTy)
+        val freeFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_frame_free", nameId: 45U64, fnTy: freeTy)
         val ignore: LLVMValueRef = LLVMBuildCall2(self.b, freeTy, freeFn, arrayCPtr(fargs), 1U64, anon())
     }
 
@@ -343,7 +343,7 @@ pub impl LlvmCtx {
         mut val noargs: Array[LLVMValueRef] = []
         mut val noty: Array[LLVMTypeRef] = []
         val newTy: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(noty), 0U64, 0I32)
-        val newFn: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_promise_new", nameId: 40U64, fnTy: newTy)
+        val newFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_promise_new", nameId: 40U64, fnTy: newTy)
         return LLVMBuildCall2(self.b, newTy, newFn, arrayCPtr(noargs), 0U64, anon())
     }
 
@@ -353,7 +353,7 @@ pub impl LlvmCtx {
         mut val aty: Array[LLVMTypeRef] = []
         aty.append(value: self.i64ty)
         val allocTy: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(aty), 1U64, 0I32)
-        val allocFn: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_frame_alloc", nameId: 44U64, fnTy: allocTy)
+        val allocFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_frame_alloc", nameId: 44U64, fnTy: allocTy)
         return LLVMBuildCall2(self.b, allocTy, allocFn, arrayCPtr(aargs), 1U64, anon())
     }
 
@@ -361,7 +361,7 @@ pub impl LlvmCtx {
         mut val noargs: Array[LLVMValueRef] = []
         mut val noty: Array[LLVMTypeRef] = []
         val loopTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(noty), 0U64, 0I32)
-        val loopFn: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_loop_run", nameId: 43U64, fnTy: loopTy)
+        val loopFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_loop_run", nameId: 43U64, fnTy: loopTy)
         val ignore: LLVMValueRef = LLVMBuildCall2(self.b, loopTy, loopFn, arrayCPtr(noargs), 0U64, anon())
     }
 
@@ -375,7 +375,7 @@ pub impl LlvmCtx {
         mut val pSidx: U64 = self.localStructIdxFor(c: inout c, start: p.tyStart, len: p.tyLen)
         mut val pRef: U64 = 0
         if p.tyIsArray {
-            pElem = llvmScalarTy(c: inout c, st: inout self, tyStart: p.tyStart, tyLen: p.tyLen)
+            pElem = self.llvmScalarTy(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen)
         } else {
             if c.isGenericInst(ref: p.ty) {
                 pRef = p.ty

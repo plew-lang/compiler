@@ -8,10 +8,10 @@ pub impl LlvmCtx {
         val mark: U64 = self.nLocals
         mut val vty: LLVMTypeRef = self.i64ty
         if varTyLen > 0U64 {
-            vty = llvmScalarTy(c: inout c, st: inout self, tyStart: varTyStart, tyLen: varTyLen)
+            vty = self.llvmScalarTy(c: inout c, tyStart: varTyStart, tyLen: varTyLen)
         }
-        val loV: LLVMValueRef = coerceInt(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: lo), target: vty, unsigned: true)
-        val hiV: LLVMValueRef = coerceInt(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: hi), target: vty, unsigned: true)
+        val loV: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: lo), target: vty, unsigned: true)
+        val hiV: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: hi), target: vty, unsigned: true)
         val islot: LLVMValueRef = self.entryAlloca(ty: vty)
         LLVMBuildStore(self.b, loV, islot)
         self.pushLocal(nameStart: varStart, nameLen: varLen, ptr: islot, ty: vty, kind: 3U64, structIdx: c.arena.structs.count, isArr: false, elemTy: self.i64ty, elemKind: 0U64)
@@ -76,7 +76,7 @@ pub impl LlvmCtx {
         }
         val isd: StructDef = c.arena.structs[isidx]
         val noArgs: Array[Arg] = []
-        val iterableVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: iter)
+        val iterableVal: LLVMValueRef = self.genLlvmExpr(c: inout c, id: iter)
         // acquire the iterator: an Iterable provides `iterator()`; an Iterator IS its own
         // iterator (it has `next()` directly). Resolve the iterator value + its struct.
         mut val iterVal: LLVMValueRef = iterableVal
@@ -142,7 +142,7 @@ pub impl LlvmCtx {
             c.cur.typeArgs = sA
         } else {
             // the value IS its own Iterator (it has next() directly).
-            iterVal = genLlvmExpr(c: inout c, st: inout self, id: iter)
+            iterVal = self.genLlvmExpr(c: inout c, id: iter)
         }
         val it: TypeRef = c.arena.types[iterInstRef]
         val nextB: Bind = c.kwSpan(kw: "next", kwLen: 4U64)
@@ -325,7 +325,7 @@ pub impl LlvmCtx {
         }
         val mark: U64 = self.nLocals
         val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: iter)
-        val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: iter)
+        val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: iter)
         val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
         val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
         val idxslot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)
@@ -351,7 +351,7 @@ pub impl LlvmCtx {
                     } else {
                         // only a backend-registered struct (not a primitive / String): gate on
                         // structRegSlot so an `Array[I32]` element stays a plain scalar.
-                        if structRegSlot(c: inout c, st: inout self, start: c.arena.types[forElemRef].nameStart, len: c.arena.types[forElemRef].nameLen) < self.structIdxs.count {
+                        if self.structRegSlot(c: inout c, start: c.arena.types[forElemRef].nameStart, len: c.arena.types[forElemRef].nameLen) < self.structIdxs.count {
                             elemSidx = c.structIndexByName(start: c.arena.types[forElemRef].nameStart, len: c.arena.types[forElemRef].nameLen)
                         }
                     }
@@ -405,7 +405,7 @@ pub impl LlvmCtx {
         }
         val mark: U64 = self.nLocals
         val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: iter)
-        val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: iter)
+        val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: iter)
         val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
         val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
         val idxslot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)

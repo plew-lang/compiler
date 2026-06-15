@@ -223,7 +223,7 @@ pub impl LlvmCtx {
                 return false
             }
             if c.isTraitName(start: f.recvStart, len: f.recvLen) { return false }
-            if structRegSlot(c: inout c, st: inout self, start: f.recvStart, len: f.recvLen) < self.structIdxs.count {
+            if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.structIdxs.count {
                 return c.methodInEntryModule(f: f)
             }
             if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.enumIdxs.count {
@@ -238,7 +238,7 @@ pub impl LlvmCtx {
             // original source offsets, to recover the defining module — this keeps std
             // struct methods, full of not-yet-supported constructs, from being emitted.)
             if c.isTraitName(start: f.recvStart, len: f.recvLen) { return false }
-            if structRegSlot(c: inout c, st: inout self, start: f.recvStart, len: f.recvLen) >= self.structIdxs.count {
+            if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.structIdxs.count {
                 if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.enumIdxs.count {
                     return false
                 }
@@ -259,7 +259,7 @@ pub impl LlvmCtx {
         // emission).
         if c.cur.selfRef != 0U64 {
             if rangeEquals(bytes: c.arena.bytes, start: p.tyStart, len: p.tyLen, kw: "Self") {
-                return llvmTypeOfRef(c: inout c, st: inout self, ref: c.cur.selfRef)
+                return self.llvmTypeOfRef(c: inout c, ref: c.cur.selfRef)
             }
         }
         // an existential `any P` param: the fat pointer (spec/08).
@@ -272,7 +272,7 @@ pub impl LlvmCtx {
             pt = c.groundTypeRef(ref: pt)
         }
         if c.isGenericInst(ref: pt) {
-            return llvmTypeOfRef(c: inout c, st: inout self, ref: pt)
+            return self.llvmTypeOfRef(c: inout c, ref: pt)
         }
         return self.llvmTypeFor(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
     }
@@ -283,7 +283,7 @@ pub impl LlvmCtx {
         if f.selfInout {
             return self.ptrty
         }
-        return llvmScalarTy(c: inout c, st: inout self, tyStart: f.recvStart, tyLen: f.recvLen)
+        return self.llvmScalarTy(c: inout c, tyStart: f.recvStart, tyLen: f.recvLen)
     }
 
     // The LLVM return type of a function (and whether it is void = Plew `()`).
@@ -293,7 +293,7 @@ pub impl LlvmCtx {
             // emitting a method): `fn dup() -> Self` on N returns N.
             if c.cur.selfRef != 0U64 {
                 if rangeEquals(bytes: c.arena.bytes, start: f.retStart, len: f.retLen, kw: "Self") {
-                    return llvmTypeOfRef(c: inout c, st: inout self, ref: c.cur.selfRef)
+                    return self.llvmTypeOfRef(c: inout c, ref: c.cur.selfRef)
                 }
             }
             // an existential `any P` return: the fat pointer (spec/08).
@@ -310,7 +310,7 @@ pub impl LlvmCtx {
                 rt = c.groundTypeRef(ref: rt)
             }
             if c.isGenericInst(ref: rt) {
-                return llvmTypeOfRef(c: inout c, st: inout self, ref: rt)
+                return self.llvmTypeOfRef(c: inout c, ref: rt)
             }
             return self.llvmTypeFor(c: inout c, tyStart: f.retStart, tyLen: f.retLen, isArray: f.retIsArray)
         }

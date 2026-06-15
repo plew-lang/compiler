@@ -86,7 +86,7 @@ pub impl LlvmCtx {
         if mf.selfInout {
             av.append(value: self.placePtrOf(c: inout c, id: recv))
         } else {
-            av.append(value: genLlvmExpr(c: inout c, st: inout self, id: recv))
+            av.append(value: self.genLlvmExpr(c: inout c, id: recv))
         }
         mut val ai: U64 = 0
         while ai < args.count {
@@ -117,7 +117,7 @@ pub impl LlvmCtx {
             // (which bottoms out in intrinsics). The result type / signedness is the
             // receiver primitive's.
             if isPrimIntName(c: inout c, start: arn.nameStart, len: arn.nameLen) {
-                val pv: LLVMValueRef = genPrimOpWitness(c: inout c, st: inout self, tyStart: arn.nameStart, tyLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                val pv: LLVMValueRef = self.genPrimOpWitness(c: inout c, tyStart: arn.nameStart, tyLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if LLVMIsNull(pv) == 0I32 {
                     return pv
                 }
@@ -211,7 +211,7 @@ pub impl LlvmCtx {
                     if smf.selfInout {
                         sav.append(value: self.placePtrOf(c: inout c, id: recv))
                     } else {
-                        sav.append(value: genLlvmExpr(c: inout c, st: inout self, id: recv))
+                        sav.append(value: self.genLlvmExpr(c: inout c, id: recv))
                     }
                     mut val sai: U64 = 0
                     while sai < args.count {
@@ -287,10 +287,10 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "wrappingSub") { wop = opSub() }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "wrappingMul") { wop = opMul() }
         if wop != -1I64 {
-            val rv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: recv)
+            val rv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: recv)
             if LLVMGetTypeKind(LLVMTypeOf(rv)) == 8U32 {
                 val uns: Bool = self.valueKind(c: inout c, id: recv) == 3U64
-                val bv: LLVMValueRef = coerceInt(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), target: LLVMTypeOf(rv), unsigned: uns)
+                val bv: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[0].expr), target: LLVMTypeOf(rv), unsigned: uns)
                 return self.buildBinOpS(c: inout c, op: wop, l: rv, r: bv, unsigned: uns)
             }
         }
@@ -314,7 +314,7 @@ pub impl LlvmCtx {
                             if emf.selfInout {
                                 eav.append(value: self.placePtrOf(c: inout c, id: recv))
                             } else {
-                                eav.append(value: genLlvmExpr(c: inout c, st: inout self, id: recv))
+                                eav.append(value: self.genLlvmExpr(c: inout c, id: recv))
                             }
                             mut val eai: U64 = 0
                             while eai < args.count {
@@ -369,7 +369,7 @@ pub impl LlvmCtx {
             if ffi < sd.fields.count {
                 val grounded: U64 = c.groundTypeRef(ref: sd.fields[ffi].ty)
                 if c.isFnType(ref: grounded) {
-                    val recvVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: recv)
+                    val recvVal: LLVMValueRef = self.genLlvmExpr(c: inout c, id: recv)
                     val cloVal: LLVMValueRef = LLVMBuildExtractValue(self.b, recvVal, ffi, anon())
                     return self.emitClosureCallValue(c: inout c, cloVal: cloVal, fnRef: grounded, args: args)
                 }
@@ -425,7 +425,7 @@ pub impl LlvmCtx {
         if mf.selfInout {
             av.append(value: self.placePtrOf(c: inout c, id: recv))
         } else {
-            av.append(value: genLlvmExpr(c: inout c, st: inout self, id: recv))
+            av.append(value: self.genLlvmExpr(c: inout c, id: recv))
         }
         mut val ai: U64 = 0
         while ai < args.count {

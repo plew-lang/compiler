@@ -45,7 +45,7 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Array") {
             return 2U64
         }
-        val sreg: U64 = structRegSlot(c: inout c, st: inout self, start: tyStart, len: tyLen)
+        val sreg: U64 = self.structRegSlot(c: inout c, start: tyStart, len: tyLen)
         if sreg < self.structIdxs.count {
             val sd: StructDef = c.arena.structs[self.structIdxs[sreg]]
             mut val w: U64 = 0
@@ -336,7 +336,7 @@ pub impl LlvmCtx {
                         bg = c.groundTypeRef(ref: fs[fj].ty)
                     }
                     self.expectedTy = bg
-                    val boxedVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: valExpr)
+                    val boxedVal: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
                     val boxedTy: LLVMTypeRef = LLVMTypeOf(boxedVal)
                     val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(boxedTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
                     LLVMBuildStore(self.b, boxedVal, cell)
@@ -350,10 +350,10 @@ pub impl LlvmCtx {
                     if gfElem != 0U64 {
                         match c.arena.exprs[valExpr] {
                             Expr.Array(val elems) => {
-                                agg = LLVMBuildInsertValue(self.b, agg, self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: llvmTypeOfRef(c: inout c, st: inout self, ref: gfElem)), fj, anon())
+                                agg = LLVMBuildInsertValue(self.b, agg, self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmTypeOfRef(c: inout c, ref: gfElem)), fj, anon())
                             }
                             _ => {
-                                agg = LLVMBuildInsertValue(self.b, agg, genLlvmExpr(c: inout c, st: inout self, id: valExpr), fj, anon())
+                                agg = LLVMBuildInsertValue(self.b, agg, self.genLlvmExpr(c: inout c, id: valExpr), fj, anon())
                             }
                         }
                     } else {
@@ -380,9 +380,9 @@ pub impl LlvmCtx {
                         }
                         if gpf != 0U64 && (c.isGenericInst(ref: gpf) || gpfIsRecord) {
                             self.expectedTy = gpf
-                            agg = LLVMBuildInsertValue(self.b, agg, genLlvmExpr(c: inout c, st: inout self, id: valExpr), fj, anon())
+                            agg = LLVMBuildInsertValue(self.b, agg, self.genLlvmExpr(c: inout c, id: valExpr), fj, anon())
                         } else {
-                            val fv: LLVMValueRef = coerceIntTo(c: inout c, st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: valExpr), tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
+                            val fv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
                             agg = LLVMBuildInsertValue(self.b, agg, fv, fj, anon())
                         }
                     }

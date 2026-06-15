@@ -5,410 +5,413 @@
 // Emit `id` and return its LLVM value. v1 handles integer literals, locals (a
 // load from the alloca), arithmetic/comparison binaries, and calls. Anything else
 // is rejected loudly (no silent miscompile) until its increment lands.
-fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
-    val e: Expr = c.arena.exprs[id]
-    match e {
-        Expr.Int(val value, offset: _, val isBool, tyStart: _, tyLen: _, val isNeg) => {
-            mut val ty: LLVMTypeRef = st.i64ty
-            if isBool {
-                ty = st.i1ty
-            } else {
-                // width from the literal's recovered type (typeOf folds in the
-                // suffix and the checker-recorded context width typeCache.intCtx).
-                val t: TypeInfo = c.typeOf(id: id)
-                if t.kind == 0 {
-                    if c.isFloatType(start: t.nameStart, len: t.nameLen) {
-                        // a polymorphic int literal in a float context (`val x: F64 = 5`):
-                        // emit it as a double (uitofp of the magnitude, then negate).
-                        val iv: LLVMValueRef = LLVMConstInt(st.i64ty, value, 0I32)
-                        mut val fv: LLVMValueRef = LLVMBuildUIToFP(st.b, iv, st.f64ty, anon())
-                        if isNeg {
-                            fv = LLVMBuildFNeg(st.b, fv, anon())
+
+pub impl LlvmCtx {
+    inout fn genLlvmExpr(c: inout Comp, id: U64) -> LLVMValueRef {
+        val e: Expr = c.arena.exprs[id]
+        match e {
+            Expr.Int(val value, offset: _, val isBool, tyStart: _, tyLen: _, val isNeg) => {
+                mut val ty: LLVMTypeRef = self.i64ty
+                if isBool {
+                    ty = self.i1ty
+                } else {
+                    // width from the literal's recovered type (typeOf folds in the
+                    // suffix and the checker-recorded context width typeCache.intCtx).
+                    val t: TypeInfo = c.typeOf(id: id)
+                    if t.kind == 0 {
+                        if c.isFloatType(start: t.nameStart, len: t.nameLen) {
+                            // a polymorphic int literal in a float context (`val x: F64 = 5`):
+                            // emit it as a double (uitofp of the magnitude, then negate).
+                            val iv: LLVMValueRef = LLVMConstInt(self.i64ty, value, 0I32)
+                            mut val fv: LLVMValueRef = LLVMBuildUIToFP(self.b, iv, self.f64ty, anon())
+                            if isNeg {
+                                fv = LLVMBuildFNeg(self.b, fv, anon())
+                            }
+                            return fv
                         }
-                        return fv
+                        ty = self.llvmScalarTy(c: inout c, tyStart: t.nameStart, tyLen: t.nameLen)
                     }
-                    ty = llvmScalarTy(c: inout c, st: inout st, tyStart: t.nameStart, tyLen: t.nameLen)
                 }
+                val k: LLVMValueRef = LLVMConstInt(ty, value, 0I32)
+                if isNeg {
+                    return LLVMBuildNeg(self.b, k, anon())
+                }
+                return k
             }
-            val k: LLVMValueRef = LLVMConstInt(ty, value, 0I32)
-            if isNeg {
-                return LLVMBuildNeg(st.b, k, anon())
+            Expr.Float(val start, val len, tyStart: _, tyLen: _) => {
+                // a float literal: parse the digit text (c.arena.bytes[start..start+len]) straight
+                // to an IEEE double constant. F32 uses double for now (see f64ty).
+                return LLVMConstRealOfStringAndSize(self.f64ty, floatTextCPtr(c: inout c, start: start, len: len), len)
             }
-            return k
-        }
-        Expr.Float(val start, val len, tyStart: _, tyLen: _) => {
-            // a float literal: parse the digit text (c.arena.bytes[start..start+len]) straight
-            // to an IEEE double constant. F32 uses double for now (see f64ty).
-            return LLVMConstRealOfStringAndSize(st.f64ty, floatTextCPtr(c: inout c, start: start, len: len), len)
-        }
-        Expr.Ident(val start, val len) => {
-            val li: U64 = st.findLocal(c: inout c, start: start, len: len)
-            if li < st.nLocals {
-                return LLVMBuildLoad2(st.b, st.locTy[li], st.locPtr[li], anon())
+            Expr.Ident(val start, val len) => {
+                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
+                if li < self.nLocals {
+                    return LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+                }
+                // a bare reference to a free function (`val g = twice`): the closure
+                // {thunk, env=null} value, where the thunk adapts it to the closure ABI.
+                val fvi: U64 = c.firstFuncByName(nameStart: start, nameLen: len)
+                if fvi < c.arena.funcs.count {
+                    val ts: U64 = self.thunkSlot(fi: fvi)
+                    if ts < self.thunkIdx.count {
+                        mut val cv: LLVMValueRef = LLVMGetUndef(self.closureTy)
+                        cv = LLVMBuildInsertValue(self.b, cv, self.thunkVal[ts], 0U64, anon())
+                        cv = LLVMBuildInsertValue(self.b, cv, LLVMConstNull(self.ptrty), 1U64, anon())
+                        return cv
+                    }
+                }
+                compileErrorAt(line: c.lineOf(offset: start), msg: "LLVM backend: unknown identifier (only locals supported so far)")
+                return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
-            // a bare reference to a free function (`val g = twice`): the closure
-            // {thunk, env=null} value, where the thunk adapts it to the closure ABI.
-            val fvi: U64 = c.firstFuncByName(nameStart: start, nameLen: len)
-            if fvi < c.arena.funcs.count {
-                val ts: U64 = st.thunkSlot(fi: fvi)
-                if ts < st.thunkIdx.count {
-                    mut val cv: LLVMValueRef = LLVMGetUndef(st.closureTy)
-                    cv = LLVMBuildInsertValue(st.b, cv, st.thunkVal[ts], 0U64, anon())
-                    cv = LLVMBuildInsertValue(st.b, cv, LLVMConstNull(st.ptrty), 1U64, anon())
+            Expr.Binary(val op, val lhs, val rhs) => {
+                // `&&` / `||` are short-circuit control flow (spec/12), not trait ops:
+                // evaluate the rhs only on the deciding lhs value; the result is an i1.
+                if op == opAnd() || op == opOr() {
+                    return self.genLlvmShortCircuit(c: inout c, isAnd: op == opAnd(), lhs: lhs, rhs: rhs)
+                }
+                // float arithmetic / comparison: emit the IEEE op directly (the operands
+                // are doubles). Arithmetic -> f-op; comparison -> fcmp (ordered) -> i1.
+                if self.valueKind(c: inout c, id: lhs) == 4U64 || self.valueKind(c: inout c, id: rhs) == 4U64 {
+                    return self.genLlvmFloatBinop(c: inout c, op: op, lhs: lhs, rhs: rhs)
+                }
+                // String ==/!= compares bytes via a runtime call (the operands are
+                // {ptr,i64} structs, not icmp-able). A 2-field struct (`Pair{a:I64,b:I64}`)
+                // shares String's `{ptr,i64}` LLVM layout, so valueKind can read it as a
+                // String — only take the byte-compare path when lhs is NOT a registered
+                // struct (else it is a struct Eq, handled by the witness path below). This
+                // surfaces with a grounded generic-`K` struct key (`self.keys[idx] == key`
+                // in a monomorphized `Dictionary[Pair].find`), which otherwise reinterprets
+                // the struct's fields as a {ptr,len} String and dereferences garbage.
+                if op == opEq() || op == opNe() {
+                    if self.valueKind(c: inout c, id: lhs) == 1U64 {
+                        if self.exprStructIdx(c: inout c, id: lhs) >= c.arena.structs.count {
+                            return self.emitStrEq(c: inout c, op: op, lhs: lhs, rhs: rhs)
+                        }
+                    }
+                }
+                // struct/enum arithmetic / bitwise / shift: dispatch to the user's
+                // operator-trait witness assoc fn (`money + money` -> `Money.add`),
+                // mirroring the C backend's emitBinTraitCall. A primitive lhs has no
+                // aggregate witness (binWitnessFn -> none) and falls through.
+                if isBinTraitOp(op: op) {
+                    val wfi: U64 = self.binWitnessFn(c: inout c, op: op, lhs: lhs, rhs: rhs)
+                    if wfi < c.arena.funcs.count {
+                        return self.emitWitnessCall(c: inout c, fi: wfi, lhs: lhs, rhs: rhs, binary: true)
+                    }
+                }
+                mut val l: LLVMValueRef = self.genLlvmExpr(c: inout c, id: lhs)
+                mut val r: LLVMValueRef = self.genLlvmExpr(c: inout c, id: rhs)
+                // struct ==/!= : structural (field-by-field) equality (the Eq witness).
+                if op == opEq() || op == opNe() {
+                    val sidxE: U64 = self.exprStructIdx(c: inout c, id: lhs)
+                    if sidxE < c.arena.structs.count {
+                        if self.structEqSupported(c: inout c, sidx: sidxE) {
+                            val eqv: LLVMValueRef = self.emitStructEq(c: inout c, a: l, b: r, sidx: sidxE)
+                            if op == opNe() {
+                                return LLVMBuildNot(self.b, eqv, anon())
+                            }
+                            return eqv
+                        }
+                    }
+                    // enum ==/!= : a payload-less enum compares by tag (field 0). A
+                    // payload-carrying enum needs a per-variant switch (deferred).
+                    mut val eidE: U64 = self.exprEnumIdx(c: inout c, id: lhs)
+                    if eidE >= c.arena.enums.count {
+                        eidE = self.exprEnumIdx(c: inout c, id: rhs)
+                    }
+                    if eidE < c.arena.enums.count {
+                        if enumPayloadless(c: inout c, eid: eidE) {
+                            val tagL: LLVMValueRef = LLVMBuildExtractValue(self.b, l, 0U64, anon())
+                            val tagR: LLVMValueRef = LLVMBuildExtractValue(self.b, r, 0U64, anon())
+                            mut val pred: U32 = llvmIntEq()
+                            if op == opNe() {
+                                pred = llvmIntNe()
+                            }
+                            return LLVMBuildICmp(self.b, pred, tagL, tagR, anon())
+                        }
+                        // a payload-carrying enum with all-scalar payloads: tag + word
+                        // bit-equality (correct on the zero-initialized payload).
+                        if self.enumEqWordable(c: inout c, eid: eidE) {
+                            val eqv: LLVMValueRef = self.emitEnumEqWords(c: inout c, l: l, r: r, eid: eidE)
+                            if op == opNe() {
+                                return LLVMBuildNot(self.b, eqv, anon())
+                            }
+                            return eqv
+                        }
+                    }
+                }
+                // struct ordering (`< <= > >=`): lexicographic field compare (the Ord
+                // witness) -> an i32 ordering compared against 0.
+                if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
+                    val sidxO: U64 = self.exprStructIdx(c: inout c, id: lhs)
+                    if sidxO < c.arena.structs.count {
+                        if self.structOrdSupported(c: inout c, sidx: sidxO) {
+                            return self.emitStructOrdOp(c: inout c, op: op, a: l, b: r, sidx: sidxO)
+                        }
+                    }
+                    // enum ordering (`< <= > >=`): tag-then-payload lexicographic compare.
+                    mut val eidO: U64 = self.exprEnumIdx(c: inout c, id: lhs)
+                    if eidO >= c.arena.enums.count {
+                        eidO = self.exprEnumIdx(c: inout c, id: rhs)
+                    }
+                    if eidO < c.arena.enums.count {
+                        if self.enumOrdSupported(c: inout c, eid: eidO) {
+                            return self.emitEnumOrdOp(c: inout c, op: op, a: l, b: r, eid: eidO, sty: LLVMTypeOf(l))
+                        }
+                    }
+                }
+                // any remaining struct/enum (aggregate) operand routes through an Eq/Ord
+                // witness in the C backend; not modeled here — reject loudly rather than
+                // emit an invalid icmp/arith on an aggregate.
+                if LLVMGetTypeKind(LLVMTypeOf(l)) != 8U32 {
+                    compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: lhs)), msg: "LLVM backend: struct/enum operator (Eq/Ord/Add/... witness) not yet supported")
+                    return LLVMConstInt(self.i1ty, 0U64, 0I32)
+                }
+                // normalize operand widths: a context-less literal defaults to i64 but
+                // may meet a narrower typed operand — extend the narrower to the wider
+                // (using that operand's signedness) so the op is single-width.
+                val wl: U32 = LLVMGetIntTypeWidth(LLVMTypeOf(l))
+                val wr: U32 = LLVMGetIntTypeWidth(LLVMTypeOf(r))
+                if wl < wr {
+                    l = self.coerceInt(v: l, target: LLVMTypeOf(r), unsigned: self.valueKind(c: inout c, id: lhs) == 3U64)
+                } else {
+                    if wr < wl {
+                        r = self.coerceInt(v: r, target: LLVMTypeOf(l), unsigned: self.valueKind(c: inout c, id: rhs) == 3U64)
+                    }
+                }
+                mut val uns: Bool = false
+                if self.valueKind(c: inout c, id: lhs) == 3U64 { uns = true }
+                if self.valueKind(c: inout c, id: rhs) == 3U64 { uns = true }
+                return self.buildBinOpChecked(c: inout c, op: op, l: l, r: r, unsigned: uns)
+            }
+            Expr.Str(val start, val len) => {
+                return self.genLlvmStr(c: inout c, start: start, len: len)
+            }
+            Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
+                return self.genLlvmMake(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ty, fields: fields)
+            }
+            Expr.Array(val elems) => {
+                mut val et: LLVMTypeRef = self.i64ty
+                if elems.count > 0U64 {
+                    et = self.exprLlvmType(c: inout c, id: elems[0])
+                }
+                return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: et)
+            }
+            Expr.Index(val base, val index) => {
+                return self.genLlvmIndex(c: inout c, base: base, index: index)
+            }
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                // `s.bytes` on a String: the String value IS the {ptr,i64} byte array
+                // (same layout), so the view is the value itself (no copy).
+                if self.isStringBytesField(c: inout c, base: base, nameStart: nameStart, nameLen: nameLen) {
+                    return self.genLlvmExpr(c: inout c, id: base)
+                }
+                // `arr.count` — an array's count is field 1.
+                if self.exprIsArray(c: inout c, id: base) {
+                    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
+                        return LLVMBuildExtractValue(self.b, self.genLlvmExpr(c: inout c, id: base), 1U64, anon())
+                    }
+                }
+                val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
+                if sidx < c.arena.structs.count {
+                    val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
+                    if fidx < c.arena.structs[sidx].fields.count {
+                        val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
+                        val raw: LLVMValueRef = LLVMBuildExtractValue(self.b, self.genLlvmExpr(c: inout c, id: base), fidx, anon())
+                        // a boxed (recursive) field holds a heap pointer; deref it to the
+                        // boxed value. Ground the field's pointee type under the BASE's
+                        // instance env first, so a recursive GENERIC field (`next:
+                        // Optional[N[T]]` on a base of type `N[I64]`) loads the concrete
+                        // `Optional[N[I64]]` layout, not the ungrounded template (which would
+                        // default to i64 and load the wrong type).
+                        if c.fieldIsBoxed(f: fd) {
+                            val bRef: U64 = self.exprTypeRef(c: inout c, id: base)
+                            val savedBP: Array[Bind] = c.cur.typeParams
+                            val savedBA: Array[U64] = c.cur.typeArgs
+                            val didSetB: Bool = self.setStructEnv(c: inout c, ref: bRef)
+                            mut val pg: U64 = fd.ty
+                            if c.cur.typeParams.count > 0U64 {
+                                pg = c.groundTypeRef(ref: fd.ty)
+                            }
+                            val pteTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: pg)
+                            if didSetB {
+                                c.cur.typeParams = savedBP
+                                c.cur.typeArgs = savedBA
+                            }
+                            return LLVMBuildLoad2(self.b, pteTy, raw, anon())
+                        }
+                        return raw
+                    }
+                }
+                compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: field access only on a registered struct value (so far)")
+                return LLVMConstInt(self.i64ty, 0U64, 0I32)
+            }
+            Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {
+                // a closure literal is the {fn, env} fat pointer: the lambda-lifted
+                // function plus its environment. A capturing closure heap-allocates an env
+                // struct and copies each captured value (or the shared cell pointer for a
+                // `mut val` capture) into it; a non-capturing one has a NULL env.
+                val slot: U64 = self.closureSlot(id: id)
+                if slot < self.cloIdx.count {
+                    mut val env: LLVMValueRef = LLVMConstNull(self.ptrty)
+                    val caps: Array[CaptureEntry] = closureCaptures(c: inout c, cloId: id)
+                    if caps.count > 0U64 {
+                        val envTy: LLVMTypeRef = self.closureEnvTy(c: inout c, caps: caps)
+                        env = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(envTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
+                        mut val ci: U64 = 0
+                        while ci < caps.count {
+                            val cap: CaptureEntry = caps[ci]
+                            val li: U64 = self.findLocal(c: inout c, start: cap.nameStart, len: cap.nameLen)
+                            if li < self.nLocals {
+                                // a boxed (mut) capture stores the shared cell POINTER
+                                // (locPtr is the heap cell); a by-value capture stores the
+                                // loaded value.
+                                if cap.boxed {
+                                    LLVMBuildStore(self.b, self.locPtr[li], LLVMBuildStructGEP2(self.b, envTy, env, ci, anon()))
+                                } else {
+                                    val cv2: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+                                    LLVMBuildStore(self.b, cv2, LLVMBuildStructGEP2(self.b, envTy, env, ci, anon()))
+                                }
+                            }
+                            ci += 1
+                        }
+                    }
+                    mut val cv: LLVMValueRef = LLVMGetUndef(self.closureTy)
+                    cv = LLVMBuildInsertValue(self.b, cv, self.cloVal[slot], 0U64, anon())
+                    cv = LLVMBuildInsertValue(self.b, cv, env, 1U64, anon())
                     return cv
                 }
+                compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: id)), msg: "LLVM backend: closure not declared")
+                return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
-            compileErrorAt(line: c.lineOf(offset: start), msg: "LLVM backend: unknown identifier (only locals supported so far)")
-            return LLVMConstInt(st.i64ty, 0U64, 0I32)
-        }
-        Expr.Binary(val op, val lhs, val rhs) => {
-            // `&&` / `||` are short-circuit control flow (spec/12), not trait ops:
-            // evaluate the rhs only on the deciding lhs value; the result is an i1.
-            if op == opAnd() || op == opOr() {
-                return st.genLlvmShortCircuit(c: inout c, isAnd: op == opAnd(), lhs: lhs, rhs: rhs)
-            }
-            // float arithmetic / comparison: emit the IEEE op directly (the operands
-            // are doubles). Arithmetic -> f-op; comparison -> fcmp (ordered) -> i1.
-            if st.valueKind(c: inout c, id: lhs) == 4U64 || st.valueKind(c: inout c, id: rhs) == 4U64 {
-                return genLlvmFloatBinop(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
-            }
-            // String ==/!= compares bytes via a runtime call (the operands are
-            // {ptr,i64} structs, not icmp-able). A 2-field struct (`Pair{a:I64,b:I64}`)
-            // shares String's `{ptr,i64}` LLVM layout, so valueKind can read it as a
-            // String — only take the byte-compare path when lhs is NOT a registered
-            // struct (else it is a struct Eq, handled by the witness path below). This
-            // surfaces with a grounded generic-`K` struct key (`self.keys[idx] == key`
-            // in a monomorphized `Dictionary[Pair].find`), which otherwise reinterprets
-            // the struct's fields as a {ptr,len} String and dereferences garbage.
-            if op == opEq() || op == opNe() {
-                if st.valueKind(c: inout c, id: lhs) == 1U64 {
-                    if st.exprStructIdx(c: inout c, id: lhs) >= c.arena.structs.count {
-                        return emitStrEq(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
+            Expr.Arrow(val base, val nameStart, val nameLen) => {
+                // `r->field`: load the pointee struct from the cell and extract `field`
+                // (an array field yields the {ptr,i64} value, whose buffer is shared, so
+                // `r->arr[i] = v` mutates through any alias).
+                val psidx: U64 = self.refPointeeStructIdx(c: inout c, base: base)
+                if psidx < c.arena.structs.count {
+                    val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
+                    if fidx < c.arena.structs[psidx].fields.count {
+                        return LLVMBuildExtractValue(self.b, self.loadRefPointee(c: inout c, base: base), fidx, anon())
                     }
                 }
+                compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: `->` only on a Ref to a registered struct (so far)")
+                return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
-            // struct/enum arithmetic / bitwise / shift: dispatch to the user's
-            // operator-trait witness assoc fn (`money + money` -> `Money.add`),
-            // mirroring the C backend's emitBinTraitCall. A primitive lhs has no
-            // aggregate witness (binWitnessFn -> none) and falls through.
-            if isBinTraitOp(op: op) {
-                val wfi: U64 = binWitnessFn(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
-                if wfi < c.arena.funcs.count {
-                    return emitWitnessCall(c: inout c, st: inout st, fi: wfi, lhs: lhs, rhs: rhs, binary: true)
-                }
+            Expr.Call(val nameStart, val nameLen, val args) => {
+                return self.genLlvmCall(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
             }
-            mut val l: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: lhs)
-            mut val r: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: rhs)
-            // struct ==/!= : structural (field-by-field) equality (the Eq witness).
-            if op == opEq() || op == opNe() {
-                val sidxE: U64 = st.exprStructIdx(c: inout c, id: lhs)
-                if sidxE < c.arena.structs.count {
-                    if structEqSupported(c: inout c, st: inout st, sidx: sidxE) {
-                        val eqv: LLVMValueRef = emitStructEq(c: inout c, st: inout st, a: l, b: r, sidx: sidxE)
-                        if op == opNe() {
-                            return LLVMBuildNot(st.b, eqv, anon())
+            Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+                return self.genLlvmMethod(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+            }
+            Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
+                return self.genLlvmExtMethod(c: inout c, recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+            }
+            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
+                // a value re-view is zero-cost: the value is unchanged (the view only
+                // affects static method resolution, handled at the dispatch site).
+                return self.genLlvmExpr(c: inout c, id: recv)
+            }
+            Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
+                return self.genLlvmIfExpr(c: inout c, cond: cond, thenBlk: thenBlk, elseBlk: elseBlk)
+            }
+            Expr.MatchExpr(val scrut, val arms) => {
+                return self.genLlvmMatchExpr(c: inout c, scrut: scrut, arms: arms, exprId: id)
+            }
+            Expr.OptChain(val base, val memberStart, val memberLen) => {
+                return self.genLlvmOptChain(c: inout c, base: base, memberStart: memberStart, memberLen: memberLen)
+            }
+            Expr.Try(val expr) => {
+                return self.genLlvmTry(c: inout c, expr: expr)
+            }
+            Expr.Move(val operand, val isBorrow) => {
+                // `move x` / `borrow x` lower to the operand's value; `move` additionally
+                // marks the source local moved (so its deinit is not run here — the new
+                // owner runs it). `borrow` leaves the source owned (a non-consuming read).
+                val v: LLVMValueRef = self.genLlvmExpr(c: inout c, id: operand)
+                if !(isBorrow) {
+                    match c.arena.exprs[operand] {
+                        Expr.Ident(start: val s, len: val l) => {
+                            self.markLocalMoved(c: inout c, start: s, len: l)
                         }
-                        return eqv
+                        _ => {}
                     }
                 }
-                // enum ==/!= : a payload-less enum compares by tag (field 0). A
-                // payload-carrying enum needs a per-variant switch (deferred).
-                mut val eidE: U64 = exprEnumIdx(c: inout c, st: inout st, id: lhs)
-                if eidE >= c.arena.enums.count {
-                    eidE = exprEnumIdx(c: inout c, st: inout st, id: rhs)
-                }
-                if eidE < c.arena.enums.count {
-                    if enumPayloadless(c: inout c, eid: eidE) {
-                        val tagL: LLVMValueRef = LLVMBuildExtractValue(st.b, l, 0U64, anon())
-                        val tagR: LLVMValueRef = LLVMBuildExtractValue(st.b, r, 0U64, anon())
-                        mut val pred: U32 = llvmIntEq()
-                        if op == opNe() {
-                            pred = llvmIntNe()
+                return v
+            }
+            Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
+                // `x as T` (spec/12: lossless): an int-width conversion (sext if the
+                // source is signed, zext if unsigned, or same width). Non-int / From
+                // conversions are not yet modeled.
+                val ov: LLVMValueRef = self.genLlvmExpr(c: inout c, id: operand)
+                // `n as F64` / `n as F32`: int -> float (sitofp / uitofp, IEEE-rounded —
+                // spec/12 total conversion), or a float -> float widen (both are double =
+                // no-op). (float -> int is lossy and is a fallible TryFrom, not `as`.)
+                if c.isFloatType(start: tyStart, len: tyLen) {
+                    if LLVMGetTypeKind(LLVMTypeOf(ov)) == 8U32 {
+                        if self.valueKind(c: inout c, id: operand) == 3U64 {
+                            return LLVMBuildUIToFP(self.b, ov, self.f64ty, anon())
                         }
-                        return LLVMBuildICmp(st.b, pred, tagL, tagR, anon())
+                        return LLVMBuildSIToFP(self.b, ov, self.f64ty, anon())
                     }
-                    // a payload-carrying enum with all-scalar payloads: tag + word
-                    // bit-equality (correct on the zero-initialized payload).
-                    if enumEqWordable(c: inout c, st: inout st, eid: eidE) {
-                        val eqv: LLVMValueRef = emitEnumEqWords(c: inout c, st: inout st, l: l, r: r, eid: eidE)
-                        if op == opNe() {
-                            return LLVMBuildNot(st.b, eqv, anon())
-                        }
-                        return eqv
-                    }
-                }
-            }
-            // struct ordering (`< <= > >=`): lexicographic field compare (the Ord
-            // witness) -> an i32 ordering compared against 0.
-            if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
-                val sidxO: U64 = st.exprStructIdx(c: inout c, id: lhs)
-                if sidxO < c.arena.structs.count {
-                    if structOrdSupported(c: inout c, st: inout st, sidx: sidxO) {
-                        return emitStructOrdOp(c: inout c, st: inout st, op: op, a: l, b: r, sidx: sidxO)
-                    }
-                }
-                // enum ordering (`< <= > >=`): tag-then-payload lexicographic compare.
-                mut val eidO: U64 = exprEnumIdx(c: inout c, st: inout st, id: lhs)
-                if eidO >= c.arena.enums.count {
-                    eidO = exprEnumIdx(c: inout c, st: inout st, id: rhs)
-                }
-                if eidO < c.arena.enums.count {
-                    if enumOrdSupported(c: inout c, st: inout st, eid: eidO) {
-                        return emitEnumOrdOp(c: inout c, st: inout st, op: op, a: l, b: r, eid: eidO, sty: LLVMTypeOf(l))
-                    }
-                }
-            }
-            // any remaining struct/enum (aggregate) operand routes through an Eq/Ord
-            // witness in the C backend; not modeled here — reject loudly rather than
-            // emit an invalid icmp/arith on an aggregate.
-            if LLVMGetTypeKind(LLVMTypeOf(l)) != 8U32 {
-                compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: lhs)), msg: "LLVM backend: struct/enum operator (Eq/Ord/Add/... witness) not yet supported")
-                return LLVMConstInt(st.i1ty, 0U64, 0I32)
-            }
-            // normalize operand widths: a context-less literal defaults to i64 but
-            // may meet a narrower typed operand — extend the narrower to the wider
-            // (using that operand's signedness) so the op is single-width.
-            val wl: U32 = LLVMGetIntTypeWidth(LLVMTypeOf(l))
-            val wr: U32 = LLVMGetIntTypeWidth(LLVMTypeOf(r))
-            if wl < wr {
-                l = coerceInt(st: inout st, v: l, target: LLVMTypeOf(r), unsigned: st.valueKind(c: inout c, id: lhs) == 3U64)
-            } else {
-                if wr < wl {
-                    r = coerceInt(st: inout st, v: r, target: LLVMTypeOf(l), unsigned: st.valueKind(c: inout c, id: rhs) == 3U64)
-                }
-            }
-            mut val uns: Bool = false
-            if st.valueKind(c: inout c, id: lhs) == 3U64 { uns = true }
-            if st.valueKind(c: inout c, id: rhs) == 3U64 { uns = true }
-            return st.buildBinOpChecked(c: inout c, op: op, l: l, r: r, unsigned: uns)
-        }
-        Expr.Str(val start, val len) => {
-            return genLlvmStr(c: inout c, st: inout st, start: start, len: len)
-        }
-        Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
-            return st.genLlvmMake(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ty, fields: fields)
-        }
-        Expr.Array(val elems) => {
-            mut val et: LLVMTypeRef = st.i64ty
-            if elems.count > 0U64 {
-                et = st.exprLlvmType(c: inout c, id: elems[0])
-            }
-            return st.genLlvmArrayLit(c: inout c, elems: elems, elemTy: et)
-        }
-        Expr.Index(val base, val index) => {
-            return st.genLlvmIndex(c: inout c, base: base, index: index)
-        }
-        Expr.Field(val base, val nameStart, val nameLen) => {
-            // `s.bytes` on a String: the String value IS the {ptr,i64} byte array
-            // (same layout), so the view is the value itself (no copy).
-            if st.isStringBytesField(c: inout c, base: base, nameStart: nameStart, nameLen: nameLen) {
-                return genLlvmExpr(c: inout c, st: inout st, id: base)
-            }
-            // `arr.count` — an array's count is field 1.
-            if st.exprIsArray(c: inout c, id: base) {
-                if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
-                    return LLVMBuildExtractValue(st.b, genLlvmExpr(c: inout c, st: inout st, id: base), 1U64, anon())
-                }
-            }
-            val sidx: U64 = st.exprStructIdx(c: inout c, id: base)
-            if sidx < c.arena.structs.count {
-                val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                if fidx < c.arena.structs[sidx].fields.count {
-                    val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
-                    val raw: LLVMValueRef = LLVMBuildExtractValue(st.b, genLlvmExpr(c: inout c, st: inout st, id: base), fidx, anon())
-                    // a boxed (recursive) field holds a heap pointer; deref it to the
-                    // boxed value. Ground the field's pointee type under the BASE's
-                    // instance env first, so a recursive GENERIC field (`next:
-                    // Optional[N[T]]` on a base of type `N[I64]`) loads the concrete
-                    // `Optional[N[I64]]` layout, not the ungrounded template (which would
-                    // default to i64 and load the wrong type).
-                    if c.fieldIsBoxed(f: fd) {
-                        val bRef: U64 = st.exprTypeRef(c: inout c, id: base)
-                        val savedBP: Array[Bind] = c.cur.typeParams
-                        val savedBA: Array[U64] = c.cur.typeArgs
-                        val didSetB: Bool = st.setStructEnv(c: inout c, ref: bRef)
-                        mut val pg: U64 = fd.ty
-                        if c.cur.typeParams.count > 0U64 {
-                            pg = c.groundTypeRef(ref: fd.ty)
-                        }
-                        val pteTy: LLVMTypeRef = llvmTypeOfRef(c: inout c, st: inout st, ref: pg)
-                        if didSetB {
-                            c.cur.typeParams = savedBP
-                            c.cur.typeArgs = savedBA
-                        }
-                        return LLVMBuildLoad2(st.b, pteTy, raw, anon())
-                    }
-                    return raw
-                }
-            }
-            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: field access only on a registered struct value (so far)")
-            return LLVMConstInt(st.i64ty, 0U64, 0I32)
-        }
-        Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {
-            // a closure literal is the {fn, env} fat pointer: the lambda-lifted
-            // function plus its environment. A capturing closure heap-allocates an env
-            // struct and copies each captured value (or the shared cell pointer for a
-            // `mut val` capture) into it; a non-capturing one has a NULL env.
-            val slot: U64 = st.closureSlot(id: id)
-            if slot < st.cloIdx.count {
-                mut val env: LLVMValueRef = LLVMConstNull(st.ptrty)
-                val caps: Array[CaptureEntry] = closureCaptures(c: inout c, cloId: id)
-                if caps.count > 0U64 {
-                    val envTy: LLVMTypeRef = st.closureEnvTy(c: inout c, caps: caps)
-                    env = st.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(envTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
-                    mut val ci: U64 = 0
-                    while ci < caps.count {
-                        val cap: CaptureEntry = caps[ci]
-                        val li: U64 = st.findLocal(c: inout c, start: cap.nameStart, len: cap.nameLen)
-                        if li < st.nLocals {
-                            // a boxed (mut) capture stores the shared cell POINTER
-                            // (locPtr is the heap cell); a by-value capture stores the
-                            // loaded value.
-                            if cap.boxed {
-                                LLVMBuildStore(st.b, st.locPtr[li], LLVMBuildStructGEP2(st.b, envTy, env, ci, anon()))
-                            } else {
-                                val cv2: LLVMValueRef = LLVMBuildLoad2(st.b, st.locTy[li], st.locPtr[li], anon())
-                                LLVMBuildStore(st.b, cv2, LLVMBuildStructGEP2(st.b, envTy, env, ci, anon()))
-                            }
-                        }
-                        ci += 1
-                    }
-                }
-                mut val cv: LLVMValueRef = LLVMGetUndef(st.closureTy)
-                cv = LLVMBuildInsertValue(st.b, cv, st.cloVal[slot], 0U64, anon())
-                cv = LLVMBuildInsertValue(st.b, cv, env, 1U64, anon())
-                return cv
-            }
-            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: id)), msg: "LLVM backend: closure not declared")
-            return LLVMConstInt(st.i64ty, 0U64, 0I32)
-        }
-        Expr.Arrow(val base, val nameStart, val nameLen) => {
-            // `r->field`: load the pointee struct from the cell and extract `field`
-            // (an array field yields the {ptr,i64} value, whose buffer is shared, so
-            // `r->arr[i] = v` mutates through any alias).
-            val psidx: U64 = st.refPointeeStructIdx(c: inout c, base: base)
-            if psidx < c.arena.structs.count {
-                val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
-                if fidx < c.arena.structs[psidx].fields.count {
-                    return LLVMBuildExtractValue(st.b, st.loadRefPointee(c: inout c, base: base), fidx, anon())
-                }
-            }
-            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: `->` only on a Ref to a registered struct (so far)")
-            return LLVMConstInt(st.i64ty, 0U64, 0I32)
-        }
-        Expr.Call(val nameStart, val nameLen, val args) => {
-            return st.genLlvmCall(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
-        }
-        Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-            return st.genLlvmMethod(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
-        }
-        Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
-            return st.genLlvmExtMethod(c: inout c, recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
-        }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
-            // a value re-view is zero-cost: the value is unchanged (the view only
-            // affects static method resolution, handled at the dispatch site).
-            return genLlvmExpr(c: inout c, st: inout st, id: recv)
-        }
-        Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-            return st.genLlvmIfExpr(c: inout c, cond: cond, thenBlk: thenBlk, elseBlk: elseBlk)
-        }
-        Expr.MatchExpr(val scrut, val arms) => {
-            return st.genLlvmMatchExpr(c: inout c, scrut: scrut, arms: arms, exprId: id)
-        }
-        Expr.OptChain(val base, val memberStart, val memberLen) => {
-            return st.genLlvmOptChain(c: inout c, base: base, memberStart: memberStart, memberLen: memberLen)
-        }
-        Expr.Try(val expr) => {
-            return st.genLlvmTry(c: inout c, expr: expr)
-        }
-        Expr.Move(val operand, val isBorrow) => {
-            // `move x` / `borrow x` lower to the operand's value; `move` additionally
-            // marks the source local moved (so its deinit is not run here — the new
-            // owner runs it). `borrow` leaves the source owned (a non-consuming read).
-            val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: operand)
-            if !(isBorrow) {
-                match c.arena.exprs[operand] {
-                    Expr.Ident(start: val s, len: val l) => {
-                        st.markLocalMoved(c: inout c, start: s, len: l)
-                    }
-                    _ => {}
-                }
-            }
-            return v
-        }
-        Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
-            // `x as T` (spec/12: lossless): an int-width conversion (sext if the
-            // source is signed, zext if unsigned, or same width). Non-int / From
-            // conversions are not yet modeled.
-            val ov: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: operand)
-            // `n as F64` / `n as F32`: int -> float (sitofp / uitofp, IEEE-rounded —
-            // spec/12 total conversion), or a float -> float widen (both are double =
-            // no-op). (float -> int is lossy and is a fallible TryFrom, not `as`.)
-            if c.isFloatType(start: tyStart, len: tyLen) {
-                if LLVMGetTypeKind(LLVMTypeOf(ov)) == 8U32 {
-                    if st.valueKind(c: inout c, id: operand) == 3U64 {
-                        return LLVMBuildUIToFP(st.b, ov, st.f64ty, anon())
-                    }
-                    return LLVMBuildSIToFP(st.b, ov, st.f64ty, anon())
-                }
-                return ov
-            }
-            if LLVMGetTypeKind(LLVMTypeOf(ov)) == 8U32 {
-                if kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen) != 1U64 {
-                    return coerceInt(st: inout st, v: ov, target: llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen), unsigned: st.valueKind(c: inout c, id: operand) == 3U64)
-                }
-            }
-            // a `newtype` re-tag (spec/10) over a NON-int underlying (`"a" as UserId`
-            // wrap / `u as String` unwrap, UserId = String): the newtype shares its
-            // underlying's representation, so the conversion is a no-op — return the
-            // operand value unchanged. (int-underlying newtypes go through the int path
-            // above.) The front-end (Verify) already gated legality, so reaching here
-            // with a non-int/non-float operand means a representation-preserving re-tag:
-            // either the TARGET is a newtype (wrap) or the OPERAND's type is (unwrap).
-            if c.newtypeUnderRef(start: tyStart, len: tyLen) != 0U64 {
-                return ov
-            }
-            val opRef: U64 = st.exprTypeRef(c: inout c, id: operand)
-            if opRef != 0U64 {
-                if c.newtypeUnderRef(start: c.arena.types[opRef].nameStart, len: c.arena.types[opRef].nameLen) != 0U64 {
                     return ov
                 }
-            }
-            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: operand)), msg: "LLVM backend: this `as` conversion is not yet supported (int-width only)")
-            return LLVMConstInt(st.i64ty, 0U64, 0I32)
-        }
-        Expr.Unary(val op, val operand) => {
-            // a struct/enum operand dispatches to its unary operator-trait witness
-            // (`-money` -> `Money.neg(value:)`, `!switch` -> `Switch.not`). A
-            // primitive operand has no aggregate witness and keeps the LLVM op.
-            val uwfi: U64 = unaryWitnessFn(c: inout c, st: inout st, op: op, operand: operand)
-            if uwfi < c.arena.funcs.count {
-                return emitWitnessCall(c: inout c, st: inout st, fi: uwfi, lhs: operand, rhs: operand, binary: false)
-            }
-            if op == opSub() {
-                val ov: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: operand)
-                // a signed-integer negation is overflow-checked (`-INT_MIN` panics);
-                // float negation keeps the raw op.
                 if LLVMGetTypeKind(LLVMTypeOf(ov)) == 8U32 {
-                    return st.buildNegChecked(c: inout c, v: ov)
+                    if kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen) != 1U64 {
+                        return self.coerceInt(v: ov, target: self.llvmScalarTy(c: inout c, tyStart: tyStart, tyLen: tyLen), unsigned: self.valueKind(c: inout c, id: operand) == 3U64)
+                    }
                 }
-                return LLVMBuildFNeg(st.b, ov, anon())
+                // a `newtype` re-tag (spec/10) over a NON-int underlying (`"a" as UserId`
+                // wrap / `u as String` unwrap, UserId = String): the newtype shares its
+                // underlying's representation, so the conversion is a no-op — return the
+                // operand value unchanged. (int-underlying newtypes go through the int path
+                // above.) The front-end (Verify) already gated legality, so reaching here
+                // with a non-int/non-float operand means a representation-preserving re-tag:
+                // either the TARGET is a newtype (wrap) or the OPERAND's type is (unwrap).
+                if c.newtypeUnderRef(start: tyStart, len: tyLen) != 0U64 {
+                    return ov
+                }
+                val opRef: U64 = self.exprTypeRef(c: inout c, id: operand)
+                if opRef != 0U64 {
+                    if c.newtypeUnderRef(start: c.arena.types[opRef].nameStart, len: c.arena.types[opRef].nameLen) != 0U64 {
+                        return ov
+                    }
+                }
+                compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: operand)), msg: "LLVM backend: this `as` conversion is not yet supported (int-width only)")
+                return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
-            // `!` (Bool) and `~` (BitNot) are both LLVM `xor x, -1` (i1: flips the
-            // single bit; iN: flips all bits).
-            if op == opNot() || op == opBitNot() {
-                return LLVMBuildNot(st.b, genLlvmExpr(c: inout c, st: inout st, id: operand), anon())
+            Expr.Unary(val op, val operand) => {
+                // a struct/enum operand dispatches to its unary operator-trait witness
+                // (`-money` -> `Money.neg(value:)`, `!switch` -> `Switch.not`). A
+                // primitive operand has no aggregate witness and keeps the LLVM op.
+                val uwfi: U64 = self.unaryWitnessFn(c: inout c, op: op, operand: operand)
+                if uwfi < c.arena.funcs.count {
+                    return self.emitWitnessCall(c: inout c, fi: uwfi, lhs: operand, rhs: operand, binary: false)
+                }
+                if op == opSub() {
+                    val ov: LLVMValueRef = self.genLlvmExpr(c: inout c, id: operand)
+                    // a signed-integer negation is overflow-checked (`-INT_MIN` panics);
+                    // float negation keeps the raw op.
+                    if LLVMGetTypeKind(LLVMTypeOf(ov)) == 8U32 {
+                        return self.buildNegChecked(c: inout c, v: ov)
+                    }
+                    return LLVMBuildFNeg(self.b, ov, anon())
+                }
+                // `!` (Bool) and `~` (BitNot) are both LLVM `xor x, -1` (i1: flips the
+                // single bit; iN: flips all bits).
+                if op == opNot() || op == opBitNot() {
+                    return LLVMBuildNot(self.b, self.genLlvmExpr(c: inout c, id: operand), anon())
+                }
+                compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: operand)), msg: "LLVM backend: unary operator not yet supported")
+                return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
-            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: operand)), msg: "LLVM backend: unary operator not yet supported")
-            return LLVMConstInt(st.i64ty, 0U64, 0I32)
-        }
-        _ => {
-            eprint(text: "[exprform] ")
-            eprint(text: exprFormName(c: inout c, id: id))
-            eprint(text: "\n")
-            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: id)), msg: "LLVM backend: expression form not yet supported")
-            return LLVMConstInt(st.i64ty, 0U64, 0I32)
+            _ => {
+                eprint(text: "[exprform] ")
+                eprint(text: exprFormName(c: inout c, id: id))
+                eprint(text: "\n")
+                compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: id)), msg: "LLVM backend: expression form not yet supported")
+                return LLVMConstInt(self.i64ty, 0U64, 0I32)
+            }
         }
     }
 }
@@ -450,4 +453,3 @@ fn exprFormName2(c: inout Comp, id: U64) -> String {
         _ => { return "other" }
     }
 }
-

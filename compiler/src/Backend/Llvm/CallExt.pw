@@ -7,7 +7,7 @@
 pub impl LlvmCtx {
     inout fn ffiTyOf(c: inout Comp, tyStart: U64, tyLen: U64) -> LLVMTypeRef {
         if isPrimIntName(c: inout c, start: tyStart, len: tyLen) {
-            return llvmScalarTy(c: inout c, st: inout self, tyStart: tyStart, tyLen: tyLen)
+            return self.llvmScalarTy(c: inout c, tyStart: tyStart, tyLen: tyLen)
         }
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "String") {
             return self.strty

@@ -20,7 +20,7 @@ pub impl LlvmCtx {
         }
         // a registered struct receiver, or a primitive lang-item (String / a fixed-width
         // integer) — all have a well-defined self LLVM type.
-        if structRegSlot(c: inout c, st: inout self, start: f.recvStart, len: f.recvLen) >= self.structIdxs.count {
+        if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.structIdxs.count {
             if !(rangeEquals(bytes: c.arena.bytes, start: f.recvStart, len: f.recvLen, kw: "String")) {
                 if !(isPrimIntName(c: inout c, start: f.recvStart, len: f.recvLen)) {
                     return self.fnIdx.count
