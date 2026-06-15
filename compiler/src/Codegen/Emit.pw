@@ -219,69 +219,6 @@ fn arrayElemNameForRef(c: inout Comp, elemRef: U64) -> Bind {
 // witness call is free at -O (spec/12: primitives are not special-cased — the
 // operator desugars to a witness uniformly, the cost is hidden in the floor).
 
-// Compare two source spans byte for byte.
-fn spansEqual(c: inout Comp, aStart: U64, aLen: U64, bStart: U64, bLen: U64) -> Bool {
-    if aLen != bLen {
-        return false
-    }
-    mut val j: U64 = 0
-    while j < aLen {
-        if c.arena.bytes[aStart + j] != c.arena.bytes[bStart + j] {
-            return false
-        }
-        j += 1
-    }
-    return true
-}
-
-// --- Phase C name interning ---------------------------------------------------
-// Map each name span's CONTENT to a stable 1-based integer id, so name equality
-// becomes integer == on precomputed ids instead of a byte-by-byte spansEqual.
-// internBytes gives each declaration a distinct byte range, so the only correct
-// key is content (FNV-1a 64-bit here); collisions fall back to spansEqual, so the
-// hash only affects speed, not correctness. Backed by a hand-rolled
-// open-addressing table (a Dictionary[String,U64] would force a String alloc per
-// intern — there's no span→String slice — on this hot path).
-fn internHash(c: inout Comp, start: U64, len: U64) -> U64 {
-    mut val h: U64 = 14695981039346656037U64
-    mut val j: U64 = 0
-    while j < len {
-        h = h ^ (c.arena.bytes[start + j] as U64)
-        h = h.wrappingMul(by: 1099511628211U64)
-        j += 1
-    }
-    return h
-}
-
-// Grow the bucket index (double, or 8 from empty), re-placing every interned span
-// by re-hashing. The dense interner.starts/lens arrays are untouched (ids stay
-// stable). Capacity is a power of two so the slot index is a bitmask (& cap-1).
-fn internGrow(c: inout Comp) {
-    mut val newCap: U64 = 8
-    if c.interner.buckets.count > 0 {
-        newCap = c.interner.buckets.count * 2
-    }
-    mut val nb: Array[U64] = []
-    mut val k: U64 = 0
-    while k < newCap {
-        nb.append(value: 0)
-        k += 1
-    }
-    mut val i: U64 = 0
-    while i < c.interner.count {
-        val code: U64 = internHash(c: inout c, start: c.interner.starts[i], len: c.interner.lens[i])
-        mut val slot: U64 = code & (newCap - 1)
-        while nb[slot] != 0 {
-            slot = (slot + 1) & (newCap - 1)
-        }
-        nb.set(i: slot, value: i + 1)
-        i += 1
-    }
-    c.interner.buckets = nb
-}
-
-// Intern a name span to its stable 1-based id (equal content ⇒ equal id; 0 is
-// never returned, so a `nameId` field's default 0 is a pure "unfilled" sentinel).
 // If (start, len) names a `newtype` (spec/10), its underlying type's TypeRef; else 0.
 // Codegen resolves a newtype to its underlying for representation / method dispatch.
 fn newtypeUnderRef(c: inout Comp, start: U64, len: U64) -> U64 {
@@ -315,32 +252,6 @@ fn newtypeUnderName(c: inout Comp, start: U64, len: U64) -> Bind {
     return <Bind nameStart=start nameLen=len fieldStart=0 fieldLen=0 />
 }
 
-fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
-    if c.interner.buckets.count == 0 {
-        internGrow(c: inout c)
-    } else {
-        if (c.interner.count + 1) * 4 > c.interner.buckets.count * 3 {
-            internGrow(c: inout c)
-        }
-    }
-    val code: U64 = internHash(c: inout c, start: start, len: len)
-    val cap: U64 = c.interner.buckets.count
-    mut val slot: U64 = code & (cap - 1)
-    while true {
-        val b: U64 = c.interner.buckets[slot]
-        if b == 0 {
-            c.interner.starts.append(value: start)
-            c.interner.lens.append(value: len)
-            c.interner.count += 1
-            c.interner.buckets.set(i: slot, value: c.interner.count)
-            return c.interner.count
-        }
-        if spansEqual(c: inout c, aStart: c.interner.starts[b - 1], aLen: c.interner.lens[b - 1], bStart: start, bLen: len) {
-            return b
-        }
-        slot = (slot + 1) & (cap - 1)
-    }
-}
 
 // 1-based source line for a byte offset (count newlines before it). For
 // diagnostics; works across the assembled multi-file buffer.

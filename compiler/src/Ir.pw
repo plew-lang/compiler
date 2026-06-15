@@ -10,7 +10,7 @@
 
 // A parsed type: for `Array[E]`, (start,len) names the element E and isArray is
 // true; otherwise (start,len) names the type itself (scalar / String / named).
-struct PType {
+export struct PType {
     pub val start: U64
     pub val len: U64
     pub val isArray: Bool
@@ -26,7 +26,7 @@ struct PType {
 // arguments (indices into Comp.arena.types). Non-generic types have an empty args
 // list. `Array[E]` is {name="Array", args=[E]}; `Optional[I32]` is
 // {name="Optional", args=[I32]}; a bare `I32` is {name="I32", args=[]}.
-struct TypeRef {
+export struct TypeRef {
     pub val nameStart: U64
     pub val nameLen: U64
     // interned head-name id (Phase D): the content-keyed id of (nameStart,nameLen),
@@ -67,7 +67,7 @@ struct TypeRef {
 // only for now). Flat list keyed by `closureId` (the Closure node's arena
 // index); querying a closure's captures filters by it. The capture becomes a
 // field of `__closure_env<closureId>`, read in the body via `__env`.
-struct CaptureEntry {
+export struct CaptureEntry {
     pub val closureId: U64
     pub val nameStart: U64
     pub val nameLen: U64
@@ -81,7 +81,7 @@ struct CaptureEntry {
     pub val boxed: Bool
 }
 
-struct Local {
+export struct Local {
     pub val nameStart: U64
     pub val nameLen: U64
     // interned name id (Phase C): set when the local is pushed (addLocalCn); 0 sentinel.
@@ -121,7 +121,7 @@ struct Local {
 // The recovered type of an expression. kind: 0 scalar (long long), 1 String,
 // 2 named struct/enum, 3 array. For named: (nameStart,len) is the type name;
 // for array: the element type name (always backed by a real declaration span).
-struct TypeInfo {
+export struct TypeInfo {
     pub val kind: I64
     pub val nameStart: U64
     pub val nameLen: U64
@@ -132,7 +132,7 @@ struct TypeInfo {
 }
 
 // One `field=expr` pair inside a JSX construction `<Type field=expr ... />`.
-struct MakeField {
+export struct MakeField {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val value: U64
@@ -146,7 +146,7 @@ struct MakeField {
 // (`val a`) the two are equal; for rename (`b: val c`) field=b, name=c.
 // (Also reused elsewhere as a plain (name) span pair — array element names,
 // part directives — where the field span is just set equal to the name.)
-struct Bind {
+export struct Bind {
     pub val nameStart: U64
     pub val nameLen: U64
     // interned name id (Phase D): set by internBytes for every re-interned name, so
@@ -164,7 +164,7 @@ struct Bind {
 
 // A call argument: the expression plus whether it was passed `inout` (which
 // lowers to `&(expr)` at the call site, matching a pointer parameter).
-struct Arg {
+export struct Arg {
     pub val expr: U64
     pub val isInout: Bool
     // the argument label `name:` (spec: required, in declaration order). Empty
@@ -174,7 +174,7 @@ struct Arg {
     pub val hasLabel: Bool
 }
 
-enum Expr {
+export enum Expr {
     // An integer (or Bool) literal. `value` is the non-negative magnitude (U64,
     // so the full unsigned range up to 2^64-1 fits); a leading `-` is a separate
     // `offset` is the source byte for diagnostics. `isBool` marks `true`/`false`
@@ -249,7 +249,7 @@ enum Expr {
 // One arm of a match: either `_ => block` (wildcard) or `Enum.Variant
 // [{ val f ... }] => block`. The pattern names the enum and variant, so codegen
 // resolves the tag index and field types without any type inference.
-struct MatchArm {
+export struct MatchArm {
     pub val isWildcard: Bool
     pub val enumStart: U64
     pub val enumLen: U64
@@ -271,7 +271,7 @@ struct MatchArm {
 
 // The pattern part of a match arm (everything before `=>`), shared by statement
 // and expression match parsing. Mirrors MatchArm minus the body.
-struct PatInfo {
+export struct PatInfo {
     pub val isWildcard: Bool
     pub val enumStart: U64
     pub val enumLen: U64
@@ -281,7 +281,7 @@ struct PatInfo {
     pub val isStruct: Bool
 }
 
-enum Stmt {
+export enum Stmt {
     Let(mutable: Bool, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64)
     Assign(op: I64, target: U64, value: U64)
     ExprStmt(expr: U64)
@@ -310,11 +310,11 @@ enum Stmt {
     Continue(offset: U64)
 }
 
-struct Block {
+export struct Block {
     pub val stmts: Array[U64]
 }
 
-struct Param {
+export struct Param {
     pub val nameStart: U64
     pub val nameLen: U64
     // interned label/name id (Phase C): set by internAllDecls; 0 sentinel.
@@ -343,7 +343,7 @@ struct Param {
     pub val defaultExpr: U64
 }
 
-struct FieldDef {
+export struct FieldDef {
     pub val nameStart: U64
     pub val nameLen: U64
     // interned name id (Phase C): set by internAllDecls; 0 until then.
@@ -372,7 +372,7 @@ struct FieldDef {
     pub val vis: U64 = 0
 }
 
-struct StructDef {
+export struct StructDef {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64 = 0
@@ -403,7 +403,7 @@ struct StructDef {
     pub val defOffset: U64 = 0
 }
 
-struct Variant {
+export struct Variant {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64 = 0
@@ -415,7 +415,7 @@ struct Variant {
 // requirement's name (reuses Bind as a (start,len) pair); the parser still
 // consumes the full signature but labels/types are recovered later. Field/
 // associated-type/factory requirements are not parsed yet (additive).
-struct TraitDef {
+export struct TraitDef {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64 = 0
@@ -447,7 +447,7 @@ struct TraitDef {
 // verify every requirement of `Trait` is met (incomplete conformance = error).
 // A `@[Eq]` / `@[Ord]` derive request recorded on a struct/enum declaration.
 // Resolved after parsing by synthesizing the witness `impl Type as Eq/Ord`.
-struct DeriveReq {
+export struct DeriveReq {
     pub val typeStart: U64
     pub val typeLen: U64
     pub val isEnum: Bool
@@ -471,7 +471,7 @@ struct DeriveReq {
 // as Trait { type Item = Concrete }` (spec/08). Records, for the conforming type,
 // which concrete type the trait's associated type resolves to — so a requirement
 // signature's `Item` substitutes to `Concrete` when checking/resolving on Type.
-struct AssocBinding {
+export struct AssocBinding {
     pub val recvStart: U64
     pub val recvLen: U64
     pub val recvId: U64 = 0
@@ -491,12 +491,12 @@ struct AssocBinding {
 
 // A `defaultExtension #Ext` declaration (spec/09): the extension's methods on
 // `typeId` join that type's bare resolution surface (findMethod admits them).
-struct DefaultExt {
+export struct DefaultExt {
     pub val typeId: U64
     pub val extId: U64
 }
 
-struct Conform {
+export struct Conform {
     pub val typeStart: U64
     pub val typeLen: U64
     pub val typeId: U64 = 0
@@ -532,7 +532,7 @@ struct Conform {
 // requirement name becomes a bare callable that dispatches to the real member).
 // findMethod, on missing `alias` for `recv`, retries with `real` — so both
 // `x.req()` and `x.real()` resolve to the one real method.
-struct MethodAlias {
+export struct MethodAlias {
     pub val recvStart: U64
     pub val recvLen: U64
     pub val recvId: U64 = 0
@@ -549,7 +549,7 @@ struct MethodAlias {
 // traitLen) the required trait. `where T: A + B` and `where T: A, U: B` expand to
 // one FuncBound per atom. Enforced at instantiation: the concrete type bound to
 // the parameter must conform to the trait, else a loud error.
-struct FuncBound {
+export struct FuncBound {
     pub val fnIdx: U64
     pub val paramStart: U64
     pub val paramLen: U64
@@ -567,7 +567,7 @@ struct FuncBound {
 // type arguments (TypeRef indices) aligned to the function's typeParams.
 // Discovered from call sites (only ground/concrete instantiations); each gets a
 // specialized C function `f_<arg-mangle...>` emitted under the type-param env.
-struct FnInst {
+export struct FnInst {
     pub val fnIdx: U64
     pub val args: Array[U64]
     // for a generic *method* instance on a generic receiver (`filterIter.map(f)`):
@@ -576,7 +576,7 @@ struct FnInst {
     pub val recvInstRef: U64 = 0
 }
 
-struct EnumDef {
+export struct EnumDef {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64 = 0
@@ -588,7 +588,7 @@ struct EnumDef {
     pub val defOffset: U64 = 0
 }
 
-struct Func {
+export struct Func {
     pub val nameStart: U64
     pub val nameLen: U64
     // interned ids (Phase C): name and (for methods/assoc) receiver type name.
@@ -679,7 +679,7 @@ struct Func {
 // initializer); the backend emits an LLVM global, runs every global's init once in
 // `plew_init_globals` before `main`, and seeds each global as a local at every
 // function-body entry so reads/writes resolve through the normal local machinery.
-struct Global {
+export struct Global {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val letStmt: U64
@@ -689,7 +689,7 @@ struct Global {
 // A `newtype Name = Underlying` (spec/10): a distinct type sharing the underlying's
 // representation. `nameId` is the interned newtype name; (underStart, underLen) /
 // underRef name the underlying type (its head span and full TypeRef).
-struct NewtypeDef {
+export struct NewtypeDef {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64
@@ -717,7 +717,7 @@ struct NewtypeDef {
 // index). `types` is the structured TypeRef arena (indexed by nodes' `ty`/`ref`
 // fields). `globals` are module-level vars in lowering (= init) order. `newtypes`
 // are `newtype Name = Underlying` declarations (spec/10).
-struct Arena {
+export struct Arena {
     pub mut val bytes: Array[U8] = []
     pub mut val exprs: Array[Expr] = []
     pub mut val stmts: Array[Stmt] = []
@@ -742,7 +742,7 @@ pub impl Arena { factory }
 // `namespaces`: `import @Std/Io` namespace binds. `importAliases`: `import …
 // with { real as alias }` rewrites. `chainResults`: result TypeRef of each
 // desugared `?.` (exprId→ref). `kwCache`: cached built-in name spans (O(1) kwSpan).
-struct Decls {
+export struct Decls {
     pub mut val traits: Array[TraitDef] = []
     pub mut val conforms: Array[Conform] = []
     pub mut val methodAliases: Array[MethodAlias] = []
@@ -767,7 +767,7 @@ pub impl Decls { factory }
 // iff it appears here). `imports`: imported name spans with `fieldStart` = the
 // importing module id (a cross-module use is visible only if imported there, and
 // exported by its own module). Aliases / namespace imports are additive.
-struct Modules {
+export struct Modules {
     pub mut val ranges: Array[Bind] = []
     pub mut val exports: Array[Bind] = []
     pub mut val imports: Array[Bind] = []
@@ -792,7 +792,7 @@ pub impl Modules { factory }
 // type transitively reaches their owning struct/enum (a containment cycle), so
 // stored behind a heap pointer (deref-on-read / repoint-on-write keeps value
 // semantics); keyed by the field decl's nameStart.
-struct MonoWork {
+export struct MonoWork {
     pub mut val genInsts: Array[U64] = []
     pub mut val fnInsts: Array[FnInst] = []
     pub mut val fnTypes: Array[U64] = []
@@ -812,7 +812,7 @@ pub impl MonoWork { factory }
 // resets in O(fills) at each body-emission entry. `intCtx` is the checker-recorded
 // integer CONTEXT type (code 1..8, 0 = none), which persists (not cleared per
 // body — a literal's context type is env-independent).
-struct TypeCache {
+export struct TypeCache {
     pub mut val kind: Array[I64] = []
     pub mut val start: Array[U64] = []
     pub mut val len: Array[U64] = []
@@ -822,7 +822,7 @@ struct TypeCache {
 }
 pub impl TypeCache { factory }
 
-struct Interner {
+export struct Interner {
     pub mut val starts: Array[U64] = []
     pub mut val lens: Array[U64] = []
     pub mut val buckets: Array[U64] = []
@@ -837,7 +837,7 @@ pub impl Interner { factory }
 // trait spans from parseWhereClause (parallel to its returned param spans).
 // `implBoundParams`/`implBoundTraits`: the impl-level `where T: Trait` bounds of
 // the impl being parsed (each member fn folds these into decls.funcBounds).
-struct ParseScratch {
+export struct ParseScratch {
     pub mut val pendingDerives: Array[DeriveReq] = []
     pub mut val witnessed: Array[Func] = []
     pub mut val whereTraits: Array[Bind] = []
@@ -857,7 +857,7 @@ pub impl ParseScratch { factory }
 // `asyncFn`/`asyncVarSeq` drive async state-machine lowering; `lowerRetTy` is the
 // lowering-time return type (generic-constructor inference); `checkFn` is the
 // function index the eager generic checker is on.
-struct Cursor {
+export struct Cursor {
     pub mut val locals: Array[Local] = []
     pub mut val tmp: U64 = 0
     pub mut val giveTmp: U64 = 0
@@ -893,7 +893,7 @@ struct Cursor {
 }
 pub impl Cursor { factory }
 
-struct Comp {
+export struct Comp {
     // the shared IR arena: source bytes + every node table (see `Arena`). The
     // single owner of the program's data that all passes read; `c.arena.exprs`,
     // `c.arena.funcs`, `c.arena.bytes`, etc.
@@ -942,6 +942,9 @@ struct Comp {
 // synthesis.)
 
 pub impl Comp {
+    // memberwise factory: `<Comp />` default-constructs the shared IR; the frontend
+    // driver builds it in another module, so the factory must be public.
+    factory
     // Append a file's source bytes onto the arena's combined byte buffer (the loader
     // builds it incrementally: each file's bytes are appended before its items are
     // lowered, so original-offset name spans resolve into it).
@@ -973,6 +976,127 @@ pub impl Comp {
         val nid: U64 = intern(c: inout self, start: t.nameStart, len: t.nameLen)
         self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels siteOffset=t.siteOffset />)
         return id
+    }
+}
+
+// Public memberwise factories for the IR node vocabulary. Every analysis/codegen
+// pass lives in a different module and constructs these nodes (`<TypeRef …/>`,
+// `<Bind …/>`, `<StructDef …/>`, …), so the default-private memberwise factory
+// must be exposed. (The arena/table sub-structs above declare theirs inline.)
+pub impl PType { factory }
+pub impl TypeRef { factory }
+pub impl CaptureEntry { factory }
+pub impl Local { factory }
+pub impl TypeInfo { factory }
+pub impl MakeField { factory }
+pub impl Bind { factory }
+pub impl Arg { factory }
+pub impl MatchArm { factory }
+pub impl PatInfo { factory }
+pub impl Block { factory }
+pub impl Param { factory }
+pub impl FieldDef { factory }
+pub impl StructDef { factory }
+pub impl Variant { factory }
+pub impl TraitDef { factory }
+pub impl DeriveReq { factory }
+pub impl AssocBinding { factory }
+pub impl DefaultExt { factory }
+pub impl Conform { factory }
+pub impl MethodAlias { factory }
+pub impl FuncBound { factory }
+pub impl FnInst { factory }
+pub impl EnumDef { factory }
+pub impl Func { factory }
+pub impl Global { factory }
+pub impl NewtypeDef { factory }
+
+// ── name interner (Phase C) ──────────────────────────────────────────────────
+// The interner lives with the IR core: `Comp.pushType` interns every type head,
+// so the service must be reachable from inside this module (a back-edge to a pass
+// would be a cycle). `intern`/`spansEqual` are used pervasively by every pass and
+// are exported; `internHash`/`internGrow` are interner-internal.
+
+// Compare two name spans for byte equality against the shared source buffer.
+export fn spansEqual(c: inout Comp, aStart: U64, aLen: U64, bStart: U64, bLen: U64) -> Bool {
+    if aLen != bLen {
+        return false
+    }
+    mut val j: U64 = 0
+    while j < aLen {
+        if c.arena.bytes[aStart + j] != c.arena.bytes[bStart + j] {
+            return false
+        }
+        j += 1
+    }
+    return true
+}
+
+// FNV-1a hash of a name span (used to place spans into the bucket index).
+fn internHash(c: inout Comp, start: U64, len: U64) -> U64 {
+    mut val h: U64 = 14695981039346656037U64
+    mut val j: U64 = 0
+    while j < len {
+        h = h ^ (c.arena.bytes[start + j] as U64)
+        h = h.wrappingMul(by: 1099511628211U64)
+        j += 1
+    }
+    return h
+}
+
+// Grow the bucket index (double, or 8 from empty), re-placing every interned span
+// by re-hashing. The dense interner.starts/lens arrays are untouched (ids stay
+// stable). Capacity is a power of two so the slot index is a bitmask (& cap-1).
+fn internGrow(c: inout Comp) {
+    mut val newCap: U64 = 8
+    if c.interner.buckets.count > 0 {
+        newCap = c.interner.buckets.count * 2
+    }
+    mut val nb: Array[U64] = []
+    mut val k: U64 = 0
+    while k < newCap {
+        nb.append(value: 0)
+        k += 1
+    }
+    mut val i: U64 = 0
+    while i < c.interner.count {
+        val code: U64 = internHash(c: inout c, start: c.interner.starts[i], len: c.interner.lens[i])
+        mut val slot: U64 = code & (newCap - 1)
+        while nb[slot] != 0 {
+            slot = (slot + 1) & (newCap - 1)
+        }
+        nb.set(i: slot, value: i + 1)
+        i += 1
+    }
+    c.interner.buckets = nb
+}
+
+// Intern a name span to its stable 1-based id (equal content ⇒ equal id; 0 is
+// never returned, so a `nameId` field's default 0 is a pure "unfilled" sentinel).
+export fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
+    if c.interner.buckets.count == 0 {
+        internGrow(c: inout c)
+    } else {
+        if (c.interner.count + 1) * 4 > c.interner.buckets.count * 3 {
+            internGrow(c: inout c)
+        }
+    }
+    val code: U64 = internHash(c: inout c, start: start, len: len)
+    val cap: U64 = c.interner.buckets.count
+    mut val slot: U64 = code & (cap - 1)
+    while true {
+        val b: U64 = c.interner.buckets[slot]
+        if b == 0 {
+            c.interner.starts.append(value: start)
+            c.interner.lens.append(value: len)
+            c.interner.count += 1
+            c.interner.buckets.set(i: slot, value: c.interner.count)
+            return c.interner.count
+        }
+        if spansEqual(c: inout c, aStart: c.interner.starts[b - 1], aLen: c.interner.lens[b - 1], bStart: start, bLen: len) {
+            return b
+        }
+        slot = (slot + 1) & (cap - 1)
     }
 }
 

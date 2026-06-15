@@ -13,7 +13,7 @@
 
 **実装済みの主要能力の正典地図は [provisional.md](provisional.md)**（spec 章ごとに「✅＝完了／✅でない＝残作業」を列挙）。ここでは再掲しない。大物の経緯は git タグ。
 
-**計画中の大物＝コンパイラ構造リファクタ**（83 フィールドの `Comp` god-object 解体＋巨大ファイル分割＋モジュール化）＝[compiler-refactor.md](compiler-refactor.md)（診断・到達点・マイルストーン M0-M4・未検証リスク）。引数名/ラベルは [spec/04 規約](../spec/01-basics/04-functions.md#引数名とラベルの指針規約) に揃える。未着手（M0 probe から）。
+**進行中の大物＝コンパイラ構造リファクタ**（83 フィールドの `Comp` god-object 解体＋巨大ファイル分割＋モジュール化）＝[compiler-refactor.md](compiler-refactor.md)（診断・到達点・マイルストーン M0-M4・未検証リスク）。引数名/ラベルは [spec/04 規約](../spec/01-basics/04-functions.md#引数名とラベルの指針規約) に揃える。**M0〜M3＋M5 完了**（`Comp` 11 フィールド・巨大ファイル全分割・scoped resolution）。残り M4（モジュール昇格）に着手：**M4-1 完了＝IR をデータモジュール `Ir.pw` へ昇格**（旧 `Ast.pw`・コンパイラ自身が `import ./Ir` する初の cross-module 共有可変 `Comp`）。次＝Backend を独立モジュール化（M4-2）。
 
 ## 🎯 ゴール＝「3 大機能を除く spec 完全準拠」
 
