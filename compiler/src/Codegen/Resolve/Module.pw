@@ -20,6 +20,20 @@ fn moduleOf(c: inout Comp, offset: U64) -> U64 {
     return 0
 }
 
+// Whether a method is defined in the entry module (id 0), via the body's first
+// statement's principal-expr offset. A module-scope query (uses moduleOf), so it
+// lives with the front-end's module resolution rather than in the backend.
+fn methodInEntryModule(c: inout Comp, f: Func) -> Bool {
+    if f.body == 0U64 {
+        return false
+    }
+    val blk: Block = c.arena.blocks[f.body]
+    if blk.stmts.count == 0U64 {
+        return false
+    }
+    return moduleOf(c: inout c, offset: stmtPrincipalOffset(c: inout c, sid: blk.stmts[0])) == 0U64
+}
+
 // Whether (start,len) names an AMBIENT lang-item type (spec/15): one in scope without an
 // `import`. The authoritative ambient set IS @Std/Lang's export surface — there is no
 // hardcoded name list. A type is ambient iff @Std/Lang either DECLARES it (a struct/enum

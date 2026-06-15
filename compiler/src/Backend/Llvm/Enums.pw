@@ -17,21 +17,6 @@ fn enumRegSlot(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 {
     return st.enumIdxs.count
 }
 
-// The c.arena.enums index of the enum named (start,len), or c.arena.enums.count.
-fn enumIdxByName(c: inout Comp, start: U64, len: U64) -> U64 {
-    // an import alias (`with { Real as Alias }`) names the same enum as `Real` (spec/15).
-    val ar: Bind = aliasReal(c: inout c, start: start, len: len)
-    val q: U64 = intern(c: inout c, start: ar.nameStart, len: ar.nameLen)
-    mut val i: U64 = 0
-    while i < c.arena.enums.count {
-        if c.arena.enums[i].nameId == q {
-            return i
-        }
-        i += 1
-    }
-    return c.arena.enums.count
-}
-
 // How many i64 words a primitive field occupies in the enum payload area (String
 // is {ptr,i64} = 2; scalar/Bool = 1; a registered struct = sum of its fields).
 fn fieldWords(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> U64 {

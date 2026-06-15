@@ -263,19 +263,6 @@ fn stmtPrincipalOffset(c: inout Comp, sid: U64) -> U64 {
     }
 }
 
-// Whether a method is defined in the entry module (id 0), via the body's first
-// statement's principal-expr offset.
-fn methodInEntryModule(c: inout Comp, f: Func) -> Bool {
-    if f.body == 0U64 {
-        return false
-    }
-    val blk: Block = c.arena.blocks[f.body]
-    if blk.stmts.count == 0U64 {
-        return false
-    }
-    return moduleOf(c: inout c, offset: stmtPrincipalOffset(c: inout c, sid: blk.stmts[0])) == 0U64
-}
-
 // The LLVM type of a parameter: a pointer for an `inout` parameter (it receives
 // the caller's address and mutates in place), else the value type (array-aware).
 fn paramLlvmTy(c: inout Comp, st: inout LlvmCtx, p: Param) -> LLVMTypeRef {
