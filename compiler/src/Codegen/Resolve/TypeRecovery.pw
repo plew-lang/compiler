@@ -3,7 +3,7 @@
 
 // Check call args against a parameter list: arg count matches and every arg
 // carries its parameter's label in declaration order (spec: labels required).
-fn paramsLabelsOk(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bool {
+export fn paramsLabelsOk(c: inout Comp, params: Array[Param], args: Array[Arg]) -> Bool {
     if args.count > params.count {
         return false
     }
@@ -190,7 +190,7 @@ fn matchExhaustive(c: inout Comp, arms: Array[MatchArm]) -> Bool {
 }
 
 // Tag index of `Enum.Variant` (the variant's position in its enum declaration).
-fn variantIndex(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64) -> U64 {
+export fn variantIndex(c: inout Comp, enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64) -> U64 {
     // an import alias (`with { Real as Alias }`) names the same enum as `Real`, so its
     // variants share the real enum's tag indices (spec/15).
     val arE: Bind = aliasReal(c: inout c, start: enumStart, len: enumLen)
@@ -257,7 +257,7 @@ fn buildKwCache(c: inout Comp) {
 // Return a stable source span naming `kw`. O(1) lookup in the prebuilt cache; any
 // name not pre-cached falls back to a source scan (a len-0 Bind if absent, which
 // callers treat as "no span").
-fn kwSpan(c: inout Comp, kw: String, kwLen: U64) -> Bind {
+export fn kwSpan(c: inout Comp, kw: String, kwLen: U64) -> Bind {
     mut val ci: U64 = 0
     while ci < c.decls.kwCache.count {
         val e: Bind = c.decls.kwCache[ci]

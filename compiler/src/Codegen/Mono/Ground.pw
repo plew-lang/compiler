@@ -159,7 +159,7 @@ fn groundRecordStruct(c: inout Comp, ref: U64) -> U64 {
     return ref
 }
 
-fn groundTypeRef(c: inout Comp, ref: U64) -> U64 {
+export fn groundTypeRef(c: inout Comp, ref: U64) -> U64 {
     if ref >= c.arena.types.count {
         return ref
     }
@@ -218,7 +218,7 @@ fn groundUnderInst(c: inout Comp, instRef: U64, tyRef: U64) -> U64 {
 
 // Append a bare (no-args) TypeRef for a type name, returning its index. Used to
 // give `Self` a concrete TypeRef when the receiver is non-generic (no inst ref).
-fn simpleTypeRef(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
+export fn simpleTypeRef(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
     val noArgs: Array[U64] = []
     return c.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=noArgs />)
 }
@@ -244,7 +244,7 @@ fn assocItemRef(c: inout Comp, recvStart: U64, recvLen: U64) -> U64 {
 // = its concrete instantiation when generic, else 0). Self = the receiver type;
 // Item = its `type Item` binding, grounded under the instantiation so a generic
 // receiver's Item resolves to the concrete element. Pair with clearSelfItemEnv.
-fn setSelfItemEnv(c: inout Comp, recvStart: U64, recvLen: U64, recvInstRef: U64) {
+export fn setSelfItemEnv(c: inout Comp, recvStart: U64, recvLen: U64, recvInstRef: U64) {
     if recvInstRef != 0 {
         c.cur.selfRef = recvInstRef
     } else {
@@ -262,7 +262,7 @@ fn setSelfItemEnv(c: inout Comp, recvStart: U64, recvLen: U64, recvInstRef: U64)
     }
 }
 
-fn clearSelfItemEnv(c: inout Comp) {
+export fn clearSelfItemEnv(c: inout Comp) {
     c.cur.selfRef = 0
     c.cur.itemRef = 0
 }

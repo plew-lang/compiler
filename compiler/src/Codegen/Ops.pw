@@ -2,27 +2,27 @@
 // `kindCode(Kind)` (the lexer's stable token-kind number). These named accessors
 // are the single symbolic source for codegen comparisons — renumbering a token
 // in `kindCode` flows through here, so no bare magic numbers leak into codegen.
-fn opEq() -> I64 { return kindCode(k: <Kind.EqEq />) }
-fn opNe() -> I64 { return kindCode(k: <Kind.Ne />) }
-fn opLt() -> I64 { return kindCode(k: <Kind.Lt />) }
-fn opLe() -> I64 { return kindCode(k: <Kind.Le />) }
-fn opGt() -> I64 { return kindCode(k: <Kind.Gt />) }
-fn opGe() -> I64 { return kindCode(k: <Kind.Ge />) }
-fn opAdd() -> I64 { return kindCode(k: <Kind.Plus />) }
-fn opSub() -> I64 { return kindCode(k: <Kind.Minus />) }
-fn opMul() -> I64 { return kindCode(k: <Kind.Star />) }
-fn opDiv() -> I64 { return kindCode(k: <Kind.Slash />) }
-fn opRem() -> I64 { return kindCode(k: <Kind.Percent />) }
-fn opAnd() -> I64 { return kindCode(k: <Kind.AmpAmp />) }
-fn opOr() -> I64 { return kindCode(k: <Kind.PipePipe />) }
-fn opNot() -> I64 { return kindCode(k: <Kind.Bang />) }
-fn opBitAnd() -> I64 { return kindCode(k: <Kind.Amp />) }
-fn opBitOr() -> I64 { return kindCode(k: <Kind.Pipe />) }
-fn opBitXor() -> I64 { return kindCode(k: <Kind.Caret />) }
-fn opShl() -> I64 { return kindCode(k: <Kind.Shl />) }
-fn opShr() -> I64 { return kindCode(k: <Kind.Shr />) }
-fn opBitNot() -> I64 { return kindCode(k: <Kind.Tilde />) }
-fn opAssign() -> I64 { return kindCode(k: <Kind.Eq />) }
+export fn opEq() -> I64 { return kindCode(k: <Kind.EqEq />) }
+export fn opNe() -> I64 { return kindCode(k: <Kind.Ne />) }
+export fn opLt() -> I64 { return kindCode(k: <Kind.Lt />) }
+export fn opLe() -> I64 { return kindCode(k: <Kind.Le />) }
+export fn opGt() -> I64 { return kindCode(k: <Kind.Gt />) }
+export fn opGe() -> I64 { return kindCode(k: <Kind.Ge />) }
+export fn opAdd() -> I64 { return kindCode(k: <Kind.Plus />) }
+export fn opSub() -> I64 { return kindCode(k: <Kind.Minus />) }
+export fn opMul() -> I64 { return kindCode(k: <Kind.Star />) }
+export fn opDiv() -> I64 { return kindCode(k: <Kind.Slash />) }
+export fn opRem() -> I64 { return kindCode(k: <Kind.Percent />) }
+export fn opAnd() -> I64 { return kindCode(k: <Kind.AmpAmp />) }
+export fn opOr() -> I64 { return kindCode(k: <Kind.PipePipe />) }
+export fn opNot() -> I64 { return kindCode(k: <Kind.Bang />) }
+export fn opBitAnd() -> I64 { return kindCode(k: <Kind.Amp />) }
+export fn opBitOr() -> I64 { return kindCode(k: <Kind.Pipe />) }
+export fn opBitXor() -> I64 { return kindCode(k: <Kind.Caret />) }
+export fn opShl() -> I64 { return kindCode(k: <Kind.Shl />) }
+export fn opShr() -> I64 { return kindCode(k: <Kind.Shr />) }
+export fn opBitNot() -> I64 { return kindCode(k: <Kind.Tilde />) }
+export fn opAssign() -> I64 { return kindCode(k: <Kind.Eq />) }
 fn opAddAssign() -> I64 { return kindCode(k: <Kind.PlusEq />) }
 fn opSubAssign() -> I64 { return kindCode(k: <Kind.MinusEq />) }
 fn opMulAssign() -> I64 { return kindCode(k: <Kind.StarEq />) }
@@ -68,7 +68,7 @@ fn arithIntType(c: inout Comp, lhs: U64, rhs: U64) -> TypeInfo {
 // so `target OP= value` can desugar to `target = target OP value` and route the
 // `OP` through the operator-trait witness dispatch (spec/12). 0 is never returned
 // for a real compound op (the caller guards `op == opAssign()` first).
-fn compoundBinOp(op: I64) -> I64 {
+export fn compoundBinOp(op: I64) -> I64 {
     if op == opAddAssign() { return opAdd() }
     if op == opSubAssign() { return opSub() }
     if op == opMulAssign() { return opMul() }

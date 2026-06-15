@@ -200,7 +200,7 @@ fn registerChainFactoryInst(c: inout Comp, headStart: U64, headLen: U64, name: S
 
 // The c.arena.funcs index of an assoc fn `Head.name` (no self), by name only — used to
 // register a Chain factory instance whose type args can't be inferred from the call.
-fn findAssocByName(c: inout Comp, recvStart: U64, recvLen: U64, name: String) -> U64 {
+export fn findAssocByName(c: inout Comp, recvStart: U64, recvLen: U64, name: String) -> U64 {
     val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     val nm: Bind = internBytes(c: inout c, s: name)
     val qName: U64 = intern(c: inout c, start: nm.nameStart, len: nm.nameLen)

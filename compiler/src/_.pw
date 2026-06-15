@@ -1,42 +1,20 @@
-// The module root of the self-hosted Plew compiler. It `part`s the
-// backend-agnostic front-end (Ast / Parser / all Codegen analysis / Loader /
-// Driver) plus the LLVM emitter (Backend/Llvm); `main` runs `runFrontend()`
-// then `emitLlvm()`. The compiler links libLLVM (the emitter calls libLLVM-C)
-// and emits textual LLVM IR, which clang lowers to an object/executable.
+// The entry module of the self-hosted Plew compiler — thin orchestration only.
+// It imports the three layers it ties together: `./Ir` (the shared IR data),
+// `./Frontend` (`runFrontend` = load + analyze → `Comp`), and `./Backend`
+// (`emitLlvm` = lower the analyzed `Comp` to textual LLVM IR). `main` runs the
+// front-end then the backend; the module graph is a DAG: Ir ← Frontend ← Backend.
+// The compiler links libLLVM (the emitter calls libLLVM-C) and emits textual LLVM
+// IR, which clang lowers to an object/executable.
 //
 // Bootstrap from the checked-in IR seed: see bootstrap.sh. Fast in-place dev
 // rebuild (current compiler/plewc recompiles this source): see dev-rebuild.sh.
 //   compiler/plewc compiler/src/_.pw > out.ll
 //   clang out.ll <runtime> $(llvm-config --ldflags --libs core) -o compiler/plewc
 
-import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileBytes, eprint, fileExists }
-import @Std/Process with { argCount, argAt, exit }
-import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
-import @Std/Core with { stringFromBytesUnchecked, truncU8 }
-import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-// The compiler's own IR (the shared `Comp` arena + node vocabulary) lives in the
-// sibling data module `./Ir`; every analysis/codegen pass below is a `part` of this
-// root module, so this one import puts the IR types + interner in scope for all of
-// them. (Distinct from @Std/Syntax's parser AST — the `*Ast` value trees above.)
-import ./Ir with { PType, TypeRef, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, DefaultExt, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Comp, Expr, Stmt, intern, spansEqual }
-
-part ./Parser/Decl
-part ./Codegen/Emit
-part ./Codegen/Resolve
-part ./Codegen/Ops
-part ./Codegen/Check
-part ./Codegen/Expr
-part ./Codegen/Stmt
-part ./Codegen/Decl
-part ./Codegen/Mono
-part ./Codegen/Array
-part ./Codegen/Gen
-part ./Codegen/Verify
-part ./Codegen/Infer
-part ./Codegen/Lower
-part ./Codegen/Driver
-part ./Backend/Llvm
-part ./Loader
+import @Std/Process with { argCount, argAt }
+import ./Ir with { Comp }
+import ./Frontend with { runFrontend }
+import ./Backend with { emitLlvm, emitLlvmRuntime }
 
 fn main() {
     // `plewc --runtime` emits the companion C runtime the generated IR links

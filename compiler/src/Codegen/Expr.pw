@@ -17,7 +17,7 @@ fn isDictionaryType(c: inout Comp, ti: TypeInfo) -> Bool {
 // Does type (typeStart,typeLen) have a method named `name` (a receiver fn)? Used
 // to route a subscript `a[k]` to a user type's `Index.index` / `IndexSet.indexSet`
 // witness — a normal method, so the call is synthesized and dispatched as one.
-fn typeHasMethodNamed(c: inout Comp, typeStart: U64, typeLen: U64, name: String) -> Bool {
+export fn typeHasMethodNamed(c: inout Comp, typeStart: U64, typeLen: U64, name: String) -> Bool {
     val qRecv: U64 = intern(c: inout c, start: typeStart, len: typeLen)
     mut val i: U64 = 0
     while i < c.arena.funcs.count {
@@ -39,7 +39,7 @@ fn typeHasMethodNamed(c: inout Comp, typeStart: U64, typeLen: U64, name: String)
 // the normal generic-method dispatch (mangling, arg copy, inout self) instead of
 // re-implementing it. The label/method names are recovered from c.arena.bytes (the
 // Dictionary prelude source contains them).
-fn synthDictMethod(c: inout Comp, recv: U64, name: String, arg0Label: String, arg0: U64, hasArg1: Bool, arg1Label: String, arg1: U64) -> U64 {
+export fn synthDictMethod(c: inout Comp, recv: U64, name: String, arg0Label: String, arg0: U64, hasArg1: Bool, arg1Label: String, arg1: U64) -> U64 {
     val nm: Bind = kwSpan(c: inout c, kw: name, kwLen: name.bytes.count)
     val l0: Bind = kwSpan(c: inout c, kw: arg0Label, kwLen: arg0Label.bytes.count)
     mut val args: Array[Arg] = []

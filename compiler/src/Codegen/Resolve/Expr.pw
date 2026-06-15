@@ -37,7 +37,7 @@ fn calleeUnfilled() -> U64 {
 // args, spec/06), so the memo is sound and never cleared. A non-call id (or an id
 // past the table, i.e. a node synthesized after buildExprTyTable) resolves directly
 // without caching.
-fn resolvedCallee(c: inout Comp, id: U64) -> U64 {
+export fn resolvedCallee(c: inout Comp, id: U64) -> U64 {
     if id < c.typeCache.callee.count {
         if c.typeCache.callee[id] != calleeUnfilled() {
             return c.typeCache.callee[id]
@@ -98,7 +98,7 @@ fn exprIntCtxTypeInfo(c: inout Comp, id: U64) -> TypeInfo {
 // rewrite, set by registerChainResultInsts), or 0 if this node isn't one. Lets typeOf
 // / exprTypeRef recover a Chain stage's type without re-deriving it from the rewritten
 // match's internal bindings (needed for a nested `a?.x?.y`).
-fn chainResultRef(c: inout Comp, exprId: U64) -> U64 {
+export fn chainResultRef(c: inout Comp, exprId: U64) -> U64 {
     mut val i: U64 = 0
     while i < c.decls.chainResults.count {
         if c.decls.chainResults[i].nameStart == exprId {
@@ -109,7 +109,7 @@ fn chainResultRef(c: inout Comp, exprId: U64) -> U64 {
     return 0
 }
 
-fn typeOf(c: inout Comp, id: U64) -> TypeInfo {
+export fn typeOf(c: inout Comp, id: U64) -> TypeInfo {
     mut val t: TypeInfo = scalarInfo()
     if id < c.typeCache.kind.count {
         if c.typeCache.kind[id] == typeUnfilled() {

@@ -14,7 +14,7 @@ fn isGenericEnumInst(c: inout Comp, ref: U64) -> Bool {
 }
 
 // Structural equality of two TypeRefs (head span + args, recursively).
-fn typeRefEq(c: inout Comp, a: U64, b: U64) -> Bool {
+export fn typeRefEq(c: inout Comp, a: U64, b: U64) -> Bool {
     if a == b {
         return true
     }

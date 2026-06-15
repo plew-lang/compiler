@@ -243,7 +243,7 @@ fn aliasReal(c: inout Comp, start: U64, len: U64) -> Bind {
 // If `recv` is a bare identifier naming a type (not a local value), return that
 // type's name span as an assoc-fn receiver; else signal "not an assoc call" by
 // returning len 0. Used by call codegen/type recovery to route `Type.name(args)`.
-fn assocRecvName(c: inout Comp, recv: U64) -> Bind {
+export fn assocRecvName(c: inout Comp, recv: U64) -> Bind {
     match c.arena.exprs[recv] {
         Expr.Ident(val start, val len) => {
             if isSelfRef(c: inout c, start: start, len: len) {

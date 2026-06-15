@@ -2,7 +2,7 @@
 
 // Index in c.arena.structs of a generic struct named (nameStart,nameLen), or
 // c.arena.structs.count if there is no such generic struct.
-fn genericStructIndex(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
+export fn genericStructIndex(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
     val qId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = 0
     while i < c.arena.structs.count {
@@ -19,7 +19,7 @@ fn genericStructIndex(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
 
 // Index in c.arena.enums of a generic enum named (nameStart,nameLen), or c.arena.enums.count
 // if there is no such generic enum.
-fn genericEnumIndex(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
+export fn genericEnumIndex(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
     val qId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = 0
     while i < c.arena.enums.count {

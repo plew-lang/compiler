@@ -7,7 +7,7 @@
 // Build and return the fully-analyzed compiler arena: parse-driven module loading,
 // derive synthesis, all soundness/visibility checks, monomorphization discovery,
 // and the typed-AST cache. Backend-agnostic — no LLVM emission happens here.
-fn runFrontend() -> Comp {
+export fn runFrontend() -> Comp {
     // gen mode (spec/16): `plewc --gen <file>` synthesizes a derive-runner harness
     // instead of compiling the user program. The entry path then sits at argv[2].
     mut val genMode: Bool = false

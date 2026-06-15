@@ -3,7 +3,7 @@
 
 // Is `ref` a concrete generic instantiation (head names a generic struct OR
 // enum and it carries type arguments)?
-fn isGenericInst(c: inout Comp, ref: U64) -> Bool {
+export fn isGenericInst(c: inout Comp, ref: U64) -> Bool {
     if ref >= c.arena.types.count {
         return false
     }
@@ -29,7 +29,7 @@ fn isGenericInst(c: inout Comp, ref: U64) -> Bool {
 }
 
 // Is `ref` a function type (head `fn`, args = [return, params...])?
-fn isFnType(c: inout Comp, ref: U64) -> Bool {
+export fn isFnType(c: inout Comp, ref: U64) -> Bool {
     if ref >= c.arena.types.count {
         return false
     }
@@ -39,7 +39,7 @@ fn isFnType(c: inout Comp, ref: U64) -> Bool {
 
 // Is `ref` a `Ref[T]` instantiation? `Ref` is a blessed primitive (a shared
 // mutable heap box), lowered to a C `T*` — not a user struct/enum.
-fn isRefInst(c: inout Comp, ref: U64) -> Bool {
+export fn isRefInst(c: inout Comp, ref: U64) -> Bool {
     if ref >= c.arena.types.count {
         return false
     }
@@ -233,7 +233,7 @@ fn fieldReachesOwner(c: inout Comp, f: FieldDef, tStart: U64, tLen: U64, visited
 }
 
 // Codegen query: is field `f` stored boxed (behind a heap pointer)?
-fn fieldIsBoxed(c: inout Comp, f: FieldDef) -> Bool {
+export fn fieldIsBoxed(c: inout Comp, f: FieldDef) -> Bool {
     return containsU64(xs: c.monoWork.boxedFields, v: f.nameStart)
 }
 

@@ -211,7 +211,7 @@ fn genericEnumFieldTypeInfo(c: inout Comp, instRef: U64, variantStart: U64, vari
 // (A method on `impl[T] Box[T]`: hasRecv, head name matches, and every type
 // parameter is bound by the receiver's args — first cut excludes methods with
 // their own extra type parameters.)
-fn methodMatchesInst(c: inout Comp, f: Func, instRef: U64) -> Bool {
+export fn methodMatchesInst(c: inout Comp, f: Func, instRef: U64) -> Bool {
     if !(f.hasRecv) {
         return false
     }

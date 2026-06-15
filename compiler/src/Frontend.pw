@@ -1,0 +1,32 @@
+// @Frontend — the backend-agnostic front-end of the self-hosted Plew compiler:
+// parsing (Parser), all Codegen analysis (lower / resolve / check / infer / mono /
+// verify), the file Loader, and the Driver (`runFrontend` runs load → analyze and
+// returns the populated `Comp`). It `import`s the shared IR data module `./Ir` and
+// is imported by `./Backend` (which consumes its results) and the entry `_.pw`.
+//
+// These passes are deeply mutually recursive (resolution ↔ type recovery ↔ mono),
+// so they are one module split by `part` (spec/15 reason ②), not a DAG of imports.
+
+import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileBytes, eprint, fileExists }
+import @Std/Process with { argCount, argAt, exit }
+import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
+import @Std/Core with { stringFromBytesUnchecked, truncU8 }
+import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
+import ./Ir with { PType, TypeRef, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, DefaultExt, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Comp, Expr, Stmt, intern, spansEqual }
+
+part ./Parser/Decl
+part ./Codegen/Emit
+part ./Codegen/Resolve
+part ./Codegen/Ops
+part ./Codegen/Check
+part ./Codegen/Expr
+part ./Codegen/Stmt
+part ./Codegen/Decl
+part ./Codegen/Mono
+part ./Codegen/Array
+part ./Codegen/Gen
+part ./Codegen/Verify
+part ./Codegen/Infer
+part ./Codegen/Lower
+part ./Codegen/Driver
+part ./Loader

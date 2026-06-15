@@ -256,7 +256,7 @@ fn fieldVis(c: inout Comp, structStart: U64, structLen: U64, fieldStart: U64, fi
 // Whether type (recvStart,recvLen) has any method named (nameStart,nameLen),
 // regardless of signature. Used to reject method-value expressions `obj.method`
 // (spec/07: a method cannot be bound to a value — wrap it in a closure).
-fn typeHasMethodNamed(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
+export fn typeHasMethodNamed(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
     val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     mut val i: U64 = 0

@@ -22,7 +22,7 @@ fn isStringEq(c: inout Comp, op: I64, lhs: U64) -> Bool {
     return lt.kind == 1
 }
 
-fn isEnumName(c: inout Comp, start: U64, len: U64) -> Bool {
+export fn isEnumName(c: inout Comp, start: U64, len: U64) -> Bool {
     val qId: U64 = intern(c: inout c, start: start, len: len)
     mut val ei: U64 = 0
     while ei < c.arena.enums.count {
@@ -123,7 +123,7 @@ fn compareNeedsTrait(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
 // Index of an assoc fn named `name` on type (typeStart,typeLen), or c.arena.funcs.count.
 // (A by-name lookup for the operator witnesses Eq.eq / Ord.compare, which have a
 // single witness per type.)
-fn findAssocByName(c: inout Comp, typeStart: U64, typeLen: U64, name: String) -> U64 {
+export fn findAssocByName(c: inout Comp, typeStart: U64, typeLen: U64, name: String) -> U64 {
     val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
     mut val i: U64 = 0
     while i < c.arena.funcs.count {
@@ -182,7 +182,7 @@ fn eqWitnessReady(c: inout Comp, ti: TypeInfo) -> Bool {
 // Whether a binary op is a trait-dispatched operator (spec/12): arithmetic
 // (Add/Sub/Mul/Div/Rem) or bitwise/shift (BitAnd/BitOr/BitXor/Shl/Shr). Comparison
 // (Eq/Ord) and `&&`/`||`/`??` are handled separately.
-fn isBinTraitOp(op: I64) -> Bool {
+export fn isBinTraitOp(op: I64) -> Bool {
     if op == opAdd() { return true }
     if op == opSub() { return true }
     if op == opMul() { return true }
@@ -211,7 +211,7 @@ fn binTraitName(op: I64) -> String {
 }
 
 // The witness assoc-fn name for a binary op (`+` -> "add", `&` -> "bitand").
-fn binTraitMethodName(op: I64) -> String {
+export fn binTraitMethodName(op: I64) -> String {
     if op == opAdd() { return "add" }
     if op == opSub() { return "sub" }
     if op == opMul() { return "mul" }
@@ -355,7 +355,7 @@ fn binTraitNeedsTrait(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
     return false
 }
 
-fn unaryMethodName(op: I64) -> String {
+export fn unaryMethodName(op: I64) -> String {
     if op == opSub() { return "neg" }
     if op == opNot() { return "not" }
     return "bitnot"

@@ -20,7 +20,7 @@ fn digitStr(d: I64) -> String {
 // U64 digit (0-9) -> its glyph. A U64 twin of digitStr: with no implicit
 // conversions and `as` restricted to lossless, an I64 digitStr cannot serve a
 // U64 caller (U64->I64 is not lossless), so unsigned printing needs its own.
-fn digitStrU(d: U64) -> String {
+export fn digitStrU(d: U64) -> String {
     if d == 0 { return "0" }
     if d == 1 { return "1" }
     if d == 2 { return "2" }
@@ -43,7 +43,7 @@ fn eprintInt(n: I64) {
     eprint(text: digitStr(d: n % 10))
 }
 
-fn compileErrorAt(line: I64, msg: String) {
+export fn compileErrorAt(line: I64, msg: String) {
     eprint(text: "plewc: error: line ")
     eprintInt(n: line)
     eprint(text: ": ")
@@ -52,7 +52,7 @@ fn compileErrorAt(line: I64, msg: String) {
     exit(code: 1)
 }
 
-fn isPrimType(c: inout Comp, start: U64, len: U64) -> Bool {
+export fn isPrimType(c: inout Comp, start: U64, len: U64) -> Bool {
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I8") { return true }
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I16") { return true }
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I32") { return true }
@@ -68,14 +68,14 @@ fn isPrimType(c: inout Comp, start: U64, len: U64) -> Bool {
 }
 
 // Whether a type-name span names a float type (F32 / F64).
-fn isFloatType(c: inout Comp, start: U64, len: U64) -> Bool {
+export fn isFloatType(c: inout Comp, start: U64, len: U64) -> Bool {
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "F32") { return true }
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "F64") { return true }
     return false
 }
 
 // Whether a type-name span is one of the 8 integer types (excludes Bool/String).
-fn isIntType(c: inout Comp, start: U64, len: U64) -> Bool {
+export fn isIntType(c: inout Comp, start: U64, len: U64) -> Bool {
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I8") { return true }
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I16") { return true }
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I32") { return true }
@@ -221,7 +221,7 @@ fn arrayElemNameForRef(c: inout Comp, elemRef: U64) -> Bind {
 
 // If (start, len) names a `newtype` (spec/10), its underlying type's TypeRef; else 0.
 // Codegen resolves a newtype to its underlying for representation / method dispatch.
-fn newtypeUnderRef(c: inout Comp, start: U64, len: U64) -> U64 {
+export fn newtypeUnderRef(c: inout Comp, start: U64, len: U64) -> U64 {
     if c.arena.newtypes.count == 0U64 {
         return 0U64
     }
@@ -238,7 +238,7 @@ fn newtypeUnderRef(c: inout Comp, start: U64, len: U64) -> U64 {
 
 // The underlying type's head-name span for a `newtype` named (start, len), or the
 // input span unchanged when it is not a newtype.
-fn newtypeUnderName(c: inout Comp, start: U64, len: U64) -> Bind {
+export fn newtypeUnderName(c: inout Comp, start: U64, len: U64) -> Bind {
     if c.arena.newtypes.count != 0U64 {
         val nid: U64 = intern(c: inout c, start: start, len: len)
         mut val i: U64 = 0
@@ -255,7 +255,7 @@ fn newtypeUnderName(c: inout Comp, start: U64, len: U64) -> Bind {
 
 // 1-based source line for a byte offset (count newlines before it). For
 // diagnostics; works across the assembled multi-file buffer.
-fn lineOf(c: inout Comp, offset: U64) -> I64 {
+export fn lineOf(c: inout Comp, offset: U64) -> I64 {
     mut val line: I64 = 1
     mut val i: U64 = 0
     while i < offset {
@@ -269,7 +269,7 @@ fn lineOf(c: inout Comp, offset: U64) -> I64 {
 
 // Best-effort byte offset for an expression (for diagnostics). Leaf nodes with
 // a span return it; compound nodes recurse to a representative child.
-fn exprOffset(c: inout Comp, id: U64) -> U64 {
+export fn exprOffset(c: inout Comp, id: U64) -> U64 {
     val e: Expr = c.arena.exprs[id]
     match e {
         Expr.Int(value: _, val offset, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { return offset }

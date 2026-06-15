@@ -6,7 +6,7 @@
 // file + its `part` tree; each `import` target a separate one). A declaration's or
 // use's module is `moduleOf(its name offset)`. Returns 0 (the entry module) if no
 // range matches (e.g. synthetic spans appended after loading).
-fn moduleOf(c: inout Comp, offset: U64) -> U64 {
+export fn moduleOf(c: inout Comp, offset: U64) -> U64 {
     mut val i: U64 = 0
     while i < c.modules.ranges.count {
         val r: Bind = c.modules.ranges[i]
@@ -20,10 +20,29 @@ fn moduleOf(c: inout Comp, offset: U64) -> U64 {
     return 0
 }
 
+// The source offset of a statement's principal expression (which carries an
+// original-source offset, unlike re-interned decl names), for recovering the
+// defining module. Falls back to 0 (= module 0) for offsetless statements.
+fn stmtPrincipalOffset(c: inout Comp, sid: U64) -> U64 {
+    match c.arena.stmts[sid] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return exprOffset(c: inout c, id: init) }
+        Stmt.Assign(op: _, val target, value: _) => { return exprOffset(c: inout c, id: target) }
+        Stmt.ExprStmt(val expr) => { return exprOffset(c: inout c, id: expr) }
+        Stmt.Return(val value, val hasValue, offset: _) => { if hasValue { return exprOffset(c: inout c, id: value) } return 0U64 }
+        Stmt.If(val cond, thenBlk: _, elseBlk: _, hasElse: _) => { return exprOffset(c: inout c, id: cond) }
+        Stmt.While(val cond, body: _) => { return exprOffset(c: inout c, id: cond) }
+        Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, val iter, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => { return exprOffset(c: inout c, id: iter) }
+        Stmt.Match(val scrut, arms: _) => { return exprOffset(c: inout c, id: scrut) }
+        Stmt.Panic(msg: _, val offset) => { return offset }
+        Stmt.Give(val value) => { return exprOffset(c: inout c, id: value) }
+        _ => { return 0U64 }
+    }
+}
+
 // Whether a method is defined in the entry module (id 0), via the body's first
 // statement's principal-expr offset. A module-scope query (uses moduleOf), so it
 // lives with the front-end's module resolution rather than in the backend.
-fn methodInEntryModule(c: inout Comp, f: Func) -> Bool {
+export fn methodInEntryModule(c: inout Comp, f: Func) -> Bool {
     if f.body == 0U64 {
         return false
     }
@@ -174,7 +193,7 @@ fn nameVisibleFrom(c: inout Comp, useMod: U64, candStart: U64, candLen: U64) -> 
 // them the one whose selector (labels + arg types) matches the call is chosen.
 // `args` carries the call's labels/types. Returns the func index, or
 // c.arena.funcs.count (a U64 sentinel, no signed index) if none matches.
-fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+export fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     // Among candidates whose labels match, prefer the one whose parameter types
     // match the argument types (type-based overload). Fall back to the first label
     // match when none type-matches (or there is a single candidate). Resolution is
@@ -292,7 +311,7 @@ fn findFunc(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U6
 // Used where a bare function name is taken as a value (function pointer): there is
 // no call to pick an overload, so the first is used (overloaded fn-values are a
 // later concern).
-fn firstFuncByName(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
+export fn firstFuncByName(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
     val qId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = 0
     while i < c.arena.funcs.count {
@@ -373,7 +392,7 @@ fn isDefaultExt(c: inout Comp, typeId: U64, extId: U64) -> Bool {
     return false
 }
 
-fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+export fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     mut val firstLabel: U64 = c.arena.funcs.count
     mut val typeMatch: U64 = c.arena.funcs.count
     mut val typeMatch2: U64 = c.arena.funcs.count
@@ -456,7 +475,7 @@ fn findMethod(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameL
 // (Func.extId) or a trait (Func.srcTraitId of a provided-method copy). Covers both
 // `value#Ext.m()` (spec/09) and `a#P.foo()` provided-method disambiguation
 // (spec/08). Resolves overloads by labels + arg types. c.arena.funcs.count if none.
-fn findExtMethod(c: inout Comp, recvStart: U64, recvLen: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+export fn findExtMethod(c: inout Comp, recvStart: U64, recvLen: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     val qSrcId: U64 = intern(c: inout c, start: srcStart, len: srcLen)
     return findExtMethodById(c: inout c, recvStart: recvStart, recvLen: recvLen, srcId: qSrcId, nameStart: nameStart, nameLen: nameLen, args: args)
 }
@@ -464,7 +483,7 @@ fn findExtMethod(c: inout Comp, recvStart: U64, recvLen: U64, srcStart: U64, src
 // Whether some extension provides a method named (nameStart,nameLen) on type
 // (recvStart,recvLen) — used to give a helpful diagnostic when a bare call hits a
 // method that exists only as an extension method (spec/09).
-fn extMethodNameExists(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
+export fn extMethodNameExists(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
     val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     val qRecvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     mut val i: U64 = 0
@@ -488,7 +507,7 @@ fn extMethodNameExists(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U
 // as a multi-path inter-trait conformance witness (Func.viewOnly) — used to give a
 // helpful diagnostic when a bare call fails because the type reaches the trait
 // through more than one subject trait and must pick a path with `value#P` (spec/09).
-fn viewOnlyMethodExists(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
+export fn viewOnlyMethodExists(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
     val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     val qRecvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     mut val i: U64 = 0
@@ -510,7 +529,7 @@ fn viewOnlyMethodExists(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: 
 
 // As findExtMethod, but the source `#X` is already interned (e.g. a type's
 // viewExtId from a `Type#Ext`-typed value). Matches Func.extId or srcTraitId.
-fn findExtMethodById(c: inout Comp, recvStart: U64, recvLen: U64, srcId: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+export fn findExtMethodById(c: inout Comp, recvStart: U64, recvLen: U64, srcId: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     val qRecvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
     val qSrcId: U64 = srcId
@@ -542,7 +561,7 @@ fn findExtMethodById(c: inout Comp, recvStart: U64, recvLen: U64, srcId: U64, na
 // Index of the assoc fn named (nameStart,nameLen) on type (recvStart,recvLen),
 // resolving overloads by labels + arg types, or c.arena.funcs.count if none. An assoc
 // fn has hasRecv=false (no self) but recvStart/recvLen name its owning type.
-fn findAssoc(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+export fn findAssoc(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
     mut val firstLabel: U64 = c.arena.funcs.count
     mut val typeMatch: U64 = c.arena.funcs.count
     mut val typeMatch2: U64 = c.arena.funcs.count
@@ -673,7 +692,7 @@ fn typeRefHasFromFactory(c: inout Comp, errRef: U64) -> Bool {
 }
 
 // The func index of `from` factory on the type named by `errRef`, or c.arena.funcs.count.
-fn typeRefFromFactoryIdx(c: inout Comp, errRef: U64) -> U64 {
+export fn typeRefFromFactoryIdx(c: inout Comp, errRef: U64) -> U64 {
     if errRef >= c.arena.types.count {
         return c.arena.funcs.count
     }
@@ -697,7 +716,7 @@ fn typeRefFromFactoryIdx(c: inout Comp, errRef: U64) -> U64 {
 }
 
 // The Err type arg (index 1) of a Result type ref, or 0 if not a 2-arg Result ref.
-fn resultErrArgRef(c: inout Comp, ref: U64) -> U64 {
+export fn resultErrArgRef(c: inout Comp, ref: U64) -> U64 {
     if ref < c.arena.types.count {
         if c.arena.types[ref].args.count >= 2U64 {
             return c.arena.types[ref].args[1]

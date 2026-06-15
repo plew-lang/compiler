@@ -2,7 +2,7 @@
 // instance registration.
 
 // Whether c.arena.funcs[fi] is a generic free function (no receiver, has type params).
-fn isGenericFreeFn(c: inout Comp, fi: U64) -> Bool {
+export fn isGenericFreeFn(c: inout Comp, fi: U64) -> Bool {
     if fi >= c.arena.funcs.count {
         return false
     }
@@ -15,7 +15,7 @@ fn isGenericFreeFn(c: inout Comp, fi: U64) -> Bool {
 
 // Find a bare (argument-less) TypeRef named (start,len), or create one. Dedups
 // by name bytes so the same concrete type maps to one TypeRef for mangling.
-fn findOrAddTypeRef(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
+export fn findOrAddTypeRef(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
     val q: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     mut val i: U64 = 0
     while i < c.arena.types.count {
@@ -59,7 +59,7 @@ fn closureFnTypeRef(c: inout Comp, params: Array[Param], retTy: U64) -> U64 {
 // argument slots, returning the first binding found (0 if none). This generalizes
 // inference from "the parameter is the type variable" to "the variable appears
 // anywhere inside the parameter's type".
-fn unifyTypeParam(c: inout Comp, paramRef: U64, argRef: U64, tpStart: U64, tpLen: U64) -> U64 {
+export fn unifyTypeParam(c: inout Comp, paramRef: U64, argRef: U64, tpStart: U64, tpLen: U64) -> U64 {
     if paramRef >= c.arena.types.count {
         return 0
     }
@@ -162,7 +162,7 @@ fn argViewRef(c: inout Comp, argExpr: U64, baseRef: U64) -> U64 {
     }
 }
 
-fn inferFnArgs(c: inout Comp, f: Func, args: Array[Arg]) -> Array[U64] {
+export fn inferFnArgs(c: inout Comp, f: Func, args: Array[Arg]) -> Array[U64] {
     mut val out: Array[U64] = []
     mut val ti: U64 = 0
     while ti < f.typeParams.count {

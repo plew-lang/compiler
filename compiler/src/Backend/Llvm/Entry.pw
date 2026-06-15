@@ -4,7 +4,7 @@
 //
 // Build the module from the analyzed arena and print its IR. v1 emits the user's
 // `main` only (other functions / types arrive in later increments).
-fn emitLlvm(c: inout Comp) {
+export fn emitLlvm(c: inout Comp) {
     val ctx: LLVMContextRef = LLVMContextCreate()
     val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cstr(s: "plew"), ctx)
     val ptrty: LLVMTypeRef = LLVMPointerTypeInContext(ctx, 0U32)

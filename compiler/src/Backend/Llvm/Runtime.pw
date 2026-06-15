@@ -84,7 +84,7 @@ fn emitLlvmIntChecked() {
     wLlvmChecked(p: "u64", ct: "uint64_t", mn: "", sgn: false)
 }
 
-fn emitLlvmRuntime() {
+export fn emitLlvmRuntime() {
     write(s: "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdint.h>\n")
     write(s: "void plew_exit(long long code){ exit((int)code); }\n")
     write(s: "void plew_write_raw(const char* d, long long n){ fwrite(d,1,(size_t)n,stdout); }\n")
