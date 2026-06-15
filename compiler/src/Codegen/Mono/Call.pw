@@ -188,12 +188,12 @@ fn registerChainFactoryInst(c: inout Comp, headStart: U64, headLen: U64, name: S
     if fi >= c.arena.funcs.count {
         return
     }
-    if !(isGenericFreeFn(c: inout c, fi: fi)) {
+    if !(c.isGenericFreeFn(fi: fi)) {
         return
     }
     mut val fArgs: Array[U64] = []
     fArgs.append(value: uRef)
-    if !(fnInstExists(c: inout c, fnIdx: fi, args: fArgs)) {
+    if !(c.fnInstExists(fnIdx: fi, args: fArgs)) {
         c.monoWork.fnInsts.append(<FnInst fnIdx=fi args=fArgs />)
     }
 }
@@ -275,7 +275,7 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
                 scanExprInsts(c: inout c, exprId: args[i].expr)
                 i += 1
             }
-            registerCallInst(c: inout c, id: exprId, nameStart: nameStart, nameLen: nameLen, args: args)
+            c.registerCallInst(id: exprId, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
             scanExprInsts(c: inout c, exprId: recv)
@@ -295,10 +295,10 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
                 scanExprInsts(c: inout c, exprId: args[i].expr)
                 i += 1
             }
-            registerMethodInst(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+            c.registerMethodInst(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
             // an assoc-fn call `Type.make(args)` (type-name receiver): register its
             // monomorphized instance through the free-fn machinery (no self).
-            registerAssocInst(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+            c.registerAssocInst(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
             // register the call's result type: a combinator on a generic receiver
             // (`mapIter.filter(p)`) yields a new adapter instantiation
             // (`FilterIter[MapIter[…],…]`) that no field/signature scan reaches, so

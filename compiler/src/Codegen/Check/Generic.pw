@@ -6,601 +6,577 @@
 // `pub impl Trait { fn ... }` body, where Self's only members are the trait's
 // requirements (and provided methods / supertraits). Returns the trait's name id
 // via the receiver, so the capability check uses traitProvidesMember.
-fn isSelfTypeInProvided(c: inout Comp, start: U64, len: U64) -> Bool {
-    if c.cur.checkFn >= c.arena.funcs.count {
-        return false
-    }
-    val f: Func = c.arena.funcs[c.cur.checkFn]
-    if !(methodRecvIsTrait(c: inout c, f: f)) {
-        return false
-    }
-    return spansEqual(c: inout c, aStart: start, aLen: len, bStart: f.recvStart, bLen: f.recvLen)
-}
 
-// Whether (start,len) is a type parameter of function `fnIdx`.
-fn isTypeParamOf(c: inout Comp, fnIdx: U64, start: U64, len: U64) -> Bool {
-    if fnIdx >= c.arena.funcs.count {
-        return false
-    }
-    val tps: Array[Bind] = c.arena.funcs[fnIdx].typeParams
-    val qTp: U64 = intern(c: inout c, start: start, len: len)
-    mut val i: U64 = 0
-    while i < tps.count {
-        if tps[i].nameId == qTp {
-            return true
+pub impl Comp {
+    inout fn isSelfTypeInProvided(start: U64, len: U64) -> Bool {
+        if self.cur.checkFn >= self.arena.funcs.count {
+            return false
         }
-        i += 1
+        val f: Func = self.arena.funcs[self.cur.checkFn]
+        if !(methodRecvIsTrait(c: inout self, f: f)) {
+            return false
+        }
+        return spansEqual(c: inout self, aStart: start, aLen: len, bStart: f.recvStart, bLen: f.recvLen)
     }
-    return false
-}
 
-// Whether a trait (by interned name id) — or, transitively, one of its
-// supertraits (spec/08: `trait Sub: Super` means conforming to Sub guarantees
-// conforming to Super, so Super's members are callable through a `T: Sub` bound)
-// — provides a member named `qName` whose labels match `args`, as a requirement
-// (TraitDef.reqs) or a provided method (a fn with recv = the trait). `depth`
-// guards against a malformed cyclic inheritance chain.
-fn traitProvidesMember(c: inout Comp, traitNameId: U64, qName: U64, args: Array[Arg], depth: U64) -> Bool {
-    if depth > 64U64 {
+    inout fn isTypeParamOf(fnIdx: U64, start: U64, len: U64) -> Bool {
+        if fnIdx >= self.arena.funcs.count {
+            return false
+        }
+        val tps: Array[Bind] = self.arena.funcs[fnIdx].typeParams
+        val qTp: U64 = intern(c: inout self, start: start, len: len)
+        mut val i: U64 = 0
+        while i < tps.count {
+            if tps[i].nameId == qTp {
+                return true
+            }
+            i += 1
+        }
         return false
     }
-    mut val ti: U64 = 0
-    while ti < c.decls.traits.count {
-        val t: TraitDef = c.decls.traits[ti]
-        if t.nameId == traitNameId {
-            // requirement of this trait
-            mut val ri: U64 = 0
-            while ri < t.reqs.count {
-                val r: Func = t.reqs[ri]
-                if r.nameId == qName {
-                    if paramsLabelsOk(c: inout c, params: r.params, args: args) {
+
+    inout fn traitProvidesMember(traitNameId: U64, qName: U64, args: Array[Arg], depth: U64) -> Bool {
+        if depth > 64U64 {
+            return false
+        }
+        mut val ti: U64 = 0
+        while ti < self.decls.traits.count {
+            val t: TraitDef = self.decls.traits[ti]
+            if t.nameId == traitNameId {
+                // requirement of this trait
+                mut val ri: U64 = 0
+                while ri < t.reqs.count {
+                    val r: Func = t.reqs[ri]
+                    if r.nameId == qName {
+                        if paramsLabelsOk(c: inout self, params: r.params, args: args) {
+                            return true
+                        }
+                    }
+                    ri += 1
+                }
+                // recurse into supertraits (`trait Sub: Super + ...`)
+                mut val sti: U64 = 0
+                while sti < t.supertraits.count {
+                    val sup: Bind = t.supertraits[sti]
+                    val supId: U64 = intern(c: inout self, start: sup.nameStart, len: sup.nameLen)
+                    if self.traitProvidesMember(traitNameId: supId, qName: qName, args: args, depth: depth + 1U64) {
+                        return true
+                    }
+                    sti += 1
+                }
+            }
+            ti += 1
+        }
+        // provided method of this trait (a method with recv = the trait)
+        mut val gi: U64 = 0
+        while gi < self.arena.funcs.count {
+            val g: Func = self.arena.funcs[gi]
+            if g.hasRecv {
+                if g.recvId == traitNameId {
+                    if g.nameId == qName {
+                        if paramsLabelsOk(c: inout self, params: g.params, args: args) {
+                            return true
+                        }
+                    }
+                }
+            }
+            gi += 1
+        }
+        return false
+    }
+
+    inout fn boundProvidesMethod(fnIdx: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
+        val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        val qTp: U64 = intern(c: inout self, start: tpStart, len: tpLen)
+        mut val bi: U64 = 0
+        while bi < self.decls.funcBounds.count {
+            val fb: FuncBound = self.decls.funcBounds[bi]
+            if fb.fnIdx == fnIdx {
+                if fb.paramNameId == qTp {
+                    val qTrait: U64 = intern(c: inout self, start: fb.traitStart, len: fb.traitLen)
+                    if self.traitProvidesMember(traitNameId: qTrait, qName: qName, args: args, depth: 0U64) {
                         return true
                     }
                 }
-                ri += 1
             }
-            // recurse into supertraits (`trait Sub: Super + ...`)
-            mut val sti: U64 = 0
-            while sti < t.supertraits.count {
-                val sup: Bind = t.supertraits[sti]
-                val supId: U64 = intern(c: inout c, start: sup.nameStart, len: sup.nameLen)
-                if traitProvidesMember(c: inout c, traitNameId: supId, qName: qName, args: args, depth: depth + 1U64) {
-                    return true
-                }
-                sti += 1
-            }
+            bi += 1
         }
-        ti += 1
+        return false
     }
-    // provided method of this trait (a method with recv = the trait)
-    mut val gi: U64 = 0
-    while gi < c.arena.funcs.count {
-        val g: Func = c.arena.funcs[gi]
-        if g.hasRecv {
-            if g.recvId == traitNameId {
-                if g.nameId == qName {
-                    if paramsLabelsOk(c: inout c, params: g.params, args: args) {
+
+    inout fn boundHasTraitNamed(fnIdx: U64, tpStart: U64, tpLen: U64, traitName: String) -> Bool {
+        val qTp: U64 = intern(c: inout self, start: tpStart, len: tpLen)
+        mut val bi: U64 = 0
+        while bi < self.decls.funcBounds.count {
+            val fb: FuncBound = self.decls.funcBounds[bi]
+            if fb.fnIdx == fnIdx {
+                if fb.paramNameId == qTp {
+                    if rangeEquals(bytes: self.arena.bytes, start: fb.traitStart, len: fb.traitLen, kw: traitName) {
                         return true
                     }
                 }
             }
+            bi += 1
         }
-        gi += 1
+        return false
     }
-    return false
-}
 
-// Whether some `where`-bound trait of type parameter (tpStart,tpLen) on function
-// `fnIdx` provides a member named (nameStart,nameLen) whose labels match `args`
-// — as a requirement (TraitDef.reqs) or a provided method (recv = the trait),
-// including members inherited from the bound trait's supertraits.
-fn boundProvidesMethod(c: inout Comp, fnIdx: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
-    val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-    val qTp: U64 = intern(c: inout c, start: tpStart, len: tpLen)
-    mut val bi: U64 = 0
-    while bi < c.decls.funcBounds.count {
-        val fb: FuncBound = c.decls.funcBounds[bi]
-        if fb.fnIdx == fnIdx {
-            if fb.paramNameId == qTp {
-                val qTrait: U64 = intern(c: inout c, start: fb.traitStart, len: fb.traitLen)
-                if traitProvidesMember(c: inout c, traitNameId: qTrait, qName: qName, args: args, depth: 0U64) {
-                    return true
-                }
-            }
-        }
-        bi += 1
+    inout fn binOpTraitName(op: I64) -> String {
+        if op == opAdd() { return "Add" }
+        if op == opSub() { return "Sub" }
+        if op == opMul() { return "Mul" }
+        if op == opDiv() { return "Div" }
+        if op == opRem() { return "Rem" }
+        if op == opBitAnd() { return "BitAnd" }
+        if op == opBitOr() { return "BitOr" }
+        if op == opBitXor() { return "BitXor" }
+        if op == opShl() { return "Shl" }
+        if op == opShr() { return "Shr" }
+        return ""
     }
-    return false
-}
 
-// Whether type parameter (tpStart,tpLen) on `fnIdx` is bound by a trait named
-// `traitName` (for the Eq/Ord operator checks).
-fn boundHasTraitNamed(c: inout Comp, fnIdx: U64, tpStart: U64, tpLen: U64, traitName: String) -> Bool {
-    val qTp: U64 = intern(c: inout c, start: tpStart, len: tpLen)
-    mut val bi: U64 = 0
-    while bi < c.decls.funcBounds.count {
-        val fb: FuncBound = c.decls.funcBounds[bi]
-        if fb.fnIdx == fnIdx {
-            if fb.paramNameId == qTp {
-                if rangeEquals(bytes: c.arena.bytes, start: fb.traitStart, len: fb.traitLen, kw: traitName) {
-                    return true
-                }
-            }
-        }
-        bi += 1
+    inout fn unOpTraitName(op: I64) -> String {
+        if op == opSub() { return "Neg" }
+        if op == opNot() { return "Not" }
+        if op == opBitNot() { return "BitNot" }
+        return ""
     }
-    return false
-}
 
-// The operator-trait a binary arithmetic/bitwise/shift op desugars to (spec/12),
-// for the type-parameter bound check (`a + b` on a `T` value needs `where T: Add`).
-// Comparison (Eq/Ord) and `&&`/`||` (Bool control flow) are handled separately; ""
-// means "not an operator-trait binary".
-fn binOpTraitName(c: inout Comp, op: I64) -> String {
-    if op == opAdd() { return "Add" }
-    if op == opSub() { return "Sub" }
-    if op == opMul() { return "Mul" }
-    if op == opDiv() { return "Div" }
-    if op == opRem() { return "Rem" }
-    if op == opBitAnd() { return "BitAnd" }
-    if op == opBitOr() { return "BitOr" }
-    if op == opBitXor() { return "BitXor" }
-    if op == opShl() { return "Shl" }
-    if op == opShr() { return "Shr" }
-    return ""
-}
-
-// The operator-trait a unary op desugars to (spec/12): `-`=Neg, `!`=Not, `~`=BitNot.
-fn unOpTraitName(c: inout Comp, op: I64) -> String {
-    if op == opSub() { return "Neg" }
-    if op == opNot() { return "Not" }
-    if op == opBitNot() { return "BitNot" }
-    return ""
-}
-
-fn checkBoundsExpr(c: inout Comp, exprId: U64) {
-    match c.arena.exprs[exprId] {
-        Expr.Unary(val op, val operand) => {
-            checkBoundsExpr(c: inout c, exprId: operand)
-            // a unary operator on a type-parameter value needs the matching bound
-            // (`-x` -> `where T: Neg`, `!x` -> `: Not`, `~x` -> `: BitNot`). spec/12.
-            val ut: TypeInfo = exprType(c: inout c, id: operand)
-            if ut.kind == 2 {
-                if isTypeParamOf(c: inout c, fnIdx: c.cur.checkFn, start: ut.nameStart, len: ut.nameLen) {
-                    val need: String = unOpTraitName(c: inout c, op: op)
-                    if need.bytes.count != 0U64 {
-                        if !(boundHasTraitNamed(c: inout c, fnIdx: c.cur.checkFn, tpStart: ut.nameStart, tpLen: ut.nameLen, traitName: need)) {
-                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "this unary operator on a type parameter needs the matching bound (add `where T: Neg` / `: Not` / `: BitNot`) (spec/12)")
-                        }
-                    }
-                }
-            }
-        }
-        Expr.Binary(val op, val lhs, val rhs) => {
-            checkBoundsExpr(c: inout c, exprId: lhs)
-            checkBoundsExpr(c: inout c, exprId: rhs)
-            // concrete operand checks in a generic body (`1I64 + true`, `aT == 5I64`):
-            // the same binop type-check verifyProgram runs on non-generic bodies, but
-            // only for the USER's (entry-module) generic templates (std is trusted).
-            if c.cur.checkFn < c.arena.funcs.count {
-                if methodInEntryModule(c: inout c, f: c.arena.funcs[c.cur.checkFn]) {
-                    tcCheckBinop(c: inout c, op: op, lhs: lhs, rhs: rhs)
-                }
-            }
-            val lt: TypeInfo = exprType(c: inout c, id: lhs)
-            if lt.kind == 2 {
-                if isTypeParamOf(c: inout c, fnIdx: c.cur.checkFn, start: lt.nameStart, len: lt.nameLen) {
-                    mut val need: String = ""
-                    if op >= 50 {
-                        if op <= 55 {
-                            need = "Ord"
-                            if op == opEq() { need = "Eq" }
-                            if op == opNe() { need = "Eq" }
-                        }
-                    }
-                    // arithmetic / bitwise / shift desugar to their operator trait.
-                    if need.bytes.count == 0U64 {
-                        need = binOpTraitName(c: inout c, op: op)
-                    }
-                    if need.bytes.count != 0U64 {
-                        if !(boundHasTraitNamed(c: inout c, fnIdx: c.cur.checkFn, tpStart: lt.nameStart, tpLen: lt.nameLen, traitName: need)) {
-                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "this operator on a type parameter needs the matching bound (e.g. `where T: Add` for `+`, `: Eq`/`: Ord` for comparison) (spec/12)")
-                        }
-                    }
-                }
-            }
-        }
-        Expr.Call(val nameStart, val nameLen, val args) => {
-            mut val i: U64 = 0
-            while i < args.count {
-                checkBoundsExpr(c: inout c, exprId: args[i].expr)
-                i += 1
-            }
-            // a `T` value passed to a CONCRETE-typed parameter (`f(x: a)` where `a: T`
-            // and `f`'s `x: I64`) is a type error at the definition. The callee's own
-            // type parameter (`f[U](x: U)`) is lenient (typesCompatible — they unify).
-            val fi: U64 = resolvedCallee(c: inout c, id: exprId)
-            if fi < c.arena.funcs.count {
-                val ps: Array[Param] = c.arena.funcs[fi].params
-                mut val k: U64 = 0
-                while k < args.count {
-                    if k < ps.count {
-                        if !(ps[k].tyIsArray) {
-                            checkGenericTypeMatch(c: inout c, expectedRef: ps[k].ty, valueExpr: args[k].expr)
-                        }
-                    }
-                    k += 1
-                }
-            }
-        }
-        Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
-            checkBoundsExpr(c: inout c, exprId: recv)
-            mut val i: U64 = 0
-            while i < args.count {
-                checkBoundsExpr(c: inout c, exprId: args[i].expr)
-                i += 1
-            }
-        }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
-            checkBoundsExpr(c: inout c, exprId: recv)
-        }
-        Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-            checkBoundsExpr(c: inout c, exprId: recv)
-            mut val i: U64 = 0
-            while i < args.count {
-                checkBoundsExpr(c: inout c, exprId: args[i].expr)
-                i += 1
-            }
-            val rt: TypeInfo = exprType(c: inout c, id: recv)
-            if rt.kind == 2 {
-                if isTypeParamOf(c: inout c, fnIdx: c.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
-                    if !(boundProvidesMethod(c: inout c, fnIdx: c.cur.checkFn, tpStart: rt.nameStart, tpLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)) {
-                        compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
-                    }
-                } else {
-                    if isSelfTypeInProvided(c: inout c, start: rt.nameStart, len: rt.nameLen) {
-                        // a method call on `self` (Self) in a trait provided-method: Self's
-                        // members are only the trait's requirements / provided methods /
-                        // supertrait members (spec/08). Anything else is undefined on Self.
-                        val qm: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-                        val selfTraitId: U64 = intern(c: inout c, start: c.arena.funcs[c.cur.checkFn].recvStart, len: c.arena.funcs[c.cur.checkFn].recvLen)
-                        if !(traitProvidesMember(c: inout c, traitNameId: selfTraitId, qName: qm, args: args, depth: 0U64)) {
-                            compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "method not provided by this trait: a provided method's `self` (Self) can only use the trait's requirements / provided methods / supertrait members (spec/08)")
-                        }
-                    } else {
-                    // a CONCRETE-receiver method: a `T` value passed to a concrete-typed
-                    // parameter is a type error (`s.set(x: a)` where a: T, x: I64). A
-                    // generic-receiver method's grounded param types are handled by the
-                    // backend; here we check the non-generic-receiver case.
-                    if !(isGenericInst(c: inout c, ref: rt.ref)) {
-                        val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                        if mi != c.arena.funcs.count {
-                            val mps: Array[Param] = c.arena.funcs[mi].params
-                            mut val mk: U64 = 0
-                            while mk < args.count {
-                                if mk < mps.count {
-                                    if !(mps[mk].tyIsArray) {
-                                        checkGenericTypeMatch(c: inout c, expectedRef: mps[mk].ty, valueExpr: args[mk].expr)
-                                    }
-                                }
-                                mk += 1
+    inout fn checkBoundsExpr(exprId: U64) {
+        match self.arena.exprs[exprId] {
+            Expr.Unary(val op, val operand) => {
+                self.checkBoundsExpr(exprId: operand)
+                // a unary operator on a type-parameter value needs the matching bound
+                // (`-x` -> `where T: Neg`, `!x` -> `: Not`, `~x` -> `: BitNot`). spec/12.
+                val ut: TypeInfo = exprType(c: inout self, id: operand)
+                if ut.kind == 2 {
+                    if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: ut.nameStart, len: ut.nameLen) {
+                        val need: String = self.unOpTraitName(op: op)
+                        if need.bytes.count != 0U64 {
+                            if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: ut.nameStart, tpLen: ut.nameLen, traitName: need)) {
+                                compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: operand)), msg: "this unary operator on a type parameter needs the matching bound (add `where T: Neg` / `: Not` / `: BitNot`) (spec/12)")
                             }
                         }
                     }
+                }
+            }
+            Expr.Binary(val op, val lhs, val rhs) => {
+                self.checkBoundsExpr(exprId: lhs)
+                self.checkBoundsExpr(exprId: rhs)
+                // concrete operand checks in a generic body (`1I64 + true`, `aT == 5I64`):
+                // the same binop type-check verifyProgram runs on non-generic bodies, but
+                // only for the USER's (entry-module) generic templates (std is trusted).
+                if self.cur.checkFn < self.arena.funcs.count {
+                    if methodInEntryModule(c: inout self, f: self.arena.funcs[self.cur.checkFn]) {
+                        self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
+                    }
+                }
+                val lt: TypeInfo = exprType(c: inout self, id: lhs)
+                if lt.kind == 2 {
+                    if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: lt.nameStart, len: lt.nameLen) {
+                        mut val need: String = ""
+                        if op >= 50 {
+                            if op <= 55 {
+                                need = "Ord"
+                                if op == opEq() { need = "Eq" }
+                                if op == opNe() { need = "Eq" }
+                            }
+                        }
+                        // arithmetic / bitwise / shift desugar to their operator trait.
+                        if need.bytes.count == 0U64 {
+                            need = self.binOpTraitName(op: op)
+                        }
+                        if need.bytes.count != 0U64 {
+                            if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: lt.nameStart, tpLen: lt.nameLen, traitName: need)) {
+                                compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: lhs)), msg: "this operator on a type parameter needs the matching bound (e.g. `where T: Add` for `+`, `: Eq`/`: Ord` for comparison) (spec/12)")
+                            }
+                        }
                     }
                 }
             }
-        }
-        Expr.Field(val base, val nameStart, val nameLen) => {
-            checkBoundsExpr(c: inout c, exprId: base)
-            // a field access on a type-parameter value is invalid: `T` is opaque and
-            // traits declare methods, not fields, so a bound cannot grant a field
-            // (spec/06). `.count`/`.bytes` etc. on a `T` value have no meaning.
-            val bt: TypeInfo = exprType(c: inout c, id: base)
-            if bt.kind == 2 {
-                if isTypeParamOf(c: inout c, fnIdx: c.cur.checkFn, start: bt.nameStart, len: bt.nameLen) {
-                    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "field access on a type parameter: `T` is opaque (traits declare methods, not fields) — no bound can provide a field (spec/06)")
+            Expr.Call(val nameStart, val nameLen, val args) => {
+                mut val i: U64 = 0
+                while i < args.count {
+                    self.checkBoundsExpr(exprId: args[i].expr)
+                    i += 1
                 }
-            }
-        }
-        Expr.Index(val base, val index) => {
-            checkBoundsExpr(c: inout c, exprId: base)
-            checkBoundsExpr(c: inout c, exprId: index)
-            // `x[i]` on a type-parameter value needs `where T: Index` (spec/12: the
-            // subscript desugars to the Index trait).
-            val ibt: TypeInfo = exprType(c: inout c, id: base)
-            if ibt.kind == 2 {
-                if isTypeParamOf(c: inout c, fnIdx: c.cur.checkFn, start: ibt.nameStart, len: ibt.nameLen) {
-                    if !(boundHasTraitNamed(c: inout c, fnIdx: c.cur.checkFn, tpStart: ibt.nameStart, tpLen: ibt.nameLen, traitName: "Index")) {
-                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "subscript `[]` on a type parameter needs a `where T: Index` bound (spec/12)")
+                // a `T` value passed to a CONCRETE-typed parameter (`f(x: a)` where `a: T`
+                // and `f`'s `x: I64`) is a type error at the definition. The callee's own
+                // type parameter (`f[U](x: U)`) is lenient (typesCompatible — they unify).
+                val fi: U64 = resolvedCallee(c: inout self, id: exprId)
+                if fi < self.arena.funcs.count {
+                    val ps: Array[Param] = self.arena.funcs[fi].params
+                    mut val k: U64 = 0
+                    while k < args.count {
+                        if k < ps.count {
+                            if !(ps[k].tyIsArray) {
+                                self.checkGenericTypeMatch(expectedRef: ps[k].ty, valueExpr: args[k].expr)
+                            }
+                        }
+                        k += 1
                     }
                 }
             }
-        }
-        Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
-            mut val i: U64 = 0
-            while i < fields.count {
-                checkBoundsExpr(c: inout c, exprId: fields[i].value)
-                // a `T` value placed into a CONCRETE-typed field (`<S a=valueT/>` where
-                // S.a: I64) is a type error at the definition. The field type comes from
-                // the (concrete) owner decl; a generic owner's type-param field is lenient.
-                val ft: TypeInfo = makeFieldType(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: fields[i].nameStart, fieldLen: fields[i].nameLen)
-                if ft.nameLen > 0U64 {
-                    mut val fref: U64 = ft.ref
-                    if fref == 0U64 {
-                        fref = simpleTypeRef(c: inout c, nameStart: ft.nameStart, nameLen: ft.nameLen)
-                    }
-                    checkGenericTypeMatch(c: inout c, expectedRef: fref, valueExpr: fields[i].value)
+            Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+                self.checkBoundsExpr(exprId: recv)
+                mut val i: U64 = 0
+                while i < args.count {
+                    self.checkBoundsExpr(exprId: args[i].expr)
+                    i += 1
                 }
-                i += 1
             }
-        }
-        Expr.Array(val elems) => {
-            mut val i: U64 = 0
-            while i < elems.count {
-                checkBoundsExpr(c: inout c, exprId: elems[i])
-                i += 1
+            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
+                self.checkBoundsExpr(exprId: recv)
             }
-        }
-        Expr.Cast(val operand, val tyStart, val tyLen, val ty) => { checkBoundsExpr(c: inout c, exprId: operand) }
-        Expr.OptChain(val base, memberStart: _, memberLen: _) => { checkBoundsExpr(c: inout c, exprId: base) }
-        Expr.Try(val expr) => { checkBoundsExpr(c: inout c, exprId: expr) }
-        Expr.Arrow(val base, val nameStart, val nameLen) => { checkBoundsExpr(c: inout c, exprId: base) }
-        Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-            checkBoundsExpr(c: inout c, exprId: cond)
-            checkBoundsBlock(c: inout c, blkId: thenBlk)
-            checkBoundsBlock(c: inout c, blkId: elseBlk)
-        }
-        Expr.MatchExpr(val scrut, val arms) => {
-            checkBoundsExpr(c: inout c, exprId: scrut)
-            mut val ai: U64 = 0
-            while ai < arms.count {
-                val a: MatchArm = arms[ai]
-                val mark: U64 = scopeMark(c: inout c)
-                scanAddArmBinds(c: inout c, a: a, scrutTi: exprType(c: inout c, id: scrut))
-                checkBoundsBlock(c: inout c, blkId: a.body)
-                popLocals(c: inout c, mark: mark)
-                ai += 1
+            Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+                self.checkBoundsExpr(exprId: recv)
+                mut val i: U64 = 0
+                while i < args.count {
+                    self.checkBoundsExpr(exprId: args[i].expr)
+                    i += 1
+                }
+                val rt: TypeInfo = exprType(c: inout self, id: recv)
+                if rt.kind == 2 {
+                    if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
+                        if !(self.boundProvidesMethod(fnIdx: self.cur.checkFn, tpStart: rt.nameStart, tpLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)) {
+                            compileErrorAt(line: lineOf(c: inout self, offset: nameStart), msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
+                        }
+                    } else {
+                        if self.isSelfTypeInProvided(start: rt.nameStart, len: rt.nameLen) {
+                            // a method call on `self` (Self) in a trait provided-method: Self's
+                            // members are only the trait's requirements / provided methods /
+                            // supertrait members (spec/08). Anything else is undefined on Self.
+                            val qm: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+                            val selfTraitId: U64 = intern(c: inout self, start: self.arena.funcs[self.cur.checkFn].recvStart, len: self.arena.funcs[self.cur.checkFn].recvLen)
+                            if !(self.traitProvidesMember(traitNameId: selfTraitId, qName: qm, args: args, depth: 0U64)) {
+                                compileErrorAt(line: lineOf(c: inout self, offset: nameStart), msg: "method not provided by this trait: a provided method's `self` (Self) can only use the trait's requirements / provided methods / supertrait members (spec/08)")
+                            }
+                        } else {
+                        // a CONCRETE-receiver method: a `T` value passed to a concrete-typed
+                        // parameter is a type error (`s.set(x: a)` where a: T, x: I64). A
+                        // generic-receiver method's grounded param types are handled by the
+                        // backend; here we check the non-generic-receiver case.
+                        if !(isGenericInst(c: inout self, ref: rt.ref)) {
+                            val mi: U64 = findMethod(c: inout self, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                            if mi != self.arena.funcs.count {
+                                val mps: Array[Param] = self.arena.funcs[mi].params
+                                mut val mk: U64 = 0
+                                while mk < args.count {
+                                    if mk < mps.count {
+                                        if !(mps[mk].tyIsArray) {
+                                            self.checkGenericTypeMatch(expectedRef: mps[mk].ty, valueExpr: args[mk].expr)
+                                        }
+                                    }
+                                    mk += 1
+                                }
+                            }
+                        }
+                        }
+                    }
+                }
             }
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                self.checkBoundsExpr(exprId: base)
+                // a field access on a type-parameter value is invalid: `T` is opaque and
+                // traits declare methods, not fields, so a bound cannot grant a field
+                // (spec/06). `.count`/`.bytes` etself. on a `T` value have no meaning.
+                val bt: TypeInfo = exprType(c: inout self, id: base)
+                if bt.kind == 2 {
+                    if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: bt.nameStart, len: bt.nameLen) {
+                        compileErrorAt(line: lineOf(c: inout self, offset: nameStart), msg: "field access on a type parameter: `T` is opaque (traits declare methods, not fields) — no bound can provide a field (spec/06)")
+                    }
+                }
+            }
+            Expr.Index(val base, val index) => {
+                self.checkBoundsExpr(exprId: base)
+                self.checkBoundsExpr(exprId: index)
+                // `x[i]` on a type-parameter value needs `where T: Index` (spec/12: the
+                // subscript desugars to the Index trait).
+                val ibt: TypeInfo = exprType(c: inout self, id: base)
+                if ibt.kind == 2 {
+                    if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: ibt.nameStart, len: ibt.nameLen) {
+                        if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: ibt.nameStart, tpLen: ibt.nameLen, traitName: "Index")) {
+                            compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: base)), msg: "subscript `[]` on a type parameter needs a `where T: Index` bound (spec/12)")
+                        }
+                    }
+                }
+            }
+            Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
+                mut val i: U64 = 0
+                while i < fields.count {
+                    self.checkBoundsExpr(exprId: fields[i].value)
+                    // a `T` value placed into a CONCRETE-typed field (`<S a=valueT/>` where
+                    // S.a: I64) is a type error at the definition. The field type comes from
+                    // the (concrete) owner decl; a generic owner's type-param field is lenient.
+                    val ft: TypeInfo = makeFieldType(c: inout self, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: fields[i].nameStart, fieldLen: fields[i].nameLen)
+                    if ft.nameLen > 0U64 {
+                        mut val fref: U64 = ft.ref
+                        if fref == 0U64 {
+                            fref = simpleTypeRef(c: inout self, nameStart: ft.nameStart, nameLen: ft.nameLen)
+                        }
+                        self.checkGenericTypeMatch(expectedRef: fref, valueExpr: fields[i].value)
+                    }
+                    i += 1
+                }
+            }
+            Expr.Array(val elems) => {
+                mut val i: U64 = 0
+                while i < elems.count {
+                    self.checkBoundsExpr(exprId: elems[i])
+                    i += 1
+                }
+            }
+            Expr.Cast(val operand, val tyStart, val tyLen, val ty) => { self.checkBoundsExpr(exprId: operand) }
+            Expr.OptChain(val base, memberStart: _, memberLen: _) => { self.checkBoundsExpr(exprId: base) }
+            Expr.Try(val expr) => { self.checkBoundsExpr(exprId: expr) }
+            Expr.Arrow(val base, val nameStart, val nameLen) => { self.checkBoundsExpr(exprId: base) }
+            Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
+                self.checkBoundsExpr(exprId: cond)
+                self.checkBoundsBlock(blkId: thenBlk)
+                self.checkBoundsBlock(blkId: elseBlk)
+            }
+            Expr.MatchExpr(val scrut, val arms) => {
+                self.checkBoundsExpr(exprId: scrut)
+                mut val ai: U64 = 0
+                while ai < arms.count {
+                    val a: MatchArm = arms[ai]
+                    val mark: U64 = scopeMark(c: inout self)
+                    scanAddArmBinds(c: inout self, a: a, scrutTi: exprType(c: inout self, id: scrut))
+                    self.checkBoundsBlock(blkId: a.body)
+                    popLocals(c: inout self, mark: mark)
+                    ai += 1
+                }
+            }
+            Expr.Move(val operand, val isBorrow) => { self.checkBoundsExpr(exprId: operand) }
+            _ => {}
         }
-        Expr.Move(val operand, val isBorrow) => { checkBoundsExpr(c: inout c, exprId: operand) }
-        _ => {}
     }
-}
 
-// In a generic body, the value's type must match `expectedRef` under the abstract
-// rules (typesCompatible is strict on `curCheckFn`'s type parameters): a `T` value
-// flowing into a concrete (or different-parameter) position is rejected at the
-// DEFINITION (`return a` from `-> I64`, `val y: I64 = a`). spec/06.
-fn checkGenericTypeMatch(c: inout Comp, expectedRef: U64, valueExpr: U64) {
-    if expectedRef == 0U64 {
-        return
-    }
-    if c.cur.checkFn >= c.arena.funcs.count {
-        return
-    }
-    // only the USER's (entry-module) generic bodies are judged; std/prelude is
-    // trusted and validated separately (its array-element inferType quirks — e.g.
-    // `Array.get` reporting the result as `Array` not the element `T` — would
-    // false-positive here). Mirrors verifyProgram's entry-module gate.
-    if !(methodInEntryModule(c: inout c, f: c.arena.funcs[c.cur.checkFn])) {
-        return
-    }
-    // an untyped numeric literal cannot flow into a type parameter / Self: `val y: T = 5`
-    // is invalid — T is opaque, and no bound makes it numeric-literal-receptive (spec/06).
-    if expectedRef < c.arena.types.count {
-        if isTypeParamOf(c: inout c, fnIdx: c.cur.checkFn, start: c.arena.types[expectedRef].nameStart, len: c.arena.types[expectedRef].nameLen) || isSelfTypeInProvided(c: inout c, start: c.arena.types[expectedRef].nameStart, len: c.arena.types[expectedRef].nameLen) {
-            match c.arena.exprs[valueExpr] {
-                Expr.Int(value: _, offset: _, val isBool, tyStart: _, val tyLen, isNeg: _) => {
-                    if !(isBool) {
-                        if tyLen == 0U64 {
-                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueExpr)), msg: "cannot assign a literal to a type parameter: it is an opaque type with no numeric bound (spec/06)")
+    inout fn checkGenericTypeMatch(expectedRef: U64, valueExpr: U64) {
+        if expectedRef == 0U64 {
+            return
+        }
+        if self.cur.checkFn >= self.arena.funcs.count {
+            return
+        }
+        // only the USER's (entry-module) generic bodies are judged; std/prelude is
+        // trusted and validated separately (its array-element inferType quirks — e.g.
+        // `Array.get` reporting the result as `Array` not the element `T` — would
+        // false-positive here). Mirrors verifyProgram's entry-module gate.
+        if !(methodInEntryModule(c: inout self, f: self.arena.funcs[self.cur.checkFn])) {
+            return
+        }
+        // an untyped numeric literal cannot flow into a type parameter / Self: `val y: T = 5`
+        // is invalid — T is opaque, and no bound makes it numeric-literal-receptive (spec/06).
+        if expectedRef < self.arena.types.count {
+            if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: self.arena.types[expectedRef].nameStart, len: self.arena.types[expectedRef].nameLen) || self.isSelfTypeInProvided(start: self.arena.types[expectedRef].nameStart, len: self.arena.types[expectedRef].nameLen) {
+                match self.arena.exprs[valueExpr] {
+                    Expr.Int(value: _, offset: _, val isBool, tyStart: _, val tyLen, isNeg: _) => {
+                        if !(isBool) {
+                            if tyLen == 0U64 {
+                                compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: valueExpr)), msg: "cannot assign a literal to a type parameter: it is an opaque type with no numeric bound (spec/06)")
+                            }
                         }
                     }
-                }
-                Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => {
-                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueExpr)), msg: "cannot assign a literal to a type parameter: it is an opaque type with no numeric bound (spec/06)")
-                }
-                _ => {}
-            }
-        }
-    }
-    // a value-position if/match: each branch's `give` value must match the expected
-    // type (`val x: I64 = if c { give a } else { give b }` with a: T).
-    match c.arena.exprs[valueExpr] {
-        Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
-            val tv: U64 = tcBlockGiveValue(c: inout c, blockId: thenBlk)
-            if tv != 0U64 {
-                checkGenericTypeMatch(c: inout c, expectedRef: expectedRef, valueExpr: tv)
-            }
-            val ev: U64 = tcBlockGiveValue(c: inout c, blockId: elseBlk)
-            if ev != 0U64 {
-                checkGenericTypeMatch(c: inout c, expectedRef: expectedRef, valueExpr: ev)
-            }
-        }
-        Expr.MatchExpr(scrut: _, val arms) => {
-            mut val ai: U64 = 0
-            while ai < arms.count {
-                if !(arms[ai].isDiverge) {
-                    if arms[ai].binds.count == 0U64 {
-                        val g: U64 = c.blockGiveExpr(blkId: arms[ai].body)
-                        if g < c.arena.exprs.count {
-                            checkGenericTypeMatch(c: inout c, expectedRef: expectedRef, valueExpr: g)
-                        }
-                    }
-                }
-                ai += 1
-            }
-        }
-        _ => {}
-    }
-    // an array literal in an `Array[E]` position: recurse element-wise (inferType
-    // reports an array literal as unknown, so check each element against E).
-    if expectedRef < c.arena.types.count {
-        if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[expectedRef].nameStart, len: c.arena.types[expectedRef].nameLen, kw: "Array") {
-            if c.arena.types[expectedRef].args.count > 0U64 {
-                match c.arena.exprs[valueExpr] {
-                    Expr.Array(val elems) => {
-                        val elemRef: U64 = c.arena.types[expectedRef].args[0]
-                        mut val ei: U64 = 0
-                        while ei < elems.count {
-                            checkGenericTypeMatch(c: inout c, expectedRef: elemRef, valueExpr: elems[ei])
-                            ei += 1
-                        }
-                        return
+                    Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => {
+                        compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: valueExpr)), msg: "cannot assign a literal to a type parameter: it is an opaque type with no numeric bound (spec/06)")
                     }
                     _ => {}
                 }
             }
         }
-    }
-    val inferred: U64 = c.inferType(id: valueExpr)
-    if !(c.typesCompatible(expected: expectedRef, inferred: inferred)) {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueExpr)), msg: "type mismatch in a generic body: a type parameter is a distinct opaque type, not the type required here (spec/06)")
-    }
-}
-
-fn checkBoundsStmt(c: inout Comp, stmtId: U64) {
-    match c.arena.stmts[stmtId] {
-        Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
-            checkBoundsExpr(c: inout c, exprId: init)
-            if tyLen > 0U64 {
-                // checkGenericTypeMatch recurses into an array literal against Array[E].
-                checkGenericTypeMatch(c: inout c, expectedRef: ty, valueExpr: init)
-            }
-            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
-        }
-        Stmt.Assign(val op, val target, val value) => {
-            checkBoundsExpr(c: inout c, exprId: target)
-            checkBoundsExpr(c: inout c, exprId: value)
-            // the assigned value must match the place's type (`x = a` / `x += a` where
-            // x: I64 and a: T is a type error). The place type is inferType(target).
-            checkGenericTypeMatch(c: inout c, expectedRef: c.inferType(id: target), valueExpr: value)
-        }
-        Stmt.ExprStmt(val expr) => { checkBoundsExpr(c: inout c, exprId: expr) }
-        Stmt.Return(val value, val hasValue, offset: _) => {
-            if hasValue {
-                checkBoundsExpr(c: inout c, exprId: value)
-                if c.cur.checkFn < c.arena.funcs.count {
-                    checkGenericTypeMatch(c: inout c, expectedRef: c.arena.funcs[c.cur.checkFn].retTy, valueExpr: value)
+        // a value-position if/match: each branch's `give` value must match the expected
+        // type (`val x: I64 = if c { give a } else { give b }` with a: T).
+        match self.arena.exprs[valueExpr] {
+            Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
+                val tv: U64 = self.tcBlockGiveValue(blockId: thenBlk)
+                if tv != 0U64 {
+                    self.checkGenericTypeMatch(expectedRef: expectedRef, valueExpr: tv)
+                }
+                val ev: U64 = self.tcBlockGiveValue(blockId: elseBlk)
+                if ev != 0U64 {
+                    self.checkGenericTypeMatch(expectedRef: expectedRef, valueExpr: ev)
                 }
             }
-        }
-        Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
-            checkBoundsExpr(c: inout c, exprId: cond)
-            checkBoundsBlock(c: inout c, blkId: thenBlk)
-            if hasElse {
-                checkBoundsBlock(c: inout c, blkId: elseBlk)
+            Expr.MatchExpr(scrut: _, val arms) => {
+                mut val ai: U64 = 0
+                while ai < arms.count {
+                    if !(arms[ai].isDiverge) {
+                        if arms[ai].binds.count == 0U64 {
+                            val g: U64 = self.blockGiveExpr(blkId: arms[ai].body)
+                            if g < self.arena.exprs.count {
+                                self.checkGenericTypeMatch(expectedRef: expectedRef, valueExpr: g)
+                            }
+                        }
+                    }
+                    ai += 1
+                }
             }
+            _ => {}
         }
-        Stmt.While(val cond, val body) => {
-            checkBoundsExpr(c: inout c, exprId: cond)
-            checkBoundsBlock(c: inout c, blkId: body)
-        }
-        Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
-            val forMark: U64 = scopeMark(c: inout c)
-            checkBoundsExpr(c: inout c, exprId: iter)
-            if isRange {
-                checkBoundsExpr(c: inout c, exprId: rangeHi)
-                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
-            } else {
-                val et: TypeInfo = exprType(c: inout c, id: iter)
-                if isStruct {
-                    addForStructBinds(c: inout c, et: et, binds: binds)
-                } else {
-                    if et.kind == 3 {
-                        addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
-                    } else {
-                        // a general Iterable: the loop var is the iterator's Item type.
-                        val elemTi: TypeInfo = c.iterableItemInfo(et: et)
-                        addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
+        // an array literal in an `Array[E]` position: recurse element-wise (inferType
+        // reports an array literal as unknown, so check each element against E).
+        if expectedRef < self.arena.types.count {
+            if rangeEquals(bytes: self.arena.bytes, start: self.arena.types[expectedRef].nameStart, len: self.arena.types[expectedRef].nameLen, kw: "Array") {
+                if self.arena.types[expectedRef].args.count > 0U64 {
+                    match self.arena.exprs[valueExpr] {
+                        Expr.Array(val elems) => {
+                            val elemRef: U64 = self.arena.types[expectedRef].args[0]
+                            mut val ei: U64 = 0
+                            while ei < elems.count {
+                                self.checkGenericTypeMatch(expectedRef: elemRef, valueExpr: elems[ei])
+                                ei += 1
+                            }
+                            return
+                        }
+                        _ => {}
                     }
                 }
             }
-            checkBoundsBlock(c: inout c, blkId: body)
-            popLocals(c: inout c, mark: forMark)
         }
-        Stmt.Match(val scrut, val arms) => {
-            checkBoundsExpr(c: inout c, exprId: scrut)
-            mut val ai: U64 = 0
-            while ai < arms.count {
-                val a: MatchArm = arms[ai]
-                val mark: U64 = scopeMark(c: inout c)
-                scanAddArmBinds(c: inout c, a: a, scrutTi: exprType(c: inout c, id: scrut))
-                checkBoundsBlock(c: inout c, blkId: a.body)
-                popLocals(c: inout c, mark: mark)
-                ai += 1
+        val inferred: U64 = self.inferType(id: valueExpr)
+        if !(self.typesCompatible(expected: expectedRef, inferred: inferred)) {
+            compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: valueExpr)), msg: "type mismatch in a generic body: a type parameter is a distinct opaque type, not the type required here (spec/06)")
+        }
+    }
+
+    inout fn checkBoundsStmt(stmtId: U64) {
+        match self.arena.stmts[stmtId] {
+            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+                self.checkBoundsExpr(exprId: init)
+                if tyLen > 0U64 {
+                    // checkGenericTypeMatch recurses into an array literal against Array[E].
+                    self.checkGenericTypeMatch(expectedRef: ty, valueExpr: init)
+                }
+                addLocal(c: inout self, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
             }
+            Stmt.Assign(val op, val target, val value) => {
+                self.checkBoundsExpr(exprId: target)
+                self.checkBoundsExpr(exprId: value)
+                // the assigned value must match the place's type (`x = a` / `x += a` where
+                // x: I64 and a: T is a type error). The place type is inferType(target).
+                self.checkGenericTypeMatch(expectedRef: self.inferType(id: target), valueExpr: value)
+            }
+            Stmt.ExprStmt(val expr) => { self.checkBoundsExpr(exprId: expr) }
+            Stmt.Return(val value, val hasValue, offset: _) => {
+                if hasValue {
+                    self.checkBoundsExpr(exprId: value)
+                    if self.cur.checkFn < self.arena.funcs.count {
+                        self.checkGenericTypeMatch(expectedRef: self.arena.funcs[self.cur.checkFn].retTy, valueExpr: value)
+                    }
+                }
+            }
+            Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
+                self.checkBoundsExpr(exprId: cond)
+                self.checkBoundsBlock(blkId: thenBlk)
+                if hasElse {
+                    self.checkBoundsBlock(blkId: elseBlk)
+                }
+            }
+            Stmt.While(val cond, val body) => {
+                self.checkBoundsExpr(exprId: cond)
+                self.checkBoundsBlock(blkId: body)
+            }
+            Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
+                val forMark: U64 = scopeMark(c: inout self)
+                self.checkBoundsExpr(exprId: iter)
+                if isRange {
+                    self.checkBoundsExpr(exprId: rangeHi)
+                    addLocal(c: inout self, nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                } else {
+                    val et: TypeInfo = exprType(c: inout self, id: iter)
+                    if isStruct {
+                        addForStructBinds(c: inout self, et: et, binds: binds)
+                    } else {
+                        if et.kind == 3 {
+                            addLocal(c: inout self, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                        } else {
+                            // a general Iterable: the loop var is the iterator's Item type.
+                            val elemTi: TypeInfo = self.iterableItemInfo(et: et)
+                            addLocal(c: inout self, nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
+                        }
+                    }
+                }
+                self.checkBoundsBlock(blkId: body)
+                popLocals(c: inout self, mark: forMark)
+            }
+            Stmt.Match(val scrut, val arms) => {
+                self.checkBoundsExpr(exprId: scrut)
+                mut val ai: U64 = 0
+                while ai < arms.count {
+                    val a: MatchArm = arms[ai]
+                    val mark: U64 = scopeMark(c: inout self)
+                    scanAddArmBinds(c: inout self, a: a, scrutTi: exprType(c: inout self, id: scrut))
+                    self.checkBoundsBlock(blkId: a.body)
+                    popLocals(c: inout self, mark: mark)
+                    ai += 1
+                }
+            }
+            Stmt.Panic(val msg, val offset) => { self.checkBoundsExpr(exprId: msg) }
+            Stmt.Give(val value) => { self.checkBoundsExpr(exprId: value) }
+            Stmt.Break(offset: _) => {}
+            Stmt.Continue(offset: _) => {}
         }
-        Stmt.Panic(val msg, val offset) => { checkBoundsExpr(c: inout c, exprId: msg) }
-        Stmt.Give(val value) => { checkBoundsExpr(c: inout c, exprId: value) }
-        Stmt.Break(offset: _) => {}
-        Stmt.Continue(offset: _) => {}
     }
-}
 
-fn checkBoundsBlock(c: inout Comp, blkId: U64) {
-    val mark: U64 = scopeMark(c: inout c)
-    val stmts: Array[U64] = c.arena.blocks[blkId].stmts
-    mut val i: U64 = 0
-    while i < stmts.count {
-        checkBoundsStmt(c: inout c, stmtId: stmts[i])
-        i += 1
-    }
-    popLocals(c: inout c, mark: mark)
-}
-
-// Eager type-check every generic template body (#9): a method/operator on a
-// type-parameter-typed value must be provided by that parameter's `where`
-// bounds. Runs once per template, with no concrete env (so a type-parameter
-// local reports as its abstract name). Does not emit C (a validation pass).
-fn checkGenericBodies(c: inout Comp) {
-    mut val fi: U64 = 0
-    while fi < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[fi]
-        // skip extern fns: they have no body (`body == 0` is a sentinel, not a real
-        // block). Generic externs like `arrayPush[T]` would otherwise have block 0
-        // (some unrelated function's body) walked under their own bound-less type
-        // params, mis-flagging method calls inside it.
-        // walk generic templates (any module — bound checks), and ENTRY-MODULE trait
-        // provided-method templates (`pub impl Trait { fn m() {...} }` — Self abstract):
-        // a dead provided method (no conforming type, so no concrete copy is verified)
-        // would otherwise escape all checks. std's provided methods (iterator
-        // combinators) are trusted and not walked here.
-        mut val shouldCheck: Bool = false
-        if f.typeParams.count > 0 {
-            shouldCheck = true
+    inout fn checkBoundsBlock(blkId: U64) {
+        val mark: U64 = scopeMark(c: inout self)
+        val stmts: Array[U64] = self.arena.blocks[blkId].stmts
+        mut val i: U64 = 0
+        while i < stmts.count {
+            self.checkBoundsStmt(stmtId: stmts[i])
+            i += 1
         }
-        if methodRecvIsTrait(c: inout c, f: f) {
-            if methodInEntryModule(c: inout c, f: f) {
+        popLocals(c: inout self, mark: mark)
+    }
+
+    inout fn checkGenericBodies() {
+        mut val fi: U64 = 0
+        while fi < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[fi]
+            // skip extern fns: they have no body (`body == 0` is a sentinel, not a real
+            // block). Generic externs like `arrayPush[T]` would otherwise have block 0
+            // (some unrelated function's body) walked under their own bound-less type
+            // params, mis-flagging method calls inside it.
+            // walk generic templates (any module — bound checks), and ENTRY-MODULE trait
+            // provided-method templates (`pub impl Trait { fn m() {...} }` — Self abstract):
+            // a dead provided method (no conforming type, so no concrete copy is verified)
+            // would otherwise escape all checks. std's provided methods (iterator
+            // combinators) are trusted and not walked here.
+            mut val shouldCheck: Bool = false
+            if f.typeParams.count > 0 {
                 shouldCheck = true
             }
-        }
-        if shouldCheck && !f.isExtern {
-            val noParams: Array[Bind] = []
-            val noArgs: Array[U64] = []
-            c.cur.locals = []
-            seedGlobalLocals(c: inout c)
-            c.cur.hasRecv = f.hasRecv
-            c.cur.recvStart = f.recvStart
-            c.cur.recvLen = f.recvLen
-            c.cur.selfInout = f.selfInout
-            c.cur.recvInstRef = 0
-            c.cur.typeParams = noParams
-            c.cur.typeArgs = noArgs
-            c.cur.checkFn = fi
-            mut val pi: U64 = 0
-            while pi < f.params.count {
-                val p: Param = f.params[pi]
-                addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
-                pi += 1
+            if methodRecvIsTrait(c: inout self, f: f) {
+                if methodInEntryModule(c: inout self, f: f) {
+                    shouldCheck = true
+                }
             }
-            checkBoundsBlock(c: inout c, blkId: f.body)
+            if shouldCheck && !f.isExtern {
+                val noParams: Array[Bind] = []
+                val noArgs: Array[U64] = []
+                self.cur.locals = []
+                seedGlobalLocals(c: inout self)
+                self.cur.hasRecv = f.hasRecv
+                self.cur.recvStart = f.recvStart
+                self.cur.recvLen = f.recvLen
+                self.cur.selfInout = f.selfInout
+                self.cur.recvInstRef = 0
+                self.cur.typeParams = noParams
+                self.cur.typeArgs = noArgs
+                self.cur.checkFn = fi
+                mut val pi: U64 = 0
+                while pi < f.params.count {
+                    val p: Param = f.params[pi]
+                    addLocal(c: inout self, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
+                    pi += 1
+                }
+                self.checkBoundsBlock(blkId: f.body)
+            }
+            fi += 1
         }
-        fi += 1
+        self.cur.locals = []
+        self.cur.hasRecv = false
+        self.cur.checkFn = self.arena.funcs.count
     }
-    c.cur.locals = []
-    c.cur.hasRecv = false
-    c.cur.checkFn = c.arena.funcs.count
 }
-

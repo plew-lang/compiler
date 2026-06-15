@@ -40,7 +40,7 @@ fn methodOwnArgs(c: inout Comp, mfi: U64, instRef: U64, args: Array[Arg]) -> Arr
     if mf.typeParams.count <= rcount {
         return []
     }
-    val inferred: Array[U64] = inferFnArgs(c: inout c, f: mf, args: args)
+    val inferred: Array[U64] = c.inferFnArgs(f: mf, args: args)
     mut val out: Array[U64] = []
     mut val i: U64 = rcount
     while i < inferred.count {

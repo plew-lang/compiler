@@ -344,7 +344,7 @@ export fn runFrontend() -> Comp {
     // eager generic type-check (#9): every generic template body is checked once
     // against its `where` bounds — a method/operator on a type parameter must be
     // provided by its bounds (no C++-style "errors only at instantiation").
-    checkGenericBodies(c: inout c)
+    c.checkGenericBodies()
     // unique types cannot be generic type arguments (wrap in Ref[T]); checked
     // after instantiation discovery since it scans the concrete genInsts.
     checkGenericUniqueArgs(c: inout c)
@@ -356,7 +356,7 @@ export fn runFrontend() -> Comp {
     // symbol table as it walks), so acceptance soundness does not depend on how
     // emission works. Runs AFTER the typed-AST cache so the operator-witness /
     // visibility checks see recovered expression types.
-    verifyProgram(c: inout c)
+    c.verifyProgram()
     return c
 }
 

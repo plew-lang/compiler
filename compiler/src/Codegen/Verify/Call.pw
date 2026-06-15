@@ -99,7 +99,7 @@ pub impl Comp {
                 }
             }
             if pIdx < cf.params.count {
-                tcCheckValue(c: inout self, expectedRef: cf.params[pIdx].ty, valueExpr: args[ai].expr, pos: "arg")
+                self.tcCheckValue(expectedRef: cf.params[pIdx].ty, valueExpr: args[ai].expr, pos: "arg")
             }
             ai += 1
         }
@@ -152,7 +152,7 @@ pub impl Comp {
                 }
             }
             if pIdx < cf.params.count {
-                tcCheckValue(c: inout self, expectedRef: cf.params[pIdx].ty, valueExpr: args[ai].expr, pos: "arg")
+                self.tcCheckValue(expectedRef: cf.params[pIdx].ty, valueExpr: args[ai].expr, pos: "arg")
             }
             ai += 1
         }

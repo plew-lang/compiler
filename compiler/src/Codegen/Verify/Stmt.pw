@@ -23,7 +23,7 @@ pub impl Comp {
                 // init reported numeric is never trusted as a mismatch source (that sank the
                 // first attempt — fn_value / dict / rawAlloc false-rejected). Skip arrays
                 // (separate machinery) and floats (typeOf wobbles float literal vs local).
-                checkGenericArity(c: inout self, ref: ty, offset: nameStart)
+                self.checkGenericArity(ref: ty, offset: nameStart)
                 // declared an array but initialized with a non-array (`val a: Array[I64] =
                 // 5I64`) reinterprets the scalar bits as an array — a definite mismatch.
                 if tyIsArray {
@@ -32,7 +32,7 @@ pub impl Comp {
                     }
                 }
                 if tyLen > 0U64 {
-                    tcCheckValue(c: inout self, expectedRef: ty, valueExpr: init, pos: "let")
+                    self.tcCheckValue(expectedRef: ty, valueExpr: init, pos: "let")
                     // an array binding's literal elements (`Array[I64] = ["a", "b"]`):
                     // category-check each element against the declared element type (tyStart
                     // names the element for an array annotation).
@@ -49,7 +49,7 @@ pub impl Comp {
                                 }
                                 mut val ek: U64 = 0
                                 while ek < elems.count {
-                                    tcCheckValue(c: inout self, expectedRef: elemRef, valueExpr: elems[ek], pos: "element")
+                                    self.tcCheckValue(expectedRef: elemRef, valueExpr: elems[ek], pos: "element")
                                     ek += 1
                                 }
                             }
@@ -115,7 +115,7 @@ pub impl Comp {
                     // type (`return "s"` / `return <A…/>` from `-> I64`). Same shared,
                     // reliable-value discipline as bindings; curRetLen 0 = `()` return.
                     if self.cur.retLen > 0U64 {
-                        tcCheckValue(c: inout self, expectedRef: self.cur.retTy, valueExpr: value, pos: "return")
+                        self.tcCheckValue(expectedRef: self.cur.retTy, valueExpr: value, pos: "return")
                     }
                     verifyExpr(c: inout self, id: value)
                 } else {
@@ -182,12 +182,12 @@ pub impl Comp {
                         // suffix, so a mismatched width (`for val i: I64 in 0I64..<5I32`)
                         // slips through — check each bound's type against the loop var type.
                         val vref: U64 = simpleTypeRef(c: inout self, nameStart: varTyStart, nameLen: varTyLen)
-                        tcCheckValue(c: inout self, expectedRef: vref, valueExpr: iter, pos: "range bound")
-                        tcCheckValue(c: inout self, expectedRef: vref, valueExpr: rangeHi, pos: "range bound")
+                        self.tcCheckValue(expectedRef: vref, valueExpr: iter, pos: "range bound")
+                        self.tcCheckValue(expectedRef: vref, valueExpr: rangeHi, pos: "range bound")
                     } else {
                         checkArithNoCtx(c: inout self, lhs: iter, rhs: rangeHi)
                         // both bounds must share a type (`0I64..<5I32` is a width mismatch).
-                        tcCheckValue(c: inout self, expectedRef: self.inferType(id: iter), valueExpr: rangeHi, pos: "range bound")
+                        self.tcCheckValue(expectedRef: self.inferType(id: iter), valueExpr: rangeHi, pos: "range bound")
                     }
                 }
                 // scope the loop binding(s) to the body, mirroring genStmt's For.
@@ -329,9 +329,9 @@ pub impl Comp {
         // subsumes the old numeric/String/named-id category checks here, with generic-arg
         // precision and Bool/width/sign distinctions).
         if op == opAssign() {
-            tcCheckValue(c: inout self, expectedRef: self.inferType(id: target), valueExpr: value, pos: "assign")
+            self.tcCheckValue(expectedRef: self.inferType(id: target), valueExpr: value, pos: "assign")
         } else {
-            tcCheckCompoundAssign(c: inout self, op: op, target: target, value: value)
+            self.tcCheckCompoundAssign(op: op, target: target, value: value)
         }
     }
 }

@@ -216,9 +216,9 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 if f.hasRet {
                     // a generic free function returning a bare type parameter:
                     // substitute it with the inferred concrete type argument.
-                    if isGenericFreeFn(c: inout c, fi: fi) {
+                    if c.isGenericFreeFn(fi: fi) {
                         if !(f.retIsArray) {
-                            val inferred: Array[U64] = inferFnArgs(c: inout c, f: f, args: args)
+                            val inferred: Array[U64] = c.inferFnArgs(f: f, args: args)
                             val qRet: U64 = intern(c: inout c, start: f.retStart, len: f.retLen)
 
                             mut val k: U64 = 0
@@ -414,7 +414,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 // declared return type (concrete primitive/String only, so a `Self`/
                 // associated return stays unknown). Active only when curCheckFn is the
                 // provided method (else isSelfTypeInProvided is false).
-                if isSelfTypeInProvided(c: inout c, start: rt.nameStart, len: rt.nameLen) {
+                if c.isSelfTypeInProvided(start: rt.nameStart, len: rt.nameLen) {
                     val sTrait: U64 = intern(c: inout c, start: rt.nameStart, len: rt.nameLen)
                     val sMethod: U64 = intern(c: inout c, start: nameStart, len: nameLen)
                     mut val sti: U64 = 0
@@ -508,7 +508,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                                 gri += 1
                             }
                             if mf.typeParams.count > rcount {
-                                val ginf: Array[U64] = inferFnArgs(c: inout c, f: mf, args: args)
+                                val ginf: Array[U64] = c.inferFnArgs(f: mf, args: args)
                                 mut val goi: U64 = rcount
                                 while goi < ginf.count {
                                     gfa.append(ginf[goi])
@@ -543,7 +543,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                         val savedTA: Array[U64] = c.cur.typeArgs
                         if mf.typeParams.count > 0 {
                             c.cur.typeParams = mf.typeParams
-                            c.cur.typeArgs = inferFnArgs(c: inout c, f: mf, args: args)
+                            c.cur.typeArgs = c.inferFnArgs(f: mf, args: args)
                         }
                         val gr2: U64 = groundTypeRef(c: inout c, ref: mf.retTy)
                         c.cur.typeParams = savedTP
@@ -645,7 +645,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // a closure literal's type is `fn(params) -> ret`; recover it so a
             // generic call can structurally infer a type parameter from it
             // (`map(f: fn(x:I64)->I64)` -> B = I64).
-            return c.typeInfoOfRef(ref: closureFnTypeRef(c: inout c, params: params, retTy: retTy))
+            return c.typeInfoOfRef(ref: c.closureFnTypeRef(params: params, retTy: retTy))
         }
         Expr.Move(val operand, val isBorrow) => {
             // `move`/`borrow` have the operand's type (the value just flows).

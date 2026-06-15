@@ -1,457 +1,424 @@
 // Part of type inference/checking (root: _.pw): checking expressions, operators,
 // assignments, indices, and make-fields against an expected type.
 
-fn tcCheckValue(c: inout Comp, expectedRef: U64, valueExpr: U64, pos: String) {
-    if expectedRef == 0U64 {
-        return
-    }
-    // a function VALUE (closure literal / function reference) flowing into a fn-typed
-    // position must match the signature, everywhere tcCheckValue runs (binding, return,
-    // arg, struct field, array element). isFnType-gated, so a no-op otherwise.
-    c.checkFnValueSig(declTy: expectedRef, init: valueExpr)
-    // a void function's result is `()` — using it where a typed value is expected
-    // (`val x: I64 = doNothing()`) is a type error (spec/04).
-    if c.exprIsVoidCall(id: valueExpr) {
-        if !(c.tcLog) {
-            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueExpr)), msg: "cannot use the result of a function that returns no value (spec/04)")
-        }
-        return
-    }
-    // a generic construction in a typed position (`val o: Optional[I64] = <Optional.Some
-    // v="x"/>`): recurse into its fields, grounding each declared field type under the
-    // EXPECTED instance's type arguments, and check the field value. This is the
-    // generic-payload case the head-name checks can't see (the un-annotated construction
-    // carries no type args itself; they come from the expected type).
-    tcCheckMakeFields(c: inout c, expectedRef: expectedRef, makeId: valueExpr)
-    // a value-position if/match (`val x: I64 = if c { give A } else { give B }`): each
-    // branch's give value must match the expected type — so a divergent branch (`give
-    // "s"` where I64 is wanted) is caught even when another branch matches.
-    match c.arena.exprs[valueExpr] {
-        Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
-            val tv: U64 = tcBlockGiveValue(c: inout c, blockId: thenBlk)
-            if tv != 0U64 {
-                tcCheckValue(c: inout c, expectedRef: expectedRef, valueExpr: tv, pos: "if-branch")
-            }
-            val ev: U64 = tcBlockGiveValue(c: inout c, blockId: elseBlk)
-            if ev != 0U64 {
-                tcCheckValue(c: inout c, expectedRef: expectedRef, valueExpr: ev, pos: "if-branch")
-            }
-        }
-        Expr.MatchExpr(scrut: _, val arms) => {
-            mut val ai: U64 = 0
-            while ai < arms.count {
-                // skip an arm that binds payload fields: its binds are not in scope at
-                // this (the match-expr) position and may shadow an outer name, so
-                // inferType on the arm body would resolve the shadowed name wrongly.
-                // a diverging arm (`=> panic`) yields no value to check.
-                if !(arms[ai].isDiverge) {
-                    if arms[ai].binds.count == 0U64 {
-                        val g: U64 = c.blockGiveExpr(blkId: arms[ai].body)
-                        if g < c.arena.exprs.count {
-                            tcCheckValue(c: inout c, expectedRef: expectedRef, valueExpr: g, pos: "match-branch")
-                        }
-                    }
-                }
-                ai += 1
-            }
-        }
-        Expr.Array(val elems) => {
-            // an array literal in a typed position (`Array[I64] = [1I64, true]`,
-            // nested `Array[Array[I64]] = [[1I64], [true]]`): each element must match
-            // the expected element type. Recurses, so arbitrary nesting is covered —
-            // inferType doesn't precisely type a literal's element, so this is the
-            // element check. (Only when the expected type is a known `Array[E]`.)
-            if expectedRef < c.arena.types.count {
-                val et: TypeRef = c.arena.types[expectedRef]
-                if rangeEquals(bytes: c.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "Array") {
-                    if et.args.count > 0U64 {
-                        mut val ei: U64 = 0
-                        while ei < elems.count {
-                            tcCheckValue(c: inout c, expectedRef: et.args[0], valueExpr: elems[ei], pos: "element")
-                            ei += 1
-                        }
-                    }
-                }
-            }
-        }
-        _ => {}
-    }
-    val inferred: U64 = c.inferType(id: valueExpr)
-    if c.typesCompatible(expected: expectedRef, inferred: inferred) {
-        return
-    }
-    if c.tcLog {
-        eprint(text: "TC ")
-        eprint(text: pos)
-        eprint(text: " expected=")
-        eprint(text: tcRefName(c: inout c, ref: groundTypeRef(c: inout c, ref: expectedRef)))
-        eprint(text: " got=")
-        eprint(text: tcRefName(c: inout c, ref: inferred))
-        eprint(text: " from=")
-        eprint(text: tcExprKind(c: inout c, id: valueExpr))
-        eprint(text: " line=")
-        eprintInt(n: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueExpr)))
-        eprint(text: "\n")
-    } else {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: valueExpr)), msg: "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)")
-    }
-}
-
-// Check an arithmetic binary's operands have the same type. Gated on the op being
-// arithmetic (Add/Sub/Mul/Div/Rem) AND both operands being primitive integer types:
-// a user type's `a + b` desugars to `Add[Rhs]` (the operands may legitimately differ),
-// but a primitive only has same-type witnesses (`impl I32 as Add[I32]`), so two
-// different primitive int operands (`3I32 + 5I64`) are a no-implicit-conversion error.
-fn tcCheckBinop(c: inout Comp, op: I64, lhs: U64, rhs: U64) {
-    // `&&` / `||` are short-circuit control flow (spec/12), not a trait op: both
-    // operands must be Bool (`1I64 && true` has no truthiness coercion).
-    if op == opAnd() || op == opOr() {
-        val bs: Bind = kwSpan(c: inout c, kw: "Bool", kwLen: 4U64)
-        if bs.nameLen != 0U64 {
-            val boolRef: U64 = simpleTypeRef(c: inout c, nameStart: bs.nameStart, nameLen: bs.nameLen)
-            tcCheckValue(c: inout c, expectedRef: boolRef, valueExpr: lhs, pos: "logical")
-            tcCheckValue(c: inout c, expectedRef: boolRef, valueExpr: rhs, pos: "logical")
-        }
-        return
-    }
-    // arithmetic (Add/Sub/Mul/Div/Rem) and comparison (Eq/Ne/Lt/Le/Gt/Ge).
-    mut val isCompare: Bool = false
-    if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
-        isCompare = true
-    }
-    mut val handled: Bool = isCompare
-    if op == opAdd() || op == opSub() || op == opMul() || op == opDiv() || op == opRem() {
-        handled = true
-    }
-    // bitwise/shift: a primitive's witnesses are all same-type (`impl I8 as Shl[I8]`,
-    // not `Shl[U64]`), so mixed primitive operands have no witness — same as arith.
-    if op == opBitAnd() || op == opBitOr() || op == opBitXor() || op == opShl() || op == opShr() {
-        handled = true
-    }
-    if !(handled) {
-        return
-    }
-    val l: U64 = c.inferType(id: lhs)
-    val r: U64 = c.inferType(id: rhs)
-    if l == 0U64 || r == 0U64 {
-        return
-    }
-    if l >= c.arena.types.count || r >= c.arena.types.count {
-        return
-    }
-    // comparison is `Eq`/`Ord` on the SAME type (no Rhs), so the operands must match
-    // for EVERY type (`"a" == 1I64`, `aI32 < bI64`) — not just primitives.
-    if isCompare {
-        tcCheckValue(c: inout c, expectedRef: l, valueExpr: rhs, pos: "compare")
-        return
-    }
-    // a PRIMITIVE numeric LHS forces the RHS to be the SAME type — a primitive's
-    // operator witnesses are all same-type (`impl I32 as Add[I32]`, `Ord` on Self,
-    // `Shl[I32]`), and `a OP b` always dispatches on the LHS type. So the RHS must
-    // match `l` whether it is another primitive (`3I32 + 5I64`), a non-numeric
-    // primitive (`1I64 + true`), or any other type — there is no `Add[Bool]` /
-    // `Add[Money]` on a primitive int. typesCompatible carries the F32/F64 leniency
-    // and the int↔float rejection. A non-numeric LHS (a user type whose `Add[Rhs]`
-    // may legitimately differ) is excluded here — its witness is checked elsewhere.
-    val lNum: Bool = isIntType(c: inout c, start: c.arena.types[l].nameStart, len: c.arena.types[l].nameLen) || isFloatType(c: inout c, start: c.arena.types[l].nameStart, len: c.arena.types[l].nameLen)
-    if lNum {
-        tcCheckValue(c: inout c, expectedRef: l, valueExpr: rhs, pos: "binop")
-    }
-}
-
-// Whether a TypeRef is an unsigned primitive integer (U8..U64).
-fn tcIsUnsignedInt(c: inout Comp, ref: U64) -> Bool {
-    if ref == 0U64 || ref >= c.arena.types.count {
-        return false
-    }
-    val t: TypeRef = c.arena.types[ref]
-    if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "U8") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "U16") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "U32") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "U64") { return true }
-    return false
-}
-
-// Log (under --tc-log) or reject a unary-operator-applicability error.
-fn tcUnaryReject(c: inout Comp, operand: U64, msg: String) {
-    if c.tcLog {
-        eprint(text: "TC unary ")
-        eprint(text: msg)
-        eprint(text: " got=")
-        eprint(text: tcRefName(c: inout c, ref: c.inferType(id: operand)))
-        eprint(text: " line=")
-        eprintInt(n: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)))
-        eprint(text: "\n")
-    } else {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: msg)
-    }
-}
-
-// Operator-applicability for the unary operators (spec/12), PRIMITIVE operands only —
-// a user type may implement Neg/Not/BitNot, so a non-primitive operand is never judged:
-//   `-` (Neg): signed integers / floats only (no Neg witness for unsigned or Bool);
-//   `!` (Not): Bool only; `~` (BitNot): integers only.
-fn tcCheckUnary(c: inout Comp, op: I64, operand: U64) {
-    val t: U64 = c.inferType(id: operand)
-    if t == 0U64 || t >= c.arena.types.count {
-        return
-    }
-    val tn: TypeRef = c.arena.types[t]
-    val isInt: Bool = isIntType(c: inout c, start: tn.nameStart, len: tn.nameLen)
-    val isBool: Bool = rangeEquals(bytes: c.arena.bytes, start: tn.nameStart, len: tn.nameLen, kw: "Bool")
-    val isFloat: Bool = isFloatType(c: inout c, start: tn.nameStart, len: tn.nameLen)
-    // String is a primitive with NO Neg/Not/BitNot witness, so judge it too (`-s`
-    // falls to each branch's reject). only judge a primitive operand (int / Bool /
-    // float / String); skip user types (which may implement Neg/Not/BitNot).
-    val isString: Bool = rangeEquals(bytes: c.arena.bytes, start: tn.nameStart, len: tn.nameLen, kw: "String")
-    if !(isInt || isBool || isFloat || isString) {
-        return
-    }
-    if op == opSub() {
-        if !(isFloat) {
-            if !(isInt && !tcIsUnsignedInt(c: inout c, ref: t)) {
-                tcUnaryReject(c: inout c, operand: operand, msg: "unary `-` (Neg) is for signed integers / floats only (spec/12)")
-            }
-        }
-    } else {
-        if op == opNot() {
-            if !(isBool) {
-                tcUnaryReject(c: inout c, operand: operand, msg: "unary `!` (Not) requires a Bool operand (spec/12)")
-            }
-        } else {
-            if op == opBitNot() {
-                if !(isInt) {
-                    tcUnaryReject(c: inout c, operand: operand, msg: "unary `~` (BitNot) requires an integer operand (spec/12)")
-                }
-            }
-        }
-    }
-}
-
-// Whether a TypeRef is a primitive integer type.
-fn tcIsPrimInt(c: inout Comp, ref: U64) -> Bool {
-    if ref == 0U64 || ref >= c.arena.types.count {
-        return false
-    }
-    return isIntType(c: inout c, start: c.arena.types[ref].nameStart, len: c.arena.types[ref].nameLen)
-}
-
-// A compound-arith assignment `x OP= y` desugars to `x = x OP y` (spec/12), so for a
-// primitive its operands must share a type (`x: I64; x += 5I32` has no Add[I32] on
-// I64). Gated on the op being arithmetic (`+= -= *= /= %=`) and BOTH sides primitive
-// ints (a user type uses Add[Rhs]; shift/bitwise compounds are Rhs-parameterized).
-fn tcCheckCompoundAssign(c: inout Comp, op: I64, target: U64, value: U64) {
-    if !(op == opAddAssign() || op == opSubAssign() || op == opMulAssign() || op == opDivAssign() || op == opRemAssign()) {
-        return
-    }
-    val l: U64 = c.inferType(id: target)
-    if l == 0U64 || l >= c.arena.types.count {
-        return
-    }
-    // a primitive numeric target forces the value to match (same as the binop it
-    // desugars to: `x: I64; x += true` / `x += "a"` has no `Add[Bool]`/`Add[String]`
-    // on I64). A user-type target uses `Add[Rhs]` and is checked by its own witness.
-    if isIntType(c: inout c, start: c.arena.types[l].nameStart, len: c.arena.types[l].nameLen) || isFloatType(c: inout c, start: c.arena.types[l].nameStart, len: c.arena.types[l].nameLen) {
-        tcCheckValue(c: inout c, expectedRef: l, valueExpr: value, pos: "compound")
-    }
-}
-
-// A subscript `base[i]`: an array indexes with a `U64` (spec/02); a `Dictionary[K, V]`
-// indexes with its key type `K` (the `dict[k]` -> `.at(key: k)` desugar is a generic
-// method, which the arg check skips, so the key type is checked here directly).
-fn tcCheckArrayIndex(c: inout Comp, base: U64, index: U64) {
-    val bt: TypeInfo = typeOf(c: inout c, id: base)
-    if bt.kind == 3 {
-        val u64: Bind = kwSpan(c: inout c, kw: "U64", kwLen: 3U64)
-        if u64.nameLen == 0U64 {
+pub impl Comp {
+    inout fn tcCheckValue(expectedRef: U64, valueExpr: U64, pos: String) {
+        if expectedRef == 0U64 {
             return
         }
-        tcCheckValue(c: inout c, expectedRef: simpleTypeRef(c: inout c, nameStart: u64.nameStart, nameLen: u64.nameLen), valueExpr: index, pos: "index")
-        return
-    }
-    val br: U64 = c.inferType(id: base)
-    if br != 0U64 {
-        if br < c.arena.types.count {
-            val bref: TypeRef = c.arena.types[br]
-            if rangeEquals(bytes: c.arena.bytes, start: bref.nameStart, len: bref.nameLen, kw: "Dictionary") {
-                if bref.args.count >= 1U64 {
-                    tcCheckValue(c: inout c, expectedRef: bref.args[0], valueExpr: index, pos: "dictkey")
+        // a function VALUE (closure literal / function reference) flowing into a fn-typed
+        // position must match the signature, everywhere tcCheckValue runs (binding, return,
+        // arg, struct field, array element). isFnType-gated, so a no-op otherwise.
+        self.checkFnValueSig(declTy: expectedRef, init: valueExpr)
+        // a void function's result is `()` — using it where a typed value is expected
+        // (`val x: I64 = doNothing()`) is a type error (spec/04).
+        if self.exprIsVoidCall(id: valueExpr) {
+            if !(self.tcLog) {
+                compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: valueExpr)), msg: "cannot use the result of a function that returns no value (spec/04)")
+            }
+            return
+        }
+        // a generic construction in a typed position (`val o: Optional[I64] = <Optional.Some
+        // v="x"/>`): recurse into its fields, grounding each declared field type under the
+        // EXPECTED instance's type arguments, and check the field value. This is the
+        // generic-payload case the head-name checks can't see (the un-annotated construction
+        // carries no type args itself; they come from the expected type).
+        self.tcCheckMakeFields(expectedRef: expectedRef, makeId: valueExpr)
+        // a value-position if/match (`val x: I64 = if c { give A } else { give B }`): each
+        // branch's give value must match the expected type — so a divergent branch (`give
+        // "s"` where I64 is wanted) is caught even when another branch matches.
+        match self.arena.exprs[valueExpr] {
+            Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
+                val tv: U64 = self.tcBlockGiveValue(blockId: thenBlk)
+                if tv != 0U64 {
+                    self.tcCheckValue(expectedRef: expectedRef, valueExpr: tv, pos: "if-branch")
+                }
+                val ev: U64 = self.tcBlockGiveValue(blockId: elseBlk)
+                if ev != 0U64 {
+                    self.tcCheckValue(expectedRef: expectedRef, valueExpr: ev, pos: "if-branch")
                 }
             }
-        }
-    }
-}
-
-// The give value of a block that ends in `give <expr>` (a value-position if branch),
-// or 0 if the block has no trailing give.
-fn tcBlockGiveValue(c: inout Comp, blockId: U64) -> U64 {
-    if blockId == 0U64 || blockId >= c.arena.blocks.count {
-        return 0U64
-    }
-    val stmts: Array[U64] = c.arena.blocks[blockId].stmts
-    if stmts.count == 0U64 {
-        return 0U64
-    }
-    match c.arena.stmts[stmts[stmts.count - 1U64]] {
-        Stmt.Give(val value) => { return value }
-        _ => { return 0U64 }
-    }
-}
-
-// If `valueExpr` is a construction (`<T … />`) of the same generic head as the
-// expected instance `expectedRef`, check each provided field's value against the
-// field's declared type grounded under the expected instance's type arguments. Covers
-// `<Optional.Some v="x"/>` for an expected `Optional[I64]` (the construction itself is
-// un-annotated, so the type args come from the expected type). A no-op unless expected
-// is a generic instance and the heads match.
-fn tcCheckMakeFields(c: inout Comp, expectedRef: U64, makeId: U64) {
-    if expectedRef >= c.arena.types.count {
-        return
-    }
-    val et: TypeRef = c.arena.types[expectedRef]
-    if et.args.count == 0U64 {
-        return
-    }
-    match c.arena.exprs[makeId] {
-        Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
-            if intern(c: inout c, start: typeStart, len: typeLen) != et.nameId {
-                return
-            }
-            // Ref[T] / WeakRef[T] are lang items (not registered generic structs), so
-            // the struct lookup below misses them. Their `value` field is T — check it
-            // (`<Ref[I64] value=true/>` would otherwise box a Bool as an I64).
-            if rangeEquals(bytes: c.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "Ref") || rangeEquals(bytes: c.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "WeakRef") {
-                if et.args.count >= 1U64 {
-                    mut val rfi: U64 = 0
-                    while rfi < fields.count {
-                        if rangeEquals(bytes: c.arena.bytes, start: fields[rfi].nameStart, len: fields[rfi].nameLen, kw: "value") {
-                            tcCheckValue(c: inout c, expectedRef: et.args[0], valueExpr: fields[rfi].value, pos: "ref value")
+            Expr.MatchExpr(scrut: _, val arms) => {
+                mut val ai: U64 = 0
+                while ai < arms.count {
+                    // skip an arm that binds payload fields: its binds are not in scope at
+                    // this (the match-expr) position and may shadow an outer name, so
+                    // inferType on the arm body would resolve the shadowed name wrongly.
+                    // a diverging arm (`=> panic`) yields no value to check.
+                    if !(arms[ai].isDiverge) {
+                        if arms[ai].binds.count == 0U64 {
+                            val g: U64 = self.blockGiveExpr(blkId: arms[ai].body)
+                            if g < self.arena.exprs.count {
+                                self.tcCheckValue(expectedRef: expectedRef, valueExpr: g, pos: "match-branch")
+                            }
                         }
-                        rfi += 1
+                    }
+                    ai += 1
+                }
+            }
+            Expr.Array(val elems) => {
+                // an array literal in a typed position (`Array[I64] = [1I64, true]`,
+                // nested `Array[Array[I64]] = [[1I64], [true]]`): each element must match
+                // the expected element type. Recurses, so arbitrary nesting is covered —
+                // inferType doesn't precisely type a literal's element, so this is the
+                // element check. (Only when the expected type is a known `Array[E]`.)
+                if expectedRef < self.arena.types.count {
+                    val et: TypeRef = self.arena.types[expectedRef]
+                    if rangeEquals(bytes: self.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "Array") {
+                        if et.args.count > 0U64 {
+                            mut val ei: U64 = 0
+                            while ei < elems.count {
+                                self.tcCheckValue(expectedRef: et.args[0], valueExpr: elems[ei], pos: "element")
+                                ei += 1
+                            }
+                        }
                     }
                 }
+            }
+            _ => {}
+        }
+        val inferred: U64 = self.inferType(id: valueExpr)
+        if self.typesCompatible(expected: expectedRef, inferred: inferred) {
+            return
+        }
+        if self.tcLog {
+            eprint(text: "TC ")
+            eprint(text: pos)
+            eprint(text: " expected=")
+            eprint(text: self.tcRefName(ref: groundTypeRef(c: inout self, ref: expectedRef)))
+            eprint(text: " got=")
+            eprint(text: self.tcRefName(ref: inferred))
+            eprint(text: " from=")
+            eprint(text: self.tcExprKind(id: valueExpr))
+            eprint(text: " line=")
+            eprintInt(n: lineOf(c: inout self, offset: exprOffset(c: inout self, id: valueExpr)))
+            eprint(text: "\n")
+        } else {
+            compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: valueExpr)), msg: "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)")
+        }
+    }
+
+    inout fn tcCheckBinop(op: I64, lhs: U64, rhs: U64) {
+        // `&&` / `||` are short-circuit control flow (spec/12), not a trait op: both
+        // operands must be Bool (`1I64 && true` has no truthiness coercion).
+        if op == opAnd() || op == opOr() {
+            val bs: Bind = kwSpan(c: inout self, kw: "Bool", kwLen: 4U64)
+            if bs.nameLen != 0U64 {
+                val boolRef: U64 = simpleTypeRef(c: inout self, nameStart: bs.nameStart, nameLen: bs.nameLen)
+                self.tcCheckValue(expectedRef: boolRef, valueExpr: lhs, pos: "logical")
+                self.tcCheckValue(expectedRef: boolRef, valueExpr: rhs, pos: "logical")
+            }
+            return
+        }
+        // arithmetic (Add/Sub/Mul/Div/Rem) and comparison (Eq/Ne/Lt/Le/Gt/Ge).
+        mut val isCompare: Bool = false
+        if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
+            isCompare = true
+        }
+        mut val handled: Bool = isCompare
+        if op == opAdd() || op == opSub() || op == opMul() || op == opDiv() || op == opRem() {
+            handled = true
+        }
+        // bitwise/shift: a primitive's witnesses are all same-type (`impl I8 as Shl[I8]`,
+        // not `Shl[U64]`), so mixed primitive operands have no witness — same as arith.
+        if op == opBitAnd() || op == opBitOr() || op == opBitXor() || op == opShl() || op == opShr() {
+            handled = true
+        }
+        if !(handled) {
+            return
+        }
+        val l: U64 = self.inferType(id: lhs)
+        val r: U64 = self.inferType(id: rhs)
+        if l == 0U64 || r == 0U64 {
+            return
+        }
+        if l >= self.arena.types.count || r >= self.arena.types.count {
+            return
+        }
+        // comparison is `Eq`/`Ord` on the SAME type (no Rhs), so the operands must match
+        // for EVERY type (`"a" == 1I64`, `aI32 < bI64`) — not just primitives.
+        if isCompare {
+            self.tcCheckValue(expectedRef: l, valueExpr: rhs, pos: "compare")
+            return
+        }
+        // a PRIMITIVE numeric LHS forces the RHS to be the SAME type — a primitive's
+        // operator witnesses are all same-type (`impl I32 as Add[I32]`, `Ord` on Self,
+        // `Shl[I32]`), and `a OP b` always dispatches on the LHS type. So the RHS must
+        // match `l` whether it is another primitive (`3I32 + 5I64`), a non-numeric
+        // primitive (`1I64 + true`), or any other type — there is no `Add[Bool]` /
+        // `Add[Money]` on a primitive int. typesCompatible carries the F32/F64 leniency
+        // and the int↔float rejection. A non-numeric LHS (a user type whose `Add[Rhs]`
+        // may legitimately differ) is excluded here — its witness is checked elsewhere.
+        val lNum: Bool = isIntType(c: inout self, start: self.arena.types[l].nameStart, len: self.arena.types[l].nameLen) || isFloatType(c: inout self, start: self.arena.types[l].nameStart, len: self.arena.types[l].nameLen)
+        if lNum {
+            self.tcCheckValue(expectedRef: l, valueExpr: rhs, pos: "binop")
+        }
+    }
+
+    inout fn tcIsUnsignedInt(ref: U64) -> Bool {
+        if ref == 0U64 || ref >= self.arena.types.count {
+            return false
+        }
+        val t: TypeRef = self.arena.types[ref]
+        if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "U8") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "U16") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "U32") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "U64") { return true }
+        return false
+    }
+
+    inout fn tcUnaryReject(operand: U64, msg: String) {
+        if self.tcLog {
+            eprint(text: "TC unary ")
+            eprint(text: msg)
+            eprint(text: " got=")
+            eprint(text: self.tcRefName(ref: self.inferType(id: operand)))
+            eprint(text: " line=")
+            eprintInt(n: lineOf(c: inout self, offset: exprOffset(c: inout self, id: operand)))
+            eprint(text: "\n")
+        } else {
+            compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: operand)), msg: msg)
+        }
+    }
+
+    inout fn tcCheckUnary(op: I64, operand: U64) {
+        val t: U64 = self.inferType(id: operand)
+        if t == 0U64 || t >= self.arena.types.count {
+            return
+        }
+        val tn: TypeRef = self.arena.types[t]
+        val isInt: Bool = isIntType(c: inout self, start: tn.nameStart, len: tn.nameLen)
+        val isBool: Bool = rangeEquals(bytes: self.arena.bytes, start: tn.nameStart, len: tn.nameLen, kw: "Bool")
+        val isFloat: Bool = isFloatType(c: inout self, start: tn.nameStart, len: tn.nameLen)
+        // String is a primitive with NO Neg/Not/BitNot witness, so judge it too (`-s`
+        // falls to each branch's reject). only judge a primitive operand (int / Bool /
+        // float / String); skip user types (which may implement Neg/Not/BitNot).
+        val isString: Bool = rangeEquals(bytes: self.arena.bytes, start: tn.nameStart, len: tn.nameLen, kw: "String")
+        if !(isInt || isBool || isFloat || isString) {
+            return
+        }
+        if op == opSub() {
+            if !(isFloat) {
+                if !(isInt && !self.tcIsUnsignedInt(ref: t)) {
+                    self.tcUnaryReject(operand: operand, msg: "unary `-` (Neg) is for signed integers / floats only (spec/12)")
+                }
+            }
+        } else {
+            if op == opNot() {
+                if !(isBool) {
+                    self.tcUnaryReject(operand: operand, msg: "unary `!` (Not) requires a Bool operand (spec/12)")
+                }
+            } else {
+                if op == opBitNot() {
+                    if !(isInt) {
+                        self.tcUnaryReject(operand: operand, msg: "unary `~` (BitNot) requires an integer operand (spec/12)")
+                    }
+                }
+            }
+        }
+    }
+
+    inout fn tcIsPrimInt(ref: U64) -> Bool {
+        if ref == 0U64 || ref >= self.arena.types.count {
+            return false
+        }
+        return isIntType(c: inout self, start: self.arena.types[ref].nameStart, len: self.arena.types[ref].nameLen)
+    }
+
+    inout fn tcCheckCompoundAssign(op: I64, target: U64, value: U64) {
+        if !(op == opAddAssign() || op == opSubAssign() || op == opMulAssign() || op == opDivAssign() || op == opRemAssign()) {
+            return
+        }
+        val l: U64 = self.inferType(id: target)
+        if l == 0U64 || l >= self.arena.types.count {
+            return
+        }
+        // a primitive numeric target forces the value to match (same as the binop it
+        // desugars to: `x: I64; x += true` / `x += "a"` has no `Add[Bool]`/`Add[String]`
+        // on I64). A user-type target uses `Add[Rhs]` and is checked by its own witness.
+        if isIntType(c: inout self, start: self.arena.types[l].nameStart, len: self.arena.types[l].nameLen) || isFloatType(c: inout self, start: self.arena.types[l].nameStart, len: self.arena.types[l].nameLen) {
+            self.tcCheckValue(expectedRef: l, valueExpr: value, pos: "compound")
+        }
+    }
+
+    inout fn tcCheckArrayIndex(base: U64, index: U64) {
+        val bt: TypeInfo = typeOf(c: inout self, id: base)
+        if bt.kind == 3 {
+            val u64: Bind = kwSpan(c: inout self, kw: "U64", kwLen: 3U64)
+            if u64.nameLen == 0U64 {
                 return
             }
-            if isEnum {
-                val ei: U64 = c.genericEnumIndex(nameStart: et.nameStart, nameLen: et.nameLen)
-                if ei >= c.arena.enums.count {
+            self.tcCheckValue(expectedRef: simpleTypeRef(c: inout self, nameStart: u64.nameStart, nameLen: u64.nameLen), valueExpr: index, pos: "index")
+            return
+        }
+        val br: U64 = self.inferType(id: base)
+        if br != 0U64 {
+            if br < self.arena.types.count {
+                val bref: TypeRef = self.arena.types[br]
+                if rangeEquals(bytes: self.arena.bytes, start: bref.nameStart, len: bref.nameLen, kw: "Dictionary") {
+                    if bref.args.count >= 1U64 {
+                        self.tcCheckValue(expectedRef: bref.args[0], valueExpr: index, pos: "dictkey")
+                    }
+                }
+            }
+        }
+    }
+
+    inout fn tcBlockGiveValue(blockId: U64) -> U64 {
+        if blockId == 0U64 || blockId >= self.arena.blocks.count {
+            return 0U64
+        }
+        val stmts: Array[U64] = self.arena.blocks[blockId].stmts
+        if stmts.count == 0U64 {
+            return 0U64
+        }
+        match self.arena.stmts[stmts[stmts.count - 1U64]] {
+            Stmt.Give(val value) => { return value }
+            _ => { return 0U64 }
+        }
+    }
+
+    inout fn tcCheckMakeFields(expectedRef: U64, makeId: U64) {
+        if expectedRef >= self.arena.types.count {
+            return
+        }
+        val et: TypeRef = self.arena.types[expectedRef]
+        if et.args.count == 0U64 {
+            return
+        }
+        match self.arena.exprs[makeId] {
+            Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
+                if intern(c: inout self, start: typeStart, len: typeLen) != et.nameId {
                     return
                 }
-                val vi: U64 = variantIndex(c: inout c, enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
-                if vi >= c.arena.enums[ei].variants.count {
+                // Ref[T] / WeakRef[T] are lang items (not registered generic structs), so
+                // the struct lookup below misses them. Their `value` field is T — check it
+                // (`<Ref[I64] value=true/>` would otherwise box a Bool as an I64).
+                if rangeEquals(bytes: self.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "Ref") || rangeEquals(bytes: self.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "WeakRef") {
+                    if et.args.count >= 1U64 {
+                        mut val rfi: U64 = 0
+                        while rfi < fields.count {
+                            if rangeEquals(bytes: self.arena.bytes, start: fields[rfi].nameStart, len: fields[rfi].nameLen, kw: "value") {
+                                self.tcCheckValue(expectedRef: et.args[0], valueExpr: fields[rfi].value, pos: "ref value")
+                            }
+                            rfi += 1
+                        }
+                    }
                     return
                 }
-                tcCheckFieldsUnder(c: inout c, params: c.arena.enums[ei].typeParams, targs: et.args, defFields: c.arena.enums[ei].variants[vi].fields, makeFields: fields)
-            } else {
-                val si: U64 = c.genericStructIndex(nameStart: et.nameStart, nameLen: et.nameLen)
-                if si >= c.arena.structs.count {
-                    return
+                if isEnum {
+                    val ei: U64 = self.genericEnumIndex(nameStart: et.nameStart, nameLen: et.nameLen)
+                    if ei >= self.arena.enums.count {
+                        return
+                    }
+                    val vi: U64 = variantIndex(c: inout self, enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
+                    if vi >= self.arena.enums[ei].variants.count {
+                        return
+                    }
+                    self.tcCheckFieldsUnder(params: self.arena.enums[ei].typeParams, targs: et.args, defFields: self.arena.enums[ei].variants[vi].fields, makeFields: fields)
+                } else {
+                    val si: U64 = self.genericStructIndex(nameStart: et.nameStart, nameLen: et.nameLen)
+                    if si >= self.arena.structs.count {
+                        return
+                    }
+                    self.tcCheckFieldsUnder(params: self.arena.structs[si].typeParams, targs: et.args, defFields: self.arena.structs[si].fields, makeFields: fields)
                 }
-                tcCheckFieldsUnder(c: inout c, params: c.arena.structs[si].typeParams, targs: et.args, defFields: c.arena.structs[si].fields, makeFields: fields)
             }
+            _ => {}
         }
-        _ => {}
     }
-}
 
-// For each provided make-field, ground the matching declared field's type under
-// (params -> targs) and check the field value against it (in the OUTER env — the
-// field value lives in the caller's scope, so the instance env is used only to ground
-// the EXPECTED field type, then restored before checking the value).
-fn tcCheckFieldsUnder(c: inout Comp, params: Array[Bind], targs: Array[U64], defFields: Array[FieldDef], makeFields: Array[MakeField]) {
-    mut val mi: U64 = 0
-    while mi < makeFields.count {
-        mut val di: U64 = 0
-        while di < defFields.count {
-            if spansEqual(c: inout c, aStart: defFields[di].nameStart, aLen: defFields[di].nameLen, bStart: makeFields[mi].nameStart, bLen: makeFields[mi].nameLen) {
-                if defFields[di].ty != 0U64 {
-                    val savedP: Array[Bind] = c.cur.typeParams
-                    val savedA: Array[U64] = c.cur.typeArgs
-                    c.cur.typeParams = params
-                    c.cur.typeArgs = targs
-                    val grounded: U64 = groundTypeRef(c: inout c, ref: defFields[di].ty)
-                    c.cur.typeParams = savedP
-                    c.cur.typeArgs = savedA
-                    tcCheckValue(c: inout c, expectedRef: grounded, valueExpr: makeFields[mi].value, pos: "ginst-field")
+    inout fn tcCheckFieldsUnder(params: Array[Bind], targs: Array[U64], defFields: Array[FieldDef], makeFields: Array[MakeField]) {
+        mut val mi: U64 = 0
+        while mi < makeFields.count {
+            mut val di: U64 = 0
+            while di < defFields.count {
+                if spansEqual(c: inout self, aStart: defFields[di].nameStart, aLen: defFields[di].nameLen, bStart: makeFields[mi].nameStart, bLen: makeFields[mi].nameLen) {
+                    if defFields[di].ty != 0U64 {
+                        val savedP: Array[Bind] = self.cur.typeParams
+                        val savedA: Array[U64] = self.cur.typeArgs
+                        self.cur.typeParams = params
+                        self.cur.typeArgs = targs
+                        val grounded: U64 = groundTypeRef(c: inout self, ref: defFields[di].ty)
+                        self.cur.typeParams = savedP
+                        self.cur.typeArgs = savedA
+                        self.tcCheckValue(expectedRef: grounded, valueExpr: makeFields[mi].value, pos: "ginst-field")
+                    }
+                    di = defFields.count
+                } else {
+                    di += 1
                 }
-                di = defFields.count
-            } else {
-                di += 1
             }
+            mi += 1
         }
-        mi += 1
     }
-}
 
-// A diagnostic position label "<prefix><fieldName>" (so a payload/field mismatch
-// names the field). Temporary (development scaffold).
-fn tcFieldPos(c: inout Comp, prefix: String, nameStart: U64, nameLen: U64) -> String {
-    mut val bs: Array[U8] = []
-    appendBytes(into: inout bs, from: prefix.bytes)
-    mut val i: U64 = 0
-    while i < nameLen {
-        bs.append(value: c.arena.bytes[nameStart + i])
-        i += 1
+    inout fn tcFieldPos(prefix: String, nameStart: U64, nameLen: U64) -> String {
+        mut val bs: Array[U8] = []
+        appendBytes(into: inout bs, from: prefix.bytes)
+        mut val i: U64 = 0
+        while i < nameLen {
+            bs.append(value: self.arena.bytes[nameStart + i])
+            i += 1
+        }
+        return stringFromBytesUnchecked(b: bs)
     }
-    return stringFromBytesUnchecked(b: bs)
-}
 
-// The expression form (for diagnostics), so a TC mismatch can be located.
-fn tcExprKind(c: inout Comp, id: U64) -> String {
-    match c.arena.exprs[id] {
-        Expr.Call(nameStart: _, nameLen: _, args: _) => { return "Call" }
-        Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => { return "Method" }
-        Expr.Field(base: _, val nameStart, val nameLen) => {
-            mut val bs: Array[U8] = []
-            appendBytes(into: inout bs, from: "Field:".bytes)
-            mut val i: U64 = 0
-            while i < nameLen {
-                bs.append(value: c.arena.bytes[nameStart + i])
-                i += 1
+    inout fn tcExprKind(id: U64) -> String {
+        match self.arena.exprs[id] {
+            Expr.Call(nameStart: _, nameLen: _, args: _) => { return "Call" }
+            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => { return "Method" }
+            Expr.Field(base: _, val nameStart, val nameLen) => {
+                mut val bs: Array[U8] = []
+                appendBytes(into: inout bs, from: "Field:".bytes)
+                mut val i: U64 = 0
+                while i < nameLen {
+                    bs.append(value: self.arena.bytes[nameStart + i])
+                    i += 1
+                }
+                return stringFromBytesUnchecked(b: bs)
             }
-            return stringFromBytesUnchecked(b: bs)
-        }
-        Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => { return "Make" }
-        Expr.MatchExpr(scrut: _, arms: _) => { return "MatchExpr" }
-        Expr.Ident(val start, val len) => {
-            mut val bs: Array[U8] = []
-            appendBytes(into: inout bs, from: "Ident:".bytes)
-            mut val i: U64 = 0
-            while i < len {
-                bs.append(value: c.arena.bytes[start + i])
-                i += 1
+            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => { return "Make" }
+            Expr.MatchExpr(scrut: _, arms: _) => { return "MatchExpr" }
+            Expr.Ident(val start, val len) => {
+                mut val bs: Array[U8] = []
+                appendBytes(into: inout bs, from: "Ident:".bytes)
+                mut val i: U64 = 0
+                while i < len {
+                    bs.append(value: self.arena.bytes[start + i])
+                    i += 1
+                }
+                return stringFromBytesUnchecked(b: bs)
             }
-            return stringFromBytesUnchecked(b: bs)
-        }
-        Expr.Index(base: _, index: _) => { return "Index" }
-        Expr.Binary(op: _, lhs: _, rhs: _) => { return "Binary" }
-        Expr.Cast(operand: _, tyStart: _, tyLen: _, ty: _) => { return "Cast" }
-        Expr.Int(value: _, offset: _, isBool: _, val tyStart, val tyLen, isNeg: _) => {
-            mut val bs: Array[U8] = []
-            appendBytes(into: inout bs, from: "Int:".bytes)
-            mut val i: U64 = 0
-            while i < tyLen {
-                bs.append(value: c.arena.bytes[tyStart + i])
-                i += 1
+            Expr.Index(base: _, index: _) => { return "Index" }
+            Expr.Binary(op: _, lhs: _, rhs: _) => { return "Binary" }
+            Expr.Cast(operand: _, tyStart: _, tyLen: _, ty: _) => { return "Cast" }
+            Expr.Int(value: _, offset: _, isBool: _, val tyStart, val tyLen, isNeg: _) => {
+                mut val bs: Array[U8] = []
+                appendBytes(into: inout bs, from: "Int:".bytes)
+                mut val i: U64 = 0
+                while i < tyLen {
+                    bs.append(value: self.arena.bytes[tyStart + i])
+                    i += 1
+                }
+                return stringFromBytesUnchecked(b: bs)
             }
-            return stringFromBytesUnchecked(b: bs)
+            Expr.Unary(op: _, operand: _) => { return "Unary" }
+            _ => { return "other" }
         }
-        Expr.Unary(op: _, operand: _) => { return "Unary" }
-        _ => { return "other" }
     }
-}
 
-// The head-name text of a TypeRef (for diagnostics), or "?" for the unknown ref 0.
-fn tcRefName(c: inout Comp, ref: U64) -> String {
-    if ref == 0U64 || ref >= c.arena.types.count {
-        return "?"
+    inout fn tcRefName(ref: U64) -> String {
+        if ref == 0U64 || ref >= self.arena.types.count {
+            return "?"
+        }
+        val t: TypeRef = self.arena.types[ref]
+        mut val bs: Array[U8] = []
+        mut val i: U64 = 0
+        while i < t.nameLen {
+            bs.append(value: self.arena.bytes[t.nameStart + i])
+            i += 1
+        }
+        return stringFromBytesUnchecked(b: bs)
     }
-    val t: TypeRef = c.arena.types[ref]
-    mut val bs: Array[U8] = []
-    mut val i: U64 = 0
-    while i < t.nameLen {
-        bs.append(value: c.arena.bytes[t.nameStart + i])
-        i += 1
-    }
-    return stringFromBytesUnchecked(b: bs)
 }

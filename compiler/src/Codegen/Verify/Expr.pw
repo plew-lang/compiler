@@ -77,12 +77,12 @@ fn verifyExpr(c: inout Comp, id: U64) {
             c.checkMethodArgCategories(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.ExtMethod(val recv, val srcStart, val srcLen, nameStart: _, nameLen: _, val args) => {
-            checkViewValid(c: inout c, recv: recv, srcStart: srcStart, srcLen: srcLen, strip: false)
+            c.checkViewValid(recv: recv, srcStart: srcStart, srcLen: srcLen, strip: false)
             verifyExpr(c: inout c, id: recv)
             c.verifyArgs(args: args)
         }
         Expr.ExtView(val recv, val srcStart, val srcLen, val strip) => {
-            checkViewValid(c: inout c, recv: recv, srcStart: srcStart, srcLen: srcLen, strip: strip)
+            c.checkViewValid(recv: recv, srcStart: srcStart, srcLen: srcLen, strip: strip)
             verifyExpr(c: inout c, id: recv)
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
@@ -131,7 +131,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
                                 mut val mfk: U64 = 0
                                 while mfk < fields.count {
                                     if spansEqual(c: inout c, aStart: fields[mfk].nameStart, aLen: fields[mfk].nameLen, bStart: cfs[cfi].nameStart, bLen: cfs[cfi].nameLen) {
-                                        tcCheckValue(c: inout c, expectedRef: cfs[cfi].ty, valueExpr: fields[mfk].value, pos: tcFieldPos(c: inout c, prefix: "payload:", nameStart: cfs[cfi].nameStart, nameLen: cfs[cfi].nameLen))
+                                        c.tcCheckValue(expectedRef: cfs[cfi].ty, valueExpr: fields[mfk].value, pos: c.tcFieldPos(prefix: "payload:", nameStart: cfs[cfi].nameStart, nameLen: cfs[cfi].nameLen))
                                         mfk = fields.count
                                     } else {
                                         mfk += 1U64
@@ -191,7 +191,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
                     mut val fk: U64 = 0
                     while fk < cfs.count {
                         if spansEqual(c: inout c, aStart: cfs[fk].nameStart, aLen: cfs[fk].nameLen, bStart: fields[i].nameStart, bLen: fields[i].nameLen) {
-                            tcCheckValue(c: inout c, expectedRef: cfs[fk].ty, valueExpr: fields[i].value, pos: "field")
+                            c.tcCheckValue(expectedRef: cfs[fk].ty, valueExpr: fields[i].value, pos: "field")
                             fk = cfs.count
                         } else {
                             fk += 1U64
@@ -218,16 +218,16 @@ fn verifyExpr(c: inout Comp, id: U64) {
             verifyExpr(c: inout c, id: lhs)
             verifyExpr(c: inout c, id: rhs)
             c.verifyBinaryOp(op: op, lhs: lhs, rhs: rhs)
-            tcCheckBinop(c: inout c, op: op, lhs: lhs, rhs: rhs)
+            c.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
         }
         Expr.Unary(val op, val operand) => {
             verifyExpr(c: inout c, id: operand)
-            tcCheckUnary(c: inout c, op: op, operand: operand)
+            c.tcCheckUnary(op: op, operand: operand)
         }
         Expr.Index(val base, val index) => {
             verifyExpr(c: inout c, id: base)
             verifyExpr(c: inout c, id: index)
-            tcCheckArrayIndex(c: inout c, base: base, index: index)
+            c.tcCheckArrayIndex(base: base, index: index)
             c.checkIndexKeyType(base: base, index: index)
         }
         Expr.Array(val elems) => {

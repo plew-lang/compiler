@@ -126,7 +126,7 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
             // generic free-function machinery (declareGenFns/emitGenFns). Infer the type
             // args from the call, find the monomorphized instance, and call it under the
             // type-param env (mono's registerAssocInst registered the FnInst).
-            if isGenericFreeFn(c: inout c, fi: afi) {
+            if c.isGenericFreeFn(fi: afi) {
                 mut val ginf: Array[U64] = llvmInferFnArgs(c: inout c, st: inout st, f: c.arena.funcs[afi], args: args)
                 // a factory whose type params aren't fully determined by its arguments
                 // (`Head.empty()` has none) grounds the unfound params from the expected

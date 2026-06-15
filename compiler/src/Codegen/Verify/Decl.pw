@@ -3,401 +3,345 @@
 // function/field/label names, generic arity, lang-item redefinition.
 
 // Verify every non-extern, non-template function body.
-fn verifyProgram(c: inout Comp) {
-    mut val fi: U64 = 0
-    while fi < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[fi]
-        // acceptance soundness is about the USER's code: verify only entry-module
-        // (module 0) bodies. The auto-loaded prelude / std (`@Std/*`) is trusted and
-        // validated separately (test suite + self-compile); walking it here falsely
-        // rejected a no-import program because a prelude body's operator witness
-        // (`Add[U64]` in SipHasher) lives in Core, loaded only on import.
-        if !(f.isExtern || methodInEntryModule(c: inout c, f: f)) {
+
+pub impl Comp {
+    inout fn verifyProgram() {
+        mut val fi: U64 = 0
+        while fi < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[fi]
+            // acceptance soundness is about the USER's code: verify only entry-module
+            // (module 0) bodies. The auto-loaded prelude / std (`@Std/*`) is trusted and
+            // validated separately (test suite + self-compile); walking it here falsely
+            // rejected a no-import program because a prelude body's operator witness
+            // (`Add[U64]` in SipHasher) lives in Core, loaded only on import.
+            if !(f.isExtern || methodInEntryModule(c: inout self, f: f)) {
+                fi += 1
+                continue
+            }
+            if !(f.isExtern) {
+                if f.typeParams.count > 0U64 {
+                    // a generic template: its concrete instances are checked during the
+                    // C emitter's instance emission (with the substitution env); this
+                    // backend-independent pass covers non-generic bodies (where the
+                    // reject-test surface lives) without a substitution env.
+                } else {
+                if methodRecvIsTrait(c: inout self, f: f) {
+                    // a trait provided-method template — checked per conforming type
+                    // (its concrete copies are ordinary funcs and get verified).
+                } else {
+                    // async bodies are checked too: an `async fn f() -> I64` body's
+                    // `return n` yields the DECLARED type I64 (the Promise[I64] wrapping is
+                    // implicit), so the return-context check uses f.retStart as-is. `await`
+                    // expressions infer as unknown (0) and are left to the conservative
+                    // pass-through. (The retired C emitter used to be the only check here.)
+                    self.verifyFunc(f: f)
+                }
+                }
+            }
             fi += 1
-            continue
         }
-        if !(f.isExtern) {
-            if f.typeParams.count > 0U64 {
-                // a generic template: its concrete instances are checked during the
-                // C emitter's instance emission (with the substitution env); this
-                // backend-independent pass covers non-generic bodies (where the
-                // reject-test surface lives) without a substitution env.
-            } else {
-            if methodRecvIsTrait(c: inout c, f: f) {
-                // a trait provided-method template — checked per conforming type
-                // (its concrete copies are ordinary funcs and get verified).
-            } else {
-                // async bodies are checked too: an `async fn f() -> I64` body's
-                // `return n` yields the DECLARED type I64 (the Promise[I64] wrapping is
-                // implicit), so the return-context check uses f.retStart as-is. `await`
-                // expressions infer as unknown (0) and are left to the conservative
-                // pass-through. (The retired C emitter used to be the only check here.)
-                c.verifyFunc(f: f)
-            }
-            }
-        }
-        fi += 1
+        self.checkDeclShapes()
     }
-    checkDeclShapes(c: inout c)
-}
 
-// A `value#X` view is valid only when X actually applies to the receiver's type
-// (spec/09). The two view kinds are asymmetric: an extension view `#A` is purely
-// *additive* (it opts in A's methods — which are otherwise off the bare surface — so
-// it never conflicts by default), and so requires the extension to declare an `impl`
-// for this type; a trait view `#P` *adds nothing* (a conformance already puts P's
-// methods on the bare surface) and exists only to *narrow* an ambiguity, so it
-// requires the type to already CONFORM to P — a trait view never confers a
-// conformance. Selecting a non-conforming trait, a non-applicable extension, or an
-// unknown name would silently fall through to the bare surface (hidden meaning), so
-// it is rejected. Skips the `#!Ext` strip form and receivers whose type is unknown
-// here (conservative). Verify only walks non-generic entry-module bodies, so the
-// receiver type is concrete (no type-parameter receivers to special-case).
-fn checkViewValid(c: inout Comp, recv: U64, srcStart: U64, srcLen: U64, strip: Bool) {
-    if strip {
-        return
-    }
-    val rt: TypeInfo = exprType(c: inout c, id: recv)
-    if rt.nameLen == 0U64 {
-        return
-    }
-    if isTraitName(c: inout c, start: srcStart, len: srcLen) {
-        if !(typeConformsTo(c: inout c, typeStart: rt.nameStart, typeLen: rt.nameLen, traitStart: srcStart, traitLen: srcLen)) {
-            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)")
+    inout fn checkViewValid(recv: U64, srcStart: U64, srcLen: U64, strip: Bool) {
+        if strip {
+            return
         }
-        return
-    }
-    if isExtName(c: inout c, start: srcStart, len: srcLen) {
-        if !(extAppliesToType(c: inout c, extStart: srcStart, extLen: srcLen, typeStart: rt.nameStart, typeLen: rt.nameLen)) {
-            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "cannot view this value through that extension (`value#Ext`): the extension declares no `impl` for this type (spec/09)")
+        val rt: TypeInfo = exprType(c: inout self, id: recv)
+        if rt.nameLen == 0U64 {
+            return
         }
-        return
-    }
-    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: recv)), msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)")
-}
-
-// Declaration-shape soundness for entry-module struct/enum types: a duplicate field
-// name (`struct A { val x  val x }`) or duplicate variant payload field would make a
-// construction / pattern ambiguous (and silently pick one) — a hidden-meaning bug.
-// Only the entry module (module 0) is the user's code; std/prelude is trusted.
-fn checkDeclShapes(c: inout Comp) {
-    // the `--gen` harness (spec/16) is a synthesized, trusted artifact that may
-    // duplicate derive scaffolding by construction; the actual generated source is
-    // decl-shape-checked when the final program is compiled normally (non-gen).
-    if c.genMode {
-        return
-    }
-    checkLangItemRedef(c: inout c)
-    checkBlanketHeadless(c: inout c)
-    checkDupTypeNames(c: inout c)
-    checkDupFns(c: inout c)
-    checkDupParamLabels(c: inout c)
-    mut val si: U64 = 0
-    while si < c.arena.structs.count {
-        val sd: StructDef = c.arena.structs[si]
-        if !(sd.isExtern) {
-            if moduleOf(c: inout c, offset: sd.nameStart) == 0U64 {
-                checkDupFields(c: inout c, fs: sd.fields, ctx: "struct")
+        if isTraitName(c: inout self, start: srcStart, len: srcLen) {
+            if !(typeConformsTo(c: inout self, typeStart: rt.nameStart, typeLen: rt.nameLen, traitStart: srcStart, traitLen: srcLen)) {
+                compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: recv)), msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)")
             }
+            return
         }
-        si += 1
+        if isExtName(c: inout self, start: srcStart, len: srcLen) {
+            if !(extAppliesToType(c: inout self, extStart: srcStart, extLen: srcLen, typeStart: rt.nameStart, typeLen: rt.nameLen)) {
+                compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: recv)), msg: "cannot view this value through that extension (`value#Ext`): the extension declares no `impl` for this type (spec/09)")
+            }
+            return
+        }
+        compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: recv)), msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)")
     }
-    mut val ei: U64 = 0
-    while ei < c.arena.enums.count {
-        val ed: EnumDef = c.arena.enums[ei]
-        if moduleOf(c: inout c, offset: ed.nameStart) == 0U64 {
-            // duplicate variant names, and duplicate fields within each variant.
-            mut val vi: U64 = 0
-            while vi < ed.variants.count {
-                mut val vj: U64 = vi + 1U64
-                while vj < ed.variants.count {
-                    if spansEqual(c: inout c, aStart: ed.variants[vi].nameStart, aLen: ed.variants[vi].nameLen, bStart: ed.variants[vj].nameStart, bLen: ed.variants[vj].nameLen) {
-                        compileErrorAt(line: lineOf(c: inout c, offset: ed.variants[vj].nameStart), msg: "duplicate enum variant name (each variant must be distinct)")
+
+    inout fn checkDeclShapes() {
+        // the `--gen` harness (spec/16) is a synthesized, trusted artifact that may
+        // duplicate derive scaffolding by construction; the actual generated source is
+        // decl-shape-checked when the final program is compiled normally (non-gen).
+        if self.genMode {
+            return
+        }
+        self.checkLangItemRedef()
+        self.checkBlanketHeadless()
+        self.checkDupTypeNames()
+        self.checkDupFns()
+        self.checkDupParamLabels()
+        mut val si: U64 = 0
+        while si < self.arena.structs.count {
+            val sd: StructDef = self.arena.structs[si]
+            if !(sd.isExtern) {
+                if moduleOf(c: inout self, offset: sd.nameStart) == 0U64 {
+                    self.checkDupFields(fs: sd.fields, ctx: "struct")
+                }
+            }
+            si += 1
+        }
+        mut val ei: U64 = 0
+        while ei < self.arena.enums.count {
+            val ed: EnumDef = self.arena.enums[ei]
+            if moduleOf(c: inout self, offset: ed.nameStart) == 0U64 {
+                // duplicate variant names, and duplicate fields within each variant.
+                mut val vi: U64 = 0
+                while vi < ed.variants.count {
+                    mut val vj: U64 = vi + 1U64
+                    while vj < ed.variants.count {
+                        if spansEqual(c: inout self, aStart: ed.variants[vi].nameStart, aLen: ed.variants[vi].nameLen, bStart: ed.variants[vj].nameStart, bLen: ed.variants[vj].nameLen) {
+                            compileErrorAt(line: lineOf(c: inout self, offset: ed.variants[vj].nameStart), msg: "duplicate enum variant name (each variant must be distinct)")
+                        }
+                        vj += 1
                     }
-                    vj += 1
-                }
-                checkDupFields(c: inout c, fs: ed.variants[vi].fields, ctx: "variant")
-                vi += 1
-            }
-        }
-        ei += 1
-    }
-}
-
-// Reject two entry-module type definitions sharing a name (`struct A {} struct A {}`,
-// `struct A {} enum A {}`): the second silently shadows the first in name resolution.
-// Names are collected from both structs and enums; only module 0 (the user's code) is
-// checked, so defining a type that coincides with a std type is a separate concern.
-// Reject a user (entry-module) type definition that redefines a lang-item type
-// (`struct String { … }`, `enum Optional { … }`): these names are reserved by the
-// language (spec/15 — they are ambient). The std definitions live in their own
-// modules (id ≠ 0), so only entry-module redefinitions are flagged. Without this the
-// user's def silently shadows the lang item in name resolution.
-// Reject a headless-Self blanket conformance `impl[T] T as Trait where T: Bound`
-// (spec/09: 頭なし Self の blanket は禁止). When the impl subject is a bare type
-// parameter (no type constructor), type ownership can't anchor the conformance and
-// a type's bare-method surface stops being locally enumerable. The spec's legal way
-// to express "every conformer of B also conforms to A" is `impl B as A` (trait
-// subject, extension-only). Only entry-module (module 0) impls are the user's code;
-// std is trusted (and uses no headless blankets — every std `impl[..]` has a type
-// constructor head like `Optional[T]` / `MapIter[I,F,B]`).
-fn checkBlanketHeadless(c: inout Comp) {
-    mut val i: U64 = 0
-    while i < c.decls.conforms.count {
-        val cf: Conform = c.decls.conforms[i]
-        if !(cf.derived) {
-            if moduleOf(c: inout c, offset: cf.typeStart) == 0U64 {
-                if isBlanketConform(c: inout c, cf: cf) {
-                    compileErrorAt(line: lineOf(c: inout c, offset: cf.typeStart), msg: "a blanket impl over a bare type parameter (`impl[T] T as Trait where T: Bound`) is not allowed: the subject must be a concrete type or a trait. To make every conformer of one trait conform to another, use `impl B as A` (subject = the trait, spec/09)")
+                    self.checkDupFields(fs: ed.variants[vi].fields, ctx: "variant")
+                    vi += 1
                 }
             }
+            ei += 1
         }
-        i += 1U64
     }
-}
 
-fn checkLangItemRedef(c: inout Comp) {
-    mut val si: U64 = 0
-    while si < c.arena.structs.count {
-        val sd: StructDef = c.arena.structs[si]
-        // extern structs ARE the canonical lang-item declarations (String/Bool/numeric
-        // intrinsics in Core, defOffset 0) — skip them; only a non-extern user redef hits.
-        if !(sd.isExtern) {
-            if offsetIsLoaded(c: inout c, offset: sd.defOffset) {
-                if moduleOf(c: inout c, offset: sd.defOffset) == 0U64 {
-                    if isAmbientInLang(c: inout c, start: sd.nameStart, len: sd.nameLen) {
-                        compileErrorAt(line: lineOf(c: inout c, offset: sd.defOffset), msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)")
+    inout fn checkBlanketHeadless() {
+        mut val i: U64 = 0
+        while i < self.decls.conforms.count {
+            val cf: Conform = self.decls.conforms[i]
+            if !(cf.derived) {
+                if moduleOf(c: inout self, offset: cf.typeStart) == 0U64 {
+                    if isBlanketConform(c: inout self, cf: cf) {
+                        compileErrorAt(line: lineOf(c: inout self, offset: cf.typeStart), msg: "a blanket impl over a bare type parameter (`impl[T] T as Trait where T: Bound`) is not allowed: the subject must be a concrete type or a trait. To make every conformer of one trait conform to another, use `impl B as A` (subject = the trait, spec/09)")
                     }
                 }
             }
+            i += 1U64
         }
-        si += 1U64
     }
-    mut val ei: U64 = 0
-    while ei < c.arena.enums.count {
-        val ed: EnumDef = c.arena.enums[ei]
-        if offsetIsLoaded(c: inout c, offset: ed.defOffset) {
-            if moduleOf(c: inout c, offset: ed.defOffset) == 0U64 {
-                if isAmbientInLang(c: inout c, start: ed.nameStart, len: ed.nameLen) {
-                    compileErrorAt(line: lineOf(c: inout c, offset: ed.defOffset), msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)")
-                }
-            }
-        }
-        ei += 1U64
-    }
-}
 
-fn checkDupTypeNames(c: inout Comp) {
-    mut val names: Array[U64] = []
-    mut val offs: Array[U64] = []
-    mut val si: U64 = 0
-    while si < c.arena.structs.count {
-        val sd: StructDef = c.arena.structs[si]
-        if !(sd.isExtern) {
-            if moduleOf(c: inout c, offset: sd.nameStart) == 0U64 {
-                names.append(value: intern(c: inout c, start: sd.nameStart, len: sd.nameLen))
-                offs.append(value: sd.nameStart)
-            }
-        }
-        si += 1
-    }
-    mut val ei: U64 = 0
-    while ei < c.arena.enums.count {
-        val ed: EnumDef = c.arena.enums[ei]
-        if moduleOf(c: inout c, offset: ed.nameStart) == 0U64 {
-            names.append(value: intern(c: inout c, start: ed.nameStart, len: ed.nameLen))
-            offs.append(value: ed.nameStart)
-        }
-        ei += 1
-    }
-    mut val i: U64 = 0
-    while i < names.count {
-        mut val j: U64 = i + 1U64
-        while j < names.count {
-            if names[i] == names[j] {
-                compileErrorAt(line: lineOf(c: inout c, offset: offs[j]), msg: "duplicate type name (a struct/enum with this name is already declared in this module)")
-            }
-            j += 1
-        }
-        i += 1
-    }
-}
-
-// The extension-view id of a parameter's declared type (0 = plain), for distinguishing
-// a view-aware overload `f(a: P)` vs `f(a: P#Ext)` from a true duplicate.
-fn paramViewId(c: inout Comp, p: Param) -> U64 {
-    if p.ty < c.arena.types.count {
-        return c.arena.types[p.ty].viewExtId
-    }
-    return 0U64
-}
-
-// Two functions/methods are EXACT duplicates when they share name + receiver and every
-// parameter agrees on label + declared type head + array-ness + extension view. Such a
-// pair is ambiguous (overload resolution silently picks one) — a hidden-meaning bug. A
-// distinct param type / label / view makes a legitimate overload, so those don't match.
-fn isExactDupFn(c: inout Comp, a: Func, b: Func) -> Bool {
-    if a.nameId != b.nameId {
-        return false
-    }
-    if a.recvId != b.recvId {
-        return false
-    }
-    if a.extId != b.extId {
-        return false
-    }
-    if a.params.count != b.params.count {
-        return false
-    }
-    mut val i: U64 = 0
-    while i < a.params.count {
-        val pa: Param = a.params[i]
-        val pb: Param = b.params[i]
-        if pa.noLabel != pb.noLabel {
-            return false
-        }
-        if !(pa.noLabel) {
-            if pa.nameId != pb.nameId {
-                return false
-            }
-        }
-        if pa.tyNameId != pb.tyNameId {
-            return false
-        }
-        if pa.tyIsArray != pb.tyIsArray {
-            return false
-        }
-        if paramViewId(c: inout c, p: pa) != paramViewId(c: inout c, p: pb) {
-            return false
-        }
-        i += 1
-    }
-    return true
-}
-
-// Reject two entry-module function/method declarations with an identical selector
-// (name + receiver + per-param label/type/view). Conservative: skip generic templates
-// (their instances differ), provided-method copies (synthesized per conformer), and
-// any decl with a default arg (omission generates extra selectors — out of scope here).
-fn checkDupFns(c: inout Comp) {
-    mut val cand: Array[U64] = []
-    mut val fi: U64 = 0
-    while fi < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[fi]
-        if f.typeParams.count == 0U64 && !f.isProvided && !f.isExtern && !fnHasDefault(c: inout c, f: f) {
-            if moduleOf(c: inout c, offset: f.nameStart) == 0U64 {
-                cand.append(value: fi)
-            }
-        }
-        fi += 1
-    }
-    mut val i: U64 = 0
-    while i < cand.count {
-        mut val j: U64 = i + 1U64
-        while j < cand.count {
-            if isExactDupFn(c: inout c, a: c.arena.funcs[cand[i]], b: c.arena.funcs[cand[j]]) {
-                compileErrorAt(line: lineOf(c: inout c, offset: c.arena.funcs[cand[j]].nameStart), msg: "duplicate function: another declaration has the same name, labels, and parameter types (overloads must differ in a label or a parameter type)")
-            }
-            j += 1
-        }
-        i += 1
-    }
-}
-
-// Reject two labelled parameters of one entry-module function sharing a label
-// (`fn f(a: I64, a: I64)`): the call `f(a: …, a: …)` can't bind them unambiguously,
-// and the second silently shadows the first in the body. Label-suppressed (`~:`)
-// params carry no label and are exempt.
-fn checkDupParamLabels(c: inout Comp) {
-    mut val fi: U64 = 0
-    while fi < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[fi]
-        if !(f.isExtern || f.isProvided) {
-            if moduleOf(c: inout c, offset: f.nameStart) == 0U64 {
-                mut val i: U64 = 0
-                while i < f.params.count {
-                    if !(f.params[i].noLabel) {
-                        mut val j: U64 = i + 1U64
-                        while j < f.params.count {
-                            if !(f.params[j].noLabel) {
-                                if f.params[i].nameId == f.params[j].nameId {
-                                    compileErrorAt(line: lineOf(c: inout c, offset: f.params[j].nameStart), msg: "duplicate parameter label (each labelled parameter must have a distinct name)")
-                                }
-                            }
-                            j += 1
+    inout fn checkLangItemRedef() {
+        mut val si: U64 = 0
+        while si < self.arena.structs.count {
+            val sd: StructDef = self.arena.structs[si]
+            // extern structs ARE the canonical lang-item declarations (String/Bool/numeric
+            // intrinsics in Core, defOffset 0) — skip them; only a non-extern user redef hits.
+            if !(sd.isExtern) {
+                if offsetIsLoaded(c: inout self, offset: sd.defOffset) {
+                    if moduleOf(c: inout self, offset: sd.defOffset) == 0U64 {
+                        if isAmbientInLang(c: inout self, start: sd.nameStart, len: sd.nameLen) {
+                            compileErrorAt(line: lineOf(c: inout self, offset: sd.defOffset), msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)")
                         }
                     }
-                    i += 1
                 }
             }
+            si += 1U64
         }
-        fi += 1
-    }
-}
-
-// Whether any parameter of `f` carries a default argument.
-fn fnHasDefault(c: inout Comp, f: Func) -> Bool {
-    mut val i: U64 = 0
-    while i < f.params.count {
-        if f.params[i].hasDefault {
-            return true
-        }
-        i += 1
-    }
-    return false
-}
-
-// Reject a duplicate field name within one field list (struct body / variant payload).
-fn checkDupFields(c: inout Comp, fs: Array[FieldDef], ctx: String) {
-    mut val i: U64 = 0
-    while i < fs.count {
-        mut val j: U64 = i + 1U64
-        while j < fs.count {
-            if spansEqual(c: inout c, aStart: fs[i].nameStart, aLen: fs[i].nameLen, bStart: fs[j].nameStart, bLen: fs[j].nameLen) {
-                compileErrorAt(line: lineOf(c: inout c, offset: fs[j].nameStart), msg: "duplicate field name (each field in a struct body / variant payload must be distinct)")
-            }
-            j += 1
-        }
-        i += 1
-    }
-}
-
-// Establish the same body context genFunc does — return type (for `return e`
-// range checks), receiver/self env (so `self`-based field/method access
-// resolves), and the parameter locals — then walk the body building the local
-// symbol table so mutability / visibility / unique checks see real bindings.
-// A written generic type annotation must supply the right number of type arguments
-// (`Box[I64, String]` for a one-parameter `Box[T]` is invalid). Conservative: only a
-// ref that DOES carry args (args.count > 0) and names a known generic struct/enum is
-// judged, so a bare name or a non-generic type is never flagged. Recurses into the
-// args so a nested `Box[Pair[I64]]` mismatch is caught too.
-fn checkGenericArity(c: inout Comp, ref: U64, offset: U64) {
-    if ref == 0U64 {
-        return
-    }
-    if ref >= c.arena.types.count {
-        return
-    }
-    val t: TypeRef = c.arena.types[ref]
-    if t.args.count > 0U64 {
-        val si: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-        if si < c.arena.structs.count {
-            if t.args.count != c.arena.structs[si].typeParams.count {
-                compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "wrong number of type arguments for this generic type (spec/06)")
-            }
-        } else {
-            val ei: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-            if ei < c.arena.enums.count {
-                if t.args.count != c.arena.enums[ei].typeParams.count {
-                    compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "wrong number of type arguments for this generic type (spec/06)")
+        mut val ei: U64 = 0
+        while ei < self.arena.enums.count {
+            val ed: EnumDef = self.arena.enums[ei]
+            if offsetIsLoaded(c: inout self, offset: ed.defOffset) {
+                if moduleOf(c: inout self, offset: ed.defOffset) == 0U64 {
+                    if isAmbientInLang(c: inout self, start: ed.nameStart, len: ed.nameLen) {
+                        compileErrorAt(line: lineOf(c: inout self, offset: ed.defOffset), msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)")
+                    }
                 }
             }
+            ei += 1U64
         }
-        mut val ai: U64 = 0
-        while ai < t.args.count {
-            checkGenericArity(c: inout c, ref: t.args[ai], offset: offset)
-            ai += 1
+    }
+
+    inout fn checkDupTypeNames() {
+        mut val names: Array[U64] = []
+        mut val offs: Array[U64] = []
+        mut val si: U64 = 0
+        while si < self.arena.structs.count {
+            val sd: StructDef = self.arena.structs[si]
+            if !(sd.isExtern) {
+                if moduleOf(c: inout self, offset: sd.nameStart) == 0U64 {
+                    names.append(value: intern(c: inout self, start: sd.nameStart, len: sd.nameLen))
+                    offs.append(value: sd.nameStart)
+                }
+            }
+            si += 1
+        }
+        mut val ei: U64 = 0
+        while ei < self.arena.enums.count {
+            val ed: EnumDef = self.arena.enums[ei]
+            if moduleOf(c: inout self, offset: ed.nameStart) == 0U64 {
+                names.append(value: intern(c: inout self, start: ed.nameStart, len: ed.nameLen))
+                offs.append(value: ed.nameStart)
+            }
+            ei += 1
+        }
+        mut val i: U64 = 0
+        while i < names.count {
+            mut val j: U64 = i + 1U64
+            while j < names.count {
+                if names[i] == names[j] {
+                    compileErrorAt(line: lineOf(c: inout self, offset: offs[j]), msg: "duplicate type name (a struct/enum with this name is already declared in this module)")
+                }
+                j += 1
+            }
+            i += 1
+        }
+    }
+
+    inout fn paramViewId(p: Param) -> U64 {
+        if p.ty < self.arena.types.count {
+            return self.arena.types[p.ty].viewExtId
+        }
+        return 0U64
+    }
+
+    inout fn isExactDupFn(a: Func, b: Func) -> Bool {
+        if a.nameId != b.nameId {
+            return false
+        }
+        if a.recvId != b.recvId {
+            return false
+        }
+        if a.extId != b.extId {
+            return false
+        }
+        if a.params.count != b.params.count {
+            return false
+        }
+        mut val i: U64 = 0
+        while i < a.params.count {
+            val pa: Param = a.params[i]
+            val pb: Param = b.params[i]
+            if pa.noLabel != pb.noLabel {
+                return false
+            }
+            if !(pa.noLabel) {
+                if pa.nameId != pb.nameId {
+                    return false
+                }
+            }
+            if pa.tyNameId != pb.tyNameId {
+                return false
+            }
+            if pa.tyIsArray != pb.tyIsArray {
+                return false
+            }
+            if self.paramViewId(p: pa) != self.paramViewId(p: pb) {
+                return false
+            }
+            i += 1
+        }
+        return true
+    }
+
+    inout fn checkDupFns() {
+        mut val cand: Array[U64] = []
+        mut val fi: U64 = 0
+        while fi < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[fi]
+            if f.typeParams.count == 0U64 && !f.isProvided && !f.isExtern && !self.fnHasDefault(f: f) {
+                if moduleOf(c: inout self, offset: f.nameStart) == 0U64 {
+                    cand.append(value: fi)
+                }
+            }
+            fi += 1
+        }
+        mut val i: U64 = 0
+        while i < cand.count {
+            mut val j: U64 = i + 1U64
+            while j < cand.count {
+                if self.isExactDupFn(a: self.arena.funcs[cand[i]], b: self.arena.funcs[cand[j]]) {
+                    compileErrorAt(line: lineOf(c: inout self, offset: self.arena.funcs[cand[j]].nameStart), msg: "duplicate function: another declaration has the same name, labels, and parameter types (overloads must differ in a label or a parameter type)")
+                }
+                j += 1
+            }
+            i += 1
+        }
+    }
+
+    inout fn checkDupParamLabels() {
+        mut val fi: U64 = 0
+        while fi < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[fi]
+            if !(f.isExtern || f.isProvided) {
+                if moduleOf(c: inout self, offset: f.nameStart) == 0U64 {
+                    mut val i: U64 = 0
+                    while i < f.params.count {
+                        if !(f.params[i].noLabel) {
+                            mut val j: U64 = i + 1U64
+                            while j < f.params.count {
+                                if !(f.params[j].noLabel) {
+                                    if f.params[i].nameId == f.params[j].nameId {
+                                        compileErrorAt(line: lineOf(c: inout self, offset: f.params[j].nameStart), msg: "duplicate parameter label (each labelled parameter must have a distinct name)")
+                                    }
+                                }
+                                j += 1
+                            }
+                        }
+                        i += 1
+                    }
+                }
+            }
+            fi += 1
+        }
+    }
+
+    inout fn fnHasDefault(f: Func) -> Bool {
+        mut val i: U64 = 0
+        while i < f.params.count {
+            if f.params[i].hasDefault {
+                return true
+            }
+            i += 1
+        }
+        return false
+    }
+
+    inout fn checkDupFields(fs: Array[FieldDef], ctx: String) {
+        mut val i: U64 = 0
+        while i < fs.count {
+            mut val j: U64 = i + 1U64
+            while j < fs.count {
+                if spansEqual(c: inout self, aStart: fs[i].nameStart, aLen: fs[i].nameLen, bStart: fs[j].nameStart, bLen: fs[j].nameLen) {
+                    compileErrorAt(line: lineOf(c: inout self, offset: fs[j].nameStart), msg: "duplicate field name (each field in a struct body / variant payload must be distinct)")
+                }
+                j += 1
+            }
+            i += 1
+        }
+    }
+
+    inout fn checkGenericArity(ref: U64, offset: U64) {
+        if ref == 0U64 {
+            return
+        }
+        if ref >= self.arena.types.count {
+            return
+        }
+        val t: TypeRef = self.arena.types[ref]
+        if t.args.count > 0U64 {
+            val si: U64 = self.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
+            if si < self.arena.structs.count {
+                if t.args.count != self.arena.structs[si].typeParams.count {
+                    compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "wrong number of type arguments for this generic type (spec/06)")
+                }
+            } else {
+                val ei: U64 = self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
+                if ei < self.arena.enums.count {
+                    if t.args.count != self.arena.enums[ei].typeParams.count {
+                        compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "wrong number of type arguments for this generic type (spec/06)")
+                    }
+                }
+            }
+            mut val ai: U64 = 0
+            while ai < t.args.count {
+                self.checkGenericArity(ref: t.args[ai], offset: offset)
+                ai += 1
+            }
         }
     }
 }
-

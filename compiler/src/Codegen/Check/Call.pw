@@ -152,7 +152,7 @@ pub impl Comp {
                     mut val k: U64 = 0
                     while k < args.count {
                         if k + 1U64 < ft.args.count {
-                            tcCheckValue(c: inout self, expectedRef: ft.args[k + 1U64], valueExpr: args[k].expr, pos: "fn-value arg")
+                            self.tcCheckValue(expectedRef: ft.args[k + 1U64], valueExpr: args[k].expr, pos: "fn-value arg")
                         }
                         k += 1
                     }
@@ -181,7 +181,7 @@ pub impl Comp {
                 // return type for a `fn(...)->R` param, etself.) — checkLitSpan only sees
                 // literals. tcCheckValue rejects only DEFINITE mismatches (unknown/generic
                 // types pass through).
-                tcCheckValue(c: inout self, expectedRef: p.ty, valueExpr: args[i].expr, pos: "arg")
+                self.tcCheckValue(expectedRef: p.ty, valueExpr: args[i].expr, pos: "arg")
             } else {
                 checkLitCtx(c: inout self, id: args[i].expr, eKind: 0, eBits: 0, eSgn: false)
             }
@@ -277,10 +277,10 @@ pub impl Comp {
                             while dai < args.count {
                                 if args[dai].hasLabel {
                                     if rangeEquals(bytes: self.arena.bytes, start: args[dai].labelStart, len: args[dai].labelLen, kw: "key") {
-                                        tcCheckValue(c: inout self, expectedRef: drt.args[0], valueExpr: args[dai].expr, pos: "dict key")
+                                        self.tcCheckValue(expectedRef: drt.args[0], valueExpr: args[dai].expr, pos: "dict key")
                                     }
                                     if rangeEquals(bytes: self.arena.bytes, start: args[dai].labelStart, len: args[dai].labelLen, kw: "value") || rangeEquals(bytes: self.arena.bytes, start: args[dai].labelStart, len: args[dai].labelLen, kw: "fallback") {
-                                        tcCheckValue(c: inout self, expectedRef: drt.args[1], valueExpr: args[dai].expr, pos: "dict value")
+                                        self.tcCheckValue(expectedRef: drt.args[1], valueExpr: args[dai].expr, pos: "dict value")
                                     }
                                 }
                                 dai += 1
@@ -309,7 +309,7 @@ pub impl Comp {
                             // `fold[B]`'s `B`, so only primitives are checked this way.)
                             if isPrimType(c: inout self, start: p.tyStart, len: p.tyLen) {
                                 checkLitSpan(c: inout self, id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
-                                tcCheckValue(c: inout self, expectedRef: p.ty, valueExpr: args[i].expr, pos: "arg")
+                                self.tcCheckValue(expectedRef: p.ty, valueExpr: args[i].expr, pos: "arg")
                             } else {
                                 // resolve the param's type under the receiver's
                                 // instantiation so a literal arg gets the concrete context.
@@ -347,13 +347,13 @@ pub impl Comp {
                                         }
                                     }
                                     if pref != 0U64 {
-                                        tcCheckValue(c: inout self, expectedRef: pref, valueExpr: args[i].expr, pos: "arg")
+                                        self.tcCheckValue(expectedRef: pref, valueExpr: args[i].expr, pos: "arg")
                                     }
                                 }
                             }
                         } else {
                             checkLitSpan(c: inout self, id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
-                            tcCheckValue(c: inout self, expectedRef: p.ty, valueExpr: args[i].expr, pos: "arg")
+                            self.tcCheckValue(expectedRef: p.ty, valueExpr: args[i].expr, pos: "arg")
                         }
                     } else {
                         checkLitCtx(c: inout self, id: args[i].expr, eKind: 0, eBits: 0, eSgn: false)
@@ -398,7 +398,7 @@ pub impl Comp {
                         // primitives are checked (their simpleTypeRef is reliable; a struct/
                         // generic element name may be mangled and is left to other checks).
                         if isIntType(c: inout self, start: rt.nameStart, len: rt.nameLen) || isFloatType(c: inout self, start: rt.nameStart, len: rt.nameLen) || rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Bool") || rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "String") {
-                            tcCheckValue(c: inout self, expectedRef: simpleTypeRef(c: inout self, nameStart: rt.nameStart, nameLen: rt.nameLen), valueExpr: args[i].expr, pos: "append")
+                            self.tcCheckValue(expectedRef: simpleTypeRef(c: inout self, nameStart: rt.nameStart, nameLen: rt.nameLen), valueExpr: args[i].expr, pos: "append")
                         }
                     }
                     i += 1
@@ -420,7 +420,7 @@ pub impl Comp {
                             val ap: Param = aps[k]
                             self.checkArgInoutMode(p: ap, arg: args[k])
                             checkLitSpan(c: inout self, id: args[k].expr, tyStart: ap.tyStart, tyLen: ap.tyLen, isArray: ap.tyIsArray)
-                            tcCheckValue(c: inout self, expectedRef: ap.ty, valueExpr: args[k].expr, pos: "arg")
+                            self.tcCheckValue(expectedRef: ap.ty, valueExpr: args[k].expr, pos: "arg")
                         }
                         k += 1
                     }

@@ -395,7 +395,7 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
         // a std free function reached from an emitted body (digitByteI from
         // I64.format) is declared+emitted lazily.
         if slot >= st.fnIdx.count {
-            if !(isGenericFreeFn(c: inout c, fi: cfi)) {
+            if !(c.isGenericFreeFn(fi: cfi)) {
                 slot = ensureFreeFnDeclared(c: inout c, st: inout st, fi: cfi)
             }
         }
@@ -418,7 +418,7 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
         }
         // a generic free-function call: infer its concrete type args, find the
         // instance, build args under the instance env, and call it.
-        if isGenericFreeFn(c: inout c, fi: cfi) {
+        if c.isGenericFreeFn(fi: cfi) {
             val inferred: Array[U64] = llvmInferFnArgs(c: inout c, st: inout st, f: c.arena.funcs[cfi], args: args)
             val gslot: U64 = genFnSlotFor(c: inout c, fnIdx: cfi, args: inferred, st: inout st)
             if gslot < st.genFnK.count {

@@ -241,7 +241,7 @@ fn checkFieldDefaults(c: inout Comp) {
                 // values) regardless of the field type, so a default of the wrong type
                 // (`val a: I64 = true`) slips through — full type-check against T.
                 if !(f.tyIsArray) {
-                    tcCheckValue(c: inout c, expectedRef: f.ty, valueExpr: f.defaultVal, pos: "field default")
+                    c.tcCheckValue(expectedRef: f.ty, valueExpr: f.defaultVal, pos: "field default")
                 }
             }
             j += 1
@@ -355,7 +355,7 @@ fn checkParamDefaults(c: inout Comp) {
                 checkDefaultSelfContained(c: inout c, exprId: p.defaultExpr, forbidden: forbidden, offset: p.nameStart, what: "a parameter default cannot reference another parameter or `self`; it is evaluated without them (spec/04)")
                 checkLitSpan(c: inout c, id: p.defaultExpr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
                 if !(p.tyIsArray) {
-                    tcCheckValue(c: inout c, expectedRef: p.ty, valueExpr: p.defaultExpr, pos: "default arg")
+                    c.tcCheckValue(expectedRef: p.ty, valueExpr: p.defaultExpr, pos: "default arg")
                 }
             }
             j += 1

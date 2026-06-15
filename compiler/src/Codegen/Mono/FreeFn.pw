@@ -2,405 +2,357 @@
 // instance registration.
 
 // Whether c.arena.funcs[fi] is a generic free function (no receiver, has type params).
-export fn isGenericFreeFn(c: inout Comp, fi: U64) -> Bool {
-    if fi >= c.arena.funcs.count {
-        return false
-    }
-    val f: Func = c.arena.funcs[fi]
-    if f.hasRecv {
-        return false
-    }
-    return f.typeParams.count > 0
-}
 
-// Find a bare (argument-less) TypeRef named (start,len), or create one. Dedups
-// by name bytes so the same concrete type maps to one TypeRef for mangling.
-export fn findOrAddTypeRef(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
-    val q: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-    mut val i: U64 = 0
-    while i < c.arena.types.count {
-        val t: TypeRef = c.arena.types[i]
-        if t.args.count == 0 {
-            if t.nameId == q {
-                return i
+pub impl Comp {
+    inout fn isGenericFreeFn(fi: U64) -> Bool {
+        if fi >= self.arena.funcs.count {
+            return false
+        }
+        val f: Func = self.arena.funcs[fi]
+        if f.hasRecv {
+            return false
+        }
+        return f.typeParams.count > 0
+    }
+
+    inout fn findOrAddTypeRef(nameStart: U64, nameLen: U64) -> U64 {
+        val q: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val i: U64 = 0
+        while i < self.arena.types.count {
+            val t: TypeRef = self.arena.types[i]
+            if t.args.count == 0 {
+                if t.nameId == q {
+                    return i
+                }
+            }
+            i += 1
+        }
+        val noArgs: Array[U64] = []
+        return self.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=noArgs />)
+    }
+
+    inout fn closureFnTypeRef(params: Array[Param], retTy: U64) -> U64 {
+        val fnName: Bind = kwSpan(c: inout self, kw: "fn", kwLen: 2)
+        mut val args: Array[U64] = []
+        args.append(retTy)
+        mut val i: U64 = 0
+        while i < params.count {
+            args.append(params[i].ty)
+            i += 1
+        }
+        return self.pushType(t: <TypeRef nameStart=fnName.nameStart nameLen=fnName.nameLen args=args />)
+    }
+
+    inout fn unifyTypeParam(paramRef: U64, argRef: U64, tpStart: U64, tpLen: U64) -> U64 {
+        if paramRef >= self.arena.types.count {
+            return 0
+        }
+        val pt: TypeRef = self.arena.types[paramRef]
+        if pt.args.count == 0 {
+            if pt.nameId == intern(c: inout self, start: tpStart, len: tpLen) {
+                return argRef
+            }
+            return 0
+        }
+        if argRef >= self.arena.types.count {
+            return 0
+        }
+        val at: TypeRef = self.arena.types[argRef]
+        mut val i: U64 = 0
+        while i < pt.args.count {
+            if i < at.args.count {
+                val r: U64 = self.unifyTypeParam(paramRef: pt.args[i], argRef: at.args[i], tpStart: tpStart, tpLen: tpLen)
+                if r != 0 {
+                    return r
+                }
+            }
+            i += 1
+        }
+        return 0
+    }
+
+    inout fn tyRefOfInfo(ti: TypeInfo) -> U64 {
+        if ti.ref != 0 {
+            return ti.ref
+        }
+        // a String value (kind 1) carries no name span in TypeInfo, but as a type argument
+        // it must infer to `String` (a string-literal accumulator `fold(init: "z", …)`), not
+        // unknown — else the inferred own arg is 0 and the env gets the index-0 dummy ref.
+        if ti.kind == 1 {
+            val ss: Bind = stringTypeSpan(c: inout self)
+            if ss.nameLen != 0 {
+                return simpleTypeRef(c: inout self, nameStart: ss.nameStart, nameLen: ss.nameLen)
             }
         }
-        i += 1
-    }
-    val noArgs: Array[U64] = []
-    return c.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=noArgs />)
-}
-
-// The concrete TypeRef for a recovered TypeInfo (used as a generic type arg). A
-// generic instantiation / Ref already carries a TypeRef (ti.ref); a named or
-// scalar type maps to a bare TypeRef by its name span. Returns 0 (the no-type
-// sentinel) when there is no name to mangle (an untyped literal / array), which
-// the caller reads as "inference failed".
-// Build a `fn(params) -> ret` TypeRef for a closure literal (so its type can be
-// structurally unified against a `fn(...)->B` parameter). The fn-type layout is
-// args[0] = return, args[1..] = parameter types (matching parseTypeTok / the
-// closure-call ABI). Appended fresh; deduping is unnecessary (used transiently).
-fn closureFnTypeRef(c: inout Comp, params: Array[Param], retTy: U64) -> U64 {
-    val fnName: Bind = kwSpan(c: inout c, kw: "fn", kwLen: 2)
-    mut val args: Array[U64] = []
-    args.append(retTy)
-    mut val i: U64 = 0
-    while i < params.count {
-        args.append(params[i].ty)
-        i += 1
-    }
-    return c.pushType(t: <TypeRef nameStart=fnName.nameStart nameLen=fnName.nameLen args=args />)
-}
-
-// Structurally unify a parameter type `paramRef` against an argument type `argRef`
-// to find the binding for the type parameter (tpStart,tpLen). When the parameter
-// type IS the type parameter (`x: T`), bind it to the whole argument type; for a
-// compound parameter (`f: fn(x: Item) -> B`, `b: Box[T]`) recurse into matching
-// argument slots, returning the first binding found (0 if none). This generalizes
-// inference from "the parameter is the type variable" to "the variable appears
-// anywhere inside the parameter's type".
-export fn unifyTypeParam(c: inout Comp, paramRef: U64, argRef: U64, tpStart: U64, tpLen: U64) -> U64 {
-    if paramRef >= c.arena.types.count {
-        return 0
-    }
-    val pt: TypeRef = c.arena.types[paramRef]
-    if pt.args.count == 0 {
-        if pt.nameId == intern(c: inout c, start: tpStart, len: tpLen) {
-            return argRef
+        if ti.nameLen == 0 {
+            return 0
         }
-        return 0
-    }
-    if argRef >= c.arena.types.count {
-        return 0
-    }
-    val at: TypeRef = c.arena.types[argRef]
-    mut val i: U64 = 0
-    while i < pt.args.count {
-        if i < at.args.count {
-            val r: U64 = unifyTypeParam(c: inout c, paramRef: pt.args[i], argRef: at.args[i], tpStart: tpStart, tpLen: tpLen)
-            if r != 0 {
-                return r
-            }
+        if ti.kind == 3 {
+            // arrays as type arguments are deferred (no generic-over-array yet).
+            return 0
         }
-        i += 1
+        return self.findOrAddTypeRef(nameStart: ti.nameStart, nameLen: ti.nameLen)
     }
-    return 0
-}
 
-fn tyRefOfInfo(c: inout Comp, ti: TypeInfo) -> U64 {
-    if ti.ref != 0 {
-        return ti.ref
-    }
-    // a String value (kind 1) carries no name span in TypeInfo, but as a type argument
-    // it must infer to `String` (a string-literal accumulator `fold(init: "z", …)`), not
-    // unknown — else the inferred own arg is 0 and the env gets the index-0 dummy ref.
-    if ti.kind == 1 {
-        val ss: Bind = stringTypeSpan(c: inout c)
-        if ss.nameLen != 0 {
-            return simpleTypeRef(c: inout c, nameStart: ss.nameStart, nameLen: ss.nameLen)
-        }
-    }
-    if ti.nameLen == 0 {
-        return 0
-    }
-    if ti.kind == 3 {
-        // arrays as type arguments are deferred (no generic-over-array yet).
-        return 0
-    }
-    return findOrAddTypeRef(c: inout c, nameStart: ti.nameStart, nameLen: ti.nameLen)
-}
-
-// Infer a generic free function's type arguments from a call's argument types.
-// For each type parameter, find a parameter declared with exactly that bare
-// type-parameter name and take the matching argument's concrete TypeRef. Returns
-// an array aligned to f.typeParams; an entry is 0 where inference failed.
-// The element TypeRef of an array-typed argument expression (for inferring a
-// type parameter from an `Array[T]` parameter), or 0. Recovered from the arg's
-// binding type, since exprType does not carry an array's element ref.
-fn argArrayElemRef(c: inout Comp, argExpr: U64) -> U64 {
-    match c.arena.exprs[argExpr] {
-        Expr.Ident(val start, val len) => {
-            val li: U64 = localIndexByName(c: inout c, start: start, len: len)
-            if li < c.cur.locals.count {
-                val lo: Local = c.cur.locals[li]
-                if lo.ty < c.arena.types.count {
-                    val lt: TypeRef = c.arena.types[lo.ty]
-                    if rangeEquals(bytes: c.arena.bytes, start: lt.nameStart, len: lt.nameLen, kw: "Array") {
-                        if lt.args.count > 0 {
-                            return lt.args[0]
+    inout fn argArrayElemRef(argExpr: U64) -> U64 {
+        match self.arena.exprs[argExpr] {
+            Expr.Ident(val start, val len) => {
+                val li: U64 = localIndexByName(c: inout self, start: start, len: len)
+                if li < self.cur.locals.count {
+                    val lo: Local = self.cur.locals[li]
+                    if lo.ty < self.arena.types.count {
+                        val lt: TypeRef = self.arena.types[lo.ty]
+                        if rangeEquals(bytes: self.arena.bytes, start: lt.nameStart, len: lt.nameLen, kw: "Array") {
+                            if lt.args.count > 0 {
+                                return lt.args[0]
+                            }
                         }
                     }
                 }
             }
+            _ => {}
         }
-        _ => {}
-    }
-    return 0
-}
-
-// If `argExpr` is a `#`-view (`s#P` / `x#Ext`, an ExtView), return `baseRef` refined
-// with that view's id (TypeRef.viewExtId) so a type parameter inferred from it binds
-// to `S#P` rather than plain `S` — letting the view satisfy a `where _: A` bound and
-// steer dispatch in the callee body (spec/09 view-aware monomorphization). A strip
-// view (`s#!Ext`) or a non-view argument returns baseRef unchanged.
-fn argViewRef(c: inout Comp, argExpr: U64, baseRef: U64) -> U64 {
-    if baseRef == 0 {
         return 0
     }
-    match c.arena.exprs[argExpr] {
-        Expr.ExtView(recv: _, val srcStart, val srcLen, val strip) => {
-            if strip {
+
+    inout fn argViewRef(argExpr: U64, baseRef: U64) -> U64 {
+        if baseRef == 0 {
+            return 0
+        }
+        match self.arena.exprs[argExpr] {
+            Expr.ExtView(recv: _, val srcStart, val srcLen, val strip) => {
+                if strip {
+                    return baseRef
+                }
+                val vid: U64 = intern(c: inout self, start: srcStart, len: srcLen)
+                val bt: TypeRef = self.arena.types[baseRef]
+                return self.pushType(t: <TypeRef nameStart=bt.nameStart nameLen=bt.nameLen args=bt.args viewExtId=vid />)
+            }
+            _ => {
                 return baseRef
             }
-            val vid: U64 = intern(c: inout c, start: srcStart, len: srcLen)
-            val bt: TypeRef = c.arena.types[baseRef]
-            return c.pushType(t: <TypeRef nameStart=bt.nameStart nameLen=bt.nameLen args=bt.args viewExtId=vid />)
-        }
-        _ => {
-            return baseRef
         }
     }
-}
 
-export fn inferFnArgs(c: inout Comp, f: Func, args: Array[Arg]) -> Array[U64] {
-    mut val out: Array[U64] = []
-    mut val ti: U64 = 0
-    while ti < f.typeParams.count {
-        val tp: Bind = f.typeParams[ti]
-        mut val found: U64 = 0
-        mut val pi: U64 = 0
-        while pi < f.params.count {
-            val p: Param = f.params[pi]
-            if p.tyIsArray {
-                // `Array[T]` param: infer T from the argument array's element.
-                if p.tyNameId == tp.nameId {
+    inout fn inferFnArgs(f: Func, args: Array[Arg]) -> Array[U64] {
+        mut val out: Array[U64] = []
+        mut val ti: U64 = 0
+        while ti < f.typeParams.count {
+            val tp: Bind = f.typeParams[ti]
+            mut val found: U64 = 0
+            mut val pi: U64 = 0
+            while pi < f.params.count {
+                val p: Param = f.params[pi]
+                if p.tyIsArray {
+                    // `Array[T]` param: infer T from the argument array's element.
+                    if p.tyNameId == tp.nameId {
+                        if pi < args.count {
+                            if found == 0 {
+                                found = self.argArrayElemRef(argExpr: args[pi].expr)
+                            }
+                        }
+                    }
+                } else {
+                    // structurally unify the parameter's type against the argument's, so
+                    // `T` is found whether it is the whole parameter type (`x: T`) or
+                    // nested in it (`f: fn(x: Item) -> T`).
                     if pi < args.count {
                         if found == 0 {
-                            found = argArrayElemRef(c: inout c, argExpr: args[pi].expr)
+                            val at: TypeInfo = typeOf(c: inout self, id: args[pi].expr)
+                            val argRef: U64 = self.argViewRef(argExpr: args[pi].expr, baseRef: self.tyRefOfInfo(ti: at))
+                            found = self.unifyTypeParam(paramRef: p.ty, argRef: argRef, tpStart: tp.nameStart, tpLen: tp.nameLen)
                         }
                     }
                 }
-            } else {
-                // structurally unify the parameter's type against the argument's, so
-                // `T` is found whether it is the whole parameter type (`x: T`) or
-                // nested in it (`f: fn(x: Item) -> T`).
-                if pi < args.count {
-                    if found == 0 {
-                        val at: TypeInfo = typeOf(c: inout c, id: args[pi].expr)
-                        val argRef: U64 = argViewRef(c: inout c, argExpr: args[pi].expr, baseRef: tyRefOfInfo(c: inout c, ti: at))
-                        found = unifyTypeParam(c: inout c, paramRef: p.ty, argRef: argRef, tpStart: tp.nameStart, tpLen: tp.nameLen)
+                pi += 1
+            }
+            out.append(found)
+            ti += 1
+        }
+        return out
+    }
+
+    inout fn fnArgsAllGround(args: Array[U64]) -> Bool {
+        if args.count == 0 {
+            return false
+        }
+        mut val i: U64 = 0
+        while i < args.count {
+            if args[i] == 0 {
+                return false
+            }
+            if !(self.tyRefIsGround(ref: args[i])) {
+                return false
+            }
+            i += 1
+        }
+        return true
+    }
+
+    inout fn fnInstExists(fnIdx: U64, args: Array[U64]) -> Bool {
+        mut val i: U64 = 0
+        while i < self.monoWork.fnInsts.count {
+            val fin: FnInst = self.monoWork.fnInsts[i]
+            if fin.fnIdx == fnIdx {
+                if fin.args.count == args.count {
+                    mut val same: Bool = true
+                    mut val j: U64 = 0
+                    while j < args.count {
+                        if !(self.typeRefEq(a: fin.args[j], b: args[j])) {
+                            same = false
+                        }
+                        j += 1
+                    }
+                    if same {
+                        return true
                     }
                 }
             }
-            pi += 1
+            i += 1
         }
-        out.append(found)
-        ti += 1
-    }
-    return out
-}
-
-// Whether every inferred type argument resolved (nonzero) and is fully ground.
-fn fnArgsAllGround(c: inout Comp, args: Array[U64]) -> Bool {
-    if args.count == 0 {
         return false
     }
-    mut val i: U64 = 0
-    while i < args.count {
-        if args[i] == 0 {
-            return false
-        }
-        if !(c.tyRefIsGround(ref: args[i])) {
-            return false
-        }
-        i += 1
-    }
-    return true
-}
 
-// Whether the FnInst (fnIdx, args) is already registered (structural arg match).
-fn fnInstExists(c: inout Comp, fnIdx: U64, args: Array[U64]) -> Bool {
-    mut val i: U64 = 0
-    while i < c.monoWork.fnInsts.count {
-        val fin: FnInst = c.monoWork.fnInsts[i]
-        if fin.fnIdx == fnIdx {
-            if fin.args.count == args.count {
-                mut val same: Bool = true
-                mut val j: U64 = 0
-                while j < args.count {
-                    if !(c.typeRefEq(a: fin.args[j], b: args[j])) {
-                        same = false
+    inout fn registerCallInst(id: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+        val fi: U64 = resolvedCallee(c: inout self, id: id)
+        if fi < self.arena.funcs.count {
+            if self.arena.funcs[fi].isExtern {
+                // a generic `extern "plew-intrinsic"` (e.g. `rawAlloc[T]`, `arrayPush[T]`):
+                // lowered inline at the call site, so it has no monomorphized instance —
+                // never register one (else a bogus prototype/body with an unmapped return
+                // type leaks out).
+            } else {
+            if self.isGenericFreeFn(fi: fi) {
+                val inferred: Array[U64] = self.inferFnArgs(f: self.arena.funcs[fi], args: args)
+                if self.fnArgsAllGround(args: inferred) {
+                    if !(self.fnInstExists(fnIdx: fi, args: inferred)) {
+                        self.monoWork.fnInsts.append(<FnInst fnIdx=fi args=inferred />)
                     }
-                    j += 1
-                }
-                if same {
-                    return true
                 }
             }
-        }
-        i += 1
-    }
-    return false
-}
-
-// Register a call as a generic free function instance if it resolves to one and
-// its type arguments all infer to ground types (deduped). Type recovery needs
-// the caller's local scope, so this runs during a scope-aware walk (below), not
-// a flat scan of the expression arena.
-fn registerCallInst(c: inout Comp, id: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
-    val fi: U64 = resolvedCallee(c: inout c, id: id)
-    if fi < c.arena.funcs.count {
-        if c.arena.funcs[fi].isExtern {
-            // a generic `extern "plew-intrinsic"` (e.g. `rawAlloc[T]`, `arrayPush[T]`):
-            // lowered inline at the call site, so it has no monomorphized instance —
-            // never register one (else a bogus prototype/body with an unmapped return
-            // type leaks out).
-        } else {
-        if isGenericFreeFn(c: inout c, fi: fi) {
-            val inferred: Array[U64] = inferFnArgs(c: inout c, f: c.arena.funcs[fi], args: args)
-            if fnArgsAllGround(c: inout c, args: inferred) {
-                if !(fnInstExists(c: inout c, fnIdx: fi, args: inferred)) {
-                    c.monoWork.fnInsts.append(<FnInst fnIdx=fi args=inferred />)
-                }
-            }
-        }
-        }
-    }
-}
-
-// Register an associated-function call `Type.make(args)` (the receiver is a type name,
-// not a value) as a generic free-function instance. An assoc fn has no self, so it
-// rides the FnInst/genFn machinery (declareGenFns/emitGenFns) exactly like a generic
-// free function; the type args infer from the call (`make(v: T)` with `v: I64` -> T=I64).
-fn registerAssocInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
-    val arn: Bind = assocRecvName(c: inout c, recv: recv)
-    if arn.nameLen == 0U64 {
-        return
-    }
-    val afi: U64 = findAssoc(c: inout c, recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-    if afi >= c.arena.funcs.count {
-        return
-    }
-    if c.arena.funcs[afi].isExtern {
-        return
-    }
-    if isGenericFreeFn(c: inout c, fi: afi) {
-        val inferred: Array[U64] = inferFnArgs(c: inout c, f: c.arena.funcs[afi], args: args)
-        if fnArgsAllGround(c: inout c, args: inferred) {
-            if !(fnInstExists(c: inout c, fnIdx: afi, args: inferred)) {
-                c.monoWork.fnInsts.append(<FnInst fnIdx=afi args=inferred />)
             }
         }
     }
-}
 
-// Register a generic method call on a non-generic receiver (`counter.map[B](f)`)
-// as an instance to emit, type args inferred from the call (Self/Item resolved so
-// `fn(x: Item) -> B` yields B). Methods on a generic receiver are emitted per
-// receiver instantiation (emitMonoMethods), so are skipped here. Reuses the FnInst
-// machinery; the receiver is recovered from the Func (recvStart). The instance
-// mangles `Recv_selector_<argMangle…>` (writeMethodInstSuffix) at def and call.
-fn registerMethodInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
-    val rt0: TypeInfo = typeOf(c: inout c, id: recv)
-    // recover the receiver type-name span: a struct/enum (kind 2) carries it; a
-    // String value (kind 1) recovers "String"; a primitive (kind 0, e.g. `U64`)
-    // already carries its name. A generic method on a primitive (`u64.hash[H]`)
-    // must register its instance too, so we no longer bail on non-struct kinds —
-    // only arrays (kind 3, handled per element type) and nameless values are skipped.
-    mut val rt: TypeInfo = rt0
-    if rt0.kind == 1 {
-        val ss: Bind = stringTypeSpan(c: inout c)
-        if ss.nameLen != 0 {
-            rt = <TypeInfo kind=2 nameStart=ss.nameStart nameLen=ss.nameLen ref=0 />
-        }
-    }
-    if rt.kind == 3 {
-        return
-    }
-    if rt.nameLen == 0 {
-        return
-    }
-    val genericRecv: Bool = isGenericInst(c: inout c, ref: rt.ref)
-    val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-    if mi == c.arena.funcs.count {
-        return
-    }
-    val mf: Func = c.arena.funcs[mi]
-    if mf.typeParams.count == 0 {
-        return
-    }
-    // a generic receiver supplies the first `rcount` type params; the method must
-    // have its OWN params beyond that to need a call-site instance (`filterIter.map`).
-    // Without own params (`filterIter.filter`) it is emitted per receiver
-    // instantiation (emitMonoMethods), so skip it here.
-    mut val rcount: U64 = 0
-    mut val recvInst: U64 = 0
-    if genericRecv {
-        rcount = recvParamCount(c: inout c, nameStart: rt.nameStart, nameLen: rt.nameLen)
-        recvInst = rt.ref
-        if mf.typeParams.count <= rcount {
+    inout fn registerAssocInst(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+        val arn: Bind = assocRecvName(c: inout self, recv: recv)
+        if arn.nameLen == 0U64 {
             return
         }
-    }
-    setSelfItemEnv(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: recvInst)
-    val inferred: Array[U64] = inferFnArgs(c: inout c, f: mf, args: args)
-    // build the full type-arg vector: the receiver's args fill the first `rcount`
-    // slots (not inferrable from the call), the method-own args the rest.
-    mut val fullArgs: Array[U64] = []
-    if genericRecv {
-        val inst: TypeRef = c.arena.types[recvInst]
-        mut val ri: U64 = 0
-        while ri < rcount {
-            if ri < inst.args.count {
-                fullArgs.append(inst.args[ri])
+        val afi: U64 = findAssoc(c: inout self, recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        if afi >= self.arena.funcs.count {
+            return
+        }
+        if self.arena.funcs[afi].isExtern {
+            return
+        }
+        if self.isGenericFreeFn(fi: afi) {
+            val inferred: Array[U64] = self.inferFnArgs(f: self.arena.funcs[afi], args: args)
+            if self.fnArgsAllGround(args: inferred) {
+                if !(self.fnInstExists(fnIdx: afi, args: inferred)) {
+                    self.monoWork.fnInsts.append(<FnInst fnIdx=afi args=inferred />)
+                }
             }
-            ri += 1
-        }
-        mut val oi: U64 = rcount
-        while oi < inferred.count {
-            fullArgs.append(inferred[oi])
-            oi += 1
-        }
-    } else {
-        mut val ai: U64 = 0
-        while ai < inferred.count {
-            fullArgs.append(inferred[ai])
-            ai += 1
         }
     }
-    if fnArgsAllGround(c: inout c, args: fullArgs) {
-        if !(fnInstExists(c: inout c, fnIdx: mi, args: fullArgs)) {
-            c.monoWork.fnInsts.append(<FnInst fnIdx=mi args=fullArgs recvInstRef=recvInst />)
-        }
-        // register the grounded return adapter (`MapIter[…,I64]`) + its transitive
-        // instantiations, so its typedef/methods get emitted (a generic method is
-        // skipped by the struct-field/signature scans).
-        val savedP: Array[Bind] = c.cur.typeParams
-        val savedA: Array[U64] = c.cur.typeArgs
-        c.cur.typeParams = mf.typeParams
-        c.cur.typeArgs = fullArgs
-        if mf.hasRet {
-            scanType(c: inout c, ref: mf.retTy)
-        }
-        c.cur.typeParams = savedP
-        c.cur.typeArgs = savedA
-    }
-    clearSelfItemEnv(c: inout c)
-}
 
-// The number of type parameters a struct/enum named (start,len) declares (0 if it
-// is not a generic type). For a generic method on a generic receiver, the first
-// this-many of the method's type args come from the receiver instantiation; the
-// rest are the method's own (encoded in the mangle suffix).
-fn recvParamCount(c: inout Comp, nameStart: U64, nameLen: U64) -> U64 {
-    val gsi: U64 = c.genericStructIndex(nameStart: nameStart, nameLen: nameLen)
-    if gsi < c.arena.structs.count {
-        return c.arena.structs[gsi].typeParams.count
+    inout fn registerMethodInst(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+        val rt0: TypeInfo = typeOf(c: inout self, id: recv)
+        // recover the receiver type-name span: a struct/enum (kind 2) carries it; a
+        // String value (kind 1) recovers "String"; a primitive (kind 0, e.g. `U64`)
+        // already carries its name. A generic method on a primitive (`u64.hash[H]`)
+        // must register its instance too, so we no longer bail on non-struct kinds —
+        // only arrays (kind 3, handled per element type) and nameless values are skipped.
+        mut val rt: TypeInfo = rt0
+        if rt0.kind == 1 {
+            val ss: Bind = stringTypeSpan(c: inout self)
+            if ss.nameLen != 0 {
+                rt = <TypeInfo kind=2 nameStart=ss.nameStart nameLen=ss.nameLen ref=0 />
+            }
+        }
+        if rt.kind == 3 {
+            return
+        }
+        if rt.nameLen == 0 {
+            return
+        }
+        val genericRecv: Bool = isGenericInst(c: inout self, ref: rt.ref)
+        val mi: U64 = findMethod(c: inout self, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        if mi == self.arena.funcs.count {
+            return
+        }
+        val mf: Func = self.arena.funcs[mi]
+        if mf.typeParams.count == 0 {
+            return
+        }
+        // a generic receiver supplies the first `rcount` type params; the method must
+        // have its OWN params beyond that to need a call-site instance (`filterIter.map`).
+        // Without own params (`filterIter.filter`) it is emitted per receiver
+        // instantiation (emitMonoMethods), so skip it here.
+        mut val rcount: U64 = 0
+        mut val recvInst: U64 = 0
+        if genericRecv {
+            rcount = self.recvParamCount(nameStart: rt.nameStart, nameLen: rt.nameLen)
+            recvInst = rt.ref
+            if mf.typeParams.count <= rcount {
+                return
+            }
+        }
+        setSelfItemEnv(c: inout self, recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: recvInst)
+        val inferred: Array[U64] = self.inferFnArgs(f: mf, args: args)
+        // build the full type-arg vector: the receiver's args fill the first `rcount`
+        // slots (not inferrable from the call), the method-own args the rest.
+        mut val fullArgs: Array[U64] = []
+        if genericRecv {
+            val inst: TypeRef = self.arena.types[recvInst]
+            mut val ri: U64 = 0
+            while ri < rcount {
+                if ri < inst.args.count {
+                    fullArgs.append(inst.args[ri])
+                }
+                ri += 1
+            }
+            mut val oi: U64 = rcount
+            while oi < inferred.count {
+                fullArgs.append(inferred[oi])
+                oi += 1
+            }
+        } else {
+            mut val ai: U64 = 0
+            while ai < inferred.count {
+                fullArgs.append(inferred[ai])
+                ai += 1
+            }
+        }
+        if self.fnArgsAllGround(args: fullArgs) {
+            if !(self.fnInstExists(fnIdx: mi, args: fullArgs)) {
+                self.monoWork.fnInsts.append(<FnInst fnIdx=mi args=fullArgs recvInstRef=recvInst />)
+            }
+            // register the grounded return adapter (`MapIter[…,I64]`) + its transitive
+            // instantiations, so its typedef/methods get emitted (a generic method is
+            // skipped by the struct-field/signature scans).
+            val savedP: Array[Bind] = self.cur.typeParams
+            val savedA: Array[U64] = self.cur.typeArgs
+            self.cur.typeParams = mf.typeParams
+            self.cur.typeArgs = fullArgs
+            if mf.hasRet {
+                scanType(c: inout self, ref: mf.retTy)
+            }
+            self.cur.typeParams = savedP
+            self.cur.typeArgs = savedA
+        }
+        clearSelfItemEnv(c: inout self)
     }
-    val gei: U64 = c.genericEnumIndex(nameStart: nameStart, nameLen: nameLen)
-    if gei < c.arena.enums.count {
-        return c.arena.enums[gei].typeParams.count
-    }
-    return 0
-}
 
+    inout fn recvParamCount(nameStart: U64, nameLen: U64) -> U64 {
+        val gsi: U64 = self.genericStructIndex(nameStart: nameStart, nameLen: nameLen)
+        if gsi < self.arena.structs.count {
+            return self.arena.structs[gsi].typeParams.count
+        }
+        val gei: U64 = self.genericEnumIndex(nameStart: nameStart, nameLen: nameLen)
+        if gei < self.arena.enums.count {
+            return self.arena.enums[gei].typeParams.count
+        }
+        return 0
+    }
+}
