@@ -333,7 +333,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             // `dict[k]` yields the Dictionary's value type V (args[1]) — the subscript
             // desugars to `.at(key:) -> V`.
-            if isDictionaryType(c: inout c, ti: bt) {
+            if c.isDictionaryType(ti: bt) {
                 val dt: TypeRef = c.arena.types[bt.ref]
                 if dt.args.count > 1 {
                     return typeInfoOfRef(c: inout c, ref: dt.args[1])

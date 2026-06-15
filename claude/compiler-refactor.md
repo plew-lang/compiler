@@ -118,6 +118,19 @@ Backend/  _.pw = バレル；leaf ヘルパ(import) ＋ codegen Core(impl LlvmCt
 
 **緊張点（到達後に判断）**：メソッド化で `Comp` の API 面が再増殖（M2/M3 の状態削減とは別軸）。`part 内 impl のみ` の enforcement の緩和（part-local private 自由関数を許すか）は到達後に再評価。
 
+#### メソッド化の手順（確定レシピ・増分で各段不動点）
+
+進捗：keystone（Comp を Frontend へ）＋pilot 2 ファイル済＝**`Comp.isRawIntrinsicName`/`isArrayIntrinsicName`（旧 Codegen/Array）/`isDictionaryType`/`typeHasMethodNamed`/`synthDictMethod`（Codegen/Expr.pw）**。1 ファイルずつ機械的に：
+
+1. **定義**：`fn NAME(c: inout Comp, REST) -> R {` を `pub impl Comp { … }` で包み `inout fn NAME(REST) -> R {` へ。本体は `c.X`→`self.X`、まだ自由関数のままの被呼 `g(c: inout c, …)`→`g(c: inout self, …)`、bare `c`→`self`（ラベル `c:` は触らない）。
+   - **一律 `inout fn`**：全自由関数が `c: inout Comp` を取る＝呼び手は常に可変、かつ inout self を他の自由関数へ渡せる（`pushType`→`intern` で実証済）。read-only でも inout self を下流へ渡すため inout fn が無難。
+   - **遷移中は `pub impl`**：private メソッドは呼び手も Comp メソッドのとき（`inAnonImplOf`）しか呼べない。呼び手が自由関数の間は `pub` 必須。全 methodize 完了後に private へ絞るのは任意（北極星は part=impl のみで、pub 最小化は別軸）。
+2. **呼び出し点（全ファイル）**：`NAME(c: inout RECV, ARGS)` → `RECV.NAME(ARGS)`（RECV は `c`/`self`/他の Comp 束縛）。引数無しは `NAME(c: inout c)`→`c.NAME()`。
+3. **import 整理**：methodize した **export 関数は Backend の `import ./Frontend` 名簿から外す**（メソッドは受け手型経由で解決＝名前 import 不要）。同名の自由関数が別に残る場合（オーバーロード双子・例 `typeHasMethodNamed` は Resolve/Locals に別シグネチャの自由版が残存）はメソッド呼び `c.f(…)` と自由呼び `f(c: inout c,…)` が構文で分離＝共存可。free 版が完全消滅した名（例 `synthDictMethod`）は import に残すと「not exported」エラー＝必ず外す。
+4. **検証**：dev-rebuild→test→（区切りで）reseed→不動点。不動点が**意味不変**を保証するので、本体 `c→self` 機械置換の取りこぼし（文字列内 `c` 等）も検出できる。
+
+**自動化の所見**：`\bc\b(?!:)`→`self`（本体）＋`\bNAME\(c: inout (\w+), `→`\1.NAME(`（呼び出し）で機械化可。ただしオーバーロード双子・read/inout 判定・import 整理は手当てが要るので 1 ファイル単位で適用→compile が安全。
+
 **済んだ予備作業**＝`findFunc` の解決を単一チョークポイント `resolvedCallee`（exprId キー永続 memo `TypeCache.callee`）へ集約済（13 site 中 12・tag `refactor-m4-b1` 他）。下記 typed IR トラックの一部だが、Backend の findFunc 呼びを memo 読みに替えて結合を薄くする副次効果もある。
 
 ### 別トラック（後段・任意）：型回復統一＝typed IR（根①）

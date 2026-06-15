@@ -1,53 +1,57 @@
-// Part of the Plew compiler module (root: _.pw). Expression-level helpers shared
-// by the frontend and backend: Dictionary subscript desugaring (recognizing the
-// type, finding the routing method, and synthesizing the dispatch call).
+// Part of the Plew compiler module (root: Frontend). Expression-level helpers
+// shared by the frontend and backend: Dictionary subscript desugaring (recognizing
+// the type, finding the routing method, and synthesizing the dispatch call). These
+// are `impl Comp` methods (the analysis is one logical module over the shared
+// `Comp` state); `pub` so the backend's still-free-function call sites can reach
+// them during the methodization transition.
 
-// Whether a TypeInfo is a `Dictionary[K,V]` instantiation (so its subscript
-// `dict[k]` / `dict[k] = v` desugars to `.at` / `.insert` — spec/02).
-fn isDictionaryType(c: inout Comp, ti: TypeInfo) -> Bool {
-    if ti.kind != 2 {
-        return false
+pub impl Comp {
+    // Whether a TypeInfo is a `Dictionary[K,V]` instantiation (so its subscript
+    // `dict[k]` / `dict[k] = v` desugars to `.at` / `.insert` — spec/02).
+    inout fn isDictionaryType(ti: TypeInfo) -> Bool {
+        if ti.kind != 2 {
+            return false
+        }
+        if !(rangeEquals(bytes: self.arena.bytes, start: ti.nameStart, len: ti.nameLen, kw: "Dictionary")) {
+            return false
+        }
+        return isGenericInst(c: inout self, ref: ti.ref)
     }
-    if !(rangeEquals(bytes: c.arena.bytes, start: ti.nameStart, len: ti.nameLen, kw: "Dictionary")) {
-        return false
-    }
-    return isGenericInst(c: inout c, ref: ti.ref)
-}
 
-// Does type (typeStart,typeLen) have a method named `name` (a receiver fn)? Used
-// to route a subscript `a[k]` to a user type's `Index.index` / `IndexSet.indexSet`
-// witness — a normal method, so the call is synthesized and dispatched as one.
-export fn typeHasMethodNamed(c: inout Comp, typeStart: U64, typeLen: U64, name: String) -> Bool {
-    val qRecv: U64 = intern(c: inout c, start: typeStart, len: typeLen)
-    mut val i: U64 = 0
-    while i < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[i]
-        if f.hasRecv {
-            if f.recvId == qRecv {
-                if rangeEquals(bytes: c.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
-                    return true
+    // Does type (typeStart,typeLen) have a method named `name` (a receiver fn)? Used
+    // to route a subscript `a[k]` to a user type's `Index.index` / `IndexSet.indexSet`
+    // witness — a normal method, so the call is synthesized and dispatched as one.
+    inout fn typeHasMethodNamed(typeStart: U64, typeLen: U64, name: String) -> Bool {
+        val qRecv: U64 = intern(c: inout self, start: typeStart, len: typeLen)
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[i]
+            if f.hasRecv {
+                if f.recvId == qRecv {
+                    if rangeEquals(bytes: self.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
+                        return true
+                    }
                 }
             }
+            i += 1
         }
-        i += 1
+        return false
     }
-    return false
-}
 
-// Synthesize a method-call expression `recv.name(arg0Label: arg0[, arg1Label:
-// arg1])` and return its arena id, so the Dictionary subscript can route through
-// the normal generic-method dispatch (mangling, arg copy, inout self) instead of
-// re-implementing it. The label/method names are recovered from c.arena.bytes (the
-// Dictionary prelude source contains them).
-export fn synthDictMethod(c: inout Comp, recv: U64, name: String, arg0Label: String, arg0: U64, hasArg1: Bool, arg1Label: String, arg1: U64) -> U64 {
-    val nm: Bind = kwSpan(c: inout c, kw: name, kwLen: name.bytes.count)
-    val l0: Bind = kwSpan(c: inout c, kw: arg0Label, kwLen: arg0Label.bytes.count)
-    mut val args: Array[Arg] = []
-    args.append(<Arg expr=arg0 isInout=false labelStart=l0.nameStart labelLen=l0.nameLen hasLabel=true />)
-    if hasArg1 {
-        val l1: Bind = kwSpan(c: inout c, kw: arg1Label, kwLen: arg1Label.bytes.count)
-        args.append(<Arg expr=arg1 isInout=false labelStart=l1.nameStart labelLen=l1.nameLen hasLabel=true />)
+    // Synthesize a method-call expression `recv.name(arg0Label: arg0[, arg1Label:
+    // arg1])` and return its arena id, so the Dictionary subscript can route through
+    // the normal generic-method dispatch (mangling, arg copy, inout self) instead of
+    // re-implementing it. The label/method names are recovered from arena.bytes (the
+    // Dictionary prelude source contains them).
+    inout fn synthDictMethod(recv: U64, name: String, arg0Label: String, arg0: U64, hasArg1: Bool, arg1Label: String, arg1: U64) -> U64 {
+        val nm: Bind = kwSpan(c: inout self, kw: name, kwLen: name.bytes.count)
+        val l0: Bind = kwSpan(c: inout self, kw: arg0Label, kwLen: arg0Label.bytes.count)
+        mut val args: Array[Arg] = []
+        args.append(<Arg expr=arg0 isInout=false labelStart=l0.nameStart labelLen=l0.nameLen hasLabel=true />)
+        if hasArg1 {
+            val l1: Bind = kwSpan(c: inout self, kw: arg1Label, kwLen: arg1Label.bytes.count)
+            args.append(<Arg expr=arg1 isInout=false labelStart=l1.nameStart labelLen=l1.nameLen hasLabel=true />)
+        }
+        return self.pushExpr(e: <Expr.Method recv=recv nameStart=nm.nameStart nameLen=nm.nameLen args=args />)
     }
-    return c.pushExpr(e: <Expr.Method recv=recv nameStart=nm.nameStart nameLen=nm.nameLen args=args />)
 }
-

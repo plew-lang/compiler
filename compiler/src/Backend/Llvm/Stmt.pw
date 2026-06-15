@@ -386,17 +386,17 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                                     val getExpr: U64 = c.pushExpr(e: <Expr.Index base=ibase index=iindex />)
                                     insVal = c.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=getExpr rhs=value />)
                                 }
-                                val m: U64 = synthDictMethod(c: inout c, recv: ibase, name: "insert", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: insVal)
+                                val m: U64 = c.synthDictMethod(recv: ibase, name: "insert", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: insVal)
                                 genLlvmExpr(c: inout c, st: inout st, id: m)
                                 return
                             }
-                            if typeHasMethodNamed(c: inout c, typeStart: c.arena.structs[ibsi].nameStart, typeLen: c.arena.structs[ibsi].nameLen, name: "indexSet") {
+                            if c.typeHasMethodNamed(typeStart: c.arena.structs[ibsi].nameStart, typeLen: c.arena.structs[ibsi].nameLen, name: "indexSet") {
                                 mut val rhsExpr: U64 = value
                                 if op != opAssign() {
                                     val getExpr: U64 = c.pushExpr(e: <Expr.Index base=ibase index=iindex />)
                                     rhsExpr = c.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=getExpr rhs=value />)
                                 }
-                                val m: U64 = synthDictMethod(c: inout c, recv: ibase, name: "indexSet", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: rhsExpr)
+                                val m: U64 = c.synthDictMethod(recv: ibase, name: "indexSet", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: rhsExpr)
                                 genLlvmExpr(c: inout c, st: inout st, id: m)
                                 return
                             }

@@ -341,11 +341,11 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             val ibsi: U64 = exprStructIdx(c: inout c, st: inout st, id: base)
             if ibsi < c.arena.structs.count {
                 if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[ibsi].nameStart, len: c.arena.structs[ibsi].nameLen, kw: "Dictionary") {
-                    val m: U64 = synthDictMethod(c: inout c, recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
+                    val m: U64 = c.synthDictMethod(recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
                     return valueKind(c: inout c, st: inout st, id: m)
                 }
-                if typeHasMethodNamed(c: inout c, typeStart: c.arena.structs[ibsi].nameStart, typeLen: c.arena.structs[ibsi].nameLen, name: "index") {
-                    val m: U64 = synthDictMethod(c: inout c, recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
+                if c.typeHasMethodNamed(typeStart: c.arena.structs[ibsi].nameStart, typeLen: c.arena.structs[ibsi].nameLen, name: "index") {
+                    val m: U64 = c.synthDictMethod(recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
                     return valueKind(c: inout c, st: inout st, id: m)
                 }
             }

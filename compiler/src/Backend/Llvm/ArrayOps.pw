@@ -45,11 +45,11 @@ fn genLlvmIndex(c: inout Comp, st: inout LlvmCtx, base: U64, index: U64) -> LLVM
             // a Dictionary subscript `d[k]` lowers to the panicking accessor
             // `d.at(key: k)` (spec/02); a user Index type uses `index`.
             if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[bsi].nameStart, len: c.arena.structs[bsi].nameLen, kw: "Dictionary") {
-                val m: U64 = synthDictMethod(c: inout c, recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
+                val m: U64 = c.synthDictMethod(recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
                 return genLlvmExpr(c: inout c, st: inout st, id: m)
             }
-            if typeHasMethodNamed(c: inout c, typeStart: c.arena.structs[bsi].nameStart, typeLen: c.arena.structs[bsi].nameLen, name: "index") {
-                val m: U64 = synthDictMethod(c: inout c, recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
+            if c.typeHasMethodNamed(typeStart: c.arena.structs[bsi].nameStart, typeLen: c.arena.structs[bsi].nameLen, name: "index") {
+                val m: U64 = c.synthDictMethod(recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
                 return genLlvmExpr(c: inout c, st: inout st, id: m)
             }
         }
